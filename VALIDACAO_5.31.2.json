@@ -1,0 +1,16 @@
+{
+  "version": "5.31.2",
+  "javascript_files_checked": 59,
+  "html_ids": 277,
+  "duplicate_ids": [],
+  "local_references_checked": 55,
+  "missing_local_references": [],
+  "service_worker_assets": 70,
+  "missing_service_worker_assets": [],
+  "auth_tests": {
+    "reuse_existing_session": "PASS",
+    "duplicate_request_guard": "PASS",
+    "rate_limit_429_handling": "PASS"
+  },
+  "errors": []
+}

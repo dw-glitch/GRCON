@@ -14,7 +14,12 @@
     realtime: null,
     activationKey: "",
     profiles: new Map(),
+    authCooldownTimer: 0,
   };
+
+  const OTP_GUARD_KEY = Config.otpGuardStorageKey || "grcon.cloud.otp.guard.v1";
+  const OTP_SENT_COOLDOWN_MS = 10 * 60 * 1000;
+  const OTP_RATE_LIMIT_COOLDOWN_MS = 60 * 60 * 1000;
 
   const $ = (selector, context) => (context || document).querySelector(selector);
   const escapeHtml = (value) => String(value == null ? "" : value)
@@ -47,6 +52,72 @@
     try { localStorage.removeItem(key); } catch (_) { /* armazenamento opcional */ }
   }
 
+  function readOtpGuard() {
+    const guard = readJson(OTP_GUARD_KEY, null);
+    if (!guard || !guard.email || !Number.isFinite(Number(guard.blockedUntil))) return null;
+    return {
+      email: String(guard.email).trim().toLowerCase(),
+      blockedUntil: Number(guard.blockedUntil),
+      reason: guard.reason || "sent",
+    };
+  }
+
+  function storeOtpGuard(email, blockedUntil, reason) {
+    writeJson(OTP_GUARD_KEY, {
+      email: String(email || "").trim().toLowerCase(),
+      blockedUntil: Number(blockedUntil) || 0,
+      reason: reason || "sent",
+    });
+  }
+
+  function formatCooldown(milliseconds) {
+    const seconds = Math.max(1, Math.ceil(milliseconds / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.ceil(seconds / 60);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.ceil(minutes / 60);
+    return `${hours} h`;
+  }
+
+  function activeOtpGuard(email) {
+    const guard = readOtpGuard();
+    if (!guard || guard.email !== String(email || "").trim().toLowerCase()) return null;
+    if (guard.blockedUntil <= Date.now()) {
+      removeStored(OTP_GUARD_KEY);
+      return null;
+    }
+    return guard;
+  }
+
+  function applyOtpCooldown() {
+    window.clearTimeout(state.authCooldownTimer);
+    const form = $("#grcon-cloud-login-form");
+    if (!form || form.dataset.busy === "true") return;
+    const input = $("#grcon-cloud-email", form);
+    const button = $("button", form);
+    if (!button) return;
+    const guard = activeOtpGuard(input?.value);
+    if (!guard) {
+      button.disabled = false;
+      button.textContent = "Enviar link de acesso";
+      return;
+    }
+    const remaining = guard.blockedUntil - Date.now();
+    button.disabled = true;
+    button.textContent = `Aguarde ${formatCooldown(remaining)}`;
+    state.authCooldownTimer = window.setTimeout(applyOtpCooldown, Math.min(1000, remaining));
+  }
+
+  function isEmailRateLimit(error) {
+    const code = String(error?.code || "").toLowerCase();
+    const message = String(error?.message || "").toLowerCase();
+    return Number(error?.status) === 429
+      || code.includes("email_send_rate_limit")
+      || code.includes("rate_limit")
+      || message.includes("email rate limit")
+      || message.includes("rate limit exceeded");
+  }
+
   function createSurface() {
     const surface = document.createElement("section");
     surface.id = "grcon-cloud-auth";
@@ -68,8 +139,14 @@
       </div>`;
     document.body.appendChild(surface);
 
-    $("#grcon-cloud-login-form", surface).addEventListener("submit", sendMagicLink);
+    const form = $("#grcon-cloud-login-form", surface);
+    const emailInput = $("#grcon-cloud-email", surface);
+    const guard = readOtpGuard();
+    if (guard?.email && emailInput) emailInput.value = guard.email;
+    form.addEventListener("submit", sendMagicLink);
+    emailInput?.addEventListener("input", applyOtpCooldown);
     $("#grcon-cloud-auth-signout", surface).addEventListener("click", signOut);
+    applyOtpCooldown();
     return surface;
   }
 
@@ -93,9 +170,11 @@
   function setAuthBusy(busy) {
     const form = $("#grcon-cloud-login-form");
     if (!form) return;
+    form.dataset.busy = busy ? "true" : "false";
     [...form.elements].forEach((control) => { control.disabled = Boolean(busy); });
     const button = $("button", form);
-    if (button) button.textContent = busy ? "Enviando…" : "Enviar link de acesso";
+    if (button) button.textContent = busy ? "Verificando…" : "Enviar link de acesso";
+    if (!busy) applyOtpCooldown();
   }
 
   async function sendMagicLink(event) {
@@ -108,17 +187,51 @@
       authMessage("Abra o GRCON pelo link publicado para entrar. O login não funciona ao abrir index.html diretamente.", "error");
       return;
     }
+
+    const guard = activeOtpGuard(email);
+    if (guard) {
+      const remaining = guard.blockedUntil - Date.now();
+      const message = guard.reason === "rate-limit"
+        ? `O serviço de e-mail atingiu o limite temporário. Tente novamente em ${formatCooldown(remaining)}.`
+        : `Um link já foi solicitado para este e-mail. Aguarde ${formatCooldown(remaining)} antes de pedir outro.`;
+      authMessage(message, "warn");
+      applyOtpCooldown();
+      return;
+    }
+
     setAuthBusy(true);
-    authMessage("Preparando seu acesso…", "info");
+    authMessage("Verificando se este navegador já possui uma sessão válida…", "info");
     try {
+      const { data: sessionData, error: sessionError } = await state.client.auth.getSession();
+      if (sessionError) console.warn("GRCON Cloud: não foi possível consultar a sessão local", sessionError);
+      const existingSession = sessionData?.session;
+      if (existingSession?.user) {
+        const existingEmail = String(existingSession.user.email || "").trim().toLowerCase();
+        if (!existingEmail || existingEmail === email) {
+          authMessage("Sessão já encontrada neste navegador. Confirmando seu acesso…", "success");
+          await activateSession(existingSession);
+          return;
+        }
+        authMessage(`Já existe uma sessão ativa para ${existingEmail}. Use “Sair e usar outro e-mail” para trocar de conta.`, "error");
+        $("#grcon-cloud-auth-signout")?.removeAttribute("hidden");
+        return;
+      }
+
+      authMessage("Enviando um único link de acesso…", "info");
       const { error } = await state.client.auth.signInWithOtp({
         email,
         options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
       });
       if (error) throw error;
-      authMessage("Link enviado. Verifique também a caixa de spam e abra o e-mail neste navegador.", "success");
+      storeOtpGuard(email, Date.now() + OTP_SENT_COOLDOWN_MS, "sent");
+      authMessage("Link enviado. Abra o e-mail neste navegador. Para evitar bloqueio, não solicite outro link enquanto este estiver válido.", "success");
     } catch (error) {
-      authMessage(error?.message || "Não foi possível enviar o link de acesso.", "error");
+      if (isEmailRateLimit(error)) {
+        storeOtpGuard(email, Date.now() + OTP_RATE_LIMIT_COOLDOWN_MS, "rate-limit");
+        authMessage("O Supabase bloqueou temporariamente novos e-mails porque o limite foi atingido. A sessão existente será reutilizada automaticamente; caso não exista, tente novamente em cerca de 1 hora.", "error");
+      } else {
+        authMessage(error?.message || "Não foi possível enviar o link de acesso.", "error");
+      }
     } finally {
       setAuthBusy(false);
     }
@@ -497,6 +610,7 @@
       }
       state.membership = membership;
       storeMembership(membership);
+      window.clearTimeout(state.authCooldownTimer);
       updateHistoryCopy();
       createAccountMenu();
       unlockApp();
@@ -531,10 +645,11 @@
     lockApp();
     $("#grcon-cloud-auth-signout")?.setAttribute("hidden", "");
     authMessage("Acesso disponível somente para usuários convidados.", "info");
+    applyOtpCooldown();
   }
 
   async function signOut() {
-    try { await state.client?.auth?.signOut(); } catch (_) { /* sessão local será removida abaixo */ }
+    try { await state.client?.auth?.signOut({ scope: "local" }); } catch (_) { /* sessão local será removida abaixo */ }
     removeStored(Config.membershipStorageKey);
     if (state.realtime) state.client?.removeChannel?.(state.realtime);
     $("#grcon-cloud-account")?.remove();

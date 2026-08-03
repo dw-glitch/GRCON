@@ -1,4 +1,4 @@
-GRCON 5.31.1 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.31.2 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 ESCOPO
 - Esta versão integra somente o GRCON entre usuários.
@@ -19,10 +19,11 @@ CONFIGURAÇÃO OBRIGATÓRIA NO SUPABASE
 4. Salve as alterações.
 
 PRIMEIRO USUÁRIO
-- E-mail autorizado como proprietário inicial: viniciomelokoke@gmail.com
+- E-mail autorizado como proprietário inicial: vinicio.silva@agnet.com.br
 - No GRCON publicado, informe esse e-mail e clique em "Enviar link de acesso".
-- Abra o link recebido no mesmo navegador.
+- Abra o link recebido no mesmo navegador. A sessão ficará salva e será reutilizada nos próximos acessos.
 - Depois de entrar, use o menu do usuário no topo para autorizar os demais e-mails.
+- Não repita o envio do link: a versão 5.31.2 bloqueia solicitações duplicadas e reaproveita a sessão existente.
 
 PERFIS
 - Proprietário: administra usuários e histórico.
