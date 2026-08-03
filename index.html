@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.31.1" data-version="5.31.1" lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="light dark" name="color-scheme"/>
+<meta content="#155c8a" name="theme-color"/>
+<script>
+try {
+  const savedTheme = localStorage.getItem("quality-theme-grcon") === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = savedTheme;
+  document.documentElement.style.colorScheme = savedTheme;
+} catch (_) {
+  document.documentElement.dataset.theme = "light";
+}
+</script>
+<meta content="Aplicativo corporativo de controle documental com processamento local e acessível." name="description"/>
+<meta content="default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: filesystem:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data: https://kvyrttccwzdhasplfxnr.supabase.co wss://kvyrttccwzdhasplfxnr.supabase.co" http-equiv="Content-Security-Policy"/>
+<title>GRCON — Central Operacional da Qualidade</title>
+<link href="grcon-icon.png" rel="icon" type="image/png"/>
+<link href="grcon-icon.png" rel="apple-touch-icon"/>
+<script>
+if (location.protocol === "http:" || location.protocol === "https:") {
+  const manifest = document.createElement("link");
+  manifest.rel = "manifest";
+  manifest.href = "manifest.json";
+  document.head.appendChild(manifest);
+}
+</script>
+<link href="design-system.css" rel="stylesheet"/><link href="legacy-compat.css" rel="stylesheet"/><link href="grcon-ui.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet" media="print" onload="this.media='all'"/><link href="analysis-history.css" rel="stylesheet" media="print" onload="this.media='all'"/><link href="grcon-final.css" rel="stylesheet"/><link href="grcon_cloud.css" rel="stylesheet"/>
+<meta content="5.31.1" name="application-version"/></head>
+<body>
+<a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
+<header class="topbar">
+<div class="brand">
+<span class="grcon-brand-mark"><img alt="GRCON — Controle de GRDT" class="brand-logo grcon-brand-logo" src="grcon-logo-app.png"/></span>
+<div><h1 class="brand-title">Central Operacional da Qualidade</h1><span class="brand-subtitle">Controle de GRDT</span></div>
+</div>
+<div class="runtime-status">
+<button class="workspace-new-tab" id="workspace-new-tab" title="Abrir outra tarefa do GRCON em uma nova aba" type="button">
+<svg viewbox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+<span>Nova tarefa</span>
+</button>
+<quality-status class="local-status" tone="success"><i></i>Pronto para uso</quality-status>
+<quality-status aria-live="polite" class="workspace-status" id="workspace-status" tone="success">Aba · Livre</quality-status>
+</div>
+</header>
+<div class="app-shell grdt-only">
+<aside aria-label="Áreas do GRCON" class="ops-sidebar">
+<div class="ops-sidebar-label">Operação</div>
+<button aria-current="page" class="ops-nav-button active" data-grcon-view="control" type="button">
+<svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Gerar eGRDT</strong></span>
+</button>
+<button class="ops-nav-button" data-grcon-view="analysis-history" type="button">
+<svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Análises</strong></span><b hidden="" id="ops-analysis-history-count">0</b>
+</button>
+<button class="ops-nav-button" data-grcon-view="history" type="button">
+<svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico</strong></span><b hidden="" id="ops-history-count">0</b>
+</button>
+<button class="ops-nav-button" data-grcon-view="sigem" type="button">
+<svg viewbox="0 0 24 24"><path d="M4 4h16v12H4zM8 20h8M12 16v4M7 8h10M7 12h6"></path></svg><span><strong>Postagem SIGEM</strong></span><b hidden="" id="ops-sigem-count">0</b>
+</button>
+<button aria-label="Configurações gerais do GRCON" class="ops-nav-button" data-ops-open-settings="" title="Configurações gerais" type="button">
+<svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7L10.5 2h-3l-.7 2.3-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2.3h3l.7-2.3 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7z"></path></svg><span><strong>Configurações</strong></span>
+</button>
+</aside>
+<main aria-label="Área de trabalho do GRCON" class="workspace" id="app-main" tabindex="-1">
+<nav aria-label="Navegação compacta do GRCON" class="grcon-view-tabs" role="tablist">
+<button id="tab-control" aria-controls="grdt-module" aria-selected="true" class="active" data-grcon-view="control" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Controle de GRDT</strong><small>Analisar e gerar eGRDT</small></span></button>
+<button id="tab-analysis" aria-controls="analysis-history-module" aria-selected="false" data-grcon-view="analysis-history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Histórico de análises</strong><small>Data, documento e status</small></span><b hidden="" id="analysis-history-tab-count">0</b></button>
+<button id="tab-history" aria-controls="history-module" aria-selected="false" data-grcon-view="history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico de eGRDTs</strong><small>Arquivos e alocações</small></span><b hidden="" id="history-tab-count">0</b></button>
+<button id="tab-sigem" aria-controls="sigem-module" aria-selected="false" data-grcon-view="sigem" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 4h16v12H4zM8 20h8M12 16v4M7 8h10M7 12h6"></path></svg><span><strong>Postagem SIGEM</strong><small>Conferir, copiar e registrar</small></span><b hidden="" id="sigem-tab-count">0</b></button>
+</nav>
+<section id="grdt-module" class="module-view" role="tabpanel" aria-labelledby="tab-control">
+<header class="ops-page-heading"><div><h2 id="grcon-module-title-1">Controle de GRDT</h2><p>LD e documentos prontos para análise.</p></div></header>
+<section aria-live="polite" class="p1-context-bar" hidden="" id="p1-grdt-context">
+<metric-chip><span>LD carregada</span><strong id="p1-context-ld">—</strong></metric-chip>
+<metric-chip><span>Documentos</span><strong id="p1-context-source">—</strong></metric-chip>
+<metric-chip><span>Situação</span><strong id="p1-context-summary">—</strong></metric-chip>
+<button class="secondary-button compact" id="p1-change-sources" type="button">Alterar arquivos</button>
+</section>
+<section aria-label="Arquivos e configurações da análise" class="control-panel">
+<div class="source-row">
+<div class="source-slot" id="ld-slot">
+<label class="compact-source">
+<input accept=".xlsx,.xls,.xlsm" id="ld-input" multiple type="file"/>
+<span class="source-icon excel">X</span>
+<span><strong>LD controlada</strong><small id="ld-meta">Selecionar arquivo</small></span>
+</label>
+<button aria-label="Remover LD carregada" class="source-clear-btn" hidden id="clear-ld-btn" title="Remover LD" type="button">
+<svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2.2" viewbox="0 0 16 16" width="12"><path d="M2 2l12 12M14 2L2 14"/></svg>
+</button>
+</div>
+<div class="source-slot" id="pdf-slot">
+<label class="compact-source">
+<input accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.dwg,.dgn,.ppt,.pptx" directory="" id="pdf-input" multiple="" type="file" webkitdirectory=""/>
+<span class="source-icon folder">
+<svg viewbox="0 0 24 24"><path d="M3 6h7l2 2h9v10H3z"></path></svg>
+</span>
+<span><strong>Pasta documental</strong><small id="pdf-meta">Selecionar pasta</small></span>
+</label>
+<button aria-label="Remover pasta documental" class="source-clear-btn" hidden id="clear-pdf-btn" title="Remover pasta" type="button">
+<svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2.2" viewbox="0 0 16 16" width="12"><path d="M2 2l12 12M14 2L2 14"/></svg>
+</button>
+</div>
+<div class="compact-source relation-source source-slot" id="relation-slot">
+<label class="relation-file-trigger">
+<input accept=".xlsx,.xls,.xlsm,.csv" id="list-input" type="file"/>
+<span class="source-icon excel">X</span>
+<span><strong>Relação de documentos</strong><small id="list-meta">Excel ou texto</small></span>
+</label>
+<button aria-label="Abrir Entrada por texto" class="relation-text-button" id="relation-start" title="Entrada por texto" type="button">
+<svg viewbox="0 0 24 24"><path d="M8 4h8M9 2h6v4H9zM7 4H5v17h14V4h-2M8 11h8M8 15h8"></path></svg>
+<span>Texto</span>
+</button>
+<button aria-label="Remover relação e texto" class="source-clear-btn" hidden id="clear-relation-btn" title="Remover relação" type="button">
+<svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2.2" viewbox="0 0 16 16" width="12"><path d="M2 2l12 12M14 2L2 14"/></svg>
+</button>
+</div>
+<button class="sgpar-button" disabled="" id="sgpar-start" type="button">
+<svg viewbox="0 0 24 24"><path d="M8 7V5h11v11h-2M5 8h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM8 12h4M8 15h4"></path></svg>
+<span>SGPAR assistido</span>
+</button>
+<button aria-expanded="false" aria-label="Configurações desta análise" class="icon-button settings-button" id="advanced-toggle" title="Configurações desta análise" type="button">
+<svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7L10.5 2h-3l-.7 2.3-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2.3h3l.7-2.3 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7z"></path></svg>
+<span class="settings-button-label">Configurações</span>
+</button>
+<button class="analyze-button" disabled="" id="analyze" type="button">
+<svg viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21M7 10h6M10 7v6"></path></svg>
+<span>Analisar e conferir</span>
+</button>
+</div>
+<div class="advanced-panel" hidden="" id="advanced-panel">
+<details class="settings-group" open>
+<summary><span>Análise e emissão</span><small>Regras operacionais</small></summary>
+<div class="settings-group-body">
+<label class="inline-setting">Emissão recente<input id="recent-days" inputmode="numeric" max="365" min="1" type="number" value="30"/><span>dias</span></label>
+<section class="egrdt-batch-settings settings-embedded compact-limit-setting" aria-labelledby="egrdt-batch-settings-title">
+<div><strong id="egrdt-batch-settings-title">Limite por eGRDT</strong><small id="egrdt-batch-limit-status">Limite atual: 48 · máximo 48</small></div>
+<label><span>Por lote</span><input id="egrdt-batch-limit" type="number" min="1" max="48" step="1" value="48" inputmode="numeric"/></label>
+<button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar</button>
+</section>
+<details class="ignored-details" hidden="" id="ignored-details"><summary id="ignored-summary">Arquivos ignorados</summary><ul id="ignored-list"></ul></details>
+<div class="settings-inline-actions"><button class="text-button" id="reset" type="button">Limpar seleção</button><button class="compatibility-open-button" hidden="" id="ld-compatibility-open" type="button">Estrutura da LD</button><span class="compatibility-status" hidden="" id="ld-compatibility-status"></span></div>
+</div>
+</details>
+<details class="settings-group technical-settings" hidden>
+<summary><span>Diagnóstico e armazenamento</span><small>Opções avançadas</small></summary>
+<div class="settings-group-body">
+<section class="performance-panel performance-panel-settings" id="performance-panel" aria-label="Diagnóstico do processamento">
+  <div class="performance-copy"><strong>Diagnóstico interno</strong><span id="performance-status">Medições disponíveis após a análise.</span></div>
+  <div class="performance-metrics" aria-live="polite">
+    <span><b id="metric-ld">LD —</b><small>leitura e índice</small></span>
+    <span><b id="metric-triage">Triagem —</b><small>processamento</small></span>
+    <span><b id="metric-export">Exportação —</b><small>Excel / eGRDT / ZIP</small></span>
+    <span><b id="metric-memory">Memória —</b><small>uso do navegador</small></span>
+  </div>
+  <div class="performance-stage-list" id="performance-stage-list" aria-label="Tempos por etapa"><span><b>Aguardando execução</b><em>As medições surgirão após a análise.</em></span></div>
+  <div class="performance-live-progress" id="performance-live-progress" aria-live="polite">Sem processamento em execução.</div>
+  <div class="performance-actions"><button class="secondary-button compact" id="clear-ld-cache" type="button">Limpar cache da LD</button></div>
+</section>
+</div>
+</details>
+<details class="settings-group" id="macro6-productivity">
+<summary><span>Preferências, backups e manutenção</span><small>Central final de produtividade</small></summary>
+<div class="settings-group-body macro6-productivity-card">
+<div class="macro6-storage-status" id="macro6-storage-summary" aria-live="polite">Calculando armazenamento local…</div>
+<div class="macro6-productivity-grid">
+<section class="macro6-productivity-section">
+<header><strong>Preferências do GRCON</strong><small>Colunas, densidade, filtros salvos, parâmetros de emissão e postagem.</small></header>
+<div class="macro6-action-row"><button class="secondary-button compact" data-macro6-action id="macro6-preferences-export" type="button">Exportar preferências</button><button class="secondary-button compact" data-macro6-action id="macro6-preferences-import-button" type="button">Importar preferências</button><input accept="application/json,.json" hidden id="macro6-preferences-import" type="file"/></div>
+</section>
+<section class="macro6-productivity-section">
+<header><strong>Backup completo</strong><small>Inclui preferências, Histórico de análises, Histórico de eGRDTs e fila SIGEM.</small></header>
+<div class="macro6-action-row"><button class="primary-button compact" data-macro6-action id="macro6-full-export" type="button">Criar backup completo</button><button class="secondary-button compact" data-macro6-action id="macro6-full-import-button" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="macro6-full-import" type="file"/></div>
+</section>
+<section class="macro6-productivity-section">
+<header><strong>Relatório comparativo</strong><small>Compara análises, eGRDTs e postagens no período selecionado.</small></header>
+<div class="macro6-date-range"><label><span>Data inicial</span><input id="macro6-report-start" type="date"/></label><label><span>Data final</span><input id="macro6-report-end" type="date"/></label></div>
+<div class="macro6-action-row"><button class="secondary-button compact" data-macro6-action id="macro6-comparison-report" type="button">Baixar comparativo em CSV</button></div>
+</section>
+<section class="macro6-productivity-section macro6-warning-section">
+<header><strong>Limpeza controlada</strong><small>A sequência numérica das eGRDTs é preservada.</small></header>
+<div class="macro6-action-row"><button class="secondary-button compact" data-macro6-action id="macro6-reset-preferences" type="button">Restaurar preferências padrão</button><button class="danger-button compact" data-macro6-action id="macro6-clear-operational" type="button">Limpar históricos e filas</button></div>
+</section>
+</div>
+<div class="macro6-storage-status" id="macro6-status" aria-live="polite">Aguardando ação.</div>
+</div>
+</details>
+</div>
+<div class="progress-wrap" hidden="" id="progress">
+<div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+<div class="progress-message-row"><span id="progress-text">Processando…</span><button class="danger-button compact" id="cancel-processing" type="button" hidden>Cancelar</button></div>
+</div>
+</section>
+<section aria-label="Resultado da triagem documental" class="results-section" hidden="" id="results-section">
+<nav aria-label="Filtros por situação" class="summary-bar">
+<button class="summary-item active" data-filter="todos" type="button"><span>Total</span><strong id="count-total">0</strong><b>0</b></button>
+<button class="summary-item ready" data-filter="pronto" type="button"><span>Prontos</span><strong id="count-ready">0</strong><b>0</b></button>
+<button class="summary-item blocked" data-filter="bloqueado" type="button"><span>Não incluir</span><strong id="count-blocked">0</strong><b>0</b></button>
+<button class="summary-item discard" data-filter="descartar" type="button"><span>Em análise</span><strong id="count-discard">0</strong><b>0</b></button>
+<button class="summary-item review" data-filter="revisar" type="button"><span>Revisar</span><strong id="count-review">0</strong><b>0</b></button>
+</nav>
+<div class="results-toolbar">
+<label class="search-box">
+<svg viewbox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M16 16l5 5"></path></svg>
+<input id="search" placeholder="Buscar documento…" type="search"/>
+</label>
+<select aria-label="Filtrar por aba" class="filter-select" id="sheet-filter"><option value="todos">Todas as abas</option></select>
+<span class="p1-shown-count" id="p1-shown-count">Nenhum resultado</span>
+<button aria-pressed="true" class="secondary-button compact p1-columns-toggle" id="p1-columns-toggle" type="button">Colunas essenciais</button>
+<label class="triage-density-control"><span>Densidade</span><select id="triage-density"><option value="comfortable">Confortável</option><option value="compact">Compacta</option></select></label>
+<button aria-pressed="false" class="secondary-button compact" id="triage-group-toggle" type="button">Agrupar por situação</button>
+<details class="triage-column-manager" id="triage-column-manager"><summary>Colunas visíveis</summary><div class="triage-column-manager-panel"><div id="triage-column-options"></div><div class="triage-column-presets"><button class="secondary-button compact" data-column-preset="essential" type="button">Essenciais</button><button class="secondary-button compact" data-column-preset="all" type="button">Todas</button></div></div></details>
+<button class="secondary-button compact table-filter-clear" hidden id="results-clear-column-filters" type="button">Limpar filtros das colunas</button>
+<span class="analysis-stamp" hidden="" id="analysis-stamp"></span>
+<span class="selected-count" id="selected-count">0 selecionados</span>
+<button class="secondary-button compact" disabled="" id="batch-egrdt" type="button">Revisar dados selecionados</button>
+<div class="toolbar-spacer"></div>
+<details class="secondary-downloads"><summary>Outros downloads</summary><div class="secondary-downloads-menu">
+<button class="secondary-button compact" disabled="" id="export-report" title="Baixar relatório de triagem" type="button">Baixar relatório da triagem</button>
+<button class="secondary-button compact" disabled="" id="export-pending-allocation-pdfs" title="Baixar somente os PDFs com número de alocação registrado e confirmação ainda como Não Alocado" type="button">PDFs aguardando alocação</button>
+<button class="secondary-button compact" id="view-pending-allocation-history" title="Ver histórico de documentos aguardando retorno da alocação" type="button">📊 Histórico de alocações pendentes</button>
+<button class="secondary-button compact" disabled="" id="export-zip" type="button">Baixar PDFs + eGRDT</button>
+<button class="secondary-button compact final-package-button" disabled="" id="export-final-package" type="button">Baixar pacote completo</button>
+</div></details>
+<button class="primary-button" disabled="" id="export-egrdt" type="button">Baixar eGRDT final</button>
+</div>
+<div aria-label="Filtros ativos da triagem" class="triage-active-filters" hidden id="triage-active-filters"></div>
+<span class="grdt-batch-limit-chip" id="egrdt-batch-policy-text">Limite: 48 por eGRDT</span>
+<div class="table-card">
+<div class="table-scroll virtual-table-scroll" id="results-scroll" tabindex="0" aria-label="Resultados virtualizados da triagem">
+<table class="grcon-results-table" id="results-table">
+<thead><tr>
+<th scope="col"><span class="select-all-heading"><input aria-label="Selecionar todos os documentos prontos" id="select-all-ready" type="checkbox"/>Situação</span></th>
+<th scope="col">ARQUIVO ORIGINAL</th>
+<th scope="col">DOCUMENTO</th>
+<th scope="col">ABA LD</th>
+<th scope="col">REVISÃO</th>
+<th scope="col">REVISÃO PARA POSTAR</th>
+<th scope="col">TÍTULO</th>
+<th scope="col">DATA EFETIVA DE EMISSÃO</th>
+<th scope="col">GRDT</th>
+<th scope="col">STATUS</th>
+<th scope="col">STATUS SIGEM</th>
+<th scope="col">STATUS DA REVISÃO PARA POSTAR</th>
+<th scope="col">SITUAÇÃO DE POSTAGEM</th>
+<th scope="col">COMENTÁRIO DA FISCAL</th>
+<th scope="col">ALOCAÇÃO</th>
+<th scope="col">ETAPA DA ALOCAÇÃO</th>
+<th scope="col">Confirmação de DOCUMENTOS PREVISTOS</th>
+<th scope="col">Caminho databook</th>
+<th scope="col">ARQUIVO FINAL</th>
+</tr><tr class="column-filter-row" id="results-column-filters"></tr></thead>
+<tbody id="results-body"></tbody>
+</table>
+<empty-state class="empty-results" hidden="" id="empty-results"><strong>Nenhum documento corresponde aos filtros.</strong><span>Limpe os filtros ou confira os arquivos carregados.</span></empty-state>
+</div>
+</div>
+<div class="virtualization-note" id="result-pagination" hidden><span id="result-page-status">Tabela virtualizada</span><button id="result-page-previous" hidden type="button"></button><button id="result-page-next" hidden type="button"></button></div>
+</section>
+</section>
+<section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
+<header class="analysis-history-heading"><div><span>RASTREABILIDADE DAS ANÁLISES</span><h2 id="analysis-history-title">Todos os documentos analisados pelo GRCON</h2><p>Cada análise concluída é registrada com data, documento, revisão, situação entregue e motivo.</p></div><div class="analysis-history-actions"><button class="secondary-button" id="analysis-history-backup" type="button">Fazer backup</button><button class="secondary-button" id="analysis-history-restore" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="analysis-history-restore-input" type="file"/><button class="secondary-button" disabled="" id="analysis-history-delete-session" type="button">Excluir análise selecionada</button><button class="secondary-button" id="analysis-history-clear" type="button">Limpar todo o histórico</button></div></header>
+<section aria-label="Busca unificada" class="unified-search" id="unified-search">
+  <div class="unified-search-heading">
+    <span>BUSCA UNIFICADA</span>
+    <h3>Buscar documentos no histórico e nas análises</h3>
+    <p>Cole códigos ou nomes de documentos, um por linha, para buscar no histórico de eGRDTs e no histórico de análises.</p>
+  </div>
+  <div class="unified-search-body">
+    <div class="unified-search-input">
+      <textarea id="unified-search-text" placeholder="Cole um código ou nome de documento por linha" rows="3" spellcheck="false"></textarea>
+      <div class="unified-search-actions">
+        <button class="primary-button" id="unified-search-btn" type="button">Buscar</button>
+        <button class="secondary-button" id="unified-search-clear" type="button">Limpar</button>
+      </div>
+    </div>
+    <div class="unified-search-results" id="unified-search-results" hidden>
+      <div class="unified-search-result-card">
+        <div class="unified-search-result-header"><span>eGRDTs no Histórico</span><strong id="unified-history-count">0</strong></div>
+        <small>eGRDTs correspondentes</small>
+      </div>
+      <div class="unified-search-result-card">
+        <div class="unified-search-result-header"><span>Análises no Histórico de Análises</span><strong id="unified-analysis-count">0</strong></div>
+        <small>documentos analisados correspondentes</small>
+      </div>
+    </div>
+    <div class="unified-search-detail" id="unified-search-detail" hidden></div>
+  </div>
+</section>
+<section aria-label="Filtros do histórico de análises" class="analysis-history-toolbar">
+<label class="analysis-history-search-field"><span>Busca geral</span><span class="analysis-history-search-control"><svg aria-hidden="true" viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input autocomplete="off" id="analysis-history-search" placeholder="Documento, título, motivo, GRDT ou alocação" type="search"/></span></label>
+<label><span>Situação entregue</span><select id="analysis-history-status"><option value="ALL">Todas</option><option value="READY">Será incluído na eGRDT</option><option value="BLOCKED">Não será incluído</option><option value="DISCARD">Não será enviado novamente</option><option value="REVIEW">Precisa de conferência</option></select></label>
+<label><span>Data inicial</span><input id="analysis-history-start" type="date"/></label>
+<label><span>Data final</span><input id="analysis-history-end" type="date"/></label>
+<label><span>Análise executada</span><select id="analysis-history-session"><option value="">Todas as análises</option></select></label>
+</section>
+<div class="analysis-history-quick" aria-label="Filtros rápidos"><button type="button" data-analysis-quick="today">Hoje</button><button type="button" data-analysis-quick="7days">Últimos 7 dias</button><button type="button" data-analysis-quick="pending">Pendências</button><button type="button" data-analysis-quick="included">Incluídos</button></div>
+<div class="analysis-saved-filters" aria-label="Filtros salvos"><label><span>Filtro salvo</span><select id="analysis-history-saved-filter"><option value="">Selecionar filtro</option></select></label><button class="secondary-button compact" id="analysis-history-save-filter" type="button">Salvar filtro atual</button><button class="secondary-button compact" disabled id="analysis-history-delete-filter" type="button">Excluir filtro</button></div>
+<section aria-label="Resumo das análises" class="analysis-history-summary" id="analysis-history-summary"></section>
+<section class="analysis-history-card" aria-label="Documentos analisados"><header><div><span>DOCUMENTOS REGISTRADOS</span><strong id="analysis-history-result-count">0 documento(s)</strong></div><div class="analysis-history-actions"><button class="primary-button" disabled="" id="analysis-history-export" type="button">Baixar relatório Excel</button></div></header>
+<div class="analysis-history-table-hint"><span>Visualização detalhada</span><small>Em telas menores, cada documento é apresentado em um cartão para evitar sobreposição.</small></div>
+<div class="analysis-history-table-wrap"><table class="analysis-history-table"><colgroup><col class="analysis-col-date"/><col class="analysis-col-document"/><col class="analysis-col-current-revision"/><col class="analysis-col-target-revision"/><col class="analysis-col-result"/><col class="analysis-col-sigem"/><col class="analysis-col-allocation"/><col class="analysis-col-ld"/><col class="analysis-col-reason"/></colgroup><thead><tr><th>Analisado em</th><th>Documento</th><th>Revisão atual</th><th>Próxima revisão</th><th>Resultado GRCON</th><th>SIGEM</th><th>Alocação</th><th>LD</th><th>Motivo</th></tr></thead><tbody id="analysis-history-body"></tbody></table><empty-state hidden="" id="analysis-history-empty"><strong>Nenhum documento localizado</strong><span>Execute uma análise ou ajuste os filtros.</span></empty-state></div>
+<footer class="analysis-history-footer"><small id="analysis-history-storage">O histórico fica no armazenamento local deste navegador.</small><div class="analysis-history-pagination"><button class="secondary-button compact" disabled="" id="analysis-history-previous" type="button">Anterior</button><span id="analysis-history-page-status">Nenhum documento</span><button class="secondary-button compact" disabled="" id="analysis-history-next" type="button">Próxima</button></div></footer>
+</section>
+<aside aria-hidden="true" aria-labelledby="analysis-history-detail-title" class="analysis-history-detail-panel" hidden id="analysis-history-detail"><header><div><span>COMPARAÇÃO E EVIDÊNCIAS</span><h3 id="analysis-history-detail-title">Documento analisado</h3></div><button aria-label="Fechar detalhes" class="icon-button" id="analysis-history-detail-close" type="button">×</button></header><div id="analysis-history-detail-body"></div></aside>
+<div class="analysis-history-detail-overlay" hidden id="analysis-history-detail-overlay"></div>
+</section>
+<section id="history-module" class="history-module history-module-v2" hidden="" role="tabpanel" aria-labelledby="tab-history">
+<header class="history-heading"><div><span>HISTÓRICO LOCAL</span><h2 id="history-title">eGRDTs geradas pelo GRCON</h2><p>Consulte documentos, confira alocações e corrija o número registrado quando necessário.</p></div><button class="secondary-button history-clear-button" id="history-clear" type="button">Limpar histórico</button></header>
+<section aria-label="Filtros e relação do histórico" class="history-toolbar">
+<label class="history-search"><svg viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input id="history-search" placeholder="Buscar eGRDT, documento ou alocação" type="search"/></label>
+<label><span>Ano</span><select id="history-year"><option value="">Todos</option></select></label>
+<label><span>Saída</span><select id="history-type"><option value="">Todas</option></select></label>
+<label><span>Postagem</span><select id="history-posting-status"><option value="">Todas</option><option value="AGUARDANDO">Aguardando preparação</option><option value="GERADO">Gerado</option><option value="VALIDADO">Pacote conferido</option><option value="PRONTO">Pronto para SIGEM</option><option value="POSTADO">Postado</option><option value="PENDENCIA">Com pendência</option><option value="FALHA">Falha</option><option value="CANCELADO">Cancelado</option></select></label>
+<label><span>Ordem</span><select id="history-sort"><option value="recent">Mais recentes</option><option value="oldest">Mais antigas</option><option value="number-desc">Maior número</option><option value="number-asc">Menor número</option></select></label>
+<div aria-label="Período da relação" class="history-period-controls" role="group">
+<label><span>Data inicial</span><input id="history-date-start" type="date"/></label>
+<label><span>Data final</span><input id="history-date-end" type="date"/></label>
+<div class="history-period-action"><span id="history-period-status">Todo o histórico disponível</span><button class="primary-button" disabled="" id="history-export-period" type="button">Baixar relação do período</button></div>
+</div>
+</section>
+<section aria-label="Resumo do histórico" class="history-summary" id="history-summary"></section>
+<div class="history-workspace">
+<section aria-label="eGRDTs registradas" class="history-list-card"><header><div><span>REGISTROS</span><strong id="history-result-count">0 eGRDTs</strong></div><small>Selecione uma eGRDT para conferir os documentos.</small></header><div class="history-list" id="history-list"></div><empty-state class="history-empty" hidden="" id="history-empty"><strong>Nenhuma eGRDT localizada</strong><span>Gere uma eGRDT ou ajuste os filtros.</span></empty-state></section>
+<section aria-live="polite" class="history-detail" id="history-detail"></section>
+</div>
+</section>
+<section id="sigem-module" class="sigem-module" hidden="" role="tabpanel" aria-labelledby="tab-sigem">
+<header class="sigem-heading"><div><span>CONTROLE MANUAL</span><h2 id="sigem-title">Conferir postagem e atualizar a LD</h2><p>O GRCON não envia nada ao SIGEM. Confira o lote, faça a postagem manualmente, marque como postado e gere uma cópia da LD com o número e a data.</p></div><button class="secondary-button" id="sigem-clear" type="button">Limpar registros de postagem</button></header>
+<section class="sigem-settings-card" aria-label="Preferências de postagem">
+<header><div><span>CONFIGURAÇÃO LOCAL</span><strong>Pasta raiz e responsável padrão</strong></div><small>Essas informações ficam somente neste navegador.</small></header>
+<div class="sigem-settings-grid">
+<label><span>Pasta raiz onde os ZIPs são extraídos</span><input autocomplete="off" id="sigem-base-path" placeholder="Ex.: R:\GRUPOS-HDD\Qualidade\06.Sigem" type="text"/></label>
+<label><span>Responsável padrão</span><input autocomplete="name" id="sigem-default-responsible" placeholder="Nome ou identificação" type="text"/></label>
+<button class="primary-button" id="sigem-save-preferences" type="button">Salvar e aplicar</button>
+</div>
+<p class="sigem-browser-note">Informe a pasta raiz uma vez e confirme a pasta de cada lote.</p>
+</section>
+<section aria-label="Filtros dos registros SIGEM" class="sigem-toolbar">
+<label class="history-search"><svg viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input id="sigem-search" placeholder="Buscar eGRDT, documento, Databook ou protocolo" type="search"/></label>
+<label><span>Status</span><select id="sigem-status-filter"><option value="all">Todos</option><option value="GERADO">Gerado</option><option value="VALIDADO">Validado</option><option value="PRONTO">Pronto para SIGEM</option><option value="POSTADO">Postado</option><option value="PENDENCIA">Com pendência</option><option value="FALHA">Falha</option><option value="CANCELADO">Cancelado</option></select></label>
+<strong id="sigem-result-count">0 registro(s)</strong>
+</section>
+<section aria-label="Resumo das postagens" class="sigem-summary" id="sigem-summary"></section>
+<section aria-label="Atualizar a LD após as postagens" class="sigem-ld-update-card">
+<header><div><span>ATUALIZAÇÃO EM LOTE</span><strong>Atualizar LD após postagens</strong><small>Preenche a Data Efetiva de Emissão e a GRDT dos documentos postados.</small></div><span class="sigem-ld-update-badge" id="sigem-ld-update-count">Nenhuma postagem pendente</span></header>
+<div class="sigem-ld-update-grid">
+<label class="sigem-ld-file-field"><span>LD que será atualizada</span><input accept=".xlsx,.xlsm" id="sigem-ld-update-file" type="file"/><small id="sigem-ld-update-file-meta">A LD carregada na análise será usada quando disponível.</small></label>
+<label><span>Postagens</span><select id="sigem-ld-update-scope"><option value="pending">Somente as ainda não atualizadas</option><option value="selected">Somente a eGRDT selecionada</option><option value="all">Todas as postagens concluídas</option></select></label>
+<button class="primary-button" id="sigem-ld-update-run" type="button">Gerar LD atualizada</button>
+</div>
+<div class="sigem-ld-update-status" id="sigem-ld-update-status" aria-live="polite">A LD original será preservada. Linhas com conflito ficarão para conferência.</div>
+</section>
+<div class="sigem-workspace">
+<section aria-label="Fila de postagens" class="sigem-list-card"><header><div><span>FILA LOCAL</span><strong>eGRDTs preparadas</strong></div><small>Selecione um registro.</small></header><div class="sigem-list" id="sigem-list"></div><empty-state class="sigem-empty" hidden="" id="sigem-empty"><strong>Nenhuma postagem localizada</strong><span>Gere um pacote com PDFs e eGRDT para iniciar.</span></empty-state></section>
+<section aria-live="polite" class="sigem-detail" id="sigem-detail"></section>
+</div>
+</section>
+</main>
+<footer class="app-footer"><span>GRCON 5.31.1 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<div class="drawer-overlay" hidden="" id="relation-overlay"></div>
+<aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
+<header class="drawer-header">
+<div><h2 id="relation-title">Entrada por texto</h2><span id="relation-count">Nenhum item válido</span></div>
+<button aria-label="Fechar" class="icon-button" id="relation-close" type="button">
+<svg viewbox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+</button>
+</header>
+<div class="relation-body">
+<div class="relation-editor-heading">
+<label for="relation-text">Entrada por texto</label>
+<div>
+<button class="text-action" id="relation-paste" type="button">Colar</button>
+<button class="text-action danger" id="relation-clear" type="button">Limpar</button>
+</div>
+</div>
+<textarea autocomplete="off" id="relation-text" placeholder="Cole o código completo ou o nome do PDF por linha — sem limite de tamanho" spellcheck="false"></textarea>
+<p class="large-list-note"><strong>Códigos e listas extensos:</strong> o GRCON usa a LD para localizar o código completo dentro do nome colado, preservando pontos, vírgulas e complementos. Não há limite artificial de tamanho ou quantidade.</p>
+<section aria-label="Resumo da relação" class="relation-summary">
+<div class="valid"><strong id="relation-valid-count">0</strong><span>Válidos</span></div>
+<div class="duplicate"><strong id="relation-duplicate-count">0</strong><span>Duplicados</span></div>
+<div class="ignored"><strong id="relation-ignored-count">0</strong><span>Ignorados</span></div>
+</section>
+<div class="relation-preview-heading"><strong>Prévia</strong><span id="relation-preview-meta">0 itens</span></div>
+<div class="relation-preview" id="relation-preview"></div>
+<empty-state class="relation-empty" id="relation-empty">Cole a relação para visualizar os documentos.</empty-state>
+</div>
+<footer class="drawer-footer">
+<button class="secondary-button" id="relation-cancel" type="button">Cancelar</button>
+<button class="primary-button" disabled="" id="relation-apply" type="button">Usar relação</button>
+</footer>
+</aside>
+<div class="drawer-overlay" hidden="" id="sgpar-overlay"></div>
+<aside aria-hidden="true" aria-labelledby="sgpar-title" class="sgpar-drawer" inert id="sgpar-drawer">
+<header class="drawer-header">
+<div><h2 id="sgpar-title">SGPAR Assistido</h2><span id="sgpar-count">Nenhum documento</span></div>
+<button aria-label="Fechar" class="icon-button" id="sgpar-close" type="button">
+<svg viewbox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+</button>
+</header>
+<div class="sgpar-body">
+<label class="sgpar-url-field">
+<span>Endereço do SGPAR</span>
+<input autocomplete="url" id="sgpar-url" inputmode="url" placeholder="https://endereco-do-sgpar" type="url"/>
+</label>
+<section aria-label="Andamento da busca" class="sgpar-overview">
+<div><strong id="sgpar-found-count">0</strong><span>Localizados</span></div>
+<div><strong id="sgpar-downloaded-count">0</strong><span>Baixados</span></div>
+<div><strong id="sgpar-pending-count">0</strong><span>Pendentes</span></div>
+<div><strong id="sgpar-unresolved-count">0</strong><span>Não encontrados</span></div>
+<div class="sgpar-progress"><i id="sgpar-progress-bar"></i></div>
+</section>
+<section aria-live="polite" class="sgpar-current">
+<div class="sgpar-current-heading">
+<span id="sgpar-position">Documento 0 de 0</span>
+<span class="sgpar-status pending" id="sgpar-current-status">Pendente</span>
+</div>
+<strong id="sgpar-code">—</strong>
+<span id="sgpar-expected-file">—</span>
+<div class="sgpar-search-actions">
+<button class="secondary-button" id="sgpar-copy" type="button">Copiar código</button>
+<button class="primary-button" id="sgpar-copy-open" type="button">Copiar e abrir SGPAR</button>
+</div>
+<div class="sgpar-result-actions">
+<button class="state-button downloaded" id="sgpar-mark-downloaded" type="button">Baixado</button>
+<button class="state-button missing" id="sgpar-mark-missing" type="button">Não encontrado</button>
+<button class="state-button neutral" id="sgpar-skip" type="button">Depois</button>
+</div>
+</section>
+<div class="sgpar-queue-heading">
+<strong>Fila</strong>
+<div>
+<button aria-label="Documento anterior" class="queue-nav" id="sgpar-previous" type="button">←</button>
+<button aria-label="Próximo documento" class="queue-nav" id="sgpar-next" type="button">→</button>
+</div>
+</div>
+<div class="sgpar-queue" id="sgpar-queue"></div>
+<label class="sgpar-file-picker">
+<input accept=".pdf" id="sgpar-files" multiple="" type="file"/>
+<svg viewbox="0 0 24 24"><path d="M12 4v11M8 8l4-4 4 4M5 14v5h14v-5"></path></svg>
+<span><strong>Adicionar PDFs baixados</strong><small id="sgpar-files-meta">Nenhum PDF adicionado</small></span>
+</label>
+</div>
+<footer class="drawer-footer">
+<button class="secondary-button" id="sgpar-cancel" type="button">Fechar</button>
+<button class="primary-button" id="sgpar-analyze" type="button">Continuar para análise</button>
+</footer>
+</aside>
+<div class="drawer-overlay" hidden="" id="drawer-overlay"></div>
+<aside aria-hidden="true" class="egrdt-drawer" inert id="egrdt-drawer">
+<header class="drawer-header">
+<div><h2>Campos da GRDT</h2><span id="drawer-count">1 documento</span></div>
+<button aria-label="Fechar" class="icon-button" id="drawer-close" type="button">
+<svg viewbox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+</button>
+</header>
+<div class="drawer-body">
+<label id="drawer-title-field">Título<input id="drawer-title" type="text"/></label>
+<div class="title-quality-panel" hidden="" id="drawer-title-quality"></div>
+<button aria-label="Aplicar sugestão de título" class="assistant-suggestion" hidden="" id="drawer-title-suggestion" type="button"></button>
+<div class="drawer-grid">
+<label>Formato<select id="drawer-format"></select></label>
+<label>Disciplina<select id="drawer-discipline"></select></label>
+<label>Tipo de documento<select id="drawer-type"></select></label>
+<label>Propósito<select id="drawer-purpose"></select></label>
+</div>
+<label id="drawer-databook-field">Caminho Databook — valor da LD<input id="drawer-databook" readonly="" title="Somente leitura: este valor vem da linha do documento na LD." type="text"/></label>
+<button aria-label="Aplicar sugestão de caminho Databook" class="assistant-suggestion" hidden="" id="drawer-databook-suggestion" type="button"></button>
+<div class="drawer-documents" id="drawer-documents"></div>
+</div>
+<footer class="drawer-footer">
+<button class="secondary-button" id="drawer-cancel" type="button">Cancelar</button>
+<button class="primary-button" id="drawer-save" type="button">Aplicar</button>
+</footer>
+</aside>
+<div class="drawer-overlay" hidden="" id="ld-compatibility-overlay"></div>
+<aside aria-hidden="true" aria-labelledby="ld-compatibility-title" class="ld-compatibility-drawer" inert id="ld-compatibility-drawer">
+<header class="drawer-header">
+<div><h2 id="ld-compatibility-title">Estrutura da LD</h2><span id="ld-compatibility-summary">Analisando estrutura</span></div>
+<button aria-label="Fechar" class="icon-button" id="ld-compatibility-close" type="button"><svg viewbox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"></path></svg></button>
+</header>
+<div class="ld-compatibility-body" id="ld-compatibility-body"></div>
+<div class="ld-compatibility-message" hidden="" id="ld-compatibility-message"></div>
+<footer class="drawer-footer">
+<button class="secondary-button" id="ld-compatibility-cancel" type="button">Cancelar</button>
+<button class="primary-button" id="ld-compatibility-confirm" type="button">Confirmar associações</button>
+</footer>
+</aside>
+<div class="p1-confirm-overlay" hidden="" id="p1-confirm-overlay"></div>
+<section aria-labelledby="p1-confirm-title" aria-modal="true" class="p1-confirm-dialog" hidden="" id="p1-confirm-dialog" role="dialog">
+<div aria-hidden="true" class="p1-confirm-icon">✓</div>
+<div><h2 id="p1-confirm-title">Confirmar saída</h2><p id="p1-confirm-message"></p></div>
+<ul id="p1-confirm-facts"></ul>
+<section class="p1-output-audit" hidden="" id="p1-output-audit">
+<div class="p1-output-audit-head"><span>Conferência final</span><strong id="p1-output-audit-summary">—</strong></div>
+<div class="p1-output-audit-state" id="p1-output-audit-state">—</div>
+<div class="v6-conference-number"><span>Número da eGRDT</span><strong id="v6-conference-number">—</strong></div>
+<div class="v6-conference-summary" id="v6-conference-summary"></div>
+<div aria-label="Filtrar arquivos da conferência" class="v6-conference-filters" role="group">
+<button aria-pressed="true" class="active" data-v6-conference-filter="all" type="button">Todos</button>
+<button aria-pressed="false" data-v6-conference-filter="included" type="button">Incluídos</button>
+<button aria-pressed="false" data-v6-conference-filter="excluded" type="button">Excluídos</button>
+<button aria-pressed="false" data-v6-conference-filter="alerts" type="button">Alertas</button>
+</div>
+<div class="v6-conference-table-wrap">
+<table class="v6-conference-table">
+<thead><tr><th>Saída</th><th>Documento</th><th>Nome original do PDF</th><th>Nome final com revisão</th><th>Revisão</th><th>Status SIGEM</th><th>Caminho Databook</th><th>Decisão final</th><th>Alertas</th></tr></thead>
+<tbody id="v6-conference-body"></tbody>
+</table>
+<empty-state class="v6-conference-empty" hidden="" id="v6-conference-empty">Nenhum arquivo neste filtro.</empty-state>
+</div>
+<div class="p1-output-audit-list" hidden="" id="p1-output-audit-list"></div>
+<small id="p1-output-audit-more"></small>
+</section>
+<section class="p1-sequence-confirm" hidden="" id="p1-sequence-confirm-field">
+<header class="p1-batch-sequence-head">
+<div><span>Divisão operacional para o SIGEM</span><strong id="p1-batch-sequence-summary">—</strong></div>
+<small id="p1-batch-limit-note">Limite: 48 documentos por eGRDT.</small>
+</header>
+<div class="p1-batch-sequence-list" id="p1-batch-sequence-list"></div>
+<small class="p1-batch-general-warning" id="p1-sequence-warning"></small>
+<label class="p1-sequence-check"><input id="p1-sequence-confirm" type="checkbox"/><span>Confirmo que todos os números acima estão disponíveis e podem ser usados.</span></label>
+</section>
+<div class="p1-confirm-actions"><button class="secondary-button" id="p1-confirm-cancel" type="button">Voltar e conferir</button><button class="primary-button" id="p1-confirm-ok" type="button">Confirmar</button></div>
+</section>
+<app-toast aria-live="polite" class="toast" id="toast" role="status"></app-toast>
+
+
+
+<script defer="" src="offline_resources.js"></script>
+<script defer="" src="grcon_module_loader.js"></script>
+<script defer="" src="grcon_contracts.js"></script>
+<script defer="" src="large_input.js"></script>
+<script defer src="grcon_config.js"></script><script defer src="grcon_utils.js"></script><script defer src="grcon_file_access.js"></script>
+<script defer="" src="core.js"></script>
+<script defer="" src="ld_conflicts.js"></script>
+<script defer="" src="report_summary.js"></script>
+<script defer="" src="grcon_output_guard.js"></script>
+<script defer="" src="output_audit.js"></script>
+<script defer="" src="package_layout.js"></script>
+<script defer="" src="egrdt_sequence.js"></script>
+<script defer="" src="history_core.js"></script>
+<script defer="" src="supabase.min.js"></script>
+<script defer="" src="grcon_cloud_config.js"></script>
+<script defer="" src="grcon_cloud_app.js"></script>
+<script defer="" src="pending_allocation_history_core.js"></script>
+<script defer="" src="analysis_history_core.js"></script>
+<script defer src="analysis_history_storage_fallback.js"></script>
+<script defer="" src="analysis_warning.js"></script>
+<script defer="" src="error_handler.js"></script>
+<script defer="" src="keyboard_shortcuts.js"></script>
+<script defer="" src="grcon_grdt_history_indicator.js"></script>
+<script defer="" src="ld_memory.js"></script>
+<script defer="" src="sigem_posting_core.js"></script>
+
+
+<script defer="" src="ld_compatibility.js"></script>
+<script defer="" src="timeline_core.js"></script>
+<script defer="" src="grdt_databook_support.js"></script>
+<script defer="" src="emission.js"></script>
+<script defer="" src="pending_allocation_package.js"></script>
+
+
+<script defer="" src="task_center.js"></script>
+<script defer="" src="workspace.js"></script>
+<script defer="" src="title_quality.js"></script>
+<script defer="" src="grdt_history_indicator.js"></script>
+<script defer="" src="app.js"></script>
+<script defer="" src="macro5_flow_core.js"></script>
+
+
+
+<script defer="" src="p1_ux.js"></script><script defer="" src="app-ui.js"></script>
+<script defer src="ui-v3.js"></script>
+<script defer src="macro5_flow_app.js"></script>
+<script defer src="productivity_center.js"></script>
+<script defer src="grcon_enhancements.js"></script>
+<script>
+const grconCanRegisterServiceWorker = location.protocol === "https:"
+  || (location.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname));
+if ('serviceWorker' in navigator && window.isSecureContext && grconCanRegisterServiceWorker) {
+  let reloadingForUpdate = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadingForUpdate) return;
+    reloadingForUpdate = true;
+    location.reload();
+  });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      console.log('GRCON SW registrado:', reg.scope);
+      reg.update().catch(() => {});
+    }).catch((err) => {
+      console.warn('GRCON SW falhou:', err);
+    });
+  });
+}
+</script>
+</body>
+</html>

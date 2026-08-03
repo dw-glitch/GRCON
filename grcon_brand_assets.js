@@ -1,0 +1,1 @@
+﻿(function(root){"use strict";root.GRCONBrandAssets=Object.freeze({appLogoFile:"grcon-logo-app.png",reportLogoFile:"grcon-logo-report.png",reportLogoBase64:""});})(typeof globalThis!=="undefined"?globalThis:this);

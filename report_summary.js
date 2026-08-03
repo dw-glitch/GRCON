@@ -1,0 +1,383 @@
+(function (root, factory) {
+  const C = root.TriagemCore || (typeof module === "object" && module.exports ? require("./core.js") : null);
+  const Contracts = root.GrconContracts || (typeof module === "object" && module.exports ? require("./grcon_contracts.js") : null);
+  const api = factory(C, Contracts);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.GrconReportSummary = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (C, Contracts) {
+  "use strict";
+
+  const Large = typeof globalThis !== "undefined" ? globalThis.GrconLargeInput : null;
+  const COLUMNS = Object.freeze([
+    { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
+    { header: "DOCUMENTO", key: "document", width: 42 },
+    { header: "TÍTULO (INFORMATIVO)", key: "title", width: 48 },
+    { header: "ALOCADO?", key: "allocated", width: 23 },
+    { header: "CONFIRMAÇÃO DE DOCUMENTOS PREVISTOS", key: "allocationStatus", width: 28 },
+    { header: "POR QUE ESTÁ / NÃO ESTÁ ALOCADO?", key: "allocationReason", width: 68 },
+    { header: "ALOCAÇÃO", key: "allocation", width: 27 },
+    { header: "ETAPA DA ALOCAÇÃO", key: "allocationStage", width: 22 },
+    { header: "COMENTÁRIO DA FISCAL", key: "fiscalComment", width: 52 },
+    { header: "ARQUIVO DA LD", key: "ldFile", width: 38 },
+    { header: "ABA LD", key: "sheet", width: 13 },
+    { header: "LINHA LD", key: "line", width: 11 },
+    { header: "VERSÃO DA LD ENVIADA", key: "ldVersion", width: 22 },
+    { header: "REVISÃO NA LD", key: "ldRevision", width: 15 },
+    { header: "REVISÃO PARA POSTAR", key: "targetRevision", width: 19 },
+    { header: "NÚMERO DA GRDT NA LD", key: "grdt", width: 31 },
+    { header: "DATA EFETIVA DE EMISSÃO DA GRDT", key: "effectiveDate", width: 22 },
+    { header: "SITUAÇÃO DE POSTAGEM", key: "postingStatus", width: 29 },
+    { header: "EVIDÊNCIA DE POSTAGEM", key: "postingEvidence", width: 58 },
+    { header: "STATUS SIGEM", key: "sigemStatus", width: 22 },
+    { header: "INCLUÍDO NA EGRDT?", key: "included", width: 22 },
+    { header: "CAMINHO DATABOOK", key: "databook", width: 46 },
+    { header: "OBSERVAÇÃO PRINCIPAL", key: "observation", width: 62 },
+  ]);
+
+  function text(value) {
+    return value === null || value === undefined ? "" : String(value).trim();
+  }
+
+  function formatDateBR(value) {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return `${String(value.getDate()).padStart(2, "0")}/${String(value.getMonth() + 1).padStart(2, "0")}/${value.getFullYear()}`;
+    const raw = text(value);
+    let match = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+    if (match) return `${String(match[1]).padStart(2, "0")}/${String(match[2]).padStart(2, "0")}/${match[3]}`;
+    match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    if (/^\d+(?:\.\d+)?$/.test(raw)) {
+      const date = new Date(Date.UTC(1899, 11, 30) + Number(raw) * 86400000);
+      if (!Number.isNaN(date.getTime())) return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
+    }
+    return raw;
+  }
+
+  function ldColumnValue(record, aliases) {
+    const columns = Array.isArray(record && record.ldColumns) ? record.ldColumns : [];
+    const wanted = (aliases || []).map((item) => C && C.norm ? C.norm(item) : text(item).toUpperCase());
+    for (const column of columns) {
+      const normalized = C && C.norm ? C.norm(column && column.header) : text(column && column.header).toUpperCase();
+      if (wanted.includes(normalized)) return column && column.value;
+    }
+    return "";
+  }
+
+  function grdtValue(row, record) {
+    return text(
+      record && record.grdt
+      || row && row.grdt
+      || row && row.postingEvidence && row.postingEvidence.grdt
+      || ldColumnValue(record, ["GRDT", "EGRDT", "NÚMERO DA GRDT", "NÚMERO DA EGRDT"])
+    );
+  }
+
+  function effectiveDateValue(row, record) {
+    return formatDateBR(
+      record && record.effectiveDate
+      || row && row.effectiveDate
+      || row && row.postingEvidence && row.postingEvidence.effectiveDate
+      || ldColumnValue(record, ["DATA EFETIVA DE EMISSÃO", "DATA EFETIVA EMISSÃO", "DATA EFETIVA DE EMISSÃO DA GRDT", "DATA EFETIVA DA GRDT"])
+    );
+  }
+
+  function decisionLabel(row) {
+    if (row && row.hardBlock) return "Não será incluído";
+    if (row && row.decision === (C && C.READY || "pronto")) return "Será incluído na eGRDT";
+    if (row && row.decision === (C && C.DISCARD || "descartar")) return "Não será enviado novamente";
+    return "Precisa de conferência";
+  }
+
+  function decisionObservation(row) {
+    if (Contracts && Contracts.enrichDecision) {
+      const message = Contracts.enrichDecision(row || {}).userMessage || {};
+      const summary = [message.title, message.explanation, message.nextAction].filter(Boolean).join(" ");
+      if (summary) return summary;
+    }
+    if (C && C.simpleReason) return C.simpleReason(row || {});
+    return text(row && row.reason);
+  }
+
+  function allocationLabel(row) {
+    const record = row && row.record || {};
+    const raw = text(record.allocationStatus || row && row.allocationStatus);
+    const allocationNumber = text(record.allocation);
+    if (C && C.allocationState) {
+      const state = C.allocationState(raw);
+      if (state.kind === "allocated") return "SIM — Alocado";
+      if (state.kind === "not_allocated") return "NÃO — Não alocado";
+      if (state.kind === "unknown") return `REVISAR — ${state.label}`;
+      if (allocationNumber) return "SIM — alocação informada";
+      return "Não informado";
+    }
+    if (raw) return raw;
+    return allocationNumber ? "SIM — alocação informada" : "Não informado";
+  }
+
+
+  function allocationReason(row) {
+    const record = row && row.record || {};
+    const allocationEvidence = record.allocationEvidence || null;
+    const evidenceRecord = allocationEvidence || record;
+    const raw = text(record.allocationStatus || row && row.allocationStatus);
+    const state = C && C.allocationState ? C.allocationState(raw) : { kind: raw ? "unknown" : "empty", label: raw || "Não informado" };
+    const allocation = text(evidenceRecord.allocation || record.allocation);
+    const stage = text(evidenceRecord.allocationStage || record.allocationStage);
+    const meaningfulStage = stage && !/^(?:0|N\/A|NA|-)$/.test(C && C.norm ? C.norm(stage) : stage.toUpperCase());
+    const fiscal = text(evidenceRecord.fiscalComment || record.fiscalComment || row && row.fiscalComment);
+    const sigem = text(record.sigemStatus || row && row.status);
+    const ldVersion = text(record.ldVersion);
+    const source = text(evidenceRecord.source || record.source);
+    const evidenceRow = Number(evidenceRecord.row) || 0;
+    const evidenceColumn = text(evidenceRecord.allocationStatusColumn || record.allocationStatusColumn);
+    const location = [source, evidenceRecord.sheet ? `aba ${evidenceRecord.sheet}` : "", evidenceColumn ? `célula ${evidenceColumn}${evidenceRow || ""}` : evidenceRow ? `linha ${evidenceRow}` : ""].filter(Boolean).join(" · ");
+    const field = text(evidenceRecord.allocationStatusHeader || record.allocationStatusHeader) || "Confirmação de DOCUMENTOS PREVISTOS";
+    const versionEvidence = ldVersion
+      ? `Versão da LD enviada da linha técnica atual: ${ldVersion}${record.ldVersionColumn ? ` (coluna ${record.ldVersionColumn})` : ""}.`
+      : record.ldVersionSource === "VERSÃO DA LD ENVIADA"
+        ? "A coluna “VERSÃO DA LD ENVIADA” está vazia na linha técnica atual."
+        : "A coluna “VERSÃO DA LD ENVIADA” não foi localizada nesta aba.";
+    const fiscalNormalized = C && C.norm ? C.norm(fiscal) : fiscal.toUpperCase();
+    const fiscalIsGeneric = !fiscal || /^(OK|ACEITO SEM COMENTARIOS?|SEM COMENTARIOS?)$/.test(fiscalNormalized);
+
+    if (state.kind === "allocated") {
+      const parts = allocationEvidence
+        ? [
+          `Alocação preservada por evidência da mesma revisão no campo “${field}”${allocation ? `; número ${allocation}` : ""}.`,
+          `Evidência da alocação: ${location || "linha histórica da LD"}${allocationEvidence.ldVersion ? ` · versão enviada ${allocationEvidence.ldVersion}` : ""}.`,
+          `A linha técnica mais recente${record.sheet ? ` da aba ${record.sheet}` : ""}${record.row ? `, linha ${record.row}` : ""}${record.ldVersion ? `, versão ${record.ldVersion}` : ""} estava duplicada como “${text(record.allocationDuplicate && record.allocationDuplicate.allocationStatus) || "NÃO ALOCADO"}” sem evidência operacional para desfazer a alocação já concluída.`,
+          versionEvidence,
+        ]
+        : [
+          `Alocação confirmada pelo campo “${field}”${allocation ? `; número ${allocation}` : ""}.`,
+          versionEvidence,
+        ];
+      if (meaningfulStage) parts.push(`Etapa registrada: ${stage}.`);
+      if (fiscal) parts.push(`Comentário da Fiscal: ${fiscal}.`);
+      if (!allocationEvidence && location) parts.push(`Evidência: ${location}.`);
+      return parts.join(" ");
+    }
+    if (state.kind === "not_allocated") {
+      const parts = [];
+      if (!fiscalIsGeneric) parts.push(`Motivo registrado pela Fiscal: ${fiscal}.`);
+      else if (fiscal) parts.push(`A Fiscal registrou “${fiscal}”, mas esse texto não explica a não alocação.`);
+      else parts.push("A LD não contém comentário da Fiscal explicando a não alocação nesta linha.");
+      if (allocation) parts.push(`Existe o número de alocação ${allocation}, porém a confirmação permanece “${raw || "NÃO ALOCADO"}”.`);
+      else parts.push("Nenhum número de alocação foi registrado nessa linha.");
+      if (meaningfulStage) parts.push(`Etapa da alocação: ${stage}.`);
+      else parts.push("A etapa da alocação não traz uma fase operacional válida nesta linha.");
+      if (sigem) parts.push(`Status SIGEM: ${sigem}.`);
+      parts.push(versionEvidence);
+      parts.push(`Evidência lida no campo “${field}”${raw ? `, valor “${raw}”` : ""}${location ? `, em ${location}` : ""}.`);
+      return parts.join(" ");
+    }
+    if (state.kind === "unknown") {
+      return `A alocação não pôde ser comprovada porque o valor “${raw || state.label}” do campo “${field}” não foi reconhecido${location ? ` (${location})` : ""}. ${versionEvidence}`;
+    }
+    return `A alocação não pôde ser comprovada porque o campo “${field}” está vazio ou não foi localizado${location ? ` (${location})` : ""}${allocation ? `, embora exista o número ${allocation}` : ""}. ${versionEvidence}`;
+  }
+
+  function buildRows(results, options) {
+    const settings = options || {};
+    return (results || []).map((row) => {
+      const record = row && row.record || {};
+      const ready = row && !row.hardBlock && row.decision === (C && C.READY || "pronto");
+      const notice = row && row.ldConflict && row.ldConflict.hasNotice && row.ldConflict.noticeSummary
+        ? ` ${row.ldConflict.noticeSummary}`
+        : "";
+      const included = ready
+        ? "SIM"
+        : row && row.hardBlock
+          ? "NÃO — BLOQUEADO"
+          : row && row.decision === (C && C.DISCARD || "descartar")
+            ? "NÃO — EM ANÁLISE"
+            : "PENDENTE";
+      return {
+        decision: decisionLabel(row),
+        document: text(row && row.document),
+        title: text(row && row.egrdt && row.egrdt.title || record.title),
+        allocated: allocationLabel(row),
+        allocationStatus: text(record.allocationStatus),
+        allocationReason: allocationReason(row),
+        allocation: text(record.allocation),
+        allocationStage: text(record.allocationStage),
+        fiscalComment: text(record.fiscalComment || row && row.fiscalComment),
+        ldFile: text(record.source || settings.ldFileName),
+        sheet: text(record.sheet || row && row.sheet),
+        line: Number(record.row) || "",
+        ldVersion: text(record.ldVersion) || (record.ldVersionSource === "VERSÃO DA LD ENVIADA" ? "Não informada na linha" : "Coluna não localizada"),
+        ldRevision: text(record.revision),
+        targetRevision: text(row && row.revision),
+        grdt: grdtValue(row, record),
+        effectiveDate: effectiveDateValue(row, record),
+        postingStatus: text(row && row.postingStatus || row && row.postingEvidence && row.postingEvidence.status) || "Sem evidência de postagem na LD",
+        postingEvidence: text(row && row.postingEvidence && row.postingEvidence.explanation),
+        sigemStatus: text(row && row.status),
+        included,
+        databook: text(record.databook),
+        observation: `${decisionObservation(row)}${notice}`.trim(),
+      };
+    });
+  }
+
+  async function buildRowsAsync(results, options) {
+    if (!Large || !Large.mapInChunks) return buildRows(results, options);
+    const settings = options || {};
+    return Large.mapInChunks(results || [], (row) => buildRows([row], settings)[0], { chunkSize: 300 });
+  }
+
+  function columnLetter(number) {
+    let n = Number(number) || 1;
+    let result = "";
+    while (n > 0) {
+      n -= 1;
+      result = String.fromCharCode(65 + (n % 26)) + result;
+      n = Math.floor(n / 26);
+    }
+    return result;
+  }
+
+  function statusPalette(value) {
+    const normalized = C && C.norm ? C.norm(value) : text(value).toUpperCase();
+    if (normalized.includes("SERA INCLUIDO")) return ["FFEAF7F1", "FF0C7657"];
+    if (normalized.includes("NAO SERA INCLUIDO")) return ["FFFFF0ED", "FFA64035"];
+    if (normalized.includes("PRECISA")) return ["FFFFF5DF", "FFA56812"];
+    return ["FFEDF1F4", "FF596C7D"];
+  }
+
+  function allocationPalette(value) {
+    const normalized = C && C.norm ? C.norm(value) : text(value).toUpperCase();
+    if (normalized.includes("NAO") && normalized.includes("ALOCADO")) return ["FFFFF0ED", "FFA64035"];
+    if (normalized.startsWith("SIM") || (normalized.includes("ALOCADO") && !normalized.includes("NAO"))) return ["FFEAF7F1", "FF0C7657"];
+    return ["FFFFF5DF", "FFA56812"];
+  }
+
+  function writeTable(worksheet, rows, startRow) {
+    const titleRow = Number(startRow) || 22;
+    const headerRow = titleRow + 1;
+    const dataStart = headerRow + 1;
+    const lastColumn = columnLetter(COLUMNS.length);
+
+    worksheet.mergeCells(`A${titleRow}:${lastColumn}${titleRow}`);
+    const title = worksheet.getCell(titleRow, 1);
+    title.value = "RESUMO POR DOCUMENTO";
+    title.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+    title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
+    title.alignment = { vertical: "middle", horizontal: "left" };
+    worksheet.getRow(titleRow).height = 24;
+
+    COLUMNS.forEach((column, index) => {
+      const cell = worksheet.getCell(headerRow, index + 1);
+      cell.value = column.header;
+      cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
+      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+      cell.border = { bottom: { style: "thin", color: { argb: "FFB7C8D6" } } };
+      worksheet.getColumn(index + 1).width = column.width;
+    });
+    worksheet.getRow(headerRow).height = 34;
+
+    rows.forEach((item, rowIndex) => {
+      const row = worksheet.getRow(dataStart + rowIndex);
+      COLUMNS.forEach((column, columnIndex) => {
+        const cell = row.getCell(columnIndex + 1);
+        const value = item[column.key];
+        cell.value = value === "" || value === null || value === undefined ? null : value;
+        cell.font = { name: "Aptos", size: 9, color: { argb: "FF263E52" } };
+        cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+        cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
+        if (rowIndex % 2) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+      });
+      const longestText = Math.max(...COLUMNS.map((column) => text(item[column.key]).length), 0);
+      row.height = Math.min(96, Math.max(34, 20 + Math.ceil(longestText / 78) * 14));
+
+      const decisionCell = row.getCell(1);
+      const decisionColors = statusPalette(decisionCell.value);
+      decisionCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: decisionColors[0] } };
+      decisionCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: decisionColors[1] } };
+
+      const allocationCell = row.getCell(4);
+      const allocationColors = allocationPalette(allocationCell.value);
+      allocationCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: allocationColors[0] } };
+      allocationCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: allocationColors[1] } };
+      if ((C && C.norm ? C.norm(allocationCell.value) : text(allocationCell.value).toUpperCase()).includes("NAO")) {
+        const reasonCell = row.getCell(6);
+        reasonCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF7F4" } };
+        reasonCell.font = { name: "Aptos", size: 9, color: { argb: "FF7A342D" } };
+      }
+
+      const includedCell = row.getCell(COLUMNS.findIndex((column) => column.key === "included") + 1);
+      const included = text(includedCell.value).toUpperCase() === "SIM";
+      includedCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: included ? "FFEAF7F1" : "FFFFF5DF" } };
+      includedCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: included ? "FF0C7657" : "FFA56812" } };
+      includedCell.alignment = { vertical: "middle", horizontal: "center" };
+    });
+
+    const finalRow = Math.max(headerRow, dataStart + rows.length - 1);
+    worksheet.autoFilter = { from: `A${headerRow}`, to: `${lastColumn}${finalRow}` };
+    return { titleRow, headerRow, dataStart, finalRow, lastColumn };
+  }
+
+  async function writeTableAsync(worksheet, rows, startRow) {
+    if (!Large || !Large.pause || (rows || []).length <= 600) return writeTable(worksheet, rows, startRow);
+    const titleRow = Number(startRow) || 22;
+    const headerRow = titleRow + 1;
+    const dataStart = headerRow + 1;
+    const lastColumn = columnLetter(COLUMNS.length);
+
+    worksheet.mergeCells(`A${titleRow}:${lastColumn}${titleRow}`);
+    const title = worksheet.getCell(titleRow, 1);
+    title.value = "RESUMO POR DOCUMENTO";
+    title.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+    title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
+    title.alignment = { vertical: "middle", horizontal: "left" };
+    worksheet.getRow(titleRow).height = 24;
+    COLUMNS.forEach((column, index) => {
+      const cell = worksheet.getCell(headerRow, index + 1);
+      cell.value = column.header;
+      cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
+      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+      cell.border = { bottom: { style: "thin", color: { argb: "FFB7C8D6" } } };
+      worksheet.getColumn(index + 1).width = column.width;
+    });
+    worksheet.getRow(headerRow).height = 34;
+
+    for (let start = 0; start < rows.length; start += 300) {
+      const end = Math.min(rows.length, start + 300);
+      for (let rowIndex = start; rowIndex < end; rowIndex += 1) {
+        const item = rows[rowIndex];
+        const row = worksheet.getRow(dataStart + rowIndex);
+        COLUMNS.forEach((column, columnIndex) => {
+          const cell = row.getCell(columnIndex + 1);
+          const value = item[column.key];
+          cell.value = value === "" || value === null || value === undefined ? null : value;
+          cell.font = { name: "Aptos", size: 9, color: { argb: "FF263E52" } };
+          cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+          cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
+          if (rowIndex % 2) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+        });
+        const longestText = Math.max(...COLUMNS.map((column) => text(item[column.key]).length), 0);
+        row.height = Math.min(96, Math.max(34, 20 + Math.ceil(longestText / 78) * 14));
+        const decisionCell = row.getCell(1);
+        const decisionColors = statusPalette(decisionCell.value);
+        decisionCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: decisionColors[0] } };
+        decisionCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: decisionColors[1] } };
+        const allocationCell = row.getCell(4);
+        const allocationColors = allocationPalette(allocationCell.value);
+        allocationCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: allocationColors[0] } };
+        allocationCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: allocationColors[1] } };
+        const includedCell = row.getCell(COLUMNS.findIndex((column) => column.key === "included") + 1);
+        const included = text(includedCell.value).toUpperCase() === "SIM";
+        includedCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: included ? "FFEAF7F1" : "FFFFF5DF" } };
+        includedCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: included ? "FF0C7657" : "FFA56812" } };
+        includedCell.alignment = { vertical: "middle", horizontal: "center" };
+      }
+      if (end < rows.length) await Large.pause();
+    }
+    const finalRow = Math.max(headerRow, dataStart + rows.length - 1);
+    worksheet.autoFilter = { from: `A${headerRow}`, to: `${lastColumn}${finalRow}` };
+    return { titleRow, headerRow, dataStart, finalRow, lastColumn };
+  }
+
+  return Object.freeze({ COLUMNS, allocationReason, buildRows, buildRowsAsync, writeTable, writeTableAsync });
+});

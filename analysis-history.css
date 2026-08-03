@@ -1,0 +1,559 @@
+/* Histórico completo de análises — GRCON 5.25.1 */
+html[data-app="GRCON"] .analysis-history-module {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+html[data-app="GRCON"] .analysis-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+html[data-app="GRCON"] .analysis-history-heading > div:first-child { min-width: 0; }
+html[data-app="GRCON"] .analysis-history-heading > div > span {
+  display: block;
+  color: var(--color-primary, #24689a);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+html[data-app="GRCON"] .analysis-history-heading h2 { margin: .2rem 0 .35rem; }
+html[data-app="GRCON"] .analysis-history-heading p {
+  max-width: 58rem;
+  margin: 0;
+  color: var(--color-text-muted, #5d7184);
+  line-height: 1.5;
+}
+html[data-app="GRCON"] .analysis-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .55rem;
+}
+
+/* Filtros isolados dos estilos antigos de .history-search. */
+html[data-app="GRCON"] .analysis-history-toolbar {
+  display: grid;
+  grid-template-columns: minmax(20rem, 1.65fr) minmax(12rem, .9fr) repeat(2, minmax(9.5rem, .72fr)) minmax(15rem, 1fr);
+  align-items: end;
+  gap: .75rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border, #dce4ea);
+  border-radius: 1rem;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 5px 18px rgba(28, 59, 82, .045);
+}
+html[data-app="GRCON"] .analysis-history-toolbar > label {
+  display: grid;
+  min-width: 0;
+  gap: .35rem;
+}
+html[data-app="GRCON"] .analysis-history-toolbar > label > span:first-child {
+  color: var(--color-text-muted, #5d7184);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+html[data-app="GRCON"] .analysis-history-toolbar select,
+html[data-app="GRCON"] .analysis-history-toolbar input { width: 100%; min-width: 0; }
+
+html[data-app="GRCON"] .analysis-history-search-control {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+html[data-app="GRCON"] .analysis-history-search-control > svg {
+  position: absolute;
+  z-index: 2;
+  left: .85rem;
+  top: 50%;
+  width: 1rem;
+  height: 1rem;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--neutral-500);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+html[data-app="GRCON"] .analysis-history-search-control > input[type="search"] {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: .65rem 2.4rem .65rem 2.55rem;
+  border: 1px solid var(--border-1, #c9d6df);
+  border-radius: .65rem;
+  outline: 0;
+  color: var(--text-1, #20384b);
+  background: var(--surface-1, #fff);
+  box-shadow: none;
+  appearance: none;
+}
+html[data-app="GRCON"] .analysis-history-search-control > input[type="search"]:focus {
+  border-color: var(--brand-600, #1f73aa);
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(31, 115, 170, .14);
+}
+html[data-app="GRCON"] .analysis-history-search-control > input[type="search"]::placeholder {
+  color: var(--neutral-500);
+  opacity: 1;
+}
+
+html[data-app="GRCON"] .analysis-history-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: .7rem;
+}
+html[data-app="GRCON"] .analysis-history-summary > div {
+  min-width: 0;
+  padding: .85rem 1rem;
+  border: 1px solid var(--color-border, #dce4ea);
+  border-left: .26rem solid var(--info-600);
+  border-radius: .8rem;
+  background: var(--color-surface, #fff);
+}
+html[data-app="GRCON"] .analysis-history-summary > div.ready { border-left-color: var(--success-700); }
+html[data-app="GRCON"] .analysis-history-summary > div.blocked { border-left-color: var(--danger-700); }
+html[data-app="GRCON"] .analysis-history-summary > div.discard { border-left-color: var(--neutral-500); }
+html[data-app="GRCON"] .analysis-history-summary > div.review { border-left-color: var(--warning-700); }
+html[data-app="GRCON"] .analysis-history-summary span {
+  display: block;
+  overflow: hidden;
+  color: var(--color-text-muted, #5d7184);
+  font-size: .75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[data-app="GRCON"] .analysis-history-summary strong {
+  display: block;
+  margin-top: .15rem;
+  font: 750 1.35rem/1.1 "Aptos Display", "Segoe UI", sans-serif;
+}
+
+html[data-app="GRCON"] .analysis-history-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border, #dce4ea);
+  border-radius: 1rem;
+  background: var(--color-surface, #fff);
+}
+html[data-app="GRCON"] .analysis-history-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .75rem;
+}
+html[data-app="GRCON"] .analysis-history-card > header span,
+html[data-app="GRCON"] .analysis-history-table-hint > span {
+  display: block;
+  color: var(--color-primary, #24689a);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+html[data-app="GRCON"] .analysis-history-card > header strong { display: block; margin-top: .15rem; }
+html[data-app="GRCON"] .analysis-history-card > header small,
+html[data-app="GRCON"] .analysis-history-table-hint small { color: var(--color-text-muted, #5d7184); }
+html[data-app="GRCON"] .analysis-history-table-hint {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: .2rem 0 .55rem;
+}
+
+/* A tabela antiga herdava table-layout:fixed e 3300 px do CSS legado.
+   Esta definição contém cada coluna e impede textos de invadirem a coluna seguinte. */
+html[data-app="GRCON"] .analysis-history-table-wrap {
+  position: relative;
+  max-width: 100%;
+  max-height: 40rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--color-border, #dce4ea);
+  border-radius: .75rem;
+  background: var(--surface-primary);
+  scrollbar-gutter: stable;
+}
+html[data-app="GRCON"] .analysis-history-table {
+  width: 100%;
+  min-width: 116rem;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--text-1, #20384b);
+  background: var(--surface-primary);
+  font-size: .8rem;
+}
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-date { width: 9rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-document { width: 25rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-current-revision { width: 8rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-target-revision { width: 10rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-result { width: 14rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-sigem { width: 11rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-allocation { width: 17rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-ld { width: 10rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-reason { width: 25rem; }
+html[data-app="GRCON"] .analysis-history-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: auto;
+  min-height: 2.8rem;
+  padding: .72rem .75rem;
+  overflow: hidden;
+  border-right: 1px solid rgba(255,255,255,.12);
+  border-bottom: 1px solid var(--neutral-800);
+  color: var(--surface-primary);
+  background: var(--info-700);
+  font-size: .69rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+html[data-app="GRCON"] .analysis-history-table thead th:last-child { border-right: 0; }
+html[data-app="GRCON"] .analysis-history-table tbody td {
+  min-width: 0;
+  padding: .75rem;
+  overflow: hidden;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--color-border, #e4eaef);
+  vertical-align: middle;
+  line-height: 1.4;
+  background: var(--surface-primary);
+}
+html[data-app="GRCON"] .analysis-history-table tbody td:last-child { border-right: 0; }
+html[data-app="GRCON"] .analysis-history-table tbody tr:nth-child(even) td { background: var(--surface-secondary); }
+html[data-app="GRCON"] .analysis-history-table tbody tr:hover td { background: var(--surface-secondary); }
+html[data-app="GRCON"] .analysis-history-table td strong,
+html[data-app="GRCON"] .analysis-history-table td small { display: block; min-width: 0; }
+html[data-app="GRCON"] .analysis-history-table td strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[data-app="GRCON"] .analysis-history-table td small {
+  display: -webkit-box;
+  margin-top: .2rem;
+  overflow: hidden;
+  color: var(--color-text-muted, #5d7184);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+html[data-app="GRCON"] .analysis-cell-date,
+html[data-app="GRCON"] .analysis-cell-revision { text-align: center; }
+html[data-app="GRCON"] .analysis-cell-date small { white-space: nowrap; }
+
+html[data-app="GRCON"] .analysis-status-chip,
+html[data-app="GRCON"] .analysis-sigem-chip {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 1.8rem;
+  align-items: center;
+  justify-content: center;
+  padding: .32rem .58rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+html[data-app="GRCON"] .analysis-status-chip.ready { color: var(--success-700); background: var(--neutral-100); }
+html[data-app="GRCON"] .analysis-status-chip.blocked { color: var(--danger-700); background: var(--neutral-100); }
+html[data-app="GRCON"] .analysis-status-chip.discard { color: var(--neutral-500); background: var(--surface-secondary); }
+html[data-app="GRCON"] .analysis-status-chip.review { color: var(--warning-700); background: var(--neutral-100); }
+html[data-app="GRCON"] .analysis-sigem-chip.not-posted { color: var(--info-600); background: var(--surface-secondary); }
+html[data-app="GRCON"] .analysis-sigem-chip.posted { color: var(--success-700); background: var(--neutral-100); }
+html[data-app="GRCON"] .analysis-sigem-chip.attention { color: var(--warning-700); background: var(--neutral-100); }
+html[data-app="GRCON"] .analysis-sigem-chip.neutral { color: var(--neutral-500); background: var(--surface-secondary); }
+
+html[data-app="GRCON"] .analysis-history-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: .8rem;
+}
+html[data-app="GRCON"] .analysis-history-pagination { display: flex; align-items: center; gap: .55rem; }
+html[data-app="GRCON"] .analysis-history-pagination span,
+html[data-app="GRCON"] #analysis-history-storage {
+  color: var(--color-text-muted, #5d7184);
+  font-size: .78rem;
+}
+html[data-app="GRCON"] .analysis-history-loading {
+  padding: 2rem !important;
+  text-align: center;
+  color: var(--color-text-muted, #5d7184);
+}
+html[data-app="GRCON"] .analysis-history-loading.error { color: var(--danger-700); }
+
+@media (max-width: 1320px) {
+  html[data-app="GRCON"] .analysis-history-toolbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  html[data-app="GRCON"] .analysis-history-search-field { grid-column: span 2; }
+  html[data-app="GRCON"] .analysis-history-toolbar > label:last-child { grid-column: span 2; }
+  html[data-app="GRCON"] .analysis-history-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Em telas estreitas, a tabela vira cartões. Isso elimina qualquer sobreposição
+   e mantém todos os dados legíveis sem exigir zoom ou rolagem lateral. */
+@media (max-width: 960px) {
+  html[data-app="GRCON"] .analysis-history-heading,
+  html[data-app="GRCON"] .analysis-history-card > header,
+  html[data-app="GRCON"] .analysis-history-footer,
+  html[data-app="GRCON"] .analysis-history-table-hint {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  html[data-app="GRCON"] .analysis-history-actions { justify-content: stretch; }
+  html[data-app="GRCON"] .analysis-history-actions > button { flex: 1 1 auto; }
+  html[data-app="GRCON"] .analysis-history-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-app="GRCON"] .analysis-history-search-field,
+  html[data-app="GRCON"] .analysis-history-toolbar > label:last-child { grid-column: 1 / -1; }
+
+  html[data-app="GRCON"] .analysis-history-table-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  html[data-app="GRCON"] .analysis-history-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+    background: transparent;
+  }
+  html[data-app="GRCON"] .analysis-history-table colgroup,
+  html[data-app="GRCON"] .analysis-history-table thead { display: none; }
+  html[data-app="GRCON"] .analysis-history-table tbody {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: .8rem;
+  }
+  html[data-app="GRCON"] .analysis-history-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    border: 1px solid var(--color-border, #dce4ea);
+    border-radius: .85rem;
+    background: var(--surface-primary);
+    box-shadow: 0 4px 14px rgba(28, 59, 82, .045);
+  }
+  html[data-app="GRCON"] .analysis-history-table tbody td,
+  html[data-app="GRCON"] .analysis-history-table tbody tr:nth-child(even) td,
+  html[data-app="GRCON"] .analysis-history-table tbody tr:hover td {
+    display: grid;
+    align-content: start;
+    gap: .25rem;
+    min-width: 0;
+    padding: .72rem .8rem;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+    text-align: left;
+    background: transparent;
+  }
+  html[data-app="GRCON"] .analysis-history-table tbody td::before {
+    content: attr(data-label);
+    color: var(--neutral-500);
+    font-size: .64rem;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  html[data-app="GRCON"] .analysis-history-table .analysis-cell-document,
+  html[data-app="GRCON"] .analysis-history-table .analysis-cell-result,
+  html[data-app="GRCON"] .analysis-history-table .analysis-cell-reason { grid-column: 1 / -1; }
+  html[data-app="GRCON"] .analysis-history-table td strong { white-space: normal; overflow-wrap: anywhere; }
+  html[data-app="GRCON"] .analysis-history-table td small {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: initial;
+  }
+  html[data-app="GRCON"] .analysis-status-chip,
+  html[data-app="GRCON"] .analysis-sigem-chip {
+    width: fit-content;
+    max-width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+  }
+  html[data-app="GRCON"] .analysis-history-pagination {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 600px) {
+  html[data-app="GRCON"] .analysis-history-toolbar,
+  html[data-app="GRCON"] .analysis-history-summary { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .analysis-history-search-field,
+  html[data-app="GRCON"] .analysis-history-toolbar > label:last-child { grid-column: 1; }
+  html[data-app="GRCON"] .analysis-history-table tbody tr { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .analysis-history-table .analysis-cell-document,
+  html[data-app="GRCON"] .analysis-history-table .analysis-cell-result,
+  html[data-app="GRCON"] .analysis-history-table .analysis-cell-reason { grid-column: 1; }
+  html[data-app="GRCON"] .analysis-history-actions > button { width: 100%; }
+}
+
+/* Busca unificada */
+html[data-app="GRCON"] .unified-search {
+  padding: 1rem;
+  border: 1px solid var(--color-border, #dce4ea);
+  border-radius: 1rem;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 5px 18px rgba(28, 59, 82, .045);
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+html[data-app="GRCON"] .unified-search-heading span {
+  display: block;
+  color: var(--color-primary, #24689a);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+html[data-app="GRCON"] .unified-search-heading h3 { margin: .2rem 0 .15rem; font-size: .95rem; }
+html[data-app="GRCON"] .unified-search-heading p {
+  margin: 0;
+  color: var(--color-text-muted, #5d7184);
+  font-size: .78rem;
+  line-height: 1.4;
+}
+html[data-app="GRCON"] .unified-search-body { display: flex; flex-direction: column; gap: .75rem; }
+html[data-app="GRCON"] .unified-search-input {
+  display: flex;
+  gap: .5rem;
+  align-items: start;
+}
+html[data-app="GRCON"] .unified-search-input textarea {
+  flex: 1;
+  min-width: 0;
+  padding: .65rem;
+  border: 1px solid var(--border-1, #c9d6df);
+  border-radius: .65rem;
+  outline: 0;
+  color: var(--text-1, #20384b);
+  background: var(--surface-1, #fff);
+  font-size: .82rem;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.4;
+}
+html[data-app="GRCON"] .unified-search-input textarea:focus {
+  border-color: var(--brand-600, #1f73aa);
+  box-shadow: 0 0 0 3px rgba(31, 115, 170, .14);
+}
+html[data-app="GRCON"] .unified-search-actions {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+  padding-top: .25rem;
+}
+html[data-app="GRCON"] .unified-search-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+html[data-app="GRCON"] .unified-search-result-card {
+  padding: 1rem;
+  border: 1px solid var(--color-border, #dce4ea);
+  border-radius: .85rem;
+  background: var(--color-surface, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+html[data-app="GRCON"] .unified-search-result-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .5rem;
+}
+html[data-app="GRCON"] .unified-search-result-header span {
+  color: var(--color-text-muted, #5d7184);
+  font-size: .75rem;
+  font-weight: 600;
+}
+html[data-app="GRCON"] .unified-search-result-header strong {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-1, #20384b);
+  line-height: 1;
+}
+html[data-app="GRCON"] .unified-search-result-card small {
+  color: var(--color-text-muted, #5d7184);
+  font-size: .72rem;
+}
+html[data-app="GRCON"] .unified-search-detail { margin-top: .25rem; }
+html[data-app="GRCON"] .unified-search-detail summary {
+  cursor: pointer;
+  color: var(--color-primary, #24689a);
+  font-size: .78rem;
+  font-weight: 700;
+  padding: .4rem 0;
+}
+html[data-app="GRCON"] .unified-search-detail-list {
+  max-height: 20rem;
+  overflow: auto;
+  border: 1px solid var(--color-border, #dce4ea);
+  border-radius: .65rem;
+  margin-top: .5rem;
+}
+html[data-app="GRCON"] .unified-search-detail-item {
+  padding: .5rem .75rem;
+  border-bottom: 1px solid var(--color-border, #e4eaef);
+  font-size: .78rem;
+  display: flex;
+  justify-content: space-between;
+  gap: .5rem;
+  align-items: start;
+}
+html[data-app="GRCON"] .unified-search-detail-item:last-child { border-bottom: 0; }
+html[data-app="GRCON"] .unified-search-detail-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+html[data-app="GRCON"] .unified-search-detail-item small {
+  color: var(--color-text-muted, #5d7184);
+  flex-shrink: 0;
+}
+html[data-app="GRCON"] .unified-search-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--color-text-muted, #5d7184);
+  font-size: .82rem;
+}
+@media (max-width: 1320px) {
+  html[data-app="GRCON"] .unified-search-results { grid-template-columns: 1fr; }
+}
+@media (max-width: 960px) {
+  html[data-app="GRCON"] .unified-search-input { flex-direction: column; }
+  html[data-app="GRCON"] .unified-search-actions { flex-direction: row; }
+}
+.analysis-history-quick{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}.analysis-history-quick button{border:1px solid var(--border,#d6dee8);background:var(--surface-primary);border-radius:999px;padding:7px 12px;font-weight:700;color:var(--ink);cursor:pointer}.analysis-history-quick button:hover,.analysis-history-quick button:focus-visible{border-color:var(--info-600);background:var(--surface-secondary)}.analysis-history-actions input[hidden]{display:none}

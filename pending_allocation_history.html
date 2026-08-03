@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Histórico de Alocações Pendentes · GRCON</title>
+  <link rel="stylesheet" href="grcon-final.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f5f7fa;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .history-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .history-header {
+      background: linear-gradient(135deg, #2c5282 0%, #3b82f6 100%);
+      color: white;
+      padding: 30px 40px;
+    }
+
+    .history-header h1 {
+      margin: 0 0 8px 0;
+      font-size: 28px;
+      font-weight: 600;
+    }
+
+    .history-header p {
+      margin: 0;
+      opacity: 0.9;
+      font-size: 15px;
+    }
+
+    .history-controls {
+      padding: 30px 40px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-group label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .control-group input,
+    .control-group select {
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      min-width: 160px;
+    }
+
+    .control-group input:focus,
+    .control-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .history-actions {
+      display: flex;
+      gap: 12px;
+      margin-left: auto;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .history-stats {
+      padding: 30px 40px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .stat-card {
+      padding: 20px;
+      background: #f9fafb;
+      border-radius: 8px;
+      border-left: 4px solid;
+    }
+
+    .stat-card.primary { border-left-color: #3b82f6; }
+    .stat-card.warning { border-left-color: #f59e0b; }
+    .stat-card.success { border-left-color: #10b981; }
+    .stat-card.purple { border-left-color: #8b5cf6; }
+
+    .stat-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .history-table-container {
+      padding: 30px 40px;
+      overflow-x: auto;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .history-table thead {
+      background: #f9fafb;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .history-table th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+      white-space: nowrap;
+    }
+
+    .history-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f3f4f6;
+      color: #111827;
+    }
+
+    .history-table tbody tr:hover {
+      background: #f9fafb;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-primary { background: #dbeafe; color: #1e40af; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-success { background: #d1fae5; color: #065f46; }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 40px;
+      color: #6b7280;
+    }
+
+    .empty-state svg {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 20px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      color: #374151;
+    }
+
+    .empty-state p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 60px;
+      color: #6b7280;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #3b82f6;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+
+    .back-link:hover {
+      color: #2563eb;
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="back-link">
+    ← Voltar ao GRCON
+  </a>
+
+  <div class="history-container">
+    <div class="history-header">
+      <h1>Histórico de Alocações Aguardando Retorno</h1>
+      <p>Acompanhe documentos com número de alocação mas confirmação "Não Alocado" ao longo das análises</p>
+    </div>
+
+    <div class="history-controls">
+      <div class="control-group">
+        <label for="start-date">Data Inicial</label>
+        <input type="date" id="start-date">
+      </div>
+
+      <div class="control-group">
+        <label for="end-date">Data Final</label>
+        <input type="date" id="end-date">
+      </div>
+
+      <div class="control-group">
+        <label for="allocation-filter">Alocação</label>
+        <input type="text" id="allocation-filter" placeholder="Filtrar por alocação">
+      </div>
+
+      <div class="control-group">
+        <label for="discipline-filter">Disciplina</label>
+        <input type="text" id="discipline-filter" placeholder="Filtrar por disciplina">
+      </div>
+
+      <div class="history-actions">
+        <button class="btn btn-primary" id="download-report" disabled>
+          📊 Baixar Relatório Excel
+        </button>
+        <button class="btn btn-secondary" id="refresh-data">
+          🔄 Atualizar
+        </button>
+      </div>
+    </div>
+
+    <div class="history-stats" id="stats-container">
+      <!-- Stats serão inseridos aqui -->
+    </div>
+
+    <div class="history-table-container" id="table-container">
+      <!-- Tabela será inserida aqui -->
+    </div>
+  </div>
+
+  <script defer src="grcon_config.js"></script>
+  <script src="exceljs.min.js"></script>
+  <script src="pending_allocation_history_core.js"></script>
+  <script src="pending_allocation_history_report.js"></script>
+  <script>
+    const History = window.GrconPendingAllocationHistory;
+    const Report = window.GrconPendingAllocationHistoryReport;
+
+    let currentSnapshots = [];
+
+    function loadData() {
+      try {
+        currentSnapshots = History.read();
+        render();
+      } catch (error) {
+        console.error("Erro ao carregar histórico:", error);
+        showError("Não foi possível carregar o histórico de alocações pendentes.");
+      }
+    }
+
+    function render() {
+      const startDate = document.getElementById("start-date").value;
+      const endDate = document.getElementById("end-date").value;
+      const allocationFilter = document.getElementById("allocation-filter").value.trim();
+      const disciplineFilter = document.getElementById("discipline-filter").value.trim();
+
+      let filtered = Report.filterSnapshots(currentSnapshots, startDate, endDate);
+      
+      if (allocationFilter) {
+        filtered = History.filterByAllocation(filtered, allocationFilter);
+      }
+      
+      if (disciplineFilter) {
+        filtered = History.filterByDiscipline(filtered, disciplineFilter);
+      }
+
+      renderStats(filtered);
+      renderTable(filtered);
+      
+      document.getElementById("download-report").disabled = filtered.length === 0;
+    }
+
+    function renderStats(snapshots) {
+      const stats = Report.summary(snapshots);
+      const container = document.getElementById("stats-container");
+      
+      container.innerHTML = `
+        <div class="stat-card primary">
+          <div class="stat-label">Análises</div>
+          <div class="stat-value">${stats.snapshots.toLocaleString("pt-BR")}</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-label">Documentos</div>
+          <div class="stat-value">${stats.totalDocuments.toLocaleString("pt-BR")}</div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-label">PDFs</div>
+          <div class="stat-value">${stats.totalPdfs.toLocaleString("pt-BR")}</div>
+        </div>
+        <div class="stat-card purple">
+          <div class="stat-label">Alocações</div>
+          <div class="stat-value">${stats.allocations.toLocaleString("pt-BR")}</div>
+        </div>
+      `;
+    }
+
+    function renderTable(snapshots) {
+      const container = document.getElementById("table-container");
+      
+      if (!snapshots.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3>Nenhum registro encontrado</h3>
+            <p>Não há histórico de alocações pendentes no período ou filtros selecionados.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const rows = Report.snapshotRows(snapshots);
+      
+      container.innerHTML = `
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Data da Análise</th>
+              <th>Documentos</th>
+              <th>PDFs</th>
+              <th>Alocações</th>
+              <th>Disciplinas</th>
+              <th>LD Utilizada</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td>${row["DATA DA ANÁLISE"]}</td>
+                <td><span class="badge badge-warning">${row["DOCUMENTOS"]}</span></td>
+                <td><span class="badge badge-success">${row["PDFs"]}</span></td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${row["ALOCAÇÕES"]}">${row["ALOCAÇÕES"] || "—"}</td>
+                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${row["DISCIPLINAS"]}">${row["DISCIPLINAS"] || "—"}</td>
+                <td>${row["LD UTILIZADA"] || "—"}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function showError(message) {
+      const container = document.getElementById("table-container");
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="color: #ef4444;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3>Erro ao carregar dados</h3>
+          <p>${message}</p>
+        </div>
+      `;
+    }
+
+    async function downloadReport() {
+      try {
+        document.getElementById("download-report").disabled = true;
+        document.getElementById("download-report").textContent = "⏳ Gerando...";
+        
+        const startDate = document.getElementById("start-date").value;
+        const endDate = document.getElementById("end-date").value;
+        const allocationFilter = document.getElementById("allocation-filter").value.trim();
+        const disciplineFilter = document.getElementById("discipline-filter").value.trim();
+
+        let filtered = Report.filterSnapshots(currentSnapshots, startDate, endDate);
+        
+        if (allocationFilter) {
+          filtered = History.filterByAllocation(filtered, allocationFilter);
+        }
+        
+        if (disciplineFilter) {
+          filtered = History.filterByDiscipline(filtered, disciplineFilter);
+        }
+
+        await Report.downloadReport(filtered, { appVersion: (window.GrconConfig && window.GrconConfig.APP_VERSION) || "5.31.1" });
+        
+        document.getElementById("download-report").textContent = "✅ Baixado!";
+        setTimeout(() => {
+          document.getElementById("download-report").textContent = "📊 Baixar Relatório Excel";
+          document.getElementById("download-report").disabled = false;
+        }, 2000);
+      } catch (error) {
+        console.error("Erro ao gerar relatório:", error);
+        alert("Não foi possível gerar o relatório. Verifique o console para mais detalhes.");
+        document.getElementById("download-report").textContent = "📊 Baixar Relatório Excel";
+        document.getElementById("download-report").disabled = false;
+      }
+    }
+
+    // Event listeners
+    document.getElementById("start-date").addEventListener("change", render);
+    document.getElementById("end-date").addEventListener("change", render);
+    document.getElementById("allocation-filter").addEventListener("input", render);
+    document.getElementById("discipline-filter").addEventListener("input", render);
+    document.getElementById("download-report").addEventListener("click", downloadReport);
+    document.getElementById("refresh-data").addEventListener("click", loadData);
+
+    // Initial load
+    loadData();
+  </script>
+</body>
+</html>

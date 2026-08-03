@@ -1,0 +1,369 @@
+.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) {
+  visibility: hidden;
+}
+
+.grcon-cloud-auth[hidden] {
+  display: none !important;
+}
+
+.grcon-cloud-auth {
+  align-items: center;
+  background:
+    radial-gradient(circle at 12% 15%, rgba(43, 128, 181, .18), transparent 32rem),
+    linear-gradient(145deg, #eef5f9 0%, #f8fafc 52%, #e8f1f6 100%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 28px;
+  position: fixed;
+  visibility: visible !important;
+  z-index: 100000;
+}
+
+.grcon-cloud-auth-card {
+  background: rgba(255, 255, 255, .96);
+  border: 1px solid #cddce6;
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(16, 48, 68, .17);
+  color: #172733;
+  max-width: 440px;
+  padding: 34px;
+  width: 100%;
+}
+
+.grcon-cloud-auth-card > img {
+  display: block;
+  height: 52px;
+  margin-bottom: 22px;
+  max-width: 210px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.grcon-cloud-eyebrow {
+  color: #176b99;
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  margin-bottom: 8px;
+}
+
+.grcon-cloud-auth h1 {
+  font-size: 25px;
+  line-height: 1.2;
+  margin: 0 0 10px;
+}
+
+.grcon-cloud-auth p {
+  color: #526573;
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 0 0 22px;
+}
+
+.grcon-cloud-auth form {
+  display: grid;
+  gap: 12px;
+}
+
+.grcon-cloud-auth label {
+  display: grid;
+  gap: 6px;
+}
+
+.grcon-cloud-auth label span {
+  color: #334b5a;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.grcon-cloud-auth input {
+  background: #fff;
+  border: 1px solid #b8cad5;
+  border-radius: 10px;
+  color: #172733;
+  font: inherit;
+  min-height: 44px;
+  padding: 0 13px;
+  width: 100%;
+}
+
+.grcon-cloud-auth input:focus {
+  border-color: #1680b5;
+  box-shadow: 0 0 0 3px rgba(22, 128, 181, .14);
+  outline: none;
+}
+
+.grcon-cloud-auth-message {
+  background: #edf5fa;
+  border: 1px solid #c9deea;
+  border-radius: 10px;
+  color: #31566b !important;
+  margin: 14px 0 !important;
+  padding: 11px 12px;
+}
+
+.grcon-cloud-auth-message[data-tone="success"] {
+  background: #edf8f3;
+  border-color: #b9e0cc;
+  color: #17613d !important;
+}
+
+.grcon-cloud-auth-message[data-tone="error"] {
+  background: #fff2f1;
+  border-color: #efc5c1;
+  color: #a2362f !important;
+}
+
+.grcon-cloud-auth-card > small {
+  color: #758691;
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+  margin-top: 18px;
+}
+
+.grcon-cloud-account {
+  position: relative;
+}
+
+.grcon-cloud-account-button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #c6d7e1;
+  border-radius: 10px;
+  color: #243b4a;
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+  min-height: 40px;
+  padding: 6px 9px;
+}
+
+.grcon-cloud-account-button:hover,
+.grcon-cloud-account-button[aria-expanded="true"] {
+  border-color: #69a6c7;
+  box-shadow: 0 4px 16px rgba(26, 82, 112, .1);
+}
+
+.grcon-cloud-account-button > span:nth-child(2) {
+  display: grid;
+  line-height: 1.15;
+  min-width: 115px;
+  text-align: left;
+}
+
+.grcon-cloud-account-button strong {
+  font-size: 12px;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grcon-cloud-account-button small {
+  color: #6c7d87;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.grcon-cloud-account-button svg {
+  fill: none;
+  height: 16px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 16px;
+}
+
+.grcon-cloud-account-dot {
+  background: #2aa66a;
+  border: 2px solid #daf2e6;
+  border-radius: 50%;
+  height: 11px;
+  width: 11px;
+}
+
+.grcon-cloud-account-menu {
+  background: #fff;
+  border: 1px solid #cbd9e2;
+  border-radius: 14px;
+  box-shadow: 0 20px 55px rgba(13, 46, 66, .2);
+  color: #203541;
+  max-height: min(680px, calc(100vh - 90px));
+  overflow: auto;
+  padding: 16px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 9px);
+  width: min(390px, calc(100vw - 24px));
+  z-index: 9000;
+}
+
+.grcon-cloud-account-menu[hidden] {
+  display: none;
+}
+
+.grcon-cloud-account-menu > header {
+  border-bottom: 1px solid #e3ebf0;
+  display: grid;
+  gap: 3px;
+  padding-bottom: 12px;
+}
+
+.grcon-cloud-account-menu > header strong {
+  font-size: 14px;
+}
+
+.grcon-cloud-account-menu > header span {
+  color: #6c7c86;
+  font-size: 11px;
+}
+
+.grcon-cloud-sync-line {
+  align-items: center;
+  color: #526977;
+  display: flex;
+  font-size: 11px;
+  gap: 7px;
+  padding: 11px 1px;
+}
+
+.grcon-cloud-sync-line i {
+  background: #2aa66a;
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
+}
+
+.grcon-cloud-sync-line[data-tone="warn"] i {
+  background: #d68b16;
+}
+
+.grcon-cloud-invite {
+  background: #f4f8fb;
+  border: 1px solid #d8e5ec;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.grcon-cloud-invite[hidden] {
+  display: none;
+}
+
+.grcon-cloud-invite h3 {
+  font-size: 12px;
+  margin: 0 0 9px;
+}
+
+.grcon-cloud-invite form {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) 110px auto;
+}
+
+.grcon-cloud-invite input,
+.grcon-cloud-invite select {
+  background: #fff;
+  border: 1px solid #bdcfd9;
+  border-radius: 7px;
+  color: #203541;
+  font: inherit;
+  font-size: 11px;
+  min-height: 34px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.grcon-cloud-invite > small {
+  color: #6b7e89;
+  display: block;
+  font-size: 10px;
+  line-height: 1.4;
+  margin-top: 8px;
+}
+
+.grcon-cloud-members {
+  display: grid;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.grcon-cloud-members > div {
+  align-items: center;
+  border-top: 1px solid #e5ecf0;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 9px 2px;
+}
+
+.grcon-cloud-members > div > span {
+  display: grid;
+  min-width: 0;
+}
+
+.grcon-cloud-members strong {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grcon-cloud-members small {
+  color: #778791;
+  font-size: 10px;
+}
+
+.grcon-cloud-members b {
+  background: #eaf4f9;
+  border-radius: 20px;
+  color: #2a637f;
+  font-size: 9px;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+.grcon-cloud-account-menu > footer {
+  border-top: 1px solid #e3ebf0;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 12px;
+}
+
+.history-record-user {
+  align-items: center;
+  color: #657b88;
+  display: inline-flex;
+  font-size: 10px;
+  gap: 5px;
+}
+
+.history-record-user::before {
+  background: #74a9c5;
+  border-radius: 50%;
+  content: "";
+  height: 6px;
+  width: 6px;
+}
+
+body[data-grcon-cloud-role="viewer"] #grdt-module .control-panel,
+body[data-grcon-cloud-role="viewer"] #grdt-module .ops-actions {
+  filter: grayscale(.4);
+  opacity: .58;
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .grcon-cloud-auth { padding: 16px; }
+  .grcon-cloud-auth-card { border-radius: 15px; padding: 24px; }
+  .grcon-cloud-account-button > span:nth-child(2) { min-width: 0; }
+  .grcon-cloud-account-button strong { max-width: 92px; }
+  .grcon-cloud-invite form { grid-template-columns: 1fr; }
+}
