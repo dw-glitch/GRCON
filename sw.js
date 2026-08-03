@@ -1,8 +1,8 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.31.2
+// Versão: 5.31.3
 // Estratégia: Cache First para assets estáticos
 
-const CACHE_NAME = "grcon-v5.31.2";
+const CACHE_NAME = "grcon-v5.31.3";
 const ASSETS = [
   "index.html",
   "design-system.css",

@@ -1,0 +1,22 @@
+{
+  "version": "5.31.3",
+  "javascript_checked": 59,
+  "javascript_errors": [],
+  "ids_checked": 306,
+  "duplicate_ids": [],
+  "index_local_references": 54,
+  "missing_index_references": [],
+  "service_worker_references": 69,
+  "missing_service_worker_references": [],
+  "auth_assertions": {
+    "uses_signInWithPassword": true,
+    "no_signInWithOtp": true,
+    "uses_resetPasswordForEmail": true,
+    "handles_PASSWORD_RECOVERY": true,
+    "uses_updateUser_password": true,
+    "session_persistence": true,
+    "membership_still_required": true,
+    "service_role_not_exposed": true
+  },
+  "passed": true
+}

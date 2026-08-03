@@ -1,4 +1,4 @@
-GRCON 5.31.2 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.31.3 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 ESCOPO
 - Esta versão integra somente o GRCON entre usuários.
@@ -23,7 +23,7 @@ PRIMEIRO USUÁRIO
 - No GRCON publicado, informe esse e-mail e clique em "Enviar link de acesso".
 - Abra o link recebido no mesmo navegador. A sessão ficará salva e será reutilizada nos próximos acessos.
 - Depois de entrar, use o menu do usuário no topo para autorizar os demais e-mails.
-- Não repita o envio do link: a versão 5.31.2 bloqueia solicitações duplicadas e reaproveita a sessão existente.
+- Não repita o envio do link: a versão 5.31.3 bloqueia solicitações duplicadas e reaproveita a sessão existente.
 
 PERFIS
 - Proprietário: administra usuários e histórico.
