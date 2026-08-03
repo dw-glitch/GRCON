@@ -385,6 +385,47 @@
     return ["owner", "admin"].includes(state.membership?.role);
   }
 
+  function newReservationRequestId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    window.crypto?.getRandomValues?.(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  function reservationRequestFor(year, count, requested) {
+    const key = Config.reservationRequestStorageKey || "grcon.cloud.reservation.request.v1";
+    const fingerprint = JSON.stringify({
+      workspaceId: state.membership?.workspace_id || "",
+      userId: state.session?.user?.id || "",
+      year,
+      count,
+      requested: requested || [],
+    });
+    const current = readJson(key, null);
+    const age = Date.now() - Number(current?.createdAt || 0);
+    if (current?.requestId && current.fingerprint === fingerprint && age >= 0 && age < 86400000) {
+      return current.requestId;
+    }
+    const requestId = newReservationRequestId();
+    writeJson(key, { requestId, fingerprint, createdAt: Date.now() });
+    return requestId;
+  }
+
+  function completeEgrdtReservationRequest(generated) {
+    const requestIds = new Set((generated || [])
+      .map((file) => String(file?.official?.requestId || ""))
+      .filter(Boolean));
+    if (!requestIds.size) return false;
+    const key = Config.reservationRequestStorageKey || "grcon.cloud.reservation.request.v1";
+    const current = readJson(key, null);
+    if (!current?.requestId || !requestIds.has(String(current.requestId))) return false;
+    removeStored(key);
+    return true;
+  }
+
   async function reserveEgrdtSequences(year, amount, requestedSequences) {
     if (!state.membership?.workspace_id) return null;
     if (!canWriteHistory()) throw new Error("Seu perfil não pode reservar números de eGRDT.");
@@ -393,11 +434,14 @@
     const requested = Array.isArray(requestedSequences) && requestedSequences.length
       ? requestedSequences.map((value) => Math.trunc(Number(value)))
       : null;
+    const normalizedYear = Math.trunc(Number(year));
+    const requestId = reservationRequestFor(normalizedYear, count, requested);
     const { data, error } = await state.client.rpc("grcon_reserve_egrdt_numbers", {
       target_workspace: state.membership.workspace_id,
-      target_year: Math.trunc(Number(year)),
+      target_year: normalizedYear,
       amount: count,
       requested_sequences: requested,
+      target_request_id: requestId,
     });
     if (error) {
       const message = String(error.message || "");
@@ -414,6 +458,7 @@
       year: Number(row.reserved_year),
       baseName: String(row.base_name || ""),
       reservationId: String(row.reservation_id || ""),
+      requestId,
       shared: true,
     }));
   }
@@ -606,6 +651,7 @@
       const response = await state.client.from("grcon_history")
         .select(columns)
         .eq("workspace_id", state.membership.workspace_id)
+        .is("deleted_at", null)
         .order("generated_at", { ascending: false })
         .range(from, from + pageSize - 1);
       if (response.error) throw response.error;
@@ -724,8 +770,8 @@
     try {
       await flushDeleteQueue();
       await pullCloudHistory();
-      await pushLocalHistory(History.read());
-      await pullCloudHistory();
+      const pushed = await pushLocalHistory(History.read());
+      if (pushed.pushed || pushed.conflicts) await pullCloudHistory();
       setSyncLabel("Histórico sincronizado", "success");
       updateAccountMenu();
     } catch (error) {
@@ -758,10 +804,11 @@
   }
 
   async function flushDeleteQueue() {
-    if (!state.online || !canManageHistory()) return;
+    if (!state.online || !canManageHistory()) return { processed: 0, pending: 0 };
     const queue = readJson(Config.deleteQueueStorageKey, []);
-    if (!queue.length) return;
+    if (!queue.length) return { processed: 0, pending: 0 };
     const remaining = [];
+    let processed = 0;
     for (const raw of queue) {
       const entry = typeof raw === "string"
         ? { recordId: raw, cloudId: "", workspaceId: state.membership.workspace_id }
@@ -770,12 +817,18 @@
         remaining.push(raw);
         continue;
       }
-      let query = state.client.from("grcon_history").delete().eq("workspace_id", state.membership.workspace_id);
+      let query = state.client.from("grcon_history").update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: state.session.user.id,
+        updated_by: state.session.user.id,
+      }).eq("workspace_id", state.membership.workspace_id).is("deleted_at", null);
       query = entry.cloudId ? query.eq("id", entry.cloudId) : query.eq("client_record_id", entry.recordId);
-      const result = await query;
+      const result = await query.select("id");
       if (result.error) remaining.push(raw);
+      else processed += 1;
     }
     writeJson(Config.deleteQueueStorageKey, remaining);
+    return { processed, pending: remaining.length };
   }
 
   function subscribeRealtime() {
@@ -944,6 +997,7 @@
     canManageHistory,
     reserveEgrdtSequences,
     inviteUser,
+    completeEgrdtReservationRequest,
   };
 
   init();

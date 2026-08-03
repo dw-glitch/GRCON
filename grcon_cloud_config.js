@@ -8,5 +8,6 @@
     authStorageKey: "grcon.cloud.auth.v1",
     membershipStorageKey: "grcon.cloud.membership.v1",
     deleteQueueStorageKey: "grcon.cloud.delete.queue.v1",
+    reservationRequestStorageKey: "grcon.cloud.reservation.request.v1",
   });
 })(typeof globalThis !== "undefined" ? globalThis : this);

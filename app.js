@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.31.4";
+  const APP_VERSION = "5.31.5";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const HARD_MAX_ITEMS_PER_EGRDT = 48;
@@ -373,6 +373,9 @@
         if (postingSaved.error) console.warn("GRCON: registros de postagem SIGEM indisponíveis", postingSaved.error);
       }
       if (saved.saved) window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { records } }));
+      if (saved.saved && window.GrconCloud?.completeEgrdtReservationRequest) {
+        window.GrconCloud.completeEgrdtReservationRequest(generated);
+      }
       if (saved.error) console.warn("GRCON: histórico local indisponível", saved.error);
     } catch (error) {
       console.warn("GRCON: a saída foi gerada, mas os históricos locais não puderam ser atualizados", error);
@@ -2392,13 +2395,17 @@
       rawResults.forEach((result) => {
         const physical = physicalById.get(result.id);
         if (physical) result.file = physical;
+        // O Worker aplica as regras da LD, mas não abre o conteúdo binário do
+        // PDF para inferir o tamanho da folha. Preserve o mesmo padrão seguro
+        // do fluxo legado quando a LD não possuir a coluna FORMATO.
+        const formatDefaulted = Boolean(result.egrdt && !result.egrdt.format);
+        if (formatDefaulted) result.egrdt.format = "A4";
         const logical = logicalMeta.get(result.id);
         if (logical) {
           result.virtualFileName = logical.listedName;
           result.listSource = logical.listSource;
           const warnings = [logical.reason].filter(Boolean);
-          if (result.egrdt && !result.egrdt.format) {
-            result.egrdt.format = "A4";
+          if (formatDefaulted) {
             warnings.push("Como o PDF físico não foi fornecido, o formato foi preenchido como A4 e deve ser confirmado antes da postagem.");
           }
           result.documentRevisionWarning = warnings.join(" ");

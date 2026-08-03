@@ -1,14 +1,15 @@
-GRCON 5.31.4 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.31.5 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 ESCOPO
 - Esta versão integra somente o GRCON entre usuários.
 - O RECON permanece separado e não foi alterado.
 
 PUBLICAÇÃO
-1. Antes de publicar, aplique SUPABASE_MIGRACAO_5.31.4.sql no projeto Supabase do GRCON.
-2. Publique o conteúdo desta pasta no projeto Vercel "grcon".
-3. O projeto é estático: não exige instalação, build ou senha administrativa do Windows.
-4. Utilize sempre o endereço HTTPS da Vercel. O login não funciona abrindo index.html por file://.
+1. Esta atualização parte da versão 5.31.4 já instalada.
+2. Antes de publicar, aplique SUPABASE_MIGRACAO_5.31.5.sql no projeto Supabase do GRCON.
+3. Publique o conteúdo desta pasta no projeto Vercel "grcon".
+4. O projeto é estático: não exige instalação, build ou senha administrativa do Windows.
+5. Utilize sempre o endereço HTTPS da Vercel. O login não funciona abrindo index.html por file://.
 
 CONFIGURAÇÃO OBRIGATÓRIA NO SUPABASE
 1. Abra Authentication > URL Configuration no projeto Supabase utilizado pelo GRCON.
@@ -31,8 +32,15 @@ NUMERAÇÃO COMPARTILHADA
 - A prévia da próxima sequência é apenas indicativa.
 - Ao iniciar a geração, o Supabase reserva atomicamente todos os números do lote.
 - Dois computadores não recebem o mesmo número, mesmo que gerem ao mesmo tempo.
+- Se a mesma solicitação for repetida após timeout ou falha de conexão, o Supabase devolve a reserva anterior em vez de consumir novos números.
 - É necessário estar online para gerar uma eGRDT oficial no modo compartilhado.
-- Uma reserva confirmada não é reutilizada se a geração for cancelada ou falhar; isso evita duplicidade e pode produzir lacunas justificáveis.
+- A solicitação é encerrada depois que a saída e o histórico local são registrados.
+- Uma operação realmente abandonada ou substituída por parâmetros diferentes pode manter a reserva sem reutilização, preservando a rastreabilidade da numeração.
+
+EXCLUSÃO COMPARTILHADA
+- Proprietários e administradores continuam sendo os únicos perfis que excluem registros.
+- A exclusão é lógica no banco e desaparece em tempo real nos demais navegadores.
+- O registro permanece auditável no banco, mas não volta a aparecer no histórico ativo.
 
 PERFIS
 - Proprietário: administra usuários e histórico.

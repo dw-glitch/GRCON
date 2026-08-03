@@ -1,8 +1,8 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.31.4
+// Versão: 5.31.5
 // Estratégia: rede primeiro para o shell mutável; cache primeiro para bibliotecas estáticas.
 
-const CACHE_NAME = "grcon-v5.31.4";
+const CACHE_NAME = "grcon-v5.31.5";
 const ASSETS = [
   "index.html",
   "design-system.css",

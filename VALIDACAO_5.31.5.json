@@ -1,0 +1,83 @@
+{
+  "version": "5.31.5",
+  "validation_date": "2026-08-03",
+  "javascript_checked": 66,
+  "javascript_errors": [],
+  "ids_checked": 277,
+  "duplicate_ids": [],
+  "index_local_references": 54,
+  "missing_index_references": [],
+  "service_worker_references": 70,
+  "missing_service_worker_references": [],
+  "operational_tests": {
+    "checks": 15,
+    "passed": true,
+    "deleted_cloud_record_does_not_return": true,
+    "pending_local_creation_is_preserved": true,
+    "pending_edit_survives_intermediate_pull": true,
+    "renamed_record_keeps_stable_cloud_identity": true,
+    "generation_awaits_shared_reservation": true,
+    "worker_defaults_missing_format_to_a4": true,
+    "sync_order_is_delete_pull_push_conditional_pull": true,
+    "manifest_icon_dimensions_match": true,
+    "legacy_xls_48_rows_build_and_reopen": true,
+    "legacy_xls_49_rows_blocked": true,
+    "javascript_syntax_valid": true
+  },
+  "real_file_validation": {
+    "xlsx_files_checked": 2,
+    "pdf_files_checked": 3,
+    "all_source_files_intact": true,
+    "ld_technical_rows": 3615,
+    "ld_sigem_rows": 16596,
+    "sample_document": "CR-5290.00-22313-911-C1O-001",
+    "sample_target_revision": "C",
+    "sample_format": "A4",
+    "sample_workbook_reopened": true,
+    "sample_workbook_format": "BIFF8",
+    "sample_workbook_official_template": true
+  },
+  "database": {
+    "migration_applied": true,
+    "atomic_reservation_rpc": true,
+    "history_number_unique_index": true,
+    "reservation_history_guard": true,
+    "realtime_history_enabled": true,
+    "same_request_returns_same_sequence": true,
+    "same_request_returns_same_reservation_id": true,
+    "changed_retry_parameters_rejected": true,
+    "reservation_consumed_and_linked": true,
+    "soft_delete_hidden_from_active_query": true,
+    "transactional_validation_rolled_back": true,
+    "validation_history_created": 0,
+    "validation_reservations_created": 0
+  },
+  "security": {
+    "rls_enabled_on_public_tables": true,
+    "profile_trigger_functions_not_callable_by_anon": true,
+    "profile_trigger_functions_not_callable_by_authenticated": true,
+    "service_role_not_exposed": true,
+    "private_reservation_table_has_no_direct_policies": true,
+    "leaked_password_protection_enabled": false,
+    "leaked_password_protection_action": "Ativar manualmente no Supabase Auth para eliminar o aviso remanescente."
+  },
+  "auth_assertions": {
+    "uses_signInWithPassword": true,
+    "application_does_not_call_signInWithOtp": true,
+    "uses_resetPasswordForEmail": true,
+    "handles_PASSWORD_RECOVERY": true,
+    "uses_updateUser_password": true,
+    "session_persistence": true,
+    "membership_still_required": true,
+    "first_access_retry_available": true
+  },
+  "browser_e2e": {
+    "published_url_version_observed": "5.31.4",
+    "published_5_31_5_tested": false,
+    "status": "pending_publication",
+    "next_test": "Publicar este pacote e repetir LD -> PDFs -> análise -> geração -> criação, edição e exclusão lógica em duas sessões."
+  },
+  "completed_checks_passed": true,
+  "release_ready_for_publication": true,
+  "full_end_to_end_complete": false
+}

@@ -1,4 +1,4 @@
-GRCON 5.31.4 — CONFIGURAÇÃO DE E-MAIL E SENHA
+GRCON 5.31.5 — CONFIGURAÇÃO DE E-MAIL E SENHA
 
 1. O aplicativo usa o projeto Supabase já configurado em grcon_cloud_config.js.
 2. O login usa supabase.auth.signInWithPassword.

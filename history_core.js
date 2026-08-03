@@ -123,6 +123,10 @@
     const cloudId = text(record && record.cloudId);
     const workspaceId = text(record && record.workspaceId);
     const syncedAt = text(record && record.syncedAt);
+    const reservationRequestId = text(record && record.reservationRequestId);
+    const reservationIds = Array.isArray(record && record.reservationIds)
+      ? record.reservationIds.map(text).filter(Boolean)
+      : [];
     const syncState = text(record && record.syncState) || (cloudId && syncedAt ? "synced" : "pending");
     return {
       id: text(record && record.id) || `${text(record && record.egrdtNumber)}|${text(record && record.generatedAt)}`,
@@ -141,6 +145,8 @@
       syncedAt,
       cloudUpdatedAt: text(record && record.cloudUpdatedAt) || syncedAt,
       localUpdatedAt: text(record && record.localUpdatedAt) || normalizeGeneratedAt(record && record.generatedAt),
+      reservationRequestId,
+      reservationIds,
       syncState: syncState === "synced" ? "synced" : "pending",
       documentCount: documents.length,
       fileCount: files.length,
@@ -310,6 +316,8 @@
       outputType: info.outputType,
       ldName: info.ldName,
       sourceName: info.sourceName,
+      reservationRequestId: text(file && file.official && file.official.requestId),
+      reservationIds: [text(file && file.official && file.official.reservationId)].filter(Boolean),
       files,
     });
   }

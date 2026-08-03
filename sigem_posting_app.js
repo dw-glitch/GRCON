@@ -3,7 +3,7 @@
 
   const Posting = window.GrconSigemPosting;
   const Flow = window.GrconMacro5Flow;
-  const APP_VERSION = "5.31.4";
+  const APP_VERSION = "5.31.5";
   if (!Posting) return;
   const $ = (selector, root) => (root || document).querySelector(selector);
   const escapeHtml = (value) => Posting.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
