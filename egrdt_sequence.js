@@ -53,7 +53,7 @@
   }
 
   function simultaneousUseWarning() {
-    return "O número não é reservado entre computadores. Confirme na fonte oficial se outra eGRDT foi emitida antes de concluir.";
+    return "A prévia é local; o número oficial será reservado no histórico compartilhado somente ao iniciar a geração.";
   }
 
   return Object.freeze({ PREFIX, START, operationalYear, parse, sequenceFrom, largestForYear, storageKey, baseName, next, simultaneousUseWarning });

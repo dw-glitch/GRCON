@@ -1,0 +1,44 @@
+{
+  "version": "5.31.4",
+  "javascript_checked": 66,
+  "javascript_errors": [],
+  "ids_checked": 277,
+  "duplicate_ids": [],
+  "index_local_references": 54,
+  "missing_index_references": [],
+  "service_worker_references": 70,
+  "missing_service_worker_references": [],
+  "operational_tests": {
+    "checks": 11,
+    "passed": true,
+    "deleted_cloud_record_does_not_return": true,
+    "pending_local_creation_is_preserved": true,
+    "pending_edit_survives_intermediate_pull": true,
+    "renamed_record_keeps_stable_cloud_identity": true,
+    "generation_awaits_shared_reservation": true,
+    "sync_order_is_delete_pull_push_pull": true,
+    "manifest_icon_dimensions_match": true,
+    "legacy_xls_48_rows_build_and_reopen": true,
+    "legacy_xls_49_rows_blocked": true
+  },
+  "database": {
+    "migration_applied": true,
+    "atomic_reservation_rpc": true,
+    "history_number_unique_index": true,
+    "reservation_history_guard": true,
+    "realtime_history_enabled": true,
+    "validation_reservations_created": 0
+  },
+  "auth_assertions": {
+    "uses_signInWithPassword": true,
+    "application_does_not_call_signInWithOtp": true,
+    "uses_resetPasswordForEmail": true,
+    "handles_PASSWORD_RECOVERY": true,
+    "uses_updateUser_password": true,
+    "session_persistence": true,
+    "membership_still_required": true,
+    "first_access_retry_available": true,
+    "service_role_not_exposed": true
+  },
+  "passed": true
+}

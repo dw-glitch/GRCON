@@ -1,11 +1,12 @@
-GRCON 5.31.3 — CONFIGURAÇÃO DE E-MAIL E SENHA
+GRCON 5.31.4 — CONFIGURAÇÃO DE E-MAIL E SENHA
 
 1. O aplicativo usa o projeto Supabase já configurado em grcon_cloud_config.js.
 2. O login usa supabase.auth.signInWithPassword.
 3. O botão “Esqueci minha senha” usa resetPasswordForEmail e retorna ao mesmo endereço publicado.
 4. O link de recuperação abre a tela de nova senha e usa updateUser.
-5. Não coloque service_role, secret key ou senha de usuário nos arquivos públicos.
-6. Para uma conta que já existia apenas por Magic Link, defina a senha inicial com o script administrativo abaixo, em um computador seguro.
+5. A entrega do e-mail de recuperação exige SMTP funcional no Supabase Auth; sem SMTP, o login por senha continua funcionando.
+6. Não coloque service_role, secret key ou senha de usuário nos arquivos públicos.
+7. Para uma conta que já existia apenas por Magic Link, defina a senha inicial com o script administrativo abaixo, em um computador seguro.
 
 SCRIPT ADMINISTRATIVO
 - Arquivo: GRCON_CONFIGURAR_SENHA_ADMIN.mjs

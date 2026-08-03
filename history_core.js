@@ -6,8 +6,10 @@
   "use strict";
 
   const STORAGE_KEY = "grcon.egrdt.history.v1";
-  const MAX_RECORDS = 200;
-  const MAX_BYTES = 4200000;
+  // O navegador mantém uma cópia de trabalho recente. No modo compartilhado,
+  // o conjunto completo é lido do Supabase em páginas e reconciliado aqui.
+  const MAX_RECORDS = 1000;
+  const MAX_BYTES = 4500000;
 
   const _U = (typeof globalThis !== "undefined" ? globalThis : this).GrconUtils || {};
   function text(value) { return _U.text ? _U.text(value) : String(value === null || value === undefined ? "" : value).trim(); }
@@ -118,20 +120,28 @@
     const files = Array.isArray(record && record.files) ? record.files.map(cleanFile).filter((file) => file.document || file.originalName || file.finalName) : [];
     const allocations = [...new Set((record && record.allocations || files.map((file) => file.allocation)).map(text).filter(Boolean))];
     const documents = [...new Set(files.map((file) => norm(file.document)).filter(Boolean))];
+    const cloudId = text(record && record.cloudId);
+    const workspaceId = text(record && record.workspaceId);
+    const syncedAt = text(record && record.syncedAt);
+    const syncState = text(record && record.syncState) || (cloudId && syncedAt ? "synced" : "pending");
     return {
       id: text(record && record.id) || `${text(record && record.egrdtNumber)}|${text(record && record.generatedAt)}`,
+      clientRecordId: text(record && record.clientRecordId) || text(record && record.id) || `${text(record && record.egrdtNumber)}|${text(record && record.generatedAt)}`,
       egrdtNumber: text(record && record.egrdtNumber),
       generatedAt: normalizeGeneratedAt(record && record.generatedAt),
       outputType: text(record && record.outputType) || "eGRDT final",
       ldName: text(record && record.ldName),
       sourceName: text(record && record.sourceName),
       numberHistory: Array.isArray(record && record.numberHistory) ? record.numberHistory.map(text).filter(Boolean) : [],
-      cloudId: text(record && record.cloudId),
-      workspaceId: text(record && record.workspaceId),
+      cloudId,
+      workspaceId,
       createdBy: text(record && record.createdBy),
       createdByEmail: text(record && record.createdByEmail),
       createdByName: text(record && record.createdByName),
-      syncedAt: text(record && record.syncedAt),
+      syncedAt,
+      cloudUpdatedAt: text(record && record.cloudUpdatedAt) || syncedAt,
+      localUpdatedAt: text(record && record.localUpdatedAt) || normalizeGeneratedAt(record && record.generatedAt),
+      syncState: syncState === "synced" ? "synced" : "pending",
       documentCount: documents.length,
       fileCount: files.length,
       allocations,
@@ -166,6 +176,75 @@
       return { saved: incoming.length, records: fitted, removed: Math.max(0, merged.size - fitted.length), error: "" };
     } catch (error) {
       return { saved: 0, records: read(target), error: error && error.message || "Não foi possível salvar o histórico." };
+    }
+  }
+
+  function replaceWorkspaceSnapshot(records, workspaceId, storage) {
+    const target = storageOf(storage);
+    if (!target) return { saved: 0, records: [], removed: 0, error: "Armazenamento local indisponível." };
+    const workspace = text(workspaceId);
+    const incoming = (records || []).map((record) => cleanRecord({ ...record, workspaceId: workspace, syncState: "synced" }))
+      .filter((record) => record.egrdtNumber);
+    const cloudIds = new Set(incoming.map((record) => record.cloudId).filter(Boolean));
+    const cloudClientIds = new Set(incoming.map((record) => record.clientRecordId).filter(Boolean));
+    const current = read(target);
+    const preserved = [];
+    const pendingKeys = new Set();
+    let removed = 0;
+
+    current.forEach((record) => {
+      if (record.workspaceId !== workspace) {
+        preserved.push(record);
+        return;
+      }
+      if (!record.cloudId) {
+        preserved.push(record);
+        pendingKeys.add(record.clientRecordId || record.id);
+        return;
+      }
+      const existsInCloud = cloudIds.has(record.cloudId) || cloudClientIds.has(record.clientRecordId);
+      if (record.syncState === "pending" && existsInCloud) {
+        preserved.push(record);
+        pendingKeys.add(record.clientRecordId || record.id);
+        return;
+      }
+      if (!existsInCloud) removed += 1;
+    });
+
+    const merged = new Map(preserved.map((record) => [record.id, record]));
+    incoming.forEach((record) => {
+      if (!pendingKeys.has(record.clientRecordId || record.id)) merged.set(record.id, record);
+    });
+    const fitted = fit([...merged.values()].sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)));
+    try {
+      target.setItem(STORAGE_KEY, JSON.stringify(fitted));
+      return { saved: incoming.length, records: fitted, removed: removed + Math.max(0, merged.size - fitted.length), error: "" };
+    } catch (error) {
+      return { saved: 0, records: current, removed: 0, error: error && error.message || "Não foi possível reconciliar o histórico compartilhado." };
+    }
+  }
+
+  function markSynced(recordId, cloudRecord, storage) {
+    const target = storageOf(storage);
+    if (!target) return { updated: false, records: [], error: "Armazenamento local indisponível." };
+    const records = read(target);
+    const wanted = text(recordId);
+    const index = records.findIndex((record) => record.id === wanted || record.clientRecordId === wanted);
+    if (index < 0) return { updated: false, records, error: "Registro local não localizado." };
+    const cloud = cloudRecord || {};
+    records[index] = cleanRecord({
+      ...records[index],
+      cloudId: cloud.id || records[index].cloudId,
+      workspaceId: cloud.workspace_id || records[index].workspaceId,
+      syncedAt: cloud.updated_at || new Date().toISOString(),
+      cloudUpdatedAt: cloud.updated_at || records[index].cloudUpdatedAt,
+      syncState: "synced",
+    });
+    try {
+      target.setItem(STORAGE_KEY, JSON.stringify(fit(records.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)))));
+      return { updated: true, record: records[index], records: read(target), error: "" };
+    } catch (error) {
+      return { updated: false, records: read(target), error: error && error.message || "Não foi possível confirmar a sincronização local." };
     }
   }
 
@@ -264,7 +343,15 @@
     if (duplicate) return { updated: false, error: "Esse número já pertence a outro registro ou a um número anterior do histórico." };
     const previous = current.egrdtNumber;
     const history = [...new Set([...(current.numberHistory || []), previous].map(text).filter(Boolean))];
-    const updatedRecord = cleanRecord({ ...current, egrdtNumber: normalized.baseName, id: `${normalized.baseName}|${current.generatedAt}|${current.outputType}`, numberHistory: history });
+    const updatedRecord = cleanRecord({
+      ...current,
+      egrdtNumber: normalized.baseName,
+      id: `${normalized.baseName}|${current.generatedAt}|${current.outputType}`,
+      clientRecordId: current.clientRecordId || current.id,
+      numberHistory: history,
+      localUpdatedAt: new Date().toISOString(),
+      syncState: "pending",
+    });
     records[index] = updatedRecord;
     try {
       target.setItem(STORAGE_KEY, JSON.stringify(fit(records.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)))));
@@ -320,5 +407,5 @@
     };
   }
 
-  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, text, norm, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
+  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, text, norm, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
 });

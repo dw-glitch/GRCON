@@ -1,13 +1,14 @@
-GRCON 5.31.3 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.31.4 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 ESCOPO
 - Esta versão integra somente o GRCON entre usuários.
 - O RECON permanece separado e não foi alterado.
 
 PUBLICAÇÃO
-1. Publique o conteúdo desta pasta no projeto Vercel "grcon".
-2. O projeto é estático: não exige instalação, build ou senha administrativa do Windows.
-3. Utilize sempre o endereço HTTPS da Vercel. O login não funciona abrindo index.html por file://.
+1. Antes de publicar, aplique SUPABASE_MIGRACAO_5.31.4.sql no projeto Supabase do GRCON.
+2. Publique o conteúdo desta pasta no projeto Vercel "grcon".
+3. O projeto é estático: não exige instalação, build ou senha administrativa do Windows.
+4. Utilize sempre o endereço HTTPS da Vercel. O login não funciona abrindo index.html por file://.
 
 CONFIGURAÇÃO OBRIGATÓRIA NO SUPABASE
 1. Abra Authentication > URL Configuration no projeto Supabase utilizado pelo GRCON.
@@ -20,10 +21,18 @@ CONFIGURAÇÃO OBRIGATÓRIA NO SUPABASE
 
 PRIMEIRO USUÁRIO
 - E-mail autorizado como proprietário inicial: vinicio.silva@agnet.com.br
-- No GRCON publicado, informe esse e-mail e clique em "Enviar link de acesso".
-- Abra o link recebido no mesmo navegador. A sessão ficará salva e será reutilizada nos próximos acessos.
+- A conta precisa existir no Supabase Auth e já possuir uma senha definida.
+- No GRCON publicado, informe o e-mail e a senha e clique em "Entrar".
+- A sessão ficará salva neste navegador e será reutilizada nos próximos acessos.
 - Depois de entrar, use o menu do usuário no topo para autorizar os demais e-mails.
-- Não repita o envio do link: a versão 5.31.3 bloqueia solicitações duplicadas e reaproveita a sessão existente.
+- Se o convite ainda estiver sendo processado, use "Tentar confirmar novamente"; não é necessário sair nem refazer o login.
+
+NUMERAÇÃO COMPARTILHADA
+- A prévia da próxima sequência é apenas indicativa.
+- Ao iniciar a geração, o Supabase reserva atomicamente todos os números do lote.
+- Dois computadores não recebem o mesmo número, mesmo que gerem ao mesmo tempo.
+- É necessário estar online para gerar uma eGRDT oficial no modo compartilhado.
+- Uma reserva confirmada não é reutilizada se a geração for cancelada ou falhar; isso evita duplicidade e pode produzir lacunas justificáveis.
 
 PERFIS
 - Proprietário: administra usuários e histórico.
@@ -34,6 +43,11 @@ PERFIS
 DADOS COMPARTILHADOS
 - Número e data da eGRDT, usuário que gerou, documentos, revisões, alocações e metadados da LD.
 - PDFs, arquivos documentais, planilhas LD e caminhos locais não são enviados ao Supabase.
+
+RECUPERAÇÃO DE SENHA
+- O login normal não depende do envio de e-mail.
+- "Esqueci minha senha" depende do provedor SMTP configurado no Supabase Auth.
+- Se o e-mail não chegar, confira o SMTP e os logs do Auth; publicar novamente os arquivos não corrige a entrega de e-mail.
 
 SEGURANÇA
 - O aplicativo contém somente a chave pública do Supabase.

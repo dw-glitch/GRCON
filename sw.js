@@ -1,8 +1,8 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.31.3
-// Estratégia: Cache First para assets estáticos
+// Versão: 5.31.4
+// Estratégia: rede primeiro para o shell mutável; cache primeiro para bibliotecas estáticas.
 
-const CACHE_NAME = "grcon-v5.31.3";
+const CACHE_NAME = "grcon-v5.31.4";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -76,15 +76,63 @@ const ASSETS = [
   "performance_workers.js",
 ];
 
+const CRITICAL_ASSETS = [
+  "index.html",
+  "design-system.css",
+  "legacy-compat.css",
+  "grcon-ui.css",
+  "grcon-final.css",
+  "grcon_cloud.css",
+  "grcon_config.js",
+  "grcon_utils.js",
+  "core.js",
+  "egrdt_sequence.js",
+  "history_core.js",
+  "supabase.min.js",
+  "grcon_cloud_config.js",
+  "grcon_cloud_app.js",
+  "app.js",
+];
+
+const MUTABLE_PATHS = new Set([
+  "/",
+  "/index.html",
+  "/sw.js",
+  "/manifest.json",
+  "/grcon_cloud_config.js",
+  "/grcon_cloud_app.js",
+  "/history_core.js",
+  "/app.js",
+]);
+
+async function fetchAndCache(request) {
+  const response = await fetch(new Request(request, { cache: "no-store" }));
+  if (response && response.ok) {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(request, response.clone());
+  }
+  return response;
+}
+
+async function networkFirst(request, fallbackUrl) {
+  try {
+    return await fetchAndCache(request);
+  } catch (_) {
+    const cache = await caches.open(CACHE_NAME);
+    return await cache.match(request) || (fallbackUrl ? await cache.match(fallbackUrl) : null)
+      || new Response("GRCON indisponível offline neste navegador.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      try {
-        await cache.addAll(ASSETS);
-      } catch (error) {
-        console.warn("SW: alguns assets não puderam ser cacheados:", error);
-      }
+      await Promise.all(CRITICAL_ASSETS.map((asset) => cache.add(asset)));
+      const optionalAssets = ASSETS.filter((asset) => !CRITICAL_ASSETS.includes(asset));
+      const results = await Promise.allSettled(optionalAssets.map((asset) => cache.add(asset)));
+      const failed = results.filter((result) => result.status === "rejected").length;
+      if (failed) console.warn(`SW: ${failed} asset(s) opcional(is) não foram pré-cacheados.`);
     })()
   );
   self.skipWaiting();
@@ -105,19 +153,24 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
   if (event.request.method !== "GET" || requestUrl.origin !== self.location.origin) return;
+  if (event.request.mode === "navigate") {
+    event.respondWith(networkFirst(event.request, "index.html"));
+    return;
+  }
+  const localPath = `/${requestUrl.pathname.split("/").filter(Boolean).pop() || ""}`;
+  if (MUTABLE_PATHS.has(requestUrl.pathname) || MUTABLE_PATHS.has(localPath)) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
   event.respondWith(
     (async () => {
-      const cached = await caches.match(event.request);
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(event.request);
       if (cached) return cached;
       try {
-        const response = await fetch(event.request);
-        if (response && response.ok) {
-          const cache = await caches.open(CACHE_NAME);
-          cache.put(event.request, response.clone());
-        }
-        return response;
+        return await fetchAndCache(event.request);
       } catch (error) {
-        return new Response("Offline", { status: 503 });
+        return new Response("Recurso indisponível offline.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
       }
     })()
   );

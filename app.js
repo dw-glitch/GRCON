@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.31.3";
+  const APP_VERSION = "5.31.4";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const HARD_MAX_ITEMS_PER_EGRDT = 48;
@@ -307,12 +307,14 @@
     };
   }
 
-  function reserveEgrdtSequences(amount) {
+  async function reserveEgrdtSequences(amount) {
     const count = Math.max(1, Number(amount) || 1);
     let values;
+    let requestedSequences = null;
     if (state.manualEgrdtSequences.length) {
       const checked = validateManualEgrdtSequences(state.manualEgrdtSequences, count);
       if (!checked.valid) throw new Error(checked.error || "A numeração dos lotes precisa ser confirmada novamente.");
+      requestedSequences = checked.items.map((item) => item.sequence);
       values = checked.items.map((item) => ({
         sequence: item.sequence,
         sequenceText: item.sequenceText,
@@ -322,6 +324,9 @@
       }));
     } else {
       values = suggestedEgrdtSequences(count);
+    }
+    if (window.GrconCloud?.state?.membership) {
+      values = await window.GrconCloud.reserveEgrdtSequences(EGRDT_YEAR, count, requestedSequences);
     }
     const highest = Math.max(...values.map((item) => item.sequence));
     state.egrdtSequenceCursor = Math.max(Number(state.egrdtSequenceCursor) || 0, highest);
@@ -3882,7 +3887,7 @@
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
       const groups = E.splitPlan(prepared, currentEgrdtBatchLimit());
-      const officialNumbers = reserveEgrdtSequences(groups.length);
+      const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = previewGenerated.length === 1 ? previewGenerated[0].fileName : PackageLayout.archiveName(previewGenerated, timestamp);
       const sigemPrepared = prepareSigemOutput(previewGenerated, "eGRDT final", packageName, generatedAt);
@@ -3992,7 +3997,7 @@
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
       const groups = E.splitPlan(plan, currentEgrdtBatchLimit());
-      const officialNumbers = reserveEgrdtSequences(groups.length);
+      const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
       const sigemPrepared = prepareSigemOutput(previewGenerated, "PDFs + eGRDT", packageName, generatedAt);
@@ -4099,7 +4104,7 @@
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
       const groups = E.splitPlan(plan, currentEgrdtBatchLimit());
-      const officialNumbers = reserveEgrdtSequences(groups.length);
+      const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
       const sigemPrepared = prepareSigemOutput(previewGenerated, "Pacote completo", packageName, generatedAt);

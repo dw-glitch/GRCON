@@ -10,6 +10,7 @@
     membership: null,
     online: navigator.onLine,
     syncing: false,
+    syncQueued: false,
     syncTimer: 0,
     realtime: null,
     activationKey: "",
@@ -100,6 +101,7 @@
           </form>
         </div>
         <p class="grcon-cloud-auth-message" id="grcon-cloud-auth-message">Acesso disponível somente para usuários autorizados.</p>
+        <button class="primary-button compact" hidden id="grcon-cloud-auth-retry" type="button">Tentar confirmar novamente</button>
         <button class="secondary-button compact" hidden id="grcon-cloud-auth-signout" type="button">Sair e usar outra conta</button>
         <small>Os documentos, PDFs e planilhas permanecem neste navegador. Somente o histórico operacional é compartilhado.</small>
       </div>`;
@@ -110,6 +112,7 @@
     $("#grcon-cloud-forgot-password", surface).addEventListener("click", requestPasswordRecovery);
     $("#grcon-cloud-password-cancel", surface).addEventListener("click", cancelPasswordChange);
     $("#grcon-cloud-auth-signout", surface).addEventListener("click", signOut);
+    $("#grcon-cloud-auth-retry", surface).addEventListener("click", retryActivation);
     surface.querySelectorAll("[data-password-target]").forEach((button) => {
       button.addEventListener("click", () => togglePasswordVisibility(button));
     });
@@ -334,16 +337,43 @@
   }
 
   async function acceptMembership() {
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const { data, error } = await state.client.rpc("grcon_accept_my_invitation");
+        if (error) throw error;
+        const membership = normalizeMembership(Array.isArray(data) ? data[0] : data);
+        if (membership?.workspace_id) return membership;
+        if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2 && state.online) {
+          await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
+          continue;
+        }
+        break;
+      }
+    }
+    const cached = cachedMembershipFor(state.session?.user?.id);
+    if (!state.online && cached) return normalizeMembership(cached);
+    if (lastError) throw lastError;
+    return null;
+  }
+
+  async function retryActivation() {
+    const button = $("#grcon-cloud-auth-retry");
+    if (button) button.disabled = true;
+    authMessage("Verificando novamente o convite e o vínculo do usuário…", "info");
     try {
-      const { data, error } = await state.client.rpc("grcon_accept_my_invitation");
+      const { data, error } = await state.client.auth.getSession();
       if (error) throw error;
-      const membership = normalizeMembership(Array.isArray(data) ? data[0] : data);
-      if (membership?.workspace_id) return membership;
-      return null;
+      if (!data?.session) return showLogin();
+      state.activationKey = "";
+      await activateSession(data.session);
     } catch (error) {
-      const cached = cachedMembershipFor(state.session?.user?.id);
-      if (!state.online && cached) return normalizeMembership(cached);
-      throw error;
+      authMessage(error?.message || "A confirmação continua indisponível. Verifique a conexão e tente novamente.", "error");
+    } finally {
+      if (button) button.disabled = false;
     }
   }
 
@@ -353,6 +383,39 @@
 
   function canManageHistory() {
     return ["owner", "admin"].includes(state.membership?.role);
+  }
+
+  async function reserveEgrdtSequences(year, amount, requestedSequences) {
+    if (!state.membership?.workspace_id) return null;
+    if (!canWriteHistory()) throw new Error("Seu perfil não pode reservar números de eGRDT.");
+    if (!state.online) throw new Error("Reconecte o GRCON para reservar a numeração oficial antes de gerar os arquivos.");
+    const count = Math.max(1, Math.trunc(Number(amount) || 1));
+    const requested = Array.isArray(requestedSequences) && requestedSequences.length
+      ? requestedSequences.map((value) => Math.trunc(Number(value)))
+      : null;
+    const { data, error } = await state.client.rpc("grcon_reserve_egrdt_numbers", {
+      target_workspace: state.membership.workspace_id,
+      target_year: Math.trunc(Number(year)),
+      amount: count,
+      requested_sequences: requested,
+    });
+    if (error) {
+      const message = String(error.message || "");
+      if (/já (?:está )?reservad|already|duplicate|unique/i.test(message)) {
+        throw new Error("Um dos números informados já foi reservado por outro usuário. Atualize a sequência e tente novamente.");
+      }
+      throw new Error(message || "Não foi possível reservar a numeração oficial no histórico compartilhado.");
+    }
+    const rows = Array.isArray(data) ? data : [];
+    if (rows.length !== count) throw new Error("O servidor não confirmou todas as numerações solicitadas.");
+    return rows.map((row) => ({
+      sequence: Number(row.reserved_sequence),
+      sequenceText: String(Number(row.reserved_sequence)).padStart(4, "0"),
+      year: Number(row.reserved_year),
+      baseName: String(row.base_name || ""),
+      reservationId: String(row.reservation_id || ""),
+      shared: true,
+    }));
   }
 
   function updateHistoryCopy() {
@@ -509,14 +572,14 @@
 
   function cloudPayload(record) {
     const payload = { ...record };
-    ["cloudId", "workspaceId", "createdBy", "createdByEmail", "createdByName", "syncedAt"].forEach((key) => delete payload[key]);
+    ["cloudId", "workspaceId", "clientRecordId", "createdBy", "createdByEmail", "createdByName", "syncedAt", "cloudUpdatedAt", "localUpdatedAt", "syncState"].forEach((key) => delete payload[key]);
     return payload;
   }
 
   function rowForRecord(record) {
     return {
       workspace_id: state.membership.workspace_id,
-      client_record_id: String(record.id || `${record.egrdtNumber}|${record.generatedAt}`),
+      client_record_id: String(record.clientRecordId || record.id || `${record.egrdtNumber}|${record.generatedAt}`),
       egrdt_number: String(record.egrdtNumber || ""),
       generated_at: record.generatedAt,
       output_type: record.outputType || "eGRDT final",
@@ -536,54 +599,85 @@
       && String(row.output_type || "") === String(record.outputType || "");
   }
 
-  async function pushLocalHistory(records) {
-    if (!state.online || !canWriteHistory() || state.syncing || !records?.length) return;
-    state.syncing = true;
-    setSyncLabel("Enviando alterações…", "info");
-    try {
+  async function fetchHistoryRows(columns) {
+    const rows = [];
+    const pageSize = 500;
+    for (let from = 0; ; from += pageSize) {
       const response = await state.client.from("grcon_history")
-        .select("id, client_record_id, egrdt_number, generated_at, output_type, payload")
-        .eq("workspace_id", state.membership.workspace_id);
+        .select(columns)
+        .eq("workspace_id", state.membership.workspace_id)
+        .order("generated_at", { ascending: false })
+        .range(from, from + pageSize - 1);
       if (response.error) throw response.error;
-      const existing = response.data || [];
-      const updates = [];
-      const inserts = [];
-      for (const record of records) {
+      rows.push(...(response.data || []));
+      if ((response.data || []).length < pageSize) break;
+    }
+    return rows;
+  }
+
+  async function pushLocalHistory(records) {
+    const pending = (records || []).filter((record) => record?.syncState !== "synced"
+      && (!record.workspaceId || record.workspaceId === state.membership?.workspace_id));
+    if (!state.online || !canWriteHistory() || !pending.length) return { pushed: 0, conflicts: 0 };
+    setSyncLabel("Enviando alterações…", "info");
+    let pushed = 0;
+    let conflicts = 0;
+    try {
+      const existing = await fetchHistoryRows("id, workspace_id, client_record_id, egrdt_number, generated_at, output_type, payload, updated_at");
+      for (const record of pending) {
         const row = rowForRecord(record);
         const own = existing.find((item) => item.client_record_id === row.client_record_id)
           || existing.find((item) => matchesPreviousNumber(record, item));
-        if (own) updates.push({ ...row, id: own.id });
-        else inserts.push(row);
-      }
-      for (let index = 0; index < updates.length; index += 50) {
-        const result = await state.client.from("grcon_history").upsert(updates.slice(index, index + 50));
+        if (own) {
+          const expected = String(record.cloudUpdatedAt || record.syncedAt || "");
+          if (!expected || expected !== String(own.updated_at || "")) {
+            History.markSynced(record.id, own);
+            conflicts += 1;
+            continue;
+          }
+          const result = await state.client.from("grcon_history")
+            .update(row)
+            .eq("id", own.id)
+            .eq("updated_at", expected)
+            .select("id, workspace_id, client_record_id, updated_at")
+            .maybeSingle();
+          if (result.error) throw result.error;
+          if (!result.data) {
+            History.markSynced(record.id, own);
+            conflicts += 1;
+            continue;
+          }
+          History.markSynced(record.id, result.data);
+          pushed += 1;
+          continue;
+        }
+        if (record.cloudId) {
+          // O registro existia na nuvem e foi excluído por outro usuário.
+          // A exclusão remota vence para impedir ressurreição por cache antigo.
+          conflicts += 1;
+          continue;
+        }
+        const result = await state.client.from("grcon_history")
+          .insert(row)
+          .select("id, workspace_id, client_record_id, updated_at")
+          .single();
         if (result.error) throw result.error;
+        History.markSynced(record.id, result.data);
+        pushed += 1;
       }
-      for (let index = 0; index < inserts.length; index += 50) {
-        const result = await state.client.from("grcon_history").upsert(inserts.slice(index, index + 50), { onConflict: "workspace_id,client_record_id" });
-        if (result.error) throw result.error;
-      }
-      setSyncLabel("Histórico sincronizado", "success");
+      if (conflicts) notify(`${conflicts} alteração(ões) local(is) não substituíram versões mais novas do histórico compartilhado.`, "warn");
+      return { pushed, conflicts };
     } catch (error) {
       console.warn("GRCON Cloud: histórico aguardando sincronização", error);
-      setSyncLabel("Sincronização pendente", "warn");
-    } finally {
-      state.syncing = false;
+      throw error;
     }
   }
 
   async function pullCloudHistory() {
-    if (!state.online || !state.membership?.workspace_id || !History || state.syncing) return;
-    state.syncing = true;
+    if (!state.online || !state.membership?.workspace_id || !History) return { records: [], removed: 0 };
     setSyncLabel("Atualizando histórico…", "info");
     try {
-      const response = await state.client.from("grcon_history")
-        .select("id, client_record_id, egrdt_number, generated_at, output_type, payload, created_by, updated_at")
-        .eq("workspace_id", state.membership.workspace_id)
-        .order("generated_at", { ascending: false })
-        .limit(1000);
-      if (response.error) throw response.error;
-      const rows = response.data || [];
+      const rows = await fetchHistoryRows("id, client_record_id, egrdt_number, generated_at, output_type, payload, created_by, updated_at");
       const creatorIds = [...new Set(rows.map((row) => row.created_by).filter(Boolean))];
       if (creatorIds.length) {
         const profiles = await state.client.from("grcon_profiles").select("id, email, display_name").in("id", creatorIds);
@@ -594,6 +688,7 @@
         return History.cleanRecord({
           ...(row.payload || {}),
           id: row.client_record_id,
+          clientRecordId: row.client_record_id,
           egrdtNumber: row.egrdt_number,
           generatedAt: row.generated_at,
           outputType: row.output_type,
@@ -603,33 +698,62 @@
           createdByEmail: profile.email || "",
           createdByName: profile.display_name || "",
           syncedAt: row.updated_at,
+          cloudUpdatedAt: row.updated_at,
+          localUpdatedAt: row.updated_at,
+          syncState: "synced",
         });
       });
-      if (records.length) History.saveMany(records);
-      window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { cloudPull: true, records } }));
-      setSyncLabel("Histórico sincronizado", "success");
-      updateAccountMenu();
+      const reconciled = History.replaceWorkspaceSnapshot(records, state.membership.workspace_id);
+      if (reconciled.error) throw new Error(reconciled.error);
+      window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { cloudPull: true, records: reconciled.records, removed: reconciled.removed } }));
+      return { records: reconciled.records, removed: reconciled.removed };
     } catch (error) {
       console.warn("GRCON Cloud: leitura compartilhada indisponível", error);
-      setSyncLabel("Usando histórico deste navegador", "warn");
-    } finally {
-      state.syncing = false;
+      throw error;
     }
   }
 
-  function scheduleSync(records) {
-    window.clearTimeout(state.syncTimer);
-    state.syncTimer = window.setTimeout(async () => {
+  async function runSyncCycle() {
+    if (!state.online || !state.membership?.workspace_id || !History) return;
+    if (state.syncing) {
+      state.syncQueued = true;
+      return;
+    }
+    state.syncing = true;
+    state.syncQueued = false;
+    try {
       await flushDeleteQueue();
-      await pushLocalHistory(records?.length ? records : History?.read?.() || []);
       await pullCloudHistory();
-    }, 500);
+      await pushLocalHistory(History.read());
+      await pullCloudHistory();
+      setSyncLabel("Histórico sincronizado", "success");
+      updateAccountMenu();
+    } catch (error) {
+      console.warn("GRCON Cloud: ciclo de sincronização pendente", error);
+      setSyncLabel("Sincronização pendente · tente novamente", "warn");
+    } finally {
+      state.syncing = false;
+      if (state.syncQueued) scheduleSync();
+    }
   }
 
-  function enqueueDelete(recordId) {
+  function scheduleSync() {
+    window.clearTimeout(state.syncTimer);
+    state.syncTimer = window.setTimeout(runSyncCycle, 500);
+  }
+
+  function enqueueDelete(recordId, cloudId, workspaceId) {
     if (!recordId || !canManageHistory()) return;
     const queue = readJson(Config.deleteQueueStorageKey, []);
-    if (!queue.includes(recordId)) queue.push(recordId);
+    const entry = {
+      recordId: String(recordId),
+      cloudId: String(cloudId || ""),
+      workspaceId: String(workspaceId || state.membership?.workspace_id || ""),
+      queuedAt: new Date().toISOString(),
+    };
+    const exists = queue.some((item) => String(typeof item === "string" ? item : item.recordId) === entry.recordId
+      && String(typeof item === "string" ? entry.workspaceId : item.workspaceId || entry.workspaceId) === entry.workspaceId);
+    if (!exists) queue.push(entry);
     writeJson(Config.deleteQueueStorageKey, queue);
   }
 
@@ -638,11 +762,18 @@
     const queue = readJson(Config.deleteQueueStorageKey, []);
     if (!queue.length) return;
     const remaining = [];
-    for (const recordId of queue) {
-      const result = await state.client.from("grcon_history").delete()
-        .eq("workspace_id", state.membership.workspace_id)
-        .eq("client_record_id", recordId);
-      if (result.error) remaining.push(recordId);
+    for (const raw of queue) {
+      const entry = typeof raw === "string"
+        ? { recordId: raw, cloudId: "", workspaceId: state.membership.workspace_id }
+        : raw;
+      if (entry.workspaceId && entry.workspaceId !== state.membership.workspace_id) {
+        remaining.push(raw);
+        continue;
+      }
+      let query = state.client.from("grcon_history").delete().eq("workspace_id", state.membership.workspace_id);
+      query = entry.cloudId ? query.eq("id", entry.cloudId) : query.eq("client_record_id", entry.recordId);
+      const result = await query;
+      if (result.error) remaining.push(raw);
     }
     writeJson(Config.deleteQueueStorageKey, remaining);
   }
@@ -659,7 +790,7 @@
         filter: `workspace_id=eq.${state.membership.workspace_id}`,
       }, () => {
         window.clearTimeout(timer);
-        timer = window.setTimeout(pullCloudHistory, 450);
+        timer = window.setTimeout(scheduleSync, 450);
       })
       .subscribe();
   }
@@ -667,7 +798,7 @@
   async function activateSession(session) {
     if (!session?.user) return showLogin();
     const key = `${session.user.id}|${session.access_token?.slice(-12) || "session"}`;
-    if (state.activationKey === key && state.membership) return;
+    if (state.activationKey === key) return;
     state.activationKey = key;
     state.session = session;
     lockApp();
@@ -676,9 +807,11 @@
       const membership = await acceptMembership();
       if (!membership) {
         authMessage(`O e-mail ${session.user.email || "informado"} ainda não foi autorizado. Peça a um administrador do GRCON para adicioná-lo.`, "error");
+        $("#grcon-cloud-auth-retry").hidden = false;
         $("#grcon-cloud-auth-signout").hidden = false;
         return;
       }
+      $("#grcon-cloud-auth-retry").hidden = true;
       state.membership = membership;
       storeMembership(membership);
       updateHistoryCopy();
@@ -687,9 +820,7 @@
       updateAccountMenu();
       await loadMembers();
       if (state.online) {
-        await pushLocalHistory(History?.read?.() || []);
-        await pullCloudHistory();
-        await flushDeleteQueue();
+        await runSyncCycle();
         subscribeRealtime();
       }
       window.dispatchEvent(new CustomEvent("grcon:cloud-ready", { detail: { membership } }));
@@ -703,7 +834,10 @@
         return;
       }
       console.error("GRCON Cloud: falha ao confirmar acesso", error);
-      authMessage(error?.message || "Não foi possível confirmar seu acesso agora.", "error");
+      authMessage(state.online
+        ? (error?.message || "Não foi possível confirmar seu acesso agora. Tente novamente sem refazer o login.")
+        : "Sem conexão para confirmar o primeiro acesso. Reconecte e tente novamente.", "error");
+      $("#grcon-cloud-auth-retry").hidden = false;
       $("#grcon-cloud-auth-signout").hidden = false;
     }
   }
@@ -715,6 +849,7 @@
     state.passwordRecovery = false;
     lockApp();
     setAuthView("login");
+    $("#grcon-cloud-auth-retry")?.setAttribute("hidden", "");
     $("#grcon-cloud-auth-signout")?.setAttribute("hidden", "");
     authMessage("Acesso disponível somente para usuários autorizados.", "info");
   }
@@ -731,8 +866,8 @@
     window.addEventListener("grcon:history-updated", (event) => {
       const detail = event.detail || {};
       if (detail.cloudPull) return;
-      if (detail.deleted && detail.recordId) enqueueDelete(detail.recordId);
-      scheduleSync(detail.records || History?.read?.() || []);
+      if (detail.deleted && detail.recordId) enqueueDelete(detail.recordId, detail.cloudId, detail.workspaceId);
+      scheduleSync();
     });
   }
 
@@ -742,7 +877,7 @@
       updateAccountMenu();
       if (state.membership) {
         subscribeRealtime();
-        scheduleSync(History?.read?.() || []);
+        scheduleSync();
       }
     });
     window.addEventListener("offline", () => {
@@ -803,10 +938,11 @@
   window.GrconCloud = {
     state,
     init,
-    pull: pullCloudHistory,
-    sync: () => scheduleSync(History?.read?.() || []),
+    pull: runSyncCycle,
+    sync: scheduleSync,
     canWriteHistory,
     canManageHistory,
+    reserveEgrdtSequences,
     inviteUser,
   };
 

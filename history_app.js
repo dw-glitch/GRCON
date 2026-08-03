@@ -5,7 +5,7 @@
   const Posting = window.GrconSigemPosting;
   const Flow = window.GrconMacro5Flow;
   const HistoryReport = window.GrconHistoryReport;
-  const APP_VERSION = "5.31.3";
+  const APP_VERSION = "5.31.4";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
@@ -333,7 +333,14 @@
     state.selectedId = result.records[0] && result.records[0].id || "";
     state.editingId = "";
     render();
-    window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { deleted: true, recordId: record.id } }));
+    window.dispatchEvent(new CustomEvent("grcon:history-updated", {
+      detail: {
+        deleted: true,
+        recordId: record.clientRecordId || record.id,
+        cloudId: record.cloudId || "",
+        workspaceId: record.workspaceId || "",
+      },
+    }));
     notify(`eGRDT excluída do histórico ${window.GrconCloud?.state?.membership ? "compartilhado" : "local"}.`, "success");
   }
 
@@ -360,5 +367,4 @@
   render();
   window.GrconHistoryUi = { state, render, activate, select };
 })();
-
 
