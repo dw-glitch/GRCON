@@ -5,7 +5,7 @@
   const Posting = window.GrconSigemPosting;
   const Flow = window.GrconMacro5Flow;
   const HistoryReport = window.GrconHistoryReport;
-  const APP_VERSION = "5.31.5";
+  const APP_VERSION = "5.31.6";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
@@ -357,9 +357,24 @@
   });
   els.detail.addEventListener("submit", (event) => { if (event.target.id !== "history-number-editor") return; event.preventDefault(); saveEditedNumber(); });
   els.detail.addEventListener("input", (event) => { if (event.target.id === "history-number-input") event.target.value = String(event.target.value || "").replace(/\D/g, "").slice(0, 4); });
-  els.clear.addEventListener("click", () => {
-    if (!state.records.length || !window.confirm("Limpar todo o histórico de eGRDTs salvo neste navegador?")) return;
-    if (History.clear()) { state.selectedId = ""; state.editingId = ""; render(); window.dispatchEvent(new CustomEvent("grcon:history-updated")); }
+  els.clear.addEventListener("click", async () => {
+    if (!state.records.length) return;
+    const shared = Boolean(window.GrconCloud?.state?.membership?.workspace_id);
+    const question = shared
+      ? "Limpar todo o histórico compartilhado de eGRDTs?\n\nOs registros serão apagados também do Supabase. A sequência numérica das eGRDTs será preservada e não poderá ser reutilizada."
+      : "Limpar todo o histórico de eGRDTs salvo neste navegador?";
+    if (!window.confirm(question)) return;
+    if (shared) {
+      const cleared = await window.GrconCloud?.clearHistory?.();
+      if (cleared) { state.selectedId = ""; state.editingId = ""; render(); }
+      return;
+    }
+    if (History.clear()) {
+      state.selectedId = "";
+      state.editingId = "";
+      render();
+      window.dispatchEvent(new CustomEvent("grcon:history-updated"));
+    }
   });
   window.addEventListener("grcon:history-updated", render);
   window.addEventListener("grcon:sigem-updated", render);

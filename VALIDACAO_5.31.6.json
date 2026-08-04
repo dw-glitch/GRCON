@@ -1,0 +1,65 @@
+{
+  "application": "GRCON",
+  "version": "5.31.6",
+  "approved": true,
+  "automated_tests": {
+    "version": "5.31.6",
+    "passed": true,
+    "checks": 17,
+    "names": [
+      "histórico remove registro apagado na nuvem",
+      "histórico preserva criação local ainda não enviada",
+      "edição pendente não é apagada por uma leitura intermediária",
+      "renomeação mantém identificador estável para sincronização",
+      "histórico preserva a identidade da reserva compartilhada",
+      "prévia informa que a reserva final ocorre no compartilhado",
+      "migrações preservam exclusão lógica, reserva idempotente e retenção física autorizada",
+      "aplicativo aguarda reserva antes das três gerações",
+      "fluxo acelerado preenche A4 quando a LD não informa o formato",
+      "sincronização usa exclusão lógica e evita a segunda leitura quando não há envio",
+      "cliente envia e conclui o identificador idempotente da reserva",
+      "limpeza compartilhada só remove o histórico local após confirmação do Supabase",
+      "atalho do cabeçalho abre o RECON sem integração de dados",
+      "manifesto declara o tamanho real do ícone",
+      "service worker publica o cache isolado da versão 5.31.6",
+      "gerador produz e reabre XLS BIFF8 com 48 linhas e bloqueia a 49ª",
+      "todos os JavaScripts têm sintaxe válida"
+    ]
+  },
+  "structure": {
+    "files_in_package_before_this_report": 100,
+    "html_ids": 277,
+    "duplicate_ids": [],
+    "local_references_checked": 54,
+    "missing_local_assets": []
+  },
+  "javascript": {
+    "files_checked": 62,
+    "syntax_failures": []
+  },
+  "security": {
+    "service_role_secret_patterns_found": []
+  },
+  "shortcut": {
+    "url": "https://recon-ivory.vercel.app/",
+    "opens_new_tab": true
+  },
+  "supabase_live_verification": {
+    "verified_at": "2026-08-04",
+    "project_ref": "kvyrttccwzdhasplfxnr",
+    "migration_version": "20260804085745",
+    "migration_name": "grcon_5_31_6_history_retention_and_clear",
+    "migration_applied": true,
+    "database_size_bytes": 12323987,
+    "database_size_display": "12 MB",
+    "history_relation_bytes": 221184,
+    "history_relation_display": "216 kB",
+    "history_rows_at_verification": 0,
+    "soft_deleted_rows_at_verification": 0,
+    "retention_trigger_present": true,
+    "authenticated_can_execute_clear_rpc": true,
+    "anonymous_can_execute_clear_rpc": false,
+    "destructive_clear_executed_during_validation": false
+  },
+  "migration_file_sha256": "8d31e6bc0b35597bf7980e2bd32453860219e3268f764f371555b7f00d74fadd"
+}

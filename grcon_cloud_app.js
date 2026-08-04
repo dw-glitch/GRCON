@@ -17,6 +17,7 @@
     profiles: new Map(),
     passwordRecovery: false,
     passwordView: "login",
+    clearingHistory: false,
   };
 
   const $ = (selector, context) => (context || document).querySelector(selector);
@@ -470,10 +471,65 @@
     if (eyebrow) eyebrow.textContent = "HISTÓRICO COMPARTILHADO";
     if (paragraph) paragraph.textContent = "Consulte as eGRDTs geradas pelos usuários autorizados e confira documentos, revisões e alocações.";
     if (storage) storage.textContent = "Histórico local com sincronização segura entre usuários do GRCON.";
+    updateHistoryClearControl();
+  }
+
+  function updateHistoryClearControl() {
     const clear = $("#history-clear");
-    if (clear) {
-      clear.hidden = true;
-      clear.title = "A exclusão em massa foi desativada no histórico compartilhado.";
+    if (!clear) return;
+    const authorized = Boolean(state.membership?.workspace_id) && canManageHistory();
+    clear.hidden = !authorized;
+    clear.disabled = !authorized || !state.online || state.syncing || state.clearingHistory;
+    if (!authorized) clear.title = "Somente proprietários e administradores podem limpar o histórico compartilhado.";
+    else if (!state.online) clear.title = "Reconecte o GRCON para apagar o histórico também no Supabase.";
+    else if (state.syncing || state.clearingHistory) clear.title = "Aguarde a sincronização atual terminar.";
+    else clear.title = "Apaga o histórico deste workspace no navegador e no Supabase. A numeração das eGRDTs não é reutilizada.";
+  }
+
+  async function clearSharedHistory() {
+    const workspaceId = state.membership?.workspace_id;
+    if (!workspaceId) {
+      notify("O histórico compartilhado ainda não está disponível.", "error");
+      return false;
+    }
+    if (!canManageHistory()) {
+      notify("Seu perfil não pode limpar o histórico compartilhado.", "error");
+      return false;
+    }
+    if (!state.online) {
+      notify("Reconecte o GRCON para apagar o histórico também no Supabase.", "warn");
+      return false;
+    }
+    if (state.syncing || state.clearingHistory) {
+      notify("Aguarde a sincronização do histórico terminar e tente novamente.", "warn");
+      return false;
+    }
+
+    state.clearingHistory = true;
+    updateHistoryClearControl();
+    setSyncLabel("Limpando histórico compartilhado…", "info");
+    try {
+      const { data, error } = await state.client.rpc("grcon_clear_history", { target_workspace: workspaceId });
+      if (error) throw error;
+      const removed = Number(data || 0);
+      History?.clear?.();
+      writeJson(Config.deleteQueueStorageKey, []);
+      window.dispatchEvent(new CustomEvent("grcon:history-updated", {
+        detail: { cloudPull: true, sharedClear: true, removed },
+      }));
+      setSyncLabel("Histórico sincronizado", "success");
+      notify(removed === 1
+        ? "1 eGRDT foi removida do histórico compartilhado e do Supabase."
+        : `${removed} eGRDTs foram removidas do histórico compartilhado e do Supabase.`, "success");
+      return true;
+    } catch (error) {
+      console.error("GRCON Cloud: falha ao limpar histórico compartilhado", error);
+      setSyncLabel("Falha ao limpar · nenhuma limpeza local foi aplicada", "warn");
+      notify(error?.message || "Não foi possível limpar o histórico no Supabase.", "error");
+      return false;
+    } finally {
+      state.clearingHistory = false;
+      updateHistoryClearControl();
     }
   }
 
@@ -528,6 +584,7 @@
     $("#grcon-cloud-invite").hidden = !canManageHistory();
     document.body.dataset.grconCloudRole = state.membership?.role || "viewer";
     setSyncLabel(state.online ? "Histórico sincronizado" : "Offline · alterações ficam neste navegador", state.online ? "success" : "warn");
+    updateHistoryClearControl();
   }
 
   function toggleAccountMenu() {
@@ -761,12 +818,14 @@
 
   async function runSyncCycle() {
     if (!state.online || !state.membership?.workspace_id || !History) return;
+    if (state.clearingHistory) { state.syncQueued = true; return; }
     if (state.syncing) {
       state.syncQueued = true;
       return;
     }
     state.syncing = true;
     state.syncQueued = false;
+    updateHistoryClearControl();
     try {
       await flushDeleteQueue();
       await pullCloudHistory();
@@ -779,6 +838,7 @@
       setSyncLabel("Sincronização pendente · tente novamente", "warn");
     } finally {
       state.syncing = false;
+      updateHistoryClearControl();
       if (state.syncQueued) scheduleSync();
     }
   }
@@ -900,6 +960,7 @@
     state.membership = null;
     state.activationKey = "";
     state.passwordRecovery = false;
+    updateHistoryClearControl();
     lockApp();
     setAuthView("login");
     $("#grcon-cloud-auth-retry")?.setAttribute("hidden", "");
@@ -937,6 +998,7 @@
       state.online = false;
       updateAccountMenu();
       setSyncLabel("Offline · alterações ficam neste navegador", "warn");
+      updateHistoryClearControl();
     });
   }
 
@@ -998,6 +1060,7 @@
     reserveEgrdtSequences,
     inviteUser,
     completeEgrdtReservationRequest,
+    clearHistory: clearSharedHistory,
   };
 
   init();

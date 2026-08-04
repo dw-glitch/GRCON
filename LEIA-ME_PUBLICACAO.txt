@@ -1,63 +1,57 @@
-GRCON 5.31.5 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.31.6 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 ESCOPO
-- Esta versão integra somente o GRCON entre usuários.
-- O RECON permanece separado e não foi alterado.
+- Esta versão integra somente os usuários do GRCON.
+- O RECON continua sendo um aplicativo independente.
+- O botão RECON no cabeçalho é apenas um atalho para https://recon-ivory.vercel.app/.
+- Não existe compartilhamento de login, banco, sessão, arquivos ou histórico entre os dois aplicativos.
 
 PUBLICAÇÃO
-1. Esta atualização parte da versão 5.31.4 já instalada.
-2. Antes de publicar, aplique SUPABASE_MIGRACAO_5.31.5.sql no projeto Supabase do GRCON.
-3. Publique o conteúdo desta pasta no projeto Vercel "grcon".
-4. O projeto é estático: não exige instalação, build ou senha administrativa do Windows.
-5. Utilize sempre o endereço HTTPS da Vercel. O login não funciona abrindo index.html por file://.
+1. Esta atualização parte da versão 5.31.5.
+2. A migração SUPABASE_MIGRACAO_5.31.6.sql já foi aplicada ao projeto kvyrttccwzdhasplfxnr em 04/08/2026.
+3. Ao instalar em outro projeto, aplique primeiro as migrações anteriores e depois SUPABASE_MIGRACAO_5.31.6.sql.
+4. Publique o conteúdo desta pasta no projeto Vercel "grcon".
+5. O projeto é estático: não exige instalação nem build.
+6. Utilize sempre o endereço HTTPS da Vercel. O login não funciona por file://.
 
-CONFIGURAÇÃO OBRIGATÓRIA NO SUPABASE
-1. Abra Authentication > URL Configuration no projeto Supabase utilizado pelo GRCON.
-2. Configure Site URL como:
-   https://grcon.vercel.app
-3. Adicione às Redirect URLs:
+CONFIGURAÇÃO DO SUPABASE AUTH
+1. Site URL: https://grcon.vercel.app
+2. Redirect URLs:
    https://grcon.vercel.app/**
    https://grcon-*-vinicios-projects-929099b6.vercel.app/**
-4. Salve as alterações.
 
-PRIMEIRO USUÁRIO
-- E-mail autorizado como proprietário inicial: vinicio.silva@agnet.com.br
-- A conta precisa existir no Supabase Auth e já possuir uma senha definida.
-- No GRCON publicado, informe o e-mail e a senha e clique em "Entrar".
-- A sessão ficará salva neste navegador e será reutilizada nos próximos acessos.
-- Depois de entrar, use o menu do usuário no topo para autorizar os demais e-mails.
-- Se o convite ainda estiver sendo processado, use "Tentar confirmar novamente"; não é necessário sair nem refazer o login.
+LIMITE E RETENÇÃO DO HISTÓRICO
+- O plano gratuito entra em modo somente leitura quando o banco ultrapassa a cota de 500 MiB.
+- A retenção preventiva começa antes disso: 300 MiB na relação grcon_history, 400 MiB no banco ou estimativa acima de 15.000 linhas.
+- A verificação ocorre no máximo uma vez a cada 30 minutos, após gravações no histórico.
+- Registros já marcados como excluídos são removidos fisicamente primeiro.
+- Sob pressão, os registros mais antigos são removidos, preservando no mínimo os 100 mais recentes de cada workspace.
+- Os números de eGRDT já reservados não são reutilizados.
 
-NUMERAÇÃO COMPARTILHADA
-- A prévia da próxima sequência é apenas indicativa.
-- Ao iniciar a geração, o Supabase reserva atomicamente todos os números do lote.
-- Dois computadores não recebem o mesmo número, mesmo que gerem ao mesmo tempo.
-- Se a mesma solicitação for repetida após timeout ou falha de conexão, o Supabase devolve a reserva anterior em vez de consumir novos números.
-- É necessário estar online para gerar uma eGRDT oficial no modo compartilhado.
-- A solicitação é encerrada depois que a saída e o histórico local são registrados.
-- Uma operação realmente abandonada ou substituída por parâmetros diferentes pode manter a reserva sem reutilização, preservando a rastreabilidade da numeração.
+BOTÃO LIMPAR HISTÓRICO
+- Visível somente para Proprietário e Administrador.
+- Exige conexão com o Supabase.
+- Executa a função grcon_clear_history no banco e só depois limpa a cópia local.
+- Em caso de erro no banco, o histórico local é preservado.
+- A limpeza é física no Supabase; os demais usuários recebem a atualização pela sincronização em tempo real.
+- A sequência numérica permanece preservada.
 
-EXCLUSÃO COMPARTILHADA
-- Proprietários e administradores continuam sendo os únicos perfis que excluem registros.
-- A exclusão é lógica no banco e desaparece em tempo real nos demais navegadores.
-- O registro permanece auditável no banco, mas não volta a aparecer no histórico ativo.
+EXCLUSÃO INDIVIDUAL
+- A exclusão de uma única eGRDT continua sincronizada entre usuários.
+- Somente Proprietário e Administrador podem excluir registros compartilhados.
 
 PERFIS
 - Proprietário: administra usuários e histórico.
-- Administrador: convida usuários e pode excluir registros compartilhados.
+- Administrador: convida usuários e gerencia o histórico.
 - Operador: gera eGRDTs e sincroniza o histórico.
 - Consulta: acessa o histórico sem operar a geração.
 
 DADOS COMPARTILHADOS
-- Número e data da eGRDT, usuário que gerou, documentos, revisões, alocações e metadados da LD.
+- Número e data da eGRDT, usuário, documentos, revisões, alocações e metadados da LD.
 - PDFs, arquivos documentais, planilhas LD e caminhos locais não são enviados ao Supabase.
 
-RECUPERAÇÃO DE SENHA
-- O login normal não depende do envio de e-mail.
-- "Esqueci minha senha" depende do provedor SMTP configurado no Supabase Auth.
-- Se o e-mail não chegar, confira o SMTP e os logs do Auth; publicar novamente os arquivos não corrige a entrega de e-mail.
-
 SEGURANÇA
-- O aplicativo contém somente a chave pública do Supabase.
-- A chave service_role não está presente no pacote.
-- Todas as seis tabelas compartilhadas utilizam RLS.
+- O pacote contém somente a chave pública do Supabase.
+- A chave service_role não está presente.
+- A função de limpeza valida sessão e perfil owner/admin no banco.
+- As tabelas compartilhadas utilizam RLS.

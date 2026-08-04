@@ -1,5 +1,5 @@
 // GRCON — Melhorias de UX e Segurança
-// Versão: 5.31.5
+// Versão: 5.31.6
 // Drag & Drop, Confirmações destrutivas, Auditoria local
 
 (function () {
@@ -229,18 +229,6 @@
           if (confirmed) originalHandler();
         }
       },
-      {
-        id: "history-clear",
-        message: "Limpar histórico de eGRDTs?",
-        detail: "Todos os registros de eGRDTs geradas serão excluídos permanentemente.",
-        event: "click",
-        handler: async (e, originalHandler) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const confirmed = await confirmAction("Limpar histórico de eGRDTs?", "Todos os registros de eGRDTs serão excluídos permanentemente.");
-          if (confirmed) originalHandler();
-        }
-      },
     ];
 
     destructiveActions.forEach((action) => {
@@ -287,7 +275,7 @@
         action: String(action),
         detail: String(detail || ""),
         user: "",
-        appVersion: "5.31.5",
+        appVersion: "5.31.6",
         userAgent: navigator.userAgent ? navigator.userAgent.slice(0, 200) : "",
       });
       await new Promise((resolve, reject) => {
