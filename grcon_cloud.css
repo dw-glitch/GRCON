@@ -370,6 +370,49 @@
   white-space: nowrap;
 }
 
+.grcon-cloud-online-count {
+  color: #0c7657;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.grcon-cloud-member-dot {
+  background: #c4ced4;
+  border-radius: 50%;
+  display: inline-block;
+  height: 7px;
+  margin-right: 5px;
+  width: 7px;
+}
+
+.grcon-cloud-members > div.is-online .grcon-cloud-member-dot {
+  background: #12a56f;
+  box-shadow: 0 0 0 2px rgba(18, 165, 111, .18);
+}
+
+.grcon-cloud-members > div.is-inactive {
+  opacity: .62;
+}
+
+.grcon-cloud-member-inactive {
+  color: #a64035;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.grcon-cloud-members select[data-member-role] {
+  border: 1px solid #d5dee4;
+  border-radius: 7px;
+  font-size: 10px;
+  max-width: 108px;
+  padding: 4px 6px;
+}
+
+.grcon-cloud-member-row {
+  flex-wrap: wrap;
+}
+
 .grcon-cloud-account-menu > footer {
   border-top: 1px solid #e3ebf0;
   display: flex;
