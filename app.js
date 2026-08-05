@@ -22,15 +22,16 @@
   const APP_VERSION = "5.31.6";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
-  const HARD_MAX_ITEMS_PER_EGRDT = 48;
   const DEFAULT_ITEMS_PER_EGRDT = 48;
   const EGRDT_BATCH_LIMIT_KEY = "grcon.egrdt.batch-limit.v1";
 
+  // Sem limite máximo imposto pelo aplicativo: o usuário escolhe livremente
+  // quantos documentos entram em cada eGRDT. Só se garante um inteiro >= 1.
   function normalizeEgrdtBatchLimit(value) {
     if (value === null || value === undefined || String(value).trim() === "") return DEFAULT_ITEMS_PER_EGRDT;
     const parsed = Math.trunc(Number(value));
     if (!Number.isFinite(parsed)) return DEFAULT_ITEMS_PER_EGRDT;
-    return Math.max(1, Math.min(HARD_MAX_ITEMS_PER_EGRDT, parsed));
+    return Math.max(1, parsed);
   }
 
   function readEgrdtBatchLimit() {
@@ -546,7 +547,7 @@
   function renderEgrdtBatchSettings() {
     const limit = currentEgrdtBatchLimit();
     if (els.egrdtBatchLimit && document.activeElement !== els.egrdtBatchLimit) els.egrdtBatchLimit.value = String(limit);
-    if (els.egrdtBatchStatus) els.egrdtBatchStatus.textContent = `Limite atual: ${limit} · máximo ${HARD_MAX_ITEMS_PER_EGRDT}`;
+    if (els.egrdtBatchStatus) els.egrdtBatchStatus.textContent = `Limite atual: ${limit} documento${limit === 1 ? "" : "s"} por eGRDT · sem máximo`;
     if (els.egrdtBatchPolicyText) els.egrdtBatchPolicyText.textContent = `Limite: ${limit} por eGRDT`;
     if (els.p1BatchLimitNote) els.p1BatchLimitNote.textContent = `Limite: ${limit} documento${limit === 1 ? "" : "s"} por eGRDT.`;
   }
@@ -554,8 +555,8 @@
   function saveEgrdtBatchLimit() {
     const raw = els.egrdtBatchLimit ? els.egrdtBatchLimit.value : state.egrdtBatchLimit;
     const parsed = Math.trunc(Number(raw));
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > HARD_MAX_ITEMS_PER_EGRDT) {
-      showToast(`Informe uma quantidade entre 1 e ${HARD_MAX_ITEMS_PER_EGRDT}.`, "error");
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      showToast("Informe uma quantidade inteira de pelo menos 1 documento.", "error");
       renderEgrdtBatchSettings();
       return false;
     }
@@ -1969,11 +1970,10 @@
   }
 
   window.GrconEgrdtBatchPlan = Object.freeze({
-    MAX_LIMIT: HARD_MAX_ITEMS_PER_EGRDT,
     getLimit() { return currentEgrdtBatchLimit(); },
     setLimit(value) {
       const parsed = normalizeEgrdtBatchLimit(value);
-      if (Number(value) !== parsed) throw new Error(`Informe uma quantidade entre 1 e ${HARD_MAX_ITEMS_PER_EGRDT}.`);
+      if (Number(value) !== parsed) throw new Error("Informe uma quantidade inteira de pelo menos 1 documento.");
       state.egrdtBatchLimit = parsed;
       try { localStorage.setItem(EGRDT_BATCH_LIMIT_KEY, String(parsed)); } catch (_) { console.debug("[App] setLimit storage:", _); }
       renderEgrdtBatchSettings();
