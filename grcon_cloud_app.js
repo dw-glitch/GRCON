@@ -674,7 +674,11 @@
 
   function cloudPayload(record) {
     const payload = { ...record };
-    ["cloudId", "workspaceId", "clientRecordId", "createdBy", "createdByEmail", "createdByName", "syncedAt", "cloudUpdatedAt", "localUpdatedAt", "syncState"].forEach((key) => delete payload[key]);
+    // Estes campos já são gravados em colunas dedicadas da tabela (egrdt_number,
+    // generated_at, output_type, document_count, file_count, allocations) e são
+    // lidos de volta a partir delas em pullCloudHistory; mantê-los aqui também
+    // duplicava dado sem necessidade.
+    ["cloudId", "workspaceId", "clientRecordId", "createdBy", "createdByEmail", "createdByName", "syncedAt", "cloudUpdatedAt", "localUpdatedAt", "syncState", "egrdtNumber", "generatedAt", "outputType", "documentCount", "fileCount", "allocations"].forEach((key) => delete payload[key]);
     return payload;
   }
 
@@ -780,7 +784,7 @@
     if (!state.online || !state.membership?.workspace_id || !History) return { records: [], removed: 0 };
     setSyncLabel("Atualizando histórico…", "info");
     try {
-      const rows = await fetchHistoryRows("id, client_record_id, egrdt_number, generated_at, output_type, payload, created_by, updated_at");
+      const rows = await fetchHistoryRows("id, client_record_id, egrdt_number, generated_at, output_type, document_count, file_count, allocations, payload, created_by, updated_at");
       const creatorIds = [...new Set(rows.map((row) => row.created_by).filter(Boolean))];
       if (creatorIds.length) {
         const profiles = await state.client.from("grcon_profiles").select("id, email, display_name").in("id", creatorIds);
@@ -795,6 +799,9 @@
           egrdtNumber: row.egrdt_number,
           generatedAt: row.generated_at,
           outputType: row.output_type,
+          documentCount: row.document_count,
+          fileCount: row.file_count,
+          allocations: Array.isArray(row.allocations) ? row.allocations : [],
           cloudId: row.id,
           workspaceId: state.membership.workspace_id,
           createdBy: row.created_by,
