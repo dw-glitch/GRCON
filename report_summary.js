@@ -28,12 +28,21 @@
     { header: "DATA EFETIVA DE EMISSÃO DA GRDT", key: "effectiveDate", width: 22 },
     { header: "SITUAÇÃO DE POSTAGEM", key: "postingStatus", width: 29 },
     { header: "EVIDÊNCIA DE POSTAGEM", key: "postingEvidence", width: 58 },
-    { header: "STATUS SIGEM", key: "sigemStatus", width: 22 },
+    { header: "STATUS DA REVISÃO PARA POSTAR", key: "postingRevisionStatus", width: 26 },
     { header: "INCLUÍDO NA EGRDT?", key: "included", width: 22 },
     { header: "CAMINHO DATABOOK", key: "databook", width: 46 },
     { header: "OBSERVAÇÃO PRINCIPAL", key: "observation", width: 62 },
     { header: "GRDT(S) ANTERIOR(ES) NO HISTÓRICO", key: "previousEgrdt", width: 34 },
+    { header: "STATUS SIGEM", key: "sigemStatus", width: 22 },
+    { header: "ARQUIVO ORIGINAL", key: "originalFile", width: 38 },
+    { header: "ARQUIVO FINAL", key: "finalFile", width: 38 },
   ]);
+
+  // Posições de coluna usadas na estilização condicional. Calculadas a
+  // partir de COLUMNS (em vez de números fixos) para não quebrar se a
+  // ordem das colunas mudar novamente no futuro.
+  const ALLOCATED_COLUMN = COLUMNS.findIndex((column) => column.key === "allocated") + 1;
+  const ALLOCATION_REASON_COLUMN = COLUMNS.findIndex((column) => column.key === "allocationReason") + 1;
 
   function text(value) {
     return value === null || value === undefined ? "" : String(value).trim();
@@ -177,6 +186,17 @@
     return `A alocação não pôde ser comprovada porque o campo “${field}” está vazio ou não foi localizado${location ? ` (${location})` : ""}${allocation ? `, embora exista o número ${allocation}` : ""}. ${versionEvidence}`;
   }
 
+  // Reúne todos os comentários da fiscal encontrados para o documento: o da
+  // linha técnica atual e os de cada revisão anterior conhecida na linha do
+  // tempo, sem repetir textos iguais.
+  function allFiscalComments(row) {
+    const record = row && row.record || {};
+    const values = [text(record.fiscalComment || row && row.fiscalComment)];
+    const revisions = (row && row.timeline && row.timeline.revisions) || [];
+    revisions.forEach((item) => values.push(text(item && item.fiscalComment)));
+    return [...new Set(values.filter(Boolean))].join(" | ");
+  }
+
   function buildRows(results, options) {
     const settings = options || {};
     return (results || []).map((row) => {
@@ -202,7 +222,7 @@
         allocationReason: allocationReason(row),
         allocation: text(record.allocation),
         allocationStage: text(record.allocationStage),
-        fiscalComment: text(record.fiscalComment || row && row.fiscalComment),
+        fiscalComment: allFiscalComments(row),
         ldFile: text(record.source || settings.ldFileName),
         sheet: text(record.sheet || row && row.sheet),
         line: Number(record.row) || "",
@@ -213,10 +233,13 @@
         effectiveDate: effectiveDateValue(row, record),
         postingStatus: text(row && row.postingStatus || row && row.postingEvidence && row.postingEvidence.status) || "Sem evidência de postagem na LD",
         postingEvidence: text(row && row.postingEvidence && row.postingEvidence.explanation),
-        sigemStatus: text(row && row.status),
+        postingRevisionStatus: text(row && row.status),
         included,
         databook: text(record.databook),
         observation: `${decisionObservation(row)}${notice}`.trim(),
+        sigemStatus: text(record.sigemStatus),
+        originalFile: text(row && row.name),
+        finalFile: text(row && row.finalName),
       };
     });
   }
@@ -297,12 +320,12 @@
       decisionCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: decisionColors[0] } };
       decisionCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: decisionColors[1] } };
 
-      const allocationCell = row.getCell(4);
+      const allocationCell = row.getCell(ALLOCATED_COLUMN);
       const allocationColors = allocationPalette(allocationCell.value);
       allocationCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: allocationColors[0] } };
       allocationCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: allocationColors[1] } };
       if ((C && C.norm ? C.norm(allocationCell.value) : text(allocationCell.value).toUpperCase()).includes("NAO")) {
-        const reasonCell = row.getCell(6);
+        const reasonCell = row.getCell(ALLOCATION_REASON_COLUMN);
         reasonCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF7F4" } };
         reasonCell.font = { name: "Aptos", size: 9, color: { argb: "FF7A342D" } };
       }
@@ -364,7 +387,7 @@
         const decisionColors = statusPalette(decisionCell.value);
         decisionCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: decisionColors[0] } };
         decisionCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: decisionColors[1] } };
-        const allocationCell = row.getCell(4);
+        const allocationCell = row.getCell(ALLOCATED_COLUMN);
         const allocationColors = allocationPalette(allocationCell.value);
         allocationCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: allocationColors[0] } };
         allocationCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: allocationColors[1] } };

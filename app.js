@@ -3355,6 +3355,17 @@
     }).join(" | ");
   }
 
+  // Reúne todos os comentários da fiscal encontrados para o documento: o da
+  // linha técnica atual e os de cada revisão anterior conhecida na linha do
+  // tempo, sem repetir textos iguais. Mesmo critério usado na aba Resumo.
+  function allFiscalCommentsText(row) {
+    const record = row && row.record || {};
+    const values = [String(record.fiscalComment || row && row.fiscalComment || "").trim()];
+    const revisions = (row && row.timeline && row.timeline.revisions) || [];
+    revisions.forEach((item) => values.push(String(item && item.fiscalComment || "").trim()));
+    return [...new Set(values.filter(Boolean))].join(" | ");
+  }
+
   function reportRows() {
     return state.results.map((row) => {
       const message = decisionMessage(row);
@@ -3363,11 +3374,20 @@
         "SITUAÇÃO GRCON": decisionLabel(row.decision, row),
         "GRDT(S) ANTERIOR(ES) NO HISTÓRICO": previousEgrdtHistoryText(row.document),
         "CÓDIGO DO MOTIVO": message.code || row.reasonCode || "",
+        "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
+        "TÍTULO": row.record && row.record.title || "",
         "ABA LD": row.sheet,
+        "REVISÃO": row.record && row.record.revision || "",
         "REVISÃO ENVIADA NA GRDT": row.revision,
         "REVISÃO PARA POSTAR": row.revision,
+        "STATUS": row.record && row.record.status || "",
+        "STATUS SIGEM": row.record && row.record.sigemStatus || "",
         "STATUS DA REVISÃO PARA POSTAR": row.status,
+        "COMENTÁRIO DA FISCAL": allFiscalCommentsText(row),
+        "ALOCAÇÃO": row.record && row.record.allocation || "",
+        "ETAPA DA ALOCAÇÃO": row.record && row.record.allocationStage || ldValue(row.record || {}, "ETAPA DA ALOCAÇÃO") || "",
+        "CONFIRMAÇÃO DE DOCUMENTOS PREVISTOS": row.record && row.record.allocationStatus || "",
         "ORIGEM DA REVISÃO": row.revisionSource,
         "HISTÓRICO DE REVISÕES": timelineReportText(row.timeline),
         "EXPLICAÇÃO DA REVISÃO": timelineExplanation(row.timeline),
@@ -3405,13 +3425,16 @@
         "ALERTA DE CODIFICAÇÃO ET": row.codeValidationWarning || "",
         "TÍTULO USADO NA GRDT": row.egrdt && row.egrdt.title || "",
         "CAMINHO DATABOOK USADO NA GRDT": row.egrdt && row.egrdt.databook || "",
+        "ARQUIVO FINAL": row.finalName || "",
         "ARQUIVOS FINAIS": (row.files || []).map((entry) => entry.finalName).join(" | ") || row.finalName,
         "LD / LINHA": row.record && (row.record.sheet || row.record.row) ? `${row.record.source || ""} · ${row.record.sheet || ""} · ${row.record.row || ""}` : "",
       };
       (row.record && row.record.ldColumns || []).forEach((column) => {
         output[column.header] = column.value;
       });
-      if (!row.record || !row.record.ldColumns || !row.record.ldColumns.length) output.DOCUMENTO = row.document;
+      // DOCUMENTO sempre reflete o mesmo valor usado na tabela de triagem,
+      // mesmo quando a LD também tem uma coluna própria chamada "DOCUMENTO".
+      output.DOCUMENTO = row.document;
       return output;
     });
   }
