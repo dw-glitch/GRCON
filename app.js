@@ -3344,12 +3344,24 @@
     }
   }
 
+  function previousEgrdtHistoryText(documentName) {
+    const Indicator = window.GrconGrdtHistoryIndicator;
+    if (!Indicator || typeof Indicator.getEntries !== "function") return "";
+    const entries = Indicator.getEntries(documentName);
+    if (!entries.length) return "";
+    return entries.map((entry) => {
+      const date = formatDateBR(entry.generatedAt);
+      return date ? `${entry.egrdtNumber} (${date})` : entry.egrdtNumber;
+    }).join(" | ");
+  }
+
   function reportRows() {
     return state.results.map((row) => {
       const message = decisionMessage(row);
       const simpleMessage = [message.title, message.explanation, message.nextAction].filter(Boolean).join(" ");
       const output = {
         "SITUAÇÃO GRCON": decisionLabel(row.decision, row),
+        "GRDT(S) ANTERIOR(ES) NO HISTÓRICO": previousEgrdtHistoryText(row.document),
         "CÓDIGO DO MOTIVO": message.code || row.reasonCode || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
         "ABA LD": row.sheet,
@@ -3407,6 +3419,7 @@
   function reportTimelineRows() {
     return state.results.flatMap((row) => (row.timeline && row.timeline.revisions || []).map((item, index, revisions) => ({
       "DOCUMENTO": row.document,
+      "GRDT(S) ANTERIOR(ES) NO HISTÓRICO": previousEgrdtHistoryText(row.document),
       "ABA LD": row.sheet,
       "VERSÃO DA LD ENVIADA": row.timeline.ldVersion || "",
       "REVISÃO": item.revision,
@@ -3572,8 +3585,8 @@
     const summaryTableStart = 12 + details.length;
     const summaryRows = ReportSummary
       ? ReportSummary.buildRowsAsync
-        ? await ReportSummary.buildRowsAsync(state.results, { ldFileName: ldDisplayName() })
-        : ReportSummary.buildRows(state.results, { ldFileName: ldDisplayName() })
+        ? await ReportSummary.buildRowsAsync(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
+        : ReportSummary.buildRows(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
       : [];
     const summaryTable = ReportSummary
       ? ReportSummary.writeTableAsync

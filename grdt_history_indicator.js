@@ -84,6 +84,20 @@
     buildIndex();
   }
 
+  // Retorna a lista bruta de eGRDTs anteriores para um documento
+  // (mesmo índice usado pelo badge da tabela de triagem), ordenada da
+  // mais recente para a mais antiga.
+  function getEntries(documentName) {
+    if (!_built) buildIndex();
+    var key = norm(documentName);
+    if (!key) return [];
+    var entries = _index.get(key);
+    if (!entries || entries.length === 0) return [];
+    return entries.slice().sort(function (a, b) {
+      return (b.generatedAt || "").localeCompare(a.generatedAt || "");
+    });
+  }
+
   function getBadgeHtml(document) {
     if (!_built) buildIndex();
     var key = norm(document);
@@ -142,5 +156,6 @@
   return Object.freeze({
     refresh: refresh,
     getBadgeHtml: getBadgeHtml,
+    getEntries: getEntries,
   });
 });
