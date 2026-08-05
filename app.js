@@ -2228,6 +2228,10 @@
       await saveCurrentAnalysisHistory();
       savePendingAllocationHistory();
       setProgress(100, "Análise concluída");
+      // Garante que o selo de "já emitido antes" reflita o histórico mais
+      // recente ao mostrar os documentos desta nova análise, em vez de
+      // depender só de um evento de sincronização anterior.
+      if (window.GrconGrdtHistoryIndicator) window.GrconGrdtHistoryIndicator.refresh();
       renderAll();
       els.resultsSection.hidden = false;
       const counts = C.resultCounts(state.results);
@@ -2434,6 +2438,10 @@
       els.analysisStamp.hidden = false;
       els.resultsSection.hidden = false;
 
+      // Garante que o selo de "já emitido antes" reflita o histórico mais
+      // recente ao mostrar os documentos desta nova análise, em vez de
+      // depender só de um evento de sincronização anterior.
+      if (window.GrconGrdtHistoryIndicator) window.GrconGrdtHistoryIndicator.refresh();
       const counts = C.resultCounts(state.results);
       window.requestAnimationFrame(() => {
         renderAll();
