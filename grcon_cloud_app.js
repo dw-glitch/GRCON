@@ -18,6 +18,7 @@
     passwordRecovery: false,
     passwordView: "login",
     clearingHistory: false,
+    onlineUserIds: new Set(),
   };
 
   const $ = (selector, context) => (context || document).querySelector(selector);
@@ -386,6 +387,10 @@
     return ["owner", "admin"].includes(state.membership?.role);
   }
 
+  function canManageMembers() {
+    return state.membership?.role === "owner";
+  }
+
   function newReservationRequestId() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     const bytes = new Uint8Array(16);
@@ -547,7 +552,7 @@
         <svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg>
       </button>
       <section class="grcon-cloud-account-menu" hidden id="grcon-cloud-account-menu">
-        <header><strong id="grcon-cloud-menu-workspace">GRCON Compartilhado</strong><span id="grcon-cloud-menu-email"></span></header>
+        <header><strong id="grcon-cloud-menu-workspace">GRCON Compartilhado</strong><span id="grcon-cloud-menu-email"></span><span id="grcon-cloud-online-count" class="grcon-cloud-online-count" title="Usuários com o GRCON aberto agora"></span></header>
         <div class="grcon-cloud-sync-line"><i></i><span id="grcon-cloud-sync-label">Histórico sincronizado</span></div>
         <div class="grcon-cloud-invite" hidden id="grcon-cloud-invite">
           <h3>Convidar usuário</h3>
@@ -581,6 +586,13 @@
     $("#grcon-cloud-account-role").textContent = `${roleLabels[state.membership?.role] || "Usuário"} · ${state.online ? "online" : "offline"}`;
     $("#grcon-cloud-menu-workspace").textContent = state.membership?.workspace_name || "GRCON Compartilhado";
     $("#grcon-cloud-menu-email").textContent = email;
+    const onlineCount = $("#grcon-cloud-online-count");
+    if (onlineCount) {
+      const total = state.onlineUserIds.size;
+      onlineCount.textContent = state.online && total
+        ? `${total} usuário${total === 1 ? "" : "s"} online agora`
+        : state.online ? "" : "Offline";
+    }
     $("#grcon-cloud-invite").hidden = !canManageHistory();
     document.body.dataset.grconCloudRole = state.membership?.role || "viewer";
     setSyncLabel(state.online ? "Histórico sincronizado" : "Offline · alterações ficam neste navegador", state.online ? "success" : "warn");
@@ -648,11 +660,14 @@
     if (!target || !state.membership?.workspace_id) return;
     target.innerHTML = "<small>Atualizando usuários…</small>";
     try {
-      const { data: memberships, error } = await state.client.from("grcon_memberships")
+      const manage = canManageMembers();
+      // O proprietário também precisa enxergar quem está desativado para
+      // poder reativar; os demais perfis continuam vendo só os ativos.
+      let query = state.client.from("grcon_memberships")
         .select("user_id, role, active, joined_at")
-        .eq("workspace_id", state.membership.workspace_id)
-        .eq("active", true)
-        .order("joined_at");
+        .eq("workspace_id", state.membership.workspace_id);
+      if (!manage) query = query.eq("active", true);
+      const { data: memberships, error } = await query.order("joined_at");
       if (error) throw error;
       const ids = [...new Set((memberships || []).map((item) => item.user_id))];
       let profiles = [];
@@ -663,13 +678,73 @@
       }
       profiles.forEach((profile) => state.profiles.set(profile.id, profile));
       updateAccountMenu();
+      const selfId = state.session?.user?.id;
       target.innerHTML = (memberships || []).map((membership) => {
         const profile = state.profiles.get(membership.user_id) || {};
-        return `<div><span><strong>${escapeHtml(profile.display_name || profile.email || "Usuário")}</strong><small>${escapeHtml(profile.email || "")}</small></span><b>${escapeHtml(roleLabels[membership.role] || membership.role)}</b></div>`;
+        const online = state.onlineUserIds.has(membership.user_id);
+        const name = escapeHtml(profile.display_name || profile.email || "Usuário");
+        const mail = escapeHtml(profile.email || "");
+        const inactiveTag = membership.active ? "" : `<em class="grcon-cloud-member-inactive">Desativado</em>`;
+        if (!manage) {
+          return `<div data-member-user-id="${escapeHtml(membership.user_id)}" class="${online ? "is-online" : ""}"><span><i class="grcon-cloud-member-dot" title="${online ? "Online agora" : "Offline"}"></i><strong>${name}</strong><small>${mail}</small></span><b>${escapeHtml(roleLabels[membership.role] || membership.role)}</b></div>`;
+        }
+        const options = Object.entries(roleLabels)
+          .map(([value, label]) => `<option value="${value}" ${membership.role === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+          .join("");
+        const isSelf = membership.user_id === selfId;
+        return `<div data-member-user-id="${escapeHtml(membership.user_id)}" class="grcon-cloud-member-row ${online ? "is-online" : ""} ${membership.active ? "" : "is-inactive"}">
+          <span><i class="grcon-cloud-member-dot" title="${online ? "Online agora" : "Offline"}"></i><strong>${name}</strong><small>${mail}</small>${inactiveTag}</span>
+          <select aria-label="Perfil de ${name}" data-member-role="${escapeHtml(membership.user_id)}">${options}</select>
+          <button class="secondary-button compact" data-member-active="${escapeHtml(membership.user_id)}" data-next-active="${membership.active ? "false" : "true"}" ${isSelf ? "disabled title='Você não pode desativar a si mesmo'" : ""} type="button">${membership.active ? "Desativar" : "Reativar"}</button>
+        </div>`;
       }).join("") || "<small>Nenhum usuário ativo.</small>";
+
+      if (manage) {
+        target.querySelectorAll("[data-member-role]").forEach((select) => {
+          select.addEventListener("change", (event) => changeMemberRole(event.target.dataset.memberRole, event.target.value));
+        });
+        target.querySelectorAll("[data-member-active]").forEach((button) => {
+          button.addEventListener("click", (event) => {
+            const el = event.currentTarget;
+            setMemberActive(el.dataset.memberActive, el.dataset.nextActive === "true");
+          });
+        });
+      }
     } catch (error) {
       target.innerHTML = `<small>${escapeHtml(error?.message || "Usuários indisponíveis.")}</small>`;
     }
+  }
+
+  async function changeMemberRole(userId, role) {
+    if (!userId || !canManageMembers()) return;
+    try {
+      const { error } = await state.client.rpc("grcon_update_member_role", {
+        target_workspace: state.membership.workspace_id,
+        target_user: userId,
+        new_role: role,
+      });
+      if (error) throw error;
+      notify(`Perfil atualizado para ${roleLabels[role] || role}.`, "success");
+    } catch (error) {
+      notify(error?.message || "Não foi possível alterar o perfil.", "error");
+    }
+    await loadMembers();
+  }
+
+  async function setMemberActive(userId, isActive) {
+    if (!userId || !canManageMembers()) return;
+    try {
+      const { error } = await state.client.rpc("grcon_set_member_active", {
+        target_workspace: state.membership.workspace_id,
+        target_user: userId,
+        is_active: isActive,
+      });
+      if (error) throw error;
+      notify(isActive ? "Usuário reativado." : "Usuário desativado.", "success");
+    } catch (error) {
+      notify(error?.message || "Não foi possível alterar o acesso do usuário.", "error");
+    }
+    await loadMembers();
   }
 
   function cloudPayload(record) {
@@ -898,11 +973,25 @@
     return { processed, pending: remaining.length };
   }
 
+  function updateMembersOnlineStatus() {
+    const target = $("#grcon-cloud-members");
+    if (!target) return;
+    target.querySelectorAll("[data-member-user-id]").forEach((row) => {
+      const online = state.onlineUserIds.has(row.dataset.memberUserId);
+      row.classList.toggle("is-online", online);
+      const dot = row.querySelector(".grcon-cloud-member-dot");
+      if (dot) dot.title = online ? "Online agora" : "Offline";
+    });
+  }
+
   function subscribeRealtime() {
     if (!state.online || !state.client || !state.membership?.workspace_id) return;
     if (state.realtime) state.client.removeChannel(state.realtime);
     let timer = 0;
-    state.realtime = state.client.channel(`grcon-history-${state.membership.workspace_id}`)
+    const channel = state.client.channel(`grcon-history-${state.membership.workspace_id}`, {
+      config: { presence: { key: state.session?.user?.id || undefined } },
+    });
+    channel
       .on("postgres_changes", {
         event: "*",
         schema: "public",
@@ -912,7 +1001,17 @@
         window.clearTimeout(timer);
         timer = window.setTimeout(scheduleSync, 450);
       })
-      .subscribe();
+      .on("presence", { event: "sync" }, () => {
+        state.onlineUserIds = new Set(Object.keys(channel.presenceState()));
+        updateAccountMenu();
+        updateMembersOnlineStatus();
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED" && state.session?.user?.id) {
+          channel.track({ user_id: state.session.user.id, online_at: new Date().toISOString() });
+        }
+      });
+    state.realtime = channel;
   }
 
   async function activateSession(session) {
