@@ -215,8 +215,19 @@
     </section>`;
   }
 
+  // Outras eGRDTs no histórico que já incluíram este documento, sem contar
+  // a própria eGRDT deste registro (senão o documento sempre "encontraria"
+  // a si mesmo, já que este registro também é um item do histórico).
+  function previousEgrdtText(document, currentEgrdtNumber) {
+    const Indicator = window.GrconGrdtHistoryIndicator;
+    if (!Indicator || typeof Indicator.getEntries !== "function") return "";
+    const entries = Indicator.getEntries(document).filter((entry) => entry.egrdtNumber !== currentEgrdtNumber);
+    if (!entries.length) return "";
+    return entries.map((entry) => `${entry.egrdtNumber}${entry.generatedAt ? ` (${formatDate(entry.generatedAt)})` : ""}`).join(" | ");
+  }
+
   function renderFiles(record) {
-    return `<details class="sigem-files-card"><summary><span>Documentos do lote</span><strong>${record.files.length} arquivo(s)</strong></summary><div class="sigem-files-table"><table><thead><tr><th>Documento</th><th>Revisão</th><th>Arquivo final</th><th>Caminho Databook</th><th>Alocação</th></tr></thead><tbody>${record.files.map((file) => `<tr><td>${escapeHtml(file.document || "—")}</td><td>${escapeHtml(file.revision || "—")}</td><td>${escapeHtml(file.finalName || "—")}</td><td>${escapeHtml(file.databook || "—")}</td><td>${escapeHtml(file.allocation || file.allocationStatus || "—")}</td></tr>`).join("")}</tbody></table></div></details>`;
+    return `<details class="sigem-files-card"><summary><span>Documentos do lote</span><strong>${record.files.length} arquivo(s)</strong></summary><div class="sigem-files-table"><table><thead><tr><th>Documento</th><th>Revisão</th><th>Arquivo final</th><th>Caminho Databook</th><th>Alocação</th><th>eGRDT(s) anterior(es)</th></tr></thead><tbody>${record.files.map((file) => `<tr><td>${escapeHtml(file.document || "—")}</td><td>${escapeHtml(file.revision || "—")}</td><td>${escapeHtml(file.finalName || "—")}</td><td>${escapeHtml(file.databook || "—")}</td><td>${escapeHtml(file.allocation || file.allocationStatus || "—")}</td><td>${escapeHtml(previousEgrdtText(file.document, record.egrdtNumber) || "—")}</td></tr>`).join("")}</tbody></table></div></details>`;
   }
 
   function renderStatusHistory(record) {
