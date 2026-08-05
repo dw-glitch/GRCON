@@ -32,6 +32,7 @@
     { header: "INCLUÍDO NA EGRDT?", key: "included", width: 22 },
     { header: "CAMINHO DATABOOK", key: "databook", width: 46 },
     { header: "OBSERVAÇÃO PRINCIPAL", key: "observation", width: 62 },
+    { header: "GRDT(S) ANTERIOR(ES) NO HISTÓRICO", key: "previousEgrdt", width: 34 },
   ]);
 
   function text(value) {
@@ -194,6 +195,7 @@
       return {
         decision: decisionLabel(row),
         document: text(row && row.document),
+        previousEgrdt: typeof settings.historyLookup === "function" ? text(settings.historyLookup(row && row.document)) : "",
         title: text(row && row.egrdt && row.egrdt.title || record.title),
         allocated: allocationLabel(row),
         allocationStatus: text(record.allocationStatus),
