@@ -29,6 +29,7 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 }
 </script>
 <link href="design-system.css" rel="stylesheet"/><link href="legacy-compat.css" rel="stylesheet"/><link href="grcon-ui.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet" media="print" onload="this.media='all'"/><link href="analysis-history.css" rel="stylesheet" media="print" onload="this.media='all'"/><link href="grcon-final.css" rel="stylesheet"/><link href="grcon_cloud.css" rel="stylesheet"/>
+<link href="grcon-ui-fix.css" rel="stylesheet"/>
 <meta content="5.31.6" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
@@ -586,6 +587,7 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <script defer src="macro5_flow_app.js"></script>
 <script defer src="productivity_center.js"></script>
 <script defer src="grcon_enhancements.js"></script>
+<script defer src="grcon-ui-fix.js"></script>
 <script>
 const grconCanRegisterServiceWorker = location.protocol === "https:"
   || (location.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname));
