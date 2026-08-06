@@ -3374,6 +3374,25 @@
     return [...new Set(values.filter(Boolean))].join(" | ");
   }
 
+  // Mesma normalização usada pelo índice do selo (grdt_history_indicator.js),
+  // para o worker conseguir casar o documento sem depender do navegador.
+  function historyDocumentKey(value) {
+    if (!value) return "";
+    return String(value).trim().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[–—]/g, "-").toUpperCase().replace(/\s+/g, " ");
+  }
+
+  function historyByDocumentMap(results) {
+    const map = {};
+    (results || []).forEach((row) => {
+      const key = historyDocumentKey(row && row.document);
+      if (!key || map[key]) return;
+      const text = previousEgrdtHistoryText(row.document);
+      if (text) map[key] = text;
+    });
+    return map;
+  }
+
   function reportRows() {
     return state.results.map((row) => {
       const message = decisionMessage(row);
@@ -3689,6 +3708,9 @@
       ldIntegrity: state.ldIntegrity,
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
+      // O worker não enxerga localStorage nem o índice de histórico, então o
+      // mapa documento -> eGRDT(s) anterior(es) vai pronto no payload.
+      historyByDocument: historyByDocumentMap(results),
     };
     const buffer = await PerformanceCore.buildReport(payload, workerProgress("Relatório Excel"));
     refreshPerformancePanel("Relatório Excel concluído.");
