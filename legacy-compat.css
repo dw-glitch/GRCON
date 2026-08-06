@@ -1163,7 +1163,7 @@ html[data-app="GRCON"] .databook-level-grid input {
 .history-detail-meta dd { margin: 0; overflow-wrap: anywhere; color: #29485f; font-size: 11px; font-weight: 700; }
 .history-detail-meta dd span { display: inline-flex; margin: 2px 5px 2px 0; padding: 3px 7px; border-radius: 999px; color: #175d86; background: #e7f2f8; }
 .history-detail-table { max-height: 520px; overflow: auto; }
-.history-detail-table table { min-width: 1320px; table-layout: fixed; }
+.history-detail-table table { min-width: 1780px; table-layout: fixed; }
 .history-detail-table th:nth-child(n),.history-detail-table td:nth-child(n) { position: static; left: auto; width: auto; box-shadow: none; }
 .history-detail-table th:nth-child(1) { width: 210px; }
 .history-detail-table th:nth-child(2),.history-detail-table th:nth-child(3) { width: 290px; }
@@ -1171,6 +1171,10 @@ html[data-app="GRCON"] .databook-level-grid input {
 .history-detail-table th:nth-child(5) { width: 180px; }
 .history-detail-table th:nth-child(6) { width: 170px; }
 .history-detail-table th:nth-child(7) { width: 100px; }
+.history-detail-table th:nth-child(8) { width: 220px; }
+.history-detail-table th:nth-child(9) { width: 140px; }
+.history-detail-table th:nth-child(10) { width: 90px; }
+.history-detail-table td { overflow-wrap: break-word; word-break: normal; }
 
 /* Tema escuro reversível — mantém todas as funções e somente troca a apresentação. */
 body.p2-dark {
