@@ -444,6 +444,7 @@
     resultPageNext: $("#result-page-next"),
     resultPageStatus: $("#result-page-status"),
     resultsScroll: $("#results-scroll"),
+    resultsTable: $("#results-table"),
     columnFilterRow: $("#results-column-filters"),
     clearColumnFilters: $("#results-clear-column-filters"),
     performancePanel: $("#performance-panel"),
@@ -2582,31 +2583,210 @@
     return values[keyName] || "";
   }
 
+  // state.columnFilters[key] guarda os valores NORMALIZADOS marcados
+  // (como no filtro do Excel: uma lista de valores permitidos). A chave só
+  // existe quando é um subconjunto próprio — "tudo marcado" equivale a
+  // nenhum filtro, igual ao Excel.
   function activeColumnFilters() {
-    return Object.entries(state.columnFilters || {}).filter(([, value]) => C.norm(value));
+    return Object.entries(state.columnFilters || {}).filter(([, values]) => Array.isArray(values) && values.length);
+  }
+
+  function rowPassesBaseFilters(row) {
+    if (state.filter === "bloqueado" && !row.hardBlock) return false;
+    if (state.filter === C.REVIEW && (row.hardBlock || row.decision !== C.REVIEW)) return false;
+    if (!["todos", "bloqueado", C.REVIEW].includes(state.filter) && row.decision !== state.filter) return false;
+    if (state.sheetFilter !== "todos" && C.norm(row.sheet) !== state.sheetFilter) return false;
+    const query = C.norm(state.search);
+    if (query && !C.norm(`${row.name} ${row.document} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt}`).includes(query)) return false;
+    return true;
+  }
+
+  function rowPassesColumnFilters(row, excludeKey, columnFilters) {
+    for (const [keyName, values] of columnFilters || activeColumnFilters()) {
+      if (keyName === excludeKey) continue;
+      if (!values.includes(C.norm(resultColumnValue(row, keyName)))) return false;
+    }
+    return true;
+  }
+
+  // Valores únicos disponíveis para a coluna, considerando os demais filtros
+  // já aplicados (igual ao Excel: o menu de uma coluna reflete o que ainda é
+  // alcançável dado o restante dos filtros ativos).
+  function computeColumnFilterOptions(keyName) {
+    const map = new Map();
+    state.results.forEach((row) => {
+      if (!rowPassesBaseFilters(row) || !rowPassesColumnFilters(row, keyName)) return;
+      const raw = String(resultColumnValue(row, keyName) ?? "").trim();
+      const norm = C.norm(raw);
+      if (!map.has(norm)) map.set(norm, { norm, label: raw || "(Vazias)", count: 0 });
+      map.get(norm).count += 1;
+    });
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { numeric: true }));
+  }
+
+  const columnFilterPopoverState = { keyName: null, pending: null, options: [], search: "", triggerEl: null };
+
+  function updateColumnFilterTriggerStates() {
+    if (!els.resultsTable) return;
+    els.resultsTable.querySelectorAll("[data-column-filter-trigger]").forEach((button) => {
+      const active = Array.isArray(state.columnFilters[button.dataset.columnFilterTrigger]) && state.columnFilters[button.dataset.columnFilterTrigger].length > 0;
+      button.classList.toggle("is-active", active);
+    });
+  }
+
+  function closeColumnFilterPopover() {
+    if (columnFilterPopoverState.triggerEl) columnFilterPopoverState.triggerEl.setAttribute("aria-expanded", "false");
+    columnFilterPopoverState.keyName = null;
+    columnFilterPopoverState.triggerEl = null;
+    if (els.columnFilterPopover) els.columnFilterPopover.hidden = true;
+  }
+
+  function renderColumnFilterPopover() {
+    const popover = els.columnFilterPopover;
+    if (!popover) return;
+    const { options, pending, search } = columnFilterPopoverState;
+    const query = C.norm(search);
+    const visibleOptions = query ? options.filter((option) => C.norm(option.label).includes(query)) : options;
+    const allVisibleChecked = visibleOptions.length > 0 && visibleOptions.every((option) => pending.has(option.norm));
+    popover.querySelector(".column-filter-search").value = search;
+    const selectAll = popover.querySelector(".column-filter-select-all");
+    selectAll.checked = allVisibleChecked;
+    selectAll.indeterminate = !allVisibleChecked && visibleOptions.some((option) => pending.has(option.norm));
+    popover.querySelector(".column-filter-list").innerHTML = visibleOptions.length
+      ? visibleOptions.map((option) => `<label class="column-filter-option"><input type="checkbox" data-column-filter-value="${escapeHtml(option.norm)}" ${pending.has(option.norm) ? "checked" : ""}><span>${escapeHtml(option.label)}</span><b>${option.count}</b></label>`).join("")
+      : `<p class="column-filter-empty">Nenhum valor com os filtros atuais.</p>`;
+    const applyButton = popover.querySelector(".column-filter-apply");
+    if (applyButton) applyButton.disabled = pending.size === 0;
+  }
+
+  function positionColumnFilterPopover(triggerEl) {
+    const popover = els.columnFilterPopover;
+    const rect = triggerEl.getBoundingClientRect();
+    const width = Math.min(280, Math.max(220, window.innerWidth - 32));
+    let left = rect.left;
+    if (left + width > window.innerWidth - 16) left = Math.max(16, window.innerWidth - 16 - width);
+    popover.style.width = `${width}px`;
+    popover.style.left = `${left}px`;
+    popover.style.top = `${rect.bottom + 6}px`;
+    const maxHeight = Math.max(180, window.innerHeight - rect.bottom - 24);
+    popover.style.maxHeight = `${Math.min(360, maxHeight)}px`;
+  }
+
+  function ensureColumnFilterPopover() {
+    if (els.columnFilterPopover) return;
+    const popover = document.createElement("div");
+    popover.className = "column-filter-popover";
+    popover.hidden = true;
+    popover.innerHTML = `
+      <input type="search" class="column-filter-search" placeholder="Buscar valor…" autocomplete="off">
+      <label class="column-filter-option column-filter-select-all-row"><input type="checkbox" class="column-filter-select-all"><span>(Selecionar tudo)</span></label>
+      <div class="column-filter-list"></div>
+      <footer>
+        <button type="button" class="text-button column-filter-reset">Limpar filtro</button>
+        <span></span>
+        <button type="button" class="secondary-button compact column-filter-cancel">Cancelar</button>
+        <button type="button" class="primary-button compact column-filter-apply">OK</button>
+      </footer>`;
+    document.body.appendChild(popover);
+    els.columnFilterPopover = popover;
+
+    popover.querySelector(".column-filter-search").addEventListener("input", (event) => {
+      columnFilterPopoverState.search = event.target.value;
+      renderColumnFilterPopover();
+    });
+    popover.querySelector(".column-filter-select-all").addEventListener("change", (event) => {
+      const query = C.norm(columnFilterPopoverState.search);
+      const visible = query ? columnFilterPopoverState.options.filter((option) => C.norm(option.label).includes(query)) : columnFilterPopoverState.options;
+      visible.forEach((option) => { if (event.target.checked) columnFilterPopoverState.pending.add(option.norm); else columnFilterPopoverState.pending.delete(option.norm); });
+      renderColumnFilterPopover();
+    });
+    popover.querySelector(".column-filter-list").addEventListener("change", (event) => {
+      const input = event.target.closest("[data-column-filter-value]");
+      if (!input) return;
+      if (input.checked) columnFilterPopoverState.pending.add(input.dataset.columnFilterValue);
+      else columnFilterPopoverState.pending.delete(input.dataset.columnFilterValue);
+      renderColumnFilterPopover();
+    });
+    popover.querySelector(".column-filter-cancel").addEventListener("click", () => closeColumnFilterPopover());
+    popover.querySelector(".column-filter-reset").addEventListener("click", () => {
+      delete state.columnFilters[columnFilterPopoverState.keyName];
+      state.filteredCache = { signature: "", indices: [] };
+      closeColumnFilterPopover();
+      updateColumnFilterTriggerStates();
+      if (els.clearColumnFilters) els.clearColumnFilters.hidden = activeColumnFilters().length === 0;
+      if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
+      renderAll();
+    });
+    popover.querySelector(".column-filter-apply").addEventListener("click", () => {
+      const { keyName, pending, options } = columnFilterPopoverState;
+      if (pending.size >= options.length) delete state.columnFilters[keyName];
+      else state.columnFilters[keyName] = [...pending];
+      state.filteredCache = { signature: "", indices: [] };
+      closeColumnFilterPopover();
+      updateColumnFilterTriggerStates();
+      if (els.clearColumnFilters) els.clearColumnFilters.hidden = activeColumnFilters().length === 0;
+      if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
+      renderAll();
+    });
+    document.addEventListener("click", (event) => {
+      if (popover.hidden || popover.contains(event.target) || event.target.closest("[data-column-filter-trigger]")) return;
+      closeColumnFilterPopover();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !popover.hidden) closeColumnFilterPopover();
+    });
+    window.addEventListener("resize", () => { if (!popover.hidden && columnFilterPopoverState.triggerEl) positionColumnFilterPopover(columnFilterPopoverState.triggerEl); });
+  }
+
+  function openColumnFilterPopover(keyName, triggerEl) {
+    ensureColumnFilterPopover();
+    const options = computeColumnFilterOptions(keyName);
+    const existing = state.columnFilters[keyName];
+    const pending = new Set(existing && existing.length ? existing : options.map((option) => option.norm));
+    columnFilterPopoverState.keyName = keyName;
+    columnFilterPopoverState.pending = pending;
+    columnFilterPopoverState.options = options;
+    columnFilterPopoverState.search = "";
+    columnFilterPopoverState.triggerEl = triggerEl;
+    renderColumnFilterPopover();
+    els.columnFilterPopover.hidden = false;
+    positionColumnFilterPopover(triggerEl);
+    triggerEl.setAttribute("aria-expanded", "true");
+    els.columnFilterPopover.querySelector(".column-filter-search").focus();
   }
 
   function initializeResultColumnFilters() {
-    if (!els.columnFilterRow || els.columnFilterRow.dataset.ready === "true") return;
-    els.columnFilterRow.innerHTML = RESULT_COLUMN_FILTERS.map(([keyName, label]) => `<th scope="col"><input id="column-filter-${keyName}" name="column-filter-${keyName}" type="search" data-column-filter="${keyName}" aria-label="Filtrar ${escapeHtml(label)}" placeholder="Filtrar…" autocomplete="off"></th>`).join("");
-    els.columnFilterRow.dataset.ready = "true";
-    els.columnFilterRow.addEventListener("input", (event) => {
-      const input = event.target.closest("[data-column-filter]");
-      if (!input) return;
-      if (input.value.trim()) state.columnFilters[input.dataset.columnFilter] = input.value;
-      else delete state.columnFilters[input.dataset.columnFilter];
-      state.filteredCache = { signature: "", indices: [] };
-      if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
-      if (els.clearColumnFilters) els.clearColumnFilters.hidden = activeColumnFilters().length === 0;
-      window.clearTimeout(els.columnFilterRow._filterTimer);
-      els.columnFilterRow._filterTimer = window.setTimeout(renderAll, 110);
+    if (els.columnFilterRow) els.columnFilterRow.hidden = true;
+    if (!els.resultsTable || els.resultsTable.dataset.columnFilterTriggersReady === "true") return;
+    els.resultsTable.dataset.columnFilterTriggersReady = "true";
+    const headerCells = [...els.resultsTable.querySelectorAll("thead tr:first-child > th")];
+    RESULT_COLUMN_FILTERS.forEach(([keyName, label], index) => {
+      const th = headerCells[index];
+      if (!th) return;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "column-filter-trigger";
+      button.dataset.columnFilterTrigger = keyName;
+      button.setAttribute("aria-label", `Filtrar ${label}`);
+      button.setAttribute("aria-expanded", "false");
+      button.innerHTML = '<svg viewBox="0 0 12 9" aria-hidden="true"><path d="M1 1h10L7.2 6v2.2L4.8 7.2V6z"/></svg>';
+      th.appendChild(button);
+    });
+    els.resultsTable.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-column-filter-trigger]");
+      if (!trigger) return;
+      event.stopPropagation();
+      const keyName = trigger.dataset.columnFilterTrigger;
+      if (columnFilterPopoverState.keyName === keyName && els.columnFilterPopover && !els.columnFilterPopover.hidden) { closeColumnFilterPopover(); return; }
+      openColumnFilterPopover(keyName, trigger);
     });
   }
 
   function clearResultColumnFilters() {
     state.columnFilters = {};
     state.filteredCache = { signature: "", indices: [] };
-    if (els.columnFilterRow) els.columnFilterRow.querySelectorAll("input").forEach((input) => { input.value = ""; });
+    closeColumnFilterPopover();
+    updateColumnFilterTriggerStates();
     if (els.clearColumnFilters) els.clearColumnFilters.hidden = true;
     if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
     renderAll();
@@ -2614,23 +2794,14 @@
 
   function filteredResultIndices() {
     const columnFilters = activeColumnFilters();
-    const columnSignature = columnFilters.map(([keyName, value]) => `${keyName}:${C.norm(value)}`).join("|");
+    const columnSignature = columnFilters.map(([keyName, values]) => `${keyName}:${[...values].sort().join(",")}`).join("|");
     const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${C.norm(state.search)}|${columnSignature}|group:${state.groupByStatus ? "1" : "0"}`;
     if (state.filteredCache && state.filteredCache.signature === signature) return state.filteredCache.indices;
-    const query = C.norm(state.search);
     const indices = [];
     for (let index = 0; index < state.results.length; index += 1) {
       const row = state.results[index];
-      if (state.filter === "bloqueado" && !row.hardBlock) continue;
-      if (state.filter === C.REVIEW && (row.hardBlock || row.decision !== C.REVIEW)) continue;
-      if (!["todos", "bloqueado", C.REVIEW].includes(state.filter) && row.decision !== state.filter) continue;
-      if (state.sheetFilter !== "todos" && C.norm(row.sheet) !== state.sheetFilter) continue;
-      if (query && !C.norm(`${row.name} ${row.document} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt}`).includes(query)) continue;
-      let columnMatch = true;
-      for (const [keyName, value] of columnFilters) {
-        if (!C.norm(resultColumnValue(row, keyName)).includes(C.norm(value))) { columnMatch = false; break; }
-      }
-      if (!columnMatch) continue;
+      if (!rowPassesBaseFilters(row)) continue;
+      if (!rowPassesColumnFilters(row, null, columnFilters)) continue;
       indices.push(index);
     }
     if (state.groupByStatus) {
@@ -3200,7 +3371,8 @@
     state.sheetFilter = "todos";
     state.search = "";
     state.columnFilters = {};
-    if (els.columnFilterRow) els.columnFilterRow.querySelectorAll("input").forEach((input) => { input.value = ""; });
+    closeColumnFilterPopover();
+    updateColumnFilterTriggerStates();
     if (els.clearColumnFilters) els.clearColumnFilters.hidden = true;
     state.expanded.clear();
     state.selected.clear();
@@ -4656,7 +4828,7 @@
       if (kind === "search") { state.search = ""; if (els.search) els.search.value = ""; }
       if (kind === "sheet") { state.sheetFilter = "todos"; if (els.sheetFilter) els.sheetFilter.value = "todos"; }
       if (kind === "summary") state.filter = "todos";
-      if (kind === "column" && keyName) { delete state.columnFilters[keyName]; const input = [...(els.columnFilterRow?.querySelectorAll("[data-column-filter]") || [])].find((candidate) => candidate.dataset.columnFilter === keyName); if (input) input.value = ""; }
+      if (kind === "column" && keyName) { delete state.columnFilters[keyName]; updateColumnFilterTriggerStates(); if (els.clearColumnFilters) els.clearColumnFilters.hidden = activeColumnFilters().length === 0; }
       state.filteredCache = { signature: "", indices: [] };
       renderAll();
     },
