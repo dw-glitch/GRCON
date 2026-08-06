@@ -1339,34 +1339,42 @@ html[data-app="GRCON"] .column-filter-trigger.is-active{color:var(--brand,#176fa
 html[data-app="GRCON"] .column-filter-trigger:focus-visible{outline:2px solid #fff;outline-offset:1px}
 
 html[data-app="GRCON"] .column-filter-popover{
-  position:fixed;z-index:200;display:flex;flex-direction:column;gap:.5rem;
-  padding:.6rem;border:1px solid var(--border-2,#cbd7e1);border-radius:.7rem;
+  position:fixed;z-index:200;display:flex;flex-direction:column;gap:.4rem;
+  padding:.5rem;border:1px solid var(--border-2,#cbd7e1);border-radius:.7rem;
   background:var(--surface-1,#fff);box-shadow:0 18px 48px rgba(20,48,72,.24);
   font-size:.8rem;
 }
 html[data-app="GRCON"] .column-filter-popover[hidden]{display:none}
 html[data-app="GRCON"] .column-filter-search{
-  height:2.1rem;padding:0 .6rem;border:1px solid var(--border-2,#cbd7e1);
+  height:1.95rem;padding:0 .55rem;border:1px solid var(--border-2,#cbd7e1);
   border-radius:.5rem;font-size:.8rem;
 }
 html[data-app="GRCON"] .column-filter-list{
-  flex:1;overflow:auto;min-height:2.6rem;
+  flex:1 1 auto;overflow-y:auto;overflow-x:hidden;min-height:2.6rem;
   border-top:1px solid var(--border-1,#dce4ea);
   border-bottom:1px solid var(--border-1,#dce4ea);
   padding:.25rem 0;
+  overscroll-behavior:contain;
 }
+/* A busca, o "selecionar tudo" e os botões não encolhem: só a lista rola,
+   assim ela fica com toda a altura que sobra em vez de ser espremida. */
+html[data-app="GRCON"] :where(.column-filter-search,.column-filter-select-all-row,.column-filter-popover footer){flex:0 0 auto}
 html[data-app="GRCON"] .column-filter-option{
-  display:flex;align-items:center;gap:.5rem;min-height:2rem;
-  padding:.25rem .3rem;border-radius:.4rem;color:var(--text-2,#385069);cursor:pointer;
+  display:flex;align-items:center;gap:.5rem;min-height:1.55rem;
+  padding:.12rem .3rem;border-radius:.4rem;color:var(--text-2,#385069);cursor:pointer;
 }
+html[data-app="GRCON"] .column-filter-option input[type="checkbox"]{flex:0 0 auto;margin:0}
 html[data-app="GRCON"] .column-filter-option:hover{background:var(--surface-2,#f3f7fa)}
 html[data-app="GRCON"] .column-filter-option span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html[data-app="GRCON"] .column-filter-option b{font-size:.68rem;font-weight:700;color:var(--text-3,#6f8296)}
-html[data-app="GRCON"] .column-filter-select-all-row{border-bottom:1px dashed var(--border-1,#dce4ea);padding-bottom:.4rem;margin-bottom:.1rem}
+html[data-app="GRCON"] .column-filter-select-all-row{border-bottom:1px dashed var(--border-1,#dce4ea);padding-bottom:.3rem;margin-bottom:0}
 html[data-app="GRCON"] .column-filter-empty{margin:.4rem 0;color:var(--text-3,#6f8296);font-size:.76rem;text-align:center}
 html[data-app="GRCON"] .column-filter-popover footer{
   display:flex;align-items:center;gap:.4rem;
 }
+/* Rodapé enxuto: em telas de 768px de altura cada pixel gasto aqui é uma
+   linha a menos de valores visíveis na lista. */
+html[data-app="GRCON"] .column-filter-popover footer button{height:1.8rem;min-height:0;padding-block:0;font-size:.74rem}
 html[data-app="GRCON"] .column-filter-popover footer span{flex:1}
 html[data-app="GRCON"] .column-filter-reset{padding:0;font-size:.74rem}
 html[data-app="GRCON"] .column-filter-apply:disabled{opacity:.5;cursor:not-allowed}
