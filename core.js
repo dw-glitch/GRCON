@@ -1451,8 +1451,10 @@
 
       if (kind === "analysis") {
         // “Em Análise” somente existe quando esse texto foi realmente localizado
-        // na coluna de status da aba Colar SIGEM. O status permanece visível para
-        // conferência, mas não bloqueia a geração da eGRDT.
+        // na coluna de status da aba Colar SIGEM. O status não bloqueia
+        // (hardBlock continua false) e o operador pode incluir manualmente a
+        // qualquer momento, mas não deve ser selecionado automaticamente como
+        // se já estivesse pronto — por isso a decisão é DISCARD, não READY.
         analysisEvidence = analysisEvidenceForRevision(group, revision, inferredSheet, statusInfo);
         const analysisRecord = analysisEvidence.item;
         grdt = text(analysisRecord && analysisRecord.grdt);
@@ -1469,8 +1471,8 @@
         }
         const statusSheet = text(statusInfo.item && statusInfo.item.sheet) || "Colar SIGEM";
         const statusRow = Number(statusInfo.item && statusInfo.item.row) || 0;
-        decision = READY;
-        reason = `A revisão ${revision} está explicitamente “Em Análise” na coluna de status da ${statusSheet}${statusRow ? `, linha ${statusRow}` : ""}. Conforme a regra operacional, esse status é informativo e não bloqueia a geração da eGRDT.`;
+        decision = DISCARD;
+        reason = `A revisão ${revision} está explicitamente “Em Análise” na coluna de status da ${statusSheet}${statusRow ? `, linha ${statusRow}` : ""}. Esse status não bloqueia a geração da eGRDT, mas precisa de seleção manual do operador — não entra automaticamente.`;
         completed = true;
         break;
       }
