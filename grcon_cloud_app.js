@@ -564,6 +564,14 @@
           <small>Autorize somente contas existentes no Supabase Auth. O usuário entra pelo mesmo link com e-mail e senha.</small>
         </div>
         <div class="grcon-cloud-members" id="grcon-cloud-members"></div>
+        <details class="grcon-cloud-panel" hidden id="grcon-cloud-invitations-panel">
+          <summary>Convites pendentes</summary>
+          <div id="grcon-cloud-invitations"></div>
+        </details>
+        <details class="grcon-cloud-panel" hidden id="grcon-cloud-audit-panel">
+          <summary>Registro de atividades</summary>
+          <div id="grcon-cloud-audit"></div>
+        </details>
         <footer><button class="secondary-button compact" id="grcon-cloud-change-password" type="button">Alterar senha</button><button class="secondary-button compact" id="grcon-cloud-copy-link" type="button">Copiar link</button><button class="secondary-button compact" id="grcon-cloud-signout" type="button">Sair</button></footer>
       </section>`;
     host.appendChild(container);
@@ -573,6 +581,12 @@
     $("#grcon-cloud-copy-link").addEventListener("click", copyAppLink);
     $("#grcon-cloud-change-password").addEventListener("click", () => { closeAccountMenu(); openPasswordChange({ recovery: false }); });
     $("#grcon-cloud-invite-form").addEventListener("submit", inviteUser);
+    $("#grcon-cloud-invitations-panel").addEventListener("toggle", (event) => {
+      if (event.target.open) loadInvitations();
+    });
+    $("#grcon-cloud-audit-panel").addEventListener("toggle", (event) => {
+      if (event.target.open) loadAuditEvents();
+    });
     document.addEventListener("click", (event) => {
       if (!container.contains(event.target)) closeAccountMenu();
     });
@@ -594,6 +608,10 @@
         : state.online ? "" : "Offline";
     }
     $("#grcon-cloud-invite").hidden = !canManageHistory();
+    const invitationsPanel = $("#grcon-cloud-invitations-panel");
+    const auditPanel = $("#grcon-cloud-audit-panel");
+    if (invitationsPanel) invitationsPanel.hidden = !canManageHistory();
+    if (auditPanel) auditPanel.hidden = !canManageHistory();
     document.body.dataset.grconCloudRole = state.membership?.role || "viewer";
     setSyncLabel(state.online ? "Histórico sincronizado" : "Offline · alterações ficam neste navegador", state.online ? "success" : "warn");
     updateHistoryClearControl();
@@ -712,6 +730,101 @@
       }
     } catch (error) {
       target.innerHTML = `<small>${escapeHtml(error?.message || "Usuários indisponíveis.")}</small>`;
+    }
+  }
+
+  function formatDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  }
+
+  // Convites já criados que ainda não viraram acesso. A leitura e a exclusão
+  // usam as permissões que já existiam para owner/admin — nada foi alterado.
+  async function loadInvitations() {
+    const target = $("#grcon-cloud-invitations");
+    if (!target || !state.membership?.workspace_id || !canManageHistory()) return;
+    target.innerHTML = "<small>Carregando convites…</small>";
+    try {
+      const { data, error } = await state.client.from("grcon_invitations")
+        .select("id, email, role, created_at, expires_at, accepted_at")
+        .eq("workspace_id", state.membership.workspace_id)
+        .is("accepted_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const now = Date.now();
+      target.innerHTML = (data || []).map((invitation) => {
+        const expired = new Date(invitation.expires_at).getTime() < now;
+        return `<div class="grcon-cloud-invitation ${expired ? "is-expired" : ""}">
+          <span><strong>${escapeHtml(invitation.email)}</strong><small>${escapeHtml(roleLabels[invitation.role] || invitation.role)} · ${expired ? "expirado" : `expira em ${formatDateTime(invitation.expires_at)}`}</small></span>
+          <button class="secondary-button compact" data-invitation-cancel="${escapeHtml(invitation.id)}" type="button">Cancelar</button>
+        </div>`;
+      }).join("") || "<small>Nenhum convite pendente.</small>";
+      target.querySelectorAll("[data-invitation-cancel]").forEach((button) => {
+        button.addEventListener("click", (event) => cancelInvitation(event.currentTarget.dataset.invitationCancel));
+      });
+    } catch (error) {
+      target.innerHTML = `<small>${escapeHtml(error?.message || "Convites indisponíveis.")}</small>`;
+    }
+  }
+
+  async function cancelInvitation(invitationId) {
+    if (!invitationId || !canManageHistory()) return;
+    try {
+      const { error } = await state.client.from("grcon_invitations")
+        .delete()
+        .eq("id", invitationId)
+        .eq("workspace_id", state.membership.workspace_id);
+      if (error) throw error;
+      notify("Convite cancelado.", "success");
+    } catch (error) {
+      notify(error?.message || "Não foi possível cancelar o convite.", "error");
+    }
+    await loadInvitations();
+  }
+
+  const auditActionLabels = Object.freeze({
+    insert: "Registro criado",
+    update: "Registro alterado",
+    delete: "Registro removido",
+    invite: "Usuário convidado",
+    update_role: "Perfil alterado",
+    deactivate: "Usuário desativado",
+    reactivate: "Usuário reativado",
+  });
+
+  // Histórico de quem fez o quê no workspace. Somente owner/admin conseguem
+  // ler esta tabela — permissão que já existia antes desta alteração.
+  async function loadAuditEvents() {
+    const target = $("#grcon-cloud-audit");
+    if (!target || !state.membership?.workspace_id || !canManageHistory()) return;
+    target.innerHTML = "<small>Carregando atividades…</small>";
+    try {
+      const { data, error } = await state.client.from("grcon_audit_events")
+        .select("id, actor_id, action, entity_type, entity_id, metadata, created_at")
+        .eq("workspace_id", state.membership.workspace_id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      const actorIds = [...new Set((data || []).map((item) => item.actor_id).filter(Boolean))]
+        .filter((id) => !state.profiles.has(id));
+      if (actorIds.length) {
+        const profiles = await state.client.from("grcon_profiles").select("id, email, display_name").in("id", actorIds);
+        if (!profiles.error) (profiles.data || []).forEach((profile) => state.profiles.set(profile.id, profile));
+      }
+      target.innerHTML = (data || []).map((event) => {
+        const profile = state.profiles.get(event.actor_id) || {};
+        const who = profile.display_name || profile.email || "Sistema";
+        const what = auditActionLabels[event.action] || event.action;
+        const detail = event.metadata && event.metadata.egrdt_number
+          ? ` · ${event.metadata.egrdt_number}`
+          : event.metadata && event.metadata.new_role
+            ? ` · ${roleLabels[event.metadata.new_role] || event.metadata.new_role}`
+            : "";
+        return `<div class="grcon-cloud-audit-item"><span><strong>${escapeHtml(what)}</strong><small>${escapeHtml(who)}${escapeHtml(detail)}</small></span><time>${escapeHtml(formatDateTime(event.created_at))}</time></div>`;
+      }).join("") || "<small>Nenhuma atividade registrada.</small>";
+    } catch (error) {
+      target.innerHTML = `<small>${escapeHtml(error?.message || "Atividades indisponíveis.")}</small>`;
     }
   }
 
