@@ -413,6 +413,73 @@
   flex-wrap: wrap;
 }
 
+.grcon-cloud-panel {
+  border-top: 1px solid #e3ebf0;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.grcon-cloud-panel[hidden] {
+  display: none;
+}
+
+.grcon-cloud-panel > summary {
+  color: #2a637f;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.grcon-cloud-panel > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.grcon-cloud-invitation,
+.grcon-cloud-audit-item {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.grcon-cloud-invitation > span,
+.grcon-cloud-audit-item > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.grcon-cloud-invitation strong,
+.grcon-cloud-audit-item strong {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grcon-cloud-invitation small,
+.grcon-cloud-audit-item small {
+  color: #657b88;
+  font-size: 9px;
+}
+
+.grcon-cloud-invitation.is-expired strong {
+  color: #a64035;
+}
+
+.grcon-cloud-audit-item > time {
+  color: #8496a1;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
 .grcon-cloud-account-menu > footer {
   border-top: 1px solid #e3ebf0;
   display: flex;
