@@ -101,9 +101,11 @@
     }
     if (snapshot.sheetFilter && snapshot.sheetFilter !== "todos") chips.push(chip(`Aba: ${els.sheet?.selectedOptions?.[0]?.textContent || snapshot.sheetFilter}`, "sheet"));
     if (Flow.text(snapshot.search)) chips.push(chip(`Busca: ${snapshot.search}`, "search"));
-    Object.entries(snapshot.columnFilters || {}).forEach(([key, value]) => {
+    Object.entries(snapshot.columnFilters || {}).forEach(([key, values]) => {
       const column = Flow.COLUMNS.find((item) => item.key === key);
-      chips.push(chip(`${column?.label || key}: ${value}`, "column", key));
+      const list = Array.isArray(values) ? values : [values];
+      const label = list.length === 1 ? (Flow.text(list[0]) || "(Vazias)") : `${list.length} selecionados`;
+      chips.push(chip(`${column?.label || key}: ${label}`, "column", key));
     });
     if (snapshot.groupByStatus) chips.push(chip("Agrupado por situação", "group"));
     els.filters.innerHTML = chips.join("");
