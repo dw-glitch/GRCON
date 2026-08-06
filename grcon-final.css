@@ -1289,13 +1289,38 @@ html[data-app="GRCON"] .relation-preview-heading{align-items:flex-start;flex-wra
 html[data-app="GRCON"] .relation-preview-heading>*,html[data-app="GRCON"] .relation-editor-heading>*{min-width:0}
 html[data-app="GRCON"] .relation-preview-heading span{max-width:100%;font-size:.73rem;line-height:1.35;overflow-wrap:anywhere}
 
-html[data-app="GRCON"] :where(.grcon-results-table,.results-table,.triage-table,.history-table) tbody tr{height:auto}
-html[data-app="GRCON"] :where(.grcon-results-table,.results-table,.triage-table,.history-table) tbody td{
+/* .grcon-results-table foi removida deste grupo: é a tabela virtualizada
+   de triagem, com table-layout:fixed e altura de linha fixa por design
+   (68px, ver grcon-ui.css). Herdar "quebra tudo, altura automática" das
+   tabelas simples abaixo fazia o texto quebrar caractere por caractere em
+   colunas estreitas, disparando linhas de centenas de pixels de altura. */
+html[data-app="GRCON"] :where(.results-table,.triage-table,.history-table) tbody tr{height:auto}
+html[data-app="GRCON"] :where(.results-table,.triage-table,.history-table) tbody td{
   height:auto!important;min-width:0;vertical-align:top;line-height:1.42;padding-top:.72rem;padding-bottom:.72rem;overflow-wrap:anywhere;word-break:break-word;white-space:normal;
 }
-html[data-app="GRCON"] :where(.grcon-results-table,.results-table,.triage-table,.history-table) tbody td :where(strong,span,small,p,div){max-width:100%;overflow-wrap:anywhere;word-break:break-word;white-space:normal}
+html[data-app="GRCON"] :where(.results-table,.triage-table,.history-table) tbody td :where(strong,span,small,p,div){max-width:100%;overflow-wrap:anywhere;word-break:break-word;white-space:normal}
 html[data-app="GRCON"] :where(.grcon-results-table,.results-table,.triage-table,.history-table) tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--surface-2) 58%,transparent)}
 html[data-app="GRCON"] :where(.grcon-results-table,.results-table,.triage-table,.history-table) tbody tr:hover td{background:var(--brand-50)}
+
+/* Restaura o truncamento com reticências para a tabela virtualizada:
+   texto numa linha só, sem quebrar, com "..." quando não couber. */
+html[data-app="GRCON"] .grcon-results-table tbody td{white-space:nowrap;overflow-wrap:normal;word-break:normal}
+html[data-app="GRCON"] .grcon-results-table tbody td :where(strong,span,small,p,div){
+  max-width:100%;overflow:hidden;overflow-wrap:normal;word-break:normal;white-space:nowrap;text-overflow:ellipsis;
+}
+html[data-app="GRCON"] .grcon-results-table tbody td .situation-cell{white-space:normal}
+
+/* Leitura confortável: o texto da tabela virtualizada media 11-12px, abaixo
+   do mínimo recomendado para leitura de dados densos. A altura da linha
+   (68px) tem folga de sobra para o texto crescer sem precisar de mais
+   espaço. Cabeçalho e badges também ganham um pouco de tamanho e contraste. */
+html[data-app="GRCON"] .grcon-results-table tbody td{font-size:.85rem;line-height:1.35}
+html[data-app="GRCON"] .grcon-results-table :where(.document-code,.grdt-code,.filename-value,.text-cell,.revision-value){font-size:.85rem}
+html[data-app="GRCON"] .grcon-results-table .document-code{color:var(--brand-strong,#123f61)}
+html[data-app="GRCON"] .grcon-results-table thead th{font-size:.78rem;letter-spacing:.03em}
+html[data-app="GRCON"] .grcon-results-table :where(.sheet-badge,.sigem-status,.allocation-state){font-size:.78rem}
+html[data-app="GRCON"] .grcon-results-table .status-chip{font-size:.72rem;letter-spacing:.03em}
+html[data-app="GRCON"] .grcon-results-table .cell-muted{font-size:.7rem}
 html[data-app="GRCON"] :where(.analysis-cell-result,.analysis-cell-document,.analysis-cell-title,.analysis-cell-reason,.analysis-cell-databook){min-width:0;overflow-wrap:anywhere;word-break:break-word;white-space:normal}
 html[data-app="GRCON"] .status-chip{height:auto;min-height:1.65rem;padding:.25rem .55rem;line-height:1.25;text-align:center;white-space:normal}
 

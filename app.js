@@ -2522,7 +2522,7 @@
   function compactDecisionLabel(row) {
     if (row.hardBlock) return "Não incluir";
     if (row.decision === C.READY) return "Incluir";
-    if (row.decision === C.DISCARD) return "Aguardar";
+    if (row.decision === C.DISCARD) return "Em análise";
     return "Conferir";
   }
 
@@ -2539,7 +2539,7 @@
   }
 
   function decisionGroupLabel(row) {
-    return ({ pronto: "Incluir na eGRDT", revisar: "Precisa de conferência", bloqueado: "Não incluir", descartar: "Aguardar situação" })[decisionGroupKey(row)] || "Outros";
+    return ({ pronto: "Incluir na eGRDT", revisar: "Precisa de conferência", bloqueado: "Não incluir", descartar: "Em análise" })[decisionGroupKey(row)] || "Outros";
   }
 
   function formatDateBR(value) {
