@@ -13,6 +13,9 @@
     syncQueued: false,
     syncTimer: 0,
     realtime: null,
+    realtimeTopic: "",
+    realtimeFailures: 0,
+    realtimePollTimer: 0,
     activationKey: "",
     profiles: new Map(),
     passwordRecovery: false,
@@ -1097,11 +1100,37 @@
     });
   }
 
+  // Quando o tempo real não se estabelece, o app não pode ficar sem sincronizar:
+  // passa a buscar novidades por tempo, que é o que o canal faria de qualquer forma.
+  function startRealtimeFallbackPolling() {
+    if (state.realtimePollTimer) return;
+    state.realtimePollTimer = window.setInterval(() => {
+      if (state.online && state.membership) scheduleSync();
+    }, 60000);
+  }
+
+  function stopRealtimeFallbackPolling() {
+    if (!state.realtimePollTimer) return;
+    window.clearInterval(state.realtimePollTimer);
+    state.realtimePollTimer = 0;
+  }
+
+  function dropRealtime() {
+    if (state.realtime) state.client?.removeChannel?.(state.realtime);
+    state.realtime = null;
+    state.realtimeTopic = "";
+  }
+
   function subscribeRealtime() {
     if (!state.online || !state.client || !state.membership?.workspace_id) return;
-    if (state.realtime) state.client.removeChannel(state.realtime);
+    const topic = `grcon-history-${state.membership.workspace_id}`;
+    // Já inscrito neste mesmo workspace: não derruba e recria o canal. Fazer isso
+    // a cada ativação deixava o socket em ciclo de reconexão sem fim.
+    if (state.realtime && state.realtimeTopic === topic) return;
+    dropRealtime();
+    state.realtimeTopic = topic;
     let timer = 0;
-    const channel = state.client.channel(`grcon-history-${state.membership.workspace_id}`, {
+    const channel = state.client.channel(topic, {
       config: { presence: { key: state.session?.user?.id || undefined } },
     });
     channel
@@ -1120,24 +1149,45 @@
         updateMembersOnlineStatus();
       })
       .subscribe((status) => {
-        if (status === "SUBSCRIBED" && state.session?.user?.id) {
-          channel.track({ user_id: state.session.user.id, online_at: new Date().toISOString() });
+        if (status === "SUBSCRIBED") {
+          state.realtimeFailures = 0;
+          stopRealtimeFallbackPolling();
+          if (state.session?.user?.id) {
+            channel.track({ user_id: state.session.user.id, online_at: new Date().toISOString() });
+          }
+          return;
         }
+        if (!["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) return;
+        // Antes nada tratava esses estados: o cliente ficava reconectando de
+        // 10 em 10s indefinidamente, enchendo o console de erro. Depois de
+        // algumas tentativas, desiste do tempo real e sincroniza por tempo.
+        state.realtimeFailures += 1;
+        if (state.realtimeFailures < 4) return;
+        console.warn(`GRCON Cloud: tempo real indisponível (${status}); sincronizando periodicamente.`);
+        dropRealtime();
+        startRealtimeFallbackPolling();
       });
     state.realtime = channel;
   }
 
   async function activateSession(session) {
     if (!session?.user) return showLogin();
-    const key = `${session.user.id}|${session.access_token?.slice(-12) || "session"}`;
+    // Mantém sempre o token mais novo em mãos.
+    state.session = session;
+    // A chave era `user|final do token`, então CADA renovação de token refazia
+    // a ativação inteira: lockApp() esconde o app e mostra a tela de acesso,
+    // seguido de 4 chamadas de rede (incluindo o histórico completo). Era isso
+    // que fazia a tela "piscar" e deixava tudo mais lento. A ativação completa
+    // só precisa acontecer quando muda o usuário.
+    const key = session.user.id;
     if (state.activationKey === key) return;
     state.activationKey = key;
-    state.session = session;
     lockApp();
     authMessage("Confirmando sua autorização…", "info");
     try {
       const membership = await acceptMembership();
       if (!membership) {
+        state.activationKey = ""; // permite tentar de novo sem sair e entrar
         authMessage(`O e-mail ${session.user.email || "informado"} ainda não foi autorizado. Peça a um administrador do GRCON para adicioná-lo.`, "error");
         $("#grcon-cloud-auth-retry").hidden = false;
         $("#grcon-cloud-auth-signout").hidden = false;
@@ -1165,6 +1215,7 @@
         updateAccountMenu();
         return;
       }
+      state.activationKey = ""; // permite tentar de novo sem sair e entrar
       console.error("GRCON Cloud: falha ao confirmar acesso", error);
       authMessage(state.online
         ? (error?.message || "Não foi possível confirmar seu acesso agora. Tente novamente sem refazer o login.")
@@ -1190,7 +1241,9 @@
   async function signOut() {
     try { await state.client?.auth?.signOut({ scope: "local" }); } catch (_) { /* sessão local será removida abaixo */ }
     removeStored(Config.membershipStorageKey);
-    if (state.realtime) state.client?.removeChannel?.(state.realtime);
+    dropRealtime();
+    stopRealtimeFallbackPolling();
+    state.realtimeFailures = 0;
     $("#grcon-cloud-account")?.remove();
     showLogin();
   }
@@ -1215,6 +1268,11 @@
     });
     window.addEventListener("offline", () => {
       state.online = false;
+      // Descarta o canal ao ficar offline: sem isto, a verificação de "já
+      // inscrito" faria o evento "online" não reinscrever, deixando um canal
+      // morto e o app sem receber atualizações.
+      dropRealtime();
+      state.realtimeFailures = 0;
       updateAccountMenu();
       setSyncLabel("Offline · alterações ficam neste navegador", "warn");
       updateHistoryClearControl();
