@@ -1,7 +1,9 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.31.7
-// Estratégia: cache primeiro SOMENTE para bibliotecas de terceiros e imagens,
-// que nunca mudam; rede primeiro para todo o código do GRCON (HTML/CSS/JS).
+// Versão: 5.31.8
+// Estratégia: rede primeiro para todo o código do GRCON (HTML/CSS/JS), para
+// que uma correção publicada apareça na hora; e stale-while-revalidate para os
+// arquivos pesados (bibliotecas, imagens e os pacotes gerados), que assim
+// carregam na hora do cache e se atualizam em segundo plano.
 //
 // Antes era o contrário: só um punhado de arquivos era "rede primeiro" e todo o
 // resto vinha do cache. Como os CSS não estavam nessa lista e o nome do cache só
@@ -9,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.31.7";
+const CACHE_NAME = "grcon-v5.31.8";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -101,11 +103,15 @@ const CRITICAL_ASSETS = [
   "app.js",
 ];
 
-// Únicos arquivos servidos do cache primeiro: bibliotecas de terceiros e
-// imagens, que só mudam quando a biblioteca é trocada de versão (e aí o nome
-// do arquivo/So cache muda junto). São também os maiores, que é onde o cache
-// realmente faz diferença no tempo de carregamento.
-const CACHE_FIRST_ASSETS = new Set([
+// Arquivos pesados: entrega imediata do cache e revalidação em segundo plano
+// (stale-while-revalidate). São bibliotecas de terceiros, imagens e os pacotes
+// gerados — performance_workers.js sozinho tem 3,3 MB e é buscado justamente
+// quando a análise começa. Baixá-lo pela rede a cada abertura atrasaria o
+// início da análise; do cache ele é instantâneo, e a versão nova entra na
+// abertura seguinte (ou na hora, quando o CACHE_NAME muda).
+const HEAVY_ASSETS = new Set([
+  "performance_workers.js",
+  "offline_performance_workers.js",
   "exceljs.min.js",
   "xlsx.full.min.js",
   "offline_xlsx.full.min.js",
@@ -175,9 +181,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   const fileName = requestUrl.pathname.split("/").filter(Boolean).pop() || "";
-  if (!CACHE_FIRST_ASSETS.has(fileName)) {
-    // Código do GRCON: sempre tenta a rede antes, com o cache como reserva
-    // para funcionar offline. Assim uma correção publicada aparece na hora.
+  if (!HEAVY_ASSETS.has(fileName)) {
+    // Código do GRCON (HTML/CSS/JS): sempre tenta a rede antes, com o cache
+    // como reserva para funcionar offline. Assim uma correção publicada
+    // aparece na hora.
     event.respondWith(networkFirst(event.request));
     return;
   }
@@ -185,12 +192,14 @@ self.addEventListener("fetch", (event) => {
     (async () => {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(event.request);
-      if (cached) return cached;
-      try {
-        return await fetchAndCache(event.request);
-      } catch (error) {
-        return new Response("Recurso indisponível offline.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      const revalidate = fetchAndCache(event.request).catch(() => null);
+      if (cached) {
+        // Mantém a revalidação viva mesmo depois de responder do cache.
+        event.waitUntil(revalidate);
+        return cached;
       }
+      const fresh = await revalidate;
+      return fresh || new Response("Recurso indisponível offline.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     })()
   );
 });
