@@ -1,8 +1,15 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.31.6
-// Estratégia: rede primeiro para o shell mutável; cache primeiro para bibliotecas estáticas.
+// Versão: 5.31.7
+// Estratégia: cache primeiro SOMENTE para bibliotecas de terceiros e imagens,
+// que nunca mudam; rede primeiro para todo o código do GRCON (HTML/CSS/JS).
+//
+// Antes era o contrário: só um punhado de arquivos era "rede primeiro" e todo o
+// resto vinha do cache. Como os CSS não estavam nessa lista e o nome do cache só
+// muda quando alguém lembra de trocá-lo na mão, uma correção de CSS publicada no
+// site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
+// servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.31.6";
+const CACHE_NAME = "grcon-v5.31.7";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -94,15 +101,22 @@ const CRITICAL_ASSETS = [
   "app.js",
 ];
 
-const MUTABLE_PATHS = new Set([
-  "/",
-  "/index.html",
-  "/sw.js",
-  "/manifest.json",
-  "/grcon_cloud_config.js",
-  "/grcon_cloud_app.js",
-  "/history_core.js",
-  "/app.js",
+// Únicos arquivos servidos do cache primeiro: bibliotecas de terceiros e
+// imagens, que só mudam quando a biblioteca é trocada de versão (e aí o nome
+// do arquivo/So cache muda junto). São também os maiores, que é onde o cache
+// realmente faz diferença no tempo de carregamento.
+const CACHE_FIRST_ASSETS = new Set([
+  "exceljs.min.js",
+  "xlsx.full.min.js",
+  "offline_xlsx.full.min.js",
+  "jszip.min.js",
+  "supabase.min.js",
+  "grdt-template.xlsx",
+  "grcon-icon.png",
+  "grcon-icon.ico",
+  "grcon-logo-app.png",
+  "grcon-logo-app.ico",
+  "grcon-logo-report.png",
 ]);
 
 async function fetchAndCache(request) {
@@ -128,9 +142,12 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      await Promise.all(CRITICAL_ASSETS.map((asset) => cache.add(asset)));
+      // cache:"reload" ignora o cache HTTP do navegador ao pré-carregar, senão o
+      // Service Worker novo podia guardar de novo justamente a cópia velha.
+      const freshRequest = (asset) => new Request(asset, { cache: "reload" });
+      await Promise.all(CRITICAL_ASSETS.map((asset) => cache.add(freshRequest(asset))));
       const optionalAssets = ASSETS.filter((asset) => !CRITICAL_ASSETS.includes(asset));
-      const results = await Promise.allSettled(optionalAssets.map((asset) => cache.add(asset)));
+      const results = await Promise.allSettled(optionalAssets.map((asset) => cache.add(freshRequest(asset))));
       const failed = results.filter((result) => result.status === "rejected").length;
       if (failed) console.warn(`SW: ${failed} asset(s) opcional(is) não foram pré-cacheados.`);
     })()
@@ -157,8 +174,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(networkFirst(event.request, "index.html"));
     return;
   }
-  const localPath = `/${requestUrl.pathname.split("/").filter(Boolean).pop() || ""}`;
-  if (MUTABLE_PATHS.has(requestUrl.pathname) || MUTABLE_PATHS.has(localPath)) {
+  const fileName = requestUrl.pathname.split("/").filter(Boolean).pop() || "";
+  if (!CACHE_FIRST_ASSETS.has(fileName)) {
+    // Código do GRCON: sempre tenta a rede antes, com o cache como reserva
+    // para funcionar offline. Assim uma correção publicada aparece na hora.
     event.respondWith(networkFirst(event.request));
     return;
   }
