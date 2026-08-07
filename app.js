@@ -2657,19 +2657,75 @@
       : `<p class="column-filter-empty">Nenhum valor com os filtros atuais.</p>`;
     const applyButton = popover.querySelector(".column-filter-apply");
     if (applyButton) applyButton.disabled = pending.size === 0;
+    // O conteúdo mudou de altura (busca filtrando a lista): reposiciona para o
+    // menu continuar dentro da janela.
+    if (!popover.hidden && columnFilterPopoverState.triggerEl) positionColumnFilterPopover(columnFilterPopoverState.triggerEl);
+  }
+
+  // flipBias: abrir para baixo é o esperado (como no Excel) e cobre o corpo da
+  // tabela; abrir para cima tapa a barra de ferramentas. Só vira para cima
+  // quando o espaço acima é bem maior, não por uma diferença pequena.
+  const COLUMN_FILTER_GEOMETRY = Object.freeze({ margin: 12, gap: 6, maxHeight: 420, minHeight: 160, maxWidth: 300, flipBias: 80 });
+
+  // Geometria pura (sem DOM) para poder ser conferida isoladamente: decide se o
+  // menu abre para baixo ou para cima conforme o espaço disponível e garante que
+  // ele nunca ultrapasse a margem da janela em nenhum dos quatro lados.
+  function columnFilterPlacement(triggerRect, naturalHeight, viewport) {
+    const { margin, gap, maxHeight, minHeight, maxWidth, flipBias } = COLUMN_FILTER_GEOMETRY;
+    const width = Math.min(maxWidth, viewport.width - margin * 2);
+    const desired = Math.min(naturalHeight, maxHeight);
+    const roomBelow = viewport.height - triggerRect.bottom - gap - margin;
+    const roomAbove = triggerRect.top - gap - margin;
+    const below = roomBelow >= desired || roomBelow + flipBias >= roomAbove;
+    const room = Math.max(below ? roomBelow : roomAbove, minHeight);
+    const height = Math.max(Math.min(minHeight, viewport.height - margin * 2), Math.min(desired, room));
+    let top = below ? triggerRect.bottom + gap : triggerRect.top - gap - height;
+    top = Math.max(margin, Math.min(top, viewport.height - margin - height));
+    // Alinha pela seta; se estourar à direita, alinha o menu pela direita da seta.
+    let left = triggerRect.left;
+    if (left + width > viewport.width - margin) left = triggerRect.right - width;
+    left = Math.max(margin, Math.min(left, viewport.width - margin - width));
+    return { left, top, width, height, below };
   }
 
   function positionColumnFilterPopover(triggerEl) {
     const popover = els.columnFilterPopover;
+    if (!popover || !triggerEl) return;
+    // Mede a altura natural do conteúdo antes de decidir o limite.
+    popover.style.maxHeight = "";
+    const placement = columnFilterPlacement(
+      triggerEl.getBoundingClientRect(),
+      popover.offsetHeight,
+      { width: document.documentElement.clientWidth, height: window.innerHeight },
+    );
+    popover.style.width = `${placement.width}px`;
+    popover.style.left = `${placement.left}px`;
+    popover.style.top = `${placement.top}px`;
+    popover.style.maxHeight = `${placement.height}px`;
+    popover.classList.toggle("is-above", !placement.below);
+  }
+
+  // A tabela rola na horizontal (19 colunas) dentro do próprio contêiner, e a
+  // página rola por fora. Sem isto o menu ficava parado no lugar antigo,
+  // "descolado" da coluna que ele filtra.
+  function columnFilterTriggerVisible(triggerEl) {
     const rect = triggerEl.getBoundingClientRect();
-    const width = Math.min(280, Math.max(220, window.innerWidth - 32));
-    let left = rect.left;
-    if (left + width > window.innerWidth - 16) left = Math.max(16, window.innerWidth - 16 - width);
-    popover.style.width = `${width}px`;
-    popover.style.left = `${left}px`;
-    popover.style.top = `${rect.bottom + 6}px`;
-    const maxHeight = Math.max(180, window.innerHeight - rect.bottom - 24);
-    popover.style.maxHeight = `${Math.min(360, maxHeight)}px`;
+    if (!rect.width || !rect.height) return false;
+    if (rect.bottom <= 0 || rect.top >= window.innerHeight) return false;
+    const scroller = els.resultsScroll;
+    if (scroller) {
+      const bounds = scroller.getBoundingClientRect();
+      if (rect.right <= bounds.left + 2 || rect.left >= bounds.right - 2) return false;
+    }
+    return true;
+  }
+
+  function followColumnFilterTrigger() {
+    const popover = els.columnFilterPopover;
+    const triggerEl = columnFilterPopoverState.triggerEl;
+    if (!popover || popover.hidden || !triggerEl) return;
+    if (!columnFilterTriggerVisible(triggerEl)) { closeColumnFilterPopover(); return; }
+    positionColumnFilterPopover(triggerEl);
   }
 
   function ensureColumnFilterPopover() {
@@ -2735,7 +2791,9 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !popover.hidden) closeColumnFilterPopover();
     });
-    window.addEventListener("resize", () => { if (!popover.hidden && columnFilterPopoverState.triggerEl) positionColumnFilterPopover(columnFilterPopoverState.triggerEl); });
+    // capture:true para pegar também a rolagem do contêiner da tabela, que não borbulha.
+    window.addEventListener("scroll", followColumnFilterTrigger, true);
+    window.addEventListener("resize", followColumnFilterTrigger);
   }
 
   function openColumnFilterPopover(keyName, triggerEl) {
@@ -2748,11 +2806,13 @@
     columnFilterPopoverState.options = options;
     columnFilterPopoverState.search = "";
     columnFilterPopoverState.triggerEl = triggerEl;
-    renderColumnFilterPopover();
     els.columnFilterPopover.hidden = false;
+    renderColumnFilterPopover();
     positionColumnFilterPopover(triggerEl);
     triggerEl.setAttribute("aria-expanded", "true");
-    els.columnFilterPopover.querySelector(".column-filter-search").focus();
+    // preventScroll: sem isto o foco podia arrastar a página quando o menu
+    // nascia perto da borda inferior.
+    els.columnFilterPopover.querySelector(".column-filter-search").focus({ preventScroll: true });
   }
 
   function initializeResultColumnFilters() {
