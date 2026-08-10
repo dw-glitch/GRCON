@@ -370,6 +370,7 @@
       // O e-mail usa exatamente os mesmos registros que vão para o histórico,
       // e não a prévia da emissão: assim a relação enviada bate com o relatório.
       registrarEmissaoParaEmail(generated, records, info.generatedAt);
+      enfileirarEmailDaEmissao();
       const saved = History.saveMany(records);
       if (Posting) {
         const postingSaved = Posting.registerGenerated(records, { packageName: info.packageName, appVersion: APP_VERSION });
@@ -444,14 +445,7 @@
       documentos,
       geradoEm: geradoEm || new Date().toISOString(),
     };
-    atualizarBotaoEmail();
-  }
-
-  function atualizarBotaoEmail() {
-    if (!els.prepareEmailDraft) return;
-    const pronto = Boolean(window.GrconEmailDraft && ultimaEmissaoParaEmail && ultimaEmissaoParaEmail.documentos.length);
-    els.prepareEmailDraft.hidden = !pronto;
-  }
+    }
 
   function ehProprietario() {
     const Cloud = window.GrconCloud;
@@ -512,18 +506,19 @@
     }
   }
 
-  function prepararRascunhoEmail() {
-    const Email = window.GrconEmailDraft;
-    if (!Email) { showToast("Módulo de e-mail indisponível.", "warn"); return; }
-    if (!ultimaEmissaoParaEmail || !ultimaEmissaoParaEmail.documentos.length) {
-      showToast("Gere uma eGRDT antes de preparar o e-mail.", "warn");
+  // O rascunho não é baixado na hora: vai para a aba "E-mails de evidência",
+  // identificado pelo número da eGRDT, para o operador decidir quando gerar.
+  function enfileirarEmailDaEmissao() {
+    const Fila = window.GrconEmailQueue;
+    if (!Fila || !ultimaEmissaoParaEmail || !ultimaEmissaoParaEmail.documentos.length) return;
+    const resultado = Fila.enqueue(ultimaEmissaoParaEmail);
+    if (!resultado.saved) {
+      console.warn("GRCON: não foi possível enfileirar o e-mail de evidência", resultado.error);
       return;
     }
-    const montado = Email.buildEml(ultimaEmissaoParaEmail);
-    if (!montado.ok) { showToast(montado.error, "warn"); return; }
-    // .eml com X-Unsent: o Outlook abre como rascunho editável, já preenchido.
-    downloadBlob(new Blob([montado.eml], { type: "message/rfc822" }), Email.suggestedFileName(ultimaEmissaoParaEmail));
-    showToast(`Rascunho gerado com ${montado.documentos} documento(s). Abra o arquivo baixado e lembre-se de anexar o log de evidência do SIGEM antes de enviar.`, "success");
+    window.dispatchEvent(new CustomEvent("grcon:email-queued", { detail: resultado.item }));
+    const quantos = ultimaEmissaoParaEmail.documentos.length;
+    showToast(`E-mail de evidência com ${quantos} documento(s) guardado na aba "E-mails de evidência".`, "info");
   }
 
   function reportDownloadName() {
@@ -571,7 +566,6 @@
     exportPendingAllocationPdfs: $("#export-pending-allocation-pdfs"),
     exportZip: $("#export-zip"),
     exportEgrdt: $("#export-egrdt"),
-    prepareEmailDraft: $("#prepare-email-draft"),
     emailDraftTo: $("#email-draft-to"),
     emailDraftCc: $("#email-draft-cc"),
     emailDraftSubject: $("#email-draft-subject"),
@@ -4828,11 +4822,9 @@
   });
   initializeResultColumnFilters();
   carregarDestinatarios();
-  atualizarBotaoEmail();
   if (els.emailDraftSave) els.emailDraftSave.addEventListener("click", salvarDestinatarios);
   window.addEventListener("grcon:email-template-updated", carregarDestinatarios);
   window.addEventListener("grcon:cloud-ready", carregarDestinatarios);
-  if (els.prepareEmailDraft) els.prepareEmailDraft.addEventListener("click", prepararRascunhoEmail);
   if (els.clearColumnFilters) els.clearColumnFilters.addEventListener("click", clearResultColumnFilters);
   els.search.addEventListener("input", (event) => {
     state.search = event.target.value;
