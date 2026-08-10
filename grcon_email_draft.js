@@ -57,9 +57,11 @@
     try { return typeof localStorage !== "undefined" ? localStorage : null; } catch (_) { return null; }
   }
 
+  const SAUDACAO_PADRAO = "Olá,";
+
   function readRecipients(storage) {
     const target = storageOf(storage);
-    const vazio = { to: [], cc: [] };
+    const vazio = { to: [], cc: [], saudacao: SAUDACAO_PADRAO };
     if (!target) return vazio;
     try {
       const parsed = JSON.parse(target.getItem(STORAGE_KEY) || "null");
@@ -67,20 +69,22 @@
       return {
         to: Array.isArray(parsed.to) ? parsed.to.filter(isValidEmail) : [],
         cc: Array.isArray(parsed.cc) ? parsed.cc.filter(isValidEmail) : [],
+        saudacao: text(parsed.saudacao) || SAUDACAO_PADRAO,
       };
     } catch (_) { return vazio; }
   }
 
-  function saveRecipients(to, cc, storage) {
+  function saveRecipients(to, cc, saudacao, storage) {
     const target = storageOf(storage);
     const listaTo = splitValidity(Array.isArray(to) ? to : parseRecipients(to));
     const listaCc = splitValidity(Array.isArray(cc) ? cc : parseRecipients(cc));
     const invalidos = [...listaTo.invalidos, ...listaCc.invalidos];
     if (invalidos.length) return { saved: false, invalidos, error: `Endereço inválido: ${invalidos.join(", ")}` };
     if (!target) return { saved: false, invalidos: [], error: "Armazenamento local indisponível." };
+    const trato = text(saudacao) || SAUDACAO_PADRAO;
     try {
-      target.setItem(STORAGE_KEY, JSON.stringify({ to: listaTo.validos, cc: listaCc.validos }));
-      return { saved: true, invalidos: [], to: listaTo.validos, cc: listaCc.validos, error: "" };
+      target.setItem(STORAGE_KEY, JSON.stringify({ to: listaTo.validos, cc: listaCc.validos, saudacao: trato }));
+      return { saved: true, invalidos: [], to: listaTo.validos, cc: listaCc.validos, saudacao: trato, error: "" };
     } catch (error) {
       return { saved: false, invalidos: [], error: error && error.message || "Não foi possível salvar os destinatários." };
     }
@@ -109,58 +113,83 @@
     return value.replace(/(.{76})/g, "$1\r\n");
   }
 
+  /** Formato do modelo aprovado: 10/08/2026, 10:54 */
   function formatDateBR(value) {
     const data = value instanceof Date ? value : new Date(value || Date.now());
     if (Number.isNaN(data.getTime())) return "";
     const dois = (n) => String(n).padStart(2, "0");
-    return `${dois(data.getDate())}/${dois(data.getMonth() + 1)}/${data.getFullYear()} ${dois(data.getHours())}:${dois(data.getMinutes())}`;
+    return `${dois(data.getDate())}/${dois(data.getMonth() + 1)}/${data.getFullYear()}, ${dois(data.getHours())}:${dois(data.getMinutes())}`;
   }
 
-  function buildBodyHtml(dados) {
+  /**
+   * O assunto usa a nota fiscal que aparece no fim do nome do documento
+   * (ex.: C1O_..._RIR_nt-LBN-NF-6204 -> NF-6204), como no modelo em uso.
+   * Havendo mais de uma NF na mesma eGRDT, todas entram; não havendo
+   * nenhuma, cai para o número da eGRDT para o assunto nunca ficar vazio.
+   */
+  function extractNotasFiscais(documentos) {
+    const encontradas = [];
+    // Não usar \b aqui: em "..._NF-1234" o caractere anterior é "_", que conta
+    // como parte de palavra, e a nota passaria batida. Exigir explicitamente um
+    // caractere não alfanumérico antes também evita casar com "CONF-1234".
+    const padrao = /(?:^|[^A-Za-z0-9])NF[-\s_]?(\d{2,})/gi;
+    (documentos || []).forEach((doc) => {
+      const alvo = `${text(doc && doc.documento)} ${text(doc && doc.arquivo)}`;
+      padrao.lastIndex = 0;
+      let achado = padrao.exec(alvo);
+      while (achado !== null) {
+        const normalizada = `NF-${achado[1]}`;
+        if (!encontradas.includes(normalizada)) encontradas.push(normalizada);
+        achado = padrao.exec(alvo);
+      }
+    });
+    return encontradas;
+  }
+
+  // Colunas conforme o modelo em uso na empresa.
+  function buildBodyHtml(dados, saudacao) {
     const info = dados || {};
     const documentos = Array.isArray(info.documentos) ? info.documentos : [];
-    const egrdts = Array.isArray(info.egrdts) ? info.egrdts : [];
-    const alocacoes = Array.isArray(info.alocacoes) ? info.alocacoes.filter(Boolean) : [];
+    const quando = formatDateBR(info.geradoEm);
+    const trato = text(saudacao) || SAUDACAO_PADRAO;
 
+    const borda = "border:1px solid #cfd9e2;padding:6px 8px";
     const linhas = documentos.map((doc) => `<tr>
-      <td style="border:1px solid #cfd9e2;padding:6px 8px">${escapeHtml(doc.documento)}</td>
-      <td style="border:1px solid #cfd9e2;padding:6px 8px;text-align:center">${escapeHtml(doc.revisao)}</td>
-      <td style="border:1px solid #cfd9e2;padding:6px 8px">${escapeHtml(doc.alocacao)}</td>
-      <td style="border:1px solid #cfd9e2;padding:6px 8px">${escapeHtml(doc.arquivo)}</td>
+      <td style="${borda};white-space:nowrap">${escapeHtml(doc.data || quando)}</td>
+      <td style="${borda}">${escapeHtml(doc.egrdt)}</td>
+      <td style="${borda}">${escapeHtml(doc.documento)}</td>
+      <td style="${borda}">${escapeHtml(doc.titulo)}</td>
+      <td style="${borda}">${escapeHtml(doc.disciplina)}</td>
     </tr>`).join("");
 
+    const cabecalho = "border:1px solid #1d5c86;padding:6px 8px;text-align:left";
     const tabela = documentos.length ? `
     <table cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:12px;margin:12px 0">
       <thead><tr style="background:#1d5c86;color:#ffffff">
-        <th style="border:1px solid #1d5c86;padding:6px 8px;text-align:left">Documento</th>
-        <th style="border:1px solid #1d5c86;padding:6px 8px">Revisão</th>
-        <th style="border:1px solid #1d5c86;padding:6px 8px;text-align:left">Alocação</th>
-        <th style="border:1px solid #1d5c86;padding:6px 8px;text-align:left">Arquivo</th>
+        <th style="${cabecalho}">DATA DA GERAÇÃO / POSTAGEM</th>
+        <th style="${cabecalho}">EGRDT</th>
+        <th style="${cabecalho}">DOCUMENTO</th>
+        <th style="${cabecalho}">TÍTULO</th>
+        <th style="${cabecalho}">DISCIPLINA</th>
       </tr></thead>
       <tbody>${linhas}</tbody>
     </table>` : "<p><i>Nenhum documento relacionado.</i></p>";
 
-    const listaEgrdt = egrdts.length
-      ? egrdts.map((numero) => `<b>${escapeHtml(numero)}</b>`).join(", ")
-      : "<i>não informada</i>";
-
     return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;color:#1c2b3a">
-<p>Prezados,</p>
-<p>Segue a evidência de postagem referente ${egrdts.length > 1 ? "às eGRDTs" : "à eGRDT"} ${listaEgrdt}${alocacoes.length ? ` — alocação ${escapeHtml(alocacoes.join(", "))}` : ""}.</p>
-<p><b>${documentos.length}</b> documento(s) relacionado(s):</p>
+<p>${escapeHtml(trato)}</p>
+<p>Segue evidencia de postagem;</p>
 ${tabela}
-<p style="color:#5b6b7c;font-size:11px">Gerado pelo GRCON em ${escapeHtml(formatDateBR(info.geradoEm))}.</p>
 </body></html>`;
   }
 
   function buildSubject(dados) {
     const info = dados || {};
+    const notas = extractNotasFiscais(info.documentos);
+    if (notas.length) return `Evidencia de Postagem ${notas.join(", ")}`;
     const egrdts = Array.isArray(info.egrdts) ? info.egrdts : [];
-    const alocacoes = Array.isArray(info.alocacoes) ? info.alocacoes.filter(Boolean) : [];
     const numero = egrdts.length === 1 ? egrdts[0] : `${egrdts.length} eGRDTs`;
-    const sufixo = alocacoes.length === 1 ? ` — Alocação ${alocacoes[0]}` : "";
-    return `Evidência de postagem — ${numero}${sufixo}`;
+    return `Evidencia de Postagem ${numero}`;
   }
 
   /** Monta o conteúdo completo do arquivo .eml. */
@@ -171,7 +200,7 @@ ${tabela}
     const cc = (alvo.cc || []).filter(isValidEmail);
     if (!to.length) return { ok: false, error: "Cadastre ao menos um destinatário em Configurações antes de preparar o e-mail." };
 
-    const corpo = buildBodyHtml(info);
+    const corpo = buildBodyHtml(info, alvo.saudacao);
     const limite = `GRCON_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const linhas = [
       `To: ${to.join(", ")}`,
@@ -199,14 +228,18 @@ ${tabela}
   }
 
   function suggestedFileName(dados) {
+    const notas = extractNotasFiscais(dados && dados.documentos);
+    if (notas.length) return `Evidencia_de_Postagem_${safeFileName(notas.join("_"))}.eml`;
     const egrdts = (dados && dados.egrdts) || [];
     const base = egrdts.length === 1 ? egrdts[0] : `${egrdts.length}_eGRDTs`;
-    return `Evidencia_${safeFileName(base)}.eml`;
+    return `Evidencia_de_Postagem_${safeFileName(base)}.eml`;
   }
 
   return {
     STORAGE_KEY,
+    SAUDACAO_PADRAO,
     parseRecipients,
+    extractNotasFiscais,
     isValidEmail,
     readRecipients,
     saveRecipients,
