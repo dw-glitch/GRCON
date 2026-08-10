@@ -196,6 +196,10 @@
       return;
     }
     if (moduleState.get(module) === "ready") {
+      // directActivate também aqui: sem isto, a partir da segunda visita a um
+      // módulo já carregado só corria o activate() do history_app, que não
+      // conhece todas as views — e a tela ficava em branco.
+      directActivate(module);
       root.GrconHistoryUi?.activate?.(module);
       return;
     }
