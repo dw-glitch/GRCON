@@ -367,6 +367,9 @@
       // Assim, a revisão registrada vem da própria eGRDT, e não apenas da prévia da emissão.
       const verifiedRecords = createGeneratedHistoryRecords(generated, outputType, { generatedAt: info.generatedAt });
       const records = verifiedRecords.length ? verifiedRecords : (preparedRecords || []);
+      // O e-mail usa exatamente os mesmos registros que vão para o histórico,
+      // e não a prévia da emissão: assim a relação enviada bate com o relatório.
+      registrarEmissaoParaEmail(generated, records, info.generatedAt);
       const saved = History.saveMany(records);
       if (Posting) {
         const postingSaved = Posting.registerGenerated(records, { packageName: info.packageName, appVersion: APP_VERSION });
@@ -401,6 +404,15 @@
   // depender de o usuário ainda estar com a mesma triagem em tela.
   let ultimaEmissaoParaEmail = null;
 
+  function inferirDisciplina(documento) {
+    if (!documento || !C || typeof C.buildEgrdtData !== "function") return "";
+    try {
+      return C.buildEgrdtData(documento, "", "", {}, "", "").discipline || "";
+    } catch (_) {
+      return "";
+    }
+  }
+
   function registrarEmissaoParaEmail(generated, preparedRecords, geradoEm) {
     const Email = window.GrconEmailDraft;
     if (!Email) return;
@@ -413,7 +425,10 @@
         documentos.push({
           documento: arquivo.document,
           titulo: arquivo.title || "",
-          disciplina: arquivo.discipline || "",
+          // A disciplina normalmente já vem do registro; quando faltar, é
+          // deduzida do próprio código do documento (…_ELE_… -> ELÉTRICA),
+          // pela mesma regra usada na emissão, para a coluna não sair vazia.
+          disciplina: arquivo.discipline || inferirDisciplina(arquivo.document),
           egrdt: registro.egrdtNumber || "",
           arquivo: arquivo.finalName || arquivo.originalName || "",
           revisao: arquivo.revision || "",
@@ -4378,7 +4393,6 @@
         }
       }
       saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, sigemPrepared.historyRecords);
-      registrarEmissaoParaEmail(generated, sigemPrepared.historyRecords, generatedAt);
       showToast(`${generated.length} GRDT final(is) verificada(s) e registrada(s) para a etapa SIGEM.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar a GRDT final.");
@@ -4476,7 +4490,6 @@
       }
       downloadBlob(blob, packageName);
       saveGeneratedHistory(generated, "PDFs + eGRDT", { packageName, generatedAt }, sigemPrepared.historyRecords);
-      registrarEmissaoParaEmail(generated, sigemPrepared.historyRecords, generatedAt);
       showToast(`${plan.entries.length} PDF(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar os PDFs com a eGRDT.");
@@ -4605,7 +4618,6 @@
       }
       downloadBlob(blob, packageName);
       saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, sigemPrepared.historyRecords);
-      registrarEmissaoParaEmail(generated, sigemPrepared.historyRecords, generatedAt);
       showToast(`${plan.entries.length} arquivo(s), ${generated.length} eGRDT(s) e o relatório de conferência validados no pacote final.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar o pacote final.");
