@@ -412,9 +412,12 @@
         if (!arquivo || !arquivo.document) return;
         documentos.push({
           documento: arquivo.document,
+          titulo: arquivo.title || "",
+          disciplina: arquivo.discipline || "",
+          egrdt: registro.egrdtNumber || "",
+          arquivo: arquivo.finalName || arquivo.originalName || "",
           revisao: arquivo.revision || "",
           alocacao: arquivo.allocation || "",
-          arquivo: arquivo.finalName || arquivo.originalName || "",
         });
         if (arquivo.allocation) alocacoes.add(arquivo.allocation);
       });
@@ -450,13 +453,14 @@
     const { to, cc } = Email.readRecipients();
     if (els.emailDraftTo) els.emailDraftTo.value = to.join("; ");
     if (els.emailDraftCc) els.emailDraftCc.value = cc.join("; ");
+    if (els.emailDraftGreeting) els.emailDraftGreeting.value = Email.readRecipients().saudacao || "";
     atualizarStatusDestinatarios();
   }
 
   function salvarDestinatarios() {
     const Email = window.GrconEmailDraft;
     if (!Email) return;
-    const resultado = Email.saveRecipients(els.emailDraftTo?.value || "", els.emailDraftCc?.value || "");
+    const resultado = Email.saveRecipients(els.emailDraftTo?.value || "", els.emailDraftCc?.value || "", els.emailDraftGreeting?.value || "");
     if (!resultado.saved) { showToast(resultado.error, "warn"); return; }
     carregarDestinatarios();
     showToast("Destinatários salvos neste navegador.", "success");
@@ -473,7 +477,7 @@
     if (!montado.ok) { showToast(montado.error, "warn"); return; }
     // .eml com X-Unsent: o Outlook abre como rascunho editável, já preenchido.
     downloadBlob(new Blob([montado.eml], { type: "message/rfc822" }), Email.suggestedFileName(ultimaEmissaoParaEmail));
-    showToast(`Rascunho gerado com ${montado.documentos} documento(s). Abra o arquivo baixado para o Outlook montar o e-mail.`, "success");
+    showToast(`Rascunho gerado com ${montado.documentos} documento(s). Abra o arquivo baixado e lembre-se de anexar o log de evidência do SIGEM antes de enviar.`, "success");
   }
 
   function reportDownloadName() {
@@ -524,6 +528,7 @@
     prepareEmailDraft: $("#prepare-email-draft"),
     emailDraftTo: $("#email-draft-to"),
     emailDraftCc: $("#email-draft-cc"),
+    emailDraftGreeting: $("#email-draft-greeting"),
     emailDraftSave: $("#email-draft-save"),
     emailDraftStatus: $("#email-draft-status"),
     exportFinalPackage: $("#export-final-package"),
