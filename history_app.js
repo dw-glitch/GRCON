@@ -11,7 +11,7 @@
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
   const els = {
     tabs: [...document.querySelectorAll("[data-grcon-view]")],
-    control: $("#grdt-module"), analysis: $("#analysis-history-module"), history: $("#history-module"), sigem: $("#sigem-module"), count: $("#history-tab-count"),
+    control: $("#grdt-module"), analysis: $("#analysis-history-module"), history: $("#history-module"), sigem: $("#sigem-module"), emails: $("#emails-module"), count: $("#history-tab-count"),
     search: $("#history-search"), year: $("#history-year"), type: $("#history-type"), postingStatus: $("#history-posting-status"), sort: $("#history-sort"),
     dateStart: $("#history-date-start"), dateEnd: $("#history-date-end"), periodStatus: $("#history-period-status"), exportPeriod: $("#history-export-period"),
     clear: $("#history-clear"), summary: $("#history-summary"), list: $("#history-list"), empty: $("#history-empty"), detail: $("#history-detail"), resultCount: $("#history-result-count"),
@@ -126,6 +126,9 @@
     if (els.analysis) els.analysis.hidden = !analysis;
     els.history.hidden = !history;
     if (els.sigem) els.sigem.hidden = !sigem;
+    // A aba de e-mails também precisa entrar aqui: esta função esconde as
+    // demais, e sem citá-la ela ficaria visível sobre outra aba (ou some).
+    if (els.emails) els.emails.hidden = view !== "emails";
     els.tabs.forEach((button) => {
       const active = button.dataset.grconView === view;
       button.classList.toggle("active", active);
