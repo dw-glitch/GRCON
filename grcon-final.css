@@ -1727,3 +1727,20 @@ body.p2-dark .app-shortcut-link:hover {
 @media (max-width: 44rem) {
   .app-shortcut-link { flex: 1 1 auto; min-width: 0; }
 }
+
+/* Cadastro de destinatários do e-mail da evidência, dentro de Configurações.
+   Segue o mesmo padrão da seção "Limite por eGRDT" logo acima. */
+html[data-app="GRCON"] .email-draft-settings{
+  display:grid;gap:.5rem;margin-top:.6rem;padding:.7rem;
+  border:1px solid var(--border-1,#dce4ea);border-radius:.6rem;
+  background:var(--surface-2,#f7fafc);
+}
+html[data-app="GRCON"] .email-draft-settings > div{display:grid;gap:.15rem}
+html[data-app="GRCON"] .email-draft-settings small{color:var(--text-3,#6f8296);font-size:.72rem}
+html[data-app="GRCON"] .email-draft-settings label{display:grid;gap:.2rem;font-size:.76rem;color:var(--text-2,#385069)}
+html[data-app="GRCON"] .email-draft-settings input{
+  height:2rem;padding:0 .55rem;border:1px solid var(--border-2,#cbd7e1);
+  border-radius:.45rem;font-size:.8rem;min-width:0;
+}
+html[data-app="GRCON"] .email-draft-settings button{justify-self:start}
+html[data-app="GRCON"] #prepare-email-draft{white-space:nowrap}

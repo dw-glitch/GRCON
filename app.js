@@ -395,6 +395,87 @@
     }
   }
 
+  /* ── Rascunho de e-mail da evidência de postagem ──────────── */
+
+  // Guarda o que a última eGRDT gerada produziu, para montar o e-mail sem
+  // depender de o usuário ainda estar com a mesma triagem em tela.
+  let ultimaEmissaoParaEmail = null;
+
+  function registrarEmissaoParaEmail(generated, preparedRecords, geradoEm) {
+    const Email = window.GrconEmailDraft;
+    if (!Email) return;
+    const registros = Array.isArray(preparedRecords) ? preparedRecords : [];
+    const documentos = [];
+    const alocacoes = new Set();
+    registros.forEach((registro) => {
+      (registro.files || []).forEach((arquivo) => {
+        if (!arquivo || !arquivo.document) return;
+        documentos.push({
+          documento: arquivo.document,
+          revisao: arquivo.revision || "",
+          alocacao: arquivo.allocation || "",
+          arquivo: arquivo.finalName || arquivo.originalName || "",
+        });
+        if (arquivo.allocation) alocacoes.add(arquivo.allocation);
+      });
+    });
+    const egrdts = registros.map((registro) => registro.egrdtNumber).filter(Boolean);
+    ultimaEmissaoParaEmail = {
+      egrdts: egrdts.length ? egrdts : (generated || []).map((item) => item && item.official && item.official.baseName).filter(Boolean),
+      alocacoes: [...alocacoes],
+      documentos,
+      geradoEm: geradoEm || new Date().toISOString(),
+    };
+    atualizarBotaoEmail();
+  }
+
+  function atualizarBotaoEmail() {
+    if (!els.prepareEmailDraft) return;
+    const pronto = Boolean(window.GrconEmailDraft && ultimaEmissaoParaEmail && ultimaEmissaoParaEmail.documentos.length);
+    els.prepareEmailDraft.hidden = !pronto;
+  }
+
+  function atualizarStatusDestinatarios() {
+    const Email = window.GrconEmailDraft;
+    if (!Email || !els.emailDraftStatus) return;
+    const { to, cc } = Email.readRecipients();
+    els.emailDraftStatus.textContent = to.length
+      ? `${to.length} destinatário(s)${cc.length ? ` e ${cc.length} em cópia` : ""}`
+      : "Nenhum destinatário cadastrado";
+  }
+
+  function carregarDestinatarios() {
+    const Email = window.GrconEmailDraft;
+    if (!Email) return;
+    const { to, cc } = Email.readRecipients();
+    if (els.emailDraftTo) els.emailDraftTo.value = to.join("; ");
+    if (els.emailDraftCc) els.emailDraftCc.value = cc.join("; ");
+    atualizarStatusDestinatarios();
+  }
+
+  function salvarDestinatarios() {
+    const Email = window.GrconEmailDraft;
+    if (!Email) return;
+    const resultado = Email.saveRecipients(els.emailDraftTo?.value || "", els.emailDraftCc?.value || "");
+    if (!resultado.saved) { showToast(resultado.error, "warn"); return; }
+    carregarDestinatarios();
+    showToast("Destinatários salvos neste navegador.", "success");
+  }
+
+  function prepararRascunhoEmail() {
+    const Email = window.GrconEmailDraft;
+    if (!Email) { showToast("Módulo de e-mail indisponível.", "warn"); return; }
+    if (!ultimaEmissaoParaEmail || !ultimaEmissaoParaEmail.documentos.length) {
+      showToast("Gere uma eGRDT antes de preparar o e-mail.", "warn");
+      return;
+    }
+    const montado = Email.buildEml(ultimaEmissaoParaEmail);
+    if (!montado.ok) { showToast(montado.error, "warn"); return; }
+    // .eml com X-Unsent: o Outlook abre como rascunho editável, já preenchido.
+    downloadBlob(new Blob([montado.eml], { type: "message/rfc822" }), Email.suggestedFileName(ultimaEmissaoParaEmail));
+    showToast(`Rascunho gerado com ${montado.documentos} documento(s). Abra o arquivo baixado para o Outlook montar o e-mail.`, "success");
+  }
+
   function reportDownloadName() {
     const next = egrdtSequenceInfo(0);
     const ld = safeOutputPart(state.ldFiles.length === 1 ? state.ldFiles[0].name : `${state.ldFiles.length}_LDs`, "LD");
@@ -440,6 +521,11 @@
     exportPendingAllocationPdfs: $("#export-pending-allocation-pdfs"),
     exportZip: $("#export-zip"),
     exportEgrdt: $("#export-egrdt"),
+    prepareEmailDraft: $("#prepare-email-draft"),
+    emailDraftTo: $("#email-draft-to"),
+    emailDraftCc: $("#email-draft-cc"),
+    emailDraftSave: $("#email-draft-save"),
+    emailDraftStatus: $("#email-draft-status"),
     exportFinalPackage: $("#export-final-package"),
     advancedToggle: $("#advanced-toggle"),
     advancedPanel: $("#advanced-panel"),
@@ -4253,6 +4339,7 @@
         }
       }
       saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      registrarEmissaoParaEmail(generated, sigemPrepared.historyRecords, generatedAt);
       showToast(`${generated.length} GRDT final(is) verificada(s) e registrada(s) para a etapa SIGEM.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar a GRDT final.");
@@ -4350,6 +4437,7 @@
       }
       downloadBlob(blob, packageName);
       saveGeneratedHistory(generated, "PDFs + eGRDT", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      registrarEmissaoParaEmail(generated, sigemPrepared.historyRecords, generatedAt);
       showToast(`${plan.entries.length} PDF(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar os PDFs com a eGRDT.");
@@ -4478,6 +4566,7 @@
       }
       downloadBlob(blob, packageName);
       saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      registrarEmissaoParaEmail(generated, sigemPrepared.historyRecords, generatedAt);
       showToast(`${plan.entries.length} arquivo(s), ${generated.length} eGRDT(s) e o relatório de conferência validados no pacote final.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar o pacote final.");
@@ -4687,6 +4776,10 @@
     els.advancedToggle.setAttribute("aria-expanded", String(open));
   });
   initializeResultColumnFilters();
+  carregarDestinatarios();
+  atualizarBotaoEmail();
+  if (els.emailDraftSave) els.emailDraftSave.addEventListener("click", salvarDestinatarios);
+  if (els.prepareEmailDraft) els.prepareEmailDraft.addEventListener("click", prepararRascunhoEmail);
   if (els.clearColumnFilters) els.clearColumnFilters.addEventListener("click", clearResultColumnFilters);
   els.search.addEventListener("input", (event) => {
     state.search = event.target.value;
