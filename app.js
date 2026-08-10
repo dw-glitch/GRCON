@@ -438,32 +438,63 @@
     els.prepareEmailDraft.hidden = !pronto;
   }
 
+  function ehProprietario() {
+    const Cloud = window.GrconCloud;
+    // Sem área compartilhada configurada, o app é de uso local: não há a quem restringir.
+    if (!Cloud || !Cloud.state?.membership) return true;
+    return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
+  }
+
   function atualizarStatusDestinatarios() {
     const Email = window.GrconEmailDraft;
     if (!Email || !els.emailDraftStatus) return;
-    const { to, cc } = Email.readRecipients();
-    els.emailDraftStatus.textContent = to.length
-      ? `${to.length} destinatário(s)${cc.length ? ` e ${cc.length} em cópia` : ""}`
-      : "Nenhum destinatário cadastrado";
+    const modelo = Email.readTemplate();
+    els.emailDraftStatus.textContent = modelo.to.length
+      ? `${modelo.to.length} destinatário(s)${modelo.cc.length ? ` e ${modelo.cc.length} em cópia` : ""}`
+      : "Nenhum destinatário definido";
+  }
+
+  function aplicarPermissaoModeloEmail() {
+    const dono = ehProprietario();
+    [els.emailDraftTo, els.emailDraftCc, els.emailDraftSubject, els.emailDraftBody].forEach((campo) => {
+      if (campo) campo.readOnly = !dono;
+    });
+    if (els.emailDraftSave) els.emailDraftSave.hidden = !dono;
+    if (els.emailDraftOwnerNote) els.emailDraftOwnerNote.hidden = dono;
   }
 
   function carregarDestinatarios() {
     const Email = window.GrconEmailDraft;
     if (!Email) return;
-    const { to, cc } = Email.readRecipients();
-    if (els.emailDraftTo) els.emailDraftTo.value = to.join("; ");
-    if (els.emailDraftCc) els.emailDraftCc.value = cc.join("; ");
-    if (els.emailDraftGreeting) els.emailDraftGreeting.value = Email.readRecipients().saudacao || "";
+    const modelo = Email.readTemplate();
+    if (els.emailDraftTo) els.emailDraftTo.value = modelo.to.join("; ");
+    if (els.emailDraftCc) els.emailDraftCc.value = modelo.cc.join("; ");
+    if (els.emailDraftSubject) els.emailDraftSubject.value = modelo.assunto;
+    if (els.emailDraftBody) els.emailDraftBody.value = modelo.corpo;
+    if (els.emailDraftHint) {
+      els.emailDraftHint.textContent = `Marcadores: ${Email.MARCADORES.map((m) => m.chave).join("  ")} — ${Email.MARCADORES.map((m) => `${m.chave} = ${m.descricao}`).join("; ")}.`;
+    }
     atualizarStatusDestinatarios();
+    aplicarPermissaoModeloEmail();
   }
 
-  function salvarDestinatarios() {
-    const Email = window.GrconEmailDraft;
-    if (!Email) return;
-    const resultado = Email.saveRecipients(els.emailDraftTo?.value || "", els.emailDraftCc?.value || "", els.emailDraftGreeting?.value || "");
-    if (!resultado.saved) { showToast(resultado.error, "warn"); return; }
-    carregarDestinatarios();
-    showToast("Destinatários salvos neste navegador.", "success");
+  async function salvarDestinatarios() {
+    const Cloud = window.GrconCloud;
+    if (!Cloud?.saveEmailTemplate) { showToast("Área compartilhada indisponível.", "warn"); return; }
+    if (els.emailDraftSave) els.emailDraftSave.disabled = true;
+    try {
+      const resultado = await Cloud.saveEmailTemplate(
+        els.emailDraftSubject?.value || "",
+        els.emailDraftBody?.value || "",
+        els.emailDraftTo?.value || "",
+        els.emailDraftCc?.value || "",
+      );
+      if (!resultado.ok) { showToast(resultado.error, "warn"); return; }
+      carregarDestinatarios();
+      showToast("Modelo salvo. Passa a valer para todos que usam o GRCON.", "success");
+    } finally {
+      if (els.emailDraftSave) els.emailDraftSave.disabled = false;
+    }
   }
 
   function prepararRascunhoEmail() {
@@ -528,7 +559,10 @@
     prepareEmailDraft: $("#prepare-email-draft"),
     emailDraftTo: $("#email-draft-to"),
     emailDraftCc: $("#email-draft-cc"),
-    emailDraftGreeting: $("#email-draft-greeting"),
+    emailDraftSubject: $("#email-draft-subject"),
+    emailDraftBody: $("#email-draft-body"),
+    emailDraftHint: $("#email-draft-hint"),
+    emailDraftOwnerNote: $("#email-draft-owner-note"),
     emailDraftSave: $("#email-draft-save"),
     emailDraftStatus: $("#email-draft-status"),
     exportFinalPackage: $("#export-final-package"),
@@ -4784,6 +4818,8 @@
   carregarDestinatarios();
   atualizarBotaoEmail();
   if (els.emailDraftSave) els.emailDraftSave.addEventListener("click", salvarDestinatarios);
+  window.addEventListener("grcon:email-template-updated", carregarDestinatarios);
+  window.addEventListener("grcon:cloud-ready", carregarDestinatarios);
   if (els.prepareEmailDraft) els.prepareEmailDraft.addEventListener("click", prepararRascunhoEmail);
   if (els.clearColumnFilters) els.clearColumnFilters.addEventListener("click", clearResultColumnFilters);
   els.search.addEventListener("input", (event) => {
