@@ -151,11 +151,14 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar</button>
 </section>
 <section class="email-draft-settings settings-embedded" aria-labelledby="email-draft-title">
-<div><strong id="email-draft-title">E-mail da evidência de postagem</strong><small id="email-draft-status">Nenhum destinatário cadastrado</small></div>
+<div><strong id="email-draft-title">Modelo do e-mail de evidência</strong><small id="email-draft-status">Carregando…</small></div>
 <label><span>Para</span><input id="email-draft-to" type="text" autocomplete="off" placeholder="fulano@empresa.com.br; ciclano@empresa.com.br"/></label>
-<label><span>Saudação</span><input id="email-draft-greeting" type="text" autocomplete="off" placeholder="Olá, Fulano"/></label>
 <label><span>Cc (opcional)</span><input id="email-draft-cc" type="text" autocomplete="off" placeholder="coordenacao@empresa.com.br"/></label>
-<button class="secondary-button compact" id="email-draft-save" type="button">Salvar destinatários</button>
+<label><span>Assunto</span><input id="email-draft-subject" type="text" autocomplete="off" placeholder="Evidencia de Postagem {NF}"/></label>
+<label><span>Corpo</span><textarea id="email-draft-body" rows="6" spellcheck="false" placeholder="Olá,&#10;&#10;Segue evidencia de postagem;&#10;&#10;{TABELA}"></textarea></label>
+<small class="email-draft-hint" id="email-draft-hint"></small>
+<button class="secondary-button compact" id="email-draft-save" type="button">Salvar modelo para todos</button>
+<small class="email-draft-owner-note" hidden id="email-draft-owner-note">Somente o proprietário pode alterar este modelo. Você está vendo o modelo em uso.</small>
 </section>
 <details class="ignored-details" hidden="" id="ignored-details"><summary id="ignored-summary">Arquivos ignorados</summary><ul id="ignored-list"></ul></details>
 <div class="settings-inline-actions"><button class="text-button" id="reset" type="button">Limpar seleção</button><button class="compatibility-open-button" hidden="" id="ld-compatibility-open" type="button">Estrutura da LD</button><span class="compatibility-status" hidden="" id="ld-compatibility-status"></span></div>

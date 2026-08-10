@@ -394,6 +394,66 @@
     return state.membership?.role === "owner";
   }
 
+  /* ── Modelo do e-mail de evidência (compartilhado, só o dono altera) ── */
+
+  async function loadEmailTemplate() {
+    const Email = window.GrconEmailDraft;
+    if (!Email || !state.client || !state.membership?.workspace_id) return null;
+    try {
+      const { data, error } = await state.client.rpc("grcon_get_email_template", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      const linha = Array.isArray(data) ? data[0] : data;
+      // Sem linha ainda: o dono nunca configurou; segue com o padrão.
+      if (!linha) return Email.readTemplate();
+      const modelo = {
+        assunto: linha.subject_template,
+        corpo: linha.body_template,
+        to: linha.recipients_to || [],
+        cc: linha.recipients_cc || [],
+      };
+      Email.cacheTemplate(modelo);
+      window.dispatchEvent(new CustomEvent("grcon:email-template-updated", { detail: modelo }));
+      return modelo;
+    } catch (error) {
+      // Offline ou sem acesso: usa a última cópia local, para não travar o uso.
+      console.debug("GRCON Cloud: modelo de e-mail indisponível agora", error);
+      return Email.readTemplate();
+    }
+  }
+
+  async function saveEmailTemplate(assunto, corpo, to, cc) {
+    const Email = window.GrconEmailDraft;
+    if (!Email) return { ok: false, error: "Módulo de e-mail indisponível." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode alterar o modelo do e-mail." };
+    if (!state.client || !state.membership?.workspace_id) return { ok: false, error: "Entre na área compartilhada para salvar o modelo." };
+    const conferido = Email.validateTemplate(assunto, corpo, to, cc);
+    if (!conferido.ok) return { ok: false, error: conferido.problemas.join(" ") };
+    try {
+      const { data, error } = await state.client.rpc("grcon_set_email_template", {
+        target_workspace: state.membership.workspace_id,
+        new_subject: assunto,
+        new_body: corpo,
+        new_to: conferido.to,
+        new_cc: conferido.cc,
+      });
+      if (error) throw error;
+      const linha = Array.isArray(data) ? data[0] : data;
+      const modelo = {
+        assunto: linha?.subject_template || assunto,
+        corpo: linha?.body_template || corpo,
+        to: linha?.recipients_to || conferido.to,
+        cc: linha?.recipients_cc || conferido.cc,
+      };
+      Email.cacheTemplate(modelo);
+      window.dispatchEvent(new CustomEvent("grcon:email-template-updated", { detail: modelo }));
+      return { ok: true, modelo };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível salvar o modelo do e-mail." };
+    }
+  }
+
   function newReservationRequestId() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     const bytes = new Uint8Array(16);
@@ -1201,6 +1261,7 @@
       unlockApp();
       updateAccountMenu();
       await loadMembers();
+      await loadEmailTemplate();
       if (state.online) {
         await runSyncCycle();
         subscribeRealtime();
@@ -1334,6 +1395,9 @@
     sync: scheduleSync,
     canWriteHistory,
     canManageHistory,
+    canManageMembers,
+    loadEmailTemplate,
+    saveEmailTemplate,
     reserveEgrdtSequences,
     inviteUser,
     completeEgrdtReservationRequest,

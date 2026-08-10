@@ -57,37 +57,64 @@
     try { return typeof localStorage !== "undefined" ? localStorage : null; } catch (_) { return null; }
   }
 
-  const SAUDACAO_PADRAO = "Olá,";
+  const MODELO_PADRAO = Object.freeze({
+    assunto: "Evidencia de Postagem {NF}",
+    corpo: "Olá,\n\nSegue evidencia de postagem;\n\n{TABELA}",
+    to: [],
+    cc: [],
+  });
 
-  function readRecipients(storage) {
+  // Marcadores que o proprietário pode usar no assunto e no corpo.
+  const MARCADORES = Object.freeze([
+    { chave: "{NF}", descricao: "nota(s) fiscal(is) encontradas no nome dos documentos" },
+    { chave: "{EGRDT}", descricao: "número da eGRDT gerada" },
+    { chave: "{DATA}", descricao: "data e hora da geração" },
+    { chave: "{QTD}", descricao: "quantidade de documentos" },
+    { chave: "{TABELA}", descricao: "a tabela dos documentos (só no corpo)" },
+  ]);
+
+  // Cópia local do modelo compartilhado, para o app funcionar offline e para
+  // não precisar ir ao servidor a cada eGRDT gerada.
+  function readTemplate(storage) {
     const target = storageOf(storage);
-    const vazio = { to: [], cc: [], saudacao: SAUDACAO_PADRAO };
-    if (!target) return vazio;
+    if (!target) return { ...MODELO_PADRAO };
     try {
       const parsed = JSON.parse(target.getItem(STORAGE_KEY) || "null");
-      if (!parsed || typeof parsed !== "object") return vazio;
+      if (!parsed || typeof parsed !== "object") return { ...MODELO_PADRAO };
       return {
+        assunto: text(parsed.assunto) || MODELO_PADRAO.assunto,
+        corpo: typeof parsed.corpo === "string" && parsed.corpo.trim() ? parsed.corpo : MODELO_PADRAO.corpo,
         to: Array.isArray(parsed.to) ? parsed.to.filter(isValidEmail) : [],
         cc: Array.isArray(parsed.cc) ? parsed.cc.filter(isValidEmail) : [],
-        saudacao: text(parsed.saudacao) || SAUDACAO_PADRAO,
       };
-    } catch (_) { return vazio; }
+    } catch (_) { return { ...MODELO_PADRAO }; }
   }
 
-  function saveRecipients(to, cc, saudacao, storage) {
+  function cacheTemplate(modelo, storage) {
     const target = storageOf(storage);
+    if (!target) return false;
+    try {
+      target.setItem(STORAGE_KEY, JSON.stringify({
+        assunto: text(modelo && modelo.assunto) || MODELO_PADRAO.assunto,
+        corpo: (modelo && typeof modelo.corpo === "string" && modelo.corpo.trim()) ? modelo.corpo : MODELO_PADRAO.corpo,
+        to: Array.isArray(modelo && modelo.to) ? modelo.to.filter(isValidEmail) : [],
+        cc: Array.isArray(modelo && modelo.cc) ? modelo.cc.filter(isValidEmail) : [],
+      }));
+      return true;
+    } catch (_) { return false; }
+  }
+
+  /** Valida o que o proprietário digitou, antes de mandar ao servidor. */
+  function validateTemplate(assunto, corpo, to, cc) {
+    const problemas = [];
+    if (!text(assunto)) problemas.push("O assunto não pode ficar vazio.");
+    if (!text(corpo)) problemas.push("O corpo não pode ficar vazio.");
     const listaTo = splitValidity(Array.isArray(to) ? to : parseRecipients(to));
     const listaCc = splitValidity(Array.isArray(cc) ? cc : parseRecipients(cc));
     const invalidos = [...listaTo.invalidos, ...listaCc.invalidos];
-    if (invalidos.length) return { saved: false, invalidos, error: `Endereço inválido: ${invalidos.join(", ")}` };
-    if (!target) return { saved: false, invalidos: [], error: "Armazenamento local indisponível." };
-    const trato = text(saudacao) || SAUDACAO_PADRAO;
-    try {
-      target.setItem(STORAGE_KEY, JSON.stringify({ to: listaTo.validos, cc: listaCc.validos, saudacao: trato }));
-      return { saved: true, invalidos: [], to: listaTo.validos, cc: listaCc.validos, saudacao: trato, error: "" };
-    } catch (error) {
-      return { saved: false, invalidos: [], error: error && error.message || "Não foi possível salvar os destinatários." };
-    }
+    if (invalidos.length) problemas.push(`Endereço inválido: ${invalidos.join(", ")}`);
+    if (!listaTo.validos.length) problemas.push("Informe ao menos um destinatário em Para.");
+    return { ok: problemas.length === 0, problemas, to: listaTo.validos, cc: listaCc.validos };
   }
 
   /* ── Montagem do .eml ─────────────────────────────────────── */
@@ -146,14 +173,14 @@
     return encontradas;
   }
 
-  // Colunas conforme o modelo em uso na empresa.
-  function buildBodyHtml(dados, saudacao) {
+  // Só a tabela é gerada pelo app; o texto ao redor vem do modelo do dono.
+  function buildTableHtml(dados) {
     const info = dados || {};
     const documentos = Array.isArray(info.documentos) ? info.documentos : [];
+    if (!documentos.length) return "<p><i>Nenhum documento relacionado.</i></p>";
     const quando = formatDateBR(info.geradoEm);
-    const trato = text(saudacao) || SAUDACAO_PADRAO;
-
     const borda = "border:1px solid #cfd9e2;padding:6px 8px";
+    const cabecalho = "border:1px solid #1d5c86;padding:6px 8px;text-align:left";
     const linhas = documentos.map((doc) => `<tr>
       <td style="${borda};white-space:nowrap">${escapeHtml(doc.data || quando)}</td>
       <td style="${borda}">${escapeHtml(doc.egrdt)}</td>
@@ -161,51 +188,77 @@
       <td style="${borda}">${escapeHtml(doc.titulo)}</td>
       <td style="${borda}">${escapeHtml(doc.disciplina)}</td>
     </tr>`).join("");
-
-    const cabecalho = "border:1px solid #1d5c86;padding:6px 8px;text-align:left";
-    const tabela = documentos.length ? `
-    <table cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:12px;margin:12px 0">
+    return `<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:12px;margin:12px 0">
       <thead><tr style="background:#1d5c86;color:#ffffff">
         <th style="${cabecalho}">DATA DA GERAÇÃO / POSTAGEM</th>
         <th style="${cabecalho}">EGRDT</th>
         <th style="${cabecalho}">DOCUMENTO</th>
         <th style="${cabecalho}">TÍTULO</th>
         <th style="${cabecalho}">DISCIPLINA</th>
-      </tr></thead>
-      <tbody>${linhas}</tbody>
-    </table>` : "<p><i>Nenhum documento relacionado.</i></p>";
+      </tr></thead><tbody>${linhas}</tbody></table>`;
+  }
 
+  /** Valores dos marcadores para uma emissão. */
+  function placeholderValues(dados) {
+    const info = dados || {};
+    const notas = extractNotasFiscais(info.documentos);
+    const egrdts = Array.isArray(info.egrdts) ? info.egrdts : [];
+    return {
+      "{NF}": notas.join(", "),
+      "{EGRDT}": egrdts.join(", "),
+      "{DATA}": formatDateBR(info.geradoEm),
+      "{QTD}": String((info.documentos || []).length),
+    };
+  }
+
+  function applyPlaceholders(texto, valores) {
+    return String(texto == null ? "" : texto).replace(/\{(NF|EGRDT|DATA|QTD)\}/g, (inteiro) => valores[inteiro] ?? "");
+  }
+
+  function buildSubject(dados, modelo) {
+    const alvo = modelo || readTemplate();
+    const valores = placeholderValues(dados);
+    // Sem NF nos documentos, {NF} viraria vazio e o assunto ficaria truncado:
+    // nesse caso o número da eGRDT entra no lugar.
+    if (!valores["{NF}"]) valores["{NF}"] = valores["{EGRDT}"];
+    return applyPlaceholders(alvo.assunto || MODELO_PADRAO.assunto, valores).replace(/\s{2,}/g, " ").trim();
+  }
+
+  function buildBodyHtml(dados, modelo) {
+    const alvo = modelo || readTemplate();
+    const valores = placeholderValues(dados);
+    if (!valores["{NF}"]) valores["{NF}"] = valores["{EGRDT}"];
+    const bruto = (alvo.corpo || MODELO_PADRAO.corpo);
+    // O texto do modelo é escapado (não vira HTML); só {TABELA} injeta marcação.
+    const paragrafos = applyPlaceholders(bruto, valores)
+      .split(/\n{2,}/)
+      .map((bloco) => {
+        if (bloco.trim() === "{TABELA}") return buildTableHtml(dados);
+        const conteudo = escapeHtml(bloco).replace(/\n/g, "<br>");
+        return conteudo.trim() ? `<p>${conteudo}</p>` : "";
+      })
+      .join("\n");
+    const comTabela = paragrafos.includes("<table") ? paragrafos : `${paragrafos}\n${buildTableHtml(dados)}`;
     return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;color:#1c2b3a">
-<p>${escapeHtml(trato)}</p>
-<p>Segue evidencia de postagem;</p>
-${tabela}
+${comTabela}
 </body></html>`;
   }
 
-  function buildSubject(dados) {
+  function buildEml(dados, modelo) {
     const info = dados || {};
-    const notas = extractNotasFiscais(info.documentos);
-    if (notas.length) return `Evidencia de Postagem ${notas.join(", ")}`;
-    const egrdts = Array.isArray(info.egrdts) ? info.egrdts : [];
-    const numero = egrdts.length === 1 ? egrdts[0] : `${egrdts.length} eGRDTs`;
-    return `Evidencia de Postagem ${numero}`;
-  }
-
-  /** Monta o conteúdo completo do arquivo .eml. */
-  function buildEml(dados, destinatarios) {
-    const info = dados || {};
-    const alvo = destinatarios || readRecipients();
+    const alvo = modelo || readTemplate();
     const to = (alvo.to || []).filter(isValidEmail);
     const cc = (alvo.cc || []).filter(isValidEmail);
-    if (!to.length) return { ok: false, error: "Cadastre ao menos um destinatário em Configurações antes de preparar o e-mail." };
+    if (!to.length) return { ok: false, error: "Nenhum destinatário definido. O proprietário precisa configurar o modelo do e-mail em Configurações." };
 
-    const corpo = buildBodyHtml(info, alvo.saudacao);
+    const assunto = buildSubject(info, alvo);
+    const corpo = buildBodyHtml(info, alvo);
     const limite = `GRCON_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const linhas = [
       `To: ${to.join(", ")}`,
       cc.length ? `Cc: ${cc.join(", ")}` : null,
-      `Subject: ${encodeHeader(buildSubject(info))}`,
+      `Subject: ${encodeHeader(assunto)}`,
       `Date: ${new Date(info.geradoEm || Date.now()).toUTCString()}`,
       "X-Unsent: 1",
       "MIME-Version: 1.0",
@@ -220,7 +273,7 @@ ${tabela}
       "",
     ].filter((linha) => linha !== null);
 
-    return { ok: true, eml: linhas.join("\r\n"), to, cc, subject: buildSubject(info), documentos: (info.documentos || []).length };
+    return { ok: true, eml: linhas.join("\r\n"), to, cc, subject: assunto, documentos: (info.documentos || []).length };
   }
 
   function safeFileName(value) {
@@ -237,12 +290,15 @@ ${tabela}
 
   return {
     STORAGE_KEY,
-    SAUDACAO_PADRAO,
+    MODELO_PADRAO,
+    MARCADORES,
     parseRecipients,
-    extractNotasFiscais,
     isValidEmail,
-    readRecipients,
-    saveRecipients,
+    extractNotasFiscais,
+    readTemplate,
+    cacheTemplate,
+    validateTemplate,
+    buildTableHtml,
     buildBodyHtml,
     buildSubject,
     buildEml,
