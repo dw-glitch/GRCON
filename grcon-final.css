@@ -1744,3 +1744,31 @@ html[data-app="GRCON"] .email-draft-settings input{
 }
 html[data-app="GRCON"] .email-draft-settings button{justify-self:start}
 html[data-app="GRCON"] #prepare-email-draft{white-space:nowrap}
+
+/* Aba "E-mails de evidência": fila de rascunhos por eGRDT. */
+html[data-app="GRCON"] .emails-summary{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.6rem;margin:0 0 .9rem;
+}
+html[data-app="GRCON"] .emails-summary > div{
+  display:grid;gap:.2rem;padding:.7rem .8rem;border:1px solid var(--border-1,#dce4ea);
+  border-radius:.6rem;background:var(--surface-1,#fff);
+}
+html[data-app="GRCON"] .emails-summary span{font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3,#6f8296)}
+html[data-app="GRCON"] .emails-summary strong{font-size:1.25rem;color:var(--brand-strong,#123f61)}
+html[data-app="GRCON"] .emails-toolbar{
+  display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.9rem;
+}
+html[data-app="GRCON"] .emails-toolbar small{color:var(--text-3,#6f8296);font-size:.74rem}
+html[data-app="GRCON"] .emails-list{display:grid;gap:.6rem}
+html[data-app="GRCON"] .email-card{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+  padding:.8rem .9rem;border:1px solid var(--border-1,#dce4ea);border-radius:.7rem;
+  background:var(--surface-1,#fff);
+}
+html[data-app="GRCON"] .email-card.is-generated{background:var(--surface-2,#f6f9fb)}
+html[data-app="GRCON"] .email-card-main{display:grid;gap:.15rem;min-width:0}
+html[data-app="GRCON"] .email-card-main strong{color:var(--brand-strong,#123f61);font-size:.9rem;overflow-wrap:anywhere}
+html[data-app="GRCON"] .email-card-main span{color:var(--text-2,#385069);font-size:.78rem}
+html[data-app="GRCON"] .email-card-flag{font-size:.72rem;color:var(--text-3,#6f8296)}
+html[data-app="GRCON"] .email-card-flag.pendente{color:#a4681a;font-weight:600}
+html[data-app="GRCON"] .email-card-actions{display:flex;gap:.4rem;flex-wrap:wrap}

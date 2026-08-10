@@ -70,6 +70,9 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <button class="ops-nav-button" data-grcon-view="sigem" type="button">
 <svg viewbox="0 0 24 24"><path d="M4 4h16v12H4zM8 20h8M12 16v4M7 8h10M7 12h6"></path></svg><span><strong>Postagem SIGEM</strong></span><b hidden="" id="ops-sigem-count">0</b>
 </button>
+<button class="ops-nav-button" data-grcon-view="emails" type="button">
+<svg viewbox="0 0 24 24"><path d="M3 6h18v12H3zM3 7l9 6 9-6"></path></svg><span><strong>E-mails</strong></span><b hidden="" id="ops-emails-count">0</b>
+</button>
 <button aria-label="Configurações gerais do GRCON" class="ops-nav-button" data-ops-open-settings="" title="Configurações gerais" type="button">
 <svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7L10.5 2h-3l-.7 2.3-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2.3h3l.7-2.3 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7z"></path></svg><span><strong>Configurações</strong></span>
 </button>
@@ -80,6 +83,7 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <button id="tab-analysis" aria-controls="analysis-history-module" aria-selected="false" data-grcon-view="analysis-history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Histórico de análises</strong><small>Data, documento e status</small></span><b hidden="" id="analysis-history-tab-count">0</b></button>
 <button id="tab-history" aria-controls="history-module" aria-selected="false" data-grcon-view="history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico de eGRDTs</strong><small>Arquivos e alocações</small></span><b hidden="" id="history-tab-count">0</b></button>
 <button id="tab-sigem" aria-controls="sigem-module" aria-selected="false" data-grcon-view="sigem" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 4h16v12H4zM8 20h8M12 16v4M7 8h10M7 12h6"></path></svg><span><strong>Postagem SIGEM</strong><small>Conferir, copiar e registrar</small></span><b hidden="" id="sigem-tab-count">0</b></button>
+<button id="tab-emails" aria-controls="emails-module" aria-selected="false" data-grcon-view="emails" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M3 6h18v12H3zM3 7l9 6 9-6"></path></svg><span><strong>E-mails de evidência</strong><small>Gerar e enviar pelo Outlook</small></span><b hidden="" id="emails-tab-count">0</b></button>
 </nav>
 <section id="grdt-module" class="module-view" role="tabpanel" aria-labelledby="tab-control">
 <header class="ops-page-heading"><div><h2 id="grcon-module-title-1">Controle de GRDT</h2><p>LD e documentos prontos para análise.</p></div></header>
@@ -245,7 +249,6 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <button class="secondary-button compact final-package-button" disabled="" id="export-final-package" type="button">Baixar pacote completo</button>
 </div></details>
 <button class="primary-button" disabled="" id="export-egrdt" type="button">Baixar eGRDT final</button>
-<button class="secondary-button compact" hidden id="prepare-email-draft" title="Abre um rascunho no Outlook com a relação dos documentos da última eGRDT gerada" type="button">✉️ Preparar e-mail da evidência</button>
 </div>
 <div aria-label="Filtros ativos da triagem" class="triage-active-filters" hidden id="triage-active-filters"></div>
 <span class="grdt-batch-limit-chip" id="egrdt-batch-policy-text">Limite: 48 por eGRDT</span>
@@ -327,6 +330,16 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 </section>
 <aside aria-hidden="true" aria-labelledby="analysis-history-detail-title" class="analysis-history-detail-panel" hidden id="analysis-history-detail"><header><div><span>COMPARAÇÃO E EVIDÊNCIAS</span><h3 id="analysis-history-detail-title">Documento analisado</h3></div><button aria-label="Fechar detalhes" class="icon-button" id="analysis-history-detail-close" type="button">×</button></header><div id="analysis-history-detail-body"></div></aside>
 <div class="analysis-history-detail-overlay" hidden id="analysis-history-detail-overlay"></div>
+</section>
+<section id="emails-module" class="emails-module" hidden="" role="tabpanel" aria-labelledby="tab-emails">
+<header class="ops-page-heading"><div><h2>E-mails de evidência</h2><p>Cada eGRDT gerada entra nesta fila. Você decide quando gerar o e-mail — e se vai gerar.</p></div></header>
+<section aria-label="Resumo da fila" class="emails-summary" id="emails-summary"></section>
+<section aria-label="Ações da fila" class="emails-toolbar">
+<button class="secondary-button compact" id="emails-clear" type="button">Limpar fila de e-mails</button>
+<small id="emails-storage-note">Os rascunhos ficam apenas neste navegador e não ocupam espaço no banco compartilhado.</small>
+</section>
+<div class="emails-list" id="emails-list"></div>
+<empty-state class="emails-empty" hidden="" id="emails-empty"><strong>Nenhum e-mail na fila</strong><span>Gere uma eGRDT para que o e-mail de evidência apareça aqui.</span></empty-state>
 </section>
 <section id="history-module" class="history-module history-module-v2" hidden="" role="tabpanel" aria-labelledby="tab-history">
 <header class="history-heading"><div><span>HISTÓRICO LOCAL</span><h2 id="history-title">eGRDTs geradas pelo GRCON</h2><p>Consulte documentos, confira alocações e corrija o número registrado quando necessário.</p></div><button class="secondary-button history-clear-button" id="history-clear" type="button">Limpar histórico</button></header>
@@ -555,7 +568,9 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <script defer="" src="grcon_contracts.js"></script>
 <script defer="" src="large_input.js"></script>
 <script defer src="grcon_config.js"></script><script defer src="grcon_utils.js"></script>
-<script defer src="grcon_email_draft.js"></script><script defer src="grcon_file_access.js"></script>
+<script defer src="grcon_email_draft.js"></script>
+<script defer src="grcon_email_queue.js"></script>
+<script defer src="grcon_email_queue_app.js"></script><script defer src="grcon_file_access.js"></script>
 <script defer="" src="core.js"></script>
 <script defer="" src="ld_conflicts.js"></script>
 <script defer="" src="report_summary.js"></script>

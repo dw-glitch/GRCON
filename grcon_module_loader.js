@@ -18,12 +18,15 @@
     "analysis-history": ["navigation", "analysis_history_report.js", "analysis_history_app.js"],
     "ld-posting": ["xlsx", "zip", "ld_posting_writer.js"],
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
+    // Os scripts da fila de e-mails já vêm no index.html; nada a carregar sob demanda.
+    emails: [],
   };
 
   const moduleRequirements = {
     history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi"],
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
+    emails: ["GrconEmailQueue", "GrconEmailQueueUi"],
   };
 
   function scriptBasename(value) {
@@ -166,6 +169,7 @@
       "analysis-history": "analysis-history-module",
       history: "history-module",
       sigem: "sigem-module",
+      emails: "emails-module",
     };
     Object.entries(modules).forEach(([key, id]) => {
       const node = document.getElementById(id);
