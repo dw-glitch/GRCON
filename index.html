@@ -150,6 +150,12 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <label><span>Por lote</span><input id="egrdt-batch-limit" type="number" min="1" step="1" value="48" inputmode="numeric"/></label>
 <button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar</button>
 </section>
+<section class="email-draft-settings settings-embedded" aria-labelledby="email-draft-title">
+<div><strong id="email-draft-title">E-mail da evidência de postagem</strong><small id="email-draft-status">Nenhum destinatário cadastrado</small></div>
+<label><span>Para</span><input id="email-draft-to" type="text" autocomplete="off" placeholder="fulano@empresa.com.br; ciclano@empresa.com.br"/></label>
+<label><span>Cc (opcional)</span><input id="email-draft-cc" type="text" autocomplete="off" placeholder="coordenacao@empresa.com.br"/></label>
+<button class="secondary-button compact" id="email-draft-save" type="button">Salvar destinatários</button>
+</section>
 <details class="ignored-details" hidden="" id="ignored-details"><summary id="ignored-summary">Arquivos ignorados</summary><ul id="ignored-list"></ul></details>
 <div class="settings-inline-actions"><button class="text-button" id="reset" type="button">Limpar seleção</button><button class="compatibility-open-button" hidden="" id="ld-compatibility-open" type="button">Estrutura da LD</button><span class="compatibility-status" hidden="" id="ld-compatibility-status"></span></div>
 </div>
@@ -235,6 +241,7 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <button class="secondary-button compact final-package-button" disabled="" id="export-final-package" type="button">Baixar pacote completo</button>
 </div></details>
 <button class="primary-button" disabled="" id="export-egrdt" type="button">Baixar eGRDT final</button>
+<button class="secondary-button compact" hidden id="prepare-email-draft" title="Abre um rascunho no Outlook com a relação dos documentos da última eGRDT gerada" type="button">✉️ Preparar e-mail da evidência</button>
 </div>
 <div aria-label="Filtros ativos da triagem" class="triage-active-filters" hidden id="triage-active-filters"></div>
 <span class="grdt-batch-limit-chip" id="egrdt-batch-policy-text">Limite: 48 por eGRDT</span>
@@ -543,7 +550,8 @@ if (location.protocol === "http:" || location.protocol === "https:") {
 <script defer="" src="grcon_module_loader.js"></script>
 <script defer="" src="grcon_contracts.js"></script>
 <script defer="" src="large_input.js"></script>
-<script defer src="grcon_config.js"></script><script defer src="grcon_utils.js"></script><script defer src="grcon_file_access.js"></script>
+<script defer src="grcon_config.js"></script><script defer src="grcon_utils.js"></script>
+<script defer src="grcon_email_draft.js"></script><script defer src="grcon_file_access.js"></script>
 <script defer="" src="core.js"></script>
 <script defer="" src="ld_conflicts.js"></script>
 <script defer="" src="report_summary.js"></script>

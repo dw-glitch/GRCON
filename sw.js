@@ -77,6 +77,7 @@ const ASSETS = [
   "xlsx.full.min.js",
   "grcon_config.js",
   "grcon_utils.js",
+  "grcon_email_draft.js",
   "grcon_file_access.js",
   "grcon_enhancements.js",
   "grcon_brand_assets.js",
