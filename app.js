@@ -374,6 +374,18 @@
         if (postingSaved.error) console.warn("GRCON: registros de postagem SIGEM indisponíveis", postingSaved.error);
       }
       if (saved.saved) window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { records } }));
+      // O histórico local tem teto (1000 registros / 4,5 MB) e vinha descartando
+      // os mais antigos em silêncio. Agora o usuário fica sabendo.
+      if (saved.trimmed) {
+        const limites = saved.limits || {};
+        const espaco = ((limites.maxBytes || 0) / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+        const motivo = saved.trimmedBySize
+          ? `limite de espaço do navegador (${espaco} MB)`
+          : `limite de ${limites.maxRecords || 1000} eGRDTs`;
+        const mensagem = `Histórico local cheio: ${saved.trimmed} eGRDT(s) mais antiga(s) saíram deste navegador pelo ${motivo}. Elas continuam no histórico compartilhado.`;
+        if (typeof window.GrconNotify === "function") window.GrconNotify(mensagem, "warning");
+        console.warn(`GRCON: ${mensagem}`);
+      }
       if (saved.saved && window.GrconCloud?.completeEgrdtReservationRequest) {
         window.GrconCloud.completeEgrdtReservationRequest(generated);
       }

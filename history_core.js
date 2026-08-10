@@ -164,10 +164,28 @@
     } catch (_) { console.debug("[HistoryCore] context:", _); return []; }
   }
 
-  function fit(records) {
+  // Devolve também POR QUE registros foram descartados, para que a interface
+  // possa avisar. Antes o histórico era truncado em silêncio: passando de 1000
+  // registros ou de 4,5 MB, os mais antigos sumiam sem nenhum sinal.
+  function fitDetailed(records) {
+    const porQuantidade = Math.max(0, records.length - MAX_RECORDS);
     const kept = records.slice(0, MAX_RECORDS);
-    while (kept.length > 1 && byteSize(JSON.stringify(kept)) > MAX_BYTES) kept.pop();
-    return kept;
+    // Mede cada registro uma única vez. O laço anterior refazia JSON.stringify
+    // do array inteiro a cada descarte, o que ficava lento justamente quando
+    // havia muito a descartar.
+    const tamanhos = kept.map((record) => byteSize(JSON.stringify(record)) + 1);
+    let total = tamanhos.reduce((soma, valor) => soma + valor, 2);
+    let porTamanho = 0;
+    while (kept.length > 1 && total > MAX_BYTES) {
+      total -= tamanhos[kept.length - 1];
+      kept.pop();
+      porTamanho += 1;
+    }
+    return { kept, droppedByCount: porQuantidade, droppedBySize: porTamanho, dropped: porQuantidade + porTamanho };
+  }
+
+  function fit(records) {
+    return fitDetailed(records).kept;
   }
 
   function saveMany(records, storage) {
@@ -176,10 +194,20 @@
     const incoming = (records || []).map(cleanRecord).filter((record) => record.egrdtNumber);
     const merged = new Map(read(target).map((record) => [record.id, record]));
     incoming.forEach((record) => merged.set(record.id, record));
-    const fitted = fit([...merged.values()].sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)));
+    const ajuste = fitDetailed([...merged.values()].sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)));
+    const fitted = ajuste.kept;
     try {
       target.setItem(STORAGE_KEY, JSON.stringify(fitted));
-      return { saved: incoming.length, records: fitted, removed: Math.max(0, merged.size - fitted.length), error: "" };
+      return {
+        saved: incoming.length,
+        records: fitted,
+        removed: Math.max(0, merged.size - fitted.length),
+        trimmed: ajuste.dropped,
+        trimmedByCount: ajuste.droppedByCount,
+        trimmedBySize: ajuste.droppedBySize,
+        limits: { maxRecords: MAX_RECORDS, maxBytes: MAX_BYTES },
+        error: "",
+      };
     } catch (error) {
       return { saved: 0, records: read(target), error: error && error.message || "Não foi possível salvar o histórico." };
     }
