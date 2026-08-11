@@ -3268,6 +3268,18 @@
       ${message.nextAction ? `<small>${escapeHtml(message.nextAction)}</small>` : ""}
       ${message.code ? `<span class="decision-code">Código interno: ${escapeHtml(message.code)}</span>` : ""}
     </div>`;
+    // O ajuste de "nt-" troca o nome do arquivo que vai ser postado. Ele ganha
+    // um cartão próprio, com o que foi entregue e o que sai, para o operador
+    // não precisar deduzir a mudança comparando duas colunas distantes.
+    const ntCard = row.ntRename ? `<section class="nt-rename-panel" aria-label="Ajuste de código nt-">
+      <div class="nt-rename-heading"><span class="nt-rename-kicker">Código encontrado na LD de outra forma</span><strong>${escapeHtml(row.ntRename.direcao)}</strong></div>
+      <dl class="nt-rename-fields">
+        <div><dt>Você informou</dt><dd>${escapeHtml(row.ntRename.enviado)}</dd></div>
+        <div><dt>Na LD está como</dt><dd>${escapeHtml(row.ntRename.naLd)}</dd></div>
+        <div><dt>Vai para a eGRDT como</dt><dd>${escapeHtml(row.ntRename.finalName || row.finalName || "—")}</dd></div>
+      </dl>
+      <p>O arquivo é renomeado para a grafia da LD porque é assim que o documento está alocado; o SIGEM só aceita a postagem com esse nome.</p>
+    </section>` : "";
     const conflict = row.ldConflict && row.ldConflict.hasConflict ? row.ldConflict : null;
     const conflictCard = conflict ? `<section class="ld-conflict-panel" aria-label="Conflito entre linhas da LD">
       <div class="ld-conflict-heading"><div><span class="ld-conflict-kicker">Conflito na LD</span><h3>${escapeHtml(conflict.summary)}</h3></div>${conflict.resolved ? '<span class="ld-conflict-resolved">Escolha aplicada nesta sessão</span>' : '<span class="ld-conflict-blocked">Decisão automática pausada</span>'}</div>
@@ -3299,6 +3311,7 @@
         <section class="detail-section">
           <h3>Controle</h3>
           ${decisionCard}
+          ${ntCard}
           ${row.fiscalComment ? `<p class="detail-line"><strong>Fiscal:</strong> ${escapeHtml(row.fiscalComment)}</p>` : ""}
           <p class="detail-line"><strong>Databook:</strong> ${escapeHtml(databook)}</p>
           ${allocationTrace}
@@ -3415,7 +3428,7 @@
           <span class="status-chip ${resultClass}">${compactDecisionLabel(row)}</span>
         </div></td>
         <td><span class="filename-value" title="${escapeHtml(row.relativePath || originalFile)}">${escapeHtml(originalFile)}</span>${companionCount ? `<span class="cell-muted">+${companionCount} arquivo(s)</span>` : ""}</td>
-        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${row.hardBlock ? "disabled" : ""} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${row.hardBlock ? 'Bloqueado — regularize a alocação na LD' : 'Marcar para incluir na GRDT final'}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
+        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${row.hardBlock ? "disabled" : ""} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${row.hardBlock ? 'Bloqueado — regularize a alocação na LD' : 'Marcar para incluir na GRDT final'}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="sheet-badge">${escapeHtml(row.sheet || "—")}</span></td>
         <td><span class="revision-value">${escapeHtml(ldRevision)}</span></td>
         <td><span class="revision-value">${escapeHtml(row.revision || "—")}</span>${row.timeline ? `<span class="revision-route" title="Histórico de revisões">${escapeHtml(timelineRoute(row.timeline))}</span>` : ""}</td>
