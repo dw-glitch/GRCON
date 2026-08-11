@@ -993,7 +993,18 @@
     return { status: "Não Postado", item: null, source: "ausência de DOCUMENTO-REVISÃO na Colar SIGEM", conflict: false, incomplete: false };
   }
 
-  function proposedFileName(inputName, document, revision) {
+  /**
+   * Documentos da N-1710 seguem regra própria de nome. Vale tanto quando a ABA
+   * da LD identifica a N-1710 (ex.: "LD 001 N-1710") quanto quando o próprio
+   * código do documento já indica isso.
+   */
+  function isN1710Context(sheetName, document) {
+    const aba = norm(sheetName).replace(/[^A-Z0-9]/g, "");
+    if (aba.includes("N1710")) return true;
+    return inferSheetFromName(`${text(document)}.pdf`) === "N-1710";
+  }
+
+  function proposedFileName(inputName, document, revision, sheetName) {
     const ext = /\.[^.]+$/.exec(text(inputName));
     const extension = ext ? ext[0].toLowerCase() : ".pdf";
     const originalStem = text(inputName).replace(/\.[^.]+$/, "");
@@ -1005,19 +1016,25 @@
     let base = hasSequence ? originalStem.replace(sequenceExpression, "_0001") : document;
     if (!hasSequence && key(withoutRevision) === key(document)) base = withoutRevision;
     if (!base) base = originalStem.replace(trailingExpression, "");
-    if (inferSheetFromName(`${document}.pdf`) === "N-1710" && !/_0001$/i.test(base)) base = `${document}_0001`;
+    const n1710 = isN1710Context(sheetName, document);
+    if (n1710 && !/_0001$/i.test(base)) base = `${document}_0001`;
     const r = normalizeRevision(revision);
+    // Na N-1710 o SIGEM só aceita com a revisão sempre presente depois do
+    // _0001, inclusive quando ela é 0 (…_0001_0). Nos demais documentos, como
+    // a ET, a revisão 0 continua sendo omitida.
+    if (n1710) return `${base}_${r || "0"}${extension}`;
     return `${base}${r && r !== "0" ? `_${r}` : ""}${extension}`;
   }
 
-  function validateFinalFileName(fileName, originalName, document, revision) {
-    const expected = proposedFileName(originalName || fileName, document, revision);
+  function validateFinalFileName(fileName, originalName, document, revision, sheetName) {
+    const expected = proposedFileName(originalName || fileName, document, revision, sheetName);
     const validName = canonicalId(fileName) === canonicalId(expected);
     const normalizedRevision = normalizeRevision(revision);
     const detectedRevision = claimedRevisionFromName(fileName, document);
-    const revisionValid = normalizedRevision === "0"
-      ? detectedRevision === ""
-      : detectedRevision === normalizedRevision;
+    // Na N-1710 a revisão 0 tem de aparecer no nome; nos demais ela é omitida.
+    const revisionValid = isN1710Context(sheetName, document)
+      ? detectedRevision === (normalizedRevision || "0")
+      : (normalizedRevision === "0" ? detectedRevision === "" : detectedRevision === normalizedRevision);
     return {
       valid: validName && revisionValid,
       expected,
@@ -1305,7 +1322,7 @@
         revisionSource,
         status: blockedSigem,
         reason: allocationReason,
-        finalName: proposedFileName(input.name || `${document}.pdf`, document, revision),
+        finalName: proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet),
         grdt,
         effectiveDate,
         databook,
@@ -1330,7 +1347,7 @@
         revisionSource,
         status: "Revisar associação da LD",
         reason: `O valor “${allocationStatus}” não foi reconhecido como Alocado nem Não alocado. O GRCON não bloqueará automaticamente. Confira a coluna ${technicalRecord.allocationStatusColumn || "—"} (${technicalRecord.allocationStatusHeader || "cabeçalho não identificado"}) na linha ${technicalRecord.row}.`,
-        finalName: proposedFileName(input.name || `${document}.pdf`, document, revision),
+        finalName: proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet),
         grdt,
         effectiveDate,
         databook,
@@ -1512,7 +1529,7 @@
       codeValidationWarning = `Divergência de codificação conforme a ET: ${codeValidation.errors.join(" ")}`;
       reason = `${reason} ${codeValidationWarning}`.trim();
     }
-    const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision);
+    const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
     const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
 
     return enrichDecision({
@@ -1688,6 +1705,7 @@
     validateFinalFileName,
     EGRDT_OPTIONS,
     buildEgrdtData,
+    isN1710Context,
     validateEgrdtData,
     triageOne,
     simpleReason,

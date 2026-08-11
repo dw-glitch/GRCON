@@ -41,7 +41,7 @@
       }
 
       sources.forEach((source) => {
-        const fileNameCheck = C.validateFinalFileName(source.finalName, source.name, row.document, row.revision);
+        const fileNameCheck = C.validateFinalFileName(source.finalName, source.name, row.document, row.revision, row.sheet);
         if (!fileNameCheck.valid) errors.push(`${row.document} / ${source.name}: ${fileNameCheck.errors.join(" ")}`);
         const finalName = fileNameCheck.expected;
         const outputKey = norm(finalName);
@@ -62,6 +62,7 @@
           rowIndex,
           document: row.document,
           revision: row.revision,
+          sheet: row.sheet,
           originalName: source.name,
           relativePath: source.relativePath || source.name,
           finalName,
@@ -92,7 +93,7 @@
       if (!item) return;
       if (entry.finalName !== item.fileName) errors.push(`${entry.document}: o arquivo físico “${entry.finalName}” diverge da coluna ARQUIVO “${item.fileName}”.`);
       if (norm(entry.revision) !== norm(item.revision)) errors.push(`${entry.document}: a revisão física diverge da revisão gravada na GRDT.`);
-      const check = C.validateFinalFileName(entry.finalName, entry.originalName, entry.document, entry.revision);
+      const check = C.validateFinalFileName(entry.finalName, entry.originalName, entry.document, entry.revision, entry.sheet);
       if (!check.valid) errors.push(`${entry.document}: ${check.errors.join(" ")}`);
     });
     return [...new Set(errors)];
