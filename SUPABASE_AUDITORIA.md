@@ -1,4 +1,4 @@
-# Auditoria Supabase — GRCON 5.32.0
+# Auditoria Supabase — GRCON 5.32.2
 
 ## Resultado do repositório
 
@@ -7,17 +7,21 @@ A validação automática percorre todas as migrações e verifica:
 - `search_path` explícito em funções `SECURITY DEFINER`;
 - revogação de acesso direto às tabelas do schema `private`;
 - wrappers públicos do modelo de e-mail como `SECURITY INVOKER`;
+- exclusão transacional do histórico com verificação de proprietário/administrador;
+- índice e reserva considerando somente registros ativos;
 - `EXECUTE` público/anon revogado e concedido ao papel `authenticated`;
 - ausência de chave `service_role`/secreta no cliente;
 - uso explícito da chave pública `sb_publishable_`.
 
 Execute com `npm run check:supabase`.
 
-## Migração 5.32.0
+## Migrações 5.32.x
 
 `SUPABASE_MIGRACAO_5.32.0.sql` revoga privilégios diretos das tabelas `private.grcon_egrdt_reservations` e `private.grcon_email_template`. Ela é idempotente e não modifica dados nem políticas.
 
-Esta alteração está preparada no repositório, mas precisa ser aplicada no projeto Supabase pelo Dashboard SQL Editor ou pela CLI autorizada. Depois de aplicar, execute os Advisors de Security e Performance e confirme que não surgiram novos avisos.
+`SUPABASE_MIGRACAO_5.32.2.sql` cria a exclusão individual transacional, libera a reserva consumida, impede que registros excluídos bloqueiem a numeração e corrige reservas antigas vinculadas a exclusões anteriores. A limpeza completa também passa a liberar numerações concluídas, sem tocar em reservas de gerações ainda em andamento.
+
+Em uma base existente, aplique primeiro a 5.32.0 e depois a 5.32.2. Depois, execute os Advisors de Security e Performance e confirme que não surgiram novos avisos.
 
 ## Limitação de reconstrução histórica
 

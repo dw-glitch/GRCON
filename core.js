@@ -102,13 +102,50 @@
   function isEtDocument(value, sheetName) {
     if (norm(sheetName) === "ET") return true;
     const documentKey = key(value);
-    return /(?:^|[^A-Z0-9])[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_/.test(documentKey);
+    return /(?:^|[^A-Z0-9])[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9][A-Z0-9.-]*_/.test(documentKey);
   }
 
   function etCodeParts(value) {
     const documentKey = key(value);
-    const match = documentKey.match(/^([A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_)(.+)$/);
+    const match = documentKey.match(/^([A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9][A-Z0-9.-]*_)(.+)$/);
     return match ? { documentKey, prefix: match[1], identifier: match[2] } : null;
+  }
+
+  function etTagComparable(value) {
+    const parts = etCodeParts(value);
+    if (!parts) return null;
+    const identifier = parts.identifier.replace(/^NT(?=[-._/\\\s])[-._/\\\s]*/, "");
+    const compact = identifier.replace(/[^A-Z0-9]/g, "");
+    if (!compact) return null;
+    return {
+      prefix: parts.prefix,
+      compact,
+      formatKey: `${parts.prefix}${compact}`,
+      confusableKey: `${parts.prefix}${compact.replace(/[OILSZB]/g, (character) => ({ O: "0", I: "1", L: "1", S: "5", Z: "2", B: "8" })[character])}`,
+    };
+  }
+
+  function singleConfusableDifference(left, right) {
+    if (!left || !right || left.length !== right.length) return false;
+    const pairs = new Set(["0O", "O0", "1I", "I1", "1L", "L1", "5S", "S5", "2Z", "Z2", "8B", "B8"]);
+    let differences = 0;
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] === right[index]) continue;
+      differences += 1;
+      if (differences > 1 || !pairs.has(`${left[index]}${right[index]}`)) return false;
+    }
+    return differences === 1;
+  }
+
+  function etTagVariantKind(inputValue, ldValue) {
+    const input = etTagComparable(inputValue);
+    const ld = etTagComparable(ldValue);
+    if (!input || !ld || input.prefix !== ld.prefix) return "";
+    if (input.compact === ld.compact) return key(inputValue) === key(ldValue) ? "" : "tag-format-variant";
+    if (input.confusableKey === ld.confusableKey && singleConfusableDifference(input.compact, ld.compact)) {
+      return "tag-transcription-variant";
+    }
+    return "";
   }
 
   /**
@@ -173,19 +210,22 @@
       && key(inputDocument) !== key(ldDocument)
       && ntNeutralKey(inputDocument) === ntNeutralKey(ldDocument)
     );
+    const matchedByTagVariant = Boolean(matched && appliesToNtRule && match && /^tag-/.test(match.matchKind || ""));
     const ldFormInSentence = ntPrefixForm(ldDocument).replace(/^./, (character) => character.toLowerCase());
     const ambiguous = !matched && Array.isArray(candidates) && candidates.length > 1;
     const searchResult = !appliesToNtRule
       ? matched ? "not-applicable-found" : "not-applicable-not-found"
       : ambiguous ? "ambiguous"
         : !matched ? "not-found-both"
-          : matchedByNtVariant ? "found-alternate-renamed" : "found-exact";
+          : matchedByNtVariant ? "found-alternate-renamed"
+            : matchedByTagVariant ? "found-in-ld" : "found-exact";
     const resultLabel = {
       "not-applicable-found": "NÃO SE APLICA — localizado pela regra normal",
       "not-applicable-not-found": "NÃO SE APLICA — não localizado",
       ambiguous: "MAIS DE UMA CORRESPONDÊNCIA — CONFERIR",
       "not-found-both": "NÃO LOCALIZADO COM NEM SEM nt-",
       "found-alternate-renamed": "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD",
+      "found-in-ld": "LOCALIZADO NA LD",
       "found-exact": "LOCALIZADO NA MESMA FORMA",
     }[searchResult];
     let message;
@@ -200,6 +240,8 @@
         : `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Nenhuma das duas formas foi localizada na LD.`;
     } else if (matchedByNtVariant) {
       message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). O código informado “${inputDocument}” foi localizado na LD ${ldFormInSentence} como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
+    } else if (matchedByTagVariant) {
+      message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Código localizado na LD como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
     } else {
       message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Localizado na LD exatamente como “${ldDocument}” (${ldFormInSentence}).`;
     }
@@ -211,6 +253,7 @@
       appliesToNtRule,
       matched,
       matchedByNtVariant,
+      matchedByTagVariant,
       ldDocument,
       ldForm: matched ? ntPrefixForm(ldDocument) : "Não localizado",
       searchResult,
@@ -690,13 +733,21 @@
     // Índice paralelo ignorando o "nt-": é ele que permite achar o documento
     // quando o arquivo grafa o código de um jeito e a LD de outro.
     const byNtNeutral = new Map();
+    const byEtTagFormat = new Map();
+    const byEtTagConfusable = new Map();
     documents.forEach((entry) => {
       if (!isEtDocument(entry.documentKey)) return;
       const neutro = ntNeutralKey(entry.documentKey);
       if (!byNtNeutral.has(neutro)) byNtNeutral.set(neutro, []);
       byNtNeutral.get(neutro).push(entry);
+      const tag = etTagComparable(entry.documentKey);
+      if (!tag) return;
+      if (!byEtTagFormat.has(tag.formatKey)) byEtTagFormat.set(tag.formatKey, []);
+      byEtTagFormat.get(tag.formatKey).push(entry);
+      if (!byEtTagConfusable.has(tag.confusableKey)) byEtTagConfusable.set(tag.confusableKey, []);
+      byEtTagConfusable.get(tag.confusableKey).push(entry);
     });
-    return { byDocument, byDocumentRevision, documents, byNtNeutral };
+    return { byDocument, byDocumentRevision, documents, byNtNeutral, byEtTagFormat, byEtTagConfusable };
   }
 
   /** Índice por chave sem "nt-", montado uma vez e reaproveitado. */
@@ -716,6 +767,45 @@
     return mapa;
   }
 
+  function etTagEntries(index) {
+    if (index && index.byEtTagFormat && index.byEtTagConfusable) {
+      return { format: index.byEtTagFormat, confusable: index.byEtTagConfusable };
+    }
+    const format = new Map();
+    const confusable = new Map();
+    ((index && index.documents) || []).forEach((entry) => {
+      const tag = isEtDocument(entry.documentKey) && etTagComparable(entry.documentKey);
+      if (!tag) return;
+      if (!format.has(tag.formatKey)) format.set(tag.formatKey, []);
+      format.get(tag.formatKey).push(entry);
+      if (!confusable.has(tag.confusableKey)) confusable.set(tag.confusableKey, []);
+      confusable.get(tag.confusableKey).push(entry);
+    });
+    if (index) {
+      try {
+        Object.defineProperty(index, "byEtTagFormat", { value: format, enumerable: false, configurable: true });
+        Object.defineProperty(index, "byEtTagConfusable", { value: confusable, enumerable: false, configurable: true });
+      } catch (_) {
+        index.byEtTagFormat = format;
+        index.byEtTagConfusable = confusable;
+      }
+    }
+    return { format, confusable };
+  }
+
+  function tagVariantMatches(value, index) {
+    const tag = etTagComparable(value);
+    if (!tag) return [];
+    const entries = etTagEntries(index);
+    const exactFormat = (entries.format.get(tag.formatKey) || [])
+      .filter((entry) => entry.documentKey !== key(value))
+      .map((entry) => ({ ...entry, matchedSearchKey: key(value), matchKind: "tag-format-variant", tagVariant: true }));
+    if (exactFormat.length) return exactFormat;
+    return (entries.confusable.get(tag.confusableKey) || [])
+      .filter((entry) => entry.documentKey !== key(value) && etTagVariantKind(value, entry.documentKey) === "tag-transcription-variant")
+      .map((entry) => ({ ...entry, matchedSearchKey: key(value), matchKind: "tag-transcription-variant", tagVariant: true }));
+  }
+
   function exactDocumentMatch(value, index) {
     if (!index || !index.byDocument) return null;
     const documentKey = key(value);
@@ -731,8 +821,11 @@
     // vez por arquivo e por linha da relação.
     const variantes = (ntNeutralEntries(index).get(ntNeutralKey(documentKey)) || [])
       .filter((item) => item.documentKey !== documentKey && isEtDocument(item.document));
-    if (variantes.length !== 1) return null;
-    return { ...variantes[0], matchedSearchKey: documentKey, matchKind: "nt-variant", ntVariant: true };
+    if (variantes.length === 1) return { ...variantes[0], matchedSearchKey: documentKey, matchKind: "nt-variant", ntVariant: true };
+    if (variantes.length > 1) return null;
+    const tagVariants = tagVariantMatches(documentKey, index);
+    if (tagVariants.length !== 1) return null;
+    return tagVariants[0];
   }
 
   function containsDocumentKey(inputKey, documentKey) {
@@ -832,6 +925,25 @@
     return [...achados.values()];
   }
 
+  function tagVariantCandidates(inputKey, index) {
+    if (!index.documents || !isEtDocument(inputKey)) return [];
+    const { inicios, fins } = boundaryPositions(inputKey);
+    if (inicios.length > MAX_FRONTEIRAS || fins.length > MAX_FRONTEIRAS) return [];
+    const formats = new Map();
+    const confusables = new Map();
+    inicios.forEach((inicio) => {
+      fins.forEach((fim) => {
+        if (fim - inicio < 7) return;
+        const trecho = inputKey.slice(inicio, fim);
+        tagVariantMatches(trecho, index).forEach((entry) => {
+          const target = entry.matchKind === "tag-format-variant" ? formats : confusables;
+          if (!target.has(entry.documentKey)) target.set(entry.documentKey, entry);
+        });
+      });
+    });
+    return [...(formats.size ? formats : confusables).values()];
+  }
+
   function matchDocuments(nameOrText, index, hintedSheet) {
     const exact = exactDocumentMatch(nameOrText, index);
     if (exact) return [exact];
@@ -845,6 +957,7 @@
       containsDocumentKey(inputKey, item.documentKey) && !isForbiddenN1710NtAlias(inputKey, item)
     )).map((item) => ({ ...item, matchedSearchKey: item.documentKey, matchKind: "exact" }));
     if (!candidates.length) candidates = ntVariantCandidates(inputKey, index);
+    if (!candidates.length) candidates = tagVariantCandidates(inputKey, index);
     if (!candidates.length) return [];
     const preferredCandidates = candidates.some((candidate) => candidate.matchKind === "exact")
       ? candidates.filter((candidate) => candidate.matchKind === "exact")
@@ -869,7 +982,7 @@
     const baseName = text(fileName).split(/[\\/]/).pop();
     const name = canonicalId(baseName.replace(/\.[A-Z0-9]{1,5}$/i, ""));
     if (/^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{4}(?:$|[_ -])/.test(name)) return "CV";
-    if (/^[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_/.test(name)) return "ET";
+    if (/^[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9][A-Z0-9.-]*_/.test(name)) return "ET";
     const first = name.split("-")[0];
     const category = /^[IAFLED]$/.test(first) ? name.split("-")[1] : first;
     if (N1710_CATEGORIES.has(category) && name.includes("-5290.00-")) return "N-1710";
@@ -1278,7 +1391,8 @@
     // nome final segue a LD: é assim que o documento está alocado e é assim que
     // o SIGEM vai aceitar. Sem isto o arquivo manteria a grafia de origem.
     const stemBase = hasSequence ? originalStem.replace(sequenceExpression, "") : withoutRevision;
-    if (document && key(stemBase) !== key(document) && ntNeutralKey(stemBase) === ntNeutralKey(document)) {
+    if (document && key(stemBase) !== key(document)
+        && (ntNeutralKey(stemBase) === ntNeutralKey(document) || etTagVariantKind(stemBase, document))) {
       base = hasSequence ? `${document}_0001` : document;
     }
     const n1710 = isN1710Context(sheetName, document);

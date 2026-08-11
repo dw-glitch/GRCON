@@ -198,6 +198,53 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   assert.match(invalidAlias.documentLookup.message, /regra com\/sem nt- não se aplica/);
 });
 
+check("ET localiza variação silenciosa de separadores somente dentro do TAG", () => {
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_US-ME.SPIE_nt-P-101-A";
+  const input = "C1O_RNEST_U32_3.1.1.1_INS_US-ME.SPIE_nt-P101A";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  const match = Core.exactDocumentMatch(input, index);
+  assert.ok(match);
+  assert.equal(match.matchKind, "tag-format-variant");
+  const result = Core.triageOne({ id: "tag-format", name: `${input}_0001.pdf` }, index, {});
+  assert.equal(result.document, ld);
+  assert.equal(result.finalName, `${ld}_0001.pdf`);
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.ntRename, null);
+  assert.equal(result.documentLookup.resultLabel, "LOCALIZADO NA LD");
+  assert.doesNotMatch(result.documentLookup.message, /erro|transcri|formata/i);
+});
+
+check("ET tolera uma única confusão alfanumérica comum no TAG quando a LD é inequívoca", () => {
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
+  const input = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-32O019";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  const match = Core.exactDocumentMatch(input, index);
+  assert.ok(match);
+  assert.equal(match.matchKind, "tag-transcription-variant");
+  const result = Core.triageOne({ id: "tag-transcription", name: `${input}.pdf` }, index, {});
+  assert.equal(result.document, ld);
+  assert.equal(result.finalName, `${ld}.pdf`);
+  assert.equal(result.decision, Core.READY);
+});
+
+check("busca tolerante do TAG não adivinha quando há mais de uma linha possível", () => {
+  const prefix = "C1O_RNEST_U32_3.1.1.1_INS_RIR_";
+  const index = Core.buildIndex([
+    ldDocumentRecord(`${prefix}P-101-A`),
+    ldDocumentRecord(`${prefix}P1-01A`),
+  ], []);
+  const result = Core.triageOne({ id: "tag-ambiguous", name: `${prefix}P.101A.pdf` }, index, {});
+  assert.equal(result.status, "Código ambíguo no nome");
+  assert.equal(result.decision, Core.REVIEW);
+});
+
+check("busca tolerante não altera os seis primeiros grupos do ET", () => {
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_P-101-A";
+  const wrongPrefix = "C1O_RNEST_U34_3.1.1.1_INS_RIR_P101A";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  assert.equal(Core.exactDocumentMatch(wrongPrefix, index), null);
+});
+
 check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantidade", () => {
   const total = 15000;
   const cases = Array.from({ length: total }, (_, index) => {
@@ -212,6 +259,24 @@ check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantid
     assert.ok(match);
     assert.equal(match.document, item.ld);
     assert.equal(match.matchKind, "nt-variant");
+  });
+});
+
+check("índice pesquisa 15.000 variações de separador do TAG sem varrer a LD", () => {
+  const total = 15000;
+  const cases = Array.from({ length: total }, (_, index) => {
+    const suffix = String(index + 1).padStart(5, "0");
+    return {
+      input: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PUMP${suffix}`,
+      ld: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PUMP-${suffix}`,
+    };
+  });
+  const index = Core.buildIndex(cases.map((item) => ldDocumentRecord(item.ld)), []);
+  cases.forEach((item) => {
+    const match = Core.exactDocumentMatch(item.input, index);
+    assert.ok(match);
+    assert.equal(match.document, item.ld);
+    assert.equal(match.matchKind, "tag-format-variant");
   });
 });
 
@@ -297,10 +362,11 @@ check("prévia informa que a reserva final ocorre no compartilhado", () => {
   assert.match(Sequence.simultaneousUseWarning(), /reservado no histórico compartilhado/i);
 });
 
-check("migrações preservam exclusão lógica, reserva idempotente e retenção física autorizada", () => {
+check("migrações liberam a numeração excluída com autorização e transação", () => {
   const migration514 = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.31.4.sql"), "utf8");
   const migration515 = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.31.5.sql"), "utf8");
   const migration516 = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.31.6.sql"), "utf8");
+  const migration532 = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.2.sql"), "utf8");
   assert.match(migration514, /grcon_history_workspace_egrdt_number_uidx/i);
   assert.match(migration515, /deleted_at timestamptz/i);
   assert.match(migration515, /target_request_id uuid/i);
@@ -319,6 +385,18 @@ check("migrações preservam exclusão lógica, reserva idempotente e retenção
   assert.match(migration516, /delete from public\.grcon_history[\s\S]*where workspace_id = target_workspace/i);
   assert.match(migration516, /grant execute on function public\.grcon_clear_history\(uuid\) to authenticated/i);
   assert.match(migration516, /revoke all on function public\.grcon_clear_history\(uuid\) from public, anon/i);
+  assert.match(migration532, /create unique index grcon_history_workspace_egrdt_number_uidx[\s\S]*deleted_at is null/i);
+  assert.ok((migration532.match(/history_row\.deleted_at is null/gi) || []).length >= 2);
+  assert.match(migration532, /create or replace function private\.grcon_delete_history_record/i);
+  assert.match(migration532, /create or replace function public\.grcon_delete_history_record/i);
+  assert.match(migration532, /private\.grcon_has_role\(target_workspace, array\['owner', 'admin'\]\)/i);
+  assert.match(migration532, /delete from private\.grcon_egrdt_reservations[\s\S]*history_row\.deleted_at is not null/i);
+  assert.match(migration532, /security definer[\s\S]*set search_path = ''/i);
+  assert.match(migration532, /security invoker[\s\S]*set search_path = ''/i);
+  assert.match(migration532, /grant execute on function public\.grcon_delete_history_record\(uuid, uuid, text, uuid\[\]\) to authenticated/i);
+  const reservationDelete = migration532.lastIndexOf("delete from private.grcon_egrdt_reservations");
+  const historyDelete = migration532.lastIndexOf("delete from public.grcon_history");
+  assert.ok(reservationDelete >= 0 && historyDelete > reservationDelete);
 });
 
 check("aplicativo aguarda reserva antes das três gerações", () => {
@@ -331,9 +409,9 @@ check("fluxo acelerado preenche A4 quando a LD não informa o formato", () => {
   assert.match(source, /rawResults\.forEach\(\(result\)\s*=>\s*\{[\s\S]*?const formatDefaulted = Boolean\(result\.egrdt && !result\.egrdt\.format\);[\s\S]*?if \(formatDefaulted\) result\.egrdt\.format = "A4";[\s\S]*?const logical = logicalMeta\.get\(result\.id\);/);
 });
 
-check("sincronização usa exclusão lógica e evita a segunda leitura quando não há envio", () => {
+check("sincronização usa RPC de exclusão e evita a segunda leitura quando não há envio", () => {
   const source = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  assert.match(source, /deleted_at:\s*new Date\(\)\.toISOString\(\)/);
+  assert.match(source, /rpc\("grcon_delete_history_record"/);
   assert.match(source, /\.is\("deleted_at", null\)/);
   assert.doesNotMatch(source, /from\("grcon_history"\)\.delete\(\)/);
   assert.match(source, /const pushed = await pushLocalHistory\(History\.read\(\)\);\s*if \(pushed\.pushed \|\| pushed\.conflicts\) await pullCloudHistory\(\);/s);
@@ -361,6 +439,18 @@ check("limpeza compartilhada só remove o histórico local após confirmação d
   assert.match(cloud, /\["owner", "admin"\]\.includes\(state\.membership\?\.role\)/);
   assert.match(ui, /Os registros serão apagados também do Supabase/);
   assert.match(ui, /await window\.GrconCloud\?\.clearHistory\?\.\(\)/);
+  assert.match(ui, /numerações consumidas serão liberadas para reutilização/i);
+});
+
+check("exclusão individual confirma o Supabase antes de apagar localmente", () => {
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  assert.match(cloud, /async function deleteSharedHistoryRecord\(record\)/);
+  assert.match(cloud, /target_reservation_ids:\s*reservationIds\.length \? reservationIds : null/);
+  const remotePosition = ui.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
+  const localPosition = ui.indexOf("History.deleteOne(record.id)", remotePosition);
+  assert.ok(remotePosition >= 0 && localPosition > remotePosition);
+  assert.match(ui, /foi liberado para reutilização/i);
 });
 
 check("atalho do cabeçalho abre o RECON sem integração de dados", () => {
@@ -378,7 +468,7 @@ check("manifesto declara o tamanho real do ícone", () => {
 
 check("service worker publica o cache isolado da versão atual", () => {
   const source = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(source, /grcon-v5\.32\.1/);
+  assert.match(source, /grcon-v5\.32\.2/);
   assert.match(source, /networkFirst/);
 });
 
@@ -435,4 +525,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.1", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.2", passed: true, checks: checks.length, names: checks }, null, 2));

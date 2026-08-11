@@ -555,7 +555,40 @@
     if (!authorized) clear.title = "Somente proprietários e administradores podem limpar o histórico compartilhado.";
     else if (!state.online) clear.title = "Reconecte o GRCON para apagar o histórico também no Supabase.";
     else if (state.syncing || state.clearingHistory) clear.title = "Aguarde a sincronização atual terminar.";
-    else clear.title = "Apaga o histórico deste workspace no navegador e no Supabase. A numeração das eGRDTs não é reutilizada.";
+    else clear.title = "Apaga o histórico deste workspace no navegador e no Supabase e libera as numerações excluídas para reutilização.";
+  }
+
+  async function deleteSharedHistoryRecord(record) {
+    const workspaceId = state.membership?.workspace_id;
+    if (!workspaceId) throw new Error("O histórico compartilhado ainda não está disponível.");
+    if (!canManageHistory()) throw new Error("Seu perfil não pode excluir registros do histórico compartilhado.");
+    if (!state.online) throw new Error("Reconecte o GRCON para excluir a eGRDT também no Supabase e liberar o número.");
+    const clientRecordId = String(record?.clientRecordId || record?.id || "");
+    const cloudId = String(record?.cloudId || "") || null;
+    const reservationIds = Array.isArray(record?.reservationIds)
+      ? record.reservationIds.map((value) => String(value || "")).filter(Boolean)
+      : [];
+    if (!cloudId && !clientRecordId && !reservationIds.length) throw new Error("Registro do histórico não identificado.");
+
+    setSyncLabel("Excluindo eGRDT e liberando número…", "info");
+    const { data, error } = await state.client.rpc("grcon_delete_history_record", {
+      target_workspace: workspaceId,
+      target_history_id: cloudId,
+      target_client_record_id: clientRecordId || null,
+      target_reservation_ids: reservationIds.length ? reservationIds : null,
+    });
+    if (error) throw error;
+    const result = data && typeof data === "object" ? data : {};
+    if (!result.deleted && !result.already_deleted && !result.not_found && !Number(result.released_reservations || 0)) {
+      throw new Error("O Supabase não confirmou a exclusão nem a liberação da numeração.");
+    }
+    setSyncLabel("Histórico sincronizado", "success");
+    return {
+      deleted: Boolean(result.deleted),
+      alreadyDeleted: Boolean(result.already_deleted || result.not_found),
+      releasedReservations: Number(result.released_reservations || 0),
+      egrdtNumber: String(result.egrdt_number || record?.egrdtNumber || ""),
+    };
   }
 
   async function clearSharedHistory() {
@@ -591,8 +624,8 @@
       }));
       setSyncLabel("Histórico sincronizado", "success");
       notify(removed === 1
-        ? "1 eGRDT foi removida do histórico compartilhado e do Supabase."
-        : `${removed} eGRDTs foram removidas do histórico compartilhado e do Supabase.`, "success");
+        ? "1 eGRDT foi removida do histórico e sua numeração foi liberada para reutilização."
+        : `${removed} eGRDTs foram removidas do histórico e suas numerações foram liberadas para reutilização.`, "success");
       return true;
     } catch (error) {
       console.error("GRCON Cloud: falha ao limpar histórico compartilhado", error);
@@ -1114,13 +1147,14 @@
     state.syncTimer = window.setTimeout(runSyncCycle, 500);
   }
 
-  function enqueueDelete(recordId, cloudId, workspaceId) {
+  function enqueueDelete(recordId, cloudId, workspaceId, reservationIds) {
     if (!recordId || !canManageHistory()) return;
     const queue = readJson(Config.deleteQueueStorageKey, []);
     const entry = {
       recordId: String(recordId),
       cloudId: String(cloudId || ""),
       workspaceId: String(workspaceId || state.membership?.workspace_id || ""),
+      reservationIds: Array.isArray(reservationIds) ? reservationIds.map((value) => String(value || "")).filter(Boolean) : [],
       queuedAt: new Date().toISOString(),
     };
     const exists = queue.some((item) => String(typeof item === "string" ? item : item.recordId) === entry.recordId
@@ -1143,14 +1177,13 @@
         remaining.push(raw);
         continue;
       }
-      let query = state.client.from("grcon_history").update({
-        deleted_at: new Date().toISOString(),
-        deleted_by: state.session.user.id,
-        updated_by: state.session.user.id,
-      }).eq("workspace_id", state.membership.workspace_id).is("deleted_at", null);
-      query = entry.cloudId ? query.eq("id", entry.cloudId) : query.eq("client_record_id", entry.recordId);
-      const result = await query.select("id");
-      if (result.error) remaining.push(raw);
+      const { error } = await state.client.rpc("grcon_delete_history_record", {
+        target_workspace: state.membership.workspace_id,
+        target_history_id: entry.cloudId || null,
+        target_client_record_id: entry.recordId || null,
+        target_reservation_ids: Array.isArray(entry.reservationIds) && entry.reservationIds.length ? entry.reservationIds : null,
+      });
+      if (error) remaining.push(raw);
       else processed += 1;
     }
     writeJson(Config.deleteQueueStorageKey, remaining);
@@ -1387,7 +1420,9 @@
     window.addEventListener("grcon:history-updated", (event) => {
       const detail = event.detail || {};
       if (detail.cloudPull) return;
-      if (detail.deleted && detail.recordId) enqueueDelete(detail.recordId, detail.cloudId, detail.workspaceId);
+      if (detail.deleted && detail.recordId && !detail.cloudDeleted) {
+        enqueueDelete(detail.recordId, detail.cloudId, detail.workspaceId, detail.reservationIds);
+      }
       scheduleSync();
     });
   }
@@ -1485,6 +1520,7 @@
     loadEmailTemplate,
     saveEmailTemplate,
     reserveEgrdtSequences,
+    deleteHistoryRecord: deleteSharedHistoryRecord,
     inviteUser,
     completeEgrdtReservationRequest,
     clearHistory: clearSharedHistory,

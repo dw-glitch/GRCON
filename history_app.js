@@ -5,7 +5,7 @@
   const Posting = window.GrconSigemPosting;
   const Flow = window.GrconMacro5Flow;
   const HistoryReport = window.GrconHistoryReport;
-  const APP_VERSION = "5.32.1";
+  const APP_VERSION = "5.32.2";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
@@ -321,16 +321,31 @@
     window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { renamed: true, previous: result.previous, current: result.record.egrdtNumber } }));
   }
 
-  function deleteSelectedRecord() {
+  async function deleteSelectedRecord() {
     const record = state.records.find((item) => item.id === state.selectedId);
     if (!record) return;
+    const shared = Boolean(window.GrconCloud?.state?.membership?.workspace_id);
     const confirmed = window.confirm(
-      `Excluir somente ${record.egrdtNumber} do histórico ${window.GrconCloud?.state?.membership ? "compartilhado" : "local"}?\n\nOs arquivos já baixados e os registros da fila SIGEM não serão alterados.`,
+      `Excluir somente ${record.egrdtNumber} do histórico ${shared ? "compartilhado" : "local"}?\n\n${shared ? "A reserva desse número também será removida e ele poderá ser usado novamente. " : ""}Os arquivos já baixados e os registros da fila SIGEM não serão alterados.`,
     );
     if (!confirmed) return;
+    const deleteButton = els.detail.querySelector('[data-history-action="delete"]');
+    if (deleteButton) deleteButton.disabled = true;
+    let cloudResult = null;
+    try {
+      if (shared) {
+        if (!window.GrconCloud?.deleteHistoryRecord) throw new Error("Atualize o GRCON para concluir a exclusão no Supabase.");
+        cloudResult = await window.GrconCloud.deleteHistoryRecord(record);
+      }
+    } catch (error) {
+      notify(error?.message || "Não foi possível excluir a eGRDT no Supabase.", "error");
+      if (deleteButton) deleteButton.disabled = false;
+      return;
+    }
     const result = History.deleteOne(record.id);
     if (!result.deleted) {
       notify(result.error || "Não foi possível excluir esta eGRDT.", "error");
+      if (deleteButton) deleteButton.disabled = false;
       return;
     }
     state.selectedId = result.records[0] && result.records[0].id || "";
@@ -342,9 +357,13 @@
         recordId: record.clientRecordId || record.id,
         cloudId: record.cloudId || "",
         workspaceId: record.workspaceId || "",
+        reservationIds: record.reservationIds || [],
+        cloudDeleted: Boolean(cloudResult),
       },
     }));
-    notify(`eGRDT excluída do histórico ${window.GrconCloud?.state?.membership ? "compartilhado" : "local"}.`, "success");
+    notify(shared
+      ? `eGRDT excluída do histórico compartilhado. O número ${record.egrdtNumber} foi liberado para reutilização.`
+      : "eGRDT excluída do histórico local.", "success");
   }
 
   els.tabs.forEach((button) => button.addEventListener("click", () => activate(button.dataset.grconView)));
@@ -355,7 +374,7 @@
     const action = event.target.closest("[data-history-action]")?.dataset.historyAction;
     if (action === "prepare-sigem") prepareForSigem();
     if (action === "edit") { state.editingId = state.selectedId; renderDetail(); }
-    if (action === "delete") deleteSelectedRecord();
+    if (action === "delete") void deleteSelectedRecord();
     if (action === "cancel") { state.editingId = ""; renderDetail(); }
   });
   els.detail.addEventListener("submit", (event) => { if (event.target.id !== "history-number-editor") return; event.preventDefault(); saveEditedNumber(); });
@@ -364,7 +383,7 @@
     if (!state.records.length) return;
     const shared = Boolean(window.GrconCloud?.state?.membership?.workspace_id);
     const question = shared
-      ? "Limpar todo o histórico compartilhado de eGRDTs?\n\nOs registros serão apagados também do Supabase. A sequência numérica das eGRDTs será preservada e não poderá ser reutilizada."
+      ? "Limpar todo o histórico compartilhado de eGRDTs?\n\nOs registros serão apagados também do Supabase e as numerações consumidas serão liberadas para reutilização."
       : "Limpar todo o histórico de eGRDTs salvo neste navegador?";
     if (!window.confirm(question)) return;
     if (shared) {

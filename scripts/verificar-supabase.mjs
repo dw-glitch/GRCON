@@ -44,6 +44,25 @@ for (const name of ["grcon_get_email_template", "grcon_set_email_template"]) {
   }
 }
 
+const deletionMigration = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.2.sql"), "utf8");
+const publicDeleteWrapper = deletionMigration.match(/create\s+or\s+replace\s+function\s+public\.grcon_delete_history_record[\s\S]*?\$\$\s*;/i);
+if (!publicDeleteWrapper || !/security\s+invoker/i.test(publicDeleteWrapper[0]) || /security\s+definer/i.test(publicDeleteWrapper[0])) {
+  failures.push("SUPABASE_MIGRACAO_5.32.2.sql: wrapper público de exclusão precisa ser SECURITY INVOKER");
+}
+if (!/private\.grcon_has_role\(target_workspace,\s*array\['owner',\s*'admin'\]\)/i.test(deletionMigration)) {
+  failures.push("SUPABASE_MIGRACAO_5.32.2.sql: exclusão precisa exigir owner/admin");
+}
+if (!/create\s+unique\s+index\s+grcon_history_workspace_egrdt_number_uidx[\s\S]*?deleted_at\s+is\s+null/i.test(deletionMigration)) {
+  failures.push("SUPABASE_MIGRACAO_5.32.2.sql: índice eGRDT precisa ignorar registros excluídos");
+}
+if ((deletionMigration.match(/history_row\.deleted_at\s+is\s+null/gi) || []).length < 2) {
+  failures.push("SUPABASE_MIGRACAO_5.32.2.sql: reserva precisa ignorar tombstones nas duas verificações");
+}
+if (!/revoke\s+all\s+on\s+function\s+public\.grcon_delete_history_record[\s\S]*?from\s+public\s*,\s*anon\s*,\s*authenticated/i.test(deletionMigration)
+    || !/grant\s+execute\s+on\s+function\s+public\.grcon_delete_history_record[\s\S]*?to\s+authenticated/i.test(deletionMigration)) {
+  failures.push("public.grcon_delete_history_record: privilégios EXECUTE incorretos");
+}
+
 if (failures.length) {
   console.error("Falha na auditoria estática do Supabase:");
   failures.forEach((failure) => console.error(`- ${failure}`));
