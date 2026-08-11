@@ -233,9 +233,15 @@
     const paragrafos = applyPlaceholders(bruto, valores)
       .split(/\n{2,}/)
       .map((bloco) => {
-        if (bloco.trim() === "{TABELA}") return buildTableHtml(dados);
         const conteudo = escapeHtml(bloco).replace(/\n/g, "<br>");
-        return conteudo.trim() ? `<p>${conteudo}</p>` : "";
+        // {TABELA} vale em qualquer posição, inclusive no meio de uma frase.
+        // Antes só era trocada quando ocupava o parágrafo inteiro, e o texto
+        // "{TABELA}" seguia literal no e-mail enviado.
+        if (!conteudo.includes("{TABELA}")) return conteudo.trim() ? `<p>${conteudo}</p>` : "";
+        return conteudo
+          .split("{TABELA}")
+          .map((parte) => (parte.trim() ? `<p>${parte}</p>` : ""))
+          .join(buildTableHtml(dados));
       })
       .join("\n");
     const comTabela = paragrafos.includes("<table") ? paragrafos : `${paragrafos}\n${buildTableHtml(dados)}`;

@@ -23,6 +23,7 @@
     vazio: $("#emails-empty"),
     resumo: $("#emails-summary"),
     limpar: $("#emails-clear"),
+    destinatarios: $("#emails-recipients"),
     contadorAba: $("#emails-tab-count"),
     contadorLateral: $("#ops-emails-count"),
   };
@@ -63,11 +64,28 @@
       <div><span>Espaço usado</span><strong>${uso}%</strong></div>`;
   }
 
+  // Mostra para quem o rascunho vai antes de gerar. Sem isto o operador só
+  // descobria a falta de destinatário depois de clicar em "Gerar e-mail".
+  function renderDestinatarios() {
+    if (!els.destinatarios) return;
+    const modelo = Email ? Email.readTemplate() : null;
+    const para = (modelo && modelo.to) || [];
+    const copia = (modelo && modelo.cc) || [];
+    els.destinatarios.classList.toggle("sem-destinatario", para.length === 0);
+    if (!para.length) {
+      els.destinatarios.textContent = "Sem destinatário definido — o proprietário precisa preencher o modelo em Configurações gerais.";
+      return;
+    }
+    const cc = copia.length ? ` · Cc: ${copia.join(", ")}` : "";
+    els.destinatarios.textContent = `Para: ${para.join(", ")}${cc}`;
+  }
+
   function render() {
     const itens = Fila.read();
     const resumo = Fila.summary();
     atualizarContadores(resumo);
     renderResumo(resumo);
+    renderDestinatarios();
     if (els.limpar) els.limpar.disabled = itens.length === 0;
     if (els.vazio) els.vazio.hidden = itens.length > 0;
     if (!els.lista) return;
