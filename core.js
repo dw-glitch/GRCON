@@ -99,6 +99,22 @@
     return canonicalId(value);
   }
 
+  /**
+   * O prefixo "nt-" aparece em um segmento do código às vezes só no arquivo,
+   * às vezes só na LD. Comparar pela forma sem ele permite achar o documento
+   * das duas maneiras. Quem manda no nome final continua sendo a LD: é como o
+   * documento está alocado, e é assim que o SIGEM vai aceitar.
+   */
+  function ntNeutralKey(value) {
+    let atual = canonicalId(value);
+    let anterior;
+    do {
+      anterior = atual;
+      atual = atual.replace(/(^|[^A-Z0-9])NT-/g, "$1");
+    } while (atual !== anterior);
+    return atual;
+  }
+
   function statusKind(value) {
     const s = norm(value);
     const exact = {
@@ -565,7 +581,15 @@
       })
       .sort((a, b) => b.documentKey.length - a.documentKey.length);
     byDocumentRevision.forEach((items) => items.sort(historyCompare));
-    return { byDocument, byDocumentRevision, documents };
+    // Índice paralelo ignorando o "nt-": é ele que permite achar o documento
+    // quando o arquivo grafa o código de um jeito e a LD de outro.
+    const byNtNeutral = new Map();
+    documents.forEach((entry) => {
+      const neutro = ntNeutralKey(entry.documentKey);
+      if (!byNtNeutral.has(neutro)) byNtNeutral.set(neutro, []);
+      byNtNeutral.get(neutro).push(entry);
+    });
+    return { byDocument, byDocumentRevision, documents, byNtNeutral };
   }
 
   function exactDocumentMatch(value, index) {
@@ -625,12 +649,50 @@
     return [...encontrados.values()].sort((a, b) => a.ordem - b.ordem).map((entrada) => entrada.item);
   }
 
+  /**
+   * Última tentativa, só quando nada foi encontrado: procura o mesmo código
+   * ignorando o "nt-". Vale apenas para ET — documento de N-1710 não tem "nt-"
+   * no código, então um casamento assim ali seria coincidência, não o mesmo
+   * documento.
+   */
+  function ntVariantCandidates(inputKey, index) {
+    if (!index.documents) return [];
+    if (!index.byNtNeutral) {
+      const mapa = new Map();
+      index.documents.forEach((entry) => {
+        const neutro = ntNeutralKey(entry.documentKey);
+        if (!mapa.has(neutro)) mapa.set(neutro, []);
+        mapa.get(neutro).push(entry);
+      });
+      try { Object.defineProperty(index, "byNtNeutral", { value: mapa, enumerable: false, configurable: true }); }
+      catch (_) { index.byNtNeutral = mapa; }
+    }
+    const { inicios, fins } = boundaryPositions(inputKey);
+    if (inicios.length > MAX_FRONTEIRAS || fins.length > MAX_FRONTEIRAS) return [];
+    const achados = new Map();
+    inicios.forEach((inicio) => {
+      fins.forEach((fim) => {
+        if (fim - inicio < 7) return;
+        const trecho = inputKey.slice(inicio, fim);
+        const neutro = ntNeutralKey(trecho);
+        // Só interessa quando o "nt-" é justamente a diferença.
+        if (neutro === trecho && !index.byNtNeutral.has(neutro)) return;
+        (index.byNtNeutral.get(neutro) || []).forEach((entry) => {
+          if (entry.documentKey === trecho) return;
+          if (isN1710Context("", entry.document)) return;
+          if (!achados.has(entry.documentKey)) achados.set(entry.documentKey, { ...entry, ntVariant: true });
+        });
+      });
+    });
+    return [...achados.values()];
+  }
+
   function matchDocuments(nameOrText, index, hintedSheet) {
     const exact = exactDocumentMatch(nameOrText, index);
     if (exact) return [exact];
     const inputKey = canonicalId(nameOrText);
     const hint = norm(hintedSheet);
-    const candidates = candidatesByIndexLookup(inputKey, index) || index.documents.filter((item) => {
+    let candidates = candidatesByIndexLookup(inputKey, index) || index.documents.filter((item) => {
       let position = inputKey.indexOf(item.documentKey);
       while (position >= 0) {
         const before = position > 0 ? inputKey[position - 1] : "";
@@ -641,6 +703,7 @@
       }
       return false;
     });
+    if (!candidates.length) candidates = ntVariantCandidates(inputKey, index);
     if (!candidates.length) return [];
     const maximalCandidates = candidates.filter((candidate) => !candidates.some((other) => (
       other !== candidate
@@ -1063,6 +1126,13 @@
     let base = hasSequence ? originalStem.replace(sequenceExpression, "_0001") : document;
     if (!hasSequence && key(withoutRevision) === key(document)) base = withoutRevision;
     if (!base) base = originalStem.replace(trailingExpression, "");
+    // Quando o arquivo grafa o código com "nt-" e a LD sem (ou o contrário), o
+    // nome final segue a LD: é assim que o documento está alocado e é assim que
+    // o SIGEM vai aceitar. Sem isto o arquivo manteria a grafia de origem.
+    const stemBase = hasSequence ? originalStem.replace(sequenceExpression, "") : withoutRevision;
+    if (document && key(stemBase) !== key(document) && ntNeutralKey(stemBase) === ntNeutralKey(document)) {
+      base = hasSequence ? `${document}_0001` : document;
+    }
     const n1710 = isN1710Context(sheetName, document);
     if (n1710 && !/_0001$/i.test(base)) base = `${document}_0001`;
     const r = normalizeRevision(revision);
@@ -1098,6 +1168,39 @@
     return Contracts ? Contracts.enrichDecision(row, reasonCode) : row;
   }
 
+  /**
+   * Descobre que o código foi informado de uma forma e a LD o tem de outra —
+   * diferindo só pelo "nt-". A relação usa isto para mostrar, lado a lado, o
+   * que foi entregue e com que nome o documento vai entrar na eGRDT.
+   */
+  function ntRenameInfo(input, document, finalName) {
+    const naLd = text(document);
+    if (!naLd || naLd === "Não localizado") return null;
+    const enviado = text(input && (input.document || input.name));
+    if (!enviado) return null;
+    const alvo = canonicalId(enviado);
+    const chave = key(naLd);
+    if (!chave || alvo.includes(chave)) return null;
+    if (!ntNeutralKey(alvo).includes(ntNeutralKey(chave))) return null;
+    const arquivoTemNt = /(^|[^A-Z0-9])NT-/.test(alvo);
+    return {
+      enviado,
+      naLd,
+      finalName: text(finalName),
+      direcao: arquivoTemNt ? "informado com nt-, LD sem nt-" : "informado sem nt-, LD com nt-",
+      nota: `Localizado na LD ${arquivoTemNt ? "sem o “nt-”" : "com “nt-”"}. Você informou ${enviado}; na LD o documento está como ${naLd}${text(finalName) ? `, e vai entrar na eGRDT como ${text(finalName)}` : ""}. O nome segue a LD porque é assim que o documento está alocado no SIGEM.`,
+    };
+  }
+
+  function applyNtRename(result, input) {
+    const info = ntRenameInfo(input, result.document, result.finalName);
+    if (!info) return result;
+    result.ntVariant = true;
+    result.ntRename = info;
+    result.reason = `${text(result.reason)} ${info.nota}`.trim();
+    return result;
+  }
+
   function reviewResult(input, values) {
     const item = values || {};
     const result = {
@@ -1130,8 +1233,10 @@
       blockCode: item.blockCode || "",
       reasonCode: item.reasonCode || "",
       ldConflict: item.ldConflict || null,
+      ntVariant: false,
+      ntRename: null,
     };
-    return enrichDecision(result, item.reasonCode);
+    return enrichDecision(applyNtRename(result, input), item.reasonCode);
   }
 
   function triageOne(input, index, options) {
@@ -1579,7 +1684,7 @@
     const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
     const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
 
-    return enrichDecision({
+    return enrichDecision(applyNtRename({
       ...input,
       id: input.id,
       document,
@@ -1610,7 +1715,9 @@
       claimedRevision,
       documentSource: identitySource,
       ldConflict,
-    });
+      ntVariant: false,
+      ntRename: null,
+    }, input));
   }
 
   function simpleReason(row) {

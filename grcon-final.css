@@ -1786,6 +1786,30 @@ html[data-app="GRCON"] .email-draft-settings input{
 html[data-app="GRCON"] .email-draft-settings button{justify-self:start}
 html[data-app="GRCON"] #prepare-email-draft{white-space:nowrap}
 
+/* Ajuste de "nt-": o código veio de um jeito e a LD tem de outro. Como isso
+   muda o nome do arquivo postado, aparece já na linha da relação. */
+html[data-app="GRCON"] .nt-rename-badge{
+  display:inline-block;max-width:100%;margin-top:.25rem;padding:.12rem .4rem;
+  border:1px solid var(--warning-800,#8a5c08);border-radius:.35rem;
+  color:var(--warning-800,#8a5c08);background:var(--warning-100,#fff3cf);
+  font-size:.66rem;font-weight:700;line-height:1.3;overflow-wrap:anywhere;
+}
+html[data-app="GRCON"] .nt-rename-panel{
+  margin:.6rem 0;padding:.7rem .8rem;border:1px solid var(--warning-800,#8a5c08);
+  border-left-width:4px;border-radius:.55rem;background:var(--warning-100,#fff3cf);
+}
+html[data-app="GRCON"] .nt-rename-kicker{
+  display:block;font-size:.66rem;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--warning-800,#8a5c08);
+}
+html[data-app="GRCON"] .nt-rename-heading strong{display:block;margin-top:.1rem;color:var(--text-1)}
+html[data-app="GRCON"] .nt-rename-fields{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:.5rem;margin:.55rem 0 .4rem;
+}
+html[data-app="GRCON"] .nt-rename-fields dt{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--warning-800,#8a5c08)}
+html[data-app="GRCON"] .nt-rename-fields dd{margin:.1rem 0 0;font-size:.78rem;color:var(--text-1);overflow-wrap:anywhere}
+html[data-app="GRCON"] .nt-rename-panel > p{margin:.2rem 0 0;font-size:.72rem;color:var(--text-2)}
+
 /* Aba "E-mails de evidência": fila de rascunhos por eGRDT. */
 html[data-app="GRCON"] .emails-summary{
   display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.6rem;margin:0 0 .9rem;

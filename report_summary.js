@@ -36,6 +36,7 @@
     { header: "STATUS SIGEM", key: "sigemStatus", width: 22 },
     { header: "ARQUIVO ORIGINAL", key: "originalFile", width: 38 },
     { header: "ARQUIVO FINAL", key: "finalFile", width: 38 },
+    { header: "AJUSTE DE CÓDIGO (nt-)", key: "ntAdjustment", width: 88 },
   ]);
 
   // Posições de coluna usadas na estilização condicional. Calculadas a
@@ -189,6 +190,27 @@
   // Reúne todos os comentários da fiscal encontrados para o documento: o da
   // linha técnica atual e os de cada revisão anterior conhecida na linha do
   // tempo, sem repetir textos iguais.
+  /**
+   * Explicação da coluna "AJUSTE DE CÓDIGO (nt-)". Escrita para ser lida por
+   * quem abre o relatório sem acompanhar a análise: diz o que foi entregue, o
+   * que a LD tem, com que nome o arquivo vai para a eGRDT e por quê.
+   */
+  function ntAdjustmentText(row) {
+    const info = row && row.ntRename;
+    if (!info) return "";
+    const semNt = /informado com nt-/.test(text(info.direcao));
+    return [
+      "SIM — o código foi encontrado na LD escrito de outra forma.",
+      `Você informou: ${text(info.enviado)}.`,
+      `Na LD o documento está como: ${text(info.naLd)}.`,
+      info.finalName ? `Vai para a eGRDT como: ${text(info.finalName)}.` : "",
+      semNt
+        ? "O “nt-” foi retirado porque a LD não o tem."
+        : "O “nt-” foi acrescentado porque a LD o tem.",
+      "O arquivo é renomeado para a grafia da LD: é assim que o documento está alocado, e o SIGEM só aceita a postagem com esse nome.",
+    ].filter(Boolean).join(" ");
+  }
+
   function allFiscalComments(row) {
     const record = row && row.record || {};
     const values = [text(record.fiscalComment || row && row.fiscalComment)];
@@ -240,6 +262,7 @@
         sigemStatus: text(record.sigemStatus),
         originalFile: text(row && row.name),
         finalFile: text(row && row.finalName),
+        ntAdjustment: ntAdjustmentText(row),
       };
     });
   }
@@ -330,6 +353,14 @@
         reasonCell.font = { name: "Aptos", size: 9, color: { argb: "FF7A342D" } };
       }
 
+      // O ajuste de "nt-" muda o nome do arquivo postado, então precisa saltar
+      // aos olhos de quem confere o relatório, e não se perder entre as colunas.
+      const ntCell = row.getCell(COLUMNS.findIndex((column) => column.key === "ntAdjustment") + 1);
+      if (text(ntCell.value)) {
+        ntCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3CF" } };
+        ntCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF7A5300" } };
+      }
+
       const includedCell = row.getCell(COLUMNS.findIndex((column) => column.key === "included") + 1);
       const included = text(includedCell.value).toUpperCase() === "SIM";
       includedCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: included ? "FFEAF7F1" : "FFFFF5DF" } };
@@ -391,7 +422,15 @@
         const allocationColors = allocationPalette(allocationCell.value);
         allocationCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: allocationColors[0] } };
         allocationCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: allocationColors[1] } };
-        const includedCell = row.getCell(COLUMNS.findIndex((column) => column.key === "included") + 1);
+        // O ajuste de "nt-" muda o nome do arquivo postado, então precisa saltar
+      // aos olhos de quem confere o relatório, e não se perder entre as colunas.
+      const ntCell = row.getCell(COLUMNS.findIndex((column) => column.key === "ntAdjustment") + 1);
+      if (text(ntCell.value)) {
+        ntCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3CF" } };
+        ntCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF7A5300" } };
+      }
+
+      const includedCell = row.getCell(COLUMNS.findIndex((column) => column.key === "included") + 1);
         const included = text(includedCell.value).toUpperCase() === "SIM";
         includedCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: included ? "FFEAF7F1" : "FFFFF5DF" } };
         includedCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: included ? "FF0C7657" : "FFA56812" } };

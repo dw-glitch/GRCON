@@ -223,7 +223,14 @@
   function enrichDecision(row, explicitCode) {
     const item = { ...(row || {}) };
     const reasonCode = explicitCode || inferReasonCode(item);
-    return { ...item, reasonCode, userMessage: messageFor(reasonCode, item) };
+    const message = messageFor(reasonCode, item);
+    // O aviso de "nt-" precisa aparecer no texto que a relação mostra, e não só
+    // no motivo interno: é ele que explica por que o nome do arquivo mudou.
+    const nota = item.ntRename && item.ntRename.nota ? String(item.ntRename.nota) : "";
+    const userMessage = nota
+      ? { ...message, explanation: `${message.explanation} ${nota}`.trim() }
+      : message;
+    return { ...item, reasonCode, userMessage };
   }
 
   function validateRecord(record) {
