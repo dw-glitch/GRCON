@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.31.6";
+  const APP_VERSION = "5.31.15";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -1276,7 +1276,16 @@
   }
 
   async function currentRelationEntries() {
-    if (state.textEntries.length) return state.textEntries;
+    if (state.textEntries.length) {
+      if (state.relationSavedText && state.index) {
+        const refreshed = parseRelationText(state.relationSavedText, state.index);
+        if (refreshed.entries.length) {
+          state.textEntries = refreshed.entries;
+          state.relationPreview = refreshed;
+        }
+      }
+      return state.textEntries;
+    }
     if (state.listFiles.length) return readPdfList(state.listFiles[0]);
     return [];
   }
@@ -1417,7 +1426,10 @@
       const key = `${C.norm(raw)}::${C.key(document)}`;
       if (seen.has(key)) return;
       seen.add(key);
-      target.push({ raw, fileName: listBaseName(raw), document, sheetName, rowNumber, header: header || "" });
+      const documentLookup = C.documentLookup
+        ? C.documentLookup(inferredDocument || raw, matches.length === 1 ? matches[0] : null, matches)
+        : null;
+      target.push({ raw, fileName: listBaseName(raw), document, documentLookup, sheetName, rowNumber, header: header || "" });
     });
   }
 
@@ -1456,7 +1468,7 @@
   function relationTokens(value) {
     const textValue = String(value || "");
     const patterns = [
-      /\b(?:[IAFLED]-)?(?:CE|CR|DB|DE|EC|ET|FD|IM|IS|LA|LD|LI|LO|MA|MC|MD|MO|PR|PT|RL|RM|CT|SIT)-5290\.00-[0-9]{5}-[A-Z0-9]{3}-[A-Z0-9]{3}-[0-9]{3,5}\b/gi,
+      /\b(?:NT-)?(?:[IAFLED]-)?(?:CE|CR|DB|DE|EC|ET|FD|IM|IS|LA|LD|LI|LO|MA|MC|MD|MO|PR|PT|RL|RM|CT|SIT)-5290\.00-[0-9]{5}-[A-Z0-9]{3}-[A-Z0-9]{3}-[0-9]{3,5}\b/gi,
       /\b5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{4}\b/gi,
       /\b[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_[A-Z0-9_-]+\b/gi,
     ];
@@ -1495,39 +1507,47 @@
       // Isso evita cortar identificadores ET que contêm ponto, vírgula ou outros
       // caracteres e evita falsas duplicidades entre documentos com prefixo igual.
       if (relationIndex) {
-        C.matchDocuments(line, relationIndex).forEach((match) => candidates.set(C.key(match.document), match.document));
+        C.matchDocuments(line, relationIndex).forEach((match) => candidates.set(C.key(match.document), { document: match.document, match }));
       }
       // As expressões regulares ficam apenas como contingência quando o código
       // ainda não existe na LD; elas nunca substituem um código completo da LD.
-      if (!candidates.size) relationTokens(line).forEach((document) => candidates.set(C.key(document), document));
+      if (!candidates.size) relationTokens(line).forEach((document) => candidates.set(C.key(document), { document, match: null }));
       if (!candidates.size) {
         line.split(/[\t;|]+/).map(cleanRelationPart).filter(Boolean).forEach((part) => {
           const document = listDocumentName(part);
           const exact = relationIndex && C.exactDocumentMatch ? C.exactDocumentMatch(document, relationIndex) : null;
           const sheet = C.inferSheetFromName(`${document}.pdf`);
           const validCode = sheet && C.validateDocumentCode(document, sheet).valid;
-          if (/\.pdf$/i.test(listBaseName(part)) || exact || validCode) candidates.set(C.key(exact ? exact.document : document), exact ? exact.document : document);
+          if (/\.pdf$/i.test(listBaseName(part)) || exact || validCode) {
+            const selectedDocument = exact ? exact.document : document;
+            candidates.set(C.key(selectedDocument), { document: selectedDocument, match: exact || null });
+          }
         });
       }
       if (!candidates.size && relationIndex) {
-        C.matchDocuments(line, relationIndex).forEach((match) => candidates.set(C.key(match.document), match.document));
+        C.matchDocuments(line, relationIndex).forEach((match) => candidates.set(C.key(match.document), { document: match.document, match }));
       }
       if (!candidates.size) {
         ignored.push({ raw: line, lineNumber: lineIndex + 1, reason: "Texto não reconhecido" });
         return;
       }
       const exactPdfName = candidates.size === 1 && /\.pdf$/i.test(listBaseName(line)) ? listBaseName(line) : "";
-      candidates.forEach((document) => {
+      candidates.forEach((candidate) => {
+        const document = candidate.document;
         const documentKey = C.key(document);
         if (seen.has(documentKey)) {
           duplicates.push({ raw: line, document, lineNumber: lineIndex + 1 });
           return;
         }
         seen.add(documentKey);
+        const documentLookup = C.documentLookup
+          ? C.documentLookup(line, candidate.match, candidate.match ? [candidate.match] : [])
+          : null;
         entries.push({
           raw: exactPdfName || document,
           fileName: exactPdfName || `${document}.pdf`,
           document,
+          documentLookup,
           sheetName: "Entrada por texto",
           rowNumber: lineIndex + 1,
           header: "Entrada por texto",
@@ -1555,7 +1575,13 @@
     els.relationIgnoredCount.textContent = String(preview.ignored.length);
     const previewLimit = 300;
     const rows = [];
-    preview.entries.slice(0, previewLimit).forEach((entry) => rows.push({ kind: "valid", label: "Válido", title: entry.document, detail: entry.fileName, line: entry.rowNumber }));
+    preview.entries.slice(0, previewLimit).forEach((entry) => rows.push({
+      kind: "valid",
+      label: entry.documentLookup && entry.documentLookup.matchedByNtVariant ? "Ajustado pela LD" : "Válido",
+      title: entry.document,
+      detail: entry.documentLookup && entry.documentLookup.message ? entry.documentLookup.message : entry.fileName,
+      line: entry.rowNumber,
+    }));
     if (rows.length < previewLimit) preview.duplicates.slice(0, previewLimit - rows.length).forEach((entry) => rows.push({ kind: "duplicate", label: "Duplicado", title: entry.document, detail: entry.raw, line: entry.lineNumber }));
     if (rows.length < previewLimit) preview.ignored.slice(0, previewLimit - rows.length).forEach((entry) => rows.push({ kind: "ignored", label: "Ignorado", title: entry.raw, detail: entry.reason, line: entry.lineNumber }));
     els.relationPreviewMeta.textContent = totalPreview > previewLimit ? `${totalPreview} itens · prévia dos primeiros ${previewLimit}` : `${totalPreview} item${totalPreview === 1 ? "" : "s"}`;
@@ -1663,6 +1689,7 @@
 
     const selected = new Map();
     const sourceByPhysicalKey = new Map();
+    const documentLookupByPhysicalKey = new Map();
     const missing = [];
     let matchedItems = 0;
     entries.forEach((entry) => {
@@ -1676,6 +1703,7 @@
         selected.set(physicalKey, unique[0]);
         if (!sourceByPhysicalKey.has(physicalKey)) sourceByPhysicalKey.set(physicalKey, []);
         sourceByPhysicalKey.get(physicalKey).push(`${entry.sheetName} · linha ${entry.rowNumber}`);
+        if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
         matchedItems += 1;
       } else {
         missing.push({
@@ -1693,7 +1721,7 @@
       .filter((file) => !selectedKeys.has(listPhysicalKey(file)))
       .map((file) => ({ name: file.name, reason: "fora da relação" }));
     state.listSummary = { total: entries.length, matched: matchedItems, files: matchedFiles.length, missing: missing.length };
-    return { matchedFiles, missing, sourceByPhysicalKey };
+    return { matchedFiles, missing, sourceByPhysicalKey, documentLookupByPhysicalKey };
   }
 
   function sgparStatusLabel(status) {
@@ -2266,6 +2294,7 @@
       let analysisFiles = state.packageFiles;
       let missingFromList = [];
       let listSourceByPhysicalKey = new Map();
+      let documentLookupByPhysicalKey = new Map();
       if (hasRelationSource()) {
         setProgress(30, state.textEntries.length ? "Preparando a Entrada por texto…" : "Lendo a lista Excel de PDFs…");
         const listEntries = await currentRelationEntries();
@@ -2273,6 +2302,7 @@
         analysisFiles = listSelection.matchedFiles;
         missingFromList = listSelection.missing;
         listSourceByPhysicalKey = listSelection.sourceByPhysicalKey;
+        documentLookupByPhysicalKey = listSelection.documentLookupByPhysicalKey;
       }
 
       const inputs = analysisFiles.map((file, index) => ({
@@ -2283,6 +2313,7 @@
         hintedSheet: "",
         documentSource: hasRelationSource() ? `${relationSourceLabel()} e nome do arquivo` : "nome do arquivo",
         listSource: (listSourceByPhysicalKey.get(listPhysicalKey(file)) || []).join(" | "),
+        documentLookupHint: documentLookupByPhysicalKey.get(listPhysicalKey(file)) || null,
       }));
       if (!inputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta.");
 
@@ -2321,6 +2352,7 @@
             hintedSheet: C.inferSheetFromName(entry.document || entry.raw),
             documentSource: state.textEntries.length ? "Entrada por texto" : "lista Excel",
             listSource: `${entry.sheetName} · linha ${entry.rowNumber}`,
+            documentLookupHint: entry.documentLookup || null,
           };
           const result = C.triageOne(input, state.index, settings);
           result.virtualFileName = listedName;
@@ -2500,12 +2532,14 @@
       let analysisFiles = state.packageFiles;
       let missingFromList = [];
       let listSourceByPhysicalKey = new Map();
+      let documentLookupByPhysicalKey = new Map();
       if (hasRelationSource()) {
         const listEntries = await currentRelationEntries();
         const listSelection = selectPdfsFromList(listEntries);
         analysisFiles = listSelection.matchedFiles;
         missingFromList = listSelection.missing;
         listSourceByPhysicalKey = listSelection.sourceByPhysicalKey;
+        documentLookupByPhysicalKey = listSelection.documentLookupByPhysicalKey;
       }
 
       const physicalById = new Map();
@@ -2521,6 +2555,7 @@
           hintedSheet: "",
           documentSource: hasRelationSource() ? `${relationSourceLabel()} e nome do arquivo` : "nome do arquivo",
           listSource: (listSourceByPhysicalKey.get(listPhysicalKey(file)) || []).join(" | "),
+          documentLookupHint: documentLookupByPhysicalKey.get(listPhysicalKey(file)) || null,
         };
       });
       missingFromList.forEach((entry, index) => {
@@ -2535,6 +2570,7 @@
           hintedSheet: C.inferSheetFromName(entry.document || entry.raw),
           documentSource: state.textEntries.length ? "Entrada por texto" : "lista Excel",
           listSource: `${entry.sheetName} · linha ${entry.rowNumber}`,
+          documentLookupHint: entry.documentLookup || null,
         });
         logicalMeta.set(id, { listedName, reason: entry.reason, listSource: `${entry.sheetName} · linha ${entry.rowNumber}` });
       });
@@ -3256,6 +3292,7 @@
           <p class="detail-line"><strong>Arquivo:</strong> ${escapeHtml(source)}</p>
           <p class="detail-line"><strong>Pacote:</strong> ${escapeHtml(files)}</p>
           <p class="detail-line"><strong>Identificação:</strong> ${escapeHtml(row.documentSource || "nome do arquivo")}</p>
+          <p class="detail-line"><strong>Busca com/sem NT-:</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
           <p class="detail-line"><strong>Revisão:</strong> ${escapeHtml(row.revisionSource || "—")}</p>
           <p class="detail-line"><strong>LD:</strong> ${escapeHtml(sourceLine)}</p>
         </section>
@@ -3779,6 +3816,10 @@
         "SITUAÇÃO GRCON": decisionLabel(row.decision, row),
         "GRDT(S) ANTERIOR(ES) NO HISTÓRICO": previousEgrdtHistoryText(row.document),
         "CÓDIGO DO MOTIVO": message.code || row.reasonCode || "",
+        "CÓDIGO INFORMADO / PDF": row.documentLookup && row.documentLookup.inputDocument || row.name || "",
+        "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.ldDocument || "",
+        "FORMA LOCALIZADA NA LD": row.documentLookup && row.documentLookup.ldForm || "Não localizado",
+        "PESQUISA COM/SEM NT- NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
         "TÍTULO": row.record && row.record.title || "",

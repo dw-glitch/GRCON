@@ -1,4 +1,4 @@
-GRCON 5.31.6 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.31.15 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 ESCOPO
 - Esta versão integra somente os usuários do GRCON.

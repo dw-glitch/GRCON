@@ -1713,7 +1713,7 @@ html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button {
 }
 
 
-/* Atalho entre aplicativos independentes — v5.31.6 / v1.26.27 */
+/* Atalho entre aplicativos independentes — v5.31.15 / v1.26.27 */
 .app-shortcut-link {
   min-height: 36px;
   display: inline-flex;

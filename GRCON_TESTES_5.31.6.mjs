@@ -10,6 +10,8 @@ const require = createRequire(import.meta.url);
 const History = require(path.join(root, "history_core.js"));
 const Sequence = require(path.join(root, "egrdt_sequence.js"));
 const Workbook = require(path.join(root, "grdt_workbook.js"));
+const Core = require(path.join(root, "core.js"));
+const ReportSummary = require(path.join(root, "report_summary.js"));
 const checks = [];
 
 function check(name, fn) {
@@ -37,6 +39,94 @@ function record(id, overrides = {}) {
     ...overrides,
   });
 }
+
+function ldDocumentRecord(document, allocationStatus = "ALOCADO") {
+  return {
+    document,
+    documentKey: Core.key(document),
+    revision: "0",
+    status: "",
+    sigemStatus: "",
+    title: "DOCUMENTO DE TESTE DA BUSCA NT",
+    grdt: "",
+    effectiveDate: "",
+    format: "A4",
+    discipline: "GERAL",
+    documentType: "MA",
+    purpose: "Para Informação",
+    databook: "",
+    fiscalComment: "",
+    allocationStatus,
+    allocation: allocationStatus === "ALOCADO" ? "ALOC-001" : "",
+    sheet: "N-1710",
+    row: 2,
+    source: "LD_TESTE.xlsx",
+    sourceTimestamp: 1,
+    sourceOrder: 0,
+    ldColumns: [],
+  };
+}
+
+const ntBaseDocument = "MA-5290.00-22000-ABC-C1O-001";
+
+check("PDF com NT- localiza código sem NT- na LD e usa o nome oficial", () => {
+  const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
+  const result = Core.triageOne({ id: "nt-1", name: `NT-${ntBaseDocument}_0001.pdf` }, index, {});
+  assert.equal(result.document, ntBaseDocument);
+  assert.equal(result.documentLookup.matchedByNtVariant, true);
+  assert.equal(result.documentLookup.ldForm, "Sem NT-");
+  assert.equal(result.finalName, `${ntBaseDocument}_0001_0.pdf`);
+  assert.equal(result.decision, Core.READY);
+});
+
+check("PDF sem NT- localiza código com NT- na LD e usa o nome oficial", () => {
+  const ldDocument = `NT-${ntBaseDocument}`;
+  const index = Core.buildIndex([ldDocumentRecord(ldDocument)], []);
+  const result = Core.triageOne({ id: "nt-2", name: `${ntBaseDocument}_0001.pdf` }, index, {});
+  assert.equal(result.document, ldDocument);
+  assert.equal(result.documentLookup.matchedByNtVariant, true);
+  assert.equal(result.documentLookup.ldForm, "Com NT-");
+  assert.equal(result.finalName, `${ldDocument}_0001_0.pdf`);
+  assert.equal(result.decision, Core.READY);
+});
+
+check("busca alternativa preserva o bloqueio quando a forma da LD não está alocada", () => {
+  const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO")], []);
+  const result = Core.triageOne({ id: "nt-3", name: `NT-${ntBaseDocument}.pdf` }, index, {});
+  assert.equal(result.document, ntBaseDocument);
+  assert.equal(result.hardBlock, true);
+  assert.equal(Core.allocationState(result.allocationStatus).kind, "not_allocated");
+});
+
+check("quando as duas formas existem na LD a forma exata prevalece", () => {
+  const index = Core.buildIndex([
+    ldDocumentRecord(ntBaseDocument, "ALOCADO"),
+    ldDocumentRecord(`NT-${ntBaseDocument}`, "NÃO ALOCADO"),
+  ], []);
+  const withoutNt = Core.triageOne({ id: "nt-4", name: `${ntBaseDocument}.pdf` }, index, {});
+  const withNt = Core.triageOne({ id: "nt-5", name: `NT-${ntBaseDocument}.pdf` }, index, {});
+  assert.equal(withoutNt.record.allocationStatus, "ALOCADO");
+  assert.equal(withNt.record.allocationStatus, "NÃO ALOCADO");
+});
+
+check("relação registra as duas formas pesquisadas e o código oficial da LD", () => {
+  const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
+  const result = Core.triageOne({ id: "nt-6", name: `NT-${ntBaseDocument}.pdf` }, index, {});
+  const summary = ReportSummary.buildRows([result], {})[0];
+  assert.equal(summary.requestedDocument, `NT-${ntBaseDocument}`);
+  assert.equal(summary.document, ntBaseDocument);
+  assert.equal(summary.ldDocumentForm, "Sem NT-");
+  assert.match(summary.ntLookup, /pesquisa com e sem NT-/i);
+  assert.match(summary.ntLookup, /código exatamente como está na LD/i);
+});
+
+check("ausência na LD informa que as formas com e sem NT- foram pesquisadas", () => {
+  const index = Core.buildIndex([], []);
+  const result = Core.triageOne({ id: "nt-7", document: ntBaseDocument, name: `${ntBaseDocument}.pdf` }, index, {});
+  assert.equal(result.status, "Sem correspondência na LD");
+  assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, `NT-${ntBaseDocument}`]);
+  assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
+});
 
 check("histórico remove registro apagado na nuvem", () => {
   const local = storage([
@@ -176,9 +266,9 @@ check("manifesto declara o tamanho real do ícone", () => {
   assert.equal(`${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`, manifest.icons[0].sizes);
 });
 
-check("service worker publica o cache isolado da versão 5.31.6", () => {
+check("service worker publica o cache isolado da versão atual", () => {
   const source = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(source, /grcon-v5\.31\.6/);
+  assert.match(source, /grcon-v5\.31\.15/);
   assert.match(source, /networkFirst/);
 });
 
@@ -216,4 +306,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.31.6", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.31.15", passed: true, checks: checks.length, names: checks }, null, 2));
