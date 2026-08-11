@@ -109,13 +109,23 @@
           if (!url || tried.includes(String(url))) continue;
           tried.push(String(url));
           try {
-            const resp = await fetch(url, { cache: "no-store" });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const text = await resp.text();
-            const inline = document.createElement("script");
-            inline.text = text;
-            inline.dataset.grconLazy = `${url}::inline`;
-            document.head.appendChild(inline);
+            // O fallback continua como script externo. Antes o arquivo era
+            // baixado como texto e injetado em inline.text, ampliando a
+            // superfície de execução e dificultando uma CSP mais rigorosa.
+            await new Promise((candidateResolve, candidateReject) => {
+              const retry = document.createElement("script");
+              const retryUrl = new URL(url, document.baseURI);
+              retryUrl.searchParams.set("grcon-retry", String(Date.now()));
+              retry.src = retryUrl.href;
+              retry.async = false;
+              retry.dataset.grconLazy = `${url}::retry`;
+              retry.addEventListener("load", candidateResolve, { once: true });
+              retry.addEventListener("error", () => {
+                retry.remove();
+                candidateReject(new Error(`Falha ao carregar ${url}.`));
+              }, { once: true });
+              document.head.appendChild(retry);
+            });
             loaded.add(src);
             resolve();
             return;

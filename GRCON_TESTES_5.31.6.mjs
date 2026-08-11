@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 const History = require(path.join(root, "history_core.js"));
 const Sequence = require(path.join(root, "egrdt_sequence.js"));
 const Workbook = require(path.join(root, "grdt_workbook.js"));
+const ExcelJS = require(path.join(root, "exceljs.min.js"));
 const Core = require(path.join(root, "core.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const checks = [];
@@ -125,6 +126,29 @@ check("relação registra as duas formas pesquisadas e o código oficial da LD",
   assert.match(summary.renameForEgrdt, /De:.*Para:/i);
   assert.match(summary.ntLookup, /pesquisa com e sem NT-/i);
   assert.match(summary.ntLookup, /código exatamente como está na LD/i);
+  const executive = ReportSummary.executiveRows([summary])[0];
+  assert.equal(executive.requestedDocument, ntDocument);
+  assert.equal(executive.ldDocument, ntBaseDocument);
+  assert.match(executive.renameForEgrdt, /De:.*Para:/i);
+  assert.match(executive.ldEvidence, /LD_TESTE\.xlsx.*aba ET.*linha 2/i);
+});
+
+check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de forma didática", () => {
+  const headers = ReportSummary.EXECUTIVE_COLUMNS.map((column) => column.header);
+  assert.deepEqual(headers, [
+    "SITUAÇÃO GRCON",
+    "CÓDIGO INFORMADO / PDF",
+    "PESQUISADO SEM NT-",
+    "PESQUISADO COM NT-",
+    "CÓDIGO ENCONTRADO NA LD",
+    "RESULTADO DA BUSCA COM/SEM NT-",
+    "ALOCADO?",
+    "RENOMEAÇÃO DE → PARA",
+    "ARQUIVO FINAL",
+    "INCLUÍDO NA EGRDT?",
+    "MOTIVO / AÇÃO NECESSÁRIA",
+    "EVIDÊNCIA NA LD",
+  ]);
 });
 
 check("relação sem PDF físico preserva o DE → PARA depois de adotar o código da LD", () => {
@@ -153,6 +177,10 @@ check("ausência na LD informa que as formas com e sem NT- foram pesquisadas", (
   assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, ntDocument]);
   assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM NT-");
   assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
+  const summary = ReportSummary.buildRows([result], {})[0];
+  const executive = ReportSummary.executiveRows([summary])[0];
+  assert.match(executive.executiveAction, /NÃO LOCALIZADO NA LD/i);
+  assert.doesNotMatch(executive.executiveAction, /marcada como não alocada/i);
 });
 
 check("N-1710 não pesquisa nem aceita uma forma artificial com NT-", () => {
@@ -195,6 +223,18 @@ check("relatório em Worker preserva a evidência NT e a renomeação", () => {
   assert.match(compact, /searchedWithNt/);
   assert.match(compact, /resultLabel/);
   assert.match(compact, /ntRename:\s*item\.ntRename/);
+});
+
+check("Workers externos usam os módulos atuais e exportam as duas abas do relatório", () => {
+  const facade = fs.readFileSync(path.join(root, "performance_workers.js"), "utf8");
+  const exportWorker = fs.readFileSync(path.join(root, "workers", "export.worker.js"), "utf8");
+  assert.doesNotMatch(facade, /const SOURCES=/);
+  assert.match(facade, /workers\/ld\.worker\.js/);
+  assert.match(facade, /workers\/triage\.worker\.js/);
+  assert.match(facade, /workers\/export\.worker\.js/);
+  assert.match(exportWorker, /\.\.\/report_summary\.js/);
+  assert.match(exportWorker, /writeExecutiveTableAsync/);
+  assert.match(exportWorker, /Auditoria detalhada/);
 });
 
 check("histórico remove registro apagado na nuvem", () => {
@@ -337,7 +377,7 @@ check("manifesto declara o tamanho real do ícone", () => {
 
 check("service worker publica o cache isolado da versão atual", () => {
   const source = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(source, /grcon-v5\.31\.17/);
+  assert.match(source, /grcon-v5\.32\.0/);
   assert.match(source, /networkFirst/);
 });
 
@@ -365,6 +405,25 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("gerador produz e reabre XLS BIFF8 com 48 linhas e bloqueia a 49ª");
 }
 
+{
+  const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
+  const result = Core.triageOne({ id: "report-xlsx", name: `${ntDocument}_0001.pdf` }, index, {});
+  const rows = ReportSummary.buildRows([result], { ldFileName: "LD_TESTE.xlsx" });
+  const workbook = new ExcelJS.Workbook();
+  const summarySheet = workbook.addWorksheet("Resumo");
+  const summaryLayout = await ReportSummary.writeExecutiveTableAsync(summarySheet, rows, 1);
+  const auditSheet = workbook.addWorksheet("Auditoria detalhada");
+  const auditLayout = await ReportSummary.writeTableAsync(auditSheet, rows, 1);
+  const bytes = await workbook.xlsx.writeBuffer();
+  const reopened = new ExcelJS.Workbook();
+  await reopened.xlsx.load(bytes);
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO GRCON");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "RENOMEAÇÃO DE → PARA");
+  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
+  assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM NT-");
+  checks.push("Excel do relatório reabre com Resumo Executivo e Auditoria detalhada");
+}
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];
@@ -375,4 +434,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.31.17", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.0", passed: true, checks: checks.length, names: checks }, null, 2));

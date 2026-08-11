@@ -105,7 +105,10 @@
       cachedTemplate = new Uint8Array(fs.readFileSync(path.join(__dirname, "grdt-template.xlsx")));
       return cachedTemplate;
     }
-    const response = await fetch("grdt-template.xlsx");
+    // Em Web Worker o endereço relativo parte de /workers/. O facade define a
+    // raiz dos ativos para que o mesmo módulo funcione na página e no worker.
+    const assetBase = typeof globalThis !== "undefined" && globalThis.GRCON_ASSET_BASE || "";
+    const response = await fetch(`${assetBase}grdt-template.xlsx`);
     if (!response.ok) throw new Error("Falha ao carregar o modelo oficial XLS da eGRDT.");
     const arrayBuffer = await response.arrayBuffer();
     cachedTemplate = new Uint8Array(arrayBuffer);

@@ -1,0 +1,20 @@
+{
+  "name": "grcon",
+  "version": "5.32.0",
+  "private": true,
+  "description": "GRCON — controle documental, triagem de LD e geração de eGRDT.",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node tests/grcon.mjs",
+    "check:syntax": "node scripts/verificar-sintaxe.mjs",
+    "check:workers": "node scripts/verificar-pacote.mjs",
+    "check:references": "node scripts/verificar-referencias.mjs",
+    "check:versions": "node scripts/verificar-versoes.mjs",
+    "check:dependencies": "node scripts/verificar-dependencias.mjs",
+    "check:supabase": "node scripts/verificar-supabase.mjs",
+    "verify": "npm run check:syntax && npm run check:workers && npm run check:references && npm run check:versions && npm run check:dependencies && npm run check:supabase && npm test"
+  }
+}

@@ -1,5 +1,5 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.31.17
+// Versão: 5.32.0
 // Estratégia: rede primeiro para todo o código do GRCON (HTML/CSS/JS), para
 // que uma correção publicada apareça na hora; e stale-while-revalidate para os
 // arquivos pesados (bibliotecas, imagens e os pacotes gerados), que assim
@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.31.17";
+const CACHE_NAME = "grcon-v5.32.0";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -27,6 +27,8 @@ const ASSETS = [
   "grcon-logo-report.png",
   "manifest.json",
   "offline_resources.js",
+  "grcon_bootstrap_head.js",
+  "grcon_service_worker.js",
   "grcon_module_loader.js",
   "grcon_contracts.js",
   "large_input.js",
@@ -87,10 +89,15 @@ const ASSETS = [
   "grdt_workbook.js",
   "ld_posting_writer.js",
   "performance_workers.js",
+  "workers/ld.worker.js",
+  "workers/triage.worker.js",
+  "workers/export.worker.js",
 ];
 
 const CRITICAL_ASSETS = [
   "index.html",
+  "grcon_bootstrap_head.js",
+  "grcon_service_worker.js",
   "design-system.css",
   "legacy-compat.css",
   "grcon-ui.css",
@@ -109,17 +116,12 @@ const CRITICAL_ASSETS = [
 ];
 
 // Arquivos pesados: entrega imediata do cache e revalidação em segundo plano
-// (stale-while-revalidate). São bibliotecas de terceiros, imagens e os pacotes
-// gerados — performance_workers.js sozinho tem 3,3 MB e é buscado justamente
-// quando a análise começa. Baixá-lo pela rede a cada abertura atrasaria o
-// início da análise; do cache ele é instantâneo, e a versão nova entra na
-// abertura seguinte (ou na hora, quando o CACHE_NAME muda).
+// (stale-while-revalidate). Os Workers deixaram de embutir cópias inteiras do
+// motor e das bibliotecas; por isso entram na política normal de código, que
+// tenta a rede primeiro e evita executar uma versão antiga após a publicação.
 const HEAVY_ASSETS = new Set([
-  "performance_workers.js",
-  "offline_performance_workers.js",
   "exceljs.min.js",
   "xlsx.full.min.js",
-  "offline_xlsx.full.min.js",
   "jszip.min.js",
   "supabase.min.js",
   "grdt-template.xlsx",

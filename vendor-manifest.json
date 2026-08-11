@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-08-11",
+  "libraries": [
+    {
+      "file": "exceljs.min.js",
+      "name": "ExcelJS",
+      "version": "não declarada no cabeçalho (build de 2023-10-19)",
+      "sha256": "7e49da68588e250dbb8bba190d2caa8ab3787cc0284bda1d8b2f805c4df742c9"
+    },
+    {
+      "file": "jszip.min.js",
+      "name": "JSZip",
+      "version": "3.10.1",
+      "sha256": "acc7e41455a80765b5fd9c7ee1b8078a6d160bbbca455aeae854de65c947d59e"
+    },
+    {
+      "file": "xlsx.full.min.js",
+      "name": "SheetJS",
+      "version": "não declarada no cabeçalho",
+      "sha256": "c9506197caf809a075b6dee1da0d36fb19da7158ffe8a88e7b0c96c5d8623c99"
+    },
+    {
+      "file": "supabase.min.js",
+      "name": "Supabase JavaScript",
+      "version": "não declarada no bundle",
+      "sha256": "eb7564b09d311fd7b0375a7c0dc687a4c7c8ca9eda22c7823285fe86cfb21601"
+    }
+  ]
+}

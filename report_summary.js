@@ -47,13 +47,24 @@
     { header: "AJUSTE DE CÓDIGO (nt-)", key: "ntAdjustment", width: 88 },
   ]);
 
-  // Posições de coluna usadas na estilização condicional. Calculadas a
-  // partir de COLUMNS (em vez de números fixos) para não quebrar se a
-  // ordem das colunas mudar novamente no futuro.
-  const ALLOCATED_COLUMN = COLUMNS.findIndex((column) => column.key === "allocated") + 1;
-  const ALLOCATION_REASON_COLUMN = COLUMNS.findIndex((column) => column.key === "allocationReason") + 1;
-  const NT_RESULT_COLUMN = COLUMNS.findIndex((column) => column.key === "ntSearchResult") + 1;
-  const NT_RENAME_COLUMN = COLUMNS.findIndex((column) => column.key === "renameForEgrdt") + 1;
+  // A primeira aba do relatório precisa permitir uma decisão rápida mesmo
+  // quando a relação contém milhares de documentos. A auditoria completa
+  // continua disponível em COLUMNS, mas o Resumo usa somente as evidências que
+  // determinam a ação do operador.
+  const EXECUTIVE_COLUMNS = Object.freeze([
+    { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
+    { header: "CÓDIGO INFORMADO / PDF", key: "requestedDocument", width: 42 },
+    { header: "PESQUISADO SEM NT-", key: "searchedWithoutNt", width: 43 },
+    { header: "PESQUISADO COM NT-", key: "searchedWithNt", width: 43 },
+    { header: "CÓDIGO ENCONTRADO NA LD", key: "ldDocument", width: 43 },
+    { header: "RESULTADO DA BUSCA COM/SEM NT-", key: "ntSearchResult", width: 38 },
+    { header: "ALOCADO?", key: "allocated", width: 23 },
+    { header: "RENOMEAÇÃO DE → PARA", key: "renameForEgrdt", width: 66 },
+    { header: "ARQUIVO FINAL", key: "finalFile", width: 42 },
+    { header: "INCLUÍDO NA EGRDT?", key: "included", width: 22 },
+    { header: "MOTIVO / AÇÃO NECESSÁRIA", key: "executiveAction", width: 72 },
+    { header: "EVIDÊNCIA NA LD", key: "ldEvidence", width: 48 },
+  ]);
 
   function text(value) {
     return value === null || value === undefined ? "" : String(value).trim();
@@ -346,14 +357,8 @@
     return ["FFEDF1F4", "FF596C7D"];
   }
 
-  function writeNtGuide(worksheet, startRow, lastColumn) {
+  function writeGuide(worksheet, startRow, lastColumn, lines) {
     const guideRow = Number(startRow) || 22;
-    const lines = [
-      ["COMO LER A PESQUISA COM/SEM NT-", "FF153A5C", "FFFFFFFF", true],
-      ["Somente documentos ET: para cada código, o GRCON pesquisa na LD a forma sem NT- e a forma com NT- no início do 7º grupo.", "FFEAF2F8", "FF234B6B", false],
-      ["Quando a outra forma é encontrada, a coluna “RENOMEAÇÃO PARA ENTRAR NA EGRDT” mostra claramente DE → PARA. O arquivo final sempre usa o código exatamente como está na LD.", "FFFFF3CF", "FF7A5300", false],
-      ["Documentos N-1710 não usam NT-: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
-    ];
     lines.forEach(([value, fill, color, bold], offset) => {
       const rowNumber = guideRow + offset;
       worksheet.mergeCells(`A${rowNumber}:${lastColumn}${rowNumber}`);
@@ -367,22 +372,66 @@
     return guideRow + lines.length + 1;
   }
 
-  function writeTable(worksheet, rows, startRow) {
+  function writeNtGuide(worksheet, startRow, lastColumn) {
+    return writeGuide(worksheet, startRow, lastColumn, [
+      ["COMO LER A PESQUISA COM/SEM NT-", "FF153A5C", "FFFFFFFF", true],
+      ["Somente documentos ET: para cada código, o GRCON pesquisa na LD a forma sem NT- e a forma com NT- no início do 7º grupo.", "FFEAF2F8", "FF234B6B", false],
+      ["Quando a outra forma é encontrada, a coluna “RENOMEAÇÃO PARA ENTRAR NA EGRDT” mostra claramente DE → PARA. O arquivo final sempre usa o código exatamente como está na LD.", "FFFFF3CF", "FF7A5300", false],
+      ["Documentos N-1710 não usam NT-: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
+    ]);
+  }
+
+  function writeExecutiveGuide(worksheet, startRow, lastColumn) {
+    return writeGuide(worksheet, startRow, lastColumn, [
+      ["LEITURA RÁPIDA DO RESULTADO", "FF153A5C", "FFFFFFFF", true],
+      ["Use esta aba para decidir o que entra na eGRDT. A aba “Auditoria detalhada” preserva todas as colunas técnicas e evidências da LD.", "FFEAF2F8", "FF234B6B", false],
+      ["Amarelo indica que o código ET foi localizado na outra forma e será renomeado exatamente como está na LD. Vermelho indica bloqueio ou ausência nas duas formas.", "FFFFF3CF", "FF7A5300", false],
+    ]);
+  }
+
+  function executiveRows(rows) {
+    return (rows || []).map((item) => {
+      const included = text(item.included).toUpperCase();
+      const allocated = text(item.allocated).toUpperCase();
+      const lookup = text(item.ntSearchResult).toUpperCase();
+      let executiveAction = text(item.observation);
+      if (allocated.includes("NÃO") && allocated.includes("ALOCADO")) {
+        executiveAction = "NÃO INCLUIR NA EGRDT. A forma encontrada na LD está marcada como não alocada. Regularize a alocação e analise novamente. Consulte a aba “Auditoria detalhada” para a célula, o comentário da Fiscal e as demais evidências.";
+      } else if (included === "SIM") {
+        executiveAction = text(item.renameForEgrdt).toUpperCase().startsWith("SIM")
+          ? "INCLUIR NA EGRDT. O documento está alocado e foi encontrado na outra forma; use o arquivo final renomeado exatamente como está na LD."
+          : "INCLUIR NA EGRDT. O documento está alocado e o código informado já coincide com a forma da LD.";
+      } else if (lookup.includes("NÃO LOCALIZADO") || lookup.includes("NAO LOCALIZADO")) {
+        executiveAction = "NÃO LOCALIZADO NA LD. O GRCON pesquisou as formas sem NT- e com NT-. Confira o código e a versão da LD antes de analisar novamente.";
+      }
+      return {
+        ...item,
+        executiveAction,
+        ldEvidence: [item.ldFile, item.sheet ? `aba ${item.sheet}` : "", item.line ? `linha ${item.line}` : ""]
+          .filter(Boolean).join(" · ") || "Não localizado na LD",
+      };
+    });
+  }
+
+  function prepareTable(worksheet, rows, startRow, columns, options) {
+    const settings = options || {};
     const sectionStart = Number(startRow) || 22;
-    const lastColumn = columnLetter(COLUMNS.length);
-    const titleRow = writeNtGuide(worksheet, sectionStart, lastColumn);
+    const lastColumn = columnLetter(columns.length);
+    const titleRow = settings.executive
+      ? writeExecutiveGuide(worksheet, sectionStart, lastColumn)
+      : writeNtGuide(worksheet, sectionStart, lastColumn);
     const headerRow = titleRow + 1;
     const dataStart = headerRow + 1;
 
     worksheet.mergeCells(`A${titleRow}:${lastColumn}${titleRow}`);
     const title = worksheet.getCell(titleRow, 1);
-    title.value = "RESUMO POR DOCUMENTO";
+    title.value = settings.title || "AUDITORIA DETALHADA POR DOCUMENTO";
     title.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
     title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
     title.alignment = { vertical: "middle", horizontal: "left" };
     worksheet.getRow(titleRow).height = 24;
 
-    COLUMNS.forEach((column, index) => {
+    columns.forEach((column, index) => {
       const cell = worksheet.getCell(headerRow, index + 1);
       cell.value = column.header;
       cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
@@ -392,10 +441,11 @@
       worksheet.getColumn(index + 1).width = column.width;
     });
     worksheet.getRow(headerRow).height = 34;
+    return { titleRow, headerRow, dataStart, lastColumn, columns, rows };
+  }
 
-    rows.forEach((item, rowIndex) => {
-      const row = worksheet.getRow(dataStart + rowIndex);
-      COLUMNS.forEach((column, columnIndex) => {
+  function styleBaseRow(row, item, rowIndex, columns) {
+      columns.forEach((column, columnIndex) => {
         const cell = row.getCell(columnIndex + 1);
         const value = item[column.key];
         cell.value = value === "" || value === null || value === undefined ? null : value;
@@ -404,138 +454,141 @@
         cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
         if (rowIndex % 2) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
       });
-      const longestText = Math.max(...COLUMNS.map((column) => text(item[column.key]).length), 0);
+      const longestText = Math.max(...columns.map((column) => text(item[column.key]).length), 0);
       row.height = Math.min(96, Math.max(34, 20 + Math.ceil(longestText / 78) * 14));
+  }
 
+  function styleDecisionCell(row) {
       const decisionCell = row.getCell(1);
       const decisionColors = statusPalette(decisionCell.value);
       decisionCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: decisionColors[0] } };
       decisionCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: decisionColors[1] } };
+  }
 
-      const ntResultCell = row.getCell(NT_RESULT_COLUMN);
+  function styleSearchCell(row, columns) {
+      const ntResultColumn = columns.findIndex((column) => column.key === "ntSearchResult") + 1;
+      if (!ntResultColumn) return;
+      const ntResultCell = row.getCell(ntResultColumn);
       const ntResultColors = ntSearchPalette(ntResultCell.value);
       ntResultCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ntResultColors[0] } };
       ntResultCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: ntResultColors[1] } };
+  }
 
-      const allocationCell = row.getCell(ALLOCATED_COLUMN);
+  function styleAllocationCell(row, columns) {
+      const allocatedColumn = columns.findIndex((column) => column.key === "allocated") + 1;
+      if (!allocatedColumn) return;
+      const allocationCell = row.getCell(allocatedColumn);
       const allocationColors = allocationPalette(allocationCell.value);
       allocationCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: allocationColors[0] } };
       allocationCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: allocationColors[1] } };
       if ((C && C.norm ? C.norm(allocationCell.value) : text(allocationCell.value).toUpperCase()).includes("NAO")) {
-        const reasonCell = row.getCell(ALLOCATION_REASON_COLUMN);
-        reasonCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF7F4" } };
-        reasonCell.font = { name: "Aptos", size: 9, color: { argb: "FF7A342D" } };
+        const reasonColumn = columns.findIndex((column) => ["allocationReason", "executiveAction"].includes(column.key)) + 1;
+        if (reasonColumn) {
+          const reasonCell = row.getCell(reasonColumn);
+          reasonCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF7F4" } };
+          reasonCell.font = { name: "Aptos", size: 9, color: { argb: "FF7A342D" } };
+        }
       }
+  }
 
-      // O ajuste de "nt-" muda o nome do arquivo postado, então precisa saltar
-      // aos olhos de quem confere o relatório, e não se perder entre as colunas.
-      const ntCell = row.getCell(COLUMNS.findIndex((column) => column.key === "ntAdjustment") + 1);
-      if (text(ntCell.value)) {
+  function styleRenameCells(row, columns) {
+      const adjustmentColumn = columns.findIndex((column) => column.key === "ntAdjustment") + 1;
+      if (adjustmentColumn && text(row.getCell(adjustmentColumn).value)) {
+        const ntCell = row.getCell(adjustmentColumn);
         ntCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3CF" } };
         ntCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF7A5300" } };
       }
 
-      const renameCell = row.getCell(NT_RENAME_COLUMN);
-      if ((C && C.norm ? C.norm(renameCell.value) : text(renameCell.value).toUpperCase()).startsWith("SIM")) {
+      const renameColumn = columns.findIndex((column) => column.key === "renameForEgrdt") + 1;
+      if (renameColumn) {
+        const renameCell = row.getCell(renameColumn);
+        if (!(C && C.norm ? C.norm(renameCell.value) : text(renameCell.value).toUpperCase()).startsWith("SIM")) return;
         renameCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE7B3" } };
         renameCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF7A5300" } };
       }
+  }
 
-      const includedCell = row.getCell(COLUMNS.findIndex((column) => column.key === "included") + 1);
+  function styleIncludedCell(row, columns) {
+      const includedColumn = columns.findIndex((column) => column.key === "included") + 1;
+      if (!includedColumn) return;
+      const includedCell = row.getCell(includedColumn);
       const included = text(includedCell.value).toUpperCase() === "SIM";
       includedCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: included ? "FFEAF7F1" : "FFFFF5DF" } };
       includedCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: included ? "FF0C7657" : "FFA56812" } };
       includedCell.alignment = { vertical: "middle", horizontal: "center" };
-    });
-
-    const finalRow = Math.max(headerRow, dataStart + rows.length - 1);
-    worksheet.autoFilter = { from: `A${headerRow}`, to: `${lastColumn}${finalRow}` };
-    worksheet.views = [{ state: "frozen", ySplit: headerRow, activeCell: `A${dataStart}`, showGridLines: false, zoomScale: 80 }];
-    return { titleRow, headerRow, dataStart, finalRow, lastColumn };
   }
 
-  async function writeTableAsync(worksheet, rows, startRow) {
-    if (!Large || !Large.pause || (rows || []).length <= 600) return writeTable(worksheet, rows, startRow);
-    const sectionStart = Number(startRow) || 22;
-    const lastColumn = columnLetter(COLUMNS.length);
-    const titleRow = writeNtGuide(worksheet, sectionStart, lastColumn);
-    const headerRow = titleRow + 1;
-    const dataStart = headerRow + 1;
+  function styleTableRow(row, item, rowIndex, columns) {
+    styleBaseRow(row, item, rowIndex, columns);
+    styleDecisionCell(row);
+    styleSearchCell(row, columns);
+    styleAllocationCell(row, columns);
+    styleRenameCells(row, columns);
+    styleIncludedCell(row, columns);
+  }
 
-    worksheet.mergeCells(`A${titleRow}:${lastColumn}${titleRow}`);
-    const title = worksheet.getCell(titleRow, 1);
-    title.value = "RESUMO POR DOCUMENTO";
-    title.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-    title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
-    title.alignment = { vertical: "middle", horizontal: "left" };
-    worksheet.getRow(titleRow).height = 24;
-    COLUMNS.forEach((column, index) => {
-      const cell = worksheet.getCell(headerRow, index + 1);
-      cell.value = column.header;
-      cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
-      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
-      cell.border = { bottom: { style: "thin", color: { argb: "FFB7C8D6" } } };
-      worksheet.getColumn(index + 1).width = column.width;
+  function finishTable(worksheet, layout, rowCount) {
+    const finalRow = Math.max(layout.headerRow, layout.dataStart + rowCount - 1);
+    worksheet.autoFilter = { from: `A${layout.headerRow}`, to: `${layout.lastColumn}${finalRow}` };
+    worksheet.views = [{ state: "frozen", ySplit: layout.headerRow, activeCell: `A${layout.dataStart}`, showGridLines: false, zoomScale: 80 }];
+    return { ...layout, finalRow };
+  }
+
+  function writeRows(worksheet, rows, layout) {
+    rows.forEach((item, rowIndex) => {
+      const row = worksheet.getRow(layout.dataStart + rowIndex);
+      styleTableRow(row, item, rowIndex, layout.columns);
     });
-    worksheet.getRow(headerRow).height = 34;
+    return finishTable(worksheet, layout, rows.length);
+  }
 
+  async function writeRowsAsync(worksheet, rows, layout) {
     for (let start = 0; start < rows.length; start += 300) {
       const end = Math.min(rows.length, start + 300);
       for (let rowIndex = start; rowIndex < end; rowIndex += 1) {
         const item = rows[rowIndex];
-        const row = worksheet.getRow(dataStart + rowIndex);
-        COLUMNS.forEach((column, columnIndex) => {
-          const cell = row.getCell(columnIndex + 1);
-          const value = item[column.key];
-          cell.value = value === "" || value === null || value === undefined ? null : value;
-          cell.font = { name: "Aptos", size: 9, color: { argb: "FF263E52" } };
-          cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
-          cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
-          if (rowIndex % 2) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
-        });
-        const longestText = Math.max(...COLUMNS.map((column) => text(item[column.key]).length), 0);
-        row.height = Math.min(96, Math.max(34, 20 + Math.ceil(longestText / 78) * 14));
-        const decisionCell = row.getCell(1);
-        const decisionColors = statusPalette(decisionCell.value);
-        decisionCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: decisionColors[0] } };
-        decisionCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: decisionColors[1] } };
-        const ntResultCell = row.getCell(NT_RESULT_COLUMN);
-        const ntResultColors = ntSearchPalette(ntResultCell.value);
-        ntResultCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ntResultColors[0] } };
-        ntResultCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: ntResultColors[1] } };
-        const allocationCell = row.getCell(ALLOCATED_COLUMN);
-        const allocationColors = allocationPalette(allocationCell.value);
-        allocationCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: allocationColors[0] } };
-        allocationCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: allocationColors[1] } };
-        // O ajuste de "nt-" muda o nome do arquivo postado, então precisa saltar
-      // aos olhos de quem confere o relatório, e não se perder entre as colunas.
-      const ntCell = row.getCell(COLUMNS.findIndex((column) => column.key === "ntAdjustment") + 1);
-      if (text(ntCell.value)) {
-        ntCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3CF" } };
-        ntCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF7A5300" } };
-      }
-
-
-      const renameCell = row.getCell(NT_RENAME_COLUMN);
-      if ((C && C.norm ? C.norm(renameCell.value) : text(renameCell.value).toUpperCase()).startsWith("SIM")) {
-        renameCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE7B3" } };
-        renameCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF7A5300" } };
-      }
-
-      const includedCell = row.getCell(COLUMNS.findIndex((column) => column.key === "included") + 1);
-        const included = text(includedCell.value).toUpperCase() === "SIM";
-        includedCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: included ? "FFEAF7F1" : "FFFFF5DF" } };
-        includedCell.font = { name: "Aptos", size: 9, bold: true, color: { argb: included ? "FF0C7657" : "FFA56812" } };
-        includedCell.alignment = { vertical: "middle", horizontal: "center" };
+        const row = worksheet.getRow(layout.dataStart + rowIndex);
+        styleTableRow(row, item, rowIndex, layout.columns);
       }
       if (end < rows.length) await Large.pause();
     }
-    const finalRow = Math.max(headerRow, dataStart + rows.length - 1);
-    worksheet.autoFilter = { from: `A${headerRow}`, to: `${lastColumn}${finalRow}` };
-    worksheet.views = [{ state: "frozen", ySplit: headerRow, activeCell: `A${dataStart}`, showGridLines: false, zoomScale: 80 }];
-    return { titleRow, headerRow, dataStart, finalRow, lastColumn };
+    return finishTable(worksheet, layout, rows.length);
   }
 
-  return Object.freeze({ COLUMNS, allocationReason, buildRows, buildRowsAsync, writeTable, writeTableAsync });
+  function writeTable(worksheet, rows, startRow) {
+    const source = rows || [];
+    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, COLUMNS, { title: "AUDITORIA DETALHADA POR DOCUMENTO" }));
+  }
+
+  async function writeTableAsync(worksheet, rows, startRow) {
+    const source = rows || [];
+    const layout = prepareTable(worksheet, source, startRow, COLUMNS, { title: "AUDITORIA DETALHADA POR DOCUMENTO" });
+    if (!Large || !Large.pause || source.length <= 600) return writeRows(worksheet, source, layout);
+    return writeRowsAsync(worksheet, source, layout);
+  }
+
+  function writeExecutiveTable(worksheet, rows, startRow) {
+    const source = executiveRows(rows);
+    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, { executive: true, title: "RESUMO EXECUTIVO POR DOCUMENTO" }));
+  }
+
+  async function writeExecutiveTableAsync(worksheet, rows, startRow) {
+    const source = executiveRows(rows);
+    const layout = prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, { executive: true, title: "RESUMO EXECUTIVO POR DOCUMENTO" });
+    if (!Large || !Large.pause || source.length <= 600) return writeRows(worksheet, source, layout);
+    return writeRowsAsync(worksheet, source, layout);
+  }
+
+  return Object.freeze({
+    COLUMNS,
+    EXECUTIVE_COLUMNS,
+    allocationReason,
+    buildRows,
+    buildRowsAsync,
+    executiveRows,
+    writeTable,
+    writeTableAsync,
+    writeExecutiveTable,
+    writeExecutiveTableAsync,
+  });
 });

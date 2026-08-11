@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.31.17";
+  const APP_VERSION = "5.32.0";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -4035,7 +4035,9 @@
     const metadata = `${ldDisplayName() || "LD não informada"} · Versão da LD enviada: ${reportLdVersion} · ${new Date().toLocaleString("pt-BR")}`;
 
     const summarySheet = workbook.addWorksheet("Resumo", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
-    const summaryColumnCount = ReportSummary ? ReportSummary.COLUMNS.length : 15;
+    // Os cinco cartões ocupam 15 colunas. A primeira aba usa somente as
+    // colunas executivas; a auditoria técnica completa fica em uma aba própria.
+    const summaryColumnCount = Math.max(15, ReportSummary ? ReportSummary.EXECUTIVE_COLUMNS.length : 15);
     const summaryLastColumn = (() => { let n = summaryColumnCount, result = ""; while (n > 0) { n -= 1; result = String.fromCharCode(65 + (n % 26)) + result; n = Math.floor(n / 26); } return result; })();
     summarySheet.columns = Array.from({ length: summaryColumnCount }, () => ({ width: 15 }));
     for (let row = 1; row <= 3; row += 1) for (let col = 1; col <= summaryColumnCount; col += 1) summarySheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
@@ -4106,9 +4108,9 @@
         : ReportSummary.buildRows(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
       : [];
     const summaryTable = ReportSummary
-      ? ReportSummary.writeTableAsync
-        ? await ReportSummary.writeTableAsync(summarySheet, summaryRows, summaryTableStart)
-        : ReportSummary.writeTable(summarySheet, summaryRows, summaryTableStart)
+      ? ReportSummary.writeExecutiveTableAsync
+        ? await ReportSummary.writeExecutiveTableAsync(summarySheet, summaryRows, summaryTableStart)
+        : ReportSummary.writeExecutiveTable(summarySheet, summaryRows, summaryTableStart)
       : null;
     if (summaryTable) {
       summarySheet.views = [{ state: "frozen", ySplit: summaryTable.headerRow, showGridLines: false, zoomScale: 80, activeCell: `A${summaryTable.dataStart}` }];
@@ -4116,6 +4118,15 @@
     summarySheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 }, printTitlesRow: summaryTable ? `${summaryTable.headerRow}:${summaryTable.headerRow}` : undefined };
     summarySheet.headerFooter.oddFooter = "&LGRCON&C&P de &N&R&D";
     await addReportLogo(workbook, summarySheet);
+
+    const auditSheet = workbook.addWorksheet("Auditoria detalhada", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 80 }] });
+    const auditTable = ReportSummary
+      ? ReportSummary.writeTableAsync
+        ? await ReportSummary.writeTableAsync(auditSheet, summaryRows, 1)
+        : ReportSummary.writeTable(auditSheet, summaryRows, 1)
+      : null;
+    auditSheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 }, printTitlesRow: auditTable ? `${auditTable.headerRow}:${auditTable.headerRow}` : undefined };
+    auditSheet.headerFooter.oddFooter = "&LGRCON · Auditoria detalhada&C&P de &N&R&D";
 
     const buildDataSheet = async (name, title, data, statusHeader) => {
       const headers = data.length ? [...new Set(data.flatMap((row) => Object.keys(row)))] : [];
@@ -4154,7 +4165,7 @@
     const buffer = await workbook.xlsx.writeBuffer();
     const check = new ExcelJS.Workbook();
     await check.xlsx.load(buffer);
-    if (!check.getWorksheet("Resumo") || !check.getWorksheet("Triagem")) throw new Error("O relatório gerado não pôde ser validado.");
+    if (!check.getWorksheet("Resumo") || !check.getWorksheet("Auditoria detalhada") || !check.getWorksheet("Triagem")) throw new Error("O relatório gerado não pôde ser validado.");
     return buffer;
   }
 

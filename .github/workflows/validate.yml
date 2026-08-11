@@ -1,62 +1,33 @@
 name: Validação
 
-# O arquivo anterior tinha só um fragmento de step, sem "on:" nem "jobs:", então
-# o GitHub nunca o executava — nenhuma verificação rodava antes de publicar.
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: grcon-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validar:
-    name: Sintaxe e integridade do pacote
+    name: Pacote, segurança e testes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
+          cache: npm
 
-      - name: Sintaxe de todos os arquivos JavaScript
-        run: |
-          erros=0
-          for arquivo in *.js scripts/*.mjs; do
-            [ -e "$arquivo" ] || continue
-            if ! node --check "$arquivo"; then
-              echo "::error file=$arquivo::erro de sintaxe"
-              erros=$((erros + 1))
-            fi
-          done
-          echo "Arquivos verificados: $(ls *.js scripts/*.mjs 2>/dev/null | wc -l) — com erro: $erros"
-          [ "$erros" -eq 0 ]
+      - name: Instalar metadados do projeto
+        run: npm ci --ignore-scripts
 
-      - name: O código embutido nos Workers confere com os arquivos-fonte
-        run: node scripts/verificar-pacote.mjs
-
-      - name: Os arquivos referenciados pelo index.html existem
-        run: |
-          faltando=0
-          referencias=$(grep -oE '(src|href)="[^":]+\.(js|css)"' index.html | sed -E 's/.*="([^"]+)"/\1/' | sort -u)
-          for ref in $referencias; do
-            if [ ! -f "$ref" ]; then
-              echo "::error file=index.html::index.html aponta para \"$ref\", que não existe no repositório"
-              faltando=$((faltando + 1))
-            fi
-          done
-          echo "Referências conferidas: $(echo "$referencias" | wc -w) — ausentes: $faltando"
-          [ "$faltando" -eq 0 ]
-
-      - name: Os arquivos pré-carregados pelo Service Worker existem
-        run: |
-          faltando=0
-          listados=$(sed -n '/^const ASSETS = \[/,/^\];/p' sw.js | grep -oE '"[^"]+"' | tr -d '"')
-          for arquivo in $listados; do
-            if [ ! -f "$arquivo" ]; then
-              echo "::error file=sw.js::sw.js pré-carrega \"$arquivo\", que não existe — a instalação do Service Worker falharia"
-              faltando=$((faltando + 1))
-            fi
-          done
-          echo "Ativos conferidos: $(echo "$listados" | wc -w) — ausentes: $faltando"
-          [ "$faltando" -eq 0 ]
+      - name: Executar validação completa
+        run: npm run verify
