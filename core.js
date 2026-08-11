@@ -99,58 +99,90 @@
     return canonicalId(value);
   }
 
-  /**
-   * O "nt-" aparece em um SEGMENTO do código, não no começo dele. Nos documentos
-   * reais ele fica depois do tipo, como em
-   * C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-AST-320019. Comparar pela forma sem ele
-   * permite achar o documento das duas maneiras. Quem manda no nome final
-   * continua sendo a LD: é como o documento está alocado, e é assim que o SIGEM
-   * vai aceitar.
-   */
-  function ntNeutralKey(value) {
-    let atual = canonicalId(value);
-    let anterior;
-    do {
-      anterior = atual;
-      atual = atual.replace(/(^|[^A-Z0-9])NT-/g, "$1");
-    } while (atual !== anterior);
-    return atual;
+  function isEtDocument(value, sheetName) {
+    if (norm(sheetName) === "ET") return true;
+    const documentKey = key(value);
+    return /(?:^|[^A-Z0-9])[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_/.test(documentKey);
   }
 
-  /** A outra forma do mesmo código: sem o "nt-" se ele existe, com ele se não. */
-  function ntPrefixVariant(value) {
+  function etCodeParts(value) {
     const documentKey = key(value);
-    if (!documentKey) return "";
-    const semNt = ntNeutralKey(documentKey);
-    if (semNt !== documentKey) return semNt;
-    // Sem "nt-": a outra forma o coloca no início do último segmento, que é
-    // onde ele aparece nos códigos reais.
-    const corte = Math.max(documentKey.lastIndexOf("_"), documentKey.lastIndexOf(" "));
-    return corte >= 0 ? `${documentKey.slice(0, corte + 1)}NT-${documentKey.slice(corte + 1)}` : `NT-${documentKey}`;
+    const match = documentKey.match(/^([A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_)(.+)$/);
+    return match ? { documentKey, prefix: match[1], identifier: match[2] } : null;
+  }
+
+  /**
+   * O "nt-" pertence exclusivamente ao início do 7º grupo do código ET, como
+   * em C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-AST-320019. A neutralização não é
+   * aplicada à N-1710 nem a outras famílias documentais.
+   */
+  function ntNeutralKey(value) {
+    const parts = etCodeParts(value);
+    if (!parts) return key(value);
+    return `${parts.prefix}${parts.identifier.replace(/^NT-/, "")}`;
+  }
+
+  /** A outra forma do mesmo código ET: sem o "nt-" se existe, com ele se não. */
+  function ntPrefixVariant(value) {
+    const parts = etCodeParts(value);
+    if (!parts) return "";
+    return parts.identifier.startsWith("NT-")
+      ? `${parts.prefix}${parts.identifier.slice(3)}`
+      : `${parts.prefix}NT-${parts.identifier}`;
   }
 
   function documentSearchKeys(value) {
     const documentKey = key(value);
+    if (!isEtDocument(documentKey)) return documentKey ? [documentKey] : [];
     return [...new Set([documentKey, ntPrefixVariant(documentKey)].filter(Boolean))];
   }
 
   function ntPrefixForm(value) {
     const documentKey = key(value);
     if (!documentKey) return "Não localizado";
+    if (!isEtDocument(documentKey)) return isN1710Context("", documentKey) ? "Não se aplica — N-1710" : "Não se aplica";
     return ntNeutralKey(documentKey) !== documentKey ? "Com NT-" : "Sem NT-";
   }
 
   function documentLookup(identityValue, match, candidates) {
     const rawIdentity = text(identityValue).split(/[\\/]/).pop().replace(/\.[A-Z0-9]{1,8}$/i, "");
     const inputDocument = text(match && match.matchedSearchKey) || canonicalId(rawIdentity);
-    const searchedKeys = documentSearchKeys(inputDocument);
     const ldDocument = text(match && match.document);
     const matched = Boolean(match && ldDocument);
-    const matchedByNtVariant = Boolean(matched && key(inputDocument) !== key(ldDocument));
+    const appliesToNtRule = isEtDocument(inputDocument) || isEtDocument(ldDocument, match && match.group && match.group.records && match.group.records[0] && match.group.records[0].sheet);
+    const searchedKeys = appliesToNtRule ? documentSearchKeys(inputDocument) : [key(inputDocument)].filter(Boolean);
+    const searchedWithoutNt = appliesToNtRule ? ntNeutralKey(inputDocument) : "";
+    const searchedWithNt = appliesToNtRule
+      ? (ntPrefixForm(inputDocument) === "Com NT-" ? key(inputDocument) : ntPrefixVariant(inputDocument))
+      : "";
+    const matchedByNtVariant = Boolean(
+      matched
+      && appliesToNtRule
+      && key(inputDocument) !== key(ldDocument)
+      && ntNeutralKey(inputDocument) === ntNeutralKey(ldDocument)
+    );
     const ldFormInSentence = ntPrefixForm(ldDocument).replace(/^./, (character) => character.toLowerCase());
+    const ambiguous = !matched && Array.isArray(candidates) && candidates.length > 1;
+    const searchResult = !appliesToNtRule
+      ? matched ? "not-applicable-found" : "not-applicable-not-found"
+      : ambiguous ? "ambiguous"
+        : !matched ? "not-found-both"
+          : matchedByNtVariant ? "found-alternate-renamed" : "found-exact";
+    const resultLabel = {
+      "not-applicable-found": "NÃO SE APLICA — localizado pela regra normal",
+      "not-applicable-not-found": "NÃO SE APLICA — não localizado",
+      ambiguous: "MAIS DE UMA CORRESPONDÊNCIA — CONFERIR",
+      "not-found-both": "NÃO LOCALIZADO COM NEM SEM NT-",
+      "found-alternate-renamed": "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD",
+      "found-exact": "LOCALIZADO NA MESMA FORMA",
+    }[searchResult];
     let message;
-    if (!matched) {
-      const ambiguous = Array.isArray(candidates) && candidates.length > 1;
+    if (!appliesToNtRule) {
+      const n1710 = isN1710Context("", inputDocument || ldDocument);
+      message = matched
+        ? `${n1710 ? "Documento N-1710: a regra com/sem NT- não se aplica." : "A regra com/sem NT- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada e localizado na LD como “${ldDocument}”.`
+        : `${n1710 ? "Documento N-1710: a regra com/sem NT- não se aplica." : "A regra com/sem NT- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada (${searchedKeys.join(" | ") || "código vazio"}) e não foi localizado na LD.`;
+    } else if (!matched) {
       message = ambiguous
         ? `Pesquisa com e sem NT- realizada (${searchedKeys.join(" | ")}). Mais de uma correspondência foi localizada na LD; confira o código correto.`
         : `Pesquisa com e sem NT- realizada (${searchedKeys.join(" | ")}). Nenhuma das duas formas foi localizada na LD.`;
@@ -162,10 +194,15 @@
     return {
       inputDocument,
       searchedKeys,
+      searchedWithoutNt,
+      searchedWithNt,
+      appliesToNtRule,
       matched,
       matchedByNtVariant,
       ldDocument,
       ldForm: matched ? ntPrefixForm(ldDocument) : "Não localizado",
+      searchResult,
+      resultLabel,
       message,
     };
   }
@@ -642,6 +679,7 @@
     // quando o arquivo grafa o código de um jeito e a LD de outro.
     const byNtNeutral = new Map();
     documents.forEach((entry) => {
+      if (!isEtDocument(entry.documentKey)) return;
       const neutro = ntNeutralKey(entry.documentKey);
       if (!byNtNeutral.has(neutro)) byNtNeutral.set(neutro, []);
       byNtNeutral.get(neutro).push(entry);
@@ -654,6 +692,7 @@
     if (index && index.byNtNeutral) return index.byNtNeutral;
     const mapa = new Map();
     ((index && index.documents) || []).forEach((entry) => {
+      if (!isEtDocument(entry.documentKey)) return;
       const neutro = ntNeutralKey(entry.documentKey);
       if (!mapa.has(neutro)) mapa.set(neutro, []);
       mapa.get(neutro).push(entry);
@@ -674,11 +713,12 @@
       const representative = all.reduce((best, item) => !best || text(item.document).length > text(best.document).length ? item : best, null);
       return { documentKey, document: representative && representative.document || text(value), group, matchedSearchKey: documentKey, matchKind: "exact" };
     }
+    if (!isEtDocument(documentKey)) return null;
     // Não achou como veio: procura a mesma chave ignorando o "nt-". A consulta
     // é num índice paralelo, e não uma varredura da LD, porque isto roda uma
     // vez por arquivo e por linha da relação.
     const variantes = (ntNeutralEntries(index).get(ntNeutralKey(documentKey)) || [])
-      .filter((item) => item.documentKey !== documentKey && !isN1710Context("", item.document));
+      .filter((item) => item.documentKey !== documentKey && isEtDocument(item.document));
     if (variantes.length !== 1) return null;
     return { ...variantes[0], matchedSearchKey: documentKey, matchKind: "nt-variant", ntVariant: true };
   }
@@ -693,6 +733,11 @@
       position = inputKey.indexOf(documentKey, position + 1);
     }
     return false;
+  }
+
+  function isForbiddenN1710NtAlias(inputKey, candidate) {
+    if (!candidate || !isN1710Context("", candidate.document)) return false;
+    return containsDocumentKey(inputKey, `NT-${candidate.documentKey}`);
   }
 
   // Um código só pode casar se começar e terminar em uma fronteira — antes e
@@ -736,7 +781,7 @@
         if (fim - inicio < 7) return;
         const trecho = inputKey.slice(inicio, fim);
         const achado = index.positionByKey.get(trecho);
-        if (achado && !encontrados.has(trecho)) encontrados.set(trecho, achado);
+        if (achado && !isForbiddenN1710NtAlias(inputKey, achado.item) && !encontrados.has(trecho)) encontrados.set(trecho, achado);
       });
     });
     return [...encontrados.values()]
@@ -752,6 +797,7 @@
    */
   function ntVariantCandidates(inputKey, index) {
     if (!index.documents) return [];
+    if (!isEtDocument(inputKey)) return [];
     ntNeutralEntries(index);
     const { inicios, fins } = boundaryPositions(inputKey);
     if (inicios.length > MAX_FRONTEIRAS || fins.length > MAX_FRONTEIRAS) return [];
@@ -765,7 +811,7 @@
         if (neutro === trecho && !index.byNtNeutral.has(neutro)) return;
         (index.byNtNeutral.get(neutro) || []).forEach((entry) => {
           if (entry.documentKey === trecho) return;
-          if (isN1710Context("", entry.document)) return;
+          if (!isEtDocument(entry.document)) return;
           if (achados.has(entry.documentKey)) return;
           achados.set(entry.documentKey, { ...entry, ntVariant: true, matchedSearchKey: trecho, matchKind: "nt-variant" });
         });
@@ -784,7 +830,7 @@
     // caminho normal procura no índice os trechos do nome delimitados por
     // separadores, que é a única posição em que um código pode casar.
     let candidates = candidatesByIndexLookup(inputKey, index) || index.documents.filter((item) => (
-      containsDocumentKey(inputKey, item.documentKey)
+      containsDocumentKey(inputKey, item.documentKey) && !isForbiddenN1710NtAlias(inputKey, item)
     )).map((item) => ({ ...item, matchedSearchKey: item.documentKey, matchKind: "exact" }));
     if (!candidates.length) candidates = ntVariantCandidates(inputKey, index);
     if (!candidates.length) return [];
@@ -1266,7 +1312,16 @@
   function ntRenameInfo(input, document, finalName) {
     const naLd = text(document);
     if (!naLd || naLd === "Não localizado") return null;
-    const enviado = text(input && (input.document || input.name));
+    // Nas relações Excel o documento lógico já pode ter sido substituído pela
+    // grafia oficial da LD antes da triagem. Preserve a identidade originalmente
+    // informada, registrada no documentLookup, para que o relatório mostre o
+    // DE → PARA correto mesmo quando o PDF físico não foi fornecido.
+    const enviado = text(input && (
+      input.documentLookup && input.documentLookup.inputDocument
+      || input.documentLookupHint && input.documentLookupHint.inputDocument
+      || input.document
+      || input.name
+    ));
     if (!enviado) return null;
     const alvo = canonicalId(enviado);
     const chave = key(naLd);
@@ -1932,6 +1987,7 @@
     technicalPostingEvidenceForRevision,
     canonicalId,
     key,
+    isEtDocument,
     ntPrefixVariant,
     documentSearchKeys,
     ntPrefixForm,

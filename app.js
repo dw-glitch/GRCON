@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.31.15";
+  const APP_VERSION = "5.31.17";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -934,6 +934,7 @@
   function compactResultForWorker(row) {
     const item = row || {};
     return {
+      name: item.name || "",
       document: item.document || "",
       decision: item.decision || "",
       hardBlock: Boolean(item.hardBlock),
@@ -952,6 +953,28 @@
       grdt: item.grdt || "",
       effectiveDate: item.effectiveDate || "",
       postingStatus: item.postingStatus || "",
+      documentLookup: item.documentLookup ? {
+        inputDocument: item.documentLookup.inputDocument || "",
+        searchedKeys: Array.isArray(item.documentLookup.searchedKeys) ? item.documentLookup.searchedKeys.slice() : [],
+        searchedWithoutNt: item.documentLookup.searchedWithoutNt || "",
+        searchedWithNt: item.documentLookup.searchedWithNt || "",
+        appliesToNtRule: Boolean(item.documentLookup.appliesToNtRule),
+        matched: Boolean(item.documentLookup.matched),
+        matchedByNtVariant: Boolean(item.documentLookup.matchedByNtVariant),
+        ldDocument: item.documentLookup.ldDocument || "",
+        ldForm: item.documentLookup.ldForm || "",
+        searchResult: item.documentLookup.searchResult || "",
+        resultLabel: item.documentLookup.resultLabel || "",
+        message: item.documentLookup.message || "",
+      } : null,
+      ntVariant: Boolean(item.ntVariant),
+      ntRename: item.ntRename ? {
+        enviado: item.ntRename.enviado || "",
+        naLd: item.ntRename.naLd || "",
+        finalName: item.ntRename.finalName || "",
+        direcao: item.ntRename.direcao || "",
+        nota: item.ntRename.nota || "",
+      } : null,
       postingEvidence: item.postingEvidence ? {
         status: item.postingEvidence.status || "",
         explanation: item.postingEvidence.explanation || "",
@@ -1468,7 +1491,7 @@
   function relationTokens(value) {
     const textValue = String(value || "");
     const patterns = [
-      /\b(?:NT-)?(?:[IAFLED]-)?(?:CE|CR|DB|DE|EC|ET|FD|IM|IS|LA|LD|LI|LO|MA|MC|MD|MO|PR|PT|RL|RM|CT|SIT)-5290\.00-[0-9]{5}-[A-Z0-9]{3}-[A-Z0-9]{3}-[0-9]{3,5}\b/gi,
+      /\b(?:[IAFLED]-)?(?:CE|CR|DB|DE|EC|ET|FD|IM|IS|LA|LD|LI|LO|MA|MC|MD|MO|PR|PT|RL|RM|CT|SIT)-5290\.00-[0-9]{5}-[A-Z0-9]{3}-[A-Z0-9]{3}-[0-9]{3,5}\b/gi,
       /\b5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{4}\b/gi,
       /\b[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_[A-Z0-9_-]+\b/gi,
     ];
@@ -2182,6 +2205,17 @@
       }
       const existing = grouped.get(groupKey);
       if (fileEntry) existing.files.push(fileEntry);
+      // Se o mesmo documento chegou repetido nas duas grafias, preserve no
+      // resultado consolidado a evidência que exigiu ajuste. Sem isto, a linha
+      // exata que apareceu primeiro escondia a renomeação da outra entrada.
+      if (row.documentLookup && row.documentLookup.matchedByNtVariant
+        && !(existing.documentLookup && existing.documentLookup.matchedByNtVariant)) {
+        existing.documentLookup = row.documentLookup;
+      }
+      if (row.ntRename && !existing.ntRename) {
+        existing.ntVariant = true;
+        existing.ntRename = row.ntRename;
+      }
       if (row.documentRevisionWarning) {
         existing.documentRevisionWarning = [existing.documentRevisionWarning, row.documentRevisionWarning].filter(Boolean).join(" ");
       }
@@ -2209,6 +2243,7 @@
         row.relativePath = primary.relativePath;
         row.finalName = primary.finalName;
       }
+      if (row.ntRename) row.ntRename.finalName = row.finalName || row.ntRename.finalName || "";
       const hasPdf = row.files.some((entry) => extensionOf(entry.name) === "pdf");
       const hasNative = row.files.some((entry) => extensionOf(entry.name) !== "pdf");
       if (row.decision === C.READY && !hasPdf && !row.virtualFileName) {
@@ -4076,7 +4111,7 @@
         : ReportSummary.writeTable(summarySheet, summaryRows, summaryTableStart)
       : null;
     if (summaryTable) {
-      summarySheet.views = [{ showGridLines: false, zoomScale: 80, activeCell: `A${summaryTable.dataStart}` }];
+      summarySheet.views = [{ state: "frozen", ySplit: summaryTable.headerRow, showGridLines: false, zoomScale: 80, activeCell: `A${summaryTable.dataStart}` }];
     }
     summarySheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 }, printTitlesRow: summaryTable ? `${summaryTable.headerRow}:${summaryTable.headerRow}` : undefined };
     summarySheet.headerFooter.oddFooter = "&LGRCON&C&P de &N&R&D";

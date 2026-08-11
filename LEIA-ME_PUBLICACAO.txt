@@ -1,4 +1,12 @@
-GRCON 5.31.15 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.31.17 — PUBLICAÇÃO E PRIMEIRO ACESSO
+
+CORREÇÃO 5.31.17 — BUSCA COM/SEM NT-
+- A regra vale somente para documentos ET: o GRCON pesquisa o código informado e a forma alternativa com/sem NT- no início do 7º grupo.
+- Documentos N-1710 continuam sendo pesquisados somente na forma informada; NT- não faz parte do código N-1710.
+- Quando a LD possui a forma alternativa, o código oficial da LD determina o nome final do arquivo e o documento incluído na eGRDT.
+- A aba Resumo registra separadamente as duas formas pesquisadas, o código encontrado na LD e a renomeação DE → PARA.
+- A evidência da busca e da renomeação é preservada também no processamento em Worker usado para relações grandes.
+- A validação inclui a relação de 14.798 linhas fornecida para teste e uma carga automatizada de 15.000 códigos ET.
 
 ESCOPO
 - Esta versão integra somente os usuários do GRCON.

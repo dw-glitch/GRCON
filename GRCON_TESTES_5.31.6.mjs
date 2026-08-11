@@ -40,7 +40,7 @@ function record(id, overrides = {}) {
   });
 }
 
-function ldDocumentRecord(document, allocationStatus = "ALOCADO") {
+function ldDocumentRecord(document, allocationStatus = "ALOCADO", sheet = "ET") {
   return {
     document,
     documentKey: Core.key(document),
@@ -58,7 +58,7 @@ function ldDocumentRecord(document, allocationStatus = "ALOCADO") {
     fiscalComment: "",
     allocationStatus,
     allocation: allocationStatus === "ALOCADO" ? "ALOC-001" : "",
-    sheet: "N-1710",
+    sheet,
     row: 2,
     source: "LD_TESTE.xlsx",
     sourceTimestamp: 1,
@@ -67,32 +67,33 @@ function ldDocumentRecord(document, allocationStatus = "ALOCADO") {
   };
 }
 
-const ntBaseDocument = "MA-5290.00-22000-ABC-C1O-001";
+const ntBaseDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
+const ntDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_NT-SPE-AST-320019";
+const n1710Document = "MA-5290.00-22000-ABC-C1O-001";
 
 check("PDF com NT- localiza código sem NT- na LD e usa o nome oficial", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
-  const result = Core.triageOne({ id: "nt-1", name: `NT-${ntBaseDocument}_0001.pdf` }, index, {});
+  const result = Core.triageOne({ id: "nt-1", name: `${ntDocument}_0001.pdf` }, index, {});
   assert.equal(result.document, ntBaseDocument);
   assert.equal(result.documentLookup.matchedByNtVariant, true);
   assert.equal(result.documentLookup.ldForm, "Sem NT-");
-  assert.equal(result.finalName, `${ntBaseDocument}_0001_0.pdf`);
+  assert.equal(result.finalName, `${ntBaseDocument}_0001.pdf`);
   assert.equal(result.decision, Core.READY);
 });
 
 check("PDF sem NT- localiza código com NT- na LD e usa o nome oficial", () => {
-  const ldDocument = `NT-${ntBaseDocument}`;
-  const index = Core.buildIndex([ldDocumentRecord(ldDocument)], []);
+  const index = Core.buildIndex([ldDocumentRecord(ntDocument)], []);
   const result = Core.triageOne({ id: "nt-2", name: `${ntBaseDocument}_0001.pdf` }, index, {});
-  assert.equal(result.document, ldDocument);
+  assert.equal(result.document, ntDocument);
   assert.equal(result.documentLookup.matchedByNtVariant, true);
   assert.equal(result.documentLookup.ldForm, "Com NT-");
-  assert.equal(result.finalName, `${ldDocument}_0001_0.pdf`);
+  assert.equal(result.finalName, `${ntDocument}_0001.pdf`);
   assert.equal(result.decision, Core.READY);
 });
 
 check("busca alternativa preserva o bloqueio quando a forma da LD não está alocada", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO")], []);
-  const result = Core.triageOne({ id: "nt-3", name: `NT-${ntBaseDocument}.pdf` }, index, {});
+  const result = Core.triageOne({ id: "nt-3", name: `${ntDocument}.pdf` }, index, {});
   assert.equal(result.document, ntBaseDocument);
   assert.equal(result.hardBlock, true);
   assert.equal(Core.allocationState(result.allocationStatus).kind, "not_allocated");
@@ -101,31 +102,99 @@ check("busca alternativa preserva o bloqueio quando a forma da LD não está alo
 check("quando as duas formas existem na LD a forma exata prevalece", () => {
   const index = Core.buildIndex([
     ldDocumentRecord(ntBaseDocument, "ALOCADO"),
-    ldDocumentRecord(`NT-${ntBaseDocument}`, "NÃO ALOCADO"),
+    ldDocumentRecord(ntDocument, "NÃO ALOCADO"),
   ], []);
   const withoutNt = Core.triageOne({ id: "nt-4", name: `${ntBaseDocument}.pdf` }, index, {});
-  const withNt = Core.triageOne({ id: "nt-5", name: `NT-${ntBaseDocument}.pdf` }, index, {});
+  const withNt = Core.triageOne({ id: "nt-5", name: `${ntDocument}.pdf` }, index, {});
   assert.equal(withoutNt.record.allocationStatus, "ALOCADO");
   assert.equal(withNt.record.allocationStatus, "NÃO ALOCADO");
 });
 
 check("relação registra as duas formas pesquisadas e o código oficial da LD", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
-  const result = Core.triageOne({ id: "nt-6", name: `NT-${ntBaseDocument}.pdf` }, index, {});
+  const result = Core.triageOne({ id: "nt-6", name: `${ntDocument}.pdf` }, index, {});
   const summary = ReportSummary.buildRows([result], {})[0];
-  assert.equal(summary.requestedDocument, `NT-${ntBaseDocument}`);
+  assert.equal(summary.requestedDocument, ntDocument);
   assert.equal(summary.document, ntBaseDocument);
   assert.equal(summary.ldDocumentForm, "Sem NT-");
+  assert.equal(summary.ntSearchResult, "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD");
+  assert.equal(summary.searchedWithoutNt, ntBaseDocument);
+  assert.equal(summary.searchedWithNt, ntDocument);
+  assert.equal(summary.ldDocument, ntBaseDocument);
+  assert.match(summary.renameForEgrdt, /SIM — RENOMEADO/i);
+  assert.match(summary.renameForEgrdt, /De:.*Para:/i);
   assert.match(summary.ntLookup, /pesquisa com e sem NT-/i);
   assert.match(summary.ntLookup, /código exatamente como está na LD/i);
+});
+
+check("relação sem PDF físico preserva o DE → PARA depois de adotar o código da LD", () => {
+  const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
+  const match = Core.exactDocumentMatch(ntDocument, index);
+  const lookup = Core.documentLookup(ntDocument, match, [match]);
+  const result = Core.triageOne({
+    id: "nt-relation-only",
+    document: ntBaseDocument,
+    name: `${ntDocument}.pdf`,
+    documentLookupHint: lookup,
+  }, index, {});
+  const summary = ReportSummary.buildRows([result], {})[0];
+  assert.equal(result.documentLookup.matchedByNtVariant, true);
+  assert.ok(result.ntRename);
+  assert.equal(result.ntRename.enviado, ntDocument);
+  assert.equal(result.ntRename.naLd, ntBaseDocument);
+  assert.match(summary.renameForEgrdt, /SIM — RENOMEADO/i);
+  assert.match(summary.renameForEgrdt, new RegExp(`De: ${ntDocument.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 });
 
 check("ausência na LD informa que as formas com e sem NT- foram pesquisadas", () => {
   const index = Core.buildIndex([], []);
   const result = Core.triageOne({ id: "nt-7", document: ntBaseDocument, name: `${ntBaseDocument}.pdf` }, index, {});
   assert.equal(result.status, "Sem correspondência na LD");
-  assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, `NT-${ntBaseDocument}`]);
+  assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, ntDocument]);
+  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM NT-");
   assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
+});
+
+check("N-1710 não pesquisa nem aceita uma forma artificial com NT-", () => {
+  const index = Core.buildIndex([ldDocumentRecord(n1710Document, "ALOCADO", "N-1710")], []);
+  const exact = Core.triageOne({ id: "n1710-1", document: n1710Document, name: `${n1710Document}_0001.pdf` }, index, {});
+  assert.equal(exact.document, n1710Document);
+  assert.equal(exact.documentLookup.appliesToNtRule, false);
+  assert.equal(exact.documentLookup.resultLabel, "NÃO SE APLICA — localizado pela regra normal");
+  assert.deepEqual(exact.documentLookup.searchedKeys, [n1710Document]);
+
+  const invalidAlias = Core.triageOne({ id: "n1710-2", name: `NT-${n1710Document}_0001.pdf` }, index, {});
+  assert.equal(invalidAlias.status, "Sem correspondência na LD");
+  assert.equal(invalidAlias.documentLookup.appliesToNtRule, false);
+  assert.match(invalidAlias.documentLookup.message, /regra com\/sem NT- não se aplica/i);
+});
+
+check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantidade", () => {
+  const total = 15000;
+  const cases = Array.from({ length: total }, (_, index) => {
+    const suffix = String(index + 1).padStart(5, "0");
+    const withoutNt = `C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-TESTE-${suffix}`;
+    const withNt = `C1O_RNEST_U32_3.1.1.1_INS_RIR_NT-SPE-TESTE-${suffix}`;
+    return { input: index % 2 ? withoutNt : withNt, ld: index % 2 ? withNt : withoutNt };
+  });
+  const index = Core.buildIndex(cases.map((item) => ldDocumentRecord(item.ld)), []);
+  cases.forEach((item) => {
+    const match = Core.exactDocumentMatch(item.input, index);
+    assert.ok(match);
+    assert.equal(match.document, item.ld);
+    assert.equal(match.matchKind, "nt-variant");
+  });
+});
+
+check("relatório em Worker preserva a evidência NT e a renomeação", () => {
+  const source = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const compact = source.slice(source.indexOf("function compactResultForWorker"), source.indexOf("async function performanceSafeResults"));
+  assert.match(compact, /name:\s*item\.name/);
+  assert.match(compact, /documentLookup:\s*item\.documentLookup/);
+  assert.match(compact, /searchedWithoutNt/);
+  assert.match(compact, /searchedWithNt/);
+  assert.match(compact, /resultLabel/);
+  assert.match(compact, /ntRename:\s*item\.ntRename/);
 });
 
 check("histórico remove registro apagado na nuvem", () => {
@@ -268,7 +337,7 @@ check("manifesto declara o tamanho real do ícone", () => {
 
 check("service worker publica o cache isolado da versão atual", () => {
   const source = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(source, /grcon-v5\.31\.15/);
+  assert.match(source, /grcon-v5\.31\.17/);
   assert.match(source, /networkFirst/);
 });
 
@@ -306,4 +375,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.31.15", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.31.17", passed: true, checks: checks.length, names: checks }, null, 2));
