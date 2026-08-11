@@ -2,12 +2,14 @@
 
 Aplicativo web estático para triagem documental de LD, conferência de alocação, geração de eGRDT e histórico compartilhado no Supabase.
 
-## Regra com/sem `NT-`
+## Regra com/sem `nt-`
 
-A versão 5.32.0 pesquisa documentos **ET** nas duas formas:
+A versão 5.32.1 pesquisa documentos **ET** nas duas formas:
 
-1. o código informado, sem `NT-` no início do 7º grupo;
-2. a mesma identidade, com `NT-` no início do 7º grupo.
+1. o código informado, sem `nt-` no início do 7º grupo;
+2. a mesma identidade, com `nt-` minúsculo no início do 7º grupo.
+
+A relação, as mensagens de auditoria e as colunas de pesquisa preservam o prefixo como `nt-` minúsculo. A chave interna de comparação é normalizada apenas para permitir uma busca segura, sem alterar a grafia apresentada ao operador.
 
 Se a LD possuir somente a forma alternativa, o GRCON adota o código exatamente como está na LD, renomeia o PDF para essa forma e registra claramente `DE → PARA` no relatório. A condição de alocação da linha encontrada continua determinando se o documento pode entrar na eGRDT.
 

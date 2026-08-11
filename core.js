@@ -122,39 +122,51 @@
     return `${parts.prefix}${parts.identifier.replace(/^NT-/, "")}`;
   }
 
+  /**
+   * Forma de apresentação do código ET. A comparação continua normalizada pela
+   * função key(), mas o prefixo documental é sempre mostrado como "nt-".
+   */
+  function displayDocumentCode(value) {
+    const parts = etCodeParts(value);
+    if (!parts) return canonicalId(value);
+    return `${parts.prefix}${parts.identifier.replace(/^NT-/, "nt-")}`;
+  }
+
   /** A outra forma do mesmo código ET: sem o "nt-" se existe, com ele se não. */
   function ntPrefixVariant(value) {
     const parts = etCodeParts(value);
     if (!parts) return "";
     return parts.identifier.startsWith("NT-")
       ? `${parts.prefix}${parts.identifier.slice(3)}`
-      : `${parts.prefix}NT-${parts.identifier}`;
+      : `${parts.prefix}nt-${parts.identifier}`;
   }
 
   function documentSearchKeys(value) {
     const documentKey = key(value);
     if (!isEtDocument(documentKey)) return documentKey ? [documentKey] : [];
-    return [...new Set([documentKey, ntPrefixVariant(documentKey)].filter(Boolean))];
+    const withoutNt = ntNeutralKey(documentKey);
+    const withNt = ntNeutralKey(documentKey) === documentKey
+      ? ntPrefixVariant(documentKey)
+      : displayDocumentCode(documentKey);
+    return [...new Set([withoutNt, withNt].filter(Boolean))];
   }
 
   function ntPrefixForm(value) {
     const documentKey = key(value);
     if (!documentKey) return "Não localizado";
     if (!isEtDocument(documentKey)) return isN1710Context("", documentKey) ? "Não se aplica — N-1710" : "Não se aplica";
-    return ntNeutralKey(documentKey) !== documentKey ? "Com NT-" : "Sem NT-";
+    return ntNeutralKey(documentKey) !== documentKey ? "Com nt-" : "Sem nt-";
   }
 
   function documentLookup(identityValue, match, candidates) {
     const rawIdentity = text(identityValue).split(/[\\/]/).pop().replace(/\.[A-Z0-9]{1,8}$/i, "");
-    const inputDocument = text(match && match.matchedSearchKey) || canonicalId(rawIdentity);
+    const inputDocument = displayDocumentCode(text(match && match.matchedSearchKey) || rawIdentity);
     const ldDocument = text(match && match.document);
     const matched = Boolean(match && ldDocument);
     const appliesToNtRule = isEtDocument(inputDocument) || isEtDocument(ldDocument, match && match.group && match.group.records && match.group.records[0] && match.group.records[0].sheet);
     const searchedKeys = appliesToNtRule ? documentSearchKeys(inputDocument) : [key(inputDocument)].filter(Boolean);
     const searchedWithoutNt = appliesToNtRule ? ntNeutralKey(inputDocument) : "";
-    const searchedWithNt = appliesToNtRule
-      ? (ntPrefixForm(inputDocument) === "Com NT-" ? key(inputDocument) : ntPrefixVariant(inputDocument))
-      : "";
+    const searchedWithNt = appliesToNtRule ? searchedKeys[1] || "" : "";
     const matchedByNtVariant = Boolean(
       matched
       && appliesToNtRule
@@ -172,7 +184,7 @@
       "not-applicable-found": "NÃO SE APLICA — localizado pela regra normal",
       "not-applicable-not-found": "NÃO SE APLICA — não localizado",
       ambiguous: "MAIS DE UMA CORRESPONDÊNCIA — CONFERIR",
-      "not-found-both": "NÃO LOCALIZADO COM NEM SEM NT-",
+      "not-found-both": "NÃO LOCALIZADO COM NEM SEM nt-",
       "found-alternate-renamed": "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD",
       "found-exact": "LOCALIZADO NA MESMA FORMA",
     }[searchResult];
@@ -180,16 +192,16 @@
     if (!appliesToNtRule) {
       const n1710 = isN1710Context("", inputDocument || ldDocument);
       message = matched
-        ? `${n1710 ? "Documento N-1710: a regra com/sem NT- não se aplica." : "A regra com/sem NT- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada e localizado na LD como “${ldDocument}”.`
-        : `${n1710 ? "Documento N-1710: a regra com/sem NT- não se aplica." : "A regra com/sem NT- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada (${searchedKeys.join(" | ") || "código vazio"}) e não foi localizado na LD.`;
+        ? `${n1710 ? "Documento N-1710: a regra com/sem nt- não se aplica." : "A regra com/sem nt- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada e localizado na LD como “${ldDocument}”.`
+        : `${n1710 ? "Documento N-1710: a regra com/sem nt- não se aplica." : "A regra com/sem nt- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada (${searchedKeys.join(" | ") || "código vazio"}) e não foi localizado na LD.`;
     } else if (!matched) {
       message = ambiguous
-        ? `Pesquisa com e sem NT- realizada (${searchedKeys.join(" | ")}). Mais de uma correspondência foi localizada na LD; confira o código correto.`
-        : `Pesquisa com e sem NT- realizada (${searchedKeys.join(" | ")}). Nenhuma das duas formas foi localizada na LD.`;
+        ? `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Mais de uma correspondência foi localizada na LD; confira o código correto.`
+        : `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Nenhuma das duas formas foi localizada na LD.`;
     } else if (matchedByNtVariant) {
-      message = `Pesquisa com e sem NT- realizada (${searchedKeys.join(" | ")}). O código informado “${inputDocument}” foi localizado na LD ${ldFormInSentence} como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
+      message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). O código informado “${inputDocument}” foi localizado na LD ${ldFormInSentence} como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
     } else {
-      message = `Pesquisa com e sem NT- realizada (${searchedKeys.join(" | ")}). Localizado na LD exatamente como “${ldDocument}” (${ldFormInSentence}).`;
+      message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Localizado na LD exatamente como “${ldDocument}” (${ldFormInSentence}).`;
     }
     return {
       inputDocument,
@@ -1256,7 +1268,7 @@
     const hasSequence = sequenceExpression.test(originalStem);
     const withoutRevision = originalStem.replace(trailingExpression, "");
     const originalDocument = originalStem.replace(sequenceExpression, "");
-    const changedOnlyByNtPrefix = key(originalDocument) === ntPrefixVariant(document);
+    const changedOnlyByNtPrefix = key(originalDocument) === key(ntPrefixVariant(document));
     let base = hasSequence
       ? changedOnlyByNtPrefix ? `${document}_0001` : originalStem.replace(sequenceExpression, "_0001")
       : document;
@@ -1988,6 +2000,7 @@
     canonicalId,
     key,
     isEtDocument,
+    displayDocumentCode,
     ntPrefixVariant,
     documentSearchKeys,
     ntPrefixForm,

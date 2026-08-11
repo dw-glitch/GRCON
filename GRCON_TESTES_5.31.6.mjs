@@ -69,25 +69,25 @@ function ldDocumentRecord(document, allocationStatus = "ALOCADO", sheet = "ET") 
 }
 
 const ntBaseDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
-const ntDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_NT-SPE-AST-320019";
+const ntDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-AST-320019";
 const n1710Document = "MA-5290.00-22000-ABC-C1O-001";
 
-check("PDF com NT- localiza código sem NT- na LD e usa o nome oficial", () => {
+check("PDF com nt- localiza código sem nt- na LD e usa o nome oficial", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
   const result = Core.triageOne({ id: "nt-1", name: `${ntDocument}_0001.pdf` }, index, {});
   assert.equal(result.document, ntBaseDocument);
   assert.equal(result.documentLookup.matchedByNtVariant, true);
-  assert.equal(result.documentLookup.ldForm, "Sem NT-");
+  assert.equal(result.documentLookup.ldForm, "Sem nt-");
   assert.equal(result.finalName, `${ntBaseDocument}_0001.pdf`);
   assert.equal(result.decision, Core.READY);
 });
 
-check("PDF sem NT- localiza código com NT- na LD e usa o nome oficial", () => {
+check("PDF sem nt- localiza código com nt- na LD e usa o nome oficial", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntDocument)], []);
   const result = Core.triageOne({ id: "nt-2", name: `${ntBaseDocument}_0001.pdf` }, index, {});
   assert.equal(result.document, ntDocument);
   assert.equal(result.documentLookup.matchedByNtVariant, true);
-  assert.equal(result.documentLookup.ldForm, "Com NT-");
+  assert.equal(result.documentLookup.ldForm, "Com nt-");
   assert.equal(result.finalName, `${ntDocument}_0001.pdf`);
   assert.equal(result.decision, Core.READY);
 });
@@ -117,14 +117,15 @@ check("relação registra as duas formas pesquisadas e o código oficial da LD",
   const summary = ReportSummary.buildRows([result], {})[0];
   assert.equal(summary.requestedDocument, ntDocument);
   assert.equal(summary.document, ntBaseDocument);
-  assert.equal(summary.ldDocumentForm, "Sem NT-");
+  assert.equal(summary.ldDocumentForm, "Sem nt-");
   assert.equal(summary.ntSearchResult, "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD");
   assert.equal(summary.searchedWithoutNt, ntBaseDocument);
   assert.equal(summary.searchedWithNt, ntDocument);
   assert.equal(summary.ldDocument, ntBaseDocument);
   assert.match(summary.renameForEgrdt, /SIM — RENOMEADO/i);
   assert.match(summary.renameForEgrdt, /De:.*Para:/i);
-  assert.match(summary.ntLookup, /pesquisa com e sem NT-/i);
+  assert.match(summary.ntLookup, /Pesquisa com e sem nt-/);
+  assert.doesNotMatch(summary.ntLookup, /NT-/);
   assert.match(summary.ntLookup, /código exatamente como está na LD/i);
   const executive = ReportSummary.executiveRows([summary])[0];
   assert.equal(executive.requestedDocument, ntDocument);
@@ -138,10 +139,10 @@ check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de fo
   assert.deepEqual(headers, [
     "SITUAÇÃO GRCON",
     "CÓDIGO INFORMADO / PDF",
-    "PESQUISADO SEM NT-",
-    "PESQUISADO COM NT-",
+    "PESQUISADO SEM nt-",
+    "PESQUISADO COM nt-",
     "CÓDIGO ENCONTRADO NA LD",
-    "RESULTADO DA BUSCA COM/SEM NT-",
+    "RESULTADO DA BUSCA COM/SEM nt-",
     "ALOCADO?",
     "RENOMEAÇÃO DE → PARA",
     "ARQUIVO FINAL",
@@ -170,12 +171,12 @@ check("relação sem PDF físico preserva o DE → PARA depois de adotar o códi
   assert.match(summary.renameForEgrdt, new RegExp(`De: ${ntDocument.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 });
 
-check("ausência na LD informa que as formas com e sem NT- foram pesquisadas", () => {
+check("ausência na LD informa que as formas com e sem nt- foram pesquisadas", () => {
   const index = Core.buildIndex([], []);
   const result = Core.triageOne({ id: "nt-7", document: ntBaseDocument, name: `${ntBaseDocument}.pdf` }, index, {});
   assert.equal(result.status, "Sem correspondência na LD");
   assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, ntDocument]);
-  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM NT-");
+  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM nt-");
   assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
   const summary = ReportSummary.buildRows([result], {})[0];
   const executive = ReportSummary.executiveRows([summary])[0];
@@ -183,7 +184,7 @@ check("ausência na LD informa que as formas com e sem NT- foram pesquisadas", (
   assert.doesNotMatch(executive.executiveAction, /marcada como não alocada/i);
 });
 
-check("N-1710 não pesquisa nem aceita uma forma artificial com NT-", () => {
+check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   const index = Core.buildIndex([ldDocumentRecord(n1710Document, "ALOCADO", "N-1710")], []);
   const exact = Core.triageOne({ id: "n1710-1", document: n1710Document, name: `${n1710Document}_0001.pdf` }, index, {});
   assert.equal(exact.document, n1710Document);
@@ -191,10 +192,10 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com NT-", () => {
   assert.equal(exact.documentLookup.resultLabel, "NÃO SE APLICA — localizado pela regra normal");
   assert.deepEqual(exact.documentLookup.searchedKeys, [n1710Document]);
 
-  const invalidAlias = Core.triageOne({ id: "n1710-2", name: `NT-${n1710Document}_0001.pdf` }, index, {});
+  const invalidAlias = Core.triageOne({ id: "n1710-2", name: `nt-${n1710Document}_0001.pdf` }, index, {});
   assert.equal(invalidAlias.status, "Sem correspondência na LD");
   assert.equal(invalidAlias.documentLookup.appliesToNtRule, false);
-  assert.match(invalidAlias.documentLookup.message, /regra com\/sem NT- não se aplica/i);
+  assert.match(invalidAlias.documentLookup.message, /regra com\/sem nt- não se aplica/);
 });
 
 check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantidade", () => {
@@ -202,7 +203,7 @@ check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantid
   const cases = Array.from({ length: total }, (_, index) => {
     const suffix = String(index + 1).padStart(5, "0");
     const withoutNt = `C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-TESTE-${suffix}`;
-    const withNt = `C1O_RNEST_U32_3.1.1.1_INS_RIR_NT-SPE-TESTE-${suffix}`;
+    const withNt = `C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-TESTE-${suffix}`;
     return { input: index % 2 ? withoutNt : withNt, ld: index % 2 ? withNt : withoutNt };
   });
   const index = Core.buildIndex(cases.map((item) => ldDocumentRecord(item.ld)), []);
@@ -377,7 +378,7 @@ check("manifesto declara o tamanho real do ícone", () => {
 
 check("service worker publica o cache isolado da versão atual", () => {
   const source = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(source, /grcon-v5\.32\.0/);
+  assert.match(source, /grcon-v5\.32\.1/);
   assert.match(source, /networkFirst/);
 });
 
@@ -420,7 +421,7 @@ check("service worker publica o cache isolado da versão atual", () => {
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO GRCON");
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "RENOMEAÇÃO DE → PARA");
   assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
-  assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM NT-");
+  assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM nt-");
   checks.push("Excel do relatório reabre com Resumo Executivo e Auditoria detalhada");
 }
 
@@ -434,4 +435,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.0", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.1", passed: true, checks: checks.length, names: checks }, null, 2));

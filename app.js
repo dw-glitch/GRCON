@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.0";
+  const APP_VERSION = "5.32.1";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -3339,7 +3339,7 @@
           <p class="detail-line"><strong>Arquivo:</strong> ${escapeHtml(source)}</p>
           <p class="detail-line"><strong>Pacote:</strong> ${escapeHtml(files)}</p>
           <p class="detail-line"><strong>Identificação:</strong> ${escapeHtml(row.documentSource || "nome do arquivo")}</p>
-          <p class="detail-line"><strong>Busca com/sem NT-:</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
+          <p class="detail-line"><strong>Busca com/sem nt-:</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
           <p class="detail-line"><strong>Revisão:</strong> ${escapeHtml(row.revisionSource || "—")}</p>
           <p class="detail-line"><strong>LD:</strong> ${escapeHtml(sourceLine)}</p>
         </section>
@@ -3867,7 +3867,7 @@
         "CÓDIGO INFORMADO / PDF": row.documentLookup && row.documentLookup.inputDocument || row.name || "",
         "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.ldDocument || "",
         "FORMA LOCALIZADA NA LD": row.documentLookup && row.documentLookup.ldForm || "Não localizado",
-        "PESQUISA COM/SEM NT- NA LD": row.documentLookup && row.documentLookup.message || "",
+        "PESQUISA COM/SEM nt- NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
         "TÍTULO": row.record && row.record.title || "",

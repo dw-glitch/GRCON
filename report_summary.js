@@ -12,12 +12,12 @@
     { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
     { header: "CÓDIGO INFORMADO / PDF", key: "requestedDocument", width: 42 },
     { header: "DOCUMENTO USADO PELO GRCON", key: "document", width: 42 },
-    { header: "RESULTADO DA BUSCA COM/SEM NT-", key: "ntSearchResult", width: 38 },
-    { header: "PESQUISADO SEM NT-", key: "searchedWithoutNt", width: 45 },
-    { header: "PESQUISADO COM NT-", key: "searchedWithNt", width: 45 },
+    { header: "RESULTADO DA BUSCA COM/SEM nt-", key: "ntSearchResult", width: 38 },
+    { header: "PESQUISADO SEM nt-", key: "searchedWithoutNt", width: 45 },
+    { header: "PESQUISADO COM nt-", key: "searchedWithNt", width: 45 },
     { header: "CÓDIGO ENCONTRADO NA LD", key: "ldDocument", width: 45 },
     { header: "FORMA LOCALIZADA NA LD", key: "ldDocumentForm", width: 22 },
-    { header: "PESQUISA COM/SEM NT- NA LD", key: "ntLookup", width: 68 },
+    { header: "PESQUISA COM/SEM nt- NA LD", key: "ntLookup", width: 68 },
     { header: "RENOMEAÇÃO PARA ENTRAR NA EGRDT", key: "renameForEgrdt", width: 72 },
     { header: "TÍTULO (INFORMATIVO)", key: "title", width: 48 },
     { header: "ALOCADO?", key: "allocated", width: 23 },
@@ -54,10 +54,10 @@
   const EXECUTIVE_COLUMNS = Object.freeze([
     { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
     { header: "CÓDIGO INFORMADO / PDF", key: "requestedDocument", width: 42 },
-    { header: "PESQUISADO SEM NT-", key: "searchedWithoutNt", width: 43 },
-    { header: "PESQUISADO COM NT-", key: "searchedWithNt", width: 43 },
+    { header: "PESQUISADO SEM nt-", key: "searchedWithoutNt", width: 43 },
+    { header: "PESQUISADO COM nt-", key: "searchedWithNt", width: 43 },
     { header: "CÓDIGO ENCONTRADO NA LD", key: "ldDocument", width: 43 },
-    { header: "RESULTADO DA BUSCA COM/SEM NT-", key: "ntSearchResult", width: 38 },
+    { header: "RESULTADO DA BUSCA COM/SEM nt-", key: "ntSearchResult", width: 38 },
     { header: "ALOCADO?", key: "allocated", width: 23 },
     { header: "RENOMEAÇÃO DE → PARA", key: "renameForEgrdt", width: 66 },
     { header: "ARQUIVO FINAL", key: "finalFile", width: 42 },
@@ -243,7 +243,7 @@
         text(info.finalName || row && row.finalName) ? `Nome final no pacote/eGRDT: ${text(info.finalName || row && row.finalName)}.` : "",
       ].filter(Boolean).join(" ");
     }
-    if (!lookup.appliesToNtRule) return "NÃO SE APLICA — a regra com/sem NT- é exclusiva dos documentos ET.";
+    if (!lookup.appliesToNtRule) return "NÃO SE APLICA — a regra com/sem nt- é exclusiva dos documentos ET.";
     if (!lookup.matched) return "NÃO — não foi possível renomear porque o documento não foi localizado na LD em nenhuma das duas formas.";
     return `NÃO — o código informado já coincide com a forma da LD${text(row && row.finalName) ? `; nome final: ${text(row.finalName)}` : ""}.`;
   }
@@ -374,10 +374,10 @@
 
   function writeNtGuide(worksheet, startRow, lastColumn) {
     return writeGuide(worksheet, startRow, lastColumn, [
-      ["COMO LER A PESQUISA COM/SEM NT-", "FF153A5C", "FFFFFFFF", true],
-      ["Somente documentos ET: para cada código, o GRCON pesquisa na LD a forma sem NT- e a forma com NT- no início do 7º grupo.", "FFEAF2F8", "FF234B6B", false],
+      ["COMO LER A PESQUISA COM/SEM nt-", "FF153A5C", "FFFFFFFF", true],
+      ["Somente documentos ET: para cada código, o GRCON pesquisa na LD a forma sem nt- e a forma com nt- no início do 7º grupo.", "FFEAF2F8", "FF234B6B", false],
       ["Quando a outra forma é encontrada, a coluna “RENOMEAÇÃO PARA ENTRAR NA EGRDT” mostra claramente DE → PARA. O arquivo final sempre usa o código exatamente como está na LD.", "FFFFF3CF", "FF7A5300", false],
-      ["Documentos N-1710 não usam NT-: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
+      ["Documentos N-1710 não usam nt-: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
     ]);
   }
 
@@ -402,7 +402,7 @@
           ? "INCLUIR NA EGRDT. O documento está alocado e foi encontrado na outra forma; use o arquivo final renomeado exatamente como está na LD."
           : "INCLUIR NA EGRDT. O documento está alocado e o código informado já coincide com a forma da LD.";
       } else if (lookup.includes("NÃO LOCALIZADO") || lookup.includes("NAO LOCALIZADO")) {
-        executiveAction = "NÃO LOCALIZADO NA LD. O GRCON pesquisou as formas sem NT- e com NT-. Confira o código e a versão da LD antes de analisar novamente.";
+        executiveAction = "NÃO LOCALIZADO NA LD. O GRCON pesquisou as formas sem nt- e com nt-. Confira o código e a versão da LD antes de analisar novamente.";
       }
       return {
         ...item,
