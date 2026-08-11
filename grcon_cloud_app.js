@@ -16,6 +16,10 @@
     realtimeTopic: "",
     realtimeFailures: 0,
     realtimePollTimer: 0,
+    realtimeRetryTimer: 0,
+    realtimeGiveUpTimer: 0,
+    // "parado" | "conectando" | "ativo" | "indisponivel"
+    realtimeStatus: "parado",
     activationKey: "",
     profiles: new Map(),
     passwordRecovery: false,
@@ -666,9 +670,13 @@
     const onlineCount = $("#grcon-cloud-online-count");
     if (onlineCount) {
       const total = state.onlineUserIds.size;
-      onlineCount.textContent = state.online && total
-        ? `${total} usuário${total === 1 ? "" : "s"} online agora`
-        : state.online ? "" : "Offline";
+      // Antes, com o tempo real fora do ar, este campo ficava vazio e nada
+      // explicava por que "quem está online" nunca mostrava ninguém. Agora o
+      // app diz em que modo está trabalhando.
+      if (!state.online) onlineCount.textContent = "Offline";
+      else if (state.realtimeStatus === "indisponivel") onlineCount.textContent = "Presença indisponível nesta rede · atualizando a cada 45s";
+      else if (state.realtimeStatus === "ativo") onlineCount.textContent = total ? `${total} usuário${total === 1 ? "" : "s"} online agora` : "";
+      else onlineCount.textContent = "";
     }
     $("#grcon-cloud-invite").hidden = !canManageHistory();
     const invitationsPanel = $("#grcon-cloud-invitations-panel");
@@ -1152,21 +1160,33 @@
   function updateMembersOnlineStatus() {
     const target = $("#grcon-cloud-members");
     if (!target) return;
+    // Sem tempo real não existe presença. Marcar todo mundo como "Offline" seria
+    // dizer uma coisa que o app não sabe: o certo é assumir que não dá para saber.
+    const sabePresenca = state.realtimeStatus === "ativo";
     target.querySelectorAll("[data-member-user-id]").forEach((row) => {
-      const online = state.onlineUserIds.has(row.dataset.memberUserId);
+      const online = sabePresenca && state.onlineUserIds.has(row.dataset.memberUserId);
       row.classList.toggle("is-online", online);
+      row.classList.toggle("presenca-indisponivel", !sabePresenca);
       const dot = row.querySelector(".grcon-cloud-member-dot");
-      if (dot) dot.title = online ? "Online agora" : "Offline";
+      if (dot) dot.title = sabePresenca ? (online ? "Online agora" : "Offline") : "Presença indisponível nesta rede";
     });
   }
 
   // Quando o tempo real não se estabelece, o app não pode ficar sem sincronizar:
   // passa a buscar novidades por tempo, que é o que o canal faria de qualquer forma.
+  //
+  // A busca só roda com a aba à vista. Antes ela seguia de 60 em 60s mesmo com o
+  // GRCON esquecido em segundo plano o dia inteiro — consulta ao banco sem
+  // ninguém para ler o resultado, e o projeto é de plano gratuito.
+  const REALTIME_POLL_MS = 45000;
+  const REALTIME_RETRY_MS = 300000;
+
   function startRealtimeFallbackPolling() {
     if (state.realtimePollTimer) return;
     state.realtimePollTimer = window.setInterval(() => {
+      if (document.hidden) return;
       if (state.online && state.membership) scheduleSync();
-    }, 60000);
+    }, REALTIME_POLL_MS);
   }
 
   function stopRealtimeFallbackPolling() {
@@ -1175,10 +1195,52 @@
     state.realtimePollTimer = 0;
   }
 
+  // Desistir do tempo real era definitivo: o resto da sessão ficava só na busca
+  // por tempo, mesmo que a rede voltasse ao normal um minuto depois. Agora o app
+  // tenta de novo de tempos em tempos, e também assim que a aba volta à frente.
+  const REALTIME_GIVEUP_MS = 20000;
+
+  function scheduleRealtimeGiveUp(motivo) {
+    if (state.realtimeGiveUpTimer) return;
+    state.realtimeGiveUpTimer = window.setTimeout(() => {
+      state.realtimeGiveUpTimer = 0;
+      if (state.realtimeStatus === "ativo") return;
+      console.warn(`GRCON Cloud: tempo real indisponível (${motivo}); sincronizando periodicamente.`);
+      dropRealtime();
+      setRealtimeStatus("indisponivel");
+      scheduleRealtimeRetry();
+    }, REALTIME_GIVEUP_MS);
+  }
+
+  function clearRealtimeGiveUp() {
+    if (!state.realtimeGiveUpTimer) return;
+    window.clearTimeout(state.realtimeGiveUpTimer);
+    state.realtimeGiveUpTimer = 0;
+  }
+
+  function scheduleRealtimeRetry() {
+    if (state.realtimeRetryTimer) return;
+    state.realtimeRetryTimer = window.setTimeout(() => {
+      state.realtimeRetryTimer = 0;
+      if (state.realtimeStatus === "ativo") return;
+      state.realtimeFailures = 0;
+      subscribeRealtime();
+    }, REALTIME_RETRY_MS);
+  }
+
+  function setRealtimeStatus(status) {
+    if (state.realtimeStatus === status) return;
+    state.realtimeStatus = status;
+    updateAccountMenu();
+    updateMembersOnlineStatus();
+  }
+
   function dropRealtime() {
+    clearRealtimeGiveUp();
     if (state.realtime) state.client?.removeChannel?.(state.realtime);
     state.realtime = null;
     state.realtimeTopic = "";
+    state.onlineUserIds = new Set();
   }
 
   function subscribeRealtime() {
@@ -1188,6 +1250,7 @@
     // a cada ativação deixava o socket em ciclo de reconexão sem fim.
     if (state.realtime && state.realtimeTopic === topic) return;
     dropRealtime();
+    setRealtimeStatus("conectando");
     state.realtimeTopic = topic;
     let timer = 0;
     const channel = state.client.channel(topic, {
@@ -1211,7 +1274,9 @@
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           state.realtimeFailures = 0;
+          clearRealtimeGiveUp();
           stopRealtimeFallbackPolling();
+          setRealtimeStatus("ativo");
           if (state.session?.user?.id) {
             channel.track({ user_id: state.session.user.id, online_at: new Date().toISOString() });
           }
@@ -1221,11 +1286,20 @@
         // Antes nada tratava esses estados: o cliente ficava reconectando de
         // 10 em 10s indefinidamente, enchendo o console de erro. Depois de
         // algumas tentativas, desiste do tempo real e sincroniza por tempo.
+        //
+        // A busca por tempo começa já na primeira falha. Antes ela só entrava na
+        // quarta: durante quase um minuto o app não tinha nem tempo real nem
+        // busca periódica, e uma eGRDT gerada por outra pessoa nesse intervalo
+        // simplesmente não aparecia.
         state.realtimeFailures += 1;
-        if (state.realtimeFailures < 4) return;
-        console.warn(`GRCON Cloud: tempo real indisponível (${status}); sincronizando periodicamente.`);
-        dropRealtime();
         startRealtimeFallbackPolling();
+        // Desistir por CONTAGEM de falhas não funcionava no caso mais comum:
+        // quando a rede bloqueia WebSocket, o socket nunca abre e o supabase-js
+        // avisa TIMED_OUT uma única vez. O contador parava em 1, a condição
+        // nunca era atingida e o app ficava para sempre em "conectando", sem
+        // dizer nada e sem tentar de novo. Agora quem decide é o relógio: se em
+        // 20s o canal não entrou no ar, considera-se indisponível.
+        scheduleRealtimeGiveUp(status);
       });
     state.realtime = channel;
   }
@@ -1334,9 +1408,21 @@
       // morto e o app sem receber atualizações.
       dropRealtime();
       state.realtimeFailures = 0;
+      setRealtimeStatus("parado");
       updateAccountMenu();
       setSyncLabel("Offline · alterações ficam neste navegador", "warn");
       updateHistoryClearControl();
+    });
+    // Voltar para a aba é o melhor momento para recuperar o atraso: busca o que
+    // apareceu enquanto ela estava escondida e tenta o tempo real de novo, sem
+    // esperar os 5 minutos da retentativa periódica.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden || !state.online || !state.membership) return;
+      scheduleSync();
+      if (state.realtimeStatus === "indisponivel") {
+        state.realtimeFailures = 0;
+        subscribeRealtime();
+      }
     });
   }
 

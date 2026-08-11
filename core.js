@@ -578,12 +578,59 @@
     return { documentKey, document: representative && representative.document || text(value), group };
   }
 
+  // Um código só pode casar se começar e terminar em uma fronteira — antes e
+  // depois dele não pode haver letra ou número. Isso limita os trechos possíveis
+  // do nome do arquivo aos pedaços delimitados por separadores, que são poucos.
+  // Enumerar esses pedaços e procurá-los no índice dá o mesmo resultado de
+  // varrer a LD inteira, só que sem depender do tamanho dela.
+  const MAX_FRONTEIRAS = 40;
+
+  function boundaryPositions(inputKey) {
+    const inicios = [0];
+    const fins = [];
+    for (let i = 0; i < inputKey.length; i += 1) {
+      if (/[A-Z0-9]/.test(inputKey[i])) continue;
+      fins.push(i);
+      inicios.push(i + 1);
+    }
+    fins.push(inputKey.length);
+    return { inicios, fins };
+  }
+
+  function candidatesByIndexLookup(inputKey, index) {
+    if (!index.byDocument || !index.documents) return null;
+    const { inicios, fins } = boundaryPositions(inputKey);
+    // Texto muito picotado (uma colagem inteira, por exemplo) faria a
+    // combinação de fronteiras crescer demais; nesse caso a varredura antiga
+    // continua sendo o caminho mais previsível.
+    if (inicios.length > MAX_FRONTEIRAS || fins.length > MAX_FRONTEIRAS) return null;
+    if (!index.positionByKey) {
+      const posicoes = new Map();
+      index.documents.forEach((item, ordem) => {
+        if (!posicoes.has(item.documentKey)) posicoes.set(item.documentKey, { item, ordem });
+      });
+      try { Object.defineProperty(index, "positionByKey", { value: posicoes, enumerable: false, configurable: true }); }
+      catch (_) { index.positionByKey = posicoes; }
+    }
+    const encontrados = new Map();
+    inicios.forEach((inicio) => {
+      fins.forEach((fim) => {
+        // documentKey com menos de 7 caracteres nunca entra no índice.
+        if (fim - inicio < 7) return;
+        const trecho = inputKey.slice(inicio, fim);
+        const achado = index.positionByKey.get(trecho);
+        if (achado && !encontrados.has(trecho)) encontrados.set(trecho, achado);
+      });
+    });
+    return [...encontrados.values()].sort((a, b) => a.ordem - b.ordem).map((entrada) => entrada.item);
+  }
+
   function matchDocuments(nameOrText, index, hintedSheet) {
     const exact = exactDocumentMatch(nameOrText, index);
     if (exact) return [exact];
     const inputKey = canonicalId(nameOrText);
     const hint = norm(hintedSheet);
-    const candidates = index.documents.filter((item) => {
+    const candidates = candidatesByIndexLookup(inputKey, index) || index.documents.filter((item) => {
       let position = inputKey.indexOf(item.documentKey);
       while (position >= 0) {
         const before = position > 0 ? inputKey[position - 1] : "";
