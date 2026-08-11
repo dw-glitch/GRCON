@@ -7,7 +7,9 @@
     --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
     --text-1: #16212b;
     --text-2: #475766;
-    --text-3: #637481;
+    /* #637481 dava 4,49:1 sobre --surface-0, logo abaixo do mínimo AA de 4,5:1.
+       Este tom escurece o suficiente para passar sobre qualquer superfície clara. */
+    --text-3: #5e6f7c;
     --surface-0: #f4f7f9;
     --surface-1: #ffffff;
     --surface-2: #f8fafb;
@@ -20,6 +22,10 @@
     --brand-600: #1479a6;
     --brand-100: #e4f2f8;
     --brand-50: #f2f9fc;
+    /* Títulos e códigos em destaque. Existia só como fallback dentro de
+       var(--brand-strong, #123f61), então no tema escuro o texto continuava
+       azul-marinho sobre fundo escuro — praticamente ilegível (1,56:1). */
+    --brand-strong: #123f61;
     --accent-700: #14745f;
     --accent-100: #ddf4ed;
     --success-700: #14745f;
@@ -53,6 +59,21 @@
     --transition: 160ms ease;
   }
 
+  /* Apelidos da nomenclatura antiga (--color-*), usada pela tela de Análises e
+     pela busca unificada. Nunca chegaram a ser definidos: cada uso caía no
+     fallback fixo e claro, então no tema escuro a tela inteira ficava ilegível
+     (chegava a texto quase branco sobre cartão branco, 1,11:1). Como apelidos
+     dos tokens atuais, elas passam a acompanhar o tema sozinhas. */
+  :root, html[data-theme="dark"] {
+    --color-text: var(--text-1);
+    --color-text-muted: var(--text-3);
+    --color-primary: var(--brand-700);
+    --color-info: var(--brand-700);
+    --color-info-soft: var(--brand-100);
+    --color-border: var(--border-1);
+    --color-surface: var(--surface-1);
+  }
+
   html[data-theme="dark"] {
     color-scheme: dark;
     --text-1: #eef4f7;
@@ -70,6 +91,7 @@
     --brand-600: #51b5da;
     --brand-100: #193848;
     --brand-50: #142a36;
+    --brand-strong: #c5e8f7;
     --accent-700: #71d6bc;
     --accent-100: #173b34;
     --success-700: #70d7bc;
@@ -133,7 +155,9 @@
   .skip-link {
     position: fixed; z-index: 10000; inset: .75rem auto auto .75rem;
     transform: translateY(-160%); padding: .7rem 1rem; border-radius: var(--radius-sm);
-    color: white; background: var(--brand-800); transition: transform var(--transition);
+    /* --brand-800 é escuro no tema claro e claro no escuro; o texto precisa
+       acompanhar, senão o atalho fica branco sobre azul-claro (1,58:1). */
+    color: var(--surface-0); background: var(--brand-800); transition: transform var(--transition);
   }
   .skip-link:focus { transform: translateY(0); }
 }
