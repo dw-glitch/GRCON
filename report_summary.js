@@ -10,7 +10,10 @@
   const Large = typeof globalThis !== "undefined" ? globalThis.GrconLargeInput : null;
   const COLUMNS = Object.freeze([
     { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
+    { header: "CÓDIGO INFORMADO / PDF", key: "requestedDocument", width: 42 },
     { header: "DOCUMENTO", key: "document", width: 42 },
+    { header: "FORMA LOCALIZADA NA LD", key: "ldDocumentForm", width: 22 },
+    { header: "PESQUISA COM/SEM NT- NA LD", key: "ntLookup", width: 68 },
     { header: "TÍTULO (INFORMATIVO)", key: "title", width: 48 },
     { header: "ALOCADO?", key: "allocated", width: 23 },
     { header: "CONFIRMAÇÃO DE DOCUMENTOS PREVISTOS", key: "allocationStatus", width: 28 },
@@ -236,7 +239,10 @@
             : "PENDENTE";
       return {
         decision: decisionLabel(row),
+        requestedDocument: text(row && row.documentLookup && row.documentLookup.inputDocument || row && row.name),
         document: text(row && row.document),
+        ldDocumentForm: text(row && row.documentLookup && row.documentLookup.ldForm) || "Não localizado",
+        ntLookup: text(row && row.documentLookup && row.documentLookup.message),
         previousEgrdt: typeof settings.historyLookup === "function" ? text(settings.historyLookup(row && row.document)) : "",
         title: text(row && row.egrdt && row.egrdt.title || record.title),
         allocated: allocationLabel(row),
