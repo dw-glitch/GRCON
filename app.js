@@ -2146,7 +2146,7 @@
         file: row.file,
         name: row.name,
         relativePath: row.relativePath || row.name,
-        finalName: C.proposedFileName(row.name, row.document, row.revision),
+        finalName: C.proposedFileName(row.name, row.document, row.revision, row.sheet),
       } : null;
       if (!grouped.has(groupKey)) {
         grouped.set(groupKey, { ...row, files: fileEntry ? [fileEntry] : [] });
@@ -2172,7 +2172,7 @@
 
     return [...grouped.values()].map((row) => {
       row.files.forEach((entry) => {
-        entry.finalName = C.proposedFileName(entry.name, row.document, row.revision);
+        entry.finalName = C.proposedFileName(entry.name, row.document, row.revision, row.sheet);
       });
       const primary = row.files.find((entry) => extensionOf(entry.name) === "pdf") || row.files[0] || null;
       if (primary) {
@@ -4407,7 +4407,7 @@
     const errors = [];
     state.results.filter((row, index) => state.selected.has(index) && !row.hardBlock).forEach((row) => {
       (row.files || []).forEach((entry) => {
-        const check = C.validateFinalFileName(entry.finalName, entry.name, row.document, row.revision);
+        const check = C.validateFinalFileName(entry.finalName, entry.name, row.document, row.revision, row.sheet);
         const finalName = check.expected;
         if (!check.valid) errors.push(`${row.document}: ${check.errors.join(" ")}`);
         if (safeArchiveName(finalName) !== finalName) errors.push(`${row.document}: o nome final contém caractere incompatível com o ZIP.`);
