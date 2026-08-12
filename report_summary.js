@@ -47,26 +47,20 @@
     { header: "AJUSTE DE CÓDIGO (nt-)", key: "ntAdjustment", width: 88 },
   ]);
 
-  // A primeira aba do relatório precisa permitir uma decisão rápida mesmo
-  // quando a relação contém milhares de documentos. A auditoria completa
-  // continua disponível em COLUMNS, mas o Resumo usa somente as evidências que
-  // determinam a ação do operador.
+  // Quem lê o Resumo é gerência e coordenação, e a pergunta é sempre a mesma:
+  // o que entra, o que não entra e o que precisa de decisão. O caminho que o
+  // GRCON percorreu para chegar ali — formas pesquisadas, célula e linha da LD
+  // — é conferência técnica e fica na Auditoria detalhada, que segue completa.
   const EXECUTIVE_COLUMNS = Object.freeze([
-    { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
-    { header: "CÓDIGO INFORMADO / PDF", key: "requestedDocument", width: 42 },
-    { header: "PESQUISADO SEM nt-", key: "searchedWithoutNt", width: 43 },
-    { header: "PESQUISADO COM nt-", key: "searchedWithNt", width: 43 },
-    { header: "CÓDIGO ENCONTRADO NA LD", key: "ldDocument", width: 43 },
-    { header: "RESULTADO DA BUSCA COM/SEM nt-", key: "ntSearchResult", width: 38 },
-    { header: "ALOCADO?", key: "allocated", width: 23 },
-    // O número da alocação decide para qual pacote o documento vai, então
-    // precisa estar à vista no Resumo, e não só na auditoria detalhada.
-    { header: "ALOCAÇÃO", key: "allocation", width: 27 },
-    { header: "RENOMEAÇÃO DE → PARA", key: "renameForEgrdt", width: 66 },
-    { header: "ARQUIVO FINAL", key: "finalFile", width: 42 },
-    { header: "INCLUÍDO NA EGRDT?", key: "included", width: 22 },
-    { header: "MOTIVO / AÇÃO NECESSÁRIA", key: "executiveAction", width: 72 },
-    { header: "EVIDÊNCIA NA LD", key: "ldEvidence", width: 48 },
+    { header: "SITUAÇÃO", key: "decision", width: 24 },
+    { header: "DOCUMENTO INFORMADO", key: "requestedDocument", width: 44 },
+    { header: "ALOCADO?", key: "allocated", width: 22 },
+    // O número da alocação decide para qual pacote o documento vai.
+    { header: "ALOCAÇÃO", key: "allocation", width: 24 },
+    { header: "SERÁ RENOMEADO?", key: "renameForEgrdt", width: 58 },
+    { header: "ARQUIVO QUE SERÁ POSTADO", key: "finalFile", width: 44 },
+    { header: "ENTRA NA EGRDT?", key: "included", width: 20 },
+    { header: "O QUE FAZER", key: "executiveAction", width: 76 },
   ]);
 
   function text(value) {
@@ -246,9 +240,9 @@
         text(info.finalName || row && row.finalName) ? `Nome final no pacote/eGRDT: ${text(info.finalName || row && row.finalName)}.` : "",
       ].filter(Boolean).join(" ");
     }
-    if (!lookup.appliesToNtRule) return "NÃO SE APLICA — a regra com/sem nt- é exclusiva dos documentos ET.";
-    if (!lookup.matched) return "NÃO — não foi possível renomear porque o documento não foi localizado na LD em nenhuma das duas formas.";
-    return `NÃO — o código informado já coincide com a forma da LD${text(row && row.finalName) ? `; nome final: ${text(row.finalName)}` : ""}.`;
+    if (!lookup.matched) return "—";
+    if (!lookup.appliesToNtRule) return "NÃO — o código informado já é o da LD.";
+    return "NÃO — o código informado já é o da LD.";
   }
 
   function allFiscalComments(row) {
@@ -386,10 +380,61 @@
 
   function writeExecutiveGuide(worksheet, startRow, lastColumn) {
     return writeGuide(worksheet, startRow, lastColumn, [
-      ["LEITURA RÁPIDA DO RESULTADO", "FF153A5C", "FFFFFFFF", true],
-      ["Use esta aba para decidir o que entra na eGRDT. A aba “Auditoria detalhada” preserva todas as colunas técnicas e evidências da LD.", "FFEAF2F8", "FF234B6B", false],
-      ["Amarelo indica que o código ET foi localizado na outra forma e será renomeado exatamente como está na LD. Vermelho indica bloqueio ou ausência nas duas formas.", "FFFFF3CF", "FF7A5300", false],
+      ["COMO LER A RELAÇÃO ABAIXO", "FF153A5C", "FFFFFFFF", true],
+      ["Cada linha é um documento. A coluna “ENTRA NA EGRDT?” responde se ele será postado, e “O QUE FAZER” diz o que falta quando não será.", "FFEAF2F8", "FF234B6B", false],
+      ["Amarelo: o documento entra, mas o arquivo será renomeado para o código exatamente como está na LD. Vermelho: não entra e depende de uma correção antes.", "FFFFF3CF", "FF7A5300", false],
     ]);
+  }
+
+  /**
+   * Perguntas que a gerência faz ao abrir o relatório, já respondidas com os
+   * números desta análise. Sem jargão e sem detalhe de funcionamento do
+   * aplicativo: só o que decide a ação.
+   */
+  function executiveBriefing(rows) {
+    const lista = rows || [];
+    const total = lista.length;
+    const pct = (n) => (total ? ` (${Math.round((n / total) * 100)}% do total)` : "");
+    const conta = (fn) => lista.filter(fn).length;
+    const incluido = (item) => text(item.included).toUpperCase() === "SIM";
+    const bloqueado = (item) => text(item.included).toUpperCase().includes("BLOQUEADO");
+    const emAnalise = (item) => text(item.included).toUpperCase().includes("EM ANÁLISE");
+    const pendente = (item) => text(item.included).toUpperCase() === "PENDENTE";
+    const naoAlocado = (item) => {
+      const valor = text(item.allocated).toUpperCase();
+      return valor.includes("NÃO") && valor.includes("ALOCADO");
+    };
+    const semLd = (item) => text(item.ntSearchResult).toUpperCase().includes("NÃO LOCALIZADO")
+      || text(item.ntSearchResult).toUpperCase().includes("NAO LOCALIZADO");
+    const renomeado = (item) => text(item.renameForEgrdt).toUpperCase().startsWith("SIM");
+
+    const entram = conta(incluido);
+    const naoEntram = total - entram;
+    const perguntas = [
+      ["Quantos documentos foram analisados?", `${total.toLocaleString("pt-BR")} documento(s).`],
+      ["Quantos serão postados nesta eGRDT?", entram
+        ? `${entram.toLocaleString("pt-BR")}${pct(entram)}.`
+        : "Nenhum. Nenhum documento reuniu as condições para ser postado."],
+      ["Quantos ficaram de fora?", naoEntram
+        ? `${naoEntram.toLocaleString("pt-BR")}${pct(naoEntram)}. Os motivos estão detalhados no quadro ao lado.`
+        : "Nenhum. Todos os documentos analisados serão postados."],
+      ["Algum arquivo precisou ser renomeado?", conta(renomeado)
+        ? `Sim, ${conta(renomeado).toLocaleString("pt-BR")} arquivo(s). O nome passa a ser o código exatamente como está na LD, que é a forma aceita na postagem.`
+        : "Não. Todos os códigos informados já coincidiam com a LD."],
+      ["O que depende de outra pessoa?", conta(naoAlocado)
+        ? `${conta(naoAlocado).toLocaleString("pt-BR")} documento(s) dependem da regularização da alocação na LD antes de qualquer nova tentativa.`
+        : "Nada. Nenhum documento está travado por alocação."],
+    ];
+
+    const motivos = [
+      ["Não estão alocados na LD", conta((item) => !incluido(item) && naoAlocado(item)), "Regularizar a alocação na LD."],
+      ["Não constam na LD", conta((item) => !incluido(item) && !naoAlocado(item) && semLd(item)), "Conferir o código informado e a versão da LD."],
+      ["Aguardam retorno da análise", conta((item) => !incluido(item) && !naoAlocado(item) && !semLd(item) && emAnalise(item)), "Aguardar o retorno; o documento não é reenviado."],
+      ["Bloqueados por outra pendência", conta((item) => !incluido(item) && !naoAlocado(item) && !semLd(item) && !emAnalise(item) && bloqueado(item)), "Ver “O QUE FAZER” na relação abaixo."],
+      ["Precisam de conferência manual", conta((item) => !incluido(item) && !naoAlocado(item) && !semLd(item) && !emAnalise(item) && !bloqueado(item) && pendente(item)), "Conferir caso a caso na relação abaixo."],
+    ].filter(([, quantidade]) => quantidade > 0);
+
+    return { total, entram, naoEntram, renomeados: conta(renomeado), perguntas, motivos };
   }
 
   function executiveRows(rows) {
@@ -397,15 +442,18 @@
       const included = text(item.included).toUpperCase();
       const allocated = text(item.allocated).toUpperCase();
       const lookup = text(item.ntSearchResult).toUpperCase();
+      // Texto escrito para quem decide, não para quem opera o aplicativo:
+      // o que acontece com o documento e de quem depende resolver.
       let executiveAction = text(item.observation);
       if (allocated.includes("NÃO") && allocated.includes("ALOCADO")) {
-        executiveAction = "NÃO INCLUIR NA EGRDT. A forma encontrada na LD está marcada como não alocada. Regularize a alocação e analise novamente. Consulte a aba “Auditoria detalhada” para a célula, o comentário da Fiscal e as demais evidências.";
+        const comentario = text(item.fiscalComment);
+        executiveAction = `Não será postado: o documento não está alocado na LD.${comentario ? ` Comentário da Fiscal: ${comentario}` : ""} Regularize a alocação na LD para liberar a postagem.`;
       } else if (included === "SIM") {
         executiveAction = text(item.renameForEgrdt).toUpperCase().startsWith("SIM")
-          ? "INCLUIR NA EGRDT. O documento está alocado e foi encontrado na outra forma; use o arquivo final renomeado exatamente como está na LD."
-          : "INCLUIR NA EGRDT. O documento está alocado e o código informado já coincide com a forma da LD.";
+          ? "Será postado. O arquivo entra com o código exatamente como está na LD, que é a forma aceita na postagem."
+          : "Será postado. Não há pendências neste documento.";
       } else if (lookup.includes("NÃO LOCALIZADO") || lookup.includes("NAO LOCALIZADO")) {
-        executiveAction = "NÃO LOCALIZADO NA LD. O GRCON pesquisou as formas sem nt- e com nt-. Confira o código e a versão da LD antes de analisar novamente.";
+        executiveAction = "Não será postado: este código não consta na LD. Confira o código informado e se a LD em uso é a versão mais recente.";
       }
       return {
         ...item,
@@ -444,7 +492,7 @@
       worksheet.getColumn(index + 1).width = column.width;
     });
     worksheet.getRow(headerRow).height = 34;
-    return { titleRow, headerRow, dataStart, lastColumn, columns, rows };
+    return { titleRow, headerRow, dataStart, lastColumn, columns, rows, executive: Boolean(settings.executive) };
   }
 
   function styleBaseRow(row, item, rowIndex, columns) {
@@ -533,7 +581,12 @@
   function finishTable(worksheet, layout, rowCount) {
     const finalRow = Math.max(layout.headerRow, layout.dataStart + rowCount - 1);
     worksheet.autoFilter = { from: `A${layout.headerRow}`, to: `${layout.lastColumn}${finalRow}` };
-    worksheet.views = [{ state: "frozen", ySplit: layout.headerRow, activeCell: `A${layout.dataStart}`, showGridLines: false, zoomScale: 80 }];
+    // O Resumo é lido de cima para baixo, junto com o bloco de perguntas, e o
+    // painel congelado atrapalhava essa leitura. Na Auditoria detalhada, que é
+    // uma tabela longa de conferência, o cabeçalho fixo continua ajudando.
+    worksheet.views = layout.executive
+      ? [{ showGridLines: false, zoomScale: 85, activeCell: "A1" }]
+      : [{ state: "frozen", ySplit: layout.headerRow, activeCell: `A${layout.dataStart}`, showGridLines: false, zoomScale: 80 }];
     return { ...layout, finalRow };
   }
 
@@ -572,12 +625,12 @@
 
   function writeExecutiveTable(worksheet, rows, startRow) {
     const source = executiveRows(rows);
-    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, { executive: true, title: "RESUMO EXECUTIVO POR DOCUMENTO" }));
+    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, { executive: true, title: "RELAÇÃO DOS DOCUMENTOS ANALISADOS" }));
   }
 
   async function writeExecutiveTableAsync(worksheet, rows, startRow) {
     const source = executiveRows(rows);
-    const layout = prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, { executive: true, title: "RESUMO EXECUTIVO POR DOCUMENTO" });
+    const layout = prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, { executive: true, title: "RELAÇÃO DOS DOCUMENTOS ANALISADOS" });
     if (!Large || !Large.pause || source.length <= 600) return writeRows(worksheet, source, layout);
     return writeRowsAsync(worksheet, source, layout);
   }
@@ -588,6 +641,7 @@
     allocationReason,
     buildRows,
     buildRowsAsync,
+    executiveBriefing,
     executiveRows,
     writeTable,
     writeTableAsync,

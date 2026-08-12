@@ -116,7 +116,7 @@
     const metadataText = [
       `Período: ${periodLabel(source, opts.startDate, opts.endDate)}`,
       `Gerado em: ${formatDate(new Date(), true)}`,
-      `GRCON versão ${opts.appVersion || "5.32.3"}`,
+      `GRCON versão ${opts.appVersion || "5.32.4"}`,
     ].join(" · ");
 
     summarySheet.mergeCells("A3:H3");

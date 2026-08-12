@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.3";
+  const APP_VERSION = "5.32.4";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -4035,11 +4035,12 @@
     const metadata = `${ldDisplayName() || "LD não informada"} · Versão da LD enviada: ${reportLdVersion} · ${new Date().toLocaleString("pt-BR")}`;
 
     const summarySheet = workbook.addWorksheet("Resumo", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
-    // Os cinco cartões ocupam 15 colunas. A primeira aba usa somente as
-    // colunas executivas; a auditoria técnica completa fica em uma aba própria.
-    const summaryColumnCount = Math.max(15, ReportSummary ? ReportSummary.EXECUTIVE_COLUMNS.length : 15);
+    // A folha inteira usa exatamente a largura da relação. Antes as faixas do
+    // topo iam até a coluna 15 enquanto a tabela parava na 8: os títulos
+    // atravessavam a página muito além dos dados.
+    const summaryColumnCount = ReportSummary ? ReportSummary.EXECUTIVE_COLUMNS.length : 8;
     const summaryLastColumn = (() => { let n = summaryColumnCount, result = ""; while (n > 0) { n -= 1; result = String.fromCharCode(65 + (n % 26)) + result; n = Math.floor(n / 26); } return result; })();
-    summarySheet.columns = Array.from({ length: summaryColumnCount }, () => ({ width: 15 }));
+    summarySheet.columns = (ReportSummary ? ReportSummary.EXECUTIVE_COLUMNS : []).map((column) => ({ width: column.width }));
     for (let row = 1; row <= 3; row += 1) for (let col = 1; col <= summaryColumnCount; col += 1) summarySheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
     summarySheet.mergeCells(`C1:${summaryLastColumn}2`);
     summarySheet.getCell("C1").value = "GRCON · RELATÓRIO DE TRIAGEM DOCUMENTAL";
@@ -4051,16 +4052,33 @@
     summarySheet.getCell("A4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } };
     summarySheet.getCell("A4").alignment = { vertical: "middle" };
 
+    const summaryRows = ReportSummary
+      ? ReportSummary.buildRowsAsync
+        ? await ReportSummary.buildRowsAsync(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
+        : ReportSummary.buildRows(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
+      : [];
+
+    // O Resumo responde perguntas, em vez de listar parâmetros da execução.
+    // Versão do aplicativo, motor documental e contagem de linhas da LD são
+    // conferência técnica e continuam na Auditoria detalhada.
+    const briefing = ReportSummary && ReportSummary.executiveBriefing
+      ? ReportSummary.executiveBriefing(summaryRows)
+      : { perguntas: [], motivos: [] };
+
+    // Rótulos em linguagem de quem lê, não em vocabulário do aplicativo. Os
+    // três primeiros cartões fecham a conta (analisados = postados + fora); o
+    // quarto é outra dimensão, para não induzir a somar coisas diferentes.
     const cards = [
-      ["TOTAL", summary.total, "FF2E5878"],
-      ["PRONTOS", summary.pronto, "FF0C7657"],
-      ["BLOQUEADOS", summary.bloqueado, "FFA64035"],
-      ["EM ANÁLISE", summary.descartar, "FF66798B"],
-      ["REVISAR", summary.revisar, "FFA56812"],
+      ["DOCUMENTOS ANALISADOS", briefing.total, "FF2E5878"],
+      ["SERÃO POSTADOS", briefing.entram, "FF0C7657"],
+      ["NÃO SERÃO POSTADOS", briefing.naoEntram, "FFA64035"],
+      ["ARQUIVOS RENOMEADOS", briefing.renomeados, "FFA56812"],
     ];
+    const larguraCartao = Math.max(1, Math.floor(summaryColumnCount / cards.length));
     cards.forEach(([label, count, color], index) => {
-      const start = index * 3 + 1;
-      summarySheet.mergeCells(6, start, 8, start + 2);
+      const start = index * larguraCartao + 1;
+      const fim = index === cards.length - 1 ? summaryColumnCount : start + larguraCartao - 1;
+      summarySheet.mergeCells(6, start, 8, fim);
       const cell = summarySheet.getCell(6, start);
       cell.value = { richText: [
         { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF6F7E8C" } }, text: `${label}\n` },
@@ -4071,50 +4089,92 @@
       cell.border = { left: { style: "medium", color: { argb: color } }, top: { style: "thin", color: { argb: "FFDCE4EA" } }, right: { style: "thin", color: { argb: "FFDCE4EA" } }, bottom: { style: "thin", color: { argb: "FFDCE4EA" } } };
     });
 
-    summarySheet.mergeCells(`A10:${summaryLastColumn}10`);
-    summarySheet.getCell("A10").value = "DADOS DA ANÁLISE";
-    summarySheet.getCell("A10").font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-    summarySheet.getCell("A10").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
-    const details = [
-      ["Versão do aplicativo", APP_VERSION],
-      ["Versão do motor documental", DOCUMENT_ENGINE_VERSION],
-      ["LD(s) carregada(s)", ldDisplayName() || "Não informado"],
-      ["Versão da LD enviada (coluna da aba ET)", reportLdVersion],
-      ["Tipo de entrada", relationSourceKind() || "Pasta documental"],
-      ["Relação usada", relationSourceLabel() || "Não utilizada"],
-      ["Itens da relação", state.listSummary ? state.listSummary.total : ""],
-      ["Arquivos físicos localizados", state.listSummary ? state.listSummary.matched : ""],
-      ["Linhas técnicas da LD", state.ldIntegrity ? state.ldIntegrity.records : ""],
-      ["Linhas da base SIGEM", state.ldIntegrity ? state.ldIntegrity.history : ""],
-      ["Janela de emissão recente", `${state.recentDays} dias`],
-      ["Integridade", "Os arquivos originais não foram alterados nem excluídos."],
-    ];
-    details.forEach(([label, value], index) => {
+    // As perguntas ocupam a metade esquerda e os motivos a direita, sempre
+    // dentro da largura da relação.
+    const meioColuna = Math.max(1, Math.floor(summaryColumnCount / 2));
+    const colunaDireita = (() => { let n = meioColuna + 1, r = ""; while (n > 0) { n -= 1; r = String.fromCharCode(65 + (n % 26)) + r; n = Math.floor(n / 26); } return r; })();
+    const colunaMeio = (() => { let n = meioColuna, r = ""; while (n > 0) { n -= 1; r = String.fromCharCode(65 + (n % 26)) + r; n = Math.floor(n / 26); } return r; })();
+
+    const faixa = (row, texto, ate) => {
+      summarySheet.mergeCells(`A${row}:${ate}${row}`);
+      const cell = summarySheet.getCell(`A${row}`);
+      cell.value = texto;
+      cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
+      cell.alignment = { vertical: "middle" };
+      summarySheet.getRow(row).height = 22;
+    };
+
+    faixa(10, "O QUE ESTE RELATÓRIO RESPONDE", colunaMeio);
+    briefing.perguntas.forEach(([pergunta, resposta], index) => {
       const row = 11 + index;
+      summarySheet.mergeCells(`A${row}:${colunaMeio}${row}`);
+      const cell = summarySheet.getCell(`A${row}`);
+      cell.value = { richText: [
+        { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF153A5C" } }, text: `${pergunta}  ` },
+        { font: { name: "Aptos", size: 9, color: { argb: "FF31465A" } }, text: resposta },
+      ] };
+      cell.alignment = { vertical: "middle", wrapText: true, indent: 1 };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: index % 2 ? "FFF8FAFC" : "FFFFFFFF" } };
+      cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
+      summarySheet.getRow(row).height = 30;
+    });
+
+    // Ao lado, onde os documentos que ficaram de fora se concentram.
+    summarySheet.mergeCells(`${colunaDireita}10:${summaryLastColumn}10`);
+    const tituloMotivos = summarySheet.getCell(`${colunaDireita}10`);
+    tituloMotivos.value = "POR QUE ALGUNS NÃO SERÃO POSTADOS";
+    tituloMotivos.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+    tituloMotivos.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
+    tituloMotivos.alignment = { vertical: "middle" };
+
+    const motivos = briefing.motivos.length
+      ? briefing.motivos
+      : [["Nenhum documento ficou de fora", 0, "Todos os documentos analisados serão postados."]];
+    motivos.slice(0, briefing.perguntas.length).forEach(([motivo, quantidade, acao], index) => {
+      const row = 11 + index;
+      summarySheet.mergeCells(`${colunaDireita}${row}:${summaryLastColumn}${row}`);
+      const cell = summarySheet.getCell(`${colunaDireita}${row}`);
+      cell.value = { richText: [
+        { font: { name: "Aptos Display", size: 12, bold: true, color: { argb: quantidade ? "FFA64035" : "FF0C7657" } }, text: quantidade ? `${quantidade.toLocaleString("pt-BR")}  ` : "" },
+        { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF153A5C" } }, text: `${motivo}. ` },
+        { font: { name: "Aptos", size: 9, color: { argb: "FF31465A" } }, text: acao },
+      ] };
+      cell.alignment = { vertical: "middle", wrapText: true, indent: 1 };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: index % 2 ? "FFF8FAFC" : "FFFFFFFF" } };
+      cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
+    });
+
+    const linhasBloco = Math.max(briefing.perguntas.length, motivos.length);
+    const origemRow = 12 + linhasBloco;
+    faixa(origemRow, "DE ONDE VEIO ESTA ANÁLISE", summaryLastColumn);
+    const origem = [
+      ["Lista de documentos (LD)", ldDisplayName() || "Não informado"],
+      ["Versão da LD enviada", reportLdVersion],
+      ["Documentos conferidos a partir de", relationSourceLabel() || "Pasta documental"],
+    ];
+    origem.forEach(([label, value], index) => {
+      const row = origemRow + 1 + index;
       summarySheet.mergeCells(`A${row}:D${row}`);
       summarySheet.mergeCells(`E${row}:${summaryLastColumn}${row}`);
       summarySheet.getCell(`A${row}`).value = label;
       summarySheet.getCell(`E${row}`).value = value;
       summarySheet.getCell(`A${row}`).font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF53697B" } };
       summarySheet.getCell(`E${row}`).font = { name: "Aptos", size: 9, color: { argb: "FF263E52" } };
+      summarySheet.getCell(`A${row}`).alignment = { vertical: "middle", indent: 1 };
       summarySheet.getCell(`E${row}`).alignment = { vertical: "middle", wrapText: true };
       if (index % 2) for (let col = 1; col <= summaryColumnCount; col += 1) summarySheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
     });
 
-    const summaryTableStart = 12 + details.length;
-    const summaryRows = ReportSummary
-      ? ReportSummary.buildRowsAsync
-        ? await ReportSummary.buildRowsAsync(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
-        : ReportSummary.buildRows(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
-      : [];
+    const summaryTableStart = origemRow + origem.length + 2;
     const summaryTable = ReportSummary
       ? ReportSummary.writeExecutiveTableAsync
         ? await ReportSummary.writeExecutiveTableAsync(summarySheet, summaryRows, summaryTableStart)
         : ReportSummary.writeExecutiveTable(summarySheet, summaryRows, summaryTableStart)
       : null;
-    if (summaryTable) {
-      summarySheet.views = [{ state: "frozen", ySplit: summaryTable.headerRow, showGridLines: false, zoomScale: 80, activeCell: `A${summaryTable.dataStart}` }];
-    }
+    // Sem painel congelado: o Resumo é para ser lido de cima para baixo, e o
+    // congelamento só atrapalhava a leitura do bloco de perguntas.
+    summarySheet.views = [{ showGridLines: false, zoomScale: 85, activeCell: "A1" }];
     summarySheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 }, printTitlesRow: summaryTable ? `${summaryTable.headerRow}:${summaryTable.headerRow}` : undefined };
     summarySheet.headerFooter.oddFooter = "&LGRCON&C&P de &N&R&D";
     await addReportLogo(workbook, summarySheet);
