@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 5.32.4 — 2026-08-12
+
+- Resumo do relatório reescrito para gerência e coordenação: começa respondendo quantos documentos foram analisados, quantos serão postados, quantos ficaram de fora e de quem depende resolver.
+- Quadro "Por que alguns não serão postados" agrupa os pendentes por motivo, com a ação de cada grupo.
+- Relação do Resumo reduzida a oito colunas de decisão; a conferência técnica continua inteira na Auditoria detalhada.
+- Textos deixam de citar o funcionamento do aplicativo e passam a dizer o que acontece com o documento.
+- Painel congelado removido do Resumo, que agora é lido de cima para baixo.
+
 ## 5.32.3 — 2026-08-12
 
 - renomeia o status "Sem correspondência na LD" para "Não consta na LD"

@@ -137,19 +137,14 @@ check("relação registra as duas formas pesquisadas e o código oficial da LD",
 check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de forma didática", () => {
   const headers = ReportSummary.EXECUTIVE_COLUMNS.map((column) => column.header);
   assert.deepEqual(headers, [
-    "SITUAÇÃO GRCON",
-    "CÓDIGO INFORMADO / PDF",
-    "PESQUISADO SEM nt-",
-    "PESQUISADO COM nt-",
-    "CÓDIGO ENCONTRADO NA LD",
-    "RESULTADO DA BUSCA COM/SEM nt-",
+    "SITUAÇÃO",
+    "DOCUMENTO INFORMADO",
     "ALOCADO?",
     "ALOCAÇÃO",
-    "RENOMEAÇÃO DE → PARA",
-    "ARQUIVO FINAL",
-    "INCLUÍDO NA EGRDT?",
-    "MOTIVO / AÇÃO NECESSÁRIA",
-    "EVIDÊNCIA NA LD",
+    "SERÁ RENOMEADO?",
+    "ARQUIVO QUE SERÁ POSTADO",
+    "ENTRA NA EGRDT?",
+    "O QUE FAZER",
   ]);
 });
 
@@ -181,8 +176,10 @@ check("ausência na LD informa que as formas com e sem nt- foram pesquisadas", (
   assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
   const summary = ReportSummary.buildRows([result], {})[0];
   const executive = ReportSummary.executiveRows([summary])[0];
-  assert.match(executive.executiveAction, /NÃO LOCALIZADO NA LD/i);
-  assert.doesNotMatch(executive.executiveAction, /marcada como não alocada/i);
+  assert.match(executive.executiveAction, /não consta na LD/i);
+  assert.doesNotMatch(executive.executiveAction, /não está alocado/i);
+  // O Resumo é lido por gerência: nada de vocabulário do aplicativo.
+  assert.doesNotMatch(executive.executiveAction, /GRCON|aba “Auditoria detalhada”/i);
 });
 
 check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
@@ -300,8 +297,13 @@ check("Workers externos usam os módulos atuais e exportam as duas abas do relat
   assert.match(facade, /workers\/triage\.worker\.js/);
   assert.match(facade, /workers\/export\.worker\.js/);
   assert.match(exportWorker, /\.\.\/report_summary\.js/);
-  assert.match(exportWorker, /writeExecutiveTableAsync/);
+  // O Resumo tem de vir do construtor compartilhado; montado dentro do Worker,
+  // uma melhoria chegava só a quem caísse em um dos dois caminhos de exportação.
+  assert.match(exportWorker, /writeExecutiveSummarySheet/);
+  assert.doesNotMatch(exportWorker, /DADOS DA ANÁLISE|Arquitetura de desempenho/);
   assert.match(exportWorker, /Auditoria detalhada/);
+  const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(appSource, /writeExecutiveSummarySheet/);
 });
 
 check("histórico remove registro apagado na nuvem", () => {
@@ -512,9 +514,9 @@ check("service worker publica o cache isolado da versão atual", () => {
   const bytes = await workbook.xlsx.writeBuffer();
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(bytes);
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO GRCON");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 9).value, "RENOMEAÇÃO DE → PARA");
-  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 9).value), /De:.*Para:/i);
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 5).value, "SERÁ RENOMEADO?");
+  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 5).value), /De:.*Para:/i);
   assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM nt-");
   checks.push("Excel do relatório reabre com Resumo Executivo e Auditoria detalhada");
 }
@@ -529,4 +531,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.3", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.4", passed: true, checks: checks.length, names: checks }, null, 2));
