@@ -469,7 +469,10 @@ check("manifesto declara o tamanho real do ícone", () => {
 
 check("service worker publica o cache isolado da versão atual", () => {
   const source = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(source, /grcon-v5\.32\.2/);
+  // A versão vem do package.json: fixá-la aqui fazia o teste quebrar em toda
+  // publicação, mesmo quando o Service Worker estava correto.
+  const { version } = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  assert.ok(source.includes(`grcon-v${version}`), `sw.js deveria publicar o cache grcon-v${version}`);
   assert.match(source, /networkFirst/);
 });
 
@@ -526,4 +529,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.2", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.3", passed: true, checks: checks.length, names: checks }, null, 2));

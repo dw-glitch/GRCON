@@ -1,6 +1,6 @@
 /**
  * GRCON — Configuração Centralizada
- * Versão: 5.32.2
+ * Versão: 5.32.3
  *
  * Arquivo único de configuração para constantes, limites e opções
  * usados em todo o projeto. Evita hardcoding disperso.

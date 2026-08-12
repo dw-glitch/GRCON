@@ -1,6 +1,6 @@
 /**
  * GRCON — Utilitários Compartilhados
- * Versão: 5.32.2
+ * Versão: 5.32.3
  *
  * Módulo centralizado com funções utilitárias que antes eram
  * copiadas em dezenas de arquivos. Todos os módulos devem usar
