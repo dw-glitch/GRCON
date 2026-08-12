@@ -10,7 +10,7 @@
 
   const CONFIG = Object.freeze({
     /* ── Versão ─────────────────────────────────────────────── */
-    APP_VERSION: "5.32.2",
+    APP_VERSION: "5.32.3",
 
     /* ── Limites de processamento ───────────────────────────── */
     EGRDT_BATCH_LIMIT: 48,
