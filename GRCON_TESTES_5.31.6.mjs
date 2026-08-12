@@ -144,6 +144,7 @@ check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de fo
     "CÓDIGO ENCONTRADO NA LD",
     "RESULTADO DA BUSCA COM/SEM nt-",
     "ALOCADO?",
+    "ALOCAÇÃO",
     "RENOMEAÇÃO DE → PARA",
     "ARQUIVO FINAL",
     "INCLUÍDO NA EGRDT?",
@@ -174,7 +175,7 @@ check("relação sem PDF físico preserva o DE → PARA depois de adotar o códi
 check("ausência na LD informa que as formas com e sem nt- foram pesquisadas", () => {
   const index = Core.buildIndex([], []);
   const result = Core.triageOne({ id: "nt-7", document: ntBaseDocument, name: `${ntBaseDocument}.pdf` }, index, {});
-  assert.equal(result.status, "Sem correspondência na LD");
+  assert.equal(result.status, "Não consta na LD");
   assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, ntDocument]);
   assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM nt-");
   assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
@@ -193,7 +194,7 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   assert.deepEqual(exact.documentLookup.searchedKeys, [n1710Document]);
 
   const invalidAlias = Core.triageOne({ id: "n1710-2", name: `nt-${n1710Document}_0001.pdf` }, index, {});
-  assert.equal(invalidAlias.status, "Sem correspondência na LD");
+  assert.equal(invalidAlias.status, "Não consta na LD");
   assert.equal(invalidAlias.documentLookup.appliesToNtRule, false);
   assert.match(invalidAlias.documentLookup.message, /regra com\/sem nt- não se aplica/);
 });
@@ -468,7 +469,10 @@ check("manifesto declara o tamanho real do ícone", () => {
 
 check("service worker publica o cache isolado da versão atual", () => {
   const source = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(source, /grcon-v5\.32\.2/);
+  // A versão vem do package.json: fixá-la aqui fazia o teste quebrar em toda
+  // publicação, mesmo quando o Service Worker estava correto.
+  const { version } = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  assert.ok(source.includes(`grcon-v${version}`), `sw.js deveria publicar o cache grcon-v${version}`);
   assert.match(source, /networkFirst/);
 });
 
@@ -509,8 +513,8 @@ check("service worker publica o cache isolado da versão atual", () => {
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(bytes);
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO GRCON");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "RENOMEAÇÃO DE → PARA");
-  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 9).value, "RENOMEAÇÃO DE → PARA");
+  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 9).value), /De:.*Para:/i);
   assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM nt-");
   checks.push("Excel do relatório reabre com Resumo Executivo e Auditoria detalhada");
 }
@@ -525,4 +529,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.2", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.3", passed: true, checks: checks.length, names: checks }, null, 2));

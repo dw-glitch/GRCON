@@ -1,5 +1,10 @@
 # Histórico de alterações
 
+## 5.32.3 — 2026-08-12
+
+- renomeia o status "Sem correspondência na LD" para "Não consta na LD"
+- inclui a coluna ALOCAÇÃO no Resumo Executivo do relatório
+
 ## 5.32.2 — 2026-08-11
 
 - Corrigida a exclusão individual do histórico compartilhado: a reserva consumida agora é removida na mesma transação e o número eGRDT pode ser usado novamente.

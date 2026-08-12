@@ -59,6 +59,9 @@
     { header: "CÓDIGO ENCONTRADO NA LD", key: "ldDocument", width: 43 },
     { header: "RESULTADO DA BUSCA COM/SEM nt-", key: "ntSearchResult", width: 38 },
     { header: "ALOCADO?", key: "allocated", width: 23 },
+    // O número da alocação decide para qual pacote o documento vai, então
+    // precisa estar à vista no Resumo, e não só na auditoria detalhada.
+    { header: "ALOCAÇÃO", key: "allocation", width: 27 },
     { header: "RENOMEAÇÃO DE → PARA", key: "renameForEgrdt", width: 66 },
     { header: "ARQUIVO FINAL", key: "finalFile", width: 42 },
     { header: "INCLUÍDO NA EGRDT?", key: "included", width: 22 },
