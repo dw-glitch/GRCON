@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.4";
+  const APP_VERSION = "5.32.5";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -506,6 +506,84 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Central de alocação
+  //
+  // Fica numa pasta de rede, fora do alcance do navegador. Por isso o GRCON não
+  // lê a planilha: guarda onde ela está e escreve a PROCX no relatório, que
+  // busca o comentário da fiscal pelo número da alocação.
+  // ---------------------------------------------------------------------------
+  const ALLOCATION_CENTER_PREFERENCE = "allocationCenter";
+
+  function allocationCenterConfig() {
+    if (!Workspace) return null;
+    const saved = Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null);
+    if (!saved || typeof saved !== "object") return null;
+    return ReportSummary && ReportSummary.normalizeAllocationCenter
+      ? ReportSummary.normalizeAllocationCenter(saved)
+      : saved;
+  }
+
+  function refreshAllocationCenterStatus() {
+    if (!els.allocationCenterStatus) return;
+    const central = allocationCenterConfig();
+    els.allocationCenterStatus.textContent = central
+      ? `Cadastrada: ${central.fileName} · aba ${central.sheet} · alocação em ${central.keyColumn} · comentário em ${central.commentColumn} · até a linha ${central.lastRow.toLocaleString("pt-BR")}`
+      : "Não cadastrada. Sem ela, a coluna STATUS INTERNO mostra a situação apurada pelo GRCON.";
+  }
+
+  function loadAllocationCenterFields() {
+    if (!els.allocationCenterPath) return;
+    const saved = Workspace ? Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null) : null;
+    const central = saved && typeof saved === "object" ? saved : {};
+    els.allocationCenterPath.value = String(central.path || "");
+    els.allocationCenterSheet.value = String(central.sheet || "");
+    els.allocationCenterKey.value = String(central.keyColumn || "");
+    els.allocationCenterComment.value = String(central.commentColumn || "");
+    els.allocationCenterLastRow.value = central.lastRow ? String(central.lastRow) : "";
+    refreshAllocationCenterStatus();
+  }
+
+  function saveAllocationCenter() {
+    if (!Workspace) { showToast("Não foi possível salvar: armazenamento local indisponível.", "warn"); return; }
+    const informado = {
+      path: String(els.allocationCenterPath?.value || "").trim(),
+      sheet: String(els.allocationCenterSheet?.value || "").trim(),
+      keyColumn: String(els.allocationCenterKey?.value || "").trim(),
+      commentColumn: String(els.allocationCenterComment?.value || "").trim(),
+      lastRow: Number(els.allocationCenterLastRow?.value) || undefined,
+    };
+    const central = ReportSummary && ReportSummary.normalizeAllocationCenter
+      ? ReportSummary.normalizeAllocationCenter(informado)
+      : null;
+    if (!central) {
+      showToast("Informe o caminho do arquivo, a aba e as duas colunas da central.", "warn");
+      return;
+    }
+    Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, {
+      path: central.path,
+      sheet: central.sheet,
+      keyColumn: central.keyColumn,
+      commentColumn: central.commentColumn,
+      lastRow: central.lastRow,
+    });
+    loadAllocationCenterFields();
+    showToast("Central de alocação cadastrada. Os próximos relatórios já trazem o comentário da fiscal.", "success");
+  }
+
+  function clearAllocationCenter() {
+    if (Workspace) Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, null);
+    if (els.allocationCenterPath) {
+      els.allocationCenterPath.value = "";
+      els.allocationCenterSheet.value = "";
+      els.allocationCenterKey.value = "";
+      els.allocationCenterComment.value = "";
+      els.allocationCenterLastRow.value = "";
+    }
+    refreshAllocationCenterStatus();
+    showToast("Cadastro da central removido.", "info");
+  }
+
   // O rascunho não é baixado na hora: vai para a aba "E-mails de evidência",
   // identificado pelo número da eGRDT, para o operador decidir quando gerar.
   function enfileirarEmailDaEmissao() {
@@ -574,6 +652,14 @@
     emailDraftOwnerNote: $("#email-draft-owner-note"),
     emailDraftSave: $("#email-draft-save"),
     emailDraftStatus: $("#email-draft-status"),
+    allocationCenterPath: $("#allocation-center-path"),
+    allocationCenterSheet: $("#allocation-center-sheet"),
+    allocationCenterKey: $("#allocation-center-key"),
+    allocationCenterComment: $("#allocation-center-comment"),
+    allocationCenterLastRow: $("#allocation-center-last-row"),
+    allocationCenterSave: $("#allocation-center-save"),
+    allocationCenterClear: $("#allocation-center-clear"),
+    allocationCenterStatus: $("#allocation-center-status"),
     exportFinalPackage: $("#export-final-package"),
     advancedToggle: $("#advanced-toggle"),
     advancedPanel: $("#advanced-panel"),
@@ -4049,6 +4135,7 @@
         ldName: ldDisplayName(),
         ldVersion: reportLdVersion,
         relationLabel: relationSourceLabel(),
+        allocationCenter: allocationCenterConfig(),
       });
     }
     await addReportLogo(workbook, summarySheet);
@@ -4121,8 +4208,10 @@
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
       // O worker não enxerga localStorage nem o índice de histórico, então o
-      // mapa documento -> eGRDT(s) anterior(es) vai pronto no payload.
+      // mapa documento -> eGRDT(s) anterior(es) e o cadastro da central de
+      // alocação vão prontos no payload.
       historyByDocument: historyByDocumentMap(results),
+      allocationCenter: allocationCenterConfig(),
     };
     const buffer = await PerformanceCore.buildReport(payload, workerProgress("Relatório Excel"));
     refreshPerformancePanel("Relatório Excel concluído.");
@@ -4348,6 +4437,7 @@
       ldIntegrity: state.ldIntegrity,
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
+      allocationCenter: allocationCenterConfig(),
     };
   }
 
@@ -4771,6 +4861,8 @@
   els.sgparUrl.addEventListener("change", () => {
     if (Workspace) Workspace.setPreference("sgparUrl", String(els.sgparUrl.value || "").trim());
   });
+  els.allocationCenterSave?.addEventListener("click", saveAllocationCenter);
+  els.allocationCenterClear?.addEventListener("click", clearAllocationCenter);
   els.sgparClose.addEventListener("click", closeSgparDrawer);
   els.sgparCancel.addEventListener("click", closeSgparDrawer);
   els.sgparOverlay.addEventListener("click", closeSgparDrawer);
@@ -4855,6 +4947,7 @@
     els.advancedToggle.setAttribute("aria-expanded", String(open));
   });
   initializeResultColumnFilters();
+  loadAllocationCenterFields();
   carregarDestinatarios();
   if (els.emailDraftSave) els.emailDraftSave.addEventListener("click", salvarDestinatarios);
   window.addEventListener("grcon:email-template-updated", carregarDestinatarios);

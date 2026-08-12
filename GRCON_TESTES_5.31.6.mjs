@@ -141,11 +141,51 @@ check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de fo
     "DOCUMENTO INFORMADO",
     "ALOCADO?",
     "ALOCAÇÃO",
+    "STATUS INTERNO",
     "SERÁ RENOMEADO?",
     "ARQUIVO QUE SERÁ POSTADO",
     "ENTRA NA EGRDT?",
     "O QUE FAZER",
   ]);
+});
+
+check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
+  assert.equal(ReportSummary.normalizeAllocationCenter(null), null);
+  assert.equal(ReportSummary.normalizeAllocationCenter({ path: "\\\\srv\\q\\Central.xlsx", sheet: "Central", keyColumn: "B" }), null);
+  const central = ReportSummary.normalizeAllocationCenter({
+    path: "\\\\servidor\\qualidade\\Central de Alocacao.xlsx",
+    sheet: "Central",
+    keyColumn: "b",
+    commentColumn: "h",
+  });
+  assert.equal(central.fileName, "Central de Alocacao.xlsx");
+  assert.equal(central.directory, "\\\\servidor\\qualidade\\");
+  assert.equal(central.keyColumn, "B");
+  assert.equal(central.commentColumn, "H");
+  assert.equal(central.lastRow, 20000);
+  assert.equal(ReportSummary.normalizeAllocationCenter({ ...central, lastRow: 500 }).lastRow, 500);
+});
+
+check("PROCX da central aponta para o arquivo de rede e reserva o status do GRCON", () => {
+  const central = ReportSummary.normalizeAllocationCenter({
+    path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H", lastRow: 900,
+  });
+  const formula = ReportSummary.allocationCenterFormula(central, "$D5", 'Não postado no "SIGEM"');
+  // O .xlsx guarda fórmula em inglês e com vírgula; o Excel pt-BR mostra PROCX.
+  assert.match(formula, /^IFERROR\(IF\(OR\(\$D5="",XLOOKUP\(/);
+  assert.ok(formula.includes("'\\\\servidor\\qualidade\\[Central.xlsx]Central'!$B$1:$B$900"));
+  assert.ok(formula.includes("'\\\\servidor\\qualidade\\[Central.xlsx]Central'!$H$1:$H$900"));
+  // Aspas do texto de reserva precisam ser dobradas, senão a fórmula quebra.
+  assert.ok(formula.includes('"Não postado no ""SIGEM"""'));
+  assert.equal(formula.split("XLOOKUP(").length - 1, 2);
+});
+
+check("STATUS INTERNO cai no que o GRCON apurou quando não há comentário da fiscal", () => {
+  assert.equal(ReportSummary.internalStatusText({ ntSearchResult: "NÃO LOCALIZADO NA LD" }), "Não consta na LD");
+  assert.equal(ReportSummary.internalStatusText({ renameForEgrdt: "SIM — RENOMEADO PARA SEGUIR A LD.", ldDocument: "C1O_X_nt-NF-1" }), "Código que consta C1O_X_nt-NF-1");
+  assert.equal(ReportSummary.internalStatusText({ included: "NÃO — EM ANÁLISE" }), "Em análise");
+  assert.equal(ReportSummary.internalStatusText({ included: "SIM", sigemStatus: "Não Postado" }), "Não postado no SIGEM");
+  assert.equal(ReportSummary.internalStatusText({ included: "SIM" }), "Não postado no SIGEM");
 });
 
 check("relação sem PDF físico preserva o DE → PARA depois de adotar o código da LD", () => {
@@ -508,15 +548,23 @@ check("service worker publica o cache isolado da versão atual", () => {
   const rows = ReportSummary.buildRows([result], { ldFileName: "LD_TESTE.xlsx" });
   const workbook = new ExcelJS.Workbook();
   const summarySheet = workbook.addWorksheet("Resumo");
-  const summaryLayout = await ReportSummary.writeExecutiveTableAsync(summarySheet, rows, 1);
+  const summaryLayout = await ReportSummary.writeExecutiveTableAsync(summarySheet, rows, 1, {
+    allocationCenter: { path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H" },
+  });
   const auditSheet = workbook.addWorksheet("Auditoria detalhada");
   const auditLayout = await ReportSummary.writeTableAsync(auditSheet, rows, 1);
   const bytes = await workbook.xlsx.writeBuffer();
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(bytes);
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 5).value, "SERÁ RENOMEADO?");
-  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 5).value), /De:.*Para:/i);
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 5).value, "STATUS INTERNO");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 6).value, "SERÁ RENOMEADO?");
+  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 6).value), /De:.*Para:/i);
+  // A célula sobrevive ao ciclo grava/reabre com a PROCX viva e com o status do
+  // GRCON em cache, que é o que aparece com a central fechada.
+  const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 5);
+  assert.match(String(internal.formula), /XLOOKUP\(\$D\d+,'\\\\servidor\\qualidade\\\[Central\.xlsx\]Central'!\$B\$1:\$B\$20000/);
+  assert.equal(internal.result, "Código que consta " + ntBaseDocument);
   assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM nt-");
   checks.push("Excel do relatório reabre com Resumo Executivo e Auditoria detalhada");
 }

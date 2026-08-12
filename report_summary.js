@@ -57,6 +57,10 @@
     { header: "ALOCADO?", key: "allocated", width: 22 },
     // O número da alocação decide para qual pacote o documento vai.
     { header: "ALOCAÇÃO", key: "allocation", width: 24 },
+    // Comentário da fiscal sobre aquela alocação, buscado na central de
+    // alocação por PROCX. Sem central configurada, mostra o status que o
+    // próprio GRCON apurou.
+    { header: "STATUS INTERNO", key: "internalStatus", width: 46 },
     { header: "SERÁ RENOMEADO?", key: "renameForEgrdt", width: 58 },
     { header: "ARQUIVO QUE SERÁ POSTADO", key: "finalFile", width: 44 },
     { header: "ENTRA NA EGRDT?", key: "included", width: 20 },
@@ -65,6 +69,80 @@
 
   function text(value) {
     return value === null || value === undefined ? "" : String(value).trim();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Central de alocação
+  //
+  // A central é uma planilha que vive numa pasta de rede: o GRCON roda no
+  // navegador e não alcança esse caminho. Por isso o relatório não copia o
+  // comentário da fiscal — ele sai com uma PROCX apontando para lá, e o texto
+  // se atualiza sozinho toda vez que a planilha é aberta.
+  //
+  // Dois detalhes do formato .xlsx que explicam o que vem abaixo: as fórmulas
+  // são gravadas sempre com os nomes em inglês e vírgula como separador (o
+  // Excel em português exibe PROCX e ";" sozinho), e uma referência externa
+  // precisa de faixa delimitada — coluna inteira não resolve com o arquivo de
+  // origem fechado.
+  // ---------------------------------------------------------------------------
+  const ALLOCATION_CENTER_LAST_ROW = 20000;
+
+  function normalizeAllocationCenter(raw) {
+    const config = raw || {};
+    const fullPath = text(config.path);
+    const sheet = text(config.sheet);
+    const keyColumn = text(config.keyColumn).toUpperCase().replace(/[^A-Z]/g, "");
+    const commentColumn = text(config.commentColumn).toUpperCase().replace(/[^A-Z]/g, "");
+    if (!fullPath || !sheet || !keyColumn || !commentColumn) return null;
+    const separator = fullPath.lastIndexOf("\\") >= fullPath.lastIndexOf("/") ? "\\" : "/";
+    const cut = fullPath.lastIndexOf(separator);
+    const fileName = cut >= 0 ? fullPath.slice(cut + 1) : fullPath;
+    const directory = cut >= 0 ? fullPath.slice(0, cut + 1) : "";
+    if (!fileName) return null;
+    const lastRow = Math.max(2, Math.min(1048576, Math.trunc(Number(config.lastRow)) || ALLOCATION_CENTER_LAST_ROW));
+    return { path: fullPath, directory, fileName, sheet, keyColumn, commentColumn, lastRow };
+  }
+
+  function allocationCenterRange(center, column) {
+    const reference = `${center.directory}[${center.fileName}]${center.sheet}`.replace(/'/g, "''");
+    return `'${reference}'!$${column}$1:$${column}$${center.lastRow}`;
+  }
+
+  function quoteFormulaText(value) {
+    return `"${text(value).replace(/"/g, "\"\"")}"`;
+  }
+
+  /**
+   * PROCX do comentário da fiscal com duas reservas: quando a linha não tem
+   * número de alocação, e quando a central não responde — arquivo fechado,
+   * fora da rede ou alocação ausente. Nos dois casos a célula cai no status
+   * que o próprio GRCON apurou, e nunca fica vazia nem mostra erro.
+   */
+  function allocationCenterFormula(center, allocationCell, fallback) {
+    const chave = allocationCenterRange(center, center.keyColumn);
+    const comentario = allocationCenterRange(center, center.commentColumn);
+    const procx = `XLOOKUP(${allocationCell},${chave},${comentario},"",0)`;
+    const reserva = quoteFormulaText(fallback);
+    return `IFERROR(IF(OR(${allocationCell}="",${procx}=""),${reserva},${procx}),${reserva})`;
+  }
+
+  /**
+   * O que o GRCON sabe dizer sobre o documento sem consultar a central. É o
+   * texto que aparece quando a PROCX não encontra a alocação, e reproduz o
+   * preenchimento manual que a coluna recebia antes.
+   */
+  function internalStatusText(item) {
+    const normalize = (value) => (C && C.norm ? C.norm(value) : text(value).toUpperCase());
+    const lookup = normalize(item && item.ntSearchResult);
+    if (lookup.includes("NAO LOCALIZADO") || lookup.includes("NEM SEM")) return "Não consta na LD";
+    const ldDocument = text(item && item.ldDocument);
+    if (normalize(item && item.renameForEgrdt).startsWith("SIM") && ldDocument) return `Código que consta ${ldDocument}`;
+    if (normalize(item && item.included).includes("EM ANALISE")) return "Em análise";
+    const sigem = text(item && item.sigemStatus);
+    const sigemNormalized = normalize(sigem);
+    if (!sigem || sigemNormalized === "NAO POSTADO") return "Não postado no SIGEM";
+    if (sigemNormalized === "EM ANALISE") return "Em análise";
+    return sigem;
   }
 
   function formatDateBR(value) {
@@ -378,11 +456,14 @@
     ]);
   }
 
-  function writeExecutiveGuide(worksheet, startRow, lastColumn) {
+  function writeExecutiveGuide(worksheet, startRow, lastColumn, allocationCenter) {
     return writeGuide(worksheet, startRow, lastColumn, [
       ["COMO LER A RELAÇÃO ABAIXO", "FF153A5C", "FFFFFFFF", true],
       ["Cada linha é um documento. A coluna “ENTRA NA EGRDT?” responde se ele será postado, e “O QUE FAZER” diz o que falta quando não será.", "FFEAF2F8", "FF234B6B", false],
       ["Amarelo: o documento entra, mas o arquivo será renomeado para o código exatamente como está na LD. Vermelho: não entra e depende de uma correção antes.", "FFFFF3CF", "FF7A5300", false],
+      allocationCenter
+        ? ["“STATUS INTERNO” traz o comentário da fiscal sobre aquela alocação, buscado na central de alocação pelo número da coluna “ALOCAÇÃO”. Abra a central junto com este relatório para ver o texto mais recente; com ela fechada, a coluna mostra a última situação apurada.", "FFEEF6F1", "FF14614A", false]
+        : ["“STATUS INTERNO” mostra a situação apurada de cada documento. Para que ela traga também o comentário da fiscal, cadastre a central de alocação nas configurações do GRCON.", "FFF2F4F6", "FF52687B", false],
     ]);
   }
 
@@ -457,6 +538,7 @@
       }
       return {
         ...item,
+        internalStatus: internalStatusText(item),
         executiveAction,
         ldEvidence: [item.ldFile, item.sheet ? `aba ${item.sheet}` : "", item.line ? `linha ${item.line}` : ""]
           .filter(Boolean).join(" · ") || "Não localizado na LD",
@@ -468,8 +550,9 @@
     const settings = options || {};
     const sectionStart = Number(startRow) || 22;
     const lastColumn = columnLetter(columns.length);
+    const allocationCenter = normalizeAllocationCenter(settings.allocationCenter);
     const titleRow = settings.executive
-      ? writeExecutiveGuide(worksheet, sectionStart, lastColumn)
+      ? writeExecutiveGuide(worksheet, sectionStart, lastColumn, allocationCenter)
       : writeNtGuide(worksheet, sectionStart, lastColumn);
     const headerRow = titleRow + 1;
     const dataStart = headerRow + 1;
@@ -492,7 +575,11 @@
       worksheet.getColumn(index + 1).width = column.width;
     });
     worksheet.getRow(headerRow).height = 34;
-    return { titleRow, headerRow, dataStart, lastColumn, columns, rows, executive: Boolean(settings.executive) };
+    return {
+      titleRow, headerRow, dataStart, lastColumn, columns, rows,
+      executive: Boolean(settings.executive),
+      allocationCenter,
+    };
   }
 
   function styleBaseRow(row, item, rowIndex, columns) {
@@ -569,11 +656,33 @@
       includedCell.alignment = { vertical: "middle", horizontal: "center" };
   }
 
-  function styleTableRow(row, item, rowIndex, columns) {
+  /**
+   * Troca o texto da coluna STATUS INTERNO pela PROCX na central de alocação,
+   * guardando o status apurado pelo GRCON como valor em cache: assim a célula
+   * já chega preenchida para quem abre o relatório fora da rede, e passa a
+   * mostrar o comentário da fiscal assim que a central é aberta.
+   */
+  function styleInternalStatusCell(row, columns, allocationCenter) {
+    const internalColumn = columns.findIndex((column) => column.key === "internalStatus") + 1;
+    if (!internalColumn) return;
+    const cell = row.getCell(internalColumn);
+    const fallback = text(cell.value);
+    const allocationColumn = columns.findIndex((column) => column.key === "allocation") + 1;
+    if (allocationCenter && allocationColumn) {
+      const allocationCell = `$${columnLetter(allocationColumn)}${row.number}`;
+      cell.value = { formula: allocationCenterFormula(allocationCenter, allocationCell, fallback), result: fallback };
+    }
+    cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF3C5468" } };
+    cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+  }
+
+  function styleTableRow(row, item, rowIndex, layout) {
+    const columns = layout.columns;
     styleBaseRow(row, item, rowIndex, columns);
     styleDecisionCell(row);
     styleSearchCell(row, columns);
     styleAllocationCell(row, columns);
+    styleInternalStatusCell(row, columns, layout.allocationCenter);
     styleRenameCells(row, columns);
     styleIncludedCell(row, columns);
   }
@@ -593,7 +702,7 @@
   function writeRows(worksheet, rows, layout) {
     rows.forEach((item, rowIndex) => {
       const row = worksheet.getRow(layout.dataStart + rowIndex);
-      styleTableRow(row, item, rowIndex, layout.columns);
+      styleTableRow(row, item, rowIndex, layout);
     });
     return finishTable(worksheet, layout, rows.length);
   }
@@ -604,7 +713,7 @@
       for (let rowIndex = start; rowIndex < end; rowIndex += 1) {
         const item = rows[rowIndex];
         const row = worksheet.getRow(layout.dataStart + rowIndex);
-        styleTableRow(row, item, rowIndex, layout.columns);
+        styleTableRow(row, item, rowIndex, layout);
       }
       if (end < rows.length) await Large.pause();
     }
@@ -623,14 +732,22 @@
     return writeRowsAsync(worksheet, source, layout);
   }
 
-  function writeExecutiveTable(worksheet, rows, startRow) {
-    const source = executiveRows(rows);
-    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, { executive: true, title: "RELAÇÃO DOS DOCUMENTOS ANALISADOS" }));
+  function executiveTableSettings(options) {
+    return {
+      executive: true,
+      title: "RELAÇÃO DOS DOCUMENTOS ANALISADOS",
+      allocationCenter: options && options.allocationCenter,
+    };
   }
 
-  async function writeExecutiveTableAsync(worksheet, rows, startRow) {
+  function writeExecutiveTable(worksheet, rows, startRow, options) {
     const source = executiveRows(rows);
-    const layout = prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, { executive: true, title: "RELAÇÃO DOS DOCUMENTOS ANALISADOS" });
+    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, executiveTableSettings(options)));
+  }
+
+  async function writeExecutiveTableAsync(worksheet, rows, startRow, options) {
+    const source = executiveRows(rows);
+    const layout = prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, executiveTableSettings(options));
     if (!Large || !Large.pause || source.length <= 600) return writeRows(worksheet, source, layout);
     return writeRowsAsync(worksheet, source, layout);
   }
@@ -747,10 +864,14 @@
     const linhasBloco = Math.max(briefing.perguntas.length, motivos.length);
     const origemRow = 12 + linhasBloco;
     faixa(origemRow, "DE ONDE VEIO ESTA ANÁLISE", "A", lastColumn);
+    const central = normalizeAllocationCenter(settings.allocationCenter);
     const origem = [
       ["Lista de documentos (LD)", text(settings.ldName) || "Não informado"],
       ["Versão da LD enviada", text(settings.ldVersion) || "Não informada"],
       ["Documentos conferidos a partir de", text(settings.relationLabel) || "Pasta documental"],
+      ["Central de alocação (STATUS INTERNO)", central
+        ? `${central.path} · aba ${central.sheet} · alocação na coluna ${central.keyColumn} · comentário na coluna ${central.commentColumn}`
+        : "Não cadastrada — a coluna mostra a situação apurada pelo GRCON"],
     ];
     origem.forEach(([label, value], index) => {
       const row = origemRow + 1 + index;
@@ -770,7 +891,7 @@
     });
 
     const tableStart = origemRow + origem.length + 2;
-    const layout = await writeExecutiveTableAsync(worksheet, rows, tableStart);
+    const layout = await writeExecutiveTableAsync(worksheet, rows, tableStart, { allocationCenter: settings.allocationCenter });
     worksheet.pageSetup = {
       orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0,
       margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 },
@@ -783,11 +904,14 @@
   return Object.freeze({
     COLUMNS,
     EXECUTIVE_COLUMNS,
+    allocationCenterFormula,
     allocationReason,
     buildRows,
     buildRowsAsync,
     executiveBriefing,
     executiveRows,
+    internalStatusText,
+    normalizeAllocationCenter,
     writeTable,
     writeTableAsync,
     writeExecutiveTable,

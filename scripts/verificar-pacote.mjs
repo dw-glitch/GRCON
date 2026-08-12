@@ -59,9 +59,13 @@ const exportWorker = fs.readFileSync(path.join(root, workers.export.file), "utf8
 check(exportWorker.includes("writeExecutiveSummarySheet"), "worker de exportação não usa o construtor compartilhado do Resumo");
 check(!/DADOS DA ANÁLISE|Arquitetura de desempenho/.test(exportWorker), "worker de exportação ainda monta o Resumo antigo por conta própria");
 check(exportWorker.includes("Auditoria detalhada"), "worker de exportação não gera a aba Auditoria detalhada");
+// O Worker não enxerga localStorage: sem repassar o cadastro no payload, a
+// coluna STATUS INTERNO sairia sem a PROCX justamente no caminho normal.
+check(exportWorker.includes("allocationCenter"), "worker de exportação não repassa a central de alocação ao Resumo");
 
 const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
 check(appSource.includes("writeExecutiveSummarySheet"), "construtor de reserva não usa o construtor compartilhado do Resumo");
+check(appSource.includes("allocationCenterConfig()"), "app.js não envia a central de alocação para a geração do relatório");
 
 if (problems.length) {
   console.error("\nFALHOU — arquitetura dos Workers inconsistente:");
