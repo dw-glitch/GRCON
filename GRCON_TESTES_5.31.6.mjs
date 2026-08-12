@@ -297,8 +297,13 @@ check("Workers externos usam os módulos atuais e exportam as duas abas do relat
   assert.match(facade, /workers\/triage\.worker\.js/);
   assert.match(facade, /workers\/export\.worker\.js/);
   assert.match(exportWorker, /\.\.\/report_summary\.js/);
-  assert.match(exportWorker, /writeExecutiveTableAsync/);
+  // O Resumo tem de vir do construtor compartilhado; montado dentro do Worker,
+  // uma melhoria chegava só a quem caísse em um dos dois caminhos de exportação.
+  assert.match(exportWorker, /writeExecutiveSummarySheet/);
+  assert.doesNotMatch(exportWorker, /DADOS DA ANÁLISE|Arquitetura de desempenho/);
   assert.match(exportWorker, /Auditoria detalhada/);
+  const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(appSource, /writeExecutiveSummarySheet/);
 });
 
 check("histórico remove registro apagado na nuvem", () => {

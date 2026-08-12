@@ -635,6 +635,151 @@
     return writeRowsAsync(worksheet, source, layout);
   }
 
+  /**
+   * Monta a aba Resumo inteira: faixa de título, cartões, o bloco de perguntas
+   * respondidas, os motivos de quem ficou de fora, a origem da análise e a
+   * relação dos documentos.
+   *
+   * Fica aqui, e não em quem chama, porque o relatório é gerado por dois
+   * caminhos — o Worker dedicado, que é o normal, e o construtor de reserva de
+   * quando o navegador não tem Worker. Enquanto o desenho estava duplicado, uma
+   * melhoria feita em um caminho não chegava a quem usa o outro.
+   */
+  async function writeExecutiveSummarySheet(worksheet, rows, options) {
+    const settings = options || {};
+    const briefing = executiveBriefing(rows);
+    const columnCount = EXECUTIVE_COLUMNS.length;
+    const lastColumn = columnLetter(columnCount);
+    worksheet.columns = EXECUTIVE_COLUMNS.map((column) => ({ width: column.width }));
+
+    for (let row = 1; row <= 3; row += 1) {
+      for (let col = 1; col <= columnCount; col += 1) {
+        worksheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
+      }
+    }
+    worksheet.mergeCells(`C1:${lastColumn}2`);
+    const titulo = worksheet.getCell("C1");
+    titulo.value = "GRCON · RELATÓRIO DE TRIAGEM DOCUMENTAL";
+    titulo.font = { name: "Aptos Display", size: 19, bold: true, color: { argb: "FFFFFFFF" } };
+    titulo.alignment = { vertical: "middle", horizontal: "left" };
+
+    worksheet.mergeCells(`A4:${lastColumn}4`);
+    const meta = worksheet.getCell("A4");
+    meta.value = text(settings.metadata);
+    meta.font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
+    meta.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } };
+    meta.alignment = { vertical: "middle" };
+
+    // Os três primeiros cartões fecham a conta; o quarto é outra dimensão,
+    // para não induzir a somar coisas diferentes.
+    const cards = [
+      ["DOCUMENTOS ANALISADOS", briefing.total, "FF2E5878"],
+      ["SERÃO POSTADOS", briefing.entram, "FF0C7657"],
+      ["NÃO SERÃO POSTADOS", briefing.naoEntram, "FFA64035"],
+      ["ARQUIVOS RENOMEADOS", briefing.renomeados, "FFA56812"],
+    ];
+    const larguraCartao = Math.max(1, Math.floor(columnCount / cards.length));
+    cards.forEach(([label, count, color], index) => {
+      const inicio = index * larguraCartao + 1;
+      const fim = index === cards.length - 1 ? columnCount : inicio + larguraCartao - 1;
+      worksheet.mergeCells(6, inicio, 8, fim);
+      const cell = worksheet.getCell(6, inicio);
+      cell.value = { richText: [
+        { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF6F7E8C" } }, text: `${label}\n` },
+        { font: { name: "Aptos Display", size: 22, bold: true, color: { argb: color } }, text: Number(count || 0).toLocaleString("pt-BR") },
+      ] };
+      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF7F9FB" } };
+      cell.border = {
+        left: { style: "medium", color: { argb: color } },
+        top: { style: "thin", color: { argb: "FFDCE4EA" } },
+        right: { style: "thin", color: { argb: "FFDCE4EA" } },
+        bottom: { style: "thin", color: { argb: "FFDCE4EA" } },
+      };
+    });
+
+    const meio = Math.max(1, Math.floor(columnCount / 2));
+    const colunaMeio = columnLetter(meio);
+    const colunaDireita = columnLetter(meio + 1);
+    const faixa = (row, texto, de, ate) => {
+      worksheet.mergeCells(`${de}${row}:${ate}${row}`);
+      const cell = worksheet.getCell(`${de}${row}`);
+      cell.value = texto;
+      cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
+      cell.alignment = { vertical: "middle" };
+      worksheet.getRow(row).height = 22;
+    };
+
+    faixa(10, "O QUE ESTE RELATÓRIO RESPONDE", "A", colunaMeio);
+    briefing.perguntas.forEach(([pergunta, resposta], index) => {
+      const row = 11 + index;
+      worksheet.mergeCells(`A${row}:${colunaMeio}${row}`);
+      const cell = worksheet.getCell(`A${row}`);
+      cell.value = { richText: [
+        { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF153A5C" } }, text: `${pergunta}  ` },
+        { font: { name: "Aptos", size: 9, color: { argb: "FF31465A" } }, text: resposta },
+      ] };
+      cell.alignment = { vertical: "middle", wrapText: true, indent: 1 };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: index % 2 ? "FFF8FAFC" : "FFFFFFFF" } };
+      cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
+      worksheet.getRow(row).height = 30;
+    });
+
+    faixa(10, "POR QUE ALGUNS NÃO SERÃO POSTADOS", colunaDireita, lastColumn);
+    const motivos = briefing.motivos.length
+      ? briefing.motivos
+      : [["Nenhum documento ficou de fora", 0, "Todos os documentos analisados serão postados."]];
+    motivos.slice(0, Math.max(briefing.perguntas.length, 1)).forEach(([motivo, quantidade, acao], index) => {
+      const row = 11 + index;
+      worksheet.mergeCells(`${colunaDireita}${row}:${lastColumn}${row}`);
+      const cell = worksheet.getCell(`${colunaDireita}${row}`);
+      cell.value = { richText: [
+        { font: { name: "Aptos Display", size: 12, bold: true, color: { argb: quantidade ? "FFA64035" : "FF0C7657" } }, text: quantidade ? `${quantidade.toLocaleString("pt-BR")}  ` : "" },
+        { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF153A5C" } }, text: `${motivo}. ` },
+        { font: { name: "Aptos", size: 9, color: { argb: "FF31465A" } }, text: acao },
+      ] };
+      cell.alignment = { vertical: "middle", wrapText: true, indent: 1 };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: index % 2 ? "FFF8FAFC" : "FFFFFFFF" } };
+      cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
+    });
+
+    const linhasBloco = Math.max(briefing.perguntas.length, motivos.length);
+    const origemRow = 12 + linhasBloco;
+    faixa(origemRow, "DE ONDE VEIO ESTA ANÁLISE", "A", lastColumn);
+    const origem = [
+      ["Lista de documentos (LD)", text(settings.ldName) || "Não informado"],
+      ["Versão da LD enviada", text(settings.ldVersion) || "Não informada"],
+      ["Documentos conferidos a partir de", text(settings.relationLabel) || "Pasta documental"],
+    ];
+    origem.forEach(([label, value], index) => {
+      const row = origemRow + 1 + index;
+      worksheet.mergeCells(`A${row}:D${row}`);
+      worksheet.mergeCells(`E${row}:${lastColumn}${row}`);
+      worksheet.getCell(`A${row}`).value = label;
+      worksheet.getCell(`E${row}`).value = value;
+      worksheet.getCell(`A${row}`).font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF53697B" } };
+      worksheet.getCell(`E${row}`).font = { name: "Aptos", size: 9, color: { argb: "FF263E52" } };
+      worksheet.getCell(`A${row}`).alignment = { vertical: "middle", indent: 1 };
+      worksheet.getCell(`E${row}`).alignment = { vertical: "middle", wrapText: true };
+      if (index % 2) {
+        for (let col = 1; col <= columnCount; col += 1) {
+          worksheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+        }
+      }
+    });
+
+    const tableStart = origemRow + origem.length + 2;
+    const layout = await writeExecutiveTableAsync(worksheet, rows, tableStart);
+    worksheet.pageSetup = {
+      orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 },
+      printTitlesRow: layout ? `${layout.headerRow}:${layout.headerRow}` : undefined,
+    };
+    worksheet.headerFooter.oddFooter = "&LGRCON&C&P de &N&R&D";
+    return layout;
+  }
+
   return Object.freeze({
     COLUMNS,
     EXECUTIVE_COLUMNS,
@@ -647,5 +792,6 @@
     writeTableAsync,
     writeExecutiveTable,
     writeExecutiveTableAsync,
+    writeExecutiveSummarySheet,
   });
 });
