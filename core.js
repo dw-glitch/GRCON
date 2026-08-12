@@ -978,10 +978,24 @@
     return matchDocuments(nameOrText, index, hintedSheet)[0] || null;
   }
 
+  // A ET de codificação de currículos define a família CV em cinco grupos.
+  // A própria norma traz exemplos históricos com sequencial de 3 dígitos,
+  // embora o texto prescreva 4. A LD é a fonte controlada; por isso a triagem
+  // aceita 3 ou 4 dígitos para localizar a aba CV e gerar a eGRDT, sem
+  // confundir com outras famílias documentais.
+  const CV_DOCUMENT_RE = /^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{3,4}$/i;
+
+  function isCvDocument(value, sheetName) {
+    if (norm(sheetName) === "CV") return true;
+    const raw = canonicalId(text(value).replace(/\.(?:PDF|DOCX?|XLSX?|XLSM|DWG|DGN|PPTX?)$/i, ""));
+    return CV_DOCUMENT_RE.test(raw);
+  }
+
   function inferSheetFromName(fileName) {
     const baseName = text(fileName).split(/[\\/]/).pop();
     const name = canonicalId(baseName.replace(/\.[A-Z0-9]{1,5}$/i, ""));
-    if (/^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{4}(?:$|[_ -])/.test(name)) return "CV";
+    const cvCandidate = name.match(/^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{3,4}/i);
+    if (cvCandidate && isCvDocument(cvCandidate[0])) return "CV";
     if (/^[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9][A-Z0-9.-]*_/.test(name)) return "ET";
     const first = name.split("-")[0];
     const category = /^[IAFLED]$/.test(first) ? name.split("-")[1] : first;
@@ -1086,9 +1100,9 @@
       return { valid: errors.length === 0, family: "ET", errors, group7 };
     }
 
-    if (sheet === "CV" || raw.includes("-C1O-CV-")) {
-      if (!/^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{4}$/i.test(raw)) {
-        errors.push("Currículo não atende aos cinco grupos e ao sequencial de quatro dígitos da ET.");
+    if (sheet === "CV" || isCvDocument(raw)) {
+      if (!isCvDocument(raw)) {
+        errors.push("Currículo não atende aos cinco grupos previstos na ET (instrumento contratual, emissor, CV, disciplina e sequencial).");
       }
       return { valid: errors.length === 0, family: "CV", errors };
     }
@@ -1167,7 +1181,7 @@
     if (direct) return direct;
     const sheet = norm(sheetName);
     if (sheet === "ET" || text(document).includes("_RNEST_")) return "RL";
-    if (sheet === "CV" || text(document).includes("-C1O-CV-")) return "CV";
+    if (sheet === "CV" || isCvDocument(document)) return "CV";
     const groups = text(document).split("-");
     const category = /^[IAFLED]$/i.test(groups[0]) ? groups[1] : groups[0];
     return optionValue(category, EGRDT_OPTIONS.documentTypes);
@@ -1517,7 +1531,7 @@
     const inferredSheet = input.hintedSheet || inferSheetFromName(input.name || input.document || "");
     const identitySource = input.document ? "documento informado" : "nome do arquivo";
     const identityValue = input.document || input.name || "";
-    const matches = matchDocuments(identityValue, index);
+    const matches = matchDocuments(identityValue, index, inferredSheet);
     const calculatedDocumentLookup = documentLookup(
       identityValue,
       matches.length === 1 ? matches[0] : null,

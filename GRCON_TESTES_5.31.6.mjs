@@ -71,6 +71,43 @@ function ldDocumentRecord(document, allocationStatus = "ALOCADO", sheet = "ET") 
 const ntBaseDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
 const ntDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-AST-320019";
 const n1710Document = "MA-5290.00-22000-ABC-C1O-001";
+const cvDocument3 = "5900.0018047.05.2-ABC-CV-GER-001";
+const cvDocument4 = "5900.0018047.05.2-C1O-CV-ELE-0001";
+
+function cvLdRecord(document, discipline = "GERAL") {
+  return {
+    ...ldDocumentRecord(document, "ALOCADO", "CV"),
+    title: "CURRÍCULO PROFISSIONAL",
+    discipline,
+    documentType: "",
+    purpose: "Para Informação",
+    format: "A4",
+    source: "LD_001.xlsx",
+  };
+}
+
+check("CV com sequencial de 3 dígitos localiza a aba CV da LD_001 e fica pronto para eGRDT", () => {
+  const index = Core.buildIndex([cvLdRecord(cvDocument3)], []);
+  assert.equal(Core.inferSheetFromName(`${cvDocument3}.pdf`), "CV");
+  const result = Core.triageOne({ id: "cv-3", name: `${cvDocument3}.pdf` }, index, {});
+  assert.equal(result.sheet, "CV");
+  assert.equal(result.record.source, "LD_001.xlsx");
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.egrdt.documentType, "CV");
+  assert.equal(result.egrdt.discipline, "GERAL");
+  assert.deepEqual(Core.validateEgrdtData(result.egrdt), []);
+});
+
+check("CV com sequencial de 4 dígitos usa a mesma regra operacional eGRDT da aba CV", () => {
+  const index = Core.buildIndex([cvLdRecord(cvDocument4, "ELÉTRICA")], []);
+  assert.equal(Core.inferSheetFromName(`${cvDocument4}_A.pdf`), "CV");
+  const result = Core.triageOne({ id: "cv-4", name: `${cvDocument4}.pdf` }, index, {});
+  assert.equal(result.sheet, "CV");
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.egrdt.documentType, "CV");
+  assert.equal(result.egrdt.discipline, "ELÉTRICA");
+  assert.deepEqual(Core.validateEgrdtData(result.egrdt), []);
+});
 
 check("PDF com nt- localiza código sem nt- na LD e usa o nome oficial", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
