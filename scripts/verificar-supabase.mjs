@@ -44,6 +44,29 @@ for (const name of ["grcon_get_email_template", "grcon_set_email_template"]) {
   }
 }
 
+// A central de alocação segue o mesmo padrão do modelo de e-mail: invólucro
+// público INVOKER, implementação privada DEFINER que confere o papel, e escrita
+// restrita ao proprietário.
+const centerMigration = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.6.sql"), "utf8");
+for (const name of ["grcon_get_allocation_center", "grcon_set_allocation_center"]) {
+  const wrapper = centerMigration.match(new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${name}[\\s\\S]*?\\$\\$\\s*;`, "i"));
+  if (!wrapper || !/security\s+invoker/i.test(wrapper[0]) || /security\s+definer/i.test(wrapper[0])) {
+    failures.push(`SUPABASE_MIGRACAO_5.32.6.sql: wrapper public.${name} precisa ser SECURITY INVOKER`);
+  }
+  if (!new RegExp(`revoke\\s+all\\s+on\\s+function\\s+public\\.${name}[\\s\\S]*?from\\s+public\\s*,\\s*anon`, "i").test(centerMigration)) {
+    failures.push(`public.${name}: falta revogar EXECUTE de public/anon`);
+  }
+  if (!new RegExp(`grant\\s+execute\\s+on\\s+function\\s+public\\.${name}[\\s\\S]*?to\\s+authenticated`, "i").test(centerMigration)) {
+    failures.push(`public.${name}: falta conceder EXECUTE somente a authenticated`);
+  }
+}
+if (!/private\.grcon_has_role\(target_workspace,\s*array\['owner'\]\)/i.test(centerMigration)) {
+  failures.push("SUPABASE_MIGRACAO_5.32.6.sql: gravação da central precisa exigir owner");
+}
+if (!/private\.grcon_is_member\(target_workspace\)/i.test(centerMigration)) {
+  failures.push("SUPABASE_MIGRACAO_5.32.6.sql: leitura da central precisa exigir membro ativo");
+}
+
 const deletionMigration = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.2.sql"), "utf8");
 const publicDeleteWrapper = deletionMigration.match(/create\s+or\s+replace\s+function\s+public\.grcon_delete_history_record[\s\S]*?\$\$\s*;/i);
 if (!publicDeleteWrapper || !/security\s+invoker/i.test(publicDeleteWrapper[0]) || /security\s+definer/i.test(publicDeleteWrapper[0])) {

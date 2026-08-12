@@ -1807,11 +1807,13 @@ html[data-app="GRCON"] .allocation-center-settings #allocation-center-key,
 html[data-app="GRCON"] .allocation-center-settings #allocation-center-comment{max-width:5rem;text-transform:uppercase}
 html[data-app="GRCON"] .allocation-center-settings #allocation-center-last-row{max-width:9rem}
 html[data-app="GRCON"] .allocation-center-hint{line-height:1.45}
+html[data-app="GRCON"] .allocation-center-owner-note{line-height:1.45;font-style:italic}
 @media (min-width:44rem){
   html[data-app="GRCON"] .allocation-center-settings{grid-template-columns:1fr 1fr}
   html[data-app="GRCON"] .allocation-center-settings > div:first-child,
   html[data-app="GRCON"] .allocation-center-settings > label:first-of-type,
   html[data-app="GRCON"] .allocation-center-hint,
+  html[data-app="GRCON"] .allocation-center-owner-note,
   html[data-app="GRCON"] .allocation-center-settings .settings-inline-actions{grid-column:1 / -1}
 }
 

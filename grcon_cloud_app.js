@@ -458,6 +458,96 @@
     }
   }
 
+  /* ── Central de alocação (compartilhada, só o dono altera) ── */
+
+  // A planilha da central vive numa pasta de rede e não é lida pelo navegador:
+  // o que fica guardado aqui é onde ela está, para o relatório montar a PROCX.
+  // O cadastro é o mesmo para todos, então mora no banco; a cópia local existe
+  // só para o relatório ser gerado offline com o último cadastro conhecido.
+  const CENTRAL_PREFERENCIA = "allocationCenter";
+
+  function guardarCentralLocalmente(central) {
+    const Workspace = window.GrconWorkspace;
+    if (!Workspace) return central;
+    // "compartilhada" registra que este cadastro veio do banco, e não de uma
+    // gravação local de emergência — é o que o painel informa ao usuário.
+    Workspace.setPreference(CENTRAL_PREFERENCIA, central ? { ...central, compartilhada: true } : null);
+    window.dispatchEvent(new CustomEvent("grcon:allocation-center-updated", { detail: central }));
+    return central;
+  }
+
+  function centralDaLinha(linha) {
+    if (!linha || !linha.file_path) return null;
+    return {
+      path: linha.file_path,
+      sheet: linha.sheet_name,
+      keyColumn: linha.key_column,
+      commentColumn: linha.comment_column,
+      lastRow: Number(linha.last_row) || 20000,
+    };
+  }
+
+  async function loadAllocationCenter() {
+    if (!state.client || !state.membership?.workspace_id) return null;
+    try {
+      const { data, error } = await state.client.rpc("grcon_get_allocation_center", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      const central = centralDaLinha(Array.isArray(data) ? data[0] : data);
+      // Sem linha ainda: ninguém cadastrou a central nesta área de trabalho.
+      // Aí o cadastro é apagado localmente, para não sobrar de outra área.
+      return guardarCentralLocalmente(central);
+    } catch (error) {
+      // Offline ou sem acesso: mantém a última cópia local, para não travar a
+      // geração do relatório.
+      console.debug("GRCON Cloud: central de alocação indisponível agora", error);
+      return null;
+    }
+  }
+
+  // "indisponivel" separa não ter área compartilhada agora de não ter permissão:
+  // no primeiro caso o aplicativo ainda grava a cópia local, no segundo não.
+  function centralIndisponivel() {
+    return !state.client || !state.membership?.workspace_id || navigator.onLine === false;
+  }
+
+  async function saveAllocationCenter(central) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode alterar a central de alocação." };
+    try {
+      const { data, error } = await state.client.rpc("grcon_set_allocation_center", {
+        target_workspace: state.membership.workspace_id,
+        new_path: central?.path || "",
+        new_sheet: central?.sheet || "",
+        new_key_column: central?.keyColumn || "",
+        new_comment_column: central?.commentColumn || "",
+        new_last_row: Number(central?.lastRow) || 20000,
+      });
+      if (error) throw error;
+      const salva = centralDaLinha(Array.isArray(data) ? data[0] : data) || central;
+      guardarCentralLocalmente(salva);
+      return { ok: true, central: salva };
+    } catch (error) {
+      return { ok: false, indisponivel: navigator.onLine === false, error: error?.message || "Não foi possível salvar a central de alocação." };
+    }
+  }
+
+  async function clearAllocationCenter() {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode alterar a central de alocação." };
+    try {
+      const { error } = await state.client.rpc("grcon_clear_allocation_center", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      guardarCentralLocalmente(null);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, indisponivel: navigator.onLine === false, error: error?.message || "Não foi possível remover a central de alocação." };
+    }
+  }
+
   function newReservationRequestId() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     const bytes = new Uint8Array(16);
@@ -1369,6 +1459,7 @@
       updateAccountMenu();
       await loadMembers();
       await loadEmailTemplate();
+      await loadAllocationCenter();
       if (state.online) {
         await runSyncCycle();
         subscribeRealtime();
@@ -1519,6 +1610,9 @@
     canManageMembers,
     loadEmailTemplate,
     saveEmailTemplate,
+    loadAllocationCenter,
+    saveAllocationCenter,
+    clearAllocationCenter,
     reserveEgrdtSequences,
     deleteHistoryRecord: deleteSharedHistoryRecord,
     inviteUser,

@@ -489,6 +489,40 @@ check("fluxo acelerado preenche A4 quando a LD não informa o formato", () => {
   assert.match(source, /rawResults\.forEach\(\(result\)\s*=>\s*\{[\s\S]*?const formatDefaulted = Boolean\(result\.egrdt && !result\.egrdt\.format\);[\s\S]*?if \(formatDefaulted\) result\.egrdt\.format = "A4";[\s\S]*?const logical = logicalMeta\.get\(result\.id\);/);
 });
 
+check("central de alocação é compartilhada pelo banco e só o proprietário altera", () => {
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  for (const rpc of ["grcon_get_allocation_center", "grcon_set_allocation_center", "grcon_clear_allocation_center"]) {
+    assert.match(cloud, new RegExp(`rpc\\("${rpc}"`));
+  }
+  // Gravar e remover exigem o papel de proprietário antes de chamar o banco.
+  assert.match(cloud, /async function saveAllocationCenter[\s\S]*?if \(!canManageMembers\(\)\)/);
+  assert.match(cloud, /async function clearAllocationCenter[\s\S]*?if \(!canManageMembers\(\)\)/);
+  // A carga entra junto com o restante da área compartilhada, no login.
+  assert.match(cloud, /await loadEmailTemplate\(\);\s*await loadAllocationCenter\(\);/);
+
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  // Remover só a cópia local deixaria o cadastro voltar na próxima leitura.
+  assert.match(app, /Cloud\?\.clearAllocationCenter/);
+  assert.match(app, /Cloud\?\.saveAllocationCenter/);
+  assert.match(app, /window\.addEventListener\("grcon:allocation-center-updated"/);
+});
+
+check("migração da central usa invólucro invoker e confere o papel no schema privado", () => {
+  const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.6.sql"), "utf8");
+  assert.match(sql, /revoke all on table private\.grcon_allocation_center from public, anon, authenticated;/);
+  // Escrita e remoção só para owner; leitura para qualquer membro ativo.
+  assert.equal((sql.match(/private\.grcon_has_role\(target_workspace, array\['owner'\]\)/g) || []).length, 2);
+  assert.match(sql, /private\.grcon_is_member\(target_workspace\)/);
+  for (const name of ["grcon_get_allocation_center", "grcon_set_allocation_center", "grcon_clear_allocation_center"]) {
+    const wrapper = sql.match(new RegExp(`create or replace function public\\.${name}[\\s\\S]*?\\$\\$;`));
+    assert.ok(wrapper, `falta o invólucro público de ${name}`);
+    assert.match(wrapper[0], /security invoker/);
+    assert.doesNotMatch(wrapper[0], /security definer/);
+  }
+  // Nenhuma política de RLS é criada nesta migração.
+  assert.doesNotMatch(sql, /create\s+policy/i);
+});
+
 check("sincronização usa RPC de exclusão e evita a segunda leitura quando não há envio", () => {
   const source = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
   assert.match(source, /rpc\("grcon_delete_history_record"/);
