@@ -1,6 +1,6 @@
 // GRCON — Indicador de histórico de eGRDT por documento
 // Módulo: GrconGrdtHistoryIndicator
-// Versão: 5.32.0
+// Versão: 5.32.5
 // Descrição: Exibe badge informativo na tabela de triagem quando um documento
 //             já foi incluído em uma eGRDT gerada anteriormente (histórico local).
 //             Não bloqueia a geração de novas eGRDTs.

@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.0";
+  const APP_VERSION = "5.32.5";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -506,6 +506,84 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Central de alocação
+  //
+  // Fica numa pasta de rede, fora do alcance do navegador. Por isso o GRCON não
+  // lê a planilha: guarda onde ela está e escreve a PROCX no relatório, que
+  // busca o comentário da fiscal pelo número da alocação.
+  // ---------------------------------------------------------------------------
+  const ALLOCATION_CENTER_PREFERENCE = "allocationCenter";
+
+  function allocationCenterConfig() {
+    if (!Workspace) return null;
+    const saved = Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null);
+    if (!saved || typeof saved !== "object") return null;
+    return ReportSummary && ReportSummary.normalizeAllocationCenter
+      ? ReportSummary.normalizeAllocationCenter(saved)
+      : saved;
+  }
+
+  function refreshAllocationCenterStatus() {
+    if (!els.allocationCenterStatus) return;
+    const central = allocationCenterConfig();
+    els.allocationCenterStatus.textContent = central
+      ? `Cadastrada: ${central.fileName} · aba ${central.sheet} · alocação em ${central.keyColumn} · comentário em ${central.commentColumn} · até a linha ${central.lastRow.toLocaleString("pt-BR")}`
+      : "Não cadastrada. Sem ela, a coluna STATUS INTERNO mostra a situação apurada pelo GRCON.";
+  }
+
+  function loadAllocationCenterFields() {
+    if (!els.allocationCenterPath) return;
+    const saved = Workspace ? Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null) : null;
+    const central = saved && typeof saved === "object" ? saved : {};
+    els.allocationCenterPath.value = String(central.path || "");
+    els.allocationCenterSheet.value = String(central.sheet || "");
+    els.allocationCenterKey.value = String(central.keyColumn || "");
+    els.allocationCenterComment.value = String(central.commentColumn || "");
+    els.allocationCenterLastRow.value = central.lastRow ? String(central.lastRow) : "";
+    refreshAllocationCenterStatus();
+  }
+
+  function saveAllocationCenter() {
+    if (!Workspace) { showToast("Não foi possível salvar: armazenamento local indisponível.", "warn"); return; }
+    const informado = {
+      path: String(els.allocationCenterPath?.value || "").trim(),
+      sheet: String(els.allocationCenterSheet?.value || "").trim(),
+      keyColumn: String(els.allocationCenterKey?.value || "").trim(),
+      commentColumn: String(els.allocationCenterComment?.value || "").trim(),
+      lastRow: Number(els.allocationCenterLastRow?.value) || undefined,
+    };
+    const central = ReportSummary && ReportSummary.normalizeAllocationCenter
+      ? ReportSummary.normalizeAllocationCenter(informado)
+      : null;
+    if (!central) {
+      showToast("Informe o caminho do arquivo, a aba e as duas colunas da central.", "warn");
+      return;
+    }
+    Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, {
+      path: central.path,
+      sheet: central.sheet,
+      keyColumn: central.keyColumn,
+      commentColumn: central.commentColumn,
+      lastRow: central.lastRow,
+    });
+    loadAllocationCenterFields();
+    showToast("Central de alocação cadastrada. Os próximos relatórios já trazem o comentário da fiscal.", "success");
+  }
+
+  function clearAllocationCenter() {
+    if (Workspace) Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, null);
+    if (els.allocationCenterPath) {
+      els.allocationCenterPath.value = "";
+      els.allocationCenterSheet.value = "";
+      els.allocationCenterKey.value = "";
+      els.allocationCenterComment.value = "";
+      els.allocationCenterLastRow.value = "";
+    }
+    refreshAllocationCenterStatus();
+    showToast("Cadastro da central removido.", "info");
+  }
+
   // O rascunho não é baixado na hora: vai para a aba "E-mails de evidência",
   // identificado pelo número da eGRDT, para o operador decidir quando gerar.
   function enfileirarEmailDaEmissao() {
@@ -574,6 +652,14 @@
     emailDraftOwnerNote: $("#email-draft-owner-note"),
     emailDraftSave: $("#email-draft-save"),
     emailDraftStatus: $("#email-draft-status"),
+    allocationCenterPath: $("#allocation-center-path"),
+    allocationCenterSheet: $("#allocation-center-sheet"),
+    allocationCenterKey: $("#allocation-center-key"),
+    allocationCenterComment: $("#allocation-center-comment"),
+    allocationCenterLastRow: $("#allocation-center-last-row"),
+    allocationCenterSave: $("#allocation-center-save"),
+    allocationCenterClear: $("#allocation-center-clear"),
+    allocationCenterStatus: $("#allocation-center-status"),
     exportFinalPackage: $("#export-final-package"),
     advancedToggle: $("#advanced-toggle"),
     advancedPanel: $("#advanced-panel"),
@@ -1492,7 +1578,7 @@
     const textValue = String(value || "");
     const patterns = [
       /\b(?:[IAFLED]-)?(?:CE|CR|DB|DE|EC|ET|FD|IM|IS|LA|LD|LI|LO|MA|MC|MD|MO|PR|PT|RL|RM|CT|SIT)-5290\.00-[0-9]{5}-[A-Z0-9]{3}-[A-Z0-9]{3}-[0-9]{3,5}\b/gi,
-      /\b5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{3,4}\b/gi,
+      /\b5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{4}\b/gi,
       /\b[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_[A-Z0-9_-]+\b/gi,
     ];
     const found = [];
@@ -3339,7 +3425,7 @@
           <p class="detail-line"><strong>Arquivo:</strong> ${escapeHtml(source)}</p>
           <p class="detail-line"><strong>Pacote:</strong> ${escapeHtml(files)}</p>
           <p class="detail-line"><strong>Identificação:</strong> ${escapeHtml(row.documentSource || "nome do arquivo")}</p>
-          <p class="detail-line"><strong>Busca com/sem NT-:</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
+          <p class="detail-line"><strong>Busca com/sem nt-:</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
           <p class="detail-line"><strong>Revisão:</strong> ${escapeHtml(row.revisionSource || "—")}</p>
           <p class="detail-line"><strong>LD:</strong> ${escapeHtml(sourceLine)}</p>
         </section>
@@ -3867,7 +3953,7 @@
         "CÓDIGO INFORMADO / PDF": row.documentLookup && row.documentLookup.inputDocument || row.name || "",
         "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.ldDocument || "",
         "FORMA LOCALIZADA NA LD": row.documentLookup && row.documentLookup.ldForm || "Não localizado",
-        "PESQUISA COM/SEM NT- NA LD": row.documentLookup && row.documentLookup.message || "",
+        "PESQUISA COM/SEM nt- NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
         "TÍTULO": row.record && row.record.title || "",
@@ -4035,88 +4121,23 @@
     const metadata = `${ldDisplayName() || "LD não informada"} · Versão da LD enviada: ${reportLdVersion} · ${new Date().toLocaleString("pt-BR")}`;
 
     const summarySheet = workbook.addWorksheet("Resumo", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
-    // Os cinco cartões ocupam 15 colunas. A primeira aba usa somente as
-    // colunas executivas; a auditoria técnica completa fica em uma aba própria.
-    const summaryColumnCount = Math.max(15, ReportSummary ? ReportSummary.EXECUTIVE_COLUMNS.length : 15);
-    const summaryLastColumn = (() => { let n = summaryColumnCount, result = ""; while (n > 0) { n -= 1; result = String.fromCharCode(65 + (n % 26)) + result; n = Math.floor(n / 26); } return result; })();
-    summarySheet.columns = Array.from({ length: summaryColumnCount }, () => ({ width: 15 }));
-    for (let row = 1; row <= 3; row += 1) for (let col = 1; col <= summaryColumnCount; col += 1) summarySheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
-    summarySheet.mergeCells(`C1:${summaryLastColumn}2`);
-    summarySheet.getCell("C1").value = "GRCON · RELATÓRIO DE TRIAGEM DOCUMENTAL";
-    summarySheet.getCell("C1").font = { name: "Aptos Display", size: 19, bold: true, color: { argb: "FFFFFFFF" } };
-    summarySheet.getCell("C1").alignment = { vertical: "middle", horizontal: "left" };
-    summarySheet.mergeCells(`A4:${summaryLastColumn}4`);
-    summarySheet.getCell("A4").value = metadata;
-    summarySheet.getCell("A4").font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
-    summarySheet.getCell("A4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } };
-    summarySheet.getCell("A4").alignment = { vertical: "middle" };
-
-    const cards = [
-      ["TOTAL", summary.total, "FF2E5878"],
-      ["PRONTOS", summary.pronto, "FF0C7657"],
-      ["BLOQUEADOS", summary.bloqueado, "FFA64035"],
-      ["EM ANÁLISE", summary.descartar, "FF66798B"],
-      ["REVISAR", summary.revisar, "FFA56812"],
-    ];
-    cards.forEach(([label, count, color], index) => {
-      const start = index * 3 + 1;
-      summarySheet.mergeCells(6, start, 8, start + 2);
-      const cell = summarySheet.getCell(6, start);
-      cell.value = { richText: [
-        { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF6F7E8C" } }, text: `${label}\n` },
-        { font: { name: "Aptos Display", size: 22, bold: true, color: { argb: color } }, text: Number(count || 0).toLocaleString("pt-BR") },
-      ] };
-      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF7F9FB" } };
-      cell.border = { left: { style: "medium", color: { argb: color } }, top: { style: "thin", color: { argb: "FFDCE4EA" } }, right: { style: "thin", color: { argb: "FFDCE4EA" } }, bottom: { style: "thin", color: { argb: "FFDCE4EA" } } };
-    });
-
-    summarySheet.mergeCells(`A10:${summaryLastColumn}10`);
-    summarySheet.getCell("A10").value = "DADOS DA ANÁLISE";
-    summarySheet.getCell("A10").font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-    summarySheet.getCell("A10").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
-    const details = [
-      ["Versão do aplicativo", APP_VERSION],
-      ["Versão do motor documental", DOCUMENT_ENGINE_VERSION],
-      ["LD(s) carregada(s)", ldDisplayName() || "Não informado"],
-      ["Versão da LD enviada (coluna da aba ET)", reportLdVersion],
-      ["Tipo de entrada", relationSourceKind() || "Pasta documental"],
-      ["Relação usada", relationSourceLabel() || "Não utilizada"],
-      ["Itens da relação", state.listSummary ? state.listSummary.total : ""],
-      ["Arquivos físicos localizados", state.listSummary ? state.listSummary.matched : ""],
-      ["Linhas técnicas da LD", state.ldIntegrity ? state.ldIntegrity.records : ""],
-      ["Linhas da base SIGEM", state.ldIntegrity ? state.ldIntegrity.history : ""],
-      ["Janela de emissão recente", `${state.recentDays} dias`],
-      ["Integridade", "Os arquivos originais não foram alterados nem excluídos."],
-    ];
-    details.forEach(([label, value], index) => {
-      const row = 11 + index;
-      summarySheet.mergeCells(`A${row}:D${row}`);
-      summarySheet.mergeCells(`E${row}:${summaryLastColumn}${row}`);
-      summarySheet.getCell(`A${row}`).value = label;
-      summarySheet.getCell(`E${row}`).value = value;
-      summarySheet.getCell(`A${row}`).font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF53697B" } };
-      summarySheet.getCell(`E${row}`).font = { name: "Aptos", size: 9, color: { argb: "FF263E52" } };
-      summarySheet.getCell(`E${row}`).alignment = { vertical: "middle", wrapText: true };
-      if (index % 2) for (let col = 1; col <= summaryColumnCount; col += 1) summarySheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
-    });
-
-    const summaryTableStart = 12 + details.length;
     const summaryRows = ReportSummary
       ? ReportSummary.buildRowsAsync
         ? await ReportSummary.buildRowsAsync(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
         : ReportSummary.buildRows(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
       : [];
-    const summaryTable = ReportSummary
-      ? ReportSummary.writeExecutiveTableAsync
-        ? await ReportSummary.writeExecutiveTableAsync(summarySheet, summaryRows, summaryTableStart)
-        : ReportSummary.writeExecutiveTable(summarySheet, summaryRows, summaryTableStart)
-      : null;
-    if (summaryTable) {
-      summarySheet.views = [{ state: "frozen", ySplit: summaryTable.headerRow, showGridLines: false, zoomScale: 80, activeCell: `A${summaryTable.dataStart}` }];
+    // O desenho da aba vive em report_summary.js e é o mesmo usado pelo Worker
+    // dedicado. Duplicá-lo aqui fazia uma melhoria chegar só a metade dos
+    // usuários, conforme o navegador tivesse ou não suporte a Worker.
+    if (ReportSummary && ReportSummary.writeExecutiveSummarySheet) {
+      await ReportSummary.writeExecutiveSummarySheet(summarySheet, summaryRows, {
+        metadata,
+        ldName: ldDisplayName(),
+        ldVersion: reportLdVersion,
+        relationLabel: relationSourceLabel(),
+        allocationCenter: allocationCenterConfig(),
+      });
     }
-    summarySheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 }, printTitlesRow: summaryTable ? `${summaryTable.headerRow}:${summaryTable.headerRow}` : undefined };
-    summarySheet.headerFooter.oddFooter = "&LGRCON&C&P de &N&R&D";
     await addReportLogo(workbook, summarySheet);
 
     const auditSheet = workbook.addWorksheet("Auditoria detalhada", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 80 }] });
@@ -4187,8 +4208,10 @@
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
       // O worker não enxerga localStorage nem o índice de histórico, então o
-      // mapa documento -> eGRDT(s) anterior(es) vai pronto no payload.
+      // mapa documento -> eGRDT(s) anterior(es) e o cadastro da central de
+      // alocação vão prontos no payload.
       historyByDocument: historyByDocumentMap(results),
+      allocationCenter: allocationCenterConfig(),
     };
     const buffer = await PerformanceCore.buildReport(payload, workerProgress("Relatório Excel"));
     refreshPerformancePanel("Relatório Excel concluído.");
@@ -4414,6 +4437,7 @@
       ldIntegrity: state.ldIntegrity,
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
+      allocationCenter: allocationCenterConfig(),
     };
   }
 
@@ -4837,6 +4861,8 @@
   els.sgparUrl.addEventListener("change", () => {
     if (Workspace) Workspace.setPreference("sgparUrl", String(els.sgparUrl.value || "").trim());
   });
+  els.allocationCenterSave?.addEventListener("click", saveAllocationCenter);
+  els.allocationCenterClear?.addEventListener("click", clearAllocationCenter);
   els.sgparClose.addEventListener("click", closeSgparDrawer);
   els.sgparCancel.addEventListener("click", closeSgparDrawer);
   els.sgparOverlay.addEventListener("click", closeSgparDrawer);
@@ -4921,6 +4947,7 @@
     els.advancedToggle.setAttribute("aria-expanded", String(open));
   });
   initializeResultColumnFilters();
+  loadAllocationCenterFields();
   carregarDestinatarios();
   if (els.emailDraftSave) els.emailDraftSave.addEventListener("click", salvarDestinatarios);
   window.addEventListener("grcon:email-template-updated", carregarDestinatarios);

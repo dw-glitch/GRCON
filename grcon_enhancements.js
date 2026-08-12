@@ -1,5 +1,5 @@
 // GRCON — Melhorias de UX e Segurança
-// Versão: 5.32.0
+// Versão: 5.32.5
 // Drag & Drop, Confirmações destrutivas, Auditoria local
 
 (function () {
@@ -275,7 +275,7 @@
         action: String(action),
         detail: String(detail || ""),
         user: "",
-        appVersion: "5.32.0",
+        appVersion: "5.32.5",
         userAgent: navigator.userAgent ? navigator.userAgent.slice(0, 200) : "",
       });
       await new Promise((resolve, reject) => {

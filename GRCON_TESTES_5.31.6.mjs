@@ -69,7 +69,7 @@ function ldDocumentRecord(document, allocationStatus = "ALOCADO", sheet = "ET") 
 }
 
 const ntBaseDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
-const ntDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_NT-SPE-AST-320019";
+const ntDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-AST-320019";
 const n1710Document = "MA-5290.00-22000-ABC-C1O-001";
 const cvDocument3 = "5900.0018047.05.2-ABC-CV-GER-001";
 const cvDocument4 = "5900.0018047.05.2-C1O-CV-ELE-0001";
@@ -109,22 +109,22 @@ check("CV com sequencial de 4 dígitos usa a mesma regra operacional eGRDT da ab
   assert.deepEqual(Core.validateEgrdtData(result.egrdt), []);
 });
 
-check("PDF com NT- localiza código sem NT- na LD e usa o nome oficial", () => {
+check("PDF com nt- localiza código sem nt- na LD e usa o nome oficial", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
   const result = Core.triageOne({ id: "nt-1", name: `${ntDocument}_0001.pdf` }, index, {});
   assert.equal(result.document, ntBaseDocument);
   assert.equal(result.documentLookup.matchedByNtVariant, true);
-  assert.equal(result.documentLookup.ldForm, "Sem NT-");
+  assert.equal(result.documentLookup.ldForm, "Sem nt-");
   assert.equal(result.finalName, `${ntBaseDocument}_0001.pdf`);
   assert.equal(result.decision, Core.READY);
 });
 
-check("PDF sem NT- localiza código com NT- na LD e usa o nome oficial", () => {
+check("PDF sem nt- localiza código com nt- na LD e usa o nome oficial", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntDocument)], []);
   const result = Core.triageOne({ id: "nt-2", name: `${ntBaseDocument}_0001.pdf` }, index, {});
   assert.equal(result.document, ntDocument);
   assert.equal(result.documentLookup.matchedByNtVariant, true);
-  assert.equal(result.documentLookup.ldForm, "Com NT-");
+  assert.equal(result.documentLookup.ldForm, "Com nt-");
   assert.equal(result.finalName, `${ntDocument}_0001.pdf`);
   assert.equal(result.decision, Core.READY);
 });
@@ -154,14 +154,15 @@ check("relação registra as duas formas pesquisadas e o código oficial da LD",
   const summary = ReportSummary.buildRows([result], {})[0];
   assert.equal(summary.requestedDocument, ntDocument);
   assert.equal(summary.document, ntBaseDocument);
-  assert.equal(summary.ldDocumentForm, "Sem NT-");
+  assert.equal(summary.ldDocumentForm, "Sem nt-");
   assert.equal(summary.ntSearchResult, "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD");
   assert.equal(summary.searchedWithoutNt, ntBaseDocument);
   assert.equal(summary.searchedWithNt, ntDocument);
   assert.equal(summary.ldDocument, ntBaseDocument);
   assert.match(summary.renameForEgrdt, /SIM — RENOMEADO/i);
   assert.match(summary.renameForEgrdt, /De:.*Para:/i);
-  assert.match(summary.ntLookup, /pesquisa com e sem NT-/i);
+  assert.match(summary.ntLookup, /Pesquisa com e sem nt-/);
+  assert.doesNotMatch(summary.ntLookup, /NT-/);
   assert.match(summary.ntLookup, /código exatamente como está na LD/i);
   const executive = ReportSummary.executiveRows([summary])[0];
   assert.equal(executive.requestedDocument, ntDocument);
@@ -173,19 +174,55 @@ check("relação registra as duas formas pesquisadas e o código oficial da LD",
 check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de forma didática", () => {
   const headers = ReportSummary.EXECUTIVE_COLUMNS.map((column) => column.header);
   assert.deepEqual(headers, [
-    "SITUAÇÃO GRCON",
-    "CÓDIGO INFORMADO / PDF",
-    "PESQUISADO SEM NT-",
-    "PESQUISADO COM NT-",
-    "CÓDIGO ENCONTRADO NA LD",
-    "RESULTADO DA BUSCA COM/SEM NT-",
+    "SITUAÇÃO",
+    "DOCUMENTO INFORMADO",
     "ALOCADO?",
-    "RENOMEAÇÃO DE → PARA",
-    "ARQUIVO FINAL",
-    "INCLUÍDO NA EGRDT?",
-    "MOTIVO / AÇÃO NECESSÁRIA",
-    "EVIDÊNCIA NA LD",
+    "ALOCAÇÃO",
+    "STATUS INTERNO",
+    "SERÁ RENOMEADO?",
+    "ARQUIVO QUE SERÁ POSTADO",
+    "ENTRA NA EGRDT?",
+    "O QUE FAZER",
   ]);
+});
+
+check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
+  assert.equal(ReportSummary.normalizeAllocationCenter(null), null);
+  assert.equal(ReportSummary.normalizeAllocationCenter({ path: "\\\\srv\\q\\Central.xlsx", sheet: "Central", keyColumn: "B" }), null);
+  const central = ReportSummary.normalizeAllocationCenter({
+    path: "\\\\servidor\\qualidade\\Central de Alocacao.xlsx",
+    sheet: "Central",
+    keyColumn: "b",
+    commentColumn: "h",
+  });
+  assert.equal(central.fileName, "Central de Alocacao.xlsx");
+  assert.equal(central.directory, "\\\\servidor\\qualidade\\");
+  assert.equal(central.keyColumn, "B");
+  assert.equal(central.commentColumn, "H");
+  assert.equal(central.lastRow, 20000);
+  assert.equal(ReportSummary.normalizeAllocationCenter({ ...central, lastRow: 500 }).lastRow, 500);
+});
+
+check("PROCX da central aponta para o arquivo de rede e reserva o status do GRCON", () => {
+  const central = ReportSummary.normalizeAllocationCenter({
+    path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H", lastRow: 900,
+  });
+  const formula = ReportSummary.allocationCenterFormula(central, "$D5", 'Não postado no "SIGEM"');
+  // O .xlsx guarda fórmula em inglês e com vírgula; o Excel pt-BR mostra PROCX.
+  assert.match(formula, /^IFERROR\(IF\(OR\(\$D5="",XLOOKUP\(/);
+  assert.ok(formula.includes("'\\\\servidor\\qualidade\\[Central.xlsx]Central'!$B$1:$B$900"));
+  assert.ok(formula.includes("'\\\\servidor\\qualidade\\[Central.xlsx]Central'!$H$1:$H$900"));
+  // Aspas do texto de reserva precisam ser dobradas, senão a fórmula quebra.
+  assert.ok(formula.includes('"Não postado no ""SIGEM"""'));
+  assert.equal(formula.split("XLOOKUP(").length - 1, 2);
+});
+
+check("STATUS INTERNO cai no que o GRCON apurou quando não há comentário da fiscal", () => {
+  assert.equal(ReportSummary.internalStatusText({ ntSearchResult: "NÃO LOCALIZADO NA LD" }), "Não consta na LD");
+  assert.equal(ReportSummary.internalStatusText({ renameForEgrdt: "SIM — RENOMEADO PARA SEGUIR A LD.", ldDocument: "C1O_X_nt-NF-1" }), "Código que consta C1O_X_nt-NF-1");
+  assert.equal(ReportSummary.internalStatusText({ included: "NÃO — EM ANÁLISE" }), "Em análise");
+  assert.equal(ReportSummary.internalStatusText({ included: "SIM", sigemStatus: "Não Postado" }), "Não postado no SIGEM");
+  assert.equal(ReportSummary.internalStatusText({ included: "SIM" }), "Não postado no SIGEM");
 });
 
 check("relação sem PDF físico preserva o DE → PARA depois de adotar o código da LD", () => {
@@ -207,20 +244,22 @@ check("relação sem PDF físico preserva o DE → PARA depois de adotar o códi
   assert.match(summary.renameForEgrdt, new RegExp(`De: ${ntDocument.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 });
 
-check("ausência na LD informa que as formas com e sem NT- foram pesquisadas", () => {
+check("ausência na LD informa que as formas com e sem nt- foram pesquisadas", () => {
   const index = Core.buildIndex([], []);
   const result = Core.triageOne({ id: "nt-7", document: ntBaseDocument, name: `${ntBaseDocument}.pdf` }, index, {});
-  assert.equal(result.status, "Sem correspondência na LD");
+  assert.equal(result.status, "Não consta na LD");
   assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, ntDocument]);
-  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM NT-");
+  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM nt-");
   assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
   const summary = ReportSummary.buildRows([result], {})[0];
   const executive = ReportSummary.executiveRows([summary])[0];
-  assert.match(executive.executiveAction, /NÃO LOCALIZADO NA LD/i);
-  assert.doesNotMatch(executive.executiveAction, /marcada como não alocada/i);
+  assert.match(executive.executiveAction, /não consta na LD/i);
+  assert.doesNotMatch(executive.executiveAction, /não está alocado/i);
+  // O Resumo é lido por gerência: nada de vocabulário do aplicativo.
+  assert.doesNotMatch(executive.executiveAction, /GRCON|aba “Auditoria detalhada”/i);
 });
 
-check("N-1710 não pesquisa nem aceita uma forma artificial com NT-", () => {
+check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   const index = Core.buildIndex([ldDocumentRecord(n1710Document, "ALOCADO", "N-1710")], []);
   const exact = Core.triageOne({ id: "n1710-1", document: n1710Document, name: `${n1710Document}_0001.pdf` }, index, {});
   assert.equal(exact.document, n1710Document);
@@ -228,10 +267,57 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com NT-", () => {
   assert.equal(exact.documentLookup.resultLabel, "NÃO SE APLICA — localizado pela regra normal");
   assert.deepEqual(exact.documentLookup.searchedKeys, [n1710Document]);
 
-  const invalidAlias = Core.triageOne({ id: "n1710-2", name: `NT-${n1710Document}_0001.pdf` }, index, {});
-  assert.equal(invalidAlias.status, "Sem correspondência na LD");
+  const invalidAlias = Core.triageOne({ id: "n1710-2", name: `nt-${n1710Document}_0001.pdf` }, index, {});
+  assert.equal(invalidAlias.status, "Não consta na LD");
   assert.equal(invalidAlias.documentLookup.appliesToNtRule, false);
-  assert.match(invalidAlias.documentLookup.message, /regra com\/sem NT- não se aplica/i);
+  assert.match(invalidAlias.documentLookup.message, /regra com\/sem nt- não se aplica/);
+});
+
+check("ET localiza variação silenciosa de separadores somente dentro do TAG", () => {
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_US-ME.SPIE_nt-P-101-A";
+  const input = "C1O_RNEST_U32_3.1.1.1_INS_US-ME.SPIE_nt-P101A";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  const match = Core.exactDocumentMatch(input, index);
+  assert.ok(match);
+  assert.equal(match.matchKind, "tag-format-variant");
+  const result = Core.triageOne({ id: "tag-format", name: `${input}_0001.pdf` }, index, {});
+  assert.equal(result.document, ld);
+  assert.equal(result.finalName, `${ld}_0001.pdf`);
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.ntRename, null);
+  assert.equal(result.documentLookup.resultLabel, "LOCALIZADO NA LD");
+  assert.doesNotMatch(result.documentLookup.message, /erro|transcri|formata/i);
+});
+
+check("ET tolera uma única confusão alfanumérica comum no TAG quando a LD é inequívoca", () => {
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
+  const input = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-32O019";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  const match = Core.exactDocumentMatch(input, index);
+  assert.ok(match);
+  assert.equal(match.matchKind, "tag-transcription-variant");
+  const result = Core.triageOne({ id: "tag-transcription", name: `${input}.pdf` }, index, {});
+  assert.equal(result.document, ld);
+  assert.equal(result.finalName, `${ld}.pdf`);
+  assert.equal(result.decision, Core.READY);
+});
+
+check("busca tolerante do TAG não adivinha quando há mais de uma linha possível", () => {
+  const prefix = "C1O_RNEST_U32_3.1.1.1_INS_RIR_";
+  const index = Core.buildIndex([
+    ldDocumentRecord(`${prefix}P-101-A`),
+    ldDocumentRecord(`${prefix}P1-01A`),
+  ], []);
+  const result = Core.triageOne({ id: "tag-ambiguous", name: `${prefix}P.101A.pdf` }, index, {});
+  assert.equal(result.status, "Código ambíguo no nome");
+  assert.equal(result.decision, Core.REVIEW);
+});
+
+check("busca tolerante não altera os seis primeiros grupos do ET", () => {
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_P-101-A";
+  const wrongPrefix = "C1O_RNEST_U34_3.1.1.1_INS_RIR_P101A";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  assert.equal(Core.exactDocumentMatch(wrongPrefix, index), null);
 });
 
 check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantidade", () => {
@@ -239,7 +325,7 @@ check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantid
   const cases = Array.from({ length: total }, (_, index) => {
     const suffix = String(index + 1).padStart(5, "0");
     const withoutNt = `C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-TESTE-${suffix}`;
-    const withNt = `C1O_RNEST_U32_3.1.1.1_INS_RIR_NT-SPE-TESTE-${suffix}`;
+    const withNt = `C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-TESTE-${suffix}`;
     return { input: index % 2 ? withoutNt : withNt, ld: index % 2 ? withNt : withoutNt };
   });
   const index = Core.buildIndex(cases.map((item) => ldDocumentRecord(item.ld)), []);
@@ -248,6 +334,24 @@ check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantid
     assert.ok(match);
     assert.equal(match.document, item.ld);
     assert.equal(match.matchKind, "nt-variant");
+  });
+});
+
+check("índice pesquisa 15.000 variações de separador do TAG sem varrer a LD", () => {
+  const total = 15000;
+  const cases = Array.from({ length: total }, (_, index) => {
+    const suffix = String(index + 1).padStart(5, "0");
+    return {
+      input: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PUMP${suffix}`,
+      ld: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PUMP-${suffix}`,
+    };
+  });
+  const index = Core.buildIndex(cases.map((item) => ldDocumentRecord(item.ld)), []);
+  cases.forEach((item) => {
+    const match = Core.exactDocumentMatch(item.input, index);
+    assert.ok(match);
+    assert.equal(match.document, item.ld);
+    assert.equal(match.matchKind, "tag-format-variant");
   });
 });
 
@@ -270,8 +374,13 @@ check("Workers externos usam os módulos atuais e exportam as duas abas do relat
   assert.match(facade, /workers\/triage\.worker\.js/);
   assert.match(facade, /workers\/export\.worker\.js/);
   assert.match(exportWorker, /\.\.\/report_summary\.js/);
-  assert.match(exportWorker, /writeExecutiveTableAsync/);
+  // O Resumo tem de vir do construtor compartilhado; montado dentro do Worker,
+  // uma melhoria chegava só a quem caísse em um dos dois caminhos de exportação.
+  assert.match(exportWorker, /writeExecutiveSummarySheet/);
+  assert.doesNotMatch(exportWorker, /DADOS DA ANÁLISE|Arquitetura de desempenho/);
   assert.match(exportWorker, /Auditoria detalhada/);
+  const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(appSource, /writeExecutiveSummarySheet/);
 });
 
 check("histórico remove registro apagado na nuvem", () => {
@@ -333,10 +442,11 @@ check("prévia informa que a reserva final ocorre no compartilhado", () => {
   assert.match(Sequence.simultaneousUseWarning(), /reservado no histórico compartilhado/i);
 });
 
-check("migrações preservam exclusão lógica, reserva idempotente e retenção física autorizada", () => {
+check("migrações liberam a numeração excluída com autorização e transação", () => {
   const migration514 = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.31.4.sql"), "utf8");
   const migration515 = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.31.5.sql"), "utf8");
   const migration516 = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.31.6.sql"), "utf8");
+  const migration532 = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.2.sql"), "utf8");
   assert.match(migration514, /grcon_history_workspace_egrdt_number_uidx/i);
   assert.match(migration515, /deleted_at timestamptz/i);
   assert.match(migration515, /target_request_id uuid/i);
@@ -355,6 +465,18 @@ check("migrações preservam exclusão lógica, reserva idempotente e retenção
   assert.match(migration516, /delete from public\.grcon_history[\s\S]*where workspace_id = target_workspace/i);
   assert.match(migration516, /grant execute on function public\.grcon_clear_history\(uuid\) to authenticated/i);
   assert.match(migration516, /revoke all on function public\.grcon_clear_history\(uuid\) from public, anon/i);
+  assert.match(migration532, /create unique index grcon_history_workspace_egrdt_number_uidx[\s\S]*deleted_at is null/i);
+  assert.ok((migration532.match(/history_row\.deleted_at is null/gi) || []).length >= 2);
+  assert.match(migration532, /create or replace function private\.grcon_delete_history_record/i);
+  assert.match(migration532, /create or replace function public\.grcon_delete_history_record/i);
+  assert.match(migration532, /private\.grcon_has_role\(target_workspace, array\['owner', 'admin'\]\)/i);
+  assert.match(migration532, /delete from private\.grcon_egrdt_reservations[\s\S]*history_row\.deleted_at is not null/i);
+  assert.match(migration532, /security definer[\s\S]*set search_path = ''/i);
+  assert.match(migration532, /security invoker[\s\S]*set search_path = ''/i);
+  assert.match(migration532, /grant execute on function public\.grcon_delete_history_record\(uuid, uuid, text, uuid\[\]\) to authenticated/i);
+  const reservationDelete = migration532.lastIndexOf("delete from private.grcon_egrdt_reservations");
+  const historyDelete = migration532.lastIndexOf("delete from public.grcon_history");
+  assert.ok(reservationDelete >= 0 && historyDelete > reservationDelete);
 });
 
 check("aplicativo aguarda reserva antes das três gerações", () => {
@@ -367,9 +489,9 @@ check("fluxo acelerado preenche A4 quando a LD não informa o formato", () => {
   assert.match(source, /rawResults\.forEach\(\(result\)\s*=>\s*\{[\s\S]*?const formatDefaulted = Boolean\(result\.egrdt && !result\.egrdt\.format\);[\s\S]*?if \(formatDefaulted\) result\.egrdt\.format = "A4";[\s\S]*?const logical = logicalMeta\.get\(result\.id\);/);
 });
 
-check("sincronização usa exclusão lógica e evita a segunda leitura quando não há envio", () => {
+check("sincronização usa RPC de exclusão e evita a segunda leitura quando não há envio", () => {
   const source = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  assert.match(source, /deleted_at:\s*new Date\(\)\.toISOString\(\)/);
+  assert.match(source, /rpc\("grcon_delete_history_record"/);
   assert.match(source, /\.is\("deleted_at", null\)/);
   assert.doesNotMatch(source, /from\("grcon_history"\)\.delete\(\)/);
   assert.match(source, /const pushed = await pushLocalHistory\(History\.read\(\)\);\s*if \(pushed\.pushed \|\| pushed\.conflicts\) await pullCloudHistory\(\);/s);
@@ -397,6 +519,18 @@ check("limpeza compartilhada só remove o histórico local após confirmação d
   assert.match(cloud, /\["owner", "admin"\]\.includes\(state\.membership\?\.role\)/);
   assert.match(ui, /Os registros serão apagados também do Supabase/);
   assert.match(ui, /await window\.GrconCloud\?\.clearHistory\?\.\(\)/);
+  assert.match(ui, /numerações consumidas serão liberadas para reutilização/i);
+});
+
+check("exclusão individual confirma o Supabase antes de apagar localmente", () => {
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  assert.match(cloud, /async function deleteSharedHistoryRecord\(record\)/);
+  assert.match(cloud, /target_reservation_ids:\s*reservationIds\.length \? reservationIds : null/);
+  const remotePosition = ui.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
+  const localPosition = ui.indexOf("History.deleteOne(record.id)", remotePosition);
+  assert.ok(remotePosition >= 0 && localPosition > remotePosition);
+  assert.match(ui, /foi liberado para reutilização/i);
 });
 
 check("atalho do cabeçalho abre o RECON sem integração de dados", () => {
@@ -414,7 +548,10 @@ check("manifesto declara o tamanho real do ícone", () => {
 
 check("service worker publica o cache isolado da versão atual", () => {
   const source = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(source, /grcon-v5\.32\.0/);
+  // A versão vem do package.json: fixá-la aqui fazia o teste quebrar em toda
+  // publicação, mesmo quando o Service Worker estava correto.
+  const { version } = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  assert.ok(source.includes(`grcon-v${version}`), `sw.js deveria publicar o cache grcon-v${version}`);
   assert.match(source, /networkFirst/);
 });
 
@@ -448,16 +585,24 @@ check("service worker publica o cache isolado da versão atual", () => {
   const rows = ReportSummary.buildRows([result], { ldFileName: "LD_TESTE.xlsx" });
   const workbook = new ExcelJS.Workbook();
   const summarySheet = workbook.addWorksheet("Resumo");
-  const summaryLayout = await ReportSummary.writeExecutiveTableAsync(summarySheet, rows, 1);
+  const summaryLayout = await ReportSummary.writeExecutiveTableAsync(summarySheet, rows, 1, {
+    allocationCenter: { path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H" },
+  });
   const auditSheet = workbook.addWorksheet("Auditoria detalhada");
   const auditLayout = await ReportSummary.writeTableAsync(auditSheet, rows, 1);
   const bytes = await workbook.xlsx.writeBuffer();
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(bytes);
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO GRCON");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "RENOMEAÇÃO DE → PARA");
-  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
-  assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM NT-");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 5).value, "STATUS INTERNO");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 6).value, "SERÁ RENOMEADO?");
+  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 6).value), /De:.*Para:/i);
+  // A célula sobrevive ao ciclo grava/reabre com a PROCX viva e com o status do
+  // GRCON em cache, que é o que aparece com a central fechada.
+  const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 5);
+  assert.match(String(internal.formula), /XLOOKUP\(\$D\d+,'\\\\servidor\\qualidade\\\[Central\.xlsx\]Central'!\$B\$1:\$B\$20000/);
+  assert.equal(internal.result, "Código que consta " + ntBaseDocument);
+  assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM nt-");
   checks.push("Excel do relatório reabre com Resumo Executivo e Auditoria detalhada");
 }
 
@@ -471,4 +616,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.0", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.4", passed: true, checks: checks.length, names: checks }, null, 2));
