@@ -47,10 +47,9 @@
     { header: "AJUSTE DE CÓDIGO (nt-)", key: "ntAdjustment", width: 88 },
   ]);
 
-  // Quem lê o Resumo é gerência e coordenação, e a pergunta é sempre a mesma:
-  // o que entra, o que não entra e o que precisa de decisão. O caminho que o
-  // GRCON percorreu para chegar ali — formas pesquisadas, célula e linha da LD
-  // — é conferência técnica e fica na Auditoria detalhada, que segue completa.
+  // Colunas de decisão que aparecem primeiro na aba Resumo. A partir da 5.32.6
+  // a mesma aba também recebe todas as evidências antes separadas na Auditoria
+  // detalhada, evitando duas relações com os mesmos documentos.
   const EXECUTIVE_COLUMNS = Object.freeze([
     { header: "SITUAÇÃO", key: "decision", width: 24 },
     { header: "DOCUMENTO INFORMADO", key: "requestedDocument", width: 44 },
@@ -65,6 +64,23 @@
     { header: "ARQUIVO QUE SERÁ POSTADO", key: "finalFile", width: 44 },
     { header: "ENTRA NA EGRDT?", key: "included", width: 20 },
     { header: "O QUE FAZER", key: "executiveAction", width: 76 },
+  ]);
+
+  const SUMMARY_PRIORITY_COLUMNS = Object.freeze([
+    { header: "SITUAÇÃO", key: "decision", width: 24 },
+    { header: "DOCUMENTO INFORMADO", key: "requestedDocument", width: 44 },
+    { header: "ENTRA NA EGRDT?", key: "included", width: 20 },
+    { header: "O QUE FAZER", key: "executiveAction", width: 76 },
+    { header: "ALOCADO?", key: "allocated", width: 22 },
+    { header: "ALOCAÇÃO", key: "allocation", width: 24 },
+    { header: "STATUS INTERNO", key: "internalStatus", width: 46 },
+    { header: "SERÁ RENOMEADO?", key: "renameForEgrdt", width: 58 },
+    { header: "ARQUIVO QUE SERÁ POSTADO", key: "finalFile", width: 44 },
+  ]);
+  const summaryPriorityKeys = new Set(SUMMARY_PRIORITY_COLUMNS.map((column) => column.key));
+  const SUMMARY_COLUMNS = Object.freeze([
+    ...SUMMARY_PRIORITY_COLUMNS,
+    ...COLUMNS.filter((column) => !summaryPriorityKeys.has(column.key)),
   ]);
 
   function text(value) {
@@ -459,8 +475,9 @@
   function writeExecutiveGuide(worksheet, startRow, lastColumn, allocationCenter) {
     return writeGuide(worksheet, startRow, lastColumn, [
       ["COMO LER A RELAÇÃO ABAIXO", "FF153A5C", "FFFFFFFF", true],
-      ["Cada linha é um documento. A coluna “ENTRA NA EGRDT?” responde se ele será postado, e “O QUE FAZER” diz o que falta quando não será.", "FFEAF2F8", "FF234B6B", false],
-      ["Amarelo: o documento entra, mas o arquivo será renomeado para o código exatamente como está na LD. Vermelho: não entra e depende de uma correção antes.", "FFFFF3CF", "FF7A5300", false],
+      ["Cada linha é um documento. As primeiras colunas respondem se ele entra na eGRDT, o que precisa ser feito, sua alocação e o arquivo final.", "FFEAF2F8", "FF234B6B", false],
+      ["Continue para a direita para consultar todas as evidências: buscas com/sem nt-, código da LD, revisão, postagem, origem, linha, Databook e histórico.", "FFF2F4F6", "FF52687B", false],
+      ["Use os filtros do cabeçalho para separar prontos, bloqueados, não localizados e documentos que exigem conferência. Amarelo destaca renomeação; vermelho indica impedimento.", "FFFFF3CF", "FF7A5300", false],
       allocationCenter
         ? ["“STATUS INTERNO” traz o comentário da fiscal sobre aquela alocação, buscado na central de alocação pelo número da coluna “ALOCAÇÃO”. Abra a central junto com este relatório para ver o texto mais recente; com ela fechada, a coluna mostra a última situação apurada.", "FFEEF6F1", "FF14614A", false]
         : ["“STATUS INTERNO” mostra a situação apurada de cada documento. Para que ela traga também o comentário da fiscal, cadastre a central de alocação nas configurações do GRCON.", "FFF2F4F6", "FF52687B", false],
@@ -550,14 +567,17 @@
     const settings = options || {};
     const sectionStart = Number(startRow) || 22;
     const lastColumn = columnLetter(columns.length);
+    const guideLastColumn = settings.executive
+      ? columnLetter(Math.min(columns.length, SUMMARY_PRIORITY_COLUMNS.length))
+      : lastColumn;
     const allocationCenter = normalizeAllocationCenter(settings.allocationCenter);
     const titleRow = settings.executive
-      ? writeExecutiveGuide(worksheet, sectionStart, lastColumn, allocationCenter)
+      ? writeExecutiveGuide(worksheet, sectionStart, guideLastColumn, allocationCenter)
       : writeNtGuide(worksheet, sectionStart, lastColumn);
     const headerRow = titleRow + 1;
     const dataStart = headerRow + 1;
 
-    worksheet.mergeCells(`A${titleRow}:${lastColumn}${titleRow}`);
+    worksheet.mergeCells(`A${titleRow}:${guideLastColumn}${titleRow}`);
     const title = worksheet.getCell(titleRow, 1);
     title.value = settings.title || "AUDITORIA DETALHADA POR DOCUMENTO";
     title.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
@@ -690,11 +710,11 @@
   function finishTable(worksheet, layout, rowCount) {
     const finalRow = Math.max(layout.headerRow, layout.dataStart + rowCount - 1);
     worksheet.autoFilter = { from: `A${layout.headerRow}`, to: `${layout.lastColumn}${finalRow}` };
-    // O Resumo é lido de cima para baixo, junto com o bloco de perguntas, e o
-    // painel congelado atrapalhava essa leitura. Na Auditoria detalhada, que é
-    // uma tabela longa de conferência, o cabeçalho fixo continua ajudando.
+    // O Resumo abre no painel gerencial. Como a relação completa é larga,
+    // somente as duas primeiras colunas ficam fixas durante a rolagem lateral;
+    // congelar todas as linhas do painel tiraria espaço útil da tabela.
     worksheet.views = layout.executive
-      ? [{ showGridLines: false, zoomScale: 85, activeCell: "A1" }]
+      ? [{ state: "frozen", xSplit: 2, showGridLines: false, zoomScale: 80, activeCell: "C1" }]
       : [{ state: "frozen", ySplit: layout.headerRow, activeCell: `A${layout.dataStart}`, showGridLines: false, zoomScale: 80 }];
     return { ...layout, finalRow };
   }
@@ -735,19 +755,19 @@
   function executiveTableSettings(options) {
     return {
       executive: true,
-      title: "RELAÇÃO DOS DOCUMENTOS ANALISADOS",
+      title: "DOCUMENTOS ANALISADOS — DECISÃO E EVIDÊNCIAS COMPLETAS",
       allocationCenter: options && options.allocationCenter,
     };
   }
 
   function writeExecutiveTable(worksheet, rows, startRow, options) {
     const source = executiveRows(rows);
-    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, executiveTableSettings(options)));
+    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, SUMMARY_COLUMNS, executiveTableSettings(options)));
   }
 
   async function writeExecutiveTableAsync(worksheet, rows, startRow, options) {
     const source = executiveRows(rows);
-    const layout = prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, executiveTableSettings(options));
+    const layout = prepareTable(worksheet, source, startRow, SUMMARY_COLUMNS, executiveTableSettings(options));
     if (!Large || !Large.pause || source.length <= 600) return writeRows(worksheet, source, layout);
     return writeRowsAsync(worksheet, source, layout);
   }
@@ -765,22 +785,25 @@
   async function writeExecutiveSummarySheet(worksheet, rows, options) {
     const settings = options || {};
     const briefing = executiveBriefing(rows);
-    const columnCount = EXECUTIVE_COLUMNS.length;
-    const lastColumn = columnLetter(columnCount);
-    worksheet.columns = EXECUTIVE_COLUMNS.map((column) => ({ width: column.width }));
+    const columnCount = SUMMARY_COLUMNS.length;
+    // O painel ocupa apenas as nove colunas prioritárias. A relação detalhada
+    // continua para a direita, sem esticar os cartões e os blocos gerenciais.
+    const dashboardColumnCount = SUMMARY_PRIORITY_COLUMNS.length;
+    const dashboardLastColumn = columnLetter(dashboardColumnCount);
+    worksheet.columns = SUMMARY_COLUMNS.map((column) => ({ width: column.width }));
 
     for (let row = 1; row <= 3; row += 1) {
-      for (let col = 1; col <= columnCount; col += 1) {
+      for (let col = 1; col <= dashboardColumnCount; col += 1) {
         worksheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
       }
     }
-    worksheet.mergeCells(`C1:${lastColumn}2`);
+    worksheet.mergeCells(`C1:${dashboardLastColumn}2`);
     const titulo = worksheet.getCell("C1");
     titulo.value = "GRCON · RELATÓRIO DE TRIAGEM DOCUMENTAL";
     titulo.font = { name: "Aptos Display", size: 19, bold: true, color: { argb: "FFFFFFFF" } };
     titulo.alignment = { vertical: "middle", horizontal: "left" };
 
-    worksheet.mergeCells(`A4:${lastColumn}4`);
+    worksheet.mergeCells(`A4:${dashboardLastColumn}4`);
     const meta = worksheet.getCell("A4");
     meta.value = text(settings.metadata);
     meta.font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
@@ -795,10 +818,10 @@
       ["NÃO SERÃO POSTADOS", briefing.naoEntram, "FFA64035"],
       ["ARQUIVOS RENOMEADOS", briefing.renomeados, "FFA56812"],
     ];
-    const larguraCartao = Math.max(1, Math.floor(columnCount / cards.length));
+    const larguraCartao = Math.max(1, Math.floor(dashboardColumnCount / cards.length));
     cards.forEach(([label, count, color], index) => {
       const inicio = index * larguraCartao + 1;
-      const fim = index === cards.length - 1 ? columnCount : inicio + larguraCartao - 1;
+      const fim = index === cards.length - 1 ? dashboardColumnCount : inicio + larguraCartao - 1;
       worksheet.mergeCells(6, inicio, 8, fim);
       const cell = worksheet.getCell(6, inicio);
       cell.value = { richText: [
@@ -815,7 +838,7 @@
       };
     });
 
-    const meio = Math.max(1, Math.floor(columnCount / 2));
+    const meio = Math.max(1, Math.floor(dashboardColumnCount / 2));
     const colunaMeio = columnLetter(meio);
     const colunaDireita = columnLetter(meio + 1);
     const faixa = (row, texto, de, ate) => {
@@ -843,13 +866,13 @@
       worksheet.getRow(row).height = 30;
     });
 
-    faixa(10, "POR QUE ALGUNS NÃO SERÃO POSTADOS", colunaDireita, lastColumn);
+    faixa(10, "POR QUE ALGUNS NÃO SERÃO POSTADOS", colunaDireita, dashboardLastColumn);
     const motivos = briefing.motivos.length
       ? briefing.motivos
       : [["Nenhum documento ficou de fora", 0, "Todos os documentos analisados serão postados."]];
     motivos.slice(0, Math.max(briefing.perguntas.length, 1)).forEach(([motivo, quantidade, acao], index) => {
       const row = 11 + index;
-      worksheet.mergeCells(`${colunaDireita}${row}:${lastColumn}${row}`);
+      worksheet.mergeCells(`${colunaDireita}${row}:${dashboardLastColumn}${row}`);
       const cell = worksheet.getCell(`${colunaDireita}${row}`);
       cell.value = { richText: [
         { font: { name: "Aptos Display", size: 12, bold: true, color: { argb: quantidade ? "FFA64035" : "FF0C7657" } }, text: quantidade ? `${quantidade.toLocaleString("pt-BR")}  ` : "" },
@@ -863,7 +886,7 @@
 
     const linhasBloco = Math.max(briefing.perguntas.length, motivos.length);
     const origemRow = 12 + linhasBloco;
-    faixa(origemRow, "DE ONDE VEIO ESTA ANÁLISE", "A", lastColumn);
+    faixa(origemRow, "DE ONDE VEIO ESTA ANÁLISE", "A", dashboardLastColumn);
     const central = normalizeAllocationCenter(settings.allocationCenter);
     const origem = [
       ["Lista de documentos (LD)", text(settings.ldName) || "Não informado"],
@@ -876,7 +899,7 @@
     origem.forEach(([label, value], index) => {
       const row = origemRow + 1 + index;
       worksheet.mergeCells(`A${row}:D${row}`);
-      worksheet.mergeCells(`E${row}:${lastColumn}${row}`);
+      worksheet.mergeCells(`E${row}:${dashboardLastColumn}${row}`);
       worksheet.getCell(`A${row}`).value = label;
       worksheet.getCell(`E${row}`).value = value;
       worksheet.getCell(`A${row}`).font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF53697B" } };
@@ -884,7 +907,7 @@
       worksheet.getCell(`A${row}`).alignment = { vertical: "middle", indent: 1 };
       worksheet.getCell(`E${row}`).alignment = { vertical: "middle", wrapText: true };
       if (index % 2) {
-        for (let col = 1; col <= columnCount; col += 1) {
+        for (let col = 1; col <= dashboardColumnCount; col += 1) {
           worksheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
         }
       }
@@ -904,6 +927,7 @@
   return Object.freeze({
     COLUMNS,
     EXECUTIVE_COLUMNS,
+    SUMMARY_COLUMNS,
     allocationCenterFormula,
     allocationReason,
     buildRows,

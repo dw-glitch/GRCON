@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.5";
+  const APP_VERSION = "5.32.6";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -4140,15 +4140,6 @@
     }
     await addReportLogo(workbook, summarySheet);
 
-    const auditSheet = workbook.addWorksheet("Auditoria detalhada", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 80 }] });
-    const auditTable = ReportSummary
-      ? ReportSummary.writeTableAsync
-        ? await ReportSummary.writeTableAsync(auditSheet, summaryRows, 1)
-        : ReportSummary.writeTable(auditSheet, summaryRows, 1)
-      : null;
-    auditSheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 }, printTitlesRow: auditTable ? `${auditTable.headerRow}:${auditTable.headerRow}` : undefined };
-    auditSheet.headerFooter.oddFooter = "&LGRCON · Auditoria detalhada&C&P de &N&R&D";
-
     const buildDataSheet = async (name, title, data, statusHeader) => {
       const headers = data.length ? [...new Set(data.flatMap((row) => Object.keys(row)))] : [];
       const sheet = workbook.addWorksheet(name, { properties: { defaultRowHeight: 20 }, views: [{ state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false, zoomScale: 85 }] });
@@ -4186,7 +4177,7 @@
     const buffer = await workbook.xlsx.writeBuffer();
     const check = new ExcelJS.Workbook();
     await check.xlsx.load(buffer);
-    if (!check.getWorksheet("Resumo") || !check.getWorksheet("Auditoria detalhada") || !check.getWorksheet("Triagem")) throw new Error("O relatório gerado não pôde ser validado.");
+    if (!check.getWorksheet("Resumo") || !check.getWorksheet("Triagem") || check.getWorksheet("Auditoria detalhada")) throw new Error("O relatório gerado não pôde ser validado.");
     return buffer;
   }
 

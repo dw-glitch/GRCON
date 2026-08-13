@@ -171,19 +171,23 @@ check("relação registra as duas formas pesquisadas e o código oficial da LD",
   assert.match(executive.ldEvidence, /LD_TESTE\.xlsx.*aba ET.*linha 2/i);
 });
 
-check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de forma didática", () => {
-  const headers = ReportSummary.EXECUTIVE_COLUMNS.map((column) => column.header);
-  assert.deepEqual(headers, [
+check("Resumo único prioriza decisão e preserva todas as evidências da auditoria", () => {
+  const headers = ReportSummary.SUMMARY_COLUMNS.map((column) => column.header);
+  assert.deepEqual(headers.slice(0, 9), [
     "SITUAÇÃO",
     "DOCUMENTO INFORMADO",
+    "ENTRA NA EGRDT?",
+    "O QUE FAZER",
     "ALOCADO?",
     "ALOCAÇÃO",
     "STATUS INTERNO",
     "SERÁ RENOMEADO?",
     "ARQUIVO QUE SERÁ POSTADO",
-    "ENTRA NA EGRDT?",
-    "O QUE FAZER",
   ]);
+  ReportSummary.COLUMNS.forEach((column) => {
+    assert.ok(ReportSummary.SUMMARY_COLUMNS.some((summaryColumn) => summaryColumn.key === column.key), `Resumo não contém ${column.header}`);
+    assert.equal(ReportSummary.SUMMARY_COLUMNS.filter((summaryColumn) => summaryColumn.key === column.key).length, 1);
+  });
 });
 
 check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
@@ -366,7 +370,7 @@ check("relatório em Worker preserva a evidência NT e a renomeação", () => {
   assert.match(compact, /ntRename:\s*item\.ntRename/);
 });
 
-check("Workers externos usam os módulos atuais e exportam as duas abas do relatório", () => {
+check("Workers externos usam os módulos atuais e exportam um Resumo único e completo", () => {
   const facade = fs.readFileSync(path.join(root, "performance_workers.js"), "utf8");
   const exportWorker = fs.readFileSync(path.join(root, "workers", "export.worker.js"), "utf8");
   assert.doesNotMatch(facade, /const SOURCES=/);
@@ -378,9 +382,10 @@ check("Workers externos usam os módulos atuais e exportam as duas abas do relat
   // uma melhoria chegava só a quem caísse em um dos dois caminhos de exportação.
   assert.match(exportWorker, /writeExecutiveSummarySheet/);
   assert.doesNotMatch(exportWorker, /DADOS DA ANÁLISE|Arquitetura de desempenho/);
-  assert.match(exportWorker, /Auditoria detalhada/);
+  assert.doesNotMatch(exportWorker, /addWorksheet\("Auditoria detalhada"/);
   const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
   assert.match(appSource, /writeExecutiveSummarySheet/);
+  assert.doesNotMatch(appSource, /workbook\.addWorksheet\("Auditoria detalhada"/);
 });
 
 check("histórico remove registro apagado na nuvem", () => {
@@ -585,25 +590,31 @@ check("service worker publica o cache isolado da versão atual", () => {
   const rows = ReportSummary.buildRows([result], { ldFileName: "LD_TESTE.xlsx" });
   const workbook = new ExcelJS.Workbook();
   const summarySheet = workbook.addWorksheet("Resumo");
-  const summaryLayout = await ReportSummary.writeExecutiveTableAsync(summarySheet, rows, 1, {
+  const summaryLayout = await ReportSummary.writeExecutiveSummarySheet(summarySheet, rows, {
+    metadata: "LD_TESTE.xlsx · Versão da LD enviada: TESTE",
+    ldName: "LD_TESTE.xlsx",
+    ldVersion: "TESTE",
+    relationLabel: "Relação de teste",
     allocationCenter: { path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H" },
   });
-  const auditSheet = workbook.addWorksheet("Auditoria detalhada");
-  const auditLayout = await ReportSummary.writeTableAsync(auditSheet, rows, 1);
   const bytes = await workbook.xlsx.writeBuffer();
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(bytes);
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 5).value, "STATUS INTERNO");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 6).value, "SERÁ RENOMEADO?");
-  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 6).value), /De:.*Para:/i);
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 3).value, "ENTRA NA EGRDT?");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 4).value, "O QUE FAZER");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 7).value, "STATUS INTERNO");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "SERÁ RENOMEADO?");
+  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
   // A célula sobrevive ao ciclo grava/reabre com a PROCX viva e com o status do
   // GRCON em cache, que é o que aparece com a central fechada.
-  const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 5);
-  assert.match(String(internal.formula), /XLOOKUP\(\$D\d+,'\\\\servidor\\qualidade\\\[Central\.xlsx\]Central'!\$B\$1:\$B\$20000/);
+  const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 7);
+  assert.match(String(internal.formula), /XLOOKUP\(\$F\d+,'\\\\servidor\\qualidade\\\[Central\.xlsx\]Central'!\$B\$1:\$B\$20000/);
   assert.equal(internal.result, "Código que consta " + ntBaseDocument);
-  assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM nt-");
-  checks.push("Excel do relatório reabre com Resumo Executivo e Auditoria detalhada");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 11).value, "RESULTADO DA BUSCA COM/SEM nt-");
+  assert.equal(reopened.getWorksheet("Resumo").columnCount, ReportSummary.SUMMARY_COLUMNS.length);
+  assert.equal(reopened.getWorksheet("Auditoria detalhada"), undefined);
+  checks.push("Excel do relatório reabre com Resumo único e evidências completas");
 }
 
 check("todos os JavaScripts têm sintaxe válida", () => {
@@ -616,4 +627,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.4", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.6", passed: true, checks: checks.length, names: checks }, null, 2));

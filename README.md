@@ -4,7 +4,7 @@ Aplicativo web estático para triagem documental de LD, conferência de alocaç�
 
 ## Regra com/sem `nt-`
 
-A versão 5.32.4 pesquisa documentos **ET** nas duas formas:
+A versão 5.32.6 pesquisa documentos **ET** nas duas formas:
 
 1. o código informado, sem `nt-` no início do 7º grupo;
 2. a mesma identidade, com `nt-` minúsculo no início do 7º grupo.
@@ -23,12 +23,13 @@ A aproximação só é aceita quando identifica uma única linha na LD. Se duas 
 
 ## Relatório
 
-O Excel gerado separa decisão e rastreabilidade:
+O Excel gerado concentra decisão e rastreabilidade sem duplicar a relação:
 
-- `Resumo`: leitura didática com as duas pesquisas, código encontrado, alocação, renomeação, arquivo final, inclusão na eGRDT e ação necessária;
-- `Auditoria detalhada`: todas as colunas técnicas, evidências, revisão, postagem e origem na LD;
+- `Resumo`: primeira aba do arquivo, com painel gerencial, decisão operacional e todas as evidências técnicas — buscas, código encontrado, alocação, renomeação, revisão, postagem, origem e linha da LD, Databook, histórico, arquivo final e ação necessária;
 - `Triagem`: resultado operacional completo;
 - `Linha do tempo`: histórico de revisões, quando disponível.
+
+Na relação do `Resumo`, as colunas de decisão aparecem primeiro e as evidências complementares continuam à direita. O cabeçalho possui filtros e as duas primeiras colunas permanecem visíveis durante a rolagem horizontal.
 
 O processamento não impõe limite à quantidade da relação. A suíte pública valida 15.000 códigos ET nos dois sentidos da busca, sem incluir dados ou metadados de planilhas operacionais no repositório.
 
