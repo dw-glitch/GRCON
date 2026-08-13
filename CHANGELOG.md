@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 5.32.7 — 2026-08-13
+
+- Corrigido o aviso de reparo ao abrir o relatório Excel.
+- Removida a `PROCX` que apontava para uma planilha externa de rede e fazia o Excel tratar o arquivo como contendo fonte não confiável.
+- `STATUS INTERNO` agora é texto seguro: prioriza o comentário da fiscal já registrado na LD e, quando ele não existe, usa a situação apurada pelo GRCON.
+- A central cadastrada aparece somente como referência informativa no `Resumo`; o arquivo não contém conexão, consulta ou fórmula externa.
+- Adicionadas validações para impedir que fórmulas `XLOOKUP/PROCX` externas voltem ao relatório.
+
 ## 5.32.6 — 2026-08-13
 
 - Removida a aba duplicada `Auditoria detalhada` do relatório de triagem.

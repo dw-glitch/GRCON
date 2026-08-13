@@ -56,9 +56,8 @@
     { header: "ALOCADO?", key: "allocated", width: 22 },
     // O número da alocação decide para qual pacote o documento vai.
     { header: "ALOCAÇÃO", key: "allocation", width: 24 },
-    // Comentário da fiscal sobre aquela alocação, buscado na central de
-    // alocação por PROCX. Sem central configurada, mostra o status que o
-    // próprio GRCON apurou.
+    // Comentário da fiscal já presente na LD; sem comentário, mostra o status
+    // que o próprio GRCON apurou. Nunca grava vínculo externo no .xlsx.
     { header: "STATUS INTERNO", key: "internalStatus", width: 46 },
     { header: "SERÁ RENOMEADO?", key: "renameForEgrdt", width: 58 },
     { header: "ARQUIVO QUE SERÁ POSTADO", key: "finalFile", width: 44 },
@@ -91,15 +90,11 @@
   // Central de alocação
   //
   // A central é uma planilha que vive numa pasta de rede: o GRCON roda no
-  // navegador e não alcança esse caminho. Por isso o relatório não copia o
-  // comentário da fiscal — ele sai com uma PROCX apontando para lá, e o texto
-  // se atualiza sozinho toda vez que a planilha é aberta.
-  //
-  // Dois detalhes do formato .xlsx que explicam o que vem abaixo: as fórmulas
-  // são gravadas sempre com os nomes em inglês e vírgula como separador (o
-  // Excel em português exibe PROCX e ";" sozinho), e uma referência externa
-  // precisa de faixa delimitada — coluna inteira não resolve com o arquivo de
-  // origem fechado.
+  // navegador e não alcança esse caminho. O cadastro continua servindo como
+  // referência da origem, mas o relatório não grava fórmulas nem conexões
+  // externas. Isso evita o reparo do .xlsx e o aviso de fonte não confiável do
+  // Excel. O STATUS INTERNO fica com o comentário presente na LD ou, quando
+  // ele não existe, com a situação apurada pelo próprio GRCON.
   // ---------------------------------------------------------------------------
   const ALLOCATION_CENTER_LAST_ROW = 20000;
 
@@ -119,36 +114,11 @@
     return { path: fullPath, directory, fileName, sheet, keyColumn, commentColumn, lastRow };
   }
 
-  function allocationCenterRange(center, column) {
-    const reference = `${center.directory}[${center.fileName}]${center.sheet}`.replace(/'/g, "''");
-    return `'${reference}'!$${column}$1:$${column}$${center.lastRow}`;
-  }
-
-  function quoteFormulaText(value) {
-    return `"${text(value).replace(/"/g, "\"\"")}"`;
-  }
-
-  /**
-   * PROCX do comentário da fiscal com duas reservas: quando a linha não tem
-   * número de alocação, e quando a central não responde — arquivo fechado,
-   * fora da rede ou alocação ausente. Nos dois casos a célula cai no status
-   * que o próprio GRCON apurou, e nunca fica vazia nem mostra erro.
-   */
-  function allocationCenterFormula(center, allocationCell, fallback) {
-    const chave = allocationCenterRange(center, center.keyColumn);
-    const comentario = allocationCenterRange(center, center.commentColumn);
-    const procx = `XLOOKUP(${allocationCell},${chave},${comentario},"",0)`;
-    const reserva = quoteFormulaText(fallback);
-    return `IFERROR(IF(OR(${allocationCell}="",${procx}=""),${reserva},${procx}),${reserva})`;
-  }
-
-  /**
-   * O que o GRCON sabe dizer sobre o documento sem consultar a central. É o
-   * texto que aparece quando a PROCX não encontra a alocação, e reproduz o
-   * preenchimento manual que a coluna recebia antes.
-   */
+  /** Comentário da fiscal na LD ou situação apurada pelo próprio GRCON. */
   function internalStatusText(item) {
     const normalize = (value) => (C && C.norm ? C.norm(value) : text(value).toUpperCase());
+    const fiscalComment = text(item && item.fiscalComment);
+    if (fiscalComment) return fiscalComment;
     const lookup = normalize(item && item.ntSearchResult);
     if (lookup.includes("NAO LOCALIZADO") || lookup.includes("NEM SEM")) return "Não consta na LD";
     const ldDocument = text(item && item.ldDocument);
@@ -472,15 +442,13 @@
     ]);
   }
 
-  function writeExecutiveGuide(worksheet, startRow, lastColumn, allocationCenter) {
+  function writeExecutiveGuide(worksheet, startRow, lastColumn) {
     return writeGuide(worksheet, startRow, lastColumn, [
       ["COMO LER A RELAÇÃO ABAIXO", "FF153A5C", "FFFFFFFF", true],
       ["Cada linha é um documento. As primeiras colunas respondem se ele entra na eGRDT, o que precisa ser feito, sua alocação e o arquivo final.", "FFEAF2F8", "FF234B6B", false],
       ["Continue para a direita para consultar todas as evidências: buscas com/sem nt-, código da LD, revisão, postagem, origem, linha, Databook e histórico.", "FFF2F4F6", "FF52687B", false],
       ["Use os filtros do cabeçalho para separar prontos, bloqueados, não localizados e documentos que exigem conferência. Amarelo destaca renomeação; vermelho indica impedimento.", "FFFFF3CF", "FF7A5300", false],
-      allocationCenter
-        ? ["“STATUS INTERNO” traz o comentário da fiscal sobre aquela alocação, buscado na central de alocação pelo número da coluna “ALOCAÇÃO”. Abra a central junto com este relatório para ver o texto mais recente; com ela fechada, a coluna mostra a última situação apurada.", "FFEEF6F1", "FF14614A", false]
-        : ["“STATUS INTERNO” mostra a situação apurada de cada documento. Para que ela traga também o comentário da fiscal, cadastre a central de alocação nas configurações do GRCON.", "FFF2F4F6", "FF52687B", false],
+      ["“STATUS INTERNO” mostra o comentário da fiscal registrado na LD; quando não há comentário, mostra a situação apurada pelo GRCON. O relatório não cria vínculos externos e pode ser aberto com segurança.", "FFEEF6F1", "FF14614A", false],
     ]);
   }
 
@@ -570,9 +538,8 @@
     const guideLastColumn = settings.executive
       ? columnLetter(Math.min(columns.length, SUMMARY_PRIORITY_COLUMNS.length))
       : lastColumn;
-    const allocationCenter = normalizeAllocationCenter(settings.allocationCenter);
     const titleRow = settings.executive
-      ? writeExecutiveGuide(worksheet, sectionStart, guideLastColumn, allocationCenter)
+      ? writeExecutiveGuide(worksheet, sectionStart, guideLastColumn)
       : writeNtGuide(worksheet, sectionStart, lastColumn);
     const headerRow = titleRow + 1;
     const dataStart = headerRow + 1;
@@ -598,7 +565,6 @@
     return {
       titleRow, headerRow, dataStart, lastColumn, columns, rows,
       executive: Boolean(settings.executive),
-      allocationCenter,
     };
   }
 
@@ -676,22 +642,11 @@
       includedCell.alignment = { vertical: "middle", horizontal: "center" };
   }
 
-  /**
-   * Troca o texto da coluna STATUS INTERNO pela PROCX na central de alocação,
-   * guardando o status apurado pelo GRCON como valor em cache: assim a célula
-   * já chega preenchida para quem abre o relatório fora da rede, e passa a
-   * mostrar o comentário da fiscal assim que a central é aberta.
-   */
-  function styleInternalStatusCell(row, columns, allocationCenter) {
+  /** Mantém STATUS INTERNO como texto seguro, sem fórmula ou vínculo externo. */
+  function styleInternalStatusCell(row, columns) {
     const internalColumn = columns.findIndex((column) => column.key === "internalStatus") + 1;
     if (!internalColumn) return;
     const cell = row.getCell(internalColumn);
-    const fallback = text(cell.value);
-    const allocationColumn = columns.findIndex((column) => column.key === "allocation") + 1;
-    if (allocationCenter && allocationColumn) {
-      const allocationCell = `$${columnLetter(allocationColumn)}${row.number}`;
-      cell.value = { formula: allocationCenterFormula(allocationCenter, allocationCell, fallback), result: fallback };
-    }
     cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF3C5468" } };
     cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
   }
@@ -702,7 +657,7 @@
     styleDecisionCell(row);
     styleSearchCell(row, columns);
     styleAllocationCell(row, columns);
-    styleInternalStatusCell(row, columns, layout.allocationCenter);
+    styleInternalStatusCell(row, columns);
     styleRenameCells(row, columns);
     styleIncludedCell(row, columns);
   }
@@ -756,7 +711,6 @@
     return {
       executive: true,
       title: "DOCUMENTOS ANALISADOS — DECISÃO E EVIDÊNCIAS COMPLETAS",
-      allocationCenter: options && options.allocationCenter,
     };
   }
 
@@ -892,9 +846,9 @@
       ["Lista de documentos (LD)", text(settings.ldName) || "Não informado"],
       ["Versão da LD enviada", text(settings.ldVersion) || "Não informada"],
       ["Documentos conferidos a partir de", text(settings.relationLabel) || "Pasta documental"],
-      ["Central de alocação (STATUS INTERNO)", central
-        ? `${central.path} · aba ${central.sheet} · alocação na coluna ${central.keyColumn} · comentário na coluna ${central.commentColumn}`
-        : "Não cadastrada — a coluna mostra a situação apurada pelo GRCON"],
+      ["Referência da central de alocação", central
+        ? `${central.path} · aba ${central.sheet} · cadastro informativo, sem conexão externa no relatório`
+        : "Não cadastrada — STATUS INTERNO usa a LD e a situação apurada pelo GRCON"],
     ];
     origem.forEach(([label, value], index) => {
       const row = origemRow + 1 + index;
@@ -928,7 +882,6 @@
     COLUMNS,
     EXECUTIVE_COLUMNS,
     SUMMARY_COLUMNS,
-    allocationCenterFormula,
     allocationReason,
     buildRows,
     buildRowsAsync,

@@ -4,7 +4,7 @@ Aplicativo web estático para triagem documental de LD, conferência de alocaç�
 
 ## Regra com/sem `nt-`
 
-A versão 5.32.6 pesquisa documentos **ET** nas duas formas:
+A versão 5.32.7 pesquisa documentos **ET** nas duas formas:
 
 1. o código informado, sem `nt-` no início do 7º grupo;
 2. a mesma identidade, com `nt-` minúsculo no início do 7º grupo.
@@ -30,6 +30,8 @@ O Excel gerado concentra decisão e rastreabilidade sem duplicar a relação:
 - `Linha do tempo`: histórico de revisões, quando disponível.
 
 Na relação do `Resumo`, as colunas de decisão aparecem primeiro e as evidências complementares continuam à direita. O cabeçalho possui filtros e as duas primeiras colunas permanecem visíveis durante a rolagem horizontal.
+
+O relatório não cria fórmulas ou conexões com planilhas externas. `STATUS INTERNO` usa o comentário da fiscal já registrado na LD e, quando ele não existe, a situação apurada pelo GRCON. Assim o arquivo abre sem reparo e sem aviso de fonte externa não confiável.
 
 O processamento não impõe limite à quantidade da relação. A suíte pública valida 15.000 códigos ET nos dois sentidos da busca, sem incluir dados ou metadados de planilhas operacionais no repositório.
 

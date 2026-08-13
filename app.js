@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.6";
+  const APP_VERSION = "5.32.7";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -509,9 +509,9 @@
   // ---------------------------------------------------------------------------
   // Central de alocação
   //
-  // Fica numa pasta de rede, fora do alcance do navegador. Por isso o GRCON não
-  // lê a planilha: guarda onde ela está e escreve a PROCX no relatório, que
-  // busca o comentário da fiscal pelo número da alocação.
+  // Fica numa pasta de rede, fora do alcance do navegador. O cadastro é mantido
+  // apenas como referência da origem no Resumo. O relatório não grava PROCX ou
+  // conexão externa, para abrir sem reparo e sem aviso de fonte não confiável.
   // ---------------------------------------------------------------------------
   const ALLOCATION_CENTER_PREFERENCE = "allocationCenter";
 
@@ -528,8 +528,8 @@
     if (!els.allocationCenterStatus) return;
     const central = allocationCenterConfig();
     els.allocationCenterStatus.textContent = central
-      ? `Cadastrada: ${central.fileName} · aba ${central.sheet} · alocação em ${central.keyColumn} · comentário em ${central.commentColumn} · até a linha ${central.lastRow.toLocaleString("pt-BR")}`
-      : "Não cadastrada. Sem ela, a coluna STATUS INTERNO mostra a situação apurada pelo GRCON.";
+      ? `Referência cadastrada: ${central.fileName} · aba ${central.sheet}. O relatório não cria conexão externa.`
+      : "Não cadastrada. STATUS INTERNO usa o comentário da LD ou a situação apurada pelo GRCON.";
   }
 
   function loadAllocationCenterFields() {
@@ -568,7 +568,7 @@
       lastRow: central.lastRow,
     });
     loadAllocationCenterFields();
-    showToast("Central de alocação cadastrada. Os próximos relatórios já trazem o comentário da fiscal.", "success");
+    showToast("Referência da central cadastrada. O relatório continuará sem conexão externa.", "success");
   }
 
   function clearAllocationCenter() {

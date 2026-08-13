@@ -11,6 +11,7 @@ const History = require(path.join(root, "history_core.js"));
 const Sequence = require(path.join(root, "egrdt_sequence.js"));
 const Workbook = require(path.join(root, "grdt_workbook.js"));
 const ExcelJS = require(path.join(root, "exceljs.min.js"));
+const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const checks = [];
@@ -207,18 +208,8 @@ check("central de alocação só é aceita com caminho, aba e as duas colunas", 
   assert.equal(ReportSummary.normalizeAllocationCenter({ ...central, lastRow: 500 }).lastRow, 500);
 });
 
-check("PROCX da central aponta para o arquivo de rede e reserva o status do GRCON", () => {
-  const central = ReportSummary.normalizeAllocationCenter({
-    path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H", lastRow: 900,
-  });
-  const formula = ReportSummary.allocationCenterFormula(central, "$D5", 'Não postado no "SIGEM"');
-  // O .xlsx guarda fórmula em inglês e com vírgula; o Excel pt-BR mostra PROCX.
-  assert.match(formula, /^IFERROR\(IF\(OR\(\$D5="",XLOOKUP\(/);
-  assert.ok(formula.includes("'\\\\servidor\\qualidade\\[Central.xlsx]Central'!$B$1:$B$900"));
-  assert.ok(formula.includes("'\\\\servidor\\qualidade\\[Central.xlsx]Central'!$H$1:$H$900"));
-  // Aspas do texto de reserva precisam ser dobradas, senão a fórmula quebra.
-  assert.ok(formula.includes('"Não postado no ""SIGEM"""'));
-  assert.equal(formula.split("XLOOKUP(").length - 1, 2);
+check("STATUS INTERNO prioriza o comentário da fiscal presente na LD", () => {
+  assert.equal(ReportSummary.internalStatusText({ fiscalComment: "Liberado pela fiscalização", sigemStatus: "Não Postado" }), "Liberado pela fiscalização");
 });
 
 check("STATUS INTERNO cai no que o GRCON apurou quando não há comentário da fiscal", () => {
@@ -598,6 +589,11 @@ check("service worker publica o cache isolado da versão atual", () => {
     allocationCenter: { path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H" },
   });
   const bytes = await workbook.xlsx.writeBuffer();
+  const archive = await JSZip.loadAsync(bytes);
+  assert.equal(Object.keys(archive.files).some((name) => name.startsWith("xl/externalLinks/") || name === "xl/connections.xml"), false);
+  const summaryXml = await archive.file("xl/worksheets/sheet1.xml").async("string");
+  assert.doesNotMatch(summaryXml, /<f(?:\s|>)/);
+  assert.doesNotMatch(summaryXml, /XLOOKUP|externalReference|externalLink/i);
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(bytes);
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO");
@@ -606,11 +602,12 @@ check("service worker publica o cache isolado da versão atual", () => {
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 7).value, "STATUS INTERNO");
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "SERÁ RENOMEADO?");
   assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
-  // A célula sobrevive ao ciclo grava/reabre com a PROCX viva e com o status do
-  // GRCON em cache, que é o que aparece com a central fechada.
+  // Mesmo com uma central cadastrada, a célula precisa ser texto puro. Uma
+  // PROCX externa fazia o Excel reparar o arquivo e avisar sobre fonte não
+  // confiável.
   const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 7);
-  assert.match(String(internal.formula), /XLOOKUP\(\$F\d+,'\\\\servidor\\qualidade\\\[Central\.xlsx\]Central'!\$B\$1:\$B\$20000/);
-  assert.equal(internal.result, "Código que consta " + ntBaseDocument);
+  assert.equal(internal.formula, undefined);
+  assert.equal(internal.value, "Código que consta " + ntBaseDocument);
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 11).value, "RESULTADO DA BUSCA COM/SEM nt-");
   assert.equal(reopened.getWorksheet("Resumo").columnCount, ReportSummary.SUMMARY_COLUMNS.length);
   assert.equal(reopened.getWorksheet("Auditoria detalhada"), undefined);
@@ -627,4 +624,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.6", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.7", passed: true, checks: checks.length, names: checks }, null, 2));
