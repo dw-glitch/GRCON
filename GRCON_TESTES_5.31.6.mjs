@@ -14,6 +14,8 @@ const ExcelJS = require(path.join(root, "exceljs.min.js"));
 const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
+const Emission = require(path.join(root, "emission.js"));
+const OutputGuard = require(path.join(root, "grcon_output_guard.js"));
 const checks = [];
 
 function check(name, fn) {
@@ -136,6 +138,52 @@ check("busca alternativa preserva o bloqueio quando a forma da LD não está alo
   assert.equal(result.document, ntBaseDocument);
   assert.equal(result.hardBlock, true);
   assert.equal(Core.allocationState(result.allocationStatus).kind, "not_allocated");
+});
+
+check("Não Alocado fica fora por padrão, mas a seleção manual permite gerar a GRDT", () => {
+  const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO")], []);
+  const result = Core.triageOne({ id: "manual-not-allocated", name: `${ntBaseDocument}.pdf` }, index, {});
+  result.files = [{ name: `${ntBaseDocument}.pdf`, finalName: result.finalName, file: { size: 1 } }];
+  result.egrdt = Core.buildEgrdtData(result.document, result.revision, result.finalName, result.record, result.sheet, "A4");
+
+  const defaultPlan = Emission.createPlan([result], new Set([0]));
+  assert.ok(defaultPlan.errors.some((message) => /bloqueado não pode ser emitido/i.test(message)));
+
+  const manualPlan = Emission.createPlan([result], new Set([0]), { manualForceIndices: new Set([0]) });
+  assert.deepEqual(manualPlan.errors, []);
+  assert.equal(manualPlan.entries.length, 1);
+  assert.equal(manualPlan.entries[0].manualAllocationOverride, true);
+  assert.equal(manualPlan.items[0].manualAllocationOverride, true);
+  assert.ok(manualPlan.warnings.some((message) => /incluído manualmente.*Não Alocado/i.test(message)));
+
+  const guardBlocked = OutputGuard.validateRows([result], { maxItems: 48 });
+  assert.equal(guardBlocked.valid, false);
+  const guardManual = OutputGuard.validateRows([result], { maxItems: 48, manualForceRows: new Set([result]) });
+  assert.equal(guardManual.valid, true);
+
+  const otherBlock = {
+    ...result,
+    allocationStatus: "ALOCADO",
+    blockCode: "technical_block",
+    record: { ...result.record, allocationStatus: "ALOCADO" },
+  };
+  const protectedPlan = Emission.createPlan([otherBlock], new Set([0]), { manualForceIndices: new Set([0]) });
+  assert.ok(protectedPlan.errors.some((message) => /bloqueado não pode ser emitido/i.test(message)));
+
+  const summary = ReportSummary.buildRows([{ ...result, selectedForEgrdt: true, manuallyIncluded: true }], {})[0];
+  assert.equal(summary.included, "SIM — MANUAL (LD NÃO ALOCADO)");
+  assert.equal(summary.allocated, "NÃO — Não alocado");
+  assert.match(summary.observation, /status original da LD foi preservado/i);
+});
+
+check("selecionar todos abrange documentos visíveis e registra inclusões manuais", () => {
+  const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const htmlSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(htmlSource, /Selecionar todos · Situação/);
+  assert.match(appSource, /const visibleIndices = filteredResultIndices\(\)/);
+  assert.match(appSource, /manualAllocationOverrideAllowed\(row\)/);
+  assert.match(appSource, /state\.manualForceInclude\.add\(index\)/);
+  assert.match(appSource, /manualForceIndices: state\.manualForceInclude/);
 });
 
 check("quando as duas formas existem na LD a forma exata prevalece", () => {
@@ -734,4 +782,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.9", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.10", passed: true, checks: checks.length, names: checks }, null, 2));

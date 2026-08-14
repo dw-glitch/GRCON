@@ -4,7 +4,7 @@ Aplicativo web estático para triagem documental de LD, conferência de alocaç�
 
 ## Regra com/sem `nt-`
 
-A versão 5.32.9 pesquisa documentos **ET** nas duas formas:
+A versão 5.32.10 pesquisa documentos **ET** nas duas formas:
 
 1. o código informado, sem `nt-` no início do 7º grupo;
 2. a mesma identidade, com `nt-` minúsculo no início do 7º grupo.
@@ -43,6 +43,14 @@ Na relação do `Resumo`, as colunas de decisão aparecem primeiro e as evidênc
 O relatório não cria fórmulas ou conexões com planilhas externas. `STATUS INTERNO` usa o comentário da fiscal já registrado na LD e, quando ele não existe, a situação apurada pelo GRCON. Assim o arquivo abre sem reparo e sem aviso de fonte externa não confiável.
 
 O processamento não impõe limite à quantidade da relação. A suíte pública valida 15.000 códigos ET nos dois sentidos da busca e mais 15.000 códigos localizados por tipo + TAG, sem incluir dados ou metadados de planilhas operacionais no repositório.
+
+## Inclusão manual de documentos Não Alocados
+
+Documentos cuja LD informa `NÃO ALOCADO` permanecem desmarcados quando a análise termina. O operador pode marcar a caixa da linha para incluí-los manualmente na GRDT, sem alterar o status original lido da LD.
+
+A caixa `Selecionar todos · Situação`, no cabeçalho da tabela, seleciona ou desmarca todos os documentos visíveis disponíveis para GRDT. Pesquisa, aba, situação e filtros de coluna são respeitados; assim é possível filtrar somente `NÃO ALOCADO` antes da seleção em massa.
+
+Toda inclusão de um documento Não Alocado é registrada como decisão manual na tela, no `Resumo`, na `Triagem` e no manifesto do pacote. Bloqueios técnicos que não correspondem a Não Alocado continuam impedindo a emissão.
 
 ## Exclusão do histórico e reutilização da numeração
 

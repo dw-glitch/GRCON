@@ -174,6 +174,7 @@
   }
 
   function decisionLabel(row) {
+    if (row && row.manuallyIncluded && row.selectedForEgrdt) return "Incluído manualmente — LD: Não Alocado";
     if (row && row.hardBlock) return "Não será incluído";
     if (row && row.decision === (C && C.READY || "pronto")) return "Será incluído na eGRDT";
     if (row && row.decision === (C && C.DISCARD || "descartar")) return "Não será enviado novamente";
@@ -321,11 +322,14 @@
     const settings = options || {};
     return (results || []).map((row) => {
       const record = row && row.record || {};
+      const manuallyIncluded = Boolean(row && row.manuallyIncluded && row.selectedForEgrdt);
       const ready = row && !row.hardBlock && row.decision === (C && C.READY || "pronto");
       const notice = row && row.ldConflict && row.ldConflict.hasNotice && row.ldConflict.noticeSummary
         ? ` ${row.ldConflict.noticeSummary}`
         : "";
-      const included = ready
+      const included = manuallyIncluded
+        ? "SIM — MANUAL (LD NÃO ALOCADO)"
+        : ready
         ? "SIM"
         : row && row.hardBlock
           ? "NÃO — BLOQUEADO"
@@ -364,7 +368,7 @@
         postingRevisionStatus: text(row && row.status),
         included,
         databook: text(record.databook),
-        observation: `${decisionObservation(row)}${notice}`.trim(),
+        observation: `${manuallyIncluded ? "INCLUSÃO MANUAL: o operador selecionou este documento para a GRDT mesmo com a LD registrando Não Alocado. O status original da LD foi preservado. " : ""}${decisionObservation(row)}${notice}`.trim(),
         sigemStatus: text(record.sigemStatus),
         originalFile: Array.isArray(row && row.files) && row.files.length
           ? row.files.map((item) => text(item && item.name)).filter(Boolean).join(" | ")
@@ -450,6 +454,7 @@
       ["Cada linha é um documento. As primeiras colunas respondem se ele entra na eGRDT, o que precisa ser feito, sua alocação e o arquivo final.", "FFEAF2F8", "FF234B6B", false],
       ["Continue para a direita para consultar todas as evidências: buscas com/sem nt- e TAG, código da LD, revisão, postagem, origem, linha, Databook e histórico.", "FFF2F4F6", "FF52687B", false],
       ["Use os filtros do cabeçalho para separar prontos, bloqueados, não localizados e documentos que exigem conferência. Amarelo destaca renomeação; vermelho indica impedimento.", "FFFFF3CF", "FF7A5300", false],
+      ["Documentos Não Alocados ficam desmarcados por padrão, mas podem ser incluídos manualmente. Quando isso ocorrer, o Resumo mantém o status da LD e identifica claramente a decisão do operador.", "FFFFF3CF", "FF7A5300", false],
       ["“STATUS INTERNO” mostra o comentário da fiscal registrado na LD; quando não há comentário, mostra a situação apurada pelo GRCON. O relatório não cria vínculos externos e pode ser aberto com segurança.", "FFEEF6F1", "FF14614A", false],
     ]);
   }
@@ -464,7 +469,7 @@
     const total = lista.length;
     const pct = (n) => (total ? ` (${Math.round((n / total) * 100)}% do total)` : "");
     const conta = (fn) => lista.filter(fn).length;
-    const incluido = (item) => text(item.included).toUpperCase() === "SIM";
+    const incluido = (item) => text(item.included).toUpperCase().startsWith("SIM");
     const bloqueado = (item) => text(item.included).toUpperCase().includes("BLOQUEADO");
     const emAnalise = (item) => text(item.included).toUpperCase().includes("EM ANÁLISE");
     const pendente = (item) => text(item.included).toUpperCase() === "PENDENTE";
@@ -477,6 +482,8 @@
     const renomeado = (item) => text(item.renameForEgrdt).toUpperCase().startsWith("SIM");
 
     const entram = conta(incluido);
+    const naoAlocadosIncluidosManualmente = conta((item) => incluido(item) && naoAlocado(item));
+    const naoAlocadosPendentes = conta((item) => !incluido(item) && naoAlocado(item));
     const naoEntram = total - entram;
     const perguntas = [
       ["Quantos documentos foram analisados?", `${total.toLocaleString("pt-BR")} documento(s).`],
@@ -489,8 +496,8 @@
       ["Algum arquivo precisou ser renomeado?", conta(renomeado)
         ? `Sim, ${conta(renomeado).toLocaleString("pt-BR")} arquivo(s). O nome passa a ser o código exatamente como está na LD, que é a forma aceita na postagem.`
         : "Não. Todos os códigos informados já coincidiam com a LD."],
-      ["O que depende de outra pessoa?", conta(naoAlocado)
-        ? `${conta(naoAlocado).toLocaleString("pt-BR")} documento(s) dependem da regularização da alocação na LD antes de qualquer nova tentativa.`
+      ["O que depende de outra pessoa?", naoAlocadosPendentes || naoAlocadosIncluidosManualmente
+        ? `${naoAlocadosPendentes.toLocaleString("pt-BR")} documento(s) permanecem fora aguardando alocação.${naoAlocadosIncluidosManualmente ? ` ${naoAlocadosIncluidosManualmente.toLocaleString("pt-BR")} foram incluído(s) manualmente apesar do status Não Alocado.` : ""}`
         : "Nada. Nenhum documento está travado por alocação."],
     ];
 
@@ -513,10 +520,12 @@
       // Texto escrito para quem decide, não para quem opera o aplicativo:
       // o que acontece com o documento e de quem depende resolver.
       let executiveAction = text(item.observation);
-      if (allocated.includes("NÃO") && allocated.includes("ALOCADO")) {
+      if (included.startsWith("SIM") && allocated.includes("NÃO") && allocated.includes("ALOCADO")) {
+        executiveAction = "Será postado por decisão manual do operador, embora a LD permaneça registrada como Não Alocado. Regularize a alocação para manter a rastreabilidade documental.";
+      } else if (allocated.includes("NÃO") && allocated.includes("ALOCADO")) {
         const comentario = text(item.fiscalComment);
         executiveAction = `Não será postado: o documento não está alocado na LD.${comentario ? ` Comentário da Fiscal: ${comentario}` : ""} Regularize a alocação na LD para liberar a postagem.`;
-      } else if (included === "SIM") {
+      } else if (included.startsWith("SIM")) {
         executiveAction = text(item.renameForEgrdt).toUpperCase().startsWith("SIM")
           ? "Será postado. O arquivo entra com o código exatamente como está na LD, que é a forma aceita na postagem."
           : "Será postado. Não há pendências neste documento.";

@@ -1,5 +1,14 @@
 # Histórico de alterações
 
+## 5.32.10 — 2026-08-14
+
+- Documentos com status `NÃO ALOCADO` continuam desmarcados por padrão, mas agora podem ser selecionados manualmente para entrar na GRDT.
+- A inclusão manual não altera nem esconde a situação original da LD; tela, relatório `Resumo`, aba `Triagem` e manifesto identificam a decisão do operador.
+- Outros bloqueios técnicos continuam protegidos e não podem ser superados por essa autorização.
+- A caixa do cabeçalho passa a selecionar ou desmarcar todos os documentos visíveis disponíveis para GRDT, respeitando pesquisa e filtros ativos.
+- Ao selecionar todos, documentos Não Alocados são registrados automaticamente como inclusões manuais.
+- A suíte passa a validar 49 cenários, incluindo o estado inicial desmarcado, a autorização manual, a proteção dos demais bloqueios e a seleção em massa.
+
 ## 5.32.9 — 2026-08-14
 
 - Corrigida a busca alternativa dos documentos ET para exigir sempre a combinação **tipo documental do Grupo 6 + TAG**.
