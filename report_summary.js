@@ -86,6 +86,15 @@
     return value === null || value === undefined ? "" : String(value).trim();
   }
 
+  /** Grafia literal da linha técnica da LD, sem normalização de caixa. */
+  function exactLdDocument(row) {
+    const recordDocument = text(row && row.record && row.record.document);
+    if (recordDocument) return recordDocument;
+    const lookupDocument = text(row && row.documentLookup && row.documentLookup.ldDocument);
+    if (lookupDocument) return lookupDocument;
+    return text(row && row.document);
+  }
+
   // ---------------------------------------------------------------------------
   // Central de alocação
   //
@@ -322,6 +331,8 @@
     const settings = options || {};
     return (results || []).map((row) => {
       const record = row && row.record || {};
+      const exactDocument = exactLdDocument(row);
+      const locatedDocument = text(record.document || row && row.documentLookup && row.documentLookup.ldDocument);
       const manuallyIncluded = Boolean(row && row.manuallyIncluded && row.selectedForEgrdt);
       const ready = row && !row.hardBlock && row.decision === (C && C.READY || "pronto");
       const notice = row && row.ldConflict && row.ldConflict.hasNotice && row.ldConflict.noticeSummary
@@ -339,11 +350,11 @@
       return {
         decision: decisionLabel(row),
         requestedDocument: text(row && row.documentLookup && row.documentLookup.inputDocument || row && row.name),
-        document: text(row && row.document),
+        document: exactDocument,
         ntSearchResult: text(row && row.documentLookup && row.documentLookup.resultLabel) || "PESQUISA NÃO REGISTRADA",
         searchedWithoutNt: text(row && row.documentLookup && row.documentLookup.searchedWithoutNt) || "Não se aplica",
         searchedWithNt: text(row && row.documentLookup && row.documentLookup.searchedWithNt) || "Não se aplica",
-        ldDocument: text(row && row.documentLookup && row.documentLookup.ldDocument) || "Não localizado",
+        ldDocument: locatedDocument || "Não localizado",
         ldDocumentForm: text(row && row.documentLookup && row.documentLookup.ldForm) || "Não localizado",
         ntLookup: text(row && row.documentLookup && row.documentLookup.message),
         renameForEgrdt: renameForEgrdtText(row),

@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.10";
+  const APP_VERSION = "5.32.11";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -3975,6 +3975,15 @@
       .replace(/[–—]/g, "-").toUpperCase().replace(/\s+/g, " ");
   }
 
+  // A normalização é usada apenas para pesquisar. No relatório, a grafia vem
+  // literalmente da linha técnica selecionada na LD.
+  function exactLdDocument(row) {
+    return String(row && row.record && row.record.document
+      || row && row.documentLookup && row.documentLookup.ldDocument
+      || row && row.document
+      || "").trim();
+  }
+
   function historyByDocumentMap(results) {
     const map = {};
     (results || []).forEach((row) => {
@@ -3988,6 +3997,7 @@
 
   function reportRows() {
     return state.results.map((row, index) => {
+      const ldDocument = exactLdDocument(row);
       const message = decisionMessage(row);
       const simpleMessage = [message.title, message.explanation, message.nextAction].filter(Boolean).join(" ");
       const output = {
@@ -3995,7 +4005,7 @@
         "GRDT(S) ANTERIOR(ES) NO HISTÓRICO": previousEgrdtHistoryText(row.document),
         "CÓDIGO DO MOTIVO": message.code || row.reasonCode || "",
         "CÓDIGO INFORMADO / PDF": row.documentLookup && row.documentLookup.inputDocument || row.name || "",
-        "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.ldDocument || "",
+        "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.matched ? ldDocument : "",
         "FORMA LOCALIZADA NA LD": row.documentLookup && row.documentLookup.ldForm || "Não localizado",
         "PESQUISA COM/SEM nt- E TAG NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
@@ -4058,7 +4068,7 @@
       });
       // DOCUMENTO sempre reflete o mesmo valor usado na tabela de triagem,
       // mesmo quando a LD também tem uma coluna própria chamada "DOCUMENTO".
-      output.DOCUMENTO = row.document;
+      output.DOCUMENTO = ldDocument || row.document;
       return output;
     });
   }

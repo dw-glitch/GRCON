@@ -4,7 +4,7 @@ Aplicativo web estático para triagem documental de LD, conferência de alocaç�
 
 ## Regra com/sem `nt-`
 
-A versão 5.32.10 pesquisa documentos **ET** nas duas formas:
+A versão 5.32.11 pesquisa documentos **ET** nas duas formas:
 
 1. o código informado, sem `nt-` no início do 7º grupo;
 2. a mesma identidade, com `nt-` minúsculo no início do 7º grupo.
@@ -12,6 +12,8 @@ A versão 5.32.10 pesquisa documentos **ET** nas duas formas:
 A relação, as mensagens de auditoria e as colunas de pesquisa preservam o prefixo como `nt-` minúsculo. A chave interna de comparação é normalizada apenas para permitir uma busca segura, sem alterar a grafia apresentada ao operador.
 
 Se a LD possuir somente a forma alternativa, o GRCON adota o código exatamente como está na LD, renomeia o PDF para essa forma e registra claramente `DE → PARA` no relatório. A condição de alocação da linha encontrada continua determinando se o documento pode entrar na eGRDT.
+
+A grafia da linha técnica da LD é preservada literalmente em todos os campos do relatório e no arquivo final: maiúsculas, minúsculas, `nt-` e separadores não são convertidos. A normalização para maiúsculas existe somente na chave interna de pesquisa e nunca é usada como valor de saída.
 
 Documentos **N-1710 não participam dessa regra**. Eles são pesquisados somente pelo código informado.
 
@@ -43,6 +45,12 @@ Na relação do `Resumo`, as colunas de decisão aparecem primeiro e as evidênc
 O relatório não cria fórmulas ou conexões com planilhas externas. `STATUS INTERNO` usa o comentário da fiscal já registrado na LD e, quando ele não existe, a situação apurada pelo GRCON. Assim o arquivo abre sem reparo e sem aviso de fonte externa não confiável.
 
 O processamento não impõe limite à quantidade da relação. A suíte pública valida 15.000 códigos ET nos dois sentidos da busca e mais 15.000 códigos localizados por tipo + TAG, sem incluir dados ou metadados de planilhas operacionais no repositório.
+
+## Responsividade no navegador
+
+A interface preserva o layout operacional de desktop e se reorganiza continuamente quando a janela do navegador é reduzida ou ampliada. Em telas menores, a navegação vira uma faixa horizontal rolável, cartões e formulários passam para uma ou duas colunas, ações longas ocupam a largura disponível e drawers, diálogos e menus permanecem inteiramente acessíveis.
+
+As tabelas continuam completas e usam rolagem horizontal própria, sem alargar a página. Nas larguras estreitas, as colunas congeladas da triagem são liberadas para não encobrir os dados. A adaptação cobre largura e altura da janela, inclusive redimensionamento livre no computador, sem alterar o conteúdo dos relatórios Excel.
 
 ## Inclusão manual de documentos Não Alocados
 

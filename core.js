@@ -741,11 +741,19 @@
         byDocumentRevision.get(historyKey).push(item);
       }
     });
+    // A linha técnica da LD é a fonte de verdade também para a grafia. O
+    // histórico só fornece um representante quando o documento não possui
+    // linha técnica. Assim, caixa, "nt-" e separadores nunca são herdados de
+    // uma escrita antiga do histórico.
+    const controlledRepresentative = (group) => {
+      const technical = (group && group.records || []).filter((item) => text(item && item.document));
+      const candidates = technical.length ? technical : (group && group.history || []).filter((item) => text(item && item.document));
+      return candidates.reduce((best, item) => !best || text(item.document).length > text(best.document).length ? item : best, null);
+    };
     const documents = [...byDocument.entries()]
       .map(([documentKey, group]) => {
-        const all = [...group.records, ...group.history];
-        const representative = all.sort((a, b) => b.document.length - a.document.length)[0];
-        return { documentKey, document: representative.document, group, searchKeys: documentSearchKeys(documentKey) };
+        const representative = controlledRepresentative(group);
+        return { documentKey, document: representative && representative.document || documentKey, group, searchKeys: documentSearchKeys(documentKey) };
       })
       .sort((a, b) => b.documentKey.length - a.documentKey.length);
     byDocumentRevision.forEach((items) => items.sort(historyCompare));
@@ -897,8 +905,9 @@
     const documentKey = key(value);
     const group = index.byDocument.get(documentKey);
     if (group) {
-      const all = [...(group.records || []), ...(group.history || [])];
-      const representative = all.reduce((best, item) => !best || text(item.document).length > text(best.document).length ? item : best, null);
+      const technical = (group.records || []).filter((item) => text(item && item.document));
+      const candidates = technical.length ? technical : (group.history || []).filter((item) => text(item && item.document));
+      const representative = candidates.reduce((best, item) => !best || text(item.document).length > text(best.document).length ? item : best, null);
       return { documentKey, document: representative && representative.document || text(value), group, matchedSearchKey: documentKey, matchKind: "exact" };
     }
     if (!isEtDocument(documentKey)) return null;

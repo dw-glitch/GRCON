@@ -772,6 +772,58 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("Excel do relatório reabre com Resumo único e evidências completas");
 }
 
+{
+  const literalLdDocument = "c1O_Rnest_u32_3.1.1.1_Ins_Rir_nt-Spe-Ast-320019";
+  const informedDocument = literalLdDocument.replace("_nt-", "_").toUpperCase();
+  const technical = ldDocumentRecord(literalLdDocument);
+  const oldHistorySpelling = { ...ldDocumentRecord(literalLdDocument.toUpperCase()), sheet: "Colar SIGEM" };
+  const index = Core.buildIndex([technical], [oldHistorySpelling]);
+  const result = Core.triageOne({ id: "literal-ld", name: `${informedDocument}_0001.pdf` }, index, {});
+
+  assert.equal(result.document, literalLdDocument);
+  assert.equal(result.documentLookup.ldDocument, literalLdDocument);
+  assert.equal(result.finalName, `${literalLdDocument}_0001.pdf`);
+
+  const rows = ReportSummary.buildRows([result], { ldFileName: "LD_LITERAL.xlsx" });
+  assert.equal(rows[0].document, literalLdDocument);
+  assert.equal(rows[0].ldDocument, literalLdDocument);
+  assert.equal(rows[0].finalFile, `${literalLdDocument}_0001.pdf`);
+
+  const workbook = new ExcelJS.Workbook();
+  const summary = workbook.addWorksheet("Resumo");
+  const layout = await ReportSummary.writeExecutiveSummarySheet(summary, rows, { ldName: "LD_LITERAL.xlsx" });
+  const bytes = await workbook.xlsx.writeBuffer();
+  const reopened = new ExcelJS.Workbook();
+  await reopened.xlsx.load(bytes);
+  const reopenedSummary = reopened.getWorksheet("Resumo");
+  const documentColumn = ReportSummary.SUMMARY_COLUMNS.findIndex((column) => column.key === "document") + 1;
+  const ldDocumentColumn = ReportSummary.SUMMARY_COLUMNS.findIndex((column) => column.key === "ldDocument") + 1;
+  const finalFileColumn = ReportSummary.SUMMARY_COLUMNS.findIndex((column) => column.key === "finalFile") + 1;
+  assert.equal(reopenedSummary.getCell(layout.dataStart, documentColumn).value, literalLdDocument);
+  assert.equal(reopenedSummary.getCell(layout.dataStart, ldDocumentColumn).value, literalLdDocument);
+  assert.equal(reopenedSummary.getCell(layout.dataStart, finalFileColumn).value, `${literalLdDocument}_0001.pdf`);
+  checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
+}
+
+check("interface do navegador tem camada responsiva final e cacheada", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+  const css = fs.readFileSync(path.join(root, "grcon-responsive.css"), "utf8");
+  const uiFixPosition = html.indexOf('href="grcon-ui-fix.css"');
+  const responsivePosition = html.indexOf('href="grcon-responsive.css"');
+
+  assert.ok(uiFixPosition >= 0 && responsivePosition > uiFixPosition, "CSS responsivo precisa ser a última camada visual");
+  assert.ok((serviceWorker.match(/"grcon-responsive\.css"/g) || []).length >= 2, "CSS responsivo precisa estar nos caches geral e crítico");
+  for (const breakpoint of ["74rem", "58rem", "44rem", "30rem"]) {
+    assert.match(css, new RegExp(`@media \\(max-width: ${breakpoint.replace(".", "\\.")}\\)`));
+  }
+  assert.match(css, /@media \(max-height: 46rem\)/);
+  assert.match(css, /body\s*\{\s*overflow-x:\s*clip;/);
+  assert.match(css, /\.grcon-view-tabs[\s\S]*overflow-x:\s*auto;/);
+  assert.match(css, /#results-table[\s\S]*position:\s*static\s*!important;/);
+  assert.match(css, /inline-size:\s*100vw\s*!important;/);
+});
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];
@@ -782,4 +834,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.10", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.11", passed: true, checks: checks.length, names: checks }, null, 2));

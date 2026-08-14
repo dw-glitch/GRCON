@@ -12,7 +12,7 @@
   let counter = 0;
 
   function appVersion() {
-    return String(root.GrconConfig && root.GrconConfig.APP_VERSION || "5.32.10");
+    return String(root.GrconConfig && root.GrconConfig.APP_VERSION || "5.32.11");
   }
 
   function supported() {
