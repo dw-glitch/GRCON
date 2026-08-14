@@ -5,7 +5,7 @@
   const Posting = window.GrconSigemPosting;
   const Flow = window.GrconMacro5Flow;
   const HistoryReport = window.GrconHistoryReport;
-  const APP_VERSION = "5.32.8";
+  const APP_VERSION = "5.32.9";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };

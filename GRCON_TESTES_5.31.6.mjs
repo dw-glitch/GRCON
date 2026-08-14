@@ -244,8 +244,8 @@ check("ausência na LD informa que as formas com e sem nt- foram pesquisadas", (
   const result = Core.triageOne({ id: "nt-7", document: ntBaseDocument, name: `${ntBaseDocument}.pdf` }, index, {});
   assert.equal(result.status, "Não consta na LD");
   assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, ntDocument]);
-  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM/SEM nt- NEM PELO TAG");
-  assert.match(result.documentLookup.message, /nenhuma correspondência única foi localizada na LD/i);
+  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM/SEM nt- NEM PELO TIPO + TAG");
+  assert.match(result.documentLookup.message, /nenhum documento desse mesmo tipo foi localizado na LD/i);
   const summary = ReportSummary.buildRows([result], {})[0];
   const executive = ReportSummary.executiveRows([summary])[0];
   assert.match(executive.executiveAction, /não consta na LD/i);
@@ -308,27 +308,88 @@ check("busca tolerante do TAG não adivinha quando há mais de uma linha possív
   assert.equal(result.decision, Core.REVIEW);
 });
 
-check("busca final pelo TAG localiza o ET correto mesmo quando os grupos anteriores diferem", () => {
+check("busca final por tipo + TAG corrige os Grupos 1 a 5 pela codificação oficial da LD", () => {
   const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_P-101-A";
   const wrongPrefix = "C1O_RNEST_U34_3.1.1.1_INS_RIR_nt-P101A";
   const index = Core.buildIndex([ldDocumentRecord(ld)], []);
   const match = Core.exactDocumentMatch(wrongPrefix, index);
   assert.ok(match);
-  assert.equal(match.matchKind, "tag-only");
-  const result = Core.triageOne({ id: "tag-only", name: `${wrongPrefix}_0001.pdf` }, index, {});
+  assert.equal(match.matchKind, "report-tag");
+  const result = Core.triageOne({ id: "report-tag", name: `${wrongPrefix}_0001.pdf` }, index, {});
   assert.equal(result.document, ld);
   assert.equal(result.finalName, `${ld}_0001.pdf`);
   assert.equal(result.decision, Core.READY);
-  assert.equal(result.documentLookup.matchedByTagOnly, true);
+  assert.equal(result.documentLookup.matchedByReportTag, true);
+  assert.equal(result.documentLookup.searchedReportCode, "RIR");
   assert.equal(result.documentLookup.searchedTag, "P101A");
-  assert.equal(result.documentLookup.resultLabel, "LOCALIZADO PELO TAG — USAR O CÓDIGO DA LD");
-  assert.match(result.documentLookup.message, /pesquisou o TAG.*P101A.*única correspondência/i);
+  assert.equal(result.documentLookup.resultLabel, "LOCALIZADO PELO TIPO + TAG — USAR O CÓDIGO DA LD");
+  assert.match(result.documentLookup.message, /tipo.*RIR.*TAG.*P101A.*única correspondência/i);
   assert.ok(result.ldRename);
   const summary = ReportSummary.buildRows([result], {})[0];
   assert.match(summary.renameForEgrdt, /SIM — RENOMEADO.*De:.*Para:/i);
 });
 
-check("busca pelo TAG não escolhe automaticamente quando a LD possui mais de um código", () => {
+check("mesmo TAG em REP e RUFF preserva o tipo REP informado", () => {
+  const tag = "P-101-A";
+  const rep = `C1O_RNEST_U32_3.1.1.1_INS_REP_${tag}`;
+  const ruff = `C1O_RNEST_U32_3.1.1.1_INS_RUFF_${tag}`;
+  const input = `C1O_RNEST_U35_3.1.1.1_INS_REP_${tag}`;
+  const index = Core.buildIndex([ldDocumentRecord(ruff), ldDocumentRecord(rep)], []);
+  const match = Core.exactDocumentMatch(input, index);
+  assert.ok(match);
+  assert.equal(match.document, rep);
+  assert.equal(match.matchKind, "report-tag");
+  const result = Core.triageOne({ id: "rep-not-ruff", name: `${input}.pdf` }, index, {});
+  assert.equal(result.document, rep);
+  assert.equal(result.finalName, `${rep}.pdf`);
+  assert.equal(result.documentLookup.searchedReportCode, "REP");
+  assert.ok(result.ldRename);
+  assert.doesNotMatch(result.document, /_RUFF_/);
+});
+
+check("REP não localiza nem renomeia para RUFF quando só o outro tipo possui o TAG", () => {
+  const tag = "P-101-A";
+  const ruff = `C1O_RNEST_U32_3.1.1.1_INS_RUFF_${tag}`;
+  const input = `C1O_RNEST_U35_3.1.1.1_INS_REP_${tag}`;
+  const index = Core.buildIndex([ldDocumentRecord(ruff)], []);
+  assert.equal(Core.exactDocumentMatch(input, index), null);
+  const result = Core.triageOne({ id: "rep-missing", name: `${input}.pdf` }, index, {});
+  assert.equal(result.status, "Não consta na LD");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.equal(result.documentLookup.searchedReportCode, "REP");
+  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM/SEM nt- NEM PELO TIPO + TAG");
+  assert.match(result.documentLookup.message, /TAG igual pertencente a outro tipo documental não é aceito/i);
+  assert.equal(result.ldRename, null);
+  assert.doesNotMatch(result.finalName || "", /_RUFF_/);
+});
+
+check("regra de tipo + TAG é genérica e não usa uma lista fixa de siglas", () => {
+  ["REP", "RUFF", "RIR", "TIPONORMA"].forEach((reportCode, position) => {
+    const tag = `EQ-${position + 1}`;
+    const ld = `C1O_RNEST_U32_3.1.1.1_INS_${reportCode}_${tag}`;
+    const input = `C1O_RNEST_U34_3.1.1.1_INS_${reportCode}_${tag}`;
+    const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+    const match = Core.exactDocumentMatch(input, index);
+    assert.ok(match);
+    assert.equal(match.document, ld);
+    assert.equal(match.matchKind, "report-tag");
+  });
+});
+
+check("tipo + TAG tolera uma confusão alfanumérica no TAG e mantém o mesmo tipo", () => {
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_REP_P-10O-A";
+  const input = "C1O_RNEST_U34_3.1.1.1_INS_REP_P-100-A";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  const match = Core.exactDocumentMatch(input, index);
+  assert.ok(match);
+  assert.equal(match.document, ld);
+  assert.equal(match.matchKind, "report-tag-transcription");
+  const result = Core.triageOne({ id: "report-tag-transcription", name: `${input}.pdf` }, index, {});
+  assert.equal(result.finalName, `${ld}.pdf`);
+  assert.ok(result.ldRename);
+});
+
+check("busca por tipo + TAG não escolhe automaticamente quando o mesmo tipo possui mais de um código", () => {
   const tag = "P-101-A";
   const index = Core.buildIndex([
     ldDocumentRecord(`C1O_RNEST_U32_3.1.1.1_INS_RIR_${tag}`),
@@ -336,7 +397,7 @@ check("busca pelo TAG não escolhe automaticamente quando a LD possui mais de um
   ], []);
   const input = `C1O_RNEST_U35_3.1.1.1_INS_RIR_${tag}`;
   assert.equal(Core.exactDocumentMatch(input, index), null);
-  const result = Core.triageOne({ id: "tag-only-ambiguous", name: `${input}.pdf` }, index, {});
+  const result = Core.triageOne({ id: "report-tag-ambiguous", name: `${input}.pdf` }, index, {});
   assert.equal(result.status, "Código ambíguo no nome");
   assert.equal(result.decision, Core.REVIEW);
   assert.equal(result.documentLookup.searchResult, "ambiguous");
@@ -377,7 +438,7 @@ check("índice pesquisa 15.000 variações de separador do TAG sem varrer a LD",
   });
 });
 
-check("índice pesquisa 15.000 códigos ET pelo TAG independente dos grupos anteriores", () => {
+check("índice pesquisa 15.000 códigos ET por tipo + TAG independente dos Grupos 1 a 5", () => {
   const total = 15000;
   const cases = Array.from({ length: total }, (_, index) => {
     const suffix = String(index + 1).padStart(5, "0");
@@ -391,7 +452,7 @@ check("índice pesquisa 15.000 códigos ET pelo TAG independente dos grupos ante
     const match = Core.exactDocumentMatch(item.input, index);
     assert.ok(match);
     assert.equal(match.document, item.ld);
-    assert.equal(match.matchKind, "tag-only");
+    assert.equal(match.matchKind, "report-tag");
   });
 });
 
@@ -404,8 +465,9 @@ check("relatório em Worker preserva a evidência NT e a renomeação", () => {
   assert.match(compact, /searchedWithNt/);
   assert.match(compact, /resultLabel/);
   assert.match(compact, /ntRename:\s*item\.ntRename/);
-  assert.match(compact, /matchedByTagOnly/);
+  assert.match(compact, /matchedByReportTag/);
   assert.match(compact, /searchedTag/);
+  assert.match(compact, /searchedReportCode/);
   assert.match(compact, /ldRename:\s*item\.ldRename/);
 });
 
@@ -672,4 +734,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.8", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.9", passed: true, checks: checks.length, names: checks }, null, 2));

@@ -1,11 +1,13 @@
-GRCON 5.32.8 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.32.9 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
 - Somente documentos ET são pesquisados com e sem nt- minúsculo no início do 7º grupo.
 - Documentos N-1710 continuam sem essa variação.
 - Se a outra forma existir na LD, o código e o nome final seguem exatamente a LD.
-- Se o código completo com/sem nt- não for localizado, o GRCON pesquisa o Grupo 7/TAG em toda a LD.
-- Um TAG único localiza o código oficial mesmo quando os grupos anteriores foram informados de outra forma; TAG repetido exige conferência manual.
+- Se o código completo com/sem nt- não for localizado, o GRCON pesquisa a combinação obrigatória tipo documental (Grupo 6) + TAG (Grupo 7).
+- A regra vale para todos os tipos da norma: nenhum tipo é trocado por outro só porque o TAG é igual.
+- Se a relação informar REP e a LD possuir apenas RUFF com o mesmo TAG, o REP é informado como não localizado e não é renomeado. O mesmo vale para qualquer par de tipos.
+- Uma combinação única de tipo + TAG localiza o código oficial mesmo quando os Grupos 1 a 5 foram informados de outra forma; repetição dentro do mesmo tipo exige conferência manual.
 - O Resumo é a primeira aba e reúne painel, decisão e todas as evidências técnicas da triagem.
 - A aba Auditoria detalhada foi removida porque repetia os mesmos documentos e informações.
 - A relação completa do Resumo mostra buscas, forma encontrada, alocação, DE → PARA, revisão, postagem, origem na LD, Databook, arquivo final e decisão de inclusão na eGRDT.
@@ -17,11 +19,11 @@ O QUE MUDA
 - A limpeza completa do histórico libera os números concluídos e preserva somente reservas de gerações ainda em andamento.
 - Registros excluídos antes desta versão têm suas reservas antigas corrigidas automaticamente pela migração 5.32.2.
 - A busca ET também tolera diferenças de separadores e uma única confusão comum de letra/número somente no Grupo 7 (TAG), desde que exista uma única correspondência na LD.
-- A busca final pelo TAG pode localizar o código mesmo com diferença nos seis grupos anteriores, mas nunca escolhe quando o TAG está repetido.
+- A busca final por tipo + TAG pode corrigir diferenças nos Grupos 1 a 5, mas nunca altera o tipo do Grupo 6 nem escolhe quando a combinação está repetida.
 - N-1710 não usa a busca de TAG dos relatórios ET.
 
 VALIDAÇÃO
-- Carga automatizada: 15.000 códigos ET nos dois sentidos da busca e 15.000 localizados somente pelo TAG.
+- Carga automatizada: 15.000 códigos ET nos dois sentidos da busca e 15.000 localizados por tipo + TAG.
 - Planilhas operacionais usadas em validações manuais não são incluídas nem descritas no repositório público.
 - Execute antes de publicar:
     npm ci --ignore-scripts
@@ -32,8 +34,8 @@ PUBLICAÇÃO NA VERCEL
 2. Publique todo o conteúdo do repositório, incluindo workers/, package.json e os novos scripts de inicialização.
 3. O projeto é estático e não exige etapa de build.
 4. Use sempre HTTPS. Login e Service Worker não funcionam por file://.
-5. Depois da publicação, confirme no rodapé e na meta application-version a versão 5.32.8.
-6. Faça uma recarga completa na primeira abertura. O cache novo é grcon-v5.32.8.
+5. Depois da publicação, confirme no rodapé e na meta application-version a versão 5.32.9.
+6. Faça uma recarga completa na primeira abertura. O cache novo é grcon-v5.32.9.
 
 SUPABASE — ORDEM DAS MIGRAÇÕES PARA UMA BASE EXISTENTE
 1. Confirme que as migrações 5.31.4, 5.31.5, 5.31.6, 5.31.7, 5.31.8, 5.31.9, 5.31.10 e 5.31.14 já foram aplicadas conforme o histórico do projeto.
@@ -60,5 +62,5 @@ SEGURANÇA
 - PDFs, planilhas LD e caminhos locais não são enviados ao Supabase.
 
 RECUPERAÇÃO
-- Se a publicação pela main não estiver disponível, use o ZIP GRCON-5.32.8-main.zip.
+- Se a publicação pela main não estiver disponível, use o ZIP GRCON-5.32.9-main.zip.
 - O ZIP deve conter exatamente a mesma versão validada e publicada.

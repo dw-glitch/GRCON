@@ -436,8 +436,9 @@
   function writeNtGuide(worksheet, startRow, lastColumn) {
     return writeGuide(worksheet, startRow, lastColumn, [
       ["COMO LER A PESQUISA COM/SEM nt- E TAG", "FF153A5C", "FFFFFFFF", true],
-      ["Somente documentos ET: o GRCON pesquisa o código completo, a forma sem nt-, a forma com nt- e, se necessário, o TAG em toda a LD.", "FFEAF2F8", "FF234B6B", false],
-      ["A busca pelo TAG só associa automaticamente quando existe uma única correspondência. Se o TAG estiver repetido, o documento fica para conferência manual.", "FFF2F4F6", "FF52687B", false],
+      ["Somente documentos ET: o GRCON pesquisa o código completo, a forma sem nt-, a forma com nt- e, se necessário, a combinação tipo documental (Grupo 6) + TAG.", "FFEAF2F8", "FF234B6B", false],
+      ["O tipo informado é obrigatório: REP só localiza REP, RUFF só localiza RUFF e a mesma regra vale para todos os tipos da norma. TAG igual em outro tipo não é aceito.", "FFF2F4F6", "FF52687B", false],
+      ["Quando tipo + TAG identificam uma única linha, os demais grupos do código são corrigidos pela forma oficial da LD e a renomeação para a eGRDT fica registrada neste RESUMO.", "FFEAF2F8", "FF234B6B", false],
       ["Quando a outra forma é encontrada, a coluna “RENOMEAÇÃO PARA ENTRAR NA EGRDT” mostra claramente DE → PARA. O arquivo final sempre usa o código exatamente como está na LD.", "FFFFF3CF", "FF7A5300", false],
       ["Documentos N-1710 não usam nt- nem a regra de TAG dos relatórios ET: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
     ]);

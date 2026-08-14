@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 5.32.9 — 2026-08-14
+
+- Corrigida a busca alternativa dos documentos ET para exigir sempre a combinação **tipo documental do Grupo 6 + TAG**.
+- A regra é geral para todos os tipos definidos pela norma e não depende de uma lista fixa de siglas.
+- Documentos de tipos diferentes nunca são associados pelo TAG: REP não localiza RUFF, nem qualquer outro tipo substitui o que foi informado.
+- Se existir somente outro tipo com o mesmo TAG, o relatório informa que o documento do tipo solicitado não foi localizado e nenhuma renomeação é feita.
+- Quando tipo + TAG identificam uma única linha, divergências nos Grupos 1 a 5 são corrigidas pelo código oficial da LD e o `DE → PARA` fica evidente no `Resumo`.
+- A comparação também cobre separadores e uma única confusão alfanumérica comum no TAG, sempre mantendo o mesmo Grupo 6.
+- A suíte passa a validar 47 cenários, incluindo REP/RUFF, regra genérica para outros tipos e 15.000 buscas indexadas por tipo + TAG.
+
 ## 5.32.8 — 2026-08-14
 
 - A busca dos documentos ET passa a seguir quatro níveis: código exato, forma com/sem `nt-`, variações toleradas do Grupo 7 e busca final somente pelo TAG em toda a LD.

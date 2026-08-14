@@ -114,15 +114,22 @@
   function etTagComparable(value) {
     const parts = etCodeParts(value);
     if (!parts) return null;
+    const groups = parts.prefix.slice(0, -1).split("_");
+    const reportCode = groups.length === 6 ? groups[5] : "";
+    if (!reportCode) return null;
     const identifier = parts.identifier.replace(/^NT(?=[-._/\\\s])[-._/\\\s]*/, "");
     const compact = identifier.replace(/[^A-Z0-9]/g, "");
     if (!compact) return null;
+    const confusableCompact = compact.replace(/[OILSZB]/g, (character) => ({ O: "0", I: "1", L: "1", S: "5", Z: "2", B: "8" })[character]);
     return {
       prefix: parts.prefix,
+      reportCode,
       identifier,
       compact,
       formatKey: `${parts.prefix}${compact}`,
-      confusableKey: `${parts.prefix}${compact.replace(/[OILSZB]/g, (character) => ({ O: "0", I: "1", L: "1", S: "5", Z: "2", B: "8" })[character])}`,
+      confusableKey: `${parts.prefix}${confusableCompact}`,
+      reportTagKey: `${reportCode}::${compact}`,
+      reportTagConfusableKey: `${reportCode}::${confusableCompact}`,
     };
   }
 
@@ -211,10 +218,11 @@
       && key(inputDocument) !== key(ldDocument)
       && ntNeutralKey(inputDocument) === ntNeutralKey(ldDocument)
     );
-    const matchedByTagOnly = Boolean(matched && appliesToNtRule && match && match.matchKind === "tag-only");
+    const matchedByReportTag = Boolean(matched && appliesToNtRule && match && /^report-tag(?:-transcription)?$/.test(match.matchKind || ""));
     const matchedByTagVariant = Boolean(matched && appliesToNtRule && match && /^tag-(?:format|transcription)-variant$/.test(match.matchKind || ""));
     const searchedTagInfo = appliesToNtRule ? etTagComparable(inputDocument) : null;
     const searchedTag = searchedTagInfo && searchedTagInfo.identifier || "";
+    const searchedReportCode = searchedTagInfo && searchedTagInfo.reportCode || "";
     const ldFormInSentence = ntPrefixForm(ldDocument).replace(/^./, (character) => character.toLowerCase());
     const ambiguous = !matched && Array.isArray(candidates) && candidates.length > 1;
     const searchResult = !appliesToNtRule
@@ -222,15 +230,15 @@
       : ambiguous ? "ambiguous"
         : !matched ? "not-found-both"
           : matchedByNtVariant ? "found-alternate-renamed"
-            : matchedByTagOnly ? "found-by-tag"
+            : matchedByReportTag ? "found-by-report-tag"
             : matchedByTagVariant ? "found-in-ld" : "found-exact";
     const resultLabel = {
       "not-applicable-found": "NÃO SE APLICA — localizado pela regra normal",
       "not-applicable-not-found": "NÃO SE APLICA — não localizado",
       ambiguous: "MAIS DE UMA CORRESPONDÊNCIA — CONFERIR",
-      "not-found-both": "NÃO LOCALIZADO COM/SEM nt- NEM PELO TAG",
+      "not-found-both": "NÃO LOCALIZADO COM/SEM nt- NEM PELO TIPO + TAG",
       "found-alternate-renamed": "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD",
-      "found-by-tag": "LOCALIZADO PELO TAG — USAR O CÓDIGO DA LD",
+      "found-by-report-tag": "LOCALIZADO PELO TIPO + TAG — USAR O CÓDIGO DA LD",
       "found-in-ld": "LOCALIZADO NA LD",
       "found-exact": "LOCALIZADO NA MESMA FORMA",
     }[searchResult];
@@ -242,12 +250,12 @@
         : `${n1710 ? "Documento N-1710: a regra com/sem nt- não se aplica." : "A regra com/sem nt- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada (${searchedKeys.join(" | ") || "código vazio"}) e não foi localizado na LD.`;
     } else if (!matched) {
       message = ambiguous
-        ? `Pesquisa pelo código completo com e sem nt- e pelo TAG${searchedTag ? ` “${searchedTag}”` : ""} realizada. Mais de uma correspondência foi localizada na LD; confira o código correto.`
-        : `Pesquisa pelo código completo com e sem nt- realizada (${searchedKeys.join(" | ")}) e busca pelo TAG${searchedTag ? ` “${searchedTag}”` : ""} concluída. Nenhuma correspondência única foi localizada na LD.`;
+        ? `Pesquisa pelo código completo com e sem nt- e pela combinação tipo “${searchedReportCode || "não identificado"}” + TAG${searchedTag ? ` “${searchedTag}”` : ""} realizada. Mais de uma correspondência do mesmo tipo foi localizada na LD; confira o código correto.`
+        : `Pesquisa pelo código completo com e sem nt- realizada (${searchedKeys.join(" | ")}) e busca pela combinação tipo “${searchedReportCode || "não identificado"}” + TAG${searchedTag ? ` “${searchedTag}”` : ""} concluída. Nenhum documento desse mesmo tipo foi localizado na LD. Um TAG igual pertencente a outro tipo documental não é aceito.`;
     } else if (matchedByNtVariant) {
       message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). O código informado “${inputDocument}” foi localizado na LD ${ldFormInSentence} como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
-    } else if (matchedByTagOnly) {
-      message = `Pesquisa pelo código completo com e sem nt- realizada (${searchedKeys.join(" | ")}). Como essas formas não foram localizadas, o GRCON pesquisou o TAG “${searchedTag}” em toda a LD e encontrou uma única correspondência: “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
+    } else if (matchedByReportTag) {
+      message = `Pesquisa pelo código completo com e sem nt- realizada (${searchedKeys.join(" | ")}). Como essas formas não foram localizadas, o GRCON pesquisou a combinação tipo “${searchedReportCode}” + TAG “${searchedTag}” e encontrou uma única correspondência: “${ldDocument}”. Os demais grupos foram corrigidos pela codificação oficial da LD; o arquivo final e a eGRDT usarão esse código exatamente como está na LD.`;
     } else if (matchedByTagVariant) {
       message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Código localizado na LD como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
     } else {
@@ -262,8 +270,9 @@
       matched,
       matchedByNtVariant,
       matchedByTagVariant,
-      matchedByTagOnly,
+      matchedByReportTag,
       searchedTag,
+      searchedReportCode,
       ldDocument,
       ldForm: matched ? ntPrefixForm(ldDocument) : "Não localizado",
       searchResult,
@@ -745,7 +754,8 @@
     const byNtNeutral = new Map();
     const byEtTagFormat = new Map();
     const byEtTagConfusable = new Map();
-    const byEtTagOnly = new Map();
+    const byEtReportTag = new Map();
+    const byEtReportTagConfusable = new Map();
     documents.forEach((entry) => {
       if (!isEtDocument(entry.documentKey)) return;
       const neutro = ntNeutralKey(entry.documentKey);
@@ -757,10 +767,12 @@
       byEtTagFormat.get(tag.formatKey).push(entry);
       if (!byEtTagConfusable.has(tag.confusableKey)) byEtTagConfusable.set(tag.confusableKey, []);
       byEtTagConfusable.get(tag.confusableKey).push(entry);
-      if (!byEtTagOnly.has(tag.compact)) byEtTagOnly.set(tag.compact, []);
-      byEtTagOnly.get(tag.compact).push(entry);
+      if (!byEtReportTag.has(tag.reportTagKey)) byEtReportTag.set(tag.reportTagKey, []);
+      byEtReportTag.get(tag.reportTagKey).push(entry);
+      if (!byEtReportTagConfusable.has(tag.reportTagConfusableKey)) byEtReportTagConfusable.set(tag.reportTagConfusableKey, []);
+      byEtReportTagConfusable.get(tag.reportTagConfusableKey).push(entry);
     });
-    return { byDocument, byDocumentRevision, documents, byNtNeutral, byEtTagFormat, byEtTagConfusable, byEtTagOnly };
+    return { byDocument, byDocumentRevision, documents, byNtNeutral, byEtTagFormat, byEtTagConfusable, byEtReportTag, byEtReportTagConfusable };
   }
 
   /** Índice por chave sem "nt-", montado uma vez e reaproveitado. */
@@ -820,35 +832,63 @@
   }
 
   /**
-   * Última busca ET: ignora os seis grupos anteriores e compara somente o TAG
-   * normalizado, incluindo diferenças de separadores e a presença de nt-. A
-   * associação só é segura quando o TAG identifica um único código na LD.
+   * Última busca ET: preserva obrigatoriamente o tipo documental do Grupo 6 e
+   * compara o TAG normalizado. Os Grupos 1 a 5 podem ser corrigidos pelo código
+   * controlado da LD, mas REP nunca pode casar com RUFF (nem qualquer outro tipo
+   * com outro), ainda que o TAG seja idêntico.
    */
-  function tagOnlyMatches(value, index) {
+  function reportTagMatches(value, index) {
     const tag = etTagComparable(value);
     if (!tag) return [];
-    let entries = index && index.byEtTagOnly;
-    if (!entries) {
-      entries = new Map();
+    let exactEntries = index && index.byEtReportTag;
+    let confusableEntries = index && index.byEtReportTagConfusable;
+    if (!exactEntries || !confusableEntries) {
+      exactEntries = new Map();
+      confusableEntries = new Map();
       ((index && index.documents) || []).forEach((entry) => {
         const candidateTag = isEtDocument(entry.documentKey) && etTagComparable(entry.documentKey);
         if (!candidateTag) return;
-        if (!entries.has(candidateTag.compact)) entries.set(candidateTag.compact, []);
-        entries.get(candidateTag.compact).push(entry);
+        if (!exactEntries.has(candidateTag.reportTagKey)) exactEntries.set(candidateTag.reportTagKey, []);
+        exactEntries.get(candidateTag.reportTagKey).push(entry);
+        if (!confusableEntries.has(candidateTag.reportTagConfusableKey)) confusableEntries.set(candidateTag.reportTagConfusableKey, []);
+        confusableEntries.get(candidateTag.reportTagConfusableKey).push(entry);
       });
       if (index) {
-        try { Object.defineProperty(index, "byEtTagOnly", { value: entries, enumerable: false, configurable: true }); }
-        catch (_) { index.byEtTagOnly = entries; }
+        try {
+          Object.defineProperty(index, "byEtReportTag", { value: exactEntries, enumerable: false, configurable: true });
+          Object.defineProperty(index, "byEtReportTagConfusable", { value: confusableEntries, enumerable: false, configurable: true });
+        } catch (_) {
+          index.byEtReportTag = exactEntries;
+          index.byEtReportTagConfusable = confusableEntries;
+        }
       }
     }
-    return (entries.get(tag.compact) || [])
+    const exact = (exactEntries.get(tag.reportTagKey) || [])
       .filter((entry) => entry.documentKey !== key(value))
       .map((entry) => ({
         ...entry,
         matchedSearchKey: key(value),
-        matchKind: "tag-only",
-        tagOnly: true,
+        matchKind: "report-tag",
+        reportTag: true,
         searchedTag: tag.identifier,
+        searchedReportCode: tag.reportCode,
+      }));
+    if (exact.length) return exact;
+    return (confusableEntries.get(tag.reportTagConfusableKey) || [])
+      .filter((entry) => {
+        if (entry.documentKey === key(value)) return false;
+        const candidateTag = etTagComparable(entry.documentKey);
+        return candidateTag
+          && candidateTag.reportCode === tag.reportCode
+          && singleConfusableDifference(tag.compact, candidateTag.compact);
+      })
+      .map((entry) => ({
+        ...entry,
+        matchedSearchKey: key(value),
+        matchKind: "report-tag-transcription",
+        reportTag: true,
+        searchedTag: tag.identifier,
+        searchedReportCode: tag.reportCode,
       }));
   }
 
@@ -871,7 +911,7 @@
     if (variantes.length > 1) return null;
     const tagVariants = tagVariantMatches(documentKey, index);
     if (tagVariants.length) return tagVariants.length === 1 ? tagVariants[0] : null;
-    const tagMatches = tagOnlyMatches(documentKey, index);
+    const tagMatches = reportTagMatches(documentKey, index);
     return tagMatches.length === 1 ? tagMatches[0] : null;
   }
 
@@ -991,7 +1031,7 @@
     return [...(formats.size ? formats : confusables).values()];
   }
 
-  function tagOnlyCandidates(inputKey, index) {
+  function reportTagCandidates(inputKey, index) {
     if (!index.documents || !isEtDocument(inputKey)) return [];
     const { inicios, fins } = boundaryPositions(inputKey);
     if (inicios.length > MAX_FRONTEIRAS || fins.length > MAX_FRONTEIRAS) return [];
@@ -1000,7 +1040,7 @@
       fins.forEach((fim) => {
         if (fim - inicio < 7) return;
         const trecho = inputKey.slice(inicio, fim);
-        tagOnlyMatches(trecho, index).forEach((entry) => {
+        reportTagMatches(trecho, index).forEach((entry) => {
           if (!achados.has(entry.documentKey)) achados.set(entry.documentKey, entry);
         });
       });
@@ -1022,7 +1062,7 @@
     )).map((item) => ({ ...item, matchedSearchKey: item.documentKey, matchKind: "exact" }));
     if (!candidates.length) candidates = ntVariantCandidates(inputKey, index);
     if (!candidates.length) candidates = tagVariantCandidates(inputKey, index);
-    if (!candidates.length) candidates = tagOnlyCandidates(inputKey, index);
+    if (!candidates.length) candidates = reportTagCandidates(inputKey, index);
     if (!candidates.length) return [];
     const preferredCandidates = candidates.some((candidate) => candidate.matchKind === "exact")
       ? candidates.filter((candidate) => candidate.matchKind === "exact")
@@ -1472,9 +1512,14 @@
     const stemBase = hasSequence ? originalStem.replace(sequenceExpression, "") : withoutRevision;
     const inputTag = etTagComparable(stemBase);
     const ldTag = etTagComparable(document);
-    const sameEtTag = Boolean(inputTag && ldTag && inputTag.compact === ldTag.compact);
+    const sameEtReportTag = Boolean(
+      inputTag
+      && ldTag
+      && inputTag.reportCode === ldTag.reportCode
+      && (inputTag.compact === ldTag.compact || singleConfusableDifference(inputTag.compact, ldTag.compact))
+    );
     if (document && key(stemBase) !== key(document)
-        && (ntNeutralKey(stemBase) === ntNeutralKey(document) || etTagVariantKind(stemBase, document) || sameEtTag)) {
+        && (ntNeutralKey(stemBase) === ntNeutralKey(document) || etTagVariantKind(stemBase, document) || sameEtReportTag)) {
       base = hasSequence ? `${document}_0001` : document;
     }
     const n1710 = isN1710Context(sheetName, document);
@@ -1556,7 +1601,7 @@
 
   function tagRenameInfo(input, document, finalName) {
     const lookup = input && (input.documentLookup || input.documentLookupHint) || {};
-    if (!lookup.matchedByTagOnly) return null;
+    if (!lookup.matchedByReportTag && !lookup.matchedByTagVariant) return null;
     const enviado = text(lookup.inputDocument || input && (input.document || input.name));
     const naLd = text(document || lookup.ldDocument);
     if (!enviado || !naLd || key(enviado) === key(naLd)) return null;
@@ -1564,8 +1609,8 @@
       enviado,
       naLd,
       finalName: text(finalName),
-      motivo: "tag",
-      nota: `O código completo não foi localizado, mas o TAG “${text(lookup.searchedTag)}” identificou uma única linha na LD. Você informou ${enviado}; na LD o documento está como ${naLd}${text(finalName) ? `, e vai entrar na eGRDT como ${text(finalName)}` : ""}. O nome final segue obrigatoriamente o código controlado da LD.`,
+      motivo: "tipo+tag",
+      nota: `O código completo não foi localizado, mas a combinação tipo “${text(lookup.searchedReportCode)}” + TAG “${text(lookup.searchedTag)}” identificou uma única linha compatível na LD. Você informou ${enviado}; na LD o documento está como ${naLd}${text(finalName) ? `, e vai entrar na eGRDT como ${text(finalName)}` : ""}. O nome final segue obrigatoriamente o código controlado da LD.`,
     };
   }
 
