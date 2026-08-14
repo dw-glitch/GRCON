@@ -12,12 +12,12 @@
     { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
     { header: "CÓDIGO INFORMADO / PDF", key: "requestedDocument", width: 42 },
     { header: "DOCUMENTO USADO PELO GRCON", key: "document", width: 42 },
-    { header: "RESULTADO DA BUSCA COM/SEM nt-", key: "ntSearchResult", width: 38 },
+    { header: "RESULTADO DA BUSCA COM/SEM nt- E TAG", key: "ntSearchResult", width: 42 },
     { header: "PESQUISADO SEM nt-", key: "searchedWithoutNt", width: 45 },
     { header: "PESQUISADO COM nt-", key: "searchedWithNt", width: 45 },
     { header: "CÓDIGO ENCONTRADO NA LD", key: "ldDocument", width: 45 },
     { header: "FORMA LOCALIZADA NA LD", key: "ldDocumentForm", width: 22 },
-    { header: "PESQUISA COM/SEM nt- NA LD", key: "ntLookup", width: 68 },
+    { header: "PESQUISA COM/SEM nt- E TAG NA LD", key: "ntLookup", width: 76 },
     { header: "RENOMEAÇÃO PARA ENTRAR NA EGRDT", key: "renameForEgrdt", width: 72 },
     { header: "TÍTULO (INFORMATIVO)", key: "title", width: 48 },
     { header: "ALOCADO?", key: "allocated", width: 23 },
@@ -295,7 +295,7 @@
 
   function renameForEgrdtText(row) {
     const lookup = row && row.documentLookup || {};
-    const info = row && row.ntRename;
+    const info = row && (row.ntRename || row.ldRename);
     if (info) {
       return [
         "SIM — RENOMEADO PARA SEGUIR A LD.",
@@ -435,10 +435,11 @@
 
   function writeNtGuide(worksheet, startRow, lastColumn) {
     return writeGuide(worksheet, startRow, lastColumn, [
-      ["COMO LER A PESQUISA COM/SEM nt-", "FF153A5C", "FFFFFFFF", true],
-      ["Somente documentos ET: para cada código, o GRCON pesquisa na LD a forma sem nt- e a forma com nt- no início do 7º grupo.", "FFEAF2F8", "FF234B6B", false],
+      ["COMO LER A PESQUISA COM/SEM nt- E TAG", "FF153A5C", "FFFFFFFF", true],
+      ["Somente documentos ET: o GRCON pesquisa o código completo, a forma sem nt-, a forma com nt- e, se necessário, o TAG em toda a LD.", "FFEAF2F8", "FF234B6B", false],
+      ["A busca pelo TAG só associa automaticamente quando existe uma única correspondência. Se o TAG estiver repetido, o documento fica para conferência manual.", "FFF2F4F6", "FF52687B", false],
       ["Quando a outra forma é encontrada, a coluna “RENOMEAÇÃO PARA ENTRAR NA EGRDT” mostra claramente DE → PARA. O arquivo final sempre usa o código exatamente como está na LD.", "FFFFF3CF", "FF7A5300", false],
-      ["Documentos N-1710 não usam nt-: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
+      ["Documentos N-1710 não usam nt- nem a regra de TAG dos relatórios ET: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
     ]);
   }
 
@@ -446,7 +447,7 @@
     return writeGuide(worksheet, startRow, lastColumn, [
       ["COMO LER A RELAÇÃO ABAIXO", "FF153A5C", "FFFFFFFF", true],
       ["Cada linha é um documento. As primeiras colunas respondem se ele entra na eGRDT, o que precisa ser feito, sua alocação e o arquivo final.", "FFEAF2F8", "FF234B6B", false],
-      ["Continue para a direita para consultar todas as evidências: buscas com/sem nt-, código da LD, revisão, postagem, origem, linha, Databook e histórico.", "FFF2F4F6", "FF52687B", false],
+      ["Continue para a direita para consultar todas as evidências: buscas com/sem nt- e TAG, código da LD, revisão, postagem, origem, linha, Databook e histórico.", "FFF2F4F6", "FF52687B", false],
       ["Use os filtros do cabeçalho para separar prontos, bloqueados, não localizados e documentos que exigem conferência. Amarelo destaca renomeação; vermelho indica impedimento.", "FFFFF3CF", "FF7A5300", false],
       ["“STATUS INTERNO” mostra o comentário da fiscal registrado na LD; quando não há comentário, mostra a situação apurada pelo GRCON. O relatório não cria vínculos externos e pode ser aberto com segurança.", "FFEEF6F1", "FF14614A", false],
     ]);

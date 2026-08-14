@@ -244,8 +244,8 @@ check("ausência na LD informa que as formas com e sem nt- foram pesquisadas", (
   const result = Core.triageOne({ id: "nt-7", document: ntBaseDocument, name: `${ntBaseDocument}.pdf` }, index, {});
   assert.equal(result.status, "Não consta na LD");
   assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, ntDocument]);
-  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM nt-");
-  assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
+  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM/SEM nt- NEM PELO TAG");
+  assert.match(result.documentLookup.message, /nenhuma correspondência única foi localizada na LD/i);
   const summary = ReportSummary.buildRows([result], {})[0];
   const executive = ReportSummary.executiveRows([summary])[0];
   assert.match(executive.executiveAction, /não consta na LD/i);
@@ -308,11 +308,38 @@ check("busca tolerante do TAG não adivinha quando há mais de uma linha possív
   assert.equal(result.decision, Core.REVIEW);
 });
 
-check("busca tolerante não altera os seis primeiros grupos do ET", () => {
+check("busca final pelo TAG localiza o ET correto mesmo quando os grupos anteriores diferem", () => {
   const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_P-101-A";
-  const wrongPrefix = "C1O_RNEST_U34_3.1.1.1_INS_RIR_P101A";
+  const wrongPrefix = "C1O_RNEST_U34_3.1.1.1_INS_RIR_nt-P101A";
   const index = Core.buildIndex([ldDocumentRecord(ld)], []);
-  assert.equal(Core.exactDocumentMatch(wrongPrefix, index), null);
+  const match = Core.exactDocumentMatch(wrongPrefix, index);
+  assert.ok(match);
+  assert.equal(match.matchKind, "tag-only");
+  const result = Core.triageOne({ id: "tag-only", name: `${wrongPrefix}_0001.pdf` }, index, {});
+  assert.equal(result.document, ld);
+  assert.equal(result.finalName, `${ld}_0001.pdf`);
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.documentLookup.matchedByTagOnly, true);
+  assert.equal(result.documentLookup.searchedTag, "P101A");
+  assert.equal(result.documentLookup.resultLabel, "LOCALIZADO PELO TAG — USAR O CÓDIGO DA LD");
+  assert.match(result.documentLookup.message, /pesquisou o TAG.*P101A.*única correspondência/i);
+  assert.ok(result.ldRename);
+  const summary = ReportSummary.buildRows([result], {})[0];
+  assert.match(summary.renameForEgrdt, /SIM — RENOMEADO.*De:.*Para:/i);
+});
+
+check("busca pelo TAG não escolhe automaticamente quando a LD possui mais de um código", () => {
+  const tag = "P-101-A";
+  const index = Core.buildIndex([
+    ldDocumentRecord(`C1O_RNEST_U32_3.1.1.1_INS_RIR_${tag}`),
+    ldDocumentRecord(`C1O_RNEST_U34_3.1.1.1_INS_RIR_${tag}`),
+  ], []);
+  const input = `C1O_RNEST_U35_3.1.1.1_INS_RIR_${tag}`;
+  assert.equal(Core.exactDocumentMatch(input, index), null);
+  const result = Core.triageOne({ id: "tag-only-ambiguous", name: `${input}.pdf` }, index, {});
+  assert.equal(result.status, "Código ambíguo no nome");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.equal(result.documentLookup.searchResult, "ambiguous");
 });
 
 check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantidade", () => {
@@ -350,6 +377,24 @@ check("índice pesquisa 15.000 variações de separador do TAG sem varrer a LD",
   });
 });
 
+check("índice pesquisa 15.000 códigos ET pelo TAG independente dos grupos anteriores", () => {
+  const total = 15000;
+  const cases = Array.from({ length: total }, (_, index) => {
+    const suffix = String(index + 1).padStart(5, "0");
+    return {
+      input: `C1O_RNEST_U34_3.1.1.1_INS_RIR_nt-PUMP${suffix}`,
+      ld: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PUMP-${suffix}`,
+    };
+  });
+  const index = Core.buildIndex(cases.map((item) => ldDocumentRecord(item.ld)), []);
+  cases.forEach((item) => {
+    const match = Core.exactDocumentMatch(item.input, index);
+    assert.ok(match);
+    assert.equal(match.document, item.ld);
+    assert.equal(match.matchKind, "tag-only");
+  });
+});
+
 check("relatório em Worker preserva a evidência NT e a renomeação", () => {
   const source = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const compact = source.slice(source.indexOf("function compactResultForWorker"), source.indexOf("async function performanceSafeResults"));
@@ -359,6 +404,9 @@ check("relatório em Worker preserva a evidência NT e a renomeação", () => {
   assert.match(compact, /searchedWithNt/);
   assert.match(compact, /resultLabel/);
   assert.match(compact, /ntRename:\s*item\.ntRename/);
+  assert.match(compact, /matchedByTagOnly/);
+  assert.match(compact, /searchedTag/);
+  assert.match(compact, /ldRename:\s*item\.ldRename/);
 });
 
 check("Workers externos usam os módulos atuais e exportam um Resumo único e completo", () => {
@@ -608,7 +656,7 @@ check("service worker publica o cache isolado da versão atual", () => {
   const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 7);
   assert.equal(internal.formula, undefined);
   assert.equal(internal.value, "Código que consta " + ntBaseDocument);
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 11).value, "RESULTADO DA BUSCA COM/SEM nt-");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 11).value, "RESULTADO DA BUSCA COM/SEM nt- E TAG");
   assert.equal(reopened.getWorksheet("Resumo").columnCount, ReportSummary.SUMMARY_COLUMNS.length);
   assert.equal(reopened.getWorksheet("Auditoria detalhada"), undefined);
   checks.push("Excel do relatório reabre com Resumo único e evidências completas");
@@ -624,4 +672,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.7", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.8", passed: true, checks: checks.length, names: checks }, null, 2));

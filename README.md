@@ -4,7 +4,7 @@ Aplicativo web estático para triagem documental de LD, conferência de alocaç�
 
 ## Regra com/sem `nt-`
 
-A versão 5.32.7 pesquisa documentos **ET** nas duas formas:
+A versão 5.32.8 pesquisa documentos **ET** nas duas formas:
 
 1. o código informado, sem `nt-` no início do 7º grupo;
 2. a mesma identidade, com `nt-` minúsculo no início do 7º grupo.
@@ -15,11 +15,18 @@ Se a LD possuir somente a forma alternativa, o GRCON adota o código exatamente 
 
 Documentos **N-1710 não participam dessa regra**. Eles são pesquisados somente pelo código informado.
 
-## Busca tolerante do TAG ET
+## Busca pelo TAG dos documentos ET
 
-Com base na ET-5290.00-22000-912-1LV-001, o GRCON preserva os seis primeiros grupos do código ET e amplia somente a comparação do Grupo 7 (TAG). Se a busca exata e a busca com/sem `nt-` não encontrarem o documento, o índice também verifica diferenças de separadores e uma única confusão comum de digitação entre letra e número (`O/0`, `I/1`, `L/1`, `S/5`, `Z/2` ou `B/8`).
+Conforme a ET-5290.00-22000-912-1LV-001 Rev. P, o Grupo 7 identifica o TAG e o código final deve seguir a grafia controlada existente. O GRCON pesquisa na seguinte ordem:
 
-A aproximação só é aceita quando identifica uma única linha na LD. Se duas linhas forem possíveis, o GRCON pede conferência em vez de adivinhar. Essas tentativas são internas: não criam colunas extras no relatório, e o arquivo final continua adotando exatamente o código controlado na LD.
+1. código completo exatamente como informado;
+2. código completo nas formas com e sem `nt-`;
+3. TAG dentro do mesmo código, tolerando diferenças de separadores e uma única confusão comum de digitação entre letra e número (`O/0`, `I/1`, `L/1`, `S/5`, `Z/2` ou `B/8`);
+4. TAG normalizado em toda a LD, mesmo quando algum dos seis grupos anteriores foi informado de outra forma.
+
+A quarta busca só associa automaticamente quando o TAG identifica um único documento ET. Se o mesmo TAG aparecer em dois ou mais códigos, o GRCON pede conferência. Quando encontra uma única linha, adota exatamente o código da LD, renomeia o arquivo e registra `DE → PARA` no relatório.
+
+Documentos N-1710 não participam da busca por TAG dos relatórios ET.
 
 ## Relatório
 
@@ -33,7 +40,7 @@ Na relação do `Resumo`, as colunas de decisão aparecem primeiro e as evidênc
 
 O relatório não cria fórmulas ou conexões com planilhas externas. `STATUS INTERNO` usa o comentário da fiscal já registrado na LD e, quando ele não existe, a situação apurada pelo GRCON. Assim o arquivo abre sem reparo e sem aviso de fonte externa não confiável.
 
-O processamento não impõe limite à quantidade da relação. A suíte pública valida 15.000 códigos ET nos dois sentidos da busca, sem incluir dados ou metadados de planilhas operacionais no repositório.
+O processamento não impõe limite à quantidade da relação. A suíte pública valida 15.000 códigos ET nos dois sentidos da busca e mais 15.000 códigos localizados somente pelo TAG, sem incluir dados ou metadados de planilhas operacionais no repositório.
 
 ## Exclusão do histórico e reutilização da numeração
 

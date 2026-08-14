@@ -119,6 +119,7 @@
     if (!compact) return null;
     return {
       prefix: parts.prefix,
+      identifier,
       compact,
       formatKey: `${parts.prefix}${compact}`,
       confusableKey: `${parts.prefix}${compact.replace(/[OILSZB]/g, (character) => ({ O: "0", I: "1", L: "1", S: "5", Z: "2", B: "8" })[character])}`,
@@ -210,7 +211,10 @@
       && key(inputDocument) !== key(ldDocument)
       && ntNeutralKey(inputDocument) === ntNeutralKey(ldDocument)
     );
-    const matchedByTagVariant = Boolean(matched && appliesToNtRule && match && /^tag-/.test(match.matchKind || ""));
+    const matchedByTagOnly = Boolean(matched && appliesToNtRule && match && match.matchKind === "tag-only");
+    const matchedByTagVariant = Boolean(matched && appliesToNtRule && match && /^tag-(?:format|transcription)-variant$/.test(match.matchKind || ""));
+    const searchedTagInfo = appliesToNtRule ? etTagComparable(inputDocument) : null;
+    const searchedTag = searchedTagInfo && searchedTagInfo.identifier || "";
     const ldFormInSentence = ntPrefixForm(ldDocument).replace(/^./, (character) => character.toLowerCase());
     const ambiguous = !matched && Array.isArray(candidates) && candidates.length > 1;
     const searchResult = !appliesToNtRule
@@ -218,13 +222,15 @@
       : ambiguous ? "ambiguous"
         : !matched ? "not-found-both"
           : matchedByNtVariant ? "found-alternate-renamed"
+            : matchedByTagOnly ? "found-by-tag"
             : matchedByTagVariant ? "found-in-ld" : "found-exact";
     const resultLabel = {
       "not-applicable-found": "NÃO SE APLICA — localizado pela regra normal",
       "not-applicable-not-found": "NÃO SE APLICA — não localizado",
       ambiguous: "MAIS DE UMA CORRESPONDÊNCIA — CONFERIR",
-      "not-found-both": "NÃO LOCALIZADO COM NEM SEM nt-",
+      "not-found-both": "NÃO LOCALIZADO COM/SEM nt- NEM PELO TAG",
       "found-alternate-renamed": "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD",
+      "found-by-tag": "LOCALIZADO PELO TAG — USAR O CÓDIGO DA LD",
       "found-in-ld": "LOCALIZADO NA LD",
       "found-exact": "LOCALIZADO NA MESMA FORMA",
     }[searchResult];
@@ -236,10 +242,12 @@
         : `${n1710 ? "Documento N-1710: a regra com/sem nt- não se aplica." : "A regra com/sem nt- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada (${searchedKeys.join(" | ") || "código vazio"}) e não foi localizado na LD.`;
     } else if (!matched) {
       message = ambiguous
-        ? `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Mais de uma correspondência foi localizada na LD; confira o código correto.`
-        : `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Nenhuma das duas formas foi localizada na LD.`;
+        ? `Pesquisa pelo código completo com e sem nt- e pelo TAG${searchedTag ? ` “${searchedTag}”` : ""} realizada. Mais de uma correspondência foi localizada na LD; confira o código correto.`
+        : `Pesquisa pelo código completo com e sem nt- realizada (${searchedKeys.join(" | ")}) e busca pelo TAG${searchedTag ? ` “${searchedTag}”` : ""} concluída. Nenhuma correspondência única foi localizada na LD.`;
     } else if (matchedByNtVariant) {
       message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). O código informado “${inputDocument}” foi localizado na LD ${ldFormInSentence} como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
+    } else if (matchedByTagOnly) {
+      message = `Pesquisa pelo código completo com e sem nt- realizada (${searchedKeys.join(" | ")}). Como essas formas não foram localizadas, o GRCON pesquisou o TAG “${searchedTag}” em toda a LD e encontrou uma única correspondência: “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
     } else if (matchedByTagVariant) {
       message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Código localizado na LD como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
     } else {
@@ -254,6 +262,8 @@
       matched,
       matchedByNtVariant,
       matchedByTagVariant,
+      matchedByTagOnly,
+      searchedTag,
       ldDocument,
       ldForm: matched ? ntPrefixForm(ldDocument) : "Não localizado",
       searchResult,
@@ -735,6 +745,7 @@
     const byNtNeutral = new Map();
     const byEtTagFormat = new Map();
     const byEtTagConfusable = new Map();
+    const byEtTagOnly = new Map();
     documents.forEach((entry) => {
       if (!isEtDocument(entry.documentKey)) return;
       const neutro = ntNeutralKey(entry.documentKey);
@@ -746,8 +757,10 @@
       byEtTagFormat.get(tag.formatKey).push(entry);
       if (!byEtTagConfusable.has(tag.confusableKey)) byEtTagConfusable.set(tag.confusableKey, []);
       byEtTagConfusable.get(tag.confusableKey).push(entry);
+      if (!byEtTagOnly.has(tag.compact)) byEtTagOnly.set(tag.compact, []);
+      byEtTagOnly.get(tag.compact).push(entry);
     });
-    return { byDocument, byDocumentRevision, documents, byNtNeutral, byEtTagFormat, byEtTagConfusable };
+    return { byDocument, byDocumentRevision, documents, byNtNeutral, byEtTagFormat, byEtTagConfusable, byEtTagOnly };
   }
 
   /** Índice por chave sem "nt-", montado uma vez e reaproveitado. */
@@ -806,6 +819,39 @@
       .map((entry) => ({ ...entry, matchedSearchKey: key(value), matchKind: "tag-transcription-variant", tagVariant: true }));
   }
 
+  /**
+   * Última busca ET: ignora os seis grupos anteriores e compara somente o TAG
+   * normalizado, incluindo diferenças de separadores e a presença de nt-. A
+   * associação só é segura quando o TAG identifica um único código na LD.
+   */
+  function tagOnlyMatches(value, index) {
+    const tag = etTagComparable(value);
+    if (!tag) return [];
+    let entries = index && index.byEtTagOnly;
+    if (!entries) {
+      entries = new Map();
+      ((index && index.documents) || []).forEach((entry) => {
+        const candidateTag = isEtDocument(entry.documentKey) && etTagComparable(entry.documentKey);
+        if (!candidateTag) return;
+        if (!entries.has(candidateTag.compact)) entries.set(candidateTag.compact, []);
+        entries.get(candidateTag.compact).push(entry);
+      });
+      if (index) {
+        try { Object.defineProperty(index, "byEtTagOnly", { value: entries, enumerable: false, configurable: true }); }
+        catch (_) { index.byEtTagOnly = entries; }
+      }
+    }
+    return (entries.get(tag.compact) || [])
+      .filter((entry) => entry.documentKey !== key(value))
+      .map((entry) => ({
+        ...entry,
+        matchedSearchKey: key(value),
+        matchKind: "tag-only",
+        tagOnly: true,
+        searchedTag: tag.identifier,
+      }));
+  }
+
   function exactDocumentMatch(value, index) {
     if (!index || !index.byDocument) return null;
     const documentKey = key(value);
@@ -824,8 +870,9 @@
     if (variantes.length === 1) return { ...variantes[0], matchedSearchKey: documentKey, matchKind: "nt-variant", ntVariant: true };
     if (variantes.length > 1) return null;
     const tagVariants = tagVariantMatches(documentKey, index);
-    if (tagVariants.length !== 1) return null;
-    return tagVariants[0];
+    if (tagVariants.length) return tagVariants.length === 1 ? tagVariants[0] : null;
+    const tagMatches = tagOnlyMatches(documentKey, index);
+    return tagMatches.length === 1 ? tagMatches[0] : null;
   }
 
   function containsDocumentKey(inputKey, documentKey) {
@@ -944,6 +991,23 @@
     return [...(formats.size ? formats : confusables).values()];
   }
 
+  function tagOnlyCandidates(inputKey, index) {
+    if (!index.documents || !isEtDocument(inputKey)) return [];
+    const { inicios, fins } = boundaryPositions(inputKey);
+    if (inicios.length > MAX_FRONTEIRAS || fins.length > MAX_FRONTEIRAS) return [];
+    const achados = new Map();
+    inicios.forEach((inicio) => {
+      fins.forEach((fim) => {
+        if (fim - inicio < 7) return;
+        const trecho = inputKey.slice(inicio, fim);
+        tagOnlyMatches(trecho, index).forEach((entry) => {
+          if (!achados.has(entry.documentKey)) achados.set(entry.documentKey, entry);
+        });
+      });
+    });
+    return [...achados.values()];
+  }
+
   function matchDocuments(nameOrText, index, hintedSheet) {
     const exact = exactDocumentMatch(nameOrText, index);
     if (exact) return [exact];
@@ -958,6 +1022,7 @@
     )).map((item) => ({ ...item, matchedSearchKey: item.documentKey, matchKind: "exact" }));
     if (!candidates.length) candidates = ntVariantCandidates(inputKey, index);
     if (!candidates.length) candidates = tagVariantCandidates(inputKey, index);
+    if (!candidates.length) candidates = tagOnlyCandidates(inputKey, index);
     if (!candidates.length) return [];
     const preferredCandidates = candidates.some((candidate) => candidate.matchKind === "exact")
       ? candidates.filter((candidate) => candidate.matchKind === "exact")
@@ -1405,8 +1470,11 @@
     // nome final segue a LD: é assim que o documento está alocado e é assim que
     // o SIGEM vai aceitar. Sem isto o arquivo manteria a grafia de origem.
     const stemBase = hasSequence ? originalStem.replace(sequenceExpression, "") : withoutRevision;
+    const inputTag = etTagComparable(stemBase);
+    const ldTag = etTagComparable(document);
+    const sameEtTag = Boolean(inputTag && ldTag && inputTag.compact === ldTag.compact);
     if (document && key(stemBase) !== key(document)
-        && (ntNeutralKey(stemBase) === ntNeutralKey(document) || etTagVariantKind(stemBase, document))) {
+        && (ntNeutralKey(stemBase) === ntNeutralKey(document) || etTagVariantKind(stemBase, document) || sameEtTag)) {
       base = hasSequence ? `${document}_0001` : document;
     }
     const n1710 = isN1710Context(sheetName, document);
@@ -1486,6 +1554,31 @@
     return result;
   }
 
+  function tagRenameInfo(input, document, finalName) {
+    const lookup = input && (input.documentLookup || input.documentLookupHint) || {};
+    if (!lookup.matchedByTagOnly) return null;
+    const enviado = text(lookup.inputDocument || input && (input.document || input.name));
+    const naLd = text(document || lookup.ldDocument);
+    if (!enviado || !naLd || key(enviado) === key(naLd)) return null;
+    return {
+      enviado,
+      naLd,
+      finalName: text(finalName),
+      motivo: "tag",
+      nota: `O código completo não foi localizado, mas o TAG “${text(lookup.searchedTag)}” identificou uma única linha na LD. Você informou ${enviado}; na LD o documento está como ${naLd}${text(finalName) ? `, e vai entrar na eGRDT como ${text(finalName)}` : ""}. O nome final segue obrigatoriamente o código controlado da LD.`,
+    };
+  }
+
+  function applyOfficialCodeRename(result, input) {
+    const withNtRename = applyNtRename(result, input);
+    if (withNtRename.ntRename) return withNtRename;
+    const info = tagRenameInfo(input, withNtRename.document, withNtRename.finalName);
+    if (!info) return withNtRename;
+    withNtRename.ldRename = info;
+    withNtRename.reason = `${text(withNtRename.reason)} ${info.nota}`.trim();
+    return withNtRename;
+  }
+
   function reviewResult(input, values) {
     const item = values || {};
     const result = {
@@ -1520,8 +1613,9 @@
       ldConflict: item.ldConflict || null,
       ntVariant: false,
       ntRename: null,
+      ldRename: null,
     };
-    return enrichDecision(applyNtRename(result, input), item.reasonCode);
+    return enrichDecision(applyOfficialCodeRename(result, input), item.reasonCode);
   }
 
   function triageOne(input, index, options) {
@@ -1977,7 +2071,7 @@
     const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
     const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
 
-    return enrichDecision(applyNtRename({
+    return enrichDecision(applyOfficialCodeRename({
       ...input,
       id: input.id,
       document,
@@ -2010,6 +2104,7 @@
       ldConflict,
       ntVariant: false,
       ntRename: null,
+      ldRename: null,
     }, input));
   }
 

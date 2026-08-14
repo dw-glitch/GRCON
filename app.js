@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.7";
+  const APP_VERSION = "5.32.8";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -1047,6 +1047,9 @@
         appliesToNtRule: Boolean(item.documentLookup.appliesToNtRule),
         matched: Boolean(item.documentLookup.matched),
         matchedByNtVariant: Boolean(item.documentLookup.matchedByNtVariant),
+        matchedByTagVariant: Boolean(item.documentLookup.matchedByTagVariant),
+        matchedByTagOnly: Boolean(item.documentLookup.matchedByTagOnly),
+        searchedTag: item.documentLookup.searchedTag || "",
         ldDocument: item.documentLookup.ldDocument || "",
         ldForm: item.documentLookup.ldForm || "",
         searchResult: item.documentLookup.searchResult || "",
@@ -1060,6 +1063,13 @@
         finalName: item.ntRename.finalName || "",
         direcao: item.ntRename.direcao || "",
         nota: item.ntRename.nota || "",
+      } : null,
+      ldRename: item.ldRename ? {
+        enviado: item.ldRename.enviado || "",
+        naLd: item.ldRename.naLd || "",
+        finalName: item.ldRename.finalName || "",
+        motivo: item.ldRename.motivo || "",
+        nota: item.ldRename.nota || "",
       } : null,
       postingEvidence: item.postingEvidence ? {
         status: item.postingEvidence.status || "",
@@ -3425,7 +3435,7 @@
           <p class="detail-line"><strong>Arquivo:</strong> ${escapeHtml(source)}</p>
           <p class="detail-line"><strong>Pacote:</strong> ${escapeHtml(files)}</p>
           <p class="detail-line"><strong>Identificação:</strong> ${escapeHtml(row.documentSource || "nome do arquivo")}</p>
-          <p class="detail-line"><strong>Busca com/sem nt-:</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
+          <p class="detail-line"><strong>Busca na LD (com/sem nt- e TAG):</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
           <p class="detail-line"><strong>Revisão:</strong> ${escapeHtml(row.revisionSource || "—")}</p>
           <p class="detail-line"><strong>LD:</strong> ${escapeHtml(sourceLine)}</p>
         </section>
@@ -3953,7 +3963,7 @@
         "CÓDIGO INFORMADO / PDF": row.documentLookup && row.documentLookup.inputDocument || row.name || "",
         "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.ldDocument || "",
         "FORMA LOCALIZADA NA LD": row.documentLookup && row.documentLookup.ldForm || "Não localizado",
-        "PESQUISA COM/SEM nt- NA LD": row.documentLookup && row.documentLookup.message || "",
+        "PESQUISA COM/SEM nt- E TAG NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
         "TÍTULO": row.record && row.record.title || "",
