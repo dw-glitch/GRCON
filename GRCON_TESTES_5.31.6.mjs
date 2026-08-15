@@ -317,6 +317,88 @@ check("tipos de solicitação são configuráveis, ordenados e não ficam fixos 
   assert.equal(Requests.normalizeRequestType({ label: "X", defaultPriority: "inventada" }).defaultPriority, "normal");
 });
 
+// ── Triagem das solicitações: as regras da seção 8 ──────────────────────────
+
+function triagemDe(documentoInformado, registros, extras = {}) {
+  const index = Core.buildIndex(registros, []);
+  const lookup = Requests.lookupDocument(documentoInformado, index, { requestedTitle: extras.requestedTitle });
+  return Requests.classifyRequestItem({ lookup, ...extras });
+}
+
+check("8.1 documento não localizado é classificado como novo e pede inclusão na LD", () => {
+  const t = triagemDe("C1O_RNEST_U32_9.9.9.9_INS_RIR_NAO-EXISTE", [consultaRecord(ntBaseDocument, "LD_A.xlsx")]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.NOVO);
+  assert.equal(t.isNewDocument, true);
+  assert.equal(t.needsManualValidation, true);
+  assert.match(t.recommendedAction, /inclusão na LD/i);
+  assert.match(t.recommendedAction, /aloca/i);
+});
+
+check("8.2 previsto e não postado recomenda a postagem e não trata como novo", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Não Postado" })]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
+  assert.equal(t.isNewDocument, false);
+  assert.match(t.recommendedAction, /Postar no SIGEM/i);
+  // A 8.2 exige dizer que NÃO é documento novo e que NÃO cabe nova inclusão.
+  assert.match(t.recommendedAction, /não é documento novo/i);
+  assert.match(t.recommendedAction, /não precisa de nova inclusão/i);
+  assert.match(t.reason, /Já previsto na LD LD_A\.xlsx/);
+});
+
+check("8.2 previsto porém não alocado manda regularizar a alocação antes de postar", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "" })]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
+  assert.equal(t.allocated, false);
+  assert.match(t.recommendedAction, /Regularizar a alocação/i);
+});
+
+check("8.3 postado com revisão nova recomenda a atualização citando as duas revisões", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Postado", revision: "0" })], { requestedRevision: "A" });
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NOVA_REVISAO);
+  assert.equal(t.revisionInLd, "0");
+  assert.equal(t.requestedRevision, "A");
+  assert.match(t.recommendedAction, /revisão 0 para A/);
+});
+
+check("8.4 título divergente mostra os dois lados e nunca altera sozinho", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: "Relatório de inspeção dimensional" })],
+    { requestedTitle: "Relatório de inspeção dimensional e visual" });
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.TITULO_DIVERGENTE);
+  assert.equal(t.needsManualValidation, true);
+  assert.equal(t.titleComparison.official, "Relatório de inspeção dimensional");
+  assert.equal(t.titleComparison.requested, "Relatório de inspeção dimensional e visual");
+  assert.deepEqual(t.titleComparison.addedWords, ["E", "VISUAL"]);
+  assert.match(t.recommendedAction, /não altera nada sozinho/i);
+});
+
+check("8.4 diferença só de caixa e acento não é considerada divergência de título", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: "Relatório de Inspeção" })],
+    { requestedTitle: "RELATORIO DE INSPECAO" });
+  assert.equal(t.titleComparison.differs, false);
+  assert.notEqual(t.classification, Requests.CLASSIFICATIONS.TITULO_DIVERGENTE);
+});
+
+check("8.5 LDs divergentes empatadas travam a triagem até alguém escolher", () => {
+  const t = triagemDe(ntBaseDocument, [
+    consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "", sourceTimestamp: 500 }),
+    consultaRecord(ntBaseDocument, "LD_B.xlsx", { allocationStatus: "ALOCADO", sourceTimestamp: 500 }),
+  ]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.VALIDAR);
+  assert.equal(t.needsManualValidation, true);
+  assert.match(t.recommendedAction, /Escolher qual LD vale/i);
+});
+
+check("documento já postado e sem revisão nova não inventa tarefa", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Postado" })]);
+  assert.match(t.recommendedAction, /Nenhuma ação necessária/i);
+});
+
+check("correspondência por variação de código mantém a conferência mesmo com classificação clara", () => {
+  const t = triagemDe(ntDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Não Postado" })]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
+  assert.equal(t.needsManualValidation, true);
+});
+
 check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
   assert.equal(ReportSummary.normalizeAllocationCenter(null), null);
   assert.equal(ReportSummary.normalizeAllocationCenter({ path: "\\\\srv\\q\\Central.xlsx", sheet: "Central", keyColumn: "B" }), null);
