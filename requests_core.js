@@ -15,19 +15,27 @@
  *      parecido ou pedaço de código não geram correspondência.
  */
 (function (root, factory) {
-  const C = root.TriagemCore || (typeof module === "object" && module.exports ? require("./core.js") : null);
-  const api = factory(C);
+  // O motor documental é resolvido na hora do uso, não aqui: no navegador este
+  // arquivo pode ser avaliado antes de core.js, e capturar a referência agora
+  // deixaria C nulo para sempre — a busca devolveria "não localizado" para tudo,
+  // silenciosamente, mesmo com o documento na LD.
+  const resolveCore = () => root.TriagemCore
+    || (typeof module === "object" && module.exports ? require("./core.js") : null);
+  const api = factory(resolveCore);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconRequestsCore = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (C) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (resolveCore) {
   "use strict";
+
+  // Açúcar para o corpo do módulo continuar lendo como antes.
+  const core = () => resolveCore();
 
   function text(value) {
     return value === null || value === undefined ? "" : String(value).trim();
   }
 
   function norm(value) {
-    return C && C.norm ? C.norm(value) : text(value).toUpperCase();
+    return core() && core().norm ? core().norm(value) : text(value).toUpperCase();
   }
 
   // ---------------------------------------------------------------------------
@@ -171,7 +179,7 @@
     const mantidos = [];
     const removidos = [];
     (items || []).forEach((item) => {
-      const chave = C && C.key ? C.key(item && item.document) : norm(item && item.document);
+      const chave = core() && core().key ? core().key(item && item.document) : norm(item && item.document);
       if (!chave) return;
       if (vistos.has(chave)) {
         const anterior = vistos.get(chave);
@@ -191,7 +199,7 @@
   // ---------------------------------------------------------------------------
 
   function occurrenceFrom(record) {
-    const estado = C && C.allocationState ? C.allocationState(record.allocationStatus) : { kind: "empty", label: "Não informado" };
+    const estado = core() && core().allocationState ? core().allocationState(record.allocationStatus) : { kind: "empty", label: "Não informado" };
     return {
       document: text(record.document),
       // O título sai exatamente como está na LD: sem maiúsculas forçadas, sem
@@ -274,11 +282,11 @@
       lookup: null,
       message: "Não localizado nas LDs anexadas.",
     };
-    if (!informado || !index || !C) return base;
+    if (!informado || !index || !core()) return base;
 
-    const matches = C.matchDocuments(informado, index, settings.hintedSheet) || [];
+    const matches = core().matchDocuments(informado, index, settings.hintedSheet) || [];
     const primeiro = matches[0] || null;
-    const lookup = C.documentLookup ? C.documentLookup(informado, matches.length === 1 ? primeiro : null, matches) : null;
+    const lookup = core().documentLookup ? core().documentLookup(informado, matches.length === 1 ? primeiro : null, matches) : null;
 
     if (!primeiro) {
       return { ...base, lookup, message: lookup && lookup.message ? lookup.message : base.message };

@@ -1,0 +1,198 @@
+/* GRCON — Consultas e Solicitações
+   Usa os mesmos tokens de cor, tipografia e espaçamento dos demais módulos.
+   Todo valor de cor tem um par no tema escuro definido no bloco do final: uma
+   cor declarada só no claro vira texto ilegível quando o sistema está escuro. */
+
+html[data-app="GRCON"] .requests-module { display: grid; gap: 1rem; }
+
+/* Fluxo em três passos: mostra onde a pessoa está e o que falta. */
+html[data-app="GRCON"] .requests-steps {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: .6rem; margin: 0; padding: 0; list-style: none;
+}
+html[data-app="GRCON"] .requests-step {
+  display: flex; align-items: center; gap: .6rem; padding: .6rem .8rem;
+  border: 1px solid var(--border-1, #dce4ea); border-radius: .6rem;
+  background: var(--surface-1, #fff);
+}
+html[data-app="GRCON"] .requests-step b {
+  flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  display: grid; place-items: center; font-size: .8rem; font-weight: 800;
+  background: var(--surface-3, #eef2f6); color: var(--text-3, #6f8296);
+}
+html[data-app="GRCON"] .requests-step span { display: grid; gap: .1rem; min-width: 0; }
+html[data-app="GRCON"] .requests-step strong { font-size: .82rem; color: var(--text-1, #17324a); }
+html[data-app="GRCON"] .requests-step small { font-size: .72rem; color: var(--text-3, #6f8296); }
+html[data-app="GRCON"] .requests-step.is-current { border-color: var(--brand-600, #24689a); box-shadow: 0 0 0 2px rgba(36, 104, 154, .12); }
+html[data-app="GRCON"] .requests-step.is-current b { background: var(--brand-600, #24689a); color: #fff; }
+html[data-app="GRCON"] .requests-step.is-done b { background: var(--success-100, #eaf7f1); color: var(--success-800, #0c7657); }
+html[data-app="GRCON"] .requests-step.is-done b::after { content: "✓"; }
+html[data-app="GRCON"] .requests-step.is-done b { font-size: .9rem; }
+
+html[data-app="GRCON"] .requests-panel {
+  display: grid; gap: .7rem; padding: .9rem 1rem;
+  border: 1px solid var(--border-1, #dce4ea); border-radius: .7rem;
+  background: var(--surface-1, #fff);
+}
+html[data-app="GRCON"] .requests-panel-head { display: grid; gap: .15rem; }
+html[data-app="GRCON"] .requests-panel-head h3 { margin: 0; font-size: .95rem; color: var(--brand-strong, #123f61); }
+html[data-app="GRCON"] .requests-panel-head small { font-size: .74rem; color: var(--text-3, #6f8296); }
+
+/* Área de arrastar e soltar as LDs. */
+html[data-app="GRCON"] .requests-drop {
+  display: grid; place-items: center; gap: .25rem; padding: 1.4rem 1rem;
+  border: 2px dashed var(--border-2, #cbd7e1); border-radius: .6rem;
+  background: var(--surface-2, #f7fafc); cursor: pointer; text-align: center;
+  transition: border-color .15s, background .15s;
+}
+html[data-app="GRCON"] .requests-drop:hover,
+html[data-app="GRCON"] .requests-drop:focus-visible { border-color: var(--brand-600, #24689a); background: var(--surface-3, #eef4f9); }
+html[data-app="GRCON"] .requests-drop.is-over { border-color: var(--brand-600, #24689a); background: var(--brand-050, #eaf2f8); border-style: solid; }
+html[data-app="GRCON"] .requests-drop svg { width: 26px; height: 26px; fill: none; stroke: var(--brand-600, #24689a); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+html[data-app="GRCON"] .requests-drop strong { font-size: .86rem; color: var(--text-1, #17324a); }
+html[data-app="GRCON"] .requests-drop span { font-size: .74rem; color: var(--text-3, #6f8296); }
+
+html[data-app="GRCON"] .requests-ld-list { display: grid; gap: .35rem; }
+html[data-app="GRCON"] .requests-ld-item {
+  display: flex; align-items: center; gap: .5rem; padding: .4rem .55rem;
+  border: 1px solid var(--border-1, #dce4ea); border-radius: .45rem;
+  background: var(--surface-2, #f7fafc); font-size: .78rem;
+}
+html[data-app="GRCON"] .requests-ld-item.has-error { border-color: var(--danger-300, #f0b8b0); background: var(--danger-050, #fff0ed); }
+html[data-app="GRCON"] .requests-ld-item svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: var(--text-3, #6f8296); stroke-width: 1.6; }
+html[data-app="GRCON"] .requests-ld-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--text-1, #17324a); font-weight: 600; }
+html[data-app="GRCON"] .requests-ld-ok { color: var(--success-800, #0c7657); font-size: .72rem; white-space: nowrap; }
+html[data-app="GRCON"] .requests-ld-loading { color: var(--text-3, #6f8296); font-size: .72rem; }
+html[data-app="GRCON"] .requests-ld-error { color: var(--danger-800, #a64035); font-size: .72rem; }
+html[data-app="GRCON"] .requests-ld-remove {
+  flex: 0 0 auto; width: 1.4rem; height: 1.4rem; border-radius: .3rem; border: 0;
+  background: transparent; color: var(--text-3, #6f8296); font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+html[data-app="GRCON"] .requests-ld-remove:hover { background: var(--danger-050, #fff0ed); color: var(--danger-800, #a64035); }
+
+html[data-app="GRCON"] .requests-paste-label { font-size: .76rem; font-weight: 600; color: var(--text-2, #385069); }
+html[data-app="GRCON"] .requests-module textarea#requests-paste {
+  width: 100%; padding: .55rem .65rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .45rem; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: .76rem; line-height: 1.5; resize: vertical;
+  background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-inline-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+html[data-app="GRCON"] .requests-count { font-size: .74rem; color: var(--text-3, #6f8296); margin-left: auto; }
+
+/* Barra de ações: fica visível durante a rolagem, porque é de onde saem as
+   ações em lote depois que a pessoa escolhe as linhas. */
+html[data-app="GRCON"] .requests-actions {
+  position: sticky; top: .25rem; z-index: 5;
+  display: flex; align-items: center; gap: .45rem; flex-wrap: wrap;
+  padding: .6rem .8rem; border: 1px solid var(--border-1, #dce4ea); border-radius: .6rem;
+  background: var(--surface-1, #fff); box-shadow: 0 2px 10px rgba(18, 63, 97, .06);
+}
+html[data-app="GRCON"] .requests-actions-divider { width: 1px; height: 1.4rem; background: var(--border-1, #dce4ea); }
+html[data-app="GRCON"] .requests-selection-note { margin-left: auto; font-size: .74rem; color: var(--text-3, #6f8296); }
+html[data-app="GRCON"] .requests-module .text-button.danger { color: var(--danger-800, #a64035); }
+
+html[data-app="GRCON"] .requests-results { display: grid; gap: .7rem; }
+html[data-app="GRCON"] .requests-results-head { display: flex; align-items: flex-end; gap: .7rem; flex-wrap: wrap; }
+html[data-app="GRCON"] .requests-results-head h3 { margin: 0; font-size: .95rem; color: var(--brand-strong, #123f61); }
+html[data-app="GRCON"] .requests-results-tools { display: flex; align-items: flex-end; gap: .5rem; flex-wrap: wrap; margin-left: auto; }
+html[data-app="GRCON"] .requests-results-tools label { display: grid; gap: .15rem; font-size: .72rem; color: var(--text-3, #6f8296); }
+html[data-app="GRCON"] .requests-results-tools select {
+  height: 1.9rem; padding: 0 .4rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .4rem; font-size: .76rem; background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-search { position: relative; }
+html[data-app="GRCON"] .requests-search svg { position: absolute; left: .45rem; top: .45rem; width: 14px; height: 14px; fill: none; stroke: var(--text-3, #6f8296); stroke-width: 2; }
+html[data-app="GRCON"] .requests-search input {
+  height: 1.9rem; padding: 0 .5rem 0 1.6rem; min-width: 15rem;
+  border: 1px solid var(--border-2, #cbd7e1); border-radius: .4rem; font-size: .78rem;
+  background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+
+html[data-app="GRCON"] .requests-progress { display: flex; align-items: center; gap: .6rem; font-size: .76rem; color: var(--text-2, #385069); }
+html[data-app="GRCON"] .requests-progress-bar { flex: 1 1 auto; height: .35rem; border-radius: .2rem; background: var(--surface-3, #eef2f6); overflow: hidden; }
+html[data-app="GRCON"] .requests-progress-bar i { display: block; height: 100%; width: 0; background: var(--brand-600, #24689a); transition: width .2s; }
+
+/* A tabela rola dentro do próprio quadro: a página nunca rola de lado. */
+html[data-app="GRCON"] .requests-table-wrap {
+  overflow-x: auto; border: 1px solid var(--border-1, #dce4ea); border-radius: .6rem;
+  background: var(--surface-1, #fff); max-height: 60vh; overflow-y: auto;
+}
+html[data-app="GRCON"] .requests-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+html[data-app="GRCON"] .requests-table thead th {
+  position: sticky; top: 0; z-index: 1; text-align: left; white-space: nowrap;
+  padding: .5rem .6rem; font-size: .7rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .03em; color: #fff; background: var(--brand-900, #153a5c);
+}
+html[data-app="GRCON"] .requests-table tbody td {
+  padding: .45rem .6rem; border-bottom: 1px solid var(--border-1, #dce4ea);
+  vertical-align: top; color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-table tbody tr:nth-child(even) td { background: var(--surface-2, #f8fafc); }
+html[data-app="GRCON"] .requests-table tbody tr.precisa-validar td { background: var(--warning-050, #fffaf0); }
+html[data-app="GRCON"] .requests-col-check { width: 2.2rem; }
+html[data-app="GRCON"] .requests-col-doc code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .74rem; overflow-wrap: anywhere; }
+html[data-app="GRCON"] .requests-rule { margin-top: .2rem; font-size: .7rem; color: var(--warning-800, #8a5c08); line-height: 1.4; }
+html[data-app="GRCON"] .requests-vazio { color: var(--text-4, #9aabb8); }
+html[data-app="GRCON"] .requests-multi { display: block; font-size: .68rem; color: var(--brand-600, #24689a); font-weight: 700; }
+
+/* Os selos não dependem só da cor: cada um traz um símbolo e um texto. */
+html[data-app="GRCON"] .requests-badge {
+  display: inline-block; padding: .1rem .4rem; border-radius: .3rem;
+  font-size: .7rem; font-weight: 700; white-space: nowrap;
+}
+html[data-app="GRCON"] .requests-badge.ok { background: var(--success-100, #eaf7f1); color: var(--success-800, #0c7657); }
+html[data-app="GRCON"] .requests-badge.alerta { background: var(--warning-100, #fff5df); color: var(--warning-800, #8a5c08); }
+html[data-app="GRCON"] .requests-badge.erro { background: var(--danger-050, #fff0ed); color: var(--danger-800, #a64035); }
+html[data-app="GRCON"] .requests-badge.pendente { background: var(--surface-3, #eef2f6); color: var(--text-3, #6f8296); }
+
+html[data-app="GRCON"] .requests-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .6rem;
+}
+html[data-app="GRCON"] .requests-summary > div {
+  display: grid; gap: .1rem; padding: .55rem .7rem;
+  border: 1px solid var(--border-1, #dce4ea); border-left: 3px solid var(--text-3, #6f8296);
+  border-radius: .45rem; background: var(--surface-2, #f7fafc);
+}
+html[data-app="GRCON"] .requests-summary span { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3, #6f8296); }
+html[data-app="GRCON"] .requests-summary strong { font-size: 1.15rem; color: var(--brand-strong, #123f61); }
+html[data-app="GRCON"] .requests-summary .ok { border-left-color: var(--success-800, #0c7657); }
+html[data-app="GRCON"] .requests-summary .ok strong { color: var(--success-800, #0c7657); }
+html[data-app="GRCON"] .requests-summary .alerta { border-left-color: var(--warning-800, #8a5c08); }
+html[data-app="GRCON"] .requests-summary .alerta strong { color: var(--warning-800, #8a5c08); }
+html[data-app="GRCON"] .requests-summary .erro { border-left-color: var(--danger-800, #a64035); }
+html[data-app="GRCON"] .requests-summary .erro strong { color: var(--danger-800, #a64035); }
+
+/* Tema escuro: os valores de reserva acima são claros, então todo bloco que
+   pinta fundo ou texto precisa do par aqui, senão o módulo fica ilegível. */
+@media (prefers-color-scheme: dark) {
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-step,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-panel,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-actions,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-table-wrap { background: var(--surface-1); border-color: var(--border-1); }
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-drop,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-ld-item,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-summary > div { background: var(--surface-2); border-color: var(--border-2); }
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-module textarea#requests-paste,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-results-tools select,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-search input { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-table tbody tr:nth-child(even) td { background: var(--surface-2); }
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-table tbody tr.precisa-validar td { background: rgba(138, 92, 8, .16); }
+}
+html[data-app="GRCON"][data-theme="dark"] .requests-step,
+html[data-app="GRCON"][data-theme="dark"] .requests-panel,
+html[data-app="GRCON"][data-theme="dark"] .requests-actions,
+html[data-app="GRCON"][data-theme="dark"] .requests-table-wrap { background: var(--surface-1); border-color: var(--border-1); }
+html[data-app="GRCON"][data-theme="dark"] .requests-drop,
+html[data-app="GRCON"][data-theme="dark"] .requests-ld-item,
+html[data-app="GRCON"][data-theme="dark"] .requests-summary > div { background: var(--surface-2); border-color: var(--border-2); }
+html[data-app="GRCON"][data-theme="dark"] .requests-module textarea#requests-paste,
+html[data-app="GRCON"][data-theme="dark"] .requests-results-tools select,
+html[data-app="GRCON"][data-theme="dark"] .requests-search input { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+html[data-app="GRCON"][data-theme="dark"] .requests-table tbody tr:nth-child(even) td { background: var(--surface-2); }
+html[data-app="GRCON"][data-theme="dark"] .requests-table tbody tr.precisa-validar td { background: rgba(138, 92, 8, .16); }
+
+@media (max-width: 60rem) {
+  html[data-app="GRCON"] .requests-results-tools { margin-left: 0; width: 100%; }
+  html[data-app="GRCON"] .requests-search input { min-width: 100%; }
+}

@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.7";
+  const APP_VERSION = "5.32.8";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -4013,19 +4013,12 @@
     }
   }
 
+  // O logo vive no construtor compartilhado: já houve duas planilhas montando a
+  // mesma imagem por caminhos diferentes, e uma delas saía sem logo.
   async function addReportLogo(workbook, worksheet) {
-    try {
-      const brand = window.GRCONBrandAssets || {};
-      let imageConfig = null;
-      if (brand.reportLogoBase64) imageConfig = { base64: brand.reportLogoBase64, extension: "png" };
-      else {
-        const response = await window.fetch(brand.reportLogoFile || "grcon-logo-report.png", { cache: "no-store" });
-        if (!response.ok) throw new Error("Logo GRCON indisponível");
-        imageConfig = { buffer: await response.arrayBuffer(), extension: "png" };
-      }
-      const image = workbook.addImage(imageConfig);
-      worksheet.addImage(image, { tl: { col: .12, row: .28 }, ext: { width: 188, height: 52 } });
-    } catch (_) { console.debug("[App] logo do relatório indisponível:", _); /* relatório segue íntegro sem imagem */ }
+    const Report = window.GrconRequestsReport;
+    if (!Report || !Report.attachBrandLogo) return;
+    await Report.attachBrandLogo(workbook, worksheet, window.GRCONBrandAssets, window.fetch.bind(window));
   }
 
   async function buildReportFileLegacy() {

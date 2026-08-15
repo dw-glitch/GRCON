@@ -1,4 +1,4 @@
-GRCON 5.32.7 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.32.8 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
 - Somente documentos ET são pesquisados com e sem nt- minúsculo no início do 7º grupo.

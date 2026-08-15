@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.7" data-version="5.32.7" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.8" data-version="5.32.8" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -14,8 +14,9 @@
 <link href="grcon-icon.png" rel="apple-touch-icon"/>
 <link href="manifest.json" rel="manifest"/>
 <link href="design-system.css" rel="stylesheet"/><link href="legacy-compat.css" rel="stylesheet"/><link href="grcon-ui.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="grcon-final.css" rel="stylesheet"/><link href="grcon_cloud.css" rel="stylesheet"/>
+<link href="requests.css" rel="stylesheet"/>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
-<meta content="5.32.7" name="application-version"/></head>
+<meta content="5.32.8" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -46,6 +47,9 @@
 <button aria-current="page" class="ops-nav-button active" data-grcon-view="control" type="button">
 <svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Gerar eGRDT</strong></span>
 </button>
+<button class="ops-nav-button" data-grcon-view="requests" type="button">
+<svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong></span>
+</button>
 <button class="ops-nav-button" data-grcon-view="analysis-history" type="button">
 <svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Análises</strong></span><b hidden="" id="ops-analysis-history-count">0</b>
 </button>
@@ -62,6 +66,7 @@
 <main aria-label="Área de trabalho do GRCON" class="workspace" id="app-main" tabindex="-1">
 <nav aria-label="Navegação compacta do GRCON" class="grcon-view-tabs" role="tablist">
 <button id="tab-control" aria-controls="grdt-module" aria-selected="true" class="active" data-grcon-view="control" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Controle de GRDT</strong><small>Analisar e gerar eGRDT</small></span></button>
+<button id="tab-requests" aria-controls="requests-module" aria-selected="false" data-grcon-view="requests" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas e Solicitações</strong><small>Consultar documentos e registrar pedidos</small></span></button>
 <button id="tab-analysis" aria-controls="analysis-history-module" aria-selected="false" data-grcon-view="analysis-history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Histórico de análises</strong><small>Data, documento e status</small></span><b hidden="" id="analysis-history-tab-count">0</b></button>
 <button id="tab-history" aria-controls="history-module" aria-selected="false" data-grcon-view="history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico de eGRDTs</strong><small>Arquivos e alocações</small></span><b hidden="" id="history-tab-count">0</b></button>
 <button id="tab-sigem" aria-controls="sigem-module" aria-selected="false" data-grcon-view="sigem" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 4h16v12H4zM8 20h8M12 16v4M7 8h10M7 12h6"></path></svg><span><strong>Postagem SIGEM</strong><small>Conferir, copiar e registrar</small></span><b hidden="" id="sigem-tab-count">0</b></button>
@@ -266,6 +271,82 @@
 <div class="virtualization-note" id="result-pagination" hidden><span id="result-page-status">Tabela virtualizada</span><button id="result-page-previous" hidden type="button"></button><button id="result-page-next" hidden type="button"></button></div>
 </section>
 </section>
+<section id="requests-module" class="requests-module" hidden="" role="tabpanel" aria-labelledby="tab-requests">
+<header class="ops-page-heading"><div><h2>Consultas e Solicitações</h2><p>Consulte o que perguntam sobre cada documento e registre os pedidos recebidos.</p></div></header>
+
+<ol class="requests-steps" aria-label="Etapas da consulta">
+<li class="requests-step is-current" id="requests-step-1"><b>1</b><span><strong>Anexar as LDs</strong><small id="requests-step-1-note">Nenhuma LD carregada</small></span></li>
+<li class="requests-step" id="requests-step-2"><b>2</b><span><strong>Informar os documentos</strong><small id="requests-step-2-note">Nenhum documento na lista</small></span></li>
+<li class="requests-step" id="requests-step-3"><b>3</b><span><strong>Consultar e exportar</strong><small id="requests-step-3-note">Aguardando consulta</small></span></li>
+</ol>
+
+<section class="requests-panel" aria-labelledby="requests-ld-title">
+<div class="requests-panel-head"><h3 id="requests-ld-title">Listas de documentos (LD)</h3><small>Pode anexar várias. O mesmo documento é procurado em todas.</small></div>
+<div class="requests-drop" id="requests-drop" tabindex="0" role="button" aria-describedby="requests-drop-hint">
+<svg aria-hidden="true" viewbox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"></path></svg>
+<strong>Arraste as LDs aqui</strong>
+<span id="requests-drop-hint">ou clique para escolher os arquivos (.xlsx, .xls, .xlsm)</span>
+<input accept=".xlsx,.xls,.xlsm" id="requests-ld-input" multiple type="file" hidden/>
+</div>
+<div class="requests-ld-list" id="requests-ld-list"></div>
+<div class="requests-inline-actions">
+<button class="secondary-button compact" id="requests-ld-add" type="button">Adicionar LDs</button>
+<button class="text-button" hidden id="requests-ld-reuse" type="button">Reutilizar a última LD usada</button>
+<button class="text-button danger" hidden id="requests-ld-clear" type="button">Remover todas</button>
+</div>
+</section>
+
+<section class="requests-panel" aria-labelledby="requests-docs-title">
+<div class="requests-panel-head"><h3 id="requests-docs-title">Documentos a consultar</h3><small>Cole um por linha. Código e título podem vir separados por tabulação, direto da planilha.</small></div>
+<label class="requests-paste-label" for="requests-paste">Lista de documentos</label>
+<textarea id="requests-paste" rows="5" spellcheck="false" placeholder="C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019&#10;C1O_RNEST_U32_10.2.1.2_TUB_RIR_nt-NF-1288-CONEXOES"></textarea>
+<div class="requests-inline-actions">
+<button class="secondary-button compact" id="requests-paste-add" type="button">Adicionar à lista</button>
+<button class="text-button" id="requests-paste-clipboard" type="button">Colar da área de transferência</button>
+<span class="requests-count" id="requests-doc-count">0 documento(s) na lista</span>
+</div>
+</section>
+
+<section class="requests-actions" id="requests-actions" aria-label="Ações da consulta">
+<button class="primary-button" disabled id="requests-run" type="button">Consultar todos</button>
+<button class="secondary-button compact" disabled id="requests-run-selected" type="button">Consultar selecionados</button>
+<span class="requests-actions-divider" aria-hidden="true"></span>
+<button class="secondary-button compact" disabled id="requests-select-all" type="button">Selecionar todos</button>
+<button class="secondary-button compact" disabled id="requests-select-none" type="button">Limpar seleção</button>
+<button class="secondary-button compact" disabled id="requests-dedupe" type="button">Remover duplicados</button>
+<span class="requests-actions-divider" aria-hidden="true"></span>
+<button class="secondary-button compact" disabled id="requests-copy" type="button">Copiar resultados</button>
+<button class="secondary-button compact" disabled id="requests-export" type="button">Exportar para Excel</button>
+<span class="requests-actions-divider" aria-hidden="true"></span>
+<button class="text-button" disabled id="requests-undo" type="button">Desfazer</button>
+<button class="text-button danger" disabled id="requests-clear" type="button">Limpar consulta</button>
+<span class="requests-selection-note" aria-live="polite" id="requests-selection-note"></span>
+</section>
+
+<section class="requests-results" aria-labelledby="requests-results-title">
+<div class="requests-results-head">
+<h3 id="requests-results-title">Resultado da consulta</h3>
+<div class="requests-results-tools">
+<label class="requests-search"><svg aria-hidden="true" viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input id="requests-search" placeholder="Buscar código, título ou LD" type="search"/></label>
+<label><span>Situação</span><select id="requests-filter-situation"><option value="">Todas</option><option value="Localizado">Localizado</option><option value="Requer validação manual">Requer validação manual</option><option value="Não localizado">Não localizado</option></select></label>
+<label><span>Alocação</span><select id="requests-filter-allocation"><option value="">Todas</option><option value="sim">Alocado</option><option value="nao">Não alocado</option><option value="revisar">A revisar</option></select></label>
+<label><span>Ordem</span><select id="requests-sort"><option value="entrada">Ordem informada</option><option value="documento">Código</option><option value="situacao">Situação</option><option value="ld">LD</option></select></label>
+</div>
+</div>
+<div aria-live="polite" class="requests-progress" hidden id="requests-progress"><div class="requests-progress-bar"><i id="requests-progress-fill"></i></div><span id="requests-progress-text">Consultando…</span></div>
+<div class="requests-table-wrap" id="requests-table-wrap" hidden>
+<table class="requests-table" id="requests-table">
+<thead><tr>
+<th class="requests-col-check"><input aria-label="Selecionar todos os resultados" id="requests-check-all" type="checkbox"/></th>
+<th>Situação</th><th>Documento</th><th>Título na LD</th><th>Alocado?</th><th>Última GRDT</th><th>Status SIGEM</th><th>LD</th>
+</tr></thead>
+<tbody id="requests-tbody"></tbody>
+</table>
+</div>
+<empty-state class="requests-empty" id="requests-empty"><strong>Nenhuma consulta ainda</strong><span>Anexe uma LD, informe os documentos e clique em “Consultar todos”.</span></empty-state>
+<div class="requests-summary" hidden id="requests-summary"></div>
+</section>
+</section>
 <section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
 <header class="analysis-history-heading"><div><span>RASTREABILIDADE DAS ANÁLISES</span><h2 id="analysis-history-title">Todos os documentos analisados pelo GRCON</h2><p>Cada análise concluída é registrada com data, documento, revisão, situação entregue e motivo.</p></div><div class="analysis-history-actions"><button class="secondary-button" id="analysis-history-backup" type="button">Fazer backup</button><button class="secondary-button" id="analysis-history-restore" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="analysis-history-restore-input" type="file"/><button class="secondary-button" disabled="" id="analysis-history-delete-session" type="button">Excluir análise selecionada</button><button class="secondary-button" id="analysis-history-clear" type="button">Limpar todo o histórico</button></div></header>
 <section aria-label="Busca unificada" class="unified-search" id="unified-search">
@@ -365,7 +446,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.32.7 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.32.8 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">
@@ -540,7 +621,7 @@
 <script defer="" src="grcon_contracts.js"></script>
 <script defer="" src="large_input.js"></script>
 <script defer src="grcon_config.js"></script><script defer src="grcon_utils.js"></script>
-<script defer src="requests_core.js"></script><script defer src="grcon_file_access.js"></script>
+<script defer src="requests_core.js"></script><script defer src="requests_report.js"></script><script defer src="grcon_file_access.js"></script>
 <script defer="" src="core.js"></script>
 <script defer="" src="ld_conflicts.js"></script>
 <script defer="" src="report_summary.js"></script>
