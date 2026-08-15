@@ -13,6 +13,7 @@ const Workbook = require(path.join(root, "grdt_workbook.js"));
 const ExcelJS = require(path.join(root, "exceljs.min.js"));
 const Core = require(path.join(root, "core.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
+const Requests = require(path.join(root, "requests_core.js"));
 const checks = [];
 
 function check(name, fn) {
@@ -184,6 +185,136 @@ check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de fo
     "ENTRA NA EGRDT?",
     "O QUE FAZER",
   ]);
+});
+
+// ── Consultas e Solicitações ────────────────────────────────────────────────
+// As duas regras que atravessam o módulo: não inventar informação e não casar
+// por semelhança. Os casos abaixo são os da seção de triagem por LD.
+
+function consultaRecord(document, source, over = {}) {
+  return {
+    document, documentKey: Core.key(document), revision: "0", status: "", sigemStatus: "Não Postado",
+    title: "Relatório de inspeção", grdt: "", effectiveDate: "", allocationStatus: "ALOCADO",
+    allocation: "ALOC-1", allocationStage: "", sheet: "ET", row: 2, source,
+    sourceTimestamp: 100, sourceOrder: 0, ldColumns: [], ...over,
+  };
+}
+
+check("lista colada separa código e título e ignora linhas vazias", () => {
+  const lista = Requests.parseDocumentList(`${ntBaseDocument}\tRelatório de inspeção\n\n${ntDocument}\n   \n`);
+  assert.equal(lista.length, 2);
+  assert.equal(lista[0].document, ntBaseDocument);
+  assert.equal(lista[0].requestedTitle, "Relatório de inspeção");
+  assert.equal(lista[1].requestedTitle, "");
+});
+
+check("duplicidade sai pelo código normalizado sem perder o título informado", () => {
+  const { items, removed } = Requests.dedupeDocuments([
+    { document: ntBaseDocument, requestedTitle: "" },
+    { document: ntBaseDocument.toLowerCase(), requestedTitle: "Título da segunda linha" },
+    { document: "OUTRO-1", requestedTitle: "" },
+  ]);
+  assert.equal(items.length, 2);
+  assert.equal(removed.length, 1);
+  assert.equal(items[0].requestedTitle, "Título da segunda linha");
+});
+
+check("cada item da solicitação tem protocolo próprio e não repetido", () => {
+  assert.equal(Requests.protocolFor("SOL-2026-014", 1, 2026), "SOL-2026-014-001/2026");
+  assert.equal(Requests.nextItemNumber([{ itemNumber: 1 }, { itemNumber: 7 }]), 8);
+  assert.equal(Requests.nextItemNumber([]), 1);
+  const itens = [1, 2, 2].map((n) => ({ protocol: Requests.protocolFor("S1", n, 2026) }));
+  assert.deepEqual(Requests.duplicatedProtocols(itens), ["S1-002/2026"]);
+});
+
+check("consulta de documento exato responde as seis colunas com confiança alta", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", { grdt: "GRDT-0007", sigemStatus: "Postado" })], []);
+  const resultado = Requests.lookupDocument(ntBaseDocument, index);
+  const linha = Requests.consultationRow(resultado);
+  assert.equal(resultado.confidence, "alta");
+  assert.equal(resultado.needsManualValidation, false);
+  assert.equal(linha.title, "Relatório de inspeção");
+  assert.equal(linha.allocated, "SIM — Alocado");
+  assert.equal(linha.lastGrdt, "GRDT-0007");
+  assert.equal(linha.sigemStatus, "Postado");
+  assert.equal(linha.ld, "LD_A.xlsx");
+});
+
+check("documento não localizado não recebe nenhum dado inventado", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx")], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument("C1O_RNEST_U32_9.9.9.9_INS_RIR_SPE-AST-999999", index));
+  assert.equal(linha.situation, "Não localizado");
+  for (const campo of ["title", "allocated", "lastGrdt", "sigemStatus", "ld"]) assert.equal(linha[campo], "");
+});
+
+check("consulta não casa por semelhança de título", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: "Relatório de inspeção" })], []);
+  const resultado = Requests.lookupDocument("XXX_OUTRO_CODIGO_DIFERENTE", index, { requestedTitle: "Relatório de inspeção" });
+  assert.equal(resultado.found, false);
+});
+
+check("mesmo documento em duas LDs com a mesma informação não é conflito", () => {
+  const index = Core.buildIndex([
+    consultaRecord(ntBaseDocument, "LD_A.xlsx"),
+    consultaRecord(ntBaseDocument, "LD_B.xlsx", { sourceTimestamp: 200 }),
+  ], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index));
+  assert.equal(linha.occurrenceCount, 2);
+  assert.equal(linha.allLds, "LD_A.xlsx | LD_B.xlsx");
+  assert.match(linha.rule, /mesma informação/);
+});
+
+check("LDs que divergem elegem a mais recente, explicam a regra e pedem confirmação", () => {
+  const index = Core.buildIndex([
+    consultaRecord(ntBaseDocument, "LD_ANTIGA.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "", sourceTimestamp: 100 }),
+    consultaRecord(ntBaseDocument, "LD_NOVA.xlsx", { allocationStatus: "ALOCADO", sourceTimestamp: 300 }),
+  ], []);
+  const resultado = Requests.lookupDocument(ntBaseDocument, index);
+  const linha = Requests.consultationRow(resultado);
+  assert.equal(resultado.conflicting, true);
+  assert.equal(resultado.chosen.ld, "LD_NOVA.xlsx");
+  assert.equal(linha.situation, "Requer validação manual");
+  assert.match(linha.rule, /mais recente: LD_NOVA/);
+});
+
+check("empate entre LDs divergentes devolve a decisão sem preencher campo algum", () => {
+  const index = Core.buildIndex([
+    consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "", sourceTimestamp: 500 }),
+    consultaRecord(ntBaseDocument, "LD_B.xlsx", { allocationStatus: "ALOCADO", sourceTimestamp: 500 }),
+  ], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index));
+  assert.equal(linha.title, "");
+  assert.equal(linha.allocated, "");
+  assert.equal(linha.allLds, "LD_A.xlsx | LD_B.xlsx");
+  assert.match(linha.rule, /Escolha qual vale/);
+});
+
+check("consulta aproveita a regra do nt- e rebaixa a confiança do resultado", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx")], []);
+  const resultado = Requests.lookupDocument(ntDocument, index);
+  assert.equal(resultado.found, true);
+  assert.equal(resultado.confidence, "media");
+  assert.equal(resultado.needsManualValidation, true);
+  assert.equal(resultado.ldDocument, ntBaseDocument);
+});
+
+check("título da consulta sai exatamente como está na LD", () => {
+  const original = "Relatório de Inspeção — Válvula 3\" (Ø nominal), rev. A";
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: original })], []);
+  assert.equal(Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index)).title, original);
+});
+
+check("tipos de solicitação são configuráveis, ordenados e não ficam fixos no código", () => {
+  const padrao = Requests.requestTypeList(null);
+  assert.ok(padrao.length >= 10);
+  const meus = Requests.requestTypeList([
+    { label: "Tipo da casa", order: 2 },
+    { label: "Urgência", code: "URG", defaultPriority: "urgente", defaultDeadlineDays: 1, order: 1 },
+  ]);
+  assert.equal(meus[0].code, "URG");
+  assert.equal(meus[1].code, "TIPO_DA_CASA");
+  assert.equal(Requests.normalizeRequestType({ label: "" }), null);
+  assert.equal(Requests.normalizeRequestType({ label: "X", defaultPriority: "inventada" }).defaultPriority, "normal");
 });
 
 check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {

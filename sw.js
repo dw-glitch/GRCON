@@ -34,6 +34,7 @@ const ASSETS = [
   "large_input.js",
   "core.js",
   "ld_conflicts.js",
+  "requests_core.js",
   "report_summary.js",
   "grcon_output_guard.js",
   "output_audit.js",
