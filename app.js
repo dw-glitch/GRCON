@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.6";
+  const APP_VERSION = "5.32.7";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -367,10 +367,6 @@
       // Assim, a revisão registrada vem da própria eGRDT, e não apenas da prévia da emissão.
       const verifiedRecords = createGeneratedHistoryRecords(generated, outputType, { generatedAt: info.generatedAt });
       const records = verifiedRecords.length ? verifiedRecords : (preparedRecords || []);
-      // O e-mail usa exatamente os mesmos registros que vão para o histórico,
-      // e não a prévia da emissão: assim a relação enviada bate com o relatório.
-      registrarEmissaoParaEmail(generated, records, info.generatedAt);
-      enfileirarEmailDaEmissao();
       const saved = History.saveMany(records);
       if (Posting) {
         const postingSaved = Posting.registerGenerated(records, { packageName: info.packageName, appVersion: APP_VERSION });
@@ -399,111 +395,11 @@
     }
   }
 
-  /* ── Rascunho de e-mail da evidência de postagem ──────────── */
-
-  // Guarda o que a última eGRDT gerada produziu, para montar o e-mail sem
-  // depender de o usuário ainda estar com a mesma triagem em tela.
-  let ultimaEmissaoParaEmail = null;
-
-  function inferirDisciplina(documento) {
-    if (!documento || !C || typeof C.buildEgrdtData !== "function") return "";
-    try {
-      return C.buildEgrdtData(documento, "", "", {}, "", "").discipline || "";
-    } catch (_) {
-      return "";
-    }
-  }
-
-  function registrarEmissaoParaEmail(generated, preparedRecords, geradoEm) {
-    const Email = window.GrconEmailDraft;
-    if (!Email) return;
-    const registros = Array.isArray(preparedRecords) ? preparedRecords : [];
-    const documentos = [];
-    const alocacoes = new Set();
-    registros.forEach((registro) => {
-      (registro.files || []).forEach((arquivo) => {
-        if (!arquivo || !arquivo.document) return;
-        documentos.push({
-          documento: arquivo.document,
-          titulo: arquivo.title || "",
-          // A disciplina normalmente já vem do registro; quando faltar, é
-          // deduzida do próprio código do documento (…_ELE_… -> ELÉTRICA),
-          // pela mesma regra usada na emissão, para a coluna não sair vazia.
-          disciplina: arquivo.discipline || inferirDisciplina(arquivo.document),
-          egrdt: registro.egrdtNumber || "",
-          arquivo: arquivo.finalName || arquivo.originalName || "",
-          revisao: arquivo.revision || "",
-          alocacao: arquivo.allocation || "",
-        });
-        if (arquivo.allocation) alocacoes.add(arquivo.allocation);
-      });
-    });
-    const egrdts = registros.map((registro) => registro.egrdtNumber).filter(Boolean);
-    ultimaEmissaoParaEmail = {
-      egrdts: egrdts.length ? egrdts : (generated || []).map((item) => item && item.official && item.official.baseName).filter(Boolean),
-      alocacoes: [...alocacoes],
-      documentos,
-      geradoEm: geradoEm || new Date().toISOString(),
-    };
-    }
-
   function ehProprietario() {
     const Cloud = window.GrconCloud;
     // Sem área compartilhada configurada, o app é de uso local: não há a quem restringir.
     if (!Cloud || !Cloud.state?.membership) return true;
     return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
-  }
-
-  function atualizarStatusDestinatarios() {
-    const Email = window.GrconEmailDraft;
-    if (!Email || !els.emailDraftStatus) return;
-    const modelo = Email.readTemplate();
-    els.emailDraftStatus.textContent = modelo.to.length
-      ? `${modelo.to.length} destinatário(s)${modelo.cc.length ? ` e ${modelo.cc.length} em cópia` : ""}`
-      : "Nenhum destinatário definido";
-  }
-
-  function aplicarPermissaoModeloEmail() {
-    const dono = ehProprietario();
-    [els.emailDraftTo, els.emailDraftCc, els.emailDraftSubject, els.emailDraftBody].forEach((campo) => {
-      if (campo) campo.readOnly = !dono;
-    });
-    if (els.emailDraftSave) els.emailDraftSave.hidden = !dono;
-    if (els.emailDraftOwnerNote) els.emailDraftOwnerNote.hidden = dono;
-  }
-
-  function carregarDestinatarios() {
-    const Email = window.GrconEmailDraft;
-    if (!Email) return;
-    const modelo = Email.readTemplate();
-    if (els.emailDraftTo) els.emailDraftTo.value = modelo.to.join("; ");
-    if (els.emailDraftCc) els.emailDraftCc.value = modelo.cc.join("; ");
-    if (els.emailDraftSubject) els.emailDraftSubject.value = modelo.assunto;
-    if (els.emailDraftBody) els.emailDraftBody.value = modelo.corpo;
-    if (els.emailDraftHint) {
-      els.emailDraftHint.textContent = `Marcadores: ${Email.MARCADORES.map((m) => m.chave).join("  ")} — ${Email.MARCADORES.map((m) => `${m.chave} = ${m.descricao}`).join("; ")}.`;
-    }
-    atualizarStatusDestinatarios();
-    aplicarPermissaoModeloEmail();
-  }
-
-  async function salvarDestinatarios() {
-    const Cloud = window.GrconCloud;
-    if (!Cloud?.saveEmailTemplate) { showToast("Área compartilhada indisponível.", "warn"); return; }
-    if (els.emailDraftSave) els.emailDraftSave.disabled = true;
-    try {
-      const resultado = await Cloud.saveEmailTemplate(
-        els.emailDraftSubject?.value || "",
-        els.emailDraftBody?.value || "",
-        els.emailDraftTo?.value || "",
-        els.emailDraftCc?.value || "",
-      );
-      if (!resultado.ok) { showToast(resultado.error, "warn"); return; }
-      carregarDestinatarios();
-      showToast("Modelo salvo. Passa a valer para todos que usam o GRCON.", "success");
-    } finally {
-      if (els.emailDraftSave) els.emailDraftSave.disabled = false;
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -639,21 +535,6 @@
     showToast("Cadastro removido somente neste navegador: a área compartilhada está indisponível agora.", "warn");
   }
 
-  // O rascunho não é baixado na hora: vai para a aba "E-mails de evidência",
-  // identificado pelo número da eGRDT, para o operador decidir quando gerar.
-  function enfileirarEmailDaEmissao() {
-    const Fila = window.GrconEmailQueue;
-    if (!Fila || !ultimaEmissaoParaEmail || !ultimaEmissaoParaEmail.documentos.length) return;
-    const resultado = Fila.enqueue(ultimaEmissaoParaEmail);
-    if (!resultado.saved) {
-      console.warn("GRCON: não foi possível enfileirar o e-mail de evidência", resultado.error);
-      return;
-    }
-    window.dispatchEvent(new CustomEvent("grcon:email-queued", { detail: resultado.item }));
-    const quantos = ultimaEmissaoParaEmail.documentos.length;
-    showToast(`E-mail de evidência com ${quantos} documento(s) guardado na aba "E-mails de evidência".`, "info");
-  }
-
   function reportDownloadName() {
     const next = egrdtSequenceInfo(0);
     const ld = safeOutputPart(state.ldFiles.length === 1 ? state.ldFiles[0].name : `${state.ldFiles.length}_LDs`, "LD");
@@ -699,14 +580,6 @@
     exportPendingAllocationPdfs: $("#export-pending-allocation-pdfs"),
     exportZip: $("#export-zip"),
     exportEgrdt: $("#export-egrdt"),
-    emailDraftTo: $("#email-draft-to"),
-    emailDraftCc: $("#email-draft-cc"),
-    emailDraftSubject: $("#email-draft-subject"),
-    emailDraftBody: $("#email-draft-body"),
-    emailDraftHint: $("#email-draft-hint"),
-    emailDraftOwnerNote: $("#email-draft-owner-note"),
-    emailDraftSave: $("#email-draft-save"),
-    emailDraftStatus: $("#email-draft-status"),
     allocationCenterPath: $("#allocation-center-path"),
     allocationCenterSheet: $("#allocation-center-sheet"),
     allocationCenterKey: $("#allocation-center-key"),
@@ -5008,10 +4881,6 @@
   // campos passam a mostrar o que está valendo para todos.
   window.addEventListener("grcon:allocation-center-updated", loadAllocationCenterFields);
   window.addEventListener("grcon:cloud-ready", loadAllocationCenterFields);
-  carregarDestinatarios();
-  if (els.emailDraftSave) els.emailDraftSave.addEventListener("click", salvarDestinatarios);
-  window.addEventListener("grcon:email-template-updated", carregarDestinatarios);
-  window.addEventListener("grcon:cloud-ready", carregarDestinatarios);
   if (els.clearColumnFilters) els.clearColumnFilters.addEventListener("click", clearResultColumnFilters);
   els.search.addEventListener("input", (event) => {
     state.search = event.target.value;

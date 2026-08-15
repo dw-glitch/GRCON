@@ -498,7 +498,7 @@ check("central de alocação é compartilhada pelo banco e só o proprietário a
   assert.match(cloud, /async function saveAllocationCenter[\s\S]*?if \(!canManageMembers\(\)\)/);
   assert.match(cloud, /async function clearAllocationCenter[\s\S]*?if \(!canManageMembers\(\)\)/);
   // A carga entra junto com o restante da área compartilhada, no login.
-  assert.match(cloud, /await loadEmailTemplate\(\);\s*await loadAllocationCenter\(\);/);
+  assert.match(cloud, /await loadMembers\(\);\s*await loadAllocationCenter\(\);/);
 
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   // Remover só a cópia local deixaria o cadastro voltar na próxima leitura.

@@ -30,21 +30,31 @@ const cloudConfig = fs.readFileSync(path.join(root, "grcon_cloud_config.js"), "u
 if (/sb_secret_|service[_-]?role/i.test(cloudConfig)) failures.push("grcon_cloud_config.js contém uma chave secreta/service_role");
 if (!/publishableKey:\s*["']sb_publishable_/i.test(cloudConfig)) failures.push("grcon_cloud_config.js não usa chave publishable explícita");
 
-const latest = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.31.14.sql"), "utf8");
+// O modelo de e-mail saiu junto com a aba "E-mails de evidência" na 5.32.7. As
+// migrações 5.31.10 e 5.31.14 continuam no repositório como registro histórico
+// do que já foi aplicado, mas não devem mais descrever estruturas vivas: se
+// alguma delas reaparecer no banco, é sinal de que a remoção foi desfeita.
+const removalMigration = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.7.sql"), "utf8");
 for (const name of ["grcon_get_email_template", "grcon_set_email_template"]) {
-  const wrapper = latest.match(new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${name}[\\s\\S]*?\\$\\$\\s*;`, "i"));
-  if (!wrapper || !/security\s+invoker/i.test(wrapper[0]) || /security\s+definer/i.test(wrapper[0])) {
-    failures.push(`SUPABASE_MIGRACAO_5.31.14.sql: wrapper public.${name} precisa ser SECURITY INVOKER`);
+  if (!new RegExp(`drop\\s+function\\s+if\\s+exists\\s+public\\.${name}`, "i").test(removalMigration)) {
+    failures.push(`SUPABASE_MIGRACAO_5.32.7.sql: falta remover o wrapper public.${name}`);
   }
-  if (!new RegExp(`revoke\\s+all\\s+on\\s+function\\s+public\\.${name}[\\s\\S]*?from\\s+public\\s*,\\s*anon`, "i").test(latest)) {
-    failures.push(`public.${name}: falta revogar EXECUTE de public/anon`);
-  }
-  if (!new RegExp(`grant\\s+execute\\s+on\\s+function\\s+public\\.${name}[\\s\\S]*?to\\s+authenticated`, "i").test(latest)) {
-    failures.push(`public.${name}: falta conceder EXECUTE somente a authenticated`);
+}
+if (!/drop\s+table\s+if\s+exists\s+private\.grcon_email_template/i.test(removalMigration)) {
+  failures.push("SUPABASE_MIGRACAO_5.32.7.sql: falta remover a tabela private.grcon_email_template");
+}
+// A remoção precisa ser reversível: os dados vão para uma cópia antes do descarte.
+if (!/create\s+table\s+if\s+not\s+exists\s+private\.grcon_email_template_backup/i.test(removalMigration)) {
+  failures.push("SUPABASE_MIGRACAO_5.32.7.sql: a remoção precisa preservar os dados numa cópia");
+}
+// Estruturas compartilhadas não podem sair junto.
+for (const preservado of ["grcon_profiles", "grcon_invitations", "grcon_audit_events"]) {
+  if (new RegExp(`drop\\s+(table|column)[^;]*${preservado}`, "i").test(removalMigration)) {
+    failures.push(`SUPABASE_MIGRACAO_5.32.7.sql: ${preservado} é compartilhado e não pode ser removido`);
   }
 }
 
-// A central de alocação segue o mesmo padrão do modelo de e-mail: invólucro
+// A central de alocação segue o mesmo padrão do antigo modelo de e-mail: invólucro
 // público INVOKER, implementação privada DEFINER que confere o papel, e escrita
 // restrita ao proprietário.
 const centerMigration = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.6.sql"), "utf8");
