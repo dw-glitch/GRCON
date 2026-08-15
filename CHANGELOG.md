@@ -1,5 +1,18 @@
 # Histórico de alterações
 
+## 5.32.12 — 2026-08-15
+
+- A geração passa a separar automaticamente os documentos por disciplina antes de aplicar o limite de itens de cada eGRDT.
+- O painel de confirmação mostra, para cada lote, a disciplina, a quantidade de documentos, a posição dentro da disciplina e o nome final da eGRDT.
+- Cada número sequencial continua editável individualmente e precisa ser confirmado pelo operador antes da reserva e da geração.
+- Relações extensas podem formar quantas eGRDTs forem necessárias; uma disciplina com mais itens que o limite é dividida em lotes adicionais sem se misturar às demais.
+- O seletor aceita uma ou mais LDs na mesma análise e consolida todas em um único índice, preservando em cada resultado a planilha, a aba e a linha de origem.
+- A leitura de LD passa a reconhecer abas da mesma família documental, como `N-1710 MOD`, e prioriza a aba técnica visível sobre cópias antigas ocultas.
+- Cabeçalhos podem estar em outras linhas ou colunas; quando o cabeçalho de propósito está vazio, o campo é identificado com segurança pelos valores oficiais de emissão.
+- A LD real de comissionamento foi validada sem incluir seus dados no repositório: documentos exclusivos da aba vigente recebem `COMISSIONAMENTO` e `Para Construção` corretamente.
+- Manifesto e texto de organização dos lotes informam a disciplina de cada eGRDT e, quando aplicável, a divisão da disciplina.
+- A suíte passa a validar 55 cenários, incluindo LD de comissionamento, índice de múltiplas LDs, prioridade da aba vigente e separação por disciplina.
+
 ## 5.32.11 — 2026-08-14
 
 - Criada uma camada responsiva final exclusiva da interface do navegador, mantendo o layout atual do desktop.

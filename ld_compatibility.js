@@ -15,7 +15,7 @@
     { key: "grdt", label: "GRDT", standard: ["GRDT", "NUMERO GRDT", "Nº GRDT"], aliases: ["EGRDT", "GRDT RELACIONADA", "DOCUMENTO GRDT"] },
     { key: "effectiveDate", label: "Data efetiva de emissão", standard: ["DATA EFETIVA DE EMISSAO", "DATA DE EMISSAO"], aliases: ["DATA EFETIVA", "EMISSAO EFETIVA"] },
     { key: "format", label: "Formato", standard: ["FORMATO"], aliases: ["FORMATO DOCUMENTO"] },
-    { key: "discipline", label: "Disciplina", standard: ["DISCIPLINA"], aliases: ["AREA DISCIPLINA", "DISCIPLINA DOCUMENTO"] },
+    { key: "discipline", label: "Disciplina", standard: ["DISCIPLINA"], aliases: ["AREA DISCIPLINA", "DISCIPLINA DOCUMENTO", "DISCIPLINA/WORKFLOW", "DISCIPLINA / WORKFLOW"] },
     { key: "documentType", label: "Tipo de documento", standard: ["TIPO DE DOCUMENTO", "TIPO DOCUMENTO"], aliases: ["TIPO DOC", "CATEGORIA DOCUMENTAL"] },
     { key: "purpose", label: "Propósito", standard: ["PROPOSITO", "FINALIDADE", "PROPOSITO DE EMISSAO", "FINALIDADE DA REVISAO"], aliases: ["MOTIVO DE EMISSAO"] },
     { key: "databook", label: "Caminho Databook", standard: ["CAMINHO DATABOOK", "CAMINHO DATA BOOK"], aliases: ["DATABOOK", "CAMINHO DO DATABOOK", "LOCAL DATABOOK"] },
@@ -180,6 +180,28 @@
     return { formulas, values, dateMode, sourceMode: formulas && values ? "fórmulas e valores" : formulas ? "fórmulas" : "valores" };
   }
 
+  function inferPurposeColumn(sheet, headerRow, columns, range) {
+    if (columns.purpose !== undefined || !C || !C.EGRDT_OPTIONS) return undefined;
+    const occupied = new Set(Object.values(columns).filter(Number.isInteger));
+    const candidates = sheetColumnsInRows(sheet, headerRow + 1, Math.min(range.e.r, headerRow + 240))
+      .filter((column) => !occupied.has(column));
+    const official = new Set(C.EGRDT_OPTIONS.purposes.map(norm));
+    let best = null;
+    candidates.forEach((column) => {
+      let recognized = 0;
+      let filled = 0;
+      for (let row = headerRow + 1; row <= Math.min(range.e.r, headerRow + 240); row += 1) {
+        const value = cellValue(sheet, row, column);
+        if (!value) continue;
+        filled += 1;
+        if (official.has(norm(value))) recognized += 1;
+      }
+      const ratio = recognized / Math.max(1, filled);
+      if (recognized >= 2 && ratio >= 0.6 && (!best || recognized > best.recognized)) best = { column, recognized };
+    });
+    return best ? best.column : undefined;
+  }
+
   function inspectSheet(workbook, sheetName) {
     const sheet = workbook.Sheets[sheetName];
     if (!sheet || !sheet["!ref"]) return { name: sheetName, role: "ignore", headerRow: 0, headers: [], columns: {}, matches: {}, score: 0, sourceMode: "vazio", dateMode: "não identificada" };
@@ -196,6 +218,12 @@
     }
     const best = candidates.sort((left, right) => right.score - left.score || left.row - right.row)[0]
       || { row: range.s.r, headers: [], columns: {}, matches: {}, score: 0, preview: "" };
+    const inferredPurpose = inferPurposeColumn(sheet, best.row, best.columns, range);
+    if (best.columns.purpose === undefined && inferredPurpose !== undefined) {
+      best.columns.purpose = inferredPurpose;
+      best.matches.purpose = { field: "purpose", kind: "inferred", score: 70, header: `Coluna ${inferredPurpose + 1} reconhecida pelos valores`, column: inferredPurpose };
+      best.score += 3;
+    }
     const mode = detectCellMode(sheet, best.row, best.columns, range);
     return {
       name: sheetName,

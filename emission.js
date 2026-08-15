@@ -5,6 +5,10 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (C) {
   "use strict";
 
+  function text(value) {
+    return String(value === null || value === undefined ? "" : value).trim();
+  }
+
   function norm(value) {
     return C.norm(value || "");
   }
@@ -79,6 +83,9 @@
           document: row.document,
           revision: row.revision,
           sheet: row.sheet,
+          discipline: item.discipline,
+          sourceLd: String(row.record && row.record.source || "").trim(),
+          allocation: String(row.record && row.record.allocation || "").trim(),
           originalName: source.name,
           relativePath: source.relativePath || source.name,
           finalName,
@@ -119,10 +126,35 @@
   function splitPlan(plan, size) {
     const limit = Math.max(1, Number(size) || 48);
     const groups = [];
-    for (let start = 0; start < (plan.entries || []).length; start += limit) {
-      const entries = plan.entries.slice(start, start + limit);
-      groups.push({ entries, items: entries.map((entry) => entry.item), number: groups.length + 1, startIndex: start, endIndex: start + entries.length - 1, limit });
-    }
+    const byDiscipline = new Map();
+    (plan.entries || []).forEach((entry, originalIndex) => {
+      const discipline = text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA";
+      const disciplineKey = norm(discipline);
+      if (!byDiscipline.has(disciplineKey)) byDiscipline.set(disciplineKey, { discipline, entries: [] });
+      byDiscipline.get(disciplineKey).entries.push({ entry, originalIndex });
+    });
+    const disciplines = [...byDiscipline.values()].sort((left, right) => norm(left.discipline).localeCompare(norm(right.discipline), "pt-BR"));
+    let outputIndex = 0;
+    disciplines.forEach((bucket) => {
+      const disciplineBatchCount = Math.ceil(bucket.entries.length / limit);
+      for (let start = 0; start < bucket.entries.length; start += limit) {
+        const slice = bucket.entries.slice(start, start + limit);
+        const entries = slice.map((item) => item.entry);
+        groups.push({
+          entries,
+          items: entries.map((entry) => entry.item),
+          number: groups.length + 1,
+          startIndex: outputIndex,
+          endIndex: outputIndex + entries.length - 1,
+          originalIndices: slice.map((item) => item.originalIndex),
+          limit,
+          discipline: bucket.discipline,
+          disciplineBatchNumber: Math.floor(start / limit) + 1,
+          disciplineBatchCount,
+        });
+        outputIndex += entries.length;
+      }
+    });
     return groups;
   }
 
@@ -137,6 +169,8 @@
       "NOME CONSISTENTE": entry.finalName === entry.item.fileName ? "SIM" : "NÃO",
       "GRDT REABERTA E VALIDADA": entry.grdtReopened ? "SIM" : "NÃO",
       "INCLUSÃO MANUAL — LD NÃO ALOCADO": entry.manualAllocationOverride ? "SIM" : "NÃO",
+      "DISCIPLINA": entry.item && entry.item.discipline || entry.discipline || "",
+      "LD DE ORIGEM": entry.sourceLd || "",
       "GRDT": entry.grdtFile || "",
       "LD UTILIZADA": info.ldName || "",
       "LISTA EXCEL": info.listName || "",

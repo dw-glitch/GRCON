@@ -16,6 +16,8 @@ const Core = require(path.join(root, "core.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const Emission = require(path.join(root, "emission.js"));
 const OutputGuard = require(path.join(root, "grcon_output_guard.js"));
+const OutputAudit = require(path.join(root, "output_audit.js"));
+const SheetJS = require(path.join(root, "xlsx.full.min.js"));
 const checks = [];
 
 function check(name, fn) {
@@ -824,6 +826,84 @@ check("interface do navegador tem camada responsiva final e cacheada", () => {
   assert.match(css, /inline-size:\s*100vw\s*!important;/);
 });
 
+check("LD de comissionamento usa a aba N-1710 vigente e reconhece propósito sem cabeçalho", () => {
+  globalThis.XLSX = SheetJS;
+  const oldRows = [
+    ["", "DOCUMENTO N-1710", "REVISÃO", "TÍTULO", "", "DISCIPLINA/WORKFLOW", "", "PROPÓSITO DE EMISSÃO", "", "DATA EFETIVA DE EMISSÃO", "GRDT", "STATUS"],
+    ["", "DE-5290.00-22313-970-C1O-104", "0", "TÍTULO ANTIGO", "", "", "", "PARA CONSTRUÇÃO"],
+  ];
+  const currentRows = [
+    ["LISTA DE DOCUMENTOS"], ["COMISSIONAMENTO"], [""], [""], ["DADOS DOS DOCUMENTOS"],
+    ["ITEM", "DOCUMENTO N-1710", "REVISÃO", "TÍTULO", "UNIDADE/ÁREA", "DISCIPLINA", "ESCOPO", "", "DATA PREVISTA DE EMISSÃO", "DATA EFETIVA DE EMISSÃO", "N-1710", "ITEM ISO", "GRDT", "STATUS", "QUEM?", "PRAZO", "STATUS SIGEM", "OBSERVAÇÕES", "ALOCAÇÃO"],
+    ["001", "DE-5290.00-22313-970-C1O-104", "0", "FLUXOGRAMA DE COMISSIONAMENTO", "U-32", "RNEST UHDTD U-32 COMISSIONAMENTO", "EMISSÃO", "PARA CONSTRUÇÃO", "", "", "970", "8.1", "", "EM EMISSÃO", "", "", "Não Postado", "", "C1O-ALOC-COM-0002-2025"],
+    ["002", "CR-5290.00-22313-970-C1O-001", "0", "CRONOGRAMA DE COMISSIONAMENTO", "U-32", "RNEST UHDTD U-32 COMISSIONAMENTO", "EMISSÃO", "PARA CONSTRUÇÃO", "", "", "970", "8.1", "", "EM EMISSÃO", "", "", "Não Postado", "", "C1O-ALOC-COM-0002-2025"],
+  ];
+  const historyRows = [["", "", "Documento", "Revisão", "Incluído em", "Título", "Status", "Finalidade da Revisão"]];
+  const workbook = {
+    SheetNames: ["N-1710", "N-1710 MOD", "Colar SIGEM"],
+    Sheets: {
+      "N-1710": SheetJS.utils.aoa_to_sheet(oldRows),
+      "N-1710 MOD": SheetJS.utils.aoa_to_sheet(currentRows),
+      "Colar SIGEM": SheetJS.utils.aoa_to_sheet(historyRows),
+    },
+    Workbook: { Sheets: [{ name: "N-1710", Hidden: 1 }, { name: "N-1710 MOD", Hidden: 0 }, { name: "Colar SIGEM", Hidden: 0 }] },
+  };
+  const parsed = Core.parseWorkbook(workbook, "LD_COMISSIONAMENTO.xlsx", 10, null);
+  const current = parsed.records.find((item) => item.document === "DE-5290.00-22313-970-C1O-104" && item.sheet === "N-1710 MOD");
+  assert.equal(current.purpose, "PARA CONSTRUÇÃO");
+  assert.equal(current.sheetHidden, 0);
+  assert.ok(parsed.mappedFields.technical.includes("discipline"));
+  assert.ok(parsed.mappedFields.technical.includes("purpose"));
+
+  const index = Core.buildIndex(parsed.records, parsed.history);
+  const result = Core.triageOne({ id: "commissioning", name: "DE-5290.00-22313-970-C1O-104_0001_0.pdf" }, index, {});
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.sheet, "N-1710 MOD");
+  assert.equal(result.egrdt.discipline, "COMISSIONAMENTO");
+  assert.equal(result.egrdt.purpose, "Para Construção");
+});
+
+check("índice consolidado pesquisa documentos em mais de uma LD", () => {
+  const first = ldDocumentRecord("MA-5290.00-22000-ABC-C1O-101", "ALOCADO", "N-1710");
+  const second = { ...ldDocumentRecord("DE-5290.00-22313-970-C1O-202", "ALOCADO", "N-1710 MOD"), source: "LD_COMISSIONAMENTO.xlsx", discipline: "COMISSIONAMENTO", purpose: "Para Construção", documentType: "DE" };
+  const index = Core.buildIndex([first, second], []);
+  assert.equal(Core.triageOne({ id: "ld-1", name: `${first.document}_0001_0.pdf` }, index, {}).record.source, "LD_TESTE.xlsx");
+  const foundInSecond = Core.triageOne({ id: "ld-2", name: `${second.document}_0001_0.pdf` }, index, {});
+  assert.equal(foundInSecond.record.source, "LD_COMISSIONAMENTO.xlsx");
+  assert.equal(foundInSecond.egrdt.discipline, "COMISSIONAMENTO");
+});
+
+check("eGRDTs são separadas primeiro por disciplina e depois pelo limite do lote", () => {
+  const makeEntries = (discipline, amount, prefix) => Array.from({ length: amount }, (_, index) => ({
+    rowIndex: index,
+    document: `${prefix}-${index + 1}`,
+    finalName: `${prefix}-${index + 1}.pdf`,
+    item: { discipline, fileName: `${prefix}-${index + 1}.pdf` },
+  }));
+  const entries = [
+    ...makeEntries("ELÉTRICA", 50, "ELE"),
+    ...makeEntries("CIVIL", 3, "CIV"),
+    ...makeEntries("ELÉTRICA", 2, "ELE-B"),
+  ];
+  const groups = Emission.splitPlan({ entries, items: entries.map((entry) => entry.item) }, 48);
+  assert.deepEqual(groups.map((group) => [group.discipline, group.entries.length]), [["CIVIL", 3], ["ELÉTRICA", 48], ["ELÉTRICA", 4]]);
+  assert.deepEqual(groups.map((group) => [group.disciplineBatchNumber, group.disciplineBatchCount]), [[1, 1], [1, 2], [2, 2]]);
+  assert.ok(groups.every((group) => new Set(group.items.map((item) => item.discipline)).size === 1));
+});
+
+check("painel mostra disciplina por GRDT e mantém cada número editável", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const panel = fs.readFileSync(path.join(root, "p1_ux.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(html, /id="ld-input"[^>]*multiple/);
+  assert.match(app, /disciplineCount/);
+  assert.match(panel, /p1-batch-discipline/);
+  assert.match(panel, /class="p1-batch-sequence-input"/);
+  const audit = OutputAudit.analyze({ detailRows: [{ included: true, batchIndex: 2, discipline: "ELÉTRICA" }] });
+  assert.equal(audit.detailRows[0].batchIndex, 2);
+  assert.equal(audit.detailRows[0].discipline, "ELÉTRICA");
+});
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];
@@ -834,4 +914,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.11", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.12", passed: true, checks: checks.length, names: checks }, null, 2));

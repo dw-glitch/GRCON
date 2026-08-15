@@ -1,6 +1,11 @@
-GRCON 5.32.11 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.32.12 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
+- O seletor aceita uma ou mais LDs e pesquisa a relação em todas elas na mesma análise.
+- LDs com cabeçalhos em posições diferentes e abas vigentes como N-1710 MOD são reconhecidas; uma aba visível prevalece sobre a cópia antiga oculta.
+- A LD de comissionamento é lida com disciplina e propósito, inclusive quando a coluna de propósito possui valores oficiais, mas o cabeçalho está vazio.
+- As eGRDTs são separadas primeiro por disciplina e depois pelo limite de documentos de cada lote.
+- O painel informa claramente qual disciplina vai para cada eGRDT e mantém o número de cada lote editável antes da confirmação.
 - A interface do navegador agora se adapta continuamente a janelas pequenas, médias e grandes, sem alterar o layout normal do desktop.
 - Em telas estreitas, navegação, fontes de entrada, filtros, resumos, histórico, SIGEM, e-mails, drawers e diálogos se reorganizam sem sobreposição.
 - As tabelas preservam todas as colunas em rolagem horizontal própria e não alargam a página.
@@ -31,6 +36,10 @@ O QUE MUDA
 - N-1710 não usa a busca de TAG dos relatórios ET.
 
 VALIDAÇÃO
+- LD de comissionamento: documento exclusivo da N-1710 MOD localizado com disciplina COMISSIONAMENTO e propósito Para Construção.
+- Múltiplas LDs: índice consolidado encontra documentos existentes em bases diferentes e preserva a origem.
+- Divisão operacional: disciplinas não se misturam; uma disciplina acima do limite é repartida em lotes adicionais com números independentes.
+- Painel: disciplina, quantidade, posição do lote e campo de número editável verificados.
 - Responsividade: camada final carregada depois das demais folhas, quatro faixas de largura, ajuste por altura e cache crítico verificados automaticamente.
 - Grafia da LD: relatório Excel reaberto e conferido com código de caixa mista, sem conversão na saída nem no nome final.
 - Autonomia operacional: Não Alocado desmarcado inicialmente, inclusão individual e seleção de todos verificadas sem remover o status da LD.
@@ -45,8 +54,8 @@ PUBLICAÇÃO NA VERCEL
 2. Publique todo o conteúdo do repositório, incluindo workers/, package.json e os novos scripts de inicialização.
 3. O projeto é estático e não exige etapa de build.
 4. Use sempre HTTPS. Login e Service Worker não funcionam por file://.
-5. Depois da publicação, confirme no rodapé e na meta application-version a versão 5.32.11.
-6. Faça uma recarga completa na primeira abertura. O cache novo é grcon-v5.32.11.
+5. Depois da publicação, confirme no rodapé e na meta application-version a versão 5.32.12.
+6. Faça uma recarga completa na primeira abertura. O cache novo é grcon-v5.32.12.
 
 SUPABASE — ORDEM DAS MIGRAÇÕES PARA UMA BASE EXISTENTE
 1. Confirme que as migrações 5.31.4, 5.31.5, 5.31.6, 5.31.7, 5.31.8, 5.31.9, 5.31.10 e 5.31.14 já foram aplicadas conforme o histórico do projeto.
@@ -73,5 +82,5 @@ SEGURANÇA
 - PDFs, planilhas LD e caminhos locais não são enviados ao Supabase.
 
 RECUPERAÇÃO
-- Se a publicação pela main não estiver disponível, use o ZIP GRCON-5.32.11-main.zip.
+- Se a publicação pela main não estiver disponível, use o ZIP GRCON-5.32.12-main.zip.
 - O ZIP deve conter exatamente a mesma versão validada e publicada.

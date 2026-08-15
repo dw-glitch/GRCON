@@ -99,6 +99,17 @@
     return canonicalId(value);
   }
 
+  function sheetFamily(value) {
+    const normalized = norm(value);
+    if (/^N-1710(?:\s|$)/.test(normalized)) return "N-1710";
+    return normalized;
+  }
+
+  function sheetMatchesHint(sheetName, hintedSheet) {
+    const hint = sheetFamily(hintedSheet);
+    return !hint || sheetFamily(sheetName) === hint;
+  }
+
   function isEtDocument(value, sheetName) {
     if (norm(sheetName) === "ET") return true;
     const documentKey = key(value);
@@ -399,6 +410,18 @@
     if (revision) return revision;
     const source = (Number(b.sourceTimestamp) || 0) - (Number(a.sourceTimestamp) || 0);
     if (source) return source;
+    // Algumas LDs mantêm uma aba antiga oculta (por exemplo, "N-1710") e
+    // publicam a relação vigente em outra aba da mesma família ("N-1710 MOD").
+    // A aba visível deve prevalecer, sem perder a consulta às linhas históricas.
+    const visibility = Number(Boolean(a.sheetHidden)) - Number(Boolean(b.sheetHidden));
+    if (visibility) return visibility;
+    const richness = (item) => [
+      item && item.title, item && item.discipline, item && item.purpose,
+      item && item.allocation, item && item.allocationStatus, item && item.grdt,
+      item && item.effectiveDate, item && item.databook,
+    ].reduce((score, value) => score + Number(Boolean(text(value))), 0);
+    const completeness = richness(b) - richness(a);
+    if (completeness) return completeness;
     const effective = dateTimestamp(b.effectiveDate) - dateTimestamp(a.effectiveDate);
     if (effective) return effective;
     const grdt = Number(Boolean(text(b.grdt))) - Number(Boolean(text(a.grdt)));
@@ -423,10 +446,8 @@
   function findHeader(rows) {
     const limit = Math.min(rows.length, 100);
     for (let i = 0; i < limit; i += 1) {
-      const cells = (rows[i] || []).map(norm);
-      const hasDocument = cells.some((c) => c === "DOCUMENTO" || c.startsWith("DOCUMENTO ") || c.includes("CODIGO DO DOCUMENTO") || c === "CODIGO DOCUMENTO");
-      const hasRevision = cells.some((c) => c === "REVISAO" || c === "REV." || c === "REV");
-      if (hasDocument && (hasRevision || cells.some((c) => c.includes("STATUS")))) return i;
+      const mapped = columnMap(rows[i] || []);
+      if (mapped.document !== undefined && (mapped.revision !== undefined || mapped.status !== undefined || mapped.sigemStatus !== undefined)) return i;
     }
     return -1;
   }
@@ -479,7 +500,7 @@
       const numberScore = allocationNumberHeaderScore(cell);
       if (statusScore) allocationStatusCandidates.push({ index, score: statusScore });
       if (numberScore) allocationNumberCandidates.push({ index, score: numberScore });
-      if (h === "DOCUMENTO" || h.startsWith("DOCUMENTO ") || h === "CODIGO DOCUMENTO" || h === "CODIGO DO DOCUMENTO") result.document = index;
+      if (h === "DOCUMENTO" || h.startsWith("DOCUMENTO ") || h === "CODIGO DOCUMENTO" || h === "CODIGO DO DOCUMENTO" || h === "NUMERO DOCUMENTO" || h === "IDENTIFICADOR DOCUMENTO") result.document = index;
       else if (h === "REVISAO" || h === "REV." || h === "REV") result.revision = index;
       else if (h === "VERSAO DA LD ENVIADA" || h.includes("VERSAO DA LD ENVIADA")) result.ldVersion = index;
       else if (h.includes("STATUS SIGEM")) result.sigemStatus = index;
@@ -488,7 +509,7 @@
       else if (h === "GRDT" || h.includes("NUMERO GRDT")) result.grdt = index;
       else if (h.includes("DATA EFETIVA DE EMISSAO")) result.effectiveDate = index;
       else if (h === "FORMATO") result.format = index;
-      else if (h === "DISCIPLINA") result.discipline = index;
+      else if (h === "DISCIPLINA" || h.includes("DISCIPLINA/WORKFLOW") || h.includes("DISCIPLINA / WORKFLOW") || h.startsWith("DISCIPLINA ")) result.discipline = index;
       else if (h.includes("TIPO DE DOCUMENTO") || h === "TIPO DOCUMENTO") result.documentType = index;
       else if (h.includes("PROPOSITO") || h.includes("FINALIDADE")) result.purpose = index;
       else if (h.includes("CAMINHO DATABOOK") || h.includes("CAMINHO DATA BOOK")) result.databook = index;
@@ -503,6 +524,30 @@
     if (status) result.allocationStatus = status.index;
     if (allocation) result.allocation = allocation.index;
     return result;
+  }
+
+  function inferPurposeColumn(sheet, headerIndex, range, columns) {
+    if (columns.purpose !== undefined) return columns.purpose;
+    const occupied = new Set(Object.values(columns).filter(Number.isInteger));
+    const candidates = sheetColumnsInRows(sheet, headerIndex + 1, Math.min(range.e.r, headerIndex + 240), range)
+      .filter((column) => !occupied.has(column));
+    const official = new Map(EGRDT_OPTIONS.purposes.map((purpose) => [norm(purpose), purpose]));
+    let best = null;
+    candidates.forEach((column) => {
+      let recognized = 0;
+      let filled = 0;
+      for (let row = headerIndex + 1; row <= Math.min(range.e.r, headerIndex + 240); row += 1) {
+        const value = sheetCell(sheet, row, column);
+        if (!value) continue;
+        filled += 1;
+        if (official.has(norm(value))) recognized += 1;
+      }
+      if (recognized < 2) return;
+      const ratio = recognized / Math.max(1, filled);
+      const score = recognized * 10 + ratio;
+      if (ratio >= 0.6 && (!best || score > best.score)) best = { column, score };
+    });
+    return best ? best.column : undefined;
   }
 
   function cell(row, index) {
@@ -643,10 +688,8 @@
         const populatedColumns = sheetColumnsInRows(sheet, range.s.r, endRow, range);
         for (let r = range.s.r; r <= endRow; r += 1) {
           const candidate = readHeaderRow(sheet, r, populatedColumns);
-          const cells = candidate.map(norm);
-          const hasDocument = cells.some((value) => value === "DOCUMENTO" || value.startsWith("DOCUMENTO ") || value.includes("CODIGO DO DOCUMENTO") || value === "CODIGO DOCUMENTO");
-          const hasRevision = cells.some((value) => value === "REVISAO" || value === "REV." || value === "REV");
-          if (hasDocument && (hasRevision || cells.some((value) => value.includes("STATUS")))) {
+          const mapped = columnMap(candidate);
+          if (mapped.document !== undefined && (mapped.revision !== undefined || mapped.status !== undefined || mapped.sigemStatus !== undefined)) {
             headerIndex = r;
             header = candidate;
             break;
@@ -656,8 +699,12 @@
       if (headerIndex < 0) return;
       const columns = configured && configured.columns ? { ...configured.columns } : columnMap(header);
       if (columns.document === undefined) return;
+      const inferredPurpose = inferPurposeColumn(sheet, headerIndex, range, columns);
+      if (columns.purpose === undefined && inferredPurpose !== undefined) columns.purpose = inferredPurpose;
       const historySheet = configured ? configured.role === "history" : norm(sheetName) === "COLAR SIGEM";
       if (!historySheet && ignoredSheets.has(norm(sheetName))) return;
+      const sheetMetadata = (workbook.Workbook && workbook.Workbook.Sheets || []).find((item) => text(item && item.name) === sheetName);
+      const sheetHidden = Number(sheetMetadata && sheetMetadata.Hidden) || 0;
       Object.keys(columns).forEach((field) => mappedFields[historySheet ? "history" : "technical"].add(field));
       for (let i = headerIndex + 1; i <= range.e.r; i += 1) {
         const document = sheetCell(sheet, i, columns.document);
@@ -696,6 +743,7 @@
           source: sourceName,
           sourceTimestamp: Number(sourceTimestamp) || 0,
           sourceOrder: sheetOrder,
+          sheetHidden,
           ldVersion: rowLdVersion,
           ldVersionHeader: columns.ldVersion === undefined ? "" : text(header[columns.ldVersion]).replace(/\s+/g, " "),
           ldVersionColumn: columns.ldVersion === undefined ? "" : XLSX.utils.encode_col(columns.ldVersion),
@@ -1082,7 +1130,7 @@
       && other.matchedSearchKey.includes(candidate.matchedSearchKey)
     )));
     if (hint) {
-      const inSheet = maximalCandidates.filter((candidate) => candidate.group.records.some((r) => norm(r.sheet) === hint));
+      const inSheet = maximalCandidates.filter((candidate) => candidate.group.records.some((r) => sheetMatchesHint(r.sheet, hint)));
       if (inSheet.length) return inSheet;
     }
     return maximalCandidates;
@@ -1332,7 +1380,7 @@
     const hint = norm(hintedSheet);
     let records = group.records || [];
     if (hint) {
-      const filtered = records.filter((r) => norm(r.sheet) === hint);
+      const filtered = records.filter((r) => sheetMatchesHint(r.sheet, hint));
       if (!filtered.length && records.length) {
         return { record: null, ambiguous: false, sheetMismatch: true, candidates: records };
       }
@@ -1356,7 +1404,7 @@
     const all = [...(group.history || []), ...(group.records || [])];
     return all.filter((item) => {
       if (normalizeRevision(item.revision) !== rev) return false;
-      if (hint && item.sheet && !norm(item.sheet).includes("SIGEM") && norm(item.sheet) !== hint) return false;
+      if (hint && item.sheet && !norm(item.sheet).includes("SIGEM") && !sheetMatchesHint(item.sheet, hint)) return false;
       return true;
     }).map((item) => ({
       status: item.sigemStatus || item.status,
@@ -1371,7 +1419,7 @@
     const hint = norm(hintedSheet);
     let records = (group.records || []).filter((item) => normalizeRevision(item.revision) === normalizeRevision(revision));
     if (hint) {
-      const sameSheet = records.filter((item) => norm(item.sheet) === hint);
+      const sameSheet = records.filter((item) => sheetMatchesHint(item.sheet, hint));
       if (sameSheet.length) records = sameSheet;
     }
     return records.length === 1 ? records[0] : null;
@@ -1397,7 +1445,7 @@
     let technicalCandidates = (group.records || [])
       .filter((item) => normalizeRevision(item.revision) === normalizeRevision(revision));
     if (hint) {
-      const sameSheet = technicalCandidates.filter((item) => norm(item.sheet) === hint);
+      const sameSheet = technicalCandidates.filter((item) => sheetMatchesHint(item.sheet, hint));
       if (sameSheet.length) technicalCandidates = sameSheet;
     }
     technicalCandidates = [...technicalCandidates].sort(recordCompare);
@@ -1436,7 +1484,7 @@
     const hint = norm(hintedSheet);
     let candidates = (group.records || []).filter((item) => normalizeRevision(item.revision) === normalizeRevision(revision));
     if (hint) {
-      const sameSheet = candidates.filter((item) => norm(item.sheet) === hint);
+      const sameSheet = candidates.filter((item) => sheetMatchesHint(item.sheet, hint));
       if (sameSheet.length) candidates = sameSheet;
     }
     candidates = [...candidates].sort(recordCompare);
@@ -2276,6 +2324,8 @@
     technicalPostingEvidenceForRevision,
     canonicalId,
     key,
+    sheetFamily,
+    sheetMatchesHint,
     isEtDocument,
     displayDocumentCode,
     ntPrefixVariant,

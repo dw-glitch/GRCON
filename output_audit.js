@@ -39,6 +39,8 @@
     const detailRows = Array.isArray(source.detailRows) ? source.detailRows.map((row, index) => ({
       id: text(row && row.id) || `item-${index + 1}`,
       included: Boolean(row && row.included),
+      batchIndex: Number.isInteger(row && row.batchIndex) ? row.batchIndex : -1,
+      discipline: text(row && row.discipline),
       egrdtNumber: text(row && row.egrdtNumber),
       document: text(row && row.document),
       originalName: text(row && row.originalName),

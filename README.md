@@ -4,7 +4,7 @@ Aplicativo web estático para triagem documental de LD, conferência de alocaç�
 
 ## Regra com/sem `nt-`
 
-A versão 5.32.11 pesquisa documentos **ET** nas duas formas:
+A versão 5.32.12 pesquisa documentos **ET** nas duas formas:
 
 1. o código informado, sem `nt-` no início do 7º grupo;
 2. a mesma identidade, com `nt-` minúsculo no início do 7º grupo.
@@ -45,6 +45,18 @@ Na relação do `Resumo`, as colunas de decisão aparecem primeiro e as evidênc
 O relatório não cria fórmulas ou conexões com planilhas externas. `STATUS INTERNO` usa o comentário da fiscal já registrado na LD e, quando ele não existe, a situação apurada pelo GRCON. Assim o arquivo abre sem reparo e sem aviso de fonte externa não confiável.
 
 O processamento não impõe limite à quantidade da relação. A suíte pública valida 15.000 códigos ET nos dois sentidos da busca e mais 15.000 códigos localizados por tipo + TAG, sem incluir dados ou metadados de planilhas operacionais no repositório.
+
+## Múltiplas LDs e LD de comissionamento
+
+O seletor `Uma ou mais LDs` aceita várias planilhas na mesma análise. O GRCON lê cada arquivo, consolida as linhas técnicas e as bases SIGEM em um índice único e procura o documento em todas as LDs selecionadas. A origem exata da linha encontrada — arquivo, aba e linha — permanece no resultado e no relatório.
+
+Os cabeçalhos não precisam estar em uma posição fixa. Abas da mesma família, como `N-1710` e `N-1710 MOD`, são tratadas como fontes compatíveis; quando existe uma cópia antiga oculta e uma aba vigente visível, a vigente tem prioridade. A leitura da LD de comissionamento também reconhece o propósito pelos valores oficiais quando a coluna contém os dados, mas o cabeçalho está vazio.
+
+## Separação das eGRDTs por disciplina
+
+Antes de aplicar o limite configurado, o GRCON agrupa todos os documentos selecionados por disciplina. Cada eGRDT contém somente uma disciplina. Se uma disciplina exceder o limite, ela é dividida em duas ou mais eGRDTs; relações grandes podem gerar quantos lotes forem necessários.
+
+Na confirmação da saída, cada cartão informa a disciplina, a quantidade de documentos e a posição do lote dentro daquela disciplina. O número sequencial de cada eGRDT permanece editável individualmente, e o operador confirma a disponibilidade dos números antes da geração.
 
 ## Responsividade no navegador
 

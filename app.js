@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.11";
+  const APP_VERSION = "5.32.12";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -780,9 +780,9 @@
   function renderEgrdtBatchSettings() {
     const limit = currentEgrdtBatchLimit();
     if (els.egrdtBatchLimit && document.activeElement !== els.egrdtBatchLimit) els.egrdtBatchLimit.value = String(limit);
-    if (els.egrdtBatchStatus) els.egrdtBatchStatus.textContent = `Limite atual: ${limit} documento${limit === 1 ? "" : "s"} por eGRDT · sem máximo`;
-    if (els.egrdtBatchPolicyText) els.egrdtBatchPolicyText.textContent = `Limite: ${limit} por eGRDT`;
-    if (els.p1BatchLimitNote) els.p1BatchLimitNote.textContent = `Limite: ${limit} documento${limit === 1 ? "" : "s"} por eGRDT.`;
+    if (els.egrdtBatchStatus) els.egrdtBatchStatus.textContent = `Separação por disciplina · até ${limit} documento${limit === 1 ? "" : "s"} por eGRDT`;
+    if (els.egrdtBatchPolicyText) els.egrdtBatchPolicyText.textContent = `Por disciplina · até ${limit} por eGRDT`;
+    if (els.p1BatchLimitNote) els.p1BatchLimitNote.textContent = `Cada disciplina terá sua própria eGRDT, limitada a ${limit} documento${limit === 1 ? "" : "s"}.`;
   }
 
   function saveEgrdtBatchLimit() {
@@ -798,7 +798,7 @@
     state.manualEgrdtSequences = [];
     renderEgrdtBatchSettings();
     renderAll();
-    showToast(`Cada eGRDT será limitada a ${parsed} documento${parsed === 1 ? "" : "s"}.`, "success");
+    showToast(`Cada disciplina será separada em eGRDTs de até ${parsed} documento${parsed === 1 ? "" : "s"}.`, "success");
     return true;
   }
 
@@ -1441,16 +1441,23 @@
       `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.reason)}</span></li>`
     )).join("");
     const ldFile = state.ldFiles[0];
-    const compatibilityReady = !ldFile || !L || L.ready(ldFile);
-    const compatibilityInspected = !ldFile || !L || Boolean(L.inspectionFor(ldFile));
+    const inspectedLdFiles = L ? state.ldFiles.filter((file) => L.inspectionFor(file)) : [];
+    const readyLdFiles = L ? state.ldFiles.filter((file) => L.ready(file)) : state.ldFiles;
+    const compatibilityReady = !state.ldFiles.length || !L || readyLdFiles.length === state.ldFiles.length;
+    const compatibilityInspected = !state.ldFiles.length || !L || inspectedLdFiles.length === state.ldFiles.length;
     const compatibilityCanStart = Boolean(PerformanceCore && PerformanceCore.supported) || compatibilityReady || !compatibilityInspected;
     els.analyze.disabled = state.busy || !state.ldFiles.length || !compatibilityCanStart || (!state.packageFiles.length && !hasRelationSource());
     els.sgparStart.disabled = state.busy || state.sgparLoading || !state.ldFiles.length || !compatibilityCanStart || !hasRelationSource();
     if (els.compatibilityOpen && els.compatibilityStatus) {
       els.compatibilityOpen.hidden = !ldFile;
       els.compatibilityStatus.hidden = !ldFile;
-      const inspection = ldFile && L && L.inspectionFor(ldFile);
-      els.compatibilityStatus.textContent = !ldFile ? "" : !inspection && PerformanceCore && PerformanceCore.supported ? "Validação paralela ao analisar" : !inspection ? "Estrutura ainda não verificada" : compatibilityReady ? "Estrutura confirmada" : "Confirmar estrutura";
+      els.compatibilityStatus.textContent = !ldFile ? "" : !compatibilityInspected && PerformanceCore && PerformanceCore.supported
+        ? `Validação de ${state.ldFiles.length} LD(s) ao analisar`
+        : !compatibilityInspected
+          ? `${inspectedLdFiles.length}/${state.ldFiles.length} estrutura(s) verificada(s)`
+          : compatibilityReady
+            ? `${readyLdFiles.length} LD(s) com estrutura confirmada`
+            : `${readyLdFiles.length}/${state.ldFiles.length} LD(s) confirmada(s)`;
       els.compatibilityStatus.className = `compatibility-status ${compatibilityReady ? "ready" : "review"}`;
     }
     if (els.clearLdBtn) els.clearLdBtn.hidden = state.ldFiles.length === 0;
@@ -2185,12 +2192,17 @@
       secondary: entry.finalName || row.finalName,
       meta: `${row.document} · revisão ${row.revision || "—"}`,
     })));
-    const batchCount = Math.max(1, Math.ceil(items.length / currentEgrdtBatchLimit()));
+    const previewPlan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
+    const previewGroups = previewPlan.errors.length ? [] : E.splitPlan(previewPlan, currentEgrdtBatchLimit());
+    const batchCount = Math.max(1, previewGroups.length || Math.ceil(items.length / currentEgrdtBatchLimit()));
     const sequences = suggestedEgrdtSequences(batchCount);
     const officialNumber = batchCount === 1
       ? sequences[0].baseName
       : `${batchCount} eGRDTs · ${sequences[0].sequenceText} a ${sequences[sequences.length - 1].sequenceText}`;
-    let includedOutputIndex = 0;
+    const batchByEntry = new Map();
+    previewGroups.forEach((group, batchIndex) => group.entries.forEach((entry) => {
+      batchByEntry.set(`${entry.rowIndex}::${C.norm(entry.finalName)}`, batchIndex);
+    }));
     const detailRows = [];
     state.results.forEach((row, index) => {
       const eligible = rowCanBeSelected(row);
@@ -2209,19 +2221,25 @@
       const databook = ldDatabookValue(row);
       const status = row.status || row.sigemStatus || row.record && row.record.status || "";
       const entries = sources.length ? sources : [{ name: row.name || row.document, finalName: row.finalName || "" }];
-      entries.forEach((entry, entryIndex) => detailRows.push({
+      entries.forEach((entry, entryIndex) => {
+        const finalName = entry.finalName || row.finalName || "";
+        const batchIndex = included ? batchByEntry.get(`${index}::${C.norm(finalName)}`) : undefined;
+        detailRows.push({
         id: `result-${index}-${entryIndex}`,
         included,
-        egrdtNumber: included ? sequences[Math.floor(includedOutputIndex++ / currentEgrdtBatchLimit())].baseName : "—",
+        batchIndex: Number.isInteger(batchIndex) ? batchIndex : -1,
+        discipline: row.egrdt && row.egrdt.discipline || "",
+        egrdtNumber: included && Number.isInteger(batchIndex) && sequences[batchIndex] ? sequences[batchIndex].baseName : "—",
         document: row.document,
         originalName: entry.name || row.document,
-        finalName: entry.finalName || row.finalName || "—",
+        finalName: finalName || "—",
         revision: row.revision || "—",
         sigemStatus: status || "—",
         databook: databook || "—",
         decision: included ? "Incluído no pacote" : eligible ? "Excluído do pacote" : decisionLabel(row.decision, row),
         alerts: alerts || (included ? "Nenhum alerta" : "Não selecionado para esta saída"),
-      }));
+        });
+      });
     });
     state.ignoredFiles.forEach((entry, index) => detailRows.push({
       id: `ignored-${index}`,
@@ -2274,6 +2292,7 @@
       totalItems: plan.entries.length,
       limit: currentEgrdtBatchLimit(),
       count: groups.length,
+      disciplineCount: new Set(groups.map((group) => C.norm(group.discipline))).size,
       groups: groups.map((group, index) => ({
         index,
         number: index + 1,
@@ -2281,6 +2300,9 @@
         firstDocument: group.entries[0] && group.entries[0].document || "",
         lastDocument: group.entries[group.entries.length - 1] && group.entries[group.entries.length - 1].document || "",
         documents: group.entries.map((entry) => entry.document),
+        discipline: group.discipline,
+        disciplineBatchNumber: group.disciplineBatchNumber,
+        disciplineBatchCount: group.disciplineBatchCount,
         suggested: suggested[index],
       })),
     };
@@ -3722,7 +3744,7 @@
     const logicalSelected = [];
     let incomplete = 0;
     let physicalIncomplete = 0;
-    let selectedOutputItems = 0;
+    const selectedItemsByDiscipline = new Map();
     state.selected.forEach((index) => {
       const row = state.results[index];
       if (!row) return;
@@ -3731,7 +3753,8 @@
       if (physical) physicalSelected.push(index);
       if (logical) logicalSelected.push(index);
       const sources = rowOutputSources(row);
-      selectedOutputItems += sources.length;
+      const discipline = C.norm(row.egrdt && row.egrdt.discipline) || "SEM DISCIPLINA";
+      selectedItemsByDiscipline.set(discipline, (selectedItemsByDiscipline.get(discipline) || 0) + sources.length);
       const invalid = sources.some((entry) => C.validateEgrdtData({
         ...(row.egrdt || {}),
         document: row.document,
@@ -3762,8 +3785,9 @@
     els.selectAllReady.checked = selectableIndices.length > 0 && selectableIndices.every((index) => state.selected.has(index));
     els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
-    const selectedBatchCount = selectedOutputItems ? Math.ceil(selectedOutputItems / currentEgrdtBatchLimit()) : 0;
-    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}`;
+    const selectedBatchCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
+    const selectedDisciplineCount = selectedItemsByDiscipline.size;
+    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}`;
     window.dispatchEvent(new CustomEvent("grcon:ui-update"));
   }
 
@@ -4448,11 +4472,17 @@
       startIndex: group.startIndex,
       endIndex: group.endIndex,
       limit: group.limit,
+      discipline: group.discipline,
+      disciplineBatchNumber: group.disciplineBatchNumber,
+      disciplineBatchCount: group.disciplineBatchCount,
       items: (group.items || []).map((item) => ({ ...item })),
       entries: (group.entries || []).map((entry) => ({
         rowIndex: entry.rowIndex,
         document: entry.document,
         revision: entry.revision,
+        discipline: entry.discipline,
+        sourceLd: entry.sourceLd,
+        allocation: entry.allocation,
         originalName: entry.originalName,
         relativePath: entry.relativePath,
         finalName: entry.finalName,
@@ -4680,6 +4710,8 @@
     ];
     generated.forEach((file, index) => {
       lines.push(`${index + 1}. ${file.official.baseName}`);
+      lines.push(`   Disciplina: ${file.group.discipline || "NÃO INFORMADA"}`);
+      if (file.group.disciplineBatchCount > 1) lines.push(`   Divisão da disciplina: ${file.group.disciplineBatchNumber} de ${file.group.disciplineBatchCount}`);
       lines.push(`   Documentos/PDFs: ${file.group.entries.length}`);
       lines.push(`   Arquivo eGRDT: ${file.fileName}`);
       lines.push(`   Pasta: ${file.official.baseName}`);
@@ -4828,10 +4860,14 @@
     }
   });
   if (els.compatibilityOpen) els.compatibilityOpen.addEventListener("click", () => {
-    if (state.ldFiles[0] && L) L.open(state.ldFiles[0]);
+    if (!L) return;
+    const target = state.ldFiles.find((file) => L.inspectionFor(file) && !L.ready(file))
+      || state.ldFiles.find((file) => L.inspectionFor(file))
+      || state.ldFiles[0];
+    if (target) L.open(target);
   });
   document.addEventListener("grcon:ld-compatibility", (event) => {
-    if (event.detail && event.detail.file === state.ldFiles[0]) updateInputMeta();
+    if (event.detail && state.ldFiles.includes(event.detail.file)) updateInputMeta();
   });
   els.listInput.addEventListener("change", async (event) => {
     clearSgparQueue();
