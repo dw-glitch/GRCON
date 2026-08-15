@@ -99,6 +99,17 @@
     return canonicalId(value);
   }
 
+  function sheetFamily(value) {
+    const normalized = norm(value);
+    if (/^N-1710(?:\s|$)/.test(normalized)) return "N-1710";
+    return normalized;
+  }
+
+  function sheetMatchesHint(sheetName, hintedSheet) {
+    const hint = sheetFamily(hintedSheet);
+    return !hint || sheetFamily(sheetName) === hint;
+  }
+
   function isEtDocument(value, sheetName) {
     if (norm(sheetName) === "ET") return true;
     const documentKey = key(value);
@@ -114,14 +125,22 @@
   function etTagComparable(value) {
     const parts = etCodeParts(value);
     if (!parts) return null;
+    const groups = parts.prefix.slice(0, -1).split("_");
+    const reportCode = groups.length === 6 ? groups[5] : "";
+    if (!reportCode) return null;
     const identifier = parts.identifier.replace(/^NT(?=[-._/\\\s])[-._/\\\s]*/, "");
     const compact = identifier.replace(/[^A-Z0-9]/g, "");
     if (!compact) return null;
+    const confusableCompact = compact.replace(/[OILSZB]/g, (character) => ({ O: "0", I: "1", L: "1", S: "5", Z: "2", B: "8" })[character]);
     return {
       prefix: parts.prefix,
+      reportCode,
+      identifier,
       compact,
       formatKey: `${parts.prefix}${compact}`,
-      confusableKey: `${parts.prefix}${compact.replace(/[OILSZB]/g, (character) => ({ O: "0", I: "1", L: "1", S: "5", Z: "2", B: "8" })[character])}`,
+      confusableKey: `${parts.prefix}${confusableCompact}`,
+      reportTagKey: `${reportCode}::${compact}`,
+      reportTagConfusableKey: `${reportCode}::${confusableCompact}`,
     };
   }
 
@@ -210,7 +229,11 @@
       && key(inputDocument) !== key(ldDocument)
       && ntNeutralKey(inputDocument) === ntNeutralKey(ldDocument)
     );
-    const matchedByTagVariant = Boolean(matched && appliesToNtRule && match && /^tag-/.test(match.matchKind || ""));
+    const matchedByReportTag = Boolean(matched && appliesToNtRule && match && /^report-tag(?:-transcription)?$/.test(match.matchKind || ""));
+    const matchedByTagVariant = Boolean(matched && appliesToNtRule && match && /^tag-(?:format|transcription)-variant$/.test(match.matchKind || ""));
+    const searchedTagInfo = appliesToNtRule ? etTagComparable(inputDocument) : null;
+    const searchedTag = searchedTagInfo && searchedTagInfo.identifier || "";
+    const searchedReportCode = searchedTagInfo && searchedTagInfo.reportCode || "";
     const ldFormInSentence = ntPrefixForm(ldDocument).replace(/^./, (character) => character.toLowerCase());
     const ambiguous = !matched && Array.isArray(candidates) && candidates.length > 1;
     const searchResult = !appliesToNtRule
@@ -218,13 +241,15 @@
       : ambiguous ? "ambiguous"
         : !matched ? "not-found-both"
           : matchedByNtVariant ? "found-alternate-renamed"
+            : matchedByReportTag ? "found-by-report-tag"
             : matchedByTagVariant ? "found-in-ld" : "found-exact";
     const resultLabel = {
       "not-applicable-found": "NÃO SE APLICA — localizado pela regra normal",
       "not-applicable-not-found": "NÃO SE APLICA — não localizado",
       ambiguous: "MAIS DE UMA CORRESPONDÊNCIA — CONFERIR",
-      "not-found-both": "NÃO LOCALIZADO COM NEM SEM nt-",
+      "not-found-both": "NÃO LOCALIZADO COM/SEM nt- NEM PELO TIPO + TAG",
       "found-alternate-renamed": "LOCALIZADO NA OUTRA FORMA — USAR O CÓDIGO DA LD",
+      "found-by-report-tag": "LOCALIZADO PELO TIPO + TAG — USAR O CÓDIGO DA LD",
       "found-in-ld": "LOCALIZADO NA LD",
       "found-exact": "LOCALIZADO NA MESMA FORMA",
     }[searchResult];
@@ -236,10 +261,12 @@
         : `${n1710 ? "Documento N-1710: a regra com/sem nt- não se aplica." : "A regra com/sem nt- não se aplica a esta família documental."} O código foi pesquisado somente na forma informada (${searchedKeys.join(" | ") || "código vazio"}) e não foi localizado na LD.`;
     } else if (!matched) {
       message = ambiguous
-        ? `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Mais de uma correspondência foi localizada na LD; confira o código correto.`
-        : `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Nenhuma das duas formas foi localizada na LD.`;
+        ? `Pesquisa pelo código completo com e sem nt- e pela combinação tipo “${searchedReportCode || "não identificado"}” + TAG${searchedTag ? ` “${searchedTag}”` : ""} realizada. Mais de uma correspondência do mesmo tipo foi localizada na LD; confira o código correto.`
+        : `Pesquisa pelo código completo com e sem nt- realizada (${searchedKeys.join(" | ")}) e busca pela combinação tipo “${searchedReportCode || "não identificado"}” + TAG${searchedTag ? ` “${searchedTag}”` : ""} concluída. Nenhum documento desse mesmo tipo foi localizado na LD. Um TAG igual pertencente a outro tipo documental não é aceito.`;
     } else if (matchedByNtVariant) {
       message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). O código informado “${inputDocument}” foi localizado na LD ${ldFormInSentence} como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
+    } else if (matchedByReportTag) {
+      message = `Pesquisa pelo código completo com e sem nt- realizada (${searchedKeys.join(" | ")}). Como essas formas não foram localizadas, o GRCON pesquisou a combinação tipo “${searchedReportCode}” + TAG “${searchedTag}” e encontrou uma única correspondência: “${ldDocument}”. Os demais grupos foram corrigidos pela codificação oficial da LD; o arquivo final e a eGRDT usarão esse código exatamente como está na LD.`;
     } else if (matchedByTagVariant) {
       message = `Pesquisa com e sem nt- realizada (${searchedKeys.join(" | ")}). Código localizado na LD como “${ldDocument}”. O arquivo final e a eGRDT usarão o código exatamente como está na LD.`;
     } else {
@@ -254,6 +281,9 @@
       matched,
       matchedByNtVariant,
       matchedByTagVariant,
+      matchedByReportTag,
+      searchedTag,
+      searchedReportCode,
       ldDocument,
       ldForm: matched ? ntPrefixForm(ldDocument) : "Não localizado",
       searchResult,
@@ -380,6 +410,18 @@
     if (revision) return revision;
     const source = (Number(b.sourceTimestamp) || 0) - (Number(a.sourceTimestamp) || 0);
     if (source) return source;
+    // Algumas LDs mantêm uma aba antiga oculta (por exemplo, "N-1710") e
+    // publicam a relação vigente em outra aba da mesma família ("N-1710 MOD").
+    // A aba visível deve prevalecer, sem perder a consulta às linhas históricas.
+    const visibility = Number(Boolean(a.sheetHidden)) - Number(Boolean(b.sheetHidden));
+    if (visibility) return visibility;
+    const richness = (item) => [
+      item && item.title, item && item.discipline, item && item.purpose,
+      item && item.allocation, item && item.allocationStatus, item && item.grdt,
+      item && item.effectiveDate, item && item.databook,
+    ].reduce((score, value) => score + Number(Boolean(text(value))), 0);
+    const completeness = richness(b) - richness(a);
+    if (completeness) return completeness;
     const effective = dateTimestamp(b.effectiveDate) - dateTimestamp(a.effectiveDate);
     if (effective) return effective;
     const grdt = Number(Boolean(text(b.grdt))) - Number(Boolean(text(a.grdt)));
@@ -404,10 +446,8 @@
   function findHeader(rows) {
     const limit = Math.min(rows.length, 100);
     for (let i = 0; i < limit; i += 1) {
-      const cells = (rows[i] || []).map(norm);
-      const hasDocument = cells.some((c) => c === "DOCUMENTO" || c.startsWith("DOCUMENTO ") || c.includes("CODIGO DO DOCUMENTO") || c === "CODIGO DOCUMENTO");
-      const hasRevision = cells.some((c) => c === "REVISAO" || c === "REV." || c === "REV");
-      if (hasDocument && (hasRevision || cells.some((c) => c.includes("STATUS")))) return i;
+      const mapped = columnMap(rows[i] || []);
+      if (mapped.document !== undefined && (mapped.revision !== undefined || mapped.status !== undefined || mapped.sigemStatus !== undefined)) return i;
     }
     return -1;
   }
@@ -460,7 +500,7 @@
       const numberScore = allocationNumberHeaderScore(cell);
       if (statusScore) allocationStatusCandidates.push({ index, score: statusScore });
       if (numberScore) allocationNumberCandidates.push({ index, score: numberScore });
-      if (h === "DOCUMENTO" || h.startsWith("DOCUMENTO ") || h === "CODIGO DOCUMENTO" || h === "CODIGO DO DOCUMENTO") result.document = index;
+      if (h === "DOCUMENTO" || h.startsWith("DOCUMENTO ") || h === "CODIGO DOCUMENTO" || h === "CODIGO DO DOCUMENTO" || h === "NUMERO DOCUMENTO" || h === "IDENTIFICADOR DOCUMENTO") result.document = index;
       else if (h === "REVISAO" || h === "REV." || h === "REV") result.revision = index;
       else if (h === "VERSAO DA LD ENVIADA" || h.includes("VERSAO DA LD ENVIADA")) result.ldVersion = index;
       else if (h.includes("STATUS SIGEM")) result.sigemStatus = index;
@@ -469,7 +509,7 @@
       else if (h === "GRDT" || h.includes("NUMERO GRDT")) result.grdt = index;
       else if (h.includes("DATA EFETIVA DE EMISSAO")) result.effectiveDate = index;
       else if (h === "FORMATO") result.format = index;
-      else if (h === "DISCIPLINA") result.discipline = index;
+      else if (h === "DISCIPLINA" || h.includes("DISCIPLINA/WORKFLOW") || h.includes("DISCIPLINA / WORKFLOW") || h.startsWith("DISCIPLINA ")) result.discipline = index;
       else if (h.includes("TIPO DE DOCUMENTO") || h === "TIPO DOCUMENTO") result.documentType = index;
       else if (h.includes("PROPOSITO") || h.includes("FINALIDADE")) result.purpose = index;
       else if (h.includes("CAMINHO DATABOOK") || h.includes("CAMINHO DATA BOOK")) result.databook = index;
@@ -484,6 +524,30 @@
     if (status) result.allocationStatus = status.index;
     if (allocation) result.allocation = allocation.index;
     return result;
+  }
+
+  function inferPurposeColumn(sheet, headerIndex, range, columns) {
+    if (columns.purpose !== undefined) return columns.purpose;
+    const occupied = new Set(Object.values(columns).filter(Number.isInteger));
+    const candidates = sheetColumnsInRows(sheet, headerIndex + 1, Math.min(range.e.r, headerIndex + 240), range)
+      .filter((column) => !occupied.has(column));
+    const official = new Map(EGRDT_OPTIONS.purposes.map((purpose) => [norm(purpose), purpose]));
+    let best = null;
+    candidates.forEach((column) => {
+      let recognized = 0;
+      let filled = 0;
+      for (let row = headerIndex + 1; row <= Math.min(range.e.r, headerIndex + 240); row += 1) {
+        const value = sheetCell(sheet, row, column);
+        if (!value) continue;
+        filled += 1;
+        if (official.has(norm(value))) recognized += 1;
+      }
+      if (recognized < 2) return;
+      const ratio = recognized / Math.max(1, filled);
+      const score = recognized * 10 + ratio;
+      if (ratio >= 0.6 && (!best || score > best.score)) best = { column, score };
+    });
+    return best ? best.column : undefined;
   }
 
   function cell(row, index) {
@@ -624,10 +688,8 @@
         const populatedColumns = sheetColumnsInRows(sheet, range.s.r, endRow, range);
         for (let r = range.s.r; r <= endRow; r += 1) {
           const candidate = readHeaderRow(sheet, r, populatedColumns);
-          const cells = candidate.map(norm);
-          const hasDocument = cells.some((value) => value === "DOCUMENTO" || value.startsWith("DOCUMENTO ") || value.includes("CODIGO DO DOCUMENTO") || value === "CODIGO DOCUMENTO");
-          const hasRevision = cells.some((value) => value === "REVISAO" || value === "REV." || value === "REV");
-          if (hasDocument && (hasRevision || cells.some((value) => value.includes("STATUS")))) {
+          const mapped = columnMap(candidate);
+          if (mapped.document !== undefined && (mapped.revision !== undefined || mapped.status !== undefined || mapped.sigemStatus !== undefined)) {
             headerIndex = r;
             header = candidate;
             break;
@@ -637,8 +699,12 @@
       if (headerIndex < 0) return;
       const columns = configured && configured.columns ? { ...configured.columns } : columnMap(header);
       if (columns.document === undefined) return;
+      const inferredPurpose = inferPurposeColumn(sheet, headerIndex, range, columns);
+      if (columns.purpose === undefined && inferredPurpose !== undefined) columns.purpose = inferredPurpose;
       const historySheet = configured ? configured.role === "history" : norm(sheetName) === "COLAR SIGEM";
       if (!historySheet && ignoredSheets.has(norm(sheetName))) return;
+      const sheetMetadata = (workbook.Workbook && workbook.Workbook.Sheets || []).find((item) => text(item && item.name) === sheetName);
+      const sheetHidden = Number(sheetMetadata && sheetMetadata.Hidden) || 0;
       Object.keys(columns).forEach((field) => mappedFields[historySheet ? "history" : "technical"].add(field));
       for (let i = headerIndex + 1; i <= range.e.r; i += 1) {
         const document = sheetCell(sheet, i, columns.document);
@@ -677,6 +743,7 @@
           source: sourceName,
           sourceTimestamp: Number(sourceTimestamp) || 0,
           sourceOrder: sheetOrder,
+          sheetHidden,
           ldVersion: rowLdVersion,
           ldVersionHeader: columns.ldVersion === undefined ? "" : text(header[columns.ldVersion]).replace(/\s+/g, " "),
           ldVersionColumn: columns.ldVersion === undefined ? "" : XLSX.utils.encode_col(columns.ldVersion),
@@ -722,11 +789,19 @@
         byDocumentRevision.get(historyKey).push(item);
       }
     });
+    // A linha técnica da LD é a fonte de verdade também para a grafia. O
+    // histórico só fornece um representante quando o documento não possui
+    // linha técnica. Assim, caixa, "nt-" e separadores nunca são herdados de
+    // uma escrita antiga do histórico.
+    const controlledRepresentative = (group) => {
+      const technical = (group && group.records || []).filter((item) => text(item && item.document));
+      const candidates = technical.length ? technical : (group && group.history || []).filter((item) => text(item && item.document));
+      return candidates.reduce((best, item) => !best || text(item.document).length > text(best.document).length ? item : best, null);
+    };
     const documents = [...byDocument.entries()]
       .map(([documentKey, group]) => {
-        const all = [...group.records, ...group.history];
-        const representative = all.sort((a, b) => b.document.length - a.document.length)[0];
-        return { documentKey, document: representative.document, group, searchKeys: documentSearchKeys(documentKey) };
+        const representative = controlledRepresentative(group);
+        return { documentKey, document: representative && representative.document || documentKey, group, searchKeys: documentSearchKeys(documentKey) };
       })
       .sort((a, b) => b.documentKey.length - a.documentKey.length);
     byDocumentRevision.forEach((items) => items.sort(historyCompare));
@@ -735,6 +810,8 @@
     const byNtNeutral = new Map();
     const byEtTagFormat = new Map();
     const byEtTagConfusable = new Map();
+    const byEtReportTag = new Map();
+    const byEtReportTagConfusable = new Map();
     documents.forEach((entry) => {
       if (!isEtDocument(entry.documentKey)) return;
       const neutro = ntNeutralKey(entry.documentKey);
@@ -746,8 +823,12 @@
       byEtTagFormat.get(tag.formatKey).push(entry);
       if (!byEtTagConfusable.has(tag.confusableKey)) byEtTagConfusable.set(tag.confusableKey, []);
       byEtTagConfusable.get(tag.confusableKey).push(entry);
+      if (!byEtReportTag.has(tag.reportTagKey)) byEtReportTag.set(tag.reportTagKey, []);
+      byEtReportTag.get(tag.reportTagKey).push(entry);
+      if (!byEtReportTagConfusable.has(tag.reportTagConfusableKey)) byEtReportTagConfusable.set(tag.reportTagConfusableKey, []);
+      byEtReportTagConfusable.get(tag.reportTagConfusableKey).push(entry);
     });
-    return { byDocument, byDocumentRevision, documents, byNtNeutral, byEtTagFormat, byEtTagConfusable };
+    return { byDocument, byDocumentRevision, documents, byNtNeutral, byEtTagFormat, byEtTagConfusable, byEtReportTag, byEtReportTagConfusable };
   }
 
   /** Índice por chave sem "nt-", montado uma vez e reaproveitado. */
@@ -806,13 +887,75 @@
       .map((entry) => ({ ...entry, matchedSearchKey: key(value), matchKind: "tag-transcription-variant", tagVariant: true }));
   }
 
+  /**
+   * Última busca ET: preserva obrigatoriamente o tipo documental do Grupo 6 e
+   * compara o TAG normalizado. Os Grupos 1 a 5 podem ser corrigidos pelo código
+   * controlado da LD, mas REP nunca pode casar com RUFF (nem qualquer outro tipo
+   * com outro), ainda que o TAG seja idêntico.
+   */
+  function reportTagMatches(value, index) {
+    const tag = etTagComparable(value);
+    if (!tag) return [];
+    let exactEntries = index && index.byEtReportTag;
+    let confusableEntries = index && index.byEtReportTagConfusable;
+    if (!exactEntries || !confusableEntries) {
+      exactEntries = new Map();
+      confusableEntries = new Map();
+      ((index && index.documents) || []).forEach((entry) => {
+        const candidateTag = isEtDocument(entry.documentKey) && etTagComparable(entry.documentKey);
+        if (!candidateTag) return;
+        if (!exactEntries.has(candidateTag.reportTagKey)) exactEntries.set(candidateTag.reportTagKey, []);
+        exactEntries.get(candidateTag.reportTagKey).push(entry);
+        if (!confusableEntries.has(candidateTag.reportTagConfusableKey)) confusableEntries.set(candidateTag.reportTagConfusableKey, []);
+        confusableEntries.get(candidateTag.reportTagConfusableKey).push(entry);
+      });
+      if (index) {
+        try {
+          Object.defineProperty(index, "byEtReportTag", { value: exactEntries, enumerable: false, configurable: true });
+          Object.defineProperty(index, "byEtReportTagConfusable", { value: confusableEntries, enumerable: false, configurable: true });
+        } catch (_) {
+          index.byEtReportTag = exactEntries;
+          index.byEtReportTagConfusable = confusableEntries;
+        }
+      }
+    }
+    const exact = (exactEntries.get(tag.reportTagKey) || [])
+      .filter((entry) => entry.documentKey !== key(value))
+      .map((entry) => ({
+        ...entry,
+        matchedSearchKey: key(value),
+        matchKind: "report-tag",
+        reportTag: true,
+        searchedTag: tag.identifier,
+        searchedReportCode: tag.reportCode,
+      }));
+    if (exact.length) return exact;
+    return (confusableEntries.get(tag.reportTagConfusableKey) || [])
+      .filter((entry) => {
+        if (entry.documentKey === key(value)) return false;
+        const candidateTag = etTagComparable(entry.documentKey);
+        return candidateTag
+          && candidateTag.reportCode === tag.reportCode
+          && singleConfusableDifference(tag.compact, candidateTag.compact);
+      })
+      .map((entry) => ({
+        ...entry,
+        matchedSearchKey: key(value),
+        matchKind: "report-tag-transcription",
+        reportTag: true,
+        searchedTag: tag.identifier,
+        searchedReportCode: tag.reportCode,
+      }));
+  }
+
   function exactDocumentMatch(value, index) {
     if (!index || !index.byDocument) return null;
     const documentKey = key(value);
     const group = index.byDocument.get(documentKey);
     if (group) {
-      const all = [...(group.records || []), ...(group.history || [])];
-      const representative = all.reduce((best, item) => !best || text(item.document).length > text(best.document).length ? item : best, null);
+      const technical = (group.records || []).filter((item) => text(item && item.document));
+      const candidates = technical.length ? technical : (group.history || []).filter((item) => text(item && item.document));
+      const representative = candidates.reduce((best, item) => !best || text(item.document).length > text(best.document).length ? item : best, null);
       return { documentKey, document: representative && representative.document || text(value), group, matchedSearchKey: documentKey, matchKind: "exact" };
     }
     if (!isEtDocument(documentKey)) return null;
@@ -824,8 +967,9 @@
     if (variantes.length === 1) return { ...variantes[0], matchedSearchKey: documentKey, matchKind: "nt-variant", ntVariant: true };
     if (variantes.length > 1) return null;
     const tagVariants = tagVariantMatches(documentKey, index);
-    if (tagVariants.length !== 1) return null;
-    return tagVariants[0];
+    if (tagVariants.length) return tagVariants.length === 1 ? tagVariants[0] : null;
+    const tagMatches = reportTagMatches(documentKey, index);
+    return tagMatches.length === 1 ? tagMatches[0] : null;
   }
 
   function containsDocumentKey(inputKey, documentKey) {
@@ -944,6 +1088,23 @@
     return [...(formats.size ? formats : confusables).values()];
   }
 
+  function reportTagCandidates(inputKey, index) {
+    if (!index.documents || !isEtDocument(inputKey)) return [];
+    const { inicios, fins } = boundaryPositions(inputKey);
+    if (inicios.length > MAX_FRONTEIRAS || fins.length > MAX_FRONTEIRAS) return [];
+    const achados = new Map();
+    inicios.forEach((inicio) => {
+      fins.forEach((fim) => {
+        if (fim - inicio < 7) return;
+        const trecho = inputKey.slice(inicio, fim);
+        reportTagMatches(trecho, index).forEach((entry) => {
+          if (!achados.has(entry.documentKey)) achados.set(entry.documentKey, entry);
+        });
+      });
+    });
+    return [...achados.values()];
+  }
+
   function matchDocuments(nameOrText, index, hintedSheet) {
     const exact = exactDocumentMatch(nameOrText, index);
     if (exact) return [exact];
@@ -958,6 +1119,7 @@
     )).map((item) => ({ ...item, matchedSearchKey: item.documentKey, matchKind: "exact" }));
     if (!candidates.length) candidates = ntVariantCandidates(inputKey, index);
     if (!candidates.length) candidates = tagVariantCandidates(inputKey, index);
+    if (!candidates.length) candidates = reportTagCandidates(inputKey, index);
     if (!candidates.length) return [];
     const preferredCandidates = candidates.some((candidate) => candidate.matchKind === "exact")
       ? candidates.filter((candidate) => candidate.matchKind === "exact")
@@ -968,7 +1130,7 @@
       && other.matchedSearchKey.includes(candidate.matchedSearchKey)
     )));
     if (hint) {
-      const inSheet = maximalCandidates.filter((candidate) => candidate.group.records.some((r) => norm(r.sheet) === hint));
+      const inSheet = maximalCandidates.filter((candidate) => candidate.group.records.some((r) => sheetMatchesHint(r.sheet, hint)));
       if (inSheet.length) return inSheet;
     }
     return maximalCandidates;
@@ -1218,7 +1380,7 @@
     const hint = norm(hintedSheet);
     let records = group.records || [];
     if (hint) {
-      const filtered = records.filter((r) => norm(r.sheet) === hint);
+      const filtered = records.filter((r) => sheetMatchesHint(r.sheet, hint));
       if (!filtered.length && records.length) {
         return { record: null, ambiguous: false, sheetMismatch: true, candidates: records };
       }
@@ -1242,7 +1404,7 @@
     const all = [...(group.history || []), ...(group.records || [])];
     return all.filter((item) => {
       if (normalizeRevision(item.revision) !== rev) return false;
-      if (hint && item.sheet && !norm(item.sheet).includes("SIGEM") && norm(item.sheet) !== hint) return false;
+      if (hint && item.sheet && !norm(item.sheet).includes("SIGEM") && !sheetMatchesHint(item.sheet, hint)) return false;
       return true;
     }).map((item) => ({
       status: item.sigemStatus || item.status,
@@ -1257,7 +1419,7 @@
     const hint = norm(hintedSheet);
     let records = (group.records || []).filter((item) => normalizeRevision(item.revision) === normalizeRevision(revision));
     if (hint) {
-      const sameSheet = records.filter((item) => norm(item.sheet) === hint);
+      const sameSheet = records.filter((item) => sheetMatchesHint(item.sheet, hint));
       if (sameSheet.length) records = sameSheet;
     }
     return records.length === 1 ? records[0] : null;
@@ -1283,7 +1445,7 @@
     let technicalCandidates = (group.records || [])
       .filter((item) => normalizeRevision(item.revision) === normalizeRevision(revision));
     if (hint) {
-      const sameSheet = technicalCandidates.filter((item) => norm(item.sheet) === hint);
+      const sameSheet = technicalCandidates.filter((item) => sheetMatchesHint(item.sheet, hint));
       if (sameSheet.length) technicalCandidates = sameSheet;
     }
     technicalCandidates = [...technicalCandidates].sort(recordCompare);
@@ -1322,7 +1484,7 @@
     const hint = norm(hintedSheet);
     let candidates = (group.records || []).filter((item) => normalizeRevision(item.revision) === normalizeRevision(revision));
     if (hint) {
-      const sameSheet = candidates.filter((item) => norm(item.sheet) === hint);
+      const sameSheet = candidates.filter((item) => sheetMatchesHint(item.sheet, hint));
       if (sameSheet.length) candidates = sameSheet;
     }
     candidates = [...candidates].sort(recordCompare);
@@ -1405,8 +1567,16 @@
     // nome final segue a LD: é assim que o documento está alocado e é assim que
     // o SIGEM vai aceitar. Sem isto o arquivo manteria a grafia de origem.
     const stemBase = hasSequence ? originalStem.replace(sequenceExpression, "") : withoutRevision;
+    const inputTag = etTagComparable(stemBase);
+    const ldTag = etTagComparable(document);
+    const sameEtReportTag = Boolean(
+      inputTag
+      && ldTag
+      && inputTag.reportCode === ldTag.reportCode
+      && (inputTag.compact === ldTag.compact || singleConfusableDifference(inputTag.compact, ldTag.compact))
+    );
     if (document && key(stemBase) !== key(document)
-        && (ntNeutralKey(stemBase) === ntNeutralKey(document) || etTagVariantKind(stemBase, document))) {
+        && (ntNeutralKey(stemBase) === ntNeutralKey(document) || etTagVariantKind(stemBase, document) || sameEtReportTag)) {
       base = hasSequence ? `${document}_0001` : document;
     }
     const n1710 = isN1710Context(sheetName, document);
@@ -1486,6 +1656,31 @@
     return result;
   }
 
+  function tagRenameInfo(input, document, finalName) {
+    const lookup = input && (input.documentLookup || input.documentLookupHint) || {};
+    if (!lookup.matchedByReportTag && !lookup.matchedByTagVariant) return null;
+    const enviado = text(lookup.inputDocument || input && (input.document || input.name));
+    const naLd = text(document || lookup.ldDocument);
+    if (!enviado || !naLd || key(enviado) === key(naLd)) return null;
+    return {
+      enviado,
+      naLd,
+      finalName: text(finalName),
+      motivo: "tipo+tag",
+      nota: `O código completo não foi localizado, mas a combinação tipo “${text(lookup.searchedReportCode)}” + TAG “${text(lookup.searchedTag)}” identificou uma única linha compatível na LD. Você informou ${enviado}; na LD o documento está como ${naLd}${text(finalName) ? `, e vai entrar na eGRDT como ${text(finalName)}` : ""}. O nome final segue obrigatoriamente o código controlado da LD.`,
+    };
+  }
+
+  function applyOfficialCodeRename(result, input) {
+    const withNtRename = applyNtRename(result, input);
+    if (withNtRename.ntRename) return withNtRename;
+    const info = tagRenameInfo(input, withNtRename.document, withNtRename.finalName);
+    if (!info) return withNtRename;
+    withNtRename.ldRename = info;
+    withNtRename.reason = `${text(withNtRename.reason)} ${info.nota}`.trim();
+    return withNtRename;
+  }
+
   function reviewResult(input, values) {
     const item = values || {};
     const result = {
@@ -1520,8 +1715,9 @@
       ldConflict: item.ldConflict || null,
       ntVariant: false,
       ntRename: null,
+      ldRename: null,
     };
-    return enrichDecision(applyNtRename(result, input), item.reasonCode);
+    return enrichDecision(applyOfficialCodeRename(result, input), item.reasonCode);
   }
 
   function triageOne(input, index, options) {
@@ -1977,7 +2173,7 @@
     const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
     const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
 
-    return enrichDecision(applyNtRename({
+    return enrichDecision(applyOfficialCodeRename({
       ...input,
       id: input.id,
       document,
@@ -2010,6 +2206,7 @@
       ldConflict,
       ntVariant: false,
       ntRename: null,
+      ldRename: null,
     }, input));
   }
 
@@ -2127,6 +2324,8 @@
     technicalPostingEvidenceForRevision,
     canonicalId,
     key,
+    sheetFamily,
+    sheetMatchesHint,
     isEtDocument,
     displayDocumentCode,
     ntPrefixVariant,

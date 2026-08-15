@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.9";
+  const APP_VERSION = "5.32.13";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -405,9 +405,9 @@
   // ---------------------------------------------------------------------------
   // Central de alocação
   //
-  // Fica numa pasta de rede, fora do alcance do navegador. Por isso o GRCON não
-  // lê a planilha: guarda onde ela está e escreve a PROCX no relatório, que
-  // busca o comentário da fiscal pelo número da alocação.
+  // Fica numa pasta de rede, fora do alcance do navegador. O cadastro é mantido
+  // apenas como referência da origem no Resumo. O relatório não grava PROCX ou
+  // conexão externa, para abrir sem reparo e sem aviso de fonte não confiável.
   // ---------------------------------------------------------------------------
   const ALLOCATION_CENTER_PREFERENCE = "allocationCenter";
 
@@ -424,17 +424,18 @@
     if (!els.allocationCenterStatus) return;
     const central = allocationCenterConfig();
     if (!central) {
-      els.allocationCenterStatus.textContent = "Não cadastrada. Sem ela, a coluna STATUS INTERNO mostra a situação apurada pelo GRCON.";
+      els.allocationCenterStatus.textContent = "Não cadastrada. STATUS INTERNO usa o comentário da LD ou a situação apurada pelo GRCON.";
       return;
     }
+    // O alcance importa: o cadastro é da equipe quando veio do banco, e só deste
+    // navegador quando a área compartilhada estava fora do ar na hora de salvar.
     const salvo = Workspace ? Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null) : null;
-    const alcance = salvo && salvo.compartilhada ? "Cadastrada para todos" : "Cadastrada somente neste navegador";
-    els.allocationCenterStatus.textContent = `${alcance}: ${central.fileName} · aba ${central.sheet} · alocação em ${central.keyColumn} · comentário em ${central.commentColumn} · até a linha ${central.lastRow.toLocaleString("pt-BR")}`;
+    const alcance = salvo && salvo.compartilhada ? "Referência cadastrada para todos" : "Referência cadastrada somente neste navegador";
+    els.allocationCenterStatus.textContent = `${alcance}: ${central.fileName} · aba ${central.sheet}. O relatório não cria conexão externa.`;
   }
 
   // O cadastro é o mesmo para toda a área de trabalho, então quem não é
-  // proprietário vê o que está valendo, mas não altera — igual ao modelo do
-  // e-mail de evidência.
+  // proprietário vê o que está valendo, mas não altera.
   function aplicarPermissaoCentralAlocacao() {
     const dono = ehProprietario();
     [els.allocationCenterPath, els.allocationCenterSheet, els.allocationCenterKey,
@@ -503,7 +504,7 @@
     }
     Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, guardado);
     loadAllocationCenterFields();
-    showToast("Central de alocação cadastrada somente neste navegador: a área compartilhada está indisponível agora.", "warn");
+    showToast("Referência cadastrada somente neste navegador: a área compartilhada está indisponível agora. O relatório continuará sem conexão externa.", "warn");
   }
 
   function limparCamposCentralAlocacao() {
@@ -709,9 +710,9 @@
   function renderEgrdtBatchSettings() {
     const limit = currentEgrdtBatchLimit();
     if (els.egrdtBatchLimit && document.activeElement !== els.egrdtBatchLimit) els.egrdtBatchLimit.value = String(limit);
-    if (els.egrdtBatchStatus) els.egrdtBatchStatus.textContent = `Limite atual: ${limit} documento${limit === 1 ? "" : "s"} por eGRDT · sem máximo`;
-    if (els.egrdtBatchPolicyText) els.egrdtBatchPolicyText.textContent = `Limite: ${limit} por eGRDT`;
-    if (els.p1BatchLimitNote) els.p1BatchLimitNote.textContent = `Limite: ${limit} documento${limit === 1 ? "" : "s"} por eGRDT.`;
+    if (els.egrdtBatchStatus) els.egrdtBatchStatus.textContent = `Separação por disciplina · até ${limit} documento${limit === 1 ? "" : "s"} por eGRDT`;
+    if (els.egrdtBatchPolicyText) els.egrdtBatchPolicyText.textContent = `Por disciplina · até ${limit} por eGRDT`;
+    if (els.p1BatchLimitNote) els.p1BatchLimitNote.textContent = `Cada disciplina terá sua própria eGRDT, limitada a ${limit} documento${limit === 1 ? "" : "s"}.`;
   }
 
   function saveEgrdtBatchLimit() {
@@ -727,7 +728,7 @@
     state.manualEgrdtSequences = [];
     renderEgrdtBatchSettings();
     renderAll();
-    showToast(`Cada eGRDT será limitada a ${parsed} documento${parsed === 1 ? "" : "s"}.`, "success");
+    showToast(`Cada disciplina será separada em eGRDTs de até ${parsed} documento${parsed === 1 ? "" : "s"}.`, "success");
     return true;
   }
 
@@ -946,13 +947,16 @@
     };
   }
 
-  function compactResultForWorker(row) {
+  function compactResultForWorker(row, rowIndex) {
     const item = row || {};
     return {
       name: item.name || "",
       document: item.document || "",
       decision: item.decision || "",
       hardBlock: Boolean(item.hardBlock),
+      blockCode: item.blockCode || "",
+      selectedForEgrdt: Number.isInteger(rowIndex) ? state.selected.has(rowIndex) : Boolean(item.selectedForEgrdt),
+      manuallyIncluded: Number.isInteger(rowIndex) ? state.manualForceInclude.has(rowIndex) : Boolean(item.manuallyIncluded),
       reasonCode: item.reasonCode || "",
       reason: item.reason || "",
       status: item.status || "",
@@ -976,6 +980,10 @@
         appliesToNtRule: Boolean(item.documentLookup.appliesToNtRule),
         matched: Boolean(item.documentLookup.matched),
         matchedByNtVariant: Boolean(item.documentLookup.matchedByNtVariant),
+        matchedByTagVariant: Boolean(item.documentLookup.matchedByTagVariant),
+        matchedByReportTag: Boolean(item.documentLookup.matchedByReportTag),
+        searchedTag: item.documentLookup.searchedTag || "",
+        searchedReportCode: item.documentLookup.searchedReportCode || "",
         ldDocument: item.documentLookup.ldDocument || "",
         ldForm: item.documentLookup.ldForm || "",
         searchResult: item.documentLookup.searchResult || "",
@@ -989,6 +997,13 @@
         finalName: item.ntRename.finalName || "",
         direcao: item.ntRename.direcao || "",
         nota: item.ntRename.nota || "",
+      } : null,
+      ldRename: item.ldRename ? {
+        enviado: item.ldRename.enviado || "",
+        naLd: item.ldRename.naLd || "",
+        finalName: item.ldRename.finalName || "",
+        motivo: item.ldRename.motivo || "",
+        nota: item.ldRename.nota || "",
       } : null,
       postingEvidence: item.postingEvidence ? {
         status: item.postingEvidence.status || "",
@@ -1031,7 +1046,7 @@
     const chunk = 600;
     for (let start = 0; start < state.results.length; start += chunk) {
       const end = Math.min(state.results.length, start + chunk);
-      for (let index = start; index < end; index += 1) output[index] = compactResultForWorker(state.results[index]);
+      for (let index = start; index < end; index += 1) output[index] = compactResultForWorker(state.results[index], index);
       if (end < state.results.length && LARGE && LARGE.pause) await LARGE.pause();
     }
     return output;
@@ -1215,6 +1230,7 @@
         results: state.results,
         pendingAllocationBundle: state.pendingAllocationBundle,
         selectedIndices: [...state.selected],
+        manualForceIndices: [...state.manualForceInclude],
         analysisAt: state.analysisAt,
         analysisValidUntil: state.analysisValidUntil,
         analysisRecentDays: state.analysisRecentDays,
@@ -1234,6 +1250,7 @@
     state.results = snapshot.results;
     state.pendingAllocationBundle = snapshot.pendingAllocationBundle || { rows: [], entries: [], documentCount: 0, pdfCount: 0 };
     state.selected = new Set(snapshot.selectedIndices || []);
+    state.manualForceInclude = new Set(snapshot.manualForceIndices || []);
     state.expanded.clear();
     state.resultVersion += 1;
     state.filteredCache = { signature: "", indices: [] };
@@ -1354,16 +1371,23 @@
       `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.reason)}</span></li>`
     )).join("");
     const ldFile = state.ldFiles[0];
-    const compatibilityReady = !ldFile || !L || L.ready(ldFile);
-    const compatibilityInspected = !ldFile || !L || Boolean(L.inspectionFor(ldFile));
+    const inspectedLdFiles = L ? state.ldFiles.filter((file) => L.inspectionFor(file)) : [];
+    const readyLdFiles = L ? state.ldFiles.filter((file) => L.ready(file)) : state.ldFiles;
+    const compatibilityReady = !state.ldFiles.length || !L || readyLdFiles.length === state.ldFiles.length;
+    const compatibilityInspected = !state.ldFiles.length || !L || inspectedLdFiles.length === state.ldFiles.length;
     const compatibilityCanStart = Boolean(PerformanceCore && PerformanceCore.supported) || compatibilityReady || !compatibilityInspected;
     els.analyze.disabled = state.busy || !state.ldFiles.length || !compatibilityCanStart || (!state.packageFiles.length && !hasRelationSource());
     els.sgparStart.disabled = state.busy || state.sgparLoading || !state.ldFiles.length || !compatibilityCanStart || !hasRelationSource();
     if (els.compatibilityOpen && els.compatibilityStatus) {
       els.compatibilityOpen.hidden = !ldFile;
       els.compatibilityStatus.hidden = !ldFile;
-      const inspection = ldFile && L && L.inspectionFor(ldFile);
-      els.compatibilityStatus.textContent = !ldFile ? "" : !inspection && PerformanceCore && PerformanceCore.supported ? "Validação paralela ao analisar" : !inspection ? "Estrutura ainda não verificada" : compatibilityReady ? "Estrutura confirmada" : "Confirmar estrutura";
+      els.compatibilityStatus.textContent = !ldFile ? "" : !compatibilityInspected && PerformanceCore && PerformanceCore.supported
+        ? `Validação de ${state.ldFiles.length} LD(s) ao analisar`
+        : !compatibilityInspected
+          ? `${inspectedLdFiles.length}/${state.ldFiles.length} estrutura(s) verificada(s)`
+          : compatibilityReady
+            ? `${readyLdFiles.length} LD(s) com estrutura confirmada`
+            : `${readyLdFiles.length}/${state.ldFiles.length} LD(s) confirmada(s)`;
       els.compatibilityStatus.className = `compatibility-status ${compatibilityReady ? "ready" : "review"}`;
     }
     if (els.clearLdBtn) els.clearLdBtn.hidden = state.ldFiles.length === 0;
@@ -2067,6 +2091,23 @@
     return [];
   }
 
+  function manualAllocationOverrideAllowed(row) {
+    if (!row || !row.hardBlock) return false;
+    const allocation = C.allocationState(row.allocationStatus || row.record && row.record.allocationStatus);
+    return allocation.kind === "not_allocated" || /^not_allocated(?:_conflict)?$/.test(row.blockCode || "");
+  }
+
+  function manuallyIncluded(row, index) {
+    const rowIndex = Number.isInteger(index) ? index : resultIndex(row);
+    return manualAllocationOverrideAllowed(row)
+      && state.selected.has(rowIndex)
+      && state.manualForceInclude.has(rowIndex);
+  }
+
+  function rowCanBeSelected(row) {
+    return Boolean(row && (!row.hardBlock || manualAllocationOverrideAllowed(row)));
+  }
+
   function refreshPendingAllocationBundle() {
     state.pendingAllocationBundle = PendingAllocationPackage
       ? PendingAllocationPackage.collect(state.results)
@@ -2075,21 +2116,26 @@
   }
 
   function outputPreviewData() {
-    const includedRows = state.results.filter((row, index) => state.selected.has(index) && !row.hardBlock);
+    const includedRows = state.results.filter((row, index) => state.selected.has(index) && rowCanBeSelected(row));
     const items = includedRows.flatMap((row) => rowOutputSources(row).map((entry) => ({
       primary: entry.name || row.document,
       secondary: entry.finalName || row.finalName,
       meta: `${row.document} · revisão ${row.revision || "—"}`,
     })));
-    const batchCount = Math.max(1, Math.ceil(items.length / currentEgrdtBatchLimit()));
+    const previewPlan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
+    const previewGroups = previewPlan.errors.length ? [] : E.splitPlan(previewPlan, currentEgrdtBatchLimit());
+    const batchCount = Math.max(1, previewGroups.length || Math.ceil(items.length / currentEgrdtBatchLimit()));
     const sequences = suggestedEgrdtSequences(batchCount);
     const officialNumber = batchCount === 1
       ? sequences[0].baseName
       : `${batchCount} eGRDTs · ${sequences[0].sequenceText} a ${sequences[sequences.length - 1].sequenceText}`;
-    let includedOutputIndex = 0;
+    const batchByEntry = new Map();
+    previewGroups.forEach((group, batchIndex) => group.entries.forEach((entry) => {
+      batchByEntry.set(`${entry.rowIndex}::${C.norm(entry.finalName)}`, batchIndex);
+    }));
     const detailRows = [];
     state.results.forEach((row, index) => {
-      const eligible = !row.hardBlock;
+      const eligible = rowCanBeSelected(row);
       const included = state.selected.has(index) && eligible;
       const includedAfterReview = included && row.decision !== C.READY;
       const sources = rowOutputSources(row);
@@ -2099,25 +2145,31 @@
         row.codeValidationWarning,
         !ldDatabookValue(row) ? "Caminho Databook não informado na LD" : "",
         row.ldConflict && row.ldConflict.hasConflict ? "Conflito entre linhas da LD" : "",
-        includedAfterReview ? "Incluído pelo operador após conferência do alerta da triagem" : "",
+        manuallyIncluded(row, index) ? "Incluído manualmente apesar de a LD informar Não Alocado" : includedAfterReview ? "Incluído pelo operador após conferência do alerta da triagem" : "",
         included ? "" : eligible ? "Não selecionado para esta saída" : message && (message.explanation || message.title),
       ].filter(Boolean).join(" · ");
       const databook = ldDatabookValue(row);
       const status = row.status || row.sigemStatus || row.record && row.record.status || "";
       const entries = sources.length ? sources : [{ name: row.name || row.document, finalName: row.finalName || "" }];
-      entries.forEach((entry, entryIndex) => detailRows.push({
+      entries.forEach((entry, entryIndex) => {
+        const finalName = entry.finalName || row.finalName || "";
+        const batchIndex = included ? batchByEntry.get(`${index}::${C.norm(finalName)}`) : undefined;
+        detailRows.push({
         id: `result-${index}-${entryIndex}`,
         included,
-        egrdtNumber: included ? sequences[Math.floor(includedOutputIndex++ / currentEgrdtBatchLimit())].baseName : "—",
+        batchIndex: Number.isInteger(batchIndex) ? batchIndex : -1,
+        discipline: row.egrdt && row.egrdt.discipline || "",
+        egrdtNumber: included && Number.isInteger(batchIndex) && sequences[batchIndex] ? sequences[batchIndex].baseName : "—",
         document: row.document,
         originalName: entry.name || row.document,
-        finalName: entry.finalName || row.finalName || "—",
+        finalName: finalName || "—",
         revision: row.revision || "—",
         sigemStatus: status || "—",
         databook: databook || "—",
         decision: included ? "Incluído no pacote" : eligible ? "Excluído do pacote" : decisionLabel(row.decision, row),
         alerts: alerts || (included ? "Nenhum alerta" : "Não selecionado para esta saída"),
-      }));
+        });
+      });
     });
     state.ignoredFiles.forEach((entry, index) => detailRows.push({
       id: `ignored-${index}`,
@@ -2160,7 +2212,7 @@
       if (!row) return false;
       return physicalOnly ? Boolean(row.files && row.files.length) : Boolean(rowOutputSources(row).length);
     }));
-    const plan = E.createPlan(state.results, selection);
+    const plan = E.createPlan(state.results, selection, { manualForceIndices: state.manualForceInclude });
     const groups = plan.errors.length ? [] : E.splitPlan(plan, currentEgrdtBatchLimit());
     const suggested = groups.length ? suggestedEgrdtSequences(groups.length) : [];
     return {
@@ -2170,6 +2222,7 @@
       totalItems: plan.entries.length,
       limit: currentEgrdtBatchLimit(),
       count: groups.length,
+      disciplineCount: new Set(groups.map((group) => C.norm(group.discipline))).size,
       groups: groups.map((group, index) => ({
         index,
         number: index + 1,
@@ -2177,6 +2230,9 @@
         firstDocument: group.entries[0] && group.entries[0].document || "",
         lastDocument: group.entries[group.entries.length - 1] && group.entries[group.entries.length - 1].document || "",
         documents: group.entries.map((entry) => entry.document),
+        discipline: group.discipline,
+        disciplineBatchNumber: group.disciplineBatchNumber,
+        disciplineBatchCount: group.disciplineBatchCount,
         suggested: suggested[index],
       })),
     };
@@ -2304,6 +2360,7 @@
     els.search.value = "";
     state.expanded.clear();
     state.selected.clear();
+    state.manualForceInclude.clear();
     state.drawerIndices = [];
     state.listIgnoredFiles = [];
     state.listSummary = null;
@@ -2443,6 +2500,7 @@
       
       refreshPendingAllocationBundle();
       state.selected.clear();
+      state.manualForceInclude.clear();
       state.results.forEach((row, index) => {
         if (row.decision === C.READY && !row.hardBlock && rowOutputSources(row).length) state.selected.add(index);
       });
@@ -2528,6 +2586,7 @@
     if (els.search) els.search.value = "";
     state.expanded.clear();
     state.selected.clear();
+    state.manualForceInclude.clear();
     state.drawerIndices = [];
     state.listIgnoredFiles = [];
     state.listSummary = null;
@@ -2655,6 +2714,7 @@
 
       refreshPendingAllocationBundle();
       state.selected.clear();
+      state.manualForceInclude.clear();
       state.results.forEach((row, index) => {
         row._resultIndex = index;
         if (row.decision === C.READY && !row.hardBlock && rowOutputSources(row).length) state.selected.add(index);
@@ -2746,6 +2806,7 @@
   }
 
   function decisionLabel(value, row) {
+    if (row && manuallyIncluded(row)) return "Incluído manualmente — LD: Não Alocado";
     if (row && row.hardBlock) return "Não será incluído";
     if (value === C.READY) return "Será incluído na eGRDT";
     if (value === C.DISCARD) return "Não será enviado novamente";
@@ -2753,6 +2814,7 @@
   }
 
   function compactDecisionLabel(row) {
+    if (manuallyIncluded(row)) return "Incluído manualmente";
     if (row.hardBlock) return "Não incluir";
     if (row.decision === C.READY) return "Incluir";
     if (row.decision === C.DISCARD) return "Em análise";
@@ -3354,7 +3416,7 @@
           <p class="detail-line"><strong>Arquivo:</strong> ${escapeHtml(source)}</p>
           <p class="detail-line"><strong>Pacote:</strong> ${escapeHtml(files)}</p>
           <p class="detail-line"><strong>Identificação:</strong> ${escapeHtml(row.documentSource || "nome do arquivo")}</p>
-          <p class="detail-line"><strong>Busca com/sem nt-:</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
+          <p class="detail-line"><strong>Busca na LD (com/sem nt- e TAG):</strong> ${escapeHtml(row.documentLookup && row.documentLookup.message || "Pesquisa não registrada")}</p>
           <p class="detail-line"><strong>Revisão:</strong> ${escapeHtml(row.revisionSource || "—")}</p>
           <p class="detail-line"><strong>LD:</strong> ${escapeHtml(sourceLine)}</p>
         </section>
@@ -3368,7 +3430,7 @@
           ${row.codeValidationWarning ? `<div class="detail-warning">${escapeHtml(row.codeValidationWarning)}</div>` : ""}
           ${row.packageWarning ? `<div class="detail-warning">${escapeHtml(row.packageWarning)}</div>` : ""}
         </section>
-        ${!row.hardBlock ? `<section class="detail-actions"><button class="secondary-button" data-action="edit-egrdt" type="button">Editar GRDT</button></section>` : ""}
+        ${rowCanBeSelected(row) ? `<section class="detail-actions"><button class="secondary-button" data-action="edit-egrdt" type="button">Editar GRDT</button></section>` : ""}
       </div>${conflictCard}${noticeCard}${timelineInline(row)}${ldGrid}</td>
     </tr>`;
   }
@@ -3448,7 +3510,7 @@
       const previousRow = previousIndex === null ? null : state.results[previousIndex];
       const groupStart = state.groupByStatus && (!previousRow || decisionGroupKey(previousRow) !== decisionGroupKey(row));
       const resultClass = decisionClass(row.decision, row);
-      const selectable = !row.hardBlock;
+      const selectable = rowCanBeSelected(row);
       const selected = state.selected.has(index);
       const companionCount = Math.max(0, (row.files || []).length - 1);
       const record = row.record || {};
@@ -3469,16 +3531,19 @@
       const allocationVisual = C.allocationState(record.allocationStatus || row.allocationStatus);
       const allocationClass = row.hardBlock ? "blocked" : allocationVisual.kind === "allocated" ? "allocated" : allocationVisual.kind === "empty" ? "empty" : "review";
       const databook = record.databook || "—";
-      const manuallyIncluded = state.manualForceInclude.has(index);
-      const mainRow = `<tr data-index="${index}" data-decision-group="${decisionGroupKey(row)}" class="result-row ${resultClass} ${groupStart ? "group-start" : ""} ${selected ? "selected" : ""} ${manuallyIncluded ? "manually-included" : ""}">
+      const manualSelection = manuallyIncluded(row, index);
+      const selectionTitle = manualAllocationOverrideAllowed(row)
+        ? "Marcar manualmente para incluir na GRDT; a LD continuará registrada como Não Alocado"
+        : selectable ? "Marcar para incluir na GRDT final" : "Bloqueado por uma condição que não admite inclusão manual";
+      const mainRow = `<tr data-index="${index}" data-decision-group="${decisionGroupKey(row)}" class="result-row ${resultClass} ${groupStart ? "group-start" : ""} ${selected ? "selected" : ""} ${manualSelection ? "manually-included" : ""}">
         <td><div class="situation-cell">
           ${groupStart ? `<span class="triage-group-label">${escapeHtml(decisionGroupLabel(row))}</span>` : ""}
-          <input id="select-row-${index}" name="select-row-${index}" class="row-select" data-select-row type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Selecionar para GRDT">
+          <input id="select-row-${index}" name="select-row-${index}" class="row-select" data-select-row type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Selecionar para GRDT" title="${selectionTitle}">
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
           <span class="status-chip ${resultClass}">${compactDecisionLabel(row)}</span>
         </div></td>
         <td><span class="filename-value" title="${escapeHtml(row.relativePath || originalFile)}">${escapeHtml(originalFile)}</span>${companionCount ? `<span class="cell-muted">+${companionCount} arquivo(s)</span>` : ""}</td>
-        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${row.hardBlock ? "disabled" : ""} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${row.hardBlock ? 'Bloqueado — regularize a alocação na LD' : 'Marcar para incluir na GRDT final'}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
+        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="sheet-badge">${escapeHtml(row.sheet || "—")}</span></td>
         <td><span class="revision-value">${escapeHtml(ldRevision)}</span></td>
         <td><span class="revision-value">${escapeHtml(row.revision || "—")}</span>${row.timeline ? `<span class="revision-route" title="Histórico de revisões">${escapeHtml(timelineRoute(row.timeline))}</span>` : ""}</td>
@@ -3522,10 +3587,10 @@
   function openEgrdtDrawer(indices) {
     const valid = [...new Set(indices)].filter((index) => {
       const row = state.results[index];
-      return row && !row.hardBlock;
+      return rowCanBeSelected(row);
     });
     if (!valid.length) {
-      showToast("Selecione ao menos um item que não esteja marcado como Não incluir.", "warn");
+      showToast("Selecione ao menos um item disponível para inclusão na GRDT.", "warn");
       return;
     }
     closeRelationDrawer();
@@ -3588,8 +3653,9 @@
   function renderAll() {
     state.selected.forEach((index) => {
       const row = state.results[index];
-      // Somente o estado final "Não incluir" é bloqueante.
-      if (!row || row.hardBlock) {
+      // "Não Alocado" pode permanecer selecionado somente quando a escolha
+      // manual do operador estiver registrada. Outros bloqueios são removidos.
+      if (!row || !rowCanBeSelected(row) || (row.hardBlock && !state.manualForceInclude.has(index))) {
         state.selected.delete(index);
         state.manualForceInclude.delete(index);
       }
@@ -3599,16 +3665,16 @@
     renderTable();
 
     const filtered = filteredResults();
-    const readyIndices = [];
+    const selectableIndices = [];
     filtered.forEach((row) => {
-      if (row.decision === C.READY && !row.hardBlock && rowOutputSources(row).length) readyIndices.push(resultIndex(row));
+      if (rowCanBeSelected(row) && rowOutputSources(row).length) selectableIndices.push(resultIndex(row));
     });
 
     const physicalSelected = [];
     const logicalSelected = [];
     let incomplete = 0;
     let physicalIncomplete = 0;
-    let selectedOutputItems = 0;
+    const selectedItemsByDiscipline = new Map();
     state.selected.forEach((index) => {
       const row = state.results[index];
       if (!row) return;
@@ -3617,7 +3683,8 @@
       if (physical) physicalSelected.push(index);
       if (logical) logicalSelected.push(index);
       const sources = rowOutputSources(row);
-      selectedOutputItems += sources.length;
+      const discipline = C.norm(row.egrdt && row.egrdt.discipline) || "SEM DISCIPLINA";
+      selectedItemsByDiscipline.set(discipline, (selectedItemsByDiscipline.get(discipline) || 0) + sources.length);
       const invalid = sources.some((entry) => C.validateEgrdtData({
         ...(row.egrdt || {}),
         document: row.document,
@@ -3644,12 +3711,13 @@
     }
     els.exportEgrdt.disabled = state.selected.size === 0;
     els.batchEgrdt.disabled = state.selected.size === 0;
-    els.selectAllReady.disabled = readyIndices.length === 0;
-    els.selectAllReady.checked = readyIndices.length > 0 && readyIndices.every((index) => state.selected.has(index));
-    els.selectAllReady.indeterminate = !els.selectAllReady.checked && readyIndices.some((index) => state.selected.has(index));
+    els.selectAllReady.disabled = selectableIndices.length === 0;
+    els.selectAllReady.checked = selectableIndices.length > 0 && selectableIndices.every((index) => state.selected.has(index));
+    els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
-    const selectedBatchCount = selectedOutputItems ? Math.ceil(selectedOutputItems / currentEgrdtBatchLimit()) : 0;
-    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}`;
+    const selectedBatchCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
+    const selectedDisciplineCount = selectedItemsByDiscipline.size;
+    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}`;
     window.dispatchEvent(new CustomEvent("grcon:ui-update"));
   }
 
@@ -3725,6 +3793,7 @@
     state.packageSelectionReady = false;
     state.smartAnalysisCache = { signature: "", snapshot: null, savedAt: 0 };
     state.selected.clear();
+    state.manualForceInclude.clear();
     state.expanded.clear();
     state.manualEgrdtSequences = [];
     state.listIgnoredFiles = [];
@@ -3764,7 +3833,7 @@
         allocation: row.allocation || record.allocation,
         allocationStage: row.allocationStage || record.allocationStage,
         fiscalComment: row.fiscalComment || record.fiscalComment,
-        includedInEgrdt: row.hardBlock ? "NÃO — NÃO INCLUIR" : row.decision === C.READY ? "SIM — AUTOMÁTICO" : "SIM — SE SELECIONADO APÓS CONFERÊNCIA",
+        includedInEgrdt: manuallyIncluded(row) ? "SIM — MANUAL; LD NÃO ALOCADO" : row.hardBlock ? "NÃO — DESMARCADO POR PADRÃO" : row.decision === C.READY ? "SIM — AUTOMÁTICO" : "SIM — SE SELECIONADO APÓS CONFERÊNCIA",
         databook: record.databook || "",
         inputSource: row.listSource || row.relativePath || row.name || "",
         packageWarning: [row.packageWarning, row.documentRevisionWarning, row.codeValidationWarning].filter(Boolean).join(" | "),
@@ -3860,6 +3929,15 @@
       .replace(/[–—]/g, "-").toUpperCase().replace(/\s+/g, " ");
   }
 
+  // A normalização é usada apenas para pesquisar. No relatório, a grafia vem
+  // literalmente da linha técnica selecionada na LD.
+  function exactLdDocument(row) {
+    return String(row && row.record && row.record.document
+      || row && row.documentLookup && row.documentLookup.ldDocument
+      || row && row.document
+      || "").trim();
+  }
+
   function historyByDocumentMap(results) {
     const map = {};
     (results || []).forEach((row) => {
@@ -3872,7 +3950,8 @@
   }
 
   function reportRows() {
-    return state.results.map((row) => {
+    return state.results.map((row, index) => {
+      const ldDocument = exactLdDocument(row);
       const message = decisionMessage(row);
       const simpleMessage = [message.title, message.explanation, message.nextAction].filter(Boolean).join(" ");
       const output = {
@@ -3880,9 +3959,9 @@
         "GRDT(S) ANTERIOR(ES) NO HISTÓRICO": previousEgrdtHistoryText(row.document),
         "CÓDIGO DO MOTIVO": message.code || row.reasonCode || "",
         "CÓDIGO INFORMADO / PDF": row.documentLookup && row.documentLookup.inputDocument || row.name || "",
-        "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.ldDocument || "",
+        "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.matched ? ldDocument : "",
         "FORMA LOCALIZADA NA LD": row.documentLookup && row.documentLookup.ldForm || "Não localizado",
-        "PESQUISA COM/SEM nt- NA LD": row.documentLookup && row.documentLookup.message || "",
+        "PESQUISA COM/SEM nt- E TAG NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
         "TÍTULO": row.record && row.record.title || "",
@@ -3905,7 +3984,7 @@
         "ÚLTIMA ATIVIDADE DA REVISÃO": row.timeline && row.timeline.lastActivity || "",
         "CONTEÚDO DO PDF ANALISADO": "NÃO",
         "ORIGEM NA LISTA EXCEL": row.listSource || "",
-        "SERÁ INCLUÍDO NA EGRDT?": row.hardBlock ? "Não — classificado como Não incluir" : row.decision === C.READY ? "Sim — seleção automática" : "Sim — quando selecionado pelo operador após conferência",
+        "SERÁ INCLUÍDO NA EGRDT?": manuallyIncluded(row, index) ? "Sim — inclusão manual apesar de a LD informar Não Alocado" : row.hardBlock ? "Não — desmarcado por padrão; inclusão manual disponível para Não Alocado" : row.decision === C.READY ? "Sim — seleção automática" : "Sim — quando selecionado pelo operador após conferência",
         "MOTIVO GRCON": simpleMessage || C.simpleReason(row),
         "FONTE DO STATUS SIGEM": row.analysisEvidence && row.analysisEvidence.statusSource
           ? `${row.analysisEvidence.statusSource.source || ""} · ${row.analysisEvidence.statusSource.sheet || ""} · linha ${row.analysisEvidence.statusSource.row || ""}`
@@ -3943,7 +4022,7 @@
       });
       // DOCUMENTO sempre reflete o mesmo valor usado na tabela de triagem,
       // mesmo quando a LD também tem uma coluna própria chamada "DOCUMENTO".
-      output.DOCUMENTO = row.document;
+      output.DOCUMENTO = ldDocument || row.document;
       return output;
     });
   }
@@ -4043,10 +4122,15 @@
     const metadata = `${ldDisplayName() || "LD não informada"} · Versão da LD enviada: ${reportLdVersion} · ${new Date().toLocaleString("pt-BR")}`;
 
     const summarySheet = workbook.addWorksheet("Resumo", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
+    const reportResults = state.results.map((row, index) => ({
+      ...row,
+      selectedForEgrdt: state.selected.has(index),
+      manuallyIncluded: state.manualForceInclude.has(index),
+    }));
     const summaryRows = ReportSummary
       ? ReportSummary.buildRowsAsync
-        ? await ReportSummary.buildRowsAsync(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
-        : ReportSummary.buildRows(state.results, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
+        ? await ReportSummary.buildRowsAsync(reportResults, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
+        : ReportSummary.buildRows(reportResults, { ldFileName: ldDisplayName(), historyLookup: previousEgrdtHistoryText })
       : [];
     // O desenho da aba vive em report_summary.js e é o mesmo usado pelo Worker
     // dedicado. Duplicá-lo aqui fazia uma melhoria chegar só a metade dos
@@ -4061,15 +4145,6 @@
       });
     }
     await addReportLogo(workbook, summarySheet);
-
-    const auditSheet = workbook.addWorksheet("Auditoria detalhada", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 80 }] });
-    const auditTable = ReportSummary
-      ? ReportSummary.writeTableAsync
-        ? await ReportSummary.writeTableAsync(auditSheet, summaryRows, 1)
-        : ReportSummary.writeTable(auditSheet, summaryRows, 1)
-      : null;
-    auditSheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 }, printTitlesRow: auditTable ? `${auditTable.headerRow}:${auditTable.headerRow}` : undefined };
-    auditSheet.headerFooter.oddFooter = "&LGRCON · Auditoria detalhada&C&P de &N&R&D";
 
     const buildDataSheet = async (name, title, data, statusHeader) => {
       const headers = data.length ? [...new Set(data.flatMap((row) => Object.keys(row)))] : [];
@@ -4108,7 +4183,7 @@
     const buffer = await workbook.xlsx.writeBuffer();
     const check = new ExcelJS.Workbook();
     await check.xlsx.load(buffer);
-    if (!check.getWorksheet("Resumo") || !check.getWorksheet("Auditoria detalhada") || !check.getWorksheet("Triagem")) throw new Error("O relatório gerado não pôde ser validado.");
+    if (!check.getWorksheet("Resumo") || !check.getWorksheet("Triagem") || check.getWorksheet("Auditoria detalhada")) throw new Error("O relatório gerado não pôde ser validado.");
     return buffer;
   }
 
@@ -4283,7 +4358,7 @@
 
   function previewEgrdtRows() {
     const rows = [];
-    state.results.filter((row, index) => state.selected.has(index) && !row.hardBlock).forEach((row) => {
+    state.results.filter((row, index) => state.selected.has(index) && rowCanBeSelected(row)).forEach((row) => {
       rowOutputSources(row).forEach((entry) => {
         const data = row.egrdt || {};
         rows.push({
@@ -4320,15 +4395,22 @@
       startIndex: group.startIndex,
       endIndex: group.endIndex,
       limit: group.limit,
+      discipline: group.discipline,
+      disciplineBatchNumber: group.disciplineBatchNumber,
+      disciplineBatchCount: group.disciplineBatchCount,
       items: (group.items || []).map((item) => ({ ...item })),
       entries: (group.entries || []).map((entry) => ({
         rowIndex: entry.rowIndex,
         document: entry.document,
         revision: entry.revision,
+        discipline: entry.discipline,
+        sourceLd: entry.sourceLd,
+        allocation: entry.allocation,
         originalName: entry.originalName,
         relativePath: entry.relativePath,
         finalName: entry.finalName,
         virtual: Boolean(entry.virtual),
+        manualAllocationOverride: Boolean(entry.manualAllocationOverride),
         item: { ...(entry.item || {}) },
         file: includeFiles ? entry.file : null,
       })),
@@ -4446,12 +4528,13 @@
 
   function outputFileEntries() {
     const selectedRows = state.results.filter((row, index) => state.selected.has(index));
-    const guard = OutputGuard ? OutputGuard.validateRows(selectedRows, { maxItems: currentEgrdtBatchLimit(), splitAllowed: true }) : { valid: true, errors: [], warnings: [] };
+    const manualForceRows = new Set([...state.manualForceInclude].map((index) => state.results[index]).filter(Boolean));
+    const guard = OutputGuard ? OutputGuard.validateRows(selectedRows, { maxItems: currentEgrdtBatchLimit(), splitAllowed: true, manualForceRows }) : { valid: true, errors: [], warnings: [] };
     const entries = [];
     const names = new Set();
     const duplicates = [];
     const errors = [];
-    state.results.filter((row, index) => state.selected.has(index) && !row.hardBlock).forEach((row) => {
+    state.results.filter((row, index) => state.selected.has(index) && rowCanBeSelected(row)).forEach((row) => {
       (row.files || []).forEach((entry) => {
         const check = C.validateFinalFileName(entry.finalName, entry.name, row.document, row.revision, row.sheet);
         const finalName = check.expected;
@@ -4478,7 +4561,7 @@
       showToast("Nenhum PDF físico selecionado. Use Baixar eGRDT final para itens recebidos somente por relação.", "warn");
       return;
     }
-    const plan = E.createPlan(state.results, physicalSelection);
+    const plan = E.createPlan(state.results, physicalSelection, { manualForceIndices: state.manualForceInclude });
     if (plan.errors.length) {
       showToast(`PDFs + eGRDT bloqueados: ${plan.errors.slice(0, 3).join(" ")}`, "error");
       return;
@@ -4550,6 +4633,8 @@
     ];
     generated.forEach((file, index) => {
       lines.push(`${index + 1}. ${file.official.baseName}`);
+      lines.push(`   Disciplina: ${file.group.discipline || "NÃO INFORMADA"}`);
+      if (file.group.disciplineBatchCount > 1) lines.push(`   Divisão da disciplina: ${file.group.disciplineBatchNumber} de ${file.group.disciplineBatchCount}`);
       lines.push(`   Documentos/PDFs: ${file.group.entries.length}`);
       lines.push(`   Arquivo eGRDT: ${file.fileName}`);
       lines.push(`   Pasta: ${file.official.baseName}`);
@@ -4585,7 +4670,7 @@
       showToast("Nenhum PDF físico foi fornecido. Use Gerar GRDT final para os itens recebidos pela relação.", "warn");
       return;
     }
-    const plan = E.createPlan(state.results, physicalSelection);
+    const plan = E.createPlan(state.results, physicalSelection, { manualForceIndices: state.manualForceInclude });
     if (plan.errors.length) {
       showToast(`Pacote final bloqueado: ${plan.errors.slice(0, 3).join(" ")}`, "error");
       return;
@@ -4698,10 +4783,14 @@
     }
   });
   if (els.compatibilityOpen) els.compatibilityOpen.addEventListener("click", () => {
-    if (state.ldFiles[0] && L) L.open(state.ldFiles[0]);
+    if (!L) return;
+    const target = state.ldFiles.find((file) => L.inspectionFor(file) && !L.ready(file))
+      || state.ldFiles.find((file) => L.inspectionFor(file))
+      || state.ldFiles[0];
+    if (target) L.open(target);
   });
   document.addEventListener("grcon:ld-compatibility", (event) => {
-    if (event.detail && event.detail.file === state.ldFiles[0]) updateInputMeta();
+    if (event.detail && state.ldFiles.includes(event.detail.file)) updateInputMeta();
   });
   els.listInput.addEventListener("change", async (event) => {
     clearSgparQueue();
@@ -4941,10 +5030,18 @@
     const index = Number(rowElement.dataset.index);
     const row = state.results[index];
     if (event.target.checked) {
+      if (!rowCanBeSelected(row)) {
+        event.target.checked = false;
+        showToast("Este documento possui um bloqueio técnico que não admite inclusão manual.", "warn");
+        return;
+      }
       state.selected.add(index);
       // Mantém o registro visual de que o operador incluiu um alerta de triagem.
-      if (row && row.decision !== C.READY && !row.hardBlock) {
+      if (row && (row.decision !== C.READY || row.hardBlock)) {
         state.manualForceInclude.add(index);
+      }
+      if (manualAllocationOverrideAllowed(row)) {
+        showToast("Documento incluído manualmente. A LD continuará registrada como Não Alocado.", "warn");
       }
     } else {
       state.selected.delete(index);
@@ -4961,12 +5058,23 @@
     renderAll();
   });
   els.selectAllReady.addEventListener("change", (event) => {
-    filteredResultIndices().forEach((index) => {
+    const visibleIndices = filteredResultIndices();
+    visibleIndices.forEach((index) => {
       const row = state.results[index];
-      if (row.decision !== C.READY || row.hardBlock || !rowOutputSources(row).length) return;
-      if (event.target.checked) state.selected.add(index);
-      else state.selected.delete(index);
+      if (!rowCanBeSelected(row) || !rowOutputSources(row).length) return;
+      if (event.target.checked) {
+        state.selected.add(index);
+        if (row.decision !== C.READY || row.hardBlock) state.manualForceInclude.add(index);
+      } else {
+        state.selected.delete(index);
+        state.manualForceInclude.delete(index);
+      }
     });
+    if (event.target.checked) {
+      const visibleSet = new Set(visibleIndices);
+      const manualCount = [...state.manualForceInclude].filter((index) => visibleSet.has(index)).length;
+      showToast(`Documentos visíveis selecionados${manualCount ? ` · ${manualCount} inclusão(ões) manual(is) sinalizada(s)` : ""}.`, manualCount ? "warn" : "success");
+    }
     renderAll();
   });
   if (els.resultsScroll) {

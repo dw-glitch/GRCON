@@ -5,7 +5,7 @@
   const Report = window.GrconAnalysisHistoryReport;
   const Flow = window.GrconMacro5Flow;
   const History = window.GrconHistory;
-  const APP_VERSION = "5.32.9";
+  const APP_VERSION = "5.32.13";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => Core.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { sessions: [], rows: [], total: 0, counts: {}, page: 1, pageSize: 200, loading: false, exporting: false, token: 0, selectedId: "", savedFilters: [] };

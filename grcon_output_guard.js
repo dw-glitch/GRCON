@@ -10,6 +10,7 @@
   function norm(value) { return Contracts ? Contracts.norm(value) : text(value).toUpperCase(); }
   function validateRows(rows, options) {
     const settings = options || {};
+    const manualForceRows = settings.manualForceRows instanceof Set ? settings.manualForceRows : new Set();
     const maxItems = Math.max(1, Number(settings.maxItems) || 48);
     const items = (rows || []).filter(Boolean);
     const errors = [];
@@ -24,11 +25,18 @@
     const names = new Map();
     items.forEach((row) => {
       const message = Contracts ? Contracts.enrichDecision(row).userMessage : null;
-      // O estado final "Não incluir" é a única decisão bloqueante. Alertas de
-      // Conferir/Revisar permanecem informativos quando o operador seleciona o item.
-      if (row.hardBlock) {
+      const allocation = text(row && (row.allocationStatus || row.record && row.record.allocationStatus));
+      const manualAllocationOverride = Boolean(
+        row.hardBlock
+        && manualForceRows.has(row)
+        && (/^not_allocated(?:_conflict)?$/.test(text(row.blockCode)) || norm(allocation).includes("NAO ALOCADO"))
+      );
+      // Apenas "Não Alocado" pode ser superado por seleção manual consciente.
+      // Os demais bloqueios continuam impedindo a saída.
+      if (row.hardBlock && !manualAllocationOverride) {
         errors.push(`${text(row.document) || "Documento"}: ${message ? message.title : "não pode ser incluído"}`);
       }
+      if (manualAllocationOverride) warnings.push(`${text(row.document) || "Documento"}: inclusão manual apesar do status “Não Alocado” na LD.`);
       const finalName = text(row.finalName);
       if (!finalName) errors.push(`${text(row.document) || "Documento"}: o nome final não foi definido.`);
       const key = norm(finalName);

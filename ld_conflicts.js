@@ -192,7 +192,9 @@
     const settings = options || {};
     const hint = norm(settings.hintedSheet);
     const technicalAll = decorated(group && group.records, "technical");
-    const sameSheet = hint ? technicalAll.filter((entry) => norm(entry.record && entry.record.sheet) === hint) : [];
+    const sameSheet = hint ? technicalAll.filter((entry) => C && C.sheetMatchesHint
+      ? C.sheetMatchesHint(entry.record && entry.record.sheet, hint)
+      : norm(entry.record && entry.record.sheet) === hint) : [];
     const technical = sameSheet.length ? sameSheet : technicalAll;
     const history = decorated(group && group.history, "history");
     const differences = [];

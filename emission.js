@@ -5,12 +5,20 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (C) {
   "use strict";
 
+  function text(value) {
+    return String(value === null || value === undefined ? "" : value).trim();
+  }
+
   function norm(value) {
     return C.norm(value || "");
   }
 
   function createPlan(results, selectedIndices, options) {
     const selected = selectedIndices instanceof Set ? selectedIndices : new Set(selectedIndices || []);
+    const settings = options || {};
+    const manualForce = settings.manualForceIndices instanceof Set
+      ? settings.manualForceIndices
+      : new Set(settings.manualForceIndices || []);
     const entries = [];
     const items = [];
     const errors = [];
@@ -19,12 +27,23 @@
 
     (results || []).forEach((row, rowIndex) => {
       if (!selected.has(rowIndex)) return;
-      // A triagem orienta o operador, mas somente "Não incluir" (hardBlock)
-      // impede a emissão. Itens em Conferir/Revisar/Aguardar podem seguir quando
-      // forem selecionados conscientemente na tela.
-      if (row.hardBlock) {
+      const allocation = C && C.allocationState
+        ? C.allocationState(row && (row.allocationStatus || row.record && row.record.allocationStatus))
+        : { kind: "" };
+      const manualAllocationOverride = Boolean(
+        manualForce.has(rowIndex)
+        && row.hardBlock
+        && (allocation.kind === "not_allocated" || /^not_allocated(?:_conflict)?$/.test(row.blockCode || ""))
+      );
+      // "Não Alocado" continua sendo um alerta forte e nunca entra por padrão,
+      // mas pode seguir quando o operador marcar conscientemente a linha. Outros
+      // bloqueios técnicos continuam impedindo a emissão.
+      if (row.hardBlock && !manualAllocationOverride) {
         errors.push(`${row.document || row.name}: item bloqueado não pode ser emitido.`);
         return;
+      }
+      if (manualAllocationOverride) {
+        warnings.push(`${row.document || row.name}: incluído manualmente na GRDT embora a LD informe “Não Alocado”.`);
       }
       const sources = row.files && row.files.length
         ? row.files
@@ -54,6 +73,7 @@
           revision: row.revision,
           fileName: finalName,
           databook: String(row.record && row.record.databook || "").trim(),
+          manualAllocationOverride,
         };
         const itemErrors = C.validateEgrdtData(item);
         if (itemErrors.length) errors.push(`${row.document} / ${finalName}: ${itemErrors.join("; ")}.`);
@@ -63,11 +83,15 @@
           document: row.document,
           revision: row.revision,
           sheet: row.sheet,
+          discipline: item.discipline,
+          sourceLd: String(row.record && row.record.source || "").trim(),
+          allocation: String(row.record && row.record.allocation || "").trim(),
           originalName: source.name,
           relativePath: source.relativePath || source.name,
           finalName,
           file: source.file,
           virtual: Boolean(source.virtual || !source.file),
+          manualAllocationOverride,
           item,
         };
         entries.push(entry);
@@ -102,10 +126,35 @@
   function splitPlan(plan, size) {
     const limit = Math.max(1, Number(size) || 48);
     const groups = [];
-    for (let start = 0; start < (plan.entries || []).length; start += limit) {
-      const entries = plan.entries.slice(start, start + limit);
-      groups.push({ entries, items: entries.map((entry) => entry.item), number: groups.length + 1, startIndex: start, endIndex: start + entries.length - 1, limit });
-    }
+    const byDiscipline = new Map();
+    (plan.entries || []).forEach((entry, originalIndex) => {
+      const discipline = text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA";
+      const disciplineKey = norm(discipline);
+      if (!byDiscipline.has(disciplineKey)) byDiscipline.set(disciplineKey, { discipline, entries: [] });
+      byDiscipline.get(disciplineKey).entries.push({ entry, originalIndex });
+    });
+    const disciplines = [...byDiscipline.values()].sort((left, right) => norm(left.discipline).localeCompare(norm(right.discipline), "pt-BR"));
+    let outputIndex = 0;
+    disciplines.forEach((bucket) => {
+      const disciplineBatchCount = Math.ceil(bucket.entries.length / limit);
+      for (let start = 0; start < bucket.entries.length; start += limit) {
+        const slice = bucket.entries.slice(start, start + limit);
+        const entries = slice.map((item) => item.entry);
+        groups.push({
+          entries,
+          items: entries.map((entry) => entry.item),
+          number: groups.length + 1,
+          startIndex: outputIndex,
+          endIndex: outputIndex + entries.length - 1,
+          originalIndices: slice.map((item) => item.originalIndex),
+          limit,
+          discipline: bucket.discipline,
+          disciplineBatchNumber: Math.floor(start / limit) + 1,
+          disciplineBatchCount,
+        });
+        outputIndex += entries.length;
+      }
+    });
     return groups;
   }
 
@@ -119,6 +168,9 @@
       "ARQUIVO DESCRITO NA GRDT": entry.item.fileName,
       "NOME CONSISTENTE": entry.finalName === entry.item.fileName ? "SIM" : "NÃO",
       "GRDT REABERTA E VALIDADA": entry.grdtReopened ? "SIM" : "NÃO",
+      "INCLUSÃO MANUAL — LD NÃO ALOCADO": entry.manualAllocationOverride ? "SIM" : "NÃO",
+      "DISCIPLINA": entry.item && entry.item.discipline || entry.discipline || "",
+      "LD DE ORIGEM": entry.sourceLd || "",
       "GRDT": entry.grdtFile || "",
       "LD UTILIZADA": info.ldName || "",
       "LISTA EXCEL": info.listName || "",

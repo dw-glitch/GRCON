@@ -1,5 +1,76 @@
 # Histórico de alterações
 
+## 5.32.12 — 2026-08-15
+
+- A geração passa a separar automaticamente os documentos por disciplina antes de aplicar o limite de itens de cada eGRDT.
+- O painel de confirmação mostra, para cada lote, a disciplina, a quantidade de documentos, a posição dentro da disciplina e o nome final da eGRDT.
+- Cada número sequencial continua editável individualmente e precisa ser confirmado pelo operador antes da reserva e da geração.
+- Relações extensas podem formar quantas eGRDTs forem necessárias; uma disciplina com mais itens que o limite é dividida em lotes adicionais sem se misturar às demais.
+- O seletor aceita uma ou mais LDs na mesma análise e consolida todas em um único índice, preservando em cada resultado a planilha, a aba e a linha de origem.
+- A leitura de LD passa a reconhecer abas da mesma família documental, como `N-1710 MOD`, e prioriza a aba técnica visível sobre cópias antigas ocultas.
+- Cabeçalhos podem estar em outras linhas ou colunas; quando o cabeçalho de propósito está vazio, o campo é identificado com segurança pelos valores oficiais de emissão.
+- A LD real de comissionamento foi validada sem incluir seus dados no repositório: documentos exclusivos da aba vigente recebem `COMISSIONAMENTO` e `Para Construção` corretamente.
+- Manifesto e texto de organização dos lotes informam a disciplina de cada eGRDT e, quando aplicável, a divisão da disciplina.
+- A suíte passa a validar 55 cenários, incluindo LD de comissionamento, índice de múltiplas LDs, prioridade da aba vigente e separação por disciplina.
+
+## 5.32.11 — 2026-08-14
+
+- Criada uma camada responsiva final exclusiva da interface do navegador, mantendo o layout atual do desktop.
+- A navegação muda para abas horizontais roláveis abaixo de 928 px, sem sobreposição com o cabeçalho.
+- Cabeçalho, fontes de entrada, filtros, resumos, histórico, SIGEM, e-mails e configurações passam de duas colunas para uma conforme a largura disponível.
+- Tabelas permanecem completas dentro de rolagem horizontal própria; em telas estreitas, as colunas congeladas deixam de encobrir os demais dados.
+- Drawers, diálogos, menu da conta, filtros de coluna, mensagens e rodapé se ajustam à largura e à altura visíveis.
+- Corrigido o conflito com regras legadas de largura mínima fixa, permitindo redimensionamento contínuo da janela do navegador.
+- O novo CSS entra nos caches geral e crítico do Service Worker e a suíte valida sua ordem de carregamento e seus breakpoints.
+- O relatório, a eGRDT e o nome final passam a priorizar explicitamente a grafia literal da linha técnica da LD, sem converter maiúsculas, minúsculas, `nt-` ou separadores.
+- O histórico continua normalizado apenas para pesquisa e nunca substitui a grafia atual da linha técnica da LD.
+- A suíte reabre um relatório Excel com um código de caixa mista e confirma que o valor e o arquivo final permanecem idênticos à LD.
+
+## 5.32.10 — 2026-08-14
+
+- Documentos com status `NÃO ALOCADO` continuam desmarcados por padrão, mas agora podem ser selecionados manualmente para entrar na GRDT.
+- A inclusão manual não altera nem esconde a situação original da LD; tela, relatório `Resumo`, aba `Triagem` e manifesto identificam a decisão do operador.
+- Outros bloqueios técnicos continuam protegidos e não podem ser superados por essa autorização.
+- A caixa do cabeçalho passa a selecionar ou desmarcar todos os documentos visíveis disponíveis para GRDT, respeitando pesquisa e filtros ativos.
+- Ao selecionar todos, documentos Não Alocados são registrados automaticamente como inclusões manuais.
+- A suíte passa a validar 49 cenários, incluindo o estado inicial desmarcado, a autorização manual, a proteção dos demais bloqueios e a seleção em massa.
+
+## 5.32.9 — 2026-08-14
+
+- Corrigida a busca alternativa dos documentos ET para exigir sempre a combinação **tipo documental do Grupo 6 + TAG**.
+- A regra é geral para todos os tipos definidos pela norma e não depende de uma lista fixa de siglas.
+- Documentos de tipos diferentes nunca são associados pelo TAG: REP não localiza RUFF, nem qualquer outro tipo substitui o que foi informado.
+- Se existir somente outro tipo com o mesmo TAG, o relatório informa que o documento do tipo solicitado não foi localizado e nenhuma renomeação é feita.
+- Quando tipo + TAG identificam uma única linha, divergências nos Grupos 1 a 5 são corrigidas pelo código oficial da LD e o `DE → PARA` fica evidente no `Resumo`.
+- A comparação também cobre separadores e uma única confusão alfanumérica comum no TAG, sempre mantendo o mesmo Grupo 6.
+- A suíte passa a validar 47 cenários, incluindo REP/RUFF, regra genérica para outros tipos e 15.000 buscas indexadas por tipo + TAG.
+
+## 5.32.8 — 2026-08-14
+
+- A busca dos documentos ET passa a seguir quatro níveis: código exato, forma com/sem `nt-`, variações toleradas do Grupo 7 e busca final somente pelo TAG em toda a LD.
+- A busca pelo TAG ignora diferenças nos seis grupos anteriores, mas só associa automaticamente quando encontra um único código controlado.
+- TAG repetido em mais de um documento gera conferência manual; o GRCON não escolhe por aproximação.
+- Quando o TAG único localiza outro código, o arquivo e a eGRDT usam exatamente o código existente na LD, com renomeação `DE → PARA` registrada no `Resumo`.
+- A regra é exclusiva dos relatórios ET. Documentos N-1710 continuam fora das pesquisas com `nt-` e TAG.
+- A implementação segue a ET-5290.00-22000-912-1LV-001 Rev. P: o Grupo 7 é o TAG e sua grafia controlada não deve ser alterada.
+- A suíte passa a validar 15.000 buscas adicionais pelo TAG, além dos cenários de unicidade e ambiguidade.
+
+## 5.32.7 — 2026-08-13
+
+- Corrigido o aviso de reparo ao abrir o relatório Excel.
+- Removida a `PROCX` que apontava para uma planilha externa de rede e fazia o Excel tratar o arquivo como contendo fonte não confiável.
+- `STATUS INTERNO` agora é texto seguro: prioriza o comentário da fiscal já registrado na LD e, quando ele não existe, usa a situação apurada pelo GRCON.
+- A central cadastrada aparece somente como referência informativa no `Resumo`; o arquivo não contém conexão, consulta ou fórmula externa.
+- Adicionadas validações para impedir que fórmulas `XLOOKUP/PROCX` externas voltem ao relatório.
+
+## 5.32.6 — 2026-08-13
+
+- Removida a aba duplicada `Auditoria detalhada` do relatório de triagem.
+- A aba `Resumo`, que permanece como primeira aba do arquivo, reúne o painel gerencial e todas as evidências técnicas antes separadas na auditoria.
+- A relação única prioriza situação, inclusão na eGRDT, ação necessária, alocação, renomeação e arquivo final; as demais evidências continuam disponíveis à direita, com filtros no cabeçalho.
+- As duas primeiras colunas permanecem visíveis durante a rolagem horizontal, facilitando a conferência de relações extensas.
+- O relatório mantém busca com/sem `nt-`, revisão, postagem, origem e linha da LD, Databook, histórico, comentários e demais campos técnicos sem perda de informação.
+
 ## 5.32.4 — 2026-08-12
 
 - Resumo do relatório reescrito para gerência e coordenação: começa respondendo quantos documentos foram analisados, quantos serão postados, quantos ficaram de fora e de quem depende resolver.

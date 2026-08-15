@@ -191,7 +191,7 @@
     if (!els.batchList || !plan) return;
     if (els.batchSummary) {
       els.batchSummary.textContent = plan.valid
-        ? `${plan.totalItems} documento(s) · ${plan.count} eGRDT${plan.count === 1 ? "" : "s"}`
+        ? `${plan.totalItems} documento(s) · ${plan.disciplineCount} disciplina${plan.disciplineCount === 1 ? "" : "s"} · ${plan.count} eGRDT${plan.count === 1 ? "" : "s"}`
         : "Não foi possível preparar os lotes";
     }
     if (!plan.valid) {
@@ -204,8 +204,12 @@
       const range = group.firstDocument === group.lastDocument
         ? group.firstDocument
         : `${group.firstDocument} → ${group.lastDocument}`;
+      const disciplinePosition = group.disciplineBatchCount > 1
+        ? `GRDT ${group.disciplineBatchNumber} de ${group.disciplineBatchCount} desta disciplina`
+        : "Uma GRDT para esta disciplina";
       return `<article class="p1-batch-sequence-card" data-batch-index="${group.index}">
-        <header><div><span>Lote ${group.number}</span><strong>${group.itemCount} documento${group.itemCount === 1 ? "" : "s"}</strong></div><small>Máximo de ${plan.limit}</small></header>
+        <header><div><span>Disciplina</span><strong class="p1-batch-discipline">${escapeHtml(group.discipline || "Sem disciplina")}</strong></div><small>Lote ${group.number} · ${group.itemCount} documento${group.itemCount === 1 ? "" : "s"}</small></header>
+        <div class="p1-batch-discipline-note"><span>${escapeHtml(disciplinePosition)}</span><small>Máximo de ${plan.limit}</small></div>
         <div class="p1-batch-sequence-fields">
           <label><span>Número sequencial</span><input id="p1-batch-sequence-${group.index}" name="p1-batch-sequence-${group.index}" autocomplete="off" class="p1-batch-sequence-input" data-batch-index="${group.index}" inputmode="numeric" maxlength="4" pattern="[0-9]{1,4}" type="text" value="${escapeHtml(value)}"/></label>
           <div><span>Nome final da eGRDT</span><strong data-batch-name>${escapeHtml(name)}</strong></div>
@@ -252,12 +256,10 @@
       else if (checked.items.length === 1) els.conferenceNumber.textContent = checked.items[0].baseName;
       else els.conferenceNumber.textContent = `${checked.items.length} eGRDTs · ${checked.items.map((item) => item.sequenceText).join(", ")}`;
     }
-    let includedIndex = 0;
     conferenceRows.forEach((row) => {
       if (!row.included) return;
-      const batchIndex = Math.floor(includedIndex / Number(plan.limit || 48));
+      const batchIndex = Number.isInteger(row.batchIndex) && row.batchIndex >= 0 ? row.batchIndex : 0;
       row.egrdtNumber = valid && checked.items[batchIndex] ? checked.items[batchIndex].baseName : "Numeração pendente";
-      includedIndex += 1;
     });
     renderConferenceRows();
     return checked;
@@ -280,7 +282,7 @@
     state.sequenceEdited = false;
     const facts = [...(config.facts || [])];
     if (batchPlan && batchPlan.valid) {
-      facts.push(`${batchPlan.totalItems} documento(s) serão distribuídos em ${batchPlan.count} eGRDT${batchPlan.count === 1 ? "" : "s"} de até ${batchPlan.limit}.`);
+      facts.push(`${batchPlan.totalItems} documento(s) serão separados por ${batchPlan.disciplineCount} disciplina${batchPlan.disciplineCount === 1 ? "" : "s"} em ${batchPlan.count} eGRDT${batchPlan.count === 1 ? "" : "s"} de até ${batchPlan.limit}.`);
       if (batchPlan.count > 1) facts.push("Cada eGRDT será criada em uma pasta separada com seus próprios PDFs.");
     }
     els.facts.innerHTML = facts.map((fact) => `<li>${escapeHtml(fact)}</li>`).join("");

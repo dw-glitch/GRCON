@@ -11,9 +11,14 @@ const History = require(path.join(root, "history_core.js"));
 const Sequence = require(path.join(root, "egrdt_sequence.js"));
 const Workbook = require(path.join(root, "grdt_workbook.js"));
 const ExcelJS = require(path.join(root, "exceljs.min.js"));
+const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const Requests = require(path.join(root, "requests_core.js"));
+const Emission = require(path.join(root, "emission.js"));
+const OutputGuard = require(path.join(root, "grcon_output_guard.js"));
+const OutputAudit = require(path.join(root, "output_audit.js"));
+const SheetJS = require(path.join(root, "xlsx.full.min.js"));
 const checks = [];
 
 function check(name, fn) {
@@ -138,6 +143,52 @@ check("busca alternativa preserva o bloqueio quando a forma da LD não está alo
   assert.equal(Core.allocationState(result.allocationStatus).kind, "not_allocated");
 });
 
+check("Não Alocado fica fora por padrão, mas a seleção manual permite gerar a GRDT", () => {
+  const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO")], []);
+  const result = Core.triageOne({ id: "manual-not-allocated", name: `${ntBaseDocument}.pdf` }, index, {});
+  result.files = [{ name: `${ntBaseDocument}.pdf`, finalName: result.finalName, file: { size: 1 } }];
+  result.egrdt = Core.buildEgrdtData(result.document, result.revision, result.finalName, result.record, result.sheet, "A4");
+
+  const defaultPlan = Emission.createPlan([result], new Set([0]));
+  assert.ok(defaultPlan.errors.some((message) => /bloqueado não pode ser emitido/i.test(message)));
+
+  const manualPlan = Emission.createPlan([result], new Set([0]), { manualForceIndices: new Set([0]) });
+  assert.deepEqual(manualPlan.errors, []);
+  assert.equal(manualPlan.entries.length, 1);
+  assert.equal(manualPlan.entries[0].manualAllocationOverride, true);
+  assert.equal(manualPlan.items[0].manualAllocationOverride, true);
+  assert.ok(manualPlan.warnings.some((message) => /incluído manualmente.*Não Alocado/i.test(message)));
+
+  const guardBlocked = OutputGuard.validateRows([result], { maxItems: 48 });
+  assert.equal(guardBlocked.valid, false);
+  const guardManual = OutputGuard.validateRows([result], { maxItems: 48, manualForceRows: new Set([result]) });
+  assert.equal(guardManual.valid, true);
+
+  const otherBlock = {
+    ...result,
+    allocationStatus: "ALOCADO",
+    blockCode: "technical_block",
+    record: { ...result.record, allocationStatus: "ALOCADO" },
+  };
+  const protectedPlan = Emission.createPlan([otherBlock], new Set([0]), { manualForceIndices: new Set([0]) });
+  assert.ok(protectedPlan.errors.some((message) => /bloqueado não pode ser emitido/i.test(message)));
+
+  const summary = ReportSummary.buildRows([{ ...result, selectedForEgrdt: true, manuallyIncluded: true }], {})[0];
+  assert.equal(summary.included, "SIM — MANUAL (LD NÃO ALOCADO)");
+  assert.equal(summary.allocated, "NÃO — Não alocado");
+  assert.match(summary.observation, /status original da LD foi preservado/i);
+});
+
+check("selecionar todos abrange documentos visíveis e registra inclusões manuais", () => {
+  const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const htmlSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(htmlSource, /Selecionar todos · Situação/);
+  assert.match(appSource, /const visibleIndices = filteredResultIndices\(\)/);
+  assert.match(appSource, /manualAllocationOverrideAllowed\(row\)/);
+  assert.match(appSource, /state\.manualForceInclude\.add\(index\)/);
+  assert.match(appSource, /manualForceIndices: state\.manualForceInclude/);
+});
+
 check("quando as duas formas existem na LD a forma exata prevalece", () => {
   const index = Core.buildIndex([
     ldDocumentRecord(ntBaseDocument, "ALOCADO"),
@@ -172,19 +223,23 @@ check("relação registra as duas formas pesquisadas e o código oficial da LD",
   assert.match(executive.ldEvidence, /LD_TESTE\.xlsx.*aba ET.*linha 2/i);
 });
 
-check("Resumo Executivo expõe busca, alocação, renomeação e inclusão de forma didática", () => {
-  const headers = ReportSummary.EXECUTIVE_COLUMNS.map((column) => column.header);
-  assert.deepEqual(headers, [
+check("Resumo único prioriza decisão e preserva todas as evidências da auditoria", () => {
+  const headers = ReportSummary.SUMMARY_COLUMNS.map((column) => column.header);
+  assert.deepEqual(headers.slice(0, 9), [
     "SITUAÇÃO",
     "DOCUMENTO INFORMADO",
+    "ENTRA NA EGRDT?",
+    "O QUE FAZER",
     "ALOCADO?",
     "ALOCAÇÃO",
     "STATUS INTERNO",
     "SERÁ RENOMEADO?",
     "ARQUIVO QUE SERÁ POSTADO",
-    "ENTRA NA EGRDT?",
-    "O QUE FAZER",
   ]);
+  ReportSummary.COLUMNS.forEach((column) => {
+    assert.ok(ReportSummary.SUMMARY_COLUMNS.some((summaryColumn) => summaryColumn.key === column.key), `Resumo não contém ${column.header}`);
+    assert.equal(ReportSummary.SUMMARY_COLUMNS.filter((summaryColumn) => summaryColumn.key === column.key).length, 1);
+  });
 });
 
 // ── Consultas e Solicitações ────────────────────────────────────────────────
@@ -416,18 +471,8 @@ check("central de alocação só é aceita com caminho, aba e as duas colunas", 
   assert.equal(ReportSummary.normalizeAllocationCenter({ ...central, lastRow: 500 }).lastRow, 500);
 });
 
-check("PROCX da central aponta para o arquivo de rede e reserva o status do GRCON", () => {
-  const central = ReportSummary.normalizeAllocationCenter({
-    path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H", lastRow: 900,
-  });
-  const formula = ReportSummary.allocationCenterFormula(central, "$D5", 'Não postado no "SIGEM"');
-  // O .xlsx guarda fórmula em inglês e com vírgula; o Excel pt-BR mostra PROCX.
-  assert.match(formula, /^IFERROR\(IF\(OR\(\$D5="",XLOOKUP\(/);
-  assert.ok(formula.includes("'\\\\servidor\\qualidade\\[Central.xlsx]Central'!$B$1:$B$900"));
-  assert.ok(formula.includes("'\\\\servidor\\qualidade\\[Central.xlsx]Central'!$H$1:$H$900"));
-  // Aspas do texto de reserva precisam ser dobradas, senão a fórmula quebra.
-  assert.ok(formula.includes('"Não postado no ""SIGEM"""'));
-  assert.equal(formula.split("XLOOKUP(").length - 1, 2);
+check("STATUS INTERNO prioriza o comentário da fiscal presente na LD", () => {
+  assert.equal(ReportSummary.internalStatusText({ fiscalComment: "Liberado pela fiscalização", sigemStatus: "Não Postado" }), "Liberado pela fiscalização");
 });
 
 check("STATUS INTERNO cai no que o GRCON apurou quando não há comentário da fiscal", () => {
@@ -462,8 +507,8 @@ check("ausência na LD informa que as formas com e sem nt- foram pesquisadas", (
   const result = Core.triageOne({ id: "nt-7", document: ntBaseDocument, name: `${ntBaseDocument}.pdf` }, index, {});
   assert.equal(result.status, "Não consta na LD");
   assert.deepEqual(result.documentLookup.searchedKeys, [ntBaseDocument, ntDocument]);
-  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM NEM SEM nt-");
-  assert.match(result.documentLookup.message, /nenhuma das duas formas foi localizada na LD/i);
+  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM/SEM nt- NEM PELO TIPO + TAG");
+  assert.match(result.documentLookup.message, /nenhum documento desse mesmo tipo foi localizado na LD/i);
   const summary = ReportSummary.buildRows([result], {})[0];
   const executive = ReportSummary.executiveRows([summary])[0];
   assert.match(executive.executiveAction, /não consta na LD/i);
@@ -526,11 +571,99 @@ check("busca tolerante do TAG não adivinha quando há mais de uma linha possív
   assert.equal(result.decision, Core.REVIEW);
 });
 
-check("busca tolerante não altera os seis primeiros grupos do ET", () => {
+check("busca final por tipo + TAG corrige os Grupos 1 a 5 pela codificação oficial da LD", () => {
   const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_P-101-A";
-  const wrongPrefix = "C1O_RNEST_U34_3.1.1.1_INS_RIR_P101A";
+  const wrongPrefix = "C1O_RNEST_U34_3.1.1.1_INS_RIR_nt-P101A";
   const index = Core.buildIndex([ldDocumentRecord(ld)], []);
-  assert.equal(Core.exactDocumentMatch(wrongPrefix, index), null);
+  const match = Core.exactDocumentMatch(wrongPrefix, index);
+  assert.ok(match);
+  assert.equal(match.matchKind, "report-tag");
+  const result = Core.triageOne({ id: "report-tag", name: `${wrongPrefix}_0001.pdf` }, index, {});
+  assert.equal(result.document, ld);
+  assert.equal(result.finalName, `${ld}_0001.pdf`);
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.documentLookup.matchedByReportTag, true);
+  assert.equal(result.documentLookup.searchedReportCode, "RIR");
+  assert.equal(result.documentLookup.searchedTag, "P101A");
+  assert.equal(result.documentLookup.resultLabel, "LOCALIZADO PELO TIPO + TAG — USAR O CÓDIGO DA LD");
+  assert.match(result.documentLookup.message, /tipo.*RIR.*TAG.*P101A.*única correspondência/i);
+  assert.ok(result.ldRename);
+  const summary = ReportSummary.buildRows([result], {})[0];
+  assert.match(summary.renameForEgrdt, /SIM — RENOMEADO.*De:.*Para:/i);
+});
+
+check("mesmo TAG em REP e RUFF preserva o tipo REP informado", () => {
+  const tag = "P-101-A";
+  const rep = `C1O_RNEST_U32_3.1.1.1_INS_REP_${tag}`;
+  const ruff = `C1O_RNEST_U32_3.1.1.1_INS_RUFF_${tag}`;
+  const input = `C1O_RNEST_U35_3.1.1.1_INS_REP_${tag}`;
+  const index = Core.buildIndex([ldDocumentRecord(ruff), ldDocumentRecord(rep)], []);
+  const match = Core.exactDocumentMatch(input, index);
+  assert.ok(match);
+  assert.equal(match.document, rep);
+  assert.equal(match.matchKind, "report-tag");
+  const result = Core.triageOne({ id: "rep-not-ruff", name: `${input}.pdf` }, index, {});
+  assert.equal(result.document, rep);
+  assert.equal(result.finalName, `${rep}.pdf`);
+  assert.equal(result.documentLookup.searchedReportCode, "REP");
+  assert.ok(result.ldRename);
+  assert.doesNotMatch(result.document, /_RUFF_/);
+});
+
+check("REP não localiza nem renomeia para RUFF quando só o outro tipo possui o TAG", () => {
+  const tag = "P-101-A";
+  const ruff = `C1O_RNEST_U32_3.1.1.1_INS_RUFF_${tag}`;
+  const input = `C1O_RNEST_U35_3.1.1.1_INS_REP_${tag}`;
+  const index = Core.buildIndex([ldDocumentRecord(ruff)], []);
+  assert.equal(Core.exactDocumentMatch(input, index), null);
+  const result = Core.triageOne({ id: "rep-missing", name: `${input}.pdf` }, index, {});
+  assert.equal(result.status, "Não consta na LD");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.equal(result.documentLookup.searchedReportCode, "REP");
+  assert.equal(result.documentLookup.resultLabel, "NÃO LOCALIZADO COM/SEM nt- NEM PELO TIPO + TAG");
+  assert.match(result.documentLookup.message, /TAG igual pertencente a outro tipo documental não é aceito/i);
+  assert.equal(result.ldRename, null);
+  assert.doesNotMatch(result.finalName || "", /_RUFF_/);
+});
+
+check("regra de tipo + TAG é genérica e não usa uma lista fixa de siglas", () => {
+  ["REP", "RUFF", "RIR", "TIPONORMA"].forEach((reportCode, position) => {
+    const tag = `EQ-${position + 1}`;
+    const ld = `C1O_RNEST_U32_3.1.1.1_INS_${reportCode}_${tag}`;
+    const input = `C1O_RNEST_U34_3.1.1.1_INS_${reportCode}_${tag}`;
+    const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+    const match = Core.exactDocumentMatch(input, index);
+    assert.ok(match);
+    assert.equal(match.document, ld);
+    assert.equal(match.matchKind, "report-tag");
+  });
+});
+
+check("tipo + TAG tolera uma confusão alfanumérica no TAG e mantém o mesmo tipo", () => {
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_REP_P-10O-A";
+  const input = "C1O_RNEST_U34_3.1.1.1_INS_REP_P-100-A";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  const match = Core.exactDocumentMatch(input, index);
+  assert.ok(match);
+  assert.equal(match.document, ld);
+  assert.equal(match.matchKind, "report-tag-transcription");
+  const result = Core.triageOne({ id: "report-tag-transcription", name: `${input}.pdf` }, index, {});
+  assert.equal(result.finalName, `${ld}.pdf`);
+  assert.ok(result.ldRename);
+});
+
+check("busca por tipo + TAG não escolhe automaticamente quando o mesmo tipo possui mais de um código", () => {
+  const tag = "P-101-A";
+  const index = Core.buildIndex([
+    ldDocumentRecord(`C1O_RNEST_U32_3.1.1.1_INS_RIR_${tag}`),
+    ldDocumentRecord(`C1O_RNEST_U34_3.1.1.1_INS_RIR_${tag}`),
+  ], []);
+  const input = `C1O_RNEST_U35_3.1.1.1_INS_RIR_${tag}`;
+  assert.equal(Core.exactDocumentMatch(input, index), null);
+  const result = Core.triageOne({ id: "report-tag-ambiguous", name: `${input}.pdf` }, index, {});
+  assert.equal(result.status, "Código ambíguo no nome");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.equal(result.documentLookup.searchResult, "ambiguous");
 });
 
 check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantidade", () => {
@@ -568,6 +701,24 @@ check("índice pesquisa 15.000 variações de separador do TAG sem varrer a LD",
   });
 });
 
+check("índice pesquisa 15.000 códigos ET por tipo + TAG independente dos Grupos 1 a 5", () => {
+  const total = 15000;
+  const cases = Array.from({ length: total }, (_, index) => {
+    const suffix = String(index + 1).padStart(5, "0");
+    return {
+      input: `C1O_RNEST_U34_3.1.1.1_INS_RIR_nt-PUMP${suffix}`,
+      ld: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PUMP-${suffix}`,
+    };
+  });
+  const index = Core.buildIndex(cases.map((item) => ldDocumentRecord(item.ld)), []);
+  cases.forEach((item) => {
+    const match = Core.exactDocumentMatch(item.input, index);
+    assert.ok(match);
+    assert.equal(match.document, item.ld);
+    assert.equal(match.matchKind, "report-tag");
+  });
+});
+
 check("relatório em Worker preserva a evidência NT e a renomeação", () => {
   const source = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const compact = source.slice(source.indexOf("function compactResultForWorker"), source.indexOf("async function performanceSafeResults"));
@@ -577,9 +728,13 @@ check("relatório em Worker preserva a evidência NT e a renomeação", () => {
   assert.match(compact, /searchedWithNt/);
   assert.match(compact, /resultLabel/);
   assert.match(compact, /ntRename:\s*item\.ntRename/);
+  assert.match(compact, /matchedByReportTag/);
+  assert.match(compact, /searchedTag/);
+  assert.match(compact, /searchedReportCode/);
+  assert.match(compact, /ldRename:\s*item\.ldRename/);
 });
 
-check("Workers externos usam os módulos atuais e exportam as duas abas do relatório", () => {
+check("Workers externos usam os módulos atuais e exportam um Resumo único e completo", () => {
   const facade = fs.readFileSync(path.join(root, "performance_workers.js"), "utf8");
   const exportWorker = fs.readFileSync(path.join(root, "workers", "export.worker.js"), "utf8");
   assert.doesNotMatch(facade, /const SOURCES=/);
@@ -591,9 +746,10 @@ check("Workers externos usam os módulos atuais e exportam as duas abas do relat
   // uma melhoria chegava só a quem caísse em um dos dois caminhos de exportação.
   assert.match(exportWorker, /writeExecutiveSummarySheet/);
   assert.doesNotMatch(exportWorker, /DADOS DA ANÁLISE|Arquitetura de desempenho/);
-  assert.match(exportWorker, /Auditoria detalhada/);
+  assert.doesNotMatch(exportWorker, /addWorksheet\("Auditoria detalhada"/);
   const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
   assert.match(appSource, /writeExecutiveSummarySheet/);
+  assert.doesNotMatch(appSource, /workbook\.addWorksheet\("Auditoria detalhada"/);
 });
 
 check("histórico remove registro apagado na nuvem", () => {
@@ -832,26 +988,168 @@ check("service worker publica o cache isolado da versão atual", () => {
   const rows = ReportSummary.buildRows([result], { ldFileName: "LD_TESTE.xlsx" });
   const workbook = new ExcelJS.Workbook();
   const summarySheet = workbook.addWorksheet("Resumo");
-  const summaryLayout = await ReportSummary.writeExecutiveTableAsync(summarySheet, rows, 1, {
+  const summaryLayout = await ReportSummary.writeExecutiveSummarySheet(summarySheet, rows, {
+    metadata: "LD_TESTE.xlsx · Versão da LD enviada: TESTE",
+    ldName: "LD_TESTE.xlsx",
+    ldVersion: "TESTE",
+    relationLabel: "Relação de teste",
     allocationCenter: { path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H" },
   });
-  const auditSheet = workbook.addWorksheet("Auditoria detalhada");
-  const auditLayout = await ReportSummary.writeTableAsync(auditSheet, rows, 1);
   const bytes = await workbook.xlsx.writeBuffer();
+  const archive = await JSZip.loadAsync(bytes);
+  assert.equal(Object.keys(archive.files).some((name) => name.startsWith("xl/externalLinks/") || name === "xl/connections.xml"), false);
+  const summaryXml = await archive.file("xl/worksheets/sheet1.xml").async("string");
+  assert.doesNotMatch(summaryXml, /<f(?:\s|>)/);
+  assert.doesNotMatch(summaryXml, /XLOOKUP|externalReference|externalLink/i);
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(bytes);
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 1).value, "SITUAÇÃO");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 5).value, "STATUS INTERNO");
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 6).value, "SERÁ RENOMEADO?");
-  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 6).value), /De:.*Para:/i);
-  // A célula sobrevive ao ciclo grava/reabre com a PROCX viva e com o status do
-  // GRCON em cache, que é o que aparece com a central fechada.
-  const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 5);
-  assert.match(String(internal.formula), /XLOOKUP\(\$D\d+,'\\\\servidor\\qualidade\\\[Central\.xlsx\]Central'!\$B\$1:\$B\$20000/);
-  assert.equal(internal.result, "Código que consta " + ntBaseDocument);
-  assert.equal(reopened.getWorksheet("Auditoria detalhada").getCell(auditLayout.headerRow, 4).value, "RESULTADO DA BUSCA COM/SEM nt-");
-  checks.push("Excel do relatório reabre com Resumo Executivo e Auditoria detalhada");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 3).value, "ENTRA NA EGRDT?");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 4).value, "O QUE FAZER");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 7).value, "STATUS INTERNO");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "SERÁ RENOMEADO?");
+  assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
+  // Mesmo com uma central cadastrada, a célula precisa ser texto puro. Uma
+  // PROCX externa fazia o Excel reparar o arquivo e avisar sobre fonte não
+  // confiável.
+  const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 7);
+  assert.equal(internal.formula, undefined);
+  assert.equal(internal.value, "Código que consta " + ntBaseDocument);
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 11).value, "RESULTADO DA BUSCA COM/SEM nt- E TAG");
+  assert.equal(reopened.getWorksheet("Resumo").columnCount, ReportSummary.SUMMARY_COLUMNS.length);
+  assert.equal(reopened.getWorksheet("Auditoria detalhada"), undefined);
+  checks.push("Excel do relatório reabre com Resumo único e evidências completas");
 }
+
+{
+  const literalLdDocument = "c1O_Rnest_u32_3.1.1.1_Ins_Rir_nt-Spe-Ast-320019";
+  const informedDocument = literalLdDocument.replace("_nt-", "_").toUpperCase();
+  const technical = ldDocumentRecord(literalLdDocument);
+  const oldHistorySpelling = { ...ldDocumentRecord(literalLdDocument.toUpperCase()), sheet: "Colar SIGEM" };
+  const index = Core.buildIndex([technical], [oldHistorySpelling]);
+  const result = Core.triageOne({ id: "literal-ld", name: `${informedDocument}_0001.pdf` }, index, {});
+
+  assert.equal(result.document, literalLdDocument);
+  assert.equal(result.documentLookup.ldDocument, literalLdDocument);
+  assert.equal(result.finalName, `${literalLdDocument}_0001.pdf`);
+
+  const rows = ReportSummary.buildRows([result], { ldFileName: "LD_LITERAL.xlsx" });
+  assert.equal(rows[0].document, literalLdDocument);
+  assert.equal(rows[0].ldDocument, literalLdDocument);
+  assert.equal(rows[0].finalFile, `${literalLdDocument}_0001.pdf`);
+
+  const workbook = new ExcelJS.Workbook();
+  const summary = workbook.addWorksheet("Resumo");
+  const layout = await ReportSummary.writeExecutiveSummarySheet(summary, rows, { ldName: "LD_LITERAL.xlsx" });
+  const bytes = await workbook.xlsx.writeBuffer();
+  const reopened = new ExcelJS.Workbook();
+  await reopened.xlsx.load(bytes);
+  const reopenedSummary = reopened.getWorksheet("Resumo");
+  const documentColumn = ReportSummary.SUMMARY_COLUMNS.findIndex((column) => column.key === "document") + 1;
+  const ldDocumentColumn = ReportSummary.SUMMARY_COLUMNS.findIndex((column) => column.key === "ldDocument") + 1;
+  const finalFileColumn = ReportSummary.SUMMARY_COLUMNS.findIndex((column) => column.key === "finalFile") + 1;
+  assert.equal(reopenedSummary.getCell(layout.dataStart, documentColumn).value, literalLdDocument);
+  assert.equal(reopenedSummary.getCell(layout.dataStart, ldDocumentColumn).value, literalLdDocument);
+  assert.equal(reopenedSummary.getCell(layout.dataStart, finalFileColumn).value, `${literalLdDocument}_0001.pdf`);
+  checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
+}
+
+check("interface do navegador tem camada responsiva final e cacheada", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+  const css = fs.readFileSync(path.join(root, "grcon-responsive.css"), "utf8");
+  const uiFixPosition = html.indexOf('href="grcon-ui-fix.css"');
+  const responsivePosition = html.indexOf('href="grcon-responsive.css"');
+
+  assert.ok(uiFixPosition >= 0 && responsivePosition > uiFixPosition, "CSS responsivo precisa ser a última camada visual");
+  assert.ok((serviceWorker.match(/"grcon-responsive\.css"/g) || []).length >= 2, "CSS responsivo precisa estar nos caches geral e crítico");
+  for (const breakpoint of ["74rem", "58rem", "44rem", "30rem"]) {
+    assert.match(css, new RegExp(`@media \\(max-width: ${breakpoint.replace(".", "\\.")}\\)`));
+  }
+  assert.match(css, /@media \(max-height: 46rem\)/);
+  assert.match(css, /body\s*\{\s*overflow-x:\s*clip;/);
+  assert.match(css, /\.grcon-view-tabs[\s\S]*overflow-x:\s*auto;/);
+  assert.match(css, /#results-table[\s\S]*position:\s*static\s*!important;/);
+  assert.match(css, /inline-size:\s*100vw\s*!important;/);
+});
+
+check("LD de comissionamento usa a aba N-1710 vigente e reconhece propósito sem cabeçalho", () => {
+  globalThis.XLSX = SheetJS;
+  const oldRows = [
+    ["", "DOCUMENTO N-1710", "REVISÃO", "TÍTULO", "", "DISCIPLINA/WORKFLOW", "", "PROPÓSITO DE EMISSÃO", "", "DATA EFETIVA DE EMISSÃO", "GRDT", "STATUS"],
+    ["", "DE-5290.00-22313-970-C1O-104", "0", "TÍTULO ANTIGO", "", "", "", "PARA CONSTRUÇÃO"],
+  ];
+  const currentRows = [
+    ["LISTA DE DOCUMENTOS"], ["COMISSIONAMENTO"], [""], [""], ["DADOS DOS DOCUMENTOS"],
+    ["ITEM", "DOCUMENTO N-1710", "REVISÃO", "TÍTULO", "UNIDADE/ÁREA", "DISCIPLINA", "ESCOPO", "", "DATA PREVISTA DE EMISSÃO", "DATA EFETIVA DE EMISSÃO", "N-1710", "ITEM ISO", "GRDT", "STATUS", "QUEM?", "PRAZO", "STATUS SIGEM", "OBSERVAÇÕES", "ALOCAÇÃO"],
+    ["001", "DE-5290.00-22313-970-C1O-104", "0", "FLUXOGRAMA DE COMISSIONAMENTO", "U-32", "RNEST UHDTD U-32 COMISSIONAMENTO", "EMISSÃO", "PARA CONSTRUÇÃO", "", "", "970", "8.1", "", "EM EMISSÃO", "", "", "Não Postado", "", "C1O-ALOC-COM-0002-2025"],
+    ["002", "CR-5290.00-22313-970-C1O-001", "0", "CRONOGRAMA DE COMISSIONAMENTO", "U-32", "RNEST UHDTD U-32 COMISSIONAMENTO", "EMISSÃO", "PARA CONSTRUÇÃO", "", "", "970", "8.1", "", "EM EMISSÃO", "", "", "Não Postado", "", "C1O-ALOC-COM-0002-2025"],
+  ];
+  const historyRows = [["", "", "Documento", "Revisão", "Incluído em", "Título", "Status", "Finalidade da Revisão"]];
+  const workbook = {
+    SheetNames: ["N-1710", "N-1710 MOD", "Colar SIGEM"],
+    Sheets: {
+      "N-1710": SheetJS.utils.aoa_to_sheet(oldRows),
+      "N-1710 MOD": SheetJS.utils.aoa_to_sheet(currentRows),
+      "Colar SIGEM": SheetJS.utils.aoa_to_sheet(historyRows),
+    },
+    Workbook: { Sheets: [{ name: "N-1710", Hidden: 1 }, { name: "N-1710 MOD", Hidden: 0 }, { name: "Colar SIGEM", Hidden: 0 }] },
+  };
+  const parsed = Core.parseWorkbook(workbook, "LD_COMISSIONAMENTO.xlsx", 10, null);
+  const current = parsed.records.find((item) => item.document === "DE-5290.00-22313-970-C1O-104" && item.sheet === "N-1710 MOD");
+  assert.equal(current.purpose, "PARA CONSTRUÇÃO");
+  assert.equal(current.sheetHidden, 0);
+  assert.ok(parsed.mappedFields.technical.includes("discipline"));
+  assert.ok(parsed.mappedFields.technical.includes("purpose"));
+
+  const index = Core.buildIndex(parsed.records, parsed.history);
+  const result = Core.triageOne({ id: "commissioning", name: "DE-5290.00-22313-970-C1O-104_0001_0.pdf" }, index, {});
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.sheet, "N-1710 MOD");
+  assert.equal(result.egrdt.discipline, "COMISSIONAMENTO");
+  assert.equal(result.egrdt.purpose, "Para Construção");
+});
+
+check("índice consolidado pesquisa documentos em mais de uma LD", () => {
+  const first = ldDocumentRecord("MA-5290.00-22000-ABC-C1O-101", "ALOCADO", "N-1710");
+  const second = { ...ldDocumentRecord("DE-5290.00-22313-970-C1O-202", "ALOCADO", "N-1710 MOD"), source: "LD_COMISSIONAMENTO.xlsx", discipline: "COMISSIONAMENTO", purpose: "Para Construção", documentType: "DE" };
+  const index = Core.buildIndex([first, second], []);
+  assert.equal(Core.triageOne({ id: "ld-1", name: `${first.document}_0001_0.pdf` }, index, {}).record.source, "LD_TESTE.xlsx");
+  const foundInSecond = Core.triageOne({ id: "ld-2", name: `${second.document}_0001_0.pdf` }, index, {});
+  assert.equal(foundInSecond.record.source, "LD_COMISSIONAMENTO.xlsx");
+  assert.equal(foundInSecond.egrdt.discipline, "COMISSIONAMENTO");
+});
+
+check("eGRDTs são separadas primeiro por disciplina e depois pelo limite do lote", () => {
+  const makeEntries = (discipline, amount, prefix) => Array.from({ length: amount }, (_, index) => ({
+    rowIndex: index,
+    document: `${prefix}-${index + 1}`,
+    finalName: `${prefix}-${index + 1}.pdf`,
+    item: { discipline, fileName: `${prefix}-${index + 1}.pdf` },
+  }));
+  const entries = [
+    ...makeEntries("ELÉTRICA", 50, "ELE"),
+    ...makeEntries("CIVIL", 3, "CIV"),
+    ...makeEntries("ELÉTRICA", 2, "ELE-B"),
+  ];
+  const groups = Emission.splitPlan({ entries, items: entries.map((entry) => entry.item) }, 48);
+  assert.deepEqual(groups.map((group) => [group.discipline, group.entries.length]), [["CIVIL", 3], ["ELÉTRICA", 48], ["ELÉTRICA", 4]]);
+  assert.deepEqual(groups.map((group) => [group.disciplineBatchNumber, group.disciplineBatchCount]), [[1, 1], [1, 2], [2, 2]]);
+  assert.ok(groups.every((group) => new Set(group.items.map((item) => item.discipline)).size === 1));
+});
+
+check("painel mostra disciplina por GRDT e mantém cada número editável", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const panel = fs.readFileSync(path.join(root, "p1_ux.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(html, /id="ld-input"[^>]*multiple/);
+  assert.match(app, /disciplineCount/);
+  assert.match(panel, /p1-batch-discipline/);
+  assert.match(panel, /class="p1-batch-sequence-input"/);
+  const audit = OutputAudit.analyze({ detailRows: [{ included: true, batchIndex: 2, discipline: "ELÉTRICA" }] });
+  assert.equal(audit.detailRows[0].batchIndex, 2);
+  assert.equal(audit.detailRows[0].discipline, "ELÉTRICA");
+});
 
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
@@ -863,4 +1161,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.4", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.32.12", passed: true, checks: checks.length, names: checks }, null, 2));

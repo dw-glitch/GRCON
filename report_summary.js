@@ -12,12 +12,12 @@
     { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
     { header: "CÓDIGO INFORMADO / PDF", key: "requestedDocument", width: 42 },
     { header: "DOCUMENTO USADO PELO GRCON", key: "document", width: 42 },
-    { header: "RESULTADO DA BUSCA COM/SEM nt-", key: "ntSearchResult", width: 38 },
+    { header: "RESULTADO DA BUSCA COM/SEM nt- E TAG", key: "ntSearchResult", width: 42 },
     { header: "PESQUISADO SEM nt-", key: "searchedWithoutNt", width: 45 },
     { header: "PESQUISADO COM nt-", key: "searchedWithNt", width: 45 },
     { header: "CÓDIGO ENCONTRADO NA LD", key: "ldDocument", width: 45 },
     { header: "FORMA LOCALIZADA NA LD", key: "ldDocumentForm", width: 22 },
-    { header: "PESQUISA COM/SEM nt- NA LD", key: "ntLookup", width: 68 },
+    { header: "PESQUISA COM/SEM nt- E TAG NA LD", key: "ntLookup", width: 76 },
     { header: "RENOMEAÇÃO PARA ENTRAR NA EGRDT", key: "renameForEgrdt", width: 72 },
     { header: "TÍTULO (INFORMATIVO)", key: "title", width: 48 },
     { header: "ALOCADO?", key: "allocated", width: 23 },
@@ -47,19 +47,17 @@
     { header: "AJUSTE DE CÓDIGO (nt-)", key: "ntAdjustment", width: 88 },
   ]);
 
-  // Quem lê o Resumo é gerência e coordenação, e a pergunta é sempre a mesma:
-  // o que entra, o que não entra e o que precisa de decisão. O caminho que o
-  // GRCON percorreu para chegar ali — formas pesquisadas, célula e linha da LD
-  // — é conferência técnica e fica na Auditoria detalhada, que segue completa.
+  // Colunas de decisão que aparecem primeiro na aba Resumo. A partir da 5.32.6
+  // a mesma aba também recebe todas as evidências antes separadas na Auditoria
+  // detalhada, evitando duas relações com os mesmos documentos.
   const EXECUTIVE_COLUMNS = Object.freeze([
     { header: "SITUAÇÃO", key: "decision", width: 24 },
     { header: "DOCUMENTO INFORMADO", key: "requestedDocument", width: 44 },
     { header: "ALOCADO?", key: "allocated", width: 22 },
     // O número da alocação decide para qual pacote o documento vai.
     { header: "ALOCAÇÃO", key: "allocation", width: 24 },
-    // Comentário da fiscal sobre aquela alocação, buscado na central de
-    // alocação por PROCX. Sem central configurada, mostra o status que o
-    // próprio GRCON apurou.
+    // Comentário da fiscal já presente na LD; sem comentário, mostra o status
+    // que o próprio GRCON apurou. Nunca grava vínculo externo no .xlsx.
     { header: "STATUS INTERNO", key: "internalStatus", width: 46 },
     { header: "SERÁ RENOMEADO?", key: "renameForEgrdt", width: 58 },
     { header: "ARQUIVO QUE SERÁ POSTADO", key: "finalFile", width: 44 },
@@ -67,23 +65,45 @@
     { header: "O QUE FAZER", key: "executiveAction", width: 76 },
   ]);
 
+  const SUMMARY_PRIORITY_COLUMNS = Object.freeze([
+    { header: "SITUAÇÃO", key: "decision", width: 24 },
+    { header: "DOCUMENTO INFORMADO", key: "requestedDocument", width: 44 },
+    { header: "ENTRA NA EGRDT?", key: "included", width: 20 },
+    { header: "O QUE FAZER", key: "executiveAction", width: 76 },
+    { header: "ALOCADO?", key: "allocated", width: 22 },
+    { header: "ALOCAÇÃO", key: "allocation", width: 24 },
+    { header: "STATUS INTERNO", key: "internalStatus", width: 46 },
+    { header: "SERÁ RENOMEADO?", key: "renameForEgrdt", width: 58 },
+    { header: "ARQUIVO QUE SERÁ POSTADO", key: "finalFile", width: 44 },
+  ]);
+  const summaryPriorityKeys = new Set(SUMMARY_PRIORITY_COLUMNS.map((column) => column.key));
+  const SUMMARY_COLUMNS = Object.freeze([
+    ...SUMMARY_PRIORITY_COLUMNS,
+    ...COLUMNS.filter((column) => !summaryPriorityKeys.has(column.key)),
+  ]);
+
   function text(value) {
     return value === null || value === undefined ? "" : String(value).trim();
+  }
+
+  /** Grafia literal da linha técnica da LD, sem normalização de caixa. */
+  function exactLdDocument(row) {
+    const recordDocument = text(row && row.record && row.record.document);
+    if (recordDocument) return recordDocument;
+    const lookupDocument = text(row && row.documentLookup && row.documentLookup.ldDocument);
+    if (lookupDocument) return lookupDocument;
+    return text(row && row.document);
   }
 
   // ---------------------------------------------------------------------------
   // Central de alocação
   //
   // A central é uma planilha que vive numa pasta de rede: o GRCON roda no
-  // navegador e não alcança esse caminho. Por isso o relatório não copia o
-  // comentário da fiscal — ele sai com uma PROCX apontando para lá, e o texto
-  // se atualiza sozinho toda vez que a planilha é aberta.
-  //
-  // Dois detalhes do formato .xlsx que explicam o que vem abaixo: as fórmulas
-  // são gravadas sempre com os nomes em inglês e vírgula como separador (o
-  // Excel em português exibe PROCX e ";" sozinho), e uma referência externa
-  // precisa de faixa delimitada — coluna inteira não resolve com o arquivo de
-  // origem fechado.
+  // navegador e não alcança esse caminho. O cadastro continua servindo como
+  // referência da origem, mas o relatório não grava fórmulas nem conexões
+  // externas. Isso evita o reparo do .xlsx e o aviso de fonte não confiável do
+  // Excel. O STATUS INTERNO fica com o comentário presente na LD ou, quando
+  // ele não existe, com a situação apurada pelo próprio GRCON.
   // ---------------------------------------------------------------------------
   const ALLOCATION_CENTER_LAST_ROW = 20000;
 
@@ -103,36 +123,11 @@
     return { path: fullPath, directory, fileName, sheet, keyColumn, commentColumn, lastRow };
   }
 
-  function allocationCenterRange(center, column) {
-    const reference = `${center.directory}[${center.fileName}]${center.sheet}`.replace(/'/g, "''");
-    return `'${reference}'!$${column}$1:$${column}$${center.lastRow}`;
-  }
-
-  function quoteFormulaText(value) {
-    return `"${text(value).replace(/"/g, "\"\"")}"`;
-  }
-
-  /**
-   * PROCX do comentário da fiscal com duas reservas: quando a linha não tem
-   * número de alocação, e quando a central não responde — arquivo fechado,
-   * fora da rede ou alocação ausente. Nos dois casos a célula cai no status
-   * que o próprio GRCON apurou, e nunca fica vazia nem mostra erro.
-   */
-  function allocationCenterFormula(center, allocationCell, fallback) {
-    const chave = allocationCenterRange(center, center.keyColumn);
-    const comentario = allocationCenterRange(center, center.commentColumn);
-    const procx = `XLOOKUP(${allocationCell},${chave},${comentario},"",0)`;
-    const reserva = quoteFormulaText(fallback);
-    return `IFERROR(IF(OR(${allocationCell}="",${procx}=""),${reserva},${procx}),${reserva})`;
-  }
-
-  /**
-   * O que o GRCON sabe dizer sobre o documento sem consultar a central. É o
-   * texto que aparece quando a PROCX não encontra a alocação, e reproduz o
-   * preenchimento manual que a coluna recebia antes.
-   */
+  /** Comentário da fiscal na LD ou situação apurada pelo próprio GRCON. */
   function internalStatusText(item) {
     const normalize = (value) => (C && C.norm ? C.norm(value) : text(value).toUpperCase());
+    const fiscalComment = text(item && item.fiscalComment);
+    if (fiscalComment) return fiscalComment;
     const lookup = normalize(item && item.ntSearchResult);
     if (lookup.includes("NAO LOCALIZADO") || lookup.includes("NEM SEM")) return "Não consta na LD";
     const ldDocument = text(item && item.ldDocument);
@@ -188,6 +183,7 @@
   }
 
   function decisionLabel(row) {
+    if (row && row.manuallyIncluded && row.selectedForEgrdt) return "Incluído manualmente — LD: Não Alocado";
     if (row && row.hardBlock) return "Não será incluído";
     if (row && row.decision === (C && C.READY || "pronto")) return "Será incluído na eGRDT";
     if (row && row.decision === (C && C.DISCARD || "descartar")) return "Não será enviado novamente";
@@ -309,7 +305,7 @@
 
   function renameForEgrdtText(row) {
     const lookup = row && row.documentLookup || {};
-    const info = row && row.ntRename;
+    const info = row && (row.ntRename || row.ldRename);
     if (info) {
       return [
         "SIM — RENOMEADO PARA SEGUIR A LD.",
@@ -335,11 +331,16 @@
     const settings = options || {};
     return (results || []).map((row) => {
       const record = row && row.record || {};
+      const exactDocument = exactLdDocument(row);
+      const locatedDocument = text(record.document || row && row.documentLookup && row.documentLookup.ldDocument);
+      const manuallyIncluded = Boolean(row && row.manuallyIncluded && row.selectedForEgrdt);
       const ready = row && !row.hardBlock && row.decision === (C && C.READY || "pronto");
       const notice = row && row.ldConflict && row.ldConflict.hasNotice && row.ldConflict.noticeSummary
         ? ` ${row.ldConflict.noticeSummary}`
         : "";
-      const included = ready
+      const included = manuallyIncluded
+        ? "SIM — MANUAL (LD NÃO ALOCADO)"
+        : ready
         ? "SIM"
         : row && row.hardBlock
           ? "NÃO — BLOQUEADO"
@@ -349,11 +350,11 @@
       return {
         decision: decisionLabel(row),
         requestedDocument: text(row && row.documentLookup && row.documentLookup.inputDocument || row && row.name),
-        document: text(row && row.document),
+        document: exactDocument,
         ntSearchResult: text(row && row.documentLookup && row.documentLookup.resultLabel) || "PESQUISA NÃO REGISTRADA",
         searchedWithoutNt: text(row && row.documentLookup && row.documentLookup.searchedWithoutNt) || "Não se aplica",
         searchedWithNt: text(row && row.documentLookup && row.documentLookup.searchedWithNt) || "Não se aplica",
-        ldDocument: text(row && row.documentLookup && row.documentLookup.ldDocument) || "Não localizado",
+        ldDocument: locatedDocument || "Não localizado",
         ldDocumentForm: text(row && row.documentLookup && row.documentLookup.ldForm) || "Não localizado",
         ntLookup: text(row && row.documentLookup && row.documentLookup.message),
         renameForEgrdt: renameForEgrdtText(row),
@@ -378,7 +379,7 @@
         postingRevisionStatus: text(row && row.status),
         included,
         databook: text(record.databook),
-        observation: `${decisionObservation(row)}${notice}`.trim(),
+        observation: `${manuallyIncluded ? "INCLUSÃO MANUAL: o operador selecionou este documento para a GRDT mesmo com a LD registrando Não Alocado. O status original da LD foi preservado. " : ""}${decisionObservation(row)}${notice}`.trim(),
         sigemStatus: text(record.sigemStatus),
         originalFile: Array.isArray(row && row.files) && row.files.length
           ? row.files.map((item) => text(item && item.name)).filter(Boolean).join(" | ")
@@ -449,21 +450,23 @@
 
   function writeNtGuide(worksheet, startRow, lastColumn) {
     return writeGuide(worksheet, startRow, lastColumn, [
-      ["COMO LER A PESQUISA COM/SEM nt-", "FF153A5C", "FFFFFFFF", true],
-      ["Somente documentos ET: para cada código, o GRCON pesquisa na LD a forma sem nt- e a forma com nt- no início do 7º grupo.", "FFEAF2F8", "FF234B6B", false],
+      ["COMO LER A PESQUISA COM/SEM nt- E TAG", "FF153A5C", "FFFFFFFF", true],
+      ["Somente documentos ET: o GRCON pesquisa o código completo, a forma sem nt-, a forma com nt- e, se necessário, a combinação tipo documental (Grupo 6) + TAG.", "FFEAF2F8", "FF234B6B", false],
+      ["O tipo informado é obrigatório: REP só localiza REP, RUFF só localiza RUFF e a mesma regra vale para todos os tipos da norma. TAG igual em outro tipo não é aceito.", "FFF2F4F6", "FF52687B", false],
+      ["Quando tipo + TAG identificam uma única linha, os demais grupos do código são corrigidos pela forma oficial da LD e a renomeação para a eGRDT fica registrada neste RESUMO.", "FFEAF2F8", "FF234B6B", false],
       ["Quando a outra forma é encontrada, a coluna “RENOMEAÇÃO PARA ENTRAR NA EGRDT” mostra claramente DE → PARA. O arquivo final sempre usa o código exatamente como está na LD.", "FFFFF3CF", "FF7A5300", false],
-      ["Documentos N-1710 não usam nt-: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
+      ["Documentos N-1710 não usam nt- nem a regra de TAG dos relatórios ET: nesses casos o relatório mostra “NÃO SE APLICA” e pesquisa somente o código informado.", "FFF2F4F6", "FF52687B", false],
     ]);
   }
 
-  function writeExecutiveGuide(worksheet, startRow, lastColumn, allocationCenter) {
+  function writeExecutiveGuide(worksheet, startRow, lastColumn) {
     return writeGuide(worksheet, startRow, lastColumn, [
       ["COMO LER A RELAÇÃO ABAIXO", "FF153A5C", "FFFFFFFF", true],
-      ["Cada linha é um documento. A coluna “ENTRA NA EGRDT?” responde se ele será postado, e “O QUE FAZER” diz o que falta quando não será.", "FFEAF2F8", "FF234B6B", false],
-      ["Amarelo: o documento entra, mas o arquivo será renomeado para o código exatamente como está na LD. Vermelho: não entra e depende de uma correção antes.", "FFFFF3CF", "FF7A5300", false],
-      allocationCenter
-        ? ["“STATUS INTERNO” traz o comentário da fiscal sobre aquela alocação, buscado na central de alocação pelo número da coluna “ALOCAÇÃO”. Abra a central junto com este relatório para ver o texto mais recente; com ela fechada, a coluna mostra a última situação apurada.", "FFEEF6F1", "FF14614A", false]
-        : ["“STATUS INTERNO” mostra a situação apurada de cada documento. Para que ela traga também o comentário da fiscal, cadastre a central de alocação nas configurações do GRCON.", "FFF2F4F6", "FF52687B", false],
+      ["Cada linha é um documento. As primeiras colunas respondem se ele entra na eGRDT, o que precisa ser feito, sua alocação e o arquivo final.", "FFEAF2F8", "FF234B6B", false],
+      ["Continue para a direita para consultar todas as evidências: buscas com/sem nt- e TAG, código da LD, revisão, postagem, origem, linha, Databook e histórico.", "FFF2F4F6", "FF52687B", false],
+      ["Use os filtros do cabeçalho para separar prontos, bloqueados, não localizados e documentos que exigem conferência. Amarelo destaca renomeação; vermelho indica impedimento.", "FFFFF3CF", "FF7A5300", false],
+      ["Documentos Não Alocados ficam desmarcados por padrão, mas podem ser incluídos manualmente. Quando isso ocorrer, o Resumo mantém o status da LD e identifica claramente a decisão do operador.", "FFFFF3CF", "FF7A5300", false],
+      ["“STATUS INTERNO” mostra o comentário da fiscal registrado na LD; quando não há comentário, mostra a situação apurada pelo GRCON. O relatório não cria vínculos externos e pode ser aberto com segurança.", "FFEEF6F1", "FF14614A", false],
     ]);
   }
 
@@ -477,7 +480,7 @@
     const total = lista.length;
     const pct = (n) => (total ? ` (${Math.round((n / total) * 100)}% do total)` : "");
     const conta = (fn) => lista.filter(fn).length;
-    const incluido = (item) => text(item.included).toUpperCase() === "SIM";
+    const incluido = (item) => text(item.included).toUpperCase().startsWith("SIM");
     const bloqueado = (item) => text(item.included).toUpperCase().includes("BLOQUEADO");
     const emAnalise = (item) => text(item.included).toUpperCase().includes("EM ANÁLISE");
     const pendente = (item) => text(item.included).toUpperCase() === "PENDENTE";
@@ -490,6 +493,8 @@
     const renomeado = (item) => text(item.renameForEgrdt).toUpperCase().startsWith("SIM");
 
     const entram = conta(incluido);
+    const naoAlocadosIncluidosManualmente = conta((item) => incluido(item) && naoAlocado(item));
+    const naoAlocadosPendentes = conta((item) => !incluido(item) && naoAlocado(item));
     const naoEntram = total - entram;
     const perguntas = [
       ["Quantos documentos foram analisados?", `${total.toLocaleString("pt-BR")} documento(s).`],
@@ -502,8 +507,8 @@
       ["Algum arquivo precisou ser renomeado?", conta(renomeado)
         ? `Sim, ${conta(renomeado).toLocaleString("pt-BR")} arquivo(s). O nome passa a ser o código exatamente como está na LD, que é a forma aceita na postagem.`
         : "Não. Todos os códigos informados já coincidiam com a LD."],
-      ["O que depende de outra pessoa?", conta(naoAlocado)
-        ? `${conta(naoAlocado).toLocaleString("pt-BR")} documento(s) dependem da regularização da alocação na LD antes de qualquer nova tentativa.`
+      ["O que depende de outra pessoa?", naoAlocadosPendentes || naoAlocadosIncluidosManualmente
+        ? `${naoAlocadosPendentes.toLocaleString("pt-BR")} documento(s) permanecem fora aguardando alocação.${naoAlocadosIncluidosManualmente ? ` ${naoAlocadosIncluidosManualmente.toLocaleString("pt-BR")} foram incluído(s) manualmente apesar do status Não Alocado.` : ""}`
         : "Nada. Nenhum documento está travado por alocação."],
     ];
 
@@ -526,10 +531,12 @@
       // Texto escrito para quem decide, não para quem opera o aplicativo:
       // o que acontece com o documento e de quem depende resolver.
       let executiveAction = text(item.observation);
-      if (allocated.includes("NÃO") && allocated.includes("ALOCADO")) {
+      if (included.startsWith("SIM") && allocated.includes("NÃO") && allocated.includes("ALOCADO")) {
+        executiveAction = "Será postado por decisão manual do operador, embora a LD permaneça registrada como Não Alocado. Regularize a alocação para manter a rastreabilidade documental.";
+      } else if (allocated.includes("NÃO") && allocated.includes("ALOCADO")) {
         const comentario = text(item.fiscalComment);
         executiveAction = `Não será postado: o documento não está alocado na LD.${comentario ? ` Comentário da Fiscal: ${comentario}` : ""} Regularize a alocação na LD para liberar a postagem.`;
-      } else if (included === "SIM") {
+      } else if (included.startsWith("SIM")) {
         executiveAction = text(item.renameForEgrdt).toUpperCase().startsWith("SIM")
           ? "Será postado. O arquivo entra com o código exatamente como está na LD, que é a forma aceita na postagem."
           : "Será postado. Não há pendências neste documento.";
@@ -550,14 +557,16 @@
     const settings = options || {};
     const sectionStart = Number(startRow) || 22;
     const lastColumn = columnLetter(columns.length);
-    const allocationCenter = normalizeAllocationCenter(settings.allocationCenter);
+    const guideLastColumn = settings.executive
+      ? columnLetter(Math.min(columns.length, SUMMARY_PRIORITY_COLUMNS.length))
+      : lastColumn;
     const titleRow = settings.executive
-      ? writeExecutiveGuide(worksheet, sectionStart, lastColumn, allocationCenter)
+      ? writeExecutiveGuide(worksheet, sectionStart, guideLastColumn)
       : writeNtGuide(worksheet, sectionStart, lastColumn);
     const headerRow = titleRow + 1;
     const dataStart = headerRow + 1;
 
-    worksheet.mergeCells(`A${titleRow}:${lastColumn}${titleRow}`);
+    worksheet.mergeCells(`A${titleRow}:${guideLastColumn}${titleRow}`);
     const title = worksheet.getCell(titleRow, 1);
     title.value = settings.title || "AUDITORIA DETALHADA POR DOCUMENTO";
     title.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
@@ -578,7 +587,6 @@
     return {
       titleRow, headerRow, dataStart, lastColumn, columns, rows,
       executive: Boolean(settings.executive),
-      allocationCenter,
     };
   }
 
@@ -656,22 +664,11 @@
       includedCell.alignment = { vertical: "middle", horizontal: "center" };
   }
 
-  /**
-   * Troca o texto da coluna STATUS INTERNO pela PROCX na central de alocação,
-   * guardando o status apurado pelo GRCON como valor em cache: assim a célula
-   * já chega preenchida para quem abre o relatório fora da rede, e passa a
-   * mostrar o comentário da fiscal assim que a central é aberta.
-   */
-  function styleInternalStatusCell(row, columns, allocationCenter) {
+  /** Mantém STATUS INTERNO como texto seguro, sem fórmula ou vínculo externo. */
+  function styleInternalStatusCell(row, columns) {
     const internalColumn = columns.findIndex((column) => column.key === "internalStatus") + 1;
     if (!internalColumn) return;
     const cell = row.getCell(internalColumn);
-    const fallback = text(cell.value);
-    const allocationColumn = columns.findIndex((column) => column.key === "allocation") + 1;
-    if (allocationCenter && allocationColumn) {
-      const allocationCell = `$${columnLetter(allocationColumn)}${row.number}`;
-      cell.value = { formula: allocationCenterFormula(allocationCenter, allocationCell, fallback), result: fallback };
-    }
     cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF3C5468" } };
     cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
   }
@@ -682,7 +679,7 @@
     styleDecisionCell(row);
     styleSearchCell(row, columns);
     styleAllocationCell(row, columns);
-    styleInternalStatusCell(row, columns, layout.allocationCenter);
+    styleInternalStatusCell(row, columns);
     styleRenameCells(row, columns);
     styleIncludedCell(row, columns);
   }
@@ -690,11 +687,11 @@
   function finishTable(worksheet, layout, rowCount) {
     const finalRow = Math.max(layout.headerRow, layout.dataStart + rowCount - 1);
     worksheet.autoFilter = { from: `A${layout.headerRow}`, to: `${layout.lastColumn}${finalRow}` };
-    // O Resumo é lido de cima para baixo, junto com o bloco de perguntas, e o
-    // painel congelado atrapalhava essa leitura. Na Auditoria detalhada, que é
-    // uma tabela longa de conferência, o cabeçalho fixo continua ajudando.
+    // O Resumo abre no painel gerencial. Como a relação completa é larga,
+    // somente as duas primeiras colunas ficam fixas durante a rolagem lateral;
+    // congelar todas as linhas do painel tiraria espaço útil da tabela.
     worksheet.views = layout.executive
-      ? [{ showGridLines: false, zoomScale: 85, activeCell: "A1" }]
+      ? [{ state: "frozen", xSplit: 2, showGridLines: false, zoomScale: 80, activeCell: "C1" }]
       : [{ state: "frozen", ySplit: layout.headerRow, activeCell: `A${layout.dataStart}`, showGridLines: false, zoomScale: 80 }];
     return { ...layout, finalRow };
   }
@@ -735,19 +732,18 @@
   function executiveTableSettings(options) {
     return {
       executive: true,
-      title: "RELAÇÃO DOS DOCUMENTOS ANALISADOS",
-      allocationCenter: options && options.allocationCenter,
+      title: "DOCUMENTOS ANALISADOS — DECISÃO E EVIDÊNCIAS COMPLETAS",
     };
   }
 
   function writeExecutiveTable(worksheet, rows, startRow, options) {
     const source = executiveRows(rows);
-    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, executiveTableSettings(options)));
+    return writeRows(worksheet, source, prepareTable(worksheet, source, startRow, SUMMARY_COLUMNS, executiveTableSettings(options)));
   }
 
   async function writeExecutiveTableAsync(worksheet, rows, startRow, options) {
     const source = executiveRows(rows);
-    const layout = prepareTable(worksheet, source, startRow, EXECUTIVE_COLUMNS, executiveTableSettings(options));
+    const layout = prepareTable(worksheet, source, startRow, SUMMARY_COLUMNS, executiveTableSettings(options));
     if (!Large || !Large.pause || source.length <= 600) return writeRows(worksheet, source, layout);
     return writeRowsAsync(worksheet, source, layout);
   }
@@ -765,22 +761,25 @@
   async function writeExecutiveSummarySheet(worksheet, rows, options) {
     const settings = options || {};
     const briefing = executiveBriefing(rows);
-    const columnCount = EXECUTIVE_COLUMNS.length;
-    const lastColumn = columnLetter(columnCount);
-    worksheet.columns = EXECUTIVE_COLUMNS.map((column) => ({ width: column.width }));
+    const columnCount = SUMMARY_COLUMNS.length;
+    // O painel ocupa apenas as nove colunas prioritárias. A relação detalhada
+    // continua para a direita, sem esticar os cartões e os blocos gerenciais.
+    const dashboardColumnCount = SUMMARY_PRIORITY_COLUMNS.length;
+    const dashboardLastColumn = columnLetter(dashboardColumnCount);
+    worksheet.columns = SUMMARY_COLUMNS.map((column) => ({ width: column.width }));
 
     for (let row = 1; row <= 3; row += 1) {
-      for (let col = 1; col <= columnCount; col += 1) {
+      for (let col = 1; col <= dashboardColumnCount; col += 1) {
         worksheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
       }
     }
-    worksheet.mergeCells(`C1:${lastColumn}2`);
+    worksheet.mergeCells(`C1:${dashboardLastColumn}2`);
     const titulo = worksheet.getCell("C1");
     titulo.value = "GRCON · RELATÓRIO DE TRIAGEM DOCUMENTAL";
     titulo.font = { name: "Aptos Display", size: 19, bold: true, color: { argb: "FFFFFFFF" } };
     titulo.alignment = { vertical: "middle", horizontal: "left" };
 
-    worksheet.mergeCells(`A4:${lastColumn}4`);
+    worksheet.mergeCells(`A4:${dashboardLastColumn}4`);
     const meta = worksheet.getCell("A4");
     meta.value = text(settings.metadata);
     meta.font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
@@ -795,10 +794,10 @@
       ["NÃO SERÃO POSTADOS", briefing.naoEntram, "FFA64035"],
       ["ARQUIVOS RENOMEADOS", briefing.renomeados, "FFA56812"],
     ];
-    const larguraCartao = Math.max(1, Math.floor(columnCount / cards.length));
+    const larguraCartao = Math.max(1, Math.floor(dashboardColumnCount / cards.length));
     cards.forEach(([label, count, color], index) => {
       const inicio = index * larguraCartao + 1;
-      const fim = index === cards.length - 1 ? columnCount : inicio + larguraCartao - 1;
+      const fim = index === cards.length - 1 ? dashboardColumnCount : inicio + larguraCartao - 1;
       worksheet.mergeCells(6, inicio, 8, fim);
       const cell = worksheet.getCell(6, inicio);
       cell.value = { richText: [
@@ -815,7 +814,7 @@
       };
     });
 
-    const meio = Math.max(1, Math.floor(columnCount / 2));
+    const meio = Math.max(1, Math.floor(dashboardColumnCount / 2));
     const colunaMeio = columnLetter(meio);
     const colunaDireita = columnLetter(meio + 1);
     const faixa = (row, texto, de, ate) => {
@@ -843,13 +842,13 @@
       worksheet.getRow(row).height = 30;
     });
 
-    faixa(10, "POR QUE ALGUNS NÃO SERÃO POSTADOS", colunaDireita, lastColumn);
+    faixa(10, "POR QUE ALGUNS NÃO SERÃO POSTADOS", colunaDireita, dashboardLastColumn);
     const motivos = briefing.motivos.length
       ? briefing.motivos
       : [["Nenhum documento ficou de fora", 0, "Todos os documentos analisados serão postados."]];
     motivos.slice(0, Math.max(briefing.perguntas.length, 1)).forEach(([motivo, quantidade, acao], index) => {
       const row = 11 + index;
-      worksheet.mergeCells(`${colunaDireita}${row}:${lastColumn}${row}`);
+      worksheet.mergeCells(`${colunaDireita}${row}:${dashboardLastColumn}${row}`);
       const cell = worksheet.getCell(`${colunaDireita}${row}`);
       cell.value = { richText: [
         { font: { name: "Aptos Display", size: 12, bold: true, color: { argb: quantidade ? "FFA64035" : "FF0C7657" } }, text: quantidade ? `${quantidade.toLocaleString("pt-BR")}  ` : "" },
@@ -863,20 +862,20 @@
 
     const linhasBloco = Math.max(briefing.perguntas.length, motivos.length);
     const origemRow = 12 + linhasBloco;
-    faixa(origemRow, "DE ONDE VEIO ESTA ANÁLISE", "A", lastColumn);
+    faixa(origemRow, "DE ONDE VEIO ESTA ANÁLISE", "A", dashboardLastColumn);
     const central = normalizeAllocationCenter(settings.allocationCenter);
     const origem = [
       ["Lista de documentos (LD)", text(settings.ldName) || "Não informado"],
       ["Versão da LD enviada", text(settings.ldVersion) || "Não informada"],
       ["Documentos conferidos a partir de", text(settings.relationLabel) || "Pasta documental"],
-      ["Central de alocação (STATUS INTERNO)", central
-        ? `${central.path} · aba ${central.sheet} · alocação na coluna ${central.keyColumn} · comentário na coluna ${central.commentColumn}`
-        : "Não cadastrada — a coluna mostra a situação apurada pelo GRCON"],
+      ["Referência da central de alocação", central
+        ? `${central.path} · aba ${central.sheet} · cadastro informativo, sem conexão externa no relatório`
+        : "Não cadastrada — STATUS INTERNO usa a LD e a situação apurada pelo GRCON"],
     ];
     origem.forEach(([label, value], index) => {
       const row = origemRow + 1 + index;
       worksheet.mergeCells(`A${row}:D${row}`);
-      worksheet.mergeCells(`E${row}:${lastColumn}${row}`);
+      worksheet.mergeCells(`E${row}:${dashboardLastColumn}${row}`);
       worksheet.getCell(`A${row}`).value = label;
       worksheet.getCell(`E${row}`).value = value;
       worksheet.getCell(`A${row}`).font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF53697B" } };
@@ -884,7 +883,7 @@
       worksheet.getCell(`A${row}`).alignment = { vertical: "middle", indent: 1 };
       worksheet.getCell(`E${row}`).alignment = { vertical: "middle", wrapText: true };
       if (index % 2) {
-        for (let col = 1; col <= columnCount; col += 1) {
+        for (let col = 1; col <= dashboardColumnCount; col += 1) {
           worksheet.getCell(row, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
         }
       }
@@ -904,7 +903,7 @@
   return Object.freeze({
     COLUMNS,
     EXECUTIVE_COLUMNS,
-    allocationCenterFormula,
+    SUMMARY_COLUMNS,
     allocationReason,
     buildRows,
     buildRowsAsync,

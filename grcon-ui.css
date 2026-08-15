@@ -1206,6 +1206,24 @@
     color: var(--text-3, #667b8d);
     font-size: .74rem;
   }
+  html[data-app="GRCON"] .p1-batch-sequence-card > header .p1-batch-discipline {
+    color: var(--brand-800, #174f76);
+    font-size: .86rem;
+    overflow-wrap: anywhere;
+  }
+  html[data-app="GRCON"] .p1-batch-discipline-note {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .65rem;
+    padding: .46rem .58rem;
+    border-radius: var(--radius-sm, 8px);
+    background: color-mix(in srgb, var(--brand-50, #eef7ff) 78%, var(--surface-1, #fff));
+    color: var(--text-2, #40566a);
+    font-size: .72rem;
+  }
+  html[data-app="GRCON"] .p1-batch-discipline-note span { font-weight: 750; }
+  html[data-app="GRCON"] .p1-batch-discipline-note small { color: var(--text-3, #667b8d); }
   html[data-app="GRCON"] .p1-batch-sequence-fields {
     min-width: 0;
     display: grid;
