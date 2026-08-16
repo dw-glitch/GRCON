@@ -21,6 +21,7 @@
     lds: [],           // { id, file, name, records, error }
     documents: [],     // { id, document, requestedTitle, selected }
     results: new Map(), // id -> linha da consulta
+    lookups: new Map(), // id -> resultado completo, usado para gerar a solicitação
     index: null,
     running: false,
     search: "",
@@ -112,6 +113,7 @@
     reconstruirIndice();
     // O resultado anterior citava LDs que não estão mais anexadas.
     state.results.clear();
+    state.lookups.clear();
     render();
     notify(`LD removida: ${alvo.name}. Consulte de novo para atualizar o resultado.`, "info");
   }
@@ -178,6 +180,7 @@
     guardarParaDesfazer("limpar a consulta");
     state.documents = [];
     state.results.clear();
+    state.lookups.clear();
     render();
     notify("Consulta limpa. Use Desfazer se foi sem querer.", "info");
   }
@@ -203,6 +206,7 @@
         const item = alvos[i];
         const resultado = R().lookupDocument(item.document, state.index, { requestedTitle: item.requestedTitle });
         state.results.set(item.id, R().consultationRow(resultado));
+        state.lookups.set(item.id, resultado);
       }
       els.progressFill.style.width = `${Math.round((fim / total) * 100)}%`;
       els.progressText.textContent = `Consultando ${fim.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")}…`;
@@ -325,6 +329,7 @@
     els.dedupe.disabled = !temDocs;
     els.copy.disabled = !temResultado;
     els.export.disabled = !temResultado;
+    els.toRequest.disabled = !temResultado || !selecionados;
     els.clear.disabled = !temDocs && !temResultado;
     els.undo.disabled = !state.undo.length;
     els.selectionNote.textContent = selecionados
@@ -407,6 +412,93 @@
     }
   }
 
+
+  // ---------------------------------------------------------------------------
+  // Transformar a consulta em solicitação
+  //
+  // É o caminho que evita redigitar: cada documento consultado vira um item do
+  // Controle de Solicitações, numerado na sequência da planilha, já com o que a
+  // LD respondeu. O que depende de etapas posteriores fica em branco de
+  // propósito — a saída marca como "na" e a pessoa preenche quando acontecer.
+  // ---------------------------------------------------------------------------
+  function cabecalhoDaSolicitacao() {
+    const data = els.reqReceived && els.reqReceived.value;
+    const dataBr = data ? data.split("-").reverse().join("/") : "";
+    return {
+      owner: els.reqOwner ? els.reqOwner.value.trim() : "",
+      receivedAt: dataBr,
+      requester: els.reqRequester ? els.reqRequester.value.trim() : "",
+      requestType: els.reqType ? els.reqType.value : "",
+      origin: els.reqOrigin ? els.reqOrigin.value : "",
+      documentPath: els.reqPath ? els.reqPath.value.trim() : "",
+    };
+  }
+
+  function documentosParaSolicitacao() {
+    return state.documents
+      .filter((item) => item.selected && state.results.has(item.id))
+      .map((item) => ({
+        document: item.document,
+        requestedTitle: item.requestedTitle,
+        lookup: state.lookups.get(item.id) || null,
+      }));
+  }
+
+  function linhasDaSolicitacao() {
+    const proximo = Math.max(1, Math.trunc(Number(els.reqNextItem && els.reqNextItem.value)) || 1);
+    // nextItemNumber devolve o maior + 1, então passamos o anterior ao desejado.
+    const base = proximo > 1 ? [{ protocol: String(proximo - 1) }] : [];
+    return R().buildControlRows(documentosParaSolicitacao(), cabecalhoDaSolicitacao(), base);
+  }
+
+  function renderPainelSolicitacao() {
+    if (!els.reqPreview) return;
+    const linhas = linhasDaSolicitacao();
+    if (!linhas.length) {
+      els.reqPreview.innerHTML = '<p class="requests-vazio">Selecione ao menos um documento já consultado.</p>';
+      return;
+    }
+    const novos = linhas.filter((linha) => linha.needsLdInclusion === "sim").length;
+    const validar = linhas.filter((linha) => linha._needsManualValidation).length;
+    els.reqPreview.innerHTML = `
+      <p><strong>${linhas.length}</strong> item(ns), do <strong>${linhas[0].item}</strong> ao <strong>${linhas[linhas.length - 1].item}</strong>.
+      ${novos ? `${novos} precisam de inclusão na LD. ` : ""}${validar ? `${validar} pedem conferência antes de seguir.` : ""}</p>
+      <table class="requests-req-table"><thead><tr><th>ITEM</th><th>Documento</th><th>Inclusão na LD?</th><th>Alocação</th><th>Status SIGEM</th></tr></thead><tbody>
+      ${linhas.slice(0, 8).map((linha) => `<tr><td>${escapeHtml(linha.item)}</td><td><code>${escapeHtml(linha.document)}</code></td><td>${escapeHtml(linha.needsLdInclusion || "—")}</td><td>${escapeHtml(linha.allocation || "—")}</td><td>${escapeHtml(linha.sigemStatus || "—")}</td></tr>`).join("")}
+      </tbody></table>
+      ${linhas.length > 8 ? `<p class="requests-vazio">…e mais ${linhas.length - 8} item(ns).</p>` : ""}`;
+  }
+
+  function abrirPainelSolicitacao() {
+    const disponiveis = documentosParaSolicitacao();
+    if (!disponiveis.length) { notify("Consulte e selecione os documentos antes de gerar a solicitação.", "warn"); return; }
+    // Semeia a lista de tipos com os rótulos do controle oficial.
+    if (els.reqType && !els.reqType.options.length) {
+      R().requestTypeList(null).filter((tipo) => tipo.active).forEach((tipo) => {
+        const opcao = document.createElement("option");
+        opcao.value = tipo.label;
+        opcao.textContent = tipo.label;
+        els.reqType.appendChild(opcao);
+      });
+    }
+    if (els.reqReceived && !els.reqReceived.value) els.reqReceived.value = new Date().toISOString().slice(0, 10);
+    els.requestPanel.hidden = false;
+    renderPainelSolicitacao();
+    els.requestPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  async function copiarLinhasDaSolicitacao(comCabecalho) {
+    const linhas = linhasDaSolicitacao();
+    if (!linhas.length) return;
+    const texto = root.GrconRequestsReport.controlClipboardText(linhas, comCabecalho);
+    try {
+      await navigator.clipboard.writeText(texto);
+      notify(`${linhas.length} linha(s) copiadas${comCabecalho ? " com cabeçalho" : ""}. Cole no Controle de Solicitações.`, "success");
+    } catch (_) {
+      notify("O navegador bloqueou a cópia automática.", "warn");
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Ligações
   // ---------------------------------------------------------------------------
@@ -443,6 +535,19 @@
     els.checkAll = $("#requests-check-all");
     els.empty = $("#requests-empty");
     els.summary = $("#requests-summary");
+    els.toRequest = $("#requests-to-request");
+    els.requestPanel = $("#requests-request-panel");
+    els.reqNextItem = $("#requests-req-next-item");
+    els.reqOwner = $("#requests-req-owner");
+    els.reqReceived = $("#requests-req-received");
+    els.reqRequester = $("#requests-req-requester");
+    els.reqType = $("#requests-req-type");
+    els.reqOrigin = $("#requests-req-origin");
+    els.reqPath = $("#requests-req-path");
+    els.reqPreview = $("#requests-req-preview");
+    els.reqCopy = $("#requests-req-copy");
+    els.reqCopyHeaders = $("#requests-req-copy-headers");
+    els.reqClose = $("#requests-req-close");
     els.step1 = $("#requests-step-1");
     els.step2 = $("#requests-step-2");
     els.step3 = $("#requests-step-3");
@@ -500,6 +605,12 @@
     els.export.addEventListener("click", exportarExcel);
     els.undo.addEventListener("click", desfazer);
     els.clear.addEventListener("click", limparConsulta);
+    els.toRequest.addEventListener("click", abrirPainelSolicitacao);
+    els.reqCopy.addEventListener("click", () => copiarLinhasDaSolicitacao(false));
+    els.reqCopyHeaders.addEventListener("click", () => copiarLinhasDaSolicitacao(true));
+    els.reqClose.addEventListener("click", () => { els.requestPanel.hidden = true; });
+    [els.reqNextItem, els.reqOwner, els.reqReceived, els.reqRequester, els.reqType, els.reqOrigin, els.reqPath]
+      .forEach((campo) => campo && campo.addEventListener("input", renderPainelSolicitacao));
 
     els.tbody.addEventListener("change", (evento) => {
       const caixa = evento.target.closest("[data-select]");

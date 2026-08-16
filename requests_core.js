@@ -541,8 +541,92 @@
     };
   }
 
+  /**
+   * Converte um item já triado numa linha do Controle de Solicitações.
+   *
+   * Só preenche o que veio da LD ou do que a pessoa informou no cabeçalho da
+   * solicitação. O que depende de etapas posteriores — retorno da fiscal, datas
+   * de submissão — fica em branco para a saída marcar como "na": inventar aqui
+   * seria pior do que deixar a pessoa preencher.
+   */
+  function controlRowFromItem(input) {
+    const dados = input || {};
+    const triagem = dados.triage || {};
+    const linha = triagem.row || {};
+    const cabecalho = dados.header || {};
+    const escolhida = dados.lookup && dados.lookup.chosen;
+
+    // "sim" quando o documento não está na LD; "não" quando já está previsto.
+    const precisaInclusao = triagem.isNewDocument ? "sim" : linha.situation === "Localizado" || linha.situation === "Requer validação manual" ? "não" : "";
+
+    // A observação junta o motivo da classificação com a ação recomendada, que
+    // é o que a pessoa precisa ler para decidir — sem repetir o óbvio.
+    const observacao = [triagem.reason, triagem.recommendedAction]
+      .map((valor) => text(valor)).filter(Boolean).join(" ");
+
+    return {
+      item: text(dados.protocol),
+      owner: text(cabecalho.owner),
+      receivedAt: text(cabecalho.receivedAt),
+      requester: text(cabecalho.requester),
+      // A família documental vem da aba em que a LD guardou o documento.
+      documentFamily: escolhida ? text(escolhida.sheet) : "",
+      requestType: text(cabecalho.requestType),
+      origin: text(cabecalho.origin),
+      emailBody: text(cabecalho.emailBody),
+      document: text(dados.document),
+      documentPath: text(cabecalho.documentPath),
+      needsLdInclusion: precisaInclusao,
+      ldVersion: escolhida ? text(escolhida.ldVersion) : "",
+      ldApprovedAt: "",
+      allocation: escolhida ? text(escolhida.allocation) : "",
+      reference: escolhida ? text(escolhida.ld) : "",
+      allocSentAt: "",
+      fiscal1ReturnedAt: "",
+      fiscal1Answer: "",
+      fiscal2ReturnedAt: "",
+      sigemOwner: "",
+      sigemStatus: escolhida ? text(escolhida.sigemStatus) : "",
+      sigemSubmittedAt: "",
+      observations: observacao,
+      pwN1710: "",
+      overallStatus: text(cabecalho.overallStatus) || "Recebida",
+      statusDate: text(cabecalho.receivedAt),
+    };
+  }
+
+  /**
+   * Transforma os documentos consultados em linhas do controle, numerando os
+   * itens a partir do próximo livre. É o caminho que evita redigitar o que o
+   * GRCON já descobriu.
+   */
+  function buildControlRows(entries, header, existingItems) {
+    const numerados = assignItemNumbers(entries || [], existingItems);
+    return numerados.map((entrada) => {
+      const triagem = classifyRequestItem({
+        lookup: entrada.lookup,
+        requestedTitle: entrada.requestedTitle,
+        requestedRevision: entrada.requestedRevision,
+      });
+      return {
+        ...controlRowFromItem({
+          protocol: entrada.protocol,
+          document: entrada.document,
+          lookup: entrada.lookup,
+          triage: triagem,
+          header: header || {},
+        }),
+        _itemNumber: entrada.itemNumber,
+        _classification: triagem.classification,
+        _needsManualValidation: triagem.needsManualValidation,
+      };
+    });
+  }
+
   return Object.freeze({
     CLASSIFICATIONS,
+    controlRowFromItem,
+    buildControlRows,
     compareTitles,
     classifyRequestItem,
     DEFAULT_REQUEST_TYPES,

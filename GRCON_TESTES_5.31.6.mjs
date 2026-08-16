@@ -467,6 +467,42 @@ check("correspondência por variação de código mantém a conferência mesmo c
   assert.equal(t.needsManualValidation, true);
 });
 
+check("consulta vira linha do controle sem redigitar o que o GRCON já achou", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_ALFA.xlsx", {
+    grdt: "GRDT-0042", allocation: "C1O-ALOC-CM-0095-2026", ldVersion: "Rev. C",
+  })], []);
+  const entradas = [
+    { document: ntBaseDocument, lookup: Requests.lookupDocument(ntBaseDocument, index) },
+    { document: "C1O_RNEST_U32_9.9.9.9_INS_RIR_NOVO-1", lookup: Requests.lookupDocument("C1O_RNEST_U32_9.9.9.9_INS_RIR_NOVO-1", index) },
+  ];
+  const cabecalho = { owner: "Laís", receivedAt: "16/08/2026", requester: "Gabriela Borges", requestType: "POSTAGEM NO SIGEM", origin: "E-MAIL" };
+  const linhas = Requests.buildControlRows(entradas, cabecalho, [{ protocol: "556" }]);
+
+  // Numeração continua a sequência da planilha.
+  assert.deepEqual(linhas.map((l) => l.item), ["557", "558"]);
+  // O cabeçalho da solicitação é repetido em cada item, como na planilha.
+  assert.equal(linhas[0].owner, "Laís");
+  assert.equal(linhas[0].requester, "Gabriela Borges");
+  // O que veio da LD entra sozinho.
+  assert.equal(linhas[0].documentFamily, "ET");
+  assert.equal(linhas[0].allocation, "C1O-ALOC-CM-0095-2026");
+  assert.equal(linhas[0].sigemStatus, "Não Postado");
+  assert.equal(linhas[0].reference, "LD_ALFA.xlsx");
+  // A classificação decide se precisa de inclusão na LD.
+  assert.equal(linhas[0].needsLdInclusion, "não");
+  assert.equal(linhas[1].needsLdInclusion, "sim");
+  assert.equal(linhas[1]._classification, Requests.CLASSIFICATIONS.NOVO);
+  // Documento novo não recebe dado nenhum da LD.
+  assert.equal(linhas[1].allocation, "");
+  assert.equal(linhas[1].sigemStatus, "");
+
+  // Etapas futuras ficam em branco e saem como "na" na planilha.
+  const saida = RequestsReport.controlRows(linhas)[0];
+  assert.equal(saida.length, 26);
+  assert.equal(saida[16], "na");
+  assert.equal(saida[0], "557");
+});
+
 check("exportação reproduz as 26 colunas do Controle de Solicitações", () => {
   // Grafia e ordem vieram da planilha oficial da rede. Qualquer diferença
   // obriga a rearrumar colunas na hora de colar — o retrabalho que esta saída

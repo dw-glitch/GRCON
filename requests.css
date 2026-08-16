@@ -196,3 +196,36 @@ html[data-app="GRCON"][data-theme="dark"] .requests-table tbody tr.precisa-valid
   html[data-app="GRCON"] .requests-results-tools { margin-left: 0; width: 100%; }
   html[data-app="GRCON"] .requests-search input { min-width: 100%; }
 }
+
+/* Painel de "Transformar em solicitação": os campos que se repetem em todos os
+   itens ficam no topo, e a prévia mostra o que será colado antes de copiar. */
+html[data-app="GRCON"] .requests-request-panel { border-color: var(--brand-600, #24689a); }
+html[data-app="GRCON"] .requests-request-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .6rem;
+}
+html[data-app="GRCON"] .requests-request-grid label { display: grid; gap: .2rem; font-size: .74rem; color: var(--text-2, #385069); }
+html[data-app="GRCON"] .requests-request-grid input,
+html[data-app="GRCON"] .requests-request-grid select {
+  height: 1.95rem; padding: 0 .5rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .4rem; font-size: .78rem; min-width: 0;
+  background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-request-wide { grid-column: 1 / -1; }
+html[data-app="GRCON"] .requests-request-preview { font-size: .78rem; color: var(--text-2, #385069); }
+html[data-app="GRCON"] .requests-request-preview p { margin: .2rem 0 .5rem; }
+html[data-app="GRCON"] .requests-req-table { width: 100%; border-collapse: collapse; font-size: .74rem; }
+html[data-app="GRCON"] .requests-req-table th {
+  text-align: left; padding: .3rem .45rem; background: var(--surface-3, #eef2f6);
+  color: var(--text-2, #385069); font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+}
+html[data-app="GRCON"] .requests-req-table td { padding: .3rem .45rem; border-bottom: 1px solid var(--border-1, #dce4ea); }
+html[data-app="GRCON"] .requests-req-table code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .7rem; overflow-wrap: anywhere; }
+
+@media (prefers-color-scheme: dark) {
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-request-grid input,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-request-grid select { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-req-table th { background: var(--surface-3); }
+}
+html[data-app="GRCON"][data-theme="dark"] .requests-request-grid input,
+html[data-app="GRCON"][data-theme="dark"] .requests-request-grid select { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+html[data-app="GRCON"][data-theme="dark"] .requests-req-table th { background: var(--surface-3); }
