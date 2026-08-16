@@ -575,6 +575,46 @@
     }
   }
 
+
+  /**
+   * Grava a solicitação na área compartilhada. Só grava o que está selecionado
+   * na tabela, e o número da solicitação é obrigatório porque é ele que agrupa
+   * os itens — sem ele o banco recusa, e com razão.
+   */
+  async function salvarSolicitacao() {
+    const Cloud = root.GrconCloud;
+    if (!Cloud || !Cloud.saveRequest) { notify("Área compartilhada indisponível.", "warn"); return; }
+    const numero = els.reqNumber ? els.reqNumber.value.trim() : "";
+    if (!numero) {
+      notify("Informe o número da solicitação antes de salvar.", "warn");
+      if (els.reqNumber) els.reqNumber.focus();
+      return;
+    }
+    const itens = state.requestRows.filter((linha) => linha._selected !== false);
+    if (!itens.length) { notify("Selecione ao menos um item.", "warn"); return; }
+
+    els.reqSave.disabled = true;
+    els.reqSaved.textContent = "Salvando…";
+    try {
+      const resultado = await Cloud.saveRequest({
+        requestNumber: numero,
+        receivedAtIso: els.reqReceived ? els.reqReceived.value : "",
+        requester: els.reqRequester ? els.reqRequester.value.trim() : "",
+        owner: els.reqOwner ? els.reqOwner.value.trim() : "",
+        status: "recebido",
+      }, itens);
+      if (!resultado.ok) {
+        els.reqSaved.textContent = "";
+        notify(resultado.error, "warn");
+        return;
+      }
+      els.reqSaved.textContent = `${itens.length} item(ns) salvos em ${numero}.`;
+      notify(`Solicitação ${numero} salva com ${itens.length} item(ns).`, "success");
+    } finally {
+      els.reqSave.disabled = false;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Ligações
   // ---------------------------------------------------------------------------
@@ -613,6 +653,7 @@
     els.summary = $("#requests-summary");
     els.toRequest = $("#requests-to-request");
     els.requestPanel = $("#requests-request-panel");
+    els.reqNumber = $("#requests-req-number");
     els.reqNextItem = $("#requests-req-next-item");
     els.reqOwner = $("#requests-req-owner");
     els.reqReceived = $("#requests-req-received");
@@ -635,6 +676,8 @@
     els.batchTableWrap = $("#requests-batch-table-wrap");
     els.batchTbody = $("#requests-batch-tbody");
     els.batchAll = $("#requests-batch-all");
+    els.reqSave = $("#requests-req-save");
+    els.reqSaved = $("#requests-req-saved");
     els.step1 = $("#requests-step-1");
     els.step2 = $("#requests-step-2");
     els.step3 = $("#requests-step-3");
@@ -698,6 +741,7 @@
     els.reqClose.addEventListener("click", () => { els.requestPanel.hidden = true; });
     els.batchApply.addEventListener("click", aplicarEmLote);
     els.batchUndo.addEventListener("click", desfazerLote);
+    els.reqSave.addEventListener("click", salvarSolicitacao);
     els.batchAll.addEventListener("change", () => {
       state.requestRows.forEach((linha) => { linha._selected = els.batchAll.checked; });
       renderPainelSolicitacao();

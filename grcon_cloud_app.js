@@ -488,6 +488,112 @@
     }
   }
 
+  /* ── Consultas e Solicitações ── */
+
+  // O protocolo é o número do ITEM da planilha oficial e a unicidade é do
+  // banco, não do aplicativo: duas pessoas gerando itens ao mesmo tempo não
+  // podem acabar com o mesmo número.
+
+  async function listRequestItems() {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    try {
+      const { data, error } = await state.client.rpc("grcon_list_request_items", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.debug("GRCON Cloud: solicitações indisponíveis agora", error);
+      return [];
+    }
+  }
+
+  /**
+   * Grava a solicitação com os itens numa transação. Se um protocolo já existir
+   * em outra solicitação, o banco recusa a gravação inteira — é melhor falhar
+   * do que deixar dois itens com a mesma identidade.
+   */
+  async function saveRequest(header, items) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    const lista = Array.isArray(items) ? items : [];
+    if (!lista.length) return { ok: false, error: "Nenhum item para gravar." };
+    try {
+      const { data, error } = await state.client.rpc("grcon_save_request", {
+        target_workspace: state.membership.workspace_id,
+        request_payload: {
+          request_number: String(header?.requestNumber || "").trim(),
+          received_at: String(header?.receivedAtIso || ""),
+          requester: String(header?.requester || ""),
+          owner_name: String(header?.owner || ""),
+          notes: String(header?.notes || ""),
+          status: String(header?.status || "recebido"),
+        },
+        items_payload: lista.map((item) => ({
+          item_number: Number(item.itemNumber) || Number(item.item) || null,
+          protocol: String(item.item || ""),
+          document: String(item.document || ""),
+          requested_title: String(item.requestedTitle || ""),
+          official_title: String(item.officialTitle || ""),
+          type_code: String(item.requestType || ""),
+          owner_name: String(item.owner || ""),
+          status: String(item.itemStatus || "recebido"),
+          classification: String(item._classification || ""),
+          recommended_action: String(item.recommendedAction || ""),
+          reason: String(item.observations || ""),
+          ld_name: String(item.reference || ""),
+          all_lds: String(item.allLds || ""),
+          allocation: String(item.allocation || ""),
+          allocation_status: String(item.needsLdInclusion || ""),
+          last_grdt: String(item.lastGrdt || ""),
+          sigem_status: String(item.sigemStatus || ""),
+          revision: String(item.revision || ""),
+          needs_manual_validation: Boolean(item._needsManualValidation),
+          observations: String(item.observations || ""),
+        })),
+      });
+      if (error) throw error;
+      return { ok: true, id: data };
+    } catch (error) {
+      return {
+        ok: false,
+        indisponivel: navigator.onLine === false,
+        error: error?.message || "Não foi possível gravar a solicitação.",
+      };
+    }
+  }
+
+  async function updateRequestItems(protocols, field, value, note) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    try {
+      const { data, error } = await state.client.rpc("grcon_update_request_items", {
+        target_workspace: state.membership.workspace_id,
+        target_protocols: protocols || [],
+        field_name: field,
+        new_value: value === null || value === undefined ? "" : String(value),
+        note: String(note || ""),
+      });
+      if (error) throw error;
+      return { ok: true, changed: Number(data) || 0 };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível alterar os itens." };
+    }
+  }
+
+  async function requestItemHistory(protocol) {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    try {
+      const { data, error } = await state.client.rpc("grcon_request_item_history", {
+        target_workspace: state.membership.workspace_id,
+        target_protocol: String(protocol || ""),
+      });
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.debug("GRCON Cloud: histórico do item indisponível", error);
+      return [];
+    }
+  }
+
   function newReservationRequestId() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     const bytes = new Uint8Array(16);
@@ -1550,6 +1656,10 @@
     loadAllocationCenter,
     saveAllocationCenter,
     clearAllocationCenter,
+    listRequestItems,
+    saveRequest,
+    updateRequestItems,
+    requestItemHistory,
     reserveEgrdtSequences,
     deleteHistoryRecord: deleteSharedHistoryRecord,
     inviteUser,

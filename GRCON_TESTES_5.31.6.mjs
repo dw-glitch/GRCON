@@ -503,6 +503,30 @@ check("consulta vira linha do controle sem redigitar o que o GRCON já achou", (
   assert.equal(saida[0], "557");
 });
 
+check("solicitação é gravada pelo banco, com o protocolo e a transação do lado do servidor", () => {
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  for (const rpc of ["grcon_save_request", "grcon_list_request_items", "grcon_update_request_items", "grcon_request_item_history"]) {
+    assert.match(cloud, new RegExp(`rpc\\("${rpc}"`));
+  }
+  // O protocolo enviado é o número do ITEM, não um identificador do cliente.
+  assert.match(cloud, /protocol: String\(item\.item \|\| ""\)/);
+
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  // Sem número da solicitação o app nem chega ao banco: é ele que agrupa os itens.
+  assert.match(app, /Informe o número da solicitação antes de salvar/);
+  // Grava apenas o que está selecionado na tabela.
+  assert.match(app, /state\.requestRows\.filter\(\(linha\) => linha\._selected !== false\)/);
+
+  const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.9.sql"), "utf8");
+  // Protocolo repetido em outra solicitação derruba a gravação inteira.
+  assert.match(sql, /O protocolo % já existe na solicitação %/);
+  // Unicidade é do banco, não do aplicativo.
+  assert.match(sql, /unique \(workspace_id, protocol\)/);
+  // Histórico só recebe inserção: nenhuma função atualiza ou apaga eventos.
+  assert.doesNotMatch(sql, /update private\.grcon_request_item_events/i);
+  assert.doesNotMatch(sql, /delete from private\.grcon_request_item_events/i);
+});
+
 check("exportação reproduz as 26 colunas do Controle de Solicitações", () => {
   // Grafia e ordem vieram da planilha oficial da rede. Qualquer diferença
   // obriga a rearrumar colunas na hora de colar — o retrabalho que esta saída

@@ -280,3 +280,4 @@ html[data-app="GRCON"][data-theme="dark"] .requests-batch-bar input,
 html[data-app="GRCON"][data-theme="dark"] .requests-batch-bar select,
 html[data-app="GRCON"][data-theme="dark"] .requests-batch-table-wrap { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
 html[data-app="GRCON"][data-theme="dark"] .requests-batch-table tr.precisa-validar td { background: rgba(138, 92, 8, .16); }
+html[data-app="GRCON"] .requests-req-saved { font-size: .74rem; color: var(--success-800, #0c7657); font-weight: 600; }

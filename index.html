@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.16" data-version="5.32.16" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.17" data-version="5.32.17" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -17,7 +17,7 @@
 <link href="requests.css" rel="stylesheet"/>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.32.16" name="application-version"/></head>
+<meta content="5.32.17" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -329,6 +329,7 @@
 <section class="requests-panel requests-request-panel" hidden id="requests-request-panel" aria-labelledby="requests-request-title">
 <div class="requests-panel-head"><h3 id="requests-request-title">Nova solicitação a partir da consulta</h3><small>Um item por documento, numerado na sequência do Controle de Solicitações. O que a LD já respondeu vem preenchido.</small></div>
 <div class="requests-request-grid">
+<label><span>Número da solicitação</span><input id="requests-req-number" autocomplete="off" type="text" placeholder="SOL-2026-014"/></label>
 <label><span>Próximo item</span><input id="requests-req-next-item" inputmode="numeric" min="1" type="number"/></label>
 <label><span>Responsável pela atividade</span><input id="requests-req-owner" autocomplete="off" list="requests-req-owner-list" type="text"/><datalist id="requests-req-owner-list"></datalist></label>
 <label><span>Data de recebimento</span><input id="requests-req-received" type="date"/></label>
@@ -356,6 +357,8 @@
 <div class="requests-inline-actions">
 <button class="primary-button" id="requests-req-copy" type="button">Copiar linhas para a planilha</button>
 <button class="secondary-button compact" id="requests-req-copy-headers" type="button">Copiar com cabeçalho</button>
+<button class="secondary-button compact" id="requests-req-save" type="button">Salvar no GRCON</button>
+<span class="requests-req-saved" aria-live="polite" id="requests-req-saved"></span>
 <button class="text-button" id="requests-req-close" type="button">Fechar</button>
 </div>
 </section>
@@ -482,7 +485,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.32.16 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.32.17 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">
