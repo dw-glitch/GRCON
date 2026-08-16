@@ -29,6 +29,8 @@
     allocation: "",
     sort: "entrada",
     undo: [],          // pilha de estados anteriores da lista de documentos
+    requestRows: [],   // itens gerados para a solicitação; depois de gerados, a tabela manda
+    requestUndo: [],   // pilha para desfazer alterações em lote
   };
 
   let proximoId = 1;
@@ -453,20 +455,91 @@
 
   function renderPainelSolicitacao() {
     if (!els.reqPreview) return;
-    const linhas = linhasDaSolicitacao();
+    const linhas = state.requestRows;
     if (!linhas.length) {
       els.reqPreview.innerHTML = '<p class="requests-vazio">Selecione ao menos um documento já consultado.</p>';
+      els.batchBar.hidden = true;
+      els.batchTableWrap.hidden = true;
       return;
     }
     const novos = linhas.filter((linha) => linha.needsLdInclusion === "sim").length;
     const validar = linhas.filter((linha) => linha._needsManualValidation).length;
-    els.reqPreview.innerHTML = `
-      <p><strong>${linhas.length}</strong> item(ns), do <strong>${linhas[0].item}</strong> ao <strong>${linhas[linhas.length - 1].item}</strong>.
-      ${novos ? `${novos} precisam de inclusão na LD. ` : ""}${validar ? `${validar} pedem conferência antes de seguir.` : ""}</p>
-      <table class="requests-req-table"><thead><tr><th>ITEM</th><th>Documento</th><th>Inclusão na LD?</th><th>Alocação</th><th>Status SIGEM</th></tr></thead><tbody>
-      ${linhas.slice(0, 8).map((linha) => `<tr><td>${escapeHtml(linha.item)}</td><td><code>${escapeHtml(linha.document)}</code></td><td>${escapeHtml(linha.needsLdInclusion || "—")}</td><td>${escapeHtml(linha.allocation || "—")}</td><td>${escapeHtml(linha.sigemStatus || "—")}</td></tr>`).join("")}
-      </tbody></table>
-      ${linhas.length > 8 ? `<p class="requests-vazio">…e mais ${linhas.length - 8} item(ns).</p>` : ""}`;
+    els.reqPreview.innerHTML = `<p><strong>${linhas.length}</strong> item(ns), do <strong>${linhas[0].item}</strong> ao <strong>${linhas[linhas.length - 1].item}</strong>.
+      ${novos ? `${novos} precisam de inclusão na LD. ` : ""}${validar ? `${validar} pedem conferência antes de seguir.` : ""}
+      Edite aqui antes de copiar: o que estiver na tabela é o que vai para a planilha.</p>`;
+
+    const tipos = R().requestTypeList(null).filter((tipo) => tipo.active).map((tipo) => tipo.label);
+    els.batchTbody.innerHTML = linhas.map((linha, indice) => {
+      const opcoes = tipos.map((rotulo) => `<option${rotulo === linha.requestType ? " selected" : ""}>${escapeHtml(rotulo)}</option>`).join("");
+      const inclusao = ["", "sim", "não", "na"].map((valor) =>
+        `<option value="${valor}"${valor === linha.needsLdInclusion ? " selected" : ""}>${valor || "—"}</option>`).join("");
+      return `<tr${linha._needsManualValidation ? ' class="precisa-validar"' : ""}>
+        <td class="requests-col-check"><input aria-label="Selecionar item ${escapeHtml(linha.item)}" data-batch-select="${indice}" type="checkbox"${linha._selected === false ? "" : " checked"}/></td>
+        <td><strong>${escapeHtml(linha.item)}</strong></td>
+        <td><code>${escapeHtml(linha.document)}</code></td>
+        <td><select data-batch-field="requestType" data-batch-row="${indice}">${opcoes}</select></td>
+        <td><input data-batch-field="owner" data-batch-row="${indice}" type="text" value="${escapeHtml(linha.owner)}"/></td>
+        <td><select data-batch-field="needsLdInclusion" data-batch-row="${indice}">${inclusao}</select></td>
+        <td>${escapeHtml(linha.allocation || "—")}</td>
+        <td>${escapeHtml(linha.sigemStatus || "—")}</td>
+        <td><input data-batch-field="observations" data-batch-row="${indice}" type="text" value="${escapeHtml(linha.observations)}"/></td>
+      </tr>`;
+    }).join("");
+
+    if (els.batchType && els.batchType.options.length <= 1) {
+      tipos.forEach((rotulo) => {
+        const opcao = document.createElement("option");
+        opcao.value = rotulo; opcao.textContent = rotulo;
+        els.batchType.appendChild(opcao);
+      });
+    }
+    els.batchBar.hidden = false;
+    els.batchTableWrap.hidden = false;
+    atualizarContagemLote();
+  }
+
+  function atualizarContagemLote() {
+    const quantos = state.requestRows.filter((linha) => linha._selected !== false).length;
+    if (els.batchCount) els.batchCount.textContent = `${quantos} selecionado(s)`;
+    if (els.batchUndo) els.batchUndo.disabled = !state.requestUndo.length;
+  }
+
+  /**
+   * Aplica de uma vez os campos preenchidos na barra. Só os preenchidos: um
+   * campo vazio não apaga o que já está na linha, senão aplicar responsável
+   * limparia a descrição sem querer.
+   */
+  function aplicarEmLote() {
+    const alvo = state.requestRows.filter((linha) => linha._selected !== false);
+    if (!alvo.length) { notify("Selecione ao menos um item.", "warn"); return; }
+    const tipo = els.batchType.value;
+    const responsavel = els.batchOwner.value.trim();
+    const inclusao = els.batchInclusion.value;
+    const observacao = els.batchNote.value.trim();
+    if (!tipo && !responsavel && !inclusao && !observacao) { notify("Preencha ao menos um campo da barra para aplicar.", "warn"); return; }
+
+    state.requestUndo.push(state.requestRows.map((linha) => ({ ...linha })));
+    if (state.requestUndo.length > 10) state.requestUndo.shift();
+
+    alvo.forEach((linha) => {
+      if (tipo) linha.requestType = tipo;
+      if (responsavel) linha.owner = responsavel;
+      if (inclusao) linha.needsLdInclusion = inclusao;
+      // A observação é acrescentada, não substituída: o motivo da triagem é
+      // informação que ninguém deveria perder ao anotar algo.
+      if (observacao) linha.observations = [linha.observations, observacao].filter(Boolean).join(" ");
+    });
+    els.batchNote.value = "";
+    renderPainelSolicitacao();
+    notify(`Aplicado a ${alvo.length} item(ns).`, "success");
+  }
+
+  function desfazerLote() {
+    const anterior = state.requestUndo.pop();
+    if (!anterior) return;
+    state.requestRows = anterior;
+    renderPainelSolicitacao();
+    notify("Alteração em lote desfeita.", "info");
   }
 
   function abrirPainelSolicitacao() {
@@ -482,13 +555,16 @@
       });
     }
     if (els.reqReceived && !els.reqReceived.value) els.reqReceived.value = new Date().toISOString().slice(0, 10);
+    state.requestRows = linhasDaSolicitacao().map((linha) => ({ ...linha, _selected: true }));
+    state.requestUndo = [];
     els.requestPanel.hidden = false;
     renderPainelSolicitacao();
     els.requestPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   async function copiarLinhasDaSolicitacao(comCabecalho) {
-    const linhas = linhasDaSolicitacao();
+    // O que vale é a tabela: ela já traz as edições e as ações em lote.
+    const linhas = state.requestRows.filter((linha) => linha._selected !== false);
     if (!linhas.length) return;
     const texto = root.GrconRequestsReport.controlClipboardText(linhas, comCabecalho);
     try {
@@ -548,6 +624,17 @@
     els.reqCopy = $("#requests-req-copy");
     els.reqCopyHeaders = $("#requests-req-copy-headers");
     els.reqClose = $("#requests-req-close");
+    els.batchBar = $("#requests-batch-bar");
+    els.batchCount = $("#requests-batch-count");
+    els.batchType = $("#requests-batch-type");
+    els.batchOwner = $("#requests-batch-owner");
+    els.batchInclusion = $("#requests-batch-inclusion");
+    els.batchNote = $("#requests-batch-note");
+    els.batchApply = $("#requests-batch-apply");
+    els.batchUndo = $("#requests-batch-undo");
+    els.batchTableWrap = $("#requests-batch-table-wrap");
+    els.batchTbody = $("#requests-batch-tbody");
+    els.batchAll = $("#requests-batch-all");
     els.step1 = $("#requests-step-1");
     els.step2 = $("#requests-step-2");
     els.step3 = $("#requests-step-3");
@@ -609,8 +696,36 @@
     els.reqCopy.addEventListener("click", () => copiarLinhasDaSolicitacao(false));
     els.reqCopyHeaders.addEventListener("click", () => copiarLinhasDaSolicitacao(true));
     els.reqClose.addEventListener("click", () => { els.requestPanel.hidden = true; });
+    els.batchApply.addEventListener("click", aplicarEmLote);
+    els.batchUndo.addEventListener("click", desfazerLote);
+    els.batchAll.addEventListener("change", () => {
+      state.requestRows.forEach((linha) => { linha._selected = els.batchAll.checked; });
+      renderPainelSolicitacao();
+    });
+    // Edição direta na tabela: sem abrir cada item numa tela separada.
+    els.batchTbody.addEventListener("change", (evento) => {
+      const selecao = evento.target.closest("[data-batch-select]");
+      if (selecao) {
+        const linha = state.requestRows[Number(selecao.dataset.batchSelect)];
+        if (linha) { linha._selected = selecao.checked; atualizarContagemLote(); }
+        return;
+      }
+      const campo = evento.target.closest("[data-batch-field]");
+      if (!campo) return;
+      const linha = state.requestRows[Number(campo.dataset.batchRow)];
+      if (linha) linha[campo.dataset.batchField] = campo.value;
+    });
+    // Mudar o cabeçalho regera as linhas — mas só enquanto não houve edição em
+    // lote, para uma correção de data não apagar o trabalho já feito na tabela.
     [els.reqNextItem, els.reqOwner, els.reqReceived, els.reqRequester, els.reqType, els.reqOrigin, els.reqPath]
-      .forEach((campo) => campo && campo.addEventListener("input", renderPainelSolicitacao));
+      .forEach((campo) => campo && campo.addEventListener("input", () => {
+        if (state.requestUndo.length) {
+          notify("A tabela já foi editada: o cabeçalho não é reaplicado sozinho. Use a barra de ações em lote.", "info");
+          return;
+        }
+        state.requestRows = linhasDaSolicitacao().map((linha) => ({ ...linha, _selected: true }));
+        renderPainelSolicitacao();
+      }));
 
     els.tbody.addEventListener("change", (evento) => {
       const caixa = evento.target.closest("[data-select]");
