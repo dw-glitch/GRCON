@@ -45,17 +45,21 @@
   // primeira carga: nada aqui é obrigatório e nada é fixo no código, senão a
   // área de configuração não teria sentido.
   // ---------------------------------------------------------------------------
+  // Os rótulos são os que já aparecem na coluna "Descrição da Solicitação" do
+  // Controle de Solicitações, na ordem de frequência real: POSTAGEM NO SIGEM
+  // responde por dois terços dos pedidos, ALOCAÇÃO e INCLUSÃO NA LD vêm em
+  // seguida. Manter a grafia da planilha evita ter de traduzir na exportação.
   const DEFAULT_REQUEST_TYPES = Object.freeze([
-    { code: "POSTAGEM", label: "Postagem de documento", defaultAction: "Postar no SIGEM", defaultDeadlineDays: 3, defaultPriority: "normal", order: 1 },
-    { code: "TITULO", label: "Alteração ou correção de título", defaultAction: "Conferir o título oficial na LD", defaultDeadlineDays: 5, defaultPriority: "normal", order: 2 },
-    { code: "INCLUSAO_LD", label: "Inclusão na LD", defaultAction: "Analisar a inclusão e a alocação", defaultDeadlineDays: 10, defaultPriority: "normal", order: 3 },
-    { code: "REVISAO", label: "Emissão ou atualização de revisão", defaultAction: "Atualizar a revisão e postar", defaultDeadlineDays: 5, defaultPriority: "normal", order: 4 },
-    { code: "LINHA_TEMPO", label: "Atualização da linha do tempo", defaultAction: "Atualizar a linha do tempo na LD", defaultDeadlineDays: 5, defaultPriority: "baixa", order: 5 },
-    { code: "ALOCACAO", label: "Alocação", defaultAction: "Regularizar a alocação na LD", defaultDeadlineDays: 7, defaultPriority: "alta", order: 6 },
-    { code: "STATUS", label: "Consulta de status", defaultAction: "Responder a situação atual", defaultDeadlineDays: 2, defaultPriority: "baixa", order: 7 },
-    { code: "CORRECAO", label: "Correção de informações", defaultAction: "Corrigir o cadastro na LD", defaultDeadlineDays: 5, defaultPriority: "normal", order: 8 },
-    { code: "CANCELAMENTO", label: "Cancelamento", defaultAction: "Cancelar conforme solicitado", defaultDeadlineDays: 3, defaultPriority: "normal", order: 9 },
-    { code: "SUBSTITUICAO", label: "Substituição", defaultAction: "Substituir o documento indicado", defaultDeadlineDays: 5, defaultPriority: "normal", order: 10 },
+    { code: "POSTAGEM_SIGEM", label: "POSTAGEM NO SIGEM", defaultAction: "Postar no SIGEM", defaultDeadlineDays: 3, defaultPriority: "normal", order: 1 },
+    { code: "ALOCACAO", label: "ALOCAÇÃO", defaultAction: "Providenciar a alocação", defaultDeadlineDays: 7, defaultPriority: "alta", order: 2 },
+    { code: "INCLUSAO_LD", label: "INCLUSÃO NA LD", defaultAction: "Analisar a inclusão na LD", defaultDeadlineDays: 10, defaultPriority: "normal", order: 3 },
+    { code: "INCLUSAO_E_ALOCACAO", label: "INCLUIR NA LD E FAZER ALOCAÇÃO", defaultAction: "Incluir na LD e providenciar a alocação", defaultDeadlineDays: 10, defaultPriority: "alta", order: 4 },
+    { code: "IMPRESSAO", label: "IMPRESSÃO", defaultAction: "Imprimir conforme solicitado", defaultDeadlineDays: 2, defaultPriority: "normal", order: 5 },
+    { code: "ALTERACAO_TITULO", label: "ALTERAÇÃO DO TITULO", defaultAction: "Conferir o título oficial na LD antes de alterar", defaultDeadlineDays: 5, defaultPriority: "normal", order: 6 },
+    { code: "CORRECAO_ALOCACAO", label: "CORREÇÃO DE ALOCAÇÃO", defaultAction: "Corrigir a alocação registrada", defaultDeadlineDays: 5, defaultPriority: "normal", order: 7 },
+    { code: "CORRECAO_LD", label: "CORREÇÃO LD", defaultAction: "Corrigir o cadastro na LD", defaultDeadlineDays: 5, defaultPriority: "normal", order: 8 },
+    { code: "INCLUSAO_CV", label: "INCLUSÃO DE CV", defaultAction: "Incluir o currículo na LD", defaultDeadlineDays: 5, defaultPriority: "normal", order: 9 },
+    { code: "POSTAGEM_E_INCLUSAO", label: "POSTAGEM NO SIGEM / INCLUSÃO NA LD", defaultAction: "Incluir na LD e postar no SIGEM", defaultDeadlineDays: 7, defaultPriority: "normal", order: 10 },
   ]);
 
   const PRIORITIES = Object.freeze(["baixa", "normal", "alta", "urgente"]);
@@ -107,27 +111,44 @@
   // ---------------------------------------------------------------------------
   // Protocolo
   //
-  // Cada ITEM tem protocolo próprio, não a solicitação: uma solicitação com dez
-  // documentos rende dez protocolos, porque é o item que é acompanhado,
-  // concluído e cobrado individualmente.
+  // O protocolo É o número do ITEM da planilha oficial de Controle de
+  // Solicitações: um sequencial simples e contínuo, que na planilha em uso vai
+  // de 1 a 556 sem falha. Não é composto por número de solicitação nem por ano.
+  //
+  // A sequência é global da planilha, não reinicia por solicitação: uma
+  // solicitação com dez documentos consome dez números seguidos, porque é o
+  // item que é acompanhado, concluído e cobrado individualmente.
   // ---------------------------------------------------------------------------
-  function protocolFor(requestNumber, itemNumber, year) {
-    const request = text(requestNumber).toUpperCase().replace(/\s+/g, "");
-    const item = Math.max(1, Math.trunc(Number(itemNumber) || 1));
-    const ano = Math.trunc(Number(year)) || new Date().getFullYear();
-    if (!request) return "";
-    return `${request}-${String(item).padStart(3, "0")}/${ano}`;
+  function protocolFor(itemNumber) {
+    const item = Math.trunc(Number(itemNumber));
+    return Number.isFinite(item) && item > 0 ? String(item) : "";
   }
 
   /**
-   * Próximo número de item livre. Recebe os itens que já existem para não
-   * repetir protocolo nem quando o usuário apaga um item do meio da lista.
+   * Próximo item livre, continuando a sequência da planilha. Recebe os itens
+   * que já existem — inclusive os importados do controle oficial — para nunca
+   * reaproveitar um número, nem quando alguém apaga um item do meio da lista.
    */
   function nextItemNumber(existingItems) {
     const usados = (existingItems || [])
-      .map((item) => Math.trunc(Number(item && item.itemNumber)))
+      .map((item) => Math.trunc(Number(
+        item && item.itemNumber !== undefined ? item.itemNumber : item && item.protocol
+      )))
       .filter((value) => Number.isFinite(value) && value > 0);
     return usados.length ? Math.max(...usados) + 1 : 1;
+  }
+
+  /**
+   * Numera uma leva de documentos a partir do próximo item livre, devolvendo
+   * cada um já com o seu protocolo.
+   */
+  function assignItemNumbers(documents, existingItems) {
+    let proximo = nextItemNumber(existingItems);
+    return (documents || []).map((item) => {
+      const numero = proximo;
+      proximo += 1;
+      return { ...item, itemNumber: numero, protocol: protocolFor(numero) };
+    });
   }
 
   function duplicatedProtocols(items) {
@@ -531,6 +552,7 @@
     requestTypeList,
     protocolFor,
     nextItemNumber,
+    assignItemNumbers,
     duplicatedProtocols,
     parseDocumentList,
     dedupeDocuments,

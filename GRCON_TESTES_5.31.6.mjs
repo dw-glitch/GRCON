@@ -15,6 +15,7 @@ const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const Requests = require(path.join(root, "requests_core.js"));
+const RequestsReport = require(path.join(root, "requests_report.js"));
 const Emission = require(path.join(root, "emission.js"));
 const OutputGuard = require(path.join(root, "grcon_output_guard.js"));
 const OutputAudit = require(path.join(root, "output_audit.js"));
@@ -274,12 +275,22 @@ check("duplicidade sai pelo código normalizado sem perder o título informado",
   assert.equal(items[0].requestedTitle, "Título da segunda linha");
 });
 
-check("cada item da solicitação tem protocolo próprio e não repetido", () => {
-  assert.equal(Requests.protocolFor("SOL-2026-014", 1, 2026), "SOL-2026-014-001/2026");
-  assert.equal(Requests.nextItemNumber([{ itemNumber: 1 }, { itemNumber: 7 }]), 8);
+check("protocolo é o número do ITEM da planilha oficial, um sequencial simples", () => {
+  // A planilha de Controle de Solicitações usa ITEM contínuo: 1, 2, 3 …
+  assert.equal(Requests.protocolFor(1), "1");
+  assert.equal(Requests.protocolFor(557), "557");
+  assert.equal(Requests.protocolFor(0), "");
+  assert.equal(Requests.protocolFor("abc"), "");
+  // A sequência continua de onde a planilha parou; nunca reaproveita número.
+  assert.equal(Requests.nextItemNumber([{ itemNumber: 556 }, { itemNumber: 12 }]), 557);
+  assert.equal(Requests.nextItemNumber([{ protocol: "556" }]), 557);
   assert.equal(Requests.nextItemNumber([]), 1);
-  const itens = [1, 2, 2].map((n) => ({ protocol: Requests.protocolFor("S1", n, 2026) }));
-  assert.deepEqual(Requests.duplicatedProtocols(itens), ["S1-002/2026"]);
+  const numerados = Requests.assignItemNumbers(
+    [{ document: "A" }, { document: "B" }, { document: "C" }],
+    [{ protocol: "556" }],
+  );
+  assert.deepEqual(numerados.map((item) => item.protocol), ["557", "558", "559"]);
+  assert.deepEqual(Requests.duplicatedProtocols([{ protocol: "5" }, { protocol: "5" }]), ["5"]);
 });
 
 check("consulta de documento exato responde as seis colunas com confiança alta", () => {
@@ -362,6 +373,8 @@ check("título da consulta sai exatamente como está na LD", () => {
 check("tipos de solicitação são configuráveis, ordenados e não ficam fixos no código", () => {
   const padrao = Requests.requestTypeList(null);
   assert.ok(padrao.length >= 10);
+  // Rótulos iguais aos da coluna "Descrição da Solicitação" do controle oficial.
+  assert.equal(padrao[0].label, "POSTAGEM NO SIGEM");
   const meus = Requests.requestTypeList([
     { label: "Tipo da casa", order: 2 },
     { label: "Urgência", code: "URG", defaultPriority: "urgente", defaultDeadlineDays: 1, order: 1 },
@@ -452,6 +465,36 @@ check("correspondência por variação de código mantém a conferência mesmo c
   const t = triagemDe(ntDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Não Postado" })]);
   assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
   assert.equal(t.needsManualValidation, true);
+});
+
+check("exportação reproduz as 26 colunas do Controle de Solicitações", () => {
+  // Grafia e ordem vieram da planilha oficial da rede. Qualquer diferença
+  // obriga a rearrumar colunas na hora de colar — o retrabalho que esta saída
+  // existe para evitar. O hífen de "N‑1710" é o curto (U+2011), não o comum.
+  const cabecalhos = RequestsReport.CONTROL_COLUMNS.map((coluna) => coluna.header);
+  assert.equal(cabecalhos.length, 26);
+  assert.equal(cabecalhos[0], "ITEM");
+  assert.equal(cabecalhos[1], "Responsavel pela atividade");
+  assert.equal(cabecalhos[5], "Descrição da Solicitação");
+  assert.equal(cabecalhos[23], "Disponibilizado no PW – N‑1710");
+  assert.equal(cabecalhos[25], "Data de inclusão do status");
+
+  const linhas = RequestsReport.controlRows([
+    { item: "557", owner: "Laís", document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", requestType: "POSTAGEM NO SIGEM" },
+  ]);
+  assert.equal(linhas.length, 1);
+  assert.equal(linhas[0].length, 26);
+  assert.equal(linhas[0][0], "557");
+  // Campo não preenchido vira "na", que é a convenção da própria planilha:
+  // célula vazia deixa dúvida entre pendência e não se aplica.
+  assert.equal(linhas[0][2], "na");
+
+  const semCabecalho = RequestsReport.controlClipboardText([{ item: "557" }], false);
+  assert.equal(semCabecalho.split("\t").length, 26);
+  assert.doesNotMatch(semCabecalho, /ITEM/);
+  const comCabecalho = RequestsReport.controlClipboardText([{ item: "557" }], true);
+  assert.equal(comCabecalho.split("\n").length, 2);
+  assert.match(comCabecalho, /^ITEM\t/);
 });
 
 check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {

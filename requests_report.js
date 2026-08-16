@@ -227,5 +227,78 @@
     }
   }
 
-  return Object.freeze({ COLUMNS, writeConsultationSheet, attachBrandLogo });
+  // ---------------------------------------------------------------------------
+  // Linhas para o Controle de Solicitações
+  //
+  // As 26 colunas abaixo são as da planilha oficial da rede, na ordem e com a
+  // grafia dela — inclusive os acentos e o hífen curto de "N‑1710". Qualquer
+  // diferença aqui obriga a rearrumar as colunas na hora de colar, que é
+  // exatamente o retrabalho que esta saída existe para evitar.
+  //
+  // Na planilha o cabeçalho está na linha 5 e os dados começam na 6; a
+  // exportação do GRCON entrega só as linhas de dados, para colar sob o que já
+  // existe sem mexer no cabeçalho nem nas validações da planilha.
+  // ---------------------------------------------------------------------------
+  const CONTROL_COLUMNS = Object.freeze([
+    { header: "ITEM", key: "item", width: 8 },
+    { header: "Responsavel pela atividade", key: "owner", width: 22 },
+    { header: "Data de Recebimento", key: "receivedAt", width: 18 },
+    { header: "Solicitante/ Área", key: "requester", width: 24 },
+    { header: "Tipo de Documento", key: "documentFamily", width: 16 },
+    { header: "Descrição da Solicitação", key: "requestType", width: 30 },
+    { header: "Origem da Solicitação", key: "origin", width: 18 },
+    { header: "Corpo do e-mail", key: "emailBody", width: 46 },
+    { header: "Documento", key: "document", width: 46 },
+    { header: "Caminho do Documento", key: "documentPath", width: 40 },
+    { header: "Inclusão na LD Necessária?", key: "needsLdInclusion", width: 20 },
+    { header: "Versão da LD enviada para Fiscal", key: "ldVersion", width: 22 },
+    { header: "Data de Aprovação da LD", key: "ldApprovedAt", width: 20 },
+    { header: "Alocação", key: "allocation", width: 24 },
+    { header: "Referência", key: "reference", width: 20 },
+    { header: "Data de Envio da ALOC para Fiscal 01", key: "allocSentAt", width: 24 },
+    { header: "Retorno da Fiscal 01 (Renata)", key: "fiscal1ReturnedAt", width: 22 },
+    { header: "Resposta da Fiscal 01 (Renata)", key: "fiscal1Answer", width: 30 },
+    { header: "Retorno da Fiscal 02 (Nani)", key: "fiscal2ReturnedAt", width: 22 },
+    { header: "Responsável pela Submissão SIGEM", key: "sigemOwner", width: 24 },
+    { header: "Status no SIGEM", key: "sigemStatus", width: 22 },
+    { header: "Data de Submissão no SIGEM", key: "sigemSubmittedAt", width: 22 },
+    { header: "Observações", key: "observations", width: 40 },
+    { header: "Disponibilizado no PW – N‑1710", key: "pwN1710", width: 22 },
+    { header: "Status Geral da Solicitação", key: "overallStatus", width: 24 },
+    { header: "Data de inclusão do status", key: "statusDate", width: 20 },
+  ]);
+
+  // "na" é o que a planilha usa para "não se aplica". Repetir essa convenção
+  // evita células vazias que depois ninguém sabe se são pendência ou não.
+  const NAO_SE_APLICA = "na";
+
+  function controlValue(item, key) {
+    const valor = item && item[key];
+    if (valor === null || valor === undefined || valor === "") return NAO_SE_APLICA;
+    return valor;
+  }
+
+  /**
+   * Linhas prontas para colar no Controle de Solicitações, uma por item, na
+   * ordem exata das colunas da planilha oficial.
+   */
+  function controlRows(items) {
+    return (items || []).map((item) => CONTROL_COLUMNS.map((coluna) => controlValue(item, coluna.key)));
+  }
+
+  /** Texto separado por tabulação, para colar direto na planilha. */
+  function controlClipboardText(items, includeHeaders) {
+    const linhas = controlRows(items).map((linha) => linha.join("\t"));
+    if (!includeHeaders) return linhas.join("\n");
+    return [CONTROL_COLUMNS.map((coluna) => coluna.header).join("\t"), ...linhas].join("\n");
+  }
+
+  return Object.freeze({
+    COLUMNS,
+    CONTROL_COLUMNS,
+    controlRows,
+    controlClipboardText,
+    writeConsultationSheet,
+    attachBrandLogo,
+  });
 });
