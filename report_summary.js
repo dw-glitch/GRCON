@@ -12,6 +12,10 @@
     { header: "SITUAÇÃO GRCON", key: "decision", width: 24 },
     { header: "CÓDIGO INFORMADO / PDF", key: "requestedDocument", width: 42 },
     { header: "DOCUMENTO USADO PELO GRCON", key: "document", width: 42 },
+    { header: "CÓDIGO DA LD", key: "ldCode", width: 45 },
+    { header: "BUSCA NO APÊNDICE", key: "apendiceSearch", width: 34 },
+    { header: "Tagueado sim ou não?", key: "tagged", width: 26 },
+    { header: "CÓDIGO SUGERIDO PELO APÊNDICE (nt-)", key: "apendiceSuggestion", width: 52 },
     { header: "RESULTADO DA BUSCA COM/SEM nt- E TAG", key: "ntSearchResult", width: 42 },
     { header: "PESQUISADO SEM nt-", key: "searchedWithoutNt", width: 45 },
     { header: "PESQUISADO COM nt-", key: "searchedWithNt", width: 45 },
@@ -200,17 +204,63 @@
     return text(row && row.reason);
   }
 
-  function allocationLabel(row) {
+  /**
+   * Cruzamento com o Apêndice 3, calculado na triagem e transportado na linha.
+   * Sem Apêndice carregado, as colunas dizem exatamente isso: nunca sai "NÃO"
+   * por ausência de fonte.
+   */
+  function apendiceValue(row) {
+    const info = row && row.apendice || null;
+    if (!info) {
+      return {
+        available: false,
+        ldCode: exactLdDocument(row) || "Não localizado",
+        search: "Apêndice não carregado",
+        tagged: "Não apurado — Apêndice não carregado",
+        suggestion: "",
+      };
+    }
+    return {
+      available: info.available !== false,
+      ldCode: text(info.ldCode) || exactLdDocument(row) || "Não localizado",
+      search: text(info.search) || "Apêndice não carregado",
+      tagged: text(info.tagged) || "Não apurado — Apêndice não carregado",
+      suggestion: text(info.suggestion),
+    };
+  }
+
+  /** Linha técnica com o status já consolidado pela triagem. */
+  function allocationRecordOf(row) {
     const record = row && row.record || {};
-    const raw = text(record.allocationStatus || row && row.allocationStatus);
+    return { ...record, allocationStatus: text(record.allocationStatus) || text(row && row.allocationStatus) };
+  }
+
+  function allocationFindingOf(row) {
+    const finding = row && row.allocationFinding;
+    if (finding && finding.kind) return finding;
+    const record = allocationRecordOf(row);
+    if (!text(record.document) && !text(record.sheet)) return null;
+    return C && C.allocationEvidenceState ? C.allocationEvidenceState(record) : null;
+  }
+
+  function allocationLabel(row) {
+    const record = allocationRecordOf(row);
+    const raw = text(record.allocationStatus);
     const allocationNumber = text(record.allocation);
-    if (C && C.allocationState) {
-      const state = C.allocationState(raw);
-      if (state.kind === "allocated") return "SIM — Alocado";
+    const state = allocationFindingOf(row);
+    if (state) {
+      if (state.kind === "allocated") {
+        return state.evidence === "number"
+          ? `SIM — alocação evidenciada pelo número ${state.allocationNumber || allocationNumber}`
+          : "SIM — Alocado";
+      }
       if (state.kind === "not_allocated") return "NÃO — Não alocado";
       if (state.kind === "unknown") return `REVISAR — ${state.label}`;
-      if (allocationNumber) return "SIM — alocação informada";
-      return "Não informado";
+      // Sem coluna na aba e coluna vazia são fatos diferentes e não podem sair
+      // com a mesma frase: um diz que a LD não rastreia, o outro que a LD
+      // rastreia e não informou.
+      if (state.kind === "not_tracked") return "NÃO APURADO — a LD não rastreia alocação nesta aba";
+      return "NÃO INFORMADO — campo de confirmação vazio na LD";
     }
     if (raw) return raw;
     return allocationNumber ? "SIM — alocação informada" : "Não informado";
@@ -222,7 +272,8 @@
     const allocationEvidence = record.allocationEvidence || null;
     const evidenceRecord = allocationEvidence || record;
     const raw = text(record.allocationStatus || row && row.allocationStatus);
-    const state = C && C.allocationState ? C.allocationState(raw) : { kind: raw ? "unknown" : "empty", label: raw || "Não informado" };
+    const state = allocationFindingOf(row)
+      || (C && C.allocationState ? C.allocationState(raw) : { kind: raw ? "unknown" : "empty", label: raw || "Não informado" });
     const allocation = text(evidenceRecord.allocation || record.allocation);
     const stage = text(evidenceRecord.allocationStage || record.allocationStage);
     const meaningfulStage = stage && !/^(?:0|N\/A|NA|-)$/.test(C && C.norm ? C.norm(stage) : stage.toUpperCase());
@@ -242,6 +293,16 @@
     const fiscalNormalized = C && C.norm ? C.norm(fiscal) : fiscal.toUpperCase();
     const fiscalIsGeneric = !fiscal || /^(OK|ACEITO SEM COMENTARIOS?|SEM COMENTARIOS?)$/.test(fiscalNormalized);
 
+    if (state.kind === "allocated" && state.evidence === "number") {
+      return [
+        `Alocação evidenciada pelo número ${state.allocationNumber || allocation}, registrado na LD sem preenchimento do campo “${field}”.`,
+        `Ter número de ALOC é evidência de alocação; o campo de confirmação vazio não a desfaz.`,
+        meaningfulStage ? `Etapa registrada: ${stage}.` : "",
+        fiscal ? `Comentário da Fiscal: ${fiscal}.` : "",
+        location ? `Evidência: ${location}.` : "",
+        versionEvidence,
+      ].filter(Boolean).join(" ");
+    }
     if (state.kind === "allocated") {
       const parts = allocationEvidence
         ? [
@@ -275,6 +336,12 @@
     }
     if (state.kind === "unknown") {
       return `A alocação não pôde ser comprovada porque o valor “${raw || state.label}” do campo “${field}” não foi reconhecido${location ? ` (${location})` : ""}. ${versionEvidence}`;
+    }
+    if (state.kind === "not_tracked") {
+      return `A alocação não foi verificada: a aba ${text(record.sheet) || "técnica"} da LD não possui coluna de confirmação de alocação${location ? ` (${location})` : ""}. Não há registro a favor nem contra a alocação deste documento${allocation ? `, e a coluna ALOCAÇÃO traz “${allocation}”` : ""}. ${versionEvidence}`;
+    }
+    if (state.kind === "blank") {
+      return `A LD rastreia a alocação nesta aba, mas o campo “${field}” está vazio nesta linha${location ? ` (${location})` : ""}${allocation ? `, e o valor “${allocation}” da coluna ALOCAÇÃO não é um número de ALOC` : ""}. ${versionEvidence}`;
     }
     return `A alocação não pôde ser comprovada porque o campo “${field}” está vazio ou não foi localizado${location ? ` (${location})` : ""}${allocation ? `, embora exista o número ${allocation}` : ""}. ${versionEvidence}`;
   }
@@ -351,6 +418,10 @@
         decision: decisionLabel(row),
         requestedDocument: text(row && row.documentLookup && row.documentLookup.inputDocument || row && row.name),
         document: exactDocument,
+        ldCode: apendiceValue(row).ldCode,
+        apendiceSearch: apendiceValue(row).search,
+        tagged: apendiceValue(row).tagged,
+        apendiceSuggestion: apendiceValue(row).suggestion || (apendiceValue(row).available === false ? "Não apurado — Apêndice não carregado" : "—"),
         ntSearchResult: text(row && row.documentLookup && row.documentLookup.resultLabel) || "PESQUISA NÃO REGISTRADA",
         searchedWithoutNt: text(row && row.documentLookup && row.documentLookup.searchedWithoutNt) || "Não se aplica",
         searchedWithNt: text(row && row.documentLookup && row.documentLookup.searchedWithNt) || "Não se aplica",

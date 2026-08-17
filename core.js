@@ -76,6 +76,81 @@
     return { kind: "unknown", raw, normalized: s, label: "Valor não reconhecido" };
   }
 
+  // Um número de alocação só vale como evidência quando é o identificador de uma
+  // ALOC: precisa trazer o token ALOC isolado e uma sequência numérica. Texto
+  // livre na mesma coluna ("Já alocado / Sem rastreio de alocação") não prova
+  // alocação nenhuma e continua fora.
+  function allocationNumberInfo(value) {
+    const raw = text(value);
+    const normalized = norm(raw);
+    if (!normalized) return { valid: false, raw, normalized, reason: "vazio" };
+    if (/^(?:0|-|X|N\/A|NA|NAO APLICAVEL|NAO SE APLICA|A DEFINIR|A ALOCAR|PENDENTE|SEM ALOCACAO)$/.test(normalized)) {
+      return { valid: false, raw, normalized, reason: "sem valor operacional" };
+    }
+    const hasToken = /(?:^|[^A-Z])ALOC(?:[^A-Z]|$)/.test(normalized);
+    const hasSequence = /\d{3,}/.test(normalized);
+    if (hasToken && hasSequence) return { valid: true, raw, normalized, reason: "identificador de ALOC" };
+    return { valid: false, raw, normalized, reason: "texto livre" };
+  }
+
+  /**
+   * Situação de alocação lida da linha inteira, e não só da célula de status.
+   *
+   * Separa três fatos que a leitura antiga confundia num único "vazio":
+   * coluna inexistente na aba (a LD não rastreia o dado), célula vazia com a
+   * coluna presente (a LD rastreia e não informou) e número de ALOC registrado
+   * sem status (a alocação está evidenciada pelo próprio número).
+   */
+  function allocationEvidenceState(record) {
+    const item = record || {};
+    const status = allocationState(item.allocationStatus);
+    const number = allocationNumberInfo(item.allocation);
+    const tracked = Boolean(text(item.allocationStatusColumn));
+    if (status.kind !== "empty") {
+      return {
+        ...status,
+        tracked,
+        evidence: "status",
+        allocationNumber: number.valid ? number.raw : "",
+        source: `campo “${text(item.allocationStatusHeader) || "confirmação de alocação"}”`,
+      };
+    }
+    if (number.valid) {
+      return {
+        kind: "allocated",
+        raw: number.raw,
+        normalized: number.normalized,
+        label: "Alocado pelo número de ALOC",
+        tracked,
+        evidence: "number",
+        allocationNumber: number.raw,
+        source: `número de alocação ${number.raw}`,
+      };
+    }
+    if (!tracked) {
+      return {
+        kind: "not_tracked",
+        raw: "",
+        normalized: "",
+        label: "A LD não rastreia alocação nesta aba",
+        tracked: false,
+        evidence: "none",
+        allocationNumber: "",
+        source: `aba ${text(item.sheet) || "técnica"} sem coluna de confirmação de alocação`,
+      };
+    }
+    return {
+      kind: "blank",
+      raw: "",
+      normalized: "",
+      label: "Alocação não informada na LD",
+      tracked: true,
+      evidence: "none",
+      allocationNumber: "",
+      source: `campo “${text(item.allocationStatusHeader) || "confirmação de alocação"}” vazio`,
+    };
+  }
+
   function allocationConflictSummary(records) {
     const states = (records || []).map((item) => ({ item, state: allocationState(item && item.allocationStatus) }));
     const kinds = new Set(states.map((entry) => entry.state.kind).filter((kind) => kind !== "empty"));
@@ -489,10 +564,24 @@
     return 0;
   }
 
+  // Coluna de TAG da LD. Nem toda aba tem uma; quando tem, ela é a origem
+  // preferencial do TAG no cruzamento com o Apêndice 3. "TAXONOMIA" e afins não
+  // são TAG e ficam de fora.
+  function tagHeaderScore(value) {
+    const h = normalizedHeader(value);
+    if (!h) return 0;
+    if (h === "TAG") return 1200;
+    if (/^TAG(?: DO| DA| DE)? /.test(h) && !h.includes("TAXONOMIA")) return 1100;
+    if (/^(NUMERO|CODIGO) (DA |DO )?TAG$/.test(h)) return 1050;
+    if (/\bTAG\b/.test(h) && (h.includes("EQUIPAMENTO") || h.includes("ITEM") || h.includes("BEM"))) return 900;
+    return 0;
+  }
+
   function columnMap(header) {
     const result = {};
     const allocationStatusCandidates = [];
     const allocationNumberCandidates = [];
+    const tagCandidates = [];
     header.forEach((cell, index) => {
       const h = norm(cell);
       if (!h) return;
@@ -515,14 +604,17 @@
       else if (h.includes("CAMINHO DATABOOK") || h.includes("CAMINHO DATA BOOK")) result.databook = index;
       else if (h.includes("COMENTARIO DA FISCAL")) result.fiscalComment = index;
       else if (h.includes("ETAPA") && h.includes("ALOCACAO")) result.allocationStage = index;
+      else if (tagHeaderScore(cell)) tagCandidates.push({ index, score: tagHeaderScore(cell) });
       else if (h.includes("MODIFICADO EM")) result.modified = index;
       else if (h.includes("INCLUIDO EM")) result.included = index;
     });
     const best = (items) => items.sort((left, right) => right.score - left.score || right.index - left.index)[0];
     const status = best(allocationStatusCandidates);
     const allocation = best(allocationNumberCandidates);
+    const tag = best(tagCandidates);
     if (status) result.allocationStatus = status.index;
     if (allocation) result.allocation = allocation.index;
+    if (tag) result.tag = tag.index;
     return result;
   }
 
@@ -738,6 +830,9 @@
           modified: sheetCell(sheet, i, columns.modified),
           included: sheetCell(sheet, i, columns.included),
           allocation: sheetCell(sheet, i, columns.allocation),
+          tag: columns.tag === undefined ? "" : sheetCell(sheet, i, columns.tag),
+          tagHeader: columns.tag === undefined ? "" : text(header[columns.tag]).replace(/\s+/g, " "),
+          tagColumn: columns.tag === undefined ? "" : XLSX.utils.encode_col(columns.tag),
           sheet: sheetName.trim(),
           row: i + 1,
           source: sourceName,
@@ -1707,6 +1802,7 @@
       codeValidation: item.codeValidation || { valid: false, errors: [] },
       egrdt: item.egrdt || {},
       allocationStatus: item.allocationStatus || "",
+      allocationFinding: item.allocationFinding || null,
       fiscalComment: item.fiscalComment || "",
       documentSource: item.documentSource || input.documentSource || "nome do arquivo",
       hardBlock: Boolean(item.hardBlock),
@@ -1791,6 +1887,14 @@
         finalName: input.name || `${match.document}.pdf`,
         documentSource: identitySource,
         allocationStatus: "NÃO ALOCADO",
+        allocationFinding: {
+          ...allocationEvidenceState(firstBlocked),
+          status: text(firstBlocked.allocationStatus) || "NÃO ALOCADO",
+          sheet: text(firstBlocked.sheet),
+          column: text(firstBlocked.allocationStatusColumn),
+          header: text(firstBlocked.allocationStatusHeader),
+          row: Number(firstBlocked.row) || 0,
+        },
         fiscalComment: blockedComments,
         record: firstBlocked,
         evidence: blocked.map((item) => ({
@@ -1924,7 +2028,23 @@
     let effectiveDate = text(technicalRecord && technicalRecord.effectiveDate);
     const databook = text(technicalRecord && technicalRecord.databook);
     const allocationStatus = text(technicalRecord && technicalRecord.allocationStatus);
-    const allocationDecision = allocationState(allocationStatus);
+    // A alocação é lida da linha inteira: status, número de ALOC e a própria
+    // existência da coluna na aba. Só o status NÃO ALOCADO bloqueia; as demais
+    // situações mudam o que o GRCON afirma, não a decisão.
+    const allocationDecision = allocationEvidenceState(technicalRecord);
+    const allocationFinding = {
+      kind: allocationDecision.kind,
+      label: allocationDecision.label,
+      evidence: allocationDecision.evidence,
+      source: allocationDecision.source,
+      tracked: allocationDecision.tracked,
+      status: allocationStatus,
+      allocationNumber: allocationDecision.allocationNumber || "",
+      sheet: text(technicalRecord && technicalRecord.sheet),
+      column: text(technicalRecord && technicalRecord.allocationStatusColumn),
+      header: text(technicalRecord && technicalRecord.allocationStatusHeader),
+      row: Number(technicalRecord && technicalRecord.row) || 0,
+    };
     const fiscalComment = text(technicalRecord && technicalRecord.fiscalComment);
     let evidence = [];
     let analysisEvidence = null;
@@ -1970,6 +2090,7 @@
         record: best,
         codeValidation,
         allocationStatus,
+        allocationFinding,
         fiscalComment,
         documentSource: identitySource,
         hardBlock: true,
@@ -1995,6 +2116,7 @@
         record: best,
         codeValidation,
         allocationStatus,
+        allocationFinding,
         fiscalComment,
         documentSource: identitySource,
         hardBlock: false,
@@ -2170,6 +2292,17 @@
       codeValidationWarning = `Divergência de codificação conforme a ET: ${codeValidation.errors.join(" ")}`;
       reason = `${reason} ${codeValidationWarning}`.trim();
     }
+    // A situação da alocação vai escrita no motivo. Sem isso, "coluna ausente
+    // na aba", "coluna vazia" e "alocado" chegavam ao operador com o mesmo
+    // silêncio.
+    const allocationNote = allocationFinding.kind === "not_tracked"
+      ? `A alocação não foi verificada: a aba ${allocationFinding.sheet || controlledSheet} da LD não possui coluna de confirmação de alocação. Não há registro de alocação a favor nem contra este documento.`
+      : allocationFinding.kind === "blank"
+        ? `A alocação não foi informada: o campo “${allocationFinding.header || "confirmação de alocação"}” está vazio na linha ${allocationFinding.row || "—"} da aba ${allocationFinding.sheet || controlledSheet}.`
+        : allocationFinding.evidence === "number"
+          ? `Alocação evidenciada pelo número ${allocationFinding.allocationNumber}, registrado na LD sem preenchimento do campo de confirmação.`
+          : "";
+    if (allocationNote) reason = `${reason} ${allocationNote}`.trim();
     const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
     const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
 
@@ -2192,6 +2325,7 @@
       recentDays,
       databook,
       allocationStatus,
+      allocationFinding,
       fiscalComment,
       evidence,
       analysisEvidence,
@@ -2320,6 +2454,8 @@
     decisionMessage: Contracts ? (row) => Contracts.enrichDecision(row).userMessage : null,
     norm,
     allocationState,
+    allocationNumberInfo,
+    allocationEvidenceState,
     allocationConflictSummary,
     technicalPostingEvidenceForRevision,
     canonicalId,

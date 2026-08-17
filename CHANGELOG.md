@@ -1,5 +1,17 @@
 # Histórico de alterações
 
+## 5.32.25 — 2026-08-17
+
+- A alocação passa a ser lida da linha inteira da LD, e não só da célula de confirmação. Três fatos que antes saíam como o mesmo "vazio" agora são ditos de formas diferentes: a aba não possui coluna de alocação, a coluna existe e a célula está vazia, e há número de ALOC registrado.
+- Ter número de ALOC (como `C1O-ALOC-CM-0028-2026`) passa a valer como evidência de alocação quando o campo de confirmação está vazio. Texto livre na mesma coluna não conta.
+- O motivo escrito na triagem e no `Resumo` informa qual das situações ocorreu e onde a evidência foi lida — arquivo, aba, célula e linha.
+- Regras de bloqueio inalteradas: somente `NÃO ALOCADO` bloqueia a postagem, e a consolidação entre várias LDs continua escolhendo o registro informado.
+- Nova fonte opcional na análise: o **Apêndice 3 — Fornecimento de Bens Tagueados**. O GRCON localiza a aba e a coluna de TAG sozinho e cruza cada documento da triagem com a lista contratual.
+- O TAG vem da coluna de TAG da LD quando a aba tiver uma e, na falta dela, do próprio código do documento (Grupo 7 da ET).
+- Três colunas novas na tela da triagem e na planilha `Resumo`: `CÓDIGO DA LD`, `BUSCA NO APÊNDICE` e `Tagueado sim ou não?`. Sem Apêndice carregado, elas dizem exatamente isso — nunca sai "NÃO" por ausência de fonte.
+- TAG ausente do Apêndice passa a sugerir o código com `nt-`, que marca o item não tagueado. A sugestão é informativa: nenhuma divergência com o Apêndice impede a postagem.
+- O cruzamento é comparado por igualdade, tolerando apenas caixa, acento e espaço, e nunca reescreve o código ou o título da LD.
+
 ## 5.32.12 — 2026-08-15
 
 - A geração passa a separar automaticamente os documentos por disciplina antes de aplicar o limite de itens de cada eGRDT.

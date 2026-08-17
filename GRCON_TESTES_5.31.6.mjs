@@ -1171,7 +1171,10 @@ check("service worker publica o cache isolado da versão atual", () => {
   const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 7);
   assert.equal(internal.formula, undefined);
   assert.equal(internal.value, "Código que consta " + ntBaseDocument);
-  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 11).value, "RESULTADO DA BUSCA COM/SEM nt- E TAG");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 11).value, "CÓDIGO DA LD");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 12).value, "BUSCA NO APÊNDICE");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 13).value, "Tagueado sim ou não?");
+  assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 15).value, "RESULTADO DA BUSCA COM/SEM nt- E TAG");
   assert.equal(reopened.getWorksheet("Resumo").columnCount, ReportSummary.SUMMARY_COLUMNS.length);
   assert.equal(reopened.getWorksheet("Auditoria detalhada"), undefined);
   checks.push("Excel do relatório reabre com Resumo único e evidências completas");
@@ -1306,6 +1309,146 @@ check("painel mostra disciplina por GRDT e mantém cada número editável", () =
   assert.equal(audit.detailRows[0].batchIndex, 2);
   assert.equal(audit.detailRows[0].discipline, "ELÉTRICA");
 });
+
+// ---------------------------------------------------------------------------
+// Alocação lida da linha inteira e cruzamento com o Apêndice 3
+// ---------------------------------------------------------------------------
+
+const Apendice = require(path.join(root, "apendice_tagueados.js"));
+
+function allocationRecord(overrides = {}) {
+  return {
+    document: ntBaseDocument,
+    documentKey: Core.key(ntBaseDocument),
+    sheet: "ET",
+    row: 12,
+    allocationStatus: "",
+    allocationStatusColumn: "U",
+    allocationStatusHeader: "CONFIRMAÇÃO DE ALOCAÇÃO",
+    allocation: "",
+    ...overrides,
+  };
+}
+
+check("coluna ausente na aba e célula vazia são fatos distintos na alocação", () => {
+  const semColuna = Core.allocationEvidenceState(allocationRecord({ allocationStatusColumn: "", allocationStatusHeader: "" }));
+  const vazia = Core.allocationEvidenceState(allocationRecord());
+  assert.equal(semColuna.kind, "not_tracked");
+  assert.equal(vazia.kind, "blank");
+  assert.notEqual(semColuna.label, vazia.label);
+  // Nenhuma das duas afirma alocação nem bloqueia por si.
+  assert.equal(semColuna.evidence, "none");
+  assert.equal(vazia.evidence, "none");
+});
+
+check("número de ALOC conta como evidência de alocação quando o status está vazio", () => {
+  const comNumero = Core.allocationEvidenceState(allocationRecord({ allocation: "C1O-ALOC-COM-0002-2025" }));
+  assert.equal(comNumero.kind, "allocated");
+  assert.equal(comNumero.evidence, "number");
+  assert.equal(comNumero.allocationNumber, "C1O-ALOC-COM-0002-2025");
+  // Texto livre na mesma coluna não é número de ALOC e não prova alocação.
+  const textoLivre = Core.allocationEvidenceState(allocationRecord({ allocation: "Já alocado / Sem rastreio de alocação" }));
+  assert.equal(textoLivre.kind, "blank");
+  assert.equal(Core.allocationNumberInfo("0").valid, false);
+  assert.equal(Core.allocationNumberInfo("C1O-ALOC-CM-0028-2026").valid, true);
+});
+
+check("status preenchido continua mandando na alocação e o NÃO ALOCADO segue bloqueando", () => {
+  assert.equal(Core.allocationEvidenceState(allocationRecord({ allocationStatus: "ALOCADO" })).kind, "allocated");
+  assert.equal(Core.allocationEvidenceState(allocationRecord({ allocationStatus: "NÃO ALOCADO", allocation: "C1O-ALOC-CM-0028-2026" })).kind, "not_allocated");
+  const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO")], []);
+  const result = Core.triageOne({ id: "bloqueado", name: `${ntBaseDocument}.pdf` }, index, {});
+  assert.equal(result.hardBlock, true);
+  assert.equal(result.allocationFinding.kind, "not_allocated");
+});
+
+check("a triagem escreve no motivo que a aba não rastreia alocação", () => {
+  const semColuna = {
+    ...ldDocumentRecord(ntBaseDocument, ""),
+    allocationStatusColumn: "",
+    allocationStatusHeader: "",
+    allocation: "",
+  };
+  const index = Core.buildIndex([semColuna], [{ ...semColuna, sheet: "Colar SIGEM", status: "Não Postado" }]);
+  const result = Core.triageOne({ id: "sem-coluna", name: `${ntBaseDocument}.pdf` }, index, {});
+  assert.ok(!result.hardBlock);
+  assert.equal(result.allocationFinding.kind, "not_tracked");
+  assert.match(result.reason, /não possui coluna de confirmação de alocação/);
+  const [linha] = ReportSummary.buildRows([result], {});
+  assert.match(linha.allocated, /NÃO APURADO/);
+  assert.match(linha.allocationReason, /não foi verificada/);
+});
+
+check("Apêndice 3 responde se o TAG consta e sugere a forma com nt- quando não consta", () => {
+  const workbook = SheetJS.utils.book_new();
+  const sheet = SheetJS.utils.aoa_to_sheet([
+    ["ANEXO I - APÊNDICE 3", "", ""],
+    ["", "", ""],
+    ["", "", ""],
+    ["", "", ""],
+    ["", "", ""],
+    ["", "", ""],
+    ["UNIDADE DE PROCESSO", "DISCIPLINA", "TAG (NOTA 1)", "DESCRIÇÃO"],
+    ["U-32", "Dinâmicos", "SPE-AST-320019", "BOMBA"],
+    ["U-32", "Tubulação", "VM-100000", "VÁLVULA"],
+  ]);
+  SheetJS.utils.book_append_sheet(workbook, sheet, "Apêndice");
+  const index = Apendice.parseWorkbook(workbook, SheetJS, { fileName: "apendice.xlsx" });
+  assert.equal(index.ok, true);
+  assert.equal(index.headerRow, 7);
+  assert.equal(index.count, 2);
+
+  const encontrado = Apendice.evaluate({ record: ldDocumentRecord(ntBaseDocument), document: ntBaseDocument }, index);
+  assert.equal(encontrado.tagged, "SIM");
+  assert.equal(encontrado.tag, "SPE-AST-320019");
+  assert.equal(encontrado.tagSource, "código do documento");
+  assert.equal(encontrado.suggestion, "");
+
+  const ausenteDocumento = "C1O_RNEST_U32_3.1.1.1_TUB_REP_VM-322710";
+  const ausente = Apendice.evaluate({ record: ldDocumentRecord(ausenteDocumento), document: ausenteDocumento }, index);
+  assert.equal(ausente.tagged, "NÃO");
+  assert.equal(ausente.suggestion, "C1O_RNEST_U32_3.1.1.1_TUB_REP_nt-VM-322710");
+  assert.match(ausente.suggestionNote, /não é impedida/);
+});
+
+check("sem Apêndice carregado o GRCON diz que não apurou, e nunca NÃO", () => {
+  const info = Apendice.evaluate({ record: ldDocumentRecord(ntBaseDocument), document: ntBaseDocument }, null);
+  assert.equal(info.search, "Apêndice não carregado");
+  assert.match(info.tagged, /Não apurado/);
+  assert.equal(info.suggestion, "");
+  const [linha] = ReportSummary.buildRows([{ document: ntBaseDocument, record: ldDocumentRecord(ntBaseDocument) }], {});
+  assert.equal(linha.apendiceSearch, "Apêndice não carregado");
+  assert.match(linha.tagged, /Não apurado/);
+});
+
+check("a coluna de TAG da LD tem preferência sobre o código do documento", () => {
+  const comTag = { ...ldDocumentRecord(ntBaseDocument), tag: "VM-100000", tagColumn: "F", tagHeader: "TAG" };
+  const origem = Apendice.documentTag(comTag, ntBaseDocument);
+  assert.equal(origem.tag, "VM-100000");
+  assert.equal(origem.source, "coluna da LD");
+  const semTag = Apendice.documentTag(ldDocumentRecord(ntBaseDocument), ntBaseDocument);
+  assert.equal(semTag.tag, "SPE-AST-320019");
+  assert.equal(semTag.source, "código do documento");
+  // O parser da LD reconhece a coluna e ignora TAXONOMIA.
+  const parsed = Core.parseWorkbook(SheetJS.read(SheetJS.write(tagWorkbook(), { type: "buffer", bookType: "xlsx" }), { type: "buffer" }), "LD_TAG.xlsx", 1, null);
+  assert.equal(parsed.records[0].tag, "VM-100000");
+  assert.equal(parsed.records[0].tagHeader, "TAG");
+});
+
+function tagWorkbook() {
+  const workbook = SheetJS.utils.book_new();
+  const technical = SheetJS.utils.aoa_to_sheet([
+    ["ITEM", "DOCUMENTO", "REVISÃO", "TÍTULO", "TAG", "TAXONOMIA", "STATUS SIGEM", "CONFIRMAÇÃO DE ALOCAÇÃO"],
+    ["1", ntBaseDocument, "0", "DOCUMENTO DE TESTE", "VM-100000", "IRRELEVANTE", "Não Postado", "ALOCADO"],
+  ]);
+  SheetJS.utils.book_append_sheet(workbook, technical, "ET");
+  const history = SheetJS.utils.aoa_to_sheet([
+    ["consulta", "Documento", "Revisão", "Status"],
+    ["", ntBaseDocument, "0", "Não Postado"],
+  ]);
+  SheetJS.utils.book_append_sheet(workbook, history, "Colar SIGEM");
+  return workbook;
+}
 
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
