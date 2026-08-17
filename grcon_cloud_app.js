@@ -494,6 +494,73 @@
   // banco, não do aplicativo: duas pessoas gerando itens ao mesmo tempo não
   // podem acabar com o mesmo número.
 
+  async function getRequestTypes() {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    try {
+      const { data, error } = await state.client.rpc("grcon_get_request_types", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []).map((linha) => ({
+        code: linha.code,
+        label: linha.label,
+        description: linha.description,
+        defaultAction: linha.default_action,
+        defaultPriority: linha.default_priority,
+        defaultDeadlineDays: linha.default_deadline_days,
+        requiredFields: linha.required_fields || [],
+        active: linha.active,
+        order: linha.display_order,
+      }));
+    } catch (error) {
+      console.debug("GRCON Cloud: tipos de solicitação indisponíveis", error);
+      return [];
+    }
+  }
+
+  async function saveRequestType(tipo) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode configurar os tipos de solicitação." };
+    if (!tipo || !tipo.label) return { ok: false, error: "O tipo precisa de um nome." };
+    try {
+      const { error } = await state.client.rpc("grcon_save_request_type", {
+        target_workspace: state.membership.workspace_id,
+        new_code: tipo.code || "",
+        new_label: tipo.label,
+        new_description: tipo.description || "",
+        new_default_action: tipo.defaultAction || "",
+        new_default_priority: tipo.defaultPriority || "normal",
+        new_default_deadline_days: tipo.defaultDeadlineDays ?? null,
+        new_required_fields: tipo.requiredFields || [],
+        new_active: tipo.active === undefined ? true : tipo.active,
+        new_order: tipo.order || 0,
+      });
+      if (error) throw error;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível salvar o tipo." };
+    }
+  }
+
+  /**
+   * A decisão entre apagar e desativar é do banco, que sabe quantos itens usam
+   * o tipo. A resposta traz o que aconteceu, para a tela poder dizer a verdade.
+   */
+  async function deleteRequestType(codigo) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode configurar os tipos de solicitação." };
+    try {
+      const { data, error } = await state.client.rpc("grcon_delete_request_type", {
+        target_workspace: state.membership.workspace_id,
+        target_code: codigo,
+      });
+      if (error) throw error;
+      return { ok: true, detalhe: String(data || "") };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível remover o tipo." };
+    }
+  }
+
   async function listRequestItems() {
     if (!state.client || !state.membership?.workspace_id) return [];
     try {
@@ -1656,6 +1723,9 @@
     loadAllocationCenter,
     saveAllocationCenter,
     clearAllocationCenter,
+    getRequestTypes,
+    saveRequestType,
+    deleteRequestType,
     listRequestItems,
     saveRequest,
     updateRequestItems,

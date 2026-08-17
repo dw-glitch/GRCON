@@ -37,6 +37,7 @@
     painelStatus: "",
     painelOwner: "",
     painelSelected: new Set(),
+    tipos: [],         // tipos vindos da área compartilhada
   };
 
   let proximoId = 1;
@@ -759,13 +760,112 @@
   }
 
   function mostrarArea(area) {
-    const consulta = area !== "painel";
-    els.areaConsulta.hidden = !consulta;
-    els.areaPainel.hidden = consulta;
+    els.areaConsulta.hidden = area !== "consulta";
+    els.areaPainel.hidden = area !== "painel";
+    els.areaTipos.hidden = area !== "tipos";
     document.querySelectorAll("[data-requests-area]").forEach((botao) => {
       botao.classList.toggle("active", botao.dataset.requestsArea === area);
     });
-    if (!consulta) carregarPainel();
+    if (area === "painel") carregarPainel();
+    if (area === "tipos") carregarTipos();
+  }
+
+
+  /**
+   * Sem área compartilhada configurada o GRCON é de uso local, e não há a quem
+   * restringir. Tratar "sem área" como "não é proprietário" esconderia a
+   * configuração de quem está trabalhando sozinho — mesma regra do app.js.
+   */
+  function ehProprietario() {
+    const Cloud = root.GrconCloud;
+    if (!Cloud || !Cloud.state?.membership) return true;
+    return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tipos de solicitação
+  //
+  // Ficam no banco e valem para a equipe. Excluir um tipo já usado não apaga
+  // solicitações antigas: a função do banco desativa em vez de remover, e
+  // devolve quantos itens foram preservados.
+  // ---------------------------------------------------------------------------
+  async function carregarTipos() {
+    const Cloud = root.GrconCloud;
+    if (Cloud && Cloud.getRequestTypes) {
+      const salvos = await Cloud.getRequestTypes();
+      state.tipos = R().requestTypeList(salvos && salvos.length ? salvos : null);
+    } else {
+      state.tipos = R().requestTypeList(null);
+    }
+    renderTipos();
+  }
+
+  function renderTipos() {
+    if (!els.tiposTbody) return;
+    const dono = ehProprietario();
+    els.tiposTbody.innerHTML = state.tipos.map((tipo) => `<tr${tipo.active ? "" : ' class="requests-tipo-inativo"'}>
+      <td><strong>${escapeHtml(tipo.label)}</strong></td>
+      <td><code>${escapeHtml(tipo.code)}</code></td>
+      <td>${escapeHtml(tipo.defaultAction || "—")}</td>
+      <td>${tipo.defaultDeadlineDays ? `${tipo.defaultDeadlineDays} dia(s)` : "—"}</td>
+      <td>${escapeHtml(tipo.defaultPriority)}</td>
+      <td>${tipo.order}</td>
+      <td>${tipo.active ? "sim" : "não"}</td>
+      <td>${dono ? `<button class="text-button" data-tipo-edit="${escapeHtml(tipo.code)}" type="button">Editar</button>
+           <button class="text-button danger" data-tipo-remove="${escapeHtml(tipo.code)}" type="button">Excluir</button>` : ""}</td>
+    </tr>`).join("");
+    if (els.tiposOwnerNote) els.tiposOwnerNote.hidden = dono;
+    if (els.tipoForm) els.tipoForm.hidden = !dono;
+  }
+
+  function preencherFormularioTipo(codigo) {
+    const tipo = state.tipos.find((item) => item.code === codigo);
+    if (!tipo) return;
+    els.tipoLabel.value = tipo.label;
+    els.tipoCode.value = tipo.code;
+    els.tipoAction.value = tipo.defaultAction || "";
+    els.tipoDays.value = tipo.defaultDeadlineDays || "";
+    els.tipoPriority.value = tipo.defaultPriority;
+    els.tipoOrder.value = tipo.order;
+    els.tipoLabel.focus();
+  }
+
+  async function salvarTipo() {
+    const Cloud = root.GrconCloud;
+    if (!Cloud || !Cloud.saveRequestType) { notify("Área compartilhada indisponível.", "warn"); return; }
+    const rotulo = els.tipoLabel.value.trim();
+    if (!rotulo) { notify("Informe o rótulo do tipo.", "warn"); els.tipoLabel.focus(); return; }
+    els.tipoSave.disabled = true;
+    try {
+      // normalizeRequestType gera o código a partir do rótulo quando ele não é
+      // informado, para ninguém precisar inventar um identificador.
+      const tipo = R().normalizeRequestType({
+        label: rotulo,
+        code: els.tipoCode.value.trim(),
+        defaultAction: els.tipoAction.value.trim(),
+        defaultDeadlineDays: els.tipoDays.value,
+        defaultPriority: els.tipoPriority.value,
+        order: els.tipoOrder.value,
+      });
+      const resultado = await Cloud.saveRequestType(tipo);
+      if (!resultado.ok) { notify(resultado.error, "warn"); return; }
+      [els.tipoLabel, els.tipoCode, els.tipoAction, els.tipoDays, els.tipoOrder].forEach((campo) => { campo.value = ""; });
+      notify(`Tipo “${tipo.label}” salvo para toda a equipe.`, "success");
+      await carregarTipos();
+    } finally {
+      els.tipoSave.disabled = false;
+    }
+  }
+
+  async function removerTipo(codigo) {
+    const Cloud = root.GrconCloud;
+    if (!Cloud || !Cloud.deleteRequestType) { notify("Área compartilhada indisponível.", "warn"); return; }
+    const tipo = state.tipos.find((item) => item.code === codigo);
+    if (!window.confirm(`Excluir o tipo “${tipo ? tipo.label : codigo}”?\n\nSe ele já estiver em uso, será apenas desativado e as solicitações antigas ficam intactas.`)) return;
+    const resultado = await Cloud.deleteRequestType(codigo);
+    if (!resultado.ok) { notify(resultado.error, "warn"); return; }
+    notify(`Tipo ${resultado.detalhe || "removido"}.`, "success");
+    await carregarTipos();
   }
 
   // ---------------------------------------------------------------------------
@@ -850,6 +950,17 @@
     els.painelSetOwner = $("#requests-painel-set-owner");
     els.painelNote = $("#requests-painel-note");
     els.painelApply = $("#requests-painel-apply");
+    els.areaTipos = $("#requests-area-tipos");
+    els.tipoForm = $("#requests-tipo-form");
+    els.tiposOwnerNote = $("#requests-tipos-owner-note");
+    els.tiposTbody = $("#requests-tipos-tbody");
+    els.tipoLabel = $("#requests-tipo-label");
+    els.tipoCode = $("#requests-tipo-code");
+    els.tipoAction = $("#requests-tipo-action");
+    els.tipoDays = $("#requests-tipo-days");
+    els.tipoPriority = $("#requests-tipo-priority");
+    els.tipoOrder = $("#requests-tipo-order");
+    els.tipoSave = $("#requests-tipo-save");
     els.step1 = $("#requests-step-1");
     els.step2 = $("#requests-step-2");
     els.step3 = $("#requests-step-3");
@@ -946,6 +1057,13 @@
     });
     // Depois de gravar, o painel deixa de estar desatualizado.
     window.addEventListener("grcon:requests-saved", carregarPainel);
+    els.tipoSave.addEventListener("click", salvarTipo);
+    els.tiposTbody.addEventListener("click", (evento) => {
+      const editar = evento.target.closest("[data-tipo-edit]");
+      if (editar) { preencherFormularioTipo(editar.dataset.tipoEdit); return; }
+      const remover = evento.target.closest("[data-tipo-remove]");
+      if (remover) removerTipo(remover.dataset.tipoRemove);
+    });
     els.batchAll.addEventListener("change", () => {
       state.requestRows.forEach((linha) => { linha._selected = els.batchAll.checked; });
       renderPainelSolicitacao();

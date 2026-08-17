@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.18" data-version="5.32.18" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.19" data-version="5.32.19" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -17,7 +17,7 @@
 <link href="requests.css" rel="stylesheet"/>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.32.18" name="application-version"/></head>
+<meta content="5.32.19" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -278,6 +278,7 @@
 <nav class="requests-subnav" aria-label="Áreas de Consultas e Solicitações">
 <button class="requests-subnav-button active" data-requests-area="consulta" type="button">Consulta e nova solicitação</button>
 <button class="requests-subnav-button" data-requests-area="painel" type="button">Acompanhamento<b hidden id="requests-painel-count">0</b></button>
+<button class="requests-subnav-button" data-requests-area="tipos" type="button">Tipos de solicitação</button>
 </nav>
 <div id="requests-area-consulta">
 <ol class="requests-steps" aria-label="Etapas da consulta">
@@ -427,6 +428,29 @@
 <empty-state class="requests-empty" id="requests-painel-empty"><strong>Nenhuma solicitação registrada</strong><span>Gere uma solicitação a partir da consulta e clique em “Salvar no GRCON”.</span></empty-state>
 </section>
 </div>
+
+<div hidden id="requests-area-tipos">
+<section class="requests-panel" aria-labelledby="requests-tipos-title">
+<div class="requests-panel-head"><h3 id="requests-tipos-title">Tipos de solicitação</h3><small>Os rótulos que aparecem na coluna “Descrição da Solicitação”. Valem para toda a equipe; somente o proprietário altera.</small></div>
+<small class="requests-tipos-owner-note" hidden id="requests-tipos-owner-note">Somente o proprietário pode alterar os tipos. Você está vendo os que estão em uso.</small>
+<div class="requests-tipo-form" id="requests-tipo-form">
+<label><span>Rótulo</span><input id="requests-tipo-label" autocomplete="off" type="text" placeholder="POSTAGEM NO SIGEM"/></label>
+<label><span>Código</span><input id="requests-tipo-code" autocomplete="off" type="text" placeholder="gerado a partir do rótulo"/></label>
+<label><span>Ação recomendada</span><input id="requests-tipo-action" autocomplete="off" type="text" placeholder="Postar no SIGEM"/></label>
+<label><span>Prazo padrão (dias)</span><input id="requests-tipo-days" inputmode="numeric" min="1" type="number"/></label>
+<label><span>Prioridade</span><select id="requests-tipo-priority"><option value="baixa">baixa</option><option selected value="normal">normal</option><option value="alta">alta</option><option value="urgente">urgente</option></select></label>
+<label><span>Ordem</span><input id="requests-tipo-order" inputmode="numeric" type="number"/></label>
+<button class="secondary-button compact" id="requests-tipo-save" type="button">Salvar tipo</button>
+</div>
+<div class="requests-batch-table-wrap" id="requests-tipos-table-wrap">
+<table class="requests-batch-table">
+<thead><tr><th>Rótulo</th><th>Código</th><th>Ação recomendada</th><th>Prazo</th><th>Prioridade</th><th>Ordem</th><th>Ativo</th><th></th></tr></thead>
+<tbody id="requests-tipos-tbody"></tbody>
+</table>
+</div>
+<small class="requests-tipos-hint">Excluir um tipo já usado não apaga solicitações antigas: o GRCON desativa em vez de remover, e informa quantos itens foram preservados. Tipo nunca usado é removido de vez.</small>
+</section>
+</div>
 </section>
 <section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
 <header class="analysis-history-heading"><div><span>RASTREABILIDADE DAS ANÁLISES</span><h2 id="analysis-history-title">Todos os documentos analisados pelo GRCON</h2><p>Cada análise concluída é registrada com data, documento, revisão, situação entregue e motivo.</p></div><div class="analysis-history-actions"><button class="secondary-button" id="analysis-history-backup" type="button">Fazer backup</button><button class="secondary-button" id="analysis-history-restore" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="analysis-history-restore-input" type="file"/><button class="secondary-button" disabled="" id="analysis-history-delete-session" type="button">Excluir análise selecionada</button><button class="secondary-button" id="analysis-history-clear" type="button">Limpar todo o histórico</button></div></header>
@@ -527,7 +551,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.32.18 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.32.19 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">

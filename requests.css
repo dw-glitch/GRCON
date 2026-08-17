@@ -331,3 +331,26 @@ html[data-app="GRCON"][data-theme="dark"] .requests-subnav-button,
 html[data-app="GRCON"][data-theme="dark"] .requests-chip { background: var(--surface-2); border-color: var(--border-2); color: var(--text-2); }
 html[data-app="GRCON"][data-theme="dark"] .requests-indicators > div { background: var(--surface-2); border-color: var(--border-2); }
 html[data-app="GRCON"][data-theme="dark"] .requests-chip.active { background: rgba(36,104,154,.22); }
+
+/* Configuração dos tipos de solicitação. */
+html[data-app="GRCON"] .requests-tipo-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .55rem; align-items: end;
+}
+html[data-app="GRCON"] .requests-tipo-form label { display: grid; gap: .18rem; font-size: .73rem; color: var(--text-2, #385069); }
+html[data-app="GRCON"] .requests-tipo-form input,
+html[data-app="GRCON"] .requests-tipo-form select {
+  height: 1.9rem; padding: 0 .45rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .4rem; font-size: .77rem; min-width: 0;
+  background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-tipo-inativo td { opacity: .55; }
+html[data-app="GRCON"] .requests-tipos-hint,
+html[data-app="GRCON"] .requests-tipos-owner-note { font-size: .73rem; color: var(--text-3, #6f8296); line-height: 1.45; }
+html[data-app="GRCON"] .requests-tipos-owner-note { font-style: italic; }
+
+@media (prefers-color-scheme: dark) {
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-tipo-form input,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-tipo-form select { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+}
+html[data-app="GRCON"][data-theme="dark"] .requests-tipo-form input,
+html[data-app="GRCON"][data-theme="dark"] .requests-tipo-form select { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
