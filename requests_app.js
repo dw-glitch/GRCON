@@ -705,7 +705,7 @@
       <td>${escapeHtml(item.owner_name || "—")}</td>
       <td>${escapeHtml(rotuloStatus(item.status))}</td>
       <td>${escapeHtml(item.classification || "—")}</td>
-      <td>${escapeHtml((item.observations || "").slice(0, 90))}</td>
+      <td>${escapeHtml((item.observations || "").slice(0, 90))}<button class="text-button requests-history-open" data-history="${escapeHtml(item.protocol)}" type="button">Histórico</button></td>
     </tr>`).join("");
 
     // Listas de filtro montadas a partir do que existe, não de uma lista fixa.
@@ -780,6 +780,48 @@
     const Cloud = root.GrconCloud;
     if (!Cloud || !Cloud.state?.membership) return true;
     return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Histórico do item
+  //
+  // O banco grava o valor anterior e o novo a cada alteração, e o histórico só
+  // recebe inserções. Isto aqui apenas mostra o que já está registrado: editar
+  // um item nunca sobrescreve o que havia antes.
+  // ---------------------------------------------------------------------------
+  function descreverEvento(evento) {
+    const campos = {
+      status: "Status", owner_name: "Responsável", type_code: "Descrição da solicitação",
+      priority: "Prioridade", deadline: "Prazo", observations: "Observações",
+      classification: "Classificação", needs_manual_validation: "Precisa de validação",
+    };
+    if (evento.action === "saved") return "Item gravado";
+    const campo = campos[evento.field] || evento.field || "Alteração";
+    const de = evento.old_value || "vazio";
+    const para = evento.new_value || "vazio";
+    return `${campo}: ${de} → ${para}`;
+  }
+
+  async function abrirHistorico(protocolo) {
+    const Cloud = root.GrconCloud;
+    if (!Cloud || !Cloud.requestItemHistory) { notify("Área compartilhada indisponível.", "warn"); return; }
+    els.historyProtocol.textContent = protocolo;
+    els.historyBody.innerHTML = '<p class="requests-vazio">Carregando…</p>';
+    els.history.hidden = false;
+    const eventos = await Cloud.requestItemHistory(protocolo);
+    if (!eventos.length) {
+      els.historyBody.innerHTML = '<p class="requests-vazio">Nenhum registro para este item ainda.</p>';
+      return;
+    }
+    els.historyBody.innerHTML = `<ol class="requests-history-list">${eventos.map((evento) => {
+      const quando = evento.created_at ? new Date(evento.created_at).toLocaleString("pt-BR") : "";
+      return `<li>
+        <span class="requests-history-when">${escapeHtml(quando)}</span>
+        <strong>${escapeHtml(descreverEvento(evento))}</strong>
+        ${evento.note ? `<span class="requests-history-note">${escapeHtml(evento.note)}</span>` : ""}
+      </li>`;
+    }).join("")}</ol>`;
   }
 
   // ---------------------------------------------------------------------------
@@ -961,6 +1003,10 @@
     els.tipoPriority = $("#requests-tipo-priority");
     els.tipoOrder = $("#requests-tipo-order");
     els.tipoSave = $("#requests-tipo-save");
+    els.history = $("#requests-history");
+    els.historyProtocol = $("#requests-history-protocol");
+    els.historyBody = $("#requests-history-body");
+    els.historyClose = $("#requests-history-close");
     els.step1 = $("#requests-step-1");
     els.step2 = $("#requests-step-2");
     els.step3 = $("#requests-step-3");
@@ -1043,6 +1089,11 @@
       document.querySelectorAll("[data-quick]").forEach((outro) => outro.classList.toggle("active", outro === chip));
       renderPainel();
     }));
+    els.historyClose.addEventListener("click", () => { els.history.hidden = true; });
+    els.painelTbody.addEventListener("click", (evento) => {
+      const botao = evento.target.closest("[data-history]");
+      if (botao) abrirHistorico(botao.dataset.history);
+    });
     els.painelTbody.addEventListener("change", (evento) => {
       const caixa = evento.target.closest("[data-painel-select]");
       if (!caixa) return;

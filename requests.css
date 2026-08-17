@@ -354,3 +354,21 @@ html[data-app="GRCON"] .requests-tipos-owner-note { font-style: italic; }
 }
 html[data-app="GRCON"][data-theme="dark"] .requests-tipo-form input,
 html[data-app="GRCON"][data-theme="dark"] .requests-tipo-form select { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+
+/* Histórico do item: só leitura, porque o registro nunca é sobrescrito. */
+html[data-app="GRCON"] .requests-history {
+  margin: .8rem 0; padding: .7rem .9rem; border: 1px solid var(--brand-600, #24689a);
+  border-radius: .6rem; background: var(--surface-2, #f7fafc);
+}
+html[data-app="GRCON"] .requests-history-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+html[data-app="GRCON"] .requests-history-head h4 { margin: 0; font-size: .86rem; color: var(--brand-strong, #123f61); }
+html[data-app="GRCON"] .requests-history-list { margin: .5rem 0 0; padding: 0 0 0 1rem; display: grid; gap: .45rem; }
+html[data-app="GRCON"] .requests-history-list li { font-size: .77rem; color: var(--text-1, #17324a); }
+html[data-app="GRCON"] .requests-history-when { display: block; font-size: .68rem; color: var(--text-3, #6f8296); }
+html[data-app="GRCON"] .requests-history-note { display: block; font-size: .72rem; color: var(--text-2, #385069); font-style: italic; }
+html[data-app="GRCON"] .requests-history-open { margin-left: .4rem; font-size: .7rem; }
+
+@media (prefers-color-scheme: dark) {
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-history { background: var(--surface-2); }
+}
+html[data-app="GRCON"][data-theme="dark"] .requests-history { background: var(--surface-2); }
