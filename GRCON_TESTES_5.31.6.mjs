@@ -370,139 +370,6 @@ check("título da consulta sai exatamente como está na LD", () => {
   assert.equal(Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index)).title, original);
 });
 
-check("tipos de solicitação são configuráveis, ordenados e não ficam fixos no código", () => {
-  const padrao = Requests.requestTypeList(null);
-  assert.ok(padrao.length >= 10);
-  // Rótulos iguais aos da coluna "Descrição da Solicitação" do controle oficial.
-  assert.equal(padrao[0].label, "POSTAGEM NO SIGEM");
-  const meus = Requests.requestTypeList([
-    { label: "Tipo da casa", order: 2 },
-    { label: "Urgência", code: "URG", defaultPriority: "urgente", defaultDeadlineDays: 1, order: 1 },
-  ]);
-  assert.equal(meus[0].code, "URG");
-  assert.equal(meus[1].code, "TIPO_DA_CASA");
-  assert.equal(Requests.normalizeRequestType({ label: "" }), null);
-  assert.equal(Requests.normalizeRequestType({ label: "X", defaultPriority: "inventada" }).defaultPriority, "normal");
-});
-
-// ── Triagem das solicitações: as regras da seção 8 ──────────────────────────
-
-function triagemDe(documentoInformado, registros, extras = {}) {
-  const index = Core.buildIndex(registros, []);
-  const lookup = Requests.lookupDocument(documentoInformado, index, { requestedTitle: extras.requestedTitle });
-  return Requests.classifyRequestItem({ lookup, ...extras });
-}
-
-check("8.1 documento não localizado é classificado como novo e pede inclusão na LD", () => {
-  const t = triagemDe("C1O_RNEST_U32_9.9.9.9_INS_RIR_NAO-EXISTE", [consultaRecord(ntBaseDocument, "LD_A.xlsx")]);
-  assert.equal(t.classification, Requests.CLASSIFICATIONS.NOVO);
-  assert.equal(t.isNewDocument, true);
-  assert.equal(t.needsManualValidation, true);
-  assert.match(t.recommendedAction, /inclusão na LD/i);
-  assert.match(t.recommendedAction, /aloca/i);
-});
-
-check("8.2 previsto e não postado recomenda a postagem e não trata como novo", () => {
-  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Não Postado" })]);
-  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
-  assert.equal(t.isNewDocument, false);
-  assert.match(t.recommendedAction, /Postar no SIGEM/i);
-  // A 8.2 exige dizer que NÃO é documento novo e que NÃO cabe nova inclusão.
-  assert.match(t.recommendedAction, /não é documento novo/i);
-  assert.match(t.recommendedAction, /não precisa de nova inclusão/i);
-  assert.match(t.reason, /Já previsto na LD LD_A\.xlsx/);
-});
-
-check("8.2 previsto porém não alocado manda regularizar a alocação antes de postar", () => {
-  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "" })]);
-  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
-  assert.equal(t.allocated, false);
-  assert.match(t.recommendedAction, /Regularizar a alocação/i);
-});
-
-check("8.3 postado com revisão nova recomenda a atualização citando as duas revisões", () => {
-  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Postado", revision: "0" })], { requestedRevision: "A" });
-  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NOVA_REVISAO);
-  assert.equal(t.revisionInLd, "0");
-  assert.equal(t.requestedRevision, "A");
-  assert.match(t.recommendedAction, /revisão 0 para A/);
-});
-
-check("8.4 título divergente mostra os dois lados e nunca altera sozinho", () => {
-  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: "Relatório de inspeção dimensional" })],
-    { requestedTitle: "Relatório de inspeção dimensional e visual" });
-  assert.equal(t.classification, Requests.CLASSIFICATIONS.TITULO_DIVERGENTE);
-  assert.equal(t.needsManualValidation, true);
-  assert.equal(t.titleComparison.official, "Relatório de inspeção dimensional");
-  assert.equal(t.titleComparison.requested, "Relatório de inspeção dimensional e visual");
-  assert.deepEqual(t.titleComparison.addedWords, ["E", "VISUAL"]);
-  assert.match(t.recommendedAction, /não altera nada sozinho/i);
-});
-
-check("8.4 diferença só de caixa e acento não é considerada divergência de título", () => {
-  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: "Relatório de Inspeção" })],
-    { requestedTitle: "RELATORIO DE INSPECAO" });
-  assert.equal(t.titleComparison.differs, false);
-  assert.notEqual(t.classification, Requests.CLASSIFICATIONS.TITULO_DIVERGENTE);
-});
-
-check("8.5 LDs divergentes empatadas travam a triagem até alguém escolher", () => {
-  const t = triagemDe(ntBaseDocument, [
-    consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "", sourceTimestamp: 500 }),
-    consultaRecord(ntBaseDocument, "LD_B.xlsx", { allocationStatus: "ALOCADO", sourceTimestamp: 500 }),
-  ]);
-  assert.equal(t.classification, Requests.CLASSIFICATIONS.VALIDAR);
-  assert.equal(t.needsManualValidation, true);
-  assert.match(t.recommendedAction, /Escolher qual LD vale/i);
-});
-
-check("documento já postado e sem revisão nova não inventa tarefa", () => {
-  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Postado" })]);
-  assert.match(t.recommendedAction, /Nenhuma ação necessária/i);
-});
-
-check("correspondência por variação de código mantém a conferência mesmo com classificação clara", () => {
-  const t = triagemDe(ntDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Não Postado" })]);
-  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
-  assert.equal(t.needsManualValidation, true);
-});
-
-check("consulta vira linha do controle sem redigitar o que o GRCON já achou", () => {
-  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_ALFA.xlsx", {
-    grdt: "GRDT-0042", allocation: "C1O-ALOC-CM-0095-2026", ldVersion: "Rev. C",
-  })], []);
-  const entradas = [
-    { document: ntBaseDocument, lookup: Requests.lookupDocument(ntBaseDocument, index) },
-    { document: "C1O_RNEST_U32_9.9.9.9_INS_RIR_NOVO-1", lookup: Requests.lookupDocument("C1O_RNEST_U32_9.9.9.9_INS_RIR_NOVO-1", index) },
-  ];
-  const cabecalho = { owner: "Laís", receivedAt: "16/08/2026", requester: "Gabriela Borges", requestType: "POSTAGEM NO SIGEM", origin: "E-MAIL" };
-  const linhas = Requests.buildControlRows(entradas, cabecalho, [{ protocol: "556" }]);
-
-  // Numeração continua a sequência da planilha.
-  assert.deepEqual(linhas.map((l) => l.item), ["557", "558"]);
-  // O cabeçalho da solicitação é repetido em cada item, como na planilha.
-  assert.equal(linhas[0].owner, "Laís");
-  assert.equal(linhas[0].requester, "Gabriela Borges");
-  // O que veio da LD entra sozinho.
-  assert.equal(linhas[0].documentFamily, "ET");
-  assert.equal(linhas[0].allocation, "C1O-ALOC-CM-0095-2026");
-  assert.equal(linhas[0].sigemStatus, "Não Postado");
-  assert.equal(linhas[0].reference, "LD_ALFA.xlsx");
-  // A classificação decide se precisa de inclusão na LD.
-  assert.equal(linhas[0].needsLdInclusion, "não");
-  assert.equal(linhas[1].needsLdInclusion, "sim");
-  assert.equal(linhas[1]._classification, Requests.CLASSIFICATIONS.NOVO);
-  // Documento novo não recebe dado nenhum da LD.
-  assert.equal(linhas[1].allocation, "");
-  assert.equal(linhas[1].sigemStatus, "");
-
-  // Etapas futuras ficam em branco e saem como "na" na planilha.
-  const saida = RequestsReport.controlRows(linhas)[0];
-  assert.equal(saida.length, 26);
-  assert.equal(saida[16], "na");
-  assert.equal(saida[0], "557");
-});
-
 check("solicitação é gravada pelo banco, com o protocolo e a transação do lado do servidor", () => {
   const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
   for (const rpc of ["grcon_save_request", "grcon_list_request_items", "grcon_update_request_items", "grcon_request_item_history"]) {
@@ -555,6 +422,21 @@ check("exportação reproduz as 26 colunas do Controle de Solicitações", () =>
   const comCabecalho = RequestsReport.controlClipboardText([{ item: "557" }], true);
   assert.equal(comCabecalho.split("\n").length, 2);
   assert.match(comCabecalho, /^ITEM\t/);
+});
+
+check("tipos de solicitação são configuráveis, ordenados e não ficam fixos no código", () => {
+  const padrao = Requests.requestTypeList(null);
+  assert.ok(padrao.length >= 10);
+  // Rótulos iguais aos da coluna "Descrição da Solicitação" do controle oficial.
+  assert.equal(padrao[0].label, "POSTAGEM NO SIGEM");
+  const meus = Requests.requestTypeList([
+    { label: "Tipo da casa", order: 2 },
+    { label: "Urgência", code: "URG", defaultPriority: "urgente", defaultDeadlineDays: 1, order: 1 },
+  ]);
+  assert.equal(meus[0].code, "URG");
+  assert.equal(meus[1].code, "TIPO_DA_CASA");
+  assert.equal(Requests.normalizeRequestType({ label: "" }), null);
+  assert.equal(Requests.normalizeRequestType({ label: "X", defaultPriority: "inventada" }).defaultPriority, "normal");
 });
 
 check("solicitação se preenche sem consulta e sem inventar classificação", () => {

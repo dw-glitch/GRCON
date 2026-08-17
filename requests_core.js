@@ -386,211 +386,47 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Triagem das solicitações
-  //
-  // Classifica cada item a partir do que a LD respondeu. Toda classificação é
-  // uma SUGESTÃO: sai com o motivo por extenso e pode ser trocada na tela. O
-  // motor nunca conclui sozinho um caso que dependa de decisão.
+  // Linha do Controle de Solicitações
   // ---------------------------------------------------------------------------
-  const CLASSIFICATIONS = Object.freeze({
-    NOVO: "Documento novo",
-    PREVISTO_NAO_POSTADO: "Já previsto na LD",
-    PREVISTO_NOVA_REVISAO: "Previsto com nova revisão",
-    TITULO_DIVERGENTE: "Título divergente",
-    NAO_LOCALIZADO: "Não localizado",
-    VALIDAR: "Requer validação manual",
-  });
 
   /**
-   * Compara o título pedido com o oficial. O oficial nunca é alterado aqui: a
-   * comparação existe para mostrar lado a lado e deixar a pessoa aprovar,
-   * rejeitar ou editar.
+   * Converte um item da solicitação numa linha da planilha oficial.
    *
-   * A diferença é medida por palavra e ignorando caixa e acento, senão qualquer
-   * maiúscula sobrando viraria "título divergente" e o alerta perderia sentido.
-   */
-  function compareTitles(requested, official) {
-    const pedido = text(requested);
-    const oficial = text(official);
-    if (!pedido || !oficial) return { differs: false, requested: pedido, official: oficial, addedWords: [], removedWords: [] };
-    const palavras = (valor) => norm(valor).split(/[^A-Z0-9]+/).filter(Boolean);
-    const doPedido = palavras(pedido);
-    const doOficial = palavras(oficial);
-    const conjuntoOficial = new Set(doOficial);
-    const conjuntoPedido = new Set(doPedido);
-    return {
-      differs: doPedido.join(" ") !== doOficial.join(" "),
-      requested: pedido,
-      official: oficial,
-      addedWords: doPedido.filter((palavra) => !conjuntoOficial.has(palavra)),
-      removedWords: doOficial.filter((palavra) => !conjuntoPedido.has(palavra)),
-    };
-  }
-
-  function postedInSigem(sigemStatus) {
-    const valor = norm(sigemStatus);
-    if (!valor) return false;
-    // "NAO POSTADO" contém "POSTADO"; a negativa tem de ser testada antes.
-    if (valor.includes("NAO POSTADO") || valor.includes("NÃO POSTADO")) return false;
-    return valor.includes("POSTADO");
-  }
-
-  /**
-   * Classifica um item da solicitação. Recebe o resultado da consulta e o que o
-   * solicitante informou; devolve a classificação sugerida, a ação recomendada
-   * e o que precisa de conferência.
-   */
-  function classifyRequestItem(input) {
-    const dados = input || {};
-    const resultado = dados.lookup || null;
-    const linha = resultado ? consultationRow(resultado) : null;
-    const escolhida = resultado && resultado.chosen;
-    const pedidoTitulo = text(dados.requestedTitle);
-    const pedidoRevisao = text(dados.requestedRevision);
-
-    const base = {
-      classification: CLASSIFICATIONS.NAO_LOCALIZADO,
-      recommendedAction: "",
-      reason: "",
-      needsManualValidation: true,
-      isNewDocument: false,
-      allocated: false,
-      titleComparison: compareTitles(pedidoTitulo, escolhida ? escolhida.title : ""),
-      revisionInLd: escolhida ? escolhida.revision : "",
-      requestedRevision: pedidoRevisao,
-      row: linha,
-    };
-
-    // 8.6 / 8.1 — não localizado em nenhuma LD anexada.
-    if (!resultado || !resultado.found) {
-      return {
-        ...base,
-        classification: CLASSIFICATIONS.NOVO,
-        isNewDocument: true,
-        recommendedAction: "Analisar a inclusão na LD e providenciar a alocação.",
-        reason: "O código não consta em nenhuma das LDs anexadas. Confirme se é documento novo ou se a LD em uso não é a mais recente.",
-      };
-    }
-
-    // 8.5 / 8.6 — localizado, mas sem ocorrência eleita: a decisão é da pessoa.
-    if (!escolhida) {
-      return {
-        ...base,
-        classification: CLASSIFICATIONS.VALIDAR,
-        recommendedAction: "Escolher qual LD vale antes de seguir.",
-        reason: resultado.rule || "As LDs anexadas divergem e não foi possível eleger uma ocorrência.",
-      };
-    }
-
-    const alocado = escolhida.allocationKind === "allocated";
-    const postado = postedInSigem(escolhida.sigemStatus);
-    const titulo = compareTitles(pedidoTitulo, escolhida.title);
-    const revisaoDiferente = Boolean(pedidoRevisao) && norm(pedidoRevisao) !== norm(escolhida.revision);
-
-    const comum = {
-      ...base,
-      allocated: alocado,
-      titleComparison: titulo,
-      // Correspondência por variação de código ou divergência entre LDs continua
-      // pedindo conferência mesmo quando a classificação é clara.
-      needsManualValidation: Boolean(resultado.needsManualValidation),
-    };
-
-    // 8.3 — previsto e postado, com revisão nova pedida.
-    if (postado && revisaoDiferente) {
-      return {
-        ...comum,
-        classification: CLASSIFICATIONS.PREVISTO_NOVA_REVISAO,
-        recommendedAction: `Atualizar da revisão ${escolhida.revision || "atual"} para ${pedidoRevisao} e postar no SIGEM.`,
-        reason: `O documento já está postado na revisão ${escolhida.revision || "registrada na LD"}. A solicitação pede a revisão ${pedidoRevisao}.`,
-      };
-    }
-
-    // 8.4 — título divergente. Vem depois da revisão porque uma revisão nova
-    // costuma trazer título novo junto, e aí a ação principal é a revisão.
-    if (titulo.differs) {
-      return {
-        ...comum,
-        classification: CLASSIFICATIONS.TITULO_DIVERGENTE,
-        needsManualValidation: true,
-        recommendedAction: "Conferir o título e decidir entre corrigir a LD ou o pedido. O GRCON não altera nada sozinho.",
-        reason: `Título na LD: “${titulo.official}”. Título informado: “${titulo.requested}”.`,
-      };
-    }
-
-    // 8.2 — previsto na LD e ainda não postado.
-    if (!postado) {
-      return {
-        ...comum,
-        classification: CLASSIFICATIONS.PREVISTO_NAO_POSTADO,
-        recommendedAction: alocado
-          ? "Postar no SIGEM. Não é documento novo e não precisa de nova inclusão."
-          : "Regularizar a alocação na LD antes de postar.",
-        reason: alocado
-          ? `Já previsto na LD ${escolhida.ld}, revisão ${escolhida.revision || "não informada"}, ainda sem postagem no SIGEM.`
-          : `Já previsto na LD ${escolhida.ld}, mas a confirmação de documentos previstos está como “${escolhida.allocationStatus || "não informada"}”.`,
-      };
-    }
-
-    // Previsto, postado e sem revisão nova pedida: nada a fazer além de responder.
-    return {
-      ...comum,
-      classification: CLASSIFICATIONS.PREVISTO_NAO_POSTADO,
-      recommendedAction: "Nenhuma ação necessária: o documento já está postado no SIGEM.",
-      reason: `Postado no SIGEM na revisão ${escolhida.revision || "registrada"}, conforme a LD ${escolhida.ld}.`,
-    };
-  }
-
-  /**
-   * Converte um item já triado numa linha do Controle de Solicitações.
-   *
-   * Só preenche o que veio da LD ou do que a pessoa informou no cabeçalho da
-   * solicitação. O que depende de etapas posteriores — retorno da fiscal, datas
-   * de submissão — fica em branco para a saída marcar como "na": inventar aqui
-   * seria pior do que deixar a pessoa preencher.
+   * Preenche só o que a pessoa informou. Tudo o que depende de etapa posterior
+   * — retorno da fiscal, datas de submissão, disponibilização no PW — fica em
+   * branco para a saída marcar como "na", e é preenchido na própria tabela
+   * quando acontecer. Inventar aqui seria pior do que deixar em branco.
    */
   function controlRowFromItem(input) {
     const dados = input || {};
-    const triagem = dados.triage || {};
-    const linha = triagem.row || {};
     const cabecalho = dados.header || {};
-    const escolhida = dados.lookup && dados.lookup.chosen;
-
-    // "sim" quando o documento não está na LD; "não" quando já está previsto.
-    const precisaInclusao = triagem.isNewDocument ? "sim" : linha.situation === "Localizado" || linha.situation === "Requer validação manual" ? "não" : "";
-
-    // A observação junta o motivo da classificação com a ação recomendada, que
-    // é o que a pessoa precisa ler para decidir — sem repetir o óbvio.
-    const observacao = [triagem.reason, triagem.recommendedAction]
-      .map((valor) => text(valor)).filter(Boolean).join(" ");
 
     return {
       item: text(dados.protocol),
       owner: text(cabecalho.owner),
       receivedAt: text(cabecalho.receivedAt),
       requester: text(cabecalho.requester),
-      // A família documental vem da aba em que a LD guardou o documento.
-      // Com LD, a família vem da aba em que o documento foi achado. Sem LD, vem
-      // do que a pessoa informou no cabeçalho — nunca de suposição.
-      documentFamily: escolhida ? text(escolhida.sheet) : text(cabecalho.documentFamily),
+      documentFamily: text(cabecalho.documentFamily),
       requestType: text(cabecalho.requestType),
       origin: text(cabecalho.origin),
       emailBody: text(cabecalho.emailBody),
       document: text(dados.document),
       documentPath: text(cabecalho.documentPath),
-      needsLdInclusion: precisaInclusao,
-      ldVersion: escolhida ? text(escolhida.ldVersion) : "",
+      // Quem responde se precisa incluir na LD é a pessoa: o GRCON não
+      // consultou LD nenhuma aqui e não tem como saber.
+      needsLdInclusion: "",
+      ldVersion: "",
       ldApprovedAt: "",
-      allocation: escolhida ? text(escolhida.allocation) : "",
-      reference: escolhida ? text(escolhida.ld) : "",
+      allocation: "",
+      reference: "",
       allocSentAt: "",
       fiscal1ReturnedAt: "",
       fiscal1Answer: "",
       fiscal2ReturnedAt: "",
       sigemOwner: "",
-      sigemStatus: escolhida ? text(escolhida.sigemStatus) : "",
+      sigemStatus: "",
       sigemSubmittedAt: "",
-      observations: observacao,
+      observations: "",
       pwN1710: "",
       overallStatus: text(cabecalho.overallStatus) || "Recebida",
       statusDate: text(cabecalho.receivedAt),
@@ -627,36 +463,9 @@
     }));
   }
 
-  function buildControlRows(entries, header, existingItems) {
-    const numerados = assignItemNumbers(entries || [], existingItems);
-    return numerados.map((entrada) => {
-      const triagem = classifyRequestItem({
-        lookup: entrada.lookup,
-        requestedTitle: entrada.requestedTitle,
-        requestedRevision: entrada.requestedRevision,
-      });
-      return {
-        ...controlRowFromItem({
-          protocol: entrada.protocol,
-          document: entrada.document,
-          lookup: entrada.lookup,
-          triage: triagem,
-          header: header || {},
-        }),
-        _itemNumber: entrada.itemNumber,
-        _classification: triagem.classification,
-        _needsManualValidation: triagem.needsManualValidation,
-      };
-    });
-  }
-
   return Object.freeze({
-    CLASSIFICATIONS,
     controlRowFromItem,
-    buildControlRows,
     buildManualControlRows,
-    compareTitles,
-    classifyRequestItem,
     DEFAULT_REQUEST_TYPES,
     PRIORITIES,
     REQUEST_STATUSES,
