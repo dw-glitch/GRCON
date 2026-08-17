@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.20" data-version="5.32.20" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.21" data-version="5.32.21" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -17,7 +17,7 @@
 <link href="requests.css" rel="stylesheet"/>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.32.20" name="application-version"/></head>
+<meta content="5.32.21" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -279,6 +279,7 @@
 <button class="requests-subnav-button active" data-requests-area="consulta" type="button">Consulta e nova solicitação</button>
 <button class="requests-subnav-button" data-requests-area="painel" type="button">Acompanhamento<b hidden id="requests-painel-count">0</b></button>
 <button class="requests-subnav-button" data-requests-area="tipos" type="button">Tipos de solicitação</button>
+<button class="requests-subnav-button" data-requests-area="modelos" type="button">Modelos de exportação</button>
 </nav>
 <div id="requests-area-consulta">
 <ol class="requests-steps" aria-label="Etapas da consulta">
@@ -323,7 +324,9 @@
 <button class="secondary-button compact" disabled id="requests-dedupe" type="button">Remover duplicados</button>
 <span class="requests-actions-divider" aria-hidden="true"></span>
 <button class="secondary-button compact" disabled id="requests-copy" type="button">Copiar resultados</button>
+<label class="requests-modelo-escolha"><span>Modelo</span><select id="requests-modelo-select"></select></label>
 <button class="secondary-button compact" disabled id="requests-export" type="button">Exportar para Excel</button>
+<button class="text-button" hidden id="requests-modelo-repeat" type="button">Repetir a última exportação</button>
 <span class="requests-actions-divider" aria-hidden="true"></span>
 <button class="secondary-button compact" disabled id="requests-to-request" type="button">Transformar em solicitação</button>
 <span class="requests-actions-divider" aria-hidden="true"></span>
@@ -458,6 +461,43 @@
 <small class="requests-tipos-hint">Excluir um tipo já usado não apaga solicitações antigas: o GRCON desativa em vez de remover, e informa quantos itens foram preservados. Tipo nunca usado é removido de vez.</small>
 </section>
 </div>
+
+<div hidden id="requests-area-modelos">
+<section class="requests-panel" aria-labelledby="requests-modelos-title">
+<div class="requests-panel-head"><h3 id="requests-modelos-title">Modelos de exportação</h3><small>A ordem e os nomes das colunas do arquivo gerado. Serve para colar direto na planilha da sua frente, sem rearrumar coluna depois.</small></div>
+<div class="requests-modelo-acoes">
+<label><span>Base dos dados</span><select id="requests-modelo-base"><option value="consulta">Consulta de documentos</option><option value="controle">Controle de Solicitações</option></select></label>
+<button class="secondary-button compact" id="requests-modelo-new" type="button">Novo modelo</button>
+<button class="secondary-button compact" id="requests-modelo-import" type="button">Importar estrutura de uma planilha</button>
+<input accept=".xlsx,.xls,.xlsm" hidden id="requests-modelo-import-input" type="file"/>
+</div>
+<div class="requests-batch-table-wrap" id="requests-modelos-table-wrap">
+<table class="requests-batch-table">
+<thead><tr><th>Modelo</th><th>Base</th><th>Colunas</th><th>Onde está salvo</th><th></th></tr></thead>
+<tbody id="requests-modelos-tbody"></tbody>
+</table>
+</div>
+<div class="requests-modelo-editor" hidden id="requests-modelo-editor">
+<div class="requests-modelo-form">
+<label><span>Nome do modelo</span><input id="requests-modelo-name" autocomplete="off" type="text" placeholder="Controle de Solicitações — Unidade 32"/></label>
+<span class="requests-modelo-base-atual" id="requests-modelo-base-note"></span>
+</div>
+<ol class="requests-modelo-columns" id="requests-modelo-columns" aria-label="Colunas do modelo"></ol>
+<div class="requests-modelo-acoes">
+<label><span>Acrescentar campo</span><select id="requests-modelo-add-field"></select></label>
+<button class="secondary-button compact" id="requests-modelo-add" type="button">Acrescentar</button>
+<button class="text-button" id="requests-modelo-add-blank" type="button">Acrescentar coluna em branco</button>
+</div>
+<h4 class="requests-modelo-previa-titulo">Prévia com os dados de agora</h4>
+<div class="requests-batch-table-wrap" id="requests-modelo-preview"></div>
+<div class="requests-modelo-acoes">
+<button class="secondary-button compact" id="requests-modelo-save" type="button">Salvar modelo</button>
+<button class="text-button" id="requests-modelo-cancel" type="button">Cancelar</button>
+</div>
+</div>
+<small class="requests-tipos-hint">Coluna que o GRCON não sabe preencher sai em branco: a estrutura da sua planilha é reproduzida sem que nenhum campo seja preenchido por suposição. Ao importar, o casamento é por nome idêntico da coluna — nunca por semelhança.</small>
+</section>
+</div>
 </section>
 <section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
 <header class="analysis-history-heading"><div><span>RASTREABILIDADE DAS ANÁLISES</span><h2 id="analysis-history-title">Todos os documentos analisados pelo GRCON</h2><p>Cada análise concluída é registrada com data, documento, revisão, situação entregue e motivo.</p></div><div class="analysis-history-actions"><button class="secondary-button" id="analysis-history-backup" type="button">Fazer backup</button><button class="secondary-button" id="analysis-history-restore" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="analysis-history-restore-input" type="file"/><button class="secondary-button" disabled="" id="analysis-history-delete-session" type="button">Excluir análise selecionada</button><button class="secondary-button" id="analysis-history-clear" type="button">Limpar todo o histórico</button></div></header>
@@ -558,7 +598,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.32.20 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.32.21 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">

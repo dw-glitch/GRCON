@@ -557,6 +557,119 @@ check("exportação reproduz as 26 colunas do Controle de Solicitações", () =>
   assert.match(comCabecalho, /^ITEM\t/);
 });
 
+check("modelo de exportação guarda ordem e nome das colunas escolhidas", () => {
+  const modelo = RequestsReport.normalizeExportTemplate({
+    name: "Minha planilha",
+    base: "consulta",
+    columns: [
+      { key: "document", header: "Código do documento" },
+      { key: "title", header: "Título" },
+    ],
+  });
+  assert.equal(modelo.id, "minha-planilha");
+  assert.equal(modelo.columns.length, 2);
+  // O nome da coluna é do usuário; a chave continua sendo a do motor.
+  assert.equal(modelo.columns[0].header, "Código do documento");
+  assert.equal(modelo.columns[0].key, "document");
+
+  const saida = RequestsReport.applyExportTemplate(modelo, [
+    { document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", title: "Relatório", situation: "Localizado" },
+  ]);
+  assert.deepEqual(saida.headers, ["Código do documento", "Título"]);
+  assert.deepEqual(saida.rows, [["C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", "Relatório"]]);
+  // Coluna fora do modelo não aparece, mesmo existindo no dado.
+  assert.equal(saida.rows[0].length, 2);
+
+  // Chave desconhecida não vira coluna preenchida por engano: perde a chave e
+  // sai em branco, em vez de o modelo inventar um campo que o motor não tem.
+  const inventada = RequestsReport.normalizeExportTemplate({
+    name: "X", base: "consulta", columns: [{ key: "campo_que_nao_existe", header: "Qualquer" }],
+  });
+  assert.equal(inventada.columns[0].key, "");
+  assert.deepEqual(RequestsReport.applyExportTemplate(inventada, [{ campo_que_nao_existe: "valor" }]).rows, [[""]]);
+});
+
+check("modelo importado do painel oficial reproduz a estrutura e não inventa coluna", () => {
+  // Cabeçalho real do Controle de Solicitações, com uma coluna que só existe na
+  // planilha da equipe.
+  const resultado = RequestsReport.importExportTemplate("Painel da equipe", [
+    "ITEM",
+    "responsavel pela atividade",      // caixa diferente: mesmo rótulo
+    "Disponibilizado no PW - N-1710",  // hífen comum no lugar do curto
+    "Coluna que só existe na rede",
+    "",
+  ], "controle");
+
+  const modelo = resultado.template;
+  assert.equal(modelo.columns.length, 4, "a linha vazia não vira coluna");
+  // A grafia do arquivo do usuário é preservada: o modelo é a planilha dele.
+  assert.equal(modelo.columns[1].header, "responsavel pela atividade");
+  assert.equal(modelo.columns[1].key, "owner");
+  assert.equal(modelo.columns[2].key, "pwN1710");
+  // O que o GRCON não reconhece fica sem chave, sai em branco e é informado.
+  assert.equal(modelo.columns[3].key, "");
+  assert.deepEqual(resultado.unmatched, ["Coluna que só existe na rede"]);
+  assert.equal(resultado.matched, 3);
+
+  const saida = RequestsReport.applyExportTemplate(modelo, [{ item: "557", owner: "Laís", pwN1710: "sim" }]);
+  assert.deepEqual(saida.rows, [["557", "Laís", "sim", ""]]);
+});
+
+check("importação de modelo casa por nome idêntico, nunca por semelhança", () => {
+  // "Documento" e "Caminho do Documento" são colunas diferentes da planilha
+  // oficial. Casar por aproximação encheria uma com o conteúdo da outra.
+  const resultado = RequestsReport.importExportTemplate("Aproximado", [
+    "Documento",
+    "Documentos",
+    "Caminho",
+  ], "controle");
+  assert.equal(resultado.template.columns[0].key, "document");
+  assert.equal(resultado.template.columns[1].key, "", "plural não é o mesmo rótulo");
+  assert.equal(resultado.template.columns[2].key, "", "prefixo não é o mesmo rótulo");
+  assert.equal(resultado.matched, 1);
+});
+
+check("prévia do modelo mostra as linhas reais e diz quantas ficaram de fora", () => {
+  const modelo = RequestsReport.BUILTIN_EXPORT_TEMPLATES.find((item) => item.base === "consulta");
+  assert.ok(modelo.builtIn, "os modelos embutidos existem sem depender de cadastro");
+  const linhas = Array.from({ length: 7 }, (_, indice) => ({ document: `DOC-${indice + 1}`, situation: "Localizado" }));
+  const previa = RequestsReport.previewExportTemplate(modelo, linhas, 5);
+  assert.equal(previa.rows.length, 5);
+  assert.equal(previa.total, 7);
+  assert.equal(previa.hidden, 2);
+  // Sem dado não há prévia inventada.
+  assert.deepEqual(RequestsReport.previewExportTemplate(modelo, [], 5).rows, []);
+});
+
+check("modelos de exportação passam pelo banco com papel conferido e sem RLS nova", () => {
+  const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.21.sql"), "utf8");
+  // Tabela no schema privado, fora do PostgREST, e sem privilégio direto.
+  assert.match(sql, /create table if not exists private\.grcon_export_templates/);
+  assert.match(sql, /revoke all on table private\.grcon_export_templates from public, anon, authenticated;/);
+  // Ler é de qualquer membro; salvar e excluir, só do proprietário.
+  assert.match(sql, /private\.grcon_is_member\(target_workspace\)/);
+  assert.match(sql, /Somente o proprietário pode salvar modelos de exportação/);
+  assert.match(sql, /Somente o proprietário pode excluir modelos de exportação/);
+  // Base é lista fechada: uma base desconhecida só apareceria na exportação.
+  assert.match(sql, /base_limpa not in \('consulta', 'controle'\)/);
+  // A restrição do usuário vale sem exceção: nenhuma política de RLS é criada.
+  assert.doesNotMatch(sql, /create policy/i);
+  assert.doesNotMatch(sql, /alter policy/i);
+  assert.doesNotMatch(sql, /drop policy/i);
+
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  assert.match(cloud, /grcon_get_export_templates/);
+  assert.match(cloud, /grcon_save_export_template/);
+  assert.match(cloud, /grcon_delete_export_template/);
+
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  // Sem área compartilhada o modelo ainda é salvo aqui: quem trabalha sozinho
+  // não pode ficar sem o recurso.
+  assert.match(app, /grcon-requests-export-templates/);
+  // Repetir a última exportação nunca troca de modelo por conta própria.
+  assert.match(app, /não existe mais\. Escolha outro para exportar/);
+});
+
 check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
   assert.equal(ReportSummary.normalizeAllocationCenter(null), null);
   assert.equal(ReportSummary.normalizeAllocationCenter({ path: "\\\\srv\\q\\Central.xlsx", sheet: "Central", keyColumn: "B" }), null);

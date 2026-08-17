@@ -372,3 +372,69 @@ html[data-app="GRCON"] .requests-history-open { margin-left: .4rem; font-size: .
   html[data-app="GRCON"]:not([data-theme="light"]) .requests-history { background: var(--surface-2); }
 }
 html[data-app="GRCON"][data-theme="dark"] .requests-history { background: var(--surface-2); }
+
+/* Modelos de exportação: ordem e nome das colunas do arquivo gerado. */
+html[data-app="GRCON"] .requests-modelo-escolha {
+  display: flex; align-items: center; gap: .35rem; font-size: .73rem; color: var(--text-2, #385069);
+}
+html[data-app="GRCON"] .requests-modelo-escolha select {
+  height: 1.9rem; max-width: 15rem; padding: 0 .45rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .4rem; font-size: .77rem; background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-modelo-acoes {
+  display: flex; flex-wrap: wrap; align-items: end; gap: .5rem; margin: .6rem 0;
+}
+html[data-app="GRCON"] .requests-modelo-acoes label { display: grid; gap: .18rem; font-size: .73rem; color: var(--text-2, #385069); }
+html[data-app="GRCON"] .requests-modelo-acoes select {
+  height: 1.9rem; min-width: 12rem; padding: 0 .45rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .4rem; font-size: .77rem; background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-modelo-editor {
+  margin-top: .8rem; padding: .75rem .9rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .6rem; background: var(--surface-2, #f7fafc);
+}
+html[data-app="GRCON"] .requests-modelo-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .55rem; align-items: end;
+}
+html[data-app="GRCON"] .requests-modelo-form label { display: grid; gap: .18rem; font-size: .73rem; color: var(--text-2, #385069); }
+html[data-app="GRCON"] .requests-modelo-form input,
+html[data-app="GRCON"] .requests-modelo-form select {
+  height: 1.9rem; padding: 0 .45rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .4rem; font-size: .77rem; min-width: 0;
+  background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-modelo-columns { margin: .7rem 0 0; padding: 0; list-style: none; display: grid; gap: .3rem; }
+html[data-app="GRCON"] .requests-modelo-coluna {
+  display: grid; grid-template-columns: 1.6rem minmax(6rem, 1fr) minmax(5rem, .8fr) auto auto auto;
+  align-items: center; gap: .4rem; padding: .25rem .4rem;
+  border: 1px solid var(--border-1, #e3eaf1); border-radius: .4rem; background: var(--surface-1, #fff);
+}
+html[data-app="GRCON"] .requests-modelo-coluna input {
+  height: 1.75rem; padding: 0 .4rem; border: 1px solid var(--border-2, #cbd7e1);
+  border-radius: .35rem; font-size: .75rem; min-width: 0;
+  background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-modelo-ordem { font-size: .7rem; color: var(--text-3, #6f8296); text-align: center; }
+html[data-app="GRCON"] .requests-modelo-campo { font-size: .7rem; color: var(--text-3, #6f8296); font-family: ui-monospace, monospace; }
+/* A coluna sem dado é marcada por texto e por traço, não só por cor. */
+html[data-app="GRCON"] .requests-modelo-coluna.sem-dado { border-style: dashed; border-color: var(--warn-600, #a56812); }
+html[data-app="GRCON"] .requests-modelo-coluna.sem-dado .requests-modelo-campo { color: var(--warn-600, #a56812); font-style: italic; }
+html[data-app="GRCON"] .requests-modelo-previa-titulo { margin: .9rem 0 .35rem; font-size: .8rem; color: var(--brand-strong, #123f61); }
+
+@media (prefers-color-scheme: dark) {
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-modelo-editor { background: var(--surface-2); border-color: var(--border-2); }
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-modelo-coluna { background: var(--surface-1); border-color: var(--border-2); }
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-modelo-escolha select,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-modelo-acoes select,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-modelo-form input,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-modelo-form select,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-modelo-coluna input { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+}
+html[data-app="GRCON"][data-theme="dark"] .requests-modelo-editor { background: var(--surface-2); border-color: var(--border-2); }
+html[data-app="GRCON"][data-theme="dark"] .requests-modelo-coluna { background: var(--surface-1); border-color: var(--border-2); }
+html[data-app="GRCON"][data-theme="dark"] .requests-modelo-escolha select,
+html[data-app="GRCON"][data-theme="dark"] .requests-modelo-acoes select,
+html[data-app="GRCON"][data-theme="dark"] .requests-modelo-form input,
+html[data-app="GRCON"][data-theme="dark"] .requests-modelo-form select,
+html[data-app="GRCON"][data-theme="dark"] .requests-modelo-coluna input { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+html[data-app="GRCON"] .requests-modelo-base-atual { align-self: end; font-size: .73rem; color: var(--text-3, #6f8296); }

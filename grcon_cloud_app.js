@@ -561,6 +561,66 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Modelos de exportação
+  //
+  // Um modelo é a ordem e o nome das colunas do arquivo gerado. Fica no banco
+  // para não precisar ser cadastrado de novo em cada máquina; a tela também
+  // guarda uma cópia local, para quem trabalha sem área compartilhada.
+  // ---------------------------------------------------------------------------
+  async function getExportTemplates() {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    try {
+      const { data, error } = await state.client.rpc("grcon_get_export_templates", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []).map((linha) => ({
+        id: linha.template_id,
+        name: linha.name,
+        base: linha.base_kind,
+        columns: Array.isArray(linha.columns) ? linha.columns : [],
+      }));
+    } catch (error) {
+      console.debug("GRCON Cloud: modelos de exportação indisponíveis", error);
+      return [];
+    }
+  }
+
+  async function saveExportTemplate(modelo) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode salvar modelos para a equipe." };
+    if (!modelo || !modelo.id || !modelo.name) return { ok: false, error: "O modelo precisa de um nome." };
+    try {
+      const { error } = await state.client.rpc("grcon_save_export_template", {
+        target_workspace: state.membership.workspace_id,
+        new_template_id: modelo.id,
+        new_name: modelo.name,
+        new_base_kind: modelo.base || "consulta",
+        new_columns: modelo.columns || [],
+      });
+      if (error) throw error;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível salvar o modelo." };
+    }
+  }
+
+  async function deleteExportTemplate(id) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode excluir modelos da equipe." };
+    try {
+      const { error } = await state.client.rpc("grcon_delete_export_template", {
+        target_workspace: state.membership.workspace_id,
+        target_template_id: id,
+      });
+      if (error) throw error;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível remover o modelo." };
+    }
+  }
+
   async function listRequestItems() {
     if (!state.client || !state.membership?.workspace_id) return [];
     try {
@@ -1726,6 +1786,9 @@
     getRequestTypes,
     saveRequestType,
     deleteRequestType,
+    getExportTemplates,
+    saveExportTemplate,
+    deleteExportTemplate,
     listRequestItems,
     saveRequest,
     updateRequestItems,

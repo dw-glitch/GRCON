@@ -38,6 +38,8 @@
     painelOwner: "",
     painelSelected: new Set(),
     tipos: [],         // tipos vindos da área compartilhada
+    modelos: [],       // modelos de exportação: embutidos + salvos aqui + da equipe
+    modeloEditor: null, // modelo aberto no editor de colunas
   };
 
   let proximoId = 1;
@@ -383,9 +385,32 @@
     }
   }
 
-  async function exportarExcel() {
-    const linhas = linhasParaSaida();
-    if (!linhas.length) return;
+  /**
+   * As linhas da exportação dependem da base do modelo: a base "consulta" sai
+   * do resultado da consulta; a base "controle" sai dos itens da solicitação,
+   * que é onde existem item, responsável, data e as demais colunas da planilha
+   * oficial. Um modelo do Controle sem solicitação aberta não tem de onde tirar
+   * dado nenhum — e é isso que a tela diz, em vez de gerar um arquivo vazio.
+   */
+  function linhasDoModelo(modelo) {
+    if (modelo && modelo.base === "controle") {
+      // Depois de gerada, a tabela da solicitação é a verdade — é nela que as
+      // edições em lote estão. Antes disso, as linhas saem do mesmo construtor.
+      return state.requestRows.length ? state.requestRows : linhasDaSolicitacao();
+    }
+    return linhasParaSaida();
+  }
+
+  async function exportarExcel(modeloEscolhido) {
+    const Report = root.GrconRequestsReport;
+    const modelo = Report.normalizeExportTemplate(modeloEscolhido || modeloAtual());
+    const linhas = linhasDoModelo(modelo);
+    if (!linhas.length) {
+      notify(modelo.base === "controle"
+        ? "Este modelo usa as colunas do Controle de Solicitações: gere a solicitação antes de exportar."
+        : "Consulte os documentos antes de exportar.", "warn");
+      return;
+    }
     els.export.disabled = true;
     try {
       await root.GRCONModuleLoader.ensure("excel");
@@ -393,32 +418,331 @@
       const workbook = new root.ExcelJS.Workbook();
       workbook.creator = "GRCON";
       workbook.company = "CONSAG Engenharia";
-      workbook.title = "Consulta de documentos GRCON";
-      const sheet = workbook.addWorksheet("Consulta", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
+      workbook.title = modelo.name;
+      const aba = modelo.base === "controle" ? "Solicitações" : "Consulta";
+      const sheet = workbook.addWorksheet(aba, { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
       const nomes = state.lds.filter((item) => !item.error).map((item) => item.name).join(" · ");
-      root.GrconRequestsReport.writeConsultationSheet(sheet, linhas, {
-        metadata: `${linhas.length.toLocaleString("pt-BR")} documento(s) · ${new Date().toLocaleString("pt-BR")}`,
+      Report.writeConsultationSheet(sheet, linhas, {
+        columns: modelo.columns,
+        title: `GRCON · ${modelo.name.toUpperCase()}`,
+        footer: `GRCON · ${modelo.name}`,
+        metadata: `${linhas.length.toLocaleString("pt-BR")} linha(s) · modelo “${modelo.name}” · ${new Date().toLocaleString("pt-BR")}`,
         ldNames: nomes,
       });
       // Mesmo logo, mesmo construtor das planilhas da Triagem.
-      await root.GrconRequestsReport.attachBrandLogo(workbook, sheet, root.GRCONBrandAssets, root.fetch.bind(root));
+      await Report.attachBrandLogo(workbook, sheet, root.GRCONBrandAssets, root.fetch.bind(root));
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const carimbo = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       link.href = url;
-      link.download = `GRCON_CONSULTA_${carimbo}.xlsx`;
+      link.download = `GRCON_${modelo.base === "controle" ? "SOLICITACOES" : "CONSULTA"}_${carimbo}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
-      notify(`Planilha gerada com ${linhas.length} documento(s).`, "success");
+      lembrarUltimaExportacao(modelo);
+      notify(`Planilha gerada com ${linhas.length} linha(s) no modelo “${modelo.name}”.`, "success");
     } catch (erro) {
       notify((erro && erro.message) || "Não foi possível gerar a planilha.", "error");
     } finally {
       els.export.disabled = false;
+      atualizarAcoes();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Modelos de exportação
+  //
+  // Cada frente cola o resultado numa planilha com ordem e nomes próprios, e
+  // rearrumar coluna a coluna depois de exportar é justamente o retrabalho que
+  // esta aba existe para tirar do caminho.
+  //
+  // Ficam gravados aqui no navegador e, havendo área compartilhada, também no
+  // banco — assim quem trabalha sozinho não fica sem o recurso e quem trabalha
+  // em equipe não precisa cadastrar o mesmo modelo em cada máquina.
+  // ---------------------------------------------------------------------------
+  const CHAVE_MODELOS = "grcon-requests-export-templates";
+  const CHAVE_ULTIMA = "grcon-requests-last-export";
+
+  function modelosLocais() {
+    try {
+      const bruto = JSON.parse(root.localStorage.getItem(CHAVE_MODELOS) || "[]");
+      return (Array.isArray(bruto) ? bruto : []).map((item) => root.GrconRequestsReport.normalizeExportTemplate({ ...item, scope: "local" }));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function gravarModelosLocais(lista) {
+    try {
+      root.localStorage.setItem(CHAVE_MODELOS, JSON.stringify(lista.map((modelo) => ({
+        id: modelo.id, name: modelo.name, base: modelo.base, columns: modelo.columns,
+      }))));
+      return true;
+    } catch (_) {
+      // Armazenamento cheio ou bloqueado: o modelo continua valendo nesta
+      // sessão, mas seria desonesto dizer que ficou salvo.
+      return false;
+    }
+  }
+
+  async function carregarModelos() {
+    const Report = root.GrconRequestsReport;
+    const porId = new Map();
+    Report.BUILTIN_EXPORT_TEMPLATES.forEach((modelo) => porId.set(modelo.id, modelo));
+    modelosLocais().forEach((modelo) => porId.set(modelo.id, modelo));
+    const Cloud = root.GrconCloud;
+    if (Cloud && Cloud.getExportTemplates) {
+      const salvos = await Cloud.getExportTemplates();
+      // O da equipe vence o local de mesmo id: é o combinado entre todos.
+      (salvos || []).forEach((modelo) => porId.set(modelo.id, Report.normalizeExportTemplate({ ...modelo, scope: "equipe" })));
+    }
+    state.modelos = [...porId.values()];
+    renderModelos();
+  }
+
+  function modeloAtual() {
+    const escolhido = els.modeloSelect && els.modeloSelect.value;
+    return state.modelos.find((modelo) => modelo.id === escolhido)
+      || state.modelos[0]
+      || root.GrconRequestsReport.BUILTIN_EXPORT_TEMPLATES[0];
+  }
+
+  function origemDoModelo(modelo) {
+    if (modelo.builtIn) return "embutido no GRCON";
+    return modelo.scope === "equipe" ? "da equipe" : "salvo neste navegador";
+  }
+
+  function renderModelos() {
+    const atual = els.modeloSelect ? els.modeloSelect.value : "";
+    if (els.modeloSelect) {
+      els.modeloSelect.innerHTML = state.modelos
+        .map((modelo) => `<option value="${escapeHtml(modelo.id)}">${escapeHtml(modelo.name)}</option>`).join("");
+      if (state.modelos.some((modelo) => modelo.id === atual)) els.modeloSelect.value = atual;
+    }
+    if (!els.modelosTbody) return;
+    const dono = ehProprietario();
+    els.modelosTbody.innerHTML = state.modelos.map((modelo) => {
+      const semDado = modelo.columns.filter((coluna) => !coluna.key).length;
+      return `<tr>
+        <td><strong>${escapeHtml(modelo.name)}</strong></td>
+        <td>${escapeHtml(root.GrconRequestsReport.TEMPLATE_BASES[modelo.base].label)}</td>
+        <td>${modelo.columns.length} coluna(s)${semDado ? ` · ${semDado} em branco` : ""}</td>
+        <td>${escapeHtml(origemDoModelo(modelo))}</td>
+        <td>
+          <button class="text-button" data-modelo-edit="${escapeHtml(modelo.id)}" type="button">${modelo.builtIn ? "Duplicar e editar" : "Editar"}</button>
+          ${modelo.builtIn || (!dono && modelo.scope === "equipe") ? "" : `<button class="text-button danger" data-modelo-remove="${escapeHtml(modelo.id)}" type="button">Excluir</button>`}
+        </td>
+      </tr>`;
+    }).join("");
+    renderEditorModelo();
+  }
+
+  function abrirEditorModelo(id) {
+    const Report = root.GrconRequestsReport;
+    const modelo = state.modelos.find((item) => item.id === id);
+    if (!modelo) return;
+    // Modelo embutido nunca é alterado no lugar: vira uma cópia com nome novo,
+    // para o padrão do GRCON continuar disponível quando a cópia não servir.
+    state.modeloEditor = modelo.builtIn
+      ? Report.normalizeExportTemplate({ name: `${modelo.name} (cópia)`, base: modelo.base, columns: modelo.columns, id: "" })
+      : Report.normalizeExportTemplate(modelo);
+    if (modelo.builtIn) state.modeloEditor.id = "";
+    els.modeloName.value = state.modeloEditor.name;
+    els.modeloBase.value = state.modeloEditor.base;
+    renderEditorModelo();
+    els.modeloName.focus();
+  }
+
+  function novoModelo(base) {
+    const Report = root.GrconRequestsReport;
+    state.modeloEditor = Report.normalizeExportTemplate({ id: "", name: "", base: base || "consulta", columns: Report.exportFieldCatalog(base || "consulta") });
+    els.modeloName.value = "";
+    els.modeloBase.value = state.modeloEditor.base;
+    renderEditorModelo();
+  }
+
+  function renderEditorModelo() {
+    if (!els.modeloColumns) return;
+    const Report = root.GrconRequestsReport;
+    const editor = state.modeloEditor;
+    els.modeloEditor.hidden = !editor;
+    if (!editor) return;
+    // A base fica na barra de cima, sempre visível, porque a importação também
+    // depende dela: escondê-la dentro do editor deixava o botão de importar sem
+    // como dizer para qual planilha a estrutura vale.
+    if (els.modeloBaseNote) els.modeloBaseNote.textContent = `Linhas de: ${Report.TEMPLATE_BASES[editor.base].label}`;
+    els.modeloColumns.innerHTML = editor.columns.map((coluna, indice) => `<li class="requests-modelo-coluna${coluna.key ? "" : " sem-dado"}">
+      <span class="requests-modelo-ordem">${indice + 1}</span>
+      <input aria-label="Nome da coluna ${indice + 1}" data-modelo-header="${indice}" type="text" value="${escapeHtml(coluna.header)}"/>
+      <span class="requests-modelo-campo">${coluna.key ? escapeHtml(coluna.key) : "sai em branco"}</span>
+      <button class="text-button" data-modelo-up="${indice}" title="Subir" type="button">↑</button>
+      <button class="text-button" data-modelo-down="${indice}" title="Descer" type="button">↓</button>
+      <button class="text-button danger" data-modelo-drop="${indice}" title="Remover" type="button">×</button>
+    </li>`).join("");
+    const usados = new Set(editor.columns.map((coluna) => coluna.key).filter(Boolean));
+    const disponiveis = Report.exportFieldCatalog(editor.base).filter((campo) => !usados.has(campo.key));
+    els.modeloAddField.innerHTML = disponiveis.length
+      ? disponiveis.map((campo) => `<option value="${escapeHtml(campo.key)}">${escapeHtml(campo.header)}</option>`).join("")
+      : '<option value="">Todos os campos já estão no modelo</option>';
+    els.modeloAdd.disabled = !disponiveis.length;
+    renderPreviaModelo();
+  }
+
+  /**
+   * A prévia mostra as linhas reais que sairiam agora. Sem consulta feita não
+   * há o que prever — e inventar exemplo aqui seria ensinar errado como o
+   * arquivo vai ficar.
+   */
+  function renderPreviaModelo() {
+    if (!els.modeloPreview || !state.modeloEditor) return;
+    const Report = root.GrconRequestsReport;
+    const linhas = linhasDoModelo(state.modeloEditor);
+    const previa = Report.previewExportTemplate(state.modeloEditor, linhas, 5);
+    if (!linhas.length) {
+      els.modeloPreview.innerHTML = `<p class="requests-vazio">Sem prévia: ${state.modeloEditor.base === "controle"
+        ? "gere uma solicitação para ver as linhas do Controle de Solicitações."
+        : "consulte os documentos para ver as linhas reais neste modelo."}</p>`;
+      return;
+    }
+    els.modeloPreview.innerHTML = `<table class="requests-batch-table">
+      <thead><tr>${previa.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+      <tbody>${previa.rows.map((linha) => `<tr>${linha.map((valor) => `<td>${escapeHtml(valor)}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>
+    <small class="requests-tipos-hint">${previa.rows.length} de ${previa.total} linha(s)${previa.hidden ? ` · ${previa.hidden} não exibida(s) na prévia` : ""}.</small>`;
+  }
+
+  /**
+   * Importa a estrutura de uma planilha oficial: lê o cabeçalho e monta um
+   * modelo com a mesma ordem e os mesmos nomes. O que o GRCON reconhece passa a
+   * ser preenchido; o que não reconhece fica em branco e é dito na tela, para
+   * ninguém supor que aquela coluna virá resolvida.
+   */
+  async function importarModelo(file) {
+    if (!file) return;
+    const Report = root.GrconRequestsReport;
+    try {
+      await root.GRCONModuleLoader.ensure("xlsx");
+      const buffer = root.GrconFileAccess
+        ? await root.GrconFileAccess.read(file, { context: "o painel oficial", retries: 1 })
+        : await file.arrayBuffer();
+      const workbook = root.XLSX.read(buffer, { type: "array", cellDates: false, cellStyles: false });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const linhas = root.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+      // O cabeçalho da planilha oficial não está na primeira linha — na do
+      // Controle de Solicitações está na quinta. Em vez de fixar um número,
+      // vale a linha mais preenchida do começo do arquivo.
+      let melhor = { indice: -1, preenchidas: 0 };
+      linhas.slice(0, 20).forEach((linha, indice) => {
+        const preenchidas = linha.filter((valor) => String(valor || "").trim()).length;
+        if (preenchidas > melhor.preenchidas) melhor = { indice, preenchidas };
+      });
+      if (melhor.indice < 0 || melhor.preenchidas < 3) {
+        notify("Não foi possível reconhecer uma linha de cabeçalho nesta planilha.", "warn");
+        return;
+      }
+      const cabecalho = linhas[melhor.indice].map((valor) => String(valor || "").trim());
+      const base = els.modeloBase ? els.modeloBase.value : "controle";
+      const resultado = Report.importExportTemplate(file.name.replace(/\.[^.]+$/, ""), cabecalho, base);
+      state.modeloEditor = resultado.template;
+      els.modeloName.value = resultado.template.name;
+      els.modeloBase.value = resultado.template.base;
+      renderEditorModelo();
+      notify(resultado.unmatched.length
+        ? `Estrutura importada da linha ${melhor.indice + 1}: ${resultado.matched} coluna(s) o GRCON preenche, ${resultado.unmatched.length} sairão em branco (${resultado.unmatched.slice(0, 3).join(", ")}${resultado.unmatched.length > 3 ? "…" : ""}).`
+        : `Estrutura importada da linha ${melhor.indice + 1}: o GRCON preenche todas as ${resultado.matched} colunas.`,
+      resultado.unmatched.length ? "warn" : "success");
+    } catch (erro) {
+      notify((erro && erro.message) || "Não foi possível ler a planilha do painel.", "error");
+    }
+  }
+
+  async function salvarModelo() {
+    const Report = root.GrconRequestsReport;
+    if (!state.modeloEditor) return;
+    const nome = els.modeloName.value.trim();
+    if (!nome) { notify("Dê um nome ao modelo.", "warn"); els.modeloName.focus(); return; }
+    if (!state.modeloEditor.columns.length) { notify("O modelo precisa de pelo menos uma coluna.", "warn"); return; }
+    const modelo = Report.normalizeExportTemplate({ ...state.modeloEditor, name: nome, id: state.modeloEditor.id || "" });
+    els.modeloSave.disabled = true;
+    try {
+      const locais = modelosLocais().filter((item) => item.id !== modelo.id);
+      const gravou = gravarModelosLocais([...locais, modelo]);
+      let compartilhado = false;
+      const Cloud = root.GrconCloud;
+      if (Cloud && Cloud.saveExportTemplate && ehProprietario()) {
+        const resultado = await Cloud.saveExportTemplate(modelo);
+        compartilhado = Boolean(resultado && resultado.ok);
+        if (resultado && !resultado.ok && !resultado.indisponivel) notify(resultado.error, "warn");
+      }
+      state.modeloEditor = null;
+      await carregarModelos();
+      if (els.modeloSelect) { els.modeloSelect.value = modelo.id; renderModelos(); }
+      notify(compartilhado
+        ? `Modelo “${modelo.name}” salvo para toda a equipe.`
+        : gravou ? `Modelo “${modelo.name}” salvo neste navegador.`
+          : `Modelo “${modelo.name}” em uso nesta sessão, mas o navegador não permitiu gravar.`,
+      gravou || compartilhado ? "success" : "warn");
+    } finally {
+      els.modeloSave.disabled = false;
+    }
+  }
+
+  async function removerModelo(id) {
+    const modelo = state.modelos.find((item) => item.id === id);
+    if (!modelo || modelo.builtIn) return;
+    if (!window.confirm(`Excluir o modelo “${modelo.name}”?`)) return;
+    gravarModelosLocais(modelosLocais().filter((item) => item.id !== id));
+    const Cloud = root.GrconCloud;
+    if (modelo.scope === "equipe" && Cloud && Cloud.deleteExportTemplate) {
+      const resultado = await Cloud.deleteExportTemplate(id);
+      if (!resultado.ok) { notify(resultado.error, "warn"); return; }
+    }
+    if (state.modeloEditor && state.modeloEditor.id === id) state.modeloEditor = null;
+    await carregarModelos();
+    notify(`Modelo “${modelo.name}” excluído.`, "success");
+  }
+
+  function lembrarUltimaExportacao(modelo) {
+    try {
+      root.localStorage.setItem(CHAVE_ULTIMA, JSON.stringify({ id: modelo.id, name: modelo.name, at: new Date().toISOString() }));
+    } catch (_) { /* repetir a última é conveniência, não requisito */ }
+    atualizarBotaoRepetir();
+  }
+
+  function ultimaExportacao() {
+    try {
+      const bruto = JSON.parse(root.localStorage.getItem(CHAVE_ULTIMA) || "null");
+      return bruto && bruto.id ? bruto : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function atualizarBotaoRepetir() {
+    if (!els.modeloRepeat) return;
+    const ultima = ultimaExportacao();
+    els.modeloRepeat.hidden = !ultima;
+    if (ultima) els.modeloRepeat.textContent = `Repetir “${ultima.name}”`;
+  }
+
+  /**
+   * Repete a última exportação com o mesmo modelo e os dados de agora. Se o
+   * modelo tiver sido excluído desde então, isso é dito — repetir em cima de
+   * outro modelo qualquer entregaria um arquivo diferente do que foi pedido.
+   */
+  async function repetirUltimaExportacao() {
+    const ultima = ultimaExportacao();
+    if (!ultima) return;
+    const modelo = state.modelos.find((item) => item.id === ultima.id);
+    if (!modelo) {
+      notify(`O modelo “${ultima.name}” não existe mais. Escolha outro para exportar.`, "warn");
+      return;
+    }
+    if (els.modeloSelect) els.modeloSelect.value = modelo.id;
+    await exportarExcel(modelo);
   }
 
 
@@ -763,11 +1087,13 @@
     els.areaConsulta.hidden = area !== "consulta";
     els.areaPainel.hidden = area !== "painel";
     els.areaTipos.hidden = area !== "tipos";
+    els.areaModelos.hidden = area !== "modelos";
     document.querySelectorAll("[data-requests-area]").forEach((botao) => {
       botao.classList.toggle("active", botao.dataset.requestsArea === area);
     });
     if (area === "painel") carregarPainel();
     if (area === "tipos") carregarTipos();
+    if (area === "modelos") carregarModelos();
   }
 
 
@@ -1003,6 +1329,24 @@
     els.tipoPriority = $("#requests-tipo-priority");
     els.tipoOrder = $("#requests-tipo-order");
     els.tipoSave = $("#requests-tipo-save");
+    els.areaModelos = $("#requests-area-modelos");
+    els.modeloSelect = $("#requests-modelo-select");
+    els.modeloRepeat = $("#requests-modelo-repeat");
+    els.modelosTbody = $("#requests-modelos-tbody");
+    els.modeloNew = $("#requests-modelo-new");
+    els.modeloImport = $("#requests-modelo-import");
+    els.modeloImportInput = $("#requests-modelo-import-input");
+    els.modeloEditor = $("#requests-modelo-editor");
+    els.modeloName = $("#requests-modelo-name");
+    els.modeloBase = $("#requests-modelo-base");
+    els.modeloBaseNote = $("#requests-modelo-base-note");
+    els.modeloColumns = $("#requests-modelo-columns");
+    els.modeloAddField = $("#requests-modelo-add-field");
+    els.modeloAdd = $("#requests-modelo-add");
+    els.modeloAddBlank = $("#requests-modelo-add-blank");
+    els.modeloPreview = $("#requests-modelo-preview");
+    els.modeloSave = $("#requests-modelo-save");
+    els.modeloCancel = $("#requests-modelo-cancel");
     els.history = $("#requests-history");
     els.historyProtocol = $("#requests-history-protocol");
     els.historyBody = $("#requests-history-body");
@@ -1061,7 +1405,65 @@
     els.selectNone.addEventListener("click", () => { state.documents.forEach((item) => { item.selected = false; }); render(); });
     els.dedupe.addEventListener("click", removerDuplicados);
     els.copy.addEventListener("click", copiarResultados);
-    els.export.addEventListener("click", exportarExcel);
+    els.export.addEventListener("click", () => exportarExcel());
+    els.modeloRepeat.addEventListener("click", repetirUltimaExportacao);
+    els.modeloNew.addEventListener("click", () => novoModelo(els.modeloBase.value));
+    els.modeloImport.addEventListener("click", () => els.modeloImportInput.click());
+    els.modeloImportInput.addEventListener("change", (evento) => {
+      importarModelo(evento.target.files && evento.target.files[0]);
+      evento.target.value = "";
+    });
+    els.modeloBase.addEventListener("change", () => {
+      // Trocar de base troca os campos disponíveis: começar do catálogo da nova
+      // base evita um modelo com colunas que aquela base não sabe preencher.
+      if (state.modeloEditor) novoModelo(els.modeloBase.value);
+    });
+    els.modeloSave.addEventListener("click", salvarModelo);
+    els.modeloCancel.addEventListener("click", () => { state.modeloEditor = null; renderEditorModelo(); });
+    els.modeloAdd.addEventListener("click", () => {
+      const campo = root.GrconRequestsReport.exportFieldCatalog(state.modeloEditor.base)
+        .find((item) => item.key === els.modeloAddField.value);
+      if (!campo) return;
+      state.modeloEditor.columns.push({ ...campo });
+      renderEditorModelo();
+    });
+    els.modeloAddBlank.addEventListener("click", () => {
+      if (!state.modeloEditor) return;
+      state.modeloEditor.columns.push({ key: "", header: "Coluna em branco", width: 24 });
+      renderEditorModelo();
+    });
+    els.modeloColumns.addEventListener("click", (evento) => {
+      const editor = state.modeloEditor;
+      if (!editor) return;
+      const subir = evento.target.closest("[data-modelo-up]");
+      const descer = evento.target.closest("[data-modelo-down]");
+      const remover = evento.target.closest("[data-modelo-drop]");
+      if (subir) {
+        const indice = Number(subir.dataset.modeloUp);
+        if (indice > 0) editor.columns.splice(indice - 1, 0, editor.columns.splice(indice, 1)[0]);
+      } else if (descer) {
+        const indice = Number(descer.dataset.modeloDown);
+        if (indice < editor.columns.length - 1) editor.columns.splice(indice + 1, 0, editor.columns.splice(indice, 1)[0]);
+      } else if (remover) {
+        editor.columns.splice(Number(remover.dataset.modeloDrop), 1);
+      } else {
+        return;
+      }
+      renderEditorModelo();
+    });
+    els.modeloColumns.addEventListener("input", (evento) => {
+      const campo = evento.target.closest("[data-modelo-header]");
+      if (!campo || !state.modeloEditor) return;
+      const coluna = state.modeloEditor.columns[Number(campo.dataset.modeloHeader)];
+      // Só o nome muda; renderizar de novo aqui tiraria o cursor do campo.
+      if (coluna) { coluna.header = campo.value; renderPreviaModelo(); }
+    });
+    els.modelosTbody.addEventListener("click", (evento) => {
+      const editar = evento.target.closest("[data-modelo-edit]");
+      if (editar) { abrirEditorModelo(editar.dataset.modeloEdit); return; }
+      const remover = evento.target.closest("[data-modelo-remove]");
+      if (remover) removerModelo(remover.dataset.modeloRemove);
+    });
     els.undo.addEventListener("click", desfazer);
     els.clear.addEventListener("click", limparConsulta);
     els.toRequest.addEventListener("click", abrirPainelSolicitacao);
@@ -1188,6 +1590,11 @@
       }
     }
 
+    // Os modelos alimentam o seletor da barra de ações, que fica na área da
+    // consulta: carregar só ao abrir a aba de modelos deixaria a exportação
+    // sem opções até alguém passar por lá.
+    carregarModelos();
+    atualizarBotaoRepetir();
     render();
     return true;
   }

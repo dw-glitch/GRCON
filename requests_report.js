@@ -62,13 +62,19 @@
   /**
    * Monta a aba da consulta numa planilha já criada por quem chama, para o
    * mesmo construtor servir tanto ao arquivo avulso quanto a um pacote maior.
+   *
+   * As colunas são um parâmetro, e não uma constante lida daqui de dentro,
+   * porque os modelos de exportação mudam ordem e nomes. Um segundo construtor
+   * só para eles significaria duas planilhas com identidades que divergem na
+   * primeira melhoria feita em uma só — foi o que aconteceu com o logo.
    */
   function writeConsultationSheet(worksheet, rows, options) {
     const settings = options || {};
     const lista = rows || [];
-    const columnCount = COLUMNS.length;
+    const columns = (settings.columns && settings.columns.length) ? settings.columns : COLUMNS;
+    const columnCount = columns.length;
     const lastColumn = columnLetter(columnCount);
-    worksheet.columns = COLUMNS.map((column) => ({ width: column.width }));
+    worksheet.columns = columns.map((column) => ({ width: column.width || 24 }));
 
     for (let row = 1; row <= 3; row += 1) {
       for (let col = 1; col <= columnCount; col += 1) {
@@ -77,7 +83,7 @@
     }
     worksheet.mergeCells(`C1:${lastColumn}2`);
     const titulo = worksheet.getCell("C1");
-    titulo.value = "GRCON · CONSULTA DE DOCUMENTOS";
+    titulo.value = text(settings.title) || "GRCON · CONSULTA DE DOCUMENTOS";
     titulo.font = { name: "Aptos Display", size: 19, bold: true, color: { argb: "FFFFFFFF" } };
     titulo.alignment = { vertical: "middle", horizontal: "left" };
 
@@ -88,37 +94,43 @@
     meta.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } };
     meta.alignment = { vertical: "middle" };
 
-    // Três números que respondem a pergunta imediata de quem abre o arquivo.
+    // Os cartões e o aviso leem a coluna SITUAÇÃO. Num modelo que não a inclui
+    // — o do Controle de Solicitações, por exemplo — todos os documentos
+    // cairiam em "não localizado" e o arquivo abriria com um alarme falso. Sem
+    // a coluna, portanto, não há resumo: melhor não dizer do que dizer errado.
+    const temSituacao = columns.some((column) => column.key === "situation");
     const localizados = lista.filter((item) => text(item.situation) === "Localizado").length;
-    const validar = lista.filter((item) => text(item.situation) === "Requer validação manual").length;
-    const ausentes = lista.length - localizados - validar;
-    const cards = [
-      ["DOCUMENTOS CONSULTADOS", lista.length, "FF2E5878"],
-      ["LOCALIZADOS", localizados, "FF0C7657"],
-      ["A VALIDAR", validar, "FFA56812"],
-      ["NÃO LOCALIZADOS", ausentes, "FFA64035"],
-    ];
-    const largura = Math.max(1, Math.floor(columnCount / cards.length));
-    cards.forEach(([label, count, cor], index) => {
-      const inicio = index * largura + 1;
-      const fim = index === cards.length - 1 ? columnCount : inicio + largura - 1;
-      worksheet.mergeCells(6, inicio, 8, fim);
-      const cell = worksheet.getCell(6, inicio);
-      cell.value = { richText: [
-        { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF6F7E8C" } }, text: `${label}\n` },
-        { font: { name: "Aptos Display", size: 22, bold: true, color: { argb: cor } }, text: Number(count || 0).toLocaleString("pt-BR") },
-      ] };
-      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF7F9FB" } };
-      cell.border = {
-        left: { style: "medium", color: { argb: cor } },
-        top: { style: "thin", color: { argb: "FFDCE4EA" } },
-        right: { style: "thin", color: { argb: "FFDCE4EA" } },
-        bottom: { style: "thin", color: { argb: "FFDCE4EA" } },
-      };
-    });
+    const validar = temSituacao ? lista.filter((item) => text(item.situation) === "Requer validação manual").length : 0;
+    const ausentes = temSituacao ? lista.length - localizados - validar : 0;
+    if (temSituacao) {
+      const cards = [
+        ["DOCUMENTOS CONSULTADOS", lista.length, "FF2E5878"],
+        ["LOCALIZADOS", localizados, "FF0C7657"],
+        ["A VALIDAR", validar, "FFA56812"],
+        ["NÃO LOCALIZADOS", ausentes, "FFA64035"],
+      ];
+      const largura = Math.max(1, Math.floor(columnCount / cards.length));
+      cards.forEach(([label, count, cor], index) => {
+        const inicio = index * largura + 1;
+        const fim = index === cards.length - 1 ? columnCount : inicio + largura - 1;
+        worksheet.mergeCells(6, inicio, 8, fim);
+        const cell = worksheet.getCell(6, inicio);
+        cell.value = { richText: [
+          { font: { name: "Aptos", size: 9, bold: true, color: { argb: "FF6F7E8C" } }, text: `${label}\n` },
+          { font: { name: "Aptos Display", size: 22, bold: true, color: { argb: cor } }, text: Number(count || 0).toLocaleString("pt-BR") },
+        ] };
+        cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF7F9FB" } };
+        cell.border = {
+          left: { style: "medium", color: { argb: cor } },
+          top: { style: "thin", color: { argb: "FFDCE4EA" } },
+          right: { style: "thin", color: { argb: "FFDCE4EA" } },
+          bottom: { style: "thin", color: { argb: "FFDCE4EA" } },
+        };
+      });
+    }
 
-    const origemRow = 10;
+    const origemRow = temSituacao ? 10 : 6;
     worksheet.mergeCells(`A${origemRow}:${lastColumn}${origemRow}`);
     const faixa = worksheet.getCell(`A${origemRow}`);
     faixa.value = "LDs CONSULTADAS";
@@ -137,18 +149,20 @@
     // Aviso permanente: a planilha não deve ser lida como se tudo estivesse
     // resolvido quando há linhas que dependem de conferência.
     const avisoRow = origemRow + 2;
-    worksheet.mergeCells(`A${avisoRow}:${lastColumn}${avisoRow}`);
-    const aviso = worksheet.getCell(`A${avisoRow}`);
-    aviso.value = validar || ausentes
-      ? "Atenção: há linhas que o GRCON não conseguiu concluir sozinho. “Requer validação manual” significa que o código foi localizado de outra forma ou que as LDs divergem; “Não localizado” significa que o código não consta em nenhuma LD anexada. Nenhum campo dessas linhas foi preenchido por suposição."
-      : "Todos os documentos foram localizados com correspondência exata de código em uma única LD.";
-    aviso.font = { name: "Aptos", size: 9, color: { argb: validar || ausentes ? "FF7A5300" : "FF0C7657" } };
-    aviso.fill = { type: "pattern", pattern: "solid", fgColor: { argb: validar || ausentes ? "FFFFF3CF" : "FFEAF7F1" } };
-    aviso.alignment = { vertical: "middle", wrapText: true, indent: 1 };
-    worksheet.getRow(avisoRow).height = 32;
+    if (temSituacao) {
+      worksheet.mergeCells(`A${avisoRow}:${lastColumn}${avisoRow}`);
+      const aviso = worksheet.getCell(`A${avisoRow}`);
+      aviso.value = validar || ausentes
+        ? "Atenção: há linhas que o GRCON não conseguiu concluir sozinho. “Requer validação manual” significa que o código foi localizado de outra forma ou que as LDs divergem; “Não localizado” significa que o código não consta em nenhuma LD anexada. Nenhum campo dessas linhas foi preenchido por suposição."
+        : "Todos os documentos foram localizados com correspondência exata de código em uma única LD.";
+      aviso.font = { name: "Aptos", size: 9, color: { argb: validar || ausentes ? "FF7A5300" : "FF0C7657" } };
+      aviso.fill = { type: "pattern", pattern: "solid", fgColor: { argb: validar || ausentes ? "FFFFF3CF" : "FFEAF7F1" } };
+      aviso.alignment = { vertical: "middle", wrapText: true, indent: 1 };
+      worksheet.getRow(avisoRow).height = 32;
+    }
 
     const headerRow = avisoRow + 2;
-    COLUMNS.forEach((column, index) => {
+    columns.forEach((column, index) => {
       const cell = worksheet.getCell(headerRow, index + 1);
       cell.value = column.header;
       cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
@@ -161,24 +175,29 @@
     const dataStart = headerRow + 1;
     lista.forEach((item, index) => {
       const row = worksheet.getRow(dataStart + index);
-      COLUMNS.forEach((column, columnIndex) => {
+      columns.forEach((column, columnIndex) => {
         const cell = row.getCell(columnIndex + 1);
-        const value = item[column.key];
+        // Coluna sem chave é coluna que o modelo reproduz da planilha oficial e
+        // o GRCON não tem como preencher. Fica vazia: a estrutura é respeitada
+        // sem que apareça um dado que ninguém apurou.
+        const value = column.key ? item[column.key] : "";
         cell.value = value === "" || value === null || value === undefined ? null : value;
         cell.font = { name: "Aptos", size: 9, color: { argb: "FF263E52" } };
         cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
         cell.border = { bottom: { style: "hair", color: { argb: "FFDCE4EA" } } };
         if (index % 2) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+        if (column.key === "situation") {
+          const cores = situationPalette(cell.value);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: cores[0] } };
+          cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: cores[1] } };
+        }
+        if (column.key === "allocated") {
+          const coresAloc = allocationPalette(cell.value);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: coresAloc[0] } };
+          cell.font = { name: "Aptos", size: 9, bold: true, color: { argb: coresAloc[1] } };
+        }
       });
-      const situacao = row.getCell(1);
-      const cores = situationPalette(situacao.value);
-      situacao.fill = { type: "pattern", pattern: "solid", fgColor: { argb: cores[0] } };
-      situacao.font = { name: "Aptos", size: 9, bold: true, color: { argb: cores[1] } };
-      const alocado = row.getCell(4);
-      const coresAloc = allocationPalette(alocado.value);
-      alocado.fill = { type: "pattern", pattern: "solid", fgColor: { argb: coresAloc[0] } };
-      alocado.font = { name: "Aptos", size: 9, bold: true, color: { argb: coresAloc[1] } };
-      const maior = Math.max(...COLUMNS.map((column) => text(item[column.key]).length), 0);
+      const maior = Math.max(...columns.map((column) => text(column.key ? item[column.key] : "").length), 0);
       row.height = Math.min(90, Math.max(32, 20 + Math.ceil(maior / 70) * 14));
     });
 
@@ -190,7 +209,7 @@
       margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 },
       printTitlesRow: `${headerRow}:${headerRow}`,
     };
-    worksheet.headerFooter.oddFooter = "&LGRCON · Consulta de documentos&C&P de &N&R&D";
+    worksheet.headerFooter.oddFooter = `&L${text(settings.footer) || "GRCON · Consulta de documentos"}&C&P de &N&R&D`;
     return { headerRow, dataStart, finalRow, lastColumn };
   }
 
@@ -293,9 +312,147 @@
     return [CONTROL_COLUMNS.map((coluna) => coluna.header).join("\t"), ...linhas].join("\n");
   }
 
+  // ---------------------------------------------------------------------------
+  // Modelos de exportação
+  //
+  // Cada equipe cola o resultado numa planilha diferente, e rearrumar coluna a
+  // coluna depois de exportar é o retrabalho que esta aba existe para eliminar.
+  // Um modelo guarda a ordem e o nome das colunas; o conteúdo continua vindo do
+  // mesmo lugar de sempre.
+  //
+  // Duas regras que valem para o módulo inteiro valem aqui também:
+  //
+  // 1. Coluna que o GRCON não sabe preencher fica com a chave vazia e sai em
+  //    branco. A estrutura da planilha oficial é reproduzida sem que nenhum
+  //    campo seja inventado para tapar buraco.
+  // 2. Ao importar um cabeçalho, o casamento é por texto idêntico — só tolera
+  //    diferença de caixa, acento, espaço e variação de hífen, que são grafia
+  //    do mesmo rótulo. Nada de aproximação: um "Documento" nunca vira
+  //    "Caminho do Documento" porque as palavras se parecem.
+  // ---------------------------------------------------------------------------
+  const TEMPLATE_BASES = Object.freeze({
+    consulta: { label: "Consulta de documentos", columns: COLUMNS, title: "GRCON · CONSULTA DE DOCUMENTOS" },
+    controle: { label: "Controle de Solicitações", columns: CONTROL_COLUMNS, title: "GRCON · CONTROLE DE SOLICITAÇÕES" },
+  });
+
+  function baseOf(name) {
+    return TEMPLATE_BASES[text(name)] || TEMPLATE_BASES.consulta;
+  }
+
+  /** Campos que um modelo desta base pode usar, com o nome padrão de cada um. */
+  function exportFieldCatalog(base) {
+    return baseOf(base).columns.map((column) => ({ key: column.key, header: column.header, width: column.width }));
+  }
+
+  /** Comparação de rótulos: mesma grafia, escrita de outro jeito. */
+  function headerKey(value) {
+    return text(value)
+      .replace(/[\u2010-\u2015\u2212]/g, "-")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .toUpperCase();
+  }
+
+  function slug(value) {
+    const base = headerKey(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return base || `modelo-${Date.now()}`;
+  }
+
+  function normalizeExportTemplate(input) {
+    const raw = input || {};
+    const base = TEMPLATE_BASES[text(raw.base)] ? text(raw.base) : "consulta";
+    const conhecidas = new Map(exportFieldCatalog(base).map((campo) => [campo.key, campo]));
+    const columns = (Array.isArray(raw.columns) ? raw.columns : [])
+      .map((column) => {
+        const key = conhecidas.has(text(column && column.key)) ? text(column.key) : "";
+        const padrao = conhecidas.get(key);
+        const header = text(column && column.header) || (padrao ? padrao.header : "");
+        const width = Number(column && column.width) || (padrao ? padrao.width : 24);
+        return { key, header, width };
+      })
+      // Sem chave e sem nome não é coluna nenhuma.
+      .filter((column) => column.key || column.header);
+    const name = text(raw.name) || "Modelo sem nome";
+    return {
+      id: text(raw.id) || slug(name),
+      name,
+      base,
+      builtIn: Boolean(raw.builtIn),
+      scope: text(raw.scope) || "local",
+      columns: columns.length ? columns : exportFieldCatalog(base),
+    };
+  }
+
+  /** Os dois modelos que sempre existem, para a exportação nunca depender de cadastro. */
+  const BUILTIN_EXPORT_TEMPLATES = Object.freeze(Object.keys(TEMPLATE_BASES).map((base) => Object.freeze(normalizeExportTemplate({
+    id: `padrao-${base}`,
+    name: `${baseOf(base).label} (padrão do GRCON)`,
+    base,
+    builtIn: true,
+    scope: "embutido",
+    columns: exportFieldCatalog(base),
+  }))));
+
+  /**
+   * Lê o cabeçalho de uma planilha oficial e devolve um modelo com a estrutura
+   * dela: mesma ordem, mesmos nomes. As colunas reconhecidas passam a ser
+   * preenchidas pelo GRCON; as demais ficam vazias e são informadas em
+   * `unmatched`, para quem importou saber exatamente o que continuará manual.
+   */
+  function importExportTemplate(name, headers, base) {
+    const catalogo = exportFieldCatalog(base);
+    const porRotulo = new Map(catalogo.map((campo) => [headerKey(campo.header), campo]));
+    const usados = new Set();
+    const unmatched = [];
+    const columns = (Array.isArray(headers) ? headers : [])
+      .map((header) => text(header))
+      .filter((header) => header)
+      .map((header) => {
+        const campo = porRotulo.get(headerKey(header));
+        if (!campo || usados.has(campo.key)) {
+          unmatched.push(header);
+          return { key: "", header, width: 24 };
+        }
+        usados.add(campo.key);
+        return { key: campo.key, header, width: campo.width };
+      });
+    const modelo = normalizeExportTemplate({ name, base, columns, scope: "local" });
+    return { template: modelo, unmatched, matched: usados.size };
+  }
+
+  function templateValue(template, row, column) {
+    if (!column.key) return "";
+    const value = row ? row[column.key] : "";
+    return value === null || value === undefined ? "" : value;
+  }
+
+  /** Cabeçalho e matriz de valores na ordem do modelo — para prévia e cópia. */
+  function applyExportTemplate(template, rows) {
+    const modelo = normalizeExportTemplate(template);
+    return {
+      headers: modelo.columns.map((column) => column.header),
+      rows: (rows || []).map((row) => modelo.columns.map((column) => templateValue(modelo, row, column))),
+    };
+  }
+
+  /** Mesma coisa, cortada — a prévia mostra o que sairia, não uma amostra fictícia. */
+  function previewExportTemplate(template, rows, limit) {
+    const total = (rows || []).length;
+    const corte = Math.max(1, Number(limit) || 5);
+    const resultado = applyExportTemplate(template, (rows || []).slice(0, corte));
+    return { headers: resultado.headers, rows: resultado.rows, total, hidden: Math.max(0, total - resultado.rows.length) };
+  }
+
   return Object.freeze({
     COLUMNS,
     CONTROL_COLUMNS,
+    TEMPLATE_BASES,
+    BUILTIN_EXPORT_TEMPLATES,
+    exportFieldCatalog,
+    normalizeExportTemplate,
+    importExportTemplate,
+    applyExportTemplate,
+    previewExportTemplate,
     controlRows,
     controlClipboardText,
     writeConsultationSheet,
