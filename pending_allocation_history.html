@@ -444,7 +444,7 @@
           filtered = History.filterByDiscipline(filtered, disciplineFilter);
         }
 
-        await Report.downloadReport(filtered, { appVersion: (window.GrconConfig && window.GrconConfig.APP_VERSION) || "5.32.22" });
+        await Report.downloadReport(filtered, { appVersion: (window.GrconConfig && window.GrconConfig.APP_VERSION) || "5.32.23" });
         
         document.getElementById("download-report").textContent = "✅ Baixado!";
         setTimeout(() => {

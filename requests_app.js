@@ -21,7 +21,6 @@
     lds: [],           // { id, file, name, records, error }
     documents: [],     // { id, document, requestedTitle, selected }
     results: new Map(), // id -> linha da consulta
-    lookups: new Map(), // id -> resultado completo, usado para gerar a solicitação
     index: null,
     running: false,
     search: "",
@@ -127,7 +126,6 @@
     reconstruirIndice();
     // O resultado anterior citava LDs que não estão mais anexadas.
     state.results.clear();
-    state.lookups.clear();
     render();
     notify(`LD removida: ${alvo.name}. Consulte de novo para atualizar o resultado.`, "info");
   }
@@ -194,7 +192,6 @@
     guardarParaDesfazer("limpar a consulta");
     state.documents = [];
     state.results.clear();
-    state.lookups.clear();
     render();
     notify("Consulta limpa. Use Desfazer se foi sem querer.", "info");
   }
@@ -220,7 +217,6 @@
         const item = alvos[i];
         const resultado = R().lookupDocument(item.document, state.index, { requestedTitle: item.requestedTitle });
         state.results.set(item.id, R().consultationRow(resultado));
-        state.lookups.set(item.id, resultado);
       }
       els.progressFill.style.width = `${Math.round((fim / total) * 100)}%`;
       els.progressText.textContent = `Consultando ${fim.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")}…`;
@@ -343,7 +339,6 @@
     els.dedupe.disabled = !temDocs;
     els.copy.disabled = !temResultado;
     els.export.disabled = !temResultado;
-    els.toRequest.disabled = !temResultado || !selecionados;
     els.clear.disabled = !temDocs && !temResultado;
     els.undo.disabled = !state.undo.length;
     els.selectionNote.textContent = selecionados
@@ -774,37 +769,17 @@
     };
   }
 
-  function documentosParaSolicitacao() {
-    return state.documents
-      .filter((item) => item.selected && state.results.has(item.id))
-      .map((item) => ({
-        document: item.document,
-        requestedTitle: item.requestedTitle,
-        lookup: state.lookups.get(item.id) || null,
-      }));
-  }
-
   /**
-   * As linhas saem de duas origens que convivem: o que veio da consulta à LD e
-   * o que a pessoa digitou aqui. A numeração é uma só e corre em sequência,
-   * porque na planilha o ITEM é único e contínuo.
+   * As linhas são as que a pessoa digitou nesta aba. A numeração continua a
+   * sequência da planilha, porque lá o ITEM é único e contínuo.
    */
   function linhasDaSolicitacao() {
     const proximo = Math.max(1, Math.trunc(Number(els.reqNextItem && els.reqNextItem.value)) || 1);
     // nextItemNumber devolve o maior + 1, então passamos o anterior ao desejado.
     const base = proximo > 1 ? [{ protocol: String(proximo - 1) }] : [];
-    const cabecalho = cabecalhoDaSolicitacao();
-    const daConsulta = R().buildControlRows(documentosParaSolicitacao(), cabecalho, base);
-    if (!state.manuais.length) return daConsulta;
-    const jaUsados = base.concat(daConsulta.map((linha) => ({ protocol: linha.item })));
-    return daConsulta.concat(R().buildManualControlRows(state.manuais, cabecalho, jaUsados));
+    return R().buildManualControlRows(state.manuais, cabecalhoDaSolicitacao(), base);
   }
 
-  /**
-   * Abre a solicitação sem passar pela consulta. Um pedido que chega por e-mail
-   * não tem LD anexada, e obrigar a consultar antes de registrar era o que
-   * impedia o uso mais comum da tela.
-   */
   /**
    * Limpa a solicitação sem tocar na consulta: são abas diferentes, com
    * funções diferentes, e uma não manda na outra.
@@ -989,17 +964,6 @@
     }
     if (els.reqReceived && !els.reqReceived.value) els.reqReceived.value = new Date().toISOString().slice(0, 10);
     state.requestUndo = [];
-  }
-
-  function abrirPainelSolicitacao() {
-    const disponiveis = documentosParaSolicitacao();
-    if (!disponiveis.length) { notify("Consulte e selecione os documentos antes de gerar a solicitação.", "warn"); return; }
-    prepararFormularioDaSolicitacao();
-    state.requestRows = linhasDaSolicitacao().map((linha) => ({ ...linha, _selected: true }));
-    // Passagem de bastão, não dependência: a aba da solicitação funciona sem
-    // isto, e a consulta funciona sem nunca gerar solicitação nenhuma.
-    mostrarArea("solicitacao");
-    renderPainelSolicitacao();
   }
 
   async function copiarLinhasDaSolicitacao(comCabecalho) {
@@ -1383,7 +1347,6 @@
     els.checkAll = $("#requests-check-all");
     els.empty = $("#requests-empty");
     els.summary = $("#requests-summary");
-    els.toRequest = $("#requests-to-request");
     els.requestPanel = $("#requests-request-panel");
     els.reqNumber = $("#requests-req-number");
     els.reqNextItem = $("#requests-req-next-item");
@@ -1586,7 +1549,6 @@
     });
     els.undo.addEventListener("click", desfazer);
     els.clear.addEventListener("click", limparConsulta);
-    els.toRequest.addEventListener("click", abrirPainelSolicitacao);
     els.reqCopy.addEventListener("click", () => copiarLinhasDaSolicitacao(false));
     els.reqCopyHeaders.addEventListener("click", () => copiarLinhasDaSolicitacao(true));
     els.reqClose.addEventListener("click", limparSolicitacao);

@@ -599,7 +599,14 @@ check("consulta e solicitação são abas independentes", () => {
   const areaConsulta = html.slice(html.indexOf('<div id="requests-area-consulta">'), html.indexOf('<div hidden id="requests-area-solicitacao">'));
   assert.doesNotMatch(areaConsulta, /id="requests-request-panel"/);
 
+  // Nenhuma ponte entre as duas: a consulta não manda nada para a solicitação.
+  assert.doesNotMatch(html, /id="requests-to-request"/);
+
   const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  assert.doesNotMatch(app, /toRequest|documentosParaSolicitacao|abrirPainelSolicitacao/,
+    "sem sobras da ponte removida");
+  // As linhas da solicitação vêm só do que foi digitado nela.
+  assert.doesNotMatch(app, /buildControlRows\(/);
   // Abrir a aba prepara o formulário; não exige documento consultado.
   assert.match(app, /if \(area === "solicitacao"\) prepararFormularioDaSolicitacao\(\);/);
   // Itens digitados à mão alimentam a solicitação por conta própria.
