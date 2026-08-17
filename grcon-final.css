@@ -1558,8 +1558,10 @@ html[data-app="GRCON"] .analyze-button > svg {
   flex: 0 0 auto;
 }
 
+/* O botão de configurações ocupa meia linha na faixa de fontes: sem o rótulo,
+   ficava um cartão largo com uma engrenagem solta e nenhuma pista do que faz. */
 html[data-app="GRCON"] .settings-button-label {
-  display: none;
+  display: inline;
   font-size: .75rem;
   font-weight: 750;
 }

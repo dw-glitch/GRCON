@@ -720,24 +720,29 @@
   html[data-app="GRCON"] .grcon-results-table thead th > * { max-inline-size: 100%; }
   html[data-app="GRCON"] .grcon-results-table tbody td > :where(span, div, button, label) { max-inline-size: 100%; }
 
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(1) { width: 10rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(2) { width: 15rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(3) { width: 18rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(4) { width: 6rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(5) { width: 6rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(6) { width: 10rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(7) { width: 18rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(8) { width: 11rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(9) { width: 12rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(10) { width: 9rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(11) { width: 10rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(12) { width: 13rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(13) { width: 17rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(14) { width: 11rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(15) { width: 12rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(16) { width: 16rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(17) { width: 18rem; }
-  html[data-app="GRCON"] .grcon-results-table th:nth-child(18) { width: 16rem; }
+  /* Largura de cada coluna da triagem — lugar único desta decisão. */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(1) { width: 12rem; } /* Situação (congelada, mesma medida de grcon-final.css) */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(2) { width: 15rem; } /* Arquivo original */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(3) { width: 18rem; } /* Documento */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(4) { width: 17rem; } /* Código da LD */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(5) { width: 12rem; } /* Busca no Apêndice */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(6) { width: 9rem; } /* Tagueado sim ou não? */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(7) { width: 7rem; } /* Aba LD */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(8) { width: 6rem; } /* Revisão */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(9) { width: 7rem; } /* Revisão para postar */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(10) { width: 16rem; } /* Título */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(11) { width: 9rem; } /* Data efetiva */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(12) { width: 13rem; } /* GRDT */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(13) { width: 9rem; } /* Status */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(14) { width: 10rem; } /* Status SIGEM */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(15) { width: 11rem; } /* Status da revisão */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(16) { width: 14rem; } /* Situação de postagem */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(17) { width: 12rem; } /* Comentário da fiscal */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(18) { width: 11rem; } /* Alocação */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(19) { width: 9rem; } /* Etapa da alocação */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(20) { width: 12rem; } /* Confirmação */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(21) { width: 14rem; } /* Caminho databook */
+  html[data-app="GRCON"] .grcon-results-table th:nth-child(22) { width: 14rem; } /* Arquivo final */
 
   html[data-app="GRCON"] .grcon-results-table :where(.filename-value, .document-code, .text-cell, .grdt-code, .revision-route) {
     display: block;
@@ -1423,14 +1428,22 @@
     cursor: pointer;
   }
   html[data-app="GRCON"] .danger-button:hover { background: #ffe7e5; }
+  /* Altura da tabela da triagem.
+     Esta é a única regra que decide o tamanho do rolamento — as antigas em
+     legacy-compat.css cedem a ela. `content-visibility: auto` foi removido de
+     propósito: num contêiner de rolagem ele faz o navegador tratar o conteúdo
+     fora da tela como tamanho zero, e a caixa desabava para o min-height. O
+     resultado era a tabela virtual aparecendo por uma fresta de 300 px numa
+     tela de 950, com 40.000 px de conteúdo por dentro. `contain` também sai:
+     junto do rolamento interno ele confundia a altura intrínseca. */
   html[data-app="GRCON"] .virtual-table-scroll {
     position: relative;
-    max-block-size: min(68vh, 46rem);
+    block-size: clamp(24rem, calc(100vh - 22rem), 52rem);
+    max-block-size: none;
+    min-block-size: 0;
     overflow: auto;
     overscroll-behavior: contain;
-    contain: layout paint style;
     scrollbar-gutter: stable both-edges;
-    content-visibility: auto;
   }
   html[data-app="GRCON"] .virtual-spacer-row > td {
     block-size: var(--virtual-space, 0px);
@@ -1557,3 +1570,44 @@
 .revision-timeline-step dd{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#26414f}
 .revision-route{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#eef4f8;color:#3a6f8f;font-size:10px;font-weight:700;vertical-align:middle}
 @media(max-width:900px){.revision-timeline-track{flex-direction:column}.revision-timeline-step{margin:4px 0}.revision-timeline-step::before{display:none}}
+
+/* ---------------------------------------------------------------------------
+   Aplicativo em tela cheia (telas largas)
+   ---------------------------------------------------------------------------
+   Antes a página inteira rolava: a barra lateral terminava no meio da tela,
+   deixando uma faixa branca embaixo, e a tabela da triagem nascia em 935 px
+   numa janela de 950 — fora da vista, com duas barras de rolagem para chegar
+   nela. Aqui o quadro é fixo (topo + lateral) e só a área de trabalho rola,
+   que é o comportamento esperado de um aplicativo operacional.
+   Vale apenas onde a lateral aparece; abaixo disso o documento volta a rolar
+   normalmente, como no celular.
+--------------------------------------------------------------------------- */
+@media (min-width: 74rem) {
+  html[data-app="GRCON"][data-ops-ui="enabled"] body {
+    block-size: 100vh;
+    overflow: hidden;
+  }
+  html[data-app="GRCON"][data-ops-ui="enabled"] .app-shell {
+    block-size: calc(100vh - 64px);
+    align-items: stretch;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  html[data-app="GRCON"][data-ops-ui="enabled"] .ops-sidebar {
+    position: static;
+    block-size: auto;
+    min-block-size: 0;
+  }
+  html[data-app="GRCON"][data-ops-ui="enabled"] .workspace {
+    min-block-size: 0;
+    overflow-y: auto;
+    scroll-padding-block-start: 1rem;
+  }
+  html[data-app="GRCON"][data-ops-ui="enabled"] .app-footer {
+    grid-column: 1 / -1;
+  }
+  /* Com a área de trabalho rolando por dentro, a tabela ocupa o que sobra da
+     altura em vez de um pedaço fixo. */
+  html[data-app="GRCON"] .virtual-table-scroll {
+    block-size: clamp(20rem, calc(100vh - 21rem), 60rem);
+  }
+}

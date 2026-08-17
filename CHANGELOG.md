@@ -1,5 +1,27 @@
 # Histórico de alterações
 
+## 5.32.27 — 2026-08-17
+
+**Apêndice 3 embutido.** A base contratual dos bens tagueados (Rev. B, 5.682 TAGs) passa a acompanhar o aplicativo. Não há mais arquivo a selecionar: toda análise cruza o TAG e o relatório da triagem responde sempre `BUSCA NO APÊNDICE` e `Tagueado sim ou não?`. Para uma revisão nova do Apêndice, `apendice_base.js` é gerado de novo a partir da planilha.
+
+**Tabela da triagem corrigida.** Eram quatro defeitos somados:
+
+- `content-visibility: auto` no contêiner de rolagem fazia o navegador tratar o conteúdo fora da tela como tamanho zero: a tabela abria com 300 px de altura numa janela de 950, com 40.000 px de linhas por dentro.
+- Três arquivos de CSS disputavam a altura da mesma tabela. Agora existe uma regra só.
+- Existiam duas listas de largura de coluna — uma em px, outra em rem — e a segunda vencia calada. Quando as colunas do Apêndice entraram, cada medida passou a cair na coluna vizinha: o cabeçalho quebrava em quatro linhas e a tabela abria com um bloco vazio. Passou a haver uma lista só, com uma largura para cada coluna, e o modo “somente o essencial” voltou a esconder as colunas certas.
+- Rolar até o fim empurrava o espaçador além do total de linhas: a barra de rolagem crescia sozinha e sobrava um vazio depois do último documento. A janela renderizada agora respeita o tamanho da lista, e a altura de linha é conferida contra o que o navegador desenhou.
+
+**Aplicativo em tela cheia.** Em telas largas o quadro (topo e lateral) fica fixo e só a área de trabalho rola. Some a faixa branca sob a barra lateral, some a segunda barra de rolagem e a tabela deixa de nascer fora da vista — depois de analisar, a relação é trazida para o topo automaticamente.
+
+**Acertos de interface:**
+
+- Cabeçalho, rodapé e título da janela passam a nomear a aba aberta; antes diziam “Controle de GRDT” em todas.
+- A barra de contexto mostrava a contagem de antes da análise (576 onde a relação já dizia 600).
+- A faixa “Nenhum filtro adicional aplicado” ocupava uma linha inteira acima da tabela para informar que nada estava acontecendo; agora só aparece quando há filtro.
+- A tabela do histórico de análises era fixa em 116rem e escondia motivo e alocação em qualquer tela de trabalho; passou a caber inteira.
+- O botão de configurações da análise era um cartão largo com uma engrenagem e nenhum rótulo.
+- As regras de largura de coluna deixaram de valer para toda tabela do aplicativo — o seletor não tinha escopo e obrigava as outras telas a se desfazerem dele uma a uma.
+
 ## 5.32.26 — 2026-08-17
 
 - **Solicitações ganham aba e módulo próprios.** Registrar um pedido deixou de ser uma área dentro de Consultas: a aba Solicitações tem barra lateral, atalho no topo e três áreas próprias — Nova solicitação, Acompanhamento e Tipos de solicitação.

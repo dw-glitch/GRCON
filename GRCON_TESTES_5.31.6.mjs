@@ -183,7 +183,10 @@ check("Não Alocado fica fora por padrão, mas a seleção manual permite gerar 
 check("selecionar todos abrange documentos visíveis e registra inclusões manuais", () => {
   const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const htmlSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  assert.match(htmlSource, /Selecionar todos · Situação/);
+  // O rótulo da coluna é curto (cabe em 12rem); a explicação inteira fica no
+  // title e no aria-label da caixa, que é onde o leitor de tela procura.
+  assert.match(htmlSource, /id="select-all-ready"[^>]*type="checkbox"\/>Situação/);
+  assert.match(htmlSource, /aria-label="Selecionar todos os documentos visíveis disponíveis para GRDT"/);
   assert.match(appSource, /const visibleIndices = filteredResultIndices\(\)/);
   assert.match(appSource, /manualAllocationOverrideAllowed\(row\)/);
   assert.match(appSource, /state\.manualForceInclude\.add\(index\)/);
@@ -1525,14 +1528,28 @@ check("Apêndice 3 responde se o TAG consta e sugere a forma com nt- quando não
   assert.match(ausente.suggestionNote, /não é impedida/);
 });
 
-check("sem Apêndice carregado o GRCON diz que não apurou, e nunca NÃO", () => {
-  const info = Apendice.evaluate({ record: ldDocumentRecord(ntBaseDocument), document: ntBaseDocument }, null);
-  assert.equal(info.search, "Apêndice não carregado");
-  assert.match(info.tagged, /Não apurado/);
+check("a base do Apêndice é embutida: toda análise cruza, sem arquivo a selecionar", () => {
+  const base = Apendice.embeddedIndex();
+  assert.equal(base.ok, true);
+  assert.equal(base.embedded, true);
+  assert.equal(base.revision, "B");
+  assert.ok(base.count > 5000, `esperado o Apêndice inteiro, veio ${base.count}`);
+
+  // Sem índice informado, o cruzamento usa a base embutida em vez de responder
+  // "não carregado" — e um TAG real da lista contratual é encontrado.
+  const tagReal = base.tags.values().next().value.tag;
+  const documento = `C1O_RNEST_U32_3.1.1.1_INS_RIR_${tagReal}`;
+  const info = Apendice.evaluate({ record: ldDocumentRecord(documento), document: documento }, null);
+  assert.equal(info.search, "TAG encontrado no Apêndice");
+  assert.equal(info.tagged, "SIM");
   assert.equal(info.suggestion, "");
-  const [linha] = ReportSummary.buildRows([{ document: ntBaseDocument, record: ldDocumentRecord(ntBaseDocument) }], {});
-  assert.equal(linha.apendiceSearch, "Apêndice não carregado");
-  assert.match(linha.tagged, /Não apurado/);
+
+  // A tela não pede mais o arquivo do Apêndice.
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.doesNotMatch(html, /id="apendice-input"|id="apendice-slot"/);
+  assert.match(html, /src="apendice_base\.js"/);
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.doesNotMatch(app, /apendiceIndex|apendiceFile/);
 });
 
 check("a coluna de TAG da LD tem preferência sobre o código do documento", () => {
@@ -1563,6 +1580,49 @@ function tagWorkbook() {
   SheetJS.utils.book_append_sheet(workbook, history, "Colar SIGEM");
   return workbook;
 }
+
+check("a tabela da triagem tem uma largura por coluna, na ordem atual", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const cabecalho = html.slice(html.indexOf('<table class="grcon-results-table" id="results-table">'), html.indexOf("</thead>"));
+  const colunas = (cabecalho.match(/<th /g) || []).length;
+
+  // Uma lista de larguras só, e com um item para cada coluna. Havia duas — uma
+  // em px no legacy-compat.css, outra em rem no grcon-ui.css — e quando as
+  // colunas do Apêndice entraram, as medidas passaram a cair na coluna vizinha:
+  // o cabeçalho quebrava em quatro linhas e a tabela abria vazia.
+  const ui = fs.readFileSync(path.join(root, "grcon-ui.css"), "utf8");
+  const larguras = [...ui.matchAll(/\.grcon-results-table th:nth-child\((\d+)\) \{ width:/g)].map((m) => Number(m[1]));
+  assert.deepEqual(larguras, Array.from({ length: colunas }, (_, i) => i + 1),
+    `a lista de larguras precisa cobrir as ${colunas} colunas, uma vez cada`);
+
+  const legacy = fs.readFileSync(path.join(root, "legacy-compat.css"), "utf8");
+  assert.doesNotMatch(legacy, /#results-table th:nth-child\(\d+\) \{ width:/, "a segunda lista de larguras não pode voltar");
+  // Regras de coluna não podem valer para toda tabela do aplicativo.
+  assert.doesNotMatch(legacy, /^th:nth-child\(\d+\) \{ width:/m, "largura de coluna sem escopo atinge as outras telas");
+
+  // O modo "somente o essencial" esconde colunas por índice: precisa apontar
+  // para as colunas informativas, não para as três primeiras nem para as novas.
+  const escondidas = [...legacy.matchAll(/p1-essential-columns #results-table>thead>tr>th:nth-child\((\d+)\)/g)].map((m) => Number(m[1]));
+  assert.ok(escondidas.length > 0);
+  assert.ok(escondidas.every((indice) => indice > 6 && indice <= colunas), `índices fora da tabela: ${escondidas}`);
+});
+
+check("o rolamento da tabela não colapsa nem cresce sozinho", () => {
+  const ui = fs.readFileSync(path.join(root, "grcon-ui.css"), "utf8");
+  // content-visibility num contêiner de rolagem fazia o navegador tratar o
+  // conteúdo fora da tela como tamanho zero: a tabela abria com 300 px numa
+  // janela de 950, com 40.000 px de linhas por dentro.
+  const bloco = ui.slice(ui.indexOf(".virtual-table-scroll {"), ui.indexOf(".virtual-spacer-row"));
+  assert.doesNotMatch(bloco, /content-visibility/);
+  assert.match(bloco, /block-size: clamp\(/);
+
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  // A janela renderizada não pode começar depois do que a lista comporta.
+  assert.match(app, /const maiorInicio = Math\.max\(0, indices\.length - janela\)/);
+  assert.match(app, /const start = Math\.min\(maiorInicio,/);
+  // E a altura de linha é conferida contra o que o navegador desenhou.
+  assert.match(app, /function calibrateVirtualRowHeight\(\)/);
+});
 
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));

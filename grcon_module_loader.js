@@ -194,6 +194,28 @@
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
     });
+    rotularArea(view);
+  }
+
+  // O cabeçalho e o rodapé diziam "Controle de GRDT" em todas as abas, mesmo
+  // com outra aberta. Quem chega à tela pelo link de outra pessoa lia o nome
+  // errado da área em que está.
+  const NOMES = {
+    control: "Controle de GRDT",
+    requests: "Consultas",
+    solicitacoes: "Solicitações",
+    "analysis-history": "Histórico de análises",
+    history: "Histórico de eGRDTs",
+    sigem: "Postagem SIGEM",
+  };
+
+  function rotularArea(view) {
+    const nome = NOMES[view] || NOMES.control;
+    const subtitulo = document.getElementById("brand-subtitle");
+    const rodape = document.getElementById("footer-view");
+    if (subtitulo) subtitulo.textContent = nome;
+    if (rodape) rodape.textContent = nome;
+    document.title = `GRCON — ${nome}`;
   }
 
   function assertModuleReady(module) {
