@@ -19,7 +19,7 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.12";
+  const APP_VERSION = "5.32.21";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -367,10 +367,6 @@
       // Assim, a revisão registrada vem da própria eGRDT, e não apenas da prévia da emissão.
       const verifiedRecords = createGeneratedHistoryRecords(generated, outputType, { generatedAt: info.generatedAt });
       const records = verifiedRecords.length ? verifiedRecords : (preparedRecords || []);
-      // O e-mail usa exatamente os mesmos registros que vão para o histórico,
-      // e não a prévia da emissão: assim a relação enviada bate com o relatório.
-      registrarEmissaoParaEmail(generated, records, info.generatedAt);
-      enfileirarEmailDaEmissao();
       const saved = History.saveMany(records);
       if (Posting) {
         const postingSaved = Posting.registerGenerated(records, { packageName: info.packageName, appVersion: APP_VERSION });
@@ -399,111 +395,11 @@
     }
   }
 
-  /* ── Rascunho de e-mail da evidência de postagem ──────────── */
-
-  // Guarda o que a última eGRDT gerada produziu, para montar o e-mail sem
-  // depender de o usuário ainda estar com a mesma triagem em tela.
-  let ultimaEmissaoParaEmail = null;
-
-  function inferirDisciplina(documento) {
-    if (!documento || !C || typeof C.buildEgrdtData !== "function") return "";
-    try {
-      return C.buildEgrdtData(documento, "", "", {}, "", "").discipline || "";
-    } catch (_) {
-      return "";
-    }
-  }
-
-  function registrarEmissaoParaEmail(generated, preparedRecords, geradoEm) {
-    const Email = window.GrconEmailDraft;
-    if (!Email) return;
-    const registros = Array.isArray(preparedRecords) ? preparedRecords : [];
-    const documentos = [];
-    const alocacoes = new Set();
-    registros.forEach((registro) => {
-      (registro.files || []).forEach((arquivo) => {
-        if (!arquivo || !arquivo.document) return;
-        documentos.push({
-          documento: arquivo.document,
-          titulo: arquivo.title || "",
-          // A disciplina normalmente já vem do registro; quando faltar, é
-          // deduzida do próprio código do documento (…_ELE_… -> ELÉTRICA),
-          // pela mesma regra usada na emissão, para a coluna não sair vazia.
-          disciplina: arquivo.discipline || inferirDisciplina(arquivo.document),
-          egrdt: registro.egrdtNumber || "",
-          arquivo: arquivo.finalName || arquivo.originalName || "",
-          revisao: arquivo.revision || "",
-          alocacao: arquivo.allocation || "",
-        });
-        if (arquivo.allocation) alocacoes.add(arquivo.allocation);
-      });
-    });
-    const egrdts = registros.map((registro) => registro.egrdtNumber).filter(Boolean);
-    ultimaEmissaoParaEmail = {
-      egrdts: egrdts.length ? egrdts : (generated || []).map((item) => item && item.official && item.official.baseName).filter(Boolean),
-      alocacoes: [...alocacoes],
-      documentos,
-      geradoEm: geradoEm || new Date().toISOString(),
-    };
-    }
-
   function ehProprietario() {
     const Cloud = window.GrconCloud;
     // Sem área compartilhada configurada, o app é de uso local: não há a quem restringir.
     if (!Cloud || !Cloud.state?.membership) return true;
     return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
-  }
-
-  function atualizarStatusDestinatarios() {
-    const Email = window.GrconEmailDraft;
-    if (!Email || !els.emailDraftStatus) return;
-    const modelo = Email.readTemplate();
-    els.emailDraftStatus.textContent = modelo.to.length
-      ? `${modelo.to.length} destinatário(s)${modelo.cc.length ? ` e ${modelo.cc.length} em cópia` : ""}`
-      : "Nenhum destinatário definido";
-  }
-
-  function aplicarPermissaoModeloEmail() {
-    const dono = ehProprietario();
-    [els.emailDraftTo, els.emailDraftCc, els.emailDraftSubject, els.emailDraftBody].forEach((campo) => {
-      if (campo) campo.readOnly = !dono;
-    });
-    if (els.emailDraftSave) els.emailDraftSave.hidden = !dono;
-    if (els.emailDraftOwnerNote) els.emailDraftOwnerNote.hidden = dono;
-  }
-
-  function carregarDestinatarios() {
-    const Email = window.GrconEmailDraft;
-    if (!Email) return;
-    const modelo = Email.readTemplate();
-    if (els.emailDraftTo) els.emailDraftTo.value = modelo.to.join("; ");
-    if (els.emailDraftCc) els.emailDraftCc.value = modelo.cc.join("; ");
-    if (els.emailDraftSubject) els.emailDraftSubject.value = modelo.assunto;
-    if (els.emailDraftBody) els.emailDraftBody.value = modelo.corpo;
-    if (els.emailDraftHint) {
-      els.emailDraftHint.textContent = `Marcadores: ${Email.MARCADORES.map((m) => m.chave).join("  ")} — ${Email.MARCADORES.map((m) => `${m.chave} = ${m.descricao}`).join("; ")}.`;
-    }
-    atualizarStatusDestinatarios();
-    aplicarPermissaoModeloEmail();
-  }
-
-  async function salvarDestinatarios() {
-    const Cloud = window.GrconCloud;
-    if (!Cloud?.saveEmailTemplate) { showToast("Área compartilhada indisponível.", "warn"); return; }
-    if (els.emailDraftSave) els.emailDraftSave.disabled = true;
-    try {
-      const resultado = await Cloud.saveEmailTemplate(
-        els.emailDraftSubject?.value || "",
-        els.emailDraftBody?.value || "",
-        els.emailDraftTo?.value || "",
-        els.emailDraftCc?.value || "",
-      );
-      if (!resultado.ok) { showToast(resultado.error, "warn"); return; }
-      carregarDestinatarios();
-      showToast("Modelo salvo. Passa a valer para todos que usam o GRCON.", "success");
-    } finally {
-      if (els.emailDraftSave) els.emailDraftSave.disabled = false;
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -527,9 +423,28 @@
   function refreshAllocationCenterStatus() {
     if (!els.allocationCenterStatus) return;
     const central = allocationCenterConfig();
-    els.allocationCenterStatus.textContent = central
-      ? `Referência cadastrada: ${central.fileName} · aba ${central.sheet}. O relatório não cria conexão externa.`
-      : "Não cadastrada. STATUS INTERNO usa o comentário da LD ou a situação apurada pelo GRCON.";
+    if (!central) {
+      els.allocationCenterStatus.textContent = "Não cadastrada. STATUS INTERNO usa o comentário da LD ou a situação apurada pelo GRCON.";
+      return;
+    }
+    // O alcance importa: o cadastro é da equipe quando veio do banco, e só deste
+    // navegador quando a área compartilhada estava fora do ar na hora de salvar.
+    const salvo = Workspace ? Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null) : null;
+    const alcance = salvo && salvo.compartilhada ? "Referência cadastrada para todos" : "Referência cadastrada somente neste navegador";
+    els.allocationCenterStatus.textContent = `${alcance}: ${central.fileName} · aba ${central.sheet}. O relatório não cria conexão externa.`;
+  }
+
+  // O cadastro é o mesmo para toda a área de trabalho, então quem não é
+  // proprietário vê o que está valendo, mas não altera.
+  function aplicarPermissaoCentralAlocacao() {
+    const dono = ehProprietario();
+    [els.allocationCenterPath, els.allocationCenterSheet, els.allocationCenterKey,
+      els.allocationCenterComment, els.allocationCenterLastRow].forEach((campo) => {
+      if (campo) campo.readOnly = !dono;
+    });
+    if (els.allocationCenterSave) els.allocationCenterSave.hidden = !dono;
+    if (els.allocationCenterClear) els.allocationCenterClear.hidden = !dono;
+    if (els.allocationCenterOwnerNote) els.allocationCenterOwnerNote.hidden = dono;
   }
 
   function loadAllocationCenterFields() {
@@ -542,9 +457,10 @@
     els.allocationCenterComment.value = String(central.commentColumn || "");
     els.allocationCenterLastRow.value = central.lastRow ? String(central.lastRow) : "";
     refreshAllocationCenterStatus();
+    aplicarPermissaoCentralAlocacao();
   }
 
-  function saveAllocationCenter() {
+  async function saveAllocationCenter() {
     if (!Workspace) { showToast("Não foi possível salvar: armazenamento local indisponível.", "warn"); return; }
     const informado = {
       path: String(els.allocationCenterPath?.value || "").trim(),
@@ -560,43 +476,64 @@
       showToast("Informe o caminho do arquivo, a aba e as duas colunas da central.", "warn");
       return;
     }
-    Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, {
+    const guardado = {
       path: central.path,
       sheet: central.sheet,
       keyColumn: central.keyColumn,
       commentColumn: central.commentColumn,
       lastRow: central.lastRow,
-    });
+    };
+    // O cadastro vale para todos, então quem manda é o banco. A cópia local é
+    // só para o relatório continuar saindo com a PROCX quando estiver offline.
+    const Cloud = window.GrconCloud;
+    if (Cloud?.saveAllocationCenter) {
+      if (els.allocationCenterSave) els.allocationCenterSave.disabled = true;
+      try {
+        const resultado = await Cloud.saveAllocationCenter(guardado);
+        if (resultado.ok) {
+          loadAllocationCenterFields();
+          showToast("Central de alocação salva para todos. Os próximos relatórios já trazem o comentário da fiscal.", "success");
+          return;
+        }
+        // Recusa por permissão para aí; só falta de área compartilhada cai na
+        // cópia local, senão quem não é proprietário burlaria a regra.
+        if (!resultado.indisponivel) { showToast(resultado.error, "warn"); return; }
+      } finally {
+        if (els.allocationCenterSave) els.allocationCenterSave.disabled = false;
+      }
+    }
+    Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, guardado);
     loadAllocationCenterFields();
-    showToast("Referência da central cadastrada. O relatório continuará sem conexão externa.", "success");
+    showToast("Referência cadastrada somente neste navegador: a área compartilhada está indisponível agora. O relatório continuará sem conexão externa.", "warn");
   }
 
-  function clearAllocationCenter() {
+  function limparCamposCentralAlocacao() {
+    if (!els.allocationCenterPath) return;
+    els.allocationCenterPath.value = "";
+    els.allocationCenterSheet.value = "";
+    els.allocationCenterKey.value = "";
+    els.allocationCenterComment.value = "";
+    els.allocationCenterLastRow.value = "";
+  }
+
+  async function clearAllocationCenter() {
+    const Cloud = window.GrconCloud;
+    // Remover só a cópia local não resolveria: a próxima leitura da área
+    // compartilhada devolveria o cadastro.
+    if (Cloud?.clearAllocationCenter) {
+      const resultado = await Cloud.clearAllocationCenter();
+      if (resultado.ok) {
+        limparCamposCentralAlocacao();
+        refreshAllocationCenterStatus();
+        showToast("Cadastro da central removido para todos.", "info");
+        return;
+      }
+      if (!resultado.indisponivel) { showToast(resultado.error, "warn"); return; }
+    }
     if (Workspace) Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, null);
-    if (els.allocationCenterPath) {
-      els.allocationCenterPath.value = "";
-      els.allocationCenterSheet.value = "";
-      els.allocationCenterKey.value = "";
-      els.allocationCenterComment.value = "";
-      els.allocationCenterLastRow.value = "";
-    }
+    limparCamposCentralAlocacao();
     refreshAllocationCenterStatus();
-    showToast("Cadastro da central removido.", "info");
-  }
-
-  // O rascunho não é baixado na hora: vai para a aba "E-mails de evidência",
-  // identificado pelo número da eGRDT, para o operador decidir quando gerar.
-  function enfileirarEmailDaEmissao() {
-    const Fila = window.GrconEmailQueue;
-    if (!Fila || !ultimaEmissaoParaEmail || !ultimaEmissaoParaEmail.documentos.length) return;
-    const resultado = Fila.enqueue(ultimaEmissaoParaEmail);
-    if (!resultado.saved) {
-      console.warn("GRCON: não foi possível enfileirar o e-mail de evidência", resultado.error);
-      return;
-    }
-    window.dispatchEvent(new CustomEvent("grcon:email-queued", { detail: resultado.item }));
-    const quantos = ultimaEmissaoParaEmail.documentos.length;
-    showToast(`E-mail de evidência com ${quantos} documento(s) guardado na aba "E-mails de evidência".`, "info");
+    showToast("Cadastro removido somente neste navegador: a área compartilhada está indisponível agora.", "warn");
   }
 
   function reportDownloadName() {
@@ -644,14 +581,6 @@
     exportPendingAllocationPdfs: $("#export-pending-allocation-pdfs"),
     exportZip: $("#export-zip"),
     exportEgrdt: $("#export-egrdt"),
-    emailDraftTo: $("#email-draft-to"),
-    emailDraftCc: $("#email-draft-cc"),
-    emailDraftSubject: $("#email-draft-subject"),
-    emailDraftBody: $("#email-draft-body"),
-    emailDraftHint: $("#email-draft-hint"),
-    emailDraftOwnerNote: $("#email-draft-owner-note"),
-    emailDraftSave: $("#email-draft-save"),
-    emailDraftStatus: $("#email-draft-status"),
     allocationCenterPath: $("#allocation-center-path"),
     allocationCenterSheet: $("#allocation-center-sheet"),
     allocationCenterKey: $("#allocation-center-key"),
@@ -660,6 +589,7 @@
     allocationCenterSave: $("#allocation-center-save"),
     allocationCenterClear: $("#allocation-center-clear"),
     allocationCenterStatus: $("#allocation-center-status"),
+    allocationCenterOwnerNote: $("#allocation-center-owner-note"),
     exportFinalPackage: $("#export-final-package"),
     advancedToggle: $("#advanced-toggle"),
     advancedPanel: $("#advanced-panel"),
@@ -4162,19 +4092,12 @@
     }
   }
 
+  // O logo vive no construtor compartilhado: já houve duas planilhas montando a
+  // mesma imagem por caminhos diferentes, e uma delas saía sem logo.
   async function addReportLogo(workbook, worksheet) {
-    try {
-      const brand = window.GRCONBrandAssets || {};
-      let imageConfig = null;
-      if (brand.reportLogoBase64) imageConfig = { base64: brand.reportLogoBase64, extension: "png" };
-      else {
-        const response = await window.fetch(brand.reportLogoFile || "grcon-logo-report.png", { cache: "no-store" });
-        if (!response.ok) throw new Error("Logo GRCON indisponível");
-        imageConfig = { buffer: await response.arrayBuffer(), extension: "png" };
-      }
-      const image = workbook.addImage(imageConfig);
-      worksheet.addImage(image, { tl: { col: .12, row: .28 }, ext: { width: 188, height: 52 } });
-    } catch (_) { console.debug("[App] logo do relatório indisponível:", _); /* relatório segue íntegro sem imagem */ }
+    const Report = window.GrconRequestsReport;
+    if (!Report || !Report.attachBrandLogo) return;
+    await Report.attachBrandLogo(workbook, worksheet, window.GRCONBrandAssets, window.fetch.bind(window));
   }
 
   async function buildReportFileLegacy() {
@@ -5036,10 +4959,10 @@
   });
   initializeResultColumnFilters();
   loadAllocationCenterFields();
-  carregarDestinatarios();
-  if (els.emailDraftSave) els.emailDraftSave.addEventListener("click", salvarDestinatarios);
-  window.addEventListener("grcon:email-template-updated", carregarDestinatarios);
-  window.addEventListener("grcon:cloud-ready", carregarDestinatarios);
+  // A área compartilhada é quem manda no cadastro: quando ela responde, os
+  // campos passam a mostrar o que está valendo para todos.
+  window.addEventListener("grcon:allocation-center-updated", loadAllocationCenterFields);
+  window.addEventListener("grcon:cloud-ready", loadAllocationCenterFields);
   if (els.clearColumnFilters) els.clearColumnFilters.addEventListener("click", clearResultColumnFilters);
   els.search.addEventListener("input", (event) => {
     state.search = event.target.value;

@@ -398,63 +398,326 @@
     return state.membership?.role === "owner";
   }
 
-  /* ── Modelo do e-mail de evidência (compartilhado, só o dono altera) ── */
+  /* ── Central de alocação (compartilhada, só o dono altera) ── */
 
-  async function loadEmailTemplate() {
-    const Email = window.GrconEmailDraft;
-    if (!Email || !state.client || !state.membership?.workspace_id) return null;
+  // A planilha da central vive numa pasta de rede e não é lida pelo navegador:
+  // o que fica guardado aqui é onde ela está, para o relatório montar a PROCX.
+  // O cadastro é o mesmo para todos, então mora no banco; a cópia local existe
+  // só para o relatório ser gerado offline com o último cadastro conhecido.
+  const CENTRAL_PREFERENCIA = "allocationCenter";
+
+  function guardarCentralLocalmente(central) {
+    const Workspace = window.GrconWorkspace;
+    if (!Workspace) return central;
+    // "compartilhada" registra que este cadastro veio do banco, e não de uma
+    // gravação local de emergência — é o que o painel informa ao usuário.
+    Workspace.setPreference(CENTRAL_PREFERENCIA, central ? { ...central, compartilhada: true } : null);
+    window.dispatchEvent(new CustomEvent("grcon:allocation-center-updated", { detail: central }));
+    return central;
+  }
+
+  function centralDaLinha(linha) {
+    if (!linha || !linha.file_path) return null;
+    return {
+      path: linha.file_path,
+      sheet: linha.sheet_name,
+      keyColumn: linha.key_column,
+      commentColumn: linha.comment_column,
+      lastRow: Number(linha.last_row) || 20000,
+    };
+  }
+
+  async function loadAllocationCenter() {
+    if (!state.client || !state.membership?.workspace_id) return null;
     try {
-      const { data, error } = await state.client.rpc("grcon_get_email_template", {
+      const { data, error } = await state.client.rpc("grcon_get_allocation_center", {
         target_workspace: state.membership.workspace_id,
       });
       if (error) throw error;
-      const linha = Array.isArray(data) ? data[0] : data;
-      // Sem linha ainda: o dono nunca configurou; segue com o padrão.
-      if (!linha) return Email.readTemplate();
-      const modelo = {
-        assunto: linha.subject_template,
-        corpo: linha.body_template,
-        to: linha.recipients_to || [],
-        cc: linha.recipients_cc || [],
-      };
-      Email.cacheTemplate(modelo);
-      window.dispatchEvent(new CustomEvent("grcon:email-template-updated", { detail: modelo }));
-      return modelo;
+      const central = centralDaLinha(Array.isArray(data) ? data[0] : data);
+      // Sem linha ainda: ninguém cadastrou a central nesta área de trabalho.
+      // Aí o cadastro é apagado localmente, para não sobrar de outra área.
+      return guardarCentralLocalmente(central);
     } catch (error) {
-      // Offline ou sem acesso: usa a última cópia local, para não travar o uso.
-      console.debug("GRCON Cloud: modelo de e-mail indisponível agora", error);
-      return Email.readTemplate();
+      // Offline ou sem acesso: mantém a última cópia local, para não travar a
+      // geração do relatório.
+      console.debug("GRCON Cloud: central de alocação indisponível agora", error);
+      return null;
     }
   }
 
-  async function saveEmailTemplate(assunto, corpo, to, cc) {
-    const Email = window.GrconEmailDraft;
-    if (!Email) return { ok: false, error: "Módulo de e-mail indisponível." };
-    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode alterar o modelo do e-mail." };
-    if (!state.client || !state.membership?.workspace_id) return { ok: false, error: "Entre na área compartilhada para salvar o modelo." };
-    const conferido = Email.validateTemplate(assunto, corpo, to, cc);
-    if (!conferido.ok) return { ok: false, error: conferido.problemas.join(" ") };
+  // "indisponivel" separa não ter área compartilhada agora de não ter permissão:
+  // no primeiro caso o aplicativo ainda grava a cópia local, no segundo não.
+  function centralIndisponivel() {
+    return !state.client || !state.membership?.workspace_id || navigator.onLine === false;
+  }
+
+  async function saveAllocationCenter(central) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode alterar a central de alocação." };
     try {
-      const { data, error } = await state.client.rpc("grcon_set_email_template", {
+      const { data, error } = await state.client.rpc("grcon_set_allocation_center", {
         target_workspace: state.membership.workspace_id,
-        new_subject: assunto,
-        new_body: corpo,
-        new_to: conferido.to,
-        new_cc: conferido.cc,
+        new_path: central?.path || "",
+        new_sheet: central?.sheet || "",
+        new_key_column: central?.keyColumn || "",
+        new_comment_column: central?.commentColumn || "",
+        new_last_row: Number(central?.lastRow) || 20000,
       });
       if (error) throw error;
-      const linha = Array.isArray(data) ? data[0] : data;
-      const modelo = {
-        assunto: linha?.subject_template || assunto,
-        corpo: linha?.body_template || corpo,
-        to: linha?.recipients_to || conferido.to,
-        cc: linha?.recipients_cc || conferido.cc,
-      };
-      Email.cacheTemplate(modelo);
-      window.dispatchEvent(new CustomEvent("grcon:email-template-updated", { detail: modelo }));
-      return { ok: true, modelo };
+      const salva = centralDaLinha(Array.isArray(data) ? data[0] : data) || central;
+      guardarCentralLocalmente(salva);
+      return { ok: true, central: salva };
     } catch (error) {
-      return { ok: false, error: error?.message || "Não foi possível salvar o modelo do e-mail." };
+      return { ok: false, indisponivel: navigator.onLine === false, error: error?.message || "Não foi possível salvar a central de alocação." };
+    }
+  }
+
+  async function clearAllocationCenter() {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode alterar a central de alocação." };
+    try {
+      const { error } = await state.client.rpc("grcon_clear_allocation_center", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      guardarCentralLocalmente(null);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, indisponivel: navigator.onLine === false, error: error?.message || "Não foi possível remover a central de alocação." };
+    }
+  }
+
+  /* ── Consultas e Solicitações ── */
+
+  // O protocolo é o número do ITEM da planilha oficial e a unicidade é do
+  // banco, não do aplicativo: duas pessoas gerando itens ao mesmo tempo não
+  // podem acabar com o mesmo número.
+
+  async function getRequestTypes() {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    try {
+      const { data, error } = await state.client.rpc("grcon_get_request_types", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []).map((linha) => ({
+        code: linha.code,
+        label: linha.label,
+        description: linha.description,
+        defaultAction: linha.default_action,
+        defaultPriority: linha.default_priority,
+        defaultDeadlineDays: linha.default_deadline_days,
+        requiredFields: linha.required_fields || [],
+        active: linha.active,
+        order: linha.display_order,
+      }));
+    } catch (error) {
+      console.debug("GRCON Cloud: tipos de solicitação indisponíveis", error);
+      return [];
+    }
+  }
+
+  async function saveRequestType(tipo) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode configurar os tipos de solicitação." };
+    if (!tipo || !tipo.label) return { ok: false, error: "O tipo precisa de um nome." };
+    try {
+      const { error } = await state.client.rpc("grcon_save_request_type", {
+        target_workspace: state.membership.workspace_id,
+        new_code: tipo.code || "",
+        new_label: tipo.label,
+        new_description: tipo.description || "",
+        new_default_action: tipo.defaultAction || "",
+        new_default_priority: tipo.defaultPriority || "normal",
+        new_default_deadline_days: tipo.defaultDeadlineDays ?? null,
+        new_required_fields: tipo.requiredFields || [],
+        new_active: tipo.active === undefined ? true : tipo.active,
+        new_order: tipo.order || 0,
+      });
+      if (error) throw error;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível salvar o tipo." };
+    }
+  }
+
+  /**
+   * A decisão entre apagar e desativar é do banco, que sabe quantos itens usam
+   * o tipo. A resposta traz o que aconteceu, para a tela poder dizer a verdade.
+   */
+  async function deleteRequestType(codigo) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode configurar os tipos de solicitação." };
+    try {
+      const { data, error } = await state.client.rpc("grcon_delete_request_type", {
+        target_workspace: state.membership.workspace_id,
+        target_code: codigo,
+      });
+      if (error) throw error;
+      return { ok: true, detalhe: String(data || "") };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível remover o tipo." };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Modelos de exportação
+  //
+  // Um modelo é a ordem e o nome das colunas do arquivo gerado. Fica no banco
+  // para não precisar ser cadastrado de novo em cada máquina; a tela também
+  // guarda uma cópia local, para quem trabalha sem área compartilhada.
+  // ---------------------------------------------------------------------------
+  async function getExportTemplates() {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    try {
+      const { data, error } = await state.client.rpc("grcon_get_export_templates", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []).map((linha) => ({
+        id: linha.template_id,
+        name: linha.name,
+        base: linha.base_kind,
+        columns: Array.isArray(linha.columns) ? linha.columns : [],
+      }));
+    } catch (error) {
+      console.debug("GRCON Cloud: modelos de exportação indisponíveis", error);
+      return [];
+    }
+  }
+
+  async function saveExportTemplate(modelo) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode salvar modelos para a equipe." };
+    if (!modelo || !modelo.id || !modelo.name) return { ok: false, error: "O modelo precisa de um nome." };
+    try {
+      const { error } = await state.client.rpc("grcon_save_export_template", {
+        target_workspace: state.membership.workspace_id,
+        new_template_id: modelo.id,
+        new_name: modelo.name,
+        new_base_kind: modelo.base || "consulta",
+        new_columns: modelo.columns || [],
+      });
+      if (error) throw error;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível salvar o modelo." };
+    }
+  }
+
+  async function deleteExportTemplate(id) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode excluir modelos da equipe." };
+    try {
+      const { error } = await state.client.rpc("grcon_delete_export_template", {
+        target_workspace: state.membership.workspace_id,
+        target_template_id: id,
+      });
+      if (error) throw error;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível remover o modelo." };
+    }
+  }
+
+  async function listRequestItems() {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    try {
+      const { data, error } = await state.client.rpc("grcon_list_request_items", {
+        target_workspace: state.membership.workspace_id,
+      });
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.debug("GRCON Cloud: solicitações indisponíveis agora", error);
+      return [];
+    }
+  }
+
+  /**
+   * Grava a solicitação com os itens numa transação. Se um protocolo já existir
+   * em outra solicitação, o banco recusa a gravação inteira — é melhor falhar
+   * do que deixar dois itens com a mesma identidade.
+   */
+  async function saveRequest(header, items) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    const lista = Array.isArray(items) ? items : [];
+    if (!lista.length) return { ok: false, error: "Nenhum item para gravar." };
+    try {
+      const { data, error } = await state.client.rpc("grcon_save_request", {
+        target_workspace: state.membership.workspace_id,
+        request_payload: {
+          request_number: String(header?.requestNumber || "").trim(),
+          received_at: String(header?.receivedAtIso || ""),
+          requester: String(header?.requester || ""),
+          owner_name: String(header?.owner || ""),
+          notes: String(header?.notes || ""),
+          status: String(header?.status || "recebido"),
+        },
+        items_payload: lista.map((item) => ({
+          item_number: Number(item.itemNumber) || Number(item.item) || null,
+          protocol: String(item.item || ""),
+          document: String(item.document || ""),
+          requested_title: String(item.requestedTitle || ""),
+          official_title: String(item.officialTitle || ""),
+          type_code: String(item.requestType || ""),
+          owner_name: String(item.owner || ""),
+          status: String(item.itemStatus || "recebido"),
+          classification: String(item._classification || ""),
+          recommended_action: String(item.recommendedAction || ""),
+          reason: String(item.observations || ""),
+          ld_name: String(item.reference || ""),
+          all_lds: String(item.allLds || ""),
+          allocation: String(item.allocation || ""),
+          allocation_status: String(item.needsLdInclusion || ""),
+          last_grdt: String(item.lastGrdt || ""),
+          sigem_status: String(item.sigemStatus || ""),
+          revision: String(item.revision || ""),
+          needs_manual_validation: Boolean(item._needsManualValidation),
+          observations: String(item.observations || ""),
+        })),
+      });
+      if (error) throw error;
+      return { ok: true, id: data };
+    } catch (error) {
+      return {
+        ok: false,
+        indisponivel: navigator.onLine === false,
+        error: error?.message || "Não foi possível gravar a solicitação.",
+      };
+    }
+  }
+
+  async function updateRequestItems(protocols, field, value, note) {
+    if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
+    try {
+      const { data, error } = await state.client.rpc("grcon_update_request_items", {
+        target_workspace: state.membership.workspace_id,
+        target_protocols: protocols || [],
+        field_name: field,
+        new_value: value === null || value === undefined ? "" : String(value),
+        note: String(note || ""),
+      });
+      if (error) throw error;
+      return { ok: true, changed: Number(data) || 0 };
+    } catch (error) {
+      return { ok: false, error: error?.message || "Não foi possível alterar os itens." };
+    }
+  }
+
+  async function requestItemHistory(protocol) {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    try {
+      const { data, error } = await state.client.rpc("grcon_request_item_history", {
+        target_workspace: state.membership.workspace_id,
+        target_protocol: String(protocol || ""),
+      });
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.debug("GRCON Cloud: histórico do item indisponível", error);
+      return [];
     }
   }
 
@@ -1368,7 +1631,7 @@
       unlockApp();
       updateAccountMenu();
       await loadMembers();
-      await loadEmailTemplate();
+      await loadAllocationCenter();
       if (state.online) {
         await runSyncCycle();
         subscribeRealtime();
@@ -1517,8 +1780,19 @@
     canWriteHistory,
     canManageHistory,
     canManageMembers,
-    loadEmailTemplate,
-    saveEmailTemplate,
+    loadAllocationCenter,
+    saveAllocationCenter,
+    clearAllocationCenter,
+    getRequestTypes,
+    saveRequestType,
+    deleteRequestType,
+    getExportTemplates,
+    saveExportTemplate,
+    deleteExportTemplate,
+    listRequestItems,
+    saveRequest,
+    updateRequestItems,
+    requestItemHistory,
     reserveEgrdtSequences,
     deleteHistoryRecord: deleteSharedHistoryRecord,
     inviteUser,

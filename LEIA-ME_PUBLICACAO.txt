@@ -1,4 +1,4 @@
-GRCON 5.32.12 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.32.21 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
 - O seletor aceita uma ou mais LDs e pesquisa a relação em todas elas na mesma análise.
@@ -61,8 +61,9 @@ SUPABASE — ORDEM DAS MIGRAÇÕES PARA UMA BASE EXISTENTE
 1. Confirme que as migrações 5.31.4, 5.31.5, 5.31.6, 5.31.7, 5.31.8, 5.31.9, 5.31.10 e 5.31.14 já foram aplicadas conforme o histórico do projeto.
 2. Aplique SUPABASE_MIGRACAO_5.32.0.sql.
 3. Aplique SUPABASE_MIGRACAO_5.32.2.sql.
-4. Execute os Advisors de Security e Performance.
-5. Consulte SUPABASE_AUDITORIA.md para as limitações e o checklist.
+4. Aplique SUPABASE_MIGRACAO_5.32.21.sql (modelos de exportação das Consultas e Solicitações).
+5. Execute os Advisors de Security e Performance.
+6. Consulte SUPABASE_AUDITORIA.md para as limitações e o checklist.
 
 ATENÇÃO PARA INSTALAÇÃO EM OUTRO PROJETO
 - SUPABASE_MIGRACAO_5.31.10.sql é um registro resumido de uma migração já aplicada e não contém os corpos completos de duas funções privadas.

@@ -1,6 +1,6 @@
 /**
  * GRCON — Configuração Centralizada
- * Versão: 5.32.12
+ * Versão: 5.32.21
  *
  * Arquivo único de configuração para constantes, limites e opções
  * usados em todo o projeto. Evita hardcoding disperso.
@@ -10,7 +10,7 @@
 
   const CONFIG = Object.freeze({
     /* ── Versão ─────────────────────────────────────────────── */
-    APP_VERSION: "5.32.12",
+    APP_VERSION: "5.32.21",
 
     /* ── Limites de processamento ───────────────────────────── */
     EGRDT_BATCH_LIMIT: 48,

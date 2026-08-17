@@ -14,6 +14,8 @@ const ExcelJS = require(path.join(root, "exceljs.min.js"));
 const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
+const Requests = require(path.join(root, "requests_core.js"));
+const RequestsReport = require(path.join(root, "requests_report.js"));
 const Emission = require(path.join(root, "emission.js"));
 const OutputGuard = require(path.join(root, "grcon_output_guard.js"));
 const OutputAudit = require(path.join(root, "output_audit.js"));
@@ -239,6 +241,433 @@ check("Resumo único prioriza decisão e preserva todas as evidências da audito
     assert.ok(ReportSummary.SUMMARY_COLUMNS.some((summaryColumn) => summaryColumn.key === column.key), `Resumo não contém ${column.header}`);
     assert.equal(ReportSummary.SUMMARY_COLUMNS.filter((summaryColumn) => summaryColumn.key === column.key).length, 1);
   });
+});
+
+// ── Consultas e Solicitações ────────────────────────────────────────────────
+// As duas regras que atravessam o módulo: não inventar informação e não casar
+// por semelhança. Os casos abaixo são os da seção de triagem por LD.
+
+function consultaRecord(document, source, over = {}) {
+  return {
+    document, documentKey: Core.key(document), revision: "0", status: "", sigemStatus: "Não Postado",
+    title: "Relatório de inspeção", grdt: "", effectiveDate: "", allocationStatus: "ALOCADO",
+    allocation: "ALOC-1", allocationStage: "", sheet: "ET", row: 2, source,
+    sourceTimestamp: 100, sourceOrder: 0, ldColumns: [], ...over,
+  };
+}
+
+check("lista colada separa código e título e ignora linhas vazias", () => {
+  const lista = Requests.parseDocumentList(`${ntBaseDocument}\tRelatório de inspeção\n\n${ntDocument}\n   \n`);
+  assert.equal(lista.length, 2);
+  assert.equal(lista[0].document, ntBaseDocument);
+  assert.equal(lista[0].requestedTitle, "Relatório de inspeção");
+  assert.equal(lista[1].requestedTitle, "");
+});
+
+check("duplicidade sai pelo código normalizado sem perder o título informado", () => {
+  const { items, removed } = Requests.dedupeDocuments([
+    { document: ntBaseDocument, requestedTitle: "" },
+    { document: ntBaseDocument.toLowerCase(), requestedTitle: "Título da segunda linha" },
+    { document: "OUTRO-1", requestedTitle: "" },
+  ]);
+  assert.equal(items.length, 2);
+  assert.equal(removed.length, 1);
+  assert.equal(items[0].requestedTitle, "Título da segunda linha");
+});
+
+check("protocolo é o número do ITEM da planilha oficial, um sequencial simples", () => {
+  // A planilha de Controle de Solicitações usa ITEM contínuo: 1, 2, 3 …
+  assert.equal(Requests.protocolFor(1), "1");
+  assert.equal(Requests.protocolFor(557), "557");
+  assert.equal(Requests.protocolFor(0), "");
+  assert.equal(Requests.protocolFor("abc"), "");
+  // A sequência continua de onde a planilha parou; nunca reaproveita número.
+  assert.equal(Requests.nextItemNumber([{ itemNumber: 556 }, { itemNumber: 12 }]), 557);
+  assert.equal(Requests.nextItemNumber([{ protocol: "556" }]), 557);
+  assert.equal(Requests.nextItemNumber([]), 1);
+  const numerados = Requests.assignItemNumbers(
+    [{ document: "A" }, { document: "B" }, { document: "C" }],
+    [{ protocol: "556" }],
+  );
+  assert.deepEqual(numerados.map((item) => item.protocol), ["557", "558", "559"]);
+  assert.deepEqual(Requests.duplicatedProtocols([{ protocol: "5" }, { protocol: "5" }]), ["5"]);
+});
+
+check("consulta de documento exato responde as seis colunas com confiança alta", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", { grdt: "GRDT-0007", sigemStatus: "Postado" })], []);
+  const resultado = Requests.lookupDocument(ntBaseDocument, index);
+  const linha = Requests.consultationRow(resultado);
+  assert.equal(resultado.confidence, "alta");
+  assert.equal(resultado.needsManualValidation, false);
+  assert.equal(linha.title, "Relatório de inspeção");
+  assert.equal(linha.allocated, "SIM — Alocado");
+  assert.equal(linha.lastGrdt, "GRDT-0007");
+  assert.equal(linha.sigemStatus, "Postado");
+  assert.equal(linha.ld, "LD_A.xlsx");
+});
+
+check("documento não localizado não recebe nenhum dado inventado", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx")], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument("C1O_RNEST_U32_9.9.9.9_INS_RIR_SPE-AST-999999", index));
+  assert.equal(linha.situation, "Não localizado");
+  for (const campo of ["title", "allocated", "lastGrdt", "sigemStatus", "ld"]) assert.equal(linha[campo], "");
+});
+
+check("consulta não casa por semelhança de título", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: "Relatório de inspeção" })], []);
+  const resultado = Requests.lookupDocument("XXX_OUTRO_CODIGO_DIFERENTE", index, { requestedTitle: "Relatório de inspeção" });
+  assert.equal(resultado.found, false);
+});
+
+check("mesmo documento em duas LDs com a mesma informação não é conflito", () => {
+  const index = Core.buildIndex([
+    consultaRecord(ntBaseDocument, "LD_A.xlsx"),
+    consultaRecord(ntBaseDocument, "LD_B.xlsx", { sourceTimestamp: 200 }),
+  ], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index));
+  assert.equal(linha.occurrenceCount, 2);
+  assert.equal(linha.allLds, "LD_A.xlsx | LD_B.xlsx");
+  assert.match(linha.rule, /mesma informação/);
+});
+
+check("LDs que divergem elegem a mais recente, explicam a regra e pedem confirmação", () => {
+  const index = Core.buildIndex([
+    consultaRecord(ntBaseDocument, "LD_ANTIGA.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "", sourceTimestamp: 100 }),
+    consultaRecord(ntBaseDocument, "LD_NOVA.xlsx", { allocationStatus: "ALOCADO", sourceTimestamp: 300 }),
+  ], []);
+  const resultado = Requests.lookupDocument(ntBaseDocument, index);
+  const linha = Requests.consultationRow(resultado);
+  assert.equal(resultado.conflicting, true);
+  assert.equal(resultado.chosen.ld, "LD_NOVA.xlsx");
+  assert.equal(linha.situation, "Requer validação manual");
+  assert.match(linha.rule, /mais recente: LD_NOVA/);
+});
+
+check("empate entre LDs divergentes devolve a decisão sem preencher campo algum", () => {
+  const index = Core.buildIndex([
+    consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "", sourceTimestamp: 500 }),
+    consultaRecord(ntBaseDocument, "LD_B.xlsx", { allocationStatus: "ALOCADO", sourceTimestamp: 500 }),
+  ], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index));
+  assert.equal(linha.title, "");
+  assert.equal(linha.allocated, "");
+  assert.equal(linha.allLds, "LD_A.xlsx | LD_B.xlsx");
+  assert.match(linha.rule, /Escolha qual vale/);
+});
+
+check("consulta aproveita a regra do nt- e rebaixa a confiança do resultado", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx")], []);
+  const resultado = Requests.lookupDocument(ntDocument, index);
+  assert.equal(resultado.found, true);
+  assert.equal(resultado.confidence, "media");
+  assert.equal(resultado.needsManualValidation, true);
+  assert.equal(resultado.ldDocument, ntBaseDocument);
+});
+
+check("título da consulta sai exatamente como está na LD", () => {
+  const original = "Relatório de Inspeção — Válvula 3\" (Ø nominal), rev. A";
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: original })], []);
+  assert.equal(Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index)).title, original);
+});
+
+check("tipos de solicitação são configuráveis, ordenados e não ficam fixos no código", () => {
+  const padrao = Requests.requestTypeList(null);
+  assert.ok(padrao.length >= 10);
+  // Rótulos iguais aos da coluna "Descrição da Solicitação" do controle oficial.
+  assert.equal(padrao[0].label, "POSTAGEM NO SIGEM");
+  const meus = Requests.requestTypeList([
+    { label: "Tipo da casa", order: 2 },
+    { label: "Urgência", code: "URG", defaultPriority: "urgente", defaultDeadlineDays: 1, order: 1 },
+  ]);
+  assert.equal(meus[0].code, "URG");
+  assert.equal(meus[1].code, "TIPO_DA_CASA");
+  assert.equal(Requests.normalizeRequestType({ label: "" }), null);
+  assert.equal(Requests.normalizeRequestType({ label: "X", defaultPriority: "inventada" }).defaultPriority, "normal");
+});
+
+// ── Triagem das solicitações: as regras da seção 8 ──────────────────────────
+
+function triagemDe(documentoInformado, registros, extras = {}) {
+  const index = Core.buildIndex(registros, []);
+  const lookup = Requests.lookupDocument(documentoInformado, index, { requestedTitle: extras.requestedTitle });
+  return Requests.classifyRequestItem({ lookup, ...extras });
+}
+
+check("8.1 documento não localizado é classificado como novo e pede inclusão na LD", () => {
+  const t = triagemDe("C1O_RNEST_U32_9.9.9.9_INS_RIR_NAO-EXISTE", [consultaRecord(ntBaseDocument, "LD_A.xlsx")]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.NOVO);
+  assert.equal(t.isNewDocument, true);
+  assert.equal(t.needsManualValidation, true);
+  assert.match(t.recommendedAction, /inclusão na LD/i);
+  assert.match(t.recommendedAction, /aloca/i);
+});
+
+check("8.2 previsto e não postado recomenda a postagem e não trata como novo", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Não Postado" })]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
+  assert.equal(t.isNewDocument, false);
+  assert.match(t.recommendedAction, /Postar no SIGEM/i);
+  // A 8.2 exige dizer que NÃO é documento novo e que NÃO cabe nova inclusão.
+  assert.match(t.recommendedAction, /não é documento novo/i);
+  assert.match(t.recommendedAction, /não precisa de nova inclusão/i);
+  assert.match(t.reason, /Já previsto na LD LD_A\.xlsx/);
+});
+
+check("8.2 previsto porém não alocado manda regularizar a alocação antes de postar", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "" })]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
+  assert.equal(t.allocated, false);
+  assert.match(t.recommendedAction, /Regularizar a alocação/i);
+});
+
+check("8.3 postado com revisão nova recomenda a atualização citando as duas revisões", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Postado", revision: "0" })], { requestedRevision: "A" });
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NOVA_REVISAO);
+  assert.equal(t.revisionInLd, "0");
+  assert.equal(t.requestedRevision, "A");
+  assert.match(t.recommendedAction, /revisão 0 para A/);
+});
+
+check("8.4 título divergente mostra os dois lados e nunca altera sozinho", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: "Relatório de inspeção dimensional" })],
+    { requestedTitle: "Relatório de inspeção dimensional e visual" });
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.TITULO_DIVERGENTE);
+  assert.equal(t.needsManualValidation, true);
+  assert.equal(t.titleComparison.official, "Relatório de inspeção dimensional");
+  assert.equal(t.titleComparison.requested, "Relatório de inspeção dimensional e visual");
+  assert.deepEqual(t.titleComparison.addedWords, ["E", "VISUAL"]);
+  assert.match(t.recommendedAction, /não altera nada sozinho/i);
+});
+
+check("8.4 diferença só de caixa e acento não é considerada divergência de título", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: "Relatório de Inspeção" })],
+    { requestedTitle: "RELATORIO DE INSPECAO" });
+  assert.equal(t.titleComparison.differs, false);
+  assert.notEqual(t.classification, Requests.CLASSIFICATIONS.TITULO_DIVERGENTE);
+});
+
+check("8.5 LDs divergentes empatadas travam a triagem até alguém escolher", () => {
+  const t = triagemDe(ntBaseDocument, [
+    consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "", sourceTimestamp: 500 }),
+    consultaRecord(ntBaseDocument, "LD_B.xlsx", { allocationStatus: "ALOCADO", sourceTimestamp: 500 }),
+  ]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.VALIDAR);
+  assert.equal(t.needsManualValidation, true);
+  assert.match(t.recommendedAction, /Escolher qual LD vale/i);
+});
+
+check("documento já postado e sem revisão nova não inventa tarefa", () => {
+  const t = triagemDe(ntBaseDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Postado" })]);
+  assert.match(t.recommendedAction, /Nenhuma ação necessária/i);
+});
+
+check("correspondência por variação de código mantém a conferência mesmo com classificação clara", () => {
+  const t = triagemDe(ntDocument, [consultaRecord(ntBaseDocument, "LD_A.xlsx", { sigemStatus: "Não Postado" })]);
+  assert.equal(t.classification, Requests.CLASSIFICATIONS.PREVISTO_NAO_POSTADO);
+  assert.equal(t.needsManualValidation, true);
+});
+
+check("consulta vira linha do controle sem redigitar o que o GRCON já achou", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_ALFA.xlsx", {
+    grdt: "GRDT-0042", allocation: "C1O-ALOC-CM-0095-2026", ldVersion: "Rev. C",
+  })], []);
+  const entradas = [
+    { document: ntBaseDocument, lookup: Requests.lookupDocument(ntBaseDocument, index) },
+    { document: "C1O_RNEST_U32_9.9.9.9_INS_RIR_NOVO-1", lookup: Requests.lookupDocument("C1O_RNEST_U32_9.9.9.9_INS_RIR_NOVO-1", index) },
+  ];
+  const cabecalho = { owner: "Laís", receivedAt: "16/08/2026", requester: "Gabriela Borges", requestType: "POSTAGEM NO SIGEM", origin: "E-MAIL" };
+  const linhas = Requests.buildControlRows(entradas, cabecalho, [{ protocol: "556" }]);
+
+  // Numeração continua a sequência da planilha.
+  assert.deepEqual(linhas.map((l) => l.item), ["557", "558"]);
+  // O cabeçalho da solicitação é repetido em cada item, como na planilha.
+  assert.equal(linhas[0].owner, "Laís");
+  assert.equal(linhas[0].requester, "Gabriela Borges");
+  // O que veio da LD entra sozinho.
+  assert.equal(linhas[0].documentFamily, "ET");
+  assert.equal(linhas[0].allocation, "C1O-ALOC-CM-0095-2026");
+  assert.equal(linhas[0].sigemStatus, "Não Postado");
+  assert.equal(linhas[0].reference, "LD_ALFA.xlsx");
+  // A classificação decide se precisa de inclusão na LD.
+  assert.equal(linhas[0].needsLdInclusion, "não");
+  assert.equal(linhas[1].needsLdInclusion, "sim");
+  assert.equal(linhas[1]._classification, Requests.CLASSIFICATIONS.NOVO);
+  // Documento novo não recebe dado nenhum da LD.
+  assert.equal(linhas[1].allocation, "");
+  assert.equal(linhas[1].sigemStatus, "");
+
+  // Etapas futuras ficam em branco e saem como "na" na planilha.
+  const saida = RequestsReport.controlRows(linhas)[0];
+  assert.equal(saida.length, 26);
+  assert.equal(saida[16], "na");
+  assert.equal(saida[0], "557");
+});
+
+check("solicitação é gravada pelo banco, com o protocolo e a transação do lado do servidor", () => {
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  for (const rpc of ["grcon_save_request", "grcon_list_request_items", "grcon_update_request_items", "grcon_request_item_history"]) {
+    assert.match(cloud, new RegExp(`rpc\\("${rpc}"`));
+  }
+  // O protocolo enviado é o número do ITEM, não um identificador do cliente.
+  assert.match(cloud, /protocol: String\(item\.item \|\| ""\)/);
+
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  // Sem número da solicitação o app nem chega ao banco: é ele que agrupa os itens.
+  assert.match(app, /Informe o número da solicitação antes de salvar/);
+  // Grava apenas o que está selecionado na tabela.
+  assert.match(app, /state\.requestRows\.filter\(\(linha\) => linha\._selected !== false\)/);
+
+  const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.9.sql"), "utf8");
+  // Protocolo repetido em outra solicitação derruba a gravação inteira.
+  assert.match(sql, /O protocolo % já existe na solicitação %/);
+  // Unicidade é do banco, não do aplicativo.
+  assert.match(sql, /unique \(workspace_id, protocol\)/);
+  // Histórico só recebe inserção: nenhuma função atualiza ou apaga eventos.
+  assert.doesNotMatch(sql, /update private\.grcon_request_item_events/i);
+  assert.doesNotMatch(sql, /delete from private\.grcon_request_item_events/i);
+});
+
+check("exportação reproduz as 26 colunas do Controle de Solicitações", () => {
+  // Grafia e ordem vieram da planilha oficial da rede. Qualquer diferença
+  // obriga a rearrumar colunas na hora de colar — o retrabalho que esta saída
+  // existe para evitar. O hífen de "N‑1710" é o curto (U+2011), não o comum.
+  const cabecalhos = RequestsReport.CONTROL_COLUMNS.map((coluna) => coluna.header);
+  assert.equal(cabecalhos.length, 26);
+  assert.equal(cabecalhos[0], "ITEM");
+  assert.equal(cabecalhos[1], "Responsavel pela atividade");
+  assert.equal(cabecalhos[5], "Descrição da Solicitação");
+  assert.equal(cabecalhos[23], "Disponibilizado no PW – N‑1710");
+  assert.equal(cabecalhos[25], "Data de inclusão do status");
+
+  const linhas = RequestsReport.controlRows([
+    { item: "557", owner: "Laís", document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", requestType: "POSTAGEM NO SIGEM" },
+  ]);
+  assert.equal(linhas.length, 1);
+  assert.equal(linhas[0].length, 26);
+  assert.equal(linhas[0][0], "557");
+  // Campo não preenchido vira "na", que é a convenção da própria planilha:
+  // célula vazia deixa dúvida entre pendência e não se aplica.
+  assert.equal(linhas[0][2], "na");
+
+  const semCabecalho = RequestsReport.controlClipboardText([{ item: "557" }], false);
+  assert.equal(semCabecalho.split("\t").length, 26);
+  assert.doesNotMatch(semCabecalho, /ITEM/);
+  const comCabecalho = RequestsReport.controlClipboardText([{ item: "557" }], true);
+  assert.equal(comCabecalho.split("\n").length, 2);
+  assert.match(comCabecalho, /^ITEM\t/);
+});
+
+check("modelo de exportação guarda ordem e nome das colunas escolhidas", () => {
+  const modelo = RequestsReport.normalizeExportTemplate({
+    name: "Minha planilha",
+    base: "consulta",
+    columns: [
+      { key: "document", header: "Código do documento" },
+      { key: "title", header: "Título" },
+    ],
+  });
+  assert.equal(modelo.id, "minha-planilha");
+  assert.equal(modelo.columns.length, 2);
+  // O nome da coluna é do usuário; a chave continua sendo a do motor.
+  assert.equal(modelo.columns[0].header, "Código do documento");
+  assert.equal(modelo.columns[0].key, "document");
+
+  const saida = RequestsReport.applyExportTemplate(modelo, [
+    { document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", title: "Relatório", situation: "Localizado" },
+  ]);
+  assert.deepEqual(saida.headers, ["Código do documento", "Título"]);
+  assert.deepEqual(saida.rows, [["C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", "Relatório"]]);
+  // Coluna fora do modelo não aparece, mesmo existindo no dado.
+  assert.equal(saida.rows[0].length, 2);
+
+  // Chave desconhecida não vira coluna preenchida por engano: perde a chave e
+  // sai em branco, em vez de o modelo inventar um campo que o motor não tem.
+  const inventada = RequestsReport.normalizeExportTemplate({
+    name: "X", base: "consulta", columns: [{ key: "campo_que_nao_existe", header: "Qualquer" }],
+  });
+  assert.equal(inventada.columns[0].key, "");
+  assert.deepEqual(RequestsReport.applyExportTemplate(inventada, [{ campo_que_nao_existe: "valor" }]).rows, [[""]]);
+});
+
+check("modelo importado do painel oficial reproduz a estrutura e não inventa coluna", () => {
+  // Cabeçalho real do Controle de Solicitações, com uma coluna que só existe na
+  // planilha da equipe.
+  const resultado = RequestsReport.importExportTemplate("Painel da equipe", [
+    "ITEM",
+    "responsavel pela atividade",      // caixa diferente: mesmo rótulo
+    "Disponibilizado no PW - N-1710",  // hífen comum no lugar do curto
+    "Coluna que só existe na rede",
+    "",
+  ], "controle");
+
+  const modelo = resultado.template;
+  assert.equal(modelo.columns.length, 4, "a linha vazia não vira coluna");
+  // A grafia do arquivo do usuário é preservada: o modelo é a planilha dele.
+  assert.equal(modelo.columns[1].header, "responsavel pela atividade");
+  assert.equal(modelo.columns[1].key, "owner");
+  assert.equal(modelo.columns[2].key, "pwN1710");
+  // O que o GRCON não reconhece fica sem chave, sai em branco e é informado.
+  assert.equal(modelo.columns[3].key, "");
+  assert.deepEqual(resultado.unmatched, ["Coluna que só existe na rede"]);
+  assert.equal(resultado.matched, 3);
+
+  const saida = RequestsReport.applyExportTemplate(modelo, [{ item: "557", owner: "Laís", pwN1710: "sim" }]);
+  assert.deepEqual(saida.rows, [["557", "Laís", "sim", ""]]);
+});
+
+check("importação de modelo casa por nome idêntico, nunca por semelhança", () => {
+  // "Documento" e "Caminho do Documento" são colunas diferentes da planilha
+  // oficial. Casar por aproximação encheria uma com o conteúdo da outra.
+  const resultado = RequestsReport.importExportTemplate("Aproximado", [
+    "Documento",
+    "Documentos",
+    "Caminho",
+  ], "controle");
+  assert.equal(resultado.template.columns[0].key, "document");
+  assert.equal(resultado.template.columns[1].key, "", "plural não é o mesmo rótulo");
+  assert.equal(resultado.template.columns[2].key, "", "prefixo não é o mesmo rótulo");
+  assert.equal(resultado.matched, 1);
+});
+
+check("prévia do modelo mostra as linhas reais e diz quantas ficaram de fora", () => {
+  const modelo = RequestsReport.BUILTIN_EXPORT_TEMPLATES.find((item) => item.base === "consulta");
+  assert.ok(modelo.builtIn, "os modelos embutidos existem sem depender de cadastro");
+  const linhas = Array.from({ length: 7 }, (_, indice) => ({ document: `DOC-${indice + 1}`, situation: "Localizado" }));
+  const previa = RequestsReport.previewExportTemplate(modelo, linhas, 5);
+  assert.equal(previa.rows.length, 5);
+  assert.equal(previa.total, 7);
+  assert.equal(previa.hidden, 2);
+  // Sem dado não há prévia inventada.
+  assert.deepEqual(RequestsReport.previewExportTemplate(modelo, [], 5).rows, []);
+});
+
+check("modelos de exportação passam pelo banco com papel conferido e sem RLS nova", () => {
+  const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.21.sql"), "utf8");
+  // Tabela no schema privado, fora do PostgREST, e sem privilégio direto.
+  assert.match(sql, /create table if not exists private\.grcon_export_templates/);
+  assert.match(sql, /revoke all on table private\.grcon_export_templates from public, anon, authenticated;/);
+  // Ler é de qualquer membro; salvar e excluir, só do proprietário.
+  assert.match(sql, /private\.grcon_is_member\(target_workspace\)/);
+  assert.match(sql, /Somente o proprietário pode salvar modelos de exportação/);
+  assert.match(sql, /Somente o proprietário pode excluir modelos de exportação/);
+  // Base é lista fechada: uma base desconhecida só apareceria na exportação.
+  assert.match(sql, /base_limpa not in \('consulta', 'controle'\)/);
+  // A restrição do usuário vale sem exceção: nenhuma política de RLS é criada.
+  assert.doesNotMatch(sql, /create policy/i);
+  assert.doesNotMatch(sql, /alter policy/i);
+  assert.doesNotMatch(sql, /drop policy/i);
+
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  assert.match(cloud, /grcon_get_export_templates/);
+  assert.match(cloud, /grcon_save_export_template/);
+  assert.match(cloud, /grcon_delete_export_template/);
+
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  // Sem área compartilhada o modelo ainda é salvo aqui: quem trabalha sozinho
+  // não pode ficar sem o recurso.
+  assert.match(app, /grcon-requests-export-templates/);
+  // Repetir a última exportação nunca troca de modelo por conta própria.
+  assert.match(app, /não existe mais\. Escolha outro para exportar/);
 });
 
 check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
@@ -643,6 +1072,40 @@ check("aplicativo aguarda reserva antes das três gerações", () => {
 check("fluxo acelerado preenche A4 quando a LD não informa o formato", () => {
   const source = fs.readFileSync(path.join(root, "app.js"), "utf8");
   assert.match(source, /rawResults\.forEach\(\(result\)\s*=>\s*\{[\s\S]*?const formatDefaulted = Boolean\(result\.egrdt && !result\.egrdt\.format\);[\s\S]*?if \(formatDefaulted\) result\.egrdt\.format = "A4";[\s\S]*?const logical = logicalMeta\.get\(result\.id\);/);
+});
+
+check("central de alocação é compartilhada pelo banco e só o proprietário altera", () => {
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  for (const rpc of ["grcon_get_allocation_center", "grcon_set_allocation_center", "grcon_clear_allocation_center"]) {
+    assert.match(cloud, new RegExp(`rpc\\("${rpc}"`));
+  }
+  // Gravar e remover exigem o papel de proprietário antes de chamar o banco.
+  assert.match(cloud, /async function saveAllocationCenter[\s\S]*?if \(!canManageMembers\(\)\)/);
+  assert.match(cloud, /async function clearAllocationCenter[\s\S]*?if \(!canManageMembers\(\)\)/);
+  // A carga entra junto com o restante da área compartilhada, no login.
+  assert.match(cloud, /await loadMembers\(\);\s*await loadAllocationCenter\(\);/);
+
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  // Remover só a cópia local deixaria o cadastro voltar na próxima leitura.
+  assert.match(app, /Cloud\?\.clearAllocationCenter/);
+  assert.match(app, /Cloud\?\.saveAllocationCenter/);
+  assert.match(app, /window\.addEventListener\("grcon:allocation-center-updated"/);
+});
+
+check("migração da central usa invólucro invoker e confere o papel no schema privado", () => {
+  const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.6.sql"), "utf8");
+  assert.match(sql, /revoke all on table private\.grcon_allocation_center from public, anon, authenticated;/);
+  // Escrita e remoção só para owner; leitura para qualquer membro ativo.
+  assert.equal((sql.match(/private\.grcon_has_role\(target_workspace, array\['owner'\]\)/g) || []).length, 2);
+  assert.match(sql, /private\.grcon_is_member\(target_workspace\)/);
+  for (const name of ["grcon_get_allocation_center", "grcon_set_allocation_center", "grcon_clear_allocation_center"]) {
+    const wrapper = sql.match(new RegExp(`create or replace function public\\.${name}[\\s\\S]*?\\$\\$;`));
+    assert.ok(wrapper, `falta o invólucro público de ${name}`);
+    assert.match(wrapper[0], /security invoker/);
+    assert.doesNotMatch(wrapper[0], /security definer/);
+  }
+  // Nenhuma política de RLS é criada nesta migração.
+  assert.doesNotMatch(sql, /create\s+policy/i);
 });
 
 check("sincronização usa RPC de exclusão e evita a segunda leitura quando não há envio", () => {

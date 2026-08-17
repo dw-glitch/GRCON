@@ -1769,22 +1769,6 @@ body.p2-dark .app-shortcut-link:hover {
   .app-shortcut-link { flex: 1 1 auto; min-width: 0; }
 }
 
-/* Cadastro de destinatários do e-mail da evidência, dentro de Configurações.
-   Segue o mesmo padrão da seção "Limite por eGRDT" logo acima. */
-html[data-app="GRCON"] .email-draft-settings{
-  display:grid;gap:.5rem;margin-top:.6rem;padding:.7rem;
-  border:1px solid var(--border-1,#dce4ea);border-radius:.6rem;
-  background:var(--surface-2,#f7fafc);
-}
-html[data-app="GRCON"] .email-draft-settings > div{display:grid;gap:.15rem}
-html[data-app="GRCON"] .email-draft-settings small{color:var(--text-3,#6f8296);font-size:.72rem}
-html[data-app="GRCON"] .email-draft-settings label{display:grid;gap:.2rem;font-size:.76rem;color:var(--text-2,#385069)}
-html[data-app="GRCON"] .email-draft-settings input{
-  height:2rem;padding:0 .55rem;border:1px solid var(--border-2,#cbd7e1);
-  border-radius:.45rem;font-size:.8rem;min-width:0;
-}
-html[data-app="GRCON"] .email-draft-settings button{justify-self:start}
-html[data-app="GRCON"] #prepare-email-draft{white-space:nowrap}
 
 /* Cadastro da central de alocação — a planilha de rede de onde a coluna
    STATUS INTERNO do relatório puxa o comentário da fiscal. Mesmo padrão visual
@@ -1807,11 +1791,13 @@ html[data-app="GRCON"] .allocation-center-settings #allocation-center-key,
 html[data-app="GRCON"] .allocation-center-settings #allocation-center-comment{max-width:5rem;text-transform:uppercase}
 html[data-app="GRCON"] .allocation-center-settings #allocation-center-last-row{max-width:9rem}
 html[data-app="GRCON"] .allocation-center-hint{line-height:1.45}
+html[data-app="GRCON"] .allocation-center-owner-note{line-height:1.45;font-style:italic}
 @media (min-width:44rem){
   html[data-app="GRCON"] .allocation-center-settings{grid-template-columns:1fr 1fr}
   html[data-app="GRCON"] .allocation-center-settings > div:first-child,
   html[data-app="GRCON"] .allocation-center-settings > label:first-of-type,
   html[data-app="GRCON"] .allocation-center-hint,
+  html[data-app="GRCON"] .allocation-center-owner-note,
   html[data-app="GRCON"] .allocation-center-settings .settings-inline-actions{grid-column:1 / -1}
 }
 
@@ -1839,35 +1825,3 @@ html[data-app="GRCON"] .nt-rename-fields dt{font-size:.66rem;font-weight:800;tex
 html[data-app="GRCON"] .nt-rename-fields dd{margin:.1rem 0 0;font-size:.78rem;color:var(--text-1);overflow-wrap:anywhere}
 html[data-app="GRCON"] .nt-rename-panel > p{margin:.2rem 0 0;font-size:.72rem;color:var(--text-2)}
 
-/* Aba "E-mails de evidência": fila de rascunhos por eGRDT. */
-html[data-app="GRCON"] .emails-summary{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.6rem;margin:0 0 .9rem;
-}
-html[data-app="GRCON"] .emails-summary > div{
-  display:grid;gap:.2rem;padding:.7rem .8rem;border:1px solid var(--border-1,#dce4ea);
-  border-radius:.6rem;background:var(--surface-1,#fff);
-}
-html[data-app="GRCON"] .emails-summary span{font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-3,#6f8296)}
-html[data-app="GRCON"] .emails-summary strong{font-size:1.25rem;color:var(--brand-strong,#123f61)}
-html[data-app="GRCON"] .emails-toolbar{
-  display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.9rem;
-}
-html[data-app="GRCON"] .emails-toolbar small{color:var(--text-3,#6f8296);font-size:.74rem}
-html[data-app="GRCON"] #emails-recipients{overflow-wrap:anywhere}
-html[data-app="GRCON"] #emails-recipients.sem-destinatario{
-  padding:.25rem .5rem;border-radius:.35rem;font-weight:600;
-  color:var(--warning-800,#8a5c08);background:var(--warning-100,#fff3cf);
-}
-html[data-app="GRCON"] .emails-list{display:grid;gap:.6rem}
-html[data-app="GRCON"] .email-card{
-  display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
-  padding:.8rem .9rem;border:1px solid var(--border-1,#dce4ea);border-radius:.7rem;
-  background:var(--surface-1,#fff);
-}
-html[data-app="GRCON"] .email-card.is-generated{background:var(--surface-2,#f6f9fb)}
-html[data-app="GRCON"] .email-card-main{display:grid;gap:.15rem;min-width:0}
-html[data-app="GRCON"] .email-card-main strong{color:var(--brand-strong,#123f61);font-size:.9rem;overflow-wrap:anywhere}
-html[data-app="GRCON"] .email-card-main span{color:var(--text-2,#385069);font-size:.78rem}
-html[data-app="GRCON"] .email-card-flag{font-size:.72rem;color:var(--text-3,#6f8296)}
-html[data-app="GRCON"] .email-card-flag.pendente{color:var(--warning-800,#8a5c08);font-weight:600}
-html[data-app="GRCON"] .email-card-actions{display:flex;gap:.4rem;flex-wrap:wrap}
