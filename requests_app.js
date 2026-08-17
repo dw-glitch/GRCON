@@ -31,6 +31,12 @@
     undo: [],          // pilha de estados anteriores da lista de documentos
     requestRows: [],   // itens gerados para a solicitação; depois de gerados, a tabela manda
     requestUndo: [],   // pilha para desfazer alterações em lote
+    painelItems: [],   // itens vindos da área compartilhada
+    painelQuick: "todos",
+    painelSearch: "",
+    painelStatus: "",
+    painelOwner: "",
+    painelSelected: new Set(),
   };
 
   let proximoId = 1;
@@ -609,10 +615,157 @@
         return;
       }
       els.reqSaved.textContent = `${itens.length} item(ns) salvos em ${numero}.`;
+      window.dispatchEvent(new CustomEvent("grcon:requests-saved"));
       notify(`Solicitação ${numero} salva com ${itens.length} item(ns).`, "success");
     } finally {
       els.reqSave.disabled = false;
     }
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Painel de acompanhamento
+  //
+  // Mostra o que está gravado na área compartilhada, não o que está na tela: as
+  // alterações feitas aqui valem para todos e passam pelo banco, que registra
+  // cada uma no histórico do item.
+  // ---------------------------------------------------------------------------
+  const STATUS_ABERTOS = new Set(["rascunho", "recebido", "em_triagem", "aguardando_info", "pendente", "em_execucao", "aguardando_validacao"]);
+
+  function rotuloStatus(codigo) {
+    const encontrado = R().REQUEST_STATUSES.find((item) => item.code === codigo);
+    return encontrado ? encontrado.label : (codigo || "—");
+  }
+
+  async function carregarPainel() {
+    const Cloud = root.GrconCloud;
+    if (!Cloud || !Cloud.listRequestItems) return;
+    if (els.painelReload) els.painelReload.disabled = true;
+    try {
+      state.painelItems = await Cloud.listRequestItems();
+      state.painelSelected.clear();
+      renderPainel();
+    } finally {
+      if (els.painelReload) els.painelReload.disabled = false;
+    }
+  }
+
+  function itensDoPainel() {
+    const busca = state.painelSearch.trim().toLowerCase();
+    return state.painelItems.filter((item) => {
+      if (state.painelStatus && item.status !== state.painelStatus) return false;
+      if (state.painelOwner && (item.owner_name || "") !== state.painelOwner) return false;
+      if (state.painelQuick === "abertos" && !STATUS_ABERTOS.has(item.status)) return false;
+      if (state.painelQuick === "validar" && !item.needs_manual_validation) return false;
+      if (state.painelQuick === "novos" && !/novo/i.test(item.classification || "")) return false;
+      if (state.painelQuick === "sem-responsavel" && (item.owner_name || "").trim()) return false;
+      if (state.painelQuick === "concluidos" && item.status !== "concluido") return false;
+      if (busca) {
+        const campos = [item.protocol, item.document, item.request_number, item.owner_name, item.type_code, item.requester];
+        if (!campos.filter(Boolean).some((valor) => String(valor).toLowerCase().includes(busca))) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderPainel() {
+    if (!els.painelTbody) return;
+    const todos = state.painelItems;
+    const visiveis = itensDoPainel();
+
+    // Indicadores: contam o conjunto inteiro, não o filtrado — senão o painel
+    // diria que não há pendências só porque o filtro escondeu.
+    const conta = (fn) => todos.filter(fn).length;
+    const indicadores = [
+      ["Itens registrados", todos.length, ""],
+      ["Em aberto", conta((i) => STATUS_ABERTOS.has(i.status)), "alerta"],
+      ["Aguardando validação", conta((i) => i.needs_manual_validation), "alerta"],
+      ["Documentos novos", conta((i) => /novo/i.test(i.classification || "")), ""],
+      ["Sem responsável", conta((i) => !(i.owner_name || "").trim()), "erro"],
+      ["Concluídos", conta((i) => i.status === "concluido"), "ok"],
+    ];
+    els.indicators.innerHTML = indicadores.map(([rotulo, valor, classe]) =>
+      `<div class="${classe}"><span>${rotulo}</span><strong>${valor.toLocaleString("pt-BR")}</strong></div>`).join("");
+    if (els.painelCount) {
+      const abertos = conta((i) => STATUS_ABERTOS.has(i.status));
+      els.painelCount.hidden = !abertos;
+      els.painelCount.textContent = String(abertos);
+    }
+
+    els.painelEmpty.hidden = Boolean(todos.length);
+    els.painelTableWrap.hidden = !todos.length;
+
+    els.painelTbody.innerHTML = visiveis.map((item) => `<tr${item.needs_manual_validation ? ' class="precisa-validar"' : ""}>
+      <td class="requests-col-check"><input aria-label="Selecionar ${escapeHtml(item.protocol)}" data-painel-select="${escapeHtml(item.protocol)}" type="checkbox"${state.painelSelected.has(item.protocol) ? " checked" : ""}/></td>
+      <td><strong>${escapeHtml(item.protocol)}</strong></td>
+      <td>${escapeHtml(item.request_number || "—")}</td>
+      <td><code>${escapeHtml(item.document || "—")}</code></td>
+      <td>${escapeHtml(item.type_code || "—")}</td>
+      <td>${escapeHtml(item.owner_name || "—")}</td>
+      <td>${escapeHtml(rotuloStatus(item.status))}</td>
+      <td>${escapeHtml(item.classification || "—")}</td>
+      <td>${escapeHtml((item.observations || "").slice(0, 90))}</td>
+    </tr>`).join("");
+
+    // Listas de filtro montadas a partir do que existe, não de uma lista fixa.
+    if (els.painelStatusSelect && els.painelStatusSelect.options.length <= 1) {
+      R().REQUEST_STATUSES.forEach((estado) => {
+        const opcao = document.createElement("option");
+        opcao.value = estado.code; opcao.textContent = estado.label;
+        els.painelStatusSelect.appendChild(opcao);
+        const outra = opcao.cloneNode(true);
+        if (els.painelSetStatus) els.painelSetStatus.appendChild(outra);
+      });
+    }
+    const responsaveis = [...new Set(todos.map((i) => (i.owner_name || "").trim()).filter(Boolean))].sort();
+    if (els.painelOwnerSelect && els.painelOwnerSelect.options.length - 1 !== responsaveis.length) {
+      els.painelOwnerSelect.innerHTML = '<option value="">Todos</option>' +
+        responsaveis.map((nome) => `<option>${escapeHtml(nome)}</option>`).join("");
+      els.painelOwnerSelect.value = state.painelOwner;
+    }
+
+    els.painelBatch.hidden = !state.painelSelected.size;
+    if (els.painelSelectedCount) els.painelSelectedCount.textContent = `${state.painelSelected.size} selecionado(s)`;
+  }
+
+  async function aplicarNoPainel() {
+    const Cloud = root.GrconCloud;
+    if (!Cloud || !Cloud.updateRequestItems) return;
+    const protocolos = [...state.painelSelected];
+    if (!protocolos.length) return;
+    const novoStatus = els.painelSetStatus ? els.painelSetStatus.value : "";
+    const novoResponsavel = els.painelSetOwner ? els.painelSetOwner.value.trim() : "";
+    const nota = els.painelNote ? els.painelNote.value.trim() : "";
+    if (!novoStatus && !novoResponsavel) { notify("Escolha um status ou informe um responsável.", "warn"); return; }
+
+    els.painelApply.disabled = true;
+    try {
+      // Uma chamada por campo: o banco grava o valor anterior e o novo em cada
+      // item, e é isso que permite reconstruir depois quem mudou o quê.
+      if (novoStatus) {
+        const r = await Cloud.updateRequestItems(protocolos, "status", novoStatus, nota);
+        if (!r.ok) { notify(r.error, "warn"); return; }
+      }
+      if (novoResponsavel) {
+        const r = await Cloud.updateRequestItems(protocolos, "owner_name", novoResponsavel, nota);
+        if (!r.ok) { notify(r.error, "warn"); return; }
+      }
+      if (els.painelNote) els.painelNote.value = "";
+      notify(`${protocolos.length} item(ns) atualizados para todos.`, "success");
+      await carregarPainel();
+    } finally {
+      els.painelApply.disabled = false;
+    }
+  }
+
+  function mostrarArea(area) {
+    const consulta = area !== "painel";
+    els.areaConsulta.hidden = !consulta;
+    els.areaPainel.hidden = consulta;
+    document.querySelectorAll("[data-requests-area]").forEach((botao) => {
+      botao.classList.toggle("active", botao.dataset.requestsArea === area);
+    });
+    if (!consulta) carregarPainel();
   }
 
   // ---------------------------------------------------------------------------
@@ -678,6 +831,25 @@
     els.batchAll = $("#requests-batch-all");
     els.reqSave = $("#requests-req-save");
     els.reqSaved = $("#requests-req-saved");
+    els.areaConsulta = $("#requests-area-consulta");
+    els.areaPainel = $("#requests-area-painel");
+    els.painelCount = $("#requests-painel-count");
+    els.indicators = $("#requests-indicators");
+    els.painelTbody = $("#requests-painel-tbody");
+    els.painelTableWrap = $("#requests-painel-table-wrap");
+    els.painelEmpty = $("#requests-painel-empty");
+    els.painelSearch = $("#requests-painel-search");
+    els.painelStatusSelect = $("#requests-painel-status");
+    els.painelOwnerSelect = $("#requests-painel-owner");
+    els.painelClear = $("#requests-painel-clear");
+    els.painelReload = $("#requests-painel-reload");
+    els.painelAll = $("#requests-painel-all");
+    els.painelBatch = $("#requests-painel-batch");
+    els.painelSelectedCount = $("#requests-painel-selected");
+    els.painelSetStatus = $("#requests-painel-set-status");
+    els.painelSetOwner = $("#requests-painel-set-owner");
+    els.painelNote = $("#requests-painel-note");
+    els.painelApply = $("#requests-painel-apply");
     els.step1 = $("#requests-step-1");
     els.step2 = $("#requests-step-2");
     els.step3 = $("#requests-step-3");
@@ -742,6 +914,38 @@
     els.batchApply.addEventListener("click", aplicarEmLote);
     els.batchUndo.addEventListener("click", desfazerLote);
     els.reqSave.addEventListener("click", salvarSolicitacao);
+    document.querySelectorAll("[data-requests-area]").forEach((botao) =>
+      botao.addEventListener("click", () => mostrarArea(botao.dataset.requestsArea)));
+    els.painelReload.addEventListener("click", carregarPainel);
+    els.painelApply.addEventListener("click", aplicarNoPainel);
+    els.painelSearch.addEventListener("input", (evento) => { state.painelSearch = evento.target.value; renderPainel(); });
+    els.painelStatusSelect.addEventListener("change", (evento) => { state.painelStatus = evento.target.value; renderPainel(); });
+    els.painelOwnerSelect.addEventListener("change", (evento) => { state.painelOwner = evento.target.value; renderPainel(); });
+    els.painelClear.addEventListener("click", () => {
+      state.painelQuick = "todos"; state.painelSearch = ""; state.painelStatus = ""; state.painelOwner = "";
+      els.painelSearch.value = ""; els.painelStatusSelect.value = ""; els.painelOwnerSelect.value = "";
+      document.querySelectorAll("[data-quick]").forEach((chip) => chip.classList.toggle("active", chip.dataset.quick === "todos"));
+      renderPainel();
+    });
+    document.querySelectorAll("[data-quick]").forEach((chip) => chip.addEventListener("click", () => {
+      state.painelQuick = chip.dataset.quick;
+      document.querySelectorAll("[data-quick]").forEach((outro) => outro.classList.toggle("active", outro === chip));
+      renderPainel();
+    }));
+    els.painelTbody.addEventListener("change", (evento) => {
+      const caixa = evento.target.closest("[data-painel-select]");
+      if (!caixa) return;
+      const protocolo = caixa.dataset.painelSelect;
+      if (caixa.checked) state.painelSelected.add(protocolo); else state.painelSelected.delete(protocolo);
+      renderPainel();
+    });
+    els.painelAll.addEventListener("change", () => {
+      state.painelSelected.clear();
+      if (els.painelAll.checked) itensDoPainel().forEach((item) => state.painelSelected.add(item.protocol));
+      renderPainel();
+    });
+    // Depois de gravar, o painel deixa de estar desatualizado.
+    window.addEventListener("grcon:requests-saved", carregarPainel);
     els.batchAll.addEventListener("change", () => {
       state.requestRows.forEach((linha) => { linha._selected = els.batchAll.checked; });
       renderPainelSolicitacao();

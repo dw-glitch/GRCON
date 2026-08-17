@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.17" data-version="5.32.17" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.18" data-version="5.32.18" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -17,7 +17,7 @@
 <link href="requests.css" rel="stylesheet"/>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.32.17" name="application-version"/></head>
+<meta content="5.32.18" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -275,6 +275,11 @@
 <section id="requests-module" class="requests-module" hidden="" role="tabpanel" aria-labelledby="tab-requests">
 <header class="ops-page-heading"><div><h2>Consultas e Solicitações</h2><p>Consulte o que perguntam sobre cada documento e registre os pedidos recebidos.</p></div></header>
 
+<nav class="requests-subnav" aria-label="Áreas de Consultas e Solicitações">
+<button class="requests-subnav-button active" data-requests-area="consulta" type="button">Consulta e nova solicitação</button>
+<button class="requests-subnav-button" data-requests-area="painel" type="button">Acompanhamento<b hidden id="requests-painel-count">0</b></button>
+</nav>
+<div id="requests-area-consulta">
 <ol class="requests-steps" aria-label="Etapas da consulta">
 <li class="requests-step is-current" id="requests-step-1"><b>1</b><span><strong>Anexar as LDs</strong><small id="requests-step-1-note">Nenhuma LD carregada</small></span></li>
 <li class="requests-step" id="requests-step-2"><b>2</b><span><strong>Informar os documentos</strong><small id="requests-step-2-note">Nenhum documento na lista</small></span></li>
@@ -385,6 +390,43 @@
 <empty-state class="requests-empty" id="requests-empty"><strong>Nenhuma consulta ainda</strong><span>Anexe uma LD, informe os documentos e clique em “Consultar todos”.</span></empty-state>
 <div class="requests-summary" hidden id="requests-summary"></div>
 </section>
+</div>
+
+<div hidden id="requests-area-painel">
+<section class="requests-indicators" id="requests-indicators" aria-label="Indicadores das solicitações"></section>
+<section class="requests-panel" aria-labelledby="requests-painel-title">
+<div class="requests-panel-head"><h3 id="requests-painel-title">Solicitações registradas</h3><small>O que está gravado na área compartilhada. As alterações valem para todos.</small></div>
+<div class="requests-quick-filters" id="requests-quick-filters">
+<button class="requests-chip active" data-quick="todos" type="button">Todos</button>
+<button class="requests-chip" data-quick="abertos" type="button">Em aberto</button>
+<button class="requests-chip" data-quick="validar" type="button">Aguardando validação</button>
+<button class="requests-chip" data-quick="novos" type="button">Documentos novos</button>
+<button class="requests-chip" data-quick="sem-responsavel" type="button">Sem responsável</button>
+<button class="requests-chip" data-quick="concluidos" type="button">Concluídos</button>
+</div>
+<div class="requests-results-tools">
+<label class="requests-search"><svg aria-hidden="true" viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input id="requests-painel-search" placeholder="Buscar protocolo, documento, solicitação ou responsável" type="search"/></label>
+<label><span>Status</span><select id="requests-painel-status"><option value="">Todos</option></select></label>
+<label><span>Responsável</span><select id="requests-painel-owner"><option value="">Todos</option></select></label>
+<button class="text-button" id="requests-painel-clear" type="button">Limpar filtros</button>
+<button class="secondary-button compact" id="requests-painel-reload" type="button">Atualizar</button>
+</div>
+<div class="requests-batch-bar" hidden id="requests-painel-batch">
+<strong id="requests-painel-selected">0 selecionados</strong>
+<label><span>Novo status</span><select id="requests-painel-set-status"><option value="">—</option></select></label>
+<label><span>Responsável</span><input id="requests-painel-set-owner" autocomplete="off" type="text" placeholder="Nome"/></label>
+<label class="requests-batch-wide"><span>Observação do registro</span><input id="requests-painel-note" autocomplete="off" type="text" placeholder="Motivo da alteração, guardado no histórico"/></label>
+<button class="secondary-button compact" id="requests-painel-apply" type="button">Aplicar aos selecionados</button>
+</div>
+<div class="requests-batch-table-wrap" id="requests-painel-table-wrap">
+<table class="requests-batch-table">
+<thead><tr><th class="requests-col-check"><input aria-label="Selecionar todos" id="requests-painel-all" type="checkbox"/></th><th>Protocolo</th><th>Solicitação</th><th>Documento</th><th>Descrição</th><th>Responsável</th><th>Status</th><th>Classificação</th><th>Observações</th></tr></thead>
+<tbody id="requests-painel-tbody"></tbody>
+</table>
+</div>
+<empty-state class="requests-empty" id="requests-painel-empty"><strong>Nenhuma solicitação registrada</strong><span>Gere uma solicitação a partir da consulta e clique em “Salvar no GRCON”.</span></empty-state>
+</section>
+</div>
 </section>
 <section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
 <header class="analysis-history-heading"><div><span>RASTREABILIDADE DAS ANÁLISES</span><h2 id="analysis-history-title">Todos os documentos analisados pelo GRCON</h2><p>Cada análise concluída é registrada com data, documento, revisão, situação entregue e motivo.</p></div><div class="analysis-history-actions"><button class="secondary-button" id="analysis-history-backup" type="button">Fazer backup</button><button class="secondary-button" id="analysis-history-restore" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="analysis-history-restore-input" type="file"/><button class="secondary-button" disabled="" id="analysis-history-delete-session" type="button">Excluir análise selecionada</button><button class="secondary-button" id="analysis-history-clear" type="button">Limpar todo o histórico</button></div></header>
@@ -485,7 +527,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.32.17 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.32.18 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">
