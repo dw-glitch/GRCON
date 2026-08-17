@@ -438,3 +438,29 @@ html[data-app="GRCON"][data-theme="dark"] .requests-modelo-form input,
 html[data-app="GRCON"][data-theme="dark"] .requests-modelo-form select,
 html[data-app="GRCON"][data-theme="dark"] .requests-modelo-coluna input { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
 html[data-app="GRCON"] .requests-modelo-base-atual { align-self: end; font-size: .73rem; color: var(--text-3, #6f8296); }
+
+/* Preencher a solicitação sem consulta: itens digitados à mão. */
+html[data-app="GRCON"] .requests-manual-add {
+  display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; align-items: end; margin: .6rem 0;
+}
+html[data-app="GRCON"] .requests-manual-add label { display: grid; gap: .18rem; font-size: .73rem; color: var(--text-2, #385069); }
+html[data-app="GRCON"] .requests-manual-add textarea {
+  padding: .4rem .5rem; border: 1px solid var(--border-2, #cbd7e1); border-radius: .45rem;
+  font-size: .78rem; resize: vertical; background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+html[data-app="GRCON"] .requests-full-toggle {
+  display: flex; align-items: center; gap: .4rem; margin: .5rem 0; font-size: .76rem; color: var(--text-2, #385069);
+}
+/* No modo completo cada célula é um campo; a tabela rola na horizontal. */
+html[data-app="GRCON"] .requests-batch-table input[type="text"] { min-width: 8rem; }
+html[data-app="GRCON"] .requests-request-grid textarea {
+  padding: .4rem .5rem; border: 1px solid var(--border-2, #cbd7e1); border-radius: .45rem;
+  font-size: .78rem; resize: vertical; background: var(--surface-1, #fff); color: var(--text-1, #17324a);
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-manual-add textarea,
+  html[data-app="GRCON"]:not([data-theme="light"]) .requests-request-grid textarea { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+}
+html[data-app="GRCON"][data-theme="dark"] .requests-manual-add textarea,
+html[data-app="GRCON"][data-theme="dark"] .requests-request-grid textarea { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }

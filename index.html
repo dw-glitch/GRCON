@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.21" data-version="5.32.21" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.22" data-version="5.32.22" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -17,7 +17,7 @@
 <link href="requests.css" rel="stylesheet"/>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.32.21" name="application-version"/></head>
+<meta content="5.32.22" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -276,7 +276,8 @@
 <header class="ops-page-heading"><div><h2>Consultas e Solicitações</h2><p>Consulte o que perguntam sobre cada documento e registre os pedidos recebidos.</p></div></header>
 
 <nav class="requests-subnav" aria-label="Áreas de Consultas e Solicitações">
-<button class="requests-subnav-button active" data-requests-area="consulta" type="button">Consulta e nova solicitação</button>
+<button class="requests-subnav-button active" data-requests-area="consulta" type="button">Consulta de documentos</button>
+<button class="requests-subnav-button" data-requests-area="solicitacao" type="button">Nova solicitação</button>
 <button class="requests-subnav-button" data-requests-area="painel" type="button">Acompanhamento<b hidden id="requests-painel-count">0</b></button>
 <button class="requests-subnav-button" data-requests-area="tipos" type="button">Tipos de solicitação</button>
 <button class="requests-subnav-button" data-requests-area="modelos" type="button">Modelos de exportação</button>
@@ -328,49 +329,13 @@
 <button class="secondary-button compact" disabled id="requests-export" type="button">Exportar para Excel</button>
 <button class="text-button" hidden id="requests-modelo-repeat" type="button">Repetir a última exportação</button>
 <span class="requests-actions-divider" aria-hidden="true"></span>
-<button class="secondary-button compact" disabled id="requests-to-request" type="button">Transformar em solicitação</button>
+<button class="secondary-button compact" disabled id="requests-to-request" type="button">Enviar selecionados para Nova solicitação</button>
 <span class="requests-actions-divider" aria-hidden="true"></span>
 <button class="text-button" disabled id="requests-undo" type="button">Desfazer</button>
 <button class="text-button danger" disabled id="requests-clear" type="button">Limpar consulta</button>
 <span class="requests-selection-note" aria-live="polite" id="requests-selection-note"></span>
 </section>
 
-<section class="requests-panel requests-request-panel" hidden id="requests-request-panel" aria-labelledby="requests-request-title">
-<div class="requests-panel-head"><h3 id="requests-request-title">Nova solicitação a partir da consulta</h3><small>Um item por documento, numerado na sequência do Controle de Solicitações. O que a LD já respondeu vem preenchido.</small></div>
-<div class="requests-request-grid">
-<label><span>Número da solicitação</span><input id="requests-req-number" autocomplete="off" type="text" placeholder="SOL-2026-014"/></label>
-<label><span>Próximo item</span><input id="requests-req-next-item" inputmode="numeric" min="1" type="number"/></label>
-<label><span>Responsável pela atividade</span><input id="requests-req-owner" autocomplete="off" list="requests-req-owner-list" type="text"/><datalist id="requests-req-owner-list"></datalist></label>
-<label><span>Data de recebimento</span><input id="requests-req-received" type="date"/></label>
-<label><span>Solicitante / Área</span><input id="requests-req-requester" autocomplete="off" type="text"/></label>
-<label><span>Descrição da solicitação</span><select id="requests-req-type"></select></label>
-<label><span>Origem</span><select id="requests-req-origin"><option>E-MAIL</option><option>TEAMS</option><option>na</option></select></label>
-<label class="requests-request-wide"><span>Caminho do documento (opcional)</span><input id="requests-req-path" autocomplete="off" type="text" placeholder="Arquivo Técnico &gt; Solicitações &gt; …"/></label>
-</div>
-<div class="requests-request-preview" id="requests-req-preview"></div>
-<div class="requests-batch-bar" hidden id="requests-batch-bar">
-<strong id="requests-batch-count">0 selecionados</strong>
-<label><span>Descrição</span><select id="requests-batch-type"><option value="">—</option></select></label>
-<label><span>Responsável</span><input id="requests-batch-owner" autocomplete="off" type="text" placeholder="Nome"/></label>
-<label><span>Inclusão na LD?</span><select id="requests-batch-inclusion"><option value="">—</option><option value="sim">sim</option><option value="não">não</option><option value="na">na</option></select></label>
-<label class="requests-batch-wide"><span>Observação</span><input id="requests-batch-note" autocomplete="off" type="text" placeholder="Acrescentar ao final da observação"/></label>
-<button class="secondary-button compact" id="requests-batch-apply" type="button">Aplicar aos selecionados</button>
-<button class="text-button" id="requests-batch-undo" type="button" disabled>Desfazer</button>
-</div>
-<div class="requests-batch-table-wrap" hidden id="requests-batch-table-wrap">
-<table class="requests-batch-table">
-<thead><tr><th class="requests-col-check"><input aria-label="Selecionar todos os itens" id="requests-batch-all" type="checkbox" checked/></th><th>ITEM</th><th>Documento</th><th>Descrição da Solicitação</th><th>Responsável</th><th>Inclusão na LD?</th><th>Alocação</th><th>Status SIGEM</th><th>Observações</th></tr></thead>
-<tbody id="requests-batch-tbody"></tbody>
-</table>
-</div>
-<div class="requests-inline-actions">
-<button class="primary-button" id="requests-req-copy" type="button">Copiar linhas para a planilha</button>
-<button class="secondary-button compact" id="requests-req-copy-headers" type="button">Copiar com cabeçalho</button>
-<button class="secondary-button compact" id="requests-req-save" type="button">Salvar no GRCON</button>
-<span class="requests-req-saved" aria-live="polite" id="requests-req-saved"></span>
-<button class="text-button" id="requests-req-close" type="button">Fechar</button>
-</div>
-</section>
 <section class="requests-results" aria-labelledby="requests-results-title">
 <div class="requests-results-head">
 <h3 id="requests-results-title">Resultado da consulta</h3>
@@ -393,6 +358,54 @@
 </div>
 <empty-state class="requests-empty" id="requests-empty"><strong>Nenhuma consulta ainda</strong><span>Anexe uma LD, informe os documentos e clique em “Consultar todos”.</span></empty-state>
 <div class="requests-summary" hidden id="requests-summary"></div>
+</section>
+</div>
+
+<div hidden id="requests-area-solicitacao">
+<section class="requests-panel requests-request-panel" id="requests-request-panel" aria-labelledby="requests-request-title">
+<div class="requests-panel-head"><h3 id="requests-request-title">Nova solicitação</h3><small>Um item por documento, numerado na sequência do Controle de Solicitações. Preencha e copie as linhas para a planilha de Controle de Solicitações. Não depende da consulta: use esta aba sozinha.</small></div>
+<div class="requests-request-grid">
+<label><span>Número da solicitação</span><input id="requests-req-number" autocomplete="off" type="text" placeholder="SOL-2026-014"/></label>
+<label><span>Próximo item</span><input id="requests-req-next-item" inputmode="numeric" min="1" type="number"/></label>
+<label><span>Responsável pela atividade</span><input id="requests-req-owner" autocomplete="off" list="requests-req-owner-list" type="text"/><datalist id="requests-req-owner-list"></datalist></label>
+<label><span>Data de recebimento</span><input id="requests-req-received" type="date"/></label>
+<label><span>Solicitante / Área</span><input id="requests-req-requester" autocomplete="off" type="text"/></label>
+<label><span>Descrição da solicitação</span><select id="requests-req-type"></select></label>
+<label><span>Origem</span><select id="requests-req-origin"><option>E-MAIL</option><option>TEAMS</option><option>na</option></select></label>
+<label><span>Tipo de Documento</span><input id="requests-req-family" autocomplete="off" list="requests-req-family-list" type="text" placeholder="ET"/><datalist id="requests-req-family-list"><option>ET</option><option>CV</option><option>MD</option><option>DE</option></datalist></label>
+<label><span>Status Geral da Solicitação</span><input id="requests-req-status" autocomplete="off" type="text" placeholder="Recebida"/></label>
+<label class="requests-request-wide"><span>Caminho do documento (opcional)</span><input id="requests-req-path" autocomplete="off" type="text" placeholder="Arquivo Técnico &gt; Solicitações &gt; …"/></label>
+<label class="requests-request-wide"><span>Corpo do e-mail</span><textarea id="requests-req-email" rows="2" placeholder="Cole aqui o texto do pedido recebido"></textarea></label>
+</div>
+<div class="requests-manual-add" id="requests-manual-add">
+<label><span>Documentos desta solicitação</span><textarea id="requests-manual-paste" rows="2" spellcheck="false" placeholder="Um por linha. Código e título podem vir separados por tabulação."></textarea></label>
+<button class="secondary-button compact" id="requests-manual-append" type="button">Acrescentar itens</button>
+<button class="text-button" id="requests-manual-blank" type="button">Acrescentar item em branco</button>
+</div>
+<div class="requests-request-preview" id="requests-req-preview"></div>
+<label class="requests-full-toggle"><input id="requests-batch-full" type="checkbox"/><span>Mostrar as 26 colunas da planilha</span></label>
+<div class="requests-batch-bar" hidden id="requests-batch-bar">
+<strong id="requests-batch-count">0 selecionados</strong>
+<label><span>Descrição</span><select id="requests-batch-type"><option value="">—</option></select></label>
+<label><span>Responsável</span><input id="requests-batch-owner" autocomplete="off" type="text" placeholder="Nome"/></label>
+<label><span>Inclusão na LD?</span><select id="requests-batch-inclusion"><option value="">—</option><option value="sim">sim</option><option value="não">não</option><option value="na">na</option></select></label>
+<label class="requests-batch-wide"><span>Observação</span><input id="requests-batch-note" autocomplete="off" type="text" placeholder="Acrescentar ao final da observação"/></label>
+<button class="secondary-button compact" id="requests-batch-apply" type="button">Aplicar aos selecionados</button>
+<button class="text-button" id="requests-batch-undo" type="button" disabled>Desfazer</button>
+</div>
+<div class="requests-batch-table-wrap" hidden id="requests-batch-table-wrap">
+<table class="requests-batch-table">
+<thead id="requests-batch-thead"><tr><th class="requests-col-check"><input aria-label="Selecionar todos os itens" id="requests-batch-all" type="checkbox" checked/></th><th>ITEM</th><th>Documento</th><th>Descrição da Solicitação</th><th>Responsável</th><th>Inclusão na LD?</th><th>Alocação</th><th>Status SIGEM</th><th>Observações</th></tr></thead>
+<tbody id="requests-batch-tbody"></tbody>
+</table>
+</div>
+<div class="requests-inline-actions">
+<button class="primary-button" id="requests-req-copy" type="button">Copiar linhas para a planilha</button>
+<button class="secondary-button compact" id="requests-req-copy-headers" type="button">Copiar com cabeçalho</button>
+<button class="secondary-button compact" id="requests-req-save" type="button">Salvar no GRCON</button>
+<span class="requests-req-saved" aria-live="polite" id="requests-req-saved"></span>
+<button class="text-button danger" id="requests-req-close" type="button">Limpar solicitação</button>
+</div>
 </section>
 </div>
 
@@ -598,7 +611,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.32.21 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.32.22 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">

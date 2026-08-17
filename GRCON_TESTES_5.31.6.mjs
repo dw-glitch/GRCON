@@ -557,6 +557,57 @@ check("exportação reproduz as 26 colunas do Controle de Solicitações", () =>
   assert.match(comCabecalho, /^ITEM\t/);
 });
 
+check("solicitação se preenche sem consulta e sem inventar classificação", () => {
+  // Um pedido que chega por e-mail não tem LD anexada. A linha precisa sair
+  // completa mesmo assim, com o que a pessoa informou — e sem que o GRCON
+  // atribua situação nenhuma ao documento, porque não conferiu nada.
+  const linhas = Requests.buildManualControlRows(
+    [{ document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", requestedTitle: "Relatório de inspeção" }],
+    { owner: "Laís", receivedAt: "17/08/2026", requester: "Gabriela Borges", requestType: "POSTAGEM NO SIGEM",
+      origin: "E-MAIL", documentFamily: "ET", emailBody: "Favor postar no SIGEM", documentPath: "Arquivo > Ago" },
+    [{ protocol: "556" }],
+  );
+  assert.equal(linhas.length, 1);
+  const linha = linhas[0];
+  assert.equal(linha.item, "557", "continua a numeração da planilha");
+  assert.equal(linha.owner, "Laís");
+  assert.equal(linha.documentFamily, "ET", "o tipo documental vem do cabeçalho quando não há LD");
+  assert.equal(linha.emailBody, "Favor postar no SIGEM");
+  assert.equal(linha.overallStatus, "Recebida");
+  // Sem LD não há classificação: nada de "não localizado" para quem nunca foi
+  // procurado, e nada de observação automática.
+  assert.equal(linha._classification, "");
+  assert.equal(linha._needsManualValidation, false);
+  assert.equal(linha.observations, "");
+  assert.equal(linha.needsLdInclusion, "", "sem LD, quem responde se precisa incluir é a pessoa");
+  // O título informado não vira título oficial: ninguém conferiu na LD.
+  assert.equal(linha._requestedTitle, "Relatório de inspeção");
+
+  // E a linha colável continua com as 26 colunas da planilha oficial.
+  assert.equal(RequestsReport.controlRows(linhas)[0].length, 26);
+});
+
+check("consulta e solicitação são abas independentes", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  // Cada uma na sua área, com botão próprio na subnavegação.
+  assert.match(html, /data-requests-area="consulta"/);
+  assert.match(html, /data-requests-area="solicitacao"/);
+  assert.match(html, /id="requests-area-solicitacao"/);
+
+  // O painel da solicitação não mora dentro da área da consulta: se morasse,
+  // registrar um pedido exigiria passar pela busca na LD.
+  const areaConsulta = html.slice(html.indexOf('<div id="requests-area-consulta">'), html.indexOf('<div hidden id="requests-area-solicitacao">'));
+  assert.doesNotMatch(areaConsulta, /id="requests-request-panel"/);
+
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  // Abrir a aba prepara o formulário; não exige documento consultado.
+  assert.match(app, /if \(area === "solicitacao"\) prepararFormularioDaSolicitacao\(\);/);
+  // Itens digitados à mão alimentam a solicitação por conta própria.
+  assert.match(app, /buildManualControlRows/);
+  // As 26 colunas ficam editáveis quando a pessoa precisa preencher tudo.
+  assert.match(app, /renderTabelaCompleta/);
+});
+
 check("modelo de exportação guarda ordem e nome das colunas escolhidas", () => {
   const modelo = RequestsReport.normalizeExportTemplate({
     name: "Minha planilha",

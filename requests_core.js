@@ -570,7 +570,9 @@
       receivedAt: text(cabecalho.receivedAt),
       requester: text(cabecalho.requester),
       // A família documental vem da aba em que a LD guardou o documento.
-      documentFamily: escolhida ? text(escolhida.sheet) : "",
+      // Com LD, a família vem da aba em que o documento foi achado. Sem LD, vem
+      // do que a pessoa informou no cabeçalho — nunca de suposição.
+      documentFamily: escolhida ? text(escolhida.sheet) : text(cabecalho.documentFamily),
       requestType: text(cabecalho.requestType),
       origin: text(cabecalho.origin),
       emailBody: text(cabecalho.emailBody),
@@ -600,6 +602,31 @@
    * itens a partir do próximo livre. É o caminho que evita redigitar o que o
    * GRCON já descobriu.
    */
+  /**
+   * Linhas de solicitação sem consulta à LD.
+   *
+   * Nem toda solicitação nasce de uma triagem: chega um pedido por e-mail e a
+   * pessoa precisa registrar e colar na planilha. Aqui não há classificação
+   * nenhuma — sem LD não há o que classificar, e inventar uma situação seria
+   * pior do que deixar em branco para ela preencher.
+   */
+  function buildManualControlRows(entries, header, existingItems) {
+    const numerados = assignItemNumbers(entries || [], existingItems);
+    return numerados.map((entrada) => ({
+      ...controlRowFromItem({
+        protocol: entrada.protocol,
+        document: entrada.document,
+        header: header || {},
+      }),
+      // O título informado não vira "título oficial": ninguém conferiu na LD.
+      _requestedTitle: text(entrada.requestedTitle),
+      _itemNumber: entrada.itemNumber,
+      _classification: "",
+      _needsManualValidation: false,
+      _manual: true,
+    }));
+  }
+
   function buildControlRows(entries, header, existingItems) {
     const numerados = assignItemNumbers(entries || [], existingItems);
     return numerados.map((entrada) => {
@@ -627,6 +654,7 @@
     CLASSIFICATIONS,
     controlRowFromItem,
     buildControlRows,
+    buildManualControlRows,
     compareTitles,
     classifyRequestItem,
     DEFAULT_REQUEST_TYPES,
