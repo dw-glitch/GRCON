@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.32.26";
+  const APP_VERSION = "5.32.27";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -63,8 +63,6 @@
   }
   const state = {
     ldFiles: [],
-    apendiceFile: null,
-    apendiceIndex: null,
     listFiles: [],
     textEntries: [],
     relationDraft: "",
@@ -111,7 +109,7 @@
     resultPage: 1,
     resultVersion: 0,
     filteredCache: { signature: "", indices: [] },
-    virtual: { rowHeight: 68, overscan: 14, start: 0, end: 0 },
+    virtual: { rowHeight: 68, overscan: 14, start: 0, end: 0, calibrating: false },
     resultDensity: "comfortable",
     performanceMetrics: {},
     smartAnalysisCache: { signature: "", snapshot: null, savedAt: 0 },
@@ -560,9 +558,6 @@
   }
   const els = {
     ldInput: $("#ld-input"),
-    apendiceInput: $("#apendice-input"),
-    apendiceMeta: $("#apendice-meta"),
-    clearApendiceBtn: $("#clear-apendice-btn"),
     listInput: $("#list-input"),
     packageInput: $("#pdf-input"),
     relationStart: $("#relation-start"),
@@ -1381,32 +1376,17 @@
     return [];
   }
 
-  /** Cruzamento com o Apêndice já calculado para a linha, ou a resposta de
-   * "não apurado" quando ainda não houver Apêndice carregado. */
+  /**
+   * Cruzamento com o Apêndice 3 para a linha. A base é embutida e vale para
+   * toda a obra, então não há arquivo a selecionar nem análise sem cruzamento.
+   */
   function apendiceInfo(row) {
     if (row && row.apendice) return row.apendice;
-    if (Apendice) return Apendice.evaluate(row || {}, state.apendiceIndex);
-    return { ldCode: "", search: "Apêndice não carregado", tagged: "Não apurado — Apêndice não carregado", note: "", suggestion: "" };
-  }
-
-  function applyApendiceToResults() {
-    if (!Apendice || !state.results.length) return;
-    Apendice.apply(state.results, state.apendiceIndex);
-    state.resultVersion += 1;
-    state.filteredCache = { signature: "", indices: [] };
-  }
-
-  function updateApendiceMeta() {
-    if (els.apendiceMeta) {
-      els.apendiceMeta.textContent = state.apendiceIndex && state.apendiceIndex.ok
-        ? `${state.apendiceIndex.count.toLocaleString("pt-BR")} TAGs · aba ${state.apendiceIndex.sheet}`
-        : "Opcional · responde se o item é tagueado";
-    }
-    if (els.clearApendiceBtn) els.clearApendiceBtn.hidden = !state.apendiceFile;
+    if (Apendice) return Apendice.evaluate(row || {}, null);
+    return { ldCode: "", search: "Apêndice indisponível", tagged: "Não apurado — Apêndice indisponível", note: "", suggestion: "" };
   }
 
   function updateInputMeta() {
-    updateApendiceMeta();
     if (!state.packageSelectionPending && !state.packageSelectionReady) refreshPackageSelection();
     els.ldMeta.textContent = state.ldFiles.length ? ldDisplayName() : "Selecionar arquivo";
     els.listMeta.textContent = state.textEntries.length
@@ -1454,6 +1434,10 @@
     if (els.clearLdBtn) els.clearLdBtn.hidden = state.ldFiles.length === 0;
     if (els.clearPdfBtn) els.clearPdfBtn.hidden = state.packageFiles.length === 0 && state.packageCandidates.length === 0;
     if (els.clearRelationBtn) els.clearRelationBtn.hidden = state.listFiles.length === 0 && state.textEntries.length === 0 && !state.relationSavedText;
+    // A barra de contexto lê estes mesmos rótulos. Sem o aviso, ela continuava
+    // mostrando a contagem de antes da análise — dizia 576 documentos onde a
+    // relação já falava em 600.
+    window.dispatchEvent(new CustomEvent("grcon:ui-update"));
   }
 
   function triageSettings() {
@@ -2504,7 +2488,7 @@
       state.results = mergePackageResults(rawResults);
       // O cruzamento com o Apêndice é informativo: roda depois da triagem, não
       // altera decisão nenhuma e responde "não apurado" quando não há Apêndice.
-      if (Apendice) Apendice.apply(state.results, state.apendiceIndex);
+      if (Apendice) Apendice.apply(state.results, null);
       const physicalCount = state.results.reduce((total, row) => total + (row.files || []).length, 0);
       if (physicalCount !== inputs.length || state.results.some((row) => !(row.files || []).length)) {
         throw new Error("A conferência de origem falhou: um resultado não corresponde exatamente aos arquivos selecionados.");
@@ -2585,6 +2569,7 @@
       if (window.GrconGrdtHistoryIndicator) window.GrconGrdtHistoryIndicator.refresh();
       renderAll();
       els.resultsSection.hidden = false;
+      focarResultados();
       const counts = C.resultCounts(state.results);
       const ignored = state.ignoredFiles.length ? ` · ${state.ignoredFiles.length} arquivo(s) ignorado(s)` : "";
       showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar${ignored}.`, counts.revisar || counts.bloqueado ? "warn" : "success");
@@ -2628,6 +2613,7 @@
       els.analysisStamp.hidden = false;
       els.resultsSection.hidden = false;
       renderAll();
+      focarResultados();
       refreshPerformancePanel("Cache inteligente aplicado: análise restaurada instantaneamente.");
       showToast("Análise reaproveitada do cache local (instantânea).", "success");
       return;
@@ -2775,7 +2761,7 @@
       state.results = mergePackageResults(rawResults);
       // O cruzamento com o Apêndice é informativo: roda depois da triagem, não
       // altera decisão nenhuma e responde "não apurado" quando não há Apêndice.
-      if (Apendice) Apendice.apply(state.results, state.apendiceIndex);
+      if (Apendice) Apendice.apply(state.results, null);
       const physicalCount = state.results.reduce((total, row) => total + (row.files || []).length, 0);
       if (physicalCount !== analysisFiles.length) throw new Error("A conferência de origem falhou: a quantidade de arquivos físicos não foi preservada.");
 
@@ -2805,6 +2791,7 @@
       const counts = C.resultCounts(state.results);
       window.requestAnimationFrame(() => {
         renderAll();
+        focarResultados();
         refreshPerformancePanel(`Resultados iniciais exibidos · consolidando linha do tempo e Databook em segundo plano.`);
         showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar.`, counts.revisar || counts.bloqueado ? "warn" : "success");
       });
@@ -3273,8 +3260,14 @@
     const viewport = scroll ? Math.max(360, scroll.clientHeight || 620) : 620;
     const scrollTop = scroll ? scroll.scrollTop : 0;
     const visibleCount = Math.ceil(viewport / rowHeight);
-    const start = Math.max(0, Math.floor(scrollTop / rowHeight) - state.virtual.overscan);
-    const end = Math.min(indices.length, start + visibleCount + (state.virtual.overscan * 2));
+    // A janela renderizada nunca pode começar depois do que a lista comporta:
+    // sem esse limite, rolar até o fim empurrava o espaçador de cima além do
+    // total de linhas, a barra de rolagem crescia sozinha e sobrava um vazio
+    // depois do último documento.
+    const janela = visibleCount + (state.virtual.overscan * 2);
+    const maiorInicio = Math.max(0, indices.length - janela);
+    const start = Math.min(maiorInicio, Math.max(0, Math.floor(scrollTop / rowHeight) - state.virtual.overscan));
+    const end = Math.min(indices.length, start + janela);
     state.virtual.start = start;
     state.virtual.end = end;
     return {
@@ -3292,6 +3285,54 @@
 
   function visibleResults() {
     return virtualResults().visibleIndices.map((index) => state.results[index]);
+  }
+
+  /**
+   * Confere a altura real da linha depois de desenhar.
+   *
+   * Os espaçadores da tabela virtual são calculados por uma altura fixa. Se a
+   * linha renderizada tiver outra altura — densidade trocada, agrupamento
+   * ligado, uma correção de CSS —, a barra de rolagem passa a mentir: some
+   * conteúdo no fim ou sobra espaço em branco. Medir o que o navegador
+   * realmente desenhou mantém as duas coisas coerentes sem depender de alguém
+   * lembrar de acertar o número no código.
+   */
+  /**
+   * Depois de analisar, a tabela é o assunto da tela — e ela nascia embaixo de
+   * tudo: numa janela de 950 px o topo da tabela caía em 935, ou seja, fora da
+   * vista. Levar a relação para o topo evita a rolagem às cegas e o efeito de
+   * "sumiu o resultado".
+   */
+  function focarResultados() {
+    if (!els.resultsSection || els.resultsSection.hidden) return;
+    window.requestAnimationFrame(() => {
+      els.resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function calibrateVirtualRowHeight() {
+    if (!els.tbody) return;
+    const linhas = els.tbody.querySelectorAll("tr.result-row");
+    if (linhas.length < 3) return;
+    let soma = 0;
+    let contadas = 0;
+    linhas.forEach((linha) => {
+      const altura = linha.getBoundingClientRect().height;
+      if (altura > 0) { soma += altura; contadas += 1; }
+    });
+    if (!contadas) return;
+    const medida = Math.round(soma / contadas);
+    if (medida < 24 || medida > 400) return;
+    if (Math.abs(medida - state.virtual.rowHeight) <= 1) return;
+    state.virtual.rowHeight = medida;
+    // Só re-renderiza quando há espaçadores em jogo: abaixo do limite virtual a
+    // tabela inteira já está na tela e a altura não muda nada.
+    if (state.virtual.calibrating || filteredResultIndices().length <= VIRTUAL_MIN_ITEMS) return;
+    state.virtual.calibrating = true;
+    window.requestAnimationFrame(() => {
+      state.virtual.calibrating = false;
+      renderTable();
+    });
   }
 
   function renderResultPagination(info) {
@@ -3669,6 +3710,7 @@
       </tr>`;
       return mainRow + detailRow(row, index);
     }).join("") + bottomSpacer;
+    calibrateVirtualRowHeight();
     window.dispatchEvent(new CustomEvent("grcon:triage-rendered", {
       detail: {
         total: virtualInfo.total,
@@ -3867,9 +3909,6 @@
     closeRelationDrawer();
     clearSgparQueue();
     els.ldInput.value = "";
-    if (els.apendiceInput) els.apendiceInput.value = "";
-    state.apendiceFile = null;
-    state.apendiceIndex = null;
     els.listInput.value = "";
     els.packageInput.value = "";
     els.sgparUrl.value = Workspace ? String(Workspace.preference("sgparUrl", "")) : "";
@@ -4894,46 +4933,6 @@
       els.ldInput.disabled = false;
       updateInputMeta();
     }
-  });
-  // O Apêndice 3 é opcional e nunca decide postagem: ele só responde se o TAG
-  // do documento consta da lista contratual de bens tagueados.
-  if (els.apendiceInput) els.apendiceInput.addEventListener("change", async (event) => {
-    // Carregar o Apêndice não invalida a análise: ele não altera decisão
-    // nenhuma, só preenche as colunas do cruzamento nas linhas já apuradas.
-    const file = [...event.target.files].find((item) => /\.(xlsx?|xlsm)$/i.test(item.name));
-    state.apendiceFile = null;
-    state.apendiceIndex = null;
-    updateApendiceMeta();
-    if (!file) return;
-    els.apendiceInput.disabled = true;
-    if (els.apendiceMeta) els.apendiceMeta.textContent = "Lendo o Apêndice…";
-    try {
-      const workbook = await readWorkbook(file, false);
-      const index = Apendice ? Apendice.parseWorkbook(workbook, XLSX, { fileName: file.name }) : null;
-      if (!index || !index.ok) throw new Error(index && index.issue || "Não foi possível localizar a coluna de TAG no Apêndice.");
-      state.apendiceFile = file;
-      state.apendiceIndex = index;
-      applyApendiceToResults();
-      renderAll();
-      showToast(`Apêndice lido: ${index.count.toLocaleString("pt-BR")} TAGs na aba ${index.sheet}.`, "success");
-    } catch (error) {
-      state.apendiceFile = null;
-      state.apendiceIndex = null;
-      event.target.value = "";
-      console.warn("GRCON: falha ao ler o Apêndice.", error);
-      showToast(String(error && error.message || "Não foi possível ler o Apêndice."), "error");
-    } finally {
-      els.apendiceInput.disabled = false;
-      updateApendiceMeta();
-    }
-  });
-  if (els.clearApendiceBtn) els.clearApendiceBtn.addEventListener("click", () => {
-    state.apendiceFile = null;
-    state.apendiceIndex = null;
-    if (els.apendiceInput) els.apendiceInput.value = "";
-    applyApendiceToResults();
-    updateApendiceMeta();
-    renderAll();
   });
   if (els.compatibilityOpen) els.compatibilityOpen.addEventListener("click", () => {
     if (!L) return;

@@ -305,9 +305,14 @@
             const render = () => {
                 const active = context.controls.map((control) => ({ control, value: filterValue(control) })).filter((item) => item.value);
                 if (!active.length) {
-                    summary.innerHTML = '<span class="p2-filter-empty">Nenhum filtro adicional aplicado</span>';
+                    // Sem filtro não há o que resumir: a faixa dizendo "nenhum
+                    // filtro aplicado" ocupava uma linha inteira acima da
+                    // tabela para informar que nada estava acontecendo.
+                    summary.innerHTML = "";
+                    summary.hidden = true;
                     return;
                 }
+                summary.hidden = false;
                 summary.innerHTML = "<strong>Filtros ativos:</strong>";
                 active.forEach(({ control, value }) => {
                     const chip = document.createElement("button");

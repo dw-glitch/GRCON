@@ -1,9 +1,10 @@
 (function (root, factory) {
   const C = root.TriagemCore || (typeof module === "object" && module.exports ? require("./core.js") : null);
-  const api = factory(C);
+  const Base = root.GrconApendiceBase || (typeof module === "object" && module.exports ? require("./apendice_base.js") : null);
+  const api = factory(C, Base);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconApendice = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (C) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (C, Base) {
   "use strict";
 
   // ---------------------------------------------------------------------------
@@ -20,6 +21,11 @@
   //      acento e espaço são tolerados.
   //   3. Sugerir nunca bloqueia. Divergência entre a LD e o Apêndice gera
   //      sugestão de código e a postagem segue.
+  //
+  // A base é embutida (apendice_base.js, Rev. B) e vale para toda a obra: não
+  // há arquivo a selecionar, e nenhuma análise sai sem o cruzamento. Ainda é
+  // possível ler um Apêndice de outra revisão por parseWorkbook, e nesse caso a
+  // planilha informada substitui a embutida.
   // ---------------------------------------------------------------------------
 
   const NOT_LOADED = "Apêndice não carregado";
@@ -169,6 +175,40 @@
     return Boolean(index && index.ok && index.tags && index.tags.size);
   }
 
+  let embutido = null;
+
+  /**
+   * A base contratual que acompanha o aplicativo. Montada uma vez e reusada:
+   * são 5.682 TAGs, e remontar o Map a cada consulta custaria caro à toa.
+   */
+  function embeddedIndex() {
+    if (embutido) return embutido;
+    const tags = new Map();
+    ((Base && Base.TAGS) || []).forEach((tag, posicao) => {
+      const chave = tagKey(tag);
+      if (chave && !tags.has(chave)) tags.set(chave, { tag, row: posicao + 1 });
+    });
+    embutido = {
+      ok: tags.size > 0,
+      embedded: true,
+      fileName: Base ? `${Base.NOME} — Rev. ${Base.REVISAO}` : "",
+      document: Base ? Base.DOCUMENTO : "",
+      revision: Base ? Base.REVISAO : "",
+      sheet: Base ? Base.ABA : "",
+      headerRow: Base ? Base.LINHA_CABECALHO : 0,
+      tagColumn: "",
+      count: tags.size,
+      tags,
+      issue: tags.size ? "" : "A base do Apêndice 3 não foi carregada com o aplicativo.",
+    };
+    return embutido;
+  }
+
+  /** O índice em uso: o informado pela tela, quando houver, ou o embutido. */
+  function activeIndex(index) {
+    return loaded(index) ? index : embeddedIndex();
+  }
+
   /**
    * Origem do TAG, nesta ordem: coluna de TAG da LD, quando a aba tiver uma; e,
    * na falta dela, o próprio código do documento (Grupo 7 do relatório ET).
@@ -213,7 +253,8 @@
    * Resposta do cruzamento para uma linha da triagem. Devolve exatamente o que
    * as três colunas novas mostram, mais a sugestão de código quando houver.
    */
-  function evaluate(row, index) {
+  function evaluate(row, informado) {
+    const index = activeIndex(informado);
     const item = row || {};
     const record = item.record || {};
     const ldCode = text(record.document) || text(item.document);
@@ -233,8 +274,8 @@
         available: false,
         found: null,
         search: NOT_LOADED,
-        tagged: "Não apurado — Apêndice não carregado",
-        note: "Carregue o Apêndice 3 para que o GRCON responda se o item é tagueado.",
+        tagged: "Não apurado — Apêndice indisponível",
+        note: "A base do Apêndice 3 não foi carregada com o aplicativo. Recarregue a página para restabelecê-la.",
       };
     }
     if (!origin.tag) {
@@ -258,7 +299,7 @@
         entry,
         search: FOUND,
         tagged: "SIM",
-        note: `TAG ${entry.tag} consta do Apêndice ${index.sheet ? `(aba ${index.sheet}, linha ${entry.row})` : ""}.`.replace(/\s+/g, " ").trim(),
+        note: `TAG ${entry.tag} consta do Apêndice${index.revision ? ` Rev. ${index.revision}` : ""}${index.embedded ? "" : index.sheet ? ` (aba ${index.sheet}, linha ${entry.row})` : ""}.`,
       };
     }
     const suggestion = nonTaggedSuggestion(ldCode);
@@ -277,7 +318,8 @@
   }
 
   /** Aplica o cruzamento a todas as linhas da triagem, sem alterar decisão. */
-  function apply(results, index) {
+  function apply(results, informado) {
+    const index = activeIndex(informado);
     (results || []).forEach((row) => {
       if (row) row.apendice = evaluate(row, index);
     });
@@ -293,6 +335,8 @@
     headerScore,
     parseWorkbook,
     loaded,
+    embeddedIndex,
+    activeIndex,
     documentTag,
     nonTaggedSuggestion,
     evaluate,

@@ -206,8 +206,8 @@
 
   /**
    * Cruzamento com o Apêndice 3, calculado na triagem e transportado na linha.
-   * Sem Apêndice carregado, as colunas dizem exatamente isso: nunca sai "NÃO"
-   * por ausência de fonte.
+   * A base é embutida no aplicativo, então toda análise traz o cruzamento; se
+   * ainda assim faltar, a coluna diz isso — nunca sai "NÃO" por falta de fonte.
    */
   function apendiceValue(row) {
     const info = row && row.apendice || null;
@@ -215,16 +215,16 @@
       return {
         available: false,
         ldCode: exactLdDocument(row) || "Não localizado",
-        search: "Apêndice não carregado",
-        tagged: "Não apurado — Apêndice não carregado",
+        search: "Apêndice indisponível",
+        tagged: "Não apurado — Apêndice indisponível",
         suggestion: "",
       };
     }
     return {
       available: info.available !== false,
       ldCode: text(info.ldCode) || exactLdDocument(row) || "Não localizado",
-      search: text(info.search) || "Apêndice não carregado",
-      tagged: text(info.tagged) || "Não apurado — Apêndice não carregado",
+      search: text(info.search) || "Apêndice indisponível",
+      tagged: text(info.tagged) || "Não apurado — Apêndice indisponível",
       suggestion: text(info.suggestion),
     };
   }
@@ -421,7 +421,7 @@
         ldCode: apendiceValue(row).ldCode,
         apendiceSearch: apendiceValue(row).search,
         tagged: apendiceValue(row).tagged,
-        apendiceSuggestion: apendiceValue(row).suggestion || (apendiceValue(row).available === false ? "Não apurado — Apêndice não carregado" : "—"),
+        apendiceSuggestion: apendiceValue(row).suggestion || (apendiceValue(row).available === false ? "Não apurado — Apêndice indisponível" : "—"),
         ntSearchResult: text(row && row.documentLookup && row.documentLookup.resultLabel) || "PESQUISA NÃO REGISTRADA",
         searchedWithoutNt: text(row && row.documentLookup && row.documentLookup.searchedWithoutNt) || "Não se aplica",
         searchedWithNt: text(row && row.documentLookup && row.documentLookup.searchedWithNt) || "Não se aplica",

@@ -181,9 +181,13 @@ html[data-app="GRCON"] .analysis-history-table-wrap {
   background: var(--surface-primary);
   scrollbar-gutter: stable;
 }
+/* A tabela era fixa em 116rem: numa tela de 1500 px (93rem) o motivo e a
+   alocação ficavam sempre fora, e só se chegava neles rolando de lado. Com
+   largura proporcional ela cabe inteira nas telas de trabalho e continua
+   rolando quando a janela é realmente estreita. */
 html[data-app="GRCON"] .analysis-history-table {
   width: 100%;
-  min-width: 116rem;
+  min-width: 72rem;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -191,15 +195,15 @@ html[data-app="GRCON"] .analysis-history-table {
   background: var(--surface-primary);
   font-size: .8rem;
 }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-date { width: 9rem; }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-document { width: 25rem; }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-current-revision { width: 8rem; }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-target-revision { width: 10rem; }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-result { width: 14rem; }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-sigem { width: 11rem; }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-allocation { width: 17rem; }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-ld { width: 10rem; }
-html[data-app="GRCON"] .analysis-history-table col.analysis-col-reason { width: 25rem; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-date { width: 8%; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-document { width: 22%; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-current-revision { width: 6%; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-target-revision { width: 7%; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-result { width: 12%; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-sigem { width: 9%; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-allocation { width: 12%; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-ld { width: 8%; }
+html[data-app="GRCON"] .analysis-history-table col.analysis-col-reason { width: 16%; }
 html[data-app="GRCON"] .analysis-history-table thead th {
   position: sticky;
   top: 0;

@@ -1,4 +1,4 @@
-GRCON 5.32.26 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.32.27 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
 - O seletor aceita uma ou mais LDs e pesquisa a relação em todas elas na mesma análise.
