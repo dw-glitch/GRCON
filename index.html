@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.25" data-version="5.32.25" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.32.26" data-version="5.32.26" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -17,7 +17,7 @@
 <link href="requests.css" rel="stylesheet"/>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.32.25" name="application-version"/></head>
+<meta content="5.32.26" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -51,6 +51,9 @@
 <button class="ops-nav-button" data-grcon-view="requests" type="button">
 <svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong></span>
 </button>
+<button class="ops-nav-button" data-grcon-view="solicitacoes" type="button">
+<svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong></span><b hidden="" id="ops-solicitacoes-count">0</b>
+</button>
 <button class="ops-nav-button" data-grcon-view="analysis-history" type="button">
 <svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Análises</strong></span><b hidden="" id="ops-analysis-history-count">0</b>
 </button>
@@ -67,7 +70,8 @@
 <main aria-label="Área de trabalho do GRCON" class="workspace" id="app-main" tabindex="-1">
 <nav aria-label="Navegação compacta do GRCON" class="grcon-view-tabs" role="tablist">
 <button id="tab-control" aria-controls="grdt-module" aria-selected="true" class="active" data-grcon-view="control" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Controle de GRDT</strong><small>Analisar e gerar eGRDT</small></span></button>
-<button id="tab-requests" aria-controls="requests-module" aria-selected="false" data-grcon-view="requests" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas e Solicitações</strong><small>Consultar documentos e registrar pedidos</small></span></button>
+<button id="tab-requests" aria-controls="requests-module" aria-selected="false" data-grcon-view="requests" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong><small>Consultar documentos na LD</small></span></button>
+<button id="tab-solicitacoes" aria-controls="solicitacoes-module" aria-selected="false" data-grcon-view="solicitacoes" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Registrar pedidos e gerar a planilha</small></span><b hidden="" id="solicitacoes-tab-count">0</b></button>
 <button id="tab-analysis" aria-controls="analysis-history-module" aria-selected="false" data-grcon-view="analysis-history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Histórico de análises</strong><small>Data, documento e status</small></span><b hidden="" id="analysis-history-tab-count">0</b></button>
 <button id="tab-history" aria-controls="history-module" aria-selected="false" data-grcon-view="history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico de eGRDTs</strong><small>Arquivos e alocações</small></span><b hidden="" id="history-tab-count">0</b></button>
 <button id="tab-sigem" aria-controls="sigem-module" aria-selected="false" data-grcon-view="sigem" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 4h16v12H4zM8 20h8M12 16v4M7 8h10M7 12h6"></path></svg><span><strong>Postagem SIGEM</strong><small>Conferir, copiar e registrar</small></span><b hidden="" id="sigem-tab-count">0</b></button>
@@ -286,13 +290,10 @@
 </section>
 </section>
 <section id="requests-module" class="requests-module" hidden="" role="tabpanel" aria-labelledby="tab-requests">
-<header class="ops-page-heading"><div><h2>Consultas e Solicitações</h2><p>Consulte o que perguntam sobre cada documento e registre os pedidos recebidos.</p></div></header>
+<header class="ops-page-heading"><div><h2>Consultas</h2><p>Consulte na LD o que costumam perguntar sobre cada documento. As solicitações têm aba própria.</p></div></header>
 
-<nav class="requests-subnav" aria-label="Áreas de Consultas e Solicitações">
+<nav class="requests-subnav" aria-label="Áreas de Consultas">
 <button class="requests-subnav-button active" data-requests-area="consulta" type="button">Consulta de documentos</button>
-<button class="requests-subnav-button" data-requests-area="solicitacao" type="button">Nova solicitação</button>
-<button class="requests-subnav-button" data-requests-area="painel" type="button">Acompanhamento<b hidden id="requests-painel-count">0</b></button>
-<button class="requests-subnav-button" data-requests-area="tipos" type="button">Tipos de solicitação</button>
 <button class="requests-subnav-button" data-requests-area="modelos" type="button">Modelos de exportação</button>
 </nav>
 <div id="requests-area-consulta">
@@ -373,119 +374,8 @@
 </section>
 </div>
 
-<div hidden id="requests-area-solicitacao">
-<section class="requests-panel requests-request-panel" id="requests-request-panel" aria-labelledby="requests-request-title">
-<div class="requests-panel-head"><h3 id="requests-request-title">Nova solicitação</h3><small>Um item por documento, numerado na sequência do Controle de Solicitações. Preencha e copie as linhas para a planilha de Controle de Solicitações. Não depende da consulta: use esta aba sozinha.</small></div>
-<div class="requests-request-grid">
-<label><span>Número da solicitação</span><input id="requests-req-number" autocomplete="off" type="text" placeholder="SOL-2026-014"/></label>
-<label><span>Próximo item</span><input id="requests-req-next-item" inputmode="numeric" min="1" type="number"/></label>
-<label><span>Responsável pela atividade</span><input id="requests-req-owner" autocomplete="off" list="requests-req-owner-list" type="text"/><datalist id="requests-req-owner-list"></datalist></label>
-<label><span>Data de recebimento</span><input id="requests-req-received" type="date"/></label>
-<label><span>Solicitante / Área</span><input id="requests-req-requester" autocomplete="off" type="text"/></label>
-<label><span>Descrição da solicitação</span><select id="requests-req-type"></select></label>
-<label><span>Origem</span><select id="requests-req-origin"><option>E-MAIL</option><option>TEAMS</option><option>na</option></select></label>
-<label><span>Tipo de Documento</span><input id="requests-req-family" autocomplete="off" list="requests-req-family-list" type="text" placeholder="ET"/><datalist id="requests-req-family-list"><option>ET</option><option>CV</option><option>MD</option><option>DE</option></datalist></label>
-<label><span>Status Geral da Solicitação</span><input id="requests-req-status" autocomplete="off" type="text" placeholder="Recebida"/></label>
-<label class="requests-request-wide"><span>Caminho do documento (opcional)</span><input id="requests-req-path" autocomplete="off" type="text" placeholder="Arquivo Técnico &gt; Solicitações &gt; …"/></label>
-<label class="requests-request-wide"><span>Corpo do e-mail</span><textarea id="requests-req-email" rows="2" placeholder="Cole aqui o texto do pedido recebido"></textarea></label>
-</div>
-<div class="requests-manual-add" id="requests-manual-add">
-<label><span>Documentos desta solicitação</span><textarea id="requests-manual-paste" rows="2" spellcheck="false" placeholder="Um por linha. Código e título podem vir separados por tabulação."></textarea></label>
-<button class="secondary-button compact" id="requests-manual-append" type="button">Acrescentar itens</button>
-<button class="text-button" id="requests-manual-blank" type="button">Acrescentar item em branco</button>
-</div>
-<div class="requests-request-preview" id="requests-req-preview"></div>
-<label class="requests-full-toggle"><input id="requests-batch-full" type="checkbox"/><span>Mostrar as 26 colunas da planilha</span></label>
-<div class="requests-batch-bar" hidden id="requests-batch-bar">
-<strong id="requests-batch-count">0 selecionados</strong>
-<label><span>Descrição</span><select id="requests-batch-type"><option value="">—</option></select></label>
-<label><span>Responsável</span><input id="requests-batch-owner" autocomplete="off" type="text" placeholder="Nome"/></label>
-<label><span>Inclusão na LD?</span><select id="requests-batch-inclusion"><option value="">—</option><option value="sim">sim</option><option value="não">não</option><option value="na">na</option></select></label>
-<label class="requests-batch-wide"><span>Observação</span><input id="requests-batch-note" autocomplete="off" type="text" placeholder="Acrescentar ao final da observação"/></label>
-<button class="secondary-button compact" id="requests-batch-apply" type="button">Aplicar aos selecionados</button>
-<button class="text-button" id="requests-batch-undo" type="button" disabled>Desfazer</button>
-</div>
-<div class="requests-batch-table-wrap" hidden id="requests-batch-table-wrap">
-<table class="requests-batch-table">
-<thead id="requests-batch-thead"><tr><th class="requests-col-check"><input aria-label="Selecionar todos os itens" id="requests-batch-all" type="checkbox" checked/></th><th>ITEM</th><th>Documento</th><th>Descrição da Solicitação</th><th>Responsável</th><th>Inclusão na LD?</th><th>Alocação</th><th>Status SIGEM</th><th>Observações</th></tr></thead>
-<tbody id="requests-batch-tbody"></tbody>
-</table>
-</div>
-<div class="requests-inline-actions">
-<button class="primary-button" id="requests-req-copy" type="button">Copiar linhas para a planilha</button>
-<button class="secondary-button compact" id="requests-req-copy-headers" type="button">Copiar com cabeçalho</button>
-<button class="secondary-button compact" id="requests-req-save" type="button">Salvar no GRCON</button>
-<span class="requests-req-saved" aria-live="polite" id="requests-req-saved"></span>
-<button class="text-button danger" id="requests-req-close" type="button">Limpar solicitação</button>
-</div>
-</section>
-</div>
 
-<div hidden id="requests-area-painel">
-<section class="requests-indicators" id="requests-indicators" aria-label="Indicadores das solicitações"></section>
-<section class="requests-panel" aria-labelledby="requests-painel-title">
-<div class="requests-panel-head"><h3 id="requests-painel-title">Solicitações registradas</h3><small>O que está gravado na área compartilhada. As alterações valem para todos.</small></div>
-<div class="requests-quick-filters" id="requests-quick-filters">
-<button class="requests-chip active" data-quick="todos" type="button">Todos</button>
-<button class="requests-chip" data-quick="abertos" type="button">Em aberto</button>
-<button class="requests-chip" data-quick="validar" type="button">Aguardando validação</button>
-<button class="requests-chip" data-quick="novos" type="button">Documentos novos</button>
-<button class="requests-chip" data-quick="sem-responsavel" type="button">Sem responsável</button>
-<button class="requests-chip" data-quick="concluidos" type="button">Concluídos</button>
-</div>
-<div class="requests-results-tools">
-<label class="requests-search"><svg aria-hidden="true" viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input id="requests-painel-search" placeholder="Buscar protocolo, documento, solicitação ou responsável" type="search"/></label>
-<label><span>Status</span><select id="requests-painel-status"><option value="">Todos</option></select></label>
-<label><span>Responsável</span><select id="requests-painel-owner"><option value="">Todos</option></select></label>
-<button class="text-button" id="requests-painel-clear" type="button">Limpar filtros</button>
-<button class="secondary-button compact" id="requests-painel-reload" type="button">Atualizar</button>
-</div>
-<div class="requests-batch-bar" hidden id="requests-painel-batch">
-<strong id="requests-painel-selected">0 selecionados</strong>
-<label><span>Novo status</span><select id="requests-painel-set-status"><option value="">—</option></select></label>
-<label><span>Responsável</span><input id="requests-painel-set-owner" autocomplete="off" type="text" placeholder="Nome"/></label>
-<label class="requests-batch-wide"><span>Observação do registro</span><input id="requests-painel-note" autocomplete="off" type="text" placeholder="Motivo da alteração, guardado no histórico"/></label>
-<button class="secondary-button compact" id="requests-painel-apply" type="button">Aplicar aos selecionados</button>
-</div>
-<div class="requests-batch-table-wrap" id="requests-painel-table-wrap">
-<table class="requests-batch-table">
-<thead><tr><th class="requests-col-check"><input aria-label="Selecionar todos" id="requests-painel-all" type="checkbox"/></th><th>Protocolo</th><th>Solicitação</th><th>Documento</th><th>Descrição</th><th>Responsável</th><th>Status</th><th>Classificação</th><th>Observações</th></tr></thead>
-<tbody id="requests-painel-tbody"></tbody>
-</table>
-</div>
-<section class="requests-history" hidden id="requests-history" aria-labelledby="requests-history-title">
-<div class="requests-history-head">
-<h4 id="requests-history-title">Histórico do item <span id="requests-history-protocol"></span></h4>
-<button class="text-button" id="requests-history-close" type="button">Fechar</button>
-</div>
-<div id="requests-history-body"></div>
-</section>
-<empty-state class="requests-empty" id="requests-painel-empty"><strong>Nenhuma solicitação registrada</strong><span>Gere uma solicitação a partir da consulta e clique em “Salvar no GRCON”.</span></empty-state>
-</section>
-</div>
 
-<div hidden id="requests-area-tipos">
-<section class="requests-panel" aria-labelledby="requests-tipos-title">
-<div class="requests-panel-head"><h3 id="requests-tipos-title">Tipos de solicitação</h3><small>Os rótulos que aparecem na coluna “Descrição da Solicitação”. Valem para toda a equipe; somente o proprietário altera.</small></div>
-<small class="requests-tipos-owner-note" hidden id="requests-tipos-owner-note">Somente o proprietário pode alterar os tipos. Você está vendo os que estão em uso.</small>
-<div class="requests-tipo-form" id="requests-tipo-form">
-<label><span>Rótulo</span><input id="requests-tipo-label" autocomplete="off" type="text" placeholder="POSTAGEM NO SIGEM"/></label>
-<label><span>Código</span><input id="requests-tipo-code" autocomplete="off" type="text" placeholder="gerado a partir do rótulo"/></label>
-<label><span>Ação recomendada</span><input id="requests-tipo-action" autocomplete="off" type="text" placeholder="Postar no SIGEM"/></label>
-<label><span>Prazo padrão (dias)</span><input id="requests-tipo-days" inputmode="numeric" min="1" type="number"/></label>
-<label><span>Prioridade</span><select id="requests-tipo-priority"><option value="baixa">baixa</option><option selected value="normal">normal</option><option value="alta">alta</option><option value="urgente">urgente</option></select></label>
-<label><span>Ordem</span><input id="requests-tipo-order" inputmode="numeric" type="number"/></label>
-<button class="secondary-button compact" id="requests-tipo-save" type="button">Salvar tipo</button>
-</div>
-<div class="requests-batch-table-wrap" id="requests-tipos-table-wrap">
-<table class="requests-batch-table">
-<thead><tr><th>Rótulo</th><th>Código</th><th>Ação recomendada</th><th>Prazo</th><th>Prioridade</th><th>Ordem</th><th>Ativo</th><th></th></tr></thead>
-<tbody id="requests-tipos-tbody"></tbody>
-</table>
-</div>
-<small class="requests-tipos-hint">Excluir um tipo já usado não apaga solicitações antigas: o GRCON desativa em vez de remover, e informa quantos itens foram preservados. Tipo nunca usado é removido de vez.</small>
-</section>
-</div>
 
 <div hidden id="requests-area-modelos">
 <section class="requests-panel" aria-labelledby="requests-modelos-title">
@@ -521,6 +411,173 @@
 </div>
 </div>
 <small class="requests-tipos-hint">Coluna que o GRCON não sabe preencher sai em branco: a estrutura da sua planilha é reproduzida sem que nenhum campo seja preenchido por suposição. Ao importar, o casamento é por nome idêntico da coluna — nunca por semelhança.</small>
+</section>
+</div>
+</section>
+<section id="solicitacoes-module" class="requests-module" hidden="" role="tabpanel" aria-labelledby="tab-solicitacoes">
+<header class="ops-page-heading"><div><h2>Solicitações</h2><p>Registre os pedidos recebidos, gere a planilha no padrão do Controle de Solicitações e acompanhe o andamento.</p></div></header>
+
+<nav class="requests-subnav" aria-label="Áreas de Solicitações">
+<button class="requests-subnav-button active" data-sol-area="nova" type="button">Nova solicitação</button>
+<button class="requests-subnav-button" data-sol-area="painel" type="button">Acompanhamento<b hidden id="sol-painel-count">0</b></button>
+<button class="requests-subnav-button" data-sol-area="tipos" type="button">Tipos de solicitação</button>
+</nav>
+
+<div id="sol-area-nova">
+<ol class="requests-steps" aria-label="Etapas da solicitação">
+<li class="requests-step is-current" id="sol-step-1"><b>1</b><span><strong>Dados do pedido</strong><small id="sol-step-1-note">Preencha o cabeçalho da solicitação</small></span></li>
+<li class="requests-step" id="sol-step-2"><b>2</b><span><strong>Documentos</strong><small id="sol-step-2-note">Nenhum documento na solicitação</small></span></li>
+<li class="requests-step" id="sol-step-3"><b>3</b><span><strong>Consultar a LD (opcional)</strong><small id="sol-step-3-note">Nenhuma LD anexada</small></span></li>
+<li class="requests-step" id="sol-step-4"><b>4</b><span><strong>Copiar ou gerar a planilha</strong><small id="sol-step-4-note">Aguardando itens</small></span></li>
+</ol>
+
+<section class="requests-panel" aria-labelledby="sol-header-title">
+<div class="requests-panel-head"><h3 id="sol-header-title">Dados da solicitação</h3><small>Valem para todos os itens desta solicitação. O ITEM segue a numeração contínua da planilha oficial.</small></div>
+<div class="requests-request-grid">
+<label><span>Número da solicitação</span><input id="sol-number" autocomplete="off" type="text" placeholder="SOL-2026-014"/></label>
+<label><span>Próximo item</span><input id="sol-next-item" inputmode="numeric" min="1" type="number"/></label>
+<label><span>Responsável pela atividade</span><input id="sol-owner" autocomplete="off" list="sol-owner-list" type="text"/><datalist id="sol-owner-list"></datalist></label>
+<label><span>Data de recebimento</span><input id="sol-received" type="date"/></label>
+<label><span>Solicitante / Área</span><input id="sol-requester" autocomplete="off" type="text"/></label>
+<label><span>Descrição da solicitação</span><select id="sol-type"></select></label>
+<label><span>Origem</span><select id="sol-origin"><option>E-MAIL</option><option>TEAMS</option><option>na</option></select></label>
+<label><span>Tipo de Documento</span><input id="sol-family" autocomplete="off" list="sol-family-list" type="text" placeholder="ET"/><datalist id="sol-family-list"><option>ET</option><option>CV</option><option>MD</option><option>DE</option></datalist></label>
+<label><span>Status Geral da Solicitação</span><input id="sol-status" autocomplete="off" type="text" placeholder="Recebida"/></label>
+<label class="requests-request-wide"><span>Caminho do documento (opcional)</span><input id="sol-path" autocomplete="off" type="text" placeholder="Arquivo Técnico &gt; Solicitações &gt; …"/></label>
+<label class="requests-request-wide"><span>Corpo do e-mail</span><textarea id="sol-email" rows="2" placeholder="Cole aqui o texto do pedido recebido"></textarea></label>
+</div>
+</section>
+
+<section class="requests-panel" aria-labelledby="sol-docs-title">
+<div class="requests-panel-head"><h3 id="sol-docs-title">Documentos da solicitação</h3><small>Anexe os arquivos e o GRCON tira o código do nome de cada um. Colar a lista continua valendo.</small></div>
+<div class="requests-drop" id="sol-drop" tabindex="0" role="button" aria-describedby="sol-drop-hint">
+<svg aria-hidden="true" viewbox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"></path></svg>
+<strong>Arraste os arquivos do pedido aqui</strong>
+<span id="sol-drop-hint">ou clique para escolher. O código sai do nome do arquivo, sem extensão e sem o sufixo de postagem.</span>
+<input id="sol-files" multiple type="file" hidden/>
+</div>
+<div class="requests-ld-list" id="sol-file-list"></div>
+<label class="requests-paste-label" for="sol-paste">Ou cole os códigos e nomes de arquivo</label>
+<textarea id="sol-paste" rows="4" spellcheck="false" placeholder="Um por linha. Aceita o código puro ou o nome do arquivo com extensão.&#10;C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019&#10;C1O_RNEST_U32_10.2.1.2_TUB_RIR_nt-NF-1288-CONEXOES_0001.pdf"></textarea>
+<div class="requests-inline-actions">
+<button class="secondary-button compact" id="sol-paste-add" type="button">Acrescentar itens</button>
+<button class="text-button" id="sol-paste-clipboard" type="button">Colar da área de transferência</button>
+<button class="text-button" id="sol-blank" type="button">Acrescentar item em branco</button>
+<span class="requests-count" id="sol-doc-count">0 item(ns) na solicitação</span>
+</div>
+</section>
+
+<section class="requests-panel" aria-labelledby="sol-ld-title">
+<div class="requests-panel-head"><h3 id="sol-ld-title">LD para consulta (opcional)</h3><small>Anexe a LD e o GRCON preenche o número da alocação e responde se o documento está alocado ou não. Sem LD, os campos ficam em branco para você preencher.</small></div>
+<div class="requests-drop compact" id="sol-ld-drop" tabindex="0" role="button" aria-describedby="sol-ld-hint">
+<svg aria-hidden="true" viewbox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"></path><path d="M14 2v4h4"></path></svg>
+<strong>Arraste as LDs aqui</strong>
+<span id="sol-ld-hint">ou clique para escolher os arquivos (.xlsx, .xls, .xlsm)</span>
+<input accept=".xlsx,.xls,.xlsm" id="sol-ld-input" multiple type="file" hidden/>
+</div>
+<div class="requests-ld-list" id="sol-ld-list"></div>
+<div class="requests-inline-actions">
+<button class="secondary-button compact" disabled id="sol-ld-run" type="button">Consultar os documentos na LD</button>
+<button class="text-button danger" hidden id="sol-ld-clear" type="button">Remover todas</button>
+<span class="requests-count" id="sol-ld-note"></span>
+</div>
+</section>
+
+<section class="requests-panel" aria-labelledby="sol-items-title">
+<div class="requests-panel-head"><h3 id="sol-items-title">Itens desta solicitação</h3><small>O que estiver aqui é o que vai para a planilha. Edite direto na tabela.</small></div>
+<div class="requests-request-preview" id="sol-preview"></div>
+<label class="requests-full-toggle"><input id="sol-full" type="checkbox"/><span>Mostrar as 26 colunas da planilha</span></label>
+<div class="requests-batch-bar" hidden id="sol-batch-bar">
+<strong id="sol-batch-count">0 selecionados</strong>
+<label><span>Descrição</span><select id="sol-batch-type"><option value="">—</option></select></label>
+<label><span>Responsável</span><input id="sol-batch-owner" autocomplete="off" type="text" placeholder="Nome"/></label>
+<label><span>Inclusão na LD?</span><select id="sol-batch-inclusion"><option value="">—</option><option value="sim">sim</option><option value="não">não</option><option value="na">na</option></select></label>
+<label class="requests-batch-wide"><span>Observação</span><input id="sol-batch-note" autocomplete="off" type="text" placeholder="Acrescentar ao final da observação"/></label>
+<button class="secondary-button compact" id="sol-batch-apply" type="button">Aplicar aos selecionados</button>
+<button class="text-button" id="sol-batch-undo" type="button" disabled>Desfazer</button>
+</div>
+<div class="requests-batch-table-wrap" hidden id="sol-table-wrap">
+<table class="requests-batch-table">
+<thead id="sol-thead"></thead>
+<tbody id="sol-tbody"></tbody>
+</table>
+</div>
+</section>
+
+<section class="requests-actions" aria-label="Saída da solicitação">
+<button class="primary-button" id="sol-excel" type="button">Gerar Excel no padrão da planilha</button>
+<button class="secondary-button compact" id="sol-copy" type="button">Copiar linhas</button>
+<button class="secondary-button compact" id="sol-copy-headers" type="button">Copiar com cabeçalho</button>
+<span class="requests-actions-divider" aria-hidden="true"></span>
+<button class="secondary-button compact" id="sol-save" type="button">Salvar no GRCON</button>
+<span class="requests-req-saved" aria-live="polite" id="sol-saved"></span>
+<button class="text-button danger" id="sol-clear" type="button">Limpar solicitação</button>
+</section>
+</div>
+
+<div hidden id="sol-area-painel">
+<section class="requests-indicators" id="sol-indicators" aria-label="Indicadores das solicitações"></section>
+<section class="requests-panel" aria-labelledby="sol-painel-title">
+<div class="requests-panel-head"><h3 id="sol-painel-title">Solicitações registradas</h3><small>O que está gravado na área compartilhada. As alterações valem para todos.</small></div>
+<div class="requests-quick-filters" id="sol-quick-filters">
+<button class="requests-chip active" data-quick="todos" type="button">Todos</button>
+<button class="requests-chip" data-quick="abertos" type="button">Em aberto</button>
+<button class="requests-chip" data-quick="validar" type="button">Aguardando validação</button>
+<button class="requests-chip" data-quick="novos" type="button">Documentos novos</button>
+<button class="requests-chip" data-quick="sem-responsavel" type="button">Sem responsável</button>
+<button class="requests-chip" data-quick="concluidos" type="button">Concluídos</button>
+</div>
+<div class="requests-results-tools">
+<label class="requests-search"><svg aria-hidden="true" viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input id="sol-painel-search" placeholder="Buscar protocolo, documento, solicitação ou responsável" type="search"/></label>
+<label><span>Status</span><select id="sol-painel-status"><option value="">Todos</option></select></label>
+<label><span>Responsável</span><select id="sol-painel-owner"><option value="">Todos</option></select></label>
+<button class="text-button" id="sol-painel-clear" type="button">Limpar filtros</button>
+<button class="secondary-button compact" id="sol-painel-reload" type="button">Atualizar</button>
+</div>
+<div class="requests-batch-bar" hidden id="sol-painel-batch">
+<strong id="sol-painel-selected">0 selecionados</strong>
+<label><span>Novo status</span><select id="sol-painel-set-status"><option value="">—</option></select></label>
+<label><span>Responsável</span><input id="sol-painel-set-owner" autocomplete="off" type="text" placeholder="Nome"/></label>
+<label class="requests-batch-wide"><span>Observação do registro</span><input id="sol-painel-note" autocomplete="off" type="text" placeholder="Motivo da alteração, guardado no histórico"/></label>
+<button class="secondary-button compact" id="sol-painel-apply" type="button">Aplicar aos selecionados</button>
+</div>
+<div class="requests-batch-table-wrap" id="sol-painel-table-wrap">
+<table class="requests-batch-table">
+<thead><tr><th class="requests-col-check"><input aria-label="Selecionar todos" id="sol-painel-all" type="checkbox"/></th><th>Protocolo</th><th>Solicitação</th><th>Documento</th><th>Descrição</th><th>Responsável</th><th>Status</th><th>Classificação</th><th>Observações</th></tr></thead>
+<tbody id="sol-painel-tbody"></tbody>
+</table>
+</div>
+<section class="requests-history" hidden id="sol-history" aria-labelledby="sol-history-title">
+<div class="requests-history-head">
+<h4 id="sol-history-title">Histórico do item <span id="sol-history-protocol"></span></h4>
+<button class="text-button" id="sol-history-close" type="button">Fechar</button>
+</div>
+<div id="sol-history-body"></div>
+</section>
+<empty-state class="requests-empty" id="sol-painel-empty"><strong>Nenhuma solicitação registrada</strong><span>Gere uma solicitação a partir da consulta e clique em “Salvar no GRCON”.</span></empty-state>
+</section>
+</div>
+
+<div hidden id="sol-area-tipos">
+<section class="requests-panel" aria-labelledby="sol-tipos-title">
+<div class="requests-panel-head"><h3 id="sol-tipos-title">Tipos de solicitação</h3><small>Os rótulos que aparecem na coluna “Descrição da Solicitação”. Valem para toda a equipe; somente o proprietário altera.</small></div>
+<small class="requests-tipos-owner-note" hidden id="sol-tipos-owner-note">Somente o proprietário pode alterar os tipos. Você está vendo os que estão em uso.</small>
+<div class="requests-tipo-form" id="sol-tipo-form">
+<label><span>Rótulo</span><input id="sol-tipo-label" autocomplete="off" type="text" placeholder="POSTAGEM NO SIGEM"/></label>
+<label><span>Código</span><input id="sol-tipo-code" autocomplete="off" type="text" placeholder="gerado a partir do rótulo"/></label>
+<label><span>Ação recomendada</span><input id="sol-tipo-action" autocomplete="off" type="text" placeholder="Postar no SIGEM"/></label>
+<label><span>Prazo padrão (dias)</span><input id="sol-tipo-days" inputmode="numeric" min="1" type="number"/></label>
+<label><span>Prioridade</span><select id="sol-tipo-priority"><option value="baixa">baixa</option><option selected value="normal">normal</option><option value="alta">alta</option><option value="urgente">urgente</option></select></label>
+<label><span>Ordem</span><input id="sol-tipo-order" inputmode="numeric" type="number"/></label>
+<button class="secondary-button compact" id="sol-tipo-save" type="button">Salvar tipo</button>
+</div>
+<div class="requests-batch-table-wrap" id="sol-tipos-table-wrap">
+<table class="requests-batch-table">
+<thead><tr><th>Rótulo</th><th>Código</th><th>Ação recomendada</th><th>Prazo</th><th>Prioridade</th><th>Ordem</th><th>Ativo</th><th></th></tr></thead>
+<tbody id="sol-tipos-tbody"></tbody>
+</table>
+</div>
+<small class="requests-tipos-hint">Excluir um tipo já usado não apaga solicitações antigas: o GRCON desativa em vez de remover, e informa quantos itens foram preservados. Tipo nunca usado é removido de vez.</small>
 </section>
 </div>
 </section>
@@ -623,7 +680,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.32.25 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.32.26 · Controle de GRDT</span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">

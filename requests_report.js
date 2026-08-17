@@ -312,6 +312,68 @@
     return [CONTROL_COLUMNS.map((coluna) => coluna.header).join("\t"), ...linhas].join("\n");
   }
 
+  /**
+   * Planilha no padrão do Controle de Solicitações.
+   *
+   * Aqui não entra a identidade do GRCON: o arquivo existe para ser colado — ou
+   * aberto lado a lado — com o controle oficial da rede, e por isso repete a
+   * estrutura dele. Cabeçalho na linha 5, dados a partir da 6, mesma ordem e
+   * mesma grafia das 26 colunas. Uma faixa azul e cartões de resumo obrigariam
+   * a apagar linhas antes de colar, que é o retrabalho que esta saída evita.
+   */
+  const CONTROL_HEADER_ROW = 5;
+
+  function writeControlSheet(worksheet, rows, options) {
+    const settings = options || {};
+    const lista = rows || [];
+    const columns = CONTROL_COLUMNS;
+    const lastColumn = columnLetter(columns.length);
+    worksheet.columns = columns.map((column) => ({ width: column.width || 24 }));
+
+    worksheet.mergeCells(`A1:${lastColumn}1`);
+    const titulo = worksheet.getCell("A1");
+    titulo.value = text(settings.title) || "CONTROLE DE SOLICITAÇÕES";
+    titulo.font = { name: "Aptos Display", size: 14, bold: true, color: { argb: "FF153A5C" } };
+    titulo.alignment = { vertical: "middle", horizontal: "left" };
+
+    worksheet.mergeCells(`A2:${lastColumn}2`);
+    const meta = worksheet.getCell("A2");
+    meta.value = text(settings.metadata);
+    meta.font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
+    meta.alignment = { vertical: "middle", horizontal: "left" };
+
+    const header = worksheet.getRow(CONTROL_HEADER_ROW);
+    columns.forEach((column, index) => {
+      const cell = header.getCell(index + 1);
+      cell.value = column.header;
+      cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZUL_CLARO } };
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      cell.border = { bottom: { style: "thin", color: { argb: "FFB9C7D2" } } };
+    });
+    header.height = 34;
+
+    lista.forEach((row, index) => {
+      const linha = worksheet.getRow(CONTROL_HEADER_ROW + 1 + index);
+      columns.forEach((column, columnIndex) => {
+        const cell = linha.getCell(columnIndex + 1);
+        // Mesma convenção da planilha: o que não se aplica sai como "na", e não
+        // como célula vazia que ninguém sabe se é pendência.
+        cell.value = controlValue(row, column.key);
+        cell.font = { name: "Aptos", size: 10 };
+        cell.alignment = { vertical: "top", wrapText: true };
+        if (index % 2 === 1) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF6F8FA" } };
+      });
+    });
+
+    worksheet.autoFilter = {
+      from: { row: CONTROL_HEADER_ROW, column: 1 },
+      to: { row: CONTROL_HEADER_ROW + lista.length, column: columns.length },
+    };
+    worksheet.views = [{ state: "frozen", ySplit: CONTROL_HEADER_ROW, showGridLines: false }];
+    return { headerRow: CONTROL_HEADER_ROW, firstDataRow: CONTROL_HEADER_ROW + 1, rows: lista.length };
+  }
+
   // ---------------------------------------------------------------------------
   // Modelos de exportação
   //
@@ -455,6 +517,8 @@
     previewExportTemplate,
     controlRows,
     controlClipboardText,
+    CONTROL_HEADER_ROW,
+    writeControlSheet,
     writeConsultationSheet,
     attachBrandLogo,
   });

@@ -1,5 +1,16 @@
 # Histórico de alterações
 
+## 5.32.26 — 2026-08-17
+
+- **Solicitações ganham aba e módulo próprios.** Registrar um pedido deixou de ser uma área dentro de Consultas: a aba Solicitações tem barra lateral, atalho no topo e três áreas próprias — Nova solicitação, Acompanhamento e Tipos de solicitação.
+- A aba Consultas ficou só com o que é consulta: buscar documentos na LD e os modelos de exportação.
+- **Anexar os arquivos preenche o campo Documento.** O código sai do nome de cada arquivo, sem a extensão e sem o sufixo de postagem (`_0001`, `_0001_A`). Ponto do código não é confundido com extensão: `LI-5290.00-22313-950-1LV-001` chega inteiro.
+- Colar continua valendo e aceita as duas formas: o código puro ou o nome do arquivo com extensão.
+- **LD opcional na solicitação.** Anexando a LD, o GRCON preenche o número da alocação, responde se o documento está alocado, traz o status no SIGEM e a versão da LD, e marca “Inclusão na LD necessária” quando o documento não está lá. Cada linha registra onde a evidência foi lida — arquivo, aba e linha.
+- O que foi digitado à mão nunca é sobrescrito pela consulta, e sem LD anexada os campos ficam em branco em vez de receberem palpite.
+- **Nova saída: “Gerar Excel no padrão da planilha”.** O arquivo reproduz o Controle de Solicitações — as 26 colunas na ordem e com a grafia da planilha oficial, cabeçalho na linha 5 e dados a partir da 6 —, para colar sob o que já existe sem rearrumar coluna. Copiar as linhas para a área de transferência continua disponível.
+- A alocação mostrada na consulta e na solicitação passa a distinguir alocação confirmada, alocação evidenciada pelo número da ALOC, aba sem coluna de alocação e coluna vazia, seguindo a leitura da Triagem.
+
 ## 5.32.25 — 2026-08-17
 
 - A alocação passa a ser lida da linha inteira da LD, e não só da célula de confirmação. Três fatos que antes saíam como o mesmo "vazio" agora são ditos de formas diferentes: a aba não possui coluna de alocação, a coluna existe e a célula está vazia, e há número de ALOC registrado.

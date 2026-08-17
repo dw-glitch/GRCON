@@ -20,6 +20,8 @@
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; ambos entram sob demanda.
     requests: ["xlsx", "excel", "brand", "requests_app.js"],
+    // A solicitação lê LDs para responder alocação e gera a planilha oficial.
+    solicitacoes: ["xlsx", "excel", "brand", "solicitacoes_app.js"],
   };
 
   const moduleRequirements = {
@@ -27,6 +29,7 @@
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsUi"],
+    solicitacoes: ["GrconRequestsCore", "GrconRequestsReport", "GrconSolicitacoesUi"],
   };
 
   function scriptBasename(value) {
@@ -180,6 +183,7 @@
       history: "history-module",
       sigem: "sigem-module",
       requests: "requests-module",
+      solicitacoes: "solicitacoes-module",
     };
     Object.entries(modules).forEach(([key, id]) => {
       const node = document.getElementById(id);
