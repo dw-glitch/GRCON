@@ -4,6 +4,12 @@ Levantamento feito sobre os arquivos reais do usuário em 17/08/2026, antes de
 qualquer alteração de código. Os números abaixo saíram do próprio motor do
 GRCON lendo as quatro LDs e o Apêndice, não de estimativa.
 
+> **Implementado na 5.32.25.** O que este documento decidiu está em código:
+> `core.js` (leitura da alocação pela linha inteira e coluna de TAG da LD),
+> `apendice_tagueados.js` (leitura do Apêndice e cruzamento), `app.js` e
+> `index.html` (fonte opcional do Apêndice e colunas da triagem) e
+> `report_summary.js` (colunas do `Resumo`). A seção 4 registra o que mudou.
+
 ## 1. O erro da alocação
 
 Relato: *"ao gerar a GRDT ele não está pegando informação verídica se está ou
@@ -89,3 +95,30 @@ Quando não houver Apêndice carregado, as três colunas dizem isso — não sai
 - Nunca casar por semelhança: o TAG é comparado por igualdade, tolerando apenas
   caixa, acento e espaço.
 - Preservar a grafia da LD: nenhuma coluna reescreve título ou código.
+
+## 4. O que foi implementado
+
+**Alocação.** `allocationEvidenceState(record)` lê a linha inteira e devolve
+cinco situações em vez de um único vazio: `allocated`, `not_allocated`,
+`unknown`, `not_tracked` (a aba não tem coluna de alocação) e `blank` (a coluna
+existe e a célula está vazia). Quando o status está vazio e a coluna ALOCAÇÃO
+traz um identificador de ALOC — token `ALOC` isolado mais sequência numérica,
+conferido por `allocationNumberInfo` — a situação é `allocated` com evidência
+`number`. Texto livre como `Já alocado / Sem rastreio de alocação` continua
+fora, porque não é número de alocação.
+
+O resultado da triagem carrega isso em `allocationFinding`, o motivo escrito
+diz qual das situações ocorreu e o `Resumo` deixou de responder "Não informado"
+para os três casos. Nada disso muda bloqueio: só `NÃO ALOCADO` bloqueia, e a
+consolidação entre LDs não foi tocada.
+
+**Apêndice.** `apendice_tagueados.js` localiza a aba e a coluna de TAG sozinho
+— nos arquivos reais, aba `Apêndice`, cabeçalho na linha 7, coluna C, 5.682
+TAGs distintos em 5.915 linhas de dados. O cruzamento roda depois da triagem,
+sobre o resultado pronto, e por isso não interfere em decisão nenhuma.
+
+Medido sobre as quatro LDs: 5.189 registros com TAG no Apêndice, 11.665 sem
+TAG no Apêndice (com sugestão `nt-` quando o código é de relatório ET) e 5.902
+sem TAG para procurar. Nenhuma LD desta remessa traz coluna de TAG, então o
+TAG veio do Grupo 7 do código; a coluna da LD continua tendo preferência
+quando existir.

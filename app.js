@@ -19,7 +19,8 @@
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
-  const APP_VERSION = "5.32.24";
+  const Apendice = window.GrconApendice;
+  const APP_VERSION = "5.32.25";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -62,6 +63,8 @@
   }
   const state = {
     ldFiles: [],
+    apendiceFile: null,
+    apendiceIndex: null,
     listFiles: [],
     textEntries: [],
     relationDraft: "",
@@ -557,6 +560,9 @@
   }
   const els = {
     ldInput: $("#ld-input"),
+    apendiceInput: $("#apendice-input"),
+    apendiceMeta: $("#apendice-meta"),
+    clearApendiceBtn: $("#clear-apendice-btn"),
     listInput: $("#list-input"),
     packageInput: $("#pdf-input"),
     relationStart: $("#relation-start"),
@@ -906,6 +912,9 @@
         : null,
       allocation: record.allocation || "",
       allocationStage: record.allocationStage || "",
+      tag: record.tag || "",
+      tagHeader: record.tagHeader || "",
+      tagColumn: record.tagColumn || "",
       fiscalComment: record.fiscalComment || "",
       sigemStatus: record.sigemStatus || "",
       ldVersion: record.ldVersion || "",
@@ -965,6 +974,33 @@
       sheet: item.sheet || "",
       fiscalComment: item.fiscalComment || "",
       allocationStatus: item.allocationStatus || "",
+      // A situação da alocação e o cruzamento com o Apêndice viajam prontos:
+      // o worker do relatório não relê a LD nem o Apêndice.
+      allocationFinding: item.allocationFinding ? {
+        kind: item.allocationFinding.kind || "",
+        label: item.allocationFinding.label || "",
+        evidence: item.allocationFinding.evidence || "",
+        source: item.allocationFinding.source || "",
+        tracked: Boolean(item.allocationFinding.tracked),
+        status: item.allocationFinding.status || "",
+        allocationNumber: item.allocationFinding.allocationNumber || "",
+        sheet: item.allocationFinding.sheet || "",
+        column: item.allocationFinding.column || "",
+        header: item.allocationFinding.header || "",
+        row: Number(item.allocationFinding.row) || 0,
+      } : null,
+      apendice: item.apendice ? {
+        available: item.apendice.available !== false,
+        found: item.apendice.found === null || item.apendice.found === undefined ? null : Boolean(item.apendice.found),
+        ldCode: item.apendice.ldCode || "",
+        tag: item.apendice.tag || "",
+        tagSource: item.apendice.tagSource || "",
+        search: item.apendice.search || "",
+        tagged: item.apendice.tagged || "",
+        suggestion: item.apendice.suggestion || "",
+        suggestionNote: item.apendice.suggestionNote || "",
+        note: item.apendice.note || "",
+      } : null,
       databook: item.record && item.record.databook || "",
       finalName: item.finalName || "",
       listSource: item.listSource || "",
@@ -1345,7 +1381,32 @@
     return [];
   }
 
+  /** Cruzamento com o Apêndice já calculado para a linha, ou a resposta de
+   * "não apurado" quando ainda não houver Apêndice carregado. */
+  function apendiceInfo(row) {
+    if (row && row.apendice) return row.apendice;
+    if (Apendice) return Apendice.evaluate(row || {}, state.apendiceIndex);
+    return { ldCode: "", search: "Apêndice não carregado", tagged: "Não apurado — Apêndice não carregado", note: "", suggestion: "" };
+  }
+
+  function applyApendiceToResults() {
+    if (!Apendice || !state.results.length) return;
+    Apendice.apply(state.results, state.apendiceIndex);
+    state.resultVersion += 1;
+    state.filteredCache = { signature: "", indices: [] };
+  }
+
+  function updateApendiceMeta() {
+    if (els.apendiceMeta) {
+      els.apendiceMeta.textContent = state.apendiceIndex && state.apendiceIndex.ok
+        ? `${state.apendiceIndex.count.toLocaleString("pt-BR")} TAGs · aba ${state.apendiceIndex.sheet}`
+        : "Opcional · responde se o item é tagueado";
+    }
+    if (els.clearApendiceBtn) els.clearApendiceBtn.hidden = !state.apendiceFile;
+  }
+
   function updateInputMeta() {
+    updateApendiceMeta();
     if (!state.packageSelectionPending && !state.packageSelectionReady) refreshPackageSelection();
     els.ldMeta.textContent = state.ldFiles.length ? ldDisplayName() : "Selecionar arquivo";
     els.listMeta.textContent = state.textEntries.length
@@ -2441,6 +2502,9 @@
       }, progressAnalysis);
 
       state.results = mergePackageResults(rawResults);
+      // O cruzamento com o Apêndice é informativo: roda depois da triagem, não
+      // altera decisão nenhuma e responde "não apurado" quando não há Apêndice.
+      if (Apendice) Apendice.apply(state.results, state.apendiceIndex);
       const physicalCount = state.results.reduce((total, row) => total + (row.files || []).length, 0);
       if (physicalCount !== inputs.length || state.results.some((row) => !(row.files || []).length)) {
         throw new Error("A conferência de origem falhou: um resultado não corresponde exatamente aos arquivos selecionados.");
@@ -2709,6 +2773,9 @@
       });
 
       state.results = mergePackageResults(rawResults);
+      // O cruzamento com o Apêndice é informativo: roda depois da triagem, não
+      // altera decisão nenhuma e responde "não apurado" quando não há Apêndice.
+      if (Apendice) Apendice.apply(state.results, state.apendiceIndex);
       const physicalCount = state.results.reduce((total, row) => total + (row.files || []).length, 0);
       if (physicalCount !== analysisFiles.length) throw new Error("A conferência de origem falhou: a quantidade de arquivos físicos não foi preservada.");
 
@@ -2844,7 +2911,9 @@
   }
 
   const RESULT_COLUMN_FILTERS = Object.freeze([
-    ["situation", "Situação"], ["originalFile", "Arquivo original"], ["document", "Documento"], ["sheet", "Aba LD"],
+    ["situation", "Situação"], ["originalFile", "Arquivo original"], ["document", "Documento"],
+    ["ldCode", "Código da LD"], ["apendiceSearch", "Busca no Apêndice"], ["tagged", "Tagueado sim ou não?"],
+    ["sheet", "Aba LD"],
     ["ldRevision", "Revisão"], ["targetRevision", "Revisão para postar"], ["title", "Título"], ["effectiveDate", "Data efetiva"],
     ["grdt", "GRDT"], ["technicalStatus", "Status"], ["sigemStatus", "Status SIGEM"], ["targetStatus", "Status da revisão"],
     ["postingStatus", "Situação de postagem"], ["fiscalComment", "Comentário da Fiscal"], ["allocation", "Alocação"],
@@ -2857,6 +2926,9 @@
       situation: compactDecisionLabel(row),
       originalFile: [row && row.name, ...(row && row.files || []).map((entry) => entry.name)].filter(Boolean).join(" | "),
       document: row && row.document,
+      ldCode: apendiceInfo(row).ldCode,
+      apendiceSearch: apendiceInfo(row).search,
+      tagged: apendiceInfo(row).tagged,
       sheet: row && row.sheet,
       ldRevision: record.revision,
       targetRevision: row && row.revision,
@@ -3347,7 +3419,7 @@
   }
 
   function detailRow(row, index) {
-    if (!state.expanded.has(index)) return `<tr class="detail-row" data-index="${index}" hidden><td colspan="19"></td></tr>`;
+    if (!state.expanded.has(index)) return `<tr class="detail-row" data-index="${index}" hidden><td colspan="22"></td></tr>`;
     const source = row.relativePath || row.name || "—";
     const sourceLine = row.record && (row.record.sheet || row.record.row)
       ? `${row.record.source || ""} · ${row.record.sheet || ""} · linha ${row.record.row || ""}`
@@ -3357,11 +3429,18 @@
     const allocationRecord = row.record || {};
     const allocationEvidence = allocationRecord.allocationEvidence || null;
     const allocationSource = allocationEvidence || allocationRecord;
-    const allocationState = C.allocationState ? C.allocationState(row.allocationStatus) : { label: row.allocationStatus || "Não informado" };
+    const allocationState = row.allocationFinding && row.allocationFinding.label
+      ? row.allocationFinding
+      : C.allocationEvidenceState
+        ? C.allocationEvidenceState(allocationRecord)
+        : C.allocationState
+          ? C.allocationState(row.allocationStatus)
+          : { label: row.allocationStatus || "Não informado" };
     const allocationTrace = `<div class="allocation-trace ${escapeHtml(allocationState.kind || "empty")}">
       <h4>Como a alocação foi interpretada</h4>
       <dl>
         <div><dt>Resultado</dt><dd>${escapeHtml(allocationState.label || "Não informado")}</dd></div>
+        <div><dt>Onde a evidência foi lida</dt><dd>${escapeHtml(allocationState.source || "—")}</dd></div>
         <div><dt>Valor confirmado</dt><dd>${escapeHtml(allocationSource.allocationStatus || row.allocationStatus || "—")}</dd></div>
         <div><dt>Cabeçalho</dt><dd>${escapeHtml(allocationSource.allocationStatusHeader || allocationRecord.allocationStatusHeader || "—")}</dd></div>
         <div><dt>Versão da evidência</dt><dd>${escapeHtml(allocationSource.ldVersion || allocationRecord.ldVersion || "Não informada na linha")}</dd></div>
@@ -3372,6 +3451,20 @@
         ${allocationEvidence ? `<div><dt>Linha técnica atual</dt><dd>${escapeHtml(allocationRecord.sheet || row.sheet || "—")} · linha ${escapeHtml(allocationRecord.row || "—")} · versão ${escapeHtml(allocationRecord.ldVersion || "—")}</dd></div>` : ""}
       </dl>
       <p>${allocationEvidence ? "A mesma revisão já possuía alocação confirmada. A linha posterior marcada como Não Alocado não tinha número nem evidência de recusa e foi tratada como duplicidade; título, Databook e demais dados permanecem os da linha técnica mais recente." : "O bloqueio por não alocação é explicado com os dados da mesma linha da aba técnica: confirmação, versão da LD enviada, número da alocação, etapa e comentário da Fiscal."}</p>
+    </div>`;
+    // Cruzamento com o Apêndice 3: informativo, nunca bloqueante. Quando o TAG
+    // não consta da lista contratual, o painel mostra a forma com nt- sugerida.
+    const apendice = apendiceInfo(row);
+    const apendiceTrace = `<div class="allocation-trace ${apendice.found === true ? "allocated" : apendice.found === false ? "review" : "empty"}">
+      <h4>Cruzamento com o Apêndice 3</h4>
+      <dl>
+        <div><dt>Código da LD</dt><dd>${escapeHtml(apendice.ldCode || "—")}</dd></div>
+        <div><dt>TAG usado na busca</dt><dd>${escapeHtml(apendice.tag || "—")}${apendice.tagSource ? ` · ${escapeHtml(apendice.tagSource)}` : ""}</dd></div>
+        <div><dt>Busca no Apêndice</dt><dd>${escapeHtml(apendice.search)}</dd></div>
+        <div><dt>Tagueado sim ou não?</dt><dd>${escapeHtml(apendice.tagged)}</dd></div>
+        ${apendice.suggestion ? `<div><dt>Código sugerido</dt><dd>${escapeHtml(apendice.suggestion)}</dd></div>` : ""}
+      </dl>
+      <p>${escapeHtml(apendice.suggestionNote || apendice.note || "")}</p>
     </div>`;
     const message = decisionMessage(row);
     const decisionCard = `<div class="detail-decision ${escapeHtml(message.severity || "warning")}">
@@ -3410,7 +3503,7 @@
       `<div><span>${escapeHtml(column.header)}</span><strong>${escapeHtml(column.value || "—")}</strong></div>`
     )).join("")}</div></div>` : "";
     return `<tr class="detail-row" data-index="${index}">
-      <td colspan="19"><div class="details-shell">
+      <td colspan="22"><div class="details-shell">
         <section class="detail-section">
           <h3>Origem</h3>
           <p class="detail-line"><strong>Arquivo:</strong> ${escapeHtml(source)}</p>
@@ -3427,6 +3520,7 @@
           ${row.fiscalComment ? `<p class="detail-line"><strong>Fiscal:</strong> ${escapeHtml(row.fiscalComment)}</p>` : ""}
           <p class="detail-line"><strong>Databook:</strong> ${escapeHtml(databook)}</p>
           ${allocationTrace}
+          ${apendiceTrace}
           ${row.codeValidationWarning ? `<div class="detail-warning">${escapeHtml(row.codeValidationWarning)}</div>` : ""}
           ${row.packageWarning ? `<div class="detail-warning">${escapeHtml(row.packageWarning)}</div>` : ""}
         </section>
@@ -3501,8 +3595,8 @@
     }));
     renderResultPagination(virtualInfo);
     els.empty.hidden = virtualInfo.total > 0;
-    const topSpacer = virtualInfo.topSpace ? `<tr class="virtual-spacer-row" aria-hidden="true"><td colspan="19" style="--virtual-space:${virtualInfo.topSpace}px"></td></tr>` : "";
-    const bottomSpacer = virtualInfo.bottomSpace ? `<tr class="virtual-spacer-row" aria-hidden="true"><td colspan="19" style="--virtual-space:${virtualInfo.bottomSpace}px"></td></tr>` : "";
+    const topSpacer = virtualInfo.topSpace ? `<tr class="virtual-spacer-row" aria-hidden="true"><td colspan="22" style="--virtual-space:${virtualInfo.topSpace}px"></td></tr>` : "";
+    const bottomSpacer = virtualInfo.bottomSpace ? `<tr class="virtual-spacer-row" aria-hidden="true"><td colspan="22" style="--virtual-space:${virtualInfo.bottomSpace}px"></td></tr>` : "";
     els.tbody.innerHTML = topSpacer + rows.map((entry) => {
       const row = entry.row;
       const index = entry.index;
@@ -3527,9 +3621,18 @@
       const fiscalComment = record.fiscalComment || "—";
       const allocation = record.allocation || "—";
       const allocationStage = record.allocationStage || ldValue(record, "ETAPA DA ALOCAÇÃO") || "—";
-      const allocationStatus = record.allocationStatus || "—";
-      const allocationVisual = C.allocationState(record.allocationStatus || row.allocationStatus);
-      const allocationClass = row.hardBlock ? "blocked" : allocationVisual.kind === "allocated" ? "allocated" : allocationVisual.kind === "empty" ? "empty" : "review";
+      // Sem status na célula, a coluna diz qual é o fato: coluna ausente na
+      // aba, célula vazia, ou alocação evidenciada pelo número de ALOC.
+      const allocationStatus = record.allocationStatus
+        || (C.allocationEvidenceState ? C.allocationEvidenceState(record).label : "")
+        || "—";
+      const allocationVisual = C.allocationEvidenceState ? C.allocationEvidenceState(record) : C.allocationState(record.allocationStatus || row.allocationStatus);
+      const allocationClass = row.hardBlock
+        ? "blocked"
+        : allocationVisual.kind === "allocated" ? "allocated"
+        : allocationVisual.kind === "empty" || allocationVisual.kind === "blank" || allocationVisual.kind === "not_tracked" ? "empty"
+        : "review";
+      const apendice = apendiceInfo(row);
       const databook = record.databook || "—";
       const manualSelection = manuallyIncluded(row, index);
       const selectionTitle = manualAllocationOverrideAllowed(row)
@@ -3544,6 +3647,9 @@
         </div></td>
         <td><span class="filename-value" title="${escapeHtml(row.relativePath || originalFile)}">${escapeHtml(originalFile)}</span>${companionCount ? `<span class="cell-muted">+${companionCount} arquivo(s)</span>` : ""}</td>
         <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
+        <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
+        <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
+        <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.tagged)}</span></td>
         <td><span class="sheet-badge">${escapeHtml(row.sheet || "—")}</span></td>
         <td><span class="revision-value">${escapeHtml(ldRevision)}</span></td>
         <td><span class="revision-value">${escapeHtml(row.revision || "—")}</span>${row.timeline ? `<span class="revision-route" title="Histórico de revisões">${escapeHtml(timelineRoute(row.timeline))}</span>` : ""}</td>
@@ -3761,6 +3867,9 @@
     closeRelationDrawer();
     clearSgparQueue();
     els.ldInput.value = "";
+    if (els.apendiceInput) els.apendiceInput.value = "";
+    state.apendiceFile = null;
+    state.apendiceIndex = null;
     els.listInput.value = "";
     els.packageInput.value = "";
     els.sgparUrl.value = Workspace ? String(Workspace.preference("sgparUrl", "")) : "";
@@ -3961,6 +4070,10 @@
         "CÓDIGO INFORMADO / PDF": row.documentLookup && row.documentLookup.inputDocument || row.name || "",
         "CÓDIGO LOCALIZADO NA LD": row.documentLookup && row.documentLookup.matched ? ldDocument : "",
         "FORMA LOCALIZADA NA LD": row.documentLookup && row.documentLookup.ldForm || "Não localizado",
+        "CÓDIGO DA LD": apendiceInfo(row).ldCode,
+        "BUSCA NO APÊNDICE": apendiceInfo(row).search,
+        "Tagueado sim ou não?": apendiceInfo(row).tagged,
+        "CÓDIGO SUGERIDO PELO APÊNDICE (nt-)": apendiceInfo(row).suggestion || "",
         "PESQUISA COM/SEM nt- E TAG NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
@@ -4781,6 +4894,46 @@
       els.ldInput.disabled = false;
       updateInputMeta();
     }
+  });
+  // O Apêndice 3 é opcional e nunca decide postagem: ele só responde se o TAG
+  // do documento consta da lista contratual de bens tagueados.
+  if (els.apendiceInput) els.apendiceInput.addEventListener("change", async (event) => {
+    // Carregar o Apêndice não invalida a análise: ele não altera decisão
+    // nenhuma, só preenche as colunas do cruzamento nas linhas já apuradas.
+    const file = [...event.target.files].find((item) => /\.(xlsx?|xlsm)$/i.test(item.name));
+    state.apendiceFile = null;
+    state.apendiceIndex = null;
+    updateApendiceMeta();
+    if (!file) return;
+    els.apendiceInput.disabled = true;
+    if (els.apendiceMeta) els.apendiceMeta.textContent = "Lendo o Apêndice…";
+    try {
+      const workbook = await readWorkbook(file, false);
+      const index = Apendice ? Apendice.parseWorkbook(workbook, XLSX, { fileName: file.name }) : null;
+      if (!index || !index.ok) throw new Error(index && index.issue || "Não foi possível localizar a coluna de TAG no Apêndice.");
+      state.apendiceFile = file;
+      state.apendiceIndex = index;
+      applyApendiceToResults();
+      renderAll();
+      showToast(`Apêndice lido: ${index.count.toLocaleString("pt-BR")} TAGs na aba ${index.sheet}.`, "success");
+    } catch (error) {
+      state.apendiceFile = null;
+      state.apendiceIndex = null;
+      event.target.value = "";
+      console.warn("GRCON: falha ao ler o Apêndice.", error);
+      showToast(String(error && error.message || "Não foi possível ler o Apêndice."), "error");
+    } finally {
+      els.apendiceInput.disabled = false;
+      updateApendiceMeta();
+    }
+  });
+  if (els.clearApendiceBtn) els.clearApendiceBtn.addEventListener("click", () => {
+    state.apendiceFile = null;
+    state.apendiceIndex = null;
+    if (els.apendiceInput) els.apendiceInput.value = "";
+    applyApendiceToResults();
+    updateApendiceMeta();
+    renderAll();
   });
   if (els.compatibilityOpen) els.compatibilityOpen.addEventListener("click", () => {
     if (!L) return;
