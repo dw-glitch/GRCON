@@ -1,9 +1,13 @@
 /**
- * GRCON — Tela de Consultas e Solicitações
+ * GRCON — Tela de Consulta de documentos
  *
  * Área de consulta rápida: anexar uma ou várias LDs, informar os documentos e
  * receber, em uma linha por documento, só o que costumam perguntar — título
  * oficial, alocação, última GRDT, status no SIGEM e em que LD foi achado.
+ *
+ * As solicitações têm módulo próprio (solicitacoes_app.js): registrar um pedido
+ * e consultar um documento são trabalhos diferentes, e misturá-los numa aba só
+ * obrigava a pessoa a passar pela consulta para chegar ao que queria.
  *
  * A leitura das LDs e a correspondência dos códigos são as mesmas da Triagem de
  * GRDT: parseWorkbook e buildIndex do motor documental, e as regras de decisão
@@ -28,18 +32,8 @@
     allocation: "",
     sort: "entrada",
     undo: [],          // pilha de estados anteriores da lista de documentos
-    requestRows: [],   // itens gerados para a solicitação; depois de gerados, a tabela manda
-    requestUndo: [],   // pilha para desfazer alterações em lote
-    painelItems: [],   // itens vindos da área compartilhada
-    painelQuick: "todos",
-    painelSearch: "",
-    painelStatus: "",
-    painelOwner: "",
-    painelSelected: new Set(),
-    tipos: [],         // tipos vindos da área compartilhada
     modelos: [],       // modelos de exportação: embutidos + salvos aqui + da equipe
     modeloEditor: null, // modelo aberto no editor de colunas
-    manuais: [],       // itens digitados à mão, sem consulta à LD
   };
 
   let proximoId = 1;
@@ -392,9 +386,11 @@
    */
   function linhasDoModelo(modelo) {
     if (modelo && modelo.base === "controle") {
-      // Depois de gerada, a tabela da solicitação é a verdade — é nela que as
-      // edições em lote estão. Antes disso, as linhas saem do mesmo construtor.
-      return state.requestRows.length ? state.requestRows : linhasDaSolicitacao();
+      // As linhas do Controle de Solicitações vivem na aba Solicitações, que é
+      // onde existem item, responsável, data e as demais colunas da planilha
+      // oficial. Aqui só se lê o que está aberto lá.
+      const Solicitacoes = root.GrconSolicitacoesUi;
+      return Solicitacoes && Solicitacoes.currentRows ? Solicitacoes.currentRows() : [];
     }
     return linhasParaSaida();
   }
@@ -405,7 +401,7 @@
     const linhas = linhasDoModelo(modelo);
     if (!linhas.length) {
       notify(modelo.base === "controle"
-        ? "Este modelo usa as colunas do Controle de Solicitações: gere a solicitação antes de exportar."
+        ? "Este modelo usa as colunas do Controle de Solicitações: abra a aba Solicitações e monte os itens antes de exportar."
         : "Consulte os documentos antes de exportar.", "warn");
       return;
     }
@@ -744,434 +740,6 @@
   }
 
 
-  // ---------------------------------------------------------------------------
-  // Transformar a consulta em solicitação
-  //
-  // É o caminho que evita redigitar: cada documento consultado vira um item do
-  // Controle de Solicitações, numerado na sequência da planilha, já com o que a
-  // LD respondeu. O que depende de etapas posteriores fica em branco de
-  // propósito — a saída marca como "na" e a pessoa preenche quando acontecer.
-  // ---------------------------------------------------------------------------
-  function cabecalhoDaSolicitacao() {
-    const data = els.reqReceived && els.reqReceived.value;
-    const dataBr = data ? data.split("-").reverse().join("/") : "";
-    return {
-      owner: els.reqOwner ? els.reqOwner.value.trim() : "",
-      receivedAt: dataBr,
-      requester: els.reqRequester ? els.reqRequester.value.trim() : "",
-      requestType: els.reqType ? els.reqType.value : "",
-      origin: els.reqOrigin ? els.reqOrigin.value : "",
-      documentPath: els.reqPath ? els.reqPath.value.trim() : "",
-      // Campos que só existem quando não há LD para responder por eles.
-      documentFamily: els.reqFamily ? els.reqFamily.value.trim() : "",
-      emailBody: els.reqEmail ? els.reqEmail.value.trim() : "",
-      overallStatus: els.reqStatus ? els.reqStatus.value.trim() : "",
-    };
-  }
-
-  /**
-   * As linhas são as que a pessoa digitou nesta aba. A numeração continua a
-   * sequência da planilha, porque lá o ITEM é único e contínuo.
-   */
-  function linhasDaSolicitacao() {
-    const proximo = Math.max(1, Math.trunc(Number(els.reqNextItem && els.reqNextItem.value)) || 1);
-    // nextItemNumber devolve o maior + 1, então passamos o anterior ao desejado.
-    const base = proximo > 1 ? [{ protocol: String(proximo - 1) }] : [];
-    return R().buildManualControlRows(state.manuais, cabecalhoDaSolicitacao(), base);
-  }
-
-  /**
-   * Limpa a solicitação sem tocar na consulta: são abas diferentes, com
-   * funções diferentes, e uma não manda na outra.
-   */
-  function limparSolicitacao() {
-    if (state.requestRows.length && !window.confirm("Limpar esta solicitação? Os itens digitados serão perdidos.")) return;
-    state.manuais = [];
-    state.requestRows = [];
-    state.requestUndo = [];
-    if (els.manualPaste) els.manualPaste.value = "";
-    if (els.reqSaved) els.reqSaved.textContent = "";
-    renderPainelSolicitacao();
-    notify("Solicitação limpa.", "info");
-  }
-
-  function adicionarItemManual(documento, titulo) {
-    state.manuais.push({ document: text(documento), requestedTitle: text(titulo) });
-  }
-
-  function acrescentarManuais(texto) {
-    const linhas = String(texto || "").split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
-    if (!linhas.length) { notify("Informe ao menos um documento.", "warn"); return; }
-    linhas.forEach((linha) => {
-      const [codigo, ...resto] = linha.split("\t");
-      adicionarItemManual(codigo, resto.join(" ").trim());
-    });
-    els.manualPaste.value = "";
-    regerarLinhasManuais();
-    notify(`${linhas.length} item(ns) acrescentado(s).`, "success");
-  }
-
-  /**
-   * Reconstrói as linhas preservando o que já foi editado à mão: recriar do
-   * zero apagaria o trabalho de quem já preencheu metade da tabela.
-   */
-  function regerarLinhasManuais() {
-    const editadas = new Map(state.requestRows.map((linha) => [linha.item, linha]));
-    state.requestRows = linhasDaSolicitacao().map((linha) => {
-      const anterior = editadas.get(linha.item);
-      return anterior ? { ...anterior } : { ...linha, _selected: true };
-    });
-    renderPainelSolicitacao();
-  }
-
-  function renderPainelSolicitacao() {
-    if (!els.reqPreview) return;
-    const linhas = state.requestRows;
-    if (!linhas.length) {
-      els.reqPreview.innerHTML = '<p class="requests-vazio">Nenhum item ainda. Acrescente os documentos acima, ou volte à consulta e selecione os já localizados.</p>';
-      els.batchBar.hidden = true;
-      els.batchTableWrap.hidden = true;
-      return;
-    }
-    const novos = linhas.filter((linha) => linha.needsLdInclusion === "sim").length;
-    const validar = linhas.filter((linha) => linha._needsManualValidation).length;
-    els.reqPreview.innerHTML = `<p><strong>${linhas.length}</strong> item(ns), do <strong>${linhas[0].item}</strong> ao <strong>${linhas[linhas.length - 1].item}</strong>.
-      ${novos ? `${novos} precisam de inclusão na LD. ` : ""}${validar ? `${validar} pedem conferência antes de seguir.` : ""}
-      Edite aqui antes de copiar: o que estiver na tabela é o que vai para a planilha.</p>`;
-
-    // Modo completo: as 26 colunas da planilha, na ordem dela, todas
-    // preenchíveis. É o que atende quem registra um pedido que não passou pela
-    // LD e precisa colar a linha inteira.
-    if (els.batchFull && els.batchFull.checked) { renderTabelaCompleta(linhas); return; }
-
-    els.batchThead.innerHTML = `<tr>${cabecalhoSelecao(linhas)}${["ITEM", "Documento", "Descrição da Solicitação",
-      "Responsável", "Inclusão na LD?", "Alocação", "Status SIGEM", "Observações"]
-      .map((titulo) => `<th>${titulo}</th>`).join("")}</tr>`;
-    const tipos = R().requestTypeList(null).filter((tipo) => tipo.active).map((tipo) => tipo.label);
-    els.batchTbody.innerHTML = linhas.map((linha, indice) => {
-      const opcoes = tipos.map((rotulo) => `<option${rotulo === linha.requestType ? " selected" : ""}>${escapeHtml(rotulo)}</option>`).join("");
-      const inclusao = ["", "sim", "não", "na"].map((valor) =>
-        `<option value="${valor}"${valor === linha.needsLdInclusion ? " selected" : ""}>${valor || "—"}</option>`).join("");
-      return `<tr${linha._needsManualValidation ? ' class="precisa-validar"' : ""}>
-        <td class="requests-col-check"><input aria-label="Selecionar item ${escapeHtml(linha.item)}" data-batch-select="${indice}" type="checkbox"${linha._selected === false ? "" : " checked"}/></td>
-        <td><strong>${escapeHtml(linha.item)}</strong></td>
-        <td><code>${escapeHtml(linha.document)}</code></td>
-        <td><select data-batch-field="requestType" data-batch-row="${indice}">${opcoes}</select></td>
-        <td><input data-batch-field="owner" data-batch-row="${indice}" type="text" value="${escapeHtml(linha.owner)}"/></td>
-        <td><select data-batch-field="needsLdInclusion" data-batch-row="${indice}">${inclusao}</select></td>
-        <td>${escapeHtml(linha.allocation || "—")}</td>
-        <td>${escapeHtml(linha.sigemStatus || "—")}</td>
-        <td><input data-batch-field="observations" data-batch-row="${indice}" type="text" value="${escapeHtml(linha.observations)}"/></td>
-      </tr>`;
-    }).join("");
-
-    if (els.batchType && els.batchType.options.length <= 1) {
-      tipos.forEach((rotulo) => {
-        const opcao = document.createElement("option");
-        opcao.value = rotulo; opcao.textContent = rotulo;
-        els.batchType.appendChild(opcao);
-      });
-    }
-    els.batchBar.hidden = false;
-    els.batchTableWrap.hidden = false;
-    atualizarContagemLote();
-  }
-
-  /**
-   * A caixa "todos" reflete o estado das linhas. Renderizá-la sempre marcada
-   * fazia com que desmarcar não tivesse efeito visível: o clique desmarcava, a
-   * tabela era redesenhada e a caixa voltava marcada.
-   */
-  function cabecalhoSelecao(linhas) {
-    const todas = linhas.length > 0 && linhas.every((linha) => linha._selected !== false);
-    return `<th class="requests-col-check"><input aria-label="Selecionar todos os itens" id="requests-batch-all" type="checkbox"${todas ? " checked" : ""}/></th>`;
-  }
-
-  /**
-   * A tabela com as 26 colunas da planilha oficial, na ordem dela e todas
-   * editáveis. ITEM continua sendo mostrado, não digitado: a numeração é
-   * sequencial e vem do campo "Próximo item", para não haver dois itens 561.
-   */
-  function renderTabelaCompleta(linhas) {
-    const Report = root.GrconRequestsReport;
-    const colunas = Report.CONTROL_COLUMNS;
-    els.batchThead.innerHTML = `<tr>${cabecalhoSelecao(linhas)}${colunas
-      .map((coluna) => `<th>${escapeHtml(coluna.header)}</th>`).join("")}</tr>`;
-    els.batchTbody.innerHTML = linhas.map((linha, indice) => `<tr${linha._needsManualValidation ? ' class="precisa-validar"' : ""}>
-      <td class="requests-col-check"><input aria-label="Selecionar item ${escapeHtml(linha.item)}" data-batch-select="${indice}" type="checkbox"${linha._selected === false ? "" : " checked"}/></td>
-      ${colunas.map((coluna) => (coluna.key === "item"
-        ? `<td><strong>${escapeHtml(linha.item)}</strong></td>`
-        : `<td><input data-batch-field="${coluna.key}" data-batch-row="${indice}" type="text" value="${escapeHtml(linha[coluna.key] || "")}"/></td>`)).join("")}
-    </tr>`).join("");
-    els.batchBar.hidden = false;
-    els.batchTableWrap.hidden = false;
-    atualizarContagemLote();
-  }
-
-  function atualizarContagemLote() {
-    const quantos = state.requestRows.filter((linha) => linha._selected !== false).length;
-    if (els.batchCount) els.batchCount.textContent = `${quantos} selecionado(s)`;
-    if (els.batchUndo) els.batchUndo.disabled = !state.requestUndo.length;
-  }
-
-  /**
-   * Aplica de uma vez os campos preenchidos na barra. Só os preenchidos: um
-   * campo vazio não apaga o que já está na linha, senão aplicar responsável
-   * limparia a descrição sem querer.
-   */
-  function aplicarEmLote() {
-    const alvo = state.requestRows.filter((linha) => linha._selected !== false);
-    if (!alvo.length) { notify("Selecione ao menos um item.", "warn"); return; }
-    const tipo = els.batchType.value;
-    const responsavel = els.batchOwner.value.trim();
-    const inclusao = els.batchInclusion.value;
-    const observacao = els.batchNote.value.trim();
-    if (!tipo && !responsavel && !inclusao && !observacao) { notify("Preencha ao menos um campo da barra para aplicar.", "warn"); return; }
-
-    state.requestUndo.push(state.requestRows.map((linha) => ({ ...linha })));
-    if (state.requestUndo.length > 10) state.requestUndo.shift();
-
-    alvo.forEach((linha) => {
-      if (tipo) linha.requestType = tipo;
-      if (responsavel) linha.owner = responsavel;
-      if (inclusao) linha.needsLdInclusion = inclusao;
-      // A observação é acrescentada, não substituída: o motivo da triagem é
-      // informação que ninguém deveria perder ao anotar algo.
-      if (observacao) linha.observations = [linha.observations, observacao].filter(Boolean).join(" ");
-    });
-    els.batchNote.value = "";
-    renderPainelSolicitacao();
-    notify(`Aplicado a ${alvo.length} item(ns).`, "success");
-  }
-
-  function desfazerLote() {
-    const anterior = state.requestUndo.pop();
-    if (!anterior) return;
-    state.requestRows = anterior;
-    renderPainelSolicitacao();
-    notify("Alteração em lote desfeita.", "info");
-  }
-
-  function prepararFormularioDaSolicitacao() {
-    // Semeia a lista de tipos com os rótulos do controle oficial.
-    if (els.reqType && !els.reqType.options.length) {
-      R().requestTypeList(null).filter((tipo) => tipo.active).forEach((tipo) => {
-        const opcao = document.createElement("option");
-        opcao.value = tipo.label;
-        opcao.textContent = tipo.label;
-        els.reqType.appendChild(opcao);
-      });
-    }
-    if (els.reqReceived && !els.reqReceived.value) els.reqReceived.value = new Date().toISOString().slice(0, 10);
-    state.requestUndo = [];
-  }
-
-  async function copiarLinhasDaSolicitacao(comCabecalho) {
-    // O que vale é a tabela: ela já traz as edições e as ações em lote.
-    const linhas = state.requestRows.filter((linha) => linha._selected !== false);
-    if (!linhas.length) return;
-    const texto = root.GrconRequestsReport.controlClipboardText(linhas, comCabecalho);
-    try {
-      await navigator.clipboard.writeText(texto);
-      notify(`${linhas.length} linha(s) copiadas${comCabecalho ? " com cabeçalho" : ""}. Cole no Controle de Solicitações.`, "success");
-    } catch (_) {
-      notify("O navegador bloqueou a cópia automática.", "warn");
-    }
-  }
-
-
-  /**
-   * Grava a solicitação na área compartilhada. Só grava o que está selecionado
-   * na tabela, e o número da solicitação é obrigatório porque é ele que agrupa
-   * os itens — sem ele o banco recusa, e com razão.
-   */
-  async function salvarSolicitacao() {
-    const Cloud = root.GrconCloud;
-    if (!Cloud || !Cloud.saveRequest) { notify("Área compartilhada indisponível.", "warn"); return; }
-    const numero = els.reqNumber ? els.reqNumber.value.trim() : "";
-    if (!numero) {
-      notify("Informe o número da solicitação antes de salvar.", "warn");
-      if (els.reqNumber) els.reqNumber.focus();
-      return;
-    }
-    const itens = state.requestRows.filter((linha) => linha._selected !== false);
-    if (!itens.length) { notify("Selecione ao menos um item.", "warn"); return; }
-
-    els.reqSave.disabled = true;
-    els.reqSaved.textContent = "Salvando…";
-    try {
-      const resultado = await Cloud.saveRequest({
-        requestNumber: numero,
-        receivedAtIso: els.reqReceived ? els.reqReceived.value : "",
-        requester: els.reqRequester ? els.reqRequester.value.trim() : "",
-        owner: els.reqOwner ? els.reqOwner.value.trim() : "",
-        status: "recebido",
-      }, itens);
-      if (!resultado.ok) {
-        els.reqSaved.textContent = "";
-        notify(resultado.error, "warn");
-        return;
-      }
-      els.reqSaved.textContent = `${itens.length} item(ns) salvos em ${numero}.`;
-      window.dispatchEvent(new CustomEvent("grcon:requests-saved"));
-      notify(`Solicitação ${numero} salva com ${itens.length} item(ns).`, "success");
-    } finally {
-      els.reqSave.disabled = false;
-    }
-  }
-
-
-  // ---------------------------------------------------------------------------
-  // Painel de acompanhamento
-  //
-  // Mostra o que está gravado na área compartilhada, não o que está na tela: as
-  // alterações feitas aqui valem para todos e passam pelo banco, que registra
-  // cada uma no histórico do item.
-  // ---------------------------------------------------------------------------
-  const STATUS_ABERTOS = new Set(["rascunho", "recebido", "em_triagem", "aguardando_info", "pendente", "em_execucao", "aguardando_validacao"]);
-
-  function rotuloStatus(codigo) {
-    const encontrado = R().REQUEST_STATUSES.find((item) => item.code === codigo);
-    return encontrado ? encontrado.label : (codigo || "—");
-  }
-
-  async function carregarPainel() {
-    const Cloud = root.GrconCloud;
-    if (!Cloud || !Cloud.listRequestItems) return;
-    if (els.painelReload) els.painelReload.disabled = true;
-    try {
-      state.painelItems = await Cloud.listRequestItems();
-      state.painelSelected.clear();
-      renderPainel();
-    } finally {
-      if (els.painelReload) els.painelReload.disabled = false;
-    }
-  }
-
-  function itensDoPainel() {
-    const busca = state.painelSearch.trim().toLowerCase();
-    return state.painelItems.filter((item) => {
-      if (state.painelStatus && item.status !== state.painelStatus) return false;
-      if (state.painelOwner && (item.owner_name || "") !== state.painelOwner) return false;
-      if (state.painelQuick === "abertos" && !STATUS_ABERTOS.has(item.status)) return false;
-      if (state.painelQuick === "validar" && !item.needs_manual_validation) return false;
-      if (state.painelQuick === "novos" && !/novo/i.test(item.classification || "")) return false;
-      if (state.painelQuick === "sem-responsavel" && (item.owner_name || "").trim()) return false;
-      if (state.painelQuick === "concluidos" && item.status !== "concluido") return false;
-      if (busca) {
-        const campos = [item.protocol, item.document, item.request_number, item.owner_name, item.type_code, item.requester];
-        if (!campos.filter(Boolean).some((valor) => String(valor).toLowerCase().includes(busca))) return false;
-      }
-      return true;
-    });
-  }
-
-  function renderPainel() {
-    if (!els.painelTbody) return;
-    const todos = state.painelItems;
-    const visiveis = itensDoPainel();
-
-    // Indicadores: contam o conjunto inteiro, não o filtrado — senão o painel
-    // diria que não há pendências só porque o filtro escondeu.
-    const conta = (fn) => todos.filter(fn).length;
-    const indicadores = [
-      ["Itens registrados", todos.length, ""],
-      ["Em aberto", conta((i) => STATUS_ABERTOS.has(i.status)), "alerta"],
-      ["Aguardando validação", conta((i) => i.needs_manual_validation), "alerta"],
-      ["Documentos novos", conta((i) => /novo/i.test(i.classification || "")), ""],
-      ["Sem responsável", conta((i) => !(i.owner_name || "").trim()), "erro"],
-      ["Concluídos", conta((i) => i.status === "concluido"), "ok"],
-    ];
-    els.indicators.innerHTML = indicadores.map(([rotulo, valor, classe]) =>
-      `<div class="${classe}"><span>${rotulo}</span><strong>${valor.toLocaleString("pt-BR")}</strong></div>`).join("");
-    if (els.painelCount) {
-      const abertos = conta((i) => STATUS_ABERTOS.has(i.status));
-      els.painelCount.hidden = !abertos;
-      els.painelCount.textContent = String(abertos);
-    }
-
-    els.painelEmpty.hidden = Boolean(todos.length);
-    els.painelTableWrap.hidden = !todos.length;
-
-    els.painelTbody.innerHTML = visiveis.map((item) => `<tr${item.needs_manual_validation ? ' class="precisa-validar"' : ""}>
-      <td class="requests-col-check"><input aria-label="Selecionar ${escapeHtml(item.protocol)}" data-painel-select="${escapeHtml(item.protocol)}" type="checkbox"${state.painelSelected.has(item.protocol) ? " checked" : ""}/></td>
-      <td><strong>${escapeHtml(item.protocol)}</strong></td>
-      <td>${escapeHtml(item.request_number || "—")}</td>
-      <td><code>${escapeHtml(item.document || "—")}</code></td>
-      <td>${escapeHtml(item.type_code || "—")}</td>
-      <td>${escapeHtml(item.owner_name || "—")}</td>
-      <td>${escapeHtml(rotuloStatus(item.status))}</td>
-      <td>${escapeHtml(item.classification || "—")}</td>
-      <td>${escapeHtml((item.observations || "").slice(0, 90))}<button class="text-button requests-history-open" data-history="${escapeHtml(item.protocol)}" type="button">Histórico</button></td>
-    </tr>`).join("");
-
-    // Listas de filtro montadas a partir do que existe, não de uma lista fixa.
-    if (els.painelStatusSelect && els.painelStatusSelect.options.length <= 1) {
-      R().REQUEST_STATUSES.forEach((estado) => {
-        const opcao = document.createElement("option");
-        opcao.value = estado.code; opcao.textContent = estado.label;
-        els.painelStatusSelect.appendChild(opcao);
-        const outra = opcao.cloneNode(true);
-        if (els.painelSetStatus) els.painelSetStatus.appendChild(outra);
-      });
-    }
-    const responsaveis = [...new Set(todos.map((i) => (i.owner_name || "").trim()).filter(Boolean))].sort();
-    if (els.painelOwnerSelect && els.painelOwnerSelect.options.length - 1 !== responsaveis.length) {
-      els.painelOwnerSelect.innerHTML = '<option value="">Todos</option>' +
-        responsaveis.map((nome) => `<option>${escapeHtml(nome)}</option>`).join("");
-      els.painelOwnerSelect.value = state.painelOwner;
-    }
-
-    els.painelBatch.hidden = !state.painelSelected.size;
-    if (els.painelSelectedCount) els.painelSelectedCount.textContent = `${state.painelSelected.size} selecionado(s)`;
-  }
-
-  async function aplicarNoPainel() {
-    const Cloud = root.GrconCloud;
-    if (!Cloud || !Cloud.updateRequestItems) return;
-    const protocolos = [...state.painelSelected];
-    if (!protocolos.length) return;
-    const novoStatus = els.painelSetStatus ? els.painelSetStatus.value : "";
-    const novoResponsavel = els.painelSetOwner ? els.painelSetOwner.value.trim() : "";
-    const nota = els.painelNote ? els.painelNote.value.trim() : "";
-    if (!novoStatus && !novoResponsavel) { notify("Escolha um status ou informe um responsável.", "warn"); return; }
-
-    els.painelApply.disabled = true;
-    try {
-      // Uma chamada por campo: o banco grava o valor anterior e o novo em cada
-      // item, e é isso que permite reconstruir depois quem mudou o quê.
-      if (novoStatus) {
-        const r = await Cloud.updateRequestItems(protocolos, "status", novoStatus, nota);
-        if (!r.ok) { notify(r.error, "warn"); return; }
-      }
-      if (novoResponsavel) {
-        const r = await Cloud.updateRequestItems(protocolos, "owner_name", novoResponsavel, nota);
-        if (!r.ok) { notify(r.error, "warn"); return; }
-      }
-      if (els.painelNote) els.painelNote.value = "";
-      notify(`${protocolos.length} item(ns) atualizados para todos.`, "success");
-      await carregarPainel();
-    } finally {
-      els.painelApply.disabled = false;
-    }
-  }
-
-  function mostrarArea(area) {
-    els.areaConsulta.hidden = area !== "consulta";
-    els.areaSolicitacao.hidden = area !== "solicitacao";
-    els.areaPainel.hidden = area !== "painel";
-    els.areaTipos.hidden = area !== "tipos";
-    els.areaModelos.hidden = area !== "modelos";
-    document.querySelectorAll("[data-requests-area]").forEach((botao) => {
-      botao.classList.toggle("active", botao.dataset.requestsArea === area);
-    });
-    if (area === "solicitacao") prepararFormularioDaSolicitacao();
-    if (area === "painel") carregarPainel();
-    if (area === "tipos") carregarTipos();
-    if (area === "modelos") carregarModelos();
-  }
-
-
   /**
    * Sem área compartilhada configurada o GRCON é de uso local, e não há a quem
    * restringir. Tratar "sem área" como "não é proprietário" esconderia a
@@ -1183,133 +751,15 @@
     return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
   }
 
-
-  // ---------------------------------------------------------------------------
-  // Histórico do item
-  //
-  // O banco grava o valor anterior e o novo a cada alteração, e o histórico só
-  // recebe inserções. Isto aqui apenas mostra o que já está registrado: editar
-  // um item nunca sobrescreve o que havia antes.
-  // ---------------------------------------------------------------------------
-  function descreverEvento(evento) {
-    const campos = {
-      status: "Status", owner_name: "Responsável", type_code: "Descrição da solicitação",
-      priority: "Prioridade", deadline: "Prazo", observations: "Observações",
-      classification: "Classificação", needs_manual_validation: "Precisa de validação",
-    };
-    if (evento.action === "saved") return "Item gravado";
-    const campo = campos[evento.field] || evento.field || "Alteração";
-    const de = evento.old_value || "vazio";
-    const para = evento.new_value || "vazio";
-    return `${campo}: ${de} → ${para}`;
+  function mostrarArea(area) {
+    els.areaConsulta.hidden = area !== "consulta";
+    els.areaModelos.hidden = area !== "modelos";
+    document.querySelectorAll("[data-requests-area]").forEach((botao) => {
+      botao.classList.toggle("active", botao.dataset.requestsArea === area);
+    });
+    if (area === "modelos") carregarModelos();
   }
 
-  async function abrirHistorico(protocolo) {
-    const Cloud = root.GrconCloud;
-    if (!Cloud || !Cloud.requestItemHistory) { notify("Área compartilhada indisponível.", "warn"); return; }
-    els.historyProtocol.textContent = protocolo;
-    els.historyBody.innerHTML = '<p class="requests-vazio">Carregando…</p>';
-    els.history.hidden = false;
-    const eventos = await Cloud.requestItemHistory(protocolo);
-    if (!eventos.length) {
-      els.historyBody.innerHTML = '<p class="requests-vazio">Nenhum registro para este item ainda.</p>';
-      return;
-    }
-    els.historyBody.innerHTML = `<ol class="requests-history-list">${eventos.map((evento) => {
-      const quando = evento.created_at ? new Date(evento.created_at).toLocaleString("pt-BR") : "";
-      return `<li>
-        <span class="requests-history-when">${escapeHtml(quando)}</span>
-        <strong>${escapeHtml(descreverEvento(evento))}</strong>
-        ${evento.note ? `<span class="requests-history-note">${escapeHtml(evento.note)}</span>` : ""}
-      </li>`;
-    }).join("")}</ol>`;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Tipos de solicitação
-  //
-  // Ficam no banco e valem para a equipe. Excluir um tipo já usado não apaga
-  // solicitações antigas: a função do banco desativa em vez de remover, e
-  // devolve quantos itens foram preservados.
-  // ---------------------------------------------------------------------------
-  async function carregarTipos() {
-    const Cloud = root.GrconCloud;
-    if (Cloud && Cloud.getRequestTypes) {
-      const salvos = await Cloud.getRequestTypes();
-      state.tipos = R().requestTypeList(salvos && salvos.length ? salvos : null);
-    } else {
-      state.tipos = R().requestTypeList(null);
-    }
-    renderTipos();
-  }
-
-  function renderTipos() {
-    if (!els.tiposTbody) return;
-    const dono = ehProprietario();
-    els.tiposTbody.innerHTML = state.tipos.map((tipo) => `<tr${tipo.active ? "" : ' class="requests-tipo-inativo"'}>
-      <td><strong>${escapeHtml(tipo.label)}</strong></td>
-      <td><code>${escapeHtml(tipo.code)}</code></td>
-      <td>${escapeHtml(tipo.defaultAction || "—")}</td>
-      <td>${tipo.defaultDeadlineDays ? `${tipo.defaultDeadlineDays} dia(s)` : "—"}</td>
-      <td>${escapeHtml(tipo.defaultPriority)}</td>
-      <td>${tipo.order}</td>
-      <td>${tipo.active ? "sim" : "não"}</td>
-      <td>${dono ? `<button class="text-button" data-tipo-edit="${escapeHtml(tipo.code)}" type="button">Editar</button>
-           <button class="text-button danger" data-tipo-remove="${escapeHtml(tipo.code)}" type="button">Excluir</button>` : ""}</td>
-    </tr>`).join("");
-    if (els.tiposOwnerNote) els.tiposOwnerNote.hidden = dono;
-    if (els.tipoForm) els.tipoForm.hidden = !dono;
-  }
-
-  function preencherFormularioTipo(codigo) {
-    const tipo = state.tipos.find((item) => item.code === codigo);
-    if (!tipo) return;
-    els.tipoLabel.value = tipo.label;
-    els.tipoCode.value = tipo.code;
-    els.tipoAction.value = tipo.defaultAction || "";
-    els.tipoDays.value = tipo.defaultDeadlineDays || "";
-    els.tipoPriority.value = tipo.defaultPriority;
-    els.tipoOrder.value = tipo.order;
-    els.tipoLabel.focus();
-  }
-
-  async function salvarTipo() {
-    const Cloud = root.GrconCloud;
-    if (!Cloud || !Cloud.saveRequestType) { notify("Área compartilhada indisponível.", "warn"); return; }
-    const rotulo = els.tipoLabel.value.trim();
-    if (!rotulo) { notify("Informe o rótulo do tipo.", "warn"); els.tipoLabel.focus(); return; }
-    els.tipoSave.disabled = true;
-    try {
-      // normalizeRequestType gera o código a partir do rótulo quando ele não é
-      // informado, para ninguém precisar inventar um identificador.
-      const tipo = R().normalizeRequestType({
-        label: rotulo,
-        code: els.tipoCode.value.trim(),
-        defaultAction: els.tipoAction.value.trim(),
-        defaultDeadlineDays: els.tipoDays.value,
-        defaultPriority: els.tipoPriority.value,
-        order: els.tipoOrder.value,
-      });
-      const resultado = await Cloud.saveRequestType(tipo);
-      if (!resultado.ok) { notify(resultado.error, "warn"); return; }
-      [els.tipoLabel, els.tipoCode, els.tipoAction, els.tipoDays, els.tipoOrder].forEach((campo) => { campo.value = ""; });
-      notify(`Tipo “${tipo.label}” salvo para toda a equipe.`, "success");
-      await carregarTipos();
-    } finally {
-      els.tipoSave.disabled = false;
-    }
-  }
-
-  async function removerTipo(codigo) {
-    const Cloud = root.GrconCloud;
-    if (!Cloud || !Cloud.deleteRequestType) { notify("Área compartilhada indisponível.", "warn"); return; }
-    const tipo = state.tipos.find((item) => item.code === codigo);
-    if (!window.confirm(`Excluir o tipo “${tipo ? tipo.label : codigo}”?\n\nSe ele já estiver em uso, será apenas desativado e as solicitações antigas ficam intactas.`)) return;
-    const resultado = await Cloud.deleteRequestType(codigo);
-    if (!resultado.ok) { notify(resultado.error, "warn"); return; }
-    notify(`Tipo ${resultado.detalhe || "removido"}.`, "success");
-    await carregarTipos();
-  }
 
   // ---------------------------------------------------------------------------
   // Ligações
@@ -1347,71 +797,7 @@
     els.checkAll = $("#requests-check-all");
     els.empty = $("#requests-empty");
     els.summary = $("#requests-summary");
-    els.requestPanel = $("#requests-request-panel");
-    els.reqNumber = $("#requests-req-number");
-    els.reqNextItem = $("#requests-req-next-item");
-    els.reqOwner = $("#requests-req-owner");
-    els.reqReceived = $("#requests-req-received");
-    els.reqRequester = $("#requests-req-requester");
-    els.reqType = $("#requests-req-type");
-    els.reqOrigin = $("#requests-req-origin");
-    els.reqPath = $("#requests-req-path");
-    els.reqPreview = $("#requests-req-preview");
-    els.reqCopy = $("#requests-req-copy");
-    els.reqCopyHeaders = $("#requests-req-copy-headers");
-    els.reqClose = $("#requests-req-close");
-    els.batchBar = $("#requests-batch-bar");
-    els.batchCount = $("#requests-batch-count");
-    els.batchType = $("#requests-batch-type");
-    els.batchOwner = $("#requests-batch-owner");
-    els.batchInclusion = $("#requests-batch-inclusion");
-    els.batchNote = $("#requests-batch-note");
-    els.batchApply = $("#requests-batch-apply");
-    els.batchUndo = $("#requests-batch-undo");
-    els.batchTableWrap = $("#requests-batch-table-wrap");
-    els.batchTbody = $("#requests-batch-tbody");
-    els.batchAll = $("#requests-batch-all");
-    els.batchThead = $("#requests-batch-thead");
-    els.batchFull = $("#requests-batch-full");
-    els.manualPaste = $("#requests-manual-paste");
-    els.manualAppend = $("#requests-manual-append");
-    els.manualBlank = $("#requests-manual-blank");
-    els.reqFamily = $("#requests-req-family");
-    els.reqEmail = $("#requests-req-email");
-    els.reqStatus = $("#requests-req-status");
-    els.reqSave = $("#requests-req-save");
-    els.reqSaved = $("#requests-req-saved");
     els.areaConsulta = $("#requests-area-consulta");
-    els.areaSolicitacao = $("#requests-area-solicitacao");
-    els.areaPainel = $("#requests-area-painel");
-    els.painelCount = $("#requests-painel-count");
-    els.indicators = $("#requests-indicators");
-    els.painelTbody = $("#requests-painel-tbody");
-    els.painelTableWrap = $("#requests-painel-table-wrap");
-    els.painelEmpty = $("#requests-painel-empty");
-    els.painelSearch = $("#requests-painel-search");
-    els.painelStatusSelect = $("#requests-painel-status");
-    els.painelOwnerSelect = $("#requests-painel-owner");
-    els.painelClear = $("#requests-painel-clear");
-    els.painelReload = $("#requests-painel-reload");
-    els.painelAll = $("#requests-painel-all");
-    els.painelBatch = $("#requests-painel-batch");
-    els.painelSelectedCount = $("#requests-painel-selected");
-    els.painelSetStatus = $("#requests-painel-set-status");
-    els.painelSetOwner = $("#requests-painel-set-owner");
-    els.painelNote = $("#requests-painel-note");
-    els.painelApply = $("#requests-painel-apply");
-    els.areaTipos = $("#requests-area-tipos");
-    els.tipoForm = $("#requests-tipo-form");
-    els.tiposOwnerNote = $("#requests-tipos-owner-note");
-    els.tiposTbody = $("#requests-tipos-tbody");
-    els.tipoLabel = $("#requests-tipo-label");
-    els.tipoCode = $("#requests-tipo-code");
-    els.tipoAction = $("#requests-tipo-action");
-    els.tipoDays = $("#requests-tipo-days");
-    els.tipoPriority = $("#requests-tipo-priority");
-    els.tipoOrder = $("#requests-tipo-order");
-    els.tipoSave = $("#requests-tipo-save");
     els.areaModelos = $("#requests-area-modelos");
     els.modeloSelect = $("#requests-modelo-select");
     els.modeloRepeat = $("#requests-modelo-repeat");
@@ -1430,10 +816,6 @@
     els.modeloPreview = $("#requests-modelo-preview");
     els.modeloSave = $("#requests-modelo-save");
     els.modeloCancel = $("#requests-modelo-cancel");
-    els.history = $("#requests-history");
-    els.historyProtocol = $("#requests-history-protocol");
-    els.historyBody = $("#requests-history-body");
-    els.historyClose = $("#requests-history-close");
     els.step1 = $("#requests-step-1");
     els.step2 = $("#requests-step-2");
     els.step3 = $("#requests-step-3");
@@ -1549,97 +931,8 @@
     });
     els.undo.addEventListener("click", desfazer);
     els.clear.addEventListener("click", limparConsulta);
-    els.reqCopy.addEventListener("click", () => copiarLinhasDaSolicitacao(false));
-    els.reqCopyHeaders.addEventListener("click", () => copiarLinhasDaSolicitacao(true));
-    els.reqClose.addEventListener("click", limparSolicitacao);
-    els.batchApply.addEventListener("click", aplicarEmLote);
-    els.batchUndo.addEventListener("click", desfazerLote);
-    els.reqSave.addEventListener("click", salvarSolicitacao);
     document.querySelectorAll("[data-requests-area]").forEach((botao) =>
       botao.addEventListener("click", () => mostrarArea(botao.dataset.requestsArea)));
-    els.painelReload.addEventListener("click", carregarPainel);
-    els.painelApply.addEventListener("click", aplicarNoPainel);
-    els.painelSearch.addEventListener("input", (evento) => { state.painelSearch = evento.target.value; renderPainel(); });
-    els.painelStatusSelect.addEventListener("change", (evento) => { state.painelStatus = evento.target.value; renderPainel(); });
-    els.painelOwnerSelect.addEventListener("change", (evento) => { state.painelOwner = evento.target.value; renderPainel(); });
-    els.painelClear.addEventListener("click", () => {
-      state.painelQuick = "todos"; state.painelSearch = ""; state.painelStatus = ""; state.painelOwner = "";
-      els.painelSearch.value = ""; els.painelStatusSelect.value = ""; els.painelOwnerSelect.value = "";
-      document.querySelectorAll("[data-quick]").forEach((chip) => chip.classList.toggle("active", chip.dataset.quick === "todos"));
-      renderPainel();
-    });
-    document.querySelectorAll("[data-quick]").forEach((chip) => chip.addEventListener("click", () => {
-      state.painelQuick = chip.dataset.quick;
-      document.querySelectorAll("[data-quick]").forEach((outro) => outro.classList.toggle("active", outro === chip));
-      renderPainel();
-    }));
-    els.historyClose.addEventListener("click", () => { els.history.hidden = true; });
-    els.painelTbody.addEventListener("click", (evento) => {
-      const botao = evento.target.closest("[data-history]");
-      if (botao) abrirHistorico(botao.dataset.history);
-    });
-    els.painelTbody.addEventListener("change", (evento) => {
-      const caixa = evento.target.closest("[data-painel-select]");
-      if (!caixa) return;
-      const protocolo = caixa.dataset.painelSelect;
-      if (caixa.checked) state.painelSelected.add(protocolo); else state.painelSelected.delete(protocolo);
-      renderPainel();
-    });
-    els.painelAll.addEventListener("change", () => {
-      state.painelSelected.clear();
-      if (els.painelAll.checked) itensDoPainel().forEach((item) => state.painelSelected.add(item.protocol));
-      renderPainel();
-    });
-    // Depois de gravar, o painel deixa de estar desatualizado.
-    window.addEventListener("grcon:requests-saved", carregarPainel);
-    els.tipoSave.addEventListener("click", salvarTipo);
-    els.tiposTbody.addEventListener("click", (evento) => {
-      const editar = evento.target.closest("[data-tipo-edit]");
-      if (editar) { preencherFormularioTipo(editar.dataset.tipoEdit); return; }
-      const remover = evento.target.closest("[data-tipo-remove]");
-      if (remover) removerTipo(remover.dataset.tipoRemove);
-    });
-    // Delegado: o cabeçalho é reescrito ao trocar de modo, e um ouvinte preso
-    // ao elemento antigo pararia de funcionar sem dar sinal nenhum.
-    els.batchTableWrap.addEventListener("change", (evento) => {
-      const todos = evento.target.closest("#requests-batch-all");
-      if (!todos) return;
-      state.requestRows.forEach((linha) => { linha._selected = todos.checked; });
-      renderPainelSolicitacao();
-    });
-    els.batchFull.addEventListener("change", renderPainelSolicitacao);
-    els.manualAppend.addEventListener("click", () => acrescentarManuais(els.manualPaste.value));
-    els.manualBlank.addEventListener("click", () => { adicionarItemManual("", ""); regerarLinhasManuais(); });
-    els.manualPaste.addEventListener("keydown", (evento) => {
-      if ((evento.ctrlKey || evento.metaKey) && evento.key === "Enter") {
-        evento.preventDefault(); acrescentarManuais(els.manualPaste.value);
-      }
-    });
-    // Edição direta na tabela: sem abrir cada item numa tela separada.
-    els.batchTbody.addEventListener("change", (evento) => {
-      const selecao = evento.target.closest("[data-batch-select]");
-      if (selecao) {
-        const linha = state.requestRows[Number(selecao.dataset.batchSelect)];
-        if (linha) { linha._selected = selecao.checked; atualizarContagemLote(); }
-        return;
-      }
-      const campo = evento.target.closest("[data-batch-field]");
-      if (!campo) return;
-      const linha = state.requestRows[Number(campo.dataset.batchRow)];
-      if (linha) linha[campo.dataset.batchField] = campo.value;
-    });
-    // Mudar o cabeçalho regera as linhas — mas só enquanto não houve edição em
-    // lote, para uma correção de data não apagar o trabalho já feito na tabela.
-    [els.reqNextItem, els.reqOwner, els.reqReceived, els.reqRequester, els.reqType, els.reqOrigin, els.reqPath,
-     els.reqFamily, els.reqEmail, els.reqStatus]
-      .forEach((campo) => campo && campo.addEventListener("input", () => {
-        if (state.requestUndo.length) {
-          notify("A tabela já foi editada: o cabeçalho não é reaplicado sozinho. Use a barra de ações em lote.", "info");
-          return;
-        }
-        state.requestRows = linhasDaSolicitacao().map((linha) => ({ ...linha, _selected: true }));
-        renderPainelSolicitacao();
-      }));
 
     els.tbody.addEventListener("change", (evento) => {
       const caixa = evento.target.closest("[data-select]");

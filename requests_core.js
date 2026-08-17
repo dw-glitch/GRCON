@@ -189,6 +189,45 @@
     return itens;
   }
 
+  // Extensões que aparecem nos arquivos entregues. A lista é fechada de
+  // propósito: cortar "o que vier depois do último ponto" transformaria
+  // `LI-5290.00-22313` em `LI-5290`.
+  const FILE_EXTENSIONS = /\.(?:pdf|docx?|xlsx?|xlsm|dwg|dgn|pptx?|zip|rar|msg|eml|jpg|jpeg|png|tif|tiff)$/i;
+
+  /**
+   * Código do documento a partir do nome do arquivo entregue.
+   *
+   * Tira o caminho, a extensão e o sufixo de postagem (`_0001`, `_0001_A`) que
+   * o SIGEM acrescenta ao arquivo — o que sobra é o código como ele aparece na
+   * LD. Nada além disso é adivinhado: se o nome não tiver código nenhum, a
+   * resposta é vazia, e a tela pede o código à pessoa.
+   */
+  function documentFromFileName(fileName) {
+    const bruto = text(fileName).split(/[\\/]/).pop();
+    if (!bruto) return { document: "", fileName: "", removed: "", changed: false };
+    const semExtensao = bruto.replace(FILE_EXTENSIONS, "");
+    const semSufixo = semExtensao.replace(/_\d{4}(?:_[0-9A-Za-z]+)?$/, "");
+    const documento = text(semSufixo);
+    return {
+      document: documento,
+      fileName: bruto,
+      removed: text(semExtensao.slice(documento.length)),
+      changed: documento !== bruto,
+    };
+  }
+
+  /** Uma entrada de solicitação por arquivo anexado, sem repetir código. */
+  function documentsFromFiles(files) {
+    const entradas = [];
+    (files || []).forEach((file) => {
+      const nome = typeof file === "string" ? file : text(file && file.name);
+      const lido = documentFromFileName(nome);
+      if (!lido.document) return;
+      entradas.push({ document: lido.document, requestedTitle: "", fileName: lido.fileName, source: "arquivo anexado" });
+    });
+    return entradas;
+  }
+
   /**
    * Remove repetições pelo código normalizado, preservando a primeira ocorrência
    * e o título informado quando a primeira linha veio sem ele. Devolve também o
@@ -220,7 +259,15 @@
   // ---------------------------------------------------------------------------
 
   function occurrenceFrom(record) {
-    const estado = core() && core().allocationState ? core().allocationState(record.allocationStatus) : { kind: "empty", label: "Não informado" };
+    // A situação da alocação é lida da linha inteira — status, número de ALOC e
+    // a existência da coluna na aba —, a mesma leitura da Triagem. Ler só a
+    // célula de confirmação devolvia "não informado" para linha que traz o
+    // número da ALOC e para aba que nem rastreia alocação.
+    const estado = core() && core().allocationEvidenceState
+      ? core().allocationEvidenceState(record)
+      : core() && core().allocationState
+        ? core().allocationState(record.allocationStatus)
+        : { kind: "empty", label: "Não informado" };
     return {
       document: text(record.document),
       // O título sai exatamente como está na LD: sem maiúsculas forçadas, sem
@@ -229,6 +276,7 @@
       allocationStatus: text(record.allocationStatus),
       allocationKind: estado.kind,
       allocationLabel: estado.label,
+      allocationEvidence: text(estado.evidence),
       allocation: text(record.allocation),
       lastGrdt: text(record.grdt),
       sigemStatus: text(record.sigemStatus),
@@ -357,17 +405,33 @@
    * para o Excel. Quando não há ocorrência eleita, os campos ficam vazios em vez
    * de receberem o valor de uma LD qualquer.
    */
+  /**
+   * Como a alocação é dita em todas as saídas deste módulo. Cada situação tem a
+   * sua frase: alocado por status, alocado pelo número da ALOC, não alocado,
+   * aba sem coluna de alocação e coluna vazia são fatos diferentes.
+   */
+  function allocationAnswer(occurrence) {
+    const item = occurrence || null;
+    if (!item) return "";
+    if (item.allocationKind === "allocated") {
+      return item.allocationEvidence === "number" && item.allocation
+        ? `SIM — alocação evidenciada pelo número ${item.allocation}`
+        : "SIM — Alocado";
+    }
+    if (item.allocationKind === "not_allocated") return "NÃO — Não alocado";
+    if (item.allocationKind === "not_tracked") return "NÃO APURADO — a LD não rastreia alocação nesta aba";
+    if (item.allocationKind === "blank" || item.allocationKind === "empty") return "NÃO INFORMADO — campo de confirmação vazio na LD";
+    return `REVISAR — ${item.allocationLabel}`;
+  }
+
   function consultationRow(resultado) {
     const escolhida = resultado && resultado.chosen;
     const todas = (resultado && resultado.occurrences) || [];
     return {
       document: text(resultado && resultado.document),
       title: escolhida ? escolhida.title : "",
-      allocated: escolhida
-        ? (escolhida.allocationKind === "allocated" ? "SIM — Alocado"
-          : escolhida.allocationKind === "not_allocated" ? "NÃO — Não alocado"
-            : `REVISAR — ${escolhida.allocationLabel}`)
-        : "",
+      allocated: allocationAnswer(escolhida),
+      allocationKind: escolhida ? text(escolhida.allocationKind) : "",
       allocation: escolhida ? escolhida.allocation : "",
       lastGrdt: escolhida ? escolhida.lastGrdt : "",
       sigemStatus: escolhida ? escolhida.sigemStatus : "",
@@ -457,10 +521,89 @@
       // O título informado não vira "título oficial": ninguém conferiu na LD.
       _requestedTitle: text(entrada.requestedTitle),
       _itemNumber: entrada.itemNumber,
+      _fileName: text(entrada.fileName),
+      _source: text(entrada.source),
       _classification: "",
       _needsManualValidation: false,
       _manual: true,
     }));
+  }
+
+  /**
+   * O que a LD responde sobre um documento da solicitação: o número da alocação
+   * e se ele está alocado ou não.
+   *
+   * Consultar é opcional — quem não anexa LD continua preenchendo à mão. Quando
+   * a LD é consultada e o documento não aparece nela, a resposta é essa mesma, e
+   * não um palpite: os campos ficam vazios e a linha registra que foi procurado.
+   */
+  function ldFactsFor(document, index, options) {
+    const settings = options || {};
+    if (!index) {
+      return { consulted: false, found: false, allocation: "", allocated: "", allocationKind: "", sigemStatus: "", ldVersion: "", title: "", ld: "", note: "" };
+    }
+    const resultado = lookupDocument(document, index, settings);
+    const linha = consultationRow(resultado);
+    const escolhida = resultado.chosen;
+    if (!resultado.found || !escolhida) {
+      return {
+        consulted: true,
+        found: false,
+        allocation: "",
+        allocated: "",
+        allocationKind: "",
+        sigemStatus: "",
+        ldVersion: "",
+        title: "",
+        ld: "",
+        needsLdInclusion: "sim",
+        note: resultado.found
+          ? `Consultado na LD: ${linha.situation}. ${text(resultado.rule)}`.trim()
+          : "Consultado na LD: não localizado.",
+      };
+    }
+    return {
+      consulted: true,
+      found: true,
+      allocation: text(escolhida.allocation),
+      allocated: linha.allocated,
+      allocationKind: text(escolhida.allocationKind),
+      sigemStatus: text(escolhida.sigemStatus),
+      ldVersion: text(escolhida.ldVersion),
+      title: text(escolhida.title),
+      ld: text(escolhida.ld),
+      // Documento localizado na LD não precisa de inclusão; "não" aqui é o que
+      // a LD respondeu, não uma suposição.
+      needsLdInclusion: "não",
+      note: `Consultado na LD ${text(escolhida.ld)}${escolhida.sheet ? ` · aba ${escolhida.sheet}` : ""}${escolhida.row ? ` · linha ${escolhida.row}` : ""}.`,
+      needsManualValidation: Boolean(resultado.needsManualValidation),
+    };
+  }
+
+  /**
+   * Aplica na linha do controle o que a LD respondeu, sem apagar o que a pessoa
+   * já digitou: campo preenchido à mão continua valendo.
+   */
+  function applyLdFacts(row, facts) {
+    const linha = { ...(row || {}) };
+    const dados = facts || {};
+    if (!dados.consulted) return linha;
+    if (dados.allocation && !text(linha.allocation)) linha.allocation = dados.allocation;
+    if (dados.sigemStatus && !text(linha.sigemStatus)) linha.sigemStatus = dados.sigemStatus;
+    if (dados.ldVersion && !text(linha.ldVersion)) linha.ldVersion = dados.ldVersion;
+    if (dados.needsLdInclusion && !text(linha.needsLdInclusion)) linha.needsLdInclusion = dados.needsLdInclusion;
+    linha._allocated = text(dados.allocated);
+    linha._allocationKind = text(dados.allocationKind);
+    linha._ldTitle = text(dados.title);
+    linha._ld = text(dados.ld);
+    linha._ldConsulted = true;
+    linha._ldFound = Boolean(dados.found);
+    linha._needsManualValidation = Boolean(dados.needsManualValidation);
+    const nota = text(dados.note);
+    if (nota && !text(linha.observations).includes(nota)) {
+      linha.observations = [text(linha.observations), nota].filter(Boolean).join(" ");
+    }
+    return linha;
   }
 
   return Object.freeze({
@@ -476,10 +619,15 @@
     assignItemNumbers,
     duplicatedProtocols,
     parseDocumentList,
+    documentFromFileName,
+    documentsFromFiles,
     dedupeDocuments,
     lookupDocument,
     lookupDocuments,
     consultationRow,
+    allocationAnswer,
+    ldFactsFor,
+    applyLdFacts,
     chooseOccurrence,
   });
 });

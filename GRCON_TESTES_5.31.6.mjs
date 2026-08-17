@@ -378,11 +378,12 @@ check("solicitação é gravada pelo banco, com o protocolo e a transação do l
   // O protocolo enviado é o número do ITEM, não um identificador do cliente.
   assert.match(cloud, /protocol: String\(item\.item \|\| ""\)/);
 
-  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  // A gravação vive no módulo de Solicitações, que tem aba própria.
+  const app = fs.readFileSync(path.join(root, "solicitacoes_app.js"), "utf8");
   // Sem número da solicitação o app nem chega ao banco: é ele que agrupa os itens.
   assert.match(app, /Informe o número da solicitação antes de salvar/);
   // Grava apenas o que está selecionado na tabela.
-  assert.match(app, /state\.requestRows\.filter\(\(linha\) => linha\._selected !== false\)/);
+  assert.match(app, /state\.rows\.filter\(\(linha\) => linha\._selected !== false\)/);
 
   const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.9.sql"), "utf8");
   // Protocolo repetido em outra solicitação derruba a gravação inteira.
@@ -469,32 +470,145 @@ check("solicitação se preenche sem consulta e sem inventar classificação", (
   assert.equal(RequestsReport.controlRows(linhas)[0].length, 26);
 });
 
-check("consulta e solicitação são abas independentes", () => {
+check("consulta e solicitação são módulos separados, cada um na sua aba", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  // Cada uma na sua área, com botão próprio na subnavegação.
-  assert.match(html, /data-requests-area="consulta"/);
-  assert.match(html, /data-requests-area="solicitacao"/);
-  assert.match(html, /id="requests-area-solicitacao"/);
+  // Duas abas de primeiro nível, não duas áreas da mesma aba.
+  assert.match(html, /data-grcon-view="requests"/);
+  assert.match(html, /data-grcon-view="solicitacoes"/);
+  assert.match(html, /id="solicitacoes-module"/);
 
-  // O painel da solicitação não mora dentro da área da consulta: se morasse,
-  // registrar um pedido exigiria passar pela busca na LD.
-  const areaConsulta = html.slice(html.indexOf('<div id="requests-area-consulta">'), html.indexOf('<div hidden id="requests-area-solicitacao">'));
-  assert.doesNotMatch(areaConsulta, /id="requests-request-panel"/);
+  // A aba de Consultas não guarda mais nada de solicitação: nem o formulário,
+  // nem o acompanhamento, nem os tipos.
+  const moduloConsulta = html.slice(html.indexOf('<section id="requests-module"'), html.indexOf('<section id="solicitacoes-module"'));
+  assert.doesNotMatch(moduloConsulta, /id="requests-area-solicitacao"|id="requests-area-painel"|id="requests-area-tipos"/);
+  assert.doesNotMatch(moduloConsulta, /data-requests-area="solicitacao"/);
+
+  // E o módulo de Solicitações tem as três áreas próprias.
+  const moduloSolicitacoes = html.slice(html.indexOf('<section id="solicitacoes-module"'));
+  assert.match(moduloSolicitacoes, /data-sol-area="nova"/);
+  assert.match(moduloSolicitacoes, /data-sol-area="painel"/);
+  assert.match(moduloSolicitacoes, /data-sol-area="tipos"/);
 
   // Nenhuma ponte entre as duas: a consulta não manda nada para a solicitação.
   assert.doesNotMatch(html, /id="requests-to-request"/);
 
-  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  assert.doesNotMatch(app, /toRequest|documentosParaSolicitacao|abrirPainelSolicitacao/,
-    "sem sobras da ponte removida");
-  // As linhas da solicitação vêm só do que foi digitado nela.
-  assert.doesNotMatch(app, /buildControlRows\(/);
-  // Abrir a aba prepara o formulário; não exige documento consultado.
-  assert.match(app, /if \(area === "solicitacao"\) prepararFormularioDaSolicitacao\(\);/);
+  const consulta = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  assert.doesNotMatch(consulta, /toRequest|documentosParaSolicitacao|abrirPainelSolicitacao/, "sem sobras da ponte removida");
+  assert.doesNotMatch(consulta, /buildControlRows\(|renderPainelSolicitacao|carregarTipos/, "a solicitação saiu inteira da aba de consulta");
+
+  const solicitacoes = fs.readFileSync(path.join(root, "solicitacoes_app.js"), "utf8");
   // Itens digitados à mão alimentam a solicitação por conta própria.
-  assert.match(app, /buildManualControlRows/);
+  assert.match(solicitacoes, /buildManualControlRows/);
   // As 26 colunas ficam editáveis quando a pessoa precisa preencher tudo.
-  assert.match(app, /renderTabelaCompleta/);
+  assert.match(solicitacoes, /renderTabelaCompleta/);
+
+  // O carregador conhece o módulo novo e sabe qual seção mostrar.
+  const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
+  assert.match(loader, /solicitacoes: \["xlsx", "excel", "brand", "solicitacoes_app\.js"\]/);
+  assert.match(loader, /solicitacoes: "solicitacoes-module"/);
+  assert.match(loader, /GrconSolicitacoesUi/);
+});
+
+check("o código do documento sai do nome do arquivo anexado", () => {
+  // Sem extensão e sem o sufixo de postagem — é o código como está na LD.
+  const lido = Requests.documentFromFileName("C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019_0001_A.pdf");
+  assert.equal(lido.document, "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019");
+  assert.equal(lido.fileName, "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019_0001_A.pdf");
+  assert.equal(lido.changed, true);
+  // Caminho completo também serve: o que vale é o nome do arquivo.
+  assert.equal(Requests.documentFromFileName("C:\\Pedidos\\MA-5290.00-22000-ABC-C1O-001.pdf").document, "MA-5290.00-22000-ABC-C1O-001");
+  // Ponto do código não é extensão: cortar pelo último ponto quebraria a LI.
+  assert.equal(Requests.documentFromFileName("LI-5290.00-22313-950-1LV-001").document, "LI-5290.00-22313-950-1LV-001");
+  // Código puro passa intacto e sem marcar renomeação.
+  const puro = Requests.documentFromFileName("C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019");
+  assert.equal(puro.changed, false);
+  // Uma entrada por arquivo, pronta para virar item da solicitação.
+  const entradas = Requests.documentsFromFiles([{ name: "MA-5290.00-22000-ABC-C1O-001_0001.pdf" }, { name: ".pdf" }]);
+  assert.equal(entradas.length, 1);
+  assert.equal(entradas[0].document, "MA-5290.00-22000-ABC-C1O-001");
+  assert.equal(entradas[0].source, "arquivo anexado");
+});
+
+check("a LD anexada responde o número da alocação e se o documento está alocado", () => {
+  const registro = consultaRecord(ntBaseDocument, "LD_A.xlsx", {
+    allocationStatus: "ALOCADO", allocation: "C1O-ALOC-CM-0028-2026", sigemStatus: "Em Análise", ldVersion: "3",
+  });
+  const index = Core.buildIndex([registro], []);
+  const fatos = Requests.ldFactsFor(ntBaseDocument, index, {});
+  assert.equal(fatos.consulted, true);
+  assert.equal(fatos.found, true);
+  assert.equal(fatos.allocation, "C1O-ALOC-CM-0028-2026");
+  assert.equal(fatos.allocated, "SIM — Alocado");
+  assert.equal(fatos.needsLdInclusion, "não");
+
+  const [linha] = Requests.buildManualControlRows([{ document: ntBaseDocument }], {}, []);
+  const preenchida = Requests.applyLdFacts(linha, fatos);
+  assert.equal(preenchida.allocation, "C1O-ALOC-CM-0028-2026");
+  assert.equal(preenchida.sigemStatus, "Em Análise");
+  assert.equal(preenchida._allocated, "SIM — Alocado");
+  assert.match(preenchida.observations, /Consultado na LD LD_A\.xlsx/);
+
+  // O que a pessoa já digitou não é sobrescrito pela LD.
+  const digitada = Requests.applyLdFacts({ ...linha, allocation: "ALOC digitada à mão" }, fatos);
+  assert.equal(digitada.allocation, "ALOC digitada à mão");
+
+  // Documento fora da LD: campos vazios, e não um palpite.
+  const ausente = Requests.ldFactsFor("C1O_RNEST_U32_3.1.1.1_INS_RIR_NAO-EXISTE", index, {});
+  assert.equal(ausente.found, false);
+  assert.equal(ausente.allocation, "");
+  assert.equal(ausente.allocated, "");
+  assert.equal(ausente.needsLdInclusion, "sim");
+
+  // Sem LD anexada, nada é consultado e nada é preenchido.
+  const semLd = Requests.ldFactsFor(ntBaseDocument, null, {});
+  assert.equal(semLd.consulted, false);
+  assert.equal(semLd.allocated, "");
+  assert.deepEqual(Requests.applyLdFacts(linha, semLd), linha);
+});
+
+check("a alocação da consulta distingue número de ALOC, coluna vazia e aba sem coluna", () => {
+  const porNumero = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", {
+    allocationStatus: "", allocation: "C1O-ALOC-CM-0028-2026",
+  })], []);
+  assert.match(Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, porNumero)).allocated, /^SIM — alocação evidenciada pelo número/);
+
+  const vazia = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", {
+    allocationStatus: "", allocation: "", allocationStatusColumn: "U", allocationStatusHeader: "CONFIRMAÇÃO DE ALOCAÇÃO",
+  })], []);
+  assert.match(Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, vazia)).allocated, /^NÃO INFORMADO/);
+
+  const semColuna = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", {
+    allocationStatus: "", allocation: "", allocationStatusColumn: "", allocationStatusHeader: "",
+  })], []);
+  assert.match(Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, semColuna)).allocated, /^NÃO APURADO/);
+});
+
+check("a planilha da solicitação sai no padrão do Controle: cabeçalho na linha 5", async () => {
+  const linhas = Requests.buildManualControlRows(
+    [{ document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1" }],
+    { owner: "Laís", receivedAt: "17/08/2026", requestType: "POSTAGEM NO SIGEM" },
+    [{ protocol: "556" }],
+  );
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Controle de Solicitações");
+  const layout = RequestsReport.writeControlSheet(sheet, linhas, { title: "CONTROLE DE SOLICITAÇÕES", metadata: "1 item" });
+  assert.equal(layout.headerRow, 5);
+  assert.equal(layout.firstDataRow, 6);
+
+  const bytes = await workbook.xlsx.writeBuffer();
+  const reaberto = new ExcelJS.Workbook();
+  await reaberto.xlsx.load(bytes);
+  const aba = reaberto.getWorksheet("Controle de Solicitações");
+  // Mesma ordem e mesma grafia das colunas da planilha oficial.
+  RequestsReport.CONTROL_COLUMNS.forEach((coluna, indice) => {
+    assert.equal(aba.getCell(5, indice + 1).value, coluna.header);
+  });
+  assert.equal(aba.getCell(6, 1).value, "557");
+  assert.equal(aba.getCell(6, 2).value, "Laís");
+  assert.equal(aba.getCell(6, 9).value, "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1");
+  // O que não se aplica sai como "na", igual à planilha da rede.
+  assert.equal(aba.getCell(6, 15).value, "na");
+  assert.equal(aba.columnCount, RequestsReport.CONTROL_COLUMNS.length);
 });
 
 check("modelo de exportação guarda ordem e nome das colunas escolhidas", () => {
