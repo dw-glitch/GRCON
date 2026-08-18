@@ -295,6 +295,12 @@
    * LDs diferentes: uma ocorrência inteira é eleita, e as outras seguem
    * visíveis para conferência.
    */
+  /** Ocorrências que se contradizem quanto à alocação do mesmo documento. */
+  function allocationConflict(occurrences) {
+    const tipos = new Set((occurrences || []).map((item) => text(item && item.allocationKind)));
+    return tipos.has("allocated") && tipos.has("not_allocated");
+  }
+
   function chooseOccurrence(occurrences) {
     if (!occurrences.length) return { chosen: null, rule: "", conflicting: false };
     if (occurrences.length === 1) {
@@ -313,12 +319,14 @@
       return { chosen: maisRecente, rule: `Localizado em ${occurrences.length} LDs com a mesma informação.`, conflicting: false };
     }
     if (empatadas.length > 1) {
-      // Sem critério para desempatar, quem decide é a pessoa.
-      return {
-        chosen: null,
-        rule: `As LDs divergem e têm a mesma data de envio (${empatadas.map((item) => item.ld).join(", ")}). Escolha qual vale.`,
-        conflicting: true,
-      };
+      // Sem critério para desempatar, quem decide é a pessoa. Quando as linhas
+      // vêm do mesmo arquivo, dizer "as LDs divergem" mandava procurar uma
+      // segunda LD que não existe: a divergência está dentro da mesma planilha.
+      const arquivos = [...new Set(empatadas.map((item) => text(item.ld)).filter(Boolean))];
+      const onde = arquivos.length > 1
+        ? `As LDs divergem e têm a mesma data de envio (${arquivos.join(", ")}).`
+        : `A LD ${arquivos[0] || "informada"} traz linhas divergentes para o mesmo documento (${empatadas.map((item) => `${item.sheet || "aba"} · linha ${item.row || "?"}`).join(", ")}).`;
+      return { chosen: null, rule: `${onde} Escolha qual vale.`, conflicting: true };
     }
     return {
       chosen: maisRecente,
@@ -413,6 +421,7 @@
   function allocationAnswer(occurrence) {
     const item = occurrence || null;
     if (!item) return "";
+    if (item.allocationKind === "conflict") return "CONFLITO — a LD registra ALOCADO e NÃO ALOCADO";
     if (item.allocationKind === "allocated") {
       return item.allocationEvidence === "number" && item.allocation
         ? `SIM — alocação evidenciada pelo número ${item.allocation}`
@@ -430,8 +439,14 @@
     return {
       document: text(resultado && resultado.document),
       title: escolhida ? escolhida.title : "",
-      allocated: allocationAnswer(escolhida),
-      allocationKind: escolhida ? text(escolhida.allocationKind) : "",
+      // Sem ocorrência eleita por divergência de alocação, a resposta é o
+      // conflito — deixar em branco fazia a consulta parecer que não apurou.
+      allocated: escolhida
+        ? allocationAnswer(escolhida)
+        : allocationConflict(todas)
+          ? "CONFLITO — a LD registra ALOCADO e NÃO ALOCADO"
+          : "",
+      allocationKind: escolhida ? text(escolhida.allocationKind) : (allocationConflict(todas) ? "conflict" : ""),
       allocation: escolhida ? escolhida.allocation : "",
       lastGrdt: escolhida ? escolhida.lastGrdt : "",
       sigemStatus: escolhida ? escolhida.sigemStatus : "",
@@ -446,6 +461,71 @@
         : resultado.conflicting || !escolhida
           ? "Requer validação manual"
           : "Localizado",
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Histórico do próprio GRCON
+  //
+  // A consulta responde o que a LD diz sobre o documento. Falta a outra metade
+  // da pergunta que se faz o dia inteiro: este documento já foi emitido por
+  // nós? Em que eGRDT e quando? O histórico de eGRDTs geradas fica no
+  // navegador; aqui só se dá forma ao que ele devolve.
+  //
+  // A regra de sempre continua: sem registro, a resposta é "não emitido", e não
+  // um silêncio que se confunde com "não consultei".
+  // ---------------------------------------------------------------------------
+
+  /** Data ISO do histórico no formato de leitura (dd/mm/aaaa). */
+  function formatDateBR(value) {
+    const raw = text(value);
+    if (!raw) return "";
+    const data = new Date(raw);
+    if (Number.isNaN(data.getTime())) {
+      const simples = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return simples ? `${simples[3]}/${simples[2]}/${simples[1]}` : raw;
+    }
+    return data.toLocaleDateString("pt-BR");
+  }
+
+  /**
+   * Resposta do histórico para um documento, pronta para a tela e para o Excel.
+   *
+   * `entries` são os registros do histórico local ({ egrdtNumber, generatedAt }),
+   * da emissão mais recente para a mais antiga.
+   */
+  function issuedHistory(entries) {
+    const lista = (entries || [])
+      .map((item) => ({ egrdt: text(item && item.egrdtNumber), date: formatDateBR(item && item.generatedAt) }))
+      .filter((item) => item.egrdt);
+    if (!lista.length) {
+      return { issued: false, count: 0, egrdt: "", date: "", all: [], label: "Não emitido pelo GRCON", cell: "Não emitido" };
+    }
+    const [maisRecente] = lista;
+    return {
+      issued: true,
+      count: lista.length,
+      egrdt: maisRecente.egrdt,
+      date: maisRecente.date,
+      all: lista,
+      label: `${maisRecente.egrdt}${maisRecente.date ? ` · ${maisRecente.date}` : ""}${lista.length > 1 ? ` · +${lista.length - 1} anterior(es)` : ""}`,
+      // No Excel a data fica na linha de baixo, dentro da mesma célula: é assim
+      // que se lê o número sem perder de vista quando ele saiu.
+      cell: lista.map((item) => (item.date ? `${item.egrdt}\n${item.date}` : item.egrdt)).join("\n"),
+    };
+  }
+
+  /** Os campos que a linha da consulta ganha com o histórico. */
+  function issuedColumns(entries) {
+    const historico = issuedHistory(entries);
+    return {
+      issued: historico.issued ? "SIM" : "NÃO",
+      issuedEgrdt: historico.egrdt,
+      issuedAt: historico.date,
+      issuedCount: historico.count,
+      issuedCell: historico.cell,
+      issuedLabel: historico.label,
+      issuedAll: historico.all,
     };
   }
 
@@ -625,6 +705,10 @@
     lookupDocument,
     lookupDocuments,
     consultationRow,
+    allocationConflict,
+    formatDateBR,
+    issuedHistory,
+    issuedColumns,
     allocationAnswer,
     ldFactsFor,
     applyLdFacts,

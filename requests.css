@@ -472,3 +472,27 @@ html[data-app="GRCON"] .requests-request-grid textarea {
 }
 html[data-app="GRCON"][data-theme="dark"] .requests-manual-add textarea,
 html[data-app="GRCON"][data-theme="dark"] .requests-request-grid textarea { background: var(--surface-2); color: var(--text-1); border-color: var(--border-2); }
+
+/* Coluna "Emitido pelo GRCON": o número da eGRDT com a data logo abaixo — a
+   pergunta que se faz junto com a consulta é "já saiu daqui alguma vez?". */
+html[data-app="GRCON"] .requests-col-emitido { min-width: 13rem; }
+html[data-app="GRCON"] .requests-emitido {
+  display: grid;
+  gap: .1rem;
+  line-height: 1.25;
+}
+html[data-app="GRCON"] .requests-emitido strong {
+  font-size: .74rem;
+  font-weight: 750;
+  color: var(--text-1, #17324a);
+  overflow-wrap: anywhere;
+}
+html[data-app="GRCON"] .requests-emitido small {
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--brand-600, #24689a);
+}
+html[data-app="GRCON"] .requests-nao-emitido {
+  font-size: .72rem;
+  color: var(--text-3, #6f8296);
+}

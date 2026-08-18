@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.32.27";
+  const APP_VERSION = "5.32.28";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -2869,6 +2869,9 @@
 
   function compactDecisionLabel(row) {
     if (manuallyIncluded(row)) return "Incluído manualmente";
+    // Conflito de alocação não é "não alocado": a LD tem duas respostas e quem
+    // decide é a pessoa. Chamar de "não incluir" escondia a diferença.
+    if (row.blockCode === "not_allocated_conflict") return "Conferir alocação";
     if (row.hardBlock) return "Não incluir";
     if (row.decision === C.READY) return "Incluir";
     if (row.decision === C.DISCARD) return "Em análise";
@@ -3663,12 +3666,19 @@
       const allocation = record.allocation || "—";
       const allocationStage = record.allocationStage || ldValue(record, "ETAPA DA ALOCAÇÃO") || "—";
       // Sem status na célula, a coluna diz qual é o fato: coluna ausente na
-      // aba, célula vazia, ou alocação evidenciada pelo número de ALOC.
-      const allocationStatus = record.allocationStatus
-        || (C.allocationEvidenceState ? C.allocationEvidenceState(record).label : "")
-        || "—";
+      // aba, célula vazia, ou alocação evidenciada pelo número de ALOC. Com as
+      // duas respostas na LD, mostra o conflito — imprimir só o valor da linha
+      // escolhida fazia a tabela parecer contradizer a própria decisão.
+      const conflitoAlocacao = row.allocationFinding && row.allocationFinding.kind === "conflict";
+      const allocationStatus = conflitoAlocacao
+        ? "CONFLITO — ALOCADO × NÃO ALOCADO"
+        : record.allocationStatus
+          || (C.allocationEvidenceState ? C.allocationEvidenceState(record).label : "")
+          || "—";
       const allocationVisual = C.allocationEvidenceState ? C.allocationEvidenceState(record) : C.allocationState(record.allocationStatus || row.allocationStatus);
-      const allocationClass = row.hardBlock
+      const allocationClass = conflitoAlocacao
+        ? "review"
+        : row.hardBlock
         ? "blocked"
         : allocationVisual.kind === "allocated" ? "allocated"
         : allocationVisual.kind === "empty" || allocationVisual.kind === "blank" || allocationVisual.kind === "not_tracked" ? "empty"
@@ -3704,7 +3714,7 @@
         <td><span class="text-cell" title="${escapeHtml(fiscalComment)}">${escapeHtml(fiscalComment)}</span></td>
         <td><span class="text-cell">${escapeHtml(allocation)}</span></td>
         <td><span class="text-cell" title="${escapeHtml(allocationStage)}">${escapeHtml(allocationStage)}</span></td>
-        <td><span class="allocation-state ${allocationClass}">${escapeHtml(allocationStatus)}</span></td>
+        <td><span class="allocation-state ${allocationClass}" title="${escapeHtml(conflitoAlocacao ? row.allocationFinding.source || "" : "")}">${escapeHtml(allocationStatus)}</span></td>
         <td><span class="text-cell" title="${escapeHtml(databook)}">${escapeHtml(databook)}</span></td>
         <td><span class="filename-value" title="${escapeHtml(row.finalName)}">${escapeHtml(row.finalName)}</span>${companionCount ? `<span class="cell-muted">+${companionCount} arquivo(s)</span>` : ""}</td>
       </tr>`;

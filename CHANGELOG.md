@@ -1,5 +1,24 @@
 # Histórico de alterações
 
+## 5.32.28 — 2026-08-18
+
+### Alocação: o GRCON deixa de contradizer a LD
+
+- **LD com ALOCADO e NÃO ALOCADO para o mesmo documento passa a ser tratada como conflito, não como não alocação.** Antes, qualquer linha `NÃO ALOCADO` no grupo bloqueava e o relatório afirmava “Não alocado”, mesmo com outra linha da mesma LD registrando `ALOCADO` e o número da ALOC. A situação agora é `Conferir alocação` / `CONFLITO — a LD registra ALOCADO e NÃO ALOCADO`, e o motivo cita as duas linhas, com arquivo, aba, linha e número de alocação de cada uma.
+- **A evidência aponta para a linha atual da LD.** O bloqueio usava a primeira linha negativa encontrada na varredura; agora usa a mais recente (arquivo mais novo, aba mais nova, linha de baixo), que é a que a pessoa vê ao abrir a planilha. Título, revisão, GRDT e Databook também passam a vir dela.
+- **`NÃO ALOCADO` com número de ALOC preenchido passa a ser dito como `Aguardando retorno da alocação`.** É o caso que mais confundia: a LD mostra a ALOC enviada e o relatório respondia apenas “Não alocado”. O bloqueio é o mesmo; o que muda é a frase, que agora nomeia o estado e cita o número da ALOC.
+- A regra de segurança continua: nada com `NÃO ALOCADO` entra sozinho na eGRDT, em nenhum dos casos, e a inclusão manual segue disponível para quem decide caso a caso.
+- A consulta de documentos deixa de responder alocação em branco quando as linhas divergem: diz o conflito. E, quando a divergência é dentro da mesma LD, o texto para de mandar procurar uma segunda LD que não existe — cita a aba e as linhas.
+
+### Consulta
+
+- A consulta de documentos passa a responder também **se o documento já foi emitido pelo GRCON**: a coluna “Emitido pelo GRCON” traz o número da eGRDT com a data logo abaixo, tanto na tabela da tela quanto na planilha exportada.
+- Quando o documento saiu em mais de uma eGRDT, a mais recente encabeça e a tela indica quantas anteriores existem; a planilha lista todas, uma por linha dentro da célula.
+- Documento consultado e sem registro no histórico responde “Não emitido” — resposta, e não uma célula vazia que se confunde com “não consultei”.
+- A busca no histórico usa primeiro a grafia da LD, que é a que vai para a eGRDT, e só depois o código informado.
+- A cópia por tabulação passa a manter um documento por linha mesmo com células de duas linhas.
+- Removido `grcon_grdt_history_indicator.js`: ele definia o mesmo `window.GrconGrdtHistoryIndicator` que `grdt_history_indicator.js` e era sobrescrito por ele — carregava em toda sessão sem nunca ser usado.
+
 ## 5.32.27 — 2026-08-17
 
 **Apêndice 3 embutido.** A base contratual dos bens tagueados (Rev. B, 5.682 TAGs) passa a acompanhar o aplicativo. Não há mais arquivo a selecionar: toda análise cruza o TAG e o relatório da triagem responde sempre `BUSCA NO APÊNDICE` e `Tagueado sim ou não?`. Para uma revisão nova do Apêndice, `apendice_base.js` é gerado de novo a partir da planilha.

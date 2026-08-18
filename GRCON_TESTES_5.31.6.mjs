@@ -346,16 +346,36 @@ check("LDs que divergem elegem a mais recente, explicam a regra e pedem confirma
   assert.match(linha.rule, /mais recente: LD_NOVA/);
 });
 
-check("empate entre LDs divergentes devolve a decisão sem preencher campo algum", () => {
+check("empate entre LDs divergentes não preenche campo por palpite, mas diz o conflito", () => {
   const index = Core.buildIndex([
     consultaRecord(ntBaseDocument, "LD_A.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "", sourceTimestamp: 500 }),
     consultaRecord(ntBaseDocument, "LD_B.xlsx", { allocationStatus: "ALOCADO", sourceTimestamp: 500 }),
   ], []);
   const linha = Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index));
+  // Título, GRDT e LD escolhida continuam vazios: escolher um lado seria palpite.
   assert.equal(linha.title, "");
-  assert.equal(linha.allocated, "");
+  assert.equal(linha.lastGrdt, "");
+  assert.equal(linha.ld, "");
+  // A alocação, não: deixar em branco fazia parecer que nada foi apurado,
+  // quando o que existe é uma LD dizendo as duas coisas.
+  assert.equal(linha.allocated, "CONFLITO — a LD registra ALOCADO e NÃO ALOCADO");
+  assert.equal(linha.allocationKind, "conflict");
   assert.equal(linha.allLds, "LD_A.xlsx | LD_B.xlsx");
   assert.match(linha.rule, /Escolha qual vale/);
+  assert.match(linha.rule, /As LDs divergem/, "arquivos diferentes: a mensagem cita as LDs");
+});
+
+check("linhas divergentes dentro da mesma LD não mandam procurar uma segunda LD", () => {
+  const index = Core.buildIndex([
+    { ...consultaRecord(ntBaseDocument, "LD_UNICA.xlsx", { allocationStatus: "NÃO ALOCADO", allocation: "" }), row: 15752 },
+    { ...consultaRecord(ntBaseDocument, "LD_UNICA.xlsx", { allocationStatus: "ALOCADO", allocation: "C1O-ALOC-CM-0094-2026" }), row: 16155 },
+  ], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index));
+  assert.equal(linha.allocated, "CONFLITO — a LD registra ALOCADO e NÃO ALOCADO");
+  assert.match(linha.rule, /traz linhas divergentes para o mesmo documento/);
+  assert.match(linha.rule, /linha 15752/);
+  assert.match(linha.rule, /linha 16155/);
+  assert.doesNotMatch(linha.rule, /As LDs divergem/);
 });
 
 check("consulta aproveita a regra do nt- e rebaixa a confiança do resultado", () => {
@@ -1622,6 +1642,139 @@ check("o rolamento da tabela não colapsa nem cresce sozinho", () => {
   assert.match(app, /const start = Math\.min\(maiorInicio,/);
   // E a altura de linha é conferida contra o que o navegador desenhou.
   assert.match(app, /function calibrateVirtualRowHeight\(\)/);
+});
+
+check("a consulta responde se o documento já foi emitido pelo GRCON, com a data", () => {
+  const entradas = [
+    { egrdtNumber: "0130870-C1O-PGV-G-1252/2026 - eGRDT", generatedAt: "2026-08-17T13:05:00.000Z" },
+    { egrdtNumber: "0130870-C1O-PGV-G-1180/2026 - eGRDT", generatedAt: "2026-07-02T10:00:00.000Z" },
+  ];
+  const emitido = Requests.issuedHistory(entradas);
+  assert.equal(emitido.issued, true);
+  assert.equal(emitido.count, 2);
+  assert.equal(emitido.egrdt, "0130870-C1O-PGV-G-1252/2026 - eGRDT", "a mais recente encabeça");
+  assert.equal(emitido.date, "17/08/2026");
+  // No Excel a data fica na linha de baixo, dentro da mesma célula.
+  assert.equal(emitido.cell.split("\n")[0], "0130870-C1O-PGV-G-1252/2026 - eGRDT");
+  assert.equal(emitido.cell.split("\n")[1], "17/08/2026");
+
+  // Sem registro a resposta é dita, não omitida.
+  const nunca = Requests.issuedHistory([]);
+  assert.equal(nunca.issued, false);
+  assert.equal(nunca.cell, "Não emitido");
+  assert.equal(nunca.egrdt, "");
+
+  // Os campos que a linha da consulta carrega para a tela e para a planilha.
+  const colunas = Requests.issuedColumns(entradas);
+  assert.equal(colunas.issued, "SIM");
+  assert.equal(colunas.issuedEgrdt, entradas[0].egrdtNumber);
+  assert.equal(colunas.issuedAt, "17/08/2026");
+  assert.equal(colunas.issuedAll.length, 2);
+
+  // A coluna existe na planilha da consulta, ao lado da GRDT que veio da LD.
+  const chaves = RequestsReport.COLUMNS.map((coluna) => coluna.key);
+  assert.ok(chaves.includes("issuedCell"), "a planilha precisa levar a eGRDT emitida");
+  assert.equal(chaves[chaves.indexOf("lastGrdt") + 1], "issuedCell");
+
+  // E na tabela da tela, com o mesmo número de colunas do cabeçalho.
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const tabela = html.slice(html.indexOf('<table class="requests-table" id="requests-table">'), html.indexOf("<tbody id=\"requests-tbody\">"));
+  assert.match(tabela, /<th>Emitido pelo GRCON<\/th>/);
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  assert.match(app, /issuedColumns\(historicoDoGrcon\(resultado, item\.document\)\)/);
+  // Cabeçalho e linha precisam ter a mesma quantidade de células.
+  const modelo = app.slice(app.indexOf("<tr data-doc="), app.indexOf("</tr>`;"));
+  assert.equal((tabela.match(/<th[ >]/g) || []).length, (modelo.match(/<td[ >]/g) || []).length);
+});
+
+check("uma célula com duas linhas não vira duas linhas na cópia", () => {
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  // A cópia por tabulação precisa manter um documento por linha.
+  assert.match(app, /replace\(\/\\s\*\\n\\s\*\/g, " · "\)/);
+});
+
+check("existe um só módulo de histórico de eGRDT por documento", () => {
+  // Dois arquivos definiam window.GrconGrdtHistoryIndicator; o segundo apagava
+  // o primeiro, que ficava carregando sem nunca ser usado.
+  assert.ok(!fs.existsSync(path.join(root, "grcon_grdt_history_indicator.js")), "o módulo sombreado não pode voltar");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.equal((html.match(/grdt_history_indicator\.js/g) || []).length, 1);
+  const indicador = fs.readFileSync(path.join(root, "grdt_history_indicator.js"), "utf8");
+  assert.match(indicador, /getEntries/);
+});
+
+check("LD com ALOCADO e NÃO ALOCADO para o mesmo documento é conflito, não é não alocado", () => {
+  // Caso real da LD do usuário: a linha 16155 registra ALOCADO com o número da
+  // ALOC, e uma linha anterior registra NÃO ALOCADO. O GRCON respondia "Não
+  // alocado" e apontava a evidência para a primeira linha negativa que
+  // encontrasse — contradizendo a LD que a pessoa tem aberta na frente.
+  const antiga = { ...ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO"), row: 15752, allocation: "" };
+  const atual = { ...ldDocumentRecord(ntBaseDocument, "ALOCADO"), row: 16155, allocation: "C1O-ALOC-CM-0094-2026" };
+  const index = Core.buildIndex([antiga, atual], []);
+  const resultado = Core.triageOne({ id: "conflito", name: `${ntBaseDocument}.pdf` }, index, {});
+
+  assert.equal(resultado.blockCode, "not_allocated_conflict");
+  assert.equal(resultado.status, "Alocação conflitante na LD");
+  assert.match(resultado.allocationStatus, /^CONFLITO/);
+  assert.notEqual(resultado.allocationStatus, "NÃO ALOCADO");
+  // A evidência aponta para a linha atual da LD, não para a primeira negativa.
+  assert.equal(resultado.record.row, 16155);
+  // O motivo cita as duas linhas e o número da alocação.
+  assert.match(resultado.reason, /linha 15752/);
+  assert.match(resultado.reason, /linha 16155/);
+  assert.match(resultado.reason, /C1O-ALOC-CM-0094-2026/);
+  // Continua fora da eGRDT automática, e a inclusão manual segue disponível.
+  assert.equal(resultado.hardBlock, true);
+
+  // A mensagem ao usuário deixa de afirmar que a LD diz "não alocado".
+  const mensagem = Core.decisionMessage(resultado);
+  assert.equal(mensagem.code, "ALLOCATION_CONFLICT");
+  assert.doesNotMatch(mensagem.explanation, /não está alocado/);
+
+  // E o Resumo diz conflito nas duas colunas que respondem alocação.
+  const [linha] = ReportSummary.buildRows([resultado], {});
+  assert.match(linha.allocated, /^CONFLITO/);
+  assert.match(linha.allocationReason, /ALOCADO em uma linha e NÃO ALOCADO em outra/);
+});
+
+check("documento só com NÃO ALOCADO continua bloqueado, e pela linha mais recente", () => {
+  const antiga = { ...ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO"), row: 10, allocation: "" };
+  const atual = { ...ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO"), row: 900, allocation: "C1O-ALOC-CM-0100-2026" };
+  const index = Core.buildIndex([antiga, atual], []);
+  const resultado = Core.triageOne({ id: "bloqueado", name: `${ntBaseDocument}.pdf` }, index, {});
+  assert.equal(resultado.blockCode, "not_allocated");
+  assert.equal(resultado.allocationStatus, "NÃO ALOCADO");
+  assert.equal(resultado.hardBlock, true);
+  assert.equal(resultado.record.row, 900, "a evidência cita a linha atual da LD");
+  assert.equal(Core.mostRecentRecord([antiga, atual]).row, 900);
+  // A linha atual tem número de ALOC: o bloqueio é o mesmo, e a situação diz
+  // que o que falta é o retorno.
+  assert.equal(resultado.status, "Aguardando retorno da alocação");
+});
+
+check("NÃO ALOCADO com ALOC enviada é dito como aguardando retorno, não como recusa", () => {
+  // Caso da ALOC C1O-ALOC-CM-0223-2026 na LD do usuário: a coluna ALOCAÇÃO traz
+  // o número (a ALOC foi enviada) e a confirmação ainda diz NÃO ALOCADO. Dizer
+  // só "Não alocado" fazia quem olha a LD, com o número preenchido, achar que o
+  // GRCON contradizia a planilha.
+  const comAloc = { ...ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO"), allocation: "C1O-ALOC-CM-0223-2026" };
+  const index = Core.buildIndex([comAloc], []);
+  const resultado = Core.triageOne({ id: "aguardando", name: `${ntBaseDocument}.pdf` }, index, {});
+  assert.equal(resultado.status, "Aguardando retorno da alocação");
+  assert.match(resultado.reason, /C1O-ALOC-CM-0223-2026 está registrada na LD/);
+  assert.match(resultado.reason, /a postagem permanece bloqueada/);
+  assert.equal(resultado.hardBlock, true, "continua fora da eGRDT");
+  assert.equal(resultado.allocationStatus, "NÃO ALOCADO", "o valor da coluna da LD é preservado");
+  const [linha] = ReportSummary.buildRows([resultado], {});
+  assert.equal(linha.allocated, "NÃO — aguardando retorno da ALOC C1O-ALOC-CM-0223-2026");
+
+  // Sem número de alocação, a resposta continua sendo a de sempre.
+  const semAloc = { ...ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO"), allocation: "" };
+  const outro = Core.triageOne({ id: "sem", name: `${ntBaseDocument}.pdf` }, Core.buildIndex([semAloc], []), {});
+  assert.equal(outro.status, "Não alocado");
+  assert.match(outro.reason, /sem número de alocação registrado/);
+  const [semLinha] = ReportSummary.buildRows([outro], {});
+  assert.equal(semLinha.allocated, "NÃO — Não alocado");
 });
 
 check("todos os JavaScripts têm sintaxe válida", () => {

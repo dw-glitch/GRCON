@@ -71,6 +71,10 @@
     const reason = norm(item.reason);
     const allocationKind = item.record && item.record.allocationStatusState && item.record.allocationStatusState.kind;
 
+    // O conflito vem antes: a LD com duas respostas para o mesmo documento não é
+    // uma não alocação, e dizer que "a LD informa que não está alocado" contradiz
+    // a linha da própria LD que diz ALOCADO.
+    if (text(item.blockCode) === "not_allocated_conflict") return CODES.ALLOCATION_CONFLICT;
     if (item.hardBlock || allocationKind === "not_allocated" || norm(item.allocationStatus) === "NAO ALOCADO") return CODES.NOT_ALLOCATED;
     if (reason.includes("ALOCACAO CONFLIT") || reason.includes("ALOCADO E NAO ALOCADO")) return CODES.ALLOCATION_CONFLICT;
     if (reason.includes("VALOR") && reason.includes("NAO FOI RECONHECIDO") && reason.includes("ALOC")) return CODES.ALLOCATION_UNKNOWN;
@@ -116,9 +120,9 @@
       },
       [CODES.ALLOCATION_CONFLICT]: {
         severity: "warning",
-        title: "Precisa de conferência antes de continuar.",
-        explanation: "A LD possui registros diferentes de alocação para o mesmo documento.",
-        nextAction: "Confira a aba, a linha e a coluna corretas na Estrutura da LD.",
+        title: "A LD dá duas respostas para este documento.",
+        explanation: "Uma linha registra ALOCADO e outra registra NÃO ALOCADO. O GRCON não escolhe entre elas e não afirma nenhuma das duas.",
+        nextAction: "Confirme na LD qual linha vale. O documento fica fora da eGRDT automática até lá; a inclusão manual continua disponível.",
       },
       [CODES.ALLOCATION_UNKNOWN]: {
         severity: "warning",

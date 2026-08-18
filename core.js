@@ -151,6 +151,26 @@
     };
   }
 
+  /**
+   * A linha mais recente de um conjunto. A LD cresce para baixo e é reenviada
+   * de tempos em tempos, então a ordem é: arquivo mais novo, aba mais nova e,
+   * dentro da mesma aba, a linha de baixo.
+   */
+  function mostRecentRecord(records) {
+    return (records || []).filter(Boolean).slice().sort((a, b) => (
+      (Number(b.sourceTimestamp) || 0) - (Number(a.sourceTimestamp) || 0)
+      || (Number(b.sourceOrder) || 0) - (Number(a.sourceOrder) || 0)
+      || (Number(b.row) || 0) - (Number(a.row) || 0)
+    ))[0] || null;
+  }
+
+  /** Onde a linha está, para a evidência citar arquivo, aba e linha. */
+  function recordLocation(record) {
+    const item = record || {};
+    return [text(item.source), item.sheet ? `aba ${text(item.sheet)}` : "", item.row ? `linha ${item.row}` : ""]
+      .filter(Boolean).join(" · ");
+  }
+
   function allocationConflictSummary(records) {
     const states = (records || []).map((item) => ({ item, state: allocationState(item && item.allocationStatus) }));
     const kinds = new Set(states.map((entry) => entry.state.kind).filter((kind) => kind !== "empty"));
@@ -1874,21 +1894,98 @@
       const blocked = groupAllocationConflict.states
         .filter((entry) => entry.state.kind === "not_allocated")
         .map((entry) => entry.item);
+      const allocated = groupAllocationConflict.states
+        .filter((entry) => entry.state.kind === "allocated")
+        .map((entry) => entry.item);
       const blockedComments = [...new Set(blocked.map((item) => text(item && item.fiscalComment)).filter(Boolean))].join(" | ");
-      const firstBlocked = blocked[0] || {};
+
+      // A LD respondendo as duas coisas para o mesmo documento é um conflito, e
+      // não uma não alocação. Dizer "Não alocado" aqui contradizia a própria LD:
+      // quem abria a planilha via a linha ALOCADO, com número de ALOC, e o
+      // relatório afirmava o contrário. Pior, a evidência apontava para a
+      // primeira linha negativa encontrada — quase nunca a linha atual.
+      if (groupAllocationConflict.mixed) {
+        const atual = mostRecentRecord(group && group.records) || blocked[0] || {};
+        const alocada = mostRecentRecord(allocated) || {};
+        const negada = mostRecentRecord(blocked) || {};
+        const numeroAlocacao = text(alocada.allocation);
+        return reviewResult(input, {
+          document: match.document,
+          documentKey: match.documentKey,
+          sheet: text(atual.sheet) || inferredSheet,
+          sheetSource: inferredSheet ? "prefixo do arquivo" : "LD",
+          revision: normalizeRevision(atual.revision) || revisionFromName(input.name || "", match.document),
+          status: "Alocação conflitante na LD",
+          reason: [
+            "A LD traz duas respostas para este documento e o GRCON não escolhe entre elas.",
+            `Diz ALOCADO em ${recordLocation(alocada) || "uma das linhas"}${numeroAlocacao ? `, com a alocação ${numeroAlocacao}` : ", sem número de alocação"}.`,
+            `Diz NÃO ALOCADO em ${recordLocation(negada) || "outra linha"}${text(negada.allocation) ? `, com a alocação ${text(negada.allocation)}` : ", sem número de alocação"}.`,
+            "Confirme qual linha vale antes de postar. Enquanto isso o documento fica fora da eGRDT automática; a inclusão manual continua disponível.",
+            blockedComments ? `Comentário da Fiscal: ${blockedComments}.` : "",
+          ].filter(Boolean).join(" "),
+          finalName: proposedFileName(input.name || `${match.document}.pdf`, match.document, normalizeRevision(atual.revision), text(atual.sheet) || inferredSheet),
+          documentSource: identitySource,
+          allocationStatus: "CONFLITO — a LD registra ALOCADO e NÃO ALOCADO",
+          allocationFinding: {
+            kind: "conflict",
+            label: "A LD registra ALOCADO e NÃO ALOCADO para o mesmo documento",
+            evidence: "conflict",
+            source: `${recordLocation(alocada) || "linha alocada"} × ${recordLocation(negada) || "linha não alocada"}`,
+            tracked: true,
+            status: "CONFLITO",
+            allocationNumber: numeroAlocacao,
+            sheet: text(atual.sheet),
+            column: text(atual.allocationStatusColumn),
+            header: text(atual.allocationStatusHeader),
+            row: Number(atual.row) || 0,
+          },
+          fiscalComment: blockedComments || text(atual.fiscalComment),
+          // A linha usada para título, revisão, GRDT e Databook é a atual da LD,
+          // não a primeira linha negativa que aparecer na varredura.
+          record: atual,
+          evidence: [...allocated, ...blocked].map((item) => ({
+            status: text(item.allocationStatus),
+            source: item.source,
+            sheet: item.sheet,
+            revision: item.revision,
+            row: item.row,
+            item,
+          })),
+          codeValidation: validateDocumentCode(match.document, text(atual.sheet) || inferredSheet),
+          ldConflict,
+          hardBlock: true,
+          blockCode: "not_allocated_conflict",
+          reasonCode: Contracts ? Contracts.CODES.ALLOCATION_CONFLICT : "ALLOCATION_CONFLICT",
+        });
+      }
+
+      const firstBlocked = mostRecentRecord(blocked) || {};
+      // "NÃO ALOCADO com número de ALOC" e "NÃO ALOCADO sem número" são
+      // situações diferentes do mesmo bloqueio: na primeira a ALOC já foi
+      // enviada e o que falta é o retorno da fiscal. Chamar as duas de "Não
+      // alocado" fazia quem lê a LD — onde o número da ALOC está preenchido —
+      // achar que o GRCON contradizia a planilha.
+      const alocEnviada = allocationNumberInfo(firstBlocked.allocation);
+      const aguardandoRetorno = alocEnviada.valid;
       return reviewResult(input, {
         document: match.document,
         documentKey: match.documentKey,
         sheet: text(firstBlocked.sheet) || inferredSheet,
         sheetSource: inferredSheet ? "prefixo do arquivo" : "LD",
         revision: normalizeRevision(firstBlocked.revision) || revisionFromName(input.name || "", match.document),
-        status: "Não alocado",
-        reason: `A coluna de confirmação de alocação contém “NÃO ALOCADO”. Esta condição é bloqueante e não pode ser substituída por outra linha, por resolução manual ou por evidência histórica.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}`,
+        status: aguardandoRetorno ? "Aguardando retorno da alocação" : "Não alocado",
+        reason: aguardandoRetorno
+          ? `A alocação ${alocEnviada.raw} está registrada na LD, mas a confirmação continua “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""} — a ALOC foi enviada e o retorno ainda não veio. Enquanto a confirmação não mudar, a postagem permanece bloqueada.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}`
+          : `A coluna de confirmação de alocação contém “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""}, sem número de alocação registrado. Esta condição é bloqueante e não pode ser substituída por outra linha, por resolução manual ou por evidência histórica.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}`,
         finalName: input.name || `${match.document}.pdf`,
         documentSource: identitySource,
         allocationStatus: "NÃO ALOCADO",
         allocationFinding: {
           ...allocationEvidenceState(firstBlocked),
+          label: aguardandoRetorno
+            ? `Não alocado — ALOC ${alocEnviada.raw} enviada, aguardando retorno`
+            : "Não alocado",
+          awaitingReturn: aguardandoRetorno,
           status: text(firstBlocked.allocationStatus) || "NÃO ALOCADO",
           sheet: text(firstBlocked.sheet),
           column: text(firstBlocked.allocationStatusColumn),
@@ -1907,7 +2004,7 @@
         })),
         ldConflict,
         hardBlock: true,
-        blockCode: groupAllocationConflict.mixed ? "not_allocated_conflict" : "not_allocated",
+        blockCode: "not_allocated",
       });
     }
     if (ldConflict && ldConflict.blocked) {
@@ -2359,7 +2456,7 @@
 
     if (item.hardBlock || norm(item.allocationStatus) === "NAO ALOCADO") {
       if (item.blockCode === "not_allocated_conflict") {
-        return `Não Alocado e com informações conflitantes na LD. Corrija a alocação e confirme a linha correta antes de postar.${fiscalSuffix}`;
+        return `A LD registra ALOCADO em uma linha e NÃO ALOCADO em outra para este documento. Confirme qual vale antes de postar.${fiscalSuffix}`;
       }
       return fiscalComment
         ? `Não Alocado. Resolva o comentário da Fiscal antes de postar.${fiscalSuffix}`
@@ -2454,6 +2551,7 @@
     decisionMessage: Contracts ? (row) => Contracts.enrichDecision(row).userMessage : null,
     norm,
     allocationState,
+    mostRecentRecord,
     allocationNumberInfo,
     allocationEvidenceState,
     allocationConflictSummary,

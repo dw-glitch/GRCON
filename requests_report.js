@@ -24,6 +24,10 @@
     { header: "ALOCADO?", key: "allocated", width: 22 },
     { header: "ALOCAÇÃO", key: "allocation", width: 24 },
     { header: "ÚLTIMA GRDT", key: "lastGrdt", width: 26 },
+    // O que a LD diz e o que o próprio GRCON já emitiu são duas perguntas
+    // diferentes. Nesta coluna o número da eGRDT vem com a data na linha de
+    // baixo, dentro da mesma célula.
+    { header: "EMITIDO PELO GRCON (eGRDT e data)", key: "issuedCell", width: 34 },
     { header: "STATUS NO SIGEM", key: "sigemStatus", width: 24 },
     { header: "LD CONSIDERADA", key: "ld", width: 34 },
     { header: "LDs EM QUE FOI LOCALIZADO", key: "allLds", width: 42 },
