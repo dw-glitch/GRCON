@@ -295,6 +295,12 @@
    * LDs diferentes: uma ocorrência inteira é eleita, e as outras seguem
    * visíveis para conferência.
    */
+  /** Ocorrências que se contradizem quanto à alocação do mesmo documento. */
+  function allocationConflict(occurrences) {
+    const tipos = new Set((occurrences || []).map((item) => text(item && item.allocationKind)));
+    return tipos.has("allocated") && tipos.has("not_allocated");
+  }
+
   function chooseOccurrence(occurrences) {
     if (!occurrences.length) return { chosen: null, rule: "", conflicting: false };
     if (occurrences.length === 1) {
@@ -313,12 +319,14 @@
       return { chosen: maisRecente, rule: `Localizado em ${occurrences.length} LDs com a mesma informação.`, conflicting: false };
     }
     if (empatadas.length > 1) {
-      // Sem critério para desempatar, quem decide é a pessoa.
-      return {
-        chosen: null,
-        rule: `As LDs divergem e têm a mesma data de envio (${empatadas.map((item) => item.ld).join(", ")}). Escolha qual vale.`,
-        conflicting: true,
-      };
+      // Sem critério para desempatar, quem decide é a pessoa. Quando as linhas
+      // vêm do mesmo arquivo, dizer "as LDs divergem" mandava procurar uma
+      // segunda LD que não existe: a divergência está dentro da mesma planilha.
+      const arquivos = [...new Set(empatadas.map((item) => text(item.ld)).filter(Boolean))];
+      const onde = arquivos.length > 1
+        ? `As LDs divergem e têm a mesma data de envio (${arquivos.join(", ")}).`
+        : `A LD ${arquivos[0] || "informada"} traz linhas divergentes para o mesmo documento (${empatadas.map((item) => `${item.sheet || "aba"} · linha ${item.row || "?"}`).join(", ")}).`;
+      return { chosen: null, rule: `${onde} Escolha qual vale.`, conflicting: true };
     }
     return {
       chosen: maisRecente,
@@ -413,6 +421,7 @@
   function allocationAnswer(occurrence) {
     const item = occurrence || null;
     if (!item) return "";
+    if (item.allocationKind === "conflict") return "CONFLITO — a LD registra ALOCADO e NÃO ALOCADO";
     if (item.allocationKind === "allocated") {
       return item.allocationEvidence === "number" && item.allocation
         ? `SIM — alocação evidenciada pelo número ${item.allocation}`
@@ -430,8 +439,14 @@
     return {
       document: text(resultado && resultado.document),
       title: escolhida ? escolhida.title : "",
-      allocated: allocationAnswer(escolhida),
-      allocationKind: escolhida ? text(escolhida.allocationKind) : "",
+      // Sem ocorrência eleita por divergência de alocação, a resposta é o
+      // conflito — deixar em branco fazia a consulta parecer que não apurou.
+      allocated: escolhida
+        ? allocationAnswer(escolhida)
+        : allocationConflict(todas)
+          ? "CONFLITO — a LD registra ALOCADO e NÃO ALOCADO"
+          : "",
+      allocationKind: escolhida ? text(escolhida.allocationKind) : (allocationConflict(todas) ? "conflict" : ""),
       allocation: escolhida ? escolhida.allocation : "",
       lastGrdt: escolhida ? escolhida.lastGrdt : "",
       sigemStatus: escolhida ? escolhida.sigemStatus : "",
@@ -690,6 +705,7 @@
     lookupDocument,
     lookupDocuments,
     consultationRow,
+    allocationConflict,
     formatDateBR,
     issuedHistory,
     issuedColumns,

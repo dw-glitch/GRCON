@@ -254,7 +254,16 @@
           ? `SIM — alocação evidenciada pelo número ${state.allocationNumber || allocationNumber}`
           : "SIM — Alocado";
       }
-      if (state.kind === "not_allocated") return "NÃO — Não alocado";
+      if (state.kind === "not_allocated") {
+        // A ALOC enviada e ainda sem retorno é o caso que mais confunde: a LD
+        // mostra o número preenchido e o relatório dizia apenas "Não alocado".
+        return state.awaitingReturn || (allocationNumber && C && C.allocationNumberInfo && C.allocationNumberInfo(allocationNumber).valid)
+          ? `NÃO — aguardando retorno da ALOC ${state.allocationNumber || allocationNumber}`
+          : "NÃO — Não alocado";
+      }
+      // A LD com duas respostas não é "não informado": é conflito, e o relatório
+      // precisa dizer isso em vez de escolher um dos lados.
+      if (state.kind === "conflict") return "CONFLITO — a LD registra ALOCADO e NÃO ALOCADO";
       if (state.kind === "unknown") return `REVISAR — ${state.label}`;
       // Sem coluna na aba e coluna vazia são fatos diferentes e não podem sair
       // com a mesma frase: um diz que a LD não rastreia, o outro que a LD
@@ -336,6 +345,16 @@
     }
     if (state.kind === "unknown") {
       return `A alocação não pôde ser comprovada porque o valor “${raw || state.label}” do campo “${field}” não foi reconhecido${location ? ` (${location})` : ""}. ${versionEvidence}`;
+    }
+    if (state.kind === "conflict") {
+      return [
+        "A LD registra ALOCADO em uma linha e NÃO ALOCADO em outra para este mesmo documento.",
+        state.source ? `Linhas em conflito: ${state.source}.` : "",
+        state.allocationNumber ? `A linha alocada traz a alocação ${state.allocationNumber}.` : "",
+        "O GRCON não escolhe entre as duas e não afirma nenhuma delas; confirme na LD qual vale antes de postar.",
+        fiscal ? `Comentário da Fiscal: ${fiscal}.` : "",
+        versionEvidence,
+      ].filter(Boolean).join(" ");
     }
     if (state.kind === "not_tracked") {
       return `A alocação não foi verificada: a aba ${text(record.sheet) || "técnica"} da LD não possui coluna de confirmação de alocação${location ? ` (${location})` : ""}. Não há registro a favor nem contra a alocação deste documento${allocation ? `, e a coluna ALOCAÇÃO traz “${allocation}”` : ""}. ${versionEvidence}`;
