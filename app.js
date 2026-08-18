@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.32.28";
+  const APP_VERSION = "5.32.29";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -2872,6 +2872,10 @@
     // Conflito de alocação não é "não alocado": a LD tem duas respostas e quem
     // decide é a pessoa. Chamar de "não incluir" escondia a diferença.
     if (row.blockCode === "not_allocated_conflict") return "Conferir alocação";
+    // ALOC enviada com o retorno pendente também não é uma recusa. Continua
+    // fora da eGRDT, mas quem lê precisa saber que o que falta é a confirmação
+    // da Fiscal — e não uma alocação que ninguém pediu.
+    if (row.allocationFinding && row.allocationFinding.awaitingReturn) return "Aguardando alocação";
     if (row.hardBlock) return "Não incluir";
     if (row.decision === C.READY) return "Incluir";
     if (row.decision === C.DISCARD) return "Em análise";

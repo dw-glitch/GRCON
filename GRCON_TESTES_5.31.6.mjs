@@ -1777,6 +1777,69 @@ check("NÃO ALOCADO com ALOC enviada é dito como aguardando retorno, não como 
   assert.equal(semLinha.allocated, "NÃO — Não alocado");
 });
 
+check("célula mesclada na LD vale para todas as linhas do intervalo", () => {
+  // Numa mescla, o arquivo guarda o valor só na célula do canto superior
+  // esquerdo; as demais vêm vazias. Sem replicar, as outras linhas do intervalo
+  // ficavam sem confirmação de alocação e caíam na evidência seguinte — o
+  // número de ALOC —, que responde "alocado" mesmo quando a mescla, na tela,
+  // dizia NÃO ALOCADO. Era o GRCON liberando o que a LD recusava.
+  const cabecalho = ["ITEM", "DOCUMENTO", "REVISÃO", "TÍTULO", "STATUS SIGEM", "ALOCAÇÃO", "CONFIRMAÇÃO DE ALOCAÇÃO"];
+  const documentos = ["DE-5290.00-22313-950-C1O-201", "DE-5290.00-22313-950-C1O-202", "DE-5290.00-22313-950-C1O-203"];
+  const montar = (confirmacao) => {
+    const linhas = [cabecalho];
+    documentos.forEach((documento, indice) => {
+      linhas.push([String(indice + 1), documento, "0", "DOCUMENTO DE TESTE", "Não Postado", "C1O-ALOC-CM-0223-2026", ""]);
+    });
+    const sheet = SheetJS.utils.aoa_to_sheet(linhas);
+    // A mescla cobre as três linhas de dados da coluna G (confirmação).
+    sheet.G2 = { t: "s", v: confirmacao };
+    sheet["!merges"] = [{ s: { r: 1, c: 6 }, e: { r: 3, c: 6 } }];
+    // A aba precisa combinar com a família do código (DE-… é N-1710), senão a
+    // triagem para antes por incompatibilidade de aba e não chega à alocação.
+    return { SheetNames: ["N-1710"], Sheets: { "N-1710": sheet } };
+  };
+  const triar = (confirmacao) => {
+    const parsed = Core.parseWorkbook(montar(confirmacao), "LD_MESCLADA.xlsx", 10, null);
+    const index = Core.buildIndex(parsed.records, []);
+    return documentos.map((documento) => Core.triageOne({ document: documento, revision: "0" }, index, {}));
+  };
+
+  for (const resultado of triar("NÃO ALOCADO")) {
+    assert.equal(resultado.allocationStatus, "NÃO ALOCADO", "a mescla vale para a linha inteira do intervalo");
+    assert.equal(resultado.hardBlock, true, "nenhuma linha da mescla escapa do bloqueio");
+    assert.equal(resultado.allocationFinding.kind, "not_allocated");
+    assert.equal(resultado.allocationFinding.evidence, "status", "o status da mescla manda, não o número de ALOC");
+  }
+  for (const resultado of triar("ALOCADO")) {
+    assert.equal(resultado.allocationStatus, "ALOCADO");
+    assert.ok(!resultado.hardBlock);
+    assert.equal(resultado.allocationFinding.evidence, "status");
+  }
+});
+
+check("a evidência da alocação cita a célula exata da LD", () => {
+  // "A LD diz uma coisa e o GRCON diz outra" só se resolve abrindo a planilha.
+  // Citar a célula transforma a discussão numa conferência de dez segundos.
+  assert.equal(Core.allocationCellRef({ allocationStatusColumn: "U", row: 134 }), "U134");
+  assert.equal(Core.allocationCellRef({ allocationStatusColumn: "", row: 134 }), "", "sem coluna não se inventa endereço");
+
+  const registro = {
+    ...ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO"),
+    allocation: "C1O-ALOC-CM-0223-2026",
+    allocationStatusColumn: "U",
+    allocationStatusHeader: "CONFIRMAÇÃO DE ALOCAÇÃO",
+    row: 138,
+  };
+  const resultado = Core.triageOne({ id: "celula", name: `${ntBaseDocument}.pdf` }, Core.buildIndex([registro], []), {});
+  const celula = `${registro.allocationStatusColumn}${registro.row}`;
+  assert.equal(resultado.allocationFinding.cell, celula);
+  assert.ok(resultado.reason.includes(`célula ${celula}`), "o motivo aponta onde conferir");
+
+  const mensagem = Core.simpleReason(resultado);
+  assert.match(mensagem, /foi enviada, mas a confirmação na LD continua/, "o texto curto explica o estado, não só recusa");
+  assert.ok(mensagem.includes(`célula ${celula}`), "o texto curto também aponta a célula");
+});
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];

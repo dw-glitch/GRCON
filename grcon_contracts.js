@@ -105,6 +105,15 @@
     const status = text(item.status) || "não informado";
     const fiscal = text(item.fiscalComment);
     const suffix = fiscal ? ` Comentário da Fiscal: ${fiscal}` : "";
+    // Onde conferir na planilha. Sem isso o texto curto vira a palavra do GRCON
+    // contra a palavra da LD; com a célula, quem lê abre a LD e resolve na hora.
+    const finding = item.allocationFinding || {};
+    const local = [
+      text(finding.sheet) ? `aba ${text(finding.sheet)}` : "",
+      text(finding.cell) ? `célula ${text(finding.cell)}` : "",
+    ].filter(Boolean).join(", ");
+    const onde = local ? ` (${local})` : "";
+    const alocEnviada = text(finding.allocationNumber);
     const messages = {
       [CODES.READY]: {
         severity: "success",
@@ -112,16 +121,21 @@
         explanation: `A revisão ${revision} está liberada para postagem.`,
         nextAction: "Confira os dados finais e gere a eGRDT.",
       },
-      [CODES.NOT_ALLOCATED]: {
+      [CODES.NOT_ALLOCATED]: finding.awaitingReturn ? {
         severity: "error",
         title: "Não será incluído na eGRDT.",
-        explanation: `A LD informa que o documento não está alocado.${suffix}`,
+        explanation: `A ALOC ${alocEnviada || "registrada na LD"} foi enviada, mas a confirmação na LD continua “NÃO ALOCADO”${onde}.${suffix}`,
+        nextAction: "Aguarde o retorno da Fiscal ou atualize a LD. A inclusão manual continua disponível.",
+      } : {
+        severity: "error",
+        title: "Não será incluído na eGRDT.",
+        explanation: `A LD informa que o documento não está alocado${onde}.${suffix}`,
         nextAction: "Regularize a alocação na LD antes de tentar novamente.",
       },
       [CODES.ALLOCATION_CONFLICT]: {
         severity: "warning",
         title: "A LD dá duas respostas para este documento.",
-        explanation: "Uma linha registra ALOCADO e outra registra NÃO ALOCADO. O GRCON não escolhe entre elas e não afirma nenhuma das duas.",
+        explanation: `Uma linha registra ALOCADO e outra registra NÃO ALOCADO${local ? ` (${local}, entre outras)` : ""}. O GRCON não escolhe entre elas e não afirma nenhuma das duas.`,
         nextAction: "Confirme na LD qual linha vale. O documento fica fora da eGRDT automática até lá; a inclusão manual continua disponível.",
       },
       [CODES.ALLOCATION_UNKNOWN]: {

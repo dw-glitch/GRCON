@@ -95,6 +95,8 @@
     names.forEach((sheetName) => {
       const sheet = book.Sheets[sheetName];
       if (!sheet || !sheet["!ref"]) return;
+      // Mesmo cuidado da LD: a mescla só preenche a célula âncora.
+      if (C && C.expandMergedCells) C.expandMergedCells(sheet);
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
       let headerIndex = -1;
       let tagColumn = -1;
