@@ -122,3 +122,76 @@ TAG no Apêndice (com sugestão `nt-` quando o código é de relatório ET) e 5.
 sem TAG para procurar. Nenhuma LD desta remessa traz coluna de TAG, então o
 TAG veio do Grupo 7 do código; a coluna da LD continua tendo preferência
 quando existir.
+---
+
+# Geração de alocação — formato correto
+
+Levantado a partir de cinco alocações reais dadas como exemplo correto:
+`C1O-ALOC-CM-0237/0238/0239/0240/0241-2026`. Todas com a mesma estrutura:
+aba única `GERAL`, 16 colunas, cabeçalho na linha 1.
+
+## Colunas, na ordem
+
+| # | Coluna | Como se preenche |
+| --- | --- | --- |
+| 0 | NomeDocumento | código do documento |
+| 1 | Data Prevista | data |
+| 2 | Workflow | `RNEST UHDTD U-32 C&M/<DISCIPLINA>` |
+| 3 | Documento Ativo | vazio nos exemplos |
+| 4 | Ação | `INCLUSÃO` |
+| 5 | Data da Linha Base | vazio nos exemplos |
+| 6 | Propósito de Emissão Original | `PARA CONSTRUÇÃO` |
+| 7 | Documento Crítico | vazio nos exemplos |
+| 8 | Observação | vazio nos exemplos |
+| 9 | Caminho Data Book | `UHDT-D\|DATA BOOK C&M\|<GRUPO>\|<SUBGRUPO>` |
+| 10-15 | N1 … N6 | níveis da EAP |
+
+Pedido do usuário, ainda não implementado: a coluna `Aba` das linhas da central
+passa a ser o número da LD, e `versão da LD` passa a ser o prazo descrito na LD
+informada.
+
+## Workflow por disciplina (do 5º grupo do código)
+
+| Disciplina | Workflow |
+| --- | --- |
+| TUB | `RNEST UHDTD U-32 C&M/TUBULACAO` |
+| EST | `RNEST UHDTD U-32 C&M/ESTATICOS` |
+| CVL | `RNEST UHDTD U-32 C&M/CIVIL` |
+
+## DOIS IMPEDIMENTOS REAIS
+
+**1. Os níveis N1..N10 NÃO saem por cálculo do código EAP.**
+
+Os exemplos mostram duas hierarquias diferentes:
+
+| EAP no código | N1 | N2 | N3 |
+| --- | --- | --- | --- |
+| `3.8.10.1` | UHDTD U-32 | 03.REPARO | 03.08.TUBULAÇÃO |
+| `6.10.4.1` | UHDTD U-32 | 06.MONTAGEM ELETROMECÂNICA | 06.10.ESTRUTURAS METÁLICAS |
+| `7.6.1.1` | **07.COMISSIONAMENTO** | 07.02.CONDICIONAMENTO | 07.02.09.SOPS |
+
+Em `3.x` e `6.x` o N1 é a unidade e os dígitos batem: `3.8` vira `03.08`. Em
+`7.6.1.1` o N1 deixa de ser a unidade e os dígitos **não batem** — `6` vira
+`02` e `1` vira `09`. Logo a EAP tem nomes e numeração próprios, e derivar os
+níveis do código por regra aritmética produziria `07.06.01`, que não existe.
+
+**É preciso a tabela da EAP** com o caminho de cada código. Sem ela, qualquer
+implementação estaria adivinhando.
+
+**2. A planilha de Data Books rev.C não foi enviada.**
+
+O caminho do Data Book não é função do EAP mais disciplina. A mesma disciplina
+`EST` aparece com dois destinos diferentes:
+
+- `UHDT-D|DATA BOOK C&M|EQP ESTÁTICOS|C&M VASOS E TANQUES`
+- `UHDT-D|DATA BOOK C&M|EQP ESTÁTICOS|C&M DEMAIS EQP ESTÁTICOS`
+
+O usuário citou "a planilha que tem todos os databook rev.C" — ela é a fonte
+desse caminho e ainda não foi anexada.
+
+## Caminhos de Data Book vistos nos exemplos
+
+- `UHDT-D|DATA BOOK C&M|TUBULAÇÃO|C&M VÁLVULAS`
+- `UHDT-D|DATA BOOK C&M|EQP ESTÁTICOS|C&M VASOS E TANQUES`
+- `UHDT-D|DATA BOOK C&M|EQP ESTÁTICOS|C&M DEMAIS EQP ESTÁTICOS`
+- `UHDT-D|DATA BOOK C&M|CIVIL|ESTRUTURA METÁLICA`
