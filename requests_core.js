@@ -450,6 +450,71 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Histórico do próprio GRCON
+  //
+  // A consulta responde o que a LD diz sobre o documento. Falta a outra metade
+  // da pergunta que se faz o dia inteiro: este documento já foi emitido por
+  // nós? Em que eGRDT e quando? O histórico de eGRDTs geradas fica no
+  // navegador; aqui só se dá forma ao que ele devolve.
+  //
+  // A regra de sempre continua: sem registro, a resposta é "não emitido", e não
+  // um silêncio que se confunde com "não consultei".
+  // ---------------------------------------------------------------------------
+
+  /** Data ISO do histórico no formato de leitura (dd/mm/aaaa). */
+  function formatDateBR(value) {
+    const raw = text(value);
+    if (!raw) return "";
+    const data = new Date(raw);
+    if (Number.isNaN(data.getTime())) {
+      const simples = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return simples ? `${simples[3]}/${simples[2]}/${simples[1]}` : raw;
+    }
+    return data.toLocaleDateString("pt-BR");
+  }
+
+  /**
+   * Resposta do histórico para um documento, pronta para a tela e para o Excel.
+   *
+   * `entries` são os registros do histórico local ({ egrdtNumber, generatedAt }),
+   * da emissão mais recente para a mais antiga.
+   */
+  function issuedHistory(entries) {
+    const lista = (entries || [])
+      .map((item) => ({ egrdt: text(item && item.egrdtNumber), date: formatDateBR(item && item.generatedAt) }))
+      .filter((item) => item.egrdt);
+    if (!lista.length) {
+      return { issued: false, count: 0, egrdt: "", date: "", all: [], label: "Não emitido pelo GRCON", cell: "Não emitido" };
+    }
+    const [maisRecente] = lista;
+    return {
+      issued: true,
+      count: lista.length,
+      egrdt: maisRecente.egrdt,
+      date: maisRecente.date,
+      all: lista,
+      label: `${maisRecente.egrdt}${maisRecente.date ? ` · ${maisRecente.date}` : ""}${lista.length > 1 ? ` · +${lista.length - 1} anterior(es)` : ""}`,
+      // No Excel a data fica na linha de baixo, dentro da mesma célula: é assim
+      // que se lê o número sem perder de vista quando ele saiu.
+      cell: lista.map((item) => (item.date ? `${item.egrdt}\n${item.date}` : item.egrdt)).join("\n"),
+    };
+  }
+
+  /** Os campos que a linha da consulta ganha com o histórico. */
+  function issuedColumns(entries) {
+    const historico = issuedHistory(entries);
+    return {
+      issued: historico.issued ? "SIM" : "NÃO",
+      issuedEgrdt: historico.egrdt,
+      issuedAt: historico.date,
+      issuedCount: historico.count,
+      issuedCell: historico.cell,
+      issuedLabel: historico.label,
+      issuedAll: historico.all,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Linha do Controle de Solicitações
   // ---------------------------------------------------------------------------
 
@@ -625,6 +690,9 @@
     lookupDocument,
     lookupDocuments,
     consultationRow,
+    formatDateBR,
+    issuedHistory,
+    issuedColumns,
     allocationAnswer,
     ldFactsFor,
     applyLdFacts,

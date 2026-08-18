@@ -210,7 +210,10 @@
       for (let i = inicio; i < fim; i += 1) {
         const item = alvos[i];
         const resultado = R().lookupDocument(item.document, state.index, { requestedTitle: item.requestedTitle });
-        state.results.set(item.id, R().consultationRow(resultado));
+        state.results.set(item.id, {
+          ...R().consultationRow(resultado),
+          ...R().issuedColumns(historicoDoGrcon(resultado, item.document)),
+        });
       }
       els.progressFill.style.width = `${Math.round((fim / total) * 100)}%`;
       els.progressText.textContent = `Consultando ${fim.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")}…`;
@@ -227,6 +230,26 @@
     notify(validar
       ? `${total} documento(s) consultados. ${validar} precisam de conferência.`
       : `${total} documento(s) consultados.`, validar ? "warn" : "success");
+  }
+
+  /**
+   * O que o histórico do próprio GRCON sabe sobre o documento: em que eGRDT ele
+   * já saiu e quando. Procura primeiro pela grafia da LD, que é a que vai para
+   * a eGRDT, e só depois pelo código informado.
+   */
+  function historicoDoGrcon(resultado, informado) {
+    const Indicador = root.GrconGrdtHistoryIndicator;
+    if (!Indicador || typeof Indicador.getEntries !== "function") return [];
+    const candidatos = [
+      resultado && resultado.chosen && resultado.chosen.document,
+      resultado && resultado.ldDocument,
+      informado,
+    ].map(text).filter(Boolean);
+    for (const candidato of [...new Set(candidatos)]) {
+      const entradas = Indicador.getEntries(candidato);
+      if (entradas && entradas.length) return entradas;
+    }
+    return [];
   }
 
   // ---------------------------------------------------------------------------
@@ -256,6 +279,25 @@
     return state.sort === "entrada" ? linhas : [...linhas].sort(ordem[state.sort] || (() => 0));
   }
 
+  /**
+   * A eGRDT em que o documento já saiu, com a data logo abaixo do número.
+   * Sem consulta ainda, a célula fica em branco; consultado e sem registro,
+   * ela diz "não emitido" — que é resposta, não ausência dela.
+   */
+  function celulaEmitido(linha) {
+    if (!linha) return '<span class="requests-vazio">—</span>';
+    if (!linha.issuedEgrdt) return '<span class="requests-nao-emitido">Não emitido</span>';
+    const anteriores = Number(linha.issuedCount) > 1
+      ? `<small class="requests-multi">+${Number(linha.issuedCount) - 1} anterior(es)</small>`
+      : "";
+    const titulo = (linha.issuedAll || []).map((item) => `${item.egrdt}${item.date ? ` — ${item.date}` : ""}`).join("\n");
+    return `<span class="requests-emitido" title="${escapeHtml(titulo)}">
+      <strong>${escapeHtml(linha.issuedEgrdt)}</strong>
+      ${linha.issuedAt ? `<small>${escapeHtml(linha.issuedAt)}</small>` : ""}
+      ${anteriores}
+    </span>`;
+  }
+
   function selo(linha) {
     if (!linha) return '<span class="requests-badge pendente">Não consultado</span>';
     if (linha.situation === "Localizado") return '<span class="requests-badge ok">✓ Localizado</span>';
@@ -282,6 +324,7 @@
         <td>${titulo}</td>
         <td>${linha && linha.allocated ? escapeHtml(linha.allocated) : '<span class="requests-vazio">—</span>'}</td>
         <td>${linha && linha.lastGrdt ? escapeHtml(linha.lastGrdt) : '<span class="requests-vazio">—</span>'}</td>
+        <td class="requests-col-emitido">${celulaEmitido(linha)}</td>
         <td>${linha && linha.sigemStatus ? escapeHtml(linha.sigemStatus) : '<span class="requests-vazio">—</span>'}</td>
         <td>${linha && linha.ld ? escapeHtml(linha.ld) : '<span class="requests-vazio">—</span>'}${linha && linha.occurrenceCount > 1 ? `<small class="requests-multi">${linha.occurrenceCount} LDs</small>` : ""}</td>
       </tr>`;
@@ -355,6 +398,10 @@
           allocated: linha.allocated,
           allocation: linha.allocation,
           lastGrdt: linha.lastGrdt,
+          issued: linha.issued,
+          issuedCell: linha.issuedCell,
+          issuedEgrdt: linha.issuedEgrdt,
+          issuedAt: linha.issuedAt,
           sigemStatus: linha.sigemStatus,
           ld: linha.ld,
           allLds: linha.allLds,
@@ -368,7 +415,11 @@
     if (!linhas.length) return;
     const Report = root.GrconRequestsReport;
     const cabecalho = Report.COLUMNS.map((coluna) => coluna.header).join("\t");
-    const corpo = linhas.map((linha) => Report.COLUMNS.map((coluna) => String(linha[coluna.key] || "")).join("\t")).join("\n");
+    // Uma célula pode ter mais de uma linha (a eGRDT emitida traz a data
+    // embaixo). Numa colagem por tabulação isso viraria uma linha nova na
+    // planilha, então aqui as quebras viram separadores.
+    const celula = (valor) => String(valor === null || valor === undefined ? "" : valor).replace(/\s*\n\s*/g, " · ");
+    const corpo = linhas.map((linha) => Report.COLUMNS.map((coluna) => celula(linha[coluna.key])).join("\t")).join("\n");
     try {
       await navigator.clipboard.writeText(`${cabecalho}\n${corpo}`);
       notify(`${linhas.length} linha(s) copiadas. Cole direto na planilha.`, "success");

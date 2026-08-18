@@ -1,5 +1,14 @@
 # Histórico de alterações
 
+## 5.32.28 — 2026-08-18
+
+- A consulta de documentos passa a responder também **se o documento já foi emitido pelo GRCON**: a coluna “Emitido pelo GRCON” traz o número da eGRDT com a data logo abaixo, tanto na tabela da tela quanto na planilha exportada.
+- Quando o documento saiu em mais de uma eGRDT, a mais recente encabeça e a tela indica quantas anteriores existem; a planilha lista todas, uma por linha dentro da célula.
+- Documento consultado e sem registro no histórico responde “Não emitido” — resposta, e não uma célula vazia que se confunde com “não consultei”.
+- A busca no histórico usa primeiro a grafia da LD, que é a que vai para a eGRDT, e só depois o código informado.
+- A cópia por tabulação passa a manter um documento por linha mesmo com células de duas linhas.
+- Removido `grcon_grdt_history_indicator.js`: ele definia o mesmo `window.GrconGrdtHistoryIndicator` que `grdt_history_indicator.js` e era sobrescrito por ele — carregava em toda sessão sem nunca ser usado.
+
 ## 5.32.27 — 2026-08-17
 
 **Apêndice 3 embutido.** A base contratual dos bens tagueados (Rev. B, 5.682 TAGs) passa a acompanhar o aplicativo. Não há mais arquivo a selecionar: toda análise cruza o TAG e o relatório da triagem responde sempre `BUSCA NO APÊNDICE` e `Tagueado sim ou não?`. Para uma revisão nova do Apêndice, `apendice_base.js` é gerado de novo a partir da planilha.

@@ -1624,6 +1624,65 @@ check("o rolamento da tabela não colapsa nem cresce sozinho", () => {
   assert.match(app, /function calibrateVirtualRowHeight\(\)/);
 });
 
+check("a consulta responde se o documento já foi emitido pelo GRCON, com a data", () => {
+  const entradas = [
+    { egrdtNumber: "0130870-C1O-PGV-G-1252/2026 - eGRDT", generatedAt: "2026-08-17T13:05:00.000Z" },
+    { egrdtNumber: "0130870-C1O-PGV-G-1180/2026 - eGRDT", generatedAt: "2026-07-02T10:00:00.000Z" },
+  ];
+  const emitido = Requests.issuedHistory(entradas);
+  assert.equal(emitido.issued, true);
+  assert.equal(emitido.count, 2);
+  assert.equal(emitido.egrdt, "0130870-C1O-PGV-G-1252/2026 - eGRDT", "a mais recente encabeça");
+  assert.equal(emitido.date, "17/08/2026");
+  // No Excel a data fica na linha de baixo, dentro da mesma célula.
+  assert.equal(emitido.cell.split("\n")[0], "0130870-C1O-PGV-G-1252/2026 - eGRDT");
+  assert.equal(emitido.cell.split("\n")[1], "17/08/2026");
+
+  // Sem registro a resposta é dita, não omitida.
+  const nunca = Requests.issuedHistory([]);
+  assert.equal(nunca.issued, false);
+  assert.equal(nunca.cell, "Não emitido");
+  assert.equal(nunca.egrdt, "");
+
+  // Os campos que a linha da consulta carrega para a tela e para a planilha.
+  const colunas = Requests.issuedColumns(entradas);
+  assert.equal(colunas.issued, "SIM");
+  assert.equal(colunas.issuedEgrdt, entradas[0].egrdtNumber);
+  assert.equal(colunas.issuedAt, "17/08/2026");
+  assert.equal(colunas.issuedAll.length, 2);
+
+  // A coluna existe na planilha da consulta, ao lado da GRDT que veio da LD.
+  const chaves = RequestsReport.COLUMNS.map((coluna) => coluna.key);
+  assert.ok(chaves.includes("issuedCell"), "a planilha precisa levar a eGRDT emitida");
+  assert.equal(chaves[chaves.indexOf("lastGrdt") + 1], "issuedCell");
+
+  // E na tabela da tela, com o mesmo número de colunas do cabeçalho.
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const tabela = html.slice(html.indexOf('<table class="requests-table" id="requests-table">'), html.indexOf("<tbody id=\"requests-tbody\">"));
+  assert.match(tabela, /<th>Emitido pelo GRCON<\/th>/);
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  assert.match(app, /issuedColumns\(historicoDoGrcon\(resultado, item\.document\)\)/);
+  // Cabeçalho e linha precisam ter a mesma quantidade de células.
+  const modelo = app.slice(app.indexOf("<tr data-doc="), app.indexOf("</tr>`;"));
+  assert.equal((tabela.match(/<th[ >]/g) || []).length, (modelo.match(/<td[ >]/g) || []).length);
+});
+
+check("uma célula com duas linhas não vira duas linhas na cópia", () => {
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  // A cópia por tabulação precisa manter um documento por linha.
+  assert.match(app, /replace\(\/\\s\*\\n\\s\*\/g, " · "\)/);
+});
+
+check("existe um só módulo de histórico de eGRDT por documento", () => {
+  // Dois arquivos definiam window.GrconGrdtHistoryIndicator; o segundo apagava
+  // o primeiro, que ficava carregando sem nunca ser usado.
+  assert.ok(!fs.existsSync(path.join(root, "grcon_grdt_history_indicator.js")), "o módulo sombreado não pode voltar");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.equal((html.match(/grdt_history_indicator\.js/g) || []).length, 1);
+  const indicador = fs.readFileSync(path.join(root, "grdt_history_indicator.js"), "utf8");
+  assert.match(indicador, /getEntries/);
+});
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];
