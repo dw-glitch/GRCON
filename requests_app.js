@@ -5,10 +5,6 @@
  * receber, em uma linha por documento, só o que costumam perguntar — título
  * oficial, alocação, última GRDT, status no SIGEM e em que LD foi achado.
  *
- * As solicitações têm módulo próprio (solicitacoes_app.js): registrar um pedido
- * e consultar um documento são trabalhos diferentes, e misturá-los numa aba só
- * obrigava a pessoa a passar pela consulta para chegar ao que queria.
- *
  * A leitura das LDs e a correspondência dos códigos são as mesmas da Triagem de
  * GRDT: parseWorkbook e buildIndex do motor documental, e as regras de decisão
  * em requests_core.js. Esta camada cuida só de tela, seleção e atalhos.
@@ -428,32 +424,12 @@
     }
   }
 
-  /**
-   * As linhas da exportação dependem da base do modelo: a base "consulta" sai
-   * do resultado da consulta; a base "controle" sai dos itens da solicitação,
-   * que é onde existem item, responsável, data e as demais colunas da planilha
-   * oficial. Um modelo do Controle sem solicitação aberta não tem de onde tirar
-   * dado nenhum — e é isso que a tela diz, em vez de gerar um arquivo vazio.
-   */
-  function linhasDoModelo(modelo) {
-    if (modelo && modelo.base === "controle") {
-      // As linhas do Controle de Solicitações vivem na aba Solicitações, que é
-      // onde existem item, responsável, data e as demais colunas da planilha
-      // oficial. Aqui só se lê o que está aberto lá.
-      const Solicitacoes = root.GrconSolicitacoesUi;
-      return Solicitacoes && Solicitacoes.currentRows ? Solicitacoes.currentRows() : [];
-    }
-    return linhasParaSaida();
-  }
-
   async function exportarExcel(modeloEscolhido) {
     const Report = root.GrconRequestsReport;
     const modelo = Report.normalizeExportTemplate(modeloEscolhido || modeloAtual());
-    const linhas = linhasDoModelo(modelo);
+    const linhas = linhasParaSaida();
     if (!linhas.length) {
-      notify(modelo.base === "controle"
-        ? "Este modelo usa as colunas do Controle de Solicitações: abra a aba Solicitações e monte os itens antes de exportar."
-        : "Consulte os documentos antes de exportar.", "warn");
+      notify("Consulte os documentos antes de exportar.", "warn");
       return;
     }
     els.export.disabled = true;
@@ -464,8 +440,7 @@
       workbook.creator = "GRCON";
       workbook.company = "CONSAG Engenharia";
       workbook.title = modelo.name;
-      const aba = modelo.base === "controle" ? "Solicitações" : "Consulta";
-      const sheet = workbook.addWorksheet(aba, { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
+      const sheet = workbook.addWorksheet("Consulta", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
       const nomes = state.lds.filter((item) => !item.error).map((item) => item.name).join(" · ");
       Report.writeConsultationSheet(sheet, linhas, {
         columns: modelo.columns,
@@ -482,7 +457,7 @@
       const link = document.createElement("a");
       const carimbo = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       link.href = url;
-      link.download = `GRCON_${modelo.base === "controle" ? "SOLICITACOES" : "CONSULTA"}_${carimbo}.xlsx`;
+      link.download = `GRCON_CONSULTA_${carimbo}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -644,12 +619,10 @@
   function renderPreviaModelo() {
     if (!els.modeloPreview || !state.modeloEditor) return;
     const Report = root.GrconRequestsReport;
-    const linhas = linhasDoModelo(state.modeloEditor);
+    const linhas = linhasParaSaida();
     const previa = Report.previewExportTemplate(state.modeloEditor, linhas, 5);
     if (!linhas.length) {
-      els.modeloPreview.innerHTML = `<p class="requests-vazio">Sem prévia: ${state.modeloEditor.base === "controle"
-        ? "gere uma solicitação para ver as linhas do Controle de Solicitações."
-        : "consulte os documentos para ver as linhas reais neste modelo."}</p>`;
+      els.modeloPreview.innerHTML = `<p class="requests-vazio">Sem prévia: consulte os documentos para ver as linhas reais neste modelo.</p>`;
       return;
     }
     els.modeloPreview.innerHTML = `<table class="requests-batch-table">
@@ -679,9 +652,9 @@
       // replicar, as demais linhas do intervalo chegam vazias aqui.
       if (root.TriagemCore && root.TriagemCore.expandMergedCells) root.TriagemCore.expandMergedCells(sheet);
       const linhas = root.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
-      // O cabeçalho da planilha oficial não está na primeira linha — na do
-      // Controle de Solicitações está na quinta. Em vez de fixar um número,
-      // vale a linha mais preenchida do começo do arquivo.
+      // O cabeçalho da planilha oficial nem sempre está na primeira linha. Em
+      // vez de fixar um número, vale a linha mais preenchida do começo do
+      // arquivo.
       let melhor = { indice: -1, preenchidas: 0 };
       linhas.slice(0, 20).forEach((linha, indice) => {
         const preenchidas = linha.filter((valor) => String(valor || "").trim()).length;
@@ -692,7 +665,7 @@
         return;
       }
       const cabecalho = linhas[melhor.indice].map((valor) => String(valor || "").trim());
-      const base = els.modeloBase ? els.modeloBase.value : "controle";
+      const base = els.modeloBase ? els.modeloBase.value : "consulta";
       const resultado = Report.importExportTemplate(file.name.replace(/\.[^.]+$/, ""), cabecalho, base);
       state.modeloEditor = resultado.template;
       els.modeloName.value = resultado.template.name;

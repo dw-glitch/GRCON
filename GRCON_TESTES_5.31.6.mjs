@@ -246,7 +246,7 @@ check("Resumo único prioriza decisão e preserva todas as evidências da audito
   });
 });
 
-// ── Consultas e Solicitações ────────────────────────────────────────────────
+// ── Consultas ────────────────────────────────────────────────────────────
 // As duas regras que atravessam o módulo: não inventar informação e não casar
 // por semelhança. Os casos abaixo são os da seção de triagem por LD.
 
@@ -276,24 +276,6 @@ check("duplicidade sai pelo código normalizado sem perder o título informado",
   assert.equal(items.length, 2);
   assert.equal(removed.length, 1);
   assert.equal(items[0].requestedTitle, "Título da segunda linha");
-});
-
-check("protocolo é o número do ITEM da planilha oficial, um sequencial simples", () => {
-  // A planilha de Controle de Solicitações usa ITEM contínuo: 1, 2, 3 …
-  assert.equal(Requests.protocolFor(1), "1");
-  assert.equal(Requests.protocolFor(557), "557");
-  assert.equal(Requests.protocolFor(0), "");
-  assert.equal(Requests.protocolFor("abc"), "");
-  // A sequência continua de onde a planilha parou; nunca reaproveita número.
-  assert.equal(Requests.nextItemNumber([{ itemNumber: 556 }, { itemNumber: 12 }]), 557);
-  assert.equal(Requests.nextItemNumber([{ protocol: "556" }]), 557);
-  assert.equal(Requests.nextItemNumber([]), 1);
-  const numerados = Requests.assignItemNumbers(
-    [{ document: "A" }, { document: "B" }, { document: "C" }],
-    [{ protocol: "556" }],
-  );
-  assert.deepEqual(numerados.map((item) => item.protocol), ["557", "558", "559"]);
-  assert.deepEqual(Requests.duplicatedProtocols([{ protocol: "5" }, { protocol: "5" }]), ["5"]);
 });
 
 check("consulta de documento exato responde as seis colunas com confiança alta", () => {
@@ -393,200 +375,31 @@ check("título da consulta sai exatamente como está na LD", () => {
   assert.equal(Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index)).title, original);
 });
 
-check("solicitação é gravada pelo banco, com o protocolo e a transação do lado do servidor", () => {
-  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  for (const rpc of ["grcon_save_request", "grcon_list_request_items", "grcon_update_request_items", "grcon_request_item_history"]) {
-    assert.match(cloud, new RegExp(`rpc\\("${rpc}"`));
-  }
-  // O protocolo enviado é o número do ITEM, não um identificador do cliente.
-  assert.match(cloud, /protocol: String\(item\.item \|\| ""\)/);
-
-  // A gravação vive no módulo de Solicitações, que tem aba própria.
-  const app = fs.readFileSync(path.join(root, "solicitacoes_app.js"), "utf8");
-  // Sem número da solicitação o app nem chega ao banco: é ele que agrupa os itens.
-  assert.match(app, /Informe o número da solicitação antes de salvar/);
-  // Grava apenas o que está selecionado na tabela.
-  assert.match(app, /state\.rows\.filter\(\(linha\) => linha\._selected !== false\)/);
-
-  const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.9.sql"), "utf8");
-  // Protocolo repetido em outra solicitação derruba a gravação inteira.
-  assert.match(sql, /O protocolo % já existe na solicitação %/);
-  // Unicidade é do banco, não do aplicativo.
-  assert.match(sql, /unique \(workspace_id, protocol\)/);
-  // Histórico só recebe inserção: nenhuma função atualiza ou apaga eventos.
-  assert.doesNotMatch(sql, /update private\.grcon_request_item_events/i);
-  assert.doesNotMatch(sql, /delete from private\.grcon_request_item_events/i);
-});
-
-check("exportação reproduz as 26 colunas do Controle de Solicitações", () => {
-  // Grafia e ordem vieram da planilha oficial da rede. Qualquer diferença
-  // obriga a rearrumar colunas na hora de colar — o retrabalho que esta saída
-  // existe para evitar. O hífen de "N‑1710" é o curto (U+2011), não o comum.
-  const cabecalhos = RequestsReport.CONTROL_COLUMNS.map((coluna) => coluna.header);
-  assert.equal(cabecalhos.length, 26);
-  assert.equal(cabecalhos[0], "ITEM");
-  assert.equal(cabecalhos[1], "Responsavel pela atividade");
-  assert.equal(cabecalhos[5], "Descrição da Solicitação");
-  assert.equal(cabecalhos[23], "Disponibilizado no PW – N‑1710");
-  assert.equal(cabecalhos[25], "Data de inclusão do status");
-
-  const linhas = RequestsReport.controlRows([
-    { item: "557", owner: "Laís", document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", requestType: "POSTAGEM NO SIGEM" },
-  ]);
-  assert.equal(linhas.length, 1);
-  assert.equal(linhas[0].length, 26);
-  assert.equal(linhas[0][0], "557");
-  // Campo não preenchido vira "na", que é a convenção da própria planilha:
-  // célula vazia deixa dúvida entre pendência e não se aplica.
-  assert.equal(linhas[0][2], "na");
-
-  const semCabecalho = RequestsReport.controlClipboardText([{ item: "557" }], false);
-  assert.equal(semCabecalho.split("\t").length, 26);
-  assert.doesNotMatch(semCabecalho, /ITEM/);
-  const comCabecalho = RequestsReport.controlClipboardText([{ item: "557" }], true);
-  assert.equal(comCabecalho.split("\n").length, 2);
-  assert.match(comCabecalho, /^ITEM\t/);
-});
-
-check("tipos de solicitação são configuráveis, ordenados e não ficam fixos no código", () => {
-  const padrao = Requests.requestTypeList(null);
-  assert.ok(padrao.length >= 10);
-  // Rótulos iguais aos da coluna "Descrição da Solicitação" do controle oficial.
-  assert.equal(padrao[0].label, "POSTAGEM NO SIGEM");
-  const meus = Requests.requestTypeList([
-    { label: "Tipo da casa", order: 2 },
-    { label: "Urgência", code: "URG", defaultPriority: "urgente", defaultDeadlineDays: 1, order: 1 },
-  ]);
-  assert.equal(meus[0].code, "URG");
-  assert.equal(meus[1].code, "TIPO_DA_CASA");
-  assert.equal(Requests.normalizeRequestType({ label: "" }), null);
-  assert.equal(Requests.normalizeRequestType({ label: "X", defaultPriority: "inventada" }).defaultPriority, "normal");
-});
-
-check("solicitação se preenche sem consulta e sem inventar classificação", () => {
-  // Um pedido que chega por e-mail não tem LD anexada. A linha precisa sair
-  // completa mesmo assim, com o que a pessoa informou — e sem que o GRCON
-  // atribua situação nenhuma ao documento, porque não conferiu nada.
-  const linhas = Requests.buildManualControlRows(
-    [{ document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1", requestedTitle: "Relatório de inspeção" }],
-    { owner: "Laís", receivedAt: "17/08/2026", requester: "Gabriela Borges", requestType: "POSTAGEM NO SIGEM",
-      origin: "E-MAIL", documentFamily: "ET", emailBody: "Favor postar no SIGEM", documentPath: "Arquivo > Ago" },
-    [{ protocol: "556" }],
-  );
-  assert.equal(linhas.length, 1);
-  const linha = linhas[0];
-  assert.equal(linha.item, "557", "continua a numeração da planilha");
-  assert.equal(linha.owner, "Laís");
-  assert.equal(linha.documentFamily, "ET", "o tipo documental vem do cabeçalho quando não há LD");
-  assert.equal(linha.emailBody, "Favor postar no SIGEM");
-  assert.equal(linha.overallStatus, "Recebida");
-  // Sem LD não há classificação: nada de "não localizado" para quem nunca foi
-  // procurado, e nada de observação automática.
-  assert.equal(linha._classification, "");
-  assert.equal(linha._needsManualValidation, false);
-  assert.equal(linha.observations, "");
-  assert.equal(linha.needsLdInclusion, "", "sem LD, quem responde se precisa incluir é a pessoa");
-  // O título informado não vira título oficial: ninguém conferiu na LD.
-  assert.equal(linha._requestedTitle, "Relatório de inspeção");
-
-  // E a linha colável continua com as 26 colunas da planilha oficial.
-  assert.equal(RequestsReport.controlRows(linhas)[0].length, 26);
-});
-
-check("consulta e solicitação são módulos separados, cada um na sua aba", () => {
+check("o módulo de Solicitações saiu do GRCON e virou um atalho para o GRCON Flow", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  // Duas abas de primeiro nível, não duas áreas da mesma aba.
+  // Nem a seção, nem a view, nem a aba do módulo antigo continuam no HTML.
+  assert.doesNotMatch(html, /id="solicitacoes-module"/);
+  assert.doesNotMatch(html, /data-grcon-view="solicitacoes"/);
+  assert.doesNotMatch(html, /id="tab-solicitacoes"/);
+  // A Consultas continua com sua própria aba, intacta.
   assert.match(html, /data-grcon-view="requests"/);
-  assert.match(html, /data-grcon-view="solicitacoes"/);
-  assert.match(html, /id="solicitacoes-module"/);
+  assert.match(html, /id="requests-module"/);
+  // O lugar do antigo módulo agora é um link externo para o GRCON Flow.
+  assert.match(html, /href="https:\/\/grcon-flow\.vercel\.app\/"/);
+  assert.match(html, /class="ops-nav-button ops-nav-external"[^>]*href="https:\/\/grcon-flow\.vercel\.app\/"/);
 
-  // A aba de Consultas não guarda mais nada de solicitação: nem o formulário,
-  // nem o acompanhamento, nem os tipos.
-  const moduloConsulta = html.slice(html.indexOf('<section id="requests-module"'), html.indexOf('<section id="solicitacoes-module"'));
-  assert.doesNotMatch(moduloConsulta, /id="requests-area-solicitacao"|id="requests-area-painel"|id="requests-area-tipos"/);
-  assert.doesNotMatch(moduloConsulta, /data-requests-area="solicitacao"/);
+  assert.ok(!fs.existsSync(path.join(root, "solicitacoes_app.js")), "solicitacoes_app.js não deve mais existir no pacote");
 
-  // E o módulo de Solicitações tem as três áreas próprias.
-  const moduloSolicitacoes = html.slice(html.indexOf('<section id="solicitacoes-module"'));
-  assert.match(moduloSolicitacoes, /data-sol-area="nova"/);
-  assert.match(moduloSolicitacoes, /data-sol-area="painel"/);
-  assert.match(moduloSolicitacoes, /data-sol-area="tipos"/);
-
-  // Nenhuma ponte entre as duas: a consulta não manda nada para a solicitação.
-  assert.doesNotMatch(html, /id="requests-to-request"/);
+  const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
+  assert.doesNotMatch(loader, /solicitacoes/);
 
   const consulta = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  assert.doesNotMatch(consulta, /toRequest|documentosParaSolicitacao|abrirPainelSolicitacao/, "sem sobras da ponte removida");
-  assert.doesNotMatch(consulta, /buildControlRows\(|renderPainelSolicitacao|carregarTipos/, "a solicitação saiu inteira da aba de consulta");
+  assert.doesNotMatch(consulta, /GrconSolicitacoesUi/, "sem referência ao módulo removido");
 
-  const solicitacoes = fs.readFileSync(path.join(root, "solicitacoes_app.js"), "utf8");
-  // Itens digitados à mão alimentam a solicitação por conta própria.
-  assert.match(solicitacoes, /buildManualControlRows/);
-  // As 26 colunas ficam editáveis quando a pessoa precisa preencher tudo.
-  assert.match(solicitacoes, /renderTabelaCompleta/);
-
-  // O carregador conhece o módulo novo e sabe qual seção mostrar.
-  const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
-  assert.match(loader, /solicitacoes: \["xlsx", "excel", "brand", "solicitacoes_app\.js"\]/);
-  assert.match(loader, /solicitacoes: "solicitacoes-module"/);
-  assert.match(loader, /GrconSolicitacoesUi/);
-});
-
-check("o código do documento sai do nome do arquivo anexado", () => {
-  // Sem extensão e sem o sufixo de postagem — é o código como está na LD.
-  const lido = Requests.documentFromFileName("C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019_0001_A.pdf");
-  assert.equal(lido.document, "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019");
-  assert.equal(lido.fileName, "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019_0001_A.pdf");
-  assert.equal(lido.changed, true);
-  // Caminho completo também serve: o que vale é o nome do arquivo.
-  assert.equal(Requests.documentFromFileName("C:\\Pedidos\\MA-5290.00-22000-ABC-C1O-001.pdf").document, "MA-5290.00-22000-ABC-C1O-001");
-  // Ponto do código não é extensão: cortar pelo último ponto quebraria a LI.
-  assert.equal(Requests.documentFromFileName("LI-5290.00-22313-950-1LV-001").document, "LI-5290.00-22313-950-1LV-001");
-  // Código puro passa intacto e sem marcar renomeação.
-  const puro = Requests.documentFromFileName("C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019");
-  assert.equal(puro.changed, false);
-  // Uma entrada por arquivo, pronta para virar item da solicitação.
-  const entradas = Requests.documentsFromFiles([{ name: "MA-5290.00-22000-ABC-C1O-001_0001.pdf" }, { name: ".pdf" }]);
-  assert.equal(entradas.length, 1);
-  assert.equal(entradas[0].document, "MA-5290.00-22000-ABC-C1O-001");
-  assert.equal(entradas[0].source, "arquivo anexado");
-});
-
-check("a LD anexada responde o número da alocação e se o documento está alocado", () => {
-  const registro = consultaRecord(ntBaseDocument, "LD_A.xlsx", {
-    allocationStatus: "ALOCADO", allocation: "C1O-ALOC-CM-0028-2026", sigemStatus: "Em Análise", ldVersion: "3",
-  });
-  const index = Core.buildIndex([registro], []);
-  const fatos = Requests.ldFactsFor(ntBaseDocument, index, {});
-  assert.equal(fatos.consulted, true);
-  assert.equal(fatos.found, true);
-  assert.equal(fatos.allocation, "C1O-ALOC-CM-0028-2026");
-  assert.equal(fatos.allocated, "SIM — Alocado");
-  assert.equal(fatos.needsLdInclusion, "não");
-
-  const [linha] = Requests.buildManualControlRows([{ document: ntBaseDocument }], {}, []);
-  const preenchida = Requests.applyLdFacts(linha, fatos);
-  assert.equal(preenchida.allocation, "C1O-ALOC-CM-0028-2026");
-  assert.equal(preenchida.sigemStatus, "Em Análise");
-  assert.equal(preenchida._allocated, "SIM — Alocado");
-  assert.match(preenchida.observations, /Consultado na LD LD_A\.xlsx/);
-
-  // O que a pessoa já digitou não é sobrescrito pela LD.
-  const digitada = Requests.applyLdFacts({ ...linha, allocation: "ALOC digitada à mão" }, fatos);
-  assert.equal(digitada.allocation, "ALOC digitada à mão");
-
-  // Documento fora da LD: campos vazios, e não um palpite.
-  const ausente = Requests.ldFactsFor("C1O_RNEST_U32_3.1.1.1_INS_RIR_NAO-EXISTE", index, {});
-  assert.equal(ausente.found, false);
-  assert.equal(ausente.allocation, "");
-  assert.equal(ausente.allocated, "");
-  assert.equal(ausente.needsLdInclusion, "sim");
-
-  // Sem LD anexada, nada é consultado e nada é preenchido.
-  const semLd = Requests.ldFactsFor(ntBaseDocument, null, {});
-  assert.equal(semLd.consulted, false);
-  assert.equal(semLd.allocated, "");
-  assert.deepEqual(Requests.applyLdFacts(linha, semLd), linha);
+  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+  for (const rpc of ["grcon_save_request", "grcon_list_request_items", "grcon_update_request_items", "grcon_request_item_history"]) {
+    assert.doesNotMatch(cloud, new RegExp(`rpc\\("${rpc}"`));
+  }
 });
 
 check("a alocação da consulta distingue número de ALOC, coluna vazia e aba sem coluna", () => {
@@ -604,34 +417,6 @@ check("a alocação da consulta distingue número de ALOC, coluna vazia e aba se
     allocationStatus: "", allocation: "", allocationStatusColumn: "", allocationStatusHeader: "",
   })], []);
   assert.match(Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, semColuna)).allocated, /^NÃO APURADO/);
-});
-
-check("a planilha da solicitação sai no padrão do Controle: cabeçalho na linha 5", async () => {
-  const linhas = Requests.buildManualControlRows(
-    [{ document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1" }],
-    { owner: "Laís", receivedAt: "17/08/2026", requestType: "POSTAGEM NO SIGEM" },
-    [{ protocol: "556" }],
-  );
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Controle de Solicitações");
-  const layout = RequestsReport.writeControlSheet(sheet, linhas, { title: "CONTROLE DE SOLICITAÇÕES", metadata: "1 item" });
-  assert.equal(layout.headerRow, 5);
-  assert.equal(layout.firstDataRow, 6);
-
-  const bytes = await workbook.xlsx.writeBuffer();
-  const reaberto = new ExcelJS.Workbook();
-  await reaberto.xlsx.load(bytes);
-  const aba = reaberto.getWorksheet("Controle de Solicitações");
-  // Mesma ordem e mesma grafia das colunas da planilha oficial.
-  RequestsReport.CONTROL_COLUMNS.forEach((coluna, indice) => {
-    assert.equal(aba.getCell(5, indice + 1).value, coluna.header);
-  });
-  assert.equal(aba.getCell(6, 1).value, "557");
-  assert.equal(aba.getCell(6, 2).value, "Laís");
-  assert.equal(aba.getCell(6, 9).value, "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-1");
-  // O que não se aplica sai como "na", igual à planilha da rede.
-  assert.equal(aba.getCell(6, 15).value, "na");
-  assert.equal(aba.columnCount, RequestsReport.CONTROL_COLUMNS.length);
 });
 
 check("modelo de exportação guarda ordem e nome das colunas escolhidas", () => {
@@ -667,39 +452,38 @@ check("modelo de exportação guarda ordem e nome das colunas escolhidas", () =>
 });
 
 check("modelo importado do painel oficial reproduz a estrutura e não inventa coluna", () => {
-  // Cabeçalho real do Controle de Solicitações, com uma coluna que só existe na
-  // planilha da equipe.
+  // Cabeçalho real da consulta, com uma coluna que só existe na planilha da
+  // equipe.
   const resultado = RequestsReport.importExportTemplate("Painel da equipe", [
-    "ITEM",
-    "responsavel pela atividade",      // caixa diferente: mesmo rótulo
-    "Disponibilizado no PW - N-1710",  // hífen comum no lugar do curto
+    "documento",       // caixa diferente: mesmo rótulo
+    "título na ld",    // idem
     "Coluna que só existe na rede",
     "",
-  ], "controle");
+  ], "consulta");
 
   const modelo = resultado.template;
-  assert.equal(modelo.columns.length, 4, "a linha vazia não vira coluna");
+  assert.equal(modelo.columns.length, 3, "a linha vazia não vira coluna");
   // A grafia do arquivo do usuário é preservada: o modelo é a planilha dele.
-  assert.equal(modelo.columns[1].header, "responsavel pela atividade");
-  assert.equal(modelo.columns[1].key, "owner");
-  assert.equal(modelo.columns[2].key, "pwN1710");
+  assert.equal(modelo.columns[0].header, "documento");
+  assert.equal(modelo.columns[0].key, "document");
+  assert.equal(modelo.columns[1].key, "title");
   // O que o GRCON não reconhece fica sem chave, sai em branco e é informado.
-  assert.equal(modelo.columns[3].key, "");
+  assert.equal(modelo.columns[2].key, "");
   assert.deepEqual(resultado.unmatched, ["Coluna que só existe na rede"]);
-  assert.equal(resultado.matched, 3);
+  assert.equal(resultado.matched, 2);
 
-  const saida = RequestsReport.applyExportTemplate(modelo, [{ item: "557", owner: "Laís", pwN1710: "sim" }]);
-  assert.deepEqual(saida.rows, [["557", "Laís", "sim", ""]]);
+  const saida = RequestsReport.applyExportTemplate(modelo, [{ document: "C1O-1", title: "Relatório" }]);
+  assert.deepEqual(saida.rows, [["C1O-1", "Relatório", ""]]);
 });
 
 check("importação de modelo casa por nome idêntico, nunca por semelhança", () => {
-  // "Documento" e "Caminho do Documento" são colunas diferentes da planilha
-  // oficial. Casar por aproximação encheria uma com o conteúdo da outra.
+  // "Documento" e "Documentos" não são o mesmo rótulo. Casar por aproximação
+  // encheria uma coluna com o conteúdo da outra.
   const resultado = RequestsReport.importExportTemplate("Aproximado", [
     "Documento",
     "Documentos",
     "Caminho",
-  ], "controle");
+  ], "consulta");
   assert.equal(resultado.template.columns[0].key, "document");
   assert.equal(resultado.template.columns[1].key, "", "plural não é o mesmo rótulo");
   assert.equal(resultado.template.columns[2].key, "", "prefixo não é o mesmo rótulo");

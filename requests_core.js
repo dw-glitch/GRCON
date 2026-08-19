@@ -1,10 +1,9 @@
 /**
- * GRCON — Motor de Consultas e Solicitações
+ * GRCON — Motor de Consultas
  *
- * Camada sem interface: consulta de documentos nas LDs, protocolos, tipos de
- * solicitação e a classificação da triagem. Fica separada da tela porque é a
- * parte que precisa ser testada sozinha, e porque o mesmo motor atende tanto a
- * consulta rápida quanto a triagem das solicitações.
+ * Camada sem interface: consulta de documentos nas LDs e a classificação da
+ * triagem. Fica separada da tela porque é a parte que precisa ser testada
+ * sozinha.
  *
  * Duas regras atravessam o arquivo inteiro e explicam quase todas as decisões:
  *
@@ -39,129 +38,6 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Tipos de solicitação
-  //
-  // Ficam no banco e são editáveis pelo usuário. Esta lista é só a semente da
-  // primeira carga: nada aqui é obrigatório e nada é fixo no código, senão a
-  // área de configuração não teria sentido.
-  // ---------------------------------------------------------------------------
-  // Os rótulos são os que já aparecem na coluna "Descrição da Solicitação" do
-  // Controle de Solicitações, na ordem de frequência real: POSTAGEM NO SIGEM
-  // responde por dois terços dos pedidos, ALOCAÇÃO e INCLUSÃO NA LD vêm em
-  // seguida. Manter a grafia da planilha evita ter de traduzir na exportação.
-  const DEFAULT_REQUEST_TYPES = Object.freeze([
-    { code: "POSTAGEM_SIGEM", label: "POSTAGEM NO SIGEM", defaultAction: "Postar no SIGEM", defaultDeadlineDays: 3, defaultPriority: "normal", order: 1 },
-    { code: "ALOCACAO", label: "ALOCAÇÃO", defaultAction: "Providenciar a alocação", defaultDeadlineDays: 7, defaultPriority: "alta", order: 2 },
-    { code: "INCLUSAO_LD", label: "INCLUSÃO NA LD", defaultAction: "Analisar a inclusão na LD", defaultDeadlineDays: 10, defaultPriority: "normal", order: 3 },
-    { code: "INCLUSAO_E_ALOCACAO", label: "INCLUIR NA LD E FAZER ALOCAÇÃO", defaultAction: "Incluir na LD e providenciar a alocação", defaultDeadlineDays: 10, defaultPriority: "alta", order: 4 },
-    { code: "IMPRESSAO", label: "IMPRESSÃO", defaultAction: "Imprimir conforme solicitado", defaultDeadlineDays: 2, defaultPriority: "normal", order: 5 },
-    { code: "ALTERACAO_TITULO", label: "ALTERAÇÃO DO TITULO", defaultAction: "Conferir o título oficial na LD antes de alterar", defaultDeadlineDays: 5, defaultPriority: "normal", order: 6 },
-    { code: "CORRECAO_ALOCACAO", label: "CORREÇÃO DE ALOCAÇÃO", defaultAction: "Corrigir a alocação registrada", defaultDeadlineDays: 5, defaultPriority: "normal", order: 7 },
-    { code: "CORRECAO_LD", label: "CORREÇÃO LD", defaultAction: "Corrigir o cadastro na LD", defaultDeadlineDays: 5, defaultPriority: "normal", order: 8 },
-    { code: "INCLUSAO_CV", label: "INCLUSÃO DE CV", defaultAction: "Incluir o currículo na LD", defaultDeadlineDays: 5, defaultPriority: "normal", order: 9 },
-    { code: "POSTAGEM_E_INCLUSAO", label: "POSTAGEM NO SIGEM / INCLUSÃO NA LD", defaultAction: "Incluir na LD e postar no SIGEM", defaultDeadlineDays: 7, defaultPriority: "normal", order: 10 },
-  ]);
-
-  const PRIORITIES = Object.freeze(["baixa", "normal", "alta", "urgente"]);
-
-  const REQUEST_STATUSES = Object.freeze([
-    { code: "rascunho", label: "Rascunho", open: true },
-    { code: "recebido", label: "Recebido", open: true },
-    { code: "em_triagem", label: "Em triagem", open: true },
-    { code: "aguardando_info", label: "Aguardando informação", open: true },
-    { code: "pendente", label: "Pendente", open: true },
-    { code: "em_execucao", label: "Em execução", open: true },
-    { code: "aguardando_validacao", label: "Aguardando validação", open: true },
-    { code: "concluido", label: "Concluído", open: false },
-    { code: "cancelado", label: "Cancelado", open: false },
-  ]);
-
-  function normalizeRequestType(raw) {
-    const source = raw || {};
-    const label = text(source.label);
-    if (!label) return null;
-    const code = text(source.code).toUpperCase().replace(/[^A-Z0-9_]/g, "_")
-      || norm(label).replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 32);
-    if (!code) return null;
-    const priority = PRIORITIES.includes(text(source.defaultPriority).toLowerCase())
-      ? text(source.defaultPriority).toLowerCase()
-      : "normal";
-    const days = Number(source.defaultDeadlineDays);
-    return {
-      code,
-      label,
-      description: text(source.description),
-      defaultAction: text(source.defaultAction),
-      defaultPriority: priority,
-      // Sem prazo padrão é uma resposta válida: nem todo tipo tem prazo.
-      defaultDeadlineDays: Number.isFinite(days) && days > 0 ? Math.trunc(days) : null,
-      requiredFields: Array.isArray(source.requiredFields) ? source.requiredFields.map(text).filter(Boolean) : [],
-      active: source.active === undefined ? true : Boolean(source.active),
-      order: Number(source.order) || 0,
-    };
-  }
-
-  function requestTypeList(saved) {
-    const list = (Array.isArray(saved) && saved.length ? saved : DEFAULT_REQUEST_TYPES)
-      .map(normalizeRequestType)
-      .filter(Boolean);
-    return list.sort((a, b) => (a.order - b.order) || a.label.localeCompare(b.label, "pt-BR"));
-  }
-
-  // ---------------------------------------------------------------------------
-  // Protocolo
-  //
-  // O protocolo É o número do ITEM da planilha oficial de Controle de
-  // Solicitações: um sequencial simples e contínuo, que na planilha em uso vai
-  // de 1 a 556 sem falha. Não é composto por número de solicitação nem por ano.
-  //
-  // A sequência é global da planilha, não reinicia por solicitação: uma
-  // solicitação com dez documentos consome dez números seguidos, porque é o
-  // item que é acompanhado, concluído e cobrado individualmente.
-  // ---------------------------------------------------------------------------
-  function protocolFor(itemNumber) {
-    const item = Math.trunc(Number(itemNumber));
-    return Number.isFinite(item) && item > 0 ? String(item) : "";
-  }
-
-  /**
-   * Próximo item livre, continuando a sequência da planilha. Recebe os itens
-   * que já existem — inclusive os importados do controle oficial — para nunca
-   * reaproveitar um número, nem quando alguém apaga um item do meio da lista.
-   */
-  function nextItemNumber(existingItems) {
-    const usados = (existingItems || [])
-      .map((item) => Math.trunc(Number(
-        item && item.itemNumber !== undefined ? item.itemNumber : item && item.protocol
-      )))
-      .filter((value) => Number.isFinite(value) && value > 0);
-    return usados.length ? Math.max(...usados) + 1 : 1;
-  }
-
-  /**
-   * Numera uma leva de documentos a partir do próximo item livre, devolvendo
-   * cada um já com o seu protocolo.
-   */
-  function assignItemNumbers(documents, existingItems) {
-    let proximo = nextItemNumber(existingItems);
-    return (documents || []).map((item) => {
-      const numero = proximo;
-      proximo += 1;
-      return { ...item, itemNumber: numero, protocol: protocolFor(numero) };
-    });
-  }
-
-  function duplicatedProtocols(items) {
-    const contagem = new Map();
-    (items || []).forEach((item) => {
-      const protocolo = text(item && item.protocol);
-      if (!protocolo) return;
-      contagem.set(protocolo, (contagem.get(protocolo) || 0) + 1);
-    });
-    return [...contagem.entries()].filter(([, quantas]) => quantas > 1).map(([protocolo]) => protocolo);
-  }
-
-  // ---------------------------------------------------------------------------
   // Entrada de documentos
   // ---------------------------------------------------------------------------
 
@@ -187,45 +63,6 @@
       });
     });
     return itens;
-  }
-
-  // Extensões que aparecem nos arquivos entregues. A lista é fechada de
-  // propósito: cortar "o que vier depois do último ponto" transformaria
-  // `LI-5290.00-22313` em `LI-5290`.
-  const FILE_EXTENSIONS = /\.(?:pdf|docx?|xlsx?|xlsm|dwg|dgn|pptx?|zip|rar|msg|eml|jpg|jpeg|png|tif|tiff)$/i;
-
-  /**
-   * Código do documento a partir do nome do arquivo entregue.
-   *
-   * Tira o caminho, a extensão e o sufixo de postagem (`_0001`, `_0001_A`) que
-   * o SIGEM acrescenta ao arquivo — o que sobra é o código como ele aparece na
-   * LD. Nada além disso é adivinhado: se o nome não tiver código nenhum, a
-   * resposta é vazia, e a tela pede o código à pessoa.
-   */
-  function documentFromFileName(fileName) {
-    const bruto = text(fileName).split(/[\\/]/).pop();
-    if (!bruto) return { document: "", fileName: "", removed: "", changed: false };
-    const semExtensao = bruto.replace(FILE_EXTENSIONS, "");
-    const semSufixo = semExtensao.replace(/_\d{4}(?:_[0-9A-Za-z]+)?$/, "");
-    const documento = text(semSufixo);
-    return {
-      document: documento,
-      fileName: bruto,
-      removed: text(semExtensao.slice(documento.length)),
-      changed: documento !== bruto,
-    };
-  }
-
-  /** Uma entrada de solicitação por arquivo anexado, sem repetir código. */
-  function documentsFromFiles(files) {
-    const entradas = [];
-    (files || []).forEach((file) => {
-      const nome = typeof file === "string" ? file : text(file && file.name);
-      const lido = documentFromFileName(nome);
-      if (!lido.document) return;
-      entradas.push({ document: lido.document, requestedTitle: "", fileName: lido.fileName, source: "arquivo anexado" });
-    });
-    return entradas;
   }
 
   /**
@@ -529,178 +366,8 @@
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Linha do Controle de Solicitações
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Converte um item da solicitação numa linha da planilha oficial.
-   *
-   * Preenche só o que a pessoa informou. Tudo o que depende de etapa posterior
-   * — retorno da fiscal, datas de submissão, disponibilização no PW — fica em
-   * branco para a saída marcar como "na", e é preenchido na própria tabela
-   * quando acontecer. Inventar aqui seria pior do que deixar em branco.
-   */
-  function controlRowFromItem(input) {
-    const dados = input || {};
-    const cabecalho = dados.header || {};
-
-    return {
-      item: text(dados.protocol),
-      owner: text(cabecalho.owner),
-      receivedAt: text(cabecalho.receivedAt),
-      requester: text(cabecalho.requester),
-      documentFamily: text(cabecalho.documentFamily),
-      requestType: text(cabecalho.requestType),
-      origin: text(cabecalho.origin),
-      emailBody: text(cabecalho.emailBody),
-      document: text(dados.document),
-      documentPath: text(cabecalho.documentPath),
-      // Quem responde se precisa incluir na LD é a pessoa: o GRCON não
-      // consultou LD nenhuma aqui e não tem como saber.
-      needsLdInclusion: "",
-      ldVersion: "",
-      ldApprovedAt: "",
-      allocation: "",
-      reference: "",
-      allocSentAt: "",
-      fiscal1ReturnedAt: "",
-      fiscal1Answer: "",
-      fiscal2ReturnedAt: "",
-      sigemOwner: "",
-      sigemStatus: "",
-      sigemSubmittedAt: "",
-      observations: "",
-      pwN1710: "",
-      overallStatus: text(cabecalho.overallStatus) || "Recebida",
-      statusDate: text(cabecalho.receivedAt),
-    };
-  }
-
-  /**
-   * Transforma os documentos consultados em linhas do controle, numerando os
-   * itens a partir do próximo livre. É o caminho que evita redigitar o que o
-   * GRCON já descobriu.
-   */
-  /**
-   * Linhas de solicitação sem consulta à LD.
-   *
-   * Nem toda solicitação nasce de uma triagem: chega um pedido por e-mail e a
-   * pessoa precisa registrar e colar na planilha. Aqui não há classificação
-   * nenhuma — sem LD não há o que classificar, e inventar uma situação seria
-   * pior do que deixar em branco para ela preencher.
-   */
-  function buildManualControlRows(entries, header, existingItems) {
-    const numerados = assignItemNumbers(entries || [], existingItems);
-    return numerados.map((entrada) => ({
-      ...controlRowFromItem({
-        protocol: entrada.protocol,
-        document: entrada.document,
-        header: header || {},
-      }),
-      // O título informado não vira "título oficial": ninguém conferiu na LD.
-      _requestedTitle: text(entrada.requestedTitle),
-      _itemNumber: entrada.itemNumber,
-      _fileName: text(entrada.fileName),
-      _source: text(entrada.source),
-      _classification: "",
-      _needsManualValidation: false,
-      _manual: true,
-    }));
-  }
-
-  /**
-   * O que a LD responde sobre um documento da solicitação: o número da alocação
-   * e se ele está alocado ou não.
-   *
-   * Consultar é opcional — quem não anexa LD continua preenchendo à mão. Quando
-   * a LD é consultada e o documento não aparece nela, a resposta é essa mesma, e
-   * não um palpite: os campos ficam vazios e a linha registra que foi procurado.
-   */
-  function ldFactsFor(document, index, options) {
-    const settings = options || {};
-    if (!index) {
-      return { consulted: false, found: false, allocation: "", allocated: "", allocationKind: "", sigemStatus: "", ldVersion: "", title: "", ld: "", note: "" };
-    }
-    const resultado = lookupDocument(document, index, settings);
-    const linha = consultationRow(resultado);
-    const escolhida = resultado.chosen;
-    if (!resultado.found || !escolhida) {
-      return {
-        consulted: true,
-        found: false,
-        allocation: "",
-        allocated: "",
-        allocationKind: "",
-        sigemStatus: "",
-        ldVersion: "",
-        title: "",
-        ld: "",
-        needsLdInclusion: "sim",
-        note: resultado.found
-          ? `Consultado na LD: ${linha.situation}. ${text(resultado.rule)}`.trim()
-          : "Consultado na LD: não localizado.",
-      };
-    }
-    return {
-      consulted: true,
-      found: true,
-      allocation: text(escolhida.allocation),
-      allocated: linha.allocated,
-      allocationKind: text(escolhida.allocationKind),
-      sigemStatus: text(escolhida.sigemStatus),
-      ldVersion: text(escolhida.ldVersion),
-      title: text(escolhida.title),
-      ld: text(escolhida.ld),
-      // Documento localizado na LD não precisa de inclusão; "não" aqui é o que
-      // a LD respondeu, não uma suposição.
-      needsLdInclusion: "não",
-      note: `Consultado na LD ${text(escolhida.ld)}${escolhida.sheet ? ` · aba ${escolhida.sheet}` : ""}${escolhida.row ? ` · linha ${escolhida.row}` : ""}.`,
-      needsManualValidation: Boolean(resultado.needsManualValidation),
-    };
-  }
-
-  /**
-   * Aplica na linha do controle o que a LD respondeu, sem apagar o que a pessoa
-   * já digitou: campo preenchido à mão continua valendo.
-   */
-  function applyLdFacts(row, facts) {
-    const linha = { ...(row || {}) };
-    const dados = facts || {};
-    if (!dados.consulted) return linha;
-    if (dados.allocation && !text(linha.allocation)) linha.allocation = dados.allocation;
-    if (dados.sigemStatus && !text(linha.sigemStatus)) linha.sigemStatus = dados.sigemStatus;
-    if (dados.ldVersion && !text(linha.ldVersion)) linha.ldVersion = dados.ldVersion;
-    if (dados.needsLdInclusion && !text(linha.needsLdInclusion)) linha.needsLdInclusion = dados.needsLdInclusion;
-    linha._allocated = text(dados.allocated);
-    linha._allocationKind = text(dados.allocationKind);
-    linha._ldTitle = text(dados.title);
-    linha._ld = text(dados.ld);
-    linha._ldConsulted = true;
-    linha._ldFound = Boolean(dados.found);
-    linha._needsManualValidation = Boolean(dados.needsManualValidation);
-    const nota = text(dados.note);
-    if (nota && !text(linha.observations).includes(nota)) {
-      linha.observations = [text(linha.observations), nota].filter(Boolean).join(" ");
-    }
-    return linha;
-  }
-
   return Object.freeze({
-    controlRowFromItem,
-    buildManualControlRows,
-    DEFAULT_REQUEST_TYPES,
-    PRIORITIES,
-    REQUEST_STATUSES,
-    normalizeRequestType,
-    requestTypeList,
-    protocolFor,
-    nextItemNumber,
-    assignItemNumbers,
-    duplicatedProtocols,
     parseDocumentList,
-    documentFromFileName,
-    documentsFromFiles,
     dedupeDocuments,
     lookupDocument,
     lookupDocuments,
@@ -710,8 +377,6 @@
     issuedHistory,
     issuedColumns,
     allocationAnswer,
-    ldFactsFor,
-    applyLdFacts,
     chooseOccurrence,
   });
 });

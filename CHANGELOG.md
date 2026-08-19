@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 5.33.0 — 2026-08-19
+
+### O módulo de Solicitações saiu do GRCON
+
+- **A aba Solicitações não existe mais aqui.** O módulo já tinha sido extraído para um aplicativo próprio, o GRCON Flow, mas o GRCON principal continuava carregando a mesma tela, o mesmo motor de tipos de solicitação e a mesma gravação no banco — os dois sistemas faziam o mesmo trabalho em paralelo. Agora só existe uma cópia: a de lá.
+- No lugar da aba, a barra lateral e a navegação compacta trazem um atalho **Solicitações**, que abre o GRCON Flow (https://grcon-flow.vercel.app/) em outra aba.
+- Saíram do pacote: `solicitacoes_app.js`; os tipos de solicitação, o painel de acompanhamento e a gravação de solicitações em `grcon_cloud_app.js` (RPCs `grcon_get_request_types`, `grcon_save_request_type`, `grcon_delete_request_type`, `grcon_list_request_items`, `grcon_save_request`, `grcon_update_request_items`, `grcon_request_item_history`); e as funções que só existiam para alimentar aquele módulo em `requests_core.js` (protocolo, tipos de solicitação, entrada de documento por arquivo, linha do Controle de Solicitações) e `requests_report.js` (as 26 colunas do Controle de Solicitações e o construtor da planilha correspondente).
+- A aba **Consultas** continua exatamente como estava — a triagem por LD, a exportação em Excel e os modelos de exportação —, exceto pela base “Controle de Solicitações” dos modelos de exportação, que dependia inteiramente de dados que só existiam na tela removida e por isso saiu junto.
+- As tabelas e funções do Supabase do GRCON principal usadas por aquele módulo continuam no banco por ora, sem nenhuma tela que as use; ficam para uma migração de limpeza à parte.
+
 ## 5.32.29 — 2026-08-18
 
 ### Célula mesclada na LD deixa de virar “sem alocação”
