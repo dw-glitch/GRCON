@@ -314,6 +314,8 @@
   .ops-nav-button.active, .module-link.active, .ops-nav-button[aria-current="page"], .module-link[aria-current="page"] {
     color: var(--brand-800); background: var(--brand-100); border-color: color-mix(in srgb, var(--brand-600) 20%, transparent);
   }
+  a.ops-nav-external, a.ops-nav-external:hover { text-decoration: none; }
+  .ops-nav-external-icon { flex: 0 0 .95rem; width: .95rem; height: .95rem; margin-left: auto; color: var(--text-3); stroke-width: 2; }
   .sidebar-foot { margin-top: auto; padding: .85rem .65rem; color: var(--text-3); font-size: .72rem; }
 
   .ops-page-heading, .module-heading, .history-heading {

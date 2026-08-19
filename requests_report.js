@@ -98,10 +98,10 @@
     meta.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } };
     meta.alignment = { vertical: "middle" };
 
-    // Os cartões e o aviso leem a coluna SITUAÇÃO. Num modelo que não a inclui
-    // — o do Controle de Solicitações, por exemplo — todos os documentos
-    // cairiam em "não localizado" e o arquivo abriria com um alarme falso. Sem
-    // a coluna, portanto, não há resumo: melhor não dizer do que dizer errado.
+    // Os cartões e o aviso leem a coluna SITUAÇÃO. Num modelo que não a inclui,
+    // todos os documentos cairiam em "não localizado" e o arquivo abriria com
+    // um alarme falso. Sem a coluna, portanto, não há resumo: melhor não dizer
+    // do que dizer errado.
     const temSituacao = columns.some((column) => column.key === "situation");
     const localizados = lista.filter((item) => text(item.situation) === "Localizado").length;
     const validar = temSituacao ? lista.filter((item) => text(item.situation) === "Requer validação manual").length : 0;
@@ -251,134 +251,6 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Linhas para o Controle de Solicitações
-  //
-  // As 26 colunas abaixo são as da planilha oficial da rede, na ordem e com a
-  // grafia dela — inclusive os acentos e o hífen curto de "N‑1710". Qualquer
-  // diferença aqui obriga a rearrumar as colunas na hora de colar, que é
-  // exatamente o retrabalho que esta saída existe para evitar.
-  //
-  // Na planilha o cabeçalho está na linha 5 e os dados começam na 6; a
-  // exportação do GRCON entrega só as linhas de dados, para colar sob o que já
-  // existe sem mexer no cabeçalho nem nas validações da planilha.
-  // ---------------------------------------------------------------------------
-  const CONTROL_COLUMNS = Object.freeze([
-    { header: "ITEM", key: "item", width: 8 },
-    { header: "Responsavel pela atividade", key: "owner", width: 22 },
-    { header: "Data de Recebimento", key: "receivedAt", width: 18 },
-    { header: "Solicitante/ Área", key: "requester", width: 24 },
-    { header: "Tipo de Documento", key: "documentFamily", width: 16 },
-    { header: "Descrição da Solicitação", key: "requestType", width: 30 },
-    { header: "Origem da Solicitação", key: "origin", width: 18 },
-    { header: "Corpo do e-mail", key: "emailBody", width: 46 },
-    { header: "Documento", key: "document", width: 46 },
-    { header: "Caminho do Documento", key: "documentPath", width: 40 },
-    { header: "Inclusão na LD Necessária?", key: "needsLdInclusion", width: 20 },
-    { header: "Versão da LD enviada para Fiscal", key: "ldVersion", width: 22 },
-    { header: "Data de Aprovação da LD", key: "ldApprovedAt", width: 20 },
-    { header: "Alocação", key: "allocation", width: 24 },
-    { header: "Referência", key: "reference", width: 20 },
-    { header: "Data de Envio da ALOC para Fiscal 01", key: "allocSentAt", width: 24 },
-    { header: "Retorno da Fiscal 01 (Renata)", key: "fiscal1ReturnedAt", width: 22 },
-    { header: "Resposta da Fiscal 01 (Renata)", key: "fiscal1Answer", width: 30 },
-    { header: "Retorno da Fiscal 02 (Nani)", key: "fiscal2ReturnedAt", width: 22 },
-    { header: "Responsável pela Submissão SIGEM", key: "sigemOwner", width: 24 },
-    { header: "Status no SIGEM", key: "sigemStatus", width: 22 },
-    { header: "Data de Submissão no SIGEM", key: "sigemSubmittedAt", width: 22 },
-    { header: "Observações", key: "observations", width: 40 },
-    { header: "Disponibilizado no PW – N‑1710", key: "pwN1710", width: 22 },
-    { header: "Status Geral da Solicitação", key: "overallStatus", width: 24 },
-    { header: "Data de inclusão do status", key: "statusDate", width: 20 },
-  ]);
-
-  // "na" é o que a planilha usa para "não se aplica". Repetir essa convenção
-  // evita células vazias que depois ninguém sabe se são pendência ou não.
-  const NAO_SE_APLICA = "na";
-
-  function controlValue(item, key) {
-    const valor = item && item[key];
-    if (valor === null || valor === undefined || valor === "") return NAO_SE_APLICA;
-    return valor;
-  }
-
-  /**
-   * Linhas prontas para colar no Controle de Solicitações, uma por item, na
-   * ordem exata das colunas da planilha oficial.
-   */
-  function controlRows(items) {
-    return (items || []).map((item) => CONTROL_COLUMNS.map((coluna) => controlValue(item, coluna.key)));
-  }
-
-  /** Texto separado por tabulação, para colar direto na planilha. */
-  function controlClipboardText(items, includeHeaders) {
-    const linhas = controlRows(items).map((linha) => linha.join("\t"));
-    if (!includeHeaders) return linhas.join("\n");
-    return [CONTROL_COLUMNS.map((coluna) => coluna.header).join("\t"), ...linhas].join("\n");
-  }
-
-  /**
-   * Planilha no padrão do Controle de Solicitações.
-   *
-   * Aqui não entra a identidade do GRCON: o arquivo existe para ser colado — ou
-   * aberto lado a lado — com o controle oficial da rede, e por isso repete a
-   * estrutura dele. Cabeçalho na linha 5, dados a partir da 6, mesma ordem e
-   * mesma grafia das 26 colunas. Uma faixa azul e cartões de resumo obrigariam
-   * a apagar linhas antes de colar, que é o retrabalho que esta saída evita.
-   */
-  const CONTROL_HEADER_ROW = 5;
-
-  function writeControlSheet(worksheet, rows, options) {
-    const settings = options || {};
-    const lista = rows || [];
-    const columns = CONTROL_COLUMNS;
-    const lastColumn = columnLetter(columns.length);
-    worksheet.columns = columns.map((column) => ({ width: column.width || 24 }));
-
-    worksheet.mergeCells(`A1:${lastColumn}1`);
-    const titulo = worksheet.getCell("A1");
-    titulo.value = text(settings.title) || "CONTROLE DE SOLICITAÇÕES";
-    titulo.font = { name: "Aptos Display", size: 14, bold: true, color: { argb: "FF153A5C" } };
-    titulo.alignment = { vertical: "middle", horizontal: "left" };
-
-    worksheet.mergeCells(`A2:${lastColumn}2`);
-    const meta = worksheet.getCell("A2");
-    meta.value = text(settings.metadata);
-    meta.font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
-    meta.alignment = { vertical: "middle", horizontal: "left" };
-
-    const header = worksheet.getRow(CONTROL_HEADER_ROW);
-    columns.forEach((column, index) => {
-      const cell = header.getCell(index + 1);
-      cell.value = column.header;
-      cell.font = { name: "Aptos", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZUL_CLARO } };
-      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-      cell.border = { bottom: { style: "thin", color: { argb: "FFB9C7D2" } } };
-    });
-    header.height = 34;
-
-    lista.forEach((row, index) => {
-      const linha = worksheet.getRow(CONTROL_HEADER_ROW + 1 + index);
-      columns.forEach((column, columnIndex) => {
-        const cell = linha.getCell(columnIndex + 1);
-        // Mesma convenção da planilha: o que não se aplica sai como "na", e não
-        // como célula vazia que ninguém sabe se é pendência.
-        cell.value = controlValue(row, column.key);
-        cell.font = { name: "Aptos", size: 10 };
-        cell.alignment = { vertical: "top", wrapText: true };
-        if (index % 2 === 1) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF6F8FA" } };
-      });
-    });
-
-    worksheet.autoFilter = {
-      from: { row: CONTROL_HEADER_ROW, column: 1 },
-      to: { row: CONTROL_HEADER_ROW + lista.length, column: columns.length },
-    };
-    worksheet.views = [{ state: "frozen", ySplit: CONTROL_HEADER_ROW, showGridLines: false }];
-    return { headerRow: CONTROL_HEADER_ROW, firstDataRow: CONTROL_HEADER_ROW + 1, rows: lista.length };
-  }
-
-  // ---------------------------------------------------------------------------
   // Modelos de exportação
   //
   // Cada equipe cola o resultado numa planilha diferente, e rearrumar coluna a
@@ -398,7 +270,6 @@
   // ---------------------------------------------------------------------------
   const TEMPLATE_BASES = Object.freeze({
     consulta: { label: "Consulta de documentos", columns: COLUMNS, title: "GRCON · CONSULTA DE DOCUMENTOS" },
-    controle: { label: "Controle de Solicitações", columns: CONTROL_COLUMNS, title: "GRCON · CONTROLE DE SOLICITAÇÕES" },
   });
 
   function baseOf(name) {
@@ -511,7 +382,6 @@
 
   return Object.freeze({
     COLUMNS,
-    CONTROL_COLUMNS,
     TEMPLATE_BASES,
     BUILTIN_EXPORT_TEMPLATES,
     exportFieldCatalog,
@@ -519,10 +389,6 @@
     importExportTemplate,
     applyExportTemplate,
     previewExportTemplate,
-    controlRows,
-    controlClipboardText,
-    CONTROL_HEADER_ROW,
-    writeControlSheet,
     writeConsultationSheet,
     attachBrandLogo,
   });

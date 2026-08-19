@@ -1,4 +1,4 @@
-/* GRCON — Consultas e Solicitações
+/* GRCON — Consultas
    Usa os mesmos tokens de cor, tipografia e espaçamento dos demais módulos.
    Todo valor de cor tem um par no tema escuro definido no bloco do final: uma
    cor declarada só no claro vira texto ilegível quando o sistema está escuro. */
@@ -51,13 +51,8 @@ html[data-app="GRCON"] .requests-drop.is-over { border-color: var(--brand-600, #
 html[data-app="GRCON"] .requests-drop svg { width: 26px; height: 26px; fill: none; stroke: var(--brand-600, #24689a); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 html[data-app="GRCON"] .requests-drop strong { font-size: .86rem; color: var(--text-1, #17324a); }
 html[data-app="GRCON"] .requests-drop span { font-size: .74rem; color: var(--text-3, #6f8296); }
-/* A LD da solicitação é opcional e fica abaixo da área principal: o alvo menor
-   diz, sozinho, que ela não é o caminho obrigatório. */
 html[data-app="GRCON"] .requests-drop.compact { padding: .8rem 1rem; }
 html[data-app="GRCON"] .requests-drop.compact svg { width: 20px; height: 20px; }
-/* O código do documento é editável na tabela: quem anexou o arquivo errado
-   corrige ali mesmo, sem refazer a lista. */
-html[data-app="GRCON"] .sol-document-input { width: 100%; min-width: 22ch; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .74rem; }
 html[data-app="GRCON"] .requests-batch-table td small.requests-count { display: block; margin-top: .15rem; font-size: .68rem; }
 
 html[data-app="GRCON"] .requests-ld-list { display: grid; gap: .35rem; }
