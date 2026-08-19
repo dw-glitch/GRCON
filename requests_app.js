@@ -675,6 +675,9 @@
         : await file.arrayBuffer();
       const workbook = root.XLSX.read(buffer, { type: "array", cellDates: false, cellStyles: false });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      // Células mescladas guardam o valor só no canto superior esquerdo; sem
+      // replicar, as demais linhas do intervalo chegam vazias aqui.
+      if (root.TriagemCore && root.TriagemCore.expandMergedCells) root.TriagemCore.expandMergedCells(sheet);
       const linhas = root.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
       // O cabeçalho da planilha oficial não está na primeira linha — na do
       // Controle de Solicitações está na quinta. Em vez de fixar um número,

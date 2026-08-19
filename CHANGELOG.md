@@ -1,5 +1,20 @@
 # Histórico de alterações
 
+## 5.32.29 — 2026-08-18
+
+### Célula mesclada na LD deixa de virar “sem alocação”
+
+- **O valor de uma célula mesclada passa a valer para todas as linhas do intervalo.** No arquivo, a mescla guarda o valor só na célula do canto superior esquerdo; as demais chegam vazias na leitura. Quem abre a LD vê `ALOCADO` (ou `NÃO ALOCADO`) nas quatro linhas cobertas pela mescla, mas o GRCON só enxergava a primeira.
+- **Isso corrigia um risco real na direção perigosa.** Com `NÃO ALOCADO` mesclado, só a primeira linha bloqueava; as demais ficavam sem confirmação, caíam na evidência seguinte — o número de ALOC — e eram respondidas como **alocadas**, liberando para a eGRDT justamente o que a LD recusava. Conferido sobre a LD_005 real: antes, 6 das 7 linhas de uma mescla passavam como `pronto`; agora as 7 bloqueiam.
+- Vale para células ausentes e para as células vazias com formatação que o Excel costuma gravar dentro da mescla — as duas formas significam “sem valor próprio”.
+- A mesma leitura foi aplicada ao painel oficial de solicitações e ao Apêndice 3 carregado de arquivo.
+
+### A evidência da alocação diz em qual célula conferir
+
+- O motivo e o texto curto passam a citar a **célula exata** (`aba ET, célula U138`), e não só arquivo, aba e linha. “A LD diz uma coisa e o GRCON diz outra” vira uma conferência de dez segundos: abrir a LD, `Ctrl+G`, olhar.
+- O texto curto do estado `Aguardando retorno da alocação` deixa de ser o genérico “A LD informa que o documento não está alocado”. Agora diz o que de fato houve — `A ALOC C1O-ALOC-CM-0223-2026 foi enviada, mas a confirmação na LD continua “NÃO ALOCADO” (aba ET, célula U138)` — com a ação correspondente: aguardar o retorno da Fiscal ou atualizar a LD.
+- A mensagem de conflito também localiza uma das células divergentes.
+
 ## 5.32.28 — 2026-08-18
 
 ### Alocação: o GRCON deixa de contradizer a LD

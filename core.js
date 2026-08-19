@@ -103,6 +103,7 @@
    */
   function allocationEvidenceState(record) {
     const item = record || {};
+    const cell = allocationCellRef(item);
     const status = allocationState(item.allocationStatus);
     const number = allocationNumberInfo(item.allocation);
     const tracked = Boolean(text(item.allocationStatusColumn));
@@ -111,6 +112,7 @@
         ...status,
         tracked,
         evidence: "status",
+        cell,
         allocationNumber: number.valid ? number.raw : "",
         source: `campo “${text(item.allocationStatusHeader) || "confirmação de alocação"}”`,
       };
@@ -123,6 +125,7 @@
         label: "Alocado pelo número de ALOC",
         tracked,
         evidence: "number",
+        cell,
         allocationNumber: number.raw,
         source: `número de alocação ${number.raw}`,
       };
@@ -167,8 +170,22 @@
   /** Onde a linha está, para a evidência citar arquivo, aba e linha. */
   function recordLocation(record) {
     const item = record || {};
-    return [text(item.source), item.sheet ? `aba ${text(item.sheet)}` : "", item.row ? `linha ${item.row}` : ""]
-      .filter(Boolean).join(" · ");
+    return [
+      text(item.source),
+      item.sheet ? `aba ${text(item.sheet)}` : "",
+      item.row ? `linha ${item.row}` : "",
+      // A célula exata evita a discussão "a LD diz outra coisa": basta abrir a
+      // planilha, apertar Ctrl+G e conferir o que está escrito ali.
+      allocationCellRef(item) ? `célula ${allocationCellRef(item)}` : "",
+    ].filter(Boolean).join(" · ");
+  }
+
+  /** Endereço da célula de confirmação de alocação da linha, tipo "U134". */
+  function allocationCellRef(record) {
+    const item = record || {};
+    const column = text(item.allocationStatusColumn);
+    const row = Number(item.row) || 0;
+    return column && row ? `${column}${row}` : "";
   }
 
   function allocationConflictSummary(records) {
@@ -666,6 +683,42 @@
     return index === undefined ? "" : text(row[index]);
   }
 
+  // Células mescladas: no arquivo, só a célula do canto superior esquerdo do
+  // intervalo guarda o valor; as demais ficam vazias. Quem abre a LD vê
+  // "ALOCADO" nas quatro linhas cobertas pela mescla, mas a leitura crua só
+  // enxergava a primeira — as outras três ficavam sem confirmação de alocação e
+  // caíam na evidência seguinte (o número de ALOC), que responde "alocado"
+  // mesmo quando a mescla dizia NÃO ALOCADO. Antes de ler qualquer linha, o
+  // valor da âncora é replicado para o restante do intervalo, e só para as
+  // células realmente vazias.
+  function expandMergedCells(sheet) {
+    const merges = sheet && sheet["!merges"];
+    if (!Array.isArray(merges) || !merges.length || !sheet["!ref"]) return sheet;
+    let range;
+    try { range = XLSX.utils.decode_range(sheet["!ref"]); } catch (_) { return sheet; }
+    merges.forEach((merge) => {
+      if (!merge || !merge.s || !merge.e) return;
+      const anchor = sheet[XLSX.utils.encode_cell({ r: merge.s.r, c: merge.s.c })];
+      if (!anchor || anchor.v === undefined || anchor.v === null || anchor.v === "") return;
+      const startRow = Math.max(merge.s.r, range.s.r);
+      const endRow = Math.min(merge.e.r, range.e.r);
+      const startColumn = Math.max(merge.s.c, range.s.c);
+      const endColumn = Math.min(merge.e.c, range.e.c);
+      for (let r = startRow; r <= endRow; r += 1) {
+        for (let c = startColumn; c <= endColumn; c += 1) {
+          const address = XLSX.utils.encode_cell({ r, c });
+          // O Excel costuma gravar as células cobertas pela mescla como células
+          // vazias com formatação, e não como células ausentes; as duas formas
+          // valem como "sem valor próprio" e recebem o valor da âncora.
+          const atual = sheet[address];
+          const vazia = !atual || atual.v === undefined || atual.v === null || atual.v === "";
+          if (vazia) sheet[address] = anchor;
+        }
+      }
+    });
+    return sheet;
+  }
+
   function sheetCell(sheet, row, column) {
     if (column === undefined) return "";
     const item = sheet[XLSX.utils.encode_cell({ r: row, c: column })];
@@ -786,6 +839,7 @@
     (workbook.SheetNames || []).forEach((sheetName, sheetOrder) => {
       const sheet = workbook.Sheets[sheetName];
       if (!sheet || !sheet["!ref"]) return;
+      expandMergedCells(sheet);
       const configured = configuredSheets && configuredSheets[sheetName];
       if (configuredSheets && (!configured || configured.role === "ignore")) return;
       const range = XLSX.utils.decode_range(sheet["!ref"]);
@@ -2554,6 +2608,8 @@
     mostRecentRecord,
     allocationNumberInfo,
     allocationEvidenceState,
+    allocationCellRef,
+    expandMergedCells,
     allocationConflictSummary,
     technicalPostingEvidenceForRevision,
     canonicalId,
