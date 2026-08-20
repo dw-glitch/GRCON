@@ -28,6 +28,9 @@
     // diferentes. Nesta coluna o número da eGRDT vem com a data na linha de
     // baixo, dentro da mesma célula.
     { header: "EMITIDO PELO GRCON (eGRDT e data)", key: "issuedCell", width: 34 },
+    // A revisão vem do arquivo ligado à mesma eGRDT no histórico do GRCON; não
+    // é a revisão atual da LD anexada à consulta.
+    { header: "REVISÃO EMITIDA NO SIGEM", key: "issuedRevisionCell", width: 24 },
     { header: "STATUS NO SIGEM", key: "sigemStatus", width: 24 },
     { header: "LD CONSIDERADA", key: "ld", width: 34 },
     { header: "LDs EM QUE FOI LOCALIZADO", key: "allLds", width: 42 },

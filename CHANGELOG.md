@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 5.33.1 — 2026-08-20
+
+- A Operação de Consultas agora mostra a revisão associada à eGRDT mais recente no histórico do GRCON.
+- A revisão é lida do mesmo documento e do mesmo registro histórico da eGRDT, sem usar a revisão atual da LD como substituta.
+- O resultado no navegador ganhou a coluna `Revisão emitida no SIGEM`.
+- A exportação Excel e os modelos de consulta ganharam o campo `REVISÃO EMITIDA NO SIGEM` ao lado da eGRDT e da data.
+- Históricos antigos sem revisão explícita são informados como `Não registrada no histórico`; documentos nunca emitidos continuam como `Não emitido`.
+
 ## 5.33.0 — 2026-08-19
 
 ### O módulo de Solicitações saiu do GRCON

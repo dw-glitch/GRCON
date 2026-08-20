@@ -491,3 +491,14 @@ html[data-app="GRCON"] .requests-nao-emitido {
   font-size: .72rem;
   color: var(--text-3, #6f8296);
 }
+
+/* A revisão fica numa coluna própria para não ser confundida com a revisão
+   atual da LD. O número da eGRDT menor abaixo deixa a origem auditável. */
+html[data-app="GRCON"] .requests-col-revisao-emitida { min-width: 10.5rem; }
+html[data-app="GRCON"] .requests-revisao-emitida { display: grid; gap: .1rem; line-height: 1.25; }
+html[data-app="GRCON"] .requests-revisao-emitida strong { color: var(--brand-strong, #123f61); font-size: .78rem; }
+html[data-app="GRCON"] .requests-revisao-emitida small {
+  max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-3, #6f8296); font-size: .66rem;
+}
+html[data-app="GRCON"] .requests-revisao-ausente { color: var(--warning-800, #8a5c08); font-size: .7rem; }

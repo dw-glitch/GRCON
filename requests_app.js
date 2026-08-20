@@ -195,6 +195,11 @@
     const alvos = apenasSelecionados ? state.documents.filter((item) => item.selected) : state.documents;
     if (!alvos.length) { notify(apenasSelecionados ? "Nenhum documento selecionado." : "Informe pelo menos um documento.", "warn"); return; }
 
+    // A sincronização compartilhada pode ter atualizado o histórico depois que
+    // a aba abriu. Uma única reindexação antes do lote garante eGRDT e revisão
+    // atuais sem reler os mesmos registros para cada documento consultado.
+    root.GrconGrdtHistoryIndicator?.refresh?.();
+
     state.running = true;
     atualizarAcoes();
     els.progress.hidden = false;
@@ -230,8 +235,8 @@
 
   /**
    * O que o histórico do próprio GRCON sabe sobre o documento: em que eGRDT ele
-   * já saiu e quando. Procura primeiro pela grafia da LD, que é a que vai para
-   * a eGRDT, e só depois pelo código informado.
+   * já saiu, quando e em qual revisão. Procura primeiro pela grafia da LD, que
+   * é a que vai para a eGRDT, e só depois pelo código informado.
    */
   function historicoDoGrcon(resultado, informado) {
     const Indicador = root.GrconGrdtHistoryIndicator;
@@ -286,11 +291,22 @@
     const anteriores = Number(linha.issuedCount) > 1
       ? `<small class="requests-multi">+${Number(linha.issuedCount) - 1} anterior(es)</small>`
       : "";
-    const titulo = (linha.issuedAll || []).map((item) => `${item.egrdt}${item.date ? ` — ${item.date}` : ""}`).join("\n");
+    const titulo = (linha.issuedAll || []).map((item) => `${item.egrdt}${item.revision ? ` — Rev. ${item.revision}` : " — revisão não registrada"}${item.date ? ` — ${item.date}` : ""}`).join("\n");
     return `<span class="requests-emitido" title="${escapeHtml(titulo)}">
       <strong>${escapeHtml(linha.issuedEgrdt)}</strong>
       ${linha.issuedAt ? `<small>${escapeHtml(linha.issuedAt)}</small>` : ""}
       ${anteriores}
+    </span>`;
+  }
+
+  /** Revisão vinculada à mesma eGRDT mostrada na coluna anterior. */
+  function celulaRevisaoEmitida(linha) {
+    if (!linha) return '<span class="requests-vazio">—</span>';
+    if (!linha.issuedEgrdt) return '<span class="requests-nao-emitido">Não emitido</span>';
+    if (!linha.issuedRevision) return '<span class="requests-revisao-ausente">Não registrada no histórico</span>';
+    return `<span class="requests-revisao-emitida" title="Revisão registrada pelo GRCON na ${escapeHtml(linha.issuedEgrdt)}">
+      <strong>Rev. ${escapeHtml(linha.issuedRevision)}</strong>
+      <small>${escapeHtml(linha.issuedEgrdt)}</small>
     </span>`;
   }
 
@@ -321,6 +337,7 @@
         <td>${linha && linha.allocated ? escapeHtml(linha.allocated) : '<span class="requests-vazio">—</span>'}</td>
         <td>${linha && linha.lastGrdt ? escapeHtml(linha.lastGrdt) : '<span class="requests-vazio">—</span>'}</td>
         <td class="requests-col-emitido">${celulaEmitido(linha)}</td>
+        <td class="requests-col-revisao-emitida">${celulaRevisaoEmitida(linha)}</td>
         <td>${linha && linha.sigemStatus ? escapeHtml(linha.sigemStatus) : '<span class="requests-vazio">—</span>'}</td>
         <td>${linha && linha.ld ? escapeHtml(linha.ld) : '<span class="requests-vazio">—</span>'}${linha && linha.occurrenceCount > 1 ? `<small class="requests-multi">${linha.occurrenceCount} LDs</small>` : ""}</td>
       </tr>`;
@@ -398,6 +415,8 @@
           issuedCell: linha.issuedCell,
           issuedEgrdt: linha.issuedEgrdt,
           issuedAt: linha.issuedAt,
+          issuedRevision: linha.issuedRevision,
+          issuedRevisionCell: linha.issuedRevisionCell,
           sigemStatus: linha.sigemStatus,
           ld: linha.ld,
           allLds: linha.allLds,

@@ -1430,14 +1430,17 @@ check("o rolamento da tabela não colapsa nem cresce sozinho", () => {
 
 check("a consulta responde se o documento já foi emitido pelo GRCON, com a data", () => {
   const entradas = [
-    { egrdtNumber: "0130870-C1O-PGV-G-1252/2026 - eGRDT", generatedAt: "2026-08-17T13:05:00.000Z" },
-    { egrdtNumber: "0130870-C1O-PGV-G-1180/2026 - eGRDT", generatedAt: "2026-07-02T10:00:00.000Z" },
+    { egrdtNumber: "0130870-C1O-PGV-G-1252/2026 - eGRDT", generatedAt: "2026-08-17T13:05:00.000Z", revision: "C" },
+    { egrdtNumber: "0130870-C1O-PGV-G-1180/2026 - eGRDT", generatedAt: "2026-07-02T10:00:00.000Z", revision: "B" },
   ];
   const emitido = Requests.issuedHistory(entradas);
   assert.equal(emitido.issued, true);
   assert.equal(emitido.count, 2);
   assert.equal(emitido.egrdt, "0130870-C1O-PGV-G-1252/2026 - eGRDT", "a mais recente encabeça");
   assert.equal(emitido.date, "17/08/2026");
+  assert.equal(emitido.revision, "C", "a revisão precisa pertencer à eGRDT mais recente");
+  assert.equal(emitido.revisionCell, "C");
+  assert.equal(emitido.all[1].revision, "B", "as revisões anteriores permanecem auditáveis");
   // No Excel a data fica na linha de baixo, dentro da mesma célula.
   assert.equal(emitido.cell.split("\n")[0], "0130870-C1O-PGV-G-1252/2026 - eGRDT");
   assert.equal(emitido.cell.split("\n")[1], "17/08/2026");
@@ -1447,25 +1450,31 @@ check("a consulta responde se o documento já foi emitido pelo GRCON, com a data
   assert.equal(nunca.issued, false);
   assert.equal(nunca.cell, "Não emitido");
   assert.equal(nunca.egrdt, "");
+  assert.equal(nunca.revisionCell, "Não emitido");
 
   // Os campos que a linha da consulta carrega para a tela e para a planilha.
   const colunas = Requests.issuedColumns(entradas);
   assert.equal(colunas.issued, "SIM");
   assert.equal(colunas.issuedEgrdt, entradas[0].egrdtNumber);
   assert.equal(colunas.issuedAt, "17/08/2026");
+  assert.equal(colunas.issuedRevision, "C");
+  assert.equal(colunas.issuedRevisionCell, "C");
   assert.equal(colunas.issuedAll.length, 2);
 
   // A coluna existe na planilha da consulta, ao lado da GRDT que veio da LD.
   const chaves = RequestsReport.COLUMNS.map((coluna) => coluna.key);
   assert.ok(chaves.includes("issuedCell"), "a planilha precisa levar a eGRDT emitida");
   assert.equal(chaves[chaves.indexOf("lastGrdt") + 1], "issuedCell");
+  assert.equal(chaves[chaves.indexOf("issuedCell") + 1], "issuedRevisionCell", "a revisão emitida precisa ficar junto da eGRDT");
 
   // E na tabela da tela, com o mesmo número de colunas do cabeçalho.
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const tabela = html.slice(html.indexOf('<table class="requests-table" id="requests-table">'), html.indexOf("<tbody id=\"requests-tbody\">"));
   assert.match(tabela, /<th>Emitido pelo GRCON<\/th>/);
+  assert.match(tabela, /<th>Revisão emitida no SIGEM<\/th>/);
   const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
   assert.match(app, /issuedColumns\(historicoDoGrcon\(resultado, item\.document\)\)/);
+  assert.match(app, /GrconGrdtHistoryIndicator\?\.refresh\?\.\(\)/, "a consulta precisa atualizar o índice após a sincronização compartilhada");
   // Cabeçalho e linha precisam ter a mesma quantidade de células.
   const modelo = app.slice(app.indexOf("<tr data-doc="), app.indexOf("</tr>`;"));
   assert.equal((tabela.match(/<th[ >]/g) || []).length, (modelo.match(/<td[ >]/g) || []).length);
@@ -1485,6 +1494,8 @@ check("existe um só módulo de histórico de eGRDT por documento", () => {
   assert.equal((html.match(/grdt_history_indicator\.js/g) || []).length, 1);
   const indicador = fs.readFileSync(path.join(root, "grdt_history_indicator.js"), "utf8");
   assert.match(indicador, /getEntries/);
+  assert.match(indicador, /file\.grdtRevision \|\| file\.revision/, "o índice precisa carregar a revisão do mesmo arquivo histórico");
+  assert.match(indicador, /addEventListener\("grcon:history-updated", refresh\)/, "o índice precisa acompanhar o histórico sincronizado");
 });
 
 check("LD com ALOCADO e NÃO ALOCADO para o mesmo documento é conflito, não é não alocado", () => {
@@ -1634,4 +1645,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.32.12", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.1", passed: true, checks: checks.length, names: checks }, null, 2));

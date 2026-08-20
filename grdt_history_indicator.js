@@ -1,6 +1,6 @@
 // GRCON — Indicador de histórico de eGRDT por documento
 // Módulo: GrconGrdtHistoryIndicator
-// Versão: 5.32.24
+// Versão: 5.33.1
 // Descrição: Exibe badge informativo na tabela de triagem quando um documento
 //             já foi incluído em uma eGRDT gerada anteriormente (histórico local).
 //             Não bloqueia a geração de novas eGRDTs.
@@ -10,7 +10,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  // Índice: normalizedDocumentKey -> [{ egrdtNumber, generatedAt }]
+  // Índice: normalizedDocumentKey ->
+  // [{ egrdtNumber, generatedAt, revision, revisionSource }]
   let _index = new Map();
   let _built = false;
 
@@ -72,6 +73,10 @@
           egrdtNumber: egrdtNumber,
           generatedAt: record.generatedAt || "",
           outputType: record.outputType || "eGRDT final",
+          // A revisão pertence ao mesmo arquivo e à mesma eGRDT do registro.
+          // Nunca é obtida da LD atual, que pode já ter avançado de revisão.
+          revision: String(file.grdtRevision || file.revision || "").trim(),
+          revisionSource: String(file.revisionSource || "Histórico do GRCON").trim(),
         });
       });
     });
@@ -115,7 +120,8 @@
 
     var tooltipLines = sorted.map(function (e) {
       var d = formatDateBR(e.generatedAt);
-      return e.egrdtNumber + (d ? " (" + d + ")" : "");
+      var rev = e.revision ? " · Rev. " + e.revision : " · revisão não registrada";
+      return e.egrdtNumber + rev + (d ? " (" + d + ")" : "");
     });
     var tooltip = "Emitido anteriormente em:\n" + tooltipLines.join("\n");
 
@@ -151,6 +157,12 @@
     });
   } else {
     setTimeout(buildIndex, 250);
+  }
+  // A leitura compartilhada do Supabase pode terminar depois da inicialização
+  // desta tela. Reindexar no evento impede que a Consulta use um retrato local
+  // anterior e deixe de mostrar uma emissão/revisão que já chegou da nuvem.
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("grcon:history-updated", refresh);
   }
 
   return Object.freeze({

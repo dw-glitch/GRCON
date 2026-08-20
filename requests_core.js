@@ -328,15 +328,34 @@
   /**
    * Resposta do histórico para um documento, pronta para a tela e para o Excel.
    *
-   * `entries` são os registros do histórico local ({ egrdtNumber, generatedAt }),
-   * da emissão mais recente para a mais antiga.
+   * `entries` são os registros do histórico local
+   * ({ egrdtNumber, generatedAt, revision }), da emissão mais recente para a
+   * mais antiga. A revisão é a que ficou gravada junto do documento naquela
+   * eGRDT; a revisão atual da LD nunca substitui este valor histórico.
    */
   function issuedHistory(entries) {
     const lista = (entries || [])
-      .map((item) => ({ egrdt: text(item && item.egrdtNumber), date: formatDateBR(item && item.generatedAt) }))
-      .filter((item) => item.egrdt);
+      .map((item) => ({
+        egrdt: text(item && item.egrdtNumber),
+        generatedAt: text(item && item.generatedAt),
+        date: formatDateBR(item && item.generatedAt),
+        revision: text(item && (item.grdtRevision || item.revision)),
+        revisionSource: text(item && item.revisionSource),
+      }))
+      .filter((item) => item.egrdt)
+      .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt));
     if (!lista.length) {
-      return { issued: false, count: 0, egrdt: "", date: "", all: [], label: "Não emitido pelo GRCON", cell: "Não emitido" };
+      return {
+        issued: false,
+        count: 0,
+        egrdt: "",
+        date: "",
+        revision: "",
+        revisionCell: "Não emitido",
+        all: [],
+        label: "Não emitido pelo GRCON",
+        cell: "Não emitido",
+      };
     }
     const [maisRecente] = lista;
     return {
@@ -344,8 +363,10 @@
       count: lista.length,
       egrdt: maisRecente.egrdt,
       date: maisRecente.date,
+      revision: maisRecente.revision,
+      revisionCell: maisRecente.revision || "Não registrada no histórico",
       all: lista,
-      label: `${maisRecente.egrdt}${maisRecente.date ? ` · ${maisRecente.date}` : ""}${lista.length > 1 ? ` · +${lista.length - 1} anterior(es)` : ""}`,
+      label: `${maisRecente.egrdt}${maisRecente.revision ? ` · Rev. ${maisRecente.revision}` : " · revisão não registrada"}${maisRecente.date ? ` · ${maisRecente.date}` : ""}${lista.length > 1 ? ` · +${lista.length - 1} anterior(es)` : ""}`,
       // No Excel a data fica na linha de baixo, dentro da mesma célula: é assim
       // que se lê o número sem perder de vista quando ele saiu.
       cell: lista.map((item) => (item.date ? `${item.egrdt}\n${item.date}` : item.egrdt)).join("\n"),
@@ -359,6 +380,8 @@
       issued: historico.issued ? "SIM" : "NÃO",
       issuedEgrdt: historico.egrdt,
       issuedAt: historico.date,
+      issuedRevision: historico.revision,
+      issuedRevisionCell: historico.revisionCell,
       issuedCount: historico.count,
       issuedCell: historico.cell,
       issuedLabel: historico.label,
