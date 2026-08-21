@@ -661,6 +661,55 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   checks.push("N-1710 bloqueia geração quando o par nativo + PDF está incompleto");
 }
 
+check("LD_001 prioriza DISCIPLINA sobre Disciplina Torre e adapta CIVIL/SEGURANCA para CIVIL na eGRDT", () => {
+  globalThis.XLSX = SheetJS;
+  const document = "DE-5290.00-22313-142-C1O-076";
+  const headers = Array(25).fill("");
+  headers[0] = "ITEM";
+  headers[1] = "DOCUMENTO";
+  headers[2] = "REVISÃO";
+  headers[3] = "TÍTULO";
+  headers[4] = "UNIDADE/ÁREA";
+  headers[5] = "DISCIPLINA";
+  headers[7] = "PROPÓSITO DE EMISSÃO";
+  headers[12] = "GRDT";
+  headers[13] = "STATUS";
+  headers[16] = "STATUS SIGEM";
+  headers[18] = "ALOCAÇÃO";
+  headers[21] = "CAMINHO DATABOOK";
+  headers[23] = "CONFIRMAÇÃO DE ALOCAÇÃO";
+  headers[24] = "Disciplina Torre";
+
+  const data = Array(25).fill("");
+  data[0] = "2551";
+  data[1] = document;
+  data[2] = "0";
+  data[3] = "DISPOSITIVO PARA RETIRADA DA BOMBA B-32006A";
+  data[4] = "U-32";
+  data[5] = "RNEST UHDT-D U32 CIVIL/SEGURANCA";
+  data[7] = "PARA CONSTRUÇÃO";
+  data[13] = "EM EMISSÃO";
+  data[16] = "Não Postado";
+  data[18] = "C1O-ALOC-CM-0062-2026";
+  data[21] = "DATA BOOK C&M UHDTD U-32";
+  data[23] = "ALOCADO";
+  // A coluna auxiliar existe na LD real, mas está vazia para estes documentos.
+  data[24] = "";
+
+  const workbook = SheetJS.utils.book_new();
+  SheetJS.utils.book_append_sheet(workbook, SheetJS.utils.aoa_to_sheet([
+    ["LISTA DE DOCUMENTOS"], [""], [""], [""], ["DADOS DOS DOCUMENTOS"], headers, data,
+  ]), "N-1710");
+
+  const parsed = Core.parseWorkbook(workbook, "LD-5290.00-22313-91A-C1O-001_0001_E.xlsx", 1, null);
+  const record = parsed.records.find((item) => item.document === document);
+  assert.ok(record);
+  assert.equal(record.discipline, "RNEST UHDT-D U32 CIVIL/SEGURANCA");
+  const egrdt = Core.buildEgrdtData(document, "0", `${document}_0001_0.pdf`, record, "N-1710", "A3");
+  assert.equal(egrdt.discipline, "CIVIL");
+  assert.deepEqual(Core.validateEgrdtData(egrdt), []);
+});
+
 check("ET localiza variação silenciosa de separadores somente dentro do TAG", () => {
   const ld = "C1O_RNEST_U32_3.1.1.1_INS_US-ME.SPIE_nt-P-101-A";
   const input = "C1O_RNEST_U32_3.1.1.1_INS_US-ME.SPIE_nt-P101A";
@@ -1698,4 +1747,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.33.3", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.4", passed: true, checks: checks.length, names: checks }, null, 2));

@@ -601,6 +601,24 @@
     return 0;
   }
 
+  function disciplineHeaderScore(value) {
+    const h = normalizedHeader(value);
+    if (!h) return 0;
+    // A LD_001 possui, na mesma linha de cabeçalho, a coluna técnica
+    // "DISCIPLINA" e uma coluna auxiliar posterior chamada "Disciplina Torre".
+    // O mapeamento antigo aceitava qualquer cabeçalho iniciado por DISCIPLINA e,
+    // como percorria a linha da esquerda para a direita, a coluna auxiliar
+    // sobrescrevia a coluna oficial. No worker rápido isso fazia a disciplina
+    // chegar vazia à eGRDT. Priorizamos explicitamente a coluna técnica e só
+    // usamos auxiliares como último recurso.
+    if (h === "DISCIPLINA") return 1200;
+    if (h === "DISCIPLINA WORKFLOW") return 1120;
+    if (h === "DISCIPLINA DOCUMENTO" || h === "AREA DISCIPLINA") return 1080;
+    if (h.includes("DISCIPLINA") && h.includes("TORRE")) return 240;
+    if (h.startsWith("DISCIPLINA ") || h.endsWith(" DISCIPLINA")) return 720;
+    return 0;
+  }
+
   // Coluna de TAG da LD. Nem toda aba tem uma; quando tem, ela é a origem
   // preferencial do TAG no cruzamento com o Apêndice 3. "TAXONOMIA" e afins não
   // são TAG e ficam de fora.
@@ -619,13 +637,16 @@
     const allocationStatusCandidates = [];
     const allocationNumberCandidates = [];
     const tagCandidates = [];
+    const disciplineCandidates = [];
     header.forEach((cell, index) => {
       const h = norm(cell);
       if (!h) return;
       const statusScore = allocationStatusHeaderScore(cell);
       const numberScore = allocationNumberHeaderScore(cell);
+      const disciplineScore = disciplineHeaderScore(cell);
       if (statusScore) allocationStatusCandidates.push({ index, score: statusScore });
       if (numberScore) allocationNumberCandidates.push({ index, score: numberScore });
+      if (disciplineScore) disciplineCandidates.push({ index, score: disciplineScore });
       if (h === "DOCUMENTO" || h.startsWith("DOCUMENTO ") || h === "CODIGO DOCUMENTO" || h === "CODIGO DO DOCUMENTO" || h === "NUMERO DOCUMENTO" || h === "IDENTIFICADOR DOCUMENTO") result.document = index;
       else if (h === "REVISAO" || h === "REV." || h === "REV") result.revision = index;
       else if (h === "VERSAO DA LD ENVIADA" || h.includes("VERSAO DA LD ENVIADA")) result.ldVersion = index;
@@ -635,7 +656,7 @@
       else if (h === "GRDT" || h.includes("NUMERO GRDT")) result.grdt = index;
       else if (h.includes("DATA EFETIVA DE EMISSAO")) result.effectiveDate = index;
       else if (h === "FORMATO") result.format = index;
-      else if (h === "DISCIPLINA" || h.includes("DISCIPLINA/WORKFLOW") || h.includes("DISCIPLINA / WORKFLOW") || h.startsWith("DISCIPLINA ")) result.discipline = index;
+      else if (disciplineScore) { /* resolvido por pontuação ao final */ }
       else if (h.includes("TIPO DE DOCUMENTO") || h === "TIPO DOCUMENTO") result.documentType = index;
       else if (h.includes("PROPOSITO") || h.includes("FINALIDADE")) result.purpose = index;
       else if (h.includes("CAMINHO DATABOOK") || h.includes("CAMINHO DATA BOOK")) result.databook = index;
@@ -649,9 +670,11 @@
     const status = best(allocationStatusCandidates);
     const allocation = best(allocationNumberCandidates);
     const tag = best(tagCandidates);
+    const discipline = best(disciplineCandidates);
     if (status) result.allocationStatus = status.index;
     if (allocation) result.allocation = allocation.index;
     if (tag) result.tag = tag.index;
+    if (discipline) result.discipline = discipline.index;
     return result;
   }
 
@@ -1483,6 +1506,48 @@
       PRJ: "ENGENHARIA DE PROJETO", TEL: "COMUNICAÇÃO E RS", GER: "GERAL",
       MON: "MONTAGEM",
     };
+    const textMap = [
+      ["TUBUL", "TUBULAÇÃO"], ["CIVIL", "CIVIL"], ["ELETR", "ELÉTRICA"],
+      ["INSTRUMENT", "INSTRUMENTAÇÃO"], ["DINAM", "DINÂMICOS"], ["ESTATIC", "ESTÁTICOS"],
+      ["MECAN", "MECÂNICA"], ["QUALIDADE", "QUALIDADE"], ["PLANEJ", "PLANEJAMENTO"],
+      ["COMISSION", "COMISSIONAMENTO"], ["SUPRIMENT", "SUPRIMENTOS"],
+      ["COORDEN", "COORDENAÇÃO"], ["SEGURAN", "SEGURANÇA"], ["SAUDE", "SAÚDE"],
+      ["MEIO AMBIENTE", "MEIO AMBIENTE"], ["ADM CONTRATUAL", "ADM CONTRATUAL"],
+      ["COMUNICACAO", "COMUNICAÇÃO E RS"], ["RESPONSABILIDADE SOCIAL", "COMUNICAÇÃO E RS"],
+      ["FERRAMENTAS COMPUTACIONAIS", "FERRAMENTAS COMPUTACIONAIS"], ["MONTAGEM", "MONTAGEM"],
+      ["TELECOM", "COMUNICAÇÃO E RS"], ["PROJETO", "ENGENHARIA DE PROJETO"], ["GERAL", "GERAL"],
+    ];
+
+    // A disciplina da LD pode vir como uma descrição corporativa longa e até
+    // composta, por exemplo "RNEST UHDT-D U32 CIVIL/SEGURANCA". A eGRDT, por
+    // outro lado, aceita apenas uma opção da sua lista oficial. Em vez de exigir
+    // que a LD já esteja igual ao combo da eGRDT, percorremos cada componente na
+    // ordem em que aparece e devolvemos a primeira opção oficial reconhecível.
+    // Assim CIVIL/SEGURANCA resulta em CIVIL, exatamente como nos eGRDTs reais.
+    function officialDisciplineFromSegment(segment) {
+      const part = norm(segment);
+      if (!part) return "";
+      const compact = part.replace(/[^A-Z0-9]/g, "");
+      if (disciplineCodeMap[compact]) return disciplineCodeMap[compact];
+
+      const official = EGRDT_OPTIONS.disciplines
+        .map((option) => ({ option, token: norm(option), index: part.indexOf(norm(option)) }))
+        .filter((candidate) => candidate.index >= 0)
+        .sort((left, right) => left.index - right.index || right.token.length - left.token.length)[0];
+      if (official) return official.option;
+
+      const alias = textMap
+        .map(([token, option]) => ({ token, option, index: part.indexOf(token) }))
+        .filter((candidate) => candidate.index >= 0)
+        .sort((left, right) => left.index - right.index || right.token.length - left.token.length)[0];
+      return alias ? alias.option : "";
+    }
+
+    for (const part of sourceParts.length ? sourceParts : [source]) {
+      const resolved = officialDisciplineFromSegment(part);
+      if (resolved) return resolved;
+    }
+
     const sourceCode = sourceTail.replace(/[^A-Z0-9]/g, "");
     if (disciplineCodeMap[sourceCode]) return disciplineCodeMap[sourceCode];
 
@@ -1498,17 +1563,6 @@
       .sort((a, b) => norm(b).length - norm(a).length)
       .find((option) => norm(option).length >= 5 && source.includes(norm(option)));
     if (officialInSource) return officialInSource;
-    const textMap = [
-      ["TUBUL", "TUBULAÇÃO"], ["CIVIL", "CIVIL"], ["ELETR", "ELÉTRICA"],
-      ["INSTRUMENT", "INSTRUMENTAÇÃO"], ["DINAM", "DINÂMICOS"], ["ESTATIC", "ESTÁTICOS"],
-      ["MECAN", "MECÂNICA"], ["QUALIDADE", "QUALIDADE"], ["PLANEJ", "PLANEJAMENTO"],
-      ["COMISSION", "COMISSIONAMENTO"], ["SUPRIMENT", "SUPRIMENTOS"],
-      ["COORDEN", "COORDENAÇÃO"], ["SEGURAN", "SEGURANÇA"], ["SAUDE", "SAÚDE"],
-      ["MEIO AMBIENTE", "MEIO AMBIENTE"], ["ADM CONTRATUAL", "ADM CONTRATUAL"],
-      ["COMUNICACAO", "COMUNICAÇÃO E RS"], ["RESPONSABILIDADE SOCIAL", "COMUNICAÇÃO E RS"],
-      ["FERRAMENTAS COMPUTACIONAIS", "FERRAMENTAS COMPUTACIONAIS"], ["MONTAGEM", "MONTAGEM"],
-      ["TELECOM", "COMUNICAÇÃO E RS"], ["PROJETO", "ENGENHARIA DE PROJETO"], ["GERAL", "GERAL"],
-    ];
     const byText = textMap.find(([token]) => source.includes(token));
     if (byText) return byText[1];
     const groups = text(document).split("_");

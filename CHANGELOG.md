@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 5.33.4 — 2026-08-21
+
+- Corrige definitivamente `DISCIPLINA fora da lista oficial` na N-1710 com a LD_001 atual.
+- A leitura rápida da LD não confunde mais a coluna técnica `DISCIPLINA` com a coluna auxiliar `Disciplina Torre`; quando as duas existem, `DISCIPLINA` tem prioridade obrigatória.
+- Valores compostos da LD, como `RNEST UHDT-D U32 CIVIL/SEGURANCA`, passam a ser comparados na ordem em que aparecem com a lista oficial da eGRDT e são convertidos para `CIVIL`, reproduzindo o padrão observado no eGRDT 0613.
+- A resolução de disciplina continua adaptativa: descrições longas, códigos contratuais e combinações separadas por `/` são reduzidas para uma opção realmente disponível na eGRDT, sem desativar a validação oficial.
+- O cache do worker de leitura da LD foi invalidado para impedir que uma leitura antiga, com disciplina vazia, continue sendo reutilizada após a atualização.
+
 ## 5.33.3 — 2026-08-21
 
 - Corrige a geração de N-1710 quando a LD informa a disciplina pelo código contratual (ex.: `CVL`) ou em workflow terminado pelo código (ex.: `.../CVL`).

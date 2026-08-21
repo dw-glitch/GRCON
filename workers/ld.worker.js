@@ -4,7 +4,7 @@ importScripts("../grcon_utils.js", "../grcon_contracts.js", "../xlsx.full.min.js
 
 const CACHE_DB = "grcon-performance-cache-v3";
 const CACHE_STORE = "ld-indexes";
-const CACHE_SCHEMA = "5.25.1";
+const CACHE_SCHEMA = "5.33.4-discipline-header";
 const memoryCache = new Map();
 function openDb() {
   return new Promise((resolve, reject) => {
