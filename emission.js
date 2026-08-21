@@ -13,6 +13,46 @@
     return C.norm(value || "");
   }
 
+  function extensionOf(name) {
+    const match = text(name).match(/\.([^.]+)$/);
+    return match ? match[1].toLowerCase() : "";
+  }
+
+  /**
+   * A N-1710 segue a composição do modelo operacional enviado pelo usuário:
+   * cada código ocupa exatamente duas linhas na eGRDT — primeiro o arquivo
+   * nativo e depois o PDF correspondente. Os dois recebem o mesmo código, a
+   * mesma revisão e o sufixo obrigatório _0001_<revisão>.
+   */
+  function validateN1710Pair(row, sources) {
+    const list = Array.isArray(sources) ? [...sources] : [];
+    const applies = Boolean(C && C.isN1710Context && C.isN1710Context(row && row.sheet, row && row.document));
+    if (!applies) return { applies: false, valid: true, sources: list, errors: [] };
+
+    const pdfs = list.filter((source) => extensionOf(source && (source.name || source.finalName)) === "pdf");
+    const natives = list.filter((source) => {
+      const extension = extensionOf(source && (source.name || source.finalName));
+      return Boolean(extension && extension !== "pdf");
+    });
+    const withoutExtension = list.filter((source) => !extensionOf(source && (source.name || source.finalName)));
+    const errors = [];
+    if (list.length !== 2) errors.push("N-1710 exige exatamente 2 arquivos por código: 1 nativo + 1 PDF.");
+    if (pdfs.length !== 1) errors.push("N-1710 exige exatamente 1 PDF por código.");
+    if (natives.length !== 1) errors.push("N-1710 exige exatamente 1 arquivo nativo por código.");
+    if (withoutExtension.length) errors.push("N-1710 exige extensão explícita nos dois arquivos.");
+    if (list.some((source) => source && (source.virtual || !source.file))) {
+      errors.push("N-1710 exige o par físico completo; não é permitido gerar somente pela relação sem o arquivo nativo e o PDF.");
+    }
+
+    return {
+      applies: true,
+      valid: errors.length === 0,
+      // A ordem reproduz os exemplos oficiais: nativo na primeira linha, PDF na segunda.
+      sources: [...natives, ...pdfs, ...withoutExtension],
+      errors: [...new Set(errors)],
+    };
+  }
+
   function createPlan(results, selectedIndices, options) {
     const selected = selectedIndices instanceof Set ? selectedIndices : new Set(selectedIndices || []);
     const settings = options || {};
@@ -54,12 +94,18 @@
         errors.push(`${row.document}: nenhum arquivo físico selecionado.`);
         return;
       }
+      const n1710Pair = validateN1710Pair(row, sources);
+      if (!n1710Pair.valid) {
+        n1710Pair.errors.forEach((message) => errors.push(`${row.document}: ${message}`));
+        return;
+      }
+      const orderedSources = n1710Pair.sources;
       const codeValidation = C.validateDocumentCode(row.document, row.sheet);
       if (!codeValidation.valid) {
         warnings.push(`${row.document}: alerta de codificação — ${codeValidation.errors.join(" ")}`);
       }
 
-      sources.forEach((source) => {
+      orderedSources.forEach((source) => {
         const fileNameCheck = C.validateFinalFileName(source.finalName, source.name, row.document, row.revision, row.sheet);
         if (!fileNameCheck.valid) errors.push(`${row.document} / ${source.name}: ${fileNameCheck.errors.join(" ")}`);
         const finalName = fileNameCheck.expected;
@@ -180,5 +226,5 @@
     }));
   }
 
-  return { createPlan, consistencyErrors, splitPlan, manifestRows };
+  return { createPlan, validateN1710Pair, consistencyErrors, splitPlan, manifestRows };
 });

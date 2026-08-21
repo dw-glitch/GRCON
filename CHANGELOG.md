@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 5.33.2 — 2026-08-21
+
+- N-1710 passa a seguir composição própria de eGRDT: exatamente 1 arquivo nativo + 1 PDF por código.
+- Os dois arquivos são registrados como duas linhas da planilha GRDT, com o nativo antes do PDF.
+- Na N-1710, o sufixo `_0001_<revisão>` é obrigatório nos dois arquivos, inclusive `_0001_0`.
+- A geração é bloqueada quando falta o arquivo nativo, falta o PDF ou existem mais/menos de dois arquivos para o mesmo código.
+
+
 ## 5.33.1 — 2026-08-20
 
 - A Operação de Consultas agora mostra a revisão associada à eGRDT mais recente no histórico do GRCON.

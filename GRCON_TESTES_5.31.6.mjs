@@ -608,6 +608,56 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   assert.match(invalidAlias.documentLookup.message, /regra com\/sem nt- não se aplica/);
 });
 
+{
+  const document = "DE-5290.00-22313-142-C1O-076";
+  const record = {
+    ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+    title: "BOMBA 32006 A ESTRUTURA METÁLICA PARA RETIDADA DA BOMBA",
+    format: "A3",
+    discipline: "CIVIL",
+    documentType: "DE",
+    purpose: "Para Construção",
+    databook: "DATA BOOK C&M UHDTD U-32",
+  };
+  const nativeName = `${document}_0001_0.dwg`;
+  const pdfName = `${document}_0001_0.pdf`;
+  assert.equal(Core.proposedFileName(`${document}.dwg`, document, "0", "N-1710"), nativeName);
+  assert.equal(Core.proposedFileName(`${document}.pdf`, document, "0", "N-1710"), pdfName);
+  assert.equal(Core.proposedFileName(`${document}_0001.dwg`, document, "A", "N-1710"), `${document}_0001_A.dwg`);
+
+  const row = {
+    document, revision: "0", sheet: "N-1710", record, decision: Core.READY, hardBlock: false,
+    egrdt: Core.buildEgrdtData(document, "0", pdfName, record, "N-1710", "A3"),
+    // Ordem propositalmente invertida: o plano deve reproduzir o exemplo oficial, nativo antes do PDF.
+    files: [
+      { name: pdfName, finalName: pdfName, file: { size: 10 } },
+      { name: nativeName, finalName: nativeName, file: { size: 20 } },
+    ],
+  };
+  const pair = Emission.validateN1710Pair(row, row.files);
+  assert.equal(pair.valid, true);
+  assert.deepEqual(pair.sources.map((entry) => entry.name), [nativeName, pdfName]);
+
+  const plan = Emission.createPlan([row], new Set([0]));
+  assert.deepEqual(plan.errors, []);
+  assert.equal(plan.entries.length, 2);
+  assert.equal(plan.items.length, 2);
+  assert.deepEqual(plan.items.map((item) => item.fileName), [nativeName, pdfName]);
+  assert.ok(plan.items.every((item) => item.document === document && item.revision === "0"));
+
+  const bytes = await Workbook.build(plan.items);
+  const verified = await Workbook.verify(bytes, plan.items);
+  assert.equal(verified.checkedRows, 2);
+  assert.deepEqual(verified.rows.map((item) => item.fileName), [nativeName, pdfName]);
+  checks.push("N-1710 gera exatamente duas linhas por código — nativo + PDF — com _0001_revisão nos dois arquivos");
+
+  const onlyPdf = { ...row, files: [row.files[0]] };
+  const incomplete = Emission.createPlan([onlyPdf], new Set([0]));
+  assert.ok(incomplete.errors.some((message) => /N-1710 exige exatamente 2 arquivos por código/i.test(message)));
+  assert.ok(incomplete.errors.some((message) => /arquivo nativo/i.test(message)));
+  checks.push("N-1710 bloqueia geração quando o par nativo + PDF está incompleto");
+}
+
 check("ET localiza variação silenciosa de separadores somente dentro do TAG", () => {
   const ld = "C1O_RNEST_U32_3.1.1.1_INS_US-ME.SPIE_nt-P-101-A";
   const input = "C1O_RNEST_U32_3.1.1.1_INS_US-ME.SPIE_nt-P101A";
@@ -1645,4 +1695,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.33.1", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.2", passed: true, checks: checks.length, names: checks }, null, 2));

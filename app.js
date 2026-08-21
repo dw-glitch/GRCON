@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.33.1";
+  const APP_VERSION = "5.33.2";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -2125,15 +2125,18 @@
   }
 
   function rowOutputSources(row) {
-    if (row && row.files && row.files.length) return row.files;
-    if (row && row.virtualFileName) return [{
+    let sources = [];
+    if (row && row.files && row.files.length) sources = row.files;
+    else if (row && row.virtualFileName) sources = [{
       name: row.virtualFileName,
       finalName: row.finalName,
       file: null,
       virtual: true,
       relativePath: row.relativePath || row.virtualFileName,
     }];
-    return [];
+    if (!sources.length) return [];
+    const pair = E && E.validateN1710Pair ? E.validateN1710Pair(row, sources) : null;
+    return pair && pair.applies ? pair.sources : sources;
   }
 
   function manualAllocationOverrideAllowed(row) {
@@ -2362,20 +2365,37 @@
       if (row.ntRename) row.ntRename.finalName = row.finalName || row.ntRename.finalName || "";
       const hasPdf = row.files.some((entry) => extensionOf(entry.name) === "pdf");
       const hasNative = row.files.some((entry) => extensionOf(entry.name) !== "pdf");
-      if (row.decision === C.READY && !hasPdf && !row.virtualFileName) {
+      const pairSources = row.files.length
+        ? row.files
+        : row.virtualFileName
+          ? [{ name: row.virtualFileName, finalName: row.finalName, file: null, virtual: true }]
+          : [];
+      const n1710Pair = E && E.validateN1710Pair ? E.validateN1710Pair(row, pairSources) : { applies: false, valid: true, sources: pairSources, errors: [] };
+      if (n1710Pair.applies) row.files = n1710Pair.sources.filter((entry) => entry && entry.file);
+      if (n1710Pair.applies && !n1710Pair.valid) {
+        row.decision = C.REVIEW;
+        row.hardBlock = true;
+        row.blockCode = "n1710_pair_incomplete";
+        row.status = "Composição N-1710 incompleta";
+        row.reason = n1710Pair.errors.join(" ");
+      } else if (row.decision === C.READY && !hasPdf && !row.virtualFileName) {
         row.decision = C.REVIEW;
         row.status = "PDF não localizado";
         row.reason = "Nenhum PDF físico foi encontrado para comprovar a revisão e integrar a emissão.";
       }
-      const compositionWarning = row.virtualFileName
-        ? "Item recebido somente pela relação. A GRDT e o nome final podem ser gerados, mas o PDF físico não será incluído no pacote."
-        : !row.files.length
-          ? "Nenhum arquivo físico foi selecionado; resultado apenas para conferência."
-        : !hasPdf
-          ? "PDF não localizado no pacote; confirme a composição documental exigida."
-          : !hasNative
-            ? "Somente PDF localizado; confirme se o arquivo nativo também é aplicável."
-            : "";
+      const compositionWarning = n1710Pair.applies
+        ? n1710Pair.valid
+          ? ""
+          : `N-1710 bloqueada: ${n1710Pair.errors.join(" ")}`
+        : row.virtualFileName
+          ? "Item recebido somente pela relação. A GRDT e o nome final podem ser gerados, mas o PDF físico não será incluído no pacote."
+          : !row.files.length
+            ? "Nenhum arquivo físico foi selecionado; resultado apenas para conferência."
+          : !hasPdf
+            ? "PDF não localizado no pacote; confirme a composição documental exigida."
+            : !hasNative
+              ? "Somente PDF localizado; confirme se o arquivo nativo também é aplicável."
+              : "";
       row.packageWarning = [row.documentRevisionWarning, compositionWarning].filter(Boolean).join(" ");
       row.egrdt = {
         ...C.buildEgrdtData(row.document, row.revision, row.finalName, row.record || {}, row.sheet, ""),
@@ -3847,7 +3867,8 @@
       const sources = rowOutputSources(row);
       const discipline = C.norm(row.egrdt && row.egrdt.discipline) || "SEM DISCIPLINA";
       selectedItemsByDiscipline.set(discipline, (selectedItemsByDiscipline.get(discipline) || 0) + sources.length);
-      const invalid = sources.some((entry) => C.validateEgrdtData({
+      const n1710Pair = E && E.validateN1710Pair ? E.validateN1710Pair(row, sources) : { valid: true };
+      const invalid = !n1710Pair.valid || sources.some((entry) => C.validateEgrdtData({
         ...(row.egrdt || {}),
         document: row.document,
         revision: row.revision,
