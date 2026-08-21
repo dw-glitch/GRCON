@@ -1309,7 +1309,7 @@
     grid-column: 1 / -1;
     min-width: 0;
     display: grid;
-    grid-template-columns: minmax(10rem, 13rem) minmax(10rem, 13rem) minmax(18rem, 1fr);
+    grid-template-columns: minmax(9rem, 12rem) minmax(9rem, 12rem) minmax(10rem, 13rem) minmax(18rem, 1fr);
     gap: .75rem;
     align-items: end;
     padding-top: .75rem;
@@ -1343,7 +1343,7 @@
   }
   html[data-app="GRCON"] #history-export-period { flex: 0 0 auto; }
   @media (max-width: 900px) {
-    html[data-app="GRCON"] .history-period-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    html[data-app="GRCON"] .history-period-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     html[data-app="GRCON"] .history-period-action { grid-column: 1 / -1; justify-content: space-between; }
   }
   @media (max-width: 600px) {

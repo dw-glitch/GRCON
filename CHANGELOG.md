@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 5.33.6 — 2026-08-21
+
+- O Histórico ganhou filtro de **Tipo de documento** específico para a relação por período: `Todos`, `N-1710`, `ET` ou `CV`.
+- A classificação usa primeiro a aba técnica registrada e, quando necessário, infere a família pelo próprio código, preservando compatibilidade com eGRDTs antigas já salvas no histórico.
+- `N-1710` reconhece as categorias contratuais da família associadas aos códigos `5290.00`; `ET` reconhece o padrão RNEST e também as subdivisões históricas RIR/C&M; `CV` segue o padrão de cinco grupos da ET de codificação de currículos.
+- Em eGRDTs mistas, o relatório de um tipo específico leva somente os arquivos/documentos daquela família e recalcula documentos, arquivos e alocações.
+- O Excel passa a informar a **FAMÍLIA DOCUMENTAL** nas abas `eGRDTs` e `Documentos`, registra o tipo selecionado nos metadados e inclui o tipo no nome do arquivo exportado.
+
 ## 5.33.5 — 2026-08-21
 
 - A triagem deixa de mostrar apenas o PDF seguido de `+1 arquivo(s)` quando o mesmo documento possui nativo e PDF.

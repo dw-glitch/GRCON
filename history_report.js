@@ -44,8 +44,20 @@
     };
     return `${display(start)} a ${display(end)}`;
   }
-  function filterRecords(records, startDate, endDate) {
-    return History && History.filterByDate ? History.filterByDate(records || [], startDate, endDate) : [...(records || [])];
+  function filterRecords(records, startDate, endDate, documentFamily) {
+    const dated = History && History.filterByDate ? History.filterByDate(records || [], startDate, endDate) : [...(records || [])];
+    return History && History.filterByDocumentFamily ? History.filterByDocumentFamily(dated, documentFamily) : dated;
+  }
+  function familyLabel(value) {
+    const family = History && History.normalizedHistoryFamily ? History.normalizedHistoryFamily(value) : text(value);
+    return family || "Todos";
+  }
+  function fileFamily(file) {
+    return History && History.documentFamily ? History.documentFamily(file) : "";
+  }
+  function recordFamily(record) {
+    const families = History && History.recordFamilies ? History.recordFamilies(record) : [];
+    return families.length ? families.join(" · ") : "Não identificado";
   }
   function allocationReason(file) {
     const status = text(file && file.allocationStatus);
@@ -94,6 +106,7 @@
       "DATA DA GERAÇÃO / POSTAGEM": formatDate(record.generatedAt, true),
       "EGRDT": text(record.egrdtNumber),
       "TIPO DE SAÍDA": text(record.outputType),
+      "FAMÍLIA DOCUMENTAL": recordFamily(record),
       "DOCUMENTOS": Number(record.documentCount || 0),
       "ARQUIVOS": Number(record.fileCount || 0),
       "REVISÕES ENVIADAS NA GRDT (DOCUMENTO · REVISÃO)": generatedRevisions(record),
@@ -136,6 +149,7 @@
       "DATA DA GERAÇÃO / POSTAGEM": formatDate(record.generatedAt, true),
       "EGRDT": text(record.egrdtNumber),
       "TIPO DE SAÍDA": text(record.outputType),
+      "FAMÍLIA DOCUMENTAL": fileFamily(file) || "Não identificado",
       "DOCUMENTO": text(file.document),
       "TÍTULO": text(file.title),
       "DISCIPLINA": text(file.discipline),
@@ -249,8 +263,8 @@
     const ExcelJS = getExcel();
     if (!ExcelJS || !ExcelJS.Workbook) throw new Error("Biblioteca ExcelJS indisponível.");
     const settings = options || {};
-    const source = filterRecords(records || [], settings.startDate, settings.endDate);
-    if (!source.length) throw new Error("Nenhuma eGRDT foi localizada no período selecionado.");
+    const source = filterRecords(records || [], settings.startDate, settings.endDate, settings.documentFamily);
+    if (!source.length) throw new Error(`Nenhuma eGRDT da família ${familyLabel(settings.documentFamily)} foi localizada no período selecionado.`);
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "GRCON";
     workbook.lastModifiedBy = "GRCON";
@@ -261,7 +275,8 @@
 
     const totals = summary(source);
     const period = periodLabel(source, settings.startDate, settings.endDate);
-    const metadata = `${source.length.toLocaleString("pt-BR")} eGRDT(s) · Período: ${period} · Histórico local do GRCON · ${new Date().toLocaleString("pt-BR")}`;
+    const selectedFamily = familyLabel(settings.documentFamily);
+    const metadata = `${source.length.toLocaleString("pt-BR")} eGRDT(s) · Período: ${period} · Tipo: ${selectedFamily} · Histórico local do GRCON · ${new Date().toLocaleString("pt-BR")}`;
     const egrdts = egrdtRows(source);
     const documents = documentRows(source);
 
@@ -304,6 +319,7 @@
     sheet.getCell("A10").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF24689A" } };
     const details = [
       ["Período selecionado", period],
+      ["Tipo de documento", selectedFamily],
       ["Primeiro registro", formatDate(totals.first, true)],
       ["Último registro", formatDate(totals.last, true)],
       ["Versão do aplicativo", text(settings.appVersion) || "GRCON"],
@@ -356,8 +372,9 @@
     const bounds = History && History.periodBounds ? History.periodBounds(records || []) : { start: "", end: "" };
     const start = (text(settings.startDate) || bounds.start || "INICIO").replace(/-/g, "");
     const end = (text(settings.endDate) || bounds.end || "FIM").replace(/-/g, "");
-    return `GRCON_Relacao_eGRDTs_${start}_a_${end}_${compactStamp()}.xlsx`;
+    const family = familyLabel(settings.documentFamily).replace(/[^A-Z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "TODOS";
+    return `GRCON_Relacao_eGRDTs_${family}_${start}_a_${end}_${compactStamp()}.xlsx`;
   }
 
-  return Object.freeze({ formatDate, periodLabel, filterRecords, allocationReason, revisionRelation, egrdtRows, documentRows, summary, buildWorkbook, downloadName });
+  return Object.freeze({ formatDate, periodLabel, filterRecords, familyLabel, allocationReason, revisionRelation, egrdtRows, documentRows, summary, buildWorkbook, downloadName });
 });

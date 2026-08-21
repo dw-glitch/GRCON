@@ -5,7 +5,7 @@
   const Posting = window.GrconSigemPosting;
   const Flow = window.GrconMacro5Flow;
   const HistoryReport = window.GrconHistoryReport;
-  const APP_VERSION = "5.32.24";
+  const APP_VERSION = "5.33.6";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
@@ -13,7 +13,7 @@
     tabs: [...document.querySelectorAll("[data-grcon-view]")],
     control: $("#grdt-module"), analysis: $("#analysis-history-module"), history: $("#history-module"), sigem: $("#sigem-module"), requests: $("#requests-module"), count: $("#history-tab-count"),
     search: $("#history-search"), year: $("#history-year"), type: $("#history-type"), postingStatus: $("#history-posting-status"), sort: $("#history-sort"),
-    dateStart: $("#history-date-start"), dateEnd: $("#history-date-end"), periodStatus: $("#history-period-status"), exportPeriod: $("#history-export-period"),
+    dateStart: $("#history-date-start"), dateEnd: $("#history-date-end"), periodDocumentType: $("#history-period-document-type"), periodStatus: $("#history-period-status"), exportPeriod: $("#history-export-period"),
     clear: $("#history-clear"), summary: $("#history-summary"), list: $("#history-list"), empty: $("#history-empty"), detail: $("#history-detail"), resultCount: $("#history-result-count"),
   };
 
@@ -32,10 +32,21 @@
     return !invalid;
   }
 
+  function periodRecords() {
+    return History && typeof History.filterByDocumentFamily === "function"
+      ? History.filterByDocumentFamily(state.filtered, els.periodDocumentType?.value || "")
+      : [...state.filtered];
+  }
+
+  function periodFamilyLabel() {
+    return els.periodDocumentType?.value || "Todos";
+  }
+
   function updatePeriodStatus() {
     if (!validPeriod(false)) { els.periodStatus.textContent = "Período inválido"; return; }
-    const label = HistoryReport ? HistoryReport.periodLabel(state.filtered, els.dateStart.value, els.dateEnd.value) : "Período selecionado";
-    els.periodStatus.textContent = `${label} · ${state.filtered.length.toLocaleString("pt-BR")} eGRDT(s)`;
+    const records = periodRecords();
+    const label = HistoryReport ? HistoryReport.periodLabel(records, els.dateStart.value, els.dateEnd.value) : "Período selecionado";
+    els.periodStatus.textContent = `${label} · Tipo: ${periodFamilyLabel()} · ${records.length.toLocaleString("pt-BR")} eGRDT(s)`;
   }
 
   function downloadBlob(blob, name) {
@@ -86,18 +97,19 @@
   }
 
   async function exportPeriodReport() {
-    if (!validPeriod(true) || !state.filtered.length || !HistoryReport) return;
+    const records = periodRecords();
+    if (!validPeriod(true) || !records.length || !HistoryReport) return;
     state.exporting = true;
     els.exportPeriod.disabled = true;
     els.exportPeriod.textContent = "Gerando relação…";
     try {
       await window.GRCONModuleLoader?.ensure("excel");
       await window.GRCONModuleLoader?.ensure("brand");
-      const options = { startDate: els.dateStart.value, endDate: els.dateEnd.value, appVersion: APP_VERSION, brandAssets: window.GRCONBrandAssets };
-      const workerBuffer = await buildWorkbookInWorker(state.filtered, options).catch(() => null);
-      const buffer = workerBuffer || await HistoryReport.buildWorkbook(state.filtered, options);
-      downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), HistoryReport.downloadName(state.filtered, options));
-      notify(`${state.filtered.length} eGRDT(s) incluída(s) na relação do período.`, "success");
+      const options = { startDate: els.dateStart.value, endDate: els.dateEnd.value, documentFamily: els.periodDocumentType?.value || "", appVersion: APP_VERSION, brandAssets: window.GRCONBrandAssets };
+      const workerBuffer = await buildWorkbookInWorker(records, options).catch(() => null);
+      const buffer = workerBuffer || await HistoryReport.buildWorkbook(records, options);
+      downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), HistoryReport.downloadName(records, options));
+      notify(`${records.length} eGRDT(s) incluída(s) na relação do período · ${periodFamilyLabel()}.`, "success");
     } catch (error) {
       console.error(error);
       notify(error.message || "Não foi possível gerar a relação por período.", "error");
@@ -183,7 +195,7 @@
     if (!state.filtered.some((record) => record.id === state.selectedId)) state.selectedId = state.filtered[0] && state.filtered[0].id || "";
     if (els.count) { els.count.textContent = String(state.records.length); els.count.hidden = state.records.length === 0; }
     if (els.resultCount) els.resultCount.textContent = `${state.filtered.length.toLocaleString("pt-BR")} eGRDT(s)`;
-    els.exportPeriod.disabled = state.exporting || !state.filtered.length || !validPeriod(false) || !HistoryReport;
+    els.exportPeriod.disabled = state.exporting || !periodRecords().length || !validPeriod(false) || !HistoryReport;
     updatePeriodStatus();
   }
 
@@ -366,7 +378,7 @@
   }
 
   els.tabs.forEach((button) => button.addEventListener("click", () => activate(button.dataset.grconView)));
-  [els.search, els.year, els.type, els.postingStatus, els.sort, els.dateStart, els.dateEnd].forEach((control) => control.addEventListener(control.tagName === "INPUT" ? "input" : "change", render));
+  [els.search, els.year, els.type, els.postingStatus, els.sort, els.dateStart, els.dateEnd, els.periodDocumentType].filter(Boolean).forEach((control) => control.addEventListener(control.tagName === "INPUT" ? "input" : "change", render));
   els.exportPeriod.addEventListener("click", exportPeriodReport);
   els.list.addEventListener("click", (event) => { const button = event.target.closest("[data-history-id]"); if (button) select(button.dataset.historyId); });
   els.detail.addEventListener("click", (event) => {

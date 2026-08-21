@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const History = require(path.join(root, "history_core.js"));
+const HistoryReport = require(path.join(root, "history_report.js"));
 const Sequence = require(path.join(root, "egrdt_sequence.js"));
 const Workbook = require(path.join(root, "grdt_workbook.js"));
 const ExcelJS = require(path.join(root, "exceljs.min.js"));
@@ -1737,6 +1738,54 @@ check("a evidência da alocação cita a célula exata da LD", () => {
   assert.ok(mensagem.includes(`célula ${celula}`), "o texto curto também aponta a célula");
 });
 
+check("histórico classifica N-1710, ET e CV pelas regras documentais já usadas no GRCON", () => {
+  const etDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
+  assert.equal(History.documentFamily({ document: n1710Document, sheet: "" }), "N-1710");
+  assert.equal(History.documentFamily({ document: "DE-5290.00-22313-142-C1O-076", sheet: "N-1710 MOD" }), "N-1710");
+  assert.equal(History.documentFamily({ document: etDocument, sheet: "" }), "ET");
+  assert.equal(History.documentFamily({ document: "QUALQUER", sheet: "RIR" }), "ET");
+  assert.equal(History.documentFamily({ document: cvDocument4, sheet: "" }), "CV");
+});
+
+check("filtro do período recorta eGRDT mista e recalcula os totais da família selecionada", () => {
+  const mixed = History.cleanRecord({
+    id: "mixed-history",
+    egrdtNumber: Sequence.baseName(777, 2026),
+    generatedAt: "2026-08-21T12:00:00.000Z",
+    outputType: "eGRDT final",
+    files: [
+      { document: "DE-5290.00-22313-142-C1O-076", sheet: "N-1710", finalName: "DE-5290.00-22313-142-C1O-076_0001_A.dwg", allocation: "ALOC-N" },
+      { document: "DE-5290.00-22313-142-C1O-076", sheet: "N-1710", finalName: "DE-5290.00-22313-142-C1O-076_0001_A.pdf", allocation: "ALOC-N" },
+      { document: ntBaseDocument, sheet: "ET", finalName: `${ntBaseDocument}.pdf`, allocation: "ALOC-ET" },
+      { document: cvDocument4, sheet: "CV", finalName: `${cvDocument4}.pdf`, allocation: "ALOC-CV" },
+    ],
+  });
+  const n1710 = History.filterByDocumentFamily([mixed], "N-1710");
+  assert.equal(n1710.length, 1);
+  assert.equal(n1710[0].documentCount, 1);
+  assert.equal(n1710[0].fileCount, 2);
+  assert.deepEqual(n1710[0].allocations, ["ALOC-N"]);
+  assert.ok(n1710[0].files.every((file) => History.documentFamily(file) === "N-1710"));
+
+  const cv = HistoryReport.filterRecords([mixed], "", "", "CV");
+  assert.equal(cv.length, 1);
+  assert.equal(cv[0].documentCount, 1);
+  assert.equal(cv[0].fileCount, 1);
+  assert.equal(HistoryReport.familyLabel(""), "Todos");
+  assert.match(HistoryReport.downloadName(cv, { documentFamily: "CV", startDate: "2026-08-21", endDate: "2026-08-21" }), /Relacao_eGRDTs_CV_20260821_a_20260821/);
+});
+
+check("Histórico oferece o filtro Todos, N-1710, ET e CV na relação do período", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const report = fs.readFileSync(path.join(root, "history_report.js"), "utf8");
+  assert.match(html, /id="history-period-document-type"[\s\S]*value="N-1710"[\s\S]*value="ET"[\s\S]*value="CV"/);
+  assert.match(ui, /filterByDocumentFamily\(state\.filtered, els\.periodDocumentType/);
+  assert.match(ui, /documentFamily: els\.periodDocumentType/);
+  assert.match(report, /"FAMÍLIA DOCUMENTAL"/);
+  assert.match(report, /\["Tipo de documento", selectedFamily\]/);
+});
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];
@@ -1755,4 +1804,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.5", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.6", passed: true, checks: checks.length, names: checks }, null, 2));

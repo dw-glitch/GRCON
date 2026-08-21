@@ -18,6 +18,65 @@
   function byteSize(value) { return _U.byteSize ? _U.byteSize(value) : (function() { try { return unescape(encodeURIComponent(String(value))).length; } catch (_) { console.debug("[HistoryCore] byteSize fallback:", _); return String(value).length; } })(); }
   function storageOf(storage) { return _U.storageOf ? _U.storageOf(storage) : (storage || (typeof localStorage !== "undefined" ? localStorage : null)); }
 
+  // Famílias documentais usadas no filtro do histórico. A classificação segue
+  // as mesmas convenções da triagem e também funciona em registros antigos,
+  // nos quais a família pode precisar ser inferida pelo código do documento.
+  const HISTORY_FAMILIES = Object.freeze(["N-1710", "ET", "CV"]);
+  const HISTORY_N1710_CATEGORIES = new Set([
+    "CE", "CR", "DB", "DE", "EC", "ET", "FD", "IM", "IS", "LA",
+    "LD", "LI", "LO", "MA", "MC", "MD", "MO", "PR", "PT", "RL",
+    "RM", "CT", "SIT",
+  ]);
+  const HISTORY_CV_RE = /^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{3,4}(?:_|$)/i;
+  const HISTORY_ET_RE = /(?:^|[^A-Z0-9])[A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9][A-Z0-9.-]*_/i;
+
+  function normalizedHistoryFamily(value) {
+    const wanted = norm(value).replace(/_/g, "-");
+    if (!wanted || wanted === "TODOS" || wanted === "TODAS") return "";
+    if (wanted === "N1710" || wanted === "N-1710") return "N-1710";
+    if (wanted === "ET") return "ET";
+    if (wanted === "CV") return "CV";
+    return "";
+  }
+
+  function documentFamily(fileOrValue, sheetName) {
+    const file = fileOrValue && typeof fileOrValue === "object" ? fileOrValue : null;
+    const sheet = norm(file ? file.sheet : sheetName);
+    if (/^N-?1710(?:\s|$)/.test(sheet)) return "N-1710";
+    if (sheet === "CV") return "CV";
+    // RIR e C&M são subdivisões operacionais da família ET nas LDs antigas.
+    if (sheet === "ET" || sheet === "RIR" || sheet === "C&M" || sheet === "C & M" || sheet === "CM") return "ET";
+
+    const candidates = file ? [file.document, file.finalName, file.originalName] : [fileOrValue];
+    for (const candidateValue of candidates) {
+      let candidate = norm(candidateValue);
+      if (!candidate) continue;
+      candidate = candidate.split(/[\/\\]/).pop().replace(/\.(?:PDF|DOCX?|XLSX?|XLSM|DWG|DGN|PPTX?)$/i, "");
+      if (HISTORY_CV_RE.test(candidate)) return "CV";
+      if (HISTORY_ET_RE.test(candidate)) return "ET";
+      const canonical = candidate.replace(/^NT-/, "");
+      const parts = canonical.split("-");
+      const first = parts[0] || "";
+      const category = /^[IAFLED]$/.test(first) ? (parts[1] || "") : first;
+      if (HISTORY_N1710_CATEGORIES.has(category) && canonical.includes("-5290.00-")) return "N-1710";
+    }
+    return "";
+  }
+
+  function recordFamilies(record) {
+    return [...new Set((record && record.files || []).map((file) => documentFamily(file)).filter(Boolean))];
+  }
+
+  function filterByDocumentFamily(records, family) {
+    const wanted = normalizedHistoryFamily(family);
+    if (!wanted) return [...(records || [])];
+    return (records || []).map((record) => {
+      const files = (record.files || []).filter((file) => documentFamily(file) === wanted);
+      if (!files.length) return null;
+      return cleanRecord({ ...record, files, allocations: files.map((file) => file.allocation).filter(Boolean) });
+    }).filter(Boolean);
+  }
+
   function parseDateValue(value) {
     if (_U.parseDateValue) return _U.parseDateValue(value);
     if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -443,5 +502,5 @@
     };
   }
 
-  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, text, norm, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
+  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
 });
