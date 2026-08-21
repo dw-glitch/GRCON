@@ -1469,6 +1469,23 @@
     const sourceParts = source.split("/").map((part) => part.trim()).filter(Boolean);
     const sourceTail = sourceParts[sourceParts.length - 1] || source;
     const sourcePrefix = sourceParts.length > 1 ? sourceParts[sourceParts.length - 2] : "";
+
+    // As LDs de N-1710 (e algumas LDs históricas) podem registrar a disciplina
+    // pelo código contratual, enquanto a eGRDT aceita somente a descrição
+    // oficial. Ex.: CVL -> CIVIL. A leitura antiga só entendia a descrição por
+    // extenso; nesses casos inferDiscipline retornava vazio e a emissão era
+    // bloqueada por "DISCIPLINA fora da lista oficial".
+    const disciplineCodeMap = {
+      CVL: "CIVIL", ELE: "ELÉTRICA", INS: "INSTRUMENTAÇÃO", DIN: "DINÂMICOS",
+      EST: "ESTÁTICOS", MEC: "MECÂNICA", PLA: "PLANEJAMENTO", QUA: "QUALIDADE",
+      SEG: "SEGURANÇA", SMS: "SEGURANÇA", SUP: "SUPRIMENTOS", TUB: "TUBULAÇÃO",
+      CDR: "COORDENAÇÃO", CRS: "COMUNICAÇÃO E RS", ADC: "ADM CONTRATUAL",
+      PRJ: "ENGENHARIA DE PROJETO", TEL: "COMUNICAÇÃO E RS", GER: "GERAL",
+      MON: "MONTAGEM",
+    };
+    const sourceCode = sourceTail.replace(/[^A-Z0-9]/g, "");
+    if (disciplineCodeMap[sourceCode]) return disciplineCodeMap[sourceCode];
+
     const officialByPrefix = [...EGRDT_OPTIONS.disciplines]
       .sort((a, b) => norm(b).length - norm(a).length)
       .find((option) => sourcePrefix.includes(norm(option)));

@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 5.33.3 — 2026-08-21
+
+- Corrige a geração de N-1710 quando a LD informa a disciplina pelo código contratual (ex.: `CVL`) ou em workflow terminado pelo código (ex.: `.../CVL`).
+- Antes da validação da eGRDT, os códigos conhecidos passam a ser convertidos para a descrição oficial (`CVL` → `CIVIL`, `ELE` → `ELÉTRICA`, `INS` → `INSTRUMENTAÇÃO`, etc.).
+- Elimina o bloqueio incorreto `DISCIPLINA fora da lista oficial` para documentos N-1710 válidos, preservando a validação oficial da eGRDT.
+
 ## 5.33.2 — 2026-08-21
 
 - N-1710 passa a seguir composição própria de eGRDT: exatamente 1 arquivo nativo + 1 PDF por código.

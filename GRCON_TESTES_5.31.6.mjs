@@ -614,7 +614,7 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
     ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
     title: "BOMBA 32006 A ESTRUTURA METÁLICA PARA RETIDADA DA BOMBA",
     format: "A3",
-    discipline: "CIVIL",
+    discipline: "RNEST UHDTD U-32 N-1710/CVL",
     documentType: "DE",
     purpose: "Para Construção",
     databook: "DATA BOOK C&M UHDTD U-32",
@@ -634,6 +634,9 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
       { name: nativeName, finalName: nativeName, file: { size: 20 } },
     ],
   };
+  assert.equal(row.egrdt.discipline, "CIVIL");
+  assert.deepEqual(Core.validateEgrdtData(row.egrdt), []);
+
   const pair = Emission.validateN1710Pair(row, row.files);
   assert.equal(pair.valid, true);
   assert.deepEqual(pair.sources.map((entry) => entry.name), [nativeName, pdfName]);
@@ -1695,4 +1698,4 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.33.2", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.3", passed: true, checks: checks.length, names: checks }, null, 2));
