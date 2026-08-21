@@ -1,5 +1,12 @@
 # Histórico de alterações
 
+## 5.33.5 — 2026-08-21
+
+- A triagem deixa de mostrar apenas o PDF seguido de `+1 arquivo(s)` quando o mesmo documento possui nativo e PDF.
+- As colunas `ARQUIVOS ORIGINAIS` e `ARQUIVOS FINAIS` passam a exibir cada arquivo físico individualmente, com o nome completo e a extensão real (`DWG`, `PDF`, `DOCX`, `XLSX`, etc.).
+- A exibição usa todos os arquivos associados ao documento, sem escolher o PDF como representação visual dos demais.
+- A regra altera somente a apresentação/identificação no painel; a composição e a validação da eGRDT continuam preservando cada arquivo físico separadamente.
+
 ## 5.33.4 — 2026-08-21
 
 - Corrige definitivamente `DISCIPLINA fora da lista oficial` na N-1710 com a LD_001 atual.

@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.33.4";
+  const APP_VERSION = "5.33.5";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -3654,6 +3654,31 @@
       : "A LD não informa um caminho Databook para este documento; a eGRDT ficará em branco.";
   }
 
+  function rowFileDisplayEntries(row) {
+    const files = row && Array.isArray(row.files) ? row.files.filter(Boolean) : [];
+    if (files.length) return files;
+    const fallbackName = row && (row.name || row.virtualFileName) || "";
+    if (!fallbackName && !(row && row.finalName)) return [];
+    return [{
+      name: fallbackName || row.finalName,
+      relativePath: row && (row.relativePath || fallbackName) || fallbackName,
+      finalName: row && row.finalName || fallbackName,
+      virtual: !(row && row.file),
+    }];
+  }
+
+  function renderRowFileList(row, finalNames = false) {
+    const entries = rowFileDisplayEntries(row);
+    if (!entries.length) return '<span class="filename-value">—</span>';
+    const label = `${entries.length} ${entries.length === 1 ? "arquivo" : "arquivos"}`;
+    return `<div class="result-file-list" aria-label="${escapeHtml(label)}">${entries.map((entry) => {
+      const value = finalNames ? (entry.finalName || row.finalName || entry.name || "—") : (entry.name || "—");
+      const title = finalNames ? value : (entry.relativePath || entry.name || value);
+      const ext = extensionOf(value);
+      return `<span class="result-file-item"><span class="filename-value" title="${escapeHtml(title)}">${escapeHtml(value)}</span>${ext ? `<span class="result-file-extension">${escapeHtml(ext.toUpperCase())}</span>` : ""}</span>`;
+    }).join("")}</div>`;
+  }
+
   function renderTable() {
     const virtualInfo = virtualResults();
     const rows = virtualInfo.visibleIndices.map((index, offset) => ({
@@ -3674,9 +3699,7 @@
       const resultClass = decisionClass(row.decision, row);
       const selectable = rowCanBeSelected(row);
       const selected = state.selected.has(index);
-      const companionCount = Math.max(0, (row.files || []).length - 1);
       const record = row.record || {};
-      const originalFile = row.name || "—";
       const ldRevision = record.revision || "—";
       // A coluna da triagem permanece fiel à LD. Ajustes aprovados de título
       // afetam somente a GRDT/arquivo final e ficam disponíveis no assistente.
@@ -3720,7 +3743,7 @@
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
           <span class="status-chip ${resultClass}">${compactDecisionLabel(row)}</span>
         </div></td>
-        <td><span class="filename-value" title="${escapeHtml(row.relativePath || originalFile)}">${escapeHtml(originalFile)}</span>${companionCount ? `<span class="cell-muted">+${companionCount} arquivo(s)</span>` : ""}</td>
+        <td>${renderRowFileList(row, false)}</td>
         <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
@@ -3740,7 +3763,7 @@
         <td><span class="text-cell" title="${escapeHtml(allocationStage)}">${escapeHtml(allocationStage)}</span></td>
         <td><span class="allocation-state ${allocationClass}" title="${escapeHtml(conflitoAlocacao ? row.allocationFinding.source || "" : "")}">${escapeHtml(allocationStatus)}</span></td>
         <td><span class="text-cell" title="${escapeHtml(databook)}">${escapeHtml(databook)}</span></td>
-        <td><span class="filename-value" title="${escapeHtml(row.finalName)}">${escapeHtml(row.finalName)}</span>${companionCount ? `<span class="cell-muted">+${companionCount} arquivo(s)</span>` : ""}</td>
+        <td>${renderRowFileList(row, true)}</td>
       </tr>`;
       return mainRow + detailRow(row, index);
     }).join("") + bottomSpacer;

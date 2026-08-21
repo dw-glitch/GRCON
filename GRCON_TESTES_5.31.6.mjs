@@ -1747,4 +1747,12 @@ check("todos os JavaScripts têm sintaxe válida", () => {
   assert.deepEqual(failures, []);
 });
 
-console.log(JSON.stringify({ version: "5.33.4", passed: true, checks: checks.length, names: checks }, null, 2));
+// 5.33.5 — UI deve mostrar todos os arquivos físicos nominalmente, sem "+N arquivo(s)".
+check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N arquivo(s)", () => {
+  const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(appSource, /function renderRowFileList\(row, finalNames = false\)/, "A UI deve possuir renderização nominal da lista de arquivos.");
+  assert.match(appSource, /entries\.map\(\(entry\) =>/, "A UI deve percorrer todos os arquivos associados ao documento.");
+  assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
+});
+
+console.log(JSON.stringify({ version: "5.33.5", passed: true, checks: checks.length, names: checks }, null, 2));
