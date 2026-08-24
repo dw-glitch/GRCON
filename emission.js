@@ -27,11 +27,20 @@
     return norm(groups[languageOffset] || "");
   }
 
+  function has98VCode(document) {
+    // Regra específica para códigos que tragam 98V em qualquer grupo da
+    // codificação oficial. A análise usa o código controlado no GRCON, sem
+    // depender de título ou texto adicional presente no nome físico.
+    return norm(document).includes("98V");
+  }
+
   /**
    * A N-1710 segue composição física obrigatória de dois arquivos por código.
-   * Regra geral: 1 nativo + 1 PDF. Exceção operacional para LI e MC: o nativo
-   * é obrigatoriamente uma planilha Excel, portanto o par deve ser exatamente
-   * 1 Excel + 1 PDF. Os dois recebem o mesmo código, revisão e _0001_<revisão>.
+   * Regra geral: 1 nativo + 1 PDF. Exceções operacionais:
+   * - LI e MC: 1 Excel + 1 PDF;
+   * - qualquer código que contenha 98V: 1 Excel + 1 PDF, independentemente do
+   *   tipo documental.
+   * Os dois recebem o mesmo código, revisão e _0001_<revisão>.
    */
   function validateN1710Pair(row, sources) {
     const originalList = Array.isArray(sources) ? [...sources] : [];
@@ -51,24 +60,29 @@
     if (!applies) return { applies: false, valid: true, sources: list, errors: [], ignoredDuplicates };
 
     const documentType = n1710DocumentType(row && row.document);
-    const requiresExcelPair = documentType === "LI" || documentType === "MC";
+    const excelPairByType = documentType === "LI" || documentType === "MC";
+    const excelPairBy98V = has98VCode(row && row.document);
+    const requiresExcelPair = excelPairByType || excelPairBy98V;
+    const excelPairLabel = excelPairBy98V && !excelPairByType
+      ? "Documento com codificação 98V da N-1710"
+      : `${documentType} da N-1710`;
     const pdfs = list.filter((source) => extensionOf(source && (source.name || source.finalName)) === "pdf");
     const excels = list.filter((source) => EXCEL_EXTENSIONS.has(extensionOf(source && (source.name || source.finalName))));
     const natives = list.filter((source) => {
       const extension = extensionOf(source && (source.name || source.finalName));
       return Boolean(extension && extension !== "pdf");
     });
-    const invalidLiMcNatives = requiresExcelPair
+    const invalidExcelPairNatives = requiresExcelPair
       ? natives.filter((source) => !EXCEL_EXTENSIONS.has(extensionOf(source && (source.name || source.finalName))))
       : [];
     const withoutExtension = list.filter((source) => !extensionOf(source && (source.name || source.finalName)));
     const errors = [];
 
     if (requiresExcelPair) {
-      if (list.length !== 2) errors.push(`${documentType} da N-1710 exige exatamente 2 arquivos por código: 1 Excel + 1 PDF.`);
-      if (pdfs.length !== 1) errors.push(`${documentType} da N-1710 exige exatamente 1 PDF por código.`);
-      if (excels.length !== 1) errors.push(`${documentType} da N-1710 exige exatamente 1 arquivo Excel por código (.xls, .xlsx, .xlsm ou .xlsb).`);
-      if (invalidLiMcNatives.length) errors.push(`${documentType} da N-1710 não aceita outro tipo de arquivo nativo: envie a planilha Excel correspondente junto com o PDF.`);
+      if (list.length !== 2) errors.push(`${excelPairLabel} exige exatamente 2 arquivos por código: 1 Excel + 1 PDF.`);
+      if (pdfs.length !== 1) errors.push(`${excelPairLabel} exige exatamente 1 PDF por código.`);
+      if (excels.length !== 1) errors.push(`${excelPairLabel} exige exatamente 1 arquivo Excel por código (.xls, .xlsx, .xlsm ou .xlsb).`);
+      if (invalidExcelPairNatives.length) errors.push(`${excelPairLabel} não aceita outro tipo de arquivo nativo: envie a planilha Excel correspondente junto com o PDF.`);
     } else {
       if (list.length !== 2) errors.push("N-1710 exige exatamente 2 arquivos por código: 1 nativo + 1 PDF.");
       if (pdfs.length !== 1) errors.push("N-1710 exige exatamente 1 PDF por código.");
@@ -77,12 +91,12 @@
     if (withoutExtension.length) errors.push("N-1710 exige extensão explícita nos dois arquivos.");
     if (list.some((source) => source && (source.virtual || !source.file))) {
       errors.push(requiresExcelPair
-        ? `${documentType} da N-1710 exige o par físico completo: 1 Excel + 1 PDF.`
+        ? `${excelPairLabel} exige o par físico completo: 1 Excel + 1 PDF.`
         : "N-1710 exige o par físico completo; não é permitido gerar somente pela relação sem o arquivo nativo e o PDF.");
     }
 
     const orderedSources = requiresExcelPair
-      ? [...excels, ...pdfs, ...invalidLiMcNatives, ...withoutExtension]
+      ? [...excels, ...pdfs, ...invalidExcelPairNatives, ...withoutExtension]
       : [...natives, ...pdfs, ...withoutExtension];
 
     return {
@@ -90,6 +104,7 @@
       valid: errors.length === 0,
       documentType,
       requiresExcelPair,
+      excelPairBy98V,
       // A ordem da eGRDT mantém o arquivo editável/nativo primeiro e o PDF depois.
       sources: orderedSources,
       errors: [...new Set(errors)],
