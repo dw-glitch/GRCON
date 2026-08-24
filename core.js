@@ -1710,22 +1710,34 @@
     return optionValue(category, EGRDT_OPTIONS.documentTypes);
   }
 
+  function enforceDocumentFormat(data) {
+    const item = data || {};
+    // Regra documental: desenhos (DE) são sempre emitidos em formato A3.
+    // A regra prevalece sobre a coluna FORMATO da LD, inferência de PDF e
+    // qualquer edição manual feita na tela antes da geração da eGRDT.
+    if (norm(item.documentType) === "DE") item.format = "A3";
+    return item;
+  }
+
   function buildEgrdtData(document, revision, finalName, record, sheetName, pdfFormat) {
-    return {
+    const documentType = inferDocumentType(document, record || {}, sheetName);
+    return enforceDocumentFormat({
       document: text(document),
       revision: normalizeRevision(revision),
       title: text(record && record.title),
       fileName: text(finalName),
       format: optionValue((record && record.format) || pdfFormat, EGRDT_OPTIONS.formats),
       discipline: inferDiscipline(document, record || {}),
-      documentType: inferDocumentType(document, record || {}, sheetName),
+      documentType,
       purpose: optionValue(record && record.purpose, EGRDT_OPTIONS.purposes),
       databook: text(record && record.databook),
-    };
+    });
   }
 
   function validateEgrdtData(data) {
+    const normalized = enforceDocumentFormat({ ...(data || {}) });
     const errors = [];
+    data = normalized;
     if (!text(data.document)) errors.push("DOCUMENTO vazio");
     if (!revisionInfo(data.revision).valid) errors.push("REVISÃO inválida");
     if (!text(data.title)) errors.push("TÍTULO vazio");
@@ -2854,6 +2866,7 @@
     validateFinalFileName,
     fileNameFormattingWarning,
     EGRDT_OPTIONS,
+    enforceDocumentFormat,
     buildEgrdtData,
     isN1710Context,
     validateEgrdtData,

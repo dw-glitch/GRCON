@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 5.33.10 — 2026-08-24
+
+- Documentos do tipo **DE** passam a usar obrigatoriamente o formato **A3** na eGRDT.
+- A regra prevalece sobre qualquer formato diferente informado na LD, inferido do arquivo ou alterado manualmente no painel.
+- A normalização é aplicada tanto na triagem quanto na montagem final da eGRDT, garantindo que todas as linhas de um DE sejam emitidas como A3.
+
 ## 5.33.9 — 2026-08-24
 
 - Sufixos inválidos no nome do arquivo (por exemplo `_RIR`, `_ERRADO` ou texto extra após `_0001`) deixam de ser tratados como revisão controlada. O GRCON ignora o conteúdo divergente, usa a revisão oficial da LD/histórico e mantém apenas um alerta visível.

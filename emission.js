@@ -173,6 +173,7 @@
           databook: String(row.record && row.record.databook || "").trim(),
           manualAllocationOverride,
         };
+        if (C && C.enforceDocumentFormat) C.enforceDocumentFormat(item);
         const itemErrors = C.validateEgrdtData(item);
         if (itemErrors.length) errors.push(`${row.document} / ${finalName}: ${itemErrors.join("; ")}.`);
 

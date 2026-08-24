@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.33.9";
+  const APP_VERSION = "5.33.10";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -2451,6 +2451,7 @@
         fileName: row.finalName,
         databook: row.record && row.record.databook || "",
       };
+      if (C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
       return row;
     });
   }
@@ -3896,6 +3897,7 @@
       ].forEach(([field, value]) => {
         if (!multiple || value) row.egrdt[field] = value;
       });
+      if (C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
     });
     const amount = state.drawerIndices.length;
     closeEgrdtDrawer();
@@ -4611,6 +4613,10 @@
   });
 
   function buildEgrdtItems() {
+    state.selected.forEach((index) => {
+      const row = state.results[index];
+      if (row && row.egrdt && C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
+    });
     return E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
   }
 

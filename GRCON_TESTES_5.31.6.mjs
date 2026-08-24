@@ -2039,6 +2039,38 @@ check("MC N-1710 ignora sufixo _RIR inválido e usa revisão controlada da LD", 
   assert.deepEqual(plan.items.map((item) => item.revision), ["0", "0"]);
 });
 
+check("documentos DE usam sempre formato A3 na eGRDT", () => {
+  const document = "DE-5290.00-22313-142-C1O-076";
+  const record = {
+    discipline: "CIVIL",
+    documentType: "DE",
+    purpose: "Para Informação",
+    format: "A4",
+    title: "DESENHO GERAL",
+    databook: "CIVIL",
+  };
+  const egrdt = Core.buildEgrdtData(document, "A", `${document}_0001_A.dwg`, record, "N-1710", "A4");
+  assert.equal(egrdt.documentType, "DE");
+  assert.equal(egrdt.format, "A3", "DE deve ignorar A4 vindo da LD/PDF");
+
+  const row = {
+    document,
+    revision: "A",
+    sheet: "N-1710",
+    decision: Core.READY,
+    hardBlock: false,
+    record,
+    egrdt: { ...egrdt, format: "A4" }, // simula edição manual indevida
+    files: [
+      { name: `${document}_0001_A.dwg`, finalName: `${document}_0001_A.dwg`, file: { size: 1 } },
+      { name: `${document}_0001_A.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 1 } },
+    ],
+  };
+  const plan = Emission.createPlan([row], new Set([0]));
+  assert.deepEqual(plan.errors, []);
+  assert.deepEqual(plan.items.map((item) => item.format), ["A3", "A3"], "a emissão deve forçar A3 mesmo após edição manual");
+});
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];
@@ -2057,4 +2089,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.9", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.10", passed: true, checks: checks.length, names: checks }, null, 2));
