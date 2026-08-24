@@ -1997,6 +1997,48 @@ check("nome final divergente é corrigido na emissão e não bloqueia", () => {
   assert.ok(plan.warnings.some((message) => /corrigiu automaticamente/i.test(message)));
 });
 
+
+check("MC N-1710 ignora sufixo _RIR inválido e usa revisão controlada da LD", () => {
+  const document = "MC-5290.00-22313-970-C1O-009";
+  const record = {
+    ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+    revision: "0",
+    title: "PROGRESSO QUINZENAL DE INSPEÇÃO DE RECEBIMENTO - AGOSTO DE 2026_1",
+    discipline: "RNEST UHDTD U-32 PLANEJAMENTO",
+    documentType: "MC",
+    purpose: "Para Construção",
+    databook: "RHDD-MCA-PLA-EX-GERA-INP-PT-",
+    allocation: "C1O-ALOC-CM-0022-2026",
+    source: "LD-5290.00-22313-91A-C1O-001_0001_E.xlsx",
+  };
+  const index = Core.buildIndex([record], []);
+  const xlsx = Core.triageOne({ id: "mc-rir-xlsx", name: `${document}_0001_RIR.xlsx`, file: { size: 1 } }, index, {});
+  const pdf = Core.triageOne({ id: "mc-rir-pdf", name: `${document}_0001_RIR.pdf`, file: { size: 1 } }, index, {});
+
+  [xlsx, pdf].forEach((result) => {
+    assert.equal(result.decision, Core.READY);
+    assert.equal(result.revision, "0");
+    assert.equal(result.claimedRevision, "", "RIR não pode virar revisão declarada válida");
+    assert.match(result.fileNameFormattingWarning, /RIR/);
+    assert.match(result.fileNameFormattingWarning, /ignorou/i);
+    assert.deepEqual(Core.validateEgrdtData(result.egrdt), []);
+  });
+  assert.equal(xlsx.finalName, `${document}_0001_0.xlsx`);
+  assert.equal(pdf.finalName, `${document}_0001_0.pdf`);
+
+  const row = {
+    ...xlsx,
+    files: [
+      { name: `${document}_0001_RIR.xlsx`, finalName: xlsx.finalName, file: { size: 1 } },
+      { name: `${document}_0001_RIR.pdf`, finalName: pdf.finalName, file: { size: 1 } },
+    ],
+  };
+  const plan = Emission.createPlan([row], new Set([0]));
+  assert.deepEqual(plan.errors, []);
+  assert.deepEqual(plan.entries.map((entry) => entry.finalName), [`${document}_0001_0.xlsx`, `${document}_0001_0.pdf`]);
+  assert.deepEqual(plan.items.map((item) => item.revision), ["0", "0"]);
+});
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];
@@ -2015,4 +2057,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.8", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.9", passed: true, checks: checks.length, names: checks }, null, 2));

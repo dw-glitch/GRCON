@@ -1,5 +1,12 @@
 # Histórico de alterações
 
+## 5.33.9 — 2026-08-24
+
+- Sufixos inválidos no nome do arquivo (por exemplo `_RIR`, `_ERRADO` ou texto extra após `_0001`) deixam de ser tratados como revisão controlada. O GRCON ignora o conteúdo divergente, usa a revisão oficial da LD/histórico e mantém apenas um alerta visível.
+- Nomes como `MC-5290.00-22313-970-C1O-009_0001_RIR.xlsx` e `.pdf` passam a gerar normalmente como `MC-5290.00-22313-970-C1O-009_0001_0.xlsx` e `.pdf` quando a LD controla a revisão `0`.
+- Divergências de revisão escritas entre arquivos do mesmo documento também deixam de bloquear a postagem; a revisão controlada pela LD/histórico prevalece e a inconsistência do nome fica registrada somente como alerta.
+- A regra preserva a validação de conteúdo da eGRDT: apenas o nome recebido fica tolerante, enquanto documento, revisão final, disciplina, tipo e propósito continuam sendo gravados pelos valores oficiais controlados.
+
 ## 5.33.8 — 2026-08-24
 
 - Nomes de arquivo podem trazer o código junto do título ou com separadores/formatos divergentes; o GRCON localiza a codificação controlada na LD, usa a grafia oficial na eGRDT e transforma a divergência em alerta, não bloqueio.

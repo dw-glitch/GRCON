@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.33.8";
+  const APP_VERSION = "5.33.9";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -2349,10 +2349,13 @@
       const claimedRevisionConflict = existing.claimedRevision && row.claimedRevision && existing.claimedRevision !== row.claimedRevision;
       if (!existing.claimedRevision && row.claimedRevision) existing.claimedRevision = row.claimedRevision;
       if (claimedRevisionConflict) {
-        existing.decision = C.REVIEW;
-        existing.status = "Revisões divergentes no pacote";
-        existing.reason = `Arquivos do mesmo documento indicam revisões diferentes no nome (${existing.claimedRevision} e ${row.claimedRevision}). Confira PDF e nativo antes da postagem.`;
-      } else if (existing.revision !== row.revision || existing.decision !== row.decision || existing.sheet !== row.sheet) {
+        // Divergência escrita no nome do arquivo é apenas informativa. A revisão
+        // que governa a eGRDT é a revisão controlada pela LD/histórico, portanto
+        // PDF/nativo não devem ser bloqueados por sufixos divergentes no nome.
+        const alert = `ALERTA: arquivos do mesmo documento trazem revisões/sufixos diferentes no nome (${existing.claimedRevision} e ${row.claimedRevision}). O GRCON ignorará essa divergência e usará a revisão controlada ${existing.revision || row.revision || "da LD"}.`;
+        existing.documentRevisionWarning = [existing.documentRevisionWarning, alert].filter(Boolean).join(" ");
+      }
+      if (existing.revision !== row.revision || existing.decision !== row.decision || existing.sheet !== row.sheet) {
         existing.decision = C.REVIEW;
         existing.status = "Pacote inconsistente";
         existing.reason = "Arquivos do mesmo documento produziram revisões, decisões ou abas diferentes. Confira o pacote antes da postagem.";

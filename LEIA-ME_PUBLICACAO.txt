@@ -1,6 +1,7 @@
-GRCON 5.33.8 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.33.9 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
+- Nome de arquivo com sufixo/revisão divergente da LD (ex.: _RIR) gera somente alerta; o GRCON usa a revisão controlada e corrige o nome final automaticamente.
 - N-1710: LI e MC exigem o conjunto físico Excel + PDF; os demais tipos continuam com nativo + PDF.
 - O seletor aceita uma ou mais LDs e pesquisa a relação em todas elas na mesma análise.
 - LDs com cabeçalhos em posições diferentes e abas vigentes como N-1710 MOD são reconhecidas; uma aba visível prevalece sobre a cópia antiga oculta.

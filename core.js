@@ -2369,6 +2369,14 @@
     const document = technicalRecord.document || match.document;
     const fromFileClaim = claimedRevisionFromName(input.name || "", document);
     const fromPdf = revisionFromText(input.pdfText || "", document);
+    const inputRevisionClaim = normalizeRevision(input.revision || "");
+    // O nome recebido nunca é fonte autoritativa da revisão. Um sufixo extra
+    // (ex.: _RIR, _CÓPIA, _ERRADO) pode parecer uma revisão, mas a eGRDT deve
+    // sempre usar a revisão controlada pela LD/histórico. Claims externos só
+    // são mantidos para comparação quando eles próprios forem revisões válidas.
+    const externalRevisionClaims = [inputRevisionClaim, fromFileClaim, fromPdf].filter(Boolean);
+    const validExternalRevisionClaims = externalRevisionClaims.filter((value) => revisionInfo(value).valid);
+    const invalidExternalRevisionClaims = [...new Set(externalRevisionClaims.filter((value) => !revisionInfo(value).valid))];
     const ldRevision = technicalRecord ? normalizeRevision(technicalRecord.revision) : "";
     const latestHistoryRev = latestHistory ? normalizeRevision(latestHistory.revision) : "";
     const controlledRevisions = [
@@ -2378,7 +2386,7 @@
       .sort((a, b) => revisionRank(b.value) - revisionRank(a.value));
     let revision = controlledRevisions.length ? controlledRevisions[0].value : "";
     let revisionSource = controlledRevisions.length ? controlledRevisions[0].source : "LD";
-    const claimedRevision = normalizeRevision(input.revision || fromFileClaim || fromPdf);
+    const claimedRevision = validExternalRevisionClaims[0] || "";
     let grdt = text(technicalRecord && technicalRecord.grdt);
     let effectiveDate = text(technicalRecord && technicalRecord.effectiveDate);
     const databook = text(technicalRecord && technicalRecord.databook);
@@ -2476,25 +2484,6 @@
         documentSource: identitySource,
         hardBlock: false,
         blockCode: "allocation_mapping_review",
-      });
-    }
-
-    if (fromFileClaim && !revisionInfo(fromFileClaim).valid) {
-      return reviewResult(input, {
-        document,
-        documentKey: match.documentKey,
-        sheet: controlledSheet,
-        sheetSource: inferredSheet ? "prefixo do arquivo" : "LD",
-        revision: fromFileClaim,
-        revisionSource: "nome",
-        status: "Revisão inválida no nome",
-        reason: `O nome do arquivo indica a revisão ${fromFileClaim}, que não atende à sequência válida.`,
-        finalName: input.name || `${document}.pdf`,
-        grdt,
-        effectiveDate,
-        databook,
-        record: best,
-        documentSource: identitySource,
       });
     }
 
@@ -2689,7 +2678,12 @@
       record: best,
       codeValidation,
       codeValidationWarning,
-      fileNameFormattingWarning: fileNameFormattingWarning(input.name || "", document, revision, controlledSheet, match.matchKind),
+      fileNameFormattingWarning: [
+        fileNameFormattingWarning(input.name || "", document, revision, controlledSheet, match.matchKind),
+        invalidExternalRevisionClaims.length
+          ? `ALERTA: o nome recebido contém sufixo(s) que não representam uma revisão válida (${invalidExternalRevisionClaims.join(", ")}). O GRCON ignorou esse conteúdo e usará a revisão controlada ${revision} da ${revisionSource}.`
+          : "",
+      ].filter(Boolean).join(" "),
       matchKind: match.matchKind || "exact",
       egrdt,
       claimedRevision,
