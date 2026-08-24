@@ -173,6 +173,54 @@
   }
 
   /**
+   * Revisões que o próprio arquivo da LD traz na aba Colar SIGEM para o
+   * documento consultado. A maior revisão controlada fica em destaque, mas
+   * todas permanecem disponíveis para a interface/auditoria.
+   *
+   * Isto é deliberadamente separado do histórico do GRCON: a Colar SIGEM é
+   * uma fonte da LD anexada; a eGRDT emitida pelo GRCON é outra fonte.
+   */
+  function sigemRevisionSummary(group) {
+    const entries = (group && group.history || [])
+      .map((item) => {
+        const revision = core() && core().normalizeRevision ? core().normalizeRevision(item && item.revision) : norm(item && item.revision);
+        const info = core() && core().revisionInfo ? core().revisionInfo(revision) : { valid: Boolean(revision), rank: 0 };
+        return {
+          revision,
+          valid: Boolean(info && info.valid),
+          rank: Number(info && info.rank) || 0,
+          status: text(item && (item.sigemStatus || item.status)),
+          source: text(item && item.source),
+          sheet: text(item && item.sheet),
+          row: Number(item && item.row) || 0,
+          sourceTimestamp: Number(item && item.sourceTimestamp) || 0,
+        };
+      })
+      .filter((item) => item.revision && item.valid);
+
+    const unique = new Map();
+    entries.forEach((item) => {
+      const previous = unique.get(item.revision);
+      if (!previous || item.sourceTimestamp > previous.sourceTimestamp || (item.sourceTimestamp === previous.sourceTimestamp && item.row > previous.row)) {
+        unique.set(item.revision, item);
+      }
+    });
+    const revisions = [...unique.values()].sort((left, right) => right.rank - left.rank || right.sourceTimestamp - left.sourceTimestamp || right.row - left.row);
+    const latest = revisions[0] || null;
+    return {
+      found: Boolean(latest),
+      revision: latest ? latest.revision : "",
+      status: latest ? latest.status : "",
+      count: revisions.length,
+      all: revisions,
+      cell: latest ? latest.revision : "Não encontrado no Colar SIGEM",
+      label: latest
+        ? `Rev. ${latest.revision}${latest.status ? ` · ${latest.status}` : ""}${revisions.length > 1 ? ` · +${revisions.length - 1} anterior(es)` : ""}`
+        : "Não encontrado no Colar SIGEM",
+    };
+  }
+
+  /**
    * Consulta um documento no índice montado a partir de todas as LDs anexadas.
    *
    * O índice do GRCON já resolve a regra do nt- (documentos ET) e uma
@@ -194,6 +242,11 @@
       rule: "",
       conflicting: false,
       lookup: null,
+      sigemRevision: "",
+      sigemRevisionCell: "Não encontrado no Colar SIGEM",
+      sigemRevisionCount: 0,
+      sigemRevisionAll: [],
+      sigemRevisionLabel: "Não encontrado no Colar SIGEM",
       message: "Não localizado nas LDs anexadas.",
     };
     if (!informado || !index || !core()) return base;
@@ -201,6 +254,7 @@
     const matches = core().matchDocuments(informado, index, settings.hintedSheet) || [];
     const primeiro = matches[0] || null;
     const lookup = core().documentLookup ? core().documentLookup(informado, matches.length === 1 ? primeiro : null, matches) : null;
+    const sigemRevision = sigemRevisionSummary(primeiro && primeiro.group);
 
     if (!primeiro) {
       return { ...base, lookup, message: lookup && lookup.message ? lookup.message : base.message };
@@ -233,6 +287,11 @@
       matchKind: primeiro.matchKind || "exact",
       ldDocument: text(primeiro.document),
       lookup,
+      sigemRevision: sigemRevision.revision,
+      sigemRevisionCell: sigemRevision.cell,
+      sigemRevisionCount: sigemRevision.count,
+      sigemRevisionAll: sigemRevision.all,
+      sigemRevisionLabel: sigemRevision.label,
       message: lookup && lookup.message ? lookup.message : "",
     };
   }
@@ -276,6 +335,11 @@
     return {
       document: text(resultado && resultado.document),
       title: escolhida ? escolhida.title : "",
+      sigemLdRevision: text(resultado && resultado.sigemRevision),
+      sigemLdRevisionCell: text(resultado && resultado.sigemRevisionCell) || "Não encontrado no Colar SIGEM",
+      sigemLdRevisionCount: Number(resultado && resultado.sigemRevisionCount) || 0,
+      sigemLdRevisionAll: (resultado && resultado.sigemRevisionAll) || [],
+      sigemLdRevisionLabel: text(resultado && resultado.sigemRevisionLabel) || "Não encontrado no Colar SIGEM",
       // Sem ocorrência eleita por divergência de alocação, a resposta é o
       // conflito — deixar em branco fazia a consulta parecer que não apurou.
       allocated: escolhida
@@ -395,6 +459,7 @@
     lookupDocument,
     lookupDocuments,
     consultationRow,
+    sigemRevisionSummary,
     allocationConflict,
     formatDateBR,
     issuedHistory,

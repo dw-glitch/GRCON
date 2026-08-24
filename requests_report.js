@@ -21,6 +21,7 @@
     { header: "SITUAÇÃO", key: "situation", width: 26 },
     { header: "DOCUMENTO", key: "document", width: 46 },
     { header: "TÍTULO NA LD", key: "title", width: 58 },
+    { header: "REVISÃO NA COLAR SIGEM", key: "sigemLdRevisionCell", width: 25 },
     { header: "ALOCADO?", key: "allocated", width: 22 },
     { header: "ALOCAÇÃO", key: "allocation", width: 24 },
     { header: "ÚLTIMA GRDT", key: "lastGrdt", width: 26 },

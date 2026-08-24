@@ -494,6 +494,7 @@ html[data-app="GRCON"] .requests-nao-emitido {
 
 /* A revisão fica numa coluna própria para não ser confundida com a revisão
    atual da LD. O número da eGRDT menor abaixo deixa a origem auditável. */
+html[data-app="GRCON"] .requests-col-revisao-colar-sigem,
 html[data-app="GRCON"] .requests-col-revisao-emitida { min-width: 10.5rem; }
 html[data-app="GRCON"] .requests-revisao-emitida { display: grid; gap: .1rem; line-height: 1.25; }
 html[data-app="GRCON"] .requests-revisao-emitida strong { color: var(--brand-strong, #123f61); font-size: .78rem; }

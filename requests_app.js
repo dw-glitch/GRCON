@@ -310,6 +310,21 @@
     </span>`;
   }
 
+  /** Revisão mais alta localizada diretamente na aba Colar SIGEM da LD. */
+  function celulaRevisaoColarSigem(linha) {
+    if (!linha) return '<span class="requests-vazio">—</span>';
+    if (!linha.sigemLdRevision) return '<span class="requests-nao-emitido">Não encontrado</span>';
+    const anteriores = Number(linha.sigemLdRevisionCount) > 1
+      ? `<small class="requests-multi">+${Number(linha.sigemLdRevisionCount) - 1} anterior(es)</small>`
+      : "";
+    const titulo = (linha.sigemLdRevisionAll || []).map((item) => `Rev. ${item.revision}${item.status ? ` — ${item.status}` : ""}`).join("\n");
+    return `<span class="requests-revisao-emitida" title="${escapeHtml(titulo || linha.sigemLdRevisionLabel || "Revisão encontrada na Colar SIGEM")}">
+      <strong>Rev. ${escapeHtml(linha.sigemLdRevision)}</strong>
+      <small>Colar SIGEM</small>
+      ${anteriores}
+    </span>`;
+  }
+
   function selo(linha) {
     if (!linha) return '<span class="requests-badge pendente">Não consultado</span>';
     if (linha.situation === "Localizado") return '<span class="requests-badge ok">✓ Localizado</span>';
@@ -334,6 +349,7 @@
         <td>${selo(linha)}</td>
         <td class="requests-col-doc"><code>${escapeHtml(item.document)}</code>${conflito}</td>
         <td>${titulo}</td>
+        <td class="requests-col-revisao-colar-sigem">${celulaRevisaoColarSigem(linha)}</td>
         <td>${linha && linha.allocated ? escapeHtml(linha.allocated) : '<span class="requests-vazio">—</span>'}</td>
         <td>${linha && linha.lastGrdt ? escapeHtml(linha.lastGrdt) : '<span class="requests-vazio">—</span>'}</td>
         <td class="requests-col-emitido">${celulaEmitido(linha)}</td>
@@ -408,6 +424,8 @@
           situation: linha.situation,
           document: item.document,
           title: linha.title,
+          sigemLdRevision: linha.sigemLdRevision,
+          sigemLdRevisionCell: linha.sigemLdRevisionCell,
           allocated: linha.allocated,
           allocation: linha.allocation,
           lastGrdt: linha.lastGrdt,
