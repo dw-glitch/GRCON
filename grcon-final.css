@@ -1855,3 +1855,94 @@ html[data-app="GRCON"] .grcon-results-table .result-file-extension {
   line-height: 1.35;
   opacity: .65;
 }
+
+/* Dica de rolagem nas tabelas.
+   As tabelas rolam dentro do próprio quadro — a página nunca rola de lado —,
+   só que sem nenhum sinal disso: quem não arrasta não descobre que existem
+   colunas à direita.
+
+   A sombra fica na CASCA, o elemento de fora que não rola, e não no quadro.
+   Dentro do quadro ela ficaria atrás das células: elas têm fundo próprio e
+   pintam por cima, o que derruba tanto o gradiente preso ao conteúdo quanto o
+   box-shadow inset. O lado aceso vem do data-scroll que o ui-v3.js escreve
+   com a posição real da rolagem, para a sombra nunca apontar para o nada. */
+/* min-width: 0 é obrigatório: a casca entra dentro de grid e flex, onde o
+   padrão min-width:auto a deixaria crescer com a tabela. Sem isto o quadro
+   deixa de ter limite, para de rolar e a sombra nunca acende. */
+html[data-app="GRCON"] .ui-v3-table-shell { position: relative; min-width: 0; max-width: 100%; }
+html[data-app="GRCON"] .ui-v3-table-shell::before,
+html[data-app="GRCON"] .ui-v3-table-shell::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 1.6rem;
+  opacity: 0;
+  transition: opacity .16s ease;
+  pointer-events: none;
+}
+html[data-app="GRCON"] .ui-v3-table-shell::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(15, 38, 60, .26), rgba(15, 38, 60, 0));
+}
+html[data-app="GRCON"] .ui-v3-table-shell::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(15, 38, 60, .26), rgba(15, 38, 60, 0));
+}
+html[data-app="GRCON"] .ui-v3-table-shell[data-scroll="start"]::after,
+html[data-app="GRCON"] .ui-v3-table-shell[data-scroll="middle"]::after,
+html[data-app="GRCON"] .ui-v3-table-shell[data-scroll="middle"]::before,
+html[data-app="GRCON"] .ui-v3-table-shell[data-scroll="end"]::before { opacity: 1; }
+
+/* No escuro a mesma sombra some contra o painel; precisa de mais densidade. */
+body.p2-dark .ui-v3-table-shell::before { background: linear-gradient(to right, rgba(0, 0, 0, .62), rgba(0, 0, 0, 0)); }
+body.p2-dark .ui-v3-table-shell::after { background: linear-gradient(to left, rgba(0, 0, 0, .62), rgba(0, 0, 0, 0)); }
+
+/* Faixa "Retomar de onde parou", no Controle de GRDT.
+   A tela abria com mais de metade da altura vazia. Estes cartões vêm do
+   histórico já gravado; sem histórico a seção fica oculta e a tela continua
+   exatamente como sempre foi. */
+html[data-app="GRCON"] .grcon-retomar {
+  margin-top: 1rem;
+  padding: 1rem 1.15rem 1.15rem;
+  border: 1px solid var(--border-1, #dce4ea);
+  border-radius: .75rem;
+  background: var(--surface-1, #fff);
+}
+html[data-app="GRCON"] .grcon-retomar-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: .8rem;
+}
+html[data-app="GRCON"] .grcon-retomar-head h3 {
+  margin: 0; font-size: .95rem; color: var(--brand-strong, #123f61);
+}
+html[data-app="GRCON"] .grcon-retomar-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: .7rem;
+}
+html[data-app="GRCON"] .grcon-retomar-card {
+  display: grid; gap: .15rem; min-width: 0;
+  padding: .75rem .85rem;
+  border: 1px solid var(--border-1, #dce4ea);
+  border-left: 3px solid var(--brand-600, #24689a);
+  border-radius: .6rem;
+  background: var(--surface-2, #f7fafc);
+}
+html[data-app="GRCON"] .grcon-retomar-card span {
+  font-size: .66rem; font-weight: 800; letter-spacing: .05em;
+  color: var(--text-3, #6f8296);
+}
+/* O número da eGRDT é longo; overflow-wrap sozinho quebraria letra a letra se
+   o cartão encolhesse, então o minmax do grid é o piso que evita isso. */
+html[data-app="GRCON"] .grcon-retomar-card strong {
+  font-size: 1.05rem; color: var(--brand-strong, #123f61); overflow-wrap: anywhere;
+}
+html[data-app="GRCON"] .grcon-retomar-card small {
+  font-size: .7rem; color: var(--text-3, #6f8296);
+}
+
+body.p2-dark .grcon-retomar { border-color: #344653; background: #131e26; }
+body.p2-dark .grcon-retomar-head h3 { color: #dceaf3; }
+body.p2-dark .grcon-retomar-card { border-color: #344653; background: #17232c; }
+body.p2-dark .grcon-retomar-card span, body.p2-dark .grcon-retomar-card small { color: #b9c8d3; }
+body.p2-dark .grcon-retomar-card strong { color: #dceaf3; }

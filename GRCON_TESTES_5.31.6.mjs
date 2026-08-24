@@ -1313,6 +1313,49 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
 }
 
+check("tabela larga avisa que rola, e a sombra vem do estado real da rolagem", () => {
+  const js = fs.readFileSync(path.join(root, "ui-v3.js"), "utf8");
+  const css = fs.readFileSync(path.join(root, "grcon-final.css"), "utf8");
+  const requests = fs.readFileSync(path.join(root, "requests.css"), "utf8");
+
+  // Os quatro estados medidos no navegador: start acende só a direita, middle
+  // acende os dois lados, end só a esquerda, none apaga tudo.
+  assert.match(js, /region\.dataset\.scroll = estado/);
+  assert.match(js, /sobra <= 1 \? "none"/, "sem transbordo não pode acender sombra");
+  for (const estado of ["start", "middle", "end"]) {
+    assert.match(css, new RegExp(`\\.ui-v3-table-shell\\[data-scroll="${estado}"\\]`));
+  }
+
+  // A sombra fica na casca, que não rola. Dentro do quadro ela some atrás das
+  // células, que têm fundo próprio — vale para o gradiente preso ao conteúdo
+  // e também para o box-shadow inset.
+  assert.match(js, /ui-v3-table-shell/);
+  assert.match(css, /\.ui-v3-table-shell \{[^}]*min-width: 0/,
+    "sem min-width:0 a casca cresce dentro de grid e o quadro para de rolar");
+
+  // min-width na tabela é o que a faz rolar em vez de espremer as colunas até
+  // o cabeçalho nowrap se sobrepor.
+  assert.match(requests, /\.requests-table \{[^}]*min-width: \d+rem/);
+});
+
+check("faixa Retomar só aparece com histórico real e nunca inventa número", () => {
+  const js = fs.readFileSync(path.join(root, "retomar.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+
+  assert.match(html, /id="grcon-retomar"/);
+  assert.match(html, /<script defer="" src="retomar\.js"><\/script>/);
+  assert.ok((sw.match(/"retomar\.js"/g) || []).length >= 2, "o script precisa entrar nos dois caches");
+
+  // Tudo sai do histórico gravado; sem registro a faixa fica oculta, sem
+  // cartão zerado nem exemplo.
+  assert.match(js, /GrconHistory/);
+  assert.match(js, /if \(!lista\.length\)/);
+  assert.match(js, /els\.secao\.hidden = true/);
+  // Nenhum número é escrito no código: os totais vêm de summary().
+  assert.match(js, /History\.summary\(lista\)/);
+});
+
 check("auditoria de tela: selo de planilha, painel SGPAR no escuro e campo com rótulo", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const legado = fs.readFileSync(path.join(root, "legacy-compat.css"), "utf8");
@@ -2135,4 +2178,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.12", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.13", passed: true, checks: checks.length, names: checks }, null, 2));

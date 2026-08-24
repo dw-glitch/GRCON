@@ -86,7 +86,60 @@
       if (!region.hasAttribute("role")) region.setAttribute("role", "region");
       if (!region.hasAttribute("aria-label")) region.setAttribute("aria-label", name);
       if (!region.hasAttribute("tabindex")) region.setAttribute("tabindex", "0");
+      marcarRolagemLateral(region);
     }
+  }
+
+  /**
+   * Marca em data-scroll de que lado ainda há coluna escondida, para o CSS
+   * desenhar a sombra da borda.
+   *
+   * O truque só de CSS, com gradientes presos ao conteúdo, não serve aqui: as
+   * células da tabela têm fundo próprio e pintam por cima da sombra. Só
+   * sabendo a posição da rolagem dá para dizer a verdade — e a sombra tem de
+   * dizer a verdade, senão vira enfeite que aponta para o nada.
+   */
+  function marcarRolagemLateral(region) {
+    if (region.dataset.uiV3ScrollHint === "true") return;
+    region.dataset.uiV3ScrollHint = "true";
+    // A sombra é desenhada por um elemento de fora, não pelo que rola: dentro
+    // do quadro ela ficaria atrás das células, que têm fundo próprio e pintam
+    // por cima — o que derruba tanto o gradiente preso ao conteúdo quanto o
+    // box-shadow inset.
+    //
+    // A casca é criada aqui em vez de reaproveitar o pai porque o pai costuma
+    // ser a seção inteira: a sombra escorria por cima dos filtros e dos
+    // cartões de resumo, apontando rolagem onde não há.
+    let casca = region.parentElement;
+    // Sem pai não há onde pendurar a casca — acontece com região solta ou
+    // ainda fora do documento, e derrubava o script inteiro com insertBefore
+    // de null. Nesse caso a tabela segue funcionando, só sem a sombra.
+    if (!casca) return;
+    if (!casca.classList.contains("ui-v3-table-shell")) {
+      const nova = document.createElement("div");
+      nova.className = "ui-v3-table-shell";
+      region.parentElement.insertBefore(nova, region);
+      nova.appendChild(region);
+      casca = nova;
+    }
+    const atualizar = () => {
+      const sobra = region.scrollWidth - region.clientWidth;
+      // Um pixel de folga: arredondamento de zoom não pode acender a sombra.
+      const estado = sobra <= 1 ? "none"
+        : region.scrollLeft <= 1 ? "start"
+          : region.scrollLeft >= sobra - 1 ? "end" : "middle";
+      region.dataset.scroll = estado;
+      if (casca) casca.dataset.scroll = estado;
+    };
+    region.addEventListener("scroll", atualizar, { passive: true });
+    // A tabela muda de largura ao filtrar, ordenar ou trocar de modo.
+    if (typeof ResizeObserver === "function") {
+      const observador = new ResizeObserver(atualizar);
+      observador.observe(region);
+      const tabela = region.querySelector("table");
+      if (tabela) observador.observe(tabela);
+    }
+    atualizar();
   }
 
   function enhanceButtons(scope) {

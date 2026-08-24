@@ -121,7 +121,12 @@ html[data-app="GRCON"] .requests-table-wrap {
   overflow-x: auto; border: 1px solid var(--border-1, #dce4ea); border-radius: .6rem;
   background: var(--surface-1, #fff); max-height: 60vh; overflow-y: auto;
 }
-html[data-app="GRCON"] .requests-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+/* O min-width é o que faz a tabela ROLAR em vez de espremer.
+   Sem ele, com width:100% as colunas encolhiam até o código do documento sair
+   em fatias de quatro caracteres e os cabeçalhos, que são nowrap, passarem por
+   cima uns dos outros — "EMITIDO PELO" sobrepondo "REVISÃO EMITIDA". Abaixo
+   deste piso o quadro rola, e a sombra da borda avisa que há coluna à direita. */
+html[data-app="GRCON"] .requests-table { width: 100%; min-width: 52rem; border-collapse: collapse; font-size: .78rem; }
 html[data-app="GRCON"] .requests-table thead th {
   position: sticky; top: 0; z-index: 1; text-align: left; white-space: nowrap;
   padding: .5rem .6rem; font-size: .7rem; font-weight: 800; text-transform: uppercase;
