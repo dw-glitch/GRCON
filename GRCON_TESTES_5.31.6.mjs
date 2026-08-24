@@ -1315,6 +1315,37 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
 }
 
+check("cabeçalho da consulta não se sobrepõe e a Colar SIGEM não fica na frente", () => {
+  const css = fs.readFileSync(path.join(root, "requests.css"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+
+  // Medido no navegador com 12 colunas: cada coluna ficava com 96px enquanto
+  // "Status da alocação (central)" precisava de 203px. Com nowrap o texto
+  // transbordava a célula e um cabeçalho passava por cima do outro.
+  assert.doesNotMatch(css, /\.requests-table thead th \{[^}]*white-space: nowrap/,
+    "o cabeçalho precisa poder quebrar em duas linhas");
+  assert.match(css, /\.requests-table thead th \{[^}]*min-width: \d/,
+    "cada coluna precisa de um piso para não ficar menor que o próprio rótulo");
+  assert.match(css, /\.requests-table \{[^}]*min-width: 88rem/);
+
+  // A Colar SIGEM saiu da quarta posição e foi para junto das outras colunas
+  // de SIGEM, que é onde ela faz sentido ser lida.
+  const cabecalho = html.slice(html.indexOf("<th>Situação</th>"));
+  const ordem = [...cabecalho.slice(0, cabecalho.indexOf("</tr>")).matchAll(/<th>([^<]+)<\/th>/g)].map((m) => m[1]);
+  assert.equal(ordem[0], "Situação");
+  assert.ok(ordem.indexOf("Revisão na Colar SIGEM") > ordem.indexOf("Alocado?"),
+    "a Colar SIGEM não pode voltar para a frente da tabela");
+  assert.equal(ordem[ordem.indexOf("Revisão na Colar SIGEM") + 1], "Status SIGEM",
+    "as colunas de SIGEM ficam juntas");
+
+  // A ordem da tela e a da exportação são a mesma leitura.
+  const report = fs.readFileSync(path.join(root, "requests_report.js"), "utf8");
+  const iColar = report.indexOf("REVISÃO NA COLAR SIGEM");
+  const iAlocado = report.indexOf('"ALOCADO?"');
+  const iStatus = report.indexOf("STATUS NO SIGEM");
+  assert.ok(iAlocado < iColar && iColar < iStatus, "a exportação segue a mesma ordem da tela");
+});
+
 check("central de alocação responde status e comentário da fiscal por documento", () => {
   const AC = AllocationCenter;
 
@@ -2256,4 +2287,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.14", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.15", passed: true, checks: checks.length, names: checks }, null, 2));

@@ -126,9 +126,17 @@ html[data-app="GRCON"] .requests-table-wrap {
    em fatias de quatro caracteres e os cabeçalhos, que são nowrap, passarem por
    cima uns dos outros — "EMITIDO PELO" sobrepondo "REVISÃO EMITIDA". Abaixo
    deste piso o quadro rola, e a sombra da borda avisa que há coluna à direita. */
-html[data-app="GRCON"] .requests-table { width: 100%; min-width: 52rem; border-collapse: collapse; font-size: .78rem; }
+/* O min-width é o que faz a tabela ROLAR em vez de espremer. Com 12 colunas,
+   as 52rem de antes deixavam cada coluna com 96px enquanto rótulos como
+   "Status da alocação (central)" precisavam de 203px: o texto transbordava a
+   célula e um cabeçalho passava por cima do outro. */
+html[data-app="GRCON"] .requests-table { width: 100%; min-width: 88rem; border-collapse: collapse; font-size: .78rem; }
+/* O cabeçalho quebra em duas linhas em vez de transbordar, e cada coluna tem
+   um piso: assim nenhum rótulo invade a coluna vizinha, por mais colunas que a
+   tabela venha a ter. */
 html[data-app="GRCON"] .requests-table thead th {
-  position: sticky; top: 0; z-index: 1; text-align: left; white-space: nowrap;
+  position: sticky; top: 0; z-index: 1; text-align: left; white-space: normal;
+  min-width: 7rem; vertical-align: bottom; line-height: 1.25;
   padding: .5rem .6rem; font-size: .7rem; font-weight: 800; text-transform: uppercase;
   letter-spacing: .03em; color: #fff; background: var(--brand-900, #153a5c);
 }
@@ -514,3 +522,8 @@ html[data-app="GRCON"] .requests-col-central { min-width: 13rem; }
 html[data-app="GRCON"] .requests-col-fiscal { min-width: 18rem; max-width: 26rem; white-space: normal; }
 html[data-app="GRCON"] .requests-central-status { margin: .5rem 0 0; font-size: .75rem; color: var(--text-3, #6f8296); line-height: 1.45; }
 html[data-app="GRCON"] .requests-central-status.tem-erro { color: var(--danger-700, #a64035); font-weight: 600; }
+
+/* Pisos por coluna: os rótulos longos e o texto da fiscal precisam de mais. */
+html[data-app="GRCON"] .requests-table thead th.requests-col-check { min-width: 2.2rem; width: 2.2rem; }
+html[data-app="GRCON"] .requests-col-doc { min-width: 15rem; }
+html[data-app="GRCON"] .requests-table tbody td:nth-child(4) { min-width: 16rem; }

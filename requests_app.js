@@ -446,11 +446,11 @@
         <td>${selo(linha)}</td>
         <td class="requests-col-doc"><code>${escapeHtml(item.document)}</code>${conflito}</td>
         <td>${titulo}</td>
-        <td class="requests-col-revisao-colar-sigem">${celulaRevisaoColarSigem(linha)}</td>
         <td>${linha && linha.allocated ? escapeHtml(linha.allocated) : '<span class="requests-vazio">—</span>'}</td>
         <td>${linha && linha.lastGrdt ? escapeHtml(linha.lastGrdt) : '<span class="requests-vazio">—</span>'}</td>
         <td class="requests-col-emitido">${celulaEmitido(linha)}</td>
         <td class="requests-col-revisao-emitida">${celulaRevisaoEmitida(linha)}</td>
+        <td class="requests-col-revisao-colar-sigem">${celulaRevisaoColarSigem(linha)}</td>
         <td>${linha && linha.sigemStatus ? escapeHtml(linha.sigemStatus) : '<span class="requests-vazio">—</span>'}</td>
         <td class="requests-col-central">${celulaCentralStatus(linha)}</td>
         <td class="requests-col-fiscal">${celulaFiscal(linha)}</td>
