@@ -508,3 +508,9 @@ html[data-app="GRCON"] .requests-revisao-emitida small {
   color: var(--text-3, #6f8296); font-size: .66rem;
 }
 html[data-app="GRCON"] .requests-revisao-ausente { color: var(--warning-800, #8a5c08); font-size: .7rem; }
+
+/* Colunas da central de alocação: o texto da fiscal pode ser longo. */
+html[data-app="GRCON"] .requests-col-central { min-width: 13rem; }
+html[data-app="GRCON"] .requests-col-fiscal { min-width: 18rem; max-width: 26rem; white-space: normal; }
+html[data-app="GRCON"] .requests-central-status { margin: .5rem 0 0; font-size: .75rem; color: var(--text-3, #6f8296); line-height: 1.45; }
+html[data-app="GRCON"] .requests-central-status.tem-erro { color: var(--danger-700, #a64035); font-weight: 600; }

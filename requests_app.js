@@ -21,6 +21,7 @@
     lds: [],           // { id, file, name, records, error }
     documents: [],     // { id, document, requestedTitle, selected }
     results: new Map(), // id -> linha da consulta
+    central: null,      // índice da central de alocação, quando anexada
     index: null,
     running: false,
     search: "",
@@ -68,6 +69,101 @@
     // sozinhos porque a tabela só mostra o que está na lista.
     render();
     notify(`Desfeito: ${anterior.rotulo}.`, "info");
+  }
+
+  // ---------------------------------------------------------------------------
+  // Central de alocação
+  //
+  // A aba "Central de alocação" do Controle de Solicitações registra cada ALOC
+  // enviada, com o status e o que a fiscal respondeu — inclusive o motivo de
+  // um documento não estar alocado. Anexar é opcional: sem ela a consulta
+  // responde o que sempre respondeu, e as colunas da fiscal ficam de fora.
+  // ---------------------------------------------------------------------------
+  function camposDaCentral(documento) {
+    const AC = root.GrconAllocationCenter;
+    if (!AC || !state.central || !state.central.ok) return {};
+    return AC.centerFields(AC.allocationCenterLookup(documento, state.central, C()));
+  }
+
+  /**
+   * Célula do status da alocação. Distingue três coisas que não podem virar a
+   * mesma: sem central anexada, documento que não consta na central, e o
+   * status registrado. Dizer "não alocado" em qualquer um dos dois primeiros
+   * seria afirmar o que ninguém apurou.
+   */
+  function celulaCentralStatus(linha) {
+    if (!state.central || !state.central.ok) return '<span class="requests-vazio">sem central</span>';
+    if (!linha || !linha.centerFound) return '<span class="requests-vazio">não consta na central</span>';
+    const extra = linha.centerAllocation
+      ? `<small class="requests-multi">${escapeHtml(linha.centerAllocation)}${linha.centerSentAt ? ` · ${escapeHtml(linha.centerSentAt)}` : ""}</small>`
+      : "";
+    const envios = Number(linha.centerSubmissions) > 1
+      ? `<small class="requests-rule">${linha.centerSubmissions} envios; vale o mais recente.</small>` : "";
+    return `${escapeHtml(linha.centerStatus) || '<span class="requests-vazio">—</span>'}${extra}${envios}`;
+  }
+
+  /** O texto da fiscal sai como está na planilha: sem cortar e sem reescrever. */
+  function celulaFiscal(linha) {
+    if (!state.central || !state.central.ok) return '<span class="requests-vazio">—</span>';
+    if (!linha || !linha.centerFiscalAnswer) return '<span class="requests-vazio">—</span>';
+    return escapeHtml(linha.centerFiscalAnswer);
+  }
+
+  function renderCentral() {
+    if (!els.centralStatus) return;
+    const indice = state.central;
+    if (!indice) {
+      els.centralStatus.textContent = "Nenhuma central anexada. A consulta responde sem as colunas da fiscal.";
+      els.centralStatus.classList.remove("tem-erro");
+      if (els.centralClear) els.centralClear.hidden = true;
+      return;
+    }
+    if (!indice.ok) {
+      els.centralStatus.textContent = indice.error;
+      els.centralStatus.classList.add("tem-erro");
+      if (els.centralClear) els.centralClear.hidden = false;
+      return;
+    }
+    els.centralStatus.classList.remove("tem-erro");
+    els.centralStatus.textContent = `${indice.nomeArquivo} · aba “${indice.sheetName}” · `
+      + `${indice.count.toLocaleString("pt-BR")} envio(s) de ALOC para `
+      + `${indice.documents.toLocaleString("pt-BR")} documento(s).`;
+    if (els.centralClear) els.centralClear.hidden = false;
+  }
+
+  async function anexarCentral(file) {
+    if (!file) return;
+    const AC = root.GrconAllocationCenter;
+    if (!AC) { notify("O leitor da central não está disponível.", "warn"); return; }
+    try {
+      await root.GRCONModuleLoader.ensure("xlsx");
+      const buffer = root.GrconFileAccess
+        ? await root.GrconFileAccess.read(file, { context: "o Controle de Solicitações", retries: 1 })
+        : await file.arrayBuffer();
+      // cellDates é obrigatório: a escolha do envio mais recente compara datas,
+      // e sem isto elas chegariam como texto e a ordem sairia errada.
+      const workbook = root.XLSX.read(buffer, { type: "array", cellDates: true, cellStyles: false });
+      const indice = AC.parseAllocationCenter(workbook, { xlsx: root.XLSX, core: C() });
+      indice.nomeArquivo = file.name;
+      state.central = indice;
+      renderCentral();
+      if (!indice.ok) { notify(indice.error, "warn"); return; }
+      notify(`Central lida: ${indice.count} envio(s) para ${indice.documents} documento(s).`, "success");
+      // Já havia consulta na tela: refaz para as colunas novas aparecerem sem
+      // obrigar a pessoa a consultar tudo de novo.
+      if (state.results.size) await consultar(false);
+    } catch (erro) {
+      state.central = { ok: false, error: (erro && erro.message) || "Não foi possível ler esta planilha.", nomeArquivo: file.name };
+      renderCentral();
+      notify(state.central.error, "error");
+    }
+  }
+
+  async function removerCentral() {
+    state.central = null;
+    renderCentral();
+    if (state.results.size) await consultar(false);
+    notify("Central de alocação removida.", "info");
   }
 
   // ---------------------------------------------------------------------------
@@ -214,6 +310,7 @@
         state.results.set(item.id, {
           ...R().consultationRow(resultado),
           ...R().issuedColumns(historicoDoGrcon(resultado, item.document)),
+          ...camposDaCentral(item.document),
         });
       }
       els.progressFill.style.width = `${Math.round((fim / total) * 100)}%`;
@@ -355,6 +452,8 @@
         <td class="requests-col-emitido">${celulaEmitido(linha)}</td>
         <td class="requests-col-revisao-emitida">${celulaRevisaoEmitida(linha)}</td>
         <td>${linha && linha.sigemStatus ? escapeHtml(linha.sigemStatus) : '<span class="requests-vazio">—</span>'}</td>
+        <td class="requests-col-central">${celulaCentralStatus(linha)}</td>
+        <td class="requests-col-fiscal">${celulaFiscal(linha)}</td>
         <td>${linha && linha.ld ? escapeHtml(linha.ld) : '<span class="requests-vazio">—</span>'}${linha && linha.occurrenceCount > 1 ? `<small class="requests-multi">${linha.occurrenceCount} LDs</small>` : ""}</td>
       </tr>`;
     }).join("");
@@ -436,6 +535,12 @@
           issuedRevision: linha.issuedRevision,
           issuedRevisionCell: linha.issuedRevisionCell,
           sigemStatus: linha.sigemStatus,
+          // Central de alocação: saem vazias quando nenhuma central foi
+          // anexada, e é assim que devem sair — a planilha não pode afirmar
+          // "não alocado" por ausência de fonte.
+          centerStatus: linha.centerStatus,
+          centerFiscalAnswer: linha.centerFiscalAnswer,
+          centerAllocationCell: linha.centerAllocationCell,
           ld: linha.ld,
           allLds: linha.allLds,
           rule: linha.rule,
@@ -833,6 +938,10 @@
     els.ldInput = $("#requests-ld-input");
     els.ldList = $("#requests-ld-list");
     els.ldAdd = $("#requests-ld-add");
+    els.centralAdd = $("#requests-central-add");
+    els.centralInput = $("#requests-central-input");
+    els.centralClear = $("#requests-central-clear");
+    els.centralStatus = $("#requests-central-status");
     els.ldReuse = $("#requests-ld-reuse");
     els.ldClear = $("#requests-ld-clear");
     els.paste = $("#requests-paste");
@@ -893,6 +1002,14 @@
       if (evento.key === "Enter" || evento.key === " ") { evento.preventDefault(); els.ldInput.click(); }
     });
     els.ldAdd.addEventListener("click", () => els.ldInput.click());
+    if (els.centralAdd) {
+      els.centralAdd.addEventListener("click", () => els.centralInput.click());
+      els.centralInput.addEventListener("change", (evento) => {
+        anexarCentral(evento.target.files && evento.target.files[0]);
+        evento.target.value = "";
+      });
+      els.centralClear.addEventListener("click", removerCentral);
+    }
     els.ldInput.addEventListener("change", (evento) => { adicionarLds(evento.target.files); evento.target.value = ""; });
     ["dragenter", "dragover"].forEach((tipo) => els.drop.addEventListener(tipo, (evento) => {
       evento.preventDefault(); els.drop.classList.add("is-over");

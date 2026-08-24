@@ -14,6 +14,8 @@ const Workbook = require(path.join(root, "grdt_workbook.js"));
 const ExcelJS = require(path.join(root, "exceljs.min.js"));
 const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
+const XLSX = require(path.join(root, "xlsx.full.min.js"));
+const AllocationCenter = require(path.join(root, "allocation_center.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const Requests = require(path.join(root, "requests_core.js"));
 const RequestsReport = require(path.join(root, "requests_report.js"));
@@ -1313,6 +1315,82 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
 }
 
+check("central de alocação responde status e comentário da fiscal por documento", () => {
+  const AC = AllocationCenter;
+
+  // Planilha no formato real: cabeçalho na segunda linha, porque a primeira
+  // traz só um total, e NomeDocumento como chave.
+  const cabecalho = ["ABA", "VERSÃO \nDA LD", "DATA DO ENVIO\n DA ALOC", "Retorno da Fiscal 01\n (Renata)",
+    "Resposta da Fiscal 01\n (Renata)", "Retorno da Fiscal 02\n (Nani)", "STATUS DA ALOCAÇÃO", "ALOCAÇÃO", "FAROL", "NomeDocumento"];
+  const doc = "C1O_RNEST_U32_3.8.2.1_TUB_RUFF_U32-AR-05655";
+  const planilha = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(planilha, XLSX.utils.aoa_to_sheet([
+    ["", "", "", "", "", "", 2],
+    cabecalho,
+    ["ET_LD_004", "0", new Date(2026, 7, 13), new Date(2026, 4, 5), "Recusado: falta o TAG", "", "FISCAL 01 - RECUSADO", "C1O-ALOC-CM-0058-2026", "0", doc],
+    ["ET_LD_004", "0", new Date(2026, 7, 18), "", "Aceita sem comentários", "", "FISCAL 01 - AGUARDANDO RETORNO", "C1O-ALOC-CM-0230-2026", "0", doc],
+  ], { cellDates: true }), "Central de alocação");
+
+  const indice = AC.parseAllocationCenter(planilha, { xlsx: XLSX, core: Core });
+  assert.equal(indice.ok, true);
+  assert.equal(indice.sheetName, "Central de alocação");
+  assert.equal(indice.headerRow, 2, "o cabeçalho não está na primeira linha");
+  assert.equal(indice.count, 2);
+  assert.equal(indice.documents, 1, "o mesmo documento em dois envios é um documento");
+
+  // A aba registra cada ALOC enviada; vale o envio mais recente, porque é ele
+  // que descreve a situação de hoje.
+  const achado = AC.allocationCenterLookup(doc, indice, Core);
+  assert.equal(achado.found, true);
+  assert.equal(achado.all.length, 2, "o histórico dos envios é preservado");
+  assert.equal(achado.chosen.status, "FISCAL 01 - AGUARDANDO RETORNO");
+  assert.equal(achado.chosen.allocation, "C1O-ALOC-CM-0230-2026");
+  assert.match(achado.rule, /2 envios/, "a regra aplicada precisa estar escrita");
+
+  const campos = AC.centerFields(achado);
+  assert.equal(campos.centerStatus, "FISCAL 01 - AGUARDANDO RETORNO");
+  // O texto da fiscal sai exatamente como está na planilha.
+  assert.equal(campos.centerFiscalAnswer, "Aceita sem comentários");
+  assert.match(campos.centerAllocationCell, /C1O-ALOC-CM-0230-2026\n/);
+
+  // Documento fora da central é "não consta", que não é "não alocado".
+  const fora = AC.allocationCenterLookup("C1O_RNEST_U32_9.9.9.9_INS_RIR_INEXISTENTE", indice, Core);
+  assert.equal(fora.found, false);
+  assert.equal(AC.centerFields(fora).centerStatus, "", "sem registro não se afirma situação");
+});
+
+check("empate de data na central desempata pelo número da ALOC", () => {
+  const AC = AllocationCenter;
+  // Acontece no arquivo real: dois envios na mesma data com status diferentes.
+  // O número da ALOC é sequencial e cresce com a data, então serve de critério.
+  assert.ok(AC.allocationSequence("C1O-ALOC-CM-0230-2026") > AC.allocationSequence("C1O-ALOC-CM-0058-2026"));
+  // O ano pesa mais que o sequencial, para a ordem não inverter na virada.
+  assert.ok(AC.allocationSequence("C1O-ALOC-CM-0001-2027") > AC.allocationSequence("C1O-ALOC-CM-9999-2026"));
+  assert.equal(AC.allocationSequence(""), 0);
+  assert.equal(AC.allocationSequence("sem número"), 0);
+});
+
+check("colunas da central chegam à tela e à exportação sem afirmar o que não se apurou", () => {
+  const report = fs.readFileSync(path.join(root, "requests_report.js"), "utf8");
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+
+  for (const coluna of ["STATUS DA ALOCAÇÃO (CENTRAL)", "RESPOSTA DA FISCAL 01", "ALOC ENVIADA (CENTRAL)"]) {
+    assert.ok(report.includes(coluna), `a exportação precisa da coluna ${coluna}`);
+  }
+  // Já foram embutidas no cabeçalho e esquecidas na montagem da linha uma vez:
+  // a planilha saiu com as colunas vazias.
+  for (const campo of ["centerStatus", "centerFiscalAnswer", "centerAllocationCell"]) {
+    assert.match(app, new RegExp(`${campo}: linha\\.${campo}`), `a exportação precisa levar ${campo}`);
+  }
+
+  assert.match(html, /id="requests-central-input"/);
+  assert.match(app, /GrconAllocationCenter/);
+  // Três respostas diferentes que não podem virar a mesma.
+  assert.match(app, /sem central/);
+  assert.match(app, /não consta na central/);
+});
+
 check("tabela larga avisa que rola, e a sombra vem do estado real da rolagem", () => {
   const js = fs.readFileSync(path.join(root, "ui-v3.js"), "utf8");
   const css = fs.readFileSync(path.join(root, "grcon-final.css"), "utf8");
@@ -2178,4 +2256,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.13", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.14", passed: true, checks: checks.length, names: checks }, null, 2));
