@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.33.11" data-version="5.33.11" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.33.12" data-version="5.33.12" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -17,7 +17,7 @@
 <link href="requests.css" rel="stylesheet"/>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.33.11" name="application-version"/></head>
+<meta content="5.33.12" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -89,7 +89,7 @@
 <div class="source-slot" id="ld-slot">
 <label class="compact-source">
 <input accept=".xlsx,.xls,.xlsm" id="ld-input" multiple type="file"/>
-<span class="source-icon excel">X</span>
+<span class="source-icon excel"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M4 4h16v16H4zM4 9.5h16M4 14.5h16M9.5 4v16M14.5 4v16"></path></svg></span>
 <span><strong>Uma ou mais LDs</strong><small id="ld-meta">Selecionar planilha(s)</small></span>
 </label>
 <button aria-label="Remover LD carregada" class="source-clear-btn" hidden id="clear-ld-btn" title="Remover LD" type="button">
@@ -111,7 +111,7 @@
 <div class="compact-source relation-source source-slot" id="relation-slot">
 <label class="relation-file-trigger">
 <input accept=".xlsx,.xls,.xlsm,.csv" id="list-input" type="file"/>
-<span class="source-icon excel">X</span>
+<span class="source-icon excel"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M4 4h16v16H4zM4 9.5h16M4 14.5h16M9.5 4v16M14.5 4v16"></path></svg></span>
 <span><strong>Relação de documentos</strong><small id="list-meta">Excel ou texto</small></span>
 </label>
 <button aria-label="Abrir Entrada por texto" class="relation-text-button" id="relation-start" title="Entrada por texto" type="button">
@@ -414,7 +414,7 @@
   </div>
   <div class="unified-search-body">
     <div class="unified-search-input">
-      <textarea id="unified-search-text" placeholder="Cole um código ou nome de documento por linha" rows="3" spellcheck="false"></textarea>
+      <textarea aria-label="Códigos ou nomes de documentos para buscar, um por linha" id="unified-search-text" placeholder="Cole um código ou nome de documento por linha" rows="3" spellcheck="false"></textarea>
       <div class="unified-search-actions">
         <button class="primary-button" id="unified-search-btn" type="button">Buscar</button>
         <button class="secondary-button" id="unified-search-clear" type="button">Limpar</button>
@@ -504,7 +504,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.33.11 · <span id="footer-view">Controle de GRDT</span></span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.33.12 · <span id="footer-view">Controle de GRDT</span></span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">

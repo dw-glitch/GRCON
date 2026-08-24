@@ -1313,6 +1313,32 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
 }
 
+check("auditoria de tela: selo de planilha, painel SGPAR no escuro e campo com rótulo", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const legado = fs.readFileSync(path.join(root, "legacy-compat.css"), "utf8");
+
+  // O selo da planilha era a letra "X" solta. Medido no navegador, ela saía
+  // rgb(10,82,125) sobre rgb(228,242,248) — o mesmo par do selo de pasta —,
+  // porque o token do design-system vence a regra branca sobre verde. Um "X"
+  // azul nos dois pontos de entrada do app é lido como erro ou fechar.
+  assert.doesNotMatch(html, /class="source-icon excel">X</,
+    "o selo de planilha não pode voltar a ser a letra X");
+  assert.match(html, /class="source-icon excel">\s*<svg/, "o selo de planilha usa ícone");
+  assert.match(legado, /\.source-icon\.excel svg/, "o ícone do selo precisa de tamanho e traço próprios");
+
+  // No modo escuro o cartão do SGPAR ficava com texto claro sobre fundo branco
+  // literal: 1,26:1 medido, ou seja, os números somem. O gêmeo
+  // .relation-summary > div já estava na lista de escuro; este ficou de fora.
+  assert.match(legado, /body\.p2-dark \.sgpar-overview > div:not\(\.sgpar-progress\)/,
+    "o cartão do SGPAR precisa de fundo escuro no modo escuro");
+  assert.match(legado, /body\.p2-dark \.sgpar-overview strong/,
+    "o número do cartão tem cor fixa e precisa da versão escura");
+
+  // Único campo sem rótulo acessível encontrado na varredura das cinco abas.
+  assert.match(html, /aria-label="[^"]+"[^>]*id="unified-search-text"/,
+    "a busca unificada precisa de rótulo acessível");
+});
+
 check("número da eGRDT não vira texto vertical quando o painel fica estreito", () => {
   // O cabeçalho do detalhe punha título e botões na mesma linha sem permitir
   // quebra. Os botões não encolhem, então o título era espremido até zero de
@@ -2109,4 +2135,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.11", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.12", passed: true, checks: checks.length, names: checks }, null, 2));

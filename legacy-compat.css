@@ -1258,7 +1258,17 @@ body.p2-dark .drawer-header, body.p2-dark .task-center-drawer header { backgroun
 body.p2-dark .drawer-footer, body.p2-dark .task-center-drawer footer { border-color: #2c3c48; background: #101920; }
 body.p2-dark .relation-preview, body.p2-dark .relation-summary > div, body.p2-dark .relation-empty,
 body.p2-dark .sgpar-current, body.p2-dark .sgpar-queue, body.p2-dark .sgpar-queue-item,
-body.p2-dark .sgpar-file-picker, body.p2-dark .task-center-item, body.p2-dark .ignored-details ul { color: #dce7ee; border-color: #344653; background: #17232c; }
+body.p2-dark .sgpar-file-picker, body.p2-dark .task-center-item, body.p2-dark .ignored-details ul,
+/* O cartão do painel SGPAR ficou de fora desta lista, ao contrário do gêmeo
+   .relation-summary > div. No modo escuro o texto herdava a cor clara da
+   gaveta enquanto o fundo continuava no "background: white" literal da regra
+   de cima: contraste de 1,26:1, ou seja, os números somem. */
+body.p2-dark .sgpar-overview > div:not(.sgpar-progress) { color: #dce7ee; border-color: #344653; background: #17232c; }
+/* O número e o rótulo têm cor própria e fixa na regra clara, então escurecer
+   só o cartão jogava o número para 1,35:1. Mesmos tons dos cartões de
+   .history-detail-numbers, para os dois painéis combinarem no escuro. */
+body.p2-dark .sgpar-overview strong { color: #dceaf3; }
+body.p2-dark .sgpar-overview > div:not(.sgpar-progress) span { color: #b9c8d3; }
 body.p2-dark .detail-reason, body.p2-dark .ld-values-grid > div, body.p2-dark .revision-timeline-step,
 body.p2-dark .revision-timeline-summary span, body.p2-dark .databook-comparison > div,
 body.p2-dark .databook-library-toolbar, body.p2-dark .databook-library-table-wrap,
@@ -1616,3 +1626,10 @@ html[data-app="GRCON"][data-ops-ui="enabled"] body.p2-dark .brand-logo { padding
 }
 
 }
+
+/* O selo de planilha era a letra "X" solta. Ela só fazia sentido quando a
+   regra .source-icon.excel ainda pintava branco sobre verde; hoje o token do
+   design-system vence e o X ficava azul sobre azul-claro, lido como "erro" ou
+   "fechar" bem nos dois pontos de entrada do app. Virou ícone, igual ao
+   cartão de pasta ao lado. */
+.source-icon.excel svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }

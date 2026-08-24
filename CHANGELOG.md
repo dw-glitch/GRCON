@@ -1,6 +1,6 @@
 # Histórico de alterações
 
-## 5.33.11 — 2026-08-24
+## 5.33.12 — 2026-08-24
 
 - Documentos do tipo **DE** passam a usar obrigatoriamente o formato **A3** na eGRDT.
 - A regra prevalece sobre qualquer formato diferente informado na LD, inferido do arquivo ou alterado manualmente no painel.
