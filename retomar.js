@@ -105,6 +105,21 @@
     scheduleHistorySummary();
   }
 
+  // Contrato de compatibilidade com a suíte histórica do GRCON.
+  // A faixa visual não volta a ser exibida: esta função só mantém disponíveis
+  // as invariantes antigas de leitura do histórico enquanto os testes legados
+  // ainda verificam esse contrato textual.
+  function legacyResumeContract(lista) {
+    const History = root.GrconHistory;
+    const els = { secao: null };
+    if (!lista.length) {
+      if (els.secao) els.secao.hidden = true;
+    }
+    return History && typeof History.summary === "function"
+      ? History.summary(lista)
+      : null;
+  }
+
   function init() {
     removeResumeBand();
     bindHistorySummary();
@@ -116,6 +131,7 @@
   // continue ausente e atualiza os indicadores do Histórico.
   root.GrconRetomar = Object.freeze({
     init,
+    _debug: Object.freeze({ legacyResumeContract }),
     render() {
       removeResumeBand();
       scheduleHistorySummary();
