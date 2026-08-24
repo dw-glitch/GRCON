@@ -34,6 +34,69 @@
     return norm(document).includes("98V");
   }
 
+  function isEtPlanningRow(row) {
+    const item = row || {};
+    const sheet = norm(item.sheet);
+    const document = norm(item.document);
+    const discipline = norm(
+      item.egrdt && item.egrdt.discipline
+      || item.record && item.record.discipline
+      || item.discipline
+    );
+    const isEt = sheet === "ET" || document.includes("_RNEST_");
+    return isEt && discipline.includes("PLANEJAMENTO");
+  }
+
+  /**
+   * Exceção operacional para documentos ET da disciplina PLANEJAMENTO.
+   * O planejamento sempre envia o arquivo editável em Word junto com o PDF,
+   * portanto os dois devem seguir para postagem e ocupar linhas próprias na
+   * eGRDT: primeiro o .docx e depois o .pdf.
+   */
+  function validateEtPlanningPair(row, sources) {
+    const originalList = Array.isArray(sources) ? [...sources] : [];
+    const applies = isEtPlanningRow(row);
+    if (!applies) return { applies: false, valid: true, sources: originalList, errors: [], ignoredDuplicates: [] };
+
+    const seen = new Set();
+    const ignoredDuplicates = [];
+    const list = originalList.filter((source) => {
+      const key = norm(source && (source.finalName || source.name));
+      if (!key) return true;
+      if (seen.has(key)) {
+        ignoredDuplicates.push(source);
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    const pdfs = list.filter((source) => extensionOf(source && (source.name || source.finalName)) === "pdf");
+    const docx = list.filter((source) => extensionOf(source && (source.name || source.finalName)) === "docx");
+    const invalid = list.filter((source) => {
+      const extension = extensionOf(source && (source.name || source.finalName));
+      return Boolean(extension && extension !== "pdf" && extension !== "docx");
+    });
+    const withoutExtension = list.filter((source) => !extensionOf(source && (source.name || source.finalName)));
+    const errors = [];
+
+    if (list.length !== 2) errors.push("ET da disciplina PLANEJAMENTO exige exatamente 2 arquivos por código: 1 DOCX + 1 PDF.");
+    if (docx.length !== 1) errors.push("ET da disciplina PLANEJAMENTO exige exatamente 1 arquivo Word .docx por código.");
+    if (pdfs.length !== 1) errors.push("ET da disciplina PLANEJAMENTO exige exatamente 1 PDF por código.");
+    if (invalid.length) errors.push("ET da disciplina PLANEJAMENTO aceita para postagem somente o conjunto .docx + .pdf.");
+    if (withoutExtension.length) errors.push("ET da disciplina PLANEJAMENTO exige extensão explícita nos dois arquivos.");
+    if (list.some((source) => source && (source.virtual || !source.file))) {
+      errors.push("ET da disciplina PLANEJAMENTO exige o par físico completo: 1 DOCX + 1 PDF.");
+    }
+
+    return {
+      applies: true,
+      valid: errors.length === 0,
+      sources: [...docx, ...pdfs, ...invalid, ...withoutExtension],
+      errors: [...new Set(errors)],
+      ignoredDuplicates,
+    };
+  }
+
   /**
    * A N-1710 segue composição física obrigatória de dois arquivos por código.
    * Regra geral: 1 nativo + 1 PDF. Exceções operacionais:
@@ -153,15 +216,16 @@
         errors.push(`${row.document}: nenhum arquivo físico selecionado.`);
         return;
       }
-      const n1710Pair = validateN1710Pair(row, sources);
-      if (n1710Pair.ignoredDuplicates && n1710Pair.ignoredDuplicates.length) {
-        warnings.push(`${row.document}: ${n1710Pair.ignoredDuplicates.length} arquivo(s) duplicado(s) ignorado(s); somente uma cópia de cada nome final seguirá para a eGRDT.`);
+      const etPlanningPair = validateEtPlanningPair(row, sources);
+      const pairValidation = etPlanningPair.applies ? etPlanningPair : validateN1710Pair(row, sources);
+      if (pairValidation.ignoredDuplicates && pairValidation.ignoredDuplicates.length) {
+        warnings.push(`${row.document}: ${pairValidation.ignoredDuplicates.length} arquivo(s) duplicado(s) ignorado(s); somente uma cópia de cada nome final seguirá para a eGRDT.`);
       }
-      if (!n1710Pair.valid) {
-        n1710Pair.errors.forEach((message) => errors.push(`${row.document}: ${message}`));
+      if (!pairValidation.valid) {
+        pairValidation.errors.forEach((message) => errors.push(`${row.document}: ${message}`));
         return;
       }
-      const orderedSources = n1710Pair.sources;
+      const orderedSources = pairValidation.sources;
       const codeValidation = C.validateDocumentCode(row.document, row.sheet);
       if (!codeValidation.valid) {
         warnings.push(`${row.document}: alerta de codificação — ${codeValidation.errors.join(" ")}`);
@@ -294,5 +358,5 @@
     }));
   }
 
-  return { createPlan, validateN1710Pair, consistencyErrors, splitPlan, manifestRows };
+  return { createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, splitPlan, manifestRows };
 });
