@@ -662,6 +662,82 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   checks.push("N-1710 bloqueia geração quando o par nativo + PDF está incompleto");
 }
 
+{
+  const liDocument = "LI-5290.00-22313-91D-C1O-001";
+  const liRow = {
+    document: liDocument, revision: "A", sheet: "N-1710",
+    files: [
+      { name: `${liDocument}_0001_A.pdf`, finalName: `${liDocument}_0001_A.pdf`, file: { size: 10 } },
+      { name: `${liDocument}_0001_A.xlsx`, finalName: `${liDocument}_0001_A.xlsx`, file: { size: 20 } },
+    ],
+  };
+  const liPair = Emission.validateN1710Pair(liRow, liRow.files);
+  assert.equal(liPair.valid, true);
+  assert.equal(liPair.requiresExcelPair, true);
+  assert.equal(liPair.documentType, "LI");
+  assert.deepEqual(liPair.sources.map((entry) => entry.name), [
+    `${liDocument}_0001_A.xlsx`,
+    `${liDocument}_0001_A.pdf`,
+  ]);
+
+  const liRecord = {
+    ...ldDocumentRecord(liDocument, "ALOCADO", "N-1710"),
+    title: "LISTA DE INSTRUMENTOS",
+    format: "A4",
+    discipline: "INSTRUMENTAÇÃO",
+    documentType: "LI",
+    purpose: "Para Informação",
+    databook: "DATA BOOK N-1710",
+  };
+  const liPlanRow = {
+    ...liRow,
+    record: liRecord,
+    decision: Core.READY,
+    hardBlock: false,
+    egrdt: Core.buildEgrdtData(liDocument, "A", `${liDocument}_0001_A.xlsx`, liRecord, "N-1710", "A4"),
+  };
+  const liPlan = Emission.createPlan([liPlanRow], new Set([0]));
+  assert.deepEqual(liPlan.errors, []);
+  assert.deepEqual(liPlan.items.map((item) => item.fileName), [
+    `${liDocument}_0001_A.xlsx`,
+    `${liDocument}_0001_A.pdf`,
+  ]);
+  const liWorkbook = await Workbook.build(liPlan.items);
+  const liVerified = await Workbook.verify(liWorkbook, liPlan.items);
+  assert.equal(liVerified.checkedRows, 2);
+  assert.deepEqual(liVerified.rows.map((item) => item.fileName), [
+    `${liDocument}_0001_A.xlsx`,
+    `${liDocument}_0001_A.pdf`,
+  ]);
+
+  const liWrongNative = Emission.validateN1710Pair(liRow, [
+    { name: `${liDocument}_0001_A.dwg`, finalName: `${liDocument}_0001_A.dwg`, file: { size: 20 } },
+    { name: `${liDocument}_0001_A.pdf`, finalName: `${liDocument}_0001_A.pdf`, file: { size: 10 } },
+  ]);
+  assert.equal(liWrongNative.valid, false);
+  assert.ok(liWrongNative.errors.some((message) => /arquivo Excel/i.test(message)));
+  assert.ok(liWrongNative.errors.some((message) => /não aceita outro tipo de arquivo nativo/i.test(message)));
+
+  const mcDocument = "MC-5290.00-22313-911-C1O-001";
+  const mcRow = {
+    document: mcDocument, revision: "0", sheet: "N-1710",
+    files: [
+      { name: `${mcDocument}_0001_0.xlsm`, finalName: `${mcDocument}_0001_0.xlsm`, file: { size: 20 } },
+      { name: `${mcDocument}_0001_0.pdf`, finalName: `${mcDocument}_0001_0.pdf`, file: { size: 10 } },
+    ],
+  };
+  const mcPair = Emission.validateN1710Pair(mcRow, mcRow.files);
+  assert.equal(mcPair.valid, true);
+  assert.equal(mcPair.requiresExcelPair, true);
+  assert.equal(mcPair.documentType, "MC");
+  assert.deepEqual(mcPair.sources.map((entry) => entry.name), [
+    `${mcDocument}_0001_0.xlsm`,
+    `${mcDocument}_0001_0.pdf`,
+  ]);
+  assert.equal(Core.proposedFileName(`${mcDocument}.xlsb`, mcDocument, "0", "N-1710"), `${mcDocument}_0001_0.xlsb`);
+  checks.push("LI e MC da N-1710 exigem e ordenam exatamente Excel + PDF, aceitando extensões Excel suportadas");
+}
+
 check("LD_001 prioriza DISCIPLINA sobre Disciplina Torre e adapta CIVIL/SEGURANCA para CIVIL na eGRDT", () => {
   globalThis.XLSX = SheetJS;
   const document = "DE-5290.00-22313-142-C1O-076";
@@ -1804,4 +1880,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.6", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.7", passed: true, checks: checks.length, names: checks }, null, 2));

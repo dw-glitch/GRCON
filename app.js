@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.33.6";
+  const APP_VERSION = "5.33.7";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -120,7 +120,7 @@
     manualForceInclude: new Set(), // índices incluídos manualmente pelo operador (mesmo sem decisão READY)
   };
 
-  const PACKAGE_EXTENSION = /\.(pdf|doc|docx|xls|xlsx|xlsm|dwg|dgn|ppt|pptx)$/i;
+  const PACKAGE_EXTENSION = /\.(pdf|doc|docx|xls|xlsx|xlsm|xlsb|dwg|dgn|ppt|pptx)$/i;
   const $ = (selector) => document.querySelector(selector);
 
   const EGRDT_LEGACY_SEQUENCE_KEY = "grcon.egrdt.sequence.v3";
@@ -4768,19 +4768,19 @@
       return row && row.files && row.files.length;
     }));
     if (!physicalSelection.size) {
-      showToast("Nenhum PDF físico selecionado. Use Baixar eGRDT final para itens recebidos somente por relação.", "warn");
+      showToast("Nenhum arquivo físico selecionado. Use Baixar eGRDT final para itens recebidos somente por relação.", "warn");
       return;
     }
     const plan = E.createPlan(state.results, physicalSelection, { manualForceIndices: state.manualForceInclude });
     if (plan.errors.length) {
-      showToast(`PDFs + eGRDT bloqueados: ${plan.errors.slice(0, 3).join(" ")}`, "error");
+      showToast(`Arquivos + eGRDT bloqueados: ${plan.errors.slice(0, 3).join(" ")}`, "error");
       return;
     }
     state.cancelled = false;
-    setBusy(true, "Montando PDFs, eGRDTs e ZIP");
+    setBusy(true, "Montando arquivos, eGRDTs e ZIP");
     els.exportZip.disabled = true;
     els.exportZip.textContent = "Preparando…";
-    if (Workspace) Workspace.start("grdt-package", "PDFs + eGRDT");
+    if (Workspace) Workspace.start("grdt-package", "Arquivos + eGRDT");
     try {
       const consistency = E.consistencyErrors(plan);
       if (consistency.length) throw new Error(consistency.join(" "));
@@ -4790,7 +4790,7 @@
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
-      const sigemPrepared = prepareSigemOutput(previewGenerated, "PDFs + eGRDT", packageName, generatedAt);
+      const sigemPrepared = prepareSigemOutput(previewGenerated, "Arquivos + eGRDT", packageName, generatedAt);
       let generated;
       let blob;
       if (PerformanceCore && PerformanceCore.supported) {
@@ -4801,10 +4801,10 @@
           officialNumbers,
           limit: currentEgrdtBatchLimit(),
           ...sigemWorkerPayload(sigemPrepared),
-        }, workerProgress("PDFs + eGRDT + ZIP"));
+        }, workerProgress("Arquivos + eGRDT + ZIP"));
         generated = restoreWorkerGenerated(built.generated, groups);
         blob = new Blob([built.bytes], { type: "application/zip" });
-        refreshPerformancePanel(`${plan.entries.length} PDF(s) e ${generated.length} eGRDT(s) processados.`);
+        refreshPerformancePanel(`${plan.entries.length} arquivo(s) e ${generated.length} eGRDT(s) processados.`);
       } else {
         generated = [];
         for (const group of groups) {
@@ -4822,13 +4822,13 @@
         blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } });
       }
       downloadBlob(blob, packageName);
-      saveGeneratedHistory(generated, "PDFs + eGRDT", { packageName, generatedAt }, sigemPrepared.historyRecords);
-      showToast(`${plan.entries.length} PDF(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
+      saveGeneratedHistory(generated, "Arquivos + eGRDT", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      showToast(`${plan.entries.length} arquivo(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
     } catch (error) {
-      handleWorkerTaskError(error, "Não foi possível gerar os PDFs com a eGRDT.");
+      handleWorkerTaskError(error, "Não foi possível gerar os arquivos com a eGRDT.");
     } finally {
       if (Workspace) Workspace.finish("grdt-package");
-      els.exportZip.textContent = "Baixar PDFs + eGRDT";
+      els.exportZip.textContent = "Baixar arquivos + eGRDT";
       setBusy(false);
       renderAll();
     }

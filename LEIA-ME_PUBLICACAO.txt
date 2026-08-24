@@ -1,6 +1,7 @@
-GRCON 5.33.6 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.33.7 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
+- N-1710: LI e MC exigem o conjunto físico Excel + PDF; os demais tipos continuam com nativo + PDF.
 - O seletor aceita uma ou mais LDs e pesquisa a relação em todas elas na mesma análise.
 - LDs com cabeçalhos em posições diferentes e abas vigentes como N-1710 MOD são reconhecidas; uma aba visível prevalece sobre a cópia antiga oculta.
 - A LD de comissionamento é lida com disciplina e propósito, inclusive quando a coluna de propósito possui valores oficiais, mas o cabeçalho está vazio.

@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 5.33.7 — 2026-08-24
+
+- Documentos N-1710 de codificação **LI** e **MC** passam a seguir composição própria para postagem: exatamente **1 arquivo Excel + 1 PDF** do mesmo código.
+- O Excel pode ser `.xls`, `.xlsx`, `.xlsm` ou `.xlsb`; outro nativo (`.dwg`, `.docx`, etc.) é rejeitado para LI/MC com mensagem específica.
+- Na eGRDT, o arquivo Excel é gravado primeiro e o PDF logo abaixo, ambos com o mesmo código, revisão e sufixo obrigatório `_0001_<revisão>`.
+- A regra geral dos demais documentos N-1710 permanece **1 nativo + 1 PDF**, sem alteração.
+- O seletor de arquivos e o pacote final passam a tratar a saída como **arquivos + eGRDT**, refletindo corretamente conjuntos que incluem Excel, DWG e outros nativos além de PDF.
+
 ## 5.33.6 — 2026-08-21
 
 - O Histórico ganhou filtro de **Tipo de documento** específico para a relação por período: `Todos`, `N-1710`, `ET` ou `CV`.

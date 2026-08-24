@@ -18,37 +18,68 @@
     return match ? match[1].toLowerCase() : "";
   }
 
+  const EXCEL_EXTENSIONS = new Set(["xls", "xlsx", "xlsm", "xlsb"]);
+
+  function n1710DocumentType(document) {
+    const raw = text(document).replace(/\.[^.]+$/, "");
+    const groups = raw.split("-");
+    const languageOffset = /^[IAFLED]$/i.test(groups[0] || "") ? 1 : 0;
+    return norm(groups[languageOffset] || "");
+  }
+
   /**
-   * A N-1710 segue a composição do modelo operacional enviado pelo usuário:
-   * cada código ocupa exatamente duas linhas na eGRDT — primeiro o arquivo
-   * nativo e depois o PDF correspondente. Os dois recebem o mesmo código, a
-   * mesma revisão e o sufixo obrigatório _0001_<revisão>.
+   * A N-1710 segue composição física obrigatória de dois arquivos por código.
+   * Regra geral: 1 nativo + 1 PDF. Exceção operacional para LI e MC: o nativo
+   * é obrigatoriamente uma planilha Excel, portanto o par deve ser exatamente
+   * 1 Excel + 1 PDF. Os dois recebem o mesmo código, revisão e _0001_<revisão>.
    */
   function validateN1710Pair(row, sources) {
     const list = Array.isArray(sources) ? [...sources] : [];
     const applies = Boolean(C && C.isN1710Context && C.isN1710Context(row && row.sheet, row && row.document));
     if (!applies) return { applies: false, valid: true, sources: list, errors: [] };
 
+    const documentType = n1710DocumentType(row && row.document);
+    const requiresExcelPair = documentType === "LI" || documentType === "MC";
     const pdfs = list.filter((source) => extensionOf(source && (source.name || source.finalName)) === "pdf");
+    const excels = list.filter((source) => EXCEL_EXTENSIONS.has(extensionOf(source && (source.name || source.finalName))));
     const natives = list.filter((source) => {
       const extension = extensionOf(source && (source.name || source.finalName));
       return Boolean(extension && extension !== "pdf");
     });
+    const invalidLiMcNatives = requiresExcelPair
+      ? natives.filter((source) => !EXCEL_EXTENSIONS.has(extensionOf(source && (source.name || source.finalName))))
+      : [];
     const withoutExtension = list.filter((source) => !extensionOf(source && (source.name || source.finalName)));
     const errors = [];
-    if (list.length !== 2) errors.push("N-1710 exige exatamente 2 arquivos por código: 1 nativo + 1 PDF.");
-    if (pdfs.length !== 1) errors.push("N-1710 exige exatamente 1 PDF por código.");
-    if (natives.length !== 1) errors.push("N-1710 exige exatamente 1 arquivo nativo por código.");
+
+    if (requiresExcelPair) {
+      if (list.length !== 2) errors.push(`${documentType} da N-1710 exige exatamente 2 arquivos por código: 1 Excel + 1 PDF.`);
+      if (pdfs.length !== 1) errors.push(`${documentType} da N-1710 exige exatamente 1 PDF por código.`);
+      if (excels.length !== 1) errors.push(`${documentType} da N-1710 exige exatamente 1 arquivo Excel por código (.xls, .xlsx, .xlsm ou .xlsb).`);
+      if (invalidLiMcNatives.length) errors.push(`${documentType} da N-1710 não aceita outro tipo de arquivo nativo: envie a planilha Excel correspondente junto com o PDF.`);
+    } else {
+      if (list.length !== 2) errors.push("N-1710 exige exatamente 2 arquivos por código: 1 nativo + 1 PDF.");
+      if (pdfs.length !== 1) errors.push("N-1710 exige exatamente 1 PDF por código.");
+      if (natives.length !== 1) errors.push("N-1710 exige exatamente 1 arquivo nativo por código.");
+    }
     if (withoutExtension.length) errors.push("N-1710 exige extensão explícita nos dois arquivos.");
     if (list.some((source) => source && (source.virtual || !source.file))) {
-      errors.push("N-1710 exige o par físico completo; não é permitido gerar somente pela relação sem o arquivo nativo e o PDF.");
+      errors.push(requiresExcelPair
+        ? `${documentType} da N-1710 exige o par físico completo: 1 Excel + 1 PDF.`
+        : "N-1710 exige o par físico completo; não é permitido gerar somente pela relação sem o arquivo nativo e o PDF.");
     }
+
+    const orderedSources = requiresExcelPair
+      ? [...excels, ...pdfs, ...invalidLiMcNatives, ...withoutExtension]
+      : [...natives, ...pdfs, ...withoutExtension];
 
     return {
       applies: true,
       valid: errors.length === 0,
-      // A ordem reproduz os exemplos oficiais: nativo na primeira linha, PDF na segunda.
-      sources: [...natives, ...pdfs, ...withoutExtension],
+      documentType,
+      requiresExcelPair,
+      // A ordem da eGRDT mantém o arquivo editável/nativo primeiro e o PDF depois.
+      sources: orderedSources,
       errors: [...new Set(errors)],
     };
   }

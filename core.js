@@ -2618,7 +2618,7 @@
       "REVISOES DIVERGENTES NO PACOTE": "Os arquivos do mesmo documento indicam revisões diferentes. Confirme qual revisão está correta.",
       "PACOTE INCONSISTENTE": "Os arquivos do mesmo documento geraram resultados diferentes. Confira os arquivos selecionados.",
       "PDF NAO LOCALIZADO": "O PDF físico não foi encontrado. Inclua o arquivo antes de gerar o pacote físico.",
-      "COMPOSICAO N-1710 INCOMPLETA": "Para N-1710, inclua exatamente o par do mesmo código: 1 arquivo nativo e 1 PDF. Os dois serão gravados na eGRDT com o mesmo número e revisão.",
+      "COMPOSICAO N-1710 INCOMPLETA": "Para N-1710, inclua o par físico do mesmo código. LI e MC exigem 1 Excel + 1 PDF; os demais tipos exigem 1 arquivo nativo + 1 PDF. Os dois serão gravados na eGRDT com o mesmo número e revisão.",
       "PDF NAO VALIDADO": "O PDF não pôde ser aberto e validado. Substitua ou confira o arquivo.",
       "ARQUIVO VAZIO": "O arquivo está vazio. Substitua pelo documento correto.",
       "PDF INVALIDO": "O arquivo não é um PDF válido ou não pôde ser aberto.",
