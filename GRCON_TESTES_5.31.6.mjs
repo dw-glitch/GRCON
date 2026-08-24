@@ -1862,6 +1862,141 @@ check("Histórico oferece o filtro Todos, N-1710, ET e CV na relação do perío
   assert.match(report, /\["Tipo de documento", selectedFamily\]/);
 });
 
+check("nome com código + título usa somente a codificação oficial da LD e segue com alerta", () => {
+  const document = "DE-5290.00-22313-142-C1O-076";
+  const index = Core.buildIndex([{
+    ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+    revision: "A",
+    discipline: "CIVIL",
+    documentType: "DE",
+  }], []);
+  const sourceName = `${document} - DESENHO GERAL DE CIVIL.dwg`;
+  const result = Core.triageOne({ id: "titulo-no-nome", name: sourceName }, index, {});
+  assert.equal(result.document, document);
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.finalName, `${document}_0001_A.dwg`);
+  assert.match(result.fileNameFormattingWarning, /fora do padrão/i);
+  assert.match(result.fileNameFormattingWarning, /reconheceu o documento pela LD/i);
+});
+
+check("separadores errados na codificação são normalizados pela LD sem bloquear", () => {
+  const document = "DE-5290.00-22313-142-C1O-076";
+  const index = Core.buildIndex([{
+    ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+    revision: "A",
+    discipline: "CIVIL",
+    documentType: "DE",
+  }], []);
+  const sourceName = "DE 5290 00 22313 142 C1O 076 DESENHO GERAL.dwg";
+  const matches = Core.matchDocuments(sourceName, index);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].document, document);
+  assert.equal(matches[0].matchKind, "code-format-variant");
+  const result = Core.triageOne({ id: "formato-incorreto", name: sourceName }, index, {});
+  assert.equal(result.document, document);
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.finalName, `${document}_0001_A.dwg`);
+  assert.match(result.fileNameFormattingWarning, /codificação\/nome fora do padrão/i);
+});
+
+check("um erro de transcrição no código é corrigido somente quando a LD é inequívoca", () => {
+  const document = "DE-5290.00-22313-142-C1O-076";
+  const index = Core.buildIndex([{
+    ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+    revision: "A",
+    discipline: "CIVIL",
+    documentType: "DE",
+  }], []);
+  const sourceName = "DE-5290.00-22313-142-C1O-07G DESENHO GERAL.dwg";
+  const matches = Core.matchDocuments(sourceName, index);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].document, document);
+  assert.equal(matches[0].matchKind, "code-transcription-variant");
+  const result = Core.triageOne({ id: "transcricao-codigo", name: sourceName }, index, {});
+  assert.equal(result.document, document);
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.finalName, `${document}_0001_A.dwg`);
+  assert.match(result.fileNameFormattingWarning, /fora do padrão/i);
+});
+
+check("título no nome desempata códigos vizinhos quando há um erro de transcrição", () => {
+  const docs = [
+    ["DE-5290.00-22313-142-C1O-075", "PROJETO DE ANDAIME TUBO EQUIPADO BALANÇO 1.5m x 1.5m"],
+    ["DE-5290.00-22313-142-C1O-076", "DISPOSITIVO PARA RETIRADA DA BOMBA B-32006A"],
+    ["DE-5290.00-22313-142-C1O-077", "CAVALETE METÁLICO"],
+  ];
+  const records = docs.map(([document, title]) => ({
+    ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+    revision: "A",
+    discipline: "CIVIL",
+    documentType: "DE",
+    title,
+  }));
+  const index = Core.buildIndex(records, []);
+  const withTitle = "DE-5290.00-22313-142-C1O-07G DISPOSITIVO PARA RETIRADA DA BOMBA B-32006A.dwg";
+  const matches = Core.matchDocuments(withTitle, index);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].document, "DE-5290.00-22313-142-C1O-076");
+  assert.equal(matches[0].matchedByEmbeddedTitle, true);
+
+  const withoutTitle = Core.matchDocuments("DE-5290.00-22313-142-C1O-07G.dwg", index);
+  assert.ok(withoutTitle.length > 1, "sem título suficiente o GRCON não deve adivinhar");
+});
+
+check("arquivo duplicado vira alerta e somente uma cópia entra na eGRDT", () => {
+  const document = "DE-5290.00-22313-142-C1O-076";
+  const row = {
+    document,
+    revision: "A",
+    sheet: "N-1710",
+    decision: Core.READY,
+    hardBlock: false,
+    record: {
+      discipline: "CIVIL",
+      documentType: "DE",
+      purpose: "Para Informação",
+      format: "A4",
+      databook: "CIVIL / DESENHOS",
+      source: "LD_001.xlsx",
+      allocation: "ALOC-001",
+    },
+    egrdt: Core.buildEgrdtData(document, "A", `${document}_0001_A.dwg`, {
+      discipline: "CIVIL", documentType: "DE", purpose: "Para Informação", format: "A4", title: "DESENHO GERAL",
+    }, "N-1710", "A4"),
+    files: [
+      { name: `${document}_0001_A.dwg`, finalName: `${document}_0001_A.dwg`, file: { size: 1 } },
+      { name: `${document}_0001_A.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 2 } },
+      { name: `${document}_0001_A - COPIA.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 3 } },
+    ],
+  };
+  const plan = Emission.createPlan([row], new Set([0]));
+  assert.deepEqual(plan.errors, []);
+  assert.equal(plan.entries.length, 2, "DWG + um único PDF devem seguir");
+  assert.ok(plan.warnings.some((message) => /duplicado.*ignorado/i.test(message)));
+});
+
+check("nome final divergente é corrigido na emissão e não bloqueia", () => {
+  const document = "DE-5290.00-22313-142-C1O-076";
+  const row = {
+    document,
+    revision: "A",
+    sheet: "N-1710",
+    decision: Core.READY,
+    hardBlock: false,
+    record: { discipline: "CIVIL", documentType: "DE", purpose: "Para Informação", format: "A4", databook: "CIVIL", title: "DESENHO GERAL" },
+    egrdt: Core.buildEgrdtData(document, "A", `${document}_0001_A.dwg`, { discipline: "CIVIL", documentType: "DE", purpose: "Para Informação", format: "A4", title: "DESENHO GERAL" }, "N-1710", "A4"),
+    files: [
+      { name: `${document} TITULO.dwg`, finalName: `${document} TITULO.dwg`, file: { size: 1 } },
+      { name: `${document} TITULO.pdf`, finalName: `${document} TITULO.pdf`, file: { size: 2 } },
+    ],
+  };
+  const plan = Emission.createPlan([row], new Set([0]));
+  assert.deepEqual(plan.errors, []);
+  assert.equal(plan.entries.length, 2);
+  assert.deepEqual(plan.entries.map((entry) => entry.finalName), [`${document}_0001_A.dwg`, `${document}_0001_A.pdf`]);
+  assert.ok(plan.warnings.some((message) => /corrigiu automaticamente/i.test(message)));
+});
+
 check("todos os JavaScripts têm sintaxe válida", () => {
   const scripts = fs.readdirSync(root).filter((name) => /\.(?:m?js)$/.test(name));
   const failures = [];
@@ -1880,4 +2015,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.7", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.8", passed: true, checks: checks.length, names: checks }, null, 2));

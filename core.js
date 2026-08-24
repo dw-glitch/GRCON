@@ -211,6 +211,13 @@
     return canonicalId(value);
   }
 
+  // Chave usada apenas para localizar a codificação dentro de nomes de arquivo
+  // que vieram com título, espaços ou separadores fora do padrão. A LD continua
+  // sendo a fonte autoritativa da grafia que será usada na eGRDT.
+  function compactDocumentCode(value) {
+    return norm(value).replace(/[^A-Z0-9]/g, "");
+  }
+
   function sheetFamily(value) {
     const normalized = norm(value);
     if (/^N-1710(?:\s|$)/.test(normalized)) return "N-1710";
@@ -1000,6 +1007,15 @@
     // Índice paralelo ignorando o "nt-": é ele que permite achar o documento
     // quando o arquivo grafa o código de um jeito e a LD de outro.
     const byNtNeutral = new Map();
+    const byCompactDocument = new Map();
+    const compactDocumentLengths = new Set();
+    documents.forEach((entry) => {
+      const compact = compactDocumentCode(entry.documentKey);
+      if (!compact) return;
+      compactDocumentLengths.add(compact.length);
+      if (!byCompactDocument.has(compact)) byCompactDocument.set(compact, []);
+      byCompactDocument.get(compact).push(entry);
+    });
     const byEtTagFormat = new Map();
     const byEtTagConfusable = new Map();
     const byEtReportTag = new Map();
@@ -1020,7 +1036,7 @@
       if (!byEtReportTagConfusable.has(tag.reportTagConfusableKey)) byEtReportTagConfusable.set(tag.reportTagConfusableKey, []);
       byEtReportTagConfusable.get(tag.reportTagConfusableKey).push(entry);
     });
-    return { byDocument, byDocumentRevision, documents, byNtNeutral, byEtTagFormat, byEtTagConfusable, byEtReportTag, byEtReportTagConfusable };
+    return { byDocument, byDocumentRevision, documents, byNtNeutral, byCompactDocument, compactDocumentLengths: [...compactDocumentLengths].sort((a, b) => b - a), byEtTagFormat, byEtTagConfusable, byEtReportTag, byEtReportTagConfusable };
   }
 
   /** Índice por chave sem "nt-", montado uma vez e reaproveitado. */
@@ -1297,6 +1313,109 @@
     return [...achados.values()];
   }
 
+  function compactDocumentCandidates(nameOrText, index) {
+    if (!index || !index.byCompactDocument) return [];
+    const baseName = text(nameOrText).split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
+    const canonicalInput = canonicalId(baseName);
+    const compactInput = compactDocumentCode(baseName);
+    if (!compactInput) return [];
+    const lengths = index.compactDocumentLengths || [];
+    const found = new Map();
+    // O título depois do código não interfere. Também aceitamos um pequeno
+    // prefixo operacional antes da codificação, sem tentar adivinhar quando
+    // mais de um código controlado puder casar.
+    const maxStart = Math.min(32, Math.max(0, compactInput.length - 7));
+    for (let start = 0; start <= maxStart; start += 1) {
+      for (const length of lengths) {
+        if (start + length > compactInput.length) continue;
+        const token = compactInput.slice(start, start + length);
+        const entries = index.byCompactDocument.get(token) || [];
+        entries.forEach((entry) => {
+          if (isForbiddenN1710NtAlias(canonicalInput, entry)) return;
+          if (!found.has(entry.documentKey)) {
+            found.set(entry.documentKey, { ...entry, matchedSearchKey: entry.documentKey, matchKind: "code-format-variant" });
+          }
+        });
+      }
+    }
+    return [...found.values()];
+  }
+
+  function oneEditApart(left, right) {
+    const a = text(left);
+    const b = text(right);
+    if (!a || !b || Math.abs(a.length - b.length) > 1) return false;
+    let i = 0;
+    let j = 0;
+    let edits = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { i += 1; j += 1; continue; }
+      edits += 1;
+      if (edits > 1) return false;
+      if (a.length > b.length) i += 1;
+      else if (b.length > a.length) j += 1;
+      else { i += 1; j += 1; }
+    }
+    if (i < a.length || j < b.length) edits += 1;
+    return edits === 1;
+  }
+
+  function titleComparable(value) {
+    return norm(value).replace(/[^A-Z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function disambiguateCandidatesByTitle(candidates, nameOrText) {
+    const list = Array.isArray(candidates) ? candidates : [];
+    if (list.length <= 1) return list;
+    const inputTitle = titleComparable(text(nameOrText).split(/[\\/]/).pop().replace(/\.[^.]+$/, ""));
+    if (!inputTitle) return list;
+    const scored = list.map((entry) => {
+      const titles = (entry.group && entry.group.records || [])
+        .map((record) => titleComparable(record && record.title))
+        .filter((title) => title.length >= 8);
+      const exactTitle = titles.filter((title) => inputTitle.includes(title)).sort((a, b) => b.length - a.length)[0] || "";
+      return { entry, score: exactTitle.length };
+    }).filter((item) => item.score > 0);
+    if (!scored.length) return list;
+    scored.sort((a, b) => b.score - a.score);
+    if (scored.length > 1 && scored[0].score === scored[1].score) return list;
+    return [{ ...scored[0].entry, matchedByEmbeddedTitle: true }];
+  }
+
+  function fuzzyDocumentCandidates(nameOrText, index) {
+    if (!index || !index.documents || !index.documents.length) return [];
+    const baseName = text(nameOrText).split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
+    const canonicalInput = canonicalId(baseName);
+    const compactInput = compactDocumentCode(baseName);
+    if (!compactInput) return [];
+    if (!index.fuzzyInputCache) {
+      try { Object.defineProperty(index, "fuzzyInputCache", { value: new Map(), enumerable: false, configurable: true }); }
+      catch (_) { index.fuzzyInputCache = new Map(); }
+    }
+    if (index.fuzzyInputCache.has(compactInput)) return index.fuzzyInputCache.get(compactInput);
+    const found = new Map();
+    const maxStart = Math.min(8, Math.max(0, compactInput.length - 7));
+    index.documents.forEach((entry) => {
+      if (isForbiddenN1710NtAlias(canonicalInput, entry)) return;
+      const controlled = compactDocumentCode(entry.documentKey);
+      if (!controlled) return;
+      for (let start = 0; start <= maxStart && !found.has(entry.documentKey); start += 1) {
+        for (const delta of [-1, 0, 1]) {
+          const length = controlled.length + delta;
+          if (length < 7 || start + length > compactInput.length) continue;
+          const token = compactInput.slice(start, start + length);
+          if (oneEditApart(token, controlled)) {
+            found.set(entry.documentKey, { ...entry, matchedSearchKey: entry.documentKey, matchKind: "code-transcription-variant" });
+            break;
+          }
+        }
+      }
+    });
+    const result = disambiguateCandidatesByTitle([...found.values()], nameOrText);
+    index.fuzzyInputCache.set(compactInput, result);
+    return result;
+  }
+
   function matchDocuments(nameOrText, index, hintedSheet) {
     const exact = exactDocumentMatch(nameOrText, index);
     if (exact) return [exact];
@@ -1312,6 +1431,8 @@
     if (!candidates.length) candidates = ntVariantCandidates(inputKey, index);
     if (!candidates.length) candidates = tagVariantCandidates(inputKey, index);
     if (!candidates.length) candidates = reportTagCandidates(inputKey, index);
+    if (!candidates.length) candidates = compactDocumentCandidates(nameOrText, index);
+    if (!candidates.length) candidates = fuzzyDocumentCandidates(nameOrText, index);
     if (!candidates.length) return [];
     const preferredCandidates = candidates.some((candidate) => candidate.matchKind === "exact")
       ? candidates.filter((candidate) => candidate.matchKind === "exact")
@@ -1850,6 +1971,16 @@
     };
   }
 
+  function fileNameFormattingWarning(fileName, document, revision, sheetName, matchKind) {
+    const source = text(fileName).split(/[\\/]/).pop();
+    if (!source || !text(document)) return "";
+    const expected = proposedFileName(source, document, revision, sheetName);
+    const same = canonicalId(source) === canonicalId(expected);
+    const relaxedMatch = matchKind === "code-format-variant" || matchKind === "code-transcription-variant";
+    if (same && !relaxedMatch) return "";
+    return `ALERTA: o arquivo “${source}” está com a codificação/nome fora do padrão. O GRCON reconheceu o documento pela LD como “${text(document)}”, ignorou o texto ou a formatação divergente e usará “${expected}” na eGRDT.`;
+  }
+
   function enrichDecision(row, reasonCode) {
     return Contracts ? Contracts.enrichDecision(row, reasonCode) : row;
   }
@@ -1957,6 +2088,8 @@
       ntVariant: false,
       ntRename: null,
       ldRename: null,
+      fileNameFormattingWarning: item.fileNameFormattingWarning || "",
+      matchKind: item.matchKind || "",
     };
     return enrichDecision(applyOfficialCodeRename(result, input), item.reasonCode);
   }
@@ -2556,6 +2689,8 @@
       record: best,
       codeValidation,
       codeValidationWarning,
+      fileNameFormattingWarning: fileNameFormattingWarning(input.name || "", document, revision, controlledSheet, match.matchKind),
+      matchKind: match.matchKind || "exact",
       egrdt,
       claimedRevision,
       documentSource: identitySource,
@@ -2686,6 +2821,7 @@
     technicalPostingEvidenceForRevision,
     canonicalId,
     key,
+    compactDocumentCode,
     sheetFamily,
     sheetMatchesHint,
     isEtDocument,
@@ -2707,6 +2843,10 @@
     exactDocumentMatch,
     matchDocument,
     matchDocuments,
+    compactDocumentCandidates,
+    fuzzyDocumentCandidates,
+    titleComparable,
+    disambiguateCandidatesByTitle,
     inferSheetFromName,
     inferLdVersion,
     inferLdVersionFromSourceName,
@@ -2718,6 +2858,7 @@
     validateDocumentCode,
     proposedFileName,
     validateFinalFileName,
+    fileNameFormattingWarning,
     EGRDT_OPTIONS,
     buildEgrdtData,
     isN1710Context,

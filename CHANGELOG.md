@@ -1,5 +1,12 @@
 # Histórico de alterações
 
+## 5.33.8 — 2026-08-24
+
+- Nomes de arquivo podem trazer o código junto do título ou com separadores/formatos divergentes; o GRCON localiza a codificação controlada na LD, usa a grafia oficial na eGRDT e transforma a divergência em alerta, não bloqueio.
+- A correspondência tolerante remove pontuação e espaçamento apenas para pesquisa e aceita um único erro de transcrição no código. Quando códigos vizinhos ficam possíveis, o título presente no nome do arquivo é confrontado com o título controlado da LD para desempatar; sem evidência única, o GRCON continua exigindo conferência e não adivinha.
+- Arquivos duplicados que resultam no mesmo nome final são ignorados automaticamente; apenas a primeira cópia segue para a composição e para a eGRDT, com alerta visível ao operador.
+- A etapa final de emissão deixa de bloquear por nome/codificação divergente quando o código oficial foi resolvido pela LD: o nome é normalizado e a geração prossegue.
+
 ## 5.33.7 — 2026-08-24
 
 - Documentos N-1710 de codificação **LI** e **MC** passam a seguir composição própria para postagem: exatamente **1 arquivo Excel + 1 PDF** do mesmo código.

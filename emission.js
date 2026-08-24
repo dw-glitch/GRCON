@@ -34,9 +34,21 @@
    * 1 Excel + 1 PDF. Os dois recebem o mesmo código, revisão e _0001_<revisão>.
    */
   function validateN1710Pair(row, sources) {
-    const list = Array.isArray(sources) ? [...sources] : [];
+    const originalList = Array.isArray(sources) ? [...sources] : [];
+    const seen = new Set();
+    const ignoredDuplicates = [];
+    const list = originalList.filter((source) => {
+      const key = norm(source && (source.finalName || source.name));
+      if (!key) return true;
+      if (seen.has(key)) {
+        ignoredDuplicates.push(source);
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
     const applies = Boolean(C && C.isN1710Context && C.isN1710Context(row && row.sheet, row && row.document));
-    if (!applies) return { applies: false, valid: true, sources: list, errors: [] };
+    if (!applies) return { applies: false, valid: true, sources: list, errors: [], ignoredDuplicates };
 
     const documentType = n1710DocumentType(row && row.document);
     const requiresExcelPair = documentType === "LI" || documentType === "MC";
@@ -81,6 +93,7 @@
       // A ordem da eGRDT mantém o arquivo editável/nativo primeiro e o PDF depois.
       sources: orderedSources,
       errors: [...new Set(errors)],
+      ignoredDuplicates,
     };
   }
 
@@ -126,6 +139,9 @@
         return;
       }
       const n1710Pair = validateN1710Pair(row, sources);
+      if (n1710Pair.ignoredDuplicates && n1710Pair.ignoredDuplicates.length) {
+        warnings.push(`${row.document}: ${n1710Pair.ignoredDuplicates.length} arquivo(s) duplicado(s) ignorado(s); somente uma cópia de cada nome final seguirá para a eGRDT.`);
+      }
       if (!n1710Pair.valid) {
         n1710Pair.errors.forEach((message) => errors.push(`${row.document}: ${message}`));
         return;
@@ -138,10 +154,15 @@
 
       orderedSources.forEach((source) => {
         const fileNameCheck = C.validateFinalFileName(source.finalName, source.name, row.document, row.revision, row.sheet);
-        if (!fileNameCheck.valid) errors.push(`${row.document} / ${source.name}: ${fileNameCheck.errors.join(" ")}`);
+        if (!fileNameCheck.valid) {
+          warnings.push(`${row.document} / ${source.name}: nome/codificação fora do padrão; o GRCON corrigiu automaticamente para ${fileNameCheck.expected}. ${fileNameCheck.errors.join(" ")}`);
+        }
         const finalName = fileNameCheck.expected;
         const outputKey = norm(finalName);
-        if (names.has(outputKey)) errors.push(`Nome final duplicado: ${finalName}.`);
+        if (names.has(outputKey)) {
+          warnings.push(`${row.document}: arquivo duplicado ${finalName} ignorado; somente uma cópia seguirá para a eGRDT.`);
+          return;
+        }
         names.add(outputKey);
 
         const item = {

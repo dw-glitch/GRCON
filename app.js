@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.33.7";
+  const APP_VERSION = "5.33.8";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -1301,7 +1301,7 @@
     const processFile = (file) => {
       const physicalKey = listPhysicalKey(file);
       if (seenPhysical.has(physicalKey)) {
-        ignoredFiles.push({ name: file.name, reason: "arquivo duplicado" });
+        ignoredFiles.push({ name: file.name, reason: "arquivo duplicado — ignorado; somente uma cópia seguirá para a GRDT" });
         return;
       }
       seenPhysical.add(physicalKey);
@@ -1332,7 +1332,14 @@
   function refreshPackageSelection() {
     state.packageSelectionReady = false;
     const ignoredFiles = [];
+    const seenPhysical = new Set();
     state.packageFiles = state.packageCandidates.filter((file) => {
+      const physicalKey = listPhysicalKey(file);
+      if (seenPhysical.has(physicalKey)) {
+        ignoredFiles.push({ name: file.name, reason: "arquivo duplicado — ignorado; somente uma cópia seguirá para a GRDT" });
+        return false;
+      }
+      seenPhysical.add(physicalKey);
       let reason = PACKAGE_EXTENSION.test(file && file.name || "") ? "" : "extensão não suportada";
       if (!reason) reason = C.controlArtifactKind(file && file.name);
       if (!reason && state.ldFiles.some((ldFile) => samePhysicalFile(file, ldFile))) reason = "LD selecionada";
@@ -2317,6 +2324,7 @@
         name: row.name,
         relativePath: row.relativePath || row.name,
         finalName: C.proposedFileName(row.name, row.document, row.revision, row.sheet),
+        matchKind: row.matchKind || "",
       } : null;
       if (!grouped.has(groupKey)) {
         grouped.set(groupKey, { ...row, files: fileEntry ? [fileEntry] : [] });
@@ -2355,6 +2363,30 @@
       row.files.forEach((entry) => {
         entry.finalName = C.proposedFileName(entry.name, row.document, row.revision, row.sheet);
       });
+      // Arquivos que convergem para o mesmo nome oficial são duplicatas lógicas.
+      // A primeira cópia é preservada; as demais viram somente alerta e não
+      // entram na composição N-1710 nem na eGRDT.
+      const uniqueFiles = [];
+      const seenFinalNames = new Set();
+      const duplicateFiles = [];
+      row.files.forEach((entry) => {
+        const finalKey = C.norm(entry.finalName || entry.name);
+        if (finalKey && seenFinalNames.has(finalKey)) {
+          duplicateFiles.push(entry);
+          state.ignoredFiles.push({
+            name: entry.name,
+            reason: `arquivo duplicado do documento ${row.document} — ignorado; foi mantida somente a primeira cópia de ${entry.finalName}`,
+          });
+          return;
+        }
+        if (finalKey) seenFinalNames.add(finalKey);
+        uniqueFiles.push(entry);
+      });
+      row.files = uniqueFiles;
+      row.duplicateFiles = duplicateFiles;
+      row.duplicateFileWarning = duplicateFiles.length
+        ? `${duplicateFiles.length} arquivo(s) duplicado(s) ignorado(s). Apenas uma cópia de cada arquivo seguirá para a GRDT.`
+        : "";
       const primary = row.files.find((entry) => extensionOf(entry.name) === "pdf") || row.files[0] || null;
       if (primary) {
         row.file = primary.file;
@@ -2396,7 +2428,18 @@
             : !hasNative
               ? "Somente PDF localizado; confirme se o arquivo nativo também é aplicável."
               : "";
-      row.packageWarning = [row.documentRevisionWarning, compositionWarning].filter(Boolean).join(" ");
+      const formattingWarnings = row.files
+        .map((entry) => C.fileNameFormattingWarning
+          ? C.fileNameFormattingWarning(entry.name, row.document, row.revision, row.sheet, entry.matchKind || row.matchKind)
+          : "")
+        .filter(Boolean);
+      row.fileNameFormattingWarning = [...new Set(formattingWarnings)].join(" ");
+      row.packageWarning = [
+        row.documentRevisionWarning,
+        row.fileNameFormattingWarning,
+        row.duplicateFileWarning,
+        compositionWarning,
+      ].filter(Boolean).join(" ");
       row.egrdt = {
         ...C.buildEgrdtData(row.document, row.revision, row.finalName, row.record || {}, row.sheet, ""),
         ...(row.egrdt || {}),
@@ -2510,8 +2553,9 @@
       // altera decisão nenhuma e responde "não apurado" quando não há Apêndice.
       if (Apendice) Apendice.apply(state.results, null);
       const physicalCount = state.results.reduce((total, row) => total + (row.files || []).length, 0);
-      if (physicalCount !== inputs.length || state.results.some((row) => !(row.files || []).length)) {
-        throw new Error("A conferência de origem falhou: um resultado não corresponde exatamente aos arquivos selecionados.");
+      const logicalDuplicateCount = state.results.reduce((total, row) => total + (row.duplicateFiles || []).length, 0);
+      if (physicalCount + logicalDuplicateCount !== inputs.length || state.results.some((row) => !(row.files || []).length)) {
+        throw new Error("A conferência de origem falhou: um resultado não corresponde aos arquivos selecionados nem às duplicatas registradas.");
       }
       if (missingFromList.length) {
         const logicalResults = await mapLarge(missingFromList, (entry, index) => {
@@ -2783,7 +2827,8 @@
       // altera decisão nenhuma e responde "não apurado" quando não há Apêndice.
       if (Apendice) Apendice.apply(state.results, null);
       const physicalCount = state.results.reduce((total, row) => total + (row.files || []).length, 0);
-      if (physicalCount !== analysisFiles.length) throw new Error("A conferência de origem falhou: a quantidade de arquivos físicos não foi preservada.");
+      const logicalDuplicateCount = state.results.reduce((total, row) => total + (row.duplicateFiles || []).length, 0);
+      if (physicalCount + logicalDuplicateCount !== analysisFiles.length) throw new Error("A conferência de origem falhou: a quantidade de arquivos físicos e duplicatas registradas não confere.");
 
       refreshPendingAllocationBundle();
       state.selected.clear();
@@ -4744,20 +4789,25 @@
     const names = new Set();
     const duplicates = [];
     const errors = [];
+    const warnings = [...(guard.warnings || [])];
     state.results.filter((row, index) => state.selected.has(index) && rowCanBeSelected(row)).forEach((row) => {
       (row.files || []).forEach((entry) => {
         const check = C.validateFinalFileName(entry.finalName, entry.name, row.document, row.revision, row.sheet);
         const finalName = check.expected;
-        if (!check.valid) errors.push(`${row.document}: ${check.errors.join(" ")}`);
+        if (!check.valid) warnings.push(`${row.document}: nome/codificação fora do padrão; corrigido automaticamente para ${finalName}. ${check.errors.join(" ")}`);
         if (safeArchiveName(finalName) !== finalName) errors.push(`${row.document}: o nome final contém caractere incompatível com o ZIP.`);
         const outputKey = C.norm(finalName);
-        if (names.has(outputKey)) duplicates.push(finalName);
+        if (names.has(outputKey)) {
+          duplicates.push(finalName);
+          warnings.push(`${row.document}: arquivo duplicado ${finalName} ignorado; somente uma cópia seguirá para a saída.`);
+          return;
+        }
         names.add(outputKey);
         entries.push({ ...entry, finalName });
       });
     });
     guard.errors.forEach((message) => { if (!errors.includes(message)) errors.push(message); });
-    return { entries, duplicates, errors, warnings: guard.warnings || [] };
+    return { entries, duplicates, errors, warnings };
   }
 
   async function exportZip() {
