@@ -1313,6 +1313,26 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
 }
 
+check("número da eGRDT não vira texto vertical quando o painel fica estreito", () => {
+  // O cabeçalho do detalhe punha título e botões na mesma linha sem permitir
+  // quebra. Os botões não encolhem, então o título era espremido até zero de
+  // largura e, com overflow-wrap: anywhere, o número saía um caractere por
+  // linha. Medido na reprodução: a 620px de contêiner o h3 ficava com 19px e
+  // 25 linhas; abaixo de 560px, com largura zero.
+  //
+  // Empilhar por @media não resolve: a consulta olha a janela, e o painel pode
+  // estar estreito com a janela larga — que é o caso das duas colunas do
+  // histórico. A quebra tem de vir do próprio flex.
+  const css = fs.readFileSync(path.join(root, "grcon-ui.css"), "utf8");
+  const cabecalho = css.slice(css.indexOf('html[data-app="GRCON"] .history-detail > header {'));
+  const bloco = cabecalho.slice(0, cabecalho.indexOf("}") + 1);
+  assert.match(bloco, /flex-wrap:\s*wrap/, "o cabeçalho do detalhe precisa poder quebrar em linhas");
+
+  // O chão do título é o que manda os botões para baixo antes de comprimir.
+  assert.match(css, /\.history-detail-title \{[^}]*flex:\s*1 1 \d+rem/,
+    "o título precisa de base mínima para não ser espremido a zero");
+});
+
 check("interface do navegador tem camada responsiva final e cacheada", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
@@ -2089,4 +2109,4 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
 });
 
-console.log(JSON.stringify({ version: "5.33.10", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.33.11", passed: true, checks: checks.length, names: checks }, null, 2));

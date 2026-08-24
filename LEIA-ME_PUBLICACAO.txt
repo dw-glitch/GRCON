@@ -1,4 +1,4 @@
-GRCON 5.33.10 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.33.11 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
 - Nome de arquivo com sufixo/revisão divergente da LD (ex.: _RIR) gera somente alerta; o GRCON usa a revisão controlada e corrige o nome final automaticamente.

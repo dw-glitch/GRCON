@@ -990,21 +990,31 @@
     white-space: nowrap;
   }
 
+  /* O cabeçalho quebra em linhas antes de espremer o título.
+     Sem isto os botões, que não encolhem, empurravam o título até zero de
+     largura e o número da eGRDT saía um caractere por linha — texto vertical.
+     O empilhamento por @media não resolvia: ele olha a janela, e o painel pode
+     estar estreito com a janela larga, que é justamente o caso das duas
+     colunas do histórico. */
   html[data-app="GRCON"] .history-detail > header {
     min-width: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    flex-wrap: wrap;
   }
 
-  html[data-app="GRCON"] .history-detail-title { min-width: 0; }
+  /* O 18rem é o chão do título: abaixo disso os botões vão para a linha de
+     baixo em vez de continuar comprimindo o número. */
+  html[data-app="GRCON"] .history-detail-title { min-width: 0; flex: 1 1 18rem; }
   html[data-app="GRCON"] .history-detail-title h3 { max-width: 100%; overflow-wrap: anywhere; }
 
   html[data-app="GRCON"] .history-detail-actions {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: .75rem;
   }
 
