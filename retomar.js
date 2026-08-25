@@ -595,8 +595,20 @@
     });
     const start = document.getElementById("dashboard-date-start");
     const end = document.getElementById("dashboard-date-end");
-    start?.addEventListener("change", () => { dashboardStart = start.value; dashboardRange = "custom"; renderDashboard(); });
-    end?.addEventListener("change", () => { dashboardEnd = end.value; dashboardRange = "custom"; renderDashboard(); });
+
+    // Atualização imediata do Dashboard ao escolher ou digitar uma data válida.
+    // O evento input cobre a seleção no calendário e a digitação sem exigir que
+    // o usuário saia do campo; change fica como reforço de compatibilidade.
+    const syncCustomDates = () => {
+      dashboardStart = String(start?.value || "").trim();
+      dashboardEnd = String(end?.value || "").trim();
+      dashboardRange = "custom";
+      renderDashboard();
+    };
+    [start, end].filter(Boolean).forEach((input) => {
+      input.addEventListener("input", syncCustomDates);
+      input.addEventListener("change", syncCustomDates);
+    });
     document.getElementById("dashboard-present")?.addEventListener("click", () => {
       const active = document.body.classList.toggle("dashboard-presenting");
       const button = document.getElementById("dashboard-present");
