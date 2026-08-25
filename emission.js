@@ -34,6 +34,14 @@
     return norm(document).includes("98V");
   }
 
+  function has955Code(document) {
+    // O 955 precisa ser um grupo completo da codificação oficial, como em
+    // PR-5290.00-22313-955-C1O-028. Evita confundir 955 com parte de título,
+    // revisão ou outro número maior.
+    const groups = norm(document).split("-");
+    return groups.includes("955");
+  }
+
   function isEtPlanningRow(row) {
     const item = row || {};
     const sheet = norm(item.sheet);
@@ -100,10 +108,11 @@
   /**
    * A N-1710 segue composição física obrigatória de dois arquivos por código.
    * Regra geral: 1 nativo + 1 PDF. Exceções operacionais:
+   * - códigos com o grupo 955: somente 1 PDF;
    * - LI e MC: 1 Excel + 1 PDF;
    * - qualquer código que contenha 98V: 1 Excel + 1 PDF, independentemente do
    *   tipo documental.
-   * Os dois recebem o mesmo código, revisão e _0001_<revisão>.
+   * Nos pares, os dois recebem o mesmo código, revisão e _0001_<revisão>.
    */
   function validateN1710Pair(row, sources) {
     const originalList = Array.isArray(sources) ? [...sources] : [];
@@ -123,9 +132,12 @@
     if (!applies) return { applies: false, valid: true, sources: list, errors: [], ignoredDuplicates };
 
     const documentType = n1710DocumentType(row && row.document);
+    const pdfOnlyBy955 = has955Code(row && row.document);
     const excelPairByType = documentType === "LI" || documentType === "MC";
     const excelPairBy98V = has98VCode(row && row.document);
-    const requiresExcelPair = excelPairByType || excelPairBy98V;
+    // A regra 955 é mais específica: nesses códigos só o PDF segue para a eGRDT,
+    // mesmo que o tipo documental normalmente exigisse Excel + PDF.
+    const requiresExcelPair = !pdfOnlyBy955 && (excelPairByType || excelPairBy98V);
     const excelPairLabel = excelPairBy98V && !excelPairByType
       ? "Documento com codificação 98V da N-1710"
       : `${documentType} da N-1710`;
@@ -138,10 +150,20 @@
     const invalidExcelPairNatives = requiresExcelPair
       ? natives.filter((source) => !EXCEL_EXTENSIONS.has(extensionOf(source && (source.name || source.finalName))))
       : [];
+    const nonPdfs = pdfOnlyBy955
+      ? list.filter((source) => {
+          const extension = extensionOf(source && (source.name || source.finalName));
+          return Boolean(extension && extension !== "pdf");
+        })
+      : [];
     const withoutExtension = list.filter((source) => !extensionOf(source && (source.name || source.finalName)));
     const errors = [];
 
-    if (requiresExcelPair) {
+    if (pdfOnlyBy955) {
+      if (list.length !== 1) errors.push("Documento N-1710 com codificação 955 exige exatamente 1 arquivo por código: somente o PDF.");
+      if (pdfs.length !== 1) errors.push("Documento N-1710 com codificação 955 exige exatamente 1 PDF por código.");
+      if (nonPdfs.length) errors.push("Documento N-1710 com codificação 955 aceita para a eGRDT somente o arquivo PDF.");
+    } else if (requiresExcelPair) {
       if (list.length !== 2) errors.push(`${excelPairLabel} exige exatamente 2 arquivos por código: 1 Excel + 1 PDF.`);
       if (pdfs.length !== 1) errors.push(`${excelPairLabel} exige exatamente 1 PDF por código.`);
       if (excels.length !== 1) errors.push(`${excelPairLabel} exige exatamente 1 arquivo Excel por código (.xls, .xlsx, .xlsm ou .xlsb).`);
@@ -151,21 +173,28 @@
       if (pdfs.length !== 1) errors.push("N-1710 exige exatamente 1 PDF por código.");
       if (natives.length !== 1) errors.push("N-1710 exige exatamente 1 arquivo nativo por código.");
     }
-    if (withoutExtension.length) errors.push("N-1710 exige extensão explícita nos dois arquivos.");
+    if (withoutExtension.length) errors.push(pdfOnlyBy955
+      ? "Documento N-1710 com codificação 955 exige extensão explícita no arquivo PDF."
+      : "N-1710 exige extensão explícita nos dois arquivos.");
     if (list.some((source) => source && (source.virtual || !source.file))) {
-      errors.push(requiresExcelPair
-        ? `${excelPairLabel} exige o par físico completo: 1 Excel + 1 PDF.`
-        : "N-1710 exige o par físico completo; não é permitido gerar somente pela relação sem o arquivo nativo e o PDF.");
+      errors.push(pdfOnlyBy955
+        ? "Documento N-1710 com codificação 955 exige o PDF físico; não é permitido gerar somente pela relação."
+        : requiresExcelPair
+          ? `${excelPairLabel} exige o par físico completo: 1 Excel + 1 PDF.`
+          : "N-1710 exige o par físico completo; não é permitido gerar somente pela relação sem o arquivo nativo e o PDF.");
     }
 
-    const orderedSources = requiresExcelPair
-      ? [...excels, ...pdfs, ...invalidExcelPairNatives, ...withoutExtension]
-      : [...natives, ...pdfs, ...withoutExtension];
+    const orderedSources = pdfOnlyBy955
+      ? [...pdfs, ...nonPdfs, ...withoutExtension]
+      : requiresExcelPair
+        ? [...excels, ...pdfs, ...invalidExcelPairNatives, ...withoutExtension]
+        : [...natives, ...pdfs, ...withoutExtension];
 
     return {
       applies: true,
       valid: errors.length === 0,
       documentType,
+      pdfOnlyBy955,
       requiresExcelPair,
       excelPairBy98V,
       // A ordem da eGRDT mantém o arquivo editável/nativo primeiro e o PDF depois.
