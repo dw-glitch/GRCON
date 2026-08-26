@@ -120,7 +120,7 @@
     manualForceInclude: new Set(), // índices incluídos manualmente pelo operador (mesmo sem decisão READY)
   };
 
-  const PACKAGE_EXTENSION = /\.(pdf|doc|docx|xls|xlsx|xlsm|xlsb|dwg|dgn|ppt|pptx)$/i;
+  const PACKAGE_EXTENSION = /\.(pdf|doc|docx|txt|xls|xlsx|xlsm|xlsb|dwg|dgn|ppt|pptx)$/i;
   const $ = (selector) => document.querySelector(selector);
 
   const EGRDT_LEGACY_SEQUENCE_KEY = "grcon.egrdt.sequence.v3";
