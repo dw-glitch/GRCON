@@ -18,6 +18,10 @@
     realtimePollTimer: 0,
     realtimeRetryTimer: 0,
     realtimeGiveUpTimer: 0,
+    realtimeRetryLevel: 0,
+    realtimeNextRetryAt: 0,
+    realtimeLastFailureReason: "",
+    realtimeAttemptId: 0,
     // "parado" | "conectando" | "ativo" | "indisponivel"
     realtimeStatus: "parado",
     activationKey: "",
@@ -1300,14 +1304,22 @@
   // Quando o tempo real não se estabelece, o app não pode ficar sem sincronizar:
   // passa a buscar novidades por tempo, que é o que o canal faria de qualquer forma.
   //
-  // A busca só roda com a aba à vista. Antes ela seguia de 60 em 60s mesmo com o
-  // GRCON esquecido em segundo plano o dia inteiro — consulta ao banco sem
-  // ninguém para ler o resultado, e o projeto é de plano gratuito.
+  // A busca só roda com a aba à vista. O Realtime é um acelerador; o histórico
+  // compartilhado não depende dele para permanecer consistente.
   const REALTIME_POLL_MS = 45000;
-  const REALTIME_RETRY_MS = 300000;
+  const REALTIME_CONNECT_TIMEOUT_MS = 12000;
+  const REALTIME_RETRY_STEPS_MS = Object.freeze([
+    5 * 60 * 1000,
+    10 * 60 * 1000,
+    15 * 60 * 1000,
+    30 * 60 * 1000,
+  ]);
 
   function startRealtimeFallbackPolling() {
     if (state.realtimePollTimer) return;
+    // Recupera qualquer alteração que possa ter acontecido justamente durante
+    // a queda do socket, sem esperar o primeiro intervalo de 45 segundos.
+    if (!document.hidden && state.online && state.membership) scheduleSync();
     state.realtimePollTimer = window.setInterval(() => {
       if (document.hidden) return;
       if (state.online && state.membership) scheduleSync();
@@ -1320,37 +1332,42 @@
     state.realtimePollTimer = 0;
   }
 
-  // Desistir do tempo real era definitivo: o resto da sessão ficava só na busca
-  // por tempo, mesmo que a rede voltasse ao normal um minuto depois. Agora o app
-  // tenta de novo de tempos em tempos, e também assim que a aba volta à frente.
-  const REALTIME_GIVEUP_MS = 20000;
-
-  function scheduleRealtimeGiveUp(motivo) {
-    if (state.realtimeGiveUpTimer) return;
-    state.realtimeGiveUpTimer = window.setTimeout(() => {
-      state.realtimeGiveUpTimer = 0;
-      if (state.realtimeStatus === "ativo") return;
-      console.warn(`GRCON Cloud: tempo real indisponível (${motivo}); sincronizando periodicamente.`);
-      dropRealtime();
-      setRealtimeStatus("indisponivel");
-      scheduleRealtimeRetry();
-    }, REALTIME_GIVEUP_MS);
-  }
-
   function clearRealtimeGiveUp() {
     if (!state.realtimeGiveUpTimer) return;
     window.clearTimeout(state.realtimeGiveUpTimer);
     state.realtimeGiveUpTimer = 0;
   }
 
-  function scheduleRealtimeRetry() {
+  function clearRealtimeRetry() {
+    if (state.realtimeRetryTimer) window.clearTimeout(state.realtimeRetryTimer);
+    state.realtimeRetryTimer = 0;
+    state.realtimeNextRetryAt = 0;
+  }
+
+  function realtimeRetryDelay() {
+    const index = Math.min(
+      Math.max(0, Number(state.realtimeRetryLevel) || 0),
+      REALTIME_RETRY_STEPS_MS.length - 1
+    );
+    return REALTIME_RETRY_STEPS_MS[index];
+  }
+
+  function formatRetryDelay(milliseconds) {
+    const minutes = Math.max(1, Math.round(Number(milliseconds || 0) / 60000));
+    return minutes === 1 ? "1 minuto" : `${minutes} minutos`;
+  }
+
+  function scheduleRealtimeRetry(delayOverride) {
+    if (!state.online || !state.membership || state.realtimeStatus === "ativo") return;
     if (state.realtimeRetryTimer) return;
+    const delay = Math.max(1000, Number(delayOverride) || realtimeRetryDelay());
+    state.realtimeNextRetryAt = Date.now() + delay;
     state.realtimeRetryTimer = window.setTimeout(() => {
       state.realtimeRetryTimer = 0;
-      if (state.realtimeStatus === "ativo") return;
-      state.realtimeFailures = 0;
-      subscribeRealtime();
-    }, REALTIME_RETRY_MS);
+      state.realtimeNextRetryAt = 0;
+      if (!state.online || !state.membership || state.realtimeStatus === "ativo") return;
+      subscribeRealtime({ force: true });
+    }, delay);
   }
 
   function setRealtimeStatus(status) {
@@ -1360,27 +1377,92 @@
     updateMembersOnlineStatus();
   }
 
-  function dropRealtime() {
+  function dropRealtime(options) {
+    const settings = options || {};
     clearRealtimeGiveUp();
-    if (state.realtime) state.client?.removeChannel?.(state.realtime);
+
+    // Zera as referências ANTES de removeChannel. O Supabase pode responder ao
+    // unsubscribe com CLOSED; assim esse callback antigo já nasce obsoleto e
+    // não abre outro ciclo de falha.
+    const channel = state.realtime;
     state.realtime = null;
     state.realtimeTopic = "";
     state.onlineUserIds = new Set();
+
+    if (channel) {
+      try {
+        const removal = state.client?.removeChannel?.(channel);
+        if (removal && typeof removal.catch === "function") removal.catch(() => {});
+      } catch (_) {
+        // O canal já pode ter sido fechado pelo próprio transporte.
+      }
+    }
+    if (!settings.keepRetry) clearRealtimeRetry();
   }
 
-  function subscribeRealtime() {
-    if (!state.online || !state.client || !state.membership?.workspace_id) return;
-    const topic = `grcon-history-${state.membership.workspace_id}`;
-    // Já inscrito neste mesmo workspace: não derruba e recria o canal. Fazer isso
-    // a cada ativação deixava o socket em ciclo de reconexão sem fim.
-    if (state.realtime && state.realtimeTopic === topic) return;
+  function markRealtimeUnavailable(reason, channel, attemptId) {
+    // Ignora CHANNEL_ERROR/CLOSED atrasados de um canal que já foi descartado.
+    if (attemptId !== state.realtimeAttemptId || state.realtime !== channel) return;
+
+    state.realtimeFailures += 1;
+    state.realtimeLastFailureReason = String(reason || "falha de conexão");
+    startRealtimeFallbackPolling();
+
+    const retryDelay = realtimeRetryDelay();
     dropRealtime();
+    setRealtimeStatus("indisponivel");
+
+    // Uma única mensagem por tentativa. Os erros brutos do navegador podem
+    // continuar mostrando a primeira falha do WebSocket, mas o GRCON não deixa
+    // o supabase-js insistir no mesmo canal e multiplicar o ruído.
+    console.info(
+      `GRCON Cloud: Realtime indisponível (${state.realtimeLastFailureReason}). `
+      + `Fallback periódico ativo; nova tentativa em ${formatRetryDelay(retryDelay)}.`
+    );
+
+    state.realtimeRetryLevel = Math.min(
+      state.realtimeRetryLevel + 1,
+      REALTIME_RETRY_STEPS_MS.length - 1
+    );
+    scheduleRealtimeRetry(retryDelay);
+  }
+
+  function subscribeRealtime(options) {
+    const settings = options || {};
+    if (!state.online || !state.client || !state.membership?.workspace_id) return;
+
+    // Uma rede corporativa que bloqueia WebSocket não deve ser testada de novo
+    // só porque o usuário alternou de aba. O cooldown é respeitado; online após
+    // uma queda real de rede pode usar force para testar imediatamente.
+    if (!settings.force
+        && state.realtimeStatus === "indisponivel"
+        && state.realtimeNextRetryAt > Date.now()) {
+      startRealtimeFallbackPolling();
+      return;
+    }
+
+    const topic = `grcon-history-${state.membership.workspace_id}`;
+    if (state.realtime && state.realtimeTopic === topic) return;
+
+    clearRealtimeRetry();
+    dropRealtime({ keepRetry: true });
     setRealtimeStatus("conectando");
     state.realtimeTopic = topic;
+    const attemptId = ++state.realtimeAttemptId;
     let timer = 0;
+
     const channel = state.client.channel(topic, {
       config: { presence: { key: state.session?.user?.id || undefined } },
     });
+    state.realtime = channel;
+
+    // Também cobre o caso em que o transporte falha sem entregar TIMED_OUT ao
+    // callback. Não deixamos o app preso indefinidamente em "conectando".
+    state.realtimeGiveUpTimer = window.setTimeout(() => {
+      state.realtimeGiveUpTimer = 0;
+      markRealtimeUnavailable("tempo limite de conexão", channel, attemptId);
+    }, REALTIME_CONNECT_TIMEOUT_MS);
+
     channel
       .on("postgres_changes", {
         event: "*",
@@ -1392,41 +1474,43 @@
         timer = window.setTimeout(scheduleSync, 450);
       })
       .on("presence", { event: "sync" }, () => {
+        if (attemptId !== state.realtimeAttemptId || state.realtime !== channel) return;
         state.onlineUserIds = new Set(Object.keys(channel.presenceState()));
         updateAccountMenu();
         updateMembersOnlineStatus();
       })
       .subscribe((status) => {
+        if (attemptId !== state.realtimeAttemptId || state.realtime !== channel) return;
+
         if (status === "SUBSCRIBED") {
           state.realtimeFailures = 0;
+          state.realtimeRetryLevel = 0;
+          state.realtimeNextRetryAt = 0;
+          state.realtimeLastFailureReason = "";
           clearRealtimeGiveUp();
+          clearRealtimeRetry();
           stopRealtimeFallbackPolling();
           setRealtimeStatus("ativo");
           if (state.session?.user?.id) {
-            channel.track({ user_id: state.session.user.id, online_at: new Date().toISOString() });
+            try {
+              const tracking = channel.track({
+                user_id: state.session.user.id,
+                online_at: new Date().toISOString(),
+              });
+              if (tracking && typeof tracking.catch === "function") tracking.catch(() => {});
+            } catch (_) {
+              // Presença é informativa e nunca deve derrubar a sincronização.
+            }
           }
           return;
         }
+
         if (!["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) return;
-        // Antes nada tratava esses estados: o cliente ficava reconectando de
-        // 10 em 10s indefinidamente, enchendo o console de erro. Depois de
-        // algumas tentativas, desiste do tempo real e sincroniza por tempo.
-        //
-        // A busca por tempo começa já na primeira falha. Antes ela só entrava na
-        // quarta: durante quase um minuto o app não tinha nem tempo real nem
-        // busca periódica, e uma eGRDT gerada por outra pessoa nesse intervalo
-        // simplesmente não aparecia.
-        state.realtimeFailures += 1;
-        startRealtimeFallbackPolling();
-        // Desistir por CONTAGEM de falhas não funcionava no caso mais comum:
-        // quando a rede bloqueia WebSocket, o socket nunca abre e o supabase-js
-        // avisa TIMED_OUT uma única vez. O contador parava em 1, a condição
-        // nunca era atingida e o app ficava para sempre em "conectando", sem
-        // dizer nada e sem tentar de novo. Agora quem decide é o relógio: se em
-        // 20s o canal não entrou no ar, considera-se indisponível.
-        scheduleRealtimeGiveUp(status);
+        // A primeira falha encerra ESTA tentativa. Esperar o cliente interno
+        // reconectar várias vezes é justamente o que gerava dezenas de erros
+        // WebSocket no console quando a rede corporativa bloqueava o protocolo.
+        markRealtimeUnavailable(status, channel, attemptId);
       });
-    state.realtime = channel;
   }
 
   async function activateSession(session) {
@@ -1504,6 +1588,9 @@
     dropRealtime();
     stopRealtimeFallbackPolling();
     state.realtimeFailures = 0;
+    state.realtimeRetryLevel = 0;
+    state.realtimeNextRetryAt = 0;
+    state.realtimeLastFailureReason = "";
     $("#grcon-cloud-account")?.remove();
     showLogin();
   }
@@ -1524,32 +1611,36 @@
       state.online = true;
       updateAccountMenu();
       if (state.membership) {
-        subscribeRealtime();
+        // Uma mudança real de offline -> online merece um teste imediato, porque
+        // a rota/rede pode ter mudado. Isso também reinicia o backoff anterior.
+        state.realtimeRetryLevel = 0;
+        state.realtimeNextRetryAt = 0;
+        subscribeRealtime({ force: true });
         scheduleSync();
       }
     });
     window.addEventListener("offline", () => {
       state.online = false;
-      // Descarta o canal ao ficar offline: sem isto, a verificação de "já
-      // inscrito" faria o evento "online" não reinscrever, deixando um canal
-      // morto e o app sem receber atualizações.
+      // Descarta timers e canal enquanto não há rede. Manter polling ativo
+      // offline só acordaria o navegador sem poder executar nenhuma consulta.
       dropRealtime();
+      stopRealtimeFallbackPolling();
       state.realtimeFailures = 0;
+      state.realtimeRetryLevel = 0;
+      state.realtimeNextRetryAt = 0;
+      state.realtimeLastFailureReason = "";
       setRealtimeStatus("parado");
       updateAccountMenu();
       setSyncLabel("Offline · alterações ficam neste navegador", "warn");
       updateHistoryClearControl();
     });
-    // Voltar para a aba é o melhor momento para recuperar o atraso: busca o que
-    // apareceu enquanto ela estava escondida e tenta o tempo real de novo, sem
-    // esperar os 5 minutos da retentativa periódica.
+    // Ao voltar para a aba, sempre atualiza o histórico pelo caminho seguro.
+    // O Realtime só é testado se o cooldown já terminou; alternar de aba não
+    // deve furar o circuito e criar outra sequência de WebSockets bloqueados.
     document.addEventListener("visibilitychange", () => {
       if (document.hidden || !state.online || !state.membership) return;
       scheduleSync();
-      if (state.realtimeStatus === "indisponivel") {
-        state.realtimeFailures = 0;
-        subscribeRealtime();
-      }
+      if (state.realtimeStatus === "indisponivel") subscribeRealtime();
     });
   }
 
