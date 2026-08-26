@@ -22,6 +22,9 @@
     realtimeNextRetryAt: 0,
     realtimeLastFailureReason: "",
     realtimeAttemptId: 0,
+    realtimeCircuitOpenUntil: 0,
+    historyFullSyncDone: false,
+    historySyncSince: "",
     // "parado" | "conectando" | "ativo" | "indisponivel"
     realtimeStatus: "parado",
     activationKey: "",
@@ -1110,6 +1113,63 @@
     return rows;
   }
 
+  async function fetchHistoryChanges(columns, since) {
+    const rows = [];
+    const pageSize = 500;
+    for (let from = 0; ; from += pageSize) {
+      let query = state.client.from("grcon_history")
+        .select(columns)
+        .eq("workspace_id", state.membership.workspace_id);
+      if (since) query = query.gte("updated_at", since);
+      const response = await query
+        .order("updated_at", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (response.error) throw response.error;
+      rows.push(...(response.data || []));
+      if ((response.data || []).length < pageSize) break;
+    }
+    return rows;
+  }
+
+  function newestUpdatedAt(rows, fallback) {
+    return (rows || []).reduce((latest, row) => {
+      const value = String(row && row.updated_at || "");
+      return value && (!latest || value > latest) ? value : latest;
+    }, String(fallback || ""));
+  }
+
+  async function loadCreatorProfiles(rows) {
+    const creatorIds = [...new Set((rows || []).map((row) => row && row.created_by).filter(Boolean))]
+      .filter((id) => !state.profiles.has(id));
+    if (!creatorIds.length) return;
+    const profiles = await state.client.from("grcon_profiles").select("id, email, display_name").in("id", creatorIds);
+    if (!profiles.error) (profiles.data || []).forEach((profile) => state.profiles.set(profile.id, profile));
+  }
+
+  function cloudHistoryRecord(row) {
+    const profile = state.profiles.get(row.created_by) || {};
+    return History.cleanRecord({
+      ...(row.payload || {}),
+      id: row.client_record_id,
+      clientRecordId: row.client_record_id,
+      egrdtNumber: row.egrdt_number,
+      generatedAt: row.generated_at,
+      outputType: row.output_type,
+      documentCount: row.document_count,
+      fileCount: row.file_count,
+      allocations: Array.isArray(row.allocations) ? row.allocations : [],
+      cloudId: row.id,
+      workspaceId: state.membership.workspace_id,
+      createdBy: row.created_by,
+      createdByEmail: profile.email || "",
+      createdByName: profile.display_name || "",
+      syncedAt: row.updated_at,
+      cloudUpdatedAt: row.updated_at,
+      localUpdatedAt: row.updated_at,
+      syncState: "synced",
+    });
+  }
+
   async function pushLocalHistory(records) {
     const pending = (records || []).filter((record) => record?.syncState !== "synced"
       && (!record.workspaceId || record.workspaceId === state.membership?.workspace_id));
@@ -1168,45 +1228,64 @@
     }
   }
 
-  async function pullCloudHistory() {
+  async function pullCloudHistory(options) {
     if (!state.online || !state.membership?.workspace_id || !History) return { records: [], removed: 0 };
+    const settings = options || {};
     setSyncLabel("Atualizando histórico…", "info");
     try {
-      const rows = await fetchHistoryRows("id, client_record_id, egrdt_number, generated_at, output_type, document_count, file_count, allocations, payload, created_by, updated_at");
-      const creatorIds = [...new Set(rows.map((row) => row.created_by).filter(Boolean))];
-      if (creatorIds.length) {
-        const profiles = await state.client.from("grcon_profiles").select("id, email, display_name").in("id", creatorIds);
-        if (!profiles.error) (profiles.data || []).forEach((profile) => state.profiles.set(profile.id, profile));
+      const columns = "id, client_record_id, egrdt_number, generated_at, output_type, document_count, file_count, allocations, payload, created_by, updated_at, deleted_at";
+      const incremental = Boolean(state.historyFullSyncDone && state.historySyncSince && !settings.forceFull);
+
+      if (!incremental) {
+        const rows = await fetchHistoryRows(columns);
+        await loadCreatorProfiles(rows);
+        const records = rows.map(cloudHistoryRecord);
+        const reconciled = History.replaceWorkspaceSnapshot(records, state.membership.workspace_id);
+        if (reconciled.error) throw new Error(reconciled.error);
+        state.historyFullSyncDone = true;
+        state.historySyncSince = newestUpdatedAt(rows, state.historySyncSince);
+        window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { cloudPull: true, fullSync: true, records: reconciled.records, removed: reconciled.removed } }));
+        return { records: reconciled.records, removed: reconciled.removed };
       }
-      const records = rows.map((row) => {
-        const profile = state.profiles.get(row.created_by) || {};
-        return History.cleanRecord({
-          ...(row.payload || {}),
-          id: row.client_record_id,
-          clientRecordId: row.client_record_id,
-          egrdtNumber: row.egrdt_number,
-          generatedAt: row.generated_at,
-          outputType: row.output_type,
-          documentCount: row.document_count,
-          fileCount: row.file_count,
-          allocations: Array.isArray(row.allocations) ? row.allocations : [],
-          cloudId: row.id,
-          workspaceId: state.membership.workspace_id,
-          createdBy: row.created_by,
-          createdByEmail: profile.email || "",
-          createdByName: profile.display_name || "",
-          syncedAt: row.updated_at,
-          cloudUpdatedAt: row.updated_at,
-          localUpdatedAt: row.updated_at,
-          syncState: "synced",
-        });
-      });
-      const reconciled = History.replaceWorkspaceSnapshot(records, state.membership.workspace_id);
-      if (reconciled.error) throw new Error(reconciled.error);
-      window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { cloudPull: true, records: reconciled.records, removed: reconciled.removed } }));
-      return { records: reconciled.records, removed: reconciled.removed };
+
+      // Depois do primeiro espelho completo, o polling de 45 s busca apenas
+      // linhas alteradas desde a última resposta. Isso impede que o GRCON baixe
+      // todo o histórico repetidamente quando o WebSocket é bloqueado pela rede.
+      const rows = await fetchHistoryChanges(columns, state.historySyncSince);
+      state.historySyncSince = newestUpdatedAt(rows, state.historySyncSince);
+      if (!rows.length) return { records: History.read(), removed: 0 };
+
+      const activeRows = rows.filter((row) => !row.deleted_at);
+      const deletedRows = rows.filter((row) => Boolean(row.deleted_at));
+      await loadCreatorProfiles(activeRows);
+      if (activeRows.length) {
+        const saved = History.saveMany(activeRows.map(cloudHistoryRecord));
+        if (saved.error) throw new Error(saved.error);
+      }
+
+      let removed = 0;
+      if (deletedRows.length && typeof History.deleteOne === "function") {
+        for (const row of deletedRows) {
+          const local = History.read().find((record) =>
+            record.cloudId === row.id || record.clientRecordId === row.client_record_id || record.id === row.client_record_id
+          );
+          // Uma criação exclusivamente local, ainda sem cloudId, não deve ser
+          // apagada por um tombstone antigo com o mesmo texto de identificação.
+          if (!local || (local.syncState === "pending" && !local.cloudId)) continue;
+          const result = History.deleteOne(local.id);
+          if (result.deleted) removed += 1;
+        }
+      }
+
+      const records = History.read();
+      window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { cloudPull: true, incremental: true, records, removed } }));
+      return { records, removed };
     } catch (error) {
       console.warn("GRCON Cloud: leitura compartilhada indisponível", error);
+      // Se uma consulta incremental falhar por mudança de schema/política, a
+      // próxima tentativa volta ao espelho completo em vez de ficar presa.
+      state.historyFullSyncDone = false;
+      state.historySyncSince = "";
       throw error;
     }
   }
@@ -1308,6 +1387,8 @@
   // compartilhado não depende dele para permanecer consistente.
   const REALTIME_POLL_MS = 45000;
   const REALTIME_CONNECT_TIMEOUT_MS = 12000;
+  const REALTIME_CIRCUIT_FAILURE_THRESHOLD = 2;
+  const REALTIME_CIRCUIT_OPEN_MS = 60 * 60 * 1000;
   const REALTIME_RETRY_STEPS_MS = Object.freeze([
     5 * 60 * 1000,
     10 * 60 * 1000,
@@ -1397,6 +1478,11 @@
         // O canal já pode ter sido fechado pelo próprio transporte.
       }
     }
+    // removeChannel encerra o canal, mas o socket Phoenix do supabase-js pode
+    // continuar tentando reconectar sozinho. Como o GRCON usa um único canal,
+    // desligamos também o transporte e só o reabrimos na próxima tentativa
+    // controlada pelo nosso circuit breaker.
+    try { state.client?.realtime?.disconnect?.(); } catch (_) { /* transporte já encerrado */ }
     if (!settings.keepRetry) clearRealtimeRetry();
   }
 
@@ -1408,16 +1494,21 @@
     state.realtimeLastFailureReason = String(reason || "falha de conexão");
     startRealtimeFallbackPolling();
 
-    const retryDelay = realtimeRetryDelay();
+    let retryDelay = realtimeRetryDelay();
+    const circuitOpened = state.realtimeFailures >= REALTIME_CIRCUIT_FAILURE_THRESHOLD;
+    if (circuitOpened) {
+      state.realtimeCircuitOpenUntil = Date.now() + REALTIME_CIRCUIT_OPEN_MS;
+      retryDelay = REALTIME_CIRCUIT_OPEN_MS;
+    }
     dropRealtime();
     setRealtimeStatus("indisponivel");
 
-    // Uma única mensagem por tentativa. Os erros brutos do navegador podem
-    // continuar mostrando a primeira falha do WebSocket, mas o GRCON não deixa
-    // o supabase-js insistir no mesmo canal e multiplicar o ruído.
+    // Duas tentativas consecutivas bastam para concluir que esta rede está
+    // bloqueando WebSocket. O histórico continua pelo HTTP incremental e o
+    // socket deixa de gerar erros repetidos durante uma hora.
     console.info(
       `GRCON Cloud: Realtime indisponível (${state.realtimeLastFailureReason}). `
-      + `Fallback periódico ativo; nova tentativa em ${formatRetryDelay(retryDelay)}.`
+      + `Fallback periódico ativo; ${circuitOpened ? "circuito WebSocket suspenso" : "nova tentativa"} em ${formatRetryDelay(retryDelay)}.`
     );
 
     state.realtimeRetryLevel = Math.min(
@@ -1432,8 +1523,12 @@
     if (!state.online || !state.client || !state.membership?.workspace_id) return;
 
     // Uma rede corporativa que bloqueia WebSocket não deve ser testada de novo
-    // só porque o usuário alternou de aba. O cooldown é respeitado; online após
-    // uma queda real de rede pode usar force para testar imediatamente.
+    // só porque o usuário alternou de aba. Após duas falhas, o circuito fica
+    // aberto por uma hora; uma mudança real offline -> online pode zerá-lo.
+    if (state.realtimeCircuitOpenUntil > Date.now()) {
+      startRealtimeFallbackPolling();
+      return;
+    }
     if (!settings.force
         && state.realtimeStatus === "indisponivel"
         && state.realtimeNextRetryAt > Date.now()) {
@@ -1487,6 +1582,7 @@
           state.realtimeRetryLevel = 0;
           state.realtimeNextRetryAt = 0;
           state.realtimeLastFailureReason = "";
+          state.realtimeCircuitOpenUntil = 0;
           clearRealtimeGiveUp();
           clearRealtimeRetry();
           stopRealtimeFallbackPolling();
@@ -1538,6 +1634,10 @@
       }
       $("#grcon-cloud-auth-retry").hidden = true;
       state.membership = membership;
+      // Uma nova ativação sempre começa com um espelho completo; só depois o
+      // polling passa para alterações incrementais.
+      state.historyFullSyncDone = false;
+      state.historySyncSince = "";
       storeMembership(membership);
       updateHistoryCopy();
       createAccountMenu();
@@ -1591,6 +1691,9 @@
     state.realtimeRetryLevel = 0;
     state.realtimeNextRetryAt = 0;
     state.realtimeLastFailureReason = "";
+    state.realtimeCircuitOpenUntil = 0;
+    state.historyFullSyncDone = false;
+    state.historySyncSince = "";
     $("#grcon-cloud-account")?.remove();
     showLogin();
   }
@@ -1615,6 +1718,7 @@
         // a rota/rede pode ter mudado. Isso também reinicia o backoff anterior.
         state.realtimeRetryLevel = 0;
         state.realtimeNextRetryAt = 0;
+        state.realtimeCircuitOpenUntil = 0;
         subscribeRealtime({ force: true });
         scheduleSync();
       }
@@ -1629,6 +1733,7 @@
       state.realtimeRetryLevel = 0;
       state.realtimeNextRetryAt = 0;
       state.realtimeLastFailureReason = "";
+      state.realtimeCircuitOpenUntil = 0;
       setRealtimeStatus("parado");
       updateAccountMenu();
       setSyncLabel("Offline · alterações ficam neste navegador", "warn");

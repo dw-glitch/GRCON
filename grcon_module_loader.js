@@ -15,6 +15,9 @@
     export: ["xlsx", "excel", "zip", "brand", "performance"],
     navigation: ["history_report.js", "history_app.js"],
     history: ["navigation"],
+    // O Dashboard é construído por retomar.js e já existe no carregamento inicial.
+    // Ele é uma view lógica, não um arquivo chamado /dashboard.
+    dashboard: [],
     "analysis-history": ["navigation", "analysis_history_report.js", "analysis_history_app.js"],
     "ld-posting": ["xlsx", "zip", "ld_posting_writer.js"],
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
@@ -24,6 +27,7 @@
 
   const moduleRequirements = {
     history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi"],
+    dashboard: ["GrconHistoryDashboard"],
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsUi"],
@@ -166,9 +170,15 @@
   }
 
   async function ensure(item) {
-    if (groups[item]) {
+    if (Object.prototype.hasOwnProperty.call(groups, item)) {
       for (const dependency of groups[item]) await ensure(dependency);
       return;
+    }
+    // Só caminhos de JavaScript podem chegar ao carregador de scripts. Antes,
+    // qualquer nome lógico desconhecido (ex.: "dashboard") virava uma URL e
+    // disparava várias tentativas 404 + erro de MIME no navegador.
+    if (!/\.(?:m?js)(?:[?#].*)?$/i.test(String(item || ""))) {
+      throw new Error(`Módulo desconhecido: ${item}. Atualize o GRCON e tente novamente.`);
     }
     await loadScript(item);
   }
@@ -178,6 +188,7 @@
       control: "grdt-module",
       "analysis-history": "analysis-history-module",
       history: "history-module",
+      dashboard: "dashboard-module",
       sigem: "sigem-module",
       requests: "requests-module",
     };
@@ -201,6 +212,7 @@
     requests: "Consultas",
     "analysis-history": "Histórico de análises",
     history: "Histórico de eGRDTs",
+    dashboard: "Dashboard de emissões",
     sigem: "Postagem SIGEM",
   };
 
@@ -220,6 +232,14 @@
     }
   }
 
+  function activateReadyModule(module) {
+    if (module === "dashboard") {
+      root.GrconHistoryDashboard?.activate?.();
+      return;
+    }
+    root.GrconHistoryUi?.activate?.(module);
+  }
+
   async function ensureModule(view) {
     const module = view || "control";
     if (module === "control") {
@@ -231,7 +251,7 @@
       // módulo já carregado só corria o activate() do history_app, que não
       // conhece todas as views — e a tela ficava em branco.
       directActivate(module);
-      root.GrconHistoryUi?.activate?.(module);
+      activateReadyModule(module);
       return;
     }
     if (moduleState.get(module) === "loading") return loading.get(`module:${module}`);
@@ -244,7 +264,7 @@
         await ensure(module);
         assertModuleReady(module);
         moduleState.set(module, "ready");
-        root.GrconHistoryUi?.activate?.(module);
+        activateReadyModule(module);
         root.dispatchEvent(new CustomEvent("grcon:module-ready", { detail: { module } }));
       } catch (error) {
         moduleState.set(module, "failed");
@@ -261,8 +281,13 @@
   }
 
   root.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll("[data-grcon-view]").forEach((button) => {
-      button.addEventListener("click", () => ensureModule(button.dataset.grconView).catch(() => {}));
+    // Delegação cobre também views criadas dinamicamente (Dashboard) e mantém
+    // um único ponto de navegação. O handler do próprio Dashboard pode coexistir:
+    // ensureModule reconhece a view e não tenta buscar um arquivo inexistente.
+    document.addEventListener("click", (event) => {
+      const button = event.target && event.target.closest ? event.target.closest("[data-grcon-view]") : null;
+      if (!button) return;
+      ensureModule(button.dataset.grconView).catch(() => {});
     });
   }, { once: true });
 
