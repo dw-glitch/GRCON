@@ -185,6 +185,16 @@
     }
   }
 
+  function currentDashboardPeriod() {
+    const startInput = document.getElementById("dashboard-date-start");
+    const endInput = document.getElementById("dashboard-date-end");
+    const start = String(startInput?.value || dashboardStart || "").trim();
+    const end = String(endInput?.value || dashboardEnd || "").trim();
+    dashboardStart = start;
+    dashboardEnd = end;
+    return { start, end };
+  }
+
   function filterRecordsByPeriod(records, startDate, endDate) {
     const start = String(startDate || "").trim();
     const end = String(endDate || "").trim();
@@ -552,7 +562,8 @@
 
   function renderDashboard() {
     if (!dashboardBuilt) return;
-    const records = filterRecordsByPeriod(rawHistoryRecords(), dashboardStart, dashboardEnd);
+    const periodSelection = currentDashboardPeriod();
+    const records = filterRecordsByPeriod(rawHistoryRecords(), periodSelection.start, periodSelection.end);
     const daily = buildDashboardDailyData(records);
     const totals = totalsFromDaily(daily);
     renderKpis(totals);
@@ -596,19 +607,27 @@
     const start = document.getElementById("dashboard-date-start");
     const end = document.getElementById("dashboard-date-end");
 
-    // Atualização imediata do Dashboard ao escolher ou digitar uma data válida.
-    // O evento input cobre a seleção no calendário e a digitação sem exigir que
-    // o usuário saia do campo; change fica como reforço de compatibilidade.
-    const syncCustomDates = () => {
-      dashboardStart = String(start?.value || "").trim();
-      dashboardEnd = String(end?.value || "").trim();
+    // Ao sair de um período rápido e escolher uma data manual, a intenção mais
+    // comum é ver aquele único dia. Por isso a primeira data escolhida é copiada
+    // para os dois campos. Depois disso, alterar o outro campo cria normalmente
+    // um intervalo personalizado.
+    const syncCustomDate = (changedInput, counterpart) => {
+      const value = String(changedInput?.value || "").trim();
+      if (value && dashboardRange !== "custom" && counterpart) counterpart.value = value;
       dashboardRange = "custom";
+      const periodSelection = currentDashboardPeriod();
+      dashboardStart = periodSelection.start;
+      dashboardEnd = periodSelection.end;
       renderDashboard();
     };
-    [start, end].filter(Boolean).forEach((input) => {
-      input.addEventListener("input", syncCustomDates);
-      input.addEventListener("change", syncCustomDates);
-    });
+    if (start) {
+      start.addEventListener("input", () => syncCustomDate(start, end));
+      start.addEventListener("change", () => syncCustomDate(start, end));
+    }
+    if (end) {
+      end.addEventListener("input", () => syncCustomDate(end, start));
+      end.addEventListener("change", () => syncCustomDate(end, start));
+    }
     document.getElementById("dashboard-present")?.addEventListener("click", () => {
       const active = document.body.classList.toggle("dashboard-presenting");
       const button = document.getElementById("dashboard-present");
@@ -718,7 +737,8 @@
     exporting = true;
     if (button) { button.disabled = true; button.textContent = "Gerando Excel…"; }
     try {
-      const records = filterRecordsByPeriod(rawHistoryRecords(), dashboardStart, dashboardEnd);
+      const periodSelection = currentDashboardPeriod();
+      const records = filterRecordsByPeriod(rawHistoryRecords(), periodSelection.start, periodSelection.end);
       const daily = buildDashboardDailyData(records);
       if (!daily.length) throw new Error("Não há emissões no período selecionado para exportar.");
       const documentRows = emittedDocuments(records);

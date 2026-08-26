@@ -68,29 +68,52 @@
   disableTitleAsEgrdtBlocker();
 
   /**
-   * A LD e a codificação ET podem registrar o propósito abreviado como CONC.
-   * A eGRDT, porém, aceita a descrição oficial "Conforme Construído".
-   * Normalizamos a abreviação antes da validação para evitar um bloqueio
-   * artificial por "PROPÓSITO fora da lista oficial".
+   * O título da eGRDT deve vir da LD. Ele não é bloqueante para a emissão, mas
+   * quando existe na linha técnica precisa ser preservado na saída. Algumas
+   * telas carregam row.egrdt antes de row.record; por isso recuperamos o valor
+   * também da linha controlada e das evidências já resolvidas pela triagem.
    */
-  function normalizeEgrdtPurpose(value, document, recordPurpose) {
+  function resolveEgrdtTitle(row) {
+    const item = row || {};
+    const candidates = [
+      item.egrdt && item.egrdt.title,
+      item.record && item.record.title,
+      item.title,
+      item.analysisEvidence && item.analysisEvidence.item && item.analysisEvidence.item.title,
+      ...((item.evidence || []).map((entry) => entry && entry.item && entry.item.title)),
+    ];
+    return candidates.map(text).find(Boolean) || "";
+  }
+
+  /**
+   * Propósito é um dado controlado da LD/eGRDT. Nunca deve ser inferido por um
+   * token do código (por exemplo, CONC dentro de um código ET), porque esse token
+   * pode representar outra classificação documental.
+   *
+   * Aqui apenas normalizamos contra a lista oficial quando o próprio valor da LD
+   * corresponde a uma opção válida. Se a LD trouxer outro texto, ele permanece
+   * explícito para a validação técnica em vez de ser adivinhado.
+   */
+  function resolveEgrdtPurpose(row) {
+    const item = row || {};
     const officialOptions = C && C.EGRDT_OPTIONS && Array.isArray(C.EGRDT_OPTIONS.purposes)
       ? C.EGRDT_OPTIONS.purposes
       : ["Para Compra", "Para Construção", "Conforme Construído", "Certificado",
           "Pendente Certificação", "Cancelado", "Emitido para Comentários",
           "Para Cancelamento", "Para Informação", "Para Liberação"];
+    const candidates = [
+      item.egrdt && item.egrdt.purpose,
+      item.record && item.record.purpose,
+      item.purpose,
+      item.analysisEvidence && item.analysisEvidence.item && item.analysisEvidence.item.purpose,
+      ...((item.evidence || []).map((entry) => entry && entry.item && entry.item.purpose)),
+    ].map(text).filter(Boolean);
 
-    const candidates = [value, recordPurpose].filter((candidate) => text(candidate));
     for (const candidate of candidates) {
       const official = officialOptions.find((option) => norm(option) === norm(candidate));
       if (official) return official;
-      if (norm(candidate) === "CONC") return "Conforme Construído";
     }
-
-    const documentTokens = norm(document).split(/[_\-\s]+/).filter(Boolean);
-    if (documentTokens.includes("CONC")) return "Conforme Construído";
-
-    return text(value) || text(recordPurpose);
+    return candidates[0] || "";
   }
 
   function n1710DocumentType(document) {
@@ -373,16 +396,12 @@
           ...(row.egrdt || {}),
           document: row.document,
           revision: row.revision,
+          title: resolveEgrdtTitle(row),
+          purpose: resolveEgrdtPurpose(row),
           fileName: finalName,
           databook: String(row.record && row.record.databook || "").trim(),
           manualAllocationOverride,
         };
-        // Corrige abreviações operacionais antes de validar os campos oficiais.
-        item.purpose = normalizeEgrdtPurpose(
-          item.purpose,
-          row.document,
-          row.record && row.record.purpose
-        );
         if (C && C.enforceDocumentFormat) C.enforceDocumentFormat(item);
         const itemErrors = C.validateEgrdtData(item);
         if (itemErrors.length) errors.push(`${row.document} / ${finalName}: ${itemErrors.join("; ")}.`);
