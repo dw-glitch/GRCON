@@ -41,6 +41,32 @@
 
   enableTxtDocumentPicker();
 
+  /**
+   * Título é informação documental, mas não é critério técnico para bloquear a
+   * geração da eGRDT. O validador central continua protegendo Documento,
+   * Revisão, Arquivo, Formato, Disciplina, Tipo e Propósito; qualquer diagnóstico
+   * cujo campo seja TÍTULO é removido da lista de bloqueios da emissão.
+   *
+   * O wrapper é aplicado aqui porque emission.js carrega antes de app.js e,
+   * assim, todos os pontos da geração que reutilizam validateEgrdtData recebem
+   * a mesma regra sem divergência entre prévia, conferência e geração final.
+   */
+  function disableTitleAsEgrdtBlocker() {
+    if (!C || typeof C.validateEgrdtData !== "function" || C.__grconTitleNonBlocking) return;
+    const originalValidateEgrdtData = C.validateEgrdtData.bind(C);
+    C.validateEgrdtData = function validateEgrdtDataWithoutTitleBlock(data) {
+      const errors = originalValidateEgrdtData(data);
+      return (Array.isArray(errors) ? errors : []).filter((error) => !/^TITULO(?:\s|$)/.test(norm(error)));
+    };
+    try {
+      Object.defineProperty(C, "__grconTitleNonBlocking", { value: true, configurable: true });
+    } catch (_) {
+      C.__grconTitleNonBlocking = true;
+    }
+  }
+
+  disableTitleAsEgrdtBlocker();
+
   function n1710DocumentType(document) {
     const raw = text(document).replace(/\.[^.]+$/, "");
     const groups = raw.split("-");
