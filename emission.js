@@ -67,6 +67,32 @@
 
   disableTitleAsEgrdtBlocker();
 
+  /**
+   * A LD e a codificação ET podem registrar o propósito abreviado como CONC.
+   * A eGRDT, porém, aceita a descrição oficial "Conforme Construído".
+   * Normalizamos a abreviação antes da validação para evitar um bloqueio
+   * artificial por "PROPÓSITO fora da lista oficial".
+   */
+  function normalizeEgrdtPurpose(value, document, recordPurpose) {
+    const officialOptions = C && C.EGRDT_OPTIONS && Array.isArray(C.EGRDT_OPTIONS.purposes)
+      ? C.EGRDT_OPTIONS.purposes
+      : ["Para Compra", "Para Construção", "Conforme Construído", "Certificado",
+          "Pendente Certificação", "Cancelado", "Emitido para Comentários",
+          "Para Cancelamento", "Para Informação", "Para Liberação"];
+
+    const candidates = [value, recordPurpose].filter((candidate) => text(candidate));
+    for (const candidate of candidates) {
+      const official = officialOptions.find((option) => norm(option) === norm(candidate));
+      if (official) return official;
+      if (norm(candidate) === "CONC") return "Conforme Construído";
+    }
+
+    const documentTokens = norm(document).split(/[_\-\s]+/).filter(Boolean);
+    if (documentTokens.includes("CONC")) return "Conforme Construído";
+
+    return text(value) || text(recordPurpose);
+  }
+
   function n1710DocumentType(document) {
     const raw = text(document).replace(/\.[^.]+$/, "");
     const groups = raw.split("-");
@@ -351,6 +377,12 @@
           databook: String(row.record && row.record.databook || "").trim(),
           manualAllocationOverride,
         };
+        // Corrige abreviações operacionais antes de validar os campos oficiais.
+        item.purpose = normalizeEgrdtPurpose(
+          item.purpose,
+          row.document,
+          row.record && row.record.purpose
+        );
         if (C && C.enforceDocumentFormat) C.enforceDocumentFormat(item);
         const itemErrors = C.validateEgrdtData(item);
         if (itemErrors.length) errors.push(`${row.document} / ${finalName}: ${itemErrors.join("; ")}.`);
