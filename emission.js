@@ -20,6 +20,27 @@
 
   const EXCEL_EXTENSIONS = new Set(["xls", "xlsx", "xlsm", "xlsb"]);
 
+  // O HTML histórico não listava .txt no seletor da pasta documental. Como o
+  // emission.js é carregado antes do uso do campo, a extensão é habilitada em
+  // tempo de execução sem exigir alteração estrutural no index.html.
+  function enableTxtDocumentPicker() {
+    if (typeof document === "undefined") return;
+    const apply = () => {
+      const input = document.getElementById("pdf-input");
+      if (!input) return;
+      const accepted = String(input.getAttribute("accept") || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (!accepted.some((item) => item.toLowerCase() === ".txt")) accepted.push(".txt");
+      input.setAttribute("accept", accepted.join(","));
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
+    else apply();
+  }
+
+  enableTxtDocumentPicker();
+
   function n1710DocumentType(document) {
     const raw = text(document).replace(/\.[^.]+$/, "");
     const groups = raw.split("-");
@@ -108,11 +129,12 @@
   /**
    * A N-1710 segue composição física obrigatória de dois arquivos por código.
    * Regra geral: 1 nativo + 1 PDF. Exceções operacionais:
+   * - CR, independentemente da restante codificação: 1 nativo + 1 PDF + 1 TXT;
    * - códigos com o grupo 955: somente 1 PDF;
    * - LI e MC: 1 Excel + 1 PDF;
    * - qualquer código que contenha 98V: 1 Excel + 1 PDF, independentemente do
    *   tipo documental.
-   * Nos pares, os dois recebem o mesmo código, revisão e _0001_<revisão>.
+   * Cada arquivo físico aceito ocupa a própria linha na eGRDT.
    */
   function validateN1710Pair(row, sources) {
     const originalList = Array.isArray(sources) ? [...sources] : [];
@@ -132,21 +154,30 @@
     if (!applies) return { applies: false, valid: true, sources: list, errors: [], ignoredDuplicates };
 
     const documentType = n1710DocumentType(row && row.document);
-    const pdfOnlyBy955 = has955Code(row && row.document);
+    // CR tem prioridade sobre qualquer outra particularidade da codificação:
+    // sempre seguem três arquivos físicos — nativo, PDF e TXT.
+    const crTriple = documentType === "CR";
+    const pdfOnlyBy955 = !crTriple && has955Code(row && row.document);
     const excelPairByType = documentType === "LI" || documentType === "MC";
     const excelPairBy98V = has98VCode(row && row.document);
-    // A regra 955 é mais específica: nesses códigos só o PDF segue para a eGRDT,
-    // mesmo que o tipo documental normalmente exigisse Excel + PDF.
-    const requiresExcelPair = !pdfOnlyBy955 && (excelPairByType || excelPairBy98V);
+    // Fora de CR, a regra 955 continua mais específica que Excel + PDF.
+    const requiresExcelPair = !crTriple && !pdfOnlyBy955 && (excelPairByType || excelPairBy98V);
     const excelPairLabel = excelPairBy98V && !excelPairByType
       ? "Documento com codificação 98V da N-1710"
       : `${documentType} da N-1710`;
     const pdfs = list.filter((source) => extensionOf(source && (source.name || source.finalName)) === "pdf");
+    const txts = list.filter((source) => extensionOf(source && (source.name || source.finalName)) === "txt");
     const excels = list.filter((source) => EXCEL_EXTENSIONS.has(extensionOf(source && (source.name || source.finalName))));
     const natives = list.filter((source) => {
       const extension = extensionOf(source && (source.name || source.finalName));
       return Boolean(extension && extension !== "pdf");
     });
+    const crNatives = crTriple
+      ? list.filter((source) => {
+          const extension = extensionOf(source && (source.name || source.finalName));
+          return Boolean(extension && extension !== "pdf" && extension !== "txt");
+        })
+      : [];
     const invalidExcelPairNatives = requiresExcelPair
       ? natives.filter((source) => !EXCEL_EXTENSIONS.has(extensionOf(source && (source.name || source.finalName))))
       : [];
@@ -159,7 +190,12 @@
     const withoutExtension = list.filter((source) => !extensionOf(source && (source.name || source.finalName)));
     const errors = [];
 
-    if (pdfOnlyBy955) {
+    if (crTriple) {
+      if (list.length !== 3) errors.push("Documento CR exige exatamente 3 arquivos por código: 1 nativo + 1 PDF + 1 TXT.");
+      if (pdfs.length !== 1) errors.push("Documento CR exige exatamente 1 PDF por código.");
+      if (txts.length !== 1) errors.push("Documento CR exige exatamente 1 arquivo TXT por código.");
+      if (crNatives.length !== 1) errors.push("Documento CR exige exatamente 1 arquivo nativo adicional, além do PDF e do TXT.");
+    } else if (pdfOnlyBy955) {
       if (list.length !== 1) errors.push("Documento N-1710 com codificação 955 exige exatamente 1 arquivo por código: somente o PDF.");
       if (pdfs.length !== 1) errors.push("Documento N-1710 com codificação 955 exige exatamente 1 PDF por código.");
       if (nonPdfs.length) errors.push("Documento N-1710 com codificação 955 aceita para a eGRDT somente o arquivo PDF.");
@@ -172,32 +208,40 @@
       if (list.length !== 2) errors.push("N-1710 exige exatamente 2 arquivos por código: 1 nativo + 1 PDF.");
       if (pdfs.length !== 1) errors.push("N-1710 exige exatamente 1 PDF por código.");
       if (natives.length !== 1) errors.push("N-1710 exige exatamente 1 arquivo nativo por código.");
+      if (txts.length) errors.push("Arquivo TXT como terceiro arquivo é uma regra exclusiva para documentos CR.");
     }
-    if (withoutExtension.length) errors.push(pdfOnlyBy955
-      ? "Documento N-1710 com codificação 955 exige extensão explícita no arquivo PDF."
-      : "N-1710 exige extensão explícita nos dois arquivos.");
+    if (withoutExtension.length) errors.push(crTriple
+      ? "Documento CR exige extensão explícita nos três arquivos: nativo, PDF e TXT."
+      : pdfOnlyBy955
+        ? "Documento N-1710 com codificação 955 exige extensão explícita no arquivo PDF."
+        : "N-1710 exige extensão explícita nos dois arquivos.");
     if (list.some((source) => source && (source.virtual || !source.file))) {
-      errors.push(pdfOnlyBy955
-        ? "Documento N-1710 com codificação 955 exige o PDF físico; não é permitido gerar somente pela relação."
-        : requiresExcelPair
-          ? `${excelPairLabel} exige o par físico completo: 1 Excel + 1 PDF.`
-          : "N-1710 exige o par físico completo; não é permitido gerar somente pela relação sem o arquivo nativo e o PDF.");
+      errors.push(crTriple
+        ? "Documento CR exige os três arquivos físicos completos: 1 nativo + 1 PDF + 1 TXT."
+        : pdfOnlyBy955
+          ? "Documento N-1710 com codificação 955 exige o PDF físico; não é permitido gerar somente pela relação."
+          : requiresExcelPair
+            ? `${excelPairLabel} exige o par físico completo: 1 Excel + 1 PDF.`
+            : "N-1710 exige o par físico completo; não é permitido gerar somente pela relação sem o arquivo nativo e o PDF.");
     }
 
-    const orderedSources = pdfOnlyBy955
-      ? [...pdfs, ...nonPdfs, ...withoutExtension]
-      : requiresExcelPair
-        ? [...excels, ...pdfs, ...invalidExcelPairNatives, ...withoutExtension]
-        : [...natives, ...pdfs, ...withoutExtension];
+    const orderedSources = crTriple
+      ? [...crNatives, ...pdfs, ...txts, ...withoutExtension]
+      : pdfOnlyBy955
+        ? [...pdfs, ...nonPdfs, ...withoutExtension]
+        : requiresExcelPair
+          ? [...excels, ...pdfs, ...invalidExcelPairNatives, ...withoutExtension]
+          : [...natives, ...pdfs, ...withoutExtension];
 
     return {
       applies: true,
       valid: errors.length === 0,
       documentType,
+      crTriple,
       pdfOnlyBy955,
       requiresExcelPair,
       excelPairBy98V,
-      // A ordem da eGRDT mantém o arquivo editável/nativo primeiro e o PDF depois.
+      // CR: nativo → PDF → TXT. Demais regras mantêm a ordem operacional anterior.
       sources: orderedSources,
       errors: [...new Set(errors)],
       ignoredDuplicates,
