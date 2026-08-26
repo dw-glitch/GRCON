@@ -169,8 +169,67 @@
     return run("export", "egrdts", payload, { onProgress });
   }
 
+  async function preparePackageFiles(payload, onProgress) {
+    const source = payload || {};
+    if (!source.includeFiles) return { payload: source, transfer: [] };
+
+    const FileAccess = root.GrconFileAccess;
+    if (!FileAccess || typeof FileAccess.read !== "function") return { payload: source, transfer: [] };
+
+    // Não mandamos para o Worker a referência original do File selecionado na
+    // unidade de rede. O Chromium pode manter essa referência ligada ao caminho
+    // físico e ela deixa de existir entre a seleção e a compactação. Lemos aqui,
+    // imediatamente antes da exportação, e enviamos bytes estáveis em memória.
+    const groups = (source.groups || []).map((group) => ({
+      ...group,
+      entries: (group.entries || []).map((entry) => ({ ...entry })),
+    }));
+    const entries = groups.flatMap((group) => group.entries || []).filter((entry) => entry && entry.file);
+    const transfer = [];
+    const snapshots = new WeakMap();
+    let completed = 0;
+
+    for (const entry of entries) {
+      const file = entry.file;
+      // Já estabilizado por uma chamada anterior: não lê nem transfere de novo.
+      if (file instanceof ArrayBuffer || ArrayBuffer.isView(file)) {
+        completed += 1;
+        continue;
+      }
+
+      let buffer = snapshots.get(file);
+      if (!buffer) {
+        buffer = await FileAccess.read(file, {
+          context: "o arquivo da pasta documental",
+          retries: 3,
+        });
+        snapshots.set(file, buffer);
+        transfer.push(buffer);
+      }
+      entry.file = new Uint8Array(buffer);
+      completed += 1;
+      if (onProgress && (completed === entries.length || completed % 8 === 0)) {
+        onProgress({
+          type: "progress",
+          progress: entries.length ? (completed / entries.length) * 0.12 : 0.12,
+          message: `Estabilizando arquivos da pasta de rede (${completed}/${entries.length})`,
+        });
+      }
+    }
+
+    return { payload: { ...source, groups }, transfer };
+  }
+
   async function buildPackage(payload, onProgress) {
-    return run("export", "package", payload, { onProgress });
+    const prepared = await preparePackageFiles(payload, onProgress);
+    const workerProgress = onProgress ? (message) => {
+      const value = message || {};
+      onProgress({
+        ...value,
+        progress: 0.12 + Math.max(0, Math.min(1, Number(value.progress) || 0)) * 0.88,
+      });
+    } : null;
+    return run("export", "package", prepared.payload, { onProgress: workerProgress, transfer: prepared.transfer });
   }
 
   function memorySnapshot() {

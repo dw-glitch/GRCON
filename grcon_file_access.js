@@ -12,8 +12,15 @@
   function isNotReadableError(error) {
     const name = text(error && error.name);
     const message = text(error && error.message);
+    // Arquivos vindos de unidade/pasta de rede podem continuar aparecendo no
+    // FileList mesmo depois de uma oscilação do compartilhamento. Chromium usa
+    // NotFoundError nesse caso (e não NotReadableError), inclusive com a mensagem
+    // “A requested file or directory could not be found at the time an operation
+    // was processed.”. Para o GRCON ambos significam “a referência física ficou
+    // temporariamente indisponível” e merecem a mesma retentativa controlada.
     return name === "NotReadableError"
-      || /requested file could not be read|permission problems|could not be read|acesso.*negado|não.*pôde.*ser lido/i.test(message);
+      || name === "NotFoundError"
+      || /requested file or directory could not be found|file or directory could not be found|at the time an operation was processed|requested file could not be read|permission problems|could not be read|acesso.*negado|não.*pôde.*ser lido|arquivo.*diretório.*não.*encontrado/i.test(message);
   }
 
   function wait(milliseconds) {
@@ -23,7 +30,7 @@
   function fileAccessError(file, context, cause) {
     const fileName = text(file && file.name) || "arquivo selecionado";
     const subject = text(context) || "o arquivo";
-    const error = new Error(`Não foi possível ler ${subject} “${fileName}”. O arquivo pode ter sido substituído, movido ou bloqueado pelo Windows após a seleção. Se ele estiver na rede, copie-o para uma pasta local e selecione-o novamente.`);
+    const error = new Error(`Não foi possível ler ${subject} “${fileName}”. A pasta de rede pode ter oscilado, sido reconectada, ou o arquivo pode ter sido movido/substituído após a seleção. Verifique se a unidade de rede continua acessível e tente novamente; se persistir, selecione a pasta novamente ou copie somente este arquivo para uma pasta local.`);
     error.name = "GrconFileAccessError";
     error.code = "FILE_NOT_READABLE";
     error.fileName = fileName;
@@ -49,7 +56,11 @@
         lastError = error;
         if (!isNotReadableError(error) || attempt >= retries) break;
         if (typeof settings.onRetry === "function") settings.onRetry(attempt + 1, file);
-        await wait(120 * (attempt + 1));
+        // Compartilhamentos SMB/VPN normalmente precisam de mais que alguns
+        // milissegundos para restabelecer a referência. O atraso cresce sem
+        // transformar uma falha real em espera longa.
+        const retryDelays = [250, 650, 1200];
+        await wait(retryDelays[Math.min(attempt, retryDelays.length - 1)]);
       }
     }
     if (isNotReadableError(lastError)) throw fileAccessError(file, settings.context, lastError);
