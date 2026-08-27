@@ -42,30 +42,35 @@
   enableTxtDocumentPicker();
 
   /**
-   * Título é informação documental, mas não é critério técnico para bloquear a
-   * geração da eGRDT. O validador central continua protegendo Documento,
-   * Revisão, Arquivo, Formato, Disciplina, Tipo e Propósito; qualquer diagnóstico
-   * cujo campo seja TÍTULO é removido da lista de bloqueios da emissão.
+   * TÍTULO e PROPÓSITO são informações documentais da eGRDT, mas não são
+   * critérios técnicos para bloquear a geração. Eles continuam sendo
+   * preservados quando existem na LD, porém ausência, texto não padronizado ou
+   * divergência nesses dois campos não impedem a emissão.
    *
-   * O wrapper é aplicado aqui porque emission.js carrega antes de app.js e,
-   * assim, todos os pontos da geração que reutilizam validateEgrdtData recebem
-   * a mesma regra sem divergência entre prévia, conferência e geração final.
+   * Documento, Revisão, Arquivo, Formato, Disciplina e Tipo de documento
+   * continuam protegidos pelo validador central. O wrapper é aplicado aqui
+   * porque emission.js carrega antes de app.js; assim prévia, conferência e
+   * geração final seguem exatamente a mesma regra.
    */
-  function disableTitleAsEgrdtBlocker() {
-    if (!C || typeof C.validateEgrdtData !== "function" || C.__grconTitleNonBlocking) return;
+  function disableInformationalFieldsAsEgrdtBlockers() {
+    if (!C || typeof C.validateEgrdtData !== "function" || C.__grconInformationalFieldsNonBlocking) return;
     const originalValidateEgrdtData = C.validateEgrdtData.bind(C);
-    C.validateEgrdtData = function validateEgrdtDataWithoutTitleBlock(data) {
+    C.validateEgrdtData = function validateEgrdtDataWithoutInformationalBlocks(data) {
       const errors = originalValidateEgrdtData(data);
-      return (Array.isArray(errors) ? errors : []).filter((error) => !/^TITULO(?:\s|$)/.test(norm(error)));
+      return (Array.isArray(errors) ? errors : []).filter((error) => {
+        const normalizedError = norm(error);
+        return !/^TITULO(?:\s|$)/.test(normalizedError)
+          && !/^PROPOSITO(?:\s|$)/.test(normalizedError);
+      });
     };
     try {
-      Object.defineProperty(C, "__grconTitleNonBlocking", { value: true, configurable: true });
+      Object.defineProperty(C, "__grconInformationalFieldsNonBlocking", { value: true, configurable: true });
     } catch (_) {
-      C.__grconTitleNonBlocking = true;
+      C.__grconInformationalFieldsNonBlocking = true;
     }
   }
 
-  disableTitleAsEgrdtBlocker();
+  disableInformationalFieldsAsEgrdtBlockers();
 
   /**
    * O título da eGRDT deve vir da LD. Ele não é bloqueante para a emissão, mas
@@ -86,34 +91,21 @@
   }
 
   /**
-   * Propósito é um dado controlado da LD/eGRDT. Nunca deve ser inferido por um
-   * token do código (por exemplo, CONC dentro de um código ET), porque esse token
-   * pode representar outra classificação documental.
-   *
-   * Aqui apenas normalizamos contra a lista oficial quando o próprio valor da LD
-   * corresponde a uma opção válida. Se a LD trouxer outro texto, ele permanece
-   * explícito para a validação técnica em vez de ser adivinhado.
+   * Propósito é apenas informação documental da LD/eGRDT durante a geração.
+   * Não é inferido pelo código, não é comparado com uma lista oficial e não é
+   * usado como critério de bloqueio. Quando existir, preservamos o primeiro
+   * valor real encontrado na triagem.
    */
   function resolveEgrdtPurpose(row) {
     const item = row || {};
-    const officialOptions = C && C.EGRDT_OPTIONS && Array.isArray(C.EGRDT_OPTIONS.purposes)
-      ? C.EGRDT_OPTIONS.purposes
-      : ["Para Compra", "Para Construção", "Conforme Construído", "Certificado",
-          "Pendente Certificação", "Cancelado", "Emitido para Comentários",
-          "Para Cancelamento", "Para Informação", "Para Liberação"];
     const candidates = [
       item.egrdt && item.egrdt.purpose,
       item.record && item.record.purpose,
       item.purpose,
       item.analysisEvidence && item.analysisEvidence.item && item.analysisEvidence.item.purpose,
       ...((item.evidence || []).map((entry) => entry && entry.item && entry.item.purpose)),
-    ].map(text).filter(Boolean);
-
-    for (const candidate of candidates) {
-      const official = officialOptions.find((option) => norm(option) === norm(candidate));
-      if (official) return official;
-    }
-    return candidates[0] || "";
+    ];
+    return candidates.map(text).find(Boolean) || "";
   }
 
   function n1710DocumentType(document) {
