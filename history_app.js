@@ -5,7 +5,12 @@
   const Posting = window.GrconSigemPosting;
   const Flow = window.GrconMacro5Flow;
   const HistoryReport = window.GrconHistoryReport;
-  const APP_VERSION = "5.33.15";
+  // A versão vem da configuração central (ou do <html data-version>) para não
+  // precisar ser atualizada à mão em cada módulo. Antes ficava fixa aqui e saía
+  // desatualizada nos relatórios sempre que a publicação era promovida.
+  const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
+    || document.documentElement.dataset.version
+    || "5.34.0";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };

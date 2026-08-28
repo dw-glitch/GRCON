@@ -5,7 +5,9 @@
   const History = window.GrconHistory;
   const Core = window.TriagemCore;
   const Emission = window.GrconEmission;
-  const APP_VERSION = document.documentElement.dataset.version || "5.33.15";
+  const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
+    || document.documentElement.dataset.version
+    || "5.34.0";
   if (!Posting || !History) return;
 
   const $ = (selector, root) => (root || document).querySelector(selector);
