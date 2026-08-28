@@ -139,8 +139,13 @@ const HEAVY_ASSETS = new Set([
   "grcon-logo-report.png",
 ]);
 
+// `no-cache` (e não `no-store`) força uma revalidação com o servidor a cada
+// carregamento, mantendo a garantia de que uma correção publicada aparece na
+// hora — mas usando requisição condicional (ETag/If-None-Match). Quando o
+// arquivo não mudou o servidor responde 304 e nada é transferido, em vez de
+// baixar de novo o ~1,8 MB de código do GRCON a cada abertura do app.
 async function fetchAndCache(request) {
-  const response = await fetch(new Request(request, { cache: "no-store" }));
+  const response = await fetch(new Request(request, { cache: "no-cache" }));
   if (response && response.ok) {
     const cache = await caches.open(CACHE_NAME);
     await cache.put(request, response.clone());

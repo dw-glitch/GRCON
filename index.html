@@ -13,8 +13,16 @@
 <link href="grcon-icon.png" rel="icon" type="image/png"/>
 <link href="grcon-icon.png" rel="apple-touch-icon"/>
 <link href="manifest.json" rel="manifest"/>
-<link href="design-system.css" rel="stylesheet"/><link href="legacy-compat.css" rel="stylesheet"/><link href="grcon-ui.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="grcon-final.css" rel="stylesheet"/><link href="grcon_cloud.css" rel="stylesheet"/>
-<link href="requests.css" rel="stylesheet"/>
+<link href="design-system.css" rel="stylesheet"/><link href="legacy-compat.css" rel="stylesheet"/><link href="grcon-ui.css" rel="stylesheet"/><link href="grcon-final.css" rel="stylesheet"/><link href="grcon_cloud.css" rel="stylesheet"/>
+<!-- Folhas de estilo dos módulos que abrem ocultos (Consulta, Histórico de
+     análises e SIGEM). Carregam com media="print" para sair do caminho crítico
+     de renderização e são promovidas para "all" logo após o primeiro desenho,
+     por grcon_bootstrap_head.js. São ~70 KB que antes bloqueavam a pintura da
+     tela inicial sem estilizar nada visível nela. -->
+<link href="requests.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
+<link href="analysis-history.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
+<link href="sigem-posting.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
+<noscript><link href="requests.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/></noscript>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
 <meta content="5.33.15" name="application-version"/></head>

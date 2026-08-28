@@ -90,17 +90,22 @@
     const surface = document.createElement("section");
     surface.id = "grcon-cloud-auth";
     surface.className = "grcon-cloud-auth";
-    surface.setAttribute("aria-live", "polite");
+    // A região viva é a mensagem de status, não o cartão inteiro: com
+    // aria-live na <section>, qualquer alteração (inclusive a troca entre
+    // login e nova senha) fazia o leitor de tela reler o formulário completo.
+    surface.setAttribute("role", "dialog");
+    surface.setAttribute("aria-modal", "true");
+    surface.setAttribute("aria-labelledby", "grcon-cloud-auth-heading");
     surface.innerHTML = `
       <div class="grcon-cloud-auth-card">
         <img alt="GRCON — Controle de GRDT" src="grcon-logo-app.png"/>
         <span class="grcon-cloud-eyebrow">GRCON COMPARTILHADO</span>
         <div id="grcon-cloud-login-view">
-          <h1>Acesse o controle de GRDT</h1>
+          <h1 id="grcon-cloud-auth-heading">Acesse o controle de GRDT</h1>
           <p>Entre com o e-mail corporativo autorizado e sua senha. O GRCON reconhece a conta existente no Supabase e mantém a sessão neste navegador.</p>
           <form id="grcon-cloud-login-form">
             <label for="grcon-cloud-email"><span>E-mail</span><input id="grcon-cloud-email" autocomplete="username" inputmode="email" required type="email" placeholder="nome@empresa.com"/></label>
-            <label for="grcon-cloud-password"><span>Senha</span><span class="grcon-cloud-password-field"><input id="grcon-cloud-password" autocomplete="current-password" minlength="8" required type="password"/><button aria-label="Mostrar senha" class="grcon-cloud-password-toggle" data-password-target="grcon-cloud-password" type="button">Mostrar</button></span></label>
+            <label for="grcon-cloud-password"><span>Senha</span><span class="grcon-cloud-password-field"><input id="grcon-cloud-password" autocomplete="current-password" minlength="8" required type="password"/><button aria-label="Mostrar senha" aria-pressed="false" class="grcon-cloud-password-toggle" data-password-target="grcon-cloud-password" type="button">Mostrar</button></span></label>
             <button class="primary-button" type="submit">Entrar</button>
             <button class="grcon-cloud-link-button" id="grcon-cloud-forgot-password" type="button">Esqueci minha senha</button>
           </form>
@@ -109,14 +114,14 @@
           <h1 id="grcon-cloud-password-title">Defina sua nova senha</h1>
           <p id="grcon-cloud-password-description">Crie uma senha forte para continuar usando sua conta.</p>
           <form id="grcon-cloud-password-form">
-            <label for="grcon-cloud-new-password"><span>Nova senha</span><span class="grcon-cloud-password-field"><input id="grcon-cloud-new-password" autocomplete="new-password" minlength="12" required type="password"/><button aria-label="Mostrar nova senha" class="grcon-cloud-password-toggle" data-password-target="grcon-cloud-new-password" type="button">Mostrar</button></span></label>
+            <label for="grcon-cloud-new-password"><span>Nova senha</span><span class="grcon-cloud-password-field"><input id="grcon-cloud-new-password" autocomplete="new-password" minlength="12" required type="password"/><button aria-label="Mostrar nova senha" aria-pressed="false" class="grcon-cloud-password-toggle" data-password-target="grcon-cloud-new-password" type="button">Mostrar</button></span></label>
             <label for="grcon-cloud-confirm-password"><span>Confirmar nova senha</span><input id="grcon-cloud-confirm-password" autocomplete="new-password" minlength="12" required type="password"/></label>
             <small class="grcon-cloud-password-rule">Mínimo de 12 caracteres, com maiúscula, minúscula, número e símbolo.</small>
             <button class="primary-button" type="submit">Salvar nova senha</button>
             <button class="secondary-button compact" id="grcon-cloud-password-cancel" type="button">Cancelar</button>
           </form>
         </div>
-        <p class="grcon-cloud-auth-message" id="grcon-cloud-auth-message">Acesso disponível somente para usuários autorizados.</p>
+        <p aria-live="polite" class="grcon-cloud-auth-message" id="grcon-cloud-auth-message" role="status">Acesso disponível somente para usuários autorizados.</p>
         <button class="primary-button compact" hidden id="grcon-cloud-auth-retry" type="button">Tentar confirmar novamente</button>
         <button class="secondary-button compact" hidden id="grcon-cloud-auth-signout" type="button">Sair e usar outra conta</button>
         <small>Os documentos, PDFs e planilhas permanecem neste navegador. Somente o histórico operacional é compartilhado.</small>
@@ -142,6 +147,7 @@
     input.type = showing ? "password" : "text";
     button.textContent = showing ? "Mostrar" : "Ocultar";
     button.setAttribute("aria-label", showing ? "Mostrar senha" : "Ocultar senha");
+    button.setAttribute("aria-pressed", showing ? "false" : "true");
   }
 
   function authMessage(message, tone) {
@@ -151,9 +157,21 @@
     target.dataset.tone = tone || "info";
   }
 
+  function focusAuthField() {
+    // Sem isto o operador precisa clicar no campo antes de digitar em toda
+    // abertura do app; com teclado ou leitor de tela o foco permanecia no
+    // <body>, atrás da tela de acesso.
+    const view = state.passwordView === "password" ? "#grcon-cloud-new-password" : "#grcon-cloud-email";
+    const field = $(view);
+    if (!field || field.disabled) return;
+    try { field.focus({ preventScroll: true }); } catch (_) { field.focus(); }
+  }
+
   function lockApp() {
     document.documentElement.classList.add("grcon-cloud-pending");
-    $("#grcon-cloud-auth")?.removeAttribute("hidden");
+    const surface = $("#grcon-cloud-auth");
+    surface?.removeAttribute("hidden");
+    if (surface) requestAnimationFrame(focusAuthField);
   }
 
   function unlockApp() {
