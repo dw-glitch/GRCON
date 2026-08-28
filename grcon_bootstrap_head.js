@@ -8,6 +8,23 @@
     document.documentElement.dataset.theme = "light";
   }
 
+  // As folhas de estilo dos módulos que abrem ocultos entram no HTML com
+  // media="print" para não bloquear a primeira pintura. Assim que o navegador
+  // desenha a tela inicial, elas voltam a valer para todas as mídias — muito
+  // antes de o operador conseguir abrir qualquer um desses módulos.
+  function promoteAsyncStyles() {
+    const pending = document.querySelectorAll('link[data-grcon-async-style][media="print"]');
+    pending.forEach((link) => {
+      link.media = "all";
+      link.removeAttribute("data-grcon-async-style");
+    });
+  }
+
+  function schedulePromoteAsyncStyles() {
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(promoteAsyncStyles));
+    else promoteAsyncStyles();
+  }
+
   function installTconsagShortcut() {
     if (document.getElementById("app-shortcut-tconsag")) return;
     const host = document.querySelector(".runtime-status");
@@ -29,8 +46,12 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", installTconsagShortcut, { once: true });
+    document.addEventListener("DOMContentLoaded", () => {
+      installTconsagShortcut();
+      schedulePromoteAsyncStyles();
+    }, { once: true });
   } else {
     installTconsagShortcut();
+    schedulePromoteAsyncStyles();
   }
 })();

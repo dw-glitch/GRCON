@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -655,13 +656,20 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   const verified = await Workbook.verify(bytes, plan.items);
   assert.equal(verified.checkedRows, 2);
   assert.deepEqual(verified.rows.map((item) => item.fileName), [nativeName, pdfName]);
-  checks.push("N-1710 gera exatamente duas linhas por código — nativo + PDF — com _0001_revisão nos dois arquivos");
+  checks.push("N-1710 grava o nativo antes do PDF na eGRDT, com _0001_revisão nos dois arquivos, mesmo quando o seletor entrega o PDF primeiro");
 
+  // A política vigente da N-1710 não impõe quantidade nem extensão: um único
+  // arquivo físico já compõe o pacote. O que continua obrigatório é existir um
+  // arquivo real associado ao documento.
   const onlyPdf = { ...row, files: [row.files[0]] };
-  const incomplete = Emission.createPlan([onlyPdf], new Set([0]));
-  assert.ok(incomplete.errors.some((message) => /N-1710 exige exatamente 2 arquivos por código/i.test(message)));
-  assert.ok(incomplete.errors.some((message) => /arquivo nativo/i.test(message)));
-  checks.push("N-1710 bloqueia geração quando o par nativo + PDF está incompleto");
+  const single = Emission.createPlan([onlyPdf], new Set([0]));
+  assert.deepEqual(single.errors, []);
+  assert.deepEqual(single.items.map((item) => item.fileName), [pdfName]);
+
+  const virtualOnly = { ...row, files: [{ name: pdfName, finalName: pdfName, file: null, virtual: true }] };
+  const withoutFile = Emission.createPlan([virtualOnly], new Set([0]));
+  assert.ok(withoutFile.errors.some((message) => /ao menos um arquivo físico/i.test(message)));
+  checks.push("N-1710 aceita qualquer quantidade/extensão de arquivo, mas exige ao menos um arquivo físico real");
 }
 
 {
@@ -675,7 +683,7 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   };
   const liPair = Emission.validateN1710Pair(liRow, liRow.files);
   assert.equal(liPair.valid, true);
-  assert.equal(liPair.requiresExcelPair, true);
+  assert.equal(liPair.flexibleFiles, true);
   assert.equal(liPair.documentType, "LI");
   assert.deepEqual(liPair.sources.map((entry) => entry.name), [
     `${liDocument}_0001_A.xlsx`,
@@ -712,13 +720,17 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
     `${liDocument}_0001_A.pdf`,
   ]);
 
-  const liWrongNative = Emission.validateN1710Pair(liRow, [
-    { name: `${liDocument}_0001_A.dwg`, finalName: `${liDocument}_0001_A.dwg`, file: { size: 20 } },
+  // Outro nativo além do Excel deixou de ser rejeitado em LI/MC; a ordem
+  // nativo → PDF continua sendo aplicada.
+  const liOtherNative = Emission.validateN1710Pair(liRow, [
     { name: `${liDocument}_0001_A.pdf`, finalName: `${liDocument}_0001_A.pdf`, file: { size: 10 } },
+    { name: `${liDocument}_0001_A.dwg`, finalName: `${liDocument}_0001_A.dwg`, file: { size: 20 } },
   ]);
-  assert.equal(liWrongNative.valid, false);
-  assert.ok(liWrongNative.errors.some((message) => /arquivo Excel/i.test(message)));
-  assert.ok(liWrongNative.errors.some((message) => /não aceita outro tipo de arquivo nativo/i.test(message)));
+  assert.equal(liOtherNative.valid, true);
+  assert.deepEqual(liOtherNative.sources.map((entry) => entry.name), [
+    `${liDocument}_0001_A.dwg`,
+    `${liDocument}_0001_A.pdf`,
+  ]);
 
   const mcDocument = "MC-5290.00-22313-911-C1O-001";
   const mcRow = {
@@ -730,14 +742,31 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   };
   const mcPair = Emission.validateN1710Pair(mcRow, mcRow.files);
   assert.equal(mcPair.valid, true);
-  assert.equal(mcPair.requiresExcelPair, true);
+  assert.equal(mcPair.flexibleFiles, true);
   assert.equal(mcPair.documentType, "MC");
   assert.deepEqual(mcPair.sources.map((entry) => entry.name), [
     `${mcDocument}_0001_0.xlsm`,
     `${mcDocument}_0001_0.pdf`,
   ]);
+  // CR historicamente compõe nativo + PDF + TXT; a ordem continua garantida
+  // mesmo quando os arquivos chegam embaralhados do seletor de pasta.
+  const crDocument = "CR-5290.00-22313-940-C1O-002";
+  const crPair = Emission.validateN1710Pair(
+    { document: crDocument, revision: "0", sheet: "N-1710" },
+    [
+      { name: `${crDocument}_0001_0.txt`, finalName: `${crDocument}_0001_0.txt`, file: { size: 5 } },
+      { name: `${crDocument}_0001_0.pdf`, finalName: `${crDocument}_0001_0.pdf`, file: { size: 10 } },
+      { name: `${crDocument}_0001_0.dwg`, finalName: `${crDocument}_0001_0.dwg`, file: { size: 20 } },
+    ]
+  );
+  assert.equal(crPair.valid, true);
+  assert.deepEqual(crPair.sources.map((entry) => entry.name), [
+    `${crDocument}_0001_0.dwg`,
+    `${crDocument}_0001_0.pdf`,
+    `${crDocument}_0001_0.txt`,
+  ]);
   assert.equal(Core.proposedFileName(`${mcDocument}.xlsb`, mcDocument, "0", "N-1710"), `${mcDocument}_0001_0.xlsb`);
-  checks.push("LI e MC da N-1710 exigem e ordenam exatamente Excel + PDF, aceitando extensões Excel suportadas");
+  checks.push("N-1710 ordena nativo → PDF → TXT de forma determinística em LI, MC e CR, aceitando qualquer extensão");
 }
 
 check("LD_001 prioriza DISCIPLINA sobre Disciplina Torre e adapta CIVIL/SEGURANCA para CIVIL na eGRDT", () => {
@@ -2192,7 +2221,7 @@ check("nome final divergente é corrigido na emissão e não bloqueia", () => {
   assert.deepEqual(plan.errors, []);
   assert.equal(plan.entries.length, 2);
   assert.deepEqual(plan.entries.map((entry) => entry.finalName), [`${document}_0001_A.dwg`, `${document}_0001_A.pdf`]);
-  assert.ok(plan.warnings.some((message) => /corrigiu automaticamente/i.test(message)));
+  assert.ok(plan.warnings.some((message) => /fora do padrão controlado/i.test(message) && /será gravado como/i.test(message)));
 });
 
 
@@ -2285,6 +2314,61 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.match(appSource, /function renderRowFileList\(row, finalNames = false\)/, "A UI deve possuir renderização nominal da lista de arquivos.");
   assert.match(appSource, /entries\.map\(\(entry\) =>/, "A UI deve percorrer todos os arquivos associados ao documento.");
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
+});
+
+
+/**
+ * retomar.js é um módulo de navegador (IIFE sobre `window`) e não pode ser
+ * carregado por require. Um contexto mínimo — com document.readyState em
+ * "loading", para que o módulo apenas registre o DOMContentLoaded em vez de
+ * inicializar — basta para alcançar a superfície exportada e conferir a
+ * matemática pura dos indicadores do Dashboard.
+ */
+function loadBrowserModule(fileName) {
+  const noop = () => {};
+  const documentStub = {
+    readyState: "loading", addEventListener: noop, documentElement: { dataset: {} },
+    getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
+    createElement: () => ({ style: {}, dataset: {}, setAttribute: noop, appendChild: noop, classList: { add: noop, remove: noop, toggle: noop } }),
+    body: { classList: { add: noop, remove: noop } },
+  };
+  const windowStub = { document: documentStub, setTimeout, clearTimeout, console, localStorage: { getItem: () => null, setItem: noop, removeItem: noop } };
+  windowStub.window = windowStub;
+  const context = vm.createContext(windowStub);
+  context.document = documentStub;
+  vm.runInContext(fs.readFileSync(path.join(root, fileName), "utf8"), context);
+  return context;
+}
+
+check("Dashboard compara cada indicador com o período anterior de mesmo tamanho", () => {
+  const { kpiTrend, previousPeriodOf, daysInPeriod } = loadBrowserModule("retomar.js").GrconHistoryDashboard._debug;
+
+  assert.equal(daysInPeriod("2026-08-01", "2026-08-30"), 30);
+  // Objetos criados dentro do contexto vm têm outro Object.prototype, então a
+  // comparação é feita campo a campo em vez de deepEqual entre realms.
+  const monthWindow = previousPeriodOf("2026-08-01", "2026-08-30");
+  assert.equal(monthWindow.start, "2026-07-02");
+  assert.equal(monthWindow.end, "2026-07-31");
+  const dayWindow = previousPeriodOf("2026-08-28", "2026-08-28");
+  assert.equal(dayWindow.start, "2026-08-27");
+  assert.equal(dayWindow.end, "2026-08-27");
+  // "Todo o histórico" começa antes do primeiro registro: sem período anterior
+  // comparável, nenhuma variação é exibida.
+  assert.equal(previousPeriodOf("", "2026-08-28"), null);
+
+  assert.equal(kpiTrend(120, 100).direction, "up");
+  assert.equal(kpiTrend(120, 100).text, "+20%");
+  assert.equal(kpiTrend(80, 100).direction, "down");
+  assert.equal(kpiTrend(80, 100).text, "-20%");
+  assert.equal(kpiTrend(100, 100).text, "estável");
+  // Dividir por zero viraria infinito: o período sem emissão anterior é dito.
+  assert.equal(kpiTrend(5, 0).text, "novo no período");
+  assert.equal(kpiTrend(0, 0).direction, "flat");
+  assert.equal(kpiTrend(10, null), null);
+
+  // A frase completa é o que o leitor de tela anuncia: uma seta e um número
+  // solto não dizem contra o quê a comparação foi feita.
+  assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
 console.log(JSON.stringify({ version: "5.33.15", passed: true, checks: checks.length, names: checks }, null, 2));

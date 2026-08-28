@@ -1,5 +1,40 @@
 # Histórico de alterações
 
+## 5.34.0 — 2026-08-28
+
+### Composição de arquivos da N-1710
+
+- A N-1710 passa a aceitar **qualquer quantidade de arquivos físicos, em qualquer extensão**. As composições obrigatórias por tipo saem de cena: não há mais exigência de 1 nativo + 1 PDF, do trio dos `CR`, do PDF isolado dos códigos `955` nem do par Excel + PDF de `LI`/`MC`. A validade continua vindo de código + LD + revisão + disciplina.
+- `TÍTULO` e `PROPÓSITO` continuam sendo gravados na eGRDT quando existem na LD, mas ausência ou divergência nesses dois campos deixa de bloquear a emissão. Documento, revisão, arquivo, formato, disciplina e tipo continuam protegidos pelo validador central.
+- O seletor da pasta documental deixa de filtrar extensões: a decisão passa a ser tomada depois, com o código documental e a LD disponíveis.
+- **A ordem das linhas continua sendo o modelo oficial**: nativo primeiro, PDF em seguida e TXT por último. Sem essa normalização o pacote herdava a ordem em que o sistema operacional devolveu os arquivos do seletor, de modo que a mesma seleção podia gerar eGRDTs com as linhas invertidas entre uma execução e outra.
+- **Arquivo duplicado volta a ser ignorado** (regra da 5.33.8): dois arquivos que resolvem para o mesmo nome controlado são a mesma cópia do documento, e só a primeira segue para a eGRDT. A cópia deixa de ser emitida como uma segunda linha com sufixo `_ARQnn`, que produzia um nome fora da codificação controlada pela LD.
+- O alerta de nome divergente volta a aparecer — a normalização interna deixava de avisar o operador — e agora informa o nome final que será gravado.
+
+### Desempenho
+
+- O Service Worker deixa de rebaixar cada revalidação a um download completo. Ele buscava todo arquivo com `cache: "no-store"`, o que fazia o app transferir de novo ~1,8 MB de código (48 scripts e 10 folhas de estilo) **a cada abertura**. Passa a usar requisição condicional (`cache: "no-cache"`, ETag/If-None-Match): a garantia de que uma correção publicada aparece na hora é a mesma, mas quando nada mudou o servidor responde `304` sem corpo.
+- As folhas de estilo dos módulos que abrem ocultos — Consulta, Histórico de análises e SIGEM, cerca de 70 KB — saem do caminho crítico de renderização e passam a valer logo após a primeira pintura.
+
+### Segurança
+
+- `'unsafe-eval'` removido da Content-Security-Policy. O único uso de `new Function` nas bibliotecas vendorizadas é o polyfill de `setImmediate` do browserify, acionado somente quando se passa uma string — o que nenhuma delas faz. Conferido em navegador com a política restrita: ExcelJS grava o `.xlsx`, JSZip comprime com DEFLATE e SheetJS grava a planilha, sem violações.
+- Índices de cobertura para as cinco chaves estrangeiras que não tinham nenhum (`SUPABASE_MIGRACAO_5.34.0.sql`). Sem eles, apagar um usuário ou excluir uma eGRDT do histórico obrigava o Postgres a varrer a tabela inteira para conferir a restrição — justamente nos dois pontos em que o operador espera a confirmação do Supabase.
+
+### Interface e acessibilidade
+
+- **Correção de contraste no tema escuro.** `--text-strong`, `--brand-500`, `--success-800` e `--danger-800` eram usados pelo Dashboard, pela Consulta e pelo anel de foco, mas nunca haviam sido definidos: cada `var()` caía no valor de reserva escrito no próprio arquivo, sempre uma cor do tema claro. No modo escuro os números dos indicadores, os títulos e os rótulos do gráfico apareciam em azul-marinho sobre fundo escuro, praticamente ilegíveis. Definidos como apelidos dos tokens reais, os 25 usos passam a acompanhar os dois temas — todos os pontos medidos ficam acima de 4,5:1 (WCAG AA) no claro e no escuro.
+- O **Dashboard compara cada indicador com o período anterior** de mesmo tamanho: cada cartão mostra a variação percentual, com direção, cor e a frase completa para leitor de tela. Um indicador sozinho não diz se 412 documentos é muito ou pouco. Quando o período começa antes do primeiro registro — “Todo o histórico” — não existe janela anterior comparável e nenhuma variação é exibida. A mesma comparação vai para o Excel do Dashboard.
+- O fundo da tela de acesso deixa de exibir uma borda circular: o gradiente terminava em `transparent`, que é preto com alfa 0, e a interpolação até ele passava por cinza.
+- A tela de acesso, o menu da conta e os painéis de equipe ganham o **tema escuro**. Os tokens de `html[data-theme="dark"]` já existiam, mas essa folha só tinha cores fixas do tema claro: quem usava o app no escuro recebia essas telas em branco.
+- O campo de e-mail recebe o foco ao abrir a tela de acesso; antes o foco ficava no `<body>`, atrás dela.
+- A região viva de leitores de tela deixa de ser o cartão inteiro e passa a ser a mensagem de status. Na configuração anterior, qualquer alteração — inclusive a troca entre login e nova senha — fazia o leitor reler o formulário completo.
+- O botão de exibir senha passa a expor seu estado (`aria-pressed`).
+
+### Manutenção
+
+- `history_app.js` e `sigem_posting_app.js` deixam de fixar a versão no próprio arquivo e passam a lê-la da configuração central. O valor de reserva entrou na conferência de versões, que subiu de 5 para 7 pontos de publicação — antes esses dois envelheciam em silêncio e carimbavam a versão errada nos relatórios.
+
 ## 5.33.15 — 2026-08-24
 
 - Documentos do tipo **DE** passam a usar obrigatoriamente o formato **A3** na eGRDT.

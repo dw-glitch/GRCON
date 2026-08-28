@@ -191,6 +191,35 @@
    * SIGEM já o utilizam, mas a função não exige mais um “par” nem combinações
    * especiais para CR, 955, LI/MC ou 98V.
    */
+  // Ordem de composição da eGRDT para a N-1710.
+  //
+  // A quantidade e a extensão deixaram de restringir a emissão, mas a ORDEM das
+  // linhas continua sendo um requisito do modelo oficial: o arquivo nativo é
+  // gravado primeiro e o PDF logo abaixo (o exemplo oficial e os eGRDTs já
+  // emitidos seguem essa disposição, inclusive no par Excel + PDF de LI/MC e no
+  // trio nativo + PDF + TXT dos CR).
+  //
+  // Sem esta normalização o pacote herdava a ordem em que o sistema operacional
+  // entregou os arquivos do seletor de pasta — ou seja, a mesma seleção podia
+  // gerar eGRDTs com as linhas invertidas entre uma execução e outra.
+  const N1710_ORDER = { native: 0, pdf: 1, txt: 2, unknown: 3 };
+
+  function n1710OrderRank(source) {
+    const extension = extensionOf(source && (source.name || source.finalName));
+    if (!extension) return N1710_ORDER.unknown;
+    if (extension === "pdf") return N1710_ORDER.pdf;
+    if (extension === "txt") return N1710_ORDER.txt;
+    return N1710_ORDER.native;
+  }
+
+  function orderN1710Sources(list) {
+    // Ordenação estável: arquivos da mesma classe preservam a ordem recebida.
+    return list
+      .map((source, index) => ({ source, index, rank: n1710OrderRank(source) }))
+      .sort((a, b) => (a.rank - b.rank) || (a.index - b.index))
+      .map((entry) => entry.source);
+  }
+
   function validateN1710Pair(row, sources) {
     const originalList = Array.isArray(sources) ? sources.filter(Boolean) : [];
     const applies = Boolean(C && C.isN1710Context && C.isN1710Context(row && row.sheet, row && row.document));
@@ -199,15 +228,30 @@
     }
 
     const errors = [];
+    // Dois arquivos que resolvem para o mesmo nome controlado são a mesma cópia
+    // do mesmo documento (por exemplo `... - COPIA.pdf`). Só a primeira segue
+    // para a eGRDT; a outra vira alerta. Inventar um sufixo para a segunda cópia
+    // produziria um nome fora da codificação controlada pela LD.
     const localNames = new Set();
-    const flexibleSources = originalList.map((source) => {
+    const ignoredDuplicates = [];
+    const flexibleSources = [];
+    orderN1710Sources(originalList).forEach((source) => {
       const originalName = text(source && (source.name || source.finalName));
       const preferred = C && C.proposedFileName
         ? C.proposedFileName(originalName, row && row.document, row && row.revision, row && row.sheet)
         : text(source && (source.finalName || source.name));
-      const finalName = n1710UniqueFinalName(source, row, localNames, preferred);
-      localNames.add(norm(finalName));
-      return { ...source, finalName };
+      const finalName = text(preferred) || text(source && (source.finalName || source.name));
+      const key = norm(finalName);
+      if (key && localNames.has(key)) {
+        ignoredDuplicates.push(source);
+        return;
+      }
+      if (key) localNames.add(key);
+      // `receivedFinalName` preserva o nome que a triagem havia proposto antes
+      // da normalização feita aqui. A emissão continua conferindo o nome
+      // recebido — e alertando o operador quando ele diverge do padrão —
+      // em vez de validar um nome que esta função acabou de corrigir.
+      flexibleSources.push({ ...source, receivedFinalName: text(source && source.finalName), finalName });
     });
 
     // Relação/linha virtual sem arquivo físico não é uma restrição de extensão
@@ -222,31 +266,15 @@
       valid: errors.length === 0,
       documentType: n1710DocumentType(row && row.document),
       flexibleFiles: true,
-      // Preserve integralmente a ordem e todos os arquivos físicos recebidos.
-      // Não existe deduplicação por extensão; colisões de nome recebem apenas
-      // um sufixo operacional para que cada arquivo continue individual.
+      // Preserva todos os arquivos físicos recebidos, sem deduplicação por
+      // extensão e sem limite de quantidade; colisões de nome recebem apenas um
+      // sufixo operacional para que cada arquivo continue individual. A ordem
+      // segue o modelo oficial da eGRDT: nativo → PDF → TXT.
       sources: flexibleSources,
       errors: [...new Set(errors)],
       warnings: [],
-      ignoredDuplicates: [],
+      ignoredDuplicates,
     };
-  }
-
-  function n1710UniqueFinalName(source, row, usedNames, preferredName) {
-    const preferred = text(preferredName) || text(source && (source.finalName || source.name));
-    const preferredKey = norm(preferred);
-    if (preferred && !usedNames.has(preferredKey)) return preferred;
-
-    const match = preferred.match(/(\.[^.]+)$/);
-    const extension = match ? match[1] : "";
-    const stem = extension ? preferred.slice(0, -extension.length) : preferred;
-    let sequence = 2;
-    let candidate = "";
-    do {
-      candidate = `${stem}_ARQ${String(sequence).padStart(2, "0")}${extension}`;
-      sequence += 1;
-    } while (usedNames.has(norm(candidate)));
-    return candidate;
   }
 
   function createPlan(results, selectedIndices, options) {
@@ -306,24 +334,18 @@
       }
 
       orderedSources.forEach((source) => {
-        const fileNameCheck = C.validateFinalFileName(source.finalName, source.name, row.document, row.revision, row.sheet);
-        const n1710 = Boolean(C && C.isN1710Context && C.isN1710Context(row.sheet, row.document));
+        const receivedFinalName = source.receivedFinalName || source.finalName;
+        const fileNameCheck = C.validateFinalFileName(receivedFinalName, source.name, row.document, row.revision, row.sheet);
         if (!fileNameCheck.valid) {
-          warnings.push(`${row.document} / ${source.name}: nome físico diferente do padrão controlado; o código foi validado pela LD e será usado como referência. ${fileNameCheck.errors.join(" ")}`);
+          warnings.push(`${row.document} / ${source.name}: nome físico fora do padrão controlado; o código foi validado pela LD e o arquivo será gravado como ${fileNameCheck.expected}. ${fileNameCheck.errors.join(" ")}`);
         }
-        const finalName = n1710
-          ? n1710UniqueFinalName(source, row, names, fileNameCheck.expected)
-          : fileNameCheck.expected;
+        const finalName = fileNameCheck.expected;
         const outputKey = norm(finalName);
         if (names.has(outputKey)) {
-          // Esta proteção continua valendo para famílias com nomenclatura rígida.
-          // Na N-1710 n1710UniqueFinalName garante um nome individual para cada
-          // arquivo, inclusive quando vários possuem a mesma extensão.
+          // Arquivos que convergem para o mesmo nome controlado são a mesma
+          // cópia do documento: apenas a primeira segue para a eGRDT.
           warnings.push(`${row.document}: arquivo duplicado ${finalName} ignorado; somente uma cópia seguirá para a eGRDT.`);
           return;
-        }
-        if (n1710 && norm(finalName) !== norm(fileNameCheck.expected)) {
-          warnings.push(`${row.document} / ${source.name}: mais de um arquivo convergiu para o mesmo nome controlado; preservado individualmente na eGRDT como ${finalName}.`);
         }
         names.add(outputKey);
 

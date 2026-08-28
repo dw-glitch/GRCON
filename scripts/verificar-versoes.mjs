@@ -13,6 +13,16 @@ const checks = [
   ["index.html", new RegExp(`data-version=["']${version.replaceAll(".", "\\.")}["']`)],
   ["LEIA-ME_PUBLICACAO.txt", new RegExp(`GRCON ${version.replaceAll(".", "\\.")}`)],
 ];
+
+// Módulos que carregam a versão da configuração central, mas mantêm um valor de
+// reserva no próprio arquivo. O valor de reserva também precisa acompanhar a
+// publicação: quando ficava de fora desta conferência, ele envelhecia em
+// silêncio e carimbava a versão errada nos relatórios gerados por esses
+// módulos.
+const fallbackChecks = ["history_app.js", "sigem_posting_app.js"];
+for (const file of fallbackChecks) {
+  checks.push([file, new RegExp(`\\|\\|\\s*["']${version.replaceAll(".", "\\.")}["']`)]);
+}
 const failures = checks
   .filter(([file, pattern]) => !pattern.test(fs.readFileSync(path.join(root, file), "utf8")))
   .map(([file]) => `${file} não declara a versão ${version}`);

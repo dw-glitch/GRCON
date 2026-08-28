@@ -1,5 +1,5 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.33.15
+// Versão: 5.34.0
 // Estratégia: rede primeiro para todo o código do GRCON (HTML/CSS/JS), para
 // que uma correção publicada apareça na hora; e stale-while-revalidate para os
 // arquivos pesados (bibliotecas, imagens e os pacotes gerados), que assim
@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.33.15";
+const CACHE_NAME = "grcon-v5.34.0";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -139,8 +139,13 @@ const HEAVY_ASSETS = new Set([
   "grcon-logo-report.png",
 ]);
 
+// `no-cache` (e não `no-store`) força uma revalidação com o servidor a cada
+// carregamento, mantendo a garantia de que uma correção publicada aparece na
+// hora — mas usando requisição condicional (ETag/If-None-Match). Quando o
+// arquivo não mudou o servidor responde 304 e nada é transferido, em vez de
+// baixar de novo o ~1,8 MB de código do GRCON a cada abertura do app.
 async function fetchAndCache(request) {
-  const response = await fetch(new Request(request, { cache: "no-store" }));
+  const response = await fetch(new Request(request, { cache: "no-cache" }));
   if (response && response.ok) {
     const cache = await caches.open(CACHE_NAME);
     await cache.put(request, response.clone());

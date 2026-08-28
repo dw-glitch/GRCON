@@ -29,6 +29,16 @@ html[data-app="GRCON"][data-ui-generation="3"] {
   --border: var(--border-1);
   --primary: var(--brand-700);
   --accent: var(--brand-600);
+  /* Apelidos que já eram usados pelo Dashboard, pela Consulta e pelo anel de
+     foco, mas que nunca chegaram a ser definidos. Sem eles, cada `var()` caía
+     no valor de reserva escrito no próprio arquivo — sempre uma cor do tema
+     claro — e no tema escuro os números dos indicadores, os títulos e os
+     rótulos do gráfico ficavam em azul-marinho sobre fundo escuro.
+     Como apelidos dos tokens reais, acompanham os dois temas. */
+  --text-strong: var(--text-1);
+  --brand-500: var(--brand-600);
+  --success-800: var(--success-700);
+  --danger-800: var(--danger-700);
   color-scheme: light;
 }
 
