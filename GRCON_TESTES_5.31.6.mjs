@@ -655,13 +655,20 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   const verified = await Workbook.verify(bytes, plan.items);
   assert.equal(verified.checkedRows, 2);
   assert.deepEqual(verified.rows.map((item) => item.fileName), [nativeName, pdfName]);
-  checks.push("N-1710 gera exatamente duas linhas por código — nativo + PDF — com _0001_revisão nos dois arquivos");
+  checks.push("N-1710 grava o nativo antes do PDF na eGRDT, com _0001_revisão nos dois arquivos, mesmo quando o seletor entrega o PDF primeiro");
 
+  // A política vigente da N-1710 não impõe quantidade nem extensão: um único
+  // arquivo físico já compõe o pacote. O que continua obrigatório é existir um
+  // arquivo real associado ao documento.
   const onlyPdf = { ...row, files: [row.files[0]] };
-  const incomplete = Emission.createPlan([onlyPdf], new Set([0]));
-  assert.ok(incomplete.errors.some((message) => /N-1710 exige exatamente 2 arquivos por código/i.test(message)));
-  assert.ok(incomplete.errors.some((message) => /arquivo nativo/i.test(message)));
-  checks.push("N-1710 bloqueia geração quando o par nativo + PDF está incompleto");
+  const single = Emission.createPlan([onlyPdf], new Set([0]));
+  assert.deepEqual(single.errors, []);
+  assert.deepEqual(single.items.map((item) => item.fileName), [pdfName]);
+
+  const virtualOnly = { ...row, files: [{ name: pdfName, finalName: pdfName, file: null, virtual: true }] };
+  const withoutFile = Emission.createPlan([virtualOnly], new Set([0]));
+  assert.ok(withoutFile.errors.some((message) => /ao menos um arquivo físico/i.test(message)));
+  checks.push("N-1710 aceita qualquer quantidade/extensão de arquivo, mas exige ao menos um arquivo físico real");
 }
 
 {
@@ -675,7 +682,7 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   };
   const liPair = Emission.validateN1710Pair(liRow, liRow.files);
   assert.equal(liPair.valid, true);
-  assert.equal(liPair.requiresExcelPair, true);
+  assert.equal(liPair.flexibleFiles, true);
   assert.equal(liPair.documentType, "LI");
   assert.deepEqual(liPair.sources.map((entry) => entry.name), [
     `${liDocument}_0001_A.xlsx`,
@@ -712,13 +719,17 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
     `${liDocument}_0001_A.pdf`,
   ]);
 
-  const liWrongNative = Emission.validateN1710Pair(liRow, [
-    { name: `${liDocument}_0001_A.dwg`, finalName: `${liDocument}_0001_A.dwg`, file: { size: 20 } },
+  // Outro nativo além do Excel deixou de ser rejeitado em LI/MC; a ordem
+  // nativo → PDF continua sendo aplicada.
+  const liOtherNative = Emission.validateN1710Pair(liRow, [
     { name: `${liDocument}_0001_A.pdf`, finalName: `${liDocument}_0001_A.pdf`, file: { size: 10 } },
+    { name: `${liDocument}_0001_A.dwg`, finalName: `${liDocument}_0001_A.dwg`, file: { size: 20 } },
   ]);
-  assert.equal(liWrongNative.valid, false);
-  assert.ok(liWrongNative.errors.some((message) => /arquivo Excel/i.test(message)));
-  assert.ok(liWrongNative.errors.some((message) => /não aceita outro tipo de arquivo nativo/i.test(message)));
+  assert.equal(liOtherNative.valid, true);
+  assert.deepEqual(liOtherNative.sources.map((entry) => entry.name), [
+    `${liDocument}_0001_A.dwg`,
+    `${liDocument}_0001_A.pdf`,
+  ]);
 
   const mcDocument = "MC-5290.00-22313-911-C1O-001";
   const mcRow = {
@@ -730,14 +741,31 @@ check("N-1710 não pesquisa nem aceita uma forma artificial com nt-", () => {
   };
   const mcPair = Emission.validateN1710Pair(mcRow, mcRow.files);
   assert.equal(mcPair.valid, true);
-  assert.equal(mcPair.requiresExcelPair, true);
+  assert.equal(mcPair.flexibleFiles, true);
   assert.equal(mcPair.documentType, "MC");
   assert.deepEqual(mcPair.sources.map((entry) => entry.name), [
     `${mcDocument}_0001_0.xlsm`,
     `${mcDocument}_0001_0.pdf`,
   ]);
+  // CR historicamente compõe nativo + PDF + TXT; a ordem continua garantida
+  // mesmo quando os arquivos chegam embaralhados do seletor de pasta.
+  const crDocument = "CR-5290.00-22313-940-C1O-002";
+  const crPair = Emission.validateN1710Pair(
+    { document: crDocument, revision: "0", sheet: "N-1710" },
+    [
+      { name: `${crDocument}_0001_0.txt`, finalName: `${crDocument}_0001_0.txt`, file: { size: 5 } },
+      { name: `${crDocument}_0001_0.pdf`, finalName: `${crDocument}_0001_0.pdf`, file: { size: 10 } },
+      { name: `${crDocument}_0001_0.dwg`, finalName: `${crDocument}_0001_0.dwg`, file: { size: 20 } },
+    ]
+  );
+  assert.equal(crPair.valid, true);
+  assert.deepEqual(crPair.sources.map((entry) => entry.name), [
+    `${crDocument}_0001_0.dwg`,
+    `${crDocument}_0001_0.pdf`,
+    `${crDocument}_0001_0.txt`,
+  ]);
   assert.equal(Core.proposedFileName(`${mcDocument}.xlsb`, mcDocument, "0", "N-1710"), `${mcDocument}_0001_0.xlsb`);
-  checks.push("LI e MC da N-1710 exigem e ordenam exatamente Excel + PDF, aceitando extensões Excel suportadas");
+  checks.push("N-1710 ordena nativo → PDF → TXT de forma determinística em LI, MC e CR, aceitando qualquer extensão");
 }
 
 check("LD_001 prioriza DISCIPLINA sobre Disciplina Torre e adapta CIVIL/SEGURANCA para CIVIL na eGRDT", () => {
@@ -2192,7 +2220,7 @@ check("nome final divergente é corrigido na emissão e não bloqueia", () => {
   assert.deepEqual(plan.errors, []);
   assert.equal(plan.entries.length, 2);
   assert.deepEqual(plan.entries.map((entry) => entry.finalName), [`${document}_0001_A.dwg`, `${document}_0001_A.pdf`]);
-  assert.ok(plan.warnings.some((message) => /corrigiu automaticamente/i.test(message)));
+  assert.ok(plan.warnings.some((message) => /fora do padrão controlado/i.test(message) && /será gravado como/i.test(message)));
 });
 
 
