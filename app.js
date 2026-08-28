@@ -120,7 +120,25 @@
     manualForceInclude: new Set(), // índices incluídos manualmente pelo operador (mesmo sem decisão READY)
   };
 
+  // Lista histórica mantida para ET/CV e demais famílias. Para N-1710, a
+  // extensão não é critério de bloqueio: o arquivo só precisa trazer um código
+  // N-1710 reconhecível para chegar à triagem, onde a LD decide a identidade.
   const PACKAGE_EXTENSION = /\.(pdf|doc|docx|txt|xls|xlsx|xlsm|xlsb|dwg|dgn|ppt|pptx)$/i;
+
+  function n1710FileCandidate(fileName) {
+    const baseName = String(fileName || "").trim().split(/[\\/]/).pop() || "";
+    // Retira qualquer extensão, inclusive extensões novas/longas, e reaplica
+    // .pdf apenas para reutilizar o identificador de família do Core. Isto NÃO
+    // valida o documento nem faz correspondência aproximada; só evita descartar
+    // o arquivo antes de a LD ser carregada.
+    const stem = baseName.replace(/\.[^.]+$/, "");
+    return Boolean(stem && C && C.inferSheetFromName && C.inferSheetFromName(`${stem}.pdf`) === "N-1710");
+  }
+
+  function packageExtensionAllowed(fileName) {
+    return PACKAGE_EXTENSION.test(String(fileName || "")) || n1710FileCandidate(fileName);
+  }
+
   const $ = (selector) => document.querySelector(selector);
 
   const EGRDT_LEGACY_SEQUENCE_KEY = "grcon.egrdt.sequence.v3";
@@ -1305,7 +1323,7 @@
         return;
       }
       seenPhysical.add(physicalKey);
-      let reason = PACKAGE_EXTENSION.test(file && file.name || "") ? "" : "extensão não suportada";
+      let reason = packageExtensionAllowed(file && file.name || "") ? "" : "extensão não suportada";
       if (!reason) reason = C.controlArtifactKind(file && file.name);
       if (!reason && state.ldFiles.some((ldFile) => samePhysicalFile(file, ldFile))) reason = "LD selecionada";
       if (reason) ignoredFiles.push({ name: file.name, reason });
@@ -1340,7 +1358,7 @@
         return false;
       }
       seenPhysical.add(physicalKey);
-      let reason = PACKAGE_EXTENSION.test(file && file.name || "") ? "" : "extensão não suportada";
+      let reason = packageExtensionAllowed(file && file.name || "") ? "" : "extensão não suportada";
       if (!reason) reason = C.controlArtifactKind(file && file.name);
       if (!reason && state.ldFiles.some((ldFile) => samePhysicalFile(file, ldFile))) reason = "LD selecionada";
       if (reason) {
@@ -1398,11 +1416,11 @@
     els.ldMeta.textContent = state.ldFiles.length ? ldDisplayName() : "Selecionar arquivo";
     els.listMeta.textContent = state.textEntries.length
       ? state.listSummary
-        ? `${state.listSummary.total} por texto · ${state.listSummary.files} PDF(s) físico(s)`
+        ? `${state.listSummary.total} por texto · ${state.listSummary.files} arquivo(s) físico(s)`
         : `${state.textEntries.length} item(ns) por texto`
       : state.listFiles.length
         ? state.listSummary
-          ? `${state.listSummary.total} item(ns) lido(s) · ${state.listSummary.files} PDF(s) físico(s)`
+          ? `${state.listSummary.total} item(ns) lido(s) · ${state.listSummary.files} arquivo(s) físico(s)`
           : state.listFiles[0].name
         : "Excel ou texto";
     const packageLabel = fileLabel(state.packageFiles, "arquivo encontrado", "arquivos encontrados");
@@ -1410,8 +1428,8 @@
       ? `Processando ${state.packageCandidates.length} arquivo(s)...`
       : state.listSummary
       ? state.listSummary.files
-        ? `${state.listSummary.files} PDF(s) da relação localizado(s)`
-        : "Sem PDF físico · GRDT disponível pela relação"
+        ? `${state.listSummary.files} arquivo(s) da relação localizado(s)`
+        : "Sem arquivo físico · GRDT disponível pela relação"
       : state.ignoredFiles.length ? `${packageLabel} · ${state.ignoredFiles.length} ignorado(s)` : packageLabel;
     els.ignoredDetails.hidden = state.ignoredFiles.length === 0 || state.packageSelectionPending;
     els.ignoredSummary.textContent = `Ignorados: ${state.ignoredFiles.length}`;
@@ -1519,7 +1537,8 @@
 
   function listDocumentName(value) {
     return listBaseName(value)
-      .replace(/\.pdf$/i, "")
+      // A relação pode citar qualquer arquivo N-1710, não somente PDF.
+      .replace(/\.[^.]+$/i, "")
       .replace(/_\d{4}(?:_[0-9A-Z]+)?$/i, "")
       .trim();
   }
@@ -1575,7 +1594,7 @@
         addListCandidate(entries, seen, cell, sheetName, rowIndex + 1, "");
       }));
     });
-    if (!entries.length) throw new Error("A lista Excel não contém nomes de PDF ou documentos reconhecidos nas colunas DOCUMENTO, ARQUIVO ou PDF.");
+    if (!entries.length) throw new Error("A lista Excel não contém nomes de arquivos ou documentos reconhecidos nas colunas DOCUMENTO, ARQUIVO ou PDF.");
     return entries;
   }
 
@@ -1780,10 +1799,26 @@
   }
 
   function selectPdfsFromList(entries) {
-    const pdfs = state.packageFiles.filter((file) => extensionOf(file.name) === "pdf");
+    const allFiles = state.packageFiles;
+    const pdfs = allFiles.filter((file) => extensionOf(file.name) === "pdf");
     const exactNames = new Map();
     const exactStems = new Map();
-    const byDocument = new Map();
+    const byDocumentPdf = new Map();
+    const byDocumentAll = new Map();
+
+    function indexByDocument(file, target) {
+      const inferredDocument = listDocumentName(file.name);
+      const exact = C.exactDocumentMatch ? C.exactDocumentMatch(inferredDocument, state.index) : null;
+      const matches = exact ? [exact] : C.matchDocuments(file.name, state.index);
+      // Só indexa quando a LD devolve UMA correspondência segura. Código
+      // parecido com dois documentos não entra por aproximação.
+      if (matches.length !== 1) return;
+      const documentKey = C.key(matches[0].document);
+      if (!target.has(documentKey)) target.set(documentKey, []);
+      target.get(documentKey).push(file);
+    }
+
+    allFiles.forEach((file) => indexByDocument(file, byDocumentAll));
     pdfs.forEach((file) => {
       const nameKey = C.norm(file.name);
       const stemKey = C.norm(file.name.replace(/\.pdf$/i, ""));
@@ -1791,14 +1826,7 @@
       if (!exactStems.has(stemKey)) exactStems.set(stemKey, []);
       exactNames.get(nameKey).push(file);
       exactStems.get(stemKey).push(file);
-      const inferredDocument = listDocumentName(file.name);
-      const exact = C.exactDocumentMatch ? C.exactDocumentMatch(inferredDocument, state.index) : null;
-      const matches = exact ? [exact] : C.matchDocuments(file.name, state.index);
-      if (matches.length === 1) {
-        const documentKey = C.key(matches[0].document);
-        if (!byDocument.has(documentKey)) byDocument.set(documentKey, []);
-        byDocument.get(documentKey).push(file);
-      }
+      indexByDocument(file, byDocumentPdf);
     });
 
     const selected = new Map();
@@ -1806,25 +1834,42 @@
     const documentLookupByPhysicalKey = new Map();
     const missing = [];
     let matchedItems = 0;
+
     entries.forEach((entry) => {
-      const baseName = listBaseName(entry.fileName || entry.raw);
-      let candidates = exactNames.get(C.norm(baseName)) || [];
-      if (!candidates.length && !/\.pdf$/i.test(baseName)) candidates = exactStems.get(C.norm(baseName)) || [];
-      if (!candidates.length && entry.document) candidates = byDocument.get(C.key(entry.document)) || [];
+      const n1710 = Boolean(C && C.isN1710Context && C.isN1710Context("", entry.document));
+      let candidates = [];
+
+      if (n1710 && entry.document) {
+        // A relação identifica o documento lógico. Para N-1710, todos os
+        // arquivos físicos associados com segurança ao mesmo código devem
+        // acompanhar esse documento, independentemente da extensão.
+        candidates = byDocumentAll.get(C.key(entry.document)) || [];
+      } else {
+        // Comportamento histórico das outras famílias: a relação seleciona PDF.
+        const baseName = listBaseName(entry.fileName || entry.raw);
+        candidates = exactNames.get(C.norm(baseName)) || [];
+        if (!candidates.length && !/\.pdf$/i.test(baseName)) candidates = exactStems.get(C.norm(baseName)) || [];
+        if (!candidates.length && entry.document) candidates = byDocumentPdf.get(C.key(entry.document)) || [];
+      }
+
       const unique = [...new Map(candidates.map((file) => [listPhysicalKey(file), file])).values()];
-      if (unique.length === 1) {
-        const physicalKey = listPhysicalKey(unique[0]);
-        selected.set(physicalKey, unique[0]);
-        if (!sourceByPhysicalKey.has(physicalKey)) sourceByPhysicalKey.set(physicalKey, []);
-        sourceByPhysicalKey.get(physicalKey).push(`${entry.sheetName} · linha ${entry.rowNumber}`);
-        if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
+      if (n1710 ? unique.length >= 1 : unique.length === 1) {
+        unique.forEach((file) => {
+          const physicalKey = listPhysicalKey(file);
+          selected.set(physicalKey, file);
+          if (!sourceByPhysicalKey.has(physicalKey)) sourceByPhysicalKey.set(physicalKey, []);
+          sourceByPhysicalKey.get(physicalKey).push(`${entry.sheetName} · linha ${entry.rowNumber}`);
+          if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
+        });
         matchedItems += 1;
       } else {
         missing.push({
           ...entry,
-          reason: unique.length > 1
-            ? `Mais de um PDF da pasta corresponde ao item “${entry.raw}”; informe o nome exato com a extensão na lista.`
-            : `O PDF “${entry.raw}” está na relação, mas não foi localizado na pasta selecionada.`,
+          reason: n1710
+            ? `Nenhum arquivo físico associado com segurança ao código “${entry.document || entry.raw}” foi localizado na pasta.`
+            : unique.length > 1
+              ? `Mais de um PDF da pasta corresponde ao item “${entry.raw}”; informe o nome exato com a extensão na lista.`
+              : `O PDF “${entry.raw}” está na relação, mas não foi localizado na pasta selecionada.`,
         });
       }
     });
@@ -2366,15 +2411,18 @@
       row.files.forEach((entry) => {
         entry.finalName = C.proposedFileName(entry.name, row.document, row.revision, row.sheet);
       });
-      // Arquivos que convergem para o mesmo nome oficial são duplicatas lógicas.
-      // A primeira cópia é preservada; as demais viram somente alerta e não
-      // entram na composição N-1710 nem na eGRDT.
+      const n1710Context = Boolean(C && C.isN1710Context && C.isN1710Context(row.sheet, row.document));
+      // Nas demais famílias, dois arquivos que convergem para o mesmo nome final
+      // continuam sendo tratados como duplicata. Na N-1710 isto NÃO vale: dois
+      // PDFs, dois XLSX ou qualquer outra repetição de extensão podem ser dois
+      // arquivos físicos legítimos do mesmo documento. O módulo de emissão dará
+      // um nome final individual a cada um sem perder nenhum arquivo.
       const uniqueFiles = [];
       const seenFinalNames = new Set();
       const duplicateFiles = [];
       row.files.forEach((entry) => {
         const finalKey = C.norm(entry.finalName || entry.name);
-        if (finalKey && seenFinalNames.has(finalKey)) {
+        if (!n1710Context && finalKey && seenFinalNames.has(finalKey)) {
           duplicateFiles.push(entry);
           state.ignoredFiles.push({
             name: entry.name,
@@ -2410,10 +2458,11 @@
       if (n1710Pair.applies && !n1710Pair.valid) {
         row.decision = C.REVIEW;
         row.hardBlock = true;
-        row.blockCode = "n1710_pair_incomplete";
-        row.status = "Composição N-1710 incompleta";
+        row.blockCode = "n1710_file_missing";
+        row.status = "Arquivo físico N-1710 não localizado";
         row.reason = n1710Pair.errors.join(" ");
-      } else if (row.decision === C.READY && !hasPdf && !row.virtualFileName) {
+      } else if (!n1710Pair.applies && row.decision === C.READY && !hasPdf && !row.virtualFileName) {
+        // A exigência histórica de PDF permanece somente fora da N-1710.
         row.decision = C.REVIEW;
         row.status = "PDF não localizado";
         row.reason = "Nenhum PDF físico foi encontrado para comprovar a revisão e integrar a emissão.";
@@ -2421,7 +2470,7 @@
       const compositionWarning = n1710Pair.applies
         ? n1710Pair.valid
           ? ""
-          : `N-1710 bloqueada: ${n1710Pair.errors.join(" ")}`
+          : `N-1710 sem arquivo físico: ${n1710Pair.errors.join(" ")}`
         : row.virtualFileName
           ? "Item recebido somente pela relação. A GRDT e o nome final podem ser gerados, mas o PDF físico não será incluído no pacote."
           : !row.files.length
@@ -2515,7 +2564,7 @@
       let listSourceByPhysicalKey = new Map();
       let documentLookupByPhysicalKey = new Map();
       if (hasRelationSource()) {
-        setProgress(30, state.textEntries.length ? "Preparando a Entrada por texto…" : "Lendo a lista Excel de PDFs…");
+        setProgress(30, state.textEntries.length ? "Preparando a Entrada por texto…" : "Lendo a lista Excel de documentos…");
         const listEntries = await currentRelationEntries();
         const listSelection = selectPdfsFromList(listEntries);
         analysisFiles = listSelection.matchedFiles;
@@ -4904,12 +4953,12 @@
       lines.push(`${index + 1}. ${file.official.baseName}`);
       lines.push(`   Disciplina: ${file.group.discipline || "NÃO INFORMADA"}`);
       if (file.group.disciplineBatchCount > 1) lines.push(`   Divisão da disciplina: ${file.group.disciplineBatchNumber} de ${file.group.disciplineBatchCount}`);
-      lines.push(`   Documentos/PDFs: ${file.group.entries.length}`);
+      lines.push(`   Arquivos na eGRDT: ${file.group.entries.length}`);
       lines.push(`   Arquivo eGRDT: ${file.fileName}`);
       lines.push(`   Pasta: ${file.official.baseName}`);
       lines.push("");
     });
-    lines.push("Cada pasta contém somente a eGRDT indicada e os PDFs pertencentes ao respectivo lote.");
+    lines.push("Cada pasta contém somente a eGRDT indicada e os arquivos pertencentes ao respectivo lote.");
     return lines.join("\r\n");
   }
 
@@ -4936,7 +4985,7 @@
       return row && row.files && row.files.length;
     }));
     if (!physicalSelection.size) {
-      showToast("Nenhum PDF físico foi fornecido. Use Gerar GRDT final para os itens recebidos pela relação.", "warn");
+      showToast("Nenhum arquivo físico foi fornecido. Use Gerar GRDT final para os itens recebidos pela relação.", "warn");
       return;
     }
     const plan = E.createPlan(state.results, physicalSelection, { manualForceIndices: state.manualForceInclude });
