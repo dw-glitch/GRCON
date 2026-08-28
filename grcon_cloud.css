@@ -9,7 +9,10 @@
 .grcon-cloud-auth {
   align-items: center;
   background:
-    radial-gradient(circle at 12% 15%, rgba(43, 128, 181, .18), transparent 32rem),
+    /* O fim do gradiente usa a mesma cor com alfa 0, não `transparent`:
+       `transparent` é rgba(0,0,0,0) e a interpolação até ele passa por
+       cinza, o que desenhava uma borda circular visível no fundo. */
+    radial-gradient(circle at 12% 15%, rgba(43, 128, 181, .18), rgba(43, 128, 181, 0) 32rem),
     linear-gradient(145deg, #eef5f9 0%, #f8fafc 52%, #e8f1f6 100%);
   display: flex;
   inset: 0;
@@ -544,7 +547,7 @@ body[data-grcon-cloud-role="viewer"] #grdt-module .ops-actions {
 
 html[data-theme="dark"] .grcon-cloud-auth {
   background:
-    radial-gradient(circle at 12% 15%, rgb(81 181 218 / 14%), transparent 32rem),
+    radial-gradient(circle at 12% 15%, rgb(81 181 218 / 14%), rgb(81 181 218 / 0%) 32rem),
     linear-gradient(145deg, var(--surface-0) 0%, var(--surface-1) 52%, var(--surface-0) 100%);
 }
 

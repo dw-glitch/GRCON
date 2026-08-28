@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -2313,6 +2314,61 @@ check("Triagem mostra cada arquivo físico e sua extensão, sem resumir como +N 
   assert.match(appSource, /function renderRowFileList\(row, finalNames = false\)/, "A UI deve possuir renderização nominal da lista de arquivos.");
   assert.match(appSource, /entries\.map\(\(entry\) =>/, "A UI deve percorrer todos os arquivos associados ao documento.");
   assert.doesNotMatch(appSource, /companionCount[^\n]*arquivo\(s\)/, "A UI não deve voltar a resumir arquivos físicos como +N arquivo(s).");
+});
+
+
+/**
+ * retomar.js é um módulo de navegador (IIFE sobre `window`) e não pode ser
+ * carregado por require. Um contexto mínimo — com document.readyState em
+ * "loading", para que o módulo apenas registre o DOMContentLoaded em vez de
+ * inicializar — basta para alcançar a superfície exportada e conferir a
+ * matemática pura dos indicadores do Dashboard.
+ */
+function loadBrowserModule(fileName) {
+  const noop = () => {};
+  const documentStub = {
+    readyState: "loading", addEventListener: noop, documentElement: { dataset: {} },
+    getElementById: () => null, querySelector: () => null, querySelectorAll: () => [],
+    createElement: () => ({ style: {}, dataset: {}, setAttribute: noop, appendChild: noop, classList: { add: noop, remove: noop, toggle: noop } }),
+    body: { classList: { add: noop, remove: noop } },
+  };
+  const windowStub = { document: documentStub, setTimeout, clearTimeout, console, localStorage: { getItem: () => null, setItem: noop, removeItem: noop } };
+  windowStub.window = windowStub;
+  const context = vm.createContext(windowStub);
+  context.document = documentStub;
+  vm.runInContext(fs.readFileSync(path.join(root, fileName), "utf8"), context);
+  return context;
+}
+
+check("Dashboard compara cada indicador com o período anterior de mesmo tamanho", () => {
+  const { kpiTrend, previousPeriodOf, daysInPeriod } = loadBrowserModule("retomar.js").GrconHistoryDashboard._debug;
+
+  assert.equal(daysInPeriod("2026-08-01", "2026-08-30"), 30);
+  // Objetos criados dentro do contexto vm têm outro Object.prototype, então a
+  // comparação é feita campo a campo em vez de deepEqual entre realms.
+  const monthWindow = previousPeriodOf("2026-08-01", "2026-08-30");
+  assert.equal(monthWindow.start, "2026-07-02");
+  assert.equal(monthWindow.end, "2026-07-31");
+  const dayWindow = previousPeriodOf("2026-08-28", "2026-08-28");
+  assert.equal(dayWindow.start, "2026-08-27");
+  assert.equal(dayWindow.end, "2026-08-27");
+  // "Todo o histórico" começa antes do primeiro registro: sem período anterior
+  // comparável, nenhuma variação é exibida.
+  assert.equal(previousPeriodOf("", "2026-08-28"), null);
+
+  assert.equal(kpiTrend(120, 100).direction, "up");
+  assert.equal(kpiTrend(120, 100).text, "+20%");
+  assert.equal(kpiTrend(80, 100).direction, "down");
+  assert.equal(kpiTrend(80, 100).text, "-20%");
+  assert.equal(kpiTrend(100, 100).text, "estável");
+  // Dividir por zero viraria infinito: o período sem emissão anterior é dito.
+  assert.equal(kpiTrend(5, 0).text, "novo no período");
+  assert.equal(kpiTrend(0, 0).direction, "flat");
+  assert.equal(kpiTrend(10, null), null);
+
+  // A frase completa é o que o leitor de tela anuncia: uma seta e um número
+  // solto não dizem contra o quê a comparação foi feita.
+  assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
 console.log(JSON.stringify({ version: "5.33.15", passed: true, checks: checks.length, names: checks }, null, 2));

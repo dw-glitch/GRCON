@@ -301,6 +301,27 @@
     return localDateKey(date);
   }
 
+  function daysInPeriod(start, end) {
+    if (!start || !end) return 0;
+    const from = new Date(`${start}T12:00:00`);
+    const to = new Date(`${end}T12:00:00`);
+    return Math.round((to - from) / 86400000) + 1;
+  }
+
+  /**
+   * Janela imediatamente anterior, do mesmo tamanho do período em tela. É o
+   * que dá sentido ao número do indicador: 412 documentos só é muito ou pouco
+   * em relação aos 30 dias anteriores.
+   *
+   * Sem as duas datas — “Todo o histórico” começa antes do primeiro registro —
+   * não existe período anterior comparável, e nenhuma variação é exibida.
+   */
+  function previousPeriodOf(start, end) {
+    const length = daysInPeriod(start, end);
+    if (!length) return null;
+    return { start: shiftDate(start, -length), end: shiftDate(start, -1) };
+  }
+
   function applyQuickRange(range) {
     dashboardRange = String(range || "all");
     const records = rawHistoryRecords();
@@ -424,7 +445,7 @@
       #dashboard-module{--dash-et:#0b7895;--dash-n1710:#6d4ac7;--dash-cv:#b16a16;min-width:0}
       .dashboard-page-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px}.dashboard-page-heading>div>span,.dashboard-chart-head>div>span,.dashboard-share-card header span,.dashboard-peak-card header span{display:block;font-size:.7rem;font-weight:900;letter-spacing:.12em;color:var(--brand-700,#155c8a);margin-bottom:4px}.dashboard-page-heading h2{margin:0;color:var(--text-strong,#183247);font-size:1.45rem}.dashboard-page-heading p{max-width:850px;margin:6px 0 0;color:var(--text-muted,#66798a);font-size:.9rem}
       .dashboard-controls{display:grid;grid-template-columns:minmax(340px,1fr) auto auto auto;gap:10px;align-items:end;padding:13px;border:1px solid var(--border,#dbe3ea);border-radius:14px;background:var(--surface,#fff);margin-bottom:12px}.dashboard-controls label{display:grid;gap:5px}.dashboard-controls label span{font-size:.7rem;font-weight:800;color:var(--text-muted,#637587);text-transform:uppercase;letter-spacing:.04em}.dashboard-controls input{min-height:38px}.dashboard-range-buttons{display:flex;gap:6px;flex-wrap:wrap}.dashboard-range-buttons button{min-height:36px;padding:0 12px;border:1px solid var(--border,#d7e0e8);border-radius:9px;background:var(--surface-soft,#f7fafc);color:var(--text-strong,#294359);font:inherit;font-size:.78rem;font-weight:800;cursor:pointer}.dashboard-range-buttons button.active{background:var(--brand-50,#eaf5fb);border-color:var(--brand-300,#8ecae4);color:var(--brand-800,#0f537a)}
-      .dashboard-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:12px}.dashboard-kpi{position:relative;overflow:hidden;min-height:82px;padding:12px 13px;border:1px solid var(--border,#dce4eb);border-radius:13px;background:var(--surface,#fff);box-shadow:0 5px 18px rgba(32,56,85,.04)}.dashboard-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--brand-500,#2789b6)}.dashboard-kpi span{display:block;font-size:.68rem;font-weight:900;letter-spacing:.045em;text-transform:uppercase;color:var(--text-muted,#687b8c)}.dashboard-kpi strong{display:block;margin-top:8px;font-size:1.5rem;line-height:1;color:var(--text-strong,#17324a)}.dashboard-kpi-et:before{background:var(--dash-et)}.dashboard-kpi-n1710:before{background:var(--dash-n1710)}.dashboard-kpi-cv:before{background:var(--dash-cv)}
+      .dashboard-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:12px}.dashboard-kpi{position:relative;overflow:hidden;min-height:82px;padding:12px 13px;border:1px solid var(--border,#dce4eb);border-radius:13px;background:var(--surface,#fff);box-shadow:0 5px 18px rgba(32,56,85,.04)}.dashboard-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--brand-500,#2789b6)}.dashboard-kpi span{display:block;font-size:.68rem;font-weight:900;letter-spacing:.045em;text-transform:uppercase;color:var(--text-muted,#687b8c)}.dashboard-kpi strong{display:block;margin-top:8px;font-size:1.5rem;line-height:1;color:var(--text-strong,#17324a)}.dashboard-kpi-trend{display:inline-flex;align-items:center;gap:4px;margin-top:7px;padding:2px 7px 2px 5px;border-radius:999px;font-size:.68rem;font-style:normal;font-weight:800;line-height:1.5;letter-spacing:.01em}.dashboard-kpi-trend b{font-size:.74rem;line-height:1}.dashboard-kpi-trend[data-direction=up]{background:var(--success-100,#e4f5ec);color:var(--success-800,#136c46)}.dashboard-kpi-trend[data-direction=down]{background:var(--danger-100,#fdeceb);color:var(--danger-800,#9c332c)}.dashboard-kpi-trend[data-direction=flat]{background:var(--surface-3,#eef2f5);color:var(--text-muted,#5f7385)}.dashboard-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.dashboard-kpi-et:before{background:var(--dash-et)}.dashboard-kpi-n1710:before{background:var(--dash-n1710)}.dashboard-kpi-cv:before{background:var(--dash-cv)}
       .dashboard-chart-card,.dashboard-share-card,.dashboard-peak-card,.dashboard-table-card{border:1px solid var(--border,#dce4eb);border-radius:14px;background:var(--surface,#fff);box-shadow:0 6px 22px rgba(32,56,85,.045);overflow:hidden}.dashboard-chart-head{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 15px 8px}.dashboard-chart-head strong{display:block;color:var(--text-strong,#183247);font-size:1rem}.dashboard-chart-head small{display:block;margin-top:4px;color:var(--text-muted,#66798a)}
       .dashboard-legend{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.dashboard-legend button{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border,#d7e0e8);border-radius:999px;background:var(--surface-soft,#f8fafc);padding:6px 10px;font:inherit;font-size:.76rem;font-weight:900;cursor:pointer}.dashboard-legend button:before{content:"";width:9px;height:9px;border-radius:3px;background:currentColor}.dashboard-legend button[data-dashboard-family="ET"]{color:var(--dash-et)}.dashboard-legend button[data-dashboard-family="N-1710"]{color:var(--dash-n1710)}.dashboard-legend button[data-dashboard-family="CV"]{color:var(--dash-cv)}.dashboard-legend button[aria-pressed="false"]{opacity:.38;filter:saturate(.3)}
       .dashboard-chart-scroll{overflow-x:auto;padding:0 8px 4px;min-height:340px}.dashboard-chart-scroll svg{display:block;height:390px;min-width:100%;width:auto}.dashboard-grid-line{stroke:rgba(93,116,136,.15);stroke-width:1}.dashboard-axis-line{stroke:rgba(93,116,136,.38);stroke-width:1}.dashboard-axis-label{fill:var(--text-muted,#6d7f8f);font-size:11px}.dashboard-bar-et{fill:var(--dash-et)}.dashboard-bar-n1710{fill:var(--dash-n1710)}.dashboard-bar-cv{fill:var(--dash-cv)}.dashboard-segment-value{fill:#fff;font-size:11px;font-weight:900;pointer-events:none}.dashboard-total-value{fill:var(--text-strong,#233d52);font-size:11px;font-weight:900}.dashboard-insight{display:flex;align-items:flex-start;gap:8px;margin:0;padding:10px 14px 13px;border-top:1px solid var(--border,#e6ebef);color:var(--text-muted,#5f7385);font-size:.82rem}.dashboard-insight:before{content:"↗";display:grid;place-items:center;flex:0 0 24px;height:24px;border-radius:50%;background:var(--brand-50,#eaf5fb);color:var(--brand-700,#155c8a);font-weight:900}
@@ -519,18 +540,50 @@
     return first === last ? first : `${first} — ${last}`;
   }
 
-  function renderKpis(totals) {
+  /**
+   * Variação do indicador contra o período anterior de mesmo tamanho.
+   * `direction` alimenta a cor e o símbolo; `text` é o rótulo curto do chip; e
+   * `label` é a frase completa lida por leitor de tela, porque uma seta e um
+   * número solto não dizem contra o quê a comparação foi feita.
+   */
+  function kpiTrend(current, previous) {
+    if (previous === null || previous === undefined) return null;
+    const now = Number(current || 0);
+    const before = Number(previous || 0);
+    if (!before && !now) return { direction: "flat", text: "sem emissões", label: "Sem emissões neste período nem no anterior" };
+    if (!before) return { direction: "up", text: "novo no período", label: `Nenhuma emissão no período anterior; ${now.toLocaleString("pt-BR")} neste` };
+    const delta = now - before;
+    const percent = Math.round((delta / before) * 100);
+    const direction = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+    const sign = delta > 0 ? "+" : "";
+    const text = delta === 0 ? "estável" : `${sign}${percent.toLocaleString("pt-BR")}%`;
+    const word = delta > 0 ? "acima" : delta < 0 ? "abaixo" : "igual";
+    const label = delta === 0
+      ? `Igual ao período anterior (${before.toLocaleString("pt-BR")})`
+      : `${Math.abs(percent).toLocaleString("pt-BR")}% ${word} do período anterior (${before.toLocaleString("pt-BR")})`;
+    return { direction, text, label };
+  }
+
+  const TREND_ARROWS = { up: "↑", down: "↓", flat: "→" };
+
+  function renderKpis(totals, previousTotals) {
     const target = document.getElementById("dashboard-kpis");
     if (!target) return;
     const items = [
-      ["Documentos emitidos", totals.documents, "total"],
-      ["ET", totals.ET, "et"],
-      ["N-1710", totals["N-1710"], "n1710"],
-      ["CV", totals.CV, "cv"],
-      ["eGRDTs com emissão", totals.egrdts, "egrdt"],
-      ["Dias com emissão", totals.days, "days"],
+      ["Documentos emitidos", totals.documents, "total", "documents"],
+      ["ET", totals.ET, "et", "ET"],
+      ["N-1710", totals["N-1710"], "n1710", "N-1710"],
+      ["CV", totals.CV, "cv", "CV"],
+      ["eGRDTs com emissão", totals.egrdts, "egrdt", "egrdts"],
+      ["Dias com emissão", totals.days, "days", "days"],
     ];
-    target.innerHTML = items.map(([label, value, tone]) => `<article class="dashboard-kpi dashboard-kpi-${tone}"><span>${escapeHtml(label)}</span><strong>${Number(value || 0).toLocaleString("pt-BR")}</strong></article>`).join("");
+    target.innerHTML = items.map(([label, value, tone, key]) => {
+      const trend = previousTotals ? kpiTrend(value, previousTotals[key]) : null;
+      const chip = trend
+        ? `<em class="dashboard-kpi-trend" data-direction="${trend.direction}"><b aria-hidden="true">${TREND_ARROWS[trend.direction]}</b>${escapeHtml(trend.text)}<span class="dashboard-sr-only"> — ${escapeHtml(trend.label)}</span></em>`
+        : "";
+      return `<article class="dashboard-kpi dashboard-kpi-${tone}"><span>${escapeHtml(label)}</span><strong>${Number(value || 0).toLocaleString("pt-BR")}</strong>${chip}</article>`;
+    }).join("");
   }
 
   function renderShare(totals) {
@@ -566,7 +619,11 @@
     const records = filterRecordsByPeriod(rawHistoryRecords(), periodSelection.start, periodSelection.end);
     const daily = buildDashboardDailyData(records);
     const totals = totalsFromDaily(daily);
-    renderKpis(totals);
+    const previous = previousPeriodOf(periodSelection.start, periodSelection.end);
+    const previousTotals = previous
+      ? totalsFromDaily(buildDashboardDailyData(filterRecordsByPeriod(rawHistoryRecords(), previous.start, previous.end)))
+      : null;
+    renderKpis(totals, previousTotals);
     renderShare(totals);
     renderPeaks(daily);
     renderDailyTable(daily);
@@ -767,17 +824,31 @@
       summary.getCell("A4").font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
       summary.getCell("A4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } };
 
+      // O Excel repete a mesma comparação da tela: um indicador sem referência
+      // não diz se o número é bom ou ruim, e quem recebe o relatório não tem o
+      // período anterior à mão.
+      const exportPrevious = previousPeriodOf(periodSelection.start, periodSelection.end);
+      const exportPreviousTotals = exportPrevious
+        ? totalsFromDaily(buildDashboardDailyData(filterRecordsByPeriod(rawHistoryRecords(), exportPrevious.start, exportPrevious.end)))
+        : null;
+
       const cards = [
-        ["DOCUMENTOS", totals.documents, "FF24689A"], ["ET", totals.ET, "FF0B7895"], ["N-1710", totals["N-1710"], "FF6D4AC7"],
-        ["CV", totals.CV, "FFB16A16"], ["eGRDTs", totals.egrdts, "FF53697B"], ["DIAS", totals.days, "FF0C7657"],
+        ["DOCUMENTOS", totals.documents, "FF24689A", "documents"], ["ET", totals.ET, "FF0B7895", "ET"], ["N-1710", totals["N-1710"], "FF6D4AC7", "N-1710"],
+        ["CV", totals.CV, "FFB16A16", "CV"], ["eGRDTs", totals.egrdts, "FF53697B", "egrdts"], ["DIAS", totals.days, "FF0C7657", "days"],
       ];
-      cards.forEach(([label, value, color], index) => {
+      cards.forEach(([label, value, color, key], index) => {
         const start = index * 2 + 1;
         summary.mergeCells(6, start, 8, start + 1);
         const cell = summary.getCell(6, start);
         cell.value = { richText: [
           { font: { name: "Aptos", size: 8, bold: true, color: { argb: "FF6F7E8C" } }, text: `${label}\n` },
           { font: { name: "Aptos Display", size: 20, bold: true, color: { argb: color } }, text: Number(value || 0).toLocaleString("pt-BR") },
+          ...(() => {
+            const trend = exportPreviousTotals ? kpiTrend(value, exportPreviousTotals[key]) : null;
+            if (!trend) return [];
+            const tone = trend.direction === "up" ? "FF116B47" : trend.direction === "down" ? "FF9C332C" : "FF6F7E8C";
+            return [{ font: { name: "Aptos", size: 8, bold: true, color: { argb: tone } }, text: `\n${TREND_ARROWS[trend.direction]} ${trend.text}` }];
+          })(),
         ] };
         cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF7F9FB" } };
@@ -880,7 +951,7 @@
     activate: activateDashboard,
     render: renderDashboard,
     exportExcel: exportDashboardExcel,
-    _debug: Object.freeze({ buildDashboardDailyData, filterRecordsByPeriod, emittedDocuments, totalsFromDaily }),
+    _debug: Object.freeze({ buildDashboardDailyData, filterRecordsByPeriod, emittedDocuments, totalsFromDaily, kpiTrend, previousPeriodOf, daysInPeriod }),
   });
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });

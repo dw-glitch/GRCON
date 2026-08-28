@@ -23,6 +23,9 @@
 
 ### Interface e acessibilidade
 
+- **Correção de contraste no tema escuro.** `--text-strong`, `--brand-500`, `--success-800` e `--danger-800` eram usados pelo Dashboard, pela Consulta e pelo anel de foco, mas nunca haviam sido definidos: cada `var()` caía no valor de reserva escrito no próprio arquivo, sempre uma cor do tema claro. No modo escuro os números dos indicadores, os títulos e os rótulos do gráfico apareciam em azul-marinho sobre fundo escuro, praticamente ilegíveis. Definidos como apelidos dos tokens reais, os 25 usos passam a acompanhar os dois temas — todos os pontos medidos ficam acima de 4,5:1 (WCAG AA) no claro e no escuro.
+- O **Dashboard compara cada indicador com o período anterior** de mesmo tamanho: cada cartão mostra a variação percentual, com direção, cor e a frase completa para leitor de tela. Um indicador sozinho não diz se 412 documentos é muito ou pouco. Quando o período começa antes do primeiro registro — “Todo o histórico” — não existe janela anterior comparável e nenhuma variação é exibida. A mesma comparação vai para o Excel do Dashboard.
+- O fundo da tela de acesso deixa de exibir uma borda circular: o gradiente terminava em `transparent`, que é preto com alfa 0, e a interpolação até ele passava por cinza.
 - A tela de acesso, o menu da conta e os painéis de equipe ganham o **tema escuro**. Os tokens de `html[data-theme="dark"]` já existiam, mas essa folha só tinha cores fixas do tema claro: quem usava o app no escuro recebia essas telas em branco.
 - O campo de e-mail recebe o foco ao abrir a tela de acesso; antes o foco ficava no `<body>`, atrás dela.
 - A região viva de leitores de tela deixa de ser o cartão inteiro e passa a ser a mensagem de status. Na configuração anterior, qualquer alteração — inclusive a troca entre login e nova senha — fazia o leitor reler o formulário completo.
