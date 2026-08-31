@@ -1,5 +1,16 @@
 # Histórico de alterações
 
+## 5.37.0 — 2026-08-31
+
+### Escolha e alteração manual da revisão na geração de GRDT
+
+- Nova coluna editável **REVISÃO DA GRDT** na tabela da triagem, ao lado da revisão encontrada na LD/arquivo. A revisão calculada automaticamente continua preenchendo o campo como sugestão inicial, mas o operador pode digitar outra revisão diretamente na célula antes de gerar a eGRDT — por exemplo quando já se sabe, pela fiscalização, que a revisão atual será recusada e a próxima já está em preparo.
+- Documento alterado manualmente ganha um selo discreto **Alterada manualmente**, com a sugestão original em dica de texto e um botão para restaurá-la a qualquer momento. A alteração de um documento nunca afeta a revisão dos demais.
+- Seleção múltipla no **Revisar dados selecionados** ganhou o campo **Revisão da GRDT**: preenchido, aplica a mesma revisão só aos documentos selecionados; em branco, mantém a revisão de cada um.
+- A revisão escolhida — automática ou manual — passa a ser a única revisão usada em toda a geração: relação, planilha `.xls` da eGRDT, relatório de triagem, Resumo, pacote final, histórico e resposta de e-mail. Uma divergência entre a revisão informada e a encontrada na LD/arquivo gera alerta, sem bloquear a geração; um formato de revisão evidentemente inválido continua barrado pela mesma regra que já valia para a revisão calculada automaticamente.
+- O histórico volta a registrar, por arquivo, a revisão efetivamente enviada e a sugestão que o sistema tinha calculado na época, preservando quando a escolha foi manual. Reabrir uma eGRDT pelo Histórico mostra a revisão que foi enviada, sem recalcular; eGRDTs geradas antes desta versão continuam completas, com a sugestão preenchida pela própria revisão já registrada.
+- Dividir os documentos selecionados entre eGRDTs por disciplina preserva a revisão escolhida de cada documento.
+
 ## 5.36.1 — 2026-08-31
 
 - A tabela da resposta de e-mail passa de `10,5 pt` para `9 pt`, com o tamanho gravado diretamente no cabeçalho e em cada célula para o Outlook preservar a formatação.

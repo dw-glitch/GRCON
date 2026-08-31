@@ -1579,7 +1579,21 @@
 .revision-timeline-step dt{flex-shrink:0;font-weight:700;color:#5a7186}
 .revision-timeline-step dd{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#26414f}
 .revision-route{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#eef4f8;color:#3a6f8f;font-size:10px;font-weight:700;vertical-align:middle}
+.revision-tag.suggested{background:#fff4df;color:#9a5c0b}
 @media(max-width:900px){.revision-timeline-track{flex-direction:column}.revision-timeline-step{margin:4px 0}.revision-timeline-step::before{display:none}}
+
+/* GRCON — Revisão da GRDT editável na triagem (sugestão automática + escolha manual) */
+.revision-grdt-cell{display:flex;flex-direction:column;gap:3px;min-width:88px}
+.revision-grdt-input{width:64px;padding:3px 6px;border:1px solid #c3d3de;border-radius:8px;background:#fff;color:#18364f;font:800 12px Aptos,Arial,sans-serif;text-align:center;text-transform:uppercase;letter-spacing:.02em}
+.revision-grdt-input:hover{border-color:#8fadc2}
+.revision-grdt-input:focus{outline:none;border-color:#2679aa;box-shadow:0 0 0 2px rgba(38,121,170,.18)}
+.revision-grdt-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-height:0}
+.revision-route{margin-left:0}
+.revision-manual-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border:1px solid #f0cd8f;border-radius:999px;background:#fff4df;color:#9a5c0b;font:800 9px Aptos,Arial,sans-serif;letter-spacing:.02em;cursor:pointer;white-space:nowrap}
+.revision-manual-badge:hover{background:#ffe9bd;border-color:#e0ac57}
+.revision-manual-badge svg,.revision-manual-badge span{pointer-events:none}
+.revision-format-warning{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:999px;background:#fbe9ea;color:#a3313a;font-size:10px;font-weight:800;cursor:help}
+@media(max-width:900px){.revision-grdt-cell{min-width:72px}}
 
 /* ---------------------------------------------------------------------------
    Aplicativo em tela cheia (telas largas)

@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.36.1";
+  const APP_VERSION = "5.37.0";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -656,6 +656,9 @@
     drawerTitleField: $("#drawer-title-field"),
     drawerDatabookField: $("#drawer-databook-field"),
     drawerTitle: $("#drawer-title"),
+    drawerRevisionField: $("#drawer-revision-field"),
+    drawerRevision: $("#drawer-revision"),
+    drawerRevisionHint: $("#drawer-revision-hint"),
     drawerFormat: $("#drawer-format"),
     drawerDiscipline: $("#drawer-discipline"),
     drawerType: $("#drawer-type"),
@@ -987,6 +990,8 @@
       status: item.status || "",
       revision: item.revision || "",
       revisionSource: item.revisionSource || "",
+      revisionSuggested: item.revisionSuggested || "",
+      revisionManual: Boolean(item.revisionManual),
       sheet: item.sheet || "",
       fiscalComment: item.fiscalComment || "",
       allocationStatus: item.allocationStatus || "",
@@ -2288,10 +2293,14 @@
       alerts: entry && entry.reason || "Arquivo ignorado com motivo registrado",
     }));
     const analyzedPhysical = state.results.reduce((total, row) => total + (row.files || []).length, 0);
+    const manualRevisionCount = manuallyAlteredRevisionCount(state.selected);
+    const manualRevisionNote = manualRevisionCount
+      ? ` · ${manualRevisionCount} revisão(ões) alterada(s) manualmente`
+      : "";
     return {
       title: "Conferência final da eGRDT",
       officialNumber,
-      summary: `${items.length} arquivo(s) incluído(s) · ${detailRows.filter((row) => !row.included).length} excluído(s)`,
+      summary: `${items.length} arquivo(s) incluído(s) · ${detailRows.filter((row) => !row.included).length} excluído(s)${manualRevisionNote}`,
       expectedInputs: state.packageCandidates.length,
       accountedInputs: analyzedPhysical + state.ignoredFiles.length,
       requireUniqueTargets: true,
@@ -2483,6 +2492,7 @@
             : !hasNative
               ? "Somente PDF localizado; confirme se o arquivo nativo também é aplicável."
               : "";
+      row.compositionWarning = compositionWarning;
       const formattingWarnings = row.files
         .map((entry) => C.fileNameFormattingWarning
           ? C.fileNameFormattingWarning(entry.name, row.document, row.revision, row.sheet, entry.matchKind || row.matchKind)
@@ -2506,6 +2516,75 @@
       if (C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
       return row;
     });
+  }
+
+  // A "Revisão da GRDT" (row.revision) é o único campo que emission.js,
+  // grdt_workbook.js, o relatório e o histórico leem para gerar e registrar a
+  // eGRDT. A revisão calculada pela triagem fica preservada em
+  // row.revisionSuggested e nunca é sobrescrita, para o operador poder
+  // restaurá-la a qualquer momento. Alterar row.revision aqui é suficiente
+  // para a geração ficar correta; os demais campos (nome final, egrdt) são
+  // recalculados só por conforto visual da tela.
+  function applyRevisionOverride(row, rawValue) {
+    if (!row) return { ok: false, error: "Documento inválido." };
+    const normalized = C.normalizeRevision(rawValue);
+    if (!normalized) return { ok: false, error: "Informe a revisão da GRDT." };
+    const suggested = row.revisionSuggested !== undefined && row.revisionSuggested !== null
+      ? row.revisionSuggested
+      : row.revision;
+    row.revision = normalized;
+    row.revisionManual = normalized !== suggested;
+    const info = C.revisionInfo ? C.revisionInfo(normalized) : { valid: true };
+    row.revisionFormatWarning = info.valid
+      ? ""
+      : `ALERTA: formato de revisão incomum “${normalized}”. Confira a digitação antes de gerar a GRDT.`;
+    row.files = (row.files || []).map((entry) => ({
+      ...entry,
+      finalName: C.proposedFileName(entry.name, row.document, row.revision, row.sheet),
+    }));
+    const primary = row.files.find((entry) => extensionOf(entry.name) === "pdf") || row.files[0] || null;
+    row.finalName = primary
+      ? primary.finalName
+      : C.proposedFileName(row.name || `${row.document}.pdf`, row.document, row.revision, row.sheet);
+    if (row.ntRename) row.ntRename = { ...row.ntRename, finalName: row.finalName };
+    const formattingWarnings = row.files
+      .map((entry) => C.fileNameFormattingWarning
+        ? C.fileNameFormattingWarning(entry.name, row.document, row.revision, row.sheet, entry.matchKind || row.matchKind)
+        : "")
+      .filter(Boolean);
+    row.fileNameFormattingWarning = [...new Set(formattingWarnings)].join(" ");
+    row.packageWarning = [
+      row.documentRevisionWarning,
+      row.fileNameFormattingWarning,
+      row.duplicateFileWarning,
+      row.compositionWarning,
+    ].filter(Boolean).join(" ");
+    row.egrdt = {
+      ...C.buildEgrdtData(row.document, row.revision, row.finalName, row.record || {}, row.sheet, ""),
+      ...(row.egrdt || {}),
+      document: row.document,
+      revision: row.revision,
+      fileName: row.finalName,
+      databook: row.record && row.record.databook || "",
+    };
+    if (C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
+    return { ok: true, manual: row.revisionManual };
+  }
+
+  function restoreSuggestedRevision(row) {
+    if (!row) return { ok: false, error: "Documento inválido." };
+    const suggested = row.revisionSuggested !== undefined && row.revisionSuggested !== null
+      ? row.revisionSuggested
+      : row.revision;
+    return applyRevisionOverride(row, suggested);
+  }
+
+  function manuallyAlteredRevisionCount(indices) {
+    const source = indices ? [...indices] : state.results.map((_, index) => index);
+    return source.reduce((total, index) => {
+      const row = state.results[index];
+      return total + (row && row.revisionManual ? 1 : 0);
+    }, 0);
   }
 
   async function analyzeLegacy() {
@@ -3029,7 +3108,7 @@
     ["situation", "Situação"], ["originalFile", "Arquivo original"], ["document", "Documento"],
     ["ldCode", "Código da LD"], ["apendiceSearch", "Busca no Apêndice"], ["tagged", "Tagueado sim ou não?"],
     ["sheet", "Aba LD"],
-    ["ldRevision", "Revisão"], ["targetRevision", "Revisão para postar"], ["title", "Título"], ["effectiveDate", "Data efetiva"],
+    ["ldRevision", "Revisão encontrada"], ["targetRevision", "Revisão da GRDT"], ["revisionManual", "Alterada manualmente"], ["title", "Título"], ["effectiveDate", "Data efetiva"],
     ["grdt", "GRDT"], ["technicalStatus", "Status"], ["sigemStatus", "Status SIGEM"], ["targetStatus", "Status da revisão"],
     ["postingStatus", "Situação de postagem"], ["fiscalComment", "Comentário da Fiscal"], ["allocation", "Alocação"],
     ["allocationStage", "Etapa da alocação"], ["allocationStatus", "Confirmação"], ["databook", "Caminho Databook"], ["finalFile", "Arquivo final"],
@@ -3047,6 +3126,7 @@
       sheet: row && row.sheet,
       ldRevision: record.revision,
       targetRevision: row && row.revision,
+      revisionManual: row && row.revisionManual ? "Sim" : "Não",
       title: record.title,
       effectiveDate: formatDateBR(ldValue(record, "DATA EFETIVA DE EMISSÃO") || record.effectiveDate),
       grdt: record.grdt || row && row.grdt,
@@ -3547,7 +3627,15 @@
   function timelineInline(row) {
     const timeline = row.timeline;
     if (!timeline || !timeline.revisions || !timeline.revisions.length) return "";
+    // A revisão efetivamente usada na GRDT é sempre row.revision — o operador
+    // pode tê-la alterado manualmente, o que a desconecta de
+    // timeline.targetRevision (recalculado do zero a partir da LD/histórico).
+    // Os dois valores são mostrados separadamente para não confundir "o que o
+    // sistema encontrou" com "o que será enviado".
+    const grdtRevision = C.normalizeRevision(row.revision);
+    const manual = Boolean(row.revisionManual);
     const steps = timeline.revisions.map((item, index) => {
+      const isGrdtRevision = item.revision === grdtRevision;
       const metadata = [
         ["GRDT", item.grdt],
         ["Data efetiva", item.effectiveDate],
@@ -3557,10 +3645,11 @@
       ].filter((entry) => entry[1]);
       const tags = [
         item.latest ? '<span class="revision-tag latest">Última registrada</span>' : "",
-        item.target ? '<span class="revision-tag target">Revisão da GRDT</span>' : "",
+        item.target ? '<span class="revision-tag suggested">Revisão sugerida</span>' : "",
+        isGrdtRevision ? '<span class="revision-tag target">Revisão da GRDT</span>' : "",
         item.predicted ? '<span class="revision-tag calculated">Calculada</span>' : "",
       ].filter(Boolean).join("");
-      return `<article class="revision-timeline-step ${item.target ? "target" : ""}">
+      return `<article class="revision-timeline-step ${isGrdtRevision ? "target" : ""}">
         <header>
           <span class="revision-step-number">${escapeHtml(item.revision)}</span>
           <div><strong>Revisão ${escapeHtml(item.revision)}</strong><div class="revision-tags">${tags}</div></div>
@@ -3576,7 +3665,11 @@
     return `<section class="revision-timeline-inline">
       <div class="revision-timeline-heading">
         <div><h3>Linha do tempo da revisão</h3><p>${escapeHtml(timelineExplanation(timeline))}</p></div>
-        <div class="revision-timeline-summary"><span>Última registrada <strong>${escapeHtml(timeline.latestRevision || "—")}</strong></span><span>Revisão da GRDT <strong>${escapeHtml(timeline.targetRevision || row.revision || "—")}</strong></span></div>
+        <div class="revision-timeline-summary">
+          <span>Última registrada <strong>${escapeHtml(timeline.latestRevision || "—")}</strong></span>
+          <span>Revisão sugerida <strong>${escapeHtml(timeline.targetRevision || row.revisionSuggested || "—")}</strong></span>
+          <span>Revisão da GRDT <strong>${escapeHtml(grdtRevision || "—")}</strong>${manual ? ' <span class="revision-manual-badge" title="Alterada manualmente pelo usuário">Alterada manualmente</span>' : ""}</span>
+        </div>
       </div>
       <div class="revision-timeline-track">${steps}</div>
     </section>`;
@@ -3850,8 +3943,15 @@
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.tagged)}</span></td>
         <td><span class="sheet-badge">${escapeHtml(row.sheet || "—")}</span></td>
-        <td><span class="revision-value">${escapeHtml(ldRevision)}</span></td>
-        <td><span class="revision-value">${escapeHtml(row.revision || "—")}</span>${row.timeline ? `<span class="revision-route" title="Histórico de revisões">${escapeHtml(timelineRoute(row.timeline))}</span>` : ""}</td>
+        <td><span class="revision-value" title="Revisão encontrada na LD">${escapeHtml(ldRevision)}</span></td>
+        <td class="revision-grdt-cell">
+          <input class="revision-grdt-input" data-revision-input data-index="${index}" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="8" value="${escapeHtml(row.revision || "")}" aria-label="Revisão da GRDT para ${escapeHtml(row.document)}" title="Revisão que será usada na GRDT · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">
+          <div class="revision-grdt-meta">
+            ${row.revisionManual ? `<button type="button" class="revision-manual-badge" data-action="restore-revision" data-index="${index}" title="Alterada manualmente · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}. Clique para restaurar a sugestão.">Alterada manualmente <span aria-hidden="true">↺</span></button>` : ""}
+            ${row.revisionFormatWarning ? `<span class="revision-format-warning" title="${escapeHtml(row.revisionFormatWarning)}" aria-label="${escapeHtml(row.revisionFormatWarning)}">⚠</span>` : ""}
+            ${row.timeline ? `<span class="revision-route" title="Histórico de revisões · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">${escapeHtml(timelineRoute(row.timeline))}</span>` : ""}
+          </div>
+        </td>
         <td><span class="text-cell" title="${escapeHtml(title)}">${escapeHtml(title)}</span>${titleQuality ? `<span class="title-quality-badge ${escapeHtml(titleQuality.status)}">${escapeHtml(titleQualityLabel(titleQuality))}</span>` : ""}</td>
         <td><span class="text-cell">${escapeHtml(effectiveDate)}</span></td>
         <td><span class="grdt-code" title="${escapeHtml(grdt)}">${escapeHtml(grdt)}</span></td>
@@ -3884,6 +3984,11 @@
     return values.length === 1 ? values[0] : "";
   }
 
+  function commonRevisionValue(indices) {
+    const values = [...new Set(indices.map((index) => (state.results[index] || {}).revision || ""))];
+    return values.length === 1 ? values[0] : "";
+  }
+
   function setDrawerOptions(element, values, selected, placeholder) {
     element.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>${values.map((value) => (
       `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`
@@ -3908,6 +4013,19 @@
     els.drawerDatabookField.hidden = multiple;
     els.drawerTitle.value = multiple ? "" : commonEgrdtValue(valid, "title");
     els.drawerDatabook.value = multiple ? "" : ldDatabookValue(state.results[valid[0]]);
+    const commonRevision = commonRevisionValue(valid);
+    els.drawerRevision.value = commonRevision;
+    els.drawerRevision.placeholder = multiple ? "Não alterar" : "Ex.: A";
+    if (multiple) {
+      els.drawerRevisionHint.textContent = commonRevision
+        ? `Todos os selecionados estão em ${commonRevision}. Deixe em branco para não alterar.`
+        : "Os selecionados têm revisões diferentes. Preencha para aplicar a mesma revisão a todos; deixe em branco para manter a de cada um.";
+    } else {
+      const soleRow = state.results[valid[0]];
+      els.drawerRevisionHint.textContent = soleRow.revisionManual
+        ? `Alterada manualmente. Sugestão do sistema: ${soleRow.revisionSuggested || "—"}.`
+        : `Sugestão do sistema: ${soleRow.revisionSuggested || soleRow.revision || "—"}.`;
+    }
     const placeholder = multiple ? "Não alterar" : "Selecione";
     setDrawerOptions(els.drawerFormat, C.EGRDT_OPTIONS.formats, commonEgrdtValue(valid, "format"), placeholder);
     setDrawerOptions(els.drawerDiscipline, C.EGRDT_OPTIONS.disciplines, commonEgrdtValue(valid, "discipline"), placeholder);
@@ -3934,6 +4052,9 @@
 
   function saveEgrdtDrawer() {
     const multiple = state.drawerIndices.length > 1;
+    const revisionValue = els.drawerRevision.value.trim();
+    let revisionChanged = 0;
+    let revisionRejected = 0;
     state.drawerIndices.forEach((index) => {
       const row = state.results[index];
       if (!row || !row.egrdt) return;
@@ -3950,11 +4071,21 @@
         if (!multiple || value) row.egrdt[field] = value;
       });
       if (C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
+      // Campo vazio em edição de lote significa "não alterar" — igual aos
+      // demais campos do formulário acima, mas aqui vale também para 1 item.
+      if (revisionValue) {
+        const result = applyRevisionOverride(row, revisionValue);
+        if (result.ok) revisionChanged += 1;
+        else revisionRejected += 1;
+      }
     });
     const amount = state.drawerIndices.length;
     closeEgrdtDrawer();
     renderAll();
-    showToast(`${amount} item(ns) atualizado(s) somente nesta análise.`, "success");
+    const revisionNote = revisionValue && revisionChanged
+      ? ` · revisão da GRDT alterada em ${revisionChanged} documento(s)`
+      : revisionRejected ? " · revisão informada não pôde ser aplicada" : "";
+    showToast(`${amount} item(ns) atualizado(s) somente nesta análise${revisionNote}.`, "success");
   }
 
   function renderAll() {
@@ -4025,7 +4156,8 @@
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
     const selectedBatchCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
     const selectedDisciplineCount = selectedItemsByDiscipline.size;
-    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}`;
+    const manualRevisionSelectedCount = manuallyAlteredRevisionCount(state.selected);
+    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}${manualRevisionSelectedCount ? ` · ${manualRevisionSelectedCount.toLocaleString("pt-BR")} revisão${manualRevisionSelectedCount === 1 ? "" : "ões"} alterada${manualRevisionSelectedCount === 1 ? "" : "s"} manualmente` : ""}`;
     window.dispatchEvent(new CustomEvent("grcon:ui-update"));
   }
 
@@ -4281,6 +4413,8 @@
         "REVISÃO": row.record && row.record.revision || "",
         "REVISÃO ENVIADA NA GRDT": row.revision,
         "REVISÃO PARA POSTAR": row.revision,
+        "REVISÃO SUGERIDA PELO SISTEMA": row.revisionSuggested || row.revision || "",
+        "REVISÃO ALTERADA MANUALMENTE": row.revisionManual ? "SIM" : "NÃO",
         "STATUS": row.record && row.record.status || "",
         "STATUS SIGEM": row.record && row.record.sigemStatus || "",
         "STATUS DA REVISÃO PARA POSTAR": row.status,
@@ -4292,7 +4426,7 @@
         "HISTÓRICO DE REVISÕES": timelineReportText(row.timeline),
         "EXPLICAÇÃO DA REVISÃO": timelineExplanation(row.timeline),
         "ÚLTIMA REVISÃO REGISTRADA": row.timeline && row.timeline.latestRevision || "",
-        "REVISÃO ALVO CALCULADA": row.timeline && row.timeline.targetRevision || row.revision || "",
+        "REVISÃO ALVO CALCULADA": row.revisionSuggested || row.timeline && row.timeline.targetRevision || row.revision || "",
         "ÚLTIMA ATIVIDADE DA REVISÃO": row.timeline && row.timeline.lastActivity || "",
         "CONTEÚDO DO PDF ANALISADO": "NÃO",
         "ORIGEM NA LISTA EXCEL": row.listSource || "",
@@ -5335,6 +5469,17 @@
       analyze();
       return;
     }
+    if (action === "restore-revision") {
+      const row = state.results[index];
+      const result = restoreSuggestedRevision(row);
+      if (result.ok) {
+        showToast(`Revisão restaurada para a sugestão do sistema (${row.revision}).`, "success");
+        renderTable();
+      } else if (result.error) {
+        showToast(result.error, "warn");
+      }
+      return;
+    }
     if (event.target.closest("input, button, select, a")) return;
     if (event.target.closest(".result-row")) {
       if (state.expanded.has(index)) state.expanded.delete(index);
@@ -5343,6 +5488,21 @@
     }
   });
   els.tbody.addEventListener("change", (event) => {
+    if (event.target.hasAttribute("data-revision-input")) {
+      const rowElement = event.target.closest("tr[data-index]");
+      if (!rowElement) return;
+      const index = Number(rowElement.dataset.index);
+      const row = state.results[index];
+      const result = applyRevisionOverride(row, event.target.value);
+      if (!result.ok) {
+        event.target.value = row ? row.revision || "" : "";
+        showToast(result.error, "warn");
+        return;
+      }
+      if (result.manual) showToast(`Revisão da GRDT alterada manualmente para ${row.revision}.`, "warn");
+      renderTable();
+      return;
+    }
     const isSelectRow = event.target.hasAttribute("data-select-row");
     const isManualSelect = event.target.hasAttribute("data-manual-select");
     if (!isSelectRow && !isManualSelect) return;
@@ -5377,6 +5537,18 @@
       if (manualSelect) manualSelect.checked = event.target.checked;
     }
     renderAll();
+  });
+  els.tbody.addEventListener("keydown", (event) => {
+    if (!event.target.hasAttribute("data-revision-input")) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.target.blur();
+    } else if (event.key === "Escape") {
+      const rowElement = event.target.closest("tr[data-index]");
+      const row = rowElement ? state.results[Number(rowElement.dataset.index)] : null;
+      event.target.value = row ? row.revision || "" : "";
+      event.target.blur();
+    }
   });
   els.selectAllReady.addEventListener("change", (event) => {
     const visibleIndices = filteredResultIndices();

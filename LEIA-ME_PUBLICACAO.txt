@@ -1,4 +1,4 @@
-GRCON 5.36.1 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.37.0 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
 - Novo painel "Resposta de e-mail": ao gerar a eGRDT, o GRCON abre a relação dos documentos postados (data, eGRDT, família, documento, título, disciplina e arquivo) pronta para colar na resposta ao solicitante.
@@ -67,8 +67,8 @@ PUBLICAÇÃO NA VERCEL
 2. Publique todo o conteúdo do repositório, incluindo workers/, package.json e os novos scripts de inicialização.
 3. O projeto é estático e não exige etapa de build.
 4. Use sempre HTTPS. Login e Service Worker não funcionam por file://.
-5. Depois da publicação, confirme no rodapé e na meta application-version a versão 5.36.1.
-6. Faça uma recarga completa na primeira abertura. O cache novo é grcon-v5.36.1.
+5. Depois da publicação, confirme no rodapé e na meta application-version a versão 5.37.0.
+6. Faça uma recarga completa na primeira abertura. O cache novo é grcon-v5.37.0.
 
 SUPABASE — ORDEM DAS MIGRAÇÕES PARA UMA BASE EXISTENTE
 1. Confirme que as migrações 5.31.4, 5.31.5, 5.31.6, 5.31.7, 5.31.8, 5.31.9, 5.31.10 e 5.31.14 já foram aplicadas conforme o histórico do projeto.

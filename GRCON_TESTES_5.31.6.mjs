@@ -2783,4 +2783,232 @@ check("resposta de e-mail monta as sete colunas da relação e cola como tabela"
   assert.equal(EmailReply.mailtoUrl(grande).truncated, true);
 });
 
-console.log(JSON.stringify({ version: "5.36.1", passed: true, checks: checks.length, names: checks }, null, 2));
+// ---------------------------------------------------------------------------
+// Escolha e alteração manual da revisão na geração de GRDT
+// ---------------------------------------------------------------------------
+
+check("triagem grava a revisão sugerida junto da revisão efetiva, sem marcar alteração manual (Cenário 1)", () => {
+  const technical = ldDocumentRecord(ntBaseDocument);
+  const result = Core.triageOne({ id: "revisao-sugestao-1", name: `${ntBaseDocument}.pdf` }, Core.buildIndex([technical], []), {});
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.revision, "0");
+  assert.equal(result.revisionSuggested, "0");
+  assert.equal(result.revisionManual, false);
+});
+
+check("escolha manual da revisão da GRDT preserva a sugestão original na linha (Cenário 2)", () => {
+  const technical = ldDocumentRecord(ntBaseDocument);
+  const row = Core.triageOne({ id: "revisao-sugestao-2", name: `${ntBaseDocument}.pdf` }, Core.buildIndex([technical], []), {});
+  assert.equal(row.revisionSuggested, "0");
+  // Simula a escolha manual feita na triagem (app.js: applyRevisionOverride).
+  // O operador sabe que a revisão sugerida será recusada e já prepara a
+  // próxima, sem que o GRCON precise reconhecê-la na LD ou no arquivo.
+  row.revision = "A";
+  row.revisionManual = true;
+  assert.equal(row.revisionSuggested, "0", "a sugestão original precisa continuar disponível para restaurar");
+  assert.equal(row.revision, "A");
+});
+
+check("GRDT gerada usa a revisão escolhida manualmente, não a sugestão automática (Cenário 2 e 9)", async () => {
+  const document = "ET-5290.00-22000-912-1LV-901";
+  const record = { ...ldDocumentRecord(document), revision: "A" };
+  const fileName = `${document}_0001_A.pdf`;
+  const row = {
+    document, revision: "A", revisionSuggested: "A", revisionManual: false,
+    sheet: "ET", record, decision: Core.READY, hardBlock: false,
+    egrdt: Core.buildEgrdtData(document, "A", fileName, record, "ET", "A4"),
+    files: [{ name: fileName, finalName: fileName, file: { size: 12 } }],
+  };
+  // Operador sabe que a revisão A será recusada e já emite com B — o mesmo
+  // recálculo de nome final e egrdt que applyRevisionOverride faz em app.js.
+  const overriddenFileName = Core.proposedFileName(fileName, document, "B", "ET");
+  row.revision = "B";
+  row.revisionManual = true;
+  row.files = [{ name: fileName, finalName: overriddenFileName, file: { size: 12 } }];
+  row.egrdt = { ...row.egrdt, revision: "B", fileName: overriddenFileName };
+
+  const plan = Emission.createPlan([row], new Set([0]));
+  assert.deepEqual(plan.errors, []);
+  assert.equal(plan.items[0].revision, "B");
+  assert.equal(plan.entries[0].revision, "B");
+  assert.match(plan.items[0].fileName, /_B\.pdf$/);
+
+  const bytes = await Workbook.build(plan.items);
+  const verified = await Workbook.verify(bytes, plan.items);
+  assert.equal(verified.rows[0].revision, "B", "o arquivo .xls reaberto precisa confirmar a revisão B, não a sugestão A");
+});
+
+check("cada documento mantém sua própria revisão da GRDT, sem contaminar os demais (Cenário 3)", () => {
+  const doc1 = "ET-5290.00-22000-912-1LV-902";
+  const doc2 = "ET-5290.00-22000-912-1LV-903";
+  const record1 = { ...ldDocumentRecord(doc1), revision: "A" };
+  const record2 = { ...ldDocumentRecord(doc2), revision: "C" };
+  const file1 = `${doc1}_0001_A.pdf`;
+  const file2 = `${doc2}_0001_C.pdf`;
+  const row1 = {
+    document: doc1, revision: "A", revisionSuggested: "A", revisionManual: false,
+    sheet: "ET", record: record1, decision: Core.READY, hardBlock: false,
+    egrdt: Core.buildEgrdtData(doc1, "A", file1, record1, "ET", "A4"),
+    files: [{ name: file1, finalName: file1, file: { size: 5 } }],
+  };
+  const row2 = {
+    document: doc2, revision: "C", revisionSuggested: "C", revisionManual: false,
+    sheet: "ET", record: record2, decision: Core.READY, hardBlock: false,
+    egrdt: Core.buildEgrdtData(doc2, "C", file2, record2, "ET", "A4"),
+    files: [{ name: file2, finalName: file2, file: { size: 5 } }],
+  };
+  // Só o primeiro documento recebe alteração manual.
+  const overriddenFile1 = Core.proposedFileName(file1, doc1, "B", "ET");
+  row1.revision = "B";
+  row1.revisionManual = true;
+  row1.files = [{ name: file1, finalName: overriddenFile1, file: { size: 5 } }];
+  row1.egrdt = { ...row1.egrdt, revision: "B", fileName: overriddenFile1 };
+
+  const plan = Emission.createPlan([row1, row2], new Set([0, 1]));
+  assert.deepEqual(plan.errors, []);
+  const byDocument = Object.fromEntries(plan.items.map((item) => [item.document, item.revision]));
+  assert.equal(byDocument[doc1], "B");
+  assert.equal(byDocument[doc2], "C", "a revisão do segundo documento não pode ser afetada pela alteração do primeiro");
+});
+
+check("dividir a eGRDT por disciplina preserva a revisão escolhida manualmente por documento (Cenário 7)", () => {
+  const docA = "ET-5290.00-22000-912-1LV-904";
+  const docB = "ET-5290.00-22000-912-1LV-905";
+  const recordA = { ...ldDocumentRecord(docA), revision: "0", discipline: "MECÂNICA" };
+  const recordB = { ...ldDocumentRecord(docB), revision: "A", discipline: "ELÉTRICA" };
+  const fileA = `${docA}_0001_0.pdf`;
+  const fileB = `${docB}_0001_A.pdf`;
+  const rowA = {
+    document: docA, revision: "0", revisionSuggested: "0", revisionManual: false,
+    sheet: "ET", record: recordA, decision: Core.READY, hardBlock: false,
+    egrdt: { ...Core.buildEgrdtData(docA, "0", fileA, recordA, "ET", "A4"), discipline: "MECÂNICA" },
+    files: [{ name: fileA, finalName: fileA, file: { size: 4 } }],
+  };
+  const rowB = {
+    document: docB, revision: "A", revisionSuggested: "A", revisionManual: false,
+    sheet: "ET", record: recordB, decision: Core.READY, hardBlock: false,
+    egrdt: { ...Core.buildEgrdtData(docB, "A", fileB, recordB, "ET", "A4"), discipline: "ELÉTRICA" },
+    files: [{ name: fileB, finalName: fileB, file: { size: 4 } }],
+  };
+  // Move a revisão de A para B antes de dividir por disciplina.
+  const overriddenFileB = Core.proposedFileName(fileB, docB, "B", "ET");
+  rowB.revision = "B";
+  rowB.revisionManual = true;
+  rowB.files = [{ name: fileB, finalName: overriddenFileB, file: { size: 4 } }];
+  rowB.egrdt = { ...rowB.egrdt, revision: "B", fileName: overriddenFileB };
+
+  const plan = Emission.createPlan([rowA, rowB], new Set([0, 1]));
+  assert.deepEqual(plan.errors, []);
+  const groups = Emission.splitPlan(plan, 48);
+  assert.equal(groups.length, 2);
+  const groupB = groups.find((group) => group.discipline === "ELÉTRICA");
+  assert.ok(groupB, "a disciplina do documento com revisão alterada precisa continuar existindo após a divisão");
+  assert.equal(groupB.items[0].revision, "B");
+  assert.equal(groupB.entries[0].revision, "B", "mover o documento entre eGRDTs não pode resetar a revisão escolhida");
+});
+
+check("histórico preserva a revisão enviada e a sugestão original ao reabrir, sem recalcular (Cenário 8)", () => {
+  const built = History.cleanRecord({
+    id: "hist-revisao-manual-1",
+    egrdtNumber: Sequence.baseName(9001, 2026),
+    generatedAt: "2026-08-31T09:00:00.000Z",
+    outputType: "eGRDT final",
+    files: [{
+      document: "PR-5290.00-22313-975-C1O-777",
+      finalName: "PR-5290.00-22313-975-C1O-777_0001_B.pdf",
+      revision: "B",
+      grdtRevision: "B",
+      revisionSuggested: "A",
+      revisionManual: true,
+    }],
+  });
+  assert.equal(built.files[0].revision, "B");
+  assert.equal(built.files[0].grdtRevision, "B");
+  assert.equal(built.files[0].revisionSuggested, "A");
+  assert.equal(built.files[0].revisionManual, true);
+
+  // Reabrir pelo histórico não recalcula: persiste, relê do storage e confere
+  // que a revisão enviada continua B, e não a sugestão A da época.
+  const store = storage([built]);
+  const reopened = History.read(store);
+  assert.equal(reopened[0].files[0].revision, "B");
+  assert.equal(reopened[0].files[0].revisionSuggested, "A");
+  assert.equal(reopened[0].files[0].revisionManual, true);
+});
+
+check("histórico antigo sem os campos novos cai para a revisão registrada, sem quebrar (compatibilidade retroativa)", () => {
+  const legacy = History.cleanRecord({
+    id: "hist-revisao-legado-1",
+    egrdtNumber: Sequence.baseName(9002, 2026),
+    generatedAt: "2026-08-01T09:00:00.000Z",
+    outputType: "eGRDT final",
+    files: [{ document: "PR-5290.00-22313-975-C1O-778", finalName: "PR-5290.00-22313-975-C1O-778_0001_A.pdf", revision: "A" }],
+  });
+  assert.equal(legacy.files[0].revision, "A");
+  assert.equal(legacy.files[0].revisionSuggested, "A");
+  assert.equal(legacy.files[0].revisionManual, false);
+});
+
+check("Resumo da triagem mostra a revisão sugerida e sinaliza a alteração manual sem bloquear a geração (Cenário 21)", () => {
+  const document = "ET-5290.00-22000-912-1LV-906";
+  const record = { ...ldDocumentRecord(document), revision: "A" };
+  const finalName = `${document}_0001_B.pdf`;
+  const row = {
+    document, revision: "B", revisionSuggested: "A", revisionManual: true,
+    sheet: "ET", record, decision: Core.READY, hardBlock: false,
+    egrdt: Core.buildEgrdtData(document, "B", finalName, record, "ET", "A4"),
+    files: [{ name: finalName, finalName, file: { size: 3 } }],
+  };
+  const [summary] = ReportSummary.buildRows([row], {});
+  assert.equal(summary.ldRevision, "A");
+  assert.equal(summary.targetRevision, "B");
+  assert.equal(summary.revisionSuggested, "A");
+  assert.equal(summary.revisionManual, "SIM");
+});
+
+check("validação de revisão continua usando as regras já existentes: incomum e legítima passa, formato inválido continua barrado", () => {
+  // Revisão "de campo" (letra+número) já era aceita pelo GRCON antes desta
+  // melhoria — não é uma restrição nova, então a edição manual não bloqueia.
+  assert.equal(Core.revisionInfo("A1").valid, true);
+  assert.equal(Core.revisionInfo("AB").valid, true);
+  // Formato claramente inválido continua barrado — regra herdada, não nova.
+  assert.equal(Core.revisionInfo("1A").valid, false);
+  assert.equal(Core.revisionInfo("O").valid, false);
+
+  const document = "ET-5290.00-22000-912-1LV-907";
+  const record = { ...ldDocumentRecord(document), revision: "A" };
+  const finalName = `${document}_0001_1A.pdf`;
+  const row = {
+    document, revision: "1A", revisionSuggested: "A", revisionManual: true,
+    sheet: "ET", record, decision: Core.READY, hardBlock: false,
+    egrdt: Core.buildEgrdtData(document, "1A", finalName, record, "ET", "A4"),
+    files: [{ name: finalName, finalName, file: { size: 3 } }],
+  };
+  const plan = Emission.createPlan([row], new Set([0]));
+  assert.ok(plan.errors.some((message) => /revis[aã]o inválida/i.test(message)), "um formato de revisão evidentemente inválido continua barrando a geração, como já acontecia antes");
+});
+
+check("triagem oferece edição inline da revisão da GRDT com restauração da sugestão (verificação estática)", () => {
+  const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(appSource, /function applyRevisionOverride/);
+  assert.match(appSource, /function restoreSuggestedRevision/);
+  assert.match(appSource, /data-revision-input/);
+  assert.match(appSource, /data-action="restore-revision"/);
+  assert.match(appSource, /#drawer-revision/);
+  // row.revision só pode ser escrito dentro de applyRevisionOverride — do
+  // contrário, algum outro trecho do app poderia sobrescrever silenciosamente
+  // a escolha manual do operador ao filtrar, pesquisar ou dividir eGRDTs
+  // (Cenários 6, 7 e 19).
+  const assignments = appSource.match(/row\.revision\s*=[^=]/g) || [];
+  assert.equal(assignments.length, 1, "row.revision deve ser escrito só dentro de applyRevisionOverride");
+
+  const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(indexSource, /REVISÃO DA GRDT/);
+  assert.match(indexSource, /id="drawer-revision"/);
+
+  const exportWorker = fs.readFileSync(path.join(root, "workers", "export.worker.js"), "utf8");
+  assert.match(exportWorker, /REVISÃO SUGERIDA PELO SISTEMA/);
+  assert.match(exportWorker, /REVISÃO ALTERADA MANUALMENTE/);
+});
+
+console.log(JSON.stringify({ version: "5.37.0", passed: true, checks: checks.length, names: checks }, null, 2));
