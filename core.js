@@ -1743,7 +1743,11 @@
     if (!text(data.title)) errors.push("TÍTULO vazio");
     if (!text(data.fileName) || !/\.[A-Z0-9]{2,8}$/i.test(text(data.fileName))) errors.push("ARQUIVO sem extensão");
     if (!EGRDT_OPTIONS.formats.includes(text(data.format))) errors.push("FORMATO fora da lista oficial");
-    if (!EGRDT_OPTIONS.disciplines.includes(text(data.discipline))) errors.push("DISCIPLINA fora da lista oficial");
+    // A disciplina orienta o agrupamento e é gravada na eGRDT, mas não pode
+    // impedir a geração. As LDs usam workflows corporativos mais amplos que o
+    // combo histórico da planilha (por exemplo RNEST UHDTD U-32 PROJETO).
+    // A emissão tenta adaptar esses valores; quando não houver equivalência,
+    // preserva a evidência da LD e registra um alerta operacional.
     if (!EGRDT_OPTIONS.documentTypes.includes(text(data.documentType))) errors.push("TIPO DE DOCUMENTO fora da lista oficial");
     if (!EGRDT_OPTIONS.purposes.includes(text(data.purpose))) errors.push("PROPÓSITO fora da lista oficial");
     return errors;
@@ -2837,6 +2841,7 @@
     validateFinalFileName,
     fileNameFormattingWarning,
     EGRDT_OPTIONS,
+    inferDiscipline,
     enforceDocumentFormat,
     buildEgrdtData,
     isN1710Context,

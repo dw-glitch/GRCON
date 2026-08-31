@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 5.35.1 — 2026-08-31
+
+- `RNEST UHDTD U-32 PROJETO`, confirmado na lista oficial de workflows, passa a ser convertido para `ENGENHARIA DE PROJETO` na eGRDT.
+- Os documentos `PR-5290.00-22313-175-C1O-040` e `PR-5290.00-22313-175-C1O-041` seguem com DOCX + PDF sem o erro incorreto `DISCIPLINA fora da lista oficial`.
+- Disciplina deixa de ser critério bloqueante: workflows conhecidos são adaptados para o nome curto da eGRDT; um valor novo ou ainda não mapeado é preservado e gera alerta, sem impedir a geração.
+
 ## 5.35.0 — 2026-08-31
 
 - Nova área **Combinar PDFs** no menu do GRCON para selecionar vários arquivos, conferir e editar a ordem e gerar um único PDF.

@@ -1043,6 +1043,111 @@ check("ET localiza variação silenciosa de separadores somente dentro do TAG", 
   assert.doesNotMatch(result.documentLookup.message, /erro|transcri|formata/i);
 });
 
+check("workflow PROJETO dos PR 040 e 041 vira ENGENHARIA DE PROJETO sem bloquear DOCX e PDF", () => {
+  const workflow = "RNEST UHDTD U-32 PROJETO";
+  ["040", "041"].forEach((sequence) => {
+    const document = `PR-5290.00-22313-175-C1O-${sequence}`;
+    const record = {
+      ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+      revision: "A",
+      title: `PROCEDIMENTO ${sequence}`,
+      format: "A4",
+      discipline: workflow,
+      documentType: "PR",
+      purpose: "Para Construção",
+      databook: "PROJETO",
+    };
+    const egrdt = Core.buildEgrdtData(document, "A", `${document}_0001_A.pdf`, record, "N-1710", "A4");
+    assert.equal(egrdt.discipline, "ENGENHARIA DE PROJETO");
+
+    const row = {
+      document,
+      revision: "A",
+      sheet: "N-1710",
+      record,
+      decision: Core.READY,
+      hardBlock: false,
+      // Simula análise antiga ou edição que ainda carregava o workflow longo.
+      egrdt: { ...egrdt, discipline: workflow },
+      files: [
+        { name: `${document}_0001_A.docx`, finalName: `${document}_0001_A.docx`, file: { size: 1 } },
+        { name: `${document}_0001_A.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 1 } },
+      ],
+    };
+    const plan = Emission.createPlan([row], new Set([0]));
+    assert.deepEqual(plan.errors, []);
+    assert.equal(plan.entries.length, 2);
+    assert.ok(plan.items.every((item) => item.discipline === "ENGENHARIA DE PROJETO"));
+    assert.ok(plan.warnings.some((message) => /adaptada para “ENGENHARIA DE PROJETO”/i.test(message)));
+  });
+});
+
+check("disciplina fora do combo histórico gera alerta e nunca impede a GRDT", () => {
+  const document = "PR-5290.00-22313-175-C1O-042";
+  const discipline = "RNEST UHDTD U-32 DISCIPLINA NOVA";
+  const record = {
+    ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+    revision: "A",
+    title: "PROCEDIMENTO 042",
+    format: "A4",
+    discipline,
+    documentType: "PR",
+    purpose: "Para Construção",
+  };
+  const row = {
+    document,
+    revision: "A",
+    sheet: "N-1710",
+    record,
+    decision: Core.READY,
+    hardBlock: false,
+    egrdt: Core.buildEgrdtData(document, "A", `${document}_0001_A.pdf`, record, "N-1710", "A4"),
+    files: [{ name: `${document}_0001_A.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 1 } }],
+  };
+  assert.doesNotMatch(Core.validateEgrdtData({ ...row.egrdt, discipline }).join("; "), /DISCIPLINA/i);
+  const plan = Emission.createPlan([row], new Set([0]));
+  assert.deepEqual(plan.errors, []);
+  assert.equal(plan.items[0].discipline, discipline);
+  assert.ok(plan.warnings.some((message) => /não correspondeu ao combo histórico.*não bloqueou/i.test(message)));
+});
+
+await checkAsync("eGRDT dos PR 040 e 041 é gerada e reaberta com quatro arquivos", async () => {
+  const workflow = "RNEST UHDTD U-32 PROJETO";
+  const rows = ["040", "041"].map((sequence) => {
+    const document = `PR-5290.00-22313-175-C1O-${sequence}`;
+    const record = {
+      ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
+      revision: "A",
+      title: `PROCEDIMENTO ${sequence}`,
+      format: "A4",
+      discipline: workflow,
+      documentType: "PR",
+      purpose: "Para Construção",
+      databook: "PROJETO",
+    };
+    return {
+      document,
+      revision: "A",
+      sheet: "N-1710",
+      record,
+      decision: Core.READY,
+      hardBlock: false,
+      egrdt: Core.buildEgrdtData(document, "A", `${document}_0001_A.pdf`, record, "N-1710", "A4"),
+      files: [
+        { name: `${document}_0001_A.docx`, finalName: `${document}_0001_A.docx`, file: { size: 1 } },
+        { name: `${document}_0001_A.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 1 } },
+      ],
+    };
+  });
+  const plan = Emission.createPlan(rows, new Set([0, 1]));
+  assert.deepEqual(plan.errors, []);
+  assert.equal(plan.items.length, 4);
+  const bytes = await Workbook.build(plan.items);
+  const verified = await Workbook.verify(bytes, plan.items);
+  assert.equal(verified.checkedRows, 4);
+  assert.ok(verified.rows.every((row) => row.discipline === "ENGENHARIA DE PROJETO"));
+});
+
 check("ET tolera uma única confusão alfanumérica comum no TAG quando a LD é inequívoca", () => {
   const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
   const input = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-32O019";
@@ -2580,4 +2685,4 @@ check("Dashboard compara cada indicador com o período anterior de mesmo tamanho
   assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
-console.log(JSON.stringify({ version: "5.35.0", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.35.1", passed: true, checks: checks.length, names: checks }, null, 2));
