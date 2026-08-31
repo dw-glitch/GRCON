@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 5.34.2 — 2026-08-31
+
+- A revisão atual só é postada quando seu status oficial é **Não Postado**. Assim, `0` com Não Postado permanece `0` para a eGRDT.
+- Qualquer outro status oficial preenchido encerra a combinação atual e libera a próxima revisão ausente: `0` avança para `A`, `A` avança para `B` e assim sucessivamente.
+- A regra inclui Em Análise, Em Workflow, comentários, Recusado, Para Construção, Conforme Construído, Para Compra, Pendente Certificação, Cancelado e qualquer outro status preenchido. Status vazio ou conflitante continua exigindo conferência.
+
 ## 5.34.1 — 2026-08-31
 
 - O status oficial **Em Workflow** passa a avançar para a próxima revisão, assim como os demais retornos que autorizam continuidade. Se a revisão `0` está Em Workflow, o GRCON procura e prepara a revisão `A`; se `A` também já está Em Workflow, prepara `B`, e assim sucessivamente.

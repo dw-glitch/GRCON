@@ -1,7 +1,8 @@
-GRCON 5.34.1 — PUBLICAÇÃO E PRIMEIRO ACESSO
+GRCON 5.34.2 — PUBLICAÇÃO E PRIMEIRO ACESSO
 
 O QUE MUDA
-- O status oficial Em Workflow encerra a revisão já registrada e libera a próxima revisão ainda ausente da Colar SIGEM, sem repetir a postagem atual.
+- Somente o status oficial Não Postado mantém a própria revisão para envio; na revisão 0, o GRCON envia a revisão 0.
+- Qualquer outro status oficial preenchido libera a próxima revisão ainda ausente da Colar SIGEM; na revisão 0, o GRCON prepara a revisão A sem repetir a postagem anterior.
 - Nome de arquivo com sufixo/revisão divergente da LD (ex.: _RIR) gera somente alerta; o GRCON usa a revisão controlada e corrige o nome final automaticamente.
 - N-1710: LI e MC exigem o conjunto físico Excel + PDF; os demais tipos continuam com nativo + PDF.
 - O seletor aceita uma ou mais LDs e pesquisa a relação em todas elas na mesma análise.
@@ -57,8 +58,8 @@ PUBLICAÇÃO NA VERCEL
 2. Publique todo o conteúdo do repositório, incluindo workers/, package.json e os novos scripts de inicialização.
 3. O projeto é estático e não exige etapa de build.
 4. Use sempre HTTPS. Login e Service Worker não funcionam por file://.
-5. Depois da publicação, confirme no rodapé e na meta application-version a versão 5.34.1.
-6. Faça uma recarga completa na primeira abertura. O cache novo é grcon-v5.34.1.
+5. Depois da publicação, confirme no rodapé e na meta application-version a versão 5.34.2.
+6. Faça uma recarga completa na primeira abertura. O cache novo é grcon-v5.34.2.
 
 SUPABASE — ORDEM DAS MIGRAÇÕES PARA UMA BASE EXISTENTE
 1. Confirme que as migrações 5.31.4, 5.31.5, 5.31.6, 5.31.7, 5.31.8, 5.31.9, 5.31.10 e 5.31.14 já foram aplicadas conforme o histórico do projeto.

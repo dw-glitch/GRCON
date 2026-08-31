@@ -159,7 +159,6 @@ check("Em Workflow na revisão 0 libera a revisão A sem repetir a postagem da 0
     now: new Date("2026-08-31T12:00:00.000Z"),
   });
 
-  assert.equal(Core.statusKind("Em Workflow"), "advance");
   assert.equal(result.decision, Core.READY);
   assert.equal(result.revision, "A");
   assert.equal(result.status, "Não Postado");
@@ -167,7 +166,7 @@ check("Em Workflow na revisão 0 libera a revisão A sem repetir a postagem da 0
   assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.READY);
 });
 
-check("Em Workflow avança por todas as revisões já registradas e mantém os demais pendentes bloqueados", () => {
+check("Em Workflow avança por todas as revisões já registradas", () => {
   const technical = ldDocumentRecord(ntDocument);
   const history = ["0", "A"].map((revision, index) => ({
     ...technical,
@@ -185,7 +184,91 @@ check("Em Workflow avança por todas as revisões já registradas e mantém os d
 
   assert.equal(result.decision, Core.READY);
   assert.equal(result.revision, "B");
-  assert.equal(Core.statusKind("Pendente Certificação"), "pending");
+});
+
+check("Conforme Construído libera a próxima revisão sem repetir a revisão atual", () => {
+  const technical = {
+    ...ldDocumentRecord(ntDocument),
+    revision: "0",
+    grdt: "C1O-GRDT-CM-0002-2026",
+    effectiveDate: "2026-08-31",
+  };
+  const history = ["0", "A"].map((revision, index) => ({
+    ...technical,
+    revision,
+    sheet: "Colar SIGEM",
+    row: index + 3,
+    status: "Conforme Construído",
+    sigemStatus: "Conforme Construído",
+  }));
+  const result = Core.triageOne(
+    { id: "as-built-next-revision", name: `${ntDocument}.pdf` },
+    Core.buildIndex([technical], history),
+    {},
+  );
+
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.revision, "B");
+  assert.equal(result.status, "Não Postado");
+  assert.match(result.reason, /A \(Conforme Construído\).*B/i);
+  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.READY);
+});
+
+check("qualquer status diferente de Não Postado avança da revisão 0 para A", () => {
+  const statuses = [
+    "Em Análise",
+    "Em Workflow",
+    "Com Comentários",
+    "Sem Comentários",
+    "Aceito Sem Comentários",
+    "Recusado",
+    "Para Construção",
+    "Conforme Construído",
+    "Para Compra",
+    "Pendente Certificação",
+    "Cancelado",
+    "Outro status oficial",
+  ];
+  const technical = ldDocumentRecord(ntDocument);
+
+  statuses.forEach((status, index) => {
+    const history = {
+      ...technical,
+      sheet: "Colar SIGEM",
+      row: index + 3,
+      status,
+      sigemStatus: status,
+    };
+    const result = Core.triageOne(
+      { id: `all-statuses-${index}`, name: `${ntDocument}.pdf` },
+      Core.buildIndex([technical], [history]),
+      {},
+    );
+    assert.equal(result.decision, Core.READY, status);
+    assert.equal(result.revision, "A", status);
+    assert.equal(result.status, "Não Postado", status);
+  });
+});
+
+check("status Não Postado mantém a própria revisão 0 para postagem", () => {
+  const technical = ldDocumentRecord(ntDocument);
+  const history = {
+    ...technical,
+    sheet: "Colar SIGEM",
+    row: 3,
+    status: "Não Postado",
+    sigemStatus: "Não Postado",
+  };
+  const result = Core.triageOne(
+    { id: "not-posted-keeps-zero", name: `${ntDocument}.pdf` },
+    Core.buildIndex([technical], [history]),
+    {},
+  );
+
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.revision, "0");
+  assert.equal(result.status, "Não Postado");
+  assert.match(result.reason, /status oficial.*Não Postado.*mesma revisão/i);
 });
 
 check("busca alternativa preserva o bloqueio quando a forma da LD não está alocada", () => {
@@ -2419,4 +2502,4 @@ check("Dashboard compara cada indicador com o período anterior de mesmo tamanho
   assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
-console.log(JSON.stringify({ version: "5.34.1", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.34.2", passed: true, checks: checks.length, names: checks }, null, 2));

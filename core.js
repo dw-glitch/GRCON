@@ -423,11 +423,7 @@
       "PARA CONSTRUCAO": "issued",
       "CONFORME CONSTRUIDO": "issued",
       "PARA COMPRA": "issued",
-      // “Em Workflow” confirma que a revisão atual já entrou no fluxo do
-      // SIGEM. Ela não deve ser reenviada; a triagem avança para a próxima
-      // revisão e só a libera quando a combinação DOCUMENTO-REVISÃO ainda não
-      // existir na Colar SIGEM.
-      "EM WORKFLOW": "advance",
+      "EM WORKFLOW": "pending",
       "PENDENTE CERTIFICACAO": "pending",
       "CANCELADO": "closed",
     };
@@ -2550,7 +2546,6 @@
       const statusInfo = statusForRevision(group, revision);
       const currentStatus = text(statusInfo.status) || "Não Postado";
       const kind = statusKind(currentStatus);
-      const currentRecord = recordForRevision(group, revision, inferredSheet);
       displayStatus = currentStatus;
       evidence = statusEvidence(group, revision, inferredSheet);
       postingEvidence = technicalPostingEvidenceForRevision(group, revision, inferredSheet);
@@ -2580,8 +2575,10 @@
         decision = READY;
         if (traversed.length) {
           const sequence = traversed.map((item) => `${item.revision} (${item.status})`).join(", ");
-          reason = `As revisões ${sequence} já têm retorno. A primeira combinação DOCUMENTO-REVISÃO ausente da Colar SIGEM é ${revision}, portanto está Não Postado.`;
+          reason = `As revisões ${sequence} já possuem status na Colar SIGEM. A primeira combinação DOCUMENTO-REVISÃO ausente é ${revision}, portanto está Não Postado.`;
           revisionSource = "histórico SIGEM";
+        } else if (statusInfo.item) {
+          reason = `O status oficial da combinação ${document}-${revision} é Não Postado; essa mesma revisão pode seguir para postagem.`;
         } else {
           reason = `A combinação ${document}-${revision} não existe na Colar SIGEM; o status calculado é Não Postado e pode seguir para postagem.`;
         }
@@ -2589,52 +2586,22 @@
         break;
       }
 
-      if (kind === "analysis") {
-        // “Em Análise” somente existe quando esse texto foi realmente localizado
-        // na coluna de status da aba Colar SIGEM. O status não bloqueia
-        // (hardBlock continua false) e o operador pode incluir manualmente a
-        // qualquer momento, mas não deve ser selecionado automaticamente como
-        // se já estivesse pronto — por isso a decisão é DISCARD, não READY.
-        analysisEvidence = analysisEvidenceForRevision(group, revision, inferredSheet, statusInfo);
-        const analysisRecord = analysisEvidence.item;
-        grdt = text(analysisRecord && analysisRecord.grdt);
-        effectiveDate = text(analysisRecord && analysisRecord.effectiveDate);
-        if (analysisEvidence.emissionSource) {
-          evidence.push({
-            status: "Fonte da GRDT e da data efetiva",
-            source: analysisEvidence.emissionSource.source,
-            sheet: analysisEvidence.emissionSource.sheet,
-            revision,
-            row: analysisEvidence.emissionSource.row,
-            item: analysisRecord,
-          });
-        }
-        const statusSheet = text(statusInfo.item && statusInfo.item.sheet) || "Colar SIGEM";
-        const statusRow = Number(statusInfo.item && statusInfo.item.row) || 0;
-        decision = DISCARD;
-        reason = `A revisão ${revision} está explicitamente “Em Análise” na coluna de status da ${statusSheet}${statusRow ? `, linha ${statusRow}` : ""}. Esse status não bloqueia a geração da eGRDT, mas precisa de seleção manual do operador — não entra automaticamente.`;
+      // Regra operacional: a única situação que permite postar a própria
+      // revisão é “Não Postado”. Qualquer outro status oficial preenchido
+      // comprova que essa combinação DOCUMENTO-REVISÃO já está controlada no
+      // SIGEM e, portanto, a triagem deve procurar a revisão seguinte. Status
+      // vazio e conflito já foram retidos acima para conferência.
+      traversed.push({ revision, status: currentStatus });
+      const following = nextRevision(revision);
+      if (!following) {
+        decision = REVIEW;
+        reason = `A revisão ${revision} possui o status oficial “${currentStatus}”, mas é de campo ou inválida para avanço automático; aplique o procedimento específico antes de gerar a próxima revisão.`;
         completed = true;
         break;
       }
-
-      if (kind === "advance") {
-        traversed.push({ revision, status: currentStatus });
-        const following = nextRevision(revision);
-        if (!following) {
-          decision = REVIEW;
-          reason = `A revisão ${revision} é de campo ou inválida para avanço automático; aplique o procedimento específico antes de gerar a próxima revisão.`;
-          completed = true;
-          break;
-        }
-        revision = following;
-        revisionSource = "histórico SIGEM";
-        continue;
-      }
-
-      decision = REVIEW;
-      reason = `O status oficial “${currentStatus}” da revisão ${revision} não autoriza avanço automático neste fluxo. Somente Em Workflow, Com Comentários, Sem Comentários, Aceito Sem Comentários e Recusado avançam automaticamente.`;
-      completed = true;
-      break;
+      revision = following;
+      revisionSource = "histórico SIGEM";
+      continue;
     }
 
     if (!completed) {
