@@ -78,6 +78,16 @@ Ao excluir uma eGRDT do histórico compartilhado, o GRCON aguarda a confirmaçã
 
 A exclusão compartilhada exige conexão e perfil de proprietário ou administrador. A limpeza completa do histórico segue a mesma regra e libera todas as numerações que já estavam vinculadas a registros concluídos; reservas de gerações ainda em andamento são preservadas.
 
+## Resposta de e-mail da eGRDT
+
+Assim que uma eGRDT é gerada, o GRCON abre o painel **Resposta de e-mail** com a relação dos arquivos postados nas mesmas sete colunas usadas no relatório do Histórico: data da geração/postagem, eGRDT, família documental, documento, título, disciplina e arquivo postado. Uma linha por arquivo físico — o DOCX e o PDF do mesmo documento continuam sendo duas linhas.
+
+A mensagem que acompanha a relação vem preenchida com o número da eGRDT, a data e a quantidade de documentos e arquivos, e pode ser editada antes de copiar. **Copiar resposta** leva mensagem e tabela; **Copiar só a tabela** leva apenas a relação; **Abrir no e-mail** cria a mensagem já com o assunto.
+
+A cópia vai para a área de transferência em dois formatos ao mesmo tempo: tabela HTML com estilo embutido, que o Outlook cola como tabela de verdade, e texto separado por tabulação, que serve para e-mail em texto puro e cola em colunas no Excel.
+
+O painel também abre pelo botão **Resposta de e-mail** na barra da triagem (última eGRDT gerada na sessão) e pelo mesmo botão na eGRDT selecionada no Histórico. A abertura automática pode ser desligada no próprio painel.
+
 ## Desenvolvimento e validação
 
 Requer Node.js 22 ou superior apenas para os testes; a aplicação publicada continua estática.

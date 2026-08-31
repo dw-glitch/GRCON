@@ -10,7 +10,7 @@
   // desatualizada nos relatórios sempre que a publicação era promovida.
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.35.2";
+    || "5.36.0";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
@@ -293,7 +293,7 @@
     const creatorLine = creator ? `<p class="history-record-user">Gerado por ${escapeHtml(creator)}</p>` : "";
     const canDelete = !window.GrconCloud?.state?.membership || window.GrconCloud.canManageHistory();
     const deleteAction = canDelete ? `<button class="history-delete-button" data-history-action="delete" type="button" aria-label="Excluir esta eGRDT do histórico" title="Excluir somente esta eGRDT"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z"/></svg><span>Excluir</span></button>` : "";
-    els.detail.innerHTML = `<header><div class="history-detail-title"><span>eGRDT REGISTRADA</span><h3>${escapeHtml(record.egrdtNumber)}</h3><p>${formatDate(record.generatedAt, true)} · ${escapeHtml(record.outputType)}</p>${creatorLine}${postingBadge(record)}</div><div class="history-detail-actions"><button class="primary-button compact" data-history-action="prepare-sigem" type="button">Preparar no SIGEM</button><button class="secondary-button compact" data-history-action="edit" type="button">Editar número</button>${deleteAction}<div class="history-detail-numbers"><span><strong>${record.documentCount}</strong> documentos</span><span><strong>${record.fileCount}</strong> arquivos</span></div></div></header>
+    els.detail.innerHTML = `<header><div class="history-detail-title"><span>eGRDT REGISTRADA</span><h3>${escapeHtml(record.egrdtNumber)}</h3><p>${formatDate(record.generatedAt, true)} · ${escapeHtml(record.outputType)}</p>${creatorLine}${postingBadge(record)}</div><div class="history-detail-actions"><button class="primary-button compact" data-history-action="prepare-sigem" type="button">Preparar no SIGEM</button><button class="secondary-button compact" data-history-action="email-reply" title="Montar a resposta de e-mail com os documentos desta eGRDT" type="button">Resposta de e-mail</button><button class="secondary-button compact" data-history-action="edit" type="button">Editar número</button>${deleteAction}<div class="history-detail-numbers"><span><strong>${record.documentCount}</strong> documentos</span><span><strong>${record.fileCount}</strong> arquivos</span></div></div></header>
       ${postingWorkflow(record)}
       ${historyNumberEditor(record)}
       <dl class="history-detail-meta"><div><dt>LD utilizada</dt><dd>${escapeHtml(record.ldName || "Não informada")}</dd></div><div><dt>Origem dos documentos</dt><dd>${escapeHtml(record.sourceName || "Pasta documental")}</dd></div><div><dt>Alocação</dt><dd>${record.allocations.length ? record.allocations.map((value) => `<span>${escapeHtml(value)}</span>`).join("") : "Não informada na LD"}</dd></div>${previousNumbers}</dl>
@@ -306,6 +306,18 @@
 
   function render() { refresh(); renderSummary(); renderList(); renderDetail(); }
   function select(id) { state.selectedId = id; state.editingId = ""; renderList(); renderDetail(); }
+
+  // A resposta ao e-mail de quem pediu a emissão usa a mesma relação exibida
+  // aqui. O painel é montado por egrdt_email_reply_ui.js.
+  function openEmailReply() {
+    const record = state.records.find((item) => item.id === state.selectedId);
+    if (!record) return;
+    if (!window.GrconEgrdtEmailReplyUi) {
+      notify("O painel da resposta de e-mail não está disponível nesta sessão.", "error");
+      return;
+    }
+    window.GrconEgrdtEmailReplyUi.open([record]);
+  }
 
   async function prepareForSigem() {
     const record = state.records.find((item) => item.id === state.selectedId);
@@ -389,6 +401,7 @@
   els.detail.addEventListener("click", (event) => {
     const action = event.target.closest("[data-history-action]")?.dataset.historyAction;
     if (action === "prepare-sigem") prepareForSigem();
+    if (action === "email-reply") openEmailReply();
     if (action === "edit") { state.editingId = state.selectedId; renderDetail(); }
     if (action === "delete") void deleteSelectedRecord();
     if (action === "cancel") { state.editingId = ""; renderDetail(); }

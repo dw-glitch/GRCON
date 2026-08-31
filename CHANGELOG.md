@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 5.36.0 — 2026-08-31
+
+### Resposta de e-mail da eGRDT
+
+- Novo painel **Resposta de e-mail**, que monta a relação dos documentos postados pronta para colar na resposta ao solicitante. Ele abre sozinho ao gerar a eGRDT e pode ser reaberto pelo botão da barra da triagem ou pela eGRDT selecionada no Histórico.
+- A relação usa as sete colunas da resposta — data da geração/postagem, eGRDT, família documental, documento, título, disciplina e arquivo postado — com uma linha por arquivo físico, como na eGRDT gerada.
+- A cópia entra na área de transferência em dois formatos ao mesmo tempo: tabela HTML com estilo embutido, que o cliente de e-mail cola como tabela, e texto separado por tabulação para e-mail em texto puro e para colar em colunas no Excel. Antes a relação era copiada da tabela do Histórico e chegava ao Outlook desmontada, uma célula por linha.
+- A mensagem de acompanhamento vem preenchida com o número da eGRDT, a data e a quantidade de documentos e arquivos, e é editável antes da cópia. **Abrir no e-mail** cria a mensagem com o assunto pronto; quando a relação passa do limite do link `mailto:`, ela segue pela área de transferência.
+- A abertura automática pode ser desligada no próprio painel e a preferência fica neste navegador. A sincronização do Supabase dispara o mesmo evento de histórico da emissão, então a geração passou a ser identificada explicitamente para não abrir o painel com o histórico inteiro.
+
 ## 5.35.2 — 2026-08-31
 
 - A eGRDT histórica `0130870-C1O-PGV-G-0177-2025` confirmou que os documentos `PR-5290.00-22313-175-C1O-040` e `PR-5290.00-22313-175-C1O-041` foram emitidos com a disciplina literal `MECÂNICA/SEGURANCA` nas linhas de DOCX e PDF.

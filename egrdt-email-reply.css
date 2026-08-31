@@ -1,0 +1,214 @@
+/* GRCON — Painel da resposta de e-mail da eGRDT.
+   Abre sobre a tela atual (triagem ou histórico) e mostra a mensagem editável
+   junto da relação dos documentos exatamente como ela será colada no e-mail. */
+
+.egrdt-email-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgb(9 24 34 / 46%);
+  backdrop-filter: blur(2px);
+}
+
+/* As folhas globais do GRCON alcançam este painel por seletores muito
+   específicos — `html[data-app][data-ui-generation] :is(..., [role="dialog"])`
+   limita qualquer diálogo a 680 px, e o CSS legado ainda impõe
+   `table-layout: fixed` e `min-width: 3300px` em toda tabela. As regras de
+   caixa daqui usam o id para vencer essas heranças sem `!important`. */
+#egrdt-email-panel.egrdt-email-panel {
+  max-width: none;
+  overflow: hidden;
+}
+
+.egrdt-email-panel {
+  position: fixed;
+  z-index: 1201;
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  width: min(72rem, calc(100vw - 2.5rem));
+  max-height: min(46rem, calc(100vh - 2.5rem));
+  background: var(--surface-1);
+  color: var(--text-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+
+.egrdt-email-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-1);
+  background: var(--surface-2);
+}
+
+.egrdt-email-header > div > span {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text-3);
+}
+
+.egrdt-email-header h2 {
+  margin: .15rem 0 .2rem;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  color: var(--brand-strong);
+  word-break: break-word;
+}
+
+.egrdt-email-header p {
+  margin: 0;
+  font-size: .82rem;
+  color: var(--text-2);
+}
+
+.egrdt-email-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  overflow: auto;
+}
+
+.egrdt-email-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.egrdt-email-message > span {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.egrdt-email-message textarea {
+  width: 100%;
+  padding: var(--space-3);
+  font: inherit;
+  font-size: .88rem;
+  line-height: 1.5;
+  color: var(--text-1);
+  background: var(--surface-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.egrdt-email-message textarea:focus-visible {
+  outline: none;
+  border-color: var(--brand-600);
+  box-shadow: var(--focus);
+}
+
+.egrdt-email-preview-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: .82rem;
+  color: var(--text-2);
+}
+
+/* A tabela leva estilo embutido claro porque é ela que vai para o e-mail.
+   O quadro do preview repete o fundo claro nos dois temas para que o operador
+   veja exatamente o que será colado, sem texto escuro sobre fundo escuro. */
+.egrdt-email-preview {
+  padding: var(--space-4);
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+}
+
+/* O tema escuro pinta `table` com a superfície escura do app e o zebrado das
+   linhas vem das folhas globais, mas esta tabela é a que vai para o e-mail:
+   ela mantém o fundo claro e a cor do estilo embutido nos dois temas, para o
+   preview mostrar exatamente o que será colado. */
+#egrdt-email-preview table,
+#egrdt-email-preview table tr,
+#egrdt-email-preview table th,
+#egrdt-email-preview table td {
+  background-color: transparent;
+  background-image: none;
+  color: #10222F;
+}
+
+#egrdt-email-preview table {
+  width: auto;
+  min-width: 100%;
+  max-width: none;
+  table-layout: auto;
+}
+
+/* O preview rola na horizontal em vez de quebrar o conteúdo: o código do
+   documento e o nome do arquivo precisam ser lidos inteiros, e no e-mail a
+   largura disponível é outra. Só o TÍTULO (5.ª coluna, fixada por COLUMNS em
+   egrdt_email_reply.js) quebra, porque é o único campo de texto corrido. */
+#egrdt-email-preview table th,
+#egrdt-email-preview table td {
+  max-width: none;
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+#egrdt-email-preview table th:nth-child(5),
+#egrdt-email-preview table td:nth-child(5) {
+  min-width: 16rem;
+  white-space: normal;
+}
+
+.egrdt-email-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-1);
+  background: var(--surface-2);
+}
+
+.egrdt-email-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: .82rem;
+  color: var(--text-2);
+}
+
+.egrdt-email-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 48rem) {
+  .egrdt-email-panel {
+    width: calc(100vw - 1rem);
+    max-height: calc(100vh - 1rem);
+  }
+
+  .egrdt-email-header,
+  .egrdt-email-body,
+  .egrdt-email-footer {
+    padding-inline: var(--space-4);
+  }
+
+  .egrdt-email-actions {
+    width: 100%;
+  }
+
+  .egrdt-email-actions button {
+    flex: 1 1 auto;
+  }
+}

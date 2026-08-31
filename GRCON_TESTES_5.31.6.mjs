@@ -10,6 +10,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const History = require(path.join(root, "history_core.js"));
 const HistoryReport = require(path.join(root, "history_report.js"));
+const EmailReply = require(path.join(root, "egrdt_email_reply.js"));
 const Sequence = require(path.join(root, "egrdt_sequence.js"));
 const Workbook = require(path.join(root, "grdt_workbook.js"));
 const ExcelJS = require(path.join(root, "exceljs.min.js"));
@@ -2685,4 +2686,98 @@ check("Dashboard compara cada indicador com o período anterior de mesmo tamanho
   assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
-console.log(JSON.stringify({ version: "5.35.2", passed: true, checks: checks.length, names: checks }, null, 2));
+check("resposta de e-mail monta as sete colunas da relação e cola como tabela", () => {
+  // A relação copiada do Histórico chegava ao Outlook desmontada, uma célula
+  // por linha. A resposta é montada com as mesmas colunas do relatório e com
+  // estilo embutido, que é o que o cliente de e-mail preserva.
+  const postado = History.cleanRecord({
+    id: "email-1",
+    egrdtNumber: "0130870-C1O-PGV-G-1407-2026 - eGRDT",
+    generatedAt: new Date(2026, 7, 31, 10, 59).toISOString(),
+    outputType: "eGRDT final",
+    files: [
+      { document: "PR-5290.00-22313-974-C1O-158", title: "CALIBRAÇÃO DE TERMOPAR TERMORRESISTENCIA", discipline: "COMISSIONAMENTO", finalName: "PR-5290.00-22313-974-C1O-158_0001_0.docx", sheet: "N-1710" },
+      { document: "PR-5290.00-22313-974-C1O-158", title: "CALIBRAÇÃO DE TERMOPAR TERMORRESISTENCIA", discipline: "COMISSIONAMENTO", finalName: "PR-5290.00-22313-974-C1O-158_0001_0.pdf", sheet: "N-1710" },
+      { document: "PR-5290.00-22313-974-C1O-159", title: "CALIBRAÇÃO DE DETECTORES DE CHAMA", discipline: "COMISSIONAMENTO", finalName: "PR-5290.00-22313-974-C1O-159_0001_0.pdf", sheet: "N-1710" },
+    ],
+  });
+
+  const reply = EmailReply.build([postado]);
+
+  assert.deepEqual(reply.columns, [
+    "DATA DA GERAÇÃO / POSTAGEM",
+    "EGRDT",
+    "FAMÍLIA DOCUMENTAL",
+    "DOCUMENTO",
+    "TÍTULO",
+    "DISCIPLINA",
+    "ARQUIVO POSTADO",
+  ]);
+
+  // Uma linha por arquivo físico: o DOCX e o PDF do mesmo documento continuam
+  // sendo duas linhas, como na eGRDT gerada.
+  assert.equal(reply.rows.length, 3);
+  assert.equal(reply.summary.documents, 2);
+  assert.equal(reply.summary.files, 3);
+  assert.equal(reply.rows[0]["EGRDT"], "0130870-C1O-PGV-G-1407-2026 - eGRDT");
+  assert.equal(reply.rows[0]["FAMÍLIA DOCUMENTAL"], "N-1710");
+  assert.equal(reply.rows[0]["DATA DA GERAÇÃO / POSTAGEM"], "31/08/2026, 10:59");
+  assert.equal(reply.rows[0]["ARQUIVO POSTADO"], "PR-5290.00-22313-974-C1O-158_0001_0.docx");
+  assert.equal(reply.rows[2]["TÍTULO"], "CALIBRAÇÃO DE DETECTORES DE CHAMA");
+
+  // Texto tabulado: cabeçalho e uma linha por arquivo, para e-mail em texto
+  // puro e para colar em colunas no Excel.
+  const linhas = reply.tableText.split("\n");
+  assert.equal(linhas.length, 4);
+  assert.equal(linhas[0].split("\t").length, 7);
+  assert.equal(linhas[1].split("\t")[3], "PR-5290.00-22313-974-C1O-158");
+
+  // HTML com estilo embutido: sem isso o Outlook descarta a formatação e a
+  // tabela chega como uma célula por linha.
+  assert.equal((reply.tableHtml.match(/<th /g) || []).length, 7);
+  assert.equal((reply.tableHtml.match(/<tr>/g) || []).length, 4);
+  assert.match(reply.tableHtml, /border-collapse:collapse/);
+  assert.match(reply.html, /<p style=/);
+
+  // A mensagem padrão nomeia a eGRDT e a data, e é o texto que abre o painel.
+  assert.match(reply.message, /0130870-C1O-PGV-G-1407-2026 - eGRDT/);
+  assert.match(reply.message, /31\/08\/2026, às 10:59/);
+  assert.equal(reply.subject, "Documentos postados — 0130870-C1O-PGV-G-1407-2026 - eGRDT");
+
+  // Só a tabela: quem já escreveu o próprio texto cola apenas a relação.
+  const somenteTabela = EmailReply.build([postado], { message: "" });
+  assert.equal(somenteTabela.text, somenteTabela.tableText);
+  assert.equal(somenteTabela.html.includes("<p style="), false);
+
+  // Campo em branco vira travessão, e não uma célula vazia que desalinha a
+  // leitura da tabela no e-mail.
+  const semTitulo = EmailReply.rowsFromRecords([History.cleanRecord({
+    id: "email-2",
+    egrdtNumber: "0130870-C1O-PGV-G-0001-2026 - eGRDT",
+    generatedAt: new Date(2026, 7, 31, 8, 0).toISOString(),
+    files: [{ document: "PR-5290.00-22313-974-C1O-900", finalName: "PR-5290.00-22313-974-C1O-900_0001_0.pdf", sheet: "N-1710" }],
+  })]);
+  assert.equal(semTitulo[0]["TÍTULO"], "—");
+  assert.equal(semTitulo[0]["DISCIPLINA"], "—");
+
+  // mailto: tem limite de tamanho. Com relação grande o link leva só a
+  // mensagem — a tabela vai pela área de transferência.
+  const curto = EmailReply.mailtoUrl(reply);
+  assert.equal(curto.truncated, false);
+  assert.match(curto.url, /^mailto:\?subject=/);
+  const grande = EmailReply.build([History.cleanRecord({
+    id: "email-3",
+    egrdtNumber: "0130870-C1O-PGV-G-0002-2026 - eGRDT",
+    generatedAt: new Date(2026, 7, 31, 9, 0).toISOString(),
+    files: Array.from({ length: 60 }, (_, index) => ({
+      document: `PR-5290.00-22313-974-C1O-${String(index + 1).padStart(3, "0")}`,
+      title: "DOCUMENTO DE TESTE DA RESPOSTA DE E-MAIL",
+      discipline: "COMISSIONAMENTO",
+      finalName: `PR-5290.00-22313-974-C1O-${String(index + 1).padStart(3, "0")}_0001_0.pdf`,
+      sheet: "N-1710",
+    })),
+  })]);
+  assert.equal(EmailReply.mailtoUrl(grande).truncated, true);
+});
+
+console.log(JSON.stringify({ version: "5.36.0", passed: true, checks: checks.length, names: checks }, null, 2));
