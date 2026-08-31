@@ -145,10 +145,7 @@
       ? ` por meio d${numbers.length === 1 ? "a eGRDT" : "as eGRDTs"} ${joinList(numbers)}`
       : "";
     const quando = info.generatedAt ? ` em ${datePhrase(info.generatedAt)}` : "";
-    const quanto = info.documents
-      ? ` Seguem ${plural(info.documents, "documento", "documentos")} em ${plural(info.files, "arquivo", "arquivos")}.`
-      : "";
-    return `Prezado(a),\n\nInformamos que os documentos abaixo foram postados${via}${quando}.${quanto}\n\nAtenciosamente,`;
+    return `Prezado(a),\n\nInformamos que os documentos abaixo foram postados${via}${quando}.\n\nAtenciosamente,`;
   }
 
   function tableText(rows) {
@@ -159,9 +156,11 @@
 
   // Estilo embutido linha a linha: o Outlook descarta folhas de estilo e
   // qualquer regra que não esteja no próprio elemento colado.
-  const TABLE_STYLE = "border-collapse:collapse;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:10.5pt;color:#10222F";
-  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:6px 10px;text-align:left;font-weight:bold;white-space:nowrap";
-  const CELL_STYLE = "border:1px solid #9FB3C3;padding:6px 10px;text-align:left;vertical-align:top";
+  const TABLE_STYLE = "border-collapse:collapse;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:9pt;color:#10222F";
+  // O Outlook nem sempre herda o tamanho declarado no <table>; por isso o
+  // cabeçalho e cada célula também carregam 9 pt no próprio style.
+  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:6px 10px;text-align:left;font-size:9pt;font-weight:bold;white-space:nowrap";
+  const CELL_STYLE = "border:1px solid #9FB3C3;padding:6px 10px;text-align:left;vertical-align:top;font-size:9pt";
 
   function tableHtml(rows) {
     const head = COLUMNS.map((column) => `<th style="${HEAD_STYLE}">${escapeHtml(column)}</th>`).join("");

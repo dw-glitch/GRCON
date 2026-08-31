@@ -2737,11 +2737,14 @@ check("resposta de e-mail monta as sete colunas da relação e cola como tabela"
   assert.equal((reply.tableHtml.match(/<th /g) || []).length, 7);
   assert.equal((reply.tableHtml.match(/<tr>/g) || []).length, 4);
   assert.match(reply.tableHtml, /border-collapse:collapse/);
+  assert.equal((reply.tableHtml.match(/font-size:9pt/g) || []).length, 29, "table, sete cabeçalhos e 21 células usam fonte 9 pt");
   assert.match(reply.html, /<p style=/);
 
   // A mensagem padrão nomeia a eGRDT e a data, e é o texto que abre o painel.
   assert.match(reply.message, /0130870-C1O-PGV-G-1407-2026 - eGRDT/);
   assert.match(reply.message, /31\/08\/2026, às 10:59/);
+  assert.doesNotMatch(reply.message, /Seguem\s+\d+\s+documento/i);
+  assert.doesNotMatch(reply.message, /\d+\s+arquivos?/i);
   assert.equal(reply.subject, "Documentos postados — 0130870-C1O-PGV-G-1407-2026 - eGRDT");
 
   // Só a tabela: quem já escreveu o próprio texto cola apenas a relação.
@@ -2780,4 +2783,4 @@ check("resposta de e-mail monta as sete colunas da relação e cola como tabela"
   assert.equal(EmailReply.mailtoUrl(grande).truncated, true);
 });
 
-console.log(JSON.stringify({ version: "5.36.0", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.36.1", passed: true, checks: checks.length, names: checks }, null, 2));

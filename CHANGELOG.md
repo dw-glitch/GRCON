@@ -1,5 +1,10 @@
 # Histórico de alterações
 
+## 5.36.1 — 2026-08-31
+
+- A tabela da resposta de e-mail passa de `10,5 pt` para `9 pt`, com o tamanho gravado diretamente no cabeçalho e em cada célula para o Outlook preservar a formatação.
+- O corpo padrão mantém a identificação da eGRDT e a data, mas deixa de acrescentar a frase automática `Seguem N documentos em N arquivos.`.
+
 ## 5.36.0 — 2026-08-31
 
 ### Resposta de e-mail da eGRDT
