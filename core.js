@@ -28,7 +28,7 @@
       "DINÂMICOS", "ESTÁTICOS", "MONTAGEM", "COMISSIONAMENTO", "SUPRIMENTOS",
       "ELÉTRICA", "ENGENHARIA DE PROJETO", "ESTRUTURA METÁLICA",
       "FERRAMENTAS COMPUTACIONAIS", "INSTRUMENTAÇÃO", "MECÂNICA", "MEIO AMBIENTE",
-      "SEGURANÇA", "PLANEJAMENTO", "COMUNICAÇÃO E RS", "ADM CONTRATUAL", "GERAL",
+      "MECÂNICA/SEGURANCA", "SEGURANÇA", "PLANEJAMENTO", "COMUNICAÇÃO E RS", "ADM CONTRATUAL", "GERAL",
       "QUALIDADE", "CIVIL", "SAÚDE", "TUBULAÇÃO", "COORDENAÇÃO",
     ],
     documentTypes: [
@@ -1613,6 +1613,13 @@
     const sourceParts = source.split("/").map((part) => part.trim()).filter(Boolean);
     const sourceTail = sourceParts[sourceParts.length - 1] || source;
     const sourcePrefix = sourceParts.length > 1 ? sourceParts[sourceParts.length - 2] : "";
+
+    // A eGRDT histórica 0130870-C1O-PGV-G-0177-2025 confirma que o workflow
+    // corporativo "RNEST UHDTD U-32 PROJETO" é gravado no combo antigo como
+    // "MECÂNICA/SEGURANCA". Essa equivalência precisa preceder o alias genérico
+    // PROJETO, pois ENGENHARIA DE PROJETO não reproduz o valor aceito nessa GRDT.
+    const compactWorkflow = source.replace(/[^A-Z0-9]/g, "");
+    if (compactWorkflow === "RNESTUHDTDU32PROJETO") return "MECÂNICA/SEGURANCA";
 
     // As LDs de N-1710 (e algumas LDs históricas) podem registrar a disciplina
     // pelo código contratual, enquanto a eGRDT aceita somente a descrição

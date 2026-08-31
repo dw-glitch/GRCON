@@ -114,7 +114,8 @@
   /**
    * A LD pode guardar o workflow completo, enquanto a coluna DISCIPLINA da
    * eGRDT trabalha com um nome curto. Sempre que possível usamos a equivalência
-   * oficial do núcleo (PROJETO -> ENGENHARIA DE PROJETO, PRJ -> idem etc.).
+   * oficial do núcleo (workflow U-32 PROJETO -> MECÂNICA/SEGURANCA, PRJ ->
+   * ENGENHARIA DE PROJETO etc.).
    * Se surgir um workflow novo, o texto real da LD é preservado e segue como
    * alerta, sem cancelar toda a emissão.
    */

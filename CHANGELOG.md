@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 5.35.2 — 2026-08-31
+
+- A eGRDT histórica `0130870-C1O-PGV-G-0177-2025` confirmou que os documentos `PR-5290.00-22313-175-C1O-040` e `PR-5290.00-22313-175-C1O-041` foram emitidos com a disciplina literal `MECÂNICA/SEGURANCA` nas linhas de DOCX e PDF.
+- O workflow `RNEST UHDTD U-32 PROJETO` passa a usar essa equivalência histórica específica, em vez de `ENGENHARIA DE PROJETO`.
+- `MECÂNICA/SEGURANCA` entra no conjunto aceito pela eGRDT; a disciplina continua sem bloquear a geração quando surgir um workflow ainda não mapeado.
+
 ## 5.35.1 — 2026-08-31
 
 - `RNEST UHDTD U-32 PROJETO`, confirmado na lista oficial de workflows, passa a ser convertido para `ENGENHARIA DE PROJETO` na eGRDT.

@@ -1043,7 +1043,7 @@ check("ET localiza variação silenciosa de separadores somente dentro do TAG", 
   assert.doesNotMatch(result.documentLookup.message, /erro|transcri|formata/i);
 });
 
-check("workflow PROJETO dos PR 040 e 041 vira ENGENHARIA DE PROJETO sem bloquear DOCX e PDF", () => {
+check("workflow PROJETO dos PR 040 e 041 reproduz MECÂNICA/SEGURANCA da eGRDT histórica", () => {
   const workflow = "RNEST UHDTD U-32 PROJETO";
   ["040", "041"].forEach((sequence) => {
     const document = `PR-5290.00-22313-175-C1O-${sequence}`;
@@ -1058,7 +1058,7 @@ check("workflow PROJETO dos PR 040 e 041 vira ENGENHARIA DE PROJETO sem bloquear
       databook: "PROJETO",
     };
     const egrdt = Core.buildEgrdtData(document, "A", `${document}_0001_A.pdf`, record, "N-1710", "A4");
-    assert.equal(egrdt.discipline, "ENGENHARIA DE PROJETO");
+    assert.equal(egrdt.discipline, "MECÂNICA/SEGURANCA");
 
     const row = {
       document,
@@ -1077,8 +1077,8 @@ check("workflow PROJETO dos PR 040 e 041 vira ENGENHARIA DE PROJETO sem bloquear
     const plan = Emission.createPlan([row], new Set([0]));
     assert.deepEqual(plan.errors, []);
     assert.equal(plan.entries.length, 2);
-    assert.ok(plan.items.every((item) => item.discipline === "ENGENHARIA DE PROJETO"));
-    assert.ok(plan.warnings.some((message) => /adaptada para “ENGENHARIA DE PROJETO”/i.test(message)));
+    assert.ok(plan.items.every((item) => item.discipline === "MECÂNICA/SEGURANCA"));
+    assert.ok(plan.warnings.some((message) => /adaptada para “MECÂNICA\/SEGURANCA”/i.test(message)));
   });
 });
 
@@ -1145,7 +1145,7 @@ await checkAsync("eGRDT dos PR 040 e 041 é gerada e reaberta com quatro arquivo
   const bytes = await Workbook.build(plan.items);
   const verified = await Workbook.verify(bytes, plan.items);
   assert.equal(verified.checkedRows, 4);
-  assert.ok(verified.rows.every((row) => row.discipline === "ENGENHARIA DE PROJETO"));
+  assert.ok(verified.rows.every((row) => row.discipline === "MECÂNICA/SEGURANCA"));
 });
 
 check("ET tolera uma única confusão alfanumérica comum no TAG quando a LD é inequívoca", () => {
@@ -2685,4 +2685,4 @@ check("Dashboard compara cada indicador com o período anterior de mesmo tamanho
   assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
-console.log(JSON.stringify({ version: "5.35.1", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.35.2", passed: true, checks: checks.length, names: checks }, null, 2));
