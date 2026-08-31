@@ -1,5 +1,5 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.34.2
+// Versão: 5.35.0
 // Estratégia: rede primeiro para todo o código do GRCON (HTML/CSS/JS), para
 // que uma correção publicada apareça na hora; e stale-while-revalidate para os
 // arquivos pesados (bibliotecas, imagens e os pacotes gerados), que assim
@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.34.2";
+const CACHE_NAME = "grcon-v5.35.0";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -24,6 +24,7 @@ const ASSETS = [
   "grcon-responsive.css",
   "grcon_cloud.css",
   "requests.css",
+  "pdf-merge.css",
   "grcon-icon.png",
   "grcon-logo-app.png",
   "grcon-logo-report.png",
@@ -39,6 +40,9 @@ const ASSETS = [
   "requests_core.js",
   "requests_report.js",
   "requests_app.js",
+  "pdf_merge_core.js",
+  "pdf_merge_engine.js",
+  "pdf_merge_app.js",
   "apendice_base.js",
   "apendice_tagueados.js",
   "allocation_center.js",
@@ -85,6 +89,7 @@ const ASSETS = [
   "productivity_center.js",
   "exceljs.min.js",
   "jszip.min.js",
+  "pdf-lib.min.js",
   "xlsx.full.min.js",
   "grcon_config.js",
   "grcon_utils.js",
@@ -97,6 +102,7 @@ const ASSETS = [
   "workers/ld.worker.js",
   "workers/triage.worker.js",
   "workers/export.worker.js",
+  "workers/pdf-merge.worker.js",
 ];
 
 const CRITICAL_ASSETS = [
@@ -130,6 +136,7 @@ const HEAVY_ASSETS = new Set([
   "exceljs.min.js",
   "xlsx.full.min.js",
   "jszip.min.js",
+  "pdf-lib.min.js",
   "supabase.min.js",
   "grdt-template.xlsx",
   "grcon-icon.png",

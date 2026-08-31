@@ -10,7 +10,7 @@
   // desatualizada nos relatórios sempre que a publicação era promovida.
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.34.2";
+    || "5.35.0";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };

@@ -23,6 +23,9 @@
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; ambos entram sob demanda.
     requests: ["xlsx", "excel", "brand", "requests_app.js"],
+    // O combinador é isolado do banco. A biblioteca pesada fica dentro do
+    // Worker e só é carregada quando o operador realmente gera o PDF.
+    "pdf-tools": ["pdf_merge_core.js", "pdf_merge_app.js"],
   };
 
   const moduleRequirements = {
@@ -31,6 +34,7 @@
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsUi"],
+    "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
   };
 
   function scriptBasename(value) {
@@ -191,6 +195,7 @@
       dashboard: "dashboard-module",
       sigem: "sigem-module",
       requests: "requests-module",
+      "pdf-tools": "pdf-tools-module",
     };
     Object.entries(modules).forEach(([key, id]) => {
       const node = document.getElementById(id);
@@ -214,6 +219,7 @@
     history: "Histórico de eGRDTs",
     dashboard: "Dashboard de emissões",
     sigem: "Postagem SIGEM",
+    "pdf-tools": "Combinar PDFs",
   };
 
   function rotularArea(view) {
@@ -235,6 +241,10 @@
   function activateReadyModule(module) {
     if (module === "dashboard") {
       root.GrconHistoryDashboard?.activate?.();
+      return;
+    }
+    if (module === "pdf-tools") {
+      root.GrconPdfMergeUi?.activate?.();
       return;
     }
     root.GrconHistoryUi?.activate?.(module);

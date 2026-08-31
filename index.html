@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.34.2" data-version="5.34.2" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.35.0" data-version="5.35.0" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -20,12 +20,13 @@
      por grcon_bootstrap_head.js. São ~70 KB que antes bloqueavam a pintura da
      tela inicial sem estilizar nada visível nela. -->
 <link href="requests.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
+<link href="pdf-merge.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="analysis-history.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="sigem-posting.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
-<noscript><link href="requests.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/></noscript>
+<noscript><link href="requests.css" rel="stylesheet"/><link href="pdf-merge.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/></noscript>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.34.2" name="application-version"/></head>
+<meta content="5.35.0" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -59,6 +60,9 @@
 <button class="ops-nav-button" data-grcon-view="requests" type="button">
 <svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong></span>
 </button>
+<button class="ops-nav-button" data-grcon-view="pdf-tools" type="button">
+<svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v12H5zM14 3v4h4"></path><path d="M9 11h5M9 15h5M19 10h2v11H8v-2"></path></svg><span><strong>Combinar PDFs</strong></span>
+</button>
 <a class="ops-nav-button ops-nav-external" href="https://grcon-flow.vercel.app/" rel="noopener noreferrer" target="_blank" title="Abrir o GRCON Flow em outra aba">
 <svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Abre o GRCON Flow</small></span><svg aria-hidden="true" class="ops-nav-external-icon" viewbox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M7 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"></path></svg>
 </a>
@@ -79,6 +83,7 @@
 <nav aria-label="Navegação compacta do GRCON" class="grcon-view-tabs" role="tablist">
 <button id="tab-control" aria-controls="grdt-module" aria-selected="true" class="active" data-grcon-view="control" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Controle de GRDT</strong><small>Analisar e gerar eGRDT</small></span></button>
 <button id="tab-requests" aria-controls="requests-module" aria-selected="false" data-grcon-view="requests" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong><small>Consultar documentos na LD</small></span></button>
+<button id="tab-pdf-tools" aria-controls="pdf-tools-module" aria-selected="false" data-grcon-view="pdf-tools" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v12H5zM14 3v4h4"></path><path d="M9 11h5M9 15h5M19 10h2v11H8v-2"></path></svg><span><strong>Combinar PDFs</strong><small>Juntar arquivos em um PDF</small></span></button>
 <a class="ops-nav-external" href="https://grcon-flow.vercel.app/" rel="noopener noreferrer" target="_blank" role="tab" title="Abrir o GRCON Flow em outra aba"><svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Abre o GRCON Flow, em outra aba</small></span><svg aria-hidden="true" class="ops-nav-external-icon" viewbox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M7 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"></path></svg></a>
 <button id="tab-analysis" aria-controls="analysis-history-module" aria-selected="false" data-grcon-view="analysis-history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Histórico de análises</strong><small>Data, documento e status</small></span><b hidden="" id="analysis-history-tab-count">0</b></button>
 <button id="tab-history" aria-controls="history-module" aria-selected="false" data-grcon-view="history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico de eGRDTs</strong><small>Arquivos e alocações</small></span><b hidden="" id="history-tab-count">0</b></button>
@@ -429,6 +434,48 @@
 </section>
 </div>
 </section>
+<section id="pdf-tools-module" class="pdf-merge-module" hidden="" role="tabpanel" aria-labelledby="tab-pdf-tools">
+<header class="ops-page-heading pdf-merge-heading">
+<div><h2>Combinar PDFs</h2><p>Junte vários PDFs em um único arquivo, exatamente na ordem escolhida.</p></div>
+<span class="pdf-merge-local-badge"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3M5 10h14v11H5z"></path></svg>Somente neste navegador</span>
+</header>
+<p class="pdf-merge-privacy" id="pdf-merge-privacy">Processamento 100% local: nenhum PDF é enviado, armazenado ou registrado no banco.</p>
+<div class="pdf-merge-workspace">
+<section class="pdf-merge-panel" aria-labelledby="pdf-merge-files-title">
+<header class="pdf-merge-panel-head"><div><span>ARQUIVOS DE ENTRADA</span><h3 id="pdf-merge-files-title">PDFs que serão combinados</h3></div><small>A ordem desta lista será a ordem das páginas no arquivo final.</small></header>
+<div class="pdf-merge-drop" id="pdf-merge-drop" role="button" tabindex="0" aria-describedby="pdf-merge-drop-hint">
+<input accept="application/pdf,.pdf" hidden="" id="pdf-merge-input" multiple="" type="file"/>
+<span class="pdf-merge-drop-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"></path></svg></span>
+<strong>Arraste seus PDFs para cá</strong>
+<span id="pdf-merge-drop-hint">ou clique para selecionar vários arquivos</span>
+</div>
+<div class="pdf-merge-file-tools">
+<div class="pdf-merge-metrics" aria-live="polite"><span><strong id="pdf-merge-count">0</strong><small>PDFs</small></span><span><strong id="pdf-merge-size">0 B</strong><small>Tamanho total</small></span></div>
+<div><button class="secondary-button compact" id="pdf-merge-add" type="button">Adicionar PDFs</button><button class="text-button danger" disabled="" id="pdf-merge-clear" type="button">Limpar lista</button></div>
+</div>
+<div class="pdf-merge-list-wrap">
+<ol class="pdf-merge-list" hidden="" id="pdf-merge-list" aria-label="Ordem dos PDFs"></ol>
+<empty-state class="pdf-merge-empty" id="pdf-merge-empty"><strong>Nenhum PDF selecionado</strong><span>Adicione pelo menos dois arquivos para começar.</span></empty-state>
+</div>
+</section>
+<aside class="pdf-merge-panel pdf-merge-output" aria-labelledby="pdf-merge-output-title">
+<header class="pdf-merge-panel-head"><div><span>ARQUIVO FINAL</span><h3 id="pdf-merge-output-title">Gerar PDF combinado</h3></div></header>
+<label class="pdf-merge-name"><span>Nome do arquivo</span><input autocomplete="off" id="pdf-merge-output-name" maxlength="124" type="text" value="PDF_Combinado.pdf"/></label>
+<ul class="pdf-merge-checks"><li><i>1</i>Confira a ordem dos arquivos.</li><li><i>2</i>Defina o nome do PDF final.</li><li><i>3</i>Combine e baixe o resultado.</li></ul>
+<div class="pdf-merge-actions"><button class="primary-button" disabled="" id="pdf-merge-run" type="button">Combinar e baixar</button><button class="secondary-button" hidden="" id="pdf-merge-cancel" type="button">Cancelar</button></div>
+<div class="pdf-merge-progress" hidden="" id="pdf-merge-progress" aria-live="polite">
+<div class="pdf-merge-progress-track" role="progressbar" aria-label="Progresso da combinação" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="pdf-merge-progress-fill"></i></div>
+<span id="pdf-merge-progress-text">Preparando os PDFs…</span>
+</div>
+<section class="pdf-merge-result" hidden="" id="pdf-merge-result" aria-live="polite">
+<span class="pdf-merge-result-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></span>
+<div><strong id="pdf-merge-result-name">PDF_Combinado.pdf</strong><small id="pdf-merge-result-meta">Arquivo pronto</small></div>
+<button class="secondary-button compact" id="pdf-merge-download" type="button">Baixar novamente</button>
+</section>
+<small class="pdf-merge-output-note">PDFs protegidos por senha precisam ser desbloqueados antes da combinação. O resultado existe somente para download e não entra no histórico do GRCON.</small>
+</aside>
+</div>
+</section>
 <section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
 <header class="analysis-history-heading"><div><span>RASTREABILIDADE DAS ANÁLISES</span><h2 id="analysis-history-title">Todos os documentos analisados pelo GRCON</h2><p>Cada análise concluída é registrada com data, documento, revisão, situação entregue e motivo.</p></div><div class="analysis-history-actions"><button class="secondary-button" id="analysis-history-backup" type="button">Fazer backup</button><button class="secondary-button" id="analysis-history-restore" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="analysis-history-restore-input" type="file"/><button class="secondary-button" disabled="" id="analysis-history-delete-session" type="button">Excluir análise selecionada</button><button class="secondary-button" id="analysis-history-clear" type="button">Limpar todo o histórico</button></div></header>
 <section aria-label="Busca unificada" class="unified-search" id="unified-search">
@@ -529,7 +576,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.34.2 · <span id="footer-view">Controle de GRDT</span></span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.35.0 · <span id="footer-view">Controle de GRDT</span></span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">

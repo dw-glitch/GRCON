@@ -23,11 +23,19 @@ const RequestsReport = require(path.join(root, "requests_report.js"));
 const Emission = require(path.join(root, "emission.js"));
 const OutputGuard = require(path.join(root, "grcon_output_guard.js"));
 const OutputAudit = require(path.join(root, "output_audit.js"));
+const PdfMergeCore = require(path.join(root, "pdf_merge_core.js"));
+const PdfMergeEngine = require(path.join(root, "pdf_merge_engine.js"));
+const PDFLib = require(path.join(root, "pdf-lib.min.js"));
 const SheetJS = require(path.join(root, "xlsx.full.min.js"));
 const checks = [];
 
 function check(name, fn) {
   fn();
+  checks.push(name);
+}
+
+async function checkAsync(name, fn) {
+  await fn();
   checks.push(name);
 }
 
@@ -84,6 +92,76 @@ const ntDocument = "C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-AST-320019";
 const n1710Document = "MA-5290.00-22000-ABC-C1O-001";
 const cvDocument3 = "5900.0018047.05.2-ABC-CV-GER-001";
 const cvDocument4 = "5900.0018047.05.2-C1O-CV-ELE-0001";
+
+check("combinador de PDFs organiza a fila e normaliza o nome de saída", () => {
+  const files = [
+    { name: "Primeiro.pdf", size: 1024, lastModified: 1, type: "application/pdf" },
+    { name: "Segundo.PDF", size: 2048, lastModified: 2, type: "application/pdf" },
+  ];
+  assert.equal(PdfMergeCore.isPdfFile(files[0]), true);
+  assert.equal(PdfMergeCore.isPdfFile({ name: "vazio.pdf", size: 0, type: "application/pdf" }), false);
+  assert.equal(PdfMergeCore.isPdfFile({ name: "texto.txt", size: 10, type: "text/plain" }), false);
+  assert.equal(PdfMergeCore.outputFileName(' GRCON: pacote/final?.pdf '), "GRCON- pacote-final-.pdf");
+  assert.deepEqual(PdfMergeCore.reorder(files, 1, 0).map((file) => file.name), ["Segundo.PDF", "Primeiro.pdf"]);
+  assert.deepEqual(PdfMergeCore.summarize(files), { count: 2, bytes: 3072 });
+  assert.equal(PdfMergeCore.fileSignature(files[0]), "primeiro.pdf::1024::1");
+});
+
+await checkAsync("combinador preserva todas as páginas, a ordem e os tamanhos originais", async () => {
+  const first = await PDFLib.PDFDocument.create();
+  first.addPage([300, 400]);
+  first.addPage([500, 200]);
+  const second = await PDFLib.PDFDocument.create();
+  second.addPage([612, 792]);
+  const progress = [];
+  const merged = await PdfMergeEngine.mergePdfSources([
+    { name: "primeiro.pdf", bytes: await first.save() },
+    { name: "segundo.pdf", bytes: await second.save() },
+  ], {
+    pdfLib: PDFLib,
+    title: "Teste GRCON",
+    onProgress: (entry) => progress.push(entry.stage),
+  });
+  const result = await PDFLib.PDFDocument.load(merged.bytes);
+  assert.equal(merged.fileCount, 2);
+  assert.equal(merged.pageCount, 3);
+  assert.equal(result.getPageCount(), 3);
+  assert.deepEqual(result.getPages().map((page) => [page.getWidth(), page.getHeight()]), [[300, 400], [500, 200], [612, 792]]);
+  assert.deepEqual(progress, ["reading", "copied", "reading", "copied", "saving"]);
+});
+
+await checkAsync("combinador recusa fila insuficiente e PDF inválido com mensagem segura", async () => {
+  await assert.rejects(
+    () => PdfMergeEngine.mergePdfSources([{ name: "um.pdf", bytes: new Uint8Array() }], { pdfLib: PDFLib }),
+    /pelo menos dois PDFs/i,
+  );
+  await assert.rejects(
+    () => PdfMergeEngine.mergePdfSources([
+      { name: "invalido.pdf", bytes: new TextEncoder().encode("não é pdf") },
+      { name: "outro.pdf", bytes: new TextEncoder().encode("também não") },
+    ], { pdfLib: PDFLib }),
+    (error) => error.code === "INVALID_PDF" && /invalido\.pdf/.test(error.message),
+  );
+});
+
+check("combinador é um módulo local, isolado do Supabase e carregado sob demanda", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
+  const app = fs.readFileSync(path.join(root, "pdf_merge_app.js"), "utf8");
+  const worker = fs.readFileSync(path.join(root, "workers", "pdf-merge.worker.js"), "utf8");
+  const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+  assert.match(html, /data-grcon-view="pdf-tools"/);
+  assert.match(html, /id="pdf-tools-module"/);
+  assert.match(html, /nenhum PDF é enviado, armazenado ou registrado no banco/i);
+  assert.match(loader, /"pdf-tools": \["pdf_merge_core\.js", "pdf_merge_app\.js"\]/);
+  assert.match(app, /new Worker\("workers\/pdf-merge\.worker\.js"\)/);
+  assert.doesNotMatch(app, /localStorage|GrconCloud|supabase|fetch\s*\(/i);
+  assert.match(worker, /importScripts\("\.\.\/pdf-lib\.min\.js", "\.\.\/pdf_merge_engine\.js"\)/);
+  assert.doesNotMatch(worker, /localStorage|GrconCloud|supabase|fetch\s*\(/i);
+  ["pdf-merge.css", "pdf_merge_core.js", "pdf_merge_engine.js", "pdf_merge_app.js", "pdf-lib.min.js", "workers/pdf-merge.worker.js"].forEach((asset) => {
+    assert.ok(sw.includes(`"${asset}"`), `${asset} precisa estar no cache offline`);
+  });
+});
 
 function cvLdRecord(document, discipline = "GERAL") {
   return {
@@ -2502,4 +2580,4 @@ check("Dashboard compara cada indicador com o período anterior de mesmo tamanho
   assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
-console.log(JSON.stringify({ version: "5.34.2", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.35.0", passed: true, checks: checks.length, names: checks }, null, 2));

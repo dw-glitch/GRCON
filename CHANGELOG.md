@@ -1,5 +1,14 @@
 # Histórico de alterações
 
+## 5.35.0 — 2026-08-31
+
+- Nova área **Combinar PDFs** no menu do GRCON para selecionar vários arquivos, conferir e editar a ordem e gerar um único PDF.
+- A operação acontece integralmente no navegador, em Web Worker, sem upload, persistência, histórico ou gravação no Supabase.
+- A ferramenta permite arrastar arquivos, usar os controles subir/descer, remover itens, limpar a fila, escolher o nome final, acompanhar o progresso, cancelar e baixar novamente o resultado enquanto a página permanecer aberta.
+- PDFs inválidos, vazios, danificados ou protegidos por senha são recusados com uma mensagem objetiva. Arquivos repetidos na mesma seleção são ignorados.
+- O motor preserva todas as páginas e seus tamanhos na ordem escolhida e usa gravação compacta com fluxos de objetos para reduzir tempo e tamanho de saída.
+- A biblioteca pdf-lib 1.17.1 foi vendorizada com licença e hash SHA-256 conferido pelo CI; o código pesado só é carregado dentro do Worker quando a combinação começa.
+
 ## 5.34.2 — 2026-08-31
 
 - A revisão atual só é postada quando seu status oficial é **Não Postado**. Assim, `0` com Não Postado permanece `0` para a eGRDT.

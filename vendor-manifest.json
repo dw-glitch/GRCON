@@ -24,6 +24,12 @@
       "name": "Supabase JavaScript",
       "version": "não declarada no bundle",
       "sha256": "eb7564b09d311fd7b0375a7c0dc687a4c7c8ca9eda22c7823285fe86cfb21601"
+    },
+    {
+      "file": "pdf-lib.min.js",
+      "name": "pdf-lib",
+      "version": "1.17.1",
+      "sha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f"
     }
   ]
 }
