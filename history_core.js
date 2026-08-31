@@ -159,6 +159,13 @@
       revision,
       grdtRevision: text(file && file.grdtRevision) || revision,
       revisionSource: text(file && file.revisionSource) || (revision ? "Histórico registrado" : ""),
+      // Rastreabilidade da escolha manual de revisão (melhoria "escolha manual
+      // de revisão na GRDT"): preserva o que o sistema sugeriu na triagem,
+      // independente da revisão efetivamente enviada acima. Registros antigos
+      // não têm este campo — revisionSuggested cai para a própria revisão
+      // enviada e revisionManual para "não alterada", sem quebrar o histórico.
+      revisionSuggested: text(file && file.revisionSuggested) || revision,
+      revisionManual: Boolean(file && file.revisionManual),
       effectiveDate: text(file && file.effectiveDate),
       grdt: text(file && file.grdt),
       sigemStatus: text(file && file.sigemStatus),
@@ -379,6 +386,8 @@
         revision: grdtRevision.revision,
         grdtRevision: grdtRevision.revision,
         revisionSource: grdtRevision.source,
+        revisionSuggested: row.revisionSuggested || "",
+        revisionManual: Boolean(row.revisionManual),
         effectiveDate: row.effectiveDate || record.effectiveDate,
         grdt: row.grdt || record.grdt,
         sigemStatus: row.status || row.sigemStatus || record.sigemStatus || record.status,

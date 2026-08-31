@@ -10,7 +10,7 @@
   // desatualizada nos relatórios sempre que a publicação era promovida.
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.36.1";
+    || "5.37.0";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
@@ -299,7 +299,10 @@
       <dl class="history-detail-meta"><div><dt>LD utilizada</dt><dd>${escapeHtml(record.ldName || "Não informada")}</dd></div><div><dt>Origem dos documentos</dt><dd>${escapeHtml(record.sourceName || "Pasta documental")}</dd></div><div><dt>Alocação</dt><dd>${record.allocations.length ? record.allocations.map((value) => `<span>${escapeHtml(value)}</span>`).join("") : "Não informada na LD"}</dd></div>${previousNumbers}</dl>
       <div class="history-detail-table"><table><thead><tr><th>Documento</th><th>Arquivo original</th><th>Arquivo enviado</th><th>Revisão gerada na GRDT</th><th>Revisão desta GRDT postada</th><th>Outra revisão postada</th><th>Status SIGEM na geração</th><th>Alocação</th><th>Versão da LD enviada</th><th>Aba LD</th></tr></thead><tbody>${record.files.map((file) => {
         const relation = revisionRelation(record, file, postings);
-        return `<tr><td>${escapeHtml(file.document || "—")}</td><td>${escapeHtml(file.originalName || "—")}</td><td>${escapeHtml(file.finalName || "—")}</td><td><strong>${escapeHtml(relation.generated)}</strong></td><td>${escapeHtml(relation.posted)}</td><td>${escapeHtml(relation.other)}</td><td>${escapeHtml(file.sigemStatus || "—")}</td><td>${escapeHtml(file.allocation || "—")}</td><td>${escapeHtml(file.ldVersion || "Não registrada")}</td><td>${escapeHtml(file.sheet || "—")}</td></tr>`;
+        const manualNote = file.revisionManual
+          ? ` <span class="history-revision-manual" title="Alterada manualmente na triagem · sugestão do sistema na época: ${escapeHtml(file.revisionSuggested || "—")}">Alterada manualmente</span>`
+          : "";
+        return `<tr><td>${escapeHtml(file.document || "—")}</td><td>${escapeHtml(file.originalName || "—")}</td><td>${escapeHtml(file.finalName || "—")}</td><td><strong>${escapeHtml(relation.generated)}</strong>${manualNote}</td><td>${escapeHtml(relation.posted)}</td><td>${escapeHtml(relation.other)}</td><td>${escapeHtml(file.sigemStatus || "—")}</td><td>${escapeHtml(file.allocation || "—")}</td><td>${escapeHtml(file.ldVersion || "Não registrada")}</td><td>${escapeHtml(file.sheet || "—")}</td></tr>`;
       }).join("")}</tbody></table></div>`;
     if (state.editingId === record.id) window.setTimeout(() => $("#history-number-input")?.focus(), 0);
   }
