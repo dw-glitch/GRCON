@@ -140,6 +140,54 @@ check("PDF sem nt- localiza código com nt- na LD e usa o nome oficial", () => {
   assert.equal(result.decision, Core.READY);
 });
 
+check("Em Workflow na revisão 0 libera a revisão A sem repetir a postagem da 0", () => {
+  const technical = {
+    ...ldDocumentRecord(ntDocument),
+    revision: "0",
+    grdt: "C1O-GRDT-CM-0001-2026",
+    effectiveDate: "2026-08-30",
+  };
+  const workflow = {
+    ...technical,
+    sheet: "Colar SIGEM",
+    row: 3,
+    status: "Em Workflow",
+    sigemStatus: "Em Workflow",
+  };
+  const index = Core.buildIndex([technical], [workflow]);
+  const result = Core.triageOne({ id: "workflow-next-revision", name: `${ntDocument}.pdf` }, index, {
+    now: new Date("2026-08-31T12:00:00.000Z"),
+  });
+
+  assert.equal(Core.statusKind("Em Workflow"), "advance");
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.revision, "A");
+  assert.equal(result.status, "Não Postado");
+  assert.match(result.reason, /0 \(Em Workflow\).*primeira combinação DOCUMENTO-REVISÃO ausente.*A/i);
+  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.READY);
+});
+
+check("Em Workflow avança por todas as revisões já registradas e mantém os demais pendentes bloqueados", () => {
+  const technical = ldDocumentRecord(ntDocument);
+  const history = ["0", "A"].map((revision, index) => ({
+    ...technical,
+    revision,
+    sheet: "Colar SIGEM",
+    row: index + 3,
+    status: "Em Workflow",
+    sigemStatus: "Em Workflow",
+  }));
+  const result = Core.triageOne(
+    { id: "workflow-sequence", name: `${ntDocument}.pdf` },
+    Core.buildIndex([technical], history),
+    {},
+  );
+
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.revision, "B");
+  assert.equal(Core.statusKind("Pendente Certificação"), "pending");
+});
+
 check("busca alternativa preserva o bloqueio quando a forma da LD não está alocada", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument, "NÃO ALOCADO")], []);
   const result = Core.triageOne({ id: "nt-3", name: `${ntDocument}.pdf` }, index, {});
@@ -2371,4 +2419,4 @@ check("Dashboard compara cada indicador com o período anterior de mesmo tamanho
   assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
-console.log(JSON.stringify({ version: "5.33.15", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.34.1", passed: true, checks: checks.length, names: checks }, null, 2));

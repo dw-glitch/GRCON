@@ -423,7 +423,11 @@
       "PARA CONSTRUCAO": "issued",
       "CONFORME CONSTRUIDO": "issued",
       "PARA COMPRA": "issued",
-      "EM WORKFLOW": "pending",
+      // “Em Workflow” confirma que a revisão atual já entrou no fluxo do
+      // SIGEM. Ela não deve ser reenviada; a triagem avança para a próxima
+      // revisão e só a libera quando a combinação DOCUMENTO-REVISÃO ainda não
+      // existir na Colar SIGEM.
+      "EM WORKFLOW": "advance",
       "PENDENTE CERTIFICACAO": "pending",
       "CANCELADO": "closed",
     };
@@ -2628,7 +2632,7 @@
       }
 
       decision = REVIEW;
-      reason = `O status oficial “${currentStatus}” da revisão ${revision} não autoriza avanço automático neste fluxo. Somente Com Comentários, Sem Comentários, Aceito Sem Comentários e Recusado avançam automaticamente.`;
+      reason = `O status oficial “${currentStatus}” da revisão ${revision} não autoriza avanço automático neste fluxo. Somente Em Workflow, Com Comentários, Sem Comentários, Aceito Sem Comentários e Recusado avançam automaticamente.`;
       completed = true;
       break;
     }

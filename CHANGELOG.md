@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 5.34.1 — 2026-08-31
+
+- O status oficial **Em Workflow** passa a avançar para a próxima revisão, assim como os demais retornos que autorizam continuidade. Se a revisão `0` está Em Workflow, o GRCON procura e prepara a revisão `A`; se `A` também já está Em Workflow, prepara `B`, e assim sucessivamente.
+- A combinação de documento + revisão já presente na `Colar SIGEM` nunca é repostada. Somente a primeira revisão ausente, calculada como **Não Postado**, fica pronta para a nova eGRDT.
+- A mensagem incorreta “Não será enviado novamente” deixa de aparecer nesse cenário; a decisão passa a informar a próxima revisão liberada.
+
 ## 5.34.0 — 2026-08-28
 
 ### Composição de arquivos da N-1710
