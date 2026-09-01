@@ -3229,4 +3229,189 @@ check("resposta de e-mail fica disponível somente no Histórico", () => {
   assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
 });
 
-console.log(JSON.stringify({ version: "5.38.4", passed: true, checks: checks.length, names: checks }, null, 2));
+// ---------------------------------------------------------------------------
+// Consulta ponta a ponta, a partir de um arquivo de LD
+//
+// Os demais testes da consulta montam as linhas técnicas na mão. Este parte de
+// uma LD no formato real — cabeçalho institucional antes da linha de títulos,
+// abas ET/N-1710/Colar SIGEM, cabeçalhos reais e célula de alocação mesclada —
+// e vai até o .xlsx gerado, relido do início. É a única cobertura da cadeia
+// inteira: parseWorkbook → índice → consulta → linha exportada (a função real
+// do requests_app.js) → construtor da planilha. Uma ponta que se solte das
+// outras aparece aqui, e não na tela de quem usa.
+// ---------------------------------------------------------------------------
+function ldRealWorkbook() {
+  const P = "C1O_RNEST_U32_3.1.1.1_INS_RIR_";
+  const cabecalho = Array(24).fill("");
+  cabecalho[0] = "ITEM"; cabecalho[1] = "DOCUMENTO"; cabecalho[2] = "REVISÃO"; cabecalho[3] = "TÍTULO";
+  cabecalho[4] = "UNIDADE/ÁREA"; cabecalho[5] = "DISCIPLINA"; cabecalho[6] = "TIPO DE DOCUMENTO";
+  cabecalho[7] = "PROPÓSITO DE EMISSÃO"; cabecalho[8] = "FORMATO"; cabecalho[9] = "TAG";
+  cabecalho[12] = "GRDT"; cabecalho[13] = "DATA EFETIVA DE EMISSÃO"; cabecalho[14] = "STATUS";
+  cabecalho[16] = "STATUS SIGEM"; cabecalho[18] = "ALOCAÇÃO"; cabecalho[20] = "COMENTÁRIO DA FISCAL";
+  cabecalho[21] = "CAMINHO DATABOOK"; cabecalho[23] = "CONFIRMAÇÃO DE ALOCAÇÃO";
+
+  const linha = (item, documento, revisao, tag, over = {}) => {
+    const dados = Array(24).fill("");
+    dados[0] = String(item); dados[1] = documento; dados[2] = revisao;
+    dados[3] = `RELATÓRIO DE INSPEÇÃO — ${tag}`; dados[4] = "U-32";
+    dados[5] = "RNEST UHDT-D U32 INSPEÇÃO"; dados[6] = "RELATÓRIO";
+    dados[7] = "Para Informação"; dados[8] = "A4"; dados[9] = tag;
+    dados[14] = "EM EMISSÃO"; dados[18] = over.aloc === undefined ? "C1O-ALOC-CM-0062-2026" : over.aloc;
+    dados[21] = "DATA BOOK C&M UHDTD U-32";
+    if (over.grdt) dados[12] = over.grdt;
+    if (over.data) dados[13] = over.data;
+    if (over.confirmacao !== undefined) dados[23] = over.confirmacao;
+    return dados;
+  };
+
+  const et = SheetJS.utils.aoa_to_sheet([
+    ["LISTA DE DOCUMENTOS — RNEST UHDT-D U-32"], [""], ["CONSAG ENGENHARIA"], [""],
+    ["DADOS DOS DOCUMENTOS"], cabecalho,
+    // O mesmo código nas duas grafias, com situações diferentes.
+    linha(2551, `${P}SPE-AST-320019`, "0", "SPE-AST-320019", { confirmacao: "ALOCADO" }),
+    linha(2552, `${P}nt-SPE-AST-320019`, "B", "SPE-AST-320019", {
+      aloc: "", confirmacao: "NÃO ALOCADO", grdt: "GRDT-2026-0087", data: "12/03/2026",
+    }),
+    // Só existe com nt-; a confirmação vem de uma célula mesclada.
+    linha(2553, `${P}nt-SPE-AST-320020`, "0", "SPE-AST-320020", { confirmacao: "" }),
+    linha(2554, `${P}nt-SPE-AST-320021`, "0", "SPE-AST-320021", { confirmacao: "" }),
+    ["FIM"],
+  ]);
+  // Mescla real de confirmação de alocação cobrindo as duas últimas linhas:
+  // no arquivo só a primeira célula do intervalo guarda o valor.
+  et["!merges"] = [{ s: { r: 8, c: 23 }, e: { r: 9, c: 23 } }];
+  et.X9 = { t: "s", v: "ALOCADO" };
+
+  const historico = Array(6).fill("");
+  historico[0] = "DOCUMENTO"; historico[1] = "REVISÃO"; historico[2] = "STATUS SIGEM";
+  historico[3] = "GRDT"; historico[4] = "DATA EFETIVA DE EMISSÃO";
+  const hist = (documento, revisao, status, grdt, data) => {
+    const dados = Array(6).fill("");
+    dados[0] = documento; dados[1] = revisao; dados[2] = status;
+    dados[3] = grdt || ""; dados[4] = data || "";
+    return dados;
+  };
+
+  const n1710Cabecalho = Array(24).fill("");
+  n1710Cabecalho[0] = "ITEM"; n1710Cabecalho[1] = "DOCUMENTO"; n1710Cabecalho[2] = "REVISÃO";
+  n1710Cabecalho[3] = "TÍTULO"; n1710Cabecalho[5] = "DISCIPLINA";
+  n1710Cabecalho[7] = "PROPÓSITO DE EMISSÃO"; n1710Cabecalho[16] = "STATUS SIGEM";
+  n1710Cabecalho[23] = "CONFIRMAÇÃO DE ALOCAÇÃO";
+  const n1710Dados = Array(24).fill("");
+  n1710Dados[0] = "1"; n1710Dados[1] = n1710Document; n1710Dados[2] = "0";
+  n1710Dados[3] = "MANUAL DE OPERAÇÃO DA UNIDADE"; n1710Dados[5] = "RNEST UHDT-D U32 MECÂNICA";
+  n1710Dados[7] = "Para Informação"; n1710Dados[16] = "Não Postado"; n1710Dados[23] = "ALOCADO";
+
+  const workbook = SheetJS.utils.book_new();
+  SheetJS.utils.book_append_sheet(workbook, et, "ET");
+  SheetJS.utils.book_append_sheet(workbook, SheetJS.utils.aoa_to_sheet([
+    ["LISTA DE DOCUMENTOS"], [""], [""], [""], ["DADOS DOS DOCUMENTOS"], n1710Cabecalho, n1710Dados,
+  ]), "N-1710");
+  SheetJS.utils.book_append_sheet(workbook, SheetJS.utils.aoa_to_sheet([
+    ["COLAR AQUI O RELATÓRIO DO SIGEM"], [""], historico,
+    hist(`${P}SPE-AST-320019`, "0", "Não Postado"),
+    hist(`${P}nt-SPE-AST-320019`, "A", "Com Comentários", "GRDT-2026-0051", "02/02/2026"),
+    hist(`${P}nt-SPE-AST-320019`, "B", "Em Análise", "GRDT-2026-0087", "12/03/2026"),
+    hist(`${P}nt-SPE-AST-320021`, "0", "Recusado", "GRDT-2026-0033", "10/01/2026"),
+    hist(`${P}nt-SPE-AST-320021`, "A", "Em Análise", "GRDT-2026-0091", "20/03/2026"),
+  ]), "Colar SIGEM");
+  return workbook;
+}
+
+await (async () => {
+  const nome = "Consulta ponta a ponta: LD em arquivo chega preenchida à planilha gerada";
+  globalThis.XLSX = SheetJS;
+  const P = "C1O_RNEST_U32_3.1.1.1_INS_RIR_";
+  // Arquivo de verdade: gravado e lido de volta, como o navegador faz.
+  const arquivo = SheetJS.read(SheetJS.write(ldRealWorkbook(), { type: "buffer", bookType: "xlsx" }), { type: "buffer" });
+  const parsed = Core.parseWorkbook(arquivo, "LD-5290.00-22313-91A-C1O-001_0001_F.xlsx", 1, null);
+  assert.equal(parsed.records.length, 5, "as quatro linhas de ET e a de N-1710 precisam ser lidas");
+  assert.equal(parsed.history.length, 5, "a Colar SIGEM precisa ser lida como histórico");
+  assert.equal(parsed.records[0].ldVersion, "F", "a versão da LD sai do nome do arquivo");
+  // A mescla vale para todas as linhas do intervalo, não só para a primeira.
+  const mesclada = parsed.records.find((item) => item.document === `${P}nt-SPE-AST-320021`);
+  assert.equal(mesclada.allocationStatus, "ALOCADO");
+  assert.equal(mesclada.allocationStatusHeader, "CONFIRMAÇÃO DE ALOCAÇÃO");
+
+  const index = Core.buildIndex(parsed.records, parsed.history);
+  // A lista chega como o operador digita: com nt-, sem nt- e com erro de
+  // transcrição no TAG (letra O no lugar do zero).
+  const documentos = Requests.parseDocumentList([
+    `${P}SPE-AST-320019`,
+    `${P}SPE-AST-320020`,
+    `${P}nt-SPE-AST-32O021`,
+    n1710Document,
+    `${P}nt-SPE-AST-999999`,
+  ].join("\n")).map((item, indice) => ({ ...item, id: `consulta-${indice}`, selected: true }));
+  const resultados = new Map(documentos.map((item) => [
+    item.id,
+    Requests.consultationRow(Requests.lookupDocument(item.document, index, {})),
+  ]));
+
+  // A linha exportada é montada pela função real da tela, não por uma cópia.
+  const appSource = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  const inicio = appSource.indexOf("function linhasParaSaida()");
+  const corpo = appSource.slice(inicio, appSource.indexOf("\n  }", inicio) + 4);
+  const linhas = new Function("state", `${corpo}; return linhasParaSaida();`)({ documents: documentos, results: resultados });
+  assert.equal(linhas.length, documentos.length);
+
+  const workbook = new ExcelJS.Workbook();
+  const aba = workbook.addWorksheet("Consulta");
+  RequestsReport.writeConsultationSheet(aba, linhas, {
+    columns: RequestsReport.BUILTIN_EXPORT_TEMPLATES.find((modelo) => modelo.base === "consulta").columns,
+    title: "GRCON · CONSULTA DE DOCUMENTOS",
+    metadata: "teste ponta a ponta",
+    ldNames: "LD-5290.00-22313-91A-C1O-001_0001_F.xlsx",
+  });
+
+  // Planilha relida do zero: é o que a pessoa abre, não o objeto em memória.
+  const gerada = SheetJS.read(await workbook.xlsx.writeBuffer(), { type: "buffer" });
+  const matriz = SheetJS.utils.sheet_to_json(gerada.Sheets[gerada.SheetNames[0]], { header: 1, defval: "" });
+  const cabecalhoIndice = matriz.findIndex((linha) => String(linha[0] || "").toUpperCase() === "SITUAÇÃO");
+  assert.ok(cabecalhoIndice > -1, "a planilha gerada precisa ter a linha de cabeçalho");
+  const colunas = matriz[cabecalhoIndice];
+  const dados = matriz.slice(cabecalhoIndice + 1).filter((linha) => String(linha[0] || "").trim());
+  assert.equal(dados.length, documentos.length);
+  const celula = (documento, coluna) => {
+    const linha = dados.find((item) => String(item[colunas.indexOf("DOCUMENTO")]) === documento);
+    return String(linha[colunas.indexOf(coluna)] || "");
+  };
+
+  // Código informado exatamente como está na LD: as duas grafias existem e a
+  // planilha traz a situação de cada uma, não só a da forma consultada.
+  assert.equal(celula(`${P}SPE-AST-320019`, "CÓDIGO LOCALIZADO NA LD"), `${P}SPE-AST-320019`);
+  assert.equal(celula(`${P}SPE-AST-320019`, "FORMA LOCALIZADA NA LD"), "Sem nt-");
+  const duasFormas = celula(`${P}SPE-AST-320019`, "SITUAÇÃO DE CADA FORMA (com/sem nt-)");
+  assert.match(duasFormas, /Sem nt-:.*forma usada nesta consulta.*Rev\. 0 na LD.*SIM — Alocado/);
+  assert.match(duasFormas, /Com nt-:.*também consta na LD.*Rev\. B na LD.*Em Análise.*NÃO — Não alocado/);
+
+  // Consultado sem nt-, existe só com nt-: o código sai corrigido na planilha.
+  assert.equal(celula(`${P}SPE-AST-320020`, "CÓDIGO LOCALIZADO NA LD"), `${P}nt-SPE-AST-320020`);
+  assert.match(celula(`${P}SPE-AST-320020`, "SITUAÇÃO DE CADA FORMA (com/sem nt-)"), /Sem nt-: não consta na LD/);
+  assert.match(celula(`${P}SPE-AST-320020`, "PESQUISA COM/SEM nt- E TAG NA LD"), /com e sem nt-/i);
+
+  // Erro de transcrição no TAG: localizado pela combinação tipo + TAG, com o
+  // código da LD na planilha — sem alterar o TAG informado.
+  assert.equal(celula(`${P}nt-SPE-AST-32O021`, "CÓDIGO LOCALIZADO NA LD"), `${P}nt-SPE-AST-320021`);
+
+  // Outra família documental não ganha uma segunda grafia inventada.
+  assert.equal(celula(n1710Document, "SITUAÇÃO DE CADA FORMA (com/sem nt-)"), "");
+  assert.match(celula(n1710Document, "FORMA LOCALIZADA NA LD"), /Não se aplica/);
+
+  // Não localizado continua dizendo o que foi pesquisado, sem célula muda.
+  assert.equal(celula(`${P}nt-SPE-AST-999999`, "SITUAÇÃO"), "Não localizado");
+  assert.match(celula(`${P}nt-SPE-AST-999999`, "SITUAÇÃO DE CADA FORMA (com/sem nt-)"), /Sem nt-: não consta na LD/);
+
+  // A mesma LD passando pela triagem: Em Análise para na própria revisão e
+  // leva a GRDT e a data da revisão analisada, não a da linha técnica.
+  const emAnalise = Core.triageOne({ id: "ld-em-analise", name: `${P}nt-SPE-AST-320021.pdf` }, index, {});
+  assert.equal(emAnalise.decision, Core.DISCARD);
+  assert.equal(emAnalise.revision, "A");
+  assert.equal(emAnalise.status, "Em Análise");
+  assert.equal(emAnalise.grdt, "GRDT-2026-0091");
+  assert.ok(emAnalise.analysisEvidence, "a evidência da revisão em análise precisa ser preenchida");
+  assert.equal(emAnalise.analysisEvidence.statusSource.sheet, "Colar SIGEM");
+  checks.push(nome);
+})();
+
+console.log(JSON.stringify({ version: "5.38.5", passed: true, checks: checks.length, names: checks }, null, 2));
