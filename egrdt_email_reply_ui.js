@@ -1,8 +1,7 @@
 /**
  * GRCON — Painel da resposta de e-mail da eGRDT
  *
- * Abre sozinho assim que uma eGRDT é gerada e pode ser reaberto a qualquer
- * momento pelo botão "Resposta de e-mail" da triagem ou pelo botão da eGRDT
+ * É aberto exclusivamente pelo botão "Resposta de e-mail" da eGRDT
  * selecionada no Histórico. O painel mostra a mensagem (editável) e a relação
  * dos documentos postados, e copia as duas coisas em um clique — como tabela
  * de verdade no Outlook e como texto tabulado nos clientes em texto puro.
@@ -15,19 +14,10 @@
   const Reply = root.GrconEgrdtEmailReply;
   if (!Reply || typeof document === "undefined") return;
 
-  const AUTO_KEY = "grcon-egrdt-email-auto";
-  const state = { records: [], lastGenerated: [], reply: null, open: false, lastFocus: null, panel: null };
+  const state = { records: [], reply: null, open: false, lastFocus: null, panel: null };
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
-  }
-
-  function autoOpenEnabled() {
-    try { return localStorage.getItem(AUTO_KEY) !== "0"; } catch (_) { console.debug("[EmailReply] preferência indisponível:", _); return true; }
-  }
-
-  function saveAutoOpen(enabled) {
-    try { localStorage.setItem(AUTO_KEY, enabled ? "1" : "0"); } catch (_) { console.debug("[EmailReply] preferência não persistida:", _); }
   }
 
   function ensurePanel() {
@@ -67,10 +57,6 @@
         <div class="egrdt-email-preview" id="egrdt-email-preview"></div>
       </div>
       <footer class="egrdt-email-footer">
-        <label class="egrdt-email-auto">
-          <input id="egrdt-email-auto" type="checkbox"/>
-          <span>Abrir este painel ao gerar a eGRDT</span>
-        </label>
         <div class="egrdt-email-actions">
           <button class="secondary-button compact" data-egrdt-email-action="mail" type="button">Abrir no e-mail</button>
           <button class="secondary-button compact" data-egrdt-email-action="copy-table" type="button">Copiar só a tabela</button>
@@ -89,8 +75,6 @@
       if (action === "copy-table") void copyReply(true);
       if (action === "mail") void openMail();
     });
-    panel.querySelector("#egrdt-email-auto").addEventListener("change", (event) => saveAutoOpen(event.target.checked));
-
     state.panel = { overlay, panel };
     return state.panel;
   }
@@ -115,7 +99,6 @@
     panel.querySelector("#egrdt-email-message").value = reply.message;
     panel.querySelector("#egrdt-email-count").textContent = `${reply.rows.length} linha(s)`;
     panel.querySelector("#egrdt-email-preview").innerHTML = reply.tableHtml;
-    panel.querySelector("#egrdt-email-auto").checked = autoOpenEnabled();
   }
 
   function onKeydown(event) {
@@ -220,44 +203,5 @@
     else if (!copied) notify("O e-mail foi aberto com a resposta; a cópia automática não estava disponível.", "warning");
   }
 
-  function trackButton() {
-    return document.getElementById("egrdt-email-reply");
-  }
-
-  function refreshTrackButton() {
-    const button = trackButton();
-    if (!button) return;
-    const available = state.lastGenerated && state.lastGenerated.length;
-    button.disabled = !available;
-    button.title = available
-      ? "Copiar a resposta de e-mail com os documentos da última eGRDT gerada"
-      : "Gere uma eGRDT para montar a resposta de e-mail";
-  }
-
-  function openLastGenerated() {
-    if (state.lastGenerated && state.lastGenerated.length) open(state.lastGenerated);
-  }
-
-  document.addEventListener("click", (event) => {
-    if (event.target.closest("#egrdt-email-reply")) openLastGenerated();
-  });
-
-  // Toda geração de eGRDT — final, pacote ou ZIP — passa pelo mesmo evento com
-  // os registros recém-salvos no histórico. Ouvir aqui evita repetir a chamada
-  // em cada caminho de exportação. A sincronização do Supabase dispara o mesmo
-  // evento com o histórico inteiro, por isso só `generated` abre o painel.
-  root.addEventListener("grcon:history-updated", (event) => {
-    const detail = event && event.detail;
-    if (!detail || !detail.generated) return;
-    const records = detail.records;
-    if (!Array.isArray(records) || !records.length) return;
-    state.lastGenerated = records;
-    refreshTrackButton();
-    if (autoOpenEnabled()) open(records);
-  });
-
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshTrackButton, { once: true });
-  else refreshTrackButton();
-
-  root.GrconEgrdtEmailReplyUi = { open, close, openLastGenerated, autoOpenEnabled };
+  root.GrconEgrdtEmailReplyUi = { open, close };
 })(typeof globalThis !== "undefined" ? globalThis : this);

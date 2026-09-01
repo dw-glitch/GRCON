@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.37.0";
+  const APP_VERSION = "5.37.1";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -392,10 +392,9 @@
         if (postingSaved.saved) window.dispatchEvent(new CustomEvent("grcon:sigem-updated", { detail: { records: postingSaved.created } }));
         if (postingSaved.error) console.warn("GRCON: registros de postagem SIGEM indisponíveis", postingSaved.error);
       }
-      // `generated` separa esta emissão de uma sincronização do Supabase, que
-      // dispara o mesmo evento com todo o histórico em detail.records. Só a
-      // emissão abre o painel da resposta de e-mail.
-      if (saved.saved) window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { records, generated: true, outputType } }));
+      // A emissão apenas atualiza o histórico. A resposta de e-mail é aberta
+      // deliberadamente pelo operador na eGRDT selecionada no Histórico.
+      if (saved.saved) window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { records, outputType } }));
       // O histórico local tem teto (1000 registros / 4,5 MB) e vinha descartando
       // os mais antigos em silêncio. Agora o usuário fica sabendo.
       if (saved.trimmed) {

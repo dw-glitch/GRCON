@@ -2393,12 +2393,14 @@ check("filtro do período recorta eGRDT mista e recalcula os totais da família 
   assert.match(HistoryReport.downloadName(cv, { documentFamily: "CV", startDate: "2026-08-21", endDate: "2026-08-21" }), /Relacao_eGRDTs_CV_20260821_a_20260821/);
 });
 
-check("Histórico oferece o filtro Todos, N-1710, ET e CV na relação do período", () => {
+check("Histórico filtra também a lista de eGRDTs por N-1710, ET e CV", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
   const report = fs.readFileSync(path.join(root, "history_report.js"), "utf8");
   assert.match(html, /id="history-period-document-type"[\s\S]*value="N-1710"[\s\S]*value="ET"[\s\S]*value="CV"/);
-  assert.match(ui, /filterByDocumentFamily\(state\.filtered, els\.periodDocumentType/);
+  assert.match(ui, /filtered = History\.filterByDocumentFamily\(filtered, els\.periodDocumentType/);
+  assert.match(ui, /state\.filtered = sortRecords\(filtered\)/);
+  assert.match(ui, /els\.list\.innerHTML = state\.filtered\.map/);
   assert.match(ui, /documentFamily: els\.periodDocumentType/);
   assert.match(report, /"FAMÍLIA DOCUMENTAL"/);
   assert.match(report, /\["Tipo de documento", selectedFamily\]/);
@@ -3011,4 +3013,17 @@ check("triagem oferece edição inline da revisão da GRDT com restauração da 
   assert.match(exportWorker, /REVISÃO ALTERADA MANUALMENTE/);
 });
 
-console.log(JSON.stringify({ version: "5.37.0", passed: true, checks: checks.length, names: checks }, null, 2));
+check("resposta de e-mail fica disponível somente no Histórico", () => {
+  const interfaceSource = fs.readFileSync(path.join(root, "egrdt_email_reply_ui.js"), "utf8");
+  const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const historySource = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+
+  assert.doesNotMatch(interfaceSource, /grcon-egrdt-email-auto/);
+  assert.doesNotMatch(interfaceSource, /grcon:history-updated/);
+  assert.doesNotMatch(interfaceSource, /openLastGenerated|autoOpenEnabled/);
+  assert.doesNotMatch(indexSource, /id=["']egrdt-email-reply["']/);
+  assert.match(historySource, /data-history-action=["']email-reply["']/);
+  assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
+});
+
+console.log(JSON.stringify({ version: "5.37.1", passed: true, checks: checks.length, names: checks }, null, 2));

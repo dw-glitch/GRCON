@@ -10,7 +10,7 @@
   // desatualizada nos relatórios sempre que a publicação era promovida.
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.37.0";
+    || "5.37.1";
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
@@ -38,9 +38,7 @@
   }
 
   function periodRecords() {
-    return History && typeof History.filterByDocumentFamily === "function"
-      ? History.filterByDocumentFamily(state.filtered, els.periodDocumentType?.value || "")
-      : [...state.filtered];
+    return [...state.filtered];
   }
 
   function periodFamilyLabel() {
@@ -196,6 +194,13 @@
       });
     }
     filtered = History.filterByDate(filtered, els.dateStart.value, els.dateEnd.value);
+    // O tipo documental é um filtro de todo o Histórico, não apenas dos KPIs
+    // e do Excel do período. Recortar antes de preencher state.filtered faz a
+    // lista inferior exibir somente as eGRDTs que contêm N-1710, ET ou CV e
+    // recalcula a contagem daquela família dentro de uma eGRDT mista.
+    if (History && typeof History.filterByDocumentFamily === "function") {
+      filtered = History.filterByDocumentFamily(filtered, els.periodDocumentType?.value || "");
+    }
     state.filtered = sortRecords(filtered);
     if (!state.filtered.some((record) => record.id === state.selectedId)) state.selectedId = state.filtered[0] && state.filtered[0].id || "";
     if (els.count) { els.count.textContent = String(state.records.length); els.count.hidden = state.records.length === 0; }

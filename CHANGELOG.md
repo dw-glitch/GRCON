@@ -1,5 +1,11 @@
 # Histórico de alterações
 
+## 5.37.1 — 2026-09-01
+
+- Gerar uma eGRDT não abre mais automaticamente o painel de resposta de e-mail.
+- O atalho da barra da triagem e a preferência de abertura automática foram removidos; a opção **Resposta de e-mail** permanece exclusivamente na eGRDT selecionada no Histórico.
+- O filtro de tipo documental do Histórico agora recorta também a lista de eGRDTs exibida abaixo, além dos totais e da relação exportada, para N-1710, ET e CV.
+
 ## 5.37.0 — 2026-08-31
 
 ### Escolha e alteração manual da revisão na geração de GRDT
