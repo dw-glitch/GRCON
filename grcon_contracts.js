@@ -201,8 +201,8 @@
       [CODES.IN_ANALYSIS_RECENT]: {
         severity: "info",
         title: "Não será enviado novamente agora.",
-        explanation: `A revisão ${revision} está em análise, com GRDT e emissão recente confirmadas.`,
-        nextAction: "Aguarde o retorno antes de preparar uma nova revisão.",
+        explanation: text(item.reason) || `A revisão ${revision} está com status oficial Em Análise na Colar SIGEM.`,
+        nextAction: "Aguarde o retorno da análise antes de preparar uma nova revisão.",
       },
       [CODES.IN_ANALYSIS_REVIEW]: {
         severity: "warning",

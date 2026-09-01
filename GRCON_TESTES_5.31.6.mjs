@@ -293,9 +293,8 @@ check("Conforme Construído libera a próxima revisão sem repetir a revisão at
   assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.READY);
 });
 
-check("qualquer status diferente de Não Postado avança da revisão 0 para A", () => {
+check("qualquer status diferente de Não Postado e de Em Análise avança da revisão 0 para A", () => {
   const statuses = [
-    "Em Análise",
     "Em Workflow",
     "Com Comentários",
     "Sem Comentários",
@@ -327,6 +326,48 @@ check("qualquer status diferente de Não Postado avança da revisão 0 para A", 
     assert.equal(result.revision, "A", status);
     assert.equal(result.status, "Não Postado", status);
   });
+});
+
+check("Em Análise nunca avança sozinho: para na própria revisão e cai no balde Em análise", () => {
+  // Diferente dos demais retornos (Em Workflow, Recusado, Conforme
+  // Construído...), o documento já está sob análise em andamento no SIGEM.
+  // O GRCON não pode preparar uma revisão nova por cima de uma análise em
+  // aberto — precisa parar e pedir conferência manual.
+  const technical = ldDocumentRecord(ntDocument);
+  const history = {
+    ...technical,
+    sheet: "Colar SIGEM",
+    row: 3,
+    status: "Em Análise",
+    sigemStatus: "Em Análise",
+  };
+  const result = Core.triageOne(
+    { id: "em-analise-nao-avanca", name: `${ntDocument}.pdf` },
+    Core.buildIndex([technical], [history]),
+    {},
+  );
+  assert.equal(result.decision, Core.DISCARD);
+  assert.equal(result.revision, "0", "não pode avançar para a revisão A sozinho");
+  assert.equal(result.status, "Em Análise");
+  assert.match(result.reason, /Em Análise.*n[ãa]o avan[çc]a/i);
+  const message = Core.decisionMessage(result);
+  assert.equal(message.code, Core.DECISION_CODES.IN_ANALYSIS_RECENT);
+  assert.match(message.title, /não será enviado/i);
+
+  // Mesmo depois de outras revisões já postadas/comentadas, uma análise em
+  // aberto mais adiante continua interrompendo o avanço automático.
+  const encadeado = [
+    { ...technical, sheet: "Colar SIGEM", row: 3, revision: "0", status: "Recusado", sigemStatus: "Recusado" },
+    { ...technical, sheet: "Colar SIGEM", row: 4, revision: "A", status: "Em Análise", sigemStatus: "Em Análise" },
+  ];
+  const resultadoEncadeado = Core.triageOne(
+    { id: "em-analise-apos-avanco", name: `${ntDocument}.pdf` },
+    Core.buildIndex([technical], encadeado),
+    {},
+  );
+  assert.equal(resultadoEncadeado.decision, Core.DISCARD);
+  assert.equal(resultadoEncadeado.revision, "A");
+  assert.equal(resultadoEncadeado.status, "Em Análise");
 });
 
 check("status Não Postado mantém a própria revisão 0 para postagem", () => {
@@ -3104,4 +3145,4 @@ check("resposta de e-mail fica disponível somente no Histórico", () => {
   assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
 });
 
-console.log(JSON.stringify({ version: "5.38.1", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.38.2", passed: true, checks: checks.length, names: checks }, null, 2));
