@@ -1,5 +1,9 @@
 # Histórico de alterações
 
+## 5.38.5 — 2026-09-01
+
+- Novo teste ponta a ponta da consulta, a partir de um arquivo de LD no formato real (cabeçalho institucional antes da linha de títulos, abas ET / N-1710 / Colar SIGEM, cabeçalhos reais e célula de confirmação de alocação mesclada). O teste percorre a cadeia inteira — leitura do `.xlsx`, `parseWorkbook`, índice, consulta, a linha exportada montada pela função real da tela e o construtor da planilha — e confere o resultado **relendo o arquivo gerado**, não o objeto em memória. Cobre o código localizado com/sem nt-, a situação de cada forma quando as duas constam na LD, a correção por tipo + TAG, a família documental sem regra de nt-, o documento não localizado e a parada da triagem em Em Análise com a GRDT da revisão analisada. Nenhuma mudança de comportamento nesta versão.
+
 ## 5.38.4 — 2026-09-01
 
 - **Consulta:** as colunas **CÓDIGO LOCALIZADO NA LD**, **FORMA LOCALIZADA NA LD** e **PESQUISA COM/SEM nt- E TAG NA LD** voltam a sair preenchidas na planilha do Excel e na cópia para planilha. Elas existiam desde a 5.38.0, mas a linha enviada para a exportação não levava esses campos: o código corrigido (com ou sem nt-) aparecia na tela e sumia no arquivo gerado. Um teste passa a cobrir toda coluna da planilha, para nenhuma outra sair muda.
