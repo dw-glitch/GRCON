@@ -1,5 +1,9 @@
 # Histórico de alterações
 
+## 5.38.3 — 2026-09-01
+
+- Corrige a evidência do balde **Em análise** (revisão com status oficial Em Análise na Colar SIGEM), introduzido na 5.38.2: o GRCON deixava `analysisEvidence` sempre vazio e mantinha GRDT/Data Efetiva da linha técnica de partida, mesmo quando a análise em aberto estava numa revisão diferente (ex.: LD na revisão 0, análise na revisão A). Agora a evidência da revisão realmente parada pela análise é preenchida (fonte do status e da GRDT/data na Colar SIGEM ou na linha técnica), e GRDT/Data Efetiva passam a refletir essa revisão — corrigindo a coluna "FONTE DO STATUS SIGEM" vazia e o cruzamento incorreto de GRDT/data entre revisões na exportação.
+
 ## 5.38.2 — 2026-09-01
 
 - A revisão com status oficial **Em Análise** na Colar SIGEM deixa de avançar sozinha para a próxima revisão: o GRCON para na própria revisão e classifica o documento no balde **Em análise** (contador e filtro já existentes na barra da triagem, no Resumo e no relatório, mas que nunca recebiam nenhum documento). Diferente de Em Workflow e dos demais retornos, uma análise em aberto no SIGEM não é ultrapassada automaticamente — o documento fica fora da eGRDT até o retorno, com a inclusão manual continuando disponível para quem quiser prosseguir mesmo assim.

@@ -370,6 +370,30 @@ check("Em Análise nunca avança sozinho: para na própria revisão e cai no bal
   assert.equal(resultadoEncadeado.status, "Em Análise");
 });
 
+check("Em Análise adota GRDT e data efetiva da revisão realmente analisada, não da revisão inicial", () => {
+  // A linha técnica de partida (revisão 0) e a revisão parada pela análise
+  // (revisão A) podem ter GRDT/data diferentes. O resultado precisa refletir
+  // a evidência da revisão em análise, não arrastar os dados da revisão 0.
+  const technical = { ...ldDocumentRecord(ntDocument), grdt: "GRDT-0000", effectiveDate: "01/01/2026" };
+  const encadeado = [
+    { ...technical, sheet: "Colar SIGEM", row: 3, revision: "0", status: "Recusado", sigemStatus: "Recusado", grdt: "GRDT-0000", effectiveDate: "01/01/2026" },
+    { ...technical, sheet: "Colar SIGEM", row: 4, revision: "A", status: "Em Análise", sigemStatus: "Em Análise", grdt: "GRDT-000A", effectiveDate: "15/03/2026" },
+  ];
+  const result = Core.triageOne(
+    { id: "em-analise-evidencia", name: `${ntDocument}.pdf` },
+    Core.buildIndex([technical], encadeado),
+    {},
+  );
+  assert.equal(result.decision, Core.DISCARD);
+  assert.equal(result.revision, "A");
+  assert.equal(result.grdt, "GRDT-000A", "GRDT deve ser o da revisão A em análise, não o da revisão 0 de partida");
+  assert.equal(result.effectiveDate, "15/03/2026", "data efetiva deve ser a da revisão A em análise");
+  assert.ok(result.analysisEvidence, "analysisEvidence precisa ser preenchida quando o documento cai em Em análise");
+  assert.equal(result.analysisEvidence.sourceKind, "history");
+  assert.ok(result.analysisEvidence.statusSource, "precisa apontar a origem do status na Colar SIGEM");
+  assert.equal(result.analysisEvidence.statusSource.row, 4);
+});
+
 check("status Não Postado mantém a própria revisão 0 para postagem", () => {
   const technical = ldDocumentRecord(ntDocument);
   const history = {
@@ -3145,4 +3169,4 @@ check("resposta de e-mail fica disponível somente no Histórico", () => {
   assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
 });
 
-console.log(JSON.stringify({ version: "5.38.2", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.38.3", passed: true, checks: checks.length, names: checks }, null, 2));

@@ -2591,6 +2591,16 @@
       // para conferência manual, mesmo sem avaliar as revisões seguintes.
       if (kind === "analysis") {
         decision = DISCARD;
+        analysisEvidence = analysisEvidenceForRevision(group, revision, inferredSheet, statusInfo);
+        // A revisão parada pela análise pode não ser a mesma da linha técnica
+        // inicialmente selecionada (ex.: LD na revisão 0, análise aberta na
+        // revisão A). GRDT/Data Efetiva precisam refletir a revisão realmente
+        // em análise, não a de partida, senão a exportação mistura evidências
+        // de revisões diferentes.
+        const analysisGrdt = text(analysisEvidence.item && analysisEvidence.item.grdt);
+        const analysisEffectiveDate = text(analysisEvidence.item && analysisEvidence.item.effectiveDate);
+        if (analysisGrdt) grdt = analysisGrdt;
+        if (analysisEffectiveDate) effectiveDate = analysisEffectiveDate;
         reason = traversed.length
           ? `A revisão ${revision} está com status oficial Em Análise na Colar SIGEM, depois de ${traversed.map((item) => `${item.revision} (${item.status})`).join(", ")}. O GRCON não avança para uma nova revisão enquanto a análise estiver em aberto.`
           : `A revisão ${revision} está com status oficial Em Análise na Colar SIGEM. O GRCON não avança para uma nova revisão enquanto a análise estiver em aberto.`;
