@@ -712,6 +712,66 @@ check("Consultas expõe o código localizado na LD na tela e na planilha exporta
   assert.ok(chaves.includes("ntSearchMessage"), "a planilha da consulta precisa registrar a pesquisa com/sem nt- e tipo+TAG");
 });
 
+check("toda coluna da planilha da consulta é preenchida pela linha exportada, sem coluna muda", () => {
+  // A coluna existia na planilha e a linha exportada não levava o campo: o
+  // código localizado e a pesquisa com/sem nt- apareciam na tela e saíam
+  // vazios no Excel e na cópia. O laço abaixo vale para qualquer coluna nova.
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  const inicio = app.indexOf("function linhasParaSaida()");
+  assert.ok(inicio > -1, "a consulta precisa ter um construtor de linhas para a saída");
+  const corpo = app.slice(inicio, app.indexOf("\n  }", inicio));
+  RequestsReport.COLUMNS.forEach((coluna) => {
+    assert.ok(
+      new RegExp(`(^|[\\s{,])${coluna.key}\\s*:`).test(corpo),
+      `a coluna “${coluna.header}” (${coluna.key}) sairia vazia: o campo não é levado por linhasParaSaida()`,
+    );
+  });
+});
+
+check("consulta mostra a situação de cada forma quando o código consta na LD com e sem nt-", () => {
+  // O mesmo código ET em duas linhas da LD, uma em cada grafia e com situações
+  // diferentes. A consulta responde pela forma que casou, mas a outra não pode
+  // sumir: cada uma sai com a sua revisão, alocação e LD.
+  const index = Core.buildIndex([
+    consultaRecord(ntBaseDocument, "LD_A.xlsx", { revision: "0" }),
+    consultaRecord(ntDocument, "LD_B.xlsx", { revision: "B", allocationStatus: "NÃO ALOCADO", allocation: "", grdt: "GRDT-123", row: 3 }),
+  ], []);
+
+  const comNt = Requests.consultationRow(Requests.lookupDocument(ntDocument, index));
+  assert.equal(comNt.ldDocument, ntDocument);
+  assert.equal(comNt.ldForm, "Com nt-");
+  assert.equal(comNt.bothNtFormsInLd, true);
+  assert.equal(comNt.ntFormsFound, 2);
+  assert.match(comNt.ntFormsDetail, /Com nt-:.*forma usada nesta consulta/);
+  assert.match(comNt.ntFormsDetail, /Sem nt-:.*também consta na LD/);
+  // A situação de cada forma é a dela, não a da forma consultada.
+  assert.match(comNt.ntFormsDetail, /Sem nt-:.*Rev\. 0 na LD.*SIM — Alocado.*LD: LD_A\.xlsx/);
+  assert.match(comNt.ntFormsDetail, /Com nt-:.*Rev\. B na LD.*NÃO — Não alocado.*LD: LD_B\.xlsx/);
+
+  // Consultando a outra grafia, a resposta troca de lado sem perder nenhuma.
+  const semNt = Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index));
+  assert.equal(semNt.ldDocument, ntBaseDocument);
+  assert.equal(semNt.bothNtFormsInLd, true);
+  assert.match(semNt.ntFormsDetail, /Sem nt-:.*forma usada nesta consulta/);
+  assert.match(semNt.ntFormsDetail, /Com nt-:.*também consta na LD/);
+});
+
+check("forma que não consta na LD é dita como ausente, e não deixada em branco", () => {
+  const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx")], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument(ntDocument, index));
+  assert.equal(linha.bothNtFormsInLd, false);
+  assert.equal(linha.ntFormsFound, 1);
+  assert.match(linha.ntFormsDetail, /Sem nt-:.*forma usada nesta consulta/);
+  assert.match(linha.ntFormsDetail, /Com nt-: não consta na LD/);
+
+  // Documento de outra família: a regra com/sem nt- não se aplica e a consulta
+  // não inventa uma segunda grafia para ele.
+  const n1710 = Core.buildIndex([consultaRecord(n1710Document, "LD_A.xlsx", { sheet: "N-1710" })], []);
+  const outraFamilia = Requests.consultationRow(Requests.lookupDocument(n1710Document, n1710));
+  assert.equal(outraFamilia.ntFormsDetail, "");
+  assert.equal(outraFamilia.ntFormsFound, 0);
+});
+
 check("título da consulta sai exatamente como está na LD", () => {
   const original = "Relatório de Inspeção — Válvula 3\" (Ø nominal), rev. A";
   const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: original })], []);
@@ -3169,4 +3229,4 @@ check("resposta de e-mail fica disponível somente no Histórico", () => {
   assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
 });
 
-console.log(JSON.stringify({ version: "5.38.3", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.38.4", passed: true, checks: checks.length, names: checks }, null, 2));

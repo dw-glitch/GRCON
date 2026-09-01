@@ -1,5 +1,10 @@
 # Histórico de alterações
 
+## 5.38.4 — 2026-09-01
+
+- **Consulta:** as colunas **CÓDIGO LOCALIZADO NA LD**, **FORMA LOCALIZADA NA LD** e **PESQUISA COM/SEM nt- E TAG NA LD** voltam a sair preenchidas na planilha do Excel e na cópia para planilha. Elas existiam desde a 5.38.0, mas a linha enviada para a exportação não levava esses campos: o código corrigido (com ou sem nt-) aparecia na tela e sumia no arquivo gerado. Um teste passa a cobrir toda coluna da planilha, para nenhuma outra sair muda.
+- **Consulta:** nova coluna **SITUAÇÃO DE CADA FORMA (com/sem nt-)**. Quando o mesmo código ET consta na LD nas duas grafias — com nt- e sem nt- —, cada uma sai com a sua própria situação (código como está na LD, revisão, revisão na Colar SIGEM, alocação, última GRDT e LD de origem), indicando qual delas respondeu à consulta. A forma que não consta é dita como ausente, em vez de ficar em branco. Na tela, a linha ganha o selo **“Consta com e sem nt-”** com a mesma informação. A escolha da consulta não muda: isto é evidência para conferência.
+
 ## 5.38.3 — 2026-09-01
 
 - Corrige a evidência do balde **Em análise** (revisão com status oficial Em Análise na Colar SIGEM), introduzido na 5.38.2: o GRCON deixava `analysisEvidence` sempre vazio e mantinha GRDT/Data Efetiva da linha técnica de partida, mesmo quando a análise em aberto estava numa revisão diferente (ex.: LD na revisão 0, análise na revisão A). Agora a evidência da revisão realmente parada pela análise é preenchida (fonte do status e da GRDT/data na Colar SIGEM ou na linha técnica), e GRDT/Data Efetiva passam a refletir essa revisão — corrigindo a coluna "FONTE DO STATUS SIGEM" vazia e o cruzamento incorreto de GRDT/data entre revisões na exportação.

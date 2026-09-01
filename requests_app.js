@@ -439,7 +439,13 @@
     const badge = linha.codeAdjusted
       ? `<span class="requests-badge ajuste" title="${escapeHtml(linha.codeAdjustmentNote)}">Código ajustado</span>`
       : "";
-    return `<code title="${escapeHtml(linha.ntSearchMessage || "")}">${escapeHtml(linha.ldDocument)}</code>${badge}`;
+    // As duas grafias do mesmo código na LD: a consulta responde pela que
+    // casou, mas a outra existe e tem situação própria. O selo abre a
+    // situação de cada uma, a mesma que vai para a planilha.
+    const duasFormas = linha.bothNtFormsInLd
+      ? `<span class="requests-badge alerta" title="${escapeHtml(linha.ntFormsDetail || "")}">Consta com e sem nt-</span>`
+      : "";
+    return `<code title="${escapeHtml(linha.ntSearchMessage || "")}">${escapeHtml(linha.ldDocument)}</code>${badge}${duasFormas}`;
   }
 
   function selo(linha) {
@@ -543,6 +549,14 @@
         return {
           situation: linha.situation,
           document: item.document,
+          // O código como está na LD, a forma (com/sem nt-), a situação de
+          // cada forma e a pesquisa que levou até ele. Sem estes campos as
+          // colunas existiam na planilha e saíam vazias: a correção de código
+          // aparecia na tela e sumia no Excel e na cópia.
+          ldDocument: linha.ldDocument,
+          ldForm: linha.ldForm,
+          ntFormsDetail: linha.ntFormsDetail,
+          ntSearchMessage: linha.ntSearchMessage,
           title: linha.title,
           sigemLdRevision: linha.sigemLdRevision,
           sigemLdRevisionCell: linha.sigemLdRevisionCell,

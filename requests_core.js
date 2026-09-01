@@ -221,6 +221,83 @@
   }
 
   /**
+   * As duas formas do mesmo código ET — com e sem nt- — e a situação de cada
+   * uma na LD.
+   *
+   * A consulta responde pela forma que casou com o código informado. Quando a
+   * LD traz as duas como linhas próprias, a outra ficava invisível: quem
+   * consultava não tinha como saber que ela existe, nem em que revisão,
+   * alocação ou status ela está. Isto é evidência, não decisão: a escolha da
+   * consulta não muda por causa desta leitura, e forma que não consta na LD é
+   * dita como ausente em vez de ficar em branco.
+   */
+  function ntFormsInLd(informado, ldDocument, index) {
+    const motor = core();
+    if (!motor || !index || !index.byDocument || !motor.documentSearchKeys || !motor.key) return [];
+    const referencia = text(ldDocument) || text(informado);
+    const chaveReferencia = motor.key(referencia);
+    if (!chaveReferencia || !motor.isEtDocument || !motor.isEtDocument(chaveReferencia)) return [];
+    const formas = (motor.documentSearchKeys(referencia) || []).map((forma) => motor.key(forma));
+    // Uma forma só significa código sem as duas grafias possíveis: não há o que
+    // comparar, e a coluna "forma localizada na LD" já responde sozinha.
+    if (formas.length < 2) return [];
+    return [...new Set(formas)].map((chave) => {
+      const grupo = index.byDocument.get(chave) || null;
+      const registros = (grupo && grupo.records) || [];
+      const ocorrencias = registros.map(occurrenceFrom);
+      const escolhida = chooseOccurrence(ocorrencias).chosen;
+      const revisaoSigem = sigemRevisionSummary(grupo);
+      const codigoNaLd = escolhida ? text(escolhida.document) : text(ocorrencias[0] && ocorrencias[0].document);
+      return {
+        form: motor.ntPrefixForm ? motor.ntPrefixForm(codigoNaLd || chave) : "",
+        key: chave,
+        document: codigoNaLd,
+        found: ocorrencias.length > 0,
+        // A forma que a consulta usou para responder as demais colunas.
+        isSearchedResult: chave === chaveReferencia,
+        title: escolhida ? escolhida.title : "",
+        revision: escolhida ? escolhida.revision : "",
+        allocated: escolhida ? allocationAnswer(escolhida) : "",
+        lastGrdt: escolhida ? escolhida.lastGrdt : "",
+        sigemStatus: escolhida ? escolhida.sigemStatus : "",
+        sigemRevisionLabel: revisaoSigem.label,
+        ld: escolhida ? escolhida.ld : "",
+        allLds: [...new Set(ocorrencias.map((item) => item.ld).filter(Boolean))].join(" | "),
+        occurrenceCount: ocorrencias.length,
+        // Sem ocorrência eleita havendo linhas é divergência dentro da própria
+        // forma; a consulta diz isso em vez de escolher uma linha qualquer.
+        conflicting: ocorrencias.length > 0 && !escolhida,
+      };
+    });
+  }
+
+  /**
+   * As formas com/sem nt- em uma célula só, uma por linha — é assim que a
+   * planilha e a cópia levam a situação de cada uma.
+   */
+  function ntFormsDetailText(forms) {
+    const lista = forms || [];
+    if (!lista.length) return "";
+    return lista.map((item) => {
+      if (!item.found) return `${item.form}: não consta na LD`;
+      const partes = [
+        text(item.document) || item.key,
+        item.isSearchedResult ? "forma usada nesta consulta" : "também consta na LD",
+        item.conflicting
+          ? "linhas divergentes na LD — conferir"
+          : item.revision ? `Rev. ${item.revision} na LD` : "revisão não informada na LD",
+        text(item.sigemRevisionLabel) && text(item.sigemRevisionLabel) !== "Não encontrado no Colar SIGEM"
+          ? `Colar SIGEM: ${item.sigemRevisionLabel}`
+          : "sem revisão na Colar SIGEM",
+        text(item.allocated) || "alocação não apurada",
+        text(item.lastGrdt) ? `Última GRDT: ${item.lastGrdt}` : "",
+        text(item.ld) ? `LD: ${item.ld}` : "",
+      ].filter(Boolean);
+      return `${item.form}: ${partes.join(" · ")}`;
+    }).join("\n");
+  }
+
+  /**
    * Consulta um documento no índice montado a partir de todas as LDs anexadas.
    *
    * O índice do GRCON já resolve a regra do nt- (documentos ET) e uma
@@ -271,6 +348,7 @@
         ambiguous: true,
         lookup: lookupAmbiguo,
         ldDocument: "",
+        ntForms: ntFormsInLd(informado, "", index),
         matchKind: "ambiguous",
         message: mensagem,
         rule: mensagem,
@@ -282,7 +360,12 @@
     const sigemRevision = sigemRevisionSummary(primeiro && primeiro.group);
 
     if (!primeiro) {
-      return { ...base, lookup, message: lookup && lookup.message ? lookup.message : base.message };
+      return {
+        ...base,
+        lookup,
+        ntForms: ntFormsInLd(informado, "", index),
+        message: lookup && lookup.message ? lookup.message : base.message,
+      };
     }
 
     // Todas as linhas do grupo: é isto que responde "em quais LDs foi achado".
@@ -325,6 +408,7 @@
       conflicting,
       matchKind: primeiro.matchKind || "exact",
       ldDocument: text(primeiro.document),
+      ntForms: ntFormsInLd(informado, text(primeiro.document), index),
       ntRename: renamed.ntRename || null,
       ldRename: renamed.ldRename || null,
       lookup,
@@ -384,6 +468,8 @@
     const escolhida = resultado && resultado.chosen;
     const todas = (resultado && resultado.occurrences) || [];
     const lookup = resultado && resultado.lookup;
+    const formas = (resultado && resultado.ntForms) || [];
+    const formasLocalizadas = formas.filter((item) => item && item.found);
     return {
       document: text(resultado && resultado.document),
       title: escolhida ? escolhida.title : "",
@@ -401,6 +487,12 @@
       searchedWithNt: text(lookup && lookup.searchedWithNt),
       ntSearchMessage: text(lookup && lookup.message),
       ntSearchResultLabel: text(lookup && lookup.resultLabel),
+      // As duas grafias possíveis do mesmo código ET, com a situação de cada
+      // uma na LD. Quando as duas constam, nenhuma some da resposta.
+      ntForms: formas,
+      ntFormsDetail: ntFormsDetailText(formas),
+      ntFormsFound: formasLocalizadas.length,
+      bothNtFormsInLd: formasLocalizadas.length > 1,
       codeAdjusted: Boolean(resultado && (resultado.ntRename || resultado.ldRename)),
       codeAdjustmentNote: codeAdjustmentNote(resultado),
       sigemLdRevision: text(resultado && resultado.sigemRevision),
@@ -534,5 +626,7 @@
     issuedColumns,
     allocationAnswer,
     chooseOccurrence,
+    ntFormsInLd,
+    ntFormsDetailText,
   });
 });
