@@ -1,5 +1,9 @@
 # Histórico de alterações
 
+## 5.38.1 — 2026-09-01
+
+- A tabela da resposta de e-mail fica mais compacta: cada coluna passa a ter uma largura fixa e o texto que não cabe (título, nome de arquivo) quebra dentro da própria célula, em vez de esticar a tabela inteira. O preenchimento de cada célula também diminui. Antes, um título ou nome de arquivo compridos deixavam a tabela colada muito maior do que o corpo do e-mail.
+
 ## 5.38.0 — 2026-09-01
 
 ### Consultas passa a pesquisar com e sem nt- e corrigir erros de transcrição no código

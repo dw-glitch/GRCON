@@ -2806,6 +2806,16 @@ check("resposta de e-mail monta as sete colunas da relação e cola como tabela"
   assert.equal((reply.tableHtml.match(/font-size:9pt/g) || []).length, 29, "table, sete cabeçalhos e 21 células usam fonte 9 pt");
   assert.match(reply.html, /<p style=/);
 
+  // A tabela ficava enorme na resposta porque nada limitava a largura: um
+  // título ou nome de arquivo compridos esticavam a linha inteira. Agora a
+  // tabela tem largura fixa e o texto que não cabe quebra na própria célula.
+  assert.match(reply.tableHtml, /table-layout:fixed/);
+  assert.match(reply.tableHtml, /width:695px/);
+  assert.match(reply.tableHtml, /padding:3px 6px/);
+  assert.doesNotMatch(reply.tableHtml, /padding:6px 10px/, "o preenchimento antigo, mais largo, não pode voltar");
+  assert.equal((reply.tableHtml.match(/word-break:break-word/g) || []).length, 21, "as 21 células precisam quebrar texto comprido em vez de alargar a tabela");
+  assert.match(reply.tableHtml, /width="140"/, "a coluna TÍTULO precisa de uma largura fixa em px, não só em CSS");
+
   // A mensagem padrão nomeia a eGRDT e a data, e é o texto que abre o painel.
   assert.match(reply.message, /0130870-C1O-PGV-G-1407-2026 - eGRDT/);
   assert.match(reply.message, /31\/08\/2026, às 10:59/);
@@ -3094,4 +3104,4 @@ check("resposta de e-mail fica disponível somente no Histórico", () => {
   assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
 });
 
-console.log(JSON.stringify({ version: "5.38.0", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.38.1", passed: true, checks: checks.length, names: checks }, null, 2));
