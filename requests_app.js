@@ -422,6 +422,26 @@
     </span>`;
   }
 
+  /**
+   * O que a consulta encontrou na LD — pesquisando com e sem nt- e, quando o
+   * código completo não bate, pela combinação tipo + TAG (mesma regra da
+   * triagem, README "Regra com/sem nt-" e "Busca pelo TAG dos documentos
+   * ET"). O TAG nunca é alterado; a correção só tolera a mesma confusão
+   * alfanumérica única que a triagem já tolerava, e só quando a LD é
+   * inequívoca. Sem correspondência, mostra o que foi pesquisado, não um
+   * vazio mudo.
+   */
+  function celulaCodigoLocalizado(linha) {
+    if (!linha || !linha.ldDocument) {
+      const pesquisa = linha && linha.ntSearchMessage ? ` title="${escapeHtml(linha.ntSearchMessage)}"` : "";
+      return `<span class="requests-vazio"${pesquisa}>Não localizado</span>`;
+    }
+    const badge = linha.codeAdjusted
+      ? `<span class="requests-badge ajuste" title="${escapeHtml(linha.codeAdjustmentNote)}">Código ajustado</span>`
+      : "";
+    return `<code title="${escapeHtml(linha.ntSearchMessage || "")}">${escapeHtml(linha.ldDocument)}</code>${badge}`;
+  }
+
   function selo(linha) {
     if (!linha) return '<span class="requests-badge pendente">Não consultado</span>';
     if (linha.situation === "Localizado") return '<span class="requests-badge ok">✓ Localizado</span>';
@@ -445,6 +465,7 @@
         <td class="requests-col-check"><input aria-label="Selecionar ${escapeHtml(item.document)}" data-select="${escapeHtml(item.id)}" type="checkbox"${item.selected ? " checked" : ""}/></td>
         <td>${selo(linha)}</td>
         <td class="requests-col-doc"><code>${escapeHtml(item.document)}</code>${conflito}</td>
+        <td class="requests-col-ld-doc">${celulaCodigoLocalizado(linha)}</td>
         <td>${titulo}</td>
         <td>${linha && linha.allocated ? escapeHtml(linha.allocated) : '<span class="requests-vazio">—</span>'}</td>
         <td>${linha && linha.lastGrdt ? escapeHtml(linha.lastGrdt) : '<span class="requests-vazio">—</span>'}</td>

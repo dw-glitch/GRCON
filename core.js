@@ -2857,6 +2857,7 @@
     buildEgrdtData,
     isN1710Context,
     validateEgrdtData,
+    applyOfficialCodeRename,
     triageOne,
     simpleReason,
     resultCounts,

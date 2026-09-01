@@ -20,6 +20,12 @@
   const COLUMNS = Object.freeze([
     { header: "SITUAÇÃO", key: "situation", width: 26 },
     { header: "DOCUMENTO", key: "document", width: 46 },
+    // Mesma regra da triagem (README "Regra com/sem nt-" e "Busca pelo TAG
+    // dos documentos ET"): pesquisado com e sem nt- e, quando o código
+    // completo não bate, pela combinação tipo + TAG. O TAG nunca é alterado.
+    { header: "CÓDIGO LOCALIZADO NA LD", key: "ldDocument", width: 46 },
+    { header: "FORMA LOCALIZADA NA LD", key: "ldForm", width: 22 },
+    { header: "PESQUISA COM/SEM nt- E TAG NA LD", key: "ntSearchMessage", width: 76 },
     { header: "TÍTULO NA LD", key: "title", width: 58 },
     { header: "ALOCADO?", key: "allocated", width: 22 },
     { header: "ALOCAÇÃO", key: "allocation", width: 24 },
