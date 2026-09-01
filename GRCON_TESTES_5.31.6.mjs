@@ -583,6 +583,70 @@ check("consulta aproveita a regra do nt- e rebaixa a confiança do resultado", (
   assert.equal(resultado.ldDocument, ntBaseDocument);
 });
 
+check("consulta pesquisa com e sem nt- na LD e informa o código localizado, como a triagem", () => {
+  // LD só tem a forma com nt-; o operador consulta sem nt-. A mesma regra
+  // com/sem nt- da triagem (README) vale aqui: a consulta pesquisa as duas
+  // formas e diz qual delas está na LD, em vez de só dizer "localizado".
+  const index = Core.buildIndex([consultaRecord(ntDocument, "LD_A.xlsx")], []);
+  const linha = Requests.consultationRow(Requests.lookupDocument(ntBaseDocument, index));
+  assert.equal(linha.ldDocument, ntDocument);
+  assert.equal(linha.ldForm, "Com nt-");
+  assert.equal(linha.codeAdjusted, true);
+  assert.match(linha.codeAdjustmentNote, /nt-/);
+  assert.equal(linha.searchedWithoutNt, ntBaseDocument);
+  assert.equal(linha.searchedWithNt, ntDocument);
+  assert.match(linha.ntSearchMessage, /com e sem nt-/i);
+
+  // E no sentido contrário: LD só tem a forma sem nt-, consulta com nt-.
+  const indexInverso = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_B.xlsx")], []);
+  const linhaInversa = Requests.consultationRow(Requests.lookupDocument(ntDocument, indexInverso));
+  assert.equal(linhaInversa.ldDocument, ntBaseDocument);
+  assert.equal(linhaInversa.ldForm, "Sem nt-");
+  assert.equal(linhaInversa.codeAdjusted, true);
+});
+
+check("consulta corrige um erro de transcrição no código sem inventar ou alterar o TAG", () => {
+  // Mesma fixture da triagem: uma única confusão comum (O por 0) dentro do
+  // TAG, com a LD inequívoca. O TAG não é adivinhado nem trocado — só
+  // reconhecido apesar da confusão, exatamente como a triagem já faz.
+  const ld = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
+  const informado = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-32O019";
+  const index = Core.buildIndex([ldDocumentRecord(ld)], []);
+  const resultado = Requests.lookupDocument(informado, index);
+  const linha = Requests.consultationRow(resultado);
+  assert.equal(linha.ldDocument, ld);
+  assert.equal(linha.matchKind, "tag-transcription-variant");
+  assert.equal(linha.codeAdjusted, true);
+  assert.match(linha.codeAdjustmentNote, /320019/);
+  assert.match(linha.codeAdjustmentNote, /32O019/);
+
+  // Ambíguo continua sem correção automática: duas linhas possíveis não
+  // recebem um TAG escolhido a dedo pelo GRCON.
+  const prefix = "C1O_RNEST_U32_3.1.1.1_INS_RIR_";
+  const indexAmbiguo = Core.buildIndex([
+    ldDocumentRecord(`${prefix}P-101-A`),
+    ldDocumentRecord(`${prefix}P1-01A`),
+  ], []);
+  const ambiguo = Requests.consultationRow(Requests.lookupDocument(`${prefix}P.101A`, indexAmbiguo));
+  assert.equal(ambiguo.ldDocument, "");
+  assert.equal(ambiguo.codeAdjusted, false);
+});
+
+check("Consultas expõe o código localizado na LD na tela e na planilha exportada (verificação estática)", () => {
+  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
+  assert.match(app, /function celulaCodigoLocalizado/);
+  assert.match(app, /celulaCodigoLocalizado\(linha\)/);
+
+  const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const tabela = indexSource.slice(indexSource.indexOf('<table class="requests-table" id="requests-table">'), indexSource.indexOf('<tbody id="requests-tbody">'));
+  assert.match(tabela, />Código localizado na LD</);
+
+  const chaves = RequestsReport.COLUMNS.map((coluna) => coluna.key);
+  assert.ok(chaves.includes("ldDocument"), "a planilha da consulta precisa levar o código localizado na LD");
+  assert.ok(chaves.includes("ldForm"), "a planilha da consulta precisa dizer se a forma localizada tem nt- ou não");
+  assert.ok(chaves.includes("ntSearchMessage"), "a planilha da consulta precisa registrar a pesquisa com/sem nt- e tipo+TAG");
+});
+
 check("título da consulta sai exatamente como está na LD", () => {
   const original = "Relatório de Inspeção — Válvula 3\" (Ø nominal), rev. A";
   const index = Core.buildIndex([consultaRecord(ntBaseDocument, "LD_A.xlsx", { title: original })], []);
@@ -3030,4 +3094,4 @@ check("resposta de e-mail fica disponível somente no Histórico", () => {
   assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
 });
 
-console.log(JSON.stringify({ version: "5.37.2", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.38.0", passed: true, checks: checks.length, names: checks }, null, 2));

@@ -1,5 +1,13 @@
 # Histórico de alterações
 
+## 5.38.0 — 2026-09-01
+
+### Consultas passa a pesquisar com e sem nt- e corrigir erros de transcrição no código
+
+- A ferramenta **Consultas** agora usa a mesma regra da triagem para localizar o documento na LD: pesquisa o código completo com e sem `nt-` e, quando não bate, pela combinação tipo + TAG, tolerando a mesma confusão alfanumérica única (O/0, I/1, L/1, S/5, Z/2, B/8) já aceita na triagem — sempre que a LD for inequívoca. O TAG nunca é alterado ou adivinhado.
+- Nova coluna **Código localizado na LD** na tela e na planilha exportada, com um selo **Código ajustado** quando o código informado precisou ser corrigido — a dica de texto explica o que foi informado e o que a LD tem, igual à triagem. A planilha ganha ainda **Forma localizada na LD** e **Pesquisa com/sem nt- e TAG na LD**.
+- Quando mais de um documento da LD corresponde ao código informado, a consulta deixa de escolher um deles sozinha: passa a pedir conferência, com os candidatos listados, do mesmo jeito que a triagem já fazia.
+
 ## 5.37.2 — 2026-09-01
 
 - A coluna e os rótulos da revisão editável na triagem passam de **Revisão da GRDT** para **Revisão do documento**: o campo já era editável por linha desde a 5.37.0 (cada documento mantém a sua, mesmo quando vários entram na mesma eGRDT), mas o nome anterior dava a entender um valor único para a GRDT inteira.

@@ -252,6 +252,31 @@
     if (!informado || !index || !core()) return base;
 
     const matches = core().matchDocuments(informado, index, settings.hintedSheet) || [];
+
+    // Mais de um documento candidato: a mesma trava da triagem (README "Busca
+    // pelo TAG dos documentos ET" — havendo mais de uma linha do mesmo tipo
+    // com o mesmo TAG, o GRCON pede conferência). Nenhum dos candidatos é
+    // escolhido a dedo pela consulta.
+    if (matches.length > 1) {
+      const lookupAmbiguo = core().documentLookup ? core().documentLookup(informado, null, matches) : null;
+      const codigos = matches.slice(0, 5).map((candidate) => candidate.document).join("; ");
+      const mensagem = lookupAmbiguo && lookupAmbiguo.message
+        ? lookupAmbiguo.message
+        : `Mais de um código controlado corresponde a “${informado}” (${codigos}). Nenhuma associação automática foi feita.`;
+      return {
+        ...base,
+        found: true,
+        confidence: "baixa",
+        needsManualValidation: true,
+        ambiguous: true,
+        lookup: lookupAmbiguo,
+        ldDocument: "",
+        matchKind: "ambiguous",
+        message: mensagem,
+        rule: mensagem,
+      };
+    }
+
     const primeiro = matches[0] || null;
     const lookup = core().documentLookup ? core().documentLookup(informado, matches.length === 1 ? primeiro : null, matches) : null;
     const sigemRevision = sigemRevisionSummary(primeiro && primeiro.group);
@@ -272,6 +297,20 @@
         ? "media"
         : occurrences.length > 1 ? "media" : "alta";
 
+    // Mesma correção de código que a triagem aplica: com/sem nt- (ntRename) e,
+    // quando o código completo não bate mas a combinação tipo + TAG identifica
+    // uma única linha, a correção pela codificação oficial da LD (ldRename).
+    // O TAG em si nunca é alterado ou adivinhado — só tolera a mesma confusão
+    // alfanumérica única que a triagem já tolerava, e só quando a LD é
+    // inequívoca. Sem arquivo físico aqui, finalName fica vazio e a frase
+    // "vai entrar na eGRDT como…" some sozinha da nota.
+    const renamed = core().applyOfficialCodeRename
+      ? core().applyOfficialCodeRename(
+        { document: text(primeiro.document), finalName: "", reason: "" },
+        { document: informado, documentLookup: lookup },
+      )
+      : {};
+
     return {
       document: informado,
       requestedTitle: text(settings.requestedTitle),
@@ -286,6 +325,8 @@
       conflicting,
       matchKind: primeiro.matchKind || "exact",
       ldDocument: text(primeiro.document),
+      ntRename: renamed.ntRename || null,
+      ldRename: renamed.ldRename || null,
       lookup,
       sigemRevision: sigemRevision.revision,
       sigemRevisionCell: sigemRevision.cell,
@@ -329,12 +370,39 @@
     return `REVISAR — ${item.allocationLabel}`;
   }
 
+  /**
+   * Explica o ajuste de código da mesma forma que a triagem: com/sem nt- ou
+   * pela combinação tipo + TAG. Sem ajuste (código informado já é o da LD),
+   * devolve string vazia.
+   */
+  function codeAdjustmentNote(resultado) {
+    const info = resultado && (resultado.ntRename || resultado.ldRename);
+    return info ? text(info.nota) : "";
+  }
+
   function consultationRow(resultado) {
     const escolhida = resultado && resultado.chosen;
     const todas = (resultado && resultado.occurrences) || [];
+    const lookup = resultado && resultado.lookup;
     return {
       document: text(resultado && resultado.document),
       title: escolhida ? escolhida.title : "",
+      // O que a consulta encontrou na LD, pesquisando com e sem nt- e, quando
+      // o código completo não bate, pela combinação tipo + TAG — a mesma
+      // regra que a triagem já aplica (README "Regra com/sem nt-" e "Busca
+      // pelo TAG dos documentos ET"). O TAG em si nunca é alterado: só tolera
+      // a mesma confusão alfanumérica única que a triagem já tolerava, e
+      // somente quando a LD é inequívoca.
+      ldDocument: text(resultado && resultado.ldDocument),
+      ldForm: text(lookup && lookup.ldForm) || (resultado && resultado.found ? "" : "Não localizado"),
+      matchKind: text(resultado && resultado.matchKind),
+      appliesToNtRule: Boolean(lookup && lookup.appliesToNtRule),
+      searchedWithoutNt: text(lookup && lookup.searchedWithoutNt),
+      searchedWithNt: text(lookup && lookup.searchedWithNt),
+      ntSearchMessage: text(lookup && lookup.message),
+      ntSearchResultLabel: text(lookup && lookup.resultLabel),
+      codeAdjusted: Boolean(resultado && (resultado.ntRename || resultado.ldRename)),
+      codeAdjustmentNote: codeAdjustmentNote(resultado),
       sigemLdRevision: text(resultado && resultado.sigemRevision),
       sigemLdRevisionCell: text(resultado && resultado.sigemRevisionCell) || "Não encontrado no Colar SIGEM",
       sigemLdRevisionCount: Number(resultado && resultado.sigemRevisionCount) || 0,
