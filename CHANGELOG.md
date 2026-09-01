@@ -1,5 +1,9 @@
 # Histórico de alterações
 
+## 5.37.2 — 2026-09-01
+
+- A coluna e os rótulos da revisão editável na triagem passam de **Revisão da GRDT** para **Revisão do documento**: o campo já era editável por linha desde a 5.37.0 (cada documento mantém a sua, mesmo quando vários entram na mesma eGRDT), mas o nome anterior dava a entender um valor único para a GRDT inteira.
+
 ## 5.37.1 — 2026-09-01
 
 - Gerar uma eGRDT não abre mais automaticamente o painel de resposta de e-mail.

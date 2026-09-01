@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.37.1";
+  const APP_VERSION = "5.37.2";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -2517,9 +2517,10 @@
     });
   }
 
-  // A "Revisão da GRDT" (row.revision) é o único campo que emission.js,
+  // A "Revisão do documento" (row.revision) é o único campo que emission.js,
   // grdt_workbook.js, o relatório e o histórico leem para gerar e registrar a
-  // eGRDT. A revisão calculada pela triagem fica preservada em
+  // eGRDT — cada documento tem a sua, independente dos demais que entrarem na
+  // mesma GRDT. A revisão calculada pela triagem fica preservada em
   // row.revisionSuggested e nunca é sobrescrita, para o operador poder
   // restaurá-la a qualquer momento. Alterar row.revision aqui é suficiente
   // para a geração ficar correta; os demais campos (nome final, egrdt) são
@@ -2527,7 +2528,7 @@
   function applyRevisionOverride(row, rawValue) {
     if (!row) return { ok: false, error: "Documento inválido." };
     const normalized = C.normalizeRevision(rawValue);
-    if (!normalized) return { ok: false, error: "Informe a revisão da GRDT." };
+    if (!normalized) return { ok: false, error: "Informe a revisão do documento." };
     const suggested = row.revisionSuggested !== undefined && row.revisionSuggested !== null
       ? row.revisionSuggested
       : row.revision;
@@ -3107,7 +3108,7 @@
     ["situation", "Situação"], ["originalFile", "Arquivo original"], ["document", "Documento"],
     ["ldCode", "Código da LD"], ["apendiceSearch", "Busca no Apêndice"], ["tagged", "Tagueado sim ou não?"],
     ["sheet", "Aba LD"],
-    ["ldRevision", "Revisão encontrada"], ["targetRevision", "Revisão da GRDT"], ["revisionManual", "Alterada manualmente"], ["title", "Título"], ["effectiveDate", "Data efetiva"],
+    ["ldRevision", "Revisão encontrada"], ["targetRevision", "Revisão do documento"], ["revisionManual", "Alterada manualmente"], ["title", "Título"], ["effectiveDate", "Data efetiva"],
     ["grdt", "GRDT"], ["technicalStatus", "Status"], ["sigemStatus", "Status SIGEM"], ["targetStatus", "Status da revisão"],
     ["postingStatus", "Situação de postagem"], ["fiscalComment", "Comentário da Fiscal"], ["allocation", "Alocação"],
     ["allocationStage", "Etapa da alocação"], ["allocationStatus", "Confirmação"], ["databook", "Caminho Databook"], ["finalFile", "Arquivo final"],
@@ -3626,11 +3627,11 @@
   function timelineInline(row) {
     const timeline = row.timeline;
     if (!timeline || !timeline.revisions || !timeline.revisions.length) return "";
-    // A revisão efetivamente usada na GRDT é sempre row.revision — o operador
-    // pode tê-la alterado manualmente, o que a desconecta de
-    // timeline.targetRevision (recalculado do zero a partir da LD/histórico).
-    // Os dois valores são mostrados separadamente para não confundir "o que o
-    // sistema encontrou" com "o que será enviado".
+    // A revisão efetivamente usada por este documento na GRDT é sempre
+    // row.revision — o operador pode tê-la alterado manualmente, o que a
+    // desconecta de timeline.targetRevision (recalculado do zero a partir da
+    // LD/histórico). Os dois valores são mostrados separadamente para não
+    // confundir "o que o sistema encontrou" com "o que será enviado".
     const grdtRevision = C.normalizeRevision(row.revision);
     const manual = Boolean(row.revisionManual);
     const steps = timeline.revisions.map((item, index) => {
@@ -3645,7 +3646,7 @@
       const tags = [
         item.latest ? '<span class="revision-tag latest">Última registrada</span>' : "",
         item.target ? '<span class="revision-tag suggested">Revisão sugerida</span>' : "",
-        isGrdtRevision ? '<span class="revision-tag target">Revisão da GRDT</span>' : "",
+        isGrdtRevision ? '<span class="revision-tag target">Revisão do documento</span>' : "",
         item.predicted ? '<span class="revision-tag calculated">Calculada</span>' : "",
       ].filter(Boolean).join("");
       return `<article class="revision-timeline-step ${isGrdtRevision ? "target" : ""}">
@@ -3667,7 +3668,7 @@
         <div class="revision-timeline-summary">
           <span>Última registrada <strong>${escapeHtml(timeline.latestRevision || "—")}</strong></span>
           <span>Revisão sugerida <strong>${escapeHtml(timeline.targetRevision || row.revisionSuggested || "—")}</strong></span>
-          <span>Revisão da GRDT <strong>${escapeHtml(grdtRevision || "—")}</strong>${manual ? ' <span class="revision-manual-badge" title="Alterada manualmente pelo usuário">Alterada manualmente</span>' : ""}</span>
+          <span>Revisão do documento <strong>${escapeHtml(grdtRevision || "—")}</strong>${manual ? ' <span class="revision-manual-badge" title="Alterada manualmente pelo usuário">Alterada manualmente</span>' : ""}</span>
         </div>
       </div>
       <div class="revision-timeline-track">${steps}</div>
@@ -3944,7 +3945,7 @@
         <td><span class="sheet-badge">${escapeHtml(row.sheet || "—")}</span></td>
         <td><span class="revision-value" title="Revisão encontrada na LD">${escapeHtml(ldRevision)}</span></td>
         <td class="revision-grdt-cell">
-          <input class="revision-grdt-input" data-revision-input data-index="${index}" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="8" value="${escapeHtml(row.revision || "")}" aria-label="Revisão da GRDT para ${escapeHtml(row.document)}" title="Revisão que será usada na GRDT · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">
+          <input class="revision-grdt-input" data-revision-input data-index="${index}" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="8" value="${escapeHtml(row.revision || "")}" aria-label="Revisão do documento ${escapeHtml(row.document)} nesta GRDT" title="Revisão deste documento na GRDT · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">
           <div class="revision-grdt-meta">
             ${row.revisionManual ? `<button type="button" class="revision-manual-badge" data-action="restore-revision" data-index="${index}" title="Alterada manualmente · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}. Clique para restaurar a sugestão.">Alterada manualmente <span aria-hidden="true">↺</span></button>` : ""}
             ${row.revisionFormatWarning ? `<span class="revision-format-warning" title="${escapeHtml(row.revisionFormatWarning)}" aria-label="${escapeHtml(row.revisionFormatWarning)}">⚠</span>` : ""}
@@ -4082,7 +4083,7 @@
     closeEgrdtDrawer();
     renderAll();
     const revisionNote = revisionValue && revisionChanged
-      ? ` · revisão da GRDT alterada em ${revisionChanged} documento(s)`
+      ? ` · revisão alterada em ${revisionChanged} documento(s)`
       : revisionRejected ? " · revisão informada não pôde ser aplicada" : "";
     showToast(`${amount} item(ns) atualizado(s) somente nesta análise${revisionNote}.`, "success");
   }
@@ -5498,7 +5499,7 @@
         showToast(result.error, "warn");
         return;
       }
-      if (result.manual) showToast(`Revisão da GRDT alterada manualmente para ${row.revision}.`, "warn");
+      if (result.manual) showToast(`Revisão do documento alterada manualmente para ${row.revision}.`, "warn");
       renderTable();
       return;
     }
