@@ -25,6 +25,10 @@
     // completo não bate, pela combinação tipo + TAG. O TAG nunca é alterado.
     { header: "CÓDIGO LOCALIZADO NA LD", key: "ldDocument", width: 46 },
     { header: "FORMA LOCALIZADA NA LD", key: "ldForm", width: 22 },
+    // Quando o mesmo código ET consta na LD nas duas grafias, cada uma tem a
+    // sua situação (revisão, alocação, LD). Nenhuma delas some da planilha:
+    // esta coluna traz uma linha por forma, inclusive a que não consta.
+    { header: "SITUAÇÃO DE CADA FORMA (com/sem nt-)", key: "ntFormsDetail", width: 72 },
     { header: "PESQUISA COM/SEM nt- E TAG NA LD", key: "ntSearchMessage", width: 76 },
     { header: "TÍTULO NA LD", key: "title", width: 58 },
     { header: "ALOCADO?", key: "allocated", width: 22 },
