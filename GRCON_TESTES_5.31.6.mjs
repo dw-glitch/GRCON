@@ -2990,7 +2990,7 @@ check("validação de revisão continua usando as regras já existentes: incomum
   assert.ok(plan.errors.some((message) => /revis[aã]o inválida/i.test(message)), "um formato de revisão evidentemente inválido continua barrando a geração, como já acontecia antes");
 });
 
-check("triagem oferece edição inline da revisão da GRDT com restauração da sugestão (verificação estática)", () => {
+check("triagem oferece edição inline da revisão de cada documento com restauração da sugestão (verificação estática)", () => {
   const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
   assert.match(appSource, /function applyRevisionOverride/);
   assert.match(appSource, /function restoreSuggestedRevision/);
@@ -3005,7 +3005,11 @@ check("triagem oferece edição inline da revisão da GRDT com restauração da 
   assert.equal(assignments.length, 1, "row.revision deve ser escrito só dentro de applyRevisionOverride");
 
   const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  assert.match(indexSource, /REVISÃO DA GRDT/);
+  // O rótulo precisa deixar claro que é a revisão de CADA documento, não um
+  // valor único compartilhado pela GRDT inteira (que pode reunir documentos
+  // em revisões diferentes).
+  assert.match(indexSource, /REVISÃO DO DOCUMENTO/);
+  assert.doesNotMatch(indexSource, /REVISÃO DA GRDT/);
   assert.match(indexSource, /id="drawer-revision"/);
 
   const exportWorker = fs.readFileSync(path.join(root, "workers", "export.worker.js"), "utf8");
@@ -3026,4 +3030,4 @@ check("resposta de e-mail fica disponível somente no Histórico", () => {
   assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
 });
 
-console.log(JSON.stringify({ version: "5.37.1", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.37.2", passed: true, checks: checks.length, names: checks }, null, 2));

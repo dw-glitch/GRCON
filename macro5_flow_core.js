@@ -14,7 +14,7 @@
     { key: "document", label: "Documento", index: 3, essential: true, locked: true },
     { key: "sheet", label: "Aba LD", index: 4, essential: true },
     { key: "ldRevision", label: "Revisão encontrada", index: 5, essential: true },
-    { key: "targetRevision", label: "Revisão da GRDT", index: 6, essential: true },
+    { key: "targetRevision", label: "Revisão do documento", index: 6, essential: true },
     { key: "title", label: "Título", index: 7, essential: true },
     { key: "effectiveDate", label: "Data efetiva", index: 8, essential: false },
     { key: "grdt", label: "GRDT", index: 9, essential: false },
