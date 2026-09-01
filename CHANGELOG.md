@@ -1,5 +1,9 @@
 # Histórico de alterações
 
+## 5.38.2 — 2026-09-01
+
+- A revisão com status oficial **Em Análise** na Colar SIGEM deixa de avançar sozinha para a próxima revisão: o GRCON para na própria revisão e classifica o documento no balde **Em análise** (contador e filtro já existentes na barra da triagem, no Resumo e no relatório, mas que nunca recebiam nenhum documento). Diferente de Em Workflow e dos demais retornos, uma análise em aberto no SIGEM não é ultrapassada automaticamente — o documento fica fora da eGRDT até o retorno, com a inclusão manual continuando disponível para quem quiser prosseguir mesmo assim.
+
 ## 5.38.1 — 2026-09-01
 
 - A tabela da resposta de e-mail fica mais compacta: cada coluna passa a ter uma largura fixa e o texto que não cabe (título, nome de arquivo) quebra dentro da própria célula, em vez de esticar a tabela inteira. O preenchimento de cada célula também diminui. Antes, um título ou nome de arquivo compridos deixavam a tabela colada muito maior do que o corpo do e-mail.

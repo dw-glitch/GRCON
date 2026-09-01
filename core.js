@@ -2584,6 +2584,20 @@
         break;
       }
 
+      // Em Análise é a única exceção ao avanço automático: diferente de Em
+      // Workflow e dos demais retornos, o documento já está sob análise em
+      // andamento no SIGEM. O GRCON nunca prepara uma revisão nova por cima
+      // de uma análise em aberto — para aqui e marca Em análise (descartar)
+      // para conferência manual, mesmo sem avaliar as revisões seguintes.
+      if (kind === "analysis") {
+        decision = DISCARD;
+        reason = traversed.length
+          ? `A revisão ${revision} está com status oficial Em Análise na Colar SIGEM, depois de ${traversed.map((item) => `${item.revision} (${item.status})`).join(", ")}. O GRCON não avança para uma nova revisão enquanto a análise estiver em aberto.`
+          : `A revisão ${revision} está com status oficial Em Análise na Colar SIGEM. O GRCON não avança para uma nova revisão enquanto a análise estiver em aberto.`;
+        completed = true;
+        break;
+      }
+
       if (kind === "not_posted") {
         decision = READY;
         if (traversed.length) {
@@ -2716,9 +2730,6 @@
     }
 
     if (item.decision === READY) {
-      if (status === "EM ANALISE") {
-        return `Revisão ${revision} está Em Análise na Colar SIGEM, mas está liberada para gerar a eGRDT.`;
-      }
       if (status === "NAO POSTADO") {
         return reason.includes("AS REVISOES")
           ? `Revisão ${revision} liberada. É a primeira Não Postado.`
@@ -2728,7 +2739,7 @@
     }
 
     if (item.decision === DISCARD) {
-      return `Revisão ${revision} já está Em Análise com GRDT recente. Desconsiderar.`;
+      return `Revisão ${revision} está Em Análise na Colar SIGEM. O GRCON não avança para uma nova revisão enquanto a análise estiver em aberto.`;
     }
 
     const exactStatuses = {

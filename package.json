@@ -1,6 +1,6 @@
 {
   "name": "grcon",
-  "version": "5.38.1",
+  "version": "5.38.2",
   "private": true,
   "description": "GRCON — controle documental, triagem de LD e geração de eGRDT.",
   "type": "commonjs",
