@@ -154,18 +154,33 @@
     return lines.join("\n");
   }
 
+  // Sem largura por coluna, um título ou nome de arquivo longo esticava a
+  // tabela inteira na resposta — cada coluna ganha uma largura fixa (em px,
+  // também como atributo width para o Outlook respeitar) e o texto que não
+  // cabe quebra dentro da própria célula, em vez de alargar a tabela.
+  const COLUMN_WIDTHS = {
+    "DATA DA GERAÇÃO / POSTAGEM": 80,
+    "EGRDT": 115,
+    "FAMÍLIA DOCUMENTAL": 55,
+    "DOCUMENTO": 105,
+    "TÍTULO": 140,
+    "DISCIPLINA": 70,
+    "ARQUIVO POSTADO": 130,
+  };
+
   // Estilo embutido linha a linha: o Outlook descarta folhas de estilo e
   // qualquer regra que não esteja no próprio elemento colado.
-  const TABLE_STYLE = "border-collapse:collapse;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:9pt;color:#10222F";
+  const TABLE_STYLE = "border-collapse:collapse;table-layout:fixed;width:695px;max-width:100%;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:9pt;color:#10222F";
   // O Outlook nem sempre herda o tamanho declarado no <table>; por isso o
-  // cabeçalho e cada célula também carregam 9 pt no próprio style.
-  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:6px 10px;text-align:left;font-size:9pt;font-weight:bold;white-space:nowrap";
-  const CELL_STYLE = "border:1px solid #9FB3C3;padding:6px 10px;text-align:left;vertical-align:top;font-size:9pt";
+  // cabeçalho e cada célula também carregam 9 pt no próprio style. O padding
+  // reduzido (era 6px 10px) deixa cada linha mais baixa.
+  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:3px 6px;text-align:left;font-size:9pt;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+  const CELL_STYLE = "border:1px solid #9FB3C3;padding:3px 6px;text-align:left;vertical-align:top;font-size:9pt;word-wrap:break-word;word-break:break-word";
 
   function tableHtml(rows) {
-    const head = COLUMNS.map((column) => `<th style="${HEAD_STYLE}">${escapeHtml(column)}</th>`).join("");
+    const head = COLUMNS.map((column) => `<th style="${HEAD_STYLE};width:${COLUMN_WIDTHS[column]}px" width="${COLUMN_WIDTHS[column]}">${escapeHtml(column)}</th>`).join("");
     const body = (rows || []).map((row) => {
-      const cells = COLUMNS.map((column) => `<td style="${CELL_STYLE}">${escapeHtml(row[column])}</td>`).join("");
+      const cells = COLUMNS.map((column) => `<td style="${CELL_STYLE};width:${COLUMN_WIDTHS[column]}px" width="${COLUMN_WIDTHS[column]}">${escapeHtml(row[column])}</td>`).join("");
       return `<tr>${cells}</tr>`;
     }).join("");
     return `<table style="${TABLE_STYLE}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
