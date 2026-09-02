@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const api = factory(root.GrconPostingConference);
+  const api = factory(root, root.GrconPostingConference);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconPostingConferenceReport = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (Conference) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (root, Conference) {
   "use strict";
 
   const BLUE = "155C8A";
