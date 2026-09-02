@@ -3,6 +3,7 @@
   let opening = false;
   let decorateTimer = 0;
   let reconcileTimer = 0;
+  let decorating = false;
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
@@ -122,48 +123,62 @@
   function decorateHistoryNow() {
     const Conference = root.GrconPostingConference;
     const History = root.GrconHistory;
-    if (!Conference || !History) return;
-    const records = History.read?.() || [];
-    const byRecordId = new Map(records.map((record) => [record.id, record]));
-    let attention = 0;
+    if (!Conference || !History || decorating) return;
+    decorating = true;
+    try {
+      const records = History.read?.() || [];
+      const byRecordId = new Map(records.map((record) => [record.id, record]));
+      let attention = 0;
 
-    document.querySelectorAll("#history-list [data-history-id]").forEach((button) => {
-      const record = byRecordId.get(button.dataset.historyId);
-      const aggregate = record ? Conference.historyAggregate(record) : null;
-      button.querySelectorAll("[data-pc-history-badge]").forEach((node) => node.remove());
-      const badge = document.createElement("span");
-      badge.dataset.pcHistoryBadge = "";
-      badge.className = `pc-history-badge ${aggregateClass(aggregate?.status)}`.trim();
-      badge.textContent = aggregateLabel(aggregate);
-      (button.querySelector(".history-record-main") || button).appendChild(badge);
-      if (aggregate && aggregate.status !== "CONFIRMADO" && aggregate.status !== "NAO_VERIFICADO") attention += 1;
-    });
+      document.querySelectorAll("#history-list [data-history-id]").forEach((button) => {
+        const record = byRecordId.get(button.dataset.historyId);
+        const aggregate = record ? Conference.historyAggregate(record) : null;
+        let badge = button.querySelector("[data-pc-history-badge]");
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.dataset.pcHistoryBadge = "";
+          (button.querySelector(".history-record-main") || button).appendChild(badge);
+        }
+        const className = `pc-history-badge ${aggregateClass(aggregate?.status)}`.trim();
+        const label = aggregateLabel(aggregate);
+        if (badge.className !== className) badge.className = className;
+        if (badge.textContent !== label) badge.textContent = label;
+        if (aggregate && aggregate.status !== "CONFIRMADO" && aggregate.status !== "NAO_VERIFICADO") attention += 1;
+      });
 
-    const active = document.querySelector("#history-list [data-history-id].active");
-    const detail = document.getElementById("history-detail");
-    if (detail) detail.querySelectorAll("[data-pc-history-summary]").forEach((node) => node.remove());
-    if (active && detail) {
-      const record = byRecordId.get(active.dataset.historyId);
-      const aggregate = record ? Conference.historyAggregate(record) : null;
-      if (aggregate) {
-        const summary = document.createElement("div");
-        summary.className = "pc-history-summary";
-        summary.dataset.pcHistorySummary = "";
-        summary.innerHTML = `<span><strong>Conf. SIGEM:</strong> ${aggregateLabel(aggregate).replace("Conf. SIGEM · ", "")}</span><span><strong>${aggregate.confirmed}</strong> confirmado(s)</span><span><strong>${aggregate.awaiting}</strong> aguardando</span><span><strong>${aggregate.divergent}</strong> divergência(s)</span><span><strong>${aggregate.notFound}</strong> não encontrado(s)</span>`;
-        const header = detail.querySelector(":scope > header");
-        if (header) header.after(summary); else detail.prepend(summary);
-      }
+      const active = document.querySelector("#history-list [data-history-id].active");
+      const detail = document.getElementById("history-detail");
+      const existingSummary = detail?.querySelector("[data-pc-history-summary]") || null;
+      if (active && detail) {
+        const record = byRecordId.get(active.dataset.historyId);
+        const aggregate = record ? Conference.historyAggregate(record) : null;
+        if (aggregate) {
+          const html = `<span><strong>Conf. SIGEM:</strong> ${aggregateLabel(aggregate).replace("Conf. SIGEM · ", "")}</span><span><strong>${aggregate.confirmed}</strong> confirmado(s)</span><span><strong>${aggregate.awaiting}</strong> aguardando</span><span><strong>${aggregate.divergent}</strong> divergência(s)</span><span><strong>${aggregate.notFound}</strong> não encontrado(s)</span>`;
+          let summary = existingSummary;
+          if (!summary) {
+            summary = document.createElement("div");
+            summary.className = "pc-history-summary";
+            summary.dataset.pcHistorySummary = "";
+            const header = detail.querySelector(":scope > header");
+            if (header) header.after(summary); else detail.prepend(summary);
+          }
+          if (summary.innerHTML !== html) summary.innerHTML = html;
+        } else if (existingSummary) existingSummary.remove();
+      } else if (existingSummary) existingSummary.remove();
+
+      const navCount = document.getElementById("pc-nav-count");
+      const tabCount = document.getElementById("pc-tab-count");
+      [navCount, tabCount].filter(Boolean).forEach((node) => {
+        if (node.textContent !== String(attention)) node.textContent = String(attention);
+        node.hidden = attention === 0;
+      });
+    } finally {
+      setTimeout(() => { decorating = false; }, 0);
     }
-
-    const navCount = document.getElementById("pc-nav-count");
-    const tabCount = document.getElementById("pc-tab-count");
-    [navCount, tabCount].filter(Boolean).forEach((node) => {
-      node.textContent = String(attention);
-      node.hidden = attention === 0;
-    });
   }
 
   function queueDecorateHistory() {
+    if (decorating) return;
     clearTimeout(decorateTimer);
     decorateTimer = setTimeout(decorateHistoryNow, 40);
   }
