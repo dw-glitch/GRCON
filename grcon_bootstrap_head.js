@@ -45,13 +45,27 @@
     else host.appendChild(link);
   }
 
+  // A Conferência de Postagem é um módulo independente e carregado sob demanda.
+  // Só este bootstrap leve entra na inicialização; XLSX, ExcelJS, relatório e UI
+  // continuam fora do caminho crítico até o operador abrir a nova área.
+  function installPostingConferenceBootstrap() {
+    if (document.querySelector('script[data-grcon-posting-conference-bootstrap]')) return;
+    const script = document.createElement("script");
+    script.src = "posting_conference_bootstrap.js";
+    script.async = false;
+    script.dataset.grconPostingConferenceBootstrap = "";
+    document.head.appendChild(script);
+  }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       installTconsagShortcut();
+      installPostingConferenceBootstrap();
       schedulePromoteAsyncStyles();
     }, { once: true });
   } else {
     installTconsagShortcut();
+    installPostingConferenceBootstrap();
     schedulePromoteAsyncStyles();
   }
 })();
