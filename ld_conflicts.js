@@ -68,6 +68,44 @@
     return (records || []).map((record) => ({ record, kind, id: recordId(record, kind) }));
   }
 
+  /**
+   * Separa as linhas que respondem pelo documento das que já foram
+   * substituídas — LD anterior aberta na mesma sessão, aba oculta da mesma LD.
+   * Só as vigentes são comparadas entre si: duas LDs para o mesmo documento são
+   * repetição, não conflito, e anunciar conflito ali mandava procurar na
+   * planilha uma segunda linha que não existe.
+   */
+  function currencyScope(entries) {
+    const list = entries || [];
+    const partition = C && C.ldCurrencyPartition ? C.ldCurrencyPartition(list.map((entry) => entry.record)) : null;
+    const sourcesOf = (items) => [...new Set(items.map((entry) => text(entry.record && entry.record.source)).filter(Boolean))];
+    if (!partition || !partition.superseded.length) {
+      return { current: list, superseded: [], currentSources: sourcesOf(list), supersededSources: [], hiddenSuperseded: false };
+    }
+    const superseded = new Set(partition.superseded);
+    return {
+      current: list.filter((entry) => !superseded.has(entry.record)),
+      superseded: list.filter((entry) => superseded.has(entry.record)),
+      currentSources: partition.currentSources,
+      supersededSources: partition.supersededSources,
+      hiddenSuperseded: partition.hiddenSuperseded,
+    };
+  }
+
+  /** Arquivo · aba · linha, para a pessoa reabrir a LD e conferir o que foi lido. */
+  function locatedLabel(record) {
+    const item = record || {};
+    return [text(item.source), text(item.sheet) || "LD", item.row ? `linha ${item.row}` : ""].filter(Boolean).join(" · ");
+  }
+
+  function describeDifference(difference, labels) {
+    const parts = (difference.values || []).map((value) => {
+      const where = (value.records || []).map((id) => labels.get(id)).filter(Boolean);
+      return `“${value.value}”${where.length ? ` (${where.join("; ")})` : ""}`;
+    });
+    return `${difference.label}: ${parts.join(" × ")}`;
+  }
+
   function normalizedFieldValue(definition, raw) {
     if (!raw) return "";
     if (definition.key === "revision") return revision(raw);
@@ -195,8 +233,17 @@
     const sameSheet = hint ? technicalAll.filter((entry) => C && C.sheetMatchesHint
       ? C.sheetMatchesHint(entry.record && entry.record.sheet, hint)
       : norm(entry.record && entry.record.sheet) === hint) : [];
-    const technical = sameSheet.length ? sameSheet : technicalAll;
-    const history = decorated(group && group.history, "history");
+    const technicalScoped = sameSheet.length ? sameSheet : technicalAll;
+    const historyScoped = decorated(group && group.history, "history");
+    // A comparação acontece só entre linhas que ainda respondem pelo documento.
+    const technicalCurrency = currencyScope(technicalScoped);
+    const historyCurrency = currencyScope(historyScoped);
+    const technical = technicalCurrency.current;
+    const history = historyCurrency.current;
+    const supersededEntries = [...technicalCurrency.superseded, ...historyCurrency.superseded];
+    const supersededSources = [...new Set([...technicalCurrency.supersededSources, ...historyCurrency.supersededSources])];
+    const currentSources = [...new Set([...technicalCurrency.currentSources, ...historyCurrency.currentSources])];
+    const hiddenSuperseded = Boolean(technicalCurrency.hiddenSuperseded || historyCurrency.hiddenSuperseded);
     const differences = [];
     const notices = [];
     const duplicateAllocations = [];
@@ -276,9 +323,13 @@
     const base = automatic ? location(automatic.base.record, automatic.base.kind) : null;
     const fieldLabels = [...new Set(differences.map((difference) => difference.label))];
     const noticeLabels = [...new Set(notices.map((difference) => difference.label))];
+    // O conflito precisa dizer arquivo, aba e linha de cada valor. Antes ele
+    // dava só o nome do campo, e quem abria a LD não achava a segunda linha
+    // que a triagem afirmava existir.
+    const differenceLabels = new Map([...technicalScoped, ...historyScoped].map((entry) => [entry.id, locatedLabel(entry.record)]));
     const summary = !differences.length
       ? "Nenhum conflito bloqueante entre as linhas controladas."
-      : `Valores incompatíveis na mesma revisão: ${fieldLabels.join(", ")}.`;
+      : `Valores incompatíveis na mesma revisão. ${differences.map((difference) => describeDifference(difference, differenceLabels)).join(". ")}.`;
     const automaticSummary = automatic
       ? automatic.baseState === "not_allocated"
         ? "Alocação reconciliada automaticamente: a mesma revisão já possui uma linha ALOCADO com número/aceite. A linha posterior NÃO ALOCADO, sem número e sem evidência de recusa, foi tratada como duplicidade; os demais dados continuam vindo da linha técnica mais recente."
@@ -287,11 +338,14 @@
     const historicalSummary = notices.some((item) => !item.automatic)
       ? `Aviso informativo: existem valores históricos diferentes em ${noticeLabels.filter((label) => label !== "Situação de alocação reconciliada").join(", ") || "campos informativos"}. A linha controlada mais recente será usada; isso não altera a decisão nem bloqueia a postagem.`
       : "";
-    const noticeSummary = [automaticSummary, historicalSummary].filter(Boolean).join(" ");
+    const currencySummary = C && C.ldCurrencyNote
+      ? C.ldCurrencyNote({ currentSources, supersededSources, hiddenSuperseded })
+      : "";
+    const noticeSummary = [currencySummary, automaticSummary, historicalSummary].filter(Boolean).join(" ");
 
     return {
       hasConflict: differences.length > 0,
-      hasNotice: notices.length > 0,
+      hasNotice: notices.length > 0 || Boolean(currencySummary),
       blocked: differences.length > 0 && !manualSelected,
       resolved: Boolean(manualSelected || automaticSelected),
       resolutionId: selected ? selected.id : "",
@@ -312,6 +366,11 @@
       noticeFields: noticeLabels,
       summary,
       noticeSummary,
+      currencySummary,
+      currentSources,
+      supersededSources,
+      hiddenSuperseded,
+      superseded: supersededEntries.map((entry) => location(entry.record, entry.kind)),
     };
   }
 
@@ -389,10 +448,11 @@
 
   function noticeText(analysis) {
     if (!analysis || !analysis.hasNotice) return "";
-    return analysis.notices.map((difference) => {
+    const fields = (analysis.notices || []).map((difference) => {
       const values = difference.values.map((item) => item.value).join(" → ");
       return `${difference.label}: ${values} (${difference.scope})`;
     }).join("; ");
+    return [text(analysis.currencySummary), fields].filter(Boolean).join(" ");
   }
 
   function consensusValue(group, field) {
@@ -414,6 +474,7 @@
     revision,
     recordId,
     location,
+    currencyScope,
     analyzeGroup,
     applyResolution,
     evidenceText,
