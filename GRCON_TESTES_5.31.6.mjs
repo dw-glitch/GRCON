@@ -2877,7 +2877,7 @@ check("Dashboard compara cada indicador com o período anterior de mesmo tamanho
   assert.match(kpiTrend(120, 100).label, /acima do período anterior \(100\)/);
 });
 
-check("resposta de e-mail monta as sete colunas da relação e cola como tabela", () => {
+check("resposta de e-mail monta as oito colunas da relação e cola como tabela", () => {
   // A relação copiada do Histórico chegava ao Outlook desmontada, uma célula
   // por linha. A resposta é montada com as mesmas colunas do relatório e com
   // estilo embutido, que é o que o cliente de e-mail preserva.
@@ -2895,11 +2895,14 @@ check("resposta de e-mail monta as sete colunas da relação e cola como tabela"
 
   const reply = EmailReply.build([postado]);
 
+  // REVISÃO fica logo depois de DOCUMENTO, como na planilha da GRDT: quem
+  // recebe a resposta confere documento e revisão lado a lado nos dois lugares.
   assert.deepEqual(reply.columns, [
     "DATA DA GERAÇÃO / POSTAGEM",
     "EGRDT",
     "FAMÍLIA DOCUMENTAL",
     "DOCUMENTO",
+    "REVISÃO",
     "TÍTULO",
     "DISCIPLINA",
     "ARQUIVO POSTADO",
@@ -2915,20 +2918,23 @@ check("resposta de e-mail monta as sete colunas da relação e cola como tabela"
   assert.equal(reply.rows[0]["DATA DA GERAÇÃO / POSTAGEM"], "31/08/2026, 10:59");
   assert.equal(reply.rows[0]["ARQUIVO POSTADO"], "PR-5290.00-22313-974-C1O-158_0001_0.docx");
   assert.equal(reply.rows[2]["TÍTULO"], "CALIBRAÇÃO DE DETECTORES DE CHAMA");
+  assert.equal(reply.rows[0]["REVISÃO"], "0");
 
   // Texto tabulado: cabeçalho e uma linha por arquivo, para e-mail em texto
   // puro e para colar em colunas no Excel.
   const linhas = reply.tableText.split("\n");
   assert.equal(linhas.length, 4);
-  assert.equal(linhas[0].split("\t").length, 7);
+  assert.equal(linhas[0].split("\t").length, 8);
   assert.equal(linhas[1].split("\t")[3], "PR-5290.00-22313-974-C1O-158");
+  assert.equal(linhas[1].split("\t")[4], "0", "a revisão sai na coluna seguinte ao documento também no texto tabulado");
 
   // HTML com estilo embutido: sem isso o Outlook descarta a formatação e a
   // tabela chega como uma célula por linha.
-  assert.equal((reply.tableHtml.match(/<th /g) || []).length, 7);
+  assert.equal((reply.tableHtml.match(/<th /g) || []).length, 8);
   assert.equal((reply.tableHtml.match(/<tr>/g) || []).length, 4);
   assert.match(reply.tableHtml, /border-collapse:collapse/);
-  assert.equal((reply.tableHtml.match(/font-size:9pt/g) || []).length, 29, "table, sete cabeçalhos e 21 células usam fonte 9 pt");
+  assert.equal((reply.tableHtml.match(/font-size:9pt/g) || []).length, 25, "table e as 24 células usam fonte 9 pt");
+  assert.equal((reply.tableHtml.match(/font-size:8pt/g) || []).length, 8, "os oito cabeçalhos usam 8 pt, para o nome da coluna caber sem quebrar ao meio");
   assert.match(reply.html, /<p style=/);
 
   // A tabela ficava enorme na resposta porque nada limitava a largura: um
@@ -2938,8 +2944,33 @@ check("resposta de e-mail monta as sete colunas da relação e cola como tabela"
   assert.match(reply.tableHtml, /width:695px/);
   assert.match(reply.tableHtml, /padding:3px 6px/);
   assert.doesNotMatch(reply.tableHtml, /padding:6px 10px/, "o preenchimento antigo, mais largo, não pode voltar");
-  assert.equal((reply.tableHtml.match(/word-break:break-word/g) || []).length, 21, "as 21 células precisam quebrar texto comprido em vez de alargar a tabela");
-  assert.match(reply.tableHtml, /width="140"/, "a coluna TÍTULO precisa de uma largura fixa em px, não só em CSS");
+  assert.equal((reply.tableHtml.match(/word-break:break-word/g) || []).length, 24, "as 24 células precisam quebrar texto comprido em vez de alargar a tabela");
+  assert.match(reply.tableHtml, /width="108"/, "a coluna TÍTULO precisa de uma largura fixa em px, não só em CSS");
+
+  // A coluna nova não pode ter alargado a tabela: ela foi acomodada
+  // estreitando as demais, e a soma continua sendo a largura declarada.
+  const somaDasColunas = Object.values(EmailReply.COLUMN_WIDTHS).reduce((total, width) => total + width, 0);
+  assert.equal(somaDasColunas, EmailReply.TABLE_WIDTH);
+  assert.equal(EmailReply.TABLE_WIDTH, 695);
+  assert.equal(Object.keys(EmailReply.COLUMN_WIDTHS).length, reply.columns.length, "toda coluna precisa declarar a própria largura");
+
+  // O cabeçalho não pode partir palavra ao meio ("FAMÍL / IA DOCU / MENT / AL"):
+  // cada coluna é larga o bastante para a maior palavra do próprio título, e o
+  // cabeçalho quebra nos espaços, não em qualquer letra.
+  assert.doesNotMatch(reply.tableHtml.split("<tbody>")[0], /word-break/, "o cabeçalho quebra nos espaços, nunca no meio da palavra");
+  const pisos = {
+    "DATA DA GERAÇÃO / POSTAGEM": 75, "EGRDT": 52, "FAMÍLIA DOCUMENTAL": 89, "DOCUMENTO": 84,
+    "REVISÃO": 62, "TÍTULO": 53, "DISCIPLINA": 75, "ARQUIVO POSTADO": 66,
+  };
+  Object.entries(pisos).forEach(([coluna, piso]) => {
+    assert.ok(EmailReply.COLUMN_WIDTHS[coluna] >= piso, `${coluna} precisa de ao menos ${piso}px para o título caber sem quebrar ao meio`);
+  });
+
+  // A revisão é um código de um ou dois caracteres: centralizada, fica sob o
+  // próprio título em vez de encostada na borda de uma célula quase vazia.
+  assert.equal(EmailReply.COLUMN_ALIGN["REVISÃO"], "center");
+  assert.equal((reply.tableHtml.match(/text-align:center/g) || []).length, 4, "cabeçalho e as três células da revisão ficam centralizados");
+  assert.equal((reply.tableHtml.match(/text-align:left/g) || []).length, 28, "as outras sete colunas continuam à esquerda");
 
   // A mensagem padrão nomeia a eGRDT e a data, e é o texto que abre o painel.
   assert.match(reply.message, /0130870-C1O-PGV-G-1407-2026 - eGRDT/);
@@ -3216,6 +3247,44 @@ check("triagem oferece edição inline da revisão de cada documento com restaur
   assert.match(exportWorker, /REVISÃO ALTERADA MANUALMENTE/);
 });
 
+check("revisão da resposta de e-mail é a enviada na GRDT, não uma recalculada agora", () => {
+  // A pessoa que recebe a resposta confere documento e revisão, e a revisão
+  // que vale é a que foi para a planilha da GRDT. Registros gravados desde a
+  // 5.37.0 trazem `grdtRevision` (que pode ter sido escolhida à mão e diferir
+  // do que o nome do arquivo sugere); os anteriores trazem só `revision`; e o
+  // histórico mais antigo, nenhum dos dois — aí, e só aí, a revisão é deduzida
+  // do nome do arquivo postado, pela mesma regra do Histórico.
+  const registro = History.cleanRecord({
+    id: "email-revisao",
+    egrdtNumber: "0130870-C1O-PGV-G-1500-2026 - eGRDT",
+    generatedAt: new Date(2026, 7, 31, 14, 0).toISOString(),
+    files: [
+      // Escolha manual: o arquivo se chama _0, mas a GRDT levou a revisão A.
+      { document: "PR-5290.00-22313-974-C1O-300", grdtRevision: "A", revisionManual: true, finalName: "PR-5290.00-22313-974-C1O-300_0001_0.pdf", sheet: "N-1710" },
+      // Histórico anterior à 5.37.0: só `revision`.
+      { document: "PR-5290.00-22313-974-C1O-301", revision: "B", finalName: "PR-5290.00-22313-974-C1O-301_0001_B.pdf", sheet: "N-1710" },
+      // Histórico antigo, sem revisão gravada: deduzida do nome do arquivo.
+      { document: "PR-5290.00-22313-974-C1O-302", finalName: "PR-5290.00-22313-974-C1O-302_0001_C.pdf", sheet: "N-1710" },
+    ],
+  });
+
+  const linhas = EmailReply.rowsFromRecords([registro]);
+  assert.equal(linhas[0]["REVISÃO"], "A", "a revisão escolhida à mão vence o que o nome do arquivo sugere");
+  assert.equal(linhas[1]["REVISÃO"], "B");
+  assert.equal(linhas[2]["REVISÃO"], "C");
+
+  // Sem nenhuma pista, a célula vira travessão — nunca fica vazia, que
+  // desalinharia a leitura da tabela no e-mail.
+  assert.equal(EmailReply.revision({ document: "PR-5290.00-22313-974-C1O-303" }), "—");
+
+  // A revisão da resposta é a mesma que o relatório do Histórico publica na
+  // coluna "REVISÃO ENVIADA NA GRDT": as duas leituras não podem divergir.
+  const doRelatorio = HistoryReport.documentRows([registro], []);
+  linhas.forEach((linha, indice) => {
+    assert.equal(linha["REVISÃO"], doRelatorio[indice]["REVISÃO ENVIADA NA GRDT"]);
+  });
+});
+
 check("resposta de e-mail fica disponível somente no Histórico", () => {
   const interfaceSource = fs.readFileSync(path.join(root, "egrdt_email_reply_ui.js"), "utf8");
   const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
@@ -3227,6 +3296,52 @@ check("resposta de e-mail fica disponível somente no Histórico", () => {
   assert.doesNotMatch(indexSource, /id=["']egrdt-email-reply["']/);
   assert.match(historySource, /data-history-action=["']email-reply["']/);
   assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
+});
+
+check("prévia da relação tem as duas leituras e o cabeçalho acompanha a rolagem", () => {
+  // A prévia mostrava a tabela do e-mail com `white-space: nowrap` por cima do
+  // estilo embutido: como a 5.38.1 fixou a largura de cada coluna, o texto que
+  // não podia quebrar passou a transbordar por cima da coluna vizinha. Agora
+  // são duas leituras — a fiel, no tamanho real, e a ampla, ajustada à tela —
+  // e nenhuma das duas altera o que vai para a área de transferência.
+  const interfaceSource = fs.readFileSync(path.join(root, "egrdt_email_reply_ui.js"), "utf8");
+  const styleSource = fs.readFileSync(path.join(root, "egrdt-email-reply.css"), "utf8");
+
+  assert.match(interfaceSource, /data-egrdt-email-view="paste"/);
+  assert.match(interfaceSource, /data-egrdt-email-view="read"/);
+  assert.match(interfaceSource, /function readingTableHtml/);
+
+  // Trocar de leitura não pode reescrever o painel inteiro: a mensagem que o
+  // operador já editou tem de continuar no campo.
+  assert.match(interfaceSource, /function renderPreview/);
+  assert.doesNotMatch(
+    interfaceSource.slice(interfaceSource.indexOf("function setView"), interfaceSource.indexOf("function render(")),
+    /egrdt-email-message/,
+    "a troca de leitura não pode tocar no campo da mensagem",
+  );
+
+  // Copiar continua levando sempre a tabela do e-mail, nunca a remontada para
+  // leitura na tela.
+  assert.match(interfaceSource, /writeClipboard\(reply\.tableHtml, reply\.tableText\)/);
+  assert.match(interfaceSource, /writeClipboard\(reply\.html, reply\.text\)/);
+  assert.doesNotMatch(interfaceSource.slice(interfaceSource.indexOf("async function copyReply")), /readingTableHtml/);
+
+  // `grcon-ui.css` desliga o congelamento de qualquer célula com
+  // `position: static !important` dentro de `@layer utilities`. Para
+  // declarações `!important` a ordem das camadas se inverte: só um
+  // `!important` de uma camada declarada antes vence — daí `@layer modules`,
+  // a primeira camada do app. Sem isso o cabeçalho da prévia some ao rolar.
+  assert.match(fs.readFileSync(path.join(root, "grcon-ui.css"), "utf8"), /position: static !important/);
+  const camada = styleSource.slice(styleSource.indexOf("@layer modules"));
+  assert.match(camada, /#egrdt-email-preview thead th \{\s*position: sticky !important/);
+  assert.match(camada, /#egrdt-email-preview\[data-view="read"\] tbody th \{[^}]*left: 0 !important/);
+
+  // As folhas globais alcançam qualquer tabela por
+  // `html[data-app][data-ui-generation="3"] table :is(th, td)` — mais
+  // específico do que uma classe. As regras da tabela de leitura precisam
+  // partir do id do quadro para valerem.
+  assert.doesNotMatch(styleSource, /^table\.egrdt-email-reading/m, "a tabela de leitura precisa do id do quadro para vencer as folhas globais");
+  assert.match(styleSource, /#egrdt-email-preview table\.egrdt-email-reading :is\(th, td\)/);
 });
 
 // ---------------------------------------------------------------------------
@@ -3414,4 +3529,4 @@ await (async () => {
   checks.push(nome);
 })();
 
-console.log(JSON.stringify({ version: "5.38.5", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.39.0", passed: true, checks: checks.length, names: checks }, null, 2));
