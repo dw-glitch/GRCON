@@ -1,5 +1,17 @@
 # Histórico de alterações
 
+## 5.39.1 — 2026-09-02
+
+### Triagem para de anunciar conflito em documento que tem uma linha só na LD
+
+- **Cada arquivo de LD volta a ser uma fonte inteira, e não uma linha a mais da mesma planilha.** Com mais de uma LD aberta na mesma sessão, o mesmo documento aparecia uma vez em cada arquivo e a triagem comparava essas linhas entre si como se estivessem lado a lado numa única planilha — qualquer diferença virava **“A LD possui mais de um registro diferente para este documento”**. Quem abria a LD para conferir encontrava uma única linha e não tinha como confirmar nada do que o relatório afirmava. Agora quem responde é a LD mais recente; as anteriores continuam valendo como evidência e não bloqueiam mais a análise.
+- A mesma separação vale para a **aba oculta**: uma linha que ninguém enxerga ao abrir a planilha deixa de competir com a linha da aba visível da mesma LD.
+- **Nada disso adivinha qual LD vale quando não há como saber.** Duas LDs divergentes com a mesma data de arquivo, ou uma delas sem data, continuam pedindo conferência — como já pediam. Dentro de uma mesma LD nada mudou: duas linhas divergentes seguem interrompendo a análise, e o **NÃO ALOCADO** da LD vigente continua bloqueando de forma absoluta. O que deixou de bloquear é o NÃO ALOCADO de uma LD anterior já substituída por outra aberta na mesma sessão, que contradizia a planilha que a pessoa tinha aberta na frente.
+- **O conflito, quando existe mesmo, passa a dizer onde está.** Antes o relatório citava só o nome do campo (“Situação de alocação”); agora traz cada valor com arquivo, aba e linha — `“ALOCADO” (LD-…-005.xlsx · ET · linha 120) × “PREVISTO” (LD-…-005.xlsx · ET · linha 340)` —, que é o que permite reabrir a LD e conferir.
+- Quando o documento consta em mais de uma LD, o relatório e a tela passam a dizer **qual LD respondeu e quais foram tratadas como versão anterior**, no aviso informativo que não bloqueia.
+- A **evidência de postagem** (GRDT e Data Efetiva na própria LD) parou de virar “conflito na evidência de postagem” só porque duas LDs abertas juntas repetiam a linha do documento com GRDTs de épocas diferentes.
+- Com isso a Triagem passa a ler várias LDs pela mesma regra que a **Consulta** já usava: duas LDs com a mesma informação são repetição, não conflito.
+
 ## 5.39.0 — 2026-09-02
 
 ### Revisão na resposta de e-mail e nova leitura da relação

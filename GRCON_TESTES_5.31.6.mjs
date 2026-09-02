@@ -483,6 +483,143 @@ check("quando as duas formas existem na LD a forma exata prevalece", () => {
   assert.equal(withNt.record.allocationStatus, "NÃO ALOCADO");
 });
 
+// Três LDs abertas na mesma sessão faziam a triagem anunciar "a LD possui mais
+// de um registro diferente para este documento" para documentos que, em cada
+// planilha aberta à mão, têm uma única linha. Um arquivo de LD é uma fonte
+// inteira: a mais recente responde, as anteriores viram evidência.
+function multiLdRecord(document, source, sourceTimestamp, overrides = {}) {
+  return {
+    document,
+    documentKey: Core.key(document),
+    revision: "A",
+    status: "",
+    sigemStatus: "",
+    title: "RELATORIO DE INSPECAO DE RECEBIMENTO",
+    grdt: "",
+    effectiveDate: "",
+    format: "A4",
+    discipline: "CIVIL",
+    documentType: "RIR",
+    purpose: "Para Informação",
+    databook: "",
+    fiscalComment: "",
+    allocationStatus: "",
+    allocationStatusHeader: "",
+    allocationStatusColumn: "",
+    allocationStage: "",
+    allocation: "",
+    sheet: "ET",
+    row: 120,
+    source,
+    sourceTimestamp,
+    sourceOrder: 0,
+    ldVersion: "",
+    ldColumns: [],
+    ...overrides,
+  };
+}
+
+const ld003 = "LD-5290.00-22313-91A-C1O-003_0001_0.xlsx";
+const ld004 = "LD-5290.00-22313-91A-C1O-004_0001_0.xlsx";
+const ld005 = "LD-5290.00-22313-91A-C1O-005_0001_0.xlsx";
+
+check("o mesmo documento repetido em três LDs não vira conflito: responde a LD mais recente", () => {
+  const index = Core.buildIndex([
+    multiLdRecord(ntBaseDocument, ld003, 1000, { allocationStatus: "PREVISTO" }),
+    multiLdRecord(ntBaseDocument, ld004, 2000, { allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+    multiLdRecord(ntBaseDocument, ld005, 3000, { allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+  ], []);
+  const result = Core.triageOne({ id: "multi-ld-1", name: `${ntBaseDocument}_A.pdf` }, index, {});
+  assert.equal(result.status, "Não Postado");
+  assert.equal(result.decision, Core.READY);
+  assert.equal(result.ldConflict.hasConflict, false);
+  assert.equal(result.record.source, ld005);
+  // A pessoa precisa saber qual LD respondeu para refazer a conferência à mão.
+  assert.match(result.ldConflict.noticeSummary, /mais de uma LD/i);
+  assert.ok(result.ldConflict.noticeSummary.includes(ld005));
+  assert.ok(result.ldConflict.noticeSummary.includes(ld003));
+});
+
+check("Colar SIGEM repetida em LDs diferentes não vira conflito de GRDT", () => {
+  const index = Core.buildIndex(
+    [multiLdRecord(ntBaseDocument, ld005, 3000, { allocationStatus: "ALOCADO", allocation: "ALOC-77" })],
+    [
+      multiLdRecord(ntBaseDocument, ld003, 1000, { sheet: "Colar SIGEM", row: 10, grdt: "GRDT-ANTIGA", sigemStatus: "APROVADO" }),
+      multiLdRecord(ntBaseDocument, ld005, 3000, { sheet: "Colar SIGEM", row: 11, grdt: "GRDT-ATUAL", sigemStatus: "APROVADO" }),
+    ],
+  );
+  const result = Core.triageOne({ id: "multi-ld-2", name: `${ntBaseDocument}_A.pdf` }, index, {});
+  assert.equal(result.ldConflict.hasConflict, false);
+  assert.notEqual(result.status, "Conflito na LD");
+});
+
+check("duas linhas divergentes dentro da mesma LD continuam pedindo conferência, com arquivo, aba e linha", () => {
+  const index = Core.buildIndex([
+    multiLdRecord(ntBaseDocument, ld005, 3000, { row: 120, allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+    multiLdRecord(ntBaseDocument, ld005, 3000, { row: 340, allocationStatus: "PREVISTO" }),
+  ], []);
+  const result = Core.triageOne({ id: "multi-ld-3", name: `${ntBaseDocument}_A.pdf` }, index, {});
+  assert.equal(result.status, "Conflito na LD");
+  assert.equal(result.ldConflict.hasConflict, true);
+  assert.match(result.reason, /linha 120/);
+  assert.match(result.reason, /linha 340/);
+  assert.ok(result.reason.includes(ld005));
+});
+
+check("LDs divergentes com a mesma data de arquivo continuam bloqueando: não há como dizer qual substitui qual", () => {
+  const index = Core.buildIndex([
+    multiLdRecord(ntBaseDocument, ld004, 3000, { allocationStatus: "PREVISTO" }),
+    multiLdRecord(ntBaseDocument, ld005, 3000, { allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+  ], []);
+  assert.equal(Core.triageOne({ id: "multi-ld-4", name: `${ntBaseDocument}_A.pdf` }, index, {}).status, "Conflito na LD");
+
+  // O mesmo vale quando falta a data de um dos arquivos.
+  const semData = Core.buildIndex([
+    multiLdRecord(ntBaseDocument, ld004, 0, { allocationStatus: "PREVISTO" }),
+    multiLdRecord(ntBaseDocument, ld005, 3000, { allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+  ], []);
+  assert.equal(Core.triageOne({ id: "multi-ld-5", name: `${ntBaseDocument}_A.pdf` }, semData, {}).status, "Conflito na LD");
+});
+
+check("NÃO ALOCADO da LD vigente continua bloqueando; o da LD anterior não contradiz a atual", () => {
+  const vigenteNegativa = Core.buildIndex([
+    multiLdRecord(ntBaseDocument, ld003, 1000, { allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+    multiLdRecord(ntBaseDocument, ld005, 3000, { allocationStatus: "NÃO ALOCADO" }),
+  ], []);
+  const bloqueado = Core.triageOne({ id: "multi-ld-6", name: `${ntBaseDocument}_A.pdf` }, vigenteNegativa, {});
+  assert.equal(bloqueado.hardBlock, true);
+  assert.equal(Core.allocationState(bloqueado.allocationStatus).kind, "not_allocated");
+
+  const anteriorNegativa = Core.buildIndex([
+    multiLdRecord(ntBaseDocument, ld003, 1000, { allocationStatus: "NÃO ALOCADO" }),
+    multiLdRecord(ntBaseDocument, ld005, 3000, { allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+  ], []);
+  const liberado = Core.triageOne({ id: "multi-ld-7", name: `${ntBaseDocument}_A.pdf` }, anteriorNegativa, {});
+  assert.equal(liberado.decision, Core.READY);
+  assert.notEqual(liberado.hardBlock, true);
+  assert.match(liberado.ldConflict.noticeSummary, /versão anterior/i);
+});
+
+check("linha de aba oculta não compete com a aba visível da mesma LD", () => {
+  const index = Core.buildIndex([
+    multiLdRecord(ntBaseDocument, ld005, 3000, { row: 120, allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+    multiLdRecord(ntBaseDocument, ld005, 3000, { row: 340, sheetHidden: 1, allocationStatus: "PREVISTO" }),
+  ], []);
+  const result = Core.triageOne({ id: "multi-ld-8", name: `${ntBaseDocument}_A.pdf` }, index, {});
+  assert.equal(result.ldConflict.hasConflict, false);
+  assert.match(result.ldConflict.noticeSummary, /abas ocultas/i);
+});
+
+check("evidência de postagem repetida em LDs diferentes não vira conflito de postagem", () => {
+  const index = Core.buildIndex([
+    multiLdRecord(ntBaseDocument, ld003, 1000, { grdt: "GRDT-ANTIGA", effectiveDate: "01/07/2026", allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+    multiLdRecord(ntBaseDocument, ld005, 3000, { grdt: "GRDT-ATUAL", effectiveDate: "18/08/2026", allocationStatus: "ALOCADO", allocation: "ALOC-77" }),
+  ], []);
+  const result = Core.triageOne({ id: "multi-ld-9", name: `${ntBaseDocument}_A.pdf` }, index, {});
+  assert.notEqual(result.postingStatus, "CONFLITO NA EVIDÊNCIA DE POSTAGEM");
+  assert.equal(result.postingEvidence.grdt, "GRDT-ATUAL");
+});
+
 check("relação registra as duas formas pesquisadas e o código oficial da LD", () => {
   const index = Core.buildIndex([ldDocumentRecord(ntBaseDocument)], []);
   const result = Core.triageOne({ id: "nt-6", name: `${ntDocument}.pdf` }, index, {});
@@ -3529,4 +3666,4 @@ await (async () => {
   checks.push(nome);
 })();
 
-console.log(JSON.stringify({ version: "5.39.0", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.39.1", passed: true, checks: checks.length, names: checks }, null, 2));

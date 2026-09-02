@@ -201,6 +201,105 @@
     };
   }
 
+  /**
+   * Vigência das LDs lidas para o mesmo documento.
+   *
+   * Cada arquivo de LD é uma fonte inteira, e não uma linha a mais da mesma
+   * planilha. Quando o mesmo documento aparece em mais de uma LD aberta na
+   * sessão, quem responde é a LD mais recente; as anteriores continuam
+   * disponíveis como evidência, mas não competem com ela. Sem essa separação,
+   * três LDs abertas juntas faziam a triagem anunciar "mais de um registro
+   * diferente" para um documento que, em cada planilha aberta à mão, tem uma
+   * única linha — exatamente o que ninguém conseguia confirmar na LD.
+   *
+   * Dentro de uma mesma LD, a linha de uma aba oculta também não compete com a
+   * da aba visível: quem confere a planilha não enxerga aquela linha.
+   *
+   * Quando não há como dizer qual LD substitui qual — falta a data de algum
+   * arquivo, ou duas trazem a mesma data —, todas continuam valendo e uma
+   * divergência real segue pedindo conferência.
+   */
+  function ldSourceVersionRank(value) {
+    const info = revisionInfo(value);
+    return info.valid ? info.rank : -1;
+  }
+
+  function ldSourceCurrency(records) {
+    return (records || []).reduce((current, item) => ({
+      timestamp: Math.max(current.timestamp, Number(item && item.sourceTimestamp) || 0),
+      version: Math.max(current.version, ldSourceVersionRank(item && item.ldVersion)),
+    }), { timestamp: 0, version: -1 });
+  }
+
+  function ldCurrencyCompare(a, b) {
+    return (b.timestamp - a.timestamp) || (b.version - a.version);
+  }
+
+  function ldCurrencyPartition(records) {
+    const list = (records || []).filter(Boolean);
+    const sourcesOf = (items) => [...new Set(items.map((item) => text(item.source)).filter(Boolean))];
+    if (list.length < 2) {
+      return { current: list, superseded: [], currentSources: sourcesOf(list), supersededSources: [], hiddenSuperseded: false };
+    }
+
+    const bySource = new Map();
+    list.forEach((item) => {
+      const source = norm(item.source);
+      if (!bySource.has(source)) bySource.set(source, []);
+      bySource.get(source).push(item);
+    });
+
+    let current = list;
+    let superseded = [];
+    if (bySource.size > 1) {
+      const ranked = [...bySource.values()].map((sourceRecords) => ({ records: sourceRecords, ...ldSourceCurrency(sourceRecords) }));
+      if (ranked.every((entry) => entry.timestamp > 0)) {
+        const ordered = [...ranked].sort(ldCurrencyCompare);
+        const leaders = ordered.filter((entry) => ldCurrencyCompare(ordered[0], entry) === 0);
+        if (leaders.length < ordered.length) {
+          const leading = new Set(leaders);
+          current = leaders.flatMap((entry) => entry.records);
+          superseded = ordered.filter((entry) => !leading.has(entry)).flatMap((entry) => entry.records);
+        }
+      }
+    }
+
+    const visible = current.filter((item) => !item.sheetHidden);
+    const hiddenSuperseded = visible.length > 0 && visible.length < current.length;
+    if (hiddenSuperseded) {
+      superseded = [...superseded, ...current.filter((item) => item.sheetHidden)];
+      current = visible;
+    }
+
+    // Uma aba oculta substituída dentro da própria LD não faz dela uma "LD
+    // anterior": o arquivo continua sendo o vigente.
+    const currentSources = sourcesOf(current);
+    return {
+      current,
+      superseded,
+      currentSources,
+      supersededSources: sourcesOf(superseded).filter((source) => !currentSources.includes(source)),
+      hiddenSuperseded,
+    };
+  }
+
+  /**
+   * Frase única que explica, no relatório e na tela, qual LD respondeu quando o
+   * documento aparece em mais de uma. Sem ela, a pessoa não tem como refazer a
+   * conferência à mão.
+   */
+  function ldCurrencyNote(partition) {
+    const data = partition || {};
+    const parts = [];
+    if ((data.supersededSources || []).length) {
+      parts.push(`O documento consta em mais de uma LD aberta nesta sessão. A leitura usa ${(data.currentSources || []).join(", ") || "a LD mais recente"}, por ser a mais recente, e trata ${data.supersededSources.join(", ")} como versão anterior — as linhas dessas LDs valem como evidência e não bloqueiam a análise.`);
+    }
+    if (data.hiddenSuperseded) {
+      parts.push("Linhas em abas ocultas da mesma LD foram mantidas apenas como histórico: quem abre a planilha não as enxerga e elas não competem com a aba visível.");
+    }
+    return parts.join(" ");
+  }
+
   function canonicalId(value) {
     return norm(value)
       .replace(/\s*([_.-])\s*/g, "$1")
@@ -1890,7 +1989,14 @@
     });
     const complete = evidence.filter((item) => item.complete);
     const partial = evidence.filter((item) => item.partial);
-    const signatures = new Set(complete.map((item) => `${norm(item.grdt)}|${item.parsedDate.getFullYear()}-${item.parsedDate.getMonth()+1}-${item.parsedDate.getDate()}`));
+    // Duas LDs abertas na mesma sessão repetindo a linha do documento não são
+    // duas postagens diferentes. A divergência só é conflito entre linhas que
+    // ainda respondem pelo documento; a LD anterior segue valendo como
+    // evidência de que a postagem existiu.
+    const currentEvidence = new Set(ldCurrencyPartition(complete.map((item) => item.item)).current);
+    const signatures = new Set(complete
+      .filter((item) => currentEvidence.has(item.item))
+      .map((item) => `${norm(item.grdt)}|${item.parsedDate.getFullYear()}-${item.parsedDate.getMonth()+1}-${item.parsedDate.getDate()}`));
     const selected = complete[0] || partial[0] || null;
     if (!selected) return { status: "SEM EVIDÊNCIA DE POSTAGEM NA LD", complete: false, partial: false, conflict: false, explanation: "A linha da revisão não possui GRDT nem Data Efetiva de Emissão preenchidas." };
     if (signatures.size > 1) return { ...selected, status: "CONFLITO NA EVIDÊNCIA DE POSTAGEM", complete: false, partial: false, conflict: true, explanation: "Existem linhas da mesma revisão com números de GRDT ou datas efetivas diferentes." };
@@ -2172,7 +2278,15 @@
     const ldConflict = conflictCore && conflictCore.analyzeGroup
       ? conflictCore.analyzeGroup(group, { hintedSheet: inferredSheet, resolutionId })
       : null;
-    const groupAllocationConflict = allocationConflictSummary(group && group.records);
+    // A alocação é lida nas linhas que ainda respondem pelo documento. Um
+    // "NÃO ALOCADO" de uma LD anterior, já substituída por outra aberta na
+    // mesma sessão, é histórico: continua na evidência, mas não contradiz a LD
+    // vigente nem bloqueia sozinho a postagem. Dentro de uma mesma LD nada
+    // muda — ali "NÃO ALOCADO" continua bloqueando de forma absoluta.
+    const ldCurrency = ldCurrencyPartition(group && group.records);
+    const currentRecords = ldCurrency.current;
+    const ldCurrencyReason = ldCurrencyNote(ldCurrency);
+    const groupAllocationConflict = allocationConflictSummary(currentRecords);
     if (groupAllocationConflict.anyNegative) {
       const blocked = groupAllocationConflict.states
         .filter((entry) => entry.state.kind === "not_allocated")
@@ -2188,7 +2302,7 @@
       // relatório afirmava o contrário. Pior, a evidência apontava para a
       // primeira linha negativa encontrada — quase nunca a linha atual.
       if (groupAllocationConflict.mixed) {
-        const atual = mostRecentRecord(group && group.records) || blocked[0] || {};
+        const atual = mostRecentRecord(currentRecords) || blocked[0] || {};
         const alocada = mostRecentRecord(allocated) || {};
         const negada = mostRecentRecord(blocked) || {};
         const numeroAlocacao = text(alocada.allocation);
@@ -2205,6 +2319,7 @@
             `Diz NÃO ALOCADO em ${recordLocation(negada) || "outra linha"}${text(negada.allocation) ? `, com a alocação ${text(negada.allocation)}` : ", sem número de alocação"}.`,
             "Confirme qual linha vale antes de postar. Enquanto isso o documento fica fora da eGRDT automática; a inclusão manual continua disponível.",
             blockedComments ? `Comentário da Fiscal: ${blockedComments}.` : "",
+            ldCurrencyReason,
           ].filter(Boolean).join(" "),
           finalName: proposedFileName(input.name || `${match.document}.pdf`, match.document, normalizeRevision(atual.revision), text(atual.sheet) || inferredSheet),
           documentSource: identitySource,
@@ -2258,8 +2373,8 @@
         revision: normalizeRevision(firstBlocked.revision) || revisionFromName(input.name || "", match.document),
         status: aguardandoRetorno ? "Aguardando retorno da alocação" : "Não alocado",
         reason: aguardandoRetorno
-          ? `A alocação ${alocEnviada.raw} está registrada na LD, mas a confirmação continua “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""} — a ALOC foi enviada e o retorno ainda não veio. Enquanto a confirmação não mudar, a postagem permanece bloqueada.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}`
-          : `A coluna de confirmação de alocação contém “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""}, sem número de alocação registrado. Esta condição é bloqueante e não pode ser substituída por outra linha, por resolução manual ou por evidência histórica.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}`,
+          ? `A alocação ${alocEnviada.raw} está registrada na LD, mas a confirmação continua “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""} — a ALOC foi enviada e o retorno ainda não veio. Enquanto a confirmação não mudar, a postagem permanece bloqueada.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}${ldCurrencyReason ? ` ${ldCurrencyReason}` : ""}`
+          : `A coluna de confirmação de alocação contém “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""}, sem número de alocação registrado. Esta condição é bloqueante e não pode ser substituída por outra linha, por resolução manual ou por evidência histórica.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}${ldCurrencyReason ? ` ${ldCurrencyReason}` : ""}`,
         finalName: input.name || `${match.document}.pdf`,
         documentSource: identitySource,
         allocationStatus: "NÃO ALOCADO",
@@ -2298,7 +2413,7 @@
         sheetSource: inferredSheet ? "prefixo do arquivo" : "LD",
         revision: revisionFromName(input.name || "", match.document),
         status: "Conflito na LD",
-        reason: `${ldConflict.summary} O GRCON não escolheu uma linha automaticamente. Selecione a fonte correta para esta sessão antes de continuar.`,
+        reason: `${ldConflict.summary} O GRCON não escolheu uma linha automaticamente. Selecione a fonte correta para esta sessão antes de continuar.${ldCurrencyReason ? ` ${ldCurrencyReason}` : ""}`,
         finalName: input.name || `${match.document}.pdf`,
         documentSource: identitySource,
         evidence: ldConflict.candidates.map((candidate) => ({
@@ -2831,6 +2946,8 @@
     allocationCellRef,
     expandMergedCells,
     allocationConflictSummary,
+    ldCurrencyPartition,
+    ldCurrencyNote,
     technicalPostingEvidenceForRevision,
     canonicalId,
     key,
