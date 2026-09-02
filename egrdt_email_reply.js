@@ -7,12 +7,12 @@
  * copiada da tabela do Histórico — e a cópia da tabela chegava ao Outlook
  * desmontada, uma célula por linha, porque cada `<td>` virava um bloco.
  *
- * Este módulo monta a mesma relação nas sete colunas que a resposta precisa
- * ter (data, eGRDT, família, documento, título, disciplina e arquivo postado)
- * e devolve as duas formas que a área de transferência entende: uma tabela
- * HTML com estilo embutido, que o cliente de e-mail cola como tabela de
- * verdade, e um texto separado por tabulação, que serve para e-mail em texto
- * puro e cola em colunas no Excel.
+ * Este módulo monta a mesma relação nas oito colunas que a resposta precisa
+ * ter (data, eGRDT, família, documento, revisão, título, disciplina e arquivo
+ * postado) e devolve as duas formas que a área de transferência entende: uma
+ * tabela HTML com estilo embutido, que o cliente de e-mail cola como tabela
+ * de verdade, e um texto separado por tabulação, que serve para e-mail em
+ * texto puro e cola em colunas no Excel.
  *
  * O módulo é puro: não toca no DOM, não escreve em storage e não decide
  * quando aparecer. Isso fica em egrdt_email_reply_ui.js.
@@ -28,13 +28,17 @@
   const _U = Utils || {};
   const EMPTY = "—";
 
-  // As sete colunas são as mesmas do relatório do Histórico, na ordem em que a
-  // resposta do e-mail é lida. Mudar a ordem aqui muda a tabela colada.
+  // As oito colunas são as mesmas do relatório do Histórico, na ordem em que a
+  // resposta do e-mail é lida. REVISÃO vem logo depois de DOCUMENTO, como na
+  // planilha da GRDT — quem recebe a resposta confere documento e revisão
+  // lado a lado, do mesmo jeito nos dois lugares.
+  // Mudar a ordem aqui muda a tabela colada.
   const COLUMNS = [
     "DATA DA GERAÇÃO / POSTAGEM",
     "EGRDT",
     "FAMÍLIA DOCUMENTAL",
     "DOCUMENTO",
+    "REVISÃO",
     "TÍTULO",
     "DISCIPLINA",
     "ARQUIVO POSTADO",
@@ -73,6 +77,20 @@
   }
 
   /**
+   * A revisão enviada na GRDT, na mesma ordem de preferência do relatório do
+   * Histórico: o valor gravado no registro vem primeiro, e só um histórico
+   * antigo — anterior à gravação da revisão — cai na dedução pelo nome do
+   * arquivo postado. A resposta nunca recalcula uma revisão que já foi
+   * enviada.
+   */
+  function revision(file) {
+    const registered = text(file && file.grdtRevision) || text(file && file.revision);
+    if (registered) return registered;
+    const derived = History && History.generatedRevision ? text(History.generatedRevision(file)) : "";
+    return derived || EMPTY;
+  }
+
+  /**
    * Uma linha por arquivo físico, na ordem em que o arquivo entrou na eGRDT.
    * O DOCX e o PDF do mesmo documento são duas linhas, como na planilha
    * gerada e como a pessoa que recebe a resposta espera conferir.
@@ -83,6 +101,7 @@
       "EGRDT": cell(record.egrdtNumber),
       "FAMÍLIA DOCUMENTAL": family(file),
       "DOCUMENTO": cell(file.document),
+      "REVISÃO": revision(file),
       "TÍTULO": cell(file.title),
       "DISCIPLINA": cell(file.discipline),
       "ARQUIVO POSTADO": cell(file.finalName || file.originalName),
@@ -158,29 +177,62 @@
   // tabela inteira na resposta — cada coluna ganha uma largura fixa (em px,
   // também como atributo width para o Outlook respeitar) e o texto que não
   // cabe quebra dentro da própria célula, em vez de alargar a tabela.
+  // A soma continua sendo os mesmos 695 px de TABLE_WIDTH: a coluna REVISÃO
+  // foi acomodada estreitando as demais, e não alargando a tabela.
+  //
+  // O piso de cada largura é a maior palavra do próprio título, no tamanho do
+  // cabeçalho, mais o preenchimento e a borda: numa coluna mais estreita que
+  // isso o Outlook parte a palavra ao meio ("FAMÍL / IA DOCU / MENT / AL") e
+  // quem recebe a resposta não lê mais o nome da coluna. Medidos com a última
+  // fonte da pilha, a mais larga, os pisos são DATA 75 ("POSTAGEM"), EGRDT 52,
+  // FAMÍLIA DOCUMENTAL 89 ("DOCUMENTAL"), DOCUMENTO 84, REVISÃO 62, TÍTULO 53,
+  // DISCIPLINA 75 e ARQUIVO POSTADO 66 — 556 px ao todo. Os 139 px restantes
+  // vão para as colunas de conteúdo longo: eGRDT, documento, título e nome do
+  // arquivo. Mexer numa largura é redistribuir, nunca somar: o total é fixo.
+  const TABLE_WIDTH = 695;
   const COLUMN_WIDTHS = {
-    "DATA DA GERAÇÃO / POSTAGEM": 80,
-    "EGRDT": 115,
-    "FAMÍLIA DOCUMENTAL": 55,
-    "DOCUMENTO": 105,
-    "TÍTULO": 140,
-    "DISCIPLINA": 70,
-    "ARQUIVO POSTADO": 130,
+    "DATA DA GERAÇÃO / POSTAGEM": 75,
+    "EGRDT": 82,
+    "FAMÍLIA DOCUMENTAL": 89,
+    "DOCUMENTO": 109,
+    "REVISÃO": 62,
+    "TÍTULO": 108,
+    "DISCIPLINA": 75,
+    "ARQUIVO POSTADO": 95,
   };
+
+  // A revisão é um código de um ou dois caracteres numa coluna estreita:
+  // centralizada ela fica sob o próprio título, em vez de encostada na borda
+  // de uma célula quase vazia. As demais colunas continuam à esquerda.
+  const COLUMN_ALIGN = { "REVISÃO": "center" };
+
+  function align(column) {
+    return COLUMN_ALIGN[column] || "left";
+  }
 
   // Estilo embutido linha a linha: o Outlook descarta folhas de estilo e
   // qualquer regra que não esteja no próprio elemento colado.
-  const TABLE_STYLE = "border-collapse:collapse;table-layout:fixed;width:695px;max-width:100%;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:9pt;color:#10222F";
+  const TABLE_STYLE = `border-collapse:collapse;table-layout:fixed;width:${TABLE_WIDTH}px;max-width:100%;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:9pt;color:#10222F`;
   // O Outlook nem sempre herda o tamanho declarado no <table>; por isso o
-  // cabeçalho e cada célula também carregam 9 pt no próprio style. O padding
-  // reduzido (era 6px 10px) deixa cada linha mais baixa.
-  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:3px 6px;text-align:left;font-size:9pt;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
-  const CELL_STYLE = "border:1px solid #9FB3C3;padding:3px 6px;text-align:left;vertical-align:top;font-size:9pt;word-wrap:break-word;word-break:break-word";
+  // cabeçalho e cada célula carregam o próprio tamanho no style — 8 pt no
+  // cabeçalho, 9 pt no corpo. O padding reduzido (era 6px 10px) deixa cada
+  // linha mais baixa.
+  //
+  // O cabeçalho quebra em mais de uma linha em vez de cortar o nome da coluna
+  // com reticências: com oito colunas em 695 px, "DATA DA GERAÇÃO / POSTAGEM"
+  // não cabe em uma linha, e um título cortado deixa quem recebe a resposta
+  // sem saber o que a coluna traz. São duas ou três linhas uma única vez, no
+  // topo da tabela. Em 8 pt, um ponto abaixo do corpo, a maior palavra de cada
+  // título cabe na largura da própria coluna e a quebra acontece nos espaços.
+  // `word-wrap` sozinho (sem `word-break`) é o que garante isso: ele parte a
+  // palavra só quando ela não cabe sozinha na linha.
+  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:3px 6px;font-size:8pt;font-weight:bold;vertical-align:bottom;white-space:normal;word-wrap:break-word";
+  const CELL_STYLE = "border:1px solid #9FB3C3;padding:3px 6px;vertical-align:top;font-size:9pt;word-wrap:break-word;word-break:break-word";
 
   function tableHtml(rows) {
-    const head = COLUMNS.map((column) => `<th style="${HEAD_STYLE};width:${COLUMN_WIDTHS[column]}px" width="${COLUMN_WIDTHS[column]}">${escapeHtml(column)}</th>`).join("");
+    const head = COLUMNS.map((column) => `<th style="${HEAD_STYLE};text-align:${align(column)};width:${COLUMN_WIDTHS[column]}px" width="${COLUMN_WIDTHS[column]}">${escapeHtml(column)}</th>`).join("");
     const body = (rows || []).map((row) => {
-      const cells = COLUMNS.map((column) => `<td style="${CELL_STYLE};width:${COLUMN_WIDTHS[column]}px" width="${COLUMN_WIDTHS[column]}">${escapeHtml(row[column])}</td>`).join("");
+      const cells = COLUMNS.map((column) => `<td style="${CELL_STYLE};text-align:${align(column)};width:${COLUMN_WIDTHS[column]}px" width="${COLUMN_WIDTHS[column]}">${escapeHtml(row[column])}</td>`).join("");
       return `<tr>${cells}</tr>`;
     }).join("");
     return `<table style="${TABLE_STYLE}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -241,5 +293,5 @@
     return { url: `mailto:?subject=${subject}&body=${short}`, truncated: true };
   }
 
-  return { COLUMNS, rowsFromRecords, summarize, defaultMessage, defaultSubject, tableText, tableHtml, replyText, replyHtml, build, mailtoUrl };
+  return { COLUMNS, COLUMN_WIDTHS, COLUMN_ALIGN, TABLE_WIDTH, revision, rowsFromRecords, summarize, defaultMessage, defaultSubject, tableText, tableHtml, replyText, replyHtml, build, mailtoUrl };
 });

@@ -1,6 +1,9 @@
 /* GRCON — Painel da resposta de e-mail da eGRDT.
-   Abre sobre a tela atual (triagem ou histórico) e mostra a mensagem editável
-   junto da relação dos documentos exatamente como ela será colada no e-mail. */
+   Abre a partir do Histórico e mostra a mensagem editável junto da relação dos
+   documentos postados. A prévia da relação tem duas leituras, alternadas no
+   próprio painel: "Como será colado", fiel ao que o destinatário recebe, e
+   "Leitura ampla", com as cores do tema e cada coluna por extenso, para
+   conferência. O cabeçalho da tabela acompanha a rolagem nas duas. */
 
 .egrdt-email-overlay {
   position: fixed;
@@ -49,14 +52,14 @@
   background: var(--surface-2);
 }
 
-.egrdt-email-header > div > span {
+.egrdt-email-heading > span {
   font-size: .68rem;
   font-weight: 700;
   letter-spacing: .08em;
   color: var(--text-3);
 }
 
-.egrdt-email-header h2 {
+.egrdt-email-heading h2 {
   margin: .15rem 0 .2rem;
   font-size: 1.05rem;
   line-height: 1.3;
@@ -64,10 +67,35 @@
   word-break: break-word;
 }
 
-.egrdt-email-header p {
+.egrdt-email-heading p {
   margin: 0;
   font-size: .82rem;
   color: var(--text-2);
+}
+
+/* Documentos, arquivos e linhas: os três números que se confere antes de
+   copiar. Eram uma frase única separada por barras, difícil de varrer. */
+.egrdt-email-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.egrdt-email-metrics li {
+  padding: .18rem .55rem;
+  font-size: .74rem;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border: 1px solid var(--border-1);
+  border-radius: 999px;
+}
+
+.egrdt-email-metrics strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
 }
 
 .egrdt-email-body {
@@ -111,60 +139,282 @@
 
 .egrdt-email-preview-heading {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   font-size: .82rem;
   color: var(--text-2);
 }
 
-/* A tabela leva estilo embutido claro porque é ela que vai para o e-mail.
-   O quadro do preview repete o fundo claro nos dois temas para que o operador
-   veja exatamente o que será colado, sem texto escuro sobre fundo escuro. */
+.egrdt-email-preview-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+/* Alternador de leitura da prévia. A relação é a mesma nas duas: muda só como
+   ela é mostrada, e por isso o controle fica junto do título da prévia, e não
+   entre os botões de copiar do rodapé. */
+.egrdt-email-views {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+}
+
+.egrdt-email-view {
+  padding: .3rem .7rem;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 3px);
+}
+
+.egrdt-email-view:hover {
+  color: var(--text-1);
+}
+
+.egrdt-email-view[aria-pressed="true"] {
+  color: var(--brand-strong);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-1);
+}
+
+.egrdt-email-view:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.egrdt-email-hint {
+  margin: calc(var(--space-3) * -1) 0 0;
+  font-size: .75rem;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.egrdt-email-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  font-size: .85rem;
+  text-align: center;
+  color: var(--text-3);
+}
+
 .egrdt-email-preview {
-  padding: var(--space-4);
+  min-height: 6rem;
+  max-height: 24rem;
   overflow: auto;
-  background: #ffffff;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-sm);
 }
 
+.egrdt-email-preview:focus-visible {
+  outline: none;
+  border-color: var(--brand-600);
+  box-shadow: var(--focus);
+}
+
+/* ---------------------------------------------------------------------------
+   Prévia "Como será colado"
+
+   A tabela leva estilo embutido claro porque é ela que vai para o e-mail: o
+   quadro repete o fundo claro nos dois temas, para o operador ver exatamente o
+   que o destinatário recebe. O estilo embutido também fixa a largura de cada
+   coluna (695 px no total), e estilo embutido vence qualquer regra desta folha
+   sem `!important` — então aqui não se tenta redimensionar nada: a tabela é
+   apenas centralizada numa folha de papel, no tamanho real.
+
+   Até a 5.38.5 esta folha pedia `white-space: nowrap` nas células para o
+   preview rolar na horizontal. Com a largura fixa da 5.38.1 isso passou a
+   transbordar o texto por cima da coluna vizinha, porque `nowrap` impede a
+   quebra que o estilo embutido pede. Ler a relação inteira agora é o que faz o
+   modo "Leitura ampla", logo abaixo. */
+#egrdt-email-preview[data-view="paste"] {
+  background: #e9eef2;
+}
+
+/* O afastamento da folha fica aqui, e não no quadro: dentro do conteúdo que
+   rola ele sai de cena junto com as primeiras linhas, em vez de deixar uma
+   faixa transparente por onde as linhas apareceriam acima do cabeçalho fixo. */
+.egrdt-email-sheet {
+  padding: var(--space-5) var(--space-4);
+}
+
+/* `legacy-compat.css` impõe `min-width: 3300px` a toda tabela e altura fixa a
+   toda linha (`th` 36 px, `td` 48 px). Nada disso está no estilo embutido, logo
+   nada disso é vencido por ele: sem estes três zeramentos a prévia mostraria
+   uma tabela de 3 300 px com linhas três vezes mais altas do que as do e-mail. */
+#egrdt-email-preview[data-view="paste"] table {
+  min-width: 0;
+  margin: 0 auto;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(9 24 34 / 18%);
+}
+
+#egrdt-email-preview[data-view="paste"] table th,
+#egrdt-email-preview[data-view="paste"] table td {
+  height: auto;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 /* O tema escuro pinta `table` com a superfície escura do app e o zebrado das
-   linhas vem das folhas globais, mas esta tabela é a que vai para o e-mail:
-   ela mantém o fundo claro e a cor do estilo embutido nos dois temas, para o
-   preview mostrar exatamente o que será colado. */
-#egrdt-email-preview table,
-#egrdt-email-preview table tr,
-#egrdt-email-preview table th,
-#egrdt-email-preview table td {
+   linhas vem das folhas globais; esta tabela mantém o fundo e a cor do estilo
+   embutido nos dois temas. O cabeçalho guarda o próprio fundo (é ele que fica
+   fixo no topo ao rolar) e as demais faixas ficam transparentes sobre o papel
+   branco. */
+#egrdt-email-preview[data-view="paste"] table tr,
+#egrdt-email-preview[data-view="paste"] table td {
   background-color: transparent;
   background-image: none;
   color: #10222F;
 }
 
-#egrdt-email-preview table {
-  width: auto;
+#egrdt-email-preview[data-view="paste"] table th {
+  background-image: none;
+  color: #10222F;
+}
+
+/* ---------------------------------------------------------------------------
+   Prévia "Leitura ampla"
+
+   Tabela remontada pelo painel (sem estilo embutido), com as cores do tema do
+   GRCON. Cada coluna fica com a largura do próprio conteúdo e nada quebra:
+   é aqui que se confere o código do documento e o nome do arquivo por
+   extenso, rolando na horizontal. */
+#egrdt-email-preview[data-view="read"] {
+  background: var(--surface-1);
+}
+
+/* As folhas globais alcançam qualquer tabela por
+   `html[data-app][data-ui-generation="3"] table :is(th, td)` — mais específico
+   do que uma classe. Por isso as regras desta tabela também partem do id do
+   quadro, e não da classe sozinha: é o que faz `nowrap` e a largura por
+   conteúdo valerem aqui dentro, sem `!important`. */
+#egrdt-email-preview table.egrdt-email-reading {
+  width: max-content;
   min-width: 100%;
   max-width: none;
   table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: .8rem;
+  color: var(--text-1);
+  background: var(--surface-1);
 }
 
-/* O preview rola na horizontal em vez de quebrar o conteúdo: o código do
-   documento e o nome do arquivo precisam ser lidos inteiros, e no e-mail a
-   largura disponível é outra. Só o TÍTULO (5.ª coluna, fixada por COLUMNS em
-   egrdt_email_reply.js) quebra, porque é o único campo de texto corrido. */
-#egrdt-email-preview table th,
-#egrdt-email-preview table td {
+#egrdt-email-preview table.egrdt-email-reading :is(th, td) {
   max-width: none;
+  height: auto;
+  padding: .35rem .6rem;
+  white-space: nowrap;
   word-break: normal;
   overflow-wrap: normal;
-  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: normal;
+  border-bottom: 1px solid var(--border-1);
 }
 
-#egrdt-email-preview table th:nth-child(5),
-#egrdt-email-preview table td:nth-child(5) {
-  min-width: 16rem;
-  white-space: normal;
+/* `legacy-compat.css` pinta toda `td` de branco: no tema escuro a relação
+   ficava em texto claro sobre faixas brancas. */
+#egrdt-email-preview table.egrdt-email-reading td {
+  color: var(--text-1);
+  background: var(--surface-1);
+}
+
+#egrdt-email-preview table.egrdt-email-reading thead th {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border-2);
+}
+
+/* Numeração da linha: a coluna existe só na leitura, para o operador dizer
+   "confere a linha 12" sem contar da primeira. */
+#egrdt-email-preview table.egrdt-email-reading tbody th {
+  font-size: .72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-3);
+  background: var(--surface-2);
+}
+
+#egrdt-email-preview table.egrdt-email-reading tbody tr:nth-child(even) td {
+  background: var(--surface-2);
+}
+
+#egrdt-email-preview table.egrdt-email-reading tbody tr:hover :is(td, th) {
+  background: var(--brand-100);
+}
+
+/* A revisão é o campo que se confere de relance: fica em fonte tabular, para
+   as revisões das linhas seguidas ficarem alinhadas na vertical. */
+#egrdt-email-preview table.egrdt-email-reading tbody td:nth-child(6) {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* O cabeçalho acompanha a rolagem nos dois modos: com trinta linhas na
+   relação, quem rola até o fim não sabia mais qual coluna estava lendo. Na
+   leitura ampla a numeração também acompanha a rolagem horizontal, senão
+   perde-se a referência da linha justamente ao ler o nome do arquivo, na
+   última coluna.
+
+   `grcon-ui.css` desliga o congelamento de qualquer célula do app com
+   `position: static !important`, dentro de `@layer utilities` — a regra existe
+   para nenhum cabeçalho flutuar sobre os filtros e as barras da triagem, e o
+   quadro fechado de um diálogo não é esse caso. Um `!important` dentro de uma
+   camada só é vencido por outro `!important` de uma camada declarada antes
+   (para declarações `!important` a ordem das camadas se inverte, e o que está
+   fora de camada é o mais fraco). `modules` é a primeira camada declarada pelo
+   app, então é por ela que este painel recupera o cabeçalho fixo — e só dentro
+   de `#egrdt-email-preview`, sem alcançar nenhuma tabela fora do quadro. */
+@layer modules {
+  #egrdt-email-preview thead th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1 !important;
+  }
+
+  #egrdt-email-preview[data-view="read"] tbody th {
+    position: sticky !important;
+    top: auto !important;
+    left: 0 !important;
+    z-index: 1 !important;
+  }
+
+  #egrdt-email-preview[data-view="read"] thead th:first-child {
+    left: 0 !important;
+    z-index: 2 !important;
+  }
+}
+
+/* `border` não é pintado em célula congelada durante a rolagem: as linhas de
+   separação da célula fixa vêm de `box-shadow`. Declarações normais, fora de
+   camada — só o congelamento precisava da camada acima. */
+#egrdt-email-preview[data-view="paste"] thead th {
+  box-shadow: inset 0 -1px 0 #9FB3C3;
+}
+
+#egrdt-email-preview[data-view="read"] thead th {
+  box-shadow: inset 0 -1px 0 var(--border-2);
+}
+
+#egrdt-email-preview[data-view="read"] tbody th {
+  box-shadow: inset -1px 0 0 var(--border-1);
+}
+
+#egrdt-email-preview[data-view="read"] thead th:first-child {
+  box-shadow: inset -1px 0 0 var(--border-1), inset 0 -1px 0 var(--border-2);
 }
 
 .egrdt-email-footer {
@@ -202,5 +452,35 @@
 
   .egrdt-email-actions button {
     flex: 1 1 auto;
+  }
+
+  /* No celular o alternador desce para a própria linha e ocupa a largura
+     toda: encolhido ao lado do título, "Como será colado" ficava com o rótulo
+     cortado. */
+  .egrdt-email-views {
+    width: 100%;
+  }
+
+  .egrdt-email-view {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  /* A tabela do e-mail tem 695 px fixos e não encolhe: numa tela estreita ela
+     rola na horizontal dentro do quadro, em vez de espremer o painel. */
+  .egrdt-email-sheet {
+    padding: var(--space-4) var(--space-3);
+  }
+
+  /* Numa tela de celular a altura é o recurso escasso: a mensagem encolhe (e
+     continua rolando por dentro) para a relação não ficar reduzida a duas
+     linhas visíveis. */
+  .egrdt-email-message textarea {
+    height: 6.5rem;
+  }
+
+  .egrdt-email-preview {
+    min-height: 11rem;
+    max-height: 18rem;
   }
 }

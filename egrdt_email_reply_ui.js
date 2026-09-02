@@ -6,6 +6,12 @@
  * dos documentos postados, e copia as duas coisas em um clique — como tabela
  * de verdade no Outlook e como texto tabulado nos clientes em texto puro.
  *
+ * A prévia da relação tem duas leituras, alternadas no próprio painel:
+ * "Como será colado" mostra a tabela do e-mail no tamanho real, e "Leitura
+ * ampla" remonta a mesma relação com o visual do GRCON, cada coluna por
+ * extenso, para conferir antes de copiar. O que vai para a área de
+ * transferência é sempre a tabela do e-mail, independente da leitura aberta.
+ *
  * O conteúdo é montado por egrdt_email_reply.js; aqui fica só a tela.
  */
 (function (root) {
@@ -14,10 +20,47 @@
   const Reply = root.GrconEgrdtEmailReply;
   if (!Reply || typeof document === "undefined") return;
 
-  const state = { records: [], reply: null, open: false, lastFocus: null, panel: null };
+  // "paste"  — a tabela exatamente como o e-mail vai recebê-la: o HTML com
+  //            estilo embutido de egrdt_email_reply.js, na largura real.
+  // "read"   — a mesma relação remontada com o visual do GRCON, ocupando o
+  //            painel inteiro, para conferir código e nome de arquivo por
+  //            extenso antes de copiar.
+  // A conferência e a fidelidade são duas leituras diferentes da mesma
+  // relação; forçar as duas numa só era o que deixava a prévia ilegível.
+  const VIEWS = { PASTE: "paste", READ: "read" };
+
+  const state = { records: [], reply: null, open: false, lastFocus: null, panel: null, view: VIEWS.PASTE };
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
+  }
+
+  function escapeHtml(value) {
+    const utils = root.GrconUtils;
+    if (utils && utils.escapeHtml) return utils.escapeHtml(value);
+    return String(value === null || value === undefined ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  /**
+   * A relação remontada para leitura na tela. Não vai para a área de
+   * transferência: usa as cores do tema do GRCON (o e-mail é sempre claro),
+   * deixa cada coluna com a largura do próprio conteúdo e marca a coluna da
+   * revisão, que é o campo que se confere de relance.
+   */
+  function readingTableHtml(reply) {
+    const columns = reply.columns || [];
+    const align = Reply.COLUMN_ALIGN || {};
+    const head = columns.map((column) => `<th scope="col" style="text-align:${align[column] || "left"}">${escapeHtml(column)}</th>`).join("");
+    const body = (reply.rows || []).map((row, index) => {
+      const cells = columns.map((column) => `<td style="text-align:${align[column] || "left"}">${escapeHtml(row[column])}</td>`).join("");
+      return `<tr><th scope="row">${index + 1}</th>${cells}</tr>`;
+    }).join("");
+    return `<table class="egrdt-email-reading"><thead><tr><th scope="col"><span class="sr-only">Linha</span></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   function ensurePanel() {
@@ -36,10 +79,11 @@
     panel.setAttribute("aria-labelledby", "egrdt-email-title");
     panel.innerHTML = `
       <header class="egrdt-email-header">
-        <div>
+        <div class="egrdt-email-heading">
           <span>RESPOSTA DE E-MAIL</span>
           <h2 id="egrdt-email-title">Documentos postados</h2>
           <p id="egrdt-email-subtitle">Relação pronta para colar na resposta.</p>
+          <ul class="egrdt-email-metrics" id="egrdt-email-metrics"></ul>
         </div>
         <button aria-label="Fechar a resposta de e-mail" class="icon-button" data-egrdt-email-action="close" type="button">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"></path></svg>
@@ -48,13 +92,20 @@
       <div class="egrdt-email-body">
         <label class="egrdt-email-message">
           <span>Mensagem da resposta (edite se precisar)</span>
-          <textarea id="egrdt-email-message" rows="6" spellcheck="false"></textarea>
+          <textarea id="egrdt-email-message" rows="5" spellcheck="false"></textarea>
         </label>
         <div class="egrdt-email-preview-heading">
-          <strong>Relação dos documentos</strong>
-          <small id="egrdt-email-count">Nenhuma linha</small>
+          <div class="egrdt-email-preview-label">
+            <strong>Relação dos documentos</strong>
+            <small id="egrdt-email-count">Nenhuma linha</small>
+          </div>
+          <div class="egrdt-email-views" role="group" aria-label="Como exibir a relação">
+            <button aria-pressed="true" class="egrdt-email-view" data-egrdt-email-view="paste" type="button">Como será colado</button>
+            <button aria-pressed="false" class="egrdt-email-view" data-egrdt-email-view="read" type="button">Leitura ampla</button>
+          </div>
         </div>
-        <div class="egrdt-email-preview" id="egrdt-email-preview"></div>
+        <p class="egrdt-email-hint" id="egrdt-email-hint"></p>
+        <div class="egrdt-email-preview" id="egrdt-email-preview" tabindex="0" role="region" aria-label="Prévia da relação dos documentos"></div>
       </div>
       <footer class="egrdt-email-footer">
         <div class="egrdt-email-actions">
@@ -69,6 +120,8 @@
 
     overlay.addEventListener("click", close);
     panel.addEventListener("click", (event) => {
+      const view = event.target.closest("[data-egrdt-email-view]")?.dataset.egrdtEmailView;
+      if (view) { setView(view); return; }
       const action = event.target.closest("[data-egrdt-email-action]")?.dataset.egrdtEmailAction;
       if (action === "close") close();
       if (action === "copy-all") void copyReply(false);
@@ -88,17 +141,62 @@
     return Reply.build(state.records, { message: currentMessage() });
   }
 
+  function metric(value, singular, plural) {
+    return `<li><strong>${escapeHtml(value)}</strong> ${escapeHtml(value === 1 ? singular : plural)}</li>`;
+  }
+
+  /**
+   * A prévia é a única parte do painel que muda de forma: o cabeçalho, a
+   * mensagem e os botões continuam onde estão quando o operador troca de
+   * leitura — inclusive o texto que ele já editou, que um render completo
+   * apagaria.
+   */
+  function renderPreview() {
+    const { panel } = ensurePanel();
+    const reply = state.reply;
+    const preview = panel.querySelector("#egrdt-email-preview");
+    const paste = state.view === VIEWS.PASTE;
+    preview.dataset.view = state.view;
+    // A folha de papel do modo "Como será colado" é um invólucro próprio: o
+    // afastamento precisa ficar dentro do conteúdo que rola, e não no quadro,
+    // senão as linhas passam por trás do cabeçalho fixo na faixa do
+    // preenchimento superior.
+    preview.innerHTML = reply.rows.length
+      ? (paste ? `<div class="egrdt-email-sheet">${reply.tableHtml}</div>` : readingTableHtml(reply))
+      : `<p class="egrdt-email-empty">Esta eGRDT não tem arquivos registrados para montar a relação.</p>`;
+    panel.querySelector("#egrdt-email-hint").textContent = paste
+      ? `Tamanho real da tabela no e-mail (${Reply.TABLE_WIDTH} px): o texto que não cabe quebra dentro da célula, como o destinatário vai receber.`
+      : "Ajustada à tela para conferência — o e-mail continua recebendo a tabela do modo “Como será colado”.";
+    panel.querySelectorAll("[data-egrdt-email-view]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.egrdtEmailView === state.view));
+    });
+  }
+
+  function setView(view) {
+    const next = view === VIEWS.READ ? VIEWS.READ : VIEWS.PASTE;
+    if (next === state.view) return;
+    state.view = next;
+    if (state.reply) renderPreview();
+  }
+
   function render() {
     const { panel } = ensurePanel();
     const reply = state.reply;
     const numbers = reply.summary.egrdtNumbers;
     panel.querySelector("#egrdt-email-title").textContent = numbers.length === 1 ? numbers[0] : "Documentos postados";
     panel.querySelector("#egrdt-email-subtitle").textContent = numbers.length > 1
-      ? `${numbers.length} eGRDTs · ${reply.summary.documents} documento(s) · ${reply.summary.files} arquivo(s)`
-      : `${reply.summary.documents} documento(s) · ${reply.summary.files} arquivo(s)`;
+      ? `${numbers.length} eGRDTs reunidas nesta resposta`
+      : "Relação pronta para colar na resposta.";
+    // Documentos, arquivos e linhas eram uma frase única com barras: os três
+    // números viram selos, que é o que se lê de relance antes de copiar.
+    panel.querySelector("#egrdt-email-metrics").innerHTML = [
+      metric(reply.summary.documents, "documento", "documentos"),
+      metric(reply.summary.files, "arquivo", "arquivos"),
+      metric(reply.rows.length, "linha na tabela", "linhas na tabela"),
+    ].join("");
     panel.querySelector("#egrdt-email-message").value = reply.message;
-    panel.querySelector("#egrdt-email-count").textContent = `${reply.rows.length} linha(s)`;
-    panel.querySelector("#egrdt-email-preview").innerHTML = reply.tableHtml;
+    panel.querySelector("#egrdt-email-count").textContent = `${reply.rows.length} linha(s) · ${reply.columns.length} colunas`;
+    renderPreview();
   }
 
   function onKeydown(event) {
