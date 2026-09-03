@@ -1,9 +1,9 @@
 (function (root) {
   "use strict";
   let opening = false;
-  let decorateTimer = 0;
   let reconcileTimer = 0;
   let decorating = false;
+  let decorateQueued = false;
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
@@ -173,14 +173,31 @@
         node.hidden = attention === 0;
       });
     } finally {
-      setTimeout(() => { decorating = false; }, 0);
+      decorating = false;
     }
   }
 
   function queueDecorateHistory() {
-    if (decorating) return;
-    clearTimeout(decorateTimer);
-    decorateTimer = setTimeout(decorateHistoryNow, 40);
+    if (decorating || decorateQueued) return;
+    decorateQueued = true;
+    const run = () => {
+      decorateQueued = false;
+      decorateHistoryNow();
+    };
+    if (typeof queueMicrotask === "function") queueMicrotask(run);
+    else Promise.resolve().then(run);
+  }
+
+  function isConferenceDecoration(node) {
+    if (!(node instanceof Element)) return false;
+    return node.matches("[data-pc-history-badge],[data-pc-history-summary]")
+      || Boolean(node.closest("[data-pc-history-badge],[data-pc-history-summary]"));
+  }
+
+  function mutationOnlyConferenceDecorations(mutation) {
+    if (isConferenceDecoration(mutation.target)) return true;
+    const changed = [...mutation.addedNodes, ...mutation.removedNodes].filter((node) => node.nodeType === Node.ELEMENT_NODE);
+    return changed.length > 0 && changed.every((node) => isConferenceDecoration(node));
   }
 
   async function reconcileAfterHistoryChange(reason) {
@@ -208,12 +225,16 @@
 
     const historyList = document.getElementById("history-list");
     const historyDetail = document.getElementById("history-detail");
-    const observer = new MutationObserver(queueDecorateHistory);
+    const observer = new MutationObserver((mutations) => {
+      if (mutations.length && mutations.every(mutationOnlyConferenceDecorations)) return;
+      queueDecorateHistory();
+    });
     if (historyList) observer.observe(historyList, { childList: true, subtree: true });
     if (historyDetail) observer.observe(historyDetail, { childList: true, subtree: true });
 
     root.addEventListener("grcon:conference-updated", queueDecorateHistory);
     root.addEventListener("grcon:history-updated", () => { queueDecorateHistory(); queueReconcile("history-event"); });
+    root.addEventListener("grcon:sigem-updated", queueDecorateHistory);
     root.addEventListener("storage", (event) => {
       if (event.key === root.GrconHistory?.STORAGE_KEY) queueReconcile("history-storage");
       if (event.key === root.GrconPostingConference?.HISTORY_INDEX_KEY) queueDecorateHistory();
