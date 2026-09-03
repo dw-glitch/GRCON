@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 function text(v) { return String(v == null ? "" : v).trim(); }
 function key(v) { return text(v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[–—]/g, "-").toUpperCase().replace(/\s*([_.-])\s*/g, "$1").replace(/\s+/g, " ").trim(); }
@@ -132,4 +134,17 @@ const historicalEnriched = R.enrichResult(missing, base("OTHER", "A", "Em Workfl
 assert.equal(historicalEnriched.rows[0].conferenceLabel, "Postado");
 assert.equal(historicalEnriched.rows[0].sigemStatus, "");
 
-console.log(`posting_conference: 17 cenários OK · 20k + Status SIGEM em ${Date.now() - start}ms`);
+// Regressão da piscada no Histórico: a conferência não pode esperar 40 ms para
+// repor badges/resumo depois que history_app.js reconstrói a lista e o detalhe.
+// Também não deve observar o documento inteiro por mudanças da área de Status SIGEM.
+const rootDir = path.resolve(__dirname, "..");
+const bootstrapSource = fs.readFileSync(path.join(rootDir, "posting_conference_bootstrap.js"), "utf8");
+const refinementSource = fs.readFileSync(path.join(rootDir, "posting_conference_refinement.js"), "utf8");
+assert.doesNotMatch(bootstrapSource, /setTimeout\s*\(\s*decorateHistoryNow\s*,\s*40/);
+assert.match(bootstrapSource, /queueMicrotask/);
+assert.match(bootstrapSource, /mutationOnlyConferenceDecorations/);
+assert.doesNotMatch(refinementSource, /observe\s*\(\s*document\.documentElement/);
+assert.match(refinementSource, /moduleObserver\.observe\(module,\s*\{\s*childList:\s*true,\s*subtree:\s*true\s*\}\)/);
+assert.match(refinementSource, /locator\.observe\(workspace,\s*\{\s*childList:\s*true\s*\}\)/);
+
+console.log(`posting_conference: 18 cenários OK · 20k + Status SIGEM em ${Date.now() - start}ms`);
