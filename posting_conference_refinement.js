@@ -12,6 +12,7 @@
   let installed = false;
   let decorating = false;
   let decorationQueued = false;
+  let moduleObserver = null;
 
   function rawText(value) {
     return value === null || value === undefined ? "" : String(value);
@@ -244,9 +245,15 @@
     const module = document.getElementById("posting-conference-module");
     if (!module) return;
     decorating = true;
-    decorateLabels(module);
-    if (root.GrconPostingConferenceUi?.state?.view !== "grdts") decorateDocumentTable(module);
-    setTimeout(() => { decorating = false; }, 0);
+    try {
+      decorateLabels(module);
+      if (root.GrconPostingConferenceUi?.state?.view !== "grdts") decorateDocumentTable(module);
+    } finally {
+      // As alterações acima pertencem ao próprio refinamento. Retiramos esses
+      // registros da fila do observer para que ele não reaja ao próprio DOM.
+      moduleObserver?.takeRecords?.();
+      decorating = false;
+    }
   }
 
   function scheduleDecorate() {
@@ -257,15 +264,40 @@
       decorate();
     };
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
-    else setTimeout(run, 0);
+    else Promise.resolve().then(run);
+  }
+
+  function observeConferenceModule(module) {
+    if (!module) return;
+    moduleObserver?.disconnect?.();
+    moduleObserver = new MutationObserver(() => scheduleDecorate());
+    moduleObserver.observe(module, { childList: true, subtree: true });
+    scheduleDecorate();
   }
 
   function installDomRefinement() {
-    const observer = new MutationObserver(() => scheduleDecorate());
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    const existing = document.getElementById("posting-conference-module");
+    if (existing) {
+      observeConferenceModule(existing);
+    } else {
+      // O módulo é criado sob demanda. Observamos somente os filhos diretos da
+      // workspace até ele existir; mudanças na aba Histórico não passam por aqui.
+      const workspace = document.querySelector("main.workspace");
+      if (workspace) {
+        const locator = new MutationObserver(() => {
+          const module = document.getElementById("posting-conference-module");
+          if (!module) return;
+          locator.disconnect();
+          observeConferenceModule(module);
+        });
+        locator.observe(workspace, { childList: true });
+      }
+    }
     root.addEventListener("grcon:conference-updated", scheduleDecorate);
     document.addEventListener("click", (event) => {
-      if (event.target.closest("[data-pc-view],#pc-prev,#pc-next,#pc-clear-filters")) setTimeout(scheduleDecorate, 0);
+      if (!event.target.closest("[data-pc-view],#pc-prev,#pc-next,#pc-clear-filters")) return;
+      if (typeof queueMicrotask === "function") queueMicrotask(scheduleDecorate);
+      else Promise.resolve().then(scheduleDecorate);
     });
     scheduleDecorate();
   }
