@@ -8,6 +8,22 @@
     document.documentElement.dataset.theme = "light";
   }
 
+  // A persistência durável registra o listener de inicialização ainda no <head>.
+  // Assim, quando DOMContentLoaded ocorrer, history_core.js e
+  // sigem_posting_core.js já terão sido avaliados pelos scripts defer, mas a
+  // pessoa ainda não teve oportunidade de iniciar uma operação. O módulo pode
+  // então migrar/hidratar o IndexedDB antes de liberar gravações.
+  function installOperationalPersistence() {
+    if (document.querySelector("script[data-grcon-operational-persistence]")) return;
+    const script = document.createElement("script");
+    script.src = "operational_persistence.js";
+    script.async = false;
+    script.dataset.grconOperationalPersistence = "";
+    document.head.appendChild(script);
+  }
+
+  installOperationalPersistence();
+
   // As folhas de estilo dos módulos que abrem ocultos entram no HTML com
   // media="print" para não bloquear a primeira pintura. Assim que o navegador
   // desenha a tela inicial, elas voltam a valer para todas as mídias — muito
