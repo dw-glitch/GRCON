@@ -114,9 +114,9 @@
 
   function aggregateLabel(item) {
     if (!item) return "Conf. SIGEM · Não verificado";
-    if (item.status === "CONFIRMADO") return `Conf. SIGEM · ${item.confirmed}/${item.total} confirmado(s)`;
+    if (item.status === "CONFIRMADO") return `Conf. SIGEM · ${item.confirmed}/${item.total} postado(s)`;
     if (item.status === "REVISAR") return `Conf. SIGEM · revisar · ${item.divergent + item.review} alerta(s)`;
-    if (item.status === "PENDENTE") return `Conf. SIGEM · ${item.confirmed}/${item.total} · ${item.awaiting + item.notFound} pendente(s)`;
+    if (item.status === "PENDENTE") return `Conf. SIGEM · ${item.confirmed}/${item.total} · ${item.awaiting + item.notFound} não postado(s) ainda`;
     return "Conf. SIGEM · Não verificado";
   }
 
@@ -153,7 +153,7 @@
         const record = byRecordId.get(active.dataset.historyId);
         const aggregate = record ? Conference.historyAggregate(record) : null;
         if (aggregate) {
-          const html = `<span><strong>Conf. SIGEM:</strong> ${aggregateLabel(aggregate).replace("Conf. SIGEM · ", "")}</span><span><strong>${aggregate.confirmed}</strong> confirmado(s)</span><span><strong>${aggregate.awaiting}</strong> aguardando</span><span><strong>${aggregate.divergent}</strong> divergência(s)</span><span><strong>${aggregate.notFound}</strong> não encontrado(s)</span>`;
+          const html = `<span><strong>Conf. SIGEM:</strong> ${aggregateLabel(aggregate).replace("Conf. SIGEM · ", "")}</span><span><strong>${aggregate.confirmed}</strong> postado(s)</span><span><strong>${aggregate.awaiting}</strong> não postado(s) ainda</span><span><strong>${aggregate.divergent}</strong> divergência(s)</span><span><strong>${aggregate.notFound}</strong> não encontrado(s)</span>`;
           let summary = existingSummary;
           if (!summary) {
             summary = document.createElement("div");
