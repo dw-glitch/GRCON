@@ -40,6 +40,9 @@ assert.equal(r.rows[0].status, C.STATUSES.AWAITING);
 r = C.reconcile(hist("MC-5290.00-22313-970-C1O-099", "A", "2026-08-20T00:00:00Z"), base("MC-5290.00-22313-970-C1O-009", "A"), null, { now: NOW, waitHours: 48 });
 assert.equal(r.rows[0].status, C.STATUSES.NOT_FOUND);
 assert.match(r.rows[0].note, /não prova/i);
+const notFoundPresentation = R.enrichResult(r, base("MC-5290.00-22313-970-C1O-009", "A", "Em Workflow"), C);
+assert.equal(notFoundPresentation.rows[0].conferenceLabel, "Não postado ainda");
+assert.equal(notFoundPresentation.rows[0].sigemStatus, "");
 
 const etWithout = "C1O_RNEST_U32_3.1.1.1_INS_RIR_SPE-AST-320019";
 const etWith = "C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-SPE-AST-320019";
@@ -129,4 +132,4 @@ const historicalEnriched = R.enrichResult(missing, base("OTHER", "A", "Em Workfl
 assert.equal(historicalEnriched.rows[0].conferenceLabel, "Postado");
 assert.equal(historicalEnriched.rows[0].sigemStatus, "");
 
-console.log(`posting_conference: 16 cenários OK · 20k + Status SIGEM em ${Date.now() - start}ms`);
+console.log(`posting_conference: 17 cenários OK · 20k + Status SIGEM em ${Date.now() - start}ms`);
