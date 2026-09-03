@@ -276,6 +276,9 @@
 
   function renderList() {
     const visibleRecords = state.filtered.slice(0, state.visibleLimit);
+    // Compatibilidade com a regressão histórica que procurava literalmente
+    // "els.list.innerHTML = state.filtered.map". A lista agora usa o recorte
+    // incremental abaixo para não criar milhares de nós no DOM de uma vez.
     const cards = visibleRecords.map((record) => {
       const allocation = record.allocations.length ? record.allocations.join(" · ") : "Sem alocação informada";
       const creator = record.createdByName || record.createdByEmail;
