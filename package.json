@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node tests/grcon.mjs && node tests/posting_conference.cjs && node tests/operational_persistence.cjs && node tests/grcon_backup.cjs && node tests/history_performance.cjs",
+    "test": "node tests/grcon.mjs && node tests/posting_conference.cjs && node tests/operational_persistence.cjs && node tests/grcon_backup.cjs && node tests/history_performance.cjs && node tests/reposting.cjs",
     "check:syntax": "node scripts/verificar-sintaxe.mjs",
     "check:workers": "node scripts/verificar-pacote.mjs",
     "check:references": "node scripts/verificar-referencias.mjs",
