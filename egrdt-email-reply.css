@@ -225,16 +225,17 @@
 
    A tabela leva estilo embutido claro porque é ela que vai para o e-mail: o
    quadro repete o fundo claro nos dois temas, para o operador ver exatamente o
-   que o destinatário recebe. O estilo embutido também fixa a largura de cada
-   coluna (695 px no total), e estilo embutido vence qualquer regra desta folha
-   sem `!important` — então aqui não se tenta redimensionar nada: a tabela é
-   apenas centralizada numa folha de papel, no tamanho real.
+   que o destinatário recebe. Desde a 5.40.0 o estilo embutido pede
+   `width: 100%` e dá a cada coluna uma porcentagem, de modo que a tabela
+   termina onde a frase acima dela termina. A folha de papel abaixo só afasta a
+   tabela das bordas do quadro: quem decide a largura é o corpo da mensagem,
+   na prévia como no e-mail.
 
    Até a 5.38.5 esta folha pedia `white-space: nowrap` nas células para o
-   preview rolar na horizontal. Com a largura fixa da 5.38.1 isso passou a
-   transbordar o texto por cima da coluna vizinha, porque `nowrap` impede a
-   quebra que o estilo embutido pede. Ler a relação inteira agora é o que faz o
-   modo "Leitura ampla", logo abaixo. */
+   preview rolar na horizontal. Com a largura declarada no estilo embutido isso
+   passou a transbordar o texto por cima da coluna vizinha, porque `nowrap`
+   impede a quebra que o estilo embutido pede. Ler a relação inteira agora é o
+   que faz o modo "Leitura ampla", logo abaixo. */
 #egrdt-email-preview[data-view="paste"] {
   background: #e9eef2;
 }
@@ -242,6 +243,10 @@
 /* O afastamento da folha fica aqui, e não no quadro: dentro do conteúdo que
    rola ele sai de cena junto com as primeiras linhas, em vez de deixar uma
    faixa transparente por onde as linhas apareceriam acima do cabeçalho fixo. */
+/* A folha não limita a largura: a tabela pede `width: 100%` e o que ela ocupa
+   é a largura do corpo onde for colada. Na prévia esse corpo é o próprio
+   quadro, que acompanha o campo da mensagem logo acima — é assim que o
+   operador vê a tabela terminando onde a frase termina. */
 .egrdt-email-sheet {
   padding: var(--space-5) var(--space-4);
 }
@@ -466,8 +471,8 @@
     text-align: center;
   }
 
-  /* A tabela do e-mail tem 695 px fixos e não encolhe: numa tela estreita ela
-     rola na horizontal dentro do quadro, em vez de espremer o painel. */
+  /* Numa tela estreita a folha vale a largura disponível e a tabela, que é
+     proporcional, encolhe junto: o afastamento é o que diminui aqui. */
   .egrdt-email-sheet {
     padding: var(--space-4) var(--space-3);
   }

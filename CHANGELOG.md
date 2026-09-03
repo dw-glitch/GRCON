@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 5.40.0 — 2026-09-03
+
+### Resposta de e-mail: tabela na largura da mensagem, em 10 pt
+
+- A tabela copiada passa a ocupar **toda a largura do corpo da mensagem**: ela termina onde a frase acima dela termina, em vez de parar antes num bloco de 695 px com uma faixa vazia à direita. Quem define isso é `width: 100%` no `<table>` (também como atributo, que é o que o Outlook lê).
+- Com a largura deixando de ser fixa, cada coluna passa a declarar uma **proporção** dessa largura, e não px: com px o Outlook manteria a soma antiga e distribuiria a sobra por conta própria. A soma das proporções fecha exatamente em 100% — uma sobra de centésimo faz o Outlook recalcular a tabela inteira.
+- **Cabeçalho e células em 10 pt**, no lugar dos 8 pt e 9 pt de quando a tabela era estreita. O espaço que obrigava aos tamanhos menores deixou de ser escasso.
+- Os pisos de largura de cada coluna acompanham a fonte maior e crescem um quarto, para o nome da coluna continuar sem quebrar ao meio (`FAMÍL / IA DOCU / MENT / AL`). `DISCIPLINA` é a exceção que a fonte maior criou: seu piso vem do título, mas o conteúdo mais comum é `COMISSIONAMENTO`, que a 10 pt não cabia nele e quebrava ao meio — a coluna foi alargada para caber a palavra inteira, redistribuindo de `DOCUMENTO` e `TÍTULO`, que quebram em hífen e em espaço sem prejudicar a leitura.
+- A prévia **Como será colado** deixa de centralizar a tabela num bloco fixo e passa a acompanhar o campo da mensagem logo acima, para o operador ver a tabela terminando onde a frase termina.
+
 ## 5.39.1 — 2026-09-02
 
 ### Triagem para de anunciar conflito em documento que tem uma linha só na LD
