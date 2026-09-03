@@ -5,6 +5,7 @@
     "grcon_revision_control_document.js",
     "grcon_reposting_core.js",
     "grcon_reposting_storage.js",
+    "grcon_reposting_search.js",
     "grcon_reposting_report.js",
     "grcon_reposting_app.js",
   ];
