@@ -24,7 +24,7 @@
   function conferenceLabel(status, Conference) {
     const S = Conference && Conference.STATUSES || {};
     if (status === S.CONFIRMED) return "Postado";
-    if (status === S.AWAITING) return "Não postado ainda";
+    if (status === S.AWAITING || status === S.NOT_FOUND) return "Não postado ainda";
     return Conference && typeof Conference.statusLabel === "function"
       ? Conference.statusLabel(status)
       : trimmed(status) || "Não verificado";
