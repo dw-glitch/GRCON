@@ -62,8 +62,14 @@
     return searchKeys(document).some((key) => boundaryMatch(stem, key));
   }
   function revisionFromName(fileName, document) {
-    if (History && typeof History.generatedRevision === "function") {
-      return normalizeRevision(History.generatedRevision({ document, finalName: fileName }));
+    if (!History || typeof History.generatedRevision !== "function") return "";
+    // ET pode aparecer com ou sem nt- no arquivo físico. O casamento de
+    // documento já usa documentSearchKeys; a extração da revisão precisa usar
+    // as mesmas variantes para não classificar um arquivo correto como ambíguo.
+    const candidates = [...new Set([text(document), ...searchKeys(document)].filter(Boolean))];
+    for (const candidate of candidates) {
+      const revision = normalizeRevision(History.generatedRevision({ document: candidate, finalName: fileName }));
+      if (revision) return revision;
     }
     return "";
   }
