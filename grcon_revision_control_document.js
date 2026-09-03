@@ -14,6 +14,43 @@
     const left = new Set(Core?.documentSearchKeys?.(a)?.map((value) => norm(value)) || [norm(a)]);
     return (Core?.documentSearchKeys?.(b)?.map((value) => norm(value)) || [norm(b)]).some((value) => left.has(value));
   }
+  function cleanAuditEvent(event) {
+    const item = event || {};
+    return {
+      id: text(item.id),
+      recordId: text(item.recordId),
+      historyRecordId: text(item.historyRecordId),
+      egrdtNumber: text(item.egrdtNumber),
+      document: text(item.document),
+      previousRevision: normalizeRevision(item.previousRevision),
+      newRevision: normalizeRevision(item.newRevision),
+      affectedFiles: Array.isArray(item.affectedFiles) ? item.affectedFiles.map((file) => ({ index: Number(file?.index) || 0, originalName: text(file?.originalName), finalName: text(file?.finalName) })) : [],
+      changedAt: text(item.changedAt),
+      source: text(item.source) || Base.SOURCE,
+      userId: text(item.userId),
+      userEmail: text(item.userEmail),
+      userName: text(item.userName),
+    };
+  }
+
+  // revisionHistory viaja junto com o registro operacional. Isso faz a
+  // rastreabilidade acompanhar a sincronização normal do Histórico/Supabase e
+  // entrar nos backups que já exportam o Histórico, sem transformar o log em
+  // fonte de verdade da revisão. A revisão válida continua nos campos
+  // revision/grdtRevision do arquivo.
+  if (!History.__grconRevisionHistoryPatched && typeof History.cleanRecord === "function") {
+    const originalCleanRecord = History.cleanRecord.bind(History);
+    History.cleanRecord = function cleanRecordWithRevisionHistory(record) {
+      const cleaned = originalCleanRecord(record);
+      cleaned.revisionHistory = Array.isArray(record?.revisionHistory)
+        ? record.revisionHistory.map(cleanAuditEvent).filter((event) => event.id && event.document && event.changedAt)
+        : [];
+      return cleaned;
+    };
+    try { Object.defineProperty(History, "__grconRevisionHistoryPatched", { value: true, configurable: false }); }
+    catch (_) { History.__grconRevisionHistoryPatched = true; }
+  }
+
   function requestResult(request) { return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error || new Error("Falha na auditoria de revisão.")); }); }
   function transactionDone(tx) { return new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error || new Error("Falha na auditoria de revisão.")); tx.onabort = () => reject(tx.error || new Error("Auditoria interrompida.")); }); }
   function openDb() {
@@ -88,7 +125,7 @@
     next.localUpdatedAt = now;
     next.syncState = "pending";
     const actor = { ...userContext(), ...(context || {}) };
-    const event = {
+    const event = cleanAuditEvent({
       id: `revision-doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       recordId: recordKey(current),
       historyRecordId: text(current.id),
@@ -102,7 +139,8 @@
       userId: text(actor.userId),
       userEmail: text(actor.userEmail),
       userName: text(actor.userName),
-    };
+    });
+    next.revisionHistory = [...(Array.isArray(next.revisionHistory) ? next.revisionHistory : []), event];
 
     let saveResult;
     try {
@@ -124,8 +162,26 @@
 
     const detail = { manualRevision: true, documentRevision: true, recordId: next.id, clientRecordId: recordKey(next), egrdtNumber: next.egrdtNumber, document, previousRevision, newRevision, affectedFiles: affectedIndexes.length, auditId: event.id };
     root.dispatchEvent(new CustomEvent("grcon:history-updated", { detail }));
-    return { updated: true, saved: true, record: next, previousRecord: current, document, previousRevision, newRevision, affectedFiles: affectedIndexes.length, event, persistence: saveResult?.persistence || null };
+    return { updated: true, saved: true, record: History.cleanRecord(next), previousRecord: current, document, previousRevision, newRevision, affectedFiles: affectedIndexes.length, event, persistence: saveResult?.persistence || null };
   }
 
-  root.GrconRevisionControl = Object.freeze({ ...Base, updateRevision: updateDocumentRevision, updateDocumentRevision });
+  async function listAudit(filter) {
+    const merged = new Map();
+    try { (await Base.listAudit(filter || {})).forEach((event) => merged.set(event.id, cleanAuditEvent(event))); } catch (_) { /* Histórico abaixo continua disponível */ }
+    const wantedRecord = text(filter?.recordId);
+    const wantedDocument = norm(filter?.document);
+    History.read().forEach((record) => {
+      if (wantedRecord && recordKey(record) !== wantedRecord && text(record.id) !== wantedRecord) return;
+      (record.revisionHistory || []).forEach((raw) => {
+        const event = cleanAuditEvent(raw);
+        if (!event.id) return;
+        if (wantedDocument && norm(event.document) !== wantedDocument) return;
+        merged.set(event.id, event);
+      });
+    });
+    return [...merged.values()].sort((a, b) => String(b.changedAt).localeCompare(String(a.changedAt)));
+  }
+  async function exportAudit() { return listAudit({}); }
+
+  root.GrconRevisionControl = Object.freeze({ ...Base, updateRevision: updateDocumentRevision, updateDocumentRevision, listAudit, exportAudit, cleanAuditEvent });
 })(window);
