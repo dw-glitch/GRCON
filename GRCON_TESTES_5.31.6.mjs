@@ -3070,34 +3070,44 @@ check("resposta de e-mail monta as oito colunas da relação e cola como tabela"
   assert.equal((reply.tableHtml.match(/<th /g) || []).length, 8);
   assert.equal((reply.tableHtml.match(/<tr>/g) || []).length, 4);
   assert.match(reply.tableHtml, /border-collapse:collapse/);
-  assert.equal((reply.tableHtml.match(/font-size:9pt/g) || []).length, 25, "table e as 24 células usam fonte 9 pt");
-  assert.equal((reply.tableHtml.match(/font-size:8pt/g) || []).length, 8, "os oito cabeçalhos usam 8 pt, para o nome da coluna caber sem quebrar ao meio");
+  assert.equal((reply.tableHtml.match(/font-size:10pt/g) || []).length, 33, "table, os 8 cabeçalhos e as 24 células usam fonte 10 pt");
+  assert.doesNotMatch(reply.tableHtml, /font-size:[89]pt/, "os tamanhos menores, de quando a tabela era estreita, não voltam");
   assert.match(reply.html, /<p style=/);
 
-  // A tabela ficava enorme na resposta porque nada limitava a largura: um
-  // título ou nome de arquivo compridos esticavam a linha inteira. Agora a
-  // tabela tem largura fixa e o texto que não cabe quebra na própria célula.
+  // A tabela termina onde a frase acima dela termina: ela ocupa a largura do
+  // corpo da mensagem, e não um bloco estreito com faixa vazia à direita. O
+  // texto que não cabe continua quebrando dentro da própria célula.
   assert.match(reply.tableHtml, /table-layout:fixed/);
-  assert.match(reply.tableHtml, /width:695px/);
+  assert.match(reply.tableHtml, /width:100%/);
+  assert.match(reply.tableHtml, /<table [^>]*width="100%"/, "o Outlook precisa da largura também como atributo");
+  assert.doesNotMatch(reply.tableHtml, /width:\d+px/, "largura em px prenderia a tabela a um bloco mais estreito que a mensagem");
   assert.match(reply.tableHtml, /padding:3px 6px/);
   assert.doesNotMatch(reply.tableHtml, /padding:6px 10px/, "o preenchimento antigo, mais largo, não pode voltar");
   assert.equal((reply.tableHtml.match(/word-break:break-word/g) || []).length, 24, "as 24 células precisam quebrar texto comprido em vez de alargar a tabela");
-  assert.match(reply.tableHtml, /width="108"/, "a coluna TÍTULO precisa de uma largura fixa em px, não só em CSS");
+  assert.match(reply.tableHtml, /width="11.54%"/, "a coluna TÍTULO precisa da própria proporção, também como atributo");
 
-  // A coluna nova não pode ter alargado a tabela: ela foi acomodada
-  // estreitando as demais, e a soma continua sendo a largura declarada.
+  // A fonte a 10 pt não deixa "COMISSIONAMENTO" caber no piso do título da
+  // coluna: DISCIPLINA precisa de largura para o conteúdo, não só para o nome.
+  assert.ok(EmailReply.COLUMN_WIDTHS["DISCIPLINA"] >= 107, "DISCIPLINA precisa caber COMISSIONAMENTO sem quebrar ao meio");
+
+  // As colunas dividem 100% na proporção declarada, e a soma fecha exata: uma
+  // sobra de centésimo faz o Outlook recalcular a tabela inteira por conta.
   const somaDasColunas = Object.values(EmailReply.COLUMN_WIDTHS).reduce((total, width) => total + width, 0);
   assert.equal(somaDasColunas, EmailReply.TABLE_WIDTH);
-  assert.equal(EmailReply.TABLE_WIDTH, 695);
+  assert.equal(EmailReply.TABLE_WIDTH, 780);
   assert.equal(Object.keys(EmailReply.COLUMN_WIDTHS).length, reply.columns.length, "toda coluna precisa declarar a própria largura");
+  const somaDasPorcentagens = Object.values(EmailReply.COLUMN_PERCENTS).reduce((total, percent) => total + percent, 0);
+  assert.equal(Math.round(somaDasPorcentagens * 100) / 100, 100);
+  assert.equal(Object.keys(EmailReply.COLUMN_PERCENTS).length, reply.columns.length);
 
   // O cabeçalho não pode partir palavra ao meio ("FAMÍL / IA DOCU / MENT / AL"):
   // cada coluna é larga o bastante para a maior palavra do próprio título, e o
   // cabeçalho quebra nos espaços, não em qualquer letra.
   assert.doesNotMatch(reply.tableHtml.split("<tbody>")[0], /word-break/, "o cabeçalho quebra nos espaços, nunca no meio da palavra");
+  // Com o cabeçalho a 10 pt, e não mais a 8 pt, cada piso cresce um quarto.
   const pisos = {
-    "DATA DA GERAÇÃO / POSTAGEM": 75, "EGRDT": 52, "FAMÍLIA DOCUMENTAL": 89, "DOCUMENTO": 84,
-    "REVISÃO": 62, "TÍTULO": 53, "DISCIPLINA": 75, "ARQUIVO POSTADO": 66,
+    "DATA DA GERAÇÃO / POSTAGEM": 91, "EGRDT": 62, "FAMÍLIA DOCUMENTAL": 108, "DOCUMENTO": 102,
+    "REVISÃO": 74, "TÍTULO": 63, "DISCIPLINA": 91, "ARQUIVO POSTADO": 79,
   };
   Object.entries(pisos).forEach(([coluna, piso]) => {
     assert.ok(EmailReply.COLUMN_WIDTHS[coluna] >= piso, `${coluna} precisa de ao menos ${piso}px para o título caber sem quebrar ao meio`);
@@ -3666,4 +3676,4 @@ await (async () => {
   checks.push(nome);
 })();
 
-console.log(JSON.stringify({ version: "5.39.1", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.40.0", passed: true, checks: checks.length, names: checks }, null, 2));

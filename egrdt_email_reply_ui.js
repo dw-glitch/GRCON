@@ -165,7 +165,7 @@
       ? (paste ? `<div class="egrdt-email-sheet">${reply.tableHtml}</div>` : readingTableHtml(reply))
       : `<p class="egrdt-email-empty">Esta eGRDT não tem arquivos registrados para montar a relação.</p>`;
     panel.querySelector("#egrdt-email-hint").textContent = paste
-      ? `Tamanho real da tabela no e-mail (${Reply.TABLE_WIDTH} px): o texto que não cabe quebra dentro da célula, como o destinatário vai receber.`
+      ? "A tabela ocupa toda a largura da mensagem, terminando onde a frase acima dela termina; o texto que não cabe quebra dentro da célula, como o destinatário vai receber."
       : "Ajustada à tela para conferência — o e-mail continua recebendo a tabela do modo “Como será colado”.";
     panel.querySelectorAll("[data-egrdt-email-view]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.egrdtEmailView === state.view));

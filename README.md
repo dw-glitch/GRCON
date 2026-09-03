@@ -82,7 +82,9 @@ A exclusão compartilhada exige conexão e perfil de proprietário ou administra
 
 Na eGRDT selecionada no **Histórico**, o botão **Resposta de e-mail** abre a relação dos arquivos postados nas mesmas oito colunas usadas no relatório: data da geração/postagem, eGRDT, família documental, documento, **revisão**, título, disciplina e arquivo postado. A revisão vem logo depois do documento, como na planilha da GRDT, e é a revisão efetivamente enviada — inclusive quando ela foi escolhida à mão na triagem. Uma linha por arquivo físico — o DOCX e o PDF do mesmo documento continuam sendo duas linhas.
 
-A prévia da relação tem duas leituras, alternadas no próprio painel. **Como será colado** mostra a tabela no tamanho real do e-mail, com a quebra de texto que o destinatário vai ver. **Leitura ampla** remonta a mesma relação ajustada à tela, com as linhas numeradas e cada coluna por extenso, para conferir código e nome de arquivo antes de copiar. Nas duas, o cabeçalho acompanha a rolagem, e o que vai para a área de transferência é sempre a tabela do e-mail.
+A tabela ocupa toda a largura do corpo da mensagem: ela termina onde a frase acima dela termina, em vez de parar antes num bloco estreito com uma faixa vazia à direita. Cada coluna recebe uma proporção fixa dessa largura, e o texto que não cabe quebra dentro da própria célula. Cabeçalho e células usam fonte 10 pt.
+
+A prévia da relação tem duas leituras, alternadas no próprio painel. **Como será colado** mostra a tabela como o destinatário vai receber, com a mesma largura e a mesma quebra de texto. **Leitura ampla** remonta a mesma relação ajustada à tela, com as linhas numeradas e cada coluna por extenso, para conferir código e nome de arquivo antes de copiar. Nas duas, o cabeçalho acompanha a rolagem, e o que vai para a área de transferência é sempre a tabela do e-mail.
 
 A mensagem que acompanha a relação vem preenchida com o número da eGRDT e a data, e pode ser editada antes de copiar. **Copiar resposta** leva mensagem e tabela; **Copiar só a tabela** leva apenas a relação; **Abrir no e-mail** cria a mensagem já com o assunto.
 

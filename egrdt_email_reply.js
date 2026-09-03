@@ -173,32 +173,42 @@
     return lines.join("\n");
   }
 
-  // Sem largura por coluna, um título ou nome de arquivo longo esticava a
-  // tabela inteira na resposta — cada coluna ganha uma largura fixa (em px,
-  // também como atributo width para o Outlook respeitar) e o texto que não
-  // cabe quebra dentro da própria célula, em vez de alargar a tabela.
-  // A soma continua sendo os mesmos 695 px de TABLE_WIDTH: a coluna REVISÃO
-  // foi acomodada estreitando as demais, e não alargando a tabela.
+  // A tabela acompanha a largura do corpo da mensagem: ela termina onde a
+  // frase acima dela termina, em vez de parar antes num bloco de 695 px com
+  // uma faixa vazia à direita. Quem define isso é `width:100%` no <table>; as
+  // colunas, por consequência, precisam de largura proporcional (em %), e não
+  // em px — com px o Outlook manteria a soma antiga e distribuiria a sobra por
+  // conta própria.
+  //
+  // TABLE_WIDTH deixa de ser a largura impressa e passa a ser a referência de
+  // proporção: é dela que sai a porcentagem de cada coluna. Mexer numa largura
+  // continua sendo redistribuir, nunca somar — o total é fixo.
   //
   // O piso de cada largura é a maior palavra do próprio título, no tamanho do
   // cabeçalho, mais o preenchimento e a borda: numa coluna mais estreita que
   // isso o Outlook parte a palavra ao meio ("FAMÍL / IA DOCU / MENT / AL") e
-  // quem recebe a resposta não lê mais o nome da coluna. Medidos com a última
-  // fonte da pilha, a mais larga, os pisos são DATA 75 ("POSTAGEM"), EGRDT 52,
-  // FAMÍLIA DOCUMENTAL 89 ("DOCUMENTAL"), DOCUMENTO 84, REVISÃO 62, TÍTULO 53,
-  // DISCIPLINA 75 e ARQUIVO POSTADO 66 — 556 px ao todo. Os 139 px restantes
-  // vão para as colunas de conteúdo longo: eGRDT, documento, título e nome do
-  // arquivo. Mexer numa largura é redistribuir, nunca somar: o total é fixo.
-  const TABLE_WIDTH = 695;
+  // quem recebe a resposta não lê mais o nome da coluna. Com o cabeçalho a
+  // 10 pt (era 8 pt) esses pisos crescem um quarto: DATA 91 ("POSTAGEM"),
+  // EGRDT 62, FAMÍLIA DOCUMENTAL 108 ("DOCUMENTAL"), DOCUMENTO 102,
+  // REVISÃO 74, TÍTULO 63, DISCIPLINA 91 e ARQUIVO POSTADO 79 — 670 ao todo.
+  // Os 110 restantes vão para as colunas de conteúdo longo: eGRDT, documento,
+  // título e nome do arquivo.
+  //
+  // DISCIPLINA é a exceção que a fonte maior criou: seu piso vem do título
+  // ("DISCIPLINA", 91), mas o conteúdo mais comum é "COMISSIONAMENTO", que a
+  // 10 pt não cabe nesses 91 e quebrava ao meio ("COMISSIONAME / NTO"). Ela
+  // recebe 107 — o bastante para a palavra inteira — tirados de DOCUMENTO e
+  // TÍTULO, que quebram em hífen e em espaço sem prejudicar a leitura.
+  const TABLE_WIDTH = 780;
   const COLUMN_WIDTHS = {
-    "DATA DA GERAÇÃO / POSTAGEM": 75,
-    "EGRDT": 82,
-    "FAMÍLIA DOCUMENTAL": 89,
-    "DOCUMENTO": 109,
-    "REVISÃO": 62,
-    "TÍTULO": 108,
-    "DISCIPLINA": 75,
-    "ARQUIVO POSTADO": 95,
+    "DATA DA GERAÇÃO / POSTAGEM": 91,
+    "EGRDT": 87,
+    "FAMÍLIA DOCUMENTAL": 108,
+    "DOCUMENTO": 119,
+    "REVISÃO": 74,
+    "TÍTULO": 90,
+    "DISCIPLINA": 107,
+    "ARQUIVO POSTADO": 104,
   };
 
   // A revisão é um código de um ou dois caracteres numa coluna estreita:
@@ -210,32 +220,55 @@
     return COLUMN_ALIGN[column] || "left";
   }
 
+  // A porcentagem de cada coluna vem da proporção declarada acima. A última
+  // absorve o arredondamento das demais, para a soma fechar exatamente em
+  // 100% — sobra ou falta de centésimo faz o Outlook recalcular a tabela toda.
+  const COLUMN_PERCENTS = (() => {
+    const total = Object.values(COLUMN_WIDTHS).reduce((sum, width) => sum + width, 0);
+    const percents = {};
+    let used = 0;
+    COLUMNS.forEach((column, index) => {
+      if (index === COLUMNS.length - 1) {
+        percents[column] = Math.round((100 - used) * 100) / 100;
+        return;
+      }
+      const value = Math.round((COLUMN_WIDTHS[column] / total) * 10000) / 100;
+      percents[column] = value;
+      used += value;
+    });
+    return percents;
+  })();
+
+  function columnWidth(column) {
+    return `${COLUMN_PERCENTS[column]}%`;
+  }
+
   // Estilo embutido linha a linha: o Outlook descarta folhas de estilo e
   // qualquer regra que não esteja no próprio elemento colado.
-  const TABLE_STYLE = `border-collapse:collapse;table-layout:fixed;width:${TABLE_WIDTH}px;max-width:100%;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:9pt;color:#10222F`;
+  const TABLE_STYLE = "border-collapse:collapse;table-layout:fixed;width:100%;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:10pt;color:#10222F";
   // O Outlook nem sempre herda o tamanho declarado no <table>; por isso o
-  // cabeçalho e cada célula carregam o próprio tamanho no style — 8 pt no
-  // cabeçalho, 9 pt no corpo. O padding reduzido (era 6px 10px) deixa cada
-  // linha mais baixa.
+  // cabeçalho e cada célula carregam o próprio tamanho no style. Cabeçalho e
+  // corpo ficam ambos em 10 pt: a tabela agora ocupa a largura da mensagem,
+  // então o espaço que antes obrigava a 8/9 pt deixou de ser escasso. O
+  // padding reduzido (era 6px 10px) continua deixando cada linha baixa.
   //
   // O cabeçalho quebra em mais de uma linha em vez de cortar o nome da coluna
-  // com reticências: com oito colunas em 695 px, "DATA DA GERAÇÃO / POSTAGEM"
-  // não cabe em uma linha, e um título cortado deixa quem recebe a resposta
-  // sem saber o que a coluna traz. São duas ou três linhas uma única vez, no
-  // topo da tabela. Em 8 pt, um ponto abaixo do corpo, a maior palavra de cada
-  // título cabe na largura da própria coluna e a quebra acontece nos espaços.
-  // `word-wrap` sozinho (sem `word-break`) é o que garante isso: ele parte a
-  // palavra só quando ela não cabe sozinha na linha.
-  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:3px 6px;font-size:8pt;font-weight:bold;vertical-align:bottom;white-space:normal;word-wrap:break-word";
-  const CELL_STYLE = "border:1px solid #9FB3C3;padding:3px 6px;vertical-align:top;font-size:9pt;word-wrap:break-word;word-break:break-word";
+  // com reticências: com oito colunas, "DATA DA GERAÇÃO / POSTAGEM" não cabe
+  // em uma linha, e um título cortado deixa quem recebe a resposta sem saber o
+  // que a coluna traz. São duas ou três linhas uma única vez, no topo da
+  // tabela, e a quebra acontece nos espaços. `word-wrap` sozinho (sem
+  // `word-break`) é o que garante isso: ele parte a palavra só quando ela não
+  // cabe sozinha na linha.
+  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:3px 6px;font-size:10pt;font-weight:bold;vertical-align:bottom;white-space:normal;word-wrap:break-word";
+  const CELL_STYLE = "border:1px solid #9FB3C3;padding:3px 6px;vertical-align:top;font-size:10pt;word-wrap:break-word;word-break:break-word";
 
   function tableHtml(rows) {
-    const head = COLUMNS.map((column) => `<th style="${HEAD_STYLE};text-align:${align(column)};width:${COLUMN_WIDTHS[column]}px" width="${COLUMN_WIDTHS[column]}">${escapeHtml(column)}</th>`).join("");
+    const head = COLUMNS.map((column) => `<th style="${HEAD_STYLE};text-align:${align(column)};width:${columnWidth(column)}" width="${columnWidth(column)}">${escapeHtml(column)}</th>`).join("");
     const body = (rows || []).map((row) => {
-      const cells = COLUMNS.map((column) => `<td style="${CELL_STYLE};text-align:${align(column)};width:${COLUMN_WIDTHS[column]}px" width="${COLUMN_WIDTHS[column]}">${escapeHtml(row[column])}</td>`).join("");
+      const cells = COLUMNS.map((column) => `<td style="${CELL_STYLE};text-align:${align(column)};width:${columnWidth(column)}" width="${columnWidth(column)}">${escapeHtml(row[column])}</td>`).join("");
       return `<tr>${cells}</tr>`;
     }).join("");
-    return `<table style="${TABLE_STYLE}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    return `<table style="${TABLE_STYLE}" width="100%"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
   function messageHtml(message) {
@@ -293,5 +326,5 @@
     return { url: `mailto:?subject=${subject}&body=${short}`, truncated: true };
   }
 
-  return { COLUMNS, COLUMN_WIDTHS, COLUMN_ALIGN, TABLE_WIDTH, revision, rowsFromRecords, summarize, defaultMessage, defaultSubject, tableText, tableHtml, replyText, replyHtml, build, mailtoUrl };
+  return { COLUMNS, COLUMN_WIDTHS, COLUMN_PERCENTS, COLUMN_ALIGN, TABLE_WIDTH, revision, rowsFromRecords, summarize, defaultMessage, defaultSubject, tableText, tableHtml, replyText, replyHtml, build, mailtoUrl };
 });
