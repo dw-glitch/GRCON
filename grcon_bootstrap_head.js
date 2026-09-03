@@ -51,6 +51,7 @@
   function installPostingConferenceBootstrap() {
     const scripts = [
       ["posting_conference_bootstrap.js", "grconPostingConferenceBootstrap"],
+      ["posting_conference_refinement.js", "grconPostingConferenceRefinement"],
       ["posting_conference_state_guard.js", "grconPostingConferenceStateGuard"],
     ];
     scripts.forEach(([src, marker]) => {
