@@ -5,15 +5,19 @@
   const Posting = window.GrconSigemPosting;
   const Flow = window.GrconMacro5Flow;
   const HistoryReport = window.GrconHistoryReport;
-  // A versão vem da configuração central (ou do <html data-version>) para não
-  // precisar ser atualizada à mão em cada módulo. Antes ficava fixa aqui e saía
-  // desatualizada nos relatórios sempre que a publicação era promovida.
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
     || "5.40.0";
+  const LIST_PAGE_SIZE = 200;
+  const SEARCH_DEBOUNCE_MS = 120;
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-  const state = { records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null };
+  const state = {
+    records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null,
+    postings: [], postingByHistoryId: new Map(), postingById: new Map(), postingByEgrdt: new Map(),
+    visibleLimit: LIST_PAGE_SIZE, searchTimer: 0, filterOptionsSignature: "",
+    performance: { lastRenderMs: 0, postingReadsLastRender: 0, renderedRecords: 0, totalFiltered: 0 },
+  };
   const els = {
     tabs: [...document.querySelectorAll("[data-grcon-view]")],
     control: $("#grdt-module"), analysis: $("#analysis-history-module"), history: $("#history-module"), sigem: $("#sigem-module"), requests: $("#requests-module"), count: $("#history-tab-count"),
@@ -21,7 +25,6 @@
     dateStart: $("#history-date-start"), dateEnd: $("#history-date-end"), periodDocumentType: $("#history-period-document-type"), periodStatus: $("#history-period-status"), exportPeriod: $("#history-export-period"),
     clear: $("#history-clear"), summary: $("#history-summary"), list: $("#history-list"), empty: $("#history-empty"), detail: $("#history-detail"), resultCount: $("#history-result-count"),
   };
-
 
   function notify(message, kind) {
     if (typeof window.GrconNotify === "function") window.GrconNotify(message, kind || "info");
@@ -37,13 +40,8 @@
     return !invalid;
   }
 
-  function periodRecords() {
-    return [...state.filtered];
-  }
-
-  function periodFamilyLabel() {
-    return els.periodDocumentType?.value || "Todos";
-  }
+  function periodRecords() { return [...state.filtered]; }
+  function periodFamilyLabel() { return els.periodDocumentType?.value || "Todos"; }
 
   function updatePeriodStatus() {
     if (!validPeriod(false)) { els.periodStatus.textContent = "Período inválido"; return; }
@@ -67,9 +65,7 @@
     const webOrigin = location.protocol === "http:" || location.protocol === "https:";
     if (typeof Worker !== "function" || !webOrigin) return Promise.resolve(null);
     try {
-      if (!state.historyReportWorker) {
-        state.historyReportWorker = new Worker("history_report_worker.js");
-      }
+      if (!state.historyReportWorker) state.historyReportWorker = new Worker("history_report_worker.js");
     } catch (error) {
       state.historyReportWorker = null;
       return Promise.reject(error);
@@ -115,7 +111,7 @@
       notify(`${records.length} eGRDT(s) incluída(s) na relação do período · ${periodFamilyLabel()}.`, "success");
     } catch (error) {
       console.error(error);
-      notify(error.message || "Não foi possível gerar a relação por período.", "error");
+      notify("Não foi possível gerar a relação por período. Verifique os dados selecionados e tente novamente.", "error");
     } finally {
       state.exporting = false;
       els.exportPeriod.textContent = "Baixar relação do período";
@@ -141,8 +137,6 @@
     if (els.analysis) els.analysis.hidden = !analysis;
     els.history.hidden = !history;
     if (els.sigem) els.sigem.hidden = !sigem;
-    // A aba de e-mails também precisa entrar aqui: esta função esconde as
-    // demais, e sem citá-la ela ficaria visível sobre outra aba (ou some).
     els.tabs.forEach((button) => {
       const active = button.dataset.grconView === view;
       button.classList.toggle("active", active);
@@ -153,11 +147,12 @@
     if (sigem) { window.GrconSigemUi?.render?.(); window.setTimeout(() => document.querySelector("#sigem-search")?.focus(), 0); }
   }
 
-  function optionHtml(value, label) {
-    return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
-  }
+  function optionHtml(value, label) { return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`; }
 
   function refreshFilterOptions() {
+    const signature = `${state.records.length}|${state.records[0]?.generatedAt || ""}|${state.records.map((record) => record.outputType).filter(Boolean).sort().join("|")}`;
+    if (signature === state.filterOptionsSignature) return;
+    state.filterOptionsSignature = signature;
     const previousYear = els.year.value;
     const previousType = els.type.value;
     const years = [...new Set(state.records.map((record) => parsedNumber(record)?.year).filter(Boolean))].sort((a, b) => b - a);
@@ -166,6 +161,27 @@
     els.type.innerHTML = '<option value="">Todas</option>' + types.map((type) => optionHtml(type, type)).join("");
     els.year.value = years.map(String).includes(previousYear) ? previousYear : "";
     els.type.value = types.includes(previousType) ? previousType : "";
+  }
+
+  function refreshPostingCache() {
+    state.postings = Posting?.read?.() || [];
+    state.postingByHistoryId = new Map();
+    state.postingById = new Map();
+    state.postingByEgrdt = new Map();
+    state.postings.forEach((item) => {
+      if (item.historyId && !state.postingByHistoryId.has(item.historyId)) state.postingByHistoryId.set(item.historyId, item);
+      if (item.id && !state.postingById.has(item.id)) state.postingById.set(item.id, item);
+      if (item.egrdtNumber && !state.postingByEgrdt.has(item.egrdtNumber)) state.postingByEgrdt.set(item.egrdtNumber, item);
+    });
+    state.performance.postingReadsLastRender += Posting ? 1 : 0;
+  }
+
+  function postingRecord(record) {
+    if (!Posting || !record) return null;
+    return state.postingByHistoryId.get(record.id)
+      || state.postingById.get(record.id)
+      || state.postingByEgrdt.get(record.egrdtNumber)
+      || null;
   }
 
   function sortRecords(records) {
@@ -183,6 +199,7 @@
 
   function refresh() {
     state.records = History.read();
+    refreshPostingCache();
     refreshFilterOptions();
     let filtered = History.filter(state.records, els.search.value);
     if (els.year.value) filtered = filtered.filter((record) => String(parsedNumber(record)?.year || "") === els.year.value);
@@ -194,17 +211,16 @@
       });
     }
     filtered = History.filterByDate(filtered, els.dateStart.value, els.dateEnd.value);
-    // O tipo documental é um filtro de todo o Histórico, não apenas dos KPIs
-    // e do Excel do período. Recortar antes de preencher state.filtered faz a
-    // lista inferior exibir somente as eGRDTs que contêm N-1710, ET ou CV e
-    // recalcula a contagem daquela família dentro de uma eGRDT mista.
-    if (History && typeof History.filterByDocumentFamily === "function") {
-      filtered = History.filterByDocumentFamily(filtered, els.periodDocumentType?.value || "");
-    }
+    if (History && typeof History.filterByDocumentFamily === "function") filtered = History.filterByDocumentFamily(filtered, els.periodDocumentType?.value || "");
     state.filtered = sortRecords(filtered);
     if (!state.filtered.some((record) => record.id === state.selectedId)) state.selectedId = state.filtered[0] && state.filtered[0].id || "";
     if (els.count) { els.count.textContent = String(state.records.length); els.count.hidden = state.records.length === 0; }
-    if (els.resultCount) els.resultCount.textContent = `${state.filtered.length.toLocaleString("pt-BR")} eGRDT(s)`;
+    if (els.resultCount) {
+      const visible = Math.min(state.visibleLimit, state.filtered.length);
+      els.resultCount.textContent = state.filtered.length > visible
+        ? `${state.filtered.length.toLocaleString("pt-BR")} eGRDT(s) · exibindo ${visible.toLocaleString("pt-BR")}`
+        : `${state.filtered.length.toLocaleString("pt-BR")} eGRDT(s)`;
+    }
     els.exportPeriod.disabled = state.exporting || !periodRecords().length || !validPeriod(false) || !HistoryReport;
     updatePeriodStatus();
   }
@@ -218,11 +234,6 @@
     els.summary.innerHTML = `<div><span>eGRDTs localizadas</span><strong>${summary.egrdts.toLocaleString("pt-BR")}</strong></div><div><span>Documentos registrados</span><strong>${summary.documents.toLocaleString("pt-BR")}</strong></div><div><span>Alocações relacionadas</span><strong>${summary.allocations.toLocaleString("pt-BR")}</strong></div><div><span>Aguardando SIGEM</span><strong>${awaiting.toLocaleString("pt-BR")}</strong></div><div><span>Postadas</span><strong>${posted.toLocaleString("pt-BR")}</strong></div><div><span>Pendências/Falhas</span><strong>${attention.toLocaleString("pt-BR")}</strong></div>`;
   }
 
-  function postingRecord(record) {
-    if (!Posting || !record) return null;
-    return Posting.read().find((item) => item.historyId === record.id || item.id === record.id || item.egrdtNumber === record.egrdtNumber) || null;
-  }
-
   function postingBadge(record) {
     const posting = postingRecord(record);
     const status = posting ? posting.status : Posting?.STATUSES?.GERADO || "GERADO";
@@ -233,25 +244,21 @@
 
   function postingWorkflow(record) {
     const posting = postingRecord(record);
-    const audit = posting && Posting ? Posting.audit(posting, Posting.read()) : { ready: false };
+    const audit = posting && Posting ? Posting.audit(posting, state.postings) : { ready: false };
     const steps = Flow?.workflowSteps?.(posting?.status || "GERADO", Boolean(audit.ready)) || [];
     return `<nav class="posting-flow" aria-label="Fluxo da eGRDT até o SIGEM">${steps.map((step, index) => `<div class="posting-flow-step ${step.complete ? "complete" : ""} ${step.current ? "current" : ""}" data-step="${index + 1}"><strong>${escapeHtml(step.label)}</strong></div>`).join("")}</nav>`;
   }
 
   function revisionRelation(record, file, postings) {
     const source = postings || [];
-    const own = source.find((item) => item.historyId === record.id || item.id === record.id || item.egrdtNumber === record.egrdtNumber) || null;
+    const own = postingRecord(record);
     const sameDocument = (item) => Posting?.norm?.(item?.document) === Posting?.norm?.(file?.document);
     const ownRevisions = own?.status === Posting?.STATUSES?.POSTADO
       ? [...new Set((own.files || []).filter(sameDocument).map((item) => Posting.text(item.revision)).filter(Boolean))]
       : [];
     const otherRows = source
       .filter((item) => item.status === Posting?.STATUSES?.POSTADO && (!own || item.id !== own.id))
-      .flatMap((item) => (item.files || []).filter(sameDocument).map((entry) => ({
-        revision: Posting.text(entry.revision),
-        egrdt: Posting.text(item.postingGrdtNumber || item.egrdtNumber),
-        at: item.resultAt || item.updatedAt,
-      })))
+      .flatMap((item) => (item.files || []).filter(sameDocument).map((entry) => ({ revision: Posting.text(entry.revision), egrdt: Posting.text(item.postingGrdtNumber || item.egrdtNumber), at: item.resultAt || item.updatedAt })))
       .filter((item) => item.revision && Posting.norm(item.revision) !== Posting.norm(file.revision))
       .sort((a, b) => String(b.at).localeCompare(String(a.at)));
     const other = [];
@@ -268,13 +275,20 @@
   }
 
   function renderList() {
-    els.list.innerHTML = state.filtered.map((record) => {
+    const visibleRecords = state.filtered.slice(0, state.visibleLimit);
+    const cards = visibleRecords.map((record) => {
       const allocation = record.allocations.length ? record.allocations.join(" · ") : "Sem alocação informada";
       const creator = record.createdByName || record.createdByEmail;
       const creatorLine = creator ? `<span class="history-record-user" title="Gerado por ${escapeHtml(record.createdByEmail || creator)}">${escapeHtml(creator)}</span>` : "";
       return `<button class="history-record ${record.id === state.selectedId ? "active" : ""}" data-history-id="${escapeHtml(record.id)}" type="button"><div class="history-record-main"><strong>${escapeHtml(record.egrdtNumber)}</strong><span>${formatDate(record.generatedAt, true)} · ${escapeHtml(record.outputType)}</span>${creatorLine}</div>${postingBadge(record)}<div class="history-record-counts"><span>${record.documentCount} documento(s)</span><span>${record.fileCount} arquivo(s)</span></div><small title="${escapeHtml(allocation)}">${escapeHtml(allocation)}</small></button>`;
-    }).join("");
+    });
+    if (visibleRecords.length < state.filtered.length) {
+      cards.push(`<button class="secondary-button compact history-load-more" data-history-load-more type="button">Mostrar mais ${Math.min(LIST_PAGE_SIZE, state.filtered.length - visibleRecords.length).toLocaleString("pt-BR")} eGRDT(s)</button>`);
+    }
+    els.list.innerHTML = cards.join("");
     els.empty.hidden = state.filtered.length > 0;
+    state.performance.renderedRecords = visibleRecords.length;
+    state.performance.totalFiltered = state.filtered.length;
   }
 
   function historyNumberEditor(record) {
@@ -293,7 +307,6 @@
     const previousNumbers = record.numberHistory && record.numberHistory.length
       ? `<div><dt>Números anteriores</dt><dd>${record.numberHistory.map((value) => `<span>${escapeHtml(value)}</span>`).join("")}</dd></div>`
       : "";
-    const postings = Posting?.read?.() || [];
     const creator = record.createdByName || record.createdByEmail;
     const creatorLine = creator ? `<p class="history-record-user">Gerado por ${escapeHtml(creator)}</p>` : "";
     const canDelete = !window.GrconCloud?.state?.membership || window.GrconCloud.canManageHistory();
@@ -303,7 +316,7 @@
       ${historyNumberEditor(record)}
       <dl class="history-detail-meta"><div><dt>LD utilizada</dt><dd>${escapeHtml(record.ldName || "Não informada")}</dd></div><div><dt>Origem dos documentos</dt><dd>${escapeHtml(record.sourceName || "Pasta documental")}</dd></div><div><dt>Alocação</dt><dd>${record.allocations.length ? record.allocations.map((value) => `<span>${escapeHtml(value)}</span>`).join("") : "Não informada na LD"}</dd></div>${previousNumbers}</dl>
       <div class="history-detail-table"><table><thead><tr><th>Documento</th><th>Arquivo original</th><th>Arquivo enviado</th><th>Revisão gerada na GRDT</th><th>Revisão desta GRDT postada</th><th>Outra revisão postada</th><th>Status SIGEM na geração</th><th>Alocação</th><th>Versão da LD enviada</th><th>Aba LD</th></tr></thead><tbody>${record.files.map((file) => {
-        const relation = revisionRelation(record, file, postings);
+        const relation = revisionRelation(record, file, state.postings);
         const manualNote = file.revisionManual
           ? ` <span class="history-revision-manual" title="Alterada manualmente na triagem · sugestão do sistema na época: ${escapeHtml(file.revisionSuggested || "—")}">Alterada manualmente</span>`
           : "";
@@ -312,11 +325,18 @@
     if (state.editingId === record.id) window.setTimeout(() => $("#history-number-input")?.focus(), 0);
   }
 
-  function render() { refresh(); renderSummary(); renderList(); renderDetail(); }
+  function nowMs() { return typeof performance !== "undefined" && performance.now ? performance.now() : Date.now(); }
+  function render() {
+    const started = nowMs();
+    state.performance.postingReadsLastRender = 0;
+    refresh();
+    renderSummary();
+    renderList();
+    renderDetail();
+    state.performance.lastRenderMs = Math.round((nowMs() - started) * 100) / 100;
+  }
   function select(id) { state.selectedId = id; state.editingId = ""; renderList(); renderDetail(); }
 
-  // A resposta ao e-mail de quem pediu a emissão usa a mesma relação exibida
-  // aqui. O painel é montado por egrdt_email_reply_ui.js.
   function openEmailReply() {
     const record = state.records.find((item) => item.id === state.selectedId);
     if (!record) return;
@@ -330,9 +350,11 @@
   async function prepareForSigem() {
     const record = state.records.find((item) => item.id === state.selectedId);
     if (!record || !Posting) return;
-    Posting.registerGenerated([record], { appVersion: APP_VERSION });
+    const saved = Posting.registerGenerated([record], { appVersion: APP_VERSION });
+    if (saved?.persistence) await saved.persistence.catch(() => null);
+    refreshPostingCache();
     await window.GRCONModuleLoader?.ensureModule?.("sigem");
-    const posting = Posting.read().find((item) => item.historyId === record.id || item.id === record.id || item.egrdtNumber === record.egrdtNumber);
+    const posting = postingRecord(record);
     if (posting) window.GrconSigemUi?.select?.(posting.id);
     window.dispatchEvent(new CustomEvent("grcon:sigem-updated", { detail: { record: posting, preparedFromHistory: true } }));
     notify("eGRDT preparada na fila de postagem SIGEM.", "success");
@@ -388,27 +410,41 @@
     state.editingId = "";
     render();
     window.dispatchEvent(new CustomEvent("grcon:history-updated", {
-      detail: {
-        deleted: true,
-        recordId: record.clientRecordId || record.id,
-        cloudId: record.cloudId || "",
-        workspaceId: record.workspaceId || "",
-        reservationIds: record.reservationIds || [],
-        cloudDeleted: Boolean(cloudResult),
-      },
+      detail: { deleted: true, recordId: record.clientRecordId || record.id, cloudId: record.cloudId || "", workspaceId: record.workspaceId || "", reservationIds: record.reservationIds || [], cloudDeleted: Boolean(cloudResult) },
     }));
     notify(shared
       ? `eGRDT excluída do histórico compartilhado. O número ${record.egrdtNumber} foi liberado para reutilização.`
       : "eGRDT excluída do histórico local.", "success");
   }
 
+  function resetVisibleAndRender() { state.visibleLimit = LIST_PAGE_SIZE; render(); }
+
   els.tabs.forEach((button) => button.addEventListener("click", () => activate(button.dataset.grconView)));
-  [els.search, els.year, els.type, els.postingStatus, els.sort, els.dateStart, els.dateEnd, els.periodDocumentType].filter(Boolean).forEach((control) => control.addEventListener(control.tagName === "INPUT" ? "input" : "change", render));
+  if (els.search) {
+    els.search.addEventListener("input", () => {
+      window.clearTimeout(state.searchTimer);
+      state.visibleLimit = LIST_PAGE_SIZE;
+      state.searchTimer = window.setTimeout(render, SEARCH_DEBOUNCE_MS);
+    });
+  }
+  [els.year, els.type, els.postingStatus, els.sort, els.dateStart, els.dateEnd, els.periodDocumentType].filter(Boolean).forEach((control) => control.addEventListener("change", resetVisibleAndRender));
   els.exportPeriod.addEventListener("click", exportPeriodReport);
-  els.list.addEventListener("click", (event) => { const button = event.target.closest("[data-history-id]"); if (button) select(button.dataset.historyId); });
+  els.list.addEventListener("click", (event) => {
+    const more = event.target.closest("[data-history-load-more]");
+    if (more) {
+      state.visibleLimit = Math.min(state.filtered.length, state.visibleLimit + LIST_PAGE_SIZE);
+      renderList();
+      if (els.resultCount) els.resultCount.textContent = state.filtered.length > state.visibleLimit
+        ? `${state.filtered.length.toLocaleString("pt-BR")} eGRDT(s) · exibindo ${state.visibleLimit.toLocaleString("pt-BR")}`
+        : `${state.filtered.length.toLocaleString("pt-BR")} eGRDT(s)`;
+      return;
+    }
+    const button = event.target.closest("[data-history-id]");
+    if (button) select(button.dataset.historyId);
+  });
   els.detail.addEventListener("click", (event) => {
     const action = event.target.closest("[data-history-action]")?.dataset.historyAction;
-    if (action === "prepare-sigem") prepareForSigem();
+    if (action === "prepare-sigem") void prepareForSigem();
     if (action === "email-reply") openEmailReply();
     if (action === "edit") { state.editingId = state.selectedId; renderDetail(); }
     if (action === "delete") void deleteSelectedRecord();
@@ -439,5 +475,8 @@
   window.addEventListener("grcon:sigem-updated", render);
   window.addEventListener("storage", (event) => { if (event.key === History.STORAGE_KEY) render(); });
   render();
-  window.GrconHistoryUi = { state, render, activate, select };
+  window.GrconHistoryUi = {
+    state, render, activate, select,
+    performanceSnapshot: () => ({ ...state.performance, postingCount: state.postings.length, totalRecords: state.records.length }),
+  };
 })();
