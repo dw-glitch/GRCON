@@ -30,9 +30,9 @@
       : trimmed(status) || "Não verificado";
   }
 
-  function matchedBaseRecords(row, baseRecords, Conference) {
+  function matchedBaseRecords(row, baseRecords, Conference, baseIndex) {
     if (!row || !Conference || !Array.isArray(baseRecords) || !baseRecords.length) return [];
-    const index = Conference.buildBaseIndex(baseRecords);
+    const index = baseIndex || Conference.buildBaseIndex(baseRecords);
     const positions = new Set();
     (row.searchKeys || Conference.documentKeys(row.document) || []).forEach((searchKey) => {
       (index.get(Conference.norm(searchKey)) || []).forEach((position) => positions.add(position));
@@ -40,18 +40,20 @@
     return [...positions].map((position) => baseRecords[position]).filter(Boolean);
   }
 
-  function exactStatusRecord(row, baseRecords, Conference) {
+  function exactStatusRecord(row, baseRecords, Conference, baseIndex) {
     if (!row || !row.currentEvidence) return null;
     const sent = Conference.normalizeRevision(row.revisionSent);
     if (!sent) return null;
-    const exact = matchedBaseRecords(row, baseRecords, Conference)
+    const exact = matchedBaseRecords(row, baseRecords, Conference, baseIndex)
       .filter((record) => Conference.normalizeRevision(record.revision) === sent);
     return exact.length === 1 ? exact[0] : null;
   }
 
   function enrichRows(rows, baseRecords, Conference) {
+    const base = Array.isArray(baseRecords) ? baseRecords : [];
+    const index = Conference && typeof Conference.buildBaseIndex === "function" ? Conference.buildBaseIndex(base) : null;
     return (rows || []).map((row) => {
-      const exact = exactStatusRecord(row, baseRecords, Conference);
+      const exact = exactStatusRecord(row, base, Conference, index);
       return {
         ...row,
         conferenceLabel: conferenceLabel(row.status, Conference),
