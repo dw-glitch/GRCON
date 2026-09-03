@@ -686,7 +686,6 @@
       state.writeBlocked = true;
       state.lastError = error && error.message || "Falha ao preparar o armazenamento local.";
       finishLoadingSurface(gate, error);
-      notify("O armazenamento durável do GRCON não pôde ser preparado. Os dados existentes foram preservados e novas gravações ficaram bloqueadas para evitar perda.", "error");
       return status();
     });
     return state.initPromise;
