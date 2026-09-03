@@ -153,7 +153,7 @@ check("combinador é um módulo local, isolado do Supabase e carregado sob deman
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   assert.match(html, /data-grcon-view="pdf-tools"/);
   assert.match(html, /id="pdf-tools-module"/);
-  assert.match(html, /nenhum PDF é enviado, armazenado ou registrado no banco/i);
+  assert.match(html, /nenhum arquivo é enviado, armazenado ou registrado no banco/i);
   assert.match(loader, /"pdf-tools": \["pdf_merge_core\.js", "pdf_merge_app\.js"\]/);
   assert.match(app, /new Worker\("workers\/pdf-merge\.worker\.js"\)/);
   assert.doesNotMatch(app, /localStorage|GrconCloud|supabase|fetch\s*\(/i);
