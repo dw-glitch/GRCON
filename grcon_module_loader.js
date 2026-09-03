@@ -23,8 +23,9 @@
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; ambos entram sob demanda.
     requests: ["xlsx", "excel", "brand", "requests_app.js"],
-    // O combinador é isolado do banco. A biblioteca pesada fica dentro do
-    // Worker e só é carregada quando o operador realmente gera o PDF.
+    // O combinador é isolado do banco. As bibliotecas pesadas (pdf-lib no
+    // Worker, JSZip pelo grupo "zip") só são carregadas quando o operador
+    // realmente gera o resultado — PDF combinado ou ZIP com PDFs e DWGs.
     "pdf-tools": ["pdf_merge_core.js", "pdf_merge_app.js"],
   };
 

@@ -15,6 +15,26 @@
     return Boolean(file && Number(file.size) > 0 && (/\.pdf$/i.test(name) || type === "application/pdf"));
   }
 
+  const DWG_TYPES = new Set([
+    "application/acad",
+    "application/x-acad",
+    "application/autocad_dwg",
+    "application/dwg",
+    "application/x-dwg",
+    "image/vnd.dwg",
+    "drawing/dwg",
+  ]);
+
+  function isDwgFile(file) {
+    const name = text(file && file.name);
+    const type = text(file && file.type).toLowerCase();
+    return Boolean(file && Number(file.size) > 0 && (/\.dwg$/i.test(name) || DWG_TYPES.has(type)));
+  }
+
+  function isAcceptedFile(file) {
+    return isPdfFile(file) || isDwgFile(file);
+  }
+
   function fileSignature(file) {
     return [
       text(file && file.name).toLocaleLowerCase("pt-BR"),
@@ -24,7 +44,7 @@
   }
 
   function cleanBaseName(value) {
-    const original = text(value).replace(/\.pdf\s*$/i, "");
+    const original = text(value).replace(/\.(pdf|dwg|zip)\s*$/i, "");
     const cleaned = original
       .replace(/[\u0000-\u001f\u007f]/g, "")
       .replace(/[<>:"/\\|?*]/g, "-")
@@ -34,8 +54,9 @@
     return Array.from(cleaned || "PDF_Combinado").slice(0, 120).join("");
   }
 
-  function outputFileName(value) {
-    return `${cleanBaseName(value)}.pdf`;
+  function outputFileName(value, extension) {
+    const ext = text(extension).replace(/^\./, "").toLowerCase() || "pdf";
+    return `${cleanBaseName(value)}.${ext}`;
   }
 
   function formatBytes(value) {
@@ -67,6 +88,8 @@
   return Object.freeze({
     text,
     isPdfFile,
+    isDwgFile,
+    isAcceptedFile,
     fileSignature,
     cleanBaseName,
     outputFileName,
