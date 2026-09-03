@@ -461,6 +461,43 @@
       return { updated: true, record: clone(updated), previous, records: clone(state.history), durable: true, persistence };
     };
 
+    History.updateFileRevision = function updateFileRevisionDurable(recordId, fileIndex, value, customStorage) {
+      if (customStorage) return original.updateFileRevision(recordId, fileIndex, value, customStorage);
+      const id = History.text(recordId);
+      const index = state.history.findIndex((record) => record.id === id);
+      if (index < 0) return { updated: false, error: "Registro do histórico não localizado." };
+      const current = state.history[index];
+      const position = Number(fileIndex);
+      const currentFile = Number.isInteger(position) ? current.files[position] : null;
+      if (!currentFile) return { updated: false, error: "Documento não localizado nesta eGRDT." };
+      const normalized = History.normalizeRevisionValue(value);
+      if (!normalized || !History.isValidRevisionValue(normalized)) {
+        return { updated: false, error: "Informe uma revisão válida: 0 ou letras (sem I/O)." };
+      }
+      const previous = currentFile.revision;
+      if (History.norm(previous) === normalized) return { updated: true, record: clone(current), previous, records: clone(state.history) };
+      const revisionHistory = [...new Set([...(currentFile.revisionHistory || []), previous].map(History.text).filter(Boolean))];
+      const files = current.files.map((file, position2) => position2 !== position ? file : {
+        ...file,
+        revision: normalized,
+        grdtRevision: normalized,
+        grdtRevisionOriginal: file.grdtRevisionOriginal || file.grdtRevision || previous,
+        revisionEditedAt: new Date().toISOString(),
+        revisionHistory,
+      });
+      const updated = History.cleanRecord({
+        ...current,
+        files,
+        localUpdatedAt: new Date().toISOString(),
+        syncState: "pending",
+      });
+      state.history[index] = updated;
+      state.history = sortHistory(state.history);
+      const token = journal({ kind: "history", upserts: [updated] });
+      const persistence = enqueue(async () => { await putMany(HISTORY_STORE, [updated]); clearJournal(token); }, "Não foi possível salvar a alteração de revisão no banco local.");
+      return { updated: true, record: clone(updated), previous, records: clone(state.history), durable: true, persistence };
+    };
+
     History.durableReady = () => state.initPromise || Promise.resolve();
     History.durableStatus = () => status();
   }
@@ -570,7 +607,7 @@
     state.originals = {
       history: {
         read: History.read.bind(History), saveMany: History.saveMany.bind(History), replaceWorkspaceSnapshot: History.replaceWorkspaceSnapshot.bind(History),
-        markSynced: History.markSynced.bind(History), clear: History.clear.bind(History), deleteOne: History.deleteOne.bind(History), updateNumber: History.updateNumber.bind(History),
+        markSynced: History.markSynced.bind(History), clear: History.clear.bind(History), deleteOne: History.deleteOne.bind(History), updateNumber: History.updateNumber.bind(History), updateFileRevision: History.updateFileRevision.bind(History),
         cleanRecord: History.cleanRecord,
       },
       posting: { read: Posting.read.bind(Posting), write: Posting.write.bind(Posting), clear: Posting.clear.bind(Posting), cleanRecord: Posting.cleanRecord },

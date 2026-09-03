@@ -13,7 +13,7 @@
   const $ = (selector) => document.querySelector(selector);
   const escapeHtml = (value) => History.text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   const state = {
-    records: [], filtered: [], selectedId: "", editingId: "", exporting: false, historyReportWorker: null,
+    records: [], filtered: [], selectedId: "", editingId: "", editingRevisionKey: "", exporting: false, historyReportWorker: null,
     postings: [], postingByHistoryId: new Map(), postingById: new Map(), postingByEgrdt: new Map(),
     visibleLimit: LIST_PAGE_SIZE, searchTimer: 0, filterOptionsSignature: "",
     performance: { lastRenderMs: 0, postingReadsLastRender: 0, renderedRecords: 0, totalFiltered: 0 },
@@ -301,6 +301,20 @@
     return `<form class="history-number-editor" id="history-number-editor"><label for="history-number-input"><span>Novo número sequencial</span><input autocomplete="off" id="history-number-input" inputmode="numeric" maxlength="4" value="${escapeHtml(parsed ? String(parsed.sequence).padStart(4, "0") : "")}"/></label><div><small>${escapeHtml(scope)}</small><div class="history-number-editor-actions"><button class="secondary-button compact" data-history-action="cancel" type="button">Cancelar</button><button class="primary-button compact" data-history-action="save" type="submit">Salvar número</button></div></div></form>`;
   }
 
+  function canEditRevision() {
+    return !window.GrconCloud?.state?.membership || window.GrconCloud.canWriteHistory();
+  }
+
+  function historyRevisionEditor(record) {
+    const prefix = `${record.id}::`;
+    if (!state.editingRevisionKey.startsWith(prefix)) return "";
+    const fileIndex = Number(state.editingRevisionKey.slice(prefix.length));
+    const file = record.files[fileIndex];
+    if (!file) return "";
+    const scope = window.GrconCloud?.state?.membership ? "Atualiza o histórico compartilhado." : "Altera somente o registro local do histórico.";
+    return `<form class="history-number-editor" id="history-revision-editor"><label for="history-revision-input"><span>Nova revisão de ${escapeHtml(file.document || file.finalName || "documento")}</span><input autocomplete="off" id="history-revision-input" maxlength="6" value="${escapeHtml(file.revision)}"/></label><div><small>${escapeHtml(scope)} O arquivo já baixado não é renomeado.</small><div class="history-number-editor-actions"><button class="secondary-button compact" data-history-action="cancel-revision" type="button">Cancelar</button><button class="primary-button compact" data-history-action="save-revision" type="submit">Salvar revisão</button></div></div></form>`;
+  }
+
   function renderDetail() {
     const record = state.records.find((item) => item.id === state.selectedId);
     if (!record) {
@@ -317,15 +331,23 @@
     els.detail.innerHTML = `<header><div class="history-detail-title"><span>eGRDT REGISTRADA</span><h3>${escapeHtml(record.egrdtNumber)}</h3><p>${formatDate(record.generatedAt, true)} · ${escapeHtml(record.outputType)}</p>${creatorLine}${postingBadge(record)}</div><div class="history-detail-actions"><button class="primary-button compact" data-history-action="prepare-sigem" type="button">Preparar no SIGEM</button><button class="secondary-button compact" data-history-action="email-reply" title="Montar a resposta de e-mail com os documentos desta eGRDT" type="button">Resposta de e-mail</button><button class="secondary-button compact" data-history-action="edit" type="button">Editar número</button>${deleteAction}<div class="history-detail-numbers"><span><strong>${record.documentCount}</strong> documentos</span><span><strong>${record.fileCount}</strong> arquivos</span></div></div></header>
       ${postingWorkflow(record)}
       ${historyNumberEditor(record)}
+      ${historyRevisionEditor(record)}
       <dl class="history-detail-meta"><div><dt>LD utilizada</dt><dd>${escapeHtml(record.ldName || "Não informada")}</dd></div><div><dt>Origem dos documentos</dt><dd>${escapeHtml(record.sourceName || "Pasta documental")}</dd></div><div><dt>Alocação</dt><dd>${record.allocations.length ? record.allocations.map((value) => `<span>${escapeHtml(value)}</span>`).join("") : "Não informada na LD"}</dd></div>${previousNumbers}</dl>
-      <div class="history-detail-table"><table><thead><tr><th>Documento</th><th>Arquivo original</th><th>Arquivo enviado</th><th>Revisão gerada na GRDT</th><th>Revisão desta GRDT postada</th><th>Outra revisão postada</th><th>Status SIGEM na geração</th><th>Alocação</th><th>Versão da LD enviada</th><th>Aba LD</th></tr></thead><tbody>${record.files.map((file) => {
+      <div class="history-detail-table"><table><thead><tr><th>Documento</th><th>Arquivo original</th><th>Arquivo enviado</th><th>Revisão gerada na GRDT</th><th>Revisão desta GRDT postada</th><th>Outra revisão postada</th><th>Status SIGEM na geração</th><th>Alocação</th><th>Versão da LD enviada</th><th>Aba LD</th></tr></thead><tbody>${record.files.map((file, fileIndex) => {
         const relation = revisionRelation(record, file, state.postings);
         const manualNote = file.revisionManual
           ? ` <span class="history-revision-manual" title="Alterada manualmente na triagem · sugestão do sistema na época: ${escapeHtml(file.revisionSuggested || "—")}">Alterada manualmente</span>`
           : "";
-        return `<tr><td>${escapeHtml(file.document || "—")}</td><td>${escapeHtml(file.originalName || "—")}</td><td>${escapeHtml(file.finalName || "—")}</td><td><strong>${escapeHtml(relation.generated)}</strong>${manualNote}</td><td>${escapeHtml(relation.posted)}</td><td>${escapeHtml(relation.other)}</td><td>${escapeHtml(file.sigemStatus || "—")}</td><td>${escapeHtml(file.allocation || "—")}</td><td>${escapeHtml(file.ldVersion || "Não registrada")}</td><td>${escapeHtml(file.sheet || "—")}</td></tr>`;
+        const editedNote = file.revisionEditedAt
+          ? ` <span class="history-revision-manual" title="Revisão corrigida manualmente no histórico em ${escapeHtml(formatDate(file.revisionEditedAt, true))} · revisão originalmente gerada: ${escapeHtml(file.grdtRevisionOriginal || "—")}">Editada no histórico</span>`
+          : "";
+        const editButton = canEditRevision()
+          ? ` <button class="text-button compact" data-history-action="edit-revision" data-history-file-index="${fileIndex}" type="button" title="Corrigir a revisão desta eGRDT já gerada" aria-label="Corrigir a revisão de ${escapeHtml(file.document || "documento")}">Editar</button>`
+          : "";
+        return `<tr><td>${escapeHtml(file.document || "—")}</td><td>${escapeHtml(file.originalName || "—")}</td><td>${escapeHtml(file.finalName || "—")}</td><td><strong>${escapeHtml(relation.generated)}</strong>${manualNote}${editedNote}${editButton}</td><td>${escapeHtml(relation.posted)}</td><td>${escapeHtml(relation.other)}</td><td>${escapeHtml(file.sigemStatus || "—")}</td><td>${escapeHtml(file.allocation || "—")}</td><td>${escapeHtml(file.ldVersion || "Não registrada")}</td><td>${escapeHtml(file.sheet || "—")}</td></tr>`;
       }).join("")}</tbody></table></div>`;
     if (state.editingId === record.id) window.setTimeout(() => $("#history-number-input")?.focus(), 0);
+    if (state.editingRevisionKey.startsWith(`${record.id}::`)) window.setTimeout(() => $("#history-revision-input")?.focus(), 0);
   }
 
   function nowMs() { return typeof performance !== "undefined" && performance.now ? performance.now() : Date.now(); }
@@ -338,7 +360,7 @@
     renderDetail();
     state.performance.lastRenderMs = Math.round((nowMs() - started) * 100) / 100;
   }
-  function select(id) { state.selectedId = id; state.editingId = ""; renderList(); renderDetail(); }
+  function select(id) { state.selectedId = id; state.editingId = ""; state.editingRevisionKey = ""; renderList(); renderDetail(); }
 
   function openEmailReply() {
     const record = state.records.find((item) => item.id === state.selectedId);
@@ -382,6 +404,26 @@
     window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { renamed: true, previous: result.previous, current: result.record.egrdtNumber } }));
   }
 
+  function saveEditedRevision() {
+    const record = state.records.find((item) => item.id === state.selectedId);
+    const input = $("#history-revision-input");
+    const prefix = record ? `${record.id}::` : "";
+    if (!record || !input || !state.editingRevisionKey.startsWith(prefix)) return;
+    const fileIndex = Number(state.editingRevisionKey.slice(prefix.length));
+    const result = History.updateFileRevision(record.id, fileIndex, input.value);
+    if (!result.updated) {
+      input.setAttribute("aria-invalid", "true");
+      input.setCustomValidity(result.error || "Revisão inválida.");
+      input.reportValidity();
+      input.setCustomValidity("");
+      return;
+    }
+    state.editingRevisionKey = "";
+    render();
+    window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { revisionEdited: true, recordId: result.record.id, previous: result.previous } }));
+    notify("Revisão atualizada no histórico.", "success");
+  }
+
   async function deleteSelectedRecord() {
     const record = state.records.find((item) => item.id === state.selectedId);
     if (!record) return;
@@ -411,6 +453,7 @@
     }
     state.selectedId = result.records[0] && result.records[0].id || "";
     state.editingId = "";
+    state.editingRevisionKey = "";
     render();
     window.dispatchEvent(new CustomEvent("grcon:history-updated", {
       detail: { deleted: true, recordId: record.clientRecordId || record.id, cloudId: record.cloudId || "", workspaceId: record.workspaceId || "", reservationIds: record.reservationIds || [], cloudDeleted: Boolean(cloudResult) },
@@ -449,12 +492,25 @@
     const action = event.target.closest("[data-history-action]")?.dataset.historyAction;
     if (action === "prepare-sigem") void prepareForSigem();
     if (action === "email-reply") openEmailReply();
-    if (action === "edit") { state.editingId = state.selectedId; renderDetail(); }
+    if (action === "edit") { state.editingId = state.selectedId; state.editingRevisionKey = ""; renderDetail(); }
     if (action === "delete") void deleteSelectedRecord();
     if (action === "cancel") { state.editingId = ""; renderDetail(); }
+    if (action === "edit-revision") {
+      const fileIndex = event.target.closest("[data-history-file-index]")?.dataset.historyFileIndex;
+      state.editingId = "";
+      state.editingRevisionKey = `${state.selectedId}::${fileIndex}`;
+      renderDetail();
+    }
+    if (action === "cancel-revision") { state.editingRevisionKey = ""; renderDetail(); }
   });
-  els.detail.addEventListener("submit", (event) => { if (event.target.id !== "history-number-editor") return; event.preventDefault(); saveEditedNumber(); });
-  els.detail.addEventListener("input", (event) => { if (event.target.id === "history-number-input") event.target.value = String(event.target.value || "").replace(/\D/g, "").slice(0, 4); });
+  els.detail.addEventListener("submit", (event) => {
+    if (event.target.id === "history-number-editor") { event.preventDefault(); saveEditedNumber(); }
+    if (event.target.id === "history-revision-editor") { event.preventDefault(); saveEditedRevision(); }
+  });
+  els.detail.addEventListener("input", (event) => {
+    if (event.target.id === "history-number-input") event.target.value = String(event.target.value || "").replace(/\D/g, "").slice(0, 4);
+    if (event.target.id === "history-revision-input") event.target.value = String(event.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  });
   els.clear.addEventListener("click", async () => {
     if (!state.records.length) return;
     const shared = Boolean(window.GrconCloud?.state?.membership?.workspace_id);
@@ -464,12 +520,13 @@
     if (!window.confirm(question)) return;
     if (shared) {
       const cleared = await window.GrconCloud?.clearHistory?.();
-      if (cleared) { state.selectedId = ""; state.editingId = ""; render(); }
+      if (cleared) { state.selectedId = ""; state.editingId = ""; state.editingRevisionKey = ""; render(); }
       return;
     }
     if (History.clear()) {
       state.selectedId = "";
       state.editingId = "";
+      state.editingRevisionKey = "";
       render();
       window.dispatchEvent(new CustomEvent("grcon:history-updated"));
     }

@@ -166,6 +166,13 @@
       // enviada e revisionManual para "não alterada", sem quebrar o histórico.
       revisionSuggested: text(file && file.revisionSuggested) || revision,
       revisionManual: Boolean(file && file.revisionManual),
+      // Rastreabilidade da edição manual de revisão *depois* de a eGRDT já
+      // estar no histórico (diferente de revisionManual/revisionSuggested,
+      // que só cobrem a escolha feita ainda na triagem). grdtRevisionOriginal
+      // preserva a revisão como foi de fato gerada na primeira vez.
+      grdtRevisionOriginal: text(file && file.grdtRevisionOriginal),
+      revisionEditedAt: text(file && file.revisionEditedAt),
+      revisionHistory: Array.isArray(file && file.revisionHistory) ? file.revisionHistory.map(text).filter(Boolean) : [],
       effectiveDate: text(file && file.effectiveDate),
       grdt: text(file && file.grdt),
       sigemStatus: text(file && file.sigemStatus),
@@ -465,6 +472,57 @@
     }
   }
 
+  function normalizeRevisionValue(value) {
+    return norm(value).replace(/^REV(?:ISAO)?\.?\s*/, "").replace(/\s+/g, "");
+  }
+
+  function isValidRevisionValue(value) {
+    // Aceita "0", revisões-padrão em letras (sem I/O, mesmo alfabeto de
+    // core.js#REVISION_ALPHABET) e revisões de campo (letras + número, ex.
+    // "A1"), igual à validação usada na triagem (core.js#revisionInfo).
+    return /^(?:0|[A-HJ-NP-Z]+(?:[1-9]\d*)?)$/.test(value);
+  }
+
+  function updateFileRevision(recordId, fileIndex, value, storage) {
+    const target = storageOf(storage);
+    if (!target) return { updated: false, error: "Armazenamento local indisponível." };
+    const records = read(target);
+    const index = records.findIndex((record) => record.id === text(recordId));
+    if (index < 0) return { updated: false, error: "Registro do histórico não localizado." };
+    const current = records[index];
+    const position = Number(fileIndex);
+    const currentFile = Number.isInteger(position) ? current.files[position] : null;
+    if (!currentFile) return { updated: false, error: "Documento não localizado nesta eGRDT." };
+    const normalized = normalizeRevisionValue(value);
+    if (!normalized || !isValidRevisionValue(normalized)) {
+      return { updated: false, error: "Informe uma revisão válida: 0 ou letras (sem I/O)." };
+    }
+    const previous = currentFile.revision;
+    if (norm(previous) === normalized) return { updated: true, record: current, previous, records };
+    const revisionHistory = [...new Set([...(currentFile.revisionHistory || []), previous].map(text).filter(Boolean))];
+    const files = current.files.map((file, position2) => position2 !== position ? file : {
+      ...file,
+      revision: normalized,
+      grdtRevision: normalized,
+      grdtRevisionOriginal: file.grdtRevisionOriginal || file.grdtRevision || previous,
+      revisionEditedAt: new Date().toISOString(),
+      revisionHistory,
+    });
+    const updatedRecord = cleanRecord({
+      ...current,
+      files,
+      localUpdatedAt: new Date().toISOString(),
+      syncState: "pending",
+    });
+    records[index] = updatedRecord;
+    try {
+      target.setItem(STORAGE_KEY, JSON.stringify(fit(records.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)))));
+      return { updated: true, record: updatedRecord, previous, records: read(target) };
+    } catch (error) {
+      return { updated: false, error: error && error.message || "Não foi possível atualizar o histórico." };
+    }
+  }
+
   function filter(records, query) {
     const wanted = norm(query);
     if (!wanted) return records || [];
@@ -511,5 +569,5 @@
     };
   }
 
-  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
+  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, normalizeRevisionValue, isValidRevisionValue, updateFileRevision, filter, localDateKey, filterByDate, periodBounds, summary };
 });

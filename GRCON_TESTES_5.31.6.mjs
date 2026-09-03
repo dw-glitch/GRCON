@@ -1726,6 +1726,33 @@ check("renomeação mantém identificador estável para sincronização", () => 
   assert.equal(updated.record.syncState, "pending");
 });
 
+check("revisão de um documento já no histórico pode ser corrigida manualmente", () => {
+  const original = record("G7", { cloudId: "cloud-g", workspaceId: "ws", syncedAt: "2026-08-03T12:01:00.000Z", syncState: "synced" });
+  assert.equal(original.files[0].revision, "0");
+  const local = storage([original]);
+  const updated = History.updateFileRevision(original.id, 0, "a1", local);
+  assert.equal(updated.updated, true);
+  assert.equal(updated.previous, "0");
+  assert.equal(updated.record.id, original.id);
+  assert.equal(updated.record.syncState, "pending");
+  const file = updated.record.files[0];
+  assert.equal(file.revision, "A1");
+  assert.equal(file.grdtRevision, "A1");
+  assert.equal(file.grdtRevisionOriginal, "0");
+  assert.ok(file.revisionEditedAt);
+  assert.deepEqual(file.revisionHistory, ["0"]);
+});
+
+check("revisão inválida é rejeitada e não altera o histórico", () => {
+  const original = record("H8");
+  const local = storage([original]);
+  const result = History.updateFileRevision(original.id, 0, "I", local);
+  assert.equal(result.updated, false);
+  assert.match(result.error, /revis/i);
+  const reread = History.read(local);
+  assert.equal(reread[0].files[0].revision, "0");
+});
+
 check("histórico preserva a identidade da reserva compartilhada", () => {
   const item = record("F6", {
     reservationRequestId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
