@@ -16,11 +16,15 @@ globalThis.GrconHistory = {
   documentFamily: (f) => { const s = key(f.sheet); if (["ET", "RIR", "C&M"].includes(s)) return "ET"; if (s === "CV") return "CV"; return "N-1710"; },
 };
 const C = require("../posting_conference_core.js");
+const R = require("../posting_conference_refinement.js");
 
 function hist(doc, rev, generatedAt = "2026-09-01T12:00:00Z", extra = {}) {
   return [{ id: "r1", clientRecordId: "stable-r1", egrdtNumber: "0130870-C1O-PGV-G-0001-2026 - eGRDT", generatedAt, files: [{ document: doc, revision: rev, grdtRevision: rev, sheet: extra.sheet || "N-1710", discipline: "MEC", finalName: extra.finalName || `${doc}_0001_${rev}.pdf` }] }];
 }
-function base(doc, rev) { const d = C.displayDocument(doc); return [{ id: `${C.documentIdentity(d)}|${rev}`, document: d, documentIdentity: C.documentIdentity(d), searchKeys: C.documentKeys(d), revision: C.normalizeRevision(rev) }]; }
+function base(doc, rev, status = "") {
+  const d = C.displayDocument(doc);
+  return [{ id: `${C.documentIdentity(d)}|${rev}`, document: d, documentIdentity: C.documentIdentity(d), searchKeys: C.documentKeys(d), revision: C.normalizeRevision(rev), status }];
+}
 const NOW = "2026-09-02T12:00:00Z";
 
 let r = C.reconcile(hist("MC-5290.00-22313-970-C1O-009", "B"), base("MC-5290.00-22313-970-C1O-009", "B"), null, { now: NOW });
@@ -51,6 +55,38 @@ let parsed = C.parseMatrix(matrix);
 assert.equal(parsed.ok, true);
 assert.equal(parsed.records.length, 2);
 assert.equal(parsed.meta.duplicateCount, 1);
+assert.equal(parsed.records.find((item) => item.revision === "A").status, "OK");
+
+const statusHeader = R.locateExactStatusColumn([
+  ["Documento", "Revisão", "Situação", " STATUS "],
+  ["DOC-STATUS", "A", "Outra informação", "Em Workflow"],
+], C);
+assert.equal(statusHeader.statusIndex, 3);
+
+let statusBase = base("DOC-STATUS", "A", "Em Workflow");
+r = R.enrichResult(C.reconcile(hist("DOC-STATUS", "A"), statusBase, null, { now: NOW }), statusBase, C);
+assert.equal(r.rows[0].conferenceLabel, "Postado");
+assert.equal(r.rows[0].sigemStatus, "Em Workflow");
+
+statusBase = base("DOC-STATUS-2", "A", "Conforme Construído");
+r = R.enrichResult(C.reconcile(hist("DOC-STATUS-2", "A"), statusBase, null, { now: NOW }), statusBase, C);
+assert.equal(r.rows[0].conferenceLabel, "Postado");
+assert.equal(r.rows[0].sigemStatus, "Conforme Construído");
+
+statusBase = base("DOC-STATUS-3", "A", "");
+r = R.enrichResult(C.reconcile(hist("DOC-STATUS-3", "A"), statusBase, null, { now: NOW }), statusBase, C);
+assert.equal(r.rows[0].conferenceLabel, "Postado");
+assert.equal(r.rows[0].sigemStatus, "");
+
+statusBase = base("DOC-STATUS-4", "A", "  Em Workflow  ");
+r = R.enrichResult(C.reconcile(hist("DOC-STATUS-4", "A"), statusBase, null, { now: NOW }), statusBase, C);
+assert.equal(r.rows[0].sigemStatus, "  Em Workflow  ");
+
+const awaitingBase = base("OTHER", "A", "Em Workflow");
+r = R.enrichResult(C.reconcile(hist("DOC-PENDING", "A", "2026-09-02T10:00:00Z"), awaitingBase, null, { now: NOW, waitHours: 48 }), awaitingBase, C);
+assert.equal(r.rows[0].status, C.STATUSES.AWAITING);
+assert.equal(r.rows[0].conferenceLabel, "Não postado ainda");
+assert.equal(r.rows[0].sigemStatus, "");
 
 let first = C.reconcile(hist("DOC-2", "A", "2026-09-02T10:00:00Z"), base("OTHER", "A"), null, { now: NOW });
 assert.equal(first.rows[0].status, C.STATUSES.AWAITING);
@@ -70,21 +106,27 @@ assert.equal(r.groups[0].confirmed, 2);
 assert.equal(r.groups[0].divergent, 1);
 assert.equal(r.groups[0].status, C.AGGREGATE_STATUSES.REVIEW);
 
-matrix = [["Consulta Geral"], [], [], [], ["Documento", "Revisão"]];
-for (let i = 0; i < 20050; i += 1) matrix.push([`MC-5290.00-22313-970-C1O-${String(i).padStart(5, "0")}`, "A"]);
+matrix = [["Consulta Geral"], [], [], [], ["Documento", "Revisão", "STATUS"]];
+for (let i = 0; i < 20050; i += 1) matrix.push([`MC-5290.00-22313-970-C1O-${String(i).padStart(5, "0")}`, "A", i % 2 ? "Em Workflow" : "Conforme Construído"]);
 const start = Date.now();
 parsed = C.parseMatrix(matrix);
 assert.equal(parsed.records.length, 20050);
 const bigHist = [];
 for (let i = 0; i < 500; i += 1) bigHist.push({ id: `h${i}`, clientRecordId: `s${i}`, egrdtNumber: `G${i}`, generatedAt: "2026-09-01T00:00:00Z", files: [{ document: `MC-5290.00-22313-970-C1O-${String(i).padStart(5, "0")}`, revision: "A", sheet: "N-1710" }] });
 r = C.reconcile(bigHist, parsed.records, null, { now: NOW });
+r = R.enrichResult(r, parsed.records, C);
 assert.equal(r.summary.confirmed, 500);
-assert.ok(Date.now() - start < 8000, `processamento 20k excedeu 8s: ${Date.now() - start}ms`);
+assert.equal(r.rows[0].conferenceLabel, "Postado");
+assert.ok(["Em Workflow", "Conforme Construído"].includes(r.rows[0].sigemStatus));
+assert.ok(Date.now() - start < 8000, `processamento 20k + Status SIGEM excedeu 8s: ${Date.now() - start}ms`);
 
 const conf = C.reconcile(hist("DOC-H", "A", "2026-08-20T00:00:00Z"), base("DOC-H", "A"), null, { now: "2026-09-01T12:00:00Z" });
 const missing = C.reconcile(hist("DOC-H", "A", "2026-08-20T00:00:00Z"), base("OTHER", "A"), conf.state, { now: "2026-09-02T12:00:00Z" });
 assert.equal(missing.rows[0].status, C.STATUSES.CONFIRMED);
 assert.equal(missing.rows[0].historicalPreserved, true);
 assert.equal(missing.rows[0].firstConfirmedAt, conf.rows[0].firstConfirmedAt);
+const historicalEnriched = R.enrichResult(missing, base("OTHER", "A", "Em Workflow"), C);
+assert.equal(historicalEnriched.rows[0].conferenceLabel, "Postado");
+assert.equal(historicalEnriched.rows[0].sigemStatus, "");
 
-console.log(`posting_conference: 10 cenários OK · 20k em ${Date.now() - start}ms`);
+console.log(`posting_conference: 16 cenários OK · 20k + Status SIGEM em ${Date.now() - start}ms`);
