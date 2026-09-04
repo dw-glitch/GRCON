@@ -159,6 +159,26 @@ assert.match(appSource, /duplicateAcrossEgrdts: organize/);
 assert.match(appSource, /await pause\(220\)/);
 assert.match(appSource, /Nenhum arquivo pôde ser lido para o ZIP/);
 
+// Busca sobre índice vazio não é evidência de ausência. O resumo precisa
+// separar “não verificado” de “não encontrado”, e a tela precisa dizer por quê.
+const uncheckedSummary = Reposting.summarize([
+  { state: Reposting.STATES.UNCHECKED, target, selected: [] },
+  { state: Reposting.STATES.UNCHECKED, target, selected: [] },
+  { state: Reposting.STATES.FOUND, target, selected: [{}] },
+]);
+assert.equal(uncheckedSummary.unchecked, 2);
+assert.equal(uncheckedSummary.notFound, 0);
+assert.equal(uncheckedSummary.ready, false);
+assert.equal(Reposting.stateLabel(Reposting.STATES.UNCHECKED), "Não verificado");
+
+assert.match(appSource, /if \(!available\.entries\.length\)/);
+assert.match(appSource, /Busca não realizada/);
+assert.match(appSource, /pendingRoots/);
+assert.match(appSource, /Clique em “Atualizar índice”/);
+assert.match(appSource, /Nenhum local de arquivos foi configurado/);
+// Autorizar a pasta passa a indexar na sequência, senão a busca fica sem fonte.
+assert.match(appSource, /Indexando os arquivos…`, "success"\); await indexRootAction\(item\.id\)/);
+
 sessionEntryResolution().then(() => {
   console.log("reposting: revisão operacional + localização segura + lote OK");
 }, (error) => { console.error(error); process.exitCode = 1; });
