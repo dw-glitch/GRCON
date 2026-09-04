@@ -193,11 +193,26 @@
       cell.className = "pc-sigem-cell";
       statusCell.insertAdjacentElement("afterend", cell);
     }
-    cell.textContent = "";
-    const badge = document.createElement("span");
-    badge.className = "pc-sigem-status";
-    badge.textContent = rawText(row && row.sigemStatus) || "—";
-    cell.appendChild(badge);
+    // O selo era destruído e recriado a cada refinamento, em todas as linhas da
+    // página. Além de descartar nó por nó sem necessidade, isso reinicia
+    // qualquer transição do CSS e pisca a coluna inteira quando o refinamento
+    // roda em sequência. Só reescrevemos o que mudou de fato.
+    const label = rawText(row && row.sigemStatus) || "—";
+    let badge = cell.firstElementChild;
+    if (!badge || !badge.classList.contains("pc-sigem-status")) {
+      cell.textContent = "";
+      badge = document.createElement("span");
+      badge.className = "pc-sigem-status";
+      cell.appendChild(badge);
+    }
+    setText(badge, label);
+  }
+
+  // textContent reescrito com o mesmo valor troca o nó de texto e conta como
+  // mutação: com o observer do módulo escutando childList, isso é trabalho e
+  // repintura por nada, linha a linha.
+  function setText(node, value) {
+    if (node && node.textContent !== value) node.textContent = value;
   }
 
   function decorateDocumentTable(module) {
@@ -207,14 +222,14 @@
     const conferenceIndex = headings.findIndex((th) => /^(Situação|Conferência)$/i.test(trimmed(th.textContent)));
     if (conferenceIndex < 0) return;
     const conferenceHeading = headings[conferenceIndex];
-    conferenceHeading.textContent = "Conferência";
+    setText(conferenceHeading, "Conferência");
     let sigemHeading = conferenceHeading.nextElementSibling;
     if (!sigemHeading || !sigemHeading.classList.contains("pc-sigem-heading")) {
       sigemHeading = document.createElement("th");
       sigemHeading.className = "pc-sigem-heading";
       conferenceHeading.insertAdjacentElement("afterend", sigemHeading);
     }
-    sigemHeading.textContent = "Status SIGEM";
+    setText(sigemHeading, "Status SIGEM");
 
     const rows = visibleRows();
     [...table.querySelectorAll("tbody tr")].forEach((tr, index) => {
@@ -223,20 +238,20 @@
       const statusCell = cells[conferenceIndex];
       if (!statusCell) return;
       const chip = statusCell.querySelector(".pc-status");
-      if (chip && row) chip.textContent = row.conferenceLabel || conferenceLabel(row.status, root.GrconPostingConference);
+      if (chip && row) setText(chip, row.conferenceLabel || conferenceLabel(row.status, root.GrconPostingConference));
       ensureSigemCell(statusCell, row);
     });
   }
 
   function decorateLabels(module) {
     module.querySelectorAll("#pc-kpis span").forEach((node) => {
-      if (trimmed(node.textContent) === "Aguardando confirmação") node.textContent = "Não postado ainda";
+      if (trimmed(node.textContent) === "Aguardando confirmação") setText(node, "Não postado ainda");
     });
     module.querySelectorAll("#pc-status option").forEach((option) => {
       const Conference = root.GrconPostingConference;
       if (!Conference) return;
-      if (option.value === Conference.STATUSES.CONFIRMED) option.textContent = "Postado";
-      if (option.value === Conference.STATUSES.AWAITING) option.textContent = "Não postado ainda";
+      if (option.value === Conference.STATUSES.CONFIRMED) setText(option, "Postado");
+      if (option.value === Conference.STATUSES.AWAITING) setText(option, "Não postado ainda");
     });
   }
 
