@@ -342,7 +342,18 @@
   }
   function renderPrepSummary() {
     const summary = Core.summarize(state.results);
-    $("#grcon-repost-summary").innerHTML = `<div><span>Documentos</span><strong>${fmt(summary.documents)}</strong></div><div><span>Arquivos encontrados</span><strong>${fmt(summary.filesFound)}</strong></div><div><span>Não encontrados</span><strong>${fmt(summary.notFound)}</strong></div><div><span>Ambíguos</span><strong>${fmt(summary.ambiguous)}</strong></div><div><span>Revisão diferente</span><strong>${fmt(summary.differentRevision)}</strong></div>`;
+    const tiles = [
+      ["Documentos", summary.documents],
+      ["Arquivos encontrados", summary.filesFound],
+      ["Não encontrados", summary.notFound],
+      ["Ambíguos", summary.ambiguous],
+      ["Revisão diferente", summary.differentRevision],
+    ];
+    // “Não verificado” não é o mesmo que “não encontrado”: o primeiro diz que a
+    // busca não chegou a acontecer para aquele documento.
+    if (summary.permissionRequired) tiles.push(["Permissão necessária", summary.permissionRequired]);
+    if (summary.unchecked) tiles.push(["Não verificados", summary.unchecked]);
+    $("#grcon-repost-summary").innerHTML = tiles.map(([caption, value]) => `<div><span>${esc(caption)}</span><strong>${fmt(value)}</strong></div>`).join("");
   }
   async function renderRoots() {
     const target = $("#grcon-roots-list"); if (!target) return;
@@ -351,7 +362,7 @@
     const rows = [];
     for (const item of roots) {
       const permission = await Storage.permissionState(item, "read");
-      rows.push(`<div class="grcon-root-row" data-root-id="${esc(item.id)}"><div><strong>${esc(item.label)}</strong><span>${item.area ? `${esc(item.area)} · ` : ""}${esc(item.handle?.name || "Pasta autorizada")}</span><small>${item.lastIndexedAt ? `Última indexação: ${esc(dateTime(item.lastIndexedAt))} · ${fmt(item.indexedFiles)} arquivo(s)` : "Ainda não indexada"}</small></div><span class="grcon-permission ${permission}">${permission === "granted" ? "Acesso autorizado" : permission === "prompt" ? "Autorizar novamente" : "Acesso negado"}</span><div><button class="secondary-button compact" data-root-authorize type="button">Autorizar</button><button class="secondary-button compact" data-root-index type="button">Atualizar índice</button><button class="text-button danger" data-root-remove type="button">Remover</button></div></div>`);
+      rows.push(`<div class="grcon-root-row${item.lastIndexedAt ? "" : " pending-index"}" data-root-id="${esc(item.id)}"><div><strong>${esc(item.label)}</strong><span>${item.area ? `${esc(item.area)} · ` : ""}${esc(item.handle?.name || "Pasta autorizada")}</span><small>${item.lastIndexedAt ? `Última indexação: ${esc(dateTime(item.lastIndexedAt))} · ${fmt(item.indexedFiles)} arquivo(s)` : "Ainda não indexada — a busca não consulta esta pasta enquanto não houver índice"}</small></div><span class="grcon-permission ${permission}">${permission === "granted" ? "Acesso autorizado" : permission === "prompt" ? "Autorizar novamente" : "Acesso negado"}</span><div><button class="secondary-button compact" data-root-authorize type="button">Autorizar</button><button class="secondary-button compact" data-root-index type="button">Atualizar índice</button><button class="text-button danger" data-root-remove type="button">Remover</button></div></div>`);
     }
     if (state.sessionEntries.length) rows.push(`<div class="grcon-root-row session"><div><strong>Pasta desta sessão</strong><span>Seleção manual do navegador</span><small>${fmt(state.sessionEntries.length)} arquivo(s) disponíveis até fechar/recarregar esta página</small></div><span class="grcon-permission granted">Sessão atual</span></div>`);
     target.innerHTML = rows.join("") || "<empty-state><strong>Nenhum local configurado</strong><span>Autorize uma pasta raiz ou selecione uma pasta somente para esta sessão.</span></empty-state>";
@@ -374,7 +385,10 @@
     if (event.target.closest("#grcon-repost-cancel")) { state.controller?.abort(); return; }
     if (event.target.closest("#grcon-root-add")) {
       const label = text($("#grcon-root-label").value); const area = text($("#grcon-root-area").value);
-      try { const item = await Storage.chooseRoot(label, { area }); $("#grcon-root-label").value = ""; $("#grcon-root-area").value = ""; await renderRoots(); notify(`Local “${item.label}” autorizado. Atualize o índice para iniciar a busca.`, "success"); }
+      // Autorizar a pasta e não indexar deixava a busca sem nada para consultar,
+      // e o operador só descobria isso pelo resultado “não encontrado”. A
+      // indexação passa a começar junto, com progresso e cancelamento.
+      try { const item = await Storage.chooseRoot(label, { area }); $("#grcon-root-label").value = ""; $("#grcon-root-area").value = ""; await renderRoots(); notify(`Local “${item.label}” autorizado. Indexando os arquivos…`, "success"); await indexRootAction(item.id); }
       catch (error) { if (error?.name !== "AbortError") notify(error.message || "Não foi possível autorizar a pasta.", "error"); }
       return;
     }
@@ -406,28 +420,50 @@
   }
   async function accessibleIndexEntries() {
     const roots = await Storage.listRoots();
-    const accessible = []; const unavailable = [];
-    for (const item of roots.filter((rootItem) => rootItem.currentGeneration)) {
+    const accessible = []; const unavailable = []; const pending = [];
+    for (const item of roots) {
+      // Uma raiz autorizada e nunca indexada não tem o que oferecer à busca.
+      // Antes ela era descartada em silêncio, e o documento saía como ausente.
+      if (!item.currentGeneration) { pending.push(item); continue; }
       const permission = await Storage.permissionState(item, "read");
-      if (permission === "granted") accessible.push(item.id); else unavailable.push(item.id);
+      if (permission === "granted") accessible.push(item.id); else unavailable.push(item);
     }
     const entries = accessible.length ? await Storage.activeEntries(accessible) : [];
-    return { entries: [...entries, ...state.sessionEntries], unavailableRoots: unavailable };
+    return { entries: [...entries, ...state.sessionEntries], roots, unavailableRoots: unavailable, pendingRoots: pending, indexedRoots: accessible };
+  }
+  // Só existe evidência de ausência quando houve onde procurar. Sem índice, sem
+  // permissão ou sem pasta de sessão, o GRCON precisa dizer isso — e não
+  // carimbar “não encontrado”, que nesta tela é lido como “o arquivo não está
+  // na rede”.
+  function missingSourceReason(available) {
+    if (available.unavailableRoots.length) return `${fmt(available.unavailableRoots.length)} local(is) indexado(s) estão sem permissão de leitura nesta sessão (${available.unavailableRoots.map((item) => item.label).join(", ")}). Clique em “Autorizar” antes de localizar.`;
+    if (available.pendingRoots.length) return `${fmt(available.pendingRoots.length)} local(is) autorizado(s) ainda não têm índice (${available.pendingRoots.map((item) => item.label).join(", ")}). Clique em “Atualizar índice” — sem índice o GRCON não tem onde procurar.`;
+    if (available.roots.length) return "Os locais autorizados estão indexados, mas o índice não contém nenhum arquivo. Atualize o índice ou selecione uma pasta nesta sessão.";
+    return "Nenhum local de arquivos foi configurado. Autorize uma pasta raiz e atualize o índice, ou selecione uma pasta apenas para esta sessão.";
   }
   async function searchFiles() {
     const controller = beginOperation("Preparando índice para busca…");
     try {
       const available = await accessibleIndexEntries();
+      if (!available.entries.length) {
+        const reason = missingSourceReason(available);
+        state.results = state.targets.map((target) => ({ state: Core.STATES.UNCHECKED, target, candidates: [], selected: [], evidence: `Busca não realizada: ${reason}` }));
+        endOperation("Busca não realizada: não havia índice para consultar.");
+        renderPrepSummary(); renderResults(); await renderRoots();
+        return notify(reason, "warning");
+      }
+      const incomplete = [...available.unavailableRoots, ...available.pendingRoots];
       const output = [];
       for (let index = 0; index < state.targets.length; index += 1) {
         if (controller.signal.aborted) { const error = new Error("Busca cancelada."); error.name = "AbortError"; throw error; }
         let result = Core.classifyTarget(state.targets[index], available.entries);
-        if (result.state === Core.STATES.NOT_FOUND && available.unavailableRoots.length && !state.sessionEntries.length) result = { ...result, state: Core.STATES.PERMISSION_REQUIRED, evidence: "Há uma ou mais raízes indexadas sem permissão de leitura nesta sessão. Autorize novamente antes de concluir que o arquivo está ausente." };
+        if (result.state === Core.STATES.NOT_FOUND && incomplete.length) result = { ...result, state: Core.STATES.PERMISSION_REQUIRED, evidence: `A busca não cobriu todos os locais configurados. ${missingSourceReason(available)} Regularize antes de concluir que o arquivo está ausente.` };
         output.push(result);
         setProgress(`Localizando documentos: ${index + 1}/${state.targets.length}`, true);
         if ((index + 1) % 8 === 0) await new Promise((resolve) => root.setTimeout(resolve, 0));
       }
-      state.results = output; endOperation("Busca concluída."); renderPrepSummary(); renderResults();
+      state.results = output; endOperation(`Busca concluída em ${fmt(available.entries.length)} arquivo(s) do índice.`); renderPrepSummary(); renderResults();
+      if (incomplete.length) notify(missingSourceReason(available), "warning");
     } catch (error) { endOperation(); if (error?.name === "AbortError") notify("Busca cancelada.", "info"); else notify(error.message || "Não foi possível localizar os arquivos.", "error"); }
   }
   function candidateEvidence(result) {
