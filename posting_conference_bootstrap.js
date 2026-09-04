@@ -4,10 +4,29 @@
   let reconcileTimer = 0;
   let decorating = false;
   let decorateQueued = false;
+  let projectionRefreshPromise = null;
+  let historyProjection = null;
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
     else if (kind === "error") root.alert(message);
+  }
+
+  function escapeHtml(value) {
+    return String(value === null || value === undefined ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function setText(node, value) {
+    if (node && node.textContent !== value) node.textContent = value;
+  }
+
+  function setClass(node, value) {
+    if (node && node.className !== value) node.className = value;
   }
 
   function ensureCss() {
@@ -85,20 +104,28 @@
     setAreaLabel(true);
   }
 
+  async function ensureConferenceRuntime() {
+    if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
+    await root.GRCONModuleLoader.ensure("posting_conference_core.js");
+    await root.GRCONModuleLoader.ensure("posting_conference_refinement.js");
+    await root.GRCONModuleLoader.ensure("posting_conference_history_projection.js");
+  }
+
   async function openConference() {
     if (opening) return;
     opening = true;
     try {
       ensureCss();
       activateConferenceShell();
-      if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
-      await root.GRCONModuleLoader.ensure("posting_conference_core.js");
+      await ensureConferenceRuntime();
       await root.GRCONModuleLoader.ensure("xlsx");
       await root.GRCONModuleLoader.ensure("excel");
       await root.GRCONModuleLoader.ensure("posting_conference_report.js");
       await root.GRCONModuleLoader.ensure("posting_conference_app.js");
       activateConferenceShell();
       await root.GrconPostingConferenceUi?.activate?.();
+      captureProjectionFromUi();
+      queueDecorateHistory();
     } catch (error) {
       console.error(error);
       deactivateConference();
@@ -118,6 +145,173 @@
     if (item.status === "REVISAR") return `Conf. SIGEM · revisar · ${item.divergent + item.review} alerta(s)`;
     if (item.status === "PENDENTE") return `Conf. SIGEM · ${item.confirmed}/${item.total} · ${item.awaiting + item.notFound} não postado(s) ainda`;
     return "Conf. SIGEM · Não verificado";
+  }
+
+  function conferenceRowLabel(row) {
+    const Conference = root.GrconPostingConference;
+    const Refinement = root.GrconPostingConferenceRefinement;
+    if (!row || !Conference) return "Não verificado";
+    if (row.conferenceLabel) return row.conferenceLabel;
+    if (Refinement?.conferenceLabel) return Refinement.conferenceLabel(row.status, Conference);
+    return row.statusLabel || Conference.statusLabel?.(row.status) || "Não verificado";
+  }
+
+  function conferenceStatusClass(status) {
+    return ({
+      CONFIRMADO: "confirmed",
+      AGUARDANDO: "awaiting",
+      REVISAO_DIVERGENTE: "divergent",
+      NAO_ENCONTRADO: "missing",
+      REQUER_ANALISE: "review",
+      NAO_VERIFICADO: "neutral",
+    })[status] || "neutral";
+  }
+
+  function captureProjection(result, baseMeta) {
+    const Projection = root.GrconPostingConferenceHistoryProjection;
+    const Conference = root.GrconPostingConference;
+    if (!Projection || !Conference) return false;
+    historyProjection = Projection.build(result?.rows || [], baseMeta || result?.baseMeta || null, Conference);
+    return true;
+  }
+
+  function captureProjectionFromUi() {
+    const ui = root.GrconPostingConferenceUi;
+    if (!ui?.state?.result) return false;
+    return captureProjection(ui.state.result, ui.state.base?.meta || null);
+  }
+
+  async function refreshHistoryProjection(reason) {
+    if (projectionRefreshPromise) return projectionRefreshPromise;
+    projectionRefreshPromise = (async () => {
+      await ensureConferenceRuntime();
+      if (captureProjectionFromUi()) return historyProjection;
+      const Conference = root.GrconPostingConference;
+      const History = root.GrconHistory;
+      const Refinement = root.GrconPostingConferenceRefinement;
+      if (!Conference || !History) return null;
+      const result = await Conference.reconcilePersisted(History.read?.() || [], { reason });
+      const base = await Conference.loadBase();
+      const prepared = Refinement?.enrichResult
+        ? Refinement.enrichResult(result, base?.records || [], Conference)
+        : result;
+      captureProjection(prepared, base?.meta || result.baseMeta || null);
+      return historyProjection;
+    })().catch((error) => {
+      console.debug("[PostingConference] projeção para o Histórico:", error);
+      return null;
+    }).finally(() => {
+      projectionRefreshPromise = null;
+      queueDecorateHistory();
+    });
+    return projectionRefreshPromise;
+  }
+
+  function rowsForRecord(record) {
+    const Projection = root.GrconPostingConferenceHistoryProjection;
+    const Conference = root.GrconPostingConference;
+    return Projection && Conference && historyProjection
+      ? Projection.rowsForRecord(historyProjection, record, Conference)
+      : [];
+  }
+
+  function sigemSummary(record) {
+    const Projection = root.GrconPostingConferenceHistoryProjection;
+    const Conference = root.GrconPostingConference;
+    return Projection && Conference
+      ? Projection.statusSummary(historyProjection, record, Conference)
+      : { label: "—", title: "Consulta Geral não carregada", values: [], baseLoaded: false };
+  }
+
+  function rowForFile(record, file) {
+    const Projection = root.GrconPostingConferenceHistoryProjection;
+    const Conference = root.GrconPostingConference;
+    const History = root.GrconHistory;
+    return Projection && Conference
+      ? Projection.rowForFile(historyProjection, record, file, Conference, History)
+      : null;
+  }
+
+  function sigemValue(row) {
+    const Projection = root.GrconPostingConferenceHistoryProjection;
+    return Projection?.sigemStatus?.(row) || "";
+  }
+
+  function ensureHistorySigemBadge(button, record) {
+    const summary = sigemSummary(record);
+    let badge = button.querySelector("[data-pc-history-sigem]");
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.dataset.pcHistorySigem = "";
+      badge.className = "pc-sigem-status";
+      (button.querySelector(".history-record-main") || button).appendChild(badge);
+    }
+    setText(badge, `Status SIGEM · ${summary.label}`);
+    const title = summary.title ? `Status SIGEM atual: ${summary.title}` : "Status SIGEM atual: —";
+    if (badge.title !== title) badge.title = title;
+  }
+
+  function ensureDetailProjection(detail, record) {
+    if (!detail || !record) return;
+    const table = detail.querySelector(".history-detail-table table");
+    if (!table) return;
+    const headRow = table.querySelector("thead tr");
+    if (!headRow) return;
+    const headings = [...headRow.children];
+    const revisionHeading = headings.find((heading) => /Revisão gerada na GRDT/i.test(heading.textContent || ""));
+    if (!revisionHeading) return;
+
+    let conferenceHeading = headRow.querySelector("[data-pc-history-conference-heading]");
+    if (!conferenceHeading) {
+      conferenceHeading = document.createElement("th");
+      conferenceHeading.dataset.pcHistoryConferenceHeading = "";
+      revisionHeading.insertAdjacentElement("afterend", conferenceHeading);
+    }
+    setText(conferenceHeading, "Conferência atual");
+
+    let sigemHeading = headRow.querySelector("[data-pc-history-sigem-heading]");
+    if (!sigemHeading) {
+      sigemHeading = document.createElement("th");
+      sigemHeading.dataset.pcHistorySigemHeading = "";
+      conferenceHeading.insertAdjacentElement("afterend", sigemHeading);
+    }
+    setText(sigemHeading, "Status SIGEM atual");
+
+    const revisionIndex = [...headRow.children].indexOf(revisionHeading);
+    [...table.querySelectorAll("tbody tr")].forEach((tr, index) => {
+      const file = record.files?.[index];
+      const row = file ? rowForFile(record, file) : null;
+      const anchor = tr.children[revisionIndex];
+      if (!anchor) return;
+
+      let conferenceCell = tr.querySelector("[data-pc-history-conference-cell]");
+      if (!conferenceCell) {
+        conferenceCell = document.createElement("td");
+        conferenceCell.dataset.pcHistoryConferenceCell = "";
+        anchor.insertAdjacentElement("afterend", conferenceCell);
+      }
+      let chip = conferenceCell.querySelector(".pc-status");
+      if (!chip) {
+        chip = document.createElement("span");
+        conferenceCell.appendChild(chip);
+      }
+      setClass(chip, `pc-status ${conferenceStatusClass(row?.status)}`);
+      setText(chip, conferenceRowLabel(row));
+
+      let sigemCell = tr.querySelector("[data-pc-history-sigem-cell]");
+      if (!sigemCell) {
+        sigemCell = document.createElement("td");
+        sigemCell.dataset.pcHistorySigemCell = "";
+        conferenceCell.insertAdjacentElement("afterend", sigemCell);
+      }
+      let sigem = sigemCell.querySelector(".pc-sigem-status");
+      if (!sigem) {
+        sigem = document.createElement("span");
+        sigem.className = "pc-sigem-status";
+        sigemCell.appendChild(sigem);
+      }
+      setText(sigem, sigemValue(row) || "—");
+    });
   }
 
   function decorateHistoryNow() {
@@ -141,8 +335,9 @@
         }
         const className = `pc-history-badge ${aggregateClass(aggregate?.status)}`.trim();
         const label = aggregateLabel(aggregate);
-        if (badge.className !== className) badge.className = className;
-        if (badge.textContent !== label) badge.textContent = label;
+        setClass(badge, className);
+        setText(badge, label);
+        if (record) ensureHistorySigemBadge(button, record);
         if (aggregate && aggregate.status !== "CONFIRMADO" && aggregate.status !== "NAO_VERIFICADO") attention += 1;
       });
 
@@ -152,8 +347,9 @@
       if (active && detail) {
         const record = byRecordId.get(active.dataset.historyId);
         const aggregate = record ? Conference.historyAggregate(record) : null;
-        if (aggregate) {
-          const html = `<span><strong>Conf. SIGEM:</strong> ${aggregateLabel(aggregate).replace("Conf. SIGEM · ", "")}</span><span><strong>${aggregate.confirmed}</strong> postado(s)</span><span><strong>${aggregate.awaiting}</strong> não postado(s) ainda</span><span><strong>${aggregate.divergent}</strong> divergência(s)</span><span><strong>${aggregate.notFound}</strong> não encontrado(s)</span>`;
+        if (aggregate && record) {
+          const status = sigemSummary(record);
+          const html = `<span><strong>Conf. SIGEM:</strong> ${escapeHtml(aggregateLabel(aggregate).replace("Conf. SIGEM · ", ""))}</span><span><strong>Status SIGEM:</strong> ${escapeHtml(status.label)}</span><span><strong>${aggregate.confirmed}</strong> postado(s)</span><span><strong>${aggregate.awaiting}</strong> não postado(s) ainda</span><span><strong>${aggregate.divergent}</strong> divergência(s)</span><span><strong>${aggregate.notFound}</strong> não encontrado(s)</span>`;
           let summary = existingSummary;
           if (!summary) {
             summary = document.createElement("div");
@@ -163,13 +359,14 @@
             if (header) header.after(summary); else detail.prepend(summary);
           }
           if (summary.innerHTML !== html) summary.innerHTML = html;
+          ensureDetailProjection(detail, record);
         } else if (existingSummary) existingSummary.remove();
       } else if (existingSummary) existingSummary.remove();
 
       const navCount = document.getElementById("pc-nav-count");
       const tabCount = document.getElementById("pc-tab-count");
       [navCount, tabCount].filter(Boolean).forEach((node) => {
-        if (node.textContent !== String(attention)) node.textContent = String(attention);
+        setText(node, String(attention));
         node.hidden = attention === 0;
       });
     } finally {
@@ -190,8 +387,8 @@
 
   function isConferenceDecoration(node) {
     if (!(node instanceof Element)) return false;
-    return node.matches("[data-pc-history-badge],[data-pc-history-summary]")
-      || Boolean(node.closest("[data-pc-history-badge],[data-pc-history-summary]"));
+    const selector = "[data-pc-history-badge],[data-pc-history-summary],[data-pc-history-sigem],[data-pc-history-conference-heading],[data-pc-history-sigem-heading],[data-pc-history-conference-cell],[data-pc-history-sigem-cell]";
+    return node.matches(selector) || Boolean(node.closest(selector));
   }
 
   function mutationOnlyConferenceDecorations(mutation) {
@@ -203,10 +400,19 @@
   async function reconcileAfterHistoryChange(reason) {
     const Conference = root.GrconPostingConference;
     const History = root.GrconHistory;
-    if (!Conference || !History || root.GrconPostingConferenceUi?.state?.ready) return;
+    if (!Conference || !History || root.GrconPostingConferenceUi?.state?.ready) {
+      captureProjectionFromUi();
+      queueDecorateHistory();
+      return;
+    }
     try {
       const result = await Conference.reconcilePersisted(History.read?.() || [], { reason });
-      root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: result.summary, changes: result.changes, baseMeta: result.baseMeta } }));
+      const base = await Conference.loadBase();
+      const prepared = root.GrconPostingConferenceRefinement?.enrichResult
+        ? root.GrconPostingConferenceRefinement.enrichResult(result, base?.records || [], Conference)
+        : result;
+      captureProjection(prepared, base?.meta || result.baseMeta || null);
+      root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: prepared.summary, changes: prepared.changes, baseMeta: base?.meta || result.baseMeta } }));
     } catch (error) {
       console.debug("[PostingConference] reconciliação automática:", error);
     }
@@ -220,7 +426,9 @@
   function installObservers() {
     document.addEventListener("click", (event) => {
       const standard = event.target.closest?.("[data-grcon-view]");
-      if (standard) deactivateConference();
+      if (!standard) return;
+      deactivateConference();
+      if (standard.dataset.grconView === "history") void refreshHistoryProjection("history-open");
     }, true);
 
     const historyList = document.getElementById("history-list");
@@ -232,9 +440,15 @@
     if (historyList) observer.observe(historyList, { childList: true, subtree: true });
     if (historyDetail) observer.observe(historyDetail, { childList: true, subtree: true });
 
-    root.addEventListener("grcon:conference-updated", queueDecorateHistory);
+    root.addEventListener("grcon:conference-updated", () => {
+      captureProjectionFromUi();
+      queueDecorateHistory();
+    });
     root.addEventListener("grcon:history-updated", () => { queueDecorateHistory(); queueReconcile("history-event"); });
     root.addEventListener("grcon:sigem-updated", queueDecorateHistory);
+    root.addEventListener("grcon:module-ready", (event) => {
+      if (event.detail?.module === "history") void refreshHistoryProjection("history-module-ready");
+    });
     root.addEventListener("storage", (event) => {
       if (event.key === root.GrconHistory?.STORAGE_KEY) queueReconcile("history-storage");
       if (event.key === root.GrconPostingConference?.HISTORY_INDEX_KEY) queueDecorateHistory();
@@ -246,7 +460,7 @@
     installNavigation();
     installObservers();
     try {
-      await root.GRCONModuleLoader?.ensure?.("posting_conference_core.js");
+      await ensureConferenceRuntime();
       queueDecorateHistory();
     } catch (error) {
       console.debug("[PostingConference] núcleo adiado:", error);
