@@ -1,6 +1,6 @@
 {
   "name": "grcon",
-  "version": "5.40.2",
+  "version": "5.40.3",
   "private": true,
   "description": "GRCON — controle documental, triagem de LD e geração de eGRDT.",
   "type": "commonjs",
@@ -8,13 +8,14 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node tests/grcon.mjs && node tests/posting_conference.cjs && node tests/operational_persistence.cjs && node tests/grcon_backup.cjs && node tests/history_performance.cjs && node tests/reposting.cjs && node tests/reposting_volume.cjs",
+    "test": "node tests/grcon.mjs && node tests/posting_conference.cjs && node tests/operational_persistence.cjs && node tests/grcon_backup.cjs && node tests/history_performance.cjs && node tests/reposting.cjs && node tests/reposting_volume.cjs && node tests/ui_stability.cjs",
     "check:syntax": "node scripts/verificar-sintaxe.mjs",
     "check:workers": "node scripts/verificar-pacote.mjs",
     "check:references": "node scripts/verificar-referencias.mjs",
     "check:versions": "node scripts/verificar-versoes.mjs",
     "check:dependencies": "node scripts/verificar-dependencias.mjs",
     "check:supabase": "node scripts/verificar-supabase.mjs",
-    "verify": "npm run check:syntax && npm run check:workers && npm run check:references && npm run check:versions && npm run check:dependencies && npm run check:supabase && npm test"
+    "verify": "npm run check:syntax && npm run check:workers && npm run check:references && npm run check:versions && npm run check:dependencies && npm run check:supabase && npm test",
+    "check:estabilidade": "node scripts/medir-estabilidade-visual.mjs"
   }
 }

@@ -2099,7 +2099,11 @@ check("tabela larga avisa que rola, e a sombra vem do estado real da rolagem", (
 
   // Os quatro estados medidos no navegador: start acende só a direita, middle
   // acende os dois lados, end só a esquerda, none apaga tudo.
-  assert.match(js, /region\.dataset\.scroll = estado/);
+  // A escrita passa pelo auxiliar condicional (setData) desde a correção do
+  // ciclo de repintura: escrever o mesmo valor gerava mutação e realimentava o
+  // observer do próprio ui-v3. O estado gravado continua sendo o mesmo.
+  assert.match(js, /setData\(region, "scroll", estado\)/);
+  assert.match(js, /setData\(casca, "scroll", estado\)/);
   assert.match(js, /sobra <= 1 \? "none"/, "sem transbordo não pode acender sombra");
   for (const estado of ["start", "middle", "end"]) {
     assert.match(css, new RegExp(`\\.ui-v3-table-shell\\[data-scroll="${estado}"\\]`));

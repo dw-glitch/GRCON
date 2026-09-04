@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 5.40.3 — 2026-09-04
+
+### A interface para de se repintar sozinha
+
+- **O GRCON reescrevia o próprio DOM 25 vezes por segundo, sem parar e sem ninguém tocar na tela.** Medido em navegador: **729 mutações de DOM em 10 segundos de tela parada** — 24 escritas por segundo em cada um de `#results-table`, `#results-scroll` e `body`. Depois da correção: **zero**.
+- **A causa.** O `ui-v3.js` observa atributos de toda a `body` (o filtro inclui `class`) para manter acessibilidade e estado de ordenação em dia. No refinamento, ele reescrevia atributos com **o mesmo valor** — `data-ui-v3-enhanced="true"` sobre `"true"`, a mesma `class`, `aria-busy="false"` sobre `"false"`. Uma escrita sem mudança **ainda gera registro de mutação**; o registro reagendava o refinamento 40 ms depois; o refinamento escrevia de novo. Ciclo fechado, a 25 Hz, desde a abertura da página e em qualquer aba. Cada volta ainda varria o documento inteiro atrás de tabelas, botões e campos, e lia `offsetParent` e `scrollWidth` — leituras que forçam recálculo de layout. É esse trabalho contínuo, competindo com a renderização real, que aparecia como piscada durante o uso.
+- **A correção ataca a origem, não o sintoma.** Toda escrita de atributo, classe e `dataset` do `ui-v3.js` passa a comparar antes de escrever (`setAttr`, `addClass`, `setData`): sem mudança real, nenhuma escrita; sem escrita, nenhum registro de mutação; sem registro, nenhum reagendamento. Como segunda linha de defesa, o refinamento descarta ao final os registros que ele mesmo gerou (`takeRecords`) — o mesmo padrão que a Conferência já usava. **Nada foi mascarado:** nenhum `setTimeout` novo, nenhum atraso, nenhum debounce inventado, nenhum elemento escondido, e o observer continua escutando `class` — estreitar o filtro desligaria o refinamento de ordenação.
+- **Segunda causa, na Conferência.** O selo de **Status SIGEM** era destruído e recriado a cada refinamento, em todas as linhas da página, e os rótulos da tabela e do filtro eram reescritos com o mesmo texto. Reescrever `textContent` com o valor que já está lá troca o nó de texto, conta como mutação e reinicia qualquer transição do CSS — a coluna inteira repintava à toa. Agora só muda o que mudou de fato.
+- **Guarda de regressão.** `tests/ui_stability.cjs` entra no `npm test` e reprova qualquer escrita incondicional de atributo, classe, `dataset` ou `textContent` nesses dois arquivos — o teste falha contra o código anterior. E `scripts/medir-estabilidade-visual.mjs` mede o comportamento real: abre o GRCON num navegador, fica 10 segundos sem tocar em nada e exige **0 mutações de DOM**. Ele fica fora do `npm run verify` de propósito, porque exige navegador e o CI deste repositório já dispensou os testes E2E; rode à mão com `npm run check:estabilidade`.
+
 ## 5.40.2 — 2026-09-04
 
 ### Repostagem: “Localizar arquivos” para de dizer que o documento não existe quando não procurou

@@ -22,6 +22,24 @@
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
+  // O observer abaixo escuta atributos (inclusive "class") de toda a body. Uma
+  // escrita que repõe o MESMO valor ainda gera um registro de mutação — e esse
+  // registro reagenda o refinamento, que escreve de novo, indefinidamente. Por
+  // isso toda escrita deste arquivo passa por estes auxiliares: sem mudança
+  // real, nenhuma escrita, nenhum registro, nenhum ciclo.
+  function setAttr(element, name, value) {
+    if (element && element.getAttribute(name) !== value) element.setAttribute(name, value);
+  }
+  function dropAttr(element, name) {
+    if (element && element.hasAttribute(name)) element.removeAttribute(name);
+  }
+  function addClass(element, name) {
+    if (element && !element.classList.contains(name)) element.classList.add(name);
+  }
+  function setData(element, key, value) {
+    if (element && element.dataset[key] !== value) element.dataset[key] = value;
+  }
+
   function elementsWithin(scope, selector) {
     const source = scope && scope.nodeType === 1 ? scope : document;
     const items = [];
@@ -52,16 +70,16 @@
     table.querySelectorAll("thead th").forEach((th) => {
       const sortable = th.matches("[data-sort], [data-sort-key], .sortable");
       if (!sortable) {
-        th.removeAttribute("aria-sort");
+        dropAttr(th, "aria-sort");
         return;
       }
-      th.setAttribute("aria-sort", normalizedSortDirection(th));
+      setAttr(th, "aria-sort", normalizedSortDirection(th));
     });
   }
 
   function enhanceTable(table) {
     if (!table) return;
-    table.dataset.uiV3Enhanced = "true";
+    setData(table, "uiV3Enhanced", "true");
     const name = tableName(table);
     if (!table.querySelector(":scope > caption")) {
       const caption = document.createElement("caption");
@@ -70,11 +88,11 @@
       table.prepend(caption);
     }
     table.querySelectorAll("thead th").forEach((th) => {
-      if (!th.hasAttribute("scope")) th.setAttribute("scope", "col");
+      if (!th.hasAttribute("scope")) setAttr(th, "scope", "col");
     });
     synchronizeSortState(table);
     if (table.dataset.uiV3SortEvents !== "true") {
-      table.dataset.uiV3SortEvents = "true";
+      setData(table, "uiV3SortEvents", "true");
       const refresh = () => requestAnimationFrame(() => synchronizeSortState(table));
       table.addEventListener("click", refresh, true);
       table.addEventListener("keydown", refresh, true);
@@ -82,10 +100,10 @@
     }
     const region = table.closest(".table-wrap, .table-scroll, .history-table-wrap, .analysis-history-table-wrap") || table.parentElement;
     if (region) {
-      region.classList.add("ui-v3-table-region");
-      if (!region.hasAttribute("role")) region.setAttribute("role", "region");
-      if (!region.hasAttribute("aria-label")) region.setAttribute("aria-label", name);
-      if (!region.hasAttribute("tabindex")) region.setAttribute("tabindex", "0");
+      addClass(region, "ui-v3-table-region");
+      if (!region.hasAttribute("role")) setAttr(region, "role", "region");
+      if (!region.hasAttribute("aria-label")) setAttr(region, "aria-label", name);
+      if (!region.hasAttribute("tabindex")) setAttr(region, "tabindex", "0");
       marcarRolagemLateral(region);
     }
   }
@@ -101,7 +119,7 @@
    */
   function marcarRolagemLateral(region) {
     if (region.dataset.uiV3ScrollHint === "true") return;
-    region.dataset.uiV3ScrollHint = "true";
+    setData(region, "uiV3ScrollHint", "true");
     // A sombra é desenhada por um elemento de fora, não pelo que rola: dentro
     // do quadro ela ficaria atrás das células, que têm fundo próprio e pintam
     // por cima — o que derruba tanto o gradiente preso ao conteúdo quanto o
@@ -128,8 +146,8 @@
       const estado = sobra <= 1 ? "none"
         : region.scrollLeft <= 1 ? "start"
           : region.scrollLeft >= sobra - 1 ? "end" : "middle";
-      region.dataset.scroll = estado;
-      if (casca) casca.dataset.scroll = estado;
+      setData(region, "scroll", estado);
+      if (casca) setData(casca, "scroll", estado);
     };
     region.addEventListener("scroll", atualizar, { passive: true });
     // A tabela muda de largura ao filtrar, ordenar ou trocar de modo.
@@ -145,8 +163,8 @@
   function enhanceButtons(scope) {
     elementsWithin(scope, "button").forEach((button) => {
       const accessible = text(button.getAttribute("aria-label")) || text(button.textContent) || text(button.getAttribute("title"));
-      if (!accessible) button.setAttribute("aria-label", humanize(button.id) || "Ação");
-      if (!button.hasAttribute("type")) button.setAttribute("type", "button");
+      if (!accessible) setAttr(button, "aria-label", humanize(button.id) || "Ação");
+      if (!button.hasAttribute("type")) setAttr(button, "type", "button");
     });
   }
 
@@ -154,32 +172,32 @@
     elementsWithin(scope, 'input[type="search"]').forEach((input) => {
       if (!input.getAttribute("aria-label")) {
         const label = input.closest("label");
-        input.setAttribute("aria-label", text(label && label.textContent) || text(input.placeholder) || "Buscar resultados");
+        setAttr(input, "aria-label", text(label && label.textContent) || text(input.placeholder) || "Buscar resultados");
       }
       const section = input.closest("section, article, .card, .module-view");
       const table = section && section.querySelector("table[id]");
-      if (table && !input.hasAttribute("aria-controls")) input.setAttribute("aria-controls", table.id);
+      if (table && !input.hasAttribute("aria-controls")) setAttr(input, "aria-controls", table.id);
     });
   }
 
   function enhanceLiveRegions(scope) {
     elementsWithin(scope, "quality-status, app-toast, .progress span, [id$='progress-text']").forEach((element) => {
-      if (!element.hasAttribute("aria-live")) element.setAttribute("aria-live", "polite");
-      if (!element.hasAttribute("role")) element.setAttribute("role", "status");
+      if (!element.hasAttribute("aria-live")) setAttr(element, "aria-live", "polite");
+      if (!element.hasAttribute("role")) setAttr(element, "role", "status");
     });
   }
 
   function refreshBusyState() {
     const busy = Array.from(document.querySelectorAll(".progress, [id$='progress']")).some((element) => !element.hidden && element.offsetParent !== null);
-    document.body.setAttribute("aria-busy", busy ? "true" : "false");
+    setAttr(document.body, "aria-busy", busy ? "true" : "false");
   }
 
   function configureTabs(scope) {
     elementsWithin(scope, '[role="tablist"]').forEach((tablist) => {
       const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
       if (!tabs.length || tablist.dataset.uiV3Keys === "true") return;
-      tablist.dataset.uiV3Keys = "true";
-      tabs.forEach((tab) => tab.setAttribute("tabindex", tab.getAttribute("aria-selected") === "true" ? "0" : "-1"));
+      setData(tablist, "uiV3Keys", "true");
+      tabs.forEach((tab) => setAttr(tab, "tabindex", tab.getAttribute("aria-selected") === "true" ? "0" : "-1"));
       tablist.addEventListener("keydown", (event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         const current = Math.max(0, tabs.indexOf(document.activeElement));
@@ -201,7 +219,7 @@
   function focusModal(element) {
     if (!element || element.dataset.uiV3Focused === "true") return;
     hadModal = true;
-    element.dataset.uiV3Focused = "true";
+    setData(element, "uiV3Focused", "true");
     const target = element.querySelector('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]');
     if (target) requestAnimationFrame(() => target.focus({ preventScroll: true }));
   }
@@ -216,9 +234,9 @@
 
   function enhanceDialogs(scope) {
     elementsWithin(scope, ".compatibility-drawer, .pending-panel-drawer, .databook-assistant-drawer, .settings-drawer, .p1-confirm-dialog").forEach((dialog) => {
-      if (!dialog.hasAttribute("role")) dialog.setAttribute("role", "dialog");
-      if (!dialog.hasAttribute("aria-modal")) dialog.setAttribute("aria-modal", "true");
-      if (!dialog.hasAttribute("tabindex")) dialog.setAttribute("tabindex", "-1");
+      if (!dialog.hasAttribute("role")) setAttr(dialog, "role", "dialog");
+      if (!dialog.hasAttribute("aria-modal")) setAttr(dialog, "aria-modal", "true");
+      if (!dialog.hasAttribute("tabindex")) setAttr(dialog, "tabindex", "-1");
     });
   }
 
@@ -245,6 +263,12 @@
     scopes.forEach((scope) => enhanceScope(scope));
     refreshBusyState();
     refreshModalState();
+    // Segunda linha de defesa, além das escritas condicionais: o refinamento é
+    // síncrono, então tudo o que o observer acumulou durante ele veio daqui.
+    // Descartar esses registros impede que o refinamento se reagende sozinho —
+    // e, ao contrário de uma flag, não deixa passar nenhuma mutação de fora,
+    // porque nenhum outro código roda enquanto esta função executa.
+    observer.takeRecords();
   }
 
   function scheduleEnhancement(scope) {
@@ -301,7 +325,7 @@
   });
 
   function start() {
-    root.dataset.uiGeneration = "3";
+    setData(root, "uiGeneration", "3");
     enhanceScope(document);
     refreshBusyState();
     refreshModalState();
