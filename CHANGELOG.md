@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 5.40.2 — 2026-09-04
+
+### Repostagem: “Localizar arquivos” para de dizer que o documento não existe quando não procurou
+
+- **Uma pasta autorizada e nunca indexada era descartada da busca em silêncio.** O resultado saía com todos os documentos em **Não encontrado** — que nesta tela é lido como *o arquivo não está na rede* —, mesmo o GRCON não tendo consultado nada. A busca agora reconhece três situações distintas e diz qual é: local autorizado **sem índice** (falta clicar em *Atualizar índice*), local indexado **sem permissão** de leitura nesta sessão, e **nenhum local configurado**. Sem fonte para consultar, os documentos ficam como **Não verificado** e a busca não é dada por concluída — ausência só é afirmada quando houve onde procurar.
+- **Configurar o local dos arquivos passa a indexar na sequência.** Antes, autorizar a pasta e clicar em *Localizar arquivos* não achava nada, porque a indexação era um segundo passo anunciado só em um aviso passageiro. A indexação começa junto, com a mesma barra de progresso e o mesmo botão de cancelar.
+- **A busca parcial passa a ser declarada.** Quando parte dos locais configurados fica de fora (sem índice ou sem permissão), os documentos não localizados saem como **Permissão necessária**, com a evidência dizendo o que ficou sem cobertura, em vez de virarem ausência confirmada.
+- **O quadro do topo separa o que não foi verificado do que não foi encontrado**, com os selos **Não verificados** e **Permissão necessária** aparecendo quando existem. Na lista de locais, a pasta ainda sem índice fica destacada e explica que a busca não a consulta enquanto não houver índice.
+- A mensagem de conclusão passa a dizer **em quantos arquivos** a busca correu, para o operador conferir se o índice é do tamanho esperado.
+
 ## 5.40.1 — 2026-09-04
 
 ### Repostagem: Gerar ZIP e Baixar arquivos voltam a entregar o lote

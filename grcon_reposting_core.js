@@ -210,6 +210,7 @@
       ambiguous: rows.filter((result) => result.state === STATES.AMBIGUOUS).length,
       differentRevision: rows.filter((result) => result.state === STATES.DIFFERENT_REVISION).length,
       permissionRequired: rows.filter((result) => result.state === STATES.PERMISSION_REQUIRED).length,
+      unchecked: rows.filter((result) => result.state === STATES.UNCHECKED).length,
       ready: rows.length > 0 && rows.every((result) => result.state === STATES.FOUND),
     };
   }
