@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 5.40.1 — 2026-09-04
+
+### Repostagem: Gerar ZIP e Baixar arquivos voltam a entregar o lote
+
+- **Gerar ZIP, Baixar arquivos e Copiar para pasta falhavam para quem usa a pasta escolhida só para a sessão** (o botão *Selecionar pasta nesta sessão*, que é o caminho de quem não autoriza um local fixo). A tela localizava os arquivos, marcava tudo como **Encontrado** e, no clique de entrega, respondia **“A raiz autorizada não está mais disponível”** — sendo que raiz autorizada nunca houve. A causa: ao classificar documento + revisão, a referência física do arquivo devolvida pelo seletor do navegador era descartada, e no fim da preparação não sobrava nada com que reabrir o arquivo. A referência agora atravessa a classificação, e o lote sai. Nada disso muda o índice das raízes autorizadas, que continua guardando apenas nome, caminho relativo, tamanho e data.
+- Quando a referência realmente se perde (a página foi recarregada depois da seleção, por exemplo), a mensagem passa a pedir o que resolve — **selecionar a pasta de novo, ou autorizar um local fixo** — no lugar de acusar uma autorização que não existia.
+- **O ZIP deixa de perder arquivo em silêncio.** Dois documentos diferentes com arquivos de mesmo nome em pastas distintas da rede terminavam como uma entrada só: o segundo substituía o primeiro dentro do pacote. Agora o segundo entra com nome livre — `nome (1).pdf` —, como já acontecia na cópia para pasta. Ao final, a mensagem diz **quantos arquivos** o pacote levou, para conferir contra a tela; um lote em que nenhum arquivo pôde ser lido para de gerar um ZIP vazio e passa a dizer isso.
+- **Um arquivo que serve a duas eGRDTs volta a aparecer nas duas pastas** quando *Organizar em pastas por eGRDT* está marcado, no ZIP e na cópia para pasta. Antes ele era gravado só na pasta da primeira eGRDT e sumia da segunda. eGRDT sem número identificado vai para `SEM-eGRDT` em vez de virar uma pasta de nome vazio.
+- **Baixar arquivos entrega o lote inteiro.** Os pedidos de download saíam todos no mesmo quadro e o navegador descartava parte deles sem avisar — voltavam menos arquivos do que a tela mostrava, e nenhuma mensagem de erro. Agora há um intervalo entre um arquivo e o seguinte, e a mensagem final traz a contagem do que foi pedido. Cancelar a operação passa a ser informado como cancelamento, e não como falha.
+
 ## 5.40.0 — 2026-09-03
 
 ### Resposta de e-mail: tabela na largura da mensagem, em 10 pt

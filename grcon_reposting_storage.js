@@ -262,9 +262,20 @@
     } finally { db.close(); }
   }
 
+  function isSessionEntry(entry) {
+    return text(entry && entry.generation) === "session" || /^snapshot-/.test(text(entry && entry.rootId));
+  }
   async function resolveEntry(indexEntry, options) {
     const entry = indexEntry || {};
     if (entry.__fileRef) return entry.__fileRef;
+    // A pasta desta sessão não tem raiz autorizada nem índice persistente. Sem
+    // a referência física o erro correto é pedir a pasta de novo, e não afirmar
+    // que uma autorização deixou de valer.
+    if (isSessionEntry(entry)) {
+      const error = new Error(`A pasta selecionada apenas para esta sessão não está mais acessível${text(entry.name) ? ` para “${text(entry.name)}”` : ""}. Selecione a pasta novamente (ou autorize um local fixo) antes de preparar o lote.`);
+      error.code = "SESSION_ENTRY_LOST";
+      throw error;
+    }
     const rootRecord = await getRoot(entry.rootId);
     if (!rootRecord || !rootRecord.handle) {
       const error = new Error("A raiz autorizada não está mais disponível."); error.code = "PERMISSION_REQUIRED"; throw error;
@@ -330,8 +341,10 @@
     const used = new Set();
     for (const item of entries || []) {
       if (settings.signal && settings.signal.aborted) throw abortError();
-      const signature = `${item.entry.rootId}|${item.entry.relativePath}`;
-      if (used.has(signature) && !settings.duplicateAcrossEgrdts) continue;
+      // Ao duplicar por eGRDT, a repetição a evitar é o mesmo arquivo na mesma
+      // pasta de destino — não o mesmo arquivo em pastas de eGRDTs diferentes.
+      const signature = `${settings.duplicateAcrossEgrdts ? text(item.egrdtNumber) : ""}|${item.entry.rootId}|${item.entry.relativePath}`;
+      if (used.has(signature)) continue;
       used.add(signature);
       const file = await resolveEntry(item.entry, { requestPermission: false });
       const targetDir = settings.organizeByEgrdt ? await ensureSubdir(destination, item.egrdtNumber) : destination;
@@ -360,5 +373,5 @@
     } finally { db.close(); }
   }
 
-  return Object.freeze({ DB_NAME, DB_VERSION, ROOTS, FILES, BATCHES, ZIP_SAFE_BYTES, compatibility, supportsDirectoryPicker, listRoots, getRoot, addRoot, chooseRoot, permissionState, requestPermission, removeRoot, indexRoot, activeEntries, resolveEntry, snapshotEntries, copyEntries, totalSize, zipSafe, saveBatch });
+  return Object.freeze({ DB_NAME, DB_VERSION, ROOTS, FILES, BATCHES, ZIP_SAFE_BYTES, compatibility, supportsDirectoryPicker, isSessionEntry, listRoots, getRoot, addRoot, chooseRoot, permissionState, requestPermission, removeRoot, indexRoot, activeEntries, resolveEntry, snapshotEntries, copyEntries, totalSize, zipSafe, saveBatch });
 });
