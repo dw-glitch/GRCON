@@ -116,10 +116,11 @@
   }
 
   function normalizeEntry(entry) {
-    return {
+    const normalized = {
       id: text(entry && entry.id),
       rootId: text(entry && entry.rootId),
       rootLabel: text(entry && entry.rootLabel),
+      generation: text(entry && entry.generation),
       name: text(entry && entry.name),
       relativePath: text(entry && entry.relativePath),
       size: Number(entry && entry.size) || 0,
@@ -127,6 +128,15 @@
       extension: text(entry && entry.extension) || extensionOf(entry && entry.name),
       indexedAt: text(entry && entry.indexedAt),
     };
+    // A pasta escolhida somente para a sessão não existe em índice nenhum: a
+    // única forma de reabrir aquele arquivo é a referência física devolvida
+    // pelo seletor do navegador. A normalização descartava essa referência, e
+    // o lote preparado a partir dessa pasta falhava no fim — ao gerar o ZIP, ao
+    // baixar os arquivos e ao copiar para pasta — alegando que a raiz
+    // autorizada não estava mais disponível, sendo que raiz autorizada nunca
+    // houve.
+    if (entry && entry.__fileRef) normalized.__fileRef = entry.__fileRef;
+    return normalized;
   }
 
   function classifyTarget(target, indexedEntries) {

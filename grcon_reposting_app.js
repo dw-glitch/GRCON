@@ -40,6 +40,28 @@
   function downloadBlob(blob, name) {
     const url = URL.createObjectURL(blob); const anchor = doc.createElement("a"); anchor.href = url; anchor.download = name; doc.body.appendChild(anchor); anchor.click(); anchor.remove(); root.setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
+  function pause(milliseconds) { return new Promise((resolve) => root.setTimeout(resolve, milliseconds)); }
+  function folderSegment(value) {
+    return text(value).replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[.\s]+$/, "").trim();
+  }
+  // Dois documentos diferentes podem ter arquivos de mesmo nome em pastas
+  // distintas da rede. Sem nome livre, o segundo substituía o primeiro dentro
+  // do ZIP em silêncio e o lote saía com menos arquivos do que a tela mostrava.
+  function uniqueZipPath(used, path) {
+    if (!used.has(path)) { used.add(path); return path; }
+    const slash = path.lastIndexOf("/");
+    const folder = slash >= 0 ? path.slice(0, slash + 1) : "";
+    const name = slash >= 0 ? path.slice(slash + 1) : path;
+    const dot = name.lastIndexOf(".");
+    const stem = dot > 0 ? name.slice(0, dot) : name;
+    const extension = dot > 0 ? name.slice(dot) : "";
+    for (let attempt = 1; attempt < 1000; attempt += 1) {
+      const candidate = `${folder}${stem} (${attempt})${extension}`;
+      if (!used.has(candidate)) { used.add(candidate); return candidate; }
+    }
+    const fallback = `${folder}${stem} (${Date.now().toString(36)})${extension}`;
+    used.add(fallback); return fallback;
+  }
   function activeHistoryRecord() {
     const selectedId = root.GrconHistoryUi?.state?.selectedId;
     return History.read().find((record) => record.id === selectedId || record.clientRecordId === selectedId) || null;
@@ -461,39 +483,57 @@
       if (!Storage.supportsDirectoryPicker()) return notify("A cópia direta requer navegador Chromium compatível. Use ZIP ou downloads.", "warning");
       try {
         const controller = beginOperation("Preparando cópia…");
-        const result = await Storage.copyEntries(entries, { signal: controller.signal, organizeByEgrdt: $("#grcon-organize-egrdt").checked, onProgress: ({ copied,total,file }) => setProgress(`Copiando ${copied}/${total}: ${file}`, true) });
+        const organize = $("#grcon-organize-egrdt").checked;
+        const result = await Storage.copyEntries(entries, { signal: controller.signal, organizeByEgrdt: organize, duplicateAcrossEgrdts: organize, onProgress: ({ copied,total,file }) => setProgress(`Copiando ${copied}/${total}: ${file}`, true) });
         endOperation(`Cópia concluída: ${result.copied} arquivo(s).`); notify(`${result.copied} arquivo(s) copiado(s). Os originais permaneceram intactos.`, "success");
       } catch (error) { endOperation(); if (error?.name === "AbortError") notify("Cópia cancelada. Arquivos já copiados permaneceram no destino; os originais não foram alterados.", "info"); else notify(error.message || "Não foi possível copiar os arquivos.", "error"); }
       return;
     }
     if (mode === "zip") {
       if (!Storage.zipSafe(entries)) return notify(`O lote soma ${bytes(Storage.totalSize(entries))}, acima do limite seguro de ${bytes(Storage.ZIP_SAFE_BYTES)} para ZIP no navegador. Prefira copiar para uma pasta.`, "warning");
+      let controller = null;
       try {
         await root.GRCONModuleLoader?.ensure?.("zip"); if (!root.JSZip) throw new Error("Módulo ZIP indisponível.");
-        const controller = beginOperation("Lendo arquivos para o ZIP…"); const zip = new root.JSZip(); const used = new Set();
+        controller = beginOperation("Lendo arquivos para o ZIP…"); const zip = new root.JSZip();
+        const organize = $("#grcon-organize-egrdt").checked;
+        const used = new Set(); const paths = new Set(); let added = 0;
         for (let index=0; index<entries.length; index+=1) {
           if (controller.signal.aborted) { const error = new Error("ZIP cancelado."); error.name="AbortError"; throw error; }
-          const item = entries[index]; const signature = `${item.entry.rootId}|${item.entry.relativePath}`; if (used.has(signature)) continue; used.add(signature);
+          const item = entries[index];
+          // Com a organização por eGRDT ligada, o mesmo arquivo físico usado por
+          // duas eGRDTs precisa aparecer nas duas pastas: a chave de repetição
+          // passa a incluir a eGRDT de destino.
+          const signature = `${organize ? item.egrdtNumber : ""}|${item.entry.rootId}|${item.entry.relativePath}`;
+          if (used.has(signature)) continue; used.add(signature);
           const file = await Storage.resolveEntry(item.entry, { requestPermission: false });
           const buffer = root.GrconFileAccess?.read ? await root.GrconFileAccess.read(file,{ context:"o arquivo da repostagem", retries:1 }) : await file.arrayBuffer();
-          const path = $("#grcon-organize-egrdt").checked ? `${item.egrdtNumber.replace(/[<>:"/\\|?*]/g,"_")}/${file.name}` : file.name;
-          zip.file(path, buffer); setProgress(`Lendo ${index+1}/${entries.length}: ${file.name}`, true);
+          const folder = organize ? `${folderSegment(item.egrdtNumber) || "SEM-eGRDT"}/` : "";
+          zip.file(uniqueZipPath(paths, `${folder}${file.name}`), buffer); added += 1;
+          setProgress(`Lendo ${index+1}/${entries.length}: ${file.name}`, true);
         }
+        if (!added) throw new Error("Nenhum arquivo pôde ser lido para o ZIP.");
         const blob = await zip.generateAsync({ type:"blob", compression:"DEFLATE", compressionOptions:{ level:3 } }, (meta) => setProgress(`Gerando ZIP: ${Math.round(meta.percent)}%`, true));
-        downloadBlob(blob, `GRCON_Repostagem_${new Date().toISOString().slice(0,10).replace(/-/g,"")}.zip`); endOperation("ZIP preparado."); notify("Pacote ZIP preparado. Isso não marca nenhum documento como postado no SIGEM.", "success");
-      } catch (error) { endOperation(); if (error?.name === "AbortError") notify("Geração do ZIP cancelada.", "info"); else notify(error.message || "Não foi possível gerar o ZIP.", "error"); }
+        downloadBlob(blob, `GRCON_Repostagem_${new Date().toISOString().slice(0,10).replace(/-/g,"")}.zip`); endOperation(`ZIP preparado: ${fmt(added)} arquivo(s).`); notify(`Pacote ZIP preparado com ${fmt(added)} arquivo(s). Isso não marca nenhum documento como postado no SIGEM.`, "success");
+      } catch (error) { endOperation(); if (error?.name === "AbortError" || controller?.signal?.aborted) notify("Geração do ZIP cancelada.", "info"); else notify(error.message || "Não foi possível gerar o ZIP.", "error"); }
       return;
     }
     if (mode === "downloads") {
+      let controller = null;
       try {
-        const controller = beginOperation("Preparando downloads…"); let downloaded = 0; const used = new Set();
+        controller = beginOperation("Preparando downloads…"); let downloaded = 0; const used = new Set();
         for (const item of entries) {
           if (controller.signal.aborted) { const error = new Error("Downloads cancelados."); error.name="AbortError"; throw error; }
           const signature = `${item.entry.rootId}|${item.entry.relativePath}`; if (used.has(signature)) continue; used.add(signature);
-          const file = await Storage.resolveEntry(item.entry,{ requestPermission:false }); downloadBlob(file,file.name); downloaded += 1; setProgress(`Preparando downloads: ${downloaded}`,true);
+          const file = await Storage.resolveEntry(item.entry,{ requestPermission:false });
+          downloadBlob(file,file.name); downloaded += 1; setProgress(`Preparando downloads: ${downloaded}`,true);
+          // Um clique sintético atrás do outro, no mesmo quadro, faz o navegador
+          // descartar parte dos downloads sem avisar: o lote saía incompleto e
+          // sem nenhuma mensagem de erro. O intervalo devolve o controle ao
+          // navegador entre um arquivo e o seguinte.
+          if (downloaded < entries.length) await pause(220);
         }
-        endOperation(`${downloaded} download(s) solicitado(s).`); notify("Downloads preparados. O navegador pode solicitar permissão para múltiplos downloads.", "success");
-      } catch (error) { endOperation(); notify(error.message || "Não foi possível preparar os downloads.", "error"); }
+        endOperation(`${fmt(downloaded)} download(s) solicitado(s).`); notify(`${fmt(downloaded)} download(s) preparado(s). O navegador pode solicitar permissão para baixar vários arquivos.`, "success");
+      } catch (error) { endOperation(); if (error?.name === "AbortError" || controller?.signal?.aborted) notify("Downloads cancelados.", "info"); else notify(error.message || "Não foi possível preparar os downloads.", "error"); }
     }
   }
   async function exportBatchReport() {

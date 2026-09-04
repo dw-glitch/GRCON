@@ -9,6 +9,7 @@ globalThis.GrconHistory = History;
 const Revision = require("../grcon_revision_control.js");
 const Reposting = require("../grcon_reposting_core.js");
 const Conference = require("../posting_conference_core.js");
+const RepostingStorage = require("../grcon_reposting_storage.js");
 
 function record(files) {
   return History.cleanRecord({
@@ -110,4 +111,54 @@ assert.match(appSource, /data-repost-grdt/);
 assert.match(appSource, /Selecionar filtrados/);
 assert.match(appSource, /PERMISSION_REQUIRED/);
 
-console.log("reposting: revisão operacional + localização segura + lote OK");
+// Pasta escolhida só para a sessão: a referência física do arquivo precisa
+// atravessar a classificação. Sem ela, Gerar ZIP / Baixar arquivos / Copiar
+// para pasta terminavam em erro porque não existe raiz autorizada para reabrir
+// o arquivo depois.
+const sessionFile = { name: "MC-5290.00-22313-970-C1O-009_0001_B.pdf", size: 100 };
+const sessionEntries = [{
+  id: "snapshot-abc|0|pasta/MC-5290.00-22313-970-C1O-009_0001_B.pdf",
+  rootId: "snapshot-abc",
+  rootLabel: "Pasta desta sessão",
+  generation: "session",
+  name: sessionFile.name,
+  relativePath: `pasta/${sessionFile.name}`,
+  extension: "pdf",
+  size: 100,
+  __fileRef: sessionFile,
+}];
+const sessionResult = Reposting.classifyTarget({ ...target, expectedByExtension: { pdf: 1 } }, sessionEntries);
+assert.equal(sessionResult.state, Reposting.STATES.FOUND);
+assert.equal(sessionResult.selected.length, 1);
+assert.equal(sessionResult.selected[0].__fileRef, sessionFile);
+assert.equal(sessionResult.selected[0].generation, "session");
+assert.equal(sessionResult.candidates[0].__fileRef, sessionFile);
+
+// O índice persistente continua sem referência física: nada de File vazando
+// para dentro do lote gravado.
+assert.equal(Object.prototype.hasOwnProperty.call(Reposting.classifyTarget(target, entries).selected[0], "__fileRef"), false);
+
+// Sem a referência, o erro precisa pedir a pasta de novo em vez de culpar uma
+// autorização que nunca existiu.
+assert.equal(RepostingStorage.isSessionEntry({ generation: "session" }), true);
+assert.equal(RepostingStorage.isSessionEntry({ rootId: "snapshot-abc" }), true);
+assert.equal(RepostingStorage.isSessionEntry({ rootId: "root-arquivos-rir" }), false);
+async function sessionEntryResolution() {
+  await assert.rejects(
+    () => RepostingStorage.resolveEntry({ rootId: "snapshot-abc", generation: "session", name: sessionFile.name, relativePath: `pasta/${sessionFile.name}` }),
+    (error) => error.code === "SESSION_ENTRY_LOST" && /Selecione a pasta novamente/.test(error.message),
+  );
+  assert.equal(await RepostingStorage.resolveEntry({ rootId: "snapshot-abc", generation: "session", __fileRef: sessionFile }), sessionFile);
+}
+
+// Entrega do lote: nome livre dentro do ZIP, pasta por eGRDT sem descartar o
+// arquivo compartilhado por duas eGRDTs e intervalo entre downloads.
+assert.match(appSource, /uniqueZipPath\(paths, `\$\{folder\}\$\{file\.name\}`\)/);
+assert.match(appSource, /const signature = `\$\{organize \? item\.egrdtNumber : ""\}\|/);
+assert.match(appSource, /duplicateAcrossEgrdts: organize/);
+assert.match(appSource, /await pause\(220\)/);
+assert.match(appSource, /Nenhum arquivo pôde ser lido para o ZIP/);
+
+sessionEntryResolution().then(() => {
+  console.log("reposting: revisão operacional + localização segura + lote OK");
+}, (error) => { console.error(error); process.exitCode = 1; });
