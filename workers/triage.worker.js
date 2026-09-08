@@ -1,6 +1,6 @@
 // GRCON Worker triage — módulos externos, sem cópias embutidas
 self.GRCON_ASSET_BASE = "../";
-importScripts("../grcon_utils.js", "../grcon_contracts.js", "../core.js", "../ld_conflicts.js", "../timeline_core.js", "../grdt_databook_support.js");
+importScripts("../grcon_utils.js", "../grcon_contracts.js", "../discipline_resolver.js", "../core.js", "../ld_conflicts.js", "../timeline_core.js", "../grdt_databook_support.js");
 
 let activeIndex = null;
 let catalogEntries = [];

@@ -1,6 +1,6 @@
 // GRCON Worker ld — módulos externos, sem cópias embutidas
 self.GRCON_ASSET_BASE = "../";
-importScripts("../grcon_utils.js", "../grcon_contracts.js", "../xlsx.full.min.js", "../core.js");
+importScripts("../grcon_utils.js", "../grcon_contracts.js", "../discipline_resolver.js", "../xlsx.full.min.js", "../core.js");
 
 const CACHE_DB = "grcon-performance-cache-v3";
 const CACHE_STORE = "ld-indexes";

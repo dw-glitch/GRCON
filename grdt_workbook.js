@@ -7,11 +7,11 @@
       console.debug("[Workbook] context:", _);
       sheetJsModule = require("./vendor/xlsx.full.min.js");
     }
-    module.exports = factory(sheetJsModule);
+    module.exports = factory(sheetJsModule, require("./discipline_resolver.js"));
   } else {
-    root.GrdtWorkbook = factory(root.XLSX);
+    root.GrdtWorkbook = factory(root.XLSX, root.GrconDiscipline);
   }
-})(typeof globalThis !== "undefined" ? globalThis : this, function (XLSX) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (XLSX, Disciplines) {
   "use strict";
 
   const HEADERS = [
@@ -311,6 +311,12 @@
     if (!XLSX || !XLSX.CFB || !XLSX.utils) throw new Error("O gerador XLS oficial da GRDT não foi carregado.");
     if (!Array.isArray(items) || !items.length) throw new Error("Nenhum item foi informado para a GRDT.");
     if (items.length > 48) throw new Error("Uma única eGRDT operacional pode conter no máximo 48 documentos. Divida a emissão em novos lotes.");
+    if (!Disciplines || typeof Disciplines.isAllowed !== "function") throw new Error("O catálogo oficial de disciplinas da eGRDT não foi carregado.");
+    items.forEach((item, index) => {
+      if (!Disciplines.isAllowed(item && item.discipline)) {
+        throw new Error(`A linha ${index + 2} não pode ser gerada: DISCIPLINA “${value(item && item.discipline) || "não informada"}” fora da lista oficial da eGRDT.`);
+      }
+    });
 
     const cfb = XLSX.CFB.read(await loadTemplate(), { type: "buffer" });
     const workbook = workbookStream(cfb);
@@ -361,6 +367,9 @@
         reopened[property] = actual;
         if (actual !== wanted) throw new Error(`GRDT inconsistente na linha ${index + 2}: ${label} “${actual}” diverge de “${wanted}”.`);
       });
+      if (!Disciplines || !Disciplines.isAllowed(reopened.discipline)) {
+        throw new Error(`GRDT inconsistente na linha ${index + 2}: DISCIPLINA “${reopened.discipline || "não informada"}” fora da lista oficial.`);
+      }
       reopenedRows.push(reopened);
     });
 
@@ -422,6 +431,9 @@
       }
       const row = {};
       fields.forEach(([, property], index) => { row[property] = values[index]; });
+      if (!Disciplines || !Disciplines.isAllowed(row.discipline)) {
+        throw new Error(`A eGRDT corrigida contém DISCIPLINA “${row.discipline || "não informada"}” fora da lista oficial na linha ${rowIndex + 1}.`);
+      }
       rows.push(row);
     }
 

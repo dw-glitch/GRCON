@@ -1,10 +1,15 @@
 (function (root, factory) {
   const contracts = root.GrconContracts || (typeof module === "object" && module.exports ? require("./grcon_contracts.js") : null);
-  const api = factory(contracts);
+  const disciplines = root.GrconDiscipline || (typeof module === "object" && module.exports ? require("./discipline_resolver.js") : null);
+  const api = factory(contracts, disciplines);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.TriagemCore = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (Contracts) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Contracts, Disciplines) {
   "use strict";
+
+  if (!Disciplines || !Array.isArray(Disciplines.OFFICIAL_DISCIPLINES)) {
+    throw new Error("O catálogo central de disciplinas da eGRDT não foi carregado.");
+  }
 
   const READY = "pronto";
   const DISCARD = "descartar";
@@ -24,13 +29,7 @@
   ]);
   const EGRDT_OPTIONS = Object.freeze({
     formats: ["A0", "A1", "A2", "A3", "A4"],
-    disciplines: [
-      "DINÂMICOS", "ESTÁTICOS", "MONTAGEM", "COMISSIONAMENTO", "SUPRIMENTOS",
-      "ELÉTRICA", "ENGENHARIA DE PROJETO", "ESTRUTURA METÁLICA",
-      "FERRAMENTAS COMPUTACIONAIS", "INSTRUMENTAÇÃO", "MECÂNICA", "MEIO AMBIENTE",
-      "MECÂNICA/SEGURANCA", "SEGURANÇA", "PLANEJAMENTO", "COMUNICAÇÃO E RS", "ADM CONTRATUAL", "GERAL",
-      "QUALIDADE", "CIVIL", "SAÚDE", "TUBULAÇÃO", "COORDENAÇÃO",
-    ],
+    disciplines: Disciplines.OFFICIAL_DISCIPLINES,
     documentTypes: [
       "AD", "AF", "AL", "ART", "AS", "AT", "CE", "CO", "CR", "CT", "CV",
       "DB", "DTRI", "DE", "DTRA", "ET", "FD", "GES", "HIS", "IM", "IS",
@@ -1565,6 +1564,13 @@
     return CV_DOCUMENT_RE.test(raw);
   }
 
+  function cvRecordsFromLd001(group) {
+    return (group && group.records || []).filter((record) => (
+      Disciplines.isCvSheet(record && record.sheet)
+      && Disciplines.isLd001Source(record && record.source)
+    ));
+  }
+
   function inferSheetFromName(fileName) {
     const baseName = text(fileName).split(/[\\/]/).pop();
     const name = canonicalId(baseName.replace(/\.[A-Z0-9]{1,5}$/i, ""));
@@ -1706,103 +1712,15 @@
   }
 
   function inferDiscipline(document, record) {
-    const direct = optionValue(record && record.discipline, EGRDT_OPTIONS.disciplines);
-    if (direct) return direct;
-    const source = norm(record && record.discipline);
-    const sourceParts = source.split("/").map((part) => part.trim()).filter(Boolean);
-    const sourceTail = sourceParts[sourceParts.length - 1] || source;
-    const sourcePrefix = sourceParts.length > 1 ? sourceParts[sourceParts.length - 2] : "";
+    return resolveDiscipline(document, record).discipline;
+  }
 
-    // A eGRDT histórica 0130870-C1O-PGV-G-0177-2025 confirma que o workflow
-    // corporativo "RNEST UHDTD U-32 PROJETO" é gravado no combo antigo como
-    // "MECÂNICA/SEGURANCA". Essa equivalência precisa preceder o alias genérico
-    // PROJETO, pois ENGENHARIA DE PROJETO não reproduz o valor aceito nessa GRDT.
-    const compactWorkflow = source.replace(/[^A-Z0-9]/g, "");
-    if (compactWorkflow === "RNESTUHDTDU32PROJETO") return "MECÂNICA/SEGURANCA";
-
-    // As LDs de N-1710 (e algumas LDs históricas) podem registrar a disciplina
-    // pelo código contratual, enquanto a eGRDT aceita somente a descrição
-    // oficial. Ex.: CVL -> CIVIL. A leitura antiga só entendia a descrição por
-    // extenso; nesses casos inferDiscipline retornava vazio e a emissão era
-    // bloqueada por "DISCIPLINA fora da lista oficial".
-    const disciplineCodeMap = {
-      CVL: "CIVIL", ELE: "ELÉTRICA", INS: "INSTRUMENTAÇÃO", DIN: "DINÂMICOS",
-      EST: "ESTÁTICOS", MEC: "MECÂNICA", PLA: "PLANEJAMENTO", QUA: "QUALIDADE",
-      SEG: "SEGURANÇA", SMS: "SEGURANÇA", SUP: "SUPRIMENTOS", TUB: "TUBULAÇÃO",
-      CDR: "COORDENAÇÃO", CRS: "COMUNICAÇÃO E RS", ADC: "ADM CONTRATUAL",
-      PRJ: "ENGENHARIA DE PROJETO", TEL: "COMUNICAÇÃO E RS", GER: "GERAL",
-      MON: "MONTAGEM",
-    };
-    const textMap = [
-      ["TUBUL", "TUBULAÇÃO"], ["CIVIL", "CIVIL"], ["ELETR", "ELÉTRICA"],
-      ["INSTRUMENT", "INSTRUMENTAÇÃO"], ["DINAM", "DINÂMICOS"], ["ESTATIC", "ESTÁTICOS"],
-      ["MECAN", "MECÂNICA"], ["QUALIDADE", "QUALIDADE"], ["PLANEJ", "PLANEJAMENTO"],
-      ["COMISSION", "COMISSIONAMENTO"], ["SUPRIMENT", "SUPRIMENTOS"],
-      ["COORDEN", "COORDENAÇÃO"], ["SEGURAN", "SEGURANÇA"], ["SAUDE", "SAÚDE"],
-      ["MEIO AMBIENTE", "MEIO AMBIENTE"], ["ADM CONTRATUAL", "ADM CONTRATUAL"],
-      ["COMUNICACAO", "COMUNICAÇÃO E RS"], ["RESPONSABILIDADE SOCIAL", "COMUNICAÇÃO E RS"],
-      ["FERRAMENTAS COMPUTACIONAIS", "FERRAMENTAS COMPUTACIONAIS"], ["MONTAGEM", "MONTAGEM"],
-      ["TELECOM", "COMUNICAÇÃO E RS"], ["PROJETO", "ENGENHARIA DE PROJETO"], ["GERAL", "GERAL"],
-    ];
-
-    // A disciplina da LD pode vir como uma descrição corporativa longa e até
-    // composta, por exemplo "RNEST UHDT-D U32 CIVIL/SEGURANCA". A eGRDT, por
-    // outro lado, aceita apenas uma opção da sua lista oficial. Em vez de exigir
-    // que a LD já esteja igual ao combo da eGRDT, percorremos cada componente na
-    // ordem em que aparece e devolvemos a primeira opção oficial reconhecível.
-    // Assim CIVIL/SEGURANCA resulta em CIVIL, exatamente como nos eGRDTs reais.
-    function officialDisciplineFromSegment(segment) {
-      const part = norm(segment);
-      if (!part) return "";
-      const compact = part.replace(/[^A-Z0-9]/g, "");
-      if (disciplineCodeMap[compact]) return disciplineCodeMap[compact];
-
-      const official = EGRDT_OPTIONS.disciplines
-        .map((option) => ({ option, token: norm(option), index: part.indexOf(norm(option)) }))
-        .filter((candidate) => candidate.index >= 0)
-        .sort((left, right) => left.index - right.index || right.token.length - left.token.length)[0];
-      if (official) return official.option;
-
-      const alias = textMap
-        .map(([token, option]) => ({ token, option, index: part.indexOf(token) }))
-        .filter((candidate) => candidate.index >= 0)
-        .sort((left, right) => left.index - right.index || right.token.length - left.token.length)[0];
-      return alias ? alias.option : "";
-    }
-
-    for (const part of sourceParts.length ? sourceParts : [source]) {
-      const resolved = officialDisciplineFromSegment(part);
-      if (resolved) return resolved;
-    }
-
-    const sourceCode = sourceTail.replace(/[^A-Z0-9]/g, "");
-    if (disciplineCodeMap[sourceCode]) return disciplineCodeMap[sourceCode];
-
-    const officialByPrefix = [...EGRDT_OPTIONS.disciplines]
-      .sort((a, b) => norm(b).length - norm(a).length)
-      .find((option) => sourcePrefix.includes(norm(option)));
-    if (officialByPrefix) return officialByPrefix;
-    const officialByTail = [...EGRDT_OPTIONS.disciplines]
-      .sort((a, b) => norm(b).length - norm(a).length)
-      .find((option) => sourceTail === norm(option) || sourceTail.includes(norm(option)));
-    if (officialByTail) return officialByTail;
-    const officialInSource = [...EGRDT_OPTIONS.disciplines]
-      .sort((a, b) => norm(b).length - norm(a).length)
-      .find((option) => norm(option).length >= 5 && source.includes(norm(option)));
-    if (officialInSource) return officialInSource;
-    const byText = textMap.find(([token]) => source.includes(token));
-    if (byText) return byText[1];
-    const groups = text(document).split("_");
-    const cvCode = text(document).match(/-CV-([A-Z0-9]+)-/i);
-    const code = norm(cvCode ? cvCode[1] : groups[4]);
-    const codeMap = {
-      CVL: "CIVIL", ELE: "ELÉTRICA", INS: "INSTRUMENTAÇÃO", DIN: "DINÂMICOS",
-      EST: "ESTÁTICOS", MEC: "MECÂNICA", PLA: "PLANEJAMENTO", QUA: "QUALIDADE",
-      SEG: "SEGURANÇA", SUP: "SUPRIMENTOS", TUB: "TUBULAÇÃO", CDR: "COORDENAÇÃO",
-      CRS: "COMUNICAÇÃO E RS", ADC: "ADM CONTRATUAL", PRJ: "ENGENHARIA DE PROJETO",
-      SMS: "SEGURANÇA", TEL: "COMUNICAÇÃO E RS", GER: "GERAL", MON: "MONTAGEM",
-    };
-    return codeMap[code] || "";
+  function resolveDiscipline(document, record, options) {
+    const item = record || {};
+    return Disciplines.resolve(document, item, {
+      ...(options || {}),
+      sheetName: options && options.sheetName || item.sheet,
+    });
   }
 
   function inferDocumentType(document, record, sheetName) {
@@ -1827,13 +1745,16 @@
 
   function buildEgrdtData(document, revision, finalName, record, sheetName, pdfFormat) {
     const documentType = inferDocumentType(document, record || {}, sheetName);
+    const disciplineResolution = resolveDiscipline(document, record || {}, { sheetName });
     return enforceDocumentFormat({
       document: text(document),
       revision: normalizeRevision(revision),
       title: text(record && record.title),
       fileName: text(finalName),
       format: optionValue((record && record.format) || pdfFormat, EGRDT_OPTIONS.formats),
-      discipline: inferDiscipline(document, record || {}),
+      discipline: disciplineResolution.discipline,
+      disciplineOriginalLd: disciplineResolution.disciplineOriginalLd,
+      disciplineResolution,
       documentType,
       purpose: optionValue(record && record.purpose, EGRDT_OPTIONS.purposes),
       databook: text(record && record.databook),
@@ -1849,11 +1770,7 @@
     if (!text(data.title)) errors.push("TÍTULO vazio");
     if (!text(data.fileName) || !/\.[A-Z0-9]{2,8}$/i.test(text(data.fileName))) errors.push("ARQUIVO sem extensão");
     if (!EGRDT_OPTIONS.formats.includes(text(data.format))) errors.push("FORMATO fora da lista oficial");
-    // A disciplina orienta o agrupamento e é gravada na eGRDT, mas não pode
-    // impedir a geração. As LDs usam workflows corporativos mais amplos que o
-    // combo histórico da planilha (por exemplo RNEST UHDTD U-32 PROJETO).
-    // A emissão tenta adaptar esses valores; quando não houver equivalência,
-    // preserva a evidência da LD e registra um alerta operacional.
+    if (!Disciplines.isAllowed(data.discipline)) errors.push("DISCIPLINA fora da lista oficial");
     if (!EGRDT_OPTIONS.documentTypes.includes(text(data.documentType))) errors.push("TIPO DE DOCUMENTO fora da lista oficial");
     if (!EGRDT_OPTIONS.purposes.includes(text(data.purpose))) errors.push("PROPÓSITO fora da lista oficial");
     return errors;
@@ -2269,6 +2186,33 @@
     }
 
     let group = match.group;
+    const cvContext = isCvDocument(match.document, inferredSheet);
+    if (cvContext) {
+      const cvSheetRecords = (group.records || []).filter((record) => Disciplines.isCvSheet(record && record.sheet));
+      const cvLd001Records = cvRecordsFromLd001(group);
+      if (!cvLd001Records.length) {
+        const foundAt = cvSheetRecords.length
+          ? [...new Set(cvSheetRecords.map((record) => `${text(record.source) || "LD sem nome"} / aba ${text(record.sheet) || "—"}`))].join("; ")
+          : "nenhuma linha da aba CV";
+        return reviewResult(input, {
+          document: match.document,
+          documentKey: match.documentKey,
+          sheet: "CV",
+          sheetSource: "regra obrigatória de Currículo",
+          revision: revisionFromName(input.name || "", match.document),
+          status: "CV sem registro na LD_001 / aba CV",
+          reason: `O Currículo foi localizado em ${foundAt}, mas não existe uma linha exata identificada como LD_001 / aba CV. O GRCON não usou a disciplina de outra aba ou de outra LD.`,
+          finalName: input.name || `${match.document}.pdf`,
+          documentSource: identitySource,
+          hardBlock: true,
+          blockCode: "cv_ld001_missing",
+        });
+      }
+      // Para CV, somente a linha da aba CV da LD_001 participa de conflitos,
+      // seleção da revisão e resolução disciplinar. O histórico SIGEM continua
+      // completo porque ele responde pelo status, não pela disciplina.
+      group = { ...group, records: cvLd001Records };
+    }
     const conflictCore = typeof globalThis !== "undefined" && globalThis.LDConflictCore
       ? globalThis.LDConflictCore
       : (typeof module === "object" && module.exports ? require("./ld_conflicts.js") : null);
@@ -2784,6 +2728,17 @@
     if (allocationNote) reason = `${reason} ${allocationNote}`.trim();
     const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
     const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
+    const disciplineResolution = egrdt.disciplineResolution || resolveDiscipline(document, best, { sheetName: controlledSheet });
+    const disciplineOriginalDecision = decision;
+    let disciplineBlockCode = "";
+    if (decision === READY && (!disciplineResolution.valid || disciplineResolution.requiresConfirmation)) {
+      decision = REVIEW;
+      disciplineBlockCode = "discipline_confirmation";
+      const choices = disciplineResolution.candidates && disciplineResolution.candidates.length
+        ? ` Opções oficiais identificadas: ${disciplineResolution.candidates.join(" ou ")}.`
+        : "";
+      reason = `${reason} Disciplina encontrada na LD: “${disciplineResolution.disciplineOriginalLd || "não informada"}”. ${disciplineResolution.warning || "Não existe mapeamento oficial inequívoco."}${choices} Confirme uma opção oficial antes de gerar a eGRDT.`.trim();
+    }
 
     return enrichDecision(applyOfficialCodeRename({
       ...input,
@@ -2813,6 +2768,11 @@
       postingEvidence,
       postingStatus,
       record: best,
+      disciplineOriginalLd: disciplineResolution.disciplineOriginalLd,
+      disciplineResolution,
+      disciplineOriginalDecision,
+      blockCode: disciplineBlockCode,
+      hardBlock: false,
       codeValidation,
       codeValidationWarning,
       fileNameFormattingWarning: [
@@ -2991,6 +2951,7 @@
     fileNameFormattingWarning,
     EGRDT_OPTIONS,
     inferDiscipline,
+    resolveDiscipline,
     enforceDocumentFormat,
     buildEgrdtData,
     isN1710Context,

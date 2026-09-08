@@ -25,6 +25,8 @@
     PDF_MISSING: "PDF_MISSING",
     PDF_INVALID: "PDF_INVALID",
     PACKAGE_CONFLICT: "PACKAGE_CONFLICT",
+    DISCIPLINE_CONFIRMATION: "DISCIPLINE_CONFIRMATION",
+    CV_LD001_MISSING: "CV_LD001_MISSING",
     STATUS_REVIEW: "STATUS_REVIEW",
     MANUAL_REVIEW: "MANUAL_REVIEW",
   });
@@ -74,6 +76,8 @@
     // O conflito vem antes: a LD com duas respostas para o mesmo documento não é
     // uma não alocação, e dizer que "a LD informa que não está alocado" contradiz
     // a linha da própria LD que diz ALOCADO.
+    if (text(item.blockCode) === "discipline_confirmation") return CODES.DISCIPLINE_CONFIRMATION;
+    if (text(item.blockCode) === "cv_ld001_missing") return CODES.CV_LD001_MISSING;
     if (text(item.blockCode) === "not_allocated_conflict") return CODES.ALLOCATION_CONFLICT;
     if (item.hardBlock || allocationKind === "not_allocated" || norm(item.allocationStatus) === "NAO ALOCADO") return CODES.NOT_ALLOCATED;
     if (reason.includes("ALOCACAO CONFLIT") || reason.includes("ALOCADO E NAO ALOCADO")) return CODES.ALLOCATION_CONFLICT;
@@ -143,6 +147,18 @@
         title: "Precisa de conferência antes de continuar.",
         explanation: `O valor de alocação “${text(item.allocationStatus) || "vazio"}” não foi reconhecido.`,
         nextAction: "Confira se a coluna de alocação foi associada corretamente.",
+      },
+      [CODES.DISCIPLINE_CONFIRMATION]: {
+        severity: "warning",
+        title: "Confirme a disciplina oficial da eGRDT.",
+        explanation: `A LD informa “${text(item.disciplineOriginalLd || item.disciplineResolution && item.disciplineResolution.disciplineOriginalLd) || "não informada"}”, mas não existe uma única equivalência oficial automática.`,
+        nextAction: "Abra Editar GRDT e escolha uma disciplina da lista oficial. A escolha valerá somente para este processamento.",
+      },
+      [CODES.CV_LD001_MISSING]: {
+        severity: "error",
+        title: "Currículo sem referência disciplinar válida.",
+        explanation: "Para CV, a disciplina precisa vir da mesma linha do documento na aba CV da LD_001.",
+        nextAction: "Carregue a LD_001 correta ou confirme que o currículo está cadastrado na aba CV.",
       },
       [CODES.DOCUMENT_NOT_FOUND]: {
         severity: "warning",

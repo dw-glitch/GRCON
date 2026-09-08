@@ -1,5 +1,20 @@
 # Histórico de alterações
 
+## 5.40.4 — 2026-09-08
+
+### Disciplina do CV passa a vir obrigatoriamente da LD_001 / aba CV
+
+- A disciplina deixou de ser apenas informativa: nenhuma eGRDT é criada se o valor final não pertencer ao catálogo oficial central.
+- Currículos usam exclusivamente a linha exata escolhida na aba `CV` da `LD_001`; linhas semelhantes de outra aba ou de outra LD não fornecem disciplina.
+- O valor literal da LD e o valor oficial da eGRDT permanecem separados e rastreáveis por arquivo, aba, linha e regra aplicada.
+- Um resolvedor determinístico central usa comparação exata, aliases validados e códigos disciplinares contratuais. Similaridade livre e fallback genérico foram removidos.
+- Descrições ambíguas não são reduzidas à primeira palavra: o documento fica em conferência e o operador escolhe somente entre disciplinas oficiais, com efeito restrito ao resultado atual.
+- Lista permitida, aliases e validação foram centralizados em `discipline_resolver.js`; núcleo, interface, emissão, relatório, Histórico, Workers e gerador usam a mesma fonte.
+- O gerador valida antes de escrever e depois de reabrir o XLS BIFF8. Relatório e evidências mostram `Disciplina encontrada na LD`, `Disciplina oficial eGRDT` e a regra usada.
+- ET preserva seu fallback seguro pelo Grupo 5; N-1710 e demais famílias sem mapeamento inequívoco pedem confirmação, sem inventar disciplina.
+- A exceção histórica `MECÂNICA/SEGURANCA` foi revogada: ela não existe no combo do modelo vigente e uma eGRDT antiga não pode ampliar a lista oficial. `RNEST UHDTD U-32 PROJETO` é resolvido como `ENGENHARIA DE PROJETO`.
+- Foram adicionadas regressões para CV direto, alias, nomenclatura não oficial, ausência de mapa, outra aba/LD, lote, ordem de processamento, ambiguidade, agrupamento, Histórico, relatório e reabertura do XLS.
+
 ## 5.40.3 — 2026-09-04
 
 ### A interface para de se repintar sozinha

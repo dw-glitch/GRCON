@@ -58,6 +58,38 @@ Antes de aplicar o limite configurado, o GRCON agrupa todos os documentos seleci
 
 Na confirmação da saída, cada cartão informa a disciplina, a quantidade de documentos e a posição do lote dentro daquela disciplina. O número sequencial de cada eGRDT permanece editável individualmente, e o operador confirma a disponibilidade dos números antes da geração.
 
+## Disciplina oficial da eGRDT
+
+`discipline_resolver.js` é a fonte única de verdade para o catálogo permitido, os códigos disciplinares e os aliases validados. `core.js`, `grcon_config.js`, a triagem, os Workers, o relatório, o Histórico e `grdt_workbook.js` consomem esse mesmo catálogo.
+
+Para documentos CV, a origem é obrigatoriamente a mesma linha localizada na `LD_001`, aba `CV`. A aba é reconhecida sem diferença de caixa ou espaços externos, mas nunca é confundida com outra família. A coluna técnica `DISCIPLINA` é localizada pelo cabeçalho e prevalece sobre campos auxiliares, como `Disciplina Torre`. A disciplina não é inferida do grupo `-CV-...-` do código.
+
+O valor literal lido da LD é preservado como `disciplinaOriginalLd`; a eGRDT recebe outro campo, já resolvido para o vocabulário oficial. A resolução segue somente esta ordem:
+
+1. correspondência exata normalizada;
+2. alias integral validado;
+3. código disciplinar contratual exato;
+4. regra determinística que resulte em uma única opção;
+5. escolha manual em combo fechado, quando houver ambiguidade ou ausência de mapa.
+
+Não existe fuzzy matching, aprendizado automático nem fallback para `GERAL`. Uma confirmação manual vale somente para aquele resultado. Toda eGRDT é validada antes da escrita e novamente depois de reaberta; um valor fora do catálogo interrompe a geração.
+
+Aliases integrais validados atualmente:
+
+| Disciplina na LD | Disciplina oficial eGRDT |
+|---|---|
+| RNEST UHDTD U-32 PROJETO | ENGENHARIA DE PROJETO |
+| RNEST UHDTD U-32 SMS/GERAL | GERAL |
+| RNEST UHDTD U-32 SMS/MEIO AMBIENTE | MEIO AMBIENTE |
+| RNEST UHDTD U-32 SMS/SAUDE | SAÚDE |
+| RNEST UHDTD U-32 SMS/SEGURANCA | SEGURANÇA |
+| RNEST UHDTD U-32 TIC TELECOM | COMUNICAÇÃO E RS |
+| RNEST UHDTD U-32 TIC TELECOM SIT | COMUNICAÇÃO E RS |
+
+Descrições com duas opções oficiais distintas, como `CIVIL/SEGURANCA`, `TUBULAÇÃO/INSTRUMENTAÇÃO` e `TUBULAÇÃO/SEGURANCA`, permanecem em conferência até uma escolha humana; o GRCON não seleciona a primeira disciplina encontrada.
+
+Uma disciplina gravada em uma eGRDT antiga não amplia o catálogo do modelo vigente. Em particular, `MECÂNICA/SEGURANCA` não é uma opção oficial e nunca é aceita; o workflow `RNEST UHDTD U-32 PROJETO` é convertido para `ENGENHARIA DE PROJETO`.
+
 ## Responsividade no navegador
 
 A interface preserva o layout operacional de desktop e se reorganiza continuamente quando a janela do navegador é reduzida ou ampliada. Em telas menores, a navegação vira uma faixa horizontal rolável, cartões e formulários passam para uma ou duas colunas, ações longas ocupam a largura disponível e drawers, diálogos e menus permanecem inteiramente acessíveis.

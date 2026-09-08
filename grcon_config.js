@@ -1,16 +1,26 @@
 /**
  * GRCON — Configuração Centralizada
- * Versão: 5.40.3
+ * Versão: 5.40.4
  *
  * Arquivo único de configuração para constantes, limites e opções
  * usados em todo o projeto. Evita hardcoding disperso.
  */
-(function (root) {
+(function (root, factory) {
+  const disciplines = root.GrconDiscipline
+    || (typeof module === "object" && module.exports ? require("./discipline_resolver.js") : null);
+  const config = factory(disciplines);
+  if (typeof module === "object" && module.exports) module.exports = config;
+  root.GrconConfig = config;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Disciplines) {
   "use strict";
+
+  if (!Disciplines || !Array.isArray(Disciplines.OFFICIAL_DISCIPLINES)) {
+    throw new Error("O catálogo central de disciplinas da eGRDT não foi carregado.");
+  }
 
   const CONFIG = Object.freeze({
     /* ── Versão ─────────────────────────────────────────────── */
-    APP_VERSION: "5.40.3",
+    APP_VERSION: "5.40.4",
 
     /* ── Limites de processamento ───────────────────────────── */
     EGRDT_BATCH_LIMIT: 48,
@@ -43,13 +53,7 @@
     /* ── Opções de eGRDT ────────────────────────────────────── */
     EGRDT_OPTIONS: Object.freeze({
       formats: ["A0", "A1", "A2", "A3", "A4"],
-      disciplines: [
-        "DINÂMICOS", "ESTÁTICOS", "MONTAGEM", "COMISSIONAMENTO", "SUPRIMENTOS",
-        "ELÉTRICA", "ENGENHARIA DE PROJETO", "ESTRUTURA METÁLICA",
-        "FERRAMENTAS COMPUTACIONAIS", "INSTRUMENTAÇÃO", "MECÂNICA", "MEIO AMBIENTE",
-        "MECÂNICA/SEGURANCA", "SEGURANÇA", "PLANEJAMENTO", "COMUNICAÇÃO E RS", "ADM CONTRATUAL", "GERAL",
-        "QUALIDADE", "CIVIL", "SAÚDE", "TUBULAÇÃO", "COORDENAÇÃO",
-      ],
+      disciplines: Disciplines.OFFICIAL_DISCIPLINES,
       documentTypes: [
         "AD", "AF", "AL", "ART", "AS", "AT", "CE", "CO", "CR", "CT", "CV",
         "DB", "DTRI", "DE", "DTRA", "ET", "FD", "GES", "HIS", "IM", "IS",
@@ -76,5 +80,5 @@
     }),
   });
 
-  root.GrconConfig = CONFIG;
-})(typeof globalThis !== "undefined" ? globalThis : this);
+  return CONFIG;
+});

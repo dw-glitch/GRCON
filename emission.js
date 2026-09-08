@@ -42,9 +42,8 @@
    * preservados quando existem na LD, porém ausência, texto não padronizado ou
    * divergência nesses dois campos não impedem a emissão.
    *
-   * Documento, Revisão, Arquivo, Formato e Tipo de documento continuam
-   * protegidos pelo validador central. Disciplina também é informativa para a
-   * geração: é adaptada e alertada, mas nunca bloqueia a eGRDT. O wrapper é aplicado aqui
+   * Documento, Revisão, Arquivo, Formato, Disciplina e Tipo de documento
+   * continuam protegidos pelo validador central. O wrapper é aplicado aqui
    * porque emission.js carrega antes de app.js; assim prévia, conferência e
    * geração final seguem exatamente a mesma regra.
    */
@@ -58,7 +57,6 @@
         const normalizedError = norm(error);
         if (/^TITULO(?:\s|$)/.test(normalizedError)) return false;
         if (/^PROPOSITO(?:\s|$)/.test(normalizedError)) return false;
-        if (/^DISCIPLINA(?:\s|$)/.test(normalizedError)) return false;
         // Para N-1710 a extensão é uma característica do arquivo recebido, não
         // um critério de validade documental. O nome do arquivo continua
         // obrigatório, mas o formato da extensão não bloqueia a eGRDT.
@@ -114,22 +112,19 @@
   /**
    * A LD pode guardar o workflow completo, enquanto a coluna DISCIPLINA da
    * eGRDT trabalha com um nome curto. Sempre que possível usamos a equivalência
-   * oficial do núcleo (workflow U-32 PROJETO -> MECÂNICA/SEGURANCA, PRJ ->
+   * oficial do núcleo (workflow U-32 PROJETO e PRJ ->
    * ENGENHARIA DE PROJETO etc.).
-   * Se surgir um workflow novo, o texto real da LD é preservado e segue como
-   * alerta, sem cancelar toda a emissão.
+   * Se surgir um workflow novo, o texto original permanece na rastreabilidade,
+   * mas nunca é copiado para a eGRDT sem equivalência oficial.
    */
   function resolveEgrdtDiscipline(row) {
     const item = row || {};
     const current = text(item.egrdt && item.egrdt.discipline);
     if (C && C.EGRDT_OPTIONS && C.EGRDT_OPTIONS.disciplines.includes(current)) return current;
-    const recordDiscipline = text(item.record && item.record.discipline);
-    const rowDiscipline = text(item.discipline);
-    const source = current || recordDiscipline || rowDiscipline;
-    const inferred = C && typeof C.inferDiscipline === "function"
-      ? C.inferDiscipline(item.document, { ...(item.record || {}), discipline: source })
-      : "";
-    return inferred || source;
+    const resolution = C && typeof C.resolveDiscipline === "function"
+      ? C.resolveDiscipline(item.document, item.record || {}, { sheetName: item.sheet })
+      : null;
+    return resolution && resolution.valid ? resolution.discipline : "";
   }
 
   function n1710DocumentType(document) {
@@ -383,15 +378,15 @@
           databook: String(row.record && row.record.databook || "").trim(),
           manualAllocationOverride,
         };
-        const sourceDiscipline = text(row.egrdt && row.egrdt.discipline)
-          || text(row.record && row.record.discipline)
-          || text(row.discipline);
+        const sourceDiscipline = text(row.disciplineOriginalLd)
+          || text(row.disciplineResolution && row.disciplineResolution.disciplineOriginalLd)
+          || text(row.record && row.record.discipline);
         const officialDiscipline = Boolean(C && C.EGRDT_OPTIONS
           && C.EGRDT_OPTIONS.disciplines.includes(item.discipline));
         if (sourceDiscipline && item.discipline && norm(sourceDiscipline) !== norm(item.discipline)) {
           warnings.push(`${row.document}: disciplina “${sourceDiscipline}” adaptada para “${item.discipline}” na eGRDT.`);
         } else if (!officialDiscipline) {
-          warnings.push(`${row.document}: disciplina “${item.discipline || "não informada"}” não correspondeu ao combo histórico da eGRDT; o valor não bloqueou a geração.`);
+          errors.push(`${row.document}: a disciplina “${sourceDiscipline || "não informada"}” não possui uma equivalência oficial confirmada. Abra Editar GRDT e escolha uma opção da lista oficial.`);
         }
         if (C && C.enforceDocumentFormat) C.enforceDocumentFormat(item);
         const itemErrors = C.validateEgrdtData(item);

@@ -1,6 +1,6 @@
 // GRCON Worker export — módulos externos, sem cópias embutidas
 self.GRCON_ASSET_BASE = "../";
-importScripts("../grcon_utils.js", "../grcon_contracts.js", "../xlsx.full.min.js", "../grdt_workbook.js", "../exceljs.min.js", "../jszip.min.js", "../core.js", "../ld_conflicts.js", "../large_input.js", "../report_summary.js");
+importScripts("../grcon_utils.js", "../grcon_contracts.js", "../discipline_resolver.js", "../xlsx.full.min.js", "../grdt_workbook.js", "../exceljs.min.js", "../jszip.min.js", "../core.js", "../ld_conflicts.js", "../large_input.js", "../report_summary.js");
 const cancelled = new Set();
 const pause = () => new Promise((resolve)=>setTimeout(resolve,0));
 function ensure(taskId){ if(cancelled.has(taskId)){ const e=new Error("Processamento cancelado pelo usuário."); e.name="AbortError"; throw e; } }

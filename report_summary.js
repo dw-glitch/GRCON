@@ -24,6 +24,9 @@
     { header: "PESQUISA COM/SEM nt- E TAG NA LD", key: "ntLookup", width: 76 },
     { header: "RENOMEAÇÃO PARA ENTRAR NA EGRDT", key: "renameForEgrdt", width: 72 },
     { header: "TÍTULO (INFORMATIVO)", key: "title", width: 48 },
+    { header: "DISCIPLINA ENCONTRADA NA LD", key: "disciplineOriginalLd", width: 38 },
+    { header: "DISCIPLINA OFICIAL EGRDT", key: "disciplineEgrdt", width: 32 },
+    { header: "REGRA DA DISCIPLINA", key: "disciplineRule", width: 34 },
     { header: "ALOCADO?", key: "allocated", width: 23 },
     { header: "CONFIRMAÇÃO DE DOCUMENTOS PREVISTOS", key: "allocationStatus", width: 28 },
     { header: "POR QUE ESTÁ / NÃO ESTÁ ALOCADO?", key: "allocationReason", width: 68 },
@@ -435,6 +438,8 @@
           : row && row.decision === (C && C.DISCARD || "descartar")
             ? "NÃO — EM ANÁLISE"
             : "PENDENTE";
+      const disciplineResolution = row && (row.disciplineResolution || row.egrdt && row.egrdt.disciplineResolution) || {};
+      const disciplineEvidence = disciplineResolution.evidence || {};
       return {
         decision: decisionLabel(row),
         requestedDocument: text(row && row.documentLookup && row.documentLookup.inputDocument || row && row.name),
@@ -452,6 +457,14 @@
         renameForEgrdt: renameForEgrdtText(row),
         previousEgrdt: typeof settings.historyLookup === "function" ? text(settings.historyLookup(row && row.document)) : "",
         title: text(row && row.egrdt && row.egrdt.title || record.title),
+        disciplineOriginalLd: text(disciplineResolution.disciplineOriginalLd || row && row.disciplineOriginalLd || record.discipline),
+        disciplineEgrdt: text(disciplineResolution.discipline || row && row.egrdt && row.egrdt.discipline) || "PRECISA DE CONFIRMAÇÃO",
+        disciplineRule: [
+          text(disciplineResolution.method) || "não resolvida",
+          text(disciplineEvidence.source || record.source),
+          text(disciplineEvidence.sheet || record.sheet) ? `aba ${text(disciplineEvidence.sheet || record.sheet)}` : "",
+          Number(disciplineEvidence.row || record.row) ? `linha ${Number(disciplineEvidence.row || record.row)}` : "",
+        ].filter(Boolean).join(" · "),
         allocated: allocationLabel(row),
         allocationStatus: text(record.allocationStatus),
         allocationReason: allocationReason(row),

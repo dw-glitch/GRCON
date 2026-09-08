@@ -9,15 +9,15 @@ const facade = fs.readFileSync(facadePath, "utf8");
 const workers = {
   ld: {
     file: "workers/ld.worker.js",
-    required: ["../grcon_contracts.js", "../xlsx.full.min.js", "../core.js"],
+    required: ["../grcon_contracts.js", "../discipline_resolver.js", "../xlsx.full.min.js", "../core.js"],
   },
   triage: {
     file: "workers/triage.worker.js",
-    required: ["../grcon_contracts.js", "../core.js", "../ld_conflicts.js", "../timeline_core.js"],
+    required: ["../grcon_contracts.js", "../discipline_resolver.js", "../core.js", "../ld_conflicts.js", "../timeline_core.js"],
   },
   export: {
     file: "workers/export.worker.js",
-    required: ["../grdt_workbook.js", "../exceljs.min.js", "../jszip.min.js", "../core.js", "../report_summary.js"],
+    required: ["../discipline_resolver.js", "../grdt_workbook.js", "../exceljs.min.js", "../jszip.min.js", "../core.js", "../report_summary.js"],
   },
 };
 

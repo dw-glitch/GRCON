@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.40.3";
+  const APP_VERSION = "5.40.4";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -660,6 +660,7 @@
     drawerRevisionHint: $("#drawer-revision-hint"),
     drawerFormat: $("#drawer-format"),
     drawerDiscipline: $("#drawer-discipline"),
+    drawerDisciplineHint: $("#drawer-discipline-hint"),
     drawerType: $("#drawer-type"),
     drawerPurpose: $("#drawer-purpose"),
     drawerDatabook: $("#drawer-databook"),
@@ -916,6 +917,7 @@
       document: record.document || "",
       revision: record.revision || "",
       title: record.title || "",
+      discipline: record.discipline || "",
       databook: record.databook || "",
       grdt: record.grdt || "",
       effectiveDate: record.effectiveDate || "",
@@ -982,6 +984,20 @@
       decision: item.decision || "",
       hardBlock: Boolean(item.hardBlock),
       blockCode: item.blockCode || "",
+      disciplineOriginalDecision: item.disciplineOriginalDecision || "",
+      disciplineOriginalLd: item.disciplineOriginalLd || item.disciplineResolution && item.disciplineResolution.disciplineOriginalLd || "",
+      disciplineResolution: item.disciplineResolution ? {
+        disciplineOriginalLd: item.disciplineResolution.disciplineOriginalLd || "",
+        discipline: item.disciplineResolution.discipline || "",
+        method: item.disciplineResolution.method || "",
+        confidence: item.disciplineResolution.confidence || "",
+        valid: Boolean(item.disciplineResolution.valid),
+        requiresConfirmation: Boolean(item.disciplineResolution.requiresConfirmation),
+        candidates: Array.isArray(item.disciplineResolution.candidates) ? item.disciplineResolution.candidates.slice() : [],
+        warning: item.disciplineResolution.warning || "",
+        evidence: item.disciplineResolution.evidence ? { ...item.disciplineResolution.evidence } : null,
+        manual: Boolean(item.disciplineResolution.manual),
+      } : null,
       selectedForEgrdt: Number.isInteger(rowIndex) ? state.selected.has(rowIndex) : Boolean(item.selectedForEgrdt),
       manuallyIncluded: Number.isInteger(rowIndex) ? state.manualForceInclude.has(rowIndex) : Boolean(item.manuallyIncluded),
       reasonCode: item.reasonCode || "",
@@ -2212,7 +2228,12 @@
   }
 
   function rowCanBeSelected(row) {
-    return Boolean(row && (!row.hardBlock || manualAllocationOverrideAllowed(row)));
+    if (!row || row.blockCode === "discipline_confirmation" || row.disciplineResolution && row.disciplineResolution.requiresConfirmation) return false;
+    return Boolean(!row.hardBlock || manualAllocationOverrideAllowed(row));
+  }
+
+  function rowCanBeEdited(row) {
+    return Boolean(row && (rowCanBeSelected(row) || row.blockCode === "discipline_confirmation"));
   }
 
   function refreshPendingAllocationBundle() {
@@ -3729,6 +3750,19 @@
       <p>${escapeHtml(apendice.suggestionNote || apendice.note || "")}</p>
     </div>`;
     const message = decisionMessage(row);
+    const disciplineResolution = row.disciplineResolution || row.egrdt && row.egrdt.disciplineResolution || {};
+    const disciplineEvidence = disciplineResolution.evidence || {};
+    const disciplineTrace = `<div class="allocation-trace ${disciplineResolution.valid ? "allocated" : "review"}">
+      <h4>Definição da disciplina da eGRDT</h4>
+      <dl>
+        <div><dt>Disciplina encontrada na LD</dt><dd>${escapeHtml(disciplineResolution.disciplineOriginalLd || row.record && row.record.discipline || "Não informada")}</dd></div>
+        <div><dt>Disciplina oficial da eGRDT</dt><dd>${escapeHtml(disciplineResolution.discipline || row.egrdt && row.egrdt.discipline || "Precisa de confirmação")}</dd></div>
+        <div><dt>Origem</dt><dd>${escapeHtml(disciplineEvidence.source || row.record && row.record.source || "—")} · aba ${escapeHtml(disciplineEvidence.sheet || row.record && row.record.sheet || row.sheet || "—")} · linha ${escapeHtml(disciplineEvidence.row || row.record && row.record.row || "—")}</dd></div>
+        <div><dt>Regra</dt><dd>${escapeHtml(disciplineResolution.method || "não resolvida")}</dd></div>
+        ${disciplineResolution.candidates && disciplineResolution.candidates.length ? `<div><dt>Opções oficiais</dt><dd>${escapeHtml(disciplineResolution.candidates.join(" ou "))}</dd></div>` : ""}
+      </dl>
+      <p>${escapeHtml(disciplineResolution.warning || "A disciplina final pertence ao catálogo oficial da eGRDT.")}</p>
+    </div>`;
     const decisionCard = `<div class="detail-decision ${escapeHtml(message.severity || "warning")}">
       <strong>${escapeHtml(message.title || "Precisa de conferência.")}</strong>
       <p>${escapeHtml(message.explanation || C.simpleReason(row))}</p>
@@ -3781,12 +3815,13 @@
           ${ntCard}
           ${row.fiscalComment ? `<p class="detail-line"><strong>Fiscal:</strong> ${escapeHtml(row.fiscalComment)}</p>` : ""}
           <p class="detail-line"><strong>Databook:</strong> ${escapeHtml(databook)}</p>
+          ${disciplineTrace}
           ${allocationTrace}
           ${apendiceTrace}
           ${row.codeValidationWarning ? `<div class="detail-warning">${escapeHtml(row.codeValidationWarning)}</div>` : ""}
           ${row.packageWarning ? `<div class="detail-warning">${escapeHtml(row.packageWarning)}</div>` : ""}
         </section>
-        ${rowCanBeSelected(row) ? `<section class="detail-actions"><button class="secondary-button" data-action="edit-egrdt" type="button">Editar GRDT</button></section>` : ""}
+        ${rowCanBeEdited(row) ? `<section class="detail-actions"><button class="secondary-button" data-action="edit-egrdt" type="button">Editar GRDT</button></section>` : ""}
       </div>${conflictCard}${noticeCard}${timelineInline(row)}${ldGrid}</td>
     </tr>`;
   }
@@ -3998,7 +4033,7 @@
   function openEgrdtDrawer(indices) {
     const valid = [...new Set(indices)].filter((index) => {
       const row = state.results[index];
-      return rowCanBeSelected(row);
+      return rowCanBeEdited(row);
     });
     if (!valid.length) {
       showToast("Selecione ao menos um item disponível para inclusão na GRDT.", "warn");
@@ -4029,6 +4064,17 @@
     const placeholder = multiple ? "Não alterar" : "Selecione";
     setDrawerOptions(els.drawerFormat, C.EGRDT_OPTIONS.formats, commonEgrdtValue(valid, "format"), placeholder);
     setDrawerOptions(els.drawerDiscipline, C.EGRDT_OPTIONS.disciplines, commonEgrdtValue(valid, "discipline"), placeholder);
+    if (els.drawerDisciplineHint) {
+      if (multiple) {
+        els.drawerDisciplineHint.textContent = "A lista contém somente disciplinas oficiais. Uma alteração em lote vale apenas para os resultados selecionados.";
+      } else {
+        const resolution = state.results[valid[0]].disciplineResolution || {};
+        const candidates = Array.isArray(resolution.candidates) && resolution.candidates.length
+          ? ` Opções compatíveis: ${resolution.candidates.join(" ou ")}.`
+          : "";
+        els.drawerDisciplineHint.textContent = `Disciplina encontrada na LD: ${resolution.disciplineOriginalLd || state.results[valid[0]].record && state.results[valid[0]].record.discipline || "não informada"}.${candidates}`;
+      }
+    }
     setDrawerOptions(els.drawerType, C.EGRDT_OPTIONS.documentTypes, commonEgrdtValue(valid, "documentType"), placeholder);
     setDrawerOptions(els.drawerPurpose, C.EGRDT_OPTIONS.purposes, commonEgrdtValue(valid, "purpose"), placeholder);
     const drawerPreviewLimit = 250;
@@ -4064,12 +4110,32 @@
       }
       [
         ["format", els.drawerFormat.value],
-        ["discipline", els.drawerDiscipline.value],
         ["documentType", els.drawerType.value],
         ["purpose", els.drawerPurpose.value],
       ].forEach(([field, value]) => {
         if (!multiple || value) row.egrdt[field] = value;
       });
+      const selectedDiscipline = els.drawerDiscipline.value;
+      if (!multiple || selectedDiscipline) {
+        const resolution = C.resolveDiscipline
+          ? C.resolveDiscipline(row.document, row.record || {}, { sheetName: row.sheet, manualDiscipline: selectedDiscipline })
+          : null;
+        if (resolution && resolution.valid) {
+          row.egrdt.discipline = resolution.discipline;
+          row.egrdt.disciplineOriginalLd = resolution.disciplineOriginalLd;
+          row.egrdt.disciplineResolution = resolution;
+          row.disciplineOriginalLd = resolution.disciplineOriginalLd;
+          row.disciplineResolution = resolution;
+          if (row.blockCode === "discipline_confirmation") {
+            row.decision = row.disciplineOriginalDecision || C.READY;
+            row.blockCode = "";
+            row.hardBlock = false;
+            row.reasonCode = "";
+            row.userMessage = null;
+            row.reason = `${row.reason || ""} Disciplina oficial “${resolution.discipline}” confirmada manualmente para este resultado.`.trim();
+          }
+        }
+      }
       if (C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
       // Campo vazio em edição de lote significa "não alterar" — igual aos
       // demais campos do formulário acima, mas aqui vale também para 1 item.

@@ -471,7 +471,7 @@
     return (records || []).filter((record) => norm([
       record.egrdtNumber, ...(record.numberHistory || []), record.outputType, record.ldName, record.sourceName,
       ...(record.allocations || []),
-      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus]),
+      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline]),
     ].join(" ")).includes(wanted));
   }
 
