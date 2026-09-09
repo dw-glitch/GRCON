@@ -17,10 +17,11 @@
       meta: text(item && item.meta),
     })) : [];
     const issues = [];
+    const warnings = [];
     const expected = Number(source.expectedInputs);
     const accounted = Number(source.accountedInputs);
     if (Number.isFinite(expected) && Number.isFinite(accounted) && expected !== accounted) {
-      issues.push(`${Math.abs(expected - accounted)} entrada(s) não foram conciliadas.`);
+      warnings.push(`${Math.abs(expected - accounted)} entrada(s) não foram conciliadas. A geração permanece liberada.`);
     }
     const missingTargets = items.filter((item) => !item.secondary).length;
     if (missingTargets) issues.push(`${missingTargets} saída(s) estão sem nome final.`);
@@ -63,6 +64,7 @@
       includedCount,
       excludedCount,
       issues: [...new Set(issues)],
+      warnings: [...new Set(warnings)],
       valid: issues.length === 0,
     };
   }

@@ -397,6 +397,7 @@
   .p1-output-audit { margin-top: 1rem; padding: .85rem; background: var(--surface-2); border: 1px solid var(--border-1); border-radius: var(--radius-md); }
   .p1-output-audit-head { display: flex; justify-content: space-between; gap: 1rem; }
   .p1-output-audit-state { margin-top: .45rem; color: var(--success-700); }
+  .p1-output-audit-state.warning { color: #8a5a00; }
   .p1-output-audit-state.error { color: var(--danger-700); }
 
   .progress-wrap, .progress, .sgpar-progress { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; align-items: center; gap: .65rem; }

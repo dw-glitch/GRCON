@@ -164,8 +164,11 @@
     const preview = audit.items.slice(0, 12);
     els.audit.hidden = false;
     els.auditSummary.textContent = audit.summary;
-    els.auditState.textContent = audit.valid ? "Entradas e saídas conferidas" : audit.issues.join(" ");
+    els.auditState.textContent = audit.valid
+      ? (audit.warnings.length ? audit.warnings.join(" ") : "Entradas e saídas conferidas")
+      : audit.issues.join(" ");
     els.auditState.classList.toggle("error", !audit.valid);
+    els.auditState.classList.toggle("warning", audit.valid && audit.warnings.length > 0);
     if (els.conferenceNumber) els.conferenceNumber.textContent = audit.officialNumber || "Número ainda não definido";
     if (els.conferenceSummary) els.conferenceSummary.innerHTML = `<div><span>Incluídos</span><strong>${audit.includedCount}</strong></div><div><span>Excluídos</span><strong>${audit.excludedCount}</strong></div><div><span>Total conferido</span><strong>${audit.detailRows.length}</strong></div>`;
     conferenceRows = audit.detailRows;
@@ -175,6 +178,8 @@
     if (els.auditList) {
       els.auditList.innerHTML = preview.map((item) => `<div class="p1-output-audit-item"><div><strong title="${escapeHtml(item.primary)}">${escapeHtml(item.primary || "—")}</strong><span>${escapeHtml(item.meta)}</span></div><b aria-hidden="true">→</b><div><strong title="${escapeHtml(item.secondary)}">${escapeHtml(item.secondary || "—")}</strong></div></div>`).join("");
     }
+    // Somente falhas estruturais bloqueiam a geração. Diferenças residuais de
+    // conciliação são avisos, pois não tornam os itens selecionados inválidos.
     state.auditBlocked = !audit.valid;
     return audit;
   }

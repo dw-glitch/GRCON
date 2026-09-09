@@ -1,5 +1,15 @@
 # Histórico de alterações
 
+## 5.40.5 — 2026-09-09
+
+### Entrada não conciliada deixa de bloquear a geração
+
+- A divergência residual “entrada(s) não foram conciliadas” passou a ser um aviso amarelo não bloqueante na conferência final.
+- O botão de geração da GRDT permanece liberado quando os itens selecionados são válidos.
+- Falhas estruturais, como saída sem nome final ou nomes finais duplicados, continuam bloqueando a geração.
+- Foi incluído um teste de regressão específico para separar avisos de conciliação de erros bloqueantes.
+
+
 ## 5.40.4 — 2026-09-08
 
 ### Disciplina do CV passa a vir obrigatoriamente da LD_001 / aba CV

@@ -2284,6 +2284,30 @@ check("painel mostra disciplina por GRDT e mantém cada número editável", () =
   assert.equal(audit.detailRows[0].discipline, "ELÉTRICA");
 });
 
+check("entrada não conciliada alerta sem bloquear a geração da GRDT", () => {
+  const audit = OutputAudit.analyze({
+    expectedInputs: 2,
+    accountedInputs: 1,
+    items: [{ primary: "DOC-A.pdf", secondary: "DOC-A_0001_A.pdf" }],
+  });
+  assert.equal(audit.valid, true);
+  assert.equal(audit.issues.length, 0);
+  assert.match(audit.warnings.join(" "), /1 entrada\(s\) não foram conciliadas/);
+
+  const missingName = OutputAudit.analyze({ items: [{ primary: "DOC-A.pdf", secondary: "" }] });
+  assert.equal(missingName.valid, false);
+  assert.match(missingName.issues.join(" "), /sem nome final/);
+
+  const duplicatedName = OutputAudit.analyze({
+    items: [
+      { primary: "DOC-A.pdf", secondary: "MESMO-NOME.pdf" },
+      { primary: "DOC-B.pdf", secondary: "MESMO-NOME.pdf" },
+    ],
+  });
+  assert.equal(duplicatedName.valid, false);
+  assert.match(duplicatedName.issues.join(" "), /duplicados/);
+});
+
 // ---------------------------------------------------------------------------
 // Alocação lida da linha inteira e cruzamento com o Apêndice 3
 // ---------------------------------------------------------------------------
@@ -3682,4 +3706,4 @@ await (async () => {
   checks.push(nome);
 })();
 
-console.log(JSON.stringify({ version: "5.40.4", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.40.5", passed: true, checks: checks.length, names: checks }, null, 2));
