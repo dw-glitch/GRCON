@@ -661,9 +661,18 @@
     const status = text(f.status);
     const start = text(f.startDate);
     const end = text(f.endDate);
+    const documentList = String(f.documentList || "")
+      .split(/[\r\n,;|\t]+/)
+      .map(text)
+      .filter(Boolean);
+    const wantedDocuments = new Set(documentList.flatMap((document) => documentKeys(document).map(norm)).filter(Boolean));
     return (rows || []).filter((row) => {
       if (search && !norm([row.document, row.egrdtNumber, row.discipline, row.documentFamily, row.revisionSent, row.revisionFound, row.statusLabel, row.note].join(" ")).includes(search)) return false;
       if (code && !norm(row.document).includes(code)) return false;
+      if (wantedDocuments.size) {
+        const rowKeys = documentKeys(row.document).map(norm);
+        if (!rowKeys.some((rowKey) => wantedDocuments.has(rowKey))) return false;
+      }
       if (grdt && !norm(row.egrdtNumber).includes(grdt)) return false;
       if (family && norm(row.documentFamily) !== family) return false;
       if (discipline && norm(row.discipline) !== discipline) return false;

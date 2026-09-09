@@ -14,7 +14,7 @@
     audit: [],
     view: "documents",
     page: 1,
-    filters: { search: "", document: "", grdt: "", family: "", discipline: "", revision: "", status: "", startDate: "", endDate: "" },
+    filters: { search: "", document: "", documentList: "", grdt: "", family: "", discipline: "", revision: "", status: "", startDate: "", endDate: "" },
   };
 
   const icon = (path) => `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="${path}"></path></svg>`;
@@ -54,6 +54,7 @@
         <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">Pendências de Postagem</button></div>
         <div class="pc-filters" id="pc-filters">
           <label class="pc-search"><span>Busca</span><input id="pc-search" type="search" placeholder="Código, eGRDT, disciplina ou observação"/></label>
+          <label class="pc-document-list"><span>Lista de documentos</span><textarea id="pc-document-list" rows="3" placeholder="Cole vários códigos — um por linha"></textarea><small id="pc-document-list-count">Todos os documentos</small></label>
           <label><span>eGRDT</span><input id="pc-grdt" type="search" placeholder="Número"/></label>
           <label><span>Tipo</span><select id="pc-family"><option value="">Todos</option></select></label>
           <label><span>Disciplina</span><select id="pc-discipline"><option value="">Todas</option></select></label>
@@ -93,13 +94,17 @@
       render();
     }));
     const controls = {
-      "pc-search": "search", "pc-grdt": "grdt", "pc-family": "family", "pc-discipline": "discipline",
+      "pc-search": "search", "pc-document-list": "documentList", "pc-grdt": "grdt", "pc-family": "family", "pc-discipline": "discipline",
       "pc-revision": "revision", "pc-status": "status", "pc-start": "startDate", "pc-end": "endDate",
     };
     Object.entries(controls).forEach(([id, field]) => {
       const control = el(id);
       control.addEventListener(control.tagName === "SELECT" ? "change" : "input", () => {
         state.filters[field] = control.value;
+        if (field === "documentList") {
+          const count = control.value.split(/[\r\n,;|\t]+/).map((item) => item.trim()).filter(Boolean).length;
+          el("pc-document-list-count").textContent = count ? `${fmt(count)} código(s) no filtro` : "Todos os documentos";
+        }
         state.page = 1;
         renderTableOnly();
       });
@@ -110,7 +115,8 @@
     });
     el("pc-clear-filters").addEventListener("click", () => {
       Object.keys(state.filters).forEach((key) => { state.filters[key] = ""; });
-      ["pc-search", "pc-grdt", "pc-family", "pc-discipline", "pc-revision", "pc-status", "pc-start", "pc-end"].forEach((id) => { el(id).value = ""; });
+      ["pc-search", "pc-document-list", "pc-grdt", "pc-family", "pc-discipline", "pc-revision", "pc-status", "pc-start", "pc-end"].forEach((id) => { el(id).value = ""; });
+      el("pc-document-list-count").textContent = "Todos os documentos";
       state.page = 1;
       renderTableOnly();
     });

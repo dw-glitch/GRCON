@@ -81,7 +81,7 @@
   }
 
   function sigemStatus(row) {
-    if (!row || !row.currentEvidence) return "";
+    if (!row) return "";
     const value = rawText(row.sigemStatus);
     return value.trim() ? value : "";
   }

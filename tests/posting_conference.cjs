@@ -87,6 +87,19 @@ statusBase = base("DOC-STATUS-4", "A", "  Em Workflow  ");
 r = R.enrichResult(C.reconcile(hist("DOC-STATUS-4", "A"), statusBase, null, { now: NOW }), statusBase, C);
 assert.equal(r.rows[0].sigemStatus, "  Em Workflow  ");
 
+statusBase = base("DOC-STATUS-ATUAL", "A", "Status da revisão antiga");
+statusBase[0].sourceRow = 10;
+const currentStatus = base("DOC-STATUS-ATUAL", "B", "Status atual da Consulta Geral")[0];
+currentStatus.sourceRow = 20;
+statusBase.push(currentStatus);
+r = R.enrichResult(C.reconcile(hist("DOC-STATUS-ATUAL", "A"), statusBase, null, { now: NOW }), statusBase, C);
+assert.equal(r.rows[0].status, C.STATUSES.CONFIRMED);
+assert.equal(r.rows[0].sigemStatus, "Status atual da Consulta Geral");
+
+r = R.enrichResult(C.reconcile(hist("DOC-STATUS-DIVERGENTE", "B"), base("DOC-STATUS-DIVERGENTE", "A", "Em Workflow"), null, { now: NOW }), base("DOC-STATUS-DIVERGENTE", "A", "Em Workflow"), C);
+assert.equal(r.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
+assert.equal(r.rows[0].sigemStatus, "Em Workflow", "Status SIGEM atual não depende de uma nova postagem da revisão enviada");
+
 const awaitingBase = base("OTHER", "A", "Em Workflow");
 r = R.enrichResult(C.reconcile(hist("DOC-PENDING", "A", "2026-09-02T10:00:00Z"), awaitingBase, null, { now: NOW, waitHours: 48 }), awaitingBase, C);
 assert.equal(r.rows[0].status, C.STATUSES.AWAITING);
@@ -110,6 +123,12 @@ assert.equal(r.groups[0].total, 3);
 assert.equal(r.groups[0].confirmed, 2);
 assert.equal(r.groups[0].divergent, 1);
 assert.equal(r.groups[0].status, C.AGGREGATE_STATUSES.REVIEW);
+
+const batchFiltered = C.filterRows(r.rows, { documentList: "DOC-A\nDOC-C" });
+assert.deepEqual(batchFiltered.map((row) => row.document), ["DOC-A", "DOC-C"]);
+assert.equal(C.filterRows(r.rows, { documentList: "DOC" }).length, 0, "filtro em lote exige o código completo, sem casar por trecho");
+const etFilterRows = [{ document: etWith }];
+assert.equal(C.filterRows(etFilterRows, { documentList: etWithout }).length, 1, "filtro em lote respeita a equivalência ET com/sem nt-");
 
 matrix = [["Consulta Geral"], [], [], [], ["Documento", "Revisão", "STATUS"]];
 for (let i = 0; i < 20050; i += 1) matrix.push([`MC-5290.00-22313-970-C1O-${String(i).padStart(5, "0")}`, "A", i % 2 ? "Em Workflow" : "Conforme Construído"]);
@@ -147,4 +166,4 @@ assert.doesNotMatch(refinementSource, /observe\s*\(\s*document\.documentElement/
 assert.match(refinementSource, /moduleObserver\.observe\(module,\s*\{\s*childList:\s*true,\s*subtree:\s*true\s*\}\)/);
 assert.match(refinementSource, /locator\.observe\(workspace,\s*\{\s*childList:\s*true\s*\}\)/);
 
-console.log(`posting_conference: 18 cenários OK · 20k + Status SIGEM em ${Date.now() - start}ms`);
+console.log(`posting_conference: filtro em lote + Status SIGEM atual + 20k em ${Date.now() - start}ms`);
