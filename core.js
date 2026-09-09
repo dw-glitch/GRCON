@@ -993,6 +993,9 @@
       }
       if (headerIndex < 0) return;
       const columns = configured && configured.columns ? { ...configured.columns } : columnMap(header);
+      // Perfis salvos antes da introdução de Prazo não possuem este campo.
+      // Recupere pelo cabeçalho real, preservando os outros mapeamentos manuais.
+      if (columns.ldPrazo === undefined) columns.ldPrazo = columnMap(header).ldPrazo;
       if (columns.document === undefined) return;
       const inferredPurpose = inferPurposeColumn(sheet, headerIndex, range, columns);
       if (columns.purpose === undefined && inferredPurpose !== undefined) columns.purpose = inferredPurpose;

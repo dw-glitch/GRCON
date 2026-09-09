@@ -399,7 +399,7 @@
         sheet: row.sheet || record.sheet,
         ldRow: record.row,
         ldVersion: record.ldVersion,
-        ldPrazo: record.ldPrazo,
+        ldPrazo: record.ldPrazo || (record.ldColumns || []).find((column) => norm(column.header) === "PRAZO")?.value || "",
         databook: record.databook || "",
         virtual: Boolean(entry.virtual),
         discipline: row.egrdt && row.egrdt.discipline || record.discipline || "",
