@@ -41,34 +41,24 @@
     return [...positions].map((position) => baseRecords[position]).filter(Boolean);
   }
 
-  function statusRecordTimestamp(record) {
-    const values = [record && record.modifiedAt, record && record.includedAt]
-      .map((value) => new Date(value).getTime())
-      .filter(Number.isFinite);
-    return values.length ? Math.max(...values) : Number.NEGATIVE_INFINITY;
-  }
-
-  function currentStatusRecord(row, baseRecords, Conference, baseIndex) {
-    const matched = matchedBaseRecords(row, baseRecords, Conference, baseIndex);
-    if (!matched.length) return null;
-    return matched.slice().sort((left, right) => {
-      const byDate = statusRecordTimestamp(right) - statusRecordTimestamp(left);
-      if (byDate) return byDate;
-      const byRow = Number(right && right.sourceRow || 0) - Number(left && left.sourceRow || 0);
-      if (byRow) return byRow;
-      return Conference.revisionRank(right && right.revision) - Conference.revisionRank(left && left.revision);
-    })[0] || null;
+  function exactStatusRecord(row, baseRecords, Conference, baseIndex) {
+    if (!row || !row.currentEvidence) return null;
+    const sent = Conference.normalizeRevision(row.revisionSent);
+    if (!sent) return null;
+    const exact = matchedBaseRecords(row, baseRecords, Conference, baseIndex)
+      .filter((record) => Conference.normalizeRevision(record.revision) === sent);
+    return exact.length === 1 ? exact[0] : null;
   }
 
   function enrichRows(rows, baseRecords, Conference) {
     const base = Array.isArray(baseRecords) ? baseRecords : [];
     const index = Conference && typeof Conference.buildBaseIndex === "function" ? Conference.buildBaseIndex(base) : null;
     return (rows || []).map((row) => {
-      const current = currentStatusRecord(row, base, Conference, index);
+      const exact = exactStatusRecord(row, base, Conference, index);
       return {
         ...row,
         conferenceLabel: conferenceLabel(row.status, Conference),
-        sigemStatus: current ? rawText(current.status) : "",
+        sigemStatus: exact ? rawText(exact.status) : "",
       };
     });
   }
@@ -339,7 +329,6 @@
     conferenceLabel,
     enrichRows,
     enrichResult,
-    currentStatusRecord,
     locateExactStatusColumn,
     repairParsedStatuses,
     wrapConference,

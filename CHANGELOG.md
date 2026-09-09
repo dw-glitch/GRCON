@@ -1,16 +1,5 @@
 # Histórico de alterações
 
-## 5.40.6 — 2026-09-09
-
-### Filtro em lote e Status SIGEM atual na Conferência
-
-- A tabela da Conferência recebeu um campo para colar e filtrar vários códigos documentais de uma vez.
-- O filtro aceita códigos separados por linha, vírgula, ponto e vírgula, barra vertical ou tabulação de uma coluna do Excel.
-- A correspondência em lote é exata e reutiliza a normalização documental do GRCON, incluindo ET com/sem `nt-`.
-- “Conferência” continua comparando documento + revisão enviada; “Status SIGEM” passa a mostrar literalmente o `STATUS` atual do documento na Consulta Geral.
-- Quando existem várias ocorrências do documento, o registro mais atual é escolhido por data da Consulta Geral e, em seguida, pela última linha de origem.
-- O Status SIGEM deixa de ficar vazio apenas porque a revisão enviada não representa uma nova postagem.
-
 ## 5.40.5 — 2026-09-09
 
 ### Entrada não conciliada deixa de bloquear a geração

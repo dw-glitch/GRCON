@@ -3706,4 +3706,4 @@ await (async () => {
   checks.push(nome);
 })();
 
-console.log(JSON.stringify({ version: "5.40.6", passed: true, checks: checks.length, names: checks }, null, 2));
+console.log(JSON.stringify({ version: "5.40.5", passed: true, checks: checks.length, names: checks }, null, 2));

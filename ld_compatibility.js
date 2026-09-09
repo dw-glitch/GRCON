@@ -6,6 +6,7 @@
   "use strict";
 
   const FIELD_DEFS = [
+    { key: "ldPrazo", label: "Prazo", standard: ["PRAZO"], aliases: [] },
     { key: "document", label: "Documento", standard: ["DOCUMENTO", "DOCUMENTO Nº", "CODIGO DOCUMENTO", "CODIGO DO DOCUMENTO"], aliases: ["NOME DOCUMENTO", "NUMERO DOCUMENTO", "IDENTIFICADOR DOCUMENTO"] },
     { key: "revision", label: "Revisão", standard: ["REVISAO", "REV.", "REV"], aliases: ["VERSAO DOCUMENTO", "REVISAO DOCUMENTO", "REVISAO ATUAL"] },
     { key: "ldVersion", label: "Versão da LD enviada", standard: ["VERSAO DA LD ENVIADA"], aliases: ["VERSAO LD ENVIADA", "REVISAO DA LD ENVIADA"] },
