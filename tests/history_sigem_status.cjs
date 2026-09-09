@@ -77,7 +77,7 @@ assert.equal(Projection.sigemStatus(row), "Em Workflow");
 
 row = Projection.rowForFile(index, record, { document: "ABC-003", grdtRevision: "A" }, Conference, History);
 assert.ok(row);
-assert.equal(Projection.sigemStatus(row), "", "status de revisão divergente não pode ser tratado como status da revisão enviada");
+assert.equal(Projection.sigemStatus(row), "Em Workflow", "Status SIGEM atual deve aparecer mesmo quando a revisão enviada ainda diverge");
 
 let summary = Projection.statusSummary(index, record, Conference);
 assert.equal(summary.label, "2 valores");
