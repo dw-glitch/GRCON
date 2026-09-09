@@ -4,7 +4,10 @@ importScripts("../grcon_utils.js", "../grcon_contracts.js", "../discipline_resol
 
 const CACHE_DB = "grcon-performance-cache-v3";
 const CACHE_STORE = "ld-indexes";
-const CACHE_SCHEMA = "5.33.4-discipline-header";
+// O schema muda quando a identidade documental/indexação muda. Isto força a
+// reconstrução de índices antigos que ainda não continham EAP, EAP+tipo+TAG e
+// a validação central de identidade documental.
+const CACHE_SCHEMA = "5.40.8-eap-identity";
 const memoryCache = new Map();
 function openDb() {
   return new Promise((resolve, reject) => {
