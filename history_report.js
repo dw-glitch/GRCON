@@ -169,7 +169,7 @@
       "COMENTÁRIO DA FISCAL": text(file.fiscalComment),
       "ABA LD": text(file.sheet),
       "LINHA LD": Number(file.ldRow) || "",
-      "VERSÃO DA LD ENVIADA": text(file.ldVersion) || "Não registrada neste histórico",
+      "VERSÃO DA LD ENVIADA": text(file.ldPrazo),
       "CAMINHO DATABOOK": text(file.databook),
       "LD UTILIZADA": text(record.ldName),
       "ORIGEM DOS DOCUMENTOS": text(record.sourceName),
