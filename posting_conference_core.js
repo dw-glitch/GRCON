@@ -415,7 +415,7 @@
     return ({
       [STATUSES.CONFIRMED]: "Confirmado",
       [STATUSES.AWAITING]: "Aguardando confirmação",
-      [STATUSES.REVISION_DIVERGENT]: "Revisão divergente",
+      [STATUSES.REVISION_DIVERGENT]: "Aguardando retorno do SIGEM",
       [STATUSES.NOT_FOUND]: "Não encontrado",
       [STATUSES.REVIEW]: "Requer análise",
       [STATUSES.NOT_VERIFIED]: "Não verificado",

@@ -216,7 +216,7 @@
     const s = state.result.summary || {};
     const cards = [
       ["Total enviado via eGRDT", s.total, ""], ["Postagens confirmadas", s.confirmed, "confirmed"],
-      ["Aguardando confirmação", s.awaiting, "awaiting"], ["Revisão diferente", s.divergent, "divergent"],
+      ["Aguardando confirmação", s.awaiting, "awaiting"], ["Aguardando retorno do SIGEM", s.divergent, "divergent"],
       ["Não encontrado", s.notFound, "missing"], ["Requer análise", s.review, "review"],
     ];
     el("pc-kpis").innerHTML = cards.map(([label, value, css]) => `<div class="${css}"><span>${escapeHtml(label)}</span><strong>${fmt(value)}</strong></div>`).join("");
@@ -234,7 +234,7 @@
     discipline.value = state.filters.discipline;
     const statuses = [
       [Conference.STATUSES.CONFIRMED, "Confirmado"], [Conference.STATUSES.AWAITING, "Aguardando confirmação"],
-      [Conference.STATUSES.REVISION_DIVERGENT, "Revisão divergente"], [Conference.STATUSES.NOT_FOUND, "Não encontrado"],
+      [Conference.STATUSES.REVISION_DIVERGENT, "Aguardando retorno do SIGEM"], [Conference.STATUSES.NOT_FOUND, "Não encontrado"],
       [Conference.STATUSES.REVIEW, "Requer análise"], [Conference.STATUSES.NOT_VERIFIED, "Não verificado"],
     ];
     el("pc-status").innerHTML = '<option value="">Todas</option>' + statuses.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
