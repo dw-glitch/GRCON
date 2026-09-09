@@ -137,7 +137,11 @@
     collected.forEach((entry) => {
       const compatible = isCompatible(sigem, entry.record);
       if (!compatible.ok) { rejected.push({ ...entry, reason: compatible.reason }); return; }
-      const key = text(entry.record.inventoryId) || `${text(entry.record.id)}|${entry.record.sourceRow}`;
+      // Versões diferentes do mesmo ID ProjectWise precisam continuar no conjunto
+      // para que a reconciliação possa eleger a revisão mais nova. Por isso a
+      // revisão faz parte da identidade técnica do item quando o inventário não
+      // trouxe um inventoryId explícito.
+      const key = text(entry.record.inventoryId) || `${text(entry.record.id)}|${normalizeRevision(entry.record.revision)}|${norm(entry.record.folderPath)}|${entry.record.sourceRow || ""}`;
       const previous = dedupe.get(key);
       if (!previous || entry.source === "MAPEAMENTO_EXPLICITO") dedupe.set(key, entry);
     });
