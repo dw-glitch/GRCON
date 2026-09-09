@@ -2,3 +2,4 @@
 // preservar a rastreabilidade das correções que deram origem aos testes.
 await import("../GRCON_TESTES_5.31.6.mjs");
 await import("./discipline.mjs");
+await import("./history_ld_prazo.cjs");

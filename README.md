@@ -34,6 +34,8 @@ Documentos N-1710 não participam da busca por TAG dos relatórios ET.
 
 ## Relatório
 
+Na exportação do Histórico, a coluna `VERSÃO DA LD ENVIADA` (X) apresenta o valor literal de `Prazo` da linha do documento na LD, como `A01`, `E30` ou `Primeiras versões`. O prazo é guardado no momento da geração e preservado nas próximas exportações. A revisão da LD continua armazenada separadamente. Registros antigos sem prazo ficam vazios nessa coluna; não se infere prazo a partir da revisão ou de uma LD atual.
+
 O Excel gerado concentra decisão e rastreabilidade sem duplicar a relação:
 
 - `Resumo`: primeira aba do arquivo, com painel gerencial, decisão operacional e todas as evidências técnicas — buscas, código encontrado, alocação, renomeação, revisão, postagem, origem e linha da LD, Databook, histórico, arquivo final e ação necessária;

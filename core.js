@@ -754,6 +754,7 @@
       if (disciplineScore) disciplineCandidates.push({ index, score: disciplineScore });
       if (h === "DOCUMENTO" || h.startsWith("DOCUMENTO ") || h === "CODIGO DOCUMENTO" || h === "CODIGO DO DOCUMENTO" || h === "NUMERO DOCUMENTO" || h === "IDENTIFICADOR DOCUMENTO") result.document = index;
       else if (h === "REVISAO" || h === "REV." || h === "REV") result.revision = index;
+      else if (h === "PRAZO") result.ldPrazo = index;
       else if (h === "VERSAO DA LD ENVIADA" || h.includes("VERSAO DA LD ENVIADA")) result.ldVersion = index;
       else if (h.includes("STATUS SIGEM")) result.sigemStatus = index;
       else if (h === "STATUS") result.status = index;
@@ -1042,6 +1043,7 @@
           sourceOrder: sheetOrder,
           sheetHidden,
           ldVersion: rowLdVersion,
+          ldPrazo: sheetCell(sheet, i, columns.ldPrazo),
           ldVersionHeader: columns.ldVersion === undefined ? "" : text(header[columns.ldVersion]).replace(/\s+/g, " "),
           ldVersionColumn: columns.ldVersion === undefined ? "" : XLSX.utils.encode_col(columns.ldVersion),
           ldVersionSource: columns.ldVersion === undefined ? "fallback" : "VERSÃO DA LD ENVIADA",
