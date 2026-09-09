@@ -7,7 +7,7 @@
   const HistoryReport = window.GrconHistoryReport;
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.40.7";
+    || "5.40.8";
   const LIST_PAGE_SIZE = 200;
   const SEARCH_DEBOUNCE_MS = 120;
   const $ = (selector) => document.querySelector(selector);
