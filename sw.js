@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw1";
+const CACHE_NAME = "grcon-v5.40.10-spw2-analyze-runtime";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -33,6 +33,7 @@ const ASSETS = [
   "offline_resources.js",
   "grcon_bootstrap_head.js",
   "grcon_service_worker.js",
+  "analysis_runtime_guard.js",
   "sigem_pw_dashboard_bootstrap.js",
   "sigem_pw_dashboard_core.js",
   "sigem_pw_dashboard_app.js",
@@ -118,6 +119,7 @@ const CRITICAL_ASSETS = [
   "index.html",
   "grcon_bootstrap_head.js",
   "grcon_service_worker.js",
+  "analysis_runtime_guard.js",
   "design-system.css",
   "legacy-compat.css",
   "grcon-ui.css",
