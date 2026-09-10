@@ -11,14 +11,17 @@
   // A persistência durável registra o listener de inicialização ainda no <head>.
   // Assim, quando DOMContentLoaded ocorrer, history_core.js e
   // sigem_posting_core.js já terão sido avaliados pelos scripts defer, mas a
-  // pessoa ainda não teve oportunidade de iniciar uma operação. O módulo pode
-  // então migrar/hidratar o IndexedDB antes de liberar gravações.
+  // pessoa ainda não teve oportunidade de iniciar uma operação. A versão v2
+  // mantém o mesmo banco e acrescenta migração idempotente, validação real de
+  // escrita e recuperação automática de bloqueios transitórios entre abas.
   function installOperationalPersistence() {
     if (document.querySelector("script[data-grcon-operational-persistence]")) return;
     const script = document.createElement("script");
-    script.src = "operational_persistence.js";
+    // O sufixo também impede que um HTML novo execute por engano a cópia antiga
+    // deste módulo após um deploy, sem depender de limpeza manual do navegador.
+    script.src = "operational_persistence_v2.js?storage=2";
     script.async = false;
-    script.dataset.grconOperationalPersistence = "";
+    script.dataset.grconOperationalPersistence = "v2";
     document.head.appendChild(script);
   }
 
