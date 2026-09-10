@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw2-analyze-runtime";
+const CACHE_NAME = "grcon-v5.40.10-spw3-sigem-pw-history";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -37,6 +37,10 @@ const ASSETS = [
   "sigem_pw_dashboard_bootstrap.js",
   "sigem_pw_dashboard_core.js",
   "sigem_pw_dashboard_app.js",
+  "sigem_pw_revision_core.js",
+  "sigem_pw_revision_section.js",
+  "sigem_pw_history_core.js",
+  "sigem_pw_history_app.js",
   "grcon_module_loader.js",
   "grcon_contracts.js",
   "discipline_resolver.js",
