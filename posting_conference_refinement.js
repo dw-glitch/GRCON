@@ -51,7 +51,6 @@
       return date.getUTCFullYear() === +y && date.getUTCMonth() === +m - 1
         && date.getUTCDate() === +d && +h < 24 && +min < 60 && +s < 60 ? time : NaN;
     }
-    // Do not let the browser guess a locale for ambiguous date strings.
     return /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(source) ? Date.parse(source) : NaN;
   }
 
@@ -86,23 +85,230 @@
     const index = Conference && typeof Conference.buildBaseIndex === "function" ? Conference.buildBaseIndex(base) : null;
     return (rows || []).map((row) => {
       const current = currentStatusRecord(row, base, Conference, index);
+      const matched = matchedBaseRecords(row, base, Conference, index);
       return {
         ...row,
         conferenceLabel: conferenceLabel(row.status, Conference),
         sigemStatus: current ? rawText(current.status) : "",
         sigemStatusRevision: current ? current.revision : "",
         sigemSourceRow: current ? current.sourceRow : null,
-        note: !current && matchedBaseRecords(row, base, Conference, index).length
-          ? `${row.note || ""} Status SIGEM ambíguo na Consulta Geral; requer análise das linhas de origem.`
+        note: !current && matched.length
+          ? `${row.note || ""} Status SIGEM ambíguo na Consulta Geral; requer análise das linhas de origem.`.trim()
           : current && Conference.normalizeRevision(current.revision) !== Conference.normalizeRevision(row.revisionSent)
-            ? `${row.note || ""} Status SIGEM referente à revisão ${current.revision} encontrada na base.` : row.note,
+            ? `${row.note || ""} Status SIGEM referente à revisão ${current.revision} encontrada na base.`.trim()
+            : row.note,
       };
     });
   }
 
+  function historyTimestamp(row) {
+    const source = trimmed(row && row.generatedAt);
+    const parsed = parseSourceDate(source);
+    if (Number.isFinite(parsed)) return parsed;
+    const generic = Date.parse(source);
+    return Number.isFinite(generic) ? generic : Number.NEGATIVE_INFINITY;
+  }
+
+  function egrdtSequence(value) {
+    const source = trimmed(value).toUpperCase();
+    const standard = source.match(/-G-(\d+)-\d{4}(?:\D|$)/);
+    if (standard) return Number(standard[1]) || 0;
+    const parts = source.match(/\d+/g) || [];
+    return parts.length ? Number(parts[parts.length - 1]) || 0 : 0;
+  }
+
+  function compareSendRecency(left, right) {
+    const byTime = historyTimestamp(right) - historyTimestamp(left);
+    if (Number.isFinite(byTime) && byTime) return byTime;
+    const bySequence = egrdtSequence(right && right.egrdtNumber) - egrdtSequence(left && left.egrdtNumber);
+    if (bySequence) return bySequence;
+    return trimmed(right && right.egrdtNumber).localeCompare(trimmed(left && left.egrdtNumber), "pt-BR", { numeric: true });
+  }
+
+  function documentRevisionIdentity(row, Conference) {
+    const identity = trimmed(row && row.documentIdentity) || Conference.documentIdentity(row && row.document);
+    return `${identity}::${Conference.normalizeRevision(row && row.revisionSent)}`;
+  }
+
+  function sendEventKey(row, Conference) {
+    const identity = trimmed(row && row.documentIdentity) || Conference.documentIdentity(row && row.document);
+    const revision = Conference.normalizeRevision(row && row.revisionSent);
+    const egrdt = Conference.norm(row && row.egrdtNumber);
+    // A eGRDT identifica o evento/lote; data só entra como fallback quando o
+    // número do lote não existe. Assim um registro persistido duas vezes com
+    // pequenas diferenças de timestamp não vira uma falsa repostagem.
+    const timestamp = historyTimestamp(row);
+    const temporal = egrdt ? "" : (Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : Conference.norm(row && row.generatedAt));
+    return `${identity}::${revision}::${egrdt}::${temporal}`;
+  }
+
+  function statusPriority(status, Conference) {
+    const S = Conference.STATUSES;
+    return ({
+      [S.CONFIRMED]: 0,
+      [S.REVIEW]: 1,
+      [S.REVISION_DIVERGENT]: 2,
+      [S.NOT_FOUND]: 3,
+      [S.AWAITING]: 4,
+      [S.NOT_VERIFIED]: 5,
+    })[status] ?? 9;
+  }
+
+  function chooseDuplicateEvent(existing, candidate, Conference) {
+    if (!existing) return candidate;
+    if (!candidate) return existing;
+    const existingPriority = statusPriority(existing.status, Conference);
+    const candidatePriority = statusPriority(candidate.status, Conference);
+    if (candidatePriority < existingPriority) return candidate;
+    if (candidatePriority > existingPriority) return existing;
+    const existingEvidence = Number(Boolean(existing.sigemStatus)) + Number(Boolean(existing.revisionFound)) + Number(Boolean(existing.note));
+    const candidateEvidence = Number(Boolean(candidate.sigemStatus)) + Number(Boolean(candidate.revisionFound)) + Number(Boolean(candidate.note));
+    return candidateEvidence > existingEvidence ? candidate : existing;
+  }
+
+  function summarizeDocuments(rows, Conference) {
+    const source = Array.isArray(rows) ? rows : [];
+    const S = Conference.STATUSES;
+    const confirmed = source.filter((row) => row.status === S.CONFIRMED).length;
+    const sendCount = source.reduce((sum, row) => sum + Number(row.sendCount || 0), 0);
+    const repostCount = source.reduce((sum, row) => sum + Number(row.repostCount || 0), 0);
+    const exactDuplicateCount = source.reduce((sum, row) => sum + Number(row.exactDuplicateCount || 0), 0);
+    const egrdts = new Set(source.flatMap((row) => (row.sends || []).map((send) => Conference.norm(send.egrdtNumber)).filter(Boolean)));
+    return {
+      total: source.length,
+      confirmed,
+      awaiting: source.filter((row) => row.status === S.AWAITING).length,
+      divergent: source.filter((row) => row.status === S.REVISION_DIVERGENT).length,
+      notFound: source.filter((row) => row.status === S.NOT_FOUND).length,
+      review: source.filter((row) => row.status === S.REVIEW).length,
+      notVerified: source.filter((row) => row.status === S.NOT_VERIFIED).length,
+      pending: source.filter((row) => row.status !== S.CONFIRMED).length,
+      percentConfirmed: source.length ? Math.round((confirmed / source.length) * 10000) / 100 : 0,
+      sendCount,
+      repostCount,
+      egrdtCount: egrdts.size,
+      exactDuplicateCount,
+      documentsWithMultipleSends: source.filter((row) => Number(row.sendCount || 0) > 1).length,
+      rawEventCount: source.reduce((sum, row) => sum + Number(row.rawEventCount || row.sendCount || 0), 0),
+    };
+  }
+
+  function buildDocumentAggregates(rows, Conference) {
+    if (!Conference) return [];
+    const groups = new Map();
+
+    (rows || []).forEach((row) => {
+      const identity = trimmed(row && row.documentIdentity) || Conference.documentIdentity(row && row.document);
+      if (!identity) return;
+      let group = groups.get(identity);
+      if (!group) {
+        group = { identity, rawRows: [], eventMap: new Map(), exactDuplicateCount: 0 };
+        groups.set(identity, group);
+      }
+      group.rawRows.push(row);
+      const eventKey = sendEventKey(row, Conference);
+      if (group.eventMap.has(eventKey)) group.exactDuplicateCount += 1;
+      group.eventMap.set(eventKey, chooseDuplicateEvent(group.eventMap.get(eventKey), row, Conference));
+    });
+
+    return [...groups.values()].map((group) => {
+      const sends = [...group.eventMap.values()].sort(compareSendRecency);
+      const latestSend = sends[0] || group.rawRows[0] || {};
+      const currentRevision = Conference.normalizeRevision(latestSend.revisionSent);
+      const currentRevisionSends = sends.filter((row) => Conference.normalizeRevision(row.revisionSent) === currentRevision);
+      const confirmedCurrent = currentRevisionSends.filter((row) => row.status === Conference.STATUSES.CONFIRMED).sort(compareSendRecency);
+      const current = confirmedCurrent[0] || currentRevisionSends[0] || latestSend;
+      const revisions = [...new Set(sends.map((row) => Conference.normalizeRevision(row.revisionSent)).filter(Boolean))]
+        .sort((a, b) => Conference.revisionRank(a) - Conference.revisionRank(b) || a.localeCompare(b, "pt-BR"));
+      const revisionCounts = new Map();
+      sends.forEach((row) => {
+        const revision = Conference.normalizeRevision(row.revisionSent);
+        revisionCounts.set(revision, (revisionCounts.get(revision) || 0) + 1);
+      });
+      const repostCount = [...revisionCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+      const egrdtNumbers = [...new Set(sends.map((row) => trimmed(row.egrdtNumber)).filter(Boolean))];
+      const searchKeys = [...new Set(sends.flatMap((row) => row.searchKeys || Conference.documentKeys(row.document)).filter(Boolean))];
+      const latestChecked = sends.slice().sort((a, b) => Date.parse(b.lastCheckedAt || 0) - Date.parse(a.lastCheckedAt || 0))[0];
+      const allNotes = [...new Set(currentRevisionSends.map((row) => trimmed(row.note)).filter(Boolean))];
+      const notePrefix = sends.length > 1
+        ? `${sends.length} envios consolidados (${repostCount} repostagem(ns)); tentativas anteriores permanecem no histórico.`
+        : "";
+      const note = [notePrefix, trimmed(current.note) || allNotes[0] || ""].filter(Boolean).join(" ");
+
+      return {
+        ...latestSend,
+        ...current,
+        key: `document::${group.identity}`,
+        identity: group.identity,
+        documentIdentity: group.identity,
+        documentRevisionIdentity: `${group.identity}::${currentRevision}`,
+        document: latestSend.document || current.document,
+        documentFamily: latestSend.documentFamily || current.documentFamily,
+        discipline: latestSend.discipline || current.discipline,
+        sheet: latestSend.sheet || current.sheet,
+        searchKeys,
+        currentRevision,
+        revisionSent: currentRevision,
+        revisions,
+        revisionCount: revisions.length,
+        sends,
+        eventKeys: sends.map((row) => row.key).filter(Boolean),
+        sendCount: sends.length,
+        rawEventCount: group.rawRows.length,
+        exactDuplicateCount: group.exactDuplicateCount,
+        repostCount,
+        currentRevisionSendCount: currentRevisionSends.length,
+        currentRevisionRepostCount: Math.max(0, currentRevisionSends.length - 1),
+        egrdtCount: egrdtNumbers.length,
+        egrdtNumbers,
+        associatedEgrdts: egrdtNumbers,
+        latestSend,
+        egrdtNumber: latestSend.egrdtNumber,
+        generatedAt: latestSend.generatedAt,
+        latestEgrdtNumber: latestSend.egrdtNumber,
+        latestSendAt: latestSend.generatedAt,
+        status: current.status,
+        statusLabel: current.statusLabel || Conference.statusLabel(current.status),
+        conferenceLabel: current.conferenceLabel || conferenceLabel(current.status, Conference),
+        revisionFound: current.revisionFound,
+        sigemStatus: current.sigemStatus,
+        sigemStatusRevision: current.sigemStatusRevision,
+        sigemSourceRow: current.sigemSourceRow,
+        firstConfirmedAt: current.firstConfirmedAt,
+        confirmedRevision: current.confirmedRevision,
+        confirmationSource: current.confirmationSource,
+        historicalPreserved: Boolean(current.historicalPreserved),
+        currentEvidence: Boolean(current.currentEvidence),
+        lastCheckedAt: latestChecked ? latestChecked.lastCheckedAt : current.lastCheckedAt,
+        note,
+      };
+    }).sort((a, b) => compareSendRecency(a.latestSend || a, b.latestSend || b));
+  }
+
   function enrichResult(result, baseRecords, Conference) {
     if (!result || typeof result !== "object") return result;
-    return { ...result, rows: enrichRows(result.rows || [], baseRecords || [], Conference) };
+    const eventRows = enrichRows(result.eventRows || result.rows || [], baseRecords || [], Conference);
+    const documentRows = buildDocumentAggregates(eventRows, Conference);
+    const summary = summarizeDocuments(documentRows, Conference);
+    const eventSummary = result.eventSummary || result.summary || (Conference.summarize ? Conference.summarize(eventRows) : {});
+    return {
+      ...result,
+      rows: eventRows,
+      eventRows,
+      documentRows,
+      summary,
+      eventSummary,
+      consolidation: {
+        rawEvents: eventRows.length,
+        uniqueDocuments: documentRows.length,
+        duplicateDocumentRowsEliminated: Math.max(0, eventRows.length - documentRows.length),
+        documentsWithMultipleSends: summary.documentsWithMultipleSends,
+        sends: summary.sendCount,
+        reposts: summary.repostCount,
+        exactDuplicateEvents: summary.exactDuplicateCount,
+        egrdts: summary.egrdtCount,
+      },
+    };
   }
 
   function locateExactStatusColumn(matrix, Conference) {
@@ -144,6 +350,60 @@
     };
   }
 
+  function isAggregateRows(rows) {
+    return Array.isArray(rows) && rows.some((row) => Array.isArray(row && row.sends));
+  }
+
+  function aggregateMatches(row, filters, Conference) {
+    const f = filters || {};
+    const sends = row.sends || [];
+    const norm = Conference.norm;
+    const search = norm(f.search);
+    const code = norm(f.document);
+    const grdt = norm(f.grdt);
+    const family = norm(f.family);
+    const discipline = norm(f.discipline);
+    const revision = Conference.normalizeRevision(f.revision);
+    const status = trimmed(f.status);
+    const start = trimmed(f.startDate);
+    const end = trimmed(f.endDate);
+    const documentList = String(f.documentList || "").split(/[\r\n,;|\t]+/).map(trimmed).filter(Boolean);
+    const wantedIdentities = new Set(documentList.map((document) => Conference.documentIdentity(document)).filter(Boolean));
+
+    if (search) {
+      const haystack = [
+        row.document, row.documentFamily, row.discipline, row.currentRevision, row.revisionFound,
+        row.statusLabel, row.conferenceLabel, row.sigemStatus, row.note,
+        ...sends.flatMap((send) => [send.egrdtNumber, send.generatedAt, send.revisionSent, send.sigemStatus, send.note]),
+      ].join(" ");
+      if (!norm(haystack).includes(search)) return false;
+    }
+    if (code && !norm(row.document).includes(code)) return false;
+    if (wantedIdentities.size && !wantedIdentities.has(row.documentIdentity)) return false;
+    if (grdt && !sends.some((send) => norm(send.egrdtNumber).includes(grdt))) return false;
+    if (family && !sends.some((send) => norm(send.documentFamily || send.sheet) === family)) return false;
+    if (discipline && !sends.some((send) => norm(send.discipline) === discipline)) return false;
+    if (revision && !sends.some((send) => Conference.normalizeRevision(send.revisionSent) === revision)) return false;
+    if (status && row.status !== status) return false;
+    if (start || end) {
+      const hasDate = sends.some((send) => {
+        const dateKey = trimmed(send.generatedAt).slice(0, 10);
+        if (!dateKey) return false;
+        if (start && dateKey < start) return false;
+        if (end && dateKey > end) return false;
+        return true;
+      });
+      if (!hasDate) return false;
+    }
+    return true;
+  }
+
+  function pendingDocumentRows(rows, Conference) {
+    return (rows || []).filter((row) => row.status !== Conference.STATUSES.CONFIRMED)
+      .sort((a, b) => statusPriority(a.status, Conference) - statusPriority(b.status, Conference)
+        || compareSendRecency(a.latestSend || a, b.latestSend || b));
+  }
+
   function wrapConference(original) {
     if (!original || original[MARKER]) return original;
     const wrapped = {
@@ -166,18 +426,36 @@
         return enrichResult(result, repaired.records || [], wrapped);
       },
       filterRows(rows, filters) {
+        if (isAggregateRows(rows)) return (rows || []).filter((row) => aggregateMatches(row, filters, wrapped));
         const sourceFilters = { ...(filters || {}) };
         const search = trimmed(sourceFilters.search);
         sourceFilters.search = "";
         let result = original.filterRows(rows, sourceFilters);
         if (!search) return result;
         const wanted = original.norm(search);
-        result = result.filter((row) => original.norm([
+        return result.filter((row) => original.norm([
           row.document, row.egrdtNumber, row.discipline, row.documentFamily,
           row.revisionSent, row.revisionFound, row.conferenceLabel || row.statusLabel,
           row.sigemStatus, row.note,
         ].join(" ")).includes(wanted));
-        return result;
+      },
+      pendingRows(rows) {
+        return isAggregateRows(rows) ? pendingDocumentRows(rows, wrapped) : original.pendingRows(rows);
+      },
+      summarize(rows) {
+        return isAggregateRows(rows) ? summarizeDocuments(rows, wrapped) : original.summarize(rows);
+      },
+      buildDocumentAggregates(rows) {
+        return buildDocumentAggregates(rows, wrapped);
+      },
+      summarizeDocuments(rows) {
+        return summarizeDocuments(rows, wrapped);
+      },
+      sendEventKey(row) {
+        return sendEventKey(row, wrapped);
+      },
+      documentRevisionIdentity(row) {
+        return documentRevisionIdentity(row, wrapped);
       },
     };
     Object.defineProperty(wrapped, MARKER, { value: true, enumerable: false });
@@ -204,39 +482,35 @@
     const ui = root.GrconPostingConferenceUi;
     const Conference = root.GrconPostingConference;
     if (!ui?.state || !Conference) return [];
-    let rows = Conference.filterRows(ui.state.result?.rows || [], ui.state.filters || {});
+    const source = ui.state.view === "grdts"
+      ? (ui.state.result?.eventRows || ui.state.result?.rows || [])
+      : (ui.state.result?.documentRows || []);
+    let rows = Conference.filterRows(source, ui.state.filters || {});
     if (ui.state.view === "pending") rows = Conference.pendingRows(rows);
     const page = Math.max(1, Number(ui.state.page) || 1);
     return rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   }
 
-  function ensureSigemCell(statusCell, row) {
-    let cell = statusCell.nextElementSibling;
-    if (!cell || !cell.classList.contains("pc-sigem-cell")) {
-      cell = document.createElement("td");
-      cell.className = "pc-sigem-cell";
-      statusCell.insertAdjacentElement("afterend", cell);
-    }
-    // O selo era destruído e recriado a cada refinamento, em todas as linhas da
-    // página. Além de descartar nó por nó sem necessidade, isso reinicia
-    // qualquer transição do CSS e pisca a coluna inteira quando o refinamento
-    // roda em sequência. Só reescrevemos o que mudou de fato.
-    const label = rawText(row && row.sigemStatus) || "—";
-    let badge = cell.firstElementChild;
-    if (!badge || !badge.classList.contains("pc-sigem-status")) {
-      cell.textContent = "";
-      badge = document.createElement("span");
-      badge.className = "pc-sigem-status";
-      cell.appendChild(badge);
-    }
-    setText(badge, label);
-  }
-
-  // textContent reescrito com o mesmo valor troca o nó de texto e conta como
-  // mutação: com o observer do módulo escutando childList, isso é trabalho e
-  // repintura por nada, linha a linha.
   function setText(node, value) {
     if (node && node.textContent !== value) node.textContent = value;
+  }
+
+  function ensureSigemCell(statusCell, row) {
+    let cell = statusCell.nextElementSibling;
+    if (cell && cell.classList.contains("pc-sigem-cell")) {
+      const badge = cell.querySelector(".pc-sigem-status");
+      if (!badge || !badge.classList.contains("pc-sigem-status")) return;
+      setText(badge, rawText(row && row.sigemStatus) || "—");
+      return;
+    }
+    // Compatibilidade com versões anteriores da tabela. A interface atual já
+    // renderiza a coluna Status SIGEM nativamente e não passa por este ramo.
+    if (cell && /Status SIGEM/i.test(cell.getAttribute("data-label") || "")) return;
+    cell = document.createElement("td");
+    cell.className = "pc-sigem-cell";
+    cell.innerHTML = `<span class="pc-sigem-status"></span>`;
+    statusCell.insertAdjacentElement("afterend", cell);
+    setText(cell.firstElementChild, rawText(row && row.sigemStatus) || "—");
   }
 
   function decorateDocumentTable(module) {
@@ -247,24 +521,26 @@
     if (conferenceIndex < 0) return;
     const conferenceHeading = headings[conferenceIndex];
     setText(conferenceHeading, "Conferência");
-    let sigemHeading = conferenceHeading.nextElementSibling;
-    if (!sigemHeading || !sigemHeading.classList.contains("pc-sigem-heading")) {
-      sigemHeading = document.createElement("th");
-      sigemHeading.className = "pc-sigem-heading";
-      conferenceHeading.insertAdjacentElement("afterend", sigemHeading);
+    const nextHeading = conferenceHeading.nextElementSibling;
+    const hasNativeSigem = nextHeading && /Status SIGEM/i.test(trimmed(nextHeading.textContent));
+    if (!hasNativeSigem) {
+      let sigemHeading = table.querySelector("thead .pc-sigem-heading");
+      if (!sigemHeading) {
+        sigemHeading = document.createElement("th");
+        sigemHeading.className = "pc-sigem-heading";
+        conferenceHeading.insertAdjacentElement("afterend", sigemHeading);
+      }
+      setText(sigemHeading, "Status SIGEM");
+      const rows = visibleRows();
+      [...table.querySelectorAll("tbody tr")].forEach((tr, index) => {
+        const cells = [...tr.children].filter((node) => node.tagName === "TD");
+        const statusCell = cells[conferenceIndex];
+        if (!statusCell) return;
+        const chip = statusCell.querySelector(".pc-status");
+        if (chip && rows[index]) setText(chip, rows[index].conferenceLabel || conferenceLabel(rows[index].status, root.GrconPostingConference));
+        ensureSigemCell(statusCell, rows[index]);
+      });
     }
-    setText(sigemHeading, "Status SIGEM");
-
-    const rows = visibleRows();
-    [...table.querySelectorAll("tbody tr")].forEach((tr, index) => {
-      const row = rows[index];
-      const cells = [...tr.children].filter((node) => node.tagName === "TD");
-      const statusCell = cells[conferenceIndex];
-      if (!statusCell) return;
-      const chip = statusCell.querySelector(".pc-status");
-      if (chip && row) setText(chip, row.conferenceLabel || conferenceLabel(row.status, root.GrconPostingConference));
-      ensureSigemCell(statusCell, row);
-    });
   }
 
   function decorateLabels(module) {
@@ -288,8 +564,6 @@
       decorateLabels(module);
       if (root.GrconPostingConferenceUi?.state?.view !== "grdts") decorateDocumentTable(module);
     } finally {
-      // As alterações acima pertencem ao próprio refinamento. Retiramos esses
-      // registros da fila do observer para que ele não reaja ao próprio DOM.
       moduleObserver?.takeRecords?.();
       decorating = false;
     }
@@ -319,8 +593,6 @@
     if (existing) {
       observeConferenceModule(existing);
     } else {
-      // O módulo é criado sob demanda. Observamos somente os filhos diretos da
-      // workspace até ele existir; mudanças na aba Histórico não passam por aqui.
       const workspace = document.querySelector("main.workspace");
       if (workspace) {
         const locator = new MutationObserver(() => {
@@ -358,5 +630,10 @@
     locateExactStatusColumn,
     repairParsedStatuses,
     wrapConference,
+    buildDocumentAggregates,
+    summarizeDocuments,
+    sendEventKey,
+    documentRevisionIdentity,
+    compareSendRecency,
   });
 });
