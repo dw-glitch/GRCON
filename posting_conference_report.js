@@ -88,17 +88,87 @@
     }
   }
 
-  function dataRowHeight(row) {
+  function statusText(row) {
+    return row.conferenceLabel || row.statusLabel || Conference?.statusLabel?.(row.status) || row.status || "";
+  }
+
+  function eventList(row) {
+    const sends = Array.isArray(row.sends) ? row.sends : [];
+    return sends.map((send) => [
+      send.egrdtNumber || "eGRDT não informada",
+      fmtDate(send.generatedAt, false) || "data não informada",
+      `Rev. ${send.revisionSent || "—"}`,
+      statusText(send) || "Não verificado",
+    ].join(" — ")).join("\n");
+  }
+
+  function dataRowHeight(row, mode) {
     const noteLength = String(row?.note || "").length;
-    if (noteLength > 220) return 54;
-    if (noteLength > 120) return 44;
-    if (noteLength > 60) return 36;
-    return 28;
+    const sends = mode === "documents" ? Math.min(6, Number(row?.sendCount || 1)) : 1;
+    const base = Math.max(28, 18 + sends * 12);
+    if (noteLength > 220) return Math.max(base, 58);
+    if (noteLength > 120) return Math.max(base, 48);
+    if (noteLength > 60) return Math.max(base, 38);
+    return base;
+  }
+
+  function documentHeaders() {
+    return [
+      "Código", "Tipo", "Disciplina", "eGRDTs emitidas / histórico de envios", "Qtd. envios", "Repostagens",
+      "Último envio", "eGRDT mais recente", "Revisão atual", "Revisões históricas", "Revisão encontrada",
+      "Conferência", "Status SIGEM", "Data da confirmação", "Última conferência", "Observação",
+    ];
+  }
+
+  function eventHeaders() {
+    return [
+      "Código", "Tipo", "Disciplina", "eGRDT", "Data eGRDT", "Revisão enviada",
+      "Revisão encontrada", "Conferência", "Status SIGEM", "Data da confirmação", "Última conferência", "Observação",
+    ];
+  }
+
+  function documentValues(row) {
+    return [
+      row.document,
+      row.documentFamily || row.sheet,
+      row.discipline,
+      eventList(row),
+      Number(row.sendCount || 0),
+      Number(row.repostCount || 0),
+      fmtDate(row.latestSendAt || row.generatedAt, false),
+      row.latestEgrdtNumber || row.egrdtNumber,
+      row.currentRevision || row.revisionSent,
+      (row.revisions || []).join(" · "),
+      row.revisionFound,
+      statusText(row),
+      sigemValue(row.sigemStatus),
+      fmtDate(row.firstConfirmedAt, true),
+      fmtDate(row.lastCheckedAt, true),
+      row.note,
+    ];
+  }
+
+  function eventValues(row) {
+    return [
+      row.document,
+      row.documentFamily || row.sheet,
+      row.discipline,
+      row.egrdtNumber,
+      fmtDate(row.generatedAt, false),
+      row.revisionSent,
+      row.revisionFound,
+      statusText(row),
+      sigemValue(row.sigemStatus),
+      fmtDate(row.firstConfirmedAt, true),
+      fmtDate(row.lastCheckedAt, true),
+      row.note,
+    ];
   }
 
   async function buildWorkbook(rows, options) {
     if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");
     const source = rows || [];
+    const mode = options?.mode === "events" ? "events" : "documents";
     const summary = Conference?.summarize ? Conference.summarize(source) : {};
     const workbook = new root.ExcelJS.Workbook();
     workbook.creator = "GRCON";
@@ -107,18 +177,23 @@
     workbook.subject = "Relatório de Conferência — Consulta Geral × Histórico";
     workbook.title = "Relatório de Conferência — Consulta Geral × Histórico";
 
+    const headers = mode === "documents" ? documentHeaders() : eventHeaders();
+    const columnCount = headers.length;
+    const lastColumn = String.fromCharCode(64 + Math.min(columnCount, 26));
     const sheet = workbook.addWorksheet("RESUMO", { views: [{ state: "frozen", ySplit: 10, xSplit: 2 }] });
     sheet.properties.defaultRowHeight = 18;
 
     sheet.mergeCells("A1:C3");
     sheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: WHITE } };
-    sheet.mergeCells("D1:L2");
+    sheet.mergeCells(`D1:${lastColumn}2`);
     const title = sheet.getCell("D1");
-    title.value = "RELATÓRIO DE CONFERÊNCIA — CONSULTA GERAL × HISTÓRICO";
+    title.value = mode === "documents"
+      ? "RELATÓRIO DE CONFERÊNCIA — DOCUMENTOS ÚNICOS"
+      : "RELATÓRIO DE CONFERÊNCIA — AUDITORIA POR eGRDT";
     title.font = { name: "Arial", size: 15, bold: true, color: { argb: DARK } };
     title.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
 
-    sheet.mergeCells("D3:L3");
+    sheet.mergeCells(`D3:${lastColumn}3`);
     const subtitle = sheet.getCell("D3");
     subtitle.value = `Histórico de eGRDTs × Consulta Geral SIGEM${options?.baseFileName ? ` · Base: ${options.baseFileName}` : ""}`;
     subtitle.font = { name: "Arial", size: 9, color: { argb: MUTED } };
@@ -127,14 +202,22 @@
     sheet.getRow(2).height = 22;
     sheet.getRow(3).height = 18;
 
-    for (let col = 1; col <= 12; col += 1) {
+    for (let col = 1; col <= columnCount; col += 1) {
       sheet.getCell(4, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: BLUE } };
     }
     sheet.getRow(4).height = 5;
     await addLogo(workbook, sheet);
 
-    const kpis = [
-      ["Total enviado", summary.total || 0],
+    const kpis = mode === "documents" ? [
+      ["Documentos únicos", summary.total || 0],
+      ["Envios", summary.sendCount || 0],
+      ["eGRDTs", summary.egrdtCount || 0],
+      ["Repostagens", summary.repostCount || 0],
+      ["Postado", summary.confirmed || 0],
+      ["Pendentes", summary.pending || 0],
+      ["% postado", `${Number(summary.percentConfirmed || 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`],
+    ] : [
+      ["Ocorrências", summary.total || source.length],
       ["Postado", summary.confirmed || 0],
       ["Não postado ainda", summary.awaiting || 0],
       ["Rev. divergente", summary.divergent || 0],
@@ -157,19 +240,15 @@
     sheet.getRow(5).height = 20;
     sheet.getRow(6).height = 24;
 
-    sheet.mergeCells("A8:L8");
+    sheet.mergeCells(`A8:${lastColumn}8`);
     const scope = sheet.getCell("A8");
-    scope.value = `${text(options?.scopeLabel) || "Todos os documentos"} · Base atualizada em ${fmtDate(options?.baseImportedAt, true) || "—"} · Relatório gerado em ${fmtDate(new Date().toISOString(), true)}`;
+    scope.value = `${text(options?.scopeLabel) || (mode === "documents" ? "Todos os documentos únicos" : "Auditoria por eGRDT")} · Base atualizada em ${fmtDate(options?.baseImportedAt, true) || "—"} · Relatório gerado em ${fmtDate(new Date().toISOString(), true)}`;
     scope.font = { name: "Arial", size: 8, color: { argb: MUTED } };
     scope.alignment = { vertical: "middle", horizontal: "left" };
 
-    const headers = [
-      "Código", "Tipo", "Disciplina", "eGRDT", "Data eGRDT", "Revisão enviada",
-      "Revisão encontrada", "Conferência", "Status SIGEM", "Data da confirmação", "Última conferência", "Observação",
-    ];
     const headerRow = sheet.getRow(10);
     headerRow.values = headers;
-    headerRow.height = 28;
+    headerRow.height = 30;
     headerRow.eachCell((cell) => {
       cell.font = { name: "Arial", size: 9, bold: true, color: { argb: WHITE } };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DARK } };
@@ -179,38 +258,34 @@
 
     source.forEach((row, index) => {
       const excelRow = sheet.getRow(11 + index);
-      excelRow.values = [
-        row.document,
-        row.documentFamily || row.sheet,
-        row.discipline,
-        row.egrdtNumber,
-        fmtDate(row.generatedAt, false),
-        row.revisionSent,
-        row.revisionFound,
-        row.conferenceLabel || row.statusLabel || Conference?.statusLabel?.(row.status) || row.status,
-        sigemValue(row.sigemStatus),
-        fmtDate(row.firstConfirmedAt, true),
-        fmtDate(row.lastCheckedAt, true),
-        row.note,
-      ];
-      excelRow.height = dataRowHeight(row);
+      excelRow.values = mode === "documents" ? documentValues(row) : eventValues(row);
+      excelRow.height = dataRowHeight(row, mode);
       excelRow.font = { name: "Arial", size: 9, color: { argb: TEXT } };
       excelRow.alignment = { vertical: "top", wrapText: true };
       excelRow.eachCell((cell) => { cell.border = borderStyle(); });
+      const conferenceColumn = mode === "documents" ? 12 : 8;
+      const sigemColumn = conferenceColumn + 1;
       if (index % 2 === 1) {
         excelRow.eachCell((cell, colNumber) => {
-          if (colNumber !== 8 && colNumber !== 9) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F8FAFB" } };
+          if (colNumber !== conferenceColumn && colNumber !== sigemColumn) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F8FAFB" } };
         });
       }
-      applyConferenceStyle(excelRow.getCell(8), row.status);
-      applySigemStyle(excelRow.getCell(9));
+      applyConferenceStyle(excelRow.getCell(conferenceColumn), row.status);
+      applySigemStyle(excelRow.getCell(sigemColumn));
       excelRow.getCell(1).font = { name: "Arial", size: 9, bold: true, color: { argb: DARK } };
-      [5, 6, 7, 10, 11].forEach((col) => { excelRow.getCell(col).alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
+      if (mode === "documents") {
+        [5, 6, 7, 9, 11, 14, 15].forEach((col) => { excelRow.getCell(col).alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
+      } else {
+        [5, 6, 7, 10, 11].forEach((col) => { excelRow.getCell(col).alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
+      }
     });
 
     const lastRow = Math.max(10, 10 + source.length);
-    sheet.autoFilter = { from: { row: 10, column: 1 }, to: { row: lastRow, column: 12 } };
-    sheet.columns = [
+    sheet.autoFilter = { from: { row: 10, column: 1 }, to: { row: lastRow, column: columnCount } };
+    sheet.columns = mode === "documents" ? [
+      { width: 34 }, { width: 13 }, { width: 18 }, { width: 56 }, { width: 12 }, { width: 13 }, { width: 14 }, { width: 31 },
+      { width: 13 }, { width: 20 }, { width: 19 }, { width: 20 }, { width: 24 }, { width: 20 }, { width: 20 }, { width: 48 },
+    ] : [
       { width: 34 }, { width: 13 }, { width: 18 }, { width: 31 }, { width: 13 }, { width: 15 },
       { width: 19 }, { width: 20 }, { width: 24 }, { width: 20 }, { width: 20 }, { width: 48 },
     ];
@@ -221,5 +296,5 @@
     return workbook.xlsx.writeBuffer();
   }
 
-  return Object.freeze({ buildWorkbook, downloadName });
+  return Object.freeze({ buildWorkbook, downloadName, eventList });
 });
