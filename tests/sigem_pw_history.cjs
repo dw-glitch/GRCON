@@ -129,6 +129,7 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   const coreSource = fs.readFileSync(path.join(rootDir, "sigem_pw_history_core.js"), "utf8");
   const appSource = fs.readFileSync(path.join(rootDir, "sigem_pw_history_app.js"), "utf8");
   const bootstrap = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
+  const storageBootstrap = fs.readFileSync(path.join(rootDir, "grcon_bootstrap_head.js"), "utf8");
   const sw = fs.readFileSync(path.join(rootDir, "sw.js"), "utf8");
   assert.match(coreSource, /DB_NAME = "grcon-sigem-pw-history"/);
   assert.match(coreSource, /createObjectStore\(STORES\.sourceSnapshots, \{ keyPath: "id" \}\)/);
@@ -153,7 +154,9 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   assert.doesNotMatch(appSource, /location\.reload\s*\(/);
   assert.match(bootstrap, /sigem_pw_history_core\.js/);
   assert.match(bootstrap, /sigem_pw_history_app\.js/);
-  assert.match(sw, /grcon-v5\.40\.10-spw3-sigem-pw-history/);
+  assert.match(storageBootstrap, /operational_persistence_v2\.js/);
+  assert.match(sw, /grcon-v5\.40\.10-spw5-storage-v2/);
+  assert.match(sw, /"operational_persistence_v2\.js"/);
   assert.match(sw, /"sigem_pw_history_core\.js"/);
   assert.match(sw, /"sigem_pw_history_app\.js"/);
 })();

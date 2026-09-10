@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw4-history-postmerge";
+const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -32,6 +32,7 @@ const ASSETS = [
   "manifest.json",
   "offline_resources.js",
   "grcon_bootstrap_head.js",
+  "operational_persistence_v2.js",
   "grcon_service_worker.js",
   "analysis_runtime_guard.js",
   "sigem_pw_dashboard_bootstrap.js",
@@ -123,6 +124,7 @@ const ASSETS = [
 const CRITICAL_ASSETS = [
   "index.html",
   "grcon_bootstrap_head.js",
+  "operational_persistence_v2.js",
   "grcon_service_worker.js",
   "analysis_runtime_guard.js",
   "design-system.css",
