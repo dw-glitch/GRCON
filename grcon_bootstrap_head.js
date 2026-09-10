@@ -17,9 +17,9 @@
   function installOperationalPersistence() {
     if (document.querySelector("script[data-grcon-operational-persistence]")) return;
     const script = document.createElement("script");
-    // O sufixo também impede que um HTML novo execute por engano a cópia antiga
-    // deste módulo após um deploy, sem depender de limpeza manual do navegador.
-    script.src = "operational_persistence_v2.js?storage=2";
+    // O próprio nome de arquivo v2 e a versão do cache do Service Worker evitam
+    // que um HTML novo execute por engano a implementação antiga após deploy.
+    script.src = "operational_persistence_v2.js";
     script.async = false;
     script.dataset.grconOperationalPersistence = "v2";
     document.head.appendChild(script);
