@@ -41,9 +41,23 @@
     return [...positions].map((position) => baseRecords[position]).filter(Boolean);
   }
 
+  function parseSourceDate(value) {
+    const source = trimmed(value);
+    const br = source.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (br) {
+      const [, d, m, y, h = "0", min = "0", s = "0"] = br;
+      const time = Date.UTC(+y, +m - 1, +d, +h, +min, +s);
+      const date = new Date(time);
+      return date.getUTCFullYear() === +y && date.getUTCMonth() === +m - 1
+        && date.getUTCDate() === +d && +h < 24 && +min < 60 && +s < 60 ? time : NaN;
+    }
+    // Do not let the browser guess a locale for ambiguous date strings.
+    return /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(source) ? Date.parse(source) : NaN;
+  }
+
   function statusRecordTimestamp(record) {
     const values = [record && record.modifiedAt, record && record.includedAt]
-      .map((value) => new Date(value).getTime())
+      .map(parseSourceDate)
       .filter(Number.isFinite);
     return values.length ? Math.max(...values) : Number.NEGATIVE_INFINITY;
   }
@@ -51,13 +65,20 @@
   function currentStatusRecord(row, baseRecords, Conference, baseIndex) {
     const matched = matchedBaseRecords(row, baseRecords, Conference, baseIndex);
     if (!matched.length) return null;
-    return matched.slice().sort((left, right) => {
+    const identities = new Set(matched.map((record) => record.documentIdentity || Conference.documentIdentity(record.document)));
+    if (identities.size !== 1) return null;
+    const exact = matched.filter((record) => Conference.normalizeRevision(record.revision) === Conference.normalizeRevision(row.revisionSent));
+    const candidates = exact.length ? exact : matched;
+    const ordered = candidates.slice().sort((left, right) => {
       const byDate = statusRecordTimestamp(right) - statusRecordTimestamp(left);
       if (byDate) return byDate;
-      const byRow = Number(right && right.sourceRow || 0) - Number(left && left.sourceRow || 0);
-      if (byRow) return byRow;
       return Conference.revisionRank(right && right.revision) - Conference.revisionRank(left && left.revision);
-    })[0] || null;
+    });
+    const selected = ordered[0];
+    const tied = ordered.filter((record) => statusRecordTimestamp(record) === statusRecordTimestamp(selected)
+      && Conference.normalizeRevision(record.revision) === Conference.normalizeRevision(selected.revision));
+    if (new Set(tied.map((record) => rawText(record.status))).size > 1) return null;
+    return selected || null;
   }
 
   function enrichRows(rows, baseRecords, Conference) {
@@ -69,6 +90,12 @@
         ...row,
         conferenceLabel: conferenceLabel(row.status, Conference),
         sigemStatus: current ? rawText(current.status) : "",
+        sigemStatusRevision: current ? current.revision : "",
+        sigemSourceRow: current ? current.sourceRow : null,
+        note: !current && matchedBaseRecords(row, base, Conference, index).length
+          ? `${row.note || ""} Status SIGEM ambíguo na Consulta Geral; requer análise das linhas de origem.`
+          : current && Conference.normalizeRevision(current.revision) !== Conference.normalizeRevision(row.revisionSent)
+            ? `${row.note || ""} Status SIGEM referente à revisão ${current.revision} encontrada na base.` : row.note,
       };
     });
   }
@@ -97,27 +124,14 @@
     const sheetName = trimmed(parsed.meta && parsed.meta.sheetName) || workbook.SheetNames?.[0];
     const sheet = workbook.Sheets && workbook.Sheets[sheetName];
     if (!sheet) return parsed;
-    const matrix = root.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false, blankrows: false });
+    const matrix = root.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false, blankrows: true });
     const located = locateExactStatusColumn(matrix, Conference);
     if (!located) return parsed;
 
     const { detection, statusIndex } = located;
-    const byDocumentRevision = new Map();
-    matrix.slice(detection.rowIndex + 1).forEach((row) => {
-      const document = trimmed(Array.isArray(row) ? row[detection.columns.document] : "");
-      const revision = Conference.normalizeRevision(Array.isArray(row) ? row[detection.columns.revision] : "");
-      if (!document) return;
-      const identity = Conference.documentIdentity(document);
-      const key = `${identity}|${revision}`;
-      const status = rawText(Array.isArray(row) ? row[statusIndex] : "");
-      if (!byDocumentRevision.has(key) || (!trimmed(byDocumentRevision.get(key)) && trimmed(status))) {
-        byDocumentRevision.set(key, status);
-      }
-    });
-
     const records = parsed.records.map((record) => {
-      const key = `${record.documentIdentity || Conference.documentIdentity(record.document)}|${Conference.normalizeRevision(record.revision)}`;
-      return byDocumentRevision.has(key) ? { ...record, status: byDocumentRevision.get(key) } : record;
+      const source = matrix[record.sourceRow - 1];
+      return source ? { ...record, status: rawText(source[statusIndex]) } : record;
     });
     const headers = matrix[detection.rowIndex] || [];
     return {
@@ -340,6 +354,7 @@
     enrichRows,
     enrichResult,
     currentStatusRecord,
+    parseSourceDate,
     locateExactStatusColumn,
     repairParsedStatuses,
     wrapConference,
