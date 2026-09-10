@@ -37,7 +37,7 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   const built = History.buildSourceSnapshot("sigem", sigem, model, { recordedAt: "2026-09-10T09:00:00.000Z" });
   assert.equal(built.snapshot.metrics.comparableDocuments, 1, "fora do escopo não pode inflar total histórico comparável");
   assert.equal(built.snapshot.metrics.classes.ET, 1);
-  assert.equal(built.documents.length, 1, "snapshotDocuments deve guardar apenas documentos mínimos comparáveis");
+  assert.equal(built.documents.length, 1, "working set deve guardar somente documentos mínimos comparáveis");
   assert.equal(built.snapshot.calculationVersion, History.CALCULATION_VERSION);
 })();
 
@@ -88,6 +88,11 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   assert.equal(delta.newPending, 1, "nova revisão que quebra alinhamento deve aparecer como nova pendência");
   assert.equal(delta.becameAligned, 1);
   assert.equal(delta.changedRevision, 2);
+  const details = History.transitionDetails(previous, current, delta);
+  assert.equal(details.resolved[0].before.state, "post-pw");
+  assert.equal(details.resolved[0].after.state, "aligned");
+  assert.equal(details.newPending[0].before.state, "aligned");
+  assert.equal(details.newPending[0].after.state, "post-pw");
 })();
 
 (function sourceTransitionsAreLinearAndAuditable() {
@@ -101,6 +106,9 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   ];
   const result = History.compareSourceDocuments(before, after);
   assert.deepEqual({ entered: result.entered, exited: result.exited, remained: result.remained, changedRevision: result.changedRevision, changedStatus: result.changedStatus }, { entered: 1, exited: 1, remained: 1, changedRevision: 1, changedStatus: 1 });
+  const details = History.sourceChangeDetails(before, after, result);
+  assert.equal(details.entered[0].after.key, "C");
+  assert.equal(details.exited[0].before.key, "B");
 })();
 
 (function hundredSnapshotsAndLargeDeltaStayResponsive() {
@@ -121,12 +129,15 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   const coreSource = fs.readFileSync(path.join(rootDir, "sigem_pw_history_core.js"), "utf8");
   const appSource = fs.readFileSync(path.join(rootDir, "sigem_pw_history_app.js"), "utf8");
   const bootstrap = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
+  const sw = fs.readFileSync(path.join(rootDir, "sw.js"), "utf8");
   assert.match(coreSource, /DB_NAME = "grcon-sigem-pw-history"/);
   assert.match(coreSource, /createObjectStore\(STORES\.sourceSnapshots, \{ keyPath: "id" \}\)/);
   assert.match(coreSource, /createObjectStore\(STORES\.comparisonSnapshots, \{ keyPath: "id" \}\)/);
-  assert.match(coreSource, /createObjectStore\(STORES\.snapshotDocuments, \{ keyPath: \["snapshotId", "key"\] \}\)/);
+  assert.match(coreSource, /createObjectStore\(STORES\.workingSets, \{ keyPath: "key" \}\)/);
+  assert.match(coreSource, /createObjectStore\(STORES\.snapshotChanges, \{ keyPath: "snapshotId" \}\)/);
+  assert.doesNotMatch(coreSource, /snapshotDocuments/, "histórico não deve acumular um registro por documento por snapshot");
   assert.doesNotMatch(coreSource, /localStorage/, "histórico grande não pode usar localStorage");
-  assert.doesNotMatch(coreSource, /\.put\(\s*value\s*,\s*key\s*\)/, "stores inline do novo histórico não podem usar put(value, key)");
+  assert.doesNotMatch(coreSource, /\.put\(\s*value\s*,\s*key\s*\)/, "stores inline não podem usar put(value, key)");
   assert.match(appSource, /Visão geral/);
   assert.match(appSource, /Pendências/);
   assert.match(appSource, /Revisões/);
@@ -135,10 +146,16 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   assert.match(appSource, /Últimos 90 dias/);
   assert.match(appSource, /Ainda não há atualizações suficientes/);
   assert.match(appSource, /É necessário ter uma base válida do SIGEM e uma do PW/);
-  assert.match(appSource, /loadSnapshotDocuments\(snapshot\.id\)/, "detalhes documentais devem ser lazy");
+  assert.match(appSource, /loadSnapshotChanges\(snapshot\.id\)/, "detalhes auditáveis devem ser lazy");
+  assert.match(appSource, /O gráfico funciona mesmo enquanto somente uma das bases possui histórico/);
+  assert.match(appSource, /Esta base já foi registrada anteriormente/);
+  assert.match(appSource, /bookType: "xlsx"/, "exportação deve gerar Excel real");
   assert.doesNotMatch(appSource, /location\.reload\s*\(/);
   assert.match(bootstrap, /sigem_pw_history_core\.js/);
   assert.match(bootstrap, /sigem_pw_history_app\.js/);
+  assert.match(sw, /grcon-v5\.40\.10-spw3-sigem-pw-history/);
+  assert.match(sw, /"sigem_pw_history_core\.js"/);
+  assert.match(sw, /"sigem_pw_history_app\.js"/);
 })();
 
-console.log("sigem_pw_history: OK — snapshots, deduplicação, deltas documentais, escopo e UX validados.");
+console.log("sigem_pw_history: OK — snapshots, compactação, deduplicação, deltas documentais, escopo e UX validados.");
