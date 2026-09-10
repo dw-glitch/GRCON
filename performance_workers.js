@@ -303,6 +303,24 @@
         const value = await run("triage", "enrich", { rows, settings }, { onProgress, collectChunks: true });
         return value.chunks;
       });
+    } catch (error) {
+      if (error && error.name === "AbortError") throw error;
+      // A triagem documental já terminou antes desta etapa. O enriquecimento
+      // atual acrescenta timeline/assistência, mas o próprio app reaplica o
+      // Databook autoritativo da LD em seguida. Logo uma falha de Worker aqui é
+      // recuperável e não deve apagar resultados válidos nem bloquear a eGRDT.
+      diagnostic("enrichment-recoverable", {
+        message: String(error && error.message || error || "Falha no enriquecimento"),
+        rows: Array.isArray(rows) ? rows.length : 0,
+      });
+      return (rows || []).map((_, index) => ({
+        index,
+        timeline: null,
+        databookAssistant: null,
+        applyDatabook: false,
+        databook: "",
+        recoverableError: String(error && error.message || error || ""),
+      }));
     } finally {
       if (settings && typeof settings === "object") triageContexts.delete(settings);
     }
