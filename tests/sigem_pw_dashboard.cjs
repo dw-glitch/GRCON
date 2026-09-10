@@ -67,7 +67,7 @@ function createFakeIndexedDb(keyPath) {
 (async () => {
   const sigemEt = "C1O_RNEST_U32_3.1.1.1_INS_RIR_nt-PI-321530";
   const pwEt = "C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-321530";
-  assert.strictEqual(Core.documentIdentity(sigemEt).key, Core.documentIdentity(pwEt).key, "RNEST + nt- devem convergir para a mesma identidade");
+  assert.strictEqual(Core.documentIdentity(sigemEt).key, Core.documentIdentity(pwEt).key, "RNEST + nt- devem convergir");
   assert.notStrictEqual(
     Core.documentIdentity("C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-321530").key,
     Core.documentIdentity("C1O_RNEST_U32_3.1.1.2_INS_RIR_PI-321530").key,
@@ -90,7 +90,7 @@ function createFakeIndexedDb(keyPath) {
   assert.strictEqual(parsed.meta.recordCount, 4);
   assert.strictEqual(parsed.meta.invalidCount, 1);
   assert.strictEqual(parsed.meta.uniqueDocumentCount, 3);
-  assert.strictEqual(parsed.meta.emittedDocumentCount, 2, "Sim e Não são evidências de emissão; Previsto não é");
+  assert.strictEqual(parsed.meta.emittedDocumentCount, 2);
 
   const sigem = [
     { document: "CE-5290.00-22313-856-C1O-001", revision: "A", status: "Sem Comentários", sourceRow: 10 },
@@ -108,9 +108,11 @@ function createFakeIndexedDb(keyPath) {
     pwExclusive: 1,
     matched: 2,
   });
+  assert.strictEqual(result.summary.sigem, result.summary.matched + result.summary.gapSigemToPw);
+  assert.strictEqual(result.summary.pwRegistered, result.summary.matched + result.summary.pwExclusive);
   assert.ok(result.summary.pwEmitted <= result.summary.pwRegistered);
   assert.deepStrictEqual(result.classes.map((row) => row.documentClass), ["N-1710"]);
-  assert.strictEqual(result.classes.find((row) => row.documentClass === "N-1710").gapSigemToPw, 1);
+  assert.strictEqual(result.classes[0].gapSigemToPw, 1);
   assert.strictEqual(Core.aggregateModel(model, { emission: "not-emitted" }).summary.pwRegistered, 1);
   assert.throws(() => Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0"), /campo\(s\) obrigatório\(s\)/i);
 
@@ -122,9 +124,9 @@ function createFakeIndexedDb(keyPath) {
   await Core.kvSet(Core.SIGEM_BASE_KEY, sigemBase);
   await Core.savePwBase(pwBaseV1);
   await Core.savePwBase(pwBaseV2);
-  assert.deepStrictEqual(await Core.loadSigemBase(), sigemBase, "SIGEM deve permanecer intacto ao substituir PW");
-  assert.deepStrictEqual(await Core.loadPwBase(), pwBaseV2, "PW deve persistir e ser substituído atomicamente");
-  assert.deepStrictEqual(inline.data.get(Core.PW_BASE_KEY), { key: Core.PW_BASE_KEY, value: pwBaseV2 }, "store inline deve persistir { key, value }");
+  assert.deepStrictEqual(await Core.loadSigemBase(), sigemBase);
+  assert.deepStrictEqual(await Core.loadPwBase(), pwBaseV2);
+  assert.deepStrictEqual(inline.data.get(Core.PW_BASE_KEY), { key: Core.PW_BASE_KEY, value: pwBaseV2 });
 
   const outline = createFakeIndexedDb(null);
   global.indexedDB = outline.indexedDB;
@@ -132,18 +134,30 @@ function createFakeIndexedDb(keyPath) {
   await Core.savePwBase(pwBaseV1);
   assert.deepStrictEqual(await Core.loadSigemBase(), sigemBase);
   assert.deepStrictEqual(await Core.loadPwBase(), pwBaseV1);
-  assert.deepStrictEqual(outline.data.get(Core.PW_BASE_KEY), pwBaseV1, "store out-of-line antiga deve continuar legível");
 
   const incompatible = createFakeIndexedDb("id");
   global.indexedDB = incompatible.indexedDB;
-  await assert.rejects(() => Core.savePwBase(pwBaseV1), /base anterior foi preservada/i, "erro de persistência deve ser amigável na interface");
-
+  await assert.rejects(() => Core.savePwBase(pwBaseV1), /base anterior foi preservada/i);
   delete global.indexedDB;
 
   const appSource = fs.readFileSync(path.join(__dirname, "..", "sigem_pw_dashboard_app.js"), "utf8");
-  assert.ok(!/MutationObserver/.test(appSource), "Dashboard não deve usar MutationObserver global");
-  assert.ok(!/location\.reload\s*\(/.test(appSource), "Dashboard não deve recarregar a página");
-  assert.ok(/workers\/sigem_pw_dashboard\.worker\.js/.test(appSource), "CSV PW deve usar Worker quando disponível");
+  assert.ok(!/MutationObserver/.test(appSource));
+  assert.ok(!/location\.reload\s*\(/.test(appSource));
+  assert.ok(/workers\/sigem_pw_dashboard\.worker\.js/.test(appSource));
+  assert.ok(/Presentes nas duas bases/.test(appSource));
+  assert.ok(/Exclusivos do SIGEM/.test(appSource));
+  assert.ok(/Exclusivos do PW/.test(appSource));
+  assert.ok(/Cobertura no PW/.test(appSource));
+  assert.ok(/Como interpretar/.test(appSource));
+  assert.ok(/Situação entre bases/.test(appSource));
+  assert.ok(/Não comparáveis/.test(appSource));
+  assert.ok(/EAP diferente continua sendo documento diferente/.test(appSource));
+  assert.ok(/data-spw-drill/.test(appSource));
+  assert.ok(/info\?\.eapApplicable && info\.eapValid === false/.test(appSource));
+  assert.ok(/niceMaximum/.test(appSource) && !/maximum\s*=\s*20000/i.test(appSource));
+  assert.ok(/spw-small-mark/.test(appSource));
+  assert.ok(/toLocaleString\("pt-BR"/.test(appSource));
+  assert.ok(/Os indicadores refletem os arquivos SIGEM e PW atualmente carregados/.test(appSource));
 
   console.log("sigem_pw_dashboard: OK");
 })().catch((error) => {
