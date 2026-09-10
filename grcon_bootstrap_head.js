@@ -61,14 +61,12 @@
     else host.appendChild(link);
   }
 
-  // A Conferência de Postagem é um módulo independente e carregado sob demanda.
-  // Só os pequenos bootstraps entram na inicialização; XLSX, ExcelJS, relatório
-  // e a UI continuam fora do caminho crítico até o operador abrir a nova área.
-  // O bootstrap operacional adiciona apenas a camada de correção pós-eGRDT e
-  // preparação de arquivos; ele reutiliza Histórico, Conferência e identidade
-  // documental existentes e não altera as regras de triagem.
+  // Os bootstraps operacionais são independentes do motor documental. O guard
+  // de análise é carregado aqui para proteger o clique antes de qualquer uso,
+  // sem inserir dependência no Dashboard SIGEM × PW nem nas regras da triagem.
   function installPostingConferenceBootstrap() {
     const scripts = [
+      ["analysis_runtime_guard.js", "grconAnalysisRuntimeGuard"],
       ["posting_conference_bootstrap.js", "grconPostingConferenceBootstrap"],
       ["posting_conference_refinement.js", "grconPostingConferenceRefinement"],
       ["posting_conference_state_guard.js", "grconPostingConferenceStateGuard"],
