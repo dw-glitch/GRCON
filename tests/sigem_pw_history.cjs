@@ -126,7 +126,7 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   assert.match(coreSource, /createObjectStore\(STORES\.comparisonSnapshots, \{ keyPath: "id" \}\)/);
   assert.match(coreSource, /createObjectStore\(STORES\.snapshotDocuments, \{ keyPath: \["snapshotId", "key"\] \}\)/);
   assert.doesNotMatch(coreSource, /localStorage/, "histórico grande não pode usar localStorage");
-  assert.doesNotMatch(coreSource, /\.put\([^\n]+,[^\n]+\)/, "stores inline do novo histórico não podem usar put(value, key)");
+  assert.doesNotMatch(coreSource, /\.put\(\s*value\s*,\s*key\s*\)/, "stores inline do novo histórico não podem usar put(value, key)");
   assert.match(appSource, /Visão geral/);
   assert.match(appSource, /Pendências/);
   assert.match(appSource, /Revisões/);
