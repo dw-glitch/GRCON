@@ -97,7 +97,9 @@
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi) throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
+    await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionUi) throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
   }
 
   async function openDashboard() {
@@ -107,7 +109,10 @@
       activateShell();
       await ensureRuntime();
       activateShell();
-      await root.GrconSigemPwDashboardUi.activate();
+      // Não recriar o shell a cada retorno ao Dashboard: evita listeners duplicados,
+      // piscadas de interface e renderizações desnecessárias.
+      if (!root.GrconSigemPwDashboardUi.state?.ready) await root.GrconSigemPwDashboardUi.activate();
+      await root.GrconSigemPwRevisionUi.activate();
     } catch (error) {
       console.error("[SIGEM×PW] abertura:", error);
       deactivate();
