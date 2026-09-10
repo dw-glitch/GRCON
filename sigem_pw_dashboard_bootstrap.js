@@ -99,7 +99,11 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionUi) throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
+    await root.GRCONModuleLoader.ensure("sigem_pw_history_core.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_history_app.js");
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi) {
+      throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
+    }
   }
 
   async function openDashboard() {
@@ -113,6 +117,7 @@
       // piscadas de interface e renderizações desnecessárias.
       if (!root.GrconSigemPwDashboardUi.state?.ready) await root.GrconSigemPwDashboardUi.activate();
       await root.GrconSigemPwRevisionUi.activate();
+      await root.GrconSigemPwHistoryUi.activate();
     } catch (error) {
       console.error("[SIGEM×PW] abertura:", error);
       deactivate();
