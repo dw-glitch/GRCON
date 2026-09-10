@@ -3,10 +3,7 @@
     if (typeof require !== "function") return null;
     try { return require(path); } catch (_) { return null; }
   };
-  const api = factory(
-    root.GrconUtils || safeRequire("./grcon_utils.js"),
-    root.TriagemCore || safeRequire("./core.js")
-  );
+  const api = factory(root.GrconUtils || safeRequire("./grcon_utils.js"), root.TriagemCore || safeRequire("./core.js"));
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconSigemPwDashboard = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Utils, Core) {
@@ -18,9 +15,9 @@
   const PW_BASE_KEY = "projectwise-current-base";
   const PW_BASE_VERSION = 1;
   const UNCLASSIFIED = "Não classificado";
+  const DOCUMENT_CLASSES = Object.freeze(["ET", "N-1710", "CV"]);
   const EMISSION_FLAGS = Object.freeze({ CURRENT: "SIM", HISTORICAL: "NAO", PLANNED: "PREVISTO" });
   const REQUIRED_PW_FIELDS = Object.freeze(["document", "revision", "documentType", "state", "lastEmission"]);
-
   const PW_HEADER_ALIASES = Object.freeze({
     document: ["NumeroDocumentoCliente", "NúmeroDocumentoCliente", "Numero Documento Cliente", "Número Documento Cliente"],
     revisionComplete: ["RevisaoCompleta", "RevisãoCompleta", "Revisao Completa", "Revisão Completa"],
@@ -42,46 +39,26 @@
     emissionSequence: ["SequencialEmissao", "Sequencial Emissao", "Sequencial Emissão"],
   });
 
-  function text(value) {
-    return value === null || value === undefined ? "" : String(value).trim();
-  }
-
+  function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
   function norm(value) {
     if (Utils && typeof Utils.norm === "function") return Utils.norm(value);
     if (Core && typeof Core.norm === "function") return Core.norm(value);
-    return text(value)
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[–—]/g, "-")
-      .toUpperCase()
-      .replace(/\s+/g, " ")
-      .trim();
+    return text(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[–—]/g, "-").toUpperCase().replace(/\s+/g, " ").trim();
   }
-
-  function normalizeHeader(value) {
-    return norm(value).replace(/[^A-Z0-9]+/g, " ").replace(/\s+/g, " ").trim();
-  }
-
-  function stripDocumentExtension(value) {
-    return text(value).split(/[\\/]/).pop().replace(/\.(?:PDF|DOCX?|XLSX?|XLSM|DWG|DGN|PPTX?|ZIP)$/i, "");
-  }
+  function normalizeHeader(value) { return norm(value).replace(/[^A-Z0-9]+/g, " ").replace(/\s+/g, " ").trim(); }
+  function stripDocumentExtension(value) { return text(value).split(/[\\/]/).pop().replace(/\.(?:PDF|DOCX?|XLSX?|XLSM|DWG|DGN|PPTX?|ZIP)$/i, ""); }
 
   function canonicalDocumentCode(value) {
     const raw = norm(stripDocumentExtension(value)).replace(/\s*([_.-])\s*/g, "$1");
     if (!raw) return "";
     const match = raw.match(/^([A-Z0-9]{3})[-_]RNEST[-_]([A-Z0-9]+)[-_](\d+(?:\.\d+){3})[-_]([A-Z0-9]+)[-_]([A-Z0-9]+)[-_](.+)$/);
-    if (!match) return raw;
-    return `${match[1]}_RNEST_${match[2]}_${match[3]}_${match[4]}_${match[5]}_${match[6]}`;
+    return match ? `${match[1]}_RNEST_${match[2]}_${match[3]}_${match[4]}_${match[5]}_${match[6]}` : raw;
   }
 
   function documentIdentity(value) {
     const canonical = canonicalDocumentCode(value);
     if (!canonical) return { key: "", canonical: "", info: null, searchKeys: [] };
-
-    const info = Utils && typeof Utils.parseDocumentIdentity === "function"
-      ? Utils.parseDocumentIdentity(canonical)
-      : null;
-
+    const info = Utils && typeof Utils.parseDocumentIdentity === "function" ? Utils.parseDocumentIdentity(canonical) : null;
     let searchKeys = [];
     if (Core && typeof Core.documentSearchKeys === "function") {
       try { searchKeys = Core.documentSearchKeys(canonical).map(norm).filter(Boolean); } catch (_) { searchKeys = []; }
@@ -94,30 +71,17 @@
     if (!key && Utils && typeof Utils.documentIdentityKey === "function") {
       try { key = norm(Utils.documentIdentityKey(canonical)); } catch (_) { key = ""; }
     }
-    if (!key) key = canonical;
-
-    return { key, canonical, info, searchKeys };
+    return { key: key || canonical, canonical, info, searchKeys };
   }
 
-  function isOfficialDocumentType(value) {
-    const candidate = norm(value);
-    const official = Core && Core.EGRDT_OPTIONS && Array.isArray(Core.EGRDT_OPTIONS.documentTypes)
-      ? Core.EGRDT_OPTIONS.documentTypes.map(norm)
-      : [];
-    return official.length ? official.includes(candidate) : /^[A-Z]{2,4}$/.test(candidate);
-  }
-
+  // Classe macro igual ao Dashboard existente: somente ET, N-1710 e CV.
+  // CE, DE, PR, IS, RL, MC etc. são tipos documentais internos da N-1710.
   function documentClass(value) {
     const identity = documentIdentity(value);
     const info = identity.info;
-    if (info && info.family === "ET") return "ET";
-    if (info && info.family === "CV") return "CV";
-    if (identity.canonical.includes("_RNEST_")) return "ET";
-    if (/^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{3,4}$/i.test(identity.canonical)) return "CV";
-    if ((info && info.family === "N-1710") || /-5290\.00-/i.test(identity.canonical)) {
-      const prefix = norm(identity.canonical.split("-")[0]);
-      return isOfficialDocumentType(prefix) ? prefix : UNCLASSIFIED;
-    }
+    if ((info && info.family === "ET") || identity.canonical.includes("_RNEST_")) return "ET";
+    if ((info && info.family === "CV") || /^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{3,4}$/i.test(identity.canonical)) return "CV";
+    if ((info && info.family === "N-1710") || /-5290\.00-/i.test(identity.canonical)) return "N-1710";
     return UNCLASSIFIED;
   }
 
@@ -154,9 +118,7 @@
   }
 
   function compareSourceRows(left, right, kind) {
-    const emissionPriority = (record) => kind === "pw"
-      ? ({ SIM: 30, NAO: 20, PREVISTO: 10 })[norm(record && record.lastEmission)] || 0
-      : 0;
+    const emissionPriority = (record) => kind === "pw" ? ({ SIM: 30, NAO: 20, PREVISTO: 10 })[norm(record && record.lastEmission)] || 0 : 0;
     return emissionPriority(left) - emissionPriority(right)
       || revisionRank(left && (left.revision || left.revisionComplete)) - revisionRank(right && (right.revision || right.revisionComplete))
       || parseDateMs(left && (left.modifiedAt || left.stateChangedAt || left.createdAt || left.includedAt)) - parseDateMs(right && (right.modifiedAt || right.stateChangedAt || right.createdAt || right.includedAt))
@@ -178,8 +140,7 @@
 
   function detectDelimiter(source) {
     const line = String(source || "").replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] || "";
-    const candidates = [";", ",", "\t"].map((delimiter) => ({ delimiter, count: countDelimiter(line, delimiter) }));
-    candidates.sort((a, b) => b.count - a.count);
+    const candidates = [";", ",", "\t"].map((delimiter) => ({ delimiter, count: countDelimiter(line, delimiter) })).sort((a, b) => b.count - a.count);
     return candidates[0].count ? candidates[0].delimiter : ";";
   }
 
@@ -190,58 +151,35 @@
     let quoted = false;
     let rowIndex = 0;
     const emitField = () => { row.push(field); field = ""; };
-    const emitRow = () => {
-      emitField();
-      callback(row, rowIndex);
-      rowIndex += 1;
-      row = [];
-    };
+    const emitRow = () => { emitField(); callback(row, rowIndex); rowIndex += 1; row = []; };
     for (let index = 0; index < input.length; index += 1) {
       const character = input[index];
       if (quoted) {
-        if (character === '"' && input[index + 1] === '"') {
-          field += '"';
-          index += 1;
-        } else if (character === '"') quoted = false;
+        if (character === '"' && input[index + 1] === '"') { field += '"'; index += 1; }
+        else if (character === '"') quoted = false;
         else field += character;
-        continue;
-      }
-      if (character === '"') { quoted = true; continue; }
-      if (character === delimiter) { emitField(); continue; }
-      if (character === "\n") { emitRow(); continue; }
-      if (character === "\r") {
-        if (input[index + 1] === "\n") index += 1;
-        emitRow();
-        continue;
-      }
-      field += character;
+      } else if (character === '"') quoted = true;
+      else if (character === delimiter) emitField();
+      else if (character === "\n") emitRow();
+      else if (character === "\r") { if (input[index + 1] === "\n") index += 1; emitRow(); }
+      else field += character;
     }
     if (field.length || row.length) emitRow();
   }
 
-  const NORMALIZED_PW_ALIASES = Object.freeze(Object.fromEntries(
-    Object.entries(PW_HEADER_ALIASES).map(([field, values]) => [field, new Set(values.map(normalizeHeader))])
-  ));
-
+  const NORMALIZED_PW_ALIASES = Object.freeze(Object.fromEntries(Object.entries(PW_HEADER_ALIASES).map(([field, values]) => [field, new Set(values.map(normalizeHeader))])));
   function findColumn(headers, field) {
     const aliases = NORMALIZED_PW_ALIASES[field] || new Set();
-    for (let index = 0; index < headers.length; index += 1) {
-      if (aliases.has(normalizeHeader(headers[index]))) return index;
-    }
+    for (let index = 0; index < headers.length; index += 1) if (aliases.has(normalizeHeader(headers[index]))) return index;
     return -1;
   }
-
   function mapPwColumns(headers) {
     const columns = {};
     Object.keys(PW_HEADER_ALIASES).forEach((field) => { columns[field] = findColumn(headers, field); });
     if (columns.revisionComplete < 0 && columns.revision >= 0) columns.revisionComplete = columns.revision;
     return columns;
   }
-
-  function rowValue(row, index) {
-    return index >= 0 && Array.isArray(row) ? text(row[index]) : "";
-  }
-
+  function rowValue(row, index) { return index >= 0 && Array.isArray(row) ? text(row[index]) : ""; }
   function validatePwColumns(columns, headers) {
     const missing = [];
     REQUIRED_PW_FIELDS.forEach((field) => {
@@ -249,13 +187,7 @@
       if (index < 0) missing.push(field);
     });
     if (!missing.length) return [];
-    const labels = {
-      document: "NumeroDocumentoCliente",
-      revision: "RevisaoCompleta/Revisao",
-      documentType: "TipoDocumento",
-      state: "o_statename",
-      lastEmission: "Última emissão",
-    };
+    const labels = { document: "NumeroDocumentoCliente", revision: "RevisaoCompleta/Revisao", documentType: "TipoDocumento", state: "o_statename", lastEmission: "Última emissão" };
     return [`Base ProjectWise inválida. Campo(s) obrigatório(s) não localizado(s): ${missing.map((field) => labels[field]).join(", ")}. Cabeçalhos lidos: ${(headers || []).filter(Boolean).slice(0, 18).join(", ")}${(headers || []).length > 18 ? "…" : ""}`];
   }
 
@@ -282,16 +214,9 @@
       if (!row.some((value) => text(value))) return;
       sourceRowCount += 1;
       const document = rowValue(row, columns.document);
-      if (!document) {
-        invalidCount += 1;
-        emptyDocumentCount += 1;
-        return;
-      }
+      if (!document) { invalidCount += 1; emptyDocumentCount += 1; return; }
       const identity = documentIdentity(document);
-      if (!identity.key) {
-        invalidCount += 1;
-        return;
-      }
+      if (!identity.key) { invalidCount += 1; return; }
       const revisionComplete = rowValue(row, columns.revisionComplete);
       const revision = rowValue(row, columns.revision) || revisionComplete;
       const lastEmission = rowValue(row, columns.lastEmission);
@@ -300,7 +225,6 @@
       const duplicateKey = `${identity.key}::${norm(revisionComplete || revision)}`;
       if (revisionSeen.has(duplicateKey)) duplicateRevisionCount += 1;
       else revisionSeen.add(duplicateKey);
-
       records.push({
         document,
         documentKey: identity.key,
@@ -333,7 +257,6 @@
     const uniqueDocuments = new Set(records.map((record) => record.documentKey));
     const emittedDocuments = new Set(records.filter((record) => record.emittedEvidence).map((record) => record.documentKey));
     if (emittedDocuments.size > uniqueDocuments.size) throw new Error("Inconsistência PW: documentos emitidos excedem documentos cadastrados.");
-
     return {
       ok: true,
       records,
@@ -362,12 +285,7 @@
   function normalizeSigemRecords(records) {
     return (records || []).map((record) => {
       const identity = documentIdentity(record && record.document);
-      return {
-        ...record,
-        documentKey: identity.key,
-        canonicalDocument: identity.canonical,
-        documentClass: documentClass(record && record.document),
-      };
+      return { ...record, documentKey: identity.key, canonicalDocument: identity.canonical, documentClass: documentClass(record && record.document) };
     }).filter((record) => record.documentKey);
   }
 
@@ -378,17 +296,7 @@
       if (!key) return;
       let document = map.get(key);
       if (!document) {
-        document = {
-          key,
-          document: text(record.document),
-          documentClass: record.documentClass || documentClass(record.document),
-          rows: [],
-          revisions: new Set(),
-          statuses: new Set(),
-          disciplines: new Set(),
-          emitted: false,
-          current: null,
-        };
+        document = { key, document: text(record.document), documentClass: record.documentClass || documentClass(record.document), rows: [], revisions: new Set(), statuses: new Set(), disciplines: new Set(), emitted: false, current: null };
         map.set(key, document);
       }
       document.rows.push(record);
@@ -403,14 +311,8 @@
     return map;
   }
 
-  function currentStatus(document, kind) {
-    return kind === "pw" ? text(document && document.current && document.current.state) : text(document && document.current && document.current.status);
-  }
-
-  function currentDiscipline(document) {
-    return text(document && document.current && (document.current.disciplineDesc || document.current.discipline));
-  }
-
+  function currentStatus(document, kind) { return kind === "pw" ? text(document && document.current && document.current.state) : text(document && document.current && document.current.status); }
+  function currentDiscipline(document) { return text(document && document.current && (document.current.disciplineDesc || document.current.discipline)); }
   function documentPasses(document, kind, filters) {
     const f = filters || {};
     if (f.documentClass && document.documentClass !== f.documentClass) return false;
@@ -423,32 +325,13 @@
     }
     return true;
   }
-
-  function filterMap(map, kind, filters) {
-    return new Map([...map].filter(([, document]) => documentPasses(document, kind, filters)));
-  }
-
-  function setDifference(left, right) {
-    const output = new Set();
-    left.forEach((value) => { if (!right.has(value)) output.add(value); });
-    return output;
-  }
-
-  function setIntersection(left, right) {
-    const output = new Set();
-    left.forEach((value) => { if (right.has(value)) output.add(value); });
-    return output;
-  }
-
+  function filterMap(map, kind, filters) { return new Map([...map].filter(([, document]) => documentPasses(document, kind, filters))); }
+  function setDifference(left, right) { const output = new Set(); left.forEach((value) => { if (!right.has(value)) output.add(value); }); return output; }
+  function setIntersection(left, right) { const output = new Set(); left.forEach((value) => { if (right.has(value)) output.add(value); }); return output; }
   function distribution(map, selector) {
     const counts = new Map();
-    map.forEach((document) => {
-      const label = text(selector(document)) || "Sem informação";
-      counts.set(label, (counts.get(label) || 0) + 1);
-    });
-    return [...counts.entries()]
-      .map(([label, count]) => ({ label, count }))
-      .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "pt-BR"));
+    map.forEach((document) => { const label = text(selector(document)) || "Sem informação"; counts.set(label, (counts.get(label) || 0) + 1); });
+    return [...counts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "pt-BR"));
   }
 
   function summarizeClasses(sigemMap, pwMap) {
@@ -461,25 +344,11 @@
       ensure(pwSets, document.documentClass || UNCLASSIFIED).add(key);
       if (document.emitted) ensure(emittedSets, document.documentClass || UNCLASSIFIED).add(key);
     });
-    const classes = new Set([...sigemSets.keys(), ...pwSets.keys()]);
-    return [...classes].map((documentClassName) => {
-      const sigem = sigemSets.get(documentClassName) || new Set();
-      const pw = pwSets.get(documentClassName) || new Set();
-      const emitted = emittedSets.get(documentClassName) || new Set();
-      return {
-        documentClass: documentClassName,
-        sigem: sigem.size,
-        pwRegistered: pw.size,
-        pwEmitted: emitted.size,
-        gapSigemToPw: setDifference(sigem, pw).size,
-        gapPwToEmitted: setDifference(pw, emitted).size,
-        pwExclusive: setDifference(pw, sigem).size,
-        matched: setIntersection(sigem, pw).size,
-      };
-    }).sort((left, right) => {
-      if (left.documentClass === UNCLASSIFIED) return 1;
-      if (right.documentClass === UNCLASSIFIED) return -1;
-      return left.documentClass.localeCompare(right.documentClass, "pt-BR", { numeric: true });
+    return DOCUMENT_CLASSES.filter((name) => sigemSets.has(name) || pwSets.has(name)).map((name) => {
+      const sigem = sigemSets.get(name) || new Set();
+      const pw = pwSets.get(name) || new Set();
+      const emitted = emittedSets.get(name) || new Set();
+      return { documentClass: name, sigem: sigem.size, pwRegistered: pw.size, pwEmitted: emitted.size, gapSigemToPw: setDifference(sigem, pw).size, gapPwToEmitted: setDifference(pw, emitted).size, pwExclusive: setDifference(pw, sigem).size, matched: setIntersection(sigem, pw).size };
     });
   }
 
@@ -488,21 +357,9 @@
     const normalizedPw = (pwRecords || []).map((record) => {
       const identity = documentIdentity(record && record.document);
       const emissionFlag = norm(record && record.lastEmission);
-      return {
-        ...record,
-        documentKey: identity.key,
-        canonicalDocument: identity.canonical,
-        documentClass: documentClass(record && record.document),
-        emissionFlag,
-        emittedEvidence: [EMISSION_FLAGS.CURRENT, EMISSION_FLAGS.HISTORICAL].includes(emissionFlag),
-      };
+      return { ...record, documentKey: identity.key, canonicalDocument: identity.canonical, documentClass: documentClass(record && record.document), emissionFlag, emittedEvidence: [EMISSION_FLAGS.CURRENT, EMISSION_FLAGS.HISTORICAL].includes(emissionFlag) };
     }).filter((record) => record.documentKey);
-    return {
-      normalizedSigem,
-      normalizedPw,
-      sigemAll: buildDocumentMap(normalizedSigem, "sigem"),
-      pwAll: buildDocumentMap(normalizedPw, "pw"),
-    };
+    return { normalizedSigem, normalizedPw, sigemAll: buildDocumentMap(normalizedSigem, "sigem"), pwAll: buildDocumentMap(normalizedPw, "pw") };
   }
 
   function aggregateModel(model, filters) {
@@ -515,55 +372,32 @@
     const pwKeys = new Set(pw.keys());
     const emittedKeys = new Set([...pw].filter(([, document]) => document.emitted).map(([key]) => key));
     if (emittedKeys.size > pwKeys.size) throw new Error("Inconsistência matemática: PW emitido maior que PW cadastrado.");
-
     const gapSigemToPw = setDifference(sigemKeys, pwKeys);
     const gapPwToEmitted = setDifference(pwKeys, emittedKeys);
     const pwExclusive = setDifference(pwKeys, sigemKeys);
     const matched = setIntersection(sigemKeys, pwKeys);
-
-    const classRows = summarizeClasses(sigem, pw);
-    const allClassRows = summarizeClasses(sigemAll, pwAll);
     const unclassified = {
       sigem: [...sigem.values()].filter((document) => document.documentClass === UNCLASSIFIED).length,
       pw: [...pw.values()].filter((document) => document.documentClass === UNCLASSIFIED).length,
     };
-
     return {
-      summary: {
-        sigem: sigemKeys.size,
-        pwRegistered: pwKeys.size,
-        pwEmitted: emittedKeys.size,
-        gapSigemToPw: gapSigemToPw.size,
-        gapPwToEmitted: gapPwToEmitted.size,
-        pwExclusive: pwExclusive.size,
-        matched: matched.size,
-      },
-      classes: classRows,
+      summary: { sigem: sigemKeys.size, pwRegistered: pwKeys.size, pwEmitted: emittedKeys.size, gapSigemToPw: gapSigemToPw.size, gapPwToEmitted: gapPwToEmitted.size, pwExclusive: pwExclusive.size, matched: matched.size },
+      classes: summarizeClasses(sigem, pw),
       sigemStatus: distribution(sigem, (document) => currentStatus(document, "sigem")),
       pwStatus: distribution(pw, (document) => currentStatus(document, "pw")),
       disciplines: distribution(pw, currentDiscipline),
       filterOptions: {
-        classes: allClassRows.map((row) => row.documentClass),
+        classes: summarizeClasses(sigemAll, pwAll).map((row) => row.documentClass),
         sigemStatuses: distribution(sigemAll, (document) => currentStatus(document, "sigem")).map((item) => item.label),
         pwStatuses: distribution(pwAll, (document) => currentStatus(document, "pw")).map((item) => item.label),
         disciplines: distribution(pwAll, currentDiscipline).map((item) => item.label),
       },
-      quality: {
-        sigemRawRecords: (source.normalizedSigem || []).length,
-        pwRawRecords: (source.normalizedPw || []).length,
-        sigemUniqueDocuments: sigemAll.size,
-        pwUniqueDocuments: pwAll.size,
-        pwEmittedDocuments: [...pwAll.values()].filter((document) => document.emitted).length,
-        unclassified,
-      },
+      quality: { sigemRawRecords: source.normalizedSigem.length, pwRawRecords: source.normalizedPw.length, sigemUniqueDocuments: sigemAll.size, pwUniqueDocuments: pwAll.size, pwEmittedDocuments: [...pwAll.values()].filter((document) => document.emitted).length, unclassified },
       sets: { sigemKeys, pwKeys, emittedKeys, gapSigemToPw, gapPwToEmitted, pwExclusive, matched },
       documents: { sigem, pw, sigemAll, pwAll },
     };
   }
-
-  function aggregate(sigemRecords, pwRecords, filters) {
-    return aggregateModel(createModel(sigemRecords, pwRecords), filters);
-  }
+  function aggregate(sigemRecords, pwRecords, filters) { return aggregateModel(createModel(sigemRecords, pwRecords), filters); }
 
   function openDb() {
     if (typeof indexedDB === "undefined") return Promise.reject(new Error("IndexedDB indisponível neste navegador."));
@@ -571,31 +405,52 @@
       const request = indexedDB.open(DB_NAME);
       request.onupgradeneeded = () => {
         const db = request.result;
-        if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+        // Contrato canônico compartilhado com posting_conference_core.js:
+        // chave inline keyPath="key" e registro { key, value }.
+        if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE, { keyPath: "key" });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error || new Error("Falha ao abrir a base local SIGEM × PW."));
     });
   }
 
+  function kvStoreMode(store) {
+    const keyPath = store ? store.keyPath : null;
+    return { inline: keyPath !== null && keyPath !== undefined, keyPath };
+  }
+  function kvReadValue(store, result, fallback) {
+    if (result === undefined) return fallback;
+    const mode = kvStoreMode(store);
+    if (!mode.inline) return result;
+    if (mode.keyPath === "key" && result && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, "value")) return result.value;
+    return result;
+  }
+  function kvPut(store, key, value) {
+    const mode = kvStoreMode(store);
+    if (!mode.inline) return store.put(value, key);
+    if (mode.keyPath === "key") return store.put({ key, value });
+    throw new Error(`Schema IndexedDB incompatível na store ${DB_STORE}: keyPath ${JSON.stringify(mode.keyPath)} não é suportado.`);
+  }
   async function kvGet(key, fallback) {
     const db = await openDb();
     try {
       return await new Promise((resolve, reject) => {
         const tx = db.transaction(DB_STORE, "readonly");
-        const request = tx.objectStore(DB_STORE).get(key);
-        request.onsuccess = () => resolve(request.result === undefined ? fallback : request.result);
+        const store = tx.objectStore(DB_STORE);
+        const request = store.get(key);
+        request.onsuccess = () => resolve(kvReadValue(store, request.result, fallback));
         request.onerror = () => reject(request.error || new Error("Falha ao ler a base local."));
       });
     } finally { db.close(); }
   }
-
   async function kvSet(key, value) {
     const db = await openDb();
     try {
       await new Promise((resolve, reject) => {
         const tx = db.transaction(DB_STORE, "readwrite");
-        tx.objectStore(DB_STORE).put(value, key);
+        const store = tx.objectStore(DB_STORE);
+        try { kvPut(store, key, value); }
+        catch (error) { try { tx.abort(); } catch (_) {} reject(error); return; }
         tx.oncomplete = resolve;
         tx.onerror = () => reject(tx.error || new Error("Falha ao salvar a base local."));
         tx.onabort = () => reject(tx.error || new Error("A gravação da base local foi cancelada."));
@@ -603,33 +458,27 @@
       return value;
     } finally { db.close(); }
   }
-
-  async function loadSigemBase() {
-    return kvGet(SIGEM_BASE_KEY, { meta: null, records: [] });
-  }
-
-  async function loadPwBase() {
-    return kvGet(PW_BASE_KEY, { meta: null, records: [] });
-  }
-
+  async function loadSigemBase() { return kvGet(SIGEM_BASE_KEY, { meta: null, records: [] }); }
+  async function loadPwBase() { return kvGet(PW_BASE_KEY, { meta: null, records: [] }); }
   async function savePwBase(base) {
     if (!base || !base.meta || !Array.isArray(base.records)) throw new Error("Base PW inválida para persistência.");
-    return kvSet(PW_BASE_KEY, base);
+    try { return await kvSet(PW_BASE_KEY, base); }
+    catch (error) {
+      const wrapped = new Error("Não foi possível salvar a nova base do ProjectWise. A base anterior foi preservada.");
+      try { wrapped.cause = error; } catch (_) {}
+      throw wrapped;
+    }
   }
-
-  async function loadBases() {
-    const [sigem, pw] = await Promise.all([loadSigemBase(), loadPwBase()]);
-    return { sigem, pw };
-  }
+  async function loadBases() { const [sigem, pw] = await Promise.all([loadSigemBase(), loadPwBase()]); return { sigem, pw }; }
 
   const EMISSION_RULE = "Um documento PW é considerado emitido quando qualquer revisão possui ‘Última emissão’ = Sim ou Não. ‘Sim’ identifica a emissão vigente; ‘Não’ identifica uma emissão histórica/superada. ‘Previsto’ não é emissão. A regra é agregada por documento, portanto revisões não inflam o KPI.";
 
   return Object.freeze({
-    DB_NAME, DB_STORE, SIGEM_BASE_KEY, PW_BASE_KEY, PW_BASE_VERSION, UNCLASSIFIED,
+    DB_NAME, DB_STORE, SIGEM_BASE_KEY, PW_BASE_KEY, PW_BASE_VERSION, UNCLASSIFIED, DOCUMENT_CLASSES,
     EMISSION_FLAGS, EMISSION_RULE, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS,
     text, norm, normalizeHeader, canonicalDocumentCode, documentIdentity, documentClass,
     revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, normalizeSigemRecords, buildDocumentMap, createModel, aggregateModel, aggregate,
-    openDb, kvGet, kvSet, loadSigemBase, loadPwBase, savePwBase, loadBases,
+    openDb, kvStoreMode, kvReadValue, kvPut, kvGet, kvSet, loadSigemBase, loadPwBase, savePwBase, loadBases,
   });
 });
