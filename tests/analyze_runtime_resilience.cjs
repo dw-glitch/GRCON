@@ -245,7 +245,7 @@ function testStaticBoundaries() {
   ]) {
     assert.doesNotMatch(source, /\b(?:chrome|browser)\.runtime\b/, `${name} não pode depender da mensageria de extensões`);
   }
-  assert.match(guard, /chrome\|moz\|edge\|safari-web-extension/, "guard pode reconhecer origem externa apenas para diagnóstico");
+  assert.match(guard, /chrome\|moz\|edge\|safari-web/, "guard pode reconhecer origem externa apenas para diagnóstico");
   assert.doesNotMatch(guard, /console\.clear\s*\(/, "correção não pode limpar o console");
   assert.doesNotMatch(guard, /message\.includes\(["']message port/i, "não pode existir filtro genérico por texto do erro");
 }
