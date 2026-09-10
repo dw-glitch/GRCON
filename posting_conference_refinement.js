@@ -499,7 +499,8 @@
     let cell = statusCell.nextElementSibling;
     if (cell && cell.classList.contains("pc-sigem-cell")) {
       const badge = cell.querySelector(".pc-sigem-status");
-      if (badge) setText(badge, rawText(row && row.sigemStatus) || "—");
+      if (!badge || !badge.classList.contains("pc-sigem-status")) return;
+      setText(badge, rawText(row && row.sigemStatus) || "—");
       return;
     }
     // Compatibilidade com versões anteriores da tabela. A interface atual já
