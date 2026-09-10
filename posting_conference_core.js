@@ -116,6 +116,10 @@
   }
 
   function fieldIndex(headers, field) {
+    if (field === "status") {
+      const exact = headers.findIndex((value) => normalizeHeader(value) === "STATUS");
+      if (exact >= 0) return exact;
+    }
     const aliases = NORMALIZED_ALIASES[field] || new Set();
     for (let index = 0; index < headers.length; index += 1) {
       if (aliases.has(normalizeHeader(headers[index]))) return index;
@@ -170,9 +174,9 @@
         return;
       }
       const identity = documentIdentity(document);
-      const dedupeKey = `${identity}|${revision}`;
+      const dedupeKey = `${identity}|${revision}|${JSON.stringify(row)}`;
       const record = {
-        id: dedupeKey,
+        id: `${identity}|${revision}|${detection.headerRow + offset + 1}`,
         document: displayDocument(document),
         documentIdentity: identity,
         searchKeys: keys,
@@ -188,12 +192,8 @@
       };
       if (dedupe.has(dedupeKey)) {
         duplicateCount += 1;
-        const previous = dedupe.get(dedupeKey);
-        const merged = { ...previous };
-        ["modifiedAt", "includedAt", "title", "status", "documentType", "situation", "observation"].forEach((field) => {
-          if (!text(merged[field]) && text(record[field])) merged[field] = record[field];
-        });
-        dedupe.set(dedupeKey, merged);
+        // Only identical source rows can be collapsed. Different statuses or
+        // dates must remain available to resolve the current evidence.
       } else {
         dedupe.set(dedupeKey, record);
       }
@@ -226,7 +226,7 @@
     let best = null;
     workbook.SheetNames.forEach((sheetName) => {
       const sheet = workbook.Sheets[sheetName];
-      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false, blankrows: false });
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false, blankrows: true });
       const detection = detectColumns(matrix, 40);
       if (!detection) return;
       if (!best || detection.score > best.detection.score) best = { matrix, sheetName, detection };
@@ -697,7 +697,7 @@
   return Object.freeze({
     DB_NAME, DB_VERSION, BASE_KEY, STATE_KEY, AUDIT_KEY, HISTORY_INDEX_KEY, PREFS_KEY,
     DEFAULT_WAIT_HOURS, STATUSES, AGGREGATE_STATUSES, HEADER_ALIASES,
-    text, norm, normalizeRevision, normalizeHeader, documentKeys, documentIdentity, displayDocument,
+    text, norm, normalizeRevision, normalizeHeader, documentKeys, documentIdentity, displayDocument, revisionRank,
     detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
     statusLabel, aggregateStatus, filterRows, pendingRows,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,

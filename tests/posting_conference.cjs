@@ -94,7 +94,7 @@ currentStatus.sourceRow = 20;
 statusBase.push(currentStatus);
 r = R.enrichResult(C.reconcile(hist("DOC-STATUS-ATUAL", "A"), statusBase, null, { now: NOW }), statusBase, C);
 assert.equal(r.rows[0].status, C.STATUSES.CONFIRMED);
-assert.equal(r.rows[0].sigemStatus, "Status atual da Consulta Geral");
+assert.equal(r.rows[0].sigemStatus, "Status da revisão antiga", "o status pertence à revisão conferida, sem misturar revisões");
 
 r = R.enrichResult(C.reconcile(hist("DOC-STATUS-DIVERGENTE", "B"), base("DOC-STATUS-DIVERGENTE", "A", "Em Workflow"), null, { now: NOW }), base("DOC-STATUS-DIVERGENTE", "A", "Em Workflow"), C);
 assert.equal(r.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
