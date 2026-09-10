@@ -101,7 +101,8 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_app.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi) {
+    await root.GRCONModuleLoader.ensure("sigem_pw_history_postmerge.js");
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryPostMerge) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
   }

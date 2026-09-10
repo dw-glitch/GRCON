@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw3-sigem-pw-history";
+const CACHE_NAME = "grcon-v5.40.10-spw4-history-postmerge";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -41,6 +41,7 @@ const ASSETS = [
   "sigem_pw_revision_section.js",
   "sigem_pw_history_core.js",
   "sigem_pw_history_app.js",
+  "sigem_pw_history_postmerge.js",
   "grcon_module_loader.js",
   "grcon_contracts.js",
   "discipline_resolver.js",
