@@ -18,12 +18,14 @@
   const STORES = Object.freeze({
     sourceSnapshots: "sourceSnapshots",
     comparisonSnapshots: "comparisonSnapshots",
-    snapshotDocuments: "snapshotDocuments",
+    workingSets: "workingSets",
+    snapshotChanges: "snapshotChanges",
     meta: "meta",
   });
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
   const CLASSES = Object.freeze(["ET", "N-1710", "CV"]);
   const PENDING_STATES = new Set(["post-pw", "post-sigem", "awaiting-emission", "review"]);
+  const WORKING_KEYS = Object.freeze({ sigem: "latest:sigem", pw: "latest:pw", comparison: "latest:comparison" });
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
   function norm(value) { return Dashboard && Dashboard.norm ? Dashboard.norm(value) : text(value).toUpperCase(); }
@@ -53,8 +55,8 @@
     return counts;
   }
 
-  // Fingerprint sem nome de arquivo: a mesma base com nome diferente não infla o histórico,
-  // enquanto conteúdo relevante diferente produz outro identificador.
+  // Fingerprint lógico do conteúdo relevante. Nome de arquivo e ordem das linhas
+  // não participam, portanto renomear a mesma base não infla o histórico.
   function hash32(source, seed) {
     let hash = (seed >>> 0) || 2166136261;
     const value = String(source || "");
@@ -107,19 +109,20 @@
     const allDocuments = sourceAll instanceof Map ? [...sourceAll.values()] : [];
     const emitted = system === SYSTEMS.PW ? comparable.filter((document) => document.emitted) : [];
     const meta = base && base.meta || {};
+    const nonComparableRecognized = allDocuments.filter((document) => !isComparable(document)).length;
     return {
       rawRecords: Number(meta.sourceRowCount || meta.recordCount || (normalized && normalized.length) || 0),
       validRecords: Number(meta.recordCount || (normalized && normalized.length) || 0),
       comparableDocuments: comparable.length,
       allRecognizedDocuments: allDocuments.length,
-      outsideScope: Math.max(0, allDocuments.length - comparable.length) + Number(meta.invalidCount || 0),
+      outsideScope: nonComparableRecognized,
+      invalidRecords: Number(meta.invalidCount || 0),
       unclassified: allDocuments.filter((document) => !CLASSES.includes(text(document.documentClass))).length,
       classes: classCounts(comparable, false),
       emittedDocuments: system === SYSTEMS.PW ? emitted.length : null,
       emittedByClass: system === SYSTEMS.PW ? classCounts(comparable, true) : null,
       notEmittedDocuments: system === SYSTEMS.PW ? comparable.length - emitted.length : null,
       statusDistribution: distribution(comparable, (document) => document.status),
-      invalidCount: Number(meta.invalidCount || 0),
       duplicateRevisionCount: Number(meta.duplicateRevisionCount || 0),
       unknownEmissionCount: Number(meta.unknownEmissionCount || 0),
     };
@@ -128,7 +131,7 @@
   function buildSourceSnapshot(system, base, model, options) {
     if (![SYSTEMS.SIGEM, SYSTEMS.PW].includes(system)) throw new Error("Sistema de snapshot inválido.");
     if (!base || !base.meta || !Array.isArray(base.records)) throw new Error(`Base ${system.toUpperCase()} inválida para snapshot.`);
-    const docs = minimalDocuments(system, model);
+    const documents = minimalDocuments(system, model);
     const fingerprint = contentFingerprint(system, base.records);
     const importedAt = text(base.meta.importedAt) || nowIso();
     const snapshot = {
@@ -143,10 +146,10 @@
       lastModified: Number(base.meta.lastModified || 0),
       calculationVersion: CALCULATION_VERSION,
       sourceVersion: Number(base.meta.version || 0),
-      metrics: sourceMetrics(system, base, model, docs),
+      metrics: sourceMetrics(system, base, model, documents),
       delta: null,
     };
-    return { snapshot, documents: docs };
+    return { snapshot, documents };
   }
 
   function mapByKey(documents) { return new Map((documents || []).map((document) => [document.key, document])); }
@@ -170,6 +173,17 @@
     };
   }
 
+  function sourceChangeDetails(previousDocuments, currentDocuments, delta) {
+    const previous = mapByKey(previousDocuments), current = mapByKey(currentDocuments);
+    const rows = (keys, mode) => (keys || []).map((key) => ({ key, before: previous.get(key) || null, after: current.get(key) || null, mode }));
+    return {
+      entered: rows(delta && delta.keys && delta.keys.entered, "entered"),
+      exited: rows(delta && delta.keys && delta.keys.exited, "exited"),
+      changedRevision: rows(delta && delta.keys && delta.keys.changedRevision, "changed-revision"),
+      changedStatus: rows(delta && delta.keys && delta.keys.changedStatus, "changed-status"),
+    };
+  }
+
   function relationSets(model) {
     const sigem = new Set(), pw = new Set(), emitted = new Set();
     if (model && model.sigemAll instanceof Map) model.sigemAll.forEach((document, key) => { if (isComparable(document)) sigem.add(key); });
@@ -179,6 +193,7 @@
     pw.forEach((key) => { if (!sigem.has(key)) pwOnly.add(key); });
     return { sigem, pw, emitted, both, sigemOnly, pwOnly };
   }
+
   function revisionState(row) {
     if (!row) return "review";
     const s = Revision && Revision.SITUATIONS || {};
@@ -188,6 +203,7 @@
     if (row.situation === s.PW_AHEAD) return "post-sigem";
     return "review";
   }
+
   function comparisonDocuments(model, revisionAnalysis) {
     const output = new Map();
     const rows = revisionAnalysis && Array.isArray(revisionAnalysis.rows) ? revisionAnalysis.rows : [];
@@ -201,7 +217,6 @@
         sigemRevision: text(row.sigemRevision),
         pwRevision: text(row.pwRevision),
         pwEmittedRevision: text(row.lastEmittedPwRevision),
-        reason: text(row.reason),
       });
     }
     const sets = relationSets(model);
@@ -217,11 +232,11 @@
         sigemRevision: "",
         pwRevision: revisionOf(current),
         pwEmittedRevision: document && document.emitted ? revisionOf(current) : "",
-        reason: "Documento comparável localizado no ProjectWise sem correspondência válida na última base SIGEM.",
       });
     });
     return [...output.values()].sort((a, b) => a.key.localeCompare(b.key));
   }
+
   function countStates(documents) {
     const counts = { aligned: 0, postPw: 0, postSigem: 0, awaitingEmission: 0, review: 0 };
     for (const document of documents || []) {
@@ -233,6 +248,7 @@
     }
     return counts;
   }
+
   function classComparisonMetrics(model, revisionAnalysis, comparisonDocs) {
     const sets = relationSets(model);
     const revisionRows = revisionAnalysis && Array.isArray(revisionAnalysis.rows) ? revisionAnalysis.rows : [];
@@ -280,8 +296,8 @@
   function buildComparisonSnapshot(sigemSnapshot, pwSnapshot, model, revisionAnalysis, options) {
     if (!sigemSnapshot || !pwSnapshot) throw new Error("As duas bases são necessárias para registrar um comparativo.");
     const sets = relationSets(model);
-    const docs = comparisonDocuments(model, revisionAnalysis);
-    const states = countStates(docs);
+    const documents = comparisonDocuments(model, revisionAnalysis);
+    const states = countStates(documents);
     const counts = revisionAnalysis && revisionAnalysis.counts || {};
     const snapshot = {
       id: `comparison:${sigemSnapshot.fingerprint}:${pwSnapshot.fingerprint}`,
@@ -314,11 +330,11 @@
         correctRegisteredNotEmitted: Number(counts.awaitingEmission || 0),
         coverage: sets.sigem.size ? sets.both.size / sets.sigem.size : null,
         emissionRate: sets.pw.size ? sets.emitted.size / sets.pw.size : null,
-        classes: classComparisonMetrics(model, revisionAnalysis, docs),
+        classes: classComparisonMetrics(model, revisionAnalysis, documents),
       },
       delta: null,
     };
-    return { snapshot, documents: docs };
+    return { snapshot, documents };
   }
 
   function compareComparisonDocuments(previousDocuments, currentDocuments) {
@@ -343,6 +359,18 @@
       changedRevision: changedRevision.length,
       changedState: changedState.length,
       keys: { resolved, newPending, becameAligned, changedRevision, changedState },
+    };
+  }
+
+  function transitionDetails(previousDocuments, currentDocuments, transition) {
+    const previous = mapByKey(previousDocuments), current = mapByKey(currentDocuments);
+    const rows = (keys, mode) => (keys || []).map((key) => ({ key, before: previous.get(key) || null, after: current.get(key) || null, mode }));
+    return {
+      resolved: rows(transition && transition.keys && transition.keys.resolved, "resolved"),
+      newPending: rows(transition && transition.keys && transition.keys.newPending, "new-pending"),
+      becameAligned: rows(transition && transition.keys && transition.keys.becameAligned, "became-aligned"),
+      changedRevision: rows(transition && transition.keys && transition.keys.changedRevision, "changed-revision"),
+      changedState: rows(transition && transition.keys && transition.keys.changedState, "changed-state"),
     };
   }
 
@@ -372,10 +400,8 @@
           const store = db.createObjectStore(STORES.comparisonSnapshots, { keyPath: "id" });
           store.createIndex("importedAt", "importedAt", { unique: false });
         }
-        if (!db.objectStoreNames.contains(STORES.snapshotDocuments)) {
-          const store = db.createObjectStore(STORES.snapshotDocuments, { keyPath: ["snapshotId", "key"] });
-          store.createIndex("snapshotId", "snapshotId", { unique: false });
-        }
+        if (!db.objectStoreNames.contains(STORES.workingSets)) db.createObjectStore(STORES.workingSets, { keyPath: "key" });
+        if (!db.objectStoreNames.contains(STORES.snapshotChanges)) db.createObjectStore(STORES.snapshotChanges, { keyPath: "snapshotId" });
         if (!db.objectStoreNames.contains(STORES.meta)) db.createObjectStore(STORES.meta, { keyPath: "key" });
       };
       request.onsuccess = () => resolve(request.result);
@@ -398,41 +424,43 @@
   }
   async function listSourceSnapshots(system) { return (await listSnapshots(STORES.sourceSnapshots)).filter((snapshot) => snapshot.system === system); }
   async function listComparisonSnapshots() { return listSnapshots(STORES.comparisonSnapshots); }
-  async function loadSnapshotDocuments(snapshotId) {
-    return withDb(async (db) => {
-      const store = db.transaction(STORES.snapshotDocuments, "readonly").objectStore(STORES.snapshotDocuments);
-      const index = store.index("snapshotId");
-      const range = typeof IDBKeyRange !== "undefined" ? IDBKeyRange.only(snapshotId) : snapshotId;
-      const values = await requestValue(index.getAll(range));
-      return (values || []).map((record) => record.value);
-    });
+  async function loadWorkingSet(key) {
+    return withDb(async (db) => requestValue(db.transaction(STORES.workingSets, "readonly").objectStore(STORES.workingSets).get(key)));
   }
-  async function insertSnapshot(storeName, snapshot, documents) {
+  async function loadSnapshotChanges(snapshotId) {
+    const record = await withDb(async (db) => requestValue(db.transaction(STORES.snapshotChanges, "readonly").objectStore(STORES.snapshotChanges).get(snapshotId)));
+    return record && record.value || null;
+  }
+
+  async function persistSnapshot(storeName, snapshot, documents, workingKey, changes) {
     const existing = await getSnapshot(storeName, snapshot.id);
     if (existing) return { created: false, snapshot: existing, duplicate: true };
     return withDb((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction([storeName, STORES.snapshotDocuments], "readwrite");
+      const tx = db.transaction([storeName, STORES.workingSets, STORES.snapshotChanges], "readwrite");
       tx.objectStore(storeName).add(snapshot);
-      const docs = tx.objectStore(STORES.snapshotDocuments);
-      for (const document of documents || []) docs.put({ snapshotId: snapshot.id, key: document.key, value: document });
+      tx.objectStore(STORES.workingSets).put({ key: workingKey, snapshotId: snapshot.id, documents: documents || [] });
+      if (changes) tx.objectStore(STORES.snapshotChanges).put({ snapshotId: snapshot.id, value: changes });
       tx.oncomplete = () => resolve({ created: true, snapshot, duplicate: false });
       tx.onerror = () => reject(tx.error || new Error("Falha ao registrar snapshot."));
       tx.onabort = () => reject(tx.error || new Error("Registro do snapshot foi cancelado."));
     }));
   }
+
   async function deleteSnapshot(storeName, snapshotId) {
     return withDb((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction([storeName, STORES.snapshotDocuments], "readwrite");
+      const tx = db.transaction([storeName, STORES.workingSets, STORES.snapshotChanges], "readwrite");
       tx.objectStore(storeName).delete(snapshotId);
-      const docStore = tx.objectStore(STORES.snapshotDocuments);
-      const index = docStore.index("snapshotId");
-      const range = typeof IDBKeyRange !== "undefined" ? IDBKeyRange.only(snapshotId) : snapshotId;
-      const cursor = index.openCursor(range);
-      cursor.onsuccess = () => { const value = cursor.result; if (!value) return; value.delete(); value.continue(); };
+      tx.objectStore(STORES.snapshotChanges).delete(snapshotId);
+      const working = tx.objectStore(STORES.workingSets);
+      [WORKING_KEYS.sigem, WORKING_KEYS.pw, WORKING_KEYS.comparison].forEach((key) => {
+        const request = working.get(key);
+        request.onsuccess = () => { if (request.result && request.result.snapshotId === snapshotId) working.delete(key); };
+      });
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => reject(tx.error || new Error("Falha ao excluir snapshot."));
     }));
   }
+
   async function clearHistory() {
     return withDb((db) => new Promise((resolve, reject) => {
       const tx = db.transaction(Object.values(STORES), "readwrite");
@@ -448,12 +476,22 @@
     if (existing) return { created: false, duplicate: true, snapshot: existing };
     const history = await listSourceSnapshots(system);
     const previous = history.length ? history[history.length - 1] : null;
-    if (previous) {
-      const previousDocs = await loadSnapshotDocuments(previous.id);
-      built.snapshot.delta = compareSourceDocuments(previousDocs, built.documents);
-      built.snapshot.delta.previousSnapshotId = previous.id;
+    const workingKey = WORKING_KEYS[system];
+    const working = await loadWorkingSet(workingKey);
+    let changes = null;
+    if (previous && working && working.snapshotId === previous.id) {
+      const delta = compareSourceDocuments(working.documents || [], built.documents);
+      built.snapshot.delta = {
+        previousSnapshotId: previous.id,
+        entered: delta.entered,
+        exited: delta.exited,
+        remained: delta.remained,
+        changedRevision: delta.changedRevision,
+        changedStatus: delta.changedStatus,
+      };
+      changes = sourceChangeDetails(working.documents || [], built.documents, delta);
     }
-    return insertSnapshot(STORES.sourceSnapshots, built.snapshot, built.documents);
+    return persistSnapshot(STORES.sourceSnapshots, built.snapshot, built.documents, workingKey, changes);
   }
 
   async function recordComparison(sigemSnapshot, pwSnapshot, model, revisionAnalysis, recordedAt) {
@@ -462,9 +500,10 @@
     if (existing) return { created: false, duplicate: true, snapshot: existing };
     const history = await listComparisonSnapshots();
     const previous = history.length ? history[history.length - 1] : null;
-    if (previous) {
-      const previousDocs = await loadSnapshotDocuments(previous.id);
-      const transition = compareComparisonDocuments(previousDocs, built.documents);
+    const working = await loadWorkingSet(WORKING_KEYS.comparison);
+    let changes = null;
+    if (previous && working && working.snapshotId === previous.id) {
+      const transition = compareComparisonDocuments(working.documents || [], built.documents);
       built.snapshot.delta = {
         previousSnapshotId: previous.id,
         metrics: metricDelta(previous.metrics, built.snapshot.metrics),
@@ -476,8 +515,9 @@
           changedState: transition.changedState,
         },
       };
+      changes = transitionDetails(working.documents || [], built.documents, transition);
     }
-    return insertSnapshot(STORES.comparisonSnapshots, built.snapshot, built.documents);
+    return persistSnapshot(STORES.comparisonSnapshots, built.snapshot, built.documents, WORKING_KEYS.comparison, changes);
   }
 
   async function recordActiveBases(sigemBase, pwBase, options) {
@@ -501,11 +541,11 @@
   }
 
   return Object.freeze({
-    DB_NAME, DB_VERSION, CALCULATION_VERSION, STORES, SYSTEMS, CLASSES, PENDING_STATES,
+    DB_NAME, DB_VERSION, CALCULATION_VERSION, STORES, SYSTEMS, CLASSES, PENDING_STATES, WORKING_KEYS,
     text, norm, isComparable, contentFingerprint, minimalDocuments, sourceMetrics, buildSourceSnapshot,
-    compareSourceDocuments, relationSets, revisionState, comparisonDocuments, countStates,
-    classComparisonMetrics, buildComparisonSnapshot, compareComparisonDocuments, metricDelta,
-    openDb, getSnapshot, listSourceSnapshots, listComparisonSnapshots, loadSnapshotDocuments,
-    insertSnapshot, deleteSnapshot, clearHistory, recordSource, recordComparison, recordActiveBases,
+    compareSourceDocuments, sourceChangeDetails, relationSets, revisionState, comparisonDocuments, countStates,
+    classComparisonMetrics, buildComparisonSnapshot, compareComparisonDocuments, transitionDetails, metricDelta,
+    openDb, getSnapshot, listSourceSnapshots, listComparisonSnapshots, loadWorkingSet, loadSnapshotChanges,
+    persistSnapshot, deleteSnapshot, clearHistory, recordSource, recordComparison, recordActiveBases,
   });
 });
