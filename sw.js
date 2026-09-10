@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10";
+const CACHE_NAME = "grcon-v5.40.10-spw1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -33,6 +33,9 @@ const ASSETS = [
   "offline_resources.js",
   "grcon_bootstrap_head.js",
   "grcon_service_worker.js",
+  "sigem_pw_dashboard_bootstrap.js",
+  "sigem_pw_dashboard_core.js",
+  "sigem_pw_dashboard_app.js",
   "grcon_module_loader.js",
   "grcon_contracts.js",
   "discipline_resolver.js",
@@ -108,6 +111,7 @@ const ASSETS = [
   "workers/triage.worker.js",
   "workers/export.worker.js",
   "workers/pdf-merge.worker.js",
+  "workers/sigem_pw_dashboard.worker.js",
 ];
 
 const CRITICAL_ASSETS = [
