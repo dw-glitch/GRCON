@@ -434,3 +434,13 @@ html[data-app="GRCON"][data-ui-generation="3"] :where(
     overflow: auto;
   }
 }
+
+/* Histórico: larguras independentes das colunas acrescentadas pela conferência. */
+.history-detail-table { max-height: 520px; overflow: auto; }
+.history-detail-table table { width: max-content; min-width: 100%; table-layout: auto; }
+.history-detail-table th:nth-child(n),.history-detail-table td:nth-child(n) { position: static; left: auto; width: auto; box-shadow: none; }
+.history-detail-table th:nth-child(n),.history-detail-table td:nth-child(n) { min-width: 160px; max-width: 320px; height: auto; padding: 10px 12px; white-space: normal; overflow-wrap: break-word; word-break: normal; vertical-align: top; line-height: 1.4; }
+.history-detail-table th:nth-child(n) { position: sticky; top: 0; z-index: 3; }
+.history-detail-table th[data-history-column="document"],.history-detail-table th[data-history-column="original"],.history-detail-table th[data-history-column="sent"] { min-width: 280px; }
+.history-detail-table th[data-history-column="sheet"] { min-width: 160px; }
+.history-table-note { margin: 0; padding: 10px 18px; color: var(--muted,#657580); font-size: 12px; line-height: 1.5; }
