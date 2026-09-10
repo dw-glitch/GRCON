@@ -120,10 +120,15 @@
   function revisionRelation(record, file, postingRecords) {
     if (!Posting) return { posted: "", other: "" };
     const source = postingRecords || [];
-    const own = source.find((item) => item.historyId === record.id || item.id === record.id || item.egrdtNumber === record.egrdtNumber) || null;
-    const sameDocument = (item) => Posting.norm(item && item.document) === Posting.norm(file && file.document);
+    const ids = new Set([record.id, record.clientRecordId].map(text).filter(Boolean));
+    const own = source.find((item) => ids.has(text(item.historyId)) || ids.has(text(item.id)))
+      || source.find((item) => text(record.egrdtNumber) && norm(item.egrdtNumber) === norm(record.egrdtNumber)) || null;
+    const identity = (value) => norm(value).replace(/\s*([_.-])\s*/g, "$1")
+      .replace(/^([A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9.-]+_)NT-/, "$1");
+    const sameDocument = (item) => identity(item && item.document) === identity(file && file.document);
+    const revision = grdtRevision(file);
     const posted = own && own.status === Posting.STATUSES.POSTADO
-      ? [...new Set((own.files || []).filter(sameDocument).map((item) => text(item.revision)).filter(Boolean))]
+      ? [...new Set((own.files || []).filter(sameDocument).map((item) => text(item.revision)).filter((value) => value && norm(value) === norm(revision)))]
       : [];
     const other = [];
     const seen = new Set();
@@ -131,14 +136,14 @@
       .filter((item) => item.status === Posting.STATUSES.POSTADO && (!own || item.id !== own.id))
       .sort((a, b) => String(b.resultAt || b.updatedAt).localeCompare(String(a.resultAt || a.updatedAt)))
       .forEach((item) => (item.files || []).filter(sameDocument).forEach((entry) => {
-        if (!text(entry.revision) || Posting.norm(entry.revision) === Posting.norm(file.revision)) return;
+        if (!text(entry.revision) || Posting.norm(entry.revision) === Posting.norm(revision)) return;
         const label = `Rev. ${text(entry.revision)} · ${text(item.postingGrdtNumber || item.egrdtNumber)}`;
         const key = Posting.norm(label);
         if (!seen.has(key)) { seen.add(key); other.push(label); }
       }));
     return {
       posted: posted.length ? posted.join(" · ") : "Não confirmada nesta GRDT",
-      other: other.length ? other.join(" | ") : "Nenhuma outra revisão postada",
+      other: other.length ? other.join(" | ") : "Sem outra revisão registrada como postada no GRCON",
     };
   }
   function documentRows(records, postingRecords) {

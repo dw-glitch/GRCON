@@ -7,7 +7,7 @@
   const HistoryReport = window.GrconHistoryReport;
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.40.9";
+    || "5.40.10";
   const LIST_PAGE_SIZE = 200;
   const SEARCH_DEBOUNCE_MS = 120;
   const $ = (selector) => document.querySelector(selector);
@@ -250,28 +250,7 @@
   }
 
   function revisionRelation(record, file, postings) {
-    const source = postings || [];
-    const own = postingRecord(record);
-    const sameDocument = (item) => Posting?.norm?.(item?.document) === Posting?.norm?.(file?.document);
-    const ownRevisions = own?.status === Posting?.STATUSES?.POSTADO
-      ? [...new Set((own.files || []).filter(sameDocument).map((item) => Posting.text(item.revision)).filter(Boolean))]
-      : [];
-    const otherRows = source
-      .filter((item) => item.status === Posting?.STATUSES?.POSTADO && (!own || item.id !== own.id))
-      .flatMap((item) => (item.files || []).filter(sameDocument).map((entry) => ({ revision: Posting.text(entry.revision), egrdt: Posting.text(item.postingGrdtNumber || item.egrdtNumber), at: item.resultAt || item.updatedAt })))
-      .filter((item) => item.revision && Posting.norm(item.revision) !== Posting.norm(file.revision))
-      .sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    const other = [];
-    const seen = new Set();
-    otherRows.forEach((item) => {
-      const key = `${Posting.norm(item.revision)}|${Posting.norm(item.egrdt)}`;
-      if (!seen.has(key)) { seen.add(key); other.push(item); }
-    });
-    return {
-      generated: Posting?.text?.(file.revision) || "—",
-      posted: ownRevisions.length ? ownRevisions.join(" · ") : "Não confirmada nesta GRDT",
-      other: other.length ? other.map((item) => `Rev. ${item.revision} · ${item.egrdt}`).join(" | ") : "Nenhuma outra revisão postada",
-    };
+    return { generated: History.generatedRevision(file) || "—", ...HistoryReport.revisionRelation(record, file, postings || []) };
   }
 
   function renderList() {
@@ -318,12 +297,12 @@
       ${postingWorkflow(record)}
       ${historyNumberEditor(record)}
       <dl class="history-detail-meta"><div><dt>LD utilizada</dt><dd>${escapeHtml(record.ldName || "Não informada")}</dd></div><div><dt>Origem dos documentos</dt><dd>${escapeHtml(record.sourceName || "Pasta documental")}</dd></div><div><dt>Alocação</dt><dd>${record.allocations.length ? record.allocations.map((value) => `<span>${escapeHtml(value)}</span>`).join("") : "Não informada na LD"}</dd></div>${previousNumbers}</dl>
-      <div class="history-detail-table"><table><thead><tr><th>Documento</th><th>Arquivo original</th><th>Arquivo enviado</th><th>Revisão gerada na GRDT</th><th>Revisão desta GRDT postada</th><th>Outra revisão postada</th><th>Status SIGEM na geração</th><th>Alocação</th><th>Versão da LD enviada</th><th>Aba LD</th></tr></thead><tbody>${record.files.map((file) => {
+      <p class="history-table-note">Conferência e Status SIGEM atual usam a Consulta Geral importada. Situação na geração, alocação e prazo da LD são registros da época da emissão. As revisões registradas como postadas vêm do controle interno do GRCON.</p><div class="history-detail-table" tabindex="0" role="region" aria-label="Documentos da eGRDT; role horizontalmente para ver todas as colunas"><table><thead><tr><th data-history-column="document">Documento</th><th data-history-column="original">Arquivo original</th><th data-history-column="sent">Arquivo enviado</th><th>Revisão gerada na GRDT</th><th>Revisão desta GRDT postada</th><th>Outra revisão postada</th><th title="Situação registrada na triagem na época da emissão; pode incluir pendências de alocação">Situação na geração</th><th>Alocação</th><th>Versão da LD enviada</th><th data-history-column="sheet">Aba LD</th></tr></thead><tbody>${record.files.map((file) => {
         const relation = revisionRelation(record, file, state.postings);
         const manualNote = file.revisionManual
           ? ` <span class="history-revision-manual" title="Alterada manualmente na triagem · sugestão do sistema na época: ${escapeHtml(file.revisionSuggested || "—")}">Alterada manualmente</span>`
           : "";
-        return `<tr><td>${escapeHtml(file.document || "—")}</td><td>${escapeHtml(file.originalName || "—")}</td><td>${escapeHtml(file.finalName || "—")}</td><td><strong>${escapeHtml(relation.generated)}</strong>${manualNote}</td><td>${escapeHtml(relation.posted)}</td><td>${escapeHtml(relation.other)}</td><td>${escapeHtml(file.sigemStatus || "—")}</td><td>${escapeHtml(file.allocation || "—")}</td><td>${escapeHtml(file.ldVersion || "Não registrada")}</td><td>${escapeHtml(file.sheet || "—")}</td></tr>`;
+        return `<tr><td>${escapeHtml(file.document || "—")}</td><td>${escapeHtml(file.originalName || "—")}</td><td>${escapeHtml(file.finalName || "—")}</td><td><strong>${escapeHtml(relation.generated)}</strong>${manualNote}</td><td>${escapeHtml(relation.posted)}</td><td>${escapeHtml(relation.other)}</td><td>${escapeHtml(file.sigemStatus || "—")}</td><td>${escapeHtml(file.allocation || "—")}</td><td>${escapeHtml(file.ldPrazo || "Não registrado")}</td><td>${escapeHtml(file.sheet || "—")}</td></tr>`;
       }).join("")}</tbody></table></div>`;
     if (state.editingId === record.id) window.setTimeout(() => $("#history-number-input")?.focus(), 0);
   }

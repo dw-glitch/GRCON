@@ -151,6 +151,7 @@
     const Conference = root.GrconPostingConference;
     const Refinement = root.GrconPostingConferenceRefinement;
     if (!row || !Conference) return "Não verificado";
+    if (row.historicalPreserved) return "Postagem confirmada anteriormente";
     if (row.conferenceLabel) return row.conferenceLabel;
     if (Refinement?.conferenceLabel) return Refinement.conferenceLabel(row.status, Conference);
     return row.statusLabel || Conference.statusLabel?.(row.status) || "Não verificado";
@@ -297,6 +298,8 @@
       }
       setClass(chip, `pc-status ${conferenceStatusClass(row?.status)}`);
       setText(chip, conferenceRowLabel(row));
+      const evidenceNote = row?.note || "Consulta Geral ainda não conferida para este documento e revisão.";
+      if (chip.title !== evidenceNote) chip.title = evidenceNote;
 
       let sigemCell = tr.querySelector("[data-pc-history-sigem-cell]");
       if (!sigemCell) {
@@ -311,6 +314,12 @@
         sigemCell.appendChild(sigem);
       }
       setText(sigem, sigemValue(row) || "—");
+      const sigemNote = [
+        row?.sigemStatusRevision ? `Revisão ${row.sigemStatusRevision}` : "Sem status inequívoco na base atual",
+        row?.sigemSourceRow ? `linha ${row.sigemSourceRow} da Consulta Geral` : "",
+        historyProjection?.baseFileName || "",
+      ].filter(Boolean).join(" · ");
+      if (sigem.title !== sigemNote) sigem.title = sigemNote;
     });
   }
 
