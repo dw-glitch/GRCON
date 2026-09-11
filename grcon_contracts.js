@@ -69,7 +69,7 @@
 
   function inferReasonCode(row) {
     const item = row || {};
-    const status = norm(item.status);
+    const status = norm(item.statusOperational || item.status);
     const reason = norm(item.reason);
     const allocationKind = item.record && item.record.allocationStatusState && item.record.allocationStatusState.kind;
 

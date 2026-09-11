@@ -2228,8 +2228,18 @@
       && state.manualForceInclude.has(rowIndex);
   }
 
+  function rowRequiresManualResolution(row) {
+    return Boolean(row && (
+      row.blockCode === "discipline_confirmation"
+      || row.disciplineResolution && row.disciplineResolution.requiresConfirmation
+    ));
+  }
+
   function rowCanBeSelected(row) {
-    if (!row || row.blockCode === "discipline_confirmation" || row.disciplineResolution && row.disciplineResolution.requiresConfirmation) return false;
+    if (!row) return false;
+    // "Revisar" é uma pendência operacional, não um bloqueio por si só.
+    // Apenas hardBlock continua impedindo a seleção, salvo a exceção controlada
+    // de Não Alocado que já exige escolha manual explícita do operador.
     return Boolean(!row.hardBlock || manualAllocationOverrideAllowed(row));
   }
 
@@ -2547,8 +2557,24 @@
   // restaurá-la a qualquer momento. Alterar row.revision aqui é suficiente
   // para a geração ficar correta; os demais campos (nome final, egrdt) são
   // recalculados só por conforto visual da tela.
+  function auditManualGrdtChange(row, field, previousValue, nextValue, reason) {
+    if (!row || String(previousValue || "") === String(nextValue || "")) return;
+    const logger = window.GrconAuditLog && window.GrconAuditLog.log;
+    if (typeof logger !== "function") return;
+    const detail = JSON.stringify({
+      document: row.document || row.name || "",
+      field,
+      previousValue: previousValue || "",
+      nextValue: nextValue || "",
+      reason: reason || "intervenção manual na triagem GRDT",
+      at: new Date().toISOString(),
+    });
+    Promise.resolve(logger("ajuste_manual_grdt", detail)).catch(() => null);
+  }
+
   function applyRevisionOverride(row, rawValue) {
     if (!row) return { ok: false, error: "Documento inválido." };
+    const previousRevision = row.revision || "";
     const normalized = C.normalizeRevision(rawValue);
     if (!normalized) return { ok: false, error: "Informe a revisão do documento." };
     const suggested = row.revisionSuggested !== undefined && row.revisionSuggested !== null
@@ -2556,6 +2582,7 @@
       : row.revision;
     row.revision = normalized;
     row.revisionManual = normalized !== suggested;
+    auditManualGrdtChange(row, "Revisão enviada na GRDT", previousRevision, normalized, "revisão definida manualmente antes da geração");
     const info = C.revisionInfo ? C.revisionInfo(normalized) : { valid: true };
     row.revisionFormatWarning = info.valid
       ? ""
@@ -3965,7 +3992,9 @@
       const manualSelection = manuallyIncluded(row, index);
       const selectionTitle = manualAllocationOverrideAllowed(row)
         ? "Marcar manualmente para incluir na GRDT; a LD continuará registrada como Não Alocado"
-        : selectable ? "Marcar para incluir na GRDT final" : "Bloqueado por uma condição que não admite inclusão manual";
+        : rowRequiresManualResolution(row)
+          ? "Pode incluir na GRDT; antes de gerar, abra Editar GRDT e conclua a pendência indicada"
+          : selectable ? "Marcar para incluir na GRDT final" : "Bloqueado por uma condição técnica que não admite inclusão manual";
       const mainRow = `<tr data-index="${index}" data-decision-group="${decisionGroupKey(row)}" class="result-row ${resultClass} ${groupStart ? "group-start" : ""} ${selected ? "selected" : ""} ${manualSelection ? "manually-included" : ""}">
         <td><div class="situation-cell">
           ${groupStart ? `<span class="triage-group-label">${escapeHtml(decisionGroupLabel(row))}</span>` : ""}
@@ -4122,11 +4151,13 @@
           ? C.resolveDiscipline(row.document, row.record || {}, { sheetName: row.sheet, manualDiscipline: selectedDiscipline })
           : null;
         if (resolution && resolution.valid) {
+          const previousDiscipline = row.egrdt.discipline || row.disciplineResolution && row.disciplineResolution.discipline || "";
           row.egrdt.discipline = resolution.discipline;
           row.egrdt.disciplineOriginalLd = resolution.disciplineOriginalLd;
           row.egrdt.disciplineResolution = resolution;
           row.disciplineOriginalLd = resolution.disciplineOriginalLd;
           row.disciplineResolution = resolution;
+          auditManualGrdtChange(row, "Disciplina oficial eGRDT", previousDiscipline, resolution.discipline, "disciplina confirmada manualmente a partir da lista oficial");
           if (row.blockCode === "discipline_confirmation") {
             row.decision = row.disciplineOriginalDecision || C.READY;
             row.blockCode = "";
