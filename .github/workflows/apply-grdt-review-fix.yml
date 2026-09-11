@@ -25,7 +25,9 @@ jobs:
           cache: npm
 
       - name: Aplicar correções com validação de contexto
-        run: python scripts/apply_grdt_review_fix.py
+        run: |
+          python scripts/apply_grdt_review_fix.py
+          python scripts/update_grdt_workflow_legacy_tests.py
 
       - name: Instalar metadados do projeto
         run: npm ci --ignore-scripts
@@ -38,7 +40,7 @@ jobs:
 
       - name: Gravar correção validada
         run: |
-          rm .github/workflows/apply-grdt-review-fix.yml scripts/apply_grdt_review_fix.py
+          rm .github/workflows/apply-grdt-review-fix.yml scripts/apply_grdt_review_fix.py scripts/update_grdt_workflow_legacy_tests.py
           git config user.name "grcon-quality-bot"
           git config user.email "actions@users.noreply.github.com"
           git add -A
