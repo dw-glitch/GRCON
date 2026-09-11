@@ -23,7 +23,9 @@ jobs:
           node-version: "22"
           cache: npm
       - name: Aplicar integração no dashboard
-        run: python scripts/apply_sigem_pw_filtered_export.py
+        run: |
+          python scripts/apply_sigem_pw_filtered_export.py
+          python scripts/fix_sigem_pw_export_timezone_test.py
       - name: Instalar metadados do projeto
         run: npm ci --ignore-scripts
       - name: Validar exportação filtrada
@@ -32,7 +34,7 @@ jobs:
         run: npm run verify
       - name: Gravar implementação validada
         run: |
-          rm .github/workflows/apply-sigem-pw-filtered-export.yml scripts/apply_sigem_pw_filtered_export.py
+          rm .github/workflows/apply-sigem-pw-filtered-export.yml scripts/apply_sigem_pw_filtered_export.py scripts/fix_sigem_pw_export_timezone_test.py
           git config user.name "grcon-quality-bot"
           git config user.email "actions@users.noreply.github.com"
           git add -A
