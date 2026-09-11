@@ -1,14 +1,29 @@
 (function () {
   "use strict";
 
-  // Mascote oficial da Qualidade. Mantido em módulo separado para que a
+  // Mascote oficial da Qualidade. Mantido em módulos separados para que a
   // integração visual não se misture com regras de negócio ou navegação.
+  const installMascotAssetFix = () => {
+    if (document.querySelector('script[data-grcon-mascot-asset-fix="true"]')) return;
+    const fix = document.createElement("script");
+    fix.src = "grcon_mascot_asset_fix.js";
+    fix.async = false;
+    fix.dataset.grconMascotAssetFix = "true";
+    document.head.appendChild(fix);
+  };
+
   const installMascotHeader = () => {
-    if (document.querySelector('script[data-grcon-mascot-loader="true"]')) return;
+    const existing = document.querySelector('script[data-grcon-mascot-loader="true"]');
+    if (existing) {
+      if (window.GRCONMascot) installMascotAssetFix();
+      else existing.addEventListener("load", installMascotAssetFix, { once: true });
+      return;
+    }
     const script = document.createElement("script");
     script.src = "grcon_mascot_header.js";
     script.async = false;
     script.dataset.grconMascotLoader = "true";
+    script.addEventListener("load", installMascotAssetFix, { once: true });
     document.head.appendChild(script);
   };
   installMascotHeader();
