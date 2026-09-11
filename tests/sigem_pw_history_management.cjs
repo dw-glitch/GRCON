@@ -92,18 +92,55 @@ const Management = require(path.join(rootDir, "sigem_pw_history_management.js"))
   assert.doesNotMatch(source, /(^|\n)\s*(?:button|article|section|table|input|select)\s*\{/m, "auditoria não pode aplicar CSS genérico fora do Dashboard");
 })();
 
-(function bootstrapLoadsManagementAndKeepsDuplicateNoticeTransient() {
+(function duplicateBasesAreSilentAndDoNotAutoRecordOnRender() {
   const bootstrap = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
-  const historyApp = fs.readFileSync(path.join(rootDir, "sigem_pw_history_app.js"), "utf8");
+  const runtime = fs.readFileSync(path.join(rootDir, "sigem_pw_history_runtime_fix.js"), "utf8");
+  assert.match(bootstrap, /HISTORY_BASE_EVENTS/);
+  assert.match(bootstrap, /loadHistoryAppWithoutAutomaticBaseListeners/);
+  assert.match(bootstrap, /if \(HISTORY_BASE_EVENTS\.has\(type\)\) return/,
+    "listeners automáticos do history_app devem ser bloqueados durante o carregamento");
+  assert.match(bootstrap, /sigem_pw_history_runtime_fix\.js/);
+  assert.match(runtime, /duplicateShortCircuits/);
+  assert.match(runtime, /state\.sourceIds\[system\]\.has\(snapshotId\)/);
+  assert.match(runtime, /History\.getSnapshot\(History\.STORES\.sourceSnapshots, snapshotId\)/,
+    "fallback de deduplicação deve ser lookup O(1) por id");
+  const duplicateCheck = runtime.indexOf("state.sourceIds[system].has(snapshotId)");
+  const heavyWrite = runtime.indexOf("History.recordActiveBases");
+  assert.ok(duplicateCheck >= 0 && heavyWrite > duplicateCheck,
+    "short-circuit de duplicidade deve ocorrer antes do processamento histórico pesado");
+  assert.doesNotMatch(runtime, /Esta base já foi registrada anteriormente/,
+    "runtime novo não pode possuir toast/mensagem de base duplicada");
+  assert.match(runtime, /recordCurrent: \(reason, changedSystem\) => VALID_SYSTEMS\.has\(changedSystem\)/,
+    "recordCurrent sem sistema de importação deve ser no-op");
+  assert.match(runtime, /await passiveRefresh\(\)/,
+    "abrir o histórico deve apenas ler snapshots e renderizar, sem registrar novamente");
+})();
+
+(function managerOpensFromMetadataWithoutFingerprintingTheActiveBase() {
+  const runtime = fs.readFileSync(path.join(rootDir, "sigem_pw_history_runtime_fix.js"), "utf8");
+  const managerStart = runtime.indexOf("async function renderManager()");
+  const managerEnd = runtime.indexOf("async function openManager()", managerStart);
+  const managerCode = runtime.slice(managerStart, managerEnd);
+  assert.match(managerCode, /listSourceSnapshots\("sigem"\)/);
+  assert.match(managerCode, /listSourceSnapshots\("pw"\)/);
+  assert.match(managerCode, /currentSnapshotIdFromMetadata/);
+  assert.doesNotMatch(managerCode, /contentFingerprint/,
+    "abrir Gerenciar histórico não pode recalcular fingerprint");
+  assert.match(runtime, /Base removida do histórico\./,
+    "feedback de exclusão deve ser curto e transitório");
+})();
+
+(function bootstrapLoadsManagementUiAuditAndSilentRuntime() {
+  const bootstrap = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
   const sw = fs.readFileSync(path.join(rootDir, "sw.js"), "utf8");
   assert.match(bootstrap, /sigem_pw_history_management\.js/);
   assert.match(bootstrap, /sigem_pw_dashboard_ui_audit\.js/);
+  assert.match(bootstrap, /sigem_pw_history_runtime_fix\.js/);
   assert.match(bootstrap, /GrconSigemPwHistoryManagement\.activate\(\)/);
   assert.match(bootstrap, /GrconSigemPwUiAudit\.activate\(\)/);
-  assert.doesNotMatch(bootstrap, /DuplicateBaseNoticeFilter/, "toast de base já registrada não deve ser suprimido nem persistido");
-  assert.match(historyApp, /Esta base já foi registrada anteriormente/);
+  assert.doesNotMatch(bootstrap, /DuplicateBaseNoticeFilter/);
   assert.match(sw, /"sigem_pw_history_management\.js"/);
   assert.match(sw, /"sigem_pw_dashboard_ui_audit\.js"/);
 })();
 
-console.log("sigem_pw_history_management: OK — exclusão seletiva, promoção segura, integridade derivada e UX responsiva validadas.");
+console.log("sigem_pw_history_management: OK — exclusão seletiva, promoção segura, deduplicação silenciosa e UX responsiva validadas.");
