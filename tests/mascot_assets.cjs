@@ -5,6 +5,41 @@ const assert = require('assert');
 
 const ROOT = path.resolve(__dirname, '..');
 
+function inspectAvifTransport(label, rels) {
+  const files = rels.map((rel) => path.join(ROOT, rel));
+  if (!files.every((f) => fs.existsSync(f))) return;
+  const text = files.map((f) => fs.readFileSync(f, 'utf8').trim()).join('');
+  let buf;
+  try { buf = Buffer.from(text, 'base64'); } catch (_) { return; }
+  const boxes = [];
+  let off = 0, complete = true;
+  while (off + 8 <= buf.length) {
+    let size = buf.readUInt32BE(off);
+    const type = buf.toString('ascii', off + 4, off + 8);
+    let header = 8;
+    if (size === 1 && off + 16 <= buf.length) {
+      const big = buf.readBigUInt64BE(off + 8);
+      if (big > BigInt(Number.MAX_SAFE_INTEGER)) break;
+      size = Number(big); header = 16;
+    } else if (size === 0) size = buf.length - off;
+    if (size < header || off + size > buf.length) {
+      boxes.push(`${type}:declared=${size}:available=${buf.length - off}`);
+      complete = false; break;
+    }
+    boxes.push(`${type}:${size}`);
+    off += size;
+  }
+  const ispe = [];
+  for (let i = 0; i + 20 <= buf.length; i++) {
+    if (buf.toString('ascii', i + 4, i + 8) === 'ispe') {
+      ispe.push(`${buf.readUInt32BE(i + 12)}x${buf.readUInt32BE(i + 16)}`);
+    }
+  }
+  console.log(`[mascot-transport] ${label}: bytes=${buf.length}; complete=${complete && off === buf.length}; boxes=${boxes.join(',')}; ispe=${ispe.join(',')}`);
+}
+inspectAvifTransport('v4-sprite', ['.mascot_hd_tmp/v4-sprite.000','.mascot_hd_tmp/v4-sprite.001']);
+inspectAvifTransport('sprite-parts', ['.mascot_hd_tmp/sprite.part000','.mascot_hd_tmp/sprite.part001']);
+
 function readPng(rel) {
   const file = path.join(ROOT, rel);
   const buf = fs.readFileSync(file);
