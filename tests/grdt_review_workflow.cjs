@@ -26,6 +26,17 @@ assert.equal(
   "contratos devem tratar Em Workflow como Em Análise sem trocar o texto original",
 );
 
+const mixedOperationalStatuses = [
+  ["Não Postado", "not_posted"],
+  ["Em Análise", "analysis"],
+  ["Em Workflow", "analysis"],
+  ["Recusado", "advance"],
+  ["Conforme Construído", "advance"],
+];
+for (const [status, expectedKind] of mixedOperationalStatuses) {
+  assert.equal(Core.statusKind(status), expectedKind, `lote misto: ${status}`);
+}
+
 const manualDiscipline = Discipline.resolve(
   "5900.00.00.00-AAA-CV-TESTE-001",
   { discipline: "Disciplina não mapeada", sheet: "CV", source: "LD_001.xlsx", row: 10 },
@@ -53,4 +64,12 @@ assert.match(coreSource, /statusOperational: normalizeSigemStatus/);
 assert.match(contractSource, /item\.statusOperational \|\| item\.status/);
 assert.match(emissionSource, /Abra Editar GRDT e escolha uma opção da lista oficial/);
 
-console.log("OK: Revisar manual + Em Workflow=Em Análise validados.");
+// Filtros e virtualização trabalham com índices-fonte de state.results. Assim,
+// selecionar/editar uma linha não depende da posição visual depois do filtro ou scroll.
+assert.match(appSource, /for \(let index = 0; index < state\.results\.length; index \+= 1\)/);
+assert.match(appSource, /return filteredResultIndices\(\)\.map\(\(index\) => state\.results\[index\]\)/);
+assert.match(appSource, /visibleIndices: indices\.slice\(start, end\)/);
+assert.match(appSource, /const index = Number\(rowElement\.dataset\.index\);[\s\S]{0,160}const row = state\.results\[index\];/);
+assert.match(appSource, /state\.selected = new Set\(snapshot\.selectedIndices \|\| \[\]\)/);
+
+console.log("OK: Revisar manual + Em Workflow=Em Análise + lote misto + persistência por índice-fonte validados.");
