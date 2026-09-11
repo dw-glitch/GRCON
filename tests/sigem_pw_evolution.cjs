@@ -78,7 +78,7 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
 (function performanceLinear(){
   const count=20000; const ldRows=[]; const before=[]; const after=[];
   for(let i=0;i<count;i++){
-    const doc=`RL-5290.00-22313-ABC-C1O-${String(i).padStart(4,'0')}`;
+    const doc=`ABC_RNEST_U32_1.1.1.1_REP_TAG${String(i).padStart(5,'0')}_001`;
     ldRows.push({document:doc}); before.push(s(doc,'0')); after.push(s(doc,'0'));
   }
   for(let i=0;i<250;i++) after.push(s(before[i].document,'A'));
@@ -86,7 +86,7 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const a=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:before.length},records:before},universe);
   const b=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:after.length},records:after},universe);
   const start=performance.now(); const d=Evo.compareSnapshots(a,b); const ms=performance.now()-start;
-  assert.equal(d.added.length,250); assert.ok(ms<1500,`20k comparison too slow: ${ms.toFixed(1)}ms`);
+  assert.equal(a.records.length,count); assert.equal(d.added.length,250); assert.ok(ms<1500,`20k comparison too slow: ${ms.toFixed(1)}ms`);
   console.log(`evolution perf 20k=${ms.toFixed(1)}ms`);
 })();
 
@@ -96,8 +96,8 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const bootstrap=fs.readFileSync(path.join(rootDir,'sigem_pw_dashboard_bootstrap.js'),'utf8');
   const scope=fs.readFileSync(path.join(rootDir,'sigem_pw_scope_fix.js'),'utf8');
   assert.match(app,/Novos no SIGEM/); assert.match(app,/Novos no PW/); assert.match(app,/Ainda não no PW/);
-  assert.match(app,/Cadastrados no SIGEM/); assert.match(app,/Encontrados no ProjectWise/); assert.match(app,/bookType: "xlsx"/);
-  assert.match(app,/data-evo-select/);
+  assert.match(app,/Cadastrados no SIGEM/); assert.match(app,/Encontrados no ProjectWise/); assert.match(app,/bookType\s*:\s*"xlsx"/);
+  assert.match(app,/LD necessária para calcular a evolução/); assert.match(app,/spw-evo-filter-document-type/); assert.match(app,/spw-evo-filter-source/); assert.match(app,/data-evo-select/);
   assert.match(bootstrap,/sigem_pw_evolution_core\.js/); assert.match(bootstrap,/sigem_pw_evolution_app\.js/);
   assert.match(scope,/scopeDiscardedRecords/); assert.match(scope,/SCOPE_VERSION = 3/);
 })();
