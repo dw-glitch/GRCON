@@ -29,6 +29,7 @@ const ASSETS = [
   "grcon-icon.png",
   "grcon-logo-app.png",
   "grcon-logo-report.png",
+  "assets/mascot/grcon-mascot-default.png",
   "manifest.json",
   "offline_resources.js",
   "grcon_bootstrap_head.js",
@@ -148,10 +149,6 @@ const CRITICAL_ASSETS = [
   "app.js",
 ];
 
-// Arquivos pesados: entrega imediata do cache e revalidação em segundo plano
-// (stale-while-revalidate). Os Workers deixaram de embutir cópias inteiras do
-// motor e das bibliotecas; por isso entram na política normal de código, que
-// tenta a rede primeiro e evita executar uma versão antiga após a publicação.
 const HEAVY_ASSETS = new Set([
   "exceljs.min.js",
   "xlsx.full.min.js",
@@ -164,13 +161,9 @@ const HEAVY_ASSETS = new Set([
   "grcon-logo-app.png",
   "grcon-logo-app.ico",
   "grcon-logo-report.png",
+  "grcon-mascot-default.png",
 ]);
 
-// `no-cache` (e não `no-store`) força uma revalidação com o servidor a cada
-// carregamento, mantendo a garantia de que uma correção publicada aparece na
-// hora — mas usando requisição condicional (ETag/If-None-Match). Quando o
-// arquivo não mudou o servidor responde 304 e nada é transferido, em vez de
-// baixar de novo o ~1,8 MB de código do GRCON a cada abertura do app.
 async function fetchAndCache(request) {
   const response = await fetch(new Request(request, { cache: "no-cache" }));
   if (response && response.ok) {
@@ -194,8 +187,6 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      // cache:"reload" ignora o cache HTTP do navegador ao pré-carregar, senão o
-      // Service Worker novo podia guardar de novo justamente a cópia velha.
       const freshRequest = (asset) => new Request(asset, { cache: "reload" });
       await Promise.all(CRITICAL_ASSETS.map((asset) => cache.add(freshRequest(asset))));
       const optionalAssets = ASSETS.filter((asset) => !CRITICAL_ASSETS.includes(asset));
@@ -228,9 +219,6 @@ self.addEventListener("fetch", (event) => {
   }
   const fileName = requestUrl.pathname.split("/").filter(Boolean).pop() || "";
   if (!HEAVY_ASSETS.has(fileName)) {
-    // Código do GRCON (HTML/CSS/JS): sempre tenta a rede antes, com o cache
-    // como reserva para funcionar offline. Assim uma correção publicada
-    // aparece na hora.
     event.respondWith(networkFirst(event.request));
     return;
   }
@@ -240,7 +228,6 @@ self.addEventListener("fetch", (event) => {
       const cached = await cache.match(event.request);
       const revalidate = fetchAndCache(event.request).catch(() => null);
       if (cached) {
-        // Mantém a revalidação viva mesmo depois de responder do cache.
         event.waitUntil(revalidate);
         return cached;
       }
