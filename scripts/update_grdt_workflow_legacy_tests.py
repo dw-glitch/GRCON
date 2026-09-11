@@ -21,7 +21,7 @@ new_assertions_1 = '''  assert.equal(result.decision, Core.DISCARD);
   assert.equal(result.statusOriginal, "Em Workflow");
   assert.equal(result.statusOperational, "Em Análise");
   assert.match(result.reason, /Em Workflow.*equivale a Em Análise.*não é preparada uma nova revisão/i);
-  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.IN_ANALYSIS_RECENT);
+  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.POSTED_BY_LD);
 '''
 if text.count(old_assertions_1) != 1:
     raise SystemExit("Asserções legadas 1 de Em Workflow não encontradas")
