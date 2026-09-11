@@ -1,36 +1,19 @@
 (function () {
   "use strict";
 
-  // Mascote oficial da Qualidade. Mantido em módulos separados para que a
-  // integração visual não se misture com regras de negócio ou navegação.
-  const installMascotAssetFix = () => {
-    if (document.querySelector('script[data-grcon-mascot-asset-fix="true"]')) return;
-    const fix = document.createElement("script");
-    fix.src = "grcon_mascot_asset_fix.js";
-    fix.async = false;
-    fix.dataset.grconMascotAssetFix = "true";
-    document.head.appendChild(fix);
-  };
-
+  // Mascote oficial da Qualidade. O runtime v4 aponta diretamente para os
+  // PNGs HD físicos em assets/mascot; não há mais patch nem Base64 legado.
   const installMascotHeader = () => {
-    const existing = document.querySelector('script[data-grcon-mascot-loader="true"]');
-    if (existing) {
-      if (window.GRCONMascot) installMascotAssetFix();
-      else existing.addEventListener("load", installMascotAssetFix, { once: true });
-      return;
-    }
+    if (document.querySelector('script[data-grcon-mascot-loader="true"]')) return;
     const script = document.createElement("script");
-    script.src = "grcon_mascot_header.js";
+    script.src = "grcon_mascot_header.js?v=4.0.0";
     script.async = false;
     script.dataset.grconMascotLoader = "true";
-    script.addEventListener("load", installMascotAssetFix, { once: true });
     document.head.appendChild(script);
   };
   installMascotHeader();
 
-  // Bootstrap leve do Dashboard SIGEM × PW. O carregamento real continua lazy:
-  // somente o bootstrap/navegação é instalado no início; core/app/Worker entram
-  // quando o operador abre a nova aba.
+  // Bootstrap leve do Dashboard SIGEM × PW. O carregamento real continua lazy.
   const installSigemPwDashboard = () => {
     const loader = window.GRCONModuleLoader;
     if (!loader || typeof loader.ensure !== "function") return;

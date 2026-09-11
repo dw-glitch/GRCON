@@ -1,17 +1,8 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.40.10
-// Estratégia: rede primeiro para todo o código do GRCON (HTML/CSS/JS), para
-// que uma correção publicada apareça na hora; e stale-while-revalidate para os
-// arquivos pesados (bibliotecas, imagens e os pacotes gerados), que assim
-// carregam na hora do cache e se atualizam em segundo plano.
-//
-// Antes era o contrário: só um punhado de arquivos era "rede primeiro" e todo o
-// resto vinha do cache. Como os CSS não estavam nessa lista e o nome do cache só
-// muda quando alguém lembra de trocá-lo na mão, uma correção de CSS publicada no
-// site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
-// servindo a versão antiga indefinidamente.
+// Versão: 5.40.10 / Mascote HD v4
+// Estratégia: rede primeiro para código; stale-while-revalidate para assets pesados.
 
-const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2";
+const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-mascot-hd-v4";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -29,6 +20,7 @@ const ASSETS = [
   "grcon-icon.png",
   "grcon-logo-app.png",
   "grcon-logo-report.png",
+  "assets/mascot/grcon-mascot-sprite.png",
   "assets/mascot/grcon-mascot-default.png",
   "manifest.json",
   "offline_resources.js",
@@ -161,6 +153,7 @@ const HEAVY_ASSETS = new Set([
   "grcon-logo-app.png",
   "grcon-logo-app.ico",
   "grcon-logo-report.png",
+  "grcon-mascot-sprite.png",
   "grcon-mascot-default.png",
 ]);
 
@@ -184,29 +177,23 @@ async function networkFirst(request, fallbackUrl) {
 }
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const freshRequest = (asset) => new Request(asset, { cache: "reload" });
-      await Promise.all(CRITICAL_ASSETS.map((asset) => cache.add(freshRequest(asset))));
-      const optionalAssets = ASSETS.filter((asset) => !CRITICAL_ASSETS.includes(asset));
-      const results = await Promise.allSettled(optionalAssets.map((asset) => cache.add(freshRequest(asset))));
-      const failed = results.filter((result) => result.status === "rejected").length;
-      if (failed) console.warn(`SW: ${failed} asset(s) opcional(is) não foram pré-cacheados.`);
-    })()
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const freshRequest = (asset) => new Request(asset, { cache: "reload" });
+    await Promise.all(CRITICAL_ASSETS.map((asset) => cache.add(freshRequest(asset))));
+    const optionalAssets = ASSETS.filter((asset) => !CRITICAL_ASSETS.includes(asset));
+    const results = await Promise.allSettled(optionalAssets.map((asset) => cache.add(freshRequest(asset))));
+    const failed = results.filter((result) => result.status === "rejected").length;
+    if (failed) console.warn(`SW: ${failed} asset(s) opcional(is) não foram pré-cacheados.`);
+  })());
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    })()
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
+  })());
   self.clients.claim();
 });
 
@@ -222,17 +209,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(networkFirst(event.request));
     return;
   }
-  event.respondWith(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(event.request);
-      const revalidate = fetchAndCache(event.request).catch(() => null);
-      if (cached) {
-        event.waitUntil(revalidate);
-        return cached;
-      }
-      const fresh = await revalidate;
-      return fresh || new Response("Recurso indisponível offline.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-    })()
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(event.request);
+    const revalidate = fetchAndCache(event.request).catch(() => null);
+    if (cached) {
+      event.waitUntil(revalidate);
+      return cached;
+    }
+    const fresh = await revalidate;
+    return fresh || new Response("Recurso indisponível offline.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  })());
 });
