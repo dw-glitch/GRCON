@@ -1,0 +1,40 @@
+name: Aplicar exportação XLSX filtrada SIGEM PW
+
+on:
+  push:
+    branches:
+      - feat/sigem-pw-filtered-xlsx-export
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar-e-validar:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sigem-pw-filtered-xlsx-export
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Aplicar integração no dashboard
+        run: python scripts/apply_sigem_pw_filtered_export.py
+      - name: Instalar metadados do projeto
+        run: npm ci --ignore-scripts
+      - name: Validar exportação filtrada
+        run: node tests/sigem_pw_revision_export.cjs
+      - name: Validar pacote completo
+        run: npm run verify
+      - name: Gravar implementação validada
+        run: |
+          rm .github/workflows/apply-sigem-pw-filtered-export.yml scripts/apply_sigem_pw_filtered_export.py
+          git config user.name "grcon-quality-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: exportar lista filtrada SIGEM PW em XLSX"
+          git push origin HEAD:feat/sigem-pw-filtered-xlsx-export
