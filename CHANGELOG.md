@@ -1,3 +1,11 @@
+## 2026-09-11 — Exportação XLSX da lista filtrada no Dashboard SIGEM × PW
+
+- “Situação das Revisões” ganhou o botão `Exportar lista filtrada` ao lado do contador do filtro.
+- Tabela, contador e Excel reutilizam o mesmo `GrconSigemPwRevision.filterRows`; a paginação continua exclusiva da visualização e nunca limita o arquivo.
+- O workbook `.xlsx` usa ExcelJS já vendorizado no GRCON e cria as abas `Lista Filtrada` e `Filtros Aplicados`, com diagnóstico do “Por quê?”, histórico de revisões, autofiltro e preservação textual de códigos/revisões.
+- Pesquisa textual, lista de documentos e todos os selects do detalhamento são registrados e respeitados simultaneamente.
+- Adicionado teste de regressão e volume `tests/sigem_pw_revision_export.cjs`, incluindo exportação sintética com mais de 15 mil registros.
+
 ## 2026-09-11 — Revisão manual da GRDT e equivalência Em Workflow / Em Análise
 
 - `Revisar` deixou de bloquear a seleção quando a pendência é corrigível manualmente; disciplina pendente pode ser selecionada e precisa ser resolvida em `Editar GRDT` antes da emissão.

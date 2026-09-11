@@ -120,6 +120,7 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_revision_report.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_core.js");
     await loadHistoryAppWithoutAutomaticBaseListeners();
@@ -127,7 +128,7 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_ui_audit.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_postmerge.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_runtime_fix.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix) {
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionReport || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
   }
