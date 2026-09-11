@@ -42,6 +42,8 @@ const ASSETS = [
   "sigem_pw_revision_section.js",
   "sigem_pw_history_core.js",
   "sigem_pw_history_app.js",
+  "sigem_pw_history_management.js",
+  "sigem_pw_dashboard_ui_audit.js",
   "sigem_pw_history_postmerge.js",
   "grcon_module_loader.js",
   "grcon_contracts.js",

@@ -2,23 +2,11 @@
   "use strict";
 
   const MODULE_ID = "sigem-pw-dashboard-module";
-  const DUPLICATE_BASE_NOTICE = "Esta base já foi registrada anteriormente. Ela permanece ativa sem criar um ponto histórico duplicado.";
   let opening = false;
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
     else if (kind === "error") root.alert(message);
-  }
-
-  function installDuplicateBaseNoticeFilter() {
-    const current = root.GrconNotify;
-    if (typeof current !== "function" || current.__grconDuplicateBaseNoticeFilter === true) return;
-    const filteredNotify = function (message, kind) {
-      if (String(message || "").trim() === DUPLICATE_BASE_NOTICE) return;
-      return current.apply(this, arguments);
-    };
-    Object.defineProperty(filteredNotify, "__grconDuplicateBaseNoticeFilter", { value: true });
-    root.GrconNotify = filteredNotify;
   }
 
   function navSvg() {
@@ -107,15 +95,16 @@
 
   async function ensureRuntime() {
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
-    installDuplicateBaseNoticeFilter();
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_app.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_history_management.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_ui_audit.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_postmerge.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryPostMerge) {
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
   }
@@ -132,6 +121,8 @@
       if (!root.GrconSigemPwDashboardUi.state?.ready) await root.GrconSigemPwDashboardUi.activate();
       await root.GrconSigemPwRevisionUi.activate();
       await root.GrconSigemPwHistoryUi.activate();
+      await root.GrconSigemPwHistoryManagement.activate();
+      root.GrconSigemPwUiAudit.activate();
     } catch (error) {
       console.error("[SIGEM×PW] abertura:", error);
       deactivate();
