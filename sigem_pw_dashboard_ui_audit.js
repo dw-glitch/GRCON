@@ -25,34 +25,35 @@
       #${MODULE_ID} .spw-rev-card:focus-visible{outline:3px solid color-mix(in srgb,var(--brand-500,#2789b6) 42%,transparent)!important;outline-offset:2px!important}
       #${MODULE_ID} .spw-rev-card.active{background:color-mix(in srgb,var(--brand-50,#eaf5fb) 64%,var(--surface,#fff))!important;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--brand-500,#2789b6) 34%,transparent),0 6px 20px rgba(32,56,85,.08)!important}
       #${MODULE_ID} .spw-kpis{grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))!important;align-items:stretch}
-      #${MODULE_ID} .spw-kpi{min-width:0;height:100%}.spw-kpi strong{font-variant-numeric:tabular-nums}
+      #${MODULE_ID} .spw-kpi{min-width:0;height:100%}#${MODULE_ID} .spw-kpi strong{font-variant-numeric:tabular-nums}
       #${MODULE_ID} .spw-relations{grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))!important;align-items:stretch}
-      #${MODULE_ID} .spw-relation{min-width:0;height:100%;white-space:normal}.spw-relation b,.spw-relation small{white-space:normal;word-break:normal;overflow-wrap:break-word}
+      #${MODULE_ID} .spw-relation{min-width:0;height:100%;white-space:normal}#${MODULE_ID} .spw-relation b,#${MODULE_ID} .spw-relation small{white-space:normal;word-break:normal;overflow-wrap:break-word}
       #${MODULE_ID} .spw-action-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))!important;align-items:stretch}
-      #${MODULE_ID} .spw-action-card{display:flex;flex-direction:column;min-width:0;min-height:112px;height:100%}.spw-action-card strong{font-variant-numeric:tabular-nums}.spw-action-card small{margin-top:auto!important;padding-top:7px;white-space:normal;overflow-wrap:break-word}
+      #${MODULE_ID} .spw-action-card{display:flex;flex-direction:column;min-width:0;min-height:112px;height:100%}#${MODULE_ID} .spw-action-card strong{font-variant-numeric:tabular-nums}#${MODULE_ID} .spw-action-card small{margin-top:auto!important;padding-top:7px;white-space:normal;overflow-wrap:break-word}
       #${MODULE_ID} .spw-delta-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr))!important;align-items:stretch}
-      #${MODULE_ID} .spw-delta-card{display:flex;flex-direction:column;min-width:0;height:100%}.spw-delta-card strong{font-variant-numeric:tabular-nums}.spw-delta-card small{margin-top:auto!important;padding-top:6px;white-space:normal;overflow-wrap:break-word}
+      #${MODULE_ID} .spw-delta-card{display:flex;flex-direction:column;min-width:0;height:100%}#${MODULE_ID} .spw-delta-card strong{font-variant-numeric:tabular-nums}#${MODULE_ID} .spw-delta-card small{margin-top:auto!important;padding-top:6px;white-space:normal;overflow-wrap:break-word}
       #${MODULE_ID} .spw-quality-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr))!important}
       #${MODULE_ID} .spw-filter-card{grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr))!important;min-width:0}
       #${MODULE_ID} .spw-filter-card label,#${MODULE_ID} .spw-filter-card select{min-width:0;max-width:100%}
       #${MODULE_ID} .spw-rev-toolbar{grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr))!important;min-width:0}
       #${MODULE_ID} .spw-rev-toolbar label,#${MODULE_ID} .spw-rev-toolbar input,#${MODULE_ID} .spw-rev-toolbar select{min-width:0;max-width:100%}
       #${MODULE_ID} .spw-base-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))!important}
-      #${MODULE_ID} .spw-base-card{min-width:0}.spw-base-card>div:first-child{min-width:0}.spw-base-card strong{max-width:100%}
+      #${MODULE_ID} .spw-base-card{min-width:0}#${MODULE_ID} .spw-base-card>div:first-child{min-width:0}#${MODULE_ID} .spw-base-card strong{max-width:100%}
       #${MODULE_ID} .spw-history-charts{grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr))!important}
       #${MODULE_ID} .spw-history-card,#${MODULE_ID} .spw-chart-card,#${MODULE_ID} .spw-table-card,#${MODULE_ID} .spw-rev-panel,#${MODULE_ID} .spw-history-table-card{min-width:0;max-width:100%}
       #${MODULE_ID} .spw-chart-wrap,#${MODULE_ID} .spw-table-wrap,#${MODULE_ID} .spw-rev-table-wrap,#${MODULE_ID} .spw-history-table-wrap,#${MODULE_ID} .spw-drawer-table{max-width:100%;overscroll-behavior-inline:contain}
       #${MODULE_ID} .spw-page-heading,#${MODULE_ID} .spw-section-title,#${MODULE_ID} .spw-card-head,#${MODULE_ID} .spw-rev-head,#${MODULE_ID} .spw-history-head,#${MODULE_ID} .spw-history-table-head,#${MODULE_ID} .spw-history-question{flex-wrap:wrap;min-width:0}
       #${MODULE_ID} .spw-page-heading>div,#${MODULE_ID} .spw-section-title>div,#${MODULE_ID} .spw-card-head>div,#${MODULE_ID} .spw-rev-head>div,#${MODULE_ID} .spw-history-head>div,#${MODULE_ID} .spw-history-table-head>div,#${MODULE_ID} .spw-history-question>div{min-width:0}
       #${MODULE_ID} .spw-page-heading p,#${MODULE_ID} .spw-section-title p,#${MODULE_ID} .spw-card-head small,#${MODULE_ID} .spw-rev-head p,#${MODULE_ID} .spw-history-head p,#${MODULE_ID} .spw-history-question span,#${MODULE_ID} .spw-history-source{overflow-wrap:break-word;word-break:normal}
-      #${MODULE_ID} .spw-inner-nav{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin}.spw-inner-nav button{flex:0 0 auto;white-space:nowrap}
-      #${MODULE_ID} .spw-rev-summary{flex-wrap:wrap}.spw-rev-summary span{min-width:0;white-space:normal}
+      #${MODULE_ID} .spw-inner-nav{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin}#${MODULE_ID} .spw-inner-nav button{flex:0 0 auto;white-space:nowrap}
+      #${MODULE_ID} .spw-rev-summary{flex-wrap:wrap}#${MODULE_ID} .spw-rev-summary span{min-width:0;white-space:normal}
       #${MODULE_ID} .spw-rev-detail-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))!important}
       #${MODULE_ID} .spw-history-source{max-width:min(100%,540px);white-space:normal}
       #${MODULE_ID} .spw-history-question b{white-space:normal;text-align:right}
       #${MODULE_ID} .spw-history-actions,#${MODULE_ID} .spw-heading-actions,#${MODULE_ID} .spw-base-actions,#${MODULE_ID} .spw-legend,#${MODULE_ID} .spw-h-legend{max-width:100%;flex-wrap:wrap}
       #${MODULE_ID} button,#${MODULE_ID} select,#${MODULE_ID} input,#${MODULE_ID} textarea{font-size:max(.75rem,12px)}
-      @media(max-width:900px){#${MODULE_ID} .spw-rev-cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))!important}#${MODULE_ID} .spw-history-question b{text-align:left}}
+      @media(max-width:1450px){#${MODULE_ID} .spw-rev-cards{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+      @media(max-width:900px){#${MODULE_ID} .spw-rev-cards{grid-template-columns:repeat(2,minmax(0,1fr))!important}#${MODULE_ID} .spw-history-question b{text-align:left}}
       @media(max-width:620px){#${MODULE_ID} .spw-rev-cards,#${MODULE_ID} .spw-kpis,#${MODULE_ID} .spw-relations,#${MODULE_ID} .spw-action-grid,#${MODULE_ID} .spw-delta-grid,#${MODULE_ID} .spw-quality-grid,#${MODULE_ID} .spw-filter-card,#${MODULE_ID} .spw-rev-toolbar,#${MODULE_ID} .spw-base-grid,#${MODULE_ID} .spw-history-charts{grid-template-columns:1fr!important}#${MODULE_ID} .spw-rev-card{min-height:118px!important}#${MODULE_ID} .spw-page-heading,#${MODULE_ID} .spw-section-title,#${MODULE_ID} .spw-rev-head,#${MODULE_ID} .spw-history-head,#${MODULE_ID} .spw-history-question{display:grid!important}#${MODULE_ID} .spw-history-source{text-align:left;margin-left:0}}
     `;
     root.document.head.appendChild(style);
@@ -127,6 +128,10 @@
     }
     return auditLayout();
   }
+
+  // O CSS entra assim que o módulo é carregado, antes de a seção de revisões
+  // renderizar. Evita um frame intermediário com os cinco cards comprimidos.
+  ensureStyle();
 
   return Object.freeze({ state, activate, auditLayout, syncRevisionCardAccessibility });
 });
