@@ -9,7 +9,7 @@
 
   if (!Base) throw new Error("Core do Dashboard SIGEM × PW indisponível para aplicar o filtro de escopo.");
 
-  const SCOPE_VERSION = 2;
+  const SCOPE_VERSION = 3;
   const SCOPE_LABEL = "GRCON N-1710 · 5290.00 / 22313 / C1O";
   const N1710_SCOPE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const VALID_CLASSES = new Set(Base.DOCUMENT_CLASSES || ["ET", "N-1710", "CV"]);
@@ -71,6 +71,31 @@
     };
   }
 
+  function rejectedRecord(record, reason) {
+    const item = normalizeRecord(record, "pw");
+    return {
+      document: text(item.document),
+      revision: text(item.revisionComplete || item.revision),
+      documentType: text(item.documentType),
+      documentTypeDesc: text(item.documentTypeDesc),
+      discipline: text(item.discipline),
+      disciplineDesc: text(item.disciplineDesc),
+      state: text(item.state),
+      lastEmission: text(item.lastEmission),
+      fileName: text(item.fileName),
+      category: text(item.category),
+      sentGrd: text(item.sentGrd),
+      sentDate: text(item.sentDate),
+      incomingGrd: text(item.incomingGrd),
+      incomingDate: text(item.incomingDate),
+      createdAt: text(item.createdAt),
+      stateChangedAt: text(item.stateChangedAt),
+      emissionSequence: text(item.emissionSequence),
+      sourceRow: Number(item.sourceRow) || 0,
+      reason: text(reason) || "fora_do_escopo_grcon",
+    };
+  }
+
   function scopeAudit(records) {
     const accepted = [];
     const rejected = [];
@@ -84,18 +109,20 @@
       const scope = n1710ScopeInfo(record && record.document);
       const reason = scope.reason || "fora_do_escopo_grcon";
       reasons[reason] = (reasons[reason] || 0) + 1;
-      if (rejected.length < 20) rejected.push({ document: text(record && record.document), reason });
+      rejected.push(rejectedRecord(record, reason));
     });
     return { accepted, rejected, reasons, excludedCount: Math.max(0, (records || []).length - accepted.length) };
   }
 
-  function metadataFor(meta, records, audit) {
+  function metadataFor(meta, records, audit, priorDiscarded) {
     const previous = meta || {};
     const priorExcluded = Number(previous.scopeExcludedCount) || 0;
-    const alreadyScoped = Number(previous.scopeVersion) === SCOPE_VERSION;
+    const alreadyScoped = Number(previous.scopeVersion) >= 2;
     const excludedCount = audit.excludedCount || (alreadyScoped ? priorExcluded : 0);
     const reasons = audit.excludedCount ? audit.reasons : (previous.scopeExcludedReasons || {});
-    const examples = audit.excludedCount ? audit.rejected : (previous.scopeExcludedExamples || []);
+    const priorFull = Array.isArray(previous.scopeDiscardedRecords) ? previous.scopeDiscardedRecords : (Array.isArray(priorDiscarded) ? priorDiscarded : []);
+    const discardedRecords = audit.excludedCount ? audit.rejected : priorFull;
+    const examples = discardedRecords.slice(0, 20);
     const previousInvalid = Number(previous.baseInvalidCount);
     const baseInvalidCount = Number.isFinite(previousInvalid)
       ? previousInvalid
@@ -119,6 +146,7 @@
       scopeExcludedCount: excludedCount,
       scopeExcludedReasons: reasons,
       scopeExcludedExamples: examples,
+      scopeDiscardedRecords: discardedRecords,
       baseInvalidCount,
       invalidCount: baseInvalidCount + excludedCount,
       recordCount: records.length,
@@ -131,17 +159,25 @@
   function sanitizePwBase(base) {
     if (!base || !base.meta || !Array.isArray(base.records)) return { meta: null, records: [] };
     const audit = scopeAudit(base.records);
-    return { meta: metadataFor(base.meta, audit.accepted, audit), records: audit.accepted };
+    const priorDiscarded = Array.isArray(base.discardedRecords) ? base.discardedRecords : [];
+    const meta = metadataFor(base.meta, audit.accepted, audit, priorDiscarded);
+    return { meta, records: audit.accepted, discardedRecords: meta.scopeDiscardedRecords || [] };
   }
 
   function parsePwCsv(source, fileMeta) {
     const parsed = Base.parsePwCsv(source, fileMeta);
     const sanitized = sanitizePwBase({ meta: parsed.meta, records: parsed.records });
-    return { ...parsed, records: sanitized.records, meta: sanitized.meta, scopeAudit: sanitized.meta && {
-      excludedCount: sanitized.meta.scopeExcludedCount,
-      reasons: sanitized.meta.scopeExcludedReasons,
-      examples: sanitized.meta.scopeExcludedExamples,
-    } };
+    return {
+      ...parsed,
+      records: sanitized.records,
+      discardedRecords: sanitized.discardedRecords,
+      meta: sanitized.meta,
+      scopeAudit: sanitized.meta && {
+        excludedCount: sanitized.meta.scopeExcludedCount,
+        reasons: sanitized.meta.scopeExcludedReasons,
+        examples: sanitized.meta.scopeExcludedExamples,
+      },
+    };
   }
 
   function normalizeSigemRecords(records) {
