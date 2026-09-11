@@ -12,6 +12,9 @@
     page: 1,
     expandedKey: "",
     searchTimer: null,
+    exporting: false,
+    exportMessage: "",
+    exportMessageKind: "info",
   };
 
   function Core() { return root.GrconSigemPwRevision; }
@@ -28,11 +31,11 @@
     style.textContent = `
       #${SECTION_ID}{margin-top:14px}.spw-rev-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:9px}.spw-rev-head h3{margin:0;color:var(--text-strong,#183247);font-size:1rem}.spw-rev-head p{margin:4px 0 0;color:var(--text-muted,#66798a);font-size:.75rem;line-height:1.4}.spw-rev-help{border:1px solid var(--border,#d7e0e8);background:var(--surface,#fff);border-radius:50%;width:28px;height:28px;cursor:help;color:var(--text-muted,#66798a);font-weight:900}
       .spw-rev-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.spw-rev-card{appearance:none;text-align:left;border:1px solid var(--border,#dce4eb);border-radius:12px;background:var(--surface,#fff);padding:11px 12px;box-shadow:0 5px 18px rgba(32,56,85,.04);cursor:pointer;color:inherit}.spw-rev-card:hover,.spw-rev-card.active{border-color:var(--brand-300,#8ac4df);box-shadow:0 6px 20px rgba(32,56,85,.08)}.spw-rev-card strong{display:block;font-size:1.35rem;color:var(--text-strong,#17324a)}.spw-rev-card b{display:block;margin-top:4px;font-size:.74rem;color:var(--text-strong,#294258)}.spw-rev-card small{display:block;margin-top:3px;color:var(--text-muted,#66798a);font-size:.66rem;line-height:1.3}.spw-rev-card.updated{border-left:4px solid var(--success-500,#3f8f68)}.spw-rev-card.previous{border-left:4px solid var(--warning-500,#c68a28)}.spw-rev-card.missing{border-left:4px solid var(--danger-500,#c74b43)}.spw-rev-card.pending{border-left:4px solid var(--brand-500,#2789b6)}.spw-rev-card.other{border-left:4px solid var(--text-muted,#7b8b98)}
-      .spw-rev-panel{margin-top:9px;border:1px solid var(--border,#dce4eb);border-radius:13px;background:var(--surface,#fff);box-shadow:0 5px 18px rgba(32,56,85,.04);overflow:hidden}.spw-rev-toolbar{display:grid;grid-template-columns:1.1fr repeat(5,minmax(120px,1fr));gap:7px;padding:10px 11px;border-bottom:1px solid var(--border,#e6ebef);align-items:end}.spw-rev-toolbar label{display:grid;gap:4px}.spw-rev-toolbar span{font-size:.61rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}.spw-rev-toolbar input,.spw-rev-toolbar select{min-height:36px}.spw-rev-list-wrap{padding:0 11px 10px}.spw-rev-list-toggle{font-size:.68rem;color:var(--brand-700,#155c8a);cursor:pointer}.spw-rev-list-wrap textarea{width:100%;min-height:66px;resize:vertical;margin-top:5px}.spw-rev-summary{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 11px;background:var(--surface-soft,#f7fafc);border-bottom:1px solid var(--border,#e6ebef);font-size:.7rem;color:var(--text-muted,#66798a)}.spw-rev-summary strong{color:var(--text-strong,#294258)}
+      .spw-rev-panel{margin-top:9px;border:1px solid var(--border,#dce4eb);border-radius:13px;background:var(--surface,#fff);box-shadow:0 5px 18px rgba(32,56,85,.04);overflow:hidden}.spw-rev-toolbar{display:grid;grid-template-columns:1.1fr repeat(5,minmax(120px,1fr));gap:7px;padding:10px 11px;border-bottom:1px solid var(--border,#e6ebef);align-items:end}.spw-rev-toolbar label{display:grid;gap:4px}.spw-rev-toolbar span{font-size:.61rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}.spw-rev-toolbar input,.spw-rev-toolbar select{min-height:36px}.spw-rev-list-wrap{padding:0 11px 10px}.spw-rev-list-toggle{font-size:.68rem;color:var(--brand-700,#155c8a);cursor:pointer}.spw-rev-list-wrap textarea{width:100%;min-height:66px;resize:vertical;margin-top:5px}.spw-rev-summary{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 11px;background:var(--surface-soft,#f7fafc);border-bottom:1px solid var(--border,#e6ebef);font-size:.7rem;color:var(--text-muted,#66798a)}.spw-rev-summary strong{color:var(--text-strong,#294258)}.spw-rev-summary-main{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0}.spw-rev-export{display:inline-flex!important;align-items:center;gap:6px;min-height:32px!important;white-space:nowrap}.spw-rev-export svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8}.spw-rev-export[disabled]{cursor:not-allowed;opacity:.55}.spw-rev-export-feedback{font-size:.66rem;color:var(--text-muted,#66798a)}.spw-rev-export-feedback.success{color:var(--success-700,#246b4e)}.spw-rev-export-feedback.error{color:var(--danger-700,#9f342f)}
       .spw-rev-table-wrap{overflow:auto;max-height:560px}.spw-rev-table{width:100%;border-collapse:collapse;font-size:.73rem}.spw-rev-table th,.spw-rev-table td{padding:8px 9px;border-bottom:1px solid var(--border,#edf1f4);text-align:left;white-space:nowrap;vertical-align:middle}.spw-rev-table thead th{position:sticky;top:0;z-index:2;background:var(--surface-soft,#f6f9fb);font-size:.59rem;text-transform:uppercase;color:var(--text-muted,#66798a)}.spw-rev-doc{max-width:310px;overflow:hidden;text-overflow:ellipsis}.spw-rev-flow{display:inline-flex;align-items:center;gap:4px;font-weight:900;color:var(--text-strong,#294258)}.spw-rev-situation{display:inline-flex;padding:4px 7px;border-radius:999px;background:var(--surface-soft,#eef3f6);font-weight:900;font-size:.64rem}.spw-rev-situation.previous{background:rgba(198,138,40,.12)}.spw-rev-situation.missing{background:rgba(199,75,67,.10)}.spw-rev-situation.pending{background:var(--brand-50,#eaf5fb)}.spw-rev-situation.updated{background:rgba(63,143,104,.12)}.spw-rev-why{border:0;background:transparent;color:var(--brand-700,#155c8a);font-weight:900;cursor:pointer}.spw-rev-detail td{white-space:normal!important;background:var(--surface-soft,#f8fafc);padding:11px}.spw-rev-detail-grid{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:10px}.spw-rev-detail-grid section{padding:9px;border:1px solid var(--border,#e0e7ec);border-radius:9px;background:var(--surface,#fff)}.spw-rev-detail-grid strong{display:block;margin-bottom:6px;font-size:.71rem}.spw-rev-history{display:flex;flex-wrap:wrap;gap:5px}.spw-rev-history span{padding:4px 6px;border-radius:7px;background:var(--surface-soft,#eef3f6);font-size:.65rem}.spw-rev-reason{margin:0;color:var(--text-muted,#5f7385);font-size:.69rem;line-height:1.45}.spw-rev-pages{display:flex;justify-content:flex-end;align-items:center;gap:7px;padding:9px 11px;border-top:1px solid var(--border,#e6ebef)}.spw-rev-pages button{min-height:32px}.spw-rev-empty{padding:28px 14px;text-align:center;color:var(--text-muted,#66798a)}
       @media(max-width:1250px){.spw-rev-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.spw-rev-toolbar{grid-template-columns:repeat(3,minmax(150px,1fr))}}
       @media(max-width:850px){.spw-rev-cards{grid-template-columns:1fr 1fr}.spw-rev-toolbar{grid-template-columns:1fr 1fr}.spw-rev-detail-grid{grid-template-columns:1fr}}
-      @media(max-width:560px){.spw-rev-cards,.spw-rev-toolbar{grid-template-columns:1fr}.spw-rev-head{display:grid}}
+      @media(max-width:560px){.spw-rev-cards,.spw-rev-toolbar{grid-template-columns:1fr}.spw-rev-head{display:grid}.spw-rev-summary{align-items:flex-start;flex-direction:column}.spw-rev-summary-main{width:100%}.spw-rev-export{width:100%;justify-content:center}}
     `;
     document.head.appendChild(style);
   }
@@ -78,8 +81,14 @@
       if (card) {
         const value = card.getAttribute("data-spw-rev-situation");
         state.filters.situation = state.filters.situation === value ? "attention" : value;
+        state.exportMessage = "";
         state.page = 1;
         void render(false);
+        return;
+      }
+      const exportButton = event.target.closest("[data-spw-rev-export]");
+      if (exportButton) {
+        void exportFilteredRows();
         return;
       }
       const why = event.target.closest("[data-spw-rev-why]");
@@ -107,6 +116,7 @@
       const field = map[event.target.id];
       if (!field) return;
       state.filters[field] = event.target.value;
+      state.exportMessage = "";
       state.page = 1;
       void render(false);
     });
@@ -116,6 +126,7 @@
       state.searchTimer = root.setTimeout(() => {
         if (event.target.id === "spw-rev-search") state.filters.search = event.target.value;
         else state.filters.documentList = event.target.value;
+        state.exportMessage = "";
         state.page = 1;
         renderTable();
       }, 180);
@@ -139,6 +150,7 @@
     });
     if (!result || result.cancelled || generation !== state.analysisGeneration) return null;
     state.analysis = result;
+    state.exportMessage = "";
     if (root.console && typeof root.console.debug === "function") console.debug("[SIGEM×PW][performance] revisão", result.metrics);
     return result;
   }
@@ -202,16 +214,102 @@
     return `<tr class="spw-rev-detail"><td colspan="9"><div class="spw-rev-detail-grid"><section><strong>SIGEM — revisões encontradas</strong><div class="spw-rev-history">${renderHistory(sigemHistory, "sigem")}</div></section><section><strong>ProjectWise — revisões encontradas</strong><div class="spw-rev-history">${renderHistory(pwHistory, "pw")}</div></section><section><strong>Por que esta situação?</strong><p class="spw-rev-reason">${escapeHtml(row.reason)}</p><p class="spw-rev-reason" style="margin-top:6px">Código SIGEM: ${escapeHtml(row.sigemCode)}${row.pwCode ? `<br>Código PW: ${escapeHtml(row.pwCode)}` : ""}${row.eap ? `<br>EAP: ${escapeHtml(row.eap)}` : ""}${row.documentType ? `<br>Tipo: ${escapeHtml(row.documentType)}` : ""}<br>Revisão SIGEM: ${escapeHtml(row.sigemRevision)}<br>Revisões PW: ${escapeHtml(pwHistory.map((item) => item.revision).join(", ") || "nenhuma")}<br>Critério: identidade documental e comparador de revisões do GRCON.</p></section></div></td></tr>`;
   }
 
+
+  function filteredRows(filters) {
+    if (!state.analysis) return [];
+    return Core().filterRows(state.analysis.rows, filters || state.filters);
+  }
+
+  function syncImmediateTextFilters() {
+    if (state.searchTimer) {
+      root.clearTimeout(state.searchTimer);
+      state.searchTimer = null;
+    }
+    const search = document.getElementById("spw-rev-search");
+    const list = document.getElementById("spw-rev-document-list");
+    if (search) state.filters.search = search.value;
+    if (list) state.filters.documentList = list.value;
+  }
+
+  function notifyExport(message, kind) {
+    state.exportMessage = text(message);
+    state.exportMessageKind = kind || "info";
+    if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
+    else if (kind === "error") console.error("[SIGEM×PW][exportação]", message);
+    else console.info("[SIGEM×PW][exportação]", message);
+  }
+
+  function yieldUi() {
+    return new Promise((resolve) => {
+      if (typeof root.requestAnimationFrame === "function") root.requestAnimationFrame(() => resolve());
+      else root.setTimeout(resolve, 0);
+    });
+  }
+
+  async function exportFilteredRows() {
+    if (state.exporting || !state.analysis) return;
+    syncImmediateTextFilters();
+    const filtersSnapshot = { ...state.filters };
+    const rows = filteredRows(filtersSnapshot);
+    if (!rows.length) {
+      notifyExport("Nenhum documento disponível para exportação.", "info");
+      renderTable();
+      return;
+    }
+    state.exporting = true;
+    state.exportMessage = `Gerando Excel com ${fmt(rows.length)} registro(s)...`;
+    state.exportMessageKind = "info";
+    renderTable();
+    await yieldUi();
+    try {
+      if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
+      await root.GRCONModuleLoader.ensure("report");
+      if (!root.GrconSigemPwRevisionReport) await root.GRCONModuleLoader.ensure("sigem_pw_revision_report.js");
+      const Report = root.GrconSigemPwRevisionReport;
+      if (!Report || typeof Report.buildWorkbook !== "function") throw new Error("Exportador Excel da análise SIGEM × PW indisponível.");
+      const buffer = await Report.buildWorkbook(rows, filtersSnapshot, {
+        brandAssets: root.GRCONBrandAssets || null,
+        createdAt: new Date(),
+      });
+      const blob = new Blob([buffer], { type: Report.MIME_XLSX });
+      const filename = Report.downloadName(filtersSnapshot, new Date());
+      if (root.GrconUtils && typeof root.GrconUtils.downloadBlob === "function") root.GrconUtils.downloadBlob(blob, filename);
+      else {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.hidden = true;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        root.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      notifyExport(`Excel gerado com sucesso. ${fmt(rows.length)} registro(s) exportado(s).`, "success");
+    } catch (error) {
+      console.error("[SIGEM×PW] exportação da lista filtrada:", error);
+      notifyExport(error && error.message ? error.message : "Não foi possível gerar o Excel da lista filtrada.", "error");
+    } finally {
+      state.exporting = false;
+      renderTable();
+    }
+  }
+
   function renderTable() {
     const target = document.getElementById("spw-rev-table-wrap");
     if (!target || !state.analysis) return;
-    const rows = Core().filterRows(state.analysis.rows, state.filters);
+    const rows = filteredRows();
     const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
     if (state.page > pages) state.page = pages;
     const start = (state.page - 1) * PAGE_SIZE;
     const pageRows = rows.slice(start, start + PAGE_SIZE);
     const summary = document.getElementById("spw-rev-summary");
-    if (summary) summary.innerHTML = `<span><strong>${fmt(rows.length)}</strong> documento(s) no filtro · mostrando ${rows.length ? fmt(start + 1) : 0}–${fmt(Math.min(start + PAGE_SIZE, rows.length))}</span><span>Análise: ${ms(state.analysis.metrics.durationMs)} ms · ${fmt(state.analysis.metrics.documentsCompared)} documentos comparáveis</span>`;
+    if (summary) {
+      const disabled = !rows.length || state.exporting;
+      const title = !rows.length ? "Nenhum documento disponível para exportação." : state.exporting ? "Aguarde a conclusão da exportação atual." : `Exportar os ${fmt(rows.length)} documento(s) resultantes dos filtros atuais, em todas as páginas.`;
+      const feedback = state.exportMessage ? `<span class="spw-rev-export-feedback ${escapeHtml(state.exportMessageKind)}" aria-live="polite">${escapeHtml(state.exportMessage)}</span>` : "";
+      summary.innerHTML = `<div class="spw-rev-summary-main"><span><strong>${fmt(rows.length)}</strong> documento(s) no filtro · mostrando ${rows.length ? fmt(start + 1) : 0}–${fmt(Math.min(start + PAGE_SIZE, rows.length))}</span><button class="secondary-button compact spw-rev-export" type="button" data-spw-rev-export ${disabled ? "disabled" : ""} title="${escapeHtml(title)}" aria-label="Exportar lista filtrada para Excel"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"></path></svg><span>${state.exporting ? "Gerando Excel..." : "Exportar lista filtrada"}</span></button>${feedback}</div><span>Análise: ${ms(state.analysis.metrics.durationMs)} ms · ${fmt(state.analysis.metrics.documentsCompared)} documentos comparáveis</span>`;
+    }
     if (!pageRows.length) {
       target.innerHTML = `<div class="spw-rev-empty"><strong>Nenhum documento corresponde aos filtros atuais.</strong></div>`;
     } else {
@@ -255,5 +353,5 @@
 
   root.addEventListener("grcon:conference-updated", (event) => { void syncAfterBaseEvent(event); });
   root.addEventListener("grcon:pw-base-updated", (event) => { void syncAfterBaseEvent(event); });
-  root.GrconSigemPwRevisionUi = Object.freeze({ activate, refresh: () => render(true), state });
+  root.GrconSigemPwRevisionUi = Object.freeze({ activate, refresh: () => render(true), state, filteredRows: () => filteredRows(), exportFilteredRows });
 })(window);

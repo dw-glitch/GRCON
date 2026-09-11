@@ -176,7 +176,7 @@ function dataCount(workbook) {
   assert.ok(filterValues.some((line) => /Registros exportados.*3/.test(line)));
   assert.ok(filterValues.some((line) => /Resultado filtrado completo/.test(line)));
 
-  const name = Report.downloadName(filters({ situation: Core.SITUATIONS.NOT_FOUND }), new Date("2026-09-11T12:05:30-03:00"));
+  const name = Report.downloadName(filters({ situation: Core.SITUATIONS.NOT_FOUND }), new Date(2026, 8, 11, 12, 5, 30));
   assert.match(name, /^GRCON_SIGEM_PW_Nao_localizado_no_PW_20260911_120530\.xlsx$/);
 
   console.log(`sigem_pw_revision_export: OK — filtros, paginação e XLSX real; volume máximo testado=15.050 em ${elapsed}ms`);

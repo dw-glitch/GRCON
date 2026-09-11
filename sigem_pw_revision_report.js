@@ -111,7 +111,7 @@
       ["Status SIGEM", text(f.sigemStatus) || "Todos"],
       ["Status PW", text(f.pwStatus) || "Todos"],
       ["Pesquisa textual", text(f.search) || "—"],
-      ["Lista de documentos", list.length ? list.join("\n") : "Não utilizada"],
+      ["Lista de documentos", list.length ? `${list.length} código(s) informado(s); relação completa abaixo` : "Não utilizada"],
       ["Códigos informados na lista", list.length],
       ["Registros exportados", Number(count) || 0],
       ["Escopo da exportação", "Resultado filtrado completo, independente da página atual da tabela"],
@@ -202,12 +202,12 @@
     list.headerFooter.oddFooter = "&LGRCON · SIGEM × PW&C&P de &N&R&D";
 
     const applied = workbook.addWorksheet("Filtros Aplicados", { properties: { defaultRowHeight: 22 }, views: [{ showGridLines: false, zoomScale: 90 }] });
-    applied.columns = [{ width: 30 }, { width: 85 }];
-    applied.mergeCells("A1:B2");
-    applied.getCell("A1").value = "GRCON · SIGEM × PROJECTWISE · FILTROS APLICADOS";
-    applied.getCell("A1").font = { name: "Aptos Display", size: 16, bold: true, color: { argb: "FFFFFFFF" } };
-    applied.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
-    applied.getCell("A1").alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    applied.columns = [{ width: 22 }, { width: 30 }, { width: 42 }, { width: 42 }];
+    applied.mergeCells("C1:D2");
+    applied.getCell("C1").value = "GRCON · SIGEM × PROJECTWISE · FILTROS APLICADOS";
+    applied.getCell("C1").font = { name: "Aptos Display", size: 16, bold: true, color: { argb: "FFFFFFFF" } };
+    applied.getCell("C1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
+    applied.getCell("C1").alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     applied.getRow(1).height = 31;
     applied.getRow(2).height = 31;
     applied.getCell("A4").value = "Campo";
@@ -222,6 +222,13 @@
         row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF7F9FB" } };
         row.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF7F9FB" } };
       }
+    });
+    const listedDocuments = normalizedDocumentList(filters && filters.documentList);
+    listedDocuments.forEach((code, index) => {
+      const row = applied.addRow([`Documento da lista ${index + 1}`, code]);
+      row.getCell(1).font = { name: "Aptos", size: 9, bold: true, color: { argb: "FF53697B" } };
+      row.getCell(2).font = { name: "Aptos", size: 9, color: { argb: "FF263E52" } };
+      row.getCell(2).numFmt = "@";
     });
     applied.autoFilter = { from: "A4", to: `B${applied.rowCount}` };
     applied.getColumn(2).numFmt = "@";
