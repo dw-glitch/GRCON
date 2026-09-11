@@ -1,6 +1,18 @@
 (function () {
   "use strict";
 
+  // Mascote oficial da Qualidade. Mantido em módulo separado para que a
+  // integração visual não se misture com regras de negócio ou navegação.
+  const installMascotHeader = () => {
+    if (document.querySelector('script[data-grcon-mascot-loader="true"]')) return;
+    const script = document.createElement("script");
+    script.src = "grcon_mascot_header.js";
+    script.async = false;
+    script.dataset.grconMascotLoader = "true";
+    document.head.appendChild(script);
+  };
+  installMascotHeader();
+
   // Bootstrap leve do Dashboard SIGEM × PW. O carregamento real continua lazy:
   // somente o bootstrap/navegação é instalado no início; core/app/Worker entram
   // quando o operador abre a nova aba.
