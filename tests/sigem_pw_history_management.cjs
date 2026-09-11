@@ -77,6 +77,8 @@ const Management = require(path.join(rootDir, "sigem_pw_history_management.js"))
   const source = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_ui_audit.js"), "utf8");
   assert.match(source, /spw-rev-cards/);
   assert.match(source, /repeat\(auto-fit,minmax\(min\(100%,220px\),1fr\)\)/);
+  assert.match(source, /@media\(max-width:1450px\).*spw-rev-cards.*repeat\(3,minmax\(0,1fr\)\)/s, "1366 px deve reorganizar os cinco cards em mais de uma linha");
+  assert.match(source, /@media\(max-width:900px\).*spw-rev-cards.*repeat\(2,minmax\(0,1fr\)\)/s);
   assert.match(source, /flex-direction:column!important/);
   assert.match(source, /align-items:flex-start!important/);
   assert.match(source, /white-space:normal!important/);
@@ -90,12 +92,18 @@ const Management = require(path.join(rootDir, "sigem_pw_history_management.js"))
   assert.doesNotMatch(source, /(^|\n)\s*(?:button|article|section|table|input|select)\s*\{/m, "auditoria não pode aplicar CSS genérico fora do Dashboard");
 })();
 
-(function bootstrapLoadsManagementBeforeFinishingDashboardOpen() {
+(function bootstrapLoadsManagementAndKeepsDuplicateNoticeTransient() {
   const bootstrap = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
+  const historyApp = fs.readFileSync(path.join(rootDir, "sigem_pw_history_app.js"), "utf8");
+  const sw = fs.readFileSync(path.join(rootDir, "sw.js"), "utf8");
   assert.match(bootstrap, /sigem_pw_history_management\.js/);
   assert.match(bootstrap, /sigem_pw_dashboard_ui_audit\.js/);
   assert.match(bootstrap, /GrconSigemPwHistoryManagement\.activate\(\)/);
   assert.match(bootstrap, /GrconSigemPwUiAudit\.activate\(\)/);
+  assert.doesNotMatch(bootstrap, /DuplicateBaseNoticeFilter/, "toast de base já registrada não deve ser suprimido nem persistido");
+  assert.match(historyApp, /Esta base já foi registrada anteriormente/);
+  assert.match(sw, /"sigem_pw_history_management\.js"/);
+  assert.match(sw, /"sigem_pw_dashboard_ui_audit\.js"/);
 })();
 
 console.log("sigem_pw_history_management: OK — exclusão seletiva, promoção segura, integridade derivada e UX responsiva validadas.");
