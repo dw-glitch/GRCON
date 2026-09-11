@@ -509,8 +509,27 @@
     };
   }
 
+  function normalizeSigemStatus(value) {
+    const original = text(value);
+    const originalKey = norm(original);
+    if (originalKey === "EM WORKFLOW" || originalKey === "EM ANALISE") {
+      return Object.freeze({
+        original,
+        normalized: "Em Análise",
+        key: "EM ANALISE",
+        equivalentTo: "Em Análise",
+      });
+    }
+    return Object.freeze({
+      original,
+      normalized: original,
+      key: originalKey,
+      equivalentTo: "",
+    });
+  }
+
   function statusKind(value) {
-    const s = norm(value);
+    const s = normalizeSigemStatus(value).key;
     const exact = {
       "NAO POSTADO": "not_posted",
       "EM ANALISE": "analysis",
@@ -521,7 +540,6 @@
       "PARA CONSTRUCAO": "issued",
       "CONFORME CONSTRUIDO": "issued",
       "PARA COMPRA": "issued",
-      "EM WORKFLOW": "pending",
       "PENDENTE CERTIFICACAO": "pending",
       "CANCELADO": "closed",
     };
@@ -2648,11 +2666,10 @@
         break;
       }
 
-      // Em Análise é a única exceção ao avanço automático: diferente de Em
-      // Workflow e dos demais retornos, o documento já está sob análise em
-      // andamento no SIGEM. O GRCON nunca prepara uma revisão nova por cima
-      // de uma análise em aberto — para aqui e marca Em análise (descartar)
-      // para conferência manual, mesmo sem avaliar as revisões seguintes.
+      // Em Análise e Em Workflow são equivalentes operacionalmente: ambos
+      // representam uma análise em andamento no SIGEM. O texto original vindo
+      // da Consulta Geral permanece em displayStatus; apenas a regra de decisão
+      // usa a normalização central para impedir uma nova revisão sobre análise aberta.
       if (kind === "analysis") {
         decision = DISCARD;
         analysisEvidence = analysisEvidenceForRevision(group, revision, inferredSheet, statusInfo);
@@ -2666,8 +2683,8 @@
         if (analysisGrdt) grdt = analysisGrdt;
         if (analysisEffectiveDate) effectiveDate = analysisEffectiveDate;
         reason = traversed.length
-          ? `A revisão ${revision} está com status oficial Em Análise na Colar SIGEM, depois de ${traversed.map((item) => `${item.revision} (${item.status})`).join(", ")}. O GRCON não avança para uma nova revisão enquanto a análise estiver em aberto.`
-          : `A revisão ${revision} está com status oficial Em Análise na Colar SIGEM. O GRCON não avança para uma nova revisão enquanto a análise estiver em aberto.`;
+          ? `A revisão ${revision} está com status oficial ${currentStatus} na Colar SIGEM, depois de ${traversed.map((item) => `${item.revision} (${item.status})`).join(", ")}. Para as regras do GRCON, este status equivale a Em Análise; não é preparada uma nova revisão enquanto a análise estiver em aberto.`
+          : `A revisão ${revision} está com status oficial ${currentStatus} na Colar SIGEM. Para as regras do GRCON, este status equivale a Em Análise; não é preparada uma nova revisão enquanto a análise estiver em aberto.`;
         completed = true;
         break;
       }
@@ -2757,6 +2774,8 @@
       revisionManual: false,
       revisionSource,
       status: displayStatus || "Sem status",
+      statusOriginal: displayStatus || "Sem status",
+      statusOperational: normalizeSigemStatus(displayStatus || "Sem status").normalized,
       decision,
       reason,
       finalName,
@@ -2925,6 +2944,7 @@
     documentSearchKeys,
     ntPrefixForm,
     documentLookup,
+    normalizeSigemStatus,
     statusKind,
     normalizeRevision,
     revisionInfo,

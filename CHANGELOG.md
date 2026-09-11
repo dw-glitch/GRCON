@@ -1,3 +1,10 @@
+## 2026-09-11 — Revisão manual da GRDT e equivalência Em Workflow / Em Análise
+
+- `Revisar` deixou de bloquear a seleção quando a pendência é corrigível manualmente; disciplina pendente pode ser selecionada e precisa ser resolvida em `Editar GRDT` antes da emissão.
+- `Em Workflow` agora usa a mesma regra operacional de `Em Análise`, preservando o status original e registrando também `statusOperational`.
+- Escolhas manuais de disciplina e revisão passam pelo catálogo/normalizador existentes e geram evento de auditoria local quando disponível.
+- Adicionado teste de regressão `tests/grdt_review_workflow.cjs`.
+
 # Histórico de alterações
 
 ## 5.40.6 — 2026-09-09

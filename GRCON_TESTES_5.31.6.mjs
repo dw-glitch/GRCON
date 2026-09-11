@@ -219,7 +219,7 @@ check("PDF sem nt- localiza código com nt- na LD e usa o nome oficial", () => {
   assert.equal(result.decision, Core.READY);
 });
 
-check("Em Workflow na revisão 0 libera a revisão A sem repetir a postagem da 0", () => {
+check("Em Workflow na revisão 0 se comporta como Em Análise e não abre a revisão A", () => {
   const technical = {
     ...ldDocumentRecord(ntDocument),
     revision: "0",
@@ -238,14 +238,16 @@ check("Em Workflow na revisão 0 libera a revisão A sem repetir a postagem da 0
     now: new Date("2026-08-31T12:00:00.000Z"),
   });
 
-  assert.equal(result.decision, Core.READY);
-  assert.equal(result.revision, "A");
-  assert.equal(result.status, "Não Postado");
-  assert.match(result.reason, /0 \(Em Workflow\).*primeira combinação DOCUMENTO-REVISÃO ausente.*A/i);
-  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.READY);
+  assert.equal(result.decision, Core.DISCARD);
+  assert.equal(result.revision, "0");
+  assert.equal(result.status, "Em Workflow");
+  assert.equal(result.statusOriginal, "Em Workflow");
+  assert.equal(result.statusOperational, "Em Análise");
+  assert.match(result.reason, /Em Workflow.*equivale a Em Análise.*não é preparada uma nova revisão/i);
+  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.POSTED_BY_LD);
 });
 
-check("Em Workflow avança por todas as revisões já registradas", () => {
+check("Em Workflow interrompe a progressão de revisões como Em Análise", () => {
   const technical = ldDocumentRecord(ntDocument);
   const history = ["0", "A"].map((revision, index) => ({
     ...technical,
@@ -261,8 +263,11 @@ check("Em Workflow avança por todas as revisões já registradas", () => {
     {},
   );
 
-  assert.equal(result.decision, Core.READY);
-  assert.equal(result.revision, "B");
+  assert.equal(result.decision, Core.DISCARD);
+  assert.notEqual(result.revision, "B");
+  assert.equal(result.status, "Em Workflow");
+  assert.equal(result.statusOperational, "Em Análise");
+  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.IN_ANALYSIS_RECENT);
 });
 
 check("Conforme Construído libera a próxima revisão sem repetir a revisão atual", () => {
@@ -293,9 +298,8 @@ check("Conforme Construído libera a próxima revisão sem repetir a revisão at
   assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.READY);
 });
 
-check("qualquer status diferente de Não Postado e de Em Análise avança da revisão 0 para A", () => {
+check("status concluídos avançam da revisão 0 para A; Em Workflow segue a regra de Em Análise", () => {
   const statuses = [
-    "Em Workflow",
     "Com Comentários",
     "Sem Comentários",
     "Aceito Sem Comentários",
@@ -326,11 +330,29 @@ check("qualquer status diferente de Não Postado e de Em Análise avança da rev
     assert.equal(result.revision, "A", status);
     assert.equal(result.status, "Não Postado", status);
   });
+
+
+  const workflowHistory = {
+    ...technical,
+    sheet: "Colar SIGEM",
+    row: statuses.length + 3,
+    status: "Em Workflow",
+    sigemStatus: "Em Workflow",
+  };
+  const workflowResult = Core.triageOne(
+    { id: "workflow-equivalente-analise", name: `${ntDocument}.pdf` },
+    Core.buildIndex([technical], [workflowHistory]),
+    {},
+  );
+  assert.equal(workflowResult.decision, Core.DISCARD, "Em Workflow");
+  assert.equal(workflowResult.revision, "0", "Em Workflow");
+  assert.equal(workflowResult.status, "Em Workflow", "Em Workflow");
+  assert.equal(workflowResult.statusOperational, "Em Análise", "Em Workflow");
 });
 
 check("Em Análise nunca avança sozinho: para na própria revisão e cai no balde Em análise", () => {
-  // Diferente dos demais retornos (Em Workflow, Recusado, Conforme
-  // Construído...), o documento já está sob análise em andamento no SIGEM.
+  // Em Análise e Em Workflow representam análise em andamento para as regras
+  // operacionais do GRCON; os demais retornos concluídos podem avançar.
   // O GRCON não pode preparar uma revisão nova por cima de uma análise em
   // aberto — precisa parar e pedir conferência manual.
   const technical = ldDocumentRecord(ntDocument);
@@ -349,7 +371,7 @@ check("Em Análise nunca avança sozinho: para na própria revisão e cai no bal
   assert.equal(result.decision, Core.DISCARD);
   assert.equal(result.revision, "0", "não pode avançar para a revisão A sozinho");
   assert.equal(result.status, "Em Análise");
-  assert.match(result.reason, /Em Análise.*n[ãa]o avan[çc]a/i);
+  assert.match(result.reason, /Em Análise.*(não é preparada uma nova revisão|n[ãa]o avan[çc]a)/i);
   const message = Core.decisionMessage(result);
   assert.equal(message.code, Core.DECISION_CODES.IN_ANALYSIS_RECENT);
   assert.match(message.title, /não será enviado/i);
