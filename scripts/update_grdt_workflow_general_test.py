@@ -62,4 +62,10 @@ if text.count(old_comment) != 1:
     raise SystemExit("Comentário legado sobre Em Workflow não encontrado")
 text = text.replace(old_comment, new_comment, 1)
 
+old_reason_assert = '  assert.match(result.reason, /Em Análise.*n[ãa]o avan[çc]a/i);\n'
+new_reason_assert = '  assert.match(result.reason, /Em Análise.*(não é preparada uma nova revisão|n[ãa]o avan[çc]a)/i);\n'
+if text.count(old_reason_assert) != 1:
+    raise SystemExit("Asserção textual legada de Em Análise não encontrada")
+text = text.replace(old_reason_assert, new_reason_assert, 1)
+
 path.write_text(text, encoding="utf-8")
