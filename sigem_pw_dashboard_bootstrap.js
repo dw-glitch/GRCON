@@ -102,9 +102,6 @@
       return;
     }
     root.addEventListener = function (type, listener, options) {
-      // O history_app legado registrava automaticamente as bases em qualquer evento
-      // de atualização. O runtime novo assume essa responsabilidade e faz a
-      // deduplicação silenciosa antes de qualquer processamento pesado.
       if (HISTORY_BASE_EVENTS.has(type)) return;
       return originalAddEventListener.call(root, type, listener, options);
     };
@@ -118,10 +115,6 @@
   async function ensureRuntime() {
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
-    // O filtro de escopo precisa entrar antes do app para impedir que uma base
-    // ProjectWise ampla seja classificada apenas por conter “5290.00”. A regra
-    // N-1710 usa a estrutura contratual completa e aceita o primeiro grupo
-    // variável (CE, DE, PR, RL etc.), conforme a codificação real.
     await root.GRCONModuleLoader.ensure("sigem_pw_scope_fix.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
@@ -133,7 +126,9 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_ui_audit.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_postmerge.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_runtime_fix.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionReport || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix) {
+    await root.GRCONModuleLoader.ensure("sigem_pw_evolution_core.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_evolution_app.js");
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionReport || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix || !root.GrconSigemPwEvolution || !root.GrconSigemPwEvolutionUi) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
   }
@@ -145,13 +140,12 @@
       activateShell();
       await ensureRuntime();
       activateShell();
-      // Não recriar o shell a cada retorno ao Dashboard: evita listeners duplicados,
-      // piscadas de interface e renderizações desnecessárias.
       if (!root.GrconSigemPwDashboardUi.state?.ready) await root.GrconSigemPwDashboardUi.activate();
       await root.GrconSigemPwRevisionUi.activate();
       await root.GrconSigemPwHistoryUi.activate();
       await root.GrconSigemPwHistoryManagement.activate();
       root.GrconSigemPwUiAudit.activate();
+      await root.GrconSigemPwEvolutionUi.activate();
     } catch (error) {
       console.error("[SIGEM×PW] abertura:", error);
       deactivate();
