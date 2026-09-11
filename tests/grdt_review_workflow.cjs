@@ -31,7 +31,7 @@ const mixedOperationalStatuses = [
   ["Em Análise", "analysis"],
   ["Em Workflow", "analysis"],
   ["Recusado", "advance"],
-  ["Conforme Construído", "advance"],
+  ["Conforme Construído", "issued"],
 ];
 for (const [status, expectedKind] of mixedOperationalStatuses) {
   assert.equal(Core.statusKind(status), expectedKind, `lote misto: ${status}`);
