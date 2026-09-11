@@ -113,3 +113,17 @@ html[data-app="GRCON"] .grcon-fix-popover-hint {
   color: var(--text-3, #6f8296);
 }
 html[data-app="GRCON"] .grcon-fix-popover-hint[hidden] { display: none; }
+
+/* ---------- 7. Códigos documentais em tabelas de Consultas ---------- */
+/* A auditoria da Conferência encontrou o mesmo padrão de quebra agressiva
+   em Consultas. Mantém os códigos legíveis e deixa o wrapper rolar quando a
+   janela é estreita, em vez de fatiar o identificador caractere por caractere. */
+html[data-app="GRCON"] .requests-module .requests-table .requests-col-doc,
+html[data-app="GRCON"] .requests-module .requests-table .requests-col-ld-doc {
+  min-width: 15rem;
+}
+html[data-app="GRCON"] .requests-module .requests-table .requests-col-doc code,
+html[data-app="GRCON"] .requests-module .requests-table .requests-col-ld-doc code {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
