@@ -269,6 +269,7 @@
     return Boolean(element)
       && !element.hidden
       && element.getAttribute("aria-hidden") !== "true"
+      && !element.closest('[hidden], [aria-hidden="true"]')
       && element.offsetParent !== null;
   }
 
@@ -292,8 +293,11 @@
       if (mascot.classList.contains("is-processing") !== shouldAnimate) {
         mascot.classList.toggle("is-processing", shouldAnimate);
       }
-      if (shouldAnimate) mascot.setAttribute("aria-busy", "true");
-      else mascot.removeAttribute("aria-busy");
+      if (shouldAnimate && mascot.getAttribute("aria-busy") !== "true") {
+        mascot.setAttribute("aria-busy", "true");
+      } else if (!shouldAnimate && mascot.hasAttribute("aria-busy")) {
+        mascot.removeAttribute("aria-busy");
+      }
     });
   }
 
