@@ -17,6 +17,9 @@
   let activeMascot = null;
   let pinnedMascot = null;
   let observer = null;
+  let explicitControlProcessing = false;
+  let processingHoldUntil = 0;
+  let processingHoldTimer = 0;
 
   function installStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -49,6 +52,17 @@
           transform 540ms cubic-bezier(.16, 1, .3, 1),
           filter 440ms ease-out;
       }
+      .grcon-mascot-greeting .grcon-mascot-pose-motion {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        overflow: visible;
+        transform: translate3d(0, 0, 0);
+        transform-origin: 52% 86%;
+      }
       .grcon-mascot-greeting .grcon-mascot-sprite {
         position: relative;
         z-index: 1;
@@ -64,12 +78,15 @@
           transform 580ms cubic-bezier(.16, 1, .3, 1),
           opacity 360ms ease-out;
       }
-      .grcon-mascot-greeting.is-greeting-active .grcon-mascot-motion {
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting.is-greeting-active .grcon-mascot-motion {
         transform: translate3d(0, -4px, 0) scale(1.008);
         filter: saturate(1.025);
         will-change: transform;
       }
-      .grcon-mascot-greeting.is-greeting-active .grcon-mascot-sprite {
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting.is-greeting-active
+        .grcon-mascot-sprite:not(.grcon-mascot-processing-orb) {
         transform: translate3d(1px, 0, 0) rotate(1.6deg);
         will-change: transform;
       }
@@ -85,38 +102,89 @@
         transition-duration: 540ms;
         transition-timing-function: cubic-bezier(.4, 0, .2, 1);
       }
+      /* Perfis naturais das 15 poses reais do sprite HD. Cada ciclo possui
+         pausas longas e assimétricas para evitar um loop mecânico. */
+      .grcon-mascot-greeting[data-pose="default"] .grcon-mascot-pose-motion,
+      .grcon-mascot-greeting[data-pose="quality"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-calm;
+        --grcon-pose-duration: 6200ms;
+      }
+      .grcon-mascot-greeting[data-pose="analysis"] .grcon-mascot-pose-motion,
+      .grcon-mascot-greeting[data-pose="dashboard"] .grcon-mascot-pose-motion,
+      .grcon-mascot-greeting[data-pose="sigem-pw"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-focus;
+        --grcon-pose-duration: 5400ms;
+      }
+      .grcon-mascot-greeting[data-pose="search"] .grcon-mascot-pose-motion,
+      .grcon-mascot-greeting[data-pose="history"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-scan;
+        --grcon-pose-duration: 5600ms;
+      }
+      .grcon-mascot-greeting[data-pose="check"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-confirm;
+        --grcon-pose-duration: 5200ms;
+      }
+      .grcon-mascot-greeting[data-pose="egrdt"] .grcon-mascot-pose-motion,
+      .grcon-mascot-greeting[data-pose="import"] .grcon-mascot-pose-motion,
+      .grcon-mascot-greeting[data-pose="report"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-work;
+        --grcon-pose-duration: 5000ms;
+      }
+      .grcon-mascot-greeting[data-pose="warning"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-alert;
+        --grcon-pose-duration: 4800ms;
+      }
+      .grcon-mascot-greeting[data-pose="success"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-success;
+        --grcon-pose-duration: 5600ms;
+      }
+      .grcon-mascot-greeting[data-pose="pending"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-pending;
+        --grcon-pose-duration: 5600ms;
+      }
+      .grcon-mascot-greeting[data-pose="empty"] .grcon-mascot-pose-motion {
+        --grcon-pose-animation: grcon-mascot-pose-empty;
+        --grcon-pose-duration: 6800ms;
+      }
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting .grcon-mascot-pose-motion {
+        animation: var(--grcon-pose-animation, grcon-mascot-pose-calm)
+          var(--grcon-pose-duration, 6200ms) cubic-bezier(.4, 0, .2, 1) infinite;
+      }
+      /* Na pose sentada, o círculo de pontos já pertence ao desenho. Durante
+         a análise, recortamos esse mesmo trecho da sprite e o fazemos girar;
+         assim não aparece um indicador genérico em outra posição. */
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-context.is-processing[data-pose="pending"]
+        .grcon-mascot-pose-motion > .grcon-mascot-sprite:not(.grcon-mascot-processing-orb) {
+        -webkit-mask-image: radial-gradient(circle at 80% 43%, transparent 0 11%, #000 12.5%);
+        mask-image: radial-gradient(circle at 80% 43%, transparent 0 11%, #000 12.5%);
+      }
       .grcon-mascot-processing-orb {
         position: absolute;
         z-index: 3;
-        right: 9%;
-        bottom: 13%;
-        width: 19%;
-        aspect-ratio: 1;
-        border-radius: 50%;
-        background: conic-gradient(
-          from 18deg,
-          transparent 0 16%,
-          color-mix(in srgb, var(--brand-600, #1479a6) 92%, white) 17% 38%,
-          transparent 39% 58%,
-          color-mix(in srgb, var(--brand-800, #0a527d) 88%, transparent) 59% 80%,
-          transparent 81% 100%
-        );
-        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-        filter: drop-shadow(0 1px 2px rgb(10 82 125 / 24%));
+        inset: 0;
+        width: 100%;
+        height: 100%;
         opacity: 0;
         pointer-events: none;
-        transform: translateZ(0);
+        clip-path: circle(12% at 80% 43%);
+        transform: rotate(0deg) translateZ(0);
+        transform-origin: 80% 43%;
+        filter: drop-shadow(0 1px 2px rgb(10 82 125 / 24%));
       }
-      .grcon-mascot-context.is-processing[data-pose="pending"] .grcon-mascot-processing-orb {
-        opacity: .94;
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-context.is-processing[data-pose="pending"] .grcon-mascot-processing-orb {
+        opacity: 1;
         animation: grcon-mascot-orb-spin 840ms cubic-bezier(.45, .05, .55, .95) infinite;
       }
-      .grcon-mascot-context.is-processing .grcon-mascot-motion {
-        animation: grcon-mascot-working-run 920ms cubic-bezier(.37, 0, .2, 1) infinite;
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-context.is-processing .grcon-mascot-motion {
+        animation: grcon-mascot-working-run 700ms cubic-bezier(.37, 0, .2, 1) infinite;
         will-change: transform;
       }
-      .grcon-mascot-context.is-processing .grcon-mascot-motion::after {
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-context.is-processing .grcon-mascot-motion::after {
         content: "";
         position: absolute;
         z-index: 0;
@@ -128,22 +196,92 @@
           linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-600, #1479a6) 68%, transparent) 35% 58%, transparent 82%) 0 10% / 100% 2px no-repeat,
           linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-700, #0c648f) 50%, transparent) 30% 55%, transparent 80%) 0 52% / 84% 2px no-repeat,
           linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-800, #0a527d) 42%, transparent) 28% 52%, transparent 78%) 0 92% / 68% 2px no-repeat;
-        opacity: .42;
+        opacity: .55;
         pointer-events: none;
-        animation: grcon-mascot-speed-lines 710ms ease-in-out infinite;
+        animation: grcon-mascot-speed-lines 620ms ease-in-out infinite;
+      }
+      @keyframes grcon-mascot-pose-calm {
+        0%, 24%, 54%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        7% { transform: translate3d(0, -2px, 0) rotate(.4deg) scale(1.006); }
+        14% { transform: translate3d(0, 0, 0) rotate(-.25deg) scale(1.002); }
+        65% { transform: translate3d(1px, -2px, 0) rotate(.7deg) scale(1.005); }
+        74% { transform: translate3d(0, 0, 0) rotate(-.2deg) scale(1); }
+      }
+      @keyframes grcon-mascot-pose-focus {
+        0%, 26%, 54%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        7% { transform: translate3d(-2px, -2px, 0) rotate(-.9deg); }
+        13% { transform: translate3d(2px, -3px, 0) rotate(.8deg); }
+        19% { transform: translate3d(0, -1px, 0) rotate(.15deg); }
+        65% { transform: translate3d(2px, -2px, 0) rotate(.7deg); }
+        73% { transform: translate3d(0, 0, 0) rotate(-.25deg); }
+      }
+      @keyframes grcon-mascot-pose-scan {
+        0%, 20%, 48%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        6% { transform: translate3d(-3px, -2px, 0) rotate(-1.1deg); }
+        12% { transform: translate3d(2px, -2px, 0) rotate(.8deg); }
+        62% { transform: translate3d(3px, -1px, 0) rotate(1deg); }
+        70% { transform: translate3d(-2px, -2px, 0) rotate(-.65deg); }
+        77% { transform: translate3d(0, 0, 0) rotate(0deg); }
+      }
+      @keyframes grcon-mascot-pose-confirm {
+        0%, 29%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        7% { transform: translate3d(0, -4px, 0) rotate(1.2deg); }
+        12% { transform: translate3d(0, 2px, 0) rotate(-.7deg); }
+        18% { transform: translate3d(0, -2px, 0) rotate(.45deg); }
+        24% { transform: translate3d(0, 0, 0) rotate(0deg); }
+      }
+      @keyframes grcon-mascot-pose-work {
+        0%, 30%, 58%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        7% { transform: translate3d(2px, -3px, 0) rotate(1deg); }
+        13% { transform: translate3d(-2px, 1px, 0) rotate(-.75deg); }
+        21% { transform: translate3d(2px, -2px, 0) rotate(.6deg); }
+        68% { transform: translate3d(-2px, -2px, 0) rotate(-.65deg); }
+        77% { transform: translate3d(1px, 0, 0) rotate(.25deg); }
+      }
+      @keyframes grcon-mascot-pose-alert {
+        0%, 34%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        7% { transform: translate3d(0, -3px, 0) rotate(-1.5deg) scale(1.012); }
+        13% { transform: translate3d(2px, 1px, 0) rotate(1.2deg) scale(1.004); }
+        19% { transform: translate3d(-2px, -2px, 0) rotate(-.8deg) scale(1.007); }
+        26% { transform: translate3d(0, 0, 0) rotate(.2deg) scale(1); }
+      }
+      @keyframes grcon-mascot-pose-success {
+        0%, 31%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        7% { transform: translate3d(0, -5px, 0) rotate(1.4deg) scale(1.012); }
+        13% { transform: translate3d(0, 2px, 0) rotate(-.8deg) scale(1.003); }
+        19% { transform: translate3d(0, -2px, 0) rotate(.5deg) scale(1.006); }
+        25% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+      }
+      @keyframes grcon-mascot-pose-pending {
+        0%, 25%, 56%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        8% { transform: translate3d(0, -2px, 0) rotate(-.6deg) scale(1.005); }
+        15% { transform: translate3d(1px, 0, 0) rotate(.35deg) scale(1.001); }
+        67% { transform: translate3d(2px, -2px, 0) rotate(.65deg) scale(1.004); }
+        76% { transform: translate3d(0, 0, 0) rotate(-.25deg) scale(1); }
+      }
+      @keyframes grcon-mascot-pose-empty {
+        0%, 23%, 51%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        8% { transform: translate3d(-3px, -1px, 0) rotate(-1.2deg); }
+        15% { transform: translate3d(2px, -2px, 0) rotate(.85deg); }
+        64% { transform: translate3d(3px, -1px, 0) rotate(1.1deg); }
+        73% { transform: translate3d(0, 0, 0) rotate(-.4deg); }
+      }
+      @keyframes grcon-mascot-reduced-acknowledge {
+        0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        42% { transform: translate3d(0, -2px, 0) rotate(.55deg); }
       }
       @keyframes grcon-mascot-working-run {
-        0%, 100% { transform: translate3d(0, 0, 0) rotate(-.35deg) scale(1); }
-        13% { transform: translate3d(-1px, -1px, 0) rotate(.35deg) scale(1.003); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-        31% { transform: translate3d(2px, -3px, 0) rotate(1.15deg) scale(1.006); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
-        48% { transform: translate3d(3px, 0, 0) rotate(.25deg) scale(1.002); animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
-        64% { transform: translate3d(1px, -1px, 0) rotate(-.65deg) scale(1.004); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-        82% { transform: translate3d(-2px, -3px, 0) rotate(-1.1deg) scale(1.006); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+        0%, 100% { transform: translate3d(-2px, 1px, 0) rotate(-.8deg) scale(1); }
+        12% { transform: translate3d(-5px, 0, 0) rotate(.7deg) scale(1.005); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+        30% { transform: translate3d(4px, -6px, 0) rotate(2.2deg) scale(1.01); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+        47% { transform: translate3d(7px, 1px, 0) rotate(.45deg) scale(1.004); animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
+        63% { transform: translate3d(2px, -2px, 0) rotate(-1.1deg) scale(1.007); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+        81% { transform: translate3d(-5px, -6px, 0) rotate(-2.1deg) scale(1.01); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
       }
       @keyframes grcon-mascot-speed-lines {
-        0%, 100% { opacity: .18; transform: translate3d(3px, 1px, 0) scaleX(.84); }
-        38% { opacity: .48; transform: translate3d(-2px, -1px, 0) scaleX(1.08); }
-        72% { opacity: .3; transform: translate3d(1px, 0, 0) scaleX(.94); }
+        0%, 100% { opacity: .25; transform: translate3d(4px, 1px, 0) scaleX(.82); }
+        38% { opacity: .68; transform: translate3d(-3px, -1px, 0) scaleX(1.14); }
+        72% { opacity: .42; transform: translate3d(1px, 0, 0) scaleX(.96); }
       }
       @keyframes grcon-mascot-orb-spin {
         0% { transform: rotate(0deg) scale(.97); }
@@ -233,24 +371,36 @@
       }
       @media (prefers-reduced-motion: reduce) {
         .grcon-mascot-greeting .grcon-mascot-motion,
-        .grcon-mascot-greeting .grcon-mascot-sprite,
+        .grcon-mascot-greeting .grcon-mascot-sprite:not(.grcon-mascot-processing-orb),
         .grcon-mascot-greeting::before {
           transform: none !important;
           filter: none !important;
           transition-duration: 80ms !important;
           transition-delay: 0ms !important;
         }
+        .grcon-mascot-greeting .grcon-mascot-pose-motion {
+          animation: none !important;
+          transition-duration: 80ms !important;
+        }
         .grcon-mascot-context.is-processing .grcon-mascot-motion,
-        .grcon-mascot-context.is-processing .grcon-mascot-motion::after,
-        .grcon-mascot-context.is-processing .grcon-mascot-processing-orb {
+        .grcon-mascot-context.is-processing .grcon-mascot-motion::after {
           animation: none !important;
           transform: none !important;
+        }
+        html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+          .grcon-mascot-context.is-processing .grcon-mascot-pose-motion {
+          animation: grcon-mascot-reduced-acknowledge 680ms ease-out 1 both !important;
+        }
+        html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+          .grcon-mascot-context.is-processing[data-pose="pending"] .grcon-mascot-processing-orb {
+          animation-duration: 2400ms !important;
+          animation-timing-function: ease-in-out !important;
         }
         .grcon-mascot-context.is-processing .grcon-mascot-motion::after {
           display: none;
         }
         .grcon-mascot-context.is-processing[data-pose="pending"] .grcon-mascot-processing-orb {
-          opacity: .72;
+          opacity: .82;
         }
         .grcon-mascot-speech,
         .grcon-mascot-speech[data-visible="true"] {
@@ -285,11 +435,30 @@
     return Array.from(document.querySelectorAll(selectors)).some(elementVisible);
   }
 
+  function durableProcessingState() {
+    const rootElement = document.documentElement;
+    return {
+      active: rootElement.dataset.grconControlProcessing === "true",
+      until: Number(rootElement.dataset.grconControlProcessingUntil) || 0,
+    };
+  }
+
+  function controlSignalActive() {
+    const durable = durableProcessingState();
+    return explicitControlProcessing
+      || durable.active
+      || Date.now() < Math.max(processingHoldUntil, durable.until);
+  }
+
   function syncProcessingState() {
-    const busy = processingActive();
+    const fallbackBusy = processingActive();
     document.querySelectorAll(SELECTOR).forEach((mascot) => {
+      const contextual = mascot.classList.contains("grcon-mascot-context");
       const processingPose = mascot.dataset.pose === "pending" || mascot.dataset.pose === "analysis";
-      const shouldAnimate = busy && mascot.classList.contains("grcon-mascot-context") && processingPose;
+      const signaledControl = mascot.dataset.context === "control" && controlSignalActive();
+      // O evento do Controle de GRDT inicia a corrida imediatamente, sem depender
+      // da ordem entre a exibição do progresso e a troca assíncrona da pose.
+      const shouldAnimate = contextual && (signaledControl || (fallbackBusy && processingPose));
       if (mascot.classList.contains("is-processing") !== shouldAnimate) {
         mascot.classList.toggle("is-processing", shouldAnimate);
       }
@@ -299,6 +468,43 @@
         mascot.removeAttribute("aria-busy");
       }
     });
+  }
+
+  function scheduleProcessingHoldEnd() {
+    root.clearTimeout(processingHoldTimer);
+    const remaining = processingHoldUntil - Date.now();
+    if (remaining <= 0) {
+      processingHoldUntil = 0;
+      syncProcessingState();
+      return;
+    }
+    processingHoldTimer = root.setTimeout(() => {
+      processingHoldUntil = 0;
+      syncProcessingState();
+    }, remaining + 20);
+  }
+
+  function handleProcessingState(event) {
+    const detail = event?.detail || {};
+    if (detail.context && detail.context !== "control") return;
+    explicitControlProcessing = Boolean(detail.active);
+    if (explicitControlProcessing) {
+      processingHoldUntil = Math.max(processingHoldUntil, Date.now() + 1100);
+      root.clearTimeout(processingHoldTimer);
+    } else {
+      scheduleProcessingHoldEnd();
+    }
+    syncProcessingState();
+  }
+
+  function handleProcessingPulse(event) {
+    const detail = event?.detail || {};
+    if (detail.context && detail.context !== "control") return;
+    const requested = Number(detail.duration) || 1100;
+    const duration = Math.min(2400, Math.max(700, requested));
+    processingHoldUntil = Math.max(processingHoldUntil, Date.now() + duration);
+    scheduleProcessingHoldEnd();
+    syncProcessingState();
   }
 
   function currentIdentity() {
@@ -438,12 +644,20 @@
     if (!mascot || mascot.dataset.grconGreetingReady === "true") return;
     mascot.dataset.grconGreetingReady = "true";
     mascot.classList.add("grcon-mascot-greeting");
-    const sprite = mascot.querySelector(".grcon-mascot-sprite");
-    if (sprite && !sprite.parentElement.classList.contains("grcon-mascot-motion")) {
-      const motion = document.createElement("span");
+    const sprite = mascot.querySelector(".grcon-mascot-sprite:not(.grcon-mascot-processing-orb)");
+    let motion = mascot.querySelector(".grcon-mascot-motion");
+    if (sprite && !motion) {
+      motion = document.createElement("span");
       motion.className = "grcon-mascot-motion";
       sprite.parentElement.insertBefore(motion, sprite);
       motion.appendChild(sprite);
+    }
+    let poseMotion = motion && motion.querySelector(".grcon-mascot-pose-motion");
+    if (sprite && motion && !poseMotion) {
+      poseMotion = document.createElement("span");
+      poseMotion.className = "grcon-mascot-pose-motion";
+      motion.insertBefore(poseMotion, sprite);
+      poseMotion.appendChild(sprite);
     }
     const originalLabel = mascot.getAttribute("aria-label") || "Mascote da Qualidade do GRCON";
     mascot.dataset.mascotLabel = originalLabel;
@@ -456,9 +670,13 @@
     mascot.removeAttribute("title");
     if (mascot.classList.contains("grcon-mascot-context") && !mascot.querySelector(".grcon-mascot-processing-orb")) {
       const processingOrb = document.createElement("span");
-      processingOrb.className = "grcon-mascot-processing-orb";
+      // A segunda camada usa a própria sprite: somente o círculo da pose
+      // sentada fica visível pelo recorte definido no CSS.
+      processingOrb.className = "grcon-mascot-sprite grcon-mascot-processing-orb";
       processingOrb.setAttribute("aria-hidden", "true");
-      mascot.appendChild(processingOrb);
+      const poseMotion = mascot.querySelector(".grcon-mascot-pose-motion");
+      const motion = mascot.querySelector(".grcon-mascot-motion");
+      (poseMotion || motion || mascot).appendChild(processingOrb);
     }
 
     mascot.addEventListener("pointerenter", (event) => {
@@ -495,7 +713,10 @@
   function init() {
     installStyles();
     ensureBubble();
+    const durable = durableProcessingState();
+    processingHoldUntil = Math.max(processingHoldUntil, durable.until);
     refresh(document);
+    if (!durable.active && processingHoldUntil > Date.now()) scheduleProcessingHoldEnd();
     observer = new MutationObserver((mutations) => {
       let processingMayHaveChanged = false;
       for (const mutation of mutations) {
@@ -509,11 +730,19 @@
       }
       if (processingMayHaveChanged) syncProcessingState();
     });
-    observer.observe(document.body, {
+    observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["data-pose", "aria-busy", "hidden", "aria-hidden"],
+      attributeFilter: [
+        "data-pose",
+        "aria-busy",
+        "hidden",
+        "aria-hidden",
+        "data-grcon-control-processing",
+        "data-grcon-control-processing-until",
+        "data-grcon-mascot-asset",
+      ],
     });
 
     document.addEventListener("pointerdown", (event) => {
@@ -525,16 +754,42 @@
     root.addEventListener("scroll", () => {
       if (activeMascot) positionBubble(activeMascot);
     }, { passive: true, capture: true });
+    root.addEventListener("grcon:processing-state", handleProcessingState);
+    root.addEventListener("grcon:processing-pulse", handleProcessingPulse);
     root.addEventListener("grcon:cloud-ready", updateGreeting);
     root.addEventListener("grcon:identity-changed", updateGreeting);
   }
 
+  function diagnostics() {
+    const mascot = document.getElementById("grcon-context-mascot") || document.querySelector(SELECTOR);
+    const motion = mascot?.querySelector(".grcon-mascot-motion");
+    const poseMotion = mascot?.querySelector(".grcon-mascot-pose-motion");
+    const orb = mascot?.querySelector(".grcon-mascot-processing-orb");
+    const animationName = (element) => element ? root.getComputedStyle(element).animationName : "none";
+    return Object.freeze({
+      version: "1.1.0",
+      hdAsset: document.documentElement.dataset.grconMascotAsset || "",
+      hdReady: document.documentElement.dataset.grconMascotAsset === "sprite-hd-file-v1",
+      reducedMotion: Boolean(root.matchMedia?.("(prefers-reduced-motion: reduce)").matches),
+      pose: mascot?.dataset.pose || "",
+      context: mascot?.dataset.context || "",
+      processingSignal: controlSignalActive(),
+      processingClass: Boolean(mascot?.classList.contains("is-processing")),
+      motionAnimation: animationName(motion),
+      poseAnimation: animationName(poseMotion),
+      orbAnimation: animationName(orb),
+    });
+  }
+
   root.GRCONMascotGreeting = Object.freeze({
-    version: "1.0.0",
+    version: "1.1.0",
     refresh,
     open: (mascot) => showGreeting(mascot || document.querySelector(SELECTOR)),
     close: () => hideGreeting(activeMascot, { force: true }),
     greetingText,
+    setProcessing: (active) => handleProcessingState({ detail: { active, context: "control" } }),
+    pulseProcessing: (duration) => handleProcessingPulse({ detail: { duration, context: "control" } }),
+    diagnostics,
   });
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });

@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1-mascot-greeting1-processing1";
+const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1-mascot-greeting1-processing5";
 const ASSETS = [
   "index.html",
   "design-system.css",

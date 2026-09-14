@@ -1208,6 +1208,24 @@
     if (els.performanceStatus && message) els.performanceStatus.textContent = message;
   }
 
+  function signalMascotProcessing(active, taskLabel = "") {
+    const nextActive = Boolean(active);
+    // Estado durável: se o módulo visual terminar de carregar depois do clique,
+    // ele ainda encontra a análise em andamento em vez de perder o evento.
+    document.documentElement.dataset.grconControlProcessing = String(nextActive);
+    window.dispatchEvent(new CustomEvent("grcon:processing-state", {
+      detail: { active: nextActive, context: "control", task: taskLabel },
+    }));
+  }
+
+  function pulseMascotProcessing(duration = 1100) {
+    const safeDuration = Math.min(2400, Math.max(700, Number(duration) || 1100));
+    document.documentElement.dataset.grconControlProcessingUntil = String(Date.now() + safeDuration);
+    window.dispatchEvent(new CustomEvent("grcon:processing-pulse", {
+      detail: { context: "control", duration: safeDuration },
+    }));
+  }
+
   function setBusy(busy, taskLabel = "Análise documental") {
     state.busy = busy;
     state.busyLabel = busy ? taskLabel : "";
@@ -1244,6 +1262,7 @@
       if (els.progress) els.progress.hidden = true;
       refreshPerformancePanel();
     }
+    signalMascotProcessing(busy, taskLabel);
   }
 
   function fileLabel(files, singular, plural) {
@@ -2849,6 +2868,9 @@
 
 
   async function analyze() {
+    // A reação começa no próprio clique, inclusive enquanto o motor sob demanda
+    // ainda está sendo carregado ou quando a resposta virá do cache.
+    pulseMascotProcessing();
     try { await ensureRuntime("performance"); } catch (_) { console.debug("[App] ensureRuntime performance:", _); /* usa compatibilidade */ }
     if (!PerformanceCore || !PerformanceCore.supported) return analyzeLegacy();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
