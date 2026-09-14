@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1";
+const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1-mascot-greeting1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -35,6 +35,10 @@ const ASSETS = [
   "grcon_bootstrap_head.js",
   "operational_persistence_v2.js",
   "grcon_service_worker.js",
+  "grcon_mascot_header.js",
+  "grcon_mascot_asset_fix.js",
+  "grcon_mascot_greeting_core.js",
+  "grcon_mascot_greeting.js",
   "analysis_runtime_guard.js",
   "sigem_pw_dashboard_bootstrap.js",
   "sigem_pw_dashboard_core.js",
