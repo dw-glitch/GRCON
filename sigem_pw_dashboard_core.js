@@ -794,13 +794,26 @@
     });
   }
 
+  function storedValue(record, fallback) {
+    if (record === undefined) return fallback;
+    if (record && typeof record === "object"
+      && Object.prototype.hasOwnProperty.call(record, "key")
+      && Object.prototype.hasOwnProperty.call(record, "value")) return record.value;
+    return record;
+  }
+
+  function putKv(store, key, value) {
+    if (store.keyPath) store.put({ key, value });
+    else store.put(value, key);
+  }
+
   async function kvGet(key, fallback) {
     const db = await openDb();
     try {
       return await new Promise((resolve, reject) => {
         const tx = db.transaction(DB_STORE, "readonly");
         const request = tx.objectStore(DB_STORE).get(key);
-        request.onsuccess = () => resolve(request.result === undefined ? fallback : request.result);
+        request.onsuccess = () => resolve(storedValue(request.result, fallback));
         request.onerror = () => reject(request.error || new Error("Falha ao ler a base local."));
       });
     } finally { db.close(); }
@@ -811,7 +824,7 @@
     try {
       await new Promise((resolve, reject) => {
         const tx = db.transaction(DB_STORE, "readwrite");
-        tx.objectStore(DB_STORE).put(value, key);
+        putKv(tx.objectStore(DB_STORE), key, value);
         tx.oncomplete = resolve;
         tx.onerror = () => reject(tx.error || new Error("Falha ao salvar a base local."));
         tx.onabort = () => reject(tx.error || new Error("A gravação da base local foi cancelada."));
@@ -826,7 +839,7 @@
       await new Promise((resolve, reject) => {
         const tx = db.transaction(DB_STORE, "readwrite");
         const store = tx.objectStore(DB_STORE);
-        (entries || []).forEach(([key, value]) => store.put(value, key));
+        (entries || []).forEach(([key, value]) => putKv(store, key, value));
         tx.oncomplete = resolve;
         tx.onerror = () => reject(tx.error || new Error("Falha ao salvar as bases do Dashboard."));
         tx.onabort = () => reject(tx.error || new Error("A gravação das bases foi cancelada."));
@@ -1021,7 +1034,7 @@
     revisionKey, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, buildComparisonLists, aggregateModel, aggregate,
-    openDb, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
+    openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
     saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, deleteSnapshot, migrateLegacyBases, loadBases,
   });
 });
