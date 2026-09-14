@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-mascot-hd1";
+const CACHE_NAME = "grcon-v5.40.10-spw6-audit1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -39,6 +39,8 @@ const ASSETS = [
   "sigem_pw_dashboard_bootstrap.js",
   "sigem_pw_dashboard_core.js",
   "sigem_pw_dashboard_app.js",
+  "sigem_pw_audit_core.js",
+  "sigem_pw_audit_app.js",
   "sigem_pw_revision_core.js",
   "sigem_pw_revision_section.js",
   "sigem_pw_history_core.js",
