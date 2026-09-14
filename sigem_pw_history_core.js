@@ -536,10 +536,68 @@
     return persistSnapshot(STORES.comparisonSnapshots, built.snapshot, built.documents, WORKING_KEYS.comparison, changes);
   }
 
+  async function captureRecordingCheckpoint() {
+    return withDb(async (db) => {
+      const values = await requestValue(db.transaction(STORES.workingSets, "readonly").objectStore(STORES.workingSets).getAll());
+      return { workingSets: values || [] };
+    });
+  }
+
+  function rollbackToken(recorded, checkpoint) {
+    const sourceResults = [recorded && recorded.sigem, recorded && recorded.pw].filter(Boolean);
+    const comparisonResult = recorded && recorded.comparison;
+    return {
+      sourceSnapshotIds: sourceResults.filter((item) => item.created && item.snapshot && item.snapshot.id).map((item) => item.snapshot.id),
+      comparisonSnapshotIds: comparisonResult && comparisonResult.created && comparisonResult.snapshot
+        ? [comparisonResult.snapshot.id]
+        : [],
+      workingSets: checkpoint && Array.isArray(checkpoint.workingSets) ? checkpoint.workingSets : [],
+    };
+  }
+
+  async function rollbackRecordedActiveBases(recorded) {
+    const token = recorded && recorded.rollbackToken ? recorded.rollbackToken : recorded;
+    if (!token) return false;
+    const sourceIds = new Set(token.sourceSnapshotIds || []);
+    const comparisonIds = new Set(token.comparisonSnapshotIds || []);
+    const previousWorking = new Map((token.workingSets || []).map((item) => [item.key, item]));
+    return withDb((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction([
+        STORES.sourceSnapshots,
+        STORES.comparisonSnapshots,
+        STORES.workingSets,
+        STORES.snapshotChanges,
+        STORES.meta,
+      ], "readwrite");
+      const sources = tx.objectStore(STORES.sourceSnapshots);
+      const comparisons = tx.objectStore(STORES.comparisonSnapshots);
+      const working = tx.objectStore(STORES.workingSets);
+      const changes = tx.objectStore(STORES.snapshotChanges);
+      const meta = tx.objectStore(STORES.meta);
+      sourceIds.forEach((id) => {
+        sources.delete(id);
+        changes.delete(id);
+        meta.delete(`sourcePayload:${id}`);
+      });
+      comparisonIds.forEach((id) => {
+        comparisons.delete(id);
+        changes.delete(id);
+      });
+      Object.values(WORKING_KEYS).forEach((key) => {
+        if (previousWorking.has(key)) working.put(previousWorking.get(key));
+        else working.delete(key);
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error || new Error("Falha ao desfazer o registro histórico incompleto."));
+      tx.onabort = () => reject(tx.error || new Error("O rollback do histórico foi cancelado."));
+    }));
+  }
+
   async function recordActiveBases(sigemBase, pwBase, options) {
     const hasSigem = Boolean(sigemBase && sigemBase.meta && Array.isArray(sigemBase.records));
     const hasPw = Boolean(pwBase && pwBase.meta && Array.isArray(pwBase.records));
-    if (!hasSigem && !hasPw) return { sigem: null, pw: null, comparison: null };
+    if (!hasSigem && !hasPw) return { sigem: null, pw: null, comparison: null, rollbackToken: null };
+    const checkpoint = await captureRecordingCheckpoint();
     const recordedAt = text(options && options.recordedAt) || nowIso();
     const hasLdRecords = Array.isArray(options && options.ldRecords);
     const model = hasLdRecords
@@ -548,18 +606,33 @@
     const effectiveAt = text(options && options.effectiveAt);
     const changedSystem = text(options && options.changedSystem);
     const sourceOptions = (system) => ({ recordedAt, effectiveAt: changedSystem === system ? effectiveAt : "" });
-    const sigem = hasSigem ? await recordSource(SYSTEMS.SIGEM, sigemBase, model, sourceOptions(SYSTEMS.SIGEM)) : null;
-    const pw = hasPw ? await recordSource(SYSTEMS.PW, pwBase, model, sourceOptions(SYSTEMS.PW)) : null;
+    let sigem = null;
+    let pw = null;
     let comparison = null;
-    if (hasSigem && hasPw) {
-      const sigemSnapshot = sigem && sigem.snapshot || buildSourceSnapshot(SYSTEMS.SIGEM, sigemBase, model, { recordedAt }).snapshot;
-      const pwSnapshot = pw && pw.snapshot || buildSourceSnapshot(SYSTEMS.PW, pwBase, model, { recordedAt }).snapshot;
-      const revisionAnalysis = Revision && typeof Revision.analyzeAsync === "function"
-        ? await Revision.analyzeAsync(model, { chunkSize: 500 })
-        : Revision.analyze(model);
-      comparison = await recordComparison(sigemSnapshot, pwSnapshot, model, revisionAnalysis, recordedAt);
+    try {
+      sigem = hasSigem ? await recordSource(SYSTEMS.SIGEM, sigemBase, model, sourceOptions(SYSTEMS.SIGEM)) : null;
+      pw = hasPw ? await recordSource(SYSTEMS.PW, pwBase, model, sourceOptions(SYSTEMS.PW)) : null;
+      if (hasSigem && hasPw) {
+        const sigemSnapshot = sigem && sigem.snapshot || buildSourceSnapshot(SYSTEMS.SIGEM, sigemBase, model, { recordedAt }).snapshot;
+        const pwSnapshot = pw && pw.snapshot || buildSourceSnapshot(SYSTEMS.PW, pwBase, model, { recordedAt }).snapshot;
+        const revisionAnalysis = Revision && typeof Revision.analyzeAsync === "function"
+          ? await Revision.analyzeAsync(model, { chunkSize: 500 })
+          : Revision.analyze(model);
+        comparison = await recordComparison(sigemSnapshot, pwSnapshot, model, revisionAnalysis, recordedAt);
+      }
+      const result = { sigem, pw, comparison };
+      result.rollbackToken = rollbackToken(result, checkpoint);
+      return result;
+    } catch (error) {
+      const partial = { sigem, pw, comparison };
+      partial.rollbackToken = rollbackToken(partial, checkpoint);
+      try {
+        await rollbackRecordedActiveBases(partial);
+      } catch (rollbackError) {
+        throw new Error(`${error.message || "Falha ao registrar o histórico."} O histórico parcial não pôde ser revertido: ${rollbackError.message || "falha desconhecida"}`);
+      }
+      throw error;
     }
-    return { sigem, pw, comparison };
   }
 
   return Object.freeze({
@@ -568,6 +641,7 @@
     compareSourceDocuments, sourceChangeDetails, relationSets, revisionState, comparisonDocuments, countStates,
     classComparisonMetrics, buildComparisonSnapshot, compareComparisonDocuments, transitionDetails, metricDelta,
     openDb, getSnapshot, listSourceSnapshots, listComparisonSnapshots, loadWorkingSet, loadSnapshotChanges,
-    persistSnapshot, deleteSnapshot, clearHistory, recordSource, recordComparison, recordActiveBases,
+    persistSnapshot, deleteSnapshot, clearHistory, recordSource, recordComparison,
+    captureRecordingCheckpoint, rollbackToken, rollbackRecordedActiveBases, recordActiveBases,
   });
 });
