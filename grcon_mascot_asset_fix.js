@@ -1,37 +1,38 @@
-/* GRCON — corrige a entrega do sprite do mascote usando arquivo PNG físico. */
+/* GRCON — entrega o sprite HD do Mascote da Qualidade. */
 (function (root) {
   "use strict";
 
   const STYLE_ID = "grcon-mascot-asset-fix-style";
-  const SPRITE_URL = new URL("assets/mascot/grcon-mascot-sprite.png?v=3.1.1", document.baseURI).href;
-  const FALLBACK_URL = new URL("grcon-mascot.png?v=3.1.1", document.baseURI).href;
+  const MIN_HD_SIDE = 1024;
+  const SPRITE_URL = new URL("grcon-mascot-sprite.png?v=4.0.0-hd", document.baseURI).href;
 
-  function setBackground(url, fallback) {
+  function setBackground(url) {
     let style = document.getElementById(STYLE_ID);
     if (!style) {
       style = document.createElement("style");
       style.id = STYLE_ID;
       document.head.appendChild(style);
     }
-    style.textContent = fallback
-      ? `.grcon-mascot-sprite{background-image:url("${url}")!important;background-size:contain!important;background-position:center!important;background-repeat:no-repeat!important}`
-      : `.grcon-mascot-sprite{background-image:url("${url}")!important;background-size:400% 400%!important;background-repeat:no-repeat!important}`;
+    style.textContent = `.grcon-mascot-sprite{background-image:url("${url}")!important;background-size:400% 400%!important;background-repeat:no-repeat!important;image-rendering:auto!important;backface-visibility:hidden}`;
 
-    document.documentElement.dataset.grconMascotAsset = fallback ? "fallback-file-v1" : "sprite-file-v1";
+    document.documentElement.dataset.grconMascotAsset = "sprite-hd-file-v1";
     if (root.GRCONMascot && typeof root.GRCONMascot.refresh === "function") root.GRCONMascot.refresh();
   }
 
   function load() {
     const image = new Image();
     image.decoding = "async";
-    image.onload = function () { setBackground(SPRITE_URL, false); };
+    image.onload = function () {
+      if (image.naturalWidth < MIN_HD_SIDE || image.naturalHeight < MIN_HD_SIDE) {
+        console.warn(`GRCON: sprite do mascote recusado por baixa resolução (${image.naturalWidth}×${image.naturalHeight}).`);
+        document.documentElement.dataset.grconMascotAsset = "sprite-low-resolution-rejected";
+        return;
+      }
+      setBackground(SPRITE_URL);
+    };
     image.onerror = function () {
-      console.warn("GRCON: sprite físico do mascote não pôde ser carregado; usando imagem padrão.");
-      const fallback = new Image();
-      fallback.decoding = "async";
-      fallback.onload = function () { setBackground(FALLBACK_URL, true); };
-      fallback.onerror = function () { console.warn("GRCON: imagem de fallback do mascote também não pôde ser carregada."); };
-      fallback.src = FALLBACK_URL;
+      console.warn("GRCON: sprite HD do mascote não pôde ser carregado.");
+      document.documentElement.dataset.grconMascotAsset = "sprite-hd-unavailable";
     };
     image.src = SPRITE_URL;
   }
