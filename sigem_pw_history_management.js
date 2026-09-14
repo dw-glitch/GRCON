@@ -141,6 +141,33 @@
     }
   }
 
+  async function capturePayload(system, base, snapshotId, context) {
+    if (!["sigem", "pw"].includes(system)) throw new Error("Sistema inválido para captura histórica.");
+    if (!base || !base.meta || !Array.isArray(base.records)) throw new Error(`Base ${system.toUpperCase()} inválida para captura histórica.`);
+    const id = text(snapshotId) || sourceId(system, base);
+    if (!id) throw new Error("Snapshot histórico sem identificação.");
+    const snapshot = await History.getSnapshot(History.STORES.sourceSnapshots, id);
+    if (!snapshot) throw new Error("O snapshot precisa ser registrado antes da captura do conteúdo da base.");
+    const existing = await readMeta(payloadKey(id), null);
+    if (existing && existing.snapshotId === id && Array.isArray(existing.records)) return existing;
+    const values = context || {};
+    const appState = App() && App().state || {};
+    const sigemBase = system === "sigem" ? base : values.sigemBase || appState.sigem;
+    const pwBase = system === "pw" ? base : values.pwBase || appState.pw;
+    const ldRecords = Array.isArray(values.ldRecords) ? values.ldRecords : appState.ld?.records || [];
+    const model = Dashboard.createModel(sigemBase?.records || [], pwBase?.records || [], ldRecords);
+    const payload = {
+      snapshotId: id,
+      system,
+      meta: clone(base.meta),
+      records: clone(base.records),
+      documents: clone(History.minimalDocuments(system, model)),
+      capturedAt: new Date().toISOString(),
+    };
+    await writeMeta(payloadKey(id), payload);
+    return payload;
+  }
+
   async function ensurePayload(system) {
     const app = App();
     const base = app && app.state && app.state[system];
@@ -149,20 +176,11 @@
     if (!id) return null;
     const snapshot = await History.getSnapshot(History.STORES.sourceSnapshots, id);
     if (!snapshot) return null;
-    const existing = await readMeta(payloadKey(id), null);
-    if (existing && existing.snapshotId === id && Array.isArray(existing.records)) return existing;
-    const model = app.state.model || Dashboard.createModel(app.state.sigem?.records || [], app.state.pw?.records || []);
-    const documents = History.minimalDocuments(system, model);
-    const payload = {
-      snapshotId: id,
-      system,
-      meta: clone(base.meta),
-      records: clone(base.records),
-      documents: clone(documents),
-      capturedAt: new Date().toISOString(),
-    };
-    await writeMeta(payloadKey(id), payload);
-    return payload;
+    return capturePayload(system, base, id, {
+      sigemBase: app.state.sigem,
+      pwBase: app.state.pw,
+      ldRecords: app.state.ld?.records || [],
+    });
   }
 
   async function ensureCurrentPayloads() {
@@ -539,6 +557,7 @@
     sourceId,
     activeSourceId,
     activePairKey,
+    capturePayload,
     ensureCurrentPayloads,
     buildDeletionContext,
     removeSourceSnapshot,
