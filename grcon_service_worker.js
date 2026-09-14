@@ -3,13 +3,46 @@
 
   // Mascote oficial da Qualidade. Mantido em módulos separados para que a
   // integração visual não se misture com regras de negócio ou navegação.
+  const installMascotGreeting = () => {
+    if (root.GRCONMascotGreeting || document.querySelector('script[data-grcon-mascot-greeting="true"]')) return;
+
+    const installInteraction = () => {
+      if (root.GRCONMascotGreeting || document.querySelector('script[data-grcon-mascot-greeting="true"]')) return;
+      const interaction = document.createElement("script");
+      interaction.src = "grcon_mascot_greeting.js";
+      interaction.async = false;
+      interaction.dataset.grconMascotGreeting = "true";
+      document.head.appendChild(interaction);
+    };
+
+    if (root.GRCONMascotGreetingCore) {
+      installInteraction();
+      return;
+    }
+    const existingCore = document.querySelector('script[data-grcon-mascot-greeting-core="true"]');
+    if (existingCore) {
+      existingCore.addEventListener("load", installInteraction, { once: true });
+      return;
+    }
+    const core = document.createElement("script");
+    core.src = "grcon_mascot_greeting_core.js";
+    core.async = false;
+    core.dataset.grconMascotGreetingCore = "true";
+    core.addEventListener("load", installInteraction, { once: true });
+    document.head.appendChild(core);
+  };
+
   const installMascotAssetFix = () => {
-    if (document.querySelector('script[data-grcon-mascot-asset-fix="true"]')) return;
+    if (document.querySelector('script[data-grcon-mascot-asset-fix="true"]')) {
+      installMascotGreeting();
+      return;
+    }
     const fix = document.createElement("script");
     fix.src = "grcon_mascot_asset_fix.js";
     fix.async = false;
     fix.dataset.grconMascotAssetFix = "true";
     document.head.appendChild(fix);
+    installMascotGreeting();
   };
 
   const installMascotHeader = () => {
