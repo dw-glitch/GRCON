@@ -89,7 +89,9 @@ function validResult() {
   assert.match(bootstrap, /ensure\("sigem_pw_readiness_core\.js"\)/);
   assert.match(bootstrap, /root\.GrconSigemPwReadiness/);
   assert.match(app, /id="spw-readiness"/);
-  assert.match(app, /Readiness\.assess\(state, state\.result\)/);
+  assert.match(app, /const readinessResult = Core\.aggregateModel\(state\.model\)/);
+  assert.match(app, /state\.result = Core\.aggregateModel\(state\.model, \{ documentClass: state\.filters\.documentClass \}\)/);
+  assert.match(app, /Readiness\.assess\(state, unfilteredResult\)/);
   assert.match(app, /aria-live="polite"/);
   assert.match(app, /data-status="attention"/);
   assert.match(sw, /"sigem_pw_readiness_core\.js"/);
