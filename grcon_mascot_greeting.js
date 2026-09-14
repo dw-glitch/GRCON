@@ -13,6 +13,12 @@
   const SELECTOR = ".grcon-brand-mascot, .grcon-mascot-context";
   const EDGE_GAP = 8;
   const MASCOT_GAP = 12;
+  const GENERATED_ASSETS = Object.freeze({
+    run: new URL("assets/mascot/animated/grcon-mascot-run-sprite.png", document.baseURI).href,
+    wave: new URL("assets/mascot/animated/grcon-mascot-wave.png", document.baseURI).href,
+    analyze: new URL("assets/mascot/animated/grcon-mascot-analyze.png", document.baseURI).href,
+    success: new URL("assets/mascot/animated/grcon-mascot-success.png", document.baseURI).href,
+  });
   let bubble = null;
   let activeMascot = null;
   let pinnedMascot = null;
@@ -69,7 +75,71 @@
         flex: 0 0 auto;
         transform: translate3d(0, 0, 0) rotate(0deg);
         transform-origin: 52% 82%;
-        transition: transform 620ms cubic-bezier(.18, .89, .32, 1.14);
+        transition:
+          transform 620ms cubic-bezier(.18, .89, .32, 1.14),
+          opacity 160ms ease-out;
+      }
+      .grcon-mascot-generated-layer {
+        position: absolute;
+        z-index: 2;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+        filter: drop-shadow(0 5px 12px rgb(12 32 48 / 18%));
+        opacity: 0;
+        pointer-events: none;
+        transform: translateZ(0);
+        transition: opacity 160ms ease-out;
+      }
+      .grcon-mascot-generated-run {
+        background-image: url("${GENERATED_ASSETS.run}");
+        background-position: 0 0;
+        background-size: 800% 100%;
+      }
+      .grcon-mascot-generated-wave {
+        background-image: url("${GENERATED_ASSETS.wave}");
+      }
+      .grcon-mascot-generated-analyze {
+        background-image: url("${GENERATED_ASSETS.analyze}");
+      }
+      .grcon-mascot-generated-success {
+        background-image: url("${GENERATED_ASSETS.success}");
+      }
+      html[data-theme="dark"] .grcon-mascot-generated-layer {
+        filter: drop-shadow(0 6px 15px rgb(0 0 0 / 38%));
+      }
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting.is-processing
+        .grcon-mascot-pose-motion > .grcon-mascot-sprite:not(.grcon-mascot-processing-orb),
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting.is-greeting-active:not(.is-processing)
+        .grcon-mascot-pose-motion > .grcon-mascot-sprite:not(.grcon-mascot-processing-orb),
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting[data-pose="analysis"]:not(.is-processing):not(.is-greeting-active)
+        .grcon-mascot-pose-motion > .grcon-mascot-sprite:not(.grcon-mascot-processing-orb),
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting[data-pose="success"]:not(.is-processing):not(.is-greeting-active)
+        .grcon-mascot-pose-motion > .grcon-mascot-sprite:not(.grcon-mascot-processing-orb) {
+        opacity: 0;
+      }
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting.is-processing .grcon-mascot-generated-run {
+        opacity: 1;
+        animation: grcon-mascot-frame-run 720ms step-end infinite;
+        will-change: background-position;
+      }
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting.is-greeting-active:not(.is-processing) .grcon-mascot-generated-wave,
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting[data-pose="analysis"]:not(.is-processing):not(.is-greeting-active)
+        .grcon-mascot-generated-analyze,
+      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
+        .grcon-mascot-greeting[data-pose="success"]:not(.is-processing):not(.is-greeting-active)
+        .grcon-mascot-generated-success {
+        opacity: 1;
       }
       .grcon-mascot-greeting::before {
         transform: scale(1);
@@ -102,55 +172,8 @@
         transition-duration: 540ms;
         transition-timing-function: cubic-bezier(.4, 0, .2, 1);
       }
-      /* Perfis naturais das 15 poses reais do sprite HD. Cada ciclo possui
-         pausas longas e assimétricas para evitar um loop mecânico. */
-      .grcon-mascot-greeting[data-pose="default"] .grcon-mascot-pose-motion,
-      .grcon-mascot-greeting[data-pose="quality"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-calm;
-        --grcon-pose-duration: 6200ms;
-      }
-      .grcon-mascot-greeting[data-pose="analysis"] .grcon-mascot-pose-motion,
-      .grcon-mascot-greeting[data-pose="dashboard"] .grcon-mascot-pose-motion,
-      .grcon-mascot-greeting[data-pose="sigem-pw"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-focus;
-        --grcon-pose-duration: 5400ms;
-      }
-      .grcon-mascot-greeting[data-pose="search"] .grcon-mascot-pose-motion,
-      .grcon-mascot-greeting[data-pose="history"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-scan;
-        --grcon-pose-duration: 5600ms;
-      }
-      .grcon-mascot-greeting[data-pose="check"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-confirm;
-        --grcon-pose-duration: 5200ms;
-      }
-      .grcon-mascot-greeting[data-pose="egrdt"] .grcon-mascot-pose-motion,
-      .grcon-mascot-greeting[data-pose="import"] .grcon-mascot-pose-motion,
-      .grcon-mascot-greeting[data-pose="report"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-work;
-        --grcon-pose-duration: 5000ms;
-      }
-      .grcon-mascot-greeting[data-pose="warning"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-alert;
-        --grcon-pose-duration: 4800ms;
-      }
-      .grcon-mascot-greeting[data-pose="success"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-success;
-        --grcon-pose-duration: 5600ms;
-      }
-      .grcon-mascot-greeting[data-pose="pending"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-pending;
-        --grcon-pose-duration: 5600ms;
-      }
-      .grcon-mascot-greeting[data-pose="empty"] .grcon-mascot-pose-motion {
-        --grcon-pose-animation: grcon-mascot-pose-empty;
-        --grcon-pose-duration: 6800ms;
-      }
-      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
-        .grcon-mascot-greeting .grcon-mascot-pose-motion {
-        animation: var(--grcon-pose-animation, grcon-mascot-pose-calm)
-          var(--grcon-pose-duration, 6200ms) cubic-bezier(.4, 0, .2, 1) infinite;
-      }
+      /* As poses sem quadros próprios permanecem estáticas. Isso evita repetir
+         o antigo efeito de deslocar a imagem inteira para simular movimento. */
       /* Na pose sentada, o círculo de pontos já pertence ao desenho. Durante
          a análise, recortamos esse mesmo trecho da sprite e o fazemos girar;
          assim não aparece um indicador genérico em outra posição. */
@@ -179,11 +202,6 @@
         animation: grcon-mascot-orb-spin 840ms cubic-bezier(.45, .05, .55, .95) infinite;
       }
       html[data-grcon-mascot-asset="sprite-hd-file-v1"]
-        .grcon-mascot-context.is-processing .grcon-mascot-motion {
-        animation: grcon-mascot-working-run 700ms cubic-bezier(.37, 0, .2, 1) infinite;
-        will-change: transform;
-      }
-      html[data-grcon-mascot-asset="sprite-hd-file-v1"]
         .grcon-mascot-context.is-processing .grcon-mascot-motion::after {
         content: "";
         position: absolute;
@@ -200,83 +218,9 @@
         pointer-events: none;
         animation: grcon-mascot-speed-lines 620ms ease-in-out infinite;
       }
-      @keyframes grcon-mascot-pose-calm {
-        0%, 24%, 54%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-        7% { transform: translate3d(0, -2px, 0) rotate(.4deg) scale(1.006); }
-        14% { transform: translate3d(0, 0, 0) rotate(-.25deg) scale(1.002); }
-        65% { transform: translate3d(1px, -2px, 0) rotate(.7deg) scale(1.005); }
-        74% { transform: translate3d(0, 0, 0) rotate(-.2deg) scale(1); }
-      }
-      @keyframes grcon-mascot-pose-focus {
-        0%, 26%, 54%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        7% { transform: translate3d(-2px, -2px, 0) rotate(-.9deg); }
-        13% { transform: translate3d(2px, -3px, 0) rotate(.8deg); }
-        19% { transform: translate3d(0, -1px, 0) rotate(.15deg); }
-        65% { transform: translate3d(2px, -2px, 0) rotate(.7deg); }
-        73% { transform: translate3d(0, 0, 0) rotate(-.25deg); }
-      }
-      @keyframes grcon-mascot-pose-scan {
-        0%, 20%, 48%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        6% { transform: translate3d(-3px, -2px, 0) rotate(-1.1deg); }
-        12% { transform: translate3d(2px, -2px, 0) rotate(.8deg); }
-        62% { transform: translate3d(3px, -1px, 0) rotate(1deg); }
-        70% { transform: translate3d(-2px, -2px, 0) rotate(-.65deg); }
-        77% { transform: translate3d(0, 0, 0) rotate(0deg); }
-      }
-      @keyframes grcon-mascot-pose-confirm {
-        0%, 29%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        7% { transform: translate3d(0, -4px, 0) rotate(1.2deg); }
-        12% { transform: translate3d(0, 2px, 0) rotate(-.7deg); }
-        18% { transform: translate3d(0, -2px, 0) rotate(.45deg); }
-        24% { transform: translate3d(0, 0, 0) rotate(0deg); }
-      }
-      @keyframes grcon-mascot-pose-work {
-        0%, 30%, 58%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        7% { transform: translate3d(2px, -3px, 0) rotate(1deg); }
-        13% { transform: translate3d(-2px, 1px, 0) rotate(-.75deg); }
-        21% { transform: translate3d(2px, -2px, 0) rotate(.6deg); }
-        68% { transform: translate3d(-2px, -2px, 0) rotate(-.65deg); }
-        77% { transform: translate3d(1px, 0, 0) rotate(.25deg); }
-      }
-      @keyframes grcon-mascot-pose-alert {
-        0%, 34%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-        7% { transform: translate3d(0, -3px, 0) rotate(-1.5deg) scale(1.012); }
-        13% { transform: translate3d(2px, 1px, 0) rotate(1.2deg) scale(1.004); }
-        19% { transform: translate3d(-2px, -2px, 0) rotate(-.8deg) scale(1.007); }
-        26% { transform: translate3d(0, 0, 0) rotate(.2deg) scale(1); }
-      }
-      @keyframes grcon-mascot-pose-success {
-        0%, 31%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-        7% { transform: translate3d(0, -5px, 0) rotate(1.4deg) scale(1.012); }
-        13% { transform: translate3d(0, 2px, 0) rotate(-.8deg) scale(1.003); }
-        19% { transform: translate3d(0, -2px, 0) rotate(.5deg) scale(1.006); }
-        25% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-      }
-      @keyframes grcon-mascot-pose-pending {
-        0%, 25%, 56%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-        8% { transform: translate3d(0, -2px, 0) rotate(-.6deg) scale(1.005); }
-        15% { transform: translate3d(1px, 0, 0) rotate(.35deg) scale(1.001); }
-        67% { transform: translate3d(2px, -2px, 0) rotate(.65deg) scale(1.004); }
-        76% { transform: translate3d(0, 0, 0) rotate(-.25deg) scale(1); }
-      }
-      @keyframes grcon-mascot-pose-empty {
-        0%, 23%, 51%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        8% { transform: translate3d(-3px, -1px, 0) rotate(-1.2deg); }
-        15% { transform: translate3d(2px, -2px, 0) rotate(.85deg); }
-        64% { transform: translate3d(3px, -1px, 0) rotate(1.1deg); }
-        73% { transform: translate3d(0, 0, 0) rotate(-.4deg); }
-      }
       @keyframes grcon-mascot-reduced-acknowledge {
         0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
         42% { transform: translate3d(0, -2px, 0) rotate(.55deg); }
-      }
-      @keyframes grcon-mascot-working-run {
-        0%, 100% { transform: translate3d(-2px, 1px, 0) rotate(-.8deg) scale(1); }
-        12% { transform: translate3d(-5px, 0, 0) rotate(.7deg) scale(1.005); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-        30% { transform: translate3d(4px, -6px, 0) rotate(2.2deg) scale(1.01); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
-        47% { transform: translate3d(7px, 1px, 0) rotate(.45deg) scale(1.004); animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
-        63% { transform: translate3d(2px, -2px, 0) rotate(-1.1deg) scale(1.007); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-        81% { transform: translate3d(-5px, -6px, 0) rotate(-2.1deg) scale(1.01); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
       }
       @keyframes grcon-mascot-speed-lines {
         0%, 100% { opacity: .25; transform: translate3d(4px, 1px, 0) scaleX(.82); }
@@ -287,6 +231,16 @@
         0% { transform: rotate(0deg) scale(.97); }
         46% { transform: rotate(176deg) scale(1.02); }
         100% { transform: rotate(360deg) scale(.97); }
+      }
+      @keyframes grcon-mascot-frame-run {
+        0%, 12.49% { background-position: 0 0; }
+        12.5%, 24.99% { background-position: 14.285714% 0; }
+        25%, 37.49% { background-position: 28.571429% 0; }
+        37.5%, 49.99% { background-position: 42.857143% 0; }
+        50%, 62.49% { background-position: 57.142857% 0; }
+        62.5%, 74.99% { background-position: 71.428571% 0; }
+        75%, 87.49% { background-position: 85.714286% 0; }
+        87.5%, 100% { background-position: 100% 0; }
       }
       .grcon-mascot-speech {
         position: fixed;
@@ -379,6 +333,10 @@
           transition-delay: 0ms !important;
         }
         .grcon-mascot-greeting .grcon-mascot-pose-motion {
+          animation: none !important;
+          transition-duration: 80ms !important;
+        }
+        .grcon-mascot-greeting .grcon-mascot-generated-layer {
           animation: none !important;
           transition-duration: 80ms !important;
         }
@@ -659,6 +617,15 @@
       motion.insertBefore(poseMotion, sprite);
       poseMotion.appendChild(sprite);
     }
+    if (poseMotion) {
+      ["run", "wave", "analyze", "success"].forEach((name) => {
+        if (poseMotion.querySelector(`.grcon-mascot-generated-${name}`)) return;
+        const layer = document.createElement("span");
+        layer.className = `grcon-mascot-generated-layer grcon-mascot-generated-${name}`;
+        layer.setAttribute("aria-hidden", "true");
+        poseMotion.appendChild(layer);
+      });
+    }
     const originalLabel = mascot.getAttribute("aria-label") || "Mascote da Qualidade do GRCON";
     mascot.dataset.mascotLabel = originalLabel;
     mascot.removeAttribute("aria-hidden");
@@ -712,6 +679,11 @@
 
   function init() {
     installStyles();
+    Object.values(GENERATED_ASSETS).forEach((source) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = source;
+    });
     ensureBubble();
     const durable = durableProcessingState();
     processingHoldUntil = Math.max(processingHoldUntil, durable.until);
