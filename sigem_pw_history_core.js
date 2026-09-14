@@ -14,7 +14,7 @@
 
   const DB_NAME = "grcon-sigem-pw-history";
   const DB_VERSION = 1;
-  const CALCULATION_VERSION = "sigem-pw-history-1";
+  const CALCULATION_VERSION = "sigem-pw-history-2";
   const STORES = Object.freeze({
     sourceSnapshots: "sourceSnapshots",
     comparisonSnapshots: "comparisonSnapshots",
@@ -108,20 +108,35 @@
     const comparable = docs || minimalDocuments(system, model);
     const allDocuments = sourceAll instanceof Map ? [...sourceAll.values()] : [];
     const emitted = system === SYSTEMS.PW ? comparable.filter((document) => document.emitted) : [];
+    const aggregate = Dashboard.aggregateModel(model);
+    const entryTotal = system === SYSTEMS.PW ? aggregate.summary.pwRegistered : aggregate.summary.sigem;
+    const entryClasses = Object.fromEntries(CLASSES.map((documentClass) => {
+      const row = aggregate.classes.find((item) => item.documentClass === documentClass);
+      return [documentClass, Number(row && (system === SYSTEMS.PW ? row.pwRegistered : row.sigem) || 0)];
+    }));
+    const emittedEntryClasses = system === SYSTEMS.PW ? Object.fromEntries(CLASSES.map((documentClass) => {
+      const row = aggregate.classes.find((item) => item.documentClass === documentClass);
+      return [documentClass, Number(row && row.pwEmitted || 0)];
+    })) : null;
     const meta = base && base.meta || {};
     const nonComparableRecognized = allDocuments.filter((document) => !isComparable(document)).length;
     return {
       rawRecords: Number(meta.sourceRowCount || meta.recordCount || (normalized && normalized.length) || 0),
       validRecords: Number(meta.recordCount || (normalized && normalized.length) || 0),
       comparableDocuments: comparable.length,
+      revisionEntries: entryTotal,
       allRecognizedDocuments: allDocuments.length,
       outsideScope: nonComparableRecognized,
       invalidRecords: Number(meta.invalidCount || 0),
       unclassified: allDocuments.filter((document) => !CLASSES.includes(text(document.documentClass))).length,
       classes: classCounts(comparable, false),
+      revisionClasses: entryClasses,
       emittedDocuments: system === SYSTEMS.PW ? emitted.length : null,
+      emittedRevisionEntries: system === SYSTEMS.PW ? aggregate.summary.pwEmitted : null,
       emittedByClass: system === SYSTEMS.PW ? classCounts(comparable, true) : null,
+      emittedRevisionByClass: emittedEntryClasses,
       notEmittedDocuments: system === SYSTEMS.PW ? comparable.length - emitted.length : null,
+      notEmittedRevisionEntries: system === SYSTEMS.PW ? aggregate.summary.gapPwToEmitted : null,
       statusDistribution: distribution(comparable, (document) => document.status),
       duplicateRevisionCount: Number(meta.duplicateRevisionCount || 0),
       unknownEmissionCount: Number(meta.unknownEmissionCount || 0),
@@ -133,13 +148,15 @@
     if (!base || !base.meta || !Array.isArray(base.records)) throw new Error(`Base ${system.toUpperCase()} inválida para snapshot.`);
     const documents = minimalDocuments(system, model);
     const fingerprint = contentFingerprint(system, base.records);
-    const importedAt = text(base.meta.importedAt) || nowIso();
+    const sourceImportedAt = text(base.meta.importedAt) || nowIso();
+    const importedAt = text(options && options.effectiveAt) || sourceImportedAt;
     const snapshot = {
       id: `${system}:${fingerprint}`,
       kind: "source",
       system,
       fingerprint,
       importedAt,
+      sourceImportedAt,
       recordedAt: text(options && options.recordedAt) || nowIso(),
       fileName: text(base.meta.fileName),
       fileSize: Number(base.meta.fileSize || 0),
@@ -250,55 +267,52 @@
   }
 
   function classComparisonMetrics(model, revisionAnalysis, comparisonDocs) {
-    const sets = relationSets(model);
+    const aggregate = Dashboard.aggregateModel(model);
     const revisionRows = revisionAnalysis && Array.isArray(revisionAnalysis.rows) ? revisionAnalysis.rows : [];
     return CLASSES.map((documentClass) => {
-      const sigem = new Set([...sets.sigem].filter((key) => model.sigemAll.get(key)?.documentClass === documentClass));
-      const pw = new Set([...sets.pw].filter((key) => model.pwAll.get(key)?.documentClass === documentClass));
-      const emitted = new Set([...sets.emitted].filter((key) => model.pwAll.get(key)?.documentClass === documentClass));
+      const entryMetrics = aggregate.classes.find((item) => item.documentClass === documentClass) || {};
       const rows = revisionRows.filter((row) => row.documentClass === documentClass);
       const docs = comparisonDocs.filter((row) => row.documentClass === documentClass);
       const states = countStates(docs);
-      let matched = 0, sigemOnly = 0, pwOnly = 0;
-      sigem.forEach((key) => { if (pw.has(key)) matched += 1; else sigemOnly += 1; });
-      pw.forEach((key) => { if (!sigem.has(key)) pwOnly += 1; });
+      const alignedEntries = aggregate.lists.aligned.filter((row) => row.documentClass === documentClass).length;
       const rc = { updated: 0, previous: 0, notFound: 0, awaitingEmission: 0, pwAhead: 0, review: 0 };
       for (const row of rows) {
-        const s = Revision && Revision.SITUATIONS || {};
-        if (row.situation === s.UPDATED) rc.updated += 1;
-        else if (row.situation === s.PREVIOUS) rc.previous += 1;
-        else if (row.situation === s.NOT_FOUND) rc.notFound += 1;
-        else if (row.situation === s.AWAITING_EMISSION) rc.awaitingEmission += 1;
-        else if (row.situation === s.PW_AHEAD) rc.pwAhead += 1;
+        const situations = Revision && Revision.SITUATIONS || {};
+        if (row.situation === situations.UPDATED) rc.updated += 1;
+        else if (row.situation === situations.PREVIOUS) rc.previous += 1;
+        else if (row.situation === situations.NOT_FOUND) rc.notFound += 1;
+        else if (row.situation === situations.AWAITING_EMISSION) rc.awaitingEmission += 1;
+        else if (row.situation === situations.PW_AHEAD) rc.pwAhead += 1;
         else rc.review += 1;
       }
       return {
         documentClass,
-        sigem: sigem.size,
-        pwRegistered: pw.size,
-        pwEmitted: emitted.size,
-        matched,
-        sigemOnly,
-        pwOnly,
-        aligned: states.aligned,
-        postPw: states.postPw,
-        postSigem: states.postSigem,
-        awaitingEmission: states.awaitingEmission,
+        sigem: Number(entryMetrics.sigem || 0),
+        pwRegistered: Number(entryMetrics.pwRegistered || 0),
+        pwEmitted: Number(entryMetrics.pwEmitted || 0),
+        matched: Number(entryMetrics.matched || 0),
+        sigemOnly: Number(entryMetrics.gapSigemToPw || 0),
+        pwOnly: Number(entryMetrics.pwExclusive || 0),
+        aligned: alignedEntries,
+        postPw: Number(entryMetrics.gapSigemToPw || 0),
+        postSigem: Number(entryMetrics.pwExclusive || 0),
+        awaitingEmission: Number(entryMetrics.gapPwToEmitted || 0),
+        documentStates: states,
         pwPrevious: rc.previous,
         notFoundPw: rc.notFound,
         correctRegisteredNotEmitted: rc.awaitingEmission,
-        coverage: sigem.size ? matched / sigem.size : null,
-        emissionRate: pw.size ? emitted.size / pw.size : null,
+        coverage: entryMetrics.sigem ? Number(entryMetrics.matched || 0) / entryMetrics.sigem : null,
+        emissionRate: entryMetrics.pwRegistered ? Number(entryMetrics.pwEmitted || 0) / entryMetrics.pwRegistered : null,
       };
     });
   }
 
   function buildComparisonSnapshot(sigemSnapshot, pwSnapshot, model, revisionAnalysis, options) {
     if (!sigemSnapshot || !pwSnapshot) throw new Error("As duas bases são necessárias para registrar um comparativo.");
-    const sets = relationSets(model);
     const documents = comparisonDocuments(model, revisionAnalysis);
     const states = countStates(documents);
     const counts = revisionAnalysis && revisionAnalysis.counts || {};
+    const aggregate = Dashboard.aggregateModel(model);
     const snapshot = {
       id: `comparison:${sigemSnapshot.fingerprint}:${pwSnapshot.fingerprint}`,
       kind: "comparison",
@@ -314,22 +328,23 @@
       sigemImportedAt: sigemSnapshot.importedAt,
       pwImportedAt: pwSnapshot.importedAt,
       metrics: {
-        sigem: sets.sigem.size,
-        pwRegistered: sets.pw.size,
-        pwEmitted: sets.emitted.size,
-        matched: sets.both.size,
-        exclusiveSigem: sets.sigemOnly.size,
-        exclusivePw: sets.pwOnly.size,
-        postPw: states.postPw,
-        postSigem: states.postSigem,
-        awaitingEmission: states.awaitingEmission,
-        aligned: states.aligned,
+        sigem: aggregate.summary.sigem,
+        pwRegistered: aggregate.summary.pwRegistered,
+        pwEmitted: aggregate.summary.pwEmitted,
+        matched: aggregate.summary.matched,
+        exclusiveSigem: aggregate.summary.gapSigemToPw,
+        exclusivePw: aggregate.summary.pwExclusive,
+        postPw: aggregate.summary.gapSigemToPw,
+        postSigem: aggregate.summary.pwExclusive,
+        awaitingEmission: aggregate.summary.gapPwToEmitted,
+        aligned: aggregate.lists.aligned.length,
         review: states.review,
+        documentStates: states,
         pwPrevious: Number(counts.previous || 0),
         notFoundPw: Number(counts.notFound || 0),
         correctRegisteredNotEmitted: Number(counts.awaitingEmission || 0),
-        coverage: sets.sigem.size ? sets.both.size / sets.sigem.size : null,
-        emissionRate: sets.pw.size ? sets.emitted.size / sets.pw.size : null,
+        coverage: aggregate.summary.sigem ? aggregate.summary.matched / aggregate.summary.sigem : null,
+        emissionRate: aggregate.summary.pwRegistered ? aggregate.summary.pwEmitted / aggregate.summary.pwRegistered : null,
         classes: classComparisonMetrics(model, revisionAnalysis, documents),
       },
       delta: null,
@@ -470,8 +485,9 @@
     }));
   }
 
-  async function recordSource(system, base, model, recordedAt) {
-    const built = buildSourceSnapshot(system, base, model, { recordedAt });
+  async function recordSource(system, base, model, options) {
+    const values = typeof options === "string" ? { recordedAt: options } : options || {};
+    const built = buildSourceSnapshot(system, base, model, values);
     const existing = await getSnapshot(STORES.sourceSnapshots, built.snapshot.id);
     if (existing) return { created: false, duplicate: true, snapshot: existing };
     const history = await listSourceSnapshots(system);
@@ -529,8 +545,11 @@
     const model = hasLdRecords
       ? Dashboard.createModel(hasSigem ? sigemBase.records : [], hasPw ? pwBase.records : [], options.ldRecords)
       : Dashboard.createModel(hasSigem ? sigemBase.records : [], hasPw ? pwBase.records : []);
-    const sigem = hasSigem ? await recordSource(SYSTEMS.SIGEM, sigemBase, model, recordedAt) : null;
-    const pw = hasPw ? await recordSource(SYSTEMS.PW, pwBase, model, recordedAt) : null;
+    const effectiveAt = text(options && options.effectiveAt);
+    const changedSystem = text(options && options.changedSystem);
+    const sourceOptions = (system) => ({ recordedAt, effectiveAt: changedSystem === system ? effectiveAt : "" });
+    const sigem = hasSigem ? await recordSource(SYSTEMS.SIGEM, sigemBase, model, sourceOptions(SYSTEMS.SIGEM)) : null;
+    const pw = hasPw ? await recordSource(SYSTEMS.PW, pwBase, model, sourceOptions(SYSTEMS.PW)) : null;
     let comparison = null;
     if (hasSigem && hasPw) {
       const sigemSnapshot = sigem && sigem.snapshot || buildSourceSnapshot(SYSTEMS.SIGEM, sigemBase, model, { recordedAt }).snapshot;
