@@ -539,27 +539,46 @@
     });
   }
 
+  function storedValue(record, fallback) {
+    if (record === undefined) return fallback;
+    if (record && typeof record === "object"
+      && Object.prototype.hasOwnProperty.call(record, "key")
+      && Object.prototype.hasOwnProperty.call(record, "value")) return record.value;
+    return record;
+  }
+
+  function putKv(store, key, value) {
+    if (store.keyPath) store.put({ key, value });
+    else store.put(value, key);
+  }
+
   async function kvGet(key, fallback) {
     const db = await openDb();
     if (!db) return fallback;
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, "readonly");
       const request = tx.objectStore(STORE).get(key);
-      request.onsuccess = () => { db.close(); resolve(request.result ? request.result.value : fallback); };
+      request.onsuccess = () => { db.close(); resolve(storedValue(request.result, fallback)); };
       request.onerror = () => { db.close(); reject(request.error || new Error("Falha ao ler a conferência local.")); };
     });
   }
 
-  async function kvSet(key, value) {
+  async function kvSetMany(entries) {
     const db = await openDb();
     if (!db) return false;
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put({ key, value });
+      const store = tx.objectStore(STORE);
+      (entries || []).forEach(([key, value]) => putKv(store, key, value));
       tx.oncomplete = () => { db.close(); resolve(true); };
       tx.onerror = () => { db.close(); reject(tx.error || new Error("Falha ao salvar a conferência local.")); };
       tx.onabort = () => { db.close(); reject(tx.error || new Error("A gravação da conferência foi cancelada.")); };
     });
+  }
+
+  async function kvSet(key, value) {
+    await kvSetMany([[key, value]]);
+    return true;
   }
 
   async function loadBase() { return kvGet(BASE_KEY, { meta: null, records: [] }); }
@@ -623,14 +642,18 @@
     return { ...result, baseMeta: base.meta || null };
   }
 
-  async function importWorkbook(workbook, fileMeta, historyRecords, options) {
+  async function prepareWorkbookImport(workbook, fileMeta, historyRecords, options) {
     const parsed = parseWorkbook(workbook, fileMeta);
     if (!parsed.ok) throw new Error(parsed.errors.join(" ") || "Não foi possível ler a Consulta Geral.");
-    const previousBase = await loadBase();
+    const [previousBase, previousState, audit] = await Promise.all([loadBase(), loadState(), loadAudit()]);
     const base = { meta: parsed.meta, records: parsed.records };
-    await saveBase(base);
-    const result = await reconcilePersisted(historyRecords, options);
-    const audit = await loadAudit();
+    const prefs = readPreferences();
+    const result = reconcile(
+      historyRecords || (History && History.read ? History.read() : []),
+      base.records,
+      previousState,
+      { ...prefs, ...(options || {}) }
+    );
     const entry = {
       id: `${parsed.meta.importedAt}|${parsed.meta.fileName}`,
       at: parsed.meta.importedAt,
@@ -646,8 +669,33 @@
       previousFileName: text(previousBase && previousBase.meta && previousBase.meta.fileName),
       errors: [],
     };
-    await saveAudit([entry, ...audit.filter((item) => item.id !== entry.id)]);
-    return { ...result, parsed, auditEntry: entry };
+    const nextAudit = [entry, ...audit.filter((item) => item.id !== entry.id)].slice(0, MAX_AUDIT);
+    return {
+      ...result,
+      parsed,
+      auditEntry: entry,
+      prepared: { base, state: result.state, audit: nextAudit, groups: result.groups },
+    };
+  }
+
+  async function commitPreparedImport(preparedResult) {
+    const prepared = preparedResult && preparedResult.prepared;
+    if (!prepared || !prepared.base || !prepared.state || !Array.isArray(prepared.audit)) {
+      throw new Error("Importação preparada inválida; nenhuma base foi alterada.");
+    }
+    await kvSetMany([
+      [BASE_KEY, prepared.base],
+      [STATE_KEY, prepared.state],
+      [AUDIT_KEY, prepared.audit],
+    ]);
+    writeHistoryIndex(prepared.groups || [], prepared.base.meta);
+    return preparedResult;
+  }
+
+  async function importWorkbook(workbook, fileMeta, historyRecords, options) {
+    const prepared = await prepareWorkbookImport(workbook, fileMeta, historyRecords, options);
+    await commitPreparedImport(prepared);
+    return prepared;
   }
 
   function filterRows(rows, filters) {
@@ -701,6 +749,7 @@
     detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
     statusLabel, aggregateStatus, filterRows, pendingRows,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
-    readHistoryIndex, historyAggregate, reconcilePersisted, importWorkbook,
+    kvGet, kvSet, kvSetMany, storedValue, putKv,
+    readHistoryIndex, historyAggregate, reconcilePersisted, prepareWorkbookImport, commitPreparedImport, importWorkbook,
   });
 });
