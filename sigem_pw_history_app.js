@@ -53,7 +53,7 @@
   function ensureNavigation() {
     const host = shell(); if (!host || document.getElementById("spw-inner-nav")) return;
     const nav = document.createElement("nav"); nav.id = "spw-inner-nav"; nav.className = "spw-inner-nav"; nav.setAttribute("aria-label", "Seções do Dashboard SIGEM × PW");
-    nav.innerHTML = `<button type="button" data-spw-jump="spw-current-anchor">Visão geral</button><button type="button" data-spw-jump="spw-action-anchor">Pendências</button><button type="button" data-spw-jump="spw-revision-section">Revisões</button><button type="button" data-spw-jump="${SECTION_ID}">Evolução</button>`;
+    nav.innerHTML = `<button type="button" data-spw-jump="spw-current-anchor">Visão geral</button><button type="button" data-spw-jump="spw-action-anchor">Pendências</button><button type="button" data-spw-jump="spw-revision-section">Revisões</button><button type="button" data-spw-jump="spw-evolution-section">Entradas diárias</button><button type="button" data-spw-jump="${SECTION_ID}">Histórico</button>`;
     host.querySelector(".spw-page-heading")?.insertAdjacentElement("afterend", nav);
     const current = document.createElement("span"); current.id = "spw-current-anchor"; current.hidden = true; host.querySelector(".spw-section-title")?.insertAdjacentElement("beforebegin", current);
   }
@@ -101,8 +101,8 @@
 
   function classMetric(snapshot, system) {
     if (!snapshot) return { total: null, emitted: null };
-    if (!state.documentClass) return { total: snapshot.metrics.comparableDocuments, emitted: system === "pw" ? snapshot.metrics.emittedDocuments : null };
-    return { total: snapshot.metrics.classes?.[state.documentClass] ?? 0, emitted: system === "pw" ? snapshot.metrics.emittedByClass?.[state.documentClass] ?? 0 : null };
+    if (!state.documentClass) return { total: snapshot.metrics.revisionEntries ?? snapshot.metrics.comparableDocuments, emitted: system === "pw" ? snapshot.metrics.emittedRevisionEntries ?? snapshot.metrics.emittedDocuments : null };
+    return { total: snapshot.metrics.revisionClasses?.[state.documentClass] ?? snapshot.metrics.classes?.[state.documentClass] ?? 0, emitted: system === "pw" ? snapshot.metrics.emittedRevisionByClass?.[state.documentClass] ?? snapshot.metrics.emittedByClass?.[state.documentClass] ?? 0 : null };
   }
   function comparisonMetric(snapshot) {
     if (!snapshot) return null;

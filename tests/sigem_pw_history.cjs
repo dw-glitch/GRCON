@@ -62,16 +62,34 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   const m = comparison.snapshot.metrics;
   assert.equal(m.sigem, 4);
   assert.equal(m.pwRegistered, 4);
-  assert.equal(m.matched, 3);
-  assert.equal(m.exclusiveSigem, 1);
-  assert.equal(m.exclusivePw, 1);
+  assert.equal(m.matched, 2, "correspondência histórica também deve usar código + revisão");
+  assert.equal(m.exclusiveSigem, 2);
+  assert.equal(m.exclusivePw, 2);
   assert.equal(m.aligned, 1, "mesma revisão emitida deve estar alinhada");
   assert.equal(m.postPw, 2, "revisão anterior + não localizado devem compor Postar no PW");
   assert.equal(m.awaitingEmission, 1, "revisão correta cadastrada sem emissão deve ficar separada");
-  assert.equal(m.postSigem, 1, "exclusivo PW deve compor Postar no SIGEM");
+  assert.equal(m.postSigem, 2, "cada revisão exclusiva no PW deve compor Postar no SIGEM");
   assert.equal(m.pwPrevious, 1);
   assert.equal(m.notFoundPw, 1);
   assert.equal(m.correctRegisteredNotEmitted, 1);
+})();
+
+(function revisionsCountAsIndependentHistoricalEntries() {
+  const sigemRecords = [et("MULTIREV", "0", "Emitido", { sourceRow: 1 }), et("MULTIREV", "A", "Emitido", { sourceRow: 2 })];
+  const pwRecords = [pw("MULTIREV", "0", "Approved", "Sim", { sourceRow: 1 }), pw("MULTIREV", "A", "Draft", "Previsto", { sourceRow: 2 })];
+  const model = Dashboard.createModel(sigemRecords, pwRecords);
+  const sigemSnapshot = History.buildSourceSnapshot("sigem", sigemBase(sigemRecords), model).snapshot;
+  const pwSnapshot = History.buildSourceSnapshot("pw", pwBase(pwRecords), model).snapshot;
+  const comparison = History.buildComparisonSnapshot(sigemSnapshot, pwSnapshot, model, Revision.analyze(model)).snapshot;
+  assert.equal(sigemSnapshot.metrics.comparableDocuments, 1, "identidade documental continua disponível para transições");
+  assert.equal(sigemSnapshot.metrics.revisionEntries, 2, "revisões 0 e A contam como duas entradas no histórico");
+  assert.equal(sigemSnapshot.metrics.revisionClasses.ET, 2);
+  assert.equal(pwSnapshot.metrics.revisionEntries, 2);
+  assert.equal(pwSnapshot.metrics.emittedRevisionEntries, 1);
+  assert.equal(comparison.metrics.sigem, 2);
+  assert.equal(comparison.metrics.pwRegistered, 2);
+  assert.equal(comparison.metrics.pwEmitted, 1);
+  assert.equal(comparison.metrics.matched, 2);
 })();
 
 (function identityTransitionsDetectResolvedAndNewPending() {

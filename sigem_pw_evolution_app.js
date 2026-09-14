@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const SECTION_ID = "spw-history-section";
+  const SECTION_ID = "spw-evolution-section";
   const STYLE_ID = "spw-evolution-v3-style";
   const PAGE_SIZE = 100;
   const state = {
@@ -155,7 +155,16 @@
 
   function ensureSection() {
     ensureStyle();
-    const section = document.getElementById(SECTION_ID); if (!section) return null;
+    let section = document.getElementById(SECTION_ID);
+    if (!section) {
+      section = document.createElement("section");
+      section.id = SECTION_ID;
+      const history = document.getElementById("spw-history-section");
+      const revision = document.getElementById("spw-revision-section");
+      if (history) history.insertAdjacentElement("beforebegin", section);
+      else if (revision) revision.insertAdjacentElement("afterend", section);
+      else document.getElementById("sigem-pw-dashboard-module")?.appendChild(section);
+    }
     section.classList.add("spw-evo-v2"); section.dataset.evolutionVersion = "3";
     section.innerHTML = `
       <header class="spw-evo-head"><div><span class="spw-kicker">EVOLUÇÃO DIÁRIA</span><h3>O que entrou de uma base para a outra</h3><p>A comparação usa os dois snapshots escolhidos. Cada código + revisão é uma entrada independente; revisão 0 e revisão A do mesmo documento contam como duas linhas.</p></div><div class="spw-evo-actions"><button class="secondary-button" id="spw-evo-export" type="button">Exportar lista</button><button class="text-button" id="spw-history-manage" type="button">Gerenciar histórico</button></div></header>
@@ -173,7 +182,7 @@
       </div>
       <div class="spw-evo-list-head"><div><strong id="spw-evo-list-title"></strong><br><small id="spw-evo-list-subtitle"></small></div><small id="spw-evo-list-count"></small></div><div class="spw-evo-table-wrap" id="spw-evo-table"></div><div class="spw-evo-pager" id="spw-evo-pager"></div>
       <div class="spw-evo-overlay" id="spw-evo-overlay" hidden><aside class="spw-evo-drawer" role="dialog" aria-modal="true"><header><div><span class="spw-kicker">RASTREABILIDADE</span><h3 id="spw-evo-detail-title">Registro</h3></div><button class="spw-evo-close" id="spw-evo-close" type="button" aria-label="Fechar">×</button></header><div id="spw-evo-detail-body"></div></aside></div>`;
-    const navButton = document.querySelector('[data-spw-jump="spw-history-section"]'); if (navButton) navButton.textContent = "Evolução";
+    const navButton = document.querySelector(`[data-spw-jump="${SECTION_ID}"]`); if (navButton) navButton.textContent = "Entradas diárias";
     return section;
   }
 
