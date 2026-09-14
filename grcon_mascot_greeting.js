@@ -273,9 +273,15 @@
   }
 
   function processingActive() {
-    if (document.body.getAttribute("aria-busy") === "true") return true;
-    return Array.from(document.querySelectorAll(".progress, [id$='progress']"))
-      .some(elementVisible);
+    const selectors = [
+      "#progress",
+      "#requests-progress",
+      "#pdf-merge-progress",
+      "#pc-progress",
+      "#spw-progress",
+      '[data-grcon-processing="true"]',
+    ].join(", ");
+    return Array.from(document.querySelectorAll(selectors)).some(elementVisible);
   }
 
   function syncProcessingState() {
