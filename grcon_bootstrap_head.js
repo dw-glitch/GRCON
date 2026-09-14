@@ -72,6 +72,7 @@
       ["analysis_runtime_guard.js", "grconAnalysisRuntimeGuard"],
       ["posting_conference_bootstrap.js", "grconPostingConferenceBootstrap"],
       ["posting_conference_refinement.js", "grconPostingConferenceRefinement"],
+      ["posting_conference_status_rule.js", "grconPostingConferenceStatusRule"],
       ["posting_conference_state_guard.js", "grconPostingConferenceStateGuard"],
       ["grcon_operational_flow_bootstrap.js", "grconOperationalFlowBootstrap"],
     ];
