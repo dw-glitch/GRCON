@@ -66,7 +66,7 @@ assert.match(ui, /grcon:processing-pulse/);
 assert.match(ui, /signaledControl \|\| \(fallbackBusy && processingPose\)/);
 assert.match(ui, /Date\.now\(\) \+ 1100/);
 assert.match(app, /signalMascotProcessing\(busy, taskLabel\)/);
-assert.match(app, /pulseMascotProcessing\(\)/);
+assert.match(app, /async function analyze\(\) \{[\s\S]{0,220}pulseMascotProcessing\(\)/);
 assert.match(app, /context: "control"/);
 assert.match(ui, /"#progress"/);
 assert.match(ui, /"#requests-progress"/);

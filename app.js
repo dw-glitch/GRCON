@@ -2862,15 +2862,15 @@
 
 
   async function analyze() {
+    // A reação começa no próprio clique, inclusive enquanto o motor sob demanda
+    // ainda está sendo carregado ou quando a resposta virá do cache.
+    pulseMascotProcessing();
     try { await ensureRuntime("performance"); } catch (_) { console.debug("[App] ensureRuntime performance:", _); /* usa compatibilidade */ }
     if (!PerformanceCore || !PerformanceCore.supported) return analyzeLegacy();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
 
     const analysisSignature = currentAnalysisSignature();
     if (restoreSmartAnalysisCache(analysisSignature)) {
-      // Mesmo quando o resultado vem do cache, o clique recebe uma resposta
-      // visual curta e perceptível do mascote.
-      pulseMascotProcessing();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) reaproveitadas do cache · válidas até ${validUntil}`;
       els.analysisStamp.title = `GRCON ${APP_VERSION} · ${ldDisplayName()}`;
