@@ -9,6 +9,7 @@ const loader = fs.readFileSync(path.join(root, "grcon_service_worker.js"), "utf8
 const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
 const mascot = fs.readFileSync(path.join(root, "grcon_mascot_header.js"), "utf8");
 const asset = fs.readFileSync(path.join(root, "grcon_mascot_asset_fix.js"), "utf8");
+const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 
 assert.strictEqual(Core.firstName("Vinicio Melo"), "Vinicio");
 assert.strictEqual(Core.firstName("João Pedro Silva"), "João");
@@ -49,7 +50,21 @@ assert.match(ui, /translate3d\(0, -4px, 0\) scale\(1\.008\)/);
 assert.match(ui, /rotate\(1\.6deg\)/);
 assert.match(ui, /cubic-bezier\(\.18, \.89, \.32, 1\.14\)/);
 assert.match(ui, /transition-delay: 70ms, 55ms, 0s/);
-assert.doesNotMatch(ui, /animation-iteration-count\s*:\s*infinite|requestAnimationFrame\s*\([^)]*requestAnimationFrame/);
+assert.doesNotMatch(ui, /requestAnimationFrame\s*\([^)]*requestAnimationFrame/);
+assert.doesNotMatch(ui, /is-greeting-active[^{}]*\{[^}]*infinite/s);
+assert.strictEqual((ui.match(/\binfinite\b/g) || []).length, 3, "somente corrida, linhas de velocidade e esfera podem repetir durante processamento");
+assert.doesNotMatch(ui, /Cumprimentar|setAttribute\("title"/);
+assert.match(ui, /mascot\.removeAttribute\("title"\)/);
+assert.match(ui, /\.grcon-mascot-context\.is-processing\[data-pose="pending"\] \.grcon-mascot-processing-orb/);
+assert.match(ui, /animation: grcon-mascot-orb-spin 840ms cubic-bezier/);
+assert.match(ui, /animation: grcon-mascot-working-run 920ms cubic-bezier/);
+assert.match(ui, /animation: grcon-mascot-speed-lines 710ms ease-in-out/);
+assert.match(ui, /processingPose = mascot\.dataset\.pose === "pending" \|\| mascot\.dataset\.pose === "analysis"/);
+assert.match(ui, /document\.body\.getAttribute\("aria-busy"\) === "true"/);
+assert.match(ui, /attributeFilter: \["data-pose", "aria-busy", "hidden", "aria-hidden"\]/);
+assert.match(ui, /animation: none !important/);
+assert.match(ui, /if \(target\.textContent !== nextText\) target\.textContent = nextText/);
+assert.match(sw, /mascot-greeting1-processing1/);
 assert.doesNotMatch(ui, /fetch\s*\(|XMLHttpRequest|\.from\s*\(/);
 assert.match(asset, /image-rendering:auto/);
 assert.match(asset, /backface-visibility:hidden/);
@@ -60,4 +75,4 @@ assert.match(ui, /role", "button"/);
 const poses = [...mascot.matchAll(/(?:default|analysis|search|check|history|dashboard|"sigem-pw"|egrdt|import|report|warning|success|pending|empty|quality):\{/g)];
 assert.ok(poses.length >= 15, "todas as poses existentes devem continuar disponíveis");
 
-console.log("grcon_mascot_greeting: OK — nome, fallback, interação, movimento, viewport, touch, acessibilidade e desempenho validados.");
+console.log("grcon_mascot_greeting: OK — saudação sem tooltip, corrida e esfera somente durante processamento, reduced motion e estabilidade validados.");
