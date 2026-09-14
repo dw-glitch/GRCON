@@ -4,6 +4,7 @@
   const Core = root.GrconSigemPwDashboard;
   const MODULE_ID = "sigem-pw-dashboard-module";
   const PAGE_SIZE = 100;
+  const PRE_STAGE7_RESET_KEY = "sigem-pw-stage7-preupdate-reset-v1";
   const LISTS = Object.freeze({
     differences: "Diferenças", sigem: "Postado no SIGEM", pw: "Cadastrado no PW",
     toRegisterPw: "Cadastrar no PW", pwNotEmitted: "PW não emitido",
@@ -308,11 +309,50 @@
     const item = (state.history.snapshots || []).find((snapshot) => snapshot.meta.snapshotId === id); if (!item || !root.confirm(`Excluir a base “${item.meta.fileName || "sem nome"}” do histórico?`)) return;
     try { await Core.deleteSnapshot(id); await refreshBases("base excluída"); renderHistory(); notify("Base excluída do histórico.", "success"); } catch (error) { notify(error.message || "Não foi possível excluir a base do histórico.", "error"); }
   }
+  async function clearPreStage7BasesOnce() {
+    const alreadyReset = await Core.kvGet(PRE_STAGE7_RESET_KEY, false);
+    if (alreadyReset) return false;
+    const History = root.GrconSigemPwHistory;
+    if (!History?.clearHistory) throw new Error("A limpeza segura do histórico SIGEM × PW não está disponível.");
+    await History.clearHistory();
+    const emptyBase = { meta: null, records: [] };
+    await Core.kvSetMany([
+      [Core.SIGEM_BASE_KEY, emptyBase],
+      [Core.PW_BASE_KEY, emptyBase],
+      [Core.LD_BASE_KEY, emptyBase],
+      [Core.HISTORY_KEY, { version: Core.HISTORY_VERSION, snapshots: [], deletedIds: [] }],
+      [Core.LEGACY_SIGEM_BASE_KEY, emptyBase],
+      [Core.LEGACY_PW_BASE_KEY, emptyBase],
+      ["confirmation-state", { version: 1, updatedAt: "", items: {} }],
+      ["audit-log", []],
+      [PRE_STAGE7_RESET_KEY, { completed: true, completedAt: new Date().toISOString() }],
+    ]);
+    try { root.localStorage?.removeItem("grcon.postingConference.historyIndex.v1"); } catch (_) { /* índice derivado */ }
+    return true;
+  }
+
   async function refreshBases(reason) {
     if (refreshPromise) return refreshPromise;
-    refreshPromise = (async () => { try { const bases = await Core.loadBases(); state.sigem = bases.sigem?.meta ? bases.sigem : { meta: null, records: [] }; state.pw = bases.pw?.meta ? bases.pw : { meta: null, records: [] }; state.ld = bases.ld?.meta ? bases.ld : { meta: null, records: [] }; state.history = bases.history || { version: 3, snapshots: [] }; rebuildModel(); renderFromModel(true); state.ready = true; } catch (error) { console.error(`[SIGEM×PW] atualização ${reason || ""}:`, error); notify(error.message || "Não foi possível ler as bases persistidas do Dashboard.", "error"); } })().finally(() => { refreshPromise = null; }); return refreshPromise;
+    refreshPromise = (async () => {
+      try {
+        const resetApplied = await clearPreStage7BasesOnce();
+        const bases = await Core.loadBases();
+        state.sigem = bases.sigem?.meta ? bases.sigem : { meta: null, records: [] };
+        state.pw = bases.pw?.meta ? bases.pw : { meta: null, records: [] };
+        state.ld = bases.ld?.meta ? bases.ld : { meta: null, records: [] };
+        state.history = bases.history || { version: 3, snapshots: [] };
+        rebuildModel();
+        renderFromModel(true);
+        state.ready = true;
+        if (resetApplied) notify("Bases anteriores SIGEM, PW e LD removidas. O módulo está pronto para novas importações.", "success");
+      } catch (error) {
+        console.error(`[SIGEM×PW] atualização ${reason || ""}:`, error);
+        notify(error.message || "Não foi possível ler as bases persistidas do Dashboard.", "error");
+      }
+    })().finally(() => { refreshPromise = null; });
+    return refreshPromise;
   }
   async function activate() { createShell(); shell.hidden = false; if (!state.ready) { setBusy(true, "Carregando bases vigentes…"); await yieldFrame(); await refreshBases("ativação"); setBusy(false); } else renderFromModel(false); }
   root.addEventListener("grcon:conference-updated", (event) => { if (event?.detail?.source !== "sigem-pw-dashboard") void refreshBases("Consulta Geral atualizada em outro módulo"); }); root.addEventListener("grcon:pw-base-updated", (event) => { if (event?.detail?.source !== "sigem-pw-dashboard") void refreshBases("base PW atualizada em outro módulo"); });
-  root.GrconSigemPwDashboardUi = Object.freeze({ activate, refresh: refreshBases, state });
+  root.GrconSigemPwDashboardUi = Object.freeze({ activate, refresh: refreshBases, clearPreStage7BasesOnce, state });
 })(window);
