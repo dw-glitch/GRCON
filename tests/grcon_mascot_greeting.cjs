@@ -8,6 +8,7 @@ const ui = fs.readFileSync(path.join(root, "grcon_mascot_greeting.js"), "utf8");
 const loader = fs.readFileSync(path.join(root, "grcon_service_worker.js"), "utf8");
 const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
 const mascot = fs.readFileSync(path.join(root, "grcon_mascot_header.js"), "utf8");
+const asset = fs.readFileSync(path.join(root, "grcon_mascot_asset_fix.js"), "utf8");
 
 assert.strictEqual(Core.firstName("Vinicio Melo"), "Vinicio");
 assert.strictEqual(Core.firstName("João Pedro Silva"), "João");
@@ -46,8 +47,8 @@ assert.match(ui, /cubic-bezier\(\.18, \.89, \.32, 1\.14\)/);
 assert.match(ui, /transition-delay: 70ms, 55ms, 0s/);
 assert.doesNotMatch(ui, /animation-iteration-count\s*:\s*infinite|requestAnimationFrame\s*\([^)]*requestAnimationFrame/);
 assert.doesNotMatch(ui, /fetch\s*\(|XMLHttpRequest|\.from\s*\(/);
-assert.match(ui, /image-rendering/);
-assert.match(ui, /backface-visibility/);
+assert.match(asset, /image-rendering:auto/);
+assert.match(asset, /backface-visibility:hidden/);
 assert.match(ui, /aria-live/);
 assert.match(ui, /aria-expanded/);
 assert.match(ui, /role", "button"/);
