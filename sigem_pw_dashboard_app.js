@@ -103,12 +103,41 @@
     return best;
   }
 
+  async function registerHistoryBeforeActivation(system, candidate, options) {
+    const History = root.GrconSigemPwHistory;
+    const Management = root.GrconSigemPwHistoryManagement;
+    if (!History?.recordActiveBases || !Management?.capturePayload) throw new Error("O histórico evolutivo não está disponível. A base vigente foi preservada.");
+    const values = options || {};
+    const sigemBase = system === "sigem" ? candidate : values.sigemBase || state.sigem;
+    const pwBase = system === "pw" ? candidate : values.pwBase || state.pw;
+    const ldRecords = Array.isArray(values.ldRecords) ? values.ldRecords : state.ld.records || [];
+    const recordedAt = text(values.recordedAt) || text(candidate.meta.importedAt) || new Date().toISOString();
+    let recorded;
+    try {
+      recorded = await History.recordActiveBases(sigemBase, pwBase, {
+        recordedAt,
+        effectiveAt: recordedAt,
+        changedSystem: system,
+        reason: values.reason || "validated-import-before-activation",
+        ldRecords,
+      });
+      const source = recorded && recorded[system];
+      if (!source?.snapshot?.id) throw new Error("Snapshot da base validada não foi confirmado.");
+      await Management.capturePayload(system, candidate, source.snapshot.id, { sigemBase, pwBase, ldRecords });
+      return recorded;
+    } catch (error) {
+      throw new Error(`A nova base foi validada, mas não pôde ser registrada no histórico e não foi ativada. ${error.message || "Tente novamente."}`);
+    }
+  }
+
   async function importSigem(file) {
     setBusy(true, "Validando e indexando a Consulta Geral…"); await yieldFrame();
     try {
       await root.GRCONModuleLoader.ensure("xlsx"); const Conference = await ensureConferenceRuntime(); const workbook = root.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false, dense: false }); validateSigemWorkbook(workbook, Conference);
       const importedAt = new Date().toISOString(); const result = await Conference.importWorkbook(workbook, { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt }, root.GrconHistory?.read?.() || [], { now: importedAt, reason: "sigem-pw-dashboard" });
-      state.sigem = await Core.saveSigemBase({ meta: result.parsed.meta, records: result.parsed.records }); state.history = await Core.loadHistory(); rebuildModel(); renderFromModel(true);
+      const candidate = { meta: result.parsed.meta, records: result.parsed.records };
+      await registerHistoryBeforeActivation("sigem", candidate, { reason: "sigem-import" });
+      state.sigem = await Core.saveSigemBase(candidate); state.history = await Core.loadHistory(); rebuildModel(); renderFromModel(true);
       root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: result.summary, changes: result.changes, baseMeta: state.sigem.meta, source: "sigem-pw-dashboard" } })); notify(`Consulta Geral atualizada: ${fmt(state.model.sigemEntries.size)} registros/revisões ET e N-1710.`, "success");
     } catch (error) { console.error("[SIGEM×PW] Consulta Geral:", error); notify(error.message || "Não foi possível atualizar a Consulta Geral. A última base válida foi mantida.", "error"); } finally { setBusy(false); }
   }
@@ -118,12 +147,12 @@
   }
   async function importPw(file) {
     setBusy(true, "Validando e indexando a base ProjectWise…"); await yieldFrame();
-    try { if (!/\.(?:csv|txt)$/i.test(file.name || "")) throw new Error("A relação ProjectWise deve ser fornecida em CSV."); const importedAt = new Date().toISOString(); const parsed = await parsePwFile(file, { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt }); state.pw = await Core.savePwBase({ meta: parsed.meta, records: parsed.records }, state.ld); state.history = await Core.loadHistory(); rebuildModel(); renderFromModel(true); root.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard" } })); notify(`Base PW atualizada: ${fmt(state.model.pwEntries.size)} registros/revisões válidos no universo ET e N-1710.`, "success"); }
+    try { if (!/\.(?:csv|txt)$/i.test(file.name || "")) throw new Error("A relação ProjectWise deve ser fornecida em CSV."); const importedAt = new Date().toISOString(); const parsed = await parsePwFile(file, { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt }); const candidate = Core.sanitizePwBase({ meta: parsed.meta, records: parsed.records }, state.ld); await registerHistoryBeforeActivation("pw", candidate, { reason: "pw-import" }); state.pw = await Core.savePwBase(candidate, state.ld); state.history = await Core.loadHistory(); rebuildModel(); renderFromModel(true); root.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard" } })); notify(`Base PW atualizada: ${fmt(state.model.pwEntries.size)} registros/revisões válidos no universo ET e N-1710.`, "success"); }
     catch (error) { console.error("[SIGEM×PW] ProjectWise:", error); notify(error.message || "Não foi possível atualizar a base ProjectWise. A última base válida foi mantida.", "error"); } finally { setBusy(false); }
   }
   async function importLd(file) {
     setBusy(true, "Lendo o universo N-1710 da LD da Qualidade…"); await yieldFrame();
-    try { await root.GRCONModuleLoader.ensure("xlsx"); const workbook = root.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false, dense: false }); const sheetName = (workbook.SheetNames || []).find((name) => Core.normalizeHeader(name) === "N 1710"); if (!sheetName) throw new Error("LD inválida: a aba N-1710 não foi localizada."); const parsed = Core.parseLdMatrix(sheetMatrix(workbook.Sheets[sheetName], 40), { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt: new Date().toISOString(), sheetName }); const saved = await Core.saveLdAndReprocessPw({ meta: parsed.meta, records: parsed.records }, state.pw); state.ld = saved.ld; if (saved.pw) state.pw = saved.pw; state.history = await Core.loadHistory(); rebuildModel(); renderFromModel(true); if (saved.pw) root.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard-ld" } })); notify(`LD da Qualidade atualizada: ${fmt(parsed.meta.uniqueDocumentCount)} códigos N-1710 no universo válido.`, "success"); }
+    try { await root.GRCONModuleLoader.ensure("xlsx"); const workbook = root.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false, dense: false }); const sheetName = (workbook.SheetNames || []).find((name) => Core.normalizeHeader(name) === "N 1710"); if (!sheetName) throw new Error("LD inválida: a aba N-1710 não foi localizada."); const parsed = Core.parseLdMatrix(sheetMatrix(workbook.Sheets[sheetName], 40), { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt: new Date().toISOString(), sheetName }); const candidateLd = { meta: parsed.meta, records: parsed.records }; const candidatePw = state.pw.meta ? Core.sanitizePwBase(state.pw, candidateLd) : null; if (candidatePw) await registerHistoryBeforeActivation("pw", candidatePw, { reason: "quality-ld-revalidation", recordedAt: parsed.meta.importedAt, ldRecords: candidateLd.records }); const saved = await Core.saveLdAndReprocessPw(candidateLd, state.pw); state.ld = saved.ld; if (saved.pw) state.pw = saved.pw; state.history = await Core.loadHistory(); rebuildModel(); renderFromModel(true); if (saved.pw) root.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard-ld" } })); notify(`LD da Qualidade atualizada: ${fmt(parsed.meta.uniqueDocumentCount)} códigos N-1710 no universo válido.`, "success"); }
     catch (error) { console.error("[SIGEM×PW] LD:", error); notify(error.message || "Não foi possível atualizar a LD da Qualidade.", "error"); } finally { setBusy(false); }
   }
 
