@@ -1,0 +1,58 @@
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+
+const root = path.join(__dirname, "..");
+const Core = require(path.join(root, "grcon_mascot_greeting_core.js"));
+const ui = fs.readFileSync(path.join(root, "grcon_mascot_greeting.js"), "utf8");
+const loader = fs.readFileSync(path.join(root, "grcon_service_worker.js"), "utf8");
+const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
+const mascot = fs.readFileSync(path.join(root, "grcon_mascot_header.js"), "utf8");
+
+assert.strictEqual(Core.firstName("Vinicio Melo"), "Vinicio");
+assert.strictEqual(Core.firstName("João Pedro Silva"), "João");
+assert.strictEqual(Core.firstName("Ana"), "Ana");
+assert.strictEqual(Core.firstName("   Ana   Carolina   Souza  "), "Ana");
+assert.strictEqual(Core.firstName(""), "");
+assert.strictEqual(Core.firstName(null), "");
+assert.strictEqual(Core.greeting({ displayName: "  Vinicio Melo " }), "Olá, Vinicio!");
+assert.strictEqual(Core.greeting({ metadataName: " João Pedro Silva " }), "Olá, João!");
+assert.strictEqual(Core.greeting({}), "Olá!");
+assert.strictEqual(Core.greeting({ displayName: "   " }), "Olá!");
+assert.ok(!Core.greeting({}).includes("undefined"));
+assert.ok(!Core.greeting({}).includes("null"));
+
+assert.match(cloud, /function getCurrentUserIdentity\(\)/);
+assert.match(cloud, /state\.profiles\.get\(user\.id\)/);
+assert.match(cloud, /metadata\.full_name \|\| metadata\.name \|\| metadata\.display_name/);
+assert.match(cloud, /getCurrentUserIdentity,/);
+
+assert.match(loader, /grcon_mascot_greeting_core\.js/);
+assert.match(loader, /grcon_mascot_greeting\.js/);
+assert.match(ui, /\.grcon-brand-mascot, \.grcon-mascot-context/);
+assert.match(ui, /pointerenter/);
+assert.match(ui, /pointerleave/);
+assert.match(ui, /event\.pointerType !== "touch"/);
+assert.match(ui, /event\.key === "Enter" \|\| event\.key === " "/);
+assert.match(ui, /event\.key === "Escape"/);
+assert.match(ui, /prefers-reduced-motion: reduce/);
+assert.match(ui, /position: fixed/);
+assert.match(ui, /z-index: 340/);
+assert.match(ui, /clamp\(left, EDGE_GAP, viewportWidth - width - EDGE_GAP\)/);
+assert.match(ui, /clamp\(top, EDGE_GAP, viewportHeight - height - EDGE_GAP\)/);
+assert.match(ui, /translate3d\(0, -4px, 0\) scale\(1\.008\)/);
+assert.match(ui, /rotate\(1\.6deg\)/);
+assert.match(ui, /cubic-bezier\(\.18, \.89, \.32, 1\.14\)/);
+assert.match(ui, /transition-delay: 70ms, 55ms, 0s/);
+assert.doesNotMatch(ui, /animation-iteration-count\s*:\s*infinite|requestAnimationFrame\s*\([^)]*requestAnimationFrame/);
+assert.doesNotMatch(ui, /fetch\s*\(|XMLHttpRequest|\.from\s*\(/);
+assert.match(ui, /image-rendering/);
+assert.match(ui, /backface-visibility/);
+assert.match(ui, /aria-live/);
+assert.match(ui, /aria-expanded/);
+assert.match(ui, /role", "button"/);
+
+const poses = [...mascot.matchAll(/(?:default|analysis|search|check|history|dashboard|"sigem-pw"|egrdt|import|report|warning|success|pending|empty|quality):\{/g)];
+assert.ok(poses.length >= 15, "todas as poses existentes devem continuar disponíveis");
+
+console.log("grcon_mascot_greeting: OK — nome, fallback, interação, movimento, viewport, touch, acessibilidade e desempenho validados.");
