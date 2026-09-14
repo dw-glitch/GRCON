@@ -57,6 +57,10 @@ assert.strictEqual((ui.match(/\binfinite\b/g) || []).length, 3, "somente corrida
 assert.doesNotMatch(ui, /Cumprimentar|setAttribute\("title"/);
 assert.match(ui, /mascot\.removeAttribute\("title"\)/);
 assert.match(ui, /\.grcon-mascot-context\.is-processing\[data-pose="pending"\] \.grcon-mascot-processing-orb/);
+assert.match(ui, /mask-image: radial-gradient\(circle at 80% 43%/);
+assert.match(ui, /clip-path: circle\(12% at 80% 43%\)/);
+assert.match(ui, /processingOrb\.className = "grcon-mascot-sprite grcon-mascot-processing-orb"/);
+assert.match(ui, /\(motion \|\| mascot\)\.appendChild\(processingOrb\)/);
 assert.match(ui, /animation: grcon-mascot-orb-spin 840ms cubic-bezier/);
 assert.match(ui, /animation: grcon-mascot-working-run 780ms cubic-bezier/);
 assert.match(ui, /animation: grcon-mascot-speed-lines 620ms ease-in-out/);
@@ -80,7 +84,7 @@ assert.match(ui, /shouldAnimate && mascot\.getAttribute\("aria-busy"\) !== "true
 assert.match(ui, /!shouldAnimate && mascot\.hasAttribute\("aria-busy"\)/);
 assert.match(ui, /animation: none !important/);
 assert.match(ui, /if \(target\.textContent !== nextText\) target\.textContent = nextText/);
-assert.match(sw, /mascot-greeting1-processing2/);
+assert.match(sw, /mascot-greeting1-processing3/);
 assert.doesNotMatch(ui, /fetch\s*\(|XMLHttpRequest|(?:supabase|client|state\.client)\s*\.?\s*\.from\s*\(|getSession\s*\(/);
 assert.match(asset, /image-rendering:auto/);
 assert.match(asset, /backface-visibility:hidden/);

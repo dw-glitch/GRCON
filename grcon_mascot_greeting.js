@@ -88,31 +88,29 @@
         transition-duration: 540ms;
         transition-timing-function: cubic-bezier(.4, 0, .2, 1);
       }
+      /* Na pose sentada, o círculo de pontos já pertence ao desenho. Durante
+         a análise, recortamos esse mesmo trecho da sprite e o fazemos girar;
+         assim não aparece um indicador genérico em outra posição. */
+      .grcon-mascot-context.is-processing[data-pose="pending"]
+        .grcon-mascot-motion > .grcon-mascot-sprite:not(.grcon-mascot-processing-orb) {
+        -webkit-mask-image: radial-gradient(circle at 80% 43%, transparent 0 11%, #000 12.5%);
+        mask-image: radial-gradient(circle at 80% 43%, transparent 0 11%, #000 12.5%);
+      }
       .grcon-mascot-processing-orb {
         position: absolute;
         z-index: 3;
-        right: 9%;
-        bottom: 13%;
-        width: 19%;
-        aspect-ratio: 1;
-        border-radius: 50%;
-        background: conic-gradient(
-          from 18deg,
-          transparent 0 16%,
-          color-mix(in srgb, var(--brand-600, #1479a6) 92%, white) 17% 38%,
-          transparent 39% 58%,
-          color-mix(in srgb, var(--brand-800, #0a527d) 88%, transparent) 59% 80%,
-          transparent 81% 100%
-        );
-        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 0);
-        filter: drop-shadow(0 1px 2px rgb(10 82 125 / 24%));
+        inset: 0;
+        width: 100%;
+        height: 100%;
         opacity: 0;
         pointer-events: none;
-        transform: translateZ(0);
+        clip-path: circle(12% at 80% 43%);
+        transform: rotate(0deg) translateZ(0);
+        transform-origin: 80% 43%;
+        filter: drop-shadow(0 1px 2px rgb(10 82 125 / 24%));
       }
       .grcon-mascot-context.is-processing[data-pose="pending"] .grcon-mascot-processing-orb {
-        opacity: .94;
+        opacity: 1;
         animation: grcon-mascot-orb-spin 840ms cubic-bezier(.45, .05, .55, .95) infinite;
       }
       .grcon-mascot-context.is-processing .grcon-mascot-motion {
@@ -504,9 +502,12 @@
     mascot.removeAttribute("title");
     if (mascot.classList.contains("grcon-mascot-context") && !mascot.querySelector(".grcon-mascot-processing-orb")) {
       const processingOrb = document.createElement("span");
-      processingOrb.className = "grcon-mascot-processing-orb";
+      // A segunda camada usa a própria sprite: somente o círculo da pose
+      // sentada fica visível pelo recorte definido no CSS.
+      processingOrb.className = "grcon-mascot-sprite grcon-mascot-processing-orb";
       processingOrb.setAttribute("aria-hidden", "true");
-      mascot.appendChild(processingOrb);
+      const motion = mascot.querySelector(".grcon-mascot-motion");
+      (motion || mascot).appendChild(processingOrb);
     }
 
     mascot.addEventListener("pointerenter", (event) => {
