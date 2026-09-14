@@ -116,6 +116,8 @@
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_audit_core.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_audit_app.js");
     // O app captura o core por código + revisão antes da ponte de
     // compatibilidade usada apenas pelos relatórios legados desta PR.
     await root.GRCONModuleLoader.ensure("sigem_pw_scope_fix.js");
@@ -130,7 +132,7 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_history_runtime_fix.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_evolution_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_evolution_app.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionReport || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix || !root.GrconSigemPwEvolution || !root.GrconSigemPwEvolutionUi) {
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwAudit || !root.GrconSigemPwAuditUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionReport || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix || !root.GrconSigemPwEvolution || !root.GrconSigemPwEvolutionUi) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
   }
@@ -143,6 +145,7 @@
       await ensureRuntime();
       activateShell();
       if (!root.GrconSigemPwDashboardUi.state?.ready) await root.GrconSigemPwDashboardUi.activate();
+      await root.GrconSigemPwAuditUi.activate();
       await root.GrconSigemPwRevisionUi.activate();
       await root.GrconSigemPwHistoryUi.activate();
       await root.GrconSigemPwHistoryManagement.activate();
