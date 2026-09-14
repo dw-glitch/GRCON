@@ -22,6 +22,13 @@
     return rawText(value).trim();
   }
 
+  function isPostedSigemStatus(value, Conference) {
+    const normalized = Conference && typeof Conference.norm === "function"
+      ? Conference.norm(value)
+      : trimmed(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+    return normalized === "EM ANALISE" || normalized === "EM WORKFLOW";
+  }
+
   function conferenceLabel(status, Conference) {
     const S = Conference && Conference.STATUSES || {};
     if (status === S.CONFIRMED) return "Postado";
@@ -86,17 +93,40 @@
     return (rows || []).map((row) => {
       const current = currentStatusRecord(row, base, Conference, index);
       const matched = matchedBaseRecords(row, base, Conference, index);
+      const sentRevision = Conference.normalizeRevision(row.revisionSent);
+      const currentRevision = current ? Conference.normalizeRevision(current.revision) : "";
+      const sameRevision = Boolean(current && currentRevision && currentRevision === sentRevision);
+      const revisionNotInformed = Boolean(current && !currentRevision);
+      const postedBySigemStatus = Boolean(
+        current
+        && isPostedSigemStatus(current.status, Conference)
+        && (sameRevision || revisionNotInformed)
+      );
+      const effectiveStatus = postedBySigemStatus ? Conference.STATUSES.CONFIRMED : row.status;
+      const confirmedAt = postedBySigemStatus
+        ? (row.firstConfirmedAt || row.lastCheckedAt || new Date().toISOString())
+        : row.firstConfirmedAt;
+      const statusNote = postedBySigemStatus && row.status !== Conference.STATUSES.CONFIRMED
+        ? `Status SIGEM “${trimmed(current.status)}” considerado como evidência de postagem realizada${revisionNotInformed ? " para documento sem revisão informada na Consulta Geral" : ` para a revisão ${sentRevision}`}.`
+        : "";
       return {
         ...row,
-        conferenceLabel: conferenceLabel(row.status, Conference),
+        status: effectiveStatus,
+        statusLabel: Conference.statusLabel(effectiveStatus),
+        conferenceLabel: conferenceLabel(effectiveStatus, Conference),
         sigemStatus: current ? rawText(current.status) : "",
         sigemStatusRevision: current ? current.revision : "",
         sigemSourceRow: current ? current.sourceRow : null,
+        firstConfirmedAt: confirmedAt,
+        confirmedRevision: postedBySigemStatus ? sentRevision : row.confirmedRevision,
+        confirmationSource: postedBySigemStatus ? `Consulta Geral SIGEM (${trimmed(current.status)})` : row.confirmationSource,
+        currentEvidence: postedBySigemStatus ? true : Boolean(row.currentEvidence),
+        revisionFound: postedBySigemStatus && !row.revisionFound ? (currentRevision || sentRevision) : row.revisionFound,
         note: !current && matched.length
           ? `${row.note || ""} Status SIGEM ambíguo na Consulta Geral; requer análise das linhas de origem.`.trim()
-          : current && Conference.normalizeRevision(current.revision) !== Conference.normalizeRevision(row.revisionSent)
+          : current && currentRevision !== sentRevision && !revisionNotInformed
             ? `${row.note || ""} Status SIGEM referente à revisão ${current.revision} encontrada na base.`.trim()
-            : row.note,
+            : [row.note, statusNote].filter(Boolean).join(" ").trim(),
       };
     });
   }
@@ -134,9 +164,6 @@
     const identity = trimmed(row && row.documentIdentity) || Conference.documentIdentity(row && row.document);
     const revision = Conference.normalizeRevision(row && row.revisionSent);
     const egrdt = Conference.norm(row && row.egrdtNumber);
-    // A eGRDT identifica o evento/lote; data só entra como fallback quando o
-    // número do lote não existe. Assim um registro persistido duas vezes com
-    // pequenas diferenças de timestamp não vira uma falsa repostagem.
     const timestamp = historyTimestamp(row);
     const temporal = egrdt ? "" : (Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : Conference.norm(row && row.generatedAt));
     return `${identity}::${revision}::${egrdt}::${temporal}`;
@@ -503,8 +530,6 @@
       setText(badge, rawText(row && row.sigemStatus) || "—");
       return;
     }
-    // Compatibilidade com versões anteriores da tabela. A interface atual já
-    // renderiza a coluna Status SIGEM nativamente e não passa por este ramo.
     if (cell && /Status SIGEM/i.test(cell.getAttribute("data-label") || "")) return;
     cell = document.createElement("td");
     cell.className = "pc-sigem-cell";
@@ -623,6 +648,7 @@
   return Object.freeze({
     install,
     conferenceLabel,
+    isPostedSigemStatus,
     enrichRows,
     enrichResult,
     currentStatusRecord,
