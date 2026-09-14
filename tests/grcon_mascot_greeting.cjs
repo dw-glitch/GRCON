@@ -65,7 +65,7 @@ assert.match(ui, /attributeFilter: \["data-pose", "aria-busy", "hidden", "aria-h
 assert.match(ui, /animation: none !important/);
 assert.match(ui, /if \(target\.textContent !== nextText\) target\.textContent = nextText/);
 assert.match(sw, /mascot-greeting1-processing1/);
-assert.doesNotMatch(ui, /fetch\s*\(|XMLHttpRequest|\.from\s*\(/);
+assert.doesNotMatch(ui, /fetch\s*\(|XMLHttpRequest|(?:supabase|client|state\.client)\s*\.?\s*\.from\s*\(|getSession\s*\(/);
 assert.match(asset, /image-rendering:auto/);
 assert.match(asset, /backface-visibility:hidden/);
 assert.match(ui, /aria-live/);
