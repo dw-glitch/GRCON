@@ -107,49 +107,49 @@
       .grcon-mascot-greeting[data-pose="default"] .grcon-mascot-pose-motion,
       .grcon-mascot-greeting[data-pose="quality"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-calm;
-        --grcon-pose-duration: 7600ms;
+        --grcon-pose-duration: 6200ms;
       }
       .grcon-mascot-greeting[data-pose="analysis"] .grcon-mascot-pose-motion,
       .grcon-mascot-greeting[data-pose="dashboard"] .grcon-mascot-pose-motion,
       .grcon-mascot-greeting[data-pose="sigem-pw"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-focus;
-        --grcon-pose-duration: 6800ms;
+        --grcon-pose-duration: 5400ms;
       }
       .grcon-mascot-greeting[data-pose="search"] .grcon-mascot-pose-motion,
       .grcon-mascot-greeting[data-pose="history"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-scan;
-        --grcon-pose-duration: 7200ms;
+        --grcon-pose-duration: 5600ms;
       }
       .grcon-mascot-greeting[data-pose="check"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-confirm;
-        --grcon-pose-duration: 6400ms;
+        --grcon-pose-duration: 5200ms;
       }
       .grcon-mascot-greeting[data-pose="egrdt"] .grcon-mascot-pose-motion,
       .grcon-mascot-greeting[data-pose="import"] .grcon-mascot-pose-motion,
       .grcon-mascot-greeting[data-pose="report"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-work;
-        --grcon-pose-duration: 6100ms;
+        --grcon-pose-duration: 5000ms;
       }
       .grcon-mascot-greeting[data-pose="warning"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-alert;
-        --grcon-pose-duration: 5600ms;
+        --grcon-pose-duration: 4800ms;
       }
       .grcon-mascot-greeting[data-pose="success"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-success;
-        --grcon-pose-duration: 7000ms;
+        --grcon-pose-duration: 5600ms;
       }
       .grcon-mascot-greeting[data-pose="pending"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-pending;
-        --grcon-pose-duration: 6600ms;
+        --grcon-pose-duration: 5600ms;
       }
       .grcon-mascot-greeting[data-pose="empty"] .grcon-mascot-pose-motion {
         --grcon-pose-animation: grcon-mascot-pose-empty;
-        --grcon-pose-duration: 8200ms;
+        --grcon-pose-duration: 6800ms;
       }
       html[data-grcon-mascot-asset="sprite-hd-file-v1"]
         .grcon-mascot-greeting .grcon-mascot-pose-motion {
         animation: var(--grcon-pose-animation, grcon-mascot-pose-calm)
-          var(--grcon-pose-duration, 7600ms) cubic-bezier(.4, 0, .2, 1) infinite;
+          var(--grcon-pose-duration, 6200ms) cubic-bezier(.4, 0, .2, 1) infinite;
       }
       /* Na pose sentada, o círculo de pontos já pertence ao desenho. Durante
          a análise, recortamos esse mesmo trecho da sprite e o fazemos girar;
@@ -180,7 +180,7 @@
       }
       html[data-grcon-mascot-asset="sprite-hd-file-v1"]
         .grcon-mascot-context.is-processing .grcon-mascot-motion {
-        animation: grcon-mascot-working-run 780ms cubic-bezier(.37, 0, .2, 1) infinite;
+        animation: grcon-mascot-working-run 700ms cubic-bezier(.37, 0, .2, 1) infinite;
         will-change: transform;
       }
       html[data-grcon-mascot-asset="sprite-hd-file-v1"]
@@ -196,92 +196,92 @@
           linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-600, #1479a6) 68%, transparent) 35% 58%, transparent 82%) 0 10% / 100% 2px no-repeat,
           linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-700, #0c648f) 50%, transparent) 30% 55%, transparent 80%) 0 52% / 84% 2px no-repeat,
           linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-800, #0a527d) 42%, transparent) 28% 52%, transparent 78%) 0 92% / 68% 2px no-repeat;
-        opacity: .42;
+        opacity: .55;
         pointer-events: none;
         animation: grcon-mascot-speed-lines 620ms ease-in-out infinite;
       }
       @keyframes grcon-mascot-pose-calm {
-        0%, 18%, 48%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-        7% { transform: translate3d(0, -1px, 0) rotate(.25deg) scale(1.004); }
-        12% { transform: translate3d(0, 0, 0) rotate(-.15deg) scale(1.001); }
-        63% { transform: translate3d(1px, -1px, 0) rotate(.45deg) scale(1.003); }
-        71% { transform: translate3d(0, 0, 0) rotate(-.12deg) scale(1); }
+        0%, 24%, 54%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        7% { transform: translate3d(0, -2px, 0) rotate(.4deg) scale(1.006); }
+        14% { transform: translate3d(0, 0, 0) rotate(-.25deg) scale(1.002); }
+        65% { transform: translate3d(1px, -2px, 0) rotate(.7deg) scale(1.005); }
+        74% { transform: translate3d(0, 0, 0) rotate(-.2deg) scale(1); }
       }
       @keyframes grcon-mascot-pose-focus {
-        0%, 23%, 52%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        8% { transform: translate3d(-1px, -1px, 0) rotate(-.65deg); }
-        14% { transform: translate3d(1px, -2px, 0) rotate(.55deg); }
-        19% { transform: translate3d(0, -1px, 0) rotate(.1deg); }
-        68% { transform: translate3d(1px, -1px, 0) rotate(.4deg); }
-        76% { transform: translate3d(0, 0, 0) rotate(-.2deg); }
+        0%, 26%, 54%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        7% { transform: translate3d(-2px, -2px, 0) rotate(-.9deg); }
+        13% { transform: translate3d(2px, -3px, 0) rotate(.8deg); }
+        19% { transform: translate3d(0, -1px, 0) rotate(.15deg); }
+        65% { transform: translate3d(2px, -2px, 0) rotate(.7deg); }
+        73% { transform: translate3d(0, 0, 0) rotate(-.25deg); }
       }
       @keyframes grcon-mascot-pose-scan {
-        0%, 16%, 46%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        6% { transform: translate3d(-2px, -1px, 0) rotate(-.7deg); }
-        11% { transform: translate3d(1px, -1px, 0) rotate(.45deg); }
-        61% { transform: translate3d(2px, 0, 0) rotate(.55deg); }
-        69% { transform: translate3d(-1px, -1px, 0) rotate(-.35deg); }
-        75% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        0%, 20%, 48%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        6% { transform: translate3d(-3px, -2px, 0) rotate(-1.1deg); }
+        12% { transform: translate3d(2px, -2px, 0) rotate(.8deg); }
+        62% { transform: translate3d(3px, -1px, 0) rotate(1deg); }
+        70% { transform: translate3d(-2px, -2px, 0) rotate(-.65deg); }
+        77% { transform: translate3d(0, 0, 0) rotate(0deg); }
       }
       @keyframes grcon-mascot-pose-confirm {
-        0%, 25%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        7% { transform: translate3d(0, -2px, 0) rotate(.8deg); }
-        12% { transform: translate3d(0, 1px, 0) rotate(-.45deg); }
-        17% { transform: translate3d(0, -1px, 0) rotate(.25deg); }
-        21% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        0%, 29%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        7% { transform: translate3d(0, -4px, 0) rotate(1.2deg); }
+        12% { transform: translate3d(0, 2px, 0) rotate(-.7deg); }
+        18% { transform: translate3d(0, -2px, 0) rotate(.45deg); }
+        24% { transform: translate3d(0, 0, 0) rotate(0deg); }
       }
       @keyframes grcon-mascot-pose-work {
-        0%, 28%, 58%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        7% { transform: translate3d(1px, -2px, 0) rotate(.65deg); }
-        13% { transform: translate3d(-1px, 0, 0) rotate(-.45deg); }
-        20% { transform: translate3d(1px, -1px, 0) rotate(.35deg); }
-        70% { transform: translate3d(-1px, -1px, 0) rotate(-.35deg); }
-        77% { transform: translate3d(0, 0, 0) rotate(.15deg); }
+        0%, 30%, 58%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        7% { transform: translate3d(2px, -3px, 0) rotate(1deg); }
+        13% { transform: translate3d(-2px, 1px, 0) rotate(-.75deg); }
+        21% { transform: translate3d(2px, -2px, 0) rotate(.6deg); }
+        68% { transform: translate3d(-2px, -2px, 0) rotate(-.65deg); }
+        77% { transform: translate3d(1px, 0, 0) rotate(.25deg); }
       }
       @keyframes grcon-mascot-pose-alert {
-        0%, 31%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-        7% { transform: translate3d(0, -2px, 0) rotate(-1deg) scale(1.008); }
-        12% { transform: translate3d(1px, 0, 0) rotate(.8deg) scale(1.003); }
-        17% { transform: translate3d(-1px, -1px, 0) rotate(-.5deg) scale(1.005); }
-        23% { transform: translate3d(0, 0, 0) rotate(.15deg) scale(1); }
+        0%, 34%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        7% { transform: translate3d(0, -3px, 0) rotate(-1.5deg) scale(1.012); }
+        13% { transform: translate3d(2px, 1px, 0) rotate(1.2deg) scale(1.004); }
+        19% { transform: translate3d(-2px, -2px, 0) rotate(-.8deg) scale(1.007); }
+        26% { transform: translate3d(0, 0, 0) rotate(.2deg) scale(1); }
       }
       @keyframes grcon-mascot-pose-success {
-        0%, 27%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-        7% { transform: translate3d(0, -3px, 0) rotate(1deg) scale(1.008); }
-        12% { transform: translate3d(0, 1px, 0) rotate(-.5deg) scale(1.002); }
-        17% { transform: translate3d(0, -1px, 0) rotate(.3deg) scale(1.004); }
-        22% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        0%, 31%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        7% { transform: translate3d(0, -5px, 0) rotate(1.4deg) scale(1.012); }
+        13% { transform: translate3d(0, 2px, 0) rotate(-.8deg) scale(1.003); }
+        19% { transform: translate3d(0, -2px, 0) rotate(.5deg) scale(1.006); }
+        25% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
       }
       @keyframes grcon-mascot-pose-pending {
-        0%, 22%, 55%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-        8% { transform: translate3d(0, -1px, 0) rotate(-.35deg) scale(1.003); }
-        14% { transform: translate3d(0, 0, 0) rotate(.2deg) scale(1); }
-        68% { transform: translate3d(1px, -1px, 0) rotate(.35deg) scale(1.002); }
-        76% { transform: translate3d(0, 0, 0) rotate(-.15deg) scale(1); }
+        0%, 25%, 56%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+        8% { transform: translate3d(0, -2px, 0) rotate(-.6deg) scale(1.005); }
+        15% { transform: translate3d(1px, 0, 0) rotate(.35deg) scale(1.001); }
+        67% { transform: translate3d(2px, -2px, 0) rotate(.65deg) scale(1.004); }
+        76% { transform: translate3d(0, 0, 0) rotate(-.25deg) scale(1); }
       }
       @keyframes grcon-mascot-pose-empty {
-        0%, 20%, 49%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        8% { transform: translate3d(-1px, 0, 0) rotate(-.8deg); }
-        14% { transform: translate3d(1px, -1px, 0) rotate(.5deg); }
-        64% { transform: translate3d(2px, 0, 0) rotate(.65deg); }
-        72% { transform: translate3d(0, 0, 0) rotate(-.25deg); }
+        0%, 23%, 51%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+        8% { transform: translate3d(-3px, -1px, 0) rotate(-1.2deg); }
+        15% { transform: translate3d(2px, -2px, 0) rotate(.85deg); }
+        64% { transform: translate3d(3px, -1px, 0) rotate(1.1deg); }
+        73% { transform: translate3d(0, 0, 0) rotate(-.4deg); }
       }
       @keyframes grcon-mascot-reduced-acknowledge {
         0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
         42% { transform: translate3d(0, -2px, 0) rotate(.55deg); }
       }
       @keyframes grcon-mascot-working-run {
-        0%, 100% { transform: translate3d(-2px, 1px, 0) rotate(-.7deg) scale(1); }
-        12% { transform: translate3d(-4px, 0, 0) rotate(.55deg) scale(1.004); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-        30% { transform: translate3d(3px, -5px, 0) rotate(1.9deg) scale(1.009); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
-        47% { transform: translate3d(5px, 1px, 0) rotate(.35deg) scale(1.003); animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
-        63% { transform: translate3d(2px, -1px, 0) rotate(-.9deg) scale(1.006); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-        81% { transform: translate3d(-4px, -5px, 0) rotate(-1.8deg) scale(1.009); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+        0%, 100% { transform: translate3d(-2px, 1px, 0) rotate(-.8deg) scale(1); }
+        12% { transform: translate3d(-5px, 0, 0) rotate(.7deg) scale(1.005); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+        30% { transform: translate3d(4px, -6px, 0) rotate(2.2deg) scale(1.01); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+        47% { transform: translate3d(7px, 1px, 0) rotate(.45deg) scale(1.004); animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
+        63% { transform: translate3d(2px, -2px, 0) rotate(-1.1deg) scale(1.007); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+        81% { transform: translate3d(-5px, -6px, 0) rotate(-2.1deg) scale(1.01); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
       }
       @keyframes grcon-mascot-speed-lines {
-        0%, 100% { opacity: .18; transform: translate3d(3px, 1px, 0) scaleX(.84); }
-        38% { opacity: .48; transform: translate3d(-2px, -1px, 0) scaleX(1.08); }
-        72% { opacity: .3; transform: translate3d(1px, 0, 0) scaleX(.94); }
+        0%, 100% { opacity: .25; transform: translate3d(4px, 1px, 0) scaleX(.82); }
+        38% { opacity: .68; transform: translate3d(-3px, -1px, 0) scaleX(1.14); }
+        72% { opacity: .42; transform: translate3d(1px, 0, 0) scaleX(.96); }
       }
       @keyframes grcon-mascot-orb-spin {
         0% { transform: rotate(0deg) scale(.97); }
