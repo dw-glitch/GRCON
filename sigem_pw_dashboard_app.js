@@ -295,11 +295,11 @@
     el("spw-table").innerHTML = visible.length ? `<table><caption>${escapeHtml(LISTS[state.activeList])}</caption><thead><tr><th>Classe</th><th>Documento</th><th>Revisão</th><th>Status SIGEM</th><th>Status PW</th><th>Emissão PW</th><th>Situação</th></tr></thead><tbody>${visible.map((row) => `<tr><td><span class="spw-pill">${escapeHtml(row.documentClass)}</span></td><td class="spw-code">${escapeHtml(row.document)}</td><td>${escapeHtml(row.revision)}</td><td>${escapeHtml(row.sigemStatus || "—")}</td><td>${escapeHtml(row.pwStatus || "—")}</td><td>${escapeHtml(row.pwEmission)}</td><td><span class="spw-situation ${situationClass(row)}">${escapeHtml(row.situation)}</span></td></tr>`).join("")}</tbody></table>` : `<div class="spw-empty"><div><strong>Nenhum registro encontrado</strong><span>Ajuste a lista ou os filtros.</span></div></div>`;
     el("spw-page-info").textContent = rows.length ? `${fmt(start + 1)}–${fmt(Math.min(start + PAGE_SIZE, rows.length))} de ${fmt(rows.length)} · página ${fmt(state.page)} de ${fmt(pages)}` : "0 registros"; el("spw-prev").disabled = state.page <= 1; el("spw-next").disabled = state.page >= pages;
   }
-  function renderReadiness() {
+  function renderReadiness(unfilteredResult) {
     const Readiness = root.GrconSigemPwReadiness;
     const host = el("spw-readiness");
     if (!host || !Readiness?.assess) return;
-    state.readiness = Readiness.assess(state, state.result);
+    state.readiness = Readiness.assess(state, unfilteredResult);
     const assessment = state.readiness;
     const iconLabel = assessment.status === "ready" ? "✓" : assessment.status === "attention" ? "!" : "i";
     const applicable = assessment.checks.filter((item) => item.applicable);
@@ -307,7 +307,7 @@
     host.dataset.status = assessment.status;
     host.innerHTML = `<span class="spw-readiness-icon" aria-hidden="true">${iconLabel}</span><div><strong>${escapeHtml(assessment.title)}</strong><small>${escapeHtml(assessment.message)}</small></div>${applicable.length ? `<details><summary>${assessment.failedChecks.length ? fmt(assessment.failedChecks.length) + " atenção(ões)" : fmt(applicable.length) + " verificações OK"}</summary><div class="spw-readiness-checks">${checks}</div></details>` : ""}`;
   }
-  function renderFromModel(resetPage) { if (!state.model) rebuildModel(); if (resetPage) state.page = 1; state.result = Core.aggregateModel(state.model, { documentClass: state.filters.documentClass }); renderBases(); renderSystems(); renderActions(); renderList(); renderReadiness(); }
+  function renderFromModel(resetPage) { if (!state.model) rebuildModel(); if (resetPage) state.page = 1; const readinessResult = Core.aggregateModel(state.model); state.result = Core.aggregateModel(state.model, { documentClass: state.filters.documentClass }); renderBases(); renderSystems(); renderActions(); renderList(); renderReadiness(readinessResult); }
 
   async function exportCurrentList() {
     try { const rows = filteredRows(); if (!rows.length) { notify("Não há registros na lista filtrada para exportar.", "info"); return; } await root.GRCONModuleLoader.ensure("xlsx"); const data = rows.map((row) => ({ Classe: row.documentClass, Documento: row.document, "Revisão": row.revision, "Status SIGEM": row.sigemStatus, "Status PW": row.pwStatus, "Emissão PW": row.pwEmission, "Situação": row.situation })); const worksheet = root.XLSX.utils.json_to_sheet(data); worksheet["!cols"] = [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 34 }]; const workbook = root.XLSX.utils.book_new(); root.XLSX.utils.book_append_sheet(workbook, worksheet, "Relação"); const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, ""); root.XLSX.writeFile(workbook, `GRCON_SIGEM_PW_${state.activeList}_${stamp}.xlsx`, { compression: true }); notify(`Lista exportada com ${fmt(rows.length)} registros.`, "success"); }
