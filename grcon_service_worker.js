@@ -4,10 +4,10 @@
   // Mascote oficial da Qualidade. Mantido em módulos separados para que a
   // integração visual não se misture com regras de negócio ou navegação.
   const installMascotGreeting = () => {
-    if (root.GRCONMascotGreeting || document.querySelector('script[data-grcon-mascot-greeting="true"]')) return;
+    if (window.GRCONMascotGreeting || document.querySelector('script[data-grcon-mascot-greeting="true"]')) return;
 
     const installInteraction = () => {
-      if (root.GRCONMascotGreeting || document.querySelector('script[data-grcon-mascot-greeting="true"]')) return;
+      if (window.GRCONMascotGreeting || document.querySelector('script[data-grcon-mascot-greeting="true"]')) return;
       const interaction = document.createElement("script");
       interaction.src = "grcon_mascot_greeting.js";
       interaction.async = false;
@@ -15,7 +15,7 @@
       document.head.appendChild(interaction);
     };
 
-    if (root.GRCONMascotGreetingCore) {
+    if (window.GRCONMascotGreetingCore) {
       installInteraction();
       return;
     }
