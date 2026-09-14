@@ -1209,14 +1209,20 @@
   }
 
   function signalMascotProcessing(active, taskLabel = "") {
+    const nextActive = Boolean(active);
+    // Estado durável: se o módulo visual terminar de carregar depois do clique,
+    // ele ainda encontra a análise em andamento em vez de perder o evento.
+    document.documentElement.dataset.grconControlProcessing = String(nextActive);
     window.dispatchEvent(new CustomEvent("grcon:processing-state", {
-      detail: { active: Boolean(active), context: "control", task: taskLabel },
+      detail: { active: nextActive, context: "control", task: taskLabel },
     }));
   }
 
   function pulseMascotProcessing(duration = 1100) {
+    const safeDuration = Math.min(2400, Math.max(700, Number(duration) || 1100));
+    document.documentElement.dataset.grconControlProcessingUntil = String(Date.now() + safeDuration);
     window.dispatchEvent(new CustomEvent("grcon:processing-pulse", {
-      detail: { context: "control", duration },
+      detail: { context: "control", duration: safeDuration },
     }));
   }
 
