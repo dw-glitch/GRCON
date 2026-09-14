@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.40.10";
+  const APP_VERSION = "5.40.11";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -1208,6 +1208,18 @@
     if (els.performanceStatus && message) els.performanceStatus.textContent = message;
   }
 
+  function signalMascotProcessing(active, taskLabel = "") {
+    window.dispatchEvent(new CustomEvent("grcon:processing-state", {
+      detail: { active: Boolean(active), context: "control", task: taskLabel },
+    }));
+  }
+
+  function pulseMascotProcessing(duration = 1100) {
+    window.dispatchEvent(new CustomEvent("grcon:processing-pulse", {
+      detail: { context: "control", duration },
+    }));
+  }
+
   function setBusy(busy, taskLabel = "Análise documental") {
     state.busy = busy;
     state.busyLabel = busy ? taskLabel : "";
@@ -1244,6 +1256,7 @@
       if (els.progress) els.progress.hidden = true;
       refreshPerformancePanel();
     }
+    signalMascotProcessing(busy, taskLabel);
   }
 
   function fileLabel(files, singular, plural) {
@@ -2855,6 +2868,9 @@
 
     const analysisSignature = currentAnalysisSignature();
     if (restoreSmartAnalysisCache(analysisSignature)) {
+      // Mesmo quando o resultado vem do cache, o clique recebe uma resposta
+      // visual curta e perceptível do mascote.
+      pulseMascotProcessing();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) reaproveitadas do cache · válidas até ${validUntil}`;
       els.analysisStamp.title = `GRCON ${APP_VERSION} · ${ldDisplayName()}`;

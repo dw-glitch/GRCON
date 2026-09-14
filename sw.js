@@ -1,5 +1,5 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.40.10
+// Versão: 5.40.11
 // Estratégia: rede primeiro para todo o código do GRCON (HTML/CSS/JS), para
 // que uma correção publicada apareça na hora; e stale-while-revalidate para os
 // arquivos pesados (bibliotecas, imagens e os pacotes gerados), que assim
@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1-mascot-greeting1-processing1";
+const CACHE_NAME = "grcon-v5.40.11-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1-mascot-greeting1-processing2";
 const ASSETS = [
   "index.html",
   "design-system.css",

@@ -17,6 +17,9 @@
   let activeMascot = null;
   let pinnedMascot = null;
   let observer = null;
+  let explicitControlProcessing = false;
+  let processingHoldUntil = 0;
+  let processingHoldTimer = 0;
 
   function installStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -113,7 +116,7 @@
         animation: grcon-mascot-orb-spin 840ms cubic-bezier(.45, .05, .55, .95) infinite;
       }
       .grcon-mascot-context.is-processing .grcon-mascot-motion {
-        animation: grcon-mascot-working-run 920ms cubic-bezier(.37, 0, .2, 1) infinite;
+        animation: grcon-mascot-working-run 780ms cubic-bezier(.37, 0, .2, 1) infinite;
         will-change: transform;
       }
       .grcon-mascot-context.is-processing .grcon-mascot-motion::after {
@@ -130,15 +133,15 @@
           linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-800, #0a527d) 42%, transparent) 28% 52%, transparent 78%) 0 92% / 68% 2px no-repeat;
         opacity: .42;
         pointer-events: none;
-        animation: grcon-mascot-speed-lines 710ms ease-in-out infinite;
+        animation: grcon-mascot-speed-lines 620ms ease-in-out infinite;
       }
       @keyframes grcon-mascot-working-run {
-        0%, 100% { transform: translate3d(0, 0, 0) rotate(-.35deg) scale(1); }
-        13% { transform: translate3d(-1px, -1px, 0) rotate(.35deg) scale(1.003); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-        31% { transform: translate3d(2px, -3px, 0) rotate(1.15deg) scale(1.006); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
-        48% { transform: translate3d(3px, 0, 0) rotate(.25deg) scale(1.002); animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
-        64% { transform: translate3d(1px, -1px, 0) rotate(-.65deg) scale(1.004); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
-        82% { transform: translate3d(-2px, -3px, 0) rotate(-1.1deg) scale(1.006); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+        0%, 100% { transform: translate3d(-2px, 1px, 0) rotate(-.7deg) scale(1); }
+        12% { transform: translate3d(-4px, 0, 0) rotate(.55deg) scale(1.004); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+        30% { transform: translate3d(3px, -5px, 0) rotate(1.9deg) scale(1.009); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+        47% { transform: translate3d(5px, 1px, 0) rotate(.35deg) scale(1.003); animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
+        63% { transform: translate3d(2px, -1px, 0) rotate(-.9deg) scale(1.006); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+        81% { transform: translate3d(-4px, -5px, 0) rotate(-1.8deg) scale(1.009); animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
       }
       @keyframes grcon-mascot-speed-lines {
         0%, 100% { opacity: .18; transform: translate3d(3px, 1px, 0) scaleX(.84); }
@@ -285,11 +288,19 @@
     return Array.from(document.querySelectorAll(selectors)).some(elementVisible);
   }
 
+  function controlSignalActive() {
+    return explicitControlProcessing || Date.now() < processingHoldUntil;
+  }
+
   function syncProcessingState() {
-    const busy = processingActive();
+    const fallbackBusy = processingActive();
     document.querySelectorAll(SELECTOR).forEach((mascot) => {
+      const contextual = mascot.classList.contains("grcon-mascot-context");
       const processingPose = mascot.dataset.pose === "pending" || mascot.dataset.pose === "analysis";
-      const shouldAnimate = busy && mascot.classList.contains("grcon-mascot-context") && processingPose;
+      const signaledControl = mascot.dataset.context === "control" && controlSignalActive();
+      // O evento do Controle de GRDT inicia a corrida imediatamente, sem depender
+      // da ordem entre a exibição do progresso e a troca assíncrona da pose.
+      const shouldAnimate = contextual && (signaledControl || (fallbackBusy && processingPose));
       if (mascot.classList.contains("is-processing") !== shouldAnimate) {
         mascot.classList.toggle("is-processing", shouldAnimate);
       }
@@ -299,6 +310,43 @@
         mascot.removeAttribute("aria-busy");
       }
     });
+  }
+
+  function scheduleProcessingHoldEnd() {
+    root.clearTimeout(processingHoldTimer);
+    const remaining = processingHoldUntil - Date.now();
+    if (remaining <= 0) {
+      processingHoldUntil = 0;
+      syncProcessingState();
+      return;
+    }
+    processingHoldTimer = root.setTimeout(() => {
+      processingHoldUntil = 0;
+      syncProcessingState();
+    }, remaining + 20);
+  }
+
+  function handleProcessingState(event) {
+    const detail = event?.detail || {};
+    if (detail.context && detail.context !== "control") return;
+    explicitControlProcessing = Boolean(detail.active);
+    if (explicitControlProcessing) {
+      processingHoldUntil = Math.max(processingHoldUntil, Date.now() + 1100);
+      root.clearTimeout(processingHoldTimer);
+    } else {
+      scheduleProcessingHoldEnd();
+    }
+    syncProcessingState();
+  }
+
+  function handleProcessingPulse(event) {
+    const detail = event?.detail || {};
+    if (detail.context && detail.context !== "control") return;
+    const requested = Number(detail.duration) || 1100;
+    const duration = Math.min(2400, Math.max(700, requested));
+    processingHoldUntil = Math.max(processingHoldUntil, Date.now() + duration);
+    scheduleProcessingHoldEnd();
+    syncProcessingState();
   }
 
   function currentIdentity() {
@@ -525,6 +573,8 @@
     root.addEventListener("scroll", () => {
       if (activeMascot) positionBubble(activeMascot);
     }, { passive: true, capture: true });
+    root.addEventListener("grcon:processing-state", handleProcessingState);
+    root.addEventListener("grcon:processing-pulse", handleProcessingPulse);
     root.addEventListener("grcon:cloud-ready", updateGreeting);
     root.addEventListener("grcon:identity-changed", updateGreeting);
   }
