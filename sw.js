@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1-mascot-greeting1-processing5";
+const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1-mascot-greeting1-processing5-frames1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -30,6 +30,10 @@ const ASSETS = [
   "grcon-logo-app.png",
   "grcon-logo-report.png",
   "grcon-mascot-sprite.png",
+  "assets/mascot/animated/grcon-mascot-run-sprite.png",
+  "assets/mascot/animated/grcon-mascot-wave.png",
+  "assets/mascot/animated/grcon-mascot-analyze.png",
+  "assets/mascot/animated/grcon-mascot-success.png",
   "manifest.json",
   "offline_resources.js",
   "grcon_bootstrap_head.js",
@@ -169,6 +173,10 @@ const HEAVY_ASSETS = new Set([
   "grcon-logo-app.ico",
   "grcon-logo-report.png",
   "grcon-mascot-sprite.png",
+  "assets/mascot/animated/grcon-mascot-run-sprite.png",
+  "assets/mascot/animated/grcon-mascot-wave.png",
+  "assets/mascot/animated/grcon-mascot-analyze.png",
+  "assets/mascot/animated/grcon-mascot-success.png",
 ]);
 
 async function fetchAndCache(request) {
