@@ -20,10 +20,12 @@
   const PW_BASE_KEY = "sigem-pw-current-pw-v3";
   const LD_BASE_KEY = "sigem-pw-current-quality-ld-v1";
   const HISTORY_KEY = "sigem-pw-base-history-v3";
-  const PW_BASE_VERSION = 3;
+  const PW_BASE_VERSION = 4;
   const HISTORY_VERSION = 3;
+  const PW_SCOPE_VERSION = 4;
   const UNCLASSIFIED = "Não classificado";
   const SCOPE_CLASSES = Object.freeze(["ET", "N-1710"]);
+  const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const EMISSION_FLAGS = Object.freeze({ CURRENT: "SIM", HISTORICAL: "NAO", PLANNED: "PREVISTO" });
   const REQUIRED_PW_FIELDS = Object.freeze(["document", "revision", "documentType", "state", "lastEmission"]);
 
@@ -129,7 +131,7 @@
   function documentClass(value) {
     const identity = documentIdentity(value);
     if (/^C1O_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_.+$/i.test(identity.canonical)) return "ET";
-    if (/^[A-Z0-9]{1,4}(?:-[A-Z0-9]{1,4})?-5290\.00-22313-[A-Z0-9]{3}-C1O-[A-Z0-9]{3}$/i.test(identity.canonical)) return "N-1710";
+    if (N1710_CODE_RE.test(identity.canonical)) return "N-1710";
     return UNCLASSIFIED;
   }
 
@@ -482,6 +484,54 @@
     return normalizeRecords(records, "sigem", ldUniverse || new Map(), arguments.length >= 2);
   }
 
+  function sanitizePwRecords(records, ldRecords) {
+    const sourceRecords = Array.isArray(records) ? records : [];
+    const ldUniverse = buildLdUniverse(ldRecords || []);
+    const accepted = normalizeRecords(sourceRecords, "pw", ldUniverse, true);
+    return {
+      records: accepted,
+      acceptedCount: accepted.length,
+      excludedCount: Math.max(0, sourceRecords.length - accepted.length),
+      ldUniverse,
+    };
+  }
+
+  function sanitizePwBase(base, ldBaseOrRecords) {
+    if (!base || !base.meta || !Array.isArray(base.records)) throw new Error("Base PW inválida para saneamento.");
+    const { scopeDiscardedRecords: _discardedRecords, scopeExcludedReasons: _excludedReasons, scopeExcludedExamples: _excludedExamples, ...previousMeta } = base.meta;
+    const sourceRecords = Array.isArray(base.sourceRecords) ? base.sourceRecords : base.records;
+    const ldRecords = Array.isArray(ldBaseOrRecords) ? ldBaseOrRecords : (ldBaseOrRecords && ldBaseOrRecords.records) || [];
+    const ldMeta = !Array.isArray(ldBaseOrRecords) && ldBaseOrRecords && ldBaseOrRecords.meta;
+    const audit = sanitizePwRecords(sourceRecords, ldRecords);
+    const entries = buildEntryMap(audit.records, "pw");
+    const documents = new Set(audit.records.map((record) => record.documentKey).filter(Boolean));
+    const emittedDocuments = new Set(audit.records.filter((record) => record.emittedEvidence).map((record) => record.documentKey).filter(Boolean));
+    const classCounts = audit.records.reduce((counts, record) => {
+      counts[record.documentClass] = (counts[record.documentClass] || 0) + 1;
+      return counts;
+    }, { ET: 0, "N-1710": 0 });
+    return {
+      meta: {
+        ...previousMeta,
+        version: Math.max(Number(previousMeta.version) || 0, PW_BASE_VERSION),
+        scopeVersion: PW_SCOPE_VERSION,
+        scopeRule: "ET estrutural ou N-1710 estrutural presente na LD da Qualidade",
+        scopeLdSnapshotId: text(ldMeta && ldMeta.snapshotId) || (ldMeta ? snapshotId("ld", ldMeta) : ""),
+        sourceRecordCount: Number(previousMeta.sourceRecordCount) || sourceRecords.length,
+        recordCount: audit.records.length,
+        validRevisionRecordCount: entries.size,
+        uniqueDocumentCount: documents.size,
+        emittedDocumentCount: emittedDocuments.size,
+        duplicateRevisionCount: Math.max(0, audit.records.length - entries.size),
+        scopeAcceptedRecordCount: audit.acceptedCount,
+        scopeExcludedCount: audit.excludedCount,
+        scopeClassCounts: classCounts,
+      },
+      records: audit.records,
+      sourceRecords,
+    };
+  }
+
   function buildEntryMap(records, kind) {
     const map = new Map();
     (records || []).forEach((record) => {
@@ -809,10 +859,16 @@
   function normalizeBase(kind, base) {
     if (!base || !base.meta || !Array.isArray(base.records)) throw new Error("Base inválida para persistência.");
     const id = text(base.meta.snapshotId) || snapshotId(kind, base.meta);
-    return {
+    const normalized = {
       meta: { ...base.meta, kind, snapshotId: id, historyVersion: HISTORY_VERSION },
       records: base.records,
     };
+    if (Array.isArray(base.sourceRecords)) normalized.sourceRecords = base.sourceRecords;
+    return normalized;
+  }
+
+  function historySnapshot(base) {
+    return { meta: { ...base.meta }, records: base.records };
   }
 
   async function loadHistory() {
@@ -824,10 +880,11 @@
 
   async function saveBase(kind, base) {
     const normalized = normalizeBase(kind, base);
+    const snapshot = historySnapshot(normalized);
     const history = await loadHistory();
     const snapshots = history.snapshots.filter((item) => item.meta.snapshotId !== normalized.meta.snapshotId);
     const deletedIds = history.deletedIds.filter((id) => id !== normalized.meta.snapshotId);
-    snapshots.push(normalized);
+    snapshots.push(snapshot);
     snapshots.sort((left, right) => parseDateMs(right.meta.importedAt) - parseDateMs(left.meta.importedAt));
     await kvSetMany([
       [baseKey(kind), normalized],
@@ -878,13 +935,23 @@
       && !history.deletedIds.includes(text(base.meta.snapshotId) || snapshotId(kind, base.meta)));
     const snapshots = [...history.snapshots];
     const writes = [];
+    let historyChanged = false;
     candidates.forEach(([kind, base]) => {
-      const normalized = normalizeBase(kind, base);
-      if (!snapshots.some((item) => item.meta.snapshotId === normalized.meta.snapshotId)) snapshots.push(normalized);
+      const prepared = kind === "pw" ? sanitizePwBase(base, ldCurrent) : base;
+      const normalized = normalizeBase(kind, prepared);
+      const compact = historySnapshot(normalized);
+      const snapshotIndex = snapshots.findIndex((item) => item.meta.snapshotId === normalized.meta.snapshotId);
+      const needsScopedSnapshot = kind === "pw" && (Number(snapshots[snapshotIndex]?.meta?.scopeVersion) < PW_SCOPE_VERSION
+        || text(snapshots[snapshotIndex]?.meta?.scopeLdSnapshotId) !== text(normalized.meta.scopeLdSnapshotId)
+        || Array.isArray(snapshots[snapshotIndex]?.sourceRecords));
+      if (snapshotIndex < 0) { snapshots.push(compact); historyChanged = true; }
+      else if (needsScopedSnapshot) { snapshots[snapshotIndex] = compact; historyChanged = true; }
       const current = kind === "sigem" ? sigemCurrent : kind === "pw" ? pwCurrent : ldCurrent;
-      if (!current || !current.meta || snapshotId(kind, current.meta) !== normalized.meta.snapshotId) writes.push([baseKey(kind), normalized]);
+      const currentNeedsScope = kind === "pw" && (Number(current?.meta?.scopeVersion) < PW_SCOPE_VERSION
+        || text(current?.meta?.scopeLdSnapshotId) !== text(normalized.meta.scopeLdSnapshotId));
+      if (!current || !current.meta || snapshotId(kind, current.meta) !== normalized.meta.snapshotId || currentNeedsScope) writes.push([baseKey(kind), normalized]);
     });
-    if (snapshots.length !== history.snapshots.length) {
+    if (historyChanged) {
       snapshots.sort((left, right) => parseDateMs(right.meta.importedAt) - parseDateMs(left.meta.importedAt));
       writes.push([HISTORY_KEY, { version: HISTORY_VERSION, snapshots, deletedIds: history.deletedIds }]);
     }
@@ -903,16 +970,39 @@
     return kvGet(LD_BASE_KEY, { meta: null, records: [] });
   }
 
-  async function savePwBase(base) {
-    return saveBase("pw", base);
+  async function savePwBase(base, ldBaseOrRecords) {
+    const ld = ldBaseOrRecords === undefined ? await loadLdBase() : ldBaseOrRecords;
+    return saveBase("pw", sanitizePwBase(base, ld));
   }
 
   async function saveSigemBase(base) {
     return saveBase("sigem", base);
   }
 
+  async function saveLdAndReprocessPw(base, pwBase) {
+    const normalizedLd = normalizeBase("ld", base);
+    const currentPw = pwBase === undefined ? await loadPwBase() : pwBase;
+    const normalizedPw = currentPw && currentPw.meta && Array.isArray(currentPw.records)
+      ? normalizeBase("pw", sanitizePwBase(currentPw, normalizedLd))
+      : null;
+    const history = await loadHistory();
+    const replacementIds = new Set([normalizedLd.meta.snapshotId, normalizedPw && normalizedPw.meta.snapshotId].filter(Boolean));
+    const snapshots = history.snapshots.filter((item) => !replacementIds.has(item.meta.snapshotId));
+    snapshots.push(historySnapshot(normalizedLd));
+    if (normalizedPw) snapshots.push(historySnapshot(normalizedPw));
+    snapshots.sort((left, right) => parseDateMs(right.meta.importedAt) - parseDateMs(left.meta.importedAt));
+    const deletedIds = history.deletedIds.filter((id) => !replacementIds.has(id));
+    const writes = [
+      [LD_BASE_KEY, normalizedLd],
+      [HISTORY_KEY, { version: HISTORY_VERSION, snapshots, deletedIds }],
+    ];
+    if (normalizedPw) writes.push([PW_BASE_KEY, normalizedPw]);
+    await kvSetMany(writes);
+    return { ld: normalizedLd, pw: normalizedPw };
+  }
+
   async function saveLdBase(base) {
-    return saveBase("ld", base);
+    return (await saveLdAndReprocessPw(base)).ld;
   }
 
   async function loadBases() {
@@ -925,13 +1015,13 @@
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
-    PW_BASE_VERSION, HISTORY_VERSION, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
+    PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, N1710_CODE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
     EMISSION_FLAGS, EMISSION_RULE, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS,
     text, norm, normalizeHeader, canonicalDocumentCode, documentIdentity, documentClass,
     revisionKey, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
-    parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, buildEntryMap, buildDocumentMap,
+    parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, buildComparisonLists, aggregateModel, aggregate,
     openDb, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
-    saveBase, saveSigemBase, savePwBase, saveLdBase, deleteSnapshot, migrateLegacyBases, loadBases,
+    saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, deleteSnapshot, migrateLegacyBases, loadBases,
   });
 });

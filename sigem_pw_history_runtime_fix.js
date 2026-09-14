@@ -222,9 +222,9 @@
     const rows = snapshots.slice().reverse().map((snapshot) => {
       const current = snapshot.id === currentId;
       const metrics = snapshot.metrics || {};
-      return `<tr><td>${esc(fmtDate(snapshot.importedAt))}</td><td class="file"><strong>${esc(snapshot.fileName || "—")}</strong></td><td>${fmt(metrics.comparableDocuments)}</td><td>${fmt(metrics.rawRecords)}</td><td title="${esc(snapshot.id)}">${esc(snapshot.fingerprint || snapshot.id)}</td><td><span class="spw-silent-state ${current ? "current" : ""}">${current ? "Base atual" : "Base histórica"}</span></td><td><button type="button" class="spw-silent-remove" data-spw-silent-remove="${esc(snapshot.id)}">Remover do histórico</button></td></tr>`;
+      return `<tr><td>${esc(fmtDate(snapshot.importedAt))}</td><td class="file"><strong>${esc(snapshot.fileName || "—")}</strong></td><td>${fmt(metrics.comparableDocuments)}</td><td>${fmt(metrics.validRecords)}</td><td title="${esc(snapshot.id)}">${esc(snapshot.fingerprint || snapshot.id)}</td><td><span class="spw-silent-state ${current ? "current" : ""}">${current ? "Base atual" : "Base histórica"}</span></td><td><button type="button" class="spw-silent-remove" data-spw-silent-remove="${esc(snapshot.id)}">Remover do histórico</button></td></tr>`;
     }).join("");
-    return `<div class="spw-silent-table-wrap"><table class="spw-silent-table"><thead><tr><th>Importação</th><th>Arquivo</th><th>Documentos</th><th>Registros brutos</th><th>Fingerprint / ID</th><th>Situação</th><th>Ação</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="spw-silent-table-wrap"><table class="spw-silent-table"><thead><tr><th>Importação</th><th>Arquivo</th><th>Documentos</th><th>Registros válidos</th><th>Fingerprint / ID</th><th>Situação</th><th>Ação</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   async function renderManager() {

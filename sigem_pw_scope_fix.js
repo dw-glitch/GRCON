@@ -9,7 +9,7 @@
 
   if (!Base) throw new Error("Core do Dashboard SIGEM × PW indisponível para aplicar o filtro de escopo.");
 
-  const SCOPE_VERSION = 3;
+  const SCOPE_VERSION = 4;
   const SCOPE_LABEL = "GRCON N-1710 · 5290.00 / 22313 / C1O";
   const N1710_SCOPE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const VALID_CLASSES = new Set(Base.SCOPE_CLASSES || Base.DOCUMENT_CLASSES || ["ET", "N-1710"]);
@@ -113,19 +113,8 @@
     return { accepted, rejected, reasons, excludedCount: Math.max(0, (records || []).length - accepted.length) };
   }
 
-  function metadataFor(meta, records, audit, priorDiscarded) {
-    const previous = meta || {};
-    const priorExcluded = Number(previous.scopeExcludedCount) || 0;
-    const alreadyScoped = Number(previous.scopeVersion) >= 2;
-    const excludedCount = audit.excludedCount || (alreadyScoped ? priorExcluded : 0);
-    const reasons = audit.excludedCount ? audit.reasons : (previous.scopeExcludedReasons || {});
-    const priorFull = Array.isArray(previous.scopeDiscardedRecords) ? previous.scopeDiscardedRecords : (Array.isArray(priorDiscarded) ? priorDiscarded : []);
-    const discardedRecords = audit.excludedCount ? audit.rejected : priorFull;
-    const examples = discardedRecords.slice(0, 20);
-    const previousInvalid = Number(previous.baseInvalidCount);
-    const baseInvalidCount = Number.isFinite(previousInvalid)
-      ? previousInvalid
-      : Math.max(0, (Number(previous.invalidCount) || 0) - (alreadyScoped ? priorExcluded : 0));
+  function metadataFor(meta, records, audit) {
+    const { scopeDiscardedRecords: _discardedRecords, scopeExcludedReasons: _excludedReasons, scopeExcludedExamples: _excludedExamples, ...previous } = meta || {};
     const uniqueDocuments = new Set(records.map((record) => record.documentKey).filter(Boolean));
     const emittedDocuments = new Set(records.filter((record) => record.emittedEvidence).map((record) => record.documentKey).filter(Boolean));
     const revisionSeen = new Set();
@@ -142,12 +131,7 @@
       scopeLabel: SCOPE_LABEL,
       scopeRule: "[tipo variável]-5290.00-22313-[3 caracteres]-C1O-[sequencial 3/4 dígitos]",
       scopeAcceptedRecordCount: records.length,
-      scopeExcludedCount: excludedCount,
-      scopeExcludedReasons: reasons,
-      scopeExcludedExamples: examples,
-      scopeDiscardedRecords: discardedRecords,
-      baseInvalidCount,
-      invalidCount: baseInvalidCount + excludedCount,
+      scopeExcludedCount: audit.excludedCount,
       recordCount: records.length,
       uniqueDocumentCount: uniqueDocuments.size,
       emittedDocumentCount: emittedDocuments.size,
@@ -155,28 +139,15 @@
     };
   }
 
-  function sanitizePwBase(base) {
+  function sanitizePwBase(base, ldBaseOrRecords) {
     if (!base || !base.meta || !Array.isArray(base.records)) return { meta: null, records: [] };
+    if (typeof Base.sanitizePwBase === "function") return Base.sanitizePwBase(base, ldBaseOrRecords || []);
     const audit = scopeAudit(base.records);
-    const priorDiscarded = Array.isArray(base.discardedRecords) ? base.discardedRecords : [];
-    const meta = metadataFor(base.meta, audit.accepted, audit, priorDiscarded);
-    return { meta, records: audit.accepted, discardedRecords: meta.scopeDiscardedRecords || [] };
+    return { meta: metadataFor(base.meta, audit.accepted, audit), records: audit.accepted };
   }
 
   function parsePwCsv(source, fileMeta) {
-    const parsed = Base.parsePwCsv(source, fileMeta);
-    const sanitized = sanitizePwBase({ meta: parsed.meta, records: parsed.records });
-    return {
-      ...parsed,
-      records: sanitized.records,
-      discardedRecords: sanitized.discardedRecords,
-      meta: sanitized.meta,
-      scopeAudit: sanitized.meta && {
-        excludedCount: sanitized.meta.scopeExcludedCount,
-        reasons: sanitized.meta.scopeExcludedReasons,
-        examples: sanitized.meta.scopeExcludedExamples,
-      },
-    };
+    return Base.parsePwCsv(source, fileMeta);
   }
 
   function normalizeSigemRecords(records) {
@@ -199,12 +170,12 @@
     };
   }
 
-  async function loadPwBase() { return sanitizePwBase(await Base.loadPwBase()); }
-  async function savePwBase(base) { return Base.savePwBase(sanitizePwBase(base)); }
-  async function loadBases() {
-    const [sigem, pw] = await Promise.all([Base.loadSigemBase(), loadPwBase()]);
-    return { sigem, pw };
+  async function loadPwBase() {
+    const [pw, ld] = await Promise.all([Base.loadPwBase(), Base.loadLdBase()]);
+    return pw && pw.meta ? sanitizePwBase(pw, ld) : pw;
   }
+  async function savePwBase(base, ldBaseOrRecords) { return Base.savePwBase(base, ldBaseOrRecords); }
+  async function loadBases() { return Base.loadBases(); }
 
   return Object.freeze({
     ...Base,
@@ -221,6 +192,7 @@
     createModel,
     loadPwBase,
     savePwBase,
+    saveLdAndReprocessPw: Base.saveLdAndReprocessPw,
     loadBases,
   });
 });

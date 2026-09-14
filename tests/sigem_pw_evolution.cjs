@@ -99,7 +99,7 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   assert.match(app,/Cadastrados no SIGEM/); assert.match(app,/Encontrados no ProjectWise/); assert.match(app,/bookType\s*:\s*"xlsx"/);
   assert.match(app,/LD necessária para calcular a evolução/); assert.match(app,/spw-evo-filter-document-type/); assert.match(app,/spw-evo-filter-source/); assert.match(app,/data-evo-select/);
   assert.match(bootstrap,/sigem_pw_evolution_core\.js/); assert.match(bootstrap,/sigem_pw_evolution_app\.js/);
-  assert.match(scope,/scopeDiscardedRecords/); assert.match(scope,/SCOPE_VERSION = 3/);
+  assert.match(scope,/SCOPE_VERSION = 4/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
 })();
 
 console.log('sigem_pw_evolution: OK — movimentação por registros/multiconjunto, LD, auditoria, drill-down e desempenho validados.');

@@ -8,6 +8,7 @@ const Scope = require("../sigem_pw_scope_fix.js");
     "DE-5290.00-22313-001-C1O-1234",
     "PR-5290.00-22313-XYZ-C1O-999",
     "SIT-5290.00-22313-A1B-C1O-010",
+    "I-RL-5290.00-22313-ABC-C1O-1234",
   ];
   validN1710.forEach((code) => {
     assert.strictEqual(Scope.documentClass(code), "N-1710", `deve aceitar primeiro grupo variável: ${code}`);
@@ -29,6 +30,7 @@ const Scope = require("../sigem_pw_scope_fix.js");
   const csv = [
     "NumeroDocumentoCliente;RevisaoCompleta;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão",
     "RL-5290.00-22313-ABC-C1O-001;0;0;RL;Relatório;DOC;Documentação;Liberado;Sim",
+    "RL-5290.00-22313-ABC-C1O-001;A;A;RL;Relatório;DOC;Documentação;Liberado;Não",
     "CE-5290.00-22313-856-C1O-002;A;A;CE;Certificado;DOC;Documentação;Superado;Não",
     "DE-5290.00-99999-856-C1O-003;0;0;DE;Desenho;PRJ;Projeto;Liberado;Sim",
     "RL-5290.00-22313-856-ABC-004;0;0;RL;Relatório;DOC;Documentação;Liberado;Sim",
@@ -36,16 +38,25 @@ const Scope = require("../sigem_pw_scope_fix.js");
   ].join("\n");
 
   const parsed = Scope.parsePwCsv(csv, { fileName: "pw.csv", importedAt: "2026-09-11T18:00:00Z" });
-  assert.strictEqual(parsed.meta.sourceRowCount, 5, "auditoria preserva linhas brutas");
-  assert.strictEqual(parsed.meta.recordCount, 2, "somente registros do escopo entram na base válida");
-  assert.strictEqual(parsed.meta.uniqueDocumentCount, 2);
-  assert.strictEqual(parsed.meta.emittedDocumentCount, 2);
-  assert.strictEqual(parsed.meta.scopeExcludedCount, 3);
-  assert.strictEqual(parsed.meta.invalidCount, parsed.meta.baseInvalidCount + 3);
-  assert.ok(parsed.meta.scopeExcludedReasons.area_sistema_diferente_22313 >= 1);
-  assert.ok(parsed.meta.scopeExcludedReasons.origem_diferente_c1o >= 1);
-  assert.ok(parsed.meta.scopeExcludedReasons.fora_das_familias_grcon >= 1);
-  assert.strictEqual(parsed.records.every((record) => record.documentClass === "N-1710"), true);
+  assert.strictEqual(parsed.meta.sourceRowCount, 6, "parser preserva a origem para reprocessamento quando a LD mudar");
+  assert.strictEqual(parsed.meta.recordCount, 6, "parser não decide pertencimento antes de receber a LD");
+  const ld = {
+    meta: { fileName: "LD.xlsx", importedAt: "2026-09-11T18:00:00Z" },
+    records: [
+      { document: "RL-5290.00-22313-ABC-C1O-001" },
+      { document: "CE-5290.00-22313-856-C1O-002" },
+    ],
+  };
+  const sanitized = Scope.sanitizePwBase(parsed, ld);
+  assert.strictEqual(sanitized.meta.recordCount, 3, "somente documentos validados pela LD entram na base persistível");
+  assert.strictEqual(sanitized.meta.validRevisionRecordCount, 3, "revisões 0 e A contam separadamente");
+  assert.strictEqual(sanitized.meta.uniqueDocumentCount, 2);
+  assert.strictEqual(sanitized.meta.emittedDocumentCount, 2);
+  assert.strictEqual(sanitized.meta.scopeExcludedCount, 3, "quantidade excluída fica disponível apenas para controle técnico");
+  assert.strictEqual(sanitized.meta.invalidCount, 0, "documento fora da LD não deve ser apresentado como inválido");
+  assert.deepStrictEqual(sanitized.records.filter((record) => record.document.startsWith("RL-")).map((record) => record.revision), ["0", "A"]);
+  assert.strictEqual(sanitized.records.every((record) => record.documentClass === "N-1710"), true);
+  assert.strictEqual(Object.hasOwn(sanitized, "discardedRecords"), false);
 
   const stalePw = [
     { document: "RL-5290.00-22313-ABC-C1O-001", revision: "0", state: "Liberado", lastEmission: "Sim" },

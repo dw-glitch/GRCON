@@ -9,6 +9,10 @@ const pwEt = "C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-321530";
 assert.strictEqual(Core.documentIdentity(sigemEt).key, Core.documentIdentity(pwEt).key, "ET com/sem nt- deve convergir");
 assert.notStrictEqual(Core.documentIdentity("C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-321530").key, Core.documentIdentity("C1O_RNEST_U32_3.1.1.2_INS_RIR_PI-321530").key, "EAP diferente deve permanecer separado");
 assert.strictEqual(Core.documentClass("CE-5290.00-22313-856-C1O-001"), "N-1710");
+assert.strictEqual(Core.documentClass("I-RL-5290.00-22313-ABC-C1O-1234"), "N-1710", "prefixo de idioma e sequencial de quatro dígitos são válidos");
+assert.strictEqual(Core.documentClass("RL-5290.00-22314-ABC-C1O-001"), Core.UNCLASSIFIED, "área diferente de 22313 deve ser recusada");
+assert.strictEqual(Core.documentClass("RL-5290.00-22313-ABC-XYZ-001"), Core.UNCLASSIFIED, "origem diferente de C1O deve ser recusada");
+assert.strictEqual(Core.documentClass("RL-5290.00-22313-ABC-C1O-X01"), Core.UNCLASSIFIED, "sequencial N-1710 deve ser numérico");
 assert.strictEqual(Core.documentClass(pwEt), "ET");
 assert.strictEqual(Core.documentClass("C10_RNEST_U32_3.1.1.1_INS_RIR_PI-1"), Core.UNCLASSIFIED, "C10 não deve ser aceito como C1O");
 assert.strictEqual(Core.documentClass("5900.00.0001.0100-ABC-CV-C1O-001"), Core.UNCLASSIFIED, "CV está fora do escopo desta fase");
@@ -32,6 +36,12 @@ const csv = [
 ].join("\n");
 const parsed = Core.parsePwCsv(csv, { fileName: "pw.csv", importedAt: "2026-09-13T10:00:00Z" });
 assert.strictEqual(parsed.meta.recordCount, 4, "parser preserva a base; escopo LD é aplicado no modelo");
+const sanitized = Core.sanitizePwBase(parsed, { meta: { fileName: "LD.xlsx", importedAt: "2026-09-13T10:00:00Z" }, records: ld.records });
+assert.strictEqual(sanitized.records.length, 3, "persistência PW aceita apenas ET e N-1710 presente na LD");
+assert.strictEqual(sanitized.meta.validRevisionRecordCount, 3, "revisões 0 e A do mesmo documento contam como duas entradas");
+assert.deepStrictEqual(sanitized.records.filter((row) => row.document.includes("856-C1O-001")).map((row) => row.revision), ["0", "A"], "cada revisão permanece como linha própria");
+assert.ok(!sanitized.records.some((row) => row.document.includes("999-C1O-999")), "N-1710 ausente da LD não alcança a base persistível");
+assert.ok(!Object.hasOwn(sanitized, "discardedRecords"), "documentos ignorados não devem ser materializados para exibição");
 
 const sigem = [
   { document: "CE-5290.00-22313-856-C1O-001", revision: "0", status: "Sem Comentários", sourceRow: 10 },
@@ -56,5 +66,12 @@ assert.ok(!/location\.reload\s*\(/.test(appSource));
 assert.ok(/Gerenciar histórico/.test(appSource));
 assert.ok(/Exportar lista/.test(appSource));
 assert.ok(/workers\/sigem_pw_dashboard\.worker\.js/.test(appSource));
+assert.ok(/savePwBase\([^;]+state\.ld\)/.test(appSource), "importação PW deve sanear com a LD vigente");
+assert.ok(/saveLdAndReprocessPw/.test(appSource), "troca de LD deve reprocessar a base PW ativa");
+
+for (const fileName of ["sigem_pw_evolution_app.js", "sigem_pw_history_app.js", "sigem_pw_history_postmerge.js", "sigem_pw_history_runtime_fix.js"]) {
+  const source = fs.readFileSync(path.join(rootDir, fileName), "utf8");
+  assert.ok(!/Descartados do escopo|Motivo de descarte|Motivo descarte|Fora do escopo|registros brutos/i.test(source), `${fileName} não deve expor documentos ignorados`);
+}
 
 console.log("sigem_pw_dashboard: OK");

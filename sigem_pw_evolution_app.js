@@ -197,8 +197,8 @@
 
   function auditArticle(label, snapshot) {
     if (!snapshot) return `<article><strong>${label}</strong><p>Selecione uma base para ver a auditoria.</p></article>`;
-    const a = snapshot.audit || {}, reasons = Object.entries(a.discardReasons || {}).sort((x,y)=>y[1]-x[1]).slice(0,4).map(([reason,count])=>`${reason}: ${fmt(count)}`).join(" · ");
-    return `<article><strong>${label} · ${esc(snapshot.fileName || "base")}</strong><p>${fmt(a.rawRecords)} brutos · ${fmt(a.acceptedRecords)} aceitos · ${fmt(a.uniqueDocuments)} documentos únicos · ${fmt(a.validRevisionRecords)} registros/revisões válidos · ${fmt(a.technicalDuplicates)} duplicidade(s) técnica(s) · ${fmt(a.discardedRecords)} descartado(s).${reasons ? ` ${esc(reasons)}` : ""}</p></article>`;
+    const a = snapshot.audit || {};
+    return `<article><strong>${label} · ${esc(snapshot.fileName || "base")}</strong><p>${fmt(a.uniqueDocuments)} documentos únicos · ${fmt(a.validRevisionRecords)} registros/revisões válidos · ${fmt(a.technicalDuplicates)} duplicidade(s) técnica(s).</p></article>`;
   }
   function renderAudit() {
     const target = document.getElementById("spw-evo-audit"); if (!target) return;
@@ -212,7 +212,6 @@
     "missing-pw": ["Novos SIGEM ainda não identificados no PW", "Novas ocorrências SIGEM sem correspondência na base PW atual."],
     "removed-sigem": ["Não encontrados nesta base SIGEM", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
     "removed-pw": ["Não encontrados nesta base PW", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
-    discarded: ["Descartados do escopo", "Registros fora do universo GRCON/LD ou reprovados pelas regras de codificação."],
   };
   function rowsForMode() {
     if (!hasValidatedLd()) return [];
@@ -223,7 +222,6 @@
     if (state.listMode === "missing-pw") return r.newSigemMissingPw || [];
     if (state.listMode === "removed-sigem") return c.sigem?.removed || [];
     if (state.listMode === "removed-pw") return c.pw?.removed || [];
-    if (state.listMode === "discarded") return [...(selected("sigem","current")?.rejected || []), ...(selected("pw","current")?.rejected || [])];
     return [];
   }
   function queryTokens(value) { return text(value).split(/[\n,;]+/).map((item) => Core().norm(item)).filter(Boolean); }
@@ -234,7 +232,7 @@
     if (f.documentType && !Core().norm(row.documentType).includes(Core().norm(f.documentType))) return false;
     if (f.source && text(row.system) !== f.source) return false;
     if (f.revision && Core().normalizeRevision(row.revision) !== Core().normalizeRevision(f.revision)) return false;
-    if (f.status && !Core().norm(row.status || row.reason).includes(Core().norm(f.status))) return false;
+    if (f.status && !Core().norm(row.status).includes(Core().norm(f.status))) return false;
     if (f.discipline && !Core().norm(row.discipline).includes(Core().norm(f.discipline))) return false;
     if (f.tag && !Core().norm(row.tag).includes(Core().norm(f.tag))) return false;
     if (f.eap && !Core().norm(row.eap).includes(Core().norm(f.eap))) return false;
@@ -244,7 +242,7 @@
 
   function renderTabs() {
     const target = document.getElementById("spw-evo-tabs"); if (!target) return;
-    const c = state.comparison || {}, r = c.relation || {}, counts = { "sigem-new": c.sigem?.added?.length || 0, "pw-new": c.pw?.added?.length || 0, both: r.newInBoth?.length || 0, "missing-pw": r.newSigemMissingPw?.length || 0, "removed-sigem": c.sigem?.removed?.length || 0, "removed-pw": c.pw?.removed?.length || 0, discarded: (selected("sigem","current")?.rejected?.length || 0) + (selected("pw","current")?.rejected?.length || 0) };
+    const c = state.comparison || {}, r = c.relation || {}, counts = { "sigem-new": c.sigem?.added?.length || 0, "pw-new": c.pw?.added?.length || 0, both: r.newInBoth?.length || 0, "missing-pw": r.newSigemMissingPw?.length || 0, "removed-sigem": c.sigem?.removed?.length || 0, "removed-pw": c.pw?.removed?.length || 0 };
     target.innerHTML = Object.entries(LIST_LABELS).map(([key,[label]]) => `<button type="button" class="${state.listMode===key?"active":""}" data-evo-list="${key}" ${hasValidatedLd()?"":"disabled"}>${esc(label)} · ${hasValidatedLd()?fmt(counts[key]):"—"}</button>`).join("");
   }
 
@@ -255,7 +253,7 @@
     if (!hasValidatedLd()) { target.innerHTML = `<div class="spw-evo-empty"><strong>Evolução não calculada.</strong>Carregue as LDs para validar o universo documental antes da comparação.</div>`; pager.innerHTML = ""; return; }
     const pages = Math.max(1, Math.ceil(rows.length/PAGE_SIZE)); state.page = Math.min(Math.max(1,state.page),pages); const start=(state.page-1)*PAGE_SIZE, pageRows=rows.slice(start,start+PAGE_SIZE);
     if (!pageRows.length) target.innerHTML = `<div class="spw-evo-empty"><strong>Nenhum registro nesta relação.</strong>A contagem e a lista usam exatamente a mesma origem de dados.</div>`;
-    else target.innerHTML = `<table class="spw-evo-table"><thead><tr><th>Código</th><th>Rev.</th><th>Classe</th><th>Tipo</th><th>Status</th><th>Disciplina</th><th>TAG</th><th>EAP</th><th>Data</th><th>Origem</th></tr></thead><tbody>${pageRows.map((row,index)=>`<tr data-evo-row="${start+index}"><td><strong>${esc(row.document||"—")}</strong></td><td>${esc(row.revision||"—")}</td><td>${esc(row.documentClass||"—")}</td><td>${esc(row.documentType||"—")}</td><td>${esc(row.status||row.reason||"—")}</td><td>${esc(row.discipline||"—")}</td><td>${esc(row.tag||"—")}</td><td>${esc(row.eap||"—")}</td><td>${esc(row.date||"—")}</td><td>${esc((row.system||"").toUpperCase()||"—")}</td></tr>`).join("")}</tbody></table>`;
+    else target.innerHTML = `<table class="spw-evo-table"><thead><tr><th>Código</th><th>Rev.</th><th>Classe</th><th>Tipo</th><th>Status</th><th>Disciplina</th><th>TAG</th><th>EAP</th><th>Data</th><th>Origem</th></tr></thead><tbody>${pageRows.map((row,index)=>`<tr data-evo-row="${start+index}"><td><strong>${esc(row.document||"—")}</strong></td><td>${esc(row.revision||"—")}</td><td>${esc(row.documentClass||"—")}</td><td>${esc(row.documentType||"—")}</td><td>${esc(row.status||"—")}</td><td>${esc(row.discipline||"—")}</td><td>${esc(row.tag||"—")}</td><td>${esc(row.eap||"—")}</td><td>${esc(row.date||"—")}</td><td>${esc((row.system||"").toUpperCase()||"—")}</td></tr>`).join("")}</tbody></table>`;
     pager.innerHTML = `<button class="secondary-button compact" type="button" data-evo-page="prev" ${state.page<=1?"disabled":""}>Anterior</button><span>Página ${fmt(state.page)} de ${fmt(pages)}</span><button class="secondary-button compact" type="button" data-evo-page="next" ${state.page>=pages?"disabled":""}>Próxima</button>`;
   }
 
@@ -275,7 +273,7 @@
       ["Código",row.document],["Revisão",row.revision],["Título",row.title],["Classe",row.documentClass],["Tipo documental",row.documentType],["TAG",row.tag],["EAP",row.eap],["Disciplina",row.discipline],
       ["Status SIGEM",row.system==="sigem"?row.status:""],["Status PW",row.matchedPw?.status||(row.system==="pw"?row.status:"")],["Data SIGEM",row.system==="sigem"?row.date:""],["Data PW",row.matchedPw?.date||(row.system==="pw"?row.date:"")],
       ["Origem",(row.system||"").toUpperCase()],["Snapshot",snapshot?`${fmtDate(snapshot.importedAt)} · ${snapshot.fileName||"base"}`:"—"],["Existia anteriormente?",existed],["Emissão PW",row.system==="pw"?(row.emitted?`Emitido (${row.lastEmission||"evidência"})`:row.lastEmission||"Não indicada"):(row.matchedPw?(row.matchedPw.emitted?`Emitido (${row.matchedPw.lastEmission||"evidência"})`:row.matchedPw.lastEmission||"Não indicada"):"—")],
-      ["LD",row.ldSource?`${row.ldSource}${row.ldSheet?` · ${row.ldSheet}`:""}${row.ldRow?` · linha ${row.ldRow}`:""}`:(row.ldValidated?"Validado":"—")],["Prazo LD",row.ldPrazo],["Motivo de descarte",row.reason],["Chave da ocorrência",row.occurrenceKey],["Situação SIGEM × PW",row.matchedPw?`Correspondência: ${row.matchedPw.document} · Rev. ${row.matchedPw.revision}`:state.listMode==="missing-pw"?"Ainda não identificada no PW atual":"—"]
+      ["LD",row.ldSource?`${row.ldSource}${row.ldSheet?` · ${row.ldSheet}`:""}${row.ldRow?` · linha ${row.ldRow}`:""}`:(row.ldValidated?"Validado":"—")],["Prazo LD",row.ldPrazo],["Chave da ocorrência",row.occurrenceKey],["Situação SIGEM × PW",row.matchedPw?`Correspondência: ${row.matchedPw.document} · Rev. ${row.matchedPw.revision}`:state.listMode==="missing-pw"?"Ainda não identificada no PW atual":"—"]
     ];
     body.innerHTML=`<div class="spw-evo-detail">${fields.map(([label,value])=>`<div><span>${esc(label)}</span><strong>${esc(value||"—")}</strong></div>`).join("")}</div>`; overlay.hidden=false;
   }
@@ -284,7 +282,7 @@
     const rows=state.filteredRows.slice(); if(!rows.length){notify("Não há registros filtrados para exportar.","warning");return;}
     try {
       if(root.GRCONModuleLoader)await root.GRCONModuleLoader.ensure("xlsx");
-      const data=rows.map((row)=>({Código:row.document||"",Revisão:row.revision||"",Classe:row.documentClass||"","Tipo documental":row.documentType||"",Título:row.title||"",Status:row.status||row.reason||"",Disciplina:row.discipline||"",TAG:row.tag||"",EAP:row.eap||"",Data:row.date||"",Origem:(row.system||"").toUpperCase(),"Emissão PW":row.system==="pw"?(row.emitted?"Emitido":row.lastEmission||""):"","LD origem":row.ldSource||"","LD aba":row.ldSheet||"","Prazo LD":row.ldPrazo||"","Motivo descarte":row.reason||""}));
+      const data=rows.map((row)=>({Código:row.document||"",Revisão:row.revision||"",Classe:row.documentClass||"","Tipo documental":row.documentType||"",Título:row.title||"",Status:row.status||"",Disciplina:row.discipline||"",TAG:row.tag||"",EAP:row.eap||"",Data:row.date||"",Origem:(row.system||"").toUpperCase(),"Emissão PW":row.system==="pw"?(row.emitted?"Emitido":row.lastEmission||""):"","LD origem":row.ldSource||"","LD aba":row.ldSheet||"","Prazo LD":row.ldPrazo||""}));
       const ws=root.XLSX.utils.json_to_sheet(data),wb=root.XLSX.utils.book_new();root.XLSX.utils.book_append_sheet(wb,ws,"Evolução");const out=root.XLSX.write(wb,{bookType:"xlsx",type:"array"});
       downloadBlob(new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),`GRCON_Evolucao_${state.listMode}_${new Date().toISOString().slice(0,10).replace(/-/g,"")}.xlsx`);
     } catch(error){notify(error.message||"Não foi possível exportar a relação.","error");}
