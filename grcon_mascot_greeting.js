@@ -285,7 +285,6 @@
     if (previous) {
       previous.classList.remove("is-greeting-active");
       previous.setAttribute("aria-expanded", "false");
-      previous.setAttribute("aria-label", previous.dataset.mascotLabel || "Mascote da Qualidade do GRCON");
     }
     const target = ensureBubble();
     target.dataset.visible = "false";
