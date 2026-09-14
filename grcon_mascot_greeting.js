@@ -153,6 +153,16 @@
         border-right: 1px solid color-mix(in srgb, var(--brand-700, #0c648f) 22%, var(--border-1, #d8e1e7));
         border-bottom: 1px solid color-mix(in srgb, var(--brand-700, #0c648f) 22%, var(--border-1, #d8e1e7));
       }
+      .grcon-mascot-speech[data-placement="bottom"] {
+        --bubble-origin: 50% 0;
+      }
+      .grcon-mascot-speech[data-placement="bottom"]::after {
+        top: -.36rem;
+        left: var(--arrow-x, 50%);
+        margin-left: -.31rem;
+        border-left: 1px solid color-mix(in srgb, var(--brand-700, #0c648f) 22%, var(--border-1, #d8e1e7));
+        border-top: 1px solid color-mix(in srgb, var(--brand-700, #0c648f) 22%, var(--border-1, #d8e1e7));
+      }
       @media (prefers-reduced-motion: reduce) {
         .grcon-mascot-greeting .grcon-mascot-motion,
         .grcon-mascot-greeting .grcon-mascot-sprite,
@@ -226,6 +236,8 @@
     const height = bubbleRect.height;
     const roomRight = viewportWidth - mascotRect.right;
     const roomLeft = mascotRect.left;
+    const roomAbove = mascotRect.top;
+    const roomBelow = viewportHeight - mascotRect.bottom;
     let placement = "right";
     let left = mascotRect.right + MASCOT_GAP;
     let top = mascotRect.top + (mascotRect.height - height) / 2;
@@ -234,9 +246,11 @@
       placement = "left";
       left = mascotRect.left - width - MASCOT_GAP;
     } else if (roomRight < width + MASCOT_GAP) {
-      placement = "top";
+      placement = roomAbove >= height + MASCOT_GAP || roomAbove >= roomBelow ? "top" : "bottom";
       left = mascotRect.left + (mascotRect.width - width) / 2;
-      top = mascotRect.top - height - MASCOT_GAP;
+      top = placement === "top"
+        ? mascotRect.top - height - MASCOT_GAP
+        : mascotRect.bottom + MASCOT_GAP;
     }
 
     left = clamp(left, EDGE_GAP, viewportWidth - width - EDGE_GAP);
@@ -245,7 +259,7 @@
     target.style.left = `${Math.round(left)}px`;
     target.style.top = `${Math.round(top)}px`;
 
-    if (placement === "top") {
+    if (placement === "top" || placement === "bottom") {
       const arrowX = clamp(mascotRect.left + mascotRect.width / 2 - left, 14, width - 14);
       target.style.setProperty("--arrow-x", `${Math.round(arrowX)}px`);
     } else {
@@ -264,7 +278,8 @@
 
   function showGreeting(mascot, options) {
     if (!mascot) return;
-    if (activeMascot && activeMascot !== mascot) hideGreeting(activeMascot);
+    if (pinnedMascot && pinnedMascot !== mascot && !options?.pinned) return;
+    if (activeMascot && activeMascot !== mascot) hideGreeting(activeMascot, { force: Boolean(options?.pinned) });
     activeMascot = mascot;
     if (options?.pinned) pinnedMascot = mascot;
     updateGreeting();
@@ -298,7 +313,7 @@
       hideGreeting(mascot, { force: true });
       return;
     }
-    pinnedMascot = mascot;
+    if (pinnedMascot && pinnedMascot !== mascot) hideGreeting(pinnedMascot, { force: true });
     showGreeting(mascot, { pinned: true });
   }
 
