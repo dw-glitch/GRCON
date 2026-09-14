@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const CALCULATION_VERSION = "sigem-pw-evolution-records-2";
+  const CALCULATION_VERSION = "sigem-pw-evolution-records-3";
   const VALID_CLASSES = new Set(["ET", "N-1710"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
@@ -81,10 +81,12 @@
     return [...keys];
   }
 
-  function buildLdUniverse(records, history) {
+  function buildLdUniverse(records, history, options) {
     const byKey = new Map();
     const all = [];
-    const add = (raw, technical) => {
+    const qualityKeys = new Set();
+    const hasExplicitQuality = Array.isArray(options && options.qualityRecords);
+    const add = (raw, technical, qualityN1710) => {
       if (!raw || !text(raw.document)) return;
       const identity = documentIdentity(raw.documentKey || raw.document);
       const keys = new Set([identity.key, ...(identity.searchKeys || []), ...searchKeysFor(raw.document)].map(norm).filter(Boolean));
@@ -104,15 +106,18 @@
         source: text(raw.source),
         row: Number(raw.row) || 0,
         technical: Boolean(technical),
+        qualityN1710: Boolean(qualityN1710),
       };
       all.push(entry);
+      if (entry.qualityN1710 && entry.documentClass === "N-1710") qualityKeys.add(entry.documentKey);
       keys.forEach((key) => {
         if (!byKey.has(key)) byKey.set(key, []);
         byKey.get(key).push(entry);
       });
     };
-    (records || []).forEach((row) => add(row, true));
-    (history || []).forEach((row) => add(row, false));
+    (records || []).forEach((row) => add(row, true, !hasExplicitQuality && documentClass(row && row.document) === "N-1710"));
+    (history || []).forEach((row) => add(row, false, false));
+    if (hasExplicitQuality) (options.qualityRecords || []).forEach((row) => add({ ...row, source: text(row && row.source) || "LD da Qualidade", sheet: text(row && row.sheet) || "N-1710" }, true, true));
     const uniqueDocuments = new Set(all.map((row) => row.documentKey).filter(Boolean));
     const technicalDocuments = new Set(all.filter((row) => row.technical).map((row) => row.documentKey).filter(Boolean));
     const sig = fingerprint(all.map((row) => [row.documentKey, row.documentClass, row.documentType, row.tag, row.eap, row.discipline, row.sheet, row.source].map(norm).join("|")), "ld");
@@ -121,6 +126,9 @@
       records: all,
       uniqueDocumentCount: uniqueDocuments.size,
       technicalDocumentCount: technicalDocuments.size,
+      qualityKeys,
+      qualityDocumentCount: qualityKeys.size,
+      qualityAvailable: qualityKeys.size > 0,
       fingerprint: sig,
       available: all.length > 0,
     };
@@ -138,6 +146,14 @@
     return [...matches.values()].sort((a, b) => Number(b.technical) - Number(a.technical) || a.row - b.row);
   }
 
+  function findQualityMatch(record, universe) {
+    if (!universe || !universe.qualityAvailable || !(universe.qualityKeys instanceof Set)) return null;
+    const identity = documentIdentity(record && record.document);
+    const key = norm(identity.key);
+    if (!universe.qualityKeys.has(key)) return null;
+    return findLdMatches(record, universe).find((entry) => entry.qualityN1710) || null;
+  }
+
   function scopeReason(record, identity, cls, universe) {
     if (!identity.key) return "codigo_vazio_ou_invalido";
     if (!VALID_CLASSES.has(cls)) {
@@ -148,7 +164,8 @@
       return "fora_do_escopo_grcon";
     }
     if (identity.info && identity.info.eapApplicable && identity.info.eapValid === false) return "eap_invalida";
-    if (universe && universe.available && !findLdMatches(record, universe).length) return "nao_encontrado_nas_lds";
+    if (cls === "N-1710" && (!universe || !universe.qualityAvailable)) return "ld_qualidade_indisponivel";
+    if (cls === "N-1710" && !findQualityMatch(record, universe)) return "nao_encontrado_na_ld_qualidade";
     return "";
   }
 
@@ -324,8 +341,8 @@
       validRevisionRecords: accepted,
       classes: classCounts(prepared.accepted),
       discardReasons: { ...prepared.reasons },
-      validationMode: universe && universe.available ? "ld" : "coding",
-      ldDocuments: universe && universe.available ? universe.uniqueDocumentCount : 0,
+      validationMode: universe && universe.qualityAvailable ? "ld-qualidade" : "coding",
+      ldDocuments: universe && universe.qualityAvailable ? universe.qualityDocumentCount : 0,
       ldFingerprint: universe && universe.available ? universe.fingerprint : "",
     };
   }
@@ -449,6 +466,15 @@
     };
   }
 
+  function emissionTransitions(pwDelta) {
+    if (!pwDelta) return [];
+    const newEmitted = (pwDelta.added || []).filter((row) => row.emitted).map((row) => ({ ...row, movement: "Nova entrada emitida" }));
+    const confirmed = (pwDelta.metadataChanged || [])
+      .filter((change) => !change.before?.emitted && change.after?.emitted)
+      .map((change) => ({ ...change.after, movement: "Emissão confirmada", previous: change.before }));
+    return [...newEmitted, ...confirmed].sort((a, b) => a.matchKey.localeCompare(b.matchKey));
+  }
+
   function compareSnapshots(previousSnapshot, currentSnapshot) {
     if (!previousSnapshot || !currentSnapshot) return null;
     if (previousSnapshot.system !== currentSnapshot.system) throw new Error("Snapshots de sistemas diferentes não podem ser comparados entre si.");
@@ -464,15 +490,54 @@
     const sigem = sigemPrevious && sigemCurrent ? compareSnapshots(sigemPrevious, sigemCurrent) : null;
     const pw = pwPrevious && pwCurrent ? compareSnapshots(pwPrevious, pwCurrent) : null;
     const relation = classifyEvolution(sigem, pw, pwCurrent && pwCurrent.records || []);
-    return { sigem, pw, relation };
+    return { sigem, pw, relation, pwEmissions: emissionTransitions(pw) };
+  }
+
+  function transitionSeries(snapshots) {
+    const ordered = (snapshots || []).slice().sort((a, b) => Date.parse(a.importedAt || 0) - Date.parse(b.importedAt || 0));
+    const output = [];
+    for (let index = 1; index < ordered.length; index += 1) {
+      const previous = ordered[index - 1];
+      const current = ordered[index];
+      const delta = compareSnapshots(previous, current);
+      output.push({
+        system: current.system,
+        date: text(current.importedAt).slice(0, 10),
+        importedAt: current.importedAt,
+        previousSnapshotId: previous.id,
+        currentSnapshotId: current.id,
+        added: delta.added.length,
+        removed: delta.removed.length,
+        net: delta.net,
+        emitted: current.system === SYSTEMS.PW ? emissionTransitions(delta).length : 0,
+      });
+    }
+    return output;
+  }
+
+  function buildDailyTimeline(sigemSnapshots, pwSnapshots) {
+    const days = new Map();
+    const ensure = (date) => {
+      if (!days.has(date)) days.set(date, { date, sigemAdded: 0, sigemRemoved: 0, pwAdded: 0, pwRemoved: 0, pwEmitted: 0, events: 0 });
+      return days.get(date);
+    };
+    for (const row of transitionSeries(sigemSnapshots)) {
+      const day = ensure(row.date);
+      day.sigemAdded += row.added; day.sigemRemoved += row.removed; day.events += 1;
+    }
+    for (const row of transitionSeries(pwSnapshots)) {
+      const day = ensure(row.date);
+      day.pwAdded += row.added; day.pwRemoved += row.removed; day.pwEmitted += row.emitted; day.events += 1;
+    }
+    return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
 
   return Object.freeze({
     CALCULATION_VERSION, VALID_CLASSES, SYSTEMS,
     text, norm, normalizeRevision, normalizeDate, fingerprint,
     documentIdentity, documentClass, inferEap, searchKeysFor,
-    buildLdUniverse, findLdMatches, occurrenceKey, matchKey, technicalFingerprint,
+    buildLdUniverse, findLdMatches, findQualityMatch, occurrenceKey, matchKey, technicalFingerprint,
     prepareRecords, buildAudit, sourceFingerprint, buildSnapshot,
-    compareRecords, multisetMatch, classifyEvolution, compareSnapshots, comparePeriod,
+    compareRecords, multisetMatch, classifyEvolution, emissionTransitions, compareSnapshots, comparePeriod, transitionSeries, buildDailyTimeline,
   });
 });

@@ -183,8 +183,11 @@
     return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(series.map((s) => s.label).join(", "))}">${parts.join("")}</svg>`;
   }
   function renderCharts(comparisons) {
-    const acervo = sourceTimeline(); document.getElementById("spw-history-acervo").innerHTML = chartSvg(acervo, [{ key: "sigem", label: "SIGEM", css: "sigem" }, { key: "pwRegistered", label: "PW cadastrado", css: "pw" }, { key: "pwEmitted", label: "PW emitido", css: "issued" }], (item, key) => item[key]);
-    document.getElementById("spw-history-pending").innerHTML = chartSvg(comparisons, [{ key: "postPw", label: "Postar no PW", css: "postpw" }, { key: "postSigem", label: "Postar no SIGEM", css: "postsigem" }, { key: "awaitingEmission", label: "Aguardando emissão", css: "awaiting" }], (snapshot, key) => comparisonMetric(snapshot)?.[key] ?? null);
+    const acervoTarget = document.getElementById("spw-history-acervo");
+    const pendingTarget = document.getElementById("spw-history-pending");
+    if (!acervoTarget || !pendingTarget) return;
+    const acervo = sourceTimeline(); acervoTarget.innerHTML = chartSvg(acervo, [{ key: "sigem", label: "SIGEM", css: "sigem" }, { key: "pwRegistered", label: "PW cadastrado", css: "pw" }, { key: "pwEmitted", label: "PW emitido", css: "issued" }], (item, key) => item[key]);
+    pendingTarget.innerHTML = chartSvg(comparisons, [{ key: "postPw", label: "Postar no PW", css: "postpw" }, { key: "postSigem", label: "Postar no SIGEM", css: "postsigem" }, { key: "awaitingEmission", label: "Aguardando emissão", css: "awaiting" }], (snapshot, key) => comparisonMetric(snapshot)?.[key] ?? null);
   }
   function renderTable(items) {
     const target = document.getElementById("spw-history-table"), count = document.getElementById("spw-history-count"); if (!target) return; if (count) count.textContent = `${fmt(items.length)} snapshot(s) comparativo(s)`;

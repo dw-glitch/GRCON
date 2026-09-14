@@ -55,6 +55,21 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const after=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:1},records:[s(A,'A',{status:'Aprovado'})]},universe);
   const d=Evo.compareSnapshots(before,after); assert.equal(d.added.length,0); assert.equal(d.removed.length,0); assert.equal(d.metadataChanged.length,1);
 })();
+(function emissionConfirmationIsTrackedWithoutInventingNewRegistration(){
+  const universe=Evo.buildLdUniverse([{document:A}],[]);
+  const before=Evo.buildSnapshot('pw',{meta:{sourceRowCount:1},records:[p(A,'A',{lastEmission:'Previsto'})]},universe);
+  const after=Evo.buildSnapshot('pw',{meta:{sourceRowCount:1},records:[p(A,'A',{lastEmission:'Sim'})]},universe);
+  const delta=Evo.compareSnapshots(before,after);
+  assert.equal(delta.added.length,0); assert.equal(delta.metadataChanged.length,1);
+  const emitted=Evo.emissionTransitions(delta); assert.equal(emitted.length,1); assert.equal(emitted[0].movement,'Emissão confirmada');
+})();
+(function newEmittedRegistrationIsTrackedOnce(){
+  const universe=Evo.buildLdUniverse([{document:A},{document:B}],[]);
+  const before=Evo.buildSnapshot('pw',{meta:{sourceRowCount:1},records:[p(A,'0')]},universe);
+  const after=Evo.buildSnapshot('pw',{meta:{sourceRowCount:2},records:[p(A,'0'),p(B,'A')]},universe);
+  const emitted=Evo.emissionTransitions(Evo.compareSnapshots(before,after));
+  assert.equal(emitted.length,1); assert.equal(emitted[0].document,B); assert.equal(emitted[0].movement,'Nova entrada emitida');
+})();
 (function exactTechnicalDuplicatesCollapse(){
   const universe=Evo.buildLdUniverse([{document:A}],[]);
   const built=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:2},records:[s(A,'A'),s(A,'A')]},universe);
@@ -63,7 +78,13 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
 (function ldUniverseRequiredWhenAvailable(){
   const universe=Evo.buildLdUniverse([{document:A,tag:'TAG-1',discipline:'DOC'}],[]);
   const built=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:2},records:[s(A,'A'),s(B,'0')]},universe);
-  assert.equal(built.records.length,1); assert.equal(built.rejected[0].reason,'nao_encontrado_nas_lds'); assert.equal(built.records[0].tag,'TAG-1');
+  assert.equal(built.records.length,1); assert.equal(built.rejected[0].reason,'nao_encontrado_na_ld_qualidade'); assert.equal(built.records[0].tag,'TAG-1');
+})();
+(function etDoesNotRequireMembershipInQualityLd(){
+  const et='C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-321530';
+  const universe=Evo.buildLdUniverse([],[],{qualityRecords:[{document:A}]});
+  const built=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:1},records:[s(et,'0')]},universe);
+  assert.equal(built.records.length,1); assert.equal(built.records[0].documentClass,'ET');
 })();
 (function crossSystemClassification(){
   const ld=Evo.buildLdUniverse([{document:A},{document:B},{document:C}],[]);
@@ -74,6 +95,14 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const period=Evo.comparePeriod(sb,sc,pb,pc);
   assert.equal(period.sigem.added.length,2); assert.equal(period.pw.added.length,1);
   assert.equal(period.relation.newInBoth.length,1); assert.equal(period.relation.newSigemMissingPw.length,1); assert.equal(period.relation.newSigemMissingPw[0].document,B);
+})();
+(function dailyTimelineAggregatesConsecutiveSnapshots(){
+  const universe=Evo.buildLdUniverse([{document:A},{document:B},{document:C}],[]);
+  const make=(system,date,records)=>Evo.buildSnapshot(system,{meta:{fileName:`${system}.csv`,importedAt:`${date}T12:00:00Z`,sourceRowCount:records.length},records},universe);
+  const sigem=[make('sigem','2026-09-10',[s(A,'0')]),make('sigem','2026-09-11',[s(A,'0'),s(B,'A')])];
+  const pw=[make('pw','2026-09-10',[p(A,'0')]),make('pw','2026-09-11',[p(A,'0'),p(C,'0')])];
+  const timeline=Evo.buildDailyTimeline(sigem,pw);
+  assert.equal(timeline.length,1); assert.deepEqual(timeline[0],{date:'2026-09-11',sigemAdded:1,sigemRemoved:0,pwAdded:1,pwRemoved:0,pwEmitted:1,events:2});
 })();
 (function performanceLinear(){
   const count=20000; const ldRows=[]; const before=[]; const after=[];
@@ -95,10 +124,13 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const app=fs.readFileSync(path.join(rootDir,'sigem_pw_evolution_app.js'),'utf8');
   const bootstrap=fs.readFileSync(path.join(rootDir,'sigem_pw_dashboard_bootstrap.js'),'utf8');
   const scope=fs.readFileSync(path.join(rootDir,'sigem_pw_scope_fix.js'),'utf8');
-  assert.match(app,/Novos no SIGEM/); assert.match(app,/Novos no PW/); assert.match(app,/Ainda não no PW/);
+  const historyApp=fs.readFileSync(path.join(rootDir,'sigem_pw_history_app.js'),'utf8');
+  assert.match(app,/Entraram no SIGEM/); assert.match(app,/Entraram no PW/); assert.match(app,/Emitidos no PW/); assert.match(app,/SIGEM novo sem PW/);
   assert.match(app,/Cadastrados no SIGEM/); assert.match(app,/Encontrados no ProjectWise/); assert.match(app,/bookType\s*:\s*"xlsx"/);
-  assert.match(app,/LD necessária para calcular a evolução/); assert.match(app,/spw-evo-filter-document-type/); assert.match(app,/spw-evo-filter-source/); assert.match(app,/data-evo-select/);
+  assert.match(app,/LD da Qualidade necessária/); assert.match(app,/spw-evo-filter-document-type/); assert.match(app,/spw-evo-filter-source/); assert.match(app,/data-evo-select/); assert.match(app,/spw-evo-timeline/);
+  assert.match(app,/DashboardApp\(\).*state.*ld/s, 'a evolução deve usar a LD persistida no dashboard');
   assert.match(bootstrap,/sigem_pw_evolution_core\.js/); assert.match(bootstrap,/sigem_pw_evolution_app\.js/);
+  assert.match(historyApp,/if \(!acervoTarget \|\| !pendingTarget\) return/, 'histórico legado não pode falhar depois que a evolução assume a seção');
   assert.match(scope,/SCOPE_VERSION = 4/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
 })();
 
