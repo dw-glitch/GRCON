@@ -115,6 +115,7 @@
   async function ensureRuntime() {
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
+    await root.GRCONModuleLoader.ensure("sigem_pw_readiness_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_audit_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_audit_app.js");
@@ -132,7 +133,7 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_history_runtime_fix.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_evolution_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_evolution_app.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwAudit || !root.GrconSigemPwAuditUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionReport || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix || !root.GrconSigemPwEvolution || !root.GrconSigemPwEvolutionUi) {
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwReadiness || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwAudit || !root.GrconSigemPwAuditUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionReport || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix || !root.GrconSigemPwEvolution || !root.GrconSigemPwEvolutionUi) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
   }
