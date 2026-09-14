@@ -66,6 +66,23 @@ function functionBody(source, name, nextName) {
   assert.match(historyCore, /meta\.delete\(`sourcePayload:\$\{id\}`\)/);
 })();
 
+(function previousBasesAreClearedExactlyOnce() {
+  const reset = functionBody(dashboardApp, "clearPreStage7BasesOnce", "refreshBases");
+  const refresh = functionBody(dashboardApp, "refreshBases", "activate");
+  [
+    "Core.SIGEM_BASE_KEY",
+    "Core.PW_BASE_KEY",
+    "Core.LD_BASE_KEY",
+    "Core.HISTORY_KEY",
+    "Core.LEGACY_SIGEM_BASE_KEY",
+    "Core.LEGACY_PW_BASE_KEY",
+  ].forEach((key) => assert.match(reset, new RegExp(key.replace(".", "\\."))));
+  assert.match(reset, /History\.clearHistory\(\)/);
+  assert.match(reset, /PRE_STAGE7_RESET_KEY/);
+  assert.ok(refresh.indexOf("clearPreStage7BasesOnce") < refresh.indexOf("Core.loadBases"));
+  assert.doesNotMatch(dashboardApp, /indexedDB\.deleteDatabase/);
+})();
+
 (function businessScopeRemainsUnchanged() {
   assert.deepEqual(Dashboard.SCOPE_CLASSES, ["ET", "N-1710"]);
   assert.match(Dashboard.EMISSION_RULE, /código \+ revisão/i);
