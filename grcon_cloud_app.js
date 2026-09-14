@@ -1815,9 +1815,23 @@
     else showLogin();
   }
 
+  function getCurrentUserIdentity() {
+    const user = state.session?.user;
+    if (!user) return null;
+    const profile = state.profiles.get(user.id) || {};
+    const metadata = user.user_metadata || {};
+    return {
+      id: user.id,
+      displayName: profile.display_name || "",
+      metadataName: metadata.full_name || metadata.name || metadata.display_name || "",
+      email: user.email || "",
+    };
+  }
+
   window.GrconCloud = {
     state,
     init,
+    getCurrentUserIdentity,
     pull: runSyncCycle,
     sync: scheduleSync,
     canWriteHistory,
