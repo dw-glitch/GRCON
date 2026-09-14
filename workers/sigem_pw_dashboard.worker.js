@@ -1,7 +1,6 @@
 /* Worker isolado: lê o CSV PW fora da thread de interface. A identidade final
-   é recalculada com o filtro de escopo antes de qualquer consolidação. */
+   é recalculada no módulo principal com TriagemCore/GrconUtils antes de persistir. */
 importScripts("../sigem_pw_dashboard_core.js");
-importScripts("../sigem_pw_scope_fix.js");
 
 self.addEventListener("message", (event) => {
   try {

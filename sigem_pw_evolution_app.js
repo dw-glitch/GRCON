@@ -154,7 +154,7 @@
       <div class="spw-evo-scope" id="spw-evo-scope"></div><div class="spw-evo-selectors" id="spw-evo-selectors"></div><div class="spw-evo-kpis" id="spw-evo-kpis"></div><div class="spw-evo-net" id="spw-evo-net"></div><div class="spw-evo-audit" id="spw-evo-audit"></div><nav class="spw-evo-tabs" id="spw-evo-tabs" aria-label="Listas da evolução"></nav>
       <div class="spw-evo-filters">
         <label><span>Código / lista de códigos</span><input id="spw-evo-filter-query" placeholder="Cole códigos separados por linha, vírgula ou ;"/></label>
-        <label><span>Classe</span><select id="spw-evo-filter-class"><option value="">Todas</option><option>ET</option><option>N-1710</option><option>CV</option></select></label>
+        <label><span>Classe</span><select id="spw-evo-filter-class"><option value="">Todas</option><option>ET</option><option>N-1710</option></select></label>
         <label><span>Tipo documental</span><input id="spw-evo-filter-document-type" placeholder="REP, RL, DE..."/></label>
         <label><span>Revisão</span><input id="spw-evo-filter-revision" placeholder="A"/></label>
         <label><span>Status</span><input id="spw-evo-filter-status" placeholder="Status"/></label>

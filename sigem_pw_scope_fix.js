@@ -12,7 +12,7 @@
   const SCOPE_VERSION = 3;
   const SCOPE_LABEL = "GRCON N-1710 · 5290.00 / 22313 / C1O";
   const N1710_SCOPE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
-  const VALID_CLASSES = new Set(Base.DOCUMENT_CLASSES || ["ET", "N-1710", "CV"]);
+  const VALID_CLASSES = new Set(Base.SCOPE_CLASSES || Base.DOCUMENT_CLASSES || ["ET", "N-1710"]);
 
   function text(value) { return Base.text ? Base.text(value) : String(value == null ? "" : value).trim(); }
   function norm(value) { return Base.norm ? Base.norm(value) : text(value).toUpperCase(); }
@@ -49,7 +49,6 @@
     const info = identity.info;
     const code = identity.canonical;
     if ((info && info.family === "ET") || code.includes("_RNEST_")) return "ET";
-    if ((info && info.family === "CV") || /^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{3,4}$/i.test(code)) return "CV";
     if (n1710ScopeInfo(code).eligible) return "N-1710";
     return Base.UNCLASSIFIED || "Não classificado";
   }
@@ -186,7 +185,8 @@
       .filter((record) => record.documentKey && VALID_CLASSES.has(record.documentClass));
   }
 
-  function createModel(sigemRecords, pwRecords) {
+  function createModel(sigemRecords, pwRecords, ldRecords) {
+    if (arguments.length >= 3 && typeof Base.createModel === "function") return Base.createModel(sigemRecords || [], pwRecords || [], ldRecords || []);
     const normalizedSigem = normalizeSigemRecords(sigemRecords || []);
     const pwAudit = scopeAudit(pwRecords || []);
     const normalizedPw = pwAudit.accepted;

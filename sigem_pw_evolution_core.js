@@ -10,7 +10,7 @@
   "use strict";
 
   const CALCULATION_VERSION = "sigem-pw-evolution-records-2";
-  const VALID_CLASSES = new Set(["ET", "N-1710", "CV"]);
+  const VALID_CLASSES = new Set(["ET", "N-1710"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
@@ -63,7 +63,6 @@
     if (Dashboard && typeof Dashboard.documentClass === "function") return Dashboard.documentClass(value);
     const code = documentIdentity(value).canonical;
     if (code.includes("_RNEST_")) return "ET";
-    if (/^5900(?:\.\d+){3}-[A-Z0-9]{3}-CV-[A-Z0-9]+-\d{3,4}$/i.test(code)) return "CV";
     if (/^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i.test(code)) return "N-1710";
     return "Não classificado";
   }
@@ -302,7 +301,7 @@
   }
 
   function classCounts(records) {
-    const output = { ET: 0, "N-1710": 0, CV: 0 };
+    const output = { ET: 0, "N-1710": 0 };
     for (const row of records || []) if (Object.prototype.hasOwnProperty.call(output, row.documentClass)) output[row.documentClass] += 1;
     return output;
   }

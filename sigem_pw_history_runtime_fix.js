@@ -128,6 +128,7 @@
         recordedAt: new Date().toISOString(),
         reason: reason || "real-import",
         changedSystem: system,
+        ldRecords: App.state.ld && App.state.ld.records || [],
       });
       state.diagnostics.historyWrites += 1;
       await passiveRefresh();

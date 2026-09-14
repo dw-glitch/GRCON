@@ -132,7 +132,7 @@
     const record = document && Array.isArray(document.rows) && document.rows.length ? document.rows[0] : null;
     const canonical = text(record && record.canonicalDocument) || text(document && document.document);
     const documentClass = text(document && document.documentClass);
-    if (documentClass !== "ET") return { comparable: ["N-1710", "CV"].includes(documentClass), eap: "", documentType: "" };
+    if (documentClass !== "ET") return { comparable: documentClass === "N-1710", eap: "", documentType: "" };
     const normalized = canonical.replace(/-/g, "-");
     const underscore = normalized.includes("_RNEST_") ? normalized.split("_") : [];
     if (underscore.length >= 7) {

@@ -195,7 +195,7 @@
 
   function renderFilters() {
     const rows = state.analysis ? state.analysis.rows : [];
-    const classes = ["ET", "N-1710", "CV"].filter((value) => rows.some((row) => row.documentClass === value));
+    const classes = ["ET", "N-1710"].filter((value) => rows.some((row) => row.documentClass === value));
     syncSelect("spw-rev-filter-class", classes, state.filters.documentClass, "Todas");
     syncSelect("spw-rev-filter-sigem-rev", rows.map((row) => row.sigemRevision), state.filters.sigemRevision, "Todas");
     syncSelect("spw-rev-filter-pw-rev", rows.map((row) => row.pwRevision), state.filters.pwRevision, "Todas");

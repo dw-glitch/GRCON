@@ -115,8 +115,10 @@
   async function ensureRuntime() {
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_scope_fix.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
+    // O app captura o core por código + revisão antes da ponte de
+    // compatibilidade usada apenas pelos relatórios legados desta PR.
+    await root.GRCONModuleLoader.ensure("sigem_pw_scope_fix.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_report.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");

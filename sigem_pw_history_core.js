@@ -23,7 +23,7 @@
     meta: "meta",
   });
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
-  const CLASSES = Object.freeze(["ET", "N-1710", "CV"]);
+  const CLASSES = Object.freeze(["ET", "N-1710"]);
   const PENDING_STATES = new Set(["post-pw", "post-sigem", "awaiting-emission", "review"]);
   const WORKING_KEYS = Object.freeze({ sigem: "latest:sigem", pw: "latest:pw", comparison: "latest:comparison" });
 
@@ -525,7 +525,10 @@
     const hasPw = Boolean(pwBase && pwBase.meta && Array.isArray(pwBase.records));
     if (!hasSigem && !hasPw) return { sigem: null, pw: null, comparison: null };
     const recordedAt = text(options && options.recordedAt) || nowIso();
-    const model = Dashboard.createModel(hasSigem ? sigemBase.records : [], hasPw ? pwBase.records : []);
+    const hasLdRecords = Array.isArray(options && options.ldRecords);
+    const model = hasLdRecords
+      ? Dashboard.createModel(hasSigem ? sigemBase.records : [], hasPw ? pwBase.records : [], options.ldRecords)
+      : Dashboard.createModel(hasSigem ? sigemBase.records : [], hasPw ? pwBase.records : []);
     const sigem = hasSigem ? await recordSource(SYSTEMS.SIGEM, sigemBase, model, recordedAt) : null;
     const pw = hasPw ? await recordSource(SYSTEMS.PW, pwBase, model, recordedAt) : null;
     let comparison = null;
