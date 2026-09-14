@@ -23,19 +23,19 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      ${SELECTOR}.grcon-mascot-greeting {
+      .grcon-mascot-greeting {
         cursor: pointer;
         overflow: visible;
         pointer-events: auto;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
       }
-      ${SELECTOR}.grcon-mascot-greeting:focus-visible {
+      .grcon-mascot-greeting:focus-visible {
         border-radius: 42%;
         outline: none;
         box-shadow: var(--focus, 0 0 0 3px rgb(20 121 166 / 23%));
       }
-      ${SELECTOR}.grcon-mascot-greeting .grcon-mascot-motion {
+      .grcon-mascot-greeting .grcon-mascot-motion {
         width: 100%;
         height: 100%;
         display: inline-flex;
@@ -48,37 +48,37 @@
           transform 540ms cubic-bezier(.16, 1, .3, 1),
           filter 440ms ease-out;
       }
-      ${SELECTOR}.grcon-mascot-greeting .grcon-mascot-sprite {
+      .grcon-mascot-greeting .grcon-mascot-sprite {
         flex: 0 0 auto;
         transform: translate3d(0, 0, 0) rotate(0deg);
         transform-origin: 52% 82%;
         transition: transform 620ms cubic-bezier(.18, .89, .32, 1.14);
       }
-      ${SELECTOR}.grcon-mascot-greeting::before {
+      .grcon-mascot-greeting::before {
         transform: scale(1);
         opacity: .72;
         transition:
           transform 580ms cubic-bezier(.16, 1, .3, 1),
           opacity 360ms ease-out;
       }
-      ${SELECTOR}.grcon-mascot-greeting.is-greeting-active .grcon-mascot-motion {
+      .grcon-mascot-greeting.is-greeting-active .grcon-mascot-motion {
         transform: translate3d(0, -4px, 0) scale(1.008);
         filter: saturate(1.025);
         will-change: transform;
       }
-      ${SELECTOR}.grcon-mascot-greeting.is-greeting-active .grcon-mascot-sprite {
+      .grcon-mascot-greeting.is-greeting-active .grcon-mascot-sprite {
         transform: translate3d(1px, 0, 0) rotate(1.6deg);
         will-change: transform;
       }
-      ${SELECTOR}.grcon-mascot-greeting.is-greeting-active::before {
+      .grcon-mascot-greeting.is-greeting-active::before {
         transform: translate3d(0, 1px, 0) scale(.96);
         opacity: .58;
       }
-      ${SELECTOR}.grcon-mascot-greeting:not(.is-greeting-active) .grcon-mascot-motion {
+      .grcon-mascot-greeting:not(.is-greeting-active) .grcon-mascot-motion {
         transition-duration: 500ms, 420ms;
         transition-timing-function: cubic-bezier(.4, 0, .2, 1), ease-in-out;
       }
-      ${SELECTOR}.grcon-mascot-greeting:not(.is-greeting-active) .grcon-mascot-sprite {
+      .grcon-mascot-greeting:not(.is-greeting-active) .grcon-mascot-sprite {
         transition-duration: 540ms;
         transition-timing-function: cubic-bezier(.4, 0, .2, 1);
       }
@@ -154,9 +154,9 @@
         border-bottom: 1px solid color-mix(in srgb, var(--brand-700, #0c648f) 22%, var(--border-1, #d8e1e7));
       }
       @media (prefers-reduced-motion: reduce) {
-        ${SELECTOR}.grcon-mascot-greeting .grcon-mascot-motion,
-        ${SELECTOR}.grcon-mascot-greeting .grcon-mascot-sprite,
-        ${SELECTOR}.grcon-mascot-greeting::before {
+        .grcon-mascot-greeting .grcon-mascot-motion,
+        .grcon-mascot-greeting .grcon-mascot-sprite,
+        .grcon-mascot-greeting::before {
           transform: none !important;
           filter: none !important;
           transition-duration: 80ms !important;
@@ -259,8 +259,7 @@
     target.textContent = greetingText();
     if (activeMascot) {
       positionBubble(activeMascot);
-      activeMascot.setAttribute("aria-label", `${activeMascot.dataset.mascotLabel || "Mascote da Qualidade"}. ${target.textContent}`);
-    }
+      }
   }
 
   function showGreeting(mascot, options) {
