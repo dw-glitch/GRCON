@@ -30,6 +30,24 @@
       "name": "pdf-lib",
       "version": "1.17.1",
       "sha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f"
+    },
+    {
+      "file": "vendor/rive/rive.js",
+      "name": "Rive Canvas Lite",
+      "version": "2.42.1",
+      "sha256": "72c3d10ef011fa53bcba16588c942f3060c1fcc6d0ccc411b86fbfe53defba6d"
+    },
+    {
+      "file": "vendor/rive/rive.wasm",
+      "name": "Rive Canvas Lite WebAssembly",
+      "version": "2.42.1",
+      "sha256": "bcc6627bdaafcb70bec872452efbc2288dfc6a627e34d4b333bdda04a402ea9f"
+    },
+    {
+      "file": "vendor/rive/rive_fallback.wasm",
+      "name": "Rive Canvas Lite WebAssembly fallback",
+      "version": "2.42.1",
+      "sha256": "aea072058a1e42781041767dff1f199ab388893f8ad4ee2b82f0874db46a2709"
     }
   ]
 }

@@ -9,8 +9,10 @@ O GRCON distribui bibliotecas JavaScript vendorizadas para operar também offlin
 | `xlsx.full.min.js` | SheetJS Community Edition | não declarada no bundle | https://git.sheetjs.com/sheetjs/sheetjs |
 | `supabase.min.js` | Supabase JavaScript | não declarada no bundle | https://github.com/supabase/supabase-js |
 | `pdf-lib.min.js` | pdf-lib | 1.17.1 | https://github.com/Hopding/pdf-lib |
+| `vendor/rive/rive.js` e WebAssembly | Rive Canvas Lite | 2.42.1 | https://github.com/rive-app/rive-wasm |
 
 Os hashes SHA-256 aceitos estão em `vendor-manifest.json` e são conferidos pelo CI. Uma atualização deve registrar versão, origem, licença e novo hash antes da publicação.
 
 Este aviso não substitui os textos de licença dos projetos de origem.
 O texto da licença do pdf-lib acompanha o pacote em `pdf-lib.LICENSE.md`.
+O Rive Canvas Lite é distribuído sob a licença MIT; o texto acompanha o pacote em `vendor/rive/LICENSE.md`.
