@@ -7,7 +7,7 @@ const outputDir = process.env.GRCON_RIVE_OUTPUT || path.join(process.cwd(), "ass
 const fixtureUrl = `${baseUrl}/tests/fixtures/grcon-mascot-rive.html`;
 
 async function waitForMascot(page) {
-  await page.waitForSelector(".grcon-brand-mascot .grcon-mascot-sprite", { state: "visible", timeout: 15000 });
+  await page.waitForSelector(".grcon-brand-mascot", { state: "visible", timeout: 15000 });
   await page.waitForFunction(() => window.GrconMascot?.diagnostics, null, { timeout: 15000 });
 }
 
