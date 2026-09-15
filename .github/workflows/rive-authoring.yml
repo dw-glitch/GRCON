@@ -32,7 +32,7 @@ jobs:
           "$HOME/.rive/bin/rive" assets/mascot/rive --verify
           "$HOME/.rive/bin/rive" assets/mascot/rive --once
           "$HOME/.rive/bin/rive" inspect assets/mascot/rive --json 2>&1 | tee assets/mascot/rive/build/inspect.json
-          "$HOME/.rive/bin/rive" assets/mascot/rive --screenshot=assets/mascot/rive/build/idle.png
+          "$HOME/.rive/bin/rive" assets/mascot/rive --screenshot=assets/mascot/rive/build/idle.png --advance=500ms
 
       - name: Publicar artefatos de validação
         uses: actions/upload-artifact@v4

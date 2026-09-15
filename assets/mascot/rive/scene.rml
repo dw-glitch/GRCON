@@ -1,5 +1,6 @@
 <Rive version="1" kind="fragment">
-    <Artboard defaultStateMachineId="0:100" width="314" height="314" name="GRCON Mascot" id="0:1">
+    <Artboard defaultStateMachineId="0:100" width="314" height="314" styleId="0:2" name="GRCON Mascot" id="0:1">
+        <LayoutComponentStyle name="Mascot Artboard Style" id="0:2"/>
         <!-- As camadas abaixo são recortes mutuamente exclusivos do PNG HD oficial. -->
         <Node name="Mascot Root" id="0:10">
             <Image x="157" y="157" originX="0.5" originY="0.5" assetId="0:301" name="Official Body" id="0:11"/>
@@ -16,7 +17,7 @@
             <StateMachineLayer name="Main Layer" id="0:102">
                 <AnyState x="0" y="-130"/>
                 <ExitState x="950" y="-130"/>
-                <EntryState><StateTransition stateToId="0:111"/></EntryState>
+                <EntryState x="-160" y="0"><StateTransition stateToId="0:111"/></EntryState>
 
                 <AnimationState x="0" y="0" animationId="0:200" stateName="idle" id="0:111">
                     <StateTransition stateToId="0:112" duration="220"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
