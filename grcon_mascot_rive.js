@@ -1,22 +1,35 @@
-/* GRCON — mascote vetorial articulado e contínuo (Rive Canvas Lite). */
+/* GRCON — uma única instância Rive raster do mascote oficial, com fallback PNG permanente. */
 (function (root) {
   "use strict";
 
-  const SELECTOR = ".grcon-brand-mascot, .grcon-mascot-context";
-  const STATE_MACHINE = "Mascot State";
-  const INPUT_NAME = "mode";
+  const VERSION = "2.0.0";
+  const HOST_SELECTOR = ".grcon-brand-mascot";
+  const STATE_MACHINE = "GRCON Mascot State";
+  const INPUT_NAME = "state";
   const RIV_URL = new URL("assets/mascot/rive/build/grcon-mascot.riv", document.baseURI).href;
   const WASM_URL = new URL("vendor/rive/rive.wasm", document.baseURI).href;
   const WASM_FALLBACK_URL = new URL("vendor/rive/rive_fallback.wasm", document.baseURI).href;
   const STYLE_ID = "grcon-mascot-rive-style";
-  const ACTIVATION_TIMEOUT_MS = 6000;
-  const records = new Set();
-  const byMascot = new WeakMap();
-  const reducedQuery = root.matchMedia?.("(prefers-reduced-motion: reduce)");
+  const ACTIVATION_TIMEOUT_MS = 7000;
+  const MAX_FRAME_CHECKS = 30;
+  const STATES = Object.freeze({
+    idle: 0,
+    hover: 1,
+    hello: 2,
+    processing: 3,
+    analyzing: 4,
+    success: 5,
+    warning: 6,
+  });
+  const ANALYZING_POSES = new Set(["analysis", "search", "check", "history", "dashboard", "sigem-pw", "import", "report"]);
+
+  const reducedMotion = root.matchMedia?.("(prefers-reduced-motion: reduce)");
+  let record = null;
   let mutationObserver = null;
-  let intersectionObserver = null;
-  let engineDisabled = false;
-  let engineFailureReason = "";
+  let syncFrame = 0;
+  let explicitState = "";
+  let disabled = false;
+  let failureReason = "";
   let failureReported = false;
 
   function installStyles() {
@@ -24,9 +37,10 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      .grcon-mascot-rive-canvas {
+      .grcon-brand-mascot .grcon-mascot-pose-motion { position: relative; }
+      .grcon-brand-mascot .grcon-mascot-rive-canvas {
         position: absolute;
-        z-index: 2;
+        z-index: 3;
         inset: 0;
         display: block;
         width: 100%;
@@ -34,285 +48,317 @@
         opacity: 0;
         pointer-events: none;
         contain: strict;
-        transform: translateZ(0);
-        transition: opacity 180ms ease-out;
+        transition: opacity 120ms ease-out;
       }
-      .grcon-mascot-greeting[data-grcon-rive-ready="true"] .grcon-mascot-rive-canvas {
-        opacity: 1;
-      }
-      .grcon-mascot-greeting[data-grcon-rive-ready="true"]
+      .grcon-brand-mascot[data-grcon-rive-ready="true"] .grcon-mascot-rive-canvas { opacity: 1; }
+      .grcon-brand-mascot[data-grcon-rive-ready="true"]
         .grcon-mascot-pose-motion > .grcon-mascot-sprite:not(.grcon-mascot-processing-orb),
-      .grcon-mascot-greeting[data-grcon-rive-ready="true"] .grcon-mascot-generated-layer {
+      .grcon-brand-mascot[data-grcon-rive-ready="true"] .grcon-mascot-generated-layer {
         opacity: 0 !important;
         visibility: hidden;
         animation: none !important;
       }
-      .grcon-mascot-greeting[data-grcon-rive-ready="true"] .grcon-mascot-motion,
-      .grcon-mascot-greeting[data-grcon-rive-ready="true"] .grcon-mascot-sprite {
-        transform: none;
-        filter: none;
-      }
-      .grcon-mascot-greeting[data-grcon-rive-ready="true"].is-processing
-        .grcon-mascot-motion::after {
-        z-index: 1;
+      .grcon-brand-mascot[data-grcon-rive-ready="true"] .grcon-mascot-motion,
+      .grcon-brand-mascot[data-grcon-rive-ready="true"] .grcon-mascot-pose-motion {
+        animation: none !important;
+        transform: none !important;
+        filter: none !important;
       }
       @media (prefers-reduced-motion: reduce) {
-        .grcon-mascot-rive-canvas { transition-duration: 80ms; }
+        .grcon-brand-mascot .grcon-mascot-rive-canvas { display: none; }
       }
     `;
     document.head.appendChild(style);
   }
 
-  function desiredMode(mascot) {
-    if (reducedQuery?.matches) return 0;
-    if (mascot.classList.contains("is-processing")) return 3;
-    if (mascot.classList.contains("is-greeting-active")) return 1;
-    const pose = String(mascot.dataset.pose || "").toLowerCase();
-    if (pose === "success") return 4;
-    if (["analysis", "pending", "search", "import"].includes(pose)) return 2;
-    return 0;
+  function contextualState() {
+    const contextual = document.querySelector(".grcon-mascot-context");
+    if (!contextual) return "idle";
+    if (contextual.classList.contains("is-processing") || contextual.getAttribute("aria-busy") === "true") return "processing";
+    const pose = String(contextual.dataset.pose || "").toLowerCase();
+    if (pose === "success") return "success";
+    if (pose === "warning") return "warning";
+    if (ANALYZING_POSES.has(pose)) return "analyzing";
+    return "idle";
   }
 
-  function resize(record) {
-    if (!record?.loaded || !record.player || !record.canvas.isConnected) return;
-    const rect = record.canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const ratio = Math.min(3, Math.max(1, Number(root.devicePixelRatio) || 1));
-    record.player.resizeDrawingSurfaceToCanvas(ratio);
-    scheduleActivation(record);
+  function desiredState() {
+    if (explicitState && Object.hasOwn(STATES, explicitState)) return explicitState;
+    const contextState = contextualState();
+    if (contextState !== "idle") return contextState;
+    if (record?.hovered) return "hover";
+    if (record?.host.classList.contains("is-greeting-active")) return "hello";
+    return "idle";
   }
 
-  function sync(record) {
-    if (!record?.input) return;
-    const mode = desiredMode(record.mascot);
-    if (record.lastMode === mode) return;
-    record.lastMode = mode;
-    record.input.value = mode;
+  function syncState() {
+    syncFrame = 0;
+    if (!record?.input || record.failed) return;
+    const state = desiredState();
+    if (record.state === state) return;
+    record.state = state;
+    record.input.value = STATES[state];
   }
 
-  function cleanupRecord(record) {
-    if (!record) return;
-    root.clearTimeout(record.activationTimer);
-    record.activationTimer = 0;
-    record.mascot.removeAttribute("data-grcon-rive-pending");
-    record.mascot.removeAttribute("data-grcon-rive-ready");
-    record.canvas.remove();
-    record.resizeObserver?.disconnect();
-    intersectionObserver?.unobserve(record.mascot);
-    record.player?.cleanup?.();
-    records.delete(record);
+  function scheduleSync() {
+    if (syncFrame) return;
+    syncFrame = root.requestAnimationFrame(syncState);
   }
 
-  function fail(record) {
-    if (!record || record.failed) return;
-    record.failed = true;
-    cleanupRecord(record);
-  }
-
-  function disableEngine(error) {
-    if (engineDisabled) return;
-    engineDisabled = true;
-    engineFailureReason = String(error?.message || error?.data || error || "indisponível");
-    document.documentElement.dataset.grconMascotEngine = "png-animated-fallback-v2";
-    Array.from(records).forEach(fail);
-    if (!failureReported && root.console?.warn) {
-      failureReported = true;
-      console.warn("GRCON: animação vetorial indisponível; usando fallback PNG animado.", engineFailureReason);
+  function canvasHasVisibleFrame(canvas) {
+    try {
+      const sample = document.createElement("canvas");
+      sample.width = 64;
+      sample.height = 64;
+      const context = sample.getContext("2d", { willReadFrequently: true });
+      if (!context) return false;
+      context.clearRect(0, 0, 64, 64);
+      context.drawImage(canvas, 0, 0, 64, 64);
+      const pixels = context.getImageData(0, 0, 64, 64).data;
+      let visible = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (pixels[index + 3] > 24) visible += 1;
+        if (visible > 24) return true;
+      }
+    } catch (_) {
+      return false;
     }
+    return false;
   }
 
-  function activate(record) {
-    record.activationScheduled = false;
-    if (!record?.loaded || record.failed || engineDisabled || !record.canvas.isConnected) return;
-    if (record.canvas.width <= 1 || record.canvas.height <= 1) return;
+  function resize() {
+    if (!record?.loaded || !record.player || !record.canvas.isConnected) return;
+    const bounds = record.canvas.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    const ratio = Math.min(2, Math.max(1, Number(root.devicePixelRatio) || 1));
+    record.player.resizeDrawingSurfaceToCanvas(ratio);
+    scheduleFrameCheck();
+  }
+
+  function activate() {
+    if (!record || record.failed || record.ready || !record.loaded || !record.canvas.isConnected) return;
+    if (!canvasHasVisibleFrame(record.canvas)) {
+      record.frameChecks += 1;
+      if (record.frameChecks < MAX_FRAME_CHECKS) scheduleFrameCheck();
+      return;
+    }
     record.ready = true;
     root.clearTimeout(record.activationTimer);
     record.activationTimer = 0;
-    record.mascot.removeAttribute("data-grcon-rive-pending");
-    record.mascot.dataset.grconRiveReady = "true";
-    document.documentElement.dataset.grconMascotEngine = "rive-vector-v2";
-    if (reducedQuery?.matches) record.player.pause();
+    record.host.removeAttribute("data-grcon-rive-pending");
+    record.host.dataset.grconRiveReady = "true";
+    document.documentElement.dataset.grconMascotEngine = "official-rive-raster-v1";
   }
 
-  function scheduleActivation(record) {
-    if (!record?.loaded || record.ready || record.failed || record.activationScheduled) return;
-    record.activationScheduled = true;
+  function scheduleFrameCheck() {
+    if (!record || record.frameCheckScheduled || record.ready || record.failed) return;
+    record.frameCheckScheduled = true;
     root.requestAnimationFrame(() => {
-      root.requestAnimationFrame(() => activate(record));
+      root.requestAnimationFrame(() => {
+        if (!record) return;
+        record.frameCheckScheduled = false;
+        activate();
+      });
     });
   }
 
-  function prepareMascot(mascot) {
-    if (engineDisabled || !mascot || byMascot.has(mascot) || mascot.dataset.grconRivePending === "true") return;
-    const runtime = root.rive;
-    const host = mascot.querySelector(".grcon-mascot-pose-motion")
-      || mascot.querySelector(".grcon-mascot-motion")
-      || mascot;
-    if (!runtime?.Rive || !host) return;
+  function cleanupRecord() {
+    if (!record) return;
+    const current = record;
+    record = null;
+    root.clearTimeout(current.activationTimer);
+    current.resizeObserver?.disconnect();
+    current.intersectionObserver?.disconnect();
+    current.host.removeEventListener("pointerenter", current.onPointerEnter);
+    current.host.removeEventListener("pointerleave", current.onPointerLeave);
+    current.host.removeAttribute("data-grcon-rive-pending");
+    current.host.removeAttribute("data-grcon-rive-ready");
+    current.player?.cleanup?.();
+    current.canvas.remove();
+  }
 
-    mascot.dataset.grconRivePending = "true";
+  function fail(reason) {
+    if (disabled) return;
+    disabled = true;
+    failureReason = String(reason?.message || reason?.data || reason || "runtime indisponível");
+    cleanupRecord();
+    document.documentElement.dataset.grconMascotEngine = "official-png-fallback-v1";
+    if (!failureReported && root.console?.warn) {
+      failureReported = true;
+      console.warn("GRCON: Rive indisponível; o PNG oficial permanece ativo.", failureReason);
+    }
+  }
+
+  function create(host) {
+    if (disabled || record || !host || reducedMotion?.matches) return;
+    const runtime = root.rive;
+    const container = host.querySelector(".grcon-mascot-pose-motion") || host.querySelector(".grcon-mascot-motion") || host;
+    if (!runtime?.Rive || !runtime?.RuntimeLoader || !container) return;
+
     const canvas = document.createElement("canvas");
     canvas.className = "grcon-mascot-rive-canvas";
     canvas.setAttribute("aria-hidden", "true");
     canvas.width = 1;
     canvas.height = 1;
-    host.appendChild(canvas);
+    container.appendChild(canvas);
+    host.dataset.grconRivePending = "true";
 
-    const record = {
-      mascot,
+    const current = {
+      host,
       canvas,
       player: null,
       input: null,
       resizeObserver: null,
+      intersectionObserver: null,
       activationTimer: 0,
-      activationScheduled: false,
+      frameChecks: 0,
+      frameCheckScheduled: false,
+      state: "",
       loaded: false,
       ready: false,
       failed: false,
+      hovered: false,
       visible: true,
-      lastMode: null,
+      onPointerEnter: null,
+      onPointerLeave: null,
     };
-    records.add(record);
-    byMascot.set(mascot, record);
+    record = current;
+
+    current.onPointerEnter = (event) => {
+      if (event.pointerType === "touch") return;
+      current.hovered = true;
+      scheduleSync();
+    };
+    current.onPointerLeave = (event) => {
+      if (event.pointerType === "touch") return;
+      current.hovered = false;
+      scheduleSync();
+    };
+    host.addEventListener("pointerenter", current.onPointerEnter);
+    host.addEventListener("pointerleave", current.onPointerLeave);
 
     try {
-      record.player = new runtime.Rive({
+      runtime.RuntimeLoader.setWasmUrl(WASM_URL);
+      runtime.RuntimeLoader.setWasmFallbackUrl?.(WASM_FALLBACK_URL);
+      current.player = new runtime.Rive({
         src: RIV_URL,
         canvas,
         artboard: "GRCON Mascot",
         stateMachine: STATE_MACHINE,
-        autoplay: !reducedQuery?.matches,
+        autoplay: true,
         enableRiveAssetCDN: false,
         shouldDisableRiveListeners: true,
         layout: new runtime.Layout({ fit: runtime.Fit.Contain, alignment: runtime.Alignment.Center }),
         onLoad: function () {
-          const inputs = record.player.stateMachineInputs(STATE_MACHINE) || [];
-          record.input = inputs.find((input) => input.name === INPUT_NAME) || null;
-          if (!record.input) {
-            disableEngine(`entrada ${INPUT_NAME} não encontrada`);
+          if (record !== current || current.failed) return;
+          const inputs = current.player.stateMachineInputs(STATE_MACHINE) || [];
+          current.input = inputs.find((input) => input.name === INPUT_NAME) || null;
+          if (!current.input) {
+            fail(`entrada ${INPUT_NAME} não encontrada`);
             return;
           }
-          record.loaded = true;
-          sync(record);
-          resize(record);
-          scheduleActivation(record);
+          current.loaded = true;
+          syncState();
+          resize();
+          scheduleFrameCheck();
         },
         onLoadError: function (event) {
-          disableEngine(event?.data || event);
+          fail(event?.data || event || "falha ao carregar o arquivo .riv");
         },
       });
-      record.activationTimer = root.setTimeout(() => {
-        if (!record.ready) disableEngine("tempo limite ao iniciar o WebAssembly do Rive");
-      }, ACTIVATION_TIMEOUT_MS);
-      const contextLost = (event) => {
-        event?.preventDefault?.();
-        disableEngine("contexto gráfico do Rive foi perdido");
-      };
-      canvas.addEventListener("webglcontextlost", contextLost, { once: true });
-      canvas.addEventListener("contextlost", contextLost, { once: true });
-      record.resizeObserver = new ResizeObserver(() => resize(record));
-      record.resizeObserver.observe(host);
-      intersectionObserver?.observe(mascot);
     } catch (error) {
-      disableEngine(error);
+      fail(error);
+      return;
+    }
+
+    current.activationTimer = root.setTimeout(() => {
+      if (!current.ready) fail("tempo limite antes do primeiro frame visível");
+    }, ACTIVATION_TIMEOUT_MS);
+    current.resizeObserver = new ResizeObserver(resize);
+    current.resizeObserver.observe(container);
+    if (root.IntersectionObserver) {
+      current.intersectionObserver = new IntersectionObserver((entries) => {
+        const visible = Boolean(entries[0]?.isIntersecting);
+        current.visible = visible;
+        if (!current.ready) return;
+        if (visible && !document.hidden) current.player.play();
+        else current.player.pause();
+      }, { rootMargin: "80px" });
+      current.intersectionObserver.observe(host);
     }
   }
 
-  function refresh(scope) {
-    const source = scope?.querySelectorAll ? scope : document;
-    if (source.matches?.(SELECTOR)) prepareMascot(source);
-    source.querySelectorAll(SELECTOR).forEach(prepareMascot);
-    records.forEach((record) => {
-      if (!record.mascot.isConnected) {
-        intersectionObserver?.unobserve(record.mascot);
-        record.resizeObserver?.disconnect();
-        record.player?.cleanup?.();
-        root.clearTimeout(record.activationTimer);
-        records.delete(record);
-        return;
-      }
-      sync(record);
-    });
+  function refresh() {
+    if (disabled) return;
+    if (record && !record.host.isConnected) cleanupRecord();
+    if (!record) create(document.querySelector(HOST_SELECTOR));
+    scheduleSync();
+  }
+
+  function setState(name) {
+    const normalized = name == null ? "" : String(name).toLowerCase();
+    if (normalized && !Object.hasOwn(STATES, normalized)) throw new Error(`Estado Rive desconhecido: ${name}`);
+    explicitState = normalized;
+    scheduleSync();
   }
 
   function handleReducedMotion() {
-    records.forEach((record) => {
-      record.lastMode = null;
-      sync(record);
-      if (!record.ready) return;
-      if (reducedQuery?.matches) {
-        record.player.play();
-        root.setTimeout(() => record.player?.pause(), 90);
-      } else if (record.visible && !document.hidden) {
-        record.player.play();
-      }
-    });
+    if (reducedMotion?.matches) cleanupRecord();
+    else refresh();
   }
 
   function init() {
     installStyles();
-    document.documentElement.dataset.grconMascotEngine = "png-animated-fallback-v2";
+    document.documentElement.dataset.grconMascotEngine = "official-png-fallback-v1";
     if (!root.rive?.Rive || !root.ResizeObserver || !root.requestAnimationFrame) return;
-    root.rive.RuntimeLoader.setWasmUrl(WASM_URL);
-    root.rive.RuntimeLoader.setWasmFallbackUrl(WASM_FALLBACK_URL);
-    root.addEventListener("unhandledrejection", (event) => {
-      const reason = String(event?.reason?.message || event?.reason || "");
-      if (/webassembly|wasm|rive|canvaskit/i.test(reason)) disableEngine(event.reason);
-    });
-    intersectionObserver = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        const record = byMascot.get(entry.target);
-        if (!record?.ready || reducedQuery?.matches) return;
-        record.visible = entry.isIntersecting;
-        if (entry.isIntersecting && !document.hidden) record.player.play();
-        else record.player.pause();
-      });
-    }, { rootMargin: "80px" });
-    refresh(document);
-    mutationObserver = new MutationObserver((mutations) => {
-      let mustSync = false;
-      mutations.forEach((mutation) => {
-        if (mutation.type === "childList") {
-          mutation.addedNodes.forEach((node) => {
-            if (node.nodeType === 1) refresh(node);
-          });
-          mustSync = mustSync || mutation.removedNodes.length > 0;
-        } else {
-          mustSync = true;
-        }
-      });
-      if (mustSync) refresh(document);
-    });
+    refresh();
+    mutationObserver = new MutationObserver(refresh);
     mutationObserver.observe(document.documentElement, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["class", "data-pose"],
+      attributeFilter: ["class", "data-pose", "aria-busy", "data-grcon-control-processing"],
     });
-    reducedQuery?.addEventListener?.("change", handleReducedMotion);
+    reducedMotion?.addEventListener?.("change", handleReducedMotion);
     document.addEventListener("visibilitychange", () => {
-      records.forEach((record) => {
-        if (!record.ready || reducedQuery?.matches) return;
-        if (document.hidden || !record.visible) record.player.pause();
-        else record.player.play();
-      });
+      if (!record?.ready) return;
+      if (document.hidden || !record.visible) record.player.pause();
+      else record.player.play();
+    });
+    root.addEventListener("grcon:processing-state", scheduleSync);
+    root.addEventListener("grcon:processing-pulse", scheduleSync);
+    root.addEventListener("pagehide", cleanupRecord, { once: true });
+    root.addEventListener("unhandledrejection", (event) => {
+      const reason = String(event?.reason?.message || event?.reason || "");
+      if (!/webassembly|wasm|rive|canvaskit/i.test(reason)) return;
+      event.preventDefault();
+      fail(event.reason);
     });
   }
 
   function diagnostics() {
     return Object.freeze({
-      version: "1.1.0",
-      engine: document.documentElement.dataset.grconMascotEngine || "png-fallback",
-      engineDisabled,
-      failureReason: engineFailureReason,
-      instances: records.size,
-      ready: Array.from(records).filter((record) => record.ready).length,
-      modes: Array.from(records).map((record) => record.lastMode),
-      reducedMotion: Boolean(reducedQuery?.matches),
+      version: VERSION,
+      engine: document.documentElement.dataset.grconMascotEngine || "official-png-fallback-v1",
+      disabled,
+      failureReason,
+      instances: record ? 1 : 0,
+      ready: Boolean(record?.ready),
+      state: record?.state || desiredState(),
+      reducedMotion: Boolean(reducedMotion?.matches),
+      source: "grcon-mascot-sprite.png#default",
     });
   }
 
-  root.GRCONMascotRive = Object.freeze({ version: "1.1.0", refresh, diagnostics });
+  root.GrconMascot = Object.freeze({
+    version: VERSION,
+    states: STATES,
+    setState,
+    clearState: () => setState(""),
+    refresh,
+    diagnostics,
+  });
+  root.GRCONMascotRive = root.GrconMascot;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 })(window);

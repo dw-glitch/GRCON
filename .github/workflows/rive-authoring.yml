@@ -2,7 +2,20 @@ name: Autoria do mascote Rive
 
 on:
   push:
-    branches: [feat/rive-mascote-oficial]
+    branches: [main, feat/rive-mascote-oficial]
+    paths:
+      - "assets/mascot/rive/**"
+      - "grcon_mascot_rive.js"
+      - "vendor/rive/**"
+      - "scripts/validar-mascote-rive-browser.cjs"
+      - ".github/workflows/rive-authoring.yml"
+  pull_request:
+    paths:
+      - "assets/mascot/rive/**"
+      - "grcon_mascot_rive.js"
+      - "vendor/rive/**"
+      - "scripts/validar-mascote-rive-browser.cjs"
+      - ".github/workflows/rive-authoring.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,14 +40,22 @@ jobs:
 
       - name: Compilar RML raster e verificar estrutura
         run: |
-          "$HOME/.rive/bin/rive" --help
-          "$HOME/.rive/bin/rive" docs drawing
           "$HOME/.rive/bin/rive" assets/mascot/rive --verify
           "$HOME/.rive/bin/rive" assets/mascot/rive --once
           "$HOME/.rive/bin/rive" inspect assets/mascot/rive --json 2>&1 | tee assets/mascot/rive/build/inspect.json
-          "$HOME/.rive/bin/rive" assets/mascot/rive --screenshot=assets/mascot/rive/build/idle.png --advance=500ms
-          "$HOME/.rive/bin/rive" assets/mascot/rive_probe --verify
-          "$HOME/.rive/bin/rive" assets/mascot/rive_probe --screenshot=assets/mascot/rive_probe/build/probe.png --advance=500ms
+
+      - name: Instalar navegador de validação
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Testar idle, hover, processing e fallback PNG
+        run: |
+          mkdir -p assets/mascot/rive/build/browser
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-preview.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-mascote-rive-browser.cjs
 
       - name: Publicar artefatos de validação
         uses: actions/upload-artifact@v4
@@ -43,7 +64,6 @@ jobs:
           path: |
             assets/mascot/rive/build/grcon-mascot.riv
             assets/mascot/rive/build/inspect.json
-            assets/mascot/rive/build/idle.png
             assets/mascot/rive/build/problems.log
-            assets/mascot/rive_probe/build/probe.png
+            assets/mascot/rive/build/browser/*.png
           if-no-files-found: error

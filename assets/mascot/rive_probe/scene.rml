@@ -1,6 +1,0 @@
-<Rive version="1" kind="fragment">
-    <Artboard width="314" height="314" name="Probe" id="0:1">
-        <Image x="157" y="157" assetId="0:10" name="Official PNG"/>
-    </Artboard>
-    <ImageAsset file="official.png" width="314" height="314" name="Official PNG" id="0:10"/>
-</Rive>
