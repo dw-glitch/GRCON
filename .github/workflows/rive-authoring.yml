@@ -19,7 +19,7 @@ jobs:
       - name: Instalar Rive CLI oficial
         run: |
           curl -fsSL https://releases.rive.app/cli/install.sh -o "$RUNNER_TEMP/rive-install.sh"
-          sh "$RUNNER_TEMP/rive-install.sh"
+          bash "$RUNNER_TEMP/rive-install.sh"
           "$HOME/.rive/bin/rive" doctor
 
       - name: Documentar esquema raster no log
@@ -27,4 +27,3 @@ jobs:
           "$HOME/.rive/bin/rive" schema ImageAsset
           "$HOME/.rive/bin/rive" schema Image
           "$HOME/.rive/bin/rive" docs --search image
-
