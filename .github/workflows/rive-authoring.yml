@@ -25,8 +25,20 @@ jobs:
           bash "$RUNNER_TEMP/rive-install.sh"
           "$HOME/.rive/bin/rive" doctor
 
-      - name: Documentar esquema raster no log
+      - name: Compilar RML raster e verificar estrutura
         run: |
-          "$HOME/.rive/bin/rive" schema ImageAsset
-          "$HOME/.rive/bin/rive" schema Image
-          "$HOME/.rive/bin/rive" docs --search image
+          "$HOME/.rive/bin/rive" assets/mascot/rive --verify
+          "$HOME/.rive/bin/rive" assets/mascot/rive --once
+          "$HOME/.rive/bin/rive" inspect assets/mascot/rive/build/grcon-mascot.riv --json | tee assets/mascot/rive/build/inspect.json
+          "$HOME/.rive/bin/rive" assets/mascot/rive --screenshot=build/idle.png
+
+      - name: Publicar artefatos de validação
+        uses: actions/upload-artifact@v4
+        with:
+          name: grcon-mascot-rive-build
+          path: |
+            assets/mascot/rive/build/grcon-mascot.riv
+            assets/mascot/rive/build/inspect.json
+            assets/mascot/rive/build/idle.png
+            assets/mascot/rive/build/problems.log
+          if-no-files-found: error
