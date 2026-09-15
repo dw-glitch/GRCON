@@ -33,6 +33,8 @@ jobs:
           "$HOME/.rive/bin/rive" assets/mascot/rive --once
           "$HOME/.rive/bin/rive" inspect assets/mascot/rive --json 2>&1 | tee assets/mascot/rive/build/inspect.json
           "$HOME/.rive/bin/rive" assets/mascot/rive --screenshot=assets/mascot/rive/build/idle.png --advance=500ms
+          "$HOME/.rive/bin/rive" assets/mascot/rive_probe --verify
+          "$HOME/.rive/bin/rive" assets/mascot/rive_probe --screenshot=assets/mascot/rive_probe/build/probe.png --advance=500ms
 
       - name: Publicar artefatos de validação
         uses: actions/upload-artifact@v4
@@ -43,4 +45,5 @@ jobs:
             assets/mascot/rive/build/inspect.json
             assets/mascot/rive/build/idle.png
             assets/mascot/rive/build/problems.log
+            assets/mascot/rive_probe/build/probe.png
           if-no-files-found: error
