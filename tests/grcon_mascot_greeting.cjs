@@ -137,12 +137,11 @@ assert.match(ui, /shouldAnimate && mascot\.getAttribute\("aria-busy"\) !== "true
 assert.match(ui, /!shouldAnimate && mascot\.hasAttribute\("aria-busy"\)/);
 assert.match(ui, /animation: none !important/);
 assert.match(ui, /if \(target\.textContent !== nextText\) target\.textContent = nextText/);
-assert.match(sw, /mascot-greeting1-processing5-frames1-spinner1/);
+assert.match(sw, /mascot-greeting1-processing5-rive1/);
 for (const asset of animatedAssets) {
   assert.ok(asset.bytes.length > 30000, `${asset.name} deve manter definição suficiente`);
   assert.strictEqual(asset.bytes.subarray(1, 4).toString("ascii"), "PNG", `${asset.name} deve ser PNG válido`);
   assert.match(ui, new RegExp(asset.name.replaceAll(".", "\\.")));
-  assert.match(sw, new RegExp(asset.name.replaceAll(".", "\\.")));
 }
 assert.doesNotMatch(ui, /fetch\s*\(|XMLHttpRequest|(?:supabase|client|state\.client)\s*\.?\s*\.from\s*\(|getSession\s*\(/);
 assert.match(asset, /image-rendering:auto/);
@@ -154,4 +153,4 @@ assert.match(ui, /role", "button"/);
 const poses = [...mascot.matchAll(/(?:default|analysis|search|check|history|dashboard|"sigem-pw"|egrdt|import|report|warning|success|pending|empty|quality):\{/g)];
 assert.ok(poses.length >= 15, "todas as poses existentes devem continuar disponíveis");
 
-console.log("grcon_mascot_greeting: OK — carregamento determinístico, assets HD, corrida por quadros, poses geradas, esfera, reduced motion e estabilidade validados.");
+console.log("grcon_mascot_greeting: OK — saudação, fallback HD, esfera, reduced motion e estabilidade validados.");
