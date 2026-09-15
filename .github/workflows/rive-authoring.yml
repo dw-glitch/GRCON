@@ -1,0 +1,30 @@
+name: Autoria do mascote Rive
+
+on:
+  push:
+    branches: [feat/rive-mascote-oficial]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-rive:
+    name: Compilar e validar Rive local
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Rive CLI oficial
+        run: |
+          curl -fsSL https://releases.rive.app/cli/install.sh -o "$RUNNER_TEMP/rive-install.sh"
+          sh "$RUNNER_TEMP/rive-install.sh"
+          "$HOME/.rive/bin/rive" doctor
+
+      - name: Documentar esquema raster no log
+        run: |
+          "$HOME/.rive/bin/rive" schema ImageAsset
+          "$HOME/.rive/bin/rive" schema Image
+          "$HOME/.rive/bin/rive" docs --search image
+
