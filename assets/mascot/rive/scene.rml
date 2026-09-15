@@ -114,7 +114,7 @@
         </LinearAnimation>
     </Artboard>
 
-    <ImageAsset file="source/grcon-mascot-body.png" name="GRCON Official Body" id="0:301"/>
-    <ImageAsset file="source/grcon-mascot-head.png" name="GRCON Official Head" id="0:302"/>
-    <ImageAsset file="source/grcon-mascot-right-arm.png" name="GRCON Official Right Arm" id="0:303"/>
+    <ImageAsset file="source/grcon-mascot-body.png" width="314" height="314" name="GRCON Official Body" id="0:301"/>
+    <ImageAsset file="source/grcon-mascot-head.png" width="314" height="314" name="GRCON Official Head" id="0:302"/>
+    <ImageAsset file="source/grcon-mascot-right-arm.png" width="314" height="314" name="GRCON Official Right Arm" id="0:303"/>
 </Rive>
