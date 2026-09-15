@@ -4,71 +4,57 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const read = (file, encoding = "utf8") => fs.readFileSync(path.join(root, file), encoding);
-const rml = read("assets/mascot/rive/scene.rml");
-const adapter = read("grcon_mascot_rive.js");
+const mascot = read("grcon_mascot_header.js");
 const greeting = read("grcon_mascot_greeting.js");
 const index = read("index.html");
 const sw = read("sw.js");
 const vercel = read("vercel.json");
-const riv = read("assets/mascot/rive/build/grcon-mascot.riv", null);
+const sprite = read("grcon-mascot-sprite.png", null);
 
-assert.ok(riv.length > 4_000, "arquivo Rive compilado deve acompanhar o aplicativo");
-assert.match(rml, /<StateMachine name="Mascot State"/);
-assert.match(rml, /<StateMachineNumber value="0" name="mode"/);
-for (const animation of ["Idle", "Greeting", "Analyzing", "Running", "Success"]) {
-  assert.match(rml, new RegExp(`<LinearAnimation[^>]+name="${animation}"`));
+assert.equal(sprite.readUInt32BE(16), 1254, "sprite oficial deve manter 1254 px de largura");
+assert.equal(sprite.readUInt32BE(20), 1254, "sprite oficial deve manter 1254 px de altura");
+assert.match(mascot, /const POSES=Object\.freeze\(\{/);
+
+const expectedPoses = {
+  default: [0, 0], analysis: [1, 0], search: [2, 0], check: [3, 0],
+  history: [0, 1], dashboard: [1, 1], "sigem-pw": [2, 1], egrdt: [3, 1],
+  import: [0, 2], report: [1, 2], warning: [2, 2], success: [3, 2],
+  pending: [0, 3], empty: [1, 3], quality: [2, 3],
+};
+for (const [pose, [x, y]] of Object.entries(expectedPoses)) {
+  const name = pose === "sigem-pw" ? `"${pose}"` : pose;
+  assert.match(mascot, new RegExp(`${name}:\\{x:${x},y:${y},label:`), `${pose} deve preservar a célula oficial`);
 }
-assert.match(rml, /name="Right Shoulder" id="0:40"/);
-assert.match(rml, /name="Right Elbow" id="0:41"/);
-assert.match(rml, /name="Left Hip" id="0:50"/);
-assert.match(rml, /name="Right Knee" id="0:61"/);
-assert.match(rml, /name="Running"[\s\S]+objectId="0:30"[\s\S]+objectId="0:40"[\s\S]+objectId="0:50"[\s\S]+objectId="0:60"/);
-assert.match(rml, /CubicEaseInterpolator/);
-assert.doesNotMatch(rml, /ImageAsset|ImageContents|\.png|\.gif|\.webp/);
 
-assert.match(adapter, /stateMachine:\s*STATE_MACHINE/);
-assert.match(adapter, /stateMachineInputs\(STATE_MACHINE\)/);
-assert.match(adapter, /mascot\.classList\.contains\("is-processing"\)\) return 3/);
-assert.match(adapter, /mascot\.classList\.contains\("is-greeting-active"\)\) return 1/);
-assert.match(adapter, /\["analysis", "pending", "search", "import"\]/);
-assert.match(adapter, /resizeDrawingSurfaceToCanvas\(ratio\)/);
-assert.match(adapter, /devicePixelRatio/);
-assert.match(adapter, /prefers-reduced-motion: reduce/);
-assert.match(adapter, /animação vetorial indisponível; usando fallback PNG animado/);
-assert.match(adapter, /enableRiveAssetCDN:\s*false/);
-assert.match(adapter, /png-animated-fallback-v2/);
-assert.match(adapter, /function disableEngine\(error\)/);
-assert.match(adapter, /if \(engineDisabled\) return/);
-assert.match(adapter, /canvas\.width <= 1 \|\| record\.canvas\.height <= 1/);
-assert.match(adapter, /requestAnimationFrame\(\(\) => \{[\s\S]+requestAnimationFrame\(\(\) => activate\(record\)\)/);
-assert.match(adapter, /tempo limite ao iniciar o WebAssembly do Rive/);
-assert.match(adapter, /webglcontextlost/);
-assert.match(adapter, /unhandledrejection/);
-assert.match(adapter, /using fallback PNG animado|usando fallback PNG animado/);
-assert.doesNotMatch(greeting, /if \(poseMotion && !root\.rive\?\.Rive\)/);
-assert.match(greeting, /if \(poseMotion\) \{[\s\S]+grcon-mascot-generated-/);
-assert.doesNotMatch(greeting, /if \(!root\.rive\?\.Rive\) \{\s*Object\.values\(GENERATED_ASSETS\)/);
-for (const csp of [index, vercel]) {
-  assert.match(csp, /script-src 'self' 'wasm-unsafe-eval' blob:/);
-  assert.doesNotMatch(csp, /script-src 'self' 'unsafe-eval'/);
-}
-assert.doesNotMatch(adapter, /pointermove|mousemove|requestAnimationFrame\([^)]*requestAnimationFrame/);
+assert.doesNotMatch(index, /vendor\/rive|grcon_mascot_rive\.js|data-grcon-rive/);
+assert.doesNotMatch(sw, /vendor\/rive|assets\/mascot\/rive|grcon_mascot_rive\.js/);
+assert.doesNotMatch(index, /wasm-unsafe-eval|unsafe-eval/);
+assert.doesNotMatch(vercel, /wasm-unsafe-eval|unsafe-eval/);
+for (const csp of [index, vercel]) assert.match(csp, /script-src 'self' blob:/);
 
-const runtimeIndex = index.indexOf('src="vendor/rive/rive.js"');
-const adapterIndex = index.indexOf('src="grcon_mascot_rive.js"');
-const greetingIndex = index.indexOf('src="grcon_mascot_greeting.js"');
-const appIndex = index.indexOf('src="app.js"');
-assert.ok(runtimeIndex >= 0 && runtimeIndex < greetingIndex && greetingIndex < adapterIndex && adapterIndex < appIndex);
 for (const asset of [
-  "assets/mascot/rive/build/grcon-mascot.riv",
-  "vendor/rive/rive.js",
-  "vendor/rive/rive.wasm",
-  "vendor/rive/rive_fallback.wasm",
-  "grcon_mascot_rive.js",
+  "grcon-mascot-sprite.png",
+  "assets/mascot/animated/grcon-mascot-wave.png",
+  "assets/mascot/animated/grcon-mascot-analyze.png",
+  "assets/mascot/animated/grcon-mascot-success.png",
 ]) {
-  assert.ok(sw.includes(`"${asset}"`), `${asset} precisa estar disponível offline`);
+  assert.ok(sw.includes(`"${asset}"`), `${asset} deve permanecer disponível offline`);
 }
 
-assert.match(sw, /rive2-dual/);
+assert.match(greeting, /official-png-css-v1/);
+assert.doesNotMatch(greeting, /root\.rive|new runtime\.Rive|\.riv"|\.wasm"/);
+assert.doesNotMatch(greeting, /run-sprite|frame-run|step-end|steps\s*\(/);
+for (const asset of ["wave", "analyze", "success"]) {
+  assert.match(greeting, new RegExp(`grcon-mascot-${asset}\\.png`));
+}
+for (const animation of ["idle", "observe", "work", "processing", "wave", "analyze", "success"]) {
+  assert.match(greeting, new RegExp(`@keyframes grcon-mascot-official-${animation}`));
+}
+for (const pose of Object.keys(expectedPoses)) {
+  assert.ok(mascot.includes(pose), `${pose} deve continuar definido no mascote oficial`);
+}
+assert.match(greeting, /prefers-reduced-motion: reduce/);
+assert.match(greeting, /animation: grcon-mascot-orb-spin 820ms linear infinite/);
+assert.match(sw, /official-fluid1/);
 
-console.log("grcon_mascot_rive: OK — Rive, CSP WebAssembly, ativação segura e fallback PNG duplo validados.");
+console.log("grcon_mascot_official: OK — somente o Mascote da Qualidade oficial é exibido e animado sem Rive.");

@@ -13,7 +13,6 @@ const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const animatedAssets = [
-  "grcon-mascot-run-sprite.png",
   "grcon-mascot-wave.png",
   "grcon-mascot-analyze.png",
   "grcon-mascot-success.png",
@@ -62,15 +61,17 @@ assert.match(ui, /rotate\(1\.6deg\)/);
 assert.match(ui, /cubic-bezier\(\.18, \.89, \.32, 1\.14\)/);
 assert.match(ui, /transition-delay: 70ms, 55ms, 0s/);
 assert.doesNotMatch(ui, /requestAnimationFrame\s*\([^)]*requestAnimationFrame/);
-assert.doesNotMatch(ui, /is-greeting-active[^{}]*\{[^}]*infinite/s);
-assert.strictEqual((ui.match(/\binfinite\b/g) || []).length, 3, "somente corrida por quadros, linhas e esfera podem repetir");
+assert.ok((ui.match(/\binfinite\b/g) || []).length >= 9, "poses oficiais devem manter movimento CSS contínuo");
+assert.doesNotMatch(ui, /step-end|steps\s*\(/);
 assert.doesNotMatch(ui, /Cumprimentar|setAttribute\("title"/);
 assert.match(ui, /mascot\.removeAttribute\("title"\)/);
 assert.match(ui, /\.grcon-mascot-context\.is-processing \.grcon-mascot-processing-orb/);
 assert.doesNotMatch(ui, /mask-image: radial-gradient\(circle at 80% 43%/);
 assert.match(ui, /grcon-mascot-pose-motion/);
 assert.doesNotMatch(ui, /--grcon-pose-animation/);
-assert.doesNotMatch(ui, /@keyframes grcon-mascot-pose-/);
+for (const animation of ["idle", "observe", "work", "processing", "wave", "analyze", "success"]) {
+  assert.match(ui, new RegExp(`@keyframes grcon-mascot-official-${animation}`));
+}
 assert.match(ui, /html\[data-grcon-mascot-asset="sprite-hd-file-v1"\]/);
 assert.doesNotMatch(ui, /clip-path: circle\(12% at 80% 43%\)/);
 assert.match(ui, /left: 68%/);
@@ -85,21 +86,14 @@ const orbFrames = ui.match(/@keyframes grcon-mascot-orb-spin \{([\s\S]*?)\n     
 assert.match(orbFrames, /rotate\(0deg\)/);
 assert.match(orbFrames, /rotate\(360deg\)/);
 assert.doesNotMatch(orbFrames, /translate3d|scale/);
-assert.match(ui, /animation: grcon-mascot-frame-run 720ms step-end infinite/);
-assert.doesNotMatch(ui, /animation: grcon-mascot-working-run/);
+assert.match(ui, /animation: grcon-mascot-official-processing 1450ms/);
 assert.doesNotMatch(ui, /\.grcon-mascot-context\.is-processing \.grcon-mascot-motion\s*\{\s*animation:/);
-assert.match(ui, /background-size: 800% 100%/);
-assert.match(ui, /background-position: 14\.285714% 0/);
-assert.match(ui, /background-position: 100% 0/);
-assert.match(ui, /grcon-mascot-generated-run/);
+assert.doesNotMatch(ui, /grcon-mascot-frame-run|background-size: 800% 100%|grcon-mascot-generated-run/);
 assert.match(ui, /grcon-mascot-generated-wave/);
 assert.match(ui, /grcon-mascot-generated-analyze/);
 assert.match(ui, /grcon-mascot-generated-success/);
 assert.match(ui, /Object\.values\(GENERATED_ASSETS\)/);
 assert.match(ui, /animation: grcon-mascot-speed-lines 620ms ease-in-out/);
-assert.doesNotMatch(ui, /grcon-mascot-working-run/);
-const runFrames = ui.match(/@keyframes grcon-mascot-frame-run \{([\s\S]*?)\n      \}/)?.[1] || "";
-assert.strictEqual((runFrames.match(/background-position:/g) || []).length, 8, "corrida deve usar oito quadros distintos");
 assert.match(ui, /opacity: \.68/);
 assert.match(ui, /processingPose = mascot\.dataset\.pose === "pending" \|\| mascot\.dataset\.pose === "analysis"/);
 assert.match(ui, /grcon:processing-state/);
@@ -137,7 +131,7 @@ assert.match(ui, /shouldAnimate && mascot\.getAttribute\("aria-busy"\) !== "true
 assert.match(ui, /!shouldAnimate && mascot\.hasAttribute\("aria-busy"\)/);
 assert.match(ui, /animation: none !important/);
 assert.match(ui, /if \(target\.textContent !== nextText\) target\.textContent = nextText/);
-assert.match(sw, /mascot-greeting1-processing5-rive2-dual/);
+assert.match(sw, /mascot-greeting1-processing6-official-fluid1/);
 for (const asset of animatedAssets) {
   assert.ok(asset.bytes.length > 30000, `${asset.name} deve manter definição suficiente`);
   assert.strictEqual(asset.bytes.subarray(1, 4).toString("ascii"), "PNG", `${asset.name} deve ser PNG válido`);
@@ -153,4 +147,4 @@ assert.match(ui, /role", "button"/);
 const poses = [...mascot.matchAll(/(?:default|analysis|search|check|history|dashboard|"sigem-pw"|egrdt|import|report|warning|success|pending|empty|quality):\{/g)];
 assert.ok(poses.length >= 15, "todas as poses existentes devem continuar disponíveis");
 
-console.log("grcon_mascot_greeting: OK — saudação, fallback HD, esfera, reduced motion e estabilidade validados.");
+console.log("grcon_mascot_greeting: OK — identidade oficial, animações CSS fluidas, esfera e reduced motion validados.");
