@@ -7,7 +7,63 @@
 
   const STYLE_ID = "spw-dashboard-ui-audit-style";
   const MODULE_ID = "sigem-pw-dashboard-module";
-  const state = { installed: false, observer: null, resizeTimer: 0, lastIssues: [] };
+  const INPUT_DEBOUNCE_MS = 180;
+  const DEBOUNCED_INPUT_IDS = new Set([
+    "spw-query",
+    "spw-evo-filter-query",
+    "spw-evo-filter-tag",
+    "spw-evo-filter-eap",
+  ]);
+  const GUARDED_APIS = Object.freeze([
+    "GrconSigemPwAuditUi",
+    "GrconSigemPwRevisionUi",
+    "GrconSigemPwHistoryUi",
+    "GrconSigemPwHistoryManagement",
+    "GrconSigemPwEvolutionUi",
+  ]);
+  const state = {
+    installed: false,
+    observer: null,
+    resizeTimer: 0,
+    lastIssues: [],
+    inputTimers: new Map(),
+    replayedInputs: typeof WeakSet === "function" ? new WeakSet() : null,
+    activationGuards: new Map(),
+    interactionToken: 0,
+    debugResizeInstalled: false,
+    inputGuardInstalled: false,
+    scrollGuardInstalled: false,
+    longTaskObserver: null,
+    performance: {
+      activationRuns: {},
+      activationSkips: {},
+      activationMs: {},
+      debouncedInputs: 0,
+      suppressedAutoScrolls: 0,
+      restoredScrollPositions: 0,
+      longTasks: [],
+    },
+  };
+
+  function nowMs() {
+    return root.performance && typeof root.performance.now === "function" ? root.performance.now() : Date.now();
+  }
+
+  function dashboard() {
+    return root.document && root.document.getElementById(MODULE_ID);
+  }
+
+  function dashboardModel() {
+    return root.GrconSigemPwDashboardUi && root.GrconSigemPwDashboardUi.state
+      ? root.GrconSigemPwDashboardUi.state.model
+      : null;
+  }
+
+  function increment(bucket, key, value) {
+    const target = state.performance[bucket];
+    if (!target) return;
+    target[key] = (Number(target[key]) || 0) + (value === undefined ? 1 : value);
+  }
 
   function ensureStyle() {
     if (!root.document || root.document.getElementById(STYLE_ID)) return;
@@ -15,7 +71,12 @@
     style.id = STYLE_ID;
     style.textContent = `
       /* Correções locais do Dashboard SIGEM × PW. Não altera o design system global. */
-      #${MODULE_ID}{container-type:inline-size;min-width:0;overflow-x:clip}
+      #${MODULE_ID}{container-type:inline-size;min-width:0;overflow-x:clip;overflow-anchor:none}
+      #${MODULE_ID} #spw-progress{box-sizing:border-box;min-height:33px}
+      #${MODULE_ID} #spw-progress[hidden]{display:flex!important;visibility:hidden!important;pointer-events:none!important}
+      #${MODULE_ID} .spw-readiness{min-height:54px;box-sizing:border-box}
+      #${MODULE_ID} .spw-table-wrap,#${MODULE_ID} .spw-rev-table-wrap,#${MODULE_ID} .spw-history-table-wrap,#${MODULE_ID} .spw-evo-table-wrap{overflow-anchor:none;overscroll-behavior:contain}
+      #${MODULE_ID} #spw-revision-section,#${MODULE_ID} #spw-history-section,#${MODULE_ID} #spw-evolution-section{content-visibility:auto;contain-intrinsic-size:auto 720px}
       #${MODULE_ID} .spw-rev-cards{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))!important;gap:10px!important;align-items:stretch!important}
       #${MODULE_ID} .spw-rev-card{position:relative;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:0!important;min-width:0!important;min-height:132px!important;height:100%;padding:14px 15px 13px!important;white-space:normal!important;overflow:visible!important;text-align:left!important;line-height:1.25!important}
       #${MODULE_ID} .spw-rev-card strong{display:block!important;flex:0 0 auto!important;width:100%;margin:0!important;font-size:clamp(1.35rem,1.1rem + .55vw,1.75rem)!important;line-height:1!important;font-variant-numeric:tabular-nums;color:var(--text-strong,#17324a);white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
@@ -100,38 +161,242 @@
   }
 
   function scheduleAudit() {
-    if (!root.setTimeout) return;
+    if (root.GRCON_DEBUG_UI !== true || !root.setTimeout) return;
     if (state.resizeTimer) root.clearTimeout(state.resizeTimer);
     state.resizeTimer = root.setTimeout(() => {
       state.resizeTimer = 0;
       syncRevisionCardAccessibility();
       auditLayout();
-    }, 120);
+    }, 160);
   }
 
   function installObserver() {
-    if (!root.document || state.observer || typeof root.MutationObserver !== "function") return;
-    const host = root.document.getElementById(MODULE_ID);
+    if (root.GRCON_DEBUG_UI !== true || !root.document || state.observer || typeof root.MutationObserver !== "function") return;
+    const host = dashboard();
     if (!host) return;
     state.observer = new root.MutationObserver(() => scheduleAudit());
     state.observer.observe(host, { childList: true, subtree: true });
   }
 
-  function activate() {
-    ensureStyle();
-    syncRevisionCardAccessibility();
-    installObserver();
-    scheduleAudit();
-    if (!state.installed && root.addEventListener) {
-      state.installed = true;
-      root.addEventListener("resize", scheduleAudit, { passive: true });
+  function disableProductionObserver() {
+    if (root.GRCON_DEBUG_UI === true) return;
+    if (state.observer) {
+      state.observer.disconnect();
+      state.observer = null;
     }
-    return auditLayout();
+    if (state.resizeTimer && root.clearTimeout) {
+      root.clearTimeout(state.resizeTimer);
+      state.resizeTimer = 0;
+    }
+    if (state.debugResizeInstalled && root.removeEventListener) {
+      root.removeEventListener("resize", scheduleAudit);
+      state.debugResizeInstalled = false;
+    }
   }
 
-  // O CSS entra assim que o módulo é carregado, antes de a seção de revisões
-  // renderizar. Evita um frame intermediário com os cinco cards comprimidos.
-  ensureStyle();
+  function installDebugPerformanceObserver() {
+    if (root.GRCON_DEBUG_PERF !== true || state.longTaskObserver || typeof root.PerformanceObserver !== "function") return;
+    try {
+      state.longTaskObserver = new root.PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          state.performance.longTasks.push({ startTime: entry.startTime, duration: entry.duration });
+        }
+        if (state.performance.longTasks.length > 50) state.performance.longTasks.splice(0, state.performance.longTasks.length - 50);
+      });
+      state.longTaskObserver.observe({ type: "longtask", buffered: true });
+    } catch (_) {
+      state.longTaskObserver = null;
+    }
+  }
 
-  return Object.freeze({ state, activate, auditLayout, syncRevisionCardAccessibility });
+  function installActivationGuard(name) {
+    const api = root[name];
+    if (!api || typeof api.activate !== "function") return;
+    const existing = state.activationGuards.get(name);
+    if (existing && existing.wrapped === api) return;
+
+    const originalApi = api;
+    const originalActivate = api.activate.bind(api);
+    let activated = false;
+    let lastModel = null;
+
+    const guardedActivate = async (...args) => {
+      const model = dashboardModel();
+      const managerOpen = name === "GrconSigemPwHistoryManagement" && Boolean(originalApi.state?.open);
+      if (activated && model && model === lastModel && !managerOpen) {
+        increment("activationSkips", name);
+        return undefined;
+      }
+      const started = nowMs();
+      try {
+        const result = await originalActivate(...args);
+        activated = true;
+        lastModel = dashboardModel();
+        increment("activationRuns", name);
+        increment("activationMs", name, nowMs() - started);
+        return result;
+      } catch (error) {
+        lastModel = null;
+        throw error;
+      }
+    };
+
+    const wrapped = Object.freeze(Object.assign({}, originalApi, { activate: guardedActivate }));
+    state.activationGuards.set(name, { source: originalApi, wrapped });
+    root[name] = wrapped;
+  }
+
+  function installActivationGuards() {
+    GUARDED_APIS.forEach(installActivationGuard);
+  }
+
+  function replayInput(target) {
+    if (!target || !target.isConnected || typeof root.Event !== "function") return;
+    const event = new root.Event("input", { bubbles: true, composed: true });
+    if (state.replayedInputs) state.replayedInputs.add(event);
+    target.dispatchEvent(event);
+  }
+
+  function onDebouncedInput(event) {
+    const target = event.target;
+    if (!target || !DEBOUNCED_INPUT_IDS.has(target.id) || event.isComposing) return;
+    if (state.replayedInputs && state.replayedInputs.has(event)) return;
+    const host = dashboard();
+    if (!host || !host.contains(target)) return;
+
+    event.stopImmediatePropagation();
+    const previous = state.inputTimers.get(target);
+    if (previous && root.clearTimeout) root.clearTimeout(previous);
+    const timer = root.setTimeout(() => {
+      state.inputTimers.delete(target);
+      replayInput(target);
+    }, INPUT_DEBOUNCE_MS);
+    state.inputTimers.set(target, timer);
+    state.performance.debouncedInputs += 1;
+  }
+
+  function installInputGuard() {
+    if (!root.document || state.inputGuardInstalled) return;
+    state.inputGuardInstalled = true;
+    root.document.addEventListener("input", onDebouncedInput, true);
+  }
+
+  function suppressEvolutionAutoScroll(event) {
+    const trigger = event.target && event.target.closest ? event.target.closest("[data-evo-list]") : null;
+    if (!trigger || !dashboard()?.contains(trigger)) return;
+    const target = root.document.getElementById("spw-evo-table");
+    if (!target || typeof target.scrollIntoView !== "function") return;
+
+    const hadOwnMethod = Object.prototype.hasOwnProperty.call(target, "scrollIntoView");
+    const original = target.scrollIntoView;
+    try {
+      Object.defineProperty(target, "scrollIntoView", {
+        configurable: true,
+        writable: true,
+        value: () => { state.performance.suppressedAutoScrolls += 1; },
+      });
+    } catch (_) {
+      return;
+    }
+    const restore = () => {
+      try {
+        if (hadOwnMethod) target.scrollIntoView = original;
+        else delete target.scrollIntoView;
+      } catch (_) { /* elemento será descartado naturalmente */ }
+    };
+    if (typeof root.queueMicrotask === "function") root.queueMicrotask(restore);
+    else root.setTimeout(restore, 0);
+  }
+
+  function shouldPreservePagePosition(target) {
+    if (!target || !target.closest) return false;
+    if (target.closest("[data-spw-jump]")) return false;
+    return Boolean(target.closest([
+      "#spw-query", "#spw-class", "#spw-clear", "#spw-prev", "#spw-next", "[data-list]",
+      "[data-evo-list]", "[data-evo-page]", "[data-spw-rev-situation]", "[data-spw-rev-page]",
+      "#spw-evo-filter-query", "#spw-evo-filter-tag", "#spw-evo-filter-eap", "[data-evo-select]",
+      "#spw-rev-filter-situation", "#spw-rev-filter-class", "#spw-rev-filter-sigem-rev", "#spw-rev-filter-pw-rev",
+      "#spw-rev-filter-sigem-status", "#spw-rev-filter-pw-status", "#spw-rev-search", "#spw-rev-document-list",
+    ].join(",")));
+  }
+
+  function preservePagePosition(event) {
+    const target = event.target;
+    const host = dashboard();
+    if (!host || !host.contains(target) || !shouldPreservePagePosition(target)) return;
+    const x = Number(root.scrollX || root.pageXOffset || 0);
+    const y = Number(root.scrollY || root.pageYOffset || 0);
+    const token = ++state.interactionToken;
+    const restore = () => {
+      if (token !== state.interactionToken) return;
+      const currentY = Number(root.scrollY || root.pageYOffset || 0);
+      if (Math.abs(currentY - y) <= 2 || typeof root.scrollTo !== "function") return;
+      root.scrollTo({ left: x, top: y, behavior: "auto" });
+      state.performance.restoredScrollPositions += 1;
+    };
+    if (typeof root.requestAnimationFrame === "function") root.requestAnimationFrame(restore);
+    else root.setTimeout(restore, 0);
+  }
+
+  function installScrollGuard() {
+    if (!root.document || state.scrollGuardInstalled) return;
+    state.scrollGuardInstalled = true;
+    root.document.addEventListener("click", suppressEvolutionAutoScroll, true);
+    root.document.addEventListener("click", preservePagePosition, true);
+    root.document.addEventListener("change", preservePagePosition, true);
+  }
+
+  function activate() {
+    ensureStyle();
+    installActivationGuards();
+    installInputGuard();
+    installScrollGuard();
+    installDebugPerformanceObserver();
+    syncRevisionCardAccessibility();
+
+    if (root.GRCON_DEBUG_UI === true) {
+      installObserver();
+      scheduleAudit();
+      if (!state.debugResizeInstalled && root.addEventListener) {
+        state.debugResizeInstalled = true;
+        root.addEventListener("resize", scheduleAudit, { passive: true });
+      }
+      state.installed = true;
+      return auditLayout();
+    }
+
+    disableProductionObserver();
+    state.installed = true;
+    return [];
+  }
+
+  function performanceSnapshot() {
+    return {
+      activationRuns: { ...state.performance.activationRuns },
+      activationSkips: { ...state.performance.activationSkips },
+      activationMs: { ...state.performance.activationMs },
+      debouncedInputs: state.performance.debouncedInputs,
+      suppressedAutoScrolls: state.performance.suppressedAutoScrolls,
+      restoredScrollPositions: state.performance.restoredScrollPositions,
+      longTasks: state.performance.longTasks.slice(),
+    };
+  }
+
+  // Instala guardas antes de o bootstrap chamar activate() dos submódulos.
+  // O arquivo é carregado depois de auditoria/revisões/histórico e antes de
+  // evolução; activate() repete a instalação para capturar módulos carregados
+  // posteriormente sem duplicar listeners ou wrappers.
+  ensureStyle();
+  installActivationGuards();
+  installInputGuard();
+  installScrollGuard();
+
+  return Object.freeze({
+    state,
+    activate,
+    auditLayout,
+    syncRevisionCardAccessibility,
+    installActivationGuards,
+    performanceSnapshot,
+  });
 });
