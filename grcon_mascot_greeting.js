@@ -620,9 +620,10 @@
       motion.insertBefore(poseMotion, sprite);
       poseMotion.appendChild(sprite);
     }
-    // Com Rive disponível, o PNG HD base já é o fallback suficiente. Evita
-    // montar e baixar as antigas sequências rasterizadas quadro a quadro.
-    if (poseMotion && !root.rive?.Rive) {
+    // O fallback raster permanece montado mesmo quando o runtime Rive existe.
+    // Em redes corporativas o script pode carregar e o WebAssembly falhar
+    // depois; nesse intervalo o PNG precisa continuar pronto e visível.
+    if (poseMotion) {
       ["run", "wave", "analyze", "success"].forEach((name) => {
         if (poseMotion.querySelector(`.grcon-mascot-generated-${name}`)) return;
         const layer = document.createElement("span");
@@ -682,13 +683,11 @@
 
   function init() {
     installStyles();
-    if (!root.rive?.Rive) {
-      Object.values(GENERATED_ASSETS).forEach((source) => {
-        const image = new Image();
-        image.decoding = "async";
-        image.src = source;
-      });
-    }
+    Object.values(GENERATED_ASSETS).forEach((source) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = source;
+    });
     ensureBubble();
     const durable = durableProcessingState();
     processingHoldUntil = Math.max(processingHoldUntil, durable.until);
