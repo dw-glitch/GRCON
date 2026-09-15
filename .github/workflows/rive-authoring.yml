@@ -8,6 +8,7 @@ on:
       - "grcon_mascot_rive.js"
       - "vendor/rive/**"
       - "scripts/validar-mascote-rive-browser.cjs"
+      - "tests/fixtures/grcon-mascot-rive.html"
       - ".github/workflows/rive-authoring.yml"
   pull_request:
     paths:
@@ -15,6 +16,7 @@ on:
       - "grcon_mascot_rive.js"
       - "vendor/rive/**"
       - "scripts/validar-mascote-rive-browser.cjs"
+      - "tests/fixtures/grcon-mascot-rive.html"
       - ".github/workflows/rive-authoring.yml"
   workflow_dispatch:
 

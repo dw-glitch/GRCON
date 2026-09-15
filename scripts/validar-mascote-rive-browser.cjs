@@ -4,6 +4,7 @@ const { chromium } = require("playwright");
 
 const baseUrl = process.env.GRCON_PREVIEW_URL || "http://127.0.0.1:8765";
 const outputDir = process.env.GRCON_RIVE_OUTPUT || path.join(process.cwd(), "assets/mascot/rive/build/browser");
+const fixtureUrl = `${baseUrl}/tests/fixtures/grcon-mascot-rive.html`;
 
 async function waitForMascot(page) {
   await page.waitForSelector(".grcon-brand-mascot .grcon-mascot-sprite", { state: "visible", timeout: 15000 });
@@ -28,7 +29,7 @@ async function main() {
       if (/rive|wasm|canvaskit/i.test(error.message)) pageErrors.push(error.message);
     });
 
-    await page.goto(`${baseUrl}/index.html`, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(fixtureUrl, { waitUntil: "networkidle", timeout: 30000 });
     await waitForMascot(page);
     await page.waitForFunction(() => window.GrconMascot.diagnostics().ready, null, { timeout: 12000 });
 
@@ -62,7 +63,7 @@ async function main() {
     fallback.on("pageerror", (error) => {
       if (/rive|wasm|canvaskit/i.test(error.message)) fallbackErrors.push(error.message);
     });
-    await fallback.goto(`${baseUrl}/index.html?rive-fallback-test=1`, { waitUntil: "networkidle", timeout: 30000 });
+    await fallback.goto(`${fixtureUrl}?rive-fallback-test=1`, { waitUntil: "networkidle", timeout: 30000 });
     await waitForMascot(fallback);
     await fallback.waitForFunction(() => window.GrconMascot.diagnostics().disabled, null, { timeout: 12000 });
     const fallbackResult = await fallback.evaluate(() => {

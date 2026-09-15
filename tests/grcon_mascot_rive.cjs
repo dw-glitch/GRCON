@@ -70,6 +70,7 @@ const sw = read("sw.js");
 const vercel = read("vercel.json");
 const workflow = read(".github/workflows/rive-authoring.yml");
 const browserSmoke = read("scripts/validar-mascote-rive-browser.cjs");
+const browserFixture = read("tests/fixtures/grcon-mascot-rive.html");
 const sprite = read("grcon-mascot-sprite.png", null);
 const riv = read("assets/mascot/rive/build/grcon-mascot.riv", null);
 const official = decodeRgbaPng(read("assets/mascot/rive/source/grcon-mascot-official-default.png", null));
@@ -139,6 +140,9 @@ for (const asset of [
 assert.match(workflow, /Rive CLI oficial/);
 assert.match(workflow, /assets\/mascot\/rive --verify/);
 assert.match(workflow, /validar-mascote-rive-browser\.cjs/);
+assert.match(browserSmoke, /tests\/fixtures\/grcon-mascot-rive\.html/);
+assert.match(browserFixture, /src="vendor\/rive\/rive\.js"/);
+assert.match(browserFixture, /src="grcon_mascot_rive\.js"/);
 for (const scenario of ["idle", "hover", "processing", "fallback"]) assert.match(browserSmoke, new RegExp(scenario));
 assert.match(browserSmoke, /assert\.equal\(diagnostics\.instances, 1/);
 assert.match(browserSmoke, /spriteVisible/);
