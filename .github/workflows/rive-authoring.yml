@@ -16,6 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Preparar biblioteca gráfica do compilador
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1
+
       - name: Instalar Rive CLI oficial
         run: |
           curl -fsSL https://releases.rive.app/cli/install.sh -o "$RUNNER_TEMP/rive-install.sh"
