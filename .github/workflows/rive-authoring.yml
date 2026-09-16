@@ -46,6 +46,7 @@ jobs:
         run: |
           "$HOME/.rive/bin/rive" assets/mascot/rive --verify
           "$HOME/.rive/bin/rive" assets/mascot/rive --once
+          git diff --exit-code -- assets/mascot/rive/build/grcon-mascot.riv
           "$HOME/.rive/bin/rive" inspect assets/mascot/rive --json 2>&1 | tee assets/mascot/rive/build/inspect.json
           node scripts/verificar-mascote-rive-inspect.cjs assets/mascot/rive/build/inspect.json
 
