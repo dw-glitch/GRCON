@@ -66,6 +66,7 @@ async function main() {
     await fallback.goto(`${fixtureUrl}?rive-fallback-test=1`, { waitUntil: "networkidle", timeout: 30000 });
     await waitForMascot(fallback);
     await fallback.waitForFunction(() => window.GrconMascot.diagnostics().disabled, null, { timeout: 12000 });
+    await fallback.waitForFunction(() => document.documentElement.dataset.grconMascotAsset === "sprite-hd-file-v1", null, { timeout: 12000 });
     const fallbackResult = await fallback.evaluate(() => {
     const mascot = document.querySelector(".grcon-brand-mascot");
     const sprite = mascot.querySelector(".grcon-mascot-sprite");
@@ -75,7 +76,7 @@ async function main() {
       diagnostics: window.GrconMascot.diagnostics(),
       canvasCount: mascot.querySelectorAll("canvas").length,
       spriteVisible: style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) > 0 && bounds.width > 0 && bounds.height > 0,
-      hasOfficialPng: style.backgroundImage.startsWith('url("data:image/png;base64,'),
+      hasOfficialPng: style.backgroundImage.includes("grcon-mascot-sprite.png"),
     };
     });
     assert.equal(fallbackResult.diagnostics.engine, "official-png-fallback-v1");
