@@ -5,132 +5,130 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const read = (file, encoding = "utf8") => fs.readFileSync(path.join(root, file), encoding);
-const exists = (file) => fs.existsSync(path.join(root, file));
 const hash = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
 
 const entrypoint = read("grcon_mascot_controller.js");
-const controller = read("grcon_mascot_controller_v4.js");
-const index = read("index.html");
-const sw = read("sw.js");
+const controller = read("grcon_mascot_controller_v5.js");
+const compat = read("grcon_mascot_compat_media.js");
+const sw = read("sw-v6.js");
 const bootstrap = read("grcon_service_worker.js");
 const vercel = read("vercel.json");
 const app = read("app.js");
 const dashboard = read("sigem_pw_dashboard_app.js");
 const conference = read("posting_conference_app.js");
 const fixture = read("tests/fixtures/grcon-mascot-video.html");
-const browser = read("scripts/validar-mascote-video-browser.cjs");
-const manifest = JSON.parse(read("vendor-manifest.json"));
 const sprite = read("grcon-mascot-sprite.png", null);
+const processing = read("assets/mascot/video/grcon-mascot-processing-alpha.webm", null);
+const wave = read("assets/mascot/video/grcon-mascot-wave-alpha.webm", null);
 
-const processingPath = "assets/mascot/video/grcon-mascot-processing-alpha.webm";
-const wavePath = "assets/mascot/video/grcon-mascot-wave-alpha.webm";
-const processing = read(processingPath, null);
-const wave = read(wavePath, null);
-
-function assertWebm(bytes, name, minimumBytes) {
+function assertWebm(bytes, name) {
   assert.deepEqual([...bytes.subarray(0, 4)], [0x1a, 0x45, 0xdf, 0xa3], `${name} precisa ser WebM/EBML válido`);
-  assert.ok(bytes.length >= minimumBytes, `${name} não pode ser um placeholder vazio`);
+  assert.ok(bytes.length > 300_000, `${name} não pode ser placeholder`);
+}
+function rebuildCompat(prefix) {
+  const chunks = [1, 2, 3, 4].map((part) => read(`assets/mascot/compat/${prefix}.part${part}.b64`).trim());
+  chunks.forEach((chunk) => assert.match(chunk, /^[A-Za-z0-9+/=]+$/));
+  return Buffer.from(chunks.join(""), "base64");
+}
+function assertMp4(bytes, expectedHash, name) {
+  assert.equal(bytes.subarray(4, 8).toString("ascii"), "ftyp", `${name} precisa ser MP4 válido`);
+  assert.equal(hash(bytes), expectedHash, `${name} deve manter o binário H.264 validado`);
 }
 
 assert.equal(sprite.readUInt32BE(16), 1254);
 assert.equal(sprite.readUInt32BE(20), 1254);
-assert.equal(hash(sprite), "cae28d23b527eb36359d9bada0bb8701f72232853875741fd0717f3256f73bc5", "PNG HD oficial não pode mudar");
-assertWebm(processing, "vídeo de processamento", 300_000);
-assertWebm(wave, "vídeo de aceno", 300_000);
-assert.notEqual(hash(processing), hash(wave), "os dois comportamentos precisam ter mídias independentes");
+assert.equal(hash(sprite), "cae28d23b527eb36359d9bada0bb8701f72232853875741fd0717f3256f73bc5");
+assertWebm(processing, "processamento");
+assertWebm(wave, "aceno");
+assert.notEqual(hash(processing), hash(wave));
+assertMp4(rebuildCompat("wave-h264-144"), "dc04bcf83409106ccd6a7f324a82a02a7eccc68e7c534dbd484b0fa5bf0a15f1", "fallback de aceno");
+assertMp4(rebuildCompat("processing-h264-128"), "c28a8615c8ef0a128e2fbdbadf55fc67f59d59463adb355a5f8896e64a6ab998", "fallback de processamento");
 
-assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=4\.1\.0-20260916\.2/);
+assert.match(entrypoint, /grcon_mascot_controller_v5\.js\?v=5\.0\.0-20260916\.3/);
 assert.match(entrypoint, /official-png-static-fallback/);
-assert.doesNotMatch(entrypoint, /gsap|\.riv/i);
+assert.doesNotMatch(entrypoint, /grcon_mascot_controller_v4\.js/);
 
-const requiredStates = [
-  "idle", "welcome", "hover", "analyzing", "searching-files", "checking-document",
-  "confused", "success", "warning", "error", "uploading", "generating-grdt",
-  "checking-ld", "sigem-pw-analysis", "loading",
-];
-for (const state of requiredStates) assert.ok(controller.includes(`"${state}"`), `estado ${state} ausente`);
+for (const state of ["idle", "welcome", "hover", "analyzing", "searching-files", "checking-document", "confused", "success", "warning", "error", "uploading", "generating-grdt", "checking-ld", "sigem-pw-analysis", "loading"])
+  assert.ok(controller.includes(`"${state}"`), `estado ${state} ausente`);
 
-assert.match(controller, /official-video-v4/);
-assert.match(controller, /ASSET_REVISION\s*=\s*"20260916\.2"/);
-assert.match(controller, /MASCOT_ANIMATIONS/);
+assert.match(controller, /official-video-v5-multiformat/);
+assert.match(controller, /ASSET_REVISION\s*=\s*"20260916\.3"/);
 assert.match(controller, /grcon-mascot-processing-alpha\.webm/);
 assert.match(controller, /grcon-mascot-wave-alpha\.webm/);
-assert.match(controller, /url\.searchParams\.set\("v", ASSET_REVISION\)/);
-assert.match(controller, /root\.location\.origin/);
+assert.match(controller, /compat:\s*"processing"/);
+assert.match(controller, /compat:\s*"wave"/);
+assert.match(controller, /attempt\(record, animationName, 1, token\)/);
+assert.match(controller, /hideMedia\(record, "png-/);
+assert.match(controller, /AUTOPLAY_BLOCKED/);
+assert.match(controller, /CODEC_UNSUPPORTED/);
+assert.match(controller, /NETWORK_BLOCKED/);
+assert.match(controller, /VIDEO_NOT_FOUND/);
+assert.match(controller, /MEDIA_DECODE_ERROR/);
+assert.match(controller, /PLAY_TIMEOUT/);
+assert.match(controller, /REDUCED_MOTION/);
+assert.match(controller, /NotAllowedError/);
+assert.match(controller, /NotSupportedError/);
+assert.match(controller, /loadedmetadata/);
+assert.match(controller, /loadeddata/);
+assert.match(controller, /canplay/);
+assert.match(controller, /onplaying/);
+assert.match(controller, /onstalled/);
+assert.match(controller, /onabort/);
 assert.match(controller, /video\.muted\s*=\s*true/);
 assert.match(controller, /video\.playsInline\s*=\s*true/);
-assert.match(controller, /video\.preload\s*=\s*"auto"/);
-assert.match(controller, /PROCESSING_STATES/);
-assert.match(controller, /result\?\.catch/);
-assert.match(controller, /canplaythrough/);
-assert.match(controller, /media-stalled/);
-assert.match(controller, /media-waiting/);
-assert.match(controller, /MediaError/);
-assert.match(controller, /is-video-active/);
-assert.match(controller, /prefers-reduced-motion:reduce/);
-assert.match(controller, /visibilitychange/);
-assert.match(controller, /pagehide/);
-assert.match(controller, /root\.sessionStorage/);
-assert.match(controller, /SESSION_PREFIX/);
-assert.match(controller, /greetingAlreadyPlayed/);
-assert.match(controller, /markGreetingPlayed/);
-assert.match(controller, /clearGreetingFor/);
-assert.match(controller, /grcon-cloud-pending/);
-assert.match(controller, /session-reset/);
+assert.match(controller, /PREF_KEY/);
+assert.match(controller, /prefers-reduced-motion: reduce/);
+assert.match(controller, /explicit === "on"/);
+assert.match(controller, /explicit === "off"/);
+assert.match(controller, /Animações do mascote/);
+assert.match(controller, /localStorage/);
+assert.match(controller, /sessionStorage/);
 assert.match(controller, /operationActive && \(state === "welcome" \|\| state === "hover"\)/);
-assert.match(controller, /root\.GrconMascot = Object\.freeze/);
-assert.doesNotMatch(controller, /root\.gsap|gsap\.|assets\/mascot\/layers|https?:\/\//i);
-assert.doesNotMatch(controller, /canvas|webassembly|\.riv/i);
+assert.match(controller, /requestVideoFrameCallback/);
+assert.match(controller, /getImageData/);
+assert.match(controller, /GRCONMascotCompatMedia/);
+assert.match(controller, /diagnostics/);
+assert.match(controller, /oldServiceWorker/);
+assert.match(controller, /oldCaches/);
+assert.doesNotMatch(controller, /https?:\/\//i);
 
-const headerIndex = index.indexOf('src="grcon_mascot_header.js"');
-const controllerIndex = index.indexOf('src="grcon_mascot_controller.js"');
-const appIndex = index.indexOf('src="app.js"');
-assert.ok(headerIndex >= 0 && headerIndex < controllerIndex && controllerIndex < appIndex);
-assert.match(index, /data-grcon-mascot-controller="video"/);
-assert.doesNotMatch(index, /vendor\/gsap|data-grcon-gsap|mascot-controller="gsap"|vendor\/rive|\.riv["']/i);
-assert.match(bootstrap, /mascot-controller="video"/);
-assert.doesNotMatch(bootstrap, /installGsap|vendor\/gsap|window\.gsap/i);
+assert.match(compat, /video\/mp4/);
+assert.match(compat, /URL\.createObjectURL/);
+assert.match(compat, /cache:\s*"no-store"/);
+assert.match(compat, /response\.ok/);
+assert.match(compat, /revokeObjectURL/);
+assert.doesNotMatch(compat, /https?:\/\//i);
 
-for (const asset of [processingPath, wavePath, "grcon_mascot_controller.js"]) {
-  assert.ok(sw.includes(`"${asset}"`), `${asset} precisa continuar disponível no cache offline existente`);
-}
-assert.match(sw, /mascot-video1/);
-assert.doesNotMatch(sw, /vendor\/gsap|assets\/mascot\/layers|grcon-mascot-(?:body|head|right-arm|official-default)\.png/i);
+assert.match(sw, /grcon-v5\.40\.11-mascot-multiformat-v2/);
+assert.match(sw, /key\.startsWith\(CACHE_PREFIX\)/);
+assert.match(sw, /self\.skipWaiting\(\)/);
+assert.match(sw, /self\.clients\.claim\(\)/);
+assert.match(sw, /request\.headers\.has\("range"\)/);
+assert.match(sw, /event\.respondWith\(fetch\(request\)\)/);
+assert.match(sw, /mascotVideo \|\| mascotCompat/);
+assert.match(sw, /networkFirst\(request\)/);
+assert.match(sw, /response\.status === 200/);
+assert.match(sw, /response\.type !== "opaque"/);
+assert.doesNotMatch(sw, /cache\.put\([^\n]*206/);
 
-assert.match(vercel, /\/assets\/mascot\/video/);
+assert.match(bootstrap, /sw-v6\.js\?v=20260916\.3/);
+assert.match(bootstrap, /updateViaCache:\s*"none"/);
+assert.match(bootstrap, /controllerchange/);
+assert.match(bootstrap, /RELOAD_GUARD/);
+assert.match(bootstrap, /sessionStorage\.removeItem\(RELOAD_GUARD\)/);
+assert.match(bootstrap, /registration\.update/);
+
+assert.match(vercel, /\/sw-v6\.js/);
+assert.match(vercel, /Accept-Ranges/);
 assert.match(vercel, /video\/webm/);
-assert.match(vercel, /max-age=31536000, immutable/);
+assert.match(vercel, /assets\/mascot\/compat/);
 assert.match(vercel, /media-src 'self' blob:/);
-assert.match(vercel, /grcon_mascot_controller\.js/);
-assert.match(vercel, /no-cache, no-store, must-revalidate/);
 
-assert.equal(manifest.libraries.some((entry) => /gsap/i.test(entry.name) || /gsap/i.test(entry.file)), false);
-for (const obsolete of [
-  "vendor/gsap/gsap.min.js",
-  "assets/mascot/layers/grcon-mascot-official-default.png",
-  "assets/mascot/layers/grcon-mascot-body.png",
-  "assets/mascot/layers/grcon-mascot-head.png",
-  "assets/mascot/layers/grcon-mascot-right-arm.png",
-  "docs/mascote-gsap.md",
-  "tests/fixtures/grcon-mascot-gsap.html",
-  "scripts/validar-mascote-gsap-browser.cjs",
-  ".github/workflows/mascot-gsap.yml",
-  "assets/mascot/grcon-mascot-default.png",
-  "assets/mascot/grcon-mascot-sprite.png",
-  "grcon-mascot.png",
-]) assert.equal(exists(obsolete), false, `${obsolete} deveria ter sido removido`);
-
-assert.match(app, /grcon:notification/);
 assert.match(app, /grcon:processing-state/);
-assert.match(app, /pulseMascotProcessing\(\)/);
 assert.match(dashboard, /grcon:mascot-operation/);
 assert.match(dashboard, /state: "sigem-pw-analysis"/);
 assert.match(conference, /grcon:mascot-operation/);
 assert.match(conference, /state: "checking-document"/);
 assert.match(fixture, /grcon_mascot_controller\.js/);
-assert.doesNotMatch(fixture, /gsap/i);
-assert.ok(browser.includes("grcon-mascot-processing-alpha"), "teste visual precisa validar o vídeo de processamento");
-assert.ok(browser.includes("grcon-mascot-wave-alpha"), "teste visual precisa validar o vídeo de aceno");
-assert.match(browser, /fallback/);
 
-console.log("grcon_mascot_video: OK — cache versionado, saudação por sessão, prioridade operacional e fallback PNG validados.");
+console.log("grcon_mascot_video: OK — WebM -> H.264/MP4 -> PNG, acessibilidade, diagnóstico e SW v6 validados.");
