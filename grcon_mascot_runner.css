@@ -1,0 +1,153 @@
+/* GRCON — pista horizontal do Mascote da Qualidade.
+ * A pista é um overlay local do #app-main: não reserva altura, não captura cliques
+ * e não altera o document.scrollWidth.
+ */
+#grcon-mascot-run-lane {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 0;
+  z-index: 34;
+  pointer-events: none;
+  contain: layout style;
+}
+
+#grcon-mascot-run-lane .grcon-mascot-run-track {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: clamp(104px, 9vw, 132px);
+  overflow: hidden;
+  overflow: clip;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(0, -4px, 0);
+  transition: opacity 160ms ease, transform 180ms ease, visibility 0s linear 180ms;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--surface, #fff) 72%, transparent) 14%, color-mix(in srgb, var(--surface, #fff) 88%, transparent) 50%, color-mix(in srgb, var(--surface, #fff) 72%, transparent) 86%, transparent 100%);
+}
+
+#grcon-mascot-run-lane .grcon-mascot-run-track::after {
+  content: "";
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  bottom: 13px;
+  height: 1px;
+  opacity: .44;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary, #155c8a) 52%, transparent), transparent);
+}
+
+#grcon-mascot-run-lane.is-active .grcon-mascot-run-track {
+  opacity: 1;
+  visibility: visible;
+  transform: translate3d(0, 0, 0);
+  transition-delay: 0s;
+}
+
+#grcon-mascot-run-lane .grcon-mascot-run-status {
+  position: absolute;
+  left: clamp(.7rem, 1.5vw, 1.15rem);
+  top: .5rem;
+  z-index: 2;
+  max-width: min(56ch, calc(100% - 1.4rem));
+  padding: .28rem .58rem;
+  border: 1px solid color-mix(in srgb, var(--border, #d7dde7) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface, #fff) 82%, transparent);
+  color: var(--text-muted, #536273);
+  font-size: .72rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(5px);
+}
+
+#grcon-mascot-run-lane .grcon-mascot-runner {
+  position: absolute;
+  left: 0;
+  bottom: 5px;
+  width: clamp(94px, 8.2vw, 122px);
+  height: clamp(94px, 8.2vw, 122px);
+  transform: translate3d(var(--grcon-run-x, -140px), 0, 0);
+  transform-origin: 50% 100%;
+  will-change: transform;
+  contain: layout paint style;
+  pointer-events: none;
+}
+
+#grcon-mascot-run-lane .grcon-mascot-runner > img,
+#grcon-mascot-run-lane .grcon-mascot-runner > video,
+#grcon-mascot-run-lane .grcon-mascot-runner > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+#grcon-mascot-run-lane .grcon-mascot-run-poster {
+  opacity: 1;
+  visibility: visible;
+}
+
+#grcon-mascot-run-lane .grcon-mascot-run-video,
+#grcon-mascot-run-lane .grcon-mascot-run-canvas {
+  opacity: 0;
+  visibility: hidden;
+}
+
+#grcon-mascot-run-lane[data-media="webm"] .grcon-mascot-run-video {
+  opacity: 1;
+  visibility: visible;
+}
+
+#grcon-mascot-run-lane[data-media="mp4-canvas"] .grcon-mascot-run-canvas {
+  opacity: 1;
+  visibility: visible;
+}
+
+#grcon-mascot-run-lane[data-media="webm"] .grcon-mascot-run-poster,
+#grcon-mascot-run-lane[data-media="mp4-canvas"] .grcon-mascot-run-poster {
+  opacity: 0;
+  visibility: hidden;
+}
+
+#grcon-mascot-run-lane[data-media="mp4-canvas"] .grcon-mascot-run-video {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  #grcon-mascot-run-lane .grcon-mascot-run-track {
+    height: 100px;
+    border-radius: 10px;
+  }
+
+  #grcon-mascot-run-lane .grcon-mascot-runner {
+    width: 84px;
+    height: 84px;
+    bottom: 4px;
+  }
+
+  #grcon-mascot-run-lane .grcon-mascot-run-status {
+    top: .35rem;
+    font-size: .66rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-grcon-mascot-motion="on"]) #grcon-mascot-run-lane {
+    display: none !important;
+  }
+
+  #grcon-mascot-run-lane .grcon-mascot-run-track {
+    transition-duration: .01ms !important;
+  }
+}
