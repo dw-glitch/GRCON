@@ -1,0 +1,75 @@
+name: Autoria do mascote Rive
+
+on:
+  push:
+    branches: [main, feat/rive-mascote-oficial]
+    paths:
+      - "assets/mascot/rive/**"
+      - "grcon_mascot_rive.js"
+      - "vendor/rive/**"
+      - "scripts/validar-mascote-rive-browser.cjs"
+      - "scripts/verificar-mascote-rive-inspect.cjs"
+      - "tests/fixtures/grcon-mascot-rive.html"
+      - ".github/workflows/rive-authoring.yml"
+  pull_request:
+    paths:
+      - "assets/mascot/rive/**"
+      - "grcon_mascot_rive.js"
+      - "vendor/rive/**"
+      - "scripts/validar-mascote-rive-browser.cjs"
+      - "scripts/verificar-mascote-rive-inspect.cjs"
+      - "tests/fixtures/grcon-mascot-rive.html"
+      - ".github/workflows/rive-authoring.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-rive:
+    name: Compilar e validar Rive local
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar biblioteca gráfica do compilador
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgles2 libgl1 libx11-6
+
+      - name: Instalar Rive CLI oficial
+        run: |
+          curl -fsSL https://releases.rive.app/cli/install.sh -o "$RUNNER_TEMP/rive-install.sh"
+          bash "$RUNNER_TEMP/rive-install.sh"
+          "$HOME/.rive/bin/rive" doctor
+
+      - name: Compilar RML raster e verificar estrutura
+        run: |
+          "$HOME/.rive/bin/rive" assets/mascot/rive --verify
+          "$HOME/.rive/bin/rive" assets/mascot/rive --once
+          git diff --exit-code -- assets/mascot/rive/build/grcon-mascot.riv
+          "$HOME/.rive/bin/rive" inspect assets/mascot/rive --json 2>&1 | tee assets/mascot/rive/build/inspect.json
+          node scripts/verificar-mascote-rive-inspect.cjs assets/mascot/rive/build/inspect.json
+
+      - name: Instalar navegador de validação
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Testar idle, hover, processing e fallback PNG
+        run: |
+          mkdir -p assets/mascot/rive/build/browser
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-preview.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-mascote-rive-browser.cjs
+
+      - name: Publicar artefatos de validação
+        uses: actions/upload-artifact@v4
+        with:
+          name: grcon-mascot-rive-build
+          path: |
+            assets/mascot/rive/build/grcon-mascot.riv
+            assets/mascot/rive/build/inspect.json
+            assets/mascot/rive/build/problems.log
+            assets/mascot/rive/build/browser/*.png
+          if-no-files-found: error

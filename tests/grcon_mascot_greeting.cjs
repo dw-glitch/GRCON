@@ -131,7 +131,7 @@ assert.match(ui, /shouldAnimate && mascot\.getAttribute\("aria-busy"\) !== "true
 assert.match(ui, /!shouldAnimate && mascot\.hasAttribute\("aria-busy"\)/);
 assert.match(ui, /animation: none !important/);
 assert.match(ui, /if \(target\.textContent !== nextText\) target\.textContent = nextText/);
-assert.match(sw, /mascot-greeting1-processing6-official-fluid1/);
+assert.match(sw, /mascot-greeting1-processing6-official-rive-raster1/);
 for (const asset of animatedAssets) {
   assert.ok(asset.bytes.length > 30000, `${asset.name} deve manter definição suficiente`);
   assert.strictEqual(asset.bytes.subarray(1, 4).toString("ascii"), "PNG", `${asset.name} deve ser PNG válido`);

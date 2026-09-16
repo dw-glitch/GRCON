@@ -1,283 +1,120 @@
 <Rive version="1" kind="fragment">
-    <Artboard defaultStateMachineId="0:100" width="256" height="256" styleId="0:2" name="GRCON Mascot" id="0:1">
+    <Artboard defaultStateMachineId="0:100" width="314" height="314" styleId="0:2" name="GRCON Mascot" id="0:1">
         <LayoutComponentStyle name="Mascot Artboard Style" id="0:2"/>
-        <Node x="128" y="122" name="Body Rig" id="0:10">
-            <!-- Camadas contextuais ficam à frente do corpo. -->
-            <Node x="45" y="-52" opacity="0" scaleX="0.7" scaleY="0.7" name="Success Spark" id="0:90">
-                <Shape><Star width="31" height="31" originX="0.5" originY="0.5" points="5" innerRadius="0.48" cornerRadius="2"/><Fill><SolidColor colorValue="FF20C997"/></Fill></Shape>
+        <!-- As camadas abaixo são recortes mutuamente exclusivos do PNG HD oficial. -->
+        <Node name="Mascot Root" id="0:10">
+            <Image x="157" y="157" originX="0.5" originY="0.5" assetId="0:301" name="Official Body" id="0:11"/>
+            <Node x="157" y="122" name="Head Joint" id="0:20">
+                <Image x="0" y="35" originX="0.5" originY="0.5" assetId="0:302" name="Official Head" id="0:21"/>
             </Node>
-            <Node x="0" y="17" opacity="0" name="Tablet" id="0:80">
-                <Shape x="-13" y="-6"><Rectangle width="17" height="3" originX="0.5" originY="0.5" cornerRadiusTL="1.5"/><Fill><SolidColor colorValue="FF33B6E8"/></Fill></Shape>
-                <Shape x="8" y="1"><Rectangle width="25" height="3" originX="0.5" originY="0.5" cornerRadiusTL="1.5"/><Fill><SolidColor colorValue="FF77CDEB"/></Fill></Shape>
-                <Shape y="-2">
-                    <Rectangle width="48" height="30" originX="0.5" originY="0.5" cornerRadiusTL="4"/>
-                    <Fill><SolidColor colorValue="FFEAF7FC"/></Fill>
-                </Shape>
-                <Shape>
-                    <Rectangle width="63" height="47" originX="0.5" originY="0.5" cornerRadiusTL="7"/>
-                    <Fill><LinearGradient startX="-30" startY="-20" endX="30" endY="20"><GradientStop colorValue="FF0A4F82" position="0"/><GradientStop colorValue="FF159ADE" position="1"/></LinearGradient></Fill>
-                    <Stroke thickness="2"><SolidColor colorValue="FF062E4B"/></Stroke>
-                </Shape>
+            <Node x="207" y="129" name="Right Arm Joint" id="0:30">
+                <Image x="-50" y="28" originX="0.5" originY="0.5" assetId="0:303" name="Official Right Arm" id="0:31"/>
             </Node>
-            <!-- Visor e cabeça. -->
-            <Node x="0" y="-55" name="Head Joint" id="0:20">
-                <Shape x="-16" y="3" name="Left Eye" id="0:22">
-                    <Ellipse width="9" height="13" originX="0.5" originY="0.5"/>
-                    <Fill><SolidColor colorValue="FF20D5F2"/></Fill>
-                </Shape>
-                <Shape x="16" y="3" name="Right Eye" id="0:23">
-                    <Ellipse width="9" height="13" originX="0.5" originY="0.5"/>
-                    <Fill><SolidColor colorValue="FF20D5F2"/></Fill>
-                </Shape>
-                <Shape x="0" y="-38" name="Blue Crown">
-                    <Rectangle width="28" height="13" originX="0.5" originY="0.5" cornerRadiusTL="6" name="Panel"/>
-                    <Fill><LinearGradient startX="-14" startY="0" endX="14" endY="0"><GradientStop colorValue="FF0A4D82" position="0"/><GradientStop colorValue="FF1AA8E7" position="1"/></LinearGradient></Fill>
-                </Shape>
-                <Shape x="0" y="2" name="Visor">
-                    <Rectangle width="72" height="35" originX="0.5" originY="0.5" cornerRadiusTL="16" name="Screen"/>
-                    <Fill><LinearGradient startX="0" startY="-18" endX="0" endY="18"><GradientStop colorValue="FF132B3A" position="0"/><GradientStop colorValue="FF02070D" position="1"/></LinearGradient></Fill>
-                    <Stroke thickness="1.5"><SolidColor colorValue="FF158ED0"/></Stroke>
-                </Shape>
-                <Shape name="Head Shell">
-                    <Ellipse width="91" height="75" originX="0.5" originY="0.5" name="Shell"/>
-                    <Fill><LinearGradient startX="0" startY="-38" endX="0" endY="38"><GradientStop colorValue="FFFFFFFF" position="0"/><GradientStop colorValue="FFD2DEE7" position="1"/></LinearGradient></Fill>
-                    <Stroke thickness="2"><SolidColor colorValue="FF0B568B"/></Stroke>
-                </Shape>
-                <Shape x="-43" y="1" name="Left Headphone">
-                    <Ellipse width="21" height="39" originX="0.5" originY="0.5" name="Cup"/>
-                    <Fill><LinearGradient startX="-10" startY="0" endX="10" endY="0"><GradientStop colorValue="FF0A497A" position="0"/><GradientStop colorValue="FF1BA4EA" position="1"/></LinearGradient></Fill>
-                </Shape>
-                <Shape x="43" y="1" name="Right Headphone">
-                    <Ellipse width="21" height="39" originX="0.5" originY="0.5" name="Cup"/>
-                    <Fill><LinearGradient startX="-10" startY="0" endX="10" endY="0"><GradientStop colorValue="FF1BA4EA" position="0"/><GradientStop colorValue="FF0A497A" position="1"/></LinearGradient></Fill>
-                </Shape>
-            </Node>
-
-            <!-- Braço esquerdo articulado. -->
-            <Node x="-39" y="-16" rotation="0.16" name="Left Shoulder" id="0:30">
-                <Shape x="0" y="13" name="Left Upper Arm">
-                    <Rectangle width="20" height="34" originX="0.5" originY="0.2" cornerRadiusTL="10" name="Armor"/>
-                    <Fill><LinearGradient startX="-10" startY="0" endX="10" endY="0"><GradientStop colorValue="FFFFFFFF" position="0"/><GradientStop colorValue="FFBFCED9" position="1"/></LinearGradient></Fill>
-                    <Stroke thickness="1.5"><SolidColor colorValue="FF0B568B"/></Stroke>
-                </Shape>
-                <Node x="0" y="31" rotation="0.18" name="Left Elbow" id="0:31">
-                    <Shape x="0" y="13" name="Left Forearm">
-                        <Rectangle width="18" height="31" originX="0.5" originY="0.15" cornerRadiusTL="9"/>
-                        <Fill><LinearGradient startX="-9" startY="0" endX="9" endY="0"><GradientStop colorValue="FFEEF4F8" position="0"/><GradientStop colorValue="FF9DB3C4" position="1"/></LinearGradient></Fill>
-                        <Stroke thickness="1.5"><SolidColor colorValue="FF0B568B"/></Stroke>
-                    </Shape>
-                    <Shape x="0" y="32" name="Left Hand">
-                        <Ellipse width="18" height="16" originX="0.5" originY="0.5"/>
-                        <Fill><SolidColor colorValue="FF07578D"/></Fill>
-                    </Shape>
-                </Node>
-            </Node>
-
-            <!-- Braço direito articulado; é o braço do cumprimento. -->
-            <Node x="39" y="-16" rotation="-0.16" name="Right Shoulder" id="0:40">
-                <Shape x="0" y="13" name="Right Upper Arm">
-                    <Rectangle width="20" height="34" originX="0.5" originY="0.2" cornerRadiusTL="10"/>
-                    <Fill><LinearGradient startX="-10" startY="0" endX="10" endY="0"><GradientStop colorValue="FFFFFFFF" position="0"/><GradientStop colorValue="FFBFCED9" position="1"/></LinearGradient></Fill>
-                    <Stroke thickness="1.5"><SolidColor colorValue="FF0B568B"/></Stroke>
-                </Shape>
-                <Node x="0" y="31" rotation="-0.18" name="Right Elbow" id="0:41">
-                    <Shape x="0" y="13" name="Right Forearm">
-                        <Rectangle width="18" height="31" originX="0.5" originY="0.15" cornerRadiusTL="9"/>
-                        <Fill><LinearGradient startX="-9" startY="0" endX="9" endY="0"><GradientStop colorValue="FFEEF4F8" position="0"/><GradientStop colorValue="FF9DB3C4" position="1"/></LinearGradient></Fill>
-                        <Stroke thickness="1.5"><SolidColor colorValue="FF0B568B"/></Stroke>
-                    </Shape>
-                    <Shape x="0" y="32" name="Right Hand">
-                        <Ellipse width="18" height="16" originX="0.5" originY="0.5"/>
-                        <Fill><SolidColor colorValue="FF07578D"/></Fill>
-                    </Shape>
-                </Node>
-            </Node>
-
-            <!-- Pernas articuladas. -->
-            <Node x="-20" y="40" rotation="0.07" name="Left Hip" id="0:50">
-                <Shape x="0" y="15" name="Left Thigh">
-                    <Rectangle width="23" height="36" originX="0.5" originY="0.15" cornerRadiusTL="11"/>
-                    <Fill><LinearGradient startX="-11" startY="0" endX="11" endY="0"><GradientStop colorValue="FFFFFFFF" position="0"/><GradientStop colorValue="FFB6C7D4" position="1"/></LinearGradient></Fill>
-                    <Stroke thickness="1.5"><SolidColor colorValue="FF0B568B"/></Stroke>
-                </Shape>
-                <Node x="0" y="35" rotation="-0.06" name="Left Knee" id="0:51">
-                    <Shape x="0" y="15" name="Left Shin">
-                        <Rectangle width="21" height="36" originX="0.5" originY="0.15" cornerRadiusTL="10"/>
-                        <Fill><LinearGradient startX="-10" startY="0" endX="10" endY="0"><GradientStop colorValue="FFF8FBFD" position="0"/><GradientStop colorValue="FFA8BDCB" position="1"/></LinearGradient></Fill>
-                        <Stroke thickness="1.5"><SolidColor colorValue="FF0B568B"/></Stroke>
-                    </Shape>
-                    <Shape x="5" y="38" name="Left Foot">
-                        <Ellipse width="31" height="15" originX="0.5" originY="0.5"/>
-                        <Fill><LinearGradient startX="-15" startY="0" endX="15" endY="0"><GradientStop colorValue="FF0A4B7B" position="0"/><GradientStop colorValue="FF1598DB" position="1"/></LinearGradient></Fill>
-                    </Shape>
-                </Node>
-            </Node>
-            <Node x="20" y="40" rotation="-0.07" name="Right Hip" id="0:60">
-                <Shape x="0" y="15" name="Right Thigh">
-                    <Rectangle width="23" height="36" originX="0.5" originY="0.15" cornerRadiusTL="11"/>
-                    <Fill><LinearGradient startX="-11" startY="0" endX="11" endY="0"><GradientStop colorValue="FFFFFFFF" position="0"/><GradientStop colorValue="FFB6C7D4" position="1"/></LinearGradient></Fill>
-                    <Stroke thickness="1.5"><SolidColor colorValue="FF0B568B"/></Stroke>
-                </Shape>
-                <Node x="0" y="35" rotation="0.06" name="Right Knee" id="0:61">
-                    <Shape x="0" y="15" name="Right Shin">
-                        <Rectangle width="21" height="36" originX="0.5" originY="0.15" cornerRadiusTL="10"/>
-                        <Fill><LinearGradient startX="-10" startY="0" endX="10" endY="0"><GradientStop colorValue="FFF8FBFD" position="0"/><GradientStop colorValue="FFA8BDCB" position="1"/></LinearGradient></Fill>
-                        <Stroke thickness="1.5"><SolidColor colorValue="FF0B568B"/></Stroke>
-                    </Shape>
-                    <Shape x="5" y="38" name="Right Foot">
-                        <Ellipse width="31" height="15" originX="0.5" originY="0.5"/>
-                        <Fill><LinearGradient startX="-15" startY="0" endX="15" endY="0"><GradientStop colorValue="FF0A4B7B" position="0"/><GradientStop colorValue="FF1598DB" position="1"/></LinearGradient></Fill>
-                    </Shape>
-                </Node>
-            </Node>
-
-            <!-- Corpo e identidade GRCON. -->
-            <Shape x="0" y="12" name="Chest Badge">
-                <Ellipse width="31" height="31" originX="0.5" originY="0.5"/>
-                <Stroke thickness="7" cap="round"><SolidColor colorValue="FF0B689F"/></Stroke>
-            </Shape>
-            <Shape x="7" y="10" name="Badge Cut">
-                <Rectangle width="14" height="8" originX="0.5" originY="0.5"/>
-                <Fill><SolidColor colorValue="FFC9D7E1"/></Fill>
-            </Shape>
-            <Shape x="19" y="31" name="Blue Belt">
-                <Rectangle width="22" height="9" originX="0.5" originY="0.5" cornerRadiusTL="4"/>
-                <Fill><SolidColor colorValue="FF0B689F"/></Fill>
-            </Shape>
-            <Shape name="Torso">
-                <Rectangle width="72" height="78" originX="0.5" originY="0.45" cornerRadiusTL="27"/>
-                <Fill><LinearGradient startX="-35" startY="-35" endX="35" endY="35"><GradientStop colorValue="FFFFFFFF" position="0"/><GradientStop colorValue="FFC2D1DC" position="1"/></LinearGradient></Fill>
-                <Stroke thickness="2"><SolidColor colorValue="FF0B568B"/></Stroke>
-            </Shape>
         </Node>
 
-        <Shape x="128" y="222" name="Ground Shadow">
-            <Ellipse width="105" height="16" originX="0.5" originY="0.5"/>
-            <Fill><RadialGradient startX="0" startY="0" endX="53" endY="0"><GradientStop colorValue="3A0A527D" position="0"/><GradientStop colorValue="000A527D" position="1"/></RadialGradient></Fill>
-        </Shape>
-
-        <StateMachine name="Mascot State" id="0:100">
-            <StateMachineNumber value="0" name="mode" id="0:101"/>
+        <StateMachine name="GRCON Mascot State" id="0:100">
+            <StateMachineNumber value="0" name="state" id="0:101"/>
             <StateMachineLayer name="Main Layer" id="0:102">
-                <AnyState x="0" y="-110" id="0:103"/>
-                <ExitState/>
-                <EntryState><StateTransition stateToId="0:111"/></EntryState>
-                <AnimationState x="0" y="0" animationId="0:200" stateName="Idle" id="0:111">
-                    <StateTransition stateToId="0:112" duration="260" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:113" duration="260" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/><TransitionNumberCondition inputId="0:101" value="2" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:114" duration="180" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:115" duration="220" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/><TransitionNumberCondition inputId="0:101" value="4" opValue="equal"/></StateTransition>
+                <AnyState x="0" y="-130"/>
+                <ExitState x="950" y="-130"/>
+                <EntryState x="-160" y="0"><StateTransition stateToId="0:111"/></EntryState>
+
+                <AnimationState x="0" y="0" animationId="0:200" stateName="idle" id="0:111">
+                    <StateTransition stateToId="0:112" duration="220"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:113" duration="260"><TransitionNumberCondition inputId="0:101" value="2" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:114" duration="220"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:115" duration="240"><TransitionNumberCondition inputId="0:101" value="4" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:116" duration="180"><TransitionNumberCondition inputId="0:101" value="5" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:117" duration="160"><TransitionNumberCondition inputId="0:101" value="6" opValue="equal"/></StateTransition>
                 </AnimationState>
-                <AnimationState x="190" y="0" animationId="0:202" stateName="Greeting" id="0:112">
-                    <StateTransition stateToId="0:111" duration="300" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.2" y2="1"/><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
+                <AnimationState x="160" y="0" animationId="0:201" stateName="hover" id="0:112">
+                    <StateTransition stateToId="0:111" duration="260"><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
                     <StateTransition stateToId="0:113" duration="240"><TransitionNumberCondition inputId="0:101" value="2" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:114" duration="180"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:114" duration="220"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
                     <StateTransition stateToId="0:115" duration="220"><TransitionNumberCondition inputId="0:101" value="4" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:116" duration="180"><TransitionNumberCondition inputId="0:101" value="5" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:117" duration="160"><TransitionNumberCondition inputId="0:101" value="6" opValue="equal"/></StateTransition>
                 </AnimationState>
-                <AnimationState x="380" y="0" animationId="0:203" stateName="Analyzing" id="0:113">
+                <AnimationState x="320" y="0" animationId="0:202" stateName="hello" id="0:113">
+                    <StateTransition stateToId="0:111" duration="280"><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:112" duration="220"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:114" duration="220"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:115" duration="220"><TransitionNumberCondition inputId="0:101" value="4" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:116" duration="180"><TransitionNumberCondition inputId="0:101" value="5" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:117" duration="160"><TransitionNumberCondition inputId="0:101" value="6" opValue="equal"/></StateTransition>
+                </AnimationState>
+                <AnimationState x="480" y="0" animationId="0:203" stateName="processing" id="0:114">
                     <StateTransition stateToId="0:111" duration="300"><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:112" duration="240"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:114" duration="180"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:115" duration="220"><TransitionNumberCondition inputId="0:101" value="4" opValue="equal"/></StateTransition>
-                </AnimationState>
-                <AnimationState x="570" y="0" animationId="0:201" stateName="Running" id="0:114">
-                    <StateTransition stateToId="0:111" duration="320"><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:112" duration="260"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:112" duration="220"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
                     <StateTransition stateToId="0:113" duration="240"><TransitionNumberCondition inputId="0:101" value="2" opValue="equal"/></StateTransition>
                     <StateTransition stateToId="0:115" duration="220"><TransitionNumberCondition inputId="0:101" value="4" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:116" duration="180"><TransitionNumberCondition inputId="0:101" value="5" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:117" duration="160"><TransitionNumberCondition inputId="0:101" value="6" opValue="equal"/></StateTransition>
                 </AnimationState>
-                <AnimationState x="760" y="0" animationId="0:204" stateName="Success" id="0:115">
-                    <StateTransition stateToId="0:111" duration="320"><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:112" duration="260"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
+                <AnimationState x="640" y="0" animationId="0:204" stateName="analyzing" id="0:115">
+                    <StateTransition stateToId="0:111" duration="300"><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:112" duration="220"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
                     <StateTransition stateToId="0:113" duration="240"><TransitionNumberCondition inputId="0:101" value="2" opValue="equal"/></StateTransition>
-                    <StateTransition stateToId="0:114" duration="180"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:114" duration="220"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:116" duration="180"><TransitionNumberCondition inputId="0:101" value="5" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:117" duration="160"><TransitionNumberCondition inputId="0:101" value="6" opValue="equal"/></StateTransition>
+                </AnimationState>
+                <AnimationState x="800" y="0" animationId="0:205" stateName="success" id="0:116">
+                    <StateTransition stateToId="0:111" duration="300"><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:112" duration="220"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:113" duration="240"><TransitionNumberCondition inputId="0:101" value="2" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:114" duration="220"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:115" duration="220"><TransitionNumberCondition inputId="0:101" value="4" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:117" duration="160"><TransitionNumberCondition inputId="0:101" value="6" opValue="equal"/></StateTransition>
+                </AnimationState>
+                <AnimationState x="960" y="0" animationId="0:206" stateName="warning" id="0:117">
+                    <StateTransition stateToId="0:111" duration="300"><TransitionNumberCondition inputId="0:101" value="0" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:112" duration="220"><TransitionNumberCondition inputId="0:101" value="1" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:113" duration="240"><TransitionNumberCondition inputId="0:101" value="2" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:114" duration="220"><TransitionNumberCondition inputId="0:101" value="3" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:115" duration="220"><TransitionNumberCondition inputId="0:101" value="4" opValue="equal"/></StateTransition>
+                    <StateTransition stateToId="0:116" duration="180"><TransitionNumberCondition inputId="0:101" value="5" opValue="equal"/></StateTransition>
                 </AnimationState>
             </StateMachineLayer>
         </StateMachine>
 
-        <LinearAnimation fps="60" duration="180" loopValue="loop" name="Idle" id="0:200">
-            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble value="122" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="119.5" frame="84" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="122" frame="180"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.015" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.018" frame="95" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.015" frame="180"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:22"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1" frame="0" interpolationType="hold"/><KeyFrameDouble value="0.12" frame="126" interpolationType="hold"/><KeyFrameDouble value="1" frame="132"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:23"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1" frame="0" interpolationType="hold"/><KeyFrameDouble value="0.12" frame="126" interpolationType="hold"/><KeyFrameDouble value="1" frame="132"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.16"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:31"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.18"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:40"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.16"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:41"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.18"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:50"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.07"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:51"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.06"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:60"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.07"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:61"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.06"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:80"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:90"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0"/></KeyedProperty><KeyedProperty propertyKey="16"><KeyFrameDouble value="0.7"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble value="0.7"/></KeyedProperty></KeyedObject>
+        <LinearAnimation fps="60" duration="240" loopValue="loop" name="idle" id="0:200">
+            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-1.5" frame="112"/><KeyFrameDouble interpolationType="linear" value="0" frame="240"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble interpolationType="linear" value="1"/><KeyFrameDouble interpolationType="linear" value="0.997" frame="112"/><KeyFrameDouble interpolationType="linear" value="1" frame="240"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="-0.01"/><KeyFrameDouble interpolationType="linear" value="0.012" frame="124"/><KeyFrameDouble interpolationType="linear" value="-0.01" frame="240"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/></KeyedProperty></KeyedObject>
         </LinearAnimation>
-
-        <LinearAnimation fps="60" duration="40" loopValue="loop" name="Running" id="0:201">
-            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble value="122" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.22" y1="0" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="114" frame="10" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="122" frame="20" interpolationType="cubic"><CubicEaseInterpolator x1="0.22" y1="0" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="114" frame="30" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="122" frame="40"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.07" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.07" frame="20" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.07" frame="40"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.72" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.72" frame="20" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.72" frame="40"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:40"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.72" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.72" frame="20" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.72" frame="40"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:50"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.82" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.82" frame="20" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.82" frame="40"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:60"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.82" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.82" frame="20" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.82" frame="40"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:51"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.72" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.25" frame="20" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.72" frame="40"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:61"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.25" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.72" frame="20" interpolationType="cubic"><CubicEaseInterpolator x1="0.37" y1="0" x2="0.63" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.25" frame="40"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:22"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:23"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:31"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.18"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:41"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.18"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:80"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:90"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0"/></KeyedProperty><KeyedProperty propertyKey="16"><KeyFrameDouble value="0.7"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble value="0.7"/></KeyedProperty></KeyedObject>
+        <LinearAnimation fps="60" duration="150" loopValue="loop" name="hover" id="0:201">
+            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble interpolationType="linear" value="-1"/><KeyFrameDouble interpolationType="linear" value="-3" frame="68"/><KeyFrameDouble interpolationType="linear" value="-1" frame="150"/></KeyedProperty><KeyedProperty propertyKey="16"><KeyFrameDouble interpolationType="linear" value="1.008"/><KeyFrameDouble interpolationType="linear" value="1.014" frame="68"/><KeyFrameDouble interpolationType="linear" value="1.008" frame="150"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble interpolationType="linear" value="1.008"/><KeyFrameDouble interpolationType="linear" value="1.014" frame="68"/><KeyFrameDouble interpolationType="linear" value="1.008" frame="150"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="-0.03"/><KeyFrameDouble interpolationType="linear" value="0.03" frame="74"/><KeyFrameDouble interpolationType="linear" value="-0.03" frame="150"/></KeyedProperty></KeyedObject>
         </LinearAnimation>
-
-        <LinearAnimation fps="60" duration="100" loopValue="pingPong" name="Greeting" id="0:202">
-            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble value="122" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="117" frame="22" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.2" y2="1"/></KeyFrameDouble><KeyFrameDouble value="119" frame="100"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.1" frame="28" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.04" frame="100"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:40"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.16" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-2.55" frame="28" interpolationType="cubic"><CubicEaseInterpolator x1="0.34" y1="1.3" x2="0.64" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-2.42" frame="100"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:41"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.18" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.75" frame="28" interpolationType="cubic"><CubicEaseInterpolator x1="0.35" y1="0" x2="0.65" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.35" frame="48" interpolationType="cubic"><CubicEaseInterpolator x1="0.35" y1="0" x2="0.65" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.88" frame="67" interpolationType="cubic"><CubicEaseInterpolator x1="0.35" y1="0" x2="0.65" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.42" frame="84" interpolationType="cubic"><CubicEaseInterpolator x1="0.35" y1="0" x2="0.65" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.68" frame="100"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:22"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:23"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.16"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:31"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.18"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:50"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.07"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:51"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.06"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:60"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.07"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:61"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.06"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:80"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:90"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0"/></KeyedProperty><KeyedProperty propertyKey="16"><KeyFrameDouble value="0.7"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble value="0.7"/></KeyedProperty></KeyedObject>
+        <LinearAnimation fps="60" duration="180" loopValue="loop" name="hello" id="0:202">
+            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-1.5" frame="82"/><KeyFrameDouble interpolationType="linear" value="0" frame="180"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="0.025" frame="84"/><KeyFrameDouble interpolationType="linear" value="0" frame="180"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-1.02" frame="28"/><KeyFrameDouble interpolationType="linear" value="-0.84" frame="54"/><KeyFrameDouble interpolationType="linear" value="-1.10" frame="79"/><KeyFrameDouble interpolationType="linear" value="-0.88" frame="104"/><KeyFrameDouble interpolationType="linear" value="-1.04" frame="129"/><KeyFrameDouble interpolationType="linear" value="0" frame="176"/></KeyedProperty></KeyedObject>
         </LinearAnimation>
-
-        <LinearAnimation fps="60" duration="120" loopValue="loop" name="Analyzing" id="0:203">
-            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble value="122"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:80"><KeyedProperty propertyKey="18"><KeyFrameDouble value="1" frame="0"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.08" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.06" frame="48" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.08" frame="120"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.68" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.51" frame="58" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-0.68" frame="120"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:40"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.68" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.51" frame="58" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="0.68" frame="120"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:31"><KeyedProperty propertyKey="15"><KeyFrameDouble value="1.25" frame="0"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:41"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-1.25" frame="0"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:22"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:23"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:50"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.07"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:51"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.06"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:60"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.07"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:61"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.06"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:90"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0"/></KeyedProperty><KeyedProperty propertyKey="16"><KeyFrameDouble value="0.7"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble value="0.7"/></KeyedProperty></KeyedObject>
+        <LinearAnimation fps="60" duration="120" loopValue="loop" name="processing" id="0:203">
+            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-2" frame="54"/><KeyFrameDouble interpolationType="linear" value="0" frame="120"/></KeyedProperty><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="-0.008"/><KeyFrameDouble interpolationType="linear" value="0.01" frame="62"/><KeyFrameDouble interpolationType="linear" value="-0.008" frame="120"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0.02"/><KeyFrameDouble interpolationType="linear" value="-0.028" frame="31"/><KeyFrameDouble interpolationType="linear" value="0.022" frame="64"/><KeyFrameDouble interpolationType="linear" value="-0.015" frame="94"/><KeyFrameDouble interpolationType="linear" value="0.02" frame="120"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="0.055" frame="34"/><KeyFrameDouble interpolationType="linear" value="-0.035" frame="74"/><KeyFrameDouble interpolationType="linear" value="0" frame="120"/></KeyedProperty></KeyedObject>
         </LinearAnimation>
-
-        <LinearAnimation fps="60" duration="105" loopValue="pingPong" name="Success" id="0:204">
-            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble value="122" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="111" frame="24" interpolationType="cubic"><CubicEaseInterpolator x1="0.34" y1="1.3" x2="0.64" y2="1"/></KeyFrameDouble><KeyFrameDouble value="119" frame="53" interpolationType="cubic"><CubicEaseInterpolator x1="0.4" y1="0" x2="0.6" y2="1"/></KeyFrameDouble><KeyFrameDouble value="117" frame="105"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.16" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="2.42" frame="31" interpolationType="cubic"><CubicEaseInterpolator x1="0.34" y1="1.3" x2="0.64" y2="1"/></KeyFrameDouble><KeyFrameDouble value="2.28" frame="105"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:40"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.16" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-2.42" frame="31" interpolationType="cubic"><CubicEaseInterpolator x1="0.34" y1="1.3" x2="0.64" y2="1"/></KeyFrameDouble><KeyFrameDouble value="-2.28" frame="105"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:90"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="1" frame="26"/></KeyedProperty><KeyedProperty propertyKey="16"><KeyFrameDouble value="0.7" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="1.15" frame="28" interpolationType="cubic"><CubicEaseInterpolator x1="0.34" y1="1.3" x2="0.64" y2="1"/></KeyFrameDouble><KeyFrameDouble value="1" frame="105"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble value="0.7" frame="0" interpolationType="cubic"><CubicEaseInterpolator x1="0.16" y1="1" x2="0.3" y2="1"/></KeyFrameDouble><KeyFrameDouble value="1.15" frame="28" interpolationType="cubic"><CubicEaseInterpolator x1="0.34" y1="1.3" x2="0.64" y2="1"/></KeyFrameDouble><KeyFrameDouble value="1" frame="105"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:22"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:23"><KeyedProperty propertyKey="17"><KeyFrameDouble value="1"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:31"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.18"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:41"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.18"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:50"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.07"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:51"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.06"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:60"><KeyedProperty propertyKey="15"><KeyFrameDouble value="-0.07"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:61"><KeyedProperty propertyKey="15"><KeyFrameDouble value="0.06"/></KeyedProperty></KeyedObject>
-            <KeyedObject objectId="0:80"><KeyedProperty propertyKey="18"><KeyFrameDouble value="0"/></KeyedProperty></KeyedObject>
+        <LinearAnimation fps="60" duration="180" loopValue="loop" name="analyzing" id="0:204">
+            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="13"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-1" frame="82"/><KeyFrameDouble interpolationType="linear" value="0" frame="180"/></KeyedProperty><KeyedProperty propertyKey="14"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-1.2" frame="82"/><KeyFrameDouble interpolationType="linear" value="0" frame="180"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="-0.035"/><KeyFrameDouble interpolationType="linear" value="0.02" frame="42"/><KeyFrameDouble interpolationType="linear" value="-0.045" frame="92"/><KeyFrameDouble interpolationType="linear" value="0.015" frame="136"/><KeyFrameDouble interpolationType="linear" value="-0.035" frame="180"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-0.08" frame="88"/><KeyFrameDouble interpolationType="linear" value="0" frame="180"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+        <LinearAnimation fps="60" duration="100" loopValue="oneShot" name="success" id="0:205">
+            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-9" frame="26"/><KeyFrameDouble interpolationType="linear" value="-2" frame="55"/><KeyFrameDouble interpolationType="linear" value="0" frame="100"/></KeyedProperty><KeyedProperty propertyKey="16"><KeyFrameDouble interpolationType="linear" value="1"/><KeyFrameDouble interpolationType="linear" value="1.022" frame="26"/><KeyFrameDouble interpolationType="linear" value="0.996" frame="55"/><KeyFrameDouble interpolationType="linear" value="1" frame="100"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble interpolationType="linear" value="1"/><KeyFrameDouble interpolationType="linear" value="1.022" frame="26"/><KeyFrameDouble interpolationType="linear" value="0.996" frame="55"/><KeyFrameDouble interpolationType="linear" value="1" frame="100"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="0.065" frame="26"/><KeyFrameDouble interpolationType="linear" value="-0.025" frame="55"/><KeyFrameDouble interpolationType="linear" value="0" frame="100"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-0.45" frame="30"/><KeyFrameDouble interpolationType="linear" value="0" frame="100"/></KeyedProperty></KeyedObject>
+        </LinearAnimation>
+        <LinearAnimation fps="60" duration="120" loopValue="oneShot" name="warning" id="0:206">
+            <KeyedObject objectId="0:10"><KeyedProperty propertyKey="14"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-2" frame="24"/><KeyFrameDouble interpolationType="linear" value="0" frame="120"/></KeyedProperty><KeyedProperty propertyKey="16"><KeyFrameDouble interpolationType="linear" value="1"/><KeyFrameDouble interpolationType="linear" value="1.012" frame="24"/><KeyFrameDouble interpolationType="linear" value="1" frame="120"/></KeyedProperty><KeyedProperty propertyKey="17"><KeyFrameDouble interpolationType="linear" value="1"/><KeyFrameDouble interpolationType="linear" value="1.012" frame="24"/><KeyFrameDouble interpolationType="linear" value="1" frame="120"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:20"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-0.08" frame="24"/><KeyFrameDouble interpolationType="linear" value="0.065" frame="48"/><KeyFrameDouble interpolationType="linear" value="-0.035" frame="72"/><KeyFrameDouble interpolationType="linear" value="0" frame="120"/></KeyedProperty></KeyedObject>
+            <KeyedObject objectId="0:30"><KeyedProperty propertyKey="15"><KeyFrameDouble interpolationType="linear" value="0"/><KeyFrameDouble interpolationType="linear" value="-0.18" frame="34"/><KeyFrameDouble interpolationType="linear" value="0" frame="120"/></KeyedProperty></KeyedObject>
         </LinearAnimation>
     </Artboard>
+
+    <ImageAsset file="source/grcon-mascot-body.png" width="314" height="314" name="GRCON Official Body" id="0:301"/>
+    <ImageAsset file="source/grcon-mascot-head.png" width="314" height="314" name="GRCON Official Head" id="0:302"/>
+    <ImageAsset file="source/grcon-mascot-right-arm.png" width="314" height="314" name="GRCON Official Right Arm" id="0:303"/>
 </Rive>
