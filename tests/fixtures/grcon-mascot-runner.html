@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <base href="../../">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data:">
+  <title>Validação da pista do mascote</title>
+  <link rel="stylesheet" href="grcon_mascot_runner.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; font-family: Arial, sans-serif; background: #eef3f6; color: #183449; }
+    .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+    aside { padding: 24px 16px; background: #153b60; color: white; }
+    #app-main { min-width: 0; width: 100%; padding: 24px; overflow: visible; }
+    .grcon-view-tabs { height: 54px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: white; border-radius: 12px; }
+    .grcon-view-tabs button { border: 0; border-radius: 8px; padding: 8px 12px; }
+    .module-view { margin-top: 18px; min-height: 520px; padding: 22px; background: white; border-radius: 14px; box-shadow: 0 10px 30px rgba(20,50,70,.08); }
+    .mock-table { height: 320px; margin-top: 24px; border-radius: 12px; background: repeating-linear-gradient(#edf2f5 0 38px,#fff 38px 76px); }
+    @media (max-width: 760px) {
+      .shell { display: block; }
+      aside { display: none; }
+      #app-main { padding: 12px; }
+      .grcon-view-tabs { overflow: hidden; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside><strong>GRCON</strong><p>Qualidade</p></aside>
+    <main id="app-main" class="workspace">
+      <nav class="grcon-view-tabs" aria-label="Navegação"><button>Controle de GRDT</button><button>Histórico</button></nav>
+      <section class="module-view">
+        <h1>Controle de GRDT</h1>
+        <p>Analisar e conferir documentos.</p>
+        <button id="fixture-action" type="button">Analisar e conferir</button>
+        <div class="mock-table"></div>
+      </section>
+    </main>
+  </div>
+  <script>
+    window.GrconMascot = {
+      calls: [],
+      stop(reason) { this.calls.push(["stop", reason]); },
+      play(state) { this.calls.push(["play", state]); return true; }
+    };
+    document.getElementById("fixture-action").addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("grcon:processing-state", { detail: { active: true, state: "analyzing", context: "control", task: "Analisar e conferir" } }));
+    });
+  </script>
+  <script defer src="grcon_mascot_runner.js"></script>
+</body>
+</html>
