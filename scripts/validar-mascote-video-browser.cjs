@@ -180,7 +180,6 @@ async function main() {
     });
     const greetingPage = await greetingContext.newPage();
     await greetingPage.addInitScript(() => {
-      document.documentElement.classList.add("grcon-cloud-pending");
       window.GrconCloud = {
         state: { session: { user: { id: "browser-test-user", email: "vinicio@example.invalid" } } },
         getCurrentUserIdentity() {
