@@ -171,6 +171,8 @@
     current.intersectionObserver?.disconnect();
     current.host.removeEventListener("pointerenter", current.onPointerEnter);
     current.host.removeEventListener("pointerleave", current.onPointerLeave);
+    current.canvas.removeEventListener("webglcontextlost", current.onContextLost);
+    current.canvas.removeEventListener("contextlost", current.onContextLost);
     current.host.removeAttribute("data-grcon-rive-pending");
     current.host.removeAttribute("data-grcon-rive-ready");
     current.player?.cleanup?.();
@@ -221,6 +223,7 @@
       visible: true,
       onPointerEnter: null,
       onPointerLeave: null,
+      onContextLost: null,
     };
     record = current;
 
@@ -236,6 +239,14 @@
     };
     host.addEventListener("pointerenter", current.onPointerEnter);
     host.addEventListener("pointerleave", current.onPointerLeave);
+    current.onContextLost = (event) => {
+      if (record !== current || current.failed) return;
+      event.preventDefault?.();
+      current.failed = true;
+      fail(`contexto gráfico perdido (${event.type || "canvas"})`);
+    };
+    canvas.addEventListener("webglcontextlost", current.onContextLost);
+    canvas.addEventListener("contextlost", current.onContextLost);
 
     try {
       runtime.RuntimeLoader.setWasmUrl(WASM_URL);
