@@ -43,12 +43,13 @@ async function main() {
     await waitForMascot(page);
 
     let diagnostics = await page.evaluate(() => window.GrconMascot.diagnostics());
-    assert.equal(diagnostics.engine, "official-video-v1");
-    assert.equal(diagnostics.videoSupported, true);
-    assert.equal(diagnostics.fallback, false);
+    assert.equal(diagnostics.engine, "official-video-v4");
+    assert.equal(diagnostics.assetRevision, "20260916.2");
     assert.equal(diagnostics.instances, 1);
     assert.equal(diagnostics.activeVideos, 0);
     assert.deepEqual(diagnostics.states, ["idle"]);
+    assert.match(diagnostics.assets.wave, /grcon-mascot-wave-alpha\.webm\?v=20260916\.2$/);
+    assert.match(diagnostics.assets.processing, /grcon-mascot-processing-alpha\.webm\?v=20260916\.2$/);
     assert.equal(await page.locator(".grcon-brand-mascot > video").count(), 1);
     assert.equal((await visibleFallback(page)).visible, true, "PNG precisa aparecer antes de qualquer reprodução");
     await page.screenshot({ path: path.join(outputDir, "idle-png.png") });
@@ -57,8 +58,8 @@ async function main() {
       detail: { active: true, context: "control", task: "Analisar e conferir na LD" },
     })));
     await page.waitForFunction(() => {
-      const diagnostics = window.GrconMascot.diagnostics();
-      return diagnostics.states.includes("searching-files") && diagnostics.activeVideos === 1;
+      const value = window.GrconMascot.diagnostics();
+      return value.states.includes("searching-files") && value.activeVideos === 1;
     }, null, { timeout: 15000 });
     const processing = await page.evaluate(() => {
       const host = document.querySelector(".grcon-brand-mascot");
@@ -73,7 +74,7 @@ async function main() {
         spriteOpacity: Number(getComputedStyle(host.querySelector(".grcon-mascot-sprite")).opacity),
       };
     });
-    assert.match(processing.src, /grcon-mascot-processing-alpha\.webm/);
+    assert.match(processing.src, /grcon-mascot-processing-alpha\.webm\?v=20260916\.2$/);
     assert.equal(processing.loop, true);
     assert.equal(processing.muted, true);
     assert.equal(processing.paused, false);
@@ -88,21 +89,21 @@ async function main() {
       window.dispatchEvent(new CustomEvent("grcon:processing-state", { detail: { active: false, context: "control" } }));
     });
     await page.waitForFunction(() => {
-      const diagnostics = window.GrconMascot.diagnostics();
-      return diagnostics.states.includes("success") && diagnostics.activeVideos === 0;
+      const value = window.GrconMascot.diagnostics();
+      return value.states.includes("success") && value.activeVideos === 0;
     });
     assert.equal((await visibleFallback(page)).visible, true, "PNG deve voltar após a operação");
 
     await page.hover(".grcon-brand-mascot");
     await page.waitForFunction(() => {
-      const diagnostics = window.GrconMascot.diagnostics();
-      return diagnostics.states.includes("hover") && diagnostics.activeVideos === 1;
+      const value = window.GrconMascot.diagnostics();
+      return value.states.includes("hover") && value.activeVideos === 1;
     }, null, { timeout: 15000 });
     const wave = await page.evaluate(() => {
       const video = document.querySelector(".grcon-brand-mascot > video");
       return { src: video.currentSrc, loop: video.loop, muted: video.muted, paused: video.paused };
     });
-    assert.match(wave.src, /grcon-mascot-wave-alpha\.webm/);
+    assert.match(wave.src, /grcon-mascot-wave-alpha\.webm\?v=20260916\.2$/);
     assert.equal(wave.loop, false);
     assert.equal(wave.muted, true);
     assert.equal(wave.paused, false);
@@ -122,7 +123,7 @@ async function main() {
 
     const fallback = await context.newPage();
     const fallbackErrors = [];
-    await fallback.route("**/assets/mascot/video/grcon-mascot-processing-alpha.webm", (route) => route.abort("failed"));
+    await fallback.route(/grcon-mascot-processing-alpha\.webm(?:\?.*)?$/, (route) => route.abort("failed"));
     fallback.on("pageerror", (error) => fallbackErrors.push(error.message));
     fallback.on("console", (message) => {
       if (message.type() !== "error") return;
@@ -134,7 +135,10 @@ async function main() {
     await fallback.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-state", {
       detail: { active: true, task: "Analisar documentos" },
     })));
-    await fallback.waitForFunction(() => window.GrconMascot.diagnostics().fallback, null, { timeout: 15000 });
+    await fallback.waitForFunction(() => {
+      const value = window.GrconMascot.diagnostics();
+      return value.records.some((record) => Object.values(record.failures).some((count) => count > 0));
+    }, null, { timeout: 15000 });
     const fallbackResult = await visibleFallback(fallback);
     assert.equal(fallbackResult.visible, true, "falha do WebM nunca pode ocultar o PNG oficial");
     assert.match(fallbackResult.source, /grcon-mascot-sprite\.png/);
@@ -163,7 +167,47 @@ async function main() {
     assert.equal(reducedResult.spriteOpacity, 1);
     await reduced.close();
 
-    console.log(JSON.stringify({ diagnostics, processing, wave, fallback: fallbackResult, reduced: reducedResult }, null, 2));
+    const greetingContext = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: "block",
+    });
+    const greetingPage = await greetingContext.newPage();
+    await greetingPage.addInitScript(() => {
+      window.GrconCloud = {
+        state: { session: { user: { id: "browser-test-user", email: "vinicio@example.invalid" } } },
+        getCurrentUserIdentity() {
+          return { userId: "browser-test-user", displayName: "Vinicio Melo", email: "vinicio@example.invalid" };
+        },
+      };
+    });
+    await greetingPage.goto(`${fixtureUrl}?greeting=1`, { waitUntil: "networkidle", timeout: 30000 });
+    await waitForMascot(greetingPage);
+    await greetingPage.waitForFunction(() => {
+      const value = window.GrconMascot.diagnostics();
+      return value.greetingPlayedThisSession && value.states.includes("welcome");
+    }, null, { timeout: 15000 });
+    const greetingText = await greetingPage.locator("#grcon-mascot-greeting-bubble").textContent();
+    assert.equal(greetingText, "Olá, Vinicio!");
+    await greetingPage.screenshot({ path: path.join(outputDir, "login-greeting-wave.png") });
+
+    await greetingPage.reload({ waitUntil: "networkidle", timeout: 30000 });
+    await waitForMascot(greetingPage);
+    const afterRefresh = await greetingPage.evaluate(() => window.GrconMascot.diagnostics());
+    assert.equal(afterRefresh.greetingPlayedThisSession, true);
+    assert.equal(afterRefresh.activeVideos, 0, "refresh na mesma sessão não deve repetir o aceno");
+    assert.deepEqual(afterRefresh.states, ["idle"]);
+
+    await greetingPage.evaluate(() => document.documentElement.classList.add("grcon-cloud-pending"));
+    await greetingPage.waitForTimeout(100);
+    await greetingPage.evaluate(() => {
+      document.documentElement.classList.remove("grcon-cloud-pending");
+      window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
+    });
+    await greetingPage.waitForFunction(() => window.GrconMascot.diagnostics().states.includes("welcome"), null, { timeout: 15000 });
+    assert.equal((await greetingPage.evaluate(() => window.GrconMascot.diagnostics())).greetingPlayedThisSession, true, "novo login após logout deve poder cumprimentar novamente");
+    await greetingContext.close();
+
+    console.log(JSON.stringify({ diagnostics, processing, wave, fallback: fallbackResult, reduced: reducedResult, afterRefresh }, null, 2));
   } finally {
     await browser.close();
   }
