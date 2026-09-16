@@ -6,9 +6,9 @@
 
   const VERSION = "5.0.0";
   const ENGINE = "official-video-v5-multiformat";
-  const ASSET_REVISION = "20260916.3";
-  const EXPECTED_SW_REVISION = "20260916.3-mascot-multiformat";
-  const EXPECTED_CACHE = "grcon-v5.40.11-mascot-multiformat-v2";
+  const ASSET_REVISION = "20260916.4";
+  const EXPECTED_SW_REVISION = "20260916.4-mascot-running-lane";
+  const EXPECTED_CACHE = "grcon-v5.40.11-mascot-running-v3";
   const SELECTOR = ".grcon-brand-mascot, .grcon-mascot-context";
   const SESSION_PREFIX = "grcon:mascot:greeting:v5:";
   const PREF_KEY = "grcon:mascot:animations:v5";
