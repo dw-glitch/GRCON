@@ -73,8 +73,8 @@ function functionBody(source, name, nextName) {
   assert.doesNotMatch(preserve, /clearHistory|SIGEM_BASE_KEY|PW_BASE_KEY|LD_BASE_KEY/,
     "a migração de preservação não pode apagar histórico nem bases ativas");
   assert.match(runtime, /await preserveExistingStage7Data\(\)/);
-  assert.ok(runtime.indexOf("await preserveExistingStage7Data()") < open.indexOf("GrconSigemPwDashboardUi.activate"),
-    "o marcador de preservação deve existir antes da ativação da UI");
+  assert.ok(open.indexOf("await ensureRuntime()") < open.indexOf("GrconSigemPwDashboardUi.activate()"),
+    "o runtime e o marcador de preservação devem concluir antes da ativação da UI");
 })();
 
 (function rollbackTokenOnlyContainsCreatedSnapshots() {
@@ -101,19 +101,11 @@ function functionBody(source, name, nextName) {
   assert.match(historyCore, /meta\.delete\(`sourcePayload:\$\{id\}`\)/);
 })();
 
-(function previousBasesAreClearedExactlyOnce() {
+(function legacyResetImplementationRemainsGuardedByPreservationMarker() {
   const reset = functionBody(dashboardApp, "clearPreStage7BasesOnce", "refreshBases");
   const refresh = functionBody(dashboardApp, "refreshBases", "activate");
-  [
-    "Core.SIGEM_BASE_KEY",
-    "Core.PW_BASE_KEY",
-    "Core.LD_BASE_KEY",
-    "Core.HISTORY_KEY",
-    "Core.LEGACY_SIGEM_BASE_KEY",
-    "Core.LEGACY_PW_BASE_KEY",
-  ].forEach((key) => assert.match(reset, new RegExp(key.replace(".", "\\."))));
-  assert.match(reset, /History\.clearHistory\(\)/);
-  assert.match(reset, /PRE_STAGE7_RESET_KEY/);
+  assert.match(reset, /Core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
+  assert.match(reset, /if \(alreadyReset\) return false/);
   assert.ok(refresh.indexOf("clearPreStage7BasesOnce") < refresh.indexOf("Core.loadBases"));
   assert.doesNotMatch(dashboardApp, /indexedDB\.deleteDatabase/);
 })();
