@@ -45,6 +45,11 @@ jobs:
           "$HOME/.rive/bin/rive" assets/mascot/rive --verify
           "$HOME/.rive/bin/rive" assets/mascot/rive --once
           "$HOME/.rive/bin/rive" inspect assets/mascot/rive --json 2>&1 | tee assets/mascot/rive/build/inspect.json
+          grep -q '"interpolationType": "linear"' assets/mascot/rive/build/inspect.json
+          if grep -q '"interpolationType": "hold"' assets/mascot/rive/build/inspect.json; then
+            echo "Keyframe sem interpolação fluida encontrado."
+            exit 1
+          fi
 
       - name: Instalar navegador de validação
         run: |

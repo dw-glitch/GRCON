@@ -101,6 +101,8 @@ for (const state of ["idle", "hover", "hello", "processing", "analyzing", "succe
   assert.match(rml, new RegExp(`<AnimationState[^>]+stateName="${state}"`), `estado ${state} deve existir`);
   assert.match(rml, new RegExp(`<LinearAnimation[^>]+name="${state}"`), `animação interpolada ${state} deve existir`);
 }
+assert.equal((rml.match(/<KeyFrameDouble /g) || []).length, (rml.match(/interpolationType="linear"/g) || []).length, "todo keyframe deve usar interpolação linear fluida");
+assert.doesNotMatch(rml, /interpolationType="hold"/, "animação não pode usar saltos entre quadros");
 assert.equal((rml.match(/<ImageAsset /g) || []).length, 3, "somente os três recortes oficiais devem ser incorporados");
 for (const asset of ["grcon-mascot-body.png", "grcon-mascot-head.png", "grcon-mascot-right-arm.png"]) assert.ok(rml.includes(asset));
 assert.doesNotMatch(rml, /<(?:Shape|Path|Ellipse|Rectangle|Star|Polygon)\b/, "o mascote não pode ser redesenhado em vetor");

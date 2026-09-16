@@ -41,12 +41,14 @@ async function main() {
 
     await page.hover(".grcon-brand-mascot");
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "hover");
+    await page.waitForTimeout(450);
     diagnostics = await page.evaluate(() => window.GrconMascot.diagnostics());
     assert.equal(diagnostics.state, "hover");
     await page.screenshot({ path: path.join(outputDir, "hover.png") });
 
     await page.evaluate(() => window.GrconMascot.setState("processing"));
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "processing");
+    await page.waitForTimeout(650);
     diagnostics = await page.evaluate(() => window.GrconMascot.diagnostics());
     assert.equal(diagnostics.instances, 1);
     assert.equal(diagnostics.state, "processing");
