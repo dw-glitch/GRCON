@@ -124,7 +124,11 @@ async function main() {
     const fallbackErrors = [];
     await fallback.route("**/assets/mascot/video/grcon-mascot-processing-alpha.webm", (route) => route.abort("failed"));
     fallback.on("pageerror", (error) => fallbackErrors.push(error.message));
-    fallback.on("console", (message) => { if (message.type() === "error") fallbackErrors.push(message.text()); });
+    fallback.on("console", (message) => {
+      if (message.type() !== "error") return;
+      const text = message.text();
+      if (!/Failed to load resource: net::ERR_FAILED/.test(text)) fallbackErrors.push(text);
+    });
     await fallback.goto(`${fixtureUrl}?fallback=1`, { waitUntil: "networkidle", timeout: 30000 });
     await waitForMascot(fallback);
     await fallback.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-state", {
