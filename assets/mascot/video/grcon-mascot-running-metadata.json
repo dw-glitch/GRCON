@@ -1,0 +1,47 @@
+{
+  "source": {
+    "generator": "Higgsfield Seedance 2.5",
+    "durationRequestedSeconds": 5,
+    "audio": false
+  },
+  "chromaKeyMeasured": "#E80FB8",
+  "alpha": {
+    "programs": [],
+    "streams": [
+      {
+        "codec_name": "vp9",
+        "width": 480,
+        "height": 480,
+        "pix_fmt": "yuv420p",
+        "r_frame_rate": "24/1",
+        "tags": {
+          "ALPHA_MODE": "1"
+        }
+      }
+    ],
+    "format": {
+      "duration": "5.042000",
+      "size": "791848"
+    }
+  },
+  "compat": {
+    "programs": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 480,
+        "height": 480,
+        "pix_fmt": "yuv420p",
+        "r_frame_rate": "24/1",
+        "tags": {}
+      }
+    ],
+    "format": {
+      "duration": "5.041667",
+      "size": "439561"
+    }
+  },
+  "poster": {
+    "path": "grcon-mascot-running-poster.png"
+  }
+}
