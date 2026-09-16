@@ -5,9 +5,13 @@ on:
     branches: [main]
     paths:
       - "assets/mascot/video/**"
+      - "assets/mascot/compat/**"
       - "grcon-mascot-sprite.png"
       - "grcon_mascot_controller.js"
-      - "grcon_mascot_controller_v4.js"
+      - "grcon_mascot_controller_v5.js"
+      - "grcon_mascot_compat_media.js"
+      - "grcon_service_worker.js"
+      - "sw-v6.js"
       - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
       - "tests/fixtures/grcon-mascot-video.html"
@@ -16,9 +20,13 @@ on:
   pull_request:
     paths:
       - "assets/mascot/video/**"
+      - "assets/mascot/compat/**"
       - "grcon-mascot-sprite.png"
       - "grcon_mascot_controller.js"
-      - "grcon_mascot_controller_v4.js"
+      - "grcon_mascot_controller_v5.js"
+      - "grcon_mascot_compat_media.js"
+      - "grcon_service_worker.js"
+      - "sw-v6.js"
       - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
       - "tests/fixtures/grcon-mascot-video.html"
@@ -31,7 +39,7 @@ permissions:
 
 jobs:
   validate-mascot:
-    name: Vídeos, sessão, eventos reais e fallback PNG
+    name: WebM, H.264, PNG, acessibilidade e migração
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -39,19 +47,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node tests/grcon_mascot_video.cjs
+      - name: Validar assets, player e Service Worker
+        run: node tests/grcon_mascot_video.cjs
       - name: Instalar navegador de validação
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Testar aceno, processamento, transparência visual e fallback
+      - name: Testar fallback real no Chromium/Edge engine
         run: |
           python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-preview.log" 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-mascote-video-browser.cjs
-      - uses: actions/upload-artifact@v4
-        with:
-          name: grcon-mascot-video-validation
-          path: artifacts/mascot-video/*.png
-          if-no-files-found: error
