@@ -8,10 +8,12 @@ const read = (file, encoding = "utf8") => fs.readFileSync(path.join(root, file),
 const exists = (file) => fs.existsSync(path.join(root, file));
 const hash = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
 
-const controller = read("grcon_mascot_controller.js");
+const entrypoint = read("grcon_mascot_controller.js");
+const controller = read("grcon_mascot_controller_v4.js");
 const index = read("index.html");
 const sw = read("sw.js");
 const bootstrap = read("grcon_service_worker.js");
+const vercel = read("vercel.json");
 const app = read("app.js");
 const dashboard = read("sigem_pw_dashboard_app.js");
 const conference = read("posting_conference_app.js");
@@ -37,6 +39,10 @@ assertWebm(processing, "vídeo de processamento", 300_000);
 assertWebm(wave, "vídeo de aceno", 300_000);
 assert.notEqual(hash(processing), hash(wave), "os dois comportamentos precisam ter mídias independentes");
 
+assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=4\.1\.0-20260916\.2/);
+assert.match(entrypoint, /official-png-static-fallback/);
+assert.doesNotMatch(entrypoint, /gsap|\.riv/i);
+
 const requiredStates = [
   "idle", "welcome", "hover", "analyzing", "searching-files", "checking-document",
   "confused", "success", "warning", "error", "uploading", "generating-grdt",
@@ -44,19 +50,34 @@ const requiredStates = [
 ];
 for (const state of requiredStates) assert.ok(controller.includes(`"${state}"`), `estado ${state} ausente`);
 
-assert.match(controller, /official-video-v1/);
+assert.match(controller, /official-video-v4/);
+assert.match(controller, /ASSET_REVISION\s*=\s*"20260916\.2"/);
+assert.match(controller, /MASCOT_ANIMATIONS/);
 assert.match(controller, /grcon-mascot-processing-alpha\.webm/);
 assert.match(controller, /grcon-mascot-wave-alpha\.webm/);
+assert.match(controller, /url\.searchParams\.set\("v", ASSET_REVISION\)/);
+assert.match(controller, /root\.location\.origin/);
 assert.match(controller, /video\.muted\s*=\s*true/);
 assert.match(controller, /video\.playsInline\s*=\s*true/);
+assert.match(controller, /video\.preload\s*=\s*"auto"/);
 assert.match(controller, /PROCESSING_STATES/);
-assert.match(controller, /record\.video\.loop\s*=\s*Boolean\(loop\)/);
 assert.match(controller, /result\?\.catch/);
+assert.match(controller, /canplaythrough/);
+assert.match(controller, /media-stalled/);
+assert.match(controller, /media-waiting/);
+assert.match(controller, /MediaError/);
 assert.match(controller, /is-video-active/);
-assert.match(controller, /official-png-static-fallback/);
-assert.match(controller, /prefers-reduced-motion: reduce/);
+assert.match(controller, /prefers-reduced-motion:reduce/);
 assert.match(controller, /visibilitychange/);
 assert.match(controller, /pagehide/);
+assert.match(controller, /root\.sessionStorage/);
+assert.match(controller, /SESSION_PREFIX/);
+assert.match(controller, /greetingAlreadyPlayed/);
+assert.match(controller, /markGreetingPlayed/);
+assert.match(controller, /clearGreetingFor/);
+assert.match(controller, /grcon-cloud-pending/);
+assert.match(controller, /session-reset/);
+assert.match(controller, /operationActive && \(state === "welcome" \|\| state === "hover"\)/);
 assert.match(controller, /root\.GrconMascot = Object\.freeze/);
 assert.doesNotMatch(controller, /root\.gsap|gsap\.|assets\/mascot\/layers|https?:\/\//i);
 assert.doesNotMatch(controller, /canvas|webassembly|\.riv/i);
@@ -71,10 +92,17 @@ assert.match(bootstrap, /mascot-controller="video"/);
 assert.doesNotMatch(bootstrap, /installGsap|vendor\/gsap|window\.gsap/i);
 
 for (const asset of [processingPath, wavePath, "grcon_mascot_controller.js"]) {
-  assert.ok(sw.includes(`"${asset}"`), `${asset} precisa funcionar offline`);
+  assert.ok(sw.includes(`"${asset}"`), `${asset} precisa continuar disponível no cache offline existente`);
 }
 assert.match(sw, /mascot-video1/);
 assert.doesNotMatch(sw, /vendor\/gsap|assets\/mascot\/layers|grcon-mascot-(?:body|head|right-arm|official-default)\.png/i);
+
+assert.match(vercel, /\/assets\/mascot\/video/);
+assert.match(vercel, /video\/webm/);
+assert.match(vercel, /max-age=31536000, immutable/);
+assert.match(vercel, /media-src 'self' blob:/);
+assert.match(vercel, /grcon_mascot_controller\.js/);
+assert.match(vercel, /no-cache, no-store, must-revalidate/);
 
 assert.equal(manifest.libraries.some((entry) => /gsap/i.test(entry.name) || /gsap/i.test(entry.file)), false);
 for (const obsolete of [
@@ -105,4 +133,4 @@ assert.ok(browser.includes("grcon-mascot-processing-alpha"), "teste visual preci
 assert.ok(browser.includes("grcon-mascot-wave-alpha"), "teste visual precisa validar o vídeo de aceno");
 assert.match(browser, /fallback/);
 
-console.log("grcon_mascot_video: OK — WebMs oficiais, eventos reais, fallback PNG e limpeza de obsoletos validados.");
+console.log("grcon_mascot_video: OK — cache versionado, saudação por sessão, prioridade operacional e fallback PNG validados.");
