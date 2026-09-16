@@ -106,6 +106,11 @@
     // Portanto o motor de revisão precisa existir ANTES de history_core.js ser carregado;
     // caso contrário a closure do histórico fica permanentemente com Revision = null.
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
+    const Revision = root.GrconSigemPwRevision;
+    if (!Revision || (typeof Revision.analyze !== "function" && typeof Revision.analyzeAsync !== "function")) {
+      throw new Error("O motor de revisão do Dashboard SIGEM × PW não foi inicializado. O histórico não será carregado para preservar a base vigente.");
+    }
+
     await root.GRCONModuleLoader.ensure("sigem_pw_history_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_management.js");
 
