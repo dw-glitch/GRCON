@@ -2,7 +2,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "4.1.0";
+  const VERSION = "4.1.1";
   const ENGINE = "official-video-v4";
   const ASSET_REVISION = "20260916.2";
   const STYLE_ID = "grcon-mascot-video-v4-style";
@@ -540,6 +540,10 @@
 
   function maybeWelcome() {
     if (operationActive) return;
+    if (document.documentElement.classList.contains("grcon-cloud-pending")) {
+      log("greeting-skip", { reason: "authenticated-interface-locked" });
+      return;
+    }
     const identity = currentIdentity();
     const userId = identity.userId || identity.email || "";
     if (!userId) return;
@@ -598,6 +602,7 @@
       reducedMotion: reducedMotion(),
       operationActive,
       operationState,
+      appLocked: document.documentElement.classList.contains("grcon-cloud-pending"),
       greetingPlayedThisSession: Boolean((identity.userId || identity.email) && greetingAlreadyPlayed(identity.userId || identity.email)),
       instances: records.size,
       activeVideos: Array.from(records.values()).filter((record) => record.host.classList.contains("is-video-active")).length,
