@@ -63,6 +63,20 @@ function functionBody(source, name, nextName) {
     "o teste deve proteger exatamente o caminho que antes executava null.analyze");
 })();
 
+(function legacyStage7ResetIsNeutralizedBeforeDashboardActivation() {
+  const preserve = functionBody(dashboardBootstrap, "preserveExistingStage7Data", "ensureRuntime");
+  const runtime = functionBody(dashboardBootstrap, "ensureRuntime", "afterFirstPaint");
+  const open = functionBody(dashboardBootstrap, "openDashboard", "openEvolution");
+  assert.match(preserve, /Core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
+  assert.match(preserve, /Core\.kvSet\(PRE_STAGE7_RESET_KEY/);
+  assert.match(preserve, /mode: "preserve-existing-data"/);
+  assert.doesNotMatch(preserve, /clearHistory|SIGEM_BASE_KEY|PW_BASE_KEY|LD_BASE_KEY/,
+    "a migração de preservação não pode apagar histórico nem bases ativas");
+  assert.match(runtime, /await preserveExistingStage7Data\(\)/);
+  assert.ok(runtime.indexOf("await preserveExistingStage7Data()") < open.indexOf("GrconSigemPwDashboardUi.activate"),
+    "o marcador de preservação deve existir antes da ativação da UI");
+})();
+
 (function rollbackTokenOnlyContainsCreatedSnapshots() {
   const checkpoint = { workingSets: [{ key: "latest:sigem", snapshotId: "old", documents: [] }] };
   const token = History.rollbackToken({
@@ -110,4 +124,4 @@ function functionBody(source, name, nextName) {
   assert.match(Dashboard.EMISSION_RULE, /0 e A.*duas entradas/i);
 })();
 
-console.log("sigem_pw_stage7_atomic_import: OK — preparação, dependências, persistência compartilhada e rollback integral validados.");
+console.log("sigem_pw_stage7_atomic_import: OK — preparação, dependências, preservação, persistência compartilhada e rollback integral validados.");
