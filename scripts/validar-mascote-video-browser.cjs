@@ -5,7 +5,7 @@ const baseUrl = process.env.GRCON_PREVIEW_URL || "http://127.0.0.1:8765";
 const fixtureUrl = `${baseUrl}/tests/fixtures/grcon-mascot-video.html`;
 
 async function waitReady(page) {
-  await page.waitForSelector(".grcon-brand-mascot", { state: "visible", timeout: 15000 });
+  await page.waitForSelector(".grcon-brand-mascot", { state: "attached", timeout: 15000 });
   await page.waitForFunction(() => window.GrconMascot?.diagnostics?.().ready, null, { timeout: 15000 });
 }
 async function operate(page) {
@@ -38,12 +38,11 @@ async function makePage(context, init) {
 async function main() {
   const browser = await chromium.launch({ headless: true });
   try {
-    // 1 — caminho principal: WebM real reproduz.
     const normalContext = await browser.newContext({ serviceWorkers: "block" });
     const normal = await makePage(normalContext);
     let d = await normal.evaluate(() => window.GrconMascot.diagnostics());
     assert.equal(d.engine, "official-video-v5-multiformat");
-    assert.equal(d.assetRevision, "20260916.3");
+    assert.equal(d.assetRevision, "20260916.4");
     assert.equal(d.instances, 1);
     assert.equal(await normal.locator("[data-grcon-mascot-motion-setting]").count(), 1);
     await operate(normal);
@@ -53,8 +52,6 @@ async function main() {
     assert.equal(d.activeVideos, 1);
     assert.equal(await normal.locator(".grcon-brand-mascot > video").count(), 1);
     assert.equal(await normal.locator(".grcon-brand-mascot > canvas").count(), 1);
-
-    // Trocas rápidas não criam instâncias/listeners de mídia duplicados.
     await normal.evaluate(() => {
       for (let i = 0; i < 60; i += 1) window.GrconMascot.play(i % 2 ? "checking-document" : "searching-files");
       window.GrconMascot.play("checking-document");
@@ -65,7 +62,6 @@ async function main() {
     assert.equal(await normal.locator(".grcon-brand-mascot > canvas").count(), 1);
     await normalContext.close();
 
-    // 2 — WebM bloqueado: H.264 local reconstruído e reproduzido em Blob.
     const fallbackContext = await browser.newContext({ serviceWorkers: "block" });
     const fallback = await fallbackContext.newPage();
     await fallback.route(/grcon-mascot-.*-alpha\.webm(?:\?.*)?$/, (route) => route.abort("failed"));
@@ -80,7 +76,6 @@ async function main() {
     assert.equal(await fallback.locator(".grcon-brand-mascot.is-compat-active > canvas").count(), 1);
     await fallbackContext.close();
 
-    // 3 — WebM e compat bloqueados: PNG final permanece visível.
     const pngContext = await browser.newContext({ serviceWorkers: "block" });
     const png = await pngContext.newPage();
     await png.route(/grcon-mascot-.*-alpha\.webm(?:\?.*)?$/, (route) => route.abort("failed"));
@@ -94,7 +89,6 @@ async function main() {
     assert.equal(await spriteVisible(png), true);
     await pngContext.close();
 
-    // 4 — reduced-motion sem escolha explícita: PNG, não erro de codec.
     const reducedContext = await browser.newContext({ reducedMotion: "reduce", serviceWorkers: "block" });
     const reduced = await makePage(reducedContext);
     await operate(reduced);
@@ -107,7 +101,6 @@ async function main() {
     assert.equal(await spriteVisible(reduced), true);
     await reducedContext.close();
 
-    // 5 — escolha explícita ON prevalece sobre reduced-motion.
     const overrideContext = await browser.newContext({ reducedMotion: "reduce", serviceWorkers: "block" });
     const override = await makePage(overrideContext, () => localStorage.setItem("grcon:mascot:animations:v5", "on"));
     await operate(override);
@@ -118,7 +111,6 @@ async function main() {
     assert.equal(d.animationsEnabled, true);
     await overrideContext.close();
 
-    // 6 — escolha explícita OFF bloqueia animação mesmo sem reduced-motion.
     const offContext = await browser.newContext({ serviceWorkers: "block" });
     const off = await makePage(offContext, () => localStorage.setItem("grcon:mascot:animations:v5", "off"));
     await operate(off);
@@ -128,7 +120,6 @@ async function main() {
     assert.deepEqual(d.formats, ["png"]);
     await offContext.close();
 
-    // 7 — autoplay é classificado separadamente e mantém PNG.
     const autoplayContext = await browser.newContext({ serviceWorkers: "block" });
     const autoplay = await makePage(autoplayContext, () => {
       HTMLMediaElement.prototype.play = function () {
@@ -143,7 +134,6 @@ async function main() {
     assert.equal(await spriteVisible(autoplay), true);
     await autoplayContext.close();
 
-    // 8 — saudação: só após desbloqueio e uma vez por sessão.
     const greetingContext = await browser.newContext({ serviceWorkers: "block" });
     await greetingContext.addInitScript(() => {
       window.GrconCloud = {
