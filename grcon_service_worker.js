@@ -83,6 +83,13 @@
     navigator.serviceWorker.register(SW_URL, { scope: "./", updateViaCache: "none" }).then((registration) => {
       registration.update().catch(() => {});
       window.dispatchEvent(new CustomEvent("grcon:sw-updated", { detail: { scope: registration.scope, revision: window.GRCON_SW_REVISION } }));
+      // A trava existe apenas para a transição atual. Depois que a página
+      // estabiliza sob o novo controller, ela precisa ser liberada para que
+      // uma futura versão do GRCON também possa fazer seu único reload.
+      window.setTimeout(() => {
+        try { sessionStorage.removeItem(RELOAD_GUARD); } catch (_) {}
+        reloadingForUpdate = false;
+      }, 1500);
     }).catch((error) => console.warn("GRCON SW v6 falhou:", error));
   });
 })();
