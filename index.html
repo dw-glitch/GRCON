@@ -788,13 +788,12 @@
 <script defer="" src="grdt_history_indicator.js"></script>
 <script defer="" src="egrdt_email_reply.js"></script>
 <script defer="" src="egrdt_email_reply_ui.js"></script>
-<!-- Mascote HD carregado antes do app: o clique de análise nunca ocorre antes
-     de os listeners e estilos de animação estarem disponíveis. -->
+<!-- Mascote HD carregado antes do app: o PNG aparece imediatamente e o
+     controlador troca para os WebMs locais somente após o primeiro frame. -->
 <script defer="" data-grcon-mascot-loader="true" src="grcon_mascot_header.js"></script>
 <script defer="" data-grcon-mascot-asset-fix="true" src="grcon_mascot_asset_fix.js"></script>
 <script defer="" data-grcon-mascot-greeting-core="true" src="grcon_mascot_greeting_core.js"></script>
-<script defer="" data-grcon-gsap-runtime="local" src="vendor/gsap/gsap.min.js"></script>
-<script defer="" data-grcon-mascot-controller="gsap" src="grcon_mascot_controller.js"></script>
+<script defer="" data-grcon-mascot-controller="video" src="grcon_mascot_controller.js"></script>
 <script defer="" src="app.js"></script>
 <script defer="" src="macro5_flow_core.js"></script>
 

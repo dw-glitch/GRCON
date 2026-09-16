@@ -30,12 +30,6 @@
       "name": "pdf-lib",
       "version": "1.17.1",
       "sha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f"
-    },
-    {
-      "file": "vendor/gsap/gsap.min.js",
-      "name": "GSAP",
-      "version": "3.13.0",
-      "sha256": "a54d1eac0991068ba0b1517906889e98f0f677f03612820a0d66957bbffb2be4"
     }
   ]
 }
