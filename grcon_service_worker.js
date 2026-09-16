@@ -3,38 +3,41 @@
 
   // Mascote oficial da Qualidade. Mantido em módulos separados para que a
   // integração visual não se misture com regras de negócio ou navegação.
-  const installMascotGreeting = () => {
-    if (window.GRCONMascotGreeting || document.querySelector('script[data-grcon-mascot-greeting="true"]')) return;
-
-    const installInteraction = () => {
-      if (window.GRCONMascotGreeting || document.querySelector('script[data-grcon-mascot-greeting="true"]')) return;
-      const interaction = document.createElement("script");
-      interaction.src = "grcon_mascot_greeting.js";
-      interaction.async = false;
-      interaction.dataset.grconMascotGreeting = "true";
-      document.head.appendChild(interaction);
+  const installMascotController = () => {
+    if (window.GrconMascot || document.querySelector('script[data-grcon-mascot-controller="gsap"]')) return;
+    const installController = () => {
+      if (window.GrconMascot || document.querySelector('script[data-grcon-mascot-controller="gsap"]')) return;
+      const controller = document.createElement("script");
+      controller.src = "grcon_mascot_controller.js";
+      controller.async = false;
+      controller.dataset.grconMascotController = "gsap";
+      document.head.appendChild(controller);
     };
-
-    if (window.GRCONMascotGreetingCore) {
-      installInteraction();
-      return;
-    }
+    const installGsap = () => {
+      if (window.gsap) return installController();
+      const existingGsap = document.querySelector('script[data-grcon-gsap-runtime="local"]');
+      if (existingGsap) return existingGsap.addEventListener("load", installController, { once: true });
+      const runtime = document.createElement("script");
+      runtime.src = "vendor/gsap/gsap.min.js";
+      runtime.async = false;
+      runtime.dataset.grconGsapRuntime = "local";
+      runtime.addEventListener("load", installController, { once: true });
+      document.head.appendChild(runtime);
+    };
+    if (window.GRCONMascotGreetingCore) return installGsap();
     const existingCore = document.querySelector('script[data-grcon-mascot-greeting-core="true"]');
-    if (existingCore) {
-      existingCore.addEventListener("load", installInteraction, { once: true });
-      return;
-    }
+    if (existingCore) return existingCore.addEventListener("load", installGsap, { once: true });
     const core = document.createElement("script");
     core.src = "grcon_mascot_greeting_core.js";
     core.async = false;
     core.dataset.grconMascotGreetingCore = "true";
-    core.addEventListener("load", installInteraction, { once: true });
+    core.addEventListener("load", installGsap, { once: true });
     document.head.appendChild(core);
   };
 
   const installMascotAssetFix = () => {
     if (document.querySelector('script[data-grcon-mascot-asset-fix="true"]')) {
-      installMascotGreeting();
+      installMascotController();
       return;
     }
     const fix = document.createElement("script");
@@ -42,7 +45,7 @@
     fix.async = false;
     fix.dataset.grconMascotAssetFix = "true";
     document.head.appendChild(fix);
-    installMascotGreeting();
+    installMascotController();
   };
 
   const installMascotHeader = () => {

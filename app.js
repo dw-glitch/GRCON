@@ -727,6 +727,9 @@
   function showToast(message, kind = "info") {
     els.toast.textContent = message;
     els.toast.className = `toast show ${kind}`;
+    window.dispatchEvent(new CustomEvent("grcon:notification", {
+      detail: { message: String(message || ""), kind: String(kind || "info") },
+    }));
     window.clearTimeout(showToast.timer);
     showToast.timer = window.setTimeout(() => { els.toast.className = "toast"; }, 6500);
   }

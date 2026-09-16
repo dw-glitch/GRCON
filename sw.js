@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-mascot-hd1-mascot-greeting1-processing6-official-rive-raster1-frame-events-spw-worker-ui-cleanup1";
+const CACHE_NAME = "grcon-v5.40.10-mascot-hd1-official-png-gsap1-spw-worker-ui-cleanup1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -30,9 +30,6 @@ const ASSETS = [
   "grcon-logo-app.png",
   "grcon-logo-report.png",
   "grcon-mascot-sprite.png",
-  "assets/mascot/animated/grcon-mascot-wave.png",
-  "assets/mascot/animated/grcon-mascot-analyze.png",
-  "assets/mascot/animated/grcon-mascot-success.png",
   "manifest.json",
   "offline_resources.js",
   "grcon_bootstrap_head.js",
@@ -41,12 +38,12 @@ const ASSETS = [
   "grcon_mascot_header.js",
   "grcon_mascot_asset_fix.js",
   "grcon_mascot_greeting_core.js",
-  "grcon_mascot_greeting.js",
-  "grcon_mascot_rive.js",
-  "vendor/rive/rive.js",
-  "vendor/rive/rive.wasm",
-  "vendor/rive/rive_fallback.wasm",
-  "assets/mascot/rive/build/grcon-mascot.riv",
+  "vendor/gsap/gsap.min.js",
+  "grcon_mascot_controller.js",
+  "assets/mascot/layers/grcon-mascot-official-default.png",
+  "assets/mascot/layers/grcon-mascot-body.png",
+  "assets/mascot/layers/grcon-mascot-head.png",
+  "assets/mascot/layers/grcon-mascot-right-arm.png",
   "analysis_runtime_guard.js",
   "sigem_pw_dashboard_bootstrap.js",
   "sigem_pw_dashboard_core.js",
@@ -174,13 +171,11 @@ const HEAVY_ASSETS = new Set([
   "grcon-logo-app.ico",
   "grcon-logo-report.png",
   "grcon-mascot-sprite.png",
-  "assets/mascot/animated/grcon-mascot-wave.png",
-  "assets/mascot/animated/grcon-mascot-analyze.png",
-  "assets/mascot/animated/grcon-mascot-success.png",
-  "rive.js",
-  "rive.wasm",
-  "rive_fallback.wasm",
-  "grcon-mascot.riv",
+  "gsap.min.js",
+  "grcon-mascot-official-default.png",
+  "grcon-mascot-body.png",
+  "grcon-mascot-head.png",
+  "grcon-mascot-right-arm.png",
 ]);
 
 async function fetchAndCache(request) {
