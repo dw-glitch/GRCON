@@ -1,8 +1,8 @@
 (function () {
   "use strict";
 
-  window.GRCON_SW_REVISION = "20260916.3-mascot-multiformat";
-  const SW_URL = "sw-v6.js?v=20260916.3";
+  window.GRCON_SW_REVISION = "20260916.4-mascot-running-lane";
+  const SW_URL = "sw-v6.js?v=20260916.4";
   const RELOAD_GUARD = "grcon:sw-v6:controller-reload";
 
   const installMascotController = () => {
@@ -10,7 +10,7 @@
     const installController = () => {
       if (window.GrconMascot || document.querySelector('script[data-grcon-mascot-controller="video"]')) return;
       const controller = document.createElement("script");
-      controller.src = "grcon_mascot_controller.js?v=20260916.3";
+      controller.src = "grcon_mascot_controller.js?v=20260916.4";
       controller.async = false;
       controller.dataset.grconMascotController = "video";
       document.head.appendChild(controller);
@@ -50,7 +50,25 @@
     script.addEventListener("load", installMascotAssetFix, { once: true });
     document.head.appendChild(script);
   };
+
+  const installMascotRunner = () => {
+    if (!document.querySelector('link[data-grcon-mascot-runner-style="true"]')) {
+      const style = document.createElement("link");
+      style.rel = "stylesheet";
+      style.href = "grcon_mascot_runner.css?v=20260916.4";
+      style.dataset.grconMascotRunnerStyle = "true";
+      document.head.appendChild(style);
+    }
+    if (window.GrconMascotRunner || document.querySelector('script[data-grcon-mascot-runner="true"]')) return;
+    const script = document.createElement("script");
+    script.src = "grcon_mascot_runner.js?v=20260916.4";
+    script.async = false;
+    script.dataset.grconMascotRunner = "true";
+    document.head.appendChild(script);
+  };
+
   installMascotHeader();
+  installMascotRunner();
 
   const installSigemPwDashboard = () => {
     const loader = window.GRCONModuleLoader;
@@ -83,9 +101,6 @@
     navigator.serviceWorker.register(SW_URL, { scope: "./", updateViaCache: "none" }).then((registration) => {
       registration.update().catch(() => {});
       window.dispatchEvent(new CustomEvent("grcon:sw-updated", { detail: { scope: registration.scope, revision: window.GRCON_SW_REVISION } }));
-      // A trava existe apenas para a transição atual. Depois que a página
-      // estabiliza sob o novo controller, ela precisa ser liberada para que
-      // uma futura versão do GRCON também possa fazer seu único reload.
       window.setTimeout(() => {
         try { sessionStorage.removeItem(RELOAD_GUARD); } catch (_) {}
         reloadingForUpdate = false;
