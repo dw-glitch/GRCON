@@ -26,6 +26,13 @@ async function visibleFallback(page) {
   });
 }
 
+async function unlockAuthenticatedApp(page) {
+  await page.evaluate(() => {
+    document.documentElement.classList.remove("grcon-cloud-pending");
+    window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
+  });
+}
+
 async function main() {
   fs.mkdirSync(outputDir, { recursive: true });
   const browser = await chromium.launch({ headless: true });
@@ -173,6 +180,7 @@ async function main() {
     });
     const greetingPage = await greetingContext.newPage();
     await greetingPage.addInitScript(() => {
+      document.documentElement.classList.add("grcon-cloud-pending");
       window.GrconCloud = {
         state: { session: { user: { id: "browser-test-user", email: "vinicio@example.invalid" } } },
         getCurrentUserIdentity() {
@@ -180,29 +188,37 @@ async function main() {
         },
       };
     });
-    await greetingPage.goto(`${fixtureUrl}?greeting=1`, { waitUntil: "networkidle", timeout: 30000 });
+    await greetingPage.goto(`${fixtureUrl}?greeting=1`, { waitUntil: "domcontentloaded", timeout: 30000 });
     await waitForMascot(greetingPage);
+    let lockedGreeting = await greetingPage.evaluate(() => window.GrconMascot.diagnostics());
+    assert.equal(lockedGreeting.appLocked, true);
+    assert.equal(lockedGreeting.greetingPlayedThisSession, false, "aceno não deve ser consumido atrás da tela de autenticação");
+    assert.deepEqual(lockedGreeting.states, ["idle"]);
+
+    await unlockAuthenticatedApp(greetingPage);
     await greetingPage.waitForFunction(() => {
       const value = window.GrconMascot.diagnostics();
-      return value.greetingPlayedThisSession && value.states.includes("welcome");
+      return value.greetingPlayedThisSession && value.states.includes("welcome") && value.activeVideos === 1;
     }, null, { timeout: 15000 });
     const greetingText = await greetingPage.locator("#grcon-mascot-greeting-bubble").textContent();
     assert.equal(greetingText, "Olá, Vinicio!");
     await greetingPage.screenshot({ path: path.join(outputDir, "login-greeting-wave.png") });
 
-    await greetingPage.reload({ waitUntil: "networkidle", timeout: 30000 });
+    await greetingPage.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
     await waitForMascot(greetingPage);
+    lockedGreeting = await greetingPage.evaluate(() => window.GrconMascot.diagnostics());
+    assert.equal(lockedGreeting.appLocked, true);
+    assert.equal(lockedGreeting.greetingPlayedThisSession, true, "refresh deve preservar a marca de saudação da sessão");
+    await unlockAuthenticatedApp(greetingPage);
+    await greetingPage.waitForTimeout(350);
     const afterRefresh = await greetingPage.evaluate(() => window.GrconMascot.diagnostics());
     assert.equal(afterRefresh.greetingPlayedThisSession, true);
     assert.equal(afterRefresh.activeVideos, 0, "refresh na mesma sessão não deve repetir o aceno");
     assert.deepEqual(afterRefresh.states, ["idle"]);
 
     await greetingPage.evaluate(() => document.documentElement.classList.add("grcon-cloud-pending"));
-    await greetingPage.waitForTimeout(100);
-    await greetingPage.evaluate(() => {
-      document.documentElement.classList.remove("grcon-cloud-pending");
-      window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
-    });
+    await greetingPage.waitForFunction(() => window.GrconMascot.diagnostics().greetingPlayedThisSession === false, null, { timeout: 5000 });
+    await unlockAuthenticatedApp(greetingPage);
     await greetingPage.waitForFunction(() => window.GrconMascot.diagnostics().states.includes("welcome"), null, { timeout: 15000 });
     assert.equal((await greetingPage.evaluate(() => window.GrconMascot.diagnostics())).greetingPlayedThisSession, true, "novo login após logout deve poder cumprimentar novamente");
     await greetingContext.close();
