@@ -37,9 +37,8 @@ jobs:
         run: |
           set -euo pipefail
           curl -L --fail --retry 3 --retry-delay 2 "$SOURCE_URL" -o /tmp/grcon-mascot-running-source.mp4
-          ffprobe -v error -show_entries stream=codec_name,width,height,pix_fmt,r_frame_rate -show_entries format=duration,size -of json /tmp/grcon-mascot-running-source.mp4
 
-      - name: Gerar WebM alpha, MP4 compatível e poster transparente
+      - name: Regerar assets finais
         shell: bash
         run: |
           set -euo pipefail
@@ -82,23 +81,43 @@ jobs:
           (root/'grcon-mascot-running-metadata.json').write_text(json.dumps(data, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
           PY
 
-          ls -lh assets/mascot/video/grcon-mascot-running-*
-          ffprobe -v error -show_entries stream=codec_name,width,height,pix_fmt,r_frame_rate:stream_tags=alpha_mode -show_entries format=duration,size -of json assets/mascot/video/grcon-mascot-running-alpha.webm
-          ffprobe -v error -show_entries stream=codec_name,width,height,pix_fmt,r_frame_rate -show_entries format=duration,size -of json assets/mascot/video/grcon-mascot-running-compat.mp4
+      - name: Atualizar revisão do controlador e remover workflow temporário
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('grcon_mascot_controller_v5.js')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'const ASSET_REVISION = "20260916.3";': 'const ASSET_REVISION = "20260916.4";',
+              'const EXPECTED_SW_REVISION = "20260916.3-mascot-multiformat";': 'const EXPECTED_SW_REVISION = "20260916.4-mascot-running-lane";',
+              'const EXPECTED_CACHE = "grcon-v5.40.11-mascot-multiformat-v2";': 'const EXPECTED_CACHE = "grcon-v5.40.11-mascot-running-v3";',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'constante esperada não encontrada: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git rm .github/workflows/build-running-mascot-once.yml
 
-      - name: Versionar assets na branch
+      - name: Versionar resultado final
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/mascot/video/grcon-mascot-running-alpha.webm \
+          git add grcon_mascot_controller_v5.js \
+                  assets/mascot/video/grcon-mascot-running-alpha.webm \
                   assets/mascot/video/grcon-mascot-running-compat.mp4 \
                   assets/mascot/video/grcon-mascot-running-poster.png \
-                  assets/mascot/video/grcon-mascot-running-metadata.json
+                  assets/mascot/video/grcon-mascot-running-metadata.json \
+                  .github/workflows/build-running-mascot-once.yml
+          git diff --cached --check
           if git diff --cached --quiet; then
-            echo "Assets já estão atualizados."
+            echo "Nada a versionar."
             exit 0
           fi
-          git commit -m "Adicionar vídeo de corrida do mascote [skip ci]"
+          git commit -m "Finalizar assets e revisão da corrida do mascote [skip ci]"
           git push origin HEAD:codex/mascot-running-lane
