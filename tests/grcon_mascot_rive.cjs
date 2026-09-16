@@ -70,6 +70,7 @@ const sw = read("sw.js");
 const vercel = read("vercel.json");
 const workflow = read(".github/workflows/rive-authoring.yml");
 const browserSmoke = read("scripts/validar-mascote-rive-browser.cjs");
+const inspectCheck = read("scripts/verificar-mascote-rive-inspect.cjs");
 const browserFixture = read("tests/fixtures/grcon-mascot-rive.html");
 const sprite = read("grcon-mascot-sprite.png", null);
 const riv = read("assets/mascot/rive/build/grcon-mascot.riv", null);
@@ -142,6 +143,9 @@ for (const asset of [
 assert.match(workflow, /Rive CLI oficial/);
 assert.match(workflow, /assets\/mascot\/rive --verify/);
 assert.match(workflow, /validar-mascote-rive-browser\.cjs/);
+assert.match(workflow, /verificar-mascote-rive-inspect\.cjs/);
+assert.match(inspectCheck, /value\.type === "KeyFrameDouble"/);
+assert.match(inspectCheck, /interpolationType !== "linear"/);
 assert.match(browserSmoke, /tests\/fixtures\/grcon-mascot-rive\.html/);
 assert.match(browserFixture, /src="vendor\/rive\/rive\.js"/);
 assert.match(browserFixture, /src="grcon_mascot_rive\.js"/);
