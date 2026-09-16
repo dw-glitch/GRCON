@@ -5,11 +5,14 @@
   };
   const api = factory(
     root.GrconSigemPwDashboard || safeRequire("./sigem_pw_dashboard_core.js"),
-    root.GrconSigemPwRevision || safeRequire("./sigem_pw_revision_core.js")
+    // Resolva a dependência no momento do uso. Em uma aba antiga/cacheada, este
+    // arquivo pode ser avaliado antes de revision_core; capturar o valor aqui
+    // congelaria null na closure e faria recordActiveBases chamar null.analyze.
+    () => root.GrconSigemPwRevision || safeRequire("./sigem_pw_revision_core.js")
   );
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconSigemPwHistory = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard, Revision) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard, getRevision) {
   "use strict";
 
   const DB_NAME = "grcon-sigem-pw-history";
@@ -30,11 +33,26 @@
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
   function norm(value) { return Dashboard && Dashboard.norm ? Dashboard.norm(value) : text(value).toUpperCase(); }
   function nowIso() { return new Date().toISOString(); }
-  function revisionOf(record) { return Revision && Revision.revisionValue ? Revision.revisionValue(record) : text(record && (record.revision || record.revisionComplete)); }
+  function resolveRevisionRuntime(required) {
+    const revision = typeof getRevision === "function" ? getRevision() : null;
+    const ready = revision
+      && (typeof revision.analyze === "function" || typeof revision.analyzeAsync === "function");
+    if (required && !ready) {
+      throw new Error("O motor de revisão do Dashboard SIGEM × PW não está disponível. A base vigente foi preservada; reabra o módulo e tente novamente.");
+    }
+    return revision;
+  }
+  function revisionOf(record) {
+    const revision = resolveRevisionRuntime(false);
+    return revision && revision.revisionValue
+      ? revision.revisionValue(record)
+      : text(record && (record.revision || record.revisionComplete));
+  }
   function currentStatus(document, system) { return system === SYSTEMS.PW ? text(document && document.current && document.current.state) : text(document && document.current && document.current.status); }
   function isComparable(document) {
     if (!document || !CLASSES.includes(text(document.documentClass))) return false;
-    if (Revision && typeof Revision.comparableDocument === "function") return Revision.comparableDocument(document);
+    const revision = resolveRevisionRuntime(false);
+    if (revision && typeof revision.comparableDocument === "function") return revision.comparableDocument(document);
     return true;
   }
   function distribution(items, selector) {
@@ -213,7 +231,8 @@
 
   function revisionState(row) {
     if (!row) return "review";
-    const s = Revision && Revision.SITUATIONS || {};
+    const revision = resolveRevisionRuntime(false);
+    const s = revision && revision.SITUATIONS || {};
     if (row.situation === s.UPDATED) return "aligned";
     if (row.situation === s.AWAITING_EMISSION) return "awaiting-emission";
     if (row.situation === s.PREVIOUS || row.situation === s.NOT_FOUND) return "post-pw";
@@ -276,8 +295,9 @@
       const states = countStates(docs);
       const alignedEntries = aggregate.lists.aligned.filter((row) => row.documentClass === documentClass).length;
       const rc = { updated: 0, previous: 0, notFound: 0, awaitingEmission: 0, pwAhead: 0, review: 0 };
+      const revision = resolveRevisionRuntime(false);
+      const situations = revision && revision.SITUATIONS || {};
       for (const row of rows) {
-        const situations = Revision && Revision.SITUATIONS || {};
         if (row.situation === situations.UPDATED) rc.updated += 1;
         else if (row.situation === situations.PREVIOUS) rc.previous += 1;
         else if (row.situation === situations.NOT_FOUND) rc.notFound += 1;
@@ -650,9 +670,10 @@
       if (hasSigem && hasPw) {
         const sigemSnapshot = sigem && sigem.snapshot || buildSourceSnapshot(SYSTEMS.SIGEM, sigemBase, model, { recordedAt }).snapshot;
         const pwSnapshot = pw && pw.snapshot || buildSourceSnapshot(SYSTEMS.PW, pwBase, model, { recordedAt }).snapshot;
-        const revisionAnalysis = Revision && typeof Revision.analyzeAsync === "function"
-          ? await Revision.analyzeAsync(model, { chunkSize: 500 })
-          : Revision.analyze(model);
+        const revision = resolveRevisionRuntime(true);
+        const revisionAnalysis = typeof revision.analyzeAsync === "function"
+          ? await revision.analyzeAsync(model, { chunkSize: 500 })
+          : revision.analyze(model);
         comparison = await recordComparison(sigemSnapshot, pwSnapshot, model, revisionAnalysis, recordedAt);
       }
       const result = { sigem, pw, comparison };
@@ -672,7 +693,7 @@
 
   return Object.freeze({
     DB_NAME, DB_VERSION, CALCULATION_VERSION, STORES, SYSTEMS, CLASSES, PENDING_STATES, WORKING_KEYS,
-    text, norm, isComparable, contentFingerprint, minimalDocuments, sourceMetrics, buildSourceSnapshot,
+    text, norm, resolveRevisionRuntime, isComparable, contentFingerprint, minimalDocuments, sourceMetrics, buildSourceSnapshot,
     compareSourceDocuments, sourceChangeDetails, relationSets, revisionState, comparisonDocuments, countStates,
     classComparisonMetrics, buildComparisonSnapshot, compareComparisonDocuments, transitionDetails, metricDelta,
     openDb, getSnapshot, listSourceSnapshots, listComparisonSnapshots, loadWorkingSet, loadSnapshotChanges, updateSourceSnapshotDate,

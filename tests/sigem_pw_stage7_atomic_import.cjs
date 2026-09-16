@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const rootDir = path.resolve(__dirname, "..");
 const read = (name) => fs.readFileSync(path.join(rootDir, name), "utf8");
@@ -43,7 +44,7 @@ function functionBody(source, name, nextName) {
   assert.match(conferenceCore, /await kvSetMany\(\[\s*\[BASE_KEY, prepared\.base\],\s*\[STATE_KEY, prepared\.state\],\s*\[AUDIT_KEY, prepared\.audit\]/);
 })();
 
-(function revisionRuntimeIsReadyBeforeHistoryFactoryCapturesIt() {
+(function revisionRuntimeIsReadyBeforeHistoryLoads() {
   const runtime = functionBody(dashboardBootstrap, "ensureRuntime", "afterFirstPaint");
   const deferred = functionBody(dashboardBootstrap, "loadDeferredEnhancements", "openDashboard");
   const revisionLoad = runtime.indexOf('ensure("sigem_pw_revision_core.js")');
@@ -59,8 +60,30 @@ function functionBody(source, name, nextName) {
   );
   assert.doesNotMatch(deferred, /sigem_pw_revision_core\.js/,
     "revision core não pode voltar a ser dependência tardia/deferred");
-  assert.match(historyCore, /Revision && typeof Revision\.analyzeAsync === "function"[\s\S]*: Revision\.analyze\(model\)/,
-    "o teste deve proteger exatamente o caminho que antes executava null.analyze");
+  assert.match(historyCore, /const revision = resolveRevisionRuntime\(true\)/);
+  assert.match(historyCore, /typeof revision\.analyzeAsync === "function"[\s\S]*: revision\.analyze\(model\)/,
+    "o registro deve obter o analisador validado no momento do uso");
+})();
+
+(function historyLoadedBeforeRevisionSelfRecovers() {
+  const context = { console };
+  context.globalThis = context;
+  vm.runInNewContext(historyCore, context, { filename: "sigem_pw_history_core.js" });
+  const earlyHistory = context.GrconSigemPwHistory;
+
+  assert.throws(
+    () => earlyHistory.resolveRevisionRuntime(true),
+    /motor de revisão.*não está disponível/i,
+    "o histórico deve falhar de forma explícita e segura enquanto o motor ainda não existe"
+  );
+
+  const lateRevision = { analyze() { return { rows: [] }; } };
+  context.GrconSigemPwRevision = lateRevision;
+  assert.equal(
+    earlyHistory.resolveRevisionRuntime(true),
+    lateRevision,
+    "a mesma instância do histórico deve enxergar o motor carregado posteriormente, sem recarregar a página"
+  );
 })();
 
 (function legacyStage7ResetIsNeutralizedBeforeDashboardActivation() {
