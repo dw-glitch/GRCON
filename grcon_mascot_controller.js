@@ -1,41 +1,38 @@
-/* GRCON — controlador central do Mascote da Qualidade: PNG oficial + GSAP local. */
+/* GRCON — controlador central do Mascote da Qualidade: vídeos locais + PNG oficial. */
 (function (root) {
   "use strict";
 
-  const VERSION = "2.0.0";
-  const ENGINE = "official-png-gsap-v2";
-  const STYLE_ID = "grcon-mascot-gsap-style";
+  const VERSION = "3.0.0";
+  const ENGINE = "official-video-v1";
+  const STYLE_ID = "grcon-mascot-video-style";
   const SELECTOR = ".grcon-brand-mascot, .grcon-mascot-context";
   const CSS_TARGET = ":is(.grcon-brand-mascot, .grcon-mascot-context)";
   const CORE = root.GRCONMascotGreetingCore;
-  const gsap = root.gsap;
   const ASSETS = Object.freeze({
-    body: new URL("assets/mascot/layers/grcon-mascot-body.png", document.baseURI).href,
-    head: new URL("assets/mascot/layers/grcon-mascot-head.png", document.baseURI).href,
-    arm: new URL("assets/mascot/layers/grcon-mascot-right-arm.png", document.baseURI).href,
+    processing: new URL("assets/mascot/video/grcon-mascot-processing-alpha.webm", document.baseURI).href,
+    wave: new URL("assets/mascot/video/grcon-mascot-wave-alpha.webm", document.baseURI).href,
   });
   const STATES = Object.freeze([
     "idle", "welcome", "hover", "analyzing", "searching-files",
     "checking-document", "confused", "success", "warning", "error",
     "uploading", "generating-grdt", "checking-ld", "sigem-pw-analysis", "loading",
   ]);
-  const POSE_STATES = Object.freeze({
-    default: "idle", quality: "idle", analysis: "analyzing", search: "searching-files",
-    check: "checking-document", history: "checking-document", dashboard: "checking-document",
-    "sigem-pw": "sigem-pw-analysis", egrdt: "generating-grdt", import: "uploading",
-    report: "checking-document", warning: "warning", success: "success",
-    pending: "loading", empty: "idle",
-  });
-  const TRANSIENT_STATES = new Set(["welcome", "success", "warning", "error"]);
-
+  const PROCESSING_STATES = new Set([
+    "analyzing", "searching-files", "checking-document", "confused", "uploading",
+    "generating-grdt", "checking-ld", "sigem-pw-analysis", "loading",
+  ]);
   const records = new Map();
+  const failedModes = new Set();
+  const videoProbe = document.createElement("video");
+  const videoSupported = Boolean(videoProbe.canPlayType?.('video/webm; codecs="vp9"'));
   let observer = null;
-  let assetsReady = false;
-  let assetsFailed = false;
+  let initialized = false;
   let operationActive = false;
   let operationState = "";
   let pendingOutcome = "";
-  let pulseCall = null;
+  let pulseTimer = 0;
+  let transientTimer = 0;
+  let welcomeTimer = 0;
   let bubble = null;
   let activeBubbleHost = null;
   let pinnedBubbleHost = null;
@@ -46,109 +43,38 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      ${CSS_TARGET}.grcon-mascot-gsap {
+      ${CSS_TARGET}.grcon-mascot-video-host {
         pointer-events: auto;
         overflow: visible;
         isolation: isolate;
         touch-action: manipulation;
       }
-      .grcon-mascot-stage {
+      .grcon-mascot-video {
         position: absolute;
         z-index: 2;
         inset: 0;
         width: 100%;
         height: 100%;
+        display: block;
+        object-fit: contain;
+        pointer-events: none;
         opacity: 0;
         visibility: hidden;
-        pointer-events: none;
-        contain: layout paint style;
         transform: translateZ(0);
+        transition: opacity 120ms ease-out;
+        filter: drop-shadow(0 5px 12px rgb(12 32 48 / 18%));
       }
-      .grcon-mascot-gsap.is-gsap-ready .grcon-mascot-stage {
+      ${CSS_TARGET}.is-video-active > .grcon-mascot-video {
         opacity: 1;
         visibility: visible;
       }
-      .grcon-mascot-gsap.is-gsap-ready > .grcon-mascot-sprite {
+      ${CSS_TARGET}.is-video-active > .grcon-mascot-sprite {
         opacity: 0;
         visibility: hidden;
       }
-      .grcon-mascot-layer {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: contain;
-        backface-visibility: hidden;
-        transform: translateZ(0);
-        pointer-events: none;
+      html[data-theme="dark"] .grcon-mascot-video {
+        filter: drop-shadow(0 6px 15px rgb(0 0 0 / 38%));
       }
-      .grcon-mascot-body { z-index: 1; background-image: url("${ASSETS.body}"); transform-origin: 50% 82%; }
-      .grcon-mascot-head { z-index: 3; background-image: url("${ASSETS.head}"); transform-origin: 50% 39%; }
-      .grcon-mascot-arm { z-index: 7; background-image: url("${ASSETS.arm}"); transform-origin: 65.9% 41.1%; }
-      .grcon-mascot-folder {
-        position: absolute;
-        z-index: 5;
-        left: 9%;
-        bottom: 5%;
-        width: 43%;
-        height: 31%;
-        border: 1px solid rgb(12 92 133 / 52%);
-        border-radius: 7% 10% 10% 8%;
-        background: linear-gradient(155deg, #47b5df 0 18%, #1684b9 19% 100%);
-        box-shadow: 0 4px 9px rgb(10 54 78 / 22%);
-        opacity: 0;
-        transform-origin: 18% 90%;
-        pointer-events: none;
-      }
-      .grcon-mascot-folder::before {
-        content: "";
-        position: absolute;
-        left: 7%;
-        top: -20%;
-        width: 44%;
-        height: 28%;
-        border: inherit;
-        border-bottom: 0;
-        border-radius: 18% 22% 0 0;
-        background: #42acd5;
-      }
-      .grcon-mascot-paper {
-        position: absolute;
-        z-index: 4;
-        width: 25%;
-        aspect-ratio: .76;
-        border: 1px solid rgb(15 98 142 / 48%);
-        border-radius: 6% 12% 6% 6%;
-        background:
-          linear-gradient(rgb(31 139 190 / 70%), rgb(31 139 190 / 70%)) 22% 34% / 57% 5% no-repeat,
-          linear-gradient(rgb(72 157 196 / 48%), rgb(72 157 196 / 48%)) 22% 50% / 45% 4% no-repeat,
-          linear-gradient(rgb(72 157 196 / 38%), rgb(72 157 196 / 38%)) 22% 65% / 55% 4% no-repeat,
-          linear-gradient(145deg, #fff 0 74%, #dcecf4 75% 100%);
-        box-shadow: 0 3px 7px rgb(12 54 77 / 18%);
-        color: #0b628f;
-        font: 800 clamp(5px, .48em, 8px)/1 system-ui, sans-serif;
-        text-align: center;
-        padding-top: 12%;
-        opacity: 0;
-        transform-origin: 50% 82%;
-        pointer-events: none;
-      }
-      .grcon-mascot-paper::after {
-        content: "";
-        position: absolute;
-        inset: 0 0 auto auto;
-        width: 27%;
-        aspect-ratio: 1;
-        border: 0 solid rgb(15 98 142 / 25%);
-        border-width: 0 0 1px 1px;
-        background: #d8eaf3;
-        transform: translate(22%, -22%) rotate(45deg);
-      }
-      .grcon-mascot-paper-a { left: -6%; top: 31%; }
-      .grcon-mascot-paper-b { right: -7%; top: 45%; }
-      .grcon-mascot-paper-c { left: 18%; bottom: -8%; }
       .grcon-mascot-speech {
         position: fixed;
         z-index: 340;
@@ -166,12 +92,18 @@
         opacity: 0;
         visibility: hidden;
         transform: translate3d(0, 5px, 0) scale(.965);
+        transition: opacity 180ms ease, transform 220ms ease, visibility 0s linear 220ms;
       }
-      .grcon-mascot-speech[data-visible="true"] { visibility: visible; }
+      .grcon-mascot-speech[data-visible="true"] {
+        opacity: 1;
+        visibility: visible;
+        transform: translate3d(0, 0, 0) scale(1);
+        transition-delay: 0s;
+      }
       @media (prefers-reduced-motion: reduce) {
-        .grcon-mascot-stage, .grcon-mascot-layer, .grcon-mascot-folder, .grcon-mascot-paper {
-          will-change: auto !important;
-        }
+        .grcon-mascot-video { display: none !important; }
+        ${CSS_TARGET}.is-video-active > .grcon-mascot-sprite { opacity: 1; visibility: visible; }
+        .grcon-mascot-speech { transition: none; }
       }
     `;
     document.head.appendChild(style);
@@ -181,290 +113,110 @@
     return Boolean(root.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   }
 
-  function preloadAssets() {
-    return Promise.all(Object.values(ASSETS).map((source) => new Promise((resolve, reject) => {
-      const image = new Image();
-      image.decoding = "async";
-      image.onload = resolve;
-      image.onerror = () => reject(new Error(source.split("/").pop()));
-      image.src = source;
-    }))).then(() => {
-      assetsReady = true;
-      document.documentElement.dataset.grconMascotLayers = "ready";
-      refresh(document);
-    }).catch((error) => {
-      assetsFailed = true;
-      document.documentElement.dataset.grconMascotLayers = "fallback";
-      console.warn(`GRCON: camadas do mascote indisponíveis (${error.message}); o PNG oficial permanece ativo.`);
+  function makeVideo(host) {
+    let video = host.querySelector(":scope > .grcon-mascot-video");
+    if (video) return video;
+    video = document.createElement("video");
+    video.className = "grcon-mascot-video";
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.disablePictureInPicture = true;
+    video.setAttribute("muted", "");
+    video.setAttribute("playsinline", "");
+    video.setAttribute("disableRemotePlayback", "");
+    video.setAttribute("aria-hidden", "true");
+    host.appendChild(video);
+    return video;
+  }
+
+  function safePause(video) {
+    try { video.pause(); } catch (_) { /* fallback PNG continua visível */ }
+  }
+
+  function hideVideo(record, resetTime) {
+    record.token += 1;
+    safePause(record.video);
+    if (resetTime) {
+      try { record.video.currentTime = 0; } catch (_) { /* mídia ainda sem metadata */ }
+    }
+    record.mode = "";
+    record.host.classList.remove("is-video-active");
+    record.host.dataset.grconMascotMedia = "png";
+  }
+
+  function revealVideo(record, token) {
+    if (token !== record.token || !record.mode || document.hidden || reducedMotion()) return;
+    record.host.classList.add("is-video-active");
+    record.host.dataset.grconMascotMedia = record.mode;
+  }
+
+  function handleVideoFailure(record, mode, reason) {
+    failedModes.add(mode);
+    hideVideo(record, false);
+    record.host.dataset.grconMascotFallback = mode;
+    document.documentElement.dataset.grconMascotVideo = "fallback";
+    if (!record.warnedModes.has(mode)) {
+      record.warnedModes.add(mode);
+      console.warn(`GRCON: vídeo ${mode} do mascote indisponível (${reason}); o PNG oficial permanece ativo.`);
+    }
+  }
+
+  function startPlayback(record, token) {
+    if (token !== record.token || !record.mode) return;
+    const result = record.video.play();
+    if (result?.catch) result.catch((error) => {
+      if (token === record.token) handleVideoFailure(record, record.mode, error?.message || "reprodução bloqueada");
     });
   }
 
-  function makeStage(host) {
-    let stage = host.querySelector(":scope > .grcon-mascot-stage");
-    if (stage) return stage;
-    stage = document.createElement("span");
-    stage.className = "grcon-mascot-stage";
-    stage.setAttribute("aria-hidden", "true");
-    stage.innerHTML = [
-      '<span class="grcon-mascot-layer grcon-mascot-body"></span>',
-      '<span class="grcon-mascot-layer grcon-mascot-head"></span>',
-      '<span class="grcon-mascot-paper grcon-mascot-paper-a">PDF</span>',
-      '<span class="grcon-mascot-paper grcon-mascot-paper-b">LD</span>',
-      '<span class="grcon-mascot-paper grcon-mascot-paper-c">DWG</span>',
-      '<span class="grcon-mascot-folder"></span>',
-      '<span class="grcon-mascot-layer grcon-mascot-arm"></span>',
-    ].join("");
-    host.appendChild(stage);
-    return stage;
-  }
-
-  function parts(record) {
-    const stage = record.stage;
-    return {
-      stage,
-      body: stage.querySelector(".grcon-mascot-body"),
-      head: stage.querySelector(".grcon-mascot-head"),
-      arm: stage.querySelector(".grcon-mascot-arm"),
-      folder: stage.querySelector(".grcon-mascot-folder"),
-      paperA: stage.querySelector(".grcon-mascot-paper-a"),
-      paperB: stage.querySelector(".grcon-mascot-paper-b"),
-      paperC: stage.querySelector(".grcon-mascot-paper-c"),
-    };
-  }
-
-  function resetVisual(record) {
-    const p = parts(record);
-    gsap.set([p.stage, p.body, p.head, p.arm], {
-      x: 0, y: 0, rotation: 0, scale: 1, scaleX: 1, scaleY: 1, opacity: 1,
-    });
-    gsap.set([p.folder, p.paperA, p.paperB, p.paperC], {
-      x: 0, y: 0, rotation: 0, scale: 1, autoAlpha: 0,
-    });
-    p.paperA.textContent = "PDF";
-    p.paperB.textContent = "LD";
-    p.paperC.textContent = "DWG";
-  }
-
-  function killMotion(record) {
-    record.timeline?.kill();
-    record.ambient?.kill();
-    record.microTimeline?.kill();
-    record.microCall?.kill();
-    record.returnCall?.kill();
-    record.context?.revert();
-    record.timeline = null;
-    record.ambient = null;
-    record.microTimeline = null;
-    record.microCall = null;
-    record.returnCall = null;
-    record.context = null;
-  }
-
-  function scheduleIdleVariation(record) {
-    record.microCall?.kill();
-    const delay = gsap.utils.random(3.4, 6.8, .1);
-    record.microCall = gsap.delayedCall(delay, () => {
-      if (record.state !== "idle" || document.hidden) return scheduleIdleVariation(record);
-      const p = parts(record);
-      const variant = Math.floor(gsap.utils.random(0, 3));
-      const timeline = gsap.timeline({
-        defaults: { ease: "sine.inOut" },
-        onComplete: () => scheduleIdleVariation(record),
-      });
-      if (variant === 0) {
-        timeline.to(p.head, { rotation: -2.2, x: -.5, duration: .65 })
-          .to(p.head, { rotation: 0, x: 0, duration: .9 });
-      } else if (variant === 1) {
-        timeline.to(p.head, { rotation: 1.8, y: -.6, duration: .72 })
-          .to(p.head, { rotation: -.4, y: 0, duration: .62 })
-          .to(p.head, { rotation: 0, duration: .48 });
-      } else {
-        timeline.to(p.stage, { x: .7, rotation: .35, duration: .8 })
-          .to(p.stage, { x: 0, rotation: 0, duration: 1.05 });
-      }
-      record.microTimeline = timeline;
-    });
-  }
-
-  function idleTimeline(record) {
-    const p = parts(record);
-    record.ambient = gsap.timeline({ repeat: -1, yoyo: true, defaults: { ease: "sine.inOut" } })
-      .to(p.body, { y: -1.1, scaleX: 1.003, scaleY: .997, duration: 2.35 }, 0)
-      .to(p.head, { y: -.65, duration: 2.55 }, .18)
-      .to(p.arm, { y: -.45, rotation: -.35, duration: 2.45 }, .28);
-    scheduleIdleVariation(record);
-    return record.ambient;
-  }
-
-  function welcomeTimeline(record) {
-    const p = parts(record);
-    return gsap.timeline({ defaults: { ease: "power2.inOut" } })
-      .to(p.body, { x: -1, rotation: -.8, duration: .36 }, 0)
-      .to(p.head, { x: -.5, rotation: -2.2, duration: .42 }, .07)
-      .to(p.arm, { x: -1, y: -1, rotation: -55, duration: .52, ease: "back.out(1.35)" }, .16)
-      .to(p.arm, { rotation: -45, duration: .22, yoyo: true, repeat: 3, ease: "sine.inOut" }, .7)
-      .to(p.arm, { x: 0, y: 0, rotation: 0, duration: .6, ease: "power3.inOut" }, 1.58)
-      .to([p.body, p.head], { x: 0, y: 0, rotation: 0, duration: .62 }, 1.54);
-  }
-
-  function hoverTimeline(record) {
-    const p = parts(record);
-    return gsap.timeline({ repeat: -1, yoyo: true, defaults: { ease: "sine.inOut" } })
-      .to(p.body, { y: -1, scaleY: .997, duration: 1.8 }, 0)
-      .to(p.head, { y: -.7, rotation: 1.1, duration: 2.05 }, .08)
-      .to(p.arm, { rotation: -2.2, duration: 1.9 }, .18);
-  }
-
-  function searchingTimeline(record) {
-    const p = parts(record);
-    gsap.set(p.folder, { autoAlpha: 1, x: -2, y: 3, rotation: -4, scale: .92 });
-    return gsap.timeline({ repeat: -1, defaults: { ease: "power2.inOut" } })
-      .to(p.folder, { x: 0, y: 0, rotation: 0, scale: 1, duration: .55, ease: "back.out(1.2)" }, 0)
-      .to(p.head, { x: -1, rotation: -4, duration: .56 }, .08)
-      .to(p.body, { x: -.7, rotation: -.55, duration: .62 }, .12)
-      .fromTo(p.paperA,
-        { autoAlpha: 0, x: -8, y: 10, rotation: -20, scale: .82 },
-        { autoAlpha: 1, x: 2, y: -3, rotation: -11, scale: 1, duration: .62, ease: "back.out(1.25)" }, .46)
-      .to(p.head, { x: 1, rotation: 4.2, duration: .72, ease: "sine.inOut" }, .82)
-      .to(p.paperA, { x: 11, y: -10, rotation: 7, autoAlpha: 0, duration: .58 }, 1.4)
-      .fromTo(p.paperB,
-        { autoAlpha: 0, x: 9, y: 9, rotation: 20, scale: .84 },
-        { autoAlpha: 1, x: -2, y: -4, rotation: 10, scale: 1, duration: .66, ease: "back.out(1.2)" }, 1.32)
-      .to(p.head, { x: -1, y: .5, rotation: -3.2, duration: .64 }, 1.68)
-      .to(p.paperB, { x: -11, y: -10, rotation: -6, autoAlpha: 0, duration: .58 }, 2.22)
-      .fromTo(p.paperC,
-        { autoAlpha: 0, x: -5, y: 10, rotation: -7, scale: .82 },
-        { autoAlpha: 1, x: 2, y: -4, rotation: 7, scale: 1, duration: .62, ease: "back.out(1.2)" }, 2.12)
-      .to(p.head, { x: .5, y: .8, rotation: 2.8, duration: .58 }, 2.42)
-      .to(p.arm, { x: -1, y: -1, rotation: 118, duration: .72, ease: "back.out(1.1)" }, 2.68)
-      .to(p.arm, { x: -2, y: -2, rotation: 106, duration: .18, yoyo: true, repeat: 5, ease: "sine.inOut" }, 3.4)
-      .to(p.head, { x: -.5, rotation: -2, duration: .72, ease: "sine.inOut" }, 3.24)
-      .to(p.paperC, { x: 10, y: -11, rotation: 14, autoAlpha: 0, duration: .62 }, 3.78)
-      .to(p.arm, { x: 0, y: 0, rotation: 0, duration: .72, ease: "power3.inOut" }, 4.38)
-      .to(p.folder, { x: -1, y: 2, rotation: -3, scale: .95, duration: .62 }, 4.54)
-      .to([p.head, p.body], { x: 0, y: 0, rotation: 0, duration: .76, ease: "sine.inOut" }, 4.62)
-      .to(p.folder, { x: -2, y: 3, rotation: -4, scale: .92, duration: .58 }, 5.24)
-      .to({}, { duration: .16 });
-  }
-
-  function checkingTimeline(record) {
-    const p = parts(record);
-    p.paperA.textContent = "OK?";
-    gsap.set(p.paperA, { autoAlpha: 1, x: 14, y: 5, rotation: 7, scale: 1.08 });
-    return gsap.timeline({ repeat: -1, defaults: { ease: "sine.inOut" } })
-      .to(p.head, { x: 1, y: .5, rotation: 3.2, duration: .8 }, 0)
-      .to(p.arm, { rotation: -14, x: -1, duration: .72 }, .14)
-      .to(p.paperA, { y: 1, rotation: 4, duration: .9 }, .08)
-      .to(p.head, { x: -1, rotation: -2.4, duration: .82 }, .86)
-      .to(p.paperA, { y: 6, rotation: 8, duration: .82 }, .98)
-      .to(p.arm, { rotation: -5, x: 0, duration: .68 }, 1.12)
-      .to([p.head, p.arm, p.paperA], { x: 0, y: 0, rotation: 0, duration: .74 }, 1.82)
-      .to({}, { duration: .22 });
-  }
-
-  function confusedTimeline(record) {
-    const p = parts(record);
-    return gsap.timeline({ repeat: -1, repeatDelay: .35, defaults: { ease: "power2.inOut" } })
-      .to(p.head, { x: -1, rotation: -5, duration: .55 }, 0)
-      .to(p.head, { x: 1, rotation: 4, duration: .62 }, .62)
-      .to(p.arm, { x: -1, y: -1, rotation: 118, duration: .7, ease: "back.out(1.15)" }, .76)
-      .to(p.arm, { x: -2, y: -2, rotation: 106, duration: .18, yoyo: true, repeat: 4 }, 1.46)
-      .to(p.arm, { x: 0, y: 0, rotation: 0, duration: .7 }, 2.35)
-      .to(p.head, { x: 0, rotation: 0, duration: .7 }, 2.42);
-  }
-
-  function compareTimeline(record) {
-    const p = parts(record);
-    p.paperA.textContent = "SIGEM";
-    p.paperB.textContent = "PW";
-    gsap.set(p.paperA, { autoAlpha: 1, x: 2, y: -2, rotation: -10 });
-    gsap.set(p.paperB, { autoAlpha: 1, x: -2, y: -2, rotation: 10 });
-    return gsap.timeline({ repeat: -1, defaults: { ease: "sine.inOut" } })
-      .to(p.head, { x: -1, rotation: -3.5, duration: .72 }, 0)
-      .to(p.paperA, { y: -5, rotation: -7, duration: .76 }, .08)
-      .to(p.head, { x: 1, rotation: 3.7, duration: .76 }, .78)
-      .to(p.paperB, { y: -5, rotation: 7, duration: .76 }, .84)
-      .to(p.arm, { rotation: -18, x: -1, duration: .62 }, 1.22)
-      .to([p.paperA, p.paperB], { x: 0, y: -3, rotation: 0, duration: .84 }, 1.5)
-      .to(p.head, { x: 0, rotation: 0, duration: .72 }, 1.68)
-      .to(p.arm, { rotation: 0, x: 0, duration: .7 }, 2.04)
-      .to([p.paperA, p.paperB], { y: -2, duration: .7 }, 2.22)
-      .to({}, { duration: .18 });
-  }
-
-  function successTimeline(record) {
-    const p = parts(record);
-    return gsap.timeline({ defaults: { ease: "power2.out" } })
-      .to(p.stage, { y: -4, scale: 1.035, duration: .34, ease: "back.out(1.55)" }, 0)
-      .to(p.head, { rotation: -2.5, duration: .36 }, .05)
-      .to(p.arm, { rotation: -42, x: -1, y: -1, duration: .48, ease: "back.out(1.35)" }, .12)
-      .to(p.stage, { y: 0, scale: 1, duration: .52, ease: "bounce.out" }, .42)
-      .to(p.arm, { rotation: -35, duration: .24, yoyo: true, repeat: 1 }, .68)
-      .to([p.arm, p.head], { x: 0, y: 0, rotation: 0, duration: .62, ease: "power3.inOut" }, 1.28);
-  }
-
-  function warningTimeline(record, errorState) {
-    const p = parts(record);
-    return gsap.timeline({ repeat: errorState ? 1 : 0, yoyo: errorState, defaults: { ease: "power2.inOut" } })
-      .to(p.head, { x: -1, rotation: -4.5, duration: .42 }, 0)
-      .to(p.body, { rotation: -.8, duration: .45 }, .05)
-      .to(p.arm, { rotation: -22, duration: .5 }, .12)
-      .to(p.head, { x: 1, rotation: 3.5, duration: .52 }, .52)
-      .to([p.head, p.body, p.arm], { x: 0, rotation: 0, duration: .66 }, 1.08);
-  }
-
-  function workingTimeline(record, state) {
-    if (state === "sigem-pw-analysis") return compareTimeline(record);
-    if (state === "searching-files" || state === "checking-ld" || state === "analyzing") return searchingTimeline(record);
-    if (state === "confused") return confusedTimeline(record);
-    if (state === "checking-document" || state === "generating-grdt" || state === "uploading" || state === "loading") return checkingTimeline(record);
-    return idleTimeline(record);
+  function activateVideo(record, mode, loop) {
+    if (!videoSupported || reducedMotion() || failedModes.has(mode)) {
+      hideVideo(record, true);
+      return false;
+    }
+    const source = ASSETS[mode];
+    const token = ++record.token;
+    record.mode = mode;
+    record.video.loop = Boolean(loop);
+    if (record.video.src !== source) {
+      record.video.src = source;
+      record.video.load();
+    } else {
+      try { record.video.currentTime = 0; } catch (_) { /* aguarda metadata */ }
+    }
+    if (record.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) revealVideo(record, token);
+    startPlayback(record, token);
+    return true;
   }
 
   function normalizeState(state) {
     return STATES.includes(state) ? state : "idle";
   }
 
-  function playForRecord(record, requestedState, options) {
-    const state = normalizeState(requestedState);
-    if (!assetsReady || assetsFailed || !gsap) return false;
-    if (record.state === state && record.timeline?.isActive()) return true;
-    killMotion(record);
-    record.state = state;
-    record.host.dataset.grconMascotState = state;
-    record.context = gsap.context(() => {
-      resetVisual(record);
-      if (reducedMotion()) {
-        const p = parts(record);
-        if (["searching-files", "checking-ld", "analyzing", "loading"].includes(state)) {
-          gsap.set(p.folder, { autoAlpha: .9, rotation: -2 });
-          gsap.set(p.paperA, { autoAlpha: .92, x: 2, y: -2, rotation: -8 });
-        }
-        record.timeline = gsap.timeline().to(record.stage, { y: -1, duration: .35 }).to(record.stage, { y: 0, duration: .45 });
-        return;
-      }
-      if (state === "idle") record.timeline = idleTimeline(record);
-      else if (state === "welcome") record.timeline = welcomeTimeline(record);
-      else if (state === "hover") record.timeline = hoverTimeline(record);
-      else if (state === "success") record.timeline = successTimeline(record);
-      else if (state === "warning") record.timeline = warningTimeline(record, false);
-      else if (state === "error") record.timeline = warningTimeline(record, true);
-      else record.timeline = workingTimeline(record, state);
-    }, record.host);
-    if (["welcome", "success", "warning", "error"].includes(state) && !options?.hold) {
-      const delay = state === "welcome" ? 2.45 : state === "success" ? 2.35 : 3.1;
-      record.returnCall = gsap.delayedCall(delay, () => {
-        if (record.state === state && !operationActive) playForRecord(record, "idle", { source: "return" });
-      });
-    }
-    if (document.hidden) record.timeline?.pause();
-    return true;
-  }
-
   function stateForHost(host) {
     if (operationActive) return operationState || "analyzing";
-    if (host.classList.contains("grcon-mascot-context")) return POSE_STATES[host.dataset.pose] || "idle";
     return "idle";
+  }
+
+  function applyContextPose(state) {
+    const header = root.GRCONMascot;
+    if (!header?.setState) return;
+    if (state === "success") header.setState("success");
+    else if (state === "warning" || state === "error") header.setState("warning");
+    else if (state === "idle") header.clearState?.();
+  }
+
+  function playForRecord(record, requestedState, options) {
+    const state = normalizeState(requestedState);
+    record.state = state;
+    record.host.dataset.grconMascotState = state;
+    if (state === "welcome" || state === "hover") activateVideo(record, "wave", false);
+    else if (PROCESSING_STATES.has(state)) activateVideo(record, "processing", true);
+    else hideVideo(record, true);
+    if (!options?.skipPose) applyContextPose(state);
+    return state;
   }
 
   function currentIdentity() {
@@ -522,38 +274,35 @@
     target.setAttribute("aria-hidden", "false");
     target.dataset.visible = "true";
     positionBubble(host);
-    gsap?.fromTo(target, { autoAlpha: 0, y: 5, scale: .965 }, { autoAlpha: 1, y: 0, scale: 1, duration: .32, ease: "power2.out", overwrite: true });
   }
 
   function hideGreeting(force) {
     if (pinnedBubbleHost && !force) return;
     const target = ensureBubble();
-    gsap?.to(target, {
-      autoAlpha: 0, y: 4, scale: .975, duration: .22, ease: "power1.in", overwrite: true,
-      onComplete: () => { target.dataset.visible = "false"; target.setAttribute("aria-hidden", "true"); },
-    });
+    target.dataset.visible = "false";
+    target.setAttribute("aria-hidden", "true");
     activeBubbleHost = null;
     if (force) pinnedBubbleHost = null;
   }
 
-  function onPointerMove(record, event) {
-    if (record.state !== "hover" || reducedMotion()) return;
-    const bounds = record.host.getBoundingClientRect();
-    const x = Math.max(-1, Math.min(1, (event.clientX - bounds.left) / Math.max(1, bounds.width) * 2 - 1));
-    const y = Math.max(-1, Math.min(1, (event.clientY - bounds.top) / Math.max(1, bounds.height) * 2 - 1));
-    const p = parts(record);
-    gsap.to(p.head, { x: x * 1.4, y: y * .7, rotation: x * 2.2, duration: .42, ease: "power2.out", overwrite: "auto" });
-  }
-
   function enhance(host) {
     if (!host || records.has(host)) return records.get(host);
-    const stage = makeStage(host);
-    const record = { host, stage, state: "", timeline: null, ambient: null, context: null };
+    const video = makeVideo(host);
+    const record = { host, video, state: "", mode: "", token: 0, warnedModes: new Set() };
     records.set(host, record);
-    host.classList.add("grcon-mascot-gsap");
+    host.classList.add("grcon-mascot-video-host");
     host.setAttribute("tabindex", "0");
     host.setAttribute("role", "button");
     host.setAttribute("aria-haspopup", "true");
+
+    const onReady = () => revealVideo(record, record.token);
+    const onError = () => { if (record.mode) handleVideoFailure(record, record.mode, "falha de carregamento"); };
+    const onEnded = () => {
+      if (record.mode !== "wave" || operationActive) return;
+      hideVideo(record, true);
+      record.state = stateForHost(host);
+      record.host.dataset.grconMascotState = record.state;
+    };
     const enter = (event) => {
       if (event.pointerType === "touch" || operationActive) return;
       playForRecord(record, "hover", { source: "pointer" });
@@ -564,39 +313,52 @@
       hideGreeting(false);
       playForRecord(record, stateForHost(host), { source: "pointer" });
     };
-    const move = (event) => onPointerMove(record, event);
-    const focus = () => { if (!operationActive) { playForRecord(record, "hover"); showGreeting(host, false); } };
-    const blur = () => { hideGreeting(false); if (!operationActive) playForRecord(record, stateForHost(host)); };
+    const focus = () => {
+      if (!operationActive) {
+        playForRecord(record, "hover", { source: "focus" });
+        showGreeting(host, false);
+      }
+    };
+    const blur = () => {
+      hideGreeting(false);
+      if (!operationActive) playForRecord(record, stateForHost(host), { source: "blur" });
+    };
     const click = (event) => {
       event.stopPropagation();
       if (pinnedBubbleHost === host) hideGreeting(true);
-      else showGreeting(host, true);
+      else {
+        showGreeting(host, true);
+        if (!operationActive) playForRecord(record, "welcome", { source: "click" });
+      }
     };
     const keydown = (event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); click(event); }
       else if (event.key === "Escape") hideGreeting(true);
     };
-    Object.assign(record, { enter, leave, move, focus, blur, click, keydown });
+    Object.assign(record, { onReady, onError, onEnded, enter, leave, focus, blur, click, keydown });
+    video.addEventListener("loadeddata", onReady);
+    video.addEventListener("canplay", onReady);
+    video.addEventListener("error", onError);
+    video.addEventListener("ended", onEnded);
     host.addEventListener("pointerenter", enter);
     host.addEventListener("pointerleave", leave);
-    host.addEventListener("pointermove", move, { passive: true });
     host.addEventListener("focus", focus);
     host.addEventListener("blur", blur);
     host.addEventListener("click", click);
     host.addEventListener("keydown", keydown);
-    if (assetsReady) {
-      host.classList.add("is-gsap-ready");
-      playForRecord(record, stateForHost(host), { source: "enhance" });
-    }
+    playForRecord(record, stateForHost(host), { source: "enhance", skipPose: true });
     return record;
   }
 
   function dispose(record) {
-    killMotion(record);
-    const host = record.host;
+    hideVideo(record, false);
+    const { host, video } = record;
+    video.removeEventListener("loadeddata", record.onReady);
+    video.removeEventListener("canplay", record.onReady);
+    video.removeEventListener("error", record.onError);
+    video.removeEventListener("ended", record.onEnded);
     host.removeEventListener("pointerenter", record.enter);
     host.removeEventListener("pointerleave", record.leave);
-    host.removeEventListener("pointermove", record.move);
     host.removeEventListener("focus", record.focus);
     host.removeEventListener("blur", record.blur);
     host.removeEventListener("click", record.click);
@@ -605,18 +367,14 @@
   }
 
   function refresh(scope) {
-    if (!gsap || assetsFailed) return;
     const source = scope?.querySelectorAll ? scope : document;
     if (source.matches?.(SELECTOR)) enhance(source);
     source.querySelectorAll(SELECTOR).forEach(enhance);
     records.forEach((record) => {
       if (!record.host.isConnected) { dispose(record); return; }
-      if (assetsReady) {
-        record.host.classList.add("is-gsap-ready");
-        const desired = stateForHost(record.host);
-        if (record.state !== desired && record.state !== "hover" && !TRANSIENT_STATES.has(record.state)) {
-          playForRecord(record, desired, { source: "refresh" });
-        }
+      const desired = stateForHost(record.host);
+      if (record.state !== desired && record.state !== "hover" && record.state !== "welcome") {
+        playForRecord(record, desired, { source: "refresh", skipPose: true });
       }
     });
   }
@@ -638,8 +396,7 @@
       const contextual = record.host.classList.contains("grcon-mascot-context");
       if (target === "global" && contextual) return;
       if (target === "context" && !contextual) return;
-      killMotion(record);
-      resetVisual(record);
+      hideVideo(record, true);
       record.state = "stopped";
       record.host.dataset.grconMascotState = "stopped";
     });
@@ -656,6 +413,8 @@
   }
 
   function beginOperation(detail) {
+    root.clearTimeout(transientTimer);
+    root.clearTimeout(pulseTimer);
     operationActive = true;
     pendingOutcome = "";
     operationState = mapTask(detail?.task, detail?.state);
@@ -674,6 +433,10 @@
     else if (outcome === "warning") play("warning", { source: "operation-end" });
     else if (outcome === "success") play("success", { source: "operation-end" });
     else play("idle", { source: "operation-end" });
+    if (outcome) {
+      root.clearTimeout(transientTimer);
+      transientTimer = root.setTimeout(() => { if (!operationActive) play("idle", { source: "outcome-end" }); }, 2300);
+    }
   }
 
   function handleOperation(event) {
@@ -687,46 +450,63 @@
     if (!kind || kind === "info") return;
     const state = kind === "error" ? "error" : kind === "success" ? "success" : "warning";
     if (operationActive) pendingOutcome = state;
-    else play(state, { source: "notification" });
+    else {
+      play(state, { source: "notification" });
+      root.clearTimeout(transientTimer);
+      transientTimer = root.setTimeout(() => { if (!operationActive) play("idle", { source: "notification-end" }); }, 2300);
+    }
   }
 
   function handlePulse(event) {
     const duration = Math.min(3000, Math.max(700, Number(event?.detail?.duration) || 1100));
-    pulseCall?.kill();
+    root.clearTimeout(pulseTimer);
     if (!operationActive) play(mapTask(event?.detail?.task, event?.detail?.state), { source: "pulse" });
-    pulseCall = gsap.delayedCall(duration / 1000, () => { if (!operationActive) play("idle", { source: "pulse-end" }); });
+    pulseTimer = root.setTimeout(() => { if (!operationActive) play("idle", { source: "pulse-end" }); }, duration);
   }
 
   function maybeWelcome() {
-    if (welcomeShown || operationActive || !assetsReady) return;
+    if (welcomeShown || operationActive) return;
     const name = CORE?.resolveFirstName?.(currentIdentity());
     if (!name) return;
     const host = document.querySelector(".grcon-brand-mascot");
-    if (!host) return;
+    const record = records.get(host);
+    if (!host || !record) return;
     welcomeShown = true;
     showGreeting(host, false);
-    playForRecord(records.get(host), "welcome", { source: "welcome" });
-    gsap.delayedCall(3.2, () => { if (activeBubbleHost === host && !pinnedBubbleHost) hideGreeting(false); });
+    playForRecord(record, "welcome", { source: "welcome" });
+    root.clearTimeout(welcomeTimer);
+    welcomeTimer = root.setTimeout(() => {
+      if (activeBubbleHost === host && !pinnedBubbleHost) hideGreeting(false);
+    }, 3200);
+  }
+
+  function resumeVisibleVideos() {
+    records.forEach((record) => {
+      if (!record.mode) return;
+      if (document.hidden) safePause(record.video);
+      else {
+        revealVideo(record, record.token);
+        startPlayback(record, record.token);
+      }
+    });
   }
 
   function init() {
     installStyles();
-    document.documentElement.dataset.grconMascotEngine = gsap ? ENGINE : "official-png-static-fallback";
-    if (!gsap) {
-      assetsFailed = true;
-      console.warn("GRCON: GSAP local indisponível; o PNG oficial permanece ativo.");
-      return;
-    }
+    initialized = true;
+    document.documentElement.dataset.grconMascotEngine = videoSupported ? ENGINE : "official-png-static-fallback";
+    document.documentElement.dataset.grconMascotVideo = videoSupported ? "ready" : "unsupported";
+    if (!videoSupported) console.warn("GRCON: WebM/VP9 indisponível; o PNG oficial permanece ativo.");
     ensureBubble();
     refresh(document);
-    void preloadAssets().then(maybeWelcome);
+    if (document.documentElement.dataset.grconControlProcessing === "true") {
+      beginOperation({ task: "Análise documental" });
+    }
+    maybeWelcome();
     observer = new MutationObserver((mutations) => {
-      let needsRefresh = false;
-      mutations.forEach((mutation) => {
-        if (mutation.type === "childList" && mutation.addedNodes.length) needsRefresh = true;
-        if (mutation.type === "attributes") needsRefresh = true;
-      });
-      if (needsRefresh) root.requestAnimationFrame(() => refresh(document));
+      if (mutations.some((mutation) => mutation.type === "childList" || mutation.type === "attributes")) {
+        root.requestAnimationFrame(() => refresh(document));
+      }
     });
     observer.observe(document.body, {
       childList: true,
@@ -743,17 +523,14 @@
     document.addEventListener("pointerdown", (event) => {
       if (pinnedBubbleHost && !pinnedBubbleHost.contains(event.target)) hideGreeting(true);
     }, true);
-    document.addEventListener("visibilitychange", () => {
-      records.forEach((record) => {
-        if (document.hidden) { record.timeline?.pause(); record.ambient?.pause(); }
-        else { record.timeline?.resume(); record.ambient?.resume(); }
-      });
-    });
+    document.addEventListener("visibilitychange", resumeVisibleVideos);
     root.addEventListener("resize", () => { if (activeBubbleHost) positionBubble(activeBubbleHost); }, { passive: true });
     root.addEventListener("scroll", () => { if (activeBubbleHost) positionBubble(activeBubbleHost); }, { passive: true, capture: true });
     root.addEventListener("pagehide", () => {
       observer?.disconnect();
-      pulseCall?.kill();
+      root.clearTimeout(pulseTimer);
+      root.clearTimeout(transientTimer);
+      root.clearTimeout(welcomeTimer);
       records.forEach(dispose);
     }, { once: true });
   }
@@ -762,16 +539,17 @@
     return Object.freeze({
       version: VERSION,
       engine: document.documentElement.dataset.grconMascotEngine || "official-png-static-fallback",
-      gsap: Boolean(gsap),
-      ready: assetsReady,
-      fallback: assetsFailed || !gsap,
+      ready: initialized,
+      videoSupported,
+      fallback: !videoSupported || failedModes.size > 0,
+      failedModes: Array.from(failedModes),
       instances: records.size,
-      timelines: Array.from(records.values()).filter((record) => record.timeline).length,
+      activeVideos: Array.from(records.values()).filter((record) => record.host.classList.contains("is-video-active")).length,
       states: Array.from(records.values()).map((record) => record.state),
       operationActive,
       operationState,
       reducedMotion: reducedMotion(),
-      source: "official-png-raster-layers",
+      source: "official-transparent-webm-with-png-fallback",
     });
   }
 
