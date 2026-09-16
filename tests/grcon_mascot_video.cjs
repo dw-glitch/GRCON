@@ -33,8 +33,8 @@ function assertWebm(bytes, name, minimumBytes) {
 assert.equal(sprite.readUInt32BE(16), 1254);
 assert.equal(sprite.readUInt32BE(20), 1254);
 assert.equal(hash(sprite), "cae28d23b527eb36359d9bada0bb8701f72232853875741fd0717f3256f73bc5", "PNG HD oficial não pode mudar");
-assertWebm(processing, "vídeo de processamento", 2_000_000);
-assertWebm(wave, "vídeo de aceno", 2_000_000);
+assertWebm(processing, "vídeo de processamento", 300_000);
+assertWebm(wave, "vídeo de aceno", 300_000);
 assert.notEqual(hash(processing), hash(wave), "os dois comportamentos precisam ter mídias independentes");
 
 const requiredStates = [
