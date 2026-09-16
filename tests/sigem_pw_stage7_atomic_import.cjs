@@ -8,6 +8,7 @@ const Dashboard = require("../sigem_pw_dashboard_core.js");
 const Conference = require("../posting_conference_core.js");
 const History = require("../sigem_pw_history_core.js");
 const dashboardApp = read("sigem_pw_dashboard_app.js");
+const dashboardBootstrap = read("sigem_pw_dashboard_bootstrap.js");
 const historyCore = read("sigem_pw_history_core.js");
 const conferenceCore = read("posting_conference_core.js");
 
@@ -40,6 +41,26 @@ function functionBody(source, name, nextName) {
   assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core.saveSigemBase"));
   assert.ok(sigem.indexOf("Core.saveSigemBase") < sigem.indexOf("Conference.commitPreparedImport"));
   assert.match(conferenceCore, /await kvSetMany\(\[\s*\[BASE_KEY, prepared\.base\],\s*\[STATE_KEY, prepared\.state\],\s*\[AUDIT_KEY, prepared\.audit\]/);
+})();
+
+(function revisionRuntimeIsReadyBeforeHistoryFactoryCapturesIt() {
+  const runtime = functionBody(dashboardBootstrap, "ensureRuntime", "afterFirstPaint");
+  const deferred = functionBody(dashboardBootstrap, "loadDeferredEnhancements", "openDashboard");
+  const revisionLoad = runtime.indexOf('ensure("sigem_pw_revision_core.js")');
+  const historyLoad = runtime.indexOf('ensure("sigem_pw_history_core.js")');
+
+  assert.ok(revisionLoad >= 0, "revision core deve fazer parte do runtime obrigatório");
+  assert.ok(historyLoad > revisionLoad, "revision core deve carregar antes do history core");
+  assert.match(runtime, /const Revision = root\.GrconSigemPwRevision/);
+  assert.match(runtime, /typeof Revision\.analyze !== "function" && typeof Revision\.analyzeAsync !== "function"/);
+  assert.ok(
+    runtime.indexOf("const Revision = root.GrconSigemPwRevision") < historyLoad,
+    "a dependência de revisão deve ser validada antes de avaliar o módulo de histórico"
+  );
+  assert.doesNotMatch(deferred, /sigem_pw_revision_core\.js/,
+    "revision core não pode voltar a ser dependência tardia/deferred");
+  assert.match(historyCore, /Revision && typeof Revision\.analyzeAsync === "function"[\s\S]*: Revision\.analyze\(model\)/,
+    "o teste deve proteger exatamente o caminho que antes executava null.analyze");
 })();
 
 (function rollbackTokenOnlyContainsCreatedSnapshots() {
@@ -89,4 +110,4 @@ function functionBody(source, name, nextName) {
   assert.match(Dashboard.EMISSION_RULE, /0 e A.*duas entradas/i);
 })();
 
-console.log("sigem_pw_stage7_atomic_import: OK — preparação, persistência compartilhada e rollback integral validados.");
+console.log("sigem_pw_stage7_atomic_import: OK — preparação, dependências, persistência compartilhada e rollback integral validados.");
