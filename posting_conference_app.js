@@ -169,6 +169,9 @@
     progress.hidden = !busy;
     progress.querySelector("span").textContent = label || "Processando…";
     [el("pc-update"), el("pc-export")].forEach((button) => { button.disabled = busy; });
+    root.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
+      detail: { active: Boolean(busy), state: "checking-document", task: label || "Conferindo documentos" },
+    }));
   }
 
   async function importFile(file) {

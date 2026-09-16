@@ -102,6 +102,9 @@
     state.busy = busy; const progress = el("spw-progress"); if (progress) { progress.hidden = !busy; progress.querySelector("span").textContent = label || "Processando base…"; }
     ["spw-sigem-update", "spw-pw-update", "spw-ld-update", "spw-history-open", "spw-evolution-open", "spw-export", "spw-clear", "spw-date-save"].forEach((id) => { if (el(id)) el(id).disabled = busy; });
     shell?.querySelectorAll("[data-edit-base-date]").forEach((button) => { button.disabled = busy; });
+    root.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
+      detail: { active: Boolean(busy), state: "sigem-pw-analysis", task: label || "Comparando SIGEM e ProjectWise" },
+    }));
   }
   function localDateTimeValue(value) {
     const date = new Date(value);
