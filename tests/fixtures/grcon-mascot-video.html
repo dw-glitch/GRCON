@@ -4,24 +4,14 @@
   <meta charset="utf-8">
   <base href="../../">
   <meta content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data:" http-equiv="Content-Security-Policy">
-  <title>Validação do mascote oficial em vídeo</title>
+  <title>Validação do mascote oficial multiformato</title>
   <style>
-    html, body {
-      margin: 0;
-      min-height: 100%;
-      background-color: #eef3f6;
-      background-image:
-        linear-gradient(45deg, #dce5ea 25%, transparent 25%),
-        linear-gradient(-45deg, #dce5ea 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, #dce5ea 75%),
-        linear-gradient(-45deg, transparent 75%, #dce5ea 75%);
-      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
-      background-size: 24px 24px;
-    }
+    html, body { margin: 0; min-height: 100%; background: #eef3f6; }
     .topbar { display: flex; min-height: 180px; align-items: center; padding: 24px; }
     .brand { display: flex; align-items: center; gap: 16px; }
     .grcon-brand-mark { width: 1px; height: 1px; overflow: hidden; opacity: 0; }
     .grcon-brand-mascot { width: 160px !important; height: 160px !important; }
+    #advanced-panel { margin: 20px; padding: 12px; }
   </style>
 </head>
 <body>
@@ -31,6 +21,7 @@
       <strong>Mascote oficial GRCON</strong>
     </div>
   </header>
+  <section id="advanced-panel" aria-label="Configurações avançadas"></section>
   <script defer src="grcon_mascot_header.js"></script>
   <script defer src="grcon_mascot_asset_fix.js"></script>
   <script defer src="grcon_mascot_greeting_core.js"></script>
