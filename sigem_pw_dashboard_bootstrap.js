@@ -101,9 +101,15 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_readiness_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_scope_fix.js");
+
+    // O histórico captura as dependências no momento em que o módulo é avaliado.
+    // Portanto o motor de revisão precisa existir ANTES de history_core.js ser carregado;
+    // caso contrário a closure do histórico fica permanentemente com Revision = null.
+    await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_management.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwReadiness || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryManagement) {
+
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwReadiness || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryManagement) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
   }
@@ -123,7 +129,6 @@
     if (deferredEnhancements) return deferredEnhancements;
     deferredEnhancements = (async () => {
       await afterFirstPaint();
-      await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
       await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
       await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_ui_audit.js");
       root.GrconSigemPwUiAudit?.activate?.();
