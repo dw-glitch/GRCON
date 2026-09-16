@@ -7,6 +7,8 @@ on:
       - "assets/mascot/video/**"
       - "grcon-mascot-sprite.png"
       - "grcon_mascot_controller.js"
+      - "grcon_mascot_controller_v4.js"
+      - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
       - "tests/fixtures/grcon-mascot-video.html"
       - "tests/grcon_mascot_video.cjs"
@@ -16,6 +18,8 @@ on:
       - "assets/mascot/video/**"
       - "grcon-mascot-sprite.png"
       - "grcon_mascot_controller.js"
+      - "grcon_mascot_controller_v4.js"
+      - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
       - "tests/fixtures/grcon-mascot-video.html"
       - "tests/grcon_mascot_video.cjs"
@@ -27,7 +31,7 @@ permissions:
 
 jobs:
   validate-mascot:
-    name: Vídeos, eventos reais e fallback PNG
+    name: Vídeos, sessão, eventos reais e fallback PNG
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
