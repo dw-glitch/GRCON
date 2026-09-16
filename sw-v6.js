@@ -1,5 +1,5 @@
-// GRCON Service Worker v6 — migração multiformato do mascote.
-const CACHE_NAME = "grcon-v5.40.11-mascot-multiformat-v2";
+// GRCON Service Worker v6 — migração multiformato + pista horizontal do mascote.
+const CACHE_NAME = "grcon-v5.40.11-mascot-running-v3";
 const CACHE_PREFIX = "grcon-";
 const CORE_ASSETS = [
   "index.html",
@@ -10,6 +10,8 @@ const CORE_ASSETS = [
   "grcon_mascot_controller.js",
   "grcon_mascot_controller_v5.js",
   "grcon_mascot_compat_media.js",
+  "grcon_mascot_runner.js",
+  "grcon_mascot_runner.css",
   "grcon-mascot-sprite.png",
   "design-system.css",
   "grcon-ui.css",
@@ -104,8 +106,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Durante e depois da migração, mídia do mascote é sempre rede-primeiro.
-  // 404/erro/resposta parcial não são armazenados por validCacheResponse().
+  // Mídia do mascote fica rede-primeiro durante a migração; os novos vídeos da
+  // corrida não entram no precache inicial e são preparados somente em idle.
   if (mascotVideo || mascotCompat) {
     event.respondWith(networkFirst(request));
     return;
