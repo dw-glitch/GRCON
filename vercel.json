@@ -15,6 +15,12 @@
       ]
     },
     {
+      "source": "/sw-v6.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
       "source": "/manifest.json",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -33,7 +39,13 @@
       ]
     },
     {
-      "source": "/grcon_mascot_controller_v4.js",
+      "source": "/grcon_mascot_controller_v(4|5).js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/grcon_mascot_compat_media.js",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
@@ -42,7 +54,15 @@
       "source": "/assets/mascot/video/(.*)\\.webm",
       "headers": [
         { "key": "Content-Type", "value": "video/webm" },
+        { "key": "Accept-Ranges", "value": "bytes" },
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/assets/mascot/compat/(.*)\\.b64",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     },
     {
