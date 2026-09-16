@@ -1,14 +1,16 @@
 (function () {
   "use strict";
 
-  // Mascote oficial da Qualidade. Mantido em módulos separados para que a
-  // integração visual não se misture com regras de negócio ou navegação.
+  window.GRCON_SW_REVISION = "20260916.3-mascot-multiformat";
+  const SW_URL = "sw-v6.js?v=20260916.3";
+  const RELOAD_GUARD = "grcon:sw-v6:controller-reload";
+
   const installMascotController = () => {
     if (window.GrconMascot || document.querySelector('script[data-grcon-mascot-controller="video"]')) return;
     const installController = () => {
       if (window.GrconMascot || document.querySelector('script[data-grcon-mascot-controller="video"]')) return;
       const controller = document.createElement("script");
-      controller.src = "grcon_mascot_controller.js";
+      controller.src = "grcon_mascot_controller.js?v=20260916.3";
       controller.async = false;
       controller.dataset.grconMascotController = "video";
       document.head.appendChild(controller);
@@ -25,10 +27,7 @@
   };
 
   const installMascotAssetFix = () => {
-    if (document.querySelector('script[data-grcon-mascot-asset-fix="true"]')) {
-      installMascotController();
-      return;
-    }
+    if (document.querySelector('script[data-grcon-mascot-asset-fix="true"]')) return installMascotController();
     const fix = document.createElement("script");
     fix.src = "grcon_mascot_asset_fix.js";
     fix.async = false;
@@ -53,15 +52,10 @@
   };
   installMascotHeader();
 
-  // Bootstrap leve do Dashboard SIGEM × PW. O carregamento real continua lazy:
-  // somente o bootstrap/navegação é instalado no início; core/app/Worker entram
-  // quando o operador abre a nova aba.
   const installSigemPwDashboard = () => {
     const loader = window.GRCONModuleLoader;
     if (!loader || typeof loader.ensure !== "function") return;
-    loader.ensure("sigem_pw_dashboard_bootstrap.js").catch((error) => {
-      console.warn("Dashboard SIGEM × PW não pôde ser inicializado:", error);
-    });
+    loader.ensure("sigem_pw_dashboard_bootstrap.js").catch((error) => console.warn("Dashboard SIGEM × PW não pôde ser inicializado:", error));
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", installSigemPwDashboard, { once: true });
   else installSigemPwDashboard();
@@ -74,14 +68,21 @@
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (reloadingForUpdate) return;
     reloadingForUpdate = true;
+    try {
+      if (sessionStorage.getItem(RELOAD_GUARD) === "1") {
+        sessionStorage.removeItem(RELOAD_GUARD);
+        window.dispatchEvent(new CustomEvent("grcon:sw-updated"));
+        return;
+      }
+      sessionStorage.setItem(RELOAD_GUARD, "1");
+    } catch (_) {}
     location.reload();
   });
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((registration) => {
-      console.log("GRCON SW registrado:", registration.scope);
+    navigator.serviceWorker.register(SW_URL, { scope: "./", updateViaCache: "none" }).then((registration) => {
       registration.update().catch(() => {});
-    }).catch((error) => {
-      console.warn("GRCON SW falhou:", error);
-    });
+      window.dispatchEvent(new CustomEvent("grcon:sw-updated", { detail: { scope: registration.scope, revision: window.GRCON_SW_REVISION } }));
+    }).catch((error) => console.warn("GRCON SW v6 falhou:", error));
   });
 })();
