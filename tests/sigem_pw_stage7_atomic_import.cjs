@@ -63,6 +63,20 @@ function functionBody(source, name, nextName) {
     "o teste deve proteger exatamente o caminho que antes executava null.analyze");
 })();
 
+(function legacyStage7ResetIsNeutralizedBeforeDashboardActivation() {
+  const preserve = functionBody(dashboardBootstrap, "preserveExistingStage7Data", "ensureRuntime");
+  const runtime = functionBody(dashboardBootstrap, "ensureRuntime", "afterFirstPaint");
+  const open = functionBody(dashboardBootstrap, "openDashboard", "openEvolution");
+  assert.match(preserve, /Core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
+  assert.match(preserve, /Core\.kvSet\(PRE_STAGE7_RESET_KEY/);
+  assert.match(preserve, /mode: "preserve-existing-data"/);
+  assert.doesNotMatch(preserve, /clearHistory|SIGEM_BASE_KEY|PW_BASE_KEY|LD_BASE_KEY/,
+    "a migração de preservação não pode apagar histórico nem bases ativas");
+  assert.match(runtime, /await preserveExistingStage7Data\(\)/);
+  assert.ok(open.indexOf("await ensureRuntime()") < open.indexOf("GrconSigemPwDashboardUi.activate()"),
+    "o runtime e o marcador de preservação devem concluir antes da ativação da UI");
+})();
+
 (function rollbackTokenOnlyContainsCreatedSnapshots() {
   const checkpoint = { workingSets: [{ key: "latest:sigem", snapshotId: "old", documents: [] }] };
   const token = History.rollbackToken({
@@ -87,19 +101,11 @@ function functionBody(source, name, nextName) {
   assert.match(historyCore, /meta\.delete\(`sourcePayload:\$\{id\}`\)/);
 })();
 
-(function previousBasesAreClearedExactlyOnce() {
+(function legacyResetImplementationRemainsGuardedByPreservationMarker() {
   const reset = functionBody(dashboardApp, "clearPreStage7BasesOnce", "refreshBases");
   const refresh = functionBody(dashboardApp, "refreshBases", "activate");
-  [
-    "Core.SIGEM_BASE_KEY",
-    "Core.PW_BASE_KEY",
-    "Core.LD_BASE_KEY",
-    "Core.HISTORY_KEY",
-    "Core.LEGACY_SIGEM_BASE_KEY",
-    "Core.LEGACY_PW_BASE_KEY",
-  ].forEach((key) => assert.match(reset, new RegExp(key.replace(".", "\\."))));
-  assert.match(reset, /History\.clearHistory\(\)/);
-  assert.match(reset, /PRE_STAGE7_RESET_KEY/);
+  assert.match(reset, /Core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
+  assert.match(reset, /if \(alreadyReset\) return false/);
   assert.ok(refresh.indexOf("clearPreStage7BasesOnce") < refresh.indexOf("Core.loadBases"));
   assert.doesNotMatch(dashboardApp, /indexedDB\.deleteDatabase/);
 })();
@@ -110,4 +116,4 @@ function functionBody(source, name, nextName) {
   assert.match(Dashboard.EMISSION_RULE, /0 e A.*duas entradas/i);
 })();
 
-console.log("sigem_pw_stage7_atomic_import: OK — preparação, dependências, persistência compartilhada e rollback integral validados.");
+console.log("sigem_pw_stage7_atomic_import: OK — preparação, dependências, preservação, persistência compartilhada e rollback integral validados.");

@@ -2,6 +2,7 @@
   "use strict";
 
   const MODULE_ID = "sigem-pw-dashboard-module";
+  const PRE_STAGE7_RESET_KEY = "sigem-pw-stage7-preupdate-reset-v1";
   let opening = false;
   let deferredEnhancements = null;
   let evolutionRuntime = null;
@@ -95,6 +96,20 @@
     setAreaLabel();
   }
 
+  async function preserveExistingStage7Data() {
+    const Core = root.GrconSigemPwDashboard;
+    if (!Core?.kvGet || !Core?.kvSet) throw new Error("Persistência do Dashboard SIGEM × PW indisponível.");
+    const marker = await Core.kvGet(PRE_STAGE7_RESET_KEY, false);
+    if (marker) return false;
+    await Core.kvSet(PRE_STAGE7_RESET_KEY, {
+      completed: true,
+      completedAt: new Date().toISOString(),
+      mode: "preserve-existing-data",
+    });
+    console.info("[SIGEM×PW][Migration] Bases e histórico existentes preservados; limpeza Stage 7 desativada.");
+    return true;
+  }
+
   async function ensureRuntime() {
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
@@ -117,6 +132,11 @@
     if (!root.GrconSigemPwDashboard || !root.GrconSigemPwReadiness || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryManagement) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
+
+    // A versão atual não apaga bases pré-existentes para concluir migração.
+    // O marcador é gravado antes da ativação da UI, neutralizando o reset legado
+    // existente em dashboard_app sem tocar nos dados persistidos.
+    await preserveExistingStage7Data();
   }
 
   function afterFirstPaint() {
