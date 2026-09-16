@@ -1,0 +1,104 @@
+name: Gerar assets da corrida do mascote
+
+on:
+  push:
+    branches:
+      - codex/mascot-running-lane
+    paths:
+      - .github/workflows/build-running-mascot-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build-running-mascot:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: codex/mascot-running-lane
+          fetch-depth: 0
+
+      - name: Garantir FFmpeg
+        shell: bash
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+
+      - name: Baixar fonte gerada no Higgsfield
+        shell: bash
+        env:
+          SOURCE_URL: https://d8j0ntlcm91z4.cloudfront.net/user_3JPlmNBUEodLWC5zqz9TRYPqweG/hf_20260916_185322_c92227c9-62ea-4bdd-a2a7-2fcb3ade197a.mp4
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 --retry-delay 2 "$SOURCE_URL" -o /tmp/grcon-mascot-running-source.mp4
+          ffprobe -v error -show_entries stream=codec_name,width,height,pix_fmt,r_frame_rate -show_entries format=duration,size -of json /tmp/grcon-mascot-running-source.mp4
+
+      - name: Gerar WebM alpha, MP4 compatível e poster transparente
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/mascot/video
+          SRC=/tmp/grcon-mascot-running-source.mp4
+          KEY=0xE80FB8
+
+          ffmpeg -hide_banner -loglevel error -y -i "$SRC" \
+            -vf "scale=480:480:flags=lanczos,chromakey=${KEY}:0.16:0.08,format=yuva420p" \
+            -an -c:v libvpx-vp9 -b:v 0 -crf 30 -row-mt 1 -auto-alt-ref 0 \
+            -metadata:s:v:0 alpha_mode=1 \
+            assets/mascot/video/grcon-mascot-running-alpha.webm
+
+          ffmpeg -hide_banner -loglevel error -y -i "$SRC" \
+            -vf "scale=480:480:flags=lanczos" \
+            -an -c:v libx264 -preset slow -crf 22 -pix_fmt yuv420p -movflags +faststart \
+            assets/mascot/video/grcon-mascot-running-compat.mp4
+
+          ffmpeg -hide_banner -loglevel error -y -ss 0.65 -i "$SRC" -frames:v 1 \
+            -vf "scale=480:480:flags=lanczos,chromakey=${KEY}:0.16:0.08,format=rgba" \
+            assets/mascot/video/grcon-mascot-running-poster.png
+
+          python3 - <<'PY'
+          import json, subprocess, pathlib
+          root = pathlib.Path('assets/mascot/video')
+          def probe(path):
+              raw = subprocess.check_output([
+                  'ffprobe','-v','error','-show_entries',
+                  'stream=codec_name,width,height,pix_fmt,r_frame_rate:stream_tags=alpha_mode:format=duration,size',
+                  '-of','json',str(path)
+              ], text=True)
+              return json.loads(raw)
+          data = {
+              'source': {'generator': 'Higgsfield Seedance 2.5', 'durationRequestedSeconds': 5, 'audio': False},
+              'chromaKeyMeasured': '#E80FB8',
+              'alpha': probe(root/'grcon-mascot-running-alpha.webm'),
+              'compat': probe(root/'grcon-mascot-running-compat.mp4'),
+              'poster': {'path': 'grcon-mascot-running-poster.png'},
+          }
+          (root/'grcon-mascot-running-metadata.json').write_text(json.dumps(data, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+          PY
+
+          ls -lh assets/mascot/video/grcon-mascot-running-*
+          ffprobe -v error -show_entries stream=codec_name,width,height,pix_fmt,r_frame_rate:stream_tags=alpha_mode -show_entries format=duration,size -of json assets/mascot/video/grcon-mascot-running-alpha.webm
+          ffprobe -v error -show_entries stream=codec_name,width,height,pix_fmt,r_frame_rate -show_entries format=duration,size -of json assets/mascot/video/grcon-mascot-running-compat.mp4
+
+      - name: Versionar assets na branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/mascot/video/grcon-mascot-running-alpha.webm \
+                  assets/mascot/video/grcon-mascot-running-compat.mp4 \
+                  assets/mascot/video/grcon-mascot-running-poster.png \
+                  assets/mascot/video/grcon-mascot-running-metadata.json
+          if git diff --cached --quiet; then
+            echo "Assets já estão atualizados."
+            exit 0
+          fi
+          git commit -m "Adicionar vídeo de corrida do mascote [skip ci]"
+          git push origin HEAD:codex/mascot-running-lane
