@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-mascot-video1-spw-worker-ui-cleanup1";
+const CACHE_NAME = "grcon-v5.40.10-mascot-video1-spw-worker-ui-cleanup1-history-runtime2";
 const ASSETS = [
   "index.html",
   "design-system.css",
