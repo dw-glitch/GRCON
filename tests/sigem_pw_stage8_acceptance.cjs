@@ -6,6 +6,7 @@ const rootDir = path.resolve(__dirname, "..");
 const read = (name) => fs.readFileSync(path.join(rootDir, name), "utf8");
 const Readiness = require("../sigem_pw_readiness_core.js");
 const Dashboard = require("../sigem_pw_dashboard_core.js");
+const dashboardCore = read("sigem_pw_dashboard_core.js");
 const app = read("sigem_pw_dashboard_app.js");
 const bootstrap = read("sigem_pw_dashboard_bootstrap.js");
 const sw = read("sw.js");
@@ -89,11 +90,17 @@ function validResult() {
   assert.match(bootstrap, /ensure\("sigem_pw_readiness_core\.js"\)/);
   assert.match(bootstrap, /root\.GrconSigemPwReadiness/);
   assert.match(app, /id="spw-readiness"/);
-  assert.match(app, /const readinessResult = Core\.aggregateModel\(state\.model\)/);
-  assert.match(app, /state\.result = Core\.aggregateModel\(state\.model, \{ documentClass: state\.filters\.documentClass \}\)/);
+  assert.match(app, /const readinessResult = state\.aggregates\?\.all \|\| Core\.aggregateModel\(state\.model\)/);
+  assert.match(app, /state\.result = state\.aggregates\?\.\[aggregateKey\] \|\| Core\.aggregateModel\(state\.model, \{ documentClass: state\.filters\.documentClass \}\)/);
   assert.match(app, /Readiness\.assess\(state, unfilteredResult\)/);
   assert.match(app, /aria-live="polite"/);
   assert.match(app, /data-status="attention"/);
+  assert.match(app, /data-edit-base-date="sigem"/);
+  assert.match(app, /data-edit-base-date="pw"/);
+  assert.match(app, /id="spw-date-input" type="datetime-local"/);
+  assert.match(app, /grcon:sigem-pw-base-date-updated/);
+  assert.match(dashboardCore, /async function updateSnapshotDate\(/);
+  assert.match(bootstrap, /openEvolution/);
   assert.match(sw, /"sigem_pw_readiness_core\.js"/);
 })();
 

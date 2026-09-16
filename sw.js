@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-spw5-storage-v2-spw6-audit1-mascot-hd1-spw7-atomic1-reset1-spw8-ready1-full1-mascot-greeting1-processing6-official-rive-raster1";
+const CACHE_NAME = "grcon-v5.40.10-mascot-hd1-mascot-greeting1-processing6-official-rive-raster1-frame-events-spw-worker-ui-cleanup1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -52,15 +52,13 @@ const ASSETS = [
   "sigem_pw_dashboard_core.js",
   "sigem_pw_readiness_core.js",
   "sigem_pw_dashboard_app.js",
-  "sigem_pw_audit_core.js",
-  "sigem_pw_audit_app.js",
   "sigem_pw_revision_core.js",
   "sigem_pw_revision_section.js",
   "sigem_pw_history_core.js",
-  "sigem_pw_history_app.js",
   "sigem_pw_history_management.js",
+  "sigem_pw_evolution_core.js",
+  "sigem_pw_evolution_app.js",
   "sigem_pw_dashboard_ui_audit.js",
-  "sigem_pw_history_postmerge.js",
   "grcon_module_loader.js",
   "grcon_contracts.js",
   "discipline_resolver.js",
@@ -106,7 +104,6 @@ const ASSETS = [
   "emission.js",
   "pending_allocation_package.js",
   "grdt-template.xlsx",
-  "task_center.js",
   "workspace.js",
   "title_quality.js",
   "grdt_history_indicator.js",

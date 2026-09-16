@@ -94,26 +94,15 @@ const Management = require(path.join(rootDir, "sigem_pw_history_management.js"))
 
 (function duplicateBasesAreSilentAndDoNotAutoRecordOnRender() {
   const bootstrap = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
-  const runtime = fs.readFileSync(path.join(rootDir, "sigem_pw_history_runtime_fix.js"), "utf8");
-  assert.match(bootstrap, /HISTORY_BASE_EVENTS/);
-  assert.match(bootstrap, /loadHistoryAppWithoutAutomaticBaseListeners/);
-  assert.match(bootstrap, /if \(HISTORY_BASE_EVENTS\.has\(type\)\) return/,
-    "listeners automáticos do history_app devem ser bloqueados durante o carregamento");
-  assert.match(bootstrap, /sigem_pw_history_runtime_fix\.js/);
-  assert.match(runtime, /duplicateShortCircuits/);
-  assert.match(runtime, /state\.sourceIds\[system\]\.has\(snapshotId\)/);
-  assert.match(runtime, /History\.getSnapshot\(History\.STORES\.sourceSnapshots, snapshotId\)/,
-    "fallback de deduplicação deve ser lookup O(1) por id");
-  const duplicateCheck = runtime.indexOf("state.sourceIds[system].has(snapshotId)");
-  const heavyWrite = runtime.indexOf("History.recordActiveBases");
-  assert.ok(duplicateCheck >= 0 && heavyWrite > duplicateCheck,
-    "short-circuit de duplicidade deve ocorrer antes do processamento histórico pesado");
-  assert.doesNotMatch(runtime, /Esta base já foi registrada anteriormente/,
-    "runtime novo não pode possuir toast/mensagem de base duplicada");
-  assert.match(runtime, /recordCurrent: \(reason, changedSystem\) => VALID_SYSTEMS\.has\(changedSystem\)/,
-    "recordCurrent sem sistema de importação deve ser no-op");
-  assert.match(runtime, /await passiveRefresh\(\)/,
-    "abrir o histórico deve apenas ler snapshots e renderizar, sem registrar novamente");
+  const dashboard = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_app.js"), "utf8");
+  assert.doesNotMatch(bootstrap, /sigem_pw_history_app\.js/,
+    "a UI histórica antiga não deve registrar automaticamente durante a abertura");
+  assert.doesNotMatch(bootstrap, /sigem_pw_history_runtime_fix\.js/,
+    "o remendo da UI removida não deve ser carregado");
+  assert.match(dashboard, /History\.recordActiveBases\(sigemBase, pwBase/);
+  assert.match(dashboard, /Management\.capturePayload\(system, candidate, source\.snapshot\.id/);
+  assert.match(dashboard, /registerHistoryBeforeActivation/,
+    "somente uma importação validada deve registrar o histórico antes da ativação");
 })();
 
 (function managerOpensFromMetadataWithoutFingerprintingTheActiveBase() {
@@ -130,17 +119,19 @@ const Management = require(path.join(rootDir, "sigem_pw_history_management.js"))
     "feedback de exclusão deve ser curto e transitório");
 })();
 
-(function bootstrapLoadsManagementUiAuditAndSilentRuntime() {
+(function bootstrapKeepsHistoryDataAndDefersOnlyTheUsefulAuditGuard() {
   const bootstrap = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
   const sw = fs.readFileSync(path.join(rootDir, "sw.js"), "utf8");
   assert.match(bootstrap, /sigem_pw_history_management\.js/);
   assert.match(bootstrap, /sigem_pw_dashboard_ui_audit\.js/);
-  assert.match(bootstrap, /sigem_pw_history_runtime_fix\.js/);
-  assert.match(bootstrap, /GrconSigemPwHistoryManagement\.activate\(\)/);
-  assert.match(bootstrap, /GrconSigemPwUiAudit\.activate\(\)/);
+  assert.doesNotMatch(bootstrap, /sigem_pw_history_runtime_fix\.js/);
+  assert.doesNotMatch(bootstrap, /GrconSigemPwHistoryManagement\.activate/,
+    "a tela gerencial removida não deve ser montada ao abrir o comparativo");
+  assert.match(bootstrap, /GrconSigemPwUiAudit\?\.activate\?\.\(\)/);
   assert.doesNotMatch(bootstrap, /DuplicateBaseNoticeFilter/);
   assert.match(sw, /"sigem_pw_history_management\.js"/);
   assert.match(sw, /"sigem_pw_dashboard_ui_audit\.js"/);
+  assert.doesNotMatch(sw, /"sigem_pw_history_runtime_fix\.js"/);
 })();
 
 console.log("sigem_pw_history_management: OK — exclusão seletiva, promoção segura, deduplicação silenciosa e UX responsiva validadas.");

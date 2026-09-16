@@ -55,12 +55,11 @@ assert.ok(audit.checks.every((check) => check.passed));
   assert.match(app, /Exportar auditoria/);
   assert.match(app, /bookType: "xlsx"/);
   assert.doesNotMatch(app, /scopeExcluded|scopeDiscarded|Itens fora do escopo|Motivo da rejeição|código descartado/i);
-  assert.match(bootstrap, /sigem_pw_audit_core\.js/);
-  assert.match(bootstrap, /sigem_pw_audit_app\.js/);
-  assert.match(bootstrap, /GrconSigemPwAuditUi\.activate/);
-  assert.match(sw, /spw6-audit1/);
-  assert.match(sw, /"sigem_pw_audit_core\.js"/);
-  assert.match(sw, /"sigem_pw_audit_app\.js"/);
+  assert.doesNotMatch(bootstrap, /sigem_pw_audit_core\.js/);
+  assert.doesNotMatch(bootstrap, /sigem_pw_audit_app\.js/);
+  assert.doesNotMatch(bootstrap, /GrconSigemPwAuditUi\.activate/);
+  assert.doesNotMatch(sw, /"sigem_pw_audit_core\.js"/);
+  assert.doesNotMatch(sw, /"sigem_pw_audit_app\.js"/);
 })();
 
 console.log("sigem_pw_audit: OK — auditoria agregada, revisão, integridade, histórico, exportação e privacidade validados.");

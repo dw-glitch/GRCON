@@ -156,6 +156,10 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   assert.match(coreSource, /createObjectStore\(STORES\.snapshotChanges, \{ keyPath: "snapshotId" \}\)/);
   assert.doesNotMatch(coreSource, /snapshotDocuments/, "histórico não deve acumular um registro por documento por snapshot");
   assert.doesNotMatch(coreSource, /localStorage/, "histórico grande não pode usar localStorage");
+  assert.match(coreSource, /async function updateSourceSnapshotDate\(/, "a data operacional do snapshot precisa ser editável");
+  assert.match(coreSource, /sourceImportedAt:/, "a data técnica original deve permanecer auditável");
+  assert.match(coreSource, /sigemImportedAt: importedAt/, "comparativos dependentes devem acompanhar a data SIGEM editada");
+  assert.match(coreSource, /pwImportedAt: importedAt/, "comparativos dependentes devem acompanhar a data PW editada");
   assert.doesNotMatch(coreSource, /\.put\(\s*value\s*,\s*key\s*\)/, "stores inline não podem usar put(value, key)");
   assert.match(appSource, /Visão geral/);
   assert.match(appSource, /Pendências/);
@@ -171,12 +175,19 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   assert.match(appSource, /bookType: "xlsx"/, "exportação deve gerar Excel real");
   assert.doesNotMatch(appSource, /location\.reload\s*\(/);
   assert.match(bootstrap, /sigem_pw_history_core\.js/);
-  assert.match(bootstrap, /sigem_pw_history_app\.js/);
+  assert.match(bootstrap, /sigem_pw_history_management\.js/);
+  assert.doesNotMatch(bootstrap, /sigem_pw_history_app\.js/);
+  assert.doesNotMatch(bootstrap, /sigem_pw_history_postmerge\.js/);
+  assert.doesNotMatch(bootstrap, /sigem_pw_history_runtime_fix\.js/);
   assert.match(storageBootstrap, /operational_persistence_v2\.js/);
-  assert.match(sw, /grcon-v5\.40\.10-spw5-storage-v2/);
+  assert.match(sw, /grcon-v5\.40\.10-mascot-hd1-mascot-greeting1-processing6-official-rive-raster1-frame-events-spw-worker-ui-cleanup1/);
   assert.match(sw, /"operational_persistence_v2\.js"/);
   assert.match(sw, /"sigem_pw_history_core\.js"/);
-  assert.match(sw, /"sigem_pw_history_app\.js"/);
+  assert.match(sw, /"sigem_pw_history_management\.js"/);
+  assert.match(sw, /"sigem_pw_evolution_core\.js"/);
+  assert.match(sw, /"sigem_pw_evolution_app\.js"/);
+  assert.doesNotMatch(sw, /"sigem_pw_history_app\.js"/);
+  assert.doesNotMatch(sw, /"sigem_pw_history_postmerge\.js"/);
 })();
 
 console.log("sigem_pw_history: OK — snapshots, compactação, deduplicação, deltas documentais, escopo e UX validados.");

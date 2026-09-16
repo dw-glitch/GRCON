@@ -906,6 +906,40 @@
     return normalized;
   }
 
+  async function updateSnapshotDate(kind, snapshotIdValue, importedAtValue) {
+    if (!["sigem", "pw"].includes(kind)) throw new Error("Somente bases SIGEM e PW permitem editar a data.");
+    const snapshotIdValueText = text(snapshotIdValue);
+    const parsed = new Date(importedAtValue);
+    if (!snapshotIdValueText || Number.isNaN(parsed.getTime())) throw new Error("Informe uma data válida para a base.");
+    const importedAt = parsed.toISOString();
+    const history = await loadHistory();
+    const index = history.snapshots.findIndex((item) => item.meta.snapshotId === snapshotIdValueText && item.meta.kind === kind);
+    if (index < 0) throw new Error("A base selecionada não existe mais no histórico.");
+    const original = history.snapshots[index];
+    const editedAt = new Date().toISOString();
+    const updated = {
+      ...original,
+      meta: {
+        ...original.meta,
+        sourceImportedAt: text(original.meta.sourceImportedAt) || text(original.meta.importedAt),
+        importedAt,
+        dateEditedAt: editedAt,
+      },
+    };
+    const snapshots = history.snapshots.slice();
+    snapshots[index] = updated;
+    snapshots.sort((left, right) => parseDateMs(right.meta.importedAt) - parseDateMs(left.meta.importedAt));
+    const current = await kvGet(baseKey(kind), { meta: null, records: [] });
+    const writes = [[HISTORY_KEY, { version: HISTORY_VERSION, snapshots, deletedIds: history.deletedIds }]];
+    let currentBase = current;
+    if (current?.meta?.snapshotId === snapshotIdValueText) {
+      currentBase = { ...current, meta: { ...current.meta, ...updated.meta } };
+      writes.push([baseKey(kind), currentBase]);
+    }
+    await kvSetMany(writes);
+    return { snapshot: updated, current: currentBase, importedAt };
+  }
+
   async function deleteSnapshot(id) {
     const history = await loadHistory();
     const removed = history.snapshots.find((item) => item.meta.snapshotId === id);
@@ -1035,6 +1069,6 @@
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, buildComparisonLists, aggregateModel, aggregate,
     openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
-    saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, deleteSnapshot, migrateLegacyBases, loadBases,
+    saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, updateSnapshotDate, deleteSnapshot, migrateLegacyBases, loadBases,
   });
 });

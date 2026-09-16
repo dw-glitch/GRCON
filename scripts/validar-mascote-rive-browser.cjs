@@ -55,6 +55,22 @@ async function main() {
     await page.screenshot({ path: path.join(outputDir, "processing.png") });
     assert.deepEqual(pageErrors, [], `erros Rive no console: ${pageErrors.join(" | ")}`);
 
+    const noReadback = await context.newPage();
+    await noReadback.addInitScript(() => {
+      const original = CanvasRenderingContext2D.prototype.getImageData;
+      CanvasRenderingContext2D.prototype.getImageData = function (...args) {
+        if (this.canvas && this.canvas.width === 64 && this.canvas.height === 64) throw new Error("pixel readback blocked by policy");
+        return original.apply(this, args);
+      };
+    });
+    await noReadback.goto(`${fixtureUrl}?rive-no-readback-test=1`, { waitUntil: "networkidle", timeout: 30000 });
+    await waitForMascot(noReadback);
+    await noReadback.waitForFunction(() => window.GrconMascot.diagnostics().ready, null, { timeout: 12000 });
+    const noReadbackDiagnostics = await noReadback.evaluate(() => window.GrconMascot.diagnostics());
+    assert.equal(noReadbackDiagnostics.engine, "official-rive-raster-v1", "o Rive deve iniciar mesmo sem leitura de pixels WebGL");
+    assert.equal(noReadbackDiagnostics.ready, true);
+    assert.equal(noReadbackDiagnostics.instances, 1);
+
     const fallback = await context.newPage();
     const fallbackMessages = [];
     const fallbackErrors = [];
@@ -89,7 +105,7 @@ async function main() {
     assert.deepEqual(fallbackErrors, [], `loops/erros Rive no fallback: ${fallbackErrors.join(" | ")}`);
     await fallback.screenshot({ path: path.join(outputDir, "fallback.png") });
 
-    console.log(JSON.stringify({ diagnostics, riveMessages, fallback: fallbackResult, fallbackMessages }, null, 2));
+    console.log(JSON.stringify({ diagnostics, noReadbackDiagnostics, riveMessages, fallback: fallbackResult, fallbackMessages }, null, 2));
   } finally {
     await browser.close();
   }

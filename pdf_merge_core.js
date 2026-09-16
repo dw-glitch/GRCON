@@ -32,7 +32,7 @@
   }
 
   function isAcceptedFile(file) {
-    return isPdfFile(file) || isDwgFile(file);
+    return isPdfFile(file);
   }
 
   function fileSignature(file) {

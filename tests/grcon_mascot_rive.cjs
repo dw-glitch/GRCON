@@ -112,7 +112,8 @@ assert.doesNotMatch(rml, /sprite|steps\s*\(|frame[-_ ]?by[-_ ]?frame/i, "a anima
 assert.match(controller, /const HOST_SELECTOR = "\.grcon-brand-mascot"/);
 assert.doesNotMatch(controller, /HOST_SELECTOR\s*=.*grcon-mascot-context/);
 assert.match(controller, /instances: record \? 1 : 0/);
-assert.match(controller, /canvasHasVisibleFrame/);
+assert.match(controller, /onAdvance: function/);
+assert.match(controller, /REQUIRED_ADVANCED_FRAMES = 2/);
 assert.match(controller, /data-grcon-rive-ready/);
 assert.match(controller, /official-png-fallback-v1/);
 assert.match(controller, /enableRiveAssetCDN: false/);
@@ -122,7 +123,8 @@ assert.match(controller, /canvas\.addEventListener\("contextlost", current\.onCo
 assert.match(controller, /canvas\.removeEventListener\("webglcontextlost", current\.onContextLost\)/);
 assert.match(controller, /canvas\.removeEventListener\("contextlost", current\.onContextLost\)/);
 assert.match(controller, /fail\(`contexto gráfico perdido/);
-assert.match(controller, /MAX_FRAME_CHECKS = 30/);
+assert.match(controller, /ACTIVATION_TIMEOUT_MS = 30000/);
+assert.doesNotMatch(controller, /getImageData|canvasHasVisibleFrame/, "a ativação não pode depender de leitura de pixels WebGL");
 assert.match(controller, /if \(!failureReported/);
 assert.match(controller, /root\.GrconMascot = Object\.freeze/);
 for (const [state, value] of Object.entries({ idle: 0, hover: 1, hello: 2, processing: 3, analyzing: 4, success: 5, warning: 6 })) {

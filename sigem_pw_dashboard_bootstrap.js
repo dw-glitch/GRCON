@@ -2,8 +2,9 @@
   "use strict";
 
   const MODULE_ID = "sigem-pw-dashboard-module";
-  const HISTORY_BASE_EVENTS = new Set(["grcon:conference-updated", "grcon:pw-base-updated"]);
   let opening = false;
+  let deferredEnhancements = null;
+  let evolutionRuntime = null;
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
@@ -94,48 +95,45 @@
     setAreaLabel();
   }
 
-  async function loadHistoryAppWithoutAutomaticBaseListeners() {
-    if (root.GrconSigemPwHistoryUi) return;
-    const originalAddEventListener = root.addEventListener;
-    if (typeof originalAddEventListener !== "function") {
-      await root.GRCONModuleLoader.ensure("sigem_pw_history_app.js");
-      return;
-    }
-    root.addEventListener = function (type, listener, options) {
-      if (HISTORY_BASE_EVENTS.has(type)) return;
-      return originalAddEventListener.call(root, type, listener, options);
-    };
-    try {
-      await root.GRCONModuleLoader.ensure("sigem_pw_history_app.js");
-    } finally {
-      root.addEventListener = originalAddEventListener;
-    }
-  }
-
   async function ensureRuntime() {
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_readiness_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_audit_core.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_audit_app.js");
-    // O app captura o core por código + revisão antes da ponte de
-    // compatibilidade usada apenas pelos relatórios legados desta PR.
     await root.GRCONModuleLoader.ensure("sigem_pw_scope_fix.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_revision_report.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_core.js");
-    await loadHistoryAppWithoutAutomaticBaseListeners();
     await root.GRCONModuleLoader.ensure("sigem_pw_history_management.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_ui_audit.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_history_postmerge.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_history_runtime_fix.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_evolution_core.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_evolution_app.js");
-    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwReadiness || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwAudit || !root.GrconSigemPwAuditUi || !root.GrconSigemPwRevision || !root.GrconSigemPwRevisionReport || !root.GrconSigemPwRevisionUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryUi || !root.GrconSigemPwHistoryManagement || !root.GrconSigemPwUiAudit || !root.GrconSigemPwHistoryPostMerge || !root.GrconSigemPwHistoryRuntimeFix || !root.GrconSigemPwEvolution || !root.GrconSigemPwEvolutionUi) {
+    if (!root.GrconSigemPwDashboard || !root.GrconSigemPwReadiness || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryManagement) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
+  }
+
+  function afterFirstPaint() {
+    return new Promise((resolve) => {
+      const schedule = () => {
+        if (typeof root.requestIdleCallback === "function") root.requestIdleCallback(resolve, { timeout: 1200 });
+        else root.setTimeout(resolve, 40);
+      };
+      if (typeof root.requestAnimationFrame === "function") root.requestAnimationFrame(() => root.requestAnimationFrame(schedule));
+      else schedule();
+    });
+  }
+
+  function loadDeferredEnhancements() {
+    if (deferredEnhancements) return deferredEnhancements;
+    deferredEnhancements = (async () => {
+      await afterFirstPaint();
+      await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
+      await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
+      await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_ui_audit.js");
+      root.GrconSigemPwUiAudit?.activate?.();
+      const module = document.getElementById(MODULE_ID);
+      if (module && !module.hidden) await root.GrconSigemPwRevisionUi?.activate?.();
+    })().catch((error) => {
+      deferredEnhancements = null;
+      console.warn("[SIGEM×PW] complementos adiados:", error);
+    });
+    return deferredEnhancements;
   }
 
   async function openDashboard() {
@@ -145,18 +143,36 @@
       activateShell();
       await ensureRuntime();
       activateShell();
-      if (!root.GrconSigemPwDashboardUi.state?.ready) await root.GrconSigemPwDashboardUi.activate();
-      await root.GrconSigemPwAuditUi.activate();
-      await root.GrconSigemPwRevisionUi.activate();
-      await root.GrconSigemPwHistoryUi.activate();
-      await root.GrconSigemPwHistoryManagement.activate();
-      root.GrconSigemPwUiAudit.activate();
-      await root.GrconSigemPwEvolutionUi.activate();
+      await root.GrconSigemPwDashboardUi.activate();
+      void loadDeferredEnhancements();
     } catch (error) {
       console.error("[SIGEM×PW] abertura:", error);
       deactivate();
       notify(error.message || "Não foi possível abrir o Dashboard SIGEM × PW.", "error");
     } finally { opening = false; }
+  }
+
+  async function openEvolution() {
+    if (!evolutionRuntime) {
+      evolutionRuntime = (async () => {
+        if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
+        await root.GRCONModuleLoader.ensure("sigem_pw_evolution_core.js");
+        await root.GRCONModuleLoader.ensure("sigem_pw_evolution_app.js");
+        if (!root.GrconSigemPwEvolution || !root.GrconSigemPwEvolutionUi?.activate) throw new Error("A Evolução SIGEM × PW não foi inicializada corretamente.");
+        await root.GrconSigemPwEvolutionUi.activate();
+        return root.GrconSigemPwEvolutionUi;
+      })().catch((error) => { evolutionRuntime = null; throw error; });
+    }
+    try {
+      const ui = await evolutionRuntime;
+      const section = document.getElementById("spw-evolution-section");
+      section?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return ui;
+    } catch (error) {
+      console.error("[SIGEM×PW] evolução:", error);
+      notify(error.message || "Não foi possível abrir a Evolução SIGEM × PW.", "error");
+      throw error;
+    }
   }
 
   function installDeactivationBridge() {
@@ -174,5 +190,5 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  root.GrconSigemPwDashboardBootstrap = Object.freeze({ open: openDashboard, deactivate });
+  root.GrconSigemPwDashboardBootstrap = Object.freeze({ open: openDashboard, openEvolution, deactivate });
 })(window);

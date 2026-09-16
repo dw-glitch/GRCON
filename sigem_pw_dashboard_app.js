@@ -14,6 +14,8 @@
     ready: false, busy: false,
     sigem: { meta: null, records: [] }, pw: { meta: null, records: [] }, ld: { meta: null, records: [] },
     history: { version: 3, snapshots: [] }, model: null, result: null, readiness: null,
+    aggregates: null, modelGeneration: 0,
+    dateEditSystem: "", dateEditSnapshotId: "",
     filters: { documentClass: "", query: "" }, activeList: "differences", page: 1,
   };
   let shell = null;
@@ -38,11 +40,12 @@
       .spw-page-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.spw-page-heading>div>span,.spw-kicker{display:block;font-size:.68rem;font-weight:900;letter-spacing:.1em;color:var(--brand-700,#155c8a);margin-bottom:4px}.spw-page-heading h2{margin:0;color:var(--text-strong,#183247);font-size:1.45rem}.spw-page-heading p{max-width:880px;margin:6px 0 0;color:var(--text-muted,#66798a);font-size:.88rem}.spw-heading-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.spw-heading-actions button,.spw-base-actions button{display:inline-flex;align-items:center;gap:7px}.spw-heading-actions svg,.spw-base-actions svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
       .spw-progress{display:flex;align-items:center;gap:8px;padding:9px 13px;border-radius:10px;background:var(--brand-50,#eaf5fb);color:var(--brand-800,#0f537a);font-size:.78rem;font-weight:800;margin-bottom:10px}.spw-progress i{width:15px;height:15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spw-spin .7s linear infinite}@keyframes spw-spin{to{transform:rotate(360deg)}}
       .spw-readiness{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;margin-bottom:10px;padding:10px 13px;border:1px solid var(--border,#dce4eb);border-left:5px solid var(--brand-500,#2382ad);border-radius:11px;background:var(--surface,#fff);color:var(--text-strong,#183247)}.spw-readiness[data-status="ready"]{border-left-color:var(--success-500,#2f8a64);background:#f2fbf7}.spw-readiness[data-status="partial"]{border-left-color:var(--warning-500,#c68a28);background:#fffaf0}.spw-readiness[data-status="attention"]{border-left-color:var(--danger-500,#c74b43);background:#fff6f5}.spw-readiness-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:rgba(35,130,173,.12);font-weight:900}.spw-readiness[data-status="ready"] .spw-readiness-icon{background:rgba(47,138,100,.13);color:#216d4d}.spw-readiness[data-status="attention"] .spw-readiness-icon{background:rgba(199,75,67,.12);color:#9d342f}.spw-readiness strong,.spw-readiness small{display:block}.spw-readiness small{margin-top:2px;color:var(--text-muted,#66798a);font-size:.72rem;line-height:1.4}.spw-readiness details{font-size:.68rem;color:var(--text-muted,#66798a)}.spw-readiness summary{cursor:pointer;font-weight:800;white-space:nowrap}.spw-readiness-checks{display:grid;gap:4px;margin-top:7px;min-width:290px}.spw-readiness-checks span{display:block}.spw-readiness-checks .fail{color:var(--danger-700,#9d342f);font-weight:800}
-      .spw-base-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:10px}.spw-base-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:13px 14px;border:1px solid var(--border,#dce4eb);border-radius:14px;background:var(--surface,#fff);box-shadow:0 5px 18px rgba(32,56,85,.04)}.spw-base-card span{display:block;font-size:.65rem;font-weight:900;letter-spacing:.075em;color:var(--brand-700,#155c8a)}.spw-base-card strong{display:block;margin-top:4px;color:var(--text-strong,#183247);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.spw-base-card small,.spw-base-card em{display:block;margin-top:3px;color:var(--text-muted,#66798a);font-size:.7rem;font-style:normal}.spw-base-card em{margin-top:7px;font-weight:800}.spw-base-actions{display:flex;justify-content:flex-end}
+      .spw-base-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:10px}.spw-base-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:13px 14px;border:1px solid var(--border,#dce4eb);border-radius:14px;background:var(--surface,#fff);box-shadow:0 5px 18px rgba(32,56,85,.04)}.spw-base-card span{display:block;font-size:.65rem;font-weight:900;letter-spacing:.075em;color:var(--brand-700,#155c8a)}.spw-base-card strong{display:block;margin-top:4px;color:var(--text-strong,#183247);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.spw-base-card small,.spw-base-card em{display:block;margin-top:3px;color:var(--text-muted,#66798a);font-size:.7rem;font-style:normal}.spw-base-card em{margin-top:7px;font-weight:800}.spw-base-actions{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
       .spw-system-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.spw-system-card{position:relative;overflow:hidden;padding:16px;border:1px solid var(--border,#dce4eb);border-radius:15px;background:var(--surface,#fff);box-shadow:0 6px 22px rgba(32,56,85,.05)}.spw-system-card:before{content:"";position:absolute;inset:0 auto 0 0;width:5px;background:var(--spw-sigem)}.spw-system-card.pw:before{background:var(--spw-pw)}.spw-system-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.spw-system-head h3{margin:0;font-size:1.08rem;color:var(--text-strong,#183247)}.spw-system-head small{display:block;margin-top:4px;color:var(--text-muted,#66798a)}.spw-system-total{text-align:right}.spw-system-total span{display:block;font-size:.65rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}.spw-system-total strong{display:block;margin-top:3px;font-size:2rem;line-height:1;color:var(--text-strong,#183247)}.spw-system-split{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:15px}.spw-system-card.pw .spw-system-split{grid-template-columns:repeat(4,1fr)}.spw-system-split div{padding:10px;border-radius:11px;background:var(--surface-soft,#f5f8fa)}.spw-system-split span{display:block;font-size:.63rem;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#66798a)}.spw-system-split strong{display:block;margin-top:5px;font-size:1.08rem;color:var(--text-strong,#183247)}
       .spw-actions-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:10px}.spw-kpi{position:relative;overflow:hidden;min-height:92px;padding:12px 13px;border:1px solid var(--border,#dce4eb);border-radius:13px;background:var(--surface,#fff);box-shadow:0 5px 18px rgba(32,56,85,.04)}.spw-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--danger-500,#c74b43)}.spw-kpi.warn:before{background:var(--spw-issued)}.spw-kpi.pw:before{background:var(--spw-pw)}.spw-kpi.ok:before{background:var(--spw-ok)}.spw-kpi span{display:block;font-size:.65rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted,#687b8c)}.spw-kpi strong{display:block;margin-top:8px;font-size:1.5rem;line-height:1;color:var(--text-strong,#17324a)}.spw-kpi small{display:block;margin-top:8px;color:var(--text-muted,#66798a);font-size:.7rem}
       .spw-list-card{border:1px solid var(--border,#dce4eb);border-radius:14px;background:var(--surface,#fff);box-shadow:0 6px 22px rgba(32,56,85,.045);overflow:hidden}.spw-list-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 15px 10px}.spw-list-head strong{display:block;color:var(--text-strong,#183247);font-size:1rem}.spw-list-head small{display:block;margin-top:4px;color:var(--text-muted,#66798a)}.spw-list-tabs{display:flex;gap:6px;overflow-x:auto;padding:0 15px 10px}.spw-list-tabs button{white-space:nowrap;border:1px solid var(--border,#dce4eb);border-radius:999px;background:var(--surface,#fff);color:var(--text-muted,#66798a);padding:6px 10px;font:inherit;font-size:.72rem;font-weight:800;cursor:pointer}.spw-list-tabs button.active{background:var(--brand-50,#eaf5fb);border-color:var(--brand-300,#8ecae4);color:var(--brand-800,#0f537a)}.spw-list-filters{display:grid;grid-template-columns:minmax(240px,1fr) 190px auto;gap:8px;padding:10px 15px;border-top:1px solid var(--border,#edf1f4);background:var(--surface-soft,#f8fafb)}.spw-list-filters input,.spw-list-filters select{min-height:38px}.spw-table-wrap{max-height:560px;overflow:auto;border-top:1px solid var(--border,#e6ebef)}.spw-table-wrap table{width:100%;border-collapse:collapse;font-size:.76rem}.spw-table-wrap th,.spw-table-wrap td{padding:9px 10px;border-bottom:1px solid var(--border,#edf1f4);text-align:left;vertical-align:top}.spw-table-wrap thead th{position:sticky;top:0;z-index:1;background:var(--surface-soft,#f6f9fb);font-size:.63rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#637587)}.spw-table-wrap tbody tr:hover{background:var(--surface-soft,#f8fafc)}.spw-code{min-width:310px;font-weight:800;color:var(--text-strong,#183247);word-break:break-word}.spw-pill{display:inline-flex;padding:3px 7px;border-radius:999px;background:var(--brand-50,#eaf5fb);color:var(--brand-800,#0f537a);font-size:.65rem;font-weight:900;white-space:nowrap}.spw-situation{font-weight:800}.spw-situation.danger{color:var(--danger-700,#9c332c)}.spw-situation.warn{color:#9a5b0d}.spw-situation.ok{color:#1e7656}.spw-pager{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 15px;color:var(--text-muted,#66798a);font-size:.73rem}.spw-pager-actions{display:flex;align-items:center;gap:7px}.spw-empty{display:grid;place-items:center;text-align:center;min-height:220px;padding:24px;color:var(--text-muted,#687b8c)}.spw-empty strong{display:block;color:var(--text-strong,#244158);font-size:1rem;margin-bottom:4px}
       .spw-history{width:min(880px,calc(100vw - 28px));max-height:min(720px,calc(100vh - 28px));padding:0;border:0;border-radius:16px;background:var(--surface,#fff);color:var(--text-strong,#183247);box-shadow:0 24px 70px rgba(10,35,52,.28)}.spw-history::backdrop{background:rgba(12,34,48,.52)}.spw-history-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 17px;border-bottom:1px solid var(--border,#dce4eb)}.spw-history-head h3{margin:0}.spw-history-body{max-height:580px;overflow:auto;padding:10px 17px 17px}.spw-history-row{display:grid;grid-template-columns:90px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border,#edf1f4)}.spw-history-row strong,.spw-history-row small{display:block}.spw-history-row small{margin-top:3px;color:var(--text-muted,#66798a)}.spw-history-kind{font-size:.65rem;font-weight:900;color:var(--brand-700,#155c8a)}.spw-current{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:999px;background:#e6f6ef;color:#1e7656;font-size:.6rem;font-weight:900}
+      .spw-history-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.spw-date-dialog{width:min(480px,calc(100vw - 28px));padding:0;border:0;border-radius:16px;background:var(--surface,#fff);color:var(--text-strong,#183247);box-shadow:0 24px 70px rgba(10,35,52,.28)}.spw-date-dialog::backdrop{background:rgba(12,34,48,.52)}.spw-date-body{display:grid;gap:10px;padding:16px 17px}.spw-date-body label{display:grid;gap:5px;font-size:.72rem;font-weight:800}.spw-date-body input{min-height:40px}.spw-date-body small{color:var(--text-muted,#66798a);line-height:1.45}.spw-date-actions{display:flex;justify-content:flex-end;gap:7px;padding:12px 17px;border-top:1px solid var(--border,#dce4eb)}
       @media(max-width:1180px){.spw-base-grid{grid-template-columns:1fr}.spw-actions-grid{grid-template-columns:repeat(2,1fr)}.spw-system-card.pw .spw-system-split{grid-template-columns:repeat(2,1fr)}}
       @media(max-width:820px){.spw-system-grid{grid-template-columns:1fr}.spw-page-heading{display:grid}.spw-heading-actions{justify-content:flex-start}.spw-list-filters{grid-template-columns:1fr}.spw-history-row{grid-template-columns:70px minmax(0,1fr)}.spw-readiness{grid-template-columns:auto minmax(0,1fr)}.spw-readiness details{grid-column:1/-1}.spw-readiness-checks{min-width:0}}
       @media(max-width:560px){.spw-actions-grid,.spw-system-split,.spw-system-card.pw .spw-system-split{grid-template-columns:1fr}.spw-system-head{display:grid}.spw-system-total{text-align:left}.spw-history-row{grid-template-columns:1fr}.spw-code{min-width:240px}}
@@ -56,17 +59,18 @@
     if (!shell) { shell = document.createElement("section"); shell.id = MODULE_ID; shell.className = "module-view"; shell.hidden = true; document.querySelector("main.workspace")?.appendChild(shell); }
     shell.setAttribute("role", "tabpanel"); shell.setAttribute("aria-label", "Dashboard SIGEM × ProjectWise");
     shell.innerHTML = `
-      <header class="spw-page-heading"><div><span>CONTROLE DOCUMENTAL INTEGRADO</span><h2>Dashboard SIGEM × ProjectWise</h2><p>Comparação por código + revisão, limitada às classes ET e N-1710 da LD da Qualidade.</p></div><div class="spw-heading-actions"><button class="secondary-button" id="spw-history-open" type="button">${icon("M4 6h16M6 3h12l1 3H5l1-3M7 9v9h10V9M10 12h4")}<span>Gerenciar histórico</span></button><button class="primary-button" id="spw-export" type="button">${icon("M12 3v12M8 11l4 4 4-4M5 19h14")}<span>Exportar lista</span></button></div></header>
+      <header class="spw-page-heading"><div><span>CONTROLE DOCUMENTAL INTEGRADO</span><h2>Dashboard SIGEM × ProjectWise</h2><p>Comparação por código + revisão, limitada às classes ET e N-1710 da LD da Qualidade.</p></div><div class="spw-heading-actions"><button class="secondary-button" id="spw-evolution-open" type="button">${icon("M4 18V9M10 18V5M16 18v-7M3 18h18M5 6l5-3 6 5 4-3")}<span>Evolução</span></button><button class="secondary-button" id="spw-history-open" type="button">${icon("M4 6h16M6 3h12l1 3H5l1-3M7 9v9h10V9M10 12h4")}<span>Gerenciar histórico</span></button><button class="primary-button" id="spw-export" type="button">${icon("M12 3v12M8 11l4 4 4-4M5 19h14")}<span>Exportar lista</span></button></div></header>
       <div class="spw-progress" id="spw-progress" hidden><i></i><span>Processando base…</span></div>
       <section class="spw-readiness" id="spw-readiness" data-status="empty" aria-live="polite"></section>
       <section class="spw-base-grid" aria-label="Bases vigentes">
-        <article class="spw-base-card"><div id="spw-sigem-base"></div><div class="spw-base-actions"><button class="secondary-button" id="spw-sigem-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><input id="spw-sigem-file" hidden type="file" accept=".xlsx,.xls,.xlsm"/></div></article>
-        <article class="spw-base-card"><div id="spw-pw-base"></div><div class="spw-base-actions"><button class="secondary-button" id="spw-pw-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar base PW</span></button><input id="spw-pw-file" hidden type="file" accept=".csv,.txt,text/csv"/></div></article>
+        <article class="spw-base-card"><div id="spw-sigem-base"></div><div class="spw-base-actions"><button class="secondary-button" data-edit-base-date="sigem" type="button"><span>Editar data</span></button><button class="secondary-button" id="spw-sigem-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><input id="spw-sigem-file" hidden type="file" accept=".xlsx,.xls,.xlsm"/></div></article>
+        <article class="spw-base-card"><div id="spw-pw-base"></div><div class="spw-base-actions"><button class="secondary-button" data-edit-base-date="pw" type="button"><span>Editar data</span></button><button class="secondary-button" id="spw-pw-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar base PW</span></button><input id="spw-pw-file" hidden type="file" accept=".csv,.txt,text/csv"/></div></article>
         <article class="spw-base-card"><div id="spw-ld-base"></div><div class="spw-base-actions"><button class="secondary-button" id="spw-ld-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar LD da Qualidade</span></button><input id="spw-ld-file" hidden type="file" accept=".xlsx,.xls,.xlsm"/></div></article>
       </section>
       <section class="spw-system-grid" id="spw-system-grid" aria-label="Totais SIGEM e ProjectWise"></section><section class="spw-actions-grid" id="spw-actions-grid" aria-label="Diferenças entre as bases"></section>
       <section class="spw-list-card"><header class="spw-list-head"><div><span class="spw-kicker">RELAÇÃO DETALHADA</span><strong id="spw-list-title">Diferenças</strong><small>Documentos e revisões que exigem conferência ou ação.</small></div></header><div class="spw-list-tabs" id="spw-list-tabs"></div><div class="spw-list-filters"><input id="spw-query" type="search" placeholder="Pesquisar código, revisão, status ou situação" aria-label="Pesquisar na lista"/><select id="spw-class" aria-label="Filtrar classe"><option value="">ET e N-1710</option><option value="ET">ET</option><option value="N-1710">N-1710</option></select><button class="text-button" id="spw-clear" type="button">Limpar filtros</button></div><div class="spw-table-wrap" id="spw-table"></div><div class="spw-pager"><span id="spw-page-info"></span><div class="spw-pager-actions"><button class="secondary-button" id="spw-prev" type="button">Anterior</button><button class="secondary-button" id="spw-next" type="button">Próxima</button></div></div></section>
-      <dialog class="spw-history" id="spw-base-history"><header class="spw-history-head"><div><span class="spw-kicker">BASES IMPORTADAS</span><h3>Gerenciar histórico</h3></div><button class="secondary-button" id="spw-base-history-close" type="button">Fechar</button></header><div class="spw-history-body" id="spw-base-history-body"></div></dialog>`;
+      <dialog class="spw-history" id="spw-base-history"><header class="spw-history-head"><div><span class="spw-kicker">BASES IMPORTADAS</span><h3>Gerenciar histórico</h3></div><button class="secondary-button" id="spw-base-history-close" type="button">Fechar</button></header><div class="spw-history-body" id="spw-base-history-body"></div></dialog>
+      <dialog class="spw-date-dialog" id="spw-date-dialog"><header class="spw-history-head"><div><span class="spw-kicker">DATA OPERACIONAL</span><h3 id="spw-date-title">Editar data da base</h3></div><button class="secondary-button" id="spw-date-close" type="button">Fechar</button></header><div class="spw-date-body"><label><span>Data e hora da base</span><input id="spw-date-input" type="datetime-local" required/></label><small>Esta é a data usada na evolução. A data técnica original da importação permanece preservada para auditoria.</small></div><div class="spw-date-actions"><button class="secondary-button" id="spw-date-cancel" type="button">Cancelar</button><button class="primary-button" id="spw-date-save" type="button">Salvar data</button></div></dialog>`;
     bind(); return shell;
   }
 
@@ -83,11 +87,89 @@
     el("spw-list-tabs")?.addEventListener("click", (event) => { const button = event.target.closest("button[data-list]"); if (!button || !LISTS[button.dataset.list]) return; state.activeList = button.dataset.list; state.page = 1; renderList(); });
     el("spw-prev")?.addEventListener("click", () => { state.page = Math.max(1, state.page - 1); renderList(); }); el("spw-next")?.addEventListener("click", () => { state.page += 1; renderList(); });
     el("spw-export")?.addEventListener("click", () => void exportCurrentList()); el("spw-history-open")?.addEventListener("click", () => void openHistory()); el("spw-base-history-close")?.addEventListener("click", () => el("spw-base-history")?.close());
-    el("spw-base-history-body")?.addEventListener("click", (event) => { const button = event.target.closest("button[data-delete-snapshot]"); if (button) void removeSnapshot(button.dataset.deleteSnapshot); });
+    el("spw-evolution-open")?.addEventListener("click", () => void root.GrconSigemPwDashboardBootstrap?.openEvolution?.());
+    shell.querySelectorAll("[data-edit-base-date]").forEach((button) => button.addEventListener("click", () => openBaseDateEditor(button.dataset.editBaseDate)));
+    el("spw-base-history-body")?.addEventListener("click", (event) => {
+      const edit = event.target.closest("button[data-edit-snapshot-date]");
+      if (edit) { openBaseDateEditor(edit.dataset.editSnapshotKind, edit.dataset.editSnapshotDate); return; }
+      const remove = event.target.closest("button[data-delete-snapshot]");
+      if (remove) void removeSnapshot(remove.dataset.deleteSnapshot);
+    });
+    ["spw-date-close", "spw-date-cancel"].forEach((id) => el(id)?.addEventListener("click", () => el("spw-date-dialog")?.close()));
+    el("spw-date-save")?.addEventListener("click", () => void saveBaseDate());
   }
   function setBusy(busy, label) {
     state.busy = busy; const progress = el("spw-progress"); if (progress) { progress.hidden = !busy; progress.querySelector("span").textContent = label || "Processando base…"; }
-    ["spw-sigem-update", "spw-pw-update", "spw-ld-update", "spw-history-open", "spw-export", "spw-clear"].forEach((id) => { if (el(id)) el(id).disabled = busy; });
+    ["spw-sigem-update", "spw-pw-update", "spw-ld-update", "spw-history-open", "spw-evolution-open", "spw-export", "spw-clear", "spw-date-save"].forEach((id) => { if (el(id)) el(id).disabled = busy; });
+    shell?.querySelectorAll("[data-edit-base-date]").forEach((button) => { button.disabled = busy; });
+  }
+  function localDateTimeValue(value) {
+    const date = new Date(value);
+    if (!value || Number.isNaN(date.getTime())) return "";
+    const pad = (part) => String(part).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+  function baseForDateEdit(system, snapshotId) {
+    const id = text(snapshotId) || currentSnapshotId(system);
+    return (state.history.snapshots || []).find((item) => item?.meta?.kind === system && item.meta.snapshotId === id)
+      || (state[system]?.meta?.snapshotId === id ? state[system] : null);
+  }
+  function openBaseDateEditor(system, snapshotId) {
+    if (!["sigem", "pw"].includes(system)) return;
+    const base = baseForDateEdit(system, snapshotId);
+    if (!base?.meta) { notify(`Ainda não existe uma base ${system === "sigem" ? "SIGEM" : "PW"} para editar.`, "warning"); return; }
+    state.dateEditSystem = system;
+    state.dateEditSnapshotId = base.meta.snapshotId;
+    const title = el("spw-date-title");
+    const input = el("spw-date-input");
+    if (title) title.textContent = `Editar data da base ${system === "sigem" ? "SIGEM" : "PW"}`;
+    if (input) input.value = localDateTimeValue(base.meta.importedAt);
+    const dialog = el("spw-date-dialog");
+    if (dialog?.showModal) dialog.showModal(); else dialog?.setAttribute("open", "");
+    input?.focus();
+  }
+  async function saveBaseDate() {
+    const system = state.dateEditSystem;
+    const snapshotId = state.dateEditSnapshotId;
+    const input = el("spw-date-input");
+    const parsed = new Date(input?.value || "");
+    if (!["sigem", "pw"].includes(system) || !snapshotId || Number.isNaN(parsed.getTime())) {
+      notify("Informe uma data e hora válidas para a base.", "warning"); input?.focus(); return;
+    }
+    const original = baseForDateEdit(system, snapshotId);
+    const originalDate = original?.meta?.importedAt;
+    let dashboardUpdated = false;
+    let historyUpdated = false;
+    let historySnapshotId = "";
+    setBusy(true, "Atualizando data operacional da base…");
+    try {
+      const result = await Core.updateSnapshotDate(system, snapshotId, parsed.toISOString());
+      dashboardUpdated = true;
+      if (root.GrconSigemPwHistory?.updateSourceSnapshotDate) {
+        historySnapshotId = text(original?.meta?.historySourceSnapshotId)
+          || (root.GrconSigemPwHistory.contentFingerprint ? `${system}:${root.GrconSigemPwHistory.contentFingerprint(system, original.records || [])}` : "");
+        const historyResult = historySnapshotId ? await root.GrconSigemPwHistory.updateSourceSnapshotDate(system, historySnapshotId, parsed.toISOString()) : null;
+        if (!historyResult) throw new Error("A base não foi localizada no histórico evolutivo; a data anterior foi preservada.");
+        historyUpdated = true;
+      } else throw new Error("O histórico evolutivo não está disponível; a data anterior foi preservada.");
+      state.history = await Core.loadHistory();
+      if (state[system]?.meta?.snapshotId === snapshotId && result.current?.meta) state[system] = result.current;
+      renderFromModel(false); renderHistory();
+      el("spw-date-dialog")?.close();
+      root.dispatchEvent(new CustomEvent("grcon:sigem-pw-base-date-updated", { detail: { system, snapshotId, importedAt: result.importedAt } }));
+      notify(`Data da base ${system === "sigem" ? "SIGEM" : "PW"} atualizada.`, "success");
+    } catch (error) {
+      if (historyUpdated && historySnapshotId && originalDate) {
+        try { await root.GrconSigemPwHistory.updateSourceSnapshotDate(system, historySnapshotId, originalDate); }
+        catch (rollbackError) { console.error("[SIGEM×PW] restauração da data evolutiva:", rollbackError); }
+      }
+      if (dashboardUpdated && originalDate) {
+        try { await Core.updateSnapshotDate(system, snapshotId, originalDate); }
+        catch (rollbackError) { console.error("[SIGEM×PW] restauração da data:", rollbackError); }
+      }
+      console.error("[SIGEM×PW] edição da data:", error);
+      notify(error.message || "Não foi possível atualizar a data da base.", "error");
+    } finally { setBusy(false); }
   }
   async function yieldFrame() { await new Promise((resolve) => root.requestAnimationFrame ? root.requestAnimationFrame(resolve) : root.setTimeout(resolve, 0)); }
   async function ensureConferenceRuntime() { if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível."); await root.GRCONModuleLoader.ensure("posting_conference_core.js"); return root.GrconPostingConference; }
@@ -173,6 +255,7 @@
       const candidate = { meta: result.parsed.meta, records: result.parsed.records };
       const previousHistory = state.history;
       const recorded = await registerHistoryBeforeActivation("sigem", candidate, { reason: "sigem-import" });
+      candidate.meta.historySourceSnapshotId = recorded.sigem.snapshot.id;
       let saved;
       try {
         saved = await Core.saveSigemBase(candidate);
@@ -190,7 +273,7 @@
       }
       state.sigem = saved;
       state.history = await Core.loadHistory();
-      rebuildModel();
+      await rebuildModelAsync();
       renderFromModel(true);
       root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: result.summary, changes: result.changes, baseMeta: state.sigem.meta, source: "sigem-pw-dashboard" } }));
       notify(`Consulta Geral atualizada: ${fmt(state.model.sigemEntries.size)} registros/revisões ET e N-1710.`, "success");
@@ -209,6 +292,7 @@
       const candidate = Core.sanitizePwBase({ meta: parsed.meta, records: parsed.records }, state.ld);
       const previousHistory = state.history;
       const recorded = await registerHistoryBeforeActivation("pw", candidate, { reason: "pw-import" });
+      candidate.meta.historySourceSnapshotId = recorded.pw.snapshot.id;
       let saved;
       try {
         saved = await Core.savePwBase(candidate, state.ld);
@@ -225,7 +309,7 @@
       }
       state.pw = saved;
       state.history = await Core.loadHistory();
-      rebuildModel();
+      await rebuildModelAsync();
       renderFromModel(true);
       root.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard" } }));
       notify(`Base PW atualizada: ${fmt(state.model.pwEntries.size)} registros/revisões válidos no universo ET e N-1710.`, "success");
@@ -263,18 +347,69 @@
       state.ld = saved.ld;
       if (saved.pw) state.pw = saved.pw;
       state.history = await Core.loadHistory();
-      rebuildModel();
+      await rebuildModelAsync();
       renderFromModel(true);
       if (saved.pw) root.dispatchEvent(new CustomEvent("grcon:pw-base-updated", { detail: { baseMeta: state.pw.meta, source: "sigem-pw-dashboard-ld" } }));
       notify(`LD da Qualidade atualizada: ${fmt(parsed.meta.uniqueDocumentCount)} códigos N-1710 no universo válido.`, "success");
     } catch (error) { console.error("[SIGEM×PW] LD:", error); notify(error.message || "Não foi possível atualizar a LD da Qualidade.", "error"); } finally { setBusy(false); }
   }
 
-  function rebuildModel() { state.model = Core.createModel(state.sigem.records || [], state.pw.records || [], state.ld.records || []); }
+  function modelInWorker(generation) {
+    if (typeof Worker === "undefined") return Promise.reject(new Error("Worker indisponível"));
+    return new Promise((resolve, reject) => {
+      let worker;
+      try { worker = new Worker(new URL("workers/sigem_pw_dashboard.worker.js", document.baseURI)); }
+      catch (error) { reject(error); return; }
+      const cleanup = () => worker.terminate();
+      worker.addEventListener("message", (event) => {
+        const payload = event.data || {};
+        cleanup();
+        if (payload.ok && payload.type === "model" && payload.model && payload.aggregates) resolve(payload);
+        else reject(new Error(payload.error || "O Worker não conseguiu montar o comparativo."));
+      }, { once: true });
+      worker.addEventListener("error", (event) => {
+        cleanup();
+        reject(event.error || new Error(event.message || "Worker do comparativo falhou."));
+      }, { once: true });
+      worker.postMessage({
+        type: "model",
+        generation,
+        sigemRecords: state.sigem.records || [],
+        pwRecords: state.pw.records || [],
+        ldRecords: state.ld.records || [],
+      });
+    });
+  }
+
+  async function rebuildModelAsync() {
+    const generation = ++state.modelGeneration;
+    let built;
+    try {
+      built = await modelInWorker(generation);
+    } catch (error) {
+      console.warn("[SIGEM×PW] Worker de comparação indisponível; usando modo compatível:", error);
+      await yieldFrame();
+      const model = Core.createModel(state.sigem.records || [], state.pw.records || [], state.ld.records || []);
+      built = {
+        generation,
+        model,
+        aggregates: {
+          all: Core.aggregateModel(model),
+          ET: Core.aggregateModel(model, { documentClass: "ET" }),
+          "N-1710": Core.aggregateModel(model, { documentClass: "N-1710" }),
+        },
+      };
+    }
+    if (generation !== state.modelGeneration || built.generation !== generation) return false;
+    state.model = built.model;
+    state.aggregates = built.aggregates;
+    return true;
+  }
   function baseCard(kind, title, empty, result) {
     const base = state[kind]; if (!base.meta) return `<span>${escapeHtml(title)}</span><strong>${escapeHtml(empty)}</strong><small>Carregue uma base válida para iniciar.</small><em>${kind === "ld" ? "Sem a LD, N-1710 não entra nos cálculos." : "Base ausente não é tratada como zero."}</em>`;
     const count = kind === "sigem" ? result.quality.sigemEntries : kind === "pw" ? result.quality.pwEntries : result.quality.ldDocumentCount; const suffix = kind === "ld" ? "códigos N-1710 elegíveis" : "registros/revisões válidos";
-    return `<span>${escapeHtml(title)}</span><strong title="${escapeHtml(base.meta.fileName)}">${escapeHtml(base.meta.fileName || title)}</strong><small>Atualizada em ${fmtDate(base.meta.importedAt)}</small><em>${fmt(count)} ${suffix}</em>`;
+    const originalDate = base.meta.sourceImportedAt && base.meta.sourceImportedAt !== base.meta.importedAt ? ` · importada originalmente em ${fmtDate(base.meta.sourceImportedAt)}` : "";
+    return `<span>${escapeHtml(title)}</span><strong title="${escapeHtml(base.meta.fileName)}">${escapeHtml(base.meta.fileName || title)}</strong><small>Data da base: ${fmtDate(base.meta.importedAt)}${escapeHtml(originalDate)}</small><em>${fmt(count)} ${suffix}</em>`;
   }
   function classRow(name) { return state.result.classes.find((row) => row.documentClass === name) || { documentClass: name, sigem: 0, pwRegistered: 0, pwEmitted: 0, gapSigemToPw: 0, gapPwToEmitted: 0, pwExclusive: 0, matched: 0 }; }
   function renderBases() { el("spw-sigem-base").innerHTML = baseCard("sigem", "BASE SIGEM · CONSULTA GERAL", "Consulta Geral não carregada", state.result); el("spw-pw-base").innerHTML = baseCard("pw", "BASE PROJECTWISE", "Relação PW não carregada", state.result); el("spw-ld-base").innerHTML = baseCard("ld", "REFERÊNCIA N-1710 · LD DA QUALIDADE", "LD da Qualidade não carregada", state.result); }
@@ -307,7 +442,14 @@
     host.dataset.status = assessment.status;
     host.innerHTML = `<span class="spw-readiness-icon" aria-hidden="true">${iconLabel}</span><div><strong>${escapeHtml(assessment.title)}</strong><small>${escapeHtml(assessment.message)}</small></div>${applicable.length ? `<details><summary>${assessment.failedChecks.length ? fmt(assessment.failedChecks.length) + " atenção(ões)" : fmt(applicable.length) + " verificações OK"}</summary><div class="spw-readiness-checks">${checks}</div></details>` : ""}`;
   }
-  function renderFromModel(resetPage) { if (!state.model) rebuildModel(); if (resetPage) state.page = 1; const readinessResult = Core.aggregateModel(state.model); state.result = Core.aggregateModel(state.model, { documentClass: state.filters.documentClass }); renderBases(); renderSystems(); renderActions(); renderList(); renderReadiness(readinessResult); }
+  function renderFromModel(resetPage) {
+    if (!state.model) return;
+    if (resetPage) state.page = 1;
+    const readinessResult = state.aggregates?.all || Core.aggregateModel(state.model);
+    const aggregateKey = state.filters.documentClass || "all";
+    state.result = state.aggregates?.[aggregateKey] || Core.aggregateModel(state.model, { documentClass: state.filters.documentClass });
+    renderBases(); renderSystems(); renderActions(); renderList(); renderReadiness(readinessResult);
+  }
 
   async function exportCurrentList() {
     try { const rows = filteredRows(); if (!rows.length) { notify("Não há registros na lista filtrada para exportar.", "info"); return; } await root.GRCONModuleLoader.ensure("xlsx"); const data = rows.map((row) => ({ Classe: row.documentClass, Documento: row.document, "Revisão": row.revision, "Status SIGEM": row.sigemStatus, "Status PW": row.pwStatus, "Emissão PW": row.pwEmission, "Situação": row.situation })); const worksheet = root.XLSX.utils.json_to_sheet(data); worksheet["!cols"] = [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 34 }]; const workbook = root.XLSX.utils.book_new(); root.XLSX.utils.book_append_sheet(workbook, worksheet, "Relação"); const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, ""); root.XLSX.writeFile(workbook, `GRCON_SIGEM_PW_${state.activeList}_${stamp}.xlsx`, { compression: true }); notify(`Lista exportada com ${fmt(rows.length)} registros.`, "success"); }
@@ -316,7 +458,12 @@
   function currentSnapshotId(kind) { return state[kind]?.meta?.snapshotId || ""; }
   function renderHistory() {
     const snapshots = [...(state.history.snapshots || [])].sort((left, right) => Core.parseDateMs(right.meta.importedAt) - Core.parseDateMs(left.meta.importedAt)); const labels = { sigem: "SIGEM", pw: "PW", ld: "LD" };
-    el("spw-base-history-body").innerHTML = snapshots.length ? snapshots.map((item) => { const current = currentSnapshotId(item.meta.kind) === item.meta.snapshotId; return `<div class="spw-history-row"><div class="spw-history-kind">${labels[item.meta.kind] || "BASE"}</div><div><strong>${escapeHtml(item.meta.fileName || "Base sem nome")}${current ? '<span class="spw-current">ATUAL</span>' : ""}</strong><small>${fmtDate(item.meta.importedAt)} · ${fmt(item.records.length)} registros armazenados</small></div><button class="secondary-button" type="button" data-delete-snapshot="${escapeHtml(item.meta.snapshotId)}">Excluir</button></div>`; }).join("") : `<div class="spw-empty"><div><strong>Histórico vazio</strong><span>As próximas importações aparecerão aqui.</span></div></div>`;
+    el("spw-base-history-body").innerHTML = snapshots.length ? snapshots.map((item) => {
+      const current = currentSnapshotId(item.meta.kind) === item.meta.snapshotId;
+      const editable = item.meta.kind === "sigem" || item.meta.kind === "pw";
+      const originalDate = item.meta.sourceImportedAt && item.meta.sourceImportedAt !== item.meta.importedAt ? ` · original ${fmtDate(item.meta.sourceImportedAt)}` : "";
+      return `<div class="spw-history-row"><div class="spw-history-kind">${labels[item.meta.kind] || "BASE"}</div><div><strong>${escapeHtml(item.meta.fileName || "Base sem nome")}${current ? '<span class="spw-current">ATUAL</span>' : ""}</strong><small>Data da base ${fmtDate(item.meta.importedAt)}${escapeHtml(originalDate)} · ${fmt(item.records.length)} registros armazenados</small></div><div class="spw-history-actions">${editable ? `<button class="secondary-button" type="button" data-edit-snapshot-kind="${item.meta.kind}" data-edit-snapshot-date="${escapeHtml(item.meta.snapshotId)}">Editar data</button>` : ""}<button class="secondary-button" type="button" data-delete-snapshot="${escapeHtml(item.meta.snapshotId)}">Excluir</button></div></div>`;
+    }).join("") : `<div class="spw-empty"><div><strong>Histórico vazio</strong><span>As próximas importações aparecerão aqui.</span></div></div>`;
   }
   async function openHistory() { state.history = await Core.loadHistory(); renderHistory(); const dialog = el("spw-base-history"); if (dialog?.showModal) dialog.showModal(); else dialog?.setAttribute("open", ""); }
   async function removeSnapshot(id) {
@@ -355,7 +502,7 @@
         state.pw = bases.pw?.meta ? bases.pw : { meta: null, records: [] };
         state.ld = bases.ld?.meta ? bases.ld : { meta: null, records: [] };
         state.history = bases.history || { version: 3, snapshots: [] };
-        rebuildModel();
+        await rebuildModelAsync();
         renderFromModel(true);
         state.ready = true;
         if (resetApplied) notify("Bases anteriores SIGEM, PW e LD removidas. O módulo está pronto para novas importações.", "success");

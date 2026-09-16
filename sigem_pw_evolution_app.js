@@ -12,6 +12,7 @@
     unavailable: { sigem: 0, pw: 0 },
     ldUniverse: null,
     ldSignature: "",
+    period: { start: "", end: "" },
     selections: { sigemPrev: "", sigemCurrent: "", pwPrev: "", pwCurrent: "" },
     comparison: null,
     timeline: [],
@@ -48,7 +49,7 @@
     const style = document.createElement("style"); style.id = STYLE_ID;
     style.textContent = `
       #${SECTION_ID}.spw-evo-v2{margin-top:16px;min-width:0}.spw-evo-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:10px}.spw-evo-head h3{margin:0;color:var(--text-strong,#183247);font-size:1.08rem}.spw-evo-head p{margin:4px 0 0;max-width:820px;color:var(--text-muted,#66798a);font-size:.75rem;line-height:1.45}.spw-evo-actions{display:flex;gap:7px;flex-wrap:wrap}.spw-evo-scope{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 10px;padding:8px 10px;border:1px solid var(--border,#dce4eb);border-radius:10px;background:var(--surface-soft,#f7fafc);font-size:.7rem;color:var(--text-muted,#66798a)}.spw-evo-scope strong{color:var(--text-strong,#294258)}.spw-evo-scope.required{border-color:rgba(198,138,40,.45);background:var(--warning-50,#fff9ea)}
-      .spw-evo-selectors{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}.spw-evo-source{padding:10px 11px;border:1px solid var(--border,#dce4eb);border-radius:11px;background:var(--surface,#fff)}.spw-evo-source header{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}.spw-evo-source header strong{font-size:.79rem;color:var(--text-strong,#294258)}.spw-evo-source header small{font-size:.64rem;color:var(--text-muted,#66798a)}.spw-evo-pair{display:grid;grid-template-columns:1fr auto 1fr;gap:7px;align-items:end}.spw-evo-pair label{display:grid;gap:4px}.spw-evo-pair label span,.spw-evo-filters span{font-size:.58rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}.spw-evo-pair select,.spw-evo-filters input,.spw-evo-filters select{min-height:35px;min-width:0}.spw-evo-arrow{padding-bottom:9px;color:var(--text-muted,#66798a);font-weight:900}
+      .spw-evo-period{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:10px 11px;border:1px solid var(--border,#dce4eb);border-radius:11px;background:var(--surface,#fff)}.spw-evo-period label{display:grid;gap:4px;min-width:170px}.spw-evo-period label span{font-size:.58rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}.spw-evo-period input{min-height:35px}.spw-evo-period small{flex:1;min-width:240px;color:var(--text-muted,#66798a);font-size:.66rem;line-height:1.4;padding-bottom:8px}.spw-evo-selectors{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}.spw-evo-source{padding:10px 11px;border:1px solid var(--border,#dce4eb);border-radius:11px;background:var(--surface,#fff)}.spw-evo-source header{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}.spw-evo-source header strong{font-size:.79rem;color:var(--text-strong,#294258)}.spw-evo-source header small{font-size:.64rem;color:var(--text-muted,#66798a)}.spw-evo-pair{display:grid;grid-template-columns:1fr auto 1fr;gap:7px;align-items:end}.spw-evo-pair label{display:grid;gap:4px}.spw-evo-pair label span,.spw-evo-filters span{font-size:.58rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}.spw-evo-pair select,.spw-evo-filters input,.spw-evo-filters select{min-height:35px;min-width:0}.spw-evo-arrow{padding-bottom:9px;color:var(--text-muted,#66798a);font-weight:900}
       .spw-evo-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.spw-evo-kpi{appearance:none;text-align:left;border:1px solid var(--border,#dce4eb);border-radius:13px;background:var(--surface,#fff);padding:13px;cursor:pointer;box-shadow:0 5px 18px rgba(32,56,85,.04)}.spw-evo-kpi:disabled{cursor:not-allowed;opacity:.62}.spw-evo-kpi span{display:block;font-size:.62rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}.spw-evo-kpi strong{display:block;margin-top:5px;font-size:1.65rem;color:var(--text-strong,#17324a)}.spw-evo-kpi small{display:block;margin-top:4px;font-size:.68rem;color:var(--text-muted,#66798a)}.spw-evo-kpi.sigem{border-left:4px solid var(--spw-sigem,#0b7895)}.spw-evo-kpi.pw{border-left:4px solid var(--spw-pw,#6d4ac7)}.spw-evo-kpi.emitted{border-left:4px solid var(--success-500,#3f8f68)}.spw-evo-kpi.pending{border-left:4px solid var(--warning-500,#c68a28)}
       .spw-evo-net{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 10px;padding:8px 10px;border:1px solid var(--border,#e0e7ed);border-radius:9px;background:var(--surface-soft,#f8fafc);font-size:.69rem;color:var(--text-muted,#66798a)}.spw-evo-net button{border:0;background:transparent;color:var(--brand-700,#155c8a);font:inherit;font-weight:900;cursor:pointer;padding:0}.spw-evo-net b{color:var(--text-strong,#294258)}
       .spw-evo-timeline{margin:0 0 10px;padding:11px;border:1px solid var(--border,#dce4eb);border-radius:12px;background:var(--surface,#fff)}.spw-evo-timeline header{display:flex;justify-content:space-between;gap:10px;align-items:flex-end}.spw-evo-timeline header strong{font-size:.78rem;color:var(--text-strong,#294258)}.spw-evo-timeline header small{font-size:.64rem;color:var(--text-muted,#66798a)}.spw-evo-days{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:7px;align-items:end;margin-top:10px}.spw-evo-day{display:grid;grid-template-rows:76px auto;gap:5px;min-width:0}.spw-evo-bars{display:flex;align-items:flex-end;justify-content:center;gap:4px;height:76px;padding:4px 5px;border-bottom:1px solid var(--border,#dce4eb);background:linear-gradient(to top,var(--surface-soft,#f7fafc),transparent);border-radius:7px 7px 0 0}.spw-evo-bar{width:16px;min-height:2px;border-radius:4px 4px 1px 1px}.spw-evo-bar.sigem{background:var(--spw-sigem,#0b7895)}.spw-evo-bar.pw{background:var(--spw-pw,#6d4ac7)}.spw-evo-bar.emitted{background:var(--success-500,#3f8f68)}.spw-evo-day span{font-size:.58rem;text-align:center;color:var(--text-muted,#66798a);white-space:nowrap}.spw-evo-legend{display:flex;gap:10px;flex-wrap:wrap}.spw-evo-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}.spw-evo-legend .sigem{background:var(--spw-sigem,#0b7895)}.spw-evo-legend .pw{background:var(--spw-pw,#6d4ac7)}.spw-evo-legend .emitted{background:var(--success-500,#3f8f68)}
@@ -65,10 +66,23 @@
   function option(snapshot) {
     return `<option value="${esc(snapshot.id)}">${esc(`${fmtDate(snapshot.importedAt)} · ${snapshot.fileName || "base"} · ${fmt(snapshot.audit?.acceptedRecords || 0)} registros`)}</option>`;
   }
+  function localDateKey(value) {
+    const date = new Date(value);
+    if (!value || Number.isNaN(date.getTime())) return "";
+    const pad = (part) => String(part).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+  function periodSnapshots(system) {
+    const start = state.period.start, end = state.period.end;
+    return ordered(state[system]).filter((snapshot) => {
+      const key = localDateKey(snapshot.importedAt);
+      return key && (!start || key >= start) && (!end || key <= end);
+    });
+  }
   function pairDefaults(system) {
-    const list = ordered(state[system]);
-    if (!list.length) return;
+    const list = periodSnapshots(system);
     const currentKey = `${system}Current`, previousKey = `${system}Prev`;
+    if (!list.length) { state.selections[currentKey] = ""; state.selections[previousKey] = ""; return; }
     state.selections[currentKey] = list.at(-1).id;
     const currentIndex = list.findIndex((row) => row.id === state.selections[currentKey]);
     state.selections[previousKey] = currentIndex > 0 ? list[currentIndex - 1].id : "";
@@ -122,7 +136,7 @@
     for (const sourceSnapshot of ordered(metadata)) {
       const payload = payloads.get(sourceSnapshot.id);
       if (!payload || !Array.isArray(payload.records)) { unavailable += 1; continue; }
-      const base = { meta: { ...(payload.meta || {}), fileName: payload.meta?.fileName || sourceSnapshot.fileName, importedAt: payload.meta?.importedAt || sourceSnapshot.importedAt }, records: payload.records };
+      const base = { meta: { ...(payload.meta || {}), fileName: payload.meta?.fileName || sourceSnapshot.fileName, importedAt: sourceSnapshot.importedAt || payload.meta?.importedAt }, records: payload.records };
       try { output.push(Core().buildSnapshot(system, base, universe, { snapshotId: sourceSnapshot.id, sourceSnapshotId: sourceSnapshot.id })); }
       catch (error) { console.warn(`[SIGEM×PW][evolution] snapshot ${sourceSnapshot.id}:`, error); unavailable += 1; }
       if (output.length % 4 === 0) await new Promise((resolve) => root.setTimeout(resolve, 0));
@@ -142,8 +156,7 @@
       const [sigemMeta, pwMeta, payloads] = await Promise.all([History().listSourceSnapshots("sigem"), History().listSourceSnapshots("pw"), readPayloadMap()]);
       const [sigem, pw] = await Promise.all([buildPreparedSnapshots("sigem", sigemMeta, payloads, universe), buildPreparedSnapshots("pw", pwMeta, payloads, universe)]);
       state.sigem = sigem.output; state.pw = pw.output; state.unavailable = { sigem: sigem.unavailable, pw: pw.unavailable };
-      state.timeline = Core().buildDailyTimeline(state.sigem, state.pw);
-      pairDefaults("sigem"); pairDefaults("pw"); recalculate();
+      applyPeriod();
     } finally { state.busy = false; }
   }
 
@@ -151,6 +164,14 @@
     if (!hasValidatedLd()) { state.comparison = null; render(); return; }
     state.comparison = Core().comparePeriod(selected("sigem", "previous"), selected("sigem", "current"), selected("pw", "previous"), selected("pw", "current"));
     state.page = 1; render();
+  }
+
+  function applyPeriod() {
+    if (state.period.start && state.period.end && state.period.start > state.period.end) return false;
+    pairDefaults("sigem"); pairDefaults("pw");
+    state.timeline = Core().buildDailyTimeline(periodSnapshots("sigem"), periodSnapshots("pw"));
+    recalculate();
+    return true;
   }
 
   function ensureSection() {
@@ -168,7 +189,7 @@
     section.classList.add("spw-evo-v2"); section.dataset.evolutionVersion = "3";
     section.innerHTML = `
       <header class="spw-evo-head"><div><span class="spw-kicker">EVOLUÇÃO DIÁRIA</span><h3>O que entrou de uma base para a outra</h3><p>A comparação usa os dois snapshots escolhidos. Cada código + revisão é uma entrada independente; revisão 0 e revisão A do mesmo documento contam como duas linhas.</p></div><div class="spw-evo-actions"><button class="secondary-button" id="spw-evo-export" type="button">Exportar lista</button><button class="text-button" id="spw-history-manage" type="button">Gerenciar histórico</button></div></header>
-      <div class="spw-evo-scope" id="spw-evo-scope"></div><div class="spw-evo-selectors" id="spw-evo-selectors"></div><div class="spw-evo-kpis" id="spw-evo-kpis"></div><div class="spw-evo-net" id="spw-evo-net"></div><div class="spw-evo-timeline" id="spw-evo-timeline"></div><div class="spw-evo-audit" id="spw-evo-audit"></div><nav class="spw-evo-tabs" id="spw-evo-tabs" aria-label="Listas da evolução"></nav>
+      <div class="spw-evo-scope" id="spw-evo-scope"></div><div class="spw-evo-period"><label><span>Data inicial</span><input id="spw-evo-date-start" type="date"/></label><label><span>Data final</span><input id="spw-evo-date-end" type="date"/></label><button class="text-button" id="spw-evo-date-clear" type="button">Todo o histórico</button><small id="spw-evo-period-summary">Período completo.</small></div><div class="spw-evo-selectors" id="spw-evo-selectors"></div><div class="spw-evo-kpis" id="spw-evo-kpis"></div><div class="spw-evo-net" id="spw-evo-net"></div><div class="spw-evo-timeline" id="spw-evo-timeline"></div><div class="spw-evo-audit" id="spw-evo-audit"></div><nav class="spw-evo-tabs" id="spw-evo-tabs" aria-label="Listas da evolução"></nav>
       <div class="spw-evo-filters">
         <label><span>Código / lista de códigos</span><input id="spw-evo-filter-query" placeholder="Cole códigos separados por linha, vírgula ou ;"/></label>
         <label><span>Classe</span><select id="spw-evo-filter-class"><option value="">Todas</option><option>ET</option><option>N-1710</option></select></label>
@@ -194,10 +215,21 @@
     else target.innerHTML = `<strong>LD da Qualidade necessária</strong><span>Atualize a LD N-1710 no dashboard geral. A evolução não calcula números sem validar primeiro esse universo.</span>`;
   }
 
+  function renderPeriod() {
+    const start = document.getElementById("spw-evo-date-start"), end = document.getElementById("spw-evo-date-end"), summary = document.getElementById("spw-evo-period-summary");
+    if (start) start.value = state.period.start;
+    if (end) end.value = state.period.end;
+    if (!summary) return;
+    const label = state.period.start || state.period.end
+      ? `${state.period.start ? `desde ${state.period.start.split("-").reverse().join("/")}` : "desde o início"} · ${state.period.end ? `até ${state.period.end.split("-").reverse().join("/")}` : "até hoje"}`
+      : "Período completo";
+    summary.textContent = `${label}. SIGEM: ${fmt(periodSnapshots("sigem").length)} base(s); PW: ${fmt(periodSnapshots("pw").length)} base(s).`;
+  }
+
   function renderSelectors() {
     const target = document.getElementById("spw-evo-selectors"); if (!target) return;
     const block = (system, label) => {
-      const list = ordered(state[system]), previousKey = `${system}Prev`, currentKey = `${system}Current`;
+      const list = periodSnapshots(system), previousKey = `${system}Prev`, currentKey = `${system}Current`;
       return `<section class="spw-evo-source"><header><strong>${label}</strong><small>${fmt(list.length)} base(s) utilizável(is)${state.unavailable[system] ? ` · ${fmt(state.unavailable[system])} antiga(s) sem payload bruto` : ""}</small></header><div class="spw-evo-pair"><label><span>Base anterior</span><select data-evo-select="${previousKey}" ${hasValidatedLd() ? "" : "disabled"}><option value="">— sem anterior —</option>${list.map(option).join("")}</select></label><span class="spw-evo-arrow">→</span><label><span>Base atual</span><select data-evo-select="${currentKey}" ${hasValidatedLd() ? "" : "disabled"}>${list.map(option).join("")}</select></label></div></section>`;
     };
     target.innerHTML = block("sigem", "SIGEM") + block("pw", "ProjectWise");
@@ -290,7 +322,7 @@
 
   function render() {
     if (!document.getElementById(SECTION_ID)?.classList.contains("spw-evo-v2")) ensureSection();
-    renderScope(); renderSelectors(); renderKpis(); renderTimeline(); renderAudit(); renderTabs(); renderTable();
+    renderScope(); renderPeriod(); renderSelectors(); renderKpis(); renderTimeline(); renderAudit(); renderTabs(); renderTable();
   }
 
   function openDetail(row) {
@@ -323,6 +355,8 @@
     if(state.bound)return;state.bound=true;
     document.addEventListener("change",(event)=>{
       const select=event.target.closest?.("[data-evo-select]"); if(select){state.selections[select.dataset.evoSelect]=select.value;recalculate();return;}
+      const periodKey=event.target.id==="spw-evo-date-start"?"start":event.target.id==="spw-evo-date-end"?"end":"";
+      if(periodKey){const previous=state.period[periodKey];state.period[periodKey]=event.target.value;if(!applyPeriod()){state.period[periodKey]=previous;event.target.value=previous;notify("A data inicial não pode ser posterior à data final.","warning");}return;}
       const map={"spw-evo-filter-class":"documentClass","spw-evo-filter-source":"source","spw-evo-filter-document-type":"documentType","spw-evo-filter-revision":"revision","spw-evo-filter-status":"status","spw-evo-filter-discipline":"discipline","spw-evo-filter-tag":"tag","spw-evo-filter-eap":"eap"};
       if(map[event.target.id]){state.filters[map[event.target.id]]=event.target.value;state.page=1;renderTable();}
     });
@@ -337,9 +371,10 @@
       if(event.target.closest?.("#spw-evo-close")){document.getElementById("spw-evo-overlay").hidden=true;return;}
       if(event.target.closest?.("#spw-evo-export")){void exportVisible();return;}
       if(event.target.closest?.("#spw-evo-refresh-ld")){void loadSnapshots(true);return;}
+      if(event.target.closest?.("#spw-evo-date-clear")){state.period={start:"",end:""};applyPeriod();return;}
       if(event.target.closest?.("#spw-history-manage")){root.GrconSigemPwHistoryRuntimeFix?.openManager?.();return;}
     });
-    ["grcon:conference-updated","grcon:pw-base-updated"].forEach((name)=>root.addEventListener(name,()=>{clearTimeout(state.eventTimer);state.eventTimer=root.setTimeout(()=>{void loadSnapshots(false);},700);}));
+    ["grcon:conference-updated","grcon:pw-base-updated","grcon:sigem-pw-base-date-updated"].forEach((name)=>root.addEventListener(name,()=>{clearTimeout(state.eventTimer);state.eventTimer=root.setTimeout(()=>{void loadSnapshots(false);},700);}));
     document.getElementById("ld-input")?.addEventListener("change",()=>{state.ldSignature="";void loadSnapshots(true);});
   }
 

@@ -67,9 +67,7 @@
     els.result.hidden = !result;
     if (!result) return;
     els.resultName.textContent = result.name;
-    els.resultMeta.textContent = result.mode === "zip"
-      ? `${Core.formatBytes(result.outputBytes)} · ${result.fileCount.toLocaleString("pt-BR")} arquivo(s) agrupados em ZIP`
-      : `${result.pageCount.toLocaleString("pt-BR")} página(s) · ${Core.formatBytes(result.outputBytes)} · ${result.fileCount.toLocaleString("pt-BR")} PDF(s)`;
+    els.resultMeta.textContent = `${result.pageCount.toLocaleString("pt-BR")} página(s) · ${Core.formatBytes(result.outputBytes)} · ${result.fileCount.toLocaleString("pt-BR")} PDF(s)`;
   }
 
   function renderList() {
@@ -83,7 +81,7 @@
         <button class="pdf-merge-grip" type="button" data-pdf-action="drag" aria-label="Arrastar ${escapeHtml(item.name)} para mudar a ordem" title="Arraste para mudar a ordem">⋮⋮</button>
         <span class="pdf-merge-order" aria-label="Posição ${index + 1}">${index + 1}</span>
         <span class="pdf-merge-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4"></path><path d="M8 16h8M8 12h5"></path></svg></span>
-        <span class="pdf-merge-file-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${Core.formatBytes(item.size)}${item.isDwg ? " · DWG" : ""}</small></span>
+        <span class="pdf-merge-file-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${Core.formatBytes(item.size)}</small></span>
         <span class="pdf-merge-item-actions">
           <button type="button" data-pdf-action="up" ${index === 0 || state.busy ? "disabled" : ""} aria-label="Subir ${escapeHtml(item.name)}">↑</button>
           <button type="button" data-pdf-action="down" ${index === state.items.length - 1 || state.busy ? "disabled" : ""} aria-label="Descer ${escapeHtml(item.name)}">↓</button>
@@ -133,7 +131,7 @@
         return;
       }
       existing.add(signature);
-      accepted.push({ id: itemId(), file, name: file.name, size: file.size, signature, isDwg: Core.isDwgFile(file) });
+      accepted.push({ id: itemId(), file, name: file.name, size: file.size, signature });
     });
     if (accepted.length) {
       invalidateResult();
@@ -141,13 +139,9 @@
       render();
       notify(`${accepted.length.toLocaleString("pt-BR")} arquivo(s) adicionado(s). Confira a ordem antes de combinar.`, "success");
     }
-    if (invalid) notify(`${invalid.toLocaleString("pt-BR")} arquivo(s) ignorado(s): selecione somente PDFs ou DWGs válidos e não vazios.`, "warn");
+    if (invalid) notify(`${invalid.toLocaleString("pt-BR")} arquivo(s) ignorado(s): selecione somente PDFs válidos e não vazios.`, "warn");
     if (duplicated) notify(`${duplicated.toLocaleString("pt-BR")} arquivo(s) idêntico(s) já estavam na lista e não foram duplicados.`, "warn");
     els.input.value = "";
-  }
-
-  function isPdfOnly() {
-    return state.items.length > 0 && state.items.every((item) => !item.isDwg);
   }
 
   function moveItem(id, delta) {
@@ -220,8 +214,7 @@
 
   function triggerDownload() {
     if (!state.result) return;
-    const extension = state.result.mode === "zip" ? "zip" : "pdf";
-    const name = Core.outputFileName(els.outputName.value || state.result.name, extension);
+    const name = Core.outputFileName(els.outputName.value || state.result.name, "pdf");
     els.outputName.value = name;
     state.result.name = name;
     const anchor = document.createElement("a");
@@ -231,50 +224,6 @@
     anchor.click();
     anchor.remove();
     renderResult();
-  }
-
-  function uniqueZipName(name, used) {
-    const base = Core.text(name) || "arquivo";
-    if (!used.has(base.toLocaleLowerCase("pt-BR"))) {
-      used.add(base.toLocaleLowerCase("pt-BR"));
-      return base;
-    }
-    const dot = base.lastIndexOf(".");
-    const stem = dot > 0 ? base.slice(0, dot) : base;
-    const ext = dot > 0 ? base.slice(dot) : "";
-    let attempt = 2;
-    let candidate = `${stem} (${attempt})${ext}`;
-    while (used.has(candidate.toLocaleLowerCase("pt-BR"))) {
-      attempt += 1;
-      candidate = `${stem} (${attempt})${ext}`;
-    }
-    used.add(candidate.toLocaleLowerCase("pt-BR"));
-    return candidate;
-  }
-
-  async function combineAsZip(outputName) {
-    if (root.GRCONModuleLoader) await root.GRCONModuleLoader.ensure("zip");
-    if (typeof root.JSZip !== "function") throw new Error("O compactador ZIP não pôde ser carregado neste navegador.");
-    const zip = new root.JSZip();
-    const used = new Set();
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      setProgress((index / state.items.length) * 60, `Lendo ${item.name} (${index + 1} de ${state.items.length})…`);
-      const bytes = await item.file.arrayBuffer();
-      zip.file(uniqueZipName(item.name, used), bytes);
-    }
-    setProgress(65, "Compactando arquivos…");
-    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } }, (metadata) => {
-      setProgress(65 + (Number(metadata.percent) || 0) * 0.3, `Compactando arquivos… ${Math.round(Number(metadata.percent) || 0)}%`);
-    });
-    return {
-      blob,
-      pageCount: 0,
-      fileCount: state.items.length,
-      outputBytes: blob.size,
-      name: outputName,
-      mode: "zip",
-    };
   }
 
   async function combinePdfs(outputName) {
@@ -299,16 +248,16 @@
     }
 
     invalidateResult();
-    const mode = isPdfOnly() ? "pdf" : "zip";
-    const outputName = Core.outputFileName(els.outputName.value, mode === "zip" ? "zip" : "pdf");
+    const mode = "pdf";
+    const outputName = Core.outputFileName(els.outputName.value, "pdf");
     els.outputName.value = outputName;
     state.mode = mode;
     state.busy = true;
-    setProgress(1, mode === "zip" ? "Preparando os arquivos…" : "Preparando os PDFs…");
+    setProgress(1, "Preparando os PDFs…");
     render();
     try {
-      const outcome = mode === "zip" ? await combineAsZip(outputName) : await combinePdfs(outputName);
-      setProgress(100, mode === "zip" ? "Arquivos agrupados com sucesso." : "PDF combinado com sucesso.");
+      const outcome = await combinePdfs(outputName);
+      setProgress(100, "PDF combinado com sucesso.");
       state.result = {
         blob: outcome.blob,
         url: URL.createObjectURL(outcome.blob),
@@ -318,9 +267,7 @@
         outputBytes: outcome.outputBytes,
         mode: outcome.mode,
       };
-      notify(mode === "zip"
-        ? `ZIP gerado com ${state.result.fileCount.toLocaleString("pt-BR")} arquivo(s), incluindo os DWGs selecionados.`
-        : `PDF combinado: ${state.result.pageCount.toLocaleString("pt-BR")} página(s) em um único arquivo.`, "success");
+      notify(`PDF combinado: ${state.result.pageCount.toLocaleString("pt-BR")} página(s) em um único arquivo.`, "success");
       triggerDownload();
     } catch (error) {
       if (error && error.code !== "CANCELLED") notify(error.message || "Não foi possível combinar os arquivos.", "error");

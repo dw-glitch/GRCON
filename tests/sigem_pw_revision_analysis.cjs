@@ -131,7 +131,8 @@ assert.ok(/Por quê\?/.test(ui));
 const bootstrap = fs.readFileSync(path.join(__dirname, "..", "sigem_pw_dashboard_bootstrap.js"), "utf8");
 assert.ok(/sigem_pw_revision_core\.js/.test(bootstrap));
 assert.ok(/sigem_pw_revision_section\.js/.test(bootstrap));
-assert.ok(/state\?\.ready/.test(bootstrap), "retorno ao Dashboard não deve recriar o shell e duplicar listeners");
+assert.ok(/if \(deferredEnhancements\) return deferredEnhancements/.test(bootstrap), "retorno ao Dashboard não deve recarregar os complementos");
+assert.ok(/state\.modelRef === model && state\.analysis/.test(ui), "retorno ao Dashboard deve reutilizar a análise da mesma base");
 
 console.log("sigem_pw_revision_analysis: OK");
 })().catch((error) => {

@@ -447,6 +447,41 @@
     return record && record.value || null;
   }
 
+  async function updateSourceSnapshotDate(system, snapshotId, importedAtValue) {
+    if (![SYSTEMS.SIGEM, SYSTEMS.PW].includes(system)) throw new Error("Sistema de snapshot inválido.");
+    const parsed = new Date(importedAtValue);
+    if (!text(snapshotId) || Number.isNaN(parsed.getTime())) throw new Error("Informe uma data válida para o snapshot.");
+    const importedAt = parsed.toISOString();
+    const current = await getSnapshot(STORES.sourceSnapshots, snapshotId);
+    if (!current) return null;
+    if (current.system !== system) throw new Error("O snapshot não pertence ao sistema informado.");
+    const updated = {
+      ...current,
+      sourceImportedAt: text(current.sourceImportedAt) || text(current.importedAt),
+      importedAt,
+      effectiveAt: importedAt,
+      dateEditedAt: nowIso(),
+    };
+    return withDb((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction([STORES.sourceSnapshots, STORES.comparisonSnapshots], "readwrite");
+      tx.objectStore(STORES.sourceSnapshots).put(updated);
+      const comparisons = tx.objectStore(STORES.comparisonSnapshots);
+      const request = comparisons.getAll();
+      request.onsuccess = () => {
+        (request.result || []).forEach((comparison) => {
+          if (comparison.sigemSnapshotId !== snapshotId && comparison.pwSnapshotId !== snapshotId) return;
+          comparisons.put({
+            ...comparison,
+            ...(system === SYSTEMS.SIGEM ? { sigemImportedAt: importedAt } : { pwImportedAt: importedAt }),
+          });
+        });
+      };
+      tx.oncomplete = () => resolve(updated);
+      tx.onerror = () => reject(tx.error || new Error("Falha ao atualizar a data do snapshot."));
+      tx.onabort = () => reject(tx.error || new Error("A atualização da data foi cancelada."));
+    }));
+  }
+
   async function persistSnapshot(storeName, snapshot, documents, workingKey, changes) {
     const existing = await getSnapshot(storeName, snapshot.id);
     if (existing) return { created: false, snapshot: existing, duplicate: true };
@@ -640,7 +675,7 @@
     text, norm, isComparable, contentFingerprint, minimalDocuments, sourceMetrics, buildSourceSnapshot,
     compareSourceDocuments, sourceChangeDetails, relationSets, revisionState, comparisonDocuments, countStates,
     classComparisonMetrics, buildComparisonSnapshot, compareComparisonDocuments, transitionDetails, metricDelta,
-    openDb, getSnapshot, listSourceSnapshots, listComparisonSnapshots, loadWorkingSet, loadSnapshotChanges,
+    openDb, getSnapshot, listSourceSnapshots, listComparisonSnapshots, loadWorkingSet, loadSnapshotChanges, updateSourceSnapshotDate,
     persistSnapshot, deleteSnapshot, clearHistory, recordSource, recordComparison,
     captureRecordingCheckpoint, rollbackToken, rollbackRecordedActiveBases, recordActiveBases,
   });

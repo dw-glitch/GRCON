@@ -130,19 +130,12 @@
         const tools = document.createElement("div");
         tools.id = "ui-runtime-tools";
         tools.className = "p2-runtime-tools";
-        const mode = document.createElement("quality-status");
-        mode.className = `p2-mode-badge ${location.protocol === "file:" ? "local" : "online"}`;
-        mode.setAttribute("tone", "success");
-        mode.innerHTML = `<i aria-hidden="true"></i><span>${location.protocol === "file:" ? "Aberto no computador" : "Versão online"}</span>`;
-        mode.title = location.protocol === "file:"
-            ? "O aplicativo está sendo executado diretamente neste computador."
-            : "O aplicativo está sendo executado por HTTP/HTTPS.";
         const theme = document.createElement("button");
         theme.id = "ui-theme-toggle";
         theme.className = "p2-theme-toggle";
         theme.type = "button";
         theme.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 15.5A8 8 0 0 1 8.5 4 8 8 0 1 0 20 15.5z"/></svg><span>Modo escuro</span>';
-        tools.append(mode, theme);
+        tools.append(theme);
         host.prepend(tools);
         let saved = "light";
         try {

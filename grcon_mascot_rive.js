@@ -10,8 +10,8 @@
   const WASM_URL = new URL("vendor/rive/rive.wasm", document.baseURI).href;
   const WASM_FALLBACK_URL = new URL("vendor/rive/rive_fallback.wasm", document.baseURI).href;
   const STYLE_ID = "grcon-mascot-rive-style";
-  const ACTIVATION_TIMEOUT_MS = 7000;
-  const MAX_FRAME_CHECKS = 30;
+  const ACTIVATION_TIMEOUT_MS = 30000;
+  const REQUIRED_ADVANCED_FRAMES = 2;
   const STATES = Object.freeze({
     idle: 0,
     hover: 1,
@@ -105,43 +105,17 @@
     syncFrame = root.requestAnimationFrame(syncState);
   }
 
-  function canvasHasVisibleFrame(canvas) {
-    try {
-      const sample = document.createElement("canvas");
-      sample.width = 64;
-      sample.height = 64;
-      const context = sample.getContext("2d", { willReadFrequently: true });
-      if (!context) return false;
-      context.clearRect(0, 0, 64, 64);
-      context.drawImage(canvas, 0, 0, 64, 64);
-      const pixels = context.getImageData(0, 0, 64, 64).data;
-      let visible = 0;
-      for (let index = 0; index < pixels.length; index += 4) {
-        if (pixels[index + 3] > 24) visible += 1;
-        if (visible > 24) return true;
-      }
-    } catch (_) {
-      return false;
-    }
-    return false;
-  }
-
   function resize() {
     if (!record?.loaded || !record.player || !record.canvas.isConnected) return;
     const bounds = record.canvas.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
     const ratio = Math.min(2, Math.max(1, Number(root.devicePixelRatio) || 1));
     record.player.resizeDrawingSurfaceToCanvas(ratio);
-    scheduleFrameCheck();
   }
 
   function activate() {
     if (!record || record.failed || record.ready || !record.loaded || !record.canvas.isConnected) return;
-    if (!canvasHasVisibleFrame(record.canvas)) {
-      record.frameChecks += 1;
-      if (record.frameChecks < MAX_FRAME_CHECKS) scheduleFrameCheck();
-      return;
-    }
+    if (record.advancedFrames < REQUIRED_ADVANCED_FRAMES || record.canvas.width <= 1 || record.canvas.height <= 1) return;
     record.ready = true;
     root.clearTimeout(record.activationTimer);
     record.activationTimer = 0;
@@ -150,13 +124,13 @@
     document.documentElement.dataset.grconMascotEngine = "official-rive-raster-v1";
   }
 
-  function scheduleFrameCheck() {
-    if (!record || record.frameCheckScheduled || record.ready || record.failed) return;
-    record.frameCheckScheduled = true;
+  function scheduleActivation() {
+    if (!record || record.activationScheduled || record.ready || record.failed) return;
+    record.activationScheduled = true;
     root.requestAnimationFrame(() => {
       root.requestAnimationFrame(() => {
         if (!record) return;
-        record.frameCheckScheduled = false;
+        record.activationScheduled = false;
         activate();
       });
     });
@@ -213,8 +187,8 @@
       resizeObserver: null,
       intersectionObserver: null,
       activationTimer: 0,
-      frameChecks: 0,
-      frameCheckScheduled: false,
+      advancedFrames: 0,
+      activationScheduled: false,
       state: "",
       loaded: false,
       ready: false,
@@ -271,7 +245,11 @@
           current.loaded = true;
           syncState();
           resize();
-          scheduleFrameCheck();
+        },
+        onAdvance: function () {
+          if (record !== current || current.failed || !current.loaded) return;
+          current.advancedFrames += 1;
+          if (current.advancedFrames >= REQUIRED_ADVANCED_FRAMES) scheduleActivation();
         },
         onLoadError: function (event) {
           fail(event?.data || event || "falha ao carregar o arquivo .riv");
@@ -283,7 +261,9 @@
     }
 
     current.activationTimer = root.setTimeout(() => {
-      if (!current.ready) fail("tempo limite antes do primeiro frame visível");
+      if (!current.ready) fail(current.loaded
+        ? "o runtime carregou, mas não confirmou avanço de frames"
+        : "tempo limite ao carregar o runtime ou o arquivo .riv");
     }, ACTIVATION_TIMEOUT_MS);
     current.resizeObserver = new ResizeObserver(resize);
     current.resizeObserver.observe(container);
