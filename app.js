@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.40.10";
+  const APP_VERSION = "5.41.0";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -380,13 +380,16 @@
 
   function saveGeneratedHistory(generated, outputType, postingContext, preparedRecords) {
     if (!History || !generated || !generated.length) return;
+    let records = preparedRecords || [];
+    let historySaved = false;
     try {
       const info = postingContext || {};
       // O histórico é reconstruído depois que o XLS foi gerado e reaberto pelo verificador.
       // Assim, a revisão registrada vem da própria eGRDT, e não apenas da prévia da emissão.
       const verifiedRecords = createGeneratedHistoryRecords(generated, outputType, { generatedAt: info.generatedAt });
-      const records = verifiedRecords.length ? verifiedRecords : (preparedRecords || []);
+      records = verifiedRecords.length ? verifiedRecords : (preparedRecords || []);
       const saved = History.saveMany(records);
+      historySaved = Boolean(saved.saved);
       if (Posting) {
         const postingSaved = Posting.registerGenerated(records, { packageName: info.packageName, appVersion: APP_VERSION });
         if (postingSaved.saved) window.dispatchEvent(new CustomEvent("grcon:sigem-updated", { detail: { records: postingSaved.created } }));
@@ -414,6 +417,10 @@
     } catch (error) {
       console.warn("GRCON: a saída foi gerada, mas os históricos locais não puderam ser atualizados", error);
     }
+    if (records.length) {
+      window.dispatchEvent(new CustomEvent("grcon:egrdt-generated", { detail: { records, outputType, historySaved } }));
+    }
+    return records;
   }
 
   function ehProprietario() {
