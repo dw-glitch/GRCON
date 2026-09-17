@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.40.10-mascot-video1-spw-worker-ui-cleanup1-history-runtime2";
+const CACHE_NAME = "grcon-v5.40.10-mascot-video1-spw-worker-ui-cleanup1-history-runtime2-runner1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -39,8 +39,10 @@ const ASSETS = [
   "grcon_mascot_asset_fix.js",
   "grcon_mascot_greeting_core.js",
   "grcon_mascot_controller.js",
+  "grcon_mascot_runner.js",
   "assets/mascot/video/grcon-mascot-processing-alpha.webm",
   "assets/mascot/video/grcon-mascot-wave-alpha.webm",
+  "assets/mascot/video/grcon-mascot-running-alpha.webm",
   "analysis_runtime_guard.js",
   "sigem_pw_dashboard_bootstrap.js",
   "sigem_pw_dashboard_core.js",
@@ -170,6 +172,7 @@ const HEAVY_ASSETS = new Set([
   "grcon-mascot-sprite.png",
   "grcon-mascot-processing-alpha.webm",
   "grcon-mascot-wave-alpha.webm",
+  "grcon-mascot-running-alpha.webm",
 ]);
 
 async function fetchAndCache(request) {
