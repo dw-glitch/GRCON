@@ -27,6 +27,13 @@
   const SCOPE_CLASSES = Object.freeze(["ET", "N-1710"]);
   const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const EMISSION_FLAGS = Object.freeze({ CURRENT: "SIM", HISTORICAL: "NAO", PLANNED: "PREVISTO" });
+  const COMPARISON_SITUATIONS = Object.freeze({
+    SIGEM_ONLY: "Postado no SIGEM, ainda não cadastrado no PW",
+    BOTH_NOT_EMITTED: "Postado no SIGEM e cadastrado no PW, ainda não emitido",
+    BOTH_EMITTED: "Postado no SIGEM e emitido no PW",
+    PW_ONLY_NOT_EMITTED: "Cadastrado no PW, ainda não emitido e não localizado no SIGEM",
+    PW_ONLY_EMITTED: "Emitido no PW, mas não localizado no SIGEM",
+  });
   const REQUIRED_PW_FIELDS = Object.freeze(["document", "revision", "documentType", "state", "lastEmission"]);
 
   const PW_HEADER_ALIASES = Object.freeze({
@@ -683,11 +690,21 @@
     const sigemStatus = currentStatus(sigemEntry, "sigem");
     const pwStatus = currentStatus(pwEntry, "pw");
     const pwEmission = pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : "Não cadastrado";
-    let situation = "Alinhado e emitido";
-    if (sigemEntry && !pwEntry) situation = "Cadastrar no PW";
-    else if (pwEntry && !sigemEntry && !pwEntry.emitted) situation = "Somente no PW, não emitido";
-    else if (pwEntry && !sigemEntry) situation = "Somente no PW, emitido";
-    else if (pwEntry && !pwEntry.emitted) situation = "Cadastrado no PW, não emitido";
+    let situationKey = "bothEmitted";
+    let situation = COMPARISON_SITUATIONS.BOTH_EMITTED;
+    if (sigemEntry && !pwEntry) {
+      situationKey = "sigemOnly";
+      situation = COMPARISON_SITUATIONS.SIGEM_ONLY;
+    } else if (pwEntry && !sigemEntry && !pwEntry.emitted) {
+      situationKey = "pwOnlyNotEmitted";
+      situation = COMPARISON_SITUATIONS.PW_ONLY_NOT_EMITTED;
+    } else if (pwEntry && !sigemEntry) {
+      situationKey = "pwOnlyEmitted";
+      situation = COMPARISON_SITUATIONS.PW_ONLY_EMITTED;
+    } else if (pwEntry && !pwEntry.emitted) {
+      situationKey = "bothNotEmitted";
+      situation = COMPARISON_SITUATIONS.BOTH_NOT_EMITTED;
+    }
     return {
       key,
       documentKey: reference.documentKey,
@@ -698,6 +715,7 @@
       pwStatus,
       pwEmission,
       situation,
+      situationKey,
       inSigem: Boolean(sigemEntry),
       inPw: Boolean(pwEntry),
       pwEmitted: Boolean(pwEntry && pwEntry.emitted),
@@ -710,14 +728,33 @@
       .sort((left, right) => left.documentClass.localeCompare(right.documentClass, "pt-BR")
         || left.document.localeCompare(right.document, "pt-BR", { numeric: true })
         || revisionRank(left.revision) - revisionRank(right.revision));
+    const bySituation = (key) => all.filter((row) => row.situationKey === key);
+    const sigemOnly = bySituation("sigemOnly");
+    const bothNotEmitted = bySituation("bothNotEmitted");
+    const bothEmitted = bySituation("bothEmitted");
+    const pwOnlyNotEmitted = bySituation("pwOnlyNotEmitted");
+    const pwOnlyEmitted = bySituation("pwOnlyEmitted");
+    const exclusiveLists = [sigemOnly, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted];
+    const classified = exclusiveLists.reduce((total, rows) => total + rows.length, 0);
+    const uniqueClassified = new Set(exclusiveLists.flat().map((row) => row.key)).size;
+    if (classified !== all.length || uniqueClassified !== all.length) {
+      throw new Error("Inconsistência matemática: as situações SIGEM × PW não formam grupos exclusivos.");
+    }
+
+    // Listas legadas permanecem disponíveis para o histórico e relatórios já
+    // publicados, mas a interface principal usa somente os cinco grupos acima.
     const sigemRows = all.filter((row) => row.inSigem);
     const pwRows = all.filter((row) => row.inPw);
-    const toRegisterPw = all.filter((row) => row.inSigem && !row.inPw);
+    const toRegisterPw = sigemOnly;
     const pwNotEmitted = all.filter((row) => row.inPw && !row.pwEmitted);
     const pwExclusive = all.filter((row) => row.inPw && !row.inSigem);
-    const aligned = all.filter((row) => row.inSigem && row.inPw && row.pwEmitted);
-    const differences = all.filter((row) => (row.inSigem && !row.inPw) || (row.inPw && !row.inSigem) || (row.inPw && !row.pwEmitted));
-    return { all, sigem: sigemRows, pw: pwRows, toRegisterPw, pwNotEmitted, pwExclusive, aligned, differences };
+    const aligned = bothEmitted;
+    const differences = all.filter((row) => row.situationKey !== "bothEmitted");
+    return {
+      all, sigem: sigemRows, pw: pwRows, differences,
+      sigemOnly, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted,
+      toRegisterPw, pwNotEmitted, pwExclusive, aligned,
+    };
   }
 
   function aggregateModel(model, filters) {
@@ -739,6 +776,10 @@
     const classRows = summarizeClasses(sigem, pw);
     const allClassRows = summarizeClasses(sigemAll, pwAll);
     const lists = buildComparisonLists(sigem, pw);
+    const classifiedTotal = lists.sigemOnly.length + lists.bothNotEmitted.length + lists.bothEmitted.length
+      + lists.pwOnlyNotEmitted.length + lists.pwOnlyEmitted.length;
+    const expectedTotal = new Set([...sigemKeys, ...pwKeys]).size;
+    if (classifiedTotal !== expectedTotal) throw new Error("Inconsistência matemática: total classificado difere do universo comparado.");
 
     return {
       summary: {
@@ -749,6 +790,12 @@
         gapPwToEmitted: gapPwToEmitted.size,
         pwExclusive: pwExclusive.size,
         matched: matched.size,
+        sigemOnly: lists.sigemOnly.length,
+        bothNotEmitted: lists.bothNotEmitted.length,
+        bothEmitted: lists.bothEmitted.length,
+        pwOnlyNotEmitted: lists.pwOnlyNotEmitted.length,
+        pwOnlyEmitted: lists.pwOnlyEmitted.length,
+        classifiedTotal,
       },
       classes: classRows,
       sigemStatus: distribution(sigem, (document) => currentStatus(document, "sigem")),
@@ -1058,12 +1105,12 @@
     return { sigem, pw, ld, history };
   }
 
-  const EMISSION_RULE = "A contagem usa código + revisão. Revisões 0 e A do mesmo documento contam como duas entradas. No PW, ‘Última emissão’ igual a Sim ou Não comprova emissão; Previsto ou vazio permanece como cadastrado e não emitido.";
+  const EMISSION_RULE = "A contagem usa código + revisão. Revisões 0 e A do mesmo documento contam como duas entradas. No PW, ‘Última emissão’ = Sim identifica a emissão atual e = Não identifica uma emissão histórica; ambos comprovam emissão. Previsto ou vazio significa cadastrado, ainda não emitido.";
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
     PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, N1710_CODE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
-    EMISSION_FLAGS, EMISSION_RULE, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS,
+    EMISSION_FLAGS, EMISSION_RULE, COMPARISON_SITUATIONS, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS,
     text, norm, normalizeHeader, canonicalDocumentCode, documentIdentity, documentClass,
     revisionKey, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,

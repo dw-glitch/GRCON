@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const VERSION = "sigem-pw-readiness-1";
+  const VERSION = "sigem-pw-readiness-2";
   const CLASSES = Object.freeze(["ET", "N-1710"]);
   const REQUIRED_BASES = Object.freeze([
     { key: "sigem", label: "Consulta Geral/SIGEM" },
@@ -59,6 +59,9 @@
         Array.isArray(lists.pwNotEmitted) && lists.pwNotEmitted.length === count(summary.gapPwToEmitted), loaded.pw),
       check("pw-exclusive-list", "Lista Somente no PW conciliada com o indicador",
         Array.isArray(lists.pwExclusive) && lists.pwExclusive.length === count(summary.pwExclusive), loaded.sigem && loaded.pw),
+      check("exclusive-situations", "Cinco situações exclusivas conciliadas sem duplicidade",
+        ["sigemOnly", "bothNotEmitted", "bothEmitted", "pwOnlyNotEmitted", "pwOnlyEmitted"].every((key) => Array.isArray(lists[key]) && lists[key].length === count(summary[key]))
+          && count(summary.classifiedTotal) === count(summary.sigem) + count(summary.pwRegistered) - count(summary.matched), loaded.sigem && loaded.pw),
       check("quality-ld", "N-1710 do PW vinculado à LD da Qualidade vigente",
         n1710Pw === 0 || (Boolean(activeLdId) && pwLdId === activeLdId), loaded.pw),
       check("scope-version", "Base PW processada pela regra de escopo vigente",

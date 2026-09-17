@@ -21,6 +21,13 @@ function validResult() {
       gapSigemToPw: 1,
       gapPwToEmitted: 1,
       pwExclusive: 0,
+      matched: 2,
+      sigemOnly: 1,
+      bothNotEmitted: 1,
+      bothEmitted: 1,
+      pwOnlyNotEmitted: 0,
+      pwOnlyEmitted: 0,
+      classifiedTotal: 3,
     },
     classes: [
       { documentClass: "ET", sigem: 2, pwRegistered: 1 },
@@ -30,6 +37,12 @@ function validResult() {
       toRegisterPw: [{}],
       pwNotEmitted: [{}],
       pwExclusive: [],
+      all: [{}, {}, {}],
+      sigemOnly: [{}],
+      bothNotEmitted: [{}],
+      bothEmitted: [{}],
+      pwOnlyNotEmitted: [],
+      pwOnlyEmitted: [],
     },
   };
 }
