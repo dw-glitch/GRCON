@@ -85,6 +85,35 @@ assert.throws(() => Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0"), /c
   assert.equal(classified.lists.bothEmitted[0].situation, Core.COMPARISON_SITUATIONS.BOTH_EMITTED);
 })();
 
+(function pwWithoutRevisionFallsBackToDocumentPresence() {
+  const et = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
+  const sigemRows = [
+    { document: et("100001"), revision: "0", status: "Recusado" },
+    { document: et("100001"), revision: "A", status: "Sem Comentários" },
+    { document: et("100002"), revision: "0", status: "Em Análise" },
+  ];
+  const pwRows = [
+    { document: et("100001"), revision: "", state: "Cadastrado", lastEmission: "Previsto" },
+    { document: et("100002"), revision: "Sem revisão", state: "Liberado", lastEmission: "Sim" },
+    { document: et("100003"), revision: "Não informada", state: "Cadastrado", lastEmission: "Previsto" },
+  ];
+  const classified = Core.aggregate(sigemRows, pwRows);
+  assert.equal(classified.summary.bothNotEmitted, 1, "código presente no SIGEM não pode ficar em Só PW por falta de revisão");
+  assert.equal(classified.summary.bothEmitted, 1);
+  assert.equal(classified.summary.pwOnlyNotEmitted, 1, "somente o código realmente ausente permanece em Só PW");
+  assert.equal(classified.summary.pwExclusive, 1);
+  assert.equal(classified.summary.matched, 2);
+  assert.equal(classified.summary.sigemOnly, 1, "a revisão SIGEM adicional continua como entrada própria");
+  assert.equal(classified.summary.classifiedTotal, 4);
+  const fallback = classified.lists.bothNotEmitted[0];
+  assert.equal(fallback.document, et("100001"));
+  assert.equal(fallback.revision, "Não informada no PW · SIGEM: A");
+  assert.equal(fallback.sigemStatus, "Sem Comentários", "fallback usa a revisão SIGEM mais recente disponível");
+  assert.equal(fallback.matchMode, "document-fallback");
+  assert.equal(classified.lists.pwOnlyNotEmitted[0].revision, "Não informada no PW");
+  assert.equal(classified.classes.find((row) => row.documentClass === "ET").pwExclusive, 1);
+})();
+
 const appSource = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_app.js"), "utf8");
 assert.ok(!/MutationObserver/.test(appSource));
 assert.ok(!/location\.reload\s*\(/.test(appSource));
@@ -94,7 +123,7 @@ assert.ok(/workers\/sigem_pw_dashboard\.worker\.js/.test(appSource));
 assert.ok(/savePwBase\([^;]+state\.ld\)/.test(appSource), "importação PW deve sanear com a LD vigente");
 assert.ok(/saveLdAndReprocessPw/.test(appSource), "troca de LD deve reprocessar a base PW ativa");
 assert.ok(/SIGEM \+ PW: ainda não emitido/.test(appSource));
-assert.ok(/Cada código \+ revisão entra em uma única situação/.test(appSource));
+assert.ok(/Revisão ausente no PW é conciliada pelo código do documento/.test(appSource));
 
 for (const fileName of ["sigem_pw_evolution_app.js", "sigem_pw_history_app.js", "sigem_pw_history_postmerge.js", "sigem_pw_history_runtime_fix.js"]) {
   const source = fs.readFileSync(path.join(rootDir, fileName), "utf8");

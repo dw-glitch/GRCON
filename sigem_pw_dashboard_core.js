@@ -143,7 +143,9 @@
   }
 
   function revisionKey(value) {
-    return norm(value).replace(/^REV(?:ISAO)?\.?\s*/, "").replace(/\s+/g, "") || "__SEM_REVISAO__";
+    const revision = norm(value).replace(/^REV(?:ISAO)?\.?\s*/, "").replace(/\s+/g, "");
+    if (!revision || /^(?:SEMREVISAO|NAOINFORMAD[AO]|NA|N\/A|-)$/.test(revision)) return "__SEM_REVISAO__";
+    return revision;
   }
 
   function revisionLabel(value) {
@@ -685,7 +687,8 @@
     };
   }
 
-  function comparisonRow(key, sigemEntry, pwEntry) {
+  function comparisonRow(key, sigemEntry, pwEntry, options) {
+    const settings = options || {};
     const reference = sigemEntry || pwEntry;
     const sigemStatus = currentStatus(sigemEntry, "sigem");
     const pwStatus = currentStatus(pwEntry, "pw");
@@ -709,7 +712,7 @@
       key,
       documentKey: reference.documentKey,
       document: reference.canonicalDocument || reference.document,
-      revision: reference.revision,
+      revision: text(settings.revision) || reference.revision,
       documentClass: reference.documentClass,
       sigemStatus,
       pwStatus,
@@ -719,13 +722,72 @@
       inSigem: Boolean(sigemEntry),
       inPw: Boolean(pwEntry),
       pwEmitted: Boolean(pwEntry && pwEntry.emitted),
+      matchMode: text(settings.matchMode) || (sigemEntry && pwEntry ? "document-revision" : "unmatched"),
     };
   }
 
+  function groupEntriesByDocument(map) {
+    const groups = new Map();
+    map.forEach((entry, key) => {
+      if (!groups.has(entry.documentKey)) groups.set(entry.documentKey, []);
+      groups.get(entry.documentKey).push({ key, entry });
+    });
+    groups.forEach((entries) => entries.sort((left, right) =>
+      revisionRank(right.entry.revision) - revisionRank(left.entry.revision)
+      || right.entry.revision.localeCompare(left.entry.revision, "pt-BR", { numeric: true })));
+    return groups;
+  }
+
   function buildComparisonLists(sigem, pw) {
-    const keys = new Set([...sigem.keys(), ...pw.keys()]);
-    const all = [...keys].map((key) => comparisonRow(key, sigem.get(key), pw.get(key)))
-      .sort((left, right) => left.documentClass.localeCompare(right.documentClass, "pt-BR")
+    const all = [];
+    const consumedSigem = new Set();
+    const consumedPw = new Set();
+
+    // Quando os dois lados informam a revisão, a chave código + revisão segue
+    // autoritativa. Revisões 0, A, B etc. continuam linhas independentes.
+    pw.forEach((pwEntry, key) => {
+      const sigemEntry = sigem.get(key);
+      if (!sigemEntry) return;
+      consumedSigem.add(key);
+      consumedPw.add(key);
+      const missingPwRevision = pwEntry.revisionKey === "__SEM_REVISAO__";
+      all.push(comparisonRow(key, sigemEntry, pwEntry, missingPwRevision ? {
+        revision: `Não informada no PW · SIGEM: ${sigemEntry.revision}`,
+        matchMode: "document-fallback",
+      } : null));
+    });
+
+    // A relação PW pode omitir a revisão. Nesse caso, a falta desse campo não
+    // pode transformar um código presente na Consulta Geral em “Só PW”. Cada
+    // registro sem revisão é conciliado uma vez, pelo código, com a revisão
+    // SIGEM mais recente ainda não usada. As demais revisões SIGEM continuam
+    // visíveis como registros próprios.
+    const sigemByDocument = groupEntriesByDocument(sigem);
+    pw.forEach((pwEntry, pwKey) => {
+      if (consumedPw.has(pwKey) || pwEntry.revisionKey !== "__SEM_REVISAO__") return;
+      const candidate = (sigemByDocument.get(pwEntry.documentKey) || [])
+        .find((item) => !consumedSigem.has(item.key));
+      if (!candidate) return;
+      consumedSigem.add(candidate.key);
+      consumedPw.add(pwKey);
+      all.push(comparisonRow(`document:${pwKey}:${candidate.key}`, candidate.entry, pwEntry, {
+        revision: `Não informada no PW · SIGEM: ${candidate.entry.revision}`,
+        matchMode: "document-fallback",
+      }));
+    });
+
+    sigem.forEach((entry, key) => {
+      if (!consumedSigem.has(key)) all.push(comparisonRow(key, entry, null));
+    });
+    pw.forEach((entry, key) => {
+      if (!consumedPw.has(key)) {
+        all.push(comparisonRow(key, null, entry, entry.revisionKey === "__SEM_REVISAO__" ? {
+          revision: "Não informada no PW",
+        } : null));
+      }
+    });
+
+    all.sort((left, right) => left.documentClass.localeCompare(right.documentClass, "pt-BR")
         || left.document.localeCompare(right.document, "pt-BR", { numeric: true })
         || revisionRank(left.revision) - revisionRank(right.revision));
     const bySituation = (key) => all.filter((row) => row.situationKey === key);
@@ -757,6 +819,37 @@
     };
   }
 
+  function summarizeClassesFromLists(sigem, pw, lists) {
+    const classes = new Map();
+    const ensure = (name) => {
+      const key = name || UNCLASSIFIED;
+      if (!classes.has(key)) classes.set(key, {
+        documentClass: key,
+        sigem: 0,
+        pwRegistered: 0,
+        pwEmitted: 0,
+        gapSigemToPw: 0,
+        gapPwToEmitted: 0,
+        pwExclusive: 0,
+        matched: 0,
+      });
+      return classes.get(key);
+    };
+    sigem.forEach((entry) => { ensure(entry.documentClass).sigem += 1; });
+    pw.forEach((entry) => {
+      const row = ensure(entry.documentClass);
+      row.pwRegistered += 1;
+      if (entry.emitted) row.pwEmitted += 1;
+      else row.gapPwToEmitted += 1;
+    });
+    lists.sigemOnly.forEach((entry) => { ensure(entry.documentClass).gapSigemToPw += 1; });
+    [...lists.pwOnlyNotEmitted, ...lists.pwOnlyEmitted].forEach((entry) => { ensure(entry.documentClass).pwExclusive += 1; });
+    [...lists.bothNotEmitted, ...lists.bothEmitted].forEach((entry) => { ensure(entry.documentClass).matched += 1; });
+    return [...classes.values()].sort((left, right) => left.documentClass === UNCLASSIFIED ? 1
+      : right.documentClass === UNCLASSIFIED ? -1
+        : left.documentClass.localeCompare(right.documentClass, "pt-BR", { numeric: true }));
+  }
+
   function aggregateModel(model, filters) {
     const source = model || { normalizedSigem: [], normalizedPw: [], sigemAll: new Map(), pwAll: new Map() };
     const sigemAll = source.sigemEntries || source.sigemAll || new Map();
@@ -768,17 +861,17 @@
     const emittedKeys = new Set([...pw].filter(([, document]) => document.emitted).map(([key]) => key));
     if (emittedKeys.size > pwKeys.size) throw new Error("Inconsistência matemática: PW emitido maior que PW cadastrado.");
 
-    const gapSigemToPw = setDifference(sigemKeys, pwKeys);
-    const gapPwToEmitted = setDifference(pwKeys, emittedKeys);
-    const pwExclusive = setDifference(pwKeys, sigemKeys);
-    const matched = setIntersection(sigemKeys, pwKeys);
-
-    const classRows = summarizeClasses(sigem, pw);
-    const allClassRows = summarizeClasses(sigemAll, pwAll);
     const lists = buildComparisonLists(sigem, pw);
+    const gapSigemToPw = new Set(lists.sigemOnly.map((row) => row.key));
+    const gapPwToEmitted = setDifference(pwKeys, emittedKeys);
+    const pwExclusive = new Set([...lists.pwOnlyNotEmitted, ...lists.pwOnlyEmitted].map((row) => row.key));
+    const matched = new Set([...lists.bothNotEmitted, ...lists.bothEmitted].map((row) => row.key));
+
+    const classRows = summarizeClassesFromLists(sigem, pw, lists);
+    const allClassRows = summarizeClassesFromLists(sigemAll, pwAll, buildComparisonLists(sigemAll, pwAll));
     const classifiedTotal = lists.sigemOnly.length + lists.bothNotEmitted.length + lists.bothEmitted.length
       + lists.pwOnlyNotEmitted.length + lists.pwOnlyEmitted.length;
-    const expectedTotal = new Set([...sigemKeys, ...pwKeys]).size;
+    const expectedTotal = sigemKeys.size + pwKeys.size - matched.size;
     if (classifiedTotal !== expectedTotal) throw new Error("Inconsistência matemática: total classificado difere do universo comparado.");
 
     return {
@@ -1105,7 +1198,7 @@
     return { sigem, pw, ld, history };
   }
 
-  const EMISSION_RULE = "A contagem usa código + revisão. Revisões 0 e A do mesmo documento contam como duas entradas. No PW, ‘Última emissão’ = Sim identifica a emissão atual e = Não identifica uma emissão histórica; ambos comprovam emissão. Previsto ou vazio significa cadastrado, ainda não emitido.";
+  const EMISSION_RULE = "A contagem usa código + revisão quando a revisão é informada. Revisões 0 e A do mesmo documento contam como duas entradas. Se o PW não informar a revisão, a presença no SIGEM é conciliada pelo código do documento, uma única vez, sem gerar falso ‘não localizado’. No PW, ‘Última emissão’ = Sim identifica a emissão atual e = Não identifica uma emissão histórica; ambos comprovam emissão. Previsto ou vazio significa cadastrado, ainda não emitido.";
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
@@ -1114,7 +1207,7 @@
     text, norm, normalizeHeader, canonicalDocumentCode, documentIdentity, documentClass,
     revisionKey, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
-    createModel, buildComparisonLists, aggregateModel, aggregate,
+    createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
     openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
     saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, updateSnapshotDate, deleteSnapshot, migrateLegacyBases, loadBases,
   });

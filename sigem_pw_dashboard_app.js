@@ -63,7 +63,7 @@
     if (!shell) { shell = document.createElement("section"); shell.id = MODULE_ID; shell.className = "module-view"; shell.hidden = true; document.querySelector("main.workspace")?.appendChild(shell); }
     shell.setAttribute("role", "tabpanel"); shell.setAttribute("aria-label", "Dashboard SIGEM × ProjectWise");
     shell.innerHTML = `
-      <header class="spw-page-heading"><div><span>CONTROLE DOCUMENTAL INTEGRADO</span><h2>Dashboard SIGEM × ProjectWise</h2><p>Comparação por código + revisão, limitada às classes ET e N-1710 da LD da Qualidade.</p></div><div class="spw-heading-actions"><button class="secondary-button" id="spw-evolution-open" type="button">${icon("M4 18V9M10 18V5M16 18v-7M3 18h18M5 6l5-3 6 5 4-3")}<span>Evolução</span></button><button class="secondary-button" id="spw-history-open" type="button">${icon("M4 6h16M6 3h12l1 3H5l1-3M7 9v9h10V9M10 12h4")}<span>Gerenciar histórico</span></button><button class="primary-button" id="spw-export" type="button">${icon("M12 3v12M8 11l4 4 4-4M5 19h14")}<span>Exportar lista</span></button></div></header>
+      <header class="spw-page-heading"><div><span>CONTROLE DOCUMENTAL INTEGRADO</span><h2>Dashboard SIGEM × ProjectWise</h2><p>Comparação por código + revisão; quando o PW não informa a revisão, a presença no SIGEM é confirmada pelo código do documento. Universo limitado às classes ET e N-1710 da LD da Qualidade.</p></div><div class="spw-heading-actions"><button class="secondary-button" id="spw-evolution-open" type="button">${icon("M4 18V9M10 18V5M16 18v-7M3 18h18M5 6l5-3 6 5 4-3")}<span>Evolução</span></button><button class="secondary-button" id="spw-history-open" type="button">${icon("M4 6h16M6 3h12l1 3H5l1-3M7 9v9h10V9M10 12h4")}<span>Gerenciar histórico</span></button><button class="primary-button" id="spw-export" type="button">${icon("M12 3v12M8 11l4 4 4-4M5 19h14")}<span>Exportar lista</span></button></div></header>
       <div class="spw-progress" id="spw-progress" hidden><i></i><span>Processando base…</span></div>
       <section class="spw-readiness" id="spw-readiness" data-status="empty" aria-live="polite"></section>
       <section class="spw-base-grid" aria-label="Bases vigentes">
@@ -429,14 +429,14 @@
     const s = state.result.summary; const both = Boolean(state.sigem.meta && state.pw.meta);
     el("spw-actions-grid").innerHTML = [
       kpi("SIGEM: falta cadastrar no PW", s.sigemOnly, "", "Postado no SIGEM; código + revisão ainda não cadastrados no PW.", both),
-      kpi("SIGEM + PW: ainda não emitido", s.bothNotEmitted, "warn", "Postado no SIGEM e cadastrado no PW; falta evidência de emissão.", both),
-      kpi("SIGEM + PW: emitido", s.bothEmitted, "ok", "Mesmo código + revisão postado no SIGEM e emitido no PW.", both),
+      kpi("SIGEM + PW: ainda não emitido", s.bothNotEmitted, "warn", "Postado no SIGEM e cadastrado no PW; se o PW não informar a revisão, a presença é confirmada pelo código. Falta evidência de emissão no PW.", both),
+      kpi("SIGEM + PW: emitido", s.bothEmitted, "ok", "Postado no SIGEM e emitido no PW; a revisão é usada quando informada.", both),
       kpi("Só PW: ainda não emitido", s.pwOnlyNotEmitted, "pw warn", "Cadastrado no PW, sem emissão e não localizado no SIGEM.", both),
       kpi("Só PW: emitido", s.pwOnlyEmitted, "pw", "Emitido no PW, mas o código + revisão não foi localizado no SIGEM.", both),
     ].join("");
     const note = el("spw-classification-note");
     if (note) note.innerHTML = both
-      ? `<strong>Contagem conciliada:</strong> ${fmt(s.classifiedTotal)} código(s) + revisão(ões) distribuídos uma única vez entre as cinco situações.`
+      ? `<strong>Contagem conciliada:</strong> ${fmt(s.classifiedTotal)} registro(s) distribuídos uma única vez entre as cinco situações. Revisão ausente no PW é conciliada pelo código do documento.`
       : "Carregue as bases SIGEM e PW para obter a classificação completa.";
   }
   function filteredRows() { const rows = state.result?.lists?.[state.activeList] || []; const query = Core.norm(state.filters.query); return query ? rows.filter((row) => Core.norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.situation].join(" ")).includes(query)) : rows; }
