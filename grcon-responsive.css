@@ -263,7 +263,12 @@ html[data-app="GRCON"][data-ui-generation="3"] :where(
   ) {
     grid-column: 1 !important;
     inline-size: 100%;
-  }
+    }
+
+    .egrdt-teams-ready-list article { align-items: stretch !important; flex-direction: column; }
+    .egrdt-teams-ready-list article .egrdt-teams-notify-button { width: 100%; }
+    .egrdt-teams-dialog footer { align-items: stretch !important; flex-direction: column-reverse; }
+    .egrdt-teams-dialog footer button { width: 100%; }
 
   html[data-app="GRCON"][data-ui-generation="3"] .results-toolbar {
     display: grid;

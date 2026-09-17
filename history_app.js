@@ -7,7 +7,7 @@
   const HistoryReport = window.GrconHistoryReport;
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.40.10";
+    || "5.41.0";
   const LIST_PAGE_SIZE = 200;
   const SEARCH_DEBOUNCE_MS = 120;
   const $ = (selector) => document.querySelector(selector);
@@ -293,7 +293,10 @@
     const creatorLine = creator ? `<p class="history-record-user">Gerado por ${escapeHtml(creator)}</p>` : "";
     const canDelete = !window.GrconCloud?.state?.membership || window.GrconCloud.canManageHistory();
     const deleteAction = canDelete ? `<button class="history-delete-button" data-history-action="delete" type="button" aria-label="Excluir esta eGRDT do histórico" title="Excluir somente esta eGRDT"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z"/></svg><span>Excluir</span></button>` : "";
-    els.detail.innerHTML = `<header><div class="history-detail-title"><span>eGRDT REGISTRADA</span><h3>${escapeHtml(record.egrdtNumber)}</h3><p>${formatDate(record.generatedAt, true)} · ${escapeHtml(record.outputType)}</p>${creatorLine}${postingBadge(record)}</div><div class="history-detail-actions"><button class="primary-button compact" data-history-action="prepare-sigem" type="button">Preparar no SIGEM</button><button class="secondary-button compact" data-history-action="email-reply" title="Montar a resposta de e-mail com os documentos desta eGRDT" type="button">Resposta de e-mail</button><button class="secondary-button compact" data-history-action="edit" type="button">Editar número</button>${deleteAction}<div class="history-detail-numbers"><span><strong>${record.documentCount}</strong> documentos</span><span><strong>${record.fileCount}</strong> arquivos</span></div></div></header>
+    const teamsAction = window.GrconEgrdtTeamsNotification
+      ? `<span class="egrdt-teams-history-action">${window.GrconEgrdtTeamsNotification.buttonHtml(record, { withStatus: true })}</span>`
+      : "";
+    els.detail.innerHTML = `<header><div class="history-detail-title"><span>eGRDT REGISTRADA</span><h3>${escapeHtml(record.egrdtNumber)}</h3><p>${formatDate(record.generatedAt, true)} · ${escapeHtml(record.outputType)}</p>${creatorLine}${postingBadge(record)}</div><div class="history-detail-actions"><button class="primary-button compact" data-history-action="prepare-sigem" type="button">Preparar no SIGEM</button>${teamsAction}<button class="secondary-button compact" data-history-action="email-reply" title="Montar a resposta de e-mail com os documentos desta eGRDT" type="button">Resposta de e-mail</button><button class="secondary-button compact" data-history-action="edit" type="button">Editar número</button>${deleteAction}<div class="history-detail-numbers"><span><strong>${record.documentCount}</strong> documentos</span><span><strong>${record.fileCount}</strong> arquivos</span></div></div></header>
       ${postingWorkflow(record)}
       ${historyNumberEditor(record)}
       <dl class="history-detail-meta"><div><dt>LD utilizada</dt><dd>${escapeHtml(record.ldName || "Não informada")}</dd></div><div><dt>Origem dos documentos</dt><dd>${escapeHtml(record.sourceName || "Pasta documental")}</dd></div><div><dt>Alocação</dt><dd>${record.allocations.length ? record.allocations.map((value) => `<span>${escapeHtml(value)}</span>`).join("") : "Não informada na LD"}</dd></div>${previousNumbers}</dl>
@@ -425,6 +428,12 @@
     if (button) select(button.dataset.historyId);
   });
   els.detail.addEventListener("click", (event) => {
+    const teamsButton = event.target.closest("[data-egrdt-teams-record-id]");
+    if (teamsButton) {
+      const record = state.records.find((item) => item.id === state.selectedId);
+      if (record) window.GrconEgrdtTeamsNotification?.open?.(record);
+      return;
+    }
     const action = event.target.closest("[data-history-action]")?.dataset.historyAction;
     if (action === "prepare-sigem") void prepareForSigem();
     if (action === "email-reply") openEmailReply();
@@ -454,6 +463,8 @@
     }
   });
   window.addEventListener("grcon:history-updated", render);
+  window.addEventListener("grcon:egrdt-teams-state", renderDetail);
+  window.addEventListener("grcon:egrdt-teams-notified", renderDetail);
   window.addEventListener("grcon:sigem-updated", render);
   window.addEventListener("storage", (event) => { if (event.key === History.STORAGE_KEY) render(); });
   render();
