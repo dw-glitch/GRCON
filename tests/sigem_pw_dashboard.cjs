@@ -52,13 +52,38 @@ const sigem = [
 ];
 const model = Core.createModel(sigem, parsed.records, ld.records);
 const result = Core.aggregateModel(model, {});
-assert.deepStrictEqual(result.summary, { sigem: 4, pwRegistered: 3, pwEmitted: 2, gapSigemToPw: 1, gapPwToEmitted: 1, pwExclusive: 0, matched: 3 });
+assert.deepStrictEqual(result.summary, {
+  sigem: 4, pwRegistered: 3, pwEmitted: 2, gapSigemToPw: 1, gapPwToEmitted: 1, pwExclusive: 0, matched: 3,
+  sigemOnly: 1, bothNotEmitted: 1, bothEmitted: 2, pwOnlyNotEmitted: 0, pwOnlyEmitted: 0, classifiedTotal: 4,
+});
 assert.strictEqual(result.classes.find((row) => row.documentClass === "N-1710").sigem, 3);
 assert.strictEqual(result.lists.toRegisterPw[0].document, "PR-5290.00-22313-122-C1O-003");
 assert.strictEqual(result.lists.pwNotEmitted[0].revision, "A");
 assert.ok(!result.lists.all.some((row) => row.document.includes("999-C1O-999")), "N-1710 fora da LD deve ser descartado silenciosamente");
 assert.strictEqual(Core.aggregateModel(model, { documentClass: "ET" }).summary.sigem, 1);
 assert.throws(() => Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0"), /campo\(s\) obrigatório\(s\)/i);
+
+(function exclusiveOperationalSituationsAreReliable() {
+  const et = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
+  const sigemRows = ["000001", "000002", "000003"].map((id) => ({ document: et(id), revision: "0", status: "Postado" }));
+  const pwRows = [
+    { document: et("000002"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
+    { document: et("000003"), revision: "0", state: "Liberado", lastEmission: "Sim" },
+    { document: et("000004"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
+    { document: et("000005"), revision: "0", state: "Liberado", lastEmission: "Não" },
+  ];
+  const classified = Core.aggregate(sigemRows, pwRows);
+  assert.equal(classified.summary.sigemOnly, 1);
+  assert.equal(classified.summary.bothNotEmitted, 1);
+  assert.equal(classified.summary.bothEmitted, 1);
+  assert.equal(classified.summary.pwOnlyNotEmitted, 1);
+  assert.equal(classified.summary.pwOnlyEmitted, 1);
+  assert.equal(classified.summary.classifiedTotal, 5);
+  assert.equal(classified.lists.all.length, 5);
+  assert.equal(new Set(classified.lists.all.map((row) => row.key)).size, 5, "cada código + revisão deve aparecer uma única vez");
+  assert.equal(classified.lists.bothNotEmitted[0].situation, Core.COMPARISON_SITUATIONS.BOTH_NOT_EMITTED);
+  assert.equal(classified.lists.bothEmitted[0].situation, Core.COMPARISON_SITUATIONS.BOTH_EMITTED);
+})();
 
 const appSource = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_app.js"), "utf8");
 assert.ok(!/MutationObserver/.test(appSource));
@@ -68,6 +93,8 @@ assert.ok(/Exportar lista/.test(appSource));
 assert.ok(/workers\/sigem_pw_dashboard\.worker\.js/.test(appSource));
 assert.ok(/savePwBase\([^;]+state\.ld\)/.test(appSource), "importação PW deve sanear com a LD vigente");
 assert.ok(/saveLdAndReprocessPw/.test(appSource), "troca de LD deve reprocessar a base PW ativa");
+assert.ok(/SIGEM \+ PW: ainda não emitido/.test(appSource));
+assert.ok(/Cada código \+ revisão entra em uma única situação/.test(appSource));
 
 for (const fileName of ["sigem_pw_evolution_app.js", "sigem_pw_history_app.js", "sigem_pw_history_postmerge.js", "sigem_pw_history_runtime_fix.js"]) {
   const source = fs.readFileSync(path.join(rootDir, fileName), "utf8");
