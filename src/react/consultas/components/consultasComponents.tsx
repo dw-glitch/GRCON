@@ -94,7 +94,7 @@ export function LdPanel({ lds, lastLd, onAddFiles, onRemove, onClear, onReuseHin
       </div>
       <div className="requests-inline-actions">
         <button className="secondary-button compact" type="button" onClick={openPicker}>Adicionar LDs</button>
-        {lastLd && !lds.length && <button className="text-button" type="button" onClick={onReuseHint}>{`Reutilizar "${lastLd.name}"`}</button>}
+        {lastLd && !lds.length && <button className="text-button" type="button" onClick={() => { onReuseHint(); openPicker(); }}>{`Reutilizar "${lastLd.name}"`}</button>}
         {Boolean(lds.length) && <button className="text-button danger" type="button" onClick={onClear}>Remover todas</button>}
       </div>
     </section>
