@@ -8,6 +8,28 @@ import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
+const TypeScript = require("typescript");
+const React = require("react");
+const ReactDOMServer = require("react-dom/server");
+
+function loadTranspiledModule(relativePath) {
+  const filename = path.join(root, relativePath);
+  const source = fs.readFileSync(filename, "utf8");
+  const output = TypeScript.transpileModule(source, {
+    fileName: filename,
+    compilerOptions: {
+      module: TypeScript.ModuleKind.CommonJS,
+      target: TypeScript.ScriptTarget.ES2020,
+      jsx: TypeScript.JsxEmit.ReactJSX,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const module = { exports: {} };
+  const execute = new Function("require", "module", "exports", "__filename", "__dirname", output);
+  execute(require, module, module.exports, filename, path.dirname(filename));
+  return module.exports;
+}
+
 const History = require(path.join(root, "history_core.js"));
 const HistoryReport = require(path.join(root, "history_report.js"));
 const EmailReply = require(path.join(root, "egrdt_email_reply.js"));
@@ -856,35 +878,85 @@ check("consulta corrige um erro de transcrição no código sem inventar ou alte
   assert.equal(ambiguo.codeAdjusted, false);
 });
 
-check("Consultas expõe o código localizado na LD na tela e na planilha exportada (verificação estática)", () => {
-  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  assert.match(app, /function celulaCodigoLocalizado/);
-  assert.match(app, /celulaCodigoLocalizado\(linha\)/);
+check("Consultas React expõe código localizado e Taxonomia Interna na tabela renderizada", () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = {};
+  let Components;
+  try {
+    Components = loadTranspiledModule("src/react/consultas/components/consultasComponents.tsx");
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
 
-  const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const tabela = indexSource.slice(indexSource.indexOf('<table class="requests-table" id="requests-table">'), indexSource.indexOf('<tbody id="requests-tbody">'));
-  assert.match(tabela, />Código localizado na LD</);
+  const item = { id: "doc-1", document: "DOC-INFORMADO", selected: true };
+  const linha = {
+    situation: "Localizado",
+    ldDocument: "DOC-LOCALIZADO-NA-LD",
+    title: "Título controlado",
+    internalTaxonomy: "TAX-LITERAL-01",
+    allocated: "SIM — Alocado",
+    ld: "LD_TESTE.xlsx",
+    allLds: "LD_TESTE.xlsx",
+    rule: "Correspondência exata",
+  };
+  const html = ReactDOMServer.renderToStaticMarkup(React.createElement(Components.ResultsTable, {
+    visibleRows: [{ item, linha }],
+    hasDocuments: true,
+    onToggle: () => {},
+    onToggleAll: () => {},
+    allSelected: true,
+    someSelected: true,
+    central: null,
+  }));
 
-  const chaves = RequestsReport.COLUMNS.map((coluna) => coluna.key);
-  assert.ok(chaves.includes("ldDocument"), "a planilha da consulta precisa levar o código localizado na LD");
-  assert.ok(chaves.includes("ldForm"), "a planilha da consulta precisa dizer se a forma localizada tem nt- ou não");
-  assert.ok(chaves.includes("ntSearchMessage"), "a planilha da consulta precisa registrar a pesquisa com/sem nt- e tipo+TAG");
+  assert.match(html, /Código localizado na LD/);
+  assert.match(html, /DOC-LOCALIZADO-NA-LD/);
+  assert.match(html, /Taxonomia Interna/);
+  assert.match(html, /TAX-LITERAL-01/);
+
+  const reportKeys = RequestsReport.COLUMNS.map((column) => column.key);
+  assert.ok(reportKeys.includes("ldDocument"), "a planilha da consulta precisa levar o código localizado na LD");
+  assert.ok(reportKeys.includes("ldForm"), "a planilha da consulta precisa dizer se a forma localizada tem nt- ou não");
+  assert.ok(reportKeys.includes("ntSearchMessage"), "a planilha da consulta precisa registrar a pesquisa com/sem nt- e tipo+TAG");
 });
 
-check("toda coluna da planilha da consulta é preenchida pela linha exportada, sem coluna muda", () => {
-  // A coluna existia na planilha e a linha exportada não levava o campo: o
-  // código localizado e a pesquisa com/sem nt- apareciam na tela e saíam
-  // vazios no Excel e na cópia. O laço abaixo vale para qualquer coluna nova.
-  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  const inicio = app.indexOf("function linhasParaSaida()");
-  assert.ok(inicio > -1, "a consulta precisa ter um construtor de linhas para a saída");
-  const corpo = app.slice(inicio, app.indexOf("\n  }", inicio));
-  RequestsReport.COLUMNS.forEach((coluna) => {
-    assert.ok(
-      new RegExp(`(^|[\\s{,])${coluna.key}\\s*:`).test(corpo),
-      `a coluna “${coluna.header}” (${coluna.key}) sairia vazia: o campo não é levado por linhasParaSaida()`,
-    );
+check("consultasAdapter.buildExportRow leva todas as colunas do relatório e preserva Taxonomia Interna", () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = {};
+  let Adapter;
+  try {
+    Adapter = loadTranspiledModule("src/react/consultas/services/consultasAdapter.ts").consultasAdapter;
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+
+  const reportColumns = [];
+  RequestsReport.COLUMNS.forEach((column) => {
+    reportColumns.push(column);
+    if (column.key === "title") reportColumns.push({ header: "TAXONOMIA INTERNA", key: "internalTaxonomy" });
   });
+
+  const line = {};
+  reportColumns.forEach((column) => {
+    if (column.key !== "document") line[column.key] = `valor:${column.key}`;
+  });
+  line.internalTaxonomy = "TAX-LITERAL-EXPORT";
+  const row = Adapter.buildExportRow("DOC-EXPORT", line);
+
+  reportColumns.forEach((column) => {
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(row, column.key),
+      `a coluna “${column.header}” (${column.key}) não foi projetada por consultasAdapter.buildExportRow()`,
+    );
+    const expected = column.key === "document" ? "DOC-EXPORT" : line[column.key];
+    assert.equal(row[column.key], expected, `valor perdido na coluna ${column.key}`);
+  });
+  assert.equal(row.internalTaxonomy, "TAX-LITERAL-EXPORT");
+
+  const emptyTaxonomy = Adapter.buildExportRow("DOC-SEM-TAX", { situation: "Localizado", internalTaxonomy: "" });
+  assert.equal(emptyTaxonomy.internalTaxonomy, "—", "Taxonomia vazia deve manter o travessão do comportamento legado");
 });
 
 check("consulta mostra a situação de cada forma quando o código consta na LD com e sem nt-", () => {
