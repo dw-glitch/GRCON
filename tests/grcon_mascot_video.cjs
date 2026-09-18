@@ -94,7 +94,7 @@ assert.doesNotMatch(bootstrap, /installGsap|vendor\/gsap|window\.gsap/i);
 for (const asset of [processingPath, wavePath, "grcon_mascot_controller.js"]) {
   assert.ok(sw.includes(`"${asset}"`), `${asset} precisa continuar disponível no cache offline existente`);
 }
-assert.match(sw, /mascot-video1/);
+assert.match(sw, /mascot-context9/);
 assert.doesNotMatch(sw, /vendor\/gsap|assets\/mascot\/layers|grcon-mascot-(?:body|head|right-arm|official-default)\.png/i);
 
 assert.match(vercel, /\/assets\/mascot\/video/);
