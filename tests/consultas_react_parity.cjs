@@ -184,6 +184,10 @@ function transpileModule(filePath, jsx, overrides = {}) {
   }
   assert.ok(requestGroup.indexOf("requests_taxonomy_core.js") < requestGroup.indexOf("react-dist/consultas-app.js"));
 
+  const bundle = fs.readFileSync(path.join(root, "react-dist/consultas-app.js"), "utf8");
+  assert.doesNotMatch(bundle, /process\\.env\\.NODE_ENV/,
+    "bundle React não pode depender do global Node process no navegador");
+
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   assert.match(sw, /consultas-react4-parity/);
   const heavyStart = sw.indexOf("const HEAVY_ASSETS");
