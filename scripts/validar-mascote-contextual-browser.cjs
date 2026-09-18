@@ -52,7 +52,7 @@ async function play(page, key) {
   assert.equal(state.video.muted, true, `${key}: autoplay precisa ser muted`);
   assert.equal(state.video.playsInline, true, `${key}: precisa usar playsInline`);
   assert.ok(state.video.readyState >= 2, `${key}: readyState insuficiente`);
-  assert.match(state.video.src, new RegExp(`${assetByKey[key].replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\?v=20260918\\.3$`));
+  assert.match(state.video.src, new RegExp(`${assetByKey[key].replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\?v=20260918\\.5$`));
   assert.equal(state.header.activeVideos, 0, `${key}: cabeçalho deve ficar estático`);
   assert.equal(state.runner?.suppressed, true, `${key}: runner não pode competir`);
   return state;
