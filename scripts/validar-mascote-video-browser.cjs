@@ -55,8 +55,8 @@ async function main() {
     assert.equal(diagnostics.instances, 1);
     assert.equal(diagnostics.activeVideos, 0);
     assert.deepEqual(diagnostics.states, ["idle"]);
-    assert.match(diagnostics.assets.wave, /grcon-mascot-wave-alpha\.webm\?v=20260916\.2$/);
-    assert.match(diagnostics.assets.processing, /grcon-mascot-processing-alpha\.webm\?v=20260916\.2$/);
+    assert.match(diagnostics.assets.wave, /grcon-mascot-wave-alpha\.webm\?v=20260918\.4$/);
+    assert.match(diagnostics.assets.processing, /grcon-mascot-processing-alpha\.webm\?v=20260918\.4$/);
     assert.equal(await page.locator(".grcon-brand-mascot > video").count(), 1);
     assert.equal((await visibleFallback(page)).visible, true, "PNG precisa aparecer antes de qualquer reprodução");
     await page.screenshot({ path: path.join(outputDir, "idle-png.png") });
@@ -81,7 +81,7 @@ async function main() {
         spriteOpacity: Number(getComputedStyle(host.querySelector(".grcon-mascot-sprite")).opacity),
       };
     });
-    assert.match(processing.src, /grcon-mascot-processing-alpha\.webm\?v=20260916\.2$/);
+    assert.match(processing.src, /grcon-mascot-processing-alpha\.webm\?v=20260918\.4$/);
     assert.equal(processing.loop, true);
     assert.equal(processing.muted, true);
     assert.equal(processing.paused, false);
@@ -110,7 +110,7 @@ async function main() {
       const video = document.querySelector(".grcon-brand-mascot > video");
       return { src: video.currentSrc, loop: video.loop, muted: video.muted, paused: video.paused };
     });
-    assert.match(wave.src, /grcon-mascot-wave-alpha\.webm\?v=20260916\.2$/);
+    assert.match(wave.src, /grcon-mascot-wave-alpha\.webm\?v=20260918\.4$/);
     assert.equal(wave.loop, false);
     assert.equal(wave.muted, true);
     assert.equal(wave.paused, false);
