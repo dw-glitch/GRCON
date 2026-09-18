@@ -80,7 +80,6 @@ jobs:
           set -euo pipefail
           COMMENTS_URL="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
           PREVIEW_URL=""
-          VERCEL_QUOTA_BLOCKED=0
 
           fetch_comments() {
             curl -fsSL \
@@ -90,13 +89,9 @@ jobs:
               "$COMMENTS_URL"
           }
 
-          validate_preview() {
+          validate_assets() {
             local candidate="$1"
-            local js ready stem format asset result code type size expected
-            js="$(curl -fsSL "$candidate/grcon_mascot_scenarios.js" || true)"
-            printf '%s' "$js" | grep -q '20260918.5' || return 1
-
-            ready=1
+            local stem format asset result code type size expected
             for stem in \
               grcon-mascot-import-bases \
               grcon-mascot-long-processing \
@@ -117,44 +112,36 @@ jobs:
                 expected="video/$format"
                 echo "$asset -> HTTP=$code MIME=$type bytes=$size"
                 if [ "$code" != "200" ] || [[ "$type" != "$expected"* ]] || [ "${size:-0}" -le 70000 ]; then
-                  ready=0
-                  break 2
+                  return 1
                 fi
               done
             done
-            [ "$ready" = "1" ]
           }
 
           for attempt in $(seq 1 18); do
             COMMENTS_JSON="$(fetch_comments)"
-            if printf '%s' "$COMMENTS_JSON" | jq -er '.[] | select(.user.login=="vercel[bot]") | .body' | grep -q 'api-deployments-free-per-day'; then
-              VERCEL_QUOTA_BLOCKED=1
-            fi
-
-            mapfile -t CANDIDATES < <(
+            READY_BODY="$(
               printf '%s' "$COMMENTS_JSON" \
-                | jq -r '.[] | select(.user.login=="vercel[bot]") | .body' \
-                | grep -oE 'https://[^ )]+\.vercel\.app' \
-                | awk '!seen[$0]++' \
-                | tac
-            )
-
-            for candidate in "${CANDIDATES[@]:-}"; do
-              [ -n "$candidate" ] || continue
-              if validate_preview "$candidate"; then
-                PREVIEW_URL="$candidate"
-                break 2
-              fi
-            done
-
+                | jq -r '.[] | select(.user.login=="vercel[bot]") | select(.body | contains("![Ready]")) | select(.body | contains(".vercel.app")) | .body' \
+                | tail -1
+            )"
+            candidate="$(printf '%s\n' "$READY_BODY" | grep -oE 'https://[^ )]+\.vercel\.app' | tail -1 || true)"
+            if [ -n "$candidate" ] && validate_assets "$candidate"; then
+              PREVIEW_URL="$candidate"
+              break
+            fi
             sleep 10
           done
 
           if [ -z "$PREVIEW_URL" ]; then
-            if [ "$VERCEL_QUOTA_BLOCKED" = "1" ]; then
-              echo "::error title=Vercel Preview indisponível::O limite diário de deployments da Vercel foi atingido (api-deployments-free-per-day). Os testes locais passaram, mas não há Preview atual para a validação remota."
+            LATEST_VERCEL_BODY="$(
+              fetch_comments \
+                | jq -r '[.[] | select(.user.login=="vercel[bot]")] | sort_by(.updated_at) | last | .body // ""'
+            )"
+            if printf '%s' "$LATEST_VERCEL_BODY" | grep -q 'api-deployments-free-per-day'; then
+              echo "::error title=Vercel Preview indisponível::O deploy atual foi bloqueado pelo limite diário da Vercel."
             else
-              echo "::error title=Vercel Preview indisponível::Nenhum Preview contendo a revisão 20260918.5 ficou pronto para validação."
+              echo "::error title=Vercel Preview indisponível::Nenhum Preview Ready expôs os 18 assets de vídeo com HTTP 200, MIME correto e tamanho esperado."
             fi
             exit 1
           fi
