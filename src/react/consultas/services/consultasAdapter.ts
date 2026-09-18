@@ -175,6 +175,9 @@ function buildExportRow(document: string, linha: ConsultationRow): ExportRow {
     ntFormsDetail: linha.ntFormsDetail,
     ntSearchMessage: linha.ntSearchMessage,
     title: linha.title,
+    // Mantém exatamente o valor projetado pelo requests_taxonomy_core.js.
+    // O legado já exportava travessão quando a mesma linha da LD não tinha valor.
+    internalTaxonomy: linha.internalTaxonomy || "—",
     sigemLdRevision: linha.sigemLdRevision,
     sigemLdRevisionCell: linha.sigemLdRevisionCell,
     allocated: linha.allocated,
