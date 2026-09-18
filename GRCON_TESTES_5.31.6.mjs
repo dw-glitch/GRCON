@@ -1120,8 +1120,10 @@ check("modelos de exportação passam pelo banco com papel conferido e sem RLS n
   // Sem área compartilhada o modelo ainda é salvo aqui: quem trabalha sozinho
   // não pode ficar sem o recurso.
   assert.match(app, /grcon-requests-export-templates/);
-  // Repetir a última exportação nunca troca de modelo por conta própria.
-  assert.match(app, /não existe mais\. Escolha outro para exportar/);
+  // Repetir a última exportação agora é orquestrado pela ilha React e nunca
+  // troca de modelo por conta própria quando o modelo anterior deixou de existir.
+  const hook = fs.readFileSync(path.join(root, "src/react/consultas/hooks/useConsultas.ts"), "utf8");
+  assert.match(hook, /não existe mais\. Escolha outro para exportar/);
 });
 
 check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
