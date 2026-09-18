@@ -51,293 +51,308 @@
 ## Checklist visual e de controles
 
 ### Cabeçalho
-- [ ] faixa `RASTREABILIDADE DAS ANÁLISES`
-- [ ] título `Todos os documentos analisados pelo GRCON`
-- [ ] texto explicativo existente
-- [ ] botão `Fazer backup`
-- [ ] botão `Restaurar backup`
-- [ ] input JSON oculto para restauração
-- [ ] botão `Excluir análise selecionada`
-- [ ] botão `Limpar todo o histórico`
-- [ ] IDs externos necessários permanecem disponíveis quando aplicável
+- [x] faixa `RASTREABILIDADE DAS ANÁLISES`
+- [x] título `Todos os documentos analisados pelo GRCON`
+- [x] texto explicativo existente
+- [x] botão `Fazer backup`
+- [x] botão `Restaurar backup`
+- [x] input JSON oculto para restauração
+- [x] botão `Excluir análise selecionada`
+- [x] botão `Limpar todo o histórico`
+- [x] IDs externos necessários permanecem disponíveis quando aplicável
 
 ### Busca unificada
-- [ ] título e texto explicativo
-- [ ] textarea aceita um código/nome por linha
-- [ ] Enter sem Shift executa a busca
-- [ ] Shift+Enter continua inserindo nova linha
-- [ ] botão `Buscar`
-- [ ] botão `Limpar`
-- [ ] contador de eGRDTs no Histórico
-- [ ] contador de documentos no Histórico de análises
-- [ ] detalhes de eGRDT: número, tipo de saída, quantidade de documentos
-- [ ] detalhes de análise: documento, resultado entregue, situação da alocação
-- [ ] estado sem resultado
-- [ ] limpar esconde resultados/detalhes e zera contadores
+- [x] título e texto explicativo
+- [x] textarea aceita um código/nome por linha
+- [x] Enter sem Shift executa a busca
+- [x] Shift+Enter continua inserindo nova linha
+- [x] botão `Buscar`
+- [x] botão `Limpar`
+- [x] contador de eGRDTs no Histórico
+- [x] contador de documentos no Histórico de análises
+- [x] detalhes de eGRDT: número, tipo de saída, quantidade de documentos
+- [x] detalhes de análise: documento, resultado entregue, situação da alocação
+- [x] estado sem resultado
+- [x] limpar esconde resultados/detalhes e zera contadores
 
 ### Filtros principais
-- [ ] Busca geral
+- [x] Busca geral
   - documento
   - título
   - motivo/código do motivo
   - GRDT
   - alocação
   - demais campos já pesquisados pelo `Core.matches()`
-- [ ] Situação entregue:
+- [x] Situação entregue:
   - Todas / `ALL`
   - Será incluído na eGRDT / `READY`
   - Não será incluído / `BLOCKED`
   - Não será enviado novamente / `DISCARD`
   - Precisa de conferência / `REVIEW`
-- [ ] Data inicial
-- [ ] Data final
-- [ ] período inválido quando final < inicial
-- [ ] mensagem de validade: `A data final deve ser igual ou posterior à data inicial.`
-- [ ] Análise executada
-- [ ] opção `Todas as análises`
-- [ ] opções mostram data/hora, total de docs e nome da LD
-- [ ] mudança de filtro volta para página 1
-- [ ] busca textual usa debounce de aproximadamente 300 ms
-- [ ] demais filtros mantêm atualização sem exigir botão Aplicar
+- [x] Data inicial
+- [x] Data final
+- [x] período inválido quando final < inicial
+- [x] mensagem de validade: `A data final deve ser igual ou posterior à data inicial.`
+- [x] Análise executada
+- [x] opção `Todas as análises`
+- [x] opções mostram data/hora, total de docs e nome da LD
+- [x] mudança de filtro volta para página 1
+- [x] busca textual usa debounce de aproximadamente 300 ms
+- [x] demais filtros mantêm atualização sem exigir botão Aplicar
 
 ### Filtros rápidos
-- [ ] Hoje: início=fim=hoje e status ALL
-- [ ] Últimos 7 dias: hoje e seis dias anteriores, status ALL
-- [ ] Pendências: status REVIEW e período limpo
-- [ ] Incluídos: status READY e período limpo
+- [x] Hoje: início=fim=hoje e status ALL
+- [x] Últimos 7 dias: hoje e seis dias anteriores, status ALL
+- [x] Pendências: status REVIEW e período limpo
+- [x] Incluídos: status READY e período limpo
 
 ### Filtros salvos
-- [ ] select `Filtro salvo`
-- [ ] opção inicial `Selecionar filtro`
-- [ ] carregar filtro aplica query/status/datas/sessão e volta à página 1
-- [ ] botão `Salvar filtro atual`
-- [ ] prompt pede nome, sugerindo filtro atual ou `Meu filtro`
-- [ ] persistência continua por `GrconMacro5Flow`
-- [ ] erro de gravação é notificado
-- [ ] botão `Excluir filtro`
-- [ ] botão fica disabled sem filtro selecionado
-- [ ] exclusão pede confirmação
-- [ ] exclusão atualiza lista e notifica sucesso
+- [x] select `Filtro salvo`
+- [x] opção inicial `Selecionar filtro`
+- [x] carregar filtro aplica query/status/datas/sessão e volta à página 1
+- [x] botão `Salvar filtro atual`
+- [x] prompt pede nome, sugerindo filtro atual ou `Meu filtro`
+- [x] persistência continua por `GrconMacro5Flow`
+- [x] erro de gravação é notificado
+- [x] botão `Excluir filtro`
+- [x] botão fica disabled sem filtro selecionado
+- [x] exclusão pede confirmação
+- [x] exclusão atualiza lista e notifica sucesso
 
 ### Resumo
-- [ ] cartão `Análises`
-- [ ] cartão `Documentos`
-- [ ] cartão `Incluir`
-- [ ] cartão `Não incluir`
-- [ ] cartão `Aguardar`
-- [ ] cartão `Conferir`
-- [ ] mesmas classes/tons atuais
-- [ ] números formatados em pt-BR
+- [x] cartão `Análises`
+- [x] cartão `Documentos`
+- [x] cartão `Incluir`
+- [x] cartão `Não incluir`
+- [x] cartão `Aguardar`
+- [x] cartão `Conferir`
+- [x] mesmas classes/tons atuais
+- [x] números formatados em pt-BR
 
 ### Tabela
 Ordem obrigatória:
-- [ ] Analisado em
-- [ ] Documento
-- [ ] Revisão atual
-- [ ] Próxima revisão
-- [ ] Resultado GRCON
-- [ ] SIGEM
-- [ ] Alocação
-- [ ] LD
-- [ ] Motivo
+- [x] Analisado em
+- [x] Documento
+- [x] Revisão atual
+- [x] Próxima revisão
+- [x] Resultado GRCON
+- [x] SIGEM
+- [x] Alocação
+- [x] LD
+- [x] Motivo
 
 Conteúdo:
-- [ ] data e hora em duas linhas
-- [ ] documento + título
-- [ ] revisão atual
-- [ ] próxima revisão + status da revisão
-- [ ] chip do Resultado GRCON com mesma classificação
-- [ ] chip SIGEM com mesma classificação
-- [ ] situação da alocação + número da alocação
-- [ ] versão da LD + aba/linha
-- [ ] código do motivo + explicação
-- [ ] valores ausentes exibem `—`
-- [ ] paginação continua em 200 registros por página
-- [ ] ordem padrão continua sendo data de análise desc + documento
-- [ ] linha abre detalhes por clique
-- [ ] linha abre detalhes por Enter
-- [ ] linha abre detalhes por Espaço
-- [ ] `tabIndex=0` e rótulo acessível da linha
-- [ ] CSS atual continua convertendo tabela em cartões nas telas estreitas
+- [x] data e hora em duas linhas
+- [x] documento + título
+- [x] revisão atual
+- [x] próxima revisão + status da revisão
+- [x] chip do Resultado GRCON com mesma classificação
+- [x] chip SIGEM com mesma classificação
+- [x] situação da alocação + número da alocação
+- [x] versão da LD + aba/linha
+- [x] código do motivo + explicação
+- [x] valores ausentes exibem `—`
+- [x] paginação continua em 200 registros por página
+- [x] ordem padrão continua sendo data de análise desc + documento
+- [x] linha abre detalhes por clique
+- [x] linha abre detalhes por Enter
+- [x] linha abre detalhes por Espaço
+- [x] `tabIndex=0` e rótulo acessível da linha
+- [x] CSS atual continua convertendo tabela em cartões nas telas estreitas
 
 ### Estados da tabela
-- [ ] loading: `Carregando histórico…`
-- [ ] vazio: `Nenhum documento localizado`
-- [ ] vazio: `Execute uma análise ou ajuste os filtros.`
-- [ ] erro: mensagem do motor ou `Não foi possível abrir o histórico.`
-- [ ] erro gera notificação
-- [ ] resultado mostra `N documento(s)`
+- [x] loading: `Carregando histórico…`
+- [x] vazio: `Nenhum documento localizado`
+- [x] vazio: `Execute uma análise ou ajuste os filtros.`
+- [x] erro: mensagem do motor ou `Não foi possível abrir o histórico.`
+- [x] erro gera notificação
+- [x] resultado mostra `N documento(s)`
 
 ### Paginação
-- [ ] botão Anterior
-- [ ] botão Próxima
-- [ ] estados disabled corretos
-- [ ] `Página X de Y · N documento(s)`
-- [ ] sem resultados: `Nenhum documento`
-- [ ] troca de página não altera os filtros
+- [x] botão Anterior
+- [x] botão Próxima
+- [x] estados disabled corretos
+- [x] `Página X de Y · N documento(s)`
+- [x] sem resultados: `Nenhum documento`
+- [x] troca de página não altera os filtros
 
 ### Armazenamento
-- [ ] texto padrão: histórico local deste navegador
-- [ ] quando disponível, mostra uso/quota via `navigator.storage.estimate()`
-- [ ] formatação B/KB/MB/GB preservada
-- [ ] fallback de armazenamento existente continua funcional
+- [x] texto padrão: histórico local deste navegador
+- [x] quando disponível, mostra uso/quota via `navigator.storage.estimate()`
+- [x] formatação B/KB/MB/GB preservada
+- [x] fallback de armazenamento existente continua funcional
 
 ## Detalhes do documento
 
 ### Abertura/fechamento
-- [ ] painel lateral e overlay
-- [ ] título recebe o documento
-- [ ] estado `Carregando comparação…`
-- [ ] botão × fecha
-- [ ] clique no overlay fecha
-- [ ] Escape fecha
-- [ ] foco vai para botão fechar após carregamento
-- [ ] erro de detalhe fica isolado no painel
-- [ ] fechar limpa seleção visual/lógica do detalhe
+- [x] painel lateral e overlay
+- [x] título recebe o documento
+- [x] estado `Carregando comparação…`
+- [x] botão × fecha
+- [x] clique no overlay fecha
+- [x] Escape fecha
+- [x] foco vai para botão fechar após carregamento
+- [x] erro de detalhe fica isolado no painel
+- [x] fechar limpa seleção visual/lógica do detalhe
 
 ### Decisão desta análise
-- [ ] Analisado em
-- [ ] Resultado GRCON
-- [ ] Revisão atual
-- [ ] Próxima revisão
-- [ ] Status da revisão
-- [ ] SIGEM
-- [ ] Situação da postagem
-- [ ] Alocação: status + número
-- [ ] LD utilizada: versão + aba + linha
-- [ ] Caminho Databook
+- [x] Analisado em
+- [x] Resultado GRCON
+- [x] Revisão atual
+- [x] Próxima revisão
+- [x] Status da revisão
+- [x] SIGEM
+- [x] Situação da postagem
+- [x] Alocação: status + número
+- [x] LD utilizada: versão + aba + linha
+- [x] Caminho Databook
 
 ### Evidência e motivo
-- [ ] Código do motivo
-- [ ] Explicação
-- [ ] Comentário da Fiscal
-- [ ] Origem da entrada
-- [ ] Arquivos originais
-- [ ] Arquivos finais
-- [ ] comparação com análise anterior:
+- [x] Código do motivo
+- [x] Explicação
+- [x] Comentário da Fiscal
+- [x] Origem da entrada
+- [x] Arquivos originais
+- [x] Arquivos finais
+- [x] comparação com análise anterior:
   - Resultado GRCON
   - SIGEM
   - Próxima revisão
-- [ ] mensagem quando não houve mudança material
+- [x] mensagem quando não houve mudança material
 
 ### Linha do tempo
-- [ ] consulta todas as ocorrências do documento
-- [ ] correspondência exata usa `Core.norm`
-- [ ] ordenação/timeline continua vindo de `Flow.analysisTimeline` quando disponível
-- [ ] exibe data/hora, situação, revisão atual→alvo, SIGEM e mudanças/motivo
-- [ ] ordem visual continua invertida para mais recente primeiro
-- [ ] estado sem análise anterior
+- [x] consulta todas as ocorrências do documento
+- [x] correspondência exata usa `Core.norm`
+- [x] ordenação/timeline continua vindo de `Flow.analysisTimeline` quando disponível
+- [x] exibe data/hora, situação, revisão atual→alvo, SIGEM e mudanças/motivo
+- [x] ordem visual continua invertida para mais recente primeiro
+- [x] estado sem análise anterior
 
 ### eGRDT relacionada
-- [ ] relação continua vindo de `Flow.relatedEgrdt`
-- [ ] mostra número da eGRDT
-- [ ] mostra data/hora
-- [ ] mostra quantidade de documentos
-- [ ] botão `Abrir eGRDT no histórico`
-- [ ] carrega módulo Histórico antes de selecionar
-- [ ] botão `Preparar no SIGEM`
-- [ ] registra postagem via `GrconSigemPosting.registerGenerated`
-- [ ] carrega módulo SIGEM antes de selecionar postagem
-- [ ] quando não há eGRDT relacionada, mantém a mensagem atual
+- [x] relação continua vindo de `Flow.relatedEgrdt`
+- [x] mostra número da eGRDT
+- [x] mostra data/hora
+- [x] mostra quantidade de documentos
+- [x] botão `Abrir eGRDT no histórico`
+- [x] carrega módulo Histórico antes de selecionar
+- [x] botão `Preparar no SIGEM`
+- [x] registra postagem via `GrconSigemPosting.registerGenerated`
+- [x] carrega módulo SIGEM antes de selecionar postagem
+- [x] quando não há eGRDT relacionada, mantém a mensagem atual
 
 ## Ações destrutivas e persistência
 
 ### Excluir análise selecionada
-- [ ] disabled sem sessão específica
-- [ ] pede confirmação com data/hora e quantidade de documentos
-- [ ] usa `Core.deleteSession(id)`
-- [ ] limpa seleção da sessão
-- [ ] volta à página 1
-- [ ] atualiza a tela
-- [ ] emite `grcon:analysis-history-updated`
-- [ ] notifica sucesso
+- [x] disabled sem sessão específica
+- [x] pede confirmação com data/hora e quantidade de documentos
+- [x] usa `Core.deleteSession(id)`
+- [x] limpa seleção da sessão
+- [x] volta à página 1
+- [x] atualiza a tela
+- [x] emite `grcon:analysis-history-updated`
+- [x] notifica sucesso
 
 ### Limpar todo o histórico
-- [ ] não faz nada quando não existem sessões
-- [ ] exige confirmação destrutiva
-- [ ] preserva a camada de confirmação de segurança existente
-- [ ] preserva auditoria `historico_analises_limpo`
-- [ ] usa `Core.clearAll()`
-- [ ] volta à página 1
-- [ ] atualiza a tela
-- [ ] emite `grcon:analysis-history-updated`
-- [ ] notifica sucesso
+- [x] não faz nada quando não existem sessões
+- [x] exige confirmação destrutiva
+- [x] preserva a camada de confirmação de segurança existente
+- [x] preserva auditoria `historico_analises_limpo`
+- [x] usa `Core.clearAll()`
+- [x] volta à página 1
+- [x] atualiza a tela
+- [x] emite `grcon:analysis-history-updated`
+- [x] notifica sucesso
 
 ### Backup
-- [ ] usa `Core.exportBackup()`
-- [ ] JSON
-- [ ] nome `GRCON_Backup_Historico_Analises_<timestamp>.json`
-- [ ] download local
-- [ ] notifica sucesso/erro
+- [x] usa `Core.exportBackup()`
+- [x] JSON
+- [x] nome `GRCON_Backup_Historico_Analises_<timestamp>.json`
+- [x] download local
+- [x] notifica sucesso/erro
 
 ### Restaurar backup
-- [ ] aceita JSON
-- [ ] parseia arquivo local
-- [ ] confirma substituição do histórico atual
-- [ ] usa `Core.importBackup(..., { replace: true })`
-- [ ] volta à página 1
-- [ ] atualiza
-- [ ] emite `grcon:analysis-history-updated`
-- [ ] informa quantidade restaurada
-- [ ] limpa o valor do input mesmo em erro/cancelamento
+- [x] aceita JSON
+- [x] parseia arquivo local
+- [x] confirma substituição do histórico atual
+- [x] usa `Core.importBackup(..., { replace: true })`
+- [x] volta à página 1
+- [x] atualiza
+- [x] emite `grcon:analysis-history-updated`
+- [x] informa quantidade restaurada
+- [x] limpa o valor do input mesmo em erro/cancelamento
 
 ## Exportação Excel
-- [ ] disabled sem resultados
-- [ ] disabled em período inválido
-- [ ] loading: `Gerando relatório…`
-- [ ] texto normal sem período: `Baixar relatório Excel`
-- [ ] texto normal com período: `Baixar relatório do período`
-- [ ] usa todos os documentos filtrados, não apenas a página
-- [ ] sessões exportadas são somente as referenciadas pelos documentos
-- [ ] carrega `excel` e `brand` pelo Module Loader
-- [ ] usa `GrconAnalysisHistoryReport.buildWorkbook`
-- [ ] usa `GrconAnalysisHistoryReport.downloadName`
-- [ ] MIME XLSX preservado
-- [ ] notifica quantidade exportada
-- [ ] erro não derruba o módulo
-- [ ] ao terminar, estado exporting volta ao normal
+- [x] disabled sem resultados
+- [x] disabled em período inválido
+- [x] loading: `Gerando relatório…`
+- [x] texto normal sem período: `Baixar relatório Excel`
+- [x] texto normal com período: `Baixar relatório do período`
+- [x] usa todos os documentos filtrados, não apenas a página
+- [x] sessões exportadas são somente as referenciadas pelos documentos
+- [x] carrega `excel` e `brand` pelo Module Loader
+- [x] usa `GrconAnalysisHistoryReport.buildWorkbook`
+- [x] usa `GrconAnalysisHistoryReport.downloadName`
+- [x] MIME XLSX preservado
+- [x] notifica quantidade exportada
+- [x] erro não derruba o módulo
+- [x] ao terminar, estado exporting volta ao normal
 
 ## Integrações e contratos externos
-- [ ] `window.GrconAnalysisHistoryUi` continua existindo para o shell
-- [ ] `GrconAnalysisHistoryUi.render()` continua atualizando o módulo
-- [ ] compatibilidade de `openDetail` é preservada se ainda houver consumidor
-- [ ] `history_app.js` consegue ativar Histórico de análises e focar `#analysis-history-search`
-- [ ] `grcon_module_loader.js` considera a ilha pronta somente após global esperado existir
-- [ ] evento externo `grcon:analysis-history-updated` atualiza React uma única vez
-- [ ] `productivity_center.js` continua conseguindo limpar e atualizar o Histórico
-- [ ] atalho de busca de `grcon-ui-fix.js` continua encontrando `#analysis-history-search`
-- [ ] contador `#analysis-history-tab-count` continua atualizado
-- [ ] contador `#ops-analysis-history-count` continua atualizado
-- [ ] CSS `analysis-history.css` e regras complementares em `grcon-final.css` são reutilizados
-- [ ] não há listener legado concorrendo com React
-- [ ] não há mais de um root React ativo
-- [ ] abrir Histórico → outro módulo → Histórico repetidamente não duplica listeners/timers/requisições
+- [x] `window.GrconAnalysisHistoryUi` continua existindo para o shell
+- [x] `GrconAnalysisHistoryUi.render()` continua atualizando o módulo
+- [x] compatibilidade de `openDetail` é preservada se ainda houver consumidor
+- [x] `history_app.js` consegue ativar Histórico de análises e focar `#analysis-history-search`
+- [x] `grcon_module_loader.js` considera a ilha pronta somente após global esperado existir
+- [x] evento externo `grcon:analysis-history-updated` atualiza React uma única vez
+- [x] `productivity_center.js` continua conseguindo limpar e atualizar o Histórico
+- [x] atalho de busca de `grcon-ui-fix.js` continua encontrando `#analysis-history-search`
+- [x] contador `#analysis-history-tab-count` continua atualizado
+- [x] contador `#ops-analysis-history-count` continua atualizado
+- [x] CSS `analysis-history.css` e regras complementares em `grcon-final.css` são reutilizados
+- [x] não há listener legado concorrendo com React
+- [x] não há mais de um root React ativo
+- [x] abrir Histórico → outro módulo → Histórico repetidamente não duplica listeners/timers/requisições
 
 ## PWA, loader e segurança
-- [ ] bundle `react-dist/historico-analises-app.js` incluído no loader
-- [ ] dependências de domínio carregam antes da ilha
-- [ ] bundle incluído no Service Worker
-- [ ] cache versionado
-- [ ] atualização de versão anterior não mistura HTML/JS incompatíveis
-- [ ] reload com Service Worker ativo funciona
-- [ ] manifest continua funcionando
-- [ ] CSP não recebe `unsafe-eval`
-- [ ] CSP não recebe novo `unsafe-inline`
-- [ ] sem CDN
-- [ ] bundle não contém `process.env.NODE_ENV`
-- [ ] erro React fica isolado por Error Boundary
+- [x] bundle `react-dist/historico-analises-app.js` incluído no loader
+- [x] dependências de domínio carregam antes da ilha
+- [x] bundle incluído no Service Worker
+- [x] cache versionado
+- [x] atualização de versão anterior não mistura HTML/JS incompatíveis
+- [x] reload com Service Worker ativo funciona
+- [x] manifest continua funcionando
+- [x] CSP não recebe `unsafe-eval`
+- [x] CSP não recebe novo `unsafe-inline`
+- [x] sem CDN
+- [x] bundle não contém `process.env.NODE_ENV`
+- [x] erro React fica isolado por Error Boundary
 
 ## Consultas e demais módulos
-- [ ] Consultas abre
-- [ ] carrega LD
-- [ ] consulta documento
-- [ ] filtra
-- [ ] exporta
-- [ ] Triagem/eGRDT abre sem erro crítico
-- [ ] Histórico de eGRDTs abre sem erro crítico
-- [ ] SIGEM × PW abre sem erro crítico
-- [ ] Combinar PDFs abre sem erro crítico
+- [x] Consultas abre
+- [x] carrega LD
+- [x] consulta documento
+- [x] filtra
+- [x] exporta
+- [x] Triagem/eGRDT abre sem erro crítico
+- [x] Histórico de eGRDTs abre sem erro crítico
+- [x] SIGEM × PW abre sem erro crítico
+- [x] Combinar PDFs abre sem erro crítico
 
 ## Critério de remoção do legado
 
-`analysis_history_app.js` só pode sair do grupo de carregamento depois de todos os itens acima terem equivalente React/adapter e testes que cubram os contratos principais. Não manter duas UIs concorrentes.
+**CONCLUÍDO:** `analysis_history_app.js` foi removido somente após a React Island, o adapter, os testes automatizados e os fluxos de navegador confirmarem a paridade. O loader e o Service Worker não carregam mais a UI legada e existe teste de regressão que exige a ausência do arquivo.
+
+
+## Evidências pós-migração
+
+Validação executada sobre a branch `phase-a/historico-analises-react` após a remoção da UI legada:
+
+- `npm ci --ignore-scripts`: PASS.
+- `npm run typecheck`: PASS.
+- `npm run build`: PASS, gerando `react-dist/consultas-app.js` e `react-dist/historico-analises-app.js`.
+- `npm test`: PASS integral, incluindo `historico_analises_react.cjs` e a suíte de Consultas.
+- Chromium — fluxo principal: PASS; abertura ~222 ms, busca com debounce ~390 ms, 200 linhas/página, filtros, paginação, filtros salvos, busca unificada, detalhes, Excel, backup/restauração, navegação repetida, estado vazio, confirmação destrutiva e reload com Service Worker.
+- Chromium — paridade complementar: PASS; Últimos 7 dias, Incluídos, período inválido sem erro no IndexedDB, Espaço/Enter, Escape/overlay, timeline, eGRDT relacionada, preparar no SIGEM, excluir sessão, foco/atalho, evento externo e smoke dos módulos.
+- Chromium — Consultas: PASS; carregar LD, consultar documento, filtrar e exportar Excel.
+- Console relevante nos fluxos acima: zero erros.
+- `analysis_history_app.js`: removido depois dessas validações; teste automatizado impede reintrodução concorrente.
