@@ -69,6 +69,45 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-mascote-video-browser.cjs
           node scripts/validar-mascote-contextual-browser.cjs
+      - name: Resolver e validar Vercel Preview
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          COMMENTS_URL="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
+          PREVIEW_URL=""
+          for attempt in $(seq 1 36); do
+            BODY="$(curl -fsSL "$COMMENTS_URL" | jq -r '.[] | select(.user.login=="vercel[bot]") | .body' | tail -n +1)"
+            PREVIEW_URL="$(printf '%s\n' "$BODY" | grep -oE 'https://[^ )]+\.vercel\.app' | tail -1 || true)"
+            if [ -n "$PREVIEW_URL" ]; then
+              JS="$(curl -fsSL "$PREVIEW_URL/grcon_mascot_scenarios.js" || true)"
+              if printf '%s' "$JS" | grep -q '20260918.3'; then
+                READY=1
+                for asset in                   grcon-mascot-import-bases.mp4                   grcon-mascot-long-processing.mp4                   grcon-mascot-sleep.mp4                   grcon-mascot-curious.mp4                   grcon-mascot-grdt-stamp.mp4                   grcon-mascot-teams-send.mp4                   grcon-mascot-grdt-to-teams.mp4                   grcon-mascot-paperwork.mp4                   grcon-mascot-review-coffee.mp4
+                do
+                  RESULT="$(curl -fsSL -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$PREVIEW_URL/assets/mascot/video/$asset?v=20260918.3" || true)"
+                  CODE="$(printf '%s' "$RESULT" | awk '{print $1}')"
+                  TYPE="$(printf '%s' "$RESULT" | awk '{print $2}')"
+                  SIZE="$(printf '%s' "$RESULT" | awk '{print $3}')"
+                  echo "$asset -> HTTP=$CODE MIME=$TYPE bytes=$SIZE"
+                  if [ "$CODE" != "200" ] || [[ "$TYPE" != video/mp4* ]] || [ "${SIZE:-0}" -le 70000 ]; then READY=0; break; fi
+                done
+                if [ "$READY" = "1" ]; then break; fi
+              fi
+            fi
+            PREVIEW_URL=""
+            sleep 5
+          done
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "Preview Vercel atual não ficou pronta para validação." >&2
+            exit 1
+          fi
+          echo "GRCON_PREVIEW_URL=$PREVIEW_URL" >> "$GITHUB_ENV"
+          echo "Preview validada: $PREVIEW_URL"
+      - name: Testar os 9 cenários na Vercel Preview
+        if: github.event_name == 'pull_request'
+        run: GRCON_PREVIEW_URL="$GRCON_PREVIEW_URL" node scripts/validar-mascote-contextual-browser.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: grcon-mascot-video-validation
