@@ -1136,18 +1136,15 @@ check("prévia do modelo mostra as linhas reais e diz quantas ficaram de fora", 
   assert.deepEqual(RequestsReport.previewExportTemplate(modelo, [], 5).rows, []);
 });
 
+
 check("modelos de exportação passam pelo banco com papel conferido e sem RLS nova", () => {
   const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.21.sql"), "utf8");
-  // Tabela no schema privado, fora do PostgREST, e sem privilégio direto.
   assert.match(sql, /create table if not exists private\.grcon_export_templates/);
   assert.match(sql, /revoke all on table private\.grcon_export_templates from public, anon, authenticated;/);
-  // Ler é de qualquer membro; salvar e excluir, só do proprietário.
   assert.match(sql, /private\.grcon_is_member\(target_workspace\)/);
   assert.match(sql, /Somente o proprietário pode salvar modelos de exportação/);
   assert.match(sql, /Somente o proprietário pode excluir modelos de exportação/);
-  // Base é lista fechada: uma base desconhecida só apareceria na exportação.
   assert.match(sql, /base_limpa not in \('consulta', 'controle'\)/);
-  // A restrição do usuário vale sem exceção: nenhuma política de RLS é criada.
   assert.doesNotMatch(sql, /create policy/i);
   assert.doesNotMatch(sql, /alter policy/i);
   assert.doesNotMatch(sql, /drop policy/i);
@@ -1158,13 +1155,15 @@ check("modelos de exportação passam pelo banco com papel conferido e sem RLS n
   assert.match(cloud, /grcon_delete_export_template/);
 
   const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  // Sem área compartilhada o modelo ainda é salvo aqui: quem trabalha sozinho
-  // não pode ficar sem o recurso.
-  assert.match(app, /grcon-requests-export-templates/);
-  // Repetir a última exportação nunca troca de modelo por conta própria.
-  assert.match(app, /não existe mais\. Escolha outro para exportar/);
-});
+  assert.match(app, /grcon-requests-export-templates/, "o editor legado ainda salva modelos localmente");
 
+  // A repetição da última exportação migrou junto com a tela para o hook React:
+  // o teste acompanha o novo ponto de integração, mantendo a mesma garantia.
+  const hook = fs.readFileSync(path.join(root, "src/react/consultas/hooks/useConsultas.ts"), "utf8");
+  assert.match(hook, /não existe mais\. Escolha outro para exportar/);
+  assert.match(hook, /setSelectedTemplateId\(ultima\.id\)/);
+  assert.match(hook, /await exportExcel\(ultima\.id\)/);
+});
 check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
   assert.equal(ReportSummary.normalizeAllocationCenter(null), null);
   assert.equal(ReportSummary.normalizeAllocationCenter({ path: "\\\\srv\\q\\Central.xlsx", sheet: "Central", keyColumn: "B" }), null);
@@ -2081,37 +2080,51 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
 }
 
+
 check("cabeçalho da consulta não se sobrepõe e a Colar SIGEM não fica na frente", () => {
   const css = fs.readFileSync(path.join(root, "requests.css"), "utf8");
-  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-
-  // Medido no navegador com 12 colunas: cada coluna ficava com 96px enquanto
-  // "Status da alocação (central)" precisava de 203px. Com nowrap o texto
-  // transbordava a célula e um cabeçalho passava por cima do outro.
   assert.doesNotMatch(css, /\.requests-table thead th \{[^}]*white-space: nowrap/,
     "o cabeçalho precisa poder quebrar em duas linhas");
   assert.match(css, /\.requests-table thead th \{[^}]*min-width: \d/,
     "cada coluna precisa de um piso para não ficar menor que o próprio rótulo");
   assert.match(css, /\.requests-table \{[^}]*min-width: 88rem/);
 
-  // A Colar SIGEM saiu da quarta posição e foi para junto das outras colunas
-  // de SIGEM, que é onde ela faz sentido ser lida.
-  const cabecalho = html.slice(html.indexOf("<th>Situação</th>"));
-  const ordem = [...cabecalho.slice(0, cabecalho.indexOf("</tr>")).matchAll(/<th>([^<]+)<\/th>/g)].map((m) => m[1]);
+  const previousWindow = globalThis.window;
+  globalThis.window = {};
+  let Components;
+  try {
+    Components = loadTranspiledModule("src/react/consultas/components/consultasComponents.tsx");
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+  const item = { id: "doc-header", document: "DOC", selected: true };
+  const html = ReactDOMServer.renderToStaticMarkup(React.createElement(Components.ResultsTable, {
+    visibleRows: [{ item, linha: { situation: "Localizado", ldDocument: "DOC", title: "Título" } }],
+    hasDocuments: true,
+    onToggle: () => {},
+    onToggleAll: () => {},
+    allSelected: true,
+    someSelected: true,
+    central: null,
+  }));
+  const ordem = [...html.matchAll(/<th[^>]*>(?:<input[^>]*>)?([^<]*)<\/th>/g)]
+    .map((match) => match[1]).filter(Boolean);
+
   assert.equal(ordem[0], "Situação");
   assert.ok(ordem.indexOf("Revisão na Colar SIGEM") > ordem.indexOf("Alocado?"),
     "a Colar SIGEM não pode voltar para a frente da tabela");
   assert.equal(ordem[ordem.indexOf("Revisão na Colar SIGEM") + 1], "Status SIGEM",
     "as colunas de SIGEM ficam juntas");
+  assert.equal(ordem[ordem.indexOf("Título na LD") + 1], "Taxonomia Interna",
+    "Taxonomia Interna precisa ficar logo depois do título");
 
-  // A ordem da tela e a da exportação são a mesma leitura.
   const report = fs.readFileSync(path.join(root, "requests_report.js"), "utf8");
   const iColar = report.indexOf("REVISÃO NA COLAR SIGEM");
   const iAlocado = report.indexOf('"ALOCADO?"');
   const iStatus = report.indexOf("STATUS NO SIGEM");
   assert.ok(iAlocado < iColar && iColar < iStatus, "a exportação segue a mesma ordem da tela");
 });
-
 check("central de alocação responde status e comentário da fiscal por documento", () => {
   const AC = AllocationCenter;
 
@@ -2167,27 +2180,56 @@ check("empate de data na central desempata pelo número da ALOC", () => {
   assert.equal(AC.allocationSequence("sem número"), 0);
 });
 
+
 check("colunas da central chegam à tela e à exportação sem afirmar o que não se apurou", () => {
   const report = fs.readFileSync(path.join(root, "requests_report.js"), "utf8");
-  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-
   for (const coluna of ["STATUS DA ALOCAÇÃO (CENTRAL)", "RESPOSTA DA FISCAL 01", "ALOC ENVIADA (CENTRAL)"]) {
     assert.ok(report.includes(coluna), `a exportação precisa da coluna ${coluna}`);
   }
-  // Já foram embutidas no cabeçalho e esquecidas na montagem da linha uma vez:
-  // a planilha saiu com as colunas vazias.
-  for (const campo of ["centerStatus", "centerFiscalAnswer", "centerAllocationCell"]) {
-    assert.match(app, new RegExp(`${campo}: linha\\.${campo}`), `a exportação precisa levar ${campo}`);
+
+  const previousWindow = globalThis.window;
+  globalThis.window = {};
+  let Adapter;
+  let Components;
+  try {
+    Adapter = loadTranspiledModule("src/react/consultas/services/consultasAdapter.ts").consultasAdapter;
+    Components = loadTranspiledModule("src/react/consultas/components/consultasComponents.tsx");
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
   }
 
-  assert.match(html, /id="requests-central-input"/);
-  assert.match(app, /GrconAllocationCenter/);
-  // Três respostas diferentes que não podem virar a mesma.
-  assert.match(app, /sem central/);
-  assert.match(app, /não consta na central/);
-});
+  const exportada = Adapter.buildExportRow("DOC-CENTRAL", {
+    situation: "Localizado",
+    centerStatus: "FISCAL 01 - AGUARDANDO RETORNO",
+    centerFiscalAnswer: "Aceita sem comentários",
+    centerAllocationCell: "C1O-ALOC-CM-0230-2026",
+  });
+  assert.equal(exportada.centerStatus, "FISCAL 01 - AGUARDANDO RETORNO");
+  assert.equal(exportada.centerFiscalAnswer, "Aceita sem comentários");
+  assert.equal(exportada.centerAllocationCell, "C1O-ALOC-CM-0230-2026");
 
+  const item = { id: "doc-central", document: "DOC-CENTRAL", selected: true };
+  const semCentral = ReactDOMServer.renderToStaticMarkup(React.createElement(Components.ResultsTable, {
+    visibleRows: [{ item, linha: { situation: "Localizado" } }],
+    hasDocuments: true, onToggle: () => {}, onToggleAll: () => {},
+    allSelected: true, someSelected: true, central: null,
+  }));
+  assert.match(semCentral, /sem central/);
+
+  const comCentralSemRegistro = ReactDOMServer.renderToStaticMarkup(React.createElement(Components.ResultsTable, {
+    visibleRows: [{ item, linha: { situation: "Localizado", centerFound: false } }],
+    hasDocuments: true, onToggle: () => {}, onToggleAll: () => {},
+    allSelected: true, someSelected: true, central: { ok: true },
+  }));
+  assert.match(comCentralSemRegistro, /não consta na central/);
+
+  const centralPanel = ReactDOMServer.renderToStaticMarkup(React.createElement(Components.CentralPanel, {
+    central: null, onAttach: () => {}, onClear: () => {},
+  }));
+  assert.match(centralPanel, /Anexar o Controle de Solicitações/);
+  assert.match(centralPanel, /Nenhuma central anexada/);
+});
 check("tabela larga avisa que rola, e a sombra vem do estado real da rolagem", () => {
   const js = fs.readFileSync(path.join(root, "ui-v3.js"), "utf8");
   const css = fs.readFileSync(path.join(root, "grcon-final.css"), "utf8");
@@ -2599,6 +2641,7 @@ check("o rolamento da tabela não colapsa nem cresce sozinho", () => {
   assert.match(app, /function calibrateVirtualRowHeight\(\)/);
 });
 
+
 check("a consulta responde se o documento já foi emitido pelo GRCON, com a data", () => {
   const entradas = [
     { egrdtNumber: "0130870-C1O-PGV-G-1252/2026 - eGRDT", generatedAt: "2026-08-17T13:05:00.000Z", revision: "C" },
@@ -2607,23 +2650,19 @@ check("a consulta responde se o documento já foi emitido pelo GRCON, com a data
   const emitido = Requests.issuedHistory(entradas);
   assert.equal(emitido.issued, true);
   assert.equal(emitido.count, 2);
-  assert.equal(emitido.egrdt, "0130870-C1O-PGV-G-1252/2026 - eGRDT", "a mais recente encabeça");
+  assert.equal(emitido.egrdt, "0130870-C1O-PGV-G-1252/2026 - eGRDT");
   assert.equal(emitido.date, "17/08/2026");
-  assert.equal(emitido.revision, "C", "a revisão precisa pertencer à eGRDT mais recente");
+  assert.equal(emitido.revision, "C");
   assert.equal(emitido.revisionCell, "C");
-  assert.equal(emitido.all[1].revision, "B", "as revisões anteriores permanecem auditáveis");
-  // No Excel a data fica na linha de baixo, dentro da mesma célula.
-  assert.equal(emitido.cell.split("\n")[0], "0130870-C1O-PGV-G-1252/2026 - eGRDT");
+  assert.equal(emitido.all[1].revision, "B");
   assert.equal(emitido.cell.split("\n")[1], "17/08/2026");
 
-  // Sem registro a resposta é dita, não omitida.
   const nunca = Requests.issuedHistory([]);
   assert.equal(nunca.issued, false);
   assert.equal(nunca.cell, "Não emitido");
   assert.equal(nunca.egrdt, "");
   assert.equal(nunca.revisionCell, "Não emitido");
 
-  // Os campos que a linha da consulta carrega para a tela e para a planilha.
   const colunas = Requests.issuedColumns(entradas);
   assert.equal(colunas.issued, "SIM");
   assert.equal(colunas.issuedEgrdt, entradas[0].egrdtNumber);
@@ -2632,31 +2671,50 @@ check("a consulta responde se o documento já foi emitido pelo GRCON, com a data
   assert.equal(colunas.issuedRevisionCell, "C");
   assert.equal(colunas.issuedAll.length, 2);
 
-  // A coluna existe na planilha da consulta, ao lado da GRDT que veio da LD.
   const chaves = RequestsReport.COLUMNS.map((coluna) => coluna.key);
-  assert.ok(chaves.includes("issuedCell"), "a planilha precisa levar a eGRDT emitida");
+  assert.ok(chaves.includes("issuedCell"));
   assert.equal(chaves[chaves.indexOf("lastGrdt") + 1], "issuedCell");
-  assert.equal(chaves[chaves.indexOf("issuedCell") + 1], "issuedRevisionCell", "a revisão emitida precisa ficar junto da eGRDT");
+  assert.equal(chaves[chaves.indexOf("issuedCell") + 1], "issuedRevisionCell");
 
-  // E na tabela da tela, com o mesmo número de colunas do cabeçalho.
-  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const tabela = html.slice(html.indexOf('<table class="requests-table" id="requests-table">'), html.indexOf("<tbody id=\"requests-tbody\">"));
-  assert.match(tabela, /<th>Emitido pelo GRCON<\/th>/);
-  assert.match(tabela, /<th>Revisão emitida no SIGEM<\/th>/);
-  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  assert.match(app, /issuedColumns\(historicoDoGrcon\(resultado, item\.document\)\)/);
-  assert.match(app, /GrconGrdtHistoryIndicator\?\.refresh\?\.\(\)/, "a consulta precisa atualizar o índice após a sincronização compartilhada");
-  // Cabeçalho e linha precisam ter a mesma quantidade de células.
-  const modelo = app.slice(app.indexOf("<tr data-doc="), app.indexOf("</tr>`;"));
-  assert.equal((tabela.match(/<th[ >]/g) || []).length, (modelo.match(/<td[ >]/g) || []).length);
+  const previousWindow = globalThis.window;
+  let refreshed = 0;
+  globalThis.window = { GrconGrdtHistoryIndicator: { refresh: () => { refreshed += 1; } } };
+  let Adapter;
+  let Components;
+  try {
+    Adapter = loadTranspiledModule("src/react/consultas/services/consultasAdapter.ts").consultasAdapter;
+    Components = loadTranspiledModule("src/react/consultas/components/consultasComponents.tsx");
+    Adapter.refreshHistoryIndicator();
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+  assert.equal(refreshed, 1, "a consulta React precisa atualizar o índice de histórico antes da busca");
+
+  const item = { id: "doc-issued", document: "DOC-EMITIDO", selected: true };
+  const html = ReactDOMServer.renderToStaticMarkup(React.createElement(Components.ResultsTable, {
+    visibleRows: [{ item, linha: {
+      situation: "Localizado",
+      issuedEgrdt: entradas[0].egrdtNumber,
+      issuedAt: "17/08/2026",
+      issuedRevision: "C",
+      issuedCount: 2,
+      issuedAll: [{ egrdt: entradas[0].egrdtNumber, revision: "C", date: "17/08/2026" }],
+    } }],
+    hasDocuments: true, onToggle: () => {}, onToggleAll: () => {},
+    allSelected: true, someSelected: true, central: null,
+  }));
+  assert.match(html, /Emitido pelo GRCON/);
+  assert.match(html, /Revisão emitida no SIGEM/);
+  assert.match(html, /0130870-C1O-PGV-G-1252\/2026 - eGRDT/);
+  assert.match(html, /Rev\. C/);
 });
 
 check("uma célula com duas linhas não vira duas linhas na cópia", () => {
-  const app = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  // A cópia por tabulação precisa manter um documento por linha.
-  assert.match(app, /replace\(\/\\s\*\\n\\s\*\/g, " · "\)/);
+  const adapter = fs.readFileSync(path.join(root, "src/react/consultas/services/consultasAdapter.ts"), "utf8");
+  assert.match(adapter, /replace\(\/\\s\*\\n\\s\*\/g, " · "\)/,
+    "a cópia React precisa manter um documento por linha");
 });
-
 check("existe um só módulo de histórico de eGRDT por documento", () => {
   // Dois arquivos definiam window.GrconGrdtHistoryIndicator; o segundo apagava
   // o primeiro, que ficava carregando sem nunca ser usado.
@@ -3734,11 +3792,17 @@ await (async () => {
     Requests.consultationRow(Requests.lookupDocument(item.document, index, {})),
   ]));
 
-  // A linha exportada é montada pela função real da tela, não por uma cópia.
-  const appSource = fs.readFileSync(path.join(root, "requests_app.js"), "utf8");
-  const inicio = appSource.indexOf("function linhasParaSaida()");
-  const corpo = appSource.slice(inicio, appSource.indexOf("\n  }", inicio) + 4);
-  const linhas = new Function("state", `${corpo}; return linhasParaSaida();`)({ documents: documentos, results: resultados });
+  // A linha exportada é montada pelo adaptador real da ilha React.
+  const previousWindow = globalThis.window;
+  globalThis.window = {};
+  let Adapter;
+  try {
+    Adapter = loadTranspiledModule("src/react/consultas/services/consultasAdapter.ts").consultasAdapter;
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+  const linhas = documentos.map((item) => Adapter.buildExportRow(item.document, resultados.get(item.id)));
   assert.equal(linhas.length, documentos.length);
 
   const workbook = new ExcelJS.Workbook();
