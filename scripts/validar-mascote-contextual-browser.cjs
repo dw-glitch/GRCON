@@ -90,6 +90,7 @@ async function main() {
       cold[key] = { http: await probeHttp(page, key), playback: await play(page, key) };
       assert.equal(cold[key].http.status, 200, `${key}: HTTP cold precisa ser 200`);
       assert.match(cold[key].http.type, /^video\/mp4(?:;|$)/i, `${key}: MIME incorreto`);
+      await page.screenshot({ path:path.join(outputDir,`${key}-desktop.png`), fullPage:true });
       await stop(page);
     }
     await page.screenshot({ path:path.join(outputDir,"desktop-cold.png"), fullPage:true });
@@ -145,23 +146,28 @@ async function main() {
     const fallbackContext = await browser.newContext({ viewport:{width:1440,height:900}, serviceWorkers:"block" });
     const fallback = await fallbackContext.newPage();
     await fallback.route(/grcon-mascot-paperwork\.mp4(?:\?.*)?$/, (route) => route.abort("failed"));
+    await fallback.route(/grcon-mascot-paperwork-poster\.webp(?:\?.*)?$/, (route) => route.abort("failed"));
     await fallback.goto(`${fixtureUrl}?fallback=1`, { waitUntil:"networkidle", timeout:30000 }); await waitReady(fallback);
     await fallback.evaluate(() => window.GrconMascotScenarios.play("paperwork", { priority:400, force:true }));
     await fallback.waitForFunction(() => window.GrconMascotScenarios.diagnostics().stages.find((s)=>s.key==="paperwork")?.status === "fallback", null, { timeout:15000 });
-    const fallbackState = await fallback.evaluate(() => { const el=document.querySelector('[data-scene="paperwork"]'); return { d:window.GrconMascotScenarios.diagnostics(), poster:getComputedStyle(el.querySelector("img")).opacity, hidden:el.hidden }; });
-    assert.equal(fallbackState.hidden,false); assert.equal(Number(fallbackState.poster),1);
+    const fallbackState = await fallback.evaluate(() => { const el=document.querySelector('[data-scene="paperwork"]'); const img=el.querySelector("img"); return { d:window.GrconMascotScenarios.diagnostics(), poster:getComputedStyle(img).opacity, posterSrc:img.currentSrc || img.src, hidden:el.hidden }; });
+    assert.equal(fallbackState.hidden,false); assert.equal(Number(fallbackState.poster),1); assert.match(fallbackState.posterSrc,/grcon-mascot-sprite\.png\?v=20260918\.3$/);
     await fallback.screenshot({ path:path.join(outputDir,"fallback-poster.png"), fullPage:true }); await fallbackContext.close();
 
     const reducedContext = await browser.newContext({ viewport:{width:1440,height:900}, reducedMotion:"reduce", serviceWorkers:"block" });
     const reduced = await reducedContext.newPage(); await reduced.goto(`${fixtureUrl}?reduced=1`, { waitUntil:"networkidle" }); await waitReady(reduced);
     await reduced.evaluate(() => window.GrconMascotScenarios.play("curious", { priority:400, force:true }));
     const reducedState = await reduced.evaluate(() => { const el=document.querySelector('[data-scene="curious"]'); return { status:window.GrconMascotScenarios.diagnostics().stages.find((s)=>s.key==="curious").status, video:getComputedStyle(el.querySelector("video")).display, poster:getComputedStyle(el.querySelector("img")).opacity }; });
-    assert.equal(reducedState.status,"poster"); assert.equal(reducedState.video,"none"); assert.equal(Number(reducedState.poster),1); await reducedContext.close();
+    assert.equal(reducedState.status,"poster"); assert.equal(reducedState.video,"none"); assert.equal(Number(reducedState.poster),1);
+    await reduced.waitForFunction(() => !window.GrconMascotScenarios.diagnostics().active, null, { timeout:4000 });
+    await reducedContext.close();
 
     const mobileContext = await browser.newContext({ viewport:{width:390,height:844}, serviceWorkers:"block" });
     const mobile = await mobileContext.newPage(); await mobile.goto(`${fixtureUrl}?mobile=1`, { waitUntil:"networkidle" }); await waitReady(mobile);
     for (const key of ["paperwork","longProcessing","grdtStamp","curious"]) {
-      const s=await play(mobile,key); assert.ok(s.rect.left >= -1 && s.rect.right <= 391, `${key}: não pode vazar horizontalmente no mobile`); await stop(mobile);
+      const s=await play(mobile,key); assert.ok(s.rect.left >= -1 && s.rect.right <= 391, `${key}: não pode vazar horizontalmente no mobile`);
+      await mobile.screenshot({ path:path.join(outputDir,`${key}-mobile.png`), fullPage:true });
+      await stop(mobile);
     }
     await mobile.screenshot({ path:path.join(outputDir,"mobile.png"), fullPage:true }); await mobileContext.close();
 
