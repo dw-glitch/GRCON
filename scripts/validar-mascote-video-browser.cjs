@@ -51,7 +51,7 @@ async function main() {
 
     let diagnostics = await page.evaluate(() => window.GrconMascot.diagnostics());
     assert.equal(diagnostics.engine, "official-video-v4");
-    assert.equal(diagnostics.assetRevision, "20260916.2");
+    assert.equal(diagnostics.assetRevision, "20260918.3");
     assert.equal(diagnostics.instances, 1);
     assert.equal(diagnostics.activeVideos, 0);
     assert.deepEqual(diagnostics.states, ["idle"]);
