@@ -53,7 +53,7 @@ for (const file of posterPaths) {
   assertWebp(read(file, null), file);
 }
 
-assert.match(scenarios, /ASSET_REVISION\s*=\s*"20260918\.3"/);
+assert.match(scenarios, /ASSET_REVISION\s*=\s*"20260918\.4"/);
 assert.match(scenarios, /wide-stage/);
 assert.match(scenarios, /medium-stage/);
 assert.match(scenarios, /event-stage/);

@@ -162,7 +162,7 @@ async function main() {
     await fallback.evaluate(() => window.GrconMascotScenarios.play("paperwork", { priority:400, force:true }));
     await fallback.waitForFunction(() => window.GrconMascotScenarios.diagnostics().stages.find((s)=>s.key==="paperwork")?.status === "fallback", null, { timeout:15000 });
     const fallbackState = await fallback.evaluate(() => { const el=document.querySelector('[data-scene="paperwork"]'); const img=el.querySelector("img"); return { d:window.GrconMascotScenarios.diagnostics(), poster:getComputedStyle(img).opacity, posterSrc:img.currentSrc || img.src, hidden:el.hidden }; });
-    assert.equal(fallbackState.hidden,false); assert.equal(Number(fallbackState.poster),1); assert.match(fallbackState.posterSrc,/grcon-mascot-sprite\.png\?v=20260918\.3$/);
+    assert.equal(fallbackState.hidden,false); assert.equal(Number(fallbackState.poster),1); assert.match(fallbackState.posterSrc,/grcon-mascot-sprite\.png\?v=20260918\.4$/);
     await fallback.screenshot({ path:path.join(outputDir,"fallback-poster.png"), fullPage:true }); await fallbackContext.close();
 
     const reducedContext = await browser.newContext({ viewport:{width:1440,height:900}, reducedMotion:"reduce", serviceWorkers:"block" });

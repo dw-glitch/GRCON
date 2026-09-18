@@ -39,7 +39,7 @@ assertWebm(processing, "vídeo de processamento", 300_000);
 assertWebm(wave, "vídeo de aceno", 300_000);
 assert.notEqual(hash(processing), hash(wave), "os dois comportamentos precisam ter mídias independentes");
 
-assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=4\.2\.0-20260918\.3/);
+assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=4\.2\.0-20260918\.4/);
 assert.match(entrypoint, /official-png-static-fallback/);
 assert.doesNotMatch(entrypoint, /gsap|\.riv/i);
 
@@ -51,7 +51,7 @@ const requiredStates = [
 for (const state of requiredStates) assert.ok(controller.includes(`"${state}"`), `estado ${state} ausente`);
 
 assert.match(controller, /official-video-v4/);
-assert.match(controller, /ASSET_REVISION\s*=\s*"20260918\.3"/);
+assert.match(controller, /ASSET_REVISION\s*=\s*"20260918\.4"/);
 assert.match(controller, /MASCOT_ANIMATIONS/);
 assert.match(controller, /grcon-mascot-processing-alpha\.webm/);
 assert.match(controller, /grcon-mascot-wave-alpha\.webm/);
