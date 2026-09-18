@@ -23,7 +23,18 @@
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; a Taxonomia Interna é projetada da
     // mesma linha já escolhida pelo motor, antes da tela e das saídas.
-    requests: ["xlsx", "excel", "brand", "requests_taxonomy_core.js", "requests_app.js", "requests_taxonomy_ui.js"],
+    // A tela de "Consulta de documentos" é uma ilha React (src/react/consultas);
+    // "Modelos de exportação" continua em requests_app.js, que carrega antes
+    // para que os modelos já existam quando a ilha React montar.
+    requests: [
+      "xlsx", "excel", "brand", "requests_taxonomy_core.js", "requests_app.js",
+      "react.production.min.js", "react-dom.production.min.js",
+      "src/react/consultas/services/consultasAdapter.js",
+      "src/react/consultas/hooks/useConsultas.js",
+      "src/react/consultas/components/consultasComponents.js",
+      "src/react/consultas/ConsultasApp.js",
+      "src/react/consultas/index.js",
+    ],
     // O combinador é isolado do banco. As bibliotecas pesadas (pdf-lib no
     // Worker, JSZip pelo grupo "zip") só são carregadas quando o operador
     // realmente gera o resultado — PDF combinado ou ZIP com PDFs e DWGs.
@@ -35,7 +46,7 @@
     dashboard: ["GrconHistoryDashboard"],
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
-    requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsTaxonomy", "GrconRequestsUi", "GrconRequestsTaxonomyUi"],
+    requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsTaxonomy", "GrconRequestsUi", "GrconConsultasReact"],
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
   };
 
