@@ -27,6 +27,10 @@ function report() {
   return window.GrconAnalysisHistoryReport;
 }
 
+function hasReport(): boolean {
+  return Boolean(window.GrconAnalysisHistoryReport);
+}
+
 function downloadBlob(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -335,6 +339,7 @@ function promptFilterName(defaultName: string): string {
 
 export const historicoAnalisesAdapter = {
   APP_VERSION,
+  hasReport,
   formatDate,
   dateParts,
   formatBytes,
