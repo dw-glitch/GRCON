@@ -46,6 +46,8 @@ on:
 
 permissions:
   contents: read
+  issues: read
+  pull-requests: read
 
 jobs:
   validate-mascot:
@@ -73,49 +75,90 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           COMMENTS_URL="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
           PREVIEW_URL=""
-          for attempt in $(seq 1 36); do
-            BODY="$(curl -fsSL "$COMMENTS_URL" | jq -r '.[] | select(.user.login=="vercel[bot]") | .body' | tail -n +1)"
-            PREVIEW_URL="$(printf '%s\n' "$BODY" | grep -oE 'https://[^ )]+\.vercel\.app' | tail -1 || true)"
-            if [ -n "$PREVIEW_URL" ]; then
-              JS="$(curl -fsSL "$PREVIEW_URL/grcon_mascot_scenarios.js" || true)"
-              if printf '%s' "$JS" | grep -q '20260918.5'; then
-                READY=1
-                for stem in \
-                  grcon-mascot-import-bases \
-                  grcon-mascot-long-processing \
-                  grcon-mascot-sleep \
-                  grcon-mascot-curious \
-                  grcon-mascot-grdt-stamp \
-                  grcon-mascot-teams-send \
-                  grcon-mascot-grdt-to-teams \
-                  grcon-mascot-paperwork \
-                  grcon-mascot-review-coffee
-                do
-                  for format in webm mp4; do
-                    asset="$stem.$format"
-                    RESULT="$(curl -fsSL -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$PREVIEW_URL/assets/mascot/video/$asset?v=20260918.5" || true)"
-                    CODE="$(printf '%s' "$RESULT" | awk '{print $1}')"
-                    TYPE="$(printf '%s' "$RESULT" | awk '{print $2}')"
-                    SIZE="$(printf '%s' "$RESULT" | awk '{print $3}')"
-                    EXPECTED="video/$format"
-                    echo "$asset -> HTTP=$CODE MIME=$TYPE bytes=$SIZE"
-                    if [ "$CODE" != "200" ] || [[ "$TYPE" != "$EXPECTED"* ]] || [ "${SIZE:-0}" -le 70000 ]; then READY=0; break 2; fi
-                  done
-                done
-                if [ "$READY" = "1" ]; then break; fi
-              fi
+          VERCEL_QUOTA_BLOCKED=0
+
+          fetch_comments() {
+            curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$COMMENTS_URL"
+          }
+
+          validate_preview() {
+            local candidate="$1"
+            local js ready stem format asset result code type size expected
+            js="$(curl -fsSL "$candidate/grcon_mascot_scenarios.js" || true)"
+            printf '%s' "$js" | grep -q '20260918.5' || return 1
+
+            ready=1
+            for stem in \
+              grcon-mascot-import-bases \
+              grcon-mascot-long-processing \
+              grcon-mascot-sleep \
+              grcon-mascot-curious \
+              grcon-mascot-grdt-stamp \
+              grcon-mascot-teams-send \
+              grcon-mascot-grdt-to-teams \
+              grcon-mascot-paperwork \
+              grcon-mascot-review-coffee
+            do
+              for format in webm mp4; do
+                asset="$stem.$format"
+                result="$(curl -fsSL -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$candidate/assets/mascot/video/$asset?v=20260918.5" || true)"
+                code="$(printf '%s' "$result" | awk '{print $1}')"
+                type="$(printf '%s' "$result" | awk '{print $2}')"
+                size="$(printf '%s' "$result" | awk '{print $3}')"
+                expected="video/$format"
+                echo "$asset -> HTTP=$code MIME=$type bytes=$size"
+                if [ "$code" != "200" ] || [[ "$type" != "$expected"* ]] || [ "${size:-0}" -le 70000 ]; then
+                  ready=0
+                  break 2
+                fi
+              done
+            done
+            [ "$ready" = "1" ]
+          }
+
+          for attempt in $(seq 1 18); do
+            COMMENTS_JSON="$(fetch_comments)"
+            if printf '%s' "$COMMENTS_JSON" | jq -er '.[] | select(.user.login=="vercel[bot]") | .body' | grep -q 'api-deployments-free-per-day'; then
+              VERCEL_QUOTA_BLOCKED=1
             fi
-            PREVIEW_URL=""
-            sleep 5
+
+            mapfile -t CANDIDATES < <(
+              printf '%s' "$COMMENTS_JSON" \
+                | jq -r '.[] | select(.user.login=="vercel[bot]") | .body' \
+                | grep -oE 'https://[^ )]+\.vercel\.app' \
+                | awk '!seen[$0]++' \
+                | tac
+            )
+
+            for candidate in "${CANDIDATES[@]:-}"; do
+              [ -n "$candidate" ] || continue
+              if validate_preview "$candidate"; then
+                PREVIEW_URL="$candidate"
+                break 2
+              fi
+            done
+
+            sleep 10
           done
+
           if [ -z "$PREVIEW_URL" ]; then
-            echo "Preview Vercel atual não ficou pronta para validação." >&2
+            if [ "$VERCEL_QUOTA_BLOCKED" = "1" ]; then
+              echo "::error title=Vercel Preview indisponível::O limite diário de deployments da Vercel foi atingido (api-deployments-free-per-day). Os testes locais passaram, mas não há Preview atual para a validação remota."
+            else
+              echo "::error title=Vercel Preview indisponível::Nenhum Preview contendo a revisão 20260918.5 ficou pronto para validação."
+            fi
             exit 1
           fi
+
           echo "GRCON_PREVIEW_URL=$PREVIEW_URL" >> "$GITHUB_ENV"
           echo "Preview validada: $PREVIEW_URL"
       - name: Testar os 9 cenários na Vercel Preview
