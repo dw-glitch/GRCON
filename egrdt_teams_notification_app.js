@@ -127,9 +127,9 @@
       audit[id] = { sentAt: result.notifiedAt || new Date().toISOString(), sentBy: identity.email || "", egrdtNumber: record.egrdtNumber };
       writeAudit(audit);
       sendOutcome = "success";
-      if (dialog.open) dialog.close("sent");
       notify(`Aviso de ${record.egrdtNumber} enviado ao grupo ${Core.DESTINATION.name}.`, "success");
       root.dispatchEvent(new CustomEvent("grcon:egrdt-teams-notified", { detail: { record, result } }));
+      root.setTimeout(() => { if (dialog.open) dialog.close("sent"); }, 700);
     } catch (error) {
       console.error("GRCON Teams:", error);
       const message = error.code === "POWER_AUTOMATE_NOT_CONFIGURED"
