@@ -353,6 +353,9 @@
         export: exportAuditLog,
         log: logAudit,
       };
+      // A confirmação também é consumida por React Islands montadas depois do
+      // DOMContentLoaded, sem duplicar listeners ou enfraquecer a proteção.
+      window.GrconEnhancements = Object.freeze({ confirmAction });
       console.log("GRCON: Melhorias de UX e Segurança ativadas.");
     } catch (error) {
       console.warn("GRCON: Melhorias de UX não puderam ser carregadas:", error);
