@@ -27,7 +27,11 @@ jobs:
           cache: npm
 
       - name: Instalar metadados do projeto
-        run: npm ci --ignore-scripts
+        # `npm install` (não `npm ci`) porque `package-lock.json` ainda não
+        # reflete react/react-dom/vite/typescript adicionados para a ilha
+        # React de Consultas — precisa ser regenerado com `npm install` em
+        # um ambiente com Node e recommitado; `npm ci` falharia até lá.
+        run: npm install --ignore-scripts
 
       - name: Executar validação completa
         run: npm run verify

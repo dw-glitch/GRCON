@@ -30,18 +30,6 @@
       "name": "pdf-lib",
       "version": "1.17.1",
       "sha256": "0f9a5cad07941f0826586c94e089d89b918c46e5c17cf2d5a3c6f666e3bc694f"
-    },
-    {
-      "file": "react.production.min.js",
-      "name": "React",
-      "version": "18.3.1",
-      "sha256": "d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd"
-    },
-    {
-      "file": "react-dom.production.min.js",
-      "name": "ReactDOM",
-      "version": "18.3.1",
-      "sha256": "35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d"
     }
   ]
 }

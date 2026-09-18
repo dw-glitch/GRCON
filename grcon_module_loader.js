@@ -23,17 +23,15 @@
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; a Taxonomia Interna é projetada da
     // mesma linha já escolhida pelo motor, antes da tela e das saídas.
-    // A tela de "Consulta de documentos" é uma ilha React (src/react/consultas);
+    // A tela de "Consulta de documentos" é uma ilha React (src/react/consultas),
+    // compilada por Vite/TypeScript em ambiente remoto (Vercel/GitHub Actions)
+    // para um único pacote autocontido em react-dist/consultas-app.js — não há
+    // build local: o arquivo só existe após `npm run build` rodar no CI/Vercel.
     // "Modelos de exportação" continua em requests_app.js, que carrega antes
     // para que os modelos já existam quando a ilha React montar.
     requests: [
       "xlsx", "excel", "brand", "requests_taxonomy_core.js", "requests_app.js",
-      "react.production.min.js", "react-dom.production.min.js",
-      "src/react/consultas/services/consultasAdapter.js",
-      "src/react/consultas/hooks/useConsultas.js",
-      "src/react/consultas/components/consultasComponents.js",
-      "src/react/consultas/ConsultasApp.js",
-      "src/react/consultas/index.js",
+      "react-dist/consultas-app.js",
     ],
     // O combinador é isolado do banco. As bibliotecas pesadas (pdf-lib no
     // Worker, JSZip pelo grupo "zip") só são carregadas quando o operador
