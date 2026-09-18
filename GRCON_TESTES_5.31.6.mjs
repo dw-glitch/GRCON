@@ -2204,8 +2204,10 @@ check("auditoria de tela: selo de planilha, painel SGPAR no escuro e campo com r
   assert.match(legado, /body\.p2-dark \.sgpar-overview strong/,
     "o número do cartão tem cor fixa e precisa da versão escura");
 
-  // Único campo sem rótulo acessível encontrado na varredura das cinco abas.
-  assert.match(html, /aria-label="[^"]+"[^>]*id="unified-search-text"/,
+  // O Histórico de análises agora é uma React Island; o contrato acessível
+  // continua existindo no componente que renderiza a busca unificada.
+  const historyReact = fs.readFileSync(path.join(root, "src/react/historico-analises/components/HistoricoAnalisesComponents.tsx"), "utf8");
+  assert.match(historyReact, /aria-label="[^"]+"[\s\S]{0,240}id="unified-search-text"/,
     "a busca unificada precisa de rótulo acessível");
 });
 
