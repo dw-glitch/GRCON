@@ -294,7 +294,7 @@
     poster.className = "grcon-mascot-scene-poster";
     poster.alt = "";
     poster.decoding = "async";
-    poster.loading = "lazy";
+    poster.loading = "eager";
     poster.setAttribute("aria-hidden", "true");
     poster.src = config.poster;
     const video = document.createElement("video");
