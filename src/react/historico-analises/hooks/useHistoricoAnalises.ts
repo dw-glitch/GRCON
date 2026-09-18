@@ -54,6 +54,10 @@ export function useHistoricoAnalises() {
     query: debouncedQuery,
   }), [filters, debouncedQuery]);
 
+  const periodInvalid = Boolean(
+    filters.startDate && filters.endDate && filters.startDate > filters.endDate,
+  );
+
   const refresh = useCallback(() => setRefreshNonce((value) => value + 1), []);
 
   useEffect(() => Adapter.subscribeUpdates(refresh), [refresh]);
@@ -77,9 +81,17 @@ export function useHistoricoAnalises() {
 
   useEffect(() => {
     const token = ++requestToken.current;
-    setLoading(true);
     setLoadError("");
 
+    // O Core usa IDBKeyRange.bound e não aceita intervalo invertido. Enquanto
+    // o próprio campo informa a validação, mantenha os resultados atuais e não
+    // envie um período inválido ao motor legado.
+    if (periodInvalid) {
+      setLoading(false);
+      return undefined;
+    }
+
+    setLoading(true);
     void (async () => {
       try {
         const nextSessions = await Adapter.listSessions();
@@ -126,7 +138,7 @@ export function useHistoricoAnalises() {
         if (token === requestToken.current) setLoading(false);
       }
     })();
-  }, [effectiveFilters, filters.sessionId, page, refreshNonce]);
+  }, [effectiveFilters, filters.sessionId, page, periodInvalid, refreshNonce]);
 
   const setFilter = useCallback(<K extends keyof AnalysisHistoryFilters>(key: K, value: AnalysisHistoryFilters[K]) => {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -287,7 +299,6 @@ export function useHistoricoAnalises() {
   }), [total, counts, sessionIds]);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const periodInvalid = Boolean(filters.startDate && filters.endDate && filters.startDate > filters.endDate);
 
   return {
     filters,
