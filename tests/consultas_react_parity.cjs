@@ -1,0 +1,197 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+const ts = require("typescript");
+const React = require("react");
+const ReactDOMServer = require("react-dom/server");
+const ExcelJS = require("../exceljs.min.js");
+const Triagem = require("../core.js");
+const RequestsOriginal = require("../requests_core.js");
+const ReportOriginal = require("../requests_report.js");
+
+globalThis.TriagemCore = Triagem;
+globalThis.GrconRequestsCore = RequestsOriginal;
+globalThis.GrconRequestsReport = ReportOriginal;
+const Taxonomy = require("../requests_taxonomy_core.js");
+const Report = Taxonomy.wrapReport(ReportOriginal);
+
+function transpileModule(filePath, jsx, overrides = {}) {
+  const source = fs.readFileSync(filePath, "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      jsx: jsx ? ts.JsxEmit.ReactJSX : undefined,
+      esModuleInterop: true,
+    },
+    fileName: path.basename(filePath),
+  }).outputText;
+  const testModule = { exports: {} };
+  const sandbox = {
+    module: testModule,
+    exports: testModule.exports,
+    require,
+    console,
+    window: {},
+    navigator: { clipboard: { writeText: async () => {} } },
+    document: {},
+    Blob,
+    URL,
+    setTimeout,
+    clearTimeout,
+    fetch: globalThis.fetch,
+    ...overrides,
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(compiled, sandbox, { filename: filePath });
+  return { exports: testModule.exports, sandbox };
+}
+
+(async () => {
+  const root = path.resolve(__dirname, "..");
+  const adapterPath = path.join(root, "src/react/consultas/services/consultasAdapter.ts");
+  const componentsPath = path.join(root, "src/react/consultas/components/consultasComponents.tsx");
+  const hookPath = path.join(root, "src/react/consultas/hooks/useConsultas.ts");
+
+  const adapterLoad = transpileModule(adapterPath, false, {
+    window: { GrconRequestsReport: Report },
+  });
+  const adapter = adapterLoad.exports.consultasAdapter;
+
+  const sourceRow = {
+    situation: "Localizado",
+    ldDocument: "C1O_RNEST_U32_3.1.1.1_TUB_RIR_nt-NF-1288-CONEXOES",
+    ldForm: "Com nt-",
+    ntFormsDetail: "Com nt-: forma usada nesta consulta",
+    ntSearchMessage: "Pesquisado com e sem nt-",
+    title: "TÍTULO CONTROLADO",
+    internalTaxonomy: "TX-LITERAL / A01",
+    sigemLdRevision: "B",
+    sigemLdRevisionCell: "B",
+    allocated: "SIM — Alocado",
+    allocation: "C1O-ALOC-CM-0001-2026",
+    lastGrdt: "GRDT-2026-0001",
+    issued: "SIM",
+    issuedCell: "0130870-C1O-PGV-G-0001/2026 - eGRDT\n18/09/2026",
+    issuedEgrdt: "0130870-C1O-PGV-G-0001/2026 - eGRDT",
+    issuedAt: "18/09/2026",
+    issuedRevision: "B",
+    issuedRevisionCell: "B",
+    sigemStatus: "Em Análise",
+    centerStatus: "Postado",
+    centerFiscalAnswer: "Conforme",
+    centerAllocationCell: "C1O-ALOC-CM-0001-2026",
+    ld: "LD_003.xlsx",
+    allLds: "LD_003.xlsx | LD_005.xlsx",
+    rule: "correspondência exata",
+    occurrenceCount: 2,
+    needsManualValidation: false,
+  };
+  const exportRow = adapter.buildExportRow("DOC-TESTE", sourceRow);
+
+  for (const column of Report.COLUMNS) {
+    assert.ok(Object.prototype.hasOwnProperty.call(exportRow, column.key),
+      `buildExportRow precisa projetar ${column.key}`);
+  }
+  assert.equal(exportRow.internalTaxonomy, "TX-LITERAL / A01");
+
+  let copied = "";
+  const copyLoad = transpileModule(adapterPath, false, {
+    window: { GrconRequestsReport: Report },
+    navigator: { clipboard: { writeText: async (value) => { copied = value; } } },
+  });
+  await copyLoad.exports.consultasAdapter.copyRowsToClipboard([exportRow]);
+  assert.match(copied, /TAXONOMIA INTERNA/);
+  assert.match(copied, /TX-LITERAL \/ A01/);
+  assert.doesNotMatch(copied, /eGRDT\n18\/09\/2026/);
+
+  const model = Report.BUILTIN_EXPORT_TEMPLATES.find((item) => item.base === "consulta");
+  assert.ok(model);
+  const preview = Report.previewExportTemplate(model, [exportRow], 5);
+  const taxPreview = preview.headers.indexOf("TAXONOMIA INTERNA");
+  assert.ok(taxPreview > -1);
+  assert.equal(preview.rows[0][taxPreview], "TX-LITERAL / A01");
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Consulta");
+  Report.writeConsultationSheet(sheet, [exportRow], {
+    columns: model.columns,
+    title: "GRCON · TESTE",
+    metadata: "paridade React",
+    ldNames: "LD_003.xlsx",
+  });
+  const taxIndex = model.columns.findIndex((column) => column.key === "internalTaxonomy");
+  assert.ok(taxIndex > -1);
+  assert.equal(sheet.getCell(15, taxIndex + 1).value, "TX-LITERAL / A01");
+
+  const components = transpileModule(componentsPath, true).exports;
+  const item = { id: "doc-1", document: "DOC-TESTE", selected: true };
+  const markup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.ResultsTable, {
+    visibleRows: [{ item, linha: sourceRow }],
+    hasDocuments: true,
+    onToggle: () => {},
+    onToggleAll: () => {},
+    allSelected: true,
+    someSelected: true,
+    central: { ok: true },
+  }));
+  assert.ok(markup.indexOf("Título na LD") < markup.indexOf("Taxonomia Interna"));
+  assert.ok(markup.indexOf("Taxonomia Interna") < markup.indexOf("Alocado?"));
+  assert.match(markup, /requests-col-taxonomia/);
+  assert.match(markup, /TX-LITERAL \/ A01/);
+  assert.match(markup, /C1O_RNEST_U32_3\.1\.1\.1_TUB_RIR_nt-NF-1288-CONEXOES/);
+  assert.match(markup, /Emitido pelo GRCON/);
+  assert.match(markup, /Revisão emitida no SIGEM/);
+  assert.match(markup, /Revisão na Colar SIGEM/);
+  assert.match(markup, /Status SIGEM/);
+  assert.match(markup, /Status da alocação \(central\)/);
+  assert.match(markup, /Resposta da fiscal 01/);
+
+  const emptyMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.ResultsTable, {
+    visibleRows: [{ item, linha: { ...sourceRow, internalTaxonomy: "" } }],
+    hasDocuments: true,
+    onToggle: () => {},
+    onToggleAll: () => {},
+    allSelected: true,
+    someSelected: true,
+    central: { ok: true },
+  }));
+  const taxCell = emptyMarkup.match(/<td class="requests-col-taxonomia">([\s\S]*?)<\/td>/);
+  assert.ok(taxCell);
+  assert.match(taxCell[1], /—/);
+
+  const hookSource = fs.readFileSync(hookPath, "utf8");
+  const runStart = hookSource.indexOf("const runQuery");
+  const runEnd = hookSource.indexOf("const exportRows", runStart);
+  const runQuery = hookSource.slice(runStart, runEnd);
+  assert.match(runQuery, /try\s*\{/);
+  assert.match(runQuery, /catch\s*\(error\)/);
+  assert.match(runQuery, /finally\s*\{/);
+  assert.ok(runQuery.indexOf("setRunning(false)") > runQuery.indexOf("finally"));
+  assert.match(runQuery, /Não foi possível concluir a consulta/);
+
+  const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
+  const groupStart = loader.indexOf("requests: [");
+  const groupEnd = loader.indexOf("],", groupStart);
+  const requestGroup = loader.slice(groupStart, groupEnd);
+  for (const dependency of [
+    "core.js", "requests_core.js", "requests_report.js", "allocation_center.js",
+    "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
+    "requests_taxonomy_core.js", "requests_app.js", "react-dist/consultas-app.js",
+  ]) {
+    assert.ok(requestGroup.includes(dependency), `grupo requests precisa carregar ${dependency}`);
+  }
+  assert.ok(requestGroup.indexOf("requests_taxonomy_core.js") < requestGroup.indexOf("react-dist/consultas-app.js"));
+
+  const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+  assert.match(sw, /consultas-react4-parity/);
+  const heavyStart = sw.indexOf("const HEAVY_ASSETS");
+  const heavyEnd = sw.indexOf("]);", heavyStart);
+  assert.doesNotMatch(sw.slice(heavyStart, heavyEnd), /consultas-app\.js/);
+
+  console.log("✓ paridade React de Consultas, Taxonomia, cópia, preview, Excel, erro assíncrono, loader e PWA");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
