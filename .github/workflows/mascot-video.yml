@@ -105,7 +105,7 @@ jobs:
             do
               for format in webm mp4; do
                 asset="$stem.$format"
-                result="$(curl -fsSL -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$candidate/assets/mascot/video/$asset?v=20260918.5" || true)"
+                result="$(curl -sS --max-time 12 -L -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$candidate/assets/mascot/video/$asset?v=20260918.5" || true)"
                 code="$(printf '%s' "$result" | awk '{print $1}')"
                 type="$(printf '%s' "$result" | awk '{print $2}')"
                 size="$(printf '%s' "$result" | awk '{print $3}')"
@@ -118,31 +118,23 @@ jobs:
             done
           }
 
-          for attempt in $(seq 1 18); do
-            COMMENTS_JSON="$(fetch_comments)"
-            READY_BODY="$(
-              printf '%s' "$COMMENTS_JSON" \
-                | jq -r '.[] | select(.user.login=="vercel[bot]") | select(.body | contains("![Ready]")) | select(.body | contains(".vercel.app")) | .body' \
-                | tail -1
-            )"
-            candidate="$(printf '%s\n' "$READY_BODY" | grep -oE 'https://[^ )]+\.vercel\.app' | tail -1 || true)"
-            if [ -n "$candidate" ] && validate_assets "$candidate"; then
-              PREVIEW_URL="$candidate"
-              break
-            fi
-            sleep 10
-          done
+          COMMENTS_JSON="$(fetch_comments)"
+          READY_BODY="$(
+            printf '%s' "$COMMENTS_JSON" \
+              | jq -r '.[] | select(.user.login=="vercel[bot]") | select(.body | contains("![Ready]")) | select(.body | contains(".vercel.app")) | .body' \
+              | tail -1
+          )"
+          candidate="$(printf '%s\n' "$READY_BODY" | grep -oE 'https://[^ )]+\.vercel\.app' | tail -1 || true)"
 
-          if [ -z "$PREVIEW_URL" ]; then
-            LATEST_VERCEL_BODY="$(
-              fetch_comments \
-                | jq -r '[.[] | select(.user.login=="vercel[bot]")] | sort_by(.updated_at) | last | .body // ""'
-            )"
-            if printf '%s' "$LATEST_VERCEL_BODY" | grep -q 'api-deployments-free-per-day'; then
-              echo "::error title=Vercel Preview indisponível::O deploy atual foi bloqueado pelo limite diário da Vercel."
-            else
-              echo "::error title=Vercel Preview indisponível::Nenhum Preview Ready expôs os 18 assets de vídeo com HTTP 200, MIME correto e tamanho esperado."
-            fi
+          if [ -z "$candidate" ]; then
+            echo "::error title=Vercel Preview indisponível::Nenhum Preview Ready foi encontrado nos comentários da PR."
+            exit 1
+          fi
+
+          if validate_assets "$candidate"; then
+            PREVIEW_URL="$candidate"
+          else
+            echo "::error title=Vercel Preview inacessível::O Preview Ready não expôs os assets com HTTP 200, MIME correto e tamanho esperado. Veja o diagnóstico HTTP acima."
             exit 1
           fi
 
