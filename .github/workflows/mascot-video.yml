@@ -82,16 +82,29 @@ jobs:
             PREVIEW_URL="$(printf '%s\n' "$BODY" | grep -oE 'https://[^ )]+\.vercel\.app' | tail -1 || true)"
             if [ -n "$PREVIEW_URL" ]; then
               JS="$(curl -fsSL "$PREVIEW_URL/grcon_mascot_scenarios.js" || true)"
-              if printf '%s' "$JS" | grep -q '20260918.4'; then
+              if printf '%s' "$JS" | grep -q '20260918.5'; then
                 READY=1
-                for asset in                   grcon-mascot-import-bases.mp4                   grcon-mascot-long-processing.mp4                   grcon-mascot-sleep.mp4                   grcon-mascot-curious.mp4                   grcon-mascot-grdt-stamp.mp4                   grcon-mascot-teams-send.mp4                   grcon-mascot-grdt-to-teams.mp4                   grcon-mascot-paperwork.mp4                   grcon-mascot-review-coffee.mp4
+                for stem in \
+                  grcon-mascot-import-bases \
+                  grcon-mascot-long-processing \
+                  grcon-mascot-sleep \
+                  grcon-mascot-curious \
+                  grcon-mascot-grdt-stamp \
+                  grcon-mascot-teams-send \
+                  grcon-mascot-grdt-to-teams \
+                  grcon-mascot-paperwork \
+                  grcon-mascot-review-coffee
                 do
-                  RESULT="$(curl -fsSL -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$PREVIEW_URL/assets/mascot/video/$asset?v=20260918.4" || true)"
-                  CODE="$(printf '%s' "$RESULT" | awk '{print $1}')"
-                  TYPE="$(printf '%s' "$RESULT" | awk '{print $2}')"
-                  SIZE="$(printf '%s' "$RESULT" | awk '{print $3}')"
-                  echo "$asset -> HTTP=$CODE MIME=$TYPE bytes=$SIZE"
-                  if [ "$CODE" != "200" ] || [[ "$TYPE" != video/mp4* ]] || [ "${SIZE:-0}" -le 70000 ]; then READY=0; break; fi
+                  for format in webm mp4; do
+                    asset="$stem.$format"
+                    RESULT="$(curl -fsSL -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$PREVIEW_URL/assets/mascot/video/$asset?v=20260918.5" || true)"
+                    CODE="$(printf '%s' "$RESULT" | awk '{print $1}')"
+                    TYPE="$(printf '%s' "$RESULT" | awk '{print $2}')"
+                    SIZE="$(printf '%s' "$RESULT" | awk '{print $3}')"
+                    EXPECTED="video/$format"
+                    echo "$asset -> HTTP=$CODE MIME=$TYPE bytes=$SIZE"
+                    if [ "$CODE" != "200" ] || [[ "$TYPE" != "$EXPECTED"* ]] || [ "${SIZE:-0}" -le 70000 ]; then READY=0; break 2; fi
+                  done
                 done
                 if [ "$READY" = "1" ]; then break; fi
               fi

@@ -22,7 +22,7 @@ Operações assíncronas emitem `grcon:mascot-operation` ou `grcon:processing-st
 
 Não há Rive, WebAssembly, Canvas, GSAP, CDN ou montagem do personagem em partes.
 
-## Cenários contextuais (revisão 20260918.4)
+## Cenários contextuais (revisão 20260918.5)
 
 A camada `grcon_mascot_scenarios.js` usa a mesma estratégia de mídia local/versionada do controlador principal, mas mantém âncoras e escalas próprias por operação. Ela não contém regras documentais e apenas reage aos eventos já emitidos pelos módulos.
 
@@ -38,7 +38,7 @@ A camada `grcon_mascot_scenarios.js` usa a mesma estratégia de mídia local/ver
 | `paperwork` | Analisar e conferir | `wide-stage` | 78% / 960 px |
 | `reviewCoffee` | conferência/revisão prolongada | `medium-stage` | 40% / 560 px |
 
-Os nove MP4 H.264 são same-origin e usam poster WebP como fallback/reduced-motion. Os clipes 01 e 08 foram recortados verticalmente, preservando mascote e papéis, para aproveitar a composição horizontal sem ocupar altura excessiva. Testes locais de matte com os fundos claros não atingiram qualidade suficiente nos contornos brancos do capacete, braços e papéis; por isso nenhuma versão alpha nova foi publicada. Em vez de chroma key aproximado, as cenas permanecem deliberadamente enquadradas em superfície do GRCON, com borda e sombra discretas.
+Os nove cenários usam WebM VP9 same-origin como mídia principal, preservam MP4 H.264 same-origin como fallback de formato e usam poster WebP como fallback estático/reduced-motion. Os clipes 01 e 08 foram recortados verticalmente, preservando mascote e papéis, para aproveitar a composição horizontal sem ocupar altura excessiva. Testes locais de matte com os fundos claros não atingiram qualidade suficiente nos contornos brancos do capacete, braços e papéis; por isso nenhuma versão alpha nova foi publicada. Em vez de chroma key aproximado, as cenas permanecem deliberadamente enquadradas em superfície do GRCON, com borda e sombra discretas.
 
 Os vídeos contextuais não entram no precache inicial. Ao entrar no módulo correspondente, somente metadados dos cenários prováveis são preparados. O Service Worker faz cache runtime após o primeiro uso, inclui suporte a `Range` e usa a revisão no query string para invalidar mídia antiga. `prefers-reduced-motion` mantém apenas o poster. Falhas de `play()`, timeout, `error`, `waiting` ou `stalled` nunca bloqueiam a operação funcional.
 

@@ -6,7 +6,7 @@
   "use strict";
 
   const VERSION = "1.0.0";
-  const ASSET_REVISION = "20260918.4";
+  const ASSET_REVISION = "20260918.5";
   const STYLE_ID = "grcon-mascot-scenarios-style";
   const IDLE_DELAY_MS = 80_000;
   const IDLE_COOLDOWN_MS = 150_000;
@@ -33,9 +33,10 @@
 
   const SCENARIOS = Object.freeze({
     importBases: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-import-bases.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-import-bases.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-import-bases.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-import-bases-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "wide-stage",
       width: 0.68,
       mobileWidth: 0.92,
@@ -45,9 +46,10 @@
       anchor: "sigem-pw",
     }),
     longProcessing: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-long-processing.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-long-processing.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-long-processing.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-long-processing-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "medium-stage",
       width: 0.38,
       mobileWidth: 0.82,
@@ -57,9 +59,10 @@
       anchor: "sigem-pw",
     }),
     sleepy: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-sleep.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-sleep.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-sleep.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-sleep-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "idle-stage",
       width: 0.18,
       mobileWidth: 0.50,
@@ -69,9 +72,10 @@
       anchor: "idle",
     }),
     curious: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-curious.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-curious.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-curious.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-curious-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "idle-stage",
       width: 0.14,
       mobileWidth: 0.46,
@@ -81,9 +85,10 @@
       anchor: "idle",
     }),
     grdtStamp: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-grdt-stamp.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-grdt-stamp.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-grdt-stamp.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-grdt-stamp-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "event-stage",
       width: 0.32,
       mobileWidth: 0.80,
@@ -93,9 +98,10 @@
       anchor: "grdt-success",
     }),
     teamsSend: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-teams-send.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-teams-send.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-teams-send.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-teams-send-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "event-stage",
       width: 0.34,
       mobileWidth: 0.82,
@@ -105,9 +111,10 @@
       anchor: "teams-dialog",
     }),
     grdtToTeams: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-grdt-to-teams.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-grdt-to-teams.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-grdt-to-teams.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-grdt-to-teams-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "event-stage",
       width: 0.26,
       mobileWidth: 0.76,
@@ -117,9 +124,10 @@
       anchor: "teams-ready",
     }),
     paperwork: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-paperwork.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-paperwork.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-paperwork.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-paperwork-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "wide-stage",
       width: 0.78,
       mobileWidth: 0.92,
@@ -129,9 +137,10 @@
       anchor: "triage",
     }),
     reviewCoffee: Object.freeze({
-      asset: asset("assets/mascot/video/grcon-mascot-review-coffee.mp4"),
+      asset: asset("assets/mascot/video/grcon-mascot-review-coffee.webm"),
+      fallbackAsset: asset("assets/mascot/video/grcon-mascot-review-coffee.mp4"),
       poster: asset("assets/mascot/poster/grcon-mascot-review-coffee-poster.webp"),
-      type: "video/mp4",
+      type: 'video/webm; codecs="vp9"',
       variant: "medium-stage",
       width: 0.40,
       mobileWidth: 0.82,
@@ -306,7 +315,7 @@
 
     const record = {
       key, config, stage, frame, poster, video,
-      token: 0, loadTimer: 0, staticTimer: 0, failures: 0, lastError: "", status: "poster", prepared: false, posterFallback: false,
+      token: 0, loadTimer: 0, staticTimer: 0, failures: 0, lastError: "", status: "poster", prepared: false, posterFallback: false, formatFallback: false,
     };
     stageRecords.set(key, record);
 
@@ -387,6 +396,7 @@
     if (!record.prepared) {
       record.video.preload = preload || "metadata";
       record.video.setAttribute("preload", record.video.preload);
+      record.formatFallback = false;
       record.video.src = record.config.asset;
       record.prepared = true;
       record.video.load();
@@ -406,7 +416,7 @@
     clearLoadTimer(record);
     record.status = "playing";
     record.stage.dataset.status = "playing";
-    log("media-ready", { key: record.key, readyState: record.video.readyState });
+    log("media-ready", { key: record.key, readyState: record.video.readyState, format: record.formatFallback ? "mp4-fallback" : "webm-primary" });
   }
 
   function mediaFailure(record, reason) {
@@ -414,9 +424,33 @@
     clearLoadTimer(record);
     record.failures += 1;
     record.lastError = String(reason || "media-failure");
+    try { record.video.pause(); } catch (_) { /* troca de formato ou poster */ }
+
+    if (!record.formatFallback && record.config.fallbackAsset && !reducedMotion()) {
+      record.formatFallback = true;
+      record.status = "loading";
+      record.stage.dataset.status = "loading";
+      record.token += 1;
+      const token = record.token;
+      record.video.src = record.config.fallbackAsset;
+      record.video.preload = "auto";
+      record.video.setAttribute("preload", "auto");
+      try { record.video.load(); } catch (_) { /* play() cuidará do fallback estático */ }
+      record.loadTimer = root.setTimeout(() => {
+        if (active?.key === record.key && token === record.token && record.status === "loading") mediaFailure(record, "mp4-fallback-timeout");
+      }, LOAD_TIMEOUT_MS);
+      let result;
+      try { result = record.video.play(); }
+      catch (error) { mediaFailure(record, error?.message || "mp4-fallback-play-throw"); return; }
+      if (result?.catch) result.catch((error) => {
+        if (active?.key === record.key && token === record.token) mediaFailure(record, error?.message || "mp4-fallback-play-rejected");
+      });
+      log("media-format-fallback", { key: record.key, from: record.config.asset, to: record.config.fallbackAsset, reason: record.lastError });
+      return;
+    }
+
     record.status = "fallback";
     record.stage.dataset.status = "fallback";
-    try { record.video.pause(); } catch (_) { /* poster permanece */ }
     log("media-fallback", { key: record.key, reason: record.lastError, failures: record.failures });
     scheduleFallbackLifecycle(record);
   }
@@ -715,7 +749,7 @@
       active: active ? { ...active } : null,
       operation: { ...operation },
       prepared: Array.from(prepared),
-      assets: Object.fromEntries(Object.entries(SCENARIOS).map(([key, config]) => [key, { asset: config.asset, poster: config.poster, variant: config.variant }])),
+      assets: Object.fromEntries(Object.entries(SCENARIOS).map(([key, config]) => [key, { asset: config.asset, fallbackAsset: config.fallbackAsset, poster: config.poster, variant: config.variant }])),
       stages: Array.from(stageRecords.values()).map((record) => ({
         key: record.key,
         status: record.status,
@@ -725,6 +759,7 @@
         failures: record.failures,
         lastError: record.lastError,
         posterFallback: record.posterFallback,
+        formatFallback: record.formatFallback,
         preload: record.video.preload,
         src: record.video.currentSrc || record.video.src || "",
       })),

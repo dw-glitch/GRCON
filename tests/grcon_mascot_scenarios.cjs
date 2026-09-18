@@ -27,9 +27,14 @@ const names = [
   "paperwork",
   "review-coffee",
 ];
+const webmPaths = names.map((name) => `assets/mascot/video/grcon-mascot-${name}.webm`);
 const videoPaths = names.map((name) => `assets/mascot/video/grcon-mascot-${name}.mp4`);
 const posterPaths = names.map((name) => `assets/mascot/poster/grcon-mascot-${name}-poster.webp`);
 
+function assertWebm(bytes, label) {
+  assert.ok(bytes.length > 70_000, `${label} precisa ser mídia real, não placeholder`);
+  assert.deepEqual([...bytes.subarray(0, 4)], [0x1a, 0x45, 0xdf, 0xa3], `${label} precisa ser WebM/EBML válido`);
+}
 function assertMp4(bytes, label) {
   assert.ok(bytes.length > 70_000, `${label} precisa ser mídia real, não placeholder`);
   assert.equal(bytes.subarray(4, 8).toString("ascii"), "ftyp", `${label} precisa conter atom ftyp de MP4`);
@@ -39,6 +44,15 @@ function assertWebp(bytes, label) {
   assert.equal(bytes.subarray(0, 4).toString("ascii"), "RIFF");
   assert.equal(bytes.subarray(8, 12).toString("ascii"), "WEBP");
 }
+
+const webmHashes = new Set();
+for (const file of webmPaths) {
+  assert.ok(exists(file), `${file} ausente`);
+  const bytes = read(file, null);
+  assertWebm(bytes, file);
+  webmHashes.add(hash(bytes));
+}
+assert.equal(webmHashes.size, webmPaths.length, "cada cenário precisa de WebM independente");
 
 const videoHashes = new Set();
 for (const file of videoPaths) {
@@ -53,7 +67,7 @@ for (const file of posterPaths) {
   assertWebp(read(file, null), file);
 }
 
-assert.match(scenarios, /ASSET_REVISION\s*=\s*"20260918\.4"/);
+assert.match(scenarios, /ASSET_REVISION\s*=\s*"20260918\.5"/);
 assert.match(scenarios, /wide-stage/);
 assert.match(scenarios, /medium-stage/);
 assert.match(scenarios, /event-stage/);
@@ -81,6 +95,8 @@ assert.match(scenarios, /scheduleReducedMotionLifecycle/);
 assert.match(scenarios, /scheduleFallbackLifecycle/);
 assert.match(scenarios, /grcon-mascot-sprite\.png/);
 assert.match(scenarios, /poster-fallback/);
+assert.match(scenarios, /media-format-fallback/);
+assert.match(scenarios, /fallbackAsset/);
 assert.match(scenarios, /prefers-reduced-motion: reduce/);
 assert.match(scenarios, /grcon:egrdt-generated/);
 assert.match(scenarios, /grcon:egrdt-teams-send/);
@@ -111,7 +127,7 @@ assert.match(teams, /active:\s*true/);
 assert.match(teams, /active:\s*false,\s*outcome:\s*sendOutcome/);
 
 const precacheBlock = sw.slice(sw.indexOf("const ASSETS"), sw.indexOf("const CRITICAL_ASSETS"));
-for (const file of [...videoPaths, ...posterPaths]) {
+for (const file of [...webmPaths, ...videoPaths, ...posterPaths]) {
   assert.doesNotMatch(precacheBlock, new RegExp(file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${file} não deve entrar no precache inicial`);
   assert.ok(sw.includes(`"${path.basename(file)}"`), `${file} deve participar do cache runtime`);
 }
@@ -120,6 +136,7 @@ assert.match(sw, /headers\.has\("range"\)/);
 assert.match(sw, /mascot-context9/);
 assert.match(sw, /grcon_mascot_scenarios\.js/);
 
+assert.match(vercel, /video\/webm/);
 assert.match(vercel, /video\/mp4/);
 assert.match(vercel, /image\/webp/);
 assert.match(vercel, /max-age=31536000, immutable/);

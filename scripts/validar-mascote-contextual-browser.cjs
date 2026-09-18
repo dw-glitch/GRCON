@@ -8,10 +8,10 @@ const fixtureUrl = `${baseUrl}/tests/fixtures/grcon-mascot-scenarios.html`;
 const outputDir = process.env.GRCON_MASCOT_OUTPUT || path.join(process.cwd(), "artifacts/mascot-contextual");
 const keys = ["importBases","longProcessing","sleepy","curious","grdtStamp","teamsSend","grdtToTeams","paperwork","reviewCoffee"];
 const assetByKey = {
-  importBases:"grcon-mascot-import-bases.mp4", longProcessing:"grcon-mascot-long-processing.mp4",
-  sleepy:"grcon-mascot-sleep.mp4", curious:"grcon-mascot-curious.mp4", grdtStamp:"grcon-mascot-grdt-stamp.mp4",
-  teamsSend:"grcon-mascot-teams-send.mp4", grdtToTeams:"grcon-mascot-grdt-to-teams.mp4",
-  paperwork:"grcon-mascot-paperwork.mp4", reviewCoffee:"grcon-mascot-review-coffee.mp4",
+  importBases:"grcon-mascot-import-bases.webm", longProcessing:"grcon-mascot-long-processing.webm",
+  sleepy:"grcon-mascot-sleep.webm", curious:"grcon-mascot-curious.webm", grdtStamp:"grcon-mascot-grdt-stamp.webm",
+  teamsSend:"grcon-mascot-teams-send.webm", grdtToTeams:"grcon-mascot-grdt-to-teams.webm",
+  paperwork:"grcon-mascot-paperwork.webm", reviewCoffee:"grcon-mascot-review-coffee.webm",
 };
 
 async function waitReady(page) {
@@ -121,7 +121,7 @@ async function main() {
     const reload = await playAll(page);
     const versionProbe = await page.evaluate(async () => {
       const current = window.GrconMascotScenarios.diagnostics().assets.curious.asset;
-      const url = current.replace("v=20260918.4", "v=20260918.4-probe");
+      const url = current.replace("v=20260918.5", "v=20260918.5-probe");
       const response = await fetch(url, { cache:"reload" }); await response.arrayBuffer();
       return { status:response.status, type:response.headers.get("content-type") || "", url };
     });
@@ -156,13 +156,14 @@ async function main() {
 
     const fallbackContext = await browser.newContext({ viewport:{width:1440,height:900}, serviceWorkers:"block" });
     const fallback = await fallbackContext.newPage();
+    await fallback.route(/grcon-mascot-paperwork\.webm(?:\?.*)?$/, (route) => route.abort("failed"));
     await fallback.route(/grcon-mascot-paperwork\.mp4(?:\?.*)?$/, (route) => route.abort("failed"));
     await fallback.route(/grcon-mascot-paperwork-poster\.webp(?:\?.*)?$/, (route) => route.abort("failed"));
     await fallback.goto(`${fixtureUrl}?fallback=1`, { waitUntil:"networkidle", timeout:30000 }); await waitReady(fallback);
     await fallback.evaluate(() => window.GrconMascotScenarios.play("paperwork", { priority:400, force:true }));
     await fallback.waitForFunction(() => window.GrconMascotScenarios.diagnostics().stages.find((s)=>s.key==="paperwork")?.status === "fallback", null, { timeout:15000 });
     const fallbackState = await fallback.evaluate(() => { const el=document.querySelector('[data-scene="paperwork"]'); const img=el.querySelector("img"); return { d:window.GrconMascotScenarios.diagnostics(), poster:getComputedStyle(img).opacity, posterSrc:img.currentSrc || img.src, hidden:el.hidden }; });
-    assert.equal(fallbackState.hidden,false); assert.equal(Number(fallbackState.poster),1); assert.match(fallbackState.posterSrc,/grcon-mascot-sprite\.png\?v=20260918\.4$/);
+    assert.equal(fallbackState.hidden,false); assert.equal(Number(fallbackState.poster),1); assert.match(fallbackState.posterSrc,/grcon-mascot-sprite\.png\?v=20260918\.5$/);
     await fallback.screenshot({ path:path.join(outputDir,"fallback-poster.png"), fullPage:true }); await fallbackContext.close();
 
     const reducedContext = await browser.newContext({ viewport:{width:1440,height:900}, reducedMotion:"reduce", serviceWorkers:"block" });
