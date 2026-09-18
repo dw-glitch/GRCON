@@ -21,7 +21,9 @@ import type {
   LookupResult,
   ParsedDocument,
 } from "../types/domain";
-import "../types/legacy-globals";
+// Os tipos ambientes de window.* (types/legacy-globals.d.ts) são globais e
+// pegos automaticamente pelo tsconfig — nenhum import é necessário (e um
+// import de efeito colateral de um .d.ts quebraria o bundle do Vite/Rollup).
 
 const CHAVE_MODELOS = "grcon-requests-export-templates";
 const CHAVE_ULTIMA = "grcon-requests-last-export";
