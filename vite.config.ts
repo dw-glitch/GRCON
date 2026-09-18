@@ -17,6 +17,12 @@ import react from "@vitejs/plugin-react";
  */
 export default defineConfig({
   plugins: [react()],
+  // React/ReactDOM ainda contêm guards de ambiente escritos como
+  // process.env.NODE_ENV. Em build de library/IIFE o Vite não garante essa
+  // substituição sozinho; deixar "process" no bundle quebra no navegador.
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   build: {
     outDir: "react-dist",
     emptyOutDir: true,

@@ -21,6 +21,7 @@ export type DocumentIndex = Record<string, unknown>;
 export type LookupResult = Record<string, unknown> & {
   chosen?: Record<string, unknown> | null;
   ldDocument?: string;
+  internalTaxonomy?: string;
   needsManualValidation?: boolean;
 };
 
@@ -78,6 +79,7 @@ export interface ConsultationRow {
   codeAdjusted?: boolean;
   codeAdjustmentNote?: string;
   title?: string;
+  internalTaxonomy?: string;
   sigemLdRevision?: string;
   sigemLdRevisionCell?: string;
   sigemLdRevisionCount?: number;
@@ -135,6 +137,7 @@ export interface ExportRow {
   ntFormsDetail?: string;
   ntSearchMessage?: string;
   title?: string;
+  internalTaxonomy?: string;
   sigemLdRevision?: string;
   sigemLdRevisionCell?: string;
   allocated?: string;

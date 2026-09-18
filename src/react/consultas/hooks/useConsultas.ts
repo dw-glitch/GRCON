@@ -173,28 +173,35 @@ export function useConsultas() {
     const alvos = onlySelected ? documents.filter((item) => item.selected) : documents;
     if (!alvos.length) { notify(onlySelected ? "Nenhum documento selecionado." : "Informe pelo menos um documento.", "warn"); return; }
 
-    Adapter.refreshHistoryIndicator();
     setRunning(true);
     const total = alvos.length;
     setProgress({ done: 0, total });
-    const novosResultados = new Map(results);
-    for (let inicio = 0; inicio < total; inicio += 100) {
-      const fim = Math.min(total, inicio + 100);
-      for (let i = inicio; i < fim; i += 1) {
-        const item = alvos[i];
-        novosResultados.set(item.id, Adapter.lookupDocument(item.document, item.requestedTitle, indexRef.current, central));
+    try {
+      Adapter.refreshHistoryIndicator();
+      const novosResultados = new Map(results);
+      for (let inicio = 0; inicio < total; inicio += 100) {
+        const fim = Math.min(total, inicio + 100);
+        for (let i = inicio; i < fim; i += 1) {
+          const item = alvos[i];
+          novosResultados.set(item.id, Adapter.lookupDocument(item.document, item.requestedTitle, indexRef.current, central));
+        }
+        setProgress({ done: fim, total });
+        if (fim < total) await new Promise((resolve) => window.setTimeout(resolve, 0));
       }
-      setProgress({ done: fim, total });
-      if (fim < total) await new Promise((resolve) => window.setTimeout(resolve, 0));
-    }
-    setResults(novosResultados);
-    setRunning(false);
+      setResults(novosResultados);
 
-    const linhas = [...novosResultados.values()];
-    const validar = linhas.filter((linha) => linha.needsManualValidation).length;
-    notify(validar
-      ? `${total} documento(s) consultados. ${validar} precisam de conferência.`
-      : `${total} documento(s) consultados.`, validar ? "warn" : "success");
+      const linhas = [...novosResultados.values()];
+      const validar = linhas.filter((linha) => linha.needsManualValidation).length;
+      notify(validar
+        ? `${total} documento(s) consultados. ${validar} precisam de conferência.`
+        : `${total} documento(s) consultados.`, validar ? "warn" : "success");
+    } catch (error) {
+      console.error("[Consultas/React] Falha ao consultar documentos:", error);
+      const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+      notify(`Não foi possível concluir a consulta${detail}`, "error");
+    } finally {
+      setRunning(false);
+    }
   }, [running, documents, results, central, notify, Adapter]);
 
   const exportRows = useMemo(() => documents
