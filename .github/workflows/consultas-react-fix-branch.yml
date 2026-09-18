@@ -1,0 +1,47 @@
+name: Consultas React - validação da branch
+
+on:
+  push:
+    branches: ["fix/consultas-react-parity"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: consultas-react-fix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    name: Lockfile, build e suíte completa
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Sincronizar package-lock.json
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Registrar lockfile atualizado na branch
+        run: |
+          if ! git diff --quiet -- package-lock.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "chore: synchronize npm lockfile"
+            git push origin HEAD:"${GITHUB_REF_NAME}"
+          fi
+
+      - name: Validar instalação reproduzível
+        run: npm ci --ignore-scripts
+
+      - name: Executar npm run verify completo
+        run: npm run verify
