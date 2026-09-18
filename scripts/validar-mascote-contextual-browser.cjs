@@ -92,7 +92,7 @@ async function main() {
         return { status:response.status, contentRange:response.headers.get("content-range"), acceptRanges:response.headers.get("accept-ranges") };
       });
       assert.equal(originRange.status, 206, "Vercel Preview precisa aceitar Range");
-      assert.match(originRange.contentRange || "", /^bytes 0-1023\\//);
+      assert.match(originRange.contentRange || "", /^bytes 0-1023\//);
     }
     await enableServiceWorker(page);
 
