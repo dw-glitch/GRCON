@@ -30,7 +30,7 @@ assert.doesNotMatch(loader, /assets\/mascot\/grcon-mascot-sprite\.png|grcon-masc
 
 const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 assert.match(sw, /grcon-mascot-sprite\.png/);
-assert.match(sw, /mascot-video1/);
+assert.match(sw, /mascot-context9/);
 assert.doesNotMatch(sw, /assets\/mascot\/grcon-mascot-default\.png/);
 
 console.log("grcon_mascot_hd: OK — sprite 1254×1254 íntegro, carregamento HD e renovação de cache validados.");
