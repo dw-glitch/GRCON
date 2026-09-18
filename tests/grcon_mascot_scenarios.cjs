@@ -101,8 +101,10 @@ assert.ok(controllerIndex >= 0 && controllerIndex < runnerIndex && runnerIndex <
 
 assert.match(controller, /setGlobalPlaybackSuppressed/);
 assert.match(controller, /globalPlaybackSuppressed/);
+assert.match(controller, /let globalPlaybackSuppressed = false/);
 assert.match(runner, /setSuppressed/);
 assert.match(runner, /suppressed/);
+assert.match(runner, /let suppressed = false/);
 assert.match(teams, /grcon:egrdt-teams-send/);
 assert.match(teams, /active:\s*true/);
 assert.match(teams, /active:\s*false,\s*outcome:\s*sendOutcome/);
