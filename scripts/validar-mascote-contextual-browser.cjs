@@ -100,7 +100,7 @@ async function main() {
     for (const key of keys) {
       cold[key] = { http: await probeHttp(page, key), playback: await play(page, key) };
       assert.equal(cold[key].http.status, 200, `${key}: HTTP cold precisa ser 200`);
-      assert.match(cold[key].http.type, /^video\/mp4(?:;|$)/i, `${key}: MIME incorreto`);
+      assert.match(cold[key].http.type, /^video\/webm(?:;|$)/i, `${key}: MIME incorreto`);
       await page.screenshot({ path:path.join(outputDir,`${key}-desktop.png`), fullPage:true });
       await stop(page);
     }
@@ -125,7 +125,7 @@ async function main() {
       const response = await fetch(url, { cache:"reload" }); await response.arrayBuffer();
       return { status:response.status, type:response.headers.get("content-type") || "", url };
     });
-    assert.equal(versionProbe.status,200); assert.match(versionProbe.type,/^video\/mp4/i);
+    assert.equal(versionProbe.status,200); assert.match(versionProbe.type,/^video\/webm/i);
 
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-state", { detail:{ active:true, context:"control", task:"Analisando documentos" } })));
     await page.waitForFunction(() => window.GrconMascotScenarios.diagnostics().active?.key === "paperwork");
