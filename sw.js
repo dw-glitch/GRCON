@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.41.0-mascot-video1-egrdt-teams-notification1-consultas-react4-parity";
+const CACHE_NAME = "grcon-v5.41.0-phase-a-history-react1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -65,6 +65,7 @@ const ASSETS = [
   "requests_report.js",
   "requests_app.js",
   "react-dist/consultas-app.js",
+  "react-dist/historico-analises-app.js",
   "pdf_merge_core.js",
   "pdf_merge_engine.js",
   "pdf_merge_app.js",
@@ -89,7 +90,6 @@ const ASSETS = [
   "pending_allocation_history_core.js",
   "analysis_history_core.js",
   "analysis_history_report.js",
-  "analysis_history_app.js",
   "analysis_history_storage_fallback.js",
   "analysis_warning.js",
   "error_handler.js",
