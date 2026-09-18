@@ -48,6 +48,7 @@ export function useConsultas() {
 
   const indexRef = useRef<DocumentIndex | null>(null);
   const undoRef = useRef<UndoEntry[]>([]);
+  const rerunForCentralRef = useRef(false);
 
   const notify = useCallback((message: string, kind?: NotifyKind) => Adapter.notify(message, kind), [Adapter]);
 
@@ -82,24 +83,30 @@ export function useConsultas() {
   }, [lds, reindex, Adapter]);
 
   const removeLd = useCallback((id: string) => {
+    const alvo = lds.find((item) => item.id === id);
+    if (!alvo) return;
     setLds((prev) => {
       const atualizado = prev.filter((item) => item.id !== id);
       reindex(atualizado);
       return atualizado;
     });
     setResults(new Map());
-  }, [reindex]);
+    notify(`LD removida: ${alvo.name}. Consulte de novo para atualizar o resultado.`, "info");
+  }, [lds, reindex, notify]);
 
   const clearLds = useCallback(() => {
+    if (!lds.length) return;
     setLds([]);
     indexRef.current = null;
     setResults(new Map());
-  }, []);
+    notify("Todas as LDs foram removidas.", "info");
+  }, [lds.length, notify]);
 
   const attachCentral = useCallback(async (file: File | null | undefined) => {
     if (!file) return;
     try {
       const indice = await Adapter.parseAllocationCenterFile(file);
+      if (indice.ok && results.size) rerunForCentralRef.current = true;
       setCentral(indice);
       if (!indice.ok) { notify(indice.error || "Não foi possível ler esta planilha.", "warn"); return; }
       notify(`Central lida: ${indice.count} envio(s) para ${indice.documents} documento(s).`, "success");
@@ -108,12 +115,13 @@ export function useConsultas() {
       setCentral(falha);
       notify(falha.error || "", "error");
     }
-  }, [notify, Adapter]);
+  }, [notify, Adapter, results.size]);
 
   const removeCentral = useCallback(() => {
+    if (results.size) rerunForCentralRef.current = true;
     setCentral(null);
     notify("Central de alocação removida.", "info");
-  }, [notify]);
+  }, [notify, results.size]);
 
   const guardarParaDesfazer = useCallback((label: string, snapshot: DocumentEntry[]) => {
     undoRef.current = [...undoRef.current, { label, documents: snapshot }].slice(-20);
@@ -192,7 +200,10 @@ export function useConsultas() {
       }
       setResults(novosResultados);
 
-      const linhas = alvos.map((item) => novosResultados.get(item.id)).filter((linha): linha is ConsultationRow => Boolean(linha));
+      // Mantém a mesma semântica do legado: a contagem de validações leva
+      // todos os resultados atualmente mantidos, inclusive após consulta só
+      // dos selecionados.
+      const linhas = [...novosResultados.values()];
       const validar = linhas.filter((linha) => linha.needsManualValidation).length;
       notify(validar
         ? `${total} documento(s) consultados. ${validar} precisam de conferência.`
@@ -209,6 +220,16 @@ export function useConsultas() {
       setRunning(false);
     }
   }, [running, documents, results, central, notify, Adapter]);
+
+  // No legado, anexar ou remover a Central recalculava imediatamente uma
+  // consulta já existente para atualizar as colunas da fiscalização. O ref
+  // evita um segundo disparo quando setResults atualizar o mapa.
+  useEffect(() => {
+    if (!rerunForCentralRef.current) return;
+    rerunForCentralRef.current = false;
+    if (!results.size || !indexRef.current) return;
+    void runQuery(false);
+  }, [central, results.size, runQuery]);
 
   const exportRows = useMemo(() => documents
     .filter((item) => results.has(item.id))
