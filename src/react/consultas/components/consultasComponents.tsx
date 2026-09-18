@@ -320,6 +320,9 @@ function ResultsRow({ item, linha, central, onToggle }: {
       <td className="requests-col-doc"><code>{item.document}</code>{linha?.rule && linha.needsManualValidation ? <div className="requests-rule">{linha.rule}</div> : null}</td>
       <td className="requests-col-ld-doc">{celulaCodigoLocalizado(linha)}</td>
       <td>{linha?.title || celulaVazio()}</td>
+      <td className="requests-col-taxonomia">{linha?.internalTaxonomy
+        ? <span title="Taxonomia Interna da mesma linha da LD considerada">{linha.internalTaxonomy}</span>
+        : celulaVazio()}</td>
       <td>{linha?.allocated || celulaVazio()}</td>
       <td>{linha?.lastGrdt || celulaVazio()}</td>
       <td className="requests-col-emitido">{celulaEmitido(linha)}</td>
@@ -333,7 +336,7 @@ function ResultsRow({ item, linha, central, onToggle }: {
   );
 }
 
-const COLUMN_HEADERS = ["Situação", "Documento", "Código localizado na LD", "Título na LD", "Alocado?", "Última GRDT", "Emitido pelo GRCON", "Revisão emitida no SIGEM", "Revisão na Colar SIGEM", "Status SIGEM", "Status da alocação (central)", "Resposta da fiscal 01", "LD"];
+const COLUMN_HEADERS = ["Situação", "Documento", "Código localizado na LD", "Título na LD", "Taxonomia Interna", "Alocado?", "Última GRDT", "Emitido pelo GRCON", "Revisão emitida no SIGEM", "Revisão na Colar SIGEM", "Status SIGEM", "Status da alocação (central)", "Resposta da fiscal 01", "LD"];
 
 function CheckAll({ allSelected, someSelected, onToggleAll }: {
   allSelected: boolean; someSelected: boolean; onToggleAll: (selected: boolean) => void;
