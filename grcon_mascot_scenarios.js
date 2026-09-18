@@ -306,10 +306,21 @@
 
     const record = {
       key, config, stage, frame, poster, video,
-      token: 0, loadTimer: 0, failures: 0, lastError: "", status: "poster", prepared: false,
+      token: 0, loadTimer: 0, staticTimer: 0, failures: 0, lastError: "", status: "poster", prepared: false, posterFallback: false,
     };
     stageRecords.set(key, record);
 
+    poster.addEventListener("error", () => {
+      if (record.posterFallback) {
+        record.stage.dataset.posterFallback = "unavailable";
+        log("poster-fallback-failed", { key, src: poster.src });
+        return;
+      }
+      record.posterFallback = true;
+      record.stage.dataset.posterFallback = "official-sprite";
+      poster.src = asset("grcon-mascot-sprite.png");
+      log("poster-fallback", { key, fallback: "official-sprite" });
+    });
     video.addEventListener("loadeddata", () => mediaReady(record));
     video.addEventListener("canplay", () => mediaReady(record));
     video.addEventListener("canplaythrough", () => mediaReady(record));
@@ -340,6 +351,23 @@
   function clearLoadTimer(record) {
     if (record.loadTimer) root.clearTimeout(record.loadTimer);
     record.loadTimer = 0;
+  }
+
+  function clearStaticTimer(record) {
+    if (record.staticTimer) root.clearTimeout(record.staticTimer);
+    record.staticTimer = 0;
+  }
+
+  function scheduleReducedMotionLifecycle(record) {
+    clearStaticTimer(record);
+    if (!reducedMotion()) return;
+    const durations = { grdtStamp: 1600, grdtToTeams: 1600, sleepy: 2200, curious: 1800 };
+    const duration = durations[record.key];
+    if (!duration) return;
+    record.staticTimer = root.setTimeout(() => {
+      record.staticTimer = 0;
+      if (active?.key === record.key) handleEnded(record.key);
+    }, duration);
   }
 
   function prepare(key, preload) {
@@ -419,6 +447,7 @@
     const record = stageRecords.get(key);
     if (!record) return;
     clearLoadTimer(record);
+    clearStaticTimer(record);
     record.token += 1;
     try { record.video.pause(); } catch (_) { /* poster permanece disponível */ }
     record.stage.dataset.status = record.status === "fallback" ? "fallback" : "poster";
@@ -454,6 +483,7 @@
     active = { key, priority, source: options?.source || "", startedAt: Date.now(), persistent: Boolean(options?.persistent) };
     if (priority >= PRIORITY.operation) suppressHeader(true);
     playRecord(record);
+    scheduleReducedMotionLifecycle(record);
     log("show", { key, priority, source: active.source, reducedMotion: reducedMotion() });
     return true;
   }
@@ -682,6 +712,7 @@
         paused: record.video.paused,
         failures: record.failures,
         lastError: record.lastError,
+        posterFallback: record.posterFallback,
         preload: record.video.preload,
         src: record.video.currentSrc || record.video.src || "",
       })),
@@ -715,6 +746,7 @@
       root.clearTimeout(operationDelayTimer);
       stageRecords.forEach((record) => {
         clearLoadTimer(record);
+        clearStaticTimer(record);
         try { record.video.pause(); } catch (_) { /* encerramento */ }
         record.video.removeAttribute("src");
       });
