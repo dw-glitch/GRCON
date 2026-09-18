@@ -107,7 +107,11 @@ export function useHistoricoAnalises() {
         setTotal(result.total);
         setCounts(result.counts || {});
         setSessionIds(result.sessionIds || []);
-        setStorageLabel(await Adapter.storageLabel());
+        // Assim como no legado, a estimativa de armazenamento não bloqueia a
+        // renderização da tabela nem prolonga o estado de loading.
+        void Adapter.storageLabel()
+          .then((label) => { if (token === requestToken.current) setStorageLabel(label); })
+          .catch((error) => console.debug("[HistoricoAnalises/React] storage:", error));
       } catch (error) {
         if (token !== requestToken.current) return;
         const message = error instanceof Error && error.message ? error.message : "Não foi possível abrir o histórico.";
