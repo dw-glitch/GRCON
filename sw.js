@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.41.0-phase-a-history-react1";
+const CACHE_NAME = "grcon-v5.41.0-mascot-video1-egrdt-teams-notification1-phase-a-history-react1";
 const ASSETS = [
   "index.html",
   "design-system.css",
