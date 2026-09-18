@@ -5,24 +5,42 @@ on:
     branches: [main]
     paths:
       - "assets/mascot/video/**"
+      - "assets/mascot/poster/**"
       - "grcon-mascot-sprite.png"
       - "grcon_mascot_controller.js"
       - "grcon_mascot_controller_v4.js"
+      - "grcon_mascot_runner.js"
+      - "grcon_mascot_scenarios.js"
+      - "egrdt_teams_notification_app.js"
+      - "sw.js"
+      - "index.html"
       - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
+      - "scripts/validar-mascote-contextual-browser.cjs"
       - "tests/fixtures/grcon-mascot-video.html"
+      - "tests/fixtures/grcon-mascot-scenarios.html"
       - "tests/grcon_mascot_video.cjs"
+      - "tests/grcon_mascot_scenarios.cjs"
       - ".github/workflows/mascot-video.yml"
   pull_request:
     paths:
       - "assets/mascot/video/**"
+      - "assets/mascot/poster/**"
       - "grcon-mascot-sprite.png"
       - "grcon_mascot_controller.js"
       - "grcon_mascot_controller_v4.js"
+      - "grcon_mascot_runner.js"
+      - "grcon_mascot_scenarios.js"
+      - "egrdt_teams_notification_app.js"
+      - "sw.js"
+      - "index.html"
       - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
+      - "scripts/validar-mascote-contextual-browser.cjs"
       - "tests/fixtures/grcon-mascot-video.html"
+      - "tests/fixtures/grcon-mascot-scenarios.html"
       - "tests/grcon_mascot_video.cjs"
+      - "tests/grcon_mascot_scenarios.cjs"
       - ".github/workflows/mascot-video.yml"
   workflow_dispatch:
 
@@ -31,7 +49,7 @@ permissions:
 
 jobs:
   validate-mascot:
-    name: Vídeos, sessão, eventos reais e fallback PNG
+    name: Vídeos, cenários, cache, eventos reais e fallback
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -39,7 +57,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node tests/grcon_mascot_video.cjs
+      - run: node tests/grcon_mascot_video.cjs && node tests/grcon_mascot_scenarios.cjs
       - name: Instalar navegador de validação
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
@@ -50,8 +68,11 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-mascote-video-browser.cjs
+          node scripts/validar-mascote-contextual-browser.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: grcon-mascot-video-validation
-          path: artifacts/mascot-video/*.png
+          path: |
+            artifacts/mascot-video/*.png
+            artifacts/mascot-contextual/*.png
           if-no-files-found: error
