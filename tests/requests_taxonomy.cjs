@@ -175,4 +175,17 @@ test("importação de modelo reconhece Taxonomia Interna por caixa e espaços", 
   assert.ok(imported.template.columns.some((item) => item.key === "internalTaxonomy"));
 });
 
+test("prévia e aplicação de modelo preservam Taxonomia Interna da linha exportada", () => {
+  const model = Report.BUILTIN_EXPORT_TEMPLATES.find((item) => item.base === "consulta");
+  const rows = [{ situation: "Localizado", document: "DOC-1", title: "Título", internalTaxonomy: "TX-PREVIEW" }];
+  const preview = Report.previewExportTemplate(model, rows, 5);
+  const taxonomyIndex = preview.headers.indexOf("TAXONOMIA INTERNA");
+  assert.ok(taxonomyIndex >= 0, "a prévia deve conter a coluna Taxonomia Interna");
+  assert.equal(preview.rows[0][taxonomyIndex], "TX-PREVIEW");
+
+  const applied = Report.applyExportTemplate(model, rows);
+  const appliedIndex = applied.headers.indexOf("TAXONOMIA INTERNA");
+  assert.equal(applied.rows[0][appliedIndex], "TX-PREVIEW");
+});
+
 console.log(`\n${passed} testes de Taxonomia Interna passaram.`);
