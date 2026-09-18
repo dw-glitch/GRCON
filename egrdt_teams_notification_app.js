@@ -109,6 +109,8 @@
     sendButton.textContent = "Enviando…";
     renderLatest();
     root.dispatchEvent(new CustomEvent("grcon:egrdt-teams-state"));
+    root.dispatchEvent(new CustomEvent("grcon:egrdt-teams-send", { detail: { active: true, record, eventId: id } }));
+    let sendOutcome = "error";
     try {
       const response = await fetch("/api/egrdt-teams-notification", {
         method: "POST",
@@ -124,9 +126,10 @@
       const audit = readAudit();
       audit[id] = { sentAt: result.notifiedAt || new Date().toISOString(), sentBy: identity.email || "", egrdtNumber: record.egrdtNumber };
       writeAudit(audit);
-      if (dialog.open) dialog.close("sent");
+      sendOutcome = "success";
       notify(`Aviso de ${record.egrdtNumber} enviado ao grupo ${Core.DESTINATION.name}.`, "success");
       root.dispatchEvent(new CustomEvent("grcon:egrdt-teams-notified", { detail: { record, result } }));
+      root.setTimeout(() => { if (dialog.open) dialog.close("sent"); }, 700);
     } catch (error) {
       console.error("GRCON Teams:", error);
       const message = error.code === "POWER_AUTOMATE_NOT_CONFIGURED"
@@ -134,6 +137,7 @@
         : error.message || "Não foi possível enviar o aviso ao Teams.";
       notify(message, "error");
     } finally {
+      root.dispatchEvent(new CustomEvent("grcon:egrdt-teams-send", { detail: { active: false, outcome: sendOutcome, record, eventId: id } }));
       state.sending.delete(id);
       sendButton.textContent = "Enviar ao grupo";
       sendButton.disabled = !checkbox.checked;
