@@ -199,6 +199,11 @@ function loadAdapter(windowOverrides = {}) {
   assert.match(group, /analysis_history_report\.js/);
   assert.match(group, /react-dist\/historico-analises-app\.js/);
   assert.doesNotMatch(group, /analysis_history_app\.js/);
+  assert.equal(
+    fs.existsSync(path.join(root, "analysis_history_app.js")),
+    false,
+    "a UI legada deve ser removida somente depois da paridade React estar coberta",
+  );
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   assert.match(sw, /react-dist\/historico-analises-app\.js/);
