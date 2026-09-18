@@ -3,3 +3,8 @@ node_modules/
 .DS_Store
 GRCON-*-main.zip
 artifacts/
+
+# Saída gerada pelo build Vite da ilha React de Consultas (npm run build).
+# Não é vendorizada nem commitada: CI e Vercel geram este arquivo antes de
+# rodar check:references/deploy — veja package.json ("build") e vercel.json.
+react-dist/

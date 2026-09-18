@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.41.0-mascot-video1-egrdt-teams-notification1";
+const CACHE_NAME = "grcon-v5.41.0-mascot-video1-egrdt-teams-notification1-consultas-react3";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -64,6 +64,7 @@ const ASSETS = [
   "requests_core.js",
   "requests_report.js",
   "requests_app.js",
+  "react-dist/consultas-app.js",
   "pdf_merge_core.js",
   "pdf_merge_engine.js",
   "pdf_merge_app.js",
@@ -165,6 +166,7 @@ const HEAVY_ASSETS = new Set([
   "jszip.min.js",
   "pdf-lib.min.js",
   "supabase.min.js",
+  "react-dist/consultas-app.js",
   "grdt-template.xlsx",
   "grcon-icon.png",
   "grcon-icon.ico",
