@@ -18,7 +18,14 @@
     // O Dashboard é construído por retomar.js e já existe no carregamento inicial.
     // Ele é uma view lógica, não um arquivo chamado /dashboard.
     dashboard: [],
-    "analysis-history": ["navigation", "analysis_history_report.js", "analysis_history_app.js"],
+    "analysis-history": [
+      "navigation",
+      "analysis_history_core.js",
+      "analysis_history_report.js",
+      "analysis_history_storage_fallback.js",
+      "macro5_flow_core.js",
+      "react-dist/historico-analises-app.js",
+    ],
     "ld-posting": ["xlsx", "zip", "ld_posting_writer.js"],
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; a Taxonomia Interna é projetada da
@@ -49,7 +56,7 @@
   const moduleRequirements = {
     history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi"],
     dashboard: ["GrconHistoryDashboard"],
-    "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi"],
+    "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi", "GrconHistoricoAnalisesReact"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsTaxonomy", "GrconRequestsUi", "GrconConsultasReact"],
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],

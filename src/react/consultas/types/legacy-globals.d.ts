@@ -50,6 +50,8 @@ interface GrconFileAccessApi {
 
 interface GRCONModuleLoaderApi {
   ensure(name: string): Promise<void>;
+  ensureModule?(name: string): Promise<void>;
+  state?(name: string): string;
 }
 
 interface GrconGrdtHistoryIndicatorApi {

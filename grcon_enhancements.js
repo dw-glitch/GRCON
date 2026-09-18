@@ -123,6 +123,9 @@
       const dialog = document.createElement("section");
       dialog.className = "p1-confirm-dialog";
       dialog.id = "grcon-confirm-dialog";
+      // O overlay dinâmico usa z-index 800; o diálogo precisa permanecer acima
+      // dele para que Confirmar/Cancelar recebam clique e foco.
+      dialog.style.zIndex = "801";
       dialog.setAttribute("role", "dialog");
       dialog.setAttribute("aria-modal", "true");
       dialog.setAttribute("aria-labelledby", "grcon-confirm-title");
@@ -353,6 +356,9 @@
         export: exportAuditLog,
         log: logAudit,
       };
+      // A confirmação também é consumida por React Islands montadas depois do
+      // DOMContentLoaded, sem duplicar listeners ou enfraquecer a proteção.
+      window.GrconEnhancements = Object.freeze({ confirmAction });
       console.log("GRCON: Melhorias de UX e Segurança ativadas.");
     } catch (error) {
       console.warn("GRCON: Melhorias de UX não puderam ser carregadas:", error);

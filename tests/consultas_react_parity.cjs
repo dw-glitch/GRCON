@@ -189,7 +189,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
     "bundle React não pode depender do global Node process no navegador");
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(sw, /consultas-react4-parity/);
+  assert.match(sw, /phase-a-history-react1/);
   const heavyStart = sw.indexOf("const HEAVY_ASSETS");
   const heavyEnd = sw.indexOf("]);", heavyStart);
   assert.doesNotMatch(sw.slice(heavyStart, heavyEnd), /consultas-app\.js/);

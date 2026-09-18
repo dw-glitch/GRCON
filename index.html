@@ -393,51 +393,7 @@
 </div>
 </section>
 <section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
-<header class="analysis-history-heading"><div><span>RASTREABILIDADE DAS ANÁLISES</span><h2 id="analysis-history-title">Todos os documentos analisados pelo GRCON</h2><p>Cada análise concluída é registrada com data, documento, revisão, situação entregue e motivo.</p></div><div class="analysis-history-actions"><button class="secondary-button" id="analysis-history-backup" type="button">Fazer backup</button><button class="secondary-button" id="analysis-history-restore" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="analysis-history-restore-input" type="file"/><button class="secondary-button" disabled="" id="analysis-history-delete-session" type="button">Excluir análise selecionada</button><button class="secondary-button" id="analysis-history-clear" type="button">Limpar todo o histórico</button></div></header>
-<section aria-label="Busca unificada" class="unified-search" id="unified-search">
-  <div class="unified-search-heading">
-    <span>BUSCA UNIFICADA</span>
-    <h3>Buscar documentos no histórico e nas análises</h3>
-    <p>Cole códigos ou nomes de documentos, um por linha, para buscar no histórico de eGRDTs e no histórico de análises.</p>
-  </div>
-  <div class="unified-search-body">
-    <div class="unified-search-input">
-      <textarea aria-label="Códigos ou nomes de documentos para buscar, um por linha" id="unified-search-text" placeholder="Cole um código ou nome de documento por linha" rows="3" spellcheck="false"></textarea>
-      <div class="unified-search-actions">
-        <button class="primary-button" id="unified-search-btn" type="button">Buscar</button>
-        <button class="secondary-button" id="unified-search-clear" type="button">Limpar</button>
-      </div>
-    </div>
-    <div class="unified-search-results" id="unified-search-results" hidden>
-      <div class="unified-search-result-card">
-        <div class="unified-search-result-header"><span>eGRDTs no Histórico</span><strong id="unified-history-count">0</strong></div>
-        <small>eGRDTs correspondentes</small>
-      </div>
-      <div class="unified-search-result-card">
-        <div class="unified-search-result-header"><span>Análises no Histórico de Análises</span><strong id="unified-analysis-count">0</strong></div>
-        <small>documentos analisados correspondentes</small>
-      </div>
-    </div>
-    <div class="unified-search-detail" id="unified-search-detail" hidden></div>
-  </div>
-</section>
-<section aria-label="Filtros do histórico de análises" class="analysis-history-toolbar">
-<label class="analysis-history-search-field"><span>Busca geral</span><span class="analysis-history-search-control"><svg aria-hidden="true" viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input autocomplete="off" id="analysis-history-search" placeholder="Documento, título, motivo, GRDT ou alocação" type="search"/></span></label>
-<label><span>Situação entregue</span><select id="analysis-history-status"><option value="ALL">Todas</option><option value="READY">Será incluído na eGRDT</option><option value="BLOCKED">Não será incluído</option><option value="DISCARD">Não será enviado novamente</option><option value="REVIEW">Precisa de conferência</option></select></label>
-<label><span>Data inicial</span><input id="analysis-history-start" type="date"/></label>
-<label><span>Data final</span><input id="analysis-history-end" type="date"/></label>
-<label><span>Análise executada</span><select id="analysis-history-session"><option value="">Todas as análises</option></select></label>
-</section>
-<div class="analysis-history-quick" aria-label="Filtros rápidos"><button type="button" data-analysis-quick="today">Hoje</button><button type="button" data-analysis-quick="7days">Últimos 7 dias</button><button type="button" data-analysis-quick="pending">Pendências</button><button type="button" data-analysis-quick="included">Incluídos</button></div>
-<div class="analysis-saved-filters" aria-label="Filtros salvos"><label><span>Filtro salvo</span><select id="analysis-history-saved-filter"><option value="">Selecionar filtro</option></select></label><button class="secondary-button compact" id="analysis-history-save-filter" type="button">Salvar filtro atual</button><button class="secondary-button compact" disabled id="analysis-history-delete-filter" type="button">Excluir filtro</button></div>
-<section aria-label="Resumo das análises" class="analysis-history-summary" id="analysis-history-summary"></section>
-<section class="analysis-history-card" aria-label="Documentos analisados"><header><div><span>DOCUMENTOS REGISTRADOS</span><strong id="analysis-history-result-count">0 documento(s)</strong></div><div class="analysis-history-actions"><button class="primary-button" disabled="" id="analysis-history-export" type="button">Baixar relatório Excel</button></div></header>
-<div class="analysis-history-table-hint"><span>Visualização detalhada</span><small>Em telas menores, cada documento é apresentado em um cartão para evitar sobreposição.</small></div>
-<div class="analysis-history-table-wrap"><table class="analysis-history-table"><colgroup><col class="analysis-col-date"/><col class="analysis-col-document"/><col class="analysis-col-current-revision"/><col class="analysis-col-target-revision"/><col class="analysis-col-result"/><col class="analysis-col-sigem"/><col class="analysis-col-allocation"/><col class="analysis-col-ld"/><col class="analysis-col-reason"/></colgroup><thead><tr><th>Analisado em</th><th>Documento</th><th>Revisão atual</th><th>Próxima revisão</th><th>Resultado GRCON</th><th>SIGEM</th><th>Alocação</th><th>LD</th><th>Motivo</th></tr></thead><tbody id="analysis-history-body"></tbody></table><empty-state hidden="" id="analysis-history-empty"><strong>Nenhum documento localizado</strong><span>Execute uma análise ou ajuste os filtros.</span></empty-state></div>
-<footer class="analysis-history-footer"><small id="analysis-history-storage">O histórico fica no armazenamento local deste navegador.</small><div class="analysis-history-pagination"><button class="secondary-button compact" disabled="" id="analysis-history-previous" type="button">Anterior</button><span id="analysis-history-page-status">Nenhum documento</span><button class="secondary-button compact" disabled="" id="analysis-history-next" type="button">Próxima</button></div></footer>
-</section>
-<aside aria-hidden="true" aria-labelledby="analysis-history-detail-title" class="analysis-history-detail-panel" hidden id="analysis-history-detail"><header><div><span>COMPARAÇÃO E EVIDÊNCIAS</span><h3 id="analysis-history-detail-title">Documento analisado</h3></div><button aria-label="Fechar detalhes" class="icon-button" id="analysis-history-detail-close" type="button">×</button></header><div id="analysis-history-detail-body"></div></aside>
-<div class="analysis-history-detail-overlay" hidden id="analysis-history-detail-overlay"></div>
+<div id="grcon-analysis-history-root"></div>
 </section>
 <section id="history-module" class="history-module history-module-v2" hidden="" role="tabpanel" aria-labelledby="tab-history">
 <header class="history-heading"><div><span>HISTÓRICO LOCAL</span><h2 id="history-title">eGRDTs geradas pelo GRCON</h2><p>Consulte documentos, confira alocações e corrija o número registrado quando necessário.</p></div><button class="secondary-button history-clear-button" id="history-clear" type="button">Limpar histórico</button></header>
