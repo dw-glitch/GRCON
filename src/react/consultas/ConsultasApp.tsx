@@ -1,7 +1,7 @@
 /**
  * GRCON — Composição da tela de Consulta de documentos em React.
  */
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useConsultas } from "./hooks/useConsultas";
 import { consultasAdapter } from "./services/consultasAdapter";
 import {
@@ -23,11 +23,14 @@ export function ConsultasApp() {
     try {
       const texto = await navigator.clipboard.readText();
       if (!texto) { consultasAdapter.notify("A área de transferência está vazia.", "warn"); return; }
-      setValue(texto);
+      // Paridade com a tela legada: o botão já adiciona os documentos, sem
+      // exigir um segundo clique em "Adicionar à lista".
+      c.addDocuments(texto);
+      setValue("");
     } catch (_error) {
       consultasAdapter.notify("O navegador bloqueou a leitura da área de transferência. Cole no campo acima.", "warn");
     }
-  }, []);
+  }, [c.addDocuments]);
 
   const onReuseHint = useCallback(() => {
     consultasAdapter.notify("Selecione o arquivo novamente: o navegador não guarda o conteúdo entre sessões, apenas o nome.", "info");
@@ -36,6 +39,31 @@ export function ConsultasApp() {
   const selectionNote = c.selectedCount
     ? `${c.selectedCount.toLocaleString("pt-BR")} de ${c.documents.length.toLocaleString("pt-BR")} selecionado(s)`
     : "";
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const modulo = document.getElementById("requests-module");
+      if (!modulo || modulo.hidden) return;
+      const active = document.activeElement;
+      const digitando = active instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        document.querySelector<HTMLInputElement>("#requests-area-consulta-react input[type=search]")?.focus();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !digitando) {
+        event.preventDefault();
+        void c.runQuery(false);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !digitando) {
+        event.preventDefault();
+        c.undo();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [c.runQuery, c.undo]);
 
   return (
     <div id="requests-area-consulta-react">
