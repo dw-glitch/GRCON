@@ -408,9 +408,11 @@
   }
 
   function suppressHeader(value) {
-    if (root.GrconMascot?.setGlobalPlaybackSuppressed) root.GrconMascot.setGlobalPlaybackSuppressed(Boolean(value));
-    else if (value) root.GrconMascot?.stop?.("global");
+    const next = Boolean(value);
+    if (root.GrconMascot?.setGlobalPlaybackSuppressed) root.GrconMascot.setGlobalPlaybackSuppressed(next);
+    else if (next) root.GrconMascot?.stop?.("global");
     else root.GrconMascot?.reset?.();
+    root.GrconMascotRunner?.setSuppressed?.(next);
   }
 
   function hideKey(key, reason) {
