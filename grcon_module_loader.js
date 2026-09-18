@@ -30,7 +30,14 @@
     // "Modelos de exportação" continua em requests_app.js, que carrega antes
     // para que os modelos já existam quando a ilha React montar.
     requests: [
-      "xlsx", "excel", "brand", "requests_taxonomy_core.js", "requests_app.js",
+      "xlsx", "excel", "brand",
+      // Dependências de domínio obrigatórias da ilha. Mesmo quando já vieram
+      // do carregamento inicial, a ordem fica explícita e auditável aqui.
+      "core.js", "requests_core.js", "requests_report.js", "allocation_center.js",
+      "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
+      // Taxonomia envolve GrconRequestsCore/Report antes de qualquer leitura da
+      // ilha; requests_app mantém somente a aba legada de modelos.
+      "requests_taxonomy_core.js", "requests_app.js",
       "react-dist/consultas-app.js",
     ],
     // O combinador é isolado do banco. As bibliotecas pesadas (pdf-lib no
