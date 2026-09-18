@@ -169,32 +169,45 @@ export function useConsultas() {
 
   const runQuery = useCallback(async (onlySelected?: boolean) => {
     if (running) return;
-    if (!indexRef.current) { notify("Anexe pelo menos uma LD válida antes de consultar.", "warn"); return; }
+    const index = indexRef.current;
+    if (!index) { notify("Anexe pelo menos uma LD válida antes de consultar.", "warn"); return; }
     const alvos = onlySelected ? documents.filter((item) => item.selected) : documents;
     if (!alvos.length) { notify(onlySelected ? "Nenhum documento selecionado." : "Informe pelo menos um documento.", "warn"); return; }
 
-    Adapter.refreshHistoryIndicator();
     setRunning(true);
     const total = alvos.length;
     setProgress({ done: 0, total });
     const novosResultados = new Map(results);
-    for (let inicio = 0; inicio < total; inicio += 100) {
-      const fim = Math.min(total, inicio + 100);
-      for (let i = inicio; i < fim; i += 1) {
-        const item = alvos[i];
-        novosResultados.set(item.id, Adapter.lookupDocument(item.document, item.requestedTitle, indexRef.current, central));
-      }
-      setProgress({ done: fim, total });
-      if (fim < total) await new Promise((resolve) => window.setTimeout(resolve, 0));
-    }
-    setResults(novosResultados);
-    setRunning(false);
 
-    const linhas = [...novosResultados.values()];
-    const validar = linhas.filter((linha) => linha.needsManualValidation).length;
-    notify(validar
-      ? `${total} documento(s) consultados. ${validar} precisam de conferência.`
-      : `${total} documento(s) consultados.`, validar ? "warn" : "success");
+    try {
+      Adapter.refreshHistoryIndicator();
+      for (let inicio = 0; inicio < total; inicio += 100) {
+        const fim = Math.min(total, inicio + 100);
+        for (let i = inicio; i < fim; i += 1) {
+          const item = alvos[i];
+          novosResultados.set(item.id, Adapter.lookupDocument(item.document, item.requestedTitle, index, central));
+        }
+        setProgress({ done: fim, total });
+        if (fim < total) await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+      setResults(novosResultados);
+
+      const linhas = alvos.map((item) => novosResultados.get(item.id)).filter((linha): linha is ConsultationRow => Boolean(linha));
+      const validar = linhas.filter((linha) => linha.needsManualValidation).length;
+      notify(validar
+        ? `${total} documento(s) consultados. ${validar} precisam de conferência.`
+        : `${total} documento(s) consultados.`, validar ? "warn" : "success");
+    } catch (error) {
+      // Operações assíncronas não chegam ao ErrorBoundary. Preserva o que já
+      // foi concluído, informa a falha pelo mecanismo padrão do GRCON e sempre
+      // libera a interface no finally.
+      setResults(new Map(novosResultados));
+      const message = (error instanceof Error && error.message) || "Falha inesperada durante a consulta.";
+      console.error("[Consultas React] Falha ao consultar documentos:", error);
+      notify(`Não foi possível concluir a consulta: ${message}`, "error");
+    } finally {
+      setRunning(false);
+    }
   }, [running, documents, results, central, notify, Adapter]);
 
   const exportRows = useMemo(() => documents
@@ -262,7 +275,7 @@ export function useConsultas() {
       });
     }
     if (busca) {
-      linhas = linhas.filter(({ item, linha }) => [item.document, linha?.title, linha?.ld, linha?.allLds]
+      linhas = linhas.filter(({ item, linha }) => [item.document, linha?.title, linha?.internalTaxonomy, linha?.ld, linha?.allLds]
         .filter(Boolean).some((valor) => String(valor).toLowerCase().includes(busca)));
     }
     const ordem: Record<string, (a: typeof linhas[number], b: typeof linhas[number]) => number> = {
