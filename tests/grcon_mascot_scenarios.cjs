@@ -118,6 +118,6 @@ assert.match(vercel, /video\/mp4/);
 assert.match(vercel, /image\/webp/);
 assert.match(vercel, /max-age=31536000, immutable/);
 assert.match(vercel, /media-src 'self' blob:/);
-assert.doesNotMatch(vercel, /media-src\\s+[^;]*https?:\\/\\//);
+assert.doesNotMatch(vercel, /media-src\s+[^;]*https?:\/\//);
 
 console.log("grcon_mascot_scenarios: OK — 9 assets, 4 layouts, eventos, preload progressivo, cache runtime, range e fallback estático validados.");
