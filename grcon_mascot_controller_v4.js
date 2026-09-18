@@ -4,7 +4,7 @@
 
   const VERSION = "4.2.0";
   const ENGINE = "official-video-v4";
-  const ASSET_REVISION = "20260918.3";
+  const ASSET_REVISION = "20260918.4";
   const STYLE_ID = "grcon-mascot-video-v4-style";
   const SELECTOR = ".grcon-brand-mascot, .grcon-mascot-context";
   const CSS_TARGET = ":is(.grcon-brand-mascot, .grcon-mascot-context)";

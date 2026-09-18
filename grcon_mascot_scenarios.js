@@ -6,7 +6,7 @@
   "use strict";
 
   const VERSION = "1.0.0";
-  const ASSET_REVISION = "20260918.3";
+  const ASSET_REVISION = "20260918.4";
   const STYLE_ID = "grcon-mascot-scenarios-style";
   const IDLE_DELAY_MS = 80_000;
   const IDLE_COOLDOWN_MS = 150_000;
@@ -370,6 +370,17 @@
     }, duration);
   }
 
+  function scheduleFallbackLifecycle(record) {
+    clearStaticTimer(record);
+    const durations = { importBases: 5200, grdtStamp: 1800, grdtToTeams: 1600, sleepy: 2200, curious: 1800 };
+    const duration = durations[record.key];
+    if (!duration) return;
+    record.staticTimer = root.setTimeout(() => {
+      record.staticTimer = 0;
+      if (active?.key === record.key) handleEnded(record.key);
+    }, duration);
+  }
+
   function prepare(key, preload) {
     const record = ensureStage(key);
     if (!record || reducedMotion()) return record;
@@ -407,6 +418,7 @@
     record.stage.dataset.status = "fallback";
     try { record.video.pause(); } catch (_) { /* poster permanece */ }
     log("media-fallback", { key: record.key, reason: record.lastError, failures: record.failures });
+    scheduleFallbackLifecycle(record);
   }
 
   function playRecord(record) {

@@ -30,7 +30,7 @@ async function stop(page) {
   await page.waitForTimeout(80);
 }
 async function play(page, key) {
-  if (key === "teamsSend") await page.evaluate(() => document.querySelector("#egrdt-teams-dialog")?.showModal?.());
+  if (key === "teamsSend") await page.evaluate(() => { const dialog=document.querySelector("#egrdt-teams-dialog"); if (dialog && !dialog.open) dialog.showModal(); });
   const shown = await page.evaluate((scenario) => window.GrconMascotScenarios.play(scenario, { priority: 400, force: true, source: "browser-test" }), key);
   assert.equal(shown, true, `${key}: cenário deve ser inserido`);
   await page.waitForFunction((scenario) => {
@@ -121,7 +121,7 @@ async function main() {
     const reload = await playAll(page);
     const versionProbe = await page.evaluate(async () => {
       const current = window.GrconMascotScenarios.diagnostics().assets.curious.asset;
-      const url = current.replace("v=20260918.3", "v=20260918.3-probe");
+      const url = current.replace("v=20260918.4", "v=20260918.4-probe");
       const response = await fetch(url, { cache:"reload" }); await response.arrayBuffer();
       return { status:response.status, type:response.headers.get("content-type") || "", url };
     });

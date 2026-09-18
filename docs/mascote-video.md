@@ -22,7 +22,7 @@ Operações assíncronas emitem `grcon:mascot-operation` ou `grcon:processing-st
 
 Não há Rive, WebAssembly, Canvas, GSAP, CDN ou montagem do personagem em partes.
 
-## Cenários contextuais (revisão 20260918.3)
+## Cenários contextuais (revisão 20260918.4)
 
 A camada `grcon_mascot_scenarios.js` usa a mesma estratégia de mídia local/versionada do controlador principal, mas mantém âncoras e escalas próprias por operação. Ela não contém regras documentais e apenas reage aos eventos já emitidos pelos módulos.
 

@@ -78,6 +78,7 @@ assert.match(scenarios, /media-waiting/);
 assert.match(scenarios, /media-stalled/);
 assert.match(scenarios, /LOAD_TIMEOUT_MS\s*=\s*9_000/);
 assert.match(scenarios, /scheduleReducedMotionLifecycle/);
+assert.match(scenarios, /scheduleFallbackLifecycle/);
 assert.match(scenarios, /grcon-mascot-sprite\.png/);
 assert.match(scenarios, /poster-fallback/);
 assert.match(scenarios, /prefers-reduced-motion: reduce/);

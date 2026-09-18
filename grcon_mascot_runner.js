@@ -5,7 +5,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "1.1.0";
+  const VERSION = "1.1.1";
   const ASSET_REVISION = "20260917.1";
   const STYLE_ID = "grcon-mascot-runner-style";
   const OVERLAY_ID = "grcon-mascot-runner";
@@ -147,6 +147,7 @@
       root.clearTimeout(runTimer);
       finishRun("suppressed");
     }
+    if (!suppressed && !running) document.documentElement.dataset.grconMascotRunner = "ready";
     log("suppressed", { value: suppressed });
     return suppressed;
   }

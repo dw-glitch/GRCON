@@ -82,11 +82,11 @@ jobs:
             PREVIEW_URL="$(printf '%s\n' "$BODY" | grep -oE 'https://[^ )]+\.vercel\.app' | tail -1 || true)"
             if [ -n "$PREVIEW_URL" ]; then
               JS="$(curl -fsSL "$PREVIEW_URL/grcon_mascot_scenarios.js" || true)"
-              if printf '%s' "$JS" | grep -q '20260918.3'; then
+              if printf '%s' "$JS" | grep -q '20260918.4'; then
                 READY=1
                 for asset in                   grcon-mascot-import-bases.mp4                   grcon-mascot-long-processing.mp4                   grcon-mascot-sleep.mp4                   grcon-mascot-curious.mp4                   grcon-mascot-grdt-stamp.mp4                   grcon-mascot-teams-send.mp4                   grcon-mascot-grdt-to-teams.mp4                   grcon-mascot-paperwork.mp4                   grcon-mascot-review-coffee.mp4
                 do
-                  RESULT="$(curl -fsSL -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$PREVIEW_URL/assets/mascot/video/$asset?v=20260918.3" || true)"
+                  RESULT="$(curl -fsSL -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$PREVIEW_URL/assets/mascot/video/$asset?v=20260918.4" || true)"
                   CODE="$(printf '%s' "$RESULT" | awk '{print $1}')"
                   TYPE="$(printf '%s' "$RESULT" | awk '{print $2}')"
                   SIZE="$(printf '%s' "$RESULT" | awk '{print $3}')"
