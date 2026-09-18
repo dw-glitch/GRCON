@@ -9,7 +9,7 @@
   if (document.querySelector('script[data-grcon-mascot-controller="v4"]')) return;
 
   const script = document.createElement("script");
-  script.src = "grcon_mascot_controller_v4.js?v=4.1.0-20260916.2";
+  script.src = "grcon_mascot_controller_v4.js?v=4.2.0-20260918.3";
   script.async = false;
   script.dataset.grconMascotController = "v4";
   script.addEventListener("error", () => {
