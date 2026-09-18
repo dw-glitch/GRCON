@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: consultas-branch-gate
@@ -15,35 +15,18 @@ concurrency:
 
 jobs:
   validar:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: fix/consultas-react-parity-93
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
-
-      - name: Regenerar lockfile
-        run: npm install --package-lock-only --ignore-scripts
+          cache: npm
 
       - name: Instalação reproduzível
         run: npm ci --ignore-scripts
 
       - name: Validação completa
         run: npm run verify
-
-      - name: Persistir lockfile validado
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          if git diff --cached --quiet; then
-            echo "Lockfile já estava atualizado."
-          else
-            git commit -m "chore: atualizar lockfile da migração React"
-            git push origin HEAD:fix/consultas-react-parity-93
-          fi
