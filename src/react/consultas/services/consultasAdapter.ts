@@ -175,6 +175,9 @@ function buildExportRow(document: string, linha: ConsultationRow): ExportRow {
     ntFormsDetail: linha.ntFormsDetail,
     ntSearchMessage: linha.ntSearchMessage,
     title: linha.title,
+    // Valor já enriquecido por requests_taxonomy_core.js a partir da mesma
+    // linha da LD escolhida pelo motor. O React não reconstrói nem infere.
+    internalTaxonomy: linha.internalTaxonomy,
     sigemLdRevision: linha.sigemLdRevision,
     sigemLdRevisionCell: linha.sigemLdRevisionCell,
     allocated: linha.allocated,
