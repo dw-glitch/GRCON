@@ -51,6 +51,7 @@
   let htmlObserver = null;
   let initialized = false;
   let operationActive = false;
+  let globalPlaybackSuppressed = false;
   let operationState = "";
   let pendingOutcome = "";
   let transientTimer = 0;
@@ -626,6 +627,7 @@
       ready: initialized,
       reducedMotion: reducedMotion(),
       operationActive,
+      globalPlaybackSuppressed,
       operationState,
       appLocked: document.documentElement.classList.contains("grcon-cloud-pending"),
       greetingPlayedThisSession: Boolean((identity.userId || identity.email) && greetingAlreadyPlayed(identity.userId || identity.email)),
@@ -705,6 +707,7 @@
     play,
     setState: play,
     stop,
+    setGlobalPlaybackSuppressed,
     reset: () => play("idle", { source: "reset" }),
     refresh: () => refresh(document),
     begin: (state, task) => beginOperation({ state, task }),
