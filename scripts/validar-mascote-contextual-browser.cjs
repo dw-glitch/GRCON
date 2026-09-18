@@ -83,6 +83,17 @@ async function main() {
     await page.goto(fixtureUrl, { waitUntil:"networkidle", timeout:30000 });
     await waitReady(page);
     await page.evaluate(async () => { for (const name of await caches.keys()) await caches.delete(name); });
+    let originRange = null;
+    if (/\\.vercel\\.app$/i.test(new URL(baseUrl).hostname)) {
+      originRange = await page.evaluate(async () => {
+        const url = window.GrconMascotScenarios.diagnostics().assets.paperwork.asset;
+        const response = await fetch(url, { headers:{ Range:"bytes=0-1023" }, cache:"reload" });
+        await response.arrayBuffer();
+        return { status:response.status, contentRange:response.headers.get("content-range"), acceptRanges:response.headers.get("accept-ranges") };
+      });
+      assert.equal(originRange.status, 206, "Vercel Preview precisa aceitar Range");
+      assert.match(originRange.contentRange || "", /^bytes 0-1023\\//);
+    }
     await enableServiceWorker(page);
 
     const cold = {};
@@ -171,7 +182,7 @@ async function main() {
     }
     await mobile.screenshot({ path:path.join(outputDir,"mobile.png"), fullPage:true }); await mobileContext.close();
 
-    console.log(JSON.stringify({ cold:Object.fromEntries(Object.entries(cold).map(([k,v])=>[k,{http:v.http,status:v.playback.stage.status}])), warm:Object.fromEntries(keys.map(k=>[k,warm[k].stage.status])), reload:Object.fromEntries(keys.map(k=>[k,reload[k].stage.status])), range, versionProbe, fallback: fallbackState.d.stages.find((s)=>s.key==="paperwork"), reduced:reducedState }, null, 2));
+    console.log(JSON.stringify({ cold:Object.fromEntries(Object.entries(cold).map(([k,v])=>[k,{http:v.http,status:v.playback.stage.status}])), warm:Object.fromEntries(keys.map(k=>[k,warm[k].stage.status])), originRange, reload:Object.fromEntries(keys.map(k=>[k,reload[k].stage.status])), range, versionProbe, fallback: fallbackState.d.stages.find((s)=>s.key==="paperwork"), reduced:reducedState }, null, 2));
     await context.close();
   } finally { await browser.close(); }
 }
