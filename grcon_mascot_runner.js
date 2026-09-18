@@ -19,6 +19,7 @@
   let operationActive = false;
   let pendingSuccess = false;
   let running = false;
+  let suppressed = false;
   let runTimer = 0;
   let cleanupTimer = 0;
   let lastRunAt = readLastRun();
@@ -113,7 +114,7 @@
   async function run(options) {
     const config = options || {};
     if (!canRun(config)) {
-      log("skip", { running, hidden: document.hidden, reducedMotion: reducedMotion(), locked: appLocked() });
+      log("skip", { suppressed, running, hidden: document.hidden, reducedMotion: reducedMotion(), locked: appLocked() });
       return false;
     }
     installStyles();
@@ -179,6 +180,7 @@
       assetRevision: ASSET_REVISION,
       source: source.href,
       running,
+      suppressed,
       operationActive,
       pendingSuccess,
       reducedMotion: reducedMotion(),
