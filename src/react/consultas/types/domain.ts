@@ -78,6 +78,7 @@ export interface ConsultationRow {
   codeAdjusted?: boolean;
   codeAdjustmentNote?: string;
   title?: string;
+  internalTaxonomy?: string;
   sigemLdRevision?: string;
   sigemLdRevisionCell?: string;
   sigemLdRevisionCount?: number;
@@ -135,6 +136,7 @@ export interface ExportRow {
   ntFormsDetail?: string;
   ntSearchMessage?: string;
   title?: string;
+  internalTaxonomy?: string;
   sigemLdRevision?: string;
   sigemLdRevisionCell?: string;
   allocated?: string;
