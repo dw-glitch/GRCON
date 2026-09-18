@@ -88,7 +88,12 @@ function loadAdapter(windowOverrides = {}) {
       queryCalls.push({ filters, options });
       return { rows: documents, total: 2, counts: { READY: 1, REVIEW: 1 }, sessionIds: ["s1"] };
     },
-    allDocuments: async () => documents,
+    allDocuments: async (filters) => filters && filters.query
+      ? [
+          { ...documents[0], id: "doc-0", analyzedAt: "2026-09-17T10:00:00.000Z", targetRevision: "A", sigemStatus: "Não Postado" },
+          documents[0],
+        ]
+      : documents,
     deleteSession: async () => true,
     clearAll: async () => true,
     exportBackup: async () => ({ schema: "grcon.analysis.history.backup.v1", sessions: [], documents: [] }),
