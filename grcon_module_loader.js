@@ -30,8 +30,14 @@
     // "Modelos de exportação" continua em requests_app.js, que carrega antes
     // para que os modelos já existam quando a ilha React montar.
     requests: [
-      "xlsx", "excel", "brand", "requests_taxonomy_core.js", "requests_app.js",
-      "react-dist/consultas-app.js",
+      "xlsx", "excel", "brand",
+      // Dependências reais da ilha. Mesmo que algumas também existam como
+      // scripts defer no index, o grupo precisa ser autossuficiente e manter
+      // a ordem: motores -> enriquecimento de Taxonomia -> UI legada/modelos
+      // -> bundle React.
+      "core.js", "requests_core.js", "requests_report.js", "allocation_center.js",
+      "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
+      "requests_taxonomy_core.js", "requests_app.js", "react-dist/consultas-app.js",
     ],
     // O combinador é isolado do banco. As bibliotecas pesadas (pdf-lib no
     // Worker, JSZip pelo grupo "zip") só são carregadas quando o operador
