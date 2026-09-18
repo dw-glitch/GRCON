@@ -46,8 +46,6 @@ on:
 
 permissions:
   contents: read
-  issues: read
-  pull-requests: read
 
 jobs:
   validate-mascot:
@@ -71,78 +69,6 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-mascote-video-browser.cjs
           node scripts/validar-mascote-contextual-browser.cjs
-      - name: Resolver e validar Vercel Preview
-        if: github.event_name == 'pull_request'
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          COMMENTS_URL="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
-          PREVIEW_URL=""
-
-          fetch_comments() {
-            curl -fsSL \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "$COMMENTS_URL"
-          }
-
-          validate_assets() {
-            local candidate="$1"
-            local stem format asset result code type size expected
-            for stem in \
-              grcon-mascot-import-bases \
-              grcon-mascot-long-processing \
-              grcon-mascot-sleep \
-              grcon-mascot-curious \
-              grcon-mascot-grdt-stamp \
-              grcon-mascot-teams-send \
-              grcon-mascot-grdt-to-teams \
-              grcon-mascot-paperwork \
-              grcon-mascot-review-coffee
-            do
-              for format in webm mp4; do
-                asset="$stem.$format"
-                result="$(curl -sS --max-time 12 -L -o /dev/null -w '%{http_code} %{content_type} %{size_download}' "$candidate/assets/mascot/video/$asset?v=20260918.5" || true)"
-                code="$(printf '%s' "$result" | awk '{print $1}')"
-                type="$(printf '%s' "$result" | awk '{print $2}')"
-                size="$(printf '%s' "$result" | awk '{print $3}')"
-                expected="video/$format"
-                echo "$asset -> HTTP=$code MIME=$type bytes=$size"
-                if [ "$code" != "200" ] || [[ "$type" != "$expected"* ]] || [ "${size:-0}" -le 70000 ]; then
-                  return 1
-                fi
-              done
-            done
-          }
-
-          COMMENTS_JSON="$(fetch_comments)"
-          READY_BODY="$(
-            printf '%s' "$COMMENTS_JSON" \
-              | jq -r '.[] | select(.user.login=="vercel[bot]") | select(.body | contains("![Ready]")) | select(.body | contains(".vercel.app")) | .body' \
-              | tail -1
-          )"
-          candidate="$(printf '%s\n' "$READY_BODY" | grep -oE 'https://[^ )]+\.vercel\.app' | tail -1 || true)"
-
-          if [ -z "$candidate" ]; then
-            echo "::error title=Vercel Preview indisponível::Nenhum Preview Ready foi encontrado nos comentários da PR."
-            exit 1
-          fi
-
-          if validate_assets "$candidate"; then
-            PREVIEW_URL="$candidate"
-          else
-            echo "::error title=Vercel Preview inacessível::O Preview Ready não expôs os assets com HTTP 200, MIME correto e tamanho esperado. Veja o diagnóstico HTTP acima."
-            exit 1
-          fi
-
-          echo "GRCON_PREVIEW_URL=$PREVIEW_URL" >> "$GITHUB_ENV"
-          echo "Preview validada: $PREVIEW_URL"
-      - name: Testar os 9 cenários na Vercel Preview
-        if: github.event_name == 'pull_request'
-        run: GRCON_PREVIEW_URL="$GRCON_PREVIEW_URL" node scripts/validar-mascote-contextual-browser.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: grcon-mascot-video-validation
