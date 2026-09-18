@@ -336,9 +336,15 @@ export function ResultsCard(props: {
                 : props.rows.map((item) => <HistoryRow item={item} key={item.id} onOpen={props.onOpen} />)}
           </tbody>
         </table>
-        <empty-state hidden={props.loading || Boolean(props.error) || props.rows.length > 0} id="analysis-history-empty">
-          <strong>Nenhum documento localizado</strong><span>Execute uma análise ou ajuste os filtros.</span>
-        </empty-state>
+        {props.loading || Boolean(props.error) || props.rows.length > 0 ? (
+          <empty-state hidden id="analysis-history-empty">
+            <strong>Nenhum documento localizado</strong><span>Execute uma análise ou ajuste os filtros.</span>
+          </empty-state>
+        ) : (
+          <empty-state id="analysis-history-empty">
+            <strong>Nenhum documento localizado</strong><span>Execute uma análise ou ajuste os filtros.</span>
+          </empty-state>
+        )}
       </div>
       <footer className="analysis-history-footer">
         <small id="analysis-history-storage">{props.storageLabel}</small>
