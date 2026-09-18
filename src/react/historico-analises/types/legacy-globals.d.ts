@@ -17,7 +17,7 @@ interface GrconAnalysisHistoryApi {
   statusKey(value: unknown): string;
   listSessions(): Promise<AnalysisSession[]>;
   queryDocuments(filters: AnalysisHistoryFilters, options: { offset: number; limit: number }): Promise<AnalysisQueryResult>;
-  allDocuments(filters: Partial<AnalysisHistoryFilters> & Record<string, unknown>): Promise<AnalysisDocument[]>;
+  allDocuments(filters: Partial<AnalysisHistoryFilters> & { all?: boolean }): Promise<AnalysisDocument[]>;
   deleteSession(id: string): Promise<boolean>;
   clearAll(): Promise<boolean>;
   exportBackup(): Promise<Record<string, unknown>>;
