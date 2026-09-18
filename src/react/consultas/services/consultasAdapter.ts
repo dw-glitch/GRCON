@@ -157,7 +157,7 @@ function lookupDocument(
     ...RC.consultationRow(resultado),
     ...RC.issuedColumns(historyEntriesFor(resultado, document)),
     ...centerFieldsFor(document, centralIndex),
-  } as ConsultationRow;
+  } as unknown as ConsultationRow;
 }
 
 /**

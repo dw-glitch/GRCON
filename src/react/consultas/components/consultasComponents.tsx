@@ -374,7 +374,6 @@ export function ResultsTable({ visibleRows, hasDocuments, onToggle, onToggleAll,
           </tbody>
         </table>
       </div>
-      {/* eslint-disable-next-line react/no-unknown-property -- `empty-state` é um elemento custom já usado no restante do GRCON, com o mesmo CSS de requests-empty */}
       <empty-state className="requests-empty" hidden={hasDocuments}>
         <strong>Nenhuma consulta ainda</strong>
         <span>{"Anexe uma LD, informe os documentos e clique em \u201cConsultar todos\u201d."}</span>
