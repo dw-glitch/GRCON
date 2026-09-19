@@ -79,6 +79,7 @@ jobs:
           node scripts/validar-mascote-contextual-browser.cjs
           node scripts/validar-consultas-browser.cjs
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: grcon-mascot-video-validation
           path: |
