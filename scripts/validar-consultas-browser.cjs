@@ -35,7 +35,7 @@ function writeLd(file, mode) {
 
 async function openConsultas(page) {
   await page.goto(baseUrl, { waitUntil:"networkidle", timeout:30000 });
-  await page.locator('[data-grcon-view="requests"]').first().click();
+  await page.locator('[data-grcon-view="requests"]:visible').first().click();
   await page.locator("#requests-area-consulta-react").waitFor({ state:"visible", timeout:15000 });
 }
 async function uploadLds(page, files) {
@@ -97,8 +97,8 @@ async function clearLds(page) {
     await opener.click(); const dm=await page.evaluate(function(){const d=document.querySelector(".requests-detail-drawer"),b=d.querySelector(".requests-detail-body");return {width:d.getBoundingClientRect().width,viewport:innerWidth,scroll:b.scrollHeight>=b.clientHeight};}); assert.ok(dm.width<=dm.viewport); assert.equal(dm.scroll,true); await page.locator(".requests-detail-overlay").click({position:{x:5,y:5}});
     await page.evaluate(function(){document.documentElement.dataset.theme="dark";}); await page.screenshot({path:path.join(outputDir,"06-dark-mode-390.png"),fullPage:true}); await page.setViewportSize({width:1366,height:900}); await page.screenshot({path:path.join(outputDir,"07-dark-mode-1366.png"),fullPage:true}); await page.evaluate(function(){document.documentElement.dataset.theme="";});
 
-    for(let i=0;i<3;i+=1){await page.locator('[data-grcon-view="control"]').first().click(); await page.locator('[data-grcon-view="requests"]').first().click(); await page.locator("#requests-area-consulta-react").waitFor({state:"visible"}); assert.equal(await page.locator("#requests-area-consulta-react").count(),1); assert.equal(await page.locator(".requests-detail-drawer").count(),0); assert.equal(await page.locator(".requests-more-actions[open]").count(),0);}
-    await page.evaluate(async function(){await navigator.serviceWorker.ready;}); await page.reload({waitUntil:"networkidle"}); await page.waitForFunction(function(){return Boolean(navigator.serviceWorker.controller);},null,{timeout:10000}); const caches=await page.evaluate(function(){return window.caches.keys();}); assert.ok(caches.some(function(k){return k.includes("phase-b-consultas-ui1-hardening1");})); await page.locator('[data-grcon-view="requests"]').first().click(); await page.locator("#requests-area-consulta-react").waitFor();
+    for(let i=0;i<3;i+=1){await page.locator('[data-grcon-view="control"]:visible').first().click(); await page.locator('[data-grcon-view="requests"]:visible').first().click(); await page.locator("#requests-area-consulta-react").waitFor({state:"visible"}); assert.equal(await page.locator("#requests-area-consulta-react").count(),1); assert.equal(await page.locator(".requests-detail-drawer").count(),0); assert.equal(await page.locator(".requests-more-actions[open]").count(),0);}
+    await page.evaluate(async function(){await navigator.serviceWorker.ready;}); await page.reload({waitUntil:"networkidle"}); await page.waitForFunction(function(){return Boolean(navigator.serviceWorker.controller);},null,{timeout:10000}); const caches=await page.evaluate(function(){return window.caches.keys();}); assert.ok(caches.some(function(k){return k.includes("phase-b-consultas-ui1-hardening1");})); await page.locator('[data-grcon-view="requests"]:visible').first().click(); await page.locator("#requests-area-consulta-react").waitFor();
     ["/requests.css","/react-ui.css","/requests-phase-b.css","/react-dist/consultas-app.js"].forEach(function(p){const r=responses.get(p);assert.equal(r&&r.status,200,p);});
     const relevant=errors.filter(function(x){return /ReferenceError|TypeError|Unhandled|React|duplicate key|Content Security Policy|CSP|service worker/i.test(x);}); assert.deepEqual(relevant,[]);
     fs.writeFileSync(path.join(outputDir,"metrics.json"),JSON.stringify({head:head,widths:widths,mobile:mobile,drawerMobile:dm,caches:caches,errors:errors},null,2));
