@@ -155,7 +155,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(detailMarkup, /Código localizado na LD/);
   assert.match(detailMarkup, /C1O_RNEST_U32_3\.1\.1\.1_TUB_RIR_nt-NF-1288-CONEXOES/);
   assert.match(detailMarkup, /Última GRDT/);
-  assert.match(detailMarkup, /eGRDT \/ emissão/);
+  assert.match(detailMarkup, /Emitido pelo GRCON \/ eGRDT/);
   assert.match(detailMarkup, /Revisão emitida/);
   assert.match(detailMarkup, /Revisão Colar SIGEM/);
   assert.match(detailMarkup, /Status SIGEM/);
