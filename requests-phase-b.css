@@ -1,0 +1,479 @@
+/* FASE B — Consultas
+   Camada visual incremental sobre requests.css. Não contém regra documental. */
+
+html[data-app="GRCON"] #requests-area-consulta-react {
+  display: grid;
+  gap: .85rem;
+}
+
+html[data-app="GRCON"] .requests-context-meta { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+html[data-app="GRCON"] .requests-steps.is-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .45rem;
+}
+html[data-app="GRCON"] .requests-steps.is-compact .requests-step {
+  min-height: 2.65rem;
+  padding: .45rem .65rem;
+}
+html[data-app="GRCON"] .requests-steps.is-compact .requests-step small { display: none; }
+
+html[data-app="GRCON"] .requests-setup-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: .7rem;
+  align-items: start;
+}
+html[data-app="GRCON"] .requests-setup-layout .requests-central-panel { grid-column: 1 / -1; }
+
+html[data-app="GRCON"] .requests-setup-panel {
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--border-1);
+  border-radius: var(--radius-md);
+}
+html[data-app="GRCON"] .requests-setup-head {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  min-height: 3.5rem;
+  padding: .65rem .8rem;
+  background: var(--surface-1);
+}
+html[data-app="GRCON"] .requests-setup-status {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-3);
+  font-size: .78rem;
+  font-weight: 850;
+}
+html[data-app="GRCON"] .requests-setup-panel.is-complete .requests-setup-status {
+  background: var(--success-100);
+  color: var(--success-700);
+}
+html[data-app="GRCON"] .requests-setup-copy { min-width: 0; flex: 1 1 auto; }
+html[data-app="GRCON"] .requests-setup-copy h3 {
+  margin: 0;
+  color: var(--text-1);
+  font-size: .88rem;
+}
+html[data-app="GRCON"] .requests-setup-copy p {
+  margin: .12rem 0 0;
+  color: var(--text-3);
+  font-size: .72rem;
+  overflow-wrap: anywhere;
+}
+html[data-app="GRCON"] .requests-setup-toggle { flex: 0 0 auto; }
+html[data-app="GRCON"] .requests-setup-body {
+  display: grid;
+  gap: .65rem;
+  padding: .75rem .8rem .85rem;
+  border-top: 1px solid var(--border-1);
+  background: var(--surface-2);
+}
+
+html[data-app="GRCON"] .requests-drop {
+  padding: 1rem;
+  border-width: 1px;
+  border-radius: var(--radius-sm);
+}
+html[data-app="GRCON"] .requests-module textarea#requests-paste { min-height: 6.25rem; }
+
+html[data-app="GRCON"] .requests-central-panel .requests-setup-body {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+html[data-app="GRCON"] .requests-central-status { margin: 0; font-size: .75rem; }
+html[data-app="GRCON"] .requests-central-status.tem-erro { color: var(--danger-700); }
+
+html[data-app="GRCON"] .requests-commandbar {
+  position: sticky;
+  top: .4rem;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .55rem .75rem;
+  padding: .6rem .7rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-1) 96%, transparent);
+  box-shadow: var(--shadow-1);
+  backdrop-filter: blur(10px);
+}
+html[data-app="GRCON"] .requests-command-primary,
+html[data-app="GRCON"] .requests-command-results,
+html[data-app="GRCON"] .requests-command-secondary {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+html[data-app="GRCON"] .requests-command-results { justify-content: flex-end; }
+html[data-app="GRCON"] .requests-command-secondary {
+  grid-column: 1 / -1;
+  padding-top: .45rem;
+  border-top: 1px solid var(--border-1);
+}
+html[data-app="GRCON"] .requests-commandbar .primary-button { min-width: 10.5rem; }
+html[data-app="GRCON"] .requests-modelo-escolha {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+html[data-app="GRCON"] .requests-modelo-escolha > span {
+  margin: 0;
+  color: var(--text-3);
+  font-size: .7rem;
+}
+html[data-app="GRCON"] .requests-modelo-escolha select {
+  width: auto;
+  min-width: 10rem;
+  min-height: 2.25rem;
+  padding-block: .35rem;
+  font-size: .78rem;
+}
+html[data-app="GRCON"] .requests-selection-note {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: .72rem;
+}
+
+html[data-app="GRCON"] .requests-more-actions { position: relative; }
+html[data-app="GRCON"] .requests-more-actions > summary {
+  list-style: none;
+  cursor: pointer;
+}
+html[data-app="GRCON"] .requests-more-actions > summary::-webkit-details-marker { display: none; }
+html[data-app="GRCON"] .requests-more-popover {
+  position: absolute;
+  z-index: 30;
+  inset: calc(100% + .35rem) 0 auto auto;
+  min-width: 13rem;
+  display: grid;
+  gap: .2rem;
+  padding: .4rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+}
+html[data-app="GRCON"] .requests-more-popover button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+html[data-app="GRCON"] .requests-results-panel {
+  display: grid;
+  gap: .75rem;
+  padding: .85rem;
+}
+html[data-app="GRCON"] .requests-results-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .75rem;
+}
+html[data-app="GRCON"] .requests-results-intro h3 { margin: 0; font-size: 1rem; }
+html[data-app="GRCON"] .requests-results-intro p { margin: .2rem 0 0; font-size: .76rem; }
+
+html[data-app="GRCON"] .requests-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .5rem;
+}
+html[data-app="GRCON"] button.requests-kpi {
+  min-width: 0;
+  min-height: 4.1rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: .2rem .5rem;
+  padding: .55rem .65rem;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border-1);
+  border-left: 3px solid var(--text-3);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+html[data-app="GRCON"] button.requests-kpi span {
+  color: var(--text-3);
+  font-size: .65rem;
+  font-weight: 750;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+html[data-app="GRCON"] button.requests-kpi strong {
+  color: var(--text-1);
+  font-size: 1.15rem;
+}
+html[data-app="GRCON"] button.requests-kpi b {
+  grid-column: 1 / -1;
+  height: .18rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border-2);
+  font-size: 0;
+}
+html[data-app="GRCON"] button.requests-kpi.ok { border-left-color: var(--success-700); }
+html[data-app="GRCON"] button.requests-kpi.ok b { background: var(--success-700); }
+html[data-app="GRCON"] button.requests-kpi.alerta { border-left-color: var(--warning-800); }
+html[data-app="GRCON"] button.requests-kpi.alerta b { background: var(--warning-800); }
+html[data-app="GRCON"] button.requests-kpi.erro { border-left-color: var(--danger-700); }
+html[data-app="GRCON"] button.requests-kpi.erro b { background: var(--danger-700); }
+html[data-app="GRCON"] button.requests-kpi[aria-pressed="true"] {
+  border-color: var(--brand-600);
+  box-shadow: var(--focus);
+}
+
+html[data-app="GRCON"] .requests-filterbar {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) auto auto auto;
+  align-items: end;
+  gap: .45rem;
+  padding: .55rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+html[data-app="GRCON"] .requests-filterbar label {
+  display: grid;
+  gap: .2rem;
+  color: var(--text-3);
+  font-size: .69rem;
+  font-weight: 700;
+}
+html[data-app="GRCON"] .requests-filterbar input,
+html[data-app="GRCON"] .requests-filterbar select {
+  min-height: 2.25rem;
+  font-size: .78rem;
+}
+html[data-app="GRCON"] .requests-search { position: relative; }
+html[data-app="GRCON"] .requests-search svg {
+  top: auto;
+  bottom: .62rem;
+  left: .65rem;
+}
+html[data-app="GRCON"] .requests-search input {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  padding-left: 2rem;
+}
+html[data-app="GRCON"] .requests-active-filter {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.1rem;
+  padding: .3rem .55rem;
+  border-radius: 999px;
+  background: var(--brand-100);
+  color: var(--brand-800);
+  font-size: .7rem;
+  font-weight: 700;
+}
+html[data-app="GRCON"] .requests-filter-count {
+  color: var(--text-3);
+  font-size: .72rem;
+  white-space: nowrap;
+}
+
+html[data-app="GRCON"] .requests-progress {
+  padding: .55rem .65rem;
+  border-radius: var(--radius-sm);
+  background: var(--brand-50);
+}
+html[data-app="GRCON"] .requests-progress-bar { height: .45rem; }
+
+html[data-app="GRCON"] .requests-table-wrap {
+  max-height: 62vh;
+  border-radius: var(--radius-sm);
+  overscroll-behavior: contain;
+}
+html[data-app="GRCON"] .requests-table {
+  min-width: 64rem;
+  table-layout: fixed;
+}
+html[data-app="GRCON"] .requests-table thead th {
+  min-width: 0;
+  padding: .48rem .55rem;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-2);
+  font-size: .66rem;
+}
+html[data-app="GRCON"] .requests-table tbody td {
+  padding: .5rem .55rem;
+  line-height: 1.35;
+}
+html[data-app="GRCON"] .requests-table tbody tr:hover td { background: var(--brand-50); }
+html[data-app="GRCON"] .requests-table tbody tr.precisa-validar td { background: var(--warning-100); }
+html[data-app="GRCON"] .requests-col-check { width: 2.2rem; }
+html[data-app="GRCON"] .requests-col-status { width: 8rem; }
+html[data-app="GRCON"] .requests-col-doc { width: 15rem; }
+html[data-app="GRCON"] .requests-col-title { width: 18rem; }
+html[data-app="GRCON"] .requests-col-taxonomia { width: 12rem; }
+html[data-app="GRCON"] .requests-col-allocation { width: 10rem; }
+html[data-app="GRCON"] .requests-col-sigem { width: 9rem; }
+html[data-app="GRCON"] .requests-col-ld { width: 10rem; }
+html[data-app="GRCON"] .requests-col-details { width: 6rem; text-align: right; }
+html[data-app="GRCON"] .requests-col-doc code {
+  display: block;
+  color: var(--brand-strong);
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+html[data-app="GRCON"] .requests-table-subtext {
+  display: block;
+  margin-top: .18rem;
+  color: var(--text-3);
+  font-size: .67rem;
+}
+
+html[data-app="GRCON"] .requests-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .4rem;
+  color: var(--text-3);
+  font-size: .72rem;
+}
+html[data-app="GRCON"] .requests-pagination span { margin-right: auto; }
+
+html[data-app="GRCON"] .requests-detail-overlay {
+  position: fixed;
+  z-index: 699;
+  inset: 0;
+  background: rgb(4 18 27 / 46%);
+  backdrop-filter: blur(2px);
+}
+html[data-app="GRCON"] .requests-detail-drawer {
+  position: fixed;
+  z-index: 700;
+  inset: 0 0 0 auto;
+  width: min(41rem, 94vw);
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--surface-1);
+  border-left: 1px solid var(--border-1);
+  box-shadow: var(--shadow-2);
+}
+html[data-app="GRCON"] .requests-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: .85rem 1rem;
+  border-bottom: 1px solid var(--border-1);
+}
+html[data-app="GRCON"] .requests-detail-head > div { flex: 1 1 auto; min-width: 0; }
+html[data-app="GRCON"] .requests-detail-head h3 { margin: 0; font-size: 1rem; }
+html[data-app="GRCON"] .requests-detail-head code {
+  display: block;
+  margin-top: .25rem;
+  color: var(--brand-strong);
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  overflow-wrap: anywhere;
+}
+html[data-app="GRCON"] .requests-detail-body {
+  min-height: 0;
+  overflow: auto;
+  padding: .85rem 1rem 1.25rem;
+}
+html[data-app="GRCON"] .requests-detail-section + .requests-detail-section { margin-top: 1rem; }
+html[data-app="GRCON"] .requests-detail-section h4 {
+  margin: 0 0 .45rem;
+  color: var(--text-2);
+  font-size: .7rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+html[data-app="GRCON"] .requests-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+html[data-app="GRCON"] .requests-detail-field {
+  min-width: 0;
+  padding: .55rem .65rem;
+  border-bottom: 1px solid var(--border-1);
+}
+html[data-app="GRCON"] .requests-detail-field:nth-child(odd) { border-right: 1px solid var(--border-1); }
+html[data-app="GRCON"] .requests-detail-field dt {
+  margin-bottom: .16rem;
+  color: var(--text-3);
+  font-size: .65rem;
+  font-weight: 750;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+html[data-app="GRCON"] .requests-detail-field dd {
+  margin: 0;
+  color: var(--text-1);
+  font-size: .76rem;
+  overflow-wrap: anywhere;
+}
+html[data-app="GRCON"] .requests-detail-field code { font-family: var(--font-mono); font-size: .72rem; }
+html[data-app="GRCON"] .requests-detail-wide { grid-column: 1 / -1; border-right: 0 !important; }
+html[data-app="GRCON"] .requests-detail-list { margin: .2rem 0 0; padding-left: 1rem; }
+html[data-app="GRCON"] .requests-detail-list li + li { margin-top: .2rem; }
+
+html[data-app="GRCON"] .requests-filter-empty { border: 1px dashed var(--border-2); border-radius: var(--radius-sm); }
+
+@media (max-width: 72rem) {
+  html[data-app="GRCON"] .requests-commandbar { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .requests-command-results { justify-content: flex-start; }
+  html[data-app="GRCON"] .requests-command-secondary { grid-column: 1; }
+  html[data-app="GRCON"] .requests-filterbar { grid-template-columns: minmax(12rem, 1fr) repeat(2, minmax(9rem, auto)); }
+  html[data-app="GRCON"] .requests-filter-count { grid-column: 1 / -1; }
+}
+
+@media (max-width: 60rem) {
+  html[data-app="GRCON"] .requests-setup-layout { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .requests-setup-layout .requests-central-panel { grid-column: 1; }
+  html[data-app="GRCON"] .requests-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-app="GRCON"] .requests-filterbar { grid-template-columns: 1fr 1fr; }
+  html[data-app="GRCON"] .requests-search { grid-column: 1 / -1; }
+  html[data-app="GRCON"] .requests-filter-count { grid-column: 1 / -1; }
+}
+
+@media (max-width: 44rem) {
+  html[data-app="GRCON"] .requests-steps.is-compact { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .requests-steps.is-compact .requests-step small { display: block; }
+  html[data-app="GRCON"] .requests-setup-head { align-items: flex-start; }
+  html[data-app="GRCON"] .requests-setup-toggle { min-width: 5.5rem; }
+  html[data-app="GRCON"] .requests-central-panel .requests-setup-body { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .requests-command-primary,
+  html[data-app="GRCON"] .requests-command-results,
+  html[data-app="GRCON"] .requests-command-secondary { align-items: stretch; }
+  html[data-app="GRCON"] .requests-commandbar button,
+  html[data-app="GRCON"] .requests-commandbar details,
+  html[data-app="GRCON"] .requests-commandbar summary { width: 100%; }
+  html[data-app="GRCON"] .requests-modelo-escolha { width: 100%; align-items: stretch; flex-direction: column; }
+  html[data-app="GRCON"] .requests-modelo-escolha select { width: 100%; }
+  html[data-app="GRCON"] .requests-selection-note { margin-left: 0; }
+  html[data-app="GRCON"] .requests-more-popover { position: static; margin-top: .35rem; }
+  html[data-app="GRCON"] .requests-results-intro { align-items: flex-start; flex-direction: column; }
+  html[data-app="GRCON"] .requests-summary { grid-template-columns: 1fr 1fr; }
+  html[data-app="GRCON"] .requests-filterbar { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .requests-search,
+  html[data-app="GRCON"] .requests-filter-count { grid-column: 1; }
+  html[data-app="GRCON"] .requests-pagination { align-items: stretch; flex-wrap: wrap; }
+  html[data-app="GRCON"] .requests-pagination span { width: 100%; margin: 0; }
+  html[data-app="GRCON"] .requests-detail-grid { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .requests-detail-field:nth-child(odd) { border-right: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="GRCON"] .requests-progress-bar i { transition: none; }
+}

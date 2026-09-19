@@ -2042,27 +2042,32 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
 }
 
-check("cabeçalho React da consulta não se sobrepõe e a Colar SIGEM não fica na frente", () => {
-  const css = fs.readFileSync(path.join(root, "requests.css"), "utf8");
+check("Consulta React mantém tabela principal legível e evidências completas no detalhe", () => {
+  const legacyCss = fs.readFileSync(path.join(root, "requests.css"), "utf8");
+  const phaseBCss = fs.readFileSync(path.join(root, "requests-phase-b.css"), "utf8");
   const components = fs.readFileSync(path.join(root, "src/react/consultas/components/consultasComponents.tsx"), "utf8");
 
-  assert.doesNotMatch(css, /\.requests-table thead th \{[^}]*white-space: nowrap/,
-    "o cabeçalho precisa poder quebrar em duas linhas");
-  assert.match(css, /\.requests-table thead th \{[^}]*min-width: \d/,
-    "cada coluna precisa de um piso para não ficar menor que o próprio rótulo");
-  assert.match(css, /\.requests-table \{[^}]*min-width: 88rem/);
-
-  const iAlocadoTela = components.indexOf('"Alocado?"');
-  const iColarTela = components.indexOf('"Revisão na Colar SIGEM"');
-  const iStatusTela = components.indexOf('"Status SIGEM"');
-  assert.ok(iAlocadoTela > -1 && iAlocadoTela < iColarTela && iColarTela < iStatusTela,
-    "a ordem da tabela React mantém as colunas SIGEM juntas depois de Alocado?");
+  assert.doesNotMatch(legacyCss, /\.requests-table thead th \{[^}]*white-space: nowrap/,
+    "o cabeçalho base precisa poder quebrar em duas linhas");
+  assert.match(phaseBCss, /\.requests-table \{[^}]*min-width: 64rem/,
+    "a FASE B deve reduzir a largura mínima da tabela operacional");
+  assert.match(phaseBCss, /table-layout: fixed/,
+    "a tabela principal deve manter colunas previsíveis");
+  assert.match(components, /const PAGE_SIZE = 100/,
+    "listas grandes não podem renderizar milhares de linhas de uma vez");
+  assert.match(components, /DocumentDetailsDrawer/,
+    "as evidências retiradas da tabela principal precisam continuar acessíveis");
+  assert.match(components, /Código localizado na LD/);
+  assert.match(components, /Revisão Colar SIGEM/);
+  assert.match(components, /Resposta fiscal/);
+  assert.match(components, /Todas as LDs/);
 
   const report = fs.readFileSync(path.join(root, "requests_report.js"), "utf8");
   const iColar = report.indexOf("REVISÃO NA COLAR SIGEM");
   const iAlocado = report.indexOf('"ALOCADO?"');
   const iStatus = report.indexOf("STATUS NO SIGEM");
-  assert.ok(iAlocado < iColar && iColar < iStatus, "a exportação segue a mesma ordem da tela");
+  assert.ok(iAlocado < iColar && iColar < iStatus,
+    "a modernização visual não pode alterar a ordem histórica das colunas exportadas");
 });
 check("central de alocação responde status e comentário da fiscal por documento", () => {
   const AC = AllocationCenter;
