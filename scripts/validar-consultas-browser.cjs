@@ -35,6 +35,14 @@ function writeLd(file, mode) {
 
 async function openConsultas(page) {
   await page.goto(baseUrl, { waitUntil:"networkidle", timeout:30000 });
+  // Este roteiro valida Consultas, não autenticação/cloud. No CI local não há
+  // sessão Supabase, então o index permanece intencionalmente bloqueado por
+  // `grcon-cloud-pending`, que torna toda a UI invisível. Libere somente o
+  // gate visual de teste, seguindo o mesmo padrão dos testes do mascote.
+  await page.evaluate(function () {
+    document.documentElement.classList.remove("grcon-cloud-pending");
+    window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
+  });
   await page.locator('[data-grcon-view="requests"]:visible').first().click();
   await page.locator("#requests-area-consulta-react").waitFor({ state:"visible", timeout:15000 });
 }
