@@ -235,7 +235,10 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(phaseBCss, /prefers-reduced-motion/);
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  assert.match(sw, /phase-a-history-react1/);\n  assert.match(sw, /phase-b-consultas-ui1/);\n  assert.match(sw, /react-ui\\.css/);\n  assert.match(sw, /requests-phase-b\\.css/);
+  assert.match(sw, /phase-a-history-react1/);
+  assert.match(sw, /phase-b-consultas-ui1/);
+  assert.match(sw, /react-ui\.css/);
+  assert.match(sw, /requests-phase-b\.css/);
   const heavyStart = sw.indexOf("const HEAVY_ASSETS");
   const heavyEnd = sw.indexOf("]);", heavyStart);
   assert.doesNotMatch(sw.slice(heavyStart, heavyEnd), /consultas-app\.js/);
