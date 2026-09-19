@@ -25,6 +25,8 @@ const ASSETS = [
   "grcon-responsive.css",
   "grcon_cloud.css",
   "requests.css",
+  "react-ui.css",
+  "requests-phase-b.css",
   "pdf-merge.css",
   "grcon-icon.png",
   "grcon-logo-app.png",
