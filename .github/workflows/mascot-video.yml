@@ -17,6 +17,10 @@ on:
       - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
       - "scripts/validar-mascote-contextual-browser.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "src/react/consultas/**"
+      - "requests-phase-b.css"
+      - "react-ui.css"
       - "tests/fixtures/grcon-mascot-video.html"
       - "tests/fixtures/grcon-mascot-scenarios.html"
       - "tests/grcon_mascot_video.cjs"
@@ -37,6 +41,10 @@ on:
       - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
       - "scripts/validar-mascote-contextual-browser.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "src/react/consultas/**"
+      - "requests-phase-b.css"
+      - "react-ui.css"
       - "tests/fixtures/grcon-mascot-video.html"
       - "tests/fixtures/grcon-mascot-scenarios.html"
       - "tests/grcon_mascot_video.cjs"
@@ -69,10 +77,13 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-mascote-video-browser.cjs
           node scripts/validar-mascote-contextual-browser.cjs
+          node scripts/validar-consultas-browser.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: grcon-mascot-video-validation
           path: |
             artifacts/mascot-video/*.png
             artifacts/mascot-contextual/*.png
+            artifacts/consultas-browser/*.png
+            artifacts/consultas-browser/metrics.json
           if-no-files-found: error
