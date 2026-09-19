@@ -306,7 +306,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
     "drawer precisa bloquear scroll do body");
   assert.match(componentSource, /body\.style\.overflow = previousOverflow/,
     "drawer precisa restaurar exatamente o overflow anterior");
-  assert.match(componentSource, /event\.key === "Tab"/,
+  assert.match(componentSource, /event\.key !== "Tab"/,
     "drawer precisa manter Tab e Shift\+Tab dentro do modal");
   assert.match(componentSource, /previousFocus\?\.isConnected/,
     "drawer precisa devolver foco ao acionador");
