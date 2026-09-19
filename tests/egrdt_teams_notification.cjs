@@ -68,6 +68,7 @@ assert.equal(Api.isAllowedFlowUrl("https://example.com/webhook"), false);
 const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+const teamsApp = fs.readFileSync(path.join(root, "egrdt_teams_notification_app.js"), "utf8");
 const history = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
 assert.match(html, /id="egrdt-teams-ready"/);
 assert.match(html, /egrdt_teams_notification_core\.js/);
@@ -75,7 +76,7 @@ assert.match(html, /egrdt_teams_notification_app\.js/);
 assert.match(app, /grcon:egrdt-generated/);
 assert.match(history, /data-egrdt-teams-record-id/);
 assert.match(history, /GrconEgrdtTeamsNotification\?\.open/);
-assert.match(app, /Avisar equipe no Teams/);
+assert.match(teamsApp, /Avisar equipe no Teams/);
 assert.equal(fs.existsSync(path.join(root, "assets", "mascot", "grcon-mascot-teams-thumbsup.png")), true, "asset PNG do mascote precisa existir no pacote");
 
 console.log("OK: aviso manual de eGRDT ao Teams validado");
