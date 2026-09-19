@@ -35,14 +35,29 @@ function writeLd(file, mode) {
 
 async function openConsultas(page) {
   await page.goto(baseUrl, { waitUntil:"networkidle", timeout:30000 });
-  // Este roteiro valida Consultas, não autenticação/cloud. No CI local não há
-  // sessão Supabase, então o index permanece intencionalmente bloqueado por
-  // `grcon-cloud-pending`, que torna toda a UI invisível. Libere somente o
-  // gate visual de teste, seguindo o mesmo padrão dos testes do mascote.
+  // Este roteiro valida Consultas, não autenticação/cloud. No CI não existe
+  // sessão Supabase; além disso, getSession() pode terminar depois do goto e
+  // recolocar o gate. O observer abaixo neutraliza SOMENTE no documento do
+  // Playwright essa corrida assíncrona, sem alterar o código publicado.
   await page.evaluate(function () {
-    document.documentElement.classList.remove("grcon-cloud-pending");
+    const root = document.documentElement;
+    const surface = document.querySelector("#grcon-cloud-auth");
+    const releaseTestGate = function () {
+      if (root.classList.contains("grcon-cloud-pending")) root.classList.remove("grcon-cloud-pending");
+      if (surface && !surface.hasAttribute("hidden")) surface.setAttribute("hidden", "");
+    };
+    releaseTestGate();
+    const observer = new MutationObserver(releaseTestGate);
+    observer.observe(root, { attributes:true, attributeFilter:["class"] });
+    if (surface) observer.observe(surface, { attributes:true, attributeFilter:["hidden"] });
+    window.__grconConsultasCloudGateObserver = observer;
     window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
   });
+  await page.waitForFunction(function () {
+    const surface = document.querySelector("#grcon-cloud-auth");
+    return !document.documentElement.classList.contains("grcon-cloud-pending")
+      && (!surface || surface.hasAttribute("hidden"));
+  }, null, { timeout:5000 });
   await page.locator('[data-grcon-view="requests"]:visible').first().click();
   await page.locator("#requests-area-consulta-react").waitFor({ state:"visible", timeout:15000 });
 }
