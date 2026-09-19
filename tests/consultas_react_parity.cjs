@@ -231,7 +231,33 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(pagedMarkup, /Mostrando 1–100 de 500/);
   assert.match(pagedMarkup, /Página 1 de 5/);
 
+  const exportRows500 = manyRows.map(({ item, linha }) => adapter.buildExportRow(item.document, linha));
+  await copyLoad.exports.consultasAdapter.copyRowsToClipboard(exportRows500);
+  const copiedDocuments = [...copied.matchAll(/DOC-\d{4}/g)].map((match) => match[0]);
+  assert.equal(new Set(copiedDocuments).size, 500,
+    "cópia precisa usar o dataset completo, não somente a página visual");
+
+  const workbook500 = new ExcelJS.Workbook();
+  const sheet500 = workbook500.addWorksheet("Consulta");
+  Report.writeConsultationSheet(sheet500, exportRows500, {
+    columns: model.columns,
+    title: "GRCON · TESTE 500",
+    metadata: "paginação visual não limita exportação",
+    ldNames: "LD_003.xlsx",
+  });
+  const documentColumn = model.columns.findIndex((column) => column.key === "document") + 1;
+  let exportedDocumentCount = 0;
+  sheet500.eachRow((row, rowNumber) => {
+    if (rowNumber >= 15 && String(row.getCell(documentColumn).value || "").startsWith("DOC-")) exportedDocumentCount += 1;
+  });
+  assert.equal(exportedDocumentCount, 500,
+    "Excel precisa receber o dataset completo, não somente a página visual");
+
   const hookSource = fs.readFileSync(hookPath, "utf8");
+  assert.match(hookSource, /const exportRows = useMemo\(\(\) => documents/,
+    "cópia/exportação precisa continuar derivada do conjunto completo de documentos");
+  assert.doesNotMatch(hookSource, /const exportRows = useMemo\(\(\) => visibleRows/,
+    "paginação/filtro visual não pode limitar o dataset de exportação");
   const runStart = hookSource.indexOf("const runQuery");
   const runEnd = hookSource.indexOf("const exportRows", runStart);
   const runQuery = hookSource.slice(runStart, runEnd);
