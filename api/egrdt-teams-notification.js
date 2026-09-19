@@ -4,6 +4,9 @@ const DEFAULT_SUPABASE_URL = "https://kvyrttccwzdhasplfxnr.supabase.co";
 const DEFAULT_SUPABASE_KEY = "sb_publishable_K-6GJbXO-MJMWp9Re5lMmg_l1riCpP-";
 const MAX_BODY_BYTES = 64000;
 const FLOW_TIMEOUT_MS = 15000;
+const ADAPTIVE_CARD_VERSION = "1.2";
+const MASCOT_ASSET_PATH = "/assets/mascot/grcon-mascot-teams-thumbsup.png";
+const DEFAULT_MASCOT_PUBLIC_URL = "https://raw.githubusercontent.com/dw-glitch/GRCON/90880fac67426e690602803cc712c15e69bbdf2c/assets/mascot/grcon-mascot-teams-thumbsup.png";
 
 function send(res, status, payload) {
   res.statusCode = status;
@@ -26,6 +29,146 @@ function escapeHtml(value) {
 function buildTableHtml(egrdtNumber, items) {
   const rows = items.map((item) => `<tr><td>${escapeHtml(egrdtNumber)}</td><td>${escapeHtml(item.document)} · Rev. ${escapeHtml(item.revision || "—")}</td><td>${escapeHtml(item.discipline || "Não informada")}</td></tr>`).join("");
   return `<table><thead><tr><th>EGRDT</th><th>REVISÕES ENVIADAS NA GRDT (DOCUMENTO · REVISÃO)</th><th>DISCIPLINAS</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function resolveMascotUrl() {
+  const candidate = text(process.env.GRCON_TEAMS_MASCOT_URL, 1200) || DEFAULT_MASCOT_PUBLIC_URL;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" || url.username || url.password) return DEFAULT_MASCOT_PUBLIC_URL;
+    return url.href;
+  } catch (_) {
+    return DEFAULT_MASCOT_PUBLIC_URL;
+  }
+}
+
+function buildFallbackText(payload) {
+  const revisions = payload.egrdt.items.map((item) => `- ${item.document} · Rev. ${item.revision || "—"} · ${item.discipline || "Não informada"}`).join("\n");
+  return [
+    "✅ eGRDT pronta para postagem",
+    `eGRDT: ${payload.egrdt.number}`,
+    "",
+    "Revisões enviadas na GRDT:",
+    revisions,
+    "",
+    `👥 ${payload.destination.name}`,
+    "Favor realizar a postagem no SIGEM.",
+    "",
+    "Enviado pelo GRCON",
+  ].join("\n");
+}
+
+function buildAdaptiveCard(payload, imageUrl) {
+  const revisionBlocks = payload.egrdt.items.map((item) => ({
+    type: "Container",
+    spacing: "Small",
+    separator: true,
+    items: [
+      {
+        type: "TextBlock",
+        text: `${item.document} · Rev. ${item.revision || "—"}`,
+        weight: "Bolder",
+        wrap: true,
+      },
+      {
+        type: "TextBlock",
+        text: item.discipline || "Não informada",
+        isSubtle: true,
+        size: "Small",
+        spacing: "None",
+        wrap: true,
+      },
+    ],
+  }));
+
+  return {
+    type: "AdaptiveCard",
+    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+    version: ADAPTIVE_CARD_VERSION,
+    body: [
+      {
+        type: "ColumnSet",
+        columns: [
+          {
+            type: "Column",
+            width: "auto",
+            verticalContentAlignment: "Center",
+            items: [{
+              type: "Image",
+              url: imageUrl,
+              size: "Medium",
+              altText: "Mascote GRCON dando joia",
+              horizontalAlignment: "Center",
+            }],
+          },
+          {
+            type: "Column",
+            width: "stretch",
+            verticalContentAlignment: "Center",
+            items: [
+              {
+                type: "TextBlock",
+                text: "✅ eGRDT pronta para postagem",
+                weight: "Bolder",
+                size: "Medium",
+                wrap: true,
+              },
+              {
+                type: "TextBlock",
+                text: payload.egrdt.number,
+                weight: "Bolder",
+                spacing: "Small",
+                wrap: true,
+              },
+              {
+                type: "TextBlock",
+                text: "Pronta para postagem no SIGEM",
+                isSubtle: true,
+                spacing: "None",
+                wrap: true,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        type: "TextBlock",
+        text: "Revisões enviadas na GRDT",
+        weight: "Bolder",
+        spacing: "Medium",
+        separator: true,
+        wrap: true,
+      },
+      ...revisionBlocks,
+      {
+        type: "Container",
+        spacing: "Medium",
+        separator: true,
+        items: [
+          {
+            type: "TextBlock",
+            text: `👥 ${payload.destination.name}`,
+            weight: "Bolder",
+            wrap: true,
+          },
+          {
+            type: "TextBlock",
+            text: "Favor realizar a postagem no SIGEM.",
+            spacing: "Small",
+            wrap: true,
+          },
+        ],
+      },
+      {
+        type: "TextBlock",
+        text: "Enviado pelo GRCON",
+        isSubtle: true,
+        size: "Small",
+        spacing: "Medium",
+        wrap: true,
+      },
+    ],
+  };
 }
 
 function isAllowedFlowUrl(raw) {
@@ -61,7 +204,7 @@ function normalizePayload(input) {
   if (confirmation.folderConfirmed !== true) throw new Error("A colocação da eGRDT na pasta não foi confirmada.");
   if (text(destination.name, 120) !== "Qualidade - Documentação") throw new Error("Destino do Teams inválido.");
   if (!items.length) throw new Error("Nenhum documento foi informado no aviso.");
-  return {
+  const normalized = {
     schemaVersion: 1,
     eventType: "EGRDT_READY_FOR_SIGEM",
     eventId,
@@ -97,6 +240,16 @@ function normalizePayload(input) {
       tableHtml: buildTableHtml(egrdtNumber, items),
     },
   };
+  const mascotUrl = resolveMascotUrl();
+  normalized.message.mascot = {
+    url: mascotUrl,
+    altText: "Mascote GRCON dando joia",
+    format: "image/png",
+    sourcePath: MASCOT_ASSET_PATH,
+  };
+  normalized.message.fallbackText = buildFallbackText(normalized);
+  normalized.message.adaptiveCard = buildAdaptiveCard(normalized, mascotUrl);
+  return normalized;
 }
 
 async function readBody(req) {
@@ -180,4 +333,4 @@ async function handler(req, res) {
 }
 
 module.exports = handler;
-module.exports._internal = { isAllowedFlowUrl, normalizePayload, verifyUserAndMembership, readBody, escapeHtml, buildTableHtml };
+module.exports._internal = { isAllowedFlowUrl, normalizePayload, verifyUserAndMembership, readBody, escapeHtml, buildTableHtml, buildAdaptiveCard, buildFallbackText, resolveMascotUrl, ADAPTIVE_CARD_VERSION, MASCOT_ASSET_PATH, DEFAULT_MASCOT_PUBLIC_URL };
