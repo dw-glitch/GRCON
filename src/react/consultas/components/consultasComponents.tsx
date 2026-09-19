@@ -685,7 +685,7 @@ export function DocumentDetailsDrawer({ entry, central, onClose }: {
             <h4>GRDT, eGRDT e SIGEM</h4>
             <dl className="requests-detail-grid">
               <DetailField label="Última GRDT">{linha?.lastGrdt || celulaVazio()}</DetailField>
-              <DetailField label="Emitido pelo GRCON / eGRDT">{celulaEmitido(linha)}</DetailField>
+              <DetailField label="Emitido pelo GRCON">{celulaEmitido(linha)}</DetailField>
               <DetailField label="Revisão emitida no SIGEM">{celulaRevisaoEmitida(linha)}</DetailField>
               <DetailField label="Revisão Colar SIGEM">{celulaRevisaoColarSigem(linha)}</DetailField>
               <DetailField label="Status SIGEM" wide>{linha?.sigemStatus || celulaVazio()}</DetailField>
