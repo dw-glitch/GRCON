@@ -29,5 +29,14 @@ jobs:
       - name: Instalar dependências de forma reproduzível
         run: npm ci --ignore-scripts
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Testes
+        run: npm test
+
       - name: Executar validação completa
         run: npm run verify
