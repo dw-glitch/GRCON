@@ -41,15 +41,20 @@ async function openConsultas(page) {
   // Playwright essa corrida assíncrona, sem alterar o código publicado.
   await page.evaluate(function () {
     const root = document.documentElement;
-    const surface = document.querySelector("#grcon-cloud-auth");
     const releaseTestGate = function () {
       if (root.classList.contains("grcon-cloud-pending")) root.classList.remove("grcon-cloud-pending");
+      const surface = document.querySelector("#grcon-cloud-auth");
       if (surface && !surface.hasAttribute("hidden")) surface.setAttribute("hidden", "");
     };
     releaseTestGate();
     const observer = new MutationObserver(releaseTestGate);
     observer.observe(root, { attributes:true, attributeFilter:["class"] });
-    if (surface) observer.observe(surface, { attributes:true, attributeFilter:["hidden"] });
+    observer.observe(document.body, {
+      childList:true,
+      subtree:true,
+      attributes:true,
+      attributeFilter:["hidden"],
+    });
     window.__grconConsultasCloudGateObserver = observer;
     window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
   });
