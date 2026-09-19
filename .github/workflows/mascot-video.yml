@@ -65,6 +65,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      - name: Instalar dependências de forma reproduzível
+        run: npm ci --ignore-scripts
+      - name: Gerar bundles React usados pela validação em navegador
+        run: npm run build
       - run: node tests/grcon_mascot_video.cjs && node tests/grcon_mascot_scenarios.cjs
       - name: Instalar navegador de validação
         run: |
