@@ -71,8 +71,17 @@ async function uploadLds(page, files) {
   await page.waitForFunction(function () { return document.querySelectorAll(".requests-ld-loading").length === 0; }, null, { timeout:15000 });
 }
 async function clearLds(page) {
-  const button = page.getByRole("button", { name:"Remover todas" });
-  if (await button.count()) { await button.click(); await page.waitForFunction(function () { return document.querySelectorAll(".requests-ld-item").length === 0; }); }
+  const panel = page.locator(".requests-setup-panel").first();
+  const body = panel.locator(".requests-setup-body");
+  if (await body.getAttribute("hidden") !== null) {
+    const edit = panel.getByRole("button", { name:"Alterar" });
+    if (await edit.count()) await edit.click();
+  }
+  const button = panel.getByRole("button", { name:"Remover todas" });
+  if (await button.count()) {
+    await button.click();
+    await page.waitForFunction(function () { return document.querySelectorAll(".requests-ld-item").length === 0; });
+  }
 }
 
 (async function () {
