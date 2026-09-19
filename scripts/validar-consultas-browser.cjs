@@ -35,34 +35,14 @@ function writeLd(file, mode) {
 
 async function openConsultas(page) {
   await page.goto(baseUrl, { waitUntil:"networkidle", timeout:30000 });
-  // Este roteiro valida Consultas, não autenticação/cloud. No CI não existe
-  // sessão Supabase; além disso, getSession() pode terminar depois do goto e
-  // recolocar o gate. O observer abaixo neutraliza SOMENTE no documento do
-  // Playwright essa corrida assíncrona, sem alterar o código publicado.
-  await page.evaluate(function () {
-    const root = document.documentElement;
-    const releaseTestGate = function () {
-      if (root.classList.contains("grcon-cloud-pending")) root.classList.remove("grcon-cloud-pending");
-      const surface = document.querySelector("#grcon-cloud-auth");
-      if (surface && !surface.hasAttribute("hidden")) surface.setAttribute("hidden", "");
-    };
-    releaseTestGate();
-    const observer = new MutationObserver(releaseTestGate);
-    observer.observe(root, { attributes:true, attributeFilter:["class"] });
-    observer.observe(document.body, {
-      childList:true,
-      subtree:true,
-      attributes:true,
-      attributeFilter:["hidden"],
-    });
-    window.__grconConsultasCloudGateObserver = observer;
-    window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
-  });
-  await page.waitForFunction(function () {
-    const surface = document.querySelector("#grcon-cloud-auth");
-    return !document.documentElement.classList.contains("grcon-cloud-pending")
-      && (!surface || surface.hasAttribute("hidden"));
-  }, null, { timeout:5000 });
+  // Este roteiro valida Consultas, não autenticação/cloud. Em vez de mutar o
+  // estado assíncrono do login (que pode relocar o gate após getSession), a
+  // página de teste recebe apenas uma sobrescrita visual. O código publicado,
+  // a sessão Supabase e os eventos do app permanecem intocados.
+  await page.addStyleTag({ content: [
+    'html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }',
+    '#grcon-cloud-auth { display: none !important; }',
+  ].join("\n") });
   await page.locator('[data-grcon-view="requests"]:visible').first().click();
   await page.locator("#requests-area-consulta-react").waitFor({ state:"visible", timeout:15000 });
 }
