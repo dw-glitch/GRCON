@@ -222,7 +222,7 @@ export function CentralPanel({ central, onAttach, onClear }: {
       <p aria-live="polite" className={`requests-central-status${hasError ? " tem-erro" : ""}`}>{statusText}</p>
       <div className="requests-inline-actions">
         <button className="secondary-button compact" type="button" onClick={() => inputRef.current?.click()}>
-          Anexar Controle de Solicitações
+          Anexar o Controle de Solicitações
         </button>
         <input
           ref={inputRef}
