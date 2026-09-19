@@ -24,6 +24,7 @@ function SetupPanel({
   description,
   complete,
   summary,
+  activeSummary = "",
   defaultExpanded = true,
   optional = false,
   className = "",
@@ -34,6 +35,7 @@ function SetupPanel({
   description: string;
   complete: boolean;
   summary: string;
+  activeSummary?: string;
   defaultExpanded?: boolean;
   optional?: boolean;
   className?: string;
@@ -54,7 +56,7 @@ function SetupPanel({
         <span className="requests-setup-status" aria-hidden="true">{complete ? "✓" : step}</span>
         <div className="requests-setup-copy">
           <h3>{title}{optional ? " (opcional)" : ""}</h3>
-          <p>{complete ? summary : description}</p>
+          <p>{complete ? summary : activeSummary || description}</p>
         </div>
         <button
           className="text-button compact requests-setup-toggle"
@@ -95,6 +97,31 @@ export function StepsIndicator({ ldsReady, documentsCount, resultsCount, compact
   );
 }
 
+export function deriveLdVisualState(lds: LdEntry[], readyCount: number) {
+  const total = lds.length;
+  const errors = lds.filter((item) => Boolean(item.error)).length;
+  const ready = Math.min(total, Math.max(0, readyCount));
+  const loading = Math.max(0, total - ready - errors);
+  const complete = total > 0 && loading === 0 && errors === 0 && ready === total;
+
+  let summary = "Nenhuma LD anexada";
+  if (loading > 0) {
+    const parts = [];
+    if (ready > 0) parts.push(`${formatBr(ready)} pronta(s)`);
+    parts.push(`${formatBr(loading)} sendo lida(s)…`);
+    if (errors > 0) parts.push(`${formatBr(errors)} com erro`);
+    summary = parts.join(" · ");
+  } else if (errors > 0) {
+    summary = ready > 0
+      ? `${formatBr(ready)} válida(s) · ${formatBr(errors)} com erro`
+      : `${formatBr(errors)} LD(s) com erro`;
+  } else if (ready > 0) {
+    summary = `${formatBr(ready)} LD(s) válida(s)`;
+  }
+
+  return { total, ready, loading, errors, complete, summary };
+}
+
 export function LdPanel({ lds, readyCount, lastLd, onAddFiles, onRemove, onClear, onReuseHint }: {
   lds: LdEntry[];
   readyCount: number;
@@ -107,17 +134,16 @@ export function LdPanel({ lds, readyCount, lastLd, onAddFiles, onRemove, onClear
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const openPicker = () => inputRef.current?.click();
-  const summary = readyCount
-    ? `${formatBr(readyCount)} LD(s) válida(s) · ${formatBr(lds.length)} arquivo(s) anexado(s)`
-    : "Nenhuma LD válida carregada";
+  const ldState = deriveLdVisualState(lds, readyCount);
 
   return (
     <SetupPanel
       step="1"
       title="Listas de documentos (LD)"
       description="Anexe uma ou mais LDs para formar a base da consulta."
-      complete={readyCount > 0}
-      summary={summary}
+      complete={ldState.complete}
+      summary={ldState.summary}
+      activeSummary={ldState.total ? ldState.summary : ""}
     >
       <div
         className={`requests-drop${dragOver ? " is-over" : ""}`}
@@ -285,6 +311,70 @@ export function DocumentsPanel({ count, onAdd, onPasteClipboard }: {
   );
 }
 
+function MoreActionsMenu({
+  hasDocuments,
+  hasResults,
+  canUndo,
+  onDedupe,
+  onUndo,
+  onClear,
+}: {
+  hasDocuments: boolean;
+  hasResults: boolean;
+  canUndo: boolean;
+  onDedupe: () => void;
+  onUndo: () => void;
+  onClear: () => void;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    const details = detailsRef.current;
+    if (!details) return undefined;
+
+    const close = (restoreFocus = false) => {
+      if (!details.open) return;
+      details.open = false;
+      if (restoreFocus) details.querySelector<HTMLElement>("summary")?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (details.open && target && !details.contains(target)) close(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !details.open) return;
+      event.preventDefault();
+      close(true);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  const runAndClose = (action: () => void) => () => {
+    try {
+      action();
+    } finally {
+      if (detailsRef.current) detailsRef.current.open = false;
+    }
+  };
+
+  return (
+    <details ref={detailsRef} className="requests-more-actions">
+      <summary className="secondary-button compact">Mais ações</summary>
+      <div className="requests-more-popover">
+        <button className="text-button" disabled={!hasDocuments} type="button" onClick={runAndClose(onDedupe)}>Remover duplicados</button>
+        <button className="text-button" disabled={!canUndo} type="button" onClick={runAndClose(onUndo)}>Desfazer</button>
+        <button className="text-button danger" disabled={!hasDocuments && !hasResults} type="button" onClick={runAndClose(onClear)}>Limpar consulta</button>
+      </div>
+    </details>
+  );
+}
+
 export function ActionsBar(props: {
   canQuery: boolean;
   hasSelection: boolean;
@@ -362,16 +452,23 @@ export function ActionsBar(props: {
       </div>
 
       <div className="requests-command-secondary">
-        <button className="text-button" disabled={!hasDocuments} type="button" onClick={onSelectAll}>Selecionar todos</button>
+        <button
+          className="text-button"
+          disabled={!hasDocuments}
+          type="button"
+          title="Seleciona todos os documentos da consulta, em todas as páginas."
+          aria-label="Selecionar todos os documentos da consulta, em todas as páginas"
+          onClick={onSelectAll}
+        >Selecionar todos</button>
         <button className="text-button" disabled={!hasSelection} type="button" onClick={onSelectNone}>Limpar seleção</button>
-        <details className="requests-more-actions">
-          <summary className="secondary-button compact">Mais ações</summary>
-          <div className="requests-more-popover">
-            <button className="text-button" disabled={!hasDocuments} type="button" onClick={onDedupe}>Remover duplicados</button>
-            <button className="text-button" disabled={!canUndo} type="button" onClick={onUndo}>Desfazer</button>
-            <button className="text-button danger" disabled={!hasDocuments && !hasResults} type="button" onClick={onClear}>Limpar consulta</button>
-          </div>
-        </details>
+        <MoreActionsMenu
+          hasDocuments={hasDocuments}
+          hasResults={hasResults}
+          canUndo={canUndo}
+          onDedupe={onDedupe}
+          onUndo={onUndo}
+          onClear={onClear}
+        />
         <span className="requests-selection-note" aria-live="polite">{selectionNote}</span>
       </div>
     </section>
@@ -610,7 +707,7 @@ function CheckAll({ allSelected, someSelected, onToggleAll }: {
   return (
     <input
       ref={ref}
-      aria-label="Selecionar todos os resultados"
+      aria-label="Selecionar todos os documentos da consulta, em todas as páginas"
       type="checkbox"
       checked={allSelected}
       onChange={(event) => onToggleAll(event.target.checked)}
@@ -636,17 +733,68 @@ export function DocumentDetailsDrawer({ entry, central, onClose }: {
   central: AllocationCenterIndex | null;
   onClose: () => void;
 }) {
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!entry) return undefined;
-    closeRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+
+    const body = document.body;
+    const previousOverflow = body.style.overflow;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    body.style.overflow = "hidden";
+    drawerRef.current?.focus();
+
+    const getFocusable = () => {
+      const drawer = drawerRef.current;
+      if (!drawer) return [] as HTMLElement[];
+      return Array.from(drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter((element) => element.getAttribute("aria-hidden") !== "true");
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [entry, onClose]);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const drawer = drawerRef.current;
+      if (!drawer) return;
+      const focusable = getFocusable();
+      if (!focusable.length) {
+        event.preventDefault();
+        drawer.focus();
+        return;
+      }
+
+      const active = document.activeElement;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const focusIsOutside = !(active instanceof Node) || !drawer.contains(active);
+
+      if (event.shiftKey && (active === drawer || active === first || focusIsOutside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === drawer || active === last || focusIsOutside)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      body.style.overflow = previousOverflow;
+      const previousFocus = previousFocusRef.current;
+      if (previousFocus?.isConnected) previousFocus.focus();
+      previousFocusRef.current = null;
+    };
+  }, [entry]);
 
   if (!entry) return null;
   const { item, linha } = entry;
@@ -655,14 +803,27 @@ export function DocumentDetailsDrawer({ entry, central, onClose }: {
 
   return (
     <>
-      <button className="requests-detail-overlay" type="button" aria-label="Fechar detalhes" onClick={onClose} />
-      <aside className="requests-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="requests-detail-title">
+      <button
+        className="requests-detail-overlay"
+        type="button"
+        tabIndex={-1}
+        aria-hidden="true"
+        onClick={() => onCloseRef.current()}
+      />
+      <aside
+        ref={drawerRef}
+        className="requests-detail-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="requests-detail-title"
+        tabIndex={-1}
+      >
         <header className="requests-detail-head">
           <div>
             <h3 id="requests-detail-title">Detalhes do documento</h3>
             <code>{item.document}</code>
           </div>
-          <button ref={closeRef} className="icon-button compact" type="button" aria-label="Fechar detalhes" onClick={onClose}>×</button>
+          <button className="icon-button compact" type="button" aria-label="Fechar detalhes" onClick={() => onCloseRef.current()}>×</button>
         </header>
 
         <div className="requests-detail-body">

@@ -126,6 +126,35 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.equal(sheet.getCell(15, taxIndex + 1).value, "TX-LITERAL / A01");
 
   const components = transpileModule(componentsPath, true).exports;
+
+  const ldReady = { id: "ld-ready", name: "LD_OK.xlsx", size: 10, records: [{}], history: [], error: "" };
+  const ldLoading = { id: "ld-loading", name: "LD_LENDO.xlsx", size: 11, records: [], history: [], error: "" };
+  const ldError = { id: "ld-error", name: "LD_ERRO.xlsx", size: 12, records: [], history: [], error: "Arquivo inválido" };
+  let ldState = components.deriveLdVisualState([ldReady, ldLoading, ldError], 1);
+  assert.equal(ldState.total, 3);
+  assert.equal(ldState.ready, 1);
+  assert.equal(ldState.loading, 1);
+  assert.equal(ldState.errors, 1);
+  assert.equal(ldState.complete, false, "LD não pode concluir enquanto outra ainda está lendo ou tem erro");
+  assert.match(ldState.summary, /1 pronta/);
+  assert.match(ldState.summary, /1 sendo lida/);
+  assert.match(ldState.summary, /1 com erro/);
+
+  ldState = components.deriveLdVisualState([
+    ldReady,
+    { ...ldReady, id: "ld-ready-2", name: "LD_OK_2.xlsx" },
+    { ...ldReady, id: "ld-ready-3", name: "LD_OK_3.xlsx" },
+  ], 3);
+  assert.equal(ldState.complete, true, "o painel só conclui quando todas as LDs terminaram sem erro");
+  assert.equal(ldState.loading, 0);
+  assert.equal(ldState.errors, 0);
+  assert.match(ldState.summary, /3 LD\(s\) válida\(s\)/);
+
+  ldState = components.deriveLdVisualState([ldReady, ldError], 1);
+  assert.equal(ldState.complete, false, "erro precisa permanecer visível em vez de recolher o painel");
+  assert.match(ldState.summary, /1 válida/);
+  assert.match(ldState.summary, /1 com erro/);
+
   const item = { id: "doc-1", document: "DOC-TESTE", selected: true };
   const markup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.ResultsTable, {
     visibleRows: [{ item, linha: sourceRow }],
@@ -164,6 +193,10 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(detailMarkup, /Todas as LDs/);
   assert.match(detailMarkup, /Regra \/ evidência/);
   assert.match(detailMarkup, /TX-LITERAL \/ A01/);
+  assert.match(detailMarkup, /role="dialog"/);
+  assert.match(detailMarkup, /aria-modal="true"/);
+  assert.match(detailMarkup, /requests-detail-drawer[^>]*tabindex="-1"/);
+  assert.match(detailMarkup, /requests-detail-overlay[^>]*tabindex="-1"[^>]*aria-hidden="true"/);
 
   const emptyMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.ResultsTable, {
     visibleRows: [{ item, linha: { ...sourceRow, internalTaxonomy: "" } }],
@@ -198,7 +231,33 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(pagedMarkup, /Mostrando 1–100 de 500/);
   assert.match(pagedMarkup, /Página 1 de 5/);
 
+  const exportRows500 = manyRows.map(({ item, linha }) => adapter.buildExportRow(item.document, linha));
+  await copyLoad.exports.consultasAdapter.copyRowsToClipboard(exportRows500);
+  const copiedDocuments = [...copied.matchAll(/DOC-\d{4}/g)].map((match) => match[0]);
+  assert.equal(new Set(copiedDocuments).size, 500,
+    "cópia precisa usar o dataset completo, não somente a página visual");
+
+  const workbook500 = new ExcelJS.Workbook();
+  const sheet500 = workbook500.addWorksheet("Consulta");
+  Report.writeConsultationSheet(sheet500, exportRows500, {
+    columns: model.columns,
+    title: "GRCON · TESTE 500",
+    metadata: "paginação visual não limita exportação",
+    ldNames: "LD_003.xlsx",
+  });
+  const documentColumn = model.columns.findIndex((column) => column.key === "document") + 1;
+  let exportedDocumentCount = 0;
+  sheet500.eachRow((row, rowNumber) => {
+    if (rowNumber >= 15 && String(row.getCell(documentColumn).value || "").startsWith("DOC-")) exportedDocumentCount += 1;
+  });
+  assert.equal(exportedDocumentCount, 500,
+    "Excel precisa receber o dataset completo, não somente a página visual");
+
   const hookSource = fs.readFileSync(hookPath, "utf8");
+  assert.match(hookSource, /const exportRows = useMemo\(\(\) => documents/,
+    "cópia/exportação precisa continuar derivada do conjunto completo de documentos");
+  assert.doesNotMatch(hookSource, /const exportRows = useMemo\(\(\) => visibleRows/,
+    "paginação/filtro visual não pode limitar o dataset de exportação");
   const runStart = hookSource.indexOf("const runQuery");
   const runEnd = hookSource.indexOf("const exportRows", runStart);
   const runQuery = hookSource.slice(runStart, runEnd);
@@ -226,17 +285,43 @@ function transpileModule(filePath, jsx, overrides = {}) {
     "bundle React não pode depender do global Node process no navegador");
 
   const indexHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  assert.match(indexHtml, /react-ui\.css/);
-  assert.match(indexHtml, /requests-phase-b\.css/);
+  assert.doesNotMatch(indexHtml, /\\n<link/,
+    "index.html não pode conter texto literal \\n entre tags do head");
+  const headStart = indexHtml.indexOf("<head>");
+  const headEnd = indexHtml.indexOf("</head>");
+  assert.ok(headStart >= 0 && headEnd > headStart, "head precisa fechar no local lógico");
+  const headHtml = indexHtml.slice(headStart, headEnd);
+  for (const stylesheet of ["requests.css", "react-ui.css", "requests-phase-b.css"]) {
+    assert.match(headHtml, new RegExp(`<link href="${stylesheet.replace(".", "\\.")}" rel="stylesheet" media="print" data-grcon-async-style=""\\s*/>`),
+      `${stylesheet} precisa permanecer dentro do head e no bootstrap assíncrono`);
+  }
 
   const phaseBCss = fs.readFileSync(path.join(root, "requests-phase-b.css"), "utf8");
   assert.match(phaseBCss, /\.requests-detail-drawer/);
   assert.match(phaseBCss, /\.requests-pagination/);
   assert.match(phaseBCss, /prefers-reduced-motion/);
 
+  const componentSource = fs.readFileSync(componentsPath, "utf8");
+  assert.match(componentSource, /body\.style\.overflow = "hidden"/,
+    "drawer precisa bloquear scroll do body");
+  assert.match(componentSource, /body\.style\.overflow = previousOverflow/,
+    "drawer precisa restaurar exatamente o overflow anterior");
+  assert.match(componentSource, /event\.key !== "Tab"/,
+    "drawer precisa manter Tab e Shift\+Tab dentro do modal");
+  assert.match(componentSource, /previousFocus\?\.isConnected/,
+    "drawer precisa devolver foco ao acionador");
+  assert.match(componentSource, /document\.addEventListener\("pointerdown", onPointerDown\)/,
+    "Mais ações precisa fechar no clique fora");
+  assert.match(componentSource, /event\.key !== "Escape"/,
+    "Mais ações precisa tratar Escape");
+  assert.match(componentSource, /detailsRef\.current\.open = false/,
+    "Mais ações precisa fechar depois de executar a ação");
+  assert.match(componentSource, /todas as páginas/,
+    "seleção global precisa deixar claro que não se limita à página visual");
+
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   assert.match(sw, /phase-a-history-react1/);
-  assert.match(sw, /phase-b-consultas-ui1/);
+  assert.match(sw, /phase-b-consultas-ui1-hardening1/);
   assert.match(sw, /react-ui\.css/);
   assert.match(sw, /requests-phase-b\.css/);
   const heavyStart = sw.indexOf("const HEAVY_ASSETS");

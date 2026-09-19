@@ -17,6 +17,10 @@ on:
       - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
       - "scripts/validar-mascote-contextual-browser.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "src/react/consultas/**"
+      - "requests-phase-b.css"
+      - "react-ui.css"
       - "tests/fixtures/grcon-mascot-video.html"
       - "tests/fixtures/grcon-mascot-scenarios.html"
       - "tests/grcon_mascot_video.cjs"
@@ -37,6 +41,10 @@ on:
       - "vercel.json"
       - "scripts/validar-mascote-video-browser.cjs"
       - "scripts/validar-mascote-contextual-browser.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "src/react/consultas/**"
+      - "requests-phase-b.css"
+      - "react-ui.css"
       - "tests/fixtures/grcon-mascot-video.html"
       - "tests/fixtures/grcon-mascot-scenarios.html"
       - "tests/grcon_mascot_video.cjs"
@@ -57,6 +65,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      - name: Instalar dependências de forma reproduzível
+        run: npm ci --ignore-scripts
+      - name: Gerar bundles React usados pela validação em navegador
+        run: npm run build
       - run: node tests/grcon_mascot_video.cjs && node tests/grcon_mascot_scenarios.cjs
       - name: Instalar navegador de validação
         run: |
@@ -69,10 +82,14 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-mascote-video-browser.cjs
           node scripts/validar-mascote-contextual-browser.cjs
+          node scripts/validar-consultas-browser.cjs
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: grcon-mascot-video-validation
           path: |
             artifacts/mascot-video/*.png
             artifacts/mascot-contextual/*.png
+            artifacts/consultas-browser/*.png
+            artifacts/consultas-browser/metrics.json
           if-no-files-found: error
