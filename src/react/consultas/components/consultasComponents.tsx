@@ -6,6 +6,7 @@
  * pelo hook/useConsultas através do adapter.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { UiDrawer } from "../../core/ui/UiPrimitives";
 import type {
   AllocationCenterIndex,
   ConsultationRow,
@@ -733,166 +734,93 @@ export function DocumentDetailsDrawer({ entry, central, onClose }: {
   central: AllocationCenterIndex | null;
   onClose: () => void;
 }) {
-  const drawerRef = useRef<HTMLElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    if (!entry) return undefined;
-
-    const body = document.body;
-    const previousOverflow = body.style.overflow;
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    body.style.overflow = "hidden";
-    drawerRef.current?.focus();
-
-    const getFocusable = () => {
-      const drawer = drawerRef.current;
-      if (!drawer) return [] as HTMLElement[];
-      return Array.from(drawer.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )).filter((element) => element.getAttribute("aria-hidden") !== "true");
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const drawer = drawerRef.current;
-      if (!drawer) return;
-      const focusable = getFocusable();
-      if (!focusable.length) {
-        event.preventDefault();
-        drawer.focus();
-        return;
-      }
-
-      const active = document.activeElement;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const focusIsOutside = !(active instanceof Node) || !drawer.contains(active);
-
-      if (event.shiftKey && (active === drawer || active === first || focusIsOutside)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === drawer || active === last || focusIsOutside)) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-      body.style.overflow = previousOverflow;
-      const previousFocus = previousFocusRef.current;
-      if (previousFocus?.isConnected) previousFocus.focus();
-      previousFocusRef.current = null;
-    };
-  }, [entry]);
-
   if (!entry) return null;
   const { item, linha } = entry;
   const issuedHistory = linha?.issuedAll || [];
   const sigemHistory = linha?.sigemLdRevisionAll || [];
 
   return (
-    <>
-      <button
-        className="requests-detail-overlay"
-        type="button"
-        tabIndex={-1}
-        aria-hidden="true"
-        onClick={() => onCloseRef.current()}
-      />
-      <aside
-        ref={drawerRef}
-        className="requests-detail-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="requests-detail-title"
-        tabIndex={-1}
-      >
-        <header className="requests-detail-head">
-          <div>
-            <h3 id="requests-detail-title">Detalhes do documento</h3>
-            <code>{item.document}</code>
-          </div>
-          <button className="icon-button compact" type="button" aria-label="Fechar detalhes" onClick={() => onCloseRef.current()}>×</button>
-        </header>
-
-        <div className="requests-detail-body">
-          <section className="requests-detail-section">
-            <h4>Identificação e localização</h4>
-            <dl className="requests-detail-grid">
-              <DetailField label="Situação">{selo(linha)}</DetailField>
-              <DetailField label="Título informado">{item.requestedTitle || celulaVazio()}</DetailField>
-              <DetailField label="Código localizado na LD" wide>{celulaCodigoLocalizado(linha)}</DetailField>
-              <DetailField label="Forma localizada">{linha?.ldForm || celulaVazio()}</DetailField>
-              <DetailField label="Título na LD">{linha?.title || celulaVazio()}</DetailField>
-              <DetailField label="Taxonomia interna">{celulaTaxonomiaInterna(linha)}</DetailField>
-              <DetailField label="Pesquisa com/sem nt-" wide>{linha?.ntSearchMessage || celulaVazio()}</DetailField>
-              <DetailField label="Evidência da forma localizada" wide>{linha?.ntFormsDetail || celulaVazio()}</DetailField>
-              <DetailField label="Ajuste de código" wide>{linha?.codeAdjustmentNote || celulaVazio()}</DetailField>
-            </dl>
-          </section>
-
-          <section className="requests-detail-section">
-            <h4>GRDT, eGRDT e SIGEM</h4>
-            <dl className="requests-detail-grid">
-              <DetailField label="Última GRDT">{linha?.lastGrdt || celulaVazio()}</DetailField>
-              <DetailField label="Emitido pelo GRCON">{celulaEmitido(linha)}</DetailField>
-              <DetailField label="Revisão emitida no SIGEM">{celulaRevisaoEmitida(linha)}</DetailField>
-              <DetailField label="Revisão Colar SIGEM">{celulaRevisaoColarSigem(linha)}</DetailField>
-              <DetailField label="Status SIGEM" wide>{linha?.sigemStatus || celulaVazio()}</DetailField>
-              <DetailField label="Histórico de emissões" wide>
-                {issuedHistory.length
-                  ? <ul className="requests-detail-list">{issuedHistory.map((entryItem, index) => (
-                      <li key={`${entryItem.egrdt || "egrdt"}-${entryItem.revision || ""}-${index}`}>
-                        {entryItem.egrdt || "eGRDT não registrada"}{entryItem.revision ? ` · Rev. ${entryItem.revision}` : ""}{entryItem.date ? ` · ${entryItem.date}` : ""}
-                      </li>
-                    ))}</ul>
-                  : celulaVazio("sem histórico de emissão")}
-              </DetailField>
-              <DetailField label="Histórico Colar SIGEM" wide>
-                {sigemHistory.length
-                  ? <ul className="requests-detail-list">{sigemHistory.map((entryItem, index) => (
-                      <li key={`${entryItem.revision || "rev"}-${entryItem.status || ""}-${index}`}>
-                        {entryItem.revision ? `Rev. ${entryItem.revision}` : "Revisão não registrada"}{entryItem.status ? ` · ${entryItem.status}` : ""}
-                      </li>
-                    ))}</ul>
-                  : celulaVazio("sem revisão registrada na Colar SIGEM")}
-              </DetailField>
-            </dl>
-          </section>
-
-          <section className="requests-detail-section">
-            <h4>Alocação e fiscal</h4>
-            <dl className="requests-detail-grid">
-              <DetailField label="Alocado?">{linha?.allocated || celulaVazio()}</DetailField>
-              <DetailField label="Alocação">{linha?.allocation || celulaVazio()}</DetailField>
-              <DetailField label="Status da central" wide>{celulaCentralStatus(central, linha)}</DetailField>
-              <DetailField label="Resposta fiscal" wide>{linha?.centerFiscalAnswer || celulaVazio()}</DetailField>
-            </dl>
-          </section>
-
-          <section className="requests-detail-section">
-            <h4>LD e evidências</h4>
-            <dl className="requests-detail-grid">
-              <DetailField label="LD">{linha?.ld || celulaVazio()}</DetailField>
-              <DetailField label="Ocorrências">{linha?.occurrenceCount ? formatBr(linha.occurrenceCount) : celulaVazio()}</DetailField>
-              <DetailField label="Todas as LDs" wide>{linha?.allLds || celulaVazio()}</DetailField>
-              <DetailField label="Regra / evidência" wide>{linha?.rule || celulaVazio()}</DetailField>
-            </dl>
-          </section>
+    <UiDrawer
+      open
+      onClose={onClose}
+      labelledBy="requests-detail-title"
+      drawerClassName="requests-detail-drawer"
+      overlayClassName="requests-detail-overlay"
+    >
+      <header className="requests-detail-head">
+        <div>
+          <h3 id="requests-detail-title">Detalhes do documento</h3>
+          <code>{item.document}</code>
         </div>
-      </aside>
-    </>
+        <button className="icon-button compact" type="button" aria-label="Fechar detalhes" onClick={onClose}>×</button>
+      </header>
+
+      <div className="requests-detail-body">
+        <section className="requests-detail-section">
+          <h4>Identificação e localização</h4>
+          <dl className="requests-detail-grid">
+            <DetailField label="Situação">{selo(linha)}</DetailField>
+            <DetailField label="Título informado">{item.requestedTitle || celulaVazio()}</DetailField>
+            <DetailField label="Código localizado na LD" wide>{celulaCodigoLocalizado(linha)}</DetailField>
+            <DetailField label="Forma localizada">{linha?.ldForm || celulaVazio()}</DetailField>
+            <DetailField label="Título na LD">{linha?.title || celulaVazio()}</DetailField>
+            <DetailField label="Taxonomia interna">{celulaTaxonomiaInterna(linha)}</DetailField>
+            <DetailField label="Pesquisa com/sem nt-" wide>{linha?.ntSearchMessage || celulaVazio()}</DetailField>
+            <DetailField label="Evidência da forma localizada" wide>{linha?.ntFormsDetail || celulaVazio()}</DetailField>
+            <DetailField label="Ajuste de código" wide>{linha?.codeAdjustmentNote || celulaVazio()}</DetailField>
+          </dl>
+        </section>
+
+        <section className="requests-detail-section">
+          <h4>GRDT, eGRDT e SIGEM</h4>
+          <dl className="requests-detail-grid">
+            <DetailField label="Última GRDT">{linha?.lastGrdt || celulaVazio()}</DetailField>
+            <DetailField label="Emitido pelo GRCON">{celulaEmitido(linha)}</DetailField>
+            <DetailField label="Revisão emitida no SIGEM">{celulaRevisaoEmitida(linha)}</DetailField>
+            <DetailField label="Revisão Colar SIGEM">{celulaRevisaoColarSigem(linha)}</DetailField>
+            <DetailField label="Status SIGEM" wide>{linha?.sigemStatus || celulaVazio()}</DetailField>
+            <DetailField label="Histórico de emissões" wide>
+              {issuedHistory.length
+                ? <ul className="requests-detail-list">{issuedHistory.map((entryItem, index) => (
+                    <li key={`${entryItem.egrdt || "egrdt"}-${entryItem.revision || ""}-${index}`}>
+                      {entryItem.egrdt || "eGRDT não registrada"}{entryItem.revision ? ` · Rev. ${entryItem.revision}` : ""}{entryItem.date ? ` · ${entryItem.date}` : ""}
+                    </li>
+                  ))}</ul>
+                : celulaVazio("sem histórico de emissão")}
+            </DetailField>
+            <DetailField label="Histórico Colar SIGEM" wide>
+              {sigemHistory.length
+                ? <ul className="requests-detail-list">{sigemHistory.map((entryItem, index) => (
+                    <li key={`${entryItem.revision || "rev"}-${entryItem.status || ""}-${index}`}>
+                      {entryItem.revision ? `Rev. ${entryItem.revision}` : "Revisão não registrada"}{entryItem.status ? ` · ${entryItem.status}` : ""}
+                    </li>
+                  ))}</ul>
+                : celulaVazio("sem revisão registrada na Colar SIGEM")}
+            </DetailField>
+          </dl>
+        </section>
+
+        <section className="requests-detail-section">
+          <h4>Alocação e fiscal</h4>
+          <dl className="requests-detail-grid">
+            <DetailField label="Alocado?">{linha?.allocated || celulaVazio()}</DetailField>
+            <DetailField label="Alocação">{linha?.allocation || celulaVazio()}</DetailField>
+            <DetailField label="Status da central" wide>{celulaCentralStatus(central, linha)}</DetailField>
+            <DetailField label="Resposta fiscal" wide>{linha?.centerFiscalAnswer || celulaVazio()}</DetailField>
+          </dl>
+        </section>
+
+        <section className="requests-detail-section">
+          <h4>LD e evidências</h4>
+          <dl className="requests-detail-grid">
+            <DetailField label="LD">{linha?.ld || celulaVazio()}</DetailField>
+            <DetailField label="Ocorrências">{linha?.occurrenceCount ? formatBr(linha.occurrenceCount) : celulaVazio()}</DetailField>
+            <DetailField label="Todas as LDs" wide>{linha?.allLds || celulaVazio()}</DetailField>
+            <DetailField label="Regra / evidência" wide>{linha?.rule || celulaVazio()}</DetailField>
+          </dl>
+        </section>
+      </div>
+    </UiDrawer>
   );
 }
 
