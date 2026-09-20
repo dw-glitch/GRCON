@@ -409,7 +409,7 @@ async function resetFilters(page) {
     await page.locator(".analysis-history-manage > summary").click().catch(() => {});
     await page.locator("#analysis-history-session").selectOption("history-session-old");
     await page.waitForFunction(() => /120 de 240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""));
-    if (!(await page.locator(".analysis-history-manage").getAttribute("open"))) await page.locator(".analysis-history-manage > summary").click();
+    if (!(await page.locator(".analysis-history-manage").evaluate((element) => element.open))) await page.locator(".analysis-history-manage > summary").click();
     page.once("dialog", async (dialog) => { assert.equal(dialog.type(), "confirm"); await dialog.accept(); });
     await page.locator("#analysis-history-delete-session").click();
     await page.waitForFunction(() => document.querySelectorAll("#analysis-history-session option").length === 2);
@@ -419,7 +419,7 @@ async function resetFilters(page) {
     await page.evaluate(() => {
       window.GrconEnhancements = Object.assign({}, window.GrconEnhancements || {}, { confirmAction: async () => true });
     });
-    if (!(await page.locator(".analysis-history-manage").getAttribute("open"))) await page.locator(".analysis-history-manage > summary").click();
+    if (!(await page.locator(".analysis-history-manage").evaluate((element) => element.open))) await page.locator(".analysis-history-manage > summary").click();
     await page.locator("#analysis-history-clear").click();
     await page.waitForFunction(() => /Nenhum documento/.test(document.querySelector("#analysis-history-page-status")?.textContent || ""));
 
