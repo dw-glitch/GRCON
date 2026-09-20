@@ -1,0 +1,89 @@
+name: FASE B — Histórico de análises
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/react/historico-analises/**"
+      - "src/react/core/ui/**"
+      - "src/react/consultas/**"
+      - "analysis-history*.css"
+      - "react-ui.css"
+      - "requests-phase-b.css"
+      - "index.html"
+      - "sw.js"
+      - "scripts/validar-historico-analises-browser.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "tests/historico_analises_react.cjs"
+      - "tests/consultas_react_parity.cjs"
+      - "docs/phase-b-historico-analises-parity.md"
+      - ".github/workflows/history-phase-b-browser.yml"
+  pull_request:
+    paths:
+      - "src/react/historico-analises/**"
+      - "src/react/core/ui/**"
+      - "src/react/consultas/**"
+      - "analysis-history*.css"
+      - "react-ui.css"
+      - "requests-phase-b.css"
+      - "index.html"
+      - "sw.js"
+      - "scripts/validar-historico-analises-browser.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "tests/historico_analises_react.cjs"
+      - "tests/consultas_react_parity.cjs"
+      - "docs/phase-b-historico-analises-parity.md"
+      - ".github/workflows/history-phase-b-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: Histórico + regressão de Consultas
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências de forma reproduzível
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Paridade React
+        run: node tests/historico_analises_react.cjs && node tests/consultas_react_parity.cjs
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Validar Histórico e Consultas em navegador real
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-history-phase-b.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-historico-analises-browser.cjs
+          node scripts/validar-consultas-browser.cjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase-b-historico-analises
+          path: |
+            artifacts/historico-analises-browser/*.png
+            artifacts/historico-analises-browser/metrics.json
+            artifacts/consultas-browser/*.png
+            artifacts/consultas-browser/metrics.json
+          if-no-files-found: error
