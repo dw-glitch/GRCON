@@ -137,11 +137,19 @@ async function seedHistory(page, fixture) {
 }
 
 async function installIntegrationFixture(page) {
+  // Carregue os módulos reais primeiro. O carregamento do SIGEM pode mudar a
+  // view ativa e a navegação de retorno pode remontar a UI do Histórico.
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) {
       await window.GRCONModuleLoader.ensureModule("history");
       await window.GRCONModuleLoader.ensureModule("sigem");
     }
+  });
+  await openHistory(page);
+
+  // Só depois da navegação instale os stubs de integração. Assim eles não são
+  // sobrescritos por um mount tardio do módulo real antes das asserções.
+  await page.evaluate(() => {
     const record = {
       id: "history-egrdt-fixture",
       egrdtNumber: "0130870-C1O-PGV-G-1558-2026",
@@ -179,9 +187,7 @@ async function installIntegrationFixture(page) {
     }
     window.dispatchEvent(new CustomEvent("grcon:analysis-history-updated"));
   });
-  await openHistory(page);
 }
-
 async function resetFilters(page) {
   await page.locator("#analysis-history-search").fill("");
   await page.locator("#analysis-history-status").selectOption("ALL");
