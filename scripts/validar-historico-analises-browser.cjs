@@ -179,6 +179,7 @@ async function installIntegrationFixture(page) {
     }
     window.dispatchEvent(new CustomEvent("grcon:analysis-history-updated"));
   });
+  await openHistory(page);
 }
 
 async function resetFilters(page) {
