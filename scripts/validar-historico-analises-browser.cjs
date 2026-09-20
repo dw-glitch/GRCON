@@ -137,11 +137,19 @@ async function seedHistory(page, fixture) {
 }
 
 async function installIntegrationFixture(page) {
+  // Carregue os módulos reais primeiro. O carregamento do SIGEM pode mudar a
+  // view ativa e a navegação de retorno pode remontar a UI do Histórico.
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) {
       await window.GRCONModuleLoader.ensureModule("history");
       await window.GRCONModuleLoader.ensureModule("sigem");
     }
+  });
+  await openHistory(page);
+
+  // Só depois da navegação instale os stubs de integração. Assim eles não são
+  // sobrescritos por um mount tardio do módulo real antes das asserções.
+  await page.evaluate(() => {
     const record = {
       id: "history-egrdt-fixture",
       egrdtNumber: "0130870-C1O-PGV-G-1558-2026",
@@ -164,24 +172,20 @@ async function installIntegrationFixture(page) {
     });
     const loader = window.GRCONModuleLoader;
     if (loader) {
-      window.GRCONModuleLoader = new Proxy(loader, {
-        get(target, property) {
-          if (property === "ensureModule") {
-            return async (name) => {
-              if (name === "history" || name === "sigem") return;
-              return target.ensureModule?.(name);
-            };
-          }
-          const value = target[property];
-          return typeof value === "function" ? value.bind(target) : value;
+      const ensure = typeof loader.ensure === "function" ? loader.ensure.bind(loader) : undefined;
+      const ensureModule = typeof loader.ensureModule === "function" ? loader.ensureModule.bind(loader) : undefined;
+      window.GRCONModuleLoader = {
+        ...loader,
+        ...(ensure ? { ensure } : {}),
+        ensureModule: async (name) => {
+          if (name === "history" || name === "sigem") return;
+          return ensureModule?.(name);
         },
-      });
+      };
     }
     window.dispatchEvent(new CustomEvent("grcon:analysis-history-updated"));
   });
-  await openHistory(page);
 }
-
 async function resetFilters(page) {
   await page.locator("#analysis-history-search").fill("");
   await page.locator("#analysis-history-status").selectOption("ALL");
@@ -405,7 +409,7 @@ async function resetFilters(page) {
     await page.locator(".analysis-history-manage > summary").click().catch(() => {});
     await page.locator("#analysis-history-session").selectOption("history-session-old");
     await page.waitForFunction(() => /120 de 240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""));
-    if (!(await page.locator(".analysis-history-manage").getAttribute("open"))) await page.locator(".analysis-history-manage > summary").click();
+    if (!(await page.locator(".analysis-history-manage").evaluate((element) => element.open))) await page.locator(".analysis-history-manage > summary").click();
     page.once("dialog", async (dialog) => { assert.equal(dialog.type(), "confirm"); await dialog.accept(); });
     await page.locator("#analysis-history-delete-session").click();
     await page.waitForFunction(() => document.querySelectorAll("#analysis-history-session option").length === 2);
@@ -415,7 +419,7 @@ async function resetFilters(page) {
     await page.evaluate(() => {
       window.GrconEnhancements = Object.assign({}, window.GrconEnhancements || {}, { confirmAction: async () => true });
     });
-    if (!(await page.locator(".analysis-history-manage").getAttribute("open"))) await page.locator(".analysis-history-manage > summary").click();
+    if (!(await page.locator(".analysis-history-manage").evaluate((element) => element.open))) await page.locator(".analysis-history-manage > summary").click();
     await page.locator("#analysis-history-clear").click();
     await page.waitForFunction(() => /Nenhum documento/.test(document.querySelector("#analysis-history-page-status")?.textContent || ""));
 
