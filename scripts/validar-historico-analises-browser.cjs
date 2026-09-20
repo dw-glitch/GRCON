@@ -108,6 +108,17 @@ async function revealApp(page) {
   ].join("\n") });
 }
 
+async function reloadApp(page) {
+  try {
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+  } catch (error) {
+    const message = String(error && error.message ? error.message : error);
+    if (!/ERR_ABORTED|frame was detached/i.test(message)) throw error;
+    await page.waitForTimeout(250);
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+  }
+}
+
 async function openHistory(page) {
   await page.locator('[data-grcon-view="analysis-history"]:visible').first().click();
   await page.locator("#grcon-analysis-history-root").waitFor({ state: "visible", timeout: 15000 });
@@ -214,10 +225,10 @@ async function resetFilters(page) {
       await Promise.all(keys.map((key) => caches.delete(key)));
       await caches.open("grcon-v5.40.0-browser-old-cache");
     });
-    await page.reload({ waitUntil: "networkidle" });
+    await reloadApp(page);
     await revealApp(page);
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
-    await page.reload({ waitUntil: "networkidle" });
+    await reloadApp(page);
     await revealApp(page);
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
     const postUpgradeCaches = await page.evaluate(() => caches.keys());
@@ -477,7 +488,7 @@ async function resetFilters(page) {
 
     // Cache quente/reload com SW controlador.
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
-    await page.reload({ waitUntil: "networkidle" });
+    await reloadApp(page);
     await revealApp(page);
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
     await openHistory(page);
