@@ -1,0 +1,1064 @@
+/* FASE B — Histórico de análises
+   Camada visual escopada. Regras de domínio permanecem no Core/adapter. */
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-phase-b {
+  display: grid;
+  min-width: 0;
+  gap: .85rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-header {
+  position: relative;
+  min-width: 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-header .ui-page-header {
+  padding-right: 11.5rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-header-tools {
+  position: absolute;
+  top: .15rem;
+  right: 0;
+  z-index: 15;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-manage {
+  position: relative;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-manage > summary {
+  min-height: var(--control-h, 2.5rem);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .5rem .75rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  background: var(--surface-1);
+  font-size: .76rem;
+  font-weight: 750;
+  cursor: pointer;
+  user-select: none;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-manage > summary:hover,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-manage > summary:focus-visible {
+  border-color: var(--brand-500);
+  color: var(--brand-strong);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-manage-menu {
+  position: absolute;
+  top: calc(100% + .35rem);
+  right: 0;
+  width: min(20rem, calc(100vw - 2rem));
+  display: grid;
+  gap: .42rem;
+  padding: .65rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-manage-menu button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-menu-label {
+  display: block;
+  padding: .15rem .15rem 0;
+  color: var(--text-3);
+  font-size: .64rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-menu-danger-label {
+  margin-top: .3rem;
+  padding-top: .55rem;
+  border-top: 1px solid var(--border-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-danger-action {
+  color: var(--danger-700);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-section-heading,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-results-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .85rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-section-heading > div,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-results-header > div {
+  min-width: 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-section-heading > div > span,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-results-header > div > span {
+  display: block;
+  color: var(--brand-700);
+  font-size: .66rem;
+  font-weight: 850;
+  letter-spacing: .075em;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-section-heading h3,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-results-header h3 {
+  margin: .12rem 0 .15rem;
+  color: var(--text-1);
+  font-size: .98rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-section-heading p {
+  max-width: 64rem;
+  margin: 0;
+  color: var(--text-3);
+  font-size: .76rem;
+  line-height: 1.4;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-unified,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-filter-panel,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-results {
+  padding: .85rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-unified-grid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1.35fr) minmax(17rem, .8fr);
+  gap: .75rem;
+  margin-top: .7rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .45rem .55rem;
+  align-items: start;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-input textarea {
+  grid-row: span 2;
+  min-height: 5.35rem;
+  width: 100%;
+  min-width: 0;
+  padding: .65rem .75rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  background: var(--surface-1);
+  font: inherit;
+  font-size: .8rem;
+  line-height: 1.42;
+  resize: vertical;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-input textarea:focus {
+  border-color: var(--brand-500);
+  outline: 3px solid color-mix(in srgb, var(--brand-500) 18%, transparent);
+  outline-offset: 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-actions {
+  display: grid;
+  gap: .4rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-input > small {
+  grid-column: 1 / -1;
+  color: var(--text-3);
+  font-size: .68rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-trace-results {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: .45rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-result-card {
+  min-width: 0;
+  padding: .68rem .75rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-result-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .6rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-result-header span {
+  color: var(--text-2);
+  font-size: .74rem;
+  font-weight: 700;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-result-header strong {
+  color: var(--text-1);
+  font-size: 1.15rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-result-card small {
+  color: var(--text-3);
+  font-size: .67rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-detail {
+  margin-top: .55rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-detail summary {
+  padding: .25rem 0;
+  color: var(--brand-strong);
+  font-size: .74rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-trace-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  margin-top: .35rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-trace-groups h4 {
+  margin: 0 0 .3rem;
+  color: var(--text-3);
+  font-size: .65rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-detail-list {
+  max-height: 13rem;
+  overflow: auto;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-detail-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .5rem;
+  padding: .45rem .55rem;
+  border-bottom: 1px solid var(--border-1);
+  font-size: .72rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-detail-item:last-child {
+  border-bottom: 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-detail-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-detail-item small {
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+html[data-app="GRCON"] .analysis-history-module .unified-search-empty {
+  margin: .3rem 0 0;
+  padding: .6rem;
+  border: 1px dashed var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: .75rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-filter-panel {
+  display: grid;
+  gap: .7rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-toolbar {
+  display: grid;
+  grid-template-columns: minmax(17rem, 1.8fr) minmax(10.5rem, .9fr) minmax(8.8rem, .7fr) minmax(8.8rem, .7fr) minmax(14rem, 1.1fr);
+  align-items: end;
+  gap: .55rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-toolbar > label {
+  display: grid;
+  min-width: 0;
+  gap: .28rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-toolbar > label > span:first-child {
+  color: var(--text-3);
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-toolbar input,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-toolbar select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-h, 2.5rem);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-search-control > input[type="search"] {
+  min-height: var(--control-h, 2.5rem);
+  border-color: var(--border-1);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  background: var(--surface-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-period-error {
+  margin: .4rem 0 0;
+  padding: .45rem .6rem;
+  border-left: .18rem solid var(--danger-700);
+  color: var(--danger-700);
+  background: var(--surface-2);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-filter-extras {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: .75rem;
+  padding-top: .1rem;
+  border-top: 1px solid var(--border-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .38rem;
+  margin: .55rem 0 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-quick button {
+  min-height: 2rem;
+  padding: .34rem .65rem;
+  border: 1px solid var(--border-1);
+  border-radius: 999px;
+  color: var(--text-2);
+  background: var(--surface-1);
+  font-size: .7rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-quick button:hover,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-quick button:focus-visible,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-quick button.is-active,
+html[data-app="GRCON"] .analysis-history-module .analysis-history-quick button[aria-pressed="true"] {
+  border-color: var(--brand-500);
+  color: var(--brand-strong);
+  background: var(--brand-50);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-saved-filters {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: .4rem;
+  margin-top: .55rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-saved-filters label {
+  display: grid;
+  min-width: min(16rem, 35vw);
+  gap: .25rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-saved-filters label > span {
+  color: var(--text-3);
+  font-size: .64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-saved-filters select {
+  min-height: 2.15rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: .5rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-kpi {
+  min-width: 0;
+  min-height: 4.7rem;
+  display: grid;
+  align-content: center;
+  gap: .08rem;
+  padding: .62rem .72rem;
+  border: 1px solid var(--border-1);
+  border-left: .2rem solid var(--info-600);
+  border-radius: var(--radius-md);
+  color: var(--text-1);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-1);
+  text-align: left;
+}
+
+html[data-app="GRCON"] .analysis-history-module button.analysis-history-kpi {
+  width: 100%;
+  cursor: pointer;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-kpi.ready { border-left-color: var(--success-700); }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-kpi.blocked { border-left-color: var(--danger-700); }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-kpi.discard { border-left-color: var(--neutral-500); }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-kpi.review { border-left-color: var(--warning-700); }
+
+html[data-app="GRCON"] .analysis-history-module button.analysis-history-kpi:hover,
+html[data-app="GRCON"] .analysis-history-module button.analysis-history-kpi:focus-visible,
+html[data-app="GRCON"] .analysis-history-module button.analysis-history-kpi[aria-pressed="true"] {
+  border-color: var(--brand-500);
+  outline: 0;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-500) 18%, transparent);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-kpi span {
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-kpi strong {
+  margin-top: 0;
+  color: var(--text-1);
+  font: 780 1.22rem/1.05 var(--font-sans, "Segoe UI", sans-serif);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-kpi small {
+  color: var(--text-3);
+  font-size: .61rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-results {
+  min-width: 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-results-header {
+  align-items: center;
+  margin-bottom: .55rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-results-header strong {
+  display: block;
+  color: var(--text-2);
+  font-size: .75rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  margin: 0 0 .55rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-active-filters span {
+  max-width: 100%;
+  padding: .25rem .48rem;
+  overflow: hidden;
+  border: 1px solid var(--border-1);
+  border-radius: 999px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  font-size: .65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table-hint {
+  margin: 0 0 .45rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table-wrap {
+  max-height: 42rem;
+  border-color: var(--border-1);
+  background: var(--surface-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table {
+  min-width: 68rem;
+  color: var(--text-1);
+  background: var(--surface-1);
+  font-size: .76rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table col.analysis-col-document { width: 20%; }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table col.analysis-col-result { width: 13%; }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table col.analysis-col-revisions { width: 8%; }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table col.analysis-col-sigem { width: 9%; }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table col.analysis-col-allocation { width: 12%; }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table col.analysis-col-date { width: 9%; }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table col.analysis-col-ld { width: 8%; }
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table col.analysis-col-reason { width: 21%; }
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table thead th {
+  padding: .5rem .55rem;
+  border-right-color: color-mix(in srgb, var(--surface-1) 18%, transparent);
+  border-bottom-color: var(--brand-strong);
+  color: var(--surface-1);
+  background: var(--brand-700);
+  font-size: .63rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody td {
+  padding: .52rem .55rem;
+  border-color: var(--border-1);
+  background: var(--surface-1);
+  line-height: 1.32;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr:nth-child(even) td {
+  background: var(--surface-2);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr:hover td {
+  background: var(--brand-50);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr:focus {
+  outline: 2px solid var(--brand-500);
+  outline-offset: -2px;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table td strong {
+  color: var(--text-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-table td small {
+  margin-top: .13rem;
+  color: var(--text-3);
+  -webkit-line-clamp: 2;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-cell-document strong {
+  color: var(--brand-strong);
+  font-family: var(--font-mono);
+  font-size: .7rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-cell-revisions,
+html[data-app="GRCON"] .analysis-history-module .analysis-cell-date {
+  text-align: center;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-cell-revisions strong {
+  white-space: normal;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-cell-reason small {
+  -webkit-line-clamp: 2;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-loading {
+  color: var(--text-3);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-footer {
+  gap: .7rem;
+  margin-top: .6rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-pagination {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-detail-overlay {
+  z-index: 699;
+  border: 0;
+  background: color-mix(in srgb, var(--neutral-900) 46%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-detail-panel {
+  z-index: 700;
+  width: min(43rem, 94vw);
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-left: 1px solid var(--border-1);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+  outline: 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-detail-head {
+  position: static;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .7rem;
+  padding: .78rem .9rem;
+  border-bottom: 1px solid var(--border-1);
+  background: var(--surface-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-detail-head > div {
+  min-width: 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-detail-head span {
+  color: var(--brand-700);
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .06em;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-detail-head h3 {
+  margin: .13rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-1);
+  font-size: .96rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-history-detail-body {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: .65rem;
+  overflow: auto;
+  padding: .7rem .85rem 1.2rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-card {
+  padding: .7rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  box-shadow: none;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-card > h4 {
+  margin: 0 0 .48rem;
+  color: var(--text-2);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-field {
+  min-width: 0;
+  padding: .48rem .55rem;
+  border-bottom: 1px solid var(--border-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-field:nth-child(odd) {
+  border-right: 1px solid var(--border-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-field-wide {
+  grid-column: 1 / -1;
+  border-right: 0 !important;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-field dt {
+  color: var(--text-3);
+  font-size: .61rem;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-field dd {
+  margin: .12rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-1);
+  font-size: .73rem;
+  font-weight: 650;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-comparison {
+  margin-top: .5rem;
+  padding: .52rem .58rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: .72rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-comparison > strong {
+  color: var(--text-1);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-comparison ul {
+  margin: .3rem 0 0;
+  padding-left: 1rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-comparison p {
+  margin: .3rem 0 0;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline {
+  position: relative;
+  display: grid;
+  gap: .45rem;
+  margin: 0;
+  padding: 0 0 0 .55rem;
+  list-style: none;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline::before {
+  content: "";
+  position: absolute;
+  top: .35rem;
+  bottom: .35rem;
+  left: .12rem;
+  width: 1px;
+  background: var(--border-2);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline li {
+  position: relative;
+  padding: .48rem .55rem;
+  border: 1px solid var(--border-1);
+  border-left: .16rem solid var(--brand-400);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline li::before {
+  content: "";
+  position: absolute;
+  top: .62rem;
+  left: -.73rem;
+  width: .42rem;
+  height: .42rem;
+  border: 2px solid var(--surface-1);
+  border-radius: 50%;
+  background: var(--brand-600);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline-top,
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline time {
+  color: var(--text-2);
+  font-size: .67rem;
+  font-weight: 750;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline .analysis-status-chip {
+  min-height: 1.45rem;
+  padding: .2rem .42rem;
+  font-size: .61rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline-meta {
+  margin-top: .25rem;
+  color: var(--text-2);
+  font-size: .69rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-timeline small {
+  margin-top: .25rem;
+  color: var(--text-3);
+  font-size: .66rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-related-egrdt-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: .45rem .7rem;
+  align-items: baseline;
+  padding: .55rem .6rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-related-egrdt-summary strong {
+  overflow-wrap: anywhere;
+  color: var(--brand-strong);
+  font-family: var(--font-mono);
+  font-size: .72rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-related-egrdt-summary span {
+  color: var(--text-3);
+  font-size: .68rem;
+}
+
+html[data-app="GRCON"] .analysis-history-module .analysis-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-top: .5rem;
+}
+
+@media (max-width: 72rem) {
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-toolbar {
+    grid-template-columns: minmax(15rem, 1.5fr) repeat(2, minmax(8.5rem, .7fr));
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-search-field {
+    grid-column: span 2;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-session-filter {
+    grid-column: span 2;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 60rem) {
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-header .ui-page-header {
+    padding-right: 0;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-header-tools {
+    position: static;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -.35rem;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-unified-grid,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-trace-groups {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-search-field,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-session-filter {
+    grid-column: 1 / -1;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-filter-extras {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-saved-filters {
+    justify-content: flex-start;
+    margin-top: 0;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    background: transparent;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table colgroup,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table thead {
+    display: none;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody {
+    display: grid;
+    gap: .6rem;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    border: 1px solid var(--border-1);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    box-shadow: var(--shadow-1);
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody td,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr:nth-child(even) td,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr:hover td {
+    display: grid;
+    align-content: start;
+    gap: .12rem;
+    min-width: 0;
+    padding: .52rem .6rem;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-1);
+    text-align: left;
+    background: transparent;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody td::before {
+    content: attr(data-label);
+    color: var(--text-3);
+    font-size: .58rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-document,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-result,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-reason {
+    grid-column: 1 / -1;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table td strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table td small {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: initial;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-results-header,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 44rem) {
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-unified,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-filter-panel,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-results {
+    padding: .7rem;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-header-tools {
+    justify-content: stretch;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-manage,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-manage > summary {
+    width: 100%;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-manage-menu {
+    position: static;
+    width: 100%;
+    margin-top: .35rem;
+    box-shadow: none;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .unified-search-input {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .unified-search-input textarea {
+    grid-row: auto;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .unified-search-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-toolbar,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-search-field,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-session-filter {
+    grid-column: 1 / -1;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-saved-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-saved-filters label {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-document,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-result,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-reason {
+    grid-column: 1;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-pagination {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-pagination span {
+    width: 100%;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-detail-panel {
+    width: 100vw;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-detail-field:nth-child(odd) {
+    border-right: 0;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-related-egrdt-summary {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-detail-actions {
+    display: grid;
+  }
+}
