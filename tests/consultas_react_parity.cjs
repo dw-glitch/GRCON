@@ -52,6 +52,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
   const root = path.resolve(__dirname, "..");
   const adapterPath = path.join(root, "src/react/consultas/services/consultasAdapter.ts");
   const componentsPath = path.join(root, "src/react/consultas/components/consultasComponents.tsx");
+  const uiPath = path.join(root, "src/react/core/ui/UiPrimitives.tsx");
   const hookPath = path.join(root, "src/react/consultas/hooks/useConsultas.ts");
 
   const adapterLoad = transpileModule(adapterPath, false, {
@@ -125,7 +126,10 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.ok(taxIndex > -1);
   assert.equal(sheet.getCell(15, taxIndex + 1).value, "TX-LITERAL / A01");
 
-  const components = transpileModule(componentsPath, true).exports;
+  const uiPrimitives = transpileModule(uiPath, true).exports;
+  const components = transpileModule(componentsPath, true, {
+    require: (request) => request.includes("core/ui/UiPrimitives") ? uiPrimitives : require(request),
+  }).exports;
 
   const ldReady = { id: "ld-ready", name: "LD_OK.xlsx", size: 10, records: [{}], history: [], error: "" };
   const ldLoading = { id: "ld-loading", name: "LD_LENDO.xlsx", size: 11, records: [], history: [], error: "" };
@@ -197,6 +201,14 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(detailMarkup, /aria-modal="true"/);
   assert.match(detailMarkup, /requests-detail-drawer[^>]*tabindex="-1"/);
   assert.match(detailMarkup, /requests-detail-overlay[^>]*tabindex="-1"[^>]*aria-hidden="true"/);
+
+  const uiSource = fs.readFileSync(uiPath, "utf8");
+  assert.match(uiSource, /export function UiDrawer/);
+  assert.match(uiSource, /role="dialog"/);
+  assert.match(uiSource, /aria-modal="true"/);
+  assert.match(uiSource, /body\.style\.overflow = "hidden"/);
+  assert.match(uiSource, /previousFocus\?\.isConnected/);
+  assert.match(uiSource, /event\.key !== "Tab"/);
 
   const emptyMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.ResultsTable, {
     visibleRows: [{ item, linha: { ...sourceRow, internalTaxonomy: "" } }],
