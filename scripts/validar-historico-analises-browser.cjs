@@ -180,6 +180,11 @@ async function installIntegrationFixture(page) {
     window.dispatchEvent(new CustomEvent("grcon:analysis-history-updated"));
   });
   await openHistory(page);
+  assert.equal(
+    await page.locator("#analysis-history-search").isVisible(),
+    true,
+    "fixture de integração deve devolver a view ao Histórico de análises",
+  );
 }
 
 async function resetFilters(page) {
