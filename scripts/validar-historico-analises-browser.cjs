@@ -316,10 +316,12 @@ async function resetFilters(page) {
     const pageStarted = Date.now();
     await page.locator("#analysis-history-next").click();
     await page.waitForFunction(() => /Página 2 de 2/.test(document.querySelector("#analysis-history-page-status")?.textContent || ""));
+    await page.waitForFunction(() => document.querySelectorAll("#analysis-history-body tr[data-analysis-id]").length === 40);
     metrics.pageChangeMs = Date.now() - pageStarted;
     assert.equal(await page.locator("#analysis-history-body tr[data-analysis-id]").count(), 40);
     await page.locator("#analysis-history-previous").click();
     await page.waitForFunction(() => /Página 1 de 2/.test(document.querySelector("#analysis-history-page-status")?.textContent || ""));
+    await page.waitForFunction(() => document.querySelectorAll("#analysis-history-body tr[data-analysis-id]").length === 200);
 
     // Busca de rastreabilidade independente do filtro textual.
     await page.locator("#unified-search-text").fill("DOC-HISTORY-0001");
