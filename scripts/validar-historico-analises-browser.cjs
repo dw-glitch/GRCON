@@ -280,8 +280,9 @@ async function resetFilters(page) {
     await page.waitForFunction(() => /120 de 240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""));
     await page.locator("#analysis-history-start").fill(localIso(0));
     await page.locator("#analysis-history-end").fill(localIso(-5));
-    await page.getByRole("alert").waitFor();
-    assert.match(await page.getByRole("alert").innerText(), /data final deve ser igual ou posterior/i);
+    const periodAlert = page.locator(".analysis-history-period-error[role=\"alert\"]");
+    await periodAlert.waitFor();
+    assert.match(await periodAlert.innerText(), /data final deve ser igual ou posterior/i);
     assert.equal(await page.locator("#analysis-history-export").isDisabled(), true);
     await page.screenshot({ path: path.join(outputDir, "03-historico-filtros-1366.png"), fullPage: true });
     await resetFilters(page);
