@@ -44,7 +44,14 @@ async function openConsultas(page) {
     '#grcon-cloud-auth { display: none !important; }',
   ].join("\n") });
   await page.locator('[data-grcon-view="requests"]:visible').first().click();
-  await page.locator("#requests-area-consulta-react").waitFor({ state:"visible", timeout:15000 });
+  // O clique dispara o lazy-load de Consultas. Aguarde também a Promise do
+  // próprio loader para não confundir um runner mais lento com falha da UI.
+  await page.evaluate(async function () {
+    if (window.GRCONModuleLoader?.ensureModule) {
+      await window.GRCONModuleLoader.ensureModule("requests");
+    }
+  });
+  await page.locator("#requests-area-consulta-react").waitFor({ state:"visible", timeout:30000 });
 }
 async function uploadLds(page, files) {
   await page.locator('.requests-drop input[type="file"]').setInputFiles(files);
