@@ -172,18 +172,16 @@ async function installIntegrationFixture(page) {
     });
     const loader = window.GRCONModuleLoader;
     if (loader) {
-      window.GRCONModuleLoader = new Proxy(loader, {
-        get(target, property) {
-          if (property === "ensureModule") {
-            return async (name) => {
-              if (name === "history" || name === "sigem") return;
-              return target.ensureModule?.(name);
-            };
-          }
-          const value = target[property];
-          return typeof value === "function" ? value.bind(target) : value;
+      const ensure = typeof loader.ensure === "function" ? loader.ensure.bind(loader) : undefined;
+      const ensureModule = typeof loader.ensureModule === "function" ? loader.ensureModule.bind(loader) : undefined;
+      window.GRCONModuleLoader = {
+        ...loader,
+        ...(ensure ? { ensure } : {}),
+        ensureModule: async (name) => {
+          if (name === "history" || name === "sigem") return;
+          return ensureModule?.(name);
         },
-      });
+      };
     }
     window.dispatchEvent(new CustomEvent("grcon:analysis-history-updated"));
   });
