@@ -3,7 +3,7 @@
  * FASE B: hierarquia visual e fluxo operacional; domínio permanece no adapter.
  */
 import { useCallback } from "react";
-import { UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
+import { UiMetaPill, UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
 import { useConsultas } from "./hooks/useConsultas";
 import { consultasAdapter } from "./services/consultasAdapter";
 import {
@@ -59,10 +59,10 @@ export function ConsultasApp() {
         description="Cruze os documentos informados com as LDs, acompanhe o resultado essencial na tabela e abra as evidências completas somente quando precisar."
         meta={(
           <div className="requests-context-meta">
-            <span className="ui-meta-pill"><strong>{c.ldsReady.toLocaleString("pt-BR")}</strong> LD(s) válida(s)</span>
-            <span className="ui-meta-pill"><strong>{c.documents.length.toLocaleString("pt-BR")}</strong> documento(s)</span>
+            <UiMetaPill><strong>{c.ldsReady.toLocaleString("pt-BR")}</strong> LD(s) válida(s)</UiMetaPill>
+            <UiMetaPill><strong>{c.documents.length.toLocaleString("pt-BR")}</strong> documento(s)</UiMetaPill>
             {c.results.size
-              ? <span className="ui-meta-pill"><strong>{c.results.size.toLocaleString("pt-BR")}</strong> consultado(s)</span>
+              ? <UiMetaPill><strong>{c.results.size.toLocaleString("pt-BR")}</strong> consultado(s)</UiMetaPill>
               : null}
           </div>
         )}
