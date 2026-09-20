@@ -314,14 +314,16 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(phaseBCss, /prefers-reduced-motion/);
 
   const componentSource = fs.readFileSync(componentsPath, "utf8");
-  assert.match(componentSource, /body\.style\.overflow = "hidden"/,
-    "drawer precisa bloquear scroll do body");
-  assert.match(componentSource, /body\.style\.overflow = previousOverflow/,
-    "drawer precisa restaurar exatamente o overflow anterior");
-  assert.match(componentSource, /event\.key !== "Tab"/,
-    "drawer precisa manter Tab e Shift\+Tab dentro do modal");
-  assert.match(componentSource, /previousFocus\?\.isConnected/,
-    "drawer precisa devolver foco ao acionador");
+  assert.match(componentSource, /<UiDrawer/,
+    "Consultas precisa usar o drawer compartilhado");
+  assert.match(uiSource, /body\.style\.overflow = "hidden"/,
+    "drawer compartilhado precisa bloquear scroll do body");
+  assert.match(uiSource, /body\.style\.overflow = previousOverflow/,
+    "drawer compartilhado precisa restaurar exatamente o overflow anterior");
+  assert.match(uiSource, /event\.key !== "Tab"/,
+    "drawer compartilhado precisa manter Tab e Shift+Tab dentro do modal");
+  assert.match(uiSource, /previousFocus\?\.isConnected/,
+    "drawer compartilhado precisa devolver foco ao acionador");
   assert.match(componentSource, /document\.addEventListener\("pointerdown", onPointerDown\)/,
     "Mais ações precisa fechar no clique fora");
   assert.match(componentSource, /event\.key !== "Escape"/,
