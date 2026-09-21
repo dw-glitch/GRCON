@@ -1,14 +1,18 @@
-name: FASE A — Combinar PDFs React
+name: FASE B — Combinar PDFs React UI
 
 on:
   pull_request:
     paths:
       - "src/react/pdf-tools/**"
+      - "src/react/core/ui/**"
       - "src/react/core/mount/**"
       - "pdf_merge_core.js"
       - "pdf_merge_engine.js"
       - "workers/pdf-merge.worker.js"
       - "pdf-merge.css"
+      - "react-ui.css"
+      - "requests-phase-b.css"
+      - "analysis-history-phase-b.css"
       - "grcon_module_loader.js"
       - "index.html"
       - "sw.js"
@@ -17,6 +21,9 @@ on:
       - "package-lock.json"
       - "tests/pdf_tools_react.cjs"
       - "scripts/validar-pdf-tools-browser.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "scripts/validar-historico-analises-browser.cjs"
+      - "docs/phase-b-pdf-tools-parity.md"
       - ".github/workflows/pdf-tools-react-browser.yml"
   workflow_dispatch:
 
@@ -25,9 +32,9 @@ permissions:
 
 jobs:
   browser:
-    name: PDF Tools + regressões React
+    name: PDF Tools FASE B + regressões React
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -44,15 +51,31 @@ jobs:
           npm run typecheck
           npm run build
 
-      - name: Contratos estáticos da migração
+      - name: Contratos estáticos da FASE B
         run: node tests/pdf_tools_react.cjs
+
+      - name: Confirmar pdf-lib fora do bundle React
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const code = fs.readFileSync("react-dist/pdf-tools-app.js", "utf8");
+          if (/PDFLib|pdf-lib\.min\.js/.test(code)) {
+            throw new Error("pdf-lib não pode ser incorporado ao bundle React do PDF Tools.");
+          }
+          console.log("pdf-lib fora do bundle React: ok");
+          NODE
+
+      - name: Suíte completa e verificação do projeto
+        run: |
+          npm test
+          npm run verify
 
       - name: Instalar Chromium
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
 
-      - name: Validar merge real, ciclo de vida, PWA e regressões
+      - name: Validar FASE B, merge real, ciclo de vida, PWA e regressões
         run: |
           python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-pdf-tools.log" 2>&1 &
           SERVER_PID=$!
@@ -64,7 +87,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: phase-a-pdf-tools-react
+          name: phase-b-pdf-tools-ui
           path: |
             artifacts/pdf-tools-browser/*.png
             artifacts/pdf-tools-browser/metrics.json
