@@ -222,6 +222,15 @@ async function clickView(page, view) {
     assert.equal(summary.pwOnlyNotEmitted, 1);
     assert.equal(summary.pwOnlyEmitted, 1);
     assert.equal(summary.classifiedTotal, 255);
+
+    await page.locator('[data-summary-list="bothEmitted"]').click();
+    await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.activeList === "bothEmitted");
+    assert.equal(await page.locator("#spw-table tbody tr").count(), 2, "KPI da FASE B deve filtrar a relação detalhada sem recalcular o modelo");
+    assert.equal(await page.locator('[data-summary-list="bothEmitted"]').getAttribute("aria-pressed"), "true");
+    await page.screenshot({ path: path.join(outputDir, "03a-sigem-pw-kpi-filter-1366.png"), fullPage: true });
+    await page.locator('[data-list="all"]').click();
+    await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.activeList === "all");
+
     const revisionCount = await page.evaluate((doc) => window.GrconSigemPwDashboardUi.state.aggregates.all.lists.sigemOnly.filter((row) => row.document === doc).length, revisionDoc);
     assert.equal(revisionCount, 3, "0/A/B precisam continuar como três ocorrências");
     await page.screenshot({ path: path.join(outputDir, "03-sigem-pw-results-1366.png"), fullPage: true });
