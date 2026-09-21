@@ -1644,3 +1644,6 @@ html[data-app="GRCON"][data-ops-ui="enabled"] body.p2-dark .brand-logo { padding
    "fechar" bem nos dois pontos de entrada do app. Virou ícone, igual ao
    cartão de pasta ao lado. */
 .source-icon.excel svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+
+/* FASE A — o root React é estruturalmente neutro para preservar o grid legado. */
+.history-react-root { display: contents; }
