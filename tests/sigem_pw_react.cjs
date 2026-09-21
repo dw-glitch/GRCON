@@ -114,4 +114,4 @@ if (fs.existsSync(path.join(root, "react-dist/sigem-pw-dashboard-app.js"))) {
   assert.doesNotMatch(bundle, /function documentIdentity\(|function parsePwCsv\(/, "Core não pode ser duplicado dentro do bundle React");
 }
 
-console.log("sigem_pw_react: OK — ilha React, fachada, Worker, atomicidade, revisão e cinco situações preservados.");
+console.log("sigem_pw_react: OK — FASE B visual sobre a ilha React, com fachada, Worker, atomicidade, revisão e cinco situações preservados.");
