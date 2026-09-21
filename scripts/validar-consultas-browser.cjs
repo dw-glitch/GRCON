@@ -33,6 +33,29 @@ function writeLd(file, mode) {
   fs.writeFileSync(file, XLSX.write(wb, { type:"buffer", bookType:"xlsx" }));
 }
 
+async function waitForStableServiceWorkerPage(page) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+      await page.waitForFunction(function () {
+        return Boolean(navigator.serviceWorker && navigator.serviceWorker.controller);
+      }, null, { timeout: 15000 });
+      // grcon_service_worker.js recarrega a página em controllerchange. Só
+      // prossiga depois que esse primeiro reload automático tiver estabilizado.
+      await page.waitForTimeout(200);
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached|Timeout/i.test(message)) throw error;
+      await page.waitForTimeout(150);
+    }
+  }
+  throw lastError || new Error("Service Worker não estabilizou a página de Consultas.");
+}
+
 async function clickVisibleView(page, view) {
   await page.waitForFunction(function (wanted) {
     return Array.from(document.querySelectorAll('[data-grcon-view="' + wanted + '"]')).some(function (node) {
@@ -68,7 +91,8 @@ async function clickVisibleView(page, view) {
 }
 
 async function openConsultas(page) {
-  await page.goto(baseUrl, { waitUntil:"networkidle", timeout:30000 });
+  await page.goto(baseUrl, { waitUntil:"domcontentloaded", timeout:30000 });
+  await waitForStableServiceWorkerPage(page);
   // Este roteiro valida Consultas, não autenticação/cloud. Em vez de mutar o
   // estado assíncrono do login (que pode relocar o gate após getSession), a
   // página de teste recebe apenas uma sobrescrita visual. O código publicado,
