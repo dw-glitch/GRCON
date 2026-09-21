@@ -86,10 +86,10 @@ ATENÇÃO PARA INSTALAÇÃO EM OUTRO PROJETO
 - Não aplique migrações de produção sem backup e conferência do projeto correto.
 
 CONFIGURAÇÃO DO SUPABASE AUTH
-- Site URL: https://grcon.vercel.app
+- Site URL: https://grcon-ten.vercel.app
 - Redirect URLs:
-    https://grcon.vercel.app/**
-    https://grcon-*-vinicios-projects-929099b6.vercel.app/**
+    https://grcon-ten.vercel.app/**
+    https://grcon-ten-*-vinicios-projects-929099b6.vercel.app/**
 
 SEGURANÇA
 - O navegador recebe somente a chave sb_publishable_, que é pública.

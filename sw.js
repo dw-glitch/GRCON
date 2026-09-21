@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.41.0-mascot-context9-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1";
+const CACHE_NAME = "grcon-v5.41.0-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -43,7 +43,7 @@ const ASSETS = [
   "grcon_mascot_greeting_core.js",
   "grcon_mascot_controller.js",
   "grcon_mascot_runner.js",
-  "grcon_mascot_scenarios.js",
+  "grcon_mascot_success_pilot.js",
   "assets/mascot/video/grcon-mascot-processing-alpha.webm",
   "assets/mascot/video/grcon-mascot-wave-alpha.webm",
   "assets/mascot/video/grcon-mascot-running-alpha.webm",
@@ -180,33 +180,7 @@ const HEAVY_ASSETS = new Set([
   "grcon-mascot-processing-alpha.webm",
   "grcon-mascot-wave-alpha.webm",
   "grcon-mascot-running-alpha.webm",
-  "grcon-mascot-import-bases.webm",
-  "grcon-mascot-import-bases.mp4",
-  "grcon-mascot-long-processing.webm",
-  "grcon-mascot-long-processing.mp4",
-  "grcon-mascot-sleep.webm",
-  "grcon-mascot-sleep.mp4",
-  "grcon-mascot-curious.webm",
-  "grcon-mascot-curious.mp4",
-  "grcon-mascot-grdt-stamp.webm",
-  "grcon-mascot-grdt-stamp.mp4",
-  "grcon-mascot-teams-send.webm",
-  "grcon-mascot-teams-send.mp4",
-  "grcon-mascot-grdt-to-teams.webm",
-  "grcon-mascot-grdt-to-teams.mp4",
-  "grcon-mascot-paperwork.webm",
-  "grcon-mascot-paperwork.mp4",
-  "grcon-mascot-review-coffee.webm",
-  "grcon-mascot-review-coffee.mp4",
-  "grcon-mascot-import-bases-poster.webp",
-  "grcon-mascot-long-processing-poster.webp",
-  "grcon-mascot-sleep-poster.webp",
-  "grcon-mascot-curious-poster.webp",
-  "grcon-mascot-grdt-stamp-poster.webp",
-  "grcon-mascot-teams-send-poster.webp",
-  "grcon-mascot-grdt-to-teams-poster.webp",
-  "grcon-mascot-paperwork-poster.webp",
-  "grcon-mascot-review-coffee-poster.webp",
+  "grcon-mascot-success-pilot-alpha.webm",
 ]);
 
 async function fetchAndCache(request) {
