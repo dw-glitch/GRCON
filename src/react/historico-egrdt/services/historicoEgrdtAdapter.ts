@@ -464,6 +464,8 @@ export const historicoEgrdtAdapter = {
   activateView,
   setPerformanceSnapshot,
   getPerformanceSnapshot,
+  publishCompatibilityState,
+  getCompatibilityState,
   confirmDelete,
   confirmClear,
   reportDateValidity,
