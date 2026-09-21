@@ -25,6 +25,7 @@ on:
       - "tests/sigem_pw_*.cjs"
       - "scripts/validar-sigem-pw-react-browser.cjs"
       - "docs/react-phase-a-sigem-pw-parity.md"
+      - "docs/phase-b-sigem-pw-parity.md"
       - ".github/workflows/sigem-pw-react-browser.yml"
   workflow_dispatch:
 
