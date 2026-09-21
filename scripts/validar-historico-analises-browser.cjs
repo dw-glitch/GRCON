@@ -186,6 +186,41 @@ async function installIntegrationFixture(page) {
     window.dispatchEvent(new CustomEvent("grcon:analysis-history-updated"));
   });
 }
+async function installHistoryQueryInstrumentation(page) {
+  await page.evaluate(() => {
+    const core = window.GrconAnalysisHistory;
+    if (!core || typeof core.queryDocuments !== "function" || typeof core.allDocuments !== "function") {
+      throw new Error("GrconAnalysisHistory não está disponível para instrumentação.");
+    }
+    if (!window.__phaseBHistoryPerformanceInstrumented) {
+      const originalQueryDocuments = core.queryDocuments.bind(core);
+      const originalAllDocuments = core.allDocuments.bind(core);
+      window.GrconAnalysisHistory = Object.freeze({
+        ...core,
+        queryDocuments: async (...args) => {
+          window.__historyQueryCalls = Number(window.__historyQueryCalls || 0) + 1;
+          window.__historyQueryLog = Array.isArray(window.__historyQueryLog) ? window.__historyQueryLog : [];
+          window.__historyQueryLog.push({
+            query: String(args[0]?.query || ""),
+            offset: Number(args[1]?.offset || 0),
+            limit: Number(args[1]?.limit || 0),
+          });
+          return originalQueryDocuments(...args);
+        },
+        allDocuments: async (...args) => {
+          const documents = await originalAllDocuments(...args);
+          window.__historyLastAllDocumentsCount = Array.isArray(documents) ? documents.length : 0;
+          return documents;
+        },
+      });
+      window.__phaseBHistoryPerformanceInstrumented = true;
+    }
+    window.__historyQueryCalls = 0;
+    window.__historyQueryLog = [];
+    window.__historyLastAllDocumentsCount = 0;
+  });
+}
+
 async function resetFilters(page) {
   await page.locator("#analysis-history-search").fill("");
   await page.locator("#analysis-history-status").selectOption("ALL");
@@ -238,7 +273,7 @@ async function resetFilters(page) {
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
     const postUpgradeCaches = await page.evaluate(() => caches.keys());
     assert.equal(postUpgradeCaches.includes("grcon-v5.40.0-browser-old-cache"), false, "cache antigo deve ser removido na ativação");
-    assert.ok(postUpgradeCaches.some((key) => key.includes("phase-b-history-ui1")), "cache atual da FASE B precisa existir");
+    assert.ok(postUpgradeCaches.some((key) => key.includes("history-perf-hardening1")), "cache atual do hardening precisa existir");
 
     const openStarted = Date.now();
     await openHistory(page);
@@ -262,9 +297,46 @@ async function resetFilters(page) {
     const fixture = buildFixture();
     await seedHistory(page, fixture);
     await installIntegrationFixture(page);
+    await installHistoryQueryInstrumentation(page);
     await page.screenshot({ path: path.join(outputDir, "02-historico-resultados-1366.png"), fullPage: true });
     assert.match(await page.locator("#analysis-history-page-status").innerText(), /Página 1 de 2/);
     assert.equal(await page.locator("#analysis-history-body tr[data-analysis-id]").count(), 200);
+    metrics.desktopRows = 200;
+
+    // O teste precisa falhar contra o padrão antigo: digitação progressiva em
+    // página 2 não pode disparar query por tecla nem uma consulta intermediária
+    // com o texto anterior quando setPage(1) é executado.
+    await page.locator("#analysis-history-next").click();
+    await page.waitForFunction(() => /Página 2 de 2/.test(document.querySelector("#analysis-history-page-status")?.textContent || ""));
+    await page.waitForFunction(() => document.querySelectorAll("#analysis-history-body tr[data-analysis-id]").length === 40);
+    await page.waitForTimeout(350);
+    await page.evaluate(() => {
+      window.__historyQueryCalls = 0;
+      window.__historyQueryLog = [];
+    });
+    const progressiveQuery = "DOC-HISTORY-0001";
+    const debounceStarted = Date.now();
+    await page.locator("#analysis-history-search").pressSequentially(progressiveQuery, { delay: 50 });
+    const debounceDuringCalls = await page.evaluate(() => Number(window.__historyQueryCalls || 0));
+    assert.equal(debounceDuringCalls, 0, "nenhuma consulta documental deve ocorrer durante a digitação rápida");
+    await page.waitForFunction(() => Number(window.__historyQueryCalls || 0) >= 1, null, { timeout: 5000 });
+    await page.waitForFunction(() => /2 de 240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""), null, { timeout: 5000 });
+    await page.waitForTimeout(150);
+    const debounceAfterCalls = await page.evaluate(() => Number(window.__historyQueryCalls || 0));
+    const debounceLog = await page.evaluate(() => window.__historyQueryLog || []);
+    assert.equal(
+      debounceAfterCalls,
+      1,
+      "somente a consulta final deve chegar ao motor após o debounce: " + JSON.stringify(debounceLog),
+    );
+    assert.equal(debounceLog.at(-1)?.query, progressiveQuery);
+    assert.equal(debounceLog.at(-1)?.offset, 0, "reset de página durante a digitação não pode consultar a página antiga");
+    metrics.debounceProgressiveMs = Date.now() - debounceStarted;
+    metrics.debounceQueryCallsDuringTyping = debounceDuringCalls;
+    metrics.debounceQueryCallsAfterSettled = debounceAfterCalls;
+    metrics.debounceTypedCharacters = progressiveQuery.length;
+    await page.locator("#analysis-history-search").fill("");
+    await page.waitForFunction(() => /240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""), null, { timeout: 5000 });
 
     const searchStarted = Date.now();
     await page.locator("#analysis-history-search").fill("DOC-NEW-0119");
@@ -383,6 +455,7 @@ async function resetFilters(page) {
     await openHistory(page);
     await resetFilters(page);
 
+    await page.evaluate(() => { window.__historyLastAllDocumentsCount = 0; });
     const excelDownload = page.waitForEvent("download");
     await page.locator("#analysis-history-export").click();
     const excel = await excelDownload;
@@ -394,6 +467,9 @@ async function resetFilters(page) {
     assert.match(workbookText, /DOC-OLD-0120/);
     assert.match(workbookText, /DOC-NEW-0120/);
     assert.match(workbookText, /DOC-HISTORY-0001/);
+    const exportDocuments = await page.evaluate(() => Number(window.__historyLastAllDocumentsCount || 0));
+    assert.equal(exportDocuments, 240, "exportação deve usar todos os documentos filtrados, não apenas a página visível");
+    metrics.exportDocuments = exportDocuments;
 
     const backupDownload = page.waitForEvent("download");
     await page.locator(".analysis-history-manage > summary").click();
@@ -428,7 +504,8 @@ async function resetFilters(page) {
     await page.locator("#analysis-history-restore-input").setInputFiles(backupPath);
     await page.waitForFunction(() => /240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""), null, { timeout: 10000 });
 
-    // Responsividade + cards mobile + viewport do drawer.
+    // Responsividade: desktop/tablet preservam tabela; somente mobile estreito
+    // usa cards e page size reduzido.
     const widths = {};
     for (const width of [1440, 1366, 1024, 768]) {
       await page.setViewportSize({ width, height: 900 });
@@ -440,29 +517,87 @@ async function resetFilters(page) {
           page: root.scrollWidth,
           viewport: root.clientWidth,
           tableDisplay: table ? getComputedStyle(table).display : "",
+          rowDisplay: document.querySelector("#analysis-history-body tr[data-analysis-id]")
+            ? getComputedStyle(document.querySelector("#analysis-history-body tr[data-analysis-id]")).display
+            : "",
           localScroll: table && wrap ? wrap.scrollWidth > wrap.clientWidth + 1 : false,
+          rows: document.querySelectorAll("#analysis-history-body tr[data-analysis-id]").length,
         };
       });
       assert.ok(widths[width].page <= widths[width].viewport + 1, "sem scroll horizontal global em " + width);
+      assert.equal(widths[width].rows, 200, "desktop/tablet devem preservar 200 registros por página em " + width);
     }
+    assert.notEqual(widths[768].tableDisplay, "block", "768 px deve continuar em tabela, não card wall");
+    assert.notEqual(widths[768].rowDisplay, "grid", "768 px não deve transformar linhas em cards");
+    assert.equal(widths[768].localScroll, true, "768 px deve usar scroll horizontal local da tabela");
 
+    const mobileRenderStarted = Date.now();
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => {
+      const status = document.querySelector("#analysis-history-page-status")?.textContent || "";
+      return /Página 1 de 10/.test(status)
+        && document.querySelectorAll("#analysis-history-body tr[data-analysis-id]").length === 25;
+    }, null, { timeout: 8000 });
+    metrics.mobileRenderMs = Date.now() - mobileRenderStarted;
     const mobile = await page.evaluate(() => {
       const root = document.documentElement;
-      const rows = Array.from(document.querySelectorAll("#analysis-history-body tr[data-analysis-id]")).slice(0, 3);
-      const labels = rows.flatMap((row) => Array.from(row.querySelectorAll("td")).map((cell) => getComputedStyle(cell, "::before").content));
+      const resultRoot = document.querySelector(".analysis-history-results");
+      const rows = Array.from(document.querySelectorAll("#analysis-history-body tr[data-analysis-id]"));
+      const labels = rows.slice(0, 3).flatMap((row) => Array.from(row.querySelectorAll("td")).map((cell) => getComputedStyle(cell, "::before").content));
       const kpis = Array.from(document.querySelectorAll(".analysis-history-kpi")).map((node) => node.getBoundingClientRect());
       return {
         page: root.scrollWidth,
         viewport: root.clientWidth,
+        cards: rows.length,
+        scrollHeight: root.scrollHeight,
+        resultDomElements: resultRoot ? resultRoot.querySelectorAll("*").length : 0,
+        rowDisplay: rows[0] ? getComputedStyle(rows[0]).display : "",
         labels: labels.filter((label) => label && label !== "none").length,
         kpiRows: new Set(kpis.map((box) => Math.round(box.top))).size,
       };
     });
     assert.ok(mobile.page <= mobile.viewport + 1);
+    assert.equal(mobile.cards, 25);
+    assert.equal(mobile.rowDisplay, "grid");
+    assert.ok(mobile.scrollHeight < 20000, "390 px não pode voltar a gerar documento >20.000 px");
     assert.ok(mobile.labels >= 8);
     assert.ok(mobile.kpiRows >= 2);
+    metrics.mobileCards = mobile.cards;
+    metrics.mobileScrollHeight = mobile.scrollHeight;
+    metrics.mobileResultDomElements = mobile.resultDomElements;
     await page.screenshot({ path: path.join(outputDir, "05-historico-mobile-390.png"), fullPage: true });
+
+    const mobilePageStarted = Date.now();
+    await page.locator("#analysis-history-next").click();
+    await page.waitForFunction(() => /Página 2 de 10/.test(document.querySelector("#analysis-history-page-status")?.textContent || ""));
+    await page.waitForFunction(() => document.querySelectorAll("#analysis-history-body tr[data-analysis-id]").length === 25);
+    metrics.mobilePageChangeMs = Date.now() - mobilePageStarted;
+
+    // Mudança de page size precisa voltar para página 1 e 768 px continua tabela.
+    await page.setViewportSize({ width: 768, height: 900 });
+    await page.waitForFunction(() => /Página 1 de 2/.test(document.querySelector("#analysis-history-page-status")?.textContent || ""));
+    await page.waitForFunction(() => document.querySelectorAll("#analysis-history-body tr[data-analysis-id]").length === 200);
+    const tabletAfterResize = await page.evaluate(() => {
+      const root = document.documentElement;
+      const table = document.querySelector(".analysis-history-table");
+      const wrap = document.querySelector(".analysis-history-table-wrap");
+      const row = document.querySelector("#analysis-history-body tr[data-analysis-id]");
+      return {
+        page: root.scrollWidth,
+        viewport: root.clientWidth,
+        tableDisplay: table ? getComputedStyle(table).display : "",
+        rowDisplay: row ? getComputedStyle(row).display : "",
+        localScroll: table && wrap ? wrap.scrollWidth > wrap.clientWidth + 1 : false,
+      };
+    });
+    assert.ok(tabletAfterResize.page <= tabletAfterResize.viewport + 1);
+    assert.notEqual(tabletAfterResize.tableDisplay, "block");
+    assert.notEqual(tabletAfterResize.rowDisplay, "grid");
+    assert.equal(tabletAfterResize.localScroll, true);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => /Página 1 de 10/.test(document.querySelector("#analysis-history-page-status")?.textContent || ""));
+    await page.waitForFunction(() => document.querySelectorAll("#analysis-history-body tr[data-analysis-id]").length === 25);
 
     await page.locator("#analysis-history-search").fill("DOC-HISTORY-0001");
     await page.waitForFunction(() => /2 de 240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""));
@@ -501,7 +636,7 @@ async function resetFilters(page) {
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
     await openHistory(page);
     const warmCaches = await page.evaluate(() => caches.keys());
-    assert.ok(warmCaches.some((key) => key.includes("phase-b-history-ui1")));
+    assert.ok(warmCaches.some((key) => key.includes("history-perf-hardening1")));
 
     ["/react-ui.css", "/analysis-history.css", "/analysis-history-phase-b.css", "/react-dist/historico-analises-app.js"].forEach((pathname) => {
       const response = responses.get(pathname);
