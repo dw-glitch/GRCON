@@ -243,11 +243,19 @@ async function collectLayout(page, width, height = 900) {
     assert.deepEqual(resultBA.heights, [500, 300]);
 
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator("#pdf-merge-result").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(80);
     await screenshot(page, "09-pdf-mobile-sucesso-390.png");
+
     await page.evaluate(() => window.GrconPdfMergeUi.clear());
     await page.waitForFunction(() => window.GrconPdfMergeUi._debug.state.items.length === 0);
+    await page.locator(".pdf-merge-shell").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(80);
     await screenshot(page, "07-pdf-mobile-vazio-390.png");
+
     await addSyntheticFiles(page, 20, "MOBILE20");
+    await page.locator(".pdf-merge-file-tools").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(80);
     await screenshot(page, "08-pdf-mobile-arquivos-390.png");
 
     await page.setViewportSize({ width: 1366, height: 900 });
@@ -410,6 +418,8 @@ async function collectLayout(page, width, height = 900) {
     await page.locator("#pdf-merge-download").focus();
     assert.equal(await page.locator("#pdf-merge-download").evaluate((node) => document.activeElement === node), true);
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator("#pdf-merge-result").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(80);
     await screenshot(page, "11-pdf-dark-390.png");
     await setTheme(page, "light");
 
