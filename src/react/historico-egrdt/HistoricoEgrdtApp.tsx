@@ -50,7 +50,7 @@ function Summary({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           data-history-kpi-status={entry.status}
           key={entry.label}
           type="button"
-          onClick={() => h.setFilter("postingStatus", h.filters.postingStatus === entry.status ? "" : entry.status)}
+          onClick={() => h.setFilter("postingStatus", h.filters.postingStatus === entry.status ? "" : entry.status!)}
         >
           <span>{entry.label}</span>
           <strong>{numberBr(entry.value)}</strong>
