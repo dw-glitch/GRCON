@@ -352,10 +352,7 @@ async function clearHistory(records: HistoryRecord[]): Promise<boolean> {
 async function prepareForSigem(record: HistoryRecord): Promise<void> {
   const Posting = posting();
   if (!Posting) throw new Error("O módulo de postagem SIGEM não está disponível.");
-  const saved = Posting.registerGenerated([record], { appVersion: appVersion() }) as PostingRecord & {
-    persistence?: Promise<unknown>;
-    created?: PostingRecord[];
-  };
+  const saved = Posting.registerGenerated([record], { appVersion: appVersion() });
   if (saved?.persistence) await saved.persistence.catch(() => null);
 
   await legacy().GRCONModuleLoader?.ensureModule?.("sigem");
@@ -395,6 +392,66 @@ function openEmailReply(record: HistoryRecord): void {
     return;
   }
   legacy().GrconEgrdtEmailReplyUi?.open([record]);
+}
+
+function postingStatusOptions(): Array<{ value: string; label: string }> {
+  const Posting = posting();
+  const values = Posting ? [...new Set(Object.values(Posting.STATUSES || {}))] : [];
+  return [
+    { value: "AGUARDANDO", label: "Aguardando preparação" },
+    ...values.map((status) => ({ value: status, label: Posting?.statusLabel(status) || status })),
+  ];
+}
+
+function historyHeaderCopy(): { eyebrow: string; description: string } {
+  if (legacy().GrconCloud) {
+    return {
+      eyebrow: "HISTÓRICO COMPARTILHADO",
+      description: "Consulte as eGRDTs geradas pelos usuários autorizados e confira documentos, revisões e alocações.",
+    };
+  }
+  return {
+    eyebrow: "HISTÓRICO LOCAL",
+    description: "Consulte documentos, confira alocações e corrija o número registrado quando necessário.",
+  };
+}
+
+function clearControl(): { hidden: boolean; disabled: boolean; title: string } {
+  const Cloud = legacy().GrconCloud;
+  if (!Cloud) return { hidden: false, disabled: false, title: "" };
+  const authorized = Boolean(Cloud.state?.membership?.workspace_id) && Boolean(Cloud.canManageHistory?.());
+  if (!authorized) {
+    return {
+      hidden: true,
+      disabled: true,
+      title: "Somente proprietários e administradores podem limpar o histórico compartilhado.",
+    };
+  }
+  if (Cloud.state?.online === false) {
+    return {
+      hidden: false,
+      disabled: true,
+      title: "Reconecte o GRCON para apagar o histórico também no Supabase.",
+    };
+  }
+  if (Cloud.state?.syncing || Cloud.state?.clearingHistory) {
+    return {
+      hidden: false,
+      disabled: true,
+      title: "Aguarde a sincronização atual terminar.",
+    };
+  }
+  return {
+    hidden: false,
+    disabled: false,
+    title: "Apaga o histórico deste workspace no navegador e no Supabase e libera as numerações excluídas para reutilização.",
+  };
+}
+
+function numberEditScope(): string {
+  return legacy().GrconCloud?.state?.membership
+    ? "Atualiza o histórico compartilhado. O arquivo já baixado não é renomeado."
+    : "Altera somente o registro local do histórico. O arquivo já baixado não é renomeado.";
 }
 
 function updateTabCount(count: number): void {
@@ -450,6 +507,8 @@ function requestRefresh(): void {
 }
 
 function requestSelect(id: string): void {
+  latestSnapshot = { ...latestSnapshot, selectedId: id };
+  legacy().__grconHistoricoEgrdtsSnapshot = latestSnapshot;
   window.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: { id } }));
 }
 
@@ -505,6 +564,10 @@ export const historicoEgrdtsAdapter = {
   openTeams,
   teamsState,
   openEmailReply,
+  postingStatusOptions,
+  historyHeaderCopy,
+  clearControl,
+  numberEditScope,
   updateTabCount,
   activateShell,
   setSnapshot,
