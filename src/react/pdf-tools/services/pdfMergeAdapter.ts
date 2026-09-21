@@ -333,6 +333,7 @@ export const pdfMergeAdapter = createPdfMergeAdapter();
 
 interface PdfMergeBridgeHandlers {
   activate(): void;
+  deactivate(): void;
   addFiles(files: FileList | File[] | null | undefined): void;
   clear(): void;
   getDebugState(): PdfMergeDebugState;
@@ -370,6 +371,9 @@ function createPdfMergeBridge() {
     activate(): void {
       if (handlers) handlers.activate();
       else pendingActivate = true;
+    },
+    deactivate(): void {
+      if (handlers) handlers.deactivate();
     },
     addFiles(files: FileList | File[] | null | undefined): void {
       const normalized = normalizeFiles(files);
