@@ -1,0 +1,121 @@
+name: SIGEM × PW — FASE A React
+
+on:
+  pull_request:
+    paths:
+      - "src/react/sigem-pw/**"
+      - "sigem-pw-dashboard.css"
+      - "sigem_pw_dashboard_core.js"
+      - "sigem_pw_readiness_core.js"
+      - "sigem_pw_scope_fix.js"
+      - "workers/sigem_pw_dashboard.worker.js"
+      - "sigem_pw_dashboard_bootstrap.js"
+      - "sigem_pw_revision_core.js"
+      - "sigem_pw_revision_section.js"
+      - "sigem_pw_history_core.js"
+      - "sigem_pw_history_management.js"
+      - "sigem_pw_evolution_core.js"
+      - "sigem_pw_evolution_app.js"
+      - "sigem_pw_dashboard_ui_audit.js"
+      - "posting_conference_core.js"
+      - "grcon_module_loader.js"
+      - "vite.config.ts"
+      - "package.json"
+      - "sw.js"
+      - "tests/sigem_pw_*.cjs"
+      - "scripts/validar-sigem-pw-react-browser.cjs"
+      - "docs/react-phase-a-sigem-pw-parity.md"
+      - ".github/workflows/sigem-pw-react-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: SIGEM × PW React + regressões
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build e bundle
+        run: |
+          npm run build
+          test -f react-dist/sigem-pw-dashboard-app.js
+          wc -c react-dist/sigem-pw-dashboard-app.js | awk '{print "bundle_sigem_pw_bytes=" $1}' | tee "$RUNNER_TEMP/sigem-pw-bundle.txt"
+          ! grep -Eqi 'exceljs\.min|SheetJS.*Community Edition|xlsx\.full\.min' react-dist/sigem-pw-dashboard-app.js
+
+      - name: Testes estruturais e regras críticas
+        run: |
+          node tests/sigem_pw_react.cjs
+          node tests/sigem_pw_dashboard.cjs
+          node tests/sigem_pw_revision_counting.cjs
+          node tests/sigem_pw_scope_filter.cjs
+          node tests/sigem_pw_revision_analysis.cjs
+          node tests/sigem_pw_revision_export.cjs
+          node tests/sigem_pw_history.cjs
+          node tests/sigem_pw_history_management.cjs
+          node tests/sigem_pw_history_postmerge.cjs
+          node tests/sigem_pw_history_stage5.cjs
+          node tests/sigem_pw_evolution.cjs
+          node tests/sigem_pw_audit.cjs
+          node tests/sigem_pw_stage7_atomic_import.cjs
+          node tests/sigem_pw_stage8_acceptance.cjs
+          node tests/sigem_pw_performance_stability.cjs
+
+      - name: npm test
+        run: npm test
+
+      - name: Verificação completa
+        run: npm run verify
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Chromium — SIGEM × PW + regressões
+        env:
+          GRCON_PREVIEW_URL: http://127.0.0.1:8765
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-sigem-pw.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-sigem-pw-react-browser.cjs
+          node scripts/validar-consultas-browser.cjs
+          node scripts/validar-historico-analises-browser.cjs
+          node scripts/validar-pdf-tools-browser.cjs
+          node scripts/validar-historico-egrdt-browser.cjs
+
+      - name: Publicar screenshots e métricas
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: sigem-pw-react-phase-a
+          path: |
+            artifacts/sigem-pw-react/*.png
+            artifacts/sigem-pw-react/metrics.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Resumo
+        if: always()
+        run: |
+          echo "### SIGEM × PW — FASE A React" >> "$GITHUB_STEP_SUMMARY"
+          test -f "$RUNNER_TEMP/sigem-pw-bundle.txt" && cat "$RUNNER_TEMP/sigem-pw-bundle.txt" >> "$GITHUB_STEP_SUMMARY" || true
+          test -f artifacts/sigem-pw-react/metrics.json && cat artifacts/sigem-pw-react/metrics.json >> "$GITHUB_STEP_SUMMARY" || true

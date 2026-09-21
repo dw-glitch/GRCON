@@ -114,13 +114,18 @@ assert.throws(() => Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0"), /c
   assert.equal(classified.classes.find((row) => row.documentClass === "ET").pwExclusive, 1);
 })();
 
-const appSource = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_app.js"), "utf8");
+const appSource = [
+  fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/SigemPwDashboardApp.tsx"), "utf8"),
+  fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/components/SigemPwHeader.tsx"), "utf8"),
+  fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/components/SigemPwSituationCards.tsx"), "utf8"),
+  fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/services/sigemPwDashboardAdapter.ts"), "utf8"),
+].join("\n");
 assert.ok(!/MutationObserver/.test(appSource));
 assert.ok(!/location\.reload\s*\(/.test(appSource));
 assert.ok(/Gerenciar histórico/.test(appSource));
 assert.ok(/Exportar lista/.test(appSource));
 assert.ok(/workers\/sigem_pw_dashboard\.worker\.js/.test(appSource));
-assert.ok(/savePwBase\([^;]+state\.ld\)/.test(appSource), "importação PW deve sanear com a LD vigente");
+assert.ok(/savePwBase\(candidate, state\.ld\)/.test(appSource), "importação PW deve sanear com a LD vigente");
 assert.ok(/saveLdAndReprocessPw/.test(appSource), "troca de LD deve reprocessar a base PW ativa");
 assert.ok(/SIGEM \+ PW: ainda não emitido/.test(appSource));
 assert.ok(/Revisão ausente no PW é conciliada pelo código do documento/.test(appSource));

@@ -51,7 +51,7 @@
       button.type = "button";
       button.dataset.pcOpen = "sidebar";
       button.innerHTML = `${navSvg()}<span><strong>Conferência</strong><small>Histórico × Consulta Geral</small></span><b hidden id="pc-nav-count">0</b>`;
-      if (sidebarBefore) sidebar.insertBefore(button, sidebarBefore);
+      if (sidebarBefore?.parentElement === sidebar) sidebar.insertBefore(button, sidebarBefore);
       else sidebar.appendChild(button);
     }
 
@@ -65,7 +65,7 @@
       button.setAttribute("aria-selected", "false");
       button.setAttribute("aria-controls", "posting-conference-module");
       button.innerHTML = `${navSvg()}<span><strong>Conferência de Postagem</strong><small>Histórico × Consulta Geral</small></span><b hidden id="pc-tab-count">0</b>`;
-      if (tabBefore) tabs.insertBefore(button, tabBefore);
+      if (tabBefore?.parentElement === tabs) tabs.insertBefore(button, tabBefore);
       else tabs.appendChild(button);
     }
 

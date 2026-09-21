@@ -18,15 +18,18 @@
 
   function createPlaceholder() {
     let module = document.getElementById(MODULE_ID);
-    if (module) return module;
-    module = document.createElement("section");
-    module.id = MODULE_ID;
-    module.className = "module-view";
-    module.hidden = true;
-    module.setAttribute("role", "tabpanel");
-    module.setAttribute("aria-label", "Dashboard SIGEM × ProjectWise");
-    module.innerHTML = '<div style="padding:18px;color:var(--text-muted,#66798a)">Carregando Dashboard SIGEM × ProjectWise…</div>';
-    document.querySelector("main.workspace")?.appendChild(module);
+    if (!module) {
+      module = document.createElement("section");
+      module.id = MODULE_ID;
+      module.className = "module-view";
+      module.hidden = true;
+      module.setAttribute("role", "tabpanel");
+      module.setAttribute("aria-label", "Dashboard SIGEM × ProjectWise");
+      document.querySelector("main.workspace")?.appendChild(module);
+    }
+    if (!module.querySelector("#grcon-sigem-pw-root")) {
+      module.innerHTML = '<div id="grcon-sigem-pw-root"><div style="padding:18px;color:var(--text-muted,#66798a)">Carregando Dashboard SIGEM × ProjectWise…</div></div>';
+    }
     return module;
   }
 
@@ -42,7 +45,7 @@
       button.type = "button";
       button.dataset.spwOpen = "sidebar";
       button.innerHTML = `${navSvg()}<span><strong>SIGEM × PW</strong><small>Dashboard comparativo</small></span>`;
-      if (sidebarBefore) sidebar.insertBefore(button, sidebarBefore);
+      if (sidebarBefore?.parentElement === sidebar) sidebar.insertBefore(button, sidebarBefore);
       else sidebar.appendChild(button);
     }
 
@@ -56,7 +59,7 @@
       button.setAttribute("aria-selected", "false");
       button.setAttribute("aria-controls", MODULE_ID);
       button.innerHTML = `${navSvg()}<span><strong>Dashboard SIGEM × PW</strong><small>Consulta Geral × ProjectWise</small></span>`;
-      if (tabBefore) tabs.insertBefore(button, tabBefore);
+      if (tabBefore?.parentElement === tabs) tabs.insertBefore(button, tabBefore);
       else tabs.appendChild(button);
     }
 
@@ -114,12 +117,10 @@
     if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_readiness_core.js");
-    await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_app.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_scope_fix.js");
 
     // O histórico captura as dependências no momento em que o módulo é avaliado.
-    // Portanto o motor de revisão precisa existir ANTES de history_core.js ser carregado;
-    // caso contrário a closure do histórico fica permanentemente com Revision = null.
+    // O motor de revisão precisa existir antes do History Core.
     await root.GRCONModuleLoader.ensure("sigem_pw_revision_core.js");
     const Revision = root.GrconSigemPwRevision;
     if (!Revision || (typeof Revision.analyze !== "function" && typeof Revision.analyzeAsync !== "function")) {
@@ -129,13 +130,13 @@
     await root.GRCONModuleLoader.ensure("sigem_pw_history_core.js");
     await root.GRCONModuleLoader.ensure("sigem_pw_history_management.js");
 
+    // A ilha React é montada somente depois dos contratos obrigatórios.
+    await root.GRCONModuleLoader.ensure("react-dist/sigem-pw-dashboard-app.js");
+
     if (!root.GrconSigemPwDashboard || !root.GrconSigemPwReadiness || !root.GrconSigemPwScopeFix || !root.GrconSigemPwDashboardUi || !root.GrconSigemPwRevision || !root.GrconSigemPwHistory || !root.GrconSigemPwHistoryManagement) {
       throw new Error("O Dashboard SIGEM × PW não foi inicializado corretamente.");
     }
 
-    // A versão atual não apaga bases pré-existentes para concluir migração.
-    // O marcador é gravado antes da ativação da UI, neutralizando o reset legado
-    // existente em dashboard_app sem tocar nos dados persistidos.
     await preserveExistingStage7Data();
   }
 

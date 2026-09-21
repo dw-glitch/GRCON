@@ -1,0 +1,10 @@
+import type { SigemPwClassSummary, SigemPwState } from "../types/domain";
+function fmt(value:number):string{return Number(value||0).toLocaleString("pt-BR");}
+function classRow(state:SigemPwState,name:string):SigemPwClassSummary{return state.result?.classes.find((row)=>row.documentClass===name)||{documentClass:name,sigem:0,pwRegistered:0,pwEmitted:0,gapSigemToPw:0,gapPwToEmitted:0,pwExclusive:0,matched:0};}
+export function SigemPwSystemsSummary({state}:{state:SigemPwState}) {
+ const s=state.result?.summary,et=classRow(state,"ET"),n=classRow(state,"N-1710");
+ return <section className="spw-system-grid" id="spw-system-grid" aria-label="Totais SIGEM e ProjectWise">
+  <article className="spw-system-card sigem"><div className="spw-system-head"><div><span className="spw-kicker">CONSULTA GERAL</span><h3>SIGEM</h3><small>Entradas postadas, contadas por código + revisão.</small></div><div className="spw-system-total"><span>Total</span><strong>{state.sigem.meta?fmt(s?.sigem||0):"—"}</strong></div></div><div className="spw-system-split"><div><span>ET</span><strong>{state.sigem.meta?fmt(et.sigem):"—"}</strong></div><div><span>N-1710</span><strong>{state.sigem.meta&&state.ld.meta?fmt(n.sigem):"—"}</strong></div></div></article>
+  <article className="spw-system-card pw"><div className="spw-system-head"><div><span className="spw-kicker">RELAÇÃO PROJECTWISE</span><h3>ProjectWise</h3><small>Cadastros e emissões, contados por código + revisão.</small></div><div className="spw-system-total"><span>Total cadastrado</span><strong>{state.pw.meta?fmt(s?.pwRegistered||0):"—"}</strong></div></div><div className="spw-system-split"><div><span>ET</span><strong>{state.pw.meta?fmt(et.pwRegistered):"—"}</strong></div><div><span>N-1710</span><strong>{state.pw.meta&&state.ld.meta?fmt(n.pwRegistered):"—"}</strong></div><div><span>Emitido</span><strong>{state.pw.meta?fmt(s?.pwEmitted||0):"—"}</strong></div><div><span>Não emitido</span><strong>{state.pw.meta?fmt(s?.gapPwToEmitted||0):"—"}</strong></div></div></article>
+ </section>;
+}

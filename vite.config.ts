@@ -27,6 +27,12 @@ const BUILDS = {
     bundleName: "GrconPdfToolsBundle",
     emptyOutDir: false,
   },
+  "sigem-pw-dashboard": {
+    entry: "src/react/sigem-pw/index.tsx",
+    fileName: "sigem-pw-dashboard-app.js",
+    bundleName: "GrconSigemPwDashboardBundle",
+    emptyOutDir: false,
+  },
 } as const;
 
 export default defineConfig(({ mode }) => {
