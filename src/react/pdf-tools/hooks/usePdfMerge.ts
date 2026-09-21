@@ -249,9 +249,14 @@ export function usePdfMerge() {
     });
   }, []);
 
+  const deactivate = useCallback((): void => {
+    if (Adapter.hasActiveWorker()) cancel(false);
+  }, [cancel]);
+
   useEffect(() => {
     const unregister = pdfMergeBridge.register({
       activate,
+      deactivate,
       addFiles,
       clear,
       getDebugState: () => stateRef.current || {
@@ -263,7 +268,7 @@ export function usePdfMerge() {
       },
     });
     return unregister;
-  }, [activate, addFiles, clear]);
+  }, [activate, deactivate, addFiles, clear]);
 
   useEffect(() => {
     const module = document.getElementById("pdf-tools-module");
