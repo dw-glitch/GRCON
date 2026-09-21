@@ -70,10 +70,10 @@ async function openPdfTools(page) {
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
   try {
-    const openStart = Date.now();
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await waitForStableServiceWorkerPage(page);
     await revealApp(page);
+    const openStart = Date.now();
     await openPdfTools(page);
     const openModuleMs = Date.now() - openStart;
 
