@@ -432,6 +432,10 @@ async function resetFilters(page) {
     await page.keyboard.press("Escape");
     await page.locator(".analysis-history-detail-panel").waitFor({ state: "detached" });
     assert.equal(await page.evaluate(() => document.body.style.overflow), "");
+    // A desmontagem do drawer e o cleanup do efeito React pertencem ao mesmo
+    // ciclo, mas o runner pode observar o DOM removido antes da restauração do
+    // foco. Aguarde o contrato de acessibilidade ficar verdadeiro, sem afrouxá-lo.
+    await page.waitForFunction(() => /^Abrir detalhes/.test(document.activeElement?.getAttribute("aria-label") || ""), null, { timeout: 3000 });
     assert.match(await page.evaluate(() => document.activeElement?.getAttribute("aria-label") || ""), /^Abrir detalhes/);
 
     await opener.press("Enter");
