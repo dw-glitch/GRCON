@@ -1914,13 +1914,14 @@ check("limpeza compartilhada só remove o histórico local após confirmação d
 
 check("exclusão individual confirma o Supabase antes de apagar localmente", () => {
   const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
+  const adapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
+  const hook = fs.readFileSync(path.join(root, "src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts"), "utf8");
   assert.match(cloud, /async function deleteSharedHistoryRecord\(record\)/);
   assert.match(cloud, /target_reservation_ids:\s*reservationIds\.length \? reservationIds : null/);
-  const remotePosition = ui.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
-  const localPosition = ui.indexOf("history().deleteOne(record.id)", remotePosition);
+  const remotePosition = adapter.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
+  const localPosition = adapter.indexOf("history().deleteOne(record.id)", remotePosition);
   assert.ok(remotePosition >= 0 && localPosition > remotePosition);
-  assert.match(ui, /foi liberado para reutilização/i);
+  assert.match(hook, /foi liberado para reutilização/i);
 });
 
 check("atalho do cabeçalho abre o RECON sem integração de dados", () => {
