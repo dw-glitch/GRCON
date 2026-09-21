@@ -35,7 +35,7 @@ function functionBody(source, name, nextName) {
 })();
 
 (function consultationIsPreparedWithoutEarlyWrite() {
-  const sigem = functionBody(dashboardApp, "importSigem", "parsePwFile");
+  const sigem = functionBody(dashboardApp, "importSigem", "importPw");
   assert.match(sigem, /Conference\.prepareWorkbookImport/);
   assert.doesNotMatch(sigem, /Conference\.importWorkbook/);
   assert.ok(sigem.indexOf("prepareWorkbookImport") < sigem.indexOf("registerHistoryBeforeActivation"));
@@ -114,7 +114,7 @@ function functionBody(source, name, nextName) {
 
 (function everyActivationHasRestorationPath() {
   const register = functionBody(dashboardApp, "registerHistoryBeforeActivation", "importSigem");
-  const sigem = functionBody(dashboardApp, "importSigem", "parsePwFile");
+  const sigem = functionBody(dashboardApp, "importSigem", "importPw");
   const pw = functionBody(dashboardApp, "importPw", "importLd");
   const ld = functionBody(dashboardApp, "importLd", "clearPreStage7BasesOnce");
   assert.match(register, /History\.rollbackRecordedActiveBases\(recorded\)/);
