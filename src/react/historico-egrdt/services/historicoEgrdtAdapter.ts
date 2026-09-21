@@ -298,8 +298,23 @@ function openTeams(record: EgrdtHistoryRecord): void {
   window.GrconEgrdtTeamsNotification?.open?.(record);
 }
 
-function teamsButtonHtml(record: EgrdtHistoryRecord): string {
-  return window.GrconEgrdtTeamsNotification?.buttonHtml?.(record, { withStatus: true }) || "";
+function teamsPresentation(record: EgrdtHistoryRecord): {
+  recordId: string;
+  label: string;
+  statusLabel: string;
+  sent: boolean;
+  disabled: boolean;
+} | null {
+  const Teams = window.GrconEgrdtTeamsNotification;
+  if (!Teams) return null;
+  const saved = Teams.status?.(record);
+  return {
+    recordId: record.id || record.clientRecordId || "",
+    label: Teams.buttonLabel?.(record) || (saved ? "Reenviar aviso no Teams" : "Avisar no Teams"),
+    statusLabel: Teams.statusLabel?.(record) || (saved ? "Avisado no Teams" : "Ainda não avisado"),
+    sent: Boolean(saved),
+    disabled: Boolean(Teams.isSending?.(record)),
+  };
 }
 
 function syncSequence(number: string): void {
