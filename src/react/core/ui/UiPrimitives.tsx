@@ -58,6 +58,12 @@ export function UiDrawer({
 }) {
   const drawerRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const previousFocusIdentityRef = useRef<{
+    id: string;
+    analysisId: string;
+    ariaLabel: string;
+    tagName: string;
+  } | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -66,7 +72,14 @@ export function UiDrawer({
 
     const body = document.body;
     const previousOverflow = body.style.overflow;
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousFocusRef.current = previousFocus;
+    previousFocusIdentityRef.current = previousFocus ? {
+      id: previousFocus.id || "",
+      analysisId: previousFocus.getAttribute("data-analysis-id") || "",
+      ariaLabel: previousFocus.getAttribute("aria-label") || "",
+      tagName: previousFocus.tagName,
+    } : null;
     body.style.overflow = "hidden";
     drawerRef.current?.focus();
 
@@ -114,8 +127,34 @@ export function UiDrawer({
       document.removeEventListener("keydown", onKeyDown, true);
       body.style.overflow = previousOverflow;
       const previousFocus = previousFocusRef.current;
-      if (previousFocus?.isConnected) previousFocus.focus();
+      const identity = previousFocusIdentityRef.current;
+      let focusTarget = previousFocus?.isConnected ? previousFocus : null;
+
+      // A tabela pode rerenderizar enquanto o drawer está aberto. Nesse caso o
+      // nó que tinha foco deixa de estar conectado, embora exista um equivalente
+      // atual. Reencontre-o por identidade estável antes de devolver o foco.
+      if (!focusTarget && identity) {
+        if (identity.id) {
+          const byId = document.getElementById(identity.id);
+          if (byId instanceof HTMLElement) focusTarget = byId;
+        }
+        if (!focusTarget && identity.analysisId) {
+          focusTarget = Array.from(document.querySelectorAll<HTMLElement>("[data-analysis-id]")).find((element) => (
+            element.tagName === identity.tagName
+            && element.getAttribute("data-analysis-id") === identity.analysisId
+          )) || null;
+        }
+        if (!focusTarget && identity.ariaLabel) {
+          focusTarget = Array.from(document.querySelectorAll<HTMLElement>("[aria-label]")).find((element) => (
+            element.tagName === identity.tagName
+            && element.getAttribute("aria-label") === identity.ariaLabel
+          )) || null;
+        }
+      }
+
+      focusTarget?.focus();
       previousFocusRef.current = null;
+      previousFocusIdentityRef.current = null;
     };
   }, [open]);
 
