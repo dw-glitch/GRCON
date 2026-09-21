@@ -21,6 +21,8 @@ const output = read("src/react/pdf-tools/components/PdfOutputPanel.tsx");
 const progress = read("src/react/pdf-tools/components/PdfProgress.tsx");
 const result = read("src/react/pdf-tools/components/PdfResult.tsx");
 const worker = read("workers/pdf-merge.worker.js");
+const css = read("pdf-merge.css");
+const phaseB = read("docs/phase-b-pdf-tools-parity.md");
 
 assert.match(html, /id="pdf-tools-module"/);
 assert.match(html, /id="grcon-pdf-tools-root"/);
@@ -62,21 +64,44 @@ assert.match(hook, /Adapter\.merge\(/);
 assert.doesNotMatch(hook, /new Worker\(/);
 
 assert.match(app, /Combinar PDFs/);
-assert.match(app, /Processamento 100% local/);
+assert.match(app, /Processamento local/);
+assert.match(app, /UiPageHeader/);
+assert.match(app, /UiMetaPill/);
+assert.match(app, /Adicionar/);
+assert.match(app, /Organizar/);
+assert.match(app, /Gerar/);
+
 assert.match(drop, /id="pdf-merge-drop"/);
 assert.match(drop, /role="button"/);
 assert.match(drop, /event\.key === "Enter"/);
 assert.match(drop, /event\.key === " "/);
+assert.match(drop, /hasFiles/);
+assert.match(drop, /Adicionar PDFs/);
+
 assert.match(list, /id="pdf-merge-list"/);
 assert.match(list, /data-pdf-action="up"/);
 assert.match(list, /data-pdf-action="down"/);
 assert.match(list, /data-pdf-action="remove"/);
+assert.match(list, /padStart\(2, "0"\)/);
+assert.match(list, /title="Remover"/);
+
 assert.match(output, /id="pdf-merge-output-name"/);
 assert.match(output, /maxLength=\{124\}/);
-assert.match(output, /props\.itemCount < 2/);
+assert.match(output, /props\.itemCount >= 2/);
+assert.match(output, /Adicione pelo menos 2 PDFs/);
+assert.match(output, /Combinar e baixar/);
+
 assert.match(progress, /role="progressbar"/);
 assert.match(progress, /aria-valuenow=\{value\}/);
+assert.match(progress, /pdf-merge-progress-percent/);
 assert.match(result, /id="pdf-merge-download"/);
+assert.match(result, /PDF combinado com sucesso/);
+
+assert.match(css, /pdf-merge-drop\.has-files/);
+assert.match(css, /max-height:\s*min\(55vh,\s*600px\)/);
+assert.match(css, /prefers-reduced-motion/);
+assert.match(css, /@media \(max-width:\s*44rem\)/);
+assert.match(phaseB, /Core, Worker e Engine sem alteração/);
 
 const reactSource = [index, app, hook, adapter, domain, drop, list, output, progress, result].join("\n");
 assert.doesNotMatch(reactSource, /PDFLib|pdf-lib\.min\.js/);
