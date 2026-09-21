@@ -177,14 +177,14 @@ function loadAdapter(windowOverrides = {}) {
   }
 
   const hook = fs.readFileSync(path.join(root, "src/react/historico-analises/hooks/useHistoricoAnalises.ts"), "utf8");
-  assert.match(hook, /const DESKTOP_PAGE_SIZE = 200/);
-  assert.match(hook, /const MOBILE_PAGE_SIZE = 25/);
-  assert.match(hook, /MOBILE_HISTORY_MEDIA = "\\(max-width: 44rem\\)"/);
-  assert.match(hook, /useDebouncedValue\\(filters\\.query, 300\\)/);
-  assert.match(hook, /query: debouncedQuery/);
-  assert.doesNotMatch(hook, /\.\.\.filters,[\\s\\S]{0,80}query: debouncedQuery/);
-  assert.match(hook, /queryDebouncing = filters\\.query !== debouncedQuery/);
-  assert.match(hook, /Adapter\\.queryDocuments\\(effectiveFilters, page, pageSize\\)/);
+  assert.ok(hook.includes("const DESKTOP_PAGE_SIZE = 200;"));
+  assert.ok(hook.includes("const MOBILE_PAGE_SIZE = 25;"));
+  assert.ok(hook.includes('const MOBILE_HISTORY_MEDIA = "(max-width: 44rem)";'));
+  assert.ok(hook.includes("useDebouncedValue(filters.query, 300)"));
+  assert.ok(hook.includes("query: debouncedQuery"));
+  assert.equal(hook.includes("...filters,\n    query: debouncedQuery"), false);
+  assert.ok(hook.includes("const queryDebouncing = filters.query !== debouncedQuery;"));
+  assert.ok(hook.includes("Adapter.queryDocuments(effectiveFilters, page, pageSize)"));
   assert.match(hook, /Adapter\.subscribeUpdates/);
   assert.match(hook, /Adapter\.subscribeOpenDetail/);
   assert.match(hook, /Adapter\.confirmClearHistory/);
