@@ -403,6 +403,15 @@ function getPerformanceSnapshot(): HistoryPerformanceSnapshot {
   return { ...performanceSnapshot };
 }
 
+function publishCompatibilityState(records: EgrdtHistoryRecord[], selectedId: string): void {
+  compatibilityState.filtered = records;
+  compatibilityState.selectedId = selectedId;
+}
+
+function getCompatibilityState() {
+  return compatibilityState;
+}
+
 function confirmDelete(record: EgrdtHistoryRecord): boolean {
   const shared = isSharedHistory();
   return window.confirm(
