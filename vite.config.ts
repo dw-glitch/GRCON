@@ -15,6 +15,12 @@ const BUILDS = {
     bundleName: "GrconHistoricoAnalisesBundle",
     emptyOutDir: false,
   },
+  "historico-egrdt": {
+    entry: "src/react/historico-egrdt/index.tsx",
+    fileName: "historico-egrdt-app.js",
+    bundleName: "GrconHistoricoEgrdtBundle",
+    emptyOutDir: false,
+  },
   "pdf-tools": {
     entry: "src/react/pdf-tools/index.tsx",
     fileName: "pdf-tools-app.js",
