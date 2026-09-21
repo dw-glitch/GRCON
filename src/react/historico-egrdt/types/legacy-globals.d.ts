@@ -14,6 +14,10 @@ interface GrconHistoryReportApi {
 
 interface GrconTeamsNotificationApi {
   open?(record: EgrdtHistoryRecord): void;
+  status?(record: EgrdtHistoryRecord): { sentAt?: string } | null;
+  statusLabel?(record: EgrdtHistoryRecord): string;
+  buttonLabel?(record: EgrdtHistoryRecord): string;
+  isSending?(record: EgrdtHistoryRecord): boolean;
   buttonHtml?(record: EgrdtHistoryRecord, options?: { primary?: boolean; withStatus?: boolean }): string;
 }
 
