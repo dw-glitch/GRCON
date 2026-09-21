@@ -39,7 +39,7 @@ export function PdfMergeApp() {
       <p className={`pdf-merge-privacy${merge.state.busy ? " is-busy" : ""}`} id="pdf-merge-privacy" aria-live="polite">
         {merge.state.busy
           ? "Não feche esta aba até a conclusão. Os arquivos continuam somente neste navegador."
-          : "Os arquivos permanecem neste navegador: nenhum PDF é enviado, salvo no banco ou registrado no histórico."}
+          : "Os arquivos permanecem neste navegador: nenhum arquivo é enviado, armazenado ou registrado no banco."}
       </p>
 
       <div className="pdf-merge-flow" aria-label="Fluxo para combinar PDFs">
