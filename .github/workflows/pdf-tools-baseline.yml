@@ -7,6 +7,10 @@ on:
     paths:
       - "scripts/medir-pdf-tools-baseline.cjs"
       - ".github/workflows/pdf-tools-baseline.yml"
+  pull_request:
+    paths:
+      - "scripts/medir-pdf-tools-baseline.cjs"
+      - ".github/workflows/pdf-tools-baseline.yml"
   workflow_dispatch:
 
 permissions:
