@@ -886,6 +886,76 @@ html[data-app="GRCON"] .analysis-history-module .analysis-detail-actions {
     margin-top: 0;
   }
 
+  /* analysis-history.css legado transforma a tabela em cards até 960 px.
+     Na FASE B, tablet permanece tabela compacta com scroll horizontal local;
+     somente o breakpoint <= 44rem abaixo volta a aplicar o layout em cards. */
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table-wrap {
+    max-height: 42rem;
+    overflow: auto;
+    border: 1px solid var(--border-1);
+    border-radius: var(--radius-md);
+    background: var(--surface-1);
+    overscroll-behavior-inline: contain;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table {
+    display: table;
+    width: 100%;
+    min-width: 68rem;
+    table-layout: fixed;
+    background: var(--surface-1);
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table colgroup {
+    display: table-column-group;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table thead {
+    display: table-header-group;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody {
+    display: table-row-group;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr {
+    display: table-row;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody td,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr:nth-child(even) td,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody tr:hover td {
+    display: table-cell;
+    min-width: 0;
+    padding: .52rem .55rem;
+    overflow: hidden;
+    border-right: 1px solid var(--border-1);
+    border-bottom: 1px solid var(--border-1);
+    text-align: inherit;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table tbody td::before {
+    content: none;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-document,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-result,
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table .analysis-cell-reason {
+    grid-column: auto;
+  }
+
+  html[data-app="GRCON"] .analysis-history-module .analysis-history-table td small {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
   html[data-app="GRCON"] .analysis-history-module .analysis-history-results-header,
   html[data-app="GRCON"] .analysis-history-module .analysis-history-footer {
     align-items: stretch;
