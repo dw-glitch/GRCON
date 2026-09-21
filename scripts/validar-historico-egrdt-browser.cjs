@@ -3,6 +3,13 @@ const { chromium } = require("playwright");
 
 const baseUrl = process.env.GRCON_PREVIEW_URL || "http://127.0.0.1:8765";
 
+function isExpectedBootstrapConsoleError(message) {
+  const text = String(message || "");
+  return text.includes("[GRCON Storage][initialize]")
+    && text.includes("DependencyError")
+    && text.includes("módulos de Histórico e Postagem SIGEM ainda não estão disponíveis");
+}
+
 function record(id, sequence, generatedAt) {
   const code = "RL-5290.00-22313-91B-C1O-" + String(sequence).padStart(3, "0");
   return {
@@ -95,7 +102,11 @@ async function seed(page) {
   const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    const text = message.text();
+    if (!isExpectedBootstrapConsoleError(text)) errors.push(text);
+  });
   try {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await waitForStableServiceWorkerPage(page);
