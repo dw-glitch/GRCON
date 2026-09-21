@@ -39,7 +39,7 @@ assertWebm(processing, "vídeo de processamento", 300_000);
 assertWebm(wave, "vídeo de aceno", 300_000);
 assert.notEqual(hash(processing), hash(wave), "os dois comportamentos precisam ter mídias independentes");
 
-assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=4\.2\.0-20260918\.4/);
+assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=4\.3\.0-20260921\.1/);
 assert.match(entrypoint, /official-png-static-fallback/);
 assert.doesNotMatch(entrypoint, /gsap|\.riv/i);
 
@@ -51,7 +51,7 @@ const requiredStates = [
 for (const state of requiredStates) assert.ok(controller.includes(`"${state}"`), `estado ${state} ausente`);
 
 assert.match(controller, /official-video-v4/);
-assert.match(controller, /ASSET_REVISION\s*=\s*"20260918\.4"/);
+assert.match(controller, /ASSET_REVISION\s*=\s*"20260921\.1"/);
 assert.match(controller, /MASCOT_ANIMATIONS/);
 assert.match(controller, /grcon-mascot-processing-alpha\.webm/);
 assert.match(controller, /grcon-mascot-wave-alpha\.webm/);
@@ -94,7 +94,7 @@ assert.doesNotMatch(bootstrap, /installGsap|vendor\/gsap|window\.gsap/i);
 for (const asset of [processingPath, wavePath, "grcon_mascot_controller.js"]) {
   assert.ok(sw.includes(`"${asset}"`), `${asset} precisa continuar disponível no cache offline existente`);
 }
-assert.match(sw, /mascot-context9/);
+assert.match(sw, /mascot-pilot1/);
 assert.doesNotMatch(sw, /vendor\/gsap|assets\/mascot\/layers|grcon-mascot-(?:body|head|right-arm|official-default)\.png/i);
 
 assert.match(vercel, /\/assets\/mascot\/video/);
