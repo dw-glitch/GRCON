@@ -67,50 +67,9 @@ async function seed(page) {
   assert.equal(observed.stored, 3, "Core/fixture deve fornecer os 3 registros controlados.");
   assert.match(observed.count, /^3 eGRDT/, "UI deve refletir os 3 registros iniciais.");
   assert.equal(observed.listCount, 3, "Lista inicial deve renderizar A, B e C.");
-}onst assert = require("node:assert/strict");
-const { chromium } = require("playwright");
-
-const baseUrl = process.env.GRCON_PREVIEW_URL || "http://127.0.0.1:8765";
-
-function record(id, sequence, generatedAt) {
-  const code = "RL-5290.00-22313-91B-C1O-" + String(sequence).padStart(3, "0");
-  return {
-    id,
-    egrdtNumber: "0130870-C1O-PGV-G-" + String(sequence).padStart(4, "0") + "-2026 - eGRDT",
-    generatedAt,
-    outputType: "ZIP + PDFs",
-    ldName: "LD_001",
-    sourceName: "Fixture Chromium",
-    allocations: ["3.1.1.1"],
-    files: [{
-      document: code,
-      originalName: code + "_0.pdf",
-      finalName: code + "_0.pdf",
-      revision: "0",
-      grdtRevision: "0",
-      sigemStatus: "POSTADO",
-      allocation: "3.1.1.1",
-      ldPrazo: "A01",
-      sheet: "N-1710",
-    }],
-  };
 }
 
-const fixtures = [
-  record("fixture-a", 1, "2026-09-01T12:00:00-03:00"),
-  record("fixture-b", 2, "2026-09-15T12:00:00-03:00"),
-  record("fixture-c", 3, "2026-09-30T12:00:00-03:00"),
-];
-
-async function revealApp(page) {
-  await page.addStyleTag({ content: [
-    "html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }",
-    "#grcon-cloud-auth { display: none !important; }",
-  ].join("\n") });
-}
-
-async function openHistory(page) {
-  await page.evaluate(async () => {
+(async () => {
     if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("history");
     window.GrconHistoryUi?.activate?.("history");
   });
