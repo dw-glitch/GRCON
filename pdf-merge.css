@@ -762,11 +762,20 @@ html[data-theme="dark"] .pdf-merge-result {
   color: var(--success-100, #e6f5ed);
 }
 
-html[data-theme="dark"] .pdf-merge-privacy,
-html[data-theme="dark"] .pdf-merge-result-copy > span,
-html[data-theme="dark"] .pdf-merge-result strong,
+html[data-theme="dark"] .pdf-merge-privacy {
+  color: var(--text-1, #eef4f7);
+}
+
+html[data-theme="dark"] .pdf-merge-result-copy > span {
+  color: var(--success-700, #70d7bc);
+}
+
+html[data-theme="dark"] .pdf-merge-result strong {
+  color: var(--text-1, #eef4f7);
+}
+
 html[data-theme="dark"] .pdf-merge-result small {
-  color: var(--success-100, #e6f5ed);
+  color: var(--text-2, #bdcbd3);
 }
 
 @media (max-width: 61.25rem) {
