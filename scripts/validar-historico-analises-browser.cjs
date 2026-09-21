@@ -192,25 +192,28 @@ async function installHistoryQueryInstrumentation(page) {
     if (!core || typeof core.queryDocuments !== "function" || typeof core.allDocuments !== "function") {
       throw new Error("GrconAnalysisHistory não está disponível para instrumentação.");
     }
-    if (!core.__phaseBHistoryPerformanceInstrumented) {
+    if (!window.__phaseBHistoryPerformanceInstrumented) {
       const originalQueryDocuments = core.queryDocuments.bind(core);
       const originalAllDocuments = core.allDocuments.bind(core);
-      core.queryDocuments = async (...args) => {
-        window.__historyQueryCalls = Number(window.__historyQueryCalls || 0) + 1;
-        window.__historyQueryLog = Array.isArray(window.__historyQueryLog) ? window.__historyQueryLog : [];
-        window.__historyQueryLog.push({
-          query: String(args[0]?.query || ""),
-          offset: Number(args[1]?.offset || 0),
-          limit: Number(args[1]?.limit || 0),
-        });
-        return originalQueryDocuments(...args);
-      };
-      core.allDocuments = async (...args) => {
-        const documents = await originalAllDocuments(...args);
-        window.__historyLastAllDocumentsCount = Array.isArray(documents) ? documents.length : 0;
-        return documents;
-      };
-      core.__phaseBHistoryPerformanceInstrumented = true;
+      window.GrconAnalysisHistory = Object.freeze({
+        ...core,
+        queryDocuments: async (...args) => {
+          window.__historyQueryCalls = Number(window.__historyQueryCalls || 0) + 1;
+          window.__historyQueryLog = Array.isArray(window.__historyQueryLog) ? window.__historyQueryLog : [];
+          window.__historyQueryLog.push({
+            query: String(args[0]?.query || ""),
+            offset: Number(args[1]?.offset || 0),
+            limit: Number(args[1]?.limit || 0),
+          });
+          return originalQueryDocuments(...args);
+        },
+        allDocuments: async (...args) => {
+          const documents = await originalAllDocuments(...args);
+          window.__historyLastAllDocumentsCount = Array.isArray(documents) ? documents.length : 0;
+          return documents;
+        },
+      });
+      window.__phaseBHistoryPerformanceInstrumented = true;
     }
     window.__historyQueryCalls = 0;
     window.__historyQueryLog = [];
