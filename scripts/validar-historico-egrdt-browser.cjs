@@ -70,32 +70,6 @@ async function seed(page) {
 }
 
 (async () => {
-    if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("history");
-    window.GrconHistoryUi?.activate?.("history");
-  });
-  await page.locator("#history-date-start").waitFor({ state: "visible", timeout: 30000 });
-}
-
-async function seed(page) {
-  await page.evaluate((rows) => {
-    localStorage.setItem(window.GrconHistory.STORAGE_KEY, JSON.stringify(rows));
-    window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { fixture: true } }));
-  }, fixtures);
-  await page.evaluate(() => window.GrconHistoryUi?.render?.());
-  await page.waitForTimeout(250);
-  const observed = await page.evaluate(() => ({
-    stored: window.GrconHistory?.read?.().length || 0,
-    count: document.querySelector("#history-result-count")?.textContent || "",
-    summary: document.querySelector("#history-summary")?.textContent || "",
-    listCount: document.querySelectorAll("#history-list [data-history-id]").length,
-  }));
-  console.log("fixture-inicial", JSON.stringify(observed));
-  assert.equal(observed.stored, 3, "Core deve ler os 3 registros controlados.");
-  assert.match(observed.count, /^3 eGRDT/, "UI deve refletir os 3 registros iniciais.");
-  assert.equal(observed.listCount, 3, "Lista inicial deve renderizar A, B e C.");
-}
-
-(async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
   const errors = [];
