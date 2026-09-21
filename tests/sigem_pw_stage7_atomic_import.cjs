@@ -36,8 +36,8 @@ function functionBody(source, name, nextName) {
 
 (function consultationIsPreparedWithoutEarlyWrite() {
   const sigem = functionBody(dashboardApp, "importSigem", "importPw");
-  assert.match(sigem, /Conference\.prepareWorkbookImport/);
-  assert.doesNotMatch(sigem, /Conference\.importWorkbook/);
+  assert.match(sigem, /conference\.prepareWorkbookImport/);
+  assert.doesNotMatch(sigem, /conference\.importWorkbook/);
   assert.ok(sigem.indexOf("prepareWorkbookImport") < sigem.indexOf("registerHistoryBeforeActivation"));
   assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core().saveSigemBase"));
   assert.ok(sigem.indexOf("Core().saveSigemBase") < sigem.indexOf("conference.commitPreparedImport"));
@@ -90,7 +90,7 @@ function functionBody(source, name, nextName) {
   const preserve = functionBody(dashboardBootstrap, "preserveExistingStage7Data", "ensureRuntime");
   const runtime = functionBody(dashboardBootstrap, "ensureRuntime", "afterFirstPaint");
   const open = functionBody(dashboardBootstrap, "openDashboard", "openEvolution");
-  assert.match(preserve, /core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
+  assert.match(preserve, /Core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
   assert.match(preserve, /Core\.kvSet\(PRE_STAGE7_RESET_KEY/);
   assert.match(preserve, /mode: "preserve-existing-data"/);
   assert.doesNotMatch(preserve, /clearHistory|SIGEM_BASE_KEY|PW_BASE_KEY|LD_BASE_KEY/,
@@ -117,7 +117,7 @@ function functionBody(source, name, nextName) {
   const sigem = functionBody(dashboardApp, "importSigem", "importPw");
   const pw = functionBody(dashboardApp, "importPw", "importLd");
   const ld = functionBody(dashboardApp, "importLd", "clearPreStage7BasesOnce");
-  assert.match(register, /History\.rollbackRecordedActiveBases\(recorded\)/);
+  assert.match(register, /history\.rollbackRecordedActiveBases\(recorded\)/);
   [sigem, pw, ld].forEach((body) => assert.match(body, /rollbackStagedImport\(recorded/));
   assert.match(historyCore, /const checkpoint = await captureRecordingCheckpoint\(\)/);
   assert.match(historyCore, /await rollbackRecordedActiveBases\(partial\)/);
@@ -129,7 +129,7 @@ function functionBody(source, name, nextName) {
   const refresh = functionBody(dashboardApp, "refresh", "activate");
   assert.match(reset, /core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
   assert.match(reset, /if \(alreadyReset\) return false/);
-  assert.ok(refresh.indexOf("clearPreStage7BasesOnce") < refresh.indexOf("Core.loadBases"));
+  assert.ok(refresh.indexOf("clearPreStage7BasesOnce") < refresh.indexOf("Core().loadBases"));
   assert.doesNotMatch(dashboardApp, /indexedDB\.deleteDatabase/);
 })();
 
