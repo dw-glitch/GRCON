@@ -422,7 +422,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
             <details className="history-detail-more">
               <summary>Mais ações</summary>
               <div>
-                <button className="secondary-button compact" data-history-action="edit" type="button" onClick={h.startEditing}>Editar número</button>
+                <button className="secondary-button compact" data-history-action="edit" type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); h.startEditing(); }}>Editar número</button>
                 {h.canDeleteHistory ? (
                   <button className="history-delete-button" data-history-action="delete" type="button" aria-label="Excluir esta eGRDT do histórico" title="Excluir somente esta eGRDT" onClick={() => { void h.deleteSelectedRecord(); }}>
                     Excluir esta eGRDT
