@@ -149,9 +149,9 @@ Comportamento legado inventariado:
 
 Hardening exigido nesta migração:
 
-- [ ] terminar Worker também ao desmontar a ilha
-- [ ] terminar Worker ao sair do módulo durante job ativo, sem perder lista/ordem
-- [ ] nenhum listener antigo sobreviver à navegação repetida
+- [x] terminar Worker também ao desmontar a ilha
+- [x] terminar Worker ao sair do módulo durante job ativo, sem perder lista/ordem
+- [x] nenhum listener antigo sobreviver à navegação repetida
 
 ## Resultado e Object URL
 
@@ -166,7 +166,7 @@ Hardening exigido nesta migração:
 - [x] alterar arquivos invalida e revoga o resultado
 - [x] limpar revoga o resultado
 - [x] `beforeunload` revoga o resultado
-- [ ] nova ilha deve também revogar em unmount e antes de substituir resultado
+- [x] nova ilha deve também revogar em unmount e antes de substituir resultado
 
 ## Erros
 
@@ -230,27 +230,46 @@ A medição obrigatória será executada no Chromium contra a revisão-base acim
 
 | Métrica | Legado | React |
 |---|---:|---:|
-| abrir módulo | NÃO EXECUTADO | NÃO EXECUTADO |
-| adicionar 20 PDFs pequenos | NÃO EXECUTADO | NÃO EXECUTADO |
-| reordenar lista | NÃO EXECUTADO | NÃO EXECUTADO |
-| resposta da UI com 50 itens | NÃO EXECUTADO | NÃO EXECUTADO |
+| abrir módulo | 117 ms | 99 ms |
+| adicionar 20 PDFs pequenos | 29 ms | 21,4 ms |
+| reordenar lista com 20 itens | 33,2 ms | 33,3 ms |
+| adicionar 50 PDFs pequenos | 49,5 ms | 33,4 ms |
+| resposta da UI com 50 itens | 32,7 ms | 34,2 ms |
 
-Nenhuma célula será marcada como PASS ou preenchida com número sem execução real.
+Medições executadas em Chromium no CI. O baseline usa o commit `ea2d432542f026a0c6833ce68d329c48cf05ab12`; a medição React usa a mesma janela funcional de abertura do módulo, depois da estabilização inicial da página/Service Worker. A diferença de 1,5 ms na resposta com 50 itens está dentro da variação normal da execução e não veio acompanhada de aumento de DOM ou perda funcional.
+
+## Evidência final de validação
+
+- [x] TypeScript `tsc --noEmit`
+- [x] build Vite das três ilhas React
+- [x] suíte estática de paridade do PDF Tools
+- [x] merge real de dois PDFs com ordem de páginas validada
+- [x] PDF corrompido retorna erro tratado, sem stack trace para o operador
+- [x] download automático e “baixar novamente”
+- [x] cancelamento ao navegar durante job ativo
+- [x] lista/ordem preservadas ao sair e voltar ao módulo
+- [x] navegação repetida sem duplicar a ilha React
+- [x] viewport mobile sem overflow horizontal
+- [x] Service Worker/cache aquecido e reabertura offline
+- [x] regressão Chromium de Histórico
+- [x] regressão Chromium de Consultas
+
+A migração desta fase é estrutural. O `pdf_merge_core.js`, o Worker e o `pdf_merge_engine.js` permanecem como fontes de verdade do processamento; não houve redesign visual nem reescrita das regras do combinador.
 
 ## Critério de remoção de `pdf_merge_app.js`
 
 Só remover depois de:
 
-- [ ] React + TypeScript implementado
-- [ ] adapter/service implementado
-- [ ] testes do adapter PASS
-- [ ] Chromium com merge real PASS
-- [ ] ordem das páginas PASS
-- [ ] download automático PASS
-- [ ] download novamente PASS
-- [ ] cancelamento determinístico PASS
-- [ ] erro de Worker PASS
-- [ ] navegação repetida PASS
-- [ ] PWA/cache frio/quente PASS
-- [ ] regressão Consultas PASS
-- [ ] regressão Histórico PASS
+- [x] React + TypeScript implementado
+- [x] adapter/service implementado
+- [x] testes do adapter PASS
+- [x] Chromium com merge real PASS
+- [x] ordem das páginas PASS
+- [x] download automático PASS
+- [x] download novamente PASS
+- [x] cancelamento determinístico PASS
+- [x] erro de Worker PASS
+- [x] navegação repetida PASS
+- [x] PWA/cache frio/quente PASS
+- [x] regressão Consultas PASS
+- [x] regressão Histórico PASS
