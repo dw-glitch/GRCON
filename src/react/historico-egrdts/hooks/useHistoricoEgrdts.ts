@@ -15,7 +15,7 @@ const INITIAL_FILTERS: HistoryFilters = {
 
 export function useHistoricoEgrdts() {
   const [records, setRecords] = useState<HistoryRecord[]>([]);
-  const [postings, setPostings] = useState(() => Adapter.readPostings());
+  const [postings, setPostings] = useState<ReturnType<typeof Adapter.readPostings>>([]);
   const [filters, setFilters] = useState<HistoryFilters>(INITIAL_FILTERS);
   const [searchInput, setSearchInput] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -269,6 +269,10 @@ export function useHistoricoEgrdts() {
     periodValid,
     periodStatus,
     canDelete: Adapter.canDelete(),
+    postingStatusOptions: Adapter.postingStatusOptions(),
+    historyHeaderCopy: Adapter.historyHeaderCopy(),
+    clearControl: Adapter.clearControl(),
+    numberEditScope: Adapter.numberEditScope(),
     select,
     loadMore,
     beginEdit,
