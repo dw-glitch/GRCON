@@ -31,7 +31,13 @@ function useDebouncedValue(value: string, delay: number): string {
 
 export function useHistoricoEgrdt() {
   const [records, setRecords] = useState<EgrdtHistoryRecord[]>([]);
-  const [postingCache, setPostingCache] = useState<PostingCache>(() => Adapter.readPostingCache());
+  const [postingCache, setPostingCache] = useState<PostingCache>(() => ({
+    records: [],
+    byHistoryId: new Map(),
+    byId: new Map(),
+    byEgrdt: new Map(),
+    reads: 0,
+  }));
   const [filters, setFilters] = useState<EgrdtHistoryFilters>(EMPTY_FILTERS);
   const debouncedQuery = useDebouncedValue(filters.query, SEARCH_DEBOUNCE_MS);
   const [selectedId, setSelectedId] = useState("");
