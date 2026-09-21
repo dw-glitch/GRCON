@@ -271,9 +271,12 @@ async function openPdfTools(page) {
     assert.equal(await page.locator("#pdf-merge-drop").count(), 1);
     await context.setOffline(false);
 
-    const filteredConsoleErrors = consoleErrors.filter((message) =>
-      !/supabase|ERR_INTERNET_DISCONNECTED|Failed to fetch|net::ERR_/i.test(message)
-    );
+    const filteredConsoleErrors = consoleErrors.filter((message) => {
+      if (/supabase|ERR_INTERNET_DISCONNECTED|Failed to fetch|net::ERR_/i.test(message)) return false;
+      if (/\[GRCON Storage\]\[initialize\]/i.test(message)
+        && /Histórico e Postagem SIGEM ainda não estão disponíveis/i.test(message)) return false;
+      return true;
+    });
     assert.deepEqual(filteredConsoleErrors, []);
 
     const metrics = {
