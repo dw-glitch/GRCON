@@ -15,6 +15,8 @@ const app = read("src/react/historico-egrdt/HistoricoEgrdtApp.tsx");
 const hook = read("src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts");
 const adapter = read("src/react/historico-egrdt/services/historicoEgrdtAdapter.ts");
 const retomar = read("retomar.js");
+const phaseB = read("history-phase-b.css");
+const parity = read("docs/phase-b-historico-egrdt-parity.md");
 
 assert.match(html, /id="history-module"/);
 assert.match(html, /id="grcon-history-root"/);
@@ -30,6 +32,8 @@ assert.doesNotMatch(loader, /history_app\.js/);
 
 assert.match(sw, /react-dist\/historico-egrdt-app\.js/);
 assert.match(sw, /phase-a-egrdt-history-react1/);
+assert.match(sw, /history-phase-b\.css/);
+assert.match(index, /history-phase-b\.css/);
 assert.doesNotMatch(sw, /"history_app\.js"/);
 
 assert.match(index, /window\.GrconHistoryUi = Object\.freeze/);
@@ -54,6 +58,16 @@ assert.match(index, /GrconHistoricoEgrdtReact/);
   "history-clear",
 ].forEach((id) => assert.match(app, new RegExp(`id=["']${id}["']`), `controle ausente: ${id}`));
 
+assert.match(app, /UiPageHeader/);
+assert.match(app, /UiPanel/);
+assert.match(app, /UiMetaPill/);
+assert.match(app, /Gerenciar histórico/);
+assert.match(app, /Limpar período/);
+assert.match(app, /Filtros ativos/);
+assert.match(app, /data-history-kpi-status/);
+assert.match(app, /history-list-scroll/);
+assert.match(app, /Exibindo/);
+assert.match(app, /Mais ações/);
 assert.match(app, /Preparar no SIGEM/);
 assert.match(app, /Resposta de e-mail/);
 assert.match(app, /Editar número/);
@@ -67,6 +81,13 @@ assert.doesNotMatch(hook, /\.\.\.filters,\s*\n\s*query: debouncedQuery/, "busca 
 assert.match(hook, /filters\.startDate/);
 assert.match(hook, /filters\.endDate/);
 assert.doesNotMatch(app, /dangerouslySetInnerHTML/);
+assert.doesNotMatch(app, /innerHTML\s*=/);
+assert.match(phaseB, /history-phase-b/);
+assert.match(phaseB, /position:\s*sticky/);
+assert.match(phaseB, /color-scheme:\s*dark/);
+assert.match(phaseB, /max-height:\s*25rem/);
+assert.match(parity, /state\.filtered representa todo o recorte filtrado/);
+assert.match(parity, /Power Automate\/payload\/webhook\/menções não alterados/);
 assert.match(app, /teamsPresentation/);
 assert.match(retomar, /GrconHistoricoEgrdtReact\?\.mounted/);
 assert.match(adapter, /readPostingCache/);
