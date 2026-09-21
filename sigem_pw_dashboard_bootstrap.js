@@ -45,7 +45,7 @@
       button.type = "button";
       button.dataset.spwOpen = "sidebar";
       button.innerHTML = `${navSvg()}<span><strong>SIGEM × PW</strong><small>Dashboard comparativo</small></span>`;
-      if (sidebarBefore) sidebar.insertBefore(button, sidebarBefore);
+      if (sidebarBefore?.parentElement === sidebar) sidebar.insertBefore(button, sidebarBefore);
       else sidebar.appendChild(button);
     }
 
@@ -59,7 +59,7 @@
       button.setAttribute("aria-selected", "false");
       button.setAttribute("aria-controls", MODULE_ID);
       button.innerHTML = `${navSvg()}<span><strong>Dashboard SIGEM × PW</strong><small>Consulta Geral × ProjectWise</small></span>`;
-      if (tabBefore) tabs.insertBefore(button, tabBefore);
+      if (tabBefore?.parentElement === tabs) tabs.insertBefore(button, tabBefore);
       else tabs.appendChild(button);
     }
 

@@ -25,6 +25,8 @@ assert.match(vite, /"sigem-pw-dashboard"[\s\S]*src\/react\/sigem-pw\/index\.tsx[
 assert.match(pkg.scripts.build, /vite build --mode sigem-pw-dashboard/);
 assert.match(bootstrap, /id="grcon-sigem-pw-root"/);
 assert.match(bootstrap, /ensure\("react-dist\/sigem-pw-dashboard-app\.js"\)/);
+assert.match(bootstrap, /sidebarBefore\?\.parentElement === sidebar/, "navegação lateral precisa tolerar reorganização concorrente do DOM");
+assert.match(bootstrap, /tabBefore\?\.parentElement === tabs/, "abas precisam tolerar reorganização concorrente do DOM");
 assert.doesNotMatch(bootstrap, /ensure\("sigem_pw_dashboard_app\.js"\)/, "o app legado não pode continuar no runtime");
 assert.ok(bootstrap.indexOf('ensure("sigem_pw_revision_core.js")') < bootstrap.indexOf('ensure("sigem_pw_history_core.js")'));
 assert.ok(bootstrap.indexOf('ensure("sigem_pw_history_management.js")') < bootstrap.indexOf('ensure("react-dist/sigem-pw-dashboard-app.js")'));
