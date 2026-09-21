@@ -1,4 +1,4 @@
-name: SIGEM × PW — FASE A React
+name: SIGEM × PW — FASE B React UI
 
 on:
   pull_request:
@@ -25,6 +25,7 @@ on:
       - "tests/sigem_pw_*.cjs"
       - "scripts/validar-sigem-pw-react-browser.cjs"
       - "docs/react-phase-a-sigem-pw-parity.md"
+      - "docs/phase-b-sigem-pw-parity.md"
       - ".github/workflows/sigem-pw-react-browser.yml"
   workflow_dispatch:
 
@@ -106,7 +107,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: sigem-pw-react-phase-a
+          name: sigem-pw-react-phase-b
           path: |
             artifacts/sigem-pw-react/*.png
             artifacts/sigem-pw-react/metrics.json
@@ -116,6 +117,6 @@ jobs:
       - name: Resumo
         if: always()
         run: |
-          echo "### SIGEM × PW — FASE A React" >> "$GITHUB_STEP_SUMMARY"
+          echo "### SIGEM × PW — FASE B React UI" >> "$GITHUB_STEP_SUMMARY"
           test -f "$RUNNER_TEMP/sigem-pw-bundle.txt" && cat "$RUNNER_TEMP/sigem-pw-bundle.txt" >> "$GITHUB_STEP_SUMMARY" || true
           test -f artifacts/sigem-pw-react/metrics.json && cat artifacts/sigem-pw-react/metrics.json >> "$GITHUB_STEP_SUMMARY" || true

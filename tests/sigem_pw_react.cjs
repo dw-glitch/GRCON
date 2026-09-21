@@ -58,9 +58,20 @@ assert.match(globals, /GrconSigemPwDashboardUi/);
 assert.match(globals, /GrconSigemPwRevisionUi/);
 assert.match(globals, /GrconSigemPwEvolutionUi/);
 
-assert.match(css, /\.spw-page-heading/);
+assert.match(css, /#sigem-pw-dashboard-module/);
+assert.match(css, /\.spw-dashboard-shell/);
 assert.match(css, /\.spw-base-grid/);
 assert.match(css, /\.spw-table-wrap/);
+assert.match(css, /prefers-reduced-motion/);
+assert.match(css, /\[data-theme="dark"\]/);
+assert.doesNotMatch(css, /#\$\{MODULE_ID\}/, "CSS da FASE B não pode manter placeholder de template literal");
+assert.match(app, /spw-phase-b/);
+assert.match(app, /UiPanel/);
+assert.match(app, /UiMetaPill/);
+assert.match(read("src/react/sigem-pw/components/SigemPwHeader.tsx"), /UiPageHeader/);
+assert.match(read("src/react/sigem-pw/components/SigemPwSituationCards.tsx"), /data-summary-list/);
+assert.match(read("src/react/sigem-pw/components/SigemPwSituationCards.tsx"), /aria-pressed/);
+assert.match(read("src/react/sigem-pw/components/SigemPwListFilters.tsx"), /Pesquisar na relação/);
 assert.doesNotMatch(app, /createModel|aggregateModel|parsePwCsv|revisionRank|documentIdentity/);
 for (const file of fs.readdirSync(path.join(root, "src/react/sigem-pw/components"))) {
   const source = read(path.join("src/react/sigem-pw/components", file));
@@ -114,4 +125,4 @@ if (fs.existsSync(path.join(root, "react-dist/sigem-pw-dashboard-app.js"))) {
   assert.doesNotMatch(bundle, /function documentIdentity\(|function parsePwCsv\(/, "Core não pode ser duplicado dentro do bundle React");
 }
 
-console.log("sigem_pw_react: OK — ilha React, fachada, Worker, atomicidade, revisão e cinco situações preservados.");
+console.log("sigem_pw_react: OK — FASE B visual sobre a ilha React, com fachada, Worker, atomicidade, revisão e cinco situações preservados.");
