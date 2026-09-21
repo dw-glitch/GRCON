@@ -35,6 +35,7 @@
     const saved = status(record);
     return saved ? `Avisado no Teams em ${formatDate(saved.sentAt)}` : "Ainda não avisado";
   }
+  function isSending(record) { return state.sending.has(Core.notificationId(record)); }
   function buttonHtml(record, options) {
     const settings = options || {};
     const id = Core.notificationId(record);
@@ -173,6 +174,6 @@
     root.addEventListener("storage", (event) => { if (event.key === STORAGE_KEY) renderLatest(); });
   }
 
-  root.GrconEgrdtTeamsNotification = Object.freeze({ open, setLatest, status, statusLabel, buttonHtml, documentRows: Core.documentRows });
+  root.GrconEgrdtTeamsNotification = Object.freeze({ open, setLatest, status, statusLabel, buttonLabel, isSending, buttonHtml, documentRows: Core.documentRows });
   bind();
 })(typeof globalThis !== "undefined" ? globalThis : window);
