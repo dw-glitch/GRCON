@@ -7,8 +7,13 @@ interface PdfProgressProps {
 
 export function PdfProgress({ busy, progress }: PdfProgressProps) {
   const value = Math.max(0, Math.min(100, Math.round(progress.percent)));
+
   return (
     <div className="pdf-merge-progress" hidden={!busy} id="pdf-merge-progress" aria-live="polite">
+      <div className="pdf-merge-progress-head">
+        <span>Progresso real</span>
+        <strong id="pdf-merge-progress-percent">{value}%</strong>
+      </div>
       <div
         className="pdf-merge-progress-track"
         role="progressbar"
