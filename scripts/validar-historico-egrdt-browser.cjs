@@ -40,6 +40,27 @@ async function revealApp(page) {
   ].join("\n") });
 }
 
+async function waitForStableServiceWorkerPage(page) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+      await page.waitForFunction(() => Boolean(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 });
+      // grcon_service_worker.js recarrega a página em controllerchange. Aguarde
+      // o primeiro reload estabilizar antes de instalar fixtures/asserções React.
+      await page.waitForTimeout(200);
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached|Timeout/i.test(message)) throw error;
+      await page.waitForTimeout(150);
+    }
+  }
+  throw lastError || new Error("Service Worker não estabilizou a página do Histórico de eGRDTs.");
+}
+
 async function openHistory(page) {
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("history");
@@ -77,6 +98,7 @@ async function seed(page) {
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   try {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await waitForStableServiceWorkerPage(page);
     await revealApp(page);
     await openHistory(page);
     await seed(page);
