@@ -114,3 +114,8 @@ Listeners React devem ser registrados uma vez por montagem e removidos no cleanu
 ## Paridade visual
 
 A folha antes injetada por `ensureStyles()` passa para `sigem-pw-dashboard.css`, mantendo IDs, classes, layout, breakpoints e dark-mode baseado nas variáveis do design system. O objetivo é ANTES ≈ DEPOIS; nenhum redesign faz parte da FASE A.
+
+
+## Consolidação final da FASE A
+
+Após o primeiro checkpoint remoto integralmente verde, `sigem_pw_dashboard_app.js` foi removido do repositório. O runtime final do shell principal passa exclusivamente por `react-dist/sigem-pw-dashboard-app.js`; Revision, Evolution e histórico analítico permanecem legados/lazy nesta etapa. Os testes que antes inspecionavam o app imperativo passaram a validar o adapter, componentes React e bootstrap correspondentes, sem alterar os contratos de negócio.

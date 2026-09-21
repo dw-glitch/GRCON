@@ -6,7 +6,10 @@ const rootDir = path.resolve(__dirname, "..");
 const Dashboard = require("../sigem_pw_dashboard_core.js");
 const uiAuditSource = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_ui_audit.js"), "utf8");
 const bootstrapSource = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
-const dashboardAppSource = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_app.js"), "utf8");
+const dashboardAppSource = [
+  fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/services/sigemPwDashboardAdapter.ts"), "utf8"),
+  fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/components/SigemPwHeader.tsx"), "utf8"),
+].join("\n");
 const evolutionAppSource = fs.readFileSync(path.join(rootDir, "sigem_pw_evolution_app.js"), "utf8");
 const workerSource = fs.readFileSync(path.join(rootDir, "workers/sigem_pw_dashboard.worker.js"), "utf8");
 const indexSource = fs.readFileSync(path.join(rootDir, "index.html"), "utf8");
@@ -99,8 +102,8 @@ function sourceRegression() {
   const dashboardOpenSource = bootstrapSource.slice(bootstrapSource.indexOf("async function openDashboard()"), bootstrapSource.indexOf("async function openEvolution()"));
   assert.doesNotMatch(dashboardOpenSource, /sigem_pw_evolution|GrconSigemPwEvolutionUi/, "evolução não deve bloquear a abertura principal");
   assert.doesNotMatch(bootstrapSource, /sigem_pw_history_(?:app|postmerge|runtime_fix)\.js/, "a UI histórica removida não deve bloquear a abertura");
-  assert.match(dashboardAppSource, /function modelInWorker\(generation\)/, "a montagem pesada deve sair da thread de interface");
-  assert.match(dashboardAppSource, /state\.aggregates\?\.\[aggregateKey\]/, "trocar ET e N-1710 deve reutilizar agregados prontos");
+  assert.match(dashboardAppSource, /function modelInWorker\(generation: number\)/, "a montagem pesada deve sair da thread de interface");
+  assert.match(dashboardAppSource, /state\.aggregates\[aggregateKey\]/, "trocar ET e N-1710 deve reutilizar agregados prontos");
   assert.match(dashboardAppSource, /id="spw-evolution-open"/, "evolução deve permanecer acessível por ação explícita");
   assert.match(evolutionAppSource, /id="spw-evo-date-start"/);
   assert.match(evolutionAppSource, /id="spw-evo-date-end"/);

@@ -19,6 +19,7 @@ const sw = read("sw.js");
 const worker = read("workers/sigem_pw_dashboard.worker.js");
 const core = read("sigem_pw_dashboard_core.js");
 const Dashboard = require("../sigem_pw_dashboard_core.js");
+assert.equal(fs.existsSync(path.join(root, "sigem_pw_dashboard_app.js")), false, "o app legado deve ser removido após a consolidação React");
 
 assert.match(vite, /"sigem-pw-dashboard"[\s\S]*src\/react\/sigem-pw\/index\.tsx[\s\S]*sigem-pw-dashboard-app\.js/);
 assert.match(pkg.scripts.build, /vite build --mode sigem-pw-dashboard/);

@@ -8,7 +8,7 @@ const read = (name) => fs.readFileSync(path.join(rootDir, name), "utf8");
 const Dashboard = require("../sigem_pw_dashboard_core.js");
 const Conference = require("../posting_conference_core.js");
 const History = require("../sigem_pw_history_core.js");
-const dashboardApp = read("sigem_pw_dashboard_app.js");
+const dashboardApp = read("src/react/sigem-pw/services/sigemPwDashboardAdapter.ts");
 const dashboardBootstrap = read("sigem_pw_dashboard_bootstrap.js");
 const historyCore = read("sigem_pw_history_core.js");
 const conferenceCore = read("posting_conference_core.js");
@@ -39,8 +39,8 @@ function functionBody(source, name, nextName) {
   assert.match(sigem, /Conference\.prepareWorkbookImport/);
   assert.doesNotMatch(sigem, /Conference\.importWorkbook/);
   assert.ok(sigem.indexOf("prepareWorkbookImport") < sigem.indexOf("registerHistoryBeforeActivation"));
-  assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core.saveSigemBase"));
-  assert.ok(sigem.indexOf("Core.saveSigemBase") < sigem.indexOf("Conference.commitPreparedImport"));
+  assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core().saveSigemBase"));
+  assert.ok(sigem.indexOf("Core().saveSigemBase") < sigem.indexOf("conference.commitPreparedImport"));
   assert.match(conferenceCore, /await kvSetMany\(\[\s*\[BASE_KEY, prepared\.base\],\s*\[STATE_KEY, prepared\.state\],\s*\[AUDIT_KEY, prepared\.audit\]/);
 })();
 
@@ -90,7 +90,7 @@ function functionBody(source, name, nextName) {
   const preserve = functionBody(dashboardBootstrap, "preserveExistingStage7Data", "ensureRuntime");
   const runtime = functionBody(dashboardBootstrap, "ensureRuntime", "afterFirstPaint");
   const open = functionBody(dashboardBootstrap, "openDashboard", "openEvolution");
-  assert.match(preserve, /Core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
+  assert.match(preserve, /core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
   assert.match(preserve, /Core\.kvSet\(PRE_STAGE7_RESET_KEY/);
   assert.match(preserve, /mode: "preserve-existing-data"/);
   assert.doesNotMatch(preserve, /clearHistory|SIGEM_BASE_KEY|PW_BASE_KEY|LD_BASE_KEY/,
@@ -116,7 +116,7 @@ function functionBody(source, name, nextName) {
   const register = functionBody(dashboardApp, "registerHistoryBeforeActivation", "importSigem");
   const sigem = functionBody(dashboardApp, "importSigem", "parsePwFile");
   const pw = functionBody(dashboardApp, "importPw", "importLd");
-  const ld = functionBody(dashboardApp, "importLd", "rebuildModel");
+  const ld = functionBody(dashboardApp, "importLd", "clearPreStage7BasesOnce");
   assert.match(register, /History\.rollbackRecordedActiveBases\(recorded\)/);
   [sigem, pw, ld].forEach((body) => assert.match(body, /rollbackStagedImport\(recorded/));
   assert.match(historyCore, /const checkpoint = await captureRecordingCheckpoint\(\)/);
@@ -125,9 +125,9 @@ function functionBody(source, name, nextName) {
 })();
 
 (function legacyResetImplementationRemainsGuardedByPreservationMarker() {
-  const reset = functionBody(dashboardApp, "clearPreStage7BasesOnce", "refreshBases");
-  const refresh = functionBody(dashboardApp, "refreshBases", "activate");
-  assert.match(reset, /Core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
+  const reset = functionBody(dashboardApp, "clearPreStage7BasesOnce", "refresh");
+  const refresh = functionBody(dashboardApp, "refresh", "activate");
+  assert.match(reset, /core\.kvGet\(PRE_STAGE7_RESET_KEY, false\)/);
   assert.match(reset, /if \(alreadyReset\) return false/);
   assert.ok(refresh.indexOf("clearPreStage7BasesOnce") < refresh.indexOf("Core.loadBases"));
   assert.doesNotMatch(dashboardApp, /indexedDB\.deleteDatabase/);
