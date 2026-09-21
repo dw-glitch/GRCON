@@ -453,7 +453,7 @@ export const historicoEgrdtAdapter = {
   prepareForSigem,
   openEmailReply,
   openTeams,
-  teamsButtonHtml,
+  teamsPresentation,
   syncSequence,
   dispatchUpdated,
   subscribeUpdates,
