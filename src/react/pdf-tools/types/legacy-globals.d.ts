@@ -4,6 +4,7 @@ type NotifyFn = (message: string, kind?: string) => void;
 
 interface GrconPdfMergeUiApi {
   activate(): void;
+  deactivate(): void;
   addFiles(files: FileList | File[] | null | undefined): void;
   clear(): void;
   _debug: {
