@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const Scope = require("../sigem_pw_scope_fix.js");
 const Evolution = require("../sigem_pw_evolution_core.js");
+const Conference = require("../posting_conference_core.js");
+const History = require("../sigem_pw_history_core.js");
 
 const n1710 = (sequence) => `RL-5290.00-22313-ABC-C1O-${String(sequence).padStart(3, "0")}`;
 const et = (eap, tag = "PI-000001") => `C1O_RNEST_U32_${eap}_INS_RIR_${tag}`;
@@ -31,6 +33,40 @@ function aggregate(sigemRows, pwRows) {
   assert.equal(model.sigemEntries.size, 3, "modelo de escopo deve preservar código + revisão");
   assert.equal(result.summary.sigem, 3);
   assert.equal(result.summary.sigemOnly, 3);
+})();
+
+
+(function consultaGeralImportPreservesRepeatedDocumentRevisions() {
+  const doc = n1710(1);
+  const parsed = Conference.parseMatrix([
+    ["DOCUMENTO", "REVISÃO", "STATUS"],
+    [doc, "0", "Postado"],
+    [doc, "A", "Postado"],
+    [doc, "B", "Postado"],
+  ]);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.records.length, 3, "a Consulta Geral não pode colapsar revisões distintas na importação");
+
+  const { model, result } = aggregate(parsed.records, []);
+  assert.equal(result.summary.sigem, 3, "as três revisões importadas precisam chegar aos indicadores");
+  assert.deepEqual(result.lists.sigemOnly.map((row) => row.revision), ["0", "A", "B"]);
+  const snapshot = History.buildSourceSnapshot("sigem", {
+    meta: { fileName: "Consulta Geral.xlsx", importedAt: "2026-09-21T12:00:00Z", recordCount: parsed.records.length, sourceRowCount: parsed.records.length },
+    records: parsed.records,
+  }, model).snapshot;
+  assert.equal(snapshot.metrics.comparableDocuments, 1, "a identidade documental consolidada continua disponível");
+  assert.equal(snapshot.metrics.revisionEntries, 3, "o histórico deve registrar três entradas/revisões");
+})();
+
+(function pwAlsoCountsEachRevision() {
+  const doc = n1710(1);
+  const { result } = aggregate(
+    [],
+    [pw(doc, "0"), pw(doc, "A"), pw(doc, "B")]
+  );
+  assert.equal(result.summary.pwRegistered, 3);
+  assert.equal(result.summary.pwEmitted, 3);
+  assert.deepEqual(result.lists.pw.map((row) => row.revision), ["0", "A", "B"]);
 })();
 
 (function exactDuplicateDoesNotDoubleCount() {
