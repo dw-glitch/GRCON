@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.41.0-mascot-context9-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1";
+const CACHE_NAME = "grcon-v5.41.0-mascot-core3-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -43,7 +43,6 @@ const ASSETS = [
   "grcon_mascot_greeting_core.js",
   "grcon_mascot_controller.js",
   "grcon_mascot_runner.js",
-  "grcon_mascot_scenarios.js",
   "assets/mascot/video/grcon-mascot-processing-alpha.webm",
   "assets/mascot/video/grcon-mascot-wave-alpha.webm",
   "assets/mascot/video/grcon-mascot-running-alpha.webm",
@@ -180,33 +179,6 @@ const HEAVY_ASSETS = new Set([
   "grcon-mascot-processing-alpha.webm",
   "grcon-mascot-wave-alpha.webm",
   "grcon-mascot-running-alpha.webm",
-  "grcon-mascot-import-bases.webm",
-  "grcon-mascot-import-bases.mp4",
-  "grcon-mascot-long-processing.webm",
-  "grcon-mascot-long-processing.mp4",
-  "grcon-mascot-sleep.webm",
-  "grcon-mascot-sleep.mp4",
-  "grcon-mascot-curious.webm",
-  "grcon-mascot-curious.mp4",
-  "grcon-mascot-grdt-stamp.webm",
-  "grcon-mascot-grdt-stamp.mp4",
-  "grcon-mascot-teams-send.webm",
-  "grcon-mascot-teams-send.mp4",
-  "grcon-mascot-grdt-to-teams.webm",
-  "grcon-mascot-grdt-to-teams.mp4",
-  "grcon-mascot-paperwork.webm",
-  "grcon-mascot-paperwork.mp4",
-  "grcon-mascot-review-coffee.webm",
-  "grcon-mascot-review-coffee.mp4",
-  "grcon-mascot-import-bases-poster.webp",
-  "grcon-mascot-long-processing-poster.webp",
-  "grcon-mascot-sleep-poster.webp",
-  "grcon-mascot-curious-poster.webp",
-  "grcon-mascot-grdt-stamp-poster.webp",
-  "grcon-mascot-teams-send-poster.webp",
-  "grcon-mascot-grdt-to-teams-poster.webp",
-  "grcon-mascot-paperwork-poster.webp",
-  "grcon-mascot-review-coffee-poster.webp",
 ]);
 
 async function fetchAndCache(request) {
@@ -226,29 +198,6 @@ async function networkFirst(request, fallbackUrl) {
     return await cache.match(request) || (fallbackUrl ? await cache.match(fallbackUrl) : null)
       || new Response("GRCON indisponível offline neste navegador.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
-}
-
-async function cachedRangeResponse(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const fullRequest = new Request(request.url, { method: "GET" });
-  const cached = await cache.match(fullRequest);
-  if (!cached) {
-    try { return await fetch(request); }
-    catch (_) { return new Response("Mídia indisponível offline.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }); }
-  }
-  const range = request.headers.get("range") || "";
-  const match = /^bytes=(\d+)-(\d*)$/i.exec(range);
-  if (!match) return cached;
-  const buffer = await cached.arrayBuffer();
-  const start = Math.min(buffer.byteLength - 1, Math.max(0, Number(match[1]) || 0));
-  const requestedEnd = match[2] ? Number(match[2]) : buffer.byteLength - 1;
-  const end = Math.min(buffer.byteLength - 1, Math.max(start, Number.isFinite(requestedEnd) ? requestedEnd : buffer.byteLength - 1));
-  const chunk = buffer.slice(start, end + 1);
-  const headers = new Headers(cached.headers);
-  headers.set("Content-Range", `bytes ${start}-${end}/${buffer.byteLength}`);
-  headers.set("Accept-Ranges", "bytes");
-  headers.set("Content-Length", String(chunk.byteLength));
-  return new Response(chunk, { status: 206, statusText: "Partial Content", headers });
 }
 
 self.addEventListener("install", (event) => {
@@ -288,12 +237,6 @@ self.addEventListener("fetch", (event) => {
   const fileName = requestUrl.pathname.split("/").filter(Boolean).pop() || "";
   if (!HEAVY_ASSETS.has(fileName)) {
     event.respondWith(networkFirst(event.request));
-    return;
-  }
-  if (event.request.headers.has("range")) {
-    event.respondWith(cachedRangeResponse(event.request));
-    const fullRequest = new Request(event.request.url, { method: "GET", cache: "no-cache" });
-    event.waitUntil(fetchAndCache(fullRequest).catch(() => null));
     return;
   }
   event.respondWith(
