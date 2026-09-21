@@ -1901,7 +1901,7 @@ check("cliente envia e conclui o identificador idempotente da reserva", () => {
 
 check("limpeza compartilhada só remove o histórico local após confirmação do Supabase", () => {
   const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const ui = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
   assert.match(cloud, /state\.client\.rpc\("grcon_clear_history", \{ target_workspace: workspaceId \}\)/);
   const rpcPosition = cloud.indexOf('state.client.rpc("grcon_clear_history"');
   const localClearPosition = cloud.indexOf("History?.clear?.()", rpcPosition);
@@ -1914,11 +1914,11 @@ check("limpeza compartilhada só remove o histórico local após confirmação d
 
 check("exclusão individual confirma o Supabase antes de apagar localmente", () => {
   const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const ui = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
   assert.match(cloud, /async function deleteSharedHistoryRecord\(record\)/);
   assert.match(cloud, /target_reservation_ids:\s*reservationIds\.length \? reservationIds : null/);
   const remotePosition = ui.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
-  const localPosition = ui.indexOf("History.deleteOne(record.id)", remotePosition);
+  const localPosition = ui.indexOf("history().deleteOne(record.id)", remotePosition);
   assert.ok(remotePosition >= 0 && localPosition > remotePosition);
   assert.match(ui, /foi liberado para reutilização/i);
 });
@@ -3505,14 +3505,15 @@ check("revisão da resposta de e-mail é a enviada na GRDT, não uma recalculada
 check("resposta de e-mail fica disponível somente no Histórico", () => {
   const interfaceSource = fs.readFileSync(path.join(root, "egrdt_email_reply_ui.js"), "utf8");
   const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const historySource = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const historyApp = fs.readFileSync(path.join(root, "src/react/historico-egrdt/HistoricoEgrdtApp.tsx"), "utf8");
+  const historyAdapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
 
   assert.doesNotMatch(interfaceSource, /grcon-egrdt-email-auto/);
   assert.doesNotMatch(interfaceSource, /grcon:history-updated/);
   assert.doesNotMatch(interfaceSource, /openLastGenerated|autoOpenEnabled/);
   assert.doesNotMatch(indexSource, /id=["']egrdt-email-reply["']/);
-  assert.match(historySource, /data-history-action=["']email-reply["']/);
-  assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
+  assert.match(historyApp, /data-history-action=["']email-reply["']/);
+  assert.match(historyAdapter, /GrconEgrdtEmailReplyUi\.open\?\.\(\[record\]\)/);
 });
 
 check("prévia da relação tem as duas leituras e o cabeçalho acompanha a rolagem", () => {
