@@ -361,7 +361,7 @@ async function clickView(page, view) {
     await clickSpw(page);
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwDashboardUi.state.sigem.meta && window.GrconSigemPwDashboardUi.state.pw.meta && window.GrconSigemPwDashboardUi.state.ld.meta)), true);
     const caches = await page.evaluate(async () => await window.caches.keys());
-    assert.ok(caches.some((key) => key.includes("phase-a-sigem-pw-react1")));
+    assert.ok(caches.some((key) => key.includes("phase-b-sigem-pw-ui1")));
 
     const relevantErrors = errors.filter((item) => /ReferenceError|TypeError|Unhandled|React|duplicate key|Content Security Policy|CSP|Worker|MIME|service worker/i.test(item));
     assert.deepEqual(relevantErrors, []);
