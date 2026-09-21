@@ -12,6 +12,7 @@ function installCompatibilityApi(): void {
 
   window.GrconPdfMergeUi = Object.freeze({
     activate: () => pdfMergeBridge.activate(),
+    deactivate: () => pdfMergeBridge.deactivate(),
     addFiles: (files: FileList | File[] | null | undefined) => pdfMergeBridge.addFiles(files),
     clear: () => pdfMergeBridge.clear(),
     _debug: Object.freeze(debug),
