@@ -38,7 +38,13 @@ export interface SigemPostingApi {
   read(): PostingRecord[];
   statusLabel(status: string): string;
   audit(record: PostingRecord, records: PostingRecord[]): { ready: boolean };
-  registerGenerated(records: HistoryRecord[], options: { appVersion: string }): PostingRecord & { persistence?: Promise<unknown> };
+  registerGenerated(records: HistoryRecord[], options: { appVersion: string }): {
+    saved?: boolean;
+    created?: PostingRecord[];
+    persistence?: Promise<unknown>;
+    records?: PostingRecord[];
+    error?: string;
+  };
 }
 
 export interface Macro5FlowApi {
@@ -49,6 +55,9 @@ export interface Macro5FlowApi {
 export interface CloudApi {
   state?: {
     membership?: { workspace_id?: string } | null;
+    online?: boolean;
+    syncing?: boolean;
+    clearingHistory?: boolean;
   };
   canManageHistory?(): boolean;
   deleteHistoryRecord?(record: HistoryRecord): Promise<unknown>;
