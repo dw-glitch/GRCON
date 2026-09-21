@@ -60,11 +60,15 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 const historyApp = fs.readFileSync(path.join(root, "src/react/historico-egrdt/HistoricoEgrdtApp.tsx"), "utf8");
 const historyAdapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
+const teamsNotificationApp = fs.readFileSync(path.join(root, "egrdt_teams_notification_app.js"), "utf8");
 assert.match(html, /id="egrdt-teams-ready"/);
 assert.match(html, /egrdt_teams_notification_core\.js/);
 assert.match(html, /egrdt_teams_notification_app\.js/);
 assert.match(app, /grcon:egrdt-generated/);
 assert.match(historyApp, /data-egrdt-teams-record-id/);
+assert.doesNotMatch(historyApp, /dangerouslySetInnerHTML/);
 assert.match(historyAdapter, /GrconEgrdtTeamsNotification\?\.open/);
+assert.match(historyAdapter, /teamsPresentation/);
+assert.match(teamsNotificationApp, /buttonLabel, isSending, buttonHtml/);
 
 console.log("OK: aviso manual de eGRDT ao Teams validado");

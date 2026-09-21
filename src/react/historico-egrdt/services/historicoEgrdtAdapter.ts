@@ -25,6 +25,16 @@ let performanceSnapshot: HistoryPerformanceSnapshot = {
   totalRecords: 0,
 };
 
+const compatibilityState: {
+  react: true;
+  filtered: EgrdtHistoryRecord[];
+  selectedId: string;
+} = {
+  react: true,
+  filtered: [],
+  selectedId: "",
+};
+
 function history() {
   if (!window.GrconHistory) throw new Error("GrconHistory não foi carregado.");
   return window.GrconHistory;
@@ -288,8 +298,23 @@ function openTeams(record: EgrdtHistoryRecord): void {
   window.GrconEgrdtTeamsNotification?.open?.(record);
 }
 
-function teamsButtonHtml(record: EgrdtHistoryRecord): string {
-  return window.GrconEgrdtTeamsNotification?.buttonHtml?.(record, { withStatus: true }) || "";
+function teamsPresentation(record: EgrdtHistoryRecord): {
+  recordId: string;
+  label: string;
+  statusLabel: string;
+  sent: boolean;
+  disabled: boolean;
+} | null {
+  const Teams = window.GrconEgrdtTeamsNotification;
+  if (!Teams) return null;
+  const saved = Teams.status?.(record);
+  return {
+    recordId: record.id || record.clientRecordId || "",
+    label: Teams.buttonLabel?.(record) || (saved ? "Reenviar aviso no Teams" : "Avisar no Teams"),
+    statusLabel: Teams.statusLabel?.(record) || (saved ? "Avisado no Teams" : "Ainda não avisado"),
+    sent: Boolean(saved),
+    disabled: Boolean(Teams.isSending?.(record)),
+  };
 }
 
 function syncSequence(number: string): void {
@@ -378,6 +403,15 @@ function getPerformanceSnapshot(): HistoryPerformanceSnapshot {
   return { ...performanceSnapshot };
 }
 
+function publishCompatibilityState(records: EgrdtHistoryRecord[], selectedId: string): void {
+  compatibilityState.filtered = records;
+  compatibilityState.selectedId = selectedId;
+}
+
+function getCompatibilityState() {
+  return compatibilityState;
+}
+
 function confirmDelete(record: EgrdtHistoryRecord): boolean {
   const shared = isSharedHistory();
   return window.confirm(
@@ -419,7 +453,7 @@ export const historicoEgrdtAdapter = {
   prepareForSigem,
   openEmailReply,
   openTeams,
-  teamsButtonHtml,
+  teamsPresentation,
   syncSequence,
   dispatchUpdated,
   subscribeUpdates,
@@ -430,6 +464,8 @@ export const historicoEgrdtAdapter = {
   activateView,
   setPerformanceSnapshot,
   getPerformanceSnapshot,
+  publishCompatibilityState,
+  getCompatibilityState,
   confirmDelete,
   confirmClear,
   reportDateValidity,

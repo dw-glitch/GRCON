@@ -14,6 +14,7 @@ const index = read("src/react/historico-egrdt/index.tsx");
 const app = read("src/react/historico-egrdt/HistoricoEgrdtApp.tsx");
 const hook = read("src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts");
 const adapter = read("src/react/historico-egrdt/services/historicoEgrdtAdapter.ts");
+const retomar = read("retomar.js");
 
 assert.match(html, /id="history-module"/);
 assert.match(html, /id="grcon-history-root"/);
@@ -32,6 +33,7 @@ assert.match(sw, /phase-a-egrdt-history-react1/);
 assert.doesNotMatch(sw, /"history_app\.js"/);
 
 assert.match(index, /window\.GrconHistoryUi = Object\.freeze/);
+assert.match(index, /state: Adapter\.getCompatibilityState\(\)/);
 assert.match(index, /performanceSnapshot/);
 assert.match(index, /GrconHistoricoEgrdtReact/);
 
@@ -60,6 +62,13 @@ assert.match(app, /Revisão desta GRDT postada/);
 assert.match(app, /Outra revisão postada/);
 assert.match(hook, /LIST_PAGE_SIZE = 200/);
 assert.match(hook, /SEARCH_DEBOUNCE_MS = 120/);
+assert.match(hook, /publishCompatibilityState\(filtered, selectedId\)/);
+assert.doesNotMatch(hook, /\.\.\.filters,\s*\n\s*query: debouncedQuery/, "busca não deve invalidar effectiveFilters a cada tecla");
+assert.match(hook, /filters\.startDate/);
+assert.match(hook, /filters\.endDate/);
+assert.doesNotMatch(app, /dangerouslySetInnerHTML/);
+assert.match(app, /teamsPresentation/);
+assert.match(retomar, /GrconHistoricoEgrdtReact\?\.mounted/);
 assert.match(adapter, /readPostingCache/);
 assert.match(adapter, /buildWorkbookInWorker/);
 assert.match(adapter, /deleteHistoryRecord/);

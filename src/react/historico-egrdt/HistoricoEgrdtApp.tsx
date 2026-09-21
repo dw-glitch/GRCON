@@ -188,7 +188,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
 
   const creator = record.createdByName || record.createdByEmail;
   const previousNumbers = record.numberHistory || [];
-  const teamsHtml = Adapter.teamsButtonHtml(record);
+  const teamsAction = Adapter.teamsPresentation(record);
 
   return (
     <section aria-live="polite" className="history-detail" id="history-detail">
@@ -202,14 +202,21 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
         </div>
         <div className="history-detail-actions">
           <button className="primary-button compact" data-history-action="prepare-sigem" type="button" onClick={() => { void h.prepareForSigem(); }}>Preparar no SIGEM</button>
-          {teamsHtml ? (
-            <span
-              className="egrdt-teams-history-action"
-              onClick={(event) => {
-                if ((event.target as Element).closest("[data-egrdt-teams-record-id]")) h.openTeams();
-              }}
-              dangerouslySetInnerHTML={{ __html: teamsHtml }}
-            />
+          {teamsAction ? (
+            <span className="egrdt-teams-history-action">
+              <button
+                className="secondary-button compact egrdt-teams-notify-button"
+                data-egrdt-teams-record-id={teamsAction.recordId}
+                disabled={teamsAction.disabled}
+                type="button"
+                onClick={h.openTeams}
+              >
+                {teamsAction.label}
+              </button>
+              <small className={`egrdt-teams-status ${teamsAction.sent ? "is-sent" : ""}`}>
+                {teamsAction.statusLabel}
+              </small>
+            </span>
           ) : null}
           <button className="secondary-button compact" data-history-action="email-reply" title="Montar a resposta de e-mail com os documentos desta eGRDT" type="button" onClick={h.openEmailReply}>Resposta de e-mail</button>
           <button className="secondary-button compact" data-history-action="edit" type="button" onClick={h.startEditing}>Editar número</button>
