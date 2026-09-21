@@ -1,0 +1,139 @@
+name: FASE A — Histórico de eGRDTs React
+
+on:
+  pull_request:
+    paths:
+      - "src/react/historico-egrdts/**"
+      - "src/react/core/mount/**"
+      - "history_core.js"
+      - "history_report.js"
+      - "history_report_worker.js"
+      - "sigem_posting_core.js"
+      - "macro5_flow_core.js"
+      - "grcon_module_loader.js"
+      - "index.html"
+      - "legacy-compat.css"
+      - "sw.js"
+      - "vite.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tests/history_performance.cjs"
+      - "tests/historico_egrdts_react.cjs"
+      - "tests/egrdt_teams_notification.cjs"
+      - "GRCON_TESTES_5.31.6.mjs"
+      - "scripts/validar-historico-egrdts-browser.cjs"
+      - "scripts/medir-historico-egrdts-baseline.cjs"
+      - "scripts/comparar-historico-egrdts-performance.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "scripts/validar-historico-analises-browser.cjs"
+      - "scripts/validar-pdf-tools-browser.cjs"
+      - "docs/react-phase-a-egrdt-history-parity.md"
+      - ".github/workflows/history-egrdts-react-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Histórico eGRDTs React + regressões
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build de todas as ilhas
+        run: npm run build
+
+      - name: Paridade estrutural do Histórico de eGRDTs
+        run: |
+          node tests/historico_egrdts_react.cjs
+          node tests/history_performance.cjs
+          node tests/history_information.cjs
+          node tests/history_sigem_status.cjs
+          node tests/egrdt_teams_notification.cjs
+          node tests/reposting.cjs
+          node tests/grcon_backup.cjs
+
+      - name: Auditar bundle do Histórico
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const file = "react-dist/historico-egrdts-app.js";
+          const code = fs.readFileSync(file, "utf8");
+          const bytes = fs.statSync(file).size;
+          if (/ExcelJS|xlsx\.full|XLSX/.test(code)) {
+            throw new Error("ExcelJS/XLSX não pode ser incorporado ao bundle React do Histórico.");
+          }
+          console.log(JSON.stringify({ file, bytes }));
+          NODE
+
+      - name: Suíte completa
+        run: npm test
+
+      - name: Verify completo
+        run: npm run verify
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Medir baseline real da main
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add "$RUNNER_TEMP/grcon-history-base" "$BASE_SHA"
+          (
+            cd "$RUNNER_TEMP/grcon-history-base"
+            python3 -m http.server 8764 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-history-base.log" 2>&1 &
+            echo $! > "$RUNNER_TEMP/grcon-history-base.pid"
+          )
+          trap 'kill "$(cat "$RUNNER_TEMP/grcon-history-base.pid")" 2>/dev/null || true' EXIT
+          GRCON_PREVIEW_URL=http://127.0.0.1:8764 node scripts/medir-historico-egrdts-baseline.cjs
+          kill "$(cat "$RUNNER_TEMP/grcon-history-base.pid")" 2>/dev/null || true
+
+      - name: Validar Histórico React e regressões em Chromium
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-history-react.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-historico-egrdts-browser.cjs
+          node scripts/validar-historico-analises-browser.cjs
+          node scripts/validar-consultas-browser.cjs
+          node scripts/validar-pdf-tools-browser.cjs
+
+      - name: Comparar performance antes/depois
+        if: github.event_name == 'pull_request'
+        run: node scripts/comparar-historico-egrdts-performance.cjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase-a-historico-egrdts-react
+          path: |
+            artifacts/historico-egrdts-baseline/metrics.json
+            artifacts/historico-egrdts-browser/*.png
+            artifacts/historico-egrdts-browser/*.json
+            artifacts/historico-analises-browser/*.png
+            artifacts/historico-analises-browser/metrics.json
+            artifacts/consultas-browser/*.png
+            artifacts/consultas-browser/metrics.json
+            artifacts/pdf-tools-browser/*.png
+            artifacts/pdf-tools-browser/metrics.json
+          if-no-files-found: warn
