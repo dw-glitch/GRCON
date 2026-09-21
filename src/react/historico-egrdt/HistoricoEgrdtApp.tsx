@@ -32,14 +32,14 @@ function PostingBadge({ record, cache }: { record: EgrdtHistoryRecord; cache: Re
 }
 
 function Summary({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
-  const entries = [
+  const entries: Array<{ label: string; value: number; tone: string; hint: string; status?: string }> = [
     { label: "eGRDTs", value: h.summary.egrdts, tone: "neutral", hint: "No recorte atual" },
     { label: "Documentos", value: h.summary.documents, tone: "neutral", hint: "Registrados no recorte" },
     { label: "Alocações", value: h.summary.allocations, tone: "neutral", hint: "Relacionadas no recorte" },
     { label: "Aguardando SIGEM", value: h.summary.awaiting, tone: "awaiting", hint: "Filtrar por situação", status: "AGUARDANDO" },
     { label: "Postadas", value: h.summary.posted, tone: "posted", hint: "Filtrar por situação", status: "POSTADO" },
     { label: "Pendências/Falhas", value: h.summary.attention, tone: "attention", hint: "Indicador informativo" },
-  ] as const;
+  ];
 
   return (
     <section aria-label="Resumo do histórico" className="history-summary history-phase-b-summary" id="history-summary">
