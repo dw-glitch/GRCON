@@ -177,8 +177,14 @@ function loadAdapter(windowOverrides = {}) {
   }
 
   const hook = fs.readFileSync(path.join(root, "src/react/historico-analises/hooks/useHistoricoAnalises.ts"), "utf8");
-  assert.match(hook, /const PAGE_SIZE = 200/);
-  assert.match(hook, /useDebouncedValue\(filters\.query, 300\)/);
+  assert.match(hook, /const DESKTOP_PAGE_SIZE = 200/);
+  assert.match(hook, /const MOBILE_PAGE_SIZE = 25/);
+  assert.match(hook, /MOBILE_HISTORY_MEDIA = "\\(max-width: 44rem\\)"/);
+  assert.match(hook, /useDebouncedValue\\(filters\\.query, 300\\)/);
+  assert.match(hook, /query: debouncedQuery/);
+  assert.doesNotMatch(hook, /\.\.\.filters,[\\s\\S]{0,80}query: debouncedQuery/);
+  assert.match(hook, /queryDebouncing = filters\\.query !== debouncedQuery/);
+  assert.match(hook, /Adapter\\.queryDocuments\\(effectiveFilters, page, pageSize\\)/);
   assert.match(hook, /Adapter\.subscribeUpdates/);
   assert.match(hook, /Adapter\.subscribeOpenDetail/);
   assert.match(hook, /Adapter\.confirmClearHistory/);
@@ -226,6 +232,7 @@ function loadAdapter(windowOverrides = {}) {
   assert.match(sw, /react-dist\/historico-analises-app\.js/);
   assert.match(sw, /phase-a-history-react1/);
   assert.match(sw, /phase-b-history-ui1/);
+  assert.match(sw, /history-perf-hardening1/);
   assert.match(sw, /analysis-history-phase-b\.css/);
   assert.doesNotMatch(sw, /"analysis_history_app\.js"/);
 
