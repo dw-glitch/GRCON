@@ -354,46 +354,7 @@
 </div>
 </section>
 <section id="pdf-tools-module" class="pdf-merge-module" hidden="" role="tabpanel" aria-labelledby="tab-pdf-tools">
-<header class="ops-page-heading pdf-merge-heading">
-<div><h2>Combinar PDFs</h2><p>Junte vários PDFs em um único arquivo, na ordem escolhida.</p></div>
-<span class="pdf-merge-local-badge"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3M5 10h14v11H5z"></path></svg>Somente neste navegador</span>
-</header>
-<p class="pdf-merge-privacy" id="pdf-merge-privacy">Processamento 100% local: nenhum arquivo é enviado, armazenado ou registrado no banco.</p>
-<div class="pdf-merge-workspace">
-<section class="pdf-merge-panel" aria-labelledby="pdf-merge-files-title">
-<header class="pdf-merge-panel-head"><div><span>ARQUIVOS DE ENTRADA</span><h3 id="pdf-merge-files-title">Arquivos que serão combinados</h3></div><small>A ordem desta lista será a ordem das páginas no PDF final.</small></header>
-<div class="pdf-merge-drop" id="pdf-merge-drop" role="button" tabindex="0" aria-describedby="pdf-merge-drop-hint">
-<input accept="application/pdf,.pdf" hidden="" id="pdf-merge-input" multiple="" type="file"/>
-<span class="pdf-merge-drop-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"></path></svg></span>
-<strong>Arraste seus PDFs para cá</strong>
-<span id="pdf-merge-drop-hint">ou clique para selecionar vários arquivos</span>
-</div>
-<div class="pdf-merge-file-tools">
-<div class="pdf-merge-metrics" aria-live="polite"><span><strong id="pdf-merge-count">0</strong><small>Arquivos</small></span><span><strong id="pdf-merge-size">0 B</strong><small>Tamanho total</small></span></div>
-<div><button class="secondary-button compact" id="pdf-merge-add" type="button">Adicionar arquivos</button><button class="text-button danger" disabled="" id="pdf-merge-clear" type="button">Limpar lista</button></div>
-</div>
-<div class="pdf-merge-list-wrap">
-<ol class="pdf-merge-list" hidden="" id="pdf-merge-list" aria-label="Ordem dos arquivos"></ol>
-<empty-state class="pdf-merge-empty" id="pdf-merge-empty"><strong>Nenhum arquivo selecionado</strong><span>Adicione pelo menos dois PDFs para começar.</span></empty-state>
-</div>
-</section>
-<aside class="pdf-merge-panel pdf-merge-output" aria-labelledby="pdf-merge-output-title">
-<header class="pdf-merge-panel-head"><div><span>ARQUIVO FINAL</span><h3 id="pdf-merge-output-title">Gerar PDF combinado</h3></div></header>
-<label class="pdf-merge-name"><span>Nome do arquivo</span><input autocomplete="off" id="pdf-merge-output-name" maxlength="124" type="text" value="PDF_Combinado.pdf"/></label>
-<ul class="pdf-merge-checks"><li><i>1</i>Confira a ordem dos arquivos.</li><li><i>2</i>Defina o nome do arquivo final.</li><li><i>3</i>Combine e baixe o PDF resultante.</li></ul>
-<div class="pdf-merge-actions"><button class="primary-button" disabled="" id="pdf-merge-run" type="button">Combinar e baixar</button><button class="secondary-button" hidden="" id="pdf-merge-cancel" type="button">Cancelar</button></div>
-<div class="pdf-merge-progress" hidden="" id="pdf-merge-progress" aria-live="polite">
-<div class="pdf-merge-progress-track" role="progressbar" aria-label="Progresso da combinação" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="pdf-merge-progress-fill"></i></div>
-<span id="pdf-merge-progress-text">Preparando os PDFs…</span>
-</div>
-<section class="pdf-merge-result" hidden="" id="pdf-merge-result" aria-live="polite">
-<span class="pdf-merge-result-icon"><svg aria-hidden="true" viewbox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg></span>
-<div><strong id="pdf-merge-result-name">PDF_Combinado.pdf</strong><small id="pdf-merge-result-meta">Arquivo pronto</small></div>
-<button class="secondary-button compact" id="pdf-merge-download" type="button">Baixar novamente</button>
-</section>
-<small class="pdf-merge-output-note">PDFs protegidos por senha precisam ser desbloqueados antes da combinação. O resultado existe somente para download e não entra no histórico do GRCON.</small>
-</aside>
-</div>
+<div id="grcon-pdf-tools-root"></div>
 </section>
 <section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
 <div id="grcon-analysis-history-root"></div>

@@ -1,0 +1,75 @@
+name: FASE A — Combinar PDFs React
+
+on:
+  pull_request:
+    paths:
+      - "src/react/pdf-tools/**"
+      - "src/react/core/mount/**"
+      - "pdf_merge_core.js"
+      - "pdf_merge_engine.js"
+      - "workers/pdf-merge.worker.js"
+      - "pdf-merge.css"
+      - "grcon_module_loader.js"
+      - "index.html"
+      - "sw.js"
+      - "vite.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tests/pdf_tools_react.cjs"
+      - "scripts/validar-pdf-tools-browser.cjs"
+      - ".github/workflows/pdf-tools-react-browser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: PDF Tools + regressões React
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências de forma reproduzível
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck e build
+        run: |
+          npm run typecheck
+          npm run build
+
+      - name: Contratos estáticos da migração
+        run: node tests/pdf_tools_react.cjs
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Validar merge real, ciclo de vida, PWA e regressões
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-pdf-tools.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-pdf-tools-browser.cjs
+          node scripts/validar-historico-analises-browser.cjs
+          node scripts/validar-consultas-browser.cjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase-a-pdf-tools-react
+          path: |
+            artifacts/pdf-tools-browser/*.png
+            artifacts/pdf-tools-browser/metrics.json
+            artifacts/historico-analises-browser/*.png
+            artifacts/historico-analises-browser/metrics.json
+            artifacts/consultas-browser/*.png
+            artifacts/consultas-browser/metrics.json
+          if-no-files-found: error

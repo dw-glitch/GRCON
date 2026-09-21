@@ -47,10 +47,10 @@
       "requests_taxonomy_core.js", "requests_app.js",
       "react-dist/consultas-app.js",
     ],
-    // O combinador é isolado do banco. As bibliotecas pesadas (pdf-lib no
-    // Worker, JSZip pelo grupo "zip") só são carregadas quando o operador
-    // realmente gera o resultado — PDF combinado ou ZIP com PDFs e DWGs.
-    "pdf-tools": ["pdf_merge_core.js", "pdf_merge_app.js"],
+    // O combinador é isolado do banco. A interface é uma ilha React; o Core
+    // legado permanece fonte da verdade e pdf-lib só entra pelo Worker quando
+    // o operador realmente inicia a combinação.
+    "pdf-tools": ["pdf_merge_core.js", "react-dist/pdf-tools-app.js"],
   };
 
   const moduleRequirements = {
@@ -213,6 +213,8 @@
   }
 
   function directActivate(view) {
+    if (view !== "pdf-tools") root.GrconPdfMergeUi?.deactivate?.();
+
     const modules = {
       control: "grdt-module",
       "analysis-history": "analysis-history-module",
