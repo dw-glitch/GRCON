@@ -58,12 +58,14 @@ assert.equal(Api.isAllowedFlowUrl("https://example.com/webhook"), false);
 const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-const history = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+const historyDetail = fs.readFileSync(path.join(root, "src/react/historico-egrdts/components/HistoricoEgrdtDetail.tsx"), "utf8");
+const historyAdapter = fs.readFileSync(path.join(root, "src/react/historico-egrdts/services/historicoEgrdtsAdapter.ts"), "utf8");
 assert.match(html, /id="egrdt-teams-ready"/);
 assert.match(html, /egrdt_teams_notification_core\.js/);
 assert.match(html, /egrdt_teams_notification_app\.js/);
 assert.match(app, /grcon:egrdt-generated/);
-assert.match(history, /data-egrdt-teams-record-id/);
-assert.match(history, /GrconEgrdtTeamsNotification\?\.open/);
+assert.match(historyDetail, /data-egrdt-teams-record-id/);
+assert.match(historyAdapter, /GrconEgrdtTeamsNotification/);
+assert.match(historyAdapter, /api\.open\(record\)/);
 
 console.log("OK: aviso manual de eGRDT ao Teams validado");
