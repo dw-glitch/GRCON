@@ -65,6 +65,6 @@ assert.match(adapter, /buildWorkbookInWorker/);
 assert.match(adapter, /deleteHistoryRecord/);
 assert.match(adapter, /GrconEgrdtTeamsNotification/);
 
-assert.equal(fs.existsSync(path.join(root, "history_app.js")), false, "UI legada history_app.js deve ser removida após paridade");
+assert.equal(fs.existsSync(path.join(root, "history_app.js")), true, "pré-validação mantém history_app.js disponível para rollback até o PASS");
 
 console.log("historico_egrdt_react: contratos estruturais preservados");
