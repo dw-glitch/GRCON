@@ -35,24 +35,44 @@ interface GrconMacro5FlowApi {
   normalizeAnalysisFilter(value: unknown): Partial<AnalysisHistoryFilters>;
   saveAnalysisFilter(name: string, value: AnalysisHistoryFilters): SaveFilterResult;
   deleteAnalysisFilter(id: string): void;
+  postingTone?(status: string): string;
+  workflowSteps?(status: string, auditReady: boolean): Array<{ key?: string; label: string; complete?: boolean; current?: boolean; tone?: string }>;
   analysisTimeline?(items: AnalysisDocument[]): AnalysisDocument[];
   relatedEgrdt?(item: AnalysisDocument, history: EgrdtHistoryRecord[]): EgrdtHistoryRecord | null;
 }
 
 interface GrconHistoryApi {
+  STORAGE_KEY: string;
   read(): EgrdtHistoryRecord[];
+  filter(records: EgrdtHistoryRecord[], query: string): EgrdtHistoryRecord[];
+  filterByDate(records: EgrdtHistoryRecord[], startDate: string, endDate: string): EgrdtHistoryRecord[];
+  filterByDocumentFamily?(records: EgrdtHistoryRecord[], family: string): EgrdtHistoryRecord[];
+  summary(records: EgrdtHistoryRecord[]): { egrdts: number; documents: number; files: number; allocations: number; lastGeneratedAt: string };
+  normalizeEgrdtNumber(value: string, fallbackYear?: number): { sequence: number; year: number; baseName: string } | null;
+  generatedRevision(file: EgrdtHistoryRecord["files"] extends Array<infer T> ? T : never): string;
+  updateNumber(recordId: string, value: string): { updated: boolean; error?: string; previous?: string; record?: EgrdtHistoryRecord; records?: EgrdtHistoryRecord[] };
+  deleteOne(recordId: string): { deleted: boolean; error?: string; records: EgrdtHistoryRecord[] };
+  clear(): boolean;
 }
 
 interface GrconHistoryUiApi {
+  state?: Record<string, unknown>;
+  render?(): void;
+  activate?(view: string): void;
   select?(id: string): void;
+  performanceSnapshot?(): Record<string, unknown>;
 }
 
 interface GrconSigemPostingApi {
-  registerGenerated(records: EgrdtHistoryRecord[], options: { appVersion: string }): void;
+  STATUSES: Record<string, string>;
+  registerGenerated(records: EgrdtHistoryRecord[], options: { appVersion: string }): { persistence?: Promise<unknown> } | void;
   read(): PostingRecord[];
+  statusLabel(status: string): string;
+  audit(record: PostingRecord, records: PostingRecord[]): { ready: boolean };
 }
 
 interface GrconSigemUiApi {
+  render?(): void;
   select?(id: string): void;
 }
 
