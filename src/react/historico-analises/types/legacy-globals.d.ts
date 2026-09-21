@@ -5,6 +5,7 @@ import type {
   AnalysisSession,
   DetailContext,
   EgrdtHistoryRecord,
+  EgrdtHistoryFile,
   PostingRecord,
   RestoreResult,
   SavedAnalysisFilter,
@@ -49,7 +50,7 @@ interface GrconHistoryApi {
   filterByDocumentFamily?(records: EgrdtHistoryRecord[], family: string): EgrdtHistoryRecord[];
   summary(records: EgrdtHistoryRecord[]): { egrdts: number; documents: number; files: number; allocations: number; lastGeneratedAt: string };
   normalizeEgrdtNumber(value: string, fallbackYear?: number): { sequence: number; year: number; baseName: string } | null;
-  generatedRevision(file: EgrdtHistoryRecord["files"] extends Array<infer T> ? T : never): string;
+  generatedRevision(file: EgrdtHistoryFile): string;
   updateNumber(recordId: string, value: string): { updated: boolean; error?: string; previous?: string; record?: EgrdtHistoryRecord; records?: EgrdtHistoryRecord[] };
   deleteOne(recordId: string): { deleted: boolean; error?: string; records: EgrdtHistoryRecord[] };
   clear(): boolean;
