@@ -2789,14 +2789,15 @@ check("filtro do período recorta eGRDT mista e recalcula os totais da família 
 });
 
 check("Histórico filtra também a lista de eGRDTs por N-1710, ET e CV", () => {
-  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const app = fs.readFileSync(path.join(root, "src/react/historico-egrdt/HistoricoEgrdtApp.tsx"), "utf8");
+  const adapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
+  const hook = fs.readFileSync(path.join(root, "src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts"), "utf8");
   const report = fs.readFileSync(path.join(root, "history_report.js"), "utf8");
-  assert.match(html, /id="history-period-document-type"[\s\S]*value="N-1710"[\s\S]*value="ET"[\s\S]*value="CV"/);
-  assert.match(ui, /filtered = History\.filterByDocumentFamily\(filtered, els\.periodDocumentType/);
-  assert.match(ui, /state\.filtered = sortRecords\(filtered\)/);
-  assert.match(ui, /els\.list\.innerHTML = state\.filtered\.map/);
-  assert.match(ui, /documentFamily: els\.periodDocumentType/);
+  assert.match(app, /id="history-period-document-type"[\s\S]*value="N-1710"[\s\S]*value="ET"[\s\S]*value="CV"/);
+  assert.match(adapter, /filtered = History\.filterByDocumentFamily\(filtered, filters\.documentFamily\)/);
+  assert.match(adapter, /return \[\.\.\.filtered\]\.sort/);
+  assert.match(hook, /filtered\.slice\(0, visibleLimit\)/);
+  assert.match(adapter, /documentFamily: filters\.documentFamily/);
   assert.match(report, /"FAMÍLIA DOCUMENTAL"/);
   assert.match(report, /\["Tipo de documento", selectedFamily\]/);
 });
