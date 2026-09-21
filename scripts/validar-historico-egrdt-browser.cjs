@@ -259,37 +259,28 @@ async function shot(page, name, fullPage = true) {
     await page.locator(".history-workflow-section").scrollIntoViewIfNeeded();
     await shot(page, "06-history-egrdt-workflow-1366.png");
 
-    // Ações com mocks seguros: nenhum webhook real e nenhum histórico real.
-    const mockSetup = await page.evaluate(() => {
-      window.__safeActionCalls = { sigem: 0, teams: 0, email: 0 };
-      if (window.GrconSigemPosting) {
-        window.GrconSigemPosting.registerGenerated = () => {
-          window.__safeActionCalls.sigem += 1;
-          return { persistence: Promise.resolve() };
-        };
-      }
-      if (window.GrconEgrdtTeamsNotification) {
-        window.GrconEgrdtTeamsNotification.open = () => { window.__safeActionCalls.teams += 1; };
-      }
-      if (window.GrconEgrdtEmailReplyUi) {
-        window.GrconEgrdtEmailReplyUi.open = () => { window.__safeActionCalls.email += 1; };
-      }
-      return Boolean(window.GrconEgrdtTeamsNotification && window.GrconEgrdtEmailReplyUi);
-    });
-    assert.equal(mockSetup, true);
-
-    // Teams e resposta de e-mail permanecem no Histórico. Preparar no SIGEM
-    // é testado por último porque a ação real navega para o módulo SIGEM.
+    // Ações operacionais em navegador real, sem chamar webhook:
+    // Teams abre somente a confirmação (Enviar permanece desabilitado) e o
+    // teste fecha o diálogo sem marcar a confirmação.
     const teamsButton = page.locator(".egrdt-teams-notify-button");
-    if (await teamsButton.count()) await teamsButton.click();
+    assert.equal(await teamsButton.count(), 1);
+    await teamsButton.click();
+    await page.locator("#egrdt-teams-dialog[open]").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#egrdt-teams-dialog-send").isDisabled(), true);
+    await page.locator('#egrdt-teams-dialog button[value="cancel"]').first().click();
+    await page.locator("#egrdt-teams-dialog").waitFor({ state: "hidden" });
+
+    // A resposta de e-mail abre apenas a prévia. Não aciona cliente de e-mail,
+    // clipboard nem qualquer integração externa.
     await page.locator('[data-history-action="email-reply"]').click();
+    await page.locator("#egrdt-email-panel").waitFor({ state: "visible" });
+    await page.locator('[data-egrdt-email-action="close"]').click();
+    await page.locator("#egrdt-email-panel").waitFor({ state: "hidden" });
+
+    // Preparar no SIGEM é testado por último porque a ação real navega para o
+    // módulo SIGEM. O navegador do CI usa apenas o armazenamento efêmero.
     await page.locator('[data-history-action="prepare-sigem"]').click();
     await page.waitForTimeout(80);
-    const actionCalls = await page.evaluate(() => window.__safeActionCalls);
-    assert.ok(actionCalls.sigem >= 1);
-    assert.ok(actionCalls.teams >= 1);
-    assert.ok(actionCalls.email >= 1);
-
     await page.evaluate(() => window.GrconHistoryUi?.activate?.("history"));
     await page.locator("#history-detail").waitFor({ state: "visible" });
 
