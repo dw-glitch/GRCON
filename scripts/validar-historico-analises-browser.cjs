@@ -316,15 +316,16 @@ async function resetFilters(page) {
     await page.locator("#analysis-history-search").pressSequentially(progressiveQuery, { delay: 50 });
     const debounceDuringCalls = await page.evaluate(() => Number(window.__historyQueryCalls || 0));
     assert.equal(debounceDuringCalls, 0, "nenhuma consulta documental deve ocorrer durante a digitação rápida");
-    await page.waitForFunction((query) => {
-      const count = Number(window.__historyQueryCalls || 0);
-      const last = Array.isArray(window.__historyQueryLog) ? window.__historyQueryLog.at(-1) : null;
-      const label = document.querySelector("#analysis-history-result-count")?.textContent || "";
-      return count === 1 && last?.query === query && /2 de 240/.test(label);
-    }, progressiveQuery, { timeout: 5000 });
+    await page.waitForFunction(() => Number(window.__historyQueryCalls || 0) >= 1, null, { timeout: 5000 });
+    await page.waitForFunction(() => /2 de 240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""), null, { timeout: 5000 });
+    await page.waitForTimeout(150);
     const debounceAfterCalls = await page.evaluate(() => Number(window.__historyQueryCalls || 0));
     const debounceLog = await page.evaluate(() => window.__historyQueryLog || []);
-    assert.equal(debounceAfterCalls, 1, "somente a consulta final deve chegar ao motor após o debounce");
+    assert.equal(
+      debounceAfterCalls,
+      1,
+      "somente a consulta final deve chegar ao motor após o debounce: " + JSON.stringify(debounceLog),
+    );
     assert.equal(debounceLog.at(-1)?.query, progressiveQuery);
     assert.equal(debounceLog.at(-1)?.offset, 0, "reset de página durante a digitação não pode consultar a página antiga");
     metrics.debounceProgressiveMs = Date.now() - debounceStarted;
