@@ -360,25 +360,7 @@
 <div id="grcon-analysis-history-root"></div>
 </section>
 <section id="history-module" class="history-module history-module-v2" hidden="" role="tabpanel" aria-labelledby="tab-history">
-<header class="history-heading"><div><span>HISTÓRICO LOCAL</span><h2 id="history-title">eGRDTs geradas pelo GRCON</h2><p>Consulte documentos, confira alocações e corrija o número registrado quando necessário.</p></div><button class="secondary-button history-clear-button" id="history-clear" type="button">Limpar histórico</button></header>
-<section aria-label="Filtros e relação do histórico" class="history-toolbar">
-<label class="history-search"><svg viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="M14.5 14.5L21 21"></path></svg><input id="history-search" placeholder="Buscar eGRDT, documento ou alocação" type="search"/></label>
-<label><span>Ano</span><select id="history-year"><option value="">Todos</option></select></label>
-<label><span>Saída</span><select id="history-type"><option value="">Todas</option></select></label>
-<label><span>Postagem</span><select id="history-posting-status"><option value="">Todas</option><option value="AGUARDANDO">Aguardando preparação</option><option value="GERADO">Gerado</option><option value="VALIDADO">Pacote conferido</option><option value="PRONTO">Pronto para SIGEM</option><option value="POSTADO">Postado</option><option value="PENDENCIA">Com pendência</option><option value="FALHA">Falha</option><option value="CANCELADO">Cancelado</option></select></label>
-<label><span>Ordem</span><select id="history-sort"><option value="recent">Mais recentes</option><option value="oldest">Mais antigas</option><option value="number-desc">Maior número</option><option value="number-asc">Menor número</option></select></label>
-<div aria-label="Período da relação" class="history-period-controls" role="group">
-<label><span>Data inicial</span><input id="history-date-start" type="date"/></label>
-<label><span>Data final</span><input id="history-date-end" type="date"/></label>
-<label><span>Tipo de documento</span><select id="history-period-document-type"><option value="">Todos</option><option value="N-1710">N-1710</option><option value="ET">ET</option><option value="CV">CV</option></select></label>
-<div class="history-period-action"><span id="history-period-status">Todo o histórico disponível · Tipo: Todos</span><button class="primary-button" disabled="" id="history-export-period" type="button">Baixar relação do período</button></div>
-</div>
-</section>
-<section aria-label="Resumo do histórico" class="history-summary" id="history-summary"></section>
-<div class="history-workspace">
-<section aria-label="eGRDTs registradas" class="history-list-card"><header><div><span>REGISTROS</span><strong id="history-result-count">0 eGRDTs</strong></div><small>Selecione uma eGRDT para conferir os documentos.</small></header><div class="history-list" id="history-list"></div><empty-state class="history-empty" hidden="" id="history-empty"><strong>Nenhuma eGRDT localizada</strong><span>Gere uma eGRDT ou ajuste os filtros.</span></empty-state></section>
-<section aria-live="polite" class="history-detail" id="history-detail"></section>
-</div>
+<div class="history-react-root" id="grcon-egrdt-history-root"></div>
 </section>
 <section id="sigem-module" class="sigem-module" hidden="" role="tabpanel" aria-labelledby="tab-sigem">
 <header class="sigem-heading"><div><span>CONTROLE MANUAL</span><h2 id="sigem-title">Conferir postagem e atualizar a LD</h2><p>O GRCON não envia nada ao SIGEM. Confira o lote, faça a postagem manualmente, marque como postado e gere uma cópia da LD com o número e a data.</p></div><button class="secondary-button" id="sigem-clear" type="button">Limpar registros de postagem</button></header>
