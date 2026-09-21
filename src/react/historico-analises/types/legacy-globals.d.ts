@@ -61,7 +61,7 @@ interface GrconHistoryUiApi {
   render?(): void;
   activate?(view: string): void;
   select?(id: string): void;
-  performanceSnapshot?(): Record<string, unknown>;
+  performanceSnapshot?(): object;
 }
 
 interface GrconSigemPostingApi {
