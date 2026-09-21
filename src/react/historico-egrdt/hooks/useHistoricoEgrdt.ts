@@ -65,9 +65,24 @@ export function useHistoricoEgrdt() {
   }, [refreshNonce]);
 
   const effectiveFilters = useMemo<EgrdtHistoryFilters>(() => ({
-    ...filters,
     query: debouncedQuery,
-  }), [filters, debouncedQuery]);
+    year: filters.year,
+    outputType: filters.outputType,
+    postingStatus: filters.postingStatus,
+    sort: filters.sort,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    documentFamily: filters.documentFamily,
+  }), [
+    debouncedQuery,
+    filters.year,
+    filters.outputType,
+    filters.postingStatus,
+    filters.sort,
+    filters.startDate,
+    filters.endDate,
+    filters.documentFamily,
+  ]);
 
   const filteredResult = useMemo(() => {
     const started = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
