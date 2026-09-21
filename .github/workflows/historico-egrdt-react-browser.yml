@@ -1,9 +1,10 @@
-name: Histórico de eGRDTs — hardening React
+name: Histórico de eGRDTs — FASE B React
 
 on:
   pull_request:
     paths:
       - "src/react/historico-egrdt/**"
+      - "history-phase-b.css"
       - "history_core.js"
       - "history_report.js"
       - "egrdt_teams_notification_app.js"
@@ -12,7 +13,9 @@ on:
       - "grcon_reposting_app.js"
       - "vite.config.ts"
       - "sw.js"
+      - "tests/historico_egrdt_react.cjs"
       - "scripts/validar-historico-egrdt-browser.cjs"
+      - "docs/phase-b-historico-egrdt-parity.md"
       - ".github/workflows/historico-egrdt-react-browser.yml"
   workflow_dispatch:
 
@@ -21,33 +24,88 @@ permissions:
 
 jobs:
   browser:
-    name: Histórico de eGRDTs Chromium
+    name: Histórico de eGRDTs FASE B + regressões
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - name: Instalar dependências
         run: npm ci --ignore-scripts
+
+      - name: Registrar bundle base
+        env:
+          BASE_SHA: \${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          set -e
+          BASE_DIR="$RUNNER_TEMP/grcon-base"
+          git fetch --no-tags origin "$BASE_SHA" --depth=1 || true
+          git worktree add --detach "$BASE_DIR" "$BASE_SHA"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$BASE_DIR/node_modules"
+          (
+            cd "$BASE_DIR"
+            ./node_modules/.bin/vite build --mode historico-egrdt >/dev/null
+            wc -c react-dist/historico-egrdt-app.js | awk '{print "bundle_base_bytes=" $1}' | tee "$RUNNER_TEMP/history-bundle-base.txt"
+          )
+          cat "$RUNNER_TEMP/history-bundle-base.txt"
+
       - name: Typecheck
         run: npm run typecheck
+
       - name: Build
-        run: npm run build
-      - name: Testes estruturais
+        run: |
+          npm run build
+          wc -c react-dist/historico-egrdt-app.js | awk '{print "bundle_head_bytes=" $1}' | tee "$RUNNER_TEMP/history-bundle-head.txt"
+          cat "$RUNNER_TEMP/history-bundle-head.txt"
+
+      - name: Testes estruturais do Histórico de eGRDTs
         run: |
           node tests/historico_egrdt_react.cjs
           node tests/history_performance.cjs
           node tests/history_information.cjs
+
+      - name: npm test
+        run: npm test
+
+      - name: Verificação completa
+        run: npm run verify
+
       - name: Instalar Chromium
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Reproduzir e validar Histórico de eGRDTs
+
+      - name: Chromium — FASE B e regressões
+        env:
+          GRCON_PREVIEW_URL: http://127.0.0.1:8765
         run: |
-          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-historico-egrdt.log" 2>&1 &
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-history-phase-b.log" 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-historico-egrdt-browser.cjs
+          node scripts/validar-consultas-browser.cjs
+          node scripts/validar-historico-analises-browser.cjs
+          node scripts/validar-pdf-tools-browser.cjs
+
+      - name: Publicar screenshots da FASE B
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historico-egrdt-phase-b-screenshots
+          path: artifacts/historico-egrdt/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Resumo de bundle
+        if: always()
+        run: |
+          echo "### Bundle Histórico de eGRDTs" >> "$GITHUB_STEP_SUMMARY"
+          test -f "$RUNNER_TEMP/history-bundle-base.txt" && cat "$RUNNER_TEMP/history-bundle-base.txt" >> "$GITHUB_STEP_SUMMARY" || true
+          test -f "$RUNNER_TEMP/history-bundle-head.txt" && cat "$RUNNER_TEMP/history-bundle-head.txt" >> "$GITHUB_STEP_SUMMARY" || true
