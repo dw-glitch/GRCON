@@ -10,7 +10,9 @@ import type {
   UnifiedSearchResult,
 } from "../types/domain";
 
-const PAGE_SIZE = 200;
+const DESKTOP_PAGE_SIZE = 200;
+const MOBILE_PAGE_SIZE = 25;
+const MOBILE_HISTORY_MEDIA = "(max-width: 44rem)";
 const EMPTY_FILTERS: AnalysisHistoryFilters = {
   query: "",
   status: "ALL",
@@ -28,6 +30,25 @@ function useDebouncedValue(value: string, delay: number): string {
   return debounced;
 }
 
+function useResponsiveHistoryPageSize(onPageSizeChange: () => void): number {
+  const [pageSize, setPageSize] = useState(() =>
+    window.matchMedia(MOBILE_HISTORY_MEDIA).matches ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_HISTORY_MEDIA);
+    const handleChange = (event: MediaQueryListEvent) => {
+      const nextPageSize = event.matches ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
+      setPageSize((current) => current === nextPageSize ? current : nextPageSize);
+      onPageSizeChange();
+    };
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, [onPageSizeChange]);
+
+  return pageSize;
+}
+
 export function useHistoricoAnalises() {
   const [filters, setFilters] = useState<AnalysisHistoryFilters>(EMPTY_FILTERS);
   const debouncedQuery = useDebouncedValue(filters.query, 300);
@@ -37,6 +58,8 @@ export function useHistoricoAnalises() {
   const [counts, setCounts] = useState<Record<string, number | undefined>>({});
   const [sessionIds, setSessionIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+  const resetPageForPageSize = useCallback(() => setPage(1), []);
+  const pageSize = useResponsiveHistoryPageSize(resetPageForPageSize);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -50,9 +73,19 @@ export function useHistoricoAnalises() {
   const requestToken = useRef(0);
 
   const effectiveFilters = useMemo<AnalysisHistoryFilters>(() => ({
-    ...filters,
     query: debouncedQuery,
-  }), [filters, debouncedQuery]);
+    status: filters.status,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    sessionId: filters.sessionId,
+  }), [
+    debouncedQuery,
+    filters.status,
+    filters.startDate,
+    filters.endDate,
+    filters.sessionId,
+  ]);
+  const queryDebouncing = filters.query !== debouncedQuery;
 
   const periodInvalid = Boolean(
     filters.startDate && filters.endDate && filters.startDate > filters.endDate,
@@ -80,13 +113,34 @@ export function useHistoricoAnalises() {
   useEffect(() => Adapter.subscribeOpenDetail((item) => { void openDetail(item); }), [openDetail]);
 
   useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const nextSessions = await Adapter.listSessions();
+        if (!active) return;
+        setSessions(nextSessions);
+        Adapter.updateExternalCount(nextSessions.length);
+        setSavedFilters(Adapter.readSavedFilters());
+        void Adapter.storageLabel()
+          .then((label) => { if (active) setStorageLabel(label); })
+          .catch((error) => console.debug("[HistoricoAnalises/React] storage:", error));
+      } catch (error) {
+        console.debug("[HistoricoAnalises/React] metadata:", error);
+      }
+    })();
+    return () => { active = false; };
+  }, [refreshNonce]);
+
+  useEffect(() => {
     const token = ++requestToken.current;
     setLoadError("");
 
     // O Core usa IDBKeyRange.bound e não aceita intervalo invertido. Enquanto
     // o próprio campo informa a validação, mantenha os resultados atuais e não
-    // envie um período inválido ao motor legado.
-    if (periodInvalid) {
+    // envie um período inválido ao motor legado. Da mesma forma, enquanto a
+    // busca textual ainda está no intervalo de debounce, invalide requisições
+    // anteriores sem iniciar uma consulta intermediária com o texto antigo.
+    if (periodInvalid || queryDebouncing) {
       setLoading(false);
       return undefined;
     }
@@ -94,22 +148,10 @@ export function useHistoricoAnalises() {
     setLoading(true);
     void (async () => {
       try {
-        const nextSessions = await Adapter.listSessions();
-        if (token !== requestToken.current) return;
-        setSessions(nextSessions);
-        Adapter.updateExternalCount(nextSessions.length);
-        setSavedFilters(Adapter.readSavedFilters());
-
-        if (filters.sessionId && !nextSessions.some((session) => session.id === filters.sessionId)) {
-          setFilters((current) => ({ ...current, sessionId: "" }));
-          setPage(1);
-          return;
-        }
-
-        const result = await Adapter.queryDocuments(effectiveFilters, page, PAGE_SIZE);
+        const result = await Adapter.queryDocuments(effectiveFilters, page, pageSize);
         if (token !== requestToken.current) return;
 
-        const pageCount = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+        const pageCount = Math.max(1, Math.ceil(result.total / pageSize));
         if (page > pageCount) {
           setPage(pageCount);
           return;
@@ -119,11 +161,6 @@ export function useHistoricoAnalises() {
         setTotal(result.total);
         setCounts(result.counts || {});
         setSessionIds(result.sessionIds || []);
-        // Assim como no legado, a estimativa de armazenamento não bloqueia a
-        // renderização da tabela nem prolonga o estado de loading.
-        void Adapter.storageLabel()
-          .then((label) => { if (token === requestToken.current) setStorageLabel(label); })
-          .catch((error) => console.debug("[HistoricoAnalises/React] storage:", error));
       } catch (error) {
         if (token !== requestToken.current) return;
         const message = error instanceof Error && error.message ? error.message : "Não foi possível abrir o histórico.";
@@ -138,7 +175,7 @@ export function useHistoricoAnalises() {
         if (token === requestToken.current) setLoading(false);
       }
     })();
-  }, [effectiveFilters, filters.sessionId, page, periodInvalid, refreshNonce]);
+  }, [effectiveFilters, page, pageSize, periodInvalid, queryDebouncing, refreshNonce]);
 
   const setFilter = useCallback(<K extends keyof AnalysisHistoryFilters>(key: K, value: AnalysisHistoryFilters[K]) => {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -298,7 +335,7 @@ export function useHistoricoAnalises() {
     sessions: sessionIds.length,
   }), [total, counts, sessionIds]);
 
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return {
     filters,
@@ -308,7 +345,7 @@ export function useHistoricoAnalises() {
     total,
     page,
     pages,
-    pageSize: PAGE_SIZE,
+    pageSize,
     setPage,
     loading,
     loadError,
