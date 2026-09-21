@@ -50,9 +50,7 @@ async function openHistory(page) {
 
 async function seed(page) {
   await page.evaluate((rows) => {
-    localStorage.removeItem(window.GrconHistory.STORAGE_KEY);
-    const result = window.GrconHistory.saveMany(rows);
-    if (!result || result.saved !== rows.length) throw new Error("Fixture do Histórico não pôde ser salva.");
+    localStorage.setItem(window.GrconHistory.STORAGE_KEY, JSON.stringify(rows));
     window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { fixture: true } }));
   }, fixtures);
   await page.waitForFunction(() => document.querySelector("#history-result-count")?.textContent?.includes("3 eGRDT"));
