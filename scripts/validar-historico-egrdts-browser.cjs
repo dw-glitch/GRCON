@@ -216,7 +216,6 @@ async function assertNoGlobalOverflow(page, width, height = 900) {
     assert.equal(perf.totalFiltered, 1000);
     assert.equal(perf.renderedRecords, 200);
     assert.ok(perf.postingReadsLastRender <= 1, "Posting.read não pode ocorrer por linha.");
-    assert.equal(window === undefined, false);
     await screenshot(page, "02-history-list-1366.png");
 
     const facade = await page.evaluate(() => ({
