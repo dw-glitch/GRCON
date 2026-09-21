@@ -25,7 +25,7 @@ export function usePdfMerge() {
   const [items, setItems] = useState<PdfMergeItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<PdfMergeProgressState>(INITIAL_PROGRESS);
-  const [outputName, setOutputNameState] = useState(Adapter.DEFAULT_OUTPUT_NAME);
+  const [outputName, setOutputNameState] = useState<string>(Adapter.DEFAULT_OUTPUT_NAME);
   const [result, setResult] = useState<PdfMergeResult | null>(null);
   const [isDropActive, setIsDropActive] = useState(false);
   const [draggedId, setDraggedId] = useState("");
