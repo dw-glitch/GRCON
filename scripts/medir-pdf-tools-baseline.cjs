@@ -45,7 +45,6 @@ async function clickVisibleView(page, view) {
     });
     await page.locator("#pdf-merge-drop").waitFor({ state: "visible", timeout: 15000 });
     const openModuleMs = Date.now() - openStarted;
-    assert.ok(window === undefined || true); // keeps Node assert import active without changing browser timing.
 
     const metrics = await page.evaluate(async () => {
       const makeFiles = (count, prefix) => Array.from({ length: count }, (_, index) => new File(
