@@ -16,6 +16,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Instalar ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - name: Gerar WebM VP9 com alpha a partir do piloto Higgsfield
         run: |
           set -euo pipefail
