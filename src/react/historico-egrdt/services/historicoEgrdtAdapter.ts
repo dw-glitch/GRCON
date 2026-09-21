@@ -60,7 +60,7 @@ function parsedNumber(record: EgrdtHistoryRecord) {
 }
 
 function readRecords(): EgrdtHistoryRecord[] {
-  return history().read();
+  return history().read() as unknown as EgrdtHistoryRecord[];
 }
 
 function readPostingCache(): PostingCache {
@@ -98,7 +98,7 @@ function filterRecords(
   cache: PostingCache,
 ): EgrdtHistoryRecord[] {
   const History = history();
-  let filtered = History.filter(records, filters.query);
+  let filtered = History.filter(records, filters.query) as unknown as EgrdtHistoryRecord[];
   if (filters.year) filtered = filtered.filter((record) => String(parsedNumber(record)?.year || "") === filters.year);
   if (filters.outputType) filtered = filtered.filter((record) => record.outputType === filters.outputType);
   if (filters.postingStatus) {
@@ -109,9 +109,9 @@ function filterRecords(
         : posting?.status === filters.postingStatus;
     });
   }
-  filtered = History.filterByDate(filtered, filters.startDate, filters.endDate);
+  filtered = History.filterByDate(filtered, filters.startDate, filters.endDate) as unknown as EgrdtHistoryRecord[];
   if (typeof History.filterByDocumentFamily === "function") {
-    filtered = History.filterByDocumentFamily(filtered, filters.documentFamily);
+    filtered = History.filterByDocumentFamily(filtered, filters.documentFamily) as unknown as EgrdtHistoryRecord[];
   }
   return [...filtered].sort((a, b) => {
     if (filters.sort === "oldest") return a.generatedAt.localeCompare(b.generatedAt);
@@ -241,7 +241,7 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
 }
 
 function updateNumber(recordId: string, value: string): UpdateNumberResult {
-  return history().updateNumber(recordId, value);
+  return history().updateNumber(recordId, value) as unknown as UpdateNumberResult;
 }
 
 function canDeleteHistory(): boolean {
@@ -258,7 +258,7 @@ async function deleteRecord(record: EgrdtHistoryRecord): Promise<{ result: Delet
     if (!window.GrconCloud?.deleteHistoryRecord) throw new Error("Atualize o GRCON para concluir a exclusão no Supabase.");
     cloudDeleted = Boolean(await window.GrconCloud.deleteHistoryRecord(record));
   }
-  return { result: history().deleteOne(record.id), cloudDeleted };
+  return { result: history().deleteOne(record.id) as unknown as DeleteOneResult, cloudDeleted };
 }
 
 async function clearHistory(): Promise<boolean> {
@@ -269,7 +269,7 @@ async function clearHistory(): Promise<boolean> {
 async function prepareForSigem(record: EgrdtHistoryRecord): Promise<PostingRecord | null> {
   const Posting = window.GrconSigemPosting;
   if (!Posting) return null;
-  const saved = Posting.registerGenerated([record], { appVersion: appVersion() });
+  const saved = Posting.registerGenerated([record], { appVersion: appVersion() }) as { persistence?: Promise<unknown> } | undefined;
   if (saved?.persistence) await saved.persistence.catch(() => null);
   const cache = readPostingCache();
   await window.GRCONModuleLoader?.ensureModule?.("sigem");
