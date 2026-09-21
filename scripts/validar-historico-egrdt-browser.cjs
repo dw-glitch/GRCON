@@ -278,15 +278,20 @@ async function shot(page, name, fullPage = true) {
     });
     assert.equal(mockSetup, true);
 
-    await page.locator('[data-history-action="prepare-sigem"]').click();
+    // Teams e resposta de e-mail permanecem no Histórico. Preparar no SIGEM
+    // é testado por último porque a ação real navega para o módulo SIGEM.
     const teamsButton = page.locator(".egrdt-teams-notify-button");
     if (await teamsButton.count()) await teamsButton.click();
     await page.locator('[data-history-action="email-reply"]').click();
+    await page.locator('[data-history-action="prepare-sigem"]').click();
     await page.waitForTimeout(80);
     const actionCalls = await page.evaluate(() => window.__safeActionCalls);
     assert.ok(actionCalls.sigem >= 1);
     assert.ok(actionCalls.teams >= 1);
     assert.ok(actionCalls.email >= 1);
+
+    await page.evaluate(() => window.GrconHistoryUi?.activate?.("history"));
+    await page.locator("#history-detail").waitFor({ state: "visible" });
 
     // Editor: inválido, duplicado e válido sem tocar no Core persistente.
     await page.locator(".history-detail-more > summary").click();
