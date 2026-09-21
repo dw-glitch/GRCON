@@ -179,18 +179,20 @@ await checkAsync("combinador recusa fila insuficiente e PDF inválido com mensag
 check("combinador é um módulo local, isolado do Supabase e carregado sob demanda", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
-  const app = fs.readFileSync(path.join(root, "pdf_merge_app.js"), "utf8");
+  const app = fs.readFileSync(path.join(root, "src", "react", "pdf-tools", "PdfMergeApp.tsx"), "utf8");
+  const adapter = fs.readFileSync(path.join(root, "src", "react", "pdf-tools", "services", "pdfMergeAdapter.ts"), "utf8");
   const worker = fs.readFileSync(path.join(root, "workers", "pdf-merge.worker.js"), "utf8");
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   assert.match(html, /data-grcon-view="pdf-tools"/);
   assert.match(html, /id="pdf-tools-module"/);
-  assert.match(html, /nenhum arquivo é enviado, armazenado ou registrado no banco/i);
-  assert.match(loader, /"pdf-tools": \["pdf_merge_core\.js", "pdf_merge_app\.js"\]/);
-  assert.match(app, /new Worker\("workers\/pdf-merge\.worker\.js"\)/);
-  assert.doesNotMatch(app, /localStorage|GrconCloud|supabase|fetch\s*\(/i);
+  assert.match(html, /id="grcon-pdf-tools-root"/);
+  assert.match(app, /nenhum arquivo é enviado, armazenado ou registrado no banco/i);
+  assert.match(loader, /"pdf-tools": \["pdf_merge_core\.js", "react-dist\/pdf-tools-app\.js"\]/);
+  assert.match(adapter, /new Worker\("workers\/pdf-merge\.worker\.js"\)/);
+  assert.doesNotMatch([app, adapter].join("\n"), /localStorage|GrconCloud|supabase|fetch\s*\(/i);
   assert.match(worker, /importScripts\("\.\.\/pdf-lib\.min\.js", "\.\.\/pdf_merge_engine\.js"\)/);
   assert.doesNotMatch(worker, /localStorage|GrconCloud|supabase|fetch\s*\(/i);
-  ["pdf-merge.css", "pdf_merge_core.js", "pdf_merge_engine.js", "pdf_merge_app.js", "pdf-lib.min.js", "workers/pdf-merge.worker.js"].forEach((asset) => {
+  ["pdf-merge.css", "pdf_merge_core.js", "pdf_merge_engine.js", "react-dist/pdf-tools-app.js", "pdf-lib.min.js", "workers/pdf-merge.worker.js"].forEach((asset) => {
     assert.ok(sw.includes(`"${asset}"`), `${asset} precisa estar no cache offline`);
   });
 });
