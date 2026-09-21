@@ -25,6 +25,16 @@ let performanceSnapshot: HistoryPerformanceSnapshot = {
   totalRecords: 0,
 };
 
+const compatibilityState: {
+  react: true;
+  filtered: EgrdtHistoryRecord[];
+  selectedId: string;
+} = {
+  react: true,
+  filtered: [],
+  selectedId: "",
+};
+
 function history() {
   if (!window.GrconHistory) throw new Error("GrconHistory não foi carregado.");
   return window.GrconHistory;
