@@ -60,14 +60,18 @@ async function waitForStablePage(page) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
       await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      await page.waitForTimeout(250);
+      await page.waitForFunction(() => Boolean(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 });
+      await page.waitForTimeout(200);
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
       return;
     } catch (error) {
       lastError = error;
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached|Timeout/i.test(message)) throw error;
       await page.waitForTimeout(150);
     }
   }
-  throw lastError;
+  throw lastError || new Error("Service Worker não estabilizou o Dashboard SIGEM × PW.");
 }
 async function exposeApp(page) {
   await page.addStyleTag({ content: [
@@ -222,11 +226,12 @@ async function clickView(page, view) {
     assert.equal(revisionCount, 3, "0/A/B precisam continuar como três ocorrências");
     await page.screenshot({ path: path.join(outputDir, "03-sigem-pw-results-1366.png"), fullPage: true });
 
+    const generationBeforeClassSwitch = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration);
     let started = Date.now();
     await page.locator("#spw-class").selectOption("ET");
     await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.filters.documentClass === "ET");
     metrics.classSwitchMs = Date.now() - started;
-    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration), await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration), "troca de classe não reconstrói o modelo");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration), generationBeforeClassSwitch, "troca de classe não reconstrói o modelo");
     await page.screenshot({ path: path.join(outputDir, "04-sigem-pw-filter-et-1366.png"), fullPage: true });
     await page.locator("#spw-class").selectOption("");
 
