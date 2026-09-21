@@ -4,7 +4,7 @@ import { mountReactIsland } from "../core/mount/mountReactIsland";
 
 function installCompatibilityApi(): void {
   window.GrconHistoryUi = Object.freeze({
-    state: { react: true },
+    state: Adapter.getCompatibilityState(),
     render: () => Adapter.requestRefresh(),
     activate: (view: string) => Adapter.activateView(view),
     select: (id: string) => Adapter.requestSelect(id),
