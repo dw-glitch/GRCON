@@ -3,6 +3,7 @@ import type { DragEvent, KeyboardEvent, MouseEvent, RefObject } from "react";
 interface PdfDropZoneProps {
   busy: boolean;
   active: boolean;
+  hasFiles: boolean;
   inputRef: RefObject<HTMLInputElement>;
   onFiles(files: FileList | null): void;
   onEnter(): void;
@@ -38,9 +39,16 @@ export function PdfDropZone(props: PdfDropZoneProps) {
     if (!props.busy) props.onFiles(event.dataTransfer.files);
   };
 
+  const className = [
+    "pdf-merge-drop",
+    props.hasFiles ? "has-files" : "is-empty",
+    props.active ? "is-dragging" : "",
+    props.busy ? "is-disabled" : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <div
-      className={`pdf-merge-drop${props.active ? " is-dragging" : ""}${props.busy ? " is-disabled" : ""}`}
+      className={className}
       id="pdf-merge-drop"
       role="button"
       tabIndex={0}
@@ -72,8 +80,13 @@ export function PdfDropZone(props: PdfDropZoneProps) {
           <path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
         </svg>
       </span>
-      <strong>Arraste seus PDFs para cá</strong>
-      <span id="pdf-merge-drop-hint">ou clique para selecionar vários arquivos</span>
+      <span className="pdf-merge-drop-copy">
+        <strong>{props.hasFiles ? "Adicionar PDFs" : "Arraste seus PDFs aqui"}</strong>
+        <span id="pdf-merge-drop-hint">
+          {props.hasFiles ? "ou arraste mais arquivos para esta área" : "ou clique para selecionar vários arquivos"}
+        </span>
+        {!props.hasFiles ? <small>Vários arquivos permitidos</small> : null}
+      </span>
     </div>
   );
 }
