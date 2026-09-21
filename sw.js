@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.41.0-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1";
+const CACHE_NAME = "grcon-v5.41.0-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react2-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -89,7 +89,7 @@ const ASSETS = [
   "grcon_cloud_config.js",
   "grcon_cloud_app.js",
   "history_report.js",
-  "history_app.js",
+  "react-dist/historico-egrdts-app.js",
   "history_report_worker.js",
   "pending_allocation_history_core.js",
   "analysis_history_core.js",
