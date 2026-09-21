@@ -1901,7 +1901,7 @@ check("cliente envia e conclui o identificador idempotente da reserva", () => {
 
 check("limpeza compartilhada só remove o histórico local após confirmação do Supabase", () => {
   const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const ui = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
   assert.match(cloud, /state\.client\.rpc\("grcon_clear_history", \{ target_workspace: workspaceId \}\)/);
   const rpcPosition = cloud.indexOf('state.client.rpc("grcon_clear_history"');
   const localClearPosition = cloud.indexOf("History?.clear?.()", rpcPosition);
@@ -1914,13 +1914,14 @@ check("limpeza compartilhada só remove o histórico local após confirmação d
 
 check("exclusão individual confirma o Supabase antes de apagar localmente", () => {
   const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const adapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
+  const hook = fs.readFileSync(path.join(root, "src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts"), "utf8");
   assert.match(cloud, /async function deleteSharedHistoryRecord\(record\)/);
   assert.match(cloud, /target_reservation_ids:\s*reservationIds\.length \? reservationIds : null/);
-  const remotePosition = ui.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
-  const localPosition = ui.indexOf("History.deleteOne(record.id)", remotePosition);
+  const remotePosition = adapter.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
+  const localPosition = adapter.indexOf("history().deleteOne(record.id)", remotePosition);
   assert.ok(remotePosition >= 0 && localPosition > remotePosition);
-  assert.match(ui, /foi liberado para reutilização/i);
+  assert.match(hook, /foi liberado para reutilização/i);
 });
 
 check("atalho do cabeçalho abre o RECON sem integração de dados", () => {
@@ -2789,14 +2790,15 @@ check("filtro do período recorta eGRDT mista e recalcula os totais da família 
 });
 
 check("Histórico filtra também a lista de eGRDTs por N-1710, ET e CV", () => {
-  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const app = fs.readFileSync(path.join(root, "src/react/historico-egrdt/HistoricoEgrdtApp.tsx"), "utf8");
+  const adapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
+  const hook = fs.readFileSync(path.join(root, "src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts"), "utf8");
   const report = fs.readFileSync(path.join(root, "history_report.js"), "utf8");
-  assert.match(html, /id="history-period-document-type"[\s\S]*value="N-1710"[\s\S]*value="ET"[\s\S]*value="CV"/);
-  assert.match(ui, /filtered = History\.filterByDocumentFamily\(filtered, els\.periodDocumentType/);
-  assert.match(ui, /state\.filtered = sortRecords\(filtered\)/);
-  assert.match(ui, /els\.list\.innerHTML = state\.filtered\.map/);
-  assert.match(ui, /documentFamily: els\.periodDocumentType/);
+  assert.match(app, /id="history-period-document-type"[\s\S]*value="N-1710"[\s\S]*value="ET"[\s\S]*value="CV"/);
+  assert.match(adapter, /filtered = History\.filterByDocumentFamily\(filtered, filters\.documentFamily\)/);
+  assert.match(adapter, /return \[\.\.\.filtered\]\.sort/);
+  assert.match(hook, /filtered\.slice\(0, visibleLimit\)/);
+  assert.match(adapter, /documentFamily: filters\.documentFamily/);
   assert.match(report, /"FAMÍLIA DOCUMENTAL"/);
   assert.match(report, /\["Tipo de documento", selectedFamily\]/);
 });
@@ -3504,14 +3506,15 @@ check("revisão da resposta de e-mail é a enviada na GRDT, não uma recalculada
 check("resposta de e-mail fica disponível somente no Histórico", () => {
   const interfaceSource = fs.readFileSync(path.join(root, "egrdt_email_reply_ui.js"), "utf8");
   const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const historySource = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const historyApp = fs.readFileSync(path.join(root, "src/react/historico-egrdt/HistoricoEgrdtApp.tsx"), "utf8");
+  const historyAdapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
 
   assert.doesNotMatch(interfaceSource, /grcon-egrdt-email-auto/);
   assert.doesNotMatch(interfaceSource, /grcon:history-updated/);
   assert.doesNotMatch(interfaceSource, /openLastGenerated|autoOpenEnabled/);
   assert.doesNotMatch(indexSource, /id=["']egrdt-email-reply["']/);
-  assert.match(historySource, /data-history-action=["']email-reply["']/);
-  assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
+  assert.match(historyApp, /data-history-action=["']email-reply["']/);
+  assert.match(historyAdapter, /GrconEgrdtEmailReplyUi\.open\?\.\(\[record\]\)/);
 });
 
 check("prévia da relação tem as duas leituras e o cabeçalho acompanha a rolagem", () => {

@@ -66,6 +66,10 @@ interface GrconLdMemoryApi {
 
 interface GrconCloudApi {
   getExportTemplates?(): Promise<ExportTemplate[]>;
+  state?: { membership?: { workspace_id?: string } };
+  canManageHistory?(): boolean;
+  deleteHistoryRecord?(record: unknown): Promise<unknown>;
+  clearHistory?(): Promise<boolean>;
 }
 
 type NotifyFn = (message: string, kind?: string) => void;

@@ -13,8 +13,8 @@
     performance: ["performance_workers.js"],
     report: ["excel", "brand", "performance"],
     export: ["xlsx", "excel", "zip", "brand", "performance"],
-    navigation: ["history_report.js", "history_app.js"],
-    history: ["navigation"],
+    navigation: ["history_report.js"],
+    history: ["navigation", "sigem_posting_core.js", "macro5_flow_core.js", "react-dist/historico-egrdt-app.js"],
     // O Dashboard é construído por retomar.js e já existe no carregamento inicial.
     // Ele é uma view lógica, não um arquivo chamado /dashboard.
     dashboard: [],
@@ -54,7 +54,7 @@
   };
 
   const moduleRequirements = {
-    history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi"],
+    history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi", "GrconHistoricoEgrdtReact"],
     dashboard: ["GrconHistoryDashboard"],
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi", "GrconHistoricoAnalisesReact"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
