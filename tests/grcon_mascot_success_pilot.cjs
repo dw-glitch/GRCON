@@ -18,6 +18,10 @@ assert.match(script, /#egrdt-teams-ready/);
 assert.match(script, /getBoundingClientRect\(\)/);
 assert.match(script, /pointer-events:none/);
 assert.match(script, /prefers-reduced-motion:reduce/);
+assert.match(script, /videoLoaded/);
+assert.match(script, /showFallback\(1200, "reduced-motion"\)/);
+assert.match(script, /translate3d/);
+assert.match(script, /requestAnimationFrame/);
 assert.match(script, /preload = "none"/);
 assert.match(script, /grcon:egrdt-teams-notified/);
 assert.match(script, /background:transparent/);
@@ -30,6 +34,8 @@ assert.ok(runnerIndex >= 0 && runnerIndex < pilotIndex && pilotIndex < appIndex,
 
 assert.ok(sw.includes('"grcon_mascot_success_pilot.js"'));
 assert.ok(sw.includes('"grcon-mascot-success-pilot-alpha.webm"'));
+const precache = sw.slice(sw.indexOf("const ASSETS"), sw.indexOf("const CRITICAL_ASSETS"));
+assert.doesNotMatch(precache, /grcon-mascot-success-pilot-alpha\.webm/, "piloto deve continuar lazy e fora do precache inicial");
 assert.doesNotMatch(sw, /grcon_mascot_scenarios\.js/);
 
 console.log("grcon_mascot_success_pilot: OK — microinteração ancorada, lazy, transparente e sem bloqueio de UI.");

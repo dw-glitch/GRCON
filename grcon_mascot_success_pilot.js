@@ -16,6 +16,7 @@
   let video = null;
   let fallback = null;
   let anchor = null;
+  let positionFrame = 0;
 
   function reducedMotion() {
     return Boolean(root.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -32,7 +33,7 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      #${OVERLAY_ID}{position:fixed;z-index:245;display:none;pointer-events:none;contain:layout paint style;isolation:isolate;width:clamp(128px,14vw,210px);aspect-ratio:400/420;transform:translate3d(0,0,0);will-change:transform,opacity}
+      #${OVERLAY_ID}{position:fixed;z-index:245;display:none;pointer-events:none;contain:layout paint style;isolation:isolate;inset:0 auto auto 0;width:clamp(128px,14vw,210px);aspect-ratio:400/420;transform:translate3d(-200vw,-200vh,0);will-change:transform,opacity}
       #${OVERLAY_ID}[data-visible="true"]{display:block}
       #${OVERLAY_ID} video,#${OVERLAY_ID} img{display:block;width:100%;height:100%;object-fit:contain;background:transparent!important;pointer-events:none}
       #${OVERLAY_ID} video{filter:drop-shadow(0 6px 14px rgb(12 32 48 / 18%))}
@@ -40,7 +41,7 @@
       #${OVERLAY_ID}[data-fallback="true"] video{display:none}
       #${OVERLAY_ID}[data-fallback="true"] img{display:block}
       @media (max-width:700px){#${OVERLAY_ID}{width:clamp(84px,28vw,120px)}}
-      @media (prefers-reduced-motion:reduce){#${OVERLAY_ID}{display:none!important}}
+      @media (prefers-reduced-motion:reduce){#${OVERLAY_ID} video{display:none!important}#${OVERLAY_ID} img{display:block!important}}
     `;
     document.head.appendChild(style);
   }
@@ -101,19 +102,29 @@
     if (left < 8) left = Math.max(8, viewportWidth - box.width - 8);
 
     top = Math.max(8, Math.min(top, viewportHeight - box.height - 8));
-    overlay.style.left = Math.round(left) + "px";
-    overlay.style.top = Math.round(top) + "px";
+    overlay.style.transform = `translate3d(${Math.round(left)}px,${Math.round(top)}px,0)`;
   }
 
-  function showFallback() {
+  function schedulePlace() {
+    if (!active || positionFrame) return;
+    positionFrame = root.requestAnimationFrame(() => {
+      positionFrame = 0;
+      place();
+    });
+  }
+
+  function showFallback(duration, reason) {
     if (!overlay) return;
     overlay.dataset.fallback = "true";
+    overlay.dataset.reason = reason || "fallback";
     root.clearTimeout(hideTimer);
-    hideTimer = root.setTimeout(() => hide("fallback-timeout"), 1600);
+    hideTimer = root.setTimeout(() => hide(reason || "fallback-timeout"), duration || 1600);
   }
 
   function hide(reason) {
     root.clearTimeout(hideTimer);
+    if (positionFrame) root.cancelAnimationFrame(positionFrame);
+    positionFrame = 0;
     if (video) {
       try { video.pause(); } catch (_) {}
       try { video.currentTime = 0; } catch (_) {}
@@ -131,7 +142,6 @@
 
   async function play(options) {
     const config = options || {};
-    if (reducedMotion() && !config.force) return false;
     const target = resolveAnchor(config.anchor);
     if (!target || target.hidden || !target.isConnected) return false;
 
@@ -142,6 +152,11 @@
     overlay.dataset.fallback = "false";
     overlay.dataset.reason = "playing";
     place();
+
+    if (reducedMotion() && !config.force) {
+      showFallback(1200, "reduced-motion");
+      return true;
+    }
 
     video.src = assetUrl(VIDEO_PATH);
     video.preload = "auto";
@@ -169,13 +184,14 @@
       source: video?.currentSrc || video?.src || assetUrl(VIDEO_PATH),
       visible: overlay?.dataset.visible === "true",
       fallback: overlay?.dataset.fallback === "true",
+      videoLoaded: Boolean(video?.getAttribute("src")),
     });
   }
 
   function init() {
     installStyles();
-    root.addEventListener("resize", place, { passive: true });
-    root.addEventListener("scroll", place, { passive: true, capture: true });
+    root.addEventListener("resize", schedulePlace, { passive: true });
+    root.addEventListener("scroll", schedulePlace, { passive: true, capture: true });
     root.addEventListener("grcon:egrdt-teams-notified", () => {
       root.setTimeout(() => { void play({ anchor: DEFAULT_ANCHOR }); }, 100);
     });

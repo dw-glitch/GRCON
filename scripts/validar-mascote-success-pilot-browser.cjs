@@ -48,8 +48,11 @@ async function run(viewport, name, reducedMotion = "no-preference") {
 
   if (reducedMotion === "reduce") {
     assert.equal(result.diag.reducedMotion, true);
-    assert.equal(result.ok, false);
-    assert.notEqual(result.visible, "true");
+    assert.equal(result.ok, true);
+    assert.equal(result.visible, "true");
+    assert.equal(result.diag.fallback, true);
+    assert.equal(result.diag.videoLoaded, false, "reduced-motion não deve carregar o WebM");
+    assert.equal(failures.filter((u) => /mascot.*success-pilot/i.test(u)).length, 0);
   } else {
     assert.equal(result.ok, true);
     assert.equal(result.visible, "true");
