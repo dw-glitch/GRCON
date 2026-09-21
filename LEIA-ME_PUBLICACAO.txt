@@ -85,6 +85,11 @@ ATENÇÃO PARA INSTALAÇÃO EM OUTRO PROJETO
 - Recupere o SQL integral do histórico do projeto Supabase antes de tentar reconstruir uma base nova.
 - Não aplique migrações de produção sem backup e conferência do projeto correto.
 
+PUBLICAÇÃO VERCEL
+- URL oficial: https://grcon-ten.vercel.app/
+- Projeto Vercel antigo: https://grcon.vercel.app/ (builds automáticos ignorados por vercel.json)
+- O ignoreCommand bloqueia apenas o projeto antigo pelo VERCEL_PROJECT_PRODUCTION_URL; o projeto grcon-ten continua apto a build/deploy.
+
 CONFIGURAÇÃO DO SUPABASE AUTH
 - Site URL: https://grcon-ten.vercel.app
 - Redirect URLs:
