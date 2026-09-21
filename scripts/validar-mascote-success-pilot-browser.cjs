@@ -27,7 +27,7 @@ async function run(viewport, name, reducedMotion = "no-preference") {
   });
 
   const result = await page.evaluate(async (reduce) => {
-    const ok = await window.GrconMascotSuccessPilot.play({ anchor: "#egrdt-teams-ready", force: reduce });
+    const ok = await window.GrconMascotSuccessPilot.play({ anchor: "#egrdt-teams-ready" });
     const el = document.querySelector("#grcon-mascot-success-pilot");
     const anchor = document.querySelector("#egrdt-teams-ready");
     const style = getComputedStyle(el);
@@ -48,6 +48,8 @@ async function run(viewport, name, reducedMotion = "no-preference") {
 
   if (reducedMotion === "reduce") {
     assert.equal(result.diag.reducedMotion, true);
+    assert.equal(result.ok, false);
+    assert.notEqual(result.visible, "true");
   } else {
     assert.equal(result.ok, true);
     assert.equal(result.visible, "true");
