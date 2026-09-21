@@ -109,6 +109,10 @@ export function useHistoricoEgrdt() {
   }, [filtered, selectedId]);
 
   useEffect(() => {
+    Adapter.publishCompatibilityState(filtered, selectedId);
+  }, [filtered, selectedId]);
+
+  useEffect(() => {
     Adapter.setPerformanceSnapshot({
       lastRenderMs: filteredResult.elapsed,
       postingReadsLastRender: postingCache.reads,
