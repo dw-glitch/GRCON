@@ -42,7 +42,7 @@ jobs:
 
       - name: Registrar bundle base
         env:
-          BASE_SHA: \${{ github.event.pull_request.base.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
         run: |
           set -e
           BASE_DIR="$RUNNER_TEMP/grcon-base"
