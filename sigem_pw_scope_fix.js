@@ -161,9 +161,19 @@
     const normalizedSigem = normalizeSigemRecords(sigemRecords || []);
     const pwAudit = scopeAudit(pwRecords || []);
     const normalizedPw = pwAudit.accepted;
+    // O caminho legado de dois argumentos ainda é usado por integrações de
+    // escopo. Ele precisa expor as duas visões do mesmo conjunto:
+    // - *Entries: identidade código + revisão, usada em contagens/comparação;
+    // - *All: identidade documental consolidada, usada pela análise histórica
+    //   de revisões. Sem os mapas de entradas, aggregateModel() cai no fallback
+    //   documental e revisões 0/A/B do mesmo código viram apenas um item.
+    const sigemEntries = Base.buildEntryMap(normalizedSigem, "sigem");
+    const pwEntries = Base.buildEntryMap(normalizedPw, "pw");
     return {
       normalizedSigem,
       normalizedPw,
+      sigemEntries,
+      pwEntries,
       sigemAll: Base.buildDocumentMap(normalizedSigem, "sigem"),
       pwAll: Base.buildDocumentMap(normalizedPw, "pw"),
       scopeAudit: pwAudit,
