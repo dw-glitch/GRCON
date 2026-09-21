@@ -188,7 +188,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
 
   const creator = record.createdByName || record.createdByEmail;
   const previousNumbers = record.numberHistory || [];
-  const teamsHtml = Adapter.teamsButtonHtml(record);
+  const teamsAction = Adapter.teamsPresentation(record);
 
   return (
     <section aria-live="polite" className="history-detail" id="history-detail">
