@@ -104,13 +104,13 @@ async function seed(page) {
     assert.doesNotMatch(listText, /0130870-C1O-PGV-G-0003-2026/);
 
     const summary = await page.locator("#history-summary").innerText();
-    assert.match(summary, /eGRDTs localizadas\s*1/, "Resumo React precisa usar o mesmo recorte da lista.");
+    assert.match(summary, /eGRDTs localizadas\s*1/i, "Resumo React precisa usar o mesmo recorte da lista.");
 
     await page.evaluate(() => window.GrconRetomar?.render?.());
     await page.waitForTimeout(80);
     const summaryAfterRetomar = await page.locator("#history-summary").innerText();
     console.log("resumo-apos-retomar", JSON.stringify(summaryAfterRetomar));
-    assert.match(summaryAfterRetomar, /eGRDTs localizadas\s*1/, "Retomar não pode restaurar registros fora do filtro de data.");
+    assert.match(summaryAfterRetomar, /eGRDTs localizadas\s*1/i, "Retomar não pode restaurar registros fora do filtro de data.");
 
     const compatibility = await page.evaluate(() => ({
       filtered: Array.isArray(window.GrconHistoryUi?.state?.filtered)
