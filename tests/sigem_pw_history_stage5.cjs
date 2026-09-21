@@ -27,7 +27,7 @@ function functionBody(source, name, nextName) {
 })();
 
 (function validatedCandidateIsRecordedBeforeActivation() {
-  const sigem = functionBody(dashboardApp, "importSigem", "parsePwFile");
+  const sigem = functionBody(dashboardApp, "importSigem", "importPw");
   const pw = functionBody(dashboardApp, "importPw", "importLd");
   const ld = functionBody(dashboardApp, "importLd", "clearPreStage7BasesOnce");
   assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core().saveSigemBase"));
