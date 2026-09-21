@@ -119,8 +119,11 @@ async function installFixtureAdapters(page, rows = fixtures, postings = postingF
 
 async function expectCount(page, count) {
   await page.waitForFunction((expected) => {
-    const text = document.querySelector("#history-result-count")?.textContent || "";
-    return new RegExp("^" + expected + " eGRDT").test(text);
+    const text = (document.querySelector("#history-result-count")?.textContent || "").trim();
+    const match = text.match(/^([\\d.\\s]+)\\s+eGRDT/);
+    if (!match) return false;
+    const actual = Number(match[1].replace(/\\D/g, ""));
+    return actual === expected;
   }, count, { timeout: 5000 });
 }
 
