@@ -2,6 +2,16 @@ import { HistoricoEgrdtApp } from "./HistoricoEgrdtApp";
 import { historicoEgrdtAdapter as Adapter } from "./services/historicoEgrdtAdapter";
 import { mountReactIsland } from "../core/mount/mountReactIsland";
 
+function ensurePhaseBStyles(): void {
+  const href = "history-phase-b.css";
+  if (document.head.querySelector('link[data-grcon-history-phase-b="true"]')) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  link.dataset.grconHistoryPhaseB = "true";
+  document.head.appendChild(link);
+}
+
 function installCompatibilityApi(): void {
   window.GrconHistoryUi = Object.freeze({
     state: Adapter.getCompatibilityState(),
@@ -13,6 +23,7 @@ function installCompatibilityApi(): void {
 }
 
 function mount(): void {
+  ensurePhaseBStyles();
   installCompatibilityApi();
   const mounted = mountReactIsland({
     containerId: "grcon-history-root",
