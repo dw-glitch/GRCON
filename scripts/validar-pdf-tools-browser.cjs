@@ -14,6 +14,27 @@ async function revealApp(page) {
   ].join("\n") });
 }
 
+async function waitForStableServiceWorkerPage(page) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+      await page.waitForFunction(() => Boolean(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 });
+      // grcon_service_worker.js recarrega a página em controllerchange. Só
+      // prossiga depois que esse primeiro reload automático tiver estabilizado.
+      await page.waitForTimeout(200);
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached|Timeout/i.test(message)) throw error;
+      await page.waitForTimeout(150);
+    }
+  }
+  throw lastError || new Error("Service Worker não estabilizou a página de Combinar PDFs.");
+}
+
 async function clickVisibleView(page, view) {
   await page.waitForFunction((wanted) => Array.from(document.querySelectorAll('[data-grcon-view="' + wanted + '"]')).some((node) => {
     const style = getComputedStyle(node);
@@ -51,6 +72,7 @@ async function openPdfTools(page) {
   try {
     const openStart = Date.now();
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await waitForStableServiceWorkerPage(page);
     await revealApp(page);
     await openPdfTools(page);
     const openModuleMs = Date.now() - openStart;
