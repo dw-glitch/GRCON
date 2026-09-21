@@ -1,0 +1,43 @@
+name: PDF Tools — baseline legado
+
+on:
+  push:
+    branches:
+      - "phase-a/pdf-tools-react"
+    paths:
+      - "scripts/medir-pdf-tools-baseline.cjs"
+      - ".github/workflows/pdf-tools-baseline.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: Chromium baseline legado
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Medir UI legada
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-pdf-baseline.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/medir-pdf-tools-baseline.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-tools-baseline
+          path: artifacts/pdf-tools-baseline/metrics.json
+          if-no-files-found: error
