@@ -762,6 +762,13 @@ html[data-theme="dark"] .pdf-merge-result {
   color: var(--success-100, #e6f5ed);
 }
 
+html[data-theme="dark"] .pdf-merge-privacy,
+html[data-theme="dark"] .pdf-merge-result-copy > span,
+html[data-theme="dark"] .pdf-merge-result strong,
+html[data-theme="dark"] .pdf-merge-result small {
+  color: var(--success-100, #e6f5ed);
+}
+
 @media (max-width: 61.25rem) {
   .pdf-merge-workspace {
     grid-template-columns: 1fr;
