@@ -121,6 +121,9 @@ export function useHistoricoAnalises() {
         setSessions(nextSessions);
         Adapter.updateExternalCount(nextSessions.length);
         setSavedFilters(Adapter.readSavedFilters());
+        setFilters((current) => current.sessionId && !nextSessions.some((session) => session.id === current.sessionId)
+          ? { ...current, sessionId: "" }
+          : current);
         void Adapter.storageLabel()
           .then((label) => { if (active) setStorageLabel(label); })
           .catch((error) => console.debug("[HistoricoAnalises/React] storage:", error));
