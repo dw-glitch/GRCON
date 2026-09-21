@@ -53,7 +53,18 @@ async function seed(page) {
     localStorage.setItem(window.GrconHistory.STORAGE_KEY, JSON.stringify(rows));
     window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { fixture: true } }));
   }, fixtures);
-  await page.waitForFunction(() => document.querySelector("#history-result-count")?.textContent?.includes("3 eGRDT"));
+  await page.evaluate(() => window.GrconHistoryUi?.render?.());
+  await page.waitForTimeout(250);
+  const observed = await page.evaluate(() => ({
+    stored: window.GrconHistory?.read?.().length || 0,
+    count: document.querySelector("#history-result-count")?.textContent || "",
+    summary: document.querySelector("#history-summary")?.textContent || "",
+    listCount: document.querySelectorAll("#history-list [data-history-id]").length,
+  }));
+  console.log("fixture-inicial", JSON.stringify(observed));
+  assert.equal(observed.stored, 3, "Core deve ler os 3 registros controlados.");
+  assert.match(observed.count, /^3 eGRDT/, "UI deve refletir os 3 registros iniciais.");
+  assert.equal(observed.listCount, 3, "Lista inicial deve renderizar A, B e C.");
 }
 
 (async () => {
@@ -74,7 +85,17 @@ async function seed(page) {
     await page.locator("#history-date-start").fill("2026-09-10");
     await page.locator("#history-date-end").fill("2026-09-20");
 
-    await page.waitForFunction(() => document.querySelector("#history-result-count")?.textContent?.startsWith("1 eGRDT"));
+    await page.waitForTimeout(250);
+    const afterDate = await page.evaluate(() => ({
+      count: document.querySelector("#history-result-count")?.textContent || "",
+      summary: document.querySelector("#history-summary")?.textContent || "",
+      filtered: Array.isArray(window.GrconHistoryUi?.state?.filtered)
+        ? window.GrconHistoryUi.state.filtered.map((item) => item.egrdtNumber)
+        : null,
+      selectedId: window.GrconHistoryUi?.state?.selectedId || "",
+    }));
+    console.log("fixture-intervalo", JSON.stringify(afterDate));
+    assert.match(afterDate.count, /^1 eGRDT/, "Contagem deve responder ao intervalo 10/09–20/09.");
     const listText = await page.locator("#history-list").innerText();
     assert.match(listText, /0130870-C1O-PGV-G-0002-2026/);
     assert.doesNotMatch(listText, /0130870-C1O-PGV-G-0001-2026/);
