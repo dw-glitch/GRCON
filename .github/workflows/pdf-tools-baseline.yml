@@ -23,6 +23,12 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Preservar medidor da branch
+        run: cp scripts/medir-pdf-tools-baseline.cjs "$RUNNER_TEMP/medir-pdf-tools-baseline.cjs"
+      - name: Voltar à baseline legada
+        run: git checkout --detach ea2d432542f026a0c6833ce68d329c48cf05ab12
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -35,10 +41,11 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Medir UI legada
         run: |
+          mkdir -p artifacts/pdf-tools-baseline
           python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-pdf-baseline.log" 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
-          node scripts/medir-pdf-tools-baseline.cjs
+          node "$RUNNER_TEMP/medir-pdf-tools-baseline.cjs"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
