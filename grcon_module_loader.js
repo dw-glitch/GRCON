@@ -213,6 +213,8 @@
   }
 
   function directActivate(view) {
+    if (view !== "pdf-tools") root.GrconPdfMergeUi?.deactivate?.();
+
     const modules = {
       control: "grdt-module",
       "analysis-history": "analysis-history-module",
