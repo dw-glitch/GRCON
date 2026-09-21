@@ -21,6 +21,12 @@ const BUILDS = {
     bundleName: "GrconPdfToolsBundle",
     emptyOutDir: false,
   },
+  "historico-egrdts": {
+    entry: "src/react/historico-egrdts/index.tsx",
+    fileName: "historico-egrdts-app.js",
+    bundleName: "GrconHistoricoEgrdtsBundle",
+    emptyOutDir: false,
+  },
 } as const;
 
 export default defineConfig(({ mode }) => {
