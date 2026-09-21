@@ -2,9 +2,9 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "4.2.0";
+  const VERSION = "4.1.1";
   const ENGINE = "official-video-v4";
-  const ASSET_REVISION = "20260918.4";
+  const ASSET_REVISION = "20260916.2";
   const STYLE_ID = "grcon-mascot-video-v4-style";
   const SELECTOR = ".grcon-brand-mascot, .grcon-mascot-context";
   const CSS_TARGET = ":is(.grcon-brand-mascot, .grcon-mascot-context)";
@@ -51,7 +51,6 @@
   let htmlObserver = null;
   let initialized = false;
   let operationActive = false;
-  let globalPlaybackSuppressed = false;
   let operationState = "";
   let pendingOutcome = "";
   let transientTimer = 0;
@@ -332,14 +331,6 @@
 
   function playForRecord(record, requestedState, options) {
     const state = normalizeState(requestedState);
-    const contextual = record.host.classList.contains("grcon-mascot-context");
-    if (globalPlaybackSuppressed && !contextual) {
-      hideVideo(record, true);
-      record.state = "idle";
-      record.host.dataset.grconMascotState = "idle";
-      if (!options?.skipPose) applyContextPose("idle");
-      return "idle";
-    }
     if (operationActive && (state === "welcome" || state === "hover")) return record.state;
     record.state = state;
     record.host.dataset.grconMascotState = state;
@@ -469,23 +460,6 @@
       playForRecord(record, normalized, options);
     });
     return normalized;
-  }
-
-  function setGlobalPlaybackSuppressed(value) {
-    globalPlaybackSuppressed = Boolean(value);
-    records.forEach((record) => {
-      if (record.host.classList.contains("grcon-mascot-context")) return;
-      if (globalPlaybackSuppressed) {
-        hideVideo(record, true);
-        record.state = "idle";
-        record.host.dataset.grconMascotState = "idle";
-      } else {
-        playForRecord(record, stateForHost(), { source: "contextual-scenario-release", skipPose: true });
-      }
-    });
-    if (globalPlaybackSuppressed) applyContextPose("idle");
-    log("global-playback-suppressed", { value: globalPlaybackSuppressed });
-    return globalPlaybackSuppressed;
   }
 
   function stop(target) {
@@ -627,7 +601,6 @@
       ready: initialized,
       reducedMotion: reducedMotion(),
       operationActive,
-      globalPlaybackSuppressed,
       operationState,
       appLocked: document.documentElement.classList.contains("grcon-cloud-pending"),
       greetingPlayedThisSession: Boolean((identity.userId || identity.email) && greetingAlreadyPlayed(identity.userId || identity.email)),
@@ -707,7 +680,6 @@
     play,
     setState: play,
     stop,
-    setGlobalPlaybackSuppressed,
     reset: () => play("idle", { source: "reset" }),
     refresh: () => refresh(document),
     begin: (state, task) => beginOperation({ state, task }),
