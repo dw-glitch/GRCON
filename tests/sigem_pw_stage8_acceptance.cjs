@@ -112,7 +112,7 @@ function validResult() {
   assert.match(app, /Readiness\(\)\.assess\(state, state\.aggregates\.all\)/);
   assert.match(app, /state\.result = state\.aggregates\[aggregateKey\]/);
   assert.match(app, /aria-live="polite"/);
-  assert.match(app, /data-status="attention"/);
+  assert.match(app, /data-status=\{assessment\.status\}/);
   assert.match(app, /data-edit-base-date="sigem"/);
   assert.match(app, /data-edit-base-date="pw"/);
   assert.match(app, /id="spw-date-input" type="datetime-local"/);
