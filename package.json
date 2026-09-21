@@ -28,7 +28,7 @@
     "check:dependencies": "node scripts/verificar-dependencias.mjs",
     "check:supabase": "node scripts/verificar-supabase.mjs",
     "typecheck": "tsc --noEmit",
-    "build": "vite build --mode consultas && vite build --mode historico-analises && vite build --mode historico-egrdt && vite build --mode pdf-tools",
+    "build": "vite build --mode consultas && vite build --mode historico-analises && vite build --mode historico-egrdt && vite build --mode pdf-tools && vite build --mode sigem-pw-dashboard",
     "verify": "npm run typecheck && npm run build && npm run check:syntax && npm run check:workers && npm run check:references && npm run check:versions && npm run check:dependencies && npm run check:supabase && npm test",
     "check:estabilidade": "node scripts/medir-estabilidade-visual.mjs"
   }

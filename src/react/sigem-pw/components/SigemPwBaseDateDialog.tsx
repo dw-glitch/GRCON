@@ -1,0 +1,8 @@
+import { useEffect, useRef } from "react";
+import type { SigemPwState } from "../types/domain";
+export function SigemPwBaseDateDialog({state,onClose,onChange,onSave}:{state:SigemPwState;onClose():void;onChange(value:string):void;onSave():void;}) {
+ const ref=useRef<HTMLDialogElement>(null),inputRef=useRef<HTMLInputElement>(null);
+ useEffect(()=>{const dialog=ref.current;if(!dialog)return;if(state.dateEditor.open&&!dialog.open){dialog.showModal?.();window.setTimeout(()=>inputRef.current?.focus(),0);}if(!state.dateEditor.open&&dialog.open)dialog.close();},[state.dateEditor.open]);
+ const system=state.dateEditor.system;
+ return <dialog ref={ref} className="spw-date-dialog" id="spw-date-dialog" onClose={onClose}><header className="spw-history-head"><div><span className="spw-kicker">DATA OPERACIONAL</span><h3 id="spw-date-title">Editar data da base {system==="sigem"?"SIGEM":"PW"}</h3></div><button className="secondary-button" id="spw-date-close" type="button" onClick={onClose}>Fechar</button></header><div className="spw-date-body"><label><span>Data e hora da base</span><input ref={inputRef} id="spw-date-input" type="datetime-local" required value={state.dateEditor.value} onChange={(event:React.ChangeEvent<HTMLInputElement>)=>onChange(event.target.value)}/></label><small>Esta é a data usada na evolução. A data técnica original da importação permanece preservada para auditoria.</small></div><div className="spw-date-actions"><button className="secondary-button" id="spw-date-cancel" type="button" onClick={onClose}>Cancelar</button><button className="primary-button" id="spw-date-save" type="button" disabled={state.busy} onClick={onSave}>Salvar data</button></div></dialog>;
+}
