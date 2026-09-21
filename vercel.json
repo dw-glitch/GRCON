@@ -4,6 +4,7 @@
   "buildCommand": "npm run build",
   "installCommand": "npm ci --ignore-scripts",
   "outputDirectory": ".",
+  "ignoreCommand": "[ \"$VERCEL_PROJECT_PRODUCTION_URL\" = \"grcon.vercel.app\" ]",
   "headers": [
     {
       "source": "/index.html",
