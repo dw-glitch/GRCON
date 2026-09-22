@@ -115,6 +115,11 @@ function sanitizeFilePart(value: string): string {
   return value.replace(/[<>:"/\\|?*\u0000-\u001F]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function blobFromBytes(bytes: Uint8Array, type: string): Blob {
+  const copy = Uint8Array.from(bytes);
+  return new Blob([copy.buffer], { type });
+}
+
 export function outputFileName(data: CoverDocumentData, kind: SourceDocumentKind): string {
   const title = sanitizeFilePart(data.title) || "DOCUMENTO";
   const code = sanitizeFilePart(data.documentNumber) || "SEM CODIGO";
@@ -188,7 +193,7 @@ async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promi
 
 export async function createCoverPreview(data: CoverDocumentData, totalPages: number): Promise<Blob> {
   const bytes = await buildCoverPdf(data, totalPages);
-  return new Blob([bytes], { type: "application/pdf" });
+  return blobFromBytes(bytes, "application/pdf");
 }
 
 export async function generatePdf(data: CoverDocumentData, source: SourceDocumentInfo): Promise<CoverGeneratedFile> {
@@ -203,7 +208,7 @@ export async function generatePdf(data: CoverDocumentData, source: SourceDocumen
   pages.forEach((page) => output.addPage(page));
   const bytes = await output.save();
   return {
-    blob: new Blob([bytes], { type: "application/pdf" }),
+    blob: blobFromBytes(bytes, "application/pdf"),
     fileName: outputFileName(data, "pdf"),
     kind: "pdf",
   };
@@ -506,7 +511,7 @@ export async function generateDocx(data: CoverDocumentData, source: SourceDocume
   if (source.kind !== "docx") throw new Error("Word editável é gerado apenas quando o documento de origem também é DOCX.");
   const bytes = await buildEditableDocx(data, source, totalPages);
   return {
-    blob: new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+    blob: blobFromBytes(bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
     fileName: outputFileName(data, "docx"),
     kind: "docx",
   };
