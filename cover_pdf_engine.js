@@ -91,7 +91,7 @@
       sourcePages = source.getPageCount();
       if (!sourcePages) throw new Error("O PDF de origem não possui páginas.");
     }
-    const totalPages = sourcePages + 1;
+    const totalPages = source ? sourcePages + 1 : Math.max(1, Number(options.totalPages) || 1);
     const coverDoc = await fillTemplate(options.templateBytes, options.data || {}, totalPages, pdfLib);
     const out = await pdfLib.PDFDocument.create({ updateMetadata: false });
     const coverPages = await out.copyPages(coverDoc, [0]); out.addPage(coverPages[0]);
