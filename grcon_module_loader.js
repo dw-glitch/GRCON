@@ -51,6 +51,8 @@
     // legado permanece fonte da verdade e pdf-lib só entra pelo Worker quando
     // o operador realmente inicia a combinação.
     "pdf-tools": ["pdf_merge_core.js", "react-dist/pdf-tools-app.js"],
+    // Capa oficial: LD + template local; nenhum documento deixa o navegador.
+    "cover-document": ["xlsx", "zip", "pdf-lib.min.js", "core.js", "react-dist/cover-document-app.js"],
   };
 
   const moduleRequirements = {
@@ -60,6 +62,7 @@
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsTaxonomy", "GrconRequestsUi", "GrconConsultasReact"],
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
+    "cover-document": ["GrconCoverDocumentUi"],
   };
 
   function scriptBasename(value) {
@@ -214,6 +217,7 @@
 
   function directActivate(view) {
     if (view !== "pdf-tools") root.GrconPdfMergeUi?.deactivate?.();
+    if (view !== "cover-document") root.GrconCoverDocumentUi?.deactivate?.();
 
     const modules = {
       control: "grdt-module",
@@ -223,6 +227,7 @@
       sigem: "sigem-module",
       requests: "requests-module",
       "pdf-tools": "pdf-tools-module",
+      "cover-document": "cover-document-module",
     };
     Object.entries(modules).forEach(([key, id]) => {
       const node = document.getElementById(id);
@@ -247,6 +252,7 @@
     dashboard: "Dashboard de emissões",
     sigem: "Postagem SIGEM",
     "pdf-tools": "Combinar PDFs",
+    "cover-document": "Adicionar Capa",
   };
 
   function rotularArea(view) {
@@ -272,6 +278,10 @@
     }
     if (module === "pdf-tools") {
       root.GrconPdfMergeUi?.activate?.();
+      return;
+    }
+    if (module === "cover-document") {
+      root.GrconCoverDocumentUi?.activate?.();
       return;
     }
     root.GrconHistoryUi?.activate?.(module);
