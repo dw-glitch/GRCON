@@ -5,6 +5,9 @@ on:
     paths:
       - "src/react/historico-egrdt/**"
       - "history-phase-b.css"
+      - "grcon_mascot_header.js"
+      - "scripts/validar-mascote-video-browser.cjs"
+      - "scripts/validar-sigem-pw-react-browser.cjs"
       - "history_core.js"
       - "history_report.js"
       - "egrdt_teams_notification_app.js"
@@ -93,6 +96,8 @@ jobs:
           node scripts/validar-consultas-browser.cjs
           node scripts/validar-historico-analises-browser.cjs
           node scripts/validar-pdf-tools-browser.cjs
+          node scripts/validar-sigem-pw-react-browser.cjs
+          node scripts/validar-mascote-video-browser.cjs
 
       - name: Publicar screenshots da FASE B
         if: always()
