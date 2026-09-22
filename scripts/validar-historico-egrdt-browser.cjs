@@ -256,8 +256,7 @@ async function setSharedHistoryFixture(page, enabled) {
     state.membership = shared
       ? { ...(window.__historyOriginalMembership || {}), workspace_id: "fixture-workspace" }
       : window.__historyOriginalMembership;
-    window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { sharedFixture: shared } }));
-    window.GrconHistoryUi?.render?.();
+    window.dispatchEvent(new CustomEvent("grcon:history-react-refresh", { detail: { sharedFixture: shared } }));
   }, enabled);
   await page.waitForTimeout(180);
 }
