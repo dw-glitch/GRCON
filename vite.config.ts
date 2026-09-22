@@ -39,12 +39,6 @@ const BUILDS = {
     bundleName: "GrconSigemPwDashboardBundle",
     emptyOutDir: false,
   },
-  cover: {
-    entry: "src/react/cover/index.tsx",
-    fileName: "cover-app.js",
-    bundleName: "GrconCoverBundle",
-    emptyOutDir: false,
-  },
 } as const;
 
 export default defineConfig(({ mode }) => {
