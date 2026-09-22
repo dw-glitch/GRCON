@@ -236,7 +236,7 @@ async function analyzeCurrentModel(force: boolean): Promise<RevisionAnalysis | n
     ensureExpandedRowStillVisible(result.rows);
     finishProgress();
     state.exportMessage = "";
-    if (window.console?.debug) console.debug("[SIGEM×PW][performance] revisão", result.metrics);
+    console.debug("[SIGEM×PW][performance] revisão", result.metrics);
     emit();
     return result;
   }).catch((error) => {
