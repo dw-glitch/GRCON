@@ -358,6 +358,7 @@ async function resetRevisionFilters(page) {
     const revisionActivationStart = Date.now();
     await installRevisionFixture(page, 250);
     metrics.revisionActivationMs = Date.now() - revisionActivationStart;
+    metrics.revisionAnalysisMs = await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysis?.metrics?.durationMs || 0);
     await resetRevisionFilters(page);
 
     const revisionSituationMap = await page.evaluate(() => {
@@ -395,8 +396,10 @@ async function resetRevisionFilters(page) {
     await page.screenshot({ path: path.join(outputDir, "02-revision-results-1366.png"), fullPage: true });
 
     // Cards continuam filtros e segundo clique volta ao default attention.
+    const revisionFilterStart = Date.now();
     await page.locator('[data-spw-rev-situation="updated"]').click();
     await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.filters.situation === "updated");
+    metrics.revisionFilterMs = Date.now() - revisionFilterStart;
     assert.equal(await page.locator('[data-spw-rev-situation="updated"]').getAttribute("aria-pressed"), "true");
     assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() >= 2);
     await page.locator('[data-spw-rev-situation="updated"]').click();
@@ -687,14 +690,22 @@ async function resetRevisionFilters(page) {
     }
 
     await page.setViewportSize({ width: 1366, height: 900 });
-    await page.evaluate(() => { window.__spwModelRef = window.GrconSigemPwDashboardUi.state.model; });
+    await page.evaluate(() => {
+      window.__spwModelRef = window.GrconSigemPwDashboardUi.state.model;
+      window.__revisionGenerationBeforeNavigation = window.GrconSigemPwRevisionUi.state.analysisGeneration;
+    });
     await clickView(page, "control");
     await clickSpw(page);
     assert.equal(await page.evaluate(() => window.__spwModelRef === window.GrconSigemPwDashboardUi.state.model), true, "reabertura não deve reconstruir modelo sem mudança");
     assert.equal(await page.locator("#grcon-sigem-pw-root").count(), 1);
+    assert.equal(await page.locator("#spw-revision-section").count(), 1, "navegação repetida deve manter uma única seção de Revisões");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration), await page.evaluate(() => window.__revisionGenerationBeforeNavigation), "reentrada não deve reanalisar o mesmo modelo");
     await clickView(page, "analysis-history");
     await clickSpw(page);
     assert.equal(await page.locator("#grcon-sigem-pw-root").count(), 1);
+    assert.equal(await page.locator("#spw-revision-section").count(), 1);
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration), await page.evaluate(() => window.__revisionGenerationBeforeNavigation));
+    assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwHistoryManagement && window.GrconSigemPwRevisionUi?.state?.analysis)), true, "History Management deve enxergar a facade React de Revisões");
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForStablePage(page);
