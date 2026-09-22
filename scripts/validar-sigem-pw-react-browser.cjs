@@ -464,7 +464,12 @@ async function resetRevisionFilters(page) {
     await page.waitForTimeout(230);
 
     // Lista colada continua interpretada exclusivamente pelo Core.filterRows().
-    await page.locator("#spw-rev-document-list").fill("PI-910001\nPI-910002, PI-910003;PI-910004");
+    await page.locator("#spw-rev-document-list").fill([
+      "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910001",
+      "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910002",
+      "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910003",
+      "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910004",
+    ].join("\n"));
     await page.waitForTimeout(230);
     assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 4);
     await page.locator("#spw-rev-document-list").fill("");
@@ -645,7 +650,13 @@ async function resetRevisionFilters(page) {
     await page.screenshot({ path: path.join(outputDir, "06-sigem-pw-history-dialog-1366.png"), fullPage: true });
     await page.locator("#spw-base-history-close").click();
 
+    const revisionGenerationBeforeReimport = await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration);
     await importFile(page, "#spw-pw-file", fixtures.pwFile);
+    await page.waitForFunction((before) => (
+      window.GrconSigemPwRevisionUi.state.analysisGeneration > before
+      && window.GrconSigemPwRevisionUi.state.modelRef === window.GrconSigemPwDashboardUi.state.model
+      && !window.GrconSigemPwRevisionUi.state.progress?.active
+    ), revisionGenerationBeforeReimport, { timeout: 30000 });
     await page.locator("#spw-history-open").click();
     await page.locator("#spw-base-history").waitFor({ state: "visible" });
     const pwRows = page.locator(".spw-history-row").filter({ hasText: "PW" });
