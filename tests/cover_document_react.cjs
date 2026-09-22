@@ -48,7 +48,7 @@ assert.match(app, /Processamento local/);
 assert.match(hook, /loadLdRecords/);
 assert.match(hook, /uniqueExactCandidate/);
 assert.match(hook, /createCoverPreview/);
-assert.match(hook, /generate\("pdf"\)/);
+assert.match(app, /cover\.generate\("pdf"\)/);
 assert.match(ld, /TriagemCore\.parseWorkbook/);
 assert.match(ld, /TAXONOMIA/);
 assert.match(ld, /EAP/);
