@@ -27,6 +27,12 @@ const BUILDS = {
     bundleName: "GrconPdfToolsBundle",
     emptyOutDir: false,
   },
+  "cover-document": {
+    entry: "src/react/cover-document/index.tsx",
+    fileName: "cover-document-app.js",
+    bundleName: "GrconCoverDocumentBundle",
+    emptyOutDir: false,
+  },
   "sigem-pw-dashboard": {
     entry: "src/react/sigem-pw/index.tsx",
     fileName: "sigem-pw-dashboard-app.js",
