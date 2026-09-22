@@ -343,6 +343,7 @@ async function exportFilteredRows(): Promise<number> {
 }
 
 async function syncAfterBaseEvent(event: Event): Promise<void> {
+  if (!state.active) return;
   try {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
     if (detail?.source !== "sigem-pw-dashboard" && window.GrconSigemPwDashboardUi?.refresh) {
