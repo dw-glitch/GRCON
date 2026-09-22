@@ -203,6 +203,14 @@ async function restoreRevisionModel(page) {
   });
 }
 
+async function setRevisionDocumentList(page, value) {
+  await page.locator("#spw-rev-document-list").evaluate((node, nextValue) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(node, nextValue);
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+  }, value);
+}
+
 async function resetRevisionFilters(page) {
   await page.locator("#spw-rev-filter-situation").selectOption("attention");
   await page.locator("#spw-rev-filter-class").selectOption("");
@@ -211,7 +219,7 @@ async function resetRevisionFilters(page) {
   await page.locator("#spw-rev-filter-sigem-status").selectOption("");
   await page.locator("#spw-rev-filter-pw-status").selectOption("");
   await page.locator("#spw-rev-search").fill("");
-  await page.locator("#spw-rev-document-list").fill("");
+  await setRevisionDocumentList(page, "");
   await page.waitForTimeout(230);
 }
 
@@ -464,7 +472,7 @@ async function resetRevisionFilters(page) {
     await page.waitForTimeout(230);
 
     // Lista colada continua interpretada exclusivamente pelo Core.filterRows().
-    await page.locator("#spw-rev-document-list").fill([
+    await setRevisionDocumentList(page, [
       "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910001",
       "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910002",
       "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910003",
@@ -472,7 +480,7 @@ async function resetRevisionFilters(page) {
     ].join("\n"));
     await page.waitForTimeout(230);
     assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 4);
-    await page.locator("#spw-rev-document-list").fill("");
+    await setRevisionDocumentList(page, "");
     await page.waitForTimeout(230);
 
     // Paginação: 250 documentos filtrados, 100 linhas por página.
