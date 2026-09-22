@@ -1,62 +1,62 @@
+import { UiMetaPill } from "../../core/ui/UiPrimitives";
 import { SigemPwRevisionCards } from "./components/SigemPwRevisionCards";
 import { SigemPwRevisionFilters } from "./components/SigemPwRevisionFilters";
 import { SigemPwRevisionPager } from "./components/SigemPwRevisionPager";
 import { SigemPwRevisionTable } from "./components/SigemPwRevisionTable";
 import { useSigemPwRevision } from "./hooks/useSigemPwRevision";
-import { REVISION_PAGE_SIZE } from "./types/domain";
 
 function fmt(value: number): string {
   return Number(value || 0).toLocaleString("pt-BR");
 }
 
-function ms(value: number): string {
-  return Number(value || 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-}
-
 function ExportIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24">
-      <path d="M12 3v12M7 10l5 5 5-5M5 20h14"></path>
+      <path d="M12 3v12M8 11l4 4 4-4M5 19h14"></path>
     </svg>
   );
 }
 
 export function SigemPwRevisionSection() {
   const { state, rows, pageData, options, adapter } = useSigemPwRevision();
-
-  if (!state.active) return null;
-
   const analysis = state.analysis;
-  const page = state.page;
-  const exportDisabled = !rows.length || state.exporting;
-  const exportTitle = !rows.length
-    ? "Nenhum documento disponível para exportação."
-    : state.exporting
-      ? "Aguarde a conclusão da exportação atual."
-      : `Exportar os ${fmt(rows.length)} documento(s) resultantes dos filtros atuais, em todas as páginas.`;
+  const progressPercent = state.progress.total > 0
+    ? Math.min(100, Math.max(0, (state.progress.done / state.progress.total) * 100))
+    : null;
 
   return (
-    <section id="spw-revision-section" aria-labelledby="spw-revision-title">
+    <section id="spw-revision-section" className="ui-panel spw-section-panel spw-revision-shell" aria-labelledby="spw-revision-title">
       <header className="spw-rev-head">
-        <div>
+        <div className="spw-rev-head-copy">
           <span className="spw-kicker">DETALHAMENTO OPERACIONAL</span>
-          <h3 id="spw-revision-title">Situação das Revisões</h3>
-          <p>Identifique documentos em que a revisão disponível ou emitida no ProjectWise ainda não acompanha a revisão encontrada no SIGEM.</p>
+          <div className="spw-rev-title-row">
+            <h3 id="spw-revision-title">Situação das Revisões</h3>
+            <button
+              className="spw-rev-help"
+              type="button"
+              aria-label="Ajuda sobre Situação das Revisões"
+              aria-describedby="spw-rev-help-copy"
+              title="Compara a revisão do SIGEM com as revisões localizadas no ProjectWise, sem alterar as regras do motor."
+            >
+              ?
+            </button>
+          </div>
+          <p>Compare a revisão encontrada no SIGEM com a situação atual no ProjectWise.</p>
+          <span className="spw-sr-only" id="spw-rev-help-copy">
+            A classificação e as contagens vêm do motor de revisões do SIGEM × ProjectWise.
+          </span>
         </div>
-        <button
-          type="button"
-          className="spw-rev-help"
-          title="Esta área compara a revisão encontrada no SIGEM com todas as revisões disponíveis no ProjectWise. Ela diferencia revisão anterior, documento não localizado e revisão correta cadastrada porém ainda sem emissão."
-          aria-label="Ajuda sobre a Situação das Revisões"
-        >
-          ⓘ
-        </button>
+        {analysis ? (
+          <UiMetaPill className="spw-rev-comparable">
+            <strong>{fmt(analysis.metrics.documentsCompared)}</strong> documentos comparáveis
+          </UiMetaPill>
+        ) : null}
       </header>
 
       {analysis ? (
         <SigemPwRevisionCards
-          counts={analysis.counts}
-          active={state.filters.situation}
+          analysis={analysis}
+          situation={state.filters.situation}
           onSelect={(value) => adapter.toggleSituation(value)}
         />
       ) : null}
@@ -68,66 +68,110 @@ export function SigemPwRevisionSection() {
           rawSearch={state.rawSearch}
           rawDocumentList={state.rawDocumentList}
           onFilter={(key, value) => adapter.setFilter(key, value)}
-          onSearch={(value) => adapter.setRawSearch(value)}
-          onDocumentList={(value) => adapter.setRawDocumentList(value)}
+          onRawSearch={(value) => adapter.setRawSearch(value)}
+          onRawDocumentList={(value) => adapter.setRawDocumentList(value)}
+          onClear={() => adapter.clearFilters()}
         />
 
         {analysis ? (
-          <div className="spw-rev-summary" id="spw-rev-summary">
-            <div className="spw-rev-summary-main">
+          <div className="spw-rev-summary">
+            <div className="spw-rev-summary-copy">
+              <strong>{fmt(rows.length)} documentos</strong>
               <span>
-                <strong>{fmt(rows.length)}</strong> documento(s) no filtro · mostrando {rows.length ? fmt(pageData.start + 1) : 0}–{fmt(Math.min(pageData.start + REVISION_PAGE_SIZE, rows.length))}
+                {rows.length
+                  ? "Mostrando " + fmt(pageData.start + 1) + "–" + fmt(Math.min(pageData.start + pageData.visible.length, rows.length))
+                  : "Nenhum item visível"}
+                {" · "}Análise {analysis.metrics.durationMs.toFixed(1)} ms
+                {" · "}{fmt(analysis.metrics.documentsCompared)} comparáveis
+              </span>
+            </div>
+            <div className="spw-rev-summary-actions">
+              <span
+                className={"spw-rev-export-feedback " + state.exportMessageKind}
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                {state.exportMessage}
               </span>
               <button
-                className="secondary-button compact spw-rev-export"
+                className="secondary-button spw-rev-export"
                 type="button"
                 data-spw-rev-export
-                disabled={exportDisabled}
-                title={exportTitle}
-                aria-label="Exportar lista filtrada para Excel"
+                disabled={state.exporting || rows.length === 0}
                 onClick={() => { void adapter.exportFilteredRows(); }}
+                aria-label="Exportar lista filtrada para Excel"
+                title="Exportar lista filtrada completa, incluindo todas as páginas"
               >
                 <ExportIcon />
-                <span>{state.exporting ? "Gerando Excel..." : "Exportar lista filtrada"}</span>
+                <span>{state.exporting ? "Gerando Excel..." : "Exportar Excel"}</span>
               </button>
-              {state.exportMessage ? (
-                <span className={`spw-rev-export-feedback ${state.exportMessageKind}`} aria-live="polite">
-                  {state.exportMessage}
-                </span>
-              ) : null}
             </div>
-            <span>Análise: {ms(analysis.metrics.durationMs)} ms · {fmt(analysis.metrics.documentsCompared)} documentos comparáveis</span>
           </div>
         ) : null}
 
-        <div className="spw-rev-table-wrap" id="spw-rev-table-wrap">
+        <div className="spw-rev-scroll-hint" aria-hidden="true">
+          <span>Deslize horizontalmente para ver todas as colunas</span>
+          <b>→</b>
+        </div>
+
+        <div
+          className="spw-rev-table-wrap"
+          id="spw-rev-table-wrap"
+          tabIndex={0}
+          aria-label="Tabela da Situação das Revisões. A tabela possui rolagem horizontal local quando necessário."
+        >
           {state.progress.active ? (
-            <div className="spw-rev-empty" role="status" aria-live="polite">
-              <strong>Comparando revisões SIGEM × PW...</strong>
-              <br />
-              <span id="spw-rev-progress-count">{state.progress.message || "Preparando índices já carregados."}</span>
+            <div className="spw-rev-processing" role="status" aria-live="polite">
+              <div className="spw-rev-processing-copy">
+                <span className="spw-rev-processing-icon" aria-hidden="true"></span>
+                <div>
+                  <strong>Comparando revisões SIGEM × PW...</strong>
+                  <span id="spw-rev-progress-count">{state.progress.message || "Preparando análise..."}</span>
+                </div>
+              </div>
+              {progressPercent !== null ? (
+                <div
+                  className="spw-rev-progress-track"
+                  role="progressbar"
+                  aria-label="Progresso da comparação de revisões"
+                  aria-valuemin={0}
+                  aria-valuemax={state.progress.total}
+                  aria-valuenow={state.progress.done}
+                >
+                  <i style={{ width: progressPercent + "%" }}></i>
+                </div>
+              ) : null}
             </div>
           ) : !analysis ? (
-            <div className="spw-rev-empty">
-              <strong>Carregue as bases para analisar as revisões.</strong>
+            <div className="spw-rev-empty spw-rev-empty-bases">
+              <div>
+                <strong>Bases necessárias</strong>
+                <span>Carregue as bases para analisar as revisões.</span>
+              </div>
             </div>
           ) : (
             <SigemPwRevisionTable
               rows={pageData.visible}
               expandedKey={state.expandedKey}
+              onToggle={(key) => adapter.toggleExpanded(key)}
+              histories={(row) => adapter.histories(row)}
               situationLabel={(value) => adapter.situationLabel(value)}
               situationClass={(value) => adapter.situationClass(value)}
-              historyForRow={(row) => adapter.histories(row)}
-              onToggleDetail={(key) => adapter.toggleExpanded(key)}
             />
           )}
         </div>
 
-        {analysis && !state.progress.active ? (
-          <SigemPwRevisionPager page={page} pages={pageData.pages} onPage={(value) => adapter.setPage(value)} />
-        ) : (
-          <div className="spw-rev-pages" id="spw-rev-pages"></div>
-        )}
+        {analysis && rows.length ? (
+          <SigemPwRevisionPager
+            page={state.page}
+            pages={pageData.pages}
+            total={rows.length}
+            start={pageData.start}
+            pageSize={100}
+            onPage={(page) => adapter.setPage(page)}
+          />
+        ) : null}
       </div>
     </section>
   );

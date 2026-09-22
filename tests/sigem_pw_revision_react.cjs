@@ -33,6 +33,11 @@ assert.match(section, /Situação das Revisões/);
 assert.match(section, /Carregue as bases para analisar as revisões/);
 assert.match(section, /Comparando revisões SIGEM × PW/);
 assert.match(section, /Exportar lista filtrada/);
+assert.match(section, /Exportar Excel/);
+assert.match(section, /documentos comparáveis/);
+assert.match(section, /Compare a revisão encontrada no SIGEM com a situação atual no ProjectWise/);
+assert.match(section, /role="progressbar"/);
+assert.match(section, /Deslize horizontalmente para ver todas as colunas/);
 assert.match(section, /aria-live="polite"/);
 
 assert.match(hook, /useSyncExternalStore/);
@@ -67,6 +72,10 @@ assert.match(adapter, /documentList:\s*state\.rawDocumentList/);
 assert.match(adapter, /GRCONModuleLoader\.ensure\("report"\)/);
 assert.match(adapter, /sigem_pw_revision_report\.js/);
 assert.match(adapter, /buildWorkbook/);
+assert.match(adapter, /function clearFilters\(\)/);
+assert.match(adapter, /state\.filters\s*=\s*EMPTY_REVISION_FILTERS\(\)/);
+assert.match(adapter, /state\.rawSearch\s*=\s*""/);
+assert.match(adapter, /state\.rawDocumentList\s*=\s*""/);
 
 assert.match(cards, /Atualizados/);
 assert.match(cards, /PW em revisão anterior/);
@@ -84,6 +93,10 @@ assert.match(filters, /spw-rev-filter-sigem-status/);
 assert.match(filters, /spw-rev-filter-pw-status/);
 assert.match(filters, /spw-rev-search/);
 assert.match(filters, /spw-rev-document-list/);
+assert.match(filters, /Mais filtros/);
+assert.match(filters, /Pesquisa em lote/);
+assert.match(filters, /Limpar filtros/);
+assert.match(filters, /<details className="spw-rev-advanced">/);
 
 [
   "Documento", "Classe", "Rev. SIGEM", "Status SIGEM", "Rev. PW",
@@ -104,6 +117,8 @@ assert.ok(table.includes("Critério"));
 assert.match(pager, /Anterior/);
 assert.match(pager, /Página/);
 assert.match(pager, /Próxima/);
+assert.match(pager, /start/);
+assert.match(pager, /pageSize/);
 
 const reactUi = [section, hook, cards, filters, table, pager].join("\n");
 assert.doesNotMatch(reactUi, /dangerouslySetInnerHTML/);
@@ -128,8 +143,14 @@ assert.match(css, /#spw-revision-section/);
 assert.match(css, /@media\(max-width:1250px\)/);
 assert.match(css, /@media\(max-width:850px\)/);
 assert.match(css, /@media\(max-width:560px\)/);
+assert.match(css, /grid-template-columns:\s*repeat\(5/);
+assert.match(css, /spw-rev-advanced/);
+assert.match(css, /spw-rev-scroll-hint/);
+assert.match(css, /spw-rev-progress-track/);
+assert.match(css, /\[data-theme="dark"\]/);
 
 assert.match(sw, /sigem-pw-revision\.css/);
+assert.match(sw, /phase-b-sigem-pw-revision-ui1/);
 assert.doesNotMatch(sw, /"sigem_pw_revision_section\.js"/);
 
 console.log("sigem_pw_revision_react: OK — React/TS, hook, adapter, facade, deferred, paginação e lazy report validados.");

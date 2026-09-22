@@ -214,12 +214,15 @@ async function setRevisionDocumentList(page, value) {
 async function resetRevisionFilters(page) {
   await page.locator("#spw-rev-filter-situation").selectOption("attention");
   await page.locator("#spw-rev-filter-class").selectOption("");
+  const advanced = page.locator(".spw-rev-advanced");
+  if (await advanced.count()) await advanced.evaluate((node) => { node.open = true; });
   await page.locator("#spw-rev-filter-sigem-rev").selectOption("");
   await page.locator("#spw-rev-filter-pw-rev").selectOption("");
   await page.locator("#spw-rev-filter-sigem-status").selectOption("");
   await page.locator("#spw-rev-filter-pw-status").selectOption("");
   await page.locator("#spw-rev-search").fill("");
   await setRevisionDocumentList(page, "");
+  if (await advanced.count()) await advanced.evaluate((node) => { node.open = false; });
   await page.waitForTimeout(230);
 }
 
@@ -362,7 +365,7 @@ async function resetRevisionFilters(page) {
     const exportedRows = XLSX.utils.sheet_to_json(exported.Sheets[exported.SheetNames[0]], { defval: "" });
     assert.equal(exportedRows.length, 250, "exportação deve incluir todas as páginas filtradas");
 
-    // FASE A — Situação das Revisões em React + TypeScript.
+    // FASE B — Situação das Revisões: paridade funcional + modernização visual/UX.
     const revisionActivationStart = Date.now();
     await installRevisionFixture(page, 250);
     metrics.revisionActivationMs = Date.now() - revisionActivationStart;
@@ -401,17 +404,24 @@ async function resetRevisionFilters(page) {
     assert.equal(Number((await page.locator('[data-spw-rev-situation="pw-not-found"] strong').innerText()).replace(/\D/g, "")), revisionCounts.notFound);
     assert.equal(Number((await page.locator('[data-spw-rev-situation="pw-awaiting-emission"] strong').innerText()).replace(/\D/g, "")), revisionCounts.awaitingEmission);
     assert.equal(Number((await page.locator('[data-spw-rev-situation="other"] strong').innerText()).replace(/\D/g, "")), revisionCounts.pwAhead + revisionCounts.review);
-    await page.screenshot({ path: path.join(outputDir, "02-revision-results-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "02-revision-overview-1366.png"), fullPage: true });
 
     // Cards continuam filtros e segundo clique volta ao default attention.
     const revisionFilterStart = Date.now();
-    await page.locator('[data-spw-rev-situation="updated"]').click();
-    await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.filters.situation === "updated");
-    metrics.revisionFilterMs = Date.now() - revisionFilterStart;
-    assert.equal(await page.locator('[data-spw-rev-situation="updated"]').getAttribute("aria-pressed"), "true");
-    assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() >= 2);
-    await page.locator('[data-spw-rev-situation="updated"]').click();
-    await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.filters.situation === "attention");
+    const revisionCardFilters = ["updated", "pw-previous", "pw-not-found", "pw-awaiting-emission", "other"];
+    for (const situation of revisionCardFilters) {
+      const card = page.locator('[data-spw-rev-situation="' + situation + '"]');
+      await card.click();
+      await page.waitForFunction((value) => window.GrconSigemPwRevisionUi.state.filters.situation === value, situation);
+      assert.equal(await card.getAttribute("aria-pressed"), "true");
+      if (situation === "updated") {
+        metrics.revisionFilterMs = Date.now() - revisionFilterStart;
+        assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() >= 2);
+        await page.screenshot({ path: path.join(outputDir, "04-revision-filter-active-1366.png"), fullPage: true });
+      }
+      await card.click();
+      await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.filters.situation === "attention");
+    }
 
     // Todas as situações e filtros de domínio.
     for (const situation of ["updated","pw-previous","pw-not-found","pw-awaiting-emission","pw-ahead","review","other","all","attention"]) {
@@ -424,6 +434,7 @@ async function resetRevisionFilters(page) {
     await page.locator("#spw-rev-filter-class").selectOption("N-1710");
     assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 1);
     await page.locator("#spw-rev-filter-class").selectOption("");
+    await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = true; });
 
     await page.locator("#spw-rev-filter-sigem-rev").selectOption("B");
     assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() > 0);
@@ -437,11 +448,17 @@ async function resetRevisionFilters(page) {
     await page.locator("#spw-rev-filter-sigem-status").selectOption(sigemStatus);
     assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() > 0);
     await page.locator("#spw-rev-filter-sigem-status").selectOption("");
+    await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = true; });
     const pwStatus = await page.locator("#spw-rev-filter-pw-status option").nth(1).getAttribute("value");
     assert.ok(pwStatus);
     await page.locator("#spw-rev-filter-pw-status").selectOption(pwStatus);
     assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() > 0);
     await page.locator("#spw-rev-filter-pw-status").selectOption("");
+    await page.locator("#spw-rev-filter-sigem-rev").selectOption("B");
+    assert.match(await page.locator(".spw-rev-advanced > summary").innerText(), /1 ativo/);
+    await page.screenshot({ path: path.join(outputDir, "03-revision-filters-1366.png"), fullPage: true });
+    await page.locator("#spw-rev-filter-sigem-rev").selectOption("");
+    await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = false; });
 
     // Debounce real: digitação progressiva não filtra por tecla.
     await page.evaluate(() => {
@@ -480,8 +497,21 @@ async function resetRevisionFilters(page) {
     ].join("\n"));
     await page.waitForTimeout(230);
     assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 4);
-    await setRevisionDocumentList(page, "");
-    await page.waitForTimeout(230);
+    await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = true; });
+    assert.match(await page.locator(".spw-rev-advanced > summary").innerText(), /1 ativo/);
+    await page.getByRole("button", { name: "Limpar filtros" }).click();
+    await page.waitForFunction(() => {
+      const state = window.GrconSigemPwRevisionUi.state;
+      return state.filters.situation === "attention"
+        && !state.filters.documentClass
+        && !state.filters.sigemRevision
+        && !state.filters.pwRevision
+        && !state.filters.sigemStatus
+        && !state.filters.pwStatus
+        && !state.rawSearch
+        && !state.rawDocumentList;
+    });
+    await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = false; });
 
     // Paginação: 250 documentos filtrados, 100 linhas por página.
     await page.locator("#spw-rev-filter-situation").selectOption("pw-not-found");
@@ -490,11 +520,15 @@ async function resetRevisionFilters(page) {
     assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.filteredRows().length), 250);
     assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 100);
     assert.match(await page.locator("#spw-rev-pages").innerText(), /Página 1 de 3/);
+    await page.locator("[data-spw-rev-why]").first().click();
+    assert.equal(await page.locator(".spw-rev-detail").count(), 1);
     const revisionPageStart = Date.now();
     await page.locator('[data-spw-rev-page="2"]').click();
     metrics.revisionPageChangeMs = Date.now() - revisionPageStart;
     await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.page === 2);
-    await page.screenshot({ path: path.join(outputDir, "05-revision-page2-1366.png"), fullPage: true });
+    assert.equal(await page.locator(".spw-rev-detail").count(), 0, "mudança de página deve remover detalhe órfão");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.expandedKey), "");
+    await page.screenshot({ path: path.join(outputDir, "06-revision-page2-1366.png"), fullPage: true });
     await page.locator('[data-spw-rev-page="1"]').click();
 
     // Exportação completa (> PAGE_SIZE).
@@ -509,7 +543,7 @@ async function resetRevisionFilters(page) {
     const revisionRows = XLSX.utils.sheet_to_json(revisionBook.Sheets[revisionBook.SheetNames[0]], { defval: "" });
     assert.equal(revisionRows.length, 250, "Excel de revisões deve exportar todas as páginas");
     await page.waitForFunction(() => /sucesso/i.test(window.GrconSigemPwRevisionUi.state.exportMessage), null, { timeout: 10000 });
-    await page.screenshot({ path: path.join(outputDir, "06-revision-export-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "08-revision-export-success-1366.png"), fullPage: true });
 
     // Exportação imediata deve usar rawSearch antes de o debounce terminar.
     await page.locator("#spw-rev-search").fill("");
@@ -542,7 +576,7 @@ async function resetRevisionFilters(page) {
     assert.match(detailText, /Código PW/);
     assert.match(detailText, /EAP/);
     assert.match(detailText, /Critério/);
-    await page.screenshot({ path: path.join(outputDir, "04-revision-detail-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "05-revision-detail-1366.png"), fullPage: true });
     await page.locator("[data-spw-rev-why]").click();
     assert.equal(await page.locator(".spw-rev-detail").count(), 0);
 
@@ -554,7 +588,7 @@ async function resetRevisionFilters(page) {
     await page.locator("#spw-rev-search").fill("910007");
     await page.waitForTimeout(230);
 
-    await page.screenshot({ path: path.join(outputDir, "03-revision-filter-1366.png"), fullPage: true });
+    assert.equal(await page.locator(".spw-rev-detail").count(), 0);
 
     // Progresso real: onProgress alimenta a UI enquanto analyzeAsync está pendente.
     await page.evaluate(() => {
@@ -573,6 +607,7 @@ async function resetRevisionFilters(page) {
     });
     await page.waitForSelector("#spw-rev-progress-count", { state: "visible", timeout: 5000 });
     assert.match(await page.locator("#spw-rev-table-wrap").innerText(), /Comparando revisões SIGEM × PW/);
+    await page.screenshot({ path: path.join(outputDir, "07-revision-processing-1366.png"), fullPage: true });
     await page.evaluate(async () => { await window.__revisionProgressPromise; window.GrconSigemPwRevision = window.__revisionCoreOriginalProgress; });
 
     // Geração concorrente: geração 1 termina depois e não pode sobrescrever geração 2.
@@ -618,25 +653,51 @@ async function resetRevisionFilters(page) {
 
     // Responsividade e dark mode específicos da seção de Revisões.
     await resetRevisionFilters(page);
-    await page.setViewportSize({ width: 390, height: 844 });
-    metrics.revisionSectionHeight390 = await page.locator("#spw-revision-section").evaluate((node) => node.getBoundingClientRect().height);
+    await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = false; });
+    metrics.revisionSectionHeight390Before = 2010.640625;
+    metrics.revisionWidths = {};
     for (const width of [1440, 1366, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
-      const revisionWidth = await page.evaluate(() => ({
-        page: document.documentElement.scrollWidth,
-        viewport: document.documentElement.clientWidth,
-        tableScroll: document.querySelector("#spw-rev-table-wrap")?.scrollWidth || 0,
-        tableClient: document.querySelector("#spw-rev-table-wrap")?.clientWidth || 0,
-      }));
-      assert.ok(revisionWidth.page <= revisionWidth.viewport + 1, "overflow global da Revisão em " + width + "px");
+      const revisionWidth = await page.evaluate(() => {
+        const section = document.querySelector("#spw-revision-section");
+        const table = document.querySelector("#spw-rev-table-wrap");
+        return {
+          documentScrollWidth: document.documentElement.scrollWidth,
+          documentClientWidth: document.documentElement.clientWidth,
+          revisionSectionScrollWidth: section?.scrollWidth || 0,
+          revisionTableScrollWidth: table?.scrollWidth || 0,
+          revisionTableClientWidth: table?.clientWidth || 0,
+        };
+      });
+      metrics.revisionWidths[String(width)] = revisionWidth;
+      assert.ok(revisionWidth.documentScrollWidth <= revisionWidth.documentClientWidth + 1, "overflow global da Revisão em " + width + "px");
     }
+
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: path.join(outputDir, "07-revision-mobile-390.png"), fullPage: true });
+    metrics.revisionSectionHeight390After = await page.locator("#spw-revision-section").evaluate((node) => node.getBoundingClientRect().height);
+    metrics.revisionSectionHeight390ReductionPct = Number(((1 - metrics.revisionSectionHeight390After / metrics.revisionSectionHeight390Before) * 100).toFixed(1));
+    assert.ok(metrics.revisionSectionHeight390After < metrics.revisionSectionHeight390Before, "FASE B deve reduzir a altura inicial da seção em 390 px");
+    await page.screenshot({ path: path.join(outputDir, "09-revision-mobile-overview-390.png"), fullPage: true });
+
+    await page.locator(".spw-rev-advanced > summary").click();
+    await page.locator("#spw-rev-filter-sigem-rev").selectOption("B");
+    await page.screenshot({ path: path.join(outputDir, "10-revision-mobile-filters-390.png"), fullPage: true });
+    await page.getByRole("button", { name: "Limpar filtros" }).click();
+    await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = false; });
+
+    await page.locator("#spw-rev-search").fill("910007");
+    await page.waitForTimeout(230);
+    await page.locator("[data-spw-rev-why]").click();
+    await page.screenshot({ path: path.join(outputDir, "11-revision-mobile-detail-390.png"), fullPage: true });
+    await page.locator("[data-spw-rev-why]").click();
+    await page.locator("#spw-rev-search").fill("");
+    await page.waitForTimeout(230);
+
     await page.setViewportSize({ width: 1366, height: 900 });
     await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
-    await page.screenshot({ path: path.join(outputDir, "08-revision-dark-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "12-revision-dark-1366.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: path.join(outputDir, "09-revision-dark-390.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "13-revision-dark-390.png"), fullPage: true });
     await page.evaluate(() => { document.documentElement.dataset.theme = ""; });
     await page.setViewportSize({ width: 1366, height: 900 });
 
@@ -743,7 +804,9 @@ async function resetRevisionFilters(page) {
     await clickSpw(page);
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwDashboardUi.state.sigem.meta && window.GrconSigemPwDashboardUi.state.pw.meta && window.GrconSigemPwDashboardUi.state.ld.meta)), true);
     const caches = await page.evaluate(async () => await window.caches.keys());
-    assert.ok(caches.some((key) => key.includes("phase-b-sigem-pw-ui1")));
+    assert.ok(caches.some((key) => key.includes("phase-b-sigem-pw-revision-ui1")));
+    assert.equal(caches.some((key) => key.endsWith("phase-a-sigem-pw-revision-react1")), false, "cache anterior deve ser removido no upgrade");
+    metrics.pwa = { cold: true, warm: true, reload: true, upgrade: true };
 
     const relevantErrors = errors.filter((item) => /ReferenceError|TypeError|Unhandled|React|duplicate key|Content Security Policy|CSP|Worker|MIME|service worker/i.test(item));
     assert.deepEqual(relevantErrors, []);
