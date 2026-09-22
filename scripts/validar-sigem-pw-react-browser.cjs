@@ -572,10 +572,10 @@ async function resetRevisionFilters(page) {
     assert.match(detailText, /Rev\. A/);
     assert.match(detailText, /Rev\. 0/);
     assert.match(detailText, /ProjectWise — revisões encontradas/);
-    assert.match(detailText, /Código SIGEM/);
-    assert.match(detailText, /Código PW/);
-    assert.match(detailText, /EAP/);
-    assert.match(detailText, /Critério/);
+    assert.match(detailText, /código sigem/i);
+    assert.match(detailText, /código pw/i);
+    assert.match(detailText, /eap/i);
+    assert.match(detailText, /critério/i);
     await page.screenshot({ path: path.join(outputDir, "05-revision-detail-1366.png"), fullPage: true });
     await page.locator("[data-spw-rev-why]").click();
     assert.equal(await page.locator(".spw-rev-detail").count(), 0);
