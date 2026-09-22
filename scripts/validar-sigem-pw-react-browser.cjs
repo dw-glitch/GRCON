@@ -151,6 +151,70 @@ async function clickView(page, view) {
   assert.equal(ok, true, `navegação ${view} deve existir`);
 }
 
+async function installRevisionFixture(page, bulkCount = 250) {
+  await page.evaluate(({ count }) => {
+    const dashboard = window.GrconSigemPwDashboard;
+    const dashboardUi = window.GrconSigemPwDashboardUi;
+    if (!dashboard?.createModel || !dashboardUi?.state || !window.GrconSigemPwRevisionUi) throw new Error("runtime de Revisões indisponível");
+
+    if (!Object.prototype.hasOwnProperty.call(window, "__revisionOriginalDashboardModel")) {
+      window.__revisionOriginalDashboardModel = dashboardUi.state.model;
+    }
+
+    const sigemDoc = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
+    const pwDoc = (id) => `C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-${id}`;
+    const sigem = [];
+    const pw = [];
+    const addS = (id, revision, status = "Em Workflow") => sigem.push({ document: sigemDoc(id), revision, status });
+    const addP = (id, revision, state = "Liberado", lastEmission = "Sim") => pw.push({ document: pwDoc(id), revision, revisionComplete: revision, state, lastEmission });
+
+    addS("910001", "B"); addP("910001", "B");
+    addS("910002", "B"); addP("910002", "A");
+    addS("910003", "B");
+    addS("910004", "B"); addP("910004", "A"); addP("910004", "B", "Cadastrado", "Previsto");
+    addS("910005", "A"); addP("910005", "A"); addP("910005", "B");
+    addS("910006", "P1"); addP("910006", "P2", "Cadastrado", "Previsto");
+    addS("910007", "0", "Recusado"); addS("910007", "A", "Com Comentários"); addS("910007", "B");
+    addP("910007", "0", "Superado", "Não"); addP("910007", "A");
+
+    const n1710 = "RL-5290.00-22313-ABC-C1O-777";
+    sigem.push({ document: n1710, revision: "0", status: "Postado" });
+    pw.push({ document: n1710, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Sim" });
+
+    for (let index = 0; index < count; index += 1) {
+      addS(String(920000 + index).padStart(6, "0"), "B");
+    }
+
+    const model = dashboard.createModel(sigem, pw);
+    window.__revisionControlledModel = model;
+    dashboardUi.state.model = model;
+  }, { count: bulkCount });
+  await page.evaluate(async () => { await window.GrconSigemPwRevisionUi.refresh(); });
+  await page.waitForFunction(() => Boolean(window.GrconSigemPwRevisionUi?.state?.analysis) && !window.GrconSigemPwRevisionUi.state.progress?.active, null, { timeout: 30000 });
+}
+
+async function restoreRevisionModel(page) {
+  await page.evaluate(async () => {
+    if (!window.GrconSigemPwDashboardUi?.state || !window.GrconSigemPwRevisionUi) return;
+    if (Object.prototype.hasOwnProperty.call(window, "__revisionOriginalDashboardModel")) {
+      window.GrconSigemPwDashboardUi.state.model = window.__revisionOriginalDashboardModel;
+      await window.GrconSigemPwRevisionUi.refresh();
+    }
+  });
+}
+
+async function resetRevisionFilters(page) {
+  await page.locator("#spw-rev-filter-situation").selectOption("attention");
+  await page.locator("#spw-rev-filter-class").selectOption("");
+  await page.locator("#spw-rev-filter-sigem-rev").selectOption("");
+  await page.locator("#spw-rev-filter-pw-rev").selectOption("");
+  await page.locator("#spw-rev-filter-sigem-status").selectOption("");
+  await page.locator("#spw-rev-filter-pw-status").selectOption("");
+  await page.locator("#spw-rev-search").fill("");
+  await page.locator("#spw-rev-document-list").fill("");
+  await page.waitForTimeout(230);
+}
+
 (async () => {
   const fixtures = writeFixtures();
   const browser = await chromium.launch({ headless: true });
