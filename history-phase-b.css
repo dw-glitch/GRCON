@@ -9,19 +9,39 @@ html[data-app="GRCON"] .history-module .history-phase-b {
 
 html[data-app="GRCON"] .history-module .history-phase-b-heading {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "header manage mascot";
+  align-items: start;
+  column-gap: clamp(.75rem, 1.2vw, 1rem);
+  row-gap: .5rem;
   min-width: 0;
   margin: 0;
+  overflow: visible;
 }
 
 html[data-app="GRCON"] .history-module .history-phase-b-heading > .ui-page-header {
-  padding-right: 11.5rem;
+  grid-area: header;
+  min-width: 0;
+  padding-right: 0;
 }
 
 html[data-app="GRCON"] .history-module .history-manage {
-  position: absolute;
-  top: .15rem;
-  right: 0;
+  grid-area: manage;
+  position: relative;
+  inset: auto;
   z-index: 22;
+  align-self: start;
+  justify-self: end;
+  min-width: 0;
+}
+
+html[data-app="GRCON"] .history-module .history-phase-b-heading > .grcon-mascot-context {
+  grid-area: mascot;
+  align-self: start;
+  justify-self: end;
+  margin-inline-start: 0;
+  pointer-events: none;
 }
 
 html[data-app="GRCON"] .history-module .history-manage > summary {
@@ -1139,22 +1159,43 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
 }
 
 @media (max-width: 48rem) {
+  html[data-app="GRCON"] .history-module .history-phase-b-heading,
+  html[data-app="GRCON"] .history-module .history-phase-b-heading.grcon-mascot-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "header header"
+      "manage mascot";
+    align-items: start;
+  }
+
   html[data-app="GRCON"] .history-module .history-phase-b-heading > .ui-page-header {
+    grid-area: header;
     padding-right: 0;
   }
 
   html[data-app="GRCON"] .history-module .history-manage {
+    grid-area: manage;
     position: relative;
-    top: auto;
-    right: auto;
-    display: flex;
-    justify-content: flex-start;
-    margin-top: .15rem;
+    inset: auto;
+    display: block;
+    width: min(20rem, 100%);
+    justify-self: start;
+    margin-top: 0;
   }
 
   html[data-app="GRCON"] .history-module .history-manage-menu {
-    left: 0;
+    position: static;
+    left: auto;
     right: auto;
+    width: 100%;
+    margin-top: .35rem;
+  }
+
+  html[data-app="GRCON"] .history-module .history-phase-b-heading > .grcon-mascot-context {
+    grid-area: mascot;
+    align-self: start;
+    justify-self: end;
+    margin-inline-start: 0;
   }
 
   html[data-app="GRCON"] .history-module .history-main-filters {
@@ -1342,6 +1383,34 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
 
   html[data-app="GRCON"] .history-module .history-detail-table {
     max-height: 25rem;
+  }
+}
+
+@media (max-width: 30rem) {
+  html[data-app="GRCON"] .history-module .history-phase-b-heading,
+  html[data-app="GRCON"] .history-module .history-phase-b-heading.grcon-mascot-heading {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "manage"
+      "mascot";
+  }
+
+  html[data-app="GRCON"] .history-module .history-manage {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  html[data-app="GRCON"] .history-module .history-manage > summary {
+    width: fit-content;
+  }
+
+  html[data-app="GRCON"] .history-module .history-manage-menu {
+    width: min(20rem, 100%);
+  }
+
+  html[data-app="GRCON"] .history-module .history-phase-b-heading > .grcon-mascot-context {
+    justify-self: end;
   }
 }
 
