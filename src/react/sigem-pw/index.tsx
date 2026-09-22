@@ -1,6 +1,7 @@
 import { SigemPwDashboardApp } from "./SigemPwDashboardApp";
 import { sigemPwDashboardAdapter } from "./services/sigemPwDashboardAdapter";
 import { mountReactIsland } from "../core/mount/mountReactIsland";
+import { sigemPwRevisionAdapter } from "./revision/services/sigemPwRevisionAdapter";
 
 function ensureStyles(): void {
   if (document.head.querySelector('link[data-grcon-sigem-pw="true"]')) return;
@@ -9,6 +10,13 @@ function ensureStyles(): void {
   link.href = "sigem-pw-dashboard.css";
   link.dataset.grconSigemPw = "true";
   document.head.appendChild(link);
+  if (!document.head.querySelector('link[data-grcon-sigem-pw-revision="true"]')) {
+    const revisionLink = document.createElement("link");
+    revisionLink.rel = "stylesheet";
+    revisionLink.href = "sigem-pw-revision.css";
+    revisionLink.dataset.grconSigemPwRevision = "true";
+    document.head.appendChild(revisionLink);
+  }
 }
 
 function installCompatibilityApi(): void {
@@ -17,6 +25,13 @@ function installCompatibilityApi(): void {
     refresh: (reason?: string) => sigemPwDashboardAdapter.refresh(reason),
     clearPreStage7BasesOnce: () => sigemPwDashboardAdapter.clearPreStage7BasesOnce(),
     state: sigemPwDashboardAdapter.state,
+  });
+  window.GrconSigemPwRevisionUi = Object.freeze({
+    activate: () => sigemPwRevisionAdapter.activate(),
+    refresh: () => sigemPwRevisionAdapter.refresh(),
+    state: sigemPwRevisionAdapter.state,
+    filteredRows: () => sigemPwRevisionAdapter.filteredRows(),
+    exportFilteredRows: () => sigemPwRevisionAdapter.exportFilteredRows(),
   });
 }
 
