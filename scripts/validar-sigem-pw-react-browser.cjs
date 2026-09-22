@@ -617,6 +617,9 @@ async function resetRevisionFilters(page) {
     });
 
     // Responsividade e dark mode específicos da seção de Revisões.
+    await resetRevisionFilters(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    metrics.revisionSectionHeight390 = await page.locator("#spw-revision-section").evaluate((node) => node.getBoundingClientRect().height);
     for (const width of [1440, 1366, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: 900 });
       const revisionWidth = await page.evaluate(() => ({

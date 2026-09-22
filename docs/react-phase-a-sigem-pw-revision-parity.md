@@ -2,6 +2,8 @@
 
 Baseline: `main` após o hardening do Histórico de eGRDTs, merge `dc498be38bb86abfc6b1b82226405fbeaf70775e`.
 
+Consolidação verificada em `9fbf7b7be2c5cb1762b75f3a3ba0e40094a54f90` / PR #125. O workflow **SIGEM × PW — Revisões React FASE A** (`35742269130`) concluiu com sucesso typecheck, build, testes estruturais e críticos, `npm test`, `npm run verify`, Chromium, screenshots, métricas, regressões, exportação e PWA. Os itens abaixo foram marcados somente após confrontar código final, facade, Core, testes e esse artefato remoto.
+
 ## Escopo
 
 Migrar somente a UI legada `sigem_pw_revision_section.js` para React + TypeScript, preservando o Core `sigem_pw_revision_core.js`, o relatório lazy `sigem_pw_revision_report.js`, Histórico/Evolução legados e todos os contratos públicos existentes.
@@ -37,174 +39,174 @@ A seção permanece na mesma React root `#grcon-sigem-pw-root`. Não existe segu
 ## Inventário de paridade
 
 ### Cabeçalho e ajuda
-- [ ] kicker `DETALHAMENTO OPERACIONAL`
-- [ ] título `Situação das Revisões`
-- [ ] descrição atual preservada
-- [ ] botão/ajuda `ⓘ` com o texto atual
+- [x] kicker `DETALHAMENTO OPERACIONAL`
+- [x] título `Situação das Revisões`
+- [x] descrição atual preservada
+- [x] botão/ajuda `ⓘ` com o texto atual
 
 ### Cinco cards
-- [ ] Atualizados
-- [ ] PW em revisão anterior
-- [ ] Não localizados no PW
-- [ ] Aguardando emissão no PW
-- [ ] Outras divergências = `pwAhead + review`
-- [ ] counts vêm de `analysis.counts`
-- [ ] clique filtra
-- [ ] segundo clique retorna para `attention`
-- [ ] `aria-pressed` reflete o estado ativo
+- [x] Atualizados
+- [x] PW em revisão anterior
+- [x] Não localizados no PW
+- [x] Aguardando emissão no PW
+- [x] Outras divergências = `pwAhead + review`
+- [x] counts vêm de `analysis.counts`
+- [x] clique filtra
+- [x] segundo clique retorna para `attention`
+- [x] `aria-pressed` reflete o estado ativo
 
 ### Situações disponíveis no filtro
-- [ ] Precisam de atenção
-- [ ] Todos
-- [ ] Não localizado no PW
-- [ ] PW em revisão anterior
-- [ ] Aguardando emissão
-- [ ] Atualizado
-- [ ] Outras divergências
-- [ ] PW em revisão posterior
-- [ ] Requer análise
+- [x] Precisam de atenção
+- [x] Todos
+- [x] Não localizado no PW
+- [x] PW em revisão anterior
+- [x] Aguardando emissão
+- [x] Atualizado
+- [x] Outras divergências
+- [x] PW em revisão posterior
+- [x] Requer análise
 
 ### Filtros
-- [ ] Situação
-- [ ] Classe
-- [ ] Rev. SIGEM
-- [ ] Rev. PW
-- [ ] Status SIGEM
-- [ ] Status PW
-- [ ] Pesquisar documento
-- [ ] Lista de documentos
-- [ ] classe limitada a ET / N-1710
-- [ ] opções de revisão ordenadas por `Core.rank()`
-- [ ] status derivados da análise real
-- [ ] filtros novos resetam `page = 1`
+- [x] Situação
+- [x] Classe
+- [x] Rev. SIGEM
+- [x] Rev. PW
+- [x] Status SIGEM
+- [x] Status PW
+- [x] Pesquisar documento
+- [x] Lista de documentos
+- [x] classe limitada a ET / N-1710
+- [x] opções de revisão ordenadas por `Core.rank()`
+- [x] status derivados da análise real
+- [x] filtros novos resetam `page = 1`
 
 ### Busca / lista
-- [ ] busca textual com debounce real de ~180 ms
-- [ ] texto cru separado do texto debounced
-- [ ] lista aceita linha, vírgula, ponto e vírgula, pipe e tab via `Core.filterRows()`
-- [ ] React não reimplementa o parser
-- [ ] exportação imediata usa texto cru atual, mesmo antes do debounce
+- [x] busca textual com debounce real de ~180 ms
+- [x] texto cru separado do texto debounced
+- [x] lista aceita linha, vírgula, ponto e vírgula, pipe e tab via `Core.filterRows()`
+- [x] React não reimplementa o parser
+- [x] exportação imediata usa texto cru atual, mesmo antes do debounce
 
 ### Análise
-- [ ] fonte do modelo = `GrconSigemPwDashboardUi.state.model`
-- [ ] referência do modelo, sem deep clone
-- [ ] `GrconSigemPwRevision.analyzeAsync()`
-- [ ] `chunkSize: 350`
-- [ ] `analysisGeneration`
-- [ ] `isCurrent(generation)`
-- [ ] progresso real `done / total`
-- [ ] resultado antigo nunca substitui nova geração
-- [ ] ativação deferred, depois da primeira pintura do Dashboard
-- [ ] reentrada com mesmo modelo não reanalisa sem necessidade
+- [x] fonte do modelo = `GrconSigemPwDashboardUi.state.model`
+- [x] referência do modelo, sem deep clone
+- [x] `GrconSigemPwRevision.analyzeAsync()`
+- [x] `chunkSize: 350`
+- [x] `analysisGeneration`
+- [x] `isCurrent(generation)`
+- [x] progresso real `done / total`
+- [x] resultado antigo nunca substitui nova geração
+- [x] ativação deferred, depois da primeira pintura do Dashboard
+- [x] reentrada com mesmo modelo não reanalisa sem necessidade
 
 ### Core preservado
 React não reimplementa:
-- [ ] comparação/rank de revisões
-- [ ] identidade documental
-- [ ] matching SIGEM × PW
-- [ ] situação
-- [ ] reason
-- [ ] contagens
-- [ ] parser de lista
-- [ ] históricos SIGEM/PW
+- [x] comparação/rank de revisões
+- [x] identidade documental
+- [x] matching SIGEM × PW
+- [x] situação
+- [x] reason
+- [x] contagens
+- [x] parser de lista
+- [x] históricos SIGEM/PW
 
 APIs usadas:
-- [ ] `analyzeAsync`
-- [ ] `filterRows`
-- [ ] `historyForRows`
-- [ ] `rank`
-- [ ] `SITUATIONS`
-- [ ] `LABELS`
+- [x] `analyzeAsync`
+- [x] `filterRows`
+- [x] `historyForRows`
+- [x] `rank`
+- [x] `SITUATIONS`
+- [x] `LABELS`
 
 ### Resumo
-- [ ] número total filtrado
-- [ ] faixa X–Y
-- [ ] duração da análise
-- [ ] documentos comparáveis
-- [ ] feedback de exportação com `aria-live`
+- [x] número total filtrado
+- [x] faixa X–Y
+- [x] duração da análise
+- [x] documentos comparáveis
+- [x] feedback de exportação com `aria-live`
 
 ### Tabela
 Colunas preservadas:
-- [ ] Documento
-- [ ] Classe
-- [ ] Rev. SIGEM
-- [ ] Status SIGEM
-- [ ] Rev. PW
-- [ ] Status PW
-- [ ] Última emissão PW
-- [ ] Situação
-- [ ] Detalhes
+- [x] Documento
+- [x] Classe
+- [x] Rev. SIGEM
+- [x] Status SIGEM
+- [x] Rev. PW
+- [x] Status PW
+- [x] Última emissão PW
+- [x] Situação
+- [x] Detalhes
 
 ### Detalhe “Por quê?”
-- [ ] `expandedKey`
-- [ ] Fechar/Por quê?
-- [ ] SIGEM — revisões encontradas
-- [ ] ProjectWise — revisões encontradas
-- [ ] `Core.historyForRows()`
-- [ ] reason
-- [ ] Código SIGEM
-- [ ] Código PW
-- [ ] EAP
-- [ ] Tipo
-- [ ] Revisão SIGEM
-- [ ] Revisões PW
-- [ ] Critério
-- [ ] filtro/página que remove a linha limpa detalhe órfão
+- [x] `expandedKey`
+- [x] Fechar/Por quê?
+- [x] SIGEM — revisões encontradas
+- [x] ProjectWise — revisões encontradas
+- [x] `Core.historyForRows()`
+- [x] reason
+- [x] Código SIGEM
+- [x] Código PW
+- [x] EAP
+- [x] Tipo
+- [x] Revisão SIGEM
+- [x] Revisões PW
+- [x] Critério
+- [x] filtro/página que remove a linha limpa detalhe órfão
 
 ### Paginação
-- [ ] `PAGE_SIZE = 100`
-- [ ] Anterior
-- [ ] Página X de Y
-- [ ] Próxima
-- [ ] `filteredRows()` retorna todas as páginas
-- [ ] tabela renderiza somente a página atual
+- [x] `PAGE_SIZE = 100`
+- [x] Anterior
+- [x] Página X de Y
+- [x] Próxima
+- [x] `filteredRows()` retorna todas as páginas
+- [x] tabela renderiza somente a página atual
 
 ### Estado vazio / progresso
-- [ ] sem modelo: `Carregue as bases para analisar as revisões.`
-- [ ] modelo + filtro zero: `Nenhum documento corresponde aos filtros atuais.`
-- [ ] progresso: `Comparando revisões SIGEM × PW...`
-- [ ] progresso: `X de Y documentos processados`
+- [x] sem modelo: `Carregue as bases para analisar as revisões.`
+- [x] modelo + filtro zero: `Nenhum documento corresponde aos filtros atuais.`
+- [x] progresso: `Comparando revisões SIGEM × PW...`
+- [x] progresso: `X de Y documentos processados`
 
 ### Exportação
-- [ ] ação `Exportar lista filtrada`
-- [ ] lazy `GRCONModuleLoader.ensure("report")`
-- [ ] lazy `sigem_pw_revision_report.js`
-- [ ] `buildWorkbook()`
-- [ ] todas as linhas filtradas, não só a página
-- [ ] texto cru atual respeitado antes de 180 ms
-- [ ] `Gerando Excel...`
-- [ ] sucesso com quantidade
-- [ ] erro visível
-- [ ] XLSX/ExcelJS/report fora do bundle React inicial
+- [x] ação `Exportar lista filtrada`
+- [x] lazy `GRCONModuleLoader.ensure("report")`
+- [x] lazy `sigem_pw_revision_report.js`
+- [x] `buildWorkbook()`
+- [x] todas as linhas filtradas, não só a página
+- [x] texto cru atual respeitado antes de 180 ms
+- [x] `Gerando Excel...`
+- [x] sucesso com quantidade
+- [x] erro visível
+- [x] XLSX/ExcelJS/report fora do bundle React inicial
 
 ### Eventos / refresh
-- [ ] `grcon:conference-updated`
-- [ ] `grcon:pw-base-updated`
-- [ ] ignorar refresh duplicado quando `detail.source === "sigem-pw-dashboard"`
-- [ ] para atualização externa: Dashboard refresh antes da revisão
-- [ ] listeners registrados uma vez e removidos no cleanup
-- [ ] sem loop Dashboard → revisão → Dashboard
+- [x] `grcon:conference-updated`
+- [x] `grcon:pw-base-updated`
+- [x] ignorar refresh duplicado quando `detail.source === "sigem-pw-dashboard"`
+- [x] para atualização externa: Dashboard refresh antes da revisão
+- [x] listeners registrados uma vez e removidos no cleanup
+- [x] sem loop Dashboard → revisão → Dashboard
 
 ### Facade pública
 Preservar:
-- [ ] `GrconSigemPwRevisionUi.activate()`
-- [ ] `GrconSigemPwRevisionUi.refresh()`
-- [ ] `GrconSigemPwRevisionUi.state`
-- [ ] `GrconSigemPwRevisionUi.state.analysis`
-- [ ] `GrconSigemPwRevisionUi.filteredRows()`
-- [ ] `GrconSigemPwRevisionUi.exportFilteredRows()`
+- [x] `GrconSigemPwRevisionUi.activate()`
+- [x] `GrconSigemPwRevisionUi.refresh()`
+- [x] `GrconSigemPwRevisionUi.state`
+- [x] `GrconSigemPwRevisionUi.state.analysis`
+- [x] `GrconSigemPwRevisionUi.filteredRows()`
+- [x] `GrconSigemPwRevisionUi.exportFilteredRows()`
 
 Estado de compatibilidade a manter vivo:
-- [ ] `modelRef`
-- [ ] `analysis`
-- [ ] `analysisGeneration`
-- [ ] `filters`
-- [ ] `page`
-- [ ] `expandedKey`
-- [ ] `searchTimer` compatível como `null`/handle interno
-- [ ] `exporting`
-- [ ] `exportMessage`
-- [ ] `exportMessageKind`
+- [x] `modelRef`
+- [x] `analysis`
+- [x] `analysisGeneration`
+- [x] `filters`
+- [x] `page`
+- [x] `expandedKey`
+- [x] `searchTimer` compatível como `null`/handle interno
+- [x] `exporting`
+- [x] `exportMessage`
+- [x] `exportMessageKind`
 
 ## Consumidores reais encontrados
 
@@ -219,29 +221,29 @@ Não foi encontrado outro consumidor direto de `GrconSigemPwRevisionUi.state` no
 
 ## CSS / visual
 
-- [ ] extrair CSS de `ensureStyle()` para `sigem-pw-revision.css`
-- [ ] preservar classes `.spw-rev-*`
-- [ ] preservar breakpoints equivalentes a 1250 / 850 / 560
-- [ ] preservar dark mode existente por tokens
-- [ ] manter correções locais do `sigem_pw_dashboard_ui_audit.js`
-- [ ] sem redesign FASE B
+- [x] extrair CSS de `ensureStyle()` para `sigem-pw-revision.css`
+- [x] preservar classes `.spw-rev-*`
+- [x] preservar breakpoints equivalentes a 1250 / 850 / 560
+- [x] preservar dark mode existente por tokens
+- [x] manter correções locais do `sigem_pw_dashboard_ui_audit.js`
+- [x] sem redesign FASE B
 
 ## Bootstrap / runtime
 
-- [ ] `sigem_pw_dashboard_bootstrap.js` deixa de carregar `sigem_pw_revision_section.js`
-- [ ] continua chamando `RevisionUi.activate()` somente após `afterFirstPaint()`
-- [ ] `sigem_pw_revision_core.js` continua carregado antes do History Core
-- [ ] History/Evolution continuam legados
-- [ ] `sigem_pw_revision_section.js` removido somente após a nova implementação e testes estruturais existirem
+- [x] `sigem_pw_dashboard_bootstrap.js` deixa de carregar `sigem_pw_revision_section.js`
+- [x] continua chamando `RevisionUi.activate()` somente após `afterFirstPaint()`
+- [x] `sigem_pw_revision_core.js` continua carregado antes do History Core
+- [x] History/Evolution continuam legados
+- [x] `sigem_pw_revision_section.js` removido somente após a nova implementação e testes estruturais existirem
 
 ## PWA / bundle
 
-- [ ] remover `sigem_pw_revision_section.js` do precache
-- [ ] adicionar `sigem-pw-revision.css`
-- [ ] renovar versão do cache
-- [ ] `sigem_pw_revision_core.js` permanece
-- [ ] `sigem_pw_revision_report.js` permanece lazy
-- [ ] bundle não contém ExcelJS/XLSX/report
+- [x] remover `sigem_pw_revision_section.js` do precache
+- [x] adicionar `sigem-pw-revision.css`
+- [x] renovar versão do cache
+- [x] `sigem_pw_revision_core.js` permanece
+- [x] `sigem_pw_revision_report.js` permanece lazy
+- [x] bundle não contém ExcelJS/XLSX/report
 
 ## Critério de aceite
 
