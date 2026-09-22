@@ -22,7 +22,7 @@ self.addEventListener("message", async (event) => {
         self.postMessage({ type: "progress", jobId, stage: "source" });
         sourceBytes = await msg.file.arrayBuffer();
       }
-      const result = await self.GrconCoverPdfEngine.generate({ templateBytes: tpl, sourceBytes, data: msg.data, pdfLib: self.PDFLib });
+      const result = await self.GrconCoverPdfEngine.generate({ templateBytes: tpl, sourceBytes, data: msg.data, totalPages: msg.totalPages, pdfLib: self.PDFLib });
       self.postMessage({ type: msg.type === "preview" ? "previewed" : "generated", jobId, ...result }, [result.bytes.buffer]);
       return;
     }
