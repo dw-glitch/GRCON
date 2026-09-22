@@ -10,6 +10,7 @@ import { SigemPwPager } from "./components/SigemPwPager";
 import { SigemPwBaseHistoryDialog } from "./components/SigemPwBaseHistoryDialog";
 import { SigemPwBaseDateDialog } from "./components/SigemPwBaseDateDialog";
 import { useSigemPwDashboard } from "./hooks/useSigemPwDashboard";
+import { SigemPwRevisionSection } from "./revision/SigemPwRevisionSection";
 import { SIGEM_PW_LISTS, SIGEM_PW_PAGE_SIZE, type SigemPwDocumentClass, type SigemPwListKey } from "./types/domain";
 
 function fmt(value: number): string {
@@ -121,6 +122,8 @@ export function SigemPwDashboardApp() {
           onPage={(page) => adapter.setPage(page)}
         />
       </UiPanel>
+
+      <SigemPwRevisionSection />
 
       <SigemPwBaseHistoryDialog
         state={state}
