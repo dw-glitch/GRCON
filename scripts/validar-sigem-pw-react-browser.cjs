@@ -546,6 +546,14 @@ async function resetRevisionFilters(page) {
     await page.locator("[data-spw-rev-why]").click();
     assert.equal(await page.locator(".spw-rev-detail").count(), 0);
 
+    await page.locator("[data-spw-rev-why]").click();
+    await page.locator("#spw-rev-search").fill("910002");
+    await page.waitForTimeout(230);
+    assert.equal(await page.locator(".spw-rev-detail").count(), 0, "filtro que remove a linha expandida deve remover o detalhe");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.expandedKey), "", "expandedKey não pode ficar órfão");
+    await page.locator("#spw-rev-search").fill("910007");
+    await page.waitForTimeout(230);
+
     await page.screenshot({ path: path.join(outputDir, "03-revision-filter-1366.png"), fullPage: true });
 
     // Progresso real: onProgress alimenta a UI enquanto analyzeAsync está pendente.
