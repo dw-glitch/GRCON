@@ -118,6 +118,17 @@ function setFilter<K extends keyof RevisionFilters>(key: K, value: RevisionFilte
   updateFilters({ [key]: value } as Pick<RevisionFilters, K>);
 }
 
+function clearFilters(): void {
+  state.filters = EMPTY_REVISION_FILTERS();
+  state.rawSearch = "";
+  state.rawDocumentList = "";
+  state.page = 1;
+  state.expandedKey = "";
+  state.exportMessage = "";
+  state.exportMessageKind = "info";
+  emit();
+}
+
 function setRawSearch(value: string): void {
   state.rawSearch = value;
   emit();
@@ -384,6 +395,7 @@ export const sigemPwRevisionAdapter = {
   situationClass,
   setPage,
   setFilter,
+  clearFilters,
   setRawSearch,
   applySearch,
   setRawDocumentList,

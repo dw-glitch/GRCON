@@ -1,46 +1,49 @@
 import type { RevisionHistoryItem, RevisionRow } from "../types/domain";
 
-function HistoryItems({ items, kind }: { items: RevisionHistoryItem[]; kind: "sigem" | "pw" }) {
-  if (!items.length) return <span>Sem histórico disponível</span>;
+function HistoryItems({ items, pw }: { items: RevisionHistoryItem[]; pw?: boolean }) {
+  if (!items.length) return <span className="spw-rev-history-empty">Nenhuma revisão localizada.</span>;
   return (
-    <>
+    <div className="spw-rev-history">
       {items.map((item, index) => (
-        <span key={`${item.revision}-${item.sourceRow || index}`}>
-          Rev. {item.revision} · {item.status || "sem status"}{kind === "pw" ? ` · ${item.emitted ? "emitida" : "não emitida"}` : ""}
+        <span className="spw-rev-history-pill" key={String(item.revision) + "-" + index}>
+          <b>Rev. {item.revision || "—"}</b>
+          <small>{item.status || "sem status"}{pw ? (item.emitted ? " · emitida" : " · não emitida") : ""}</small>
         </span>
       ))}
-    </>
+    </div>
   );
 }
 
-function RevisionDetail({ row, histories }: {
+function DetailRow({ row, histories }: {
   row: RevisionRow;
-  histories: { sigem: RevisionHistoryItem[]; pw: RevisionHistoryItem[] };
+  histories: (row: RevisionRow) => { sigem: RevisionHistoryItem[]; pw: RevisionHistoryItem[] };
 }) {
+  const history = histories(row);
+  const pwRevisions = history.pw.map((item) => item.revision).filter(Boolean).join(", ") || "—";
   return (
     <tr className="spw-rev-detail">
       <td colSpan={9}>
         <div className="spw-rev-detail-grid">
           <section>
             <strong>SIGEM — revisões encontradas</strong>
-            <div className="spw-rev-history"><HistoryItems items={histories.sigem} kind="sigem" /></div>
+            <HistoryItems items={history.sigem} />
           </section>
           <section>
             <strong>ProjectWise — revisões encontradas</strong>
-            <div className="spw-rev-history"><HistoryItems items={histories.pw} kind="pw" /></div>
+            <HistoryItems items={history.pw} pw />
           </section>
-          <section>
+          <section className="spw-rev-diagnostic">
             <strong>Por que esta situação?</strong>
-            <p className="spw-rev-reason">{row.reason}</p>
-            <p className="spw-rev-reason spw-rev-reason-meta">
-              Código SIGEM: {row.sigemCode}
-              {row.pwCode ? <><br />Código PW: {row.pwCode}</> : null}
-              {row.eap ? <><br />EAP: {row.eap}</> : null}
-              {row.documentType ? <><br />Tipo: {row.documentType}</> : null}
-              <br />Revisão SIGEM: {row.sigemRevision}
-              <br />Revisões PW: {histories.pw.map((item) => item.revision).join(", ") || "nenhuma"}
-              <br />Critério: identidade documental e comparador de revisões do GRCON.
-            </p>
+            <p className="spw-rev-reason">{row.reason || "Sem diagnóstico adicional."}</p>
+            <dl className="spw-rev-reason-meta">
+              <div><dt>Código SIGEM</dt><dd>{row.sigemCode || row.document || "—"}</dd></div>
+              <div><dt>Código PW</dt><dd>{row.pwCode || "—"}</dd></div>
+              <div><dt>EAP</dt><dd>{row.eap || "—"}</dd></div>
+              <div><dt>Tipo</dt><dd>{row.documentType || "—"}</dd></div>
+              <div><dt>Revisão SIGEM</dt><dd>{row.sigemRevision || "—"}</dd></div>
+              <div><dt>Revisões PW</dt><dd>{pwRevisions}</dd></div>
+              <div><dt>Critério</dt><dd>documento + revisão</dd></div>
+            </dl>
           </section>
         </div>
       </td>
@@ -48,27 +51,39 @@ function RevisionDetail({ row, histories }: {
   );
 }
 
+function valueOrDash(value: string): string {
+  return value || "—";
+}
+
 export function SigemPwRevisionTable({
   rows,
   expandedKey,
+  onToggle,
+  histories,
   situationLabel,
   situationClass,
-  historyForRow,
-  onToggleDetail,
 }: {
   rows: RevisionRow[];
   expandedKey: string;
+  onToggle(key: string): void;
+  histories(row: RevisionRow): { sigem: RevisionHistoryItem[]; pw: RevisionHistoryItem[] };
   situationLabel(value: string): string;
   situationClass(value: string): string;
-  historyForRow(row: RevisionRow): { sigem: RevisionHistoryItem[]; pw: RevisionHistoryItem[] };
-  onToggleDetail(key: string): void;
 }) {
   if (!rows.length) {
-    return <div className="spw-rev-empty"><strong>Nenhum documento corresponde aos filtros atuais.</strong></div>;
+    return (
+      <div className="spw-rev-empty spw-rev-empty-filter">
+        <div>
+          <strong>Nenhum resultado</strong>
+          <span>Nenhum documento corresponde aos filtros atuais.</span>
+        </div>
+      </div>
+    );
   }
 
   return (
     <table className="spw-rev-table">
+      <caption>Situação das Revisões SIGEM × ProjectWise</caption>
       <thead>
         <tr>
           <th>Documento</th>
@@ -84,17 +99,47 @@ export function SigemPwRevisionTable({
       </thead>
       <tbody>
         {rows.map((row) => {
-          const expanded = expandedKey === row.key;
+          const expanded = row.key === expandedKey;
+          const sigemRevision = valueOrDash(row.sigemRevision);
+          const pwRevision = valueOrDash(row.pwRevision);
           return (
-            <RevisionRows
-              key={row.key}
-              row={row}
-              expanded={expanded}
-              situationLabel={situationLabel}
-              situationClass={situationClass}
-              histories={expanded ? historyForRow(row) : null}
-              onToggle={() => onToggleDetail(row.key)}
-            />
+            <FragmentRow key={row.key}>
+              <tr>
+                <td className="spw-rev-doc" title={row.document}><strong>{row.document}</strong></td>
+                <td><span className="spw-rev-class">{row.documentClass || "—"}</span></td>
+                <td><span className="spw-rev-revision">{sigemRevision}</span></td>
+                <td><span className="spw-rev-status" title={row.sigemStatus || ""}>{valueOrDash(row.sigemStatus)}</span></td>
+                <td><span className="spw-rev-revision">{pwRevision}</span></td>
+                <td><span className="spw-rev-status" title={row.pwStatus || ""}>{valueOrDash(row.pwStatus)}</span></td>
+                <td>
+                  <span className="spw-rev-emission">
+                    {row.lastEmittedPwRevision ? "Rev. " + row.lastEmittedPwRevision : "—"}
+                  </span>
+                </td>
+                <td>
+                  <div className="spw-rev-situation-cell">
+                    <span className="spw-rev-flow" aria-label={"SIGEM " + sigemRevision + " para PW " + pwRevision}>
+                      <small>SIGEM</small><b>{sigemRevision}</b><i aria-hidden="true">→</i><small>PW</small><b>{pwRevision}</b>
+                    </span>
+                    <span className={"spw-rev-situation " + situationClass(row.situation)}>
+                      {situationLabel(row.situation)}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="spw-rev-why"
+                    data-spw-rev-why
+                    aria-expanded={expanded}
+                    onClick={() => onToggle(row.key)}
+                  >
+                    {expanded ? "Fechar" : "Por quê?"}
+                  </button>
+                </td>
+              </tr>
+              {expanded ? <DetailRow row={row} histories={histories} /> : null}
+            </FragmentRow>
           );
         })}
       </tbody>
@@ -102,50 +147,6 @@ export function SigemPwRevisionTable({
   );
 }
 
-function RevisionRows({
-  row,
-  expanded,
-  situationLabel,
-  situationClass,
-  histories,
-  onToggle,
-}: {
-  row: RevisionRow;
-  expanded: boolean;
-  situationLabel(value: string): string;
-  situationClass(value: string): string;
-  histories: { sigem: RevisionHistoryItem[]; pw: RevisionHistoryItem[] } | null;
-  onToggle(): void;
-}) {
-  const lastEmission = row.lastEmittedPwRevision !== "" ? `Rev. ${row.lastEmittedPwRevision}` : "—";
-  return (
-    <>
-      <tr>
-        <td className="spw-rev-doc" title={row.document}><strong>{row.document}</strong></td>
-        <td>{row.documentClass}</td>
-        <td>{row.sigemRevision}</td>
-        <td>{row.sigemStatus || "—"}</td>
-        <td>{row.pwRevision !== "" ? row.pwRevision : "—"}</td>
-        <td>{row.pwStatus || "—"}</td>
-        <td>{lastEmission}</td>
-        <td>
-          <span className="spw-rev-flow">{row.sigemRevision} → {row.pwRevision !== "" ? row.pwRevision : "—"}</span>
-          <br />
-          <span className={`spw-rev-situation ${situationClass(row.situation)}`}>{situationLabel(row.situation)}</span>
-        </td>
-        <td>
-          <button
-            type="button"
-            className="spw-rev-why"
-            data-spw-rev-why={row.key}
-            aria-expanded={expanded}
-            onClick={onToggle}
-          >
-            {expanded ? "Fechar" : "Por quê?"}
-          </button>
-        </td>
-      </tr>
-      {expanded && histories ? <RevisionDetail row={row} histories={histories} /> : null}
-    </>
-  );
+function FragmentRow({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
