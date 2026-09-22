@@ -23,6 +23,7 @@
 <link href="react-ui.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="requests-phase-b.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="pdf-merge.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
+<link href="cover-tool.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="cover-document.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="analysis-history.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="analysis-history-phase-b.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
@@ -63,6 +64,9 @@
 <button class="ops-nav-button" data-grcon-view="pdf-tools" type="button">
 <svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v12H5zM14 3v4h4"></path><path d="M9 11h5M9 15h5M19 10h2v11H8v-2"></path></svg><span><strong>Combinar PDFs</strong></span>
 </button>
+<button class="ops-nav-button" data-grcon-view="cover" type="button">
+<svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v14H5zM14 3v4h4M8 12h8M8 16h5"></path><path d="M17 11l3 3-3 3"></path></svg><span><strong>Adicionar Capa</strong></span>
+</button>
 <button class="ops-nav-button" data-grcon-view="cover-document" type="button">
 <svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v18H5zM14 3v4h4M8 11h8M8 15h8M8 19h5"></path></svg><span><strong>Adicionar Capa</strong></span>
 </button>
@@ -87,6 +91,7 @@
 <button id="tab-control" aria-controls="grdt-module" aria-selected="true" class="active" data-grcon-view="control" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Controle de GRDT</strong><small>Analisar e gerar eGRDT</small></span></button>
 <button id="tab-requests" aria-controls="requests-module" aria-selected="false" data-grcon-view="requests" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong><small>Consultar documentos na LD</small></span></button>
 <button id="tab-pdf-tools" aria-controls="pdf-tools-module" aria-selected="false" data-grcon-view="pdf-tools" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v12H5zM14 3v4h4"></path><path d="M9 11h5M9 15h5M19 10h2v11H8v-2"></path></svg><span><strong>Combinar PDFs</strong><small>Juntar vários PDFs</small></span></button>
+<button id="tab-cover" aria-controls="cover-module" aria-selected="false" data-grcon-view="cover" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v14H5zM14 3v4h4M8 12h8M8 16h5"></path><path d="M17 11l3 3-3 3"></path></svg><span><strong>Adicionar Capa</strong><small>Gerar capa pela LD</small></span></button>
 <button id="tab-cover-document" aria-controls="cover-document-module" aria-selected="false" data-grcon-view="cover-document" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v18H5zM14 3v4h4M8 11h8M8 15h8M8 19h5"></path></svg><span><strong>Adicionar Capa</strong><small>Capa oficial pela LD</small></span></button>
 <a class="ops-nav-external" href="https://grcon-flow.vercel.app/" rel="noopener noreferrer" target="_blank" role="tab" title="Abrir o GRCON Flow em outra aba"><svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Abre o GRCON Flow, em outra aba</small></span><svg aria-hidden="true" class="ops-nav-external-icon" viewbox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M7 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"></path></svg></a>
 <button id="tab-analysis" aria-controls="analysis-history-module" aria-selected="false" data-grcon-view="analysis-history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Histórico de análises</strong><small>Data, documento e status</small></span><b hidden="" id="analysis-history-tab-count">0</b></button>
@@ -357,6 +362,9 @@
 <small class="requests-tipos-hint">Coluna que o GRCON não sabe preencher sai em branco: a estrutura da sua planilha é reproduzida sem que nenhum campo seja preenchido por suposição. Ao importar, o casamento é por nome idêntico da coluna — nunca por semelhança.</small>
 </section>
 </div>
+</section>
+<section id="cover-module" class="cover-module" hidden="" role="tabpanel" aria-labelledby="tab-cover">
+<div id="grcon-cover-root"></div>
 </section>
 <section id="pdf-tools-module" class="pdf-merge-module" hidden="" role="tabpanel" aria-labelledby="tab-pdf-tools">
 <div id="grcon-pdf-tools-root"></div>
