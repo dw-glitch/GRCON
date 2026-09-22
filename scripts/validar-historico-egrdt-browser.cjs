@@ -142,6 +142,126 @@ async function shot(page, name, fullPage = true) {
   await page.screenshot({ path: path.join(artifactDir, name), fullPage });
 }
 
+function intersectsRect(a, b) {
+  return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+}
+
+function visualGap(a, b) {
+  const horizontal = Math.max(b.left - a.right, a.left - b.right, 0);
+  const vertical = Math.max(b.top - a.bottom, a.top - b.bottom, 0);
+  return Math.max(horizontal, vertical);
+}
+
+async function waitForHistoryMascot(page) {
+  await page.evaluate(() => window.GRCONMascot?.refresh?.());
+  await page.waitForFunction(() => {
+    const mascot = document.querySelector('#grcon-context-mascot[data-context="history"]');
+    return Boolean(mascot && mascot.getBoundingClientRect().width > 0 && mascot.getBoundingClientRect().height > 0);
+  }, null, { timeout: 15000 });
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+}
+
+async function headerGeometry(page, label) {
+  await waitForHistoryMascot(page);
+  const geometry = await page.evaluate(() => {
+    const rect = (node) => {
+      const value = node.getBoundingClientRect();
+      return {
+        left: value.left,
+        top: value.top,
+        right: value.right,
+        bottom: value.bottom,
+        width: value.width,
+        height: value.height,
+      };
+    };
+    const summary = document.querySelector(".history-manage > summary");
+    const details = document.querySelector(".history-manage");
+    const mascot = document.querySelector('#grcon-context-mascot[data-context="history"]');
+    const header = document.querySelector(".history-phase-b-heading > .ui-page-header");
+    const title = header?.querySelector("h2");
+    const pills = Array.from(header?.querySelectorAll(".ui-meta-pill") || []);
+    const menu = document.querySelector(".history-manage-menu");
+    return {
+      summary: rect(summary),
+      details: rect(details),
+      mascot: rect(mascot),
+      header: rect(header),
+      title: title ? rect(title) : null,
+      pills: pills.map(rect),
+      menu: details.open && menu ? rect(menu) : null,
+      menuOpen: details.open,
+      mascotContext: mascot.dataset.context,
+      mascotPose: mascot.dataset.pose,
+      mascotPointerEvents: getComputedStyle(mascot).pointerEvents,
+      summaryText: summary.textContent.trim(),
+      pillTexts: pills.map((node) => node.textContent.trim()),
+      pageOverflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      summaryTabIndex: summary.tabIndex,
+    };
+  });
+
+  assert.equal(geometry.mascotContext, "history", label + ": mascote deve permanecer no contexto history");
+  assert.equal(geometry.mascotPose, "history", label + ": pose history deve permanecer ativa");
+  assert.equal(geometry.mascotPointerEvents, "none", label + ": mascote contextual não pode interceptar cliques");
+  assert.equal(geometry.summaryText, "Gerenciar histórico", label + ": texto real da ação deve ser preservado");
+  assert.equal(geometry.pills.length, 2, label + ": duas meta pills devem permanecer no cabeçalho");
+  assert.equal(intersectsRect(geometry.summary, geometry.mascot), false, label + ": botão não pode intersectar mascote");
+  assert.equal(intersectsRect(geometry.header, geometry.summary), false, label + ": header não pode intersectar botão");
+  if (geometry.title) assert.equal(intersectsRect(geometry.title, geometry.summary), false, label + ": título não pode intersectar botão");
+  for (const pill of geometry.pills) {
+    assert.equal(intersectsRect(pill, geometry.summary), false, label + ": meta pill não pode intersectar botão");
+  }
+  const gapPx = visualGap(geometry.summary, geometry.mascot);
+  assert.ok(gapPx >= 8, label + ": botão e mascote precisam manter gap visual >= 8px");
+  assert.ok(geometry.pageOverflowX <= 1, label + ": não pode existir overflow horizontal global");
+  assert.ok(geometry.summaryTabIndex >= 0, label + ": summary deve permanecer focável");
+
+  console.log("history-header-geometry", JSON.stringify({ label, gapPx, ...geometry }));
+  return { ...geometry, gapPx };
+}
+
+async function validateClosedHeader(page, width, height, screenshotName = "") {
+  await page.setViewportSize({ width, height });
+  const details = page.locator(".history-manage");
+  if (await details.getAttribute("open") !== null) await page.locator(".history-manage > summary").click();
+  await page.locator(".history-phase-b-heading").scrollIntoViewIfNeeded();
+  const geometry = await headerGeometry(page, String(width));
+  if (screenshotName) await shot(page, screenshotName, true);
+  return geometry;
+}
+
+async function validateOpenMenu(page, width, height, screenshotName = "") {
+  await page.setViewportSize({ width, height });
+  const details = page.locator(".history-manage");
+  if (await details.getAttribute("open") === null) await page.locator(".history-manage > summary").click();
+  await page.locator(".history-manage-menu").waitFor({ state: "visible" });
+  const geometry = await headerGeometry(page, String(width) + "-open");
+  assert.ok(geometry.menu, "menu aberto precisa ter geometria");
+  assert.equal(intersectsRect(geometry.menu, geometry.mascot), false, String(width) + ": menu aberto não pode intersectar mascote");
+  assert.equal(await page.locator("#history-clear").isVisible(), true, String(width) + ": Limpar histórico deve continuar acessível");
+  if (screenshotName) await shot(page, screenshotName, true);
+  return geometry;
+}
+
+async function setSharedHistoryFixture(page, enabled) {
+  await page.evaluate((shared) => {
+    const state = window.GrconCloud?.state;
+    if (!state) return;
+    if (!Object.prototype.hasOwnProperty.call(window, "__historyOriginalMembership")) {
+      window.__historyOriginalMembership = state.membership || null;
+    }
+    state.membership = shared
+      ? { ...(window.__historyOriginalMembership || {}), workspace_id: "fixture-workspace" }
+      : window.__historyOriginalMembership;
+    window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { sharedFixture: shared } }));
+    window.GrconHistoryUi?.render?.();
+  }, enabled);
+  await page.waitForTimeout(180);
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
@@ -167,6 +287,54 @@ async function shot(page, name, fullPage = true) {
     await expectCount(page, 3);
     assert.equal(await page.locator("#history-list [data-history-id]").count(), 3);
     await shot(page, "02-history-egrdt-results-1366.png");
+
+    // Hardening corretivo integrado: o botão administrativo e o mascote real
+    // precisam ocupar áreas independentes em todos os viewports suportados.
+    const geometryByViewport = {};
+    geometryByViewport["1440"] = await validateClosedHeader(page, 1440, 900, "01-history-header-mascot-1440.png");
+    geometryByViewport["1366"] = await validateClosedHeader(page, 1366, 900, "02-history-header-mascot-1366.png");
+    geometryByViewport["1024"] = await validateClosedHeader(page, 1024, 820, "03-history-header-mascot-1024.png");
+    geometryByViewport["768"] = await validateClosedHeader(page, 768, 900, "04-history-header-mascot-768.png");
+    geometryByViewport["620"] = await validateClosedHeader(page, 620, 900);
+    geometryByViewport["430"] = await validateClosedHeader(page, 430, 900);
+    geometryByViewport["390"] = await validateClosedHeader(page, 390, 844, "05-history-header-mascot-390.png");
+
+    // Acessibilidade do <details>/<summary>: foco e Enter continuam funcionais.
+    await page.setViewportSize({ width: 1366, height: 900 });
+    const manageSummary = page.locator(".history-manage > summary");
+    await manageSummary.focus();
+    assert.equal(await manageSummary.evaluate((node) => document.activeElement === node), true);
+    await page.keyboard.press("Enter");
+    assert.equal(await page.locator(".history-manage").getAttribute("open") !== null, true);
+    await page.keyboard.press("Enter");
+    assert.equal(await page.locator(".history-manage").getAttribute("open") === null, true);
+
+    const open1366 = await validateOpenMenu(page, 1366, 900, "06-history-manage-open-1366.png");
+    assert.ok(open1366.gapPx >= 8);
+    await page.locator(".history-manage > summary").click();
+
+    const open390 = await validateOpenMenu(page, 390, 844, "07-history-manage-open-390.png");
+    assert.ok(open390.gapPx >= 8);
+    await page.locator(".history-manage > summary").click();
+
+    // Histórico compartilhado tem texto maior e precisa preservar a mesma geometria.
+    await setSharedHistoryFixture(page, true);
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.waitForFunction(() => /Histórico compartilhado/i.test(document.querySelector(".history-phase-b-heading")?.textContent || ""));
+    const sharedGeometry = await headerGeometry(page, "1366-shared");
+    assert.ok(sharedGeometry.pillTexts.some((text) => /Histórico compartilhado/i.test(text)));
+    await setSharedHistoryFixture(page, false);
+
+    // Dark mode mantém contraste/layout; o teste geométrico continua obrigatório.
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+    await validateClosedHeader(page, 1366, 900, "08-history-header-dark-1366.png");
+    await validateClosedHeader(page, 390, 844, "09-history-header-dark-390.png");
+    await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
+    await page.setViewportSize({ width: 1366, height: 900 });
+
+    console.log("history-header-gaps", JSON.stringify(Object.fromEntries(
+      Object.entries(geometryByViewport).map(([key, value]) => [key, value.gapPx]),
+    )));
 
     await page.locator("#history-year").selectOption("2026");
     await expectCount(page, 3);
