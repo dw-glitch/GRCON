@@ -166,9 +166,22 @@ function optionSets(): RevisionOptionSets {
 
 function histories(row: RevisionRow): { sigem: RevisionHistoryItem[]; pw: RevisionHistoryItem[] } {
   return {
-    sigem: Core().historyForRows?.(row.sigemRows, "sigem") as RevisionHistoryItem[] || [],
-    pw: Core().historyForRows?.(row.pwRows, "pw") as RevisionHistoryItem[] || [],
+    sigem: Core().historyForRows(row.sigemRows, "sigem"),
+    pw: Core().historyForRows(row.pwRows, "pw"),
   };
+}
+
+function situationLabel(value: string): string {
+  return Core().LABELS[value] || value;
+}
+
+function situationClass(value: string): string {
+  const situations = Core().SITUATIONS;
+  if (value === situations.UPDATED) return "updated";
+  if (value === situations.PREVIOUS) return "previous";
+  if (value === situations.NOT_FOUND) return "missing";
+  if (value === situations.AWAITING_EMISSION) return "pending";
+  return "other";
 }
 
 function finishProgress(): void {
@@ -216,7 +229,7 @@ async function analyzeCurrentModel(force: boolean): Promise<RevisionAnalysis | n
     },
   }) as Promise<RevisionAnalysis>;
 
-  analysisPromise = task.then((result) => {
+  const currentTask = task.then((result) => {
     if (!result || result.cancelled || generation !== state.analysisGeneration) return null;
     state.analysis = result;
     state.page = 1;
@@ -233,10 +246,10 @@ async function analyzeCurrentModel(force: boolean): Promise<RevisionAnalysis | n
     }
     throw error;
   }).finally(() => {
-    if (analysisPromise === task) analysisPromise = null;
+    if (analysisPromise === currentTask) analysisPromise = null;
   });
-
-  return analysisPromise;
+  analysisPromise = currentTask;
+  return currentTask;
 }
 
 async function activate(): Promise<RevisionAnalysis | null> {
@@ -293,13 +306,15 @@ async function exportFilteredRows(): Promise<number> {
     if (!window.GrconSigemPwRevisionReport) await window.GRCONModuleLoader.ensure("sigem_pw_revision_report.js");
     const report = window.GrconSigemPwRevisionReport;
     if (!report?.buildWorkbook) throw new Error("Exportador Excel da análise SIGEM × PW indisponível.");
+    const brandAssets = (window as unknown as { GRCONBrandAssets?: unknown }).GRCONBrandAssets || null;
     const buffer = await report.buildWorkbook(rows, filters, {
-      brandAssets: window.GRCONBrandAssets || null,
+      brandAssets,
       createdAt: new Date(),
     });
     const blob = new Blob([buffer], { type: report.MIME_XLSX });
     const filename = report.downloadName(filters, new Date());
-    if (window.GrconUtils?.downloadBlob) window.GrconUtils.downloadBlob(blob, filename);
+    const utils = (window as unknown as { GrconUtils?: { downloadBlob?(blob: Blob, filename: string): void } }).GrconUtils;
+    if (utils?.downloadBlob) utils.downloadBlob(blob, filename);
     else {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -364,6 +379,8 @@ export const sigemPwRevisionAdapter = {
   pageData,
   optionSets,
   histories,
+  situationLabel,
+  situationClass,
   setPage,
   setFilter,
   setRawSearch,
