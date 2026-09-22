@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.41.0-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1";
+const CACHE_NAME = "grcon-v5.41.0-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -30,6 +30,7 @@ const ASSETS = [
   "react-ui.css",
   "requests-phase-b.css",
   "pdf-merge.css",
+  "cover-document.css",
   "grcon-icon.png",
   "grcon-logo-app.png",
   "grcon-logo-report.png",
@@ -76,6 +77,7 @@ const ASSETS = [
   "pdf_merge_core.js",
   "pdf_merge_engine.js",
   "react-dist/pdf-tools-app.js",
+  "react-dist/cover-document-app.js",
   "apendice_base.js",
   "apendice_tagueados.js",
   "allocation_center.js",
@@ -109,6 +111,12 @@ const ASSETS = [
   "emission.js",
   "pending_allocation_package.js",
   "grdt-template.xlsx",
+  "assets/templates/capa-documento.docx.b64.1",
+  "assets/templates/capa-documento.docx.b64.2",
+  "assets/templates/capa-documento.docx.b64.3",
+  "assets/templates/capa-documento-base.pdf.b64.1",
+  "assets/templates/capa-documento-base.pdf.b64.2",
+  "assets/templates/capa-documento-base.pdf.b64.3",
   "workspace.js",
   "title_quality.js",
   "grdt_history_indicator.js",
@@ -173,6 +181,12 @@ const HEAVY_ASSETS = new Set([
   "pdf-lib.min.js",
   "supabase.min.js",
   "grdt-template.xlsx",
+  "capa-documento.docx.b64.1",
+  "capa-documento.docx.b64.2",
+  "capa-documento.docx.b64.3",
+  "capa-documento-base.pdf.b64.1",
+  "capa-documento-base.pdf.b64.2",
+  "capa-documento-base.pdf.b64.3",
   "grcon-icon.png",
   "grcon-icon.ico",
   "grcon-logo-app.png",
