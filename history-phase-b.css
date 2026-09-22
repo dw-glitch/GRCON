@@ -14,7 +14,7 @@ html[data-app="GRCON"] .history-module .history-phase-b-heading {
   grid-template-areas: "header manage mascot";
   align-items: start;
   column-gap: clamp(.75rem, 1.2vw, 1rem);
-  row-gap: .5rem;
+  row-gap: .625rem;
   min-width: 0;
   margin: 0;
   overflow: visible;
