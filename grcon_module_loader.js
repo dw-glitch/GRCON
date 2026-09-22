@@ -217,7 +217,6 @@
 
   function directActivate(view) {
     if (view !== "pdf-tools") root.GrconPdfMergeUi?.deactivate?.();
-    if (view !== "cover") root.GrconCoverUi?.deactivate?.();
     if (view !== "cover-document") root.GrconCoverDocumentUi?.deactivate?.();
 
     const modules = {
@@ -279,10 +278,6 @@
     }
     if (module === "pdf-tools") {
       root.GrconPdfMergeUi?.activate?.();
-      return;
-    }
-    if (module === "cover") {
-      root.GrconCoverUi?.activate?.();
       return;
     }
     if (module === "cover-document") {
