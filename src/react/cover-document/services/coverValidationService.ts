@@ -36,11 +36,18 @@ export function validateCover(
     push("info", "word-output", "A saída Word mantém a capa editável e integra a primeira página diretamente ao pacote OOXML do DOCX original, preservando o arquivo de origem.");
   }
 
-  if (data.documentNumber.trim() && window.TriagemCore) {
+  const triagemValidator = window.TriagemCore as (typeof window.TriagemCore & {
+    validateDocumentCode?: (document: string, sheetName?: string) => {
+      valid: boolean;
+      family?: string;
+      errors?: string[];
+    };
+  });
+  if (data.documentNumber.trim() && triagemValidator?.validateDocumentCode) {
     try {
-      const validation = window.TriagemCore.validateDocumentCode(data.documentNumber, selected?.sheet || "");
+      const validation = triagemValidator.validateDocumentCode(data.documentNumber, selected?.sheet || "");
       if (!validation.valid) {
-        (validation.errors || ["Código não passou pela validação documental."]).slice(0, 3).forEach((message, index) => {
+        (validation.errors || ["Código não passou pela validação documental."]).slice(0, 3).forEach((message: string, index: number) => {
           push("warning", `code-rule-${index}`, message);
         });
       } else {
