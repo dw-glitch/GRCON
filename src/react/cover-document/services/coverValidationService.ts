@@ -33,7 +33,7 @@ export function validateCover(
     push("info", "docx-pages", "A contagem do DOCX vem do metadado de páginas salvo no Word. Confira o total se o documento tiver sido alterado depois do último salvamento.");
   }
   if (source?.kind === "docx") {
-    push("info", "word-output", "A saída Word mantém a capa editável e incorpora o DOCX original por OOXML altChunk; editores que não implementam altChunk podem não expandir o conteúdo anexado.");
+    push("info", "word-output", "A saída Word mantém a capa editável e integra a primeira página diretamente ao pacote OOXML do DOCX original, preservando o arquivo de origem.");
   }
 
   if (data.documentNumber.trim() && window.TriagemCore) {
