@@ -138,8 +138,8 @@ export async function loadLdRecords(files: FileList | File[]): Promise<LdDocumen
     if (!/\.(?:xlsx?|xlsm)$/i.test(file.name)) continue;
     const buffer = await file.arrayBuffer();
     const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
-    const parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified, null);
-    records.push(...(parsed.records || []));
+    const parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified);
+    records.push(...((parsed.records || []) as unknown as LdDocumentRecord[]));
     await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
   }
   return records.filter((record) => Boolean(String(record.title ?? "").trim() && String(record.document ?? "").trim()));
