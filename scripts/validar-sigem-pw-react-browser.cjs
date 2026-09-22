@@ -151,6 +151,78 @@ async function clickView(page, view) {
   assert.equal(ok, true, `navegação ${view} deve existir`);
 }
 
+async function installRevisionFixture(page, bulkCount = 250) {
+  await page.evaluate(({ count }) => {
+    const dashboard = window.GrconSigemPwDashboard;
+    const dashboardUi = window.GrconSigemPwDashboardUi;
+    if (!dashboard?.createModel || !dashboardUi?.state || !window.GrconSigemPwRevisionUi) throw new Error("runtime de Revisões indisponível");
+
+    if (!Object.prototype.hasOwnProperty.call(window, "__revisionOriginalDashboardModel")) {
+      window.__revisionOriginalDashboardModel = dashboardUi.state.model;
+    }
+
+    const sigemDoc = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
+    const pwDoc = (id) => `C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-${id}`;
+    const sigem = [];
+    const pw = [];
+    const addS = (id, revision, status = "Em Workflow") => sigem.push({ document: sigemDoc(id), revision, status });
+    const addP = (id, revision, state = "Liberado", lastEmission = "Sim") => pw.push({ document: pwDoc(id), revision, revisionComplete: revision, state, lastEmission });
+
+    addS("910001", "B"); addP("910001", "B");
+    addS("910002", "B"); addP("910002", "A");
+    addS("910003", "B");
+    addS("910004", "B"); addP("910004", "A"); addP("910004", "B", "Cadastrado", "Previsto");
+    addS("910005", "A"); addP("910005", "A"); addP("910005", "B");
+    addS("910006", "X-1"); addP("910006", "Y-2", "Cadastrado", "Previsto");
+    addS("910007", "0", "Recusado"); addS("910007", "A", "Com Comentários"); addS("910007", "B");
+    addP("910007", "0", "Superado", "Não"); addP("910007", "A");
+
+    const n1710 = "RL-5290.00-22313-ABC-C1O-777";
+    sigem.push({ document: n1710, revision: "0", status: "Postado" });
+    pw.push({ document: n1710, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Sim" });
+
+    for (let index = 0; index < count; index += 1) {
+      addS(String(920000 + index).padStart(6, "0"), "B");
+    }
+
+    const model = dashboard.createModel(sigem, pw);
+    window.__revisionControlledModel = model;
+    dashboardUi.state.model = model;
+  }, { count: bulkCount });
+  await page.evaluate(async () => { await window.GrconSigemPwRevisionUi.refresh(); });
+  await page.waitForFunction(() => Boolean(window.GrconSigemPwRevisionUi?.state?.analysis) && !window.GrconSigemPwRevisionUi.state.progress?.active, null, { timeout: 30000 });
+}
+
+async function restoreRevisionModel(page) {
+  await page.evaluate(async () => {
+    if (!window.GrconSigemPwDashboardUi?.state || !window.GrconSigemPwRevisionUi) return;
+    if (Object.prototype.hasOwnProperty.call(window, "__revisionOriginalDashboardModel")) {
+      window.GrconSigemPwDashboardUi.state.model = window.__revisionOriginalDashboardModel;
+      await window.GrconSigemPwRevisionUi.refresh();
+    }
+  });
+}
+
+async function setRevisionDocumentList(page, value) {
+  await page.locator("#spw-rev-document-list").evaluate((node, nextValue) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(node, nextValue);
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+  }, value);
+}
+
+async function resetRevisionFilters(page) {
+  await page.locator("#spw-rev-filter-situation").selectOption("attention");
+  await page.locator("#spw-rev-filter-class").selectOption("");
+  await page.locator("#spw-rev-filter-sigem-rev").selectOption("");
+  await page.locator("#spw-rev-filter-pw-rev").selectOption("");
+  await page.locator("#spw-rev-filter-sigem-status").selectOption("");
+  await page.locator("#spw-rev-filter-pw-status").selectOption("");
+  await page.locator("#spw-rev-search").fill("");
+  await setRevisionDocumentList(page, "");
+  await page.waitForTimeout(230);
+}
+
 (async () => {
   const fixtures = writeFixtures();
   const browser = await chromium.launch({ headless: true });
@@ -172,6 +244,20 @@ async function clickView(page, view) {
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwDashboardUi?.state)), true);
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.readiness?.status), "empty");
     await page.screenshot({ path: path.join(outputDir, "01-sigem-pw-empty-1366.png"), fullPage: true });
+
+    await page.waitForFunction(() => Boolean(window.GrconSigemPwRevisionUi?.state?.active), null, { timeout: 30000 });
+    await page.locator("#spw-revision-section").waitFor({ state: "visible", timeout: 30000 });
+    await page.evaluate(async () => {
+      window.__revisionEmptyOriginalModel = window.GrconSigemPwDashboardUi.state.model;
+      window.GrconSigemPwDashboardUi.state.model = null;
+      await window.GrconSigemPwRevisionUi.refresh();
+    });
+    assert.match(await page.locator("#spw-rev-table-wrap").innerText(), /Carregue as bases para analisar as revisões/i);
+    await page.screenshot({ path: path.join(outputDir, "01-revision-empty-1366.png"), fullPage: true });
+    await page.evaluate(async () => {
+      window.GrconSigemPwDashboardUi.state.model = window.__revisionEmptyOriginalModel;
+      await window.GrconSigemPwRevisionUi.refresh();
+    });
 
     await importFile(page, "#spw-ld-file", fixtures.ldFile);
     assert.deepEqual(await page.evaluate(() => ({
@@ -276,6 +362,285 @@ async function clickView(page, view) {
     const exportedRows = XLSX.utils.sheet_to_json(exported.Sheets[exported.SheetNames[0]], { defval: "" });
     assert.equal(exportedRows.length, 250, "exportação deve incluir todas as páginas filtradas");
 
+    // FASE A — Situação das Revisões em React + TypeScript.
+    const revisionActivationStart = Date.now();
+    await installRevisionFixture(page, 250);
+    metrics.revisionActivationMs = Date.now() - revisionActivationStart;
+    metrics.revisionAnalysisMs = await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysis?.metrics?.durationMs || 0);
+    await resetRevisionFilters(page);
+
+    const revisionSituationMap = await page.evaluate(() => {
+      const rows = window.GrconSigemPwRevisionUi.state.analysis.rows;
+      const pick = (needle) => rows.find((row) => row.document.includes(needle))?.situation || "";
+      return {
+        updated: pick("910001"),
+        previous: pick("910002"),
+        notFound: pick("910003"),
+        awaiting: pick("910004"),
+        ahead: pick("910005"),
+        review: pick("910006"),
+        history: pick("910007"),
+        n1710: rows.find((row) => row.document.includes("22313-ABC-C1O-777"))?.situation || "",
+      };
+    });
+    assert.deepEqual(revisionSituationMap, {
+      updated: "updated",
+      previous: "pw-previous",
+      notFound: "pw-not-found",
+      awaiting: "pw-awaiting-emission",
+      ahead: "pw-ahead",
+      review: "review",
+      history: "pw-previous",
+      n1710: "updated",
+    });
+
+    const revisionCounts = await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysis.counts);
+    assert.equal(await page.locator(".spw-rev-card").count(), 5);
+    assert.equal(Number((await page.locator('[data-spw-rev-situation="updated"] strong').innerText()).replace(/\D/g, "")), revisionCounts.updated);
+    assert.equal(Number((await page.locator('[data-spw-rev-situation="pw-previous"] strong').innerText()).replace(/\D/g, "")), revisionCounts.previous);
+    assert.equal(Number((await page.locator('[data-spw-rev-situation="pw-not-found"] strong').innerText()).replace(/\D/g, "")), revisionCounts.notFound);
+    assert.equal(Number((await page.locator('[data-spw-rev-situation="pw-awaiting-emission"] strong').innerText()).replace(/\D/g, "")), revisionCounts.awaitingEmission);
+    assert.equal(Number((await page.locator('[data-spw-rev-situation="other"] strong').innerText()).replace(/\D/g, "")), revisionCounts.pwAhead + revisionCounts.review);
+    await page.screenshot({ path: path.join(outputDir, "02-revision-results-1366.png"), fullPage: true });
+
+    // Cards continuam filtros e segundo clique volta ao default attention.
+    const revisionFilterStart = Date.now();
+    await page.locator('[data-spw-rev-situation="updated"]').click();
+    await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.filters.situation === "updated");
+    metrics.revisionFilterMs = Date.now() - revisionFilterStart;
+    assert.equal(await page.locator('[data-spw-rev-situation="updated"]').getAttribute("aria-pressed"), "true");
+    assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() >= 2);
+    await page.locator('[data-spw-rev-situation="updated"]').click();
+    await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.filters.situation === "attention");
+
+    // Todas as situações e filtros de domínio.
+    for (const situation of ["updated","pw-previous","pw-not-found","pw-awaiting-emission","pw-ahead","review","other","all","attention"]) {
+      await page.locator("#spw-rev-filter-situation").selectOption(situation);
+      await page.waitForFunction((value) => window.GrconSigemPwRevisionUi.state.filters.situation === value, situation);
+    }
+    await page.locator("#spw-rev-filter-situation").selectOption("all");
+    await page.locator("#spw-rev-filter-class").selectOption("ET");
+    assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() > 0);
+    await page.locator("#spw-rev-filter-class").selectOption("N-1710");
+    assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 1);
+    await page.locator("#spw-rev-filter-class").selectOption("");
+
+    await page.locator("#spw-rev-filter-sigem-rev").selectOption("B");
+    assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() > 0);
+    await page.locator("#spw-rev-filter-sigem-rev").selectOption("");
+    await page.locator("#spw-rev-filter-pw-rev").selectOption("A");
+    assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() > 0);
+    await page.locator("#spw-rev-filter-pw-rev").selectOption("");
+
+    const sigemStatus = await page.locator("#spw-rev-filter-sigem-status option").nth(1).getAttribute("value");
+    assert.ok(sigemStatus);
+    await page.locator("#spw-rev-filter-sigem-status").selectOption(sigemStatus);
+    assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() > 0);
+    await page.locator("#spw-rev-filter-sigem-status").selectOption("");
+    const pwStatus = await page.locator("#spw-rev-filter-pw-status option").nth(1).getAttribute("value");
+    assert.ok(pwStatus);
+    await page.locator("#spw-rev-filter-pw-status").selectOption(pwStatus);
+    assert.ok(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count() > 0);
+    await page.locator("#spw-rev-filter-pw-status").selectOption("");
+
+    // Debounce real: digitação progressiva não filtra por tecla.
+    await page.evaluate(() => {
+      const original = window.GrconSigemPwRevision;
+      window.__revisionCoreOriginal = original;
+      window.__revisionFilterCalls = 0;
+      window.GrconSigemPwRevision = Object.freeze({
+        ...original,
+        filterRows(rows, filters) {
+          window.__revisionFilterCalls += 1;
+          return original.filterRows(rows, filters);
+        },
+      });
+    });
+    await page.locator("#spw-rev-search").focus();
+    const revisionFilterCallsBefore = await page.evaluate(() => window.__revisionFilterCalls);
+    await page.locator("#spw-rev-search").pressSequentially("RL-5290.00-22313", { delay: 35 });
+    const revisionFilterCallsDuringTyping = (await page.evaluate(() => window.__revisionFilterCalls)) - revisionFilterCallsBefore;
+    assert.equal(revisionFilterCallsDuringTyping, 0, "filtro pesado não pode executar por tecla antes do debounce");
+    const revisionSearchStart = Date.now();
+    await page.waitForTimeout(230);
+    metrics.revisionSearchMs = Date.now() - revisionSearchStart;
+    const revisionFilterCallsAfter = (await page.evaluate(() => window.__revisionFilterCalls)) - revisionFilterCallsBefore;
+    assert.ok(revisionFilterCallsAfter <= 2, "debounce deve consolidar a busca em uma atualização");
+    assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 1);
+    await page.evaluate(() => { window.GrconSigemPwRevision = window.__revisionCoreOriginal; });
+    await page.locator("#spw-rev-search").fill("");
+    await page.waitForTimeout(230);
+
+    // Lista colada continua interpretada exclusivamente pelo Core.filterRows().
+    await setRevisionDocumentList(page, [
+      "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910001",
+      "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910002",
+      "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910003",
+      "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-910004",
+    ].join("\n"));
+    await page.waitForTimeout(230);
+    assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 4);
+    await setRevisionDocumentList(page, "");
+    await page.waitForTimeout(230);
+
+    // Paginação: 250 documentos filtrados, 100 linhas por página.
+    await page.locator("#spw-rev-filter-situation").selectOption("pw-not-found");
+    await page.locator("#spw-rev-search").fill("PI-92");
+    await page.waitForTimeout(230);
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.filteredRows().length), 250);
+    assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 100);
+    assert.match(await page.locator("#spw-rev-pages").innerText(), /Página 1 de 3/);
+    const revisionPageStart = Date.now();
+    await page.locator('[data-spw-rev-page="2"]').click();
+    metrics.revisionPageChangeMs = Date.now() - revisionPageStart;
+    await page.waitForFunction(() => window.GrconSigemPwRevisionUi.state.page === 2);
+    await page.screenshot({ path: path.join(outputDir, "05-revision-page2-1366.png"), fullPage: true });
+    await page.locator('[data-spw-rev-page="1"]').click();
+
+    // Exportação completa (> PAGE_SIZE).
+    const revisionExportStart = Date.now();
+    const revisionDownloadPromise = page.waitForEvent("download");
+    await page.locator("[data-spw-rev-export]").click();
+    const revisionDownload = await revisionDownloadPromise;
+    const revisionExportPath = path.join(fixtureDir, "sigem-pw-revision-export.xlsx");
+    await revisionDownload.saveAs(revisionExportPath);
+    metrics.revisionExportMs = Date.now() - revisionExportStart;
+    const revisionBook = XLSX.read(fs.readFileSync(revisionExportPath), { type: "buffer" });
+    const revisionRows = XLSX.utils.sheet_to_json(revisionBook.Sheets[revisionBook.SheetNames[0]], { defval: "" });
+    assert.equal(revisionRows.length, 250, "Excel de revisões deve exportar todas as páginas");
+    await page.waitForFunction(() => /sucesso/i.test(window.GrconSigemPwRevisionUi.state.exportMessage), null, { timeout: 10000 });
+    await page.screenshot({ path: path.join(outputDir, "06-revision-export-1366.png"), fullPage: true });
+
+    // Exportação imediata deve usar rawSearch antes de o debounce terminar.
+    await page.locator("#spw-rev-search").fill("");
+    await page.waitForTimeout(230);
+    await page.locator("#spw-rev-search").fill("920001");
+    const immediateDownloadPromise = page.waitForEvent("download");
+    await page.locator("[data-spw-rev-export]").click();
+    const immediateDownload = await immediateDownloadPromise;
+    const immediatePath = path.join(fixtureDir, "sigem-pw-revision-export-immediate.xlsx");
+    await immediateDownload.saveAs(immediatePath);
+    const immediateBook = XLSX.read(fs.readFileSync(immediatePath), { type: "buffer" });
+    const immediateRows = XLSX.utils.sheet_to_json(immediateBook.Sheets[immediateBook.SheetNames[0]], { defval: "" });
+    assert.equal(immediateRows.length, 1, "exportação antes do debounce deve respeitar o texto cru atual");
+    await page.waitForTimeout(230);
+
+    // Detalhe Por quê? usa históricos reais do Core (SIGEM 0/A/B × PW 0/A).
+    await resetRevisionFilters(page);
+    await page.locator("#spw-rev-search").fill("910007");
+    await page.waitForTimeout(230);
+    const revisionExpandStart = Date.now();
+    await page.locator("[data-spw-rev-why]").click();
+    metrics.revisionExpandMs = Date.now() - revisionExpandStart;
+    const detailText = await page.locator(".spw-rev-detail").innerText();
+    assert.match(detailText, /SIGEM — revisões encontradas/);
+    assert.match(detailText, /Rev\. B/);
+    assert.match(detailText, /Rev\. A/);
+    assert.match(detailText, /Rev\. 0/);
+    assert.match(detailText, /ProjectWise — revisões encontradas/);
+    assert.match(detailText, /Código SIGEM/);
+    assert.match(detailText, /Código PW/);
+    assert.match(detailText, /EAP/);
+    assert.match(detailText, /Critério/);
+    await page.screenshot({ path: path.join(outputDir, "04-revision-detail-1366.png"), fullPage: true });
+    await page.locator("[data-spw-rev-why]").click();
+    assert.equal(await page.locator(".spw-rev-detail").count(), 0);
+
+    await page.locator("[data-spw-rev-why]").click();
+    await page.locator("#spw-rev-search").fill("910002");
+    await page.waitForTimeout(230);
+    assert.equal(await page.locator(".spw-rev-detail").count(), 0, "filtro que remove a linha expandida deve remover o detalhe");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.expandedKey), "", "expandedKey não pode ficar órfão");
+    await page.locator("#spw-rev-search").fill("910007");
+    await page.waitForTimeout(230);
+
+    await page.screenshot({ path: path.join(outputDir, "03-revision-filter-1366.png"), fullPage: true });
+
+    // Progresso real: onProgress alimenta a UI enquanto analyzeAsync está pendente.
+    await page.evaluate(() => {
+      const original = window.GrconSigemPwRevision;
+      window.__revisionCoreOriginalProgress = original;
+      window.GrconSigemPwRevision = Object.freeze({
+        ...original,
+        async analyzeAsync(model, options) {
+          const total = model.sigemAll?.size || 1;
+          options?.onProgress?.(1, total);
+          await new Promise((resolve) => setTimeout(resolve, 160));
+          return original.analyzeAsync(model, options);
+        },
+      });
+      window.__revisionProgressPromise = window.GrconSigemPwRevisionUi.refresh();
+    });
+    await page.waitForSelector("#spw-rev-progress-count", { state: "visible", timeout: 5000 });
+    assert.match(await page.locator("#spw-rev-table-wrap").innerText(), /Comparando revisões SIGEM × PW/);
+    await page.evaluate(async () => { await window.__revisionProgressPromise; window.GrconSigemPwRevision = window.__revisionCoreOriginalProgress; });
+
+    // Geração concorrente: geração 1 termina depois e não pode sobrescrever geração 2.
+    await page.evaluate(() => {
+      const original = window.GrconSigemPwRevision;
+      const dashboard = window.GrconSigemPwDashboard;
+      const s = (id, revision) => ({ document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-" + id, revision, status: "Postado" });
+      const p = (id, revision) => ({ document: "C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-" + id, revision, revisionComplete: revision, state: "Liberado", lastEmission: "Sim" });
+      const model1 = dashboard.createModel([s("930001", "A")], [p("930001", "A")]);
+      const model2 = dashboard.createModel([s("930002", "B")], [p("930002", "B")]);
+      const analysis1 = original.analyze(model1);
+      const analysis2 = original.analyze(model2);
+      window.__revisionRace = { original, model1, model2, analysis1, analysis2, pending: [] };
+      window.GrconSigemPwRevision = Object.freeze({
+        ...original,
+        analyzeAsync(model, options) {
+          return new Promise((resolve) => window.__revisionRace.pending.push({ model, options, resolve }));
+        },
+      });
+      window.GrconSigemPwDashboardUi.state.model = model1;
+      window.__revisionRace.p1 = window.GrconSigemPwRevisionUi.refresh();
+    });
+    await page.waitForFunction(() => window.__revisionRace?.pending?.length === 1);
+    await page.evaluate(() => {
+      window.GrconSigemPwDashboardUi.state.model = window.__revisionRace.model2;
+      window.__revisionRace.p2 = window.GrconSigemPwRevisionUi.refresh();
+    });
+    await page.waitForFunction(() => window.__revisionRace?.pending?.length === 2);
+    await page.evaluate(async () => {
+      window.__revisionRace.pending[1].resolve(window.__revisionRace.analysis2);
+      await window.__revisionRace.p2;
+    });
+    await page.evaluate(async () => {
+      window.__revisionRace.pending[0].resolve(window.__revisionRace.analysis1);
+      await window.__revisionRace.p1;
+    });
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysis === window.__revisionRace.analysis2), true, "geração antiga não pode substituir a geração nova");
+    await page.evaluate(async () => {
+      window.GrconSigemPwRevision = window.__revisionRace.original;
+      window.GrconSigemPwDashboardUi.state.model = window.__revisionControlledModel;
+      await window.GrconSigemPwRevisionUi.refresh();
+    });
+
+    // Responsividade e dark mode específicos da seção de Revisões.
+    for (const width of [1440, 1366, 1024, 768, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const revisionWidth = await page.evaluate(() => ({
+        page: document.documentElement.scrollWidth,
+        viewport: document.documentElement.clientWidth,
+        tableScroll: document.querySelector("#spw-rev-table-wrap")?.scrollWidth || 0,
+        tableClient: document.querySelector("#spw-rev-table-wrap")?.clientWidth || 0,
+      }));
+      assert.ok(revisionWidth.page <= revisionWidth.viewport + 1, "overflow global da Revisão em " + width + "px");
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(outputDir, "07-revision-mobile-390.png"), fullPage: true });
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
+    await page.screenshot({ path: path.join(outputDir, "08-revision-dark-1366.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(outputDir, "09-revision-dark-390.png"), fullPage: true });
+    await page.evaluate(() => { document.documentElement.dataset.theme = ""; });
+    await page.setViewportSize({ width: 1366, height: 900 });
+
+    // Restaura o modelo importado real antes das regressões de histórico/evolução.
+    await restoreRevisionModel(page);
+    await page.waitForFunction(() => Boolean(window.GrconSigemPwRevisionUi.state.analysis), null, { timeout: 30000 });
+
     const oldSigemDate = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.sigem.meta.importedAt);
     await page.locator('[data-edit-base-date="sigem"]').click();
     await page.locator("#spw-date-input").fill("2026-09-20T08:30");
@@ -301,7 +666,13 @@ async function clickView(page, view) {
     await page.screenshot({ path: path.join(outputDir, "06-sigem-pw-history-dialog-1366.png"), fullPage: true });
     await page.locator("#spw-base-history-close").click();
 
+    const revisionGenerationBeforeReimport = await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration);
     await importFile(page, "#spw-pw-file", fixtures.pwFile);
+    await page.waitForFunction((before) => (
+      window.GrconSigemPwRevisionUi.state.analysisGeneration > before
+      && window.GrconSigemPwRevisionUi.state.modelRef === window.GrconSigemPwDashboardUi.state.model
+      && !window.GrconSigemPwRevisionUi.state.progress?.active
+    ), revisionGenerationBeforeReimport, { timeout: 30000 });
     await page.locator("#spw-history-open").click();
     await page.locator("#spw-base-history").waitFor({ state: "visible" });
     const pwRows = page.locator(".spw-history-row").filter({ hasText: "PW" });
@@ -346,14 +717,22 @@ async function clickView(page, view) {
     }
 
     await page.setViewportSize({ width: 1366, height: 900 });
-    await page.evaluate(() => { window.__spwModelRef = window.GrconSigemPwDashboardUi.state.model; });
+    await page.evaluate(() => {
+      window.__spwModelRef = window.GrconSigemPwDashboardUi.state.model;
+      window.__revisionGenerationBeforeNavigation = window.GrconSigemPwRevisionUi.state.analysisGeneration;
+    });
     await clickView(page, "control");
     await clickSpw(page);
     assert.equal(await page.evaluate(() => window.__spwModelRef === window.GrconSigemPwDashboardUi.state.model), true, "reabertura não deve reconstruir modelo sem mudança");
     assert.equal(await page.locator("#grcon-sigem-pw-root").count(), 1);
+    assert.equal(await page.locator("#spw-revision-section").count(), 1, "navegação repetida deve manter uma única seção de Revisões");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration), await page.evaluate(() => window.__revisionGenerationBeforeNavigation), "reentrada não deve reanalisar o mesmo modelo");
     await clickView(page, "analysis-history");
     await clickSpw(page);
     assert.equal(await page.locator("#grcon-sigem-pw-root").count(), 1);
+    assert.equal(await page.locator("#spw-revision-section").count(), 1);
+    assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration), await page.evaluate(() => window.__revisionGenerationBeforeNavigation));
+    assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwHistoryManagement && window.GrconSigemPwRevisionUi?.state?.analysis)), true, "History Management deve enxergar a facade React de Revisões");
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForStablePage(page);

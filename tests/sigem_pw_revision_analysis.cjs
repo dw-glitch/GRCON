@@ -115,24 +115,31 @@ assert.deepStrictEqual(asyncAnalysis.counts, bigAnalysis.counts);
 assert.ok(asyncAnalysis.metrics.maxChunkMs < 100, `chunk principal longo: ${asyncAnalysis.metrics.maxChunkMs.toFixed(1)}ms`);
 console.log(`perf synthetic: model=${modelMs.toFixed(1)}ms revision=${revisionMs.toFixed(1)}ms async=${asyncMs.toFixed(1)}ms maxChunk=${asyncAnalysis.metrics.maxChunkMs.toFixed(1)}ms docs=${bigAnalysis.rows.length}`);
 
-const ui = fs.readFileSync(path.join(__dirname, "..", "sigem_pw_revision_section.js"), "utf8");
-assert.ok(/PAGE_SIZE\s*=\s*100/.test(ui), "tabela deve paginar");
-assert.ok(/setTimeout\([^]*180\)/.test(ui), "pesquisa deve usar debounce curto");
-assert.ok(!/MutationObserver/.test(ui));
-assert.ok(!/setInterval/.test(ui));
-assert.ok(/Situação das Revisões/.test(ui));
-assert.ok(/PW em revisão anterior/.test(ui));
-assert.ok(/Não localizados no PW/.test(ui));
-assert.ok(/Aguardando emissão no PW/.test(ui));
-assert.ok(/Última emissão PW/.test(ui));
-assert.ok(/Pesquisar uma lista de documentos/.test(ui));
-assert.ok(/Por quê\?/.test(ui));
+const section = fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/SigemPwRevisionSection.tsx"), "utf8");
+const hook = fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/hooks/useSigemPwRevision.ts"), "utf8");
+const adapter = fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/services/sigemPwRevisionAdapter.ts"), "utf8");
+const domain = fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/types/domain.ts"), "utf8");
+assert.ok(/REVISION_PAGE_SIZE\s*=\s*100/.test(domain), "tabela deve paginar");
+assert.ok(/REVISION_SEARCH_DEBOUNCE_MS\s*=\s*180/.test(domain), "pesquisa deve usar debounce curto");
+assert.ok(/window\.setTimeout/.test(hook), "hook deve aplicar debounce real");
+assert.ok(!/MutationObserver/.test(section + hook + adapter));
+assert.ok(!/setInterval/.test(section + hook + adapter));
+assert.ok(/Situação das Revisões/.test(section));
+assert.ok(/PW em revisão anterior/.test(section + fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/components/SigemPwRevisionCards.tsx"), "utf8")));
+assert.ok(/Não localizados no PW/.test(fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/components/SigemPwRevisionCards.tsx"), "utf8")));
+assert.ok(/Aguardando emissão no PW/.test(fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/components/SigemPwRevisionCards.tsx"), "utf8")));
+assert.ok(/Última emissão PW/.test(fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/components/SigemPwRevisionTable.tsx"), "utf8")));
+assert.ok(/Pesquisar uma lista de documentos/.test(fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/components/SigemPwRevisionFilters.tsx"), "utf8")));
+assert.ok(/Por quê\?/.test(fs.readFileSync(path.join(__dirname, "..", "src/react/sigem-pw/revision/components/SigemPwRevisionTable.tsx"), "utf8")));
+assert.ok(/chunkSize:\s*350/.test(adapter), "análise React deve preservar chunk de 350");
+assert.ok(/analysisGeneration/.test(adapter) && /isCurrent/.test(adapter), "generation/cancelamento devem permanecer");
+assert.ok(/state\.modelRef === model && state\.analysis/.test(adapter), "retorno ao Dashboard deve reutilizar análise da mesma base");
 
 const bootstrap = fs.readFileSync(path.join(__dirname, "..", "sigem_pw_dashboard_bootstrap.js"), "utf8");
 assert.ok(/sigem_pw_revision_core\.js/.test(bootstrap));
-assert.ok(/sigem_pw_revision_section\.js/.test(bootstrap));
+assert.ok(!/ensure\("sigem_pw_revision_section\.js"\)/.test(bootstrap), "bootstrap não deve carregar a UI legada");
+assert.ok(/GrconSigemPwRevisionUi\?\.activate/.test(bootstrap));
 assert.ok(/if \(deferredEnhancements\) return deferredEnhancements/.test(bootstrap), "retorno ao Dashboard não deve recarregar os complementos");
-assert.ok(/state\.modelRef === model && state\.analysis/.test(ui), "retorno ao Dashboard deve reutilizar a análise da mesma base");
 
 console.log("sigem_pw_revision_analysis: OK");
 })().catch((error) => {

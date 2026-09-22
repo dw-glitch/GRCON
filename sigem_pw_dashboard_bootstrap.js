@@ -155,7 +155,8 @@
     if (deferredEnhancements) return deferredEnhancements;
     deferredEnhancements = (async () => {
       await afterFirstPaint();
-      await root.GRCONModuleLoader.ensure("sigem_pw_revision_section.js");
+      // A UI de Revisões já pertence à árvore React do Dashboard. Somente a
+      // ativação/análise continua adiada para preservar a primeira pintura.
       await root.GRCONModuleLoader.ensure("sigem_pw_dashboard_ui_audit.js");
       root.GrconSigemPwUiAudit?.activate?.();
       const module = document.getElementById(MODULE_ID);
