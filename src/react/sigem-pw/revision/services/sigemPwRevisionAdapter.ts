@@ -233,7 +233,7 @@ async function analyzeCurrentModel(force: boolean): Promise<RevisionAnalysis | n
     if (!result || result.cancelled || generation !== state.analysisGeneration) return null;
     state.analysis = result;
     state.page = 1;
-    ensureExpandedRowStillVisible(result.rows);
+    ensureExpandedRowStillVisible();
     finishProgress();
     state.exportMessage = "";
     console.debug("[SIGEM×PW][performance] revisão", result.metrics);
