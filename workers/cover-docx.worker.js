@@ -9,6 +9,15 @@ function templateBytes() {
 self.addEventListener("message", async (event) => {
   const msg = event.data || {}, jobId = msg.jobId || "";
   try {
+    if (msg.type === "inspect") {
+      const zip = await self.JSZip.loadAsync(await msg.file.arrayBuffer());
+      const app = zip.file("docProps/app.xml");
+      const xml = app ? await app.async("string") : "";
+      const match = xml.match(/<Pages>(\d+)<\/Pages>/i);
+      const pages = match ? Number(match[1]) : 0;
+      self.postMessage({ type: "inspected", jobId, pages, pageCountReliable: pages > 0 });
+      return;
+    }
     if (msg.type !== "generate") return;
     self.postMessage({ type: "progress", jobId, stage: "template" });
     const tpl = await templateBytes();
