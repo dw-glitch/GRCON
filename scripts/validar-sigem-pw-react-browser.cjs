@@ -499,7 +499,7 @@ async function resetRevisionFilters(page) {
     assert.equal(await page.locator(".spw-rev-table tbody tr:not(.spw-rev-detail)").count(), 4);
     await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = true; });
     assert.match(await page.locator(".spw-rev-advanced > summary").innerText(), /1 ativo/);
-    await page.getByRole("button", { name: "Limpar filtros" }).click();
+    await page.locator("#spw-revision-section").getByRole("button", { name: "Limpar filtros" }).click();
     await page.waitForFunction(() => {
       const state = window.GrconSigemPwRevisionUi.state;
       return state.filters.situation === "attention"
@@ -682,7 +682,7 @@ async function resetRevisionFilters(page) {
     await page.locator(".spw-rev-advanced > summary").click();
     await page.locator("#spw-rev-filter-sigem-rev").selectOption("B");
     await page.screenshot({ path: path.join(outputDir, "10-revision-mobile-filters-390.png"), fullPage: true });
-    await page.getByRole("button", { name: "Limpar filtros" }).click();
+    await page.locator("#spw-revision-section").getByRole("button", { name: "Limpar filtros" }).click();
     await page.locator(".spw-rev-advanced").evaluate((node) => { node.open = false; });
 
     await page.locator("#spw-rev-search").fill("910007");
