@@ -173,7 +173,7 @@ async function installRevisionFixture(page, bulkCount = 250) {
     addS("910003", "B");
     addS("910004", "B"); addP("910004", "A"); addP("910004", "B", "Cadastrado", "Previsto");
     addS("910005", "A"); addP("910005", "A"); addP("910005", "B");
-    addS("910006", "P1"); addP("910006", "P2", "Cadastrado", "Previsto");
+    addS("910006", "X-1"); addP("910006", "Y-2", "Cadastrado", "Previsto");
     addS("910007", "0", "Recusado"); addS("910007", "A", "Com Comentários"); addS("910007", "B");
     addP("910007", "0", "Superado", "Não"); addP("910007", "A");
 
