@@ -8,6 +8,12 @@ import type {
 const DOCX_TEMPLATE_PARTS = [
   "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.001",
   "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.002",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.003",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.004",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.005",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.006",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.007",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.008",
 ];
 const PDF_TEMPLATE_PARTS = [
   "assets/templates/CAPA_PAGE1_BASE.pdf.b64.001",
