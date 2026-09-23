@@ -83,8 +83,7 @@
 <nav aria-label="Navegação compacta do GRCON" class="grcon-view-tabs" role="tablist">
 <button id="tab-control" aria-controls="grdt-module" aria-selected="true" class="active" data-grcon-view="control" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Controle de GRDT</strong><small>Analisar e gerar eGRDT</small></span></button>
 <button id="tab-requests" aria-controls="requests-module" aria-selected="false" data-grcon-view="requests" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong><small>Consultar documentos na LD</small></span></button>
-<button id="tab-pdf-tools" aria-controls="pdf-tools-module" aria-selected="false" data-grcon-view="pdf-tools" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v12H5zM14 3v4h4"></path><path d="M9 11h5M9 15h5M19 10h2v11H8v-2"></path></svg><span><strong>Combinar PDFs</strong><small>Juntar vários PDFs</small></span></button>
-<button id="tab-cover-document" aria-controls="cover-document-module" aria-selected="false" data-grcon-view="cover-document" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v18H5zM14 3v4h4M8 11h8M8 15h8M8 19h5"></path></svg><span><strong>Adicionar Capa</strong><small>Capa oficial pela LD</small></span></button>
+<button id="tab-additional-tools" aria-controls="additional-tools-module" aria-selected="false" data-grcon-view="additional-tools" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3M9 12h6M12 9v6"></path></svg><span><strong>Ferramentas adicionais</strong><small>PDFs e capas</small></span></button>
 <a class="ops-nav-external" href="https://grcon-flow.vercel.app/" rel="noopener noreferrer" target="_blank" role="tab" title="Abrir o GRCON Flow em outra aba"><svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Abre o GRCON Flow, em outra aba</small></span><svg aria-hidden="true" class="ops-nav-external-icon" viewbox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M7 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"></path></svg></a>
 <button id="tab-analysis" aria-controls="analysis-history-module" aria-selected="false" data-grcon-view="analysis-history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M5 7l5-4 6 5 4-3"></path></svg><span><strong>Histórico de análises</strong><small>Data, documento e status</small></span><b hidden="" id="analysis-history-tab-count">0</b></button>
 <button id="tab-history" aria-controls="history-module" aria-selected="false" data-grcon-view="history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico de eGRDTs</strong><small>Arquivos e alocações</small></span><b hidden="" id="history-tab-count">0</b></button>
@@ -355,7 +354,7 @@
 </section>
 </div>
 </section>
-<section id="additional-tools-module" class="additional-tools-module" hidden="" role="tabpanel" aria-label="Ferramentas adicionais">
+<section id="additional-tools-module" class="additional-tools-module" hidden="" role="tabpanel" aria-labelledby="tab-additional-tools">
 <header class="additional-tools-heading">
 <div><span>FERRAMENTAS ADICIONAIS</span><h2>Utilitários documentais</h2><p>Abra apenas a ferramenta necessária. Combinar PDFs e Adicionar Capa ficam fora da navegação operacional principal.</p></div>
 </header>
@@ -372,10 +371,10 @@
 </button>
 </div>
 </section>
-<section id="pdf-tools-module" class="pdf-merge-module" hidden="" role="tabpanel" aria-labelledby="tab-pdf-tools">
+<section id="pdf-tools-module" class="pdf-merge-module" hidden="" role="tabpanel" aria-label="Combinar PDFs">
 <div id="grcon-pdf-tools-root"></div>
 </section>
-<section id="cover-document-module" class="cover-document-module" hidden="" role="tabpanel" aria-labelledby="tab-cover-document">
+<section id="cover-document-module" class="cover-document-module" hidden="" role="tabpanel" aria-label="Adicionar Capa">
 <div id="grcon-cover-document-root"></div>
 </section>
 <section id="analysis-history-module" class="analysis-history-module" hidden="" role="tabpanel" aria-labelledby="tab-analysis">
