@@ -52,6 +52,11 @@ async function clickVisibleView(page, view) {
 }
 
 async function openPdfTools(page) {
+  await clickVisibleView(page, "additional-tools");
+  await page.evaluate(async () => {
+    if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("additional-tools");
+  });
+  await page.locator("#additional-tools-module").waitFor({ state: "visible", timeout: 10000 });
   await clickVisibleView(page, "pdf-tools");
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("pdf-tools");
