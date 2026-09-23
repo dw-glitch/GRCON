@@ -32,6 +32,21 @@ async function clickVisibleView(page, view) {
   }, view);
 }
 
+async function stabilizeServiceWorker(page) {
+  if (!await page.evaluate(() => "serviceWorker" in navigator)) return;
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  if (!await page.evaluate(() => Boolean(navigator.serviceWorker.controller))) {
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+    await revealApp(page);
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+  }
+  await page.waitForFunction(() => !("serviceWorker" in navigator) || Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
+}
+
 async function openCover(page) {
   await clickVisibleView(page, "additional-tools");
   await page.evaluate(async () => {
@@ -156,6 +171,8 @@ async function layoutAt(page, width, height = 900) {
 
   try {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await revealApp(page);
+    await stabilizeServiceWorker(page);
     await revealApp(page);
     await openCover(page);
 
