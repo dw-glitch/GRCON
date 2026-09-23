@@ -3190,12 +3190,30 @@ check("resposta de e-mail monta as oito colunas da relação e cola como tabela"
   assert.equal((reply.tableHtml.match(/text-align:center/g) || []).length, 4, "cabeçalho e as três células da revisão ficam centralizados");
   assert.equal((reply.tableHtml.match(/text-align:left/g) || []).length, 28, "as outras sete colunas continuam à esquerda");
 
-  // A mensagem padrão nomeia a eGRDT e a data, e é o texto que abre o painel.
-  assert.match(reply.message, /0130870-C1O-PGV-G-1407-2026 - eGRDT/);
-  assert.match(reply.message, /31\/08\/2026, às 10:59/);
+  // A mensagem padrão nomeia a eGRDT e usa a data/hora gravada no Histórico.
+  assert.equal(
+    reply.message,
+    "Prezado(a),\n\nInformamos que os documentos abaixo foram postados por meio da eGRDT 0130870-C1O-PGV-G-1407-2026 - eGRDT em 31/08/2026, às 10:59.\n\nSolicitamos, por gentileza, que seja consultada a Consulta Geral, disponibilizada diariamente, para verificação da efetivação da postagem e demais atualizações relacionadas ao envio.",
+  );
+  assert.doesNotMatch(reply.message, /Atenciosamente/);
   assert.doesNotMatch(reply.message, /Seguem\s+\d+\s+documento/i);
   assert.doesNotMatch(reply.message, /\d+\s+arquivos?/i);
+  assert.match(reply.html, /<strong>eGRDT 0130870-C1O-PGV-G-1407-2026 - eGRDT<\/strong>/);
+  assert.match(reply.html, /<strong>31\/08\/2026, às 10:59<\/strong>/);
+  assert.match(reply.html, /<strong>Solicitamos, por gentileza, que seja consultada a Consulta Geral,[^<]+<\/strong>/);
   assert.equal(reply.subject, "Documentos postados — 0130870-C1O-PGV-G-1407-2026 - eGRDT");
+
+  // Histórico antigo com apenas data: a normalização para meia-noite não pode
+  // virar um horário artificial no corpo da resposta.
+  const antigoSemHorario = EmailReply.build([History.cleanRecord({
+    id: "email-data-only",
+    egrdtNumber: "0130870-C1O-PGV-G-0009-2026 - eGRDT",
+    generatedAt: "22/09/2026",
+    files: [{ document: "DOC-ANTIGO", finalName: "DOC-ANTIGO.pdf", sheet: "ET" }],
+  })]);
+  assert.match(antigoSemHorario.message, /em 22\/09\/2026\./);
+  assert.doesNotMatch(antigoSemHorario.message, /às 00:00|00:00/);
+  assert.doesNotMatch(antigoSemHorario.message, /undefined|null|Invalid Date/);
 
   // Só a tabela: quem já escreveu o próprio texto cola apenas a relação.
   const somenteTabela = EmailReply.build([postado], { message: "" });
