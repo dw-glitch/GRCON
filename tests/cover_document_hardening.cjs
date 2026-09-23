@@ -23,6 +23,8 @@ function transpile(relative, globals = {}) {
     console,
     Blob,
     URL,
+    Uint8Array,
+    ArrayBuffer,
     setTimeout,
     clearTimeout,
     performance,
