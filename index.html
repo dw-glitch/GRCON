@@ -60,11 +60,8 @@
 <button class="ops-nav-button" data-grcon-view="requests" type="button">
 <svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong></span>
 </button>
-<button class="ops-nav-button" data-grcon-view="pdf-tools" type="button">
-<svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v12H5zM14 3v4h4"></path><path d="M9 11h5M9 15h5M19 10h2v11H8v-2"></path></svg><span><strong>Combinar PDFs</strong></span>
-</button>
-<button class="ops-nav-button" data-grcon-view="cover-document" type="button">
-<svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v18H5zM14 3v4h4M8 11h8M8 15h8M8 19h5"></path></svg><span><strong>Adicionar Capa</strong></span>
+<button class="ops-nav-button" data-grcon-view="additional-tools" type="button">
+<svg viewbox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3M9 12h6M12 9v6"></path></svg><span><strong>Ferramentas adicionais</strong><small>PDFs e capas</small></span>
 </button>
 <a class="ops-nav-button ops-nav-external" href="https://grcon-flow.vercel.app/" rel="noopener noreferrer" target="_blank" title="Abrir o GRCON Flow em outra aba">
 <svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Abre o GRCON Flow</small></span><svg aria-hidden="true" class="ops-nav-external-icon" viewbox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M7 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"></path></svg>
@@ -356,6 +353,23 @@
 </div>
 <small class="requests-tipos-hint">Coluna que o GRCON não sabe preencher sai em branco: a estrutura da sua planilha é reproduzida sem que nenhum campo seja preenchido por suposição. Ao importar, o casamento é por nome idêntico da coluna — nunca por semelhança.</small>
 </section>
+</div>
+</section>
+<section id="additional-tools-module" class="additional-tools-module" hidden="" role="tabpanel" aria-label="Ferramentas adicionais">
+<header class="additional-tools-heading">
+<div><span>FERRAMENTAS ADICIONAIS</span><h2>Utilitários documentais</h2><p>Abra apenas a ferramenta necessária. Combinar PDFs e Adicionar Capa ficam fora da navegação operacional principal.</p></div>
+</header>
+<div class="additional-tools-grid" role="list">
+<button class="additional-tool-card" data-grcon-view="pdf-tools" type="button" role="listitem">
+<span class="additional-tool-icon" aria-hidden="true"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v12H5zM14 3v4h4"></path><path d="M9 11h5M9 15h5M19 10h2v11H8v-2"></path></svg></span>
+<span><strong>Combinar PDFs</strong><small>Organize vários PDFs e gere um único arquivo no próprio navegador.</small></span>
+<span class="additional-tool-open" aria-hidden="true">Abrir →</span>
+</button>
+<button class="additional-tool-card" data-grcon-view="cover-document" type="button" role="listitem">
+<span class="additional-tool-icon" aria-hidden="true"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v18H5zM14 3v4h4M8 11h8M8 15h8M8 19h5"></path></svg></span>
+<span><strong>Adicionar Capa</strong><small>Localize os dados na LD e aplique a capa oficial ao documento.</small></span>
+<span class="additional-tool-open" aria-hidden="true">Abrir →</span>
+</button>
 </div>
 </section>
 <section id="pdf-tools-module" class="pdf-merge-module" hidden="" role="tabpanel" aria-labelledby="tab-pdf-tools">
