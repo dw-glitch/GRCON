@@ -25,6 +25,7 @@ function transpile(relative, globals = {}) {
     URL,
     Uint8Array,
     ArrayBuffer,
+    Array,
     setTimeout,
     clearTimeout,
     performance,
