@@ -70,6 +70,13 @@ function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
   };
 }
 
+function initialStatus(): string {
+  const last = window.GrconLdMemory?.get?.();
+  return last?.name
+    ? `Carregue uma ou mais LDs para começar. Última LD usada: ${last.name}.`
+    : "Carregue uma ou mais LDs para começar.";
+}
+
 export function useCoverDocument() {
   const [records, setRecords] = useState<LdDocumentRecord[]>([]);
   const [ldNames, setLdNames] = useState<string[]>([]);
