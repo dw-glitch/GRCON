@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  buildLdSearchIndex,
   categoryLabel,
   loadLdRecords,
   searchLdDocuments,
@@ -74,6 +75,7 @@ export function useCoverDocument() {
   const [records, setRecords] = useState<LdDocumentRecord[]>([]);
   const [ldNames, setLdNames] = useState<string[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selected, setSelected] = useState<CoverDocumentCandidate | null>(null);
   const [baseData, setBaseData] = useState<CoverDocumentData>(EMPTY_DATA);
   const [data, setData] = useState<CoverDocumentData>(EMPTY_DATA);
@@ -86,7 +88,12 @@ export function useCoverDocument() {
   const stateRef = useRef<CoverDebugState | null>(null);
   const previewToken = useRef(0);
 
-  const candidates = useMemo(() => searchLdDocuments(records, query), [records, query]);
+  const searchIndex = useMemo(() => buildLdSearchIndex(records), [records]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), 120);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+  const candidates = useMemo(() => searchLdDocuments(searchIndex, debouncedQuery), [searchIndex, debouncedQuery]);
   const originalPages = manualOriginalPages ?? source?.originalPages ?? null;
   const totalPages = originalPages ? originalPages + 1 : null;
   const validations = useMemo(() => validateCover(selected, data, source, totalPages), [selected, data, source, totalPages]);
@@ -119,6 +126,7 @@ export function useCoverDocument() {
       setBaseData(EMPTY_DATA);
       setData(EMPTY_DATA);
       setQuery("");
+      setDebouncedQuery("");
       setStatus(`${loaded.length.toLocaleString("pt-BR")} registro(s) documental(is) disponível(is) para pesquisa.`);
       notify("LD carregada para a ferramenta de capa.", "success");
     } catch (error) {
@@ -224,6 +232,7 @@ export function useCoverDocument() {
     setRecords([]);
     setLdNames([]);
     setQuery("");
+    setDebouncedQuery("");
     setSelected(null);
     setBaseData(EMPTY_DATA);
     setData(EMPTY_DATA);
