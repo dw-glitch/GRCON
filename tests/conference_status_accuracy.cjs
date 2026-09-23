@@ -37,7 +37,7 @@ assert.equal(check([header, updated, ...source], doc, 'B').sigemStatus, 'Sem Com
 const conflict = [...updated]; conflict[4] = 'Recusado';
 const ambiguous = check([header, updated, conflict], doc, 'B');
 assert.equal(ambiguous.sigemStatus, '');
-assert.match(ambiguous.note, /ambíguo/);
+assert.match(ambiguous.note, /ambígu[oa]/i);
 assert.equal(check([header, [doc, 'B', '', '', '']], doc, 'B').sigemStatus, '');
 assert.equal(check([header, ...source], doc.replace('3.8.9.1', '3.8.9.2'), 'B').sigemStatus, '');
 assert.equal(check([header, ...source], doc.replace('_REP_', '_RUFF_'), 'B').sigemStatus, '');
