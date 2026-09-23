@@ -22,8 +22,8 @@ export function validateCover(
   if (!source) push("error", "source", "Anexe o documento que receberá a capa.");
   if (!data.title.trim()) push("error", "title", "Título obrigatório.");
   if (!data.documentNumber.trim()) push("error", "code", "Código/número do documento obrigatório.");
-  if (!data.revision.trim()) push("error", "revision", "Revisão obrigatória; confirme a LD ou informe manualmente.");
-  if (!data.revisionDate.trim()) push("error", "date", "Data da emissão/revisão obrigatória.");
+  if (!data.revision.trim()) push("error", "revision", "Revisão obrigatória; informe a revisão no campo da ferramenta.");
+  if (!data.revisionDate.trim()) push("error", "date", "A data atual da emissão não pôde ser definida.");
   if (!data.revisionDescription.trim()) push("error", "revision-description", "Descrição da revisão obrigatória.");
   if (!data.categoryLabel.trim()) push("warning", "category", "Categoria documental não foi mapeada para uma descrição; confira antes de gerar.");
   if (!data.taxonomy.trim()) push("warning", "taxonomy", "Taxonomia não encontrada na coluna TAXONOMIA da linha selecionada da LD. Ela não será inventada.");
