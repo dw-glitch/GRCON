@@ -22,11 +22,21 @@ export function validateCover(
   if (!source) push("error", "source", "Anexe o documento que receberá a capa.");
   if (!data.title.trim()) push("error", "title", "Título obrigatório.");
   if (!data.documentNumber.trim()) push("error", "code", "Código/número do documento obrigatório.");
-  if (!data.revision.trim()) push("error", "revision", "Revisão obrigatória; confirme a revisão carregada da LD ou informe manualmente.");
+  if (!data.revision.trim()) {
+    push("error", "revision", "Revisão obrigatória; confirme a revisão carregada da LD ou informe manualmente.");
+  } else if (window.TriagemCore?.revisionInfo && !window.TriagemCore.revisionInfo(data.revision).valid) {
+    push("error", "revision-rule", "Revisão fora da regra oficial do GRCON.");
+  }
   if (!data.revisionDate.trim()) push("error", "date", "A data atual da emissão não pôde ser definida.");
   if (!data.revisionDescription.trim()) push("error", "revision-description", "Descrição da revisão obrigatória.");
   if (!data.categoryLabel.trim()) push("warning", "category", "Categoria documental não foi mapeada para uma descrição; confira antes de gerar.");
-  if (!data.taxonomy.trim()) push("warning", "taxonomy", "Taxonomia não encontrada na coluna TAXONOMIA da linha selecionada da LD. Ela não será inventada.");
+  const officialTypes = window.TriagemCore?.EGRDT_OPTIONS?.documentTypes || [];
+  if (data.category.trim() && officialTypes.length && !officialTypes.includes(data.category.trim().toUpperCase())) {
+    push("error", "category-rule", "Categoria documental fora do catálogo oficial do GRCON.");
+  }
+  if (!data.taxonomy.trim()) {
+    push("error", "taxonomy", "Taxonomia não encontrada na coluna TAXONOMIA da linha selecionada da LD.");
+  }
   if (!totalPages || totalPages < 2) push("error", "pages", "Total de folhas não pôde ser confirmado.");
   if (source?.kind === "docx" && source.pageCountSource === "metadata") {
     push("info", "docx-pages", "A contagem do DOCX vem do metadado de páginas salvo no Word. Confira o total se o documento tiver sido alterado depois do último salvamento.");
@@ -35,15 +45,6 @@ export function validateCover(
     push("info", "word-output", "A saída Word mantém a capa editável e integra a primeira página diretamente ao pacote OOXML do DOCX original, preservando o arquivo de origem.");
   }
 
-  const revisionCore = (window as unknown as {
-    TriagemCore?: { revisionInfo?: (value: unknown) => { valid: boolean } };
-  }).TriagemCore;
-  const revisionInfo = data.revision.trim() && revisionCore?.revisionInfo
-    ? revisionCore.revisionInfo(data.revision)
-    : null;
-  if (revisionInfo && !revisionInfo.valid) {
-    push("warning", "revision-format", `Formato de revisão incomum “${data.revision}”. Confira a LD antes de gerar.`);
-  }
 
   const triagemValidator = window.TriagemCore as (typeof window.TriagemCore & {
     validateDocumentCode?: (document: string, sheetName?: string) => {

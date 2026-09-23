@@ -40,16 +40,27 @@ type ZipLike = {
   generateAsync(options: Record<string, unknown>): Promise<Uint8Array>;
 };
 
+const TEMPLATE_BYTES_CACHE = new Map<string, Promise<Uint8Array>>();
+
 async function loadTemplateBytes(parts: string[], label: string): Promise<Uint8Array> {
-  const chunks = await Promise.all(parts.map(async (url) => {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error("Template " + label + " da capa não pôde ser carregado.");
-    return (await response.text()).trim();
-  }));
-  const binary = atob(chunks.join(""));
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
+  const key = parts.join("|");
+  if (!TEMPLATE_BYTES_CACHE.has(key)) {
+    TEMPLATE_BYTES_CACHE.set(key, (async () => {
+      const chunks = await Promise.all(parts.map(async (url) => {
+        const response = await fetch(url, { cache: "force-cache" });
+        if (!response.ok) throw new Error("Template " + label + " da capa não pôde ser carregado.");
+        return (await response.text()).trim();
+      }));
+      const binary = atob(chunks.join(""));
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return bytes;
+    })().catch((error) => {
+      TEMPLATE_BYTES_CACHE.delete(key);
+      throw error;
+    }));
+  }
+  return Uint8Array.from(await TEMPLATE_BYTES_CACHE.get(key)!);
 }
 
 function getPdfLib() {

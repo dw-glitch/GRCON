@@ -18,6 +18,7 @@ on:
       - "package-lock.json"
       - "tests/additional_tools_navigation.cjs"
       - "tests/cover_document_react.cjs"
+      - "tests/cover_document_hardening.cjs"
       - "scripts/validar-cover-document-browser.cjs"
       - ".github/workflows/cover-document-chromium.yml"
   workflow_dispatch:
@@ -47,6 +48,7 @@ jobs:
           npm run build
           node tests/additional_tools_navigation.cjs
           node tests/cover_document_react.cjs
+          node tests/cover_document_hardening.cjs
 
       - name: Instalar Chromium
         run: |
