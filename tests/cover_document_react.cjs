@@ -55,7 +55,7 @@ assert.match(hook, /setTimeout\(\(\) => setDebouncedQuery\(query\), 120\)/);
 assert.match(hook, /uniqueExactCandidate/);
 assert.match(hook, /createCoverPreview/);
 assert.match(app, /cover\.generate\("pdf"\)/);
-assert.match(ld, /TriagemCore\.parseWorkbook/);
+assert.match(ld, /triagemCore\.parseWorkbook/);
 assert.match(ld, /GrconPerformance/);
 assert.match(ld, /GrconLdMemory/);
 assert.match(ld, /exactColumnValue\(record\.ldColumns, "TAXONOMIA"\)/);
