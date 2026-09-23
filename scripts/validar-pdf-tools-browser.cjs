@@ -16,22 +16,29 @@ async function revealApp(page) {
 }
 
 async function waitForStableServiceWorkerPage(page) {
-  let lastError = null;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      await page.waitForFunction(() => Boolean(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 });
-      await page.waitForTimeout(200);
-      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      return;
+      const supported = await page.evaluate(() => "serviceWorker" in navigator);
+      if (!supported) return;
+      await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+      if (await page.evaluate(() => Boolean(navigator.serviceWorker.controller))) {
+        await page.waitForTimeout(250);
+        return;
+      }
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+      await revealApp(page);
     } catch (error) {
-      lastError = error;
       const message = String(error && error.message ? error.message : error);
       if (!/Execution context was destroyed|navigation|frame was detached|Timeout/i.test(message)) throw error;
-      await page.waitForTimeout(150);
+      await page.waitForLoadState("domcontentloaded", { timeout: 30000 }).catch(() => {});
+      await revealApp(page).catch(() => {});
     }
   }
-  throw lastError || new Error("Service Worker não estabilizou a página de Combinar PDFs.");
+  await page.waitForFunction(
+    () => !("serviceWorker" in navigator) || Boolean(navigator.serviceWorker.controller),
+    null,
+    { timeout: 10000 },
+  );
 }
 
 async function clickVisibleView(page, view) {
@@ -52,6 +59,11 @@ async function clickVisibleView(page, view) {
 }
 
 async function openPdfTools(page) {
+  await clickVisibleView(page, "additional-tools");
+  await page.evaluate(async () => {
+    if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("additional-tools");
+  });
+  await page.locator("#additional-tools-module").waitFor({ state: "visible", timeout: 10000 });
   await clickVisibleView(page, "pdf-tools");
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("pdf-tools");

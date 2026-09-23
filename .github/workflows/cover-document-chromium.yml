@@ -1,0 +1,70 @@
+name: QA — Adicionar Capa Chromium
+
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "grcon_module_loader.js"
+      - "grcon-ui-fix.css"
+      - "src/react/cover-document/**"
+      - "assets/templates/CAPA_PAGE1_*"
+      - "performance_workers.js"
+      - "workers/ld.worker.js"
+      - "ld_memory.js"
+      - "cover-document.css"
+      - "sw.js"
+      - "vite.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tests/additional_tools_navigation.cjs"
+      - "tests/cover_document_react.cjs"
+      - "scripts/validar-cover-document-browser.cjs"
+      - ".github/workflows/cover-document-chromium.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium:
+    name: Capa + Ferramentas adicionais — Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck, build e regressões focadas
+        run: |
+          npm run typecheck
+          npm run build
+          node tests/additional_tools_navigation.cjs
+          node tests/cover_document_react.cjs
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: QA real no Chromium
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-cover-document.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-cover-document-browser.cjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cover-document-chromium
+          path: |
+            artifacts/cover-document-browser/*.png
+            artifacts/cover-document-browser/metrics.json
+          if-no-files-found: warn

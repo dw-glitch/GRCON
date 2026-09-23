@@ -47,6 +47,8 @@
       "requests_taxonomy_core.js", "requests_app.js",
       "react-dist/consultas-app.js",
     ],
+    // Hub estático: não carrega dependências até o operador escolher uma ferramenta.
+    "additional-tools": [],
     // O combinador é isolado do banco. A interface é uma ilha React; o Core
     // legado permanece fonte da verdade e pdf-lib só entra pelo Worker quando
     // o operador realmente inicia a combinação.
@@ -226,6 +228,7 @@
       dashboard: "dashboard-module",
       sigem: "sigem-module",
       requests: "requests-module",
+      "additional-tools": "additional-tools-module",
       "pdf-tools": "pdf-tools-module",
       "cover-document": "cover-document-module",
     };
@@ -234,7 +237,9 @@
       if (node) node.hidden = key !== view;
     });
     document.querySelectorAll("[data-grcon-view]").forEach((button) => {
-      const active = button.dataset.grconView === view;
+      const nestedToolView = view === "pdf-tools" || view === "cover-document";
+      const active = button.dataset.grconView === view
+        || (nestedToolView && button.dataset.grconView === "additional-tools" && button.classList.contains("ops-nav-button"));
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
     });
@@ -247,6 +252,7 @@
   const NOMES = {
     control: "Controle de GRDT",
     requests: "Consultas",
+    "additional-tools": "Ferramentas adicionais",
     "analysis-history": "Histórico de análises",
     history: "Histórico de eGRDTs",
     dashboard: "Dashboard de emissões",
@@ -272,6 +278,7 @@
   }
 
   function activateReadyModule(module) {
+    if (module === "additional-tools") return;
     if (module === "dashboard") {
       root.GrconHistoryDashboard?.activate?.();
       return;

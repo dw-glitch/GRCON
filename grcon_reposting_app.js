@@ -202,7 +202,12 @@
       button.dataset.historyRevisionEdit = "";
       button.textContent = "Alterar revisão";
       const editNumber = $("[data-history-action=edit]", actions);
-      if (editNumber) actions.insertBefore(button, editNumber); else actions.appendChild(button);
+      // O Histórico React pode substituir a faixa de ações entre a consulta e
+      // a inserção. Só use insertBefore se a referência ainda pertencer ao
+      // mesmo container; caso contrário, anexe normalmente e deixe a próxima
+      // renderização reposicionar a ação.
+      if (editNumber && editNumber.parentElement === actions) actions.insertBefore(button, editNumber);
+      else actions.appendChild(button);
     };
     detail.addEventListener("click", (event) => { if (event.target.closest("[data-history-revision-edit]")) void openRevision(); });
     const observer = new MutationObserver(() => queueMicrotask(decorate));

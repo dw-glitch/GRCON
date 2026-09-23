@@ -113,3 +113,22 @@ html[data-app="GRCON"] .grcon-fix-popover-hint {
   color: var(--text-3, #6f8296);
 }
 html[data-app="GRCON"] .grcon-fix-popover-hint[hidden] { display: none; }
+
+
+/* Ferramentas adicionais: mantém utilitários documentais fora da navegação operacional principal. */
+.additional-tools-module{padding:28px 30px 40px;max-width:1180px;margin:0 auto;width:100%;box-sizing:border-box}
+.additional-tools-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:22px}
+.additional-tools-heading span{display:block;font-size:.72rem;font-weight:800;letter-spacing:.14em;color:var(--text-muted,#687b8c)}
+.additional-tools-heading h2{margin:6px 0 7px;color:var(--text-strong,#244158);font-size:clamp(1.45rem,2vw,2rem)}
+.additional-tools-heading p{margin:0;max-width:760px;color:var(--text-muted,#687b8c);line-height:1.55}
+.additional-tools-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.additional-tool-card{appearance:none;border:1px solid var(--border,#d8e1e8);background:var(--surface,#fff);color:inherit;border-radius:18px;padding:22px;display:grid;grid-template-columns:48px 1fr auto;gap:16px;align-items:center;text-align:left;cursor:pointer;box-shadow:0 8px 24px rgba(20,45,65,.06);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+.additional-tool-card:hover{transform:translateY(-2px);border-color:var(--accent,#2b6f96);box-shadow:0 12px 28px rgba(20,45,65,.1)}
+.additional-tool-card:focus-visible{outline:3px solid color-mix(in srgb,var(--accent,#2b6f96) 28%,transparent);outline-offset:3px}
+.additional-tool-icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:var(--surface-muted,#eef4f7);color:var(--accent,#2b6f96)}
+.additional-tool-icon svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.additional-tool-card strong{display:block;color:var(--text-strong,#244158);font-size:1.02rem;margin-bottom:5px}
+.additional-tool-card small{display:block;color:var(--text-muted,#687b8c);font-size:.88rem;line-height:1.45}
+.additional-tool-open{font-size:.82rem;font-weight:800;color:var(--accent,#2b6f96);white-space:nowrap}
+@media(max-width:760px){.additional-tools-module{padding:20px 16px 32px}.additional-tools-grid{grid-template-columns:1fr}.additional-tool-card{grid-template-columns:44px 1fr;padding:18px}.additional-tool-open{grid-column:2}.additional-tools-heading{align-items:flex-start}}
+@media(prefers-reduced-motion:reduce){.additional-tool-card{transition:none}.additional-tool-card:hover{transform:none}}
