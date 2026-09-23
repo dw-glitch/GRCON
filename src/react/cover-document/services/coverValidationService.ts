@@ -22,13 +22,35 @@ export function validateCover(
   if (!source) push("error", "source", "Anexe o documento que receberá a capa.");
   if (!data.title.trim()) push("error", "title", "Título obrigatório.");
   if (!data.documentNumber.trim()) push("error", "code", "Código/número do documento obrigatório.");
-  if (!data.revision.trim()) push("error", "revision", "Revisão obrigatória; confirme a LD ou informe manualmente.");
+
+  const rawRevision = data.revision.trim();
+  if (!rawRevision) {
+    push("error", "revision", "Revisão obrigatória; confirme a LD ou informe manualmente.");
+  } else if (window.TriagemCore?.revisionInfo) {
+    try {
+      const info = window.TriagemCore.revisionInfo(rawRevision);
+      if (!info.valid) {
+        push("warning", "revision-rule", `Revisão “${rawRevision}” possui formato inesperado para a regra documental vigente do GRCON. O valor original foi preservado para conferência.`);
+      } else {
+        push("info", "revision-valid", info.kind === "field"
+          ? `Revisão de campo “${rawRevision}” reconhecida pelo motor documental do GRCON.`
+          : `Revisão “${rawRevision}” reconhecida pelo motor documental do GRCON.`);
+      }
+    } catch (_) {
+      push("warning", "revision-validator", "A regra documental de revisão não pôde ser executada; o valor original da LD foi preservado.");
+    }
+  } else {
+    push("warning", "revision-validator", "Motor documental de revisão indisponível; o valor original da LD foi preservado.");
+  }
+
   if (!data.revisionDate.trim()) push("error", "date", "Data da emissão/revisão obrigatória.");
   if (!data.revisionDescription.trim()) push("error", "revision-description", "Descrição da revisão obrigatória.");
-  if (!data.categoryLabel.trim()) push("warning", "category", "Categoria documental não foi mapeada para uma descrição; confira antes de gerar.");
-  if (!data.taxonomy.trim()) push("warning", "taxonomy", "Taxonomia não encontrada na linha selecionada da LD. Ela não será inventada.");
-  if (!data.internalDocumentCode.trim()) push("warning", "internal", "Código interno não informado na LD; a capa indicará “NÃO INFORMADO NA LD”.");
+  if (!data.categoryLabel.trim()) push("warning", "category", data.category.trim()
+    ? `Categoria “${data.category}” não reconhecida pelo catálogo/motor documental do GRCON; confira antes de gerar.`
+    : "Categoria documental não informada ou não reconhecida na LD.");
+  if (!data.taxonomy.trim()) push("warning", "taxonomy", "Taxonomia Interna não informada na LD");
   if (!totalPages || totalPages < 2) push("error", "pages", "Total de folhas não pôde ser confirmado.");
+
   if (source?.kind === "docx" && source.pageCountSource === "metadata") {
     push("info", "docx-pages", "A contagem do DOCX vem do metadado de páginas salvo no Word. Confira o total se o documento tiver sido alterado depois do último salvamento.");
   }
