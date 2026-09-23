@@ -1,3 +1,4 @@
+import { UiPanel } from "../core/ui/UiPrimitives";
 import { historicoAnalisesAdapter as Adapter } from "./services/historicoAnalisesAdapter";
 import { useHistoricoAnalises } from "./hooks/useHistoricoAnalises";
 import {
@@ -12,10 +13,13 @@ import {
 
 export function HistoricoAnalisesApp() {
   const h = useHistoricoAnalises();
+  const allDocumentsCount = h.sessions.reduce((total, session) => total + Number(session.total || 0), 0);
 
   return (
-    <>
+    <div className="analysis-history-phase-b">
       <HistoryHeader
+        sessionsCount={h.sessions.length}
+        documentsCount={h.total}
         canDeleteSession={Boolean(h.filters.sessionId)}
         onBackup={() => { void h.backup(); }}
         onRestore={h.restore}
@@ -31,27 +35,44 @@ export function HistoricoAnalisesApp() {
         onClear={h.clearUnifiedSearch}
       />
 
-      <HistoryFilters
-        filters={h.filters}
-        sessions={h.sessions}
-        periodInvalid={h.periodInvalid}
-        onFilter={h.setFilter}
-      />
+      <UiPanel className="analysis-history-filter-panel" labelledBy="analysis-history-filter-title">
+        <div className="analysis-history-section-heading">
+          <div>
+            <span>BUSCA / FILTROS</span>
+            <h3 id="analysis-history-filter-title">Localizar análises</h3>
+            <p>Refine por texto, situação, período ou execução sem perder o contexto do histórico.</p>
+          </div>
+        </div>
 
-      <QuickAndSavedFilters
-        savedFilters={h.savedFilters}
-        selectedId={h.selectedSavedFilterId}
-        onQuick={h.applyQuickFilter}
-        onSelectSaved={h.loadSavedFilter}
-        onSave={h.saveCurrentFilter}
-        onDelete={h.deleteSavedFilter}
-      />
+        <HistoryFilters
+          filters={h.filters}
+          sessions={h.sessions}
+          periodInvalid={h.periodInvalid}
+          onFilter={h.setFilter}
+        />
 
-      <SummaryCards summary={h.summary} />
+        <QuickAndSavedFilters
+          filters={h.filters}
+          savedFilters={h.savedFilters}
+          selectedId={h.selectedSavedFilterId}
+          onQuick={h.applyQuickFilter}
+          onSelectSaved={h.loadSavedFilter}
+          onSave={h.saveCurrentFilter}
+          onDelete={h.deleteSavedFilter}
+        />
+      </UiPanel>
+
+      <SummaryCards
+        summary={h.summary}
+        activeStatus={h.filters.status}
+        onStatus={(status) => h.setFilter("status", status)}
+      />
 
       <ResultsCard
         rows={h.rows}
         total={h.total}
+        allTotal={allDocumentsCount}
+        filters={h.filters}
         page={h.page}
         pages={h.pages}
         loading={h.loading}
@@ -72,6 +93,6 @@ export function HistoricoAnalisesApp() {
         onClose={h.closeDetail}
         onRelated={(id, prepareSigem) => { void h.openRelatedHistory(id, prepareSigem); }}
       />
-    </>
+    </div>
   );
 }

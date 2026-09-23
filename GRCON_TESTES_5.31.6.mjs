@@ -179,18 +179,20 @@ await checkAsync("combinador recusa fila insuficiente e PDF inválido com mensag
 check("combinador é um módulo local, isolado do Supabase e carregado sob demanda", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
-  const app = fs.readFileSync(path.join(root, "pdf_merge_app.js"), "utf8");
+  const app = fs.readFileSync(path.join(root, "src", "react", "pdf-tools", "PdfMergeApp.tsx"), "utf8");
+  const adapter = fs.readFileSync(path.join(root, "src", "react", "pdf-tools", "services", "pdfMergeAdapter.ts"), "utf8");
   const worker = fs.readFileSync(path.join(root, "workers", "pdf-merge.worker.js"), "utf8");
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   assert.match(html, /data-grcon-view="pdf-tools"/);
   assert.match(html, /id="pdf-tools-module"/);
-  assert.match(html, /nenhum arquivo é enviado, armazenado ou registrado no banco/i);
-  assert.match(loader, /"pdf-tools": \["pdf_merge_core\.js", "pdf_merge_app\.js"\]/);
-  assert.match(app, /new Worker\("workers\/pdf-merge\.worker\.js"\)/);
-  assert.doesNotMatch(app, /localStorage|GrconCloud|supabase|fetch\s*\(/i);
+  assert.match(html, /id="grcon-pdf-tools-root"/);
+  assert.match(app, /nenhum arquivo é enviado, armazenado ou registrado no banco/i);
+  assert.match(loader, /"pdf-tools": \["pdf_merge_core\.js", "react-dist\/pdf-tools-app\.js"\]/);
+  assert.match(adapter, /new Worker\("workers\/pdf-merge\.worker\.js"\)/);
+  assert.doesNotMatch([app, adapter].join("\n"), /localStorage|GrconCloud|supabase|fetch\s*\(/i);
   assert.match(worker, /importScripts\("\.\.\/pdf-lib\.min\.js", "\.\.\/pdf_merge_engine\.js"\)/);
   assert.doesNotMatch(worker, /localStorage|GrconCloud|supabase|fetch\s*\(/i);
-  ["pdf-merge.css", "pdf_merge_core.js", "pdf_merge_engine.js", "pdf_merge_app.js", "pdf-lib.min.js", "workers/pdf-merge.worker.js"].forEach((asset) => {
+  ["pdf-merge.css", "pdf_merge_core.js", "pdf_merge_engine.js", "react-dist/pdf-tools-app.js", "pdf-lib.min.js", "workers/pdf-merge.worker.js"].forEach((asset) => {
     assert.ok(sw.includes(`"${asset}"`), `${asset} precisa estar no cache offline`);
   });
 });
@@ -1899,7 +1901,7 @@ check("cliente envia e conclui o identificador idempotente da reserva", () => {
 
 check("limpeza compartilhada só remove o histórico local após confirmação do Supabase", () => {
   const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const ui = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
   assert.match(cloud, /state\.client\.rpc\("grcon_clear_history", \{ target_workspace: workspaceId \}\)/);
   const rpcPosition = cloud.indexOf('state.client.rpc("grcon_clear_history"');
   const localClearPosition = cloud.indexOf("History?.clear?.()", rpcPosition);
@@ -1912,13 +1914,14 @@ check("limpeza compartilhada só remove o histórico local após confirmação d
 
 check("exclusão individual confirma o Supabase antes de apagar localmente", () => {
   const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const adapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
+  const hook = fs.readFileSync(path.join(root, "src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts"), "utf8");
   assert.match(cloud, /async function deleteSharedHistoryRecord\(record\)/);
   assert.match(cloud, /target_reservation_ids:\s*reservationIds\.length \? reservationIds : null/);
-  const remotePosition = ui.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
-  const localPosition = ui.indexOf("History.deleteOne(record.id)", remotePosition);
+  const remotePosition = adapter.indexOf("await window.GrconCloud.deleteHistoryRecord(record)");
+  const localPosition = adapter.indexOf("history().deleteOne(record.id)", remotePosition);
   assert.ok(remotePosition >= 0 && localPosition > remotePosition);
-  assert.match(ui, /foi liberado para reutilização/i);
+  assert.match(hook, /foi liberado para reutilização/i);
 });
 
 check("atalho do cabeçalho abre o RECON sem integração de dados", () => {
@@ -2042,27 +2045,32 @@ check("service worker publica o cache isolado da versão atual", () => {
   checks.push("relatório e arquivo final preservam literalmente maiúsculas e minúsculas da LD");
 }
 
-check("cabeçalho React da consulta não se sobrepõe e a Colar SIGEM não fica na frente", () => {
-  const css = fs.readFileSync(path.join(root, "requests.css"), "utf8");
+check("Consulta React mantém tabela principal legível e evidências completas no detalhe", () => {
+  const legacyCss = fs.readFileSync(path.join(root, "requests.css"), "utf8");
+  const phaseBCss = fs.readFileSync(path.join(root, "requests-phase-b.css"), "utf8");
   const components = fs.readFileSync(path.join(root, "src/react/consultas/components/consultasComponents.tsx"), "utf8");
 
-  assert.doesNotMatch(css, /\.requests-table thead th \{[^}]*white-space: nowrap/,
-    "o cabeçalho precisa poder quebrar em duas linhas");
-  assert.match(css, /\.requests-table thead th \{[^}]*min-width: \d/,
-    "cada coluna precisa de um piso para não ficar menor que o próprio rótulo");
-  assert.match(css, /\.requests-table \{[^}]*min-width: 88rem/);
-
-  const iAlocadoTela = components.indexOf('"Alocado?"');
-  const iColarTela = components.indexOf('"Revisão na Colar SIGEM"');
-  const iStatusTela = components.indexOf('"Status SIGEM"');
-  assert.ok(iAlocadoTela > -1 && iAlocadoTela < iColarTela && iColarTela < iStatusTela,
-    "a ordem da tabela React mantém as colunas SIGEM juntas depois de Alocado?");
+  assert.doesNotMatch(legacyCss, /\.requests-table thead th \{[^}]*white-space: nowrap/,
+    "o cabeçalho base precisa poder quebrar em duas linhas");
+  assert.match(phaseBCss, /\.requests-table \{[^}]*min-width: 64rem/,
+    "a FASE B deve reduzir a largura mínima da tabela operacional");
+  assert.match(phaseBCss, /table-layout: fixed/,
+    "a tabela principal deve manter colunas previsíveis");
+  assert.match(components, /const PAGE_SIZE = 100/,
+    "listas grandes não podem renderizar milhares de linhas de uma vez");
+  assert.match(components, /DocumentDetailsDrawer/,
+    "as evidências retiradas da tabela principal precisam continuar acessíveis");
+  assert.match(components, /Código localizado na LD/);
+  assert.match(components, /Revisão Colar SIGEM/);
+  assert.match(components, /Resposta fiscal/);
+  assert.match(components, /Todas as LDs/);
 
   const report = fs.readFileSync(path.join(root, "requests_report.js"), "utf8");
   const iColar = report.indexOf("REVISÃO NA COLAR SIGEM");
   const iAlocado = report.indexOf('"ALOCADO?"');
   const iStatus = report.indexOf("STATUS NO SIGEM");
-  assert.ok(iAlocado < iColar && iColar < iStatus, "a exportação segue a mesma ordem da tela");
+  assert.ok(iAlocado < iColar && iColar < iStatus,
+    "a modernização visual não pode alterar a ordem histórica das colunas exportadas");
 });
 check("central de alocação responde status e comentário da fiscal por documento", () => {
   const AC = AllocationCenter;
@@ -2782,14 +2790,15 @@ check("filtro do período recorta eGRDT mista e recalcula os totais da família 
 });
 
 check("Histórico filtra também a lista de eGRDTs por N-1710, ET e CV", () => {
-  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const ui = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const app = fs.readFileSync(path.join(root, "src/react/historico-egrdt/HistoricoEgrdtApp.tsx"), "utf8");
+  const adapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
+  const hook = fs.readFileSync(path.join(root, "src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts"), "utf8");
   const report = fs.readFileSync(path.join(root, "history_report.js"), "utf8");
-  assert.match(html, /id="history-period-document-type"[\s\S]*value="N-1710"[\s\S]*value="ET"[\s\S]*value="CV"/);
-  assert.match(ui, /filtered = History\.filterByDocumentFamily\(filtered, els\.periodDocumentType/);
-  assert.match(ui, /state\.filtered = sortRecords\(filtered\)/);
-  assert.match(ui, /els\.list\.innerHTML = state\.filtered\.map/);
-  assert.match(ui, /documentFamily: els\.periodDocumentType/);
+  assert.match(app, /id="history-period-document-type"[\s\S]*value="N-1710"[\s\S]*value="ET"[\s\S]*value="CV"/);
+  assert.match(adapter, /filtered = History\.filterByDocumentFamily\(filtered, filters\.documentFamily\)/);
+  assert.match(adapter, /return \[\.\.\.filtered\]\.sort/);
+  assert.match(hook, /filtered\.slice\(0, visibleLimit\)/);
+  assert.match(adapter, /documentFamily: filters\.documentFamily/);
   assert.match(report, /"FAMÍLIA DOCUMENTAL"/);
   assert.match(report, /\["Tipo de documento", selectedFamily\]/);
 });
@@ -3181,12 +3190,30 @@ check("resposta de e-mail monta as oito colunas da relação e cola como tabela"
   assert.equal((reply.tableHtml.match(/text-align:center/g) || []).length, 4, "cabeçalho e as três células da revisão ficam centralizados");
   assert.equal((reply.tableHtml.match(/text-align:left/g) || []).length, 28, "as outras sete colunas continuam à esquerda");
 
-  // A mensagem padrão nomeia a eGRDT e a data, e é o texto que abre o painel.
-  assert.match(reply.message, /0130870-C1O-PGV-G-1407-2026 - eGRDT/);
-  assert.match(reply.message, /31\/08\/2026, às 10:59/);
+  // A mensagem padrão nomeia a eGRDT e usa a data/hora gravada no Histórico.
+  assert.equal(
+    reply.message,
+    "Prezado(a),\n\nInformamos que os documentos abaixo foram postados por meio da eGRDT 0130870-C1O-PGV-G-1407-2026 - eGRDT em 31/08/2026, às 10:59.\n\nSolicitamos, por gentileza, que seja consultada a Consulta Geral, disponibilizada diariamente, para verificação da efetivação da postagem e demais atualizações relacionadas ao envio.",
+  );
+  assert.doesNotMatch(reply.message, /Atenciosamente/);
   assert.doesNotMatch(reply.message, /Seguem\s+\d+\s+documento/i);
   assert.doesNotMatch(reply.message, /\d+\s+arquivos?/i);
+  assert.match(reply.html, /<strong>eGRDT 0130870-C1O-PGV-G-1407-2026 - eGRDT<\/strong>/);
+  assert.match(reply.html, /<strong>31\/08\/2026, às 10:59<\/strong>/);
+  assert.match(reply.html, /<strong>Solicitamos, por gentileza, que seja consultada a Consulta Geral,[^<]+<\/strong>/);
   assert.equal(reply.subject, "Documentos postados — 0130870-C1O-PGV-G-1407-2026 - eGRDT");
+
+  // Histórico antigo com apenas data: a normalização para meia-noite não pode
+  // virar um horário artificial no corpo da resposta.
+  const antigoSemHorario = EmailReply.build([History.cleanRecord({
+    id: "email-data-only",
+    egrdtNumber: "0130870-C1O-PGV-G-0009-2026 - eGRDT",
+    generatedAt: "22/09/2026",
+    files: [{ document: "DOC-ANTIGO", finalName: "DOC-ANTIGO.pdf", sheet: "ET" }],
+  })]);
+  assert.match(antigoSemHorario.message, /em 22\/09\/2026\./);
+  assert.doesNotMatch(antigoSemHorario.message, /às 00:00|00:00/);
+  assert.doesNotMatch(antigoSemHorario.message, /undefined|null|Invalid Date/);
 
   // Só a tabela: quem já escreveu o próprio texto cola apenas a relação.
   const somenteTabela = EmailReply.build([postado], { message: "" });
@@ -3497,14 +3524,15 @@ check("revisão da resposta de e-mail é a enviada na GRDT, não uma recalculada
 check("resposta de e-mail fica disponível somente no Histórico", () => {
   const interfaceSource = fs.readFileSync(path.join(root, "egrdt_email_reply_ui.js"), "utf8");
   const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const historySource = fs.readFileSync(path.join(root, "history_app.js"), "utf8");
+  const historyApp = fs.readFileSync(path.join(root, "src/react/historico-egrdt/HistoricoEgrdtApp.tsx"), "utf8");
+  const historyAdapter = fs.readFileSync(path.join(root, "src/react/historico-egrdt/services/historicoEgrdtAdapter.ts"), "utf8");
 
   assert.doesNotMatch(interfaceSource, /grcon-egrdt-email-auto/);
   assert.doesNotMatch(interfaceSource, /grcon:history-updated/);
   assert.doesNotMatch(interfaceSource, /openLastGenerated|autoOpenEnabled/);
   assert.doesNotMatch(indexSource, /id=["']egrdt-email-reply["']/);
-  assert.match(historySource, /data-history-action=["']email-reply["']/);
-  assert.match(historySource, /GrconEgrdtEmailReplyUi\.open\(\[record\]\)/);
+  assert.match(historyApp, /data-history-action=["']email-reply["']/);
+  assert.match(historyAdapter, /GrconEgrdtEmailReplyUi\.open\?\.\(\[record\]\)/);
 });
 
 check("prévia da relação tem as duas leituras e o cabeçalho acompanha a rolagem", () => {

@@ -107,13 +107,23 @@ export interface EgrdtHistoryFile {
   document?: string;
   originalName?: string;
   finalName?: string;
+  title?: string;
   allocation?: string;
   revision?: string;
+  grdtRevision?: string;
+  revisionSuggested?: string;
+  revisionManual?: boolean;
   sigemStatus?: string;
+  ldPrazo?: string;
+  sheet?: string;
 }
 
 export interface EgrdtHistoryRecord {
   id: string;
+  clientRecordId?: string;
+  cloudId?: string;
+  workspaceId?: string;
+  reservationIds?: string[];
   egrdtNumber?: string;
   numberHistory?: string[];
   outputType?: string;
@@ -122,12 +132,18 @@ export interface EgrdtHistoryRecord {
   allocations?: string[];
   files?: EgrdtHistoryFile[];
   documentCount?: number;
+  fileCount?: number;
   generatedAt?: string;
+  createdByName?: string;
+  createdByEmail?: string;
 }
 
 export interface PostingRecord {
   id: string;
   historyId?: string;
+  egrdtNumber?: string;
+  status?: string;
+  files?: Array<{ document?: string; revision?: string }>;
 }
 
 export interface UnifiedSearchResult {

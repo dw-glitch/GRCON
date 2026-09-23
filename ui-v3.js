@@ -130,13 +130,15 @@
     // cartões de resumo, apontando rolagem onde não há.
     let casca = region.parentElement;
     // Sem pai não há onde pendurar a casca — acontece com região solta ou
-    // ainda fora do documento, e derrubava o script inteiro com insertBefore
-    // de null. Nesse caso a tabela segue funcionando, só sem a sombra.
+    // ainda fora do documento. O pai capturado também precisa continuar sendo
+    // o mesmo até a inserção: React/observers podem mover a região entre a
+    // leitura de parentElement e o insertBefore.
     if (!casca) return;
     if (!casca.classList.contains("ui-v3-table-shell")) {
       const nova = document.createElement("div");
       nova.className = "ui-v3-table-shell";
-      region.parentElement.insertBefore(nova, region);
+      if (region.parentElement !== casca || !casca.contains(region)) return;
+      casca.insertBefore(nova, region);
       nova.appendChild(region);
       casca = nova;
     }

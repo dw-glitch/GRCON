@@ -69,6 +69,7 @@
   }
 
   function updateHistorySummary() {
+    if (root.GrconHistoricoEgrdtReact?.mounted || root.GrconHistoryUi?.state?.react) return;
     const summaryElement = document.getElementById("history-summary");
     const History = root.GrconHistory;
     if (!summaryElement || !History || typeof History.summary !== "function") return;

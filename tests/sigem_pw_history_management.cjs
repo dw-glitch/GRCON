@@ -94,13 +94,13 @@ const Management = require(path.join(rootDir, "sigem_pw_history_management.js"))
 
 (function duplicateBasesAreSilentAndDoNotAutoRecordOnRender() {
   const bootstrap = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_bootstrap.js"), "utf8");
-  const dashboard = fs.readFileSync(path.join(rootDir, "sigem_pw_dashboard_app.js"), "utf8");
+  const dashboard = fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/services/sigemPwDashboardAdapter.ts"), "utf8");
   assert.doesNotMatch(bootstrap, /sigem_pw_history_app\.js/,
     "a UI histórica antiga não deve registrar automaticamente durante a abertura");
   assert.doesNotMatch(bootstrap, /sigem_pw_history_runtime_fix\.js/,
     "o remendo da UI removida não deve ser carregado");
-  assert.match(dashboard, /History\.recordActiveBases\(sigemBase, pwBase/);
-  assert.match(dashboard, /Management\.capturePayload\(system, candidate, source\.snapshot\.id/);
+  assert.match(dashboard, /history\.recordActiveBases\(sigemBase, pwBase/);
+  assert.match(dashboard, /management\.capturePayload\(system, candidate, sourceId/);
   assert.match(dashboard, /registerHistoryBeforeActivation/,
     "somente uma importação validada deve registrar o histórico antes da ativação");
 })();

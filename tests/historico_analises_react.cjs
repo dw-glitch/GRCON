@@ -156,7 +156,7 @@ function loadAdapter(windowOverrides = {}) {
   const components = fs.readFileSync(path.join(root, "src/react/historico-analises/components/HistoricoAnalisesComponents.tsx"), "utf8");
   for (const text of [
     "Fazer backup", "Restaurar backup", "Excluir análise selecionada", "Limpar todo o histórico",
-    "Busca geral", "Situação entregue", "Data inicial", "Data final", "Análise executada",
+    "Busca geral", "Situação", "Data inicial", "Data final", "Análise executada",
     "Hoje", "Últimos 7 dias", "Pendências", "Incluídos", "Salvar filtro atual", "Excluir filtro",
     "Analisado em", "Documento", "Revisão atual", "Próxima revisão", "Resultado GRCON",
     "SIGEM", "Alocação", "LD", "Motivo", "Baixar relatório",
@@ -177,12 +177,35 @@ function loadAdapter(windowOverrides = {}) {
   }
 
   const hook = fs.readFileSync(path.join(root, "src/react/historico-analises/hooks/useHistoricoAnalises.ts"), "utf8");
-  assert.match(hook, /const PAGE_SIZE = 200/);
-  assert.match(hook, /useDebouncedValue\(filters\.query, 300\)/);
+  assert.ok(hook.includes("const DESKTOP_PAGE_SIZE = 200;"));
+  assert.ok(hook.includes("const MOBILE_PAGE_SIZE = 25;"));
+  assert.ok(hook.includes('const MOBILE_HISTORY_MEDIA = "(max-width: 44rem)";'));
+  assert.ok(hook.includes("useDebouncedValue(filters.query, 300)"));
+  assert.ok(hook.includes("query: debouncedQuery"));
+  assert.equal(hook.includes("...filters,\n    query: debouncedQuery"), false);
+  assert.ok(hook.includes("const queryDebouncing = filters.query !== debouncedQuery;"));
+  assert.ok(hook.includes("Adapter.queryDocuments(effectiveFilters, page, pageSize)"));
   assert.match(hook, /Adapter\.subscribeUpdates/);
   assert.match(hook, /Adapter\.subscribeOpenDetail/);
   assert.match(hook, /Adapter\.confirmClearHistory/);
   assert.match(hook, /Adapter\.dispatchUpdated/);
+
+  assert.match(components, /UiPageHeader/);
+  assert.match(components, /UiPanel/);
+  assert.match(components, /UiMetaPill/);
+  assert.match(components, /UiDrawer/);
+  assert.match(components, /aria-pressed=/);
+  assert.match(components, /A data final deve ser igual ou posterior à data inicial/);
+  assert.match(components, /analysis-cell-revisions/);
+  assert.match(components, /onStatus/);
+
+  const ui = fs.readFileSync(path.join(root, "src/react/core/ui/UiPrimitives.tsx"), "utf8");
+  assert.match(ui, /export function UiDrawer/);
+  assert.match(ui, /role="dialog"/);
+  assert.match(ui, /aria-modal="true"/);
+  assert.match(ui, /body\.style\.overflow = "hidden"/);
+  assert.match(ui, /previousFocus\?\.isConnected/);
+  assert.match(ui, /event\.key !== "Tab"/);
 
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const start = index.indexOf('id="analysis-history-module"');
@@ -208,6 +231,9 @@ function loadAdapter(windowOverrides = {}) {
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   assert.match(sw, /react-dist\/historico-analises-app\.js/);
   assert.match(sw, /phase-a-history-react1/);
+  assert.match(sw, /phase-b-history-ui1/);
+  assert.match(sw, /history-perf-hardening1/);
+  assert.match(sw, /analysis-history-phase-b\.css/);
   assert.doesNotMatch(sw, /"analysis_history_app\.js"/);
 
   const vite = fs.readFileSync(path.join(root, "vite.config.ts"), "utf8");
@@ -217,6 +243,15 @@ function loadAdapter(windowOverrides = {}) {
   const checklist = fs.readFileSync(path.join(root, "docs/react-phase-a-history-parity.md"), "utf8");
   assert.match(checklist, /Checklist de paridade/);
   assert.match(checklist, /Critério de remoção do legado/);
+
+  const phaseBChecklist = fs.readFileSync(path.join(root, "docs/phase-b-historico-analises-parity.md"), "utf8");
+  assert.match(phaseBChecklist, /FASE B — Histórico de análises/);
+  assert.match(phaseBChecklist, /UiDrawer/);
+
+  const indexSource = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(indexSource, /analysis-history-phase-b\.css/);
+  assert.equal(fs.existsSync(path.join(root, "analysis-history-phase-b.css")), true);
+  assert.equal(fs.existsSync(path.join(root, "scripts/validar-historico-analises-browser.cjs")), true);
 
   console.log("historico_analises_react: OK — adapter, contratos, UI, loader, PWA e checklist validados.");
 })().catch((error) => {

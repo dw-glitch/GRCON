@@ -129,11 +129,16 @@
   }
 
   // "31/08/2026, 10:59" é o formato da coluna da tabela. Dentro de uma frase
-  // ele fica truncado, então a mensagem usa a forma por extenso.
+  // ele ganha o "às". Registros antigos que só tinham data acabam normalizados
+  // pelo Histórico para meia-noite; nesse caso a resposta não inventa "00:00".
   function datePhrase(value) {
     const formatted = formatDate(value);
+    if (!formatted || formatted === EMPTY) return "";
     const parts = formatted.split(",");
-    return parts.length === 2 ? `${parts[0].trim()}, às ${parts[1].trim()}` : formatted;
+    if (parts.length !== 2) return formatted;
+    const date = parts[0].trim();
+    const time = parts[1].trim();
+    return time && time !== "00:00" ? `${date}, às ${time}` : date;
   }
 
   function plural(count, singular, pluralWord) {
@@ -153,6 +158,8 @@
     return "Documentos postados";
   }
 
+  const FOLLOW_UP_MESSAGE = "Solicitamos, por gentileza, que seja consultada a Consulta Geral, disponibilizada diariamente, para verificação da efetivação da postagem e demais atualizações relacionadas ao envio.";
+
   /**
    * A mensagem é um ponto de partida editável, não um texto fechado: o painel
    * abre com ela preenchida e o operador ajusta antes de copiar.
@@ -163,8 +170,9 @@
     const via = numbers.length
       ? ` por meio d${numbers.length === 1 ? "a eGRDT" : "as eGRDTs"} ${joinList(numbers)}`
       : "";
-    const quando = info.generatedAt ? ` em ${datePhrase(info.generatedAt)}` : "";
-    return `Prezado(a),\n\nInformamos que os documentos abaixo foram postados${via}${quando}.\n\nAtenciosamente,`;
+    const date = info.generatedAt ? datePhrase(info.generatedAt) : "";
+    const quando = date ? ` em ${date}` : "";
+    return `Prezado(a),\n\nInformamos que os documentos abaixo foram postados${via}${quando}.\n\n${FOLLOW_UP_MESSAGE}`;
   }
 
   function tableText(rows) {
@@ -271,15 +279,34 @@
     return `<table style="${TABLE_STYLE}" width="100%"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
+  const MESSAGE_PARAGRAPH_STYLE = "margin:0 0 12px;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:10.5pt;color:#10222F";
+
   function messageHtml(message) {
     return text(message)
       .split(/\n{2,}/)
-      .map((paragraph) => `<p style="margin:0 0 12px;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:10.5pt;color:#10222F">${escapeHtml(paragraph).replace(/\n/g, "<br/>")}</p>`)
+      .map((paragraph) => `<p style="${MESSAGE_PARAGRAPH_STYLE}">${escapeHtml(paragraph).replace(/\n/g, "<br/>")}</p>`)
       .join("");
   }
 
-  function replyHtml(rows, message) {
-    const intro = text(message) ? messageHtml(message) : "";
+  function defaultMessageHtml(summary) {
+    const info = summary || { egrdtNumbers: [], generatedAt: "" };
+    const numbers = info.egrdtNumbers || [];
+    const label = numbers.length === 1 ? "eGRDT" : "eGRDTs";
+    const via = numbers.length
+      ? ` por meio d${numbers.length === 1 ? "a" : "as"} <strong>${escapeHtml(`${label} ${joinList(numbers)}`)}</strong>`
+      : "";
+    const date = info.generatedAt ? datePhrase(info.generatedAt) : "";
+    const quando = date ? ` em <strong>${escapeHtml(date)}</strong>` : "";
+    const paragraphs = [
+      "Prezado(a),",
+      `Informamos que os documentos abaixo foram postados${via}${quando}.`,
+      `<strong>${escapeHtml(FOLLOW_UP_MESSAGE)}</strong>`,
+    ];
+    return paragraphs.map((paragraph) => `<p style="${MESSAGE_PARAGRAPH_STYLE}">${paragraph}</p>`).join("");
+  }
+
+  function replyHtml(rows, message, defaultSummary) {
+    const intro = defaultSummary ? defaultMessageHtml(defaultSummary) : (text(message) ? messageHtml(message) : "");
     return `<div>${intro}${tableHtml(rows)}</div>`;
   }
 
@@ -296,14 +323,16 @@
     const config = options || {};
     const rows = rowsFromRecords(records);
     const summary = summarize(records);
-    const message = config.message === null || config.message === undefined ? defaultMessage(summary) : text(config.message);
+    const standardMessage = defaultMessage(summary);
+    const message = config.message === null || config.message === undefined ? standardMessage : text(config.message);
+    const useStandardHtml = message === standardMessage;
     return {
       columns: [...COLUMNS],
       rows,
       summary,
       subject: text(config.subject) || defaultSubject(summary),
       message,
-      html: replyHtml(rows, message),
+      html: replyHtml(rows, message, useStandardHtml ? summary : null),
       text: replyText(rows, message),
       tableHtml: tableHtml(rows),
       tableText: tableText(rows),

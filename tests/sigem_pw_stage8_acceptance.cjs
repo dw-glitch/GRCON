@@ -7,7 +7,13 @@ const read = (name) => fs.readFileSync(path.join(rootDir, name), "utf8");
 const Readiness = require("../sigem_pw_readiness_core.js");
 const Dashboard = require("../sigem_pw_dashboard_core.js");
 const dashboardCore = read("sigem_pw_dashboard_core.js");
-const app = read("sigem_pw_dashboard_app.js");
+const app = [
+  read("src/react/sigem-pw/SigemPwDashboardApp.tsx"),
+  read("src/react/sigem-pw/components/SigemPwReadiness.tsx"),
+  read("src/react/sigem-pw/components/SigemPwBases.tsx"),
+  read("src/react/sigem-pw/components/SigemPwBaseDateDialog.tsx"),
+  read("src/react/sigem-pw/services/sigemPwDashboardAdapter.ts"),
+].join("\n");
 const bootstrap = read("sigem_pw_dashboard_bootstrap.js");
 const sw = read("sw.js");
 
@@ -103,11 +109,10 @@ function validResult() {
   assert.match(bootstrap, /ensure\("sigem_pw_readiness_core\.js"\)/);
   assert.match(bootstrap, /root\.GrconSigemPwReadiness/);
   assert.match(app, /id="spw-readiness"/);
-  assert.match(app, /const readinessResult = state\.aggregates\?\.all \|\| Core\.aggregateModel\(state\.model\)/);
-  assert.match(app, /state\.result = state\.aggregates\?\.\[aggregateKey\] \|\| Core\.aggregateModel\(state\.model, \{ documentClass: state\.filters\.documentClass \}\)/);
-  assert.match(app, /Readiness\.assess\(state, unfilteredResult\)/);
+  assert.match(app, /Readiness\(\)\.assess\(state, state\.aggregates\.all\)/);
+  assert.match(app, /state\.result = state\.aggregates\[aggregateKey\]/);
   assert.match(app, /aria-live="polite"/);
-  assert.match(app, /data-status="attention"/);
+  assert.match(app, /data-status=\{assessment\.status\}/);
   assert.match(app, /data-edit-base-date="sigem"/);
   assert.match(app, /data-edit-base-date="pw"/);
   assert.match(app, /id="spw-date-input" type="datetime-local"/);

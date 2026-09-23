@@ -52,6 +52,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
   const root = path.resolve(__dirname, "..");
   const adapterPath = path.join(root, "src/react/consultas/services/consultasAdapter.ts");
   const componentsPath = path.join(root, "src/react/consultas/components/consultasComponents.tsx");
+  const uiPath = path.join(root, "src/react/core/ui/UiPrimitives.tsx");
   const hookPath = path.join(root, "src/react/consultas/hooks/useConsultas.ts");
 
   const adapterLoad = transpileModule(adapterPath, false, {
@@ -125,7 +126,39 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.ok(taxIndex > -1);
   assert.equal(sheet.getCell(15, taxIndex + 1).value, "TX-LITERAL / A01");
 
-  const components = transpileModule(componentsPath, true).exports;
+  const uiPrimitives = transpileModule(uiPath, true).exports;
+  const components = transpileModule(componentsPath, true, {
+    require: (request) => request.includes("core/ui/UiPrimitives") ? uiPrimitives : require(request),
+  }).exports;
+
+  const ldReady = { id: "ld-ready", name: "LD_OK.xlsx", size: 10, records: [{}], history: [], error: "" };
+  const ldLoading = { id: "ld-loading", name: "LD_LENDO.xlsx", size: 11, records: [], history: [], error: "" };
+  const ldError = { id: "ld-error", name: "LD_ERRO.xlsx", size: 12, records: [], history: [], error: "Arquivo inválido" };
+  let ldState = components.deriveLdVisualState([ldReady, ldLoading, ldError], 1);
+  assert.equal(ldState.total, 3);
+  assert.equal(ldState.ready, 1);
+  assert.equal(ldState.loading, 1);
+  assert.equal(ldState.errors, 1);
+  assert.equal(ldState.complete, false, "LD não pode concluir enquanto outra ainda está lendo ou tem erro");
+  assert.match(ldState.summary, /1 pronta/);
+  assert.match(ldState.summary, /1 sendo lida/);
+  assert.match(ldState.summary, /1 com erro/);
+
+  ldState = components.deriveLdVisualState([
+    ldReady,
+    { ...ldReady, id: "ld-ready-2", name: "LD_OK_2.xlsx" },
+    { ...ldReady, id: "ld-ready-3", name: "LD_OK_3.xlsx" },
+  ], 3);
+  assert.equal(ldState.complete, true, "o painel só conclui quando todas as LDs terminaram sem erro");
+  assert.equal(ldState.loading, 0);
+  assert.equal(ldState.errors, 0);
+  assert.match(ldState.summary, /3 LD\(s\) válida\(s\)/);
+
+  ldState = components.deriveLdVisualState([ldReady, ldError], 1);
+  assert.equal(ldState.complete, false, "erro precisa permanecer visível em vez de recolher o painel");
+  assert.match(ldState.summary, /1 válida/);
+  assert.match(ldState.summary, /1 com erro/);
+
   const item = { id: "doc-1", document: "DOC-TESTE", selected: true };
   const markup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.ResultsTable, {
     visibleRows: [{ item, linha: sourceRow }],
@@ -135,18 +168,47 @@ function transpileModule(filePath, jsx, overrides = {}) {
     allSelected: true,
     someSelected: true,
     central: { ok: true },
+    filterKey: "",
   }));
-  assert.ok(markup.indexOf("Título na LD") < markup.indexOf("Taxonomia Interna"));
-  assert.ok(markup.indexOf("Taxonomia Interna") < markup.indexOf("Alocado?"));
+  assert.ok(markup.indexOf("Documento") < markup.indexOf("Título"));
+  assert.ok(markup.indexOf("Título") < markup.indexOf("Taxonomia Interna"));
+  assert.ok(markup.indexOf("Taxonomia Interna") < markup.indexOf("Alocação"));
   assert.match(markup, /requests-col-taxonomia/);
   assert.match(markup, /TX-LITERAL \/ A01/);
-  assert.match(markup, /C1O_RNEST_U32_3\.1\.1\.1_TUB_RIR_nt-NF-1288-CONEXOES/);
-  assert.match(markup, /Emitido pelo GRCON/);
-  assert.match(markup, /Revisão emitida no SIGEM/);
-  assert.match(markup, /Revisão na Colar SIGEM/);
   assert.match(markup, /Status SIGEM/);
-  assert.match(markup, /Status da alocação \(central\)/);
-  assert.match(markup, /Resposta da fiscal 01/);
+  assert.match(markup, /Detalhes/);
+  assert.doesNotMatch(markup, /Emitido pelo GRCON/);
+  assert.doesNotMatch(markup, /Resposta da fiscal/);
+
+  const detailMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.DocumentDetailsDrawer, {
+    entry: { item, linha: sourceRow },
+    central: { ok: true },
+    onClose: () => {},
+  }));
+  assert.match(detailMarkup, /Código localizado na LD/);
+  assert.match(detailMarkup, /C1O_RNEST_U32_3\.1\.1\.1_TUB_RIR_nt-NF-1288-CONEXOES/);
+  assert.match(detailMarkup, /Última GRDT/);
+  assert.match(detailMarkup, /Emitido pelo GRCON/);
+  assert.match(detailMarkup, /Revisão emitida/);
+  assert.match(detailMarkup, /Revisão Colar SIGEM/);
+  assert.match(detailMarkup, /Status SIGEM/);
+  assert.match(detailMarkup, /Status da central/);
+  assert.match(detailMarkup, /Resposta fiscal/);
+  assert.match(detailMarkup, /Todas as LDs/);
+  assert.match(detailMarkup, /Regra \/ evidência/);
+  assert.match(detailMarkup, /TX-LITERAL \/ A01/);
+  assert.match(detailMarkup, /role="dialog"/);
+  assert.match(detailMarkup, /aria-modal="true"/);
+  assert.match(detailMarkup, /requests-detail-drawer[^>]*tabindex="-1"/);
+  assert.match(detailMarkup, /requests-detail-overlay[^>]*tabindex="-1"[^>]*aria-hidden="true"/);
+
+  const uiSource = fs.readFileSync(uiPath, "utf8");
+  assert.match(uiSource, /export function UiDrawer/);
+  assert.match(uiSource, /role="dialog"/);
+  assert.match(uiSource, /aria-modal="true"/);
+  assert.match(uiSource, /body\.style\.overflow = "hidden"/);
+  assert.match(uiSource, /previousFocus\?\.isConnected/);
+  assert.match(uiSource, /event\.key !== "Tab"/);
 
   const emptyMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.ResultsTable, {
     visibleRows: [{ item, linha: { ...sourceRow, internalTaxonomy: "" } }],
@@ -156,12 +218,58 @@ function transpileModule(filePath, jsx, overrides = {}) {
     allSelected: true,
     someSelected: true,
     central: { ok: true },
+    filterKey: "",
   }));
   const taxCell = emptyMarkup.match(/<td class="requests-col-taxonomia">([\s\S]*?)<\/td>/);
   assert.ok(taxCell);
   assert.match(taxCell[1], /—/);
 
+  const manyRows = Array.from({ length: 500 }, (_, index) => ({
+    item: { id: `doc-${index + 1}`, document: `DOC-${String(index + 1).padStart(4, "0")}`, selected: true },
+    linha: sourceRow,
+  }));
+  const pagedMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.ResultsTable, {
+    visibleRows: manyRows,
+    hasDocuments: true,
+    onToggle: () => {},
+    onToggleAll: () => {},
+    allSelected: true,
+    someSelected: true,
+    central: { ok: true },
+    filterKey: "",
+  }));
+  assert.equal((pagedMarkup.match(/data-doc=/g) || []).length, 100,
+    "a tabela visual deve limitar o DOM a 100 documentos por página");
+  assert.match(pagedMarkup, /Mostrando 1–100 de 500/);
+  assert.match(pagedMarkup, /Página 1 de 5/);
+
+  const exportRows500 = manyRows.map(({ item, linha }) => adapter.buildExportRow(item.document, linha));
+  await copyLoad.exports.consultasAdapter.copyRowsToClipboard(exportRows500);
+  const copiedDocuments = [...copied.matchAll(/DOC-\d{4}/g)].map((match) => match[0]);
+  assert.equal(new Set(copiedDocuments).size, 500,
+    "cópia precisa usar o dataset completo, não somente a página visual");
+
+  const workbook500 = new ExcelJS.Workbook();
+  const sheet500 = workbook500.addWorksheet("Consulta");
+  Report.writeConsultationSheet(sheet500, exportRows500, {
+    columns: model.columns,
+    title: "GRCON · TESTE 500",
+    metadata: "paginação visual não limita exportação",
+    ldNames: "LD_003.xlsx",
+  });
+  const documentColumn = model.columns.findIndex((column) => column.key === "document") + 1;
+  let exportedDocumentCount = 0;
+  sheet500.eachRow((row, rowNumber) => {
+    if (rowNumber >= 15 && String(row.getCell(documentColumn).value || "").startsWith("DOC-")) exportedDocumentCount += 1;
+  });
+  assert.equal(exportedDocumentCount, 500,
+    "Excel precisa receber o dataset completo, não somente a página visual");
+
   const hookSource = fs.readFileSync(hookPath, "utf8");
+  assert.match(hookSource, /const exportRows = useMemo\(\(\) => documents/,
+    "cópia/exportação precisa continuar derivada do conjunto completo de documentos");
+  assert.doesNotMatch(hookSource, /const exportRows = useMemo\(\(\) => visibleRows/,
+    "paginação/filtro visual não pode limitar o dataset de exportação");
   const runStart = hookSource.indexOf("const runQuery");
   const runEnd = hookSource.indexOf("const exportRows", runStart);
   const runQuery = hookSource.slice(runStart, runEnd);
@@ -188,8 +296,48 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.doesNotMatch(bundle, /process\\.env\\.NODE_ENV/,
     "bundle React não pode depender do global Node process no navegador");
 
+  const indexHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.doesNotMatch(indexHtml, /\\n<link/,
+    "index.html não pode conter texto literal \\n entre tags do head");
+  const headStart = indexHtml.indexOf("<head>");
+  const headEnd = indexHtml.indexOf("</head>");
+  assert.ok(headStart >= 0 && headEnd > headStart, "head precisa fechar no local lógico");
+  const headHtml = indexHtml.slice(headStart, headEnd);
+  for (const stylesheet of ["requests.css", "react-ui.css", "requests-phase-b.css"]) {
+    assert.match(headHtml, new RegExp(`<link href="${stylesheet.replace(".", "\\.")}" rel="stylesheet" media="print" data-grcon-async-style=""\\s*/>`),
+      `${stylesheet} precisa permanecer dentro do head e no bootstrap assíncrono`);
+  }
+
+  const phaseBCss = fs.readFileSync(path.join(root, "requests-phase-b.css"), "utf8");
+  assert.match(phaseBCss, /\.requests-detail-drawer/);
+  assert.match(phaseBCss, /\.requests-pagination/);
+  assert.match(phaseBCss, /prefers-reduced-motion/);
+
+  const componentSource = fs.readFileSync(componentsPath, "utf8");
+  assert.match(componentSource, /<UiDrawer/,
+    "Consultas precisa usar o drawer compartilhado");
+  assert.match(uiSource, /body\.style\.overflow = "hidden"/,
+    "drawer compartilhado precisa bloquear scroll do body");
+  assert.match(uiSource, /body\.style\.overflow = previousOverflow/,
+    "drawer compartilhado precisa restaurar exatamente o overflow anterior");
+  assert.match(uiSource, /event\.key !== "Tab"/,
+    "drawer compartilhado precisa manter Tab e Shift+Tab dentro do modal");
+  assert.match(uiSource, /previousFocus\?\.isConnected/,
+    "drawer compartilhado precisa devolver foco ao acionador");
+  assert.match(componentSource, /document\.addEventListener\("pointerdown", onPointerDown\)/,
+    "Mais ações precisa fechar no clique fora");
+  assert.match(componentSource, /event\.key !== "Escape"/,
+    "Mais ações precisa tratar Escape");
+  assert.match(componentSource, /detailsRef\.current\.open = false/,
+    "Mais ações precisa fechar depois de executar a ação");
+  assert.match(componentSource, /todas as páginas/,
+    "seleção global precisa deixar claro que não se limita à página visual");
+
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   assert.match(sw, /phase-a-history-react1/);
+  assert.match(sw, /phase-b-consultas-ui1-hardening1/);
+  assert.match(sw, /react-ui\.css/);
+  assert.match(sw, /requests-phase-b\.css/);
   const heavyStart = sw.indexOf("const HEAVY_ASSETS");
   const heavyEnd = sw.indexOf("]);", heavyStart);
   assert.doesNotMatch(sw.slice(heavyStart, heavyEnd), /consultas-app\.js/);

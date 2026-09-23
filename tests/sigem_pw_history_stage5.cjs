@@ -4,7 +4,7 @@ const path = require("node:path");
 
 const rootDir = path.resolve(__dirname, "..");
 const read = (name) => fs.readFileSync(path.join(rootDir, name), "utf8");
-const dashboardApp = read("sigem_pw_dashboard_app.js");
+const dashboardApp = read("src/react/sigem-pw/services/sigemPwDashboardAdapter.ts");
 const historyApp = read("sigem_pw_history_app.js");
 const evolutionApp = read("sigem_pw_evolution_app.js");
 const management = read("sigem_pw_history_management.js");
@@ -27,12 +27,12 @@ function functionBody(source, name, nextName) {
 })();
 
 (function validatedCandidateIsRecordedBeforeActivation() {
-  const sigem = functionBody(dashboardApp, "importSigem", "parsePwFile");
+  const sigem = functionBody(dashboardApp, "importSigem", "importPw");
   const pw = functionBody(dashboardApp, "importPw", "importLd");
-  const ld = functionBody(dashboardApp, "importLd", "rebuildModel");
-  assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core.saveSigemBase"));
-  assert.ok(pw.indexOf("registerHistoryBeforeActivation") < pw.indexOf("Core.savePwBase"));
-  assert.ok(ld.indexOf("registerHistoryBeforeActivation") < ld.indexOf("Core.saveLdAndReprocessPw"));
+  const ld = functionBody(dashboardApp, "importLd", "clearPreStage7BasesOnce");
+  assert.ok(sigem.indexOf("registerHistoryBeforeActivation") < sigem.indexOf("Core().saveSigemBase"));
+  assert.ok(pw.indexOf("registerHistoryBeforeActivation") < pw.indexOf("Core().savePwBase"));
+  assert.ok(ld.indexOf("registerHistoryBeforeActivation") < ld.indexOf("Core().saveLdAndReprocessPw"));
   assert.match(dashboardApp, /não pôde ser registrada no histórico e não foi ativada/,
     "falha histórica deve preservar a base vigente");
 })();
@@ -43,7 +43,7 @@ function functionBody(source, name, nextName) {
   assert.match(management, /records: clone\(base\.records\)/);
   assert.match(management, /capturePayload,/);
   const helper = functionBody(dashboardApp, "registerHistoryBeforeActivation", "importSigem");
-  assert.ok(helper.indexOf("History.recordActiveBases") < helper.indexOf("Management.capturePayload"),
+  assert.ok(helper.indexOf("history.recordActiveBases") < helper.indexOf("management.capturePayload"),
     "snapshot agregado deve existir antes do payload bruto");
 })();
 

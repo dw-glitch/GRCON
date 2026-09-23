@@ -5,7 +5,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "1.1.1";
+  const VERSION = "1.2.0";
   const ASSET_REVISION = "20260917.1";
   const STYLE_ID = "grcon-mascot-runner-style";
   const OVERLAY_ID = "grcon-mascot-runner";
@@ -19,7 +19,6 @@
   let operationActive = false;
   let pendingSuccess = false;
   let running = false;
-  let suppressed = false;
   let runTimer = 0;
   let cleanupTimer = 0;
   let lastRunAt = readLastRun();
@@ -48,7 +47,7 @@
   }
 
   function canRun(options) {
-    if (suppressed || running || document.hidden || reducedMotion()) return false;
+    if (running || document.hidden || reducedMotion()) return false;
     if (!options?.force && (appLocked() || Date.now() - lastRunAt < COOLDOWN_MS)) return false;
     const probe = document.createElement("video");
     return probe.canPlayType('video/webm; codecs="vp9"') !== "";
@@ -114,7 +113,7 @@
   async function run(options) {
     const config = options || {};
     if (!canRun(config)) {
-      log("skip", { suppressed, running, hidden: document.hidden, reducedMotion: reducedMotion(), locked: appLocked() });
+      log("skip", { running, hidden: document.hidden, reducedMotion: reducedMotion(), locked: appLocked() });
       return false;
     }
     installStyles();
@@ -141,20 +140,8 @@
     }
   }
 
-  function setSuppressed(value) {
-    suppressed = Boolean(value);
-    if (suppressed) {
-      root.clearTimeout(runTimer);
-      finishRun("suppressed");
-    }
-    if (!suppressed && !running) document.documentElement.dataset.grconMascotRunner = "ready";
-    log("suppressed", { value: suppressed });
-    return suppressed;
-  }
-
   function scheduleRun(sourceName) {
     root.clearTimeout(runTimer);
-    if (suppressed) return;
     runTimer = root.setTimeout(() => { void run({ source: sourceName }); }, 380);
   }
 
@@ -181,7 +168,6 @@
       assetRevision: ASSET_REVISION,
       source: source.href,
       running,
-      suppressed,
       operationActive,
       pendingSuccess,
       reducedMotion: reducedMotion(),
@@ -208,7 +194,7 @@
     }
   }
 
-  root.GrconMascotRunner = Object.freeze({ version: VERSION, run, setSuppressed, diagnostics });
+  root.GrconMascotRunner = Object.freeze({ version: VERSION, run, diagnostics });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 })(window);

@@ -4,6 +4,7 @@
   "buildCommand": "npm run build",
   "installCommand": "npm ci --ignore-scripts",
   "outputDirectory": ".",
+  "ignoreCommand": "if [ \"$VERCEL_PROJECT_PRODUCTION_URL\" = \"grcon-ten.vercel.app\" ]; then exit 1; else echo \"Ignoring deployment for legacy Vercel project: $VERCEL_PROJECT_PRODUCTION_URL\"; exit 0; fi",
   "headers": [
     {
       "source": "/index.html",
@@ -45,20 +46,6 @@
       "source": "/assets/mascot/video/(.*)\\.webm",
       "headers": [
         { "key": "Content-Type", "value": "video/webm" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/assets/mascot/video/(.*)\\.mp4",
-      "headers": [
-        { "key": "Content-Type", "value": "video/mp4" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/assets/mascot/poster/(.*)\\.webp",
-      "headers": [
-        { "key": "Content-Type", "value": "image/webp" },
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
