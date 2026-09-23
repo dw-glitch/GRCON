@@ -6,7 +6,7 @@ const MAX_BODY_BYTES = 64000;
 const FLOW_TIMEOUT_MS = 15000;
 const ADAPTIVE_CARD_VERSION = "1.2";
 const MASCOT_ASSET_PATH = "/assets/mascot/grcon-mascot-teams-thumbsup.png";
-const DEFAULT_MASCOT_PUBLIC_URL = "https://raw.githubusercontent.com/dw-glitch/GRCON/90880fac67426e690602803cc712c15e69bbdf2c/assets/mascot/grcon-mascot-teams-thumbsup.png";
+const DEFAULT_MASCOT_PUBLIC_URL = "https://raw.githubusercontent.com/dw-glitch/GRCON/034c4270f0e7585ba77010f26e4880c128c934e0/assets/mascot/grcon-mascot-teams-thumbsup.png";
 
 function send(res, status, payload) {
   res.statusCode = status;
@@ -50,9 +50,6 @@ function buildFallbackText(payload) {
     "",
     "Revisões enviadas na GRDT:",
     revisions,
-    "",
-    `👥 ${payload.destination.name}`,
-    "Favor realizar a postagem no SIGEM.",
     "",
     "Enviado pelo GRCON",
   ].join("\n");
@@ -140,25 +137,6 @@ function buildAdaptiveCard(payload, imageUrl) {
         wrap: true,
       },
       ...revisionBlocks,
-      {
-        type: "Container",
-        spacing: "Medium",
-        separator: true,
-        items: [
-          {
-            type: "TextBlock",
-            text: `👥 ${payload.destination.name}`,
-            weight: "Bolder",
-            wrap: true,
-          },
-          {
-            type: "TextBlock",
-            text: "Favor realizar a postagem no SIGEM.",
-            spacing: "Small",
-            wrap: true,
-          },
-        ],
-      },
       {
         type: "TextBlock",
         text: "Enviado pelo GRCON",

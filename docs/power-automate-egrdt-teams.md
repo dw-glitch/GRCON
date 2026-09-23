@@ -21,9 +21,9 @@ Além dos campos já existentes, o corpo entregue ao Power Automate agora inclui
 - `message.fallbackText`: texto completo para contingência;
 - `message.mascot`: metadados da imagem usada pelo cartão.
 
-O PNG fica versionado em `/assets/mascot/grcon-mascot-teams-thumbsup.png`. O cartão usa uma URL HTTPS pública e imutável do próprio repositório GRCON para que a imagem não dependa da sessão do usuário, do navegador, do SharePoint ou de URL temporária. Depois do merge, o mesmo arquivo também fica disponível no deploy estático do GRCON/Vercel no caminho `/assets/mascot/grcon-mascot-teams-thumbsup.png`.
+O PNG fica versionado em `/assets/mascot/grcon-mascot-teams-thumbsup.png`. Ele é uma extração válida e transparente da pose oficial de joinha do sprite HD do GRCON; o teste de regressão confere a estrutura completa do PNG para impedir a publicação de arquivos truncados. O cartão usa uma URL HTTPS pública e imutável do próprio repositório GRCON para que a imagem não dependa da sessão do usuário, do navegador, do SharePoint ou de URL temporária. Depois do merge, o mesmo arquivo também fica disponível no deploy estático do GRCON/Vercel no caminho `/assets/mascot/grcon-mascot-teams-thumbsup.png`.
 
-A imagem é apenas decorativa. Se ela não carregar no Teams, o número da eGRDT, documentos, revisões, disciplinas, destino e instrução continuam dentro do próprio cartão. O fluxo não deve condicionar a postagem ao sucesso da imagem.
+A imagem é apenas decorativa. Se ela não carregar no Teams, o número da eGRDT, documentos, revisões e disciplinas continuam dentro do próprio cartão; as menções e a chamada final continuam sendo acrescentadas pelo Power Automate. O fluxo não deve condicionar a postagem ao sucesso da imagem.
 
 ### Ajuste mínimo no fluxo existente
 
@@ -45,6 +45,8 @@ No fluxo atual, o campo **Cartão Adaptável** usa a expressão abaixo. Ela pres
 Essa composição segue o requisito do Teams para menções em Adaptive Cards: o texto `<at>...</at>` deve estar em um `TextBlock` e cada usuário deve possuir uma entidade `mention` correspondente em `msteams.entities`.
 
 O `message.fallbackText` existe para contingência: se o conector de Adaptive Card não estiver disponível ou o cartão falhar na validação do locatário, a ação final pode continuar usando uma única mensagem textual com esse campo. Nunca publique cartão e fallback simultaneamente.
+
+O cartão base não repete o nome do grupo nem a instrução “Favor realizar a postagem no SIGEM.”. A chamada final fica concentrada no `TextBlock` de menções acrescentado pelo Power Automate, evitando conteúdo duplicado no Teams.
 
 ## Criar o fluxo
 
