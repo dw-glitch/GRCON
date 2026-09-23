@@ -167,7 +167,9 @@ async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promi
     documentNumber: data.documentNumber,
     pageNumber: "1 de " + totalPages,
     title: data.title,
-    internalDocumentCode: data.internalDocumentCode || "NÃO INFORMADO NA LD",
+    // O campo físico “CÓD. DOCUMENTO INTERNO” da capa oficial recebe a
+    // TAXONOMIA da mesma linha selecionada na LD.
+    internalDocumentCode: data.taxonomy || "NÃO INFORMADO NA LD",
     revision: data.revision,
     revisionDescription: data.revisionDescription,
     revisionDate: data.revisionDate,
@@ -476,7 +478,7 @@ async function buildEditableDocx(data: CoverDocumentData, source: SourceDocument
     "{{DOCUMENT_NUMBER}}": data.documentNumber,
     "{{TOTAL_PAGES}}": String(totalPages),
     "{{TITLE}}": data.title,
-    "{{INTERNAL_CODE}}": data.internalDocumentCode || "NÃO INFORMADO NA LD",
+    "{{INTERNAL_CODE}}": data.taxonomy || "NÃO INFORMADO NA LD",
     "{{REVISION}}": data.revision,
     "{{REVISION_DESCRIPTION}}": data.revisionDescription,
     "{{REVISION_DATE}}": data.revisionDate,

@@ -4,8 +4,7 @@ import type { CoverDocumentCandidate, CoverDocumentData } from "../types/domain"
 const EDITABLE_FIELDS: Array<{ key: keyof CoverDocumentData; label: string }> = [
   { key: "title", label: "Título" },
   { key: "documentNumber", label: "Código do documento" },
-  { key: "taxonomy", label: "Taxonomia" },
-  { key: "internalDocumentCode", label: "Cód. documento interno" },
+  { key: "taxonomy", label: "Taxonomia · campo Cód. documento interno da capa" },
   { key: "revision", label: "Revisão" },
   { key: "revisionDate", label: "Data" },
   { key: "revisionDescription", label: "Descrição da revisão" },
