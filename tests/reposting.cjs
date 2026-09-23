@@ -45,7 +45,7 @@ assert.equal(Revision.validRevision("I"), false);
 
 // A Conferência passa a usar a revisão B do registro corrigido, sem qualquer
 // conhecimento especial da UI de edição.
-const baseB = [{ document: "MC-5290.00-22313-970-C1O-009", revision: "B", searchKeys: Core.documentSearchKeys("MC-5290.00-22313-970-C1O-009"), documentIdentity: Conference.documentIdentity("MC-5290.00-22313-970-C1O-009") }];
+const baseB = [{ document: "MC-5290.00-22313-970-C1O-009", revision: "B", status: "Em Análise", searchKeys: Core.documentSearchKeys("MC-5290.00-22313-970-C1O-009"), documentIdentity: Conference.documentIdentity("MC-5290.00-22313-970-C1O-009") }];
 let conference = Conference.reconcile([changed.record], baseB, null, { now: "2026-09-03T15:00:00Z" });
 const correctedRow = conference.rows.find((row) => row.document.includes("MC-5290"));
 assert.equal(correctedRow.revisionSent, "B");

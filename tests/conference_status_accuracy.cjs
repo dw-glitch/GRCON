@@ -21,10 +21,15 @@ assert.ok(Number.isNaN(R.parseSourceDate('31/02/2026 12:00:00')));
 assert.ok(Number.isNaN(R.parseSourceDate('')));
 assert.equal(R.parseSourceDate('2026-09-03T12:04:47Z'), Date.UTC(2026, 8, 3, 12, 4, 47));
 for (const rows of [source, source.slice().reverse(), [source[1], source[2], source[0]]]) {
-  for (const [revision, expected] of [['0', 'Recusado'], ['A', 'Sem Comentários'], ['B', 'Em Análise']]) {
-    assert.equal(check([header, ...rows], doc, revision).sigemStatus, expected);
+  for (const revision of ['0', 'A', 'B']) {
+    const result = check([header, ...rows], doc, revision);
+    assert.equal(result.sigemStatus, 'Em Análise');
+    assert.equal(result.sigemStatusRevision, 'B');
+    assert.equal(result.status, C.STATUSES.CONFIRMED);
   }
-  assert.equal(check([header, ...rows], doc, 'C').sigemStatus, 'Em Análise');
+  const newerThanBase = check([header, ...rows], doc, 'C');
+  assert.equal(newerThanBase.status, C.STATUSES.REVISION_DIVERGENT);
+  assert.equal(newerThanBase.sigemStatus, 'Em Análise');
 }
 const updated = [doc, 'B', '09/09/2026 10:00:00', '', 'Sem Comentários'];
 assert.equal(check([header, ...source, updated], doc, 'B').sigemStatus, 'Sem Comentários');
@@ -32,7 +37,7 @@ assert.equal(check([header, updated, ...source], doc, 'B').sigemStatus, 'Sem Com
 const conflict = [...updated]; conflict[4] = 'Recusado';
 const ambiguous = check([header, updated, conflict], doc, 'B');
 assert.equal(ambiguous.sigemStatus, '');
-assert.match(ambiguous.note, /ambíguo/);
+assert.match(ambiguous.note, /ambígu[oa]/i);
 assert.equal(check([header, [doc, 'B', '', '', '']], doc, 'B').sigemStatus, '');
 assert.equal(check([header, ...source], doc.replace('3.8.9.1', '3.8.9.2'), 'B').sigemStatus, '');
 assert.equal(check([header, ...source], doc.replace('_REP_', '_RUFF_'), 'B').sigemStatus, '');
