@@ -53,6 +53,8 @@ assert.match(hook, /buildLdSearchIndex/);
 assert.match(hook, /revision: ""/);
 assert.match(hook, /revisionDate: currentCoverDate\(\)/);
 assert.match(hook, /outputData = \{ \.\.\.data, revisionDate: currentCoverDate\(\) \}/);
+assert.match(hook, /Não foi possível gerar a prévia da capa/);
+assert.doesNotMatch(hook, /\.catch\(\(\) => \{\}\)/);
 assert.doesNotMatch(hook, /candidate\.revision \|\|/);
 assert.doesNotMatch(hook, /normalizeRevisionDate\(candidate\.revisionDate\)/);
 assert.match(panel, /Revisão · informe manualmente/);
