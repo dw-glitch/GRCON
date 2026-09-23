@@ -87,7 +87,7 @@ assert.equal(r.rows[0].sigemStatus, "");
 
 statusBase = base("DOC-STATUS-4", "A", "  Em Workflow  ");
 r = R.enrichResult(C.reconcile(hist("DOC-STATUS-4", "A"), statusBase, null, { now: NOW }), statusBase, C);
-assert.equal(r.rows[0].sigemStatus, "  Em Workflow  ");
+assert.equal(r.rows[0].sigemStatus, "Em Workflow", "a importação normaliza espaços externos sem alterar o significado do status");
 
 statusBase = base("DOC-STATUS-ATUAL", "A", "Status da revisão antiga");
 statusBase[0].sourceRow = 10;
