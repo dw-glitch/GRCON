@@ -207,10 +207,15 @@ async function layoutAt(page, width, height = 900) {
     await page.locator("#cover-data-heading").waitFor({ state: "visible" });
     assert.ok((await page.locator(".cover-data-summary").innerText()).includes(taxonomy));
 
-    // Revisão é uma decisão do operador; a LD não preenche esse campo.
+    // Revisão vem da LD, mas permanece editável e pode ser restaurada ao valor original.
     await page.getByRole("button", { name: "Revisar dados da capa" }).click();
-    const revisionInput = page.locator(".cover-edit-grid label").filter({ hasText: "Revisão · informe manualmente" }).locator("input");
-    await revisionInput.fill("0");
+    const revisionLabel = page.locator(".cover-edit-grid label").filter({ hasText: "Revisão · preenchida pela LD e editável" });
+    const revisionInput = revisionLabel.locator("input");
+    assert.equal(await revisionInput.inputValue(), "0");
+    await revisionInput.fill("A");
+    assert.equal(await revisionInput.inputValue(), "A");
+    await revisionLabel.getByRole("button", { name: "Restaurar valor da LD" }).click();
+    assert.equal(await revisionInput.inputValue(), "0");
     const today = await page.evaluate(() => {
       const now = new Date();
       const pad = (value) => String(value).padStart(2, "0");

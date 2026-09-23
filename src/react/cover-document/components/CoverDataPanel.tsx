@@ -5,7 +5,7 @@ const EDITABLE_FIELDS: Array<{ key: keyof CoverDocumentData; label: string; read
   { key: "title", label: "Título" },
   { key: "documentNumber", label: "Código do documento" },
   { key: "taxonomy", label: "Taxonomia · campo Cód. documento interno da capa" },
-  { key: "revision", label: "Revisão · informe manualmente" },
+  { key: "revision", label: "Revisão · preenchida pela LD e editável" },
   { key: "revisionDate", label: "Data · preenchida automaticamente hoje", readOnly: true },
   { key: "revisionDescription", label: "Descrição da revisão" },
   { key: "executor", label: "Execução" },
@@ -49,7 +49,7 @@ export function CoverDataPanel({
         <div className="cover-edit-grid">
           {EDITABLE_FIELDS.map(({ key, label, readOnly }) => (
             <label key={key} className={overrides.has(key) ? "is-overridden" : ""}>
-              <span>{label}{overrides.has(key) && key !== "revision" ? <em>Alterado manualmente</em> : null}</span>
+              <span>{label}{overrides.has(key) ? <em>Alterado manualmente</em> : null}</span>
               <input
                 value={String(data[key] ?? "")}
                 readOnly={readOnly}
@@ -57,7 +57,7 @@ export function CoverDataPanel({
               />
               {overrides.has(key) && !readOnly ? (
                 <button type="button" className="text-button" onClick={() => onRestore(key)}>
-                  {key === "revision" ? "Limpar revisão" : "Restaurar valor da LD"}
+                  Restaurar valor da LD
                 </button>
               ) : null}
             </label>
