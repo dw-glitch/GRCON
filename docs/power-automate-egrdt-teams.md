@@ -30,10 +30,19 @@ A imagem é apenas decorativa. Se ela não carregar no Teams, o número da eGRDT
 Não recrie o fluxo. Preserve gatilho, Parse JSON, validações, destino **Qualidade - Documentação**, controle de `eventId`, menções e demais passos já existentes. Altere somente a etapa final de apresentação depois de validar em cópia/teste do fluxo:
 
 1. mantenha as ações atuais que obtêm as identidades/menções de Adriana e Janecleide;
-2. substitua a ação final **Post message in a chat or channel** por **Post adaptive card in a chat or channel** / **Post your own adaptive card as the Flow bot to a channel**, conforme o conector disponível no locatário;
-3. no campo do cartão, use o objeto dinâmico `message.adaptiveCard` recebido do GRCON;
-4. não deixe a ação antiga de mensagem ativa em paralelo com a ação de cartão, para que um clique continue gerando somente uma notificação;
-5. teste as menções reais no locatário antes de ativar. O GRCON continua enviando `mentions` sem alteração; se o método de menção do cartão no locatário não preservar a notificação, mantenha temporariamente a etapa antiga de mensagem em vez de publicar duas mensagens.
+2. substitua a ação final **Post message in a chat or channel** por **Post card in a chat or channel**, mantendo `Flow bot`, `Chat em grupo` e **Qualidade - Documentação**;
+3. no campo **Cartão Adaptável**, use o objeto dinâmico `message.adaptiveCard` recebido do GRCON e acrescente as entidades `msteams.entities` com os resultados das duas ações de menção;
+4. derive o UPN em tempo de execução a partir de `body/atMention`; não grave e-mails corporativos no repositório nem em valores literais do cartão;
+5. não deixe a ação antiga de mensagem ativa em paralelo com a ação de cartão, para que um clique continue gerando somente uma notificação;
+6. teste as menções reais no locatário antes de ativar. O texto `<at>...</at>` e a entidade correspondente precisam existir juntos para que o Teams gere a notificação.
+
+No fluxo atual, o campo **Cartão Adaptável** usa a expressão abaixo. Ela preserva o cartão produzido pelo GRCON, acrescenta uma linha de chamada e cria as duas entidades de menção a partir dos tokens já obtidos pelo conector do Teams:
+
+```text
+@{setProperty(setProperty(body('Parse_JSON')?['message']?['adaptiveCard'],'body',union(body('Parse_JSON')?['message']?['adaptiveCard']?['body'],createArray(json(concat('{"type":"TextBlock","text":"',outputs('Menção_-_Adriana')?['body/atMention'],' ',outputs('Menção_-_Janecleide')?['body/atMention'],', favor realizar a postagem.","wrap":true,"spacing":"Medium","separator":true}'))))),'msteams',json(concat('{"entities":[{"type":"mention","text":"',outputs('Menção_-_Adriana')?['body/atMention'],'","mentioned":{"id":"',replace(replace(outputs('Menção_-_Adriana')?['body/atMention'],'<at>',''),'</at>',''),'","name":"Adriana Nojosa da Silva"}},{"type":"mention","text":"',outputs('Menção_-_Janecleide')?['body/atMention'],'","mentioned":{"id":"',replace(replace(outputs('Menção_-_Janecleide')?['body/atMention'],'<at>',''),'</at>',''),'","name":"Janecleide Maria de Oliveira"}}]}')))}
+```
+
+Essa composição segue o requisito do Teams para menções em Adaptive Cards: o texto `<at>...</at>` deve estar em um `TextBlock` e cada usuário deve possuir uma entidade `mention` correspondente em `msteams.entities`.
 
 O `message.fallbackText` existe para contingência: se o conector de Adaptive Card não estiver disponível ou o cartão falhar na validação do locatário, a ação final pode continuar usando uma única mensagem textual com esse campo. Nunca publique cartão e fallback simultaneamente.
 
