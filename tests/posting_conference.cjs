@@ -75,12 +75,14 @@ assert.equal(r.rows[0].sigemStatus, "Em Workflow");
 
 statusBase = base("DOC-STATUS-2", "A", "Conforme Construído");
 r = R.enrichResult(C.reconcile(hist("DOC-STATUS-2", "A"), statusBase, null, { now: NOW }), statusBase, C);
-assert.equal(r.rows[0].conferenceLabel, "Postado");
+assert.equal(r.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
+assert.equal(r.rows[0].conferenceLabel, "Aguardando retorno do SIGEM");
 assert.equal(r.rows[0].sigemStatus, "Conforme Construído");
 
 statusBase = base("DOC-STATUS-3", "A", "");
 r = R.enrichResult(C.reconcile(hist("DOC-STATUS-3", "A"), statusBase, null, { now: NOW }), statusBase, C);
-assert.equal(r.rows[0].conferenceLabel, "Postado");
+assert.equal(r.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
+assert.equal(r.rows[0].conferenceLabel, "Aguardando retorno do SIGEM");
 assert.equal(r.rows[0].sigemStatus, "");
 
 statusBase = base("DOC-STATUS-4", "A", "  Em Workflow  ");
@@ -93,8 +95,8 @@ const currentStatus = base("DOC-STATUS-ATUAL", "B", "Status atual da Consulta Ge
 currentStatus.sourceRow = 20;
 statusBase.push(currentStatus);
 r = R.enrichResult(C.reconcile(hist("DOC-STATUS-ATUAL", "A"), statusBase, null, { now: NOW }), statusBase, C);
-assert.equal(r.rows[0].status, C.STATUSES.CONFIRMED);
-assert.equal(r.rows[0].sigemStatus, "Status da revisão antiga", "o status pertence à revisão conferida, sem misturar revisões");
+assert.equal(r.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
+assert.equal(r.rows[0].sigemStatus, "Status da revisão antiga", "status não autorizado da revisão exata permanece visível sem virar Postado");
 
 r = R.enrichResult(C.reconcile(hist("DOC-STATUS-DIVERGENTE", "B"), base("DOC-STATUS-DIVERGENTE", "A", "Em Workflow"), null, { now: NOW }), base("DOC-STATUS-DIVERGENTE", "A", "Em Workflow"), C);
 assert.equal(r.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
@@ -139,18 +141,19 @@ const bigHist = [];
 for (let i = 0; i < 500; i += 1) bigHist.push({ id: `h${i}`, clientRecordId: `s${i}`, egrdtNumber: `G${i}`, generatedAt: "2026-09-01T00:00:00Z", files: [{ document: `MC-5290.00-22313-970-C1O-${String(i).padStart(5, "0")}`, revision: "A", sheet: "N-1710" }] });
 r = C.reconcile(bigHist, parsed.records, null, { now: NOW });
 r = R.enrichResult(r, parsed.records, C);
-assert.equal(r.summary.confirmed, 500);
-assert.equal(r.rows[0].conferenceLabel, "Postado");
-assert.ok(["Em Workflow", "Conforme Construído"].includes(r.rows[0].sigemStatus));
+assert.equal(r.summary.confirmed, 250);
+assert.equal(r.summary.divergent, 250);
+assert.equal(r.rows[0].conferenceLabel, "Aguardando retorno do SIGEM");
+assert.equal(r.rows[0].sigemStatus, "Conforme Construído");
 assert.ok(Date.now() - start < 8000, `processamento 20k + Status SIGEM excedeu 8s: ${Date.now() - start}ms`);
 
 const conf = C.reconcile(hist("DOC-H", "A", "2026-08-20T00:00:00Z"), base("DOC-H", "A"), null, { now: "2026-09-01T12:00:00Z" });
 const missing = C.reconcile(hist("DOC-H", "A", "2026-08-20T00:00:00Z"), base("OTHER", "A"), conf.state, { now: "2026-09-02T12:00:00Z" });
-assert.equal(missing.rows[0].status, C.STATUSES.CONFIRMED);
+assert.equal(missing.rows[0].status, C.STATUSES.NOT_FOUND);
 assert.equal(missing.rows[0].historicalPreserved, true);
 assert.equal(missing.rows[0].firstConfirmedAt, conf.rows[0].firstConfirmedAt);
 const historicalEnriched = R.enrichResult(missing, base("OTHER", "A", "Em Workflow"), C);
-assert.equal(historicalEnriched.rows[0].conferenceLabel, "Postado");
+assert.equal(historicalEnriched.rows[0].conferenceLabel, "Não postado ainda");
 assert.equal(historicalEnriched.rows[0].sigemStatus, "");
 
 // Regressão da piscada no Histórico: a conferência não pode esperar 40 ms para
