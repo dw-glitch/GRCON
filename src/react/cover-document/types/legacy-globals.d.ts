@@ -2,6 +2,8 @@ import type { CoverDebugState, LdDocumentRecord } from "./domain";
 
 interface TriagemCoreApi {
   norm(value: unknown): string;
+  normalizeRevision(value: unknown): string;
+  revisionInfo(value: unknown): { revision: string; valid: boolean; kind?: string; rank?: number };
   parseWorkbook(workbook: unknown, fileName: string, lastModified: number, compatibilityProfile?: unknown): {
     records: LdDocumentRecord[];
     history: LdDocumentRecord[];
@@ -67,6 +69,19 @@ interface GrconCoverDocumentUiApi {
 
 type NotifyFn = (message: string, kind?: string) => void;
 
+interface GrconPerformanceApi {
+  supported: boolean;
+  loadLd(file: File, profile?: unknown): Promise<{
+    parsed: { records: LdDocumentRecord[]; history: LdDocumentRecord[] };
+    cacheHit?: boolean;
+    cacheLayer?: string;
+  }>;
+}
+
+interface GrconLdMemoryApi {
+  save(file: File): void;
+}
+
 declare global {
   interface Window {
     TriagemCore?: TriagemCoreApi;
@@ -74,6 +89,8 @@ declare global {
     PDFLib?: PdfLibApi;
     JSZip?: JsZipConstructor;
     GrconNotify?: NotifyFn;
+    GrconPerformance?: GrconPerformanceApi;
+    GrconLdMemory?: GrconLdMemoryApi;
     GrconCoverDocumentUi?: GrconCoverDocumentUiApi;
     GrconCoverDocumentReact?: { mounted: boolean };
   }
