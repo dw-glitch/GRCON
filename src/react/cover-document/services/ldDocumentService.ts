@@ -19,7 +19,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const FIELD_ALIASES = {
-  taxonomy: ["TAXONOMIA", "CODIGO DA TAXONOMIA", "CODIGO TAXONOMIA", "TAXONOMIA DOCUMENTAL"],
   eap: ["EAP", "CODIGO EAP", "CODIGO DA EAP", "ESTRUTURA ANALITICA DO PROJETO"],
   classification: ["CLASSIFICACAO", "CLASSIFICACAO DO DOCUMENTO", "CLASSE", "CLASSE DOCUMENTAL"],
   internalCode: ["COD DOCUMENTO INTERNO", "CODIGO DOCUMENTO INTERNO", "CODIGO DO DOCUMENTO INTERNO", "CODIGO INTERNO", "CODIGO DA CONTRATADA", "DOCUMENTO INTERNO"],
@@ -38,6 +37,17 @@ export function normalizeSearch(value: unknown): string {
 
 function normalizedHeader(value: unknown): string {
   return normalizeSearch(value);
+}
+
+function exactColumnValue(columns: LdColumnValue[] | undefined, header: string): string {
+  if (!columns?.length) return "";
+  const wanted = normalizedHeader(header);
+  const values = columns
+    .filter((entry) => normalizedHeader(entry.header) === wanted)
+    .map((entry) => String(entry.value ?? "").trim());
+  if (!values.length) return "";
+  const unique = [...new Set(values)];
+  return unique.length === 1 ? unique[0] : "";
 }
 
 function columnValue(columns: LdColumnValue[] | undefined, aliases: readonly string[]): string {
@@ -74,9 +84,7 @@ function diceCoefficient(left: string, right: string): number {
   return (2 * intersection) / (left.length + right.length - 2);
 }
 
-function scoreTitle(title: string, query: string): number {
-  const candidate = normalizeSearch(title);
-  const wanted = normalizeSearch(query);
+function scoreNormalizedTitle(candidate: string, wanted: string): number {
   if (!candidate || !wanted) return 0;
   if (candidate === wanted) return 1000;
   if (candidate.startsWith(wanted)) return 900 + Math.min(80, wanted.length / Math.max(1, candidate.length) * 80);
@@ -114,7 +122,7 @@ export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentC
     record,
     documentNumber: String(record.document ?? "").trim(),
     title: String(record.title ?? "").trim(),
-    taxonomy: columnValue(record.ldColumns, FIELD_ALIASES.taxonomy),
+    taxonomy: exactColumnValue(record.ldColumns, "TAXONOMIA"),
     eap: columnValue(record.ldColumns, FIELD_ALIASES.eap),
     category,
     categoryLabel: categoryLabel(category),
@@ -132,24 +140,44 @@ export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentC
 }
 
 export async function loadLdRecords(files: FileList | File[]): Promise<LdDocumentRecord[]> {
-  if (!window.XLSX || !window.TriagemCore) throw new Error("Leitor de LD do GRCON não está disponível.");
+  if (!window.TriagemCore) throw new Error("Leitor de LD do GRCON não está disponível.");
   const records: LdDocumentRecord[] = [];
   for (const file of Array.from(files)) {
     if (!/\.(?:xlsx?|xlsm)$/i.test(file.name)) continue;
-    const buffer = await file.arrayBuffer();
-    const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
-    const parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified);
+    let parsed: { records: LdDocumentRecord[] };
+    const performanceCore = window.GrconPerformance;
+    if (performanceCore?.supported && typeof performanceCore.loadLd === "function") {
+      const result = await performanceCore.loadLd(file, null);
+      parsed = result.parsed;
+    } else {
+      if (!window.XLSX) throw new Error("Leitor de planilhas do GRCON não está disponível.");
+      const buffer = await file.arrayBuffer();
+      const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
+      parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified);
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
     records.push(...((parsed.records || []) as unknown as LdDocumentRecord[]));
-    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    window.GrconLdMemory?.save?.(file);
   }
   return records.filter((record) => Boolean(String(record.title ?? "").trim() && String(record.document ?? "").trim()));
 }
 
-export function searchLdDocuments(records: LdDocumentRecord[], query: string, limit = 30): CoverDocumentCandidate[] {
+export interface LdSearchEntry {
+  record: LdDocumentRecord;
+  normalizedTitle: string;
+}
+
+export function buildLdSearchIndex(records: LdDocumentRecord[]): LdSearchEntry[] {
+  return records
+    .map((record) => ({ record, normalizedTitle: normalizeSearch(record.title) }))
+    .filter((entry) => Boolean(entry.normalizedTitle && String(entry.record.document ?? "").trim()));
+}
+
+export function searchLdDocuments(index: LdSearchEntry[], query: string, limit = 30): CoverDocumentCandidate[] {
   const wanted = normalizeSearch(query);
   if (!wanted) return [];
-  return records
-    .map((record) => toCandidate(record, scoreTitle(record.title, wanted)))
+  return index
+    .map((entry) => toCandidate(entry.record, scoreNormalizedTitle(entry.normalizedTitle, wanted)))
     .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title, "pt-BR"))
     .slice(0, limit);
