@@ -23,7 +23,7 @@ const R = require("../posting_conference_refinement.js");
 function hist(doc, rev, generatedAt = "2026-09-01T12:00:00Z", extra = {}) {
   return [{ id: "r1", clientRecordId: "stable-r1", egrdtNumber: "0130870-C1O-PGV-G-0001-2026 - eGRDT", generatedAt, files: [{ document: doc, revision: rev, grdtRevision: rev, sheet: extra.sheet || "N-1710", discipline: "MEC", finalName: extra.finalName || `${doc}_0001_${rev}.pdf` }] }];
 }
-function base(doc, rev, status = "") {
+function base(doc, rev, status = "Em Análise") {
   const d = C.displayDocument(doc);
   return [{ id: `${C.documentIdentity(d)}|${rev}`, document: d, documentIdentity: C.documentIdentity(d), searchKeys: C.documentKeys(d), revision: C.normalizeRevision(rev), status }];
 }
