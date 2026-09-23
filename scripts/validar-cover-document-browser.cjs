@@ -142,6 +142,19 @@ async function layoutAt(page, width, height = 900) {
     await page.locator("#cover-data-heading").waitFor({ state: "visible" });
     assert.ok((await page.locator(".cover-data-summary").innerText()).includes(taxonomy));
 
+    // Revisão é uma decisão do operador; a LD não preenche esse campo.
+    await page.getByRole("button", { name: "Revisar dados da capa" }).click();
+    const revisionInput = page.locator(".cover-edit-grid label").filter({ hasText: "Revisão · informe manualmente" }).locator("input");
+    await revisionInput.fill("0");
+    const today = await page.evaluate(() => {
+      const now = new Date();
+      const pad = (value) => String(value).padStart(2, "0");
+      return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+    });
+    const dateInput = page.locator(".cover-edit-grid label").filter({ hasText: "Data · preenchida automaticamente hoje" }).locator("input");
+    assert.equal(await dateInput.inputValue(), today);
+    assert.equal(await dateInput.getAttribute("readonly"), "");
+
     await setSourcePdf(page);
     await page.waitForFunction(() => {
       const iframe = document.querySelector(".cover-preview-frame iframe");
@@ -156,7 +169,6 @@ async function layoutAt(page, width, height = 900) {
 
     await screenshot(page, "01-cover-1366.png");
 
-    await page.getByRole("button", { name: "Revisar dados da capa" }).click();
     const longTitle = "POP 01 - PROCEDIMENTO DE REFERÊNCIA COM TÍTULO EXTENSO PARA VALIDAR QUEBRA DE TEXTO E LIMITES VISUAIS SEM ULTRAPASSAR AS BORDAS DA CAPA OFICIAL";
     await page.locator(".cover-edit-grid label").filter({ hasText: "Título" }).locator("input").fill(longTitle);
     await page.waitForTimeout(450);
