@@ -14,6 +14,7 @@ export interface LdDocumentRecord {
   effectiveDate?: string;
   discipline?: string;
   documentType?: string;
+  documentTypeDesc?: string;
   format?: string;
   tag?: string;
   sheet?: string;
@@ -34,7 +35,6 @@ export interface CoverDocumentCandidate {
   category: string;
   categoryLabel: string;
   classification: string;
-  internalDocumentCode: string;
   revision: string;
   revisionDate: string;
   discipline: string;
