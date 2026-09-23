@@ -33,18 +33,29 @@ async function clickVisibleView(page, view) {
 }
 
 async function stabilizeServiceWorker(page) {
-  if (!await page.evaluate(() => "serviceWorker" in navigator)) return;
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.ready;
-  });
-  if (!await page.evaluate(() => Boolean(navigator.serviceWorker.controller))) {
-    await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
-    await revealApp(page);
-    await page.evaluate(async () => {
-      await navigator.serviceWorker.ready;
-    });
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const supported = await page.evaluate(() => "serviceWorker" in navigator);
+      if (!supported) return;
+      await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+      if (await page.evaluate(() => Boolean(navigator.serviceWorker.controller))) {
+        await page.waitForTimeout(250);
+        return;
+      }
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+      await revealApp(page);
+    } catch (error) {
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached/i.test(message)) throw error;
+      await page.waitForLoadState("domcontentloaded", { timeout: 30000 }).catch(() => {});
+      await revealApp(page).catch(() => {});
+    }
   }
-  await page.waitForFunction(() => !("serviceWorker" in navigator) || Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
+  await page.waitForFunction(
+    () => !("serviceWorker" in navigator) || Boolean(navigator.serviceWorker.controller),
+    null,
+    { timeout: 10000 },
+  );
 }
 
 async function openCover(page) {
