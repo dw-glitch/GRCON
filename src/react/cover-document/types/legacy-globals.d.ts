@@ -11,6 +11,13 @@ interface TriagemCoreApi {
     family?: string;
     errors?: string[];
   };
+  revisionInfo(value: unknown): {
+    revision: string;
+    valid: boolean;
+    kind: "standard" | "field" | "invalid";
+    rank: number;
+  };
+  EGRDT_OPTIONS?: { documentTypes?: string[] };
 }
 
 interface PdfPageLike {
@@ -58,6 +65,32 @@ interface JsZipConstructor {
   loadAsync(data: ArrayBuffer | Uint8Array): Promise<JsZipLike>;
 }
 
+interface GrconRequestsTaxonomyApi {
+  internalTaxonomyFromRecord(record: LdDocumentRecord, triagem?: TriagemCoreApi): string;
+}
+
+interface GrconPerformanceApi {
+  supported: boolean;
+  loadLd(file: File, profile?: unknown, onProgress?: (message: { progress?: number; message?: string }) => void): Promise<{
+    parsed: { records: LdDocumentRecord[]; history: LdDocumentRecord[] };
+    index?: unknown;
+    cacheHit?: boolean;
+  }>;
+}
+
+interface GrconLdMemoryApi {
+  save(file: File): void;
+  saveLastLd?(file: File): void;
+  get(): { name: string; size: number; lastModified: number; savedAt: number } | null;
+  getLastLd?(): { name: string; size: number; lastModified: number; savedAt: number } | null;
+  current(): File | null;
+  clear(): void;
+}
+
+interface GrconLdCompatibilityApi {
+  profileFor(file: File): unknown;
+}
+
 interface GrconCoverDocumentUiApi {
   activate(): void;
   deactivate(): void;
@@ -74,6 +107,10 @@ declare global {
     PDFLib?: PdfLibApi;
     JSZip?: JsZipConstructor;
     GrconNotify?: NotifyFn;
+    GrconRequestsTaxonomy?: GrconRequestsTaxonomyApi;
+    GrconPerformance?: GrconPerformanceApi;
+    GrconLdMemory?: GrconLdMemoryApi;
+    GrconLdCompatibility?: GrconLdCompatibilityApi;
     GrconCoverDocumentUi?: GrconCoverDocumentUiApi;
     GrconCoverDocumentReact?: { mounted: boolean };
   }
