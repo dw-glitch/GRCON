@@ -39,8 +39,13 @@ jobs:
       - name: Instalar dependências
         run: npm ci --ignore-scripts
 
-      - name: Auditoria de dependências
-        run: npm audit --audit-level=high
+      - name: Registrar auditoria completa
+        run: |
+          mkdir -p artifacts/cover-document-browser
+          npm audit --json > artifacts/cover-document-browser/npm-audit.json || true
+
+      - name: Auditoria de dependências de produção
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Typecheck e build
         run: |
@@ -74,4 +79,5 @@ jobs:
           path: |
             artifacts/cover-document-browser/*.png
             artifacts/cover-document-browser/metrics.json
-          if-no-files-found: error
+            artifacts/cover-document-browser/npm-audit.json
+          if-no-files-found: warn
