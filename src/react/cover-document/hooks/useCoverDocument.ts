@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  categoryLabel,
   loadLdRecords,
   searchLdDocuments,
   uniqueExactCandidate,
+  type LdLoadProgress,
+  type LdSearchIndex,
 } from "../services/ldDocumentService";
 import {
   createCoverPreview,
@@ -22,6 +23,9 @@ import type {
   SourceDocumentInfo,
 } from "../types/domain";
 
+const SEARCH_DEBOUNCE_MS = 160;
+const PREVIEW_DEBOUNCE_MS = 220;
+
 const DEFAULTS: Pick<CoverDocumentData, "revisionDescription" | "executor" | "checker" | "approver"> = {
   revisionDescription: "EMISSÃO ORIGINAL",
   executor: "KAIQUE CAETANO",
@@ -37,7 +41,6 @@ const EMPTY_DATA: CoverDocumentData = {
   category: "",
   categoryLabel: "",
   classification: "",
-  internalDocumentCode: "",
   revision: "",
   revisionDescription: DEFAULTS.revisionDescription,
   revisionDate: "",
@@ -56,9 +59,8 @@ function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
     taxonomy: candidate.taxonomy,
     eap: candidate.eap,
     category: candidate.category,
-    categoryLabel: candidate.categoryLabel || categoryLabel(candidate.category),
+    categoryLabel: candidate.categoryLabel,
     classification: candidate.classification,
-    internalDocumentCode: candidate.internalDocumentCode,
     revision,
     revisionDescription: revision === "0" ? "EMISSÃO ORIGINAL" : "",
     revisionDate: normalizeRevisionDate(candidate.revisionDate),
@@ -70,28 +72,49 @@ function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
   };
 }
 
+function progressStatus(progress: LdLoadProgress): string {
+  if (progress.phase === "read") return "Lendo LD";
+  if (progress.phase === "prepare") return "Preparando documentos";
+  return "Pronto para pesquisa";
+}
+
 export function useCoverDocument() {
   const [records, setRecords] = useState<LdDocumentRecord[]>([]);
+  const [searchIndex, setSearchIndex] = useState<LdSearchIndex>({ entries: [], count: 0 });
   const [ldNames, setLdNames] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
+  const [ldSource, setLdSource] = useState<"grcon" | "manual" | "">("");
+  const [query, setQueryState] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selected, setSelected] = useState<CoverDocumentCandidate | null>(null);
   const [baseData, setBaseData] = useState<CoverDocumentData>(EMPTY_DATA);
   const [data, setData] = useState<CoverDocumentData>(EMPTY_DATA);
   const [source, setSource] = useState<SourceDocumentInfo | null>(null);
   const [manualOriginalPages, setManualOriginalPages] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("Carregue uma ou mais LDs para começar.");
+  const [status, setStatus] = useState("Use a LD já carregada no GRCON ou selecione outra LD.");
   const [previewUrl, setPreviewUrl] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const stateRef = useRef<CoverDebugState | null>(null);
   const previewToken = useRef(0);
+  const autoReuseAttempted = useRef(false);
 
-  const candidates = useMemo(() => searchLdDocuments(records, query), [records, query]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
+  const candidates = useMemo(
+    () => searchLdDocuments(searchIndex, debouncedQuery),
+    [searchIndex, debouncedQuery],
+  );
   const originalPages = manualOriginalPages ?? source?.originalPages ?? null;
   const totalPages = originalPages ? originalPages + 1 : null;
   const validations = useMemo(() => validateCover(selected, data, source, totalPages), [selected, data, source, totalPages]);
   const hasErrors = validations.some((item) => item.level === "error");
-  const overrides = useMemo(() => new Set((Object.keys(data) as Array<keyof CoverDocumentData>).filter((key) => data[key] !== baseData[key])), [baseData, data]);
+  const overrides = useMemo(
+    () => new Set((Object.keys(data) as Array<keyof CoverDocumentData>).filter((key) => data[key] !== baseData[key])),
+    [baseData, data],
+  );
 
   stateRef.current = {
     ldCount: ldNames.length,
@@ -106,21 +129,30 @@ export function useCoverDocument() {
     if (typeof window.GrconNotify === "function") window.GrconNotify(message, kind);
   }, []);
 
-  const loadLds = useCallback(async (files: FileList | File[]) => {
-    const list = Array.from(files);
+  const loadLds = useCallback(async (
+    files: FileList | File[],
+    origin: "grcon" | "manual" = "manual",
+  ) => {
+    const list = Array.from(files).filter((file) => /\.(?:xlsx?|xlsm)$/i.test(file.name));
     if (!list.length || busy) return;
     setBusy(true);
-    setStatus("Lendo LDs com o parser do GRCON…");
+    setStatus("Lendo LD");
     try {
-      const loaded = await loadLdRecords(list);
-      setRecords(loaded);
+      const loaded = await loadLdRecords(list, (progress) => {
+        setStatus(progressStatus(progress));
+      });
+      setRecords(loaded.records);
+      setSearchIndex(loaded.searchIndex);
       setLdNames(list.map((file) => file.name));
+      setLdSource(origin);
       setSelected(null);
       setBaseData(EMPTY_DATA);
       setData(EMPTY_DATA);
-      setQuery("");
-      setStatus(`${loaded.length.toLocaleString("pt-BR")} registro(s) documental(is) disponível(is) para pesquisa.`);
-      notify("LD carregada para a ferramenta de capa.", "success");
+      setQueryState("");
+      setDebouncedQuery("");
+      setStatus(`Pronto para pesquisa · ${loaded.records.length.toLocaleString("pt-BR")} registro(s) documental(is).`);
+      if (origin === "manual" && list[0]) window.GrconLdMemory?.save?.(list[0]);
+      notify(origin === "grcon" ? "LD vigente do GRCON reutilizada na ferramenta de capa." : "LD carregada para a ferramenta de capa.", "success");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível ler a LD.";
       setStatus(message);
@@ -130,20 +162,28 @@ export function useCoverDocument() {
     }
   }, [busy, notify]);
 
+  useEffect(() => {
+    if (autoReuseAttempted.current) return;
+    autoReuseAttempted.current = true;
+    const currentLd = window.GrconLdMemory?.current?.();
+    if (currentLd) void loadLds([currentLd], "grcon");
+  }, [loadLds]);
+
   const chooseCandidate = useCallback((candidate: CoverDocumentCandidate) => {
     const mapped = fromCandidate(candidate);
     setSelected(candidate);
     setBaseData(mapped);
     setData(mapped);
-    setQuery(candidate.title);
+    setQueryState(candidate.title);
+    setDebouncedQuery(candidate.title);
     setStatus(`Linha ${candidate.row || "—"} de ${candidate.ldName || "LD"} selecionada. Confira os dados e anexe o documento.`);
   }, []);
 
   useEffect(() => {
-    if (selected || query.trim().length < 4) return;
-    const exact = uniqueExactCandidate(candidates, query);
+    if (selected || debouncedQuery.trim().length < 4) return;
+    const exact = uniqueExactCandidate(candidates, debouncedQuery);
     if (exact) chooseCandidate(exact);
-  }, [candidates, chooseCandidate, query, selected]);
+  }, [candidates, chooseCandidate, debouncedQuery, selected]);
 
   const attachSource = useCallback(async (file: File | null) => {
     if (!file || busy) return;
@@ -184,16 +224,19 @@ export function useCoverDocument() {
       return undefined;
     }
     const timeout = window.setTimeout(() => {
-      createCoverPreview(data, totalPages).then((blob) => {
+      void createCoverPreview(data, totalPages).then((blob) => {
         if (token !== previewToken.current) return;
         const url = URL.createObjectURL(blob);
         setPreviewUrl((current) => {
           if (current) URL.revokeObjectURL(current);
           return url;
         });
-      }).catch(() => {});
-    }, 250);
-    return () => window.clearTimeout(timeout);
+      }).catch(() => undefined);
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timeout);
+      previewToken.current += 1;
+    };
   }, [data, hasErrors, selected, totalPages]);
 
   useEffect(() => () => {
@@ -222,14 +265,17 @@ export function useCoverDocument() {
 
   const clear = useCallback(() => {
     setRecords([]);
+    setSearchIndex({ entries: [], count: 0 });
     setLdNames([]);
-    setQuery("");
+    setLdSource("");
+    setQueryState("");
+    setDebouncedQuery("");
     setSelected(null);
     setBaseData(EMPTY_DATA);
     setData(EMPTY_DATA);
     setSource(null);
     setManualOriginalPages(null);
-    setStatus("Carregue uma ou mais LDs para começar.");
+    setStatus("Use a LD já carregada no GRCON ou selecione outra LD.");
     setAdvancedOpen(false);
   }, []);
 
@@ -242,8 +288,12 @@ export function useCoverDocument() {
   return {
     records,
     ldNames,
+    ldSource,
     query,
-    setQuery: (value: string) => { setQuery(value); if (selected && value !== selected.title) setSelected(null); },
+    setQuery: (value: string) => {
+      setQueryState(value);
+      if (selected && value !== selected.title) setSelected(null);
+    },
     candidates,
     selected,
     data,
