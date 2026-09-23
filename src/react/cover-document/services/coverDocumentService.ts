@@ -8,6 +8,12 @@ import type {
 const DOCX_TEMPLATE_PARTS = [
   "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.001",
   "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.002",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.003",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.004",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.005",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.006",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.007",
+  "assets/templates/CAPA_PAGE1_TEMPLATE.docx.b64.008",
 ];
 const PDF_TEMPLATE_PARTS = [
   "assets/templates/CAPA_PAGE1_BASE.pdf.b64.001",
@@ -40,16 +46,27 @@ type ZipLike = {
   generateAsync(options: Record<string, unknown>): Promise<Uint8Array>;
 };
 
+const TEMPLATE_BYTES_CACHE = new Map<string, Promise<Uint8Array>>();
+
 async function loadTemplateBytes(parts: string[], label: string): Promise<Uint8Array> {
-  const chunks = await Promise.all(parts.map(async (url) => {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error("Template " + label + " da capa não pôde ser carregado.");
-    return (await response.text()).trim();
-  }));
-  const binary = atob(chunks.join(""));
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
+  const key = parts.join("|");
+  if (!TEMPLATE_BYTES_CACHE.has(key)) {
+    TEMPLATE_BYTES_CACHE.set(key, (async () => {
+      const chunks = await Promise.all(parts.map(async (url) => {
+        const response = await fetch(url, { cache: "force-cache" });
+        if (!response.ok) throw new Error("Template " + label + " da capa não pôde ser carregado.");
+        return (await response.text()).trim();
+      }));
+      const binary = atob(chunks.join(""));
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return bytes;
+    })().catch((error) => {
+      TEMPLATE_BYTES_CACHE.delete(key);
+      throw error;
+    }));
+  }
+  return Uint8Array.from(await TEMPLATE_BYTES_CACHE.get(key)!);
 }
 
 function getPdfLib() {
