@@ -21,8 +21,8 @@ const PDF_DRAW = {
   category: { x: 202, top: 33, width: 110, size: 9, bold: true, align: "center" as const },
   documentNumber: { x: 380, top: 34, width: 170, size: 8.5, bold: true, align: "left" as const },
   pageNumber: { x: 518, top: 56, width: 48, size: 8.5, bold: false, align: "center" as const },
-  title: { x: 204, top: 108, width: 268, size: 9, bold: true, align: "left" as const, lines: 2 },
-  internalDocumentCode: { x: 302, top: 171, width: 84, size: 7.5, bold: true, align: "center" as const },
+  title: { x: 204, top: 108, width: 268, size: 9, minSize: 5.5, bold: true, align: "left" as const, lines: 7 },
+  taxonomy: { x: 302, top: 171, width: 84, size: 7.5, minSize: 5.5, bold: true, align: "center" as const, lines: 3 },
   revision: { x: 84, top: 245, width: 27, size: 10, bold: false, align: "center" as const },
   revisionDescription: { x: 120, top: 245, width: 350, size: 10, bold: false, align: "left" as const, lines: 2 },
   revisionDate: { x: 139, top: 728, width: 91, size: 6.5, bold: false, align: "center" as const },
@@ -40,16 +40,32 @@ type ZipLike = {
   generateAsync(options: Record<string, unknown>): Promise<Uint8Array>;
 };
 
+const templateByteCache = new Map<string, Promise<Uint8Array>>();
+
 async function loadTemplateBytes(parts: string[], label: string): Promise<Uint8Array> {
-  const chunks = await Promise.all(parts.map(async (url) => {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error("Template " + label + " da capa não pôde ser carregado.");
-    return (await response.text()).trim();
-  }));
-  const binary = atob(chunks.join(""));
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
+  const cacheKey = label + "::" + parts.join("|");
+  const cached = templateByteCache.get(cacheKey);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    const chunks = await Promise.all(parts.map(async (url) => {
+      const response = await fetch(url, { cache: "force-cache" });
+      if (!response.ok) throw new Error("Template " + label + " da capa não pôde ser carregado.");
+      return (await response.text()).trim();
+    }));
+    const binary = atob(chunks.join(""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    if (bytes.length < 1024) throw new Error("Template " + label + " da capa está incompleto.");
+    return bytes;
+  })();
+  templateByteCache.set(cacheKey, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    templateByteCache.delete(cacheKey);
+    throw error;
+  }
 }
 
 function getPdfLib() {
@@ -128,26 +144,67 @@ export function outputFileName(data: CoverDocumentData, kind: SourceDocumentKind
   return code + " - " + maxTitle + " - REV " + revision + "." + kind;
 }
 
-function wrapText(text: string, font: { widthOfTextAtSize(value: string, size: number): number }, size: number, maxWidth: number, maxLines = 1): { lines: string[]; size: number } {
+function splitOversizedWord(
+  word: string,
+  font: { widthOfTextAtSize(value: string, size: number): number },
+  size: number,
+  maxWidth: number,
+): string[] {
+  const chunks: string[] = [];
+  let current = "";
+  for (const char of word) {
+    const proposed = current + char;
+    if (current && font.widthOfTextAtSize(proposed, size) > maxWidth) {
+      chunks.push(current);
+      current = char;
+    } else {
+      current = proposed;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function linesAtSize(
+  clean: string,
+  font: { widthOfTextAtSize(value: string, size: number): number },
+  size: number,
+  maxWidth: number,
+): string[] {
+  const tokens = clean.split(" ").flatMap((word) => (
+    font.widthOfTextAtSize(word, size) <= maxWidth ? [word] : splitOversizedWord(word, font, size, maxWidth)
+  ));
+  const lines: string[] = [];
+  let current = "";
+  tokens.forEach((word) => {
+    const proposed = current ? current + " " + word : word;
+    if (font.widthOfTextAtSize(proposed, size) <= maxWidth) current = proposed;
+    else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  });
+  if (current) lines.push(current);
+  return lines;
+}
+
+function wrapText(
+  text: string,
+  font: { widthOfTextAtSize(value: string, size: number): number },
+  size: number,
+  maxWidth: number,
+  maxLines = 1,
+  minSize = 5.5,
+): { lines: string[]; size: number } {
   const clean = String(text || "").replace(/\s+/g, " ").trim();
   if (!clean) return { lines: [""], size };
-  let currentSize = size;
-  for (; currentSize >= 5.5; currentSize -= 0.25) {
-    const words = clean.split(" ");
-    const lines: string[] = [];
-    let current = "";
-    words.forEach((word) => {
-      const proposed = current ? current + " " + word : word;
-      if (font.widthOfTextAtSize(proposed, currentSize) <= maxWidth) current = proposed;
-      else {
-        if (current) lines.push(current);
-        current = word;
-      }
-    });
-    if (current) lines.push(current);
-    if (lines.length <= maxLines && lines.every((line) => font.widthOfTextAtSize(line, currentSize) <= maxWidth)) return { lines, size: currentSize };
+  for (let currentSize = size; currentSize >= minSize; currentSize -= 0.25) {
+    const lines = linesAtSize(clean, font, currentSize, maxWidth);
+    if (lines.length <= maxLines && lines.every((line) => font.widthOfTextAtSize(line, currentSize) <= maxWidth)) {
+      return { lines, size: currentSize };
+    }
   }
-  return { lines: [clean], size: 5.5 };
+  throw new Error("O conteúdo da capa não cabe no campo oficial sem atravessar suas bordas. Revise o valor antes de gerar.");
 }
 
 async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promise<Uint8Array> {
@@ -167,7 +224,7 @@ async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promi
     documentNumber: data.documentNumber,
     pageNumber: "1 de " + totalPages,
     title: data.title,
-    internalDocumentCode: data.internalDocumentCode || "NÃO INFORMADO NA LD",
+    taxonomy: data.taxonomy || "NÃO INFORMADO NA LD",
     revision: data.revision,
     revisionDescription: data.revisionDescription,
     revisionDate: data.revisionDate,
@@ -179,7 +236,7 @@ async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promi
   (Object.keys(PDF_DRAW) as Array<keyof typeof PDF_DRAW>).forEach((key) => {
     const spec = PDF_DRAW[key];
     const font = spec.bold ? bold : regular;
-    const wrapped = wrapText(values[key], font, spec.size, spec.width, "lines" in spec ? spec.lines : 1);
+    const wrapped = wrapText(values[key], font, spec.size, spec.width, "lines" in spec ? spec.lines : 1, "minSize" in spec ? spec.minSize : 5.5);
     wrapped.lines.forEach((line, index) => {
       const lineWidth = font.widthOfTextAtSize(line, wrapped.size);
       const x = spec.align === "center" ? spec.x + Math.max(0, (spec.width - lineWidth) / 2) : spec.x;
@@ -476,7 +533,7 @@ async function buildEditableDocx(data: CoverDocumentData, source: SourceDocument
     "{{DOCUMENT_NUMBER}}": data.documentNumber,
     "{{TOTAL_PAGES}}": String(totalPages),
     "{{TITLE}}": data.title,
-    "{{INTERNAL_CODE}}": data.internalDocumentCode || "NÃO INFORMADO NA LD",
+    "{{INTERNAL_CODE}}": data.taxonomy || "NÃO INFORMADO NA LD",
     "{{REVISION}}": data.revision,
     "{{REVISION_DESCRIPTION}}": data.revisionDescription,
     "{{REVISION_DATE}}": data.revisionDate,
