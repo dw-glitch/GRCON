@@ -21,7 +21,7 @@ export function CoverDocumentApp() {
       <div className="cover-status" role="status" aria-live="polite">{cover.status}</div>
       <div className="cover-layout">
         <div className="cover-main-column">
-          <LdDocumentSearch ldNames={cover.ldNames} query={cover.query} candidates={cover.candidates} selectedId={cover.selected?.id || ""} busy={cover.busy} onLdFiles={cover.loadLds} onQuery={cover.setQuery} onSelect={cover.chooseCandidate} />
+          <LdDocumentSearch ldNames={cover.ldNames} ldSource={cover.ldSource} query={cover.query} candidates={cover.candidates} selectedId={cover.selected?.id || ""} busy={cover.busy} onLdFiles={cover.loadLds} onQuery={cover.setQuery} onSelect={cover.chooseCandidate} />
           <CoverDataPanel selected={cover.selected} data={cover.data} overrides={cover.overrides} open={cover.advancedOpen} onToggle={() => cover.setAdvancedOpen(!cover.advancedOpen)} onUpdate={cover.updateField} onRestore={cover.restoreField} />
           <SourceDocumentPanel source={cover.source} originalPages={cover.originalPages} manualOriginalPages={cover.manualOriginalPages} busy={cover.busy} onFile={cover.attachSource} onManualPages={cover.setManualOriginalPages} />
         </div>
