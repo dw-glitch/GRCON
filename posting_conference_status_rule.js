@@ -23,11 +23,7 @@
   function revisionProvesPosting(foundRevision, sentRevision, Conference) {
     const found = Conference.normalizeRevision(foundRevision);
     const sent = Conference.normalizeRevision(sentRevision);
-    if (!found || !sent) return false;
-    if (found === sent) return true;
-    const foundRank = Conference.revisionRank(found);
-    const sentRank = Conference.revisionRank(sent);
-    return foundRank >= 0 && sentRank >= 0 && foundRank > sentRank;
+    return Boolean(found && sent && found === sent);
   }
 
   function matchedRecords(row, baseRecords, Conference, baseIndex) {

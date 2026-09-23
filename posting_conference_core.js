@@ -409,69 +409,16 @@
 
     const exact = sortEvidenceRecords(matched.filter((item) => normalizeRevision(item.revision) === sent));
     if (exact.length) {
-      if (sameTimestampStatusConflict(exact)) {
-        return {
-          status: STATUSES.REVIEW,
-          revisionFound: sent,
-          revisionsFound: revisions,
-          currentEvidence: false,
-          ambiguity: true,
-          evidence: null,
-          note: `A Consulta Geral possui linhas conflitantes para a revisão ${sent} com a mesma data efetiva; a situação atual é ambígua e requer análise.`,
-        };
-      }
       const evidence = exact[0];
-      if (isPostedSigemStatus(evidence.status)) {
-        return {
-          status: STATUSES.CONFIRMED,
-          revisionFound: sent,
-          revisionsFound: revisions,
-          currentEvidence: true,
-          ambiguity: false,
-          evidence,
-          note: `Status SIGEM "${text(evidence.status)}" localizado para a revisão ${sent}; esta linha comprova a postagem na Consulta Geral atual.`,
-        };
-      }
-    }
-
-    const sentRank = revisionRank(sent);
-    const laterByRevision = new Map();
-    matched.forEach((record) => {
-      const revision = normalizeRevision(record.revision);
-      const rank = revisionRank(revision);
-      if (!revision || sentRank < 0 || rank <= sentRank) return;
-      if (!laterByRevision.has(revision)) laterByRevision.set(revision, []);
-      laterByRevision.get(revision).push(record);
-    });
-
-    const laterRevisions = [...laterByRevision.keys()]
-      .sort((a, b) => revisionRank(b) - revisionRank(a) || b.localeCompare(a, "pt-BR"));
-
-    for (const revision of laterRevisions) {
-      const candidates = sortEvidenceRecords(laterByRevision.get(revision));
-      if (sameTimestampStatusConflict(candidates)) {
-        return {
-          status: STATUSES.REVIEW,
-          revisionFound: revision,
-          revisionsFound: revisions,
-          currentEvidence: false,
-          ambiguity: true,
-          evidence: null,
-          note: `A Consulta Geral possui linhas conflitantes para a revisão posterior ${revision} com a mesma data efetiva; a evidência é ambígua.`,
-        };
-      }
-      const evidence = candidates[0];
-      if (evidence && isPostedSigemStatus(evidence.status)) {
-        return {
-          status: STATUSES.CONFIRMED,
-          revisionFound: revision,
-          revisionsFound: revisions,
-          currentEvidence: true,
-          ambiguity: false,
-          evidence,
-          note: `Revisão ${revision} encontrada no SIGEM com status "${text(evidence.status)}"; revisão posterior comprova que a revisão ${sent} já foi postada.`,
-        };
-      }
+      return {
+        status: STATUSES.CONFIRMED,
+        revisionFound: sent,
+        revisionsFound: revisions,
+        currentEvidence: true,
+        ambiguity: false,
+        evidence,
+        note: `Documento e revisão ${sent} localizados na Consulta Geral.`,
+      };
     }
 
     if (!revisions.length) {
@@ -486,17 +433,14 @@
       };
     }
 
-    const exactCurrent = exact[0] || null;
     return {
       status: STATUSES.REVISION_DIVERGENT,
-      revisionFound: exactCurrent ? sent : revisions.join(" · "),
+      revisionFound: revisions.join(" · "),
       revisionsFound: revisions,
       currentEvidence: false,
       ambiguity: false,
-      evidence: exactCurrent,
-      note: exactCurrent
-        ? `Documento e revisão ${sent} localizados, porém o status SIGEM atual "${text(exactCurrent.status) || "não informado"}" não é evidência válida de postagem.`
-        : `Documento localizado, porém a revisão ${sent} ainda não possui evidência válida de postagem. Revisão(ões) encontrada(s): ${revisions.join(" · ")}.`,
+      evidence: sortEvidenceRecords(matched)[0] || null,
+      note: `Documento localizado, porém a revisão ${sent} ainda não foi confirmada. Revisão(ões) encontrada(s): ${revisions.join(" · ")}.`,
     };
   }
 
