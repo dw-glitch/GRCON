@@ -56,7 +56,6 @@ const EMPTY_DATA: CoverDocumentData = {
 };
 
 function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
-  const revision = candidate.revision || "";
   return {
     title: candidate.title,
     documentNumber: candidate.documentNumber,
@@ -66,9 +65,10 @@ function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
     categoryLabel: candidate.categoryLabel || categoryLabel(candidate.category),
     classification: candidate.classification,
     internalDocumentCode: candidate.internalDocumentCode,
-    // Regra operacional: revisão vem da linha da LD selecionada e continua editável.
-    revision,
-    revisionDescription: revision === "0" ? "EMISSÃO ORIGINAL" : "",
+    // Regra operacional: a revisão da capa é sempre informada pelo operador.
+    // A revisão existente na LD não preenche este campo automaticamente.
+    revision: "",
+    revisionDescription: "",
     // A capa usa a data local atual, não a data histórica registrada na LD.
     revisionDate: currentCoverDate(),
     discipline: candidate.discipline,
@@ -195,7 +195,7 @@ export function useCoverDocument() {
 
   const restoreField = useCallback((key: keyof CoverDocumentData) => {
     setData((current) => {
-      if (key === "revision") return { ...current, revision: baseData.revision, revisionDescription: baseData.revisionDescription };
+      if (key === "revision") return { ...current, revision: "", revisionDescription: "" };
       return { ...current, [key]: baseData[key] };
     });
   }, [baseData]);
