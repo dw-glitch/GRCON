@@ -1,11 +1,10 @@
 import type { ChangeEvent } from "react";
 import type { CoverDocumentCandidate, CoverDocumentData } from "../types/domain";
 
-const EDITABLE_FIELDS: Array<{ key: keyof CoverDocumentData; label: string }> = [
+const EDITABLE_FIELDS: Array<{ key: keyof CoverDocumentData; label: string; hint?: string }> = [
   { key: "title", label: "Título" },
-  { key: "documentNumber", label: "Código do documento" },
-  { key: "taxonomy", label: "Taxonomia" },
-  { key: "internalDocumentCode", label: "Cód. documento interno" },
+  { key: "documentNumber", label: "Número/código Petrobras" },
+  { key: "taxonomy", label: "Taxonomia Interna / Cód. Documento Interno", hint: "Valor da mesma linha física da LD selecionada." },
   { key: "revision", label: "Revisão" },
   { key: "revisionDate", label: "Data" },
   { key: "revisionDescription", label: "Descrição da revisão" },
@@ -40,7 +39,7 @@ export function CoverDataPanel({
       </div>
       <dl className="cover-data-summary">
         <div><dt>Título</dt><dd>{data.title}</dd></div>
-        <div><dt>Taxonomia</dt><dd>{data.taxonomy || "Não informado na LD"}</dd></div>
+        <div><dt>Taxonomia Interna / Cód. Documento Interno</dt><dd>{data.taxonomy || "Taxonomia Interna não informada na LD"}</dd></div>
         <div><dt>EAP</dt><dd>{data.eap || "Não informado na LD"}</dd></div>
         <div><dt>Disciplina</dt><dd>{data.discipline || "Não informado na LD"}</dd></div>
         <div><dt>Categoria</dt><dd>{data.categoryLabel || data.category || "Não informado na LD"}</dd></div>
@@ -48,10 +47,15 @@ export function CoverDataPanel({
       </dl>
       {open ? (
         <div className="cover-edit-grid">
-          {EDITABLE_FIELDS.map(({ key, label }) => (
+          {EDITABLE_FIELDS.map(({ key, label, hint }) => (
             <label key={key} className={overrides.has(key) ? "is-overridden" : ""}>
               <span>{label}{overrides.has(key) ? <em>Alterado manualmente</em> : null}</span>
-              <input value={String(data[key] ?? "")} onChange={(event: ChangeEvent<HTMLInputElement>) => onUpdate(key, event.currentTarget.value)} />
+              <input
+                value={String(data[key] ?? "")}
+                aria-describedby={hint ? `cover-hint-${key}` : undefined}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => onUpdate(key, event.currentTarget.value)}
+              />
+              {hint ? <small id={`cover-hint-${key}`} className="cover-field-hint">{hint}</small> : null}
               {overrides.has(key) ? <button type="button" className="text-button" onClick={() => onRestore(key)}>Restaurar valor da LD</button> : null}
             </label>
           ))}
