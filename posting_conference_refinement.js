@@ -23,10 +23,9 @@
   }
 
   function isPostedSigemStatus(value, Conference) {
-    const normalized = Conference && typeof Conference.norm === "function"
-      ? Conference.norm(value)
-      : trimmed(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
-    return normalized === "EM ANALISE" || normalized === "EM WORKFLOW";
+    return Boolean(Conference && typeof Conference.isPostedSigemStatus === "function"
+      ? Conference.isPostedSigemStatus(value)
+      : false);
   }
 
   function conferenceLabel(status, Conference) {
@@ -91,42 +90,20 @@
     const base = Array.isArray(baseRecords) ? baseRecords : [];
     const index = Conference && typeof Conference.buildBaseIndex === "function" ? Conference.buildBaseIndex(base) : null;
     return (rows || []).map((row) => {
-      const current = currentStatusRecord(row, base, Conference, index);
       const matched = matchedBaseRecords(row, base, Conference, index);
-      const sentRevision = Conference.normalizeRevision(row.revisionSent);
-      const currentRevision = current ? Conference.normalizeRevision(current.revision) : "";
-      const sameRevision = Boolean(current && currentRevision && currentRevision === sentRevision);
-      const revisionNotInformed = Boolean(current && !currentRevision);
-      const postedBySigemStatus = Boolean(
-        current
-        && isPostedSigemStatus(current.status, Conference)
-        && (sameRevision || revisionNotInformed)
-      );
-      const effectiveStatus = postedBySigemStatus ? Conference.STATUSES.CONFIRMED : row.status;
-      const confirmedAt = postedBySigemStatus
-        ? (row.firstConfirmedAt || row.lastCheckedAt || new Date().toISOString())
-        : row.firstConfirmedAt;
-      const statusNote = postedBySigemStatus && row.status !== Conference.STATUSES.CONFIRMED
-        ? `Status SIGEM “${trimmed(current.status)}” considerado como evidência de postagem realizada${revisionNotInformed ? " para documento sem revisão informada na Consulta Geral" : ` para a revisão ${sentRevision}`}.`
-        : "";
+      const fallback = !row.sigemStatus && matched.length
+        ? currentStatusRecord(row, base, Conference, index)
+        : null;
+      const sigemStatus = row.sigemStatus || (fallback ? rawText(fallback.status) : "");
+      const sigemStatusRevision = row.sigemStatusRevision || (fallback ? Conference.normalizeRevision(fallback.revision) : "");
+      const sigemSourceRow = row.sigemSourceRow || (fallback ? fallback.sourceRow : null);
       return {
         ...row,
-        status: effectiveStatus,
-        statusLabel: Conference.statusLabel(effectiveStatus),
-        conferenceLabel: conferenceLabel(effectiveStatus, Conference),
-        sigemStatus: current ? rawText(current.status) : "",
-        sigemStatusRevision: current ? current.revision : "",
-        sigemSourceRow: current ? current.sourceRow : null,
-        firstConfirmedAt: confirmedAt,
-        confirmedRevision: postedBySigemStatus ? sentRevision : row.confirmedRevision,
-        confirmationSource: postedBySigemStatus ? `Consulta Geral SIGEM (${trimmed(current.status)})` : row.confirmationSource,
-        currentEvidence: postedBySigemStatus ? true : Boolean(row.currentEvidence),
-        revisionFound: postedBySigemStatus && !row.revisionFound ? (currentRevision || sentRevision) : row.revisionFound,
-        note: !current && matched.length
-          ? `${row.note || ""} Status SIGEM ambíguo na Consulta Geral; requer análise das linhas de origem.`.trim()
-          : current && currentRevision !== sentRevision && !revisionNotInformed
-            ? `${row.note || ""} Status SIGEM referente à revisão ${current.revision} encontrada na base.`.trim()
-            : [row.note, statusNote].filter(Boolean).join(" ").trim(),
+        statusLabel: Conference.statusLabel(row.status),
+        conferenceLabel: conferenceLabel(row.status, Conference),
+        sigemStatus,
+        sigemStatusRevision,
+        sigemSourceRow,
       };
     });
   }
@@ -444,13 +421,8 @@
         return enrichResult(result, base && base.records || [], wrapped);
       },
       async importWorkbook(workbook, fileMeta, historyRecords, options) {
-        let result = await original.importWorkbook(workbook, fileMeta, historyRecords, options);
-        const repaired = repairParsedStatuses(workbook, result.parsed, wrapped);
-        if (repaired !== result.parsed) {
-          await original.saveBase({ meta: repaired.meta, records: repaired.records });
-          result = { ...result, parsed: repaired };
-        }
-        return enrichResult(result, repaired.records || [], wrapped);
+        const result = await original.importWorkbook(workbook, fileMeta, historyRecords, options);
+        return enrichResult(result, result.parsed && result.parsed.records || [], wrapped);
       },
       filterRows(rows, filters) {
         if (isAggregateRows(rows)) return (rows || []).filter((row) => aggregateMatches(row, filters, wrapped));
