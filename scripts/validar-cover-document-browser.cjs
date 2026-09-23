@@ -156,10 +156,23 @@ async function layoutAt(page, width, height = 900) {
     assert.equal(await dateInput.getAttribute("readonly"), "");
 
     await setSourcePdf(page);
+    const diagnostics = await page.evaluate(() => ({
+      debug: window.GrconCoverDocumentUi?._debug?.state || null,
+      validations: Array.from(document.querySelectorAll(".cover-validations li")).map((node) => node.textContent?.trim() || ""),
+      status: document.querySelector(".cover-status")?.textContent?.trim() || "",
+    }));
+    console.log("cover_pre_preview", JSON.stringify(diagnostics));
+    assert.equal(diagnostics.debug?.validationErrors, 0, "A prévia ficou bloqueada por validações: " + diagnostics.validations.join(" | "));
     await page.waitForFunction(() => {
       const iframe = document.querySelector(".cover-preview-frame iframe");
-      return Boolean(iframe && iframe.getAttribute("src")?.startsWith("blob:"));
+      const status = document.querySelector(".cover-status")?.textContent || "";
+      return Boolean(iframe && iframe.getAttribute("src")?.startsWith("blob:"))
+        || status.includes("Não foi possível gerar a prévia da capa:");
     }, null, { timeout: 20000 });
+    const previewFailure = await page.locator(".cover-status").innerText();
+    assert.ok(!previewFailure.includes("Não foi possível gerar a prévia da capa:"), previewFailure);
+    const iframeSrc = await page.locator(".cover-preview-frame iframe").getAttribute("src");
+    assert.ok(iframeSrc?.startsWith("blob:"), "A prévia PDF não recebeu URL blob.");
 
     const downloadPromise = page.waitForEvent("download", { timeout: 20000 });
     await page.getByRole("button", { name: "Gerar PDF" }).click();
