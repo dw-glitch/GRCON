@@ -110,6 +110,8 @@ assert.match(appSource, /Consulta Geral continua sendo a evidência final/);
 assert.match(appSource, /data-repost-grdt/);
 assert.match(appSource, /Selecionar filtrados/);
 assert.match(appSource, /PERMISSION_REQUIRED/);
+assert.match(appSource, /editNumber && editNumber\.parentElement === actions/);
+assert.match(appSource, /actions\.insertBefore\(button, editNumber\)/);
 
 // Pasta escolhida só para a sessão: a referência física do arquivo precisa
 // atravessar a classificação. Sem ela, Gerar ZIP / Baixar arquivos / Copiar
