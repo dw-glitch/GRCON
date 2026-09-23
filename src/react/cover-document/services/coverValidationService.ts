@@ -35,8 +35,11 @@ export function validateCover(
     push("info", "word-output", "A saída Word mantém a capa editável e integra a primeira página diretamente ao pacote OOXML do DOCX original, preservando o arquivo de origem.");
   }
 
-  const revisionInfo = data.revision.trim() && window.TriagemCore?.revisionInfo
-    ? window.TriagemCore.revisionInfo(data.revision)
+  const revisionCore = (window as unknown as {
+    TriagemCore?: { revisionInfo?: (value: unknown) => { valid: boolean } };
+  }).TriagemCore;
+  const revisionInfo = data.revision.trim() && revisionCore?.revisionInfo
+    ? revisionCore.revisionInfo(data.revision)
     : null;
   if (revisionInfo && !revisionInfo.valid) {
     push("warning", "revision-format", `Formato de revisão incomum “${data.revision}”. Confira a LD antes de gerar.`);
