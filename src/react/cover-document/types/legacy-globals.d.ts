@@ -6,6 +6,8 @@ interface TriagemCoreApi {
     records: LdDocumentRecord[];
     history: LdDocumentRecord[];
   };
+  revisionInfo(value: string): { revision: string; valid: boolean; kind: string; rank: number };
+  EGRDT_OPTIONS: { documentTypes: string[] };
   validateDocumentCode(document: string, sheetName?: string): {
     valid: boolean;
     family?: string;
@@ -74,6 +76,16 @@ declare global {
     PDFLib?: PdfLibApi;
     JSZip?: JsZipConstructor;
     GrconNotify?: NotifyFn;
+    GrconPerformance?: {
+      loadLd(file: File, profile?: unknown, onProgress?: (message: { message?: string; progress?: number }) => void): Promise<{
+        parsed?: { records?: LdDocumentRecord[]; history?: LdDocumentRecord[] };
+      }>;
+    };
+    GrconLdMemory?: {
+      save(file: File): void;
+      get(): { name: string; size: number; lastModified: number; savedAt: number } | null;
+      clear(): void;
+    };
     GrconCoverDocumentUi?: GrconCoverDocumentUiApi;
     GrconCoverDocumentReact?: { mounted: boolean };
   }
