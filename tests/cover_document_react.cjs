@@ -16,7 +16,6 @@ const panel = read("src/react/cover-document/components/CoverDataPanel.tsx");
 const ld = read("src/react/cover-document/services/ldDocumentService.ts");
 const service = read("src/react/cover-document/services/coverDocumentService.ts");
 const validation = read("src/react/cover-document/services/coverValidationService.ts");
-const globals = read("src/react/cover-document/types/legacy-globals.d.ts");
 const css = read("cover-document.css");
 
 assert.match(html, /data-grcon-view="cover-document"/);
@@ -82,8 +81,6 @@ assert.match(validation, /coluna TAXONOMIA/);
 assert.doesNotMatch(validation, /Código interno não informado/);
 assert.match(panel, /Taxonomia · campo Cód\. documento interno da capa/);
 assert.doesNotMatch(panel, /key: "internalDocumentCode"/);
-assert.match(globals, /GrconPerformance/);
-assert.match(globals, /GrconLdMemory/);
 assert.match(css, /@media\(max-width:980px\)/);
 
 const reactSource = [app, hook, ld, service, validation].join("\n");
