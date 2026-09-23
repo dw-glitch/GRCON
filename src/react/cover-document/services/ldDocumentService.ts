@@ -1,5 +1,7 @@
 import type { CoverDocumentCandidate, LdColumnValue, LdDocumentRecord } from "../types/domain";
 
+const TAXONOMY_HEADER = "TAXONOMIA";
+
 const CATEGORY_LABELS: Record<string, string> = {
   PR: "PROCEDIMENTO",
   RL: "RELATÓRIO",
@@ -19,11 +21,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const FIELD_ALIASES = {
-  taxonomy: ["TAXONOMIA", "CODIGO DA TAXONOMIA", "CODIGO TAXONOMIA", "TAXONOMIA DOCUMENTAL"],
   eap: ["EAP", "CODIGO EAP", "CODIGO DA EAP", "ESTRUTURA ANALITICA DO PROJETO"],
   classification: ["CLASSIFICACAO", "CLASSIFICACAO DO DOCUMENTO", "CLASSE", "CLASSE DOCUMENTAL"],
-  internalCode: ["COD DOCUMENTO INTERNO", "CODIGO DOCUMENTO INTERNO", "CODIGO DO DOCUMENTO INTERNO", "CODIGO INTERNO", "CODIGO DA CONTRATADA", "DOCUMENTO INTERNO"],
 } as const;
+
+type SearchEntry = {
+  record: LdDocumentRecord;
+  normalizedTitle: string;
+};
+
+const SEARCH_INDEX_CACHE = new WeakMap<LdDocumentRecord[], SearchEntry[]>();
 
 export function normalizeSearch(value: unknown): string {
   return String(value ?? "")
@@ -38,6 +45,17 @@ export function normalizeSearch(value: unknown): string {
 
 function normalizedHeader(value: unknown): string {
   return normalizeSearch(value);
+}
+
+function canonicalColumnValue(columns: LdColumnValue[] | undefined, canonicalHeader: string): string {
+  if (!columns?.length) return "";
+  const wanted = normalizedHeader(canonicalHeader);
+  const values = columns
+    .filter((entry) => normalizedHeader(entry.header) === wanted)
+    .map((entry) => String(entry.value ?? "").trim());
+  if (!values.length) return "";
+  const unique = [...new Set(values)];
+  return unique.length === 1 ? unique[0] : "";
 }
 
 function columnValue(columns: LdColumnValue[] | undefined, aliases: readonly string[]): string {
@@ -74,9 +92,7 @@ function diceCoefficient(left: string, right: string): number {
   return (2 * intersection) / (left.length + right.length - 2);
 }
 
-function scoreTitle(title: string, query: string): number {
-  const candidate = normalizeSearch(title);
-  const wanted = normalizeSearch(query);
+function scoreNormalizedTitle(candidate: string, wanted: string): number {
   if (!candidate || !wanted) return 0;
   if (candidate === wanted) return 1000;
   if (candidate.startsWith(wanted)) return 900 + Math.min(80, wanted.length / Math.max(1, candidate.length) * 80);
@@ -89,13 +105,32 @@ function scoreTitle(title: string, query: string): number {
   return Math.round(500 * coverage + 300 * dice);
 }
 
+function searchIndex(records: LdDocumentRecord[]): SearchEntry[] {
+  const cached = SEARCH_INDEX_CACHE.get(records);
+  if (cached) return cached;
+  const built = records.map((record) => ({
+    record,
+    normalizedTitle: normalizeSearch(record.title),
+  }));
+  SEARCH_INDEX_CACHE.set(records, built);
+  return built;
+}
+
+function officialDocumentType(value: unknown): string {
+  const candidate = String(value ?? "").trim().toUpperCase();
+  if (!candidate) return "";
+  const catalog = window.TriagemCore?.EGRDT_OPTIONS?.documentTypes || [];
+  return catalog.includes(candidate) ? candidate : "";
+}
+
 function documentCategory(record: LdDocumentRecord): string {
-  const direct = String(record.documentType ?? "").trim().toUpperCase();
+  const direct = officialDocumentType(record.documentType);
   if (direct) return direct;
   const code = String(record.document ?? "").trim();
   const groups = code.split("-");
   const offset = /^[IAFLED]$/i.test(groups[0] || "") ? 1 : 0;
-  return String(groups[offset] || "").trim().toUpperCase();
+  const derived = String(groups[offset] || "").trim().toUpperCase();
+  return officialDocumentType(derived) || derived;
 }
 
 export function categoryLabel(category: string): string {
@@ -103,23 +138,25 @@ export function categoryLabel(category: string): string {
   if (!value) return "";
   const key = value.toUpperCase();
   if (CATEGORY_LABELS[key]) return CATEGORY_LABELS[key];
-  if (value.length > 3 || /\s/.test(value)) return value.toUpperCase();
   return value.toUpperCase();
 }
 
 export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentCandidate {
   const category = documentCategory(record);
+  const taxonomy = canonicalColumnValue(record.ldColumns, TAXONOMY_HEADER);
   return {
     id: [record.source, record.sheet, record.row, record.document, columnValue(record.ldColumns, FIELD_ALIASES.eap)].join("::"),
     record,
     documentNumber: String(record.document ?? "").trim(),
     title: String(record.title ?? "").trim(),
-    taxonomy: columnValue(record.ldColumns, FIELD_ALIASES.taxonomy),
+    // A capa usa exatamente a coluna TAXONOMIA da mesma linha física selecionada.
+    taxonomy,
     eap: columnValue(record.ldColumns, FIELD_ALIASES.eap),
     category,
     categoryLabel: categoryLabel(category),
     classification: columnValue(record.ldColumns, FIELD_ALIASES.classification),
-    internalDocumentCode: columnValue(record.ldColumns, FIELD_ALIASES.internalCode),
+    // O campo "CÓD. DOCUMENTO INTERNO" da capa é a Taxonomia da LD.
+    internalDocumentCode: taxonomy,
     revision: String(record.revision ?? "").trim(),
     revisionDate: String(record.effectiveDate ?? "").trim(),
     discipline: String(record.discipline ?? "").trim(),
@@ -131,25 +168,45 @@ export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentC
   };
 }
 
-export async function loadLdRecords(files: FileList | File[]): Promise<LdDocumentRecord[]> {
+export async function loadLdRecords(
+  files: FileList | File[],
+  onProgress?: (message: string, progress: number) => void,
+): Promise<LdDocumentRecord[]> {
   if (!window.XLSX || !window.TriagemCore) throw new Error("Leitor de LD do GRCON não está disponível.");
+  const list = Array.from(files).filter((file) => /\.(?:xlsx?|xlsm)$/i.test(file.name));
   const records: LdDocumentRecord[] = [];
-  for (const file of Array.from(files)) {
-    if (!/\.(?:xlsx?|xlsm)$/i.test(file.name)) continue;
-    const buffer = await file.arrayBuffer();
-    const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
-    const parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified);
-    records.push(...((parsed.records || []) as unknown as LdDocumentRecord[]));
-    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+
+  for (let fileIndex = 0; fileIndex < list.length; fileIndex += 1) {
+    const file = list[fileIndex];
+    const reportProgress = (message: { message?: string; progress?: number }) => {
+      const local = Math.max(0, Math.min(1, Number(message?.progress) || 0));
+      const global = list.length ? (fileIndex + local) / list.length : 0;
+      onProgress?.(message?.message || `Lendo ${file.name}`, global);
+    };
+
+    if (window.GrconPerformance?.loadLd) {
+      const loaded = await window.GrconPerformance.loadLd(file, null, reportProgress);
+      records.push(...((loaded?.parsed?.records || []) as LdDocumentRecord[]));
+    } else {
+      const buffer = await file.arrayBuffer();
+      const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
+      const parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified);
+      records.push(...((parsed.records || []) as unknown as LdDocumentRecord[]));
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
+
+    window.GrconLdMemory?.save?.(file);
+    onProgress?.(`${file.name} carregada`, (fileIndex + 1) / Math.max(1, list.length));
   }
+
   return records.filter((record) => Boolean(String(record.title ?? "").trim() && String(record.document ?? "").trim()));
 }
 
 export function searchLdDocuments(records: LdDocumentRecord[], query: string, limit = 30): CoverDocumentCandidate[] {
   const wanted = normalizeSearch(query);
   if (!wanted) return [];
-  return records
-    .map((record) => toCandidate(record, scoreTitle(record.title, wanted)))
+  return searchIndex(records)
+    .map((entry) => toCandidate(entry.record, scoreNormalizedTitle(entry.normalizedTitle, wanted)))
     .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title, "pt-BR"))
     .slice(0, limit);
