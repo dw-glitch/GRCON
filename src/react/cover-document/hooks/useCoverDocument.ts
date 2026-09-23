@@ -13,7 +13,7 @@ import {
   generatePdf,
   inspectSourceDocument,
 } from "../services/coverDocumentService";
-import { normalizeRevisionDate, validateCover } from "../services/coverValidationService";
+import { validateCover } from "../services/coverValidationService";
 import { coverDocumentBridge } from "../services/coverDocumentBridge";
 import type {
   CoverDebugState,
@@ -29,6 +29,12 @@ const DEFAULTS: Pick<CoverDocumentData, "revisionDescription" | "executor" | "ch
   checker: "LEANDRO CALDEIRA",
   approver: "LUCIANA SCIARRA",
 };
+
+function currentCoverDate(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+}
 
 const EMPTY_DATA: CoverDocumentData = {
   title: "",
@@ -50,7 +56,6 @@ const EMPTY_DATA: CoverDocumentData = {
 };
 
 function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
-  const revision = candidate.revision || "";
   return {
     title: candidate.title,
     documentNumber: candidate.documentNumber,
@@ -60,9 +65,11 @@ function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
     categoryLabel: candidate.categoryLabel || categoryLabel(candidate.category),
     classification: candidate.classification,
     internalDocumentCode: candidate.internalDocumentCode,
-    revision,
-    revisionDescription: revision === "0" ? "EMISSÃO ORIGINAL" : "",
-    revisionDate: normalizeRevisionDate(candidate.revisionDate),
+    // Regra operacional: revisão é sempre informada pelo operador na ferramenta.
+    revision: "",
+    revisionDescription: "",
+    // A capa usa a data local atual, não a data histórica registrada na LD.
+    revisionDate: currentCoverDate(),
     discipline: candidate.discipline,
     tag: candidate.tag,
     executor: DEFAULTS.executor,
@@ -175,11 +182,21 @@ export function useCoverDocument() {
   }, [busy, notify]);
 
   const updateField = useCallback(<K extends keyof CoverDocumentData>(key: K, value: CoverDocumentData[K]) => {
-    setData((current) => ({ ...current, [key]: value }));
+    setData((current) => {
+      if (key !== "revision") return { ...current, [key]: value };
+      const revision = String(value ?? "").trim().toUpperCase();
+      const revisionDescription = revision === "0"
+        ? "EMISSÃO ORIGINAL"
+        : current.revisionDescription === "EMISSÃO ORIGINAL" ? "" : current.revisionDescription;
+      return { ...current, revision, revisionDescription };
+    });
   }, []);
 
   const restoreField = useCallback((key: keyof CoverDocumentData) => {
-    setData((current) => ({ ...current, [key]: baseData[key] }));
+    setData((current) => {
+      if (key === "revision") return { ...current, revision: "", revisionDescription: "" };
+      return { ...current, [key]: baseData[key] };
+    });
   }, [baseData]);
 
   useEffect(() => {
@@ -213,9 +230,11 @@ export function useCoverDocument() {
     setBusy(true);
     setStatus(kind === "pdf" ? "Montando a capa e preservando as páginas originais…" : "Montando a capa Word editável e incorporando o documento original…");
     try {
+      const outputData = { ...data, revisionDate: currentCoverDate() };
+      if (outputData.revisionDate !== data.revisionDate) setData(outputData);
       const generated = kind === "pdf"
-        ? await generatePdf(data, source)
-        : await generateDocx(data, source, totalPages);
+        ? await generatePdf(outputData, source)
+        : await generateDocx(outputData, source, totalPages);
       downloadGenerated(generated);
       setStatus(`${generated.fileName} gerado com sucesso.`);
       notify("Arquivo com capa gerado com sucesso.", "success");
