@@ -22,7 +22,7 @@ const PDF_DRAW = {
   documentNumber: { x: 380, top: 34, width: 170, size: 8.5, bold: true, align: "left" as const },
   pageNumber: { x: 518, top: 56, width: 48, size: 8.5, bold: false, align: "center" as const },
   title: { x: 204, top: 108, width: 268, size: 9, bold: true, align: "left" as const, lines: 2 },
-  internalDocumentCode: { x: 302, top: 171, width: 84, size: 7.5, bold: true, align: "center" as const },
+  taxonomy: { x: 302, top: 171, width: 84, size: 7.5, bold: true, align: "center" as const },
   revision: { x: 84, top: 245, width: 27, size: 10, bold: false, align: "center" as const },
   revisionDescription: { x: 120, top: 245, width: 350, size: 10, bold: false, align: "left" as const, lines: 2 },
   revisionDate: { x: 139, top: 728, width: 91, size: 6.5, bold: false, align: "center" as const },
@@ -150,6 +150,22 @@ function wrapText(text: string, font: { widthOfTextAtSize(value: string, size: n
   return { lines: [clean], size: 5.5 };
 }
 
+export function coverFieldValues(data: CoverDocumentData, totalPages: number) {
+  return {
+    category: data.categoryLabel || data.category,
+    documentNumber: data.documentNumber,
+    pageNumber: "1 de " + totalPages,
+    title: data.title,
+    taxonomy: data.taxonomy || "NÃO INFORMADO NA LD",
+    revision: data.revision,
+    revisionDescription: data.revisionDescription,
+    revisionDate: data.revisionDate,
+    executor: data.executor,
+    checker: data.checker,
+    approver: data.approver,
+  };
+}
+
 async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promise<Uint8Array> {
   const lib = getPdfLib();
   const document = await lib.PDFDocument.load(await loadTemplateBytes(PDF_TEMPLATE_PARTS, "PDF"));
@@ -162,19 +178,7 @@ async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promi
   const height = page.getHeight();
   page.drawRectangle({ x: 516, y: height - 69, width: 51, height: 15, color: white });
 
-  const values: Record<keyof typeof PDF_DRAW, string> = {
-    category: data.categoryLabel || data.category,
-    documentNumber: data.documentNumber,
-    pageNumber: "1 de " + totalPages,
-    title: data.title,
-    internalDocumentCode: data.internalDocumentCode || "NÃO INFORMADO NA LD",
-    revision: data.revision,
-    revisionDescription: data.revisionDescription,
-    revisionDate: data.revisionDate,
-    executor: data.executor,
-    checker: data.checker,
-    approver: data.approver,
-  };
+  const values: Record<keyof typeof PDF_DRAW, string> = coverFieldValues(data, totalPages);
 
   (Object.keys(PDF_DRAW) as Array<keyof typeof PDF_DRAW>).forEach((key) => {
     const spec = PDF_DRAW[key];
@@ -471,18 +475,19 @@ async function buildEditableDocx(data: CoverDocumentData, source: SourceDocument
   if (!coverDocumentPart || !sourceDocumentPart) throw new Error("Template ou documento Word incompleto.");
 
   let coverXml = await coverDocumentPart.async("string");
+  const fields = coverFieldValues(data, totalPages);
   const replacements: Record<string, string> = {
-    "{{CATEGORY}}": data.categoryLabel || data.category,
-    "{{DOCUMENT_NUMBER}}": data.documentNumber,
+    "{{CATEGORY}}": fields.category,
+    "{{DOCUMENT_NUMBER}}": fields.documentNumber,
     "{{TOTAL_PAGES}}": String(totalPages),
-    "{{TITLE}}": data.title,
-    "{{INTERNAL_CODE}}": data.internalDocumentCode || "NÃO INFORMADO NA LD",
-    "{{REVISION}}": data.revision,
-    "{{REVISION_DESCRIPTION}}": data.revisionDescription,
-    "{{REVISION_DATE}}": data.revisionDate,
-    "{{EXECUTOR}}": data.executor,
-    "{{CHECKER}}": data.checker,
-    "{{APPROVER}}": data.approver,
+    "{{TITLE}}": fields.title,
+    "{{INTERNAL_CODE}}": fields.taxonomy,
+    "{{REVISION}}": fields.revision,
+    "{{REVISION_DESCRIPTION}}": fields.revisionDescription,
+    "{{REVISION_DATE}}": fields.revisionDate,
+    "{{EXECUTOR}}": fields.executor,
+    "{{CHECKER}}": fields.checker,
+    "{{APPROVER}}": fields.approver,
   };
   Object.entries(replacements).forEach(([placeholder, value]) => {
     coverXml = replacePlaceholder(coverXml, placeholder, value);
