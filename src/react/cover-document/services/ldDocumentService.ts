@@ -145,10 +145,15 @@ export async function loadLdRecords(files: FileList | File[]): Promise<LdDocumen
   for (const file of Array.from(files)) {
     if (!/\.(?:xlsx?|xlsm)$/i.test(file.name)) continue;
     let parsed: { records: LdDocumentRecord[] };
-    const performanceCore = window.GrconPerformance;
+    const performanceCore = (window as unknown as {
+      GrconPerformance?: {
+        supported?: boolean;
+        loadLd?: (input: File, profile?: unknown) => Promise<{ parsed?: { records?: unknown[] } }>;
+      };
+    }).GrconPerformance;
     if (performanceCore?.supported && typeof performanceCore.loadLd === "function") {
       const result = await performanceCore.loadLd(file, null);
-      parsed = result.parsed;
+      parsed = { records: (result.parsed?.records || []) as unknown as LdDocumentRecord[] };
     } else {
       if (!window.XLSX) throw new Error("Leitor de planilhas do GRCON não está disponível.");
       const buffer = await file.arrayBuffer();
@@ -157,7 +162,8 @@ export async function loadLdRecords(files: FileList | File[]): Promise<LdDocumen
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     }
     records.push(...((parsed.records || []) as unknown as LdDocumentRecord[]));
-    window.GrconLdMemory?.save?.(file);
+    const ldMemory = (window as unknown as { GrconLdMemory?: { save?: (input: File) => void } }).GrconLdMemory;
+    ldMemory?.save?.(file);
   }
   return records.filter((record) => Boolean(String(record.title ?? "").trim() && String(record.document ?? "").trim()));
 }
