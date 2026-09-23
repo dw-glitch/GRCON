@@ -329,6 +329,177 @@
     return Math.max(0, (now.getTime() - parsed.getTime()) / 3600000);
   }
 
+  function isPostedSigemStatus(value) {
+    const normalized = norm(value).replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim();
+    return normalized === "EM ANALISE" || normalized === "EM WORKFLOW";
+  }
+
+  function parseSourceDate(value) {
+    const source = text(value);
+    const br = source.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (br) {
+      const [, d, m, y, h = "0", min = "0", s = "0"] = br;
+      const time = Date.UTC(+y, +m - 1, +d, +h, +min, +s);
+      const date = new Date(time);
+      return date.getUTCFullYear() === +y
+        && date.getUTCMonth() === +m - 1
+        && date.getUTCDate() === +d
+        && +h < 24 && +min < 60 && +s < 60 ? time : NaN;
+    }
+    return /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(source) ? Date.parse(source) : NaN;
+  }
+
+  function effectiveRecordTimestamp(record) {
+    const values = [record && record.modifiedAt, record && record.includedAt]
+      .map(parseSourceDate)
+      .filter(Number.isFinite);
+    return values.length ? Math.max(...values) : Number.NEGATIVE_INFINITY;
+  }
+
+  function sameTimestampStatusConflict(records) {
+    if (!records.length) return false;
+    const firstTime = effectiveRecordTimestamp(records[0]);
+    const tied = records.filter((record) => effectiveRecordTimestamp(record) === firstTime);
+    return new Set(tied.map((record) => norm(record && record.status))).size > 1;
+  }
+
+  function sortEvidenceRecords(records) {
+    return records.slice().sort((left, right) => {
+      const byTime = effectiveRecordTimestamp(right) - effectiveRecordTimestamp(left);
+      if (byTime) return byTime;
+      const byRevision = revisionRank(right && right.revision) - revisionRank(left && left.revision);
+      if (byRevision) return byRevision;
+      return Number(right && right.sourceRow || 0) - Number(left && left.sourceRow || 0);
+    });
+  }
+
+  function resolvePostingEvidence(historyRow, matchedRecords) {
+    const matched = Array.isArray(matchedRecords) ? matchedRecords : [];
+    const sent = normalizeRevision(historyRow && historyRow.revisionSent);
+    const identities = [...new Set(matched.map((item) => item.documentIdentity || documentIdentity(item.document)).filter(Boolean))];
+    const revisions = uniqueSortedRevisions(matched.map((item) => item.revision));
+
+    if (!historyRow || !historyRow.document || !sent) {
+      return {
+        status: STATUSES.REVIEW,
+        revisionFound: "",
+        revisionsFound: revisions,
+        currentEvidence: false,
+        ambiguity: false,
+        evidence: null,
+        note: !historyRow || !historyRow.document
+          ? "O histórico não possui código documental suficiente para a conferência automática."
+          : "A revisão enviada não está registrada de forma inequívoca no Histórico.",
+      };
+    }
+
+    if (identities.length > 1) {
+      return {
+        status: STATUSES.REVIEW,
+        revisionFound: revisions.join(" · "),
+        revisionsFound: revisions,
+        currentEvidence: false,
+        ambiguity: true,
+        evidence: null,
+        note: `Mais de um documento da Consulta Geral corresponde às formas normalizadas pesquisadas (${matched.map((item) => item.document).filter(Boolean).slice(0, 4).join(" | ")}).`,
+      };
+    }
+
+    if (!matched.length) return null;
+
+    const exact = sortEvidenceRecords(matched.filter((item) => normalizeRevision(item.revision) === sent));
+    if (exact.length) {
+      if (sameTimestampStatusConflict(exact)) {
+        return {
+          status: STATUSES.REVIEW,
+          revisionFound: sent,
+          revisionsFound: revisions,
+          currentEvidence: false,
+          ambiguity: true,
+          evidence: null,
+          note: `A Consulta Geral possui linhas conflitantes para a revisão ${sent} com a mesma data efetiva; a situação atual é ambígua e requer análise.`,
+        };
+      }
+      const evidence = exact[0];
+      if (isPostedSigemStatus(evidence.status)) {
+        return {
+          status: STATUSES.CONFIRMED,
+          revisionFound: sent,
+          revisionsFound: revisions,
+          currentEvidence: true,
+          ambiguity: false,
+          evidence,
+          note: `Status SIGEM "${text(evidence.status)}" localizado para a revisão ${sent}; esta linha comprova a postagem na Consulta Geral atual.`,
+        };
+      }
+    }
+
+    const sentRank = revisionRank(sent);
+    const laterByRevision = new Map();
+    matched.forEach((record) => {
+      const revision = normalizeRevision(record.revision);
+      const rank = revisionRank(revision);
+      if (!revision || sentRank < 0 || rank <= sentRank) return;
+      if (!laterByRevision.has(revision)) laterByRevision.set(revision, []);
+      laterByRevision.get(revision).push(record);
+    });
+
+    const laterRevisions = [...laterByRevision.keys()]
+      .sort((a, b) => revisionRank(b) - revisionRank(a) || b.localeCompare(a, "pt-BR"));
+
+    for (const revision of laterRevisions) {
+      const candidates = sortEvidenceRecords(laterByRevision.get(revision));
+      if (sameTimestampStatusConflict(candidates)) {
+        return {
+          status: STATUSES.REVIEW,
+          revisionFound: revision,
+          revisionsFound: revisions,
+          currentEvidence: false,
+          ambiguity: true,
+          evidence: null,
+          note: `A Consulta Geral possui linhas conflitantes para a revisão posterior ${revision} com a mesma data efetiva; a evidência é ambígua.`,
+        };
+      }
+      const evidence = candidates[0];
+      if (evidence && isPostedSigemStatus(evidence.status)) {
+        return {
+          status: STATUSES.CONFIRMED,
+          revisionFound: revision,
+          revisionsFound: revisions,
+          currentEvidence: true,
+          ambiguity: false,
+          evidence,
+          note: `Revisão ${revision} encontrada no SIGEM com status "${text(evidence.status)}"; revisão posterior comprova que a revisão ${sent} já foi postada.`,
+        };
+      }
+    }
+
+    if (!revisions.length) {
+      return {
+        status: STATUSES.REVIEW,
+        revisionFound: "",
+        revisionsFound: revisions,
+        currentEvidence: false,
+        ambiguity: false,
+        evidence: null,
+        note: "O documento foi localizado na Consulta Geral, porém a revisão da linha está vazia ou inválida para comparação.",
+      };
+    }
+
+    const exactCurrent = exact[0] || null;
+    return {
+      status: STATUSES.REVISION_DIVERGENT,
+      revisionFound: exactCurrent ? sent : revisions.join(" · "),
+      revisionsFound: revisions,
+      currentEvidence: false,
+      ambiguity: false,
+      evidence: exactCurrent,
+      note: exactCurrent
+        ? `Documento e revisão ${sent} localizados, porém o status SIGEM atual "${text(exactCurrent.status) || "não informado"}" não é evidência válida de postagem.`
+        : `Documento localizado, porém a revisão ${sent} ainda não possui evidência válida de postagem. Revisão(ões) encontrada(s): ${revisions.join(" · ")}.`,
+    };
+  }
+
   function previousStateMap(previousState) {
     const source = previousState && previousState.items && typeof previousState.items === "object" ? previousState.items : {};
     return { ...source };
@@ -338,76 +509,73 @@
     const now = text(options && options.now) || new Date().toISOString();
     const waitHours = Math.max(0, Number(options && options.waitHours) || DEFAULT_WAIT_HOURS);
     const matched = matchedBaseRecords(historyRow, baseRecords, index);
-    const identities = [...new Set(matched.map((item) => item.documentIdentity || documentIdentity(item.document)).filter(Boolean))];
-    const revisions = uniqueSortedRevisions(matched.map((item) => item.revision));
     const sent = normalizeRevision(historyRow.revisionSent);
-    let status = STATUSES.NOT_VERIFIED;
-    let note = "Consulta Geral ainda não carregada.";
-    let currentEvidence = false;
-    let foundRevision = "";
+    let resolved = null;
 
     if (baseRecords.length) {
-      if (!historyRow.document || !sent) {
-        status = STATUSES.REVIEW;
-        note = !historyRow.document ? "O histórico não possui código documental suficiente para a conferência automática." : "A revisão enviada não está registrada de forma inequívoca no Histórico.";
-      } else if (identities.length > 1) {
-        status = STATUSES.REVIEW;
-        note = `Mais de um documento da Consulta Geral corresponde às formas normalizadas pesquisadas (${matched.map((item) => item.document).filter(Boolean).slice(0, 4).join(" | ")}).`;
-      } else if (matched.length) {
-        const exact = matched.filter((item) => normalizeRevision(item.revision) === sent);
-        if (exact.length) {
-          status = STATUSES.CONFIRMED;
-          currentEvidence = true;
-          foundRevision = sent;
-          note = `Documento e revisão ${sent} localizados na Consulta Geral.`;
-        } else if (!revisions.length) {
-          status = STATUSES.REVIEW;
-          note = "O documento foi localizado na Consulta Geral, porém a revisão da linha está vazia ou inválida para comparação.";
-        } else {
-          status = STATUSES.REVISION_DIVERGENT;
-          foundRevision = revisions.join(" · ");
-          note = `Documento localizado, porém a revisão ${sent} ainda não foi confirmada. Revisão(ões) encontrada(s): ${foundRevision}.`;
-        }
-      } else {
+      resolved = resolvePostingEvidence(historyRow, matched);
+      if (!resolved) {
         const age = hoursSince(historyRow.generatedAt, now);
-        status = age <= waitHours ? STATUSES.AWAITING : STATUSES.NOT_FOUND;
-        note = status === STATUSES.AWAITING
-          ? `Ainda não confirmado na Consulta Geral. A eGRDT tem menos de ${waitHours} hora(s); a ausência não é tratada como falha.`
-          : "Código não localizado na Consulta Geral atual. A ausência é uma pendência de confirmação e, isoladamente, não prova que a postagem não ocorreu.";
+        resolved = {
+          status: age <= waitHours ? STATUSES.AWAITING : STATUSES.NOT_FOUND,
+          revisionFound: "",
+          revisionsFound: [],
+          currentEvidence: false,
+          ambiguity: false,
+          evidence: null,
+          note: age <= waitHours
+            ? `Ainda não confirmado na Consulta Geral. A eGRDT tem menos de ${waitHours} hora(s); a ausência não é tratada como falha.`
+            : "Código não localizado na Consulta Geral atual. A ausência é uma pendência de confirmação e, isoladamente, não prova que a postagem não ocorreu.",
+        };
       }
+    } else {
+      resolved = {
+        status: STATUSES.NOT_VERIFIED,
+        revisionFound: "",
+        revisionsFound: [],
+        currentEvidence: false,
+        ambiguity: false,
+        evidence: null,
+        note: "Consulta Geral ainda não carregada.",
+      };
     }
 
     const prior = previous || {};
     let firstConfirmedAt = text(prior.firstConfirmedAt);
     let confirmedRevision = text(prior.confirmedRevision);
     let confirmationSource = text(prior.confirmationSource);
-    let historicalPreserved = false;
+    const historicalPreserved = Boolean(firstConfirmedAt && normalizeRevision(confirmedRevision) === sent);
 
-    if (status === STATUSES.CONFIRMED) {
+    if (resolved.status === STATUSES.CONFIRMED) {
       if (!firstConfirmedAt) firstConfirmedAt = now;
       confirmedRevision = sent;
-      confirmationSource = "Consulta Geral SIGEM";
-    } else if (firstConfirmedAt && normalizeRevision(confirmedRevision) === sent) {
-      status = STATUSES.CONFIRMED;
-      historicalPreserved = true;
-      note = `Confirmação histórica preservada desde ${firstConfirmedAt}. A revisão ${sent} não foi reencontrada na Consulta Geral atual; confira a base se necessário.`;
+      confirmationSource = resolved.evidence
+        ? `Consulta Geral SIGEM — ${text(resolved.evidence.status)}`
+        : "Consulta Geral SIGEM";
     }
 
+    const evidence = resolved.evidence || null;
     return {
       ...historyRow,
-      status,
-      statusLabel: statusLabel(status),
-      revisionFound: foundRevision || (status === STATUSES.CONFIRMED ? sent : revisions.join(" · ")),
-      revisionsFound: revisions,
+      status: resolved.status,
+      statusLabel: statusLabel(resolved.status),
+      revisionFound: resolved.revisionFound,
+      revisionsFound: resolved.revisionsFound,
       firstConfirmedAt,
       confirmedRevision,
       confirmationSource,
       lastCheckedAt: now,
-      currentEvidence,
-      historicalPreserved,
-      note,
+      currentEvidence: Boolean(resolved.currentEvidence),
+      historicalPreserved: resolved.status === STATUSES.CONFIRMED ? false : historicalPreserved,
+      note: resolved.note,
       matchedCount: matched.length,
       matchedDocuments: [...new Set(matched.map((item) => item.document).filter(Boolean))],
+      postingEvidenceStatus: evidence ? text(evidence.status) : "",
+      postingEvidenceRevision: evidence ? normalizeRevision(evidence.revision) : "",
+      sigemStatus: evidence ? text(evidence.status) : "",
+      sigemStatusRevision: evidence ? normalizeRevision(evidence.revision) : "",
+      sigemSourceRow: evidence ? Number(evidence.sourceRow) || null : null,
+      ambiguity: Boolean(resolved.ambiguity),
     };
   }
 
@@ -746,6 +914,7 @@
     DB_NAME, DB_VERSION, BASE_KEY, STATE_KEY, AUDIT_KEY, HISTORY_INDEX_KEY, PREFS_KEY,
     DEFAULT_WAIT_HOURS, STATUSES, AGGREGATE_STATUSES, HEADER_ALIASES,
     text, norm, normalizeRevision, normalizeHeader, documentKeys, documentIdentity, displayDocument, revisionRank,
+    isPostedSigemStatus, parseSourceDate, effectiveRecordTimestamp, resolvePostingEvidence,
     detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
     statusLabel, aggregateStatus, filterRows, pendingRows,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
