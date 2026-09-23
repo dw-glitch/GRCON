@@ -15,13 +15,9 @@
   }
 
   function isPostedSigemStatus(value, Conference) {
-    const normalized = Conference && typeof Conference.norm === "function"
-      ? Conference.norm(value)
-      : rawText(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
-    return normalized === "EM ANALISE"
-      || normalized === "EM WORKFLOW"
-      || normalized.startsWith("EM ANALISE ")
-      || normalized.startsWith("EM WORKFLOW ");
+    return Boolean(Conference && typeof Conference.isPostedSigemStatus === "function"
+      ? Conference.isPostedSigemStatus(value)
+      : false);
   }
 
   function revisionProvesPosting(foundRevision, sentRevision, Conference) {
@@ -48,21 +44,10 @@
   }
 
   function postingEvidence(row, baseRecords, Conference, baseIndex) {
+    if (!Conference || typeof Conference.resolvePostingEvidence !== "function") return null;
     const matched = matchedRecords(row, baseRecords, Conference, baseIndex);
-    if (!matched.length) return null;
-    const identities = new Set(matched.map((record) => record.documentIdentity || Conference.documentIdentity(record.document)).filter(Boolean));
-    if (identities.size !== 1) return null;
-    const sent = Conference.normalizeRevision(row.revisionSent);
-    if (!sent) return null;
-
-    return matched
-      .filter((record) => isPostedSigemStatus(record && record.status, Conference))
-      .filter((record) => revisionProvesPosting(record && record.revision, sent, Conference))
-      .sort((left, right) => {
-        const byRevision = Conference.revisionRank(right && right.revision) - Conference.revisionRank(left && left.revision);
-        if (byRevision) return byRevision;
-        return Number(right && right.sourceRow || 0) - Number(left && left.sourceRow || 0);
-      })[0] || null;
+    const resolved = Conference.resolvePostingEvidence(row, matched);
+    return resolved && resolved.currentEvidence ? resolved.evidence : null;
   }
 
   function promotedRow(row, evidence, Conference) {
@@ -106,49 +91,10 @@
     };
   }
 
-  function applyResult(result, baseRecords, Conference) {
-    if (!result || !Conference || !Array.isArray(result.rows)) return result;
-    const base = Array.isArray(baseRecords) ? baseRecords : [];
-    if (!base.length) return result;
-    const index = Conference.buildBaseIndex(base);
-    let promoted = 0;
-    let resolvedDivergences = 0;
-
-    const rows = result.rows.map((row) => {
-      if (!row || row.status === Conference.STATUSES.CONFIRMED) return row;
-      const evidence = postingEvidence(row, base, Conference, index);
-      if (!evidence) return row;
-      promoted += 1;
-      if (row.status === Conference.STATUSES.REVISION_DIVERGENT) resolvedDivergences += 1;
-      return promotedRow(row, evidence, Conference);
-    });
-
-    if (!promoted) return result;
-
-    const groups = Conference.aggregateByGrdt(rows);
-    const summary = Conference.summarize(rows);
-    const previousItems = result.state && result.state.items && typeof result.state.items === "object"
-      ? result.state.items
-      : {};
-    const items = { ...previousItems };
-    rows.forEach((row) => {
-      if (!row || !row.key) return;
-      items[row.key] = stateItem(row, items[row.key]);
-    });
-    const state = {
-      ...(result.state || {}),
-      version: Number(result.state && result.state.version) || 1,
-      updatedAt: result.state && result.state.updatedAt || new Date().toISOString(),
-      items,
-    };
-    const changes = {
-      ...(result.changes || {}),
-      newlyConfirmed: Number(result.changes && result.changes.newlyConfirmed || 0) + promoted,
-      divergencesResolved: Number(result.changes && result.changes.divergencesResolved || 0) + resolvedDivergences,
-      statusChanged: Number(result.changes && result.changes.statusChanged || 0) + promoted,
-    };
-
-    return { ...result, rows, groups, summary, state, changes, postingStatusPromoted: promoted };
+  function applyResult(result) {
+    // Compatibility facade only. The core is the single source of truth for
+    // posting evidence and status; this layer must never promote/downgrade.
+    return result;
   }
 
   function writeHistoryIndex(groups, baseMeta, Conference) {
@@ -198,60 +144,8 @@
   }
 
   function wrapConference(original) {
-    if (!original || original[MARKER]) return original;
-    const wrapped = {
-      ...original,
-      [MARKER]: true,
-      reconcile(historyRecords, baseRecords, previousState, options) {
-        return applyResult(original.reconcile(historyRecords, baseRecords, previousState, options), baseRecords || [], original);
-      },
-      async reconcilePersisted(historyRecords, options) {
-        const result = await original.reconcilePersisted(historyRecords, options);
-        const base = await original.loadBase();
-        const adjusted = applyResult(result, base && base.records || [], original);
-        if (adjusted !== result) {
-          await original.saveState(adjusted.state);
-          writeHistoryIndex(adjusted.groups, base && base.meta, original);
-        }
-        return adjusted;
-      },
-      async prepareWorkbookImport(workbook, fileMeta, historyRecords, options) {
-        const result = await original.prepareWorkbookImport(workbook, fileMeta, historyRecords, options);
-        const records = result && result.parsed && result.parsed.records || result && result.prepared && result.prepared.base && result.prepared.base.records || [];
-        const adjusted = applyResult(result, records, original);
-        if (adjusted === result) return result;
-        const auditEntry = adjustedAuditEntry(result.auditEntry, adjusted);
-        const preparedAudit = Array.isArray(result.prepared && result.prepared.audit)
-          ? result.prepared.audit.map((entry) => entry && auditEntry && entry.id === auditEntry.id ? auditEntry : entry)
-          : result.prepared && result.prepared.audit;
-        return {
-          ...adjusted,
-          auditEntry,
-          prepared: {
-            ...(result.prepared || {}),
-            state: adjusted.state,
-            groups: adjusted.groups,
-            audit: preparedAudit,
-          },
-        };
-      },
-      async importWorkbook(workbook, fileMeta, historyRecords, options) {
-        const result = await original.importWorkbook(workbook, fileMeta, historyRecords, options);
-        const records = result && result.parsed && result.parsed.records || [];
-        const adjusted = applyResult(result, records, original);
-        if (adjusted === result) return result;
-        await original.saveState(adjusted.state);
-        writeHistoryIndex(adjusted.groups, result && result.parsed && result.parsed.meta, original);
-        const auditEntry = adjustedAuditEntry(result.auditEntry, adjusted);
-        if (auditEntry && typeof original.loadAudit === "function" && typeof original.saveAudit === "function") {
-          const audit = await original.loadAudit();
-          const nextAudit = (audit || []).map((entry) => entry && entry.id === auditEntry.id ? auditEntry : entry);
-          await original.saveAudit(nextAudit);
-        }
-        return { ...adjusted, auditEntry };
-      },
-    };
-    return Object.freeze(wrapped);
+    // Keep the historical module contract without adding a second decision engine.
+    return original;
   }
 
   function install() {
