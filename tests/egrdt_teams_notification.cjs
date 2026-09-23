@@ -48,6 +48,17 @@ assert.equal(normalized.egrdt.number, record.egrdtNumber);
 assert.equal(normalized.egrdt.items.length, 2);
 assert.equal(normalized.confirmation.folderConfirmed, true);
 assert.match(normalized.message.tableHtml, /<table>/);
+assert.equal(normalized.message.adaptiveCard.version, "1.2");
+assert.equal(normalized.message.mascot.sourcePath, "/assets/mascot/grcon-mascot-teams-thumbsup.png");
+assert.match(normalized.message.mascot.url, /^https:\/\//);
+assert.match(normalized.message.fallbackText, /eGRDT pronta para postagem/);
+assert.doesNotMatch(normalized.message.fallbackText, /Qualidade - Documentação|Favor realizar a postagem no SIGEM/i);
+const cardJson = JSON.stringify(normalized.message.adaptiveCard);
+assert.match(cardJson, /Mascote GRCON dando joia/);
+assert.match(cardJson, /RL-5290\.00-22313-91B-C1O-002/);
+assert.match(cardJson, /DINÂMICOS/);
+assert.doesNotMatch(cardJson, /Qualidade - Documentação|Favor realizar a postagem no SIGEM/i);
+assert.match(cardJson, /Enviado pelo GRCON/);
 assert.equal(Api.escapeHtml('<script>alert("x")</script>'), "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
 assert.throws(() => Api.normalizePayload({ ...payload, destination: { name: "Outro grupo" } }), /Destino do Teams inválido/);
 assert.equal(Api.isAllowedFlowUrl("https://prod-01.brazilsouth.logic.azure.com/workflows/abc/triggers/manual/paths/invoke"), true);
@@ -70,5 +81,25 @@ assert.doesNotMatch(historyApp, /dangerouslySetInnerHTML/);
 assert.match(historyAdapter, /GrconEgrdtTeamsNotification\?\.open/);
 assert.match(historyAdapter, /teamsPresentation/);
 assert.match(teamsNotificationApp, /buttonLabel, isSending, buttonHtml/);
+assert.match(teamsNotificationApp, /Avisar equipe no Teams/);
+const mascotPath = path.join(root, "assets", "mascot", "grcon-mascot-teams-thumbsup.png");
+assert.equal(fs.existsSync(mascotPath), true, "asset PNG do mascote precisa existir no pacote");
+const mascotPng = fs.readFileSync(mascotPath);
+assert.deepEqual([...mascotPng.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], "asset do mascote precisa ter assinatura PNG válida");
+let cursor = 8;
+let sawIend = false;
+while (cursor + 12 <= mascotPng.length) {
+  const chunkLength = mascotPng.readUInt32BE(cursor);
+  const chunkEnd = cursor + 12 + chunkLength;
+  assert.ok(chunkEnd <= mascotPng.length, "asset PNG do mascote não pode estar truncado");
+  if (mascotPng.toString("ascii", cursor + 4, cursor + 8) === "IEND") {
+    sawIend = true;
+    assert.equal(chunkLength, 0, "bloco IEND do PNG deve estar íntegro");
+    assert.equal(chunkEnd, mascotPng.length, "PNG não deve conter dados incompletos após IEND");
+    break;
+  }
+  cursor = chunkEnd;
+}
+assert.equal(sawIend, true, "asset PNG do mascote precisa terminar com IEND");
 
 console.log("OK: aviso manual de eGRDT ao Teams validado");

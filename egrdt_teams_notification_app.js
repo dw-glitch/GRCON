@@ -29,7 +29,7 @@
   }
   function buttonLabel(record) {
     if (state.sending.has(Core.notificationId(record))) return "Enviando ao Teams…";
-    return status(record) ? "Reenviar aviso no Teams" : "Avisar no Teams";
+    return status(record) ? "Reenviar aviso no Teams" : "Avisar equipe no Teams";
   }
   function statusLabel(record) {
     const saved = status(record);
