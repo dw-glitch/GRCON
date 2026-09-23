@@ -1,29 +1,31 @@
 import type { CoverDocumentCandidate, LdColumnValue, LdDocumentRecord } from "../types/domain";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  PR: "PROCEDIMENTO",
-  RL: "RELATÓRIO",
-  RM: "RELATÓRIO DE MEMÓRIA",
-  ET: "ESPECIFICAÇÃO TÉCNICA",
-  MD: "MEMORIAL DESCRITIVO",
-  MC: "MEMORIAL DE CÁLCULO",
-  MA: "MANUAL",
-  LI: "LISTA",
-  LD: "LISTA DE DOCUMENTOS",
-  DE: "DESENHO",
-  PT: "PARECER TÉCNICO",
-  IM: "INSTRUÇÃO DE MONTAGEM",
-  IS: "INSTRUÇÃO DE SERVIÇO",
-  CR: "CRITÉRIO",
-  CE: "CERTIFICADO",
-};
-
 const FIELD_ALIASES = {
-  taxonomy: ["TAXONOMIA", "CODIGO DA TAXONOMIA", "CODIGO TAXONOMIA", "TAXONOMIA DOCUMENTAL"],
   eap: ["EAP", "CODIGO EAP", "CODIGO DA EAP", "ESTRUTURA ANALITICA DO PROJETO"],
   classification: ["CLASSIFICACAO", "CLASSIFICACAO DO DOCUMENTO", "CLASSE", "CLASSE DOCUMENTAL"],
-  internalCode: ["COD DOCUMENTO INTERNO", "CODIGO DOCUMENTO INTERNO", "CODIGO DO DOCUMENTO INTERNO", "CODIGO INTERNO", "CODIGO DA CONTRATADA", "DOCUMENTO INTERNO"],
+  documentTypeDescription: ["TIPO DOCUMENTO DESC", "TIPO DE DOCUMENTO DESC", "DESCRICAO TIPO DOCUMENTO", "DESCRICAO DO TIPO DE DOCUMENTO"],
 } as const;
+
+export interface LdSearchIndexEntry {
+  record: LdDocumentRecord;
+  normalizedTitle: string;
+}
+
+export interface LdSearchIndex {
+  entries: LdSearchIndexEntry[];
+  count: number;
+}
+
+export interface LdLoadProgress {
+  phase: "read" | "prepare" | "ready";
+  progress: number;
+  message: string;
+}
+
+export interface LoadedLdRecords {
+  records: LdDocumentRecord[];
+  searchIndex: LdSearchIndex;
+}
 
 export function normalizeSearch(value: unknown): string {
   return String(value ?? "")
@@ -43,16 +45,19 @@ function normalizedHeader(value: unknown): string {
 function columnValue(columns: LdColumnValue[] | undefined, aliases: readonly string[]): string {
   if (!columns?.length) return "";
   const aliasSet = new Set(aliases.map(normalizedHeader));
-  const exact = columns.find((entry) => aliasSet.has(normalizedHeader(entry.header)));
-  if (exact?.value) return String(exact.value).trim();
-  const fuzzy = columns.find((entry) => {
-    const header = normalizedHeader(entry.header);
-    return aliases.some((alias) => {
-      const wanted = normalizedHeader(alias);
-      return header === wanted || header.startsWith(`${wanted} `) || header.endsWith(` ${wanted}`);
-    });
-  });
-  return String(fuzzy?.value ?? "").trim();
+  const exact = columns.filter((entry) => aliasSet.has(normalizedHeader(entry.header)));
+  const values = [...new Set(exact.map((entry) => String(entry.value ?? "").trim()))];
+  if (values.length === 1) return values[0];
+  if (values.length > 1) return "";
+  return "";
+}
+
+function internalTaxonomy(record: LdDocumentRecord): string {
+  const resolver = window.GrconRequestsTaxonomy?.internalTaxonomyFromRecord;
+  if (typeof resolver !== "function") {
+    throw new Error("Motor oficial de Taxonomia Interna do GRCON não está disponível.");
+  }
+  return String(resolver(record, window.TriagemCore) ?? "").trim();
 }
 
 function diceCoefficient(left: string, right: string): number {
@@ -74,9 +79,7 @@ function diceCoefficient(left: string, right: string): number {
   return (2 * intersection) / (left.length + right.length - 2);
 }
 
-function scoreTitle(title: string, query: string): number {
-  const candidate = normalizeSearch(title);
-  const wanted = normalizeSearch(query);
+function scoreNormalizedTitle(candidate: string, wanted: string): number {
   if (!candidate || !wanted) return 0;
   if (candidate === wanted) return 1000;
   if (candidate.startsWith(wanted)) return 900 + Math.min(80, wanted.length / Math.max(1, candidate.length) * 80);
@@ -84,6 +87,7 @@ function scoreTitle(title: string, query: string): number {
   const tokens = wanted.split(" ").filter((token) => token.length > 1);
   const found = tokens.filter((token) => candidate.includes(token)).length;
   const coverage = tokens.length ? found / tokens.length : 0;
+  if (coverage < 0.5 && wanted.length < 5) return 0;
   const dice = diceCoefficient(candidate, wanted);
   if (coverage < 0.5 && dice < 0.55) return 0;
   return Math.round(500 * coverage + 300 * dice);
@@ -98,13 +102,27 @@ function documentCategory(record: LdDocumentRecord): string {
   return String(groups[offset] || "").trim().toUpperCase();
 }
 
-export function categoryLabel(category: string): string {
-  const value = String(category || "").trim();
-  if (!value) return "";
-  const key = value.toUpperCase();
-  if (CATEGORY_LABELS[key]) return CATEGORY_LABELS[key];
-  if (value.length > 3 || /\s/.test(value)) return value.toUpperCase();
-  return value.toUpperCase();
+function officialCategoryDescription(record: LdDocumentRecord, category: string): string {
+  const directDescription = String(record.documentTypeDesc ?? "").trim()
+    || columnValue(record.ldColumns, FIELD_ALIASES.documentTypeDescription);
+  if (directDescription) return directDescription;
+  if (!category) return "";
+
+  const officialCatalog = window.TriagemCore?.EGRDT_OPTIONS?.documentTypes || [];
+  if (officialCatalog.some((item) => normalizeSearch(item) === normalizeSearch(category))) return category;
+
+  try {
+    const validation = window.TriagemCore?.validateDocumentCode?.(String(record.document ?? ""), String(record.sheet ?? ""));
+    if (validation?.valid && validation.family === "N-1710") return category;
+  } catch (_) {
+    // A validação normativa é informativa aqui; o valor original da LD permanece intacto.
+  }
+  return "";
+}
+
+export function categoryLabel(record: LdDocumentRecord, category?: string): string {
+  const value = category || documentCategory(record);
+  return officialCategoryDescription(record, value);
 }
 
 export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentCandidate {
@@ -114,12 +132,11 @@ export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentC
     record,
     documentNumber: String(record.document ?? "").trim(),
     title: String(record.title ?? "").trim(),
-    taxonomy: columnValue(record.ldColumns, FIELD_ALIASES.taxonomy),
+    taxonomy: internalTaxonomy(record),
     eap: columnValue(record.ldColumns, FIELD_ALIASES.eap),
     category,
-    categoryLabel: categoryLabel(category),
+    categoryLabel: categoryLabel(record, category),
     classification: columnValue(record.ldColumns, FIELD_ALIASES.classification),
-    internalDocumentCode: columnValue(record.ldColumns, FIELD_ALIASES.internalCode),
     revision: String(record.revision ?? "").trim(),
     revisionDate: String(record.effectiveDate ?? "").trim(),
     discipline: String(record.discipline ?? "").trim(),
@@ -131,28 +148,100 @@ export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentC
   };
 }
 
-export async function loadLdRecords(files: FileList | File[]): Promise<LdDocumentRecord[]> {
-  if (!window.XLSX || !window.TriagemCore) throw new Error("Leitor de LD do GRCON não está disponível.");
-  const records: LdDocumentRecord[] = [];
-  for (const file of Array.from(files)) {
-    if (!/\.(?:xlsx?|xlsm)$/i.test(file.name)) continue;
-    const buffer = await file.arrayBuffer();
-    const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
-    const parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified);
-    records.push(...((parsed.records || []) as unknown as LdDocumentRecord[]));
-    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-  }
-  return records.filter((record) => Boolean(String(record.title ?? "").trim() && String(record.document ?? "").trim()));
+function yieldToUi(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(() => resolve());
+    else window.setTimeout(resolve, 0);
+  });
 }
 
-export function searchLdDocuments(records: LdDocumentRecord[], query: string, limit = 30): CoverDocumentCandidate[] {
+export async function prepareLdSearchIndex(
+  records: LdDocumentRecord[],
+  onProgress?: (progress: LdLoadProgress) => void,
+): Promise<LdSearchIndex> {
+  const entries: LdSearchIndexEntry[] = new Array(records.length);
+  const chunkSize = records.length >= 20000 ? 1500 : 3000;
+  for (let index = 0; index < records.length; index += 1) {
+    entries[index] = { record: records[index], normalizedTitle: normalizeSearch(records[index].title) };
+    if ((index + 1) % chunkSize === 0) {
+      onProgress?.({
+        phase: "prepare",
+        progress: records.length ? (index + 1) / records.length : 1,
+        message: "Preparando documentos",
+      });
+      await yieldToUi();
+    }
+  }
+  onProgress?.({ phase: "ready", progress: 1, message: "Pronto para pesquisa" });
+  return { entries, count: entries.length };
+}
+
+export async function loadLdRecords(
+  files: FileList | File[],
+  onProgress?: (progress: LdLoadProgress) => void,
+): Promise<LoadedLdRecords> {
+  if (!window.TriagemCore) throw new Error("Motor documental do GRCON não está disponível.");
+  const records: LdDocumentRecord[] = [];
+  const validFiles = Array.from(files).filter((file) => /\.(?:xlsx?|xlsm)$/i.test(file.name));
+  if (!validFiles.length) throw new Error("Selecione uma LD XLSX, XLS ou XLSM válida.");
+
+  for (let fileIndex = 0; fileIndex < validFiles.length; fileIndex += 1) {
+    const file = validFiles[fileIndex];
+    onProgress?.({ phase: "read", progress: fileIndex / validFiles.length, message: "Lendo LD" });
+    const profile = window.GrconLdCompatibility?.profileFor?.(file);
+    if (window.GrconPerformance?.supported && typeof window.GrconPerformance.loadLd === "function") {
+      const loaded = await window.GrconPerformance.loadLd(file, profile, (message) => {
+        const value = Math.max(0, Math.min(1, Number(message?.progress) || 0));
+        onProgress?.({
+          phase: value < 0.6 ? "read" : "prepare",
+          progress: (fileIndex + value) / validFiles.length,
+          message: value < 0.6 ? "Lendo LD" : "Preparando documentos",
+        });
+      });
+      records.push(...((loaded.parsed?.records || []) as unknown as LdDocumentRecord[]));
+    } else {
+      if (!window.XLSX) throw new Error("Leitor de LD do GRCON não está disponível.");
+      await yieldToUi();
+      const buffer = await file.arrayBuffer();
+      const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
+      await yieldToUi();
+      const parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified, profile);
+      records.push(...((parsed.records || []) as unknown as LdDocumentRecord[]));
+      await yieldToUi();
+    }
+  }
+
+  const filtered = records.filter((record) => Boolean(String(record.title ?? "").trim() && String(record.document ?? "").trim()));
+  const searchIndex = await prepareLdSearchIndex(filtered, onProgress);
+  return { records: filtered, searchIndex };
+}
+
+function insertTopCandidate(list: CoverDocumentCandidate[], candidate: CoverDocumentCandidate, limit: number): void {
+  let low = 0;
+  let high = list.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    const current = list[middle];
+    const before = candidate.score > current.score
+      || (candidate.score === current.score && candidate.title.localeCompare(current.title, "pt-BR") < 0);
+    if (before) high = middle;
+    else low = middle + 1;
+  }
+  if (low >= limit) return;
+  list.splice(low, 0, candidate);
+  if (list.length > limit) list.pop();
+}
+
+export function searchLdDocuments(index: LdSearchIndex, query: string, limit = 30): CoverDocumentCandidate[] {
   const wanted = normalizeSearch(query);
-  if (!wanted) return [];
-  return records
-    .map((record) => toCandidate(record, scoreTitle(record.title, wanted)))
-    .filter((candidate) => candidate.score > 0)
-    .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title, "pt-BR"))
-    .slice(0, limit);
+  if (!wanted || wanted.length < 2) return [];
+  const top: CoverDocumentCandidate[] = [];
+  for (const entry of index.entries) {
+    const score = scoreNormalizedTitle(entry.normalizedTitle, wanted);
+    if (score <= 0) continue;
+    insertTopCandidate(top, toCandidate(entry.record, score), limit);
+  }
+  return top;
 }
 
 export function uniqueExactCandidate(candidates: CoverDocumentCandidate[], query: string): CoverDocumentCandidate | null {
