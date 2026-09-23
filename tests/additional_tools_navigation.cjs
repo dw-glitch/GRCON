@@ -15,7 +15,18 @@ assert.match(aside, /Ferramentas adicionais/);
 assert.doesNotMatch(aside, /data-grcon-view="pdf-tools"/);
 assert.doesNotMatch(aside, /data-grcon-view="cover-document"/);
 
-assert.match(html, /id="additional-tools-module"/);
+const compactNav = html.slice(
+  html.indexOf('<nav aria-label="Navegação compacta do GRCON"'),
+  html.indexOf("</nav>", html.indexOf('<nav aria-label="Navegação compacta do GRCON"')) + 6
+);
+assert.match(compactNav, /id="tab-additional-tools"/);
+assert.match(compactNav, /data-grcon-view="additional-tools"/);
+assert.doesNotMatch(compactNav, /data-grcon-view="pdf-tools"/);
+assert.doesNotMatch(compactNav, /data-grcon-view="cover-document"/);
+
+assert.match(html, /id="additional-tools-module"[^>]+aria-labelledby="tab-additional-tools"/);
+assert.match(html, /id="pdf-tools-module"[^>]+aria-label="Combinar PDFs"/);
+assert.match(html, /id="cover-document-module"[^>]+aria-label="Adicionar Capa"/);
 assert.match(html, /class="additional-tool-card" data-grcon-view="pdf-tools"/);
 assert.match(html, /class="additional-tool-card" data-grcon-view="cover-document"/);
 assert.match(html, /id="pdf-tools-module"/);
