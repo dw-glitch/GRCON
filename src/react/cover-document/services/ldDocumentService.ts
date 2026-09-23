@@ -158,7 +158,13 @@ export async function loadLdRecords(files: FileList | File[]): Promise<LdDocumen
       if (!window.XLSX) throw new Error("Leitor de planilhas do GRCON não está disponível.");
       const buffer = await file.arrayBuffer();
       const workbook = window.XLSX.read(buffer, { type: "array", cellDates: true });
-      parsed = window.TriagemCore.parseWorkbook(workbook, file.name, file.lastModified);
+      const triagemCore = (window as unknown as {
+        TriagemCore: {
+          parseWorkbook: (input: unknown, fileName: string, lastModified: number) => { records?: unknown[] };
+        };
+      }).TriagemCore;
+      const fallback = triagemCore.parseWorkbook(workbook, file.name, file.lastModified);
+      parsed = { records: (fallback.records || []) as unknown as LdDocumentRecord[] };
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     }
     records.push(...((parsed.records || []) as unknown as LdDocumentRecord[]));
