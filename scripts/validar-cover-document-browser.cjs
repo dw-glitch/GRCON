@@ -46,6 +46,38 @@ async function openCover(page) {
   await page.waitForFunction(() => window.GrconCoverDocumentReact?.mounted === true && window.GrconCoverDocumentUi?._debug?.state);
 }
 
+async function probePdfTemplate(page) {
+  return page.evaluate(async () => {
+    const urls = [
+      "assets/templates/CAPA_PAGE1_BASE.pdf.b64.001",
+      "assets/templates/CAPA_PAGE1_BASE.pdf.b64.002",
+      "assets/templates/CAPA_PAGE1_BASE.pdf.b64.003",
+      "assets/templates/CAPA_PAGE1_BASE.pdf.b64.004",
+      "assets/templates/CAPA_PAGE1_BASE.pdf.b64.005",
+    ];
+    const withTimeout = (promise, label) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(label + " excedeu 5 s")), 5000)),
+    ]);
+    const chunks = [];
+    const responses = [];
+    for (const url of urls) {
+      const response = await withTimeout(fetch(url, { cache: "no-store" }), "fetch " + url);
+      const text = await withTimeout(response.text(), "text " + url);
+      responses.push({ url, ok: response.ok, status: response.status, length: text.trim().length });
+      if (!response.ok) return { stage: "fetch", responses };
+      chunks.push(text.trim());
+    }
+    const binary = atob(chunks.join(""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const documentPdf = await withTimeout(window.PDFLib.PDFDocument.load(bytes), "PDFDocument.load");
+    const pages = documentPdf.getPageCount();
+    await withTimeout(documentPdf.save(), "PDFDocument.save");
+    return { stage: "ok", responses, bytes: bytes.length, pages };
+  });
+}
+
 async function setLd(page, rows, fileName = "LD_TESTE_CAPA.xlsx") {
   await page.evaluate(({ rows, fileName }) => {
     const worksheet = window.XLSX.utils.aoa_to_sheet(rows);
@@ -126,6 +158,11 @@ async function layoutAt(page, width, height = 900) {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await revealApp(page);
     await openCover(page);
+
+    const templateProbe = await probePdfTemplate(page);
+    console.log("cover_template_probe", JSON.stringify(templateProbe));
+    assert.equal(templateProbe.stage, "ok", "Template PDF da capa não passou no probe do Chromium.");
+    assert.equal(templateProbe.pages, 1);
 
     assert.equal(await page.locator("#grcon-cover-document-root").count(), 1);
     assert.equal(await page.locator("#cover-title-search").isDisabled(), true);
