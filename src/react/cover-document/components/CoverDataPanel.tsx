@@ -5,7 +5,6 @@ const EDITABLE_FIELDS: Array<{ key: keyof CoverDocumentData; label: string }> = 
   { key: "title", label: "Título" },
   { key: "documentNumber", label: "Código do documento" },
   { key: "taxonomy", label: "Taxonomia / Cód. documento interno" },
-  { key: "internalDocumentCode", label: "Cód. documento interno" },
   { key: "revision", label: "Revisão" },
   { key: "revisionDate", label: "Data" },
   { key: "revisionDescription", label: "Descrição da revisão" },
