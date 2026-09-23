@@ -80,7 +80,8 @@ function initialStatus(): string {
 export function useCoverDocument() {
   const [records, setRecords] = useState<LdDocumentRecord[]>([]);
   const [ldNames, setLdNames] = useState<string[]>([]);
-  const [query, setQuery] = useState("");\n  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selected, setSelected] = useState<CoverDocumentCandidate | null>(null);
   const [baseData, setBaseData] = useState<CoverDocumentData>(EMPTY_DATA);
   const [data, setData] = useState<CoverDocumentData>(EMPTY_DATA);
