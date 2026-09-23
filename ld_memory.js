@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = "grcon.lastLd.v1";
   const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
+  let activeFile = null;
 
   function createLdSignature(file) {
     if (!file) return null;
@@ -30,6 +31,7 @@
 
   function saveLastLd(file) {
     if (!file) return;
+    activeFile = file;
     try {
       const signature = createLdSignature(file);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(signature));
@@ -53,6 +55,11 @@
       return null;
     }
   }
+
+  function currentLdFile() {
+    return typeof File !== "undefined" && activeFile instanceof File ? activeFile : null;
+  }
+
 
   function clearLastLd() {
     try {
@@ -229,7 +236,10 @@
 
   window.GrconLdMemory = Object.freeze({
     save: saveLastLd,
+    saveLastLd,
     get: getLastLd,
+    getLastLd,
+    current: currentLdFile,
     clear: clearLastLd,
     matches: matchesSignature,
     showBanner: showRestoreBanner,
