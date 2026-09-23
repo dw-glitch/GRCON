@@ -1,0 +1,77 @@
+name: Hardening — Adicionar Capa React
+
+on:
+  pull_request:
+    paths:
+      - "src/react/cover-document/**"
+      - "assets/templates/CAPA_PAGE1_*"
+      - "grcon_module_loader.js"
+      - "performance_workers.js"
+      - "workers/ld.worker.js"
+      - "ld_memory.js"
+      - "cover-document.css"
+      - "sw.js"
+      - "vite.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tests/cover_document_react.cjs"
+      - "tests/cover_document_hardening.cjs"
+      - "scripts/validar-cover-document-browser.cjs"
+      - ".github/workflows/cover-document-hardening.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hardening:
+    name: Capa — funcional, performance e Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Auditoria de dependências
+        run: npm audit --audit-level=high
+
+      - name: Typecheck e build
+        run: |
+          npm run typecheck
+          npm run build
+
+      - name: QA funcional real da capa
+        run: node tests/cover_document_hardening.cjs
+
+      - name: Suíte completa
+        run: |
+          npm test
+          npm run verify
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: QA Chromium, responsividade, preview e PWA
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-cover-document.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-cover-document-browser.cjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cover-document-hardening
+          path: |
+            artifacts/cover-document-browser/*.png
+            artifacts/cover-document-browser/metrics.json
+          if-no-files-found: error
