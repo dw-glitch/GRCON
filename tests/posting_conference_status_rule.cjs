@@ -12,7 +12,7 @@ function history(document, revision) {
   }];
 }
 
-function base(document, revision, status, sourceRow = 2) {
+function base(document, revision, status, sourceRow = 2, modifiedAt = '14/09/2026 13:00:00') {
   const displayed = C.displayDocument(document);
   return [{
     id: `${C.documentIdentity(displayed)}|${revision}|${sourceRow}`,
@@ -21,43 +21,51 @@ function base(document, revision, status, sourceRow = 2) {
     searchKeys: C.documentKeys(displayed),
     revision: C.normalizeRevision(revision),
     status,
+    modifiedAt,
     sourceRow,
   }];
 }
 
-function reconcileWithRule(document, sentRevision, records) {
-  const raw = C.reconcile(history(document, sentRevision), records, null, { now: '2026-09-14T14:00:00Z' });
-  return { raw, adjusted: Rule.applyResult(raw, records, C) };
+function reconcile(document, sentRevision, records, previousState) {
+  return C.reconcile(history(document, sentRevision), records, previousState, { now: '2026-09-14T14:00:00Z' });
 }
 
+assert.equal(C.isPostedSigemStatus('Em Análise'), true);
+assert.equal(C.isPostedSigemStatus('Em Analise'), true);
+assert.equal(C.isPostedSigemStatus('em análise'), true);
+assert.equal(C.isPostedSigemStatus('  Em\u00a0Workflow  '), true);
+assert.equal(C.isPostedSigemStatus('Recusado'), false);
+assert.equal(C.isPostedSigemStatus('Sem Comentários'), false);
 assert.equal(Rule.isPostedSigemStatus('Em Análise', C), true);
-assert.equal(Rule.isPostedSigemStatus('Em Analise', C), true);
-assert.equal(Rule.isPostedSigemStatus('Em Workflow', C), true);
-assert.equal(Rule.isPostedSigemStatus('Recusado', C), false);
 
-let result = reconcileWithRule('DOC-POST-1', 'A', base('DOC-POST-1', 'B', 'Em Análise'));
-assert.equal(result.raw.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
-assert.equal(result.adjusted.rows[0].status, C.STATUSES.CONFIRMED);
-assert.equal(result.adjusted.rows[0].postingEvidenceRevision, 'B');
-assert.equal(result.adjusted.rows[0].postingEvidenceStatus, 'Em Análise');
-assert.match(result.adjusted.rows[0].note, /revisão posterior/i);
+let result = reconcile('DOC-POST-1', 'A', base('DOC-POST-1', 'B', 'Em Análise'));
+assert.equal(result.rows[0].status, C.STATUSES.CONFIRMED);
+assert.equal(result.rows[0].postingEvidenceRevision, 'B');
+assert.equal(result.rows[0].postingEvidenceStatus, 'Em Análise');
+assert.match(result.rows[0].note, /revisão posterior/i);
 
-result = reconcileWithRule('DOC-POST-2', 'A', base('DOC-POST-2', 'B', 'Em Workflow'));
-assert.equal(result.raw.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
-assert.equal(result.adjusted.rows[0].status, C.STATUSES.CONFIRMED);
-assert.equal(result.adjusted.rows[0].postingEvidenceRevision, 'B');
-assert.equal(result.adjusted.rows[0].postingEvidenceStatus, 'Em Workflow');
+result = reconcile('DOC-POST-2', 'A', base('DOC-POST-2', 'B', 'Em Workflow'));
+assert.equal(result.rows[0].status, C.STATUSES.CONFIRMED);
+assert.equal(result.rows[0].postingEvidenceRevision, 'B');
 
-result = reconcileWithRule('DOC-POST-3', 'B', base('DOC-POST-3', 'A', 'Em Workflow'));
-assert.equal(result.raw.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
-assert.equal(result.adjusted.rows[0].status, C.STATUSES.REVISION_DIVERGENT, 'revisão anterior não pode provar uma revisão mais nova');
+result = reconcile('DOC-POST-3', 'B', base('DOC-POST-3', 'A', 'Em Workflow'));
+assert.equal(result.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
 
-result = reconcileWithRule('DOC-POST-4', 'B', base('DOC-POST-4', 'B', 'Em Workflow'));
-assert.equal(result.raw.rows[0].status, C.STATUSES.CONFIRMED);
-assert.equal(result.adjusted.rows[0].status, C.STATUSES.CONFIRMED);
+result = reconcile('DOC-POST-4', 'B', base('DOC-POST-4', 'B', 'Em Workflow'));
+assert.equal(result.rows[0].status, C.STATUSES.CONFIRMED);
 
-result = reconcileWithRule('DOC-POST-5', 'A', base('DOC-POST-5', 'B', 'Recusado'));
-assert.equal(result.raw.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
-assert.equal(result.adjusted.rows[0].status, C.STATUSES.REVISION_DIVERGENT, 'somente Em Análise/Em Workflow promovem revisão posterior');
+result = reconcile('DOC-POST-5', 'A', base('DOC-POST-5', 'B', 'Recusado'));
+assert.equal(result.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
 
-console.log('OK — Em Análise e Em Workflow confirmam postagem da mesma revisão ou de revisão posterior, sem falso positivo para revisão anterior.');
+result = reconcile('DOC-POST-6', 'B', base('DOC-POST-6', 'B', 'Recusado'));
+assert.equal(result.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
+assert.equal(result.rows[0].sigemStatus, 'Recusado');
+
+result = reconcile('DOC-POST-7', 'B', base('DOC-POST-7', 'B', 'Sem Comentários'));
+assert.equal(result.rows[0].status, C.STATUSES.REVISION_DIVERGENT);
+assert.equal(result.rows[0].sigemStatus, 'Sem Comentários');
+
+const raw = reconcile('DOC-POST-8', 'A', base('DOC-POST-8', 'B', 'Em Análise'));
+assert.strictEqual(Rule.applyResult(raw, base('DOC-POST-8', 'B', 'Em Análise'), C), raw, 'status_rule não pode manter uma segunda engine de promoção');
+
+console.log('OK — o core decide postagem por documento + revisão + status SIGEM; status_rule é apenas compatibilidade.');
