@@ -6,8 +6,6 @@ interface TriagemCoreApi {
     records: LdDocumentRecord[];
     history: LdDocumentRecord[];
   };
-  revisionInfo(value: unknown): { revision: string; valid: boolean; kind: string; rank: number };
-  EGRDT_OPTIONS: { documentTypes: string[] };
   validateDocumentCode(document: string, sheetName?: string): {
     valid: boolean;
     family?: string;

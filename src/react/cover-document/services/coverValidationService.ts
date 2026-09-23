@@ -22,15 +22,21 @@ export function validateCover(
   if (!source) push("error", "source", "Anexe o documento que receberá a capa.");
   if (!data.title.trim()) push("error", "title", "Título obrigatório.");
   if (!data.documentNumber.trim()) push("error", "code", "Código/número do documento obrigatório.");
+  const coverCore = (window as unknown as {
+    TriagemCore?: {
+      revisionInfo?: (value: unknown) => { valid: boolean };
+      EGRDT_OPTIONS?: { documentTypes?: string[] };
+    };
+  }).TriagemCore;
   if (!data.revision.trim()) {
     push("error", "revision", "Revisão obrigatória; confirme a revisão carregada da LD ou informe manualmente.");
-  } else if (window.TriagemCore?.revisionInfo && !window.TriagemCore.revisionInfo(data.revision).valid) {
+  } else if (coverCore?.revisionInfo && !coverCore.revisionInfo(data.revision).valid) {
     push("error", "revision-rule", "Revisão fora da regra oficial do GRCON.");
   }
   if (!data.revisionDate.trim()) push("error", "date", "A data atual da emissão não pôde ser definida.");
   if (!data.revisionDescription.trim()) push("error", "revision-description", "Descrição da revisão obrigatória.");
   if (!data.categoryLabel.trim()) push("warning", "category", "Categoria documental não foi mapeada para uma descrição; confira antes de gerar.");
-  const officialTypes = window.TriagemCore?.EGRDT_OPTIONS?.documentTypes || [];
+  const officialTypes = coverCore?.EGRDT_OPTIONS?.documentTypes || [];
   if (data.category.trim() && officialTypes.length && !officialTypes.includes(data.category.trim().toUpperCase())) {
     push("error", "category-rule", "Categoria documental fora do catálogo oficial do GRCON.");
   }
