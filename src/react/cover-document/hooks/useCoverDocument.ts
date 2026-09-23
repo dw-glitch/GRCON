@@ -73,20 +73,25 @@ function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
 export function useCoverDocument() {
   const [records, setRecords] = useState<LdDocumentRecord[]>([]);
   const [ldNames, setLdNames] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState("");\n  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selected, setSelected] = useState<CoverDocumentCandidate | null>(null);
   const [baseData, setBaseData] = useState<CoverDocumentData>(EMPTY_DATA);
   const [data, setData] = useState<CoverDocumentData>(EMPTY_DATA);
   const [source, setSource] = useState<SourceDocumentInfo | null>(null);
   const [manualOriginalPages, setManualOriginalPages] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("Carregue uma ou mais LDs para começar.");
+  const [status, setStatus] = useState(initialStatus);
   const [previewUrl, setPreviewUrl] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const stateRef = useRef<CoverDebugState | null>(null);
   const previewToken = useRef(0);
 
-  const candidates = useMemo(() => searchLdDocuments(records, query), [records, query]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), 160);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
+  const candidates = useMemo(() => searchLdDocuments(records, debouncedQuery), [records, debouncedQuery]);
   const originalPages = manualOriginalPages ?? source?.originalPages ?? null;
   const totalPages = originalPages ? originalPages + 1 : null;
   const validations = useMemo(() => validateCover(selected, data, source, totalPages), [selected, data, source, totalPages]);
@@ -112,7 +117,10 @@ export function useCoverDocument() {
     setBusy(true);
     setStatus("Lendo LDs com o parser do GRCON…");
     try {
-      const loaded = await loadLdRecords(list);
+      const loaded = await loadLdRecords(list, (message, progress) => {
+        const percent = Math.round(Math.max(0, Math.min(1, progress)) * 100);
+        setStatus(`${message} · ${percent}%`);
+      });
       setRecords(loaded);
       setLdNames(list.map((file) => file.name));
       setSelected(null);
@@ -192,7 +200,7 @@ export function useCoverDocument() {
           return url;
         });
       }).catch(() => {});
-    }, 250);
+    }, 180);
     return () => window.clearTimeout(timeout);
   }, [data, hasErrors, selected, totalPages]);
 
@@ -229,7 +237,7 @@ export function useCoverDocument() {
     setData(EMPTY_DATA);
     setSource(null);
     setManualOriginalPages(null);
-    setStatus("Carregue uma ou mais LDs para começar.");
+    setStatus(initialStatus());
     setAdvancedOpen(false);
   }, []);
 
