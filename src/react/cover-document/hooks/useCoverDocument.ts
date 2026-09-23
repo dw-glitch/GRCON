@@ -216,10 +216,15 @@ export function useCoverDocument() {
           if (current) URL.revokeObjectURL(current);
           return url;
         });
-      }).catch(() => {});
+      }).catch((error) => {
+        if (token !== previewToken.current) return;
+        const message = error instanceof Error ? error.message : "Falha desconhecida ao montar a prévia.";
+        setStatus(`Não foi possível gerar a prévia da capa: ${message}`);
+        notify(`Prévia da capa indisponível: ${message}`, "error");
+      });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [data, hasErrors, selected, totalPages]);
+  }, [data, hasErrors, notify, selected, totalPages]);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
