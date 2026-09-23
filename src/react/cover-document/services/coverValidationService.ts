@@ -30,8 +30,13 @@ export function validateCover(
   if (!data.revisionDate.trim()) push("error", "date", "Data da emissão/revisão obrigatória.");
   if (!data.revisionDescription.trim()) push("error", "revision-description", "Descrição da revisão obrigatória.");
   if (!data.categoryLabel.trim()) push("warning", "category", "Categoria documental não foi mapeada para uma descrição; confira antes de gerar.");
-  if (!data.taxonomy.trim()) push("warning", "taxonomy", "Taxonomia não encontrada na linha selecionada da LD. Ela não será inventada.");
-  if (!data.internalDocumentCode.trim()) push("warning", "internal", "Código interno não informado na LD; a capa indicará “NÃO INFORMADO NA LD”.");
+  const officialTypes = window.TriagemCore?.EGRDT_OPTIONS?.documentTypes || [];
+  if (data.category.trim() && officialTypes.length && !officialTypes.includes(data.category.trim().toUpperCase())) {
+    push("error", "category-rule", "Categoria documental fora do catálogo oficial do GRCON.");
+  }
+  if (!data.taxonomy.trim()) {
+    push("error", "taxonomy", "Taxonomia não encontrada na coluna TAXONOMIA da linha selecionada da LD.");
+  }
   if (!totalPages || totalPages < 2) push("error", "pages", "Total de folhas não pôde ser confirmado.");
   if (source?.kind === "docx" && source.pageCountSource === "metadata") {
     push("info", "docx-pages", "A contagem do DOCX vem do metadado de páginas salvo no Word. Confira o total se o documento tiver sido alterado depois do último salvamento.");
