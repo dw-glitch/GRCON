@@ -147,6 +147,26 @@ async function main() {
     await page.waitForTimeout(1700);
     await page.evaluate(() => document.querySelector("#fixture-mobile-target")?.remove());
 
+    await page.evaluate(() => {
+      const menu = document.createElement("div");
+      menu.id = "fixture-critical-menu";
+      menu.setAttribute("role", "menu");
+      Object.assign(menu.style, { position: "fixed", right: "12px", bottom: "56px", width: "300px", height: "160px" });
+      document.body.appendChild(menu);
+      window.GrconMascot.idle({ source: "qa-visible-menu" });
+    });
+    await page.waitForTimeout(100);
+    const menuAvoidance = await page.evaluate(() => {
+      const mascot = document.querySelector("#grcon-context-mascot").getBoundingClientRect();
+      const menu = document.querySelector("#fixture-critical-menu").getBoundingClientRect();
+      return {
+        mascot: { left: mascot.left, right: mascot.right, top: mascot.top, bottom: mascot.bottom },
+        menu: { left: menu.left, right: menu.right, top: menu.top, bottom: menu.bottom },
+      };
+    });
+    assert.equal(intersects(menuAvoidance.mascot, menuAvoidance.menu), false, "mascote não pode cobrir menu visível");
+    await page.evaluate(() => document.querySelector("#fixture-critical-menu")?.remove());
+
     assert.deepEqual(errors, [], "console deve permanecer limpo: " + errors.join(" | "));
     await context.close();
 
