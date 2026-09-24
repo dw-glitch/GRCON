@@ -967,6 +967,7 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwEvolutionUi?.state && window.GrconSigemPwEvolutionUi?.refresh)), true, "facade React da Evolução deve estar disponível");
     assert.match(await page.locator("#spw-evo-scope").textContent(), /LD da Qualidade necessária/i);
     assert.equal(await page.locator("#spw-evo-kpis strong").first().textContent(), "—", "sem LD os KPIs não podem exibir zero válido");
+    await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outputDir, "01-evolution-no-ld-1366.png"), fullPage: true });
 
     const evolutionResources = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name));
@@ -1040,6 +1041,7 @@ async function waitEvolutionReady(page) {
     assert.deepEqual(overviewState, { sigemAdded: 250, sigemRemoved: 1, pwAdded: 3, pwRemoved: 1, pwEmitted: 3, both: 1, missingPw: 249 });
     assert.match(await page.locator("#spw-evo-audit").textContent(), /252 documentos únicos · 254 registros\/revisões válidos · 1 duplicidade/i);
     assert.match(await page.locator("#spw-evo-audit").textContent(), /7 documentos únicos · 7 registros\/revisões válidos · 0 duplicidade/i);
+    await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outputDir, "02-evolution-overview-1366.png"), fullPage: true });
 
     // Período: somente inicial.
@@ -1332,6 +1334,9 @@ async function waitEvolutionReady(page) {
     await page.locator('#spw-evo-more-filters').click();
     assert.equal(await page.locator('#spw-evo-more-filters').getAttribute('aria-expanded'), 'false');
     assert.equal(await page.locator('#spw-evo-advanced-filters').isVisible(), false);
+    await page.locator('#spw-evo-tabs [data-evo-list="sigem-new"]').click();
+    await resetEvolutionFilters(page);
+    assert.equal(await page.locator('#spw-evo-table tbody tr').count(), 100, 'medição responsiva requer tabela povoada');
     metrics.evolutionWidths = {};
     for (const width of [1440, 1366, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
@@ -1351,11 +1356,12 @@ async function waitEvolutionReady(page) {
       metrics.evolutionWidths[String(width)] = dimensions;
       assert.ok(dimensions.documentScrollWidth <= dimensions.documentClientWidth + 1, "overflow global da Evolução em " + width + "px");
       assert.ok(dimensions.evolutionSectionScrollWidth <= dimensions.evolutionSectionClientWidth + 1, "overflow da seção em " + width + "px");
-      if (width === 390) assert.ok(dimensions.tableScrollWidth > dimensions.tableClientWidth, "tabela deve ter rolagem local no mobile");
+      if (width === 390) assert.ok(dimensions.tableScrollWidth > dimensions.tableClientWidth, `tabela deve ter rolagem local no mobile: ${JSON.stringify(dimensions)}`);
     }
     metrics.evolutionSectionHeight390After = metrics.evolutionWidths["390"].evolutionSectionHeight;
 
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outputDir, "10-evolution-mobile-390.png"), fullPage: true });
     const mobileRow = page.locator("#spw-evo-table tbody tr").first();
     await mobileRow.click();
