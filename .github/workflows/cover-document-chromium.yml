@@ -68,5 +68,6 @@ jobs:
           name: cover-document-chromium
           path: |
             artifacts/cover-document-browser/*.png
+            artifacts/cover-document-browser/*.pdf
             artifacts/cover-document-browser/metrics.json
           if-no-files-found: warn
