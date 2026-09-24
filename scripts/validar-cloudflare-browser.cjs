@@ -119,11 +119,14 @@ async function probe(page, pathname) {
     assert.match(swInfo.scriptURL, /\/sw\.js$/);
     assert.equal(new URL(swInfo.scope).pathname, "/");
 
-    results.mascot = await page.evaluate(() => ({
-      version: window.GrconMascot?.version || "",
-      instances: window.GrconMascot?.diagnostics?.().instances ?? null,
-      enabled: window.GrconMascot?.diagnostics?.().enabled ?? null,
-    }));
+    results.mascot = await page.evaluate(() => {
+      const diagnostics = window.GrconMascot?.diagnostics?.() || {};
+      return {
+        version: diagnostics.version || "",
+        instances: diagnostics.instances ?? null,
+        enabled: diagnostics.enabled ?? null,
+      };
+    });
     assert.match(results.mascot.version, /^5\./);
 
     results.api = await page.evaluate(async () => {
