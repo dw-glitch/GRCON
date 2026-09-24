@@ -130,7 +130,7 @@ assert.ok(/saveLdAndReprocessPw/.test(appSource), "troca de LD deve reprocessar 
 assert.ok(/SIGEM \+ PW: ainda não emitido/.test(appSource));
 assert.ok(/Revisão ausente no PW é conciliada pelo código do documento/.test(appSource));
 
-for (const fileName of ["sigem_pw_evolution_app.js", "sigem_pw_history_app.js", "sigem_pw_history_postmerge.js", "sigem_pw_history_runtime_fix.js"]) {
+for (const fileName of ["src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx", "sigem_pw_history_app.js", "sigem_pw_history_postmerge.js", "sigem_pw_history_runtime_fix.js"]) {
   const source = fs.readFileSync(path.join(rootDir, fileName), "utf8");
   assert.ok(!/Descartados do escopo|Motivo de descarte|Motivo descarte|Fora do escopo|registros brutos/i.test(source), `${fileName} não deve expor documentos ignorados`);
 }
