@@ -127,7 +127,7 @@ async function main() {
 
     let state = await diagnostics(page);
     assert.equal(state.engine, "official-contextual-v5");
-    assert.equal(state.assetRevision, "20260924.1");
+    assert.equal(state.assetRevision, "20260924.2");
     assert.equal(state.instances, 1);
     assert.equal(await page.locator("#grcon-context-mascot video").count(), 1);
     assert.deepEqual(Object.keys(state.assets).sort(), ["analyzing", "hello", "idle", "running", "success", "warning"]);
