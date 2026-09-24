@@ -154,6 +154,8 @@ async function inspectRealMascotTransparency(page) {
       border:[hs.borderTopWidth,hs.borderRightWidth,hs.borderBottomWidth,hs.borderLeftWidth],
       shadow:hs.boxShadow,
       overflow:hs.overflow,
+      contain:hs.contain,
+      rect:host.getBoundingClientRect().toJSON(),
     };
   });
 }
@@ -213,6 +215,8 @@ async function clearLds(page) {
     assert.deepEqual(mascotLight.border,["0px","0px","0px","0px"]);
     assert.equal(mascotLight.shadow,"none");
     assert.equal(mascotLight.overflow,"visible");
+    assert.doesNotMatch(mascotLight.contain,/paint/);
+    if(mascotLight.media==="png") assert.ok(Math.abs((mascotLight.rect.width/mascotLight.rect.height)-1)<0.12,"interface real: fallback sem distorção");
     await page.screenshot({path:path.join(outputDir,"03-resultados-1366.png"),fullPage:true});
 
     for (const label of ["Localizados","A validar","Não localizados","Total"]) { const k=page.getByRole("button",{name:new RegExp("^"+label+"\\s+\\d+$")}); await k.click(); assert.equal(await k.getAttribute("aria-pressed"),"true"); }
