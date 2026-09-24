@@ -1,6 +1,7 @@
 import type {
   CoverDocumentData,
   CoverGeneratedFile,
+  CoverPlacementMode,
   SourceDocumentInfo,
   SourceDocumentKind,
 } from "../types/domain";
@@ -23,19 +24,72 @@ const PDF_TEMPLATE_PARTS = [
   "assets/templates/CAPA_PAGE1_BASE.pdf.b64.005",
 ];
 
-const PDF_DRAW = {
-  category: { x: 202, top: 33, width: 110, size: 9, bold: true, align: "center" as const },
-  documentNumber: { x: 380, top: 34, width: 170, size: 8.5, bold: true, align: "left" as const },
-  pageNumber: { x: 518, top: 56, width: 48, size: 8.5, bold: false, align: "center" as const },
-  title: { x: 204, top: 108, width: 268, size: 9, bold: true, align: "left" as const, lines: 2 },
-  internalDocumentCode: { x: 302, top: 171, width: 84, size: 7.5, bold: true, align: "center" as const },
-  revision: { x: 84, top: 245, width: 27, size: 10, bold: false, align: "center" as const },
-  revisionDescription: { x: 120, top: 245, width: 350, size: 10, bold: false, align: "left" as const, lines: 2 },
-  revisionDate: { x: 139, top: 728, width: 91, size: 6.5, bold: false, align: "center" as const },
-  executor: { x: 135, top: 739, width: 100, size: 6.5, bold: false, align: "center" as const },
-  checker: { x: 135, top: 750, width: 110, size: 6.5, bold: false, align: "center" as const },
-  approver: { x: 135, top: 761, width: 100, size: 6.5, bold: false, align: "center" as const },
+type CoverFieldKey =
+  | "category"
+  | "documentNumber"
+  | "pageNumber"
+  | "title"
+  | "internalDocumentCode"
+  | "revision"
+  | "revisionDescription"
+  | "revisionDate"
+  | "executor"
+  | "checker"
+  | "approver";
+
+type CoverBox = {
+  x: number;
+  top: number;
+  width: number;
+  height: number;
 };
+
+type CoverFieldSpec = CoverBox & {
+  fontFamily: "Arial";
+  fontSize: number;
+  fontWeight: "normal" | "bold";
+  textAlign: "left" | "center";
+  lineHeight: number;
+  maxLines: number;
+  clear?: CoverBox;
+};
+
+// Coordenadas únicas e determinísticas em pontos PDF (A4). x/top/width/height
+// representam a área segura de texto; clear representa, quando necessário, a
+// área interna que pode ser limpa sem tocar nas linhas do formulário.
+export const COVER_LAYOUT: Record<CoverFieldKey, CoverFieldSpec> = {
+  category: { x: 161.5, top: 32, width: 171, height: 15, fontFamily: "Arial", fontSize: 9, fontWeight: "bold", textAlign: "center", lineHeight: 10.2, maxLines: 1, clear: { x: 161.2, top: 30.8, width: 171.4, height: 16.8 } },
+  documentNumber: { x: 365.0, top: 33, width: 208.5, height: 14, fontFamily: "Arial", fontSize: 8.5, fontWeight: "bold", textAlign: "center", lineHeight: 9.6, maxLines: 1, clear: { x: 364.0, top: 30.8, width: 209.7, height: 16.8 } },
+  pageNumber: { x: 510.5, top: 55, width: 62.5, height: 10, fontFamily: "Arial", fontSize: 8.5, fontWeight: "normal", textAlign: "center", lineHeight: 9.6, maxLines: 1, clear: { x: 509.5, top: 50.2, width: 64.2, height: 14.3 } },
+  title: { x: 201.0, top: 107, width: 272.5, height: 23, fontFamily: "Arial", fontSize: 9, fontWeight: "bold", textAlign: "center", lineHeight: 10.2, maxLines: 2, clear: { x: 199.5, top: 102.2, width: 274.2, height: 27.5 } },
+  internalDocumentCode: { x: 274.0, top: 170, width: 234.0, height: 13, fontFamily: "Arial", fontSize: 7.5, fontWeight: "bold", textAlign: "center", lineHeight: 8.6, maxLines: 1, clear: { x: 273.4, top: 165.2, width: 235.2, height: 19.6 } },
+  revision: { x: 77.5, top: 245, width: 38.5, height: 12, fontFamily: "Arial", fontSize: 10, fontWeight: "normal", textAlign: "center", lineHeight: 11.2, maxLines: 1, clear: { x: 77.2, top: 244.0, width: 38.8, height: 15.0 } },
+  revisionDescription: { x: 120.0, top: 245, width: 451.5, height: 23, fontFamily: "Arial", fontSize: 10, fontWeight: "normal", textAlign: "left", lineHeight: 11.2, maxLines: 2, clear: { x: 118.6, top: 244.0, width: 454.2, height: 27.0 } },
+  revisionDate: { x: 138.3, top: 728, width: 75.8, height: 9, fontFamily: "Arial", fontSize: 6.5, fontWeight: "normal", textAlign: "center", lineHeight: 7.4, maxLines: 1, clear: { x: 138.2, top: 728.3, width: 76.0, height: 9.0 } },
+  executor: { x: 138.3, top: 739, width: 75.8, height: 9, fontFamily: "Arial", fontSize: 6.5, fontWeight: "normal", textAlign: "center", lineHeight: 7.4, maxLines: 1, clear: { x: 138.2, top: 739.1, width: 76.0, height: 9.1 } },
+  checker: { x: 138.3, top: 750, width: 75.8, height: 9, fontFamily: "Arial", fontSize: 6.5, fontWeight: "normal", textAlign: "center", lineHeight: 7.4, maxLines: 1, clear: { x: 138.2, top: 750.3, width: 76.0, height: 9.7 } },
+  approver: { x: 138.3, top: 762, width: 75.8, height: 9, fontFamily: "Arial", fontSize: 6.5, fontWeight: "normal", textAlign: "center", lineHeight: 7.4, maxLines: 1, clear: { x: 138.2, top: 761.7, width: 76.0, height: 9.8 } },
+};
+
+// Valores que existiam no PDF usado para construir o template não são dados
+// universais do GRCON. Limpamos somente o interior dessas células e deixamos
+// rótulos/linhas intactos. No modo "substituir", a capa oficial gerada ocupa a
+// página 1 e o GRCON copia a página 2 em diante diretamente do PDF de origem,
+// preservando a contracapa específica daquele documento.
+const TEMPLATE_ONLY_CLEAR_REGIONS: CoverBox[] = [
+  { x: 205.0, top: 50.0, width: 268.5, height: 14.5 }, // cliente
+  { x: 196.0, top: 66.8, width: 277.5, height: 14.2 }, // programa
+  { x: 477.0, top: 66.8, width: 96.5, height: 14.2 }, // célula direita programa
+  { x: 196.0, top: 83.8, width: 277.5, height: 14.2 }, // área
+  { x: 477.0, top: 83.8, width: 96.5, height: 14.2 }, // célula direita área
+  { x: 77.2, top: 100.8, width: 81.4, height: 28.8 }, // célula esquerda sob logo
+  { x: 477.0, top: 100.8, width: 96.5, height: 13.4 }, // órgão/código
+  { x: 477.0, top: 116.6, width: 96.5, height: 13.2 }, // classificação
+  { x: 77.2, top: 140.5, width: 136.9, height: 10.0 }, // valor da razão social (preserva o rótulo)
+  { x: 216.7, top: 140.5, width: 291.8, height: 10.0 }, // valor do responsável técnico (preserva o rótulo)
+  { x: 77.2, top: 166.2, width: 136.9, height: 18.6 }, // contrato
+  { x: 216.7, top: 166.2, width: 54.1, height: 18.6 }, // CREA
+];
 
 type ZipLike = {
   file(path: string): {
@@ -145,26 +199,90 @@ export function outputFileName(data: CoverDocumentData, kind: SourceDocumentKind
   return code + " - " + maxTitle + " - REV " + revision + "." + kind;
 }
 
-function wrapText(text: string, font: { widthOfTextAtSize(value: string, size: number): number }, size: number, maxWidth: number, maxLines = 1): { lines: string[]; size: number } {
+function ellipsize(text: string, font: { widthOfTextAtSize(value: string, size: number): number }, size: number, maxWidth: number): string {
+  const clean = String(text || "").trim();
+  if (font.widthOfTextAtSize(clean, size) <= maxWidth) return clean;
+  const suffix = "…";
+  let value = clean;
+  while (value && font.widthOfTextAtSize(value + suffix, size) > maxWidth) value = value.slice(0, -1).trimEnd();
+  return value ? value + suffix : "";
+}
+
+function wrapAtSize(text: string, font: { widthOfTextAtSize(value: string, size: number): number }, size: number, maxWidth: number): string[] {
+  const words = text.split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  const pushLongToken = (token: string) => {
+    let piece = "";
+    for (const character of token) {
+      const proposed = piece + character;
+      if (piece && font.widthOfTextAtSize(proposed, size) > maxWidth) {
+        lines.push(piece);
+        piece = character;
+      } else piece = proposed;
+    }
+    current = piece;
+  };
+  words.forEach((word) => {
+    const proposed = current ? current + " " + word : word;
+    if (font.widthOfTextAtSize(proposed, size) <= maxWidth) {
+      current = proposed;
+      return;
+    }
+    if (current) {
+      lines.push(current);
+      current = "";
+    }
+    if (font.widthOfTextAtSize(word, size) <= maxWidth) current = word;
+    else pushLongToken(word);
+  });
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
+}
+
+function fitText(text: string, font: { widthOfTextAtSize(value: string, size: number): number }, spec: CoverFieldSpec): { lines: string[]; size: number } {
   const clean = String(text || "").replace(/\s+/g, " ").trim();
-  if (!clean) return { lines: [""], size };
-  let currentSize = size;
-  for (; currentSize >= 5.5; currentSize -= 0.25) {
-    const words = clean.split(" ");
-    const lines: string[] = [];
-    let current = "";
-    words.forEach((word) => {
-      const proposed = current ? current + " " + word : word;
-      if (font.widthOfTextAtSize(proposed, currentSize) <= maxWidth) current = proposed;
-      else {
-        if (current) lines.push(current);
-        current = word;
-      }
-    });
-    if (current) lines.push(current);
-    if (lines.length <= maxLines && lines.every((line) => font.widthOfTextAtSize(line, currentSize) <= maxWidth)) return { lines, size: currentSize };
+  if (!clean) return { lines: [""], size: spec.fontSize };
+  const minSize = 5.5;
+  for (let currentSize = spec.fontSize; currentSize >= minSize; currentSize -= 0.25) {
+    const lines = wrapAtSize(clean, font, currentSize, spec.width);
+    if (lines.length <= spec.maxLines) return { lines, size: currentSize };
   }
-  return { lines: [clean], size: 5.5 };
+  const lines = wrapAtSize(clean, font, minSize, spec.width);
+  const visible = lines.slice(0, spec.maxLines);
+  if (lines.length > spec.maxLines) {
+    visible[visible.length - 1] = ellipsize(lines.slice(spec.maxLines - 1).join(" "), font, minSize, spec.width);
+  }
+  return { lines: visible, size: minSize };
+}
+
+function clearBoxInterior(
+  page: { drawRectangle(options: Record<string, unknown>): void },
+  pageHeight: number,
+  box: CoverBox,
+  white: unknown,
+): void {
+  page.drawRectangle({
+    x: box.x,
+    y: pageHeight - box.top - box.height,
+    width: box.width,
+    height: box.height,
+    color: white,
+  });
+}
+
+function clearFieldInterior(
+  page: { drawRectangle(options: Record<string, unknown>): void },
+  pageHeight: number,
+  spec: CoverFieldSpec,
+  white: unknown,
+): void {
+  clearBoxInterior(page, pageHeight, spec.clear || {
+    x: spec.x - 1,
+    top: spec.top,
+    width: spec.width + 2,
+    height: spec.height,
+  }, white);
 }
 
 async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promise<Uint8Array> {
@@ -172,20 +290,26 @@ async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promi
   const document = await lib.PDFDocument.load(await loadTemplateBytes(PDF_TEMPLATE_PARTS, "PDF"));
   const page = document.getPages()[0];
   if (!page) throw new Error("Template PDF da capa está vazio.");
+  // pdf-lib só disponibiliza as fontes PDF core sem bytes externos. Helvetica é
+  // o fallback métrico mais próximo de Arial no PDF; no DOCX os runs do template
+  // continuam com a tipografia Arial do formulário oficial.
   const regular = await document.embedFont(lib.StandardFonts.Helvetica);
   const bold = await document.embedFont(lib.StandardFonts.HelveticaBold);
   const black = lib.rgb(0, 0, 0);
   const white = lib.rgb(1, 1, 1);
   const height = page.getHeight();
-  page.drawRectangle({ x: 516, y: height - 69, width: 51, height: 15, color: white });
 
-  const values: Record<keyof typeof PDF_DRAW, string> = {
+  // O template visual veio de um documento real. Antes de preencher os campos
+  // variáveis, removemos somente os valores específicos que não podem vazar
+  // para outro documento (cliente, programa, área, contrato, responsável etc.).
+  // As caixas foram medidas dentro das células e não alcançam as linhas.
+  TEMPLATE_ONLY_CLEAR_REGIONS.forEach((box) => clearBoxInterior(page, height, box, white));
+
+  const values: Record<CoverFieldKey, string> = {
     category: data.categoryLabel || data.category,
     documentNumber: data.documentNumber,
     pageNumber: "1 de " + totalPages,
     title: data.title,
-    // O campo físico “CÓD. DOCUMENTO INTERNO” da capa oficial recebe a
-    // TAXONOMIA da mesma linha selecionada na LD.
     internalDocumentCode: data.taxonomy || "NÃO INFORMADO NA LD",
     revision: data.revision,
     revisionDescription: data.revisionDescription,
@@ -195,44 +319,77 @@ async function buildCoverPdf(data: CoverDocumentData, totalPages: number): Promi
     approver: data.approver,
   };
 
-  (Object.keys(PDF_DRAW) as Array<keyof typeof PDF_DRAW>).forEach((key) => {
-    const spec = PDF_DRAW[key];
-    const font = spec.bold ? bold : regular;
-    const wrapped = wrapText(values[key], font, spec.size, spec.width, "lines" in spec ? spec.lines : 1);
-    wrapped.lines.forEach((line, index) => {
-      const lineWidth = font.widthOfTextAtSize(line, wrapped.size);
-      const x = spec.align === "center" ? spec.x + Math.max(0, (spec.width - lineWidth) / 2) : spec.x;
-      const y = height - spec.top - wrapped.size - index * (wrapped.size + 1.2);
-      page.drawText(line, { x, y, size: wrapped.size, font, color: black });
+  (Object.keys(COVER_LAYOUT) as CoverFieldKey[]).forEach((key) => {
+    const spec = COVER_LAYOUT[key];
+    const font = spec.fontWeight === "bold" ? bold : regular;
+    clearFieldInterior(page, height, spec, white);
+    const fitted = fitText(values[key], font, spec);
+    fitted.lines.forEach((line, index) => {
+      const lineWidth = font.widthOfTextAtSize(line, fitted.size);
+      const x = spec.textAlign === "center" ? spec.x + Math.max(0, (spec.width - lineWidth) / 2) : spec.x;
+      const y = height - spec.top - fitted.size - index * spec.lineHeight;
+      page.drawText(line, { x, y, size: fitted.size, font, color: black });
     });
   });
 
   return document.save();
 }
 
-export async function createCoverPreview(data: CoverDocumentData, totalPages: number): Promise<Blob> {
+async function assemblePdf(
+  data: CoverDocumentData,
+  source: SourceDocumentInfo,
+  mode: CoverPlacementMode,
+  maxOriginalPages: number | null = null,
+): Promise<Uint8Array> {
+  if (source.kind !== "pdf") throw new Error("A montagem PDF exige um documento de origem em PDF.");
+  const lib = getPdfLib();
+  const original = await lib.PDFDocument.load(await source.file.arrayBuffer());
+  const originalPages = original.getPageCount();
+  if (!originalPages) throw new Error("O PDF de origem não possui páginas.");
+  const replacing = mode === "replace-first-page";
+  const finalTotalPages = replacing ? originalPages : originalPages + 1;
+  const coverBytes = await buildCoverPdf(data, finalTotalPages);
+  const output = await lib.PDFDocument.load(coverBytes);
+  const firstSourceIndex = replacing ? 1 : 0;
+  const available = Math.max(0, originalPages - firstSourceIndex);
+  const copyCount = maxOriginalPages == null ? available : Math.min(available, Math.max(0, maxOriginalPages));
+  const indices = Array.from({ length: copyCount }, (_, index) => firstSourceIndex + index);
+  if (indices.length) {
+    const pages = await output.copyPages(original, indices);
+    pages.forEach((page) => output.addPage(page));
+  }
+  return output.save();
+}
+
+export async function createDocumentPreview(
+  data: CoverDocumentData,
+  source: SourceDocumentInfo,
+  totalPages: number,
+  mode: CoverPlacementMode,
+): Promise<Blob> {
+  if (source.kind === "pdf") {
+    // A prévia usa o mesmo compositor do arquivo final e inclui a página
+    // seguinte. Em modo substituição, essa página é a contracapa/página 2 real
+    // do próprio documento, sem qualquer template universal.
+    const bytes = await assemblePdf(data, source, mode, 1);
+    return blobFromBytes(bytes, "application/pdf");
+  }
   const bytes = await buildCoverPdf(data, totalPages);
   return blobFromBytes(bytes, "application/pdf");
 }
 
-export async function generatePdf(data: CoverDocumentData, source: SourceDocumentInfo): Promise<CoverGeneratedFile> {
-  if (source.kind !== "pdf") throw new Error("A geração de PDF nesta versão exige um documento de origem em PDF.");
-  const lib = getPdfLib();
-  const original = await lib.PDFDocument.load(await source.file.arrayBuffer());
-  const originalPages = original.getPageCount();
-  const coverBytes = await buildCoverPdf(data, originalPages + 1);
-  const output = await lib.PDFDocument.load(coverBytes);
-  const indices = Array.from({ length: originalPages }, (_, index) => index);
-  const pages = await output.copyPages(original, indices);
-  pages.forEach((page) => output.addPage(page));
-  const bytes = await output.save();
+export async function generatePdf(
+  data: CoverDocumentData,
+  source: SourceDocumentInfo,
+  mode: CoverPlacementMode = "replace-first-page",
+): Promise<CoverGeneratedFile> {
+  const bytes = await assemblePdf(data, source, mode);
   return {
     blob: blobFromBytes(bytes, "application/pdf"),
     fileName: outputFileName(data, "pdf"),
     kind: "pdf",
   };
 }
-
 function replacePlaceholder(xml: string, placeholder: string, value: string): string {
   if (!xml.includes(placeholder)) throw new Error("Template DOCX inválido: campo " + placeholder + " não encontrado.");
   return xml.split(placeholder).join(escapeXml(value || ""));
