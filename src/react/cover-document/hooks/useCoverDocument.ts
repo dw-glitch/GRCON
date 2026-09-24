@@ -7,7 +7,7 @@ import {
   uniqueExactCandidate,
 } from "../services/ldDocumentService";
 import {
-  createCoverPreview,
+  createDocumentPreview,
   downloadGenerated,
   generateDocx,
   generatePdf,
@@ -19,12 +19,12 @@ import type {
   CoverDebugState,
   CoverDocumentCandidate,
   CoverDocumentData,
+  CoverPlacementMode,
   LdDocumentRecord,
   SourceDocumentInfo,
 } from "../types/domain";
 
-const DEFAULTS: Pick<CoverDocumentData, "revisionDescription" | "executor" | "checker" | "approver"> = {
-  revisionDescription: "EMISSÃO ORIGINAL",
+const DEFAULTS: Pick<CoverDocumentData, "executor" | "checker" | "approver"> = {
   executor: "KAIQUE CAETANO",
   checker: "LEANDRO CALDEIRA",
   approver: "LUCIANA SCIARRA",
@@ -46,7 +46,7 @@ const EMPTY_DATA: CoverDocumentData = {
   classification: "",
   internalDocumentCode: "",
   revision: "",
-  revisionDescription: DEFAULTS.revisionDescription,
+  revisionDescription: "",
   revisionDate: "",
   discipline: "",
   tag: "",
@@ -56,7 +56,6 @@ const EMPTY_DATA: CoverDocumentData = {
 };
 
 function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
-  const revision = candidate.revision || "";
   return {
     title: candidate.title,
     documentNumber: candidate.documentNumber,
@@ -66,9 +65,9 @@ function fromCandidate(candidate: CoverDocumentCandidate): CoverDocumentData {
     categoryLabel: candidate.categoryLabel || categoryLabel(candidate.category),
     classification: candidate.classification,
     internalDocumentCode: candidate.internalDocumentCode,
-    // Regra operacional: revisão vem da linha da LD selecionada e continua editável.
-    revision,
-    revisionDescription: revision === "0" ? "EMISSÃO ORIGINAL" : "",
+    // Regra operacional: a revisão é sempre informada pelo operador.
+    revision: "",
+    revisionDescription: "",
     // A capa usa a data local atual, não a data histórica registrada na LD.
     revisionDate: currentCoverDate(),
     discipline: candidate.discipline,
@@ -89,6 +88,7 @@ export function useCoverDocument() {
   const [data, setData] = useState<CoverDocumentData>(EMPTY_DATA);
   const [source, setSource] = useState<SourceDocumentInfo | null>(null);
   const [manualOriginalPages, setManualOriginalPages] = useState<number | null>(null);
+  const [coverMode, setCoverMode] = useState<CoverPlacementMode>("replace-first-page");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("Carregue uma ou mais LDs para começar.");
   const [previewUrl, setPreviewUrl] = useState("");
@@ -103,7 +103,9 @@ export function useCoverDocument() {
   }, [query]);
   const candidates = useMemo(() => searchLdDocuments(searchIndex, debouncedQuery), [searchIndex, debouncedQuery]);
   const originalPages = manualOriginalPages ?? source?.originalPages ?? null;
-  const totalPages = originalPages ? originalPages + 1 : null;
+  const totalPages = originalPages
+    ? (source?.kind === "pdf" && coverMode === "replace-first-page" ? originalPages : originalPages + 1)
+    : null;
   const validations = useMemo(() => validateCover(selected, data, source, totalPages), [selected, data, source, totalPages]);
   const hasErrors = validations.some((item) => item.level === "error");
   const overrides = useMemo(() => new Set((Object.keys(data) as Array<keyof CoverDocumentData>).filter((key) => data[key] !== baseData[key])), [baseData, data]);
@@ -115,6 +117,7 @@ export function useCoverDocument() {
     sourceName: source?.file.name || "",
     busy,
     validationErrors: validations.filter((item) => item.level === "error").length,
+    coverMode,
   };
 
   const notify = useCallback((message: string, kind = "info") => {
@@ -169,8 +172,12 @@ export function useCoverDocument() {
       const inspected = await inspectSourceDocument(file);
       setSource(inspected);
       setManualOriginalPages(null);
+      if (inspected.kind === "pdf") setCoverMode("replace-first-page");
+      else setCoverMode("prepend");
       setStatus(inspected.originalPages
-        ? `${file.name}: ${inspected.originalPages.toLocaleString("pt-BR")} página(s) de origem.`
+        ? (inspected.kind === "pdf"
+          ? `${file.name}: ${inspected.originalPages.toLocaleString("pt-BR")} página(s). Por padrão, a capa atual será substituída e a página 2 em diante será preservada.`
+          : `${file.name}: ${inspected.originalPages.toLocaleString("pt-BR")} página(s) de origem.`)
         : `${file.name}: confirme manualmente a quantidade de páginas do DOCX.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível abrir o documento.";
@@ -202,7 +209,7 @@ export function useCoverDocument() {
 
   useEffect(() => {
     const token = ++previewToken.current;
-    if (!selected || !totalPages || hasErrors) {
+    if (!selected || !source || !totalPages || hasErrors) {
       setPreviewUrl((current) => {
         if (current) URL.revokeObjectURL(current);
         return "";
@@ -210,7 +217,7 @@ export function useCoverDocument() {
       return undefined;
     }
     const timeout = window.setTimeout(() => {
-      createCoverPreview(data, totalPages).then((blob) => {
+      createDocumentPreview(data, source, totalPages, coverMode).then((blob) => {
         if (token !== previewToken.current) return;
         const url = URL.createObjectURL(blob);
         setPreviewUrl((current) => {
@@ -220,12 +227,12 @@ export function useCoverDocument() {
       }).catch((error) => {
         if (token !== previewToken.current) return;
         const message = error instanceof Error ? error.message : "Falha desconhecida ao montar a prévia.";
-        setStatus(`Não foi possível gerar a prévia da capa: ${message}`);
-        notify(`Prévia da capa indisponível: ${message}`, "error");
+        setStatus(`Não foi possível gerar a prévia do documento: ${message}`);
+        notify(`Prévia do documento indisponível: ${message}`, "error");
       });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [data, hasErrors, notify, selected, totalPages]);
+  }, [coverMode, data, hasErrors, notify, selected, source, totalPages]);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -234,14 +241,39 @@ export function useCoverDocument() {
   const generate = useCallback(async (kind: "pdf" | "docx") => {
     if (!source || !selected || !totalPages || hasErrors || busy) return;
     setBusy(true);
-    setStatus(kind === "pdf" ? "Montando a capa e preservando as páginas originais…" : "Montando a capa Word editável e incorporando o documento original…");
+    setStatus(kind === "pdf"
+      ? (coverMode === "replace-first-page"
+        ? "Substituindo somente a capa e preservando a contracapa/páginas seguintes…"
+        : "Adicionando a capa antes do documento e preservando as páginas originais…")
+      : "Montando a capa Word editável e incorporando o documento original…");
     try {
       const outputData = { ...data, revisionDate: currentCoverDate() };
       if (outputData.revisionDate !== data.revisionDate) setData(outputData);
       const generated = kind === "pdf"
-        ? await generatePdf(outputData, source)
+        ? await generatePdf(outputData, source, coverMode)
         : await generateDocx(outputData, source, totalPages);
       downloadGenerated(generated);
+      try {
+        const key = "grcon_cover_document_history_v1";
+        const previous = JSON.parse(window.localStorage.getItem(key) || "[]");
+        const entry = {
+          generatedAt: new Date().toISOString(),
+          documentNumber: outputData.documentNumber,
+          title: outputData.title,
+          taxonomy: outputData.taxonomy,
+          revision: outputData.revision,
+          revisionDate: outputData.revisionDate,
+          sourceName: source.file.name,
+          outputName: generated.fileName,
+          kind,
+          coverMode: kind === "pdf" ? coverMode : "prepend",
+        };
+        const history = Array.isArray(previous) ? [entry, ...previous].slice(0, 200) : [entry];
+        window.localStorage.setItem(key, JSON.stringify(history));
+        window.dispatchEvent(new CustomEvent("grcon:cover-generated", { detail: entry }));
+      } catch (_) {
+        // A geração não deve falhar caso o armazenamento local esteja indisponível.
+      }
       setStatus(`${generated.fileName} gerado com sucesso.`);
       notify("Arquivo com capa gerado com sucesso.", "success");
     } catch (error) {
@@ -251,7 +283,7 @@ export function useCoverDocument() {
     } finally {
       setBusy(false);
     }
-  }, [busy, data, hasErrors, notify, selected, source, totalPages]);
+  }, [busy, coverMode, data, hasErrors, notify, selected, source, totalPages]);
 
   const clear = useCallback(() => {
     setRecords([]);
@@ -263,6 +295,7 @@ export function useCoverDocument() {
     setData(EMPTY_DATA);
     setSource(null);
     setManualOriginalPages(null);
+    setCoverMode("replace-first-page");
     setStatus("Carregue uma ou mais LDs para começar.");
     setAdvancedOpen(false);
   }, []);
@@ -286,6 +319,8 @@ export function useCoverDocument() {
     totalPages,
     manualOriginalPages,
     setManualOriginalPages,
+    coverMode,
+    setCoverMode,
     busy,
     status,
     validations,
