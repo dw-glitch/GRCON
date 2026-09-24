@@ -49,6 +49,12 @@ async function main() {
     assert.equal(await page.locator("#grcon-context-mascot").evaluate((el) => getComputedStyle(el).pointerEvents), "none");
     await page.screenshot({ path: path.join(outputDir, "01-idle.png") });
 
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-pulse", {
+      detail: { context: "control", duration: 800 },
+    })));
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "analyzing", null, { timeout: 3000 });
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 4000 });
+
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-state", {
       detail: { active: true, context: "control", state: "checking-document", task: "Analisar e conferir na LD" },
     })));
@@ -93,6 +99,20 @@ async function main() {
     });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "success", null, { timeout: 5000 });
     await page.screenshot({ path: path.join(outputDir, "04-success.png") });
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 7000 });
+
+    await page.evaluate(() => {
+      window.GrconMascot.warning({ message: "Aviso concorrente", duration: 1500 });
+      window.dispatchEvent(new CustomEvent("grcon:processing-state", {
+        detail: { active: true, context: "control", state: "checking-document", task: "Operação durante warning" },
+      }));
+      window.dispatchEvent(new CustomEvent("grcon:processing-state", {
+        detail: { active: false, success: true, context: "control" },
+      }));
+    });
+    await page.waitForTimeout(180);
+    assert.equal((await diagnostics(page)).state, "warning", "operação não pode interromper warning ativo");
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "success", null, { timeout: 5000 });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 7000 });
 
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
@@ -231,9 +251,20 @@ async function main() {
     const afterReload = await diagnostics(helloPage);
     assert.equal(afterReload.greetingPlayedThisSession, true);
     assert.notEqual(afterReload.state, "hello", "hello não pode repetir na mesma sessão");
+
+    await helloPage.evaluate(() => document.documentElement.classList.add("grcon-cloud-pending"));
+    await helloPage.waitForFunction(() => window.GrconMascot.diagnostics().greetingPlayedThisSession === false, null, { timeout: 3000 });
+    await helloPage.evaluate(() => {
+      document.documentElement.classList.remove("grcon-cloud-pending");
+      window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
+    });
+    await helloPage.waitForFunction(() => window.GrconMascot.diagnostics().state === "hello", null, { timeout: 5000 });
+    assert.equal(await helloPage.locator("#grcon-mascot-context-bubble").textContent(), "Olá, Vinicio!");
+    const afterRelogin = await diagnostics(helloPage);
+    assert.equal(afterRelogin.greetingPlayedThisSession, true);
     await helloContext.close();
 
-    console.log(JSON.stringify({ warningGeometry, disabled, mobile, reduced, fallback, afterReload }, null, 2));
+    console.log(JSON.stringify({ warningGeometry, disabled, mobile, reduced, fallback, afterReload, afterRelogin }, null, 2));
     console.log("mascot-runtime-browser: PASS");
   } finally {
     await browser.close();
