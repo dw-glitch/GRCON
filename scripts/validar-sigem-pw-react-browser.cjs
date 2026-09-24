@@ -1192,7 +1192,12 @@ async function waitEvolutionReady(page) {
     for (const [selector, key, value] of debounceCases) {
       await resetEvolutionFilters(page);
       await page.evaluate(() => { window.__evolutionNormCalls = 0; });
-      await page.locator(selector).pressSequentially(value, { delay: 40 });
+      // Preencher prefixos exercita atualizações rápidas sem depender da
+      // persistência do foco entre eventos de teclado.
+      for (let length = 1; length <= value.length; length += 1) {
+        await page.locator(selector).fill(value.slice(0, length));
+      }
+      await page.waitForFunction(({ filterKey, wanted }) => window.GrconSigemPwEvolutionUi.state.rawFilters[filterKey] === wanted, { filterKey: key, wanted: value });
       assert.equal(await page.evaluate((filterKey) => window.GrconSigemPwEvolutionUi.state.rawFilters[filterKey], key), value);
       assert.equal(await page.evaluate((filterKey) => window.GrconSigemPwEvolutionUi.state.filters[filterKey], key), "", key + " não deve aplicar antes do debounce");
       const callsBeforeDebounce = await page.evaluate(() => window.__evolutionNormCalls);
