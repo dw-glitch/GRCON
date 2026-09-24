@@ -15,11 +15,18 @@ function isExpectedExternalError(message) {
 }
 
 async function waitForServiceWorker(page) {
-  await page.waitForFunction(() => "serviceWorker" in navigator, null, { timeout: 10000 });
-  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
-  if (!await page.evaluate(() => Boolean(navigator.serviceWorker.controller))) {
-    await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const supported = await page.evaluate(() => "serviceWorker" in navigator);
+      if (!supported) throw new Error("Service Worker indisponível no Chromium.");
+      await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+      if (await page.evaluate(() => Boolean(navigator.serviceWorker.controller))) return;
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+    } catch (error) {
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached/i.test(message)) throw error;
+      await page.waitForLoadState("domcontentloaded", { timeout: 30000 }).catch(() => {});
+    }
   }
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
 }
@@ -66,6 +73,7 @@ async function probe(page, pathname) {
     const response = await page.goto(baseUrl + "/", { waitUntil: "domcontentloaded", timeout: 30000 });
     assert.equal(response.status(), 200, "A raiz do pacote Cloudflare deve responder 200.");
 
+    await waitForServiceWorker(page);
     await page.addStyleTag({ content: [
       "html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }",
       "#grcon-cloud-auth { display: none !important; }",
@@ -73,7 +81,6 @@ async function probe(page, pathname) {
 
     await page.waitForFunction(() => Boolean(window.GRCONModuleLoader), null, { timeout: 15000 });
     await page.waitForFunction(() => Boolean(window.GrconMascot), null, { timeout: 15000 });
-    await waitForServiceWorker(page);
 
     const targets = [
       "/", "/index.html", "/sw.js", "/manifest.json", "/grcon_cloud_config.js",
