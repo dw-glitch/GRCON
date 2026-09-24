@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, "..");
 const Core = require("../core.js");
 const JSZip = require("../jszip.min.js");
 const PDFLib = require("../pdf-lib.min.js");
+const Taxonomy = require("../requests_taxonomy_core.js");
 
 function transpile(relative, globals = {}) {
   const source = fs.readFileSync(path.join(root, relative), "utf8");
@@ -41,7 +42,7 @@ function transpile(relative, globals = {}) {
 }
 
 const Ld = transpile("src/react/cover-document/services/ldDocumentService.ts", {
-  window: { TriagemCore: Core, XLSX: {} },
+  window: { TriagemCore: Core, XLSX: {}, GrconRequestsTaxonomy: Taxonomy },
 });
 
 function record(overrides = {}) {
@@ -57,9 +58,9 @@ function record(overrides = {}) {
     row: 42,
     source: "LD_003.xlsx",
     ldColumns: [
-      { header: "TAXONOMIA", value: "RHDD-PEX-SMS-EX-REF-SST-PT-0002" },
-      { header: "CODIGO TAXONOMIA", value: "NAO-USAR" },
-      { header: "TAXONOMIA INTERNA", value: "NAO-USAR-2" },
+      { header: "TAXONOMIA", value: "NAO-USAR" },
+      { header: "CODIGO TAXONOMIA", value: "NAO-USAR-2" },
+      { header: "TAXONOMIA INTERNA", value: "RHDD-PEX-SMS-EX-REF-SST-PT-0002" },
       { header: "EAP", value: "1.1.1.1" },
     ],
     ...overrides,
@@ -69,17 +70,17 @@ function record(overrides = {}) {
 const exact = Ld.toCandidate(record());
 assert.equal(exact.taxonomy, "RHDD-PEX-SMS-EX-REF-SST-PT-0002");
 const missingCanonical = Ld.toCandidate(record({
-  ldColumns: [{ header: "TAXONOMIA INTERNA", value: "NAO-USAR" }, { header: "EAP", value: "1.1.1.1" }],
+  ldColumns: [{ header: "TAXONOMIA", value: "NAO-USAR" }, { header: "EAP", value: "1.1.1.1" }],
 }));
 assert.equal(missingCanonical.taxonomy, "");
 const duplicateConflict = Ld.toCandidate(record({
-  ldColumns: [{ header: "TAXONOMIA", value: "TX-1" }, { header: "Taxonomia", value: "TX-2" }],
+  ldColumns: [{ header: "TAXONOMIA INTERNA", value: "TX-1" }, { header: "Taxonomia Interna", value: "TX-2" }],
 }));
 assert.equal(duplicateConflict.taxonomy, "");
 
 const indexed = Ld.buildLdSearchIndex([
-  record({ row: 10, ldColumns: [{ header: "TAXONOMIA", value: "TX-A" }, { header: "EAP", value: "1.1.1.1" }] }),
-  record({ row: 11, ldColumns: [{ header: "TAXONOMIA", value: "TX-B" }, { header: "EAP", value: "2.2.2.2" }] }),
+  record({ row: 10, ldColumns: [{ header: "TAXONOMIA INTERNA", value: "TX-A" }, { header: "EAP", value: "1.1.1.1" }] }),
+  record({ row: 11, ldColumns: [{ header: "TAXONOMIA INTERNA", value: "TX-B" }, { header: "EAP", value: "2.2.2.2" }] }),
 ]);
 const ambiguous = Ld.searchLdDocuments(indexed, "POP 01 - PROCEDIMENTO DE REFERÊNCIA");
 assert.equal(ambiguous.length, 2);
@@ -107,7 +108,9 @@ const baseData = {
   checker: "LEANDRO CALDEIRA",
   approver: "LUCIANA SCIARRA",
 };
-assert.equal(Validation.validateCover(exact, baseData, sourceStub, 2).some((item) => item.level === "error"), false);
+assert.equal(Validation.validateCover(exact, baseData, sourceStub, 1).some((item) => item.level === "error"), false);
+assert.ok(Validation.validateCover(exact, baseData, sourceStub, 1).some((item) => item.id === "backcover-missing" && item.level === "warning"));
+assert.ok(Validation.validateCover(exact, baseData, { ...sourceStub, originalPages: 2 }, 2).some((item) => item.id === "backcover-preserved" && item.level === "info"));
 assert.ok(Validation.validateCover(exact, { ...baseData, taxonomy: "" }, sourceStub, 2).some((item) => item.id === "taxonomy" && item.level === "error"));
 assert.ok(Validation.validateCover(exact, { ...baseData, revision: "O" }, sourceStub, 2).some((item) => item.id === "revision-rule" && item.level === "error"));
 assert.ok(Validation.validateCover(exact, { ...baseData, category: "ZZ" }, sourceStub, 2).some((item) => item.id === "category-rule" && item.level === "error"));
@@ -135,24 +138,43 @@ function fileLike(name, type, bytes) {
 }
 
 async function generatedFiles() {
+  assert.equal(Service.COVER_LAYOUT.title.fontFamily, "Arial");
+  assert.equal(Service.COVER_LAYOUT.title.maxLines, 2);
+  assert.equal(Service.COVER_LAYOUT.internalDocumentCode.fontFamily, "Arial");
+
   const sourcePdf = await PDFLib.PDFDocument.create();
-  sourcePdf.addPage([595, 842]);
+  sourcePdf.addPage([420, 610]); // capa antiga: deve sair no modo substituição
+  sourcePdf.addPage([500, 700]); // contracapa específica: deve ser preservada
   const sourcePdfBytes = await sourcePdf.save();
   const sourcePdfInfo = {
     file: fileLike("origem.pdf", "application/pdf", sourcePdfBytes),
-    kind: "pdf", originalPages: 1, pageCountSource: "exact",
+    kind: "pdf", originalPages: 2, pageCountSource: "exact",
   };
 
-  const firstPdf = await Service.generatePdf(baseData, sourcePdfInfo);
-  const secondPdf = await Service.generatePdf(baseData, sourcePdfInfo);
+  const firstPdf = await Service.generatePdf(baseData, sourcePdfInfo, "replace-first-page");
+  const secondPdf = await Service.generatePdf(baseData, sourcePdfInfo, "replace-first-page");
   assert.match(firstPdf.fileName, /REV 0\.pdf$/);
   assert.match(secondPdf.fileName, /REV 0\.pdf$/);
   const reopenedPdf = await PDFLib.PDFDocument.load(new Uint8Array(await firstPdf.blob.arrayBuffer()));
-  assert.equal(reopenedPdf.getPageCount(), 2);
+  assert.equal(reopenedPdf.getPageCount(), 2, "Substituir a capa não pode aumentar o total de páginas.");
+  assert.equal(Math.round(reopenedPdf.getPages()[1].getWidth()), 500, "A página 2/contracapa do documento deve ser preservada.");
+  assert.equal(Math.round(reopenedPdf.getPages()[1].getHeight()), 700, "A geometria da contracapa não pode ser alterada.");
+
+  const preview = await Service.createDocumentPreview(baseData, sourcePdfInfo, 2, "replace-first-page");
+  const reopenedPreview = await PDFLib.PDFDocument.load(new Uint8Array(await preview.arrayBuffer()));
+  assert.equal(reopenedPreview.getPageCount(), 2, "Preview deve usar capa + página 2 real do documento.");
+  assert.equal(Math.round(reopenedPreview.getPages()[1].getWidth()), 500);
+  assert.equal(Math.round(reopenedPreview.getPages()[1].getHeight()), 700);
+
+  const prependedPdf = await Service.generatePdf(baseData, sourcePdfInfo, "prepend");
+  const reopenedPrepended = await PDFLib.PDFDocument.load(new Uint8Array(await prependedPdf.blob.arrayBuffer()));
+  assert.equal(reopenedPrepended.getPageCount(), 3, "Adicionar antes deve preservar todas as páginas originais.");
+  assert.equal(Math.round(reopenedPrepended.getPages()[1].getWidth()), 420);
+  assert.equal(Math.round(reopenedPrepended.getPages()[2].getWidth()), 500);
+
   for (const part of ["001","002","003","004","005"]) {
     assert.equal(fetchCounts.get("assets/templates/CAPA_PAGE1_BASE.pdf.b64." + part), 1, "Template PDF deve ser reutilizado do cache em memória.");
   }
-
   const sourceZip = new JSZip();
   sourceZip.file("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>');
   sourceZip.file("word/document.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>ORIGINAL-DOCX-BODY</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>');
