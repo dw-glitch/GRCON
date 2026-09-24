@@ -1248,6 +1248,7 @@ async function waitEvolutionReady(page) {
     // Detalhe pelo mouse: conteúdo, foco, trap, scroll lock, clique interno e overlay.
     const firstEvolutionRow = page.locator("#spw-evo-table tbody tr").first();
     const firstEvolutionIdentity = await firstEvolutionRow.getAttribute("data-analysis-id");
+    const bodyOverflowBeforeEvolutionDrawer = await page.evaluate(() => document.body.style.overflow);
     await firstEvolutionRow.click();
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
     assert.equal(await page.evaluate(() => document.activeElement?.id), "spw-evo-drawer", "drawer deve assumir foco");
@@ -1267,7 +1268,7 @@ async function waitEvolutionReady(page) {
     await page.screenshot({ path: path.join(outputDir, "08-evolution-detail-1366.png"), fullPage: true });
     await page.locator("#spw-evo-overlay").click({ position: { x: 10, y: 10 } });
     await page.waitForFunction(() => !document.getElementById("spw-evo-drawer"));
-    assert.equal(await page.evaluate(() => document.body.style.overflow), "", "scroll lock deve ser restaurado");
+    assert.equal(await page.evaluate(() => document.body.style.overflow), bodyOverflowBeforeEvolutionDrawer, "scroll lock deve restaurar o valor original");
     assert.equal(await page.evaluate((identity) => document.activeElement?.getAttribute("data-analysis-id") === identity, firstEvolutionIdentity), true, "foco deve retornar à linha após overlay");
 
     // Detalhe por Enter e Space; Escape fecha e restaura foco.
