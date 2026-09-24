@@ -10,7 +10,7 @@ const dashboardAppSource = [
   fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/services/sigemPwDashboardAdapter.ts"), "utf8"),
   fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/components/SigemPwHeader.tsx"), "utf8"),
 ].join("\n");
-const evolutionAppSource = fs.readFileSync(path.join(rootDir, "sigem_pw_evolution_app.js"), "utf8");
+const evolutionAppSource = fs.readFileSync(path.join(rootDir, "src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx"), "utf8");
 const workerSource = fs.readFileSync(path.join(rootDir, "workers/sigem_pw_dashboard.worker.js"), "utf8");
 const indexSource = fs.readFileSync(path.join(rootDir, "index.html"), "utf8");
 const appUiSource = fs.readFileSync(path.join(rootDir, "app-ui.js"), "utf8");

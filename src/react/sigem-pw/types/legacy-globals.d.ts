@@ -17,6 +17,16 @@ import type {
   RevisionRow,
   RevisionUiState,
 } from "../revision/types/domain";
+import type {
+  EvolutionComparison,
+  EvolutionLdUniverse,
+  EvolutionRecord,
+  EvolutionSnapshot,
+  EvolutionSourceSnapshotMeta,
+  EvolutionSystem,
+  EvolutionTimelineDay,
+  EvolutionUiState,
+} from "../evolution/types/domain";
 
 interface PreparedConferenceImport {
   parsed: { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
@@ -51,6 +61,9 @@ interface SigemPwDashboardCoreApi {
 interface SigemPwReadinessApi { assess(state: SigemPwState, result: SigemPwResult): SigemPwReadiness; }
 interface RecordedActiveBases { sigem?: { snapshot?: { id?: string } }; pw?: { snapshot?: { id?: string } }; rollbackToken?: unknown; }
 interface SigemPwHistoryApi {
+  STORES: Readonly<{ sourceSnapshots: string; comparisonSnapshots: string; workingSets: string; snapshotChanges: string; meta: string }>;
+  openDb(): Promise<IDBDatabase>;
+  listSourceSnapshots(system: EvolutionSystem): Promise<EvolutionSourceSnapshotMeta[]>;
   clearHistory(): Promise<unknown>;
   recordActiveBases(sigem: SigemPwBase, pw: SigemPwBase, options: Record<string, unknown>): Promise<RecordedActiveBases>;
   rollbackRecordedActiveBases(recorded: RecordedActiveBases): Promise<unknown>;
@@ -58,7 +71,9 @@ interface SigemPwHistoryApi {
   contentFingerprint(system: string, records: SigemPwRecord[]): string;
 }
 interface SigemPwHistoryManagementApi {
+  PAYLOAD_PREFIX?: string;
   capturePayload(system: string, base: SigemPwBase, snapshotId: string, context: Record<string, unknown>): Promise<unknown>;
+  ensureCurrentPayloads?(): Promise<unknown>;
   state?: { open?: boolean; [key: string]: unknown };
   activate?: () => Promise<unknown> | unknown;
 }
@@ -103,6 +118,30 @@ interface SigemPwRevisionReportApi {
   buildWorkbook(rows: RevisionRow[], filters: RevisionFilters, options?: Record<string, unknown>): Promise<ArrayBuffer>;
   downloadName(filters: RevisionFilters, date?: Date): string;
 }
+interface EvolutionBase {
+  meta: Record<string, unknown>;
+  records: SigemPwRecord[];
+}
+interface SigemPwEvolutionCoreApi {
+  norm(value: unknown): string;
+  normalizeRevision(value: unknown): string;
+  buildLdUniverse(records: SigemPwRecord[], history: SigemPwRecord[], options?: { qualityRecords?: SigemPwRecord[] }): EvolutionLdUniverse;
+  buildSnapshot(system: EvolutionSystem, base: EvolutionBase, universe: EvolutionLdUniverse, options?: Record<string, unknown>): EvolutionSnapshot;
+  comparePeriod(
+    sigemPrevious: EvolutionSnapshot | null,
+    sigemCurrent: EvolutionSnapshot | null,
+    pwPrevious: EvolutionSnapshot | null,
+    pwCurrent: EvolutionSnapshot | null,
+  ): EvolutionComparison;
+  buildDailyTimeline(sigemSnapshots: EvolutionSnapshot[], pwSnapshots: EvolutionSnapshot[]): EvolutionTimelineDay[];
+}
+interface SigemPwEvolutionUiApi {
+  activate(): Promise<void>;
+  refresh(forceLd?: boolean): Promise<void>;
+  readonly state: EvolutionUiState;
+  filteredRows(): EvolutionRecord[];
+  exportFilteredRows(): Promise<number>;
+}
 interface SigemPwBootstrapApi { open(): Promise<void>; openEvolution(): Promise<unknown>; deactivate(): void; }
 interface LegacyActivationApi {
   activate?: (...args: unknown[]) => Promise<unknown> | unknown;
@@ -118,9 +157,10 @@ declare global {
     GrconSigemPwHistoryManagement?: SigemPwHistoryManagementApi;
     GrconSigemPwRevision?: SigemPwRevisionCoreApi;
     GrconSigemPwRevisionReport?: SigemPwRevisionReportApi;
+    GrconSigemPwEvolution?: SigemPwEvolutionCoreApi;
     GrconSigemPwDashboardUi?: SigemPwDashboardUiApi;
     GrconSigemPwRevisionUi?: SigemPwRevisionUiApi;
-    GrconSigemPwEvolutionUi?: LegacyActivationApi;
+    GrconSigemPwEvolutionUi?: SigemPwEvolutionUiApi;
     GrconSigemPwDashboardBootstrap?: SigemPwBootstrapApi;
     GrconSigemPwDashboardReact?: { mounted: boolean };
     GrconPostingConference?: PostingConferenceApi;
@@ -132,5 +172,12 @@ declare global {
     "grcon:mascot-operation": CustomEvent<Record<string, unknown>>;
   }
 }
-export type { SigemPwDashboardCoreApi, SigemPwRevisionCoreApi, SigemPwRevisionUiApi, WorkerModelPayload };
+export type {
+  SigemPwDashboardCoreApi,
+  SigemPwEvolutionCoreApi,
+  SigemPwEvolutionUiApi,
+  SigemPwRevisionCoreApi,
+  SigemPwRevisionUiApi,
+  WorkerModelPayload,
+};
 export {};

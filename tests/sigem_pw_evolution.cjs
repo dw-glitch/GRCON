@@ -121,21 +121,27 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
 
 (function sourceContracts(){
   const fs=require('node:fs'); const path=require('node:path'); const rootDir=path.resolve(__dirname,'..');
-  const app=fs.readFileSync(path.join(rootDir,'sigem_pw_evolution_app.js'),'utf8');
+  const app=fs.readFileSync(path.join(rootDir,'src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx'),'utf8');
+  const adapter=fs.readFileSync(path.join(rootDir,'src/react/sigem-pw/evolution/services/sigemPwEvolutionAdapter.ts'),'utf8');
+  const domain=fs.readFileSync(path.join(rootDir,'src/react/sigem-pw/evolution/types/domain.ts'),'utf8');
+  const entry=fs.readFileSync(path.join(rootDir,'src/react/sigem-pw/evolution/index.tsx'),'utf8');
   const bootstrap=fs.readFileSync(path.join(rootDir,'sigem_pw_dashboard_bootstrap.js'),'utf8');
   const scope=fs.readFileSync(path.join(rootDir,'sigem_pw_scope_fix.js'),'utf8');
   const historyApp=fs.readFileSync(path.join(rootDir,'sigem_pw_history_app.js'),'utf8');
+  assert.equal(fs.existsSync(path.join(rootDir,'sigem_pw_evolution_app.js')),false,'UI legada da evolução deve ser removida');
   assert.match(app,/Entraram no SIGEM/); assert.match(app,/Entraram no PW/); assert.match(app,/Emitidos no PW/); assert.match(app,/SIGEM novo sem PW/);
-  assert.match(app,/Cadastrados no SIGEM/); assert.match(app,/Encontrados no ProjectWise/); assert.match(app,/bookType\s*:\s*"xlsx"/);
+  assert.match(domain,/Cadastrados no SIGEM/); assert.match(domain,/Encontrados no ProjectWise/);
+  assert.match(adapter,/bookType:\s*"xlsx"/); assert.match(adapter,/importedAt:\s*sourceSnapshot\.importedAt\s*\|\|\s*text\(payload\.meta\?\.importedAt\)/, 'a data operacional editada deve prevalecer na evolução');
+  assert.match(adapter,/window\.GrconSigemPwDashboardUi\?\.state\?\.ld/, 'a evolução deve usar a LD persistida no dashboard');
   assert.match(app,/LD da Qualidade necessária/); assert.match(app,/spw-evo-filter-document-type/); assert.match(app,/spw-evo-filter-source/); assert.match(app,/data-evo-select/); assert.match(app,/spw-evo-timeline/);
-  assert.match(app,/id="spw-evo-date-start"/); assert.match(app,/id="spw-evo-date-end"/); assert.match(app,/function periodSnapshots\(system\)/);
-  assert.match(app,/importedAt: sourceSnapshot\.importedAt \|\| payload\.meta\?\.importedAt/, 'a data operacional editada deve prevalecer na evolução');
-  assert.match(app,/DashboardApp\(\).*state.*ld/s, 'a evolução deve usar a LD persistida no dashboard');
-  assert.match(bootstrap,/async function openEvolution\(\)/); assert.match(bootstrap,/sigem_pw_evolution_core\.js/); assert.match(bootstrap,/sigem_pw_evolution_app\.js/);
+  assert.match(app,/id="spw-evo-date-start"/); assert.match(app,/id="spw-evo-date-end"/); assert.match(adapter,/function periodSnapshots\(system/);
+  assert.match(entry,/GrconSigemPwEvolutionUi/); assert.match(bootstrap,/async function openEvolution\(\)/); assert.match(bootstrap,/sigem_pw_evolution_core\.js/); assert.match(bootstrap,/react-dist\/sigem-pw-evolution-app\.js/); assert.doesNotMatch(bootstrap,/ensure\("sigem_pw_evolution_app\.js"\)/);
   const openDashboard = bootstrap.slice(bootstrap.indexOf('async function openDashboard()'), bootstrap.indexOf('async function openEvolution()'));
   assert.doesNotMatch(openDashboard,/sigem_pw_evolution|GrconSigemPwEvolutionUi/, 'a evolução deve continuar sob demanda e não bloquear a abertura principal');
   assert.match(historyApp,/if \(!acervoTarget \|\| !pendingTarget\) return/, 'histórico legado não pode falhar depois que a evolução assume a seção');
   assert.match(scope,/SCOPE_VERSION = 4/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
 })();
+
+
 
 console.log('sigem_pw_evolution: OK — movimentação por registros/multiconjunto, LD, auditoria, drill-down e desempenho validados.');

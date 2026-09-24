@@ -6,7 +6,9 @@ const rootDir = path.resolve(__dirname, "..");
 const read = (name) => fs.readFileSync(path.join(rootDir, name), "utf8");
 const dashboardApp = read("src/react/sigem-pw/services/sigemPwDashboardAdapter.ts");
 const historyApp = read("sigem_pw_history_app.js");
-const evolutionApp = read("sigem_pw_evolution_app.js");
+const evolutionApp = read("src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx");
+const evolutionEntry = read("src/react/sigem-pw/evolution/index.tsx");
+const bootstrap = read("sigem_pw_dashboard_bootstrap.js");
 const management = read("sigem_pw_history_management.js");
 const historyCore = read("sigem_pw_history_core.js");
 
@@ -18,12 +20,14 @@ function functionBody(source, name, nextName) {
 }
 
 (function dailyEvolutionAndLongTermHistoryAreIndependent() {
-  assert.match(evolutionApp, /const SECTION_ID = "spw-evolution-section"/);
+  assert.match(evolutionApp, /id="spw-evolution-section"/);
+  assert.match(evolutionEntry, /containerId:\s*"grcon-sigem-pw-evolution-root"/);
   assert.match(historyApp, /const SECTION_ID = "spw-history-section"/);
   assert.match(historyApp, /data-spw-jump="spw-evolution-section">Entradas diárias/);
   assert.match(historyApp, /data-spw-jump="\$\{SECTION_ID\}">Histórico/);
-  assert.match(evolutionApp, /history\.insertAdjacentElement\("beforebegin", section\)/,
-    "evolução diária deve ser criada sem substituir a visão histórica");
+  assert.match(bootstrap, /evolutionRoot\.id = "grcon-sigem-pw-evolution-root"/);
+  assert.match(bootstrap, /revision\.insertAdjacentElement\("afterend", evolutionRoot\)/,
+    "a raiz React da evolução deve ser criada sem substituir a visão histórica");
 })();
 
 (function validatedCandidateIsRecordedBeforeActivation() {

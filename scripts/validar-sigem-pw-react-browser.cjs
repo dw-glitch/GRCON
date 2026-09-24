@@ -756,6 +756,12 @@ async function resetRevisionFilters(page) {
 
     await page.locator("#spw-evolution-open").click();
     await page.locator("#spw-evolution-section").waitFor({ state: "visible", timeout: 30000 });
+    assert.equal(await page.locator("#grcon-sigem-pw-evolution-root").count(), 1, "Evolução deve montar em uma única raiz React");
+    assert.equal(await page.locator("#spw-evolution-section").getAttribute("data-evolution-version"), "react-phase-a", "Evolução deve ser a implementação React da FASE A");
+    assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwEvolutionUi?.state && window.GrconSigemPwEvolutionUi?.refresh)), true, "facade React da Evolução deve estar disponível");
+    const evolutionResources = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name));
+    assert.ok(evolutionResources.some((url) => /react-dist\/sigem-pw-evolution-app\.js(?:\?|$)/.test(url)), "bundle React da Evolução deve ser carregado sob demanda");
+    assert.equal(evolutionResources.some((url) => /sigem_pw_evolution_app\.js(?:\?|$)/.test(url)), false, "UI legada da Evolução não pode ser carregada");
     assert.ok(await page.locator("#spw-revision-section").count() === 1);
 
     await page.setViewportSize({ width: 390, height: 844 });
