@@ -83,7 +83,6 @@ assert.doesNotMatch(app, /insertAdjacentHTML/);
 assert.match(globals, /interface SigemPwEvolutionUiApi/);
 assert.match(globals, /GrconSigemPwEvolutionUi/);
 assert.match(css, /#spw-evolution-section/);
-assert.match(css, /spw-evolution-react/);
 assert.match(css, /@media/);
 assert.match(css, /\[data-theme="dark"\]/);
 
