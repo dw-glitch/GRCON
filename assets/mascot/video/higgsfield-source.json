@@ -1,0 +1,17 @@
+{
+  "assetRevision": "20260924.1",
+  "officialElement": {
+    "name": "grcon-mascot",
+    "id": "5d684379-9c43-47db-913a-6af9d779e8b2"
+  },
+  "format": "WebM VP9 with alpha, silent",
+  "preparedAt": "2026-09-24",
+  "jobs": {
+    "idle": "2eaab221-011e-4d08-bb30-df8b8f0f4eb0",
+    "hello": "c10f3f30-cb91-4ceb-a7d9-3e443efb6108",
+    "analyzing": "c5cee622-84a8-40cf-858b-5060476d977e",
+    "warning": "5e34f23c-8e8e-4485-8e12-285c4246957e",
+    "success": "4c337668-0cec-413a-a1d1-aeac9e5822c5",
+    "run": "c7291bc5-1af8-4e96-956b-08c75a342a42"
+  }
+}

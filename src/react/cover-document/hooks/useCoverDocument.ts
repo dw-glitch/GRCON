@@ -15,6 +15,7 @@ import {
 } from "../services/coverDocumentService";
 import { validateCover } from "../services/coverValidationService";
 import { coverDocumentBridge } from "../services/coverDocumentBridge";
+import { beginMascotOperation } from "../../shared/mascot";
 import type {
   CoverDebugState,
   CoverDocumentCandidate,
@@ -127,6 +128,7 @@ export function useCoverDocument() {
   const loadLds = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files);
     if (!list.length || busy) return;
+    const mascotOperation = beginMascotOperation({ state: "analyzing", message: "Conferindo LD…", source: "cover-document-ld" });
     setBusy(true);
     setStatus("Lendo LDs com o parser do GRCON…");
     try {
@@ -140,10 +142,12 @@ export function useCoverDocument() {
       setDebouncedQuery("");
       setStatus(`${loaded.length.toLocaleString("pt-BR")} registro(s) documental(is) disponível(is) para pesquisa.`);
       notify("LD carregada para a ferramenta de capa.", "success");
+      mascotOperation.success({ message: "LD conferida." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível ler a LD.";
       setStatus(message);
       notify(message, "error");
+      mascotOperation.warning({ message });
     } finally {
       setBusy(false);
     }
@@ -166,6 +170,7 @@ export function useCoverDocument() {
 
   const attachSource = useCallback(async (file: File | null) => {
     if (!file || busy) return;
+    const mascotOperation = beginMascotOperation({ state: "analyzing", message: "Conferindo documento…", source: "cover-document-source" });
     setBusy(true);
     setStatus("Conferindo o documento de origem…");
     try {
@@ -179,11 +184,13 @@ export function useCoverDocument() {
           ? `${file.name}: ${inspected.originalPages.toLocaleString("pt-BR")} página(s). Por padrão, a capa atual será substituída e a página 2 em diante será preservada.`
           : `${file.name}: ${inspected.originalPages.toLocaleString("pt-BR")} página(s) de origem.`)
         : `${file.name}: confirme manualmente a quantidade de páginas do DOCX.`);
+      mascotOperation.success({ message: "Documento conferido." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível abrir o documento.";
       setSource(null);
       setStatus(message);
       notify(message, "error");
+      mascotOperation.warning({ message });
     } finally {
       setBusy(false);
     }
@@ -240,6 +247,7 @@ export function useCoverDocument() {
 
   const generate = useCallback(async (kind: "pdf" | "docx") => {
     if (!source || !selected || !totalPages || hasErrors || busy) return;
+    const mascotOperation = beginMascotOperation({ state: "analyzing", message: "Gerando arquivo com capa…", source: "cover-document-generate" });
     setBusy(true);
     setStatus(kind === "pdf"
       ? (coverMode === "replace-first-page"
@@ -276,10 +284,12 @@ export function useCoverDocument() {
       }
       setStatus(`${generated.fileName} gerado com sucesso.`);
       notify("Arquivo com capa gerado com sucesso.", "success");
+      mascotOperation.success({ message: "Arquivo com capa gerado." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível gerar o arquivo.";
       setStatus(message);
       notify(message, "error");
+      mascotOperation.warning({ message });
     } finally {
       setBusy(false);
     }

@@ -4,225 +4,217 @@ const fs = require("node:fs");
 const { chromium } = require("playwright");
 
 const baseUrl = process.env.GRCON_PREVIEW_URL || "http://127.0.0.1:8765";
+const fixtureUrl = baseUrl + "/tests/fixtures/grcon-mascot-video.html";
 const outputDir = process.env.GRCON_MASCOT_OUTPUT || path.join(process.cwd(), "artifacts/mascot-video");
-const fixtureUrl = `${baseUrl}/tests/fixtures/grcon-mascot-video.html`;
+fs.mkdirSync(outputDir, { recursive: true });
 
-async function waitForMascot(page) {
-  await page.waitForSelector(".grcon-brand-mascot", { state: "visible", timeout: 15000 });
-  await page.waitForFunction(() => window.GrconMascot?.diagnostics().ready, null, { timeout: 15000 });
+function intersects(a, b) {
+  return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
 }
 
-async function visibleFallback(page) {
-  return page.evaluate(() => {
-    const host = document.querySelector(".grcon-brand-mascot");
-    const sprite = host.querySelector(".grcon-mascot-sprite");
-    const style = getComputedStyle(sprite);
-    const bounds = sprite.getBoundingClientRect();
-    return {
-      visible: style.visibility !== "hidden" && Number(style.opacity) > 0 && bounds.width > 0 && bounds.height > 0,
-      source: style.backgroundImage,
-      media: host.dataset.grconMascotMedia,
-    };
-  });
+async function waitRuntime(page) {
+  await page.waitForFunction(() => Boolean(window.GrconMascot?.diagnostics?.().ready), null, { timeout: 15000 });
+  await page.waitForSelector("#grcon-context-mascot", { state: "attached", timeout: 15000 });
 }
 
-async function unlockAuthenticatedApp(page) {
+async function unlock(page) {
   await page.evaluate(() => {
     document.documentElement.classList.remove("grcon-cloud-pending");
     window.dispatchEvent(new CustomEvent("grcon:cloud-ready"));
   });
 }
 
+async function diagnostics(page) {
+  return page.evaluate(() => window.GrconMascot.diagnostics());
+}
+
 async function main() {
-  fs.mkdirSync(outputDir, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   try {
-    const context = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
-      deviceScaleFactor: 1,
-      serviceWorkers: "block",
-    });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
     const errors = [];
     const page = await context.newPage();
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-    await page.goto(fixtureUrl, { waitUntil: "networkidle", timeout: 30000 });
-    await waitForMascot(page);
 
-    let diagnostics = await page.evaluate(() => window.GrconMascot.diagnostics());
-    assert.equal(diagnostics.engine, "official-video-v4");
-    assert.equal(diagnostics.assetRevision, "20260921.1");
-    assert.equal(diagnostics.instances, 1);
-    assert.equal(diagnostics.activeVideos, 0);
-    assert.deepEqual(diagnostics.states, ["idle"]);
-    assert.match(diagnostics.assets.wave, /grcon-mascot-wave-alpha\.webm\?v=20260921\.1$/);
-    assert.match(diagnostics.assets.processing, /grcon-mascot-processing-alpha\.webm\?v=20260921\.1$/);
-    assert.equal(await page.locator(".grcon-brand-mascot > video").count(), 1);
-    assert.equal((await visibleFallback(page)).visible, true, "PNG precisa aparecer antes de qualquer reprodução");
-    await page.screenshot({ path: path.join(outputDir, "idle-png.png") });
+    await page.goto(fixtureUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await waitRuntime(page);
+
+    let state = await diagnostics(page);
+    assert.equal(state.engine, "official-contextual-v5");
+    assert.equal(state.assetRevision, "20260924.1");
+    assert.equal(state.instances, 1);
+    assert.equal(await page.locator("#grcon-context-mascot video").count(), 1);
+    assert.deepEqual(Object.keys(state.assets).sort(), ["analyzing", "hello", "idle", "running", "success", "warning"]);
+    assert.equal(await page.locator("#grcon-context-mascot").evaluate((el) => getComputedStyle(el).pointerEvents), "none");
+    await page.screenshot({ path: path.join(outputDir, "01-idle.png") });
 
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-state", {
-      detail: { active: true, context: "control", task: "Analisar e conferir na LD" },
+      detail: { active: true, context: "control", state: "checking-document", task: "Analisar e conferir na LD" },
     })));
-    await page.waitForFunction(() => {
-      const value = window.GrconMascot.diagnostics();
-      return value.states.includes("searching-files") && value.activeVideos === 1;
-    }, null, { timeout: 15000 });
-    const processing = await page.evaluate(() => {
-      const host = document.querySelector(".grcon-brand-mascot");
-      const video = host.querySelector("video");
-      return {
-        src: video.currentSrc,
-        loop: video.loop,
-        muted: video.muted,
-        paused: video.paused,
-        readyState: video.readyState,
-        media: host.dataset.grconMascotMedia,
-        spriteOpacity: Number(getComputedStyle(host.querySelector(".grcon-mascot-sprite")).opacity),
-      };
-    });
-    assert.match(processing.src, /grcon-mascot-processing-alpha\.webm\?v=20260921\.1$/);
-    assert.equal(processing.loop, true);
-    assert.equal(processing.muted, true);
-    assert.equal(processing.paused, false);
-    assert.ok(processing.readyState >= 2);
-    assert.equal(processing.media, "processing");
-    assert.equal(processing.spriteOpacity, 0);
-    await page.waitForTimeout(2850);
-    await page.screenshot({ path: path.join(outputDir, "processing-head-scratch.png") });
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "analyzing");
+    state = await diagnostics(page);
+    assert.equal(state.activeOperations, 1);
+    assert.match(state.assets.analyzing, /grcon-mascot-analyzing-alpha\.webm\?v=20260924\.1$/);
+    await page.screenshot({ path: path.join(outputDir, "02-analyzing.png") });
 
     await page.evaluate(() => {
+      const target = document.createElement("input");
+      target.id = "fixture-revision";
+      target.value = "A";
+      Object.assign(target.style, { position: "fixed", left: "520px", top: "320px", width: "180px", height: "42px" });
+      document.body.appendChild(target);
+      window.GrconMascot.warning({ target: "#fixture-revision", message: "Confira a revisão deste documento.", duration: 1600 });
+    });
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "warning");
+    const warningGeometry = await page.evaluate(() => {
+      const mascot = document.querySelector("#grcon-context-mascot").getBoundingClientRect();
+      const target = document.querySelector("#fixture-revision").getBoundingClientRect();
+      const bubble = document.querySelector("#grcon-mascot-context-bubble");
+      return {
+        mascot: { left: mascot.left, right: mascot.right, top: mascot.top, bottom: mascot.bottom },
+        target: { left: target.left, right: target.right, top: target.top, bottom: target.bottom },
+        bubble: bubble.textContent,
+        bubbleVisible: bubble.dataset.visible,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    assert.equal(intersects(warningGeometry.mascot, warningGeometry.target), false);
+    assert.equal(warningGeometry.bubble, "Confira a revisão deste documento.");
+    assert.equal(warningGeometry.bubbleVisible, "true");
+    assert.ok(warningGeometry.overflow <= 1);
+    await page.screenshot({ path: path.join(outputDir, "03-warning-target.png") });
+
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "analyzing", null, { timeout: 5000 });
+    await page.evaluate(() => {
+      document.querySelector("#fixture-revision")?.remove();
       window.dispatchEvent(new CustomEvent("grcon:notification", { detail: { kind: "success", message: "Conferência concluída" } }));
       window.dispatchEvent(new CustomEvent("grcon:processing-state", { detail: { active: false, context: "control" } }));
     });
-    await page.waitForFunction(() => {
-      const value = window.GrconMascot.diagnostics();
-      return value.states.includes("success") && value.activeVideos === 0;
-    });
-    assert.equal((await visibleFallback(page)).visible, true, "PNG deve voltar após a operação");
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "success", null, { timeout: 5000 });
+    await page.screenshot({ path: path.join(outputDir, "04-success.png") });
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 7000 });
 
-    await page.hover(".grcon-brand-mascot");
-    await page.waitForFunction(() => {
-      const value = window.GrconMascot.diagnostics();
-      return value.states.includes("hover") && value.activeVideos === 1;
-    }, null, { timeout: 15000 });
-    const wave = await page.evaluate(() => {
-      const video = document.querySelector(".grcon-brand-mascot > video");
-      return { src: video.currentSrc, loop: video.loop, muted: video.muted, paused: video.paused };
-    });
-    assert.match(wave.src, /grcon-mascot-wave-alpha\.webm\?v=20260921\.1$/);
-    assert.equal(wave.loop, false);
-    assert.equal(wave.muted, true);
-    assert.equal(wave.paused, false);
-    await page.waitForTimeout(2200);
-    await page.screenshot({ path: path.join(outputDir, "wave.png") });
-
-    await page.evaluate(() => {
-      for (let index = 0; index < 80; index += 1) {
-        window.GrconMascot.play(index % 2 ? "checking-document" : "searching-files");
-      }
-      window.GrconMascot.play("searching-files");
-    });
-    diagnostics = await page.evaluate(() => window.GrconMascot.diagnostics());
-    assert.equal(diagnostics.instances, 1, "troca rápida não pode duplicar a instância");
-    assert.equal(await page.locator(".grcon-brand-mascot > video").count(), 1, "troca rápida não pode duplicar o vídeo");
-    assert.deepEqual(errors, [], `console precisa permanecer sem erros: ${errors.join(" | ")}`);
-
-    const fallback = await context.newPage();
-    const fallbackErrors = [];
-    await fallback.route(/grcon-mascot-processing-alpha\.webm(?:\?.*)?$/, (route) => route.abort("failed"));
-    fallback.on("pageerror", (error) => fallbackErrors.push(error.message));
-    fallback.on("console", (message) => {
-      if (message.type() !== "error") return;
-      const text = message.text();
-      if (!/Failed to load resource: net::ERR_FAILED/.test(text)) fallbackErrors.push(text);
-    });
-    await fallback.goto(`${fixtureUrl}?fallback=1`, { waitUntil: "networkidle", timeout: 30000 });
-    await waitForMascot(fallback);
-    await fallback.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-state", {
-      detail: { active: true, task: "Analisar documentos" },
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
+      detail: { active: true, state: "sigem-pw-analysis", task: "Comparando SIGEM e ProjectWise" },
     })));
-    await fallback.waitForFunction(() => {
-      const value = window.GrconMascot.diagnostics();
-      return value.records.some((record) => Object.values(record.failures).some((count) => count > 0));
-    }, null, { timeout: 15000 });
-    const fallbackResult = await visibleFallback(fallback);
-    assert.equal(fallbackResult.visible, true, "falha do WebM nunca pode ocultar o PNG oficial");
-    assert.match(fallbackResult.source, /grcon-mascot-sprite\.png/);
-    assert.deepEqual(fallbackErrors, []);
-    await fallback.screenshot({ path: path.join(outputDir, "fallback-png.png") });
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "running", null, { timeout: 5000 });
+    state = await diagnostics(page);
+    assert.match(state.assets.running, /grcon-mascot-run-alpha\.webm/);
+    await page.screenshot({ path: path.join(outputDir, "05-running.png") });
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:mascot-operation", { detail: { active: false } })));
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 5000 });
 
-    const reduced = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
-      reducedMotion: "reduce",
-      serviceWorkers: "block",
-    });
-    const reducedPage = await reduced.newPage();
-    await reducedPage.goto(`${fixtureUrl}?reduced=1`, { waitUntil: "networkidle", timeout: 30000 });
-    await waitForMascot(reducedPage);
-    await reducedPage.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-state", {
-      detail: { active: true, task: "Conferindo documentos" },
-    })));
-    const reducedResult = await reducedPage.evaluate(() => ({
-      diagnostics: window.GrconMascot.diagnostics(),
-      videoDisplay: getComputedStyle(document.querySelector(".grcon-brand-mascot > video")).display,
-      spriteOpacity: Number(getComputedStyle(document.querySelector(".grcon-brand-mascot .grcon-mascot-sprite")).opacity),
-    }));
-    assert.equal(reducedResult.diagnostics.reducedMotion, true);
-    assert.equal(reducedResult.diagnostics.activeVideos, 0);
-    assert.equal(reducedResult.videoDisplay, "none");
-    assert.equal(reducedResult.spriteOpacity, 1);
-    await reduced.close();
-
-    const greetingContext = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
-      serviceWorkers: "block",
-    });
-    const greetingPage = await greetingContext.newPage();
-    await greetingPage.addInitScript(() => {
-      window.GrconCloud = {
-        state: { session: { user: { id: "browser-test-user", email: "vinicio@example.invalid" } } },
-        getCurrentUserIdentity() {
-          return { userId: "browser-test-user", displayName: "Vinicio Melo", email: "vinicio@example.invalid" };
-        },
+    const disabled = await page.evaluate(() => {
+      window.GrconMascot.setEnabled(false);
+      window.GrconMascot.show("analyzing");
+      const el = document.querySelector("#grcon-context-mascot");
+      const video = el.querySelector("video");
+      return {
+        diagnostics: window.GrconMascot.diagnostics(),
+        media: el.dataset.media,
+        videoSrc: video.getAttribute("src"),
+        fallbackOpacity: getComputedStyle(el.querySelector(".grcon-mascot-sprite")).opacity,
       };
     });
-    await greetingPage.goto(`${fixtureUrl}?greeting=1`, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await waitForMascot(greetingPage);
-    let lockedGreeting = await greetingPage.evaluate(() => window.GrconMascot.diagnostics());
-    assert.equal(lockedGreeting.appLocked, true);
-    assert.equal(lockedGreeting.greetingPlayedThisSession, false, "aceno não deve ser consumido atrás da tela de autenticação");
-    assert.deepEqual(lockedGreeting.states, ["idle"]);
+    assert.equal(disabled.diagnostics.animationsEnabled, false);
+    assert.equal(disabled.media, "png");
+    assert.equal(disabled.videoSrc, null);
+    assert.equal(Number(disabled.fallbackOpacity), 1);
+    await page.evaluate(() => { window.GrconMascot.setEnabled(true); window.GrconMascot.idle(); });
 
-    await unlockAuthenticatedApp(greetingPage);
-    await greetingPage.waitForFunction(() => {
-      const value = window.GrconMascot.diagnostics();
-      return value.greetingPlayedThisSession && value.states.includes("welcome") && value.activeVideos === 1;
-    }, null, { timeout: 15000 });
-    const greetingText = await greetingPage.locator("#grcon-mascot-greeting-bubble").textContent();
-    assert.equal(greetingText, "Olá, Vinicio!");
-    await greetingPage.screenshot({ path: path.join(outputDir, "login-greeting-wave.png") });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => {
+      const target = document.createElement("input");
+      target.id = "fixture-mobile-target";
+      Object.assign(target.style, { position: "fixed", left: "12px", top: "420px", width: "350px", height: "44px" });
+      document.body.appendChild(target);
+      window.GrconMascot.warning({ target, message: "Campo precisa de atenção.", duration: 1500 });
+    });
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "warning");
+    const mobile = await page.evaluate(() => {
+      const rect = document.querySelector("#grcon-context-mascot").getBoundingClientRect();
+      return {
+        left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+        width: innerWidth, height: innerHeight,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    console.log("mobile-geometry", JSON.stringify(mobile));
+    assert.ok(mobile.left >= -0.5 && mobile.top >= -0.5 && mobile.right <= mobile.width + 0.5 && mobile.bottom <= mobile.height + 0.5);
+    assert.ok(mobile.overflow <= 1);
+    await page.screenshot({ path: path.join(outputDir, "06-mobile-warning.png") });
+    await page.waitForTimeout(1700);
+    await page.evaluate(() => document.querySelector("#fixture-mobile-target")?.remove());
 
-    await greetingPage.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
-    await waitForMascot(greetingPage);
-    lockedGreeting = await greetingPage.evaluate(() => window.GrconMascot.diagnostics());
-    assert.equal(lockedGreeting.appLocked, true);
-    assert.equal(lockedGreeting.greetingPlayedThisSession, true, "refresh deve preservar a marca de saudação da sessão");
-    await unlockAuthenticatedApp(greetingPage);
-    await greetingPage.waitForTimeout(350);
-    const afterRefresh = await greetingPage.evaluate(() => window.GrconMascot.diagnostics());
-    assert.equal(afterRefresh.greetingPlayedThisSession, true);
-    assert.equal(afterRefresh.activeVideos, 0, "refresh na mesma sessão não deve repetir o aceno");
-    assert.deepEqual(afterRefresh.states, ["idle"]);
+    assert.deepEqual(errors, [], "console deve permanecer limpo: " + errors.join(" | "));
+    await context.close();
 
-    await greetingPage.evaluate(() => document.documentElement.classList.add("grcon-cloud-pending"));
-    await greetingPage.waitForFunction(() => window.GrconMascot.diagnostics().greetingPlayedThisSession === false, null, { timeout: 5000 });
-    await unlockAuthenticatedApp(greetingPage);
-    await greetingPage.waitForFunction(() => window.GrconMascot.diagnostics().states.includes("welcome"), null, { timeout: 15000 });
-    assert.equal((await greetingPage.evaluate(() => window.GrconMascot.diagnostics())).greetingPlayedThisSession, true, "novo login após logout deve poder cumprimentar novamente");
-    await greetingContext.close();
+    const reducedContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", serviceWorkers: "block" });
+    const reducedPage = await reducedContext.newPage();
+    await reducedPage.goto(fixtureUrl + "?reduced=1", { waitUntil: "networkidle", timeout: 30000 });
+    await waitRuntime(reducedPage);
+    await reducedPage.evaluate(() => window.GrconMascot.show("running"));
+    const reduced = await reducedPage.evaluate(() => ({
+      diagnostics: window.GrconMascot.diagnostics(),
+      videoDisplay: getComputedStyle(document.querySelector("#grcon-context-mascot video")).display,
+      state: document.querySelector("#grcon-context-mascot").dataset.state,
+    }));
+    assert.equal(reduced.diagnostics.reducedMotion, true);
+    assert.equal(reduced.videoDisplay, "none");
+    assert.notEqual(reduced.state, "running");
+    await reducedContext.close();
 
-    console.log(JSON.stringify({ diagnostics, processing, wave, fallback: fallbackResult, reduced: reducedResult, afterRefresh }, null, 2));
+    const fallbackContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
+    const fallbackPage = await fallbackContext.newPage();
+    const fallbackErrors = [];
+    await fallbackPage.route(/grcon-mascot-analyzing-alpha\.webm(?:\?.*)?$/, (route) => route.abort("failed"));
+    fallbackPage.on("pageerror", (error) => fallbackErrors.push(error.message));
+    fallbackPage.on("console", (message) => {
+      if (message.type() !== "error") return;
+      if (!/Failed to load resource|ERR_FAILED/.test(message.text())) fallbackErrors.push(message.text());
+    });
+    await fallbackPage.goto(fixtureUrl + "?fallback=1", { waitUntil: "networkidle", timeout: 30000 });
+    await waitRuntime(fallbackPage);
+    await fallbackPage.evaluate(() => window.GrconMascot.show("analyzing"));
+    await fallbackPage.waitForFunction(() => window.GrconMascot.diagnostics().mediaFailureCount > 0, null, { timeout: 10000 });
+    const fallback = await fallbackPage.evaluate(() => ({
+      media: document.querySelector("#grcon-context-mascot").dataset.media,
+      opacity: Number(getComputedStyle(document.querySelector("#grcon-context-mascot .grcon-mascot-sprite")).opacity),
+    }));
+    assert.equal(fallback.media, "png");
+    assert.equal(fallback.opacity, 1);
+    assert.deepEqual(fallbackErrors, []);
+    await fallbackPage.screenshot({ path: path.join(outputDir, "07-fallback.png") });
+    await fallbackContext.close();
+
+    const helloContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
+    const helloPage = await helloContext.newPage();
+    await helloPage.addInitScript(() => {
+      window.GrconCloud = {
+        state: { session: { user: { id: "mascot-test-user" } } },
+        getCurrentUserIdentity() { return { userId: "mascot-test-user", displayName: "Vinicio Teste" }; },
+      };
+    });
+    await helloPage.goto(fixtureUrl + "?hello=1", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await waitRuntime(helloPage);
+    assert.equal((await diagnostics(helloPage)).greetingPlayedThisSession, false);
+    await unlock(helloPage);
+    await helloPage.waitForFunction(() => window.GrconMascot.diagnostics().state === "hello", null, { timeout: 5000 });
+    assert.equal(await helloPage.locator("#grcon-mascot-context-bubble").textContent(), "Olá, Vinicio!");
+    await helloPage.screenshot({ path: path.join(outputDir, "08-hello.png") });
+
+    await helloPage.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+    await waitRuntime(helloPage);
+    await unlock(helloPage);
+    await helloPage.waitForTimeout(450);
+    const afterReload = await diagnostics(helloPage);
+    assert.equal(afterReload.greetingPlayedThisSession, true);
+    assert.notEqual(afterReload.state, "hello", "hello não pode repetir na mesma sessão");
+    await helloContext.close();
+
+    console.log(JSON.stringify({ warningGeometry, disabled, mobile, reduced, fallback, afterReload }, null, 2));
+    console.log("mascot-runtime-browser: PASS");
   } finally {
     await browser.close();
   }
