@@ -1,11 +1,11 @@
 import type { ChangeEvent } from "react";
 import type { CoverDocumentCandidate, CoverDocumentData } from "../types/domain";
 
-const EDITABLE_FIELDS: Array<{ key: keyof CoverDocumentData; label: string; readOnly?: boolean }> = [
-  { key: "title", label: "Título" },
-  { key: "documentNumber", label: "Código do documento" },
-  { key: "taxonomy", label: "Taxonomia · campo Cód. documento interno da capa" },
-  { key: "revision", label: "Revisão · preenchida pela LD e editável" },
+const EDITABLE_FIELDS: Array<{ key: keyof CoverDocumentData; label: string; readOnly?: boolean; restoreable?: boolean }> = [
+  { key: "title", label: "Título · vindo da LD", readOnly: true },
+  { key: "documentNumber", label: "Código do documento · vindo da LD", readOnly: true },
+  { key: "taxonomy", label: "Taxonomia Interna · vinda da LD", readOnly: true },
+  { key: "revision", label: "Revisão · informada manualmente", restoreable: false },
   { key: "revisionDate", label: "Data · preenchida automaticamente hoje", readOnly: true },
   { key: "revisionDescription", label: "Descrição da revisão" },
   { key: "executor", label: "Execução" },
@@ -47,7 +47,7 @@ export function CoverDataPanel({
       </dl>
       {open ? (
         <div className="cover-edit-grid">
-          {EDITABLE_FIELDS.map(({ key, label, readOnly }) => (
+          {EDITABLE_FIELDS.map(({ key, label, readOnly, restoreable = true }) => (
             <label key={key} className={overrides.has(key) ? "is-overridden" : ""}>
               <span>{label}{overrides.has(key) ? <em>Alterado manualmente</em> : null}</span>
               <input
@@ -55,7 +55,7 @@ export function CoverDataPanel({
                 readOnly={readOnly}
                 onChange={readOnly ? undefined : (event: ChangeEvent<HTMLInputElement>) => onUpdate(key, event.currentTarget.value)}
               />
-              {overrides.has(key) && !readOnly ? (
+              {overrides.has(key) && !readOnly && restoreable ? (
                 <button type="button" className="text-button" onClick={() => onRestore(key)}>
                   Restaurar valor da LD
                 </button>
