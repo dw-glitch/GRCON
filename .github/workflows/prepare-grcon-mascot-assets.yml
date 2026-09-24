@@ -82,8 +82,8 @@ jobs:
             alpha="$(ffprobe -v error -select_streams v:0 -show_entries stream_tags=alpha_mode -of default=nw=1:nk=1 "$f" || true)"
             test "$alpha" = "1"
           done
-          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 assets/mascot/video/grcon-mascot-idle-alpha.webm)" = "720"
-          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 assets/mascot/video/grcon-mascot-idle-alpha.webm)" = "720"
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 assets/mascot/video/grcon-mascot-idle-alpha.webm)" = "960"
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 assets/mascot/video/grcon-mascot-idle-alpha.webm)" = "960"
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 assets/mascot/video/grcon-mascot-run-alpha.webm)" = "1280"
           test "$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 assets/mascot/video/grcon-mascot-run-alpha.webm)" = "720"
           du -h assets/mascot/video/grcon-mascot-*-alpha.webm
