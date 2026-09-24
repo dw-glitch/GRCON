@@ -77,7 +77,7 @@ jobs:
           node scripts/validar-historico-analises-browser.cjs
           node scripts/validar-consultas-browser.cjs
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: phase-b-historico-analises

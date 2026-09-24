@@ -102,7 +102,7 @@ jobs:
       - name: Publicar screenshots da FASE B
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: historico-egrdt-phase-b-screenshots
           path: artifacts/historico-egrdt/*.png
