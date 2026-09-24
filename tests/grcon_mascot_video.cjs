@@ -79,6 +79,8 @@ assert.match(controller, /grcon-mascot-fallback-idle/);
 assert.match(controller, /grcon-mascot-fallback-analyzing/);
 assert.match(controller, /grcon-mascot-fallback-warning/);
 assert.match(controller, /grcon-mascot-fallback-success/);
+assert.match(controller, /\[data-state=\'running\'\]\[data-media=\'png\'\]/);
+assert.doesNotMatch(controller, /contain:layout style paint/);
 assert.match(controller, /instances: overlay\?\.isConnected \? 1 : 0/);
 assert.doesNotMatch(controller, /https?:\/\//i, "runtime não pode depender de CDN");
 assert.doesNotMatch(controller, /canvas|iframe|sprite sheet|requestVideoFrameCallback/i);
