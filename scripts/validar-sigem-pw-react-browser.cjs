@@ -1257,9 +1257,10 @@ async function waitEvolutionReady(page) {
     const bodyOverflowBeforeEvolutionDrawer = await page.evaluate(() => document.body.style.overflow);
     await firstEvolutionRow.click();
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
+    await page.waitForFunction(() => document.querySelector("#spw-evo-detail-body")?.textContent?.includes("Código"));
     assert.equal(await page.evaluate(() => document.activeElement?.id), "spw-evo-drawer", "drawer deve assumir foco");
     assert.equal(await page.evaluate(() => document.body.style.overflow), "hidden", "drawer deve bloquear scroll do body");
-    const evolutionDetailText = await page.locator("#spw-evo-detail-body").innerText();
+    const evolutionDetailText = await page.locator("#spw-evo-detail-body").textContent();
     for (const label of ["Código", "Revisão", "Título", "Classe", "Tipo documental", "TAG", "EAP", "Disciplina", "Status SIGEM", "Status PW", "Data SIGEM", "Data PW", "Origem", "Movimento", "Snapshot", "Existia anteriormente?", "Emissão PW", "LD", "Prazo LD", "Chave da ocorrência", "Situação SIGEM × PW"]) {
       assert.ok(evolutionDetailText.includes(label), "campo do detalhe ausente: " + label);
     }
