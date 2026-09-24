@@ -129,18 +129,15 @@ async function probe(page, pathname) {
     });
     assert.match(results.mascot.version, /^5\./);
 
-    results.api = await page.evaluate(async () => {
-      const getResponse = await fetch("/api/egrdt-teams-notification", { method: "GET" });
-      const postResponse = await fetch("/api/egrdt-teams-notification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      return {
-        get: { status: getResponse.status, allow: getResponse.headers.get("allow") || "" },
-        post: { status: postResponse.status, body: await postResponse.json().catch(() => ({})) },
-      };
+    const apiGetResponse = await context.request.get(baseUrl + "/api/egrdt-teams-notification");
+    const apiPostResponse = await context.request.post(baseUrl + "/api/egrdt-teams-notification", {
+      headers: { "Content-Type": "application/json" },
+      data: {},
     });
+    results.api = {
+      get: { status: apiGetResponse.status(), allow: apiGetResponse.headers()["allow"] || "" },
+      post: { status: apiPostResponse.status(), body: await apiPostResponse.json().catch(() => ({})) },
+    };
     assert.equal(results.api.get.status, 405);
     assert.equal(results.api.get.allow, "POST");
     assert.equal(results.api.post.status, 401);
