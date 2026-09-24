@@ -37,7 +37,7 @@ function collectReferences(file, source) {
   const refs = new Set();
   const patterns = [
     /(?:src|href)=["']([^"'#?]+)["']/g,
-    /\bensure\(["']([^"']+)["']\)/g,
+    /GRCONModuleLoader\.ensure\(["']([^"']+)["']\)/g,
     /new\s+Worker\(\s*["']([^"']+)["']/g,
     /new\s+Worker\(\s*new\s+URL\(\s*["']([^"']+)["']/g,
     /navigator\.serviceWorker\.register\(\s*["']([^"']+)["']/g,
