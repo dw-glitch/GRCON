@@ -1,0 +1,42 @@
+name: Deploy Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grcon-cloudflare-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publicar Workers Static Assets
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+      - name: Validar GRCON
+        run: npm run verify
+      - name: Gerar pacote Cloudflare
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: npm run build:cloudflare
+      - name: Validar pacote Cloudflare
+        run: npm run verify:cloudflare
+      - name: Publicar na Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.34.0 deploy --config wrangler.jsonc

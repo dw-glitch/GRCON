@@ -8,3 +8,6 @@ artifacts/
 # Não é vendorizada nem commitada: CI e Vercel geram este arquivo antes de
 # rodar check:references/deploy — veja package.json ("build") e vercel.json.
 react-dist/
+
+# Artefato de produção gerado para Cloudflare Workers Static Assets.
+dist-cloudflare/

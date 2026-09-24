@@ -1,0 +1,43 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data: https://kvyrttccwzdhasplfxnr.supabase.co wss://kvyrttccwzdhasplfxnr.supabase.co; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'; manifest-src 'self'
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/manifest.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/grcon_cloud_config.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/grcon_mascot_controller.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/grcon_mascot_controller_v4.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/assets/mascot/video/*.webm
+  Content-Type: video/webm
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/react-dist/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/workers/*
+  Cache-Control: public, max-age=0, must-revalidate

@@ -1,0 +1,54 @@
+name: Validar Cloudflare
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/**"
+      - "scripts/build-cloudflare-package.mjs"
+      - "scripts/verify-cloudflare-package.mjs"
+      - "tests/cloudflare_deploy.cjs"
+      - "wrangler.jsonc"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/validate-cloudflare.yml"
+      - ".github/workflows/deploy-cloudflare.yml"
+      - "assets/**"
+      - "workers/**"
+      - "src/react/**"
+      - "*.js"
+      - "*.css"
+      - "*.html"
+      - "manifest.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grcon-cloudflare-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    name: Pacote Cloudflare sem credenciais
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+      - name: Validar GRCON
+        run: npm run verify
+      - name: Gerar pacote Cloudflare
+        env:
+          GRCON_DEPLOY_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          GRCON_DEPLOY_BUILD: pr-${{ github.event.pull_request.number || github.run_id }}
+        run: npm run build:cloudflare
+      - name: Validar pacote Cloudflare
+        run: npm run verify:cloudflare
+      - name: Validar configuração Wrangler sem publicar
+        run: npx --yes wrangler@4.34.0 deploy --config wrangler.jsonc --dry-run --outdir "$RUNNER_TEMP/wrangler-dry-run"
