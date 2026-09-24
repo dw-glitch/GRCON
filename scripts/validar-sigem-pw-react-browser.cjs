@@ -959,6 +959,7 @@ async function waitEvolutionReady(page) {
     await page.locator("#spw-evolution-open").click();
     await page.locator("#spw-evolution-section").waitFor({ state: "visible", timeout: 30000 });
     await waitEvolutionReady(page);
+    await page.waitForFunction(() => document.querySelector("#spw-evo-scope")?.textContent?.includes("LD da Qualidade necessária"), null, { timeout: 5000 });
     metrics.evolutionLazyLoadMs = Date.now() - evolutionLazyStart;
     assert.equal(await page.locator("#grcon-sigem-pw-evolution-root").count(), 1, "Evolução deve montar em uma única raiz React");
     assert.equal(await page.locator("#spw-evolution-section").getAttribute("data-evolution-version"), "react-phase-a", "Evolução deve permanecer React da FASE A");
