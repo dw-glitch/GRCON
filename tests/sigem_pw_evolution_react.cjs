@@ -74,7 +74,12 @@ for (const id of ["spw-evo-date-start", "spw-evo-date-end", "spw-evo-filter-quer
 assert.match(app, /data-evolution-version="react-phase-a"/);
 assert.match(app, /data-evo-select/);
 assert.match(app, /data-evo-row/);
-assert.match(app, /role="dialog"/);
+assert.match(app, /UiDrawer/);
+assert.match(app, /data-analysis-id/);
+assert.match(app, /event\.currentTarget\.focus\(\)/);
+assert.match(app, /drawerClassName="spw-evo-drawer"/);
+assert.match(app, /overlayClassName="spw-evo-overlay"/);
+assert.doesNotMatch(app, /<aside className="spw-evo-drawer"/);
 assert.match(app, /aria-live="polite"/);
 assert.doesNotMatch(app, /dangerouslySetInnerHTML/);
 assert.doesNotMatch(app, /\.innerHTML\s*=/);
