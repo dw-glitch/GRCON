@@ -98,6 +98,18 @@ async function mascotVisualTransparency(page) {
   });
 }
 
+async function waitMascotInsideViewport(page) {
+  await page.waitForFunction(() => {
+    const host = document.querySelector("#grcon-context-mascot");
+    if (!host) return false;
+    const rect = host.getBoundingClientRect();
+    return rect.left >= -0.5
+      && rect.top >= -0.5
+      && rect.right <= innerWidth + 0.5
+      && rect.bottom <= innerHeight + 0.5;
+  }, null, { timeout: 3000 });
+}
+
 async function assertMascotTransparent(page, label) {
   const visual = await mascotVisualTransparency(page);
   assert.ok(visual.transparentEdgeRatio >= 0.72, label + ": mídia precisa ter transparência real nas bordas; razão=" + visual.transparentEdgeRatio);
@@ -261,12 +273,14 @@ async function main() {
 
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.evaluate(() => window.GrconMascot.idle({ source: "qa-desktop-1920" }));
+    await waitMascotInsideViewport(page);
     const desktop1920 = await assertMascotTransparent(page, "desktop-1920x1080");
     assert.ok(desktop1920.rect.left >= 0 && desktop1920.rect.top >= 0 && desktop1920.rect.right <= 1920 && desktop1920.rect.bottom <= 1080);
     await page.screenshot({ path: path.join(outputDir, "09-desktop-1920.png") });
 
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.evaluate(() => window.GrconMascot.idle({ source: "qa-desktop-1366" }));
+    await waitMascotInsideViewport(page);
     const desktop1366 = await assertMascotTransparent(page, "desktop-1366x768");
     assert.ok(desktop1366.rect.left >= 0 && desktop1366.rect.top >= 0 && desktop1366.rect.right <= 1366 && desktop1366.rect.bottom <= 768);
     await page.screenshot({ path: path.join(outputDir, "10-desktop-1366.png") });
