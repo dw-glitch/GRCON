@@ -106,7 +106,8 @@
   }
 
   function isMobile() {
-    return (document.documentElement.clientWidth || root.innerWidth || 0) <= 700;
+    const width = root.visualViewport?.width || root.innerWidth || document.documentElement.clientWidth || 0;
+    return width <= 700;
   }
 
   function appLocked() {
@@ -273,8 +274,8 @@
 
   function viewport() {
     return {
-      width: document.documentElement.clientWidth || root.innerWidth || 1,
-      height: document.documentElement.clientHeight || root.innerHeight || 1,
+      width: root.visualViewport?.width || root.innerWidth || document.documentElement.clientWidth || 1,
+      height: root.visualViewport?.height || root.innerHeight || document.documentElement.clientHeight || 1,
     };
   }
 
@@ -389,11 +390,18 @@
   function handleViewportResize() {
     if (!overlay) return;
     overlay.style.transition = "none";
-    if (currentTarget) positionNearTarget();
-    else positionDefault();
-    root.requestAnimationFrame(() => {
-      overlay?.style.removeProperty("transition");
+    if (positionFrame) root.cancelAnimationFrame(positionFrame);
+    positionFrame = root.requestAnimationFrame(() => {
+      positionFrame = 0;
+      if (currentTarget) positionNearTarget();
+      else positionDefault();
       positionBubble();
+      root.requestAnimationFrame(() => {
+        overlay?.style.removeProperty("transition");
+        if (currentTarget) positionNearTarget();
+        else positionDefault();
+        positionBubble();
+      });
     });
   }
 
