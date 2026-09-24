@@ -6,6 +6,7 @@ on:
       - "cloudflare/**"
       - "scripts/build-cloudflare-package.mjs"
       - "scripts/verify-cloudflare-package.mjs"
+      - "scripts/validar-cloudflare-browser.cjs"
       - "tests/cloudflare_deploy.cjs"
       - "wrangler.jsonc"
       - "package.json"
