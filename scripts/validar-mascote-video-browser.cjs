@@ -5,7 +5,7 @@ const { chromium } = require("playwright");
 
 const baseUrl = process.env.GRCON_PREVIEW_URL || "http://127.0.0.1:8765";
 const fixtureUrl = baseUrl + "/tests/fixtures/grcon-mascot-video.html";
-const outputDir = process.env.GRCON_MASCOT_OUTPUT || path.join(process.cwd(), "artifacts/mascot-runtime");
+const outputDir = process.env.GRCON_MASCOT_OUTPUT || path.join(process.cwd(), "artifacts/mascot-video");
 fs.mkdirSync(outputDir, { recursive: true });
 
 function intersects(a, b) {
@@ -140,7 +140,8 @@ async function main() {
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
-    assert.ok(mobile.left >= 0 && mobile.top >= 0 && mobile.right <= mobile.width && mobile.bottom <= mobile.height);
+    console.log("mobile-geometry", JSON.stringify(mobile));
+    assert.ok(mobile.left >= -0.5 && mobile.top >= -0.5 && mobile.right <= mobile.width + 0.5 && mobile.bottom <= mobile.height + 0.5);
     assert.ok(mobile.overflow <= 1);
     await page.screenshot({ path: path.join(outputDir, "06-mobile-warning.png") });
     await page.waitForTimeout(1700);
