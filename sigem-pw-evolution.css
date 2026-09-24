@@ -109,6 +109,9 @@
   #spw-evolution-section *, .spw-evo-overlay *{scroll-behavior:auto!important;transition:none!important;animation:none!important}
 }
 /* FASE B: compact comparison controls and locally scrollable data. */
+#grcon-sigem-pw-evolution-root{width:100%;max-width:100%;min-width:0;overflow:hidden}
+#spw-evolution-section.spw-evo-v2{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+#spw-evolution-section .spw-evo-table-wrap{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 #spw-evolution-section .spw-evo-section-label{grid-column:1/-1;display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text-strong,#294258)}
 #spw-evolution-section .spw-evo-period .spw-evo-section-label{flex-basis:100%}
 #spw-evolution-section .spw-evo-period small{padding:0;min-width:180px}
