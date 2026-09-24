@@ -83,7 +83,9 @@ assert.match(controller, /\[data-state=\'running\'\]\[data-media=\'png\'\]/);
 assert.doesNotMatch(controller, /contain:layout style paint/);
 assert.match(controller, /instances: overlay\?\.isConnected \? 1 : 0/);
 assert.doesNotMatch(controller, /https?:\/\//i, "runtime não pode depender de CDN");
-assert.doesNotMatch(controller, /canvas|iframe|sprite sheet|requestVideoFrameCallback/i);
+assert.equal((controller.match(/createElement\("canvas"\)/g) || []).length, 1, "canvas deve existir somente no probe único de transparência");
+assert.doesNotMatch(controller, /iframe|sprite sheet|requestVideoFrameCallback/i);
+assert.doesNotMatch(controller, /requestAnimationFrame[\s\S]{0,240}getImageData/, "não pode haver chroma key/processamento de alpha a cada frame");
 assert.doesNotMatch(controller, /root\.gsap|gsap\./i, "GSAP não existe no projeto atual e não deve ser inventado");
 
 assert.match(header, /bridge de compatibilidade/);
