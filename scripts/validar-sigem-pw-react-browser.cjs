@@ -964,8 +964,8 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.locator("#grcon-sigem-pw-evolution-root").count(), 1, "Evolução deve montar em uma única raiz React");
     assert.equal(await page.locator("#spw-evolution-section").getAttribute("data-evolution-version"), "react-phase-a", "Evolução deve permanecer React da FASE A");
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwEvolutionUi?.state && window.GrconSigemPwEvolutionUi?.refresh)), true, "facade React da Evolução deve estar disponível");
-    assert.match(await page.locator("#spw-evo-scope").innerText(), /LD da Qualidade necessária/i);
-    assert.equal(await page.locator("#spw-evo-kpis strong").first().innerText(), "—", "sem LD os KPIs não podem exibir zero válido");
+    assert.match(await page.locator("#spw-evo-scope").textContent(), /LD da Qualidade necessária/i);
+    assert.equal(await page.locator("#spw-evo-kpis strong").first().textContent(), "—", "sem LD os KPIs não podem exibir zero válido");
     await page.screenshot({ path: path.join(outputDir, "01-evolution-no-ld-1366.png"), fullPage: true });
 
     const evolutionResources = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name));
@@ -1037,25 +1037,25 @@ async function waitEvolutionReady(page) {
       missingPw: window.GrconSigemPwEvolutionUi.state.comparison?.relation?.newSigemMissingPw.length,
     }));
     assert.deepEqual(overviewState, { sigemAdded: 250, sigemRemoved: 1, pwAdded: 3, pwRemoved: 1, pwEmitted: 3, both: 1, missingPw: 249 });
-    assert.match(await page.locator("#spw-evo-audit").innerText(), /252 documentos únicos · 254 registros\/revisões válidos · 1 duplicidade/i);
-    assert.match(await page.locator("#spw-evo-audit").innerText(), /7 documentos únicos · 7 registros\/revisões válidos · 0 duplicidade/i);
+    assert.match(await page.locator("#spw-evo-audit").textContent(), /252 documentos únicos · 254 registros\/revisões válidos · 1 duplicidade/i);
+    assert.match(await page.locator("#spw-evo-audit").textContent(), /7 documentos únicos · 7 registros\/revisões válidos · 0 duplicidade/i);
     await page.screenshot({ path: path.join(outputDir, "02-evolution-overview-1366.png"), fullPage: true });
 
     // Período: somente inicial.
     await page.locator("#spw-evo-date-start").fill("2026-09-10");
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.period.start === "2026-09-10");
-    assert.match(await page.locator("#spw-evo-period-summary").innerText(), /SIGEM: 3 base\(s\); PW: 3 base\(s\)/);
+    assert.match(await page.locator("#spw-evo-period-summary").textContent(), /SIGEM: 3 base\(s\); PW: 3 base\(s\)/);
 
     // Somente final.
     await page.locator("#spw-evo-date-start").fill("");
     await page.locator("#spw-evo-date-end").fill("2026-09-20");
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.period.end === "2026-09-20");
-    assert.match(await page.locator("#spw-evo-period-summary").innerText(), /SIGEM: 3 base\(s\); PW: 3 base\(s\)/);
+    assert.match(await page.locator("#spw-evo-period-summary").textContent(), /SIGEM: 3 base\(s\); PW: 3 base\(s\)/);
 
     // Intervalo 10/09 -> 20/09.
     await page.locator("#spw-evo-date-start").fill("2026-09-10");
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.period.start === "2026-09-10");
-    assert.match(await page.locator("#spw-evo-period-summary").innerText(), /SIGEM: 2 base\(s\); PW: 2 base\(s\)/);
+    assert.match(await page.locator("#spw-evo-period-summary").textContent(), /SIGEM: 2 base\(s\); PW: 2 base\(s\)/);
     await page.screenshot({ path: path.join(outputDir, "03-evolution-period-1366.png"), fullPage: true });
 
     // Período inválido preserva o estado anterior e apresenta feedback.
@@ -1377,7 +1377,7 @@ async function waitEvolutionReady(page) {
       });
       await window.GrconSigemPwEvolutionUi.refresh(false).catch(() => undefined);
     });
-    assert.match(await page.locator(".spw-evo-message.error").innerText(), /fixture dark error/i);
+    assert.match(await page.locator(".spw-evo-message.error").textContent(), /fixture dark error/i);
     await page.evaluate(async () => {
       window.GrconSigemPwHistory = window.__evolutionHistoryOriginalForDark;
       await window.GrconSigemPwEvolutionUi.refresh(false);
