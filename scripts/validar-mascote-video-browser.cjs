@@ -224,6 +224,12 @@ async function main() {
     state = await diagnostics(page);
     assert.match(state.assets.running, /grcon-mascot-run-alpha\.webm/);
     await assertMascotTransparent(page, "running/sigem-pw-analysis");
+    await page.waitForFunction(() => {
+      const host = document.querySelector("#grcon-context-mascot");
+      if (!host) return false;
+      const rect = host.getBoundingClientRect();
+      return rect.right > 12 && rect.left < innerWidth - 12 && rect.bottom > 12 && rect.top < innerHeight - 12;
+    }, null, { timeout: 3000 });
     await page.screenshot({ path: path.join(outputDir, "05-running.png") });
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:mascot-operation", { detail: { active: false } })));
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 5000 });
