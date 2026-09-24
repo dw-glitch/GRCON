@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
 const { chromium } = require("playwright");
+const PDFLib = require("../pdf-lib.min.js");
 
 const baseUrl = process.env.GRCON_PREVIEW_URL || "http://127.0.0.1:8765";
 const outputDir = path.join(process.cwd(), "artifacts/cover-document-browser");
@@ -126,8 +127,10 @@ async function setLd(page, rows, fileName = "LD_TESTE_CAPA.xlsx") {
 async function setSourcePdf(page) {
   await page.evaluate(async () => {
     const documentPdf = await window.PDFLib.PDFDocument.create({ updateMetadata: false });
-    const pagePdf = documentPdf.addPage([595, 842]);
-    pagePdf.drawText("ORIGINAL QA", { x: 48, y: 780, size: 12 });
+    const oldCover = documentPdf.addPage([420, 610]);
+    oldCover.drawText("CAPA ANTIGA QA", { x: 48, y: 550, size: 12 });
+    const backCover = documentPdf.addPage([500, 700]);
+    backCover.drawText("CONTRACAPA ESPECIFICA QA", { x: 48, y: 640, size: 12 });
     const bytes = await documentPdf.save();
     const file = new File([bytes], "origem-qa.pdf", { type: "application/pdf", lastModified: 1727049600000 });
     const input = document.querySelector(".cover-dropzone input[type=file]");
@@ -178,7 +181,12 @@ async function layoutAt(page, width, height = 900) {
   const uniqueTitle = "POP 01 - PROCEDIMENTO DE REFERÊNCIA";
   const taxonomy = "RHDD-PEX-SMS-EX-REF-SST-PT-0002";
   const documentCode = "PR-5290.00-22313-91B-C1O-002";
-  const headers = ["DOCUMENTO", "REVISAO", "TITULO", "DATA EFETIVA DE EMISSAO", "DISCIPLINA", "TIPO DE DOCUMENTO", "TAXONOMIA", "EAP"];
+  const headers = ["DOCUMENTO", "REVISAO", "TITULO", "DATA EFETIVA DE EMISSAO", "DISCIPLINA", "TIPO DE DOCUMENTO", "TAXONOMIA INTERNA", "EAP"];
+  const visualCases = [
+    { code: "PR-5290.00-22313-955-C1O-101", ldRevision: "E", title: "POP CURTO", taxonomy: "TX-1", revision: "0", description: "EMISSÃO ORIGINAL" },
+    { code: "PR-5290.00-22313-955-C1O-102", ldRevision: "D", title: "PROCEDIMENTO DE INSPEÇÃO E CONTROLE DE QUALIDADE PARA EQUIPAMENTOS", taxonomy: "RHDD-PEX-SMS-EX-REF-SST-PT-0002", revision: "A", description: "REVISÃO A" },
+    { code: "PR-5290.00-22313-955-C1O-103-EXTENSA", ldRevision: "C", title: "PROCEDIMENTO EXTENSO PARA VALIDAR O LIMITE VISUAL DA CÉLULA SEM ULTRAPASSAR BORDAS OU COBRIR LINHAS DO FORMULÁRIO OFICIAL", taxonomy: "RHDD-TAXONOMIA-INTERNA-MUITO-LONGA-PARA-VALIDAR-LIMITE-0002", revision: "B", description: "REVISÃO B" },
+  ];
 
   try {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -200,6 +208,7 @@ async function layoutAt(page, width, height = 900) {
       [documentCode, "0", uniqueTitle, "22/09/2026", "SMS", "PR", taxonomy, "1.1.1.1"],
       ["PR-5290.00-22313-91B-C1O-003", "A", "TITULO AMBIGUO", "22/09/2026", "SMS", "PR", "TX-EAP-1", "1.1.1.1"],
       ["PR-5290.00-22313-91B-C1O-004", "A", "TITULO AMBIGUO", "22/09/2026", "SMS", "PR", "TX-EAP-2", "2.2.2.2"],
+      ...visualCases.map((item) => [item.code, item.ldRevision, item.title, "22/09/2026", "SMS", "PR", item.taxonomy, "3.3.3.3"]),
     ]);
 
     await page.locator("#cover-title-search").fill(uniqueTitle);
@@ -207,15 +216,14 @@ async function layoutAt(page, width, height = 900) {
     await page.locator("#cover-data-heading").waitFor({ state: "visible" });
     assert.ok((await page.locator(".cover-data-summary").innerText()).includes(taxonomy));
 
-    // Revisão vem da LD, mas permanece editável e pode ser restaurada ao valor original.
+    // A revisão é exclusivamente manual: o valor existente na LD não preenche a capa.
     await page.getByRole("button", { name: "Revisar dados da capa" }).click();
-    const revisionLabel = page.locator(".cover-edit-grid label").filter({ hasText: "Revisão · preenchida pela LD e editável" });
+    const revisionLabel = page.locator(".cover-edit-grid label").filter({ hasText: "Revisão · informada manualmente" });
     const revisionInput = revisionLabel.locator("input");
+    assert.equal(await revisionInput.inputValue(), "");
+    await revisionInput.fill("0");
     assert.equal(await revisionInput.inputValue(), "0");
-    await revisionInput.fill("A");
-    assert.equal(await revisionInput.inputValue(), "A");
-    await revisionLabel.getByRole("button", { name: "Restaurar valor da LD" }).click();
-    assert.equal(await revisionInput.inputValue(), "0");
+    assert.equal(await revisionLabel.getByRole("button", { name: "Restaurar valor da LD" }).count(), 0);
     const today = await page.evaluate(() => {
       const now = new Date();
       const pad = (value) => String(value).padStart(2, "0");
@@ -226,9 +234,13 @@ async function layoutAt(page, width, height = 900) {
     assert.equal(await dateInput.getAttribute("readonly"), "");
 
     await setSourcePdf(page);
+    assert.equal(await page.locator('input[name="cover-placement"][value="replace-first-page"]').isChecked(), true);
+    assert.equal(await page.evaluate(() => window.GrconCoverDocumentUi._debug.state.coverMode), "replace-first-page");
+    const backcoverNote = await page.locator('[data-cover-backcover-state="preserved"]').innerText();
+    assert.match(backcoverNote, /Contracapa detectada: a página 2 deste PDF será preservada exatamente como está/);
     const diagnostics = await page.evaluate(() => ({
       debug: window.GrconCoverDocumentUi?._debug?.state || null,
-      validations: Array.from(document.querySelectorAll(".cover-validations li")).map((node) => node.textContent?.trim() || ""),
+      validations: Array.from(document.querySelectorAll(".cover-validation")).map((node) => node.textContent?.trim() || ""),
       status: document.querySelector(".cover-status")?.textContent?.trim() || "",
     }));
     console.log("cover_pre_preview", JSON.stringify(diagnostics));
@@ -237,10 +249,10 @@ async function layoutAt(page, width, height = 900) {
       const iframe = document.querySelector(".cover-preview-frame iframe");
       const status = document.querySelector(".cover-status")?.textContent || "";
       return Boolean(iframe && iframe.getAttribute("src")?.startsWith("blob:"))
-        || status.includes("Não foi possível gerar a prévia da capa:");
+        || status.includes("Não foi possível gerar a prévia do documento:");
     }, null, { timeout: 20000 });
     const previewFailure = await page.locator(".cover-status").innerText();
-    assert.ok(!previewFailure.includes("Não foi possível gerar a prévia da capa:"), previewFailure);
+    assert.ok(!previewFailure.includes("Não foi possível gerar a prévia do documento:"), previewFailure);
     const iframeSrc = await page.locator(".cover-preview-frame iframe").getAttribute("src");
     assert.ok(iframeSrc?.startsWith("blob:"), "A prévia PDF não recebeu URL blob.");
 
@@ -249,13 +261,51 @@ async function layoutAt(page, width, height = 900) {
     const download = await downloadPromise;
     assert.match(download.suggestedFilename(), /PR-5290\.00-22313-91B-C1O-002/);
     assert.match(download.suggestedFilename(), /REV 0\.pdf$/);
+    const replacedPdfPath = path.join(outputDir, "resultado-cover-substituicao.pdf");
+    await download.saveAs(replacedPdfPath);
+    const replacedPdf = await PDFLib.PDFDocument.load(fs.readFileSync(replacedPdfPath));
+    assert.equal(replacedPdf.getPageCount(), 2, "Substituir capa deve manter o total original.");
+    assert.equal(Math.round(replacedPdf.getPages()[1].getWidth()), 500, "Contracapa específica deve permanecer como página 2.");
+    assert.equal(Math.round(replacedPdf.getPages()[1].getHeight()), 700, "Contracapa específica não pode ser redimensionada.");
+    const history = await page.evaluate(() => JSON.parse(localStorage.getItem("grcon_cover_document_history_v1") || "[]"));
+    assert.equal(history[0]?.coverMode, "replace-first-page");
+    assert.equal(history[0]?.revision, "0");
 
     await screenshot(page, "01-cover-1366.png");
 
-    const longTitle = "POP 01 - PROCEDIMENTO DE REFERÊNCIA COM TÍTULO EXTENSO PARA VALIDAR QUEBRA DE TEXTO E LIMITES VISUAIS SEM ULTRAPASSAR AS BORDAS DA CAPA OFICIAL";
-    await page.locator(".cover-edit-grid label").filter({ hasText: "Título" }).locator("input").fill(longTitle);
-    await page.waitForTimeout(450);
+    // O modo alternativo é explícito e só deve ser usado quando o arquivo ainda não tem capa.
+    await page.locator('input[name="cover-placement"][value="prepend"]').check();
+    await page.waitForFunction(() => window.GrconCoverDocumentUi._debug.state.coverMode === "prepend");
+    const prependPromise = page.waitForEvent("download", { timeout: 20000 });
+    await page.getByRole("button", { name: "Gerar PDF" }).click();
+    const prependDownload = await prependPromise;
+    const prependedPdfPath = path.join(outputDir, "resultado-cover-adicionar-antes.pdf");
+    await prependDownload.saveAs(prependedPdfPath);
+    const prependedPdf = await PDFLib.PDFDocument.load(fs.readFileSync(prependedPdfPath));
+    assert.equal(prependedPdf.getPageCount(), 3);
+    assert.equal(Math.round(prependedPdf.getPages()[1].getWidth()), 420);
+    assert.equal(Math.round(prependedPdf.getPages()[2].getWidth()), 500);
+    await page.locator('input[name="cover-placement"][value="replace-first-page"]').check();
+    await page.waitForFunction(() => window.GrconCoverDocumentUi._debug.state.coverMode === "replace-first-page");
 
+    const revisionDescriptionInput = page.locator(".cover-edit-grid label").filter({ hasText: "Descrição da revisão" }).locator("input");
+    for (const [index, item] of visualCases.entries()) {
+      await page.locator("#cover-title-search").fill(item.title);
+      await page.waitForFunction((code) => window.GrconCoverDocumentUi?._debug?.state?.selectedDocument === code, item.code, { timeout: 10000 });
+      assert.ok((await page.locator(".cover-data-summary").innerText()).includes(item.taxonomy));
+      assert.equal(await revisionInput.inputValue(), "", "A revisão da LD não pode preencher a capa ao trocar de documento.");
+      await revisionInput.fill(item.revision);
+      await revisionDescriptionInput.fill(item.description);
+      await page.waitForTimeout(350);
+      await page.waitForFunction(() => Boolean(document.querySelector(".cover-preview-frame iframe")));
+      const visualDownloadPromise = page.waitForEvent("download", { timeout: 20000 });
+      await page.getByRole("button", { name: "Gerar PDF" }).click();
+      const visualDownload = await visualDownloadPromise;
+      await visualDownload.saveAs(path.join(outputDir, `cover-visual-case-${index + 1}.pdf`));
+      await screenshot(page, `cover-visual-case-${index + 1}.png`);
+    }
+    // Mantém o caso mais exigente selecionado para validar também a responsividade da interface.
+    assert.equal(await page.evaluate(() => window.GrconCoverDocumentUi._debug.state.selectedDocument), visualCases[visualCases.length - 1].code);
     const layout = {};
     for (const width of [1366, 1024, 768, 390]) {
       layout[String(width)] = await layoutAt(page, width, width === 390 ? 844 : 900);
@@ -310,6 +360,11 @@ async function layoutAt(page, width, height = 900) {
       ambiguity: true,
       darkMode: true,
       pdfDownload: true,
+      replaceFirstPage: true,
+      backCoverPreserved: true,
+      prependMode: true,
+      manualRevision: true,
+      visualCases: 3,
       offlineWarmCache: true,
     };
     fs.writeFileSync(path.join(outputDir, "metrics.json"), JSON.stringify(metrics, null, 2));
