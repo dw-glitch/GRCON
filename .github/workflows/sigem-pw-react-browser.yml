@@ -27,6 +27,7 @@ on:
       - "scripts/validar-sigem-pw-react-browser.cjs"
       - "docs/react-phase-a-sigem-pw-parity.md"
       - "docs/react-phase-a-sigem-pw-revision-parity.md"
+      - "docs/react-phase-a-sigem-pw-evolution-parity.md"
       - "docs/phase-b-sigem-pw-parity.md"
       - "docs/phase-b-sigem-pw-revision-parity.md"
       - ".github/workflows/sigem-pw-react-browser.yml"
