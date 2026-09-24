@@ -111,6 +111,53 @@ async function openConsultas(page) {
   });
   await page.locator("#requests-area-consulta-react").waitFor({ state:"visible", timeout:30000 });
 }
+async function inspectRealMascotTransparency(page) {
+  await page.evaluate(function () {
+    if (window.GrconMascot && typeof window.GrconMascot.idle === "function") window.GrconMascot.idle({ source:"consultas-real-ui-qa" });
+  });
+  await page.waitForFunction(function () {
+    const d = window.GrconMascot && window.GrconMascot.diagnostics && window.GrconMascot.diagnostics();
+    return Boolean(d && (d.media === "video" || d.mediaFallback || d.reducedMotion || !d.animationsEnabled));
+  }, null, { timeout:8000 });
+  return page.evaluate(async function () {
+    const host=document.querySelector("#grcon-context-mascot");
+    const stage=host&&host.querySelector(".grcon-mascot-stage");
+    const video=host&&host.querySelector("video");
+    const sprite=host&&host.querySelector(".grcon-mascot-sprite");
+    if(!host||!stage||!video||!sprite) throw new Error("Mascote real não foi renderizado na interface");
+    const canvas=document.createElement("canvas"); canvas.width=48; canvas.height=48;
+    const ctx=canvas.getContext("2d",{alpha:true,willReadFrequently:true});
+    if(!ctx) throw new Error("Canvas 2D indisponível");
+    ctx.clearRect(0,0,48,48);
+    const media=host.dataset.media||"png";
+    if(media==="video"&&video.readyState>=2){
+      ctx.drawImage(video,0,0,48,48);
+    }else{
+      const bg=getComputedStyle(sprite).backgroundImage;
+      const match=bg.match(/^url\(["']?(.*?)["']?\)$/);
+      if(!match) throw new Error("Sprite transparente não encontrado");
+      const img=new Image(); img.src=match[1];
+      if(typeof img.decode==="function") await img.decode(); else await new Promise(function(resolve,reject){img.onload=resolve;img.onerror=reject;});
+      const x=Number.parseFloat(host.style.getPropertyValue("--mx")||getComputedStyle(host).getPropertyValue("--mx"))||0;
+      const y=Number.parseFloat(host.style.getPropertyValue("--my")||getComputedStyle(host).getPropertyValue("--my"))||0;
+      ctx.drawImage(img,x*(img.naturalWidth/4),y*(img.naturalHeight/4),img.naturalWidth/4,img.naturalHeight/4,0,0,48,48);
+    }
+    const pixels=ctx.getImageData(0,0,48,48).data; let transparent=0,total=0; const edge=9;
+    for(let y=0;y<48;y+=1)for(let x=0;x<48;x+=1){const corner=(x<edge||x>=48-edge)&&(y<edge||y>=48-edge);if(!corner)continue;total+=1;if(pixels[((y*48+x)*4)+3]<=24)transparent+=1;}
+    const hs=getComputedStyle(host),ss=getComputedStyle(stage);
+    return {
+      media:media,
+      fallback:host.dataset.mediaFallback||"",
+      transparentEdgeRatio:total?transparent/total:0,
+      hostBackground:hs.backgroundColor,
+      stageBackground:ss.backgroundColor,
+      border:[hs.borderTopWidth,hs.borderRightWidth,hs.borderBottomWidth,hs.borderLeftWidth],
+      shadow:hs.boxShadow,
+      overflow:hs.overflow,
+    };
+  });
+}
+
 async function uploadLds(page, files) {
   await page.locator('.requests-drop input[type="file"]').setInputFiles(files);
   await page.waitForFunction(function () { return document.querySelectorAll(".requests-ld-loading").length === 0; }, null, { timeout:15000 });
@@ -158,7 +205,15 @@ async function clearLds(page) {
     const P="C1O_RNEST_U32_3.1.1.1_INS_RIR_"; const docs=[P+"SPE-AST-320019",P+"SPE-AST-320020",P+"nt-SPE-AST-32O021",P+"nt-SPE-AST-999999"]; for(let i=docs.length;i<500;i+=1)docs.push(P+"nt-ZZ-"+String(i).padStart(6,"0"));
     await page.locator("#requests-paste").fill(docs.join("\n")); await page.getByRole("button",{name:"Adicionar à lista"}).click(); await page.waitForFunction(function(){return document.querySelector(".requests-selection-note")&&document.querySelector(".requests-selection-note").textContent.includes("500 de 500");});
     await page.getByRole("button",{name:"Consultar documentos",exact:true}).click(); await page.waitForFunction(function(){return document.querySelector(".requests-progress")&&document.querySelector(".requests-progress").hidden&&document.querySelector(".requests-summary");},{},{timeout:20000});
-    assert.equal(await page.locator(".requests-kpi").first().locator("strong").innerText(),"500"); assert.match(await page.locator(".requests-pagination").innerText(),/Página 1 de 5/); await page.screenshot({path:path.join(outputDir,"03-resultados-1366.png"),fullPage:true});
+    assert.equal(await page.locator(".requests-kpi").first().locator("strong").innerText(),"500"); assert.match(await page.locator(".requests-pagination").innerText(),/Página 1 de 5/);
+    const mascotLight=await inspectRealMascotTransparency(page);
+    assert.ok(mascotLight.transparentEdgeRatio>=0.72,"interface real: o mascote precisa estar realmente transparente nas bordas");
+    assert.equal(mascotLight.hostBackground,"rgba(0, 0, 0, 0)");
+    assert.equal(mascotLight.stageBackground,"rgba(0, 0, 0, 0)");
+    assert.deepEqual(mascotLight.border,["0px","0px","0px","0px"]);
+    assert.equal(mascotLight.shadow,"none");
+    assert.equal(mascotLight.overflow,"visible");
+    await page.screenshot({path:path.join(outputDir,"03-resultados-1366.png"),fullPage:true});
 
     for (const label of ["Localizados","A validar","Não localizados","Total"]) { const k=page.getByRole("button",{name:new RegExp("^"+label+"\\s+\\d+$")}); await k.click(); assert.equal(await k.getAttribute("aria-pressed"),"true"); }
     await page.getByRole("button",{name:/^Localizados\s+\d+$/}).click(); await page.locator(".requests-search input").fill("SPE-AST-320020"); await page.locator(".requests-filterbar select").nth(0).selectOption("sim"); await page.locator(".requests-filterbar select").nth(1).selectOption("documento"); await page.waitForTimeout(100); assert.match(await page.locator(".requests-filter-count").innerText(),/Exibindo 1 de 500/); await page.getByRole("button",{name:"Limpar filtros"}).click(); await page.getByRole("button",{name:/^Total\s+\d+$/}).click();
@@ -177,13 +232,18 @@ async function clearLds(page) {
 
     await page.setViewportSize({width:390,height:844}); await page.screenshot({path:path.join(outputDir,"05-mobile-390.png"),fullPage:true}); const mobile=await page.evaluate(function(){const r=document.documentElement,bs=[...document.querySelectorAll(".requests-commandbar button:not([disabled]),.requests-commandbar summary")].map(function(x){return x.getBoundingClientRect();}),ks=[...document.querySelectorAll(".requests-kpi")].map(function(x){return x.getBoundingClientRect();}); return {page:r.scrollWidth,viewport:r.clientWidth,buttons:bs.every(function(x){return x.left>=-1&&x.right<=innerWidth+1;}),rows:new Set(ks.map(function(x){return Math.round(x.top);})).size};}); assert.ok(mobile.page<=mobile.viewport+1); assert.equal(mobile.buttons,true); assert.ok(mobile.rows>=2);
     await opener.click(); const dm=await page.evaluate(function(){const d=document.querySelector(".requests-detail-drawer"),b=d.querySelector(".requests-detail-body");return {width:d.getBoundingClientRect().width,viewport:innerWidth,scroll:b.scrollHeight>=b.clientHeight};}); assert.ok(dm.width<=dm.viewport); assert.equal(dm.scroll,true); await page.locator(".requests-detail-overlay").click({position:{x:5,y:5}});
-    await page.evaluate(function(){document.documentElement.dataset.theme="dark";}); await page.screenshot({path:path.join(outputDir,"06-dark-mode-390.png"),fullPage:true}); await page.setViewportSize({width:1366,height:900}); await page.screenshot({path:path.join(outputDir,"07-dark-mode-1366.png"),fullPage:true}); await page.evaluate(function(){document.documentElement.dataset.theme="";});
+    await page.evaluate(function(){document.documentElement.dataset.theme="dark";});
+    const mascotDarkMobile=await inspectRealMascotTransparency(page); assert.ok(mascotDarkMobile.transparentEdgeRatio>=0.72,"dark mobile: sem fundo residual");
+    await page.screenshot({path:path.join(outputDir,"06-dark-mode-390.png"),fullPage:true});
+    await page.setViewportSize({width:1366,height:900});
+    const mascotDarkDesktop=await inspectRealMascotTransparency(page); assert.ok(mascotDarkDesktop.transparentEdgeRatio>=0.72,"dark desktop: sem fundo residual");
+    await page.screenshot({path:path.join(outputDir,"07-dark-mode-1366.png"),fullPage:true}); await page.evaluate(function(){document.documentElement.dataset.theme="";});
 
     for(let i=0;i<3;i+=1){await clickVisibleView(page, "control"); await clickVisibleView(page, "requests"); await page.locator("#requests-area-consulta-react").waitFor({state:"visible"}); assert.equal(await page.locator("#requests-area-consulta-react").count(),1); assert.equal(await page.locator(".requests-detail-drawer").count(),0); assert.equal(await page.locator(".requests-more-actions[open]").count(),0);}
     await page.evaluate(async function(){await navigator.serviceWorker.ready;}); await page.reload({waitUntil:"networkidle"}); await page.addStyleTag({content:'html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; } #grcon-cloud-auth { display: none !important; }'}); await page.waitForFunction(function(){return Boolean(navigator.serviceWorker.controller);},null,{timeout:10000}); const caches=await page.evaluate(function(){return window.caches.keys();}); assert.ok(caches.some(function(k){return k.includes("phase-b-consultas-ui1-hardening1");})); await clickVisibleView(page, "requests"); await page.locator("#requests-area-consulta-react").waitFor();
     ["/requests.css","/react-ui.css","/requests-phase-b.css","/react-dist/consultas-app.js"].forEach(function(p){const r=responses.get(p);assert.equal(r&&r.status,200,p);});
     const relevant=errors.filter(function(x){return /ReferenceError|TypeError|Unhandled|React|duplicate key|Content Security Policy|CSP|service worker/i.test(x);}); assert.deepEqual(relevant,[]);
-    fs.writeFileSync(path.join(outputDir,"metrics.json"),JSON.stringify({head:head,widths:widths,mobile:mobile,drawerMobile:dm,caches:caches,errors:errors},null,2));
+    fs.writeFileSync(path.join(outputDir,"metrics.json"),JSON.stringify({head:head,widths:widths,mobile:mobile,drawerMobile:dm,mascotLight:mascotLight,mascotDarkMobile:mascotDarkMobile,mascotDarkDesktop:mascotDarkDesktop,caches:caches,errors:errors},null,2));
     console.log(JSON.stringify({passed:true,widths:widths,mobile:mobile,caches:caches,errors:errors},null,2));
   } finally { await browser.close(); }
 })().catch(function(e){console.error(e);process.exitCode=1;});
