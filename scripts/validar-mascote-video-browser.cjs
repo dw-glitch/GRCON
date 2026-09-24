@@ -28,6 +28,88 @@ async function diagnostics(page) {
   return page.evaluate(() => window.GrconMascot.diagnostics());
 }
 
+async function mascotVisualTransparency(page) {
+  await page.waitForFunction(() => {
+    const diagnostics = window.GrconMascot?.diagnostics?.();
+    return Boolean(diagnostics && (diagnostics.media === "video" || diagnostics.mediaFallback || diagnostics.reducedMotion || !diagnostics.animationsEnabled));
+  }, null, { timeout: 8000 });
+  return page.evaluate(async () => {
+    const host = document.querySelector("#grcon-context-mascot");
+    const stage = host?.querySelector(".grcon-mascot-stage");
+    const video = host?.querySelector("video");
+    const sprite = host?.querySelector(".grcon-mascot-sprite");
+    if (!host || !stage || !video || !sprite) throw new Error("estrutura do mascote ausente");
+
+    const hostStyle = getComputedStyle(host);
+    const stageStyle = getComputedStyle(stage);
+    const before = getComputedStyle(host, "::before");
+    const after = getComputedStyle(host, "::after");
+    const canvas = document.createElement("canvas");
+    canvas.width = 48;
+    canvas.height = 48;
+    const context = canvas.getContext("2d", { alpha: true, willReadFrequently: true });
+    if (!context) throw new Error("canvas 2D indisponível");
+    context.clearRect(0, 0, canvas.width, canvas.height);
+
+    const media = host.dataset.media || "png";
+    if (media === "video" && video.readyState >= 2) {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } else {
+      const background = getComputedStyle(sprite).backgroundImage;
+      const match = background.match(/^url\(["']?(.*?)["']?\)$/);
+      if (!match) throw new Error("sprite sem URL de fundo");
+      const image = new Image();
+      image.src = match[1];
+      if (typeof image.decode === "function") await image.decode();
+      else await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
+      const x = Number.parseFloat(host.style.getPropertyValue("--mx") || getComputedStyle(host).getPropertyValue("--mx")) || 0;
+      const y = Number.parseFloat(host.style.getPropertyValue("--my") || getComputedStyle(host).getPropertyValue("--my")) || 0;
+      const frameWidth = image.naturalWidth / 4;
+      const frameHeight = image.naturalHeight / 4;
+      context.drawImage(image, x * frameWidth, y * frameHeight, frameWidth, frameHeight, 0, 0, canvas.width, canvas.height);
+    }
+
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const edge = 9;
+    let transparent = 0;
+    let total = 0;
+    for (let y = 0; y < canvas.height; y += 1) {
+      for (let x = 0; x < canvas.width; x += 1) {
+        const corner = (x < edge || x >= canvas.width - edge) && (y < edge || y >= canvas.height - edge);
+        if (!corner) continue;
+        total += 1;
+        if (pixels[((y * canvas.width + x) * 4) + 3] <= 24) transparent += 1;
+      }
+    }
+    return {
+      media,
+      fallback: host.dataset.mediaFallback || "",
+      transparentEdgeRatio: total ? transparent / total : 0,
+      hostBackground: hostStyle.backgroundColor,
+      hostBorder: [hostStyle.borderTopWidth, hostStyle.borderRightWidth, hostStyle.borderBottomWidth, hostStyle.borderLeftWidth],
+      hostShadow: hostStyle.boxShadow,
+      hostOverflow: hostStyle.overflow,
+      stageBackground: stageStyle.backgroundColor,
+      beforeContent: before.content,
+      afterContent: after.content,
+      rect: host.getBoundingClientRect().toJSON(),
+    };
+  });
+}
+
+async function assertMascotTransparent(page, label) {
+  const visual = await mascotVisualTransparency(page);
+  assert.ok(visual.transparentEdgeRatio >= 0.72, label + ": mídia precisa ter transparência real nas bordas; razão=" + visual.transparentEdgeRatio);
+  assert.equal(visual.hostBackground, "rgba(0, 0, 0, 0)", label + ": wrapper deve ser transparente");
+  assert.deepEqual(visual.hostBorder, ["0px", "0px", "0px", "0px"], label + ": wrapper não pode ter borda");
+  assert.equal(visual.hostShadow, "none", label + ": wrapper não pode ter sombra/card");
+  assert.equal(visual.hostOverflow, "visible", label + ": wrapper não pode cortar o mascote");
+  assert.equal(visual.stageBackground, "rgba(0, 0, 0, 0)", label + ": stage deve ser transparente");
+  assert.ok(visual.beforeContent === "none" || visual.beforeContent === "normal", label + ": ::before não pode criar caixa");
+  assert.ok(visual.afterContent === "none" || visual.afterContent === "normal", label + ": ::after não pode criar caixa");
+  return visual;
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -47,6 +129,8 @@ async function main() {
     assert.equal(await page.locator("#grcon-context-mascot video").count(), 1);
     assert.deepEqual(Object.keys(state.assets).sort(), ["analyzing", "hello", "idle", "running", "success", "warning"]);
     assert.equal(await page.locator("#grcon-context-mascot").evaluate((el) => getComputedStyle(el).pointerEvents), "none");
+    await page.evaluate(() => window.GrconMascot.idle({ source: "qa-idle-transparent" }));
+    await assertMascotTransparent(page, "idle");
     await page.screenshot({ path: path.join(outputDir, "01-idle.png") });
 
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-pulse", {
@@ -61,7 +145,8 @@ async function main() {
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "analyzing");
     state = await diagnostics(page);
     assert.equal(state.activeOperations, 1);
-    assert.match(state.assets.analyzing, /grcon-mascot-analyzing-alpha\.webm\?v=20260924\.1$/);
+    assert.match(state.assets.analyzing, /grcon-mascot-analyzing-alpha\.webm\?v=20260924\.2$/);
+    await assertMascotTransparent(page, "analyzing/checking-document/loading/searching-files");
     await page.screenshot({ path: path.join(outputDir, "02-analyzing.png") });
 
     await page.evaluate(() => {
@@ -89,6 +174,7 @@ async function main() {
     assert.equal(warningGeometry.bubble, "Confira a revisão deste documento.");
     assert.equal(warningGeometry.bubbleVisible, "true");
     assert.ok(warningGeometry.overflow <= 1);
+    await assertMascotTransparent(page, "warning/confused/error");
     await page.screenshot({ path: path.join(outputDir, "03-warning-target.png") });
 
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "analyzing", null, { timeout: 5000 });
@@ -98,6 +184,7 @@ async function main() {
       window.dispatchEvent(new CustomEvent("grcon:processing-state", { detail: { active: false, context: "control" } }));
     });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "success", null, { timeout: 5000 });
+    await assertMascotTransparent(page, "success");
     await page.screenshot({ path: path.join(outputDir, "04-success.png") });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 7000 });
 
@@ -121,6 +208,7 @@ async function main() {
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "running", null, { timeout: 5000 });
     state = await diagnostics(page);
     assert.match(state.assets.running, /grcon-mascot-run-alpha\.webm/);
+    await assertMascotTransparent(page, "running/sigem-pw-analysis");
     await page.screenshot({ path: path.join(outputDir, "05-running.png") });
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:mascot-operation", { detail: { active: false } })));
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 5000 });
@@ -163,9 +251,32 @@ async function main() {
     console.log("mobile-geometry", JSON.stringify(mobile));
     assert.ok(mobile.left >= -0.5 && mobile.top >= -0.5 && mobile.right <= mobile.width + 0.5 && mobile.bottom <= mobile.height + 0.5);
     assert.ok(mobile.overflow <= 1);
+    await assertMascotTransparent(page, "mobile-390x844");
     await page.screenshot({ path: path.join(outputDir, "06-mobile-warning.png") });
     await page.waitForTimeout(1700);
     await page.evaluate(() => document.querySelector("#fixture-mobile-target")?.remove());
+
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.evaluate(() => window.GrconMascot.idle({ source: "qa-desktop-1920" }));
+    const desktop1920 = await assertMascotTransparent(page, "desktop-1920x1080");
+    assert.ok(desktop1920.rect.left >= 0 && desktop1920.rect.top >= 0 && desktop1920.rect.right <= 1920 && desktop1920.rect.bottom <= 1080);
+    await page.screenshot({ path: path.join(outputDir, "09-desktop-1920.png") });
+
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.evaluate(() => window.GrconMascot.idle({ source: "qa-desktop-1366" }));
+    const desktop1366 = await assertMascotTransparent(page, "desktop-1366x768");
+    assert.ok(desktop1366.rect.left >= 0 && desktop1366.rect.top >= 0 && desktop1366.rect.right <= 1366 && desktop1366.rect.bottom <= 768);
+    await page.screenshot({ path: path.join(outputDir, "10-desktop-1366.png") });
+
+    await page.evaluate(() => {
+      document.documentElement.style.background = "#162630";
+      document.body.style.background = "#162630";
+      document.documentElement.style.backgroundImage = "none";
+      document.body.style.backgroundImage = "none";
+      window.GrconMascot.idle({ source: "qa-dark-surface" });
+    });
+    await assertMascotTransparent(page, "dark-surface");
+    await page.screenshot({ path: path.join(outputDir, "11-dark-surface.png") });
 
     await page.evaluate(() => {
       const menu = document.createElement("div");
@@ -225,6 +336,7 @@ async function main() {
     assert.equal(fallback.media, "png");
     assert.equal(fallback.opacity, 1);
     assert.deepEqual(fallbackErrors, []);
+    await assertMascotTransparent(fallbackPage, "network-fallback");
     await fallbackPage.screenshot({ path: path.join(outputDir, "07-fallback.png") });
     await fallbackContext.close();
 
@@ -242,6 +354,7 @@ async function main() {
     await unlock(helloPage);
     await helloPage.waitForFunction(() => window.GrconMascot.diagnostics().state === "hello", null, { timeout: 5000 });
     assert.equal(await helloPage.locator("#grcon-mascot-context-bubble").textContent(), "Olá, Vinicio!");
+    await assertMascotTransparent(helloPage, "hello");
     await helloPage.screenshot({ path: path.join(outputDir, "08-hello.png") });
 
     await helloPage.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
