@@ -1451,13 +1451,12 @@ async function waitEvolutionReady(page) {
 
     fs.writeFileSync(path.join(outputDir, "metrics.json"), JSON.stringify({
       ...metrics,
-      widths,
       ticksDuringSigemImport: ticksAfterSigem,
       caches,
       errors,
       badResponses,
     }, null, 2));
-    console.log(JSON.stringify({ passed: true, metrics, widths, caches, errors, badResponses }, null, 2));
+    console.log(JSON.stringify({ passed: true, metrics, caches, errors, badResponses }, null, 2));
   } finally {
     await browser.close();
   }
