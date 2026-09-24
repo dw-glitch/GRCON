@@ -185,7 +185,9 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   assert.match(sw, /"sigem_pw_history_core\.js"/);
   assert.match(sw, /"sigem_pw_history_management\.js"/);
   assert.match(sw, /"sigem_pw_evolution_core\.js"/);
-  assert.match(sw, /"sigem_pw_evolution_app\.js"/);
+  assert.match(sw, /"sigem-pw-evolution\.css"/);
+  assert.match(sw, /"react-dist\/sigem-pw-evolution-app\.js"/);
+  assert.doesNotMatch(sw, /"sigem_pw_evolution_app\.js"/);
   assert.doesNotMatch(sw, /"sigem_pw_history_app\.js"/);
   assert.doesNotMatch(sw, /"sigem_pw_history_postmerge\.js"/);
 })();
