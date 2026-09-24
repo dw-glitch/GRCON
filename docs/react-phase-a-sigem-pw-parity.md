@@ -90,7 +90,7 @@ A fachada React deve manter:
 - `sigem_pw_audit_app.js`: lê `state.pw` e snapshot atual.
 - `sigem_pw_history_postmerge.js`: lê `state.sigem` / `state.pw` para token de bases.
 - `sigem_pw_history_runtime_fix.js`: lê `state[system]` em integrações legadas.
-- `sigem_pw_evolution_app.js`: integra sob demanda via Dashboard/bootstrap.
+- `react-dist/sigem-pw-evolution-app.js`: UI React + TypeScript da Evolução, carregada sob demanda após `sigem_pw_evolution_core.js` pelo Dashboard/bootstrap.
 - `sigem_pw_history_app.js`: permanece legado e fora do bundle React nesta etapa.
 - `tests/sigem_pw_history_postmerge.cjs` e `tests/sigem_pw_performance_stability.cjs` exercitam a mutabilidade histórica do `state`.
 
