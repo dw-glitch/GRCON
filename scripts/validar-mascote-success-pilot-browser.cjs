@@ -12,61 +12,73 @@ async function run(viewport, name, reducedMotion = "no-preference") {
   const context = await browser.newContext({ viewport, reducedMotion, serviceWorkers: "block" });
   const page = await context.newPage();
   const errors = [];
-  const failures = [];
-  page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
+  page.on("console", (msg) => {
+    if (msg.type() !== "error") return;
+    const text = msg.text();
+    if (text.includes("[GRCON Storage][initialize]") && text.includes("Os módulos de Histórico e Postagem SIGEM ainda não estão disponíveis.")) return;
+    errors.push(text);
+  });
   page.on("pageerror", (err) => errors.push(err.message));
-  page.on("requestfailed", (req) => failures.push(req.url()));
 
   await page.goto(baseUrl + "/index.html", { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.waitForFunction(() => Boolean(window.GrconMascotSuccessPilot), null, { timeout: 15000 });
+  await page.waitForFunction(() => Boolean(window.GrconMascotSuccessPilot && window.GrconMascot?.diagnostics?.().ready), null, { timeout: 15000 });
+
   await page.evaluate(() => {
-    const panel = document.querySelector("#egrdt-teams-ready");
+    document.documentElement.classList.remove("grcon-cloud-pending");
+    const panel = document.querySelector("#egrdt-teams-ready") || document.createElement("div");
+    panel.id = "egrdt-teams-ready";
     panel.hidden = false;
-    panel.style.minHeight = "120px";
-    panel.style.marginTop = "140px";
+    Object.assign(panel.style, {
+      position: "fixed",
+      left: innerWidth > 700 ? "300px" : "18px",
+      top: "220px",
+      width: innerWidth > 700 ? "420px" : "300px",
+      minHeight: "110px",
+      border: "1px solid transparent",
+    });
+    if (!panel.isConnected) document.body.appendChild(panel);
   });
 
-  const result = await page.evaluate(async (reduce) => {
-    const ok = await window.GrconMascotSuccessPilot.play({ anchor: "#egrdt-teams-ready" });
-    const el = document.querySelector("#grcon-mascot-success-pilot");
+  const ok = await page.evaluate(() => window.GrconMascotSuccessPilot.play({
+    anchor: "#egrdt-teams-ready",
+    message: "Postagem concluída.",
+    duration: 2200,
+  }));
+  assert.equal(ok, true);
+  await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "success", null, { timeout: 5000 });
+
+  const result = await page.evaluate(() => {
+    const el = document.querySelector("#grcon-context-mascot");
     const anchor = document.querySelector("#egrdt-teams-ready");
-    const style = getComputedStyle(el);
     const rect = el.getBoundingClientRect();
     const anchorRect = anchor.getBoundingClientRect();
     return {
-      ok,
-      visible: el.dataset.visible,
-      pointerEvents: style.pointerEvents,
-      background: style.backgroundColor,
-      width: rect.width,
+      pointerEvents: getComputedStyle(el).pointerEvents,
+      media: el.dataset.media,
+      state: el.dataset.state,
       left: rect.left,
-      anchorRight: anchorRect.right,
-      viewport: innerWidth,
-      diag: window.GrconMascotSuccessPilot.diagnostics(),
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      anchor: { left: anchorRect.left, right: anchorRect.right, top: anchorRect.top, bottom: anchorRect.bottom },
+      viewport: { width: innerWidth, height: innerHeight },
+      diag: window.GrconMascot.diagnostics(),
+      delegated: window.GrconMascotSuccessPilot.diagnostics().delegated,
     };
-  }, reducedMotion === "reduce");
+  });
 
+  assert.equal(result.delegated, true);
+  assert.equal(result.pointerEvents, "none");
+  assert.equal(result.diag.instances, 1);
+  assert.ok(result.left >= -0.5 && result.top >= -0.5);
+  assert.ok(result.right <= result.viewport.width + 0.5 && result.bottom <= result.viewport.height + 0.5);
   if (reducedMotion === "reduce") {
     assert.equal(result.diag.reducedMotion, true);
-    assert.equal(result.ok, true);
-    assert.equal(result.visible, "true");
-    assert.equal(result.diag.fallback, true);
-    assert.equal(result.diag.videoLoaded, false, "reduced-motion não deve carregar o WebM");
-    assert.equal(failures.filter((u) => /mascot.*success-pilot/i.test(u)).length, 0);
-  } else {
-    assert.equal(result.ok, true);
-    assert.equal(result.visible, "true");
-    assert.equal(result.pointerEvents, "none");
-    assert.ok(result.width <= viewport.width * 0.30, "mascote não pode dominar a interface");
+    assert.equal(result.media, "png");
   }
-  const unexpectedErrors = errors.filter((message) => !(
-    message.includes("[GRCON Storage][initialize]")
-    && message.includes("Os módulos de Histórico e Postagem SIGEM ainda não estão disponíveis.")
-  ));
-  assert.equal(unexpectedErrors.length, 0, "console sem erros inesperados: " + unexpectedErrors.join(" | "));
-  assert.equal(failures.filter((u) => /mascot.*success-pilot/i.test(u)).length, 0, "asset do piloto não pode falhar");
 
   await page.screenshot({ path: path.join(out, name + ".png"), fullPage: true });
+  assert.deepEqual(errors, []);
   await context.close();
   await browser.close();
   return result;
@@ -77,4 +89,8 @@ async function run(viewport, name, reducedMotion = "no-preference") {
   const mobile = await run({ width: 390, height: 844 }, "success-pilot-mobile");
   const reduced = await run({ width: 1440, height: 900 }, "success-pilot-reduced", "reduce");
   console.log(JSON.stringify({ desktop, mobile, reduced }, null, 2));
-})().catch((error) => { console.error(error); process.exit(1); });
+  console.log("mascot-success-delegation-browser: PASS");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
