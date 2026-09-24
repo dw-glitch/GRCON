@@ -6,6 +6,7 @@ on:
       - "src/react/sigem-pw/**"
       - "sigem-pw-dashboard.css"
       - "sigem-pw-revision.css"
+      - "sigem-pw-evolution.css"
       - "sigem_pw_dashboard_core.js"
       - "sigem_pw_readiness_core.js"
       - "sigem_pw_scope_fix.js"
@@ -16,7 +17,6 @@ on:
       - "sigem_pw_history_core.js"
       - "sigem_pw_history_management.js"
       - "sigem_pw_evolution_core.js"
-      - "sigem_pw_evolution_app.js"
       - "sigem_pw_dashboard_ui_audit.js"
       - "posting_conference_core.js"
       - "grcon_module_loader.js"
@@ -60,8 +60,11 @@ jobs:
         run: |
           npm run build
           test -f react-dist/sigem-pw-dashboard-app.js
+          test -f react-dist/sigem-pw-evolution-app.js
           wc -c react-dist/sigem-pw-dashboard-app.js | awk '{print "bundle_sigem_pw_bytes=" $1}' | tee "$RUNNER_TEMP/sigem-pw-bundle.txt"
           gzip -c react-dist/sigem-pw-dashboard-app.js | wc -c | awk '{print "bundle_sigem_pw_gzip_bytes=" $1}' | tee -a "$RUNNER_TEMP/sigem-pw-bundle.txt"
+          wc -c react-dist/sigem-pw-evolution-app.js | awk '{print "bundle_sigem_pw_evolution_bytes=" $1}' | tee -a "$RUNNER_TEMP/sigem-pw-bundle.txt"
+          gzip -c react-dist/sigem-pw-evolution-app.js | wc -c | awk '{print "bundle_sigem_pw_evolution_gzip_bytes=" $1}' | tee -a "$RUNNER_TEMP/sigem-pw-bundle.txt"
           echo "bundle_baseline_before_revision_phase_b_approx=206.1kB gzip_approx=63.9kB" | tee -a "$RUNNER_TEMP/sigem-pw-bundle.txt"
           ! grep -Eqi 'exceljs\.min|SheetJS.*Community Edition|xlsx\.full\.min|emittedPwHistoryText' react-dist/sigem-pw-dashboard-app.js
 
@@ -69,6 +72,7 @@ jobs:
         run: |
           node tests/sigem_pw_react.cjs
           node tests/sigem_pw_revision_react.cjs
+          node tests/sigem_pw_evolution_react.cjs
           node tests/sigem_pw_dashboard.cjs
           node tests/sigem_pw_revision_counting.cjs
           node tests/sigem_pw_scope_filter.cjs
