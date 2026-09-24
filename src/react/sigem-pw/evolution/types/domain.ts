@@ -7,6 +7,7 @@ export type EvolutionListMode =
   | "missing-pw"
   | "removed-sigem"
   | "removed-pw";
+export type EvolutionExportMessageKind = "info" | "success" | "error";
 
 export interface EvolutionFilters {
   query: string;
@@ -70,6 +71,16 @@ export interface EvolutionSnapshot {
   [key: string]: unknown;
 }
 
+export interface EvolutionSourceSnapshotMeta {
+  id: string;
+  system?: EvolutionSystem;
+  importedAt?: string;
+  recordedAt?: string;
+  fileName?: string;
+  audit?: EvolutionAudit;
+  [key: string]: unknown;
+}
+
 export interface EvolutionDelta {
   added: EvolutionRecord[];
   removed: EvolutionRecord[];
@@ -129,6 +140,7 @@ export interface EvolutionMetrics {
 }
 
 export interface EvolutionUiState {
+  active: boolean;
   ready: boolean;
   busy: boolean;
   sigem: EvolutionSnapshot[];
@@ -146,6 +158,9 @@ export interface EvolutionUiState {
   page: number;
   filteredRows: EvolutionRecord[];
   detailRow: EvolutionRecord | null;
+  exporting: boolean;
+  exportMessage: string;
+  exportMessageKind: EvolutionExportMessageKind;
   error: string;
   metrics: EvolutionMetrics;
 }
