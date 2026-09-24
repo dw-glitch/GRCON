@@ -185,11 +185,21 @@
   }
 
   async function openEvolution() {
+    const module = createPlaceholder();
+    let evolutionRoot = document.getElementById("grcon-sigem-pw-evolution-root");
+    if (!evolutionRoot) {
+      evolutionRoot = document.createElement("div");
+      evolutionRoot.id = "grcon-sigem-pw-evolution-root";
+      const revision = module.querySelector("#spw-revision-section");
+      if (revision) revision.insertAdjacentElement("afterend", evolutionRoot);
+      else module.appendChild(evolutionRoot);
+    }
+
     if (!evolutionRuntime) {
       evolutionRuntime = (async () => {
         if (!root.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
         await root.GRCONModuleLoader.ensure("sigem_pw_evolution_core.js");
-        await root.GRCONModuleLoader.ensure("sigem_pw_evolution_app.js");
+        await root.GRCONModuleLoader.ensure("react-dist/sigem-pw-evolution-app.js");
         if (!root.GrconSigemPwEvolution || !root.GrconSigemPwEvolutionUi?.activate) throw new Error("A Evolução SIGEM × PW não foi inicializada corretamente.");
         await root.GrconSigemPwEvolutionUi.activate();
         return root.GrconSigemPwEvolutionUi;
