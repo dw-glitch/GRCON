@@ -402,7 +402,8 @@ async function installEvolutionFixture(page) {
 }
 
 async function resetEvolutionFilters(page) {
-  await page.locator("#spw-evolution-section").getByRole("button", { name: "Limpar filtros" }).click();
+  const clear = page.locator("#spw-evolution-section .spw-evo-clear");
+  if (await clear.count()) await clear.click();
   await page.waitForFunction(() => {
     const state = window.GrconSigemPwEvolutionUi?.state;
     return Boolean(state)
@@ -417,7 +418,7 @@ async function waitEvolutionReady(page) {
 
 (async () => {
   const fixtures = writeFixtures();
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, ...(process.env.GRCON_CHROMIUM_PATH ? { executablePath: process.env.GRCON_CHROMIUM_PATH } : {}) });
   const errors = [];
   const badResponses = [];
   const metrics = {};
@@ -1137,6 +1138,9 @@ async function waitEvolutionReady(page) {
 
     await page.locator('[data-evo-list="sigem-new"]').last().click();
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.listMode === "sigem-new");
+    await page.locator('#spw-evo-more-filters').click();
+    assert.equal(await page.locator('#spw-evo-more-filters').getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('#spw-evo-advanced-filters').isVisible(), true);
     await resetEvolutionFilters(page);
     assert.equal(await page.locator("#spw-evo-table tbody tr").count(), 100);
     await page.screenshot({ path: path.join(outputDir, "07-evolution-list-1366.png"), fullPage: true });
@@ -1164,6 +1168,7 @@ async function waitEvolutionReady(page) {
 
     await resetEvolutionFilters(page);
     await page.locator("#spw-evo-filter-revision").fill("A");
+    assert.match(await page.locator('#spw-evo-more-filters').textContent(), /ativo/);
     await page.locator("#spw-evo-filter-status").fill("Em Workflow");
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.filteredRows.length), 25, "combinação revisão + status");
     await resetEvolutionFilters(page);
@@ -1324,21 +1329,31 @@ async function waitEvolutionReady(page) {
     await page.evaluate(() => { window.GrconSigemPwEvolution = window.__evolutionEventCoreOriginal; });
 
     // Responsividade específica da Evolução, com scroll horizontal somente local à tabela.
+    await page.locator('#spw-evo-more-filters').click();
+    assert.equal(await page.locator('#spw-evo-more-filters').getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#spw-evo-advanced-filters').isVisible(), false);
     metrics.evolutionWidths = {};
     for (const width of [1440, 1366, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       const dimensions = await page.evaluate(() => {
         const table = document.querySelector("#spw-evo-table");
+        const section = document.querySelector("#spw-evolution-section");
         return {
           documentScrollWidth: document.documentElement.scrollWidth,
           documentClientWidth: document.documentElement.clientWidth,
+          evolutionSectionScrollWidth: section?.scrollWidth || 0,
+          evolutionSectionClientWidth: section?.clientWidth || 0,
+          evolutionSectionHeight: section?.getBoundingClientRect().height || 0,
           tableScrollWidth: table?.scrollWidth || 0,
           tableClientWidth: table?.clientWidth || 0,
         };
       });
       metrics.evolutionWidths[String(width)] = dimensions;
       assert.ok(dimensions.documentScrollWidth <= dimensions.documentClientWidth + 1, "overflow global da Evolução em " + width + "px");
+      assert.ok(dimensions.evolutionSectionScrollWidth <= dimensions.evolutionSectionClientWidth + 1, "overflow da seção em " + width + "px");
+      if (width === 390) assert.ok(dimensions.tableScrollWidth > dimensions.tableClientWidth, "tabela deve ter rolagem local no mobile");
     }
+    metrics.evolutionSectionHeight390After = metrics.evolutionWidths["390"].evolutionSectionHeight;
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.join(outputDir, "10-evolution-mobile-390.png"), fullPage: true });
