@@ -226,6 +226,195 @@ async function resetRevisionFilters(page) {
   await page.waitForTimeout(230);
 }
 
+
+async function installEvolutionFixture(page) {
+  return page.evaluate(async () => {
+    const history = window.GrconSigemPwHistory;
+    const management = window.GrconSigemPwHistoryManagement;
+    const dashboardUi = window.GrconSigemPwDashboardUi;
+    if (!history?.recordActiveBases || !management?.capturePayload || !dashboardUi?.state?.ld?.records?.length) {
+      throw new Error("Runtime histórico/LD indisponível para fixture da Evolução.");
+    }
+
+    await history.clearHistory();
+
+    const sigemDoc = (id) => \`C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-\${id}\`;
+    const pwDoc = (id) => \`C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-\${id}\`;
+    const s = (id, revision = "0", extra = {}) => ({
+      document: sigemDoc(id),
+      revision,
+      status: extra.status || "Postado",
+      documentType: extra.documentType || "RIR",
+      title: extra.title || \`Documento SIGEM \${id}\`,
+      discipline: extra.discipline || "INS",
+      disciplineDesc: extra.discipline || "INS",
+      tag: extra.tag || \`TAG-\${id}\`,
+      eap: extra.eap || "3.1.1.1",
+      modifiedAt: extra.modifiedAt || "2026-09-01T08:00:00.000Z",
+      sourceRow: extra.sourceRow || 1,
+    });
+    const p = (id, revision = "0", emitted = false, extra = {}) => ({
+      document: pwDoc(id),
+      revision,
+      revisionComplete: revision,
+      state: emitted ? "Liberado" : (extra.state || "Cadastrado"),
+      lastEmission: emitted ? "Sim" : "Previsto",
+      documentType: extra.documentType || "RIR",
+      title: extra.title || \`Documento PW \${id}\`,
+      discipline: extra.discipline || "INS",
+      disciplineDesc: extra.discipline || "INS",
+      tag: extra.tag || \`TAG-\${id}\`,
+      eap: extra.eap || "3.1.1.1",
+      stateChangedAt: extra.stateChangedAt || "2026-09-01T09:00:00.000Z",
+      sourceRow: extra.sourceRow || 1,
+    });
+
+    const sigem1 = [
+      s("300001", "A", { modifiedAt: "2026-09-01T08:01:00.000Z" }),
+      s("300002", "0", { modifiedAt: "2026-09-01T08:02:00.000Z" }),
+      s("300003", "0", { modifiedAt: "2026-09-01T08:03:00.000Z" }),
+    ];
+    const sigem2 = [
+      ...sigem1,
+      s("300001", "A", { status: "Em Workflow", modifiedAt: "2026-09-10T08:04:00.000Z", sourceRow: 4 }),
+    ];
+    const sigem3 = [
+      ...sigem2,
+      s("300001", "0", { modifiedAt: "2026-09-20T08:05:00.000Z", sourceRow: 5 }),
+    ];
+
+    const bulk = Array.from({ length: 250 }, (_, index) => {
+      const id = String(400000 + index).padStart(6, "0");
+      return s(id, index % 2 === 0 ? "A" : "0", {
+        documentType: index === 42 ? "REP" : "RIR",
+        status: index % 10 === 0 ? "Em Workflow" : "Postado",
+        discipline: index % 2 === 0 ? "INS" : "PIP",
+        tag: \`TAG-\${id}\`,
+        eap: index % 2 === 0 ? "3.1.1.1" : "4.2.2.2",
+        modifiedAt: \`2026-09-30T08:\${String(index % 60).padStart(2, "0")}:00.000Z\`,
+        sourceRow: 100 + index,
+      });
+    });
+    const sigem4 = [
+      ...sigem3.filter((row) => !row.document.endsWith("-300003")),
+      ...bulk,
+      { ...bulk[0] },
+    ];
+
+    const pw1 = [
+      p("300002", "0", true, { stateChangedAt: "2026-09-01T09:01:00.000Z" }),
+      p("300010", "0", false, { stateChangedAt: "2026-09-01T09:02:00.000Z" }),
+      p("300011", "0", true, { stateChangedAt: "2026-09-01T09:03:00.000Z" }),
+    ];
+    const pw2 = [
+      ...pw1,
+      p("300012", "0", false, { stateChangedAt: "2026-09-10T09:04:00.000Z" }),
+    ];
+    const pw3 = [
+      ...pw2,
+      p("300013", "0", false, { stateChangedAt: "2026-09-20T09:05:00.000Z" }),
+    ];
+    const pw4 = [
+      ...pw3.filter((row) => !row.document.endsWith("-300011") && !row.document.endsWith("-300010")),
+      p("300010", "0", true, { stateChangedAt: "2026-09-30T09:02:00.000Z" }),
+      p("400000", "A", true, { stateChangedAt: "2026-09-30T09:06:00.000Z" }),
+      p("500001", "0", false, { stateChangedAt: "2026-09-30T09:07:00.000Z" }),
+      p("500002", "0", true, { stateChangedAt: "2026-09-30T09:08:00.000Z" }),
+    ];
+
+    const sigemSets = [sigem1, sigem2, sigem3, sigem4];
+    const pwSets = [pw1, pw2, pw3, pw4];
+    const sigemMetaDates = [
+      "2026-09-01T12:00:00.000Z",
+      "2026-09-01T12:00:00.000Z",
+      "2026-09-20T12:00:00.000Z",
+      "2026-09-30T12:00:00.000Z",
+    ];
+    const pwMetaDates = [
+      "2026-09-01T13:00:00.000Z",
+      "2026-09-10T13:00:00.000Z",
+      "2026-09-20T13:00:00.000Z",
+      "2026-09-30T13:00:00.000Z",
+    ];
+    const recordedDates = [
+      "2026-09-01T14:00:00.000Z",
+      "2026-09-10T14:00:00.000Z",
+      "2026-09-20T14:00:00.000Z",
+      "2026-09-30T14:00:00.000Z",
+    ];
+    const ldRecords = dashboardUi.state.ld.records;
+    const sigemIds = [];
+    const pwIds = [];
+
+    for (let index = 0; index < 4; index += 1) {
+      const sigemBase = {
+        meta: {
+          fileName: \`SIGEM_\${String(index + 1).padStart(2, "0")}.xlsx\`,
+          importedAt: sigemMetaDates[index],
+          recordCount: sigemSets[index].length,
+          sourceRowCount: sigemSets[index].length,
+        },
+        records: sigemSets[index],
+      };
+      const pwBase = {
+        meta: {
+          fileName: \`PW_\${String(index + 1).padStart(2, "0")}.csv\`,
+          importedAt: pwMetaDates[index],
+          recordCount: pwSets[index].length,
+          sourceRowCount: pwSets[index].length,
+        },
+        records: pwSets[index],
+      };
+      const options = {
+        recordedAt: recordedDates[index],
+        ldRecords,
+        ...(index === 1 ? {
+          changedSystem: "sigem",
+          effectiveAt: "2026-09-15T12:00:00.000Z",
+        } : {}),
+      };
+      const recorded = await history.recordActiveBases(sigemBase, pwBase, options);
+      const sigemId = recorded.sigem?.snapshot?.id;
+      const pwId = recorded.pw?.snapshot?.id;
+      if (!sigemId || !pwId) throw new Error("Fixture não registrou os snapshots esperados.");
+      sigemIds.push(sigemId);
+      pwIds.push(pwId);
+      await management.capturePayload("sigem", sigemBase, sigemId, { sigemBase, pwBase, ldRecords });
+      await management.capturePayload("pw", pwBase, pwId, { sigemBase, pwBase, ldRecords });
+    }
+
+    window.__evolutionFixture = {
+      sigemIds,
+      pwIds,
+      operationalSigemId: sigemIds[1],
+      expected: {
+        "sigem-new": 250,
+        "pw-new": 3,
+        "pw-emitted": 3,
+        both: 1,
+        "missing-pw": 249,
+        "removed-sigem": 1,
+        "removed-pw": 1,
+      },
+    };
+    return window.__evolutionFixture;
+  });
+}
+
+async function resetEvolutionFilters(page) {
+  await page.locator("#spw-evolution-section").getByRole("button", { name: "Limpar filtros" }).click();
+  await page.waitForFunction(() => {
+    const state = window.GrconSigemPwEvolutionUi?.state;
+    return Boolean(state)
+      && Object.values(state.filters || {}).every((value) => value === "")
+      && Object.values(state.rawFilters || {}).every((value) => value === "");
+  });
+}
+
+async function waitEvolutionReady(page) {
+  await page.waitForFunction(() => Boolean(window.GrconSigemPwEvolutionUi?.state?.ready) && !window.GrconSigemPwEvolutionUi.state.busy, null, { timeout: 30000 });
+}
+
 (async () => {
   const fixtures = writeFixtures();
   const browser = await chromium.launch({ headless: true });
