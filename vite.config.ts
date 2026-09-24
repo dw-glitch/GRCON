@@ -39,6 +39,12 @@ const BUILDS = {
     bundleName: "GrconSigemPwDashboardBundle",
     emptyOutDir: false,
   },
+  "sigem-pw-evolution": {
+    entry: "src/react/sigem-pw/evolution/index.tsx",
+    fileName: "sigem-pw-evolution-app.js",
+    bundleName: "GrconSigemPwEvolutionBundle",
+    emptyOutDir: false,
+  },
 } as const;
 
 export default defineConfig(({ mode }) => {
