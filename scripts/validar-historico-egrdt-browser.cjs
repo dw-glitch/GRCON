@@ -448,10 +448,15 @@ async function setSharedHistoryFixture(page, enabled) {
 
     // Preparar no SIGEM é testado por último porque a ação real navega para o
     // módulo SIGEM. O navegador do CI usa apenas o armazenamento efêmero.
+    await page.evaluate(() => {
+      window.__prepareSigemReady = new Promise((resolve) => {
+        window.addEventListener("grcon:sigem-updated", resolve, { once: true });
+      });
+    });
     await page.locator('[data-history-action="prepare-sigem"]').click();
-    await page.waitForTimeout(80);
+    await page.evaluate(() => window.__prepareSigemReady);
     await page.evaluate(() => window.GrconHistoryUi?.activate?.("history"));
-    await page.locator("#history-detail").waitFor({ state: "visible" });
+    await page.locator(".history-detail-more > summary").waitFor({ state: "visible" });
 
     // Editor: inválido, duplicado e válido sem tocar no Core persistente.
     await page.locator(".history-detail-more > summary").click();
