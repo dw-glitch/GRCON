@@ -238,17 +238,17 @@ async function installEvolutionFixture(page) {
 
     await history.clearHistory();
 
-    const sigemDoc = (id) => \`C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-\${id}\`;
-    const pwDoc = (id) => \`C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-\${id}\`;
+    const sigemDoc = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
+    const pwDoc = (id) => `C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-${id}`;
     const s = (id, revision = "0", extra = {}) => ({
       document: sigemDoc(id),
       revision,
       status: extra.status || "Postado",
       documentType: extra.documentType || "RIR",
-      title: extra.title || \`Documento SIGEM \${id}\`,
+      title: extra.title || `Documento SIGEM ${id}`,
       discipline: extra.discipline || "INS",
       disciplineDesc: extra.discipline || "INS",
-      tag: extra.tag || \`TAG-\${id}\`,
+      tag: extra.tag || `TAG-${id}`,
       eap: extra.eap || "3.1.1.1",
       modifiedAt: extra.modifiedAt || "2026-09-01T08:00:00.000Z",
       sourceRow: extra.sourceRow || 1,
@@ -260,10 +260,10 @@ async function installEvolutionFixture(page) {
       state: emitted ? "Liberado" : (extra.state || "Cadastrado"),
       lastEmission: emitted ? "Sim" : "Previsto",
       documentType: extra.documentType || "RIR",
-      title: extra.title || \`Documento PW \${id}\`,
+      title: extra.title || `Documento PW ${id}`,
       discipline: extra.discipline || "INS",
       disciplineDesc: extra.discipline || "INS",
-      tag: extra.tag || \`TAG-\${id}\`,
+      tag: extra.tag || `TAG-${id}`,
       eap: extra.eap || "3.1.1.1",
       stateChangedAt: extra.stateChangedAt || "2026-09-01T09:00:00.000Z",
       sourceRow: extra.sourceRow || 1,
@@ -289,9 +289,9 @@ async function installEvolutionFixture(page) {
         documentType: index === 42 ? "REP" : "RIR",
         status: index % 10 === 0 ? "Em Workflow" : "Postado",
         discipline: index % 2 === 0 ? "INS" : "PIP",
-        tag: \`TAG-\${id}\`,
+        tag: `TAG-${id}`,
         eap: index % 2 === 0 ? "3.1.1.1" : "4.2.2.2",
-        modifiedAt: \`2026-09-30T08:\${String(index % 60).padStart(2, "0")}:00.000Z\`,
+        modifiedAt: `2026-09-30T08:${String(index % 60).padStart(2, "0")}:00.000Z`,
         sourceRow: 100 + index,
       });
     });
@@ -349,7 +349,7 @@ async function installEvolutionFixture(page) {
     for (let index = 0; index < 4; index += 1) {
       const sigemBase = {
         meta: {
-          fileName: \`SIGEM_\${String(index + 1).padStart(2, "0")}.xlsx\`,
+          fileName: `SIGEM_${String(index + 1).padStart(2, "0")}.xlsx`,
           importedAt: sigemMetaDates[index],
           recordCount: sigemSets[index].length,
           sourceRowCount: sigemSets[index].length,
@@ -358,7 +358,7 @@ async function installEvolutionFixture(page) {
       };
       const pwBase = {
         meta: {
-          fileName: \`PW_\${String(index + 1).padStart(2, "0")}.csv\`,
+          fileName: `PW_${String(index + 1).padStart(2, "0")}.csv`,
           importedAt: pwMetaDates[index],
           recordCount: pwSets[index].length,
           sourceRowCount: pwSets[index].length,
