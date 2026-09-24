@@ -108,6 +108,7 @@ if (fs.existsSync(path.join(root, "react-dist/sigem-pw-evolution-app.js"))) {
   const bytes = Buffer.byteLength(bundle);
   assert.ok(bytes < 500000, `bundle Evolução inesperadamente grande: ${bytes} bytes`);
   assert.doesNotMatch(bundle, /ExcelJS|exceljs\.min|SheetJS.*Community Edition|xlsx\.full\.min/i, "XLSX/ExcelJS não podem entrar no bundle React");
+  assert.doesNotMatch(bundle, /function buildLdUniverse|function buildSnapshot|function comparePeriod|function buildDailyTimeline/, "Core da Evolução não pode ser reimplementado dentro do bundle React");
 }
 
 console.log("sigem_pw_evolution_react: OK — React/TS lazy, facade, Core/History preservados, filtros, paginação, exportação e PWA validados.");
