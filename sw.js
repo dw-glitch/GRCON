@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.41.0-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4";
+const CACHE_NAME = "grcon-v5.41.0-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -60,7 +60,8 @@ const ASSETS = [
   "sigem_pw_history_core.js",
   "sigem_pw_history_management.js",
   "sigem_pw_evolution_core.js",
-  "sigem_pw_evolution_app.js",
+  "sigem-pw-evolution.css",
+  "react-dist/sigem-pw-evolution-app.js",
   "sigem_pw_dashboard_ui_audit.js",
   "grcon_module_loader.js",
   "grcon_contracts.js",
