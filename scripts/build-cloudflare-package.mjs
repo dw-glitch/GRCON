@@ -67,9 +67,9 @@ for (const dir of runtimeDirs) await copyRuntimeDirectory(dir);
 await cp(path.join(root, "cloudflare", "_headers"), path.join(outDir, "_headers"));
 
 const deploymentMeta = {
-  commit: process.env.GITHUB_SHA || process.env.GRCON_DEPLOY_COMMIT || "local",
+  commit: process.env.GRCON_DEPLOY_COMMIT || process.env.GITHUB_SHA || "local",
   provider: "cloudflare",
-  build: process.env.GITHUB_RUN_ID || process.env.GRCON_DEPLOY_BUILD || "local",
+  build: process.env.GRCON_DEPLOY_BUILD || process.env.GITHUB_RUN_ID || "local",
   generatedAt: new Date().toISOString(),
 };
 await writeFile(path.join(outDir, "deployment-meta.json"), `${JSON.stringify(deploymentMeta, null, 2)}\n`, "utf8");
