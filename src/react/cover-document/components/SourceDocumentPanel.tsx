@@ -1,20 +1,24 @@
 import type { ChangeEvent } from "react";
-import type { SourceDocumentInfo } from "../types/domain";
+import type { CoverPlacementMode, SourceDocumentInfo } from "../types/domain";
 
 export function SourceDocumentPanel({
   source,
   originalPages,
   manualOriginalPages,
   busy,
+  coverMode,
   onFile,
   onManualPages,
+  onCoverMode,
 }: {
   source: SourceDocumentInfo | null;
   originalPages: number | null;
   manualOriginalPages: number | null;
   busy: boolean;
+  coverMode: CoverPlacementMode;
   onFile: (file: File | null) => void;
   onManualPages: (pages: number | null) => void;
+  onCoverMode: (mode: CoverPlacementMode) => void;
 }) {
   return (
     <section className="cover-card" aria-labelledby="cover-source-heading">
@@ -24,6 +28,18 @@ export function SourceDocumentPanel({
         <strong>{source ? source.file.name : "Selecionar PDF ou DOCX"}</strong>
         <span>{source ? `${source.kind.toUpperCase()} · ${source.file.size.toLocaleString("pt-BR")} bytes` : "O arquivo permanece no navegador."}</span>
       </label>
+      {source?.kind === "pdf" ? (
+        <fieldset className="cover-placement">
+          <legend>Como tratar a primeira página do PDF?</legend>
+          <label><input type="radio" name="cover-placement" value="replace-first-page" checked={coverMode === "replace-first-page"} onChange={() => onCoverMode("replace-first-page")} /> <span><b>Substituir a capa existente</b><small>A página 2 (contracapa específica deste documento) é mantida exatamente como está; o GRCON não cria contracapa genérica.</small></span></label>
+          <label><input type="radio" name="cover-placement" value="prepend" checked={coverMode === "prepend"} onChange={() => onCoverMode("prepend")} /> <span><b>Adicionar antes do documento</b><small>Use apenas quando o arquivo anexado ainda não possui capa.</small></span></label>
+        </fieldset>
+      ) : source?.kind === "docx" ? (
+        <div className="cover-source-note">No Word, a capa é adicionada antes do conteúdo. A substituição automática da primeira página não é aplicada porque a paginação do DOCX depende do Word e não é determinística no navegador.</div>
+      ) : null}
+      {source?.kind === "pdf" && originalPages ? (
+        <div className="cover-source-note" data-cover-backcover-state={originalPages >= 2 ? "preserved" : "missing"}>{originalPages >= 2 ? "Contracapa detectada: a página 2 deste PDF será preservada exatamente como está." : "Este PDF possui apenas uma página; não há página 2/contracapa para preservar."}</div>
+      ) : null}
       {source ? (
         <div className="cover-page-count">
           <span>Páginas do documento original</span>
