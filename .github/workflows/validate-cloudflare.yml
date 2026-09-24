@@ -52,3 +52,36 @@ jobs:
         run: npm run verify:cloudflare
       - name: Validar configuração Wrangler sem publicar
         run: npx --yes wrangler@4.34.0 deploy --config wrangler.jsonc --dry-run --outdir "$RUNNER_TEMP/wrangler-dry-run"
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Smoke test do pacote real no Chromium
+        env:
+          GRCON_EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          npx --yes wrangler@4.34.0 dev --config wrangler.jsonc --local --ip 127.0.0.1 --port 8766 > "$RUNNER_TEMP/grcon-cloudflare-wrangler.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:8766/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              cat "$RUNNER_TEMP/grcon-cloudflare-wrangler.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          node scripts/validar-cloudflare-browser.cjs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cloudflare-browser
+          path: |
+            artifacts/cloudflare-browser/*.png
+            artifacts/cloudflare-browser/metrics.json
+          if-no-files-found: warn
