@@ -2,7 +2,7 @@
 
 ## Fonte de verdade
 
-O personagem continua sendo o mascote oficial do GRCON. Os seis estados animados foram preparados a partir do elemento Higgsfield `grcon-mascot` (`5d684379-9c43-47db-913a-6af9d779e8b2`) e versionados localmente como WebM VP9 com alpha:
+O personagem continua sendo o mascote oficial do GRCON. Os seis estados animados foram preparados a partir do elemento Higgsfield `grcon-mascot` (`5d684379-9c43-47db-913a-6af9d779e8b2`) e versionados localmente como WebM VP9 declarados com alpha no contêiner. Como a revisão `20260924.1` foi detectada em QA com fundo cinza ainda opaco no quadro decodificado, o runtime **não confia apenas no metadado AlphaMode**: antes de revelar qualquer vídeo ele mede uma amostra das bordas do primeiro frame. Vídeo sem transparência visual real é rejeitado antes de ficar visível e o sprite PNG HD oficial é usado como fallback transparente:
 
 - `idle` → `assets/mascot/video/grcon-mascot-idle-alpha.webm`
 - `hello` → `assets/mascot/video/grcon-mascot-hello-alpha.webm`
@@ -61,4 +61,4 @@ A corrida usa o vídeo Higgsfield para o movimento corporal e CSS transform para
 
 ## Fallback
 
-Falha de WebM → sprite PNG HD oficial. Falhas de mídia nunca bloqueiam o GRCON.
+Falha de WebM **ou frame com fundo opaco detectado pelo probe de transparência** → sprite PNG HD oficial. O probe usa um canvas pequeno apenas no primeiro frame de cada asset, sem chroma key e sem processamento por frame. O vídeo permanece com `opacity: 0` até passar no probe, portanto não há flash do retângulo cinza. Enquanto o fallback estiver ativo, os estados continuam com movimentos CSS leves (idle/hello/analyzing/warning/success/running), posicionamento, bolha, hover e corrida do runtime. Falhas de mídia nunca bloqueiam o GRCON.
