@@ -8,6 +8,9 @@
   Cross-Origin-Resource-Policy: same-origin
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data: https://kvyrttccwzdhasplfxnr.supabase.co wss://kvyrttccwzdhasplfxnr.supabase.co; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'; manifest-src 'self'
 
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
 
