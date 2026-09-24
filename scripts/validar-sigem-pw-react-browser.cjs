@@ -1043,6 +1043,13 @@ async function waitEvolutionReady(page) {
     assert.match(await page.locator("#spw-evo-audit").textContent(), /7 documentos únicos · 7 registros\/revisões válidos · 0 duplicidade/i);
     await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outputDir, "02-evolution-overview-1366.png"), fullPage: true });
+    const kpiContentOrder = await page.locator('#spw-evo-kpis .spw-evo-kpi').first().evaluate((card) => {
+      const label = card.querySelector('span')?.getBoundingClientRect();
+      const number = card.querySelector('strong')?.getBoundingClientRect();
+      const description = card.querySelector('small')?.getBoundingClientRect();
+      return Boolean(label && number && description && label.bottom <= number.top && number.bottom <= description.top);
+    });
+    assert.equal(kpiContentOrder, true, 'rótulo, número e descrição do KPI devem ocupar linhas sem sobreposição');
 
     // Período: somente inicial.
     await page.locator("#spw-evo-date-start").fill("2026-09-10");

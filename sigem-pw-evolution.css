@@ -118,8 +118,9 @@
 #spw-evolution-section .spw-evo-source{min-width:0}
 #spw-evolution-section .spw-evo-pair label{min-width:0}
 #spw-evolution-section .spw-evo-pair select{width:100%;max-width:100%;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+#spw-evolution-section .spw-evo-kpi{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;align-content:start;gap:4px;min-width:0}
+#spw-evolution-section .spw-evo-kpi span,#spw-evolution-section .spw-evo-kpi strong,#spw-evolution-section .spw-evo-kpi small{margin:0;min-width:0;line-height:1.2}
 #spw-evolution-section .spw-evo-kpi[aria-pressed="true"]{outline:2px solid var(--brand-700,#155c8a);outline-offset:1px;background:var(--brand-50,#eaf5fb)}
-#spw-evolution-section .spw-evo-kpi strong{line-height:1.1}
 #spw-evolution-section .spw-evo-net span{padding:2px 6px;border-radius:6px;background:var(--surface,#fff)}
 #spw-evolution-section .spw-evo-days{display:flex;overflow-x:auto;gap:8px;max-width:100%;padding-bottom:7px;scrollbar-width:thin}
 #spw-evolution-section .spw-evo-day{flex:1 0 76px}
