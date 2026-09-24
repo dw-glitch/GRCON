@@ -1,5 +1,6 @@
 export type ValidationLevel = "error" | "warning" | "info";
 export type SourceDocumentKind = "pdf" | "docx";
+export type CoverPlacementMode = "replace-first-page" | "prepend";
 
 export interface LdColumnValue {
   header: string;
@@ -90,4 +91,5 @@ export interface CoverDebugState {
   sourceName: string;
   busy: boolean;
   validationErrors: number;
+  coverMode: CoverPlacementMode;
 }
