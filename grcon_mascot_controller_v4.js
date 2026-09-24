@@ -1,695 +1,1013 @@
-/* GRCON — Mascote da Qualidade v4: vídeos locais versionados, saudação por sessão e prioridade operacional. */
+/* GRCON — Mascot Runtime v5: uma única instância contextual, assets Higgsfield locais e bridge legado/React. */
 (function (root) {
   "use strict";
 
-  const VERSION = "4.3.0";
-  const ENGINE = "official-video-v4";
-  const ASSET_REVISION = "20260921.1";
-  const STYLE_ID = "grcon-mascot-video-v4-style";
-  const SELECTOR = ".grcon-brand-mascot";
-  const CSS_TARGET = ".grcon-brand-mascot";
-  const SESSION_PREFIX = "grcon:mascot:greeting:v4:";
-  const CORE = root.GRCONMascotGreetingCore;
-  const DEBUG = new URLSearchParams(root.location.search).get("grconMascotDebug") === "1"
-    || root.sessionStorage?.getItem("grcon:mascot:debug") === "1";
-
-  const absoluteAsset = (path) => {
-    const url = new URL(path.replace(/^\/+/, ""), `${root.location.origin}/`);
-    url.searchParams.set("v", ASSET_REVISION);
-    return url.href;
-  };
-
-  const MASCOT_ANIMATIONS = Object.freeze({
-    greeting: Object.freeze({
-      mode: "wave",
-      url: absoluteAsset("assets/mascot/video/grcon-mascot-wave-alpha.webm"),
-      type: 'video/webm; codecs="vp9"',
-      loop: false,
-    }),
-    analysing: Object.freeze({
-      mode: "processing",
-      url: absoluteAsset("assets/mascot/video/grcon-mascot-processing-alpha.webm"),
-      type: 'video/webm; codecs="vp9"',
-      loop: true,
-    }),
+  const VERSION = "5.0.0";
+  const ENGINE = "official-contextual-v5";
+  const ASSET_REVISION = "20260924.1";
+  const OVERLAY_ID = "grcon-context-mascot";
+  const BUBBLE_ID = "grcon-mascot-context-bubble";
+  const STYLE_ID = "grcon-mascot-runtime-v5-style";
+  const SETTINGS_ID = "grcon-mascot-animation-setting";
+  const PREF_KEY = "grcon:mascot:animations";
+  const SESSION_PREFIX = "grcon:mascot:hello:v5:";
+  const PRIORITY = Object.freeze({ hidden: 0, idle: 1, hello: 2, success: 3, running: 4, analyzing: 5, warning: 6 });
+  const STATES = Object.freeze(["hidden", "hello", "idle", "analyzing", "warning", "success", "running"]);
+  const ALIASES = Object.freeze({
+    welcome: "hello",
+    hover: "idle",
+    "searching-files": "analyzing",
+    "checking-document": "analyzing",
+    confused: "warning",
+    error: "warning",
+    uploading: "analyzing",
+    "generating-grdt": "analyzing",
+    "checking-ld": "analyzing",
+    "sigem-pw-analysis": "running",
+    loading: "analyzing",
+    run: "running",
+  });
+  const CONTEXTS = Object.freeze([
+    ["control", "#grdt-module", "default"],
+    ["requests", "#requests-module", "search"],
+    ["pdf-tools", "#pdf-tools-module", "report"],
+    ["cover-document", "#cover-document-module", "check"],
+    ["analysis-history", "#analysis-history-module", "dashboard"],
+    ["history", "#history-module", "history"],
+    ["sigem", "#sigem-module", "pending"],
+    ["conference", "#posting-conference-module", "check"],
+    ["sigem-pw", "#sigem-pw-dashboard-module", "sigem-pw"],
+    ["additional-tools", "#additional-tools-module", "quality"],
+  ]);
+  const POSES = Object.freeze({
+    default: [0, 0], analysis: [1, 0], search: [2, 0], check: [3, 0],
+    history: [0, 1], dashboard: [1, 1], "sigem-pw": [2, 1], egrdt: [3, 1],
+    import: [0, 2], report: [1, 2], warning: [2, 2], success: [3, 2],
+    pending: [0, 3], empty: [1, 3], quality: [2, 3],
   });
 
-  const STATES = Object.freeze([
-    "idle", "welcome", "hover", "analyzing", "searching-files",
-    "checking-document", "confused", "success", "warning", "error",
-    "uploading", "generating-grdt", "checking-ld", "sigem-pw-analysis", "loading",
-  ]);
-  const PROCESSING_STATES = new Set([
-    "analyzing", "searching-files", "checking-document", "confused", "uploading",
-    "generating-grdt", "checking-ld", "sigem-pw-analysis", "loading",
-  ]);
-
-  const records = new Map();
-  const preloaders = new Map();
-  const diagnosticsLog = [];
-  let observer = null;
-  let htmlObserver = null;
-  let initialized = false;
-  let operationActive = false;
-  let operationState = "";
-  let pendingOutcome = "";
-  let transientTimer = 0;
-  let pulseTimer = 0;
-  let greetingTimer = 0;
-  let bubble = null;
-  let activeBubbleHost = null;
-  let pinnedBubbleHost = null;
-  let lastUserId = "";
-  let welcomeShown = false;
-  let wasAppLocked = document.documentElement.classList.contains("grcon-cloud-pending");
-
-  function log(event, detail) {
-    const entry = { time: new Date().toISOString(), event, ...(detail || {}) };
-    diagnosticsLog.push(entry);
-    if (diagnosticsLog.length > 40) diagnosticsLog.shift();
-    if (DEBUG) console.debug("GRCON Mascot:", event, detail || "");
+  function asset(path) {
+    const url = new URL(path.replace(/^\/+/, ""), root.location.origin + "/");
+    url.searchParams.set("v", ASSET_REVISION);
+    return url.href;
   }
 
-  function installStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID;
-    style.textContent = `
-      ${CSS_TARGET}.grcon-mascot-video-host{pointer-events:auto;overflow:visible;isolation:isolate;touch-action:manipulation}
-      .grcon-mascot-video{position:absolute;z-index:2;inset:0;width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;opacity:0;visibility:hidden;transform:translateZ(0);transition:opacity 120ms ease-out;filter:drop-shadow(0 5px 12px rgb(12 32 48 / 18%))}
-      ${CSS_TARGET}.is-video-active>.grcon-mascot-video{opacity:1;visibility:visible}
-      ${CSS_TARGET}.is-video-active>.grcon-mascot-sprite{opacity:0;visibility:hidden}
-      html[data-theme="dark"] .grcon-mascot-video{filter:drop-shadow(0 6px 15px rgb(0 0 0 / 38%))}
-      .grcon-mascot-speech{position:fixed;z-index:340;inset:0 auto auto 0;max-inline-size:min(14rem,calc(100vw - 1rem));padding:.58rem .78rem;color:var(--text-1,#16212b);background:color-mix(in srgb,var(--surface-1,#fff) 96%,var(--brand-50,#f2f9fc));border:1px solid color-mix(in srgb,var(--brand-700,#0c648f) 22%,var(--border-1,#d8e1e7));border-radius:var(--radius-md,13px);box-shadow:var(--shadow-1,0 8px 24px rgb(12 32 48 / 10%));font:690 .86rem/1.25 var(--font-sans,Inter,"Segoe UI",Arial,sans-serif);overflow-wrap:anywhere;pointer-events:none;opacity:0;visibility:hidden;transform:translate3d(0,5px,0) scale(.965);transition:opacity 180ms ease,transform 220ms ease,visibility 0s linear 220ms}
-      .grcon-mascot-speech[data-visible="true"]{opacity:1;visibility:visible;transform:translate3d(0,0,0) scale(1);transition-delay:0s}
-      @media (prefers-reduced-motion:reduce){.grcon-mascot-video{display:none!important}${CSS_TARGET}.is-video-active>.grcon-mascot-sprite{opacity:1;visibility:visible}.grcon-mascot-speech{transition:none}}
-    `;
-    document.head.appendChild(style);
+  const ASSETS = Object.freeze({
+    idle: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-idle-alpha.webm"), loop: true }),
+    hello: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-hello-alpha.webm"), loop: false }),
+    analyzing: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-analyzing-alpha.webm"), loop: true }),
+    warning: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-warning-alpha.webm"), loop: false }),
+    success: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-success-alpha.webm"), loop: false }),
+    running: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-run-alpha.webm"), loop: true }),
+  });
+
+  const logEntries = [];
+  const operations = new Map();
+  const detachedPreloaders = new Map();
+  let sequence = 0;
+  let currentState = "hidden";
+  let currentTarget = null;
+  let currentMessage = "";
+  let currentContext = "";
+  let contextGeneration = 0;
+  let transientTimer = 0;
+  let warningTimer = 0;
+  let longOperationTimer = 0;
+  let positionFrame = 0;
+  let pointerFrame = 0;
+  let pendingPointer = null;
+  let warningUntil = 0;
+  let pendingSuccess = false;
+  let legacyOperation = null;
+  let observer = null;
+  let authObserver = null;
+  let wasAppLocked = null;
+  let lastHelloStorageKey = "";
+  let overlay = null;
+  let video = null;
+  let fallback = null;
+  let bubble = null;
+  let initialized = false;
+  let mediaToken = 0;
+  let mediaFailureCount = 0;
+
+  function log(event, detail) {
+    logEntries.push({ time: new Date().toISOString(), event, ...(detail || {}) });
+    if (logEntries.length > 60) logEntries.shift();
   }
 
   function reducedMotion() {
-    return Boolean(root.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    return Boolean(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+
+  function animationsEnabled() {
+    try { return root.localStorage.getItem(PREF_KEY) !== "off"; }
+    catch (_) { return true; }
+  }
+
+  function isMobile() {
+    const width = root.visualViewport?.width || root.innerWidth || document.documentElement.clientWidth || 0;
+    return width <= 700;
+  }
+
+  function appLocked() {
+    return document.documentElement.classList.contains("grcon-cloud-pending");
+  }
+
+  function normalizeState(value) {
+    const raw = String(value || "idle");
+    const mapped = ALIASES[raw] || raw;
+    return STATES.includes(mapped) ? mapped : "idle";
   }
 
   function currentIdentity() {
     const cloud = root.GrconCloud;
     if (cloud && typeof cloud.getCurrentUserIdentity === "function") {
       const identity = cloud.getCurrentUserIdentity() || {};
-      const user = cloud?.state?.session?.user;
-      return { ...identity, userId: identity.userId || user?.id || "", email: identity.email || user?.email || "" };
+      return {
+        userId: identity.userId || cloud.state?.session?.user?.id || "",
+        displayName: identity.displayName || identity.profileName || identity.metadataName || identity.fullName || identity.name || "",
+      };
     }
     const user = cloud?.state?.session?.user;
-    const profile = user && cloud?.state?.profiles?.get?.(user.id);
-    const metadata = user?.user_metadata || {};
-    return {
-      userId: user?.id || "",
-      email: user?.email || "",
-      displayName: profile?.display_name || "",
-      metadataName: metadata.full_name || metadata.name || metadata.display_name || "",
-    };
+    return { userId: user?.id || "", displayName: user?.user_metadata?.full_name || user?.user_metadata?.name || "" };
   }
 
-  function resolveFirstName(identity) {
-    if (CORE?.resolveFirstName) return CORE.resolveFirstName(identity);
-    const raw = identity?.displayName || identity?.profileName || identity?.metadataName || identity?.fullName || identity?.name || "";
-    return String(raw).trim().split(/\s+/)[0] || "";
-  }
-
-  function greetingText() {
+  function greetingMessage() {
     const identity = currentIdentity();
-    if (CORE?.greeting) return CORE.greeting(identity);
-    const name = resolveFirstName(identity);
-    return name ? `Olá, ${name}!` : "Olá!";
+    const firstName = String(identity.displayName || "").trim().split(/\s+/)[0];
+    return firstName ? "Olá, " + firstName + "!" : "Olá!";
   }
 
-  function sessionKey(userId) {
-    return userId ? `${SESSION_PREFIX}${userId}` : "";
+  function helloKey() {
+    const id = currentIdentity().userId || "session";
+    return SESSION_PREFIX + id;
   }
 
-  function greetingAlreadyPlayed(userId) {
-    const key = sessionKey(userId);
-    if (!key) return false;
-    try { return root.sessionStorage.getItem(key) === ASSET_REVISION; } catch (_) { return welcomeShown; }
+  function helloPlayed() {
+    const key = helloKey();
+    if (key !== SESSION_PREFIX + "session") lastHelloStorageKey = key;
+    try { return root.sessionStorage.getItem(key) === ASSET_REVISION; }
+    catch (_) { return false; }
   }
 
-  function markGreetingPlayed(userId) {
-    const key = sessionKey(userId);
-    welcomeShown = true;
-    if (!key) return;
-    try { root.sessionStorage.setItem(key, ASSET_REVISION); } catch (_) { /* memória da página continua protegendo contra repetição */ }
+  function markHelloPlayed() {
+    const key = helloKey();
+    lastHelloStorageKey = key;
+    try { root.sessionStorage.setItem(key, ASSET_REVISION); }
+    catch (_) { /* memória de sessão indisponível não pode quebrar o GRCON */ }
   }
 
-  function clearGreetingFor(userId) {
-    const key = sessionKey(userId);
-    if (key) {
-      try { root.sessionStorage.removeItem(key); } catch (_) { /* sem storage: usa memória */ }
-    }
-    welcomeShown = false;
+  function clearHelloMarker() {
+    const key = lastHelloStorageKey || helloKey();
+    try { root.sessionStorage.removeItem(key); }
+    catch (_) {}
+    lastHelloStorageKey = "";
   }
 
-  function ensureBubble() {
-    if (bubble?.isConnected) return bubble;
-    bubble = document.getElementById("grcon-mascot-greeting-bubble") || document.createElement("div");
-    bubble.id = "grcon-mascot-greeting-bubble";
-    bubble.className = "grcon-mascot-speech";
-    bubble.setAttribute("role", "status");
-    bubble.setAttribute("aria-live", "polite");
-    bubble.setAttribute("aria-hidden", "true");
-    bubble.dataset.visible = "false";
-    if (!bubble.isConnected) document.body.appendChild(bubble);
-    return bubble;
+  function installStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = [
+      "#" + OVERLAY_ID + "{--mascot-x:calc(100vw - clamp(166px,13vw,190px) - 22px);--mascot-y:calc(100vh - clamp(166px,13vw,190px) - 22px);--cursor-x:0px;--cursor-y:0px;position:fixed;z-index:245;left:0;top:0;width:clamp(150px,13vw,190px);height:clamp(150px,13vw,190px);transform:translate3d(var(--mascot-x),var(--mascot-y),0);transition:transform 260ms cubic-bezier(.2,.8,.2,1),opacity 160ms ease;pointer-events:none;user-select:none;contain:layout style paint;isolation:isolate;opacity:1}",
+      "#" + OVERLAY_ID + "[data-state='hidden']{opacity:0;visibility:hidden}",
+      "#" + OVERLAY_ID + " .grcon-mascot-stage{position:absolute;inset:0;transform:translate3d(var(--cursor-x),var(--cursor-y),0) rotate(var(--cursor-tilt,0deg));transition:transform 120ms ease-out;pointer-events:none}",
+      "#" + OVERLAY_ID + " video,#" + OVERLAY_ID + " .grcon-mascot-sprite{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}",
+      "#" + OVERLAY_ID + " video{object-fit:contain;background:transparent!important;filter:drop-shadow(0 7px 14px rgb(12 32 48 / 19%));opacity:0;transition:opacity 120ms ease}",
+      "#" + OVERLAY_ID + "[data-media='video'] video{opacity:1}",
+      "#" + OVERLAY_ID + " .grcon-mascot-sprite{background-image:url('grcon-mascot-sprite.png?v=4.0.0-hd');background-repeat:no-repeat;background-size:400% 400%;background-position:calc(var(--mx,0)*33.333333%) calc(var(--my,0)*33.333333%);filter:drop-shadow(0 6px 12px rgb(12 32 48 / 16%));opacity:1}",
+      "#" + OVERLAY_ID + "[data-media='video'] .grcon-mascot-sprite{opacity:0}",
+      "#" + OVERLAY_ID + "[data-state='running']{width:clamp(190px,22vw,280px);height:clamp(110px,12.4vw,158px);transition:none;animation:grcon-mascot-runtime-run 8s linear infinite}",
+      "@keyframes grcon-mascot-runtime-run{from{transform:translate3d(calc(-100% - 16px),calc(100vh - 190px),0)}to{transform:translate3d(calc(100vw + 16px),calc(100vh - 190px),0)}}",
+      "#" + BUBBLE_ID + "{position:fixed;z-index:246;max-width:min(250px,calc(100vw - 24px));padding:.55rem .72rem;border:1px solid color-mix(in srgb,var(--brand-700,#0c648f) 20%,var(--border-1,#d8e1e7));border-radius:12px;background:color-mix(in srgb,var(--surface-1,#fff) 97%,var(--brand-50,#f2f9fc));box-shadow:0 8px 24px rgb(12 32 48 / 12%);color:var(--text-1,#16212b);font:650 .84rem/1.3 Inter,'Segoe UI',Arial,sans-serif;pointer-events:none;opacity:0;visibility:hidden;transform:translateY(4px);transition:opacity 150ms ease,transform 180ms ease;overflow-wrap:anywhere}",
+      "#" + BUBBLE_ID + "[data-visible='true']{opacity:1;visibility:visible;transform:translateY(0)}",
+      ".grcon-mascot-setting-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.75rem .85rem;border:1px solid var(--border-1,#d8e1e7);border-radius:12px;background:var(--surface-1,#fff)}",
+      ".grcon-mascot-setting-row span{display:grid;gap:.16rem}.grcon-mascot-setting-row strong{font-size:.9rem}.grcon-mascot-setting-row small{color:var(--text-2,#5f6e78)}",
+      ".grcon-mascot-setting-row input{inline-size:1.15rem;block-size:1.15rem}",
+      "html[data-theme='dark'] #" + OVERLAY_ID + " video{filter:drop-shadow(0 8px 15px rgb(0 0 0 / 42%))}",
+      "@media(max-width:900px){#" + OVERLAY_ID + "{width:clamp(130px,17vw,160px);height:clamp(130px,17vw,160px)}}",
+      "@media(max-width:700px){#" + OVERLAY_ID + "{width:clamp(95px,27vw,125px);height:clamp(95px,27vw,125px);--mascot-x:calc(100vw - clamp(95px,27vw,125px) - 10px);--mascot-y:calc(100vh - clamp(95px,27vw,125px) - max(10px,env(safe-area-inset-bottom)))}#" + OVERLAY_ID + "[data-state='running']{animation:none;width:clamp(95px,27vw,125px);height:clamp(95px,27vw,125px)}}",
+      "@media(prefers-reduced-motion:reduce){#" + OVERLAY_ID + "{transition:none!important;animation:none!important}#" + OVERLAY_ID + " video{display:none!important}#" + OVERLAY_ID + " .grcon-mascot-stage{transition:none!important;transform:none!important}#" + BUBBLE_ID + "{transition:none!important}}",
+    ].join("\n");
+    document.head.appendChild(style);
   }
 
-  function positionBubble(host) {
-    const target = ensureBubble();
-    if (!host?.isConnected) return;
-    const hostRect = host.getBoundingClientRect();
-    const bubbleRect = target.getBoundingClientRect();
-    const gap = 10;
-    const viewportWidth = document.documentElement.clientWidth || root.innerWidth;
-    const viewportHeight = document.documentElement.clientHeight || root.innerHeight;
-    let left = hostRect.right + gap;
-    let top = hostRect.top + (hostRect.height - bubbleRect.height) / 2;
-    if (left + bubbleRect.width > viewportWidth - 8) left = hostRect.left - bubbleRect.width - gap;
-    if (left < 8) left = Math.max(8, hostRect.left + (hostRect.width - bubbleRect.width) / 2);
-    top = Math.max(8, Math.min(top, viewportHeight - bubbleRect.height - 8));
-    target.style.left = `${Math.round(left)}px`;
-    target.style.top = `${Math.round(top)}px`;
-  }
+  function ensureDom() {
+    if (overlay?.isConnected) return overlay;
+    installStyles();
+    overlay = document.getElementById(OVERLAY_ID) || document.createElement("div");
+    overlay.id = OVERLAY_ID;
+    overlay.className = "grcon-mascot-context grcon-mascot-runtime";
+    overlay.dataset.state = "hidden";
+    overlay.dataset.media = "png";
+    overlay.dataset.context = "none";
+    overlay.dataset.pose = "default";
+    overlay.setAttribute("aria-hidden", "true");
 
-  function showGreeting(host, pinned) {
-    if (!host || operationActive) return;
-    const target = ensureBubble();
-    target.textContent = greetingText();
-    activeBubbleHost = host;
-    if (pinned) pinnedBubbleHost = host;
-    target.setAttribute("aria-hidden", "false");
-    target.dataset.visible = "true";
-    positionBubble(host);
-  }
-
-  function hideGreeting(force) {
-    if (pinnedBubbleHost && !force) return;
-    const target = ensureBubble();
-    target.dataset.visible = "false";
-    target.setAttribute("aria-hidden", "true");
-    activeBubbleHost = null;
-    if (force) pinnedBubbleHost = null;
-  }
-
-  function makeVideo(host) {
-    let video = host.querySelector(":scope > .grcon-mascot-video");
-    if (video) return video;
+    const stage = document.createElement("div");
+    stage.className = "grcon-mascot-stage";
+    fallback = document.createElement("span");
+    fallback.className = "grcon-mascot-sprite";
+    fallback.setAttribute("aria-hidden", "true");
     video = document.createElement("video");
     video.className = "grcon-mascot-video";
     video.muted = true;
     video.defaultMuted = true;
-    video.autoplay = false;
     video.playsInline = true;
-    video.preload = "auto";
+    video.preload = "none";
     video.disablePictureInPicture = true;
     video.setAttribute("muted", "");
     video.setAttribute("playsinline", "");
-    video.setAttribute("preload", "auto");
     video.setAttribute("disableRemotePlayback", "");
     video.setAttribute("aria-hidden", "true");
-    host.appendChild(video);
-    return video;
+    stage.append(fallback, video);
+    overlay.replaceChildren(stage);
+    if (!overlay.isConnected) document.body.appendChild(overlay);
+
+    bubble = document.getElementById(BUBBLE_ID) || document.createElement("div");
+    bubble.id = BUBBLE_ID;
+    bubble.setAttribute("role", "status");
+    bubble.setAttribute("aria-live", "polite");
+    bubble.dataset.visible = "false";
+    if (!bubble.isConnected) document.body.appendChild(bubble);
+
+    video.addEventListener("loadeddata", revealVideo);
+    video.addEventListener("canplay", revealVideo);
+    video.addEventListener("error", handleMediaError);
+    video.addEventListener("ended", handleEnded);
+    return overlay;
   }
 
-  function safePause(video) {
-    try { video.pause(); } catch (_) { /* PNG continua visível */ }
-  }
-
-  function clearLoadTimer(record) {
-    if (record.loadTimer) root.clearTimeout(record.loadTimer);
-    record.loadTimer = 0;
-  }
-
-  function hideVideo(record, resetTime) {
-    clearLoadTimer(record);
-    record.token += 1;
-    safePause(record.video);
-    if (resetTime) {
-      try { record.video.currentTime = 0; } catch (_) { /* metadata ainda indisponível */ }
+  function activeContext() {
+    for (const [name, selector, pose] of CONTEXTS) {
+      const node = document.querySelector(selector);
+      if (node && !node.hidden && node.getAttribute("aria-hidden") !== "true") return { name, node, pose };
     }
-    record.mode = "";
-    record.host.classList.remove("is-video-active");
-    record.host.dataset.grconMascotMedia = "png";
+    return { name: "none", node: null, pose: "default" };
   }
 
-  function revealVideo(record, token) {
-    if (token !== record.token || !record.mode || document.hidden || reducedMotion()) return;
-    clearLoadTimer(record);
-    record.host.classList.add("is-video-active");
-    record.host.dataset.grconMascotMedia = record.mode;
-    document.documentElement.dataset.grconMascotVideo = "playing";
-  }
-
-  function mediaFailure(record, mode, reason) {
-    if (!mode) return;
-    record.failures[mode] = (record.failures[mode] || 0) + 1;
-    record.lastError = reason || "falha de mídia";
-    hideVideo(record, false);
-    record.host.dataset.grconMascotFallback = mode;
-    document.documentElement.dataset.grconMascotVideo = "fallback";
-    log("media-fallback", { mode, reason: record.lastError, url: MASCOT_ANIMATIONS[mode === "wave" ? "greeting" : "analysing"].url });
-    if (!record.warnedModes.has(mode)) {
-      record.warnedModes.add(mode);
-      console.warn(`GRCON: vídeo ${mode} do mascote indisponível (${record.lastError}); PNG oficial mantido.`);
+  function setFallbackPose(pose) {
+    const resolved = POSES[pose] ? pose : "default";
+    const [x, y] = POSES[resolved];
+    if (overlay) {
+      overlay.dataset.pose = resolved;
+      overlay.style.setProperty("--mx", String(x));
+      overlay.style.setProperty("--my", String(y));
     }
   }
 
-  function startPlayback(record, token) {
-    if (token !== record.token || !record.mode) return;
-    let result;
-    try { result = record.video.play(); }
-    catch (error) { mediaFailure(record, record.mode, error?.message || "play() falhou"); return; }
-    if (result?.catch) result.catch((error) => {
-      if (token === record.token) mediaFailure(record, record.mode, error?.message || "play() rejeitado");
+  function refreshContext(forcedPose) {
+    ensureDom();
+    const next = activeContext();
+    if (next.name !== currentContext) {
+      currentContext = next.name;
+      contextGeneration += 1;
+      log("context", { context: currentContext, generation: contextGeneration });
+    }
+    overlay.dataset.context = next.name;
+    const statePose = currentState === "warning" ? "warning" : currentState === "success" ? "success" : "";
+    setFallbackPose(statePose || forcedPose || next.pose);
+    if (!currentTarget && currentState !== "running") positionDefault();
+    return next;
+  }
+
+  function viewport() {
+    return {
+      width: root.visualViewport?.width || root.innerWidth || document.documentElement.clientWidth || 1,
+      height: root.visualViewport?.height || root.innerHeight || document.documentElement.clientHeight || 1,
+    };
+  }
+
+  function mascotSize() {
+    const rect = ensureDom().getBoundingClientRect();
+    return { width: rect.width || 170, height: rect.height || 170 };
+  }
+
+  function setPosition(left, top) {
+    const vp = viewport();
+    const size = mascotSize();
+    const safe = 8;
+    const x = Math.max(safe, Math.min(left, vp.width - size.width - safe));
+    const y = Math.max(safe, Math.min(top, vp.height - size.height - safe));
+    overlay.style.setProperty("--mascot-x", Math.round(x) + "px");
+    overlay.style.setProperty("--mascot-y", Math.round(y) + "px");
+    positionBubble();
+  }
+
+  function rectsIntersect(a, b) {
+    return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+  }
+
+  function visibleAvoidanceRects() {
+    const selectors = [
+      "dialog[open]",
+      '[role="dialog"]:not([hidden])',
+      '[aria-modal="true"]:not([hidden])',
+      '[role="menu"]:not([hidden])',
+      ".history-manage[open] .history-manage-menu",
+    ];
+    const seen = new Set();
+    const rects = [];
+    selectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((node) => {
+        if (!(node instanceof Element) || seen.has(node) || node === overlay || overlay?.contains(node)) return;
+        seen.add(node);
+        const style = getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return;
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        rects.push(rect);
+      });
     });
+    return rects;
   }
 
-  function animationForState(state) {
-    if (state === "welcome" || state === "hover") return MASCOT_ANIMATIONS.greeting;
-    if (PROCESSING_STATES.has(state)) return MASCOT_ANIMATIONS.analysing;
+  function positionDefault() {
+    if (!overlay || currentState === "running") return;
+    const vp = viewport();
+    const size = mascotSize();
+    const gap = isMobile() ? 10 : 22;
+    const candidates = [
+      { left: vp.width - size.width - gap, top: vp.height - size.height - gap },
+      { left: vp.width - size.width - gap, top: gap },
+      { left: gap, top: vp.height - size.height - gap },
+      { left: gap, top: gap },
+    ];
+    const blockers = visibleAvoidanceRects();
+    const chosen = candidates.find((candidate) => {
+      const rect = {
+        left: candidate.left,
+        top: candidate.top,
+        right: candidate.left + size.width,
+        bottom: candidate.top + size.height,
+      };
+      return blockers.every((blocker) => !rectsIntersect(rect, blocker));
+    }) || candidates[0];
+    setPosition(chosen.left, chosen.top);
+  }
+
+  function resolveTarget(input) {
+    if (input instanceof Element) return input.isConnected ? input : null;
+    if (typeof input === "string" && input) {
+      try { return document.querySelector(input); }
+      catch (_) { return null; }
+    }
     return null;
   }
 
-  function activateVideo(record, state) {
-    const animation = animationForState(state);
-    if (!animation || reducedMotion()) {
-      hideVideo(record, true);
-      return false;
+  function positionNearTarget() {
+    if (!currentTarget || !currentTarget.isConnected || isMobile()) {
+      if (currentTarget && !currentTarget.isConnected) currentTarget = null;
+      positionDefault();
+      return;
     }
-    const token = ++record.token;
-    record.mode = animation.mode;
-    record.video.loop = animation.loop;
-    record.video.dataset.grconAssetRevision = ASSET_REVISION;
-    if (record.video.src !== animation.url) {
-      record.video.src = animation.url;
-      record.video.load();
+    const targetRect = currentTarget.getBoundingClientRect();
+    const vp = viewport();
+    const size = mascotSize();
+    const gap = 20;
+    const candidates = [
+      { left: targetRect.right + gap, top: targetRect.top + (targetRect.height - size.height) / 2 },
+      { left: targetRect.left - size.width - gap, top: targetRect.top + (targetRect.height - size.height) / 2 },
+      { left: targetRect.left + (targetRect.width - size.width) / 2, top: targetRect.top - size.height - gap },
+      { left: targetRect.left + (targetRect.width - size.width) / 2, top: targetRect.bottom + gap },
+    ];
+    const fits = (p) => p.left >= 8 && p.top >= 8 && p.left + size.width <= vp.width - 8 && p.top + size.height <= vp.height - 8;
+    const choice = candidates.find(fits) || candidates[0];
+    setPosition(choice.left, choice.top);
+  }
+
+  function schedulePosition() {
+    if (positionFrame) return;
+    positionFrame = root.requestAnimationFrame(() => {
+      positionFrame = 0;
+      if (currentTarget) positionNearTarget();
+      else positionDefault();
+      refreshContext();
+    });
+  }
+
+  function handleViewportResize() {
+    if (!overlay) return;
+    overlay.style.transition = "none";
+    if (positionFrame) root.cancelAnimationFrame(positionFrame);
+    positionFrame = root.requestAnimationFrame(() => {
+      positionFrame = 0;
+      if (currentTarget) positionNearTarget();
+      else positionDefault();
+      positionBubble();
+      root.requestAnimationFrame(() => {
+        overlay?.style.removeProperty("transition");
+        if (currentTarget) positionNearTarget();
+        else positionDefault();
+        positionBubble();
+      });
+    });
+  }
+
+  function positionBubble() {
+    if (!bubble || bubble.dataset.visible !== "true" || !overlay) return;
+    const host = overlay.getBoundingClientRect();
+    const box = bubble.getBoundingClientRect();
+    const vp = viewport();
+    const gap = 8;
+    let left = host.left - box.width - gap;
+    let top = host.top + Math.max(0, (host.height - box.height) / 2);
+    if (left < 8) left = host.right + gap;
+    if (left + box.width > vp.width - 8) left = Math.max(8, vp.width - box.width - 8);
+    top = Math.max(8, Math.min(top, vp.height - box.height - 8));
+    bubble.style.left = Math.round(left) + "px";
+    bubble.style.top = Math.round(top) + "px";
+  }
+
+  function showBubble(message) {
+    ensureDom();
+    currentMessage = String(message || "").trim();
+    if (!currentMessage) {
+      hideBubble();
+      return;
+    }
+    bubble.textContent = currentMessage;
+    bubble.dataset.visible = "true";
+    positionBubble();
+  }
+
+  function hideBubble() {
+    currentMessage = "";
+    if (bubble) bubble.dataset.visible = "false";
+  }
+
+  function useFallback(reason) {
+    mediaToken += 1;
+    try { video.pause(); } catch (_) {}
+    overlay.dataset.media = "png";
+    overlay.dataset.mediaFallback = reason || "fallback";
+    mediaFailureCount += reason ? 1 : 0;
+    log("fallback", { reason: reason || "static" });
+  }
+
+  function revealVideo() {
+    if (!animationsEnabled() || reducedMotion() || !video?.currentSrc) return;
+    overlay.dataset.media = "video";
+    delete overlay.dataset.mediaFallback;
+  }
+
+  function handleMediaError() {
+    const error = video?.error;
+    useFallback(error ? "MediaError " + error.code : "media-error");
+  }
+
+  function clearVideoSource() {
+    mediaToken += 1;
+    try { video.pause(); } catch (_) {}
+    video.removeAttribute("src");
+    try { video.load(); } catch (_) {}
+    overlay.dataset.media = "png";
+  }
+
+  function playAsset(state) {
+    ensureDom();
+    if (!animationsEnabled() || reducedMotion()) {
+      clearVideoSource();
+      return;
+    }
+    const item = ASSETS[state];
+    if (!item) {
+      useFallback("asset-missing");
+      return;
+    }
+    const token = ++mediaToken;
+    video.loop = Boolean(item.loop);
+    video.preload = state === "running" ? "metadata" : "auto";
+    if (video.src !== item.url) {
+      video.src = item.url;
+      try { video.load(); } catch (_) {}
     } else {
-      try { record.video.currentTime = 0; } catch (_) { /* aguarda metadata */ }
+      try { video.currentTime = 0; } catch (_) {}
     }
-    record.loadTimer = root.setTimeout(() => {
-      if (token === record.token && record.mode) mediaFailure(record, record.mode, "timeout aguardando frame reproduzível");
-    }, 9000);
-    if (record.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) revealVideo(record, token);
-    startPlayback(record, token);
-    log("play-request", { state, mode: animation.mode, url: animation.url, loop: animation.loop });
-    return true;
-  }
-
-  function preload(mode) {
-    const animation = mode === "wave" ? MASCOT_ANIMATIONS.greeting : MASCOT_ANIMATIONS.analysing;
-    if (!animation || reducedMotion() || preloaders.has(mode)) return;
-    const video = document.createElement("video");
-    video.muted = true;
-    video.preload = "auto";
-    video.src = animation.url;
-    preloaders.set(mode, video);
-    try { video.load(); } catch (_) { /* o player visível fará nova tentativa */ }
-    log("preload", { mode, url: animation.url });
-  }
-
-  function normalizeState(state) {
-    return STATES.includes(state) ? state : "idle";
-  }
-
-  function stateForHost() {
-    return operationActive ? (operationState || "analyzing") : "idle";
-  }
-
-  function applyContextPose(state) {
-    const header = root.GRCONMascot;
-    if (!header?.setState) return;
-    if (state === "success") header.setState("success");
-    else if (state === "warning" || state === "error") header.setState("warning");
-    else if (state === "idle") header.clearState?.();
-  }
-
-  function playForRecord(record, requestedState, options) {
-    const state = normalizeState(requestedState);
-    if (operationActive && (state === "welcome" || state === "hover")) return record.state;
-    record.state = state;
-    record.host.dataset.grconMascotState = state;
-    if (animationForState(state)) activateVideo(record, state);
-    else hideVideo(record, true);
-    if (!options?.skipPose) applyContextPose(state);
-    return state;
-  }
-
-  function enhance(host) {
-    if (!host || records.has(host)) return records.get(host);
-    const video = makeVideo(host);
-    const record = { host, video, state: "", mode: "", token: 0, loadTimer: 0, warnedModes: new Set(), failures: {}, lastError: "" };
-    records.set(host, record);
-    host.classList.add("grcon-mascot-video-host");
-    host.setAttribute("tabindex", "0");
-    host.setAttribute("role", "button");
-    host.setAttribute("aria-haspopup", "true");
-
-    const onReady = () => revealVideo(record, record.token);
-    const onError = () => {
-      const mediaError = record.video.error;
-      mediaFailure(record, record.mode, mediaError ? `MediaError ${mediaError.code}` : "falha de carregamento");
-    };
-    const onAbort = () => { if (record.mode && !operationActive) log("media-abort", { mode: record.mode }); };
-    const onWaiting = () => { if (record.mode) log("media-waiting", { mode: record.mode, readyState: record.video.readyState }); };
-    const onStalled = () => { if (record.mode) log("media-stalled", { mode: record.mode, networkState: record.video.networkState }); };
-    const onEnded = () => {
-      if (record.mode !== "wave" || operationActive) return;
-      hideVideo(record, true);
-      record.state = "idle";
-      record.host.dataset.grconMascotState = "idle";
-    };
-    const enter = (event) => {
-      if (event.pointerType === "touch" || operationActive) return;
-      playForRecord(record, "hover", { source: "pointer" });
-      showGreeting(host, false);
-    };
-    const leave = (event) => {
-      if (event.pointerType === "touch" || operationActive) return;
-      hideGreeting(false);
-      playForRecord(record, "idle", { source: "pointer" });
-    };
-    const focus = () => {
-      if (!operationActive) {
-        playForRecord(record, "hover", { source: "focus" });
-        showGreeting(host, false);
-      }
-    };
-    const blur = () => {
-      hideGreeting(false);
-      if (!operationActive) playForRecord(record, "idle", { source: "blur" });
-    };
-    const click = (event) => {
-      event.stopPropagation();
-      if (operationActive) return;
-      if (pinnedBubbleHost === host) hideGreeting(true);
-      else {
-        showGreeting(host, true);
-        playForRecord(record, "welcome", { source: "click" });
-      }
-    };
-    const keydown = (event) => {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); click(event); }
-      else if (event.key === "Escape") hideGreeting(true);
-    };
-
-    Object.assign(record, { onReady, onError, onAbort, onWaiting, onStalled, onEnded, enter, leave, focus, blur, click, keydown });
-    video.addEventListener("loadeddata", onReady);
-    video.addEventListener("canplay", onReady);
-    video.addEventListener("canplaythrough", onReady);
-    video.addEventListener("error", onError);
-    video.addEventListener("abort", onAbort);
-    video.addEventListener("waiting", onWaiting);
-    video.addEventListener("stalled", onStalled);
-    video.addEventListener("ended", onEnded);
-    host.addEventListener("pointerenter", enter);
-    host.addEventListener("pointerleave", leave);
-    host.addEventListener("focus", focus);
-    host.addEventListener("blur", blur);
-    host.addEventListener("click", click);
-    host.addEventListener("keydown", keydown);
-    playForRecord(record, stateForHost(), { source: "enhance", skipPose: true });
-    return record;
-  }
-
-  function dispose(record) {
-    hideVideo(record, false);
-    const { host, video } = record;
-    video.removeEventListener("loadeddata", record.onReady);
-    video.removeEventListener("canplay", record.onReady);
-    video.removeEventListener("canplaythrough", record.onReady);
-    video.removeEventListener("error", record.onError);
-    video.removeEventListener("abort", record.onAbort);
-    video.removeEventListener("waiting", record.onWaiting);
-    video.removeEventListener("stalled", record.onStalled);
-    video.removeEventListener("ended", record.onEnded);
-    host.removeEventListener("pointerenter", record.enter);
-    host.removeEventListener("pointerleave", record.leave);
-    host.removeEventListener("focus", record.focus);
-    host.removeEventListener("blur", record.blur);
-    host.removeEventListener("click", record.click);
-    host.removeEventListener("keydown", record.keydown);
-    records.delete(host);
-  }
-
-  function refresh(scope) {
-    const source = scope?.querySelectorAll ? scope : document;
-    if (source.matches?.(SELECTOR)) enhance(source);
-    source.querySelectorAll(SELECTOR).forEach(enhance);
-    records.forEach((record) => {
-      if (!record.host.isConnected) { dispose(record); return; }
-      const desired = stateForHost();
-      if (record.state !== desired && record.state !== "hover" && record.state !== "welcome") {
-        playForRecord(record, desired, { source: "refresh", skipPose: true });
-      }
+    let playResult;
+    try { playResult = video.play(); }
+    catch (error) {
+      if (token === mediaToken) useFallback(error?.message || "play-error");
+      return;
+    }
+    if (playResult?.catch) playResult.catch((error) => {
+      if (token === mediaToken) useFallback(error?.message || "play-rejected");
     });
   }
 
-  function play(state, options) {
-    const normalized = normalizeState(state);
-    records.forEach((record) => playForRecord(record, normalized, options));
-    return normalized;
+  function statePose() {
+    if (currentState === "warning") return "warning";
+    if (currentState === "success") return "success";
+    return activeContext().pose;
   }
 
-  function stop() {
-    records.forEach((record) => {
-      hideVideo(record, true);
-      record.state = "stopped";
-      record.host.dataset.grconMascotState = "stopped";
-    });
-  }
+  function applyState(nextInput, options) {
+    const config = options || {};
+    const next = normalizeState(nextInput);
+    ensureDom();
+    if (!config.force && Date.now() < warningUntil && PRIORITY[next] < PRIORITY.warning) return currentState;
+    if (!config.force && PRIORITY[next] < PRIORITY[currentState] && currentState === "warning") return currentState;
 
-  function mapTask(task, explicitState) {
-    if (STATES.includes(explicitState)) return explicitState;
-    const value = String(task || "").toLocaleLowerCase("pt-BR");
-    if (/sigem|projectwise|\bpw\b/.test(value)) return "sigem-pw-analysis";
-    if (/egrdt|grdt/.test(value)) return "generating-grdt";
-    if (/\bld\b|document|analis|confer/.test(value)) return "searching-files";
-    if (/upload|import|base/.test(value)) return "uploading";
-    return "loading";
-  }
-
-  function beginOperation(detail) {
     root.clearTimeout(transientTimer);
-    root.clearTimeout(pulseTimer);
-    root.clearTimeout(greetingTimer);
-    operationActive = true;
-    pendingOutcome = "";
-    operationState = mapTask(detail?.task, detail?.state);
-    hideGreeting(true);
-    records.forEach((record) => record.host.setAttribute("aria-busy", "true"));
-    play(operationState, { source: "operation", hold: true });
-    log("operation-begin", { state: operationState, task: detail?.task || "" });
-  }
+    transientTimer = 0;
+    currentState = next;
+    overlay.dataset.state = next;
+    document.documentElement.dataset.grconMascotState = next;
+    setFallbackPose(statePose());
 
-  function endOperation(detail) {
-    operationActive = false;
-    const outcome = detail?.outcome || pendingOutcome;
-    pendingOutcome = "";
-    operationState = "";
-    records.forEach((record) => record.host.removeAttribute("aria-busy"));
-    if (outcome === "error") play("error", { source: "operation-end" });
-    else if (outcome === "warning") play("warning", { source: "operation-end" });
-    else if (outcome === "success") play("success", { source: "operation-end" });
-    else play("idle", { source: "operation-end" });
-    if (outcome) {
-      root.clearTimeout(transientTimer);
-      transientTimer = root.setTimeout(() => { if (!operationActive) play("idle", { source: "outcome-end" }); }, 2300);
+    if (next === "hidden") {
+      clearVideoSource();
+      hideBubble();
+      return next;
     }
-    log("operation-end", { outcome: outcome || "idle" });
+
+    if (next === "running" && (isMobile() || reducedMotion())) {
+      currentState = "analyzing";
+      overlay.dataset.state = "analyzing";
+      document.documentElement.dataset.grconMascotState = "analyzing";
+    }
+
+    playAsset(currentState);
+    if (config.message) showBubble(config.message);
+    else if (currentState === "idle") hideBubble();
+
+    if (currentTarget) positionNearTarget();
+    else positionDefault();
+
+    log("state", { state: currentState, source: config.source || "api", context: currentContext });
+    return currentState;
   }
 
-  function handleOperation(event) {
+  function nextOperationalState() {
+    let latest = null;
+    operations.forEach((op) => {
+      if (op.cancelled || op.generation !== contextGeneration) return;
+      if (!latest || op.sequence > latest.sequence) latest = op;
+    });
+    return latest ? latest.state : "idle";
+  }
+
+  function returnFromTransient() {
+    if (pendingSuccess && !operations.size) {
+      pendingSuccess = false;
+      success({ source: "queued-success" });
+      return;
+    }
+    applyState(nextOperationalState(), { force: true, source: "transient-return" });
+  }
+
+  function warning(options) {
+    const config = typeof options === "string" ? { message: options } : (options || {});
+    const duration = Math.max(1500, Number(config.duration) || 3600);
+    currentTarget = resolveTarget(config.target);
+    warningUntil = Date.now() + duration;
+    applyState("warning", { force: true, message: config.message || "Confira esta informação.", source: config.source || "warning" });
+    root.clearTimeout(warningTimer);
+    warningTimer = root.setTimeout(() => {
+      warningTimer = 0;
+      warningUntil = 0;
+      currentTarget = null;
+      hideBubble();
+      returnFromTransient();
+    }, duration);
+    return "warning";
+  }
+
+  function success(options) {
+    const config = options || {};
+    if (Date.now() < warningUntil) {
+      pendingSuccess = true;
+      return "warning";
+    }
+    pendingSuccess = false;
+    currentTarget = resolveTarget(config.target);
+    applyState("success", { force: true, message: config.message || "Operação concluída.", source: config.source || "success" });
+    root.clearTimeout(transientTimer);
+    transientTimer = root.setTimeout(() => {
+      currentTarget = null;
+      hideBubble();
+      applyState("idle", { force: true, source: "success-complete" });
+    }, Math.max(1500, Number(config.duration) || 3100));
+    return "success";
+  }
+
+  function idle(options) {
+    warningUntil = 0;
+    root.clearTimeout(warningTimer);
+    warningTimer = 0;
+    currentTarget = null;
+    hideBubble();
+    return applyState("idle", { force: true, source: options?.source || "idle" });
+  }
+
+  function hide() {
+    currentTarget = null;
+    hideBubble();
+    return applyState("hidden", { force: true, source: "hide" });
+  }
+
+  function run(options) {
+    const config = options || {};
+    const value = applyState("running", { force: true, message: config.message || "Processando…", source: config.source || "run" });
+    if (!operations.size) {
+      root.clearTimeout(transientTimer);
+      transientTimer = root.setTimeout(() => {
+        hideBubble();
+        applyState("idle", { force: true, source: "run-complete" });
+      }, Math.max(2200, Number(config.duration) || 4300));
+    }
+    return Promise.resolve(value !== "hidden");
+  }
+
+  function show(stateOrOptions, maybeOptions) {
+    const config = typeof stateOrOptions === "object" ? stateOrOptions : { ...(maybeOptions || {}), state: stateOrOptions };
+    const state = normalizeState(config.state);
+    currentTarget = resolveTarget(config.target);
+    if (state === "warning") return warning(config);
+    if (state === "success") return success(config);
+    if (state === "running") { void run(config); return "running"; }
+    return applyState(state, { force: Boolean(config.force), message: config.message, source: config.source || "show" });
+  }
+
+  function begin(options) {
+    const config = options || {};
+    const id = "mascot-op-" + (++sequence);
+    const initial = normalizeState(config.state || "analyzing");
+    const op = {
+      id,
+      sequence,
+      generation: contextGeneration,
+      context: currentContext,
+      state: initial === "running" ? "running" : "analyzing",
+      cancelled: false,
+    };
+    operations.set(id, op);
+    currentTarget = resolveTarget(config.target);
+    if (Date.now() < warningUntil && currentState === "warning") {
+      log("operation-begin-queued-during-warning", { id, state: op.state });
+    } else {
+      applyState(op.state, { force: true, message: config.message || "", source: "operation-begin" });
+    }
+
+    const valid = () => operations.has(id) && !op.cancelled && op.generation === contextGeneration;
+    const finish = (outcome, detail) => {
+      if (!operations.has(id)) return false;
+      operations.delete(id);
+      if (!valid() && op.generation !== contextGeneration) {
+        log("stale-operation", { id, from: op.context, to: currentContext });
+        if (!operations.size) applyState("idle", { force: true, source: "stale-operation" });
+        return false;
+      }
+      if (outcome === "success") {
+        if (operations.size) applyState(nextOperationalState(), { force: true, source: "operation-peer-active" });
+        else success({ ...(detail || {}), source: "operation-success" });
+      } else if (outcome === "warning") {
+        warning({ ...(detail || {}), source: "operation-warning" });
+      } else {
+        applyState(nextOperationalState(), { force: true, source: "operation-end" });
+      }
+      return true;
+    };
+
+    return Object.freeze({
+      id,
+      success: (detail) => finish("success", detail),
+      warning: (detail) => finish("warning", detail),
+      cancel: () => { op.cancelled = true; return finish("cancel"); },
+      end: () => finish("end"),
+      running: (message) => {
+        if (!valid()) return false;
+        op.state = "running";
+        if (!(Date.now() < warningUntil && currentState === "warning")) {
+          applyState("running", { force: true, message: message || config.message || "", source: "operation-running" });
+        }
+        return true;
+      },
+      analyzing: (message) => {
+        if (!valid()) return false;
+        op.state = "analyzing";
+        if (!(Date.now() < warningUntil && currentState === "warning")) {
+          applyState("analyzing", { force: true, message: message || config.message || "", source: "operation-analyzing" });
+        }
+        return true;
+      },
+    });
+  }
+
+  function inferWarningTarget(message) {
+    const value = String(message || "").toLocaleLowerCase("pt-BR");
+    if (/revis[aã]o/.test(value)) return "#drawer-revision";
+    if (/databook/.test(value)) return "#drawer-databook";
+    if (/t[ií]tulo/.test(value)) return "#drawer-title";
+    if (/taxonomia/.test(value)) return "#cover-taxonomy";
+    return null;
+  }
+
+  function shouldRunLong(detail) {
+    const text = [detail?.state, detail?.task, detail?.context].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR");
+    return /sigem-pw|projectwise|\bpw\b|worker|combinar pdf|importa|base grande|muitos documentos/.test(text);
+  }
+
+  function beginLegacy(detail) {
+    if (legacyOperation) legacyOperation.cancel();
+    const running = normalizeState(detail?.state) === "running" || shouldRunLong(detail);
+    legacyOperation = begin({
+      state: running ? "analyzing" : normalizeState(detail?.state || "analyzing"),
+      message: detail?.task || detail?.message || "",
+    });
+    root.clearTimeout(longOperationTimer);
+    if (running) {
+      longOperationTimer = root.setTimeout(() => {
+        legacyOperation?.running(detail?.task || "Processando dados…");
+      }, 1800);
+    }
+  }
+
+  function endLegacy(successful) {
+    root.clearTimeout(longOperationTimer);
+    longOperationTimer = 0;
+    const op = legacyOperation;
+    legacyOperation = null;
+    if (!op) {
+      if (successful) success({ source: "legacy-notification" });
+      else if (Date.now() >= warningUntil) idle({ source: "legacy-end" });
+      return;
+    }
+    if (Date.now() < warningUntil) {
+      operations.delete(op.id);
+      if (successful) pendingSuccess = true;
+      return;
+    }
+    if (successful) {
+      pendingSuccess = false;
+      op.success();
+    } else op.end();
+  }
+
+  function handleOperationEvent(event) {
     const detail = event?.detail || {};
-    if (detail.active) beginOperation(detail);
-    else endOperation(detail);
-  }
-
-  function handleNotification(event) {
-    const kind = event?.detail?.kind;
-    if (!kind || kind === "info") return;
-    const state = kind === "error" ? "error" : kind === "success" ? "success" : "warning";
-    if (operationActive) pendingOutcome = state;
-    else {
-      play(state, { source: "notification" });
-      root.clearTimeout(transientTimer);
-      transientTimer = root.setTimeout(() => { if (!operationActive) play("idle", { source: "notification-end" }); }, 2300);
-    }
+    if (detail.active) beginLegacy(detail);
+    else endLegacy(Boolean(detail.success) || pendingSuccess);
   }
 
   function handlePulse(event) {
     const duration = Math.min(3000, Math.max(700, Number(event?.detail?.duration) || 1100));
-    root.clearTimeout(pulseTimer);
-    if (!operationActive) play(mapTask(event?.detail?.task, event?.detail?.state), { source: "pulse" });
-    pulseTimer = root.setTimeout(() => { if (!operationActive) play("idle", { source: "pulse-end" }); }, duration);
-  }
-
-  function maybeWelcome() {
-    if (operationActive) return;
-    if (document.documentElement.classList.contains("grcon-cloud-pending")) {
-      log("greeting-skip", { reason: "authenticated-interface-locked" });
+    if (operations.size || Date.now() < warningUntil) {
+      log("processing-pulse-skip", { operations: operations.size, warning: Date.now() < warningUntil });
       return;
     }
-    const identity = currentIdentity();
-    const userId = identity.userId || identity.email || "";
-    if (!userId) return;
-    lastUserId = userId;
-    if (welcomeShown || greetingAlreadyPlayed(userId)) {
-      welcomeShown = true;
-      log("greeting-skip", { reason: "already-played-this-session" });
+    currentTarget = null;
+    hideBubble();
+    applyState("analyzing", { force: true, source: "processing-pulse" });
+    root.clearTimeout(transientTimer);
+    transientTimer = root.setTimeout(() => {
+      transientTimer = 0;
+      if (operations.size || Date.now() < warningUntil) return;
+      hideBubble();
+      applyState("idle", { force: true, source: "processing-pulse-end" });
+    }, duration);
+  }
+
+  function handleNotification(event) {
+    const detail = event?.detail || {};
+    const kind = String(detail.kind || "").toLowerCase();
+    if (kind === "success") {
+      if (legacyOperation || operations.size) pendingSuccess = true;
+      else success({ message: detail.message || "Operação concluída.", source: "notification" });
       return;
     }
-    const host = document.querySelector(".grcon-brand-mascot");
-    const record = records.get(host);
-    if (!host || !record) return;
-    markGreetingPlayed(userId);
-    showGreeting(host, false);
-    playForRecord(record, "welcome", { source: "login-greeting" });
-    root.clearTimeout(greetingTimer);
-    greetingTimer = root.setTimeout(() => {
-      if (activeBubbleHost === host && !pinnedBubbleHost) hideGreeting(false);
-    }, 3200);
-    log("greeting-play", { name: resolveFirstName(identity) || "", media: reducedMotion() ? "reduced-motion-static" : "wave" });
+    if (kind === "warn" || kind === "warning" || kind === "error") {
+      const target = detail.target || inferWarningTarget(detail.message);
+      warning({ target, message: detail.message || "Confira esta informação.", source: "notification" });
+    }
   }
 
-  function observeAuthLockState() {
-    htmlObserver = new MutationObserver(() => {
-      const locked = document.documentElement.classList.contains("grcon-cloud-pending");
-      if (locked && !wasAppLocked) {
-        clearGreetingFor(lastUserId);
-        lastUserId = "";
-        hideGreeting(true);
-        play("idle", { source: "signed-out" });
-        log("session-reset", { reason: "app-locked-after-active-session" });
-      }
-      wasAppLocked = locked;
-    });
-    htmlObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  function maybeHello() {
+    if (appLocked() || helloPlayed() || operations.size || Date.now() < warningUntil) return false;
+    markHelloPlayed();
+    currentTarget = null;
+    applyState("hello", { force: true, message: greetingMessage(), source: "session-hello" });
+    root.clearTimeout(transientTimer);
+    transientTimer = root.setTimeout(() => {
+      hideBubble();
+      applyState("idle", { force: true, source: "hello-complete" });
+    }, 4200);
+    return true;
   }
 
-  function resumeVisibleVideos() {
-    records.forEach((record) => {
-      if (!record.mode) return;
-      if (document.hidden) safePause(record.video);
-      else {
-        revealVideo(record, record.token);
-        startPlayback(record, record.token);
-      }
+  function preload(state) {
+    if (!animationsEnabled() || reducedMotion() || detachedPreloaders.has(state) || !ASSETS[state]) return;
+    const probe = document.createElement("video");
+    probe.muted = true;
+    probe.preload = "auto";
+    probe.src = ASSETS[state].url;
+    detachedPreloaders.set(state, probe);
+    try { probe.load(); } catch (_) {}
+  }
+
+  function scheduleLazyPreload() {
+    if (!animationsEnabled() || reducedMotion()) return;
+    preload("idle");
+    preload("hello");
+    const loadLater = () => ["analyzing", "warning", "success"].forEach(preload);
+    if (typeof root.requestIdleCallback === "function") root.requestIdleCallback(loadLater, { timeout: 3500 });
+    else root.setTimeout(loadLater, 1800);
+  }
+
+  function setEnabled(enabled) {
+    try { root.localStorage.setItem(PREF_KEY, enabled ? "on" : "off"); } catch (_) {}
+    const input = document.getElementById(SETTINGS_ID);
+    if (input) input.checked = Boolean(enabled);
+    if (!enabled) {
+      detachedPreloaders.clear();
+      clearVideoSource();
+      overlay.dataset.media = "png";
+    } else {
+      scheduleLazyPreload();
+      playAsset(currentState === "hidden" ? "idle" : currentState);
+    }
+    document.documentElement.dataset.grconMascotAnimations = enabled ? "on" : "off";
+    return Boolean(enabled);
+  }
+
+  function installSettingsControl() {
+    if (document.getElementById(SETTINGS_ID)) return;
+    const container = document.querySelector("#macro6-productivity .settings-group-body");
+    if (!container) return;
+    const label = document.createElement("label");
+    label.className = "grcon-mascot-setting-row";
+    const copy = document.createElement("span");
+    const strong = document.createElement("strong");
+    strong.textContent = "Animações do mascote";
+    const small = document.createElement("small");
+    small.textContent = "Ative ou desative apenas as animações visuais; as validações do GRCON continuam funcionando.";
+    copy.append(strong, small);
+    const input = document.createElement("input");
+    input.id = SETTINGS_ID;
+    input.type = "checkbox";
+    input.checked = animationsEnabled();
+    input.setAttribute("aria-label", "Animações do mascote");
+    input.addEventListener("change", () => setEnabled(input.checked));
+    label.append(copy, input);
+    container.prepend(label);
+  }
+
+  function handlePointer(event) {
+    if (currentState !== "idle" || isMobile() || reducedMotion() || !animationsEnabled()) return;
+    pendingPointer = { x: event.clientX, y: event.clientY };
+    if (pointerFrame) return;
+    pointerFrame = root.requestAnimationFrame(() => {
+      pointerFrame = 0;
+      if (!pendingPointer || !overlay) return;
+      const rect = overlay.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = Math.max(-4, Math.min(4, (pendingPointer.x - cx) / 160));
+      const dy = Math.max(-3, Math.min(3, (pendingPointer.y - cy) / 190));
+      overlay.style.setProperty("--cursor-x", dx.toFixed(2) + "px");
+      overlay.style.setProperty("--cursor-y", dy.toFixed(2) + "px");
+      overlay.style.setProperty("--cursor-tilt", (dx * 0.22).toFixed(2) + "deg");
     });
+  }
+
+  function handleEnded() {
+    if (currentState === "hello") {
+      hideBubble();
+      applyState("idle", { force: true, source: "hello-ended" });
+    } else if (currentState === "success" && !operations.size) {
+      hideBubble();
+      applyState("idle", { force: true, source: "success-ended" });
+    }
   }
 
   function diagnostics() {
-    const identity = currentIdentity();
     return Object.freeze({
       version: VERSION,
+      engine: ENGINE,
       assetRevision: ASSET_REVISION,
-      engine: document.documentElement.dataset.grconMascotEngine || ENGINE,
-      ready: initialized,
+      state: currentState,
+      states: [currentState],
+      context: currentContext,
+      contextGeneration,
+      instances: overlay?.isConnected ? 1 : 0,
+      activeVideos: overlay?.dataset.media === "video" && !video?.paused ? 1 : 0,
+      animationsEnabled: animationsEnabled(),
       reducedMotion: reducedMotion(),
-      operationActive,
-      operationState,
-      appLocked: document.documentElement.classList.contains("grcon-cloud-pending"),
-      greetingPlayedThisSession: Boolean((identity.userId || identity.email) && greetingAlreadyPlayed(identity.userId || identity.email)),
-      instances: records.size,
-      activeVideos: Array.from(records.values()).filter((record) => record.host.classList.contains("is-video-active")).length,
-      states: Array.from(records.values()).map((record) => record.state),
-      assets: {
-        wave: MASCOT_ANIMATIONS.greeting.url,
-        processing: MASCOT_ANIMATIONS.analysing.url,
-      },
-      records: Array.from(records.values()).map((record) => ({
-        state: record.state,
-        mode: record.mode,
-        media: record.host.dataset.grconMascotMedia || "png",
-        failures: { ...record.failures },
-        lastError: record.lastError,
-      })),
-      recentEvents: diagnosticsLog.slice(-12),
-      debug: DEBUG,
-      source: "same-origin-versioned-webm-with-png-fallback",
+      greetingPlayedThisSession: helloPlayed(),
+      appLocked: appLocked(),
+      media: overlay?.dataset.media || "png",
+      mediaFailureCount,
+      activeOperations: operations.size,
+      targetConnected: Boolean(currentTarget?.isConnected),
+      assets: Object.fromEntries(Object.entries(ASSETS).map(([key, value]) => [key, value.url])),
+      log: logEntries.slice(-20),
+      ready: initialized,
     });
+  }
+
+  function initObserver() {
+    if (observer || !document.body) return;
+    observer = new MutationObserver((entries) => {
+      if (!entries.some((entry) => entry.type === "childList" || ["hidden", "aria-hidden", "class", "open"].includes(entry.attributeName))) return;
+      refreshContext();
+      installSettingsControl();
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "aria-hidden", "class", "open"] });
+  }
+
+  function initAuthObserver() {
+    if (authObserver) return;
+    wasAppLocked = appLocked();
+    authObserver = new MutationObserver(() => {
+      const locked = appLocked();
+      if (locked === wasAppLocked) return;
+      if (locked) {
+        clearHelloMarker();
+        root.clearTimeout(transientTimer);
+        transientTimer = 0;
+        root.clearTimeout(warningTimer);
+        warningTimer = 0;
+        warningUntil = 0;
+        pendingSuccess = false;
+        hideBubble();
+        if (!operations.size) applyState("idle", { force: true, source: "signed-out" });
+        log("session-reset", { reason: "app-locked-after-active-session" });
+      } else {
+        root.setTimeout(maybeHello, 0);
+      }
+      wasAppLocked = locked;
+    });
+    authObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
   }
 
   function init() {
     if (initialized) return;
-    installStyles();
     initialized = true;
-    document.documentElement.dataset.grconMascotEngine = ENGINE;
-    document.documentElement.dataset.grconMascotVideo = reducedMotion() ? "reduced-motion" : "ready";
-    ensureBubble();
-    refresh(document);
-    preload("wave");
-    const preloadProcessing = () => preload("processing");
-    if (root.requestIdleCallback) root.requestIdleCallback(preloadProcessing, { timeout: 2500 });
-    else root.setTimeout(preloadProcessing, 900);
-    if (document.documentElement.dataset.grconControlProcessing === "true") beginOperation({ task: "Análise documental" });
-    maybeWelcome();
-
-    observer = new MutationObserver((mutations) => {
-      if (mutations.some((mutation) => mutation.type === "childList" || mutation.type === "attributes")) {
-        root.requestAnimationFrame(() => refresh(document));
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-pose", "data-context", "hidden", "aria-hidden"] });
-    observeAuthLockState();
-
-    root.addEventListener("grcon:processing-state", handleOperation);
-    root.addEventListener("grcon:mascot-operation", handleOperation);
+    ensureDom();
+    refreshContext();
+    installSettingsControl();
+    initObserver();
+    initAuthObserver();
+    document.documentElement.dataset.grconMascotRuntime = ENGINE;
+    document.documentElement.dataset.grconMascotAnimations = animationsEnabled() ? "on" : "off";
+    root.addEventListener("resize", handleViewportResize, { passive: true });
+    root.addEventListener("scroll", schedulePosition, { passive: true, capture: true });
+    root.addEventListener("pointermove", handlePointer, { passive: true });
+    root.addEventListener("grcon:processing-state", handleOperationEvent);
+    root.addEventListener("grcon:mascot-operation", handleOperationEvent);
     root.addEventListener("grcon:processing-pulse", handlePulse);
     root.addEventListener("grcon:notification", handleNotification);
-    root.addEventListener("grcon:cloud-ready", maybeWelcome);
-    root.addEventListener("grcon:identity-changed", maybeWelcome);
-    document.addEventListener("pointerdown", (event) => {
-      if (pinnedBubbleHost && !pinnedBubbleHost.contains(event.target)) hideGreeting(true);
-    }, true);
-    document.addEventListener("visibilitychange", resumeVisibleVideos);
-    root.addEventListener("resize", () => { if (activeBubbleHost) positionBubble(activeBubbleHost); }, { passive: true });
-    root.addEventListener("scroll", () => { if (activeBubbleHost) positionBubble(activeBubbleHost); }, { passive: true, capture: true });
+    root.addEventListener("grcon:mascot-warning", (event) => warning(event?.detail || {}));
+    root.addEventListener("grcon:mascot-success", (event) => success(event?.detail || {}));
+    root.addEventListener("grcon:mascot-run", (event) => { void run(event?.detail || {}); });
+    root.addEventListener("grcon:mascot-context-refresh", (event) => refreshContext(event?.detail?.pose));
+    root.addEventListener("grcon:cloud-ready", maybeHello);
+    root.addEventListener("grcon:identity-changed", maybeHello);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        try { video?.pause(); } catch (_) {}
+      } else if (currentState !== "hidden") {
+        playAsset(currentState);
+      }
+    });
     root.addEventListener("pagehide", () => {
-      observer?.disconnect();
-      htmlObserver?.disconnect();
-      root.clearTimeout(pulseTimer);
       root.clearTimeout(transientTimer);
-      root.clearTimeout(greetingTimer);
-      records.forEach(dispose);
-      preloaders.forEach((video) => { safePause(video); video.removeAttribute("src"); });
-      preloaders.clear();
+      root.clearTimeout(warningTimer);
+      root.clearTimeout(longOperationTimer);
+      if (positionFrame) root.cancelAnimationFrame(positionFrame);
+      if (pointerFrame) root.cancelAnimationFrame(pointerFrame);
+      operations.clear();
+      authObserver?.disconnect();
+      try { video?.pause(); } catch (_) {}
     }, { once: true });
-
-    log("init", { version: VERSION, assetRevision: ASSET_REVISION });
+    scheduleLazyPreload();
+    applyState("idle", { force: true, source: "init" });
+    if (!appLocked()) root.setTimeout(maybeHello, 180);
   }
 
-  root.GrconMascot = Object.freeze({
+  const api = Object.freeze({
     version: VERSION,
+    engine: ENGINE,
     states: STATES,
-    animations: MASCOT_ANIMATIONS,
-    play,
-    setState: play,
-    stop,
-    reset: () => play("idle", { source: "reset" }),
-    refresh: () => refresh(document),
-    begin: (state, task) => beginOperation({ state, task }),
-    finish: (outcome) => endOperation({ outcome }),
-    showGreeting: (host) => showGreeting(host || document.querySelector(SELECTOR), true),
-    hideGreeting: () => hideGreeting(true),
-    diagnostics,
-  });
-  root.GRCONMascotGreeting = Object.freeze({
-    version: VERSION,
-    refresh: () => refresh(document),
-    open: (host) => showGreeting(host || document.querySelector(SELECTOR), true),
-    close: () => hideGreeting(true),
-    greetingText,
-    setProcessing: (active) => handleOperation({ detail: { active, task: "Análise documental" } }),
-    pulseProcessing: (duration) => handlePulse({ detail: { duration } }),
+    assets: ASSETS,
+    show,
+    play: show,
+    warning,
+    success,
+    run,
+    idle,
+    hide,
+    stop: hide,
+    reset: idle,
+    begin,
+    setEnabled,
+    isEnabled: animationsEnabled,
+    refresh: refreshContext,
     diagnostics,
   });
 
+  root.GrconMascot = api;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 })(window);

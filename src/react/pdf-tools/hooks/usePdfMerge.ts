@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pdfMergeAdapter as Adapter, pdfMergeBridge } from "../services/pdfMergeAdapter";
+import { beginMascotOperation } from "../../shared/mascot";
 import type {
   PdfMergeDebugState,
   PdfMergeItem,
@@ -185,6 +186,11 @@ export function usePdfMerge() {
       return;
     }
 
+    const mascotOperation = beginMascotOperation({
+      state: "running",
+      message: "Combinando PDFs…",
+      source: "pdf-tools",
+    });
     invalidateResult();
     const normalizedName = Adapter.outputFileName(outputNameRef.current);
     outputNameRef.current = normalizedName;
@@ -207,6 +213,7 @@ export function usePdfMerge() {
         `PDF combinado: ${nextResult.pageCount.toLocaleString("pt-BR")} página(s) em um único arquivo.`,
         "success",
       );
+      mascotOperation.success({ message: "PDF combinado com sucesso." });
       const downloadedName = Adapter.triggerDownload(nextResult.url, normalizedName);
       if (downloadedName !== nextResult.name) {
         const renamed = { ...nextResult, name: downloadedName };
@@ -215,7 +222,11 @@ export function usePdfMerge() {
     } catch (error) {
       const failure = error as { code?: string; message?: string };
       if (failure.code !== "CANCELLED") {
-        Adapter.notify(failure.message || "Não foi possível combinar os arquivos.", "error");
+        const message = failure.message || "Não foi possível combinar os arquivos.";
+        Adapter.notify(message, "error");
+        mascotOperation.warning({ message });
+      } else {
+        mascotOperation.cancel();
       }
     } finally {
       if (mountedRef.current) {
