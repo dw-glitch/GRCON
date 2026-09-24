@@ -71,6 +71,7 @@
   let currentContext = "";
   let contextGeneration = 0;
   let transientTimer = 0;
+  let warningTimer = 0;
   let longOperationTimer = 0;
   let positionFrame = 0;
   let pointerFrame = 0;
@@ -79,6 +80,9 @@
   let pendingSuccess = false;
   let legacyOperation = null;
   let observer = null;
+  let authObserver = null;
+  let wasAppLocked = null;
+  let lastHelloStorageKey = "";
   let overlay = null;
   let video = null;
   let fallback = null;
@@ -140,18 +144,24 @@
   }
 
   function helloPlayed() {
-    try { return root.sessionStorage.getItem(helloKey()) === ASSET_REVISION; }
+    const key = helloKey();
+    if (key !== SESSION_PREFIX + "session") lastHelloStorageKey = key;
+    try { return root.sessionStorage.getItem(key) === ASSET_REVISION; }
     catch (_) { return false; }
   }
 
   function markHelloPlayed() {
-    try { root.sessionStorage.setItem(helloKey(), ASSET_REVISION); }
+    const key = helloKey();
+    lastHelloStorageKey = key;
+    try { root.sessionStorage.setItem(key, ASSET_REVISION); }
     catch (_) { /* memória de sessão indisponível não pode quebrar o GRCON */ }
   }
 
   function clearHelloMarker() {
-    try { root.sessionStorage.removeItem(helloKey()); }
+    const key = lastHelloStorageKey || helloKey();
+    try { root.sessionStorage.removeItem(key); }
     catch (_) {}
+    lastHelloStorageKey = "";
   }
 
   function installStyles() {
@@ -541,16 +551,18 @@
 
   function warning(options) {
     const config = typeof options === "string" ? { message: options } : (options || {});
+    const duration = Math.max(1500, Number(config.duration) || 3600);
     currentTarget = resolveTarget(config.target);
-    warningUntil = Date.now() + Math.max(1500, Number(config.duration) || 3600);
+    warningUntil = Date.now() + duration;
     applyState("warning", { force: true, message: config.message || "Confira esta informação.", source: config.source || "warning" });
-    root.clearTimeout(transientTimer);
-    transientTimer = root.setTimeout(() => {
+    root.clearTimeout(warningTimer);
+    warningTimer = root.setTimeout(() => {
+      warningTimer = 0;
       warningUntil = 0;
       currentTarget = null;
       hideBubble();
       returnFromTransient();
-    }, Math.max(1500, Number(config.duration) || 3600));
+    }, duration);
     return "warning";
   }
 
@@ -574,6 +586,8 @@
 
   function idle(options) {
     warningUntil = 0;
+    root.clearTimeout(warningTimer);
+    warningTimer = 0;
     currentTarget = null;
     hideBubble();
     return applyState("idle", { force: true, source: options?.source || "idle" });
@@ -622,7 +636,11 @@
     };
     operations.set(id, op);
     currentTarget = resolveTarget(config.target);
-    applyState(op.state, { force: true, message: config.message || "", source: "operation-begin" });
+    if (Date.now() < warningUntil && currentState === "warning") {
+      log("operation-begin-queued-during-warning", { id, state: op.state });
+    } else {
+      applyState(op.state, { force: true, message: config.message || "", source: "operation-begin" });
+    }
 
     const valid = () => operations.has(id) && !op.cancelled && op.generation === contextGeneration;
     const finish = (outcome, detail) => {
@@ -653,13 +671,17 @@
       running: (message) => {
         if (!valid()) return false;
         op.state = "running";
-        applyState("running", { force: true, message: message || config.message || "", source: "operation-running" });
+        if (!(Date.now() < warningUntil && currentState === "warning")) {
+          applyState("running", { force: true, message: message || config.message || "", source: "operation-running" });
+        }
         return true;
       },
       analyzing: (message) => {
         if (!valid()) return false;
         op.state = "analyzing";
-        applyState("analyzing", { force: true, message: message || config.message || "", source: "operation-analyzing" });
+        if (!(Date.now() < warningUntil && currentState === "warning")) {
+          applyState("analyzing", { force: true, message: message || config.message || "", source: "operation-analyzing" });
+        }
         return true;
       },
     });
@@ -719,6 +741,24 @@
     const detail = event?.detail || {};
     if (detail.active) beginLegacy(detail);
     else endLegacy(Boolean(detail.success) || pendingSuccess);
+  }
+
+  function handlePulse(event) {
+    const duration = Math.min(3000, Math.max(700, Number(event?.detail?.duration) || 1100));
+    if (operations.size || Date.now() < warningUntil) {
+      log("processing-pulse-skip", { operations: operations.size, warning: Date.now() < warningUntil });
+      return;
+    }
+    currentTarget = null;
+    hideBubble();
+    applyState("analyzing", { force: true, source: "processing-pulse" });
+    root.clearTimeout(transientTimer);
+    transientTimer = root.setTimeout(() => {
+      transientTimer = 0;
+      if (operations.size || Date.now() < warningUntil) return;
+      hideBubble();
+      applyState("idle", { force: true, source: "processing-pulse-end" });
+    }, duration);
   }
 
   function handleNotification(event) {
@@ -868,6 +908,31 @@
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "aria-hidden", "class", "open"] });
   }
 
+  function initAuthObserver() {
+    if (authObserver) return;
+    wasAppLocked = appLocked();
+    authObserver = new MutationObserver(() => {
+      const locked = appLocked();
+      if (locked === wasAppLocked) return;
+      if (locked) {
+        clearHelloMarker();
+        root.clearTimeout(transientTimer);
+        transientTimer = 0;
+        root.clearTimeout(warningTimer);
+        warningTimer = 0;
+        warningUntil = 0;
+        pendingSuccess = false;
+        hideBubble();
+        if (!operations.size) applyState("idle", { force: true, source: "signed-out" });
+        log("session-reset", { reason: "app-locked-after-active-session" });
+      } else {
+        root.setTimeout(maybeHello, 0);
+      }
+      wasAppLocked = locked;
+    });
+    authObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  }
+
   function init() {
     if (initialized) return;
     initialized = true;
@@ -875,6 +940,7 @@
     refreshContext();
     installSettingsControl();
     initObserver();
+    initAuthObserver();
     document.documentElement.dataset.grconMascotRuntime = ENGINE;
     document.documentElement.dataset.grconMascotAnimations = animationsEnabled() ? "on" : "off";
     root.addEventListener("resize", handleViewportResize, { passive: true });
@@ -882,6 +948,7 @@
     root.addEventListener("pointermove", handlePointer, { passive: true });
     root.addEventListener("grcon:processing-state", handleOperationEvent);
     root.addEventListener("grcon:mascot-operation", handleOperationEvent);
+    root.addEventListener("grcon:processing-pulse", handlePulse);
     root.addEventListener("grcon:notification", handleNotification);
     root.addEventListener("grcon:mascot-warning", (event) => warning(event?.detail || {}));
     root.addEventListener("grcon:mascot-success", (event) => success(event?.detail || {}));
@@ -898,10 +965,12 @@
     });
     root.addEventListener("pagehide", () => {
       root.clearTimeout(transientTimer);
+      root.clearTimeout(warningTimer);
       root.clearTimeout(longOperationTimer);
       if (positionFrame) root.cancelAnimationFrame(positionFrame);
       if (pointerFrame) root.cancelAnimationFrame(pointerFrame);
       operations.clear();
+      authObserver?.disconnect();
       try { video?.pause(); } catch (_) {}
     }, { once: true });
     scheduleLazyPreload();
