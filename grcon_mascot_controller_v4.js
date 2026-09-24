@@ -332,6 +332,17 @@
     });
   }
 
+  function handleViewportResize() {
+    if (!overlay) return;
+    overlay.style.transition = "none";
+    if (currentTarget) positionNearTarget();
+    else positionDefault();
+    root.requestAnimationFrame(() => {
+      overlay?.style.removeProperty("transition");
+      positionBubble();
+    });
+  }
+
   function positionBubble() {
     if (!bubble || bubble.dataset.visible !== "true" || !overlay) return;
     const host = overlay.getBoundingClientRect();
@@ -822,7 +833,7 @@
     initObserver();
     document.documentElement.dataset.grconMascotRuntime = ENGINE;
     document.documentElement.dataset.grconMascotAnimations = animationsEnabled() ? "on" : "off";
-    root.addEventListener("resize", schedulePosition, { passive: true });
+    root.addEventListener("resize", handleViewportResize, { passive: true });
     root.addEventListener("scroll", schedulePosition, { passive: true, capture: true });
     root.addEventListener("pointermove", handlePointer, { passive: true });
     root.addEventListener("grcon:processing-state", handleOperationEvent);
