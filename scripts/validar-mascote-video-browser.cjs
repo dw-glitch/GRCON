@@ -89,6 +89,7 @@ async function mascotVisualTransparency(page) {
       hostBorder: [hostStyle.borderTopWidth, hostStyle.borderRightWidth, hostStyle.borderBottomWidth, hostStyle.borderLeftWidth],
       hostShadow: hostStyle.boxShadow,
       hostOverflow: hostStyle.overflow,
+      hostContain: hostStyle.contain,
       stageBackground: stageStyle.backgroundColor,
       beforeContent: before.content,
       afterContent: after.content,
@@ -104,6 +105,8 @@ async function assertMascotTransparent(page, label) {
   assert.deepEqual(visual.hostBorder, ["0px", "0px", "0px", "0px"], label + ": wrapper não pode ter borda");
   assert.equal(visual.hostShadow, "none", label + ": wrapper não pode ter sombra/card");
   assert.equal(visual.hostOverflow, "visible", label + ": wrapper não pode cortar o mascote");
+  assert.doesNotMatch(visual.hostContain, /paint/, label + ": paint containment não pode recortar a animação");
+  if (visual.media === "png") assert.ok(Math.abs((visual.rect.width / visual.rect.height) - 1) < 0.12, label + ": fallback PNG deve preservar proporção quadrada");
   assert.equal(visual.stageBackground, "rgba(0, 0, 0, 0)", label + ": stage deve ser transparente");
   assert.ok(visual.beforeContent === "none" || visual.beforeContent === "normal", label + ": ::before não pode criar caixa");
   assert.ok(visual.afterContent === "none" || visual.afterContent === "normal", label + ": ::after não pode criar caixa");
