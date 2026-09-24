@@ -505,6 +505,7 @@
       pendingSuccess = true;
       return "warning";
     }
+    pendingSuccess = false;
     currentTarget = resolveTarget(config.target);
     applyState("success", { force: true, message: config.message || "Operação concluída.", source: config.source || "success" });
     root.clearTimeout(transientTimer);
@@ -645,11 +646,18 @@
     legacyOperation = null;
     if (!op) {
       if (successful) success({ source: "legacy-notification" });
-      else idle({ source: "legacy-end" });
+      else if (Date.now() >= warningUntil) idle({ source: "legacy-end" });
       return;
     }
-    if (successful) op.success();
-    else op.end();
+    if (Date.now() < warningUntil) {
+      operations.delete(op.id);
+      if (successful) pendingSuccess = true;
+      return;
+    }
+    if (successful) {
+      pendingSuccess = false;
+      op.success();
+    } else op.end();
   }
 
   function handleOperationEvent(event) {
