@@ -141,8 +141,14 @@
 #spw-evolution-section .spw-evo-list-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 #spw-evolution-section .spw-evo-list-actions strong{font-size:.74rem;color:var(--text-strong,#294258)}
 #spw-evolution-section .spw-evo-scroll-hint{display:none}
-#spw-evolution-section .spw-evo-table{min-width:900px}
+#spw-evolution-section .spw-evo-table{min-width:1180px;table-layout:fixed}
+#spw-evolution-section .spw-evo-table th:first-child{width:280px}
+#spw-evolution-section .spw-evo-table th:nth-child(9){width:155px}
+#spw-evolution-section .spw-evo-table td:first-child strong,#spw-evolution-section .spw-evo-table td:nth-child(9){display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #spw-evolution-section .spw-evo-cell-badge{display:inline-block;padding:2px 6px;border:1px solid var(--border,#dce4eb);border-radius:6px;background:var(--surface-soft,#f7fafc)}
+[data-theme="dark"] #spw-evolution-section .spw-evo-table tbody tr,[data-theme="dark"] #spw-evolution-section .spw-evo-table tbody td{background:var(--surface,#15232d);color:var(--text-strong,#e8eff5)}
+[data-theme="dark"] #spw-evolution-section .spw-evo-table tbody tr:hover td,[data-theme="dark"] #spw-evolution-section .spw-evo-table tbody tr:focus td{background:var(--surface-soft,#203440)}
+[data-theme="dark"] #spw-evolution-section .spw-evo-cell-badge{background:var(--surface-soft,#203440);color:var(--text-strong,#e8eff5)}
 .spw-evo-detail{display:grid;grid-template-columns:1fr;gap:14px}
 .spw-evo-detail-group h4{margin:0 0 6px;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted,#66798a)}
 .spw-evo-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}

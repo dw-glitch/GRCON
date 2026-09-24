@@ -484,7 +484,7 @@ export function SigemPwEvolutionApp() {
                     }
                   }}
                 >
-                  <td><strong>{row.document || "—"}</strong></td><td>{row.revision || "—"}</td><td>{row.documentClass || "—"}</td><td>{row.documentType || "—"}</td><td><span className="spw-evo-cell-badge">{row.status || "—"}</span></td><td>{row.discipline || "—"}</td><td>{row.tag || "—"}</td><td>{row.eap || "—"}</td><td>{row.date || "—"}</td><td><span className="spw-evo-cell-badge">{(row.system || "").toUpperCase() || "—"}</span></td>
+                  <td title={row.document}><strong>{row.document || "—"}</strong></td><td>{row.revision || "—"}</td><td>{row.documentClass || "—"}</td><td>{row.documentType || "—"}</td><td><span className="spw-evo-cell-badge">{row.status || "—"}</span></td><td>{row.discipline || "—"}</td><td>{row.tag || "—"}</td><td>{row.eap || "—"}</td><td title={row.date}>{row.date || "—"}</td><td><span className="spw-evo-cell-badge">{(row.system || "").toUpperCase() || "—"}</span></td>
                 </tr>
               ))}
             </tbody>

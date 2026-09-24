@@ -1344,6 +1344,7 @@ async function waitEvolutionReady(page) {
     await page.locator('#spw-evo-tabs [data-evo-list="sigem-new"]').click();
     await resetEvolutionFilters(page);
     assert.equal(await page.locator('#spw-evo-table tbody tr').count(), 100, 'medição responsiva requer tabela povoada');
+    assert.equal(await page.locator('#spw-evo-table tbody td:first-child strong').first().evaluate((code) => code.getBoundingClientRect().right <= code.parentElement.getBoundingClientRect().right + 1), true, 'código não pode invadir a revisão');
     metrics.evolutionWidths = {};
     for (const width of [1440, 1366, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
@@ -1380,6 +1381,9 @@ async function waitEvolutionReady(page) {
     // Dark mode: overview, drawer/overlay, loading, feedback e erro.
     await page.setViewportSize({ width: 1366, height: 900 });
     await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
+    const darkRowBackground = await page.locator('#spw-evo-table tbody td').first().evaluate((cell) => getComputedStyle(cell).backgroundColor);
+    const darkChannels = darkRowBackground.match(/[\d.]+/g)?.slice(0, 3).map(Number) || [];
+    assert.ok(darkChannels.length === 3 && darkChannels.reduce((sum, channel) => sum + channel, 0) < 350, 'linhas da tabela devem ter fundo escuro no tema escuro');
     await page.screenshot({ path: path.join(outputDir, "12-evolution-dark-1366.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await mobileRow.click();
