@@ -1,4 +1,4 @@
-name: SIGEM × PW — Revisões React FASE B
+name: SIGEM × PW — Evolução React hardening
 
 on:
   pull_request:
@@ -68,6 +68,8 @@ jobs:
           gzip -c react-dist/sigem-pw-evolution-app.js | wc -c | awk '{print "bundle_sigem_pw_evolution_gzip_bytes=" $1}' | tee -a "$RUNNER_TEMP/sigem-pw-bundle.txt"
           echo "bundle_baseline_before_revision_phase_b_approx=206.1kB gzip_approx=63.9kB" | tee -a "$RUNNER_TEMP/sigem-pw-bundle.txt"
           ! grep -Eqi 'exceljs\.min|SheetJS.*Community Edition|xlsx\.full\.min|emittedPwHistoryText' react-dist/sigem-pw-dashboard-app.js
+          ! grep -Eqi 'exceljs\.min|SheetJS.*Community Edition|xlsx\.full\.min' react-dist/sigem-pw-evolution-app.js
+          ! grep -Eq 'function buildLdUniverse|function buildSnapshot|function comparePeriod|function buildDailyTimeline' react-dist/sigem-pw-evolution-app.js
 
       - name: Testes estruturais e regras críticas
         run: |
@@ -118,16 +120,17 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: sigem-pw-revision-react-phase-b
+          name: sigem-pw-evolution-react-phase-a-hardening
           path: |
             artifacts/sigem-pw-react/*.png
             artifacts/sigem-pw-react/metrics.json
+            react-dist/sigem-pw-evolution-app.js
           if-no-files-found: warn
           retention-days: 14
 
       - name: Resumo
         if: always()
         run: |
-          echo "### SIGEM × PW — Revisões React FASE B" >> "$GITHUB_STEP_SUMMARY"
+          echo "### SIGEM × PW — Evolução React hardening" >> "$GITHUB_STEP_SUMMARY"
           test -f "$RUNNER_TEMP/sigem-pw-bundle.txt" && cat "$RUNNER_TEMP/sigem-pw-bundle.txt" >> "$GITHUB_STEP_SUMMARY" || true
           test -f artifacts/sigem-pw-react/metrics.json && cat artifacts/sigem-pw-react/metrics.json >> "$GITHUB_STEP_SUMMARY" || true

@@ -79,8 +79,8 @@
 #spw-evolution-section .spw-evo-export-feedback{display:block;min-height:1.1rem;margin-top:5px;text-align:right;font-size:.65rem;color:var(--text-muted,#66798a)}
 #spw-evolution-section .spw-evo-export-feedback.success{color:var(--success-700,#2f7452)}
 #spw-evolution-section .spw-evo-export-feedback.error{color:var(--danger-700,#9b3434)}
-.spw-evo-overlay{position:fixed;inset:0;z-index:10055;display:flex;justify-content:flex-end;background:rgba(18,37,52,.42)}
-.spw-evo-drawer{width:min(720px,96vw);height:100%;overflow:auto;padding:16px;background:var(--surface,#fff);box-shadow:-16px 0 44px rgba(20,40,60,.2)}
+.spw-evo-overlay{position:fixed;inset:0;z-index:10055;border:0;padding:0;background:rgba(18,37,52,.42);cursor:default}
+.spw-evo-drawer{position:fixed;inset:0 0 0 auto;z-index:10056;width:min(720px,96vw);height:100%;overflow:auto;padding:16px;background:var(--surface,#fff);box-shadow:-16px 0 44px rgba(20,40,60,.2);outline:none}
 .spw-evo-drawer header{display:flex;justify-content:space-between;gap:12px}
 .spw-evo-drawer h3{margin:3px 0;color:var(--text-strong,#183247)}
 .spw-evo-close{width:34px;height:34px;border:0;border-radius:50%;background:var(--surface-soft,#eef3f6);font-size:1.2rem;cursor:pointer}

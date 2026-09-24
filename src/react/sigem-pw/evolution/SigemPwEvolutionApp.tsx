@@ -1,4 +1,5 @@
 import type { ChangeEvent } from "react";
+import { UiDrawer } from "../../core/ui/UiPrimitives";
 import { useSigemPwEvolution } from "./hooks/useSigemPwEvolution";
 import {
   EVOLUTION_LIST_LABELS,
@@ -206,27 +207,31 @@ function DetailDrawer({
     ["Situação SIGEM × PW", row.matchedPw ? `Correspondência: ${row.matchedPw.document} · Rev. ${row.matchedPw.revision}` : listMode === "missing-pw" ? "Ainda não identificada no PW atual" : "—"],
   ];
   return (
-    <div className="spw-evo-overlay" id="spw-evo-overlay" role="presentation" onMouseDown={(event) => {
-      if (event.currentTarget === event.target) onClose();
-    }}>
-      <aside className="spw-evo-drawer" role="dialog" aria-modal="true" aria-labelledby="spw-evo-detail-title">
-        <header>
-          <div>
-            <span className="spw-kicker">RASTREABILIDADE</span>
-            <h3 id="spw-evo-detail-title">{row.document || "Registro"}{row.revision ? ` · Rev. ${row.revision}` : ""}</h3>
-          </div>
-          <button className="spw-evo-close" id="spw-evo-close" type="button" aria-label="Fechar" onClick={onClose}>×</button>
-        </header>
-        <div className="spw-evo-detail" id="spw-evo-detail-body">
-          {fields.map(([label, value]) => (
-            <div key={label}>
-              <span>{label}</span>
-              <strong>{String(value || "—")}</strong>
-            </div>
-          ))}
+    <UiDrawer
+      open={Boolean(row)}
+      onClose={onClose}
+      labelledBy="spw-evo-detail-title"
+      drawerClassName="spw-evo-drawer"
+      overlayClassName="spw-evo-overlay"
+      drawerId="spw-evo-drawer"
+      overlayId="spw-evo-overlay"
+    >
+      <header>
+        <div>
+          <span className="spw-kicker">RASTREABILIDADE</span>
+          <h3 id="spw-evo-detail-title">{row.document || "Registro"}{row.revision ? ` · Rev. ${row.revision}` : ""}</h3>
         </div>
-      </aside>
-    </div>
+        <button className="spw-evo-close" id="spw-evo-close" type="button" aria-label="Fechar" onClick={onClose}>×</button>
+      </header>
+      <div className="spw-evo-detail" id="spw-evo-detail-body">
+        {fields.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong>{String(value || "—")}</strong>
+          </div>
+        ))}
+      </div>
+    </UiDrawer>
   );
 }
 
@@ -444,8 +449,13 @@ export function SigemPwEvolutionApp() {
                 <tr
                   key={`${row.occurrenceKey || row.document}:${row.technicalFingerprint || index}`}
                   data-evo-row={pageData.start + index}
+                  data-analysis-id={`evolution:${row.occurrenceKey || row.document}:${row.technicalFingerprint || ""}`}
+                  aria-label={`Abrir detalhes de ${row.document || "registro"} · revisão ${row.revision || "—"}`}
                   tabIndex={0}
-                  onClick={() => adapter.openDetail(row)}
+                  onClick={(event) => {
+                    event.currentTarget.focus();
+                    adapter.openDetail(row);
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();

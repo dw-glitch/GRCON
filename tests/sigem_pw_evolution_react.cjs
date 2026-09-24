@@ -11,6 +11,7 @@ const hook = read("src/react/sigem-pw/evolution/hooks/useSigemPwEvolution.ts");
 const adapter = read("src/react/sigem-pw/evolution/services/sigemPwEvolutionAdapter.ts");
 const domain = read("src/react/sigem-pw/evolution/types/domain.ts");
 const entry = read("src/react/sigem-pw/evolution/index.tsx");
+const uiPrimitives = read("src/react/core/ui/UiPrimitives.tsx");
 const globals = read("src/react/sigem-pw/types/legacy-globals.d.ts");
 const bootstrap = read("sigem_pw_dashboard_bootstrap.js");
 const css = read("sigem-pw-evolution.css");
@@ -74,11 +75,22 @@ for (const id of ["spw-evo-date-start", "spw-evo-date-end", "spw-evo-filter-quer
 assert.match(app, /data-evolution-version="react-phase-a"/);
 assert.match(app, /data-evo-select/);
 assert.match(app, /data-evo-row/);
-assert.match(app, /role="dialog"/);
+assert.match(app, /UiDrawer/);
+assert.match(app, /data-analysis-id/);
+assert.match(app, /event\.currentTarget\.focus\(\)/);
+assert.match(app, /drawerClassName="spw-evo-drawer"/);
+assert.match(app, /overlayClassName="spw-evo-overlay"/);
+assert.doesNotMatch(app, /<aside className="spw-evo-drawer"/);
 assert.match(app, /aria-live="polite"/);
 assert.doesNotMatch(app, /dangerouslySetInnerHTML/);
 assert.doesNotMatch(app, /\.innerHTML\s*=/);
 assert.doesNotMatch(app, /insertAdjacentHTML/);
+assert.match(uiPrimitives, /export function UiDrawer/);
+assert.match(uiPrimitives, /event\.key === "Escape"/);
+assert.match(uiPrimitives, /event\.key !== "Tab"/);
+assert.match(uiPrimitives, /body\.style\.overflow = "hidden"/);
+assert.match(uiPrimitives, /data-analysis-id/);
+assert.match(uiPrimitives, /focusTarget\?\.focus\(\)/);
 
 assert.match(globals, /interface SigemPwEvolutionUiApi/);
 assert.match(globals, /GrconSigemPwEvolutionUi/);
@@ -96,6 +108,7 @@ if (fs.existsSync(path.join(root, "react-dist/sigem-pw-evolution-app.js"))) {
   const bytes = Buffer.byteLength(bundle);
   assert.ok(bytes < 500000, `bundle Evolução inesperadamente grande: ${bytes} bytes`);
   assert.doesNotMatch(bundle, /ExcelJS|exceljs\.min|SheetJS.*Community Edition|xlsx\.full\.min/i, "XLSX/ExcelJS não podem entrar no bundle React");
+  assert.doesNotMatch(bundle, /function buildLdUniverse|function buildSnapshot|function comparePeriod|function buildDailyTimeline/, "Core da Evolução não pode ser reimplementado dentro do bundle React");
 }
 
 console.log("sigem_pw_evolution_react: OK — React/TS lazy, facade, Core/History preservados, filtros, paginação, exportação e PWA validados.");
