@@ -39,7 +39,7 @@ O endpoint do Teams também precisa do segredo de runtime `POWER_AUTOMATE_EGRDT_
 
 ## Primeiro deploy
 
-Antes do merge, configure a conta/projeto Cloudflare, os dois GitHub Actions secrets e o segredo de runtime `POWER_AUTOMATE_EGRDT_WEBHOOK_URL`. Depois execute o workflow de deploy a partir de `main` somente quando a integração estiver pronta. O workflow recusa deploy de outra branch.
+Antes do merge, configure a conta/projeto Cloudflare, os dois GitHub Actions secrets e o segredo de runtime `POWER_AUTOMATE_EGRDT_WEBHOOK_URL`. O primeiro deployment autenticado desta PR deve ser feito manualmente e de forma autorizada com `npx --yes wrangler@4.34.0 deploy --config wrangler.jsonc` a partir desta branch, para validar a URL Cloudflare sem permitir deploy automático de PR. O workflow de produção permanece restrito a `main` e recusa deploy de outra branch.
 
 Após publicar, valide `/`, `/index.html`, `/sw.js`, `/manifest.json`, `/grcon_mascot_controller_v4.js`, `/deployment-meta.json`, os bundles em `/react-dist/`, os WebM em `/assets/mascot/video/` e o endpoint `/api/egrdt-teams-notification`.
 
