@@ -284,12 +284,56 @@
     positionBubble();
   }
 
+  function rectsIntersect(a, b) {
+    return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+  }
+
+  function visibleAvoidanceRects() {
+    const selectors = [
+      "dialog[open]",
+      '[role="dialog"]:not([hidden])',
+      '[aria-modal="true"]:not([hidden])',
+      '[role="menu"]:not([hidden])',
+      ".history-manage[open] .history-manage-menu",
+    ];
+    const seen = new Set();
+    const rects = [];
+    selectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((node) => {
+        if (!(node instanceof Element) || seen.has(node) || node === overlay || overlay?.contains(node)) return;
+        seen.add(node);
+        const style = getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return;
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        rects.push(rect);
+      });
+    });
+    return rects;
+  }
+
   function positionDefault() {
     if (!overlay || currentState === "running") return;
     const vp = viewport();
     const size = mascotSize();
     const gap = isMobile() ? 10 : 22;
-    setPosition(vp.width - size.width - gap, vp.height - size.height - gap);
+    const candidates = [
+      { left: vp.width - size.width - gap, top: vp.height - size.height - gap },
+      { left: vp.width - size.width - gap, top: gap },
+      { left: gap, top: vp.height - size.height - gap },
+      { left: gap, top: gap },
+    ];
+    const blockers = visibleAvoidanceRects();
+    const chosen = candidates.find((candidate) => {
+      const rect = {
+        left: candidate.left,
+        top: candidate.top,
+        right: candidate.left + size.width,
+        bottom: candidate.top + size.height,
+      };
+      return blockers.every((blocker) => !rectsIntersect(rect, blocker));
+    }) || candidates[0];
+    setPosition(chosen.left, chosen.top);
   }
 
   function resolveTarget(input) {
@@ -817,11 +861,11 @@
   function initObserver() {
     if (observer || !document.body) return;
     observer = new MutationObserver((entries) => {
-      if (!entries.some((entry) => entry.type === "childList" || ["hidden", "aria-hidden", "class"].includes(entry.attributeName))) return;
+      if (!entries.some((entry) => entry.type === "childList" || ["hidden", "aria-hidden", "class", "open"].includes(entry.attributeName))) return;
       refreshContext();
       installSettingsControl();
     });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "aria-hidden", "class"] });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "aria-hidden", "class", "open"] });
   }
 
   function init() {
