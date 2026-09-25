@@ -31,7 +31,7 @@ async function diagnostics(page) {
 async function mascotVisualTransparency(page) {
   await page.waitForFunction(() => {
     const diagnostics = window.GrconMascot?.diagnostics?.();
-    return Boolean(diagnostics && (diagnostics.media === "video" || diagnostics.mediaFallback || diagnostics.reducedMotion || !diagnostics.animationsEnabled));
+    return Boolean(diagnostics && (diagnostics.media === "video" || diagnostics.media === "png" || diagnostics.mediaFallback || diagnostics.reducedMotion || !diagnostics.animationsEnabled));
   }, null, { timeout: 8000 });
   return page.evaluate(async () => {
     const host = document.querySelector("#grcon-context-mascot");
