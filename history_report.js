@@ -101,6 +101,10 @@
     }).filter(Boolean);
     return [...new Set(items)].join(" | ");
   }
+  function generatedPurposes(record) {
+    const items = (record && record.files || []).map((file) => text(file && file.purpose)).filter(Boolean);
+    return [...new Set(items)].join(" · ") || "Não registrado";
+  }
   function egrdtRows(records) {
     return (records || []).map((record) => ({
       "DATA DA GERAÇÃO / POSTAGEM": formatDate(record.generatedAt, true),
@@ -110,6 +114,7 @@
       "DOCUMENTOS": Number(record.documentCount || 0),
       "ARQUIVOS": Number(record.fileCount || 0),
       "REVISÕES ENVIADAS NA GRDT (DOCUMENTO · REVISÃO)": generatedRevisions(record),
+      "PROPÓSITO(S) DA GRDT": generatedPurposes(record),
       "DISCIPLINAS": extractDisciplines(record),
       "ALOCAÇÕES": (record.allocations || []).join(" · "),
       "LD UTILIZADA": text(record.ldName),
@@ -154,6 +159,7 @@
       "DATA DA GERAÇÃO / POSTAGEM": formatDate(record.generatedAt, true),
       "EGRDT": text(record.egrdtNumber),
       "TIPO DE SAÍDA": text(record.outputType),
+      "PROPÓSITO": text(file.purpose) || "Não registrado",
       "FAMÍLIA DOCUMENTAL": fileFamily(file) || "Não identificado",
       "DOCUMENTO": text(file.document),
       "TÍTULO": text(file.title),
@@ -200,7 +206,7 @@
   }
   function widthFor(header) {
     const key = norm(header);
-    if (/POR QUE|COMENTARIO|CAMINHO|TITULO|ORIGEM|NUMEROS ANTERIORES/.test(key)) return 42;
+    if (/POR QUE|COMENTARIO|CAMINHO|TITULO|ORIGEM|NUMEROS ANTERIORES|PROPOSITO/.test(key)) return 42;
     if (/DOCUMENTO|ARQUIVO|EGRDT|ALOCACAO|LD UTILIZADA/.test(key)) return 30;
     if (/DATA|VERSAO|STATUS|CONFIRMACAO|ETAPA|REVISAO/.test(key)) return 22;
     return 16;
