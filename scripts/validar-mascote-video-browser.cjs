@@ -134,15 +134,15 @@ async function main() {
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
 
-    await page.goto(fixtureUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(fixtureUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await waitRuntime(page);
 
     let state = await diagnostics(page);
-    assert.equal(state.engine, "official-contextual-v5");
-    assert.equal(state.assetRevision, "20260924.2");
+    assert.equal(state.engine, "official-sprite-contextual-v5");
+    assert.equal(state.assetRevision, "20260925.1");
     assert.equal(state.instances, 1);
     assert.equal(await page.locator("#grcon-context-mascot video").count(), 1);
-    assert.deepEqual(Object.keys(state.assets).sort(), ["analyzing", "hello", "idle", "running", "success", "warning"]);
+    assert.deepEqual(Object.keys(state.assets).sort(), ["analyzing", "hello", "running", "success", "warning"]);
     assert.equal(await page.locator("#grcon-context-mascot").evaluate((el) => getComputedStyle(el).pointerEvents), "none");
     await page.evaluate(() => window.GrconMascot.idle({ source: "qa-idle-transparent" }));
     await assertMascotTransparent(page, "idle");
@@ -160,7 +160,7 @@ async function main() {
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "analyzing");
     state = await diagnostics(page);
     assert.equal(state.activeOperations, 1);
-    assert.match(state.assets.analyzing, /grcon-mascot-analyzing-alpha\.webm\?v=20260924\.2$/);
+    assert.match(state.assets.analyzing, /grcon-mascot-analyzing-alpha\.webm\?v=20260925\.1$/);
     await assertMascotTransparent(page, "analyzing/checking-document/loading/searching-files");
     await page.screenshot({ path: path.join(outputDir, "02-analyzing.png") });
 
