@@ -223,6 +223,11 @@ async function main() {
       window.GrconMascot.warning({ target: "#fixture-revision", message: "Confira a revisão deste documento.", duration: 1600 });
     });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "warning");
+    await page.waitForFunction(() => {
+      const video = document.querySelector("#grcon-context-mascot video");
+      return Boolean(video && /grcon-mascot-warning-alpha\.webm/.test(video.currentSrc) && !video.paused && video.currentTime > 0);
+    }, null, { timeout: 8000 });
+    assert.ok(videoResponses.some((entry) => /grcon-mascot-warning-alpha\.webm/.test(entry.url) && entry.status === 200), "Network deve comprovar HTTP 200 do vídeo de warning");
     const warningGeometry = await page.evaluate(() => {
       const mascot = document.querySelector("#grcon-context-mascot").getBoundingClientRect();
       const target = document.querySelector("#fixture-revision").getBoundingClientRect();
@@ -249,6 +254,10 @@ async function main() {
       window.dispatchEvent(new CustomEvent("grcon:processing-state", { detail: { active: false, context: "control" } }));
     });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "success", null, { timeout: 5000 });
+    await page.waitForFunction(() => {
+      const video = document.querySelector("#grcon-context-mascot video");
+      return Boolean(video && /grcon-mascot-success-alpha\.webm/.test(video.currentSrc) && !video.paused && video.currentTime > 0);
+    }, null, { timeout: 8000 });
     await assertMascotTransparent(page, "success");
     await page.screenshot({ path: path.join(outputDir, "04-success.png") });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 7000 });
@@ -549,6 +558,10 @@ async function main() {
     assert.equal((await diagnostics(helloPage)).greetingPlayedThisSession, false);
     await unlock(helloPage);
     await helloPage.waitForFunction(() => window.GrconMascot.diagnostics().state === "hello", null, { timeout: 5000 });
+    await helloPage.waitForFunction(() => {
+      const video = document.querySelector("#grcon-context-mascot video");
+      return Boolean(video && /grcon-mascot-hello-alpha\.webm/.test(video.currentSrc) && !video.paused && video.currentTime > 0);
+    }, null, { timeout: 8000 });
     assert.equal(await helloPage.locator("#grcon-mascot-context-bubble").textContent(), "Olá, Vinicio!");
     await assertMascotTransparent(helloPage, "hello");
     await helloPage.screenshot({ path: path.join(outputDir, "08-hello.png") });
