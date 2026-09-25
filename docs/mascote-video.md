@@ -1,31 +1,51 @@
-# GRCON Mascot Runtime v5
+# GRCON Mascot Runtime v5.1
 
-## Fonte de verdade
+## Arquitetura visual
 
-O personagem continua sendo o mascote oficial do GRCON. Os seis estados animados foram preparados a partir do elemento Higgsfield `grcon-mascot` (`5d684379-9c43-47db-913a-6af9d779e8b2`) e versionados localmente como WebM VP9 declarados com alpha no contêiner. Como a revisão `20260924.1` foi detectada em QA com fundo cinza ainda opaco no quadro decodificado, o runtime **não confia apenas no metadado AlphaMode**: antes de revelar qualquer vídeo ele mede uma amostra das bordas do primeiro frame. Vídeo sem transparência visual real é rejeitado antes de ficar visível e o sprite PNG HD oficial é usado como fallback transparente:
+O mascote oficial continua usando os assets já versionados no GRCON. A correção de setembro de 2026 separa definitivamente a apresentação do mascote da área operacional:
+
+```text
+AppShell
+├── Header / topbar
+│   └── #grcon-mascot-header-slot
+│       └── #grcon-context-mascot
+├── #grcon-mascot-activity-strip
+│   └── vídeo real de corrida
+└── .app-shell
+    └── .workspace
+```
+
+O mascote contextual normal fica no slot da topbar. Ele não usa mais `position: fixed`, não escolhe cantos da viewport e não é reposicionado ao redor de campos dentro do workspace. Mensagens de aviso continuam disponíveis, mas aparecem junto ao mascote no shell.
+
+A corrida é uma apresentação separada. `grcon_mascot_runner.js` controla uma faixa temporária em fluxo normal imediatamente antes do `.app-shell`. A faixa fica `hidden` quando inativa, portanto não deixa espaço permanente na tela.
+
+## Fonte de verdade dos vídeos
+
+Os estados contextuais continuam locais e same-origin:
 
 - `idle` → `assets/mascot/video/grcon-mascot-idle-alpha.webm`
 - `hello` → `assets/mascot/video/grcon-mascot-hello-alpha.webm`
 - `analyzing` → `assets/mascot/video/grcon-mascot-analyzing-alpha.webm`
 - `warning` → `assets/mascot/video/grcon-mascot-warning-alpha.webm`
 - `success` → `assets/mascot/video/grcon-mascot-success-alpha.webm`
-- `running` → `assets/mascot/video/grcon-mascot-run-alpha.webm`
 
-A procedência e os job IDs ficam em `assets/mascot/video/higgsfield-source.json`. Nenhuma URL temporária do Higgsfield é usada em produção.
+A corrida horizontal volta a usar o vídeo original que já havia sido aprovado no aplicativo:
 
-## Arquitetura
+- `running` → `assets/mascot/video/grcon-mascot-running-alpha.webm`
+- revisão histórica do runner: `20260917.1`
+- duração de travessia restaurada como referência: `5040 ms`
 
-`grcon_mascot_controller.js` é o entrypoint estável. O runtime vive em `grcon_mascot_controller_v4.js` por compatibilidade de cache/caminho, mas sua versão lógica é 5.0.0.
+O arquivo posterior `grcon-mascot-run-alpha.webm` permanece no repositório por compatibilidade/histórico, mas não é a fonte visual da corrida horizontal restaurada.
 
-Existe somente uma instância visual global: `#grcon-context-mascot`. Ela contém um único `<video>` reutilizado entre estados e o sprite PNG HD oficial como fallback estático.
+## Corrida real, não PNG deslocado
 
-`grcon_mascot_header.js`, `grcon_mascot_runner.js` e `grcon_mascot_success_pilot.js` são bridges de compatibilidade. Eles não criam player, overlay, timers operacionais ou listeners concorrentes.
+`grcon_mascot_runner.js` cria/reutiliza um único `<video>`, mantém `muted`, `playsInline`, `loop` e desloca somente o contêiner da mídia pela faixa. O movimento das pernas e do corpo vem do WebM real.
 
-React usa a mesma instância por `src/react/shared/mascot/`.
+O runtime contextual não contém mais `grcon-mascot-runtime-run` nem fallback CSS que simule passos em PNG. Durante `running`, o mascote contextual da topbar fica oculto e a faixa é a única representação visual da corrida.
 
-## API
+## Estados e integração
 
-A API pública é `window.GrconMascot`:
+A API pública continua sendo `window.GrconMascot`:
 
 - `show(...)`
 - `warning({ target, message })`
@@ -33,32 +53,41 @@ A API pública é `window.GrconMascot`:
 - `run(...)`
 - `idle()`
 - `hide()`
-- `begin(...)`, que devolve uma operação cancelável com `success`, `warning`, `running`, `analyzing`, `cancel` e `end`
+- `begin(...)`
 - `setEnabled(boolean)`
 - `diagnostics()`
 
-Estados antigos como `checking-document`, `checking-ld`, `generating-grdt` e `sigem-pw-analysis` são normalizados para a state machine nova.
+React continua usando `src/react/shared/mascot/`. Operações longas podem entrar logicamente em `running`; o controlador delega a apresentação para `window.GrconMascotRunner`. Ao concluir, avisar, cancelar, navegar para outro estado, desativar animações ou sair da página, o runner pausa e reinicia a mídia e oculta a faixa.
 
-## Comportamento
+## Transparência e fallback
 
-A prioridade é `warning > analyzing > running > success > hello > idle`. Warnings ativos não são interrompidos por sucesso. Operações guardam a geração do contexto atual; se o usuário navegar antes da resposta assíncrona, a conclusão antiga não altera a nova tela.
+Os vídeos contextuais continuam passando pelo probe de transparência antes de serem revelados. Se um desses WebMs falhar ou tiver fundo visualmente opaco, o sprite PNG HD oficial permanece como fallback.
 
-Sem target, o mascote usa uma região segura no canto inferior direito. Com target no desktop, o runtime tenta direita, esquerda, acima e abaixo, mantendo gap e limites da viewport. Em mobile, o target não faz o mascote atravessar formulários; a bolha comunica o contexto e o personagem permanece em posição segura.
+A corrida não é substituída por PNG animado. Se o vídeo original de corrida não puder ser reproduzido, a faixa é encerrada e o controlador retorna ao estado `analyzing`, preservando a interface funcional sem fingir uma corrida com imagem estática.
 
-A corrida usa o vídeo Higgsfield para o movimento corporal e CSS transform para o deslocamento controlado pela viewport. GSAP não foi adicionado porque não há runtime GSAP instalado no GRCON atual.
+## Mobile, acessibilidade e interação
 
-## Performance e acessibilidade
+- a faixa usa altura compacta em telas estreitas;
+- `pointer-events: none` impede bloqueio de botões, campos e navegação;
+- o runner fica antes do workspace e não o sobrepõe;
+- `prefers-reduced-motion: reduce` desativa o deslocamento horizontal;
+- o PNG oficial pode aparecer como fallback estático/acessível nos estados contextuais;
+- nenhuma informação funcional depende somente da animação.
 
-- `idle` e `hello` podem ser carregados primeiro.
-- `analyzing`, `warning` e `success` são pré-carregados somente quando o navegador fica ocioso.
-- `running` permanece sob demanda.
-- o Service Worker pré-cacheia apenas `idle` e `hello`; os demais entram no cache quando usados.
-- `prefers-reduced-motion: reduce` desativa corrida/deslocamentos e usa o PNG estático.
-- a opção **Animações do mascote** fica nas configurações gerais e persiste localmente.
-- ao desativar animações, o runtime não mantém fonte de vídeo carregada.
-- mídia e overlay usam `pointer-events: none`.
-- nenhuma informação funcional essencial existe somente na animação.
+## PWA / Service Worker
 
-## Fallback
+O vídeo original de corrida permanece lazy/on-demand e está incluído na estratégia de mídia pesada do Service Worker. WebM continua servido com `video/webm` e cache imutável pelas configurações Vercel/Cloudflare existentes. O cache do Service Worker foi versionado para invalidar a implementação anterior.
 
-Falha de WebM **ou frame com fundo opaco detectado pelo probe de transparência** → sprite PNG HD oficial. O probe usa um canvas pequeno apenas no primeiro frame de cada asset, sem chroma key e sem processamento por frame. O vídeo permanece com `opacity: 0` até passar no probe, portanto não há flash do retângulo cinza. Enquanto o fallback estiver ativo, os estados continuam com movimentos CSS leves (idle/hello/analyzing/warning/success/running), posicionamento, bolha, hover e corrida do runtime. Falhas de mídia nunca bloqueiam o GRCON.
+## QA obrigatório
+
+A validação Chromium cobre:
+
+- 1920×1080
+- 1440×900
+- 1366×768
+- 1024×768
+- 768×1024
+- 390×844
+- 375×812
+
+Durante o QA de corrida, os testes confirmam o caminho exato `grcon-mascot-running-alpha.webm`, avanço real de `currentTime`, animação horizontal da faixa, ausência de sprite PNG no runner, ausência de sobreposição com o workspace, clique funcional no conteúdo durante a corrida, encerramento da faixa e ausência de overflow horizontal.
