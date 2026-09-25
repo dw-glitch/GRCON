@@ -32,8 +32,6 @@
     "build:cloudflare": "node scripts/build-cloudflare-package.mjs",
     "verify:cloudflare": "node scripts/verify-cloudflare-package.mjs",
     "verify": "npm run typecheck && npm run build && npm run check:syntax && npm run check:workers && npm run check:references && npm run check:versions && npm run check:dependencies && npm run check:supabase && npm test",
-    "check:estabilidade": "node scripts/medir-estabilidade-visual.mjs",
-    "build:cloudflare": "node scripts/build-cloudflare-package.mjs",
-    "verify:cloudflare": "node scripts/verify-cloudflare-package.mjs"
+    "check:estabilidade": "node scripts/medir-estabilidade-visual.mjs"
   }
 }
