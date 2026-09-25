@@ -253,18 +253,27 @@ async function resetFilters(page) {
       } catch (_) {}
     });
 
-    await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await revealApp(page);
 
     // Simula atualização PWA: remove registro/cache do carregamento inicial,
     // cria um cache antigo e deixa a versão atual instalar/ativar do zero.
-    await page.evaluate(async () => {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map((registration) => registration.unregister()));
-      const keys = await caches.keys();
-      await Promise.all(keys.map((key) => caches.delete(key)));
-      await caches.open("grcon-v5.40.0-browser-old-cache");
-    });
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        await page.evaluate(async () => {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+          const keys = await caches.keys();
+          await Promise.all(keys.map((key) => caches.delete(key)));
+          await caches.open("grcon-v5.40.0-browser-old-cache");
+        });
+        break;
+      } catch (error) {
+        const message = String(error && error.message ? error.message : error);
+        if (!/Execution context was destroyed|navigation|frame was detached/i.test(message) || attempt === 3) throw error;
+        await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+      }
+    }
     await reloadApp(page);
     await revealApp(page);
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
