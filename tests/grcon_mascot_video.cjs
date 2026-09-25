@@ -17,6 +17,7 @@ const bridge = read("src/react/shared/mascot/mascotController.ts");
 const types = read("src/react/shared/mascot/mascot.types.ts");
 const source = JSON.parse(read("assets/mascot/video/higgsfield-source.json"));
 const sprite = read("grcon-mascot-sprite.png", null);
+const approvedRunning = read("assets/mascot/video/grcon-mascot-running-alpha.webm", null);
 
 const states = ["idle", "hello", "analyzing", "warning", "success", "run"];
 const assets = Object.fromEntries(states.map((state) => {
@@ -36,13 +37,16 @@ function assertWebm(bytes, state) {
 assert.equal(sprite.readUInt32BE(16), 1254);
 assert.equal(sprite.readUInt32BE(20), 1254);
 for (const [state, bytes] of Object.entries(assets)) assertWebm(bytes, state);
-assert.equal(new Set(Object.values(assets).map(hash)).size, 6, "os seis estados precisam ter mídias independentes");
+assertWebm(approvedRunning, "running-approved");
+assert.ok(approvedRunning.length >= 300_000, "vídeo original de corrida não pode ser placeholder");
+assert.equal(new Set(Object.values(assets).map(hash)).size, 6, "os seis assets contextuais precisam permanecer independentes");
+assert.notEqual(hash(approvedRunning), hash(assets.run), "corrida original deve permanecer distinta do asset contextual recente");
 
 assert.equal(source.assetRevision, "20260924.1");
 assert.equal(source.officialElement.id, "5d684379-9c43-47db-913a-6af9d779e8b2");
 for (const state of states) assert.ok(source.jobs[state], `job Higgsfield ausente para ${state}`);
 
-assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=5\.0\.1-20260924\.2/);
+assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=5\.1\.0-20260925\.1/);
 assert.match(controller, /official-contextual-v5/);
 assert.match(controller, /ASSET_REVISION = "20260924\.2"/);
 assert.match(controller, /const PRIORITY/);
@@ -67,7 +71,7 @@ assert.match(controller, /grcon-mascot-hello-alpha\.webm/);
 assert.match(controller, /grcon-mascot-analyzing-alpha\.webm/);
 assert.match(controller, /grcon-mascot-warning-alpha\.webm/);
 assert.match(controller, /grcon-mascot-success-alpha\.webm/);
-assert.match(controller, /grcon-mascot-run-alpha\.webm/);
+assert.match(controller, /grcon-mascot-running-alpha\.webm/);
 assert.match(controller, /video\.preload = "none"/);
 assert.match(controller, /function measureTransparentEdgeRatio\(\)/);
 assert.match(controller, /getImageData\(/);
@@ -79,7 +83,9 @@ assert.match(controller, /grcon-mascot-fallback-idle/);
 assert.match(controller, /grcon-mascot-fallback-analyzing/);
 assert.match(controller, /grcon-mascot-fallback-warning/);
 assert.match(controller, /grcon-mascot-fallback-success/);
-assert.match(controller, /\[data-state=\'running\'\]\[data-media=\'png\'\]/);
+assert.doesNotMatch(controller, /grcon-mascot-fallback-running/, "PNG não pode simular a corrida real");
+assert.doesNotMatch(controller, /grcon-mascot-runtime-run/, "runtime contextual não pode atravessar o workspace");
+assert.doesNotMatch(controller, /position:fixed/, "mascote contextual deve permanecer no shell/header");
 assert.doesNotMatch(controller, /contain:layout style paint/);
 assert.match(controller, /instances: overlay\?\.isConnected \? 1 : 0/);
 assert.doesNotMatch(controller, /https?:\/\//i, "runtime não pode depender de CDN");
@@ -90,8 +96,11 @@ assert.doesNotMatch(controller, /root\.gsap|gsap\./i, "GSAP não existe no proje
 
 assert.match(header, /bridge de compatibilidade/);
 assert.doesNotMatch(header, /createElement\("video"\)|MutationObserver/);
-assert.match(runner, /GrconMascot\?\.run/);
-assert.doesNotMatch(runner, /createElement\(|addEventListener\(/);
+assert.match(runner, /grcon-mascot-running-alpha\.webm/);
+assert.match(runner, /grcon-mascot-activity-strip/);
+assert.match(runner, /video\.play\(\)/);
+assert.match(runner, /video\.pause\(\)/);
+assert.doesNotMatch(runner, /position:fixed/);
 assert.match(successPilot, /GrconMascot\?\.success/);
 assert.doesNotMatch(successPilot, /createElement\(|addEventListener\(/);
 
@@ -110,6 +119,8 @@ for (const state of ["analyzing", "warning", "success", "run"]) {
   assert.doesNotMatch(precache, new RegExp("grcon-mascot-" + state + "-alpha\\.webm"), state + " deve continuar lazy");
   assert.match(sw, new RegExp('"grcon-mascot-' + state + '-alpha\\.webm"'), state + " precisa estar na estratégia HEAVY");
 }
-assert.match(sw, /mascot-runtime5/);
+assert.doesNotMatch(precache, /grcon-mascot-running-alpha\.webm/, "corrida original deve continuar lazy");
+assert.match(sw, /"grcon-mascot-running-alpha\.webm"/, "corrida original precisa usar a estratégia HEAVY");
+assert.match(sw, /mascot-shell-runner1/);
 
-console.log("grcon_mascot_video: OK — runtime único, 6 estados Higgsfield, state machine, React bridge, lazy loading e fallback validados.");
+console.log("grcon_mascot_video: OK — estados contextuais preservados, corrida original separada no shell, React bridge, lazy loading e fallback validados.");
