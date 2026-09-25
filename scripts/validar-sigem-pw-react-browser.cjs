@@ -56,22 +56,13 @@ function writeFixtures() {
 }
 
 async function waitForStablePage(page) {
-  let lastError = null;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    try {
-      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      await page.waitForFunction(() => Boolean(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 });
-      await page.waitForTimeout(200);
-      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      return;
-    } catch (error) {
-      lastError = error;
-      const message = String(error && error.message ? error.message : error);
-      if (!/Execution context was destroyed|navigation|frame was detached|Timeout/i.test(message)) throw error;
-      await page.waitForTimeout(150);
-    }
-  }
-  throw lastError || new Error("Service Worker não estabilizou o Dashboard SIGEM × PW.");
+  await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+  await page.waitForFunction(() => Boolean(document.body && window.GRCONModuleLoader), null, { timeout: 30000 });
+  await page.waitForFunction(() => Array.from(document.querySelectorAll("[data-spw-open]")).some((node) => {
+    const rect = node.getBoundingClientRect();
+    const style = getComputedStyle(node);
+    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+  }), null, { timeout: 30000 });
 }
 async function exposeApp(page) {
   await page.addStyleTag({ content: [
