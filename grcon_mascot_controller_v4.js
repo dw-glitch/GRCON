@@ -28,6 +28,7 @@
     run: "running",
   });
   const CONTEXTS = Object.freeze([
+    ["dashboard", "#dashboard-module", ".dashboard-page-heading,.ui-page-header,header", "dashboard"],
     ["control", "#grdt-module", ".ops-page-heading", "default"],
     ["requests", "#requests-module", ".ops-page-heading,.requests-heading", "search"],
     ["grdt-reissue", "#grdt-reissue-module", ".grdt-reissue-heading", "egrdt"],
@@ -282,9 +283,18 @@
     }
     overlay.dataset.context = next.name;
     const heading = next.node?.querySelector?.(next.headingSelector || "header") || next.node?.querySelector?.("header") || null;
-    if (heading) {
+    const previousParent = overlay.parentElement;
+    const previousParentHidden = previousParent && previousParent !== document.body && (
+      previousParent.hidden ||
+      previousParent.getAttribute?.("aria-hidden") === "true" ||
+      previousParent.closest?.("[hidden],[aria-hidden='true']")
+    );
+    if (heading && heading.isConnected) {
       heading.classList.add("grcon-mascot-heading");
-      if (overlay.parentElement !== heading) heading.appendChild(overlay);
+      if (previousParent !== heading) heading.appendChild(overlay);
+    } else if (previousParentHidden || !previousParent?.isConnected || (next.node && previousParent && !next.node.contains(previousParent))) {
+      document.body.appendChild(overlay);
+      log("context-reparent-fallback", { context: next.name, reason: "missing-or-hidden-heading" });
     }
     const statePose = currentState === "warning" ? "warning" : currentState === "success" ? "success" : "";
     setFallbackPose(statePose || forcedPose || next.pose);
