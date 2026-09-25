@@ -2,11 +2,12 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "5.0.1";
+  const VERSION = "5.1.0";
   const ENGINE = "official-contextual-v5";
   const ASSET_REVISION = "20260924.2";
   const OVERLAY_ID = "grcon-context-mascot";
   const BUBBLE_ID = "grcon-mascot-context-bubble";
+  const HEADER_SLOT_ID = "grcon-mascot-header-slot";
   const STYLE_ID = "grcon-mascot-runtime-v5-style";
   const SETTINGS_ID = "grcon-mascot-animation-setting";
   const PREF_KEY = "grcon:mascot:animations";
@@ -58,7 +59,7 @@
     analyzing: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-analyzing-alpha.webm"), loop: true }),
     warning: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-warning-alpha.webm"), loop: false }),
     success: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-success-alpha.webm"), loop: false }),
-    running: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-run-alpha.webm"), loop: true }),
+    running: Object.freeze({ url: asset("assets/mascot/video/grcon-mascot-running-alpha.webm"), loop: true }),
   });
 
   const logEntries = [];
@@ -171,14 +172,15 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = [
-      "#" + OVERLAY_ID + "{--mascot-x:calc(100vw - clamp(166px,13vw,190px) - 22px);--mascot-y:calc(100vh - clamp(166px,13vw,190px) - 22px);--cursor-x:0px;--cursor-y:0px;position:fixed;z-index:245;left:0;top:0;width:clamp(150px,13vw,190px);height:clamp(150px,13vw,190px);transform:translate3d(var(--mascot-x),var(--mascot-y),0);transition:transform 260ms cubic-bezier(.2,.8,.2,1),opacity 160ms ease;pointer-events:none;user-select:none;contain:layout style;isolation:isolate;opacity:1;background:transparent;border:0;box-shadow:none;overflow:visible}",
-      "#" + OVERLAY_ID + "[data-state='hidden']{opacity:0;visibility:hidden}",
-      "#" + OVERLAY_ID + " .grcon-mascot-stage{position:absolute;inset:0;transform:translate3d(var(--cursor-x),var(--cursor-y),0) rotate(var(--cursor-tilt,0deg));transition:transform 120ms ease-out;pointer-events:none;background:transparent;border:0;box-shadow:none;overflow:visible}",
+      "#" + HEADER_SLOT_ID + "{display:flex;align-items:center;justify-content:flex-end;gap:.55rem;min-width:0;flex:0 0 auto;pointer-events:none;isolation:isolate}",
+      "#" + OVERLAY_ID + "{position:relative;z-index:1;left:auto;top:auto;width:clamp(64px,5vw,76px);height:clamp(64px,5vw,76px);transform:none;transition:opacity 160ms ease;pointer-events:none;user-select:none;contain:layout style;isolation:isolate;opacity:1;background:transparent;border:0;box-shadow:none;overflow:visible;flex:0 0 auto}",
+      "#" + OVERLAY_ID + "[data-state='hidden'],#" + OVERLAY_ID + "[data-state='running']{opacity:0;visibility:hidden}",
+      "#" + OVERLAY_ID + " .grcon-mascot-stage{position:absolute;inset:0;transform:translate3d(var(--cursor-x,0px),var(--cursor-y,0px),0) rotate(var(--cursor-tilt,0deg));transition:transform 120ms ease-out;pointer-events:none;background:transparent;border:0;box-shadow:none;overflow:visible}",
       "#" + OVERLAY_ID + "::before,#" + OVERLAY_ID + "::after,#" + OVERLAY_ID + " .grcon-mascot-stage::before,#" + OVERLAY_ID + " .grcon-mascot-stage::after{content:none!important;display:none!important}",
       "#" + OVERLAY_ID + " video,#" + OVERLAY_ID + " .grcon-mascot-sprite{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;background-color:transparent;border:0;box-shadow:none}",
-      "#" + OVERLAY_ID + " video{object-fit:contain;background:transparent!important;filter:drop-shadow(0 7px 14px rgb(12 32 48 / 19%));opacity:0;transition:opacity 120ms ease}",
+      "#" + OVERLAY_ID + " video{object-fit:contain;background:transparent!important;filter:drop-shadow(0 5px 10px rgb(12 32 48 / 18%));opacity:0;transition:opacity 120ms ease}",
       "#" + OVERLAY_ID + "[data-media='video'] video{opacity:1}",
-      "#" + OVERLAY_ID + " .grcon-mascot-sprite{background-image:url('grcon-mascot-sprite.png?v=4.0.0-hd');background-repeat:no-repeat;background-size:400% 400%;background-position:calc(var(--mx,0)*33.333333%) calc(var(--my,0)*33.333333%);filter:drop-shadow(0 6px 12px rgb(12 32 48 / 16%));opacity:1}",
+      "#" + OVERLAY_ID + " .grcon-mascot-sprite{background-image:url('grcon-mascot-sprite.png?v=4.0.0-hd');background-repeat:no-repeat;background-size:400% 400%;background-position:calc(var(--mx,0)*33.333333%) calc(var(--my,0)*33.333333%);filter:drop-shadow(0 5px 10px rgb(12 32 48 / 15%));opacity:1}",
       "#" + OVERLAY_ID + "[data-media='video'] .grcon-mascot-sprite{opacity:0}",
       "#" + OVERLAY_ID + "[data-media='png'] .grcon-mascot-sprite{transform-origin:50% 82%}",
       "#" + OVERLAY_ID + "[data-media='png'][data-state='idle'] .grcon-mascot-sprite{animation:grcon-mascot-fallback-idle 3.2s ease-in-out infinite}",
@@ -186,27 +188,36 @@
       "#" + OVERLAY_ID + "[data-media='png'][data-state='analyzing'] .grcon-mascot-sprite{animation:grcon-mascot-fallback-analyzing 1.15s ease-in-out infinite}",
       "#" + OVERLAY_ID + "[data-media='png'][data-state='warning'] .grcon-mascot-sprite{animation:grcon-mascot-fallback-warning .42s ease-in-out 3}",
       "#" + OVERLAY_ID + "[data-media='png'][data-state='success'] .grcon-mascot-sprite{animation:grcon-mascot-fallback-success .72s cubic-bezier(.2,.9,.2,1) 1}",
-      "#" + OVERLAY_ID + "[data-media='png'][data-state='running'] .grcon-mascot-sprite{animation:grcon-mascot-fallback-running .62s ease-in-out infinite}",
-      "@keyframes grcon-mascot-fallback-idle{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}",
+      "@keyframes grcon-mascot-fallback-idle{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}",
       "@keyframes grcon-mascot-fallback-hello{0%,100%{transform:rotate(0deg)}35%{transform:rotate(-3deg)}70%{transform:rotate(3deg)}}",
       "@keyframes grcon-mascot-fallback-analyzing{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-2px) rotate(-1.5deg)}}",
       "@keyframes grcon-mascot-fallback-warning{0%,100%{transform:translateX(0)}35%{transform:translateX(-2px) rotate(-1.5deg)}70%{transform:translateX(2px) rotate(1.5deg)}}",
-      "@keyframes grcon-mascot-fallback-success{0%{transform:scale(.96) translateY(2px)}55%{transform:scale(1.035) translateY(-3px)}100%{transform:scale(1) translateY(0)}}",
-      "@keyframes grcon-mascot-fallback-running{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-3px) rotate(1deg)}}",
-      "#" + OVERLAY_ID + "[data-state='running']{width:clamp(190px,22vw,280px);height:clamp(110px,12.4vw,158px);transition:none;animation:grcon-mascot-runtime-run 8s linear infinite}",
-      "#" + OVERLAY_ID + "[data-state='running'][data-media='png']{width:clamp(150px,13vw,190px);height:clamp(150px,13vw,190px)}",
-      "@keyframes grcon-mascot-runtime-run{from{transform:translate3d(calc(-100% - 16px),calc(100vh - 190px),0)}to{transform:translate3d(calc(100vw + 16px),calc(100vh - 190px),0)}}",
-      "#" + BUBBLE_ID + "{position:fixed;z-index:246;max-width:min(250px,calc(100vw - 24px));padding:.55rem .72rem;border:1px solid color-mix(in srgb,var(--brand-700,#0c648f) 20%,var(--border-1,#d8e1e7));border-radius:12px;background:color-mix(in srgb,var(--surface-1,#fff) 97%,var(--brand-50,#f2f9fc));box-shadow:0 8px 24px rgb(12 32 48 / 12%);color:var(--text-1,#16212b);font:650 .84rem/1.3 Inter,'Segoe UI',Arial,sans-serif;pointer-events:none;opacity:0;visibility:hidden;transform:translateY(4px);transition:opacity 150ms ease,transform 180ms ease;overflow-wrap:anywhere}",
+      "@keyframes grcon-mascot-fallback-success{0%{transform:scale(.96) translateY(2px)}55%{transform:scale(1.035) translateY(-2px)}100%{transform:scale(1) translateY(0)}}",
+      "#" + BUBBLE_ID + "{position:relative;z-index:1;max-width:min(230px,28vw);padding:.48rem .62rem;border:1px solid color-mix(in srgb,var(--brand-700,#0c648f) 20%,var(--border-1,#d8e1e7));border-radius:10px;background:color-mix(in srgb,var(--surface-1,#fff) 97%,var(--brand-50,#f2f9fc));box-shadow:0 5px 16px rgb(12 32 48 / 10%);color:var(--text-1,#16212b);font:650 .78rem/1.25 Inter,'Segoe UI',Arial,sans-serif;pointer-events:none;opacity:0;visibility:hidden;transform:translateY(2px);transition:opacity 150ms ease,transform 180ms ease;overflow-wrap:anywhere}",
       "#" + BUBBLE_ID + "[data-visible='true']{opacity:1;visibility:visible;transform:translateY(0)}",
       ".grcon-mascot-setting-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.75rem .85rem;border:1px solid var(--border-1,#d8e1e7);border-radius:12px;background:var(--surface-1,#fff)}",
       ".grcon-mascot-setting-row span{display:grid;gap:.16rem}.grcon-mascot-setting-row strong{font-size:.9rem}.grcon-mascot-setting-row small{color:var(--text-2,#5f6e78)}",
       ".grcon-mascot-setting-row input{inline-size:1.15rem;block-size:1.15rem}",
-      "html[data-theme='dark'] #" + OVERLAY_ID + " video{filter:drop-shadow(0 8px 15px rgb(0 0 0 / 42%))}",
-      "@media(max-width:900px){#" + OVERLAY_ID + "{width:clamp(130px,17vw,160px);height:clamp(130px,17vw,160px)}}",
-      "@media(max-width:700px){#" + OVERLAY_ID + "{width:clamp(95px,27vw,125px);height:clamp(95px,27vw,125px);--mascot-x:calc(100vw - clamp(95px,27vw,125px) - 10px);--mascot-y:calc(100vh - clamp(95px,27vw,125px) - max(10px,env(safe-area-inset-bottom)))}#" + OVERLAY_ID + "[data-state='running']{animation:none;width:clamp(95px,27vw,125px);height:clamp(95px,27vw,125px)}}",
-      "@media(prefers-reduced-motion:reduce){#" + OVERLAY_ID + "{transition:none!important;animation:none!important}#" + OVERLAY_ID + " video{display:none!important}#" + OVERLAY_ID + " .grcon-mascot-stage{transition:none!important;transform:none!important}#" + OVERLAY_ID + " .grcon-mascot-sprite{animation:none!important;transform:none!important}#" + BUBBLE_ID + "{transition:none!important}}",
+      "html[data-theme='dark'] #" + OVERLAY_ID + " video{filter:drop-shadow(0 6px 12px rgb(0 0 0 / 40%))}",
+      "@media(max-width:900px){#" + HEADER_SLOT_ID + "{order:3;flex:1 1 100%;justify-content:flex-start;min-height:58px}#" + OVERLAY_ID + "{width:58px;height:58px}#" + BUBBLE_ID + "{max-width:min(260px,calc(100vw - 96px))}}",
+      "@media(max-width:700px){#" + HEADER_SLOT_ID + "{min-height:52px}#" + OVERLAY_ID + "{width:52px;height:52px}#" + BUBBLE_ID + "{font-size:.74rem}}",
+      "@media(prefers-reduced-motion:reduce){#" + OVERLAY_ID + "{transition:none!important}#" + OVERLAY_ID + " video{display:none!important}#" + OVERLAY_ID + " .grcon-mascot-stage{transition:none!important;transform:none!important}#" + OVERLAY_ID + " .grcon-mascot-sprite{animation:none!important;transform:none!important}#" + BUBBLE_ID + "{transition:none!important}}",
     ].join("\n");
     document.head.appendChild(style);
+  }
+
+  function ensureHeaderSlot() {
+    let slot = document.getElementById(HEADER_SLOT_ID);
+    if (slot) return slot;
+    const topbar = document.querySelector(".topbar");
+    slot = document.createElement("div");
+    slot.id = HEADER_SLOT_ID;
+    slot.className = "grcon-mascot-header-slot";
+    slot.dataset.grconMascotShell = "header";
+    const runtimeStatus = topbar?.querySelector(".runtime-status");
+    if (topbar) topbar.insertBefore(slot, runtimeStatus || null);
+    else document.body.prepend(slot);
+    return slot;
   }
 
   function ensureDom() {
@@ -239,14 +250,15 @@
     video.setAttribute("aria-hidden", "true");
     stage.append(fallback, video);
     overlay.replaceChildren(stage);
-    if (!overlay.isConnected) document.body.appendChild(overlay);
+    const headerSlot = ensureHeaderSlot();
+    if (!overlay.isConnected || overlay.parentElement !== headerSlot) headerSlot.appendChild(overlay);
 
     bubble = document.getElementById(BUBBLE_ID) || document.createElement("div");
     bubble.id = BUBBLE_ID;
     bubble.setAttribute("role", "status");
     bubble.setAttribute("aria-live", "polite");
     bubble.dataset.visible = "false";
-    if (!bubble.isConnected) document.body.appendChild(bubble);
+    if (!bubble.isConnected || bubble.parentElement !== headerSlot) headerSlot.appendChild(bubble);
 
     video.addEventListener("loadeddata", revealVideo);
     video.addEventListener("canplay", revealVideo);
@@ -300,14 +312,10 @@
     return { width: rect.width || 170, height: rect.height || 170 };
   }
 
-  function setPosition(left, top) {
-    const vp = viewport();
-    const size = mascotSize();
-    const safe = 8;
-    const x = Math.max(safe, Math.min(left, vp.width - size.width - safe));
-    const y = Math.max(safe, Math.min(top, vp.height - size.height - safe));
-    overlay.style.setProperty("--mascot-x", Math.round(x) + "px");
-    overlay.style.setProperty("--mascot-y", Math.round(y) + "px");
+  function setPosition() {
+    if (!overlay) return;
+    overlay.style.removeProperty("--mascot-x");
+    overlay.style.removeProperty("--mascot-y");
     positionBubble();
   }
 
@@ -316,51 +324,11 @@
   }
 
   function visibleAvoidanceRects() {
-    const selectors = [
-      "dialog[open]",
-      '[role="dialog"]:not([hidden])',
-      '[aria-modal="true"]:not([hidden])',
-      '[role="menu"]:not([hidden])',
-      ".history-manage[open] .history-manage-menu",
-    ];
-    const seen = new Set();
-    const rects = [];
-    selectors.forEach((selector) => {
-      document.querySelectorAll(selector).forEach((node) => {
-        if (!(node instanceof Element) || seen.has(node) || node === overlay || overlay?.contains(node)) return;
-        seen.add(node);
-        const style = getComputedStyle(node);
-        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return;
-        const rect = node.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
-        rects.push(rect);
-      });
-    });
-    return rects;
+    return [];
   }
 
   function positionDefault() {
-    if (!overlay || currentState === "running") return;
-    const vp = viewport();
-    const size = mascotSize();
-    const gap = isMobile() ? 10 : 22;
-    const candidates = [
-      { left: vp.width - size.width - gap, top: vp.height - size.height - gap },
-      { left: vp.width - size.width - gap, top: gap },
-      { left: gap, top: vp.height - size.height - gap },
-      { left: gap, top: gap },
-    ];
-    const blockers = visibleAvoidanceRects();
-    const chosen = candidates.find((candidate) => {
-      const rect = {
-        left: candidate.left,
-        top: candidate.top,
-        right: candidate.left + size.width,
-        bottom: candidate.top + size.height,
-      };
-      return blockers.every((blocker) => !rectsIntersect(rect, blocker));
-    }) || candidates[0];
-    setPosition(chosen.left, chosen.top);
+    setPosition();
   }
 
   function resolveTarget(input) {
@@ -373,24 +341,8 @@
   }
 
   function positionNearTarget() {
-    if (!currentTarget || !currentTarget.isConnected || isMobile()) {
-      if (currentTarget && !currentTarget.isConnected) currentTarget = null;
-      positionDefault();
-      return;
-    }
-    const targetRect = currentTarget.getBoundingClientRect();
-    const vp = viewport();
-    const size = mascotSize();
-    const gap = 20;
-    const candidates = [
-      { left: targetRect.right + gap, top: targetRect.top + (targetRect.height - size.height) / 2 },
-      { left: targetRect.left - size.width - gap, top: targetRect.top + (targetRect.height - size.height) / 2 },
-      { left: targetRect.left + (targetRect.width - size.width) / 2, top: targetRect.top - size.height - gap },
-      { left: targetRect.left + (targetRect.width - size.width) / 2, top: targetRect.bottom + gap },
-    ];
-    const fits = (p) => p.left >= 8 && p.top >= 8 && p.left + size.width <= vp.width - 8 && p.top + size.height <= vp.height - 8;
-    const choice = candidates.find(fits) || candidates[0];
-    setPosition(choice.left, choice.top);
+    if (currentTarget && !currentTarget.isConnected) currentTarget = null;
+    positionDefault();
   }
 
   function schedulePosition() {
@@ -422,18 +374,9 @@
   }
 
   function positionBubble() {
-    if (!bubble || bubble.dataset.visible !== "true" || !overlay) return;
-    const host = overlay.getBoundingClientRect();
-    const box = bubble.getBoundingClientRect();
-    const vp = viewport();
-    const gap = 8;
-    let left = host.left - box.width - gap;
-    let top = host.top + Math.max(0, (host.height - box.height) / 2);
-    if (left < 8) left = host.right + gap;
-    if (left + box.width > vp.width - 8) left = Math.max(8, vp.width - box.width - 8);
-    top = Math.max(8, Math.min(top, vp.height - box.height - 8));
-    bubble.style.left = Math.round(left) + "px";
-    bubble.style.top = Math.round(top) + "px";
+    if (!bubble) return;
+    bubble.style.removeProperty("left");
+    bubble.style.removeProperty("top");
   }
 
   function showBubble(message) {
@@ -526,6 +469,10 @@
 
   function playAsset(state) {
     ensureDom();
+    if (state === "running") {
+      clearVideoSource();
+      return;
+    }
     if (!animationsEnabled() || reducedMotion()) {
       clearVideoSource();
       return;
@@ -576,17 +523,44 @@
     setFallbackPose(statePose());
 
     if (next === "hidden") {
+      root.GrconMascotRunner?.stop?.("hidden");
       clearVideoSource();
       hideBubble();
       return next;
     }
 
-    if (next === "running" && (isMobile() || reducedMotion())) {
-      currentState = "analyzing";
-      overlay.dataset.state = "analyzing";
-      document.documentElement.dataset.grconMascotState = "analyzing";
+    if (next === "running") {
+      if (reducedMotion() || !animationsEnabled()) {
+        root.GrconMascotRunner?.stop?.("reduced-or-disabled");
+        currentState = "analyzing";
+        overlay.dataset.state = "analyzing";
+        document.documentElement.dataset.grconMascotState = "analyzing";
+        playAsset("analyzing");
+        if (config.message) showBubble(config.message);
+        positionDefault();
+        log("state", { state: currentState, source: config.source || "api", context: currentContext, runningFallback: true });
+        return currentState;
+      }
+      clearVideoSource();
+      hideBubble();
+      positionDefault();
+      const runner = root.GrconMascotRunner;
+      if (runner?.run) {
+        Promise.resolve(runner.run({ source: config.source || "api", hold: Boolean(operations.size) })).then((started) => {
+          if (!started && currentState === "running") applyState("analyzing", { force: true, message: config.message, source: "runner-unavailable" });
+        }).catch(() => {
+          if (currentState === "running") applyState("analyzing", { force: true, message: config.message, source: "runner-error" });
+        });
+      } else {
+        root.setTimeout(() => {
+          if (currentState === "running" && !root.GrconMascotRunner?.run) applyState("analyzing", { force: true, message: config.message, source: "runner-not-loaded" });
+        }, 120);
+      }
+      log("state", { state: currentState, source: config.source || "api", context: currentContext, runner: "activity-strip" });
+      return currentState;
     }
 
+    root.GrconMascotRunner?.stop?.("state-" + next);
     playAsset(currentState);
     if (config.message) showBubble(config.message);
     else if (currentState === "idle") hideBubble();
@@ -674,7 +648,7 @@
       transientTimer = root.setTimeout(() => {
         hideBubble();
         applyState("idle", { force: true, source: "run-complete" });
-      }, Math.max(2200, Number(config.duration) || 4300));
+      }, Math.max(5200, Number(config.duration) || 5400));
     }
     return Promise.resolve(value !== "hidden");
   }
@@ -880,11 +854,13 @@
     if (input) input.checked = Boolean(enabled);
     if (!enabled) {
       detachedPreloaders.clear();
+      root.GrconMascotRunner?.stop?.("disabled");
       clearVideoSource();
       overlay.dataset.media = "png";
     } else {
       scheduleLazyPreload();
-      playAsset(currentState === "hidden" ? "idle" : currentState);
+      if (currentState === "running") void root.GrconMascotRunner?.run?.({ source: "enabled", hold: Boolean(operations.size) });
+      else playAsset(currentState === "hidden" ? "idle" : currentState);
     }
     document.documentElement.dataset.grconMascotAnimations = enabled ? "on" : "off";
     return Boolean(enabled);
@@ -1028,6 +1004,8 @@
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         try { video?.pause(); } catch (_) {}
+      } else if (currentState === "running") {
+        void root.GrconMascotRunner?.run?.({ source: "visibility-resume", hold: Boolean(operations.size) });
       } else if (currentState !== "hidden") {
         playAsset(currentState);
       }
@@ -1040,6 +1018,7 @@
       if (pointerFrame) root.cancelAnimationFrame(pointerFrame);
       operations.clear();
       authObserver?.disconnect();
+      root.GrconMascotRunner?.stop?.("pagehide");
       try { video?.pause(); } catch (_) {}
     }, { once: true });
     scheduleLazyPreload();

@@ -18,10 +18,13 @@
       background-position: 0 0, 0 12px, 12px -12px, -12px 0;
       background-size: 24px 24px;
     }
-    .topbar { display: flex; min-height: 180px; align-items: center; padding: 24px; }
+    .topbar { display: flex; min-height: 92px; align-items: center; gap: 20px; padding: 12px 24px; background: rgba(255,255,255,.9); }
     .brand { display: flex; align-items: center; gap: 16px; }
     .grcon-brand-mark { width: 1px; height: 1px; overflow: hidden; opacity: 0; }
-    .grcon-brand-mascot { width: 160px !important; height: 160px !important; }
+    .runtime-status { margin-left: auto; }
+    .app-shell { min-height: 720px; background: rgba(255,255,255,.72); }
+    .workspace { min-height: 680px; padding: 24px; border-top: 1px solid #c8d4dc; }
+    @media (max-width: 700px) { .topbar { flex-wrap: wrap; padding: 10px 12px; } .workspace { min-height: 760px; } }
   </style>
 </head>
 <body>
@@ -30,10 +33,15 @@
       <span class="grcon-brand-mark" aria-hidden="true"></span>
       <strong>Mascote oficial GRCON</strong>
     </div>
+    <div class="grcon-mascot-header-slot" id="grcon-mascot-header-slot" data-grcon-mascot-shell="header"></div>
+    <div class="runtime-status">QA</div>
   </header>
+  <section aria-hidden="true" class="grcon-mascot-activity-strip" data-active="false" hidden id="grcon-mascot-activity-strip"></section>
+  <div class="app-shell"><main class="workspace" id="app-main"><button id="fixture-workspace-action">Ação do workspace</button></main></div>
   <script defer src="grcon_mascot_header.js"></script>
   <script defer src="grcon_mascot_asset_fix.js"></script>
   <script defer src="grcon_mascot_greeting_core.js"></script>
   <script defer data-grcon-mascot-controller="video" src="grcon_mascot_controller.js"></script>
+  <script defer data-grcon-mascot-runner="video" src="grcon_mascot_runner.js"></script>
 </body>
 </html>
