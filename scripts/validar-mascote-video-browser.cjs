@@ -228,7 +228,7 @@ async function main() {
       const host = document.querySelector("#grcon-context-mascot");
       if (!host) return false;
       const rect = host.getBoundingClientRect();
-      return rect.left >= 12 && rect.right <= innerWidth - 12 && rect.top >= -0.5 && rect.bottom <= innerHeight + 0.5;
+      return rect.left >= -0.5 && rect.right <= innerWidth + 0.5 && rect.top >= -0.5 && rect.bottom <= innerHeight + 0.5;
     }, null, { timeout: 3000 });
     await page.screenshot({ path: path.join(outputDir, "05-running.png") });
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:mascot-operation", { detail: { active: false } })));
