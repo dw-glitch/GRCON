@@ -156,6 +156,9 @@
       title: text(file && file.title),
       originalName: text(file && file.originalName),
       finalName: text(file && file.finalName),
+      format: text(file && file.format),
+      documentType: text(file && file.documentType),
+      purpose: text(file && file.purpose),
       revision,
       grdtRevision: text(file && file.grdtRevision) || revision,
       revisionSource: text(file && file.revisionSource) || (revision ? "Histórico registrado" : ""),
@@ -203,6 +206,7 @@
       outputType: text(record && record.outputType) || "eGRDT final",
       ldName: text(record && record.ldName),
       sourceName: text(record && record.sourceName),
+      reissueSources: Array.isArray(record && record.reissueSources) ? record.reissueSources.map(text).filter(Boolean) : [],
       numberHistory: Array.isArray(record && record.numberHistory) ? record.numberHistory.map(text).filter(Boolean) : [],
       cloudId,
       workspaceId,
@@ -403,6 +407,9 @@
         databook: record.databook || "",
         virtual: Boolean(entry.virtual),
         discipline: row.egrdt && row.egrdt.discipline || record.discipline || "",
+        format: entry.item && entry.item.format || row.egrdt && row.egrdt.format || "",
+        documentType: entry.item && entry.item.documentType || row.egrdt && row.egrdt.documentType || "",
+        purpose: entry.item && entry.item.purpose || row.egrdt && row.egrdt.purpose || record.purpose || "",
       });
     });
     const generatedAt = text(info.generatedAt) || new Date().toISOString();
@@ -471,9 +478,9 @@
     const wanted = norm(query);
     if (!wanted) return records || [];
     return (records || []).filter((record) => norm([
-      record.egrdtNumber, ...(record.numberHistory || []), record.outputType, record.ldName, record.sourceName,
+      record.egrdtNumber, ...(record.numberHistory || []), ...(record.reissueSources || []), record.outputType, record.ldName, record.sourceName,
       ...(record.allocations || []),
-      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline]),
+      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline, file.documentType, file.purpose]),
     ].join(" ")).includes(wanted));
   }
 

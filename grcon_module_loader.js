@@ -47,6 +47,7 @@
       "requests_taxonomy_core.js", "requests_app.js",
       "react-dist/consultas-app.js",
     ],
+    "grdt-reissue": ["xlsx", "zip", "sigem_posting_core.js", "grdt_reissue_core.js", "grdt_reissue_app.js"],
     // Hub estático: não carrega dependências até o operador escolher uma ferramenta.
     "additional-tools": [],
     // O combinador é isolado do banco. A interface é uma ilha React; o Core
@@ -63,6 +64,7 @@
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi", "GrconHistoricoAnalisesReact"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsTaxonomy", "GrconRequestsUi", "GrconConsultasReact"],
+    "grdt-reissue": ["GrconGrdtReissueCore", "GrconGrdtReissueUi", "GrdtWorkbook"],
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
     "cover-document": ["GrconCoverDocumentUi"],
   };
@@ -228,6 +230,7 @@
       dashboard: "dashboard-module",
       sigem: "sigem-module",
       requests: "requests-module",
+      "grdt-reissue": "grdt-reissue-module",
       "additional-tools": "additional-tools-module",
       "pdf-tools": "pdf-tools-module",
       "cover-document": "cover-document-module",
@@ -252,6 +255,7 @@
   const NOMES = {
     control: "Controle de GRDT",
     requests: "Consultas",
+    "grdt-reissue": "Repostagem de GRDT",
     "additional-tools": "Ferramentas adicionais",
     "analysis-history": "Histórico de análises",
     history: "Histórico de eGRDTs",
@@ -289,6 +293,10 @@
     }
     if (module === "cover-document") {
       root.GrconCoverDocumentUi?.activate?.();
+      return;
+    }
+    if (module === "grdt-reissue") {
+      root.GrconGrdtReissueUi?.activate?.();
       return;
     }
     root.GrconHistoryUi?.activate?.(module);

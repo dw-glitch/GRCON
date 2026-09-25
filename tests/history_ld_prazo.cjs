@@ -22,10 +22,11 @@ const record = History.recordFromGenerated({
 const restored = History.cleanRecord(JSON.parse(JSON.stringify(record)));
 const rows = Report.documentRows([restored], []);
 assert.deepEqual(rows.map(r => r['VERSÃO DA LD ENVIADA']), ['A01', 'E30', 'Primeiras versões', '']);
-assert.equal(Object.keys(rows[0])[23], 'VERSÃO DA LD ENVIADA');
+assert.equal(Object.keys(rows[0])[3], 'PROPÓSITO');
+assert.equal(Object.keys(rows[0])[24], 'VERSÃO DA LD ENVIADA');
 const legacy = History.cleanRecord({ ...record, files: [{ document: 'RL-LEGADO', ldVersion: 'E' }] });
 assert.equal(Report.documentRows([legacy], [])[0]['VERSÃO DA LD ENVIADA'], '');
-console.log('OK — Prazo da LD preservado na leitura, histórico e coluna X; legado sem prazo permanece vazio.');
+console.log('OK — Prazo da LD preservado na leitura, histórico e coluna Y; legado sem prazo permanece vazio.');
 
 // Caminho de importação usado pelo aplicativo, com Prazo na coluna P.
 const Compatibility = require('../ld_compatibility.js');
