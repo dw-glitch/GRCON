@@ -1,4 +1,4 @@
-name: Inspecionar subdominio Cloudflare
+name: Atualizar subdominio Cloudflare
 on:
   push:
     branches: [infra/cloudflare-workers-independent-deploy]
@@ -6,28 +6,28 @@ on:
 permissions:
   contents: read
 jobs:
-  inspect:
+  update:
     runs-on: ubuntu-latest
     steps:
-      - name: Consultar subdominio e Workers
+      - name: Alterar e confirmar subdominio
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           node --input-type=module <<'NODE'
-          const base = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/workers`;
-          async function get(path) {
-            const response = await fetch(base + path, { headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` } });
-            const data = await response.json();
-            if (!response.ok || !data.success) {
-              console.log(JSON.stringify({ path, status: response.status, errors: data.errors }));
-              process.exitCode = 1;
-              return;
-            }
-            return data;
+          const url = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/workers/subdomain`;
+          const headers = { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` };
+          const response = await fetch(url, { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ subdomain: 'grcon-qualidade' }) });
+          const data = await response.json();
+          if (!response.ok || !data.success) {
+            console.log(JSON.stringify({ status: response.status, errors: data.errors }));
+            process.exit(1);
           }
-          const subdomain = await get('/subdomain');
-          const scripts = await get('/scripts');
-          if (subdomain) console.log('Subdominio da conta:', subdomain.result?.subdomain);
-          if (scripts) console.log('Workers na conta:', JSON.stringify((scripts.result || []).map(({ id }) => id)));
+          const check = await fetch(url, { headers });
+          const current = await check.json();
+          if (!check.ok || !current.success || current.result?.subdomain !== 'grcon-qualidade') {
+            console.log(JSON.stringify({ status: check.status, errors: current.errors, subdomain: current.result?.subdomain }));
+            process.exit(1);
+          }
+          console.log('Subdominio confirmado:', current.result.subdomain);
           NODE
