@@ -61,22 +61,9 @@ async function revealApp(page) {
 }
 
 async function waitForStableServiceWorkerPage(page) {
-  let lastError = null;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    try {
-      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      await page.waitForFunction(() => Boolean(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 });
-      await page.waitForTimeout(200);
-      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      return;
-    } catch (error) {
-      lastError = error;
-      const message = String(error && error.message ? error.message : error);
-      if (!/Execution context was destroyed|navigation|frame was detached|Timeout/i.test(message)) throw error;
-      await page.waitForTimeout(150);
-    }
-  }
-  throw lastError || new Error("Service Worker não estabilizou a página do Histórico de eGRDTs.");
+  await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
+  await page.waitForFunction(() => Boolean(document.body && window.GRCONModuleLoader && window.GrconHistory), null, { timeout: 30000 });
+  await page.waitForFunction(() => !document.querySelector(".app-loader:not([hidden]),.loading-overlay:not([hidden])"), null, { timeout: 15000 }).catch(() => undefined);
 }
 
 async function openHistory(page) {
