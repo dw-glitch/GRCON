@@ -2,7 +2,7 @@ name: Deploy Cloudflare
 
 on:
   push:
-    branches: [main]
+    branches: [main, infra/cloudflare-workers-independent-deploy]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   deploy:
     name: Publicar Workers Static Assets
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/infra/cloudflare-workers-independent-deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
