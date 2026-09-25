@@ -261,6 +261,7 @@ async function main() {
       window.GrconMascot.warning({ target, message: "Campo precisa de atenção.", duration: 1500 });
     });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "warning");
+    await waitMascotInsideViewport(page);
     const mobile = await page.evaluate(() => {
       const rect = document.querySelector("#grcon-context-mascot").getBoundingClientRect();
       return {

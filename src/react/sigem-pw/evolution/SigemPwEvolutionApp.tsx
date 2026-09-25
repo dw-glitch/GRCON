@@ -1,4 +1,4 @@
-import type { ChangeEvent } from "react";
+import { useState, type ChangeEvent } from "react";
 import { UiDrawer } from "../../core/ui/UiPrimitives";
 import { useSigemPwEvolution } from "./hooks/useSigemPwEvolution";
 import {
@@ -53,6 +53,10 @@ function SourceSelector({
 }) {
   const previousKey = `${system}Prev` as keyof EvolutionUiState["selections"];
   const currentKey = `${system}Current` as keyof EvolutionUiState["selections"];
+  const selectedLabel = (key: keyof EvolutionUiState["selections"]) => {
+    const snapshot = list.find((item) => item.id === selections[key]);
+    return snapshot ? optionLabel(snapshot) : "";
+  };
   return (
     <section className="spw-evo-source">
       <header>
@@ -65,7 +69,7 @@ function SourceSelector({
       <div className="spw-evo-pair">
         <label>
           <span>Base anterior</span>
-          <select
+          <select title={selectedLabel(previousKey)}
             data-evo-select={previousKey}
             disabled={!enabled}
             value={selections[previousKey]}
@@ -78,7 +82,7 @@ function SourceSelector({
         <span className="spw-evo-arrow" aria-hidden="true">→</span>
         <label>
           <span>Base atual</span>
-          <select
+          <select title={selectedLabel(currentKey)}
             data-evo-select={currentKey}
             disabled={!enabled || list.length === 0}
             value={selections[currentKey]}
@@ -107,7 +111,7 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
       </div>
     );
   }
-  const max = Math.max(1, ...visible.flatMap((row) => [row.sigemAdded, row.pwAdded, row.pwEmitted]));
+  const max = Math.max(1, ...visible.flatMap((row) => [row.sigemAdded, row.sigemRemoved, row.pwAdded, row.pwRemoved, row.pwEmitted]));
   const height = (value: number) => Math.max(value ? 6 : 2, Math.round((Number(value || 0) / max) * 68));
   const dayLabel = (value: string) => {
     const [year, month, day] = value.split("-");
@@ -122,7 +126,9 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
         </div>
         <div className="spw-evo-legend">
           <span><i className="sigem"></i>SIGEM</span>
+          <span><i className="sigem-removed"></i>Saíram SIGEM</span>
           <span><i className="pw"></i>PW</span>
+          <span><i className="pw-removed"></i>Saíram PW</span>
           <span><i className="emitted"></i>Emitidos PW</span>
         </div>
       </header>
@@ -131,11 +137,15 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
           <div
             className="spw-evo-day"
             key={row.date}
-            title={`${row.date} · SIGEM +${row.sigemAdded} · PW +${row.pwAdded} · emitidos ${row.pwEmitted}`}
+            title={`${row.date} · SIGEM +${row.sigemAdded} / −${row.sigemRemoved} · PW +${row.pwAdded} / −${row.pwRemoved} · emitidos ${row.pwEmitted}`}
+            tabIndex={0}
+            aria-label={`${row.date}: SIGEM entraram ${row.sigemAdded}, saíram ${row.sigemRemoved}; PW entraram ${row.pwAdded}, saíram ${row.pwRemoved}, emitidos ${row.pwEmitted}`}
           >
             <div className="spw-evo-bars">
               <i className="spw-evo-bar sigem" style={{ height: height(row.sigemAdded) }}></i>
+              <i className="spw-evo-bar sigem-removed" style={{ height: height(row.sigemRemoved) }}></i>
               <i className="spw-evo-bar pw" style={{ height: height(row.pwAdded) }}></i>
+              <i className="spw-evo-bar pw-removed" style={{ height: height(row.pwRemoved) }}></i>
               <i className="spw-evo-bar emitted" style={{ height: height(row.pwEmitted) }}></i>
             </div>
             <span>{dayLabel(row.date)}</span>
@@ -224,11 +234,18 @@ function DetailDrawer({
         <button className="spw-evo-close" id="spw-evo-close" type="button" aria-label="Fechar" onClick={onClose}>×</button>
       </header>
       <div className="spw-evo-detail" id="spw-evo-detail-body">
-        {fields.map(([label, value]) => (
-          <div key={label}>
-            <span>{label}</span>
-            <strong>{String(value || "—")}</strong>
-          </div>
+        {[
+          ["Documento", fields.slice(0, 5)],
+          ["Localização", fields.slice(5, 8)],
+          ["Status e movimento", fields.slice(8, 14).concat(fields.slice(16, 17))],
+          ["Histórico", fields.slice(14, 16).concat(fields.slice(17))],
+        ].map(([heading, group]) => (
+          <section className="spw-evo-detail-group" key={heading as string}>
+            <h4>{heading as string}</h4>
+            <div className="spw-evo-detail-grid">{(group as Array<[string, unknown]>).map(([label, value]) => (
+              <div key={label}><span>{label}</span><strong>{String(value || "—")}</strong></div>
+            ))}</div>
+          </section>
         ))}
       </div>
     </UiDrawer>
@@ -236,6 +253,7 @@ function DetailDrawer({
 }
 
 export function SigemPwEvolutionApp() {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const { state, periodSigem, periodPw, pageData, adapter } = useSigemPwEvolution();
   const hasValidatedLd = Boolean(state.ldUniverse?.qualityAvailable);
   const comparison = state.comparison;
@@ -263,25 +281,18 @@ export function SigemPwEvolutionApp() {
   const [listTitle, listSubtitle] = EVOLUTION_LIST_LABELS[state.listMode];
   const onSimpleFilter = (key: "documentClass" | "documentType" | "revision" | "status" | "discipline" | "source") =>
     (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => adapter.setFilter(key, event.target.value);
+  const advancedCount = [state.rawFilters.tag, state.rawFilters.eap, state.filters.documentType, state.filters.revision, state.filters.status, state.filters.discipline].filter(Boolean).length;
+  const activeFilterCount = advancedCount + [state.rawFilters.query, state.filters.documentClass, state.filters.source].filter(Boolean).length;
 
   return (
     <section id="spw-evolution-section" className="spw-evo-v2 spw-evolution-react" data-evolution-version="react-phase-a">
       <header className="spw-evo-head">
         <div>
-          <span className="spw-kicker">EVOLUÇÃO DIÁRIA</span>
-          <h3>O que entrou de uma base para a outra</h3>
+          <span className="spw-kicker">EVOLUÇÃO SIGEM × PW</span>
+          <h3>O que mudou entre as bases</h3>
           <p>A comparação usa os dois snapshots escolhidos. Cada código + revisão é uma entrada independente; revisão 0 e revisão A do mesmo documento contam como duas linhas.</p>
         </div>
         <div className="spw-evo-actions">
-          <button
-            className="secondary-button"
-            id="spw-evo-export"
-            type="button"
-            disabled={state.exporting || state.filteredRows.length === 0}
-            onClick={() => { void adapter.exportFilteredRows(); }}
-          >
-            {state.exporting ? "Gerando Excel..." : "Exportar lista"}
-          </button>
           <button className="text-button" id="spw-history-manage" type="button" onClick={() => adapter.openHistoryManager()}>
             Gerenciar histórico
           </button>
@@ -309,6 +320,7 @@ export function SigemPwEvolutionApp() {
       {state.busy ? <div className="spw-evo-message" role="status" aria-live="polite">Carregando snapshots da evolução…</div> : null}
 
       <div className="spw-evo-period">
+        <strong className="spw-evo-section-label">1 · Período</strong>
         <label>
           <span>Data inicial</span>
           <input id="spw-evo-date-start" type="date" value={state.period.start} onChange={(event) => adapter.setPeriod("start", event.target.value)} />
@@ -324,6 +336,7 @@ export function SigemPwEvolutionApp() {
       </div>
 
       <div className="spw-evo-selectors" id="spw-evo-selectors">
+        <strong className="spw-evo-section-label">2 · Bases comparadas</strong>
         <SourceSelector
           system="sigem"
           label="SIGEM"
@@ -345,16 +358,16 @@ export function SigemPwEvolutionApp() {
       </div>
 
       <div className="spw-evo-kpis" id="spw-evo-kpis">
-        <button className="spw-evo-kpi sigem" data-evo-list="sigem-new" disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("sigem-new")}>
+        <button className="spw-evo-kpi sigem" data-evo-list="sigem-new" aria-pressed={state.listMode === "sigem-new"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("sigem-new")}>
           <span>Entraram no SIGEM</span><strong>{value(Boolean(comparison?.sigem), counts["sigem-new"], true)}</strong><small>Código + revisão novos na Consulta Geral</small>
         </button>
-        <button className="spw-evo-kpi pw" data-evo-list="pw-new" disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-new")}>
+        <button className="spw-evo-kpi pw" data-evo-list="pw-new" aria-pressed={state.listMode === "pw-new"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-new")}>
           <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>Cadastros novos na relação ProjectWise</small>
         </button>
-        <button className="spw-evo-kpi emitted" data-evo-list="pw-emitted" disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-emitted")}>
+        <button className="spw-evo-kpi emitted" data-evo-list="pw-emitted" aria-pressed={state.listMode === "pw-emitted"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-emitted")}>
           <span>Emitidos no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-emitted"], true)}</strong><small>Novos emitidos ou emissão confirmada</small>
         </button>
-        <button className="spw-evo-kpi pending" data-evo-list="missing-pw" disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("missing-pw")}>
+        <button className="spw-evo-kpi pending" data-evo-list="missing-pw" aria-pressed={state.listMode === "missing-pw"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("missing-pw")}>
           <span>SIGEM novo sem PW</span><strong>{value(Boolean(comparison?.sigem), counts["missing-pw"])}</strong><small>Entradas ainda não localizadas no PW atual</small>
         </button>
       </div>
@@ -416,31 +429,39 @@ export function SigemPwEvolutionApp() {
       </nav>
 
       <div className="spw-evo-filters">
+        <div className="spw-evo-filter-heading"><strong>Filtros</strong>{activeFilterCount ? <button type="button" className="text-button spw-evo-clear" onClick={() => adapter.clearFilters()}>Limpar {activeFilterCount} filtro(s)</button> : null}</div>
+        <div className="spw-evo-primary-filters">
         <label>
           <span>Código / lista de códigos</span>
           <input id="spw-evo-filter-query" placeholder="Cole códigos separados por linha, vírgula ou ;" value={state.rawFilters.query} onChange={(event) => adapter.setRawFilter("query", event.target.value)} />
         </label>
         <label><span>Classe</span><select id="spw-evo-filter-class" value={state.filters.documentClass} onChange={onSimpleFilter("documentClass")}><option value="">Todas</option><option>ET</option><option>N-1710</option></select></label>
+        <label><span>Origem</span><select id="spw-evo-filter-source" value={state.filters.source} onChange={onSimpleFilter("source")}><option value="">SIGEM + PW</option><option value="sigem">SIGEM</option><option value="pw">PW</option></select></label>
+        </div>
+        <button type="button" id="spw-evo-more-filters" className="spw-evo-more" aria-expanded={advancedOpen} aria-controls="spw-evo-advanced-filters" onClick={() => setAdvancedOpen(!advancedOpen)}>
+          Mais filtros{advancedCount ? ` · ${advancedCount} ativo(s)` : ""}<span aria-hidden="true">{advancedOpen ? "▴" : "▾"}</span>
+        </button>
+        <div className="spw-evo-advanced-filters" id="spw-evo-advanced-filters" hidden={!advancedOpen}>
         <label><span>Tipo documental</span><input id="spw-evo-filter-document-type" placeholder="REP, RL, DE..." value={state.filters.documentType} onChange={onSimpleFilter("documentType")} /></label>
         <label><span>Revisão</span><input id="spw-evo-filter-revision" placeholder="A" value={state.filters.revision} onChange={onSimpleFilter("revision")} /></label>
         <label><span>Status</span><input id="spw-evo-filter-status" placeholder="Status" value={state.filters.status} onChange={onSimpleFilter("status")} /></label>
         <label><span>Disciplina</span><input id="spw-evo-filter-discipline" placeholder="Disciplina" value={state.filters.discipline} onChange={onSimpleFilter("discipline")} /></label>
         <label><span>TAG</span><input id="spw-evo-filter-tag" placeholder="TAG" value={state.rawFilters.tag} onChange={(event) => adapter.setRawFilter("tag", event.target.value)} /></label>
         <label><span>EAP</span><input id="spw-evo-filter-eap" placeholder="1.1.1.1" value={state.rawFilters.eap} onChange={(event) => adapter.setRawFilter("eap", event.target.value)} /></label>
-        <label><span>Origem</span><select id="spw-evo-filter-source" value={state.filters.source} onChange={onSimpleFilter("source")}><option value="">SIGEM + PW</option><option value="sigem">SIGEM</option><option value="pw">PW</option></select></label>
-        <button className="text-button spw-evo-clear" type="button" onClick={() => adapter.clearFilters()}>Limpar filtros</button>
+        </div>
       </div>
 
       <div className="spw-evo-list-head">
         <div><strong id="spw-evo-list-title">{listTitle}</strong><br /><small id="spw-evo-list-subtitle">{listSubtitle}</small></div>
-        <small id="spw-evo-list-count">{hasValidatedLd ? `${fmt(state.filteredRows.length)} registro(s) após filtro` : "LD necessária"}</small>
+        <div className="spw-evo-list-actions"><strong id="spw-evo-list-count">{hasValidatedLd ? `${fmt(state.filteredRows.length)} resultados` : "LD necessária"}</strong><button className="secondary-button compact" id="spw-evo-export" type="button" disabled={state.exporting || state.filteredRows.length === 0} onClick={() => { void adapter.exportFilteredRows(); }}>{state.exporting ? "Gerando Excel..." : "Exportar lista"}</button></div>
       </div>
 
+      <p className="spw-evo-scroll-hint">Deslize a tabela para ver todas as colunas →</p>
       <div className="spw-evo-table-wrap" id="spw-evo-table" tabIndex={0} aria-label="Tabela da Evolução SIGEM × ProjectWise">
         {!hasValidatedLd ? (
           <div className="spw-evo-empty"><strong>Evolução não calculada.</strong>Carregue as LDs para validar o universo documental antes da comparação.</div>
         ) : !pageData.visible.length ? (
-          <div className="spw-evo-empty"><strong>Nenhum registro nesta relação.</strong>A contagem e a lista usam exatamente a mesma origem de dados.</div>
+          <div className="spw-evo-empty"><strong>{activeFilterCount ? "Nenhum resultado para estes filtros." : comparison ? "Nenhum registro nesta relação." : "Selecione as bases para comparar."}</strong>{activeFilterCount ? "Ajuste ou limpe os filtros para ver os documentos." : "A contagem e a lista usam exatamente a mesma origem de dados."}</div>
         ) : (
           <table className="spw-evo-table">
             <thead><tr><th>Código</th><th>Rev.</th><th>Classe</th><th>Tipo</th><th>Status</th><th>Disciplina</th><th>TAG</th><th>EAP</th><th>Data</th><th>Origem</th></tr></thead>
@@ -463,7 +484,7 @@ export function SigemPwEvolutionApp() {
                     }
                   }}
                 >
-                  <td><strong>{row.document || "—"}</strong></td><td>{row.revision || "—"}</td><td>{row.documentClass || "—"}</td><td>{row.documentType || "—"}</td><td>{row.status || "—"}</td><td>{row.discipline || "—"}</td><td>{row.tag || "—"}</td><td>{row.eap || "—"}</td><td>{row.date || "—"}</td><td>{(row.system || "").toUpperCase() || "—"}</td>
+                  <td title={row.document}><strong>{row.document || "—"}</strong></td><td>{row.revision || "—"}</td><td>{row.documentClass || "—"}</td><td>{row.documentType || "—"}</td><td><span className="spw-evo-cell-badge">{row.status || "—"}</span></td><td>{row.discipline || "—"}</td><td>{row.tag || "—"}</td><td>{row.eap || "—"}</td><td title={row.date}>{row.date || "—"}</td><td><span className="spw-evo-cell-badge">{(row.system || "").toUpperCase() || "—"}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -475,7 +496,7 @@ export function SigemPwEvolutionApp() {
         {hasValidatedLd && state.filteredRows.length ? (
           <>
             <button className="secondary-button compact" type="button" data-evo-page="prev" disabled={state.page <= 1} onClick={() => adapter.setPage(state.page - 1)}>Anterior</button>
-            <span>Página {fmt(state.page)} de {fmt(pageData.pages)} · {fmt(pageData.start + 1)}–{fmt(Math.min(pageData.start + EVOLUTION_PAGE_SIZE, state.filteredRows.length))}</span>
+            <span>{fmt(pageData.start + 1)}–{fmt(Math.min(pageData.start + EVOLUTION_PAGE_SIZE, state.filteredRows.length))} de {fmt(state.filteredRows.length)} · Página {fmt(state.page)} de {fmt(pageData.pages)}</span>
             <button className="secondary-button compact" type="button" data-evo-page="next" disabled={state.page >= pageData.pages} onClick={() => adapter.setPage(state.page + 1)}>Próxima</button>
           </>
         ) : null}
