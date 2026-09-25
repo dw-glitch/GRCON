@@ -60,7 +60,6 @@ async function waitForStablePage(page) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
       await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      await page.waitForFunction(() => document.readyState !== "loading", null, { timeout: 15000 });
       await page.waitForTimeout(200);
       await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
       return;
