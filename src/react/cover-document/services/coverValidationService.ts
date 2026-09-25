@@ -29,7 +29,7 @@ export function validateCover(
     };
   }).TriagemCore;
   if (!data.revision.trim()) {
-    push("error", "revision", "Revisão obrigatória; confirme a revisão carregada da LD ou informe manualmente.");
+    push("error", "revision", "Revisão obrigatória; informe manualmente a revisão que será aplicada à capa.");
   } else if (coverCore?.revisionInfo && !coverCore.revisionInfo(data.revision).valid) {
     push("error", "revision-rule", "Revisão fora da regra oficial do GRCON.");
   }
@@ -41,9 +41,13 @@ export function validateCover(
     push("error", "category-rule", "Categoria documental fora do catálogo oficial do GRCON.");
   }
   if (!data.taxonomy.trim()) {
-    push("error", "taxonomy", "Taxonomia não encontrada na coluna TAXONOMIA da linha selecionada da LD.");
+    push("error", "taxonomy", "Taxonomia Interna não encontrada pelo motor canônico na coluna TAXONOMIA INTERNA da linha selecionada da LD.");
   }
-  if (!totalPages || totalPages < 2) push("error", "pages", "Total de folhas não pôde ser confirmado.");
+  if (!totalPages || totalPages < 1) push("error", "pages", "Total de folhas não pôde ser confirmado.");
+  if (source?.kind === "pdf" && source.originalPages) {
+    if (source.originalPages >= 2) push("info", "backcover-preserved", "Contracapa específica detectada: a página 2 do PDF original será preservada sem alterações.");
+    else push("warning", "backcover-missing", "O PDF possui apenas uma página; não existe página 2/contracapa para preservar.");
+  }
   if (source?.kind === "docx" && source.pageCountSource === "metadata") {
     push("info", "docx-pages", "A contagem do DOCX vem do metadado de páginas salvo no Word. Confira o total se o documento tiver sido alterado depois do último salvamento.");
   }

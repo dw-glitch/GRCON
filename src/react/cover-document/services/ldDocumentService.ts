@@ -39,15 +39,14 @@ function normalizedHeader(value: unknown): string {
   return normalizeSearch(value);
 }
 
-function exactColumnValue(columns: LdColumnValue[] | undefined, header: string): string {
-  if (!columns?.length) return "";
-  const wanted = normalizedHeader(header);
-  const values = columns
-    .filter((entry) => normalizedHeader(entry.header) === wanted)
-    .map((entry) => String(entry.value ?? "").trim());
-  if (!values.length) return "";
-  const unique = [...new Set(values)];
-  return unique.length === 1 ? unique[0] : "";
+function internalTaxonomyFromRecord(record: LdDocumentRecord): string {
+  const taxonomyCore = (window as unknown as {
+    GrconRequestsTaxonomy?: {
+      internalTaxonomyFromRecord?: (input: LdDocumentRecord, triagem?: unknown) => string;
+    };
+  }).GrconRequestsTaxonomy;
+  if (typeof taxonomyCore?.internalTaxonomyFromRecord !== "function") return "";
+  return String(taxonomyCore.internalTaxonomyFromRecord(record, window.TriagemCore) ?? "").trim();
 }
 
 function columnValue(columns: LdColumnValue[] | undefined, aliases: readonly string[]): string {
@@ -122,7 +121,7 @@ export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentC
     record,
     documentNumber: String(record.document ?? "").trim(),
     title: String(record.title ?? "").trim(),
-    taxonomy: exactColumnValue(record.ldColumns, "TAXONOMIA"),
+    taxonomy: internalTaxonomyFromRecord(record),
     eap: columnValue(record.ldColumns, FIELD_ALIASES.eap),
     category,
     categoryLabel: categoryLabel(category),

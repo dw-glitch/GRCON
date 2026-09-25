@@ -1,58 +1,64 @@
-# Mascote oficial GRCON — vídeos essenciais + piloto contextual
+# GRCON Mascot Runtime v5
 
-O GRCON preserva somente os três comportamentos originais aprovados e um piloto novo de microinteração contextual.
+## Fonte de verdade
 
-## Comportamentos preservados
+O personagem continua sendo o mascote oficial do GRCON. Os seis estados animados foram preparados a partir do elemento Higgsfield `grcon-mascot` (`5d684379-9c43-47db-913a-6af9d779e8b2`) e versionados localmente como WebM VP9 declarados com alpha no contêiner. Como a revisão `20260924.1` foi detectada em QA com fundo cinza ainda opaco no quadro decodificado, o runtime **não confia apenas no metadado AlphaMode**: antes de revelar qualquer vídeo ele mede uma amostra das bordas do primeiro frame. Vídeo sem transparência visual real é rejeitado antes de ficar visível e o sprite PNG HD oficial é usado como fallback transparente:
 
-- `assets/mascot/video/grcon-mascot-wave-alpha.webm`: aceno de boas-vindas, clique, foco e hover.
-- `assets/mascot/video/grcon-mascot-processing-alpha.webm`: conferência de documentos, busca de papéis e gesto de coçar o capacete durante operações.
-- `assets/mascot/video/grcon-mascot-running-alpha.webm`: corrida horizontal pós-operação bem-sucedida.
+- `idle` → `assets/mascot/video/grcon-mascot-idle-alpha.webm`
+- `hello` → `assets/mascot/video/grcon-mascot-hello-alpha.webm`
+- `analyzing` → `assets/mascot/video/grcon-mascot-analyzing-alpha.webm`
+- `warning` → `assets/mascot/video/grcon-mascot-warning-alpha.webm`
+- `success` → `assets/mascot/video/grcon-mascot-success-alpha.webm`
+- `running` → `assets/mascot/video/grcon-mascot-run-alpha.webm`
 
-Os estados `analyzing`, `searching-files`, `checking-document`, `checking-ld`, `sigem-pw-analysis`, `uploading`, `generating-grdt` e `loading` continuam usando o vídeo de processamento. `welcome` e `hover` usam o aceno uma vez.
-
-## Piloto Higgsfield — sucesso / joinha
-
-O piloto foi gerado no Higgsfield com o mascote oficial do repositório como referência, em 720p, 4 segundos e sem áudio. A cena foi criada para depender da UI real: o mascote entra pela lateral direita, olha para a área vazia onde estará o card real, faz joinha e sai.
-
-Prompt utilizado:
-
-> Use the supplied GRCON mascot image as the exact character reference. Preserve the same robot identity, helmet, dark visor, cyan eyes, white/graphite/blue technical body, green quality-check chest badge, proportions and overall design. Create a 4-second UI microinteraction, not a standalone cinematic scene. Composition: the mascot is small and anchored at the far RIGHT edge, occupying roughly 15-18% of the frame width, with large empty space on the LEFT reserved for a real application card. Start with the mascot mostly hidden just outside the right edge, then it peeks in, turns its eyes/head toward the empty left area as if reacting to a real success card, raises one hand and gives one clear thumbs-up, shows a subtle satisfied reaction, then retreats back toward the right edge. Keep movement compact, professional, calm and readable. No sitting. No chair. No desk. No room. No office. No monitor. No fake dashboard. No fake buttons. No text. No logos other than the existing badge on the mascot. No camera movement. No zoom. Fixed camera. Use a perfectly flat, uniform pure magenta background (#FF00FF) across the entire frame with no gradient, texture, shadows, glow, reflections or color spill on the character; the background is only for chroma-key removal. Keep clear separation between the mascot edges and the magenta background. The animation must feel incomplete without the surrounding software UI, because it is intended to be composited beside a real GRCON card.
-
-O MP4 gerado foi tratado com chroma key e convertido para WebM VP9 com alpha real. O asset final é:
-
-`assets/mascot/video/grcon-mascot-success-pilot-alpha.webm`
-
-Ele é carregado sob demanda por `grcon_mascot_success_pilot.js`, sem frame, sem fundo, sem player aparente e com `pointer-events: none`.
-
-### Integração
-
-O piloto é acionado após `grcon:egrdt-teams-notified`, ancorado ao card real `#egrdt-teams-ready`. A posição é calculada com `getBoundingClientRect()` e recalculada em scroll/resize. Em desktop ocupa no máximo cerca de 14vw (limitado a 210 px); no mobile cai para no máximo 120 px.
-
-Com `prefers-reduced-motion: reduce`, o piloto não é reproduzido. Se a mídia falhar, o PNG oficial HD é usado brevemente como fallback estático.
+A procedência e os job IDs ficam em `assets/mascot/video/higgsfield-source.json`. Nenhuma URL temporária do Higgsfield é usada em produção.
 
 ## Arquitetura
 
-```text
-GrconMascot
-  ├─ wave
-  └─ processing
+`grcon_mascot_controller.js` é o entrypoint estável. O runtime vive em `grcon_mascot_controller_v4.js` por compatibilidade de cache/caminho, mas sua versão lógica é 5.0.0.
 
-GrconMascotRunner
-  └─ corrida horizontal
+Existe somente uma instância visual global: `#grcon-context-mascot`. Ela contém um único `<video>` reutilizado entre estados e o sprite PNG HD oficial como fallback estático.
 
-GrconMascotSuccessPilot
-  └─ microinteração de sucesso ancorada à UI
-```
+`grcon_mascot_header.js`, `grcon_mascot_runner.js` e `grcon_mascot_success_pilot.js` são bridges de compatibilidade. Eles não criam player, overlay, timers operacionais ou listeners concorrentes.
 
-A antiga camada `grcon_mascot_scenarios.js` e seus nove vídeos contextuais foram removidos, junto com MP4s, WebMs, posters, testes e cache dedicados.
+React usa a mesma instância por `src/react/shared/mascot/`.
 
 ## API
 
-```js
-window.GrconMascot.play("searching-files");
-window.GrconMascot.stop();
-window.GrconMascot.reset();
+A API pública é `window.GrconMascot`:
 
-window.GrconMascotRunner.run({ force: true });
-window.GrconMascotSuccessPilot.play({ anchor: "#egrdt-teams-ready" });
-```
+- `show(...)`
+- `warning({ target, message })`
+- `success(...)`
+- `run(...)`
+- `idle()`
+- `hide()`
+- `begin(...)`, que devolve uma operação cancelável com `success`, `warning`, `running`, `analyzing`, `cancel` e `end`
+- `setEnabled(boolean)`
+- `diagnostics()`
+
+Estados antigos como `checking-document`, `checking-ld`, `generating-grdt` e `sigem-pw-analysis` são normalizados para a state machine nova.
+
+## Comportamento
+
+A prioridade é `warning > analyzing > running > success > hello > idle`. Warnings ativos não são interrompidos por sucesso. Operações guardam a geração do contexto atual; se o usuário navegar antes da resposta assíncrona, a conclusão antiga não altera a nova tela.
+
+Sem target, o mascote usa uma região segura no canto inferior direito. Com target no desktop, o runtime tenta direita, esquerda, acima e abaixo, mantendo gap e limites da viewport. Em mobile, o target não faz o mascote atravessar formulários; a bolha comunica o contexto e o personagem permanece em posição segura.
+
+A corrida usa o vídeo Higgsfield para o movimento corporal e CSS transform para o deslocamento controlado pela viewport. GSAP não foi adicionado porque não há runtime GSAP instalado no GRCON atual.
+
+## Performance e acessibilidade
+
+- `idle` e `hello` podem ser carregados primeiro.
+- `analyzing`, `warning` e `success` são pré-carregados somente quando o navegador fica ocioso.
+- `running` permanece sob demanda.
+- o Service Worker pré-cacheia apenas `idle` e `hello`; os demais entram no cache quando usados.
+- `prefers-reduced-motion: reduce` desativa corrida/deslocamentos e usa o PNG estático.
+- a opção **Animações do mascote** fica nas configurações gerais e persiste localmente.
+- ao desativar animações, o runtime não mantém fonte de vídeo carregada.
+- mídia e overlay usam `pointer-events: none`.
+- nenhuma informação funcional essencial existe somente na animação.
+
+## Fallback
+
+Falha de WebM **ou frame com fundo opaco detectado pelo probe de transparência** → sprite PNG HD oficial. O probe usa um canvas pequeno apenas no primeiro frame de cada asset, sem chroma key e sem processamento por frame. O vídeo permanece com `opacity: 0` até passar no probe, portanto não há flash do retângulo cinza. Enquanto o fallback estiver ativo, os estados continuam com movimentos CSS leves (idle/hello/analyzing/warning/success/running), posicionamento, bolha, hover e corrida do runtime. Falhas de mídia nunca bloqueiam o GRCON.
