@@ -248,6 +248,12 @@ async function main() {
       const video = document.querySelector("#grcon-mascot-activity-strip video");
       return Boolean(video && video.readyState >= 2 && !video.paused && video.currentTime > 0);
     }, null, { timeout: 8000 });
+    await page.waitForFunction(() => {
+      const track = document.querySelector("#grcon-mascot-activity-strip .grcon-mascot-runner-track");
+      if (!track) return false;
+      const rect = track.getBoundingClientRect();
+      return rect.right > 12 && rect.left < innerWidth - 12;
+    }, null, { timeout: 3000 });
     state = await diagnostics(page);
     assert.match(state.assets.running, /grcon-mascot-running-alpha\.webm/);
 
@@ -349,6 +355,12 @@ async function main() {
 
     await page.evaluate(() => { void window.GrconMascot.run({ source: "qa-mobile-run" }); });
     await page.waitForFunction(() => document.querySelector("#grcon-mascot-activity-strip")?.dataset.active === "true", null, { timeout: 5000 });
+    await page.waitForFunction(() => {
+      const track = document.querySelector("#grcon-mascot-activity-strip .grcon-mascot-runner-track");
+      if (!track) return false;
+      const rect = track.getBoundingClientRect();
+      return rect.right > 8 && rect.left < innerWidth - 8;
+    }, null, { timeout: 3000 });
     const mobileRun = await page.evaluate(() => {
       const strip = document.querySelector("#grcon-mascot-activity-strip");
       const workspace = document.querySelector(".workspace");
