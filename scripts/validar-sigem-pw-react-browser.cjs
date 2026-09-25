@@ -402,7 +402,8 @@ async function installEvolutionFixture(page) {
 }
 
 async function resetEvolutionFilters(page) {
-  await page.locator("#spw-evolution-section").getByRole("button", { name: "Limpar filtros" }).click();
+  const clear = page.locator("#spw-evolution-section .spw-evo-clear");
+  if (await clear.count()) await clear.click();
   await page.waitForFunction(() => {
     const state = window.GrconSigemPwEvolutionUi?.state;
     return Boolean(state)
@@ -417,7 +418,7 @@ async function waitEvolutionReady(page) {
 
 (async () => {
   const fixtures = writeFixtures();
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, ...(process.env.GRCON_CHROMIUM_PATH ? { executablePath: process.env.GRCON_CHROMIUM_PATH } : {}) });
   const errors = [];
   const badResponses = [];
   const metrics = {};
@@ -966,7 +967,8 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwEvolutionUi?.state && window.GrconSigemPwEvolutionUi?.refresh)), true, "facade React da Evolução deve estar disponível");
     assert.match(await page.locator("#spw-evo-scope").textContent(), /LD da Qualidade necessária/i);
     assert.equal(await page.locator("#spw-evo-kpis strong").first().textContent(), "—", "sem LD os KPIs não podem exibir zero válido");
-    await page.screenshot({ path: path.join(outputDir, "01-evolution-no-ld-1366.png"), fullPage: true });
+    await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(outputDir, "01-evolution-phase-b-no-ld-1366.png"), fullPage: true });
 
     const evolutionResources = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name));
     assert.ok(evolutionResources.some((url) => /react-dist\/sigem-pw-evolution-app\.js(?:\?|$)/.test(url)), "bundle React da Evolução deve carregar somente após o clique");
@@ -1039,7 +1041,15 @@ async function waitEvolutionReady(page) {
     assert.deepEqual(overviewState, { sigemAdded: 250, sigemRemoved: 1, pwAdded: 3, pwRemoved: 1, pwEmitted: 3, both: 1, missingPw: 249 });
     assert.match(await page.locator("#spw-evo-audit").textContent(), /252 documentos únicos · 254 registros\/revisões válidos · 1 duplicidade/i);
     assert.match(await page.locator("#spw-evo-audit").textContent(), /7 documentos únicos · 7 registros\/revisões válidos · 0 duplicidade/i);
-    await page.screenshot({ path: path.join(outputDir, "02-evolution-overview-1366.png"), fullPage: true });
+    await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(outputDir, "02-evolution-phase-b-overview-1366.png"), fullPage: true });
+    const kpiContentOrder = await page.locator('#spw-evo-kpis .spw-evo-kpi').first().evaluate((card) => {
+      const label = card.querySelector('span')?.getBoundingClientRect();
+      const number = card.querySelector('strong')?.getBoundingClientRect();
+      const description = card.querySelector('small')?.getBoundingClientRect();
+      return Boolean(label && number && description && label.bottom <= number.top && number.bottom <= description.top);
+    });
+    assert.equal(kpiContentOrder, true, 'rótulo, número e descrição do KPI devem ocupar linhas sem sobreposição');
 
     // Período: somente inicial.
     await page.locator("#spw-evo-date-start").fill("2026-09-10");
@@ -1056,7 +1066,7 @@ async function waitEvolutionReady(page) {
     await page.locator("#spw-evo-date-start").fill("2026-09-10");
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.period.start === "2026-09-10");
     assert.match(await page.locator("#spw-evo-period-summary").textContent(), /SIGEM: 2 base\(s\); PW: 2 base\(s\)/);
-    await page.screenshot({ path: path.join(outputDir, "03-evolution-period-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "03-evolution-phase-b-period-1366.png"), fullPage: true });
 
     // Período inválido preserva o estado anterior e apresenta feedback.
     await page.evaluate(() => {
@@ -1093,7 +1103,7 @@ async function waitEvolutionReady(page) {
     const sigemAfterChange = await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.selections.sigemPrev);
     await page.locator('[data-evo-select="pwPrev"]').selectOption(evolutionFixture.pwIds[1]);
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.selections.sigemPrev), sigemAfterChange);
-    await page.screenshot({ path: path.join(outputDir, "04-evolution-selectors-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "04-evolution-phase-b-snapshots-1366.png"), fullPage: true });
 
     // Multiconjunto: 1 ocorrência DOC 300001 Rev A -> 2 ocorrências = +1.
     await page.locator('[data-evo-select="sigemPrev"]').selectOption(evolutionFixture.sigemIds[0]);
@@ -1123,8 +1133,9 @@ async function waitEvolutionReady(page) {
       await page.waitForFunction((wanted) => window.GrconSigemPwEvolutionUi.state.listMode === wanted, mode);
       assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.filteredRows.length), evolutionFixture.expected[mode]);
     }
-    await page.screenshot({ path: path.join(outputDir, "05-evolution-kpis-1366.png"), fullPage: true });
-    await page.screenshot({ path: path.join(outputDir, "06-evolution-timeline-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "05-evolution-phase-b-kpis-1366.png"), fullPage: true });
+    await page.locator('#spw-evo-timeline').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(outputDir, "06-evolution-phase-b-timeline-1366.png"), fullPage: true });
 
     // Sete listas: ativação, contagem e linhas.
     for (const mode of ["sigem-new", "pw-new", "pw-emitted", "both", "missing-pw", "removed-sigem", "removed-pw"]) {
@@ -1137,9 +1148,14 @@ async function waitEvolutionReady(page) {
 
     await page.locator('[data-evo-list="sigem-new"]').last().click();
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.listMode === "sigem-new");
+    await page.locator('#spw-evo-list-title').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(outputDir, "09-evolution-phase-b-list-1366.png"), fullPage: true });
+    await page.locator('#spw-evo-more-filters').click();
+    assert.equal(await page.locator('#spw-evo-more-filters').getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('#spw-evo-advanced-filters').isVisible(), true);
     await resetEvolutionFilters(page);
     assert.equal(await page.locator("#spw-evo-table tbody tr").count(), 100);
-    await page.screenshot({ path: path.join(outputDir, "07-evolution-list-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "07-evolution-phase-b-filters-1366.png"), fullPage: true });
 
     // Nove filtros, individualmente, e duas combinações.
     const filterCases = [
@@ -1164,6 +1180,8 @@ async function waitEvolutionReady(page) {
 
     await resetEvolutionFilters(page);
     await page.locator("#spw-evo-filter-revision").fill("A");
+    assert.match(await page.locator('#spw-evo-more-filters').textContent(), /ativo/);
+    await page.screenshot({ path: path.join(outputDir, "08-evolution-phase-b-filter-active-1366.png"), fullPage: true });
     await page.locator("#spw-evo-filter-status").fill("Em Workflow");
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.filteredRows.length), 25, "combinação revisão + status");
     await resetEvolutionFilters(page);
@@ -1228,7 +1246,7 @@ async function waitEvolutionReady(page) {
     await page.locator('[data-evo-page="next"]').click();
     assert.equal(await page.locator("#spw-evo-table tbody tr").count(), 100);
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.page), 2);
-    await page.screenshot({ path: path.join(outputDir, "09-evolution-page2-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "11-evolution-phase-b-page2-1366.png"), fullPage: true });
     await page.locator('[data-evo-page="next"]').click();
     assert.equal(await page.locator("#spw-evo-table tbody tr").count(), 50);
     assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.page), 3);
@@ -1272,7 +1290,7 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(() => document.activeElement?.id), "spw-evo-close", "Shift+Tab não pode escapar do drawer");
     await page.locator("#spw-evo-detail-body").click({ position: { x: 10, y: 10 } });
     assert.equal(await page.locator("#spw-evo-drawer").count(), 1, "clique dentro não pode fechar o drawer");
-    await page.screenshot({ path: path.join(outputDir, "08-evolution-detail-1366.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "10-evolution-phase-b-detail-1366.png"), fullPage: true });
     await page.locator("#spw-evo-overlay").click({ position: { x: 10, y: 10 } });
     await page.waitForFunction(() => !document.getElementById("spw-evo-drawer"));
     assert.equal(await page.evaluate(() => document.body.style.overflow), bodyOverflowBeforeEvolutionDrawer, "scroll lock deve restaurar o valor original");
@@ -1324,39 +1342,61 @@ async function waitEvolutionReady(page) {
     await page.evaluate(() => { window.GrconSigemPwEvolution = window.__evolutionEventCoreOriginal; });
 
     // Responsividade específica da Evolução, com scroll horizontal somente local à tabela.
+    await page.locator('#spw-evo-more-filters').click();
+    assert.equal(await page.locator('#spw-evo-more-filters').getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#spw-evo-advanced-filters').isVisible(), false);
+    await page.locator('#spw-evo-tabs [data-evo-list="sigem-new"]').click();
+    await resetEvolutionFilters(page);
+    assert.equal(await page.locator('#spw-evo-table tbody tr').count(), 100, 'medição responsiva requer tabela povoada');
+    assert.equal(await page.locator('#spw-evo-table tbody td:first-child strong').first().evaluate((code) => code.getBoundingClientRect().right <= code.parentElement.getBoundingClientRect().right + 1), true, 'código não pode invadir a revisão');
     metrics.evolutionWidths = {};
     for (const width of [1440, 1366, 1024, 768, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       const dimensions = await page.evaluate(() => {
         const table = document.querySelector("#spw-evo-table");
+        const section = document.querySelector("#spw-evolution-section");
         return {
           documentScrollWidth: document.documentElement.scrollWidth,
           documentClientWidth: document.documentElement.clientWidth,
+          evolutionSectionScrollWidth: section?.scrollWidth || 0,
+          evolutionSectionClientWidth: section?.clientWidth || 0,
+          evolutionSectionHeight: section?.getBoundingClientRect().height || 0,
           tableScrollWidth: table?.scrollWidth || 0,
           tableClientWidth: table?.clientWidth || 0,
         };
       });
       metrics.evolutionWidths[String(width)] = dimensions;
       assert.ok(dimensions.documentScrollWidth <= dimensions.documentClientWidth + 1, "overflow global da Evolução em " + width + "px");
+      assert.ok(dimensions.evolutionSectionScrollWidth <= dimensions.evolutionSectionClientWidth + 1, "overflow da seção em " + width + "px");
+      if (width === 390) assert.ok(dimensions.tableScrollWidth > dimensions.tableClientWidth, `tabela deve ter rolagem local no mobile: ${JSON.stringify(dimensions)}`);
     }
+    metrics.evolutionSectionHeight390After = metrics.evolutionWidths["390"].evolutionSectionHeight;
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: path.join(outputDir, "10-evolution-mobile-390.png"), fullPage: true });
+    await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(outputDir, "12-evolution-phase-b-mobile-390.png"), fullPage: true });
+    await page.locator('#spw-evo-more-filters').click();
+    await page.locator('#spw-evolution-section .spw-evo-filters').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(outputDir, "13-evolution-phase-b-mobile-filters-390.png"), fullPage: true });
+    await page.locator('#spw-evo-more-filters').click();
     const mobileRow = page.locator("#spw-evo-table tbody tr").first();
     await mobileRow.click();
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1));
-    await page.screenshot({ path: path.join(outputDir, "11-evolution-detail-mobile-390.png"), fullPage: true });
+    await page.screenshot({ path: path.join(outputDir, "14-evolution-phase-b-mobile-detail-390.png"), fullPage: true });
     await page.keyboard.press("Escape");
 
     // Dark mode: overview, drawer/overlay, loading, feedback e erro.
     await page.setViewportSize({ width: 1366, height: 900 });
     await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
-    await page.screenshot({ path: path.join(outputDir, "12-evolution-dark-1366.png"), fullPage: true });
+    const darkRowBackground = await page.locator('#spw-evo-table tbody td').first().evaluate((cell) => getComputedStyle(cell).backgroundColor);
+    const darkChannels = darkRowBackground.match(/[\d.]+/g)?.slice(0, 3).map(Number) || [];
+    assert.ok(darkChannels.length === 3 && darkChannels.reduce((sum, channel) => sum + channel, 0) < 350, 'linhas da tabela devem ter fundo escuro no tema escuro');
+    await page.screenshot({ path: path.join(outputDir, "15-evolution-phase-b-dark-1366.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(outputDir, "16-evolution-phase-b-dark-390.png"), fullPage: true });
     await mobileRow.click();
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
-    await page.screenshot({ path: path.join(outputDir, "13-evolution-dark-390.png"), fullPage: true });
     await page.keyboard.press("Escape");
 
     await page.evaluate(() => {
