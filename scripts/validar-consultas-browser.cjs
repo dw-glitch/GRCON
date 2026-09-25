@@ -117,7 +117,7 @@ async function inspectRealMascotTransparency(page) {
   });
   await page.waitForFunction(function () {
     const d = window.GrconMascot && window.GrconMascot.diagnostics && window.GrconMascot.diagnostics();
-    return Boolean(d && (d.media === "video" || d.mediaFallback || d.reducedMotion || !d.animationsEnabled));
+    return Boolean(d && (d.media === "video" || d.media === "png" || d.mediaFallback || d.reducedMotion || !d.animationsEnabled));
   }, null, { timeout:8000 });
   return page.evaluate(async function () {
     const host=document.querySelector("#grcon-context-mascot");
