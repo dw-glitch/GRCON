@@ -195,6 +195,13 @@
       const records = generated.map((entry) => recordForGenerated(entry.group, entry.official, entry.verification, generatedAt));
       const saved = History.saveMany(records);
       if (!saved.saved) throw new Error(saved.error || "A eGRDT foi criada, mas não pôde ser registrada no Histórico.");
+      if (saved.persistence && typeof saved.persistence.then === "function") {
+        try {
+          await saved.persistence;
+        } catch (error) {
+          throw new Error(error?.message || "A eGRDT foi criada, mas a persistência durável do Histórico falhou.");
+        }
+      }
       if (root.GrconSigemPosting?.registerGenerated) {
         root.GrconSigemPosting.registerGenerated(records, { packageName: generated.length === 1 ? generated[0].fileName : "GRCON_Repostagem_eGRDT.zip", appVersion: appVersion() });
       }
@@ -203,13 +210,15 @@
       root.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { records, outputType: "Repostagem de eGRDT" } }));
       root.dispatchEvent(new CustomEvent("grcon:egrdt-generated", { detail: { records, outputType: "Repostagem de eGRDT", historySaved: true } }));
       const cloud = await confirmSharedHistory(records);
-      operation?.success?.({ message: `${generated.length} eGRDT(s) de repostagem gerada(s).` });
       if (cloud.shared && cloud.synced) {
+        operation?.success?.({ message: `${generated.length} eGRDT(s) de repostagem gerada(s) e sincronizada(s).` });
         notify(`${generated.length} eGRDT(s) de repostagem gerada(s), verificadas no banco e exibidas no Histórico compartilhado.`, "success");
       } else if (cloud.shared) {
+        operation?.warning?.({ message: "Repostagem gerada; sincronização com o banco ainda pendente." });
         notify(`${generated.length} eGRDT(s) gerada(s) e salva(s) localmente. Sincronização com o banco pendente: ${cloud.error}`, "warning");
       } else {
-        notify(`${generated.length} eGRDT(s) de repostagem gerada(s), verificada(s) e registrada(s) no Histórico local.`, "success");
+        operation?.success?.({ message: `${generated.length} eGRDT(s) de repostagem registrada(s) no Histórico local.` });
+        notify(`${generated.length} eGRDT(s) de repostagem gerada(s), persistida(s) e registrada(s) no Histórico local.`, "success");
       }
     } catch (error) {
       console.error(error);
