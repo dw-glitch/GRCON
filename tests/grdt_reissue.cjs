@@ -80,6 +80,7 @@ assert.equal(cloudRoundTrip.outputType, "Repostagem de eGRDT");
 assert.equal(cloudRoundTrip.reissueSources[0], records[1].egrdtNumber);
 assert.equal(cloudRoundTrip.files[0].purpose, "Para Construção");
 const appSource = fs.readFileSync(path.join(__dirname, "..", "grdt_reissue_app.js"), "utf8");
+assert.match(appSource, /await saved\.persistence/, "repostagem precisa aguardar persistência durável");
 assert.match(appSource, /await root\.GrconCloud\.pull\(\)/);
 assert.match(appSource, /Histórico compartilhado/);
 console.log("OK — repostagem localiza a última emissão, preserva propósito, divide lotes e confirma o histórico compartilhado.");
