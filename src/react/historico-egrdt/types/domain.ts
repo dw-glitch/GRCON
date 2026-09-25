@@ -3,6 +3,9 @@ export interface EgrdtHistoryFile {
   originalName?: string;
   finalName?: string;
   title?: string;
+  format?: string;
+  documentType?: string;
+  purpose?: string;
   revision?: string;
   grdtRevision?: string;
   revisionSuggested?: string;
@@ -11,6 +14,7 @@ export interface EgrdtHistoryFile {
   allocation?: string;
   ldPrazo?: string;
   sheet?: string;
+  discipline?: string;
 }
 
 export interface EgrdtHistoryRecord {
@@ -25,6 +29,7 @@ export interface EgrdtHistoryRecord {
   outputType: string;
   ldName?: string;
   sourceName?: string;
+  reissueSources?: string[];
   allocations: string[];
   files: EgrdtHistoryFile[];
   documentCount: number;
