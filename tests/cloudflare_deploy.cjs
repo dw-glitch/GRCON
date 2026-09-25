@@ -32,7 +32,7 @@ assert.match(build, /dist-cloudflare/);
 assert.match(build, /react-dist/);
 assert.match(build, /25 \* 1024 \* 1024/);
 assert.match(verify, /Referências locais quebradas/);
-assert.match(deploy, /branches:\s*\[main\]/);
+assert.match(deploy, /branches:\s*\[main(?:, infra\/cloudflare-workers-independent-deploy)?\]/);
 assert.match(deploy, /workflow_dispatch:/);
 assert.match(deploy, /github\.ref == 'refs\/heads\/main'/);
 assert.match(deploy, /CLOUDFLARE_API_TOKEN/);
