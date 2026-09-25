@@ -144,6 +144,24 @@ async function main() {
     assert.equal(await page.locator("#grcon-context-mascot video").count(), 1);
     assert.deepEqual(Object.keys(state.assets).sort(), ["analyzing", "hello", "idle", "running", "success", "warning"]);
     assert.equal(await page.locator("#grcon-context-mascot").evaluate((el) => getComputedStyle(el).pointerEvents), "none");
+    const shellPlacement = await page.evaluate(() => {
+      const host = document.querySelector("#grcon-context-mascot");
+      const slot = document.querySelector("#grcon-mascot-header-slot");
+      const topbar = document.querySelector(".topbar");
+      const workspace = document.querySelector(".workspace");
+      const hostRect = host.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      return {
+        parentIsSlot: host.parentElement === slot,
+        slotInTopbar: topbar.contains(slot),
+        position: getComputedStyle(host).position,
+        overlapsWorkspace: !(hostRect.right <= workspaceRect.left || hostRect.left >= workspaceRect.right || hostRect.bottom <= workspaceRect.top || hostRect.top >= workspaceRect.bottom),
+      };
+    });
+    assert.equal(shellPlacement.parentIsSlot, true, "mascote contextual precisa estar no slot estrutural da topbar");
+    assert.equal(shellPlacement.slotInTopbar, true, "slot do mascote precisa pertencer à topbar");
+    assert.notEqual(shellPlacement.position, "fixed", "mascote contextual não pode ficar fixo sobre o workspace");
+    assert.equal(shellPlacement.overlapsWorkspace, false, "mascote contextual não pode cobrir a área operacional");
     await page.evaluate(() => window.GrconMascot.idle({ source: "qa-idle-transparent" }));
     await assertMascotTransparent(page, "idle");
     await page.screenshot({ path: path.join(outputDir, "01-idle.png") });
@@ -217,22 +235,72 @@ async function main() {
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "success", null, { timeout: 5000 });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 7000 });
 
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
-      detail: { active: true, state: "sigem-pw-analysis", task: "Comparando SIGEM e ProjectWise" },
-    })));
+    await page.evaluate(() => {
+      window.__workspaceClicks = 0;
+      document.querySelector("#fixture-workspace-action").addEventListener("click", () => { window.__workspaceClicks += 1; });
+      window.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
+        detail: { active: true, state: "sigem-pw-analysis", task: "Comparando SIGEM e ProjectWise" },
+      }));
+    });
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "running", null, { timeout: 5000 });
-    state = await diagnostics(page);
-    assert.match(state.assets.running, /grcon-mascot-run-alpha\.webm/);
-    await assertMascotTransparent(page, "running/sigem-pw-analysis");
+    await page.waitForFunction(() => document.querySelector("#grcon-mascot-activity-strip")?.dataset.active === "true", null, { timeout: 5000 });
     await page.waitForFunction(() => {
+      const video = document.querySelector("#grcon-mascot-activity-strip video");
+      return Boolean(video && video.readyState >= 2 && !video.paused && video.currentTime > 0);
+    }, null, { timeout: 8000 });
+    state = await diagnostics(page);
+    assert.match(state.assets.running, /grcon-mascot-running-alpha\.webm/);
+
+    const runningStart = await page.evaluate(() => {
+      const strip = document.querySelector("#grcon-mascot-activity-strip");
+      const workspace = document.querySelector(".workspace");
+      const shell = document.querySelector(".app-shell");
+      const track = strip.querySelector(".grcon-mascot-runner-track");
+      const video = strip.querySelector("video");
       const host = document.querySelector("#grcon-context-mascot");
-      if (!host) return false;
-      const rect = host.getBoundingClientRect();
-      return rect.left >= 12 && rect.right <= innerWidth - 12 && rect.top >= -0.5 && rect.bottom <= innerHeight + 0.5;
-    }, null, { timeout: 3000 });
-    await page.screenshot({ path: path.join(outputDir, "05-running.png") });
+      const sr = strip.getBoundingClientRect();
+      const wr = workspace.getBoundingClientRect();
+      const shellRect = shell.getBoundingClientRect();
+      return {
+        source: video.currentSrc,
+        currentTime: video.currentTime,
+        paused: video.paused,
+        stripActive: strip.dataset.active,
+        stripHidden: strip.hidden,
+        animationName: getComputedStyle(track).animationName,
+        stripPosition: getComputedStyle(strip).position,
+        stripPointerEvents: getComputedStyle(strip).pointerEvents,
+        outsideWorkspace: sr.bottom <= wr.top + 1 && sr.bottom <= shellRect.top + 1,
+        overlapsWorkspace: !(sr.right <= wr.left || sr.left >= wr.right || sr.bottom <= wr.top || sr.top >= wr.bottom),
+        hostInHeader: host.parentElement?.id === "grcon-mascot-header-slot",
+        hostVisibility: getComputedStyle(host).visibility,
+        hasPngRunner: Boolean(strip.querySelector(".grcon-mascot-sprite")),
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    await page.waitForTimeout(260);
+    const runningLater = await page.locator("#grcon-mascot-activity-strip video").evaluate((video) => video.currentTime);
+    assert.match(runningStart.source, /grcon-mascot-running-alpha\.webm/);
+    assert.equal(runningStart.paused, false);
+    assert.ok(runningLater > runningStart.currentTime + 0.05, "vídeo real precisa avançar frames durante a corrida");
+    assert.equal(runningStart.stripActive, "true");
+    assert.equal(runningStart.stripHidden, false);
+    assert.match(runningStart.animationName, /grcon-mascot-strip-run/);
+    assert.equal(runningStart.stripPosition, "relative");
+    assert.equal(runningStart.stripPointerEvents, "none");
+    assert.equal(runningStart.outsideWorkspace, true, "faixa deve ficar integralmente antes do app-shell/workspace");
+    assert.equal(runningStart.overlapsWorkspace, false, "corrida não pode passar sobre conteúdo operacional");
+    assert.equal(runningStart.hostInHeader, true);
+    assert.equal(runningStart.hostVisibility, "hidden", "mascote contextual deve sair visualmente enquanto a corrida usa a faixa");
+    assert.equal(runningStart.hasPngRunner, false, "corrida não pode ser simulada com sprite/PNG");
+    assert.ok(runningStart.overflow <= 1);
+
+    await page.click("#fixture-workspace-action");
+    assert.equal(await page.evaluate(() => window.__workspaceClicks), 1, "faixa do mascote não pode bloquear cliques no workspace");
+    await page.screenshot({ path: path.join(outputDir, "05-running-strip.png") });
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:mascot-operation", { detail: { active: false } })));
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector("#grcon-mascot-activity-strip")?.hidden === true, null, { timeout: 3000 });
 
     const disabled = await page.evaluate(() => {
       window.GrconMascot.setEnabled(false);
@@ -277,6 +345,30 @@ async function main() {
     await page.screenshot({ path: path.join(outputDir, "06-mobile-warning.png") });
     await page.waitForTimeout(1700);
     await page.evaluate(() => document.querySelector("#fixture-mobile-target")?.remove());
+    await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 4000 });
+
+    await page.evaluate(() => { void window.GrconMascot.run({ source: "qa-mobile-run" }); });
+    await page.waitForFunction(() => document.querySelector("#grcon-mascot-activity-strip")?.dataset.active === "true", null, { timeout: 5000 });
+    const mobileRun = await page.evaluate(() => {
+      const strip = document.querySelector("#grcon-mascot-activity-strip");
+      const workspace = document.querySelector(".workspace");
+      const video = strip.querySelector("video");
+      const sr = strip.getBoundingClientRect();
+      const wr = workspace.getBoundingClientRect();
+      return {
+        source: video.currentSrc,
+        outsideWorkspace: sr.bottom <= wr.top + 1,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        stripHeight: sr.height,
+      };
+    });
+    assert.match(mobileRun.source, /grcon-mascot-running-alpha\.webm/);
+    assert.equal(mobileRun.outsideWorkspace, true);
+    assert.ok(mobileRun.overflow <= 1);
+    assert.ok(mobileRun.stripHeight <= 70, "faixa mobile precisa permanecer compacta");
+    await page.screenshot({ path: path.join(outputDir, "06b-mobile-running-strip.png") });
+    await page.evaluate(() => window.GrconMascot.idle({ source: "qa-mobile-run-end" }));
+    await page.waitForFunction(() => document.querySelector("#grcon-mascot-activity-strip")?.hidden === true, null, { timeout: 3000 });
 
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.evaluate(() => window.GrconMascot.idle({ source: "qa-desktop-1920" }));
@@ -292,6 +384,35 @@ async function main() {
     assert.ok(desktop1366.rect.left >= 0 && desktop1366.rect.top >= 0 && desktop1366.rect.right <= 1366 && desktop1366.rect.bottom <= 768);
     await page.screenshot({ path: path.join(outputDir, "10-desktop-1366.png") });
 
+    for (const viewport of [
+      { width: 1024, height: 768, file: "12-tablet-1024x768.png" },
+      { width: 768, height: 1024, file: "13-tablet-768x1024.png" },
+      { width: 375, height: 812, file: "14-mobile-375x812.png" },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.evaluate(() => window.GrconMascot.idle({ source: "qa-required-viewport" }));
+      await waitMascotInsideViewport(page);
+      const placement = await page.evaluate(() => {
+        const host = document.querySelector("#grcon-context-mascot");
+        const workspace = document.querySelector(".workspace");
+        const hr = host.getBoundingClientRect();
+        const wr = workspace.getBoundingClientRect();
+        return {
+          fixed: getComputedStyle(host).position === "fixed",
+          inHeader: host.parentElement?.id === "grcon-mascot-header-slot",
+          overlapsWorkspace: !(hr.right <= wr.left || hr.left >= wr.right || hr.bottom <= wr.top || hr.top >= wr.bottom),
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+      assert.equal(placement.fixed, false);
+      assert.equal(placement.inHeader, true);
+      assert.equal(placement.overlapsWorkspace, false);
+      assert.ok(placement.overflow <= 1);
+      await assertMascotTransparent(page, viewport.width + "x" + viewport.height);
+      await page.screenshot({ path: path.join(outputDir, viewport.file) });
+    }
+
+    await page.setViewportSize({ width: 1366, height: 768 });
     await page.evaluate(() => {
       document.documentElement.style.background = "#162630";
       document.body.style.background = "#162630";
@@ -334,10 +455,14 @@ async function main() {
       diagnostics: window.GrconMascot.diagnostics(),
       videoDisplay: getComputedStyle(document.querySelector("#grcon-context-mascot video")).display,
       state: document.querySelector("#grcon-context-mascot").dataset.state,
+      runnerActive: document.querySelector("#grcon-mascot-activity-strip")?.dataset.active,
+      runnerHidden: document.querySelector("#grcon-mascot-activity-strip")?.hidden,
     }));
     assert.equal(reduced.diagnostics.reducedMotion, true);
     assert.equal(reduced.videoDisplay, "none");
     assert.notEqual(reduced.state, "running");
+    assert.notEqual(reduced.runnerActive, "true");
+    assert.equal(reduced.runnerHidden, true);
     await reducedContext.close();
 
     const fallbackContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
