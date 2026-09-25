@@ -42,9 +42,9 @@ assert.equal(source.assetRevision, "20260924.1");
 assert.equal(source.officialElement.id, "5d684379-9c43-47db-913a-6af9d779e8b2");
 for (const state of states) assert.ok(source.jobs[state], `job Higgsfield ausente para ${state}`);
 
-assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=5\.0\.1-20260924\.2/);
-assert.match(controller, /official-contextual-v5/);
-assert.match(controller, /ASSET_REVISION = "20260924\.2"/);
+assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=5\.1\.0-20260925\.1/);
+assert.match(controller, /official-sprite-contextual-v5/);
+assert.match(controller, /ASSET_REVISION = "20260925\.1"/);
 assert.match(controller, /const PRIORITY/);
 assert.match(controller, /warning: 6/);
 assert.match(controller, /function begin\(/);
@@ -62,7 +62,7 @@ assert.match(controller, /prefers-reduced-motion:reduce/);
 assert.match(controller, /grcon:mascot:animations/);
 assert.match(controller, /Animações do mascote/);
 assert.match(controller, /requestIdleCallback/);
-assert.match(controller, /grcon-mascot-idle-alpha\.webm/);
+assert.doesNotMatch(controller, /idle: Object\.freeze\(\{ url:/, "sprite deve permanecer como base no estado ocioso");
 assert.match(controller, /grcon-mascot-hello-alpha\.webm/);
 assert.match(controller, /grcon-mascot-analyzing-alpha\.webm/);
 assert.match(controller, /grcon-mascot-warning-alpha\.webm/);
@@ -79,7 +79,9 @@ assert.match(controller, /grcon-mascot-fallback-idle/);
 assert.match(controller, /grcon-mascot-fallback-analyzing/);
 assert.match(controller, /grcon-mascot-fallback-warning/);
 assert.match(controller, /grcon-mascot-fallback-success/);
-assert.match(controller, /\[data-state=\'running\'\]\[data-media=\'png\'\]/);
+assert.match(controller, /\[data-state=\'running\'\]\[data-media=\'video\'\]/);
+assert.match(controller, /position:relative/);
+assert.match(controller, /grcon-mascot-heading/);
 assert.doesNotMatch(controller, /contain:layout style paint/);
 assert.match(controller, /instances: overlay\?\.isConnected \? 1 : 0/);
 assert.doesNotMatch(controller, /https?:\/\//i, "runtime não pode depender de CDN");
@@ -104,12 +106,12 @@ assert.match(coverHook, /Conferindo LD/);
 assert.match(coverHook, /Gerando arquivo com capa/);
 
 const precache = sw.slice(sw.indexOf("const ASSETS"), sw.indexOf("const CRITICAL_ASSETS"));
-assert.match(precache, /grcon-mascot-idle-alpha\.webm/);
+assert.doesNotMatch(precache, /grcon-mascot-idle-alpha\.webm/);
 assert.match(precache, /grcon-mascot-hello-alpha\.webm/);
 for (const state of ["analyzing", "warning", "success", "run"]) {
   assert.doesNotMatch(precache, new RegExp("grcon-mascot-" + state + "-alpha\\.webm"), state + " deve continuar lazy");
   assert.match(sw, new RegExp('"grcon-mascot-' + state + '-alpha\\.webm"'), state + " precisa estar na estratégia HEAVY");
 }
-assert.match(sw, /mascot-runtime5/);
+assert.match(sw, /mascot-sprite-context1/);
 
-console.log("grcon_mascot_video: OK — runtime único, 6 estados Higgsfield, state machine, React bridge, lazy loading e fallback validados.");
+console.log("grcon_mascot_video: OK — sprite primário, animações contextuais, transparência e fallback validados.");

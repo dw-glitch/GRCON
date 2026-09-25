@@ -48,7 +48,7 @@ function report() {
 function appVersion(): string {
   return window.GrconConfig?.APP_VERSION
     || document.documentElement.dataset.version
-    || "5.41.0";
+    || "5.42.0";
 }
 
 function notify(message: string, kind = "info"): void {
