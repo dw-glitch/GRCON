@@ -29,7 +29,7 @@ jobs:
         run: cp scripts/medir-pdf-tools-baseline.cjs "$RUNNER_TEMP/medir-pdf-tools-baseline.cjs"
       - name: Voltar à baseline legada
         run: git checkout --detach ea2d432542f026a0c6833ce68d329c48cf05ab12
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
