@@ -253,7 +253,7 @@ async function resetFilters(page) {
       } catch (_) {}
     });
 
-    await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await revealApp(page);
 
     // Simula atualização PWA: remove registro/cache do carregamento inicial,
