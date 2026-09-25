@@ -83,7 +83,7 @@ assert.match(controller, /\[data-state=\'running\'\]\[data-media=\'video\'\]/);
 assert.match(controller, /position:relative/);
 assert.match(controller, /grcon-mascot-heading/);
 assert.match(controller, /#dashboard-module/, "runtime precisa reconhecer explicitamente o Dashboard");
-assert.match(controller, /\\.dashboard-page-heading/, "Dashboard precisa possuir heading contextual");
+assert.match(controller, /\.dashboard-page-heading/, "Dashboard precisa possuir heading contextual");
 assert.match(controller, /context-reparent-fallback/, "reparenting defensivo precisa impedir mascote preso em container oculto");
 assert.doesNotMatch(controller, /contain:layout style paint/);
 assert.match(controller, /instances: overlay\?\.isConnected \? 1 : 0/);
