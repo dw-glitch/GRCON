@@ -440,15 +440,10 @@
     let transparentEdgeRatio = transparencyChecks.get(src);
     if (transparentEdgeRatio == null) {
       transparentEdgeRatio = measureTransparentEdgeRatio();
-      if (transparentEdgeRatio == null) return;
-      transparencyChecks.set(src, transparentEdgeRatio);
+      if (transparentEdgeRatio != null) transparencyChecks.set(src, transparentEdgeRatio);
     }
-    if (transparentEdgeRatio < 0.72) {
-      if (overlay.dataset.mediaFallback !== "opaque-video-background") {
-        log("video-rejected-opaque-background", { state: currentState, transparentEdgeRatio });
-        useFallback("opaque-video-background");
-      }
-      return;
+    if (transparentEdgeRatio != null && transparentEdgeRatio < 0.72) {
+      log("video-transparency-warning", { state: currentState, transparentEdgeRatio });
     }
     overlay.dataset.media = "video";
     delete overlay.dataset.mediaFallback;
