@@ -465,6 +465,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           <dl className="history-detail-meta">
             <div><dt>LD utilizada</dt><dd>{record.ldName || "Não informada"}</dd></div>
             <div><dt>Origem</dt><dd>{record.sourceName || "Pasta documental"}</dd></div>
+            {record.reissueSources?.length ? <div><dt>eGRDT(s) de origem</dt><dd>{record.reissueSources.map((value) => <span key={value}>{value}</span>)}</dd></div> : null}
             <div><dt>Alocação</dt><dd>{record.allocations.length ? record.allocations.map((value) => <span key={value}>{value}</span>) : "Não informada na LD"}</dd></div>
             {previousNumbers.length ? <div><dt>Números anteriores</dt><dd>{previousNumbers.map((value) => <span key={value}>{value}</span>)}</dd></div> : null}
           </dl>
@@ -485,6 +486,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                 <th data-history-column="original">Arquivo original</th>
                 <th data-history-column="sent">Arquivo enviado</th>
                 <th>Revisão gerada na GRDT</th>
+                <th>Propósito da GRDT</th>
                 <th>Revisão desta GRDT postada</th>
                 <th>Outra revisão postada</th>
                 <th title="Situação registrada na triagem na época da emissão; pode incluir pendências de alocação">Situação na geração</th>
@@ -501,6 +503,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                       <td data-label="Arquivo original">{file.originalName || "—"}</td>
                       <td data-label="Arquivo enviado">{file.finalName || "—"}</td>
                       <td data-label="Revisão gerada"><span className="history-revision-badge">{relation.generated}</span>{file.revisionManual ? <span className="history-revision-manual" title={"Alterada manualmente na triagem · sugestão do sistema na época: " + (file.revisionSuggested || "—")}>Alterada manualmente</span> : null}</td>
+                      <td data-label="Propósito da GRDT">{file.purpose || "Não registrado"}</td>
                       <td data-label="Postada nesta GRDT"><span className="history-revision-badge posted">{relation.posted}</span></td>
                       <td data-label="Outra postada"><span className="history-revision-badge other">{relation.other}</span></td>
                       <td data-label="Situação na geração">{file.sigemStatus || "—"}</td>
