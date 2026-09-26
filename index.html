@@ -161,9 +161,15 @@
 <div class="settings-group-body">
 <label class="inline-setting">Emissão recente<input id="recent-days" inputmode="numeric" max="365" min="1" type="number" value="30"/><span>dias</span></label>
 <section class="egrdt-batch-settings settings-embedded compact-limit-setting" aria-labelledby="egrdt-batch-settings-title">
-<div><strong id="egrdt-batch-settings-title">Limite por eGRDT</strong><small id="egrdt-batch-limit-status">Separação por disciplina · até 48 documentos por eGRDT</small></div>
-<label><span>Por lote</span><input id="egrdt-batch-limit" type="number" min="1" step="1" value="48" inputmode="numeric"/></label>
-<button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar</button>
+<div><strong id="egrdt-batch-settings-title">Organização das eGRDTs</strong><small id="egrdt-batch-limit-status">Separar por disciplina · máximo de 48 documentos por eGRDT</small></div>
+<fieldset class="egrdt-batch-mode-options" aria-describedby="egrdt-batch-mode-help">
+<legend>Como distribuir os documentos</legend>
+<label><input id="egrdt-batch-mode-discipline" name="egrdt-batch-mode" type="radio" value="discipline" checked/><span><strong>Separar por disciplina</strong><small>Cria eGRDTs independentes para cada disciplina, respeitando o limite de 48 documentos.</small></span></label>
+<label><input id="egrdt-batch-mode-limit-only" name="egrdt-batch-mode" type="radio" value="limit-only"/><span><strong>Manter documentos juntos — dividir somente a cada 48</strong><small>Mantém disciplinas diferentes na mesma eGRDT e preserva a ordem operacional.</small></span></label>
+</fieldset>
+<small id="egrdt-batch-mode-help">A opção escolhida é usada também na prévia e fica salva como preferência.</small>
+<label><span>Máximo por lote</span><input id="egrdt-batch-limit" type="number" min="1" max="48" step="1" value="48" inputmode="numeric"/></label>
+<button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar limite</button>
 </section>
 <section class="allocation-center-settings settings-embedded" aria-labelledby="allocation-center-title">
 <div><strong id="allocation-center-title">Referência da central de alocação</strong><small id="allocation-center-status">Carregando…</small></div>
@@ -366,6 +372,16 @@
 <section class="grdt-reissue-input" aria-labelledby="grdt-reissue-input-title">
 <label for="grdt-reissue-documents"><span id="grdt-reissue-input-title">Documentos para repostagem</span><textarea id="grdt-reissue-documents" placeholder="Cole um código de documento por linha"></textarea></label>
 <div class="grdt-reissue-actions"><button class="primary-button" id="grdt-reissue-find" type="button">Localizar última eGRDT</button><small>A busca usa somente o Histórico do GRCON e aceita lote.</small></div>
+<fieldset class="grdt-reissue-mode egrdt-batch-mode-options" aria-describedby="grdt-reissue-mode-help">
+<legend>Organização das eGRDTs</legend>
+<label><input id="grdt-reissue-mode-discipline" name="grdt-reissue-mode" type="radio" value="discipline"/><span><strong>Separar por disciplina</strong><small>Cria eGRDTs independentes para cada disciplina, respeitando o limite de 48 documentos.</small></span></label>
+<label><input id="grdt-reissue-mode-limit-only" name="grdt-reissue-mode" type="radio" value="limit-only"/><span><strong>Manter documentos juntos — dividir somente a cada 48</strong><small>Mantém disciplinas diferentes na mesma eGRDT e cria novo lote apenas ao atingir 48 documentos.</small></span></label>
+</fieldset>
+<small id="grdt-reissue-mode-help">A escolha fica visível, é compartilhada com a geração normal e pode ser alterada a qualquer momento.</small>
+<section class="grdt-reissue-preview" aria-labelledby="grdt-reissue-preview-title">
+<div><span>ORGANIZAÇÃO SELECIONADA</span><strong id="grdt-reissue-batch-mode-label">Separar por disciplina</strong></div>
+<div><span id="grdt-reissue-preview-title">Resultado previsto</span><div id="grdt-reissue-batch-preview" aria-live="polite"><p class="grdt-reissue-preview-empty">A prévia aparecerá depois que os documentos forem localizados.</p></div></div>
+</section>
 </section>
 <section class="grdt-reissue-results" aria-live="polite">
 <div class="grdt-reissue-summary"><div><span>Documentos</span><strong id="grdt-reissue-count-docs">0</strong></div><div><span>Linhas recuperadas</span><strong id="grdt-reissue-count-rows">0</strong></div><div><span>eGRDTs de origem</span><strong id="grdt-reissue-count-sources">0</strong></div><div><span>Novos lotes</span><strong id="grdt-reissue-count-batches">0</strong></div></div>
