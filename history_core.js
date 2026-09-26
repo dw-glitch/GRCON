@@ -206,6 +206,7 @@
       outputType: text(record && record.outputType) || "eGRDT final",
       ldName: text(record && record.ldName),
       sourceName: text(record && record.sourceName),
+      batchMode: ["discipline", "limit-only"].includes(text(record && record.batchMode)) ? text(record && record.batchMode) : "",
       reissueSources: Array.isArray(record && record.reissueSources) ? record.reissueSources.map(text).filter(Boolean) : [],
       numberHistory: Array.isArray(record && record.numberHistory) ? record.numberHistory.map(text).filter(Boolean) : [],
       cloudId,
@@ -421,6 +422,7 @@
       outputType: info.outputType,
       ldName: info.ldName,
       sourceName: info.sourceName,
+      batchMode: text(info.batchMode) || text(file && file.group && file.group.batchMode),
       reservationRequestId: text(file && file.official && file.official.requestId),
       reservationIds: [text(file && file.official && file.official.reservationId)].filter(Boolean),
       files,
@@ -478,7 +480,7 @@
     const wanted = norm(query);
     if (!wanted) return records || [];
     return (records || []).filter((record) => norm([
-      record.egrdtNumber, ...(record.numberHistory || []), ...(record.reissueSources || []), record.outputType, record.ldName, record.sourceName,
+      record.egrdtNumber, ...(record.numberHistory || []), ...(record.reissueSources || []), record.outputType, record.ldName, record.sourceName, record.batchMode,
       ...(record.allocations || []),
       ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline, file.documentType, file.purpose]),
     ].join(" ")).includes(wanted));
