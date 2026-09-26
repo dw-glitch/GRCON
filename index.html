@@ -161,8 +161,9 @@
 <div class="settings-group-body">
 <label class="inline-setting">Emissão recente<input id="recent-days" inputmode="numeric" max="365" min="1" type="number" value="30"/><span>dias</span></label>
 <section class="egrdt-batch-settings settings-embedded compact-limit-setting" aria-labelledby="egrdt-batch-settings-title">
-<div><strong id="egrdt-batch-settings-title">Limite por eGRDT</strong><small id="egrdt-batch-limit-status">Separação por disciplina · até 48 documentos por eGRDT</small></div>
-<label><span>Por lote</span><input id="egrdt-batch-limit" type="number" min="1" step="1" value="48" inputmode="numeric"/></label>
+<div><strong id="egrdt-batch-settings-title">Distribuição das eGRDTs</strong><small id="egrdt-batch-limit-status">Separação por disciplina · até 48 documentos por eGRDT</small></div>
+<label><span>Modo</span><select id="egrdt-batch-mode"><option value="discipline">Separar por disciplina</option><option value="limit-only">Somente limite de 48</option></select></label>
+<label><span>Máx. por lote</span><input id="egrdt-batch-limit" type="number" min="1" max="48" step="1" value="48" inputmode="numeric"/></label>
 <button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar</button>
 </section>
 <section class="allocation-center-settings settings-embedded" aria-labelledby="allocation-center-title">
@@ -365,6 +366,10 @@
 <header class="grdt-reissue-heading"><div><span>REPOSTAGEM CONTROLADA</span><h2>Gerar nova eGRDT a partir da última emissão</h2><p>Informe um ou vários documentos. O GRCON recupera, para cada um, a eGRDT mais recente do Histórico e replica os dados da linha.</p></div></header>
 <section class="grdt-reissue-input" aria-labelledby="grdt-reissue-input-title">
 <label for="grdt-reissue-documents"><span id="grdt-reissue-input-title">Documentos para repostagem</span><textarea id="grdt-reissue-documents" placeholder="Cole um código de documento por linha"></textarea></label>
+<div class="grdt-reissue-mode">
+<label for="grdt-reissue-batch-mode"><span>Distribuição das novas eGRDTs</span><select id="grdt-reissue-batch-mode"><option value="discipline">Separar por disciplina</option><option value="limit-only">Somente limite de 48</option></select></label>
+<small id="grdt-reissue-batch-mode-status">Cada disciplina terá sua própria eGRDT, sempre respeitando o máximo absoluto de 48 documentos.</small>
+</div>
 <div class="grdt-reissue-actions"><button class="primary-button" id="grdt-reissue-find" type="button">Localizar última eGRDT</button><small>A busca usa somente o Histórico do GRCON e aceita lote.</small></div>
 </section>
 <section class="grdt-reissue-results" aria-live="polite">
