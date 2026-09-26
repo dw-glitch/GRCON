@@ -442,20 +442,29 @@
     return [...new Set(errors)];
   }
 
-  function splitPlan(plan, size) {
-    const limit = Math.max(1, Number(size) || 48);
+  const BATCH_MODES = Object.freeze({
+    DISCIPLINE: "discipline",
+    LIMIT_ONLY: "limit-only",
+  });
+
+  function normalizeBatchMode(value) {
+    return value === BATCH_MODES.LIMIT_ONLY ? BATCH_MODES.LIMIT_ONLY : BATCH_MODES.DISCIPLINE;
+  }
+
+  function normalizeBatchLimit(value) {
+    const parsed = Math.trunc(Number(value));
+    if (!Number.isFinite(parsed)) return 48;
+    return Math.max(1, Math.min(48, parsed));
+  }
+
+  function splitPlan(plan, size, mode) {
+    const limit = normalizeBatchLimit(size);
+    const batchMode = normalizeBatchMode(mode);
+    const source = (plan.entries || []).map((entry, originalIndex) => ({ entry, originalIndex }));
     const groups = [];
-    const byDiscipline = new Map();
-    (plan.entries || []).forEach((entry, originalIndex) => {
-      const discipline = text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA";
-      const disciplineKey = norm(discipline);
-      if (!byDiscipline.has(disciplineKey)) byDiscipline.set(disciplineKey, { discipline, entries: [] });
-      byDiscipline.get(disciplineKey).entries.push({ entry, originalIndex });
-    });
-    const disciplines = [...byDiscipline.values()].sort((left, right) => norm(left.discipline).localeCompare(norm(right.discipline), "pt-BR"));
     let outputIndex = 0;
-    disciplines.forEach((bucket) => {
-      const disciplineBatchCount = Math.ceil(bucket.entries.length / limit);
+
+    const pushBucket = (bucket, disciplineBatchCount) => {
       for (let start = 0; start < bucket.entries.length; start += limit) {
         const slice = bucket.entries.slice(start, start + limit);
         const entries = slice.map((item) => item.entry);
@@ -467,13 +476,29 @@
           endIndex: outputIndex + entries.length - 1,
           originalIndices: slice.map((item) => item.originalIndex),
           limit,
+          batchMode,
           discipline: bucket.discipline,
           disciplineBatchNumber: Math.floor(start / limit) + 1,
           disciplineBatchCount,
         });
         outputIndex += entries.length;
       }
+    };
+
+    if (batchMode === BATCH_MODES.LIMIT_ONLY) {
+      pushBucket({ discipline: "MISTO", entries: source }, Math.ceil(source.length / limit));
+      return groups;
+    }
+
+    const byDiscipline = new Map();
+    source.forEach((item) => {
+      const discipline = text(item.entry && item.entry.item && item.entry.item.discipline) || "SEM DISCIPLINA";
+      const disciplineKey = norm(discipline);
+      if (!byDiscipline.has(disciplineKey)) byDiscipline.set(disciplineKey, { discipline, entries: [] });
+      byDiscipline.get(disciplineKey).entries.push(item);
     });
+    const disciplines = [...byDiscipline.values()].sort((left, right) => norm(left.discipline).localeCompare(norm(right.discipline), "pt-BR"));
+    disciplines.forEach((bucket) => pushBucket(bucket, Math.ceil(bucket.entries.length / limit)));
     return groups;
   }
 
@@ -499,5 +524,8 @@
     }));
   }
 
-  return { createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, splitPlan, manifestRows };
+  return {
+    BATCH_MODES, normalizeBatchMode, normalizeBatchLimit,
+    createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, splitPlan, manifestRows,
+  };
 });
