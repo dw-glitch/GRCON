@@ -191,7 +191,13 @@ async function lookup(page, count) {
     assert.ok(mobile.inputWidth < mobile.viewport, "inputs devem caber no cartão mobile");
     await page.screenshot({ path: path.join(outputDir, "mobile-240.png"), fullPage: true });
 
-    const unexpectedErrors = errors.filter((message) => {\n      if (/GRCON Storage.*initialize/i.test(message) && /módulos de Histórico e Postagem SIGEM ainda não estão disponíveis/i.test(message)) return false;\n      if (/supabase|Failed to fetch|net::ERR_/i.test(message)) return false;\n      return true;\n    });\n    assert.equal(unexpectedErrors.length, 0, "console/page errors: " + unexpectedErrors.join("\\n"));\n    fs.writeFileSync(path.join(outputDir, "metrics.json"), JSON.stringify({ metrics, interaction, mobile, filteredBootstrapErrors: errors.length - unexpectedErrors.length }, null, 2));
+    const unexpectedErrors = errors.filter((message) => {
+      if (/GRCON Storage.*initialize/i.test(message) && /módulos de Histórico e Postagem SIGEM ainda não estão disponíveis/i.test(message)) return false;
+      if (/supabase|Failed to fetch|net::ERR_/i.test(message)) return false;
+      return true;
+    });
+    assert.equal(unexpectedErrors.length, 0, "console/page errors: " + unexpectedErrors.join("\\n"));
+    fs.writeFileSync(path.join(outputDir, "metrics.json"), JSON.stringify({ metrics, interaction, mobile, filteredBootstrapErrors: errors.length - unexpectedErrors.length }, null, 2));
     console.log("OK — Repostagem validada no Chromium em 48/96/240 linhas, edição incremental e mobile.");
   } finally {
     await browser.close();
