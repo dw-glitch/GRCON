@@ -105,6 +105,15 @@
       const mapped = mappings.find(([pattern]) => pattern.test(message));
       addFieldError(result, mapped ? mapped[1] : "document", message);
     });
+    // emission.js torna PROPÓSITO informativo na geração normal. Na Repostagem,
+    // porém, um valor antigo não padronizado precisa ser confirmado pelo operador:
+    // não podemos replicar silenciosamente um propósito que não existe no modelo.
+    const allowedPurposes = Core && Core.EGRDT_OPTIONS && Array.isArray(Core.EGRDT_OPTIONS.purposes)
+      ? Core.EGRDT_OPTIONS.purposes
+      : [];
+    if (text(item && item.purpose) && allowedPurposes.length && !allowedPurposes.includes(text(item.purpose))) {
+      addFieldError(result, "purpose", "PROPÓSITO fora da lista oficial");
+    }
     if (!text(item && item.databook)) addFieldError(result, "databook", "CAMINHO DATABOOK vazio");
     if (text(item && item.fileName) && text(item && item.document) && text(item && item.revision)
         && Core && typeof Core.proposedFileName === "function") {
