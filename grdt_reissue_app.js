@@ -5,7 +5,10 @@
   const History = root.GrconHistory;
   if (!Core || !History || !root.document) return;
 
-  const state = { rows: [], missingDocuments: [], busy: false };
+  const LIMIT = 48;
+  const MODE_KEY = "grcon.egrdt.batch-mode.v1";
+  const MODE_DISCIPLINE = "discipline";
+  const MODE_LIMIT_ONLY = "limit-only";
   const OPTION_LISTS = Object.freeze({
     format: "grdt-reissue-formats",
     discipline: "grdt-reissue-disciplines",
@@ -17,6 +20,21 @@
   function text(value) { return String(value === null || value === undefined ? "" : value).trim(); }
   function esc(value) { return text(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
   function fmtDate(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("pt-BR"); }
+  function normalizeMode(value) { return value === MODE_LIMIT_ONLY ? MODE_LIMIT_ONLY : MODE_DISCIPLINE; }
+  function readMode() {
+    try {
+      const shared = root.GrconWorkspace?.preference?.("egrdtBatchMode", "");
+      if (shared) return normalizeMode(shared);
+      return normalizeMode(root.localStorage?.getItem(MODE_KEY));
+    } catch (_) {
+      console.debug("[GRDT Reissue] preferência de lote indisponível:", _);
+      return MODE_DISCIPLINE;
+    }
+  }
+  const state = { rows: [], missingDocuments: [], busy: false, batchMode: readMode() };
+
+  function batchOptions() { return { mode: state.batchMode, limit: LIMIT }; }
+  function modeLabel() { return state.batchMode === MODE_LIMIT_ONLY ? "Somente limite de 48" : "Separar por disciplina"; }
   function notify(message, kind) { if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info"); else if (kind === "error") root.alert(message); }
   function download(blob, name) {
     const url = URL.createObjectURL(blob);
@@ -29,17 +47,30 @@
     root.setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
   function appVersion() { return root.GrconConfig?.APP_VERSION || doc.documentElement.dataset.version || "GRCON"; }
+
+  function validation() { return Core.validateRows(state.rows); }
+  function updateGenerateButton() {
+    const button = $("#grdt-reissue-generate");
+    if (!button) return;
+    button.disabled = state.busy || !validation().valid;
+    button.textContent = state.busy ? "Gerando eGRDT…" : "Gerar nova eGRDT";
+  }
   function setBusy(busy) {
     state.busy = Boolean(busy);
-    ["grdt-reissue-find", "grdt-reissue-generate"].forEach((id) => { const button = $(`#${id}`); if (button) button.disabled = state.busy || (id.endsWith("generate") && !Core.validateRows(state.rows).valid); });
-    const generate = $("#grdt-reissue-generate");
-    if (generate) generate.textContent = state.busy ? "Gerando eGRDT…" : "Gerar nova eGRDT";
+    const find = $("#grdt-reissue-find");
+    if (find) find.disabled = state.busy;
+    updateGenerateButton();
   }
+
   function fieldInput(row, index, field, width) {
-    const missing = row.missing.includes(field);
+    const errors = row.fieldErrors && row.fieldErrors[field] || [];
+    const invalid = errors.length > 0;
+    const inputId = `grdt-reissue-field-${index}-${field}`;
+    const errorId = `${inputId}-error`;
     const list = OPTION_LISTS[field] ? ` list="${OPTION_LISTS[field]}"` : "";
-    return `<input ${missing ? 'aria-invalid="true"' : ""}${list} data-field="${field}" data-row="${index}" style="min-width:${width || "8rem"}" value="${esc(row.item[field])}"/>`;
+    return `<span class="grdt-reissue-field"><input id="${inputId}" ${invalid ? 'aria-invalid="true"' : ""} ${invalid ? `aria-describedby="${errorId}"` : ""}${list} data-field="${field}" data-row="${index}" style="min-width:${width || "8rem"}" value="${esc(row.item[field])}"/><small class="grdt-reissue-field-error" id="${errorId}" ${invalid ? "" : "hidden"}>${esc(errors[0] || "")}</small></span>`;
   }
+
   function ensureOptionLists() {
     const options = root.TriagemCore?.EGRDT_OPTIONS || {};
     const values = {
@@ -56,41 +87,130 @@
       doc.body.appendChild(list);
     });
   }
-  function render() {
-    const host = $("#grdt-reissue-results");
-    const validation = Core.validateRows(state.rows);
+
+  function statusMarkup(row) {
+    return row.errors.length
+      ? `<span class="grdt-reissue-missing" title="${esc(row.errors.join(" · "))}">Revisar ${row.errors.length}</span>`
+      : '<span class="grdt-reissue-ready">Pronto</span>';
+  }
+
+  function rowMarkup(row, index) {
+    return `<tr data-row-index="${index}" class="${row.errors.length ? "is-incomplete" : ""}">
+      <td data-label="Origem localizada"><span class="grdt-reissue-source"><strong>${esc(row.sourceEgrdt)}</strong><small>${esc(fmtDate(row.sourceGeneratedAt))}</small></span></td>
+      <td data-label="Documento"><strong>${esc(row.item.document)}</strong></td>
+      <td data-label="Revisão">${fieldInput(row, index, "revision")}</td>
+      <td data-label="Título">${fieldInput(row, index, "title", "16rem")}</td>
+      <td data-label="Arquivo">${fieldInput(row, index, "fileName", "18rem")}</td>
+      <td data-label="Formato">${fieldInput(row, index, "format")}</td>
+      <td data-label="Disciplina">${fieldInput(row, index, "discipline")}</td>
+      <td data-label="Tipo de documento">${fieldInput(row, index, "documentType")}</td>
+      <td data-label="Propósito">${fieldInput(row, index, "purpose", "12rem")}</td>
+      <td data-label="Caminho Databook">${fieldInput(row, index, "databook", "18rem")}</td>
+      <td data-label="Situação" data-row-status>${statusMarkup(row)}</td>
+    </tr>`;
+  }
+
+  function renderBatchPreview() {
+    const host = $("#grdt-reissue-batch-preview");
+    const label = $("#grdt-reissue-batch-mode-label");
+    const groups = state.rows.length ? Core.groupRows(state.rows, batchOptions()) : [];
+    if (label) label.textContent = modeLabel();
+    if (!host) return groups;
+    if (!groups.length) {
+      host.innerHTML = '<p class="grdt-reissue-preview-empty">A prévia aparecerá depois que os documentos forem localizados.</p>';
+      return groups;
+    }
+    host.innerHTML = `<ol>${groups.map((group) => {
+      if (state.batchMode === MODE_LIMIT_ONLY) {
+        return `<li><strong>eGRDT ${group.number}</strong><span>${group.rows.length} documento(s) · ${group.disciplineCount} disciplina(s)</span></li>`;
+      }
+      return `<li><strong>eGRDT ${group.number}</strong><span>${esc(group.discipline)} · ${group.rows.length} documento(s)</span></li>`;
+    }).join("")}</ol>`;
+    return groups;
+  }
+
+  function renderSummary() {
+    const currentValidation = validation();
     const sourceCount = new Set(state.rows.map((row) => row.sourceEgrdt)).size;
-    const groupCount = validation.valid ? Core.groupRows(state.rows, 48).length : 0;
+    const groups = renderBatchPreview();
     $("#grdt-reissue-count-docs").textContent = String(new Set(state.rows.map((row) => Core.norm(row.item.document))).size);
     $("#grdt-reissue-count-rows").textContent = String(state.rows.length);
     $("#grdt-reissue-count-sources").textContent = String(sourceCount);
-    $("#grdt-reissue-count-batches").textContent = String(groupCount);
+    $("#grdt-reissue-count-batches").textContent = String(groups.length);
     const alert = $("#grdt-reissue-alert");
     const notices = [];
     if (state.missingDocuments.length) notices.push(`Sem eGRDT anterior: ${state.missingDocuments.join("; ")}.`);
-    if (validation.incomplete.length) notices.push(`${validation.incomplete.length} linha(s) antiga(s) precisam ter os campos destacados completados ou corrigidos antes da geração.`);
+    if (currentValidation.incomplete.length) notices.push(`${currentValidation.incomplete.length} linha(s) precisam de correção nos campos indicados antes da geração.`);
     alert.textContent = notices.join(" ");
     alert.hidden = !notices.length;
+    updateGenerateButton();
+  }
+
+  function render() {
+    const host = $("#grdt-reissue-results");
+    renderSummary();
     if (!state.rows.length) {
       host.innerHTML = '<div class="history-empty"><strong>Nenhum documento consultado</strong><span>Cole os códigos acima para localizar a última eGRDT gerada pelo GRCON.</span></div>';
-      setBusy(false);
       return;
     }
-    host.innerHTML = `<table class="grdt-reissue-table"><thead><tr><th>Origem localizada</th><th>Documento</th><th>Revisão</th><th>Título</th><th>Arquivo</th><th>Formato</th><th>Disciplina</th><th>Tipo de documento</th><th>Propósito</th><th>Caminho Databook</th><th>Situação</th></tr></thead><tbody>${state.rows.map((row, index) => `<tr class="${row.errors.length ? "is-incomplete" : ""}">
-      <td><span class="grdt-reissue-source"><strong>${esc(row.sourceEgrdt)}</strong><small>${esc(fmtDate(row.sourceGeneratedAt))}</small></span></td>
-      <td><strong>${esc(row.item.document)}</strong></td>
-      <td>${fieldInput(row, index, "revision")}</td>
-      <td>${fieldInput(row, index, "title", "16rem")}</td>
-      <td>${fieldInput(row, index, "fileName", "18rem")}</td>
-      <td>${fieldInput(row, index, "format")}</td>
-      <td>${fieldInput(row, index, "discipline")}</td>
-      <td>${fieldInput(row, index, "documentType")}</td>
-      <td>${fieldInput(row, index, "purpose", "12rem")}</td>
-      <td>${fieldInput(row, index, "databook", "18rem")}</td>
-      <td>${row.errors.length ? `<span class="grdt-reissue-missing" title="${esc(row.errors.join(" · "))}">Revisar ${row.errors.length}</span>` : '<span class="grdt-reissue-ready">Pronto</span>'}</td>
-    </tr>`).join("")}</tbody></table>`;
-    setBusy(false);
+    host.innerHTML = `<table class="grdt-reissue-table"><thead><tr><th>Origem localizada</th><th>Documento</th><th>Revisão</th><th>Título</th><th>Arquivo</th><th>Formato</th><th>Disciplina</th><th>Tipo de documento</th><th>Propósito</th><th>Caminho Databook</th><th>Situação</th></tr></thead><tbody>${state.rows.map(rowMarkup).join("")}</tbody></table>`;
   }
+
+  function patchRow(index) {
+    const row = state.rows[index];
+    const element = $(`[data-row-index="${index}"]`, $("#grdt-reissue-results"));
+    if (!row || !element) { render(); return; }
+    const wrap = $("#grdt-reissue-results");
+    const top = wrap?.scrollTop || 0;
+    const left = wrap?.scrollLeft || 0;
+    const active = doc.activeElement;
+    const selection = active && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
+    element.classList.toggle("is-incomplete", row.errors.length > 0);
+    REQUIRED_FIELDS_LOOP: for (const field of Core.REQUIRED_FIELDS) {
+      const input = element.querySelector(`[data-field="${field}"]`);
+      if (!input) continue REQUIRED_FIELDS_LOOP;
+      if (input.value !== text(row.item[field])) input.value = text(row.item[field]);
+      const errors = row.fieldErrors && row.fieldErrors[field] || [];
+      const error = element.querySelector(`#${input.id}-error`);
+      if (errors.length) {
+        input.setAttribute("aria-invalid", "true");
+        input.setAttribute("aria-describedby", `${input.id}-error`);
+        if (error) { error.textContent = errors[0]; error.hidden = false; }
+      } else {
+        input.removeAttribute("aria-invalid");
+        input.removeAttribute("aria-describedby");
+        if (error) { error.textContent = ""; error.hidden = true; }
+      }
+    }
+    const status = element.querySelector("[data-row-status]");
+    if (status) status.innerHTML = statusMarkup(row);
+    if (wrap) { wrap.scrollTop = top; wrap.scrollLeft = left; }
+    if (active && active.isConnected && selection) {
+      try { active.setSelectionRange(selection[0], selection[1]); } catch (_) { console.debug("[GRDT Reissue] seleção:", _); }
+    }
+    renderSummary();
+  }
+
+  function setBatchMode(value, announce) {
+    state.batchMode = normalizeMode(value);
+    try {
+      if (root.GrconWorkspace?.setPreference) root.GrconWorkspace.setPreference("egrdtBatchMode", state.batchMode);
+      else root.localStorage?.setItem(MODE_KEY, state.batchMode);
+    } catch (_) { console.debug("[GRDT Reissue] preferência somente nesta sessão:", _); }
+    const discipline = $("#grdt-reissue-mode-discipline");
+    const limitOnly = $("#grdt-reissue-mode-limit-only");
+    if (discipline) discipline.checked = state.batchMode === MODE_DISCIPLINE;
+    if (limitOnly) limitOnly.checked = state.batchMode === MODE_LIMIT_ONLY;
+    renderSummary();
+    if (announce) notify(
+      state.batchMode === MODE_LIMIT_ONLY
+        ? "A repostagem manterá a ordem dos documentos e dividirá somente a cada 48."
+        : "A repostagem será separada por disciplina, com no máximo 48 documentos por eGRDT.",
+      "success",
+    );
+    return state.batchMode;
+  }
+
   function findLatest() {
     const documents = Core.parseDocuments($("#grdt-reissue-documents")?.value || "");
     if (!documents.length) {
@@ -104,6 +224,7 @@
     if (!state.rows.length) notify("Nenhum dos documentos foi localizado no Histórico de eGRDTs.", "warning");
     else notify(`${state.rows.length} linha(s) recuperada(s) da última eGRDT de cada documento.`, "success");
   }
+
   async function reserveNumbers(count) {
     const sequence = root.GrconEgrdtSequence;
     const preview = sequence?.previewMany?.(count) || [];
@@ -114,6 +235,7 @@
     if (preview.length !== count) throw new Error("A numeração automática das eGRDTs não está disponível.");
     return preview;
   }
+
   function recordForGenerated(group, official, verification, generatedAt) {
     const sourceNumbers = [...new Set(group.rows.map((row) => row.sourceEgrdt).filter(Boolean))];
     const sourceRecords = History.read().filter((record) => group.rows.some((row) => row.sourceRecordId === record.id));
@@ -131,7 +253,7 @@
         grdtRevision: reopened.revision || row.item.revision,
         revisionSource: "Arquivo eGRDT de repostagem reaberto e verificado",
         revisionSuggested: row.item.revision,
-        revisionManual: false,
+        revisionManual: Boolean(!row.fileNameAuto || text(previous.grdtRevision || previous.revision) !== text(row.item.revision)),
         format: row.item.format,
         discipline: row.item.discipline,
         documentType: row.item.documentType,
@@ -145,6 +267,7 @@
       egrdtNumber: official.baseName,
       generatedAt,
       outputType: "Repostagem de eGRDT",
+      batchMode: state.batchMode,
       ldName: ldNames.join(" · ") || "Histórico GRCON",
       sourceName: `Última eGRDT por documento: ${sourceNumbers.join(" · ")}`,
       reissueSources: sourceNumbers,
@@ -153,6 +276,7 @@
       files,
     });
   }
+
   async function confirmSharedHistory(records) {
     if (!root.GrconCloud?.state?.membership) return { shared: false, synced: true, error: "" };
     if (!root.GrconCloud.state.online) return { shared: true, synced: false, error: "O GRCON está offline; a sincronização ficará pendente." };
@@ -165,16 +289,18 @@
       return { shared: true, synced: false, error: error?.message || "Falha ao confirmar o histórico compartilhado." };
     }
   }
+
   async function generate() {
-    const validation = Core.validateRows(state.rows);
-    if (!validation.valid) {
-      notify("Complete todos os campos destacados antes de gerar a repostagem.", "warning");
+    const currentValidation = validation();
+    if (!currentValidation.valid) {
+      notify("Corrija os campos indicados antes de gerar a repostagem.", "warning");
       return;
     }
     setBusy(true);
     const operation = root.GrconMascot?.begin?.({ state: "analyzing", message: "Gerando repostagem de eGRDT…", source: "grdt-reissue" });
     try {
-      const groups = Core.groupRows(state.rows, 48);
+      const groups = Core.groupRows(state.rows, batchOptions());
+      if (groups.some((group) => group.rows.length > LIMIT)) throw new Error("Lote inválido: uma eGRDT ultrapassou o limite absoluto de 48 documentos.");
       const officialNumbers = await reserveNumbers(groups.length);
       const generatedAt = new Date().toISOString();
       const generated = [];
@@ -196,11 +322,8 @@
       const saved = History.saveMany(records);
       if (!saved.saved) throw new Error(saved.error || "A eGRDT foi criada, mas não pôde ser registrada no Histórico.");
       if (saved.persistence && typeof saved.persistence.then === "function") {
-        try {
-          await saved.persistence;
-        } catch (error) {
-          throw new Error(error?.message || "A eGRDT foi criada, mas a persistência durável do Histórico falhou.");
-        }
+        try { await saved.persistence; }
+        catch (error) { throw new Error(error?.message || "A eGRDT foi criada, mas a persistência durável do Histórico falhou."); }
       }
       if (root.GrconSigemPosting?.registerGenerated) {
         root.GrconSigemPosting.registerGenerated(records, { packageName: generated.length === 1 ? generated[0].fileName : "GRCON_Repostagem_eGRDT.zip", appVersion: appVersion() });
@@ -228,25 +351,39 @@
       setBusy(false);
     }
   }
+
   function activate() {
+    setBatchMode(state.batchMode, false);
     render();
     root.GRCONMascot?.refresh?.();
   }
+
   function init() {
     ensureOptionLists();
+    setBatchMode(state.batchMode, false);
     $("#grdt-reissue-find")?.addEventListener("click", findLatest);
     $("#grdt-reissue-generate")?.addEventListener("click", () => void generate());
+    $("#grdt-reissue-mode-discipline")?.addEventListener("change", (event) => { if (event.target.checked) setBatchMode(MODE_DISCIPLINE, true); });
+    $("#grdt-reissue-mode-limit-only")?.addEventListener("change", (event) => { if (event.target.checked) setBatchMode(MODE_LIMIT_ONLY, true); });
     $("#grdt-reissue-results")?.addEventListener("change", (event) => {
       const input = event.target.closest("[data-row][data-field]");
       if (!input) return;
       const index = Number(input.dataset.row);
       if (!Number.isInteger(index) || !state.rows[index]) return;
       state.rows[index] = Core.updateRow(state.rows[index], input.dataset.field, input.value);
-      render();
+      patchRow(index);
     });
     render();
   }
 
-  root.GrconGrdtReissueUi = Object.freeze({ activate, state, findLatest, generate, confirmSharedHistory });
+  root.GrconGrdtReissueUi = Object.freeze({
+    activate,
+    state,
+    findLatest,
+    generate,
+    confirmSharedHistory,
+    setBatchMode,
+    preview: () => Core.groupRows(state.rows, batchOptions()),
+  });
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true }); else init();
 })(window);
