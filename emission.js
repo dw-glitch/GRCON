@@ -5,6 +5,12 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (C) {
   "use strict";
 
+  const MAX_ITEMS_PER_EGRDT = 48;
+  const BATCH_MODES = Object.freeze({
+    DISCIPLINE: "discipline",
+    LIMIT_ONLY: "limit-only",
+  });
+
   function text(value) {
     return String(value === null || value === undefined ? "" : value).trim();
   }
@@ -442,39 +448,96 @@
     return [...new Set(errors)];
   }
 
-  function splitPlan(plan, size) {
-    const limit = Math.max(1, Number(size) || 48);
+  function normalizeBatchOptions(options) {
+    const source = typeof options === "number" ? { limit: options } : (options || {});
+    const requestedLimit = Math.trunc(Number(source.limit) || MAX_ITEMS_PER_EGRDT);
+    const limit = Math.max(1, Math.min(MAX_ITEMS_PER_EGRDT, requestedLimit));
+    const mode = source.mode === BATCH_MODES.LIMIT_ONLY ? BATCH_MODES.LIMIT_ONLY : BATCH_MODES.DISCIPLINE;
+    return { mode, limit };
+  }
+
+  function batchMetadata(entries) {
+    const disciplines = [...new Set((entries || [])
+      .map((entry) => text(entry && entry.item && entry.item.discipline))
+      .filter(Boolean))];
+    return {
+      disciplines,
+      disciplineCount: disciplines.length,
+      discipline: disciplines.length === 1 ? disciplines[0] : (disciplines.length > 1 ? "MÚLTIPLAS DISCIPLINAS" : "SEM DISCIPLINA"),
+    };
+  }
+
+  function splitPlan(plan, options) {
+    const settings = normalizeBatchOptions(options);
+    const sourceEntries = plan && Array.isArray(plan.entries) ? plan.entries : [];
     const groups = [];
+    let outputIndex = 0;
+
+    const appendGroup = (entries, originalIndices, extra) => {
+      const metadata = batchMetadata(entries);
+      groups.push({
+        entries,
+        items: entries.map((entry) => entry.item),
+        number: groups.length + 1,
+        startIndex: outputIndex,
+        endIndex: outputIndex + entries.length - 1,
+        originalIndices,
+        limit: settings.limit,
+        mode: settings.mode,
+        ...metadata,
+        ...(extra || {}),
+      });
+      outputIndex += entries.length;
+    };
+
+    if (settings.mode === BATCH_MODES.LIMIT_ONLY) {
+      for (let start = 0; start < sourceEntries.length; start += settings.limit) {
+        const entries = sourceEntries.slice(start, start + settings.limit);
+        appendGroup(entries, entries.map((_, offset) => start + offset), {
+          disciplineBatchNumber: Math.floor(start / settings.limit) + 1,
+          disciplineBatchCount: Math.ceil(sourceEntries.length / settings.limit),
+        });
+      }
+      return groups;
+    }
+
     const byDiscipline = new Map();
-    (plan.entries || []).forEach((entry, originalIndex) => {
+    sourceEntries.forEach((entry, originalIndex) => {
       const discipline = text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA";
       const disciplineKey = norm(discipline);
       if (!byDiscipline.has(disciplineKey)) byDiscipline.set(disciplineKey, { discipline, entries: [] });
       byDiscipline.get(disciplineKey).entries.push({ entry, originalIndex });
     });
     const disciplines = [...byDiscipline.values()].sort((left, right) => norm(left.discipline).localeCompare(norm(right.discipline), "pt-BR"));
-    let outputIndex = 0;
     disciplines.forEach((bucket) => {
-      const disciplineBatchCount = Math.ceil(bucket.entries.length / limit);
-      for (let start = 0; start < bucket.entries.length; start += limit) {
-        const slice = bucket.entries.slice(start, start + limit);
-        const entries = slice.map((item) => item.entry);
-        groups.push({
-          entries,
-          items: entries.map((entry) => entry.item),
-          number: groups.length + 1,
-          startIndex: outputIndex,
-          endIndex: outputIndex + entries.length - 1,
-          originalIndices: slice.map((item) => item.originalIndex),
-          limit,
+      const disciplineBatchCount = Math.ceil(bucket.entries.length / settings.limit);
+      for (let start = 0; start < bucket.entries.length; start += settings.limit) {
+        const slice = bucket.entries.slice(start, start + settings.limit);
+        appendGroup(slice.map((item) => item.entry), slice.map((item) => item.originalIndex), {
           discipline: bucket.discipline,
-          disciplineBatchNumber: Math.floor(start / limit) + 1,
+          disciplines: [bucket.discipline],
+          disciplineCount: 1,
+          disciplineBatchNumber: Math.floor(start / settings.limit) + 1,
           disciplineBatchCount,
         });
-        outputIndex += entries.length;
       }
     });
     return groups;
+  }
+
+  function groupEgrdtRows(rows, options) {
+    const source = Array.isArray(rows) ? rows : [];
+    const entries = source.map((row, originalIndex) => ({
+      rowRef: row,
+      originalIndex,
+      document: text(row && row.item && row.item.document),
+      item: row && row.item ? row.item : row,
+    }));
+    return splitPlan({ entries }, options).map((group) => ({
+      ...group,
+      rows: group.entries.map((entry) => entry.rowRef),
+      items: group.entries.map((entry) => ({ ...(entry.item || {}) })),
+    }));
   }
 
   function manifestRows(plan, metadata) {
@@ -499,5 +562,5 @@
     }));
   }
 
-  return { createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, splitPlan, manifestRows };
+  return { MAX_ITEMS_PER_EGRDT, BATCH_MODES, createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, normalizeBatchOptions, splitPlan, groupEgrdtRows, manifestRows };
 });
