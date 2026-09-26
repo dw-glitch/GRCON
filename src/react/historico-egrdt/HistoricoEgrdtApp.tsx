@@ -465,6 +465,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           <dl className="history-detail-meta">
             <div><dt>LD utilizada</dt><dd>{record.ldName || "Não informada"}</dd></div>
             <div><dt>Origem</dt><dd>{record.sourceName || "Pasta documental"}</dd></div>
+            {record.batchMode ? <div><dt>Distribuição</dt><dd>{record.batchMode === "limit-only" ? "Somente limite de 48" : "Separar por disciplina"}</dd></div> : null}
             {record.reissueSources?.length ? <div><dt>eGRDT(s) de origem</dt><dd>{record.reissueSources.map((value) => <span key={value}>{value}</span>)}</dd></div> : null}
             <div><dt>Alocação</dt><dd>{record.allocations.length ? record.allocations.map((value) => <span key={value}>{value}</span>) : "Não informada na LD"}</dd></div>
             {previousNumbers.length ? <div><dt>Números anteriores</dt><dd>{previousNumbers.map((value) => <span key={value}>{value}</span>)}</dd></div> : null}
