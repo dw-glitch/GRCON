@@ -46,9 +46,11 @@ async function waitForStableServiceWorkerPage(page) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
       await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      if ("serviceWorker" in await page.evaluate(() => ({ serviceWorker: "serviceWorker" in navigator }))) return;
-      await page.waitForFunction(() => !("serviceWorker" in navigator) || Boolean(navigator.serviceWorker.controller), null, { timeout: 15000 });
+      const supported = await page.evaluate(() => "serviceWorker" in navigator);
+      if (!supported) return;
+      await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 15000 });
       await page.waitForTimeout(180);
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
       return;
     } catch (error) {
       lastError = error;
