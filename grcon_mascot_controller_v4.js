@@ -2,9 +2,9 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "5.2.0";
+  const VERSION = "5.2.1";
   const ENGINE = "official-hybrid-media-v5";
-  const ASSET_REVISION = "20260925.2";
+  const ASSET_REVISION = "20260926.1";
   const OVERLAY_ID = "grcon-context-mascot";
   const BUBBLE_ID = "grcon-mascot-context-bubble";
   const HEADER_SLOT_ID = "grcon-mascot-header-slot";

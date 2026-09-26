@@ -150,7 +150,7 @@ async function main() {
 
     let state = await diagnostics(page);
     assert.equal(state.engine, "official-hybrid-media-v5");
-    assert.equal(state.assetRevision, "20260925.2");
+    assert.equal(state.assetRevision, "20260926.1");
     assert.equal(state.instances, 1);
     assert.equal(await page.locator("#grcon-context-mascot video").count(), 1);
     assert.deepEqual(Object.keys(state.assets).sort(), ["analyzing", "hello", "idle", "running", "success", "warning"]);
@@ -210,7 +210,7 @@ async function main() {
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "analyzing");
     state = await diagnostics(page);
     assert.equal(state.activeOperations, 1);
-    assert.match(state.assets.analyzing, /grcon-mascot-analyzing-alpha\.webm\?v=20260925\.2$/);
+    assert.match(state.assets.analyzing, /grcon-mascot-analyzing-alpha\.webm\?v=20260926\.1$/);
     await page.waitForFunction(() => {
       const video = document.querySelector("#grcon-context-mascot video");
       return Boolean(video && /grcon-mascot-analyzing-alpha\.webm/.test(video.currentSrc) && !video.paused && video.currentTime > 0);

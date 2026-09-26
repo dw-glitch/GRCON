@@ -19,7 +19,7 @@ const source = JSON.parse(read("assets/mascot/video/higgsfield-source.json"));
 const sprite = read("grcon-mascot-sprite.png", null);
 const approvedRunning = read("assets/mascot/video/grcon-mascot-running-alpha.webm", null);
 
-const states = ["idle", "hello", "analyzing", "warning", "success", "run"];
+const states = ["idle", "hello", "analyzing", "warning", "success"];
 const assets = Object.fromEntries(states.map((state) => {
   const file = `assets/mascot/video/grcon-mascot-${state}-alpha.webm`;
   return [state, read(file, null)];
@@ -39,16 +39,15 @@ assert.equal(sprite.readUInt32BE(20), 1254);
 for (const [state, bytes] of Object.entries(assets)) assertWebm(bytes, state);
 assertWebm(approvedRunning, "running-approved");
 assert.ok(approvedRunning.length >= 300_000, "vídeo original de corrida não pode ser placeholder");
-assert.equal(new Set(Object.values(assets).map(hash)).size, 6, "os seis assets contextuais precisam permanecer independentes");
-assert.notEqual(hash(approvedRunning), hash(assets.run), "corrida original deve permanecer distinta do asset contextual recente");
+assert.equal(new Set(Object.values(assets).map(hash)).size, 5, "os cinco assets contextuais precisam permanecer independentes");
 
 assert.equal(source.assetRevision, "20260924.1");
 assert.equal(source.officialElement.id, "5d684379-9c43-47db-913a-6af9d779e8b2");
 for (const state of states) assert.ok(source.jobs[state], `job Higgsfield ausente para ${state}`);
 
-assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=5\.2\.0-20260925\.2/);
+assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=5\.2\.1-20260926\.1/);
 assert.match(controller, /official-hybrid-media-v5/);
-assert.match(controller, /ASSET_REVISION = "20260925\.2"/);
+assert.match(controller, /ASSET_REVISION = "20260926\.1"/);
 assert.match(controller, /const PRIORITY/);
 assert.match(controller, /warning: 6/);
 assert.match(controller, /function begin\(/);
@@ -115,7 +114,7 @@ assert.match(coverHook, /Gerando arquivo com capa/);
 const precache = sw.slice(sw.indexOf("const ASSETS"), sw.indexOf("const CRITICAL_ASSETS"));
 assert.doesNotMatch(precache, /grcon-mascot-idle-alpha\.webm/, "idle em vídeo não deve ser baixado no precache");
 assert.match(precache, /grcon-mascot-hello-alpha\.webm/);
-for (const state of ["analyzing", "warning", "success", "run"]) {
+for (const state of ["analyzing", "warning", "success"]) {
   assert.doesNotMatch(precache, new RegExp("grcon-mascot-" + state + "-alpha\\.webm"), state + " deve continuar lazy");
   assert.match(sw, new RegExp('"grcon-mascot-' + state + '-alpha\\.webm"'), state + " precisa estar na estratégia HEAVY");
 }
