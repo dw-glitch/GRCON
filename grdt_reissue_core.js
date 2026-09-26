@@ -3,10 +3,10 @@
     if (typeof require !== "function") return null;
     try { return require(path); } catch (_) { return null; }
   };
-  const api = factory(root.TriagemCore || safeRequire("./core.js"), root.GrconHistory || safeRequire("./history_core.js"));
+  const api = factory(root.TriagemCore || safeRequire("./core.js"), root.GrconHistory || safeRequire("./history_core.js"), root.GrconEmission || safeRequire("./emission.js"));
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconGrdtReissueCore = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (Core, History) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Core, History, Emission) {
   "use strict";
 
   const REQUIRED_FIELDS = Object.freeze([
@@ -45,11 +45,29 @@
     const match = text(fileName).match(/\.([A-Z0-9]{1,10})$/i);
     return match ? match[1].toUpperCase() : "";
   }
-  function latestMatch(document, records) {
+  function buildLatestIndex(records) {
+    const index = new Map();
     const ordered = [...(records || [])].sort((left, right) => text(right && right.generatedAt).localeCompare(text(left && left.generatedAt)));
-    for (const record of ordered) {
-      const files = (record && record.files || []).filter((file) => sameDocument(file && file.document, document));
-      if (files.length) return { document, record, files };
+    ordered.forEach((record) => {
+      const grouped = new Map();
+      (record && record.files || []).forEach((file) => {
+        documentKeys(file && file.document).forEach((key) => {
+          if (!grouped.has(key)) grouped.set(key, []);
+          grouped.get(key).push(file);
+        });
+      });
+      grouped.forEach((files, key) => {
+        if (!index.has(key)) index.set(key, { record, files });
+      });
+    });
+    return index;
+  }
+
+  function latestMatch(document, recordsOrIndex) {
+    const index = recordsOrIndex instanceof Map ? recordsOrIndex : buildLatestIndex(recordsOrIndex);
+    for (const key of documentKeys(document)) {
+      const match = index.get(key);
+      if (match) return { document, record: match.record, files: match.files };
     }
     return { document, record: null, files: [] };
   }
@@ -70,20 +88,58 @@
   function missingFields(item) {
     return REQUIRED_FIELDS.filter((field) => !text(item && item[field]));
   }
-  function itemErrors(item) {
-    if (Core && typeof Core.validateEgrdtData === "function") {
-      const errors = [...Core.validateEgrdtData(item || {})];
-      if (!text(item && item.databook)) errors.push("CAMINHO DATABOOK vazio");
-      return errors;
+
+  function fieldForError(message) {
+    const value = norm(message);
+    if (value.startsWith("DOCUMENTO")) return "document";
+    if (value.startsWith("REVISAO")) return "revision";
+    if (value.startsWith("TITULO")) return "title";
+    if (value.startsWith("ARQUIVO")) return "fileName";
+    if (value.startsWith("FORMATO")) return "format";
+    if (value.startsWith("DISCIPLINA")) return "discipline";
+    if (value.startsWith("TIPO DE DOCUMENTO")) return "documentType";
+    if (value.startsWith("PROPOSITO")) return "purpose";
+    if (value.startsWith("CAMINHO DATABOOK")) return "databook";
+    return "";
+  }
+
+  function validationState(item, sourceFile) {
+    const errors = Core && typeof Core.validateEgrdtData === "function"
+      ? [...Core.validateEgrdtData(item || {})]
+      : missingFields(item).map((field) => `${field} não informado`);
+    if (!text(item && item.databook)) errors.push("CAMINHO DATABOOK vazio");
+
+    const originalName = text(sourceFile && (sourceFile.originalName || sourceFile.finalName)) || text(item && item.fileName);
+    if (Core && typeof Core.validateFinalFileName === "function" && text(item && item.fileName) && text(item && item.document) && text(item && item.revision)) {
+      const fileCheck = Core.validateFinalFileName(
+        item.fileName,
+        originalName,
+        item.document,
+        item.revision,
+        text(sourceFile && sourceFile.sheet),
+      );
+      if (!fileCheck.valid) fileCheck.errors.forEach((error) => errors.push(`ARQUIVO: ${error}`));
     }
-    return missingFields(item).map((field) => `${field} não informado`);
+
+    const unique = [...new Set(errors.map(text).filter(Boolean))];
+    const fieldErrors = Object.fromEntries(REQUIRED_FIELDS.map((field) => [field, []]));
+    unique.forEach((error) => {
+      const field = fieldForError(error);
+      if (field) fieldErrors[field].push(error.replace(/^ARQUIVO:\s*/i, ""));
+    });
+    return { errors: unique, fieldErrors };
+  }
+
+  function itemErrors(item, sourceFile) {
+    return validationState(item, sourceFile).errors;
   }
   function rowsForDocuments(documents, records) {
     const rows = [];
     const missingDocuments = [];
     const used = new Set();
+    const latestIndex = buildLatestIndex(records);
     (documents || []).forEach((document) => {
-      const match = latestMatch(document, records);
+      const match = latestMatch(document, latestIndex);
       if (!match.record) {
         missingDocuments.push(document);
         return;
@@ -93,6 +149,7 @@
         const key = `${text(match.record.id)}|${norm(item.document)}|${norm(item.fileName)}|${fileIndex}`;
         if (used.has(key)) return;
         used.add(key);
+        const validation = validationState(item, file);
         rows.push({
           id: key,
           requestedDocument: document,
@@ -101,50 +158,66 @@
           sourceGeneratedAt: text(match.record.generatedAt),
           item,
           sourceFile: { ...file },
+          fileNameAuto: true,
           missing: missingFields(item),
-          errors: itemErrors(item),
+          errors: validation.errors,
+          fieldErrors: validation.fieldErrors,
         });
       });
     });
     return { rows, missingDocuments };
   }
+
   function updateRow(row, field, value) {
     if (!REQUIRED_FIELDS.includes(field)) return row;
-    const item = { ...(row && row.item || {}), [field]: text(value) };
-    return { ...row, item, missing: missingFields(item), errors: itemErrors(item) };
-  }
-  function groupRows(rows, limit) {
-    const size = Math.max(1, Math.min(48, Number(limit) || 48));
-    const buckets = new Map();
-    (rows || []).forEach((row) => {
-      const discipline = text(row && row.item && row.item.discipline) || "SEM DISCIPLINA";
-      const key = norm(discipline);
-      if (!buckets.has(key)) buckets.set(key, { discipline, rows: [] });
-      buckets.get(key).rows.push(row);
-    });
-    const groups = [];
-    [...buckets.values()].sort((a, b) => norm(a.discipline).localeCompare(norm(b.discipline), "pt-BR")).forEach((bucket) => {
-      const count = Math.ceil(bucket.rows.length / size);
-      for (let start = 0; start < bucket.rows.length; start += size) {
-        const slice = bucket.rows.slice(start, start + size);
-        groups.push({
-          number: groups.length + 1,
-          discipline: bucket.discipline,
-          disciplineBatchNumber: Math.floor(start / size) + 1,
-          disciplineBatchCount: count,
-          rows: slice,
-          items: slice.map((row) => ({ ...row.item })),
-        });
+    const previous = row && row.item || {};
+    const item = { ...previous };
+    let fileNameAuto = row && row.fileNameAuto !== false;
+    if (field === "revision") {
+      const raw = text(value);
+      const normalized = Core && typeof Core.normalizeRevision === "function" ? Core.normalizeRevision(raw) : raw;
+      item.revision = normalized || raw;
+      if (fileNameAuto && Core && typeof Core.proposedFileName === "function") {
+        const sourceName = text(row && row.sourceFile && (row.sourceFile.originalName || row.sourceFile.finalName)) || text(previous.fileName);
+        item.fileName = Core.proposedFileName(
+          sourceName,
+          item.document,
+          item.revision,
+          text(row && row.sourceFile && row.sourceFile.sheet),
+        );
       }
-    });
-    return groups;
+    } else {
+      item[field] = text(value);
+      if (field === "fileName") fileNameAuto = false;
+    }
+    const validation = validationState(item, row && row.sourceFile);
+    return {
+      ...row,
+      item,
+      fileNameAuto,
+      missing: missingFields(item),
+      errors: validation.errors,
+      fieldErrors: validation.fieldErrors,
+    };
   }
+
+  function groupRows(rows, options) {
+    if (!Emission || typeof Emission.groupEgrdtRows !== "function") {
+      throw new Error("Motor compartilhado de loteamento de eGRDT indisponível.");
+    }
+    return Emission.groupEgrdtRows(rows, typeof options === "number" ? { limit: options, mode: "discipline" } : options);
+  }
+
   function validateRows(rows) {
     const source = rows || [];
+    const normalized = source.map((row) => {
+      const validation = validationState(row && row.item, row && row.sourceFile);
+      return row && row.errors && row.fieldErrors ? row : { ...row, errors: validation.errors, fieldErrors: validation.fieldErrors };
+    });
     return {
-      valid: source.length > 0 && source.every((row) => !(row.errors || itemErrors(row.item)).length),
-      rowCount: source.length,
-      incomplete: source.filter((row) => (row.errors || itemErrors(row.item)).length),
+      valid: normalized.length > 0 && normalized.every((row) => !(row.errors || []).length),
+      rowCount: normalized.length,
+      incomplete: normalized.filter((row) => (row.errors || []).length),
     };
   }
   function sharedPersistenceStatus(records, storedRecords) {
@@ -159,6 +232,6 @@
 
   return Object.freeze({
     REQUIRED_FIELDS, text, norm, documentKeys, sameDocument, parseDocuments, extensionFormat,
-    latestMatch, itemFromFile, missingFields, itemErrors, rowsForDocuments, updateRow, groupRows, validateRows, sharedPersistenceStatus,
+    buildLatestIndex, latestMatch, itemFromFile, missingFields, fieldForError, validationState, itemErrors, rowsForDocuments, updateRow, groupRows, validateRows, sharedPersistenceStatus,
   });
 });
