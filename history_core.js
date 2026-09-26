@@ -17,6 +17,7 @@
   function pad(value) { return _U.pad ? _U.pad(value, 2) : String(value).padStart(2, "0"); }
   function byteSize(value) { return _U.byteSize ? _U.byteSize(value) : (function() { try { return unescape(encodeURIComponent(String(value))).length; } catch (_) { console.debug("[HistoryCore] byteSize fallback:", _); return String(value).length; } })(); }
   function storageOf(storage) { return _U.storageOf ? _U.storageOf(storage) : (storage || (typeof localStorage !== "undefined" ? localStorage : null)); }
+  function normalizeBatchMode(value) { return text(value) === "limit-only" ? "limit-only" : "discipline"; }
 
   // Famílias documentais usadas no filtro do histórico. A classificação segue
   // as mesmas convenções da triagem e também funciona em registros antigos,
@@ -204,6 +205,7 @@
       egrdtNumber: text(record && record.egrdtNumber),
       generatedAt: normalizeGeneratedAt(record && record.generatedAt),
       outputType: text(record && record.outputType) || "eGRDT final",
+      batchMode: normalizeBatchMode(record && record.batchMode),
       ldName: text(record && record.ldName),
       sourceName: text(record && record.sourceName),
       reissueSources: Array.isArray(record && record.reissueSources) ? record.reissueSources.map(text).filter(Boolean) : [],
@@ -419,6 +421,7 @@
       egrdtNumber,
       generatedAt,
       outputType: info.outputType,
+      batchMode: normalizeBatchMode(info.batchMode),
       ldName: info.ldName,
       sourceName: info.sourceName,
       reservationRequestId: text(file && file.official && file.official.requestId),
@@ -520,5 +523,5 @@
     };
   }
 
-  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
+  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizeBatchMode, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
 });
