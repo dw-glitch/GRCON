@@ -25,14 +25,20 @@
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
   const EGRDT_BATCH_LIMIT_KEY = "grcon.egrdt.batch-limit.v1";
+  const EGRDT_BATCH_MODE_KEY = "grcon.egrdt.batch-mode.v1";
+  const DEFAULT_EGRDT_BATCH_MODE = "discipline";
 
-  // Sem limite máximo imposto pelo aplicativo: o usuário escolhe livremente
-  // quantos documentos entram em cada eGRDT. Só se garante um inteiro >= 1.
   function normalizeEgrdtBatchLimit(value) {
     if (value === null || value === undefined || String(value).trim() === "") return DEFAULT_ITEMS_PER_EGRDT;
     const parsed = Math.trunc(Number(value));
     if (!Number.isFinite(parsed)) return DEFAULT_ITEMS_PER_EGRDT;
-    return Math.max(1, parsed);
+    return Math.max(1, Math.min(48, parsed));
+  }
+
+  function normalizeEgrdtBatchMode(value) {
+    return E && typeof E.normalizeBatchMode === "function"
+      ? E.normalizeBatchMode(value)
+      : value === "limit-only" ? "limit-only" : DEFAULT_EGRDT_BATCH_MODE;
   }
 
   function readEgrdtBatchLimit() {
@@ -40,8 +46,17 @@
     catch (_) { console.debug("[App] readEgrdtBatchLimit:", _); return DEFAULT_ITEMS_PER_EGRDT; }
   }
 
+  function readEgrdtBatchMode() {
+    try { return normalizeEgrdtBatchMode(localStorage.getItem(EGRDT_BATCH_MODE_KEY)); }
+    catch (_) { console.debug("[App] readEgrdtBatchMode:", _); return DEFAULT_EGRDT_BATCH_MODE; }
+  }
+
   function currentEgrdtBatchLimit() {
     return normalizeEgrdtBatchLimit(state && state.egrdtBatchLimit);
+  }
+
+  function currentEgrdtBatchMode() {
+    return normalizeEgrdtBatchMode(state && state.egrdtBatchMode);
   }
   const LARGE = window.GrconLargeInput;
   let PerformanceCore = window.GrconPerformance;
@@ -116,6 +131,7 @@
     liveProgress: { stage: "", completed: 0, total: 0, percent: 0 },
     cancelled: false,
     egrdtBatchLimit: readEgrdtBatchLimit(),
+    egrdtBatchMode: readEgrdtBatchMode(),
     groupByStatus: false,
     manualForceInclude: new Set(), // índices incluídos manualmente pelo operador (mesmo sem decisão READY)
   };
@@ -364,6 +380,7 @@
       ldName: ldDisplayName(),
       sourceName: relationSourceLabel(),
       generatedAt: info.generatedAt,
+      batchMode: currentEgrdtBatchMode(),
     });
   }
 
@@ -646,6 +663,7 @@
     cancelProcessing: $("#cancel-processing"),
     clearLdCache: $("#clear-ld-cache"),
     egrdtBatchLimit: $("#egrdt-batch-limit"),
+    egrdtBatchMode: $("#egrdt-batch-mode"),
     egrdtBatchSave: $("#egrdt-batch-limit-save"),
     egrdtBatchStatus: $("#egrdt-batch-limit-status"),
     egrdtBatchPolicyText: $("#egrdt-batch-policy-text"),
@@ -742,28 +760,46 @@
   }
   window.GrconNotify = showToast;
 
+  function batchModeLabel(mode) {
+    return normalizeEgrdtBatchMode(mode) === "limit-only"
+      ? "Ordem da seleção · disciplinas podem ser misturadas"
+      : "Separação por disciplina";
+  }
+
   function renderEgrdtBatchSettings() {
     const limit = currentEgrdtBatchLimit();
+    const mode = currentEgrdtBatchMode();
     if (els.egrdtBatchLimit && document.activeElement !== els.egrdtBatchLimit) els.egrdtBatchLimit.value = String(limit);
-    if (els.egrdtBatchStatus) els.egrdtBatchStatus.textContent = `Separação por disciplina · até ${limit} documento${limit === 1 ? "" : "s"} por eGRDT`;
-    if (els.egrdtBatchPolicyText) els.egrdtBatchPolicyText.textContent = `Por disciplina · até ${limit} por eGRDT`;
-    if (els.p1BatchLimitNote) els.p1BatchLimitNote.textContent = `Cada disciplina terá sua própria eGRDT, limitada a ${limit} documento${limit === 1 ? "" : "s"}.`;
+    if (els.egrdtBatchMode && document.activeElement !== els.egrdtBatchMode) els.egrdtBatchMode.value = mode;
+    const label = batchModeLabel(mode);
+    if (els.egrdtBatchStatus) els.egrdtBatchStatus.textContent = `${label} · até ${limit} documento${limit === 1 ? "" : "s"} por eGRDT`;
+    if (els.egrdtBatchPolicyText) els.egrdtBatchPolicyText.textContent = `${mode === "limit-only" ? "Ordem da seleção" : "Por disciplina"} · até ${limit} por eGRDT`;
+    if (els.p1BatchLimitNote) {
+      els.p1BatchLimitNote.textContent = mode === "limit-only"
+        ? `Os documentos manterão a ordem da seleção e serão divididos somente ao atingir ${limit} item${limit === 1 ? "" : "s"} por eGRDT.`
+        : `Cada disciplina terá sua própria eGRDT, limitada a ${limit} documento${limit === 1 ? "" : "s"}.`;
+    }
   }
 
   function saveEgrdtBatchLimit() {
     const raw = els.egrdtBatchLimit ? els.egrdtBatchLimit.value : state.egrdtBatchLimit;
     const parsed = Math.trunc(Number(raw));
-    if (!Number.isInteger(parsed) || parsed < 1) {
-      showToast("Informe uma quantidade inteira de pelo menos 1 documento.", "error");
+    const mode = normalizeEgrdtBatchMode(els.egrdtBatchMode ? els.egrdtBatchMode.value : state.egrdtBatchMode);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 48) {
+      showToast("Informe uma quantidade inteira entre 1 e 48 documentos por eGRDT.", "error");
       renderEgrdtBatchSettings();
       return false;
     }
     state.egrdtBatchLimit = parsed;
-    try { localStorage.setItem(EGRDT_BATCH_LIMIT_KEY, String(parsed)); } catch (_) { console.debug("[App] configuração somente nesta sessão:", _); /* configuração disponível somente nesta sessão */ }
+    state.egrdtBatchMode = mode;
+    try {
+      localStorage.setItem(EGRDT_BATCH_LIMIT_KEY, String(parsed));
+      localStorage.setItem(EGRDT_BATCH_MODE_KEY, mode);
+    } catch (_) { console.debug("[App] configuração somente nesta sessão:", _); /* configuração disponível somente nesta sessão */ }
     state.manualEgrdtSequences = [];
     renderEgrdtBatchSettings();
     renderAll();
-    showToast(`Cada disciplina será separada em eGRDTs de até ${parsed} documento${parsed === 1 ? "" : "s"}.`, "success");
+    showToast(`${batchModeLabel(mode)} · limite de ${parsed} documento${parsed === 1 ? "" : "s"} por eGRDT.`, "success");
     return true;
   }
 
@@ -2291,7 +2327,7 @@
       meta: `${row.document} · revisão ${row.revision || "—"}`,
     })));
     const previewPlan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
-    const previewGroups = previewPlan.errors.length ? [] : E.splitPlan(previewPlan, currentEgrdtBatchLimit());
+    const previewGroups = previewPlan.errors.length ? [] : E.splitPlan(previewPlan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
     const batchCount = Math.max(1, previewGroups.length || Math.ceil(items.length / currentEgrdtBatchLimit()));
     const sequences = suggestedEgrdtSequences(batchCount);
     const officialNumber = batchCount === 1
@@ -2385,7 +2421,7 @@
       return physicalOnly ? Boolean(row.files && row.files.length) : Boolean(rowOutputSources(row).length);
     }));
     const plan = E.createPlan(state.results, selection, { manualForceIndices: state.manualForceInclude });
-    const groups = plan.errors.length ? [] : E.splitPlan(plan, currentEgrdtBatchLimit());
+    const groups = plan.errors.length ? [] : E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
     const suggested = groups.length ? suggestedEgrdtSequences(groups.length) : [];
     return {
       valid: plan.errors.length === 0 && groups.length > 0,
@@ -2393,6 +2429,7 @@
       warnings: plan.warnings || [],
       totalItems: plan.entries.length,
       limit: currentEgrdtBatchLimit(),
+      batchMode: currentEgrdtBatchMode(),
       count: groups.length,
       disciplineCount: new Set(groups.map((group) => C.norm(group.discipline))).size,
       groups: groups.map((group, index) => ({
@@ -2414,11 +2451,21 @@
     getLimit() { return currentEgrdtBatchLimit(); },
     setLimit(value) {
       const parsed = normalizeEgrdtBatchLimit(value);
-      if (Number(value) !== parsed) throw new Error("Informe uma quantidade inteira de pelo menos 1 documento.");
+      if (Number(value) !== parsed) throw new Error("Informe uma quantidade inteira entre 1 e 48 documentos.");
       state.egrdtBatchLimit = parsed;
       try { localStorage.setItem(EGRDT_BATCH_LIMIT_KEY, String(parsed)); } catch (_) { console.debug("[App] setLimit storage:", _); }
       renderEgrdtBatchSettings();
       return parsed;
+    },
+    getMode() { return currentEgrdtBatchMode(); },
+    setMode(value) {
+      const mode = normalizeEgrdtBatchMode(value);
+      state.egrdtBatchMode = mode;
+      try { localStorage.setItem(EGRDT_BATCH_MODE_KEY, mode); } catch (_) { console.debug("[App] setMode storage:", _); }
+      state.manualEgrdtSequences = [];
+      renderEgrdtBatchSettings();
+      renderAll();
+      return mode;
     },
     preview(mode) { return batchPlanPreview(mode); },
     validate(values, amount) { return validateManualEgrdtSequences(values, amount); },
@@ -4284,10 +4331,16 @@
     els.selectAllReady.checked = selectableIndices.length > 0 && selectableIndices.every((index) => state.selected.has(index));
     els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
-    const selectedBatchCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
+    const selectedItemCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + amount, 0);
+    const selectedBatchCount = currentEgrdtBatchMode() === "limit-only"
+      ? Math.ceil(selectedItemCount / currentEgrdtBatchLimit())
+      : [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
     const selectedDisciplineCount = selectedItemsByDiscipline.size;
     const manualRevisionSelectedCount = manuallyAlteredRevisionCount(state.selected);
-    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}${manualRevisionSelectedCount ? ` · ${manualRevisionSelectedCount.toLocaleString("pt-BR")} revisão${manualRevisionSelectedCount === 1 ? "" : "ões"} alterada${manualRevisionSelectedCount === 1 ? "" : "s"} manualmente` : ""}`;
+    const distributionLabel = currentEgrdtBatchMode() === "limit-only"
+      ? "ordem da seleção"
+      : `${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"}`;
+    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${distributionLabel} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}${manualRevisionSelectedCount ? ` · ${manualRevisionSelectedCount.toLocaleString("pt-BR")} revisão${manualRevisionSelectedCount === 1 ? "" : "ões"} alterada${manualRevisionSelectedCount === 1 ? "" : "s"} manualmente` : ""}`;
     window.dispatchEvent(new CustomEvent("grcon:ui-update"));
   }
 
@@ -5045,7 +5098,7 @@
     try {
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(prepared, currentEgrdtBatchLimit());
+      const groups = E.splitPlan(prepared, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = previewGenerated.length === 1 ? previewGenerated[0].fileName : PackageLayout.archiveName(previewGenerated, timestamp);
@@ -5161,7 +5214,7 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(plan, currentEgrdtBatchLimit());
+      const groups = E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
@@ -5212,6 +5265,7 @@
   function buildBatchSummaryText(generated) {
     const lines = [
       "GRCON — ORGANIZAÇÃO DOS LOTES PARA POSTAGEM NO SIGEM",
+      `Distribuição aplicada: ${batchModeLabel(currentEgrdtBatchMode())}.`,
       `Limite operacional aplicado: ${currentEgrdtBatchLimit()} documentos por eGRDT.`,
       `Total de eGRDTs: ${generated.length}.`,
       "",
@@ -5219,7 +5273,7 @@
     generated.forEach((file, index) => {
       lines.push(`${index + 1}. ${file.official.baseName}`);
       lines.push(`   Disciplina: ${file.group.discipline || "NÃO INFORMADA"}`);
-      if (file.group.disciplineBatchCount > 1) lines.push(`   Divisão da disciplina: ${file.group.disciplineBatchNumber} de ${file.group.disciplineBatchCount}`);
+      if (file.group.batchMode === "discipline" && file.group.disciplineBatchCount > 1) lines.push(`   Divisão da disciplina: ${file.group.disciplineBatchNumber} de ${file.group.disciplineBatchCount}`);
       lines.push(`   Arquivos na eGRDT: ${file.group.entries.length}`);
       lines.push(`   Arquivo eGRDT: ${file.fileName}`);
       lines.push(`   Pasta: ${file.official.baseName}`);
@@ -5270,7 +5324,7 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(plan, currentEgrdtBatchLimit());
+      const groups = E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
@@ -5719,6 +5773,7 @@
     els.egrdtBatchLimit.addEventListener("keydown", (event) => { if (event.key === "Enter") saveEgrdtBatchLimit(); });
     els.egrdtBatchLimit.addEventListener("blur", () => renderEgrdtBatchSettings());
   }
+  if (els.egrdtBatchMode) els.egrdtBatchMode.addEventListener("change", saveEgrdtBatchLimit);
   if (els.clearLdCache) els.clearLdCache.addEventListener("click", async () => {
     try {
       await ensureRuntime("performance");
@@ -5843,6 +5898,7 @@
       memory: PerformanceCore ? PerformanceCore.memorySnapshot() : null,
       ldIntegrity: state.ldIntegrity ? { ...state.ldIntegrity } : null,
       egrdtBatchLimit: currentEgrdtBatchLimit(),
+      egrdtBatchMode: currentEgrdtBatchMode(),
     }),
     cancel: () => PerformanceCore && PerformanceCore.cancelAll(),
     clearLdCache: () => PerformanceCore && PerformanceCore.clearLdCache(),
