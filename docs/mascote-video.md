@@ -47,7 +47,7 @@ A regra visual é simples:
 
 Os aliases como `searching-files`, `checking-document`, `uploading`, `generating-grdt`, `checking-ld` e `loading` continuam convergindo para a ação de análise quando não há um vídeo dedicado.
 
-Os arquivos `grcon-mascot-idle-alpha.webm`, `grcon-mascot-run-alpha.webm`, `grcon-mascot-processing-alpha.webm` e `grcon-mascot-wave-alpha.webm` permanecem versionados para histórico/compatibilidade, mas não são usados para inventar movimento do sprite.
+Os arquivos `grcon-mascot-idle-alpha.webm`, `grcon-mascot-processing-alpha.webm` e `grcon-mascot-wave-alpha.webm` permanecem versionados para histórico/compatibilidade, mas não são usados para inventar movimento do sprite. O antigo `grcon-mascot-run-alpha.webm`, que duplicava a corrida e ainda carregava rastros do cenário, foi removido; a corrida aprovada usa exclusivamente `grcon-mascot-running-alpha.webm`.
 
 ## Idle realmente estático
 

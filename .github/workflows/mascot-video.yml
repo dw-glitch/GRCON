@@ -67,6 +67,8 @@ jobs:
       - name: Gerar bundles React usados pela validação em navegador
         run: npm run build
       - run: node tests/grcon_mascot_video.cjs && node tests/grcon_mascot_runner.cjs && node tests/grcon_mascot_success_pilot.cjs
+      - name: Decodificar VP9 e comprovar transparência real
+        run: node scripts/validar-mascote-alpha.cjs
       - name: Instalar navegador de validação
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
