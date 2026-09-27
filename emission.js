@@ -442,11 +442,42 @@
     return [...new Set(errors)];
   }
 
-  function splitPlan(plan, size) {
-    const limit = Math.max(1, Number(size) || 48);
+  function normalizeBatchMode(value) {
+    return text(value).toLowerCase() === "limit-only" ? "limit-only" : "discipline";
+  }
+
+  function splitPlan(plan, size, mode) {
+    const limit = Math.max(1, Math.min(48, Math.trunc(Number(size) || 48)));
+    const batchMode = normalizeBatchMode(mode);
+    const source = (plan && plan.entries || []).map((entry, originalIndex) => ({ entry, originalIndex }));
     const groups = [];
+
+    if (batchMode === "limit-only") {
+      const total = Math.ceil(source.length / limit);
+      for (let start = 0; start < source.length; start += limit) {
+        const slice = source.slice(start, start + limit);
+        const entries = slice.map((item) => item.entry);
+        const disciplines = [...new Set(entries.map((entry) => text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA"))];
+        groups.push({
+          entries,
+          items: entries.map((entry) => entry.item),
+          number: groups.length + 1,
+          startIndex: start,
+          endIndex: start + entries.length - 1,
+          originalIndices: slice.map((item) => item.originalIndex),
+          limit,
+          batchMode,
+          discipline: disciplines.length === 1 ? disciplines[0] : "MISTO",
+          disciplines,
+          disciplineBatchNumber: groups.length + 1,
+          disciplineBatchCount: total,
+        });
+      }
+      return groups;
+    }
+
     const byDiscipline = new Map();
-    (plan.entries || []).forEach((entry, originalIndex) => {
+    source.forEach(({ entry, originalIndex }) => {
       const discipline = text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA";
       const disciplineKey = norm(discipline);
       if (!byDiscipline.has(disciplineKey)) byDiscipline.set(disciplineKey, { discipline, entries: [] });
@@ -467,7 +498,9 @@
           endIndex: outputIndex + entries.length - 1,
           originalIndices: slice.map((item) => item.originalIndex),
           limit,
+          batchMode,
           discipline: bucket.discipline,
+          disciplines: [bucket.discipline],
           disciplineBatchNumber: Math.floor(start / limit) + 1,
           disciplineBatchCount,
         });
@@ -499,5 +532,5 @@
     }));
   }
 
-  return { createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, splitPlan, manifestRows };
+  return { createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, normalizeBatchMode, splitPlan, manifestRows };
 });

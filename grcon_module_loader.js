@@ -47,7 +47,7 @@
       "requests_taxonomy_core.js", "requests_app.js",
       "react-dist/consultas-app.js",
     ],
-    "grdt-reissue": ["xlsx", "zip", "sigem_posting_core.js", "grdt_reissue_core.js", "grdt_reissue_app.js"],
+    "grdt-reissue": ["xlsx", "zip", "sigem_posting_core.js", "emission.js", "grdt_reissue_core.js", "grdt_reissue_app.js"],
     // Hub estático: não carrega dependências até o operador escolher uma ferramenta.
     "additional-tools": [],
     // O combinador é isolado do banco. A interface é uma ilha React; o Core
