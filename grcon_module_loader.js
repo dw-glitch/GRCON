@@ -239,6 +239,11 @@
       const node = document.getElementById(id);
       if (node) node.hidden = key !== view;
     });
+    const workspace = document.querySelector("main.workspace");
+    if (workspace) workspace.scrollTop = 0;
+    const scrollingElement = document.scrollingElement;
+    if (scrollingElement) scrollingElement.scrollTop = 0;
+    if (root.scrollY) root.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.querySelectorAll("[data-grcon-view]").forEach((button) => {
       const nestedToolView = view === "pdf-tools" || view === "cover-document";
       const active = button.dataset.grconView === view

@@ -447,7 +447,8 @@
   }
 
   function splitPlan(plan, size, mode) {
-    const limit = Math.max(1, Math.min(48, Math.trunc(Number(size) || 48)));
+    const parsedLimit = Math.trunc(Number(size));
+    const limit = Number.isSafeInteger(parsedLimit) && parsedLimit >= 1 ? parsedLimit : 48;
     const batchMode = normalizeBatchMode(mode);
     const source = (plan && plan.entries || []).map((entry, originalIndex) => ({ entry, originalIndex }));
     const groups = [];

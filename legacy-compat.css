@@ -337,7 +337,7 @@ body.p2-dark .drawer-hint { color: #93a5b3; }
 .toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; max-width: 440px; padding: 12px 15px; border-radius: 7px; color: white; background: #26384c; box-shadow: 0 12px 30px rgba(13,31,51,.2); font-size: 11px; font-weight: 700; transform: translateY(18px); opacity: 0; pointer-events: none; transition: .2s ease; }
 .toast.show { transform: translateY(0); opacity: 1; }
 .toast.success { background: var(--green); }
-.toast.warn { background: #98600a; }
+.toast.warn, .toast.warning { background: #98600a; }
 .toast.error { background: var(--red); }
 
 .app-shell { max-width: 1700px; display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; margin: 0 auto; }
@@ -894,7 +894,7 @@ tbody tr:focus-within td { background: #e8f3fa; }
 }
 .toast.success { background: var(--p2-success); }
 .toast.error { background: var(--p2-danger); }
-.toast.warn { background: var(--p2-warning); }
+.toast.warn, .toast.warning { background: var(--p2-warning); }
 
 .p1-confirm-dialog { max-width: min(560px, calc(100vw - 32px)); }
 .p1-confirm-dialog h2 { font-size: 20px; }

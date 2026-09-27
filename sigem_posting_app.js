@@ -7,7 +7,7 @@
   const Emission = window.GrconEmission;
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.42.0";
+    || "5.43.1";
   if (!Posting || !History) return;
 
   const $ = (selector, root) => (root || document).querySelector(selector);
@@ -114,6 +114,7 @@
   function baselineAudit(record) {
     const checks = [];
     const files = record.files || [];
+    const configuredLimit = Number.isSafeInteger(Number(record.batchLimit)) && Number(record.batchLimit) >= 1 ? Number(record.batchLimit) : 48;
     const expectedFileName = `${record.egrdtNumber}.xls`;
     const numberValid = /^0130870-C1O-PGV-G-\d{4}-\d{4}\s-\seGRDT$/i.test(text(record.egrdtNumber));
     checks.push(check(
@@ -133,11 +134,11 @@
     checks.push(check(
       "FILES",
       "Arquivos relacionados",
-      files.length && files.length <= 48 ? "ok" : "error",
+      files.length && files.length <= configuredLimit ? "ok" : "error",
       !files.length
         ? "Nenhum arquivo foi relacionado a esta eGRDT."
-        : files.length > 48
-          ? `${files.length} linhas relacionadas; o limite operacional é 48.`
+        : files.length > configuredLimit
+          ? `${files.length} linhas relacionadas; o limite configurado para este lote é ${configuredLimit}.`
           : `${files.length} arquivo(s) devem aparecer como linha(s) na eGRDT.`,
     ));
 

@@ -29,8 +29,8 @@ check("postingRecord consulta Maps e não executa find sobre toda a fila", () =>
   assert.doesNotMatch(block, /\.find\(/);
 });
 
-check("lista grande usa carregamento incremental de 200 registros", () => {
-  assert.match(hook, /LIST_PAGE_SIZE = 200/);
+check("lista grande usa carregamento incremental de 50 registros", () => {
+  assert.match(hook, /LIST_PAGE_SIZE = 50/);
   assert.match(hook, /filtered\.slice\(0, visibleLimit\)/);
   assert.match(app, /data-history-load-more/);
 });

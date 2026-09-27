@@ -180,7 +180,8 @@ function pwBase(records, fileName = "PW.csv", importedAt = "2026-09-10T08:35:00.
   assert.doesNotMatch(bootstrap, /sigem_pw_history_postmerge\.js/);
   assert.doesNotMatch(bootstrap, /sigem_pw_history_runtime_fix\.js/);
   assert.match(storageBootstrap, /operational_persistence_v2\.js/);
-  assert.match(sw, /grcon-v5\.42\.0-mascot-pilot1-egrdt-teams-notification1/);
+  const { version } = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
+  assert.ok(sw.includes(`grcon-v${version}-mascot-pilot1-egrdt-teams-notification1`));
   assert.match(sw, /"operational_persistence_v2\.js"/);
   assert.match(sw, /"sigem_pw_history_core\.js"/);
   assert.match(sw, /"sigem_pw_history_management\.js"/);

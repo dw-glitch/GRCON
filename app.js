@@ -20,19 +20,18 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.42.0";
+  const APP_VERSION = "5.43.1";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
-  const MAX_ITEMS_PER_EGRDT = 48;
   const EGRDT_BATCH_LIMIT_KEY = "grcon.egrdt.batch-limit.v1";
   const EGRDT_BATCH_MODE_KEY = "grcon.egrdt.batch-mode.v1";
 
   function normalizeEgrdtBatchLimit(value) {
     if (value === null || value === undefined || String(value).trim() === "") return DEFAULT_ITEMS_PER_EGRDT;
     const parsed = Math.trunc(Number(value));
-    if (!Number.isFinite(parsed)) return DEFAULT_ITEMS_PER_EGRDT;
-    return Math.max(1, Math.min(MAX_ITEMS_PER_EGRDT, parsed));
+    if (!Number.isSafeInteger(parsed)) return DEFAULT_ITEMS_PER_EGRDT;
+    return Math.max(1, parsed);
   }
 
   function normalizeEgrdtBatchMode(value) {
@@ -58,7 +57,7 @@
   }
 
   function egrdtBatchModeLabel(mode) {
-    return normalizeEgrdtBatchMode(mode) === "limit-only" ? "Somente limite de 48" : "Separar por disciplina";
+    return normalizeEgrdtBatchMode(mode) === "limit-only" ? "Somente por limite" : "Separar por disciplina";
   }
   const LARGE = window.GrconLargeInput;
   let PerformanceCore = window.GrconPerformance;
@@ -383,6 +382,7 @@
       sourceName: relationSourceLabel(),
       generatedAt: info.generatedAt,
       batchMode: currentEgrdtBatchMode(),
+      batchLimit: currentEgrdtBatchLimit(),
     });
   }
 
@@ -782,8 +782,8 @@
   function saveEgrdtBatchLimit() {
     const raw = els.egrdtBatchLimit ? els.egrdtBatchLimit.value : state.egrdtBatchLimit;
     const parsed = Math.trunc(Number(raw));
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_ITEMS_PER_EGRDT) {
-      showToast("Informe uma quantidade inteira entre 1 e 48 documentos.", "error");
+    if (!Number.isSafeInteger(parsed) || parsed < 1) {
+      showToast("Informe uma quantidade inteira maior ou igual a 1.", "error");
       renderEgrdtBatchSettings();
       return false;
     }
@@ -2453,8 +2453,8 @@
     getMode() { return currentEgrdtBatchMode(); },
     setLimit(value) {
       const parsed = normalizeEgrdtBatchLimit(value);
-      if (!Number.isInteger(Number(value)) || Number(value) < 1 || Number(value) > MAX_ITEMS_PER_EGRDT || Number(value) !== parsed) {
-        throw new Error("Informe uma quantidade inteira entre 1 e 48 documentos.");
+      if (!Number.isSafeInteger(Number(value)) || Number(value) < 1 || Number(value) !== parsed) {
+        throw new Error("Informe uma quantidade inteira maior ou igual a 1.");
       }
       state.egrdtBatchLimit = parsed;
       try { localStorage.setItem(EGRDT_BATCH_LIMIT_KEY, String(parsed)); } catch (_) { console.debug("[App] setLimit storage:", _); }
@@ -5263,7 +5263,7 @@
     const lines = [
       "GRCON — ORGANIZAÇÃO DOS LOTES PARA POSTAGEM NO SIGEM",
       `Modo de distribuição: ${egrdtBatchModeLabel(currentEgrdtBatchMode())}.`,
-      `Limite operacional aplicado: ${currentEgrdtBatchLimit()} documentos por eGRDT (máximo absoluto: 48).`,
+      `Limite configurado pelo usuário: ${currentEgrdtBatchLimit()} documentos por eGRDT.`,
       `Total de eGRDTs: ${generated.length}.`,
       "",
     ];

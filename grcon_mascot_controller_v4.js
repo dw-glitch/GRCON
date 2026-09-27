@@ -30,6 +30,7 @@
   });
   const CONTEXTS = Object.freeze([
     ["control", "#grdt-module", "default"],
+    ["grdt-reissue", "#grdt-reissue-module", "egrdt"],
     ["requests", "#requests-module", "search"],
     ["pdf-tools", "#pdf-tools-module", "report"],
     ["cover-document", "#cover-document-module", "check"],
@@ -590,10 +591,11 @@
 
   function warning(options) {
     const config = typeof options === "string" ? { message: options } : (options || {});
+    const message = Object.prototype.hasOwnProperty.call(config, "message") ? config.message : "Confira esta informação.";
     const duration = Math.max(1500, Number(config.duration) || 3600);
     currentTarget = resolveTarget(config.target);
     warningUntil = Date.now() + duration;
-    applyState("warning", { force: true, message: config.message || "Confira esta informação.", source: config.source || "warning" });
+    applyState("warning", { force: true, message, source: config.source || "warning" });
     root.clearTimeout(warningTimer);
     warningTimer = root.setTimeout(() => {
       warningTimer = 0;
@@ -607,13 +609,14 @@
 
   function success(options) {
     const config = options || {};
+    const message = Object.prototype.hasOwnProperty.call(config, "message") ? config.message : "Operação concluída.";
     if (Date.now() < warningUntil) {
       pendingSuccess = true;
       return "warning";
     }
     pendingSuccess = false;
     currentTarget = resolveTarget(config.target);
-    applyState("success", { force: true, message: config.message || "Operação concluída.", source: config.source || "success" });
+    applyState("success", { force: true, message, source: config.source || "success" });
     return "success";
   }
 
@@ -799,12 +802,12 @@
     const kind = String(detail.kind || "").toLowerCase();
     if (kind === "success") {
       if (legacyOperation || operations.size) pendingSuccess = true;
-      else success({ message: detail.message || "Operação concluída.", source: "notification" });
+      else success({ message: "", source: "notification" });
       return;
     }
     if (kind === "warn" || kind === "warning" || kind === "error") {
       const target = detail.target || inferWarningTarget(detail.message);
-      warning({ target, message: detail.message || "Confira esta informação.", source: "notification" });
+      warning({ target, message: "", source: "notification" });
     }
   }
 

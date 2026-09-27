@@ -1,8 +1,8 @@
-/* GRCON — corrida horizontal do mascote em faixa estrutural fora do workspace. */
+/* GRCON — corrida horizontal do mascote sobre o workspace (única sobreposição autorizada). */
 (function (root) {
   "use strict";
 
-  const VERSION = "6.0.0";
+  const VERSION = "6.2.0";
   const ASSET_REVISION = "20260917.1";
   const STYLE_ID = "grcon-mascot-runner-style";
   const STRIP_ID = "grcon-mascot-activity-strip";
@@ -27,15 +27,15 @@
     style.id = STYLE_ID;
     style.textContent = [
       "#" + STRIP_ID + "[hidden]{display:none!important}",
-      "#" + STRIP_ID + "{position:relative;z-index:20;width:100%;height:clamp(82px,7.8vw,108px);overflow:hidden;pointer-events:none;user-select:none;background:transparent;border:0;border-bottom:1px solid color-mix(in srgb,var(--border-1,#d8e1e7) 74%,transparent);box-shadow:none;contain:layout style paint}",
-      "#" + STRIP_ID + " ." + INNER_CLASS + "{position:relative;width:min(100%,var(--content-max,1920px));height:100%;margin-inline:auto;overflow:hidden;pointer-events:none}",
-      "#" + STRIP_ID + " ." + TRACK_CLASS + "{position:absolute;left:0;bottom:0;width:clamp(150px,16vw,220px);height:100%;transform:translate3d(-120%,0,0);will-change:transform;pointer-events:none}",
+      "#" + STRIP_ID + "{position:fixed;z-index:320;inset:0;width:100%;height:100%;overflow:hidden;pointer-events:none;user-select:none;background:transparent;border:0;box-shadow:none;contain:layout style paint}",
+      "#" + STRIP_ID + " ." + INNER_CLASS + "{position:relative;width:100%;height:100%;overflow:hidden;pointer-events:none}",
+      "#" + STRIP_ID + " ." + TRACK_CLASS + "{position:absolute;left:0;bottom:max(.4rem,env(safe-area-inset-bottom));width:clamp(180px,22vw,240px);height:clamp(180px,22vw,240px);transform:translate3d(-120%,0,0);will-change:transform;pointer-events:none}",
       "#" + STRIP_ID + "[data-active='true'] ." + TRACK_CLASS + "{animation:grcon-mascot-strip-run " + RUN_DURATION_MS + "ms linear infinite}",
       "#" + STRIP_ID + " video{display:block;width:100%;height:100%;object-fit:contain;background:transparent!important;border:0;box-shadow:none;filter:drop-shadow(0 6px 10px rgb(7 35 56 / 20%));pointer-events:none}",
       "html[data-theme='dark'] #" + STRIP_ID + " video{filter:drop-shadow(0 7px 12px rgb(0 0 0 / 42%))}",
       "@keyframes grcon-mascot-strip-run{from{transform:translate3d(-120%,0,0)}to{transform:translate3d(calc(100vw + 20%),0,0)}}",
-      "@media(max-width:700px){#" + STRIP_ID + "{height:68px}#" + STRIP_ID + " ." + TRACK_CLASS + "{width:126px}}",
-      "@media(max-width:390px){#" + STRIP_ID + "{height:62px}#" + STRIP_ID + " ." + TRACK_CLASS + "{width:116px}}",
+      "@media(max-width:700px){#" + STRIP_ID + " ." + TRACK_CLASS + "{width:170px;height:170px}}",
+      "@media(max-width:390px){#" + STRIP_ID + " ." + TRACK_CLASS + "{width:150px;height:150px}}",
       "@media(prefers-reduced-motion:reduce){#" + STRIP_ID + "{display:none!important}#" + STRIP_ID + " ." + TRACK_CLASS + "{animation:none!important}}",
     ].join("\n");
     document.head.appendChild(style);
@@ -83,15 +83,7 @@
     }
     if (video.getAttribute("src") !== source.href) video.src = source.href;
 
-    const shell = document.querySelector(".app-shell");
-    const topbar = document.querySelector(".topbar");
-    if (!strip.isConnected) {
-      if (shell?.parentNode) shell.parentNode.insertBefore(strip, shell);
-      else if (topbar?.parentNode) topbar.parentNode.insertBefore(strip, topbar.nextSibling);
-      else document.body.prepend(strip);
-    } else if (shell?.parentNode && strip.nextElementSibling !== shell) {
-      shell.parentNode.insertBefore(strip, shell);
-    }
+    if (strip.parentNode !== document.body) document.body.appendChild(strip);
     return strip;
   }
 
@@ -153,7 +145,8 @@
       running,
       active: strip?.dataset.active === "true",
       stripAttached: Boolean(strip?.isConnected),
-      outsideWorkspace: Boolean(stripRect && shellRect && stripRect.bottom <= shellRect.top + 1),
+      workspaceOverlay: Boolean(stripRect && shellRect && stripRect.left < shellRect.right && stripRect.right > shellRect.left && stripRect.top < shellRect.bottom && stripRect.bottom > shellRect.top),
+      nonBlocking: root.getComputedStyle?.(strip)?.pointerEvents === "none",
       reducedMotion: reducedMotion(),
     });
   }
