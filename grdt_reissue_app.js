@@ -6,6 +6,8 @@
   if (!Core || !History || !root.document) return;
 
   const BATCH_MODE_KEY = "grcon.egrdt.batch-mode.v1";
+  const BATCH_LIMIT_KEY = "grcon.egrdt.batch-limit.v1";
+  const DEFAULT_BATCH_LIMIT = 48;
   const FIELD_LABELS = Object.freeze({
     revision: "Revisão",
     title: "Título",
@@ -34,7 +36,17 @@
     try { return Core.normalizeBatchMode(root.localStorage?.getItem(BATCH_MODE_KEY)); }
     catch (_) { console.debug("[GRDT Reissue] batch mode storage unavailable:", _); return "discipline"; }
   }
-  const state = { rows: [], missingDocuments: [], busy: false, batchMode: initialBatchMode() };
+  function normalizeBatchLimit(value) {
+    const parsed = Math.trunc(Number(value));
+    return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : DEFAULT_BATCH_LIMIT;
+  }
+  function initialBatchLimit() {
+    const shared = root.GrconEgrdtBatchPlan?.getLimit?.();
+    if (shared) return normalizeBatchLimit(shared);
+    try { return normalizeBatchLimit(root.localStorage?.getItem(BATCH_LIMIT_KEY)); }
+    catch (_) { console.debug("[GRDT Reissue] batch limit storage unavailable:", _); return DEFAULT_BATCH_LIMIT; }
+  }
+  const state = { rows: [], missingDocuments: [], busy: false, batchMode: initialBatchMode(), batchLimit: initialBatchLimit() };
 
   function download(blob, name) {
     const url = URL.createObjectURL(blob);
@@ -47,7 +59,7 @@
     root.setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
   function appVersion() { return root.GrconConfig?.APP_VERSION || doc.documentElement.dataset.version || "GRCON"; }
-  function batchModeLabel(mode) { return Core.normalizeBatchMode(mode) === "limit-only" ? "Somente limite de 48" : "Separar por disciplina"; }
+  function batchModeLabel(mode) { return Core.normalizeBatchMode(mode) === "limit-only" ? "Somente por limite" : "Separar por disciplina"; }
   function setBatchMode(value) {
     const mode = Core.normalizeBatchMode(value);
     state.batchMode = mode;
@@ -55,6 +67,21 @@
     try { root.GrconEgrdtBatchPlan?.setMode?.(mode); } catch (_) { console.debug("[GRDT Reissue] shared batch mode unavailable:", _); }
     renderSummary();
     return mode;
+  }
+  function setBatchLimit(value, options) {
+    const parsed = Math.trunc(Number(value));
+    if (!Number.isSafeInteger(parsed) || parsed < 1) {
+      if (!options?.silent) notify("Informe uma quantidade inteira maior ou igual a 1.", "error");
+      const input = $("#grdt-reissue-batch-limit");
+      if (input) input.value = String(state.batchLimit);
+      return false;
+    }
+    state.batchLimit = parsed;
+    try { root.localStorage?.setItem(BATCH_LIMIT_KEY, String(parsed)); } catch (_) { console.debug("[GRDT Reissue] batch limit local only:", _); }
+    try { root.GrconEgrdtBatchPlan?.setLimit?.(parsed); } catch (_) { console.debug("[GRDT Reissue] shared batch limit unavailable:", _); }
+    renderSummary();
+    if (!options?.silent) notify(`${batchModeLabel(state.batchMode)}: eGRDTs de até ${parsed} documento${parsed === 1 ? "" : "s"}.`, "success");
+    return parsed;
   }
   function setBusy(busy) {
     state.busy = Boolean(busy);
@@ -74,8 +101,9 @@
     const list = OPTION_LISTS[field] ? ` list="${OPTION_LISTS[field]}"` : "";
     const invalid = errors.length ? ' aria-invalid="true"' : ' aria-invalid="false"';
     const describedBy = errors.length ? ` aria-describedby="${errorId}"` : "";
+    const documentLabel = text(row?.item?.document) || `linha ${index + 1}`;
     return `<div class="grdt-reissue-field" data-field-wrap="${field}">
-      <input${invalid}${describedBy}${list} aria-label="${esc(FIELD_LABELS[field] || field)}" data-field="${field}" data-row="${index}" style="min-width:${width || "8rem"}" value="${esc(row.item[field])}"/>
+      <input${invalid}${describedBy}${list} aria-label="${esc(FIELD_LABELS[field] || field)} — ${esc(documentLabel)}" data-field="${field}" data-row="${index}" style="min-width:${width || "8rem"}" value="${esc(row.item[field])}"/>
       <small id="${errorId}" class="grdt-reissue-field-error"${errors.length ? "" : " hidden"}>${esc(errors.join(" · "))}</small>
     </div>`;
   }
@@ -98,7 +126,7 @@
   function safeGroups() {
     const validation = Core.validateRows(state.rows);
     if (!validation.valid) return [];
-    try { return Core.groupRows(state.rows, 48, state.batchMode); }
+    try { return Core.groupRows(state.rows, state.batchLimit, state.batchMode); }
     catch (error) { console.warn("GRCON: não foi possível calcular os lotes da repostagem", error); return []; }
   }
   function renderSummary() {
@@ -108,11 +136,13 @@
     const mode = Core.normalizeBatchMode(state.batchMode);
     const modeSelect = $("#grdt-reissue-batch-mode");
     if (modeSelect && doc.activeElement !== modeSelect) modeSelect.value = mode;
+    const limitInput = $("#grdt-reissue-batch-limit");
+    if (limitInput && doc.activeElement !== limitInput) limitInput.value = String(state.batchLimit);
     const modeStatus = $("#grdt-reissue-batch-mode-status");
     if (modeStatus) {
       modeStatus.textContent = mode === "limit-only"
-        ? "A ordem atual será preservada; as novas eGRDTs serão divididas somente em blocos de no máximo 48 documentos, mesmo com disciplinas diferentes."
-        : "Cada disciplina terá sua própria eGRDT, sempre respeitando o máximo absoluto de 48 documentos.";
+        ? `A ordem atual será preservada; as novas eGRDTs serão divididas somente em blocos de até ${state.batchLimit} documento${state.batchLimit === 1 ? "" : "s"}, mesmo com disciplinas diferentes.`
+        : `Cada disciplina terá sua própria eGRDT, usando lotes de até ${state.batchLimit} documento${state.batchLimit === 1 ? "" : "s"}.`;
     }
     const docs = $("#grdt-reissue-count-docs");
     const rows = $("#grdt-reissue-count-rows");
@@ -247,6 +277,7 @@
       generatedAt,
       outputType: "Repostagem de eGRDT",
       batchMode: Core.normalizeBatchMode(state.batchMode),
+      batchLimit: state.batchLimit,
       ldName: ldNames.join(" · ") || "Histórico GRCON",
       sourceName: `Última eGRDT por documento: ${sourceNumbers.join(" · ")}`,
       reissueSources: sourceNumbers,
@@ -276,7 +307,7 @@
     setBusy(true);
     const operation = root.GrconMascot?.begin?.({ state: "analyzing", message: "Gerando repostagem de eGRDT…", source: "grdt-reissue" });
     try {
-      const groups = Core.groupRows(state.rows, 48, state.batchMode);
+      const groups = Core.groupRows(state.rows, state.batchLimit, state.batchMode);
       const officialNumbers = await reserveNumbers(groups.length);
       const generatedAt = new Date().toISOString();
       const generated = [];
@@ -333,6 +364,7 @@
   }
   function activate() {
     state.batchMode = initialBatchMode();
+    state.batchLimit = initialBatchLimit();
     renderSummary();
     root.GRCONMascot?.refresh?.();
   }
@@ -342,6 +374,14 @@
     if (modeSelect) {
       modeSelect.value = state.batchMode;
       modeSelect.addEventListener("change", () => setBatchMode(modeSelect.value));
+    }
+    const limitInput = $("#grdt-reissue-batch-limit");
+    if (limitInput) {
+      limitInput.value = String(state.batchLimit);
+      limitInput.addEventListener("change", () => setBatchLimit(limitInput.value));
+      limitInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") { event.preventDefault(); setBatchLimit(limitInput.value); }
+      });
     }
     $("#grdt-reissue-find")?.addEventListener("click", findLatest);
     $("#grdt-reissue-generate")?.addEventListener("click", () => void generate());
@@ -353,7 +393,7 @@
   }
 
   root.GrconGrdtReissueUi = Object.freeze({
-    activate, state, findLatest, generate, confirmSharedHistory, setBatchMode, updateEditedRow,
+    activate, state, findLatest, generate, confirmSharedHistory, setBatchMode, setBatchLimit, updateEditedRow,
   });
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true }); else init();
 })(window);

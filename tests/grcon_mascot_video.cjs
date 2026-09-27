@@ -45,7 +45,7 @@ assert.equal(source.assetRevision, "20260924.1");
 assert.equal(source.officialElement.id, "5d684379-9c43-47db-913a-6af9d779e8b2");
 for (const state of states) assert.ok(source.jobs[state], `job Higgsfield ausente para ${state}`);
 
-assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=5\.2\.1-20260926\.1/);
+assert.match(entrypoint, /grcon_mascot_controller_v4\.js\?v=5\.2\.2-20260927\.1/);
 assert.match(controller, /official-hybrid-media-v5/);
 assert.match(controller, /ASSET_REVISION = "20260926\.1"/);
 assert.match(controller, /const PRIORITY/);
@@ -99,7 +99,7 @@ assert.match(runner, /grcon-mascot-running-alpha\.webm/);
 assert.match(runner, /grcon-mascot-activity-strip/);
 assert.match(runner, /video\.play\(\)/);
 assert.match(runner, /video\.pause\(\)/);
-assert.doesNotMatch(runner, /position:fixed/);
+assert.match(runner, /position:fixed/, "somente o runner pode usar overlay fixo para atravessar o workspace");
 assert.match(successPilot, /GrconMascot\?\.success/);
 assert.doesNotMatch(successPilot, /createElement\(|addEventListener\(/);
 

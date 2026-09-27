@@ -310,7 +310,7 @@
   async function build(items) {
     if (!XLSX || !XLSX.CFB || !XLSX.utils) throw new Error("O gerador XLS oficial da GRDT não foi carregado.");
     if (!Array.isArray(items) || !items.length) throw new Error("Nenhum item foi informado para a GRDT.");
-    if (items.length > 48) throw new Error("Uma única eGRDT operacional pode conter no máximo 48 documentos. Divida a emissão em novos lotes.");
+    if (items.length > 65526) throw new Error("A quantidade de documentos excede a capacidade técnica de linhas do formato XLS BIFF8.");
     if (!Disciplines || typeof Disciplines.isAllowed !== "function") throw new Error("O catálogo oficial de disciplinas da eGRDT não foi carregado.");
     items.forEach((item, index) => {
       if (!Disciplines.isAllowed(item && item.discipline)) {
@@ -439,7 +439,7 @@
 
     if (fimRow < 0) throw new Error("A linha FIM não foi encontrada na eGRDT corrigida.");
     if (!rows.length) throw new Error("A eGRDT corrigida não contém documentos.");
-    if (rows.length > 48) throw new Error("A eGRDT corrigida excede o limite operacional de 48 documentos.");
+    if (rows.length > 65526) throw new Error("A eGRDT corrigida excede a capacidade técnica de linhas do formato XLS BIFF8.");
     return {
       valid: true,
       format: "BIFF8",

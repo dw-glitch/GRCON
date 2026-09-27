@@ -30,6 +30,7 @@ export interface EgrdtHistoryRecord {
   ldName?: string;
   sourceName?: string;
   batchMode?: "discipline" | "limit-only" | string;
+  batchLimit?: number;
   reissueSources?: string[];
   allocations: string[];
   files: EgrdtHistoryFile[];

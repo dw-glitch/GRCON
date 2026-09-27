@@ -16,7 +16,7 @@ assert.ok(asset.length > 300_000 && asset.length < 1_500_000, "vídeo original d
 assert.match(runner, /grcon-mascot-running-alpha\.webm/);
 assert.match(runner, /grcon-mascot-activity-strip/);
 assert.match(runner, /RUN_DURATION_MS = 5_040/);
-assert.match(runner, /insertBefore\(strip, shell\)/);
+assert.match(runner, /document\.body\.appendChild\(strip\)/);
 assert.match(runner, /pointer-events:none/);
 assert.match(runner, /prefers-reduced-motion: reduce/);
 assert.match(runner, /video\.loop = true/);
@@ -24,7 +24,9 @@ assert.match(runner, /video\.play\(\)/);
 assert.match(runner, /video\.pause\(\)/);
 assert.match(runner, /currentTime = 0/);
 assert.match(runner, /@keyframes grcon-mascot-strip-run/);
-assert.doesNotMatch(runner, /position:fixed/, "a faixa de corrida não pode ser overlay fixo sobre o workspace");
+assert.match(runner, /position:fixed/, "a corrida é a única animação autorizada a atravessar o workspace");
+assert.match(runner, /workspaceOverlay/);
+assert.match(runner, /nonBlocking/);
 assert.doesNotMatch(runner, /grcon-mascot-run-alpha\.webm/, "runner deve usar o vídeo original aprovado, não o substituto recente");
 
 assert.match(controller, /HEADER_SLOT_ID = "grcon-mascot-header-slot"/);
@@ -38,13 +40,11 @@ assert.doesNotMatch(controller, /vp\.width - size\.width - gap/, "runtime não p
 
 const slotIndex = index.indexOf('id="grcon-mascot-header-slot"');
 const runtimeStatusIndex = index.indexOf('class="runtime-status"');
-const stripIndex = index.indexOf('id="grcon-mascot-activity-strip"');
-const shellIndex = index.indexOf('class="app-shell grdt-only"');
 assert.ok(slotIndex >= 0 && slotIndex < runtimeStatusIndex, "slot do mascote deve fazer parte da topbar");
-assert.ok(stripIndex >= 0 && stripIndex < shellIndex, "faixa da corrida deve ficar antes do app-shell/workspace");
+assert.doesNotMatch(index, /id="grcon-mascot-activity-strip"/, "overlay temporário da corrida deve ser criado apenas pelo runner");
 assert.match(index, /grcon_mascot_controller\.js[\s\S]*grcon_mascot_runner\.js/, "runner deve carregar depois do controlador e antes das operações do app");
 
 assert.match(sw, /grcon-mascot-running-alpha\.webm/);
 assert.match(sw, /mascot-shell-runner1/);
 
-console.log("grcon_mascot_runner: OK — vídeo original restaurado em faixa estrutural fora do workspace; mascote contextual preso à topbar.");
+console.log("grcon_mascot_runner: OK — vídeo original atravessa o workspace sem bloquear interação; demais poses permanecem presas ao cabeçalho.");

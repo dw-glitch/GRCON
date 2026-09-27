@@ -1966,8 +1966,12 @@ check("service worker publica o cache isolado da versão atual", () => {
   assert.equal(Workbook.isLegacyXls(bytes), true);
   assert.equal(verified.valid, true);
   assert.equal(verified.checkedRows, 48);
-  await assert.rejects(() => Workbook.build([...items, { ...items[0] }]), /no máximo 48/i);
-  checks.push("gerador produz e reabre XLS BIFF8 com 48 linhas e bloqueia a 49ª");
+  const expanded = [...items, { ...items[0], document: "0130870-C1O-PGV-G-TESTE-049", fileName: "0130870-C1O-PGV-G-TESTE-049_0001.pdf" }];
+  const expandedBytes = await Workbook.build(expanded);
+  const expandedVerified = await Workbook.verify(expandedBytes, expanded);
+  assert.equal(expandedVerified.valid, true);
+  assert.equal(expandedVerified.checkedRows, 49);
+  checks.push("gerador produz e reabre XLS BIFF8 com limite configurável acima do padrão 48");
 }
 
 {

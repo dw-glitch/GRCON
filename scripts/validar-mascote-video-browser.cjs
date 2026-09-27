@@ -322,7 +322,6 @@ async function main() {
         animationName: getComputedStyle(track).animationName,
         stripPosition: getComputedStyle(strip).position,
         stripPointerEvents: getComputedStyle(strip).pointerEvents,
-        outsideWorkspace: sr.bottom <= wr.top + 1 && sr.bottom <= shellRect.top + 1,
         overlapsWorkspace: !(sr.right <= wr.left || sr.left >= wr.right || sr.bottom <= wr.top || sr.top >= wr.bottom),
         hostInHeader: host.parentElement?.id === "grcon-mascot-header-slot",
         hostVisibility: getComputedStyle(host).visibility,
@@ -339,10 +338,9 @@ async function main() {
     assert.equal(runningStart.stripActive, "true");
     assert.equal(runningStart.stripHidden, false);
     assert.match(runningStart.animationName, /grcon-mascot-strip-run/);
-    assert.equal(runningStart.stripPosition, "relative");
+    assert.equal(runningStart.stripPosition, "fixed");
     assert.equal(runningStart.stripPointerEvents, "none");
-    assert.equal(runningStart.outsideWorkspace, true, "faixa deve ficar integralmente antes do app-shell/workspace");
-    assert.equal(runningStart.overlapsWorkspace, false, "corrida não pode passar sobre conteúdo operacional");
+    assert.equal(runningStart.overlapsWorkspace, true, "a corrida é a única animação autorizada a atravessar o workspace");
     assert.equal(runningStart.hostInHeader, true);
     assert.equal(runningStart.hostVisibility, "hidden", "mascote contextual deve sair visualmente enquanto a corrida usa a faixa");
     assert.equal(runningStart.hasPngRunner, false, "corrida não pode ser simulada com sprite/PNG");
@@ -416,15 +414,15 @@ async function main() {
       const wr = workspace.getBoundingClientRect();
       return {
         source: video.currentSrc,
-        outsideWorkspace: sr.bottom <= wr.top + 1,
+        overlapsWorkspace: !(sr.right <= wr.left || sr.left >= wr.right || sr.bottom <= wr.top || sr.top >= wr.bottom),
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         stripHeight: sr.height,
       };
     });
     assert.match(mobileRun.source, /grcon-mascot-running-alpha\.webm/);
-    assert.equal(mobileRun.outsideWorkspace, true);
+    assert.equal(mobileRun.overlapsWorkspace, true);
     assert.ok(mobileRun.overflow <= 1);
-    assert.ok(mobileRun.stripHeight <= 70, "faixa mobile precisa permanecer compacta");
+    assert.equal(mobileRun.stripHeight, 844, "overlay mobile deve cobrir a viewport sem criar layout adicional");
     await page.screenshot({ path: path.join(outputDir, "06b-mobile-running-strip.png") });
     await page.evaluate(() => window.GrconMascot.idle({ source: "qa-mobile-run-end" }));
     await page.waitForFunction(() => document.querySelector("#grcon-mascot-activity-strip")?.hidden === true, null, { timeout: 3000 });

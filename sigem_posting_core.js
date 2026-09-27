@@ -25,6 +25,10 @@
   function byteSize(value) { return _U.byteSize ? _U.byteSize(value) : (function() { try { return unescape(encodeURIComponent(String(value))).length; } catch (_) { console.debug("[SigemPostingCore] byteSize fallback:", _); return String(value).length; } })(); }
   function storageOf(storage) { return _U.storageOf ? _U.storageOf(storage) : (storage || (typeof localStorage !== "undefined" ? localStorage : null)); }
   function nowIso() { return new Date().toISOString(); }
+  function batchLimit(value) {
+    const parsed = Math.trunc(Number(value));
+    return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 48;
+  }
   function safePart(value, fallback) {
     const clean = text(value).replace(/[\u0000-\u001f<>:"/\\|?*]/g, "_").replace(/[. ]+$/g, "");
     return clean || fallback || "arquivo";
@@ -103,6 +107,7 @@
       folderName,
       packageName: text(record && record.packageName),
       outputType: text(record && record.outputType),
+      batchLimit: batchLimit(record && record.batchLimit),
       generatedAt,
       createdAt: text(record && record.createdAt) || generatedAt,
       updatedAt: text(record && record.updatedAt) || generatedAt,
@@ -205,6 +210,7 @@
       folderName,
       packageName: text(info.packageName),
       outputType: source.outputType,
+      batchLimit: source.batchLimit,
       generatedAt: source.generatedAt,
       createdAt: source.generatedAt,
       updatedAt: source.generatedAt,
@@ -346,8 +352,9 @@
     return { updated: result.saved, record: next, records: result.records, error: result.error };
   }
 
-  function correctedRowErrors(rows) {
+  function correctedRowErrors(rows, configuredLimit) {
     const source = Array.isArray(rows) ? rows : [];
+    const limit = batchLimit(configuredLimit);
     const required = [
       ["document", "DOCUMENTO"], ["revision", "REVISÃO"], ["title", "TÍTULO"],
       ["fileName", "ARQUIVO"], ["format", "FORMATO"], ["discipline", "DISCIPLINA"],
@@ -355,7 +362,7 @@
     ];
     const errors = [];
     if (!source.length) return ["A eGRDT corrigida não contém documentos."];
-    if (source.length > 48) errors.push("A eGRDT corrigida excede o limite de 48 documentos.");
+    if (source.length > limit) errors.push(`A eGRDT corrigida excede o limite configurado de ${limit} documentos.`);
     source.forEach((row, index) => {
       required.forEach(([property, label]) => {
         if (!text(row && row[property])) errors.push(`Linha ${index + 2}: ${label} está vazio.`);
@@ -423,7 +430,7 @@
     const index = records.findIndex((record) => record.id === text(recordId));
     if (index < 0) return { updated: false, records, error: "Registro de postagem não localizado.", errors: [] };
     const current = records[index];
-    const errors = correctedRowErrors(rows);
+    const errors = correctedRowErrors(rows, current.batchLimit);
     if (!sameDocumentRevisionSet(current.files, Array.isArray(rows) ? rows : [])) {
       errors.push("Os pares DOCUMENTO + REVISÃO da eGRDT corrigida não correspondem exatamente a este lote.");
     }

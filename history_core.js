@@ -207,6 +207,9 @@
       ldName: text(record && record.ldName),
       sourceName: text(record && record.sourceName),
       batchMode: ["discipline", "limit-only"].includes(text(record && record.batchMode)) ? text(record && record.batchMode) : "",
+      batchLimit: Number.isSafeInteger(Number(record && record.batchLimit)) && Number(record && record.batchLimit) >= 1
+        ? Number(record.batchLimit)
+        : 0,
       reissueSources: Array.isArray(record && record.reissueSources) ? record.reissueSources.map(text).filter(Boolean) : [],
       numberHistory: Array.isArray(record && record.numberHistory) ? record.numberHistory.map(text).filter(Boolean) : [],
       cloudId,
@@ -423,6 +426,7 @@
       ldName: info.ldName,
       sourceName: info.sourceName,
       batchMode: text(info.batchMode) || text(file && file.group && file.group.batchMode),
+      batchLimit: Number(info.batchLimit) || Number(file && file.group && file.group.limit) || 0,
       reservationRequestId: text(file && file.official && file.official.requestId),
       reservationIds: [text(file && file.official && file.official.reservationId)].filter(Boolean),
       files,

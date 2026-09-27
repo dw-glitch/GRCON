@@ -26,6 +26,10 @@ function numberBr(value: number): string {
   return Number(value || 0).toLocaleString("pt-BR");
 }
 
+function countLabel(value: number, singular: string, plural: string): string {
+  return `${numberBr(value)} ${value === 1 ? singular : plural}`;
+}
+
 function PostingBadge({ record, cache }: { record: EgrdtHistoryRecord; cache: ReturnType<typeof Adapter.readPostingCache> }) {
   const presentation = Adapter.postingPresentation(cache, record);
   return <span className={"history-posting-status " + presentation.tone}>{presentation.label}</span>;
@@ -263,8 +267,8 @@ function Toolbar({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
 function RecordList({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
   const visible = Math.min(h.visibleLimit, h.filtered.length);
   const resultText = h.filtered.length > visible
-    ? numberBr(h.filtered.length) + " eGRDT(s) · exibindo " + numberBr(visible)
-    : numberBr(h.filtered.length) + " eGRDT(s)";
+    ? countLabel(h.filtered.length, "eGRDT", "eGRDTs") + " · exibindo " + numberBr(visible)
+    : countLabel(h.filtered.length, "eGRDT", "eGRDTs");
 
   return (
     <UiPanel className="history-list-card" labelledBy="history-list-title">
@@ -299,8 +303,8 @@ function RecordList({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                   <PostingBadge record={record} cache={h.postingCache} />
                 </div>
                 <div className="history-record-facts">
-                  <span><strong>{numberBr(record.documentCount)}</strong> documentos</span>
-                  <span><strong>{numberBr(record.fileCount)}</strong> arquivos</span>
+                  <span>{countLabel(record.documentCount, "documento", "documentos")}</span>
+                  <span>{countLabel(record.fileCount, "arquivo", "arquivos")}</span>
                   <span title={allocation}>Alocação: <strong>{allocation}</strong></span>
                 </div>
                 {creator ? <small className="history-record-user" title={"Gerado por " + (record.createdByEmail || creator)}>Gerado por {creator}</small> : null}
@@ -384,8 +388,8 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           </div>
           <div className="history-detail-identity-meta">
             <PostingBadge record={record} cache={h.postingCache} />
-            <UiMetaPill><strong>{numberBr(record.documentCount)}</strong> documentos</UiMetaPill>
-            <UiMetaPill><strong>{numberBr(record.fileCount)}</strong> arquivos</UiMetaPill>
+            <UiMetaPill>{countLabel(record.documentCount, "documento", "documentos")}</UiMetaPill>
+            <UiMetaPill>{countLabel(record.fileCount, "arquivo", "arquivos")}</UiMetaPill>
           </div>
         </section>
 
@@ -465,7 +469,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           <dl className="history-detail-meta">
             <div><dt>LD utilizada</dt><dd>{record.ldName || "Não informada"}</dd></div>
             <div><dt>Origem</dt><dd>{record.sourceName || "Pasta documental"}</dd></div>
-            {record.batchMode ? <div><dt>Distribuição</dt><dd>{record.batchMode === "limit-only" ? "Somente limite de 48" : "Separar por disciplina"}</dd></div> : null}
+            {record.batchMode ? <div><dt>Distribuição</dt><dd>{record.batchMode === "limit-only" ? "Somente por limite" : "Separar por disciplina"}{record.batchLimit ? ` · até ${numberBr(record.batchLimit)} por eGRDT` : ""}</dd></div> : null}
             {record.reissueSources?.length ? <div><dt>eGRDT(s) de origem</dt><dd>{record.reissueSources.map((value) => <span key={value}>{value}</span>)}</dd></div> : null}
             <div><dt>Alocação</dt><dd>{record.allocations.length ? record.allocations.map((value) => <span key={value}>{value}</span>) : "Não informada na LD"}</dd></div>
             {previousNumbers.length ? <div><dt>Números anteriores</dt><dd>{previousNumbers.map((value) => <span key={value}>{value}</span>)}</dd></div> : null}
@@ -526,6 +530,16 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
 export function HistoricoEgrdtApp() {
   const h = useHistoricoEgrdt();
 
+  if (h.loading) {
+    return (
+      <section className="history-initial-loading" role="status" aria-live="polite">
+        <span className="history-loading-spinner" aria-hidden="true" />
+        <strong>Carregando Histórico de eGRDTs…</strong>
+        <small>Preparando filtros e emissões compartilhadas.</small>
+      </section>
+    );
+  }
+
   return (
     <div className="history-phase-b">
       <div className="history-heading history-phase-b-heading">
@@ -535,7 +549,7 @@ export function HistoricoEgrdtApp() {
           description="Consulte emissões, documentos e situação de postagem no SIGEM. Filtre, selecione, confira e execute somente a ação necessária."
           meta={(
             <>
-              <UiMetaPill><strong>{numberBr(h.records.length)}</strong> eGRDT(s)</UiMetaPill>
+              <UiMetaPill>{countLabel(h.records.length, "eGRDT", "eGRDTs")}</UiMetaPill>
               <UiMetaPill>{h.sharedHistory ? "Histórico compartilhado" : "Histórico local"}</UiMetaPill>
             </>
           )}

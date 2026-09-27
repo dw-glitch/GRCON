@@ -10,8 +10,8 @@ html[data-app="GRCON"] .history-module .history-phase-b {
 html[data-app="GRCON"] .history-module .history-phase-b-heading {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-areas: "header manage mascot";
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "header manage";
   align-items: start;
   column-gap: clamp(.75rem, 1.2vw, 1rem);
   row-gap: .625rem;
@@ -34,14 +34,6 @@ html[data-app="GRCON"] .history-module .history-manage {
   align-self: start;
   justify-self: end;
   min-width: 0;
-}
-
-html[data-app="GRCON"] .history-module .history-phase-b-heading > .grcon-mascot-context {
-  grid-area: mascot;
-  align-self: start;
-  justify-self: end;
-  margin-inline-start: 0;
-  pointer-events: none;
 }
 
 html[data-app="GRCON"] .history-module .history-manage > summary {
@@ -1161,10 +1153,10 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
 @media (max-width: 48rem) {
   html[data-app="GRCON"] .history-module .history-phase-b-heading,
   html[data-app="GRCON"] .history-module .history-phase-b-heading.grcon-mascot-heading {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "header header"
-      "manage mascot";
+      "header"
+      "manage";
     align-items: start;
   }
 
@@ -1189,13 +1181,6 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
     right: auto;
     width: 100%;
     margin-top: .35rem;
-  }
-
-  html[data-app="GRCON"] .history-module .history-phase-b-heading > .grcon-mascot-context {
-    grid-area: mascot;
-    align-self: start;
-    justify-self: end;
-    margin-inline-start: 0;
   }
 
   html[data-app="GRCON"] .history-module .history-main-filters {
@@ -1392,8 +1377,7 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "header"
-      "manage"
-      "mascot";
+      "manage";
   }
 
   html[data-app="GRCON"] .history-module .history-manage {
@@ -1409,9 +1393,6 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
     width: min(20rem, 100%);
   }
 
-  html[data-app="GRCON"] .history-module .history-phase-b-heading > .grcon-mascot-context {
-    justify-self: end;
-  }
 }
 
 @media (max-width: 25rem) {
@@ -1437,3 +1418,4 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
     transition: none;
   }
 }
+.history-initial-loading{display:grid;place-items:center;align-content:center;gap:.55rem;min-height:clamp(18rem,55vh,34rem);padding:2rem;border:1px solid var(--border-1,#d8e1e7);border-radius:16px;background:var(--surface-1,#fff);color:var(--text-2,#5f6e78);text-align:center}.history-initial-loading strong{color:var(--text-1,#16212b);font-size:1rem}.history-initial-loading small{font-size:.8rem}.history-loading-spinner{width:2rem;height:2rem;border:3px solid var(--border-1,#d8e1e7);border-top-color:var(--brand-600,#1a6f9f);border-radius:50%;animation:history-loading-spin .8s linear infinite}@keyframes history-loading-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.history-loading-spinner{animation:none;border-top-color:var(--border-1,#d8e1e7);background:var(--brand-600,#1a6f9f);box-shadow:inset 0 0 0 .45rem var(--surface-1,#fff)}}

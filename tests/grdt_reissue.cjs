@@ -78,7 +78,8 @@ assert.deepEqual(limitOnly.map((group) => group.entries.length), [48, 48, 1]);
 assert.deepEqual(limitOnly.flatMap((group) => group.entries.map((entry) => entry.document)), mixedEntries.map((entry) => entry.document));
 assert.ok(limitOnly[0].disciplines.length > 1, "modo sem disciplina precisa aceitar disciplinas mistas");
 assert.ok(limitOnly.every((group) => group.entries.length <= 48));
-assert.deepEqual(Emission.splitPlan({ entries: mixedEntries }, 999, "limit-only").map((group) => group.entries.length), [48, 48, 1], "48 é o máximo absoluto");
+assert.deepEqual(Emission.splitPlan({ entries: mixedEntries }, 999, "limit-only").map((group) => group.entries.length), [97], "o limite configurado pelo usuário não pode ser reduzido silenciosamente para 48");
+assert.deepEqual(Emission.splitPlan({ entries: mixedEntries }, 72, "limit-only").map((group) => group.entries.length), [72, 25]);
 
 const disciplineMode = Emission.splitPlan({ entries: mixedEntries.slice(0, 6) }, 48, "discipline");
 assert.deepEqual(disciplineMode.map((group) => group.discipline), ["CIVIL", "DINÂMICOS"]);
@@ -130,9 +131,11 @@ const batchModeRoundTrip = History.cleanRecord({
   generatedAt: "2026-09-26T12:00:00.000Z",
   outputType: "Repostagem de eGRDT",
   batchMode: "limit-only",
+  batchLimit: 72,
   files: [completeFile],
 });
 assert.equal(batchModeRoundTrip.batchMode, "limit-only");
+assert.equal(batchModeRoundTrip.batchLimit, 72);
 
 assert.equal(records[1].files[0].purpose, "Para Construção");
 const pendingRecord = { id: "reissue-1", clientRecordId: "reissue-1", syncState: "pending", cloudId: "" };

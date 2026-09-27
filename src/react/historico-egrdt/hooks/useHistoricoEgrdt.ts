@@ -6,7 +6,7 @@ import type {
   PostingCache,
 } from "../types/domain";
 
-export const LIST_PAGE_SIZE = 200;
+export const LIST_PAGE_SIZE = 50;
 export const SEARCH_DEBOUNCE_MS = 120;
 
 const EMPTY_FILTERS: EgrdtHistoryFilters = {
@@ -31,6 +31,7 @@ function useDebouncedValue(value: string, delay: number): string {
 
 export function useHistoricoEgrdt() {
   const [records, setRecords] = useState<EgrdtHistoryRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [postingCache, setPostingCache] = useState<PostingCache>(() => ({
     records: [],
     byHistoryId: new Map(),
@@ -57,11 +58,15 @@ export function useHistoricoEgrdt() {
   }), []);
 
   useEffect(() => {
-    const nextRecords = Adapter.readRecords();
-    const nextPostingCache = Adapter.readPostingCache();
-    setRecords(nextRecords);
-    setPostingCache(nextPostingCache);
-    Adapter.updateExternalCount(nextRecords.length);
+    try {
+      const nextRecords = Adapter.readRecords();
+      const nextPostingCache = Adapter.readPostingCache();
+      setRecords(nextRecords);
+      setPostingCache(nextPostingCache);
+      Adapter.updateExternalCount(nextRecords.length);
+    } finally {
+      setLoading(false);
+    }
   }, [refreshNonce]);
 
   const effectiveFilters = useMemo<EgrdtHistoryFilters>(() => ({
@@ -278,6 +283,7 @@ export function useHistoricoEgrdt() {
   }, [periodInvalid, filtered, effectiveFilters, filters.documentFamily]);
 
   return {
+    loading,
     records,
     filters,
     effectiveFilters,

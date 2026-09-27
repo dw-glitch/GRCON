@@ -1104,7 +1104,7 @@ html[data-app="GRCON"] .final-package-button:disabled {
 /* GRCON 5.30.8 — atualização da LD após postagem e compactação visual. */
 html[data-app="GRCON"] .compact-limit-setting {
   display: grid;
-  grid-template-columns: minmax(10rem, 1fr) minmax(7rem, .55fr) auto;
+  grid-template-columns: minmax(10rem, 1fr) minmax(10rem, .75fr) minmax(7rem, .4fr) auto;
   align-items: end;
   gap: .55rem;
   padding: .65rem .75rem;
@@ -2025,3 +2025,16 @@ body.p2-dark .grcon-retomar-head h3 { color: #dceaf3; }
 body.p2-dark .grcon-retomar-card { border-color: #344653; background: #17232c; }
 body.p2-dark .grcon-retomar-card span, body.p2-dark .grcon-retomar-card small { color: #b9c8d3; }
 body.p2-dark .grcon-retomar-card strong { color: #dceaf3; }
+
+/* As configurações avançadas devem usar as mesmas superfícies do tema. */
+html[data-app="GRCON"][data-theme="dark"] :where(.advanced-panel,.settings-group,.settings-group-body) {
+  color: var(--text-1);
+  border-color: var(--border-1);
+  background: var(--surface-1);
+}
+html[data-app="GRCON"][data-theme="dark"] .settings-group > summary,
+html[data-app="GRCON"][data-theme="dark"] .settings-group[open] > summary {
+  color: var(--text-1);
+  border-color: var(--border-1);
+  background: var(--surface-2);
+}
