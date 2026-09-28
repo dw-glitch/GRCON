@@ -141,10 +141,6 @@
 <svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-width="2.2" viewbox="0 0 16 16" width="12"><path d="M2 2l12 12M14 2L2 14"/></svg>
 </button>
 </div>
-<button class="sgpar-button" disabled="" id="sgpar-start" type="button">
-<svg viewbox="0 0 24 24"><path d="M8 7V5h11v11h-2M5 8h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM8 12h4M8 15h4"></path></svg>
-<span>SGPAR assistido</span>
-</button>
 <button aria-expanded="false" aria-label="Configurações desta análise" class="icon-button settings-button" id="advanced-toggle" title="Configurações desta análise" type="button">
 <svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7L10.5 2h-3l-.7 2.3-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2.3h3l.7-2.3 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7z"></path></svg>
 <span class="settings-button-label">Configurações</span>
@@ -471,62 +467,6 @@
 <footer class="drawer-footer">
 <button class="secondary-button" id="relation-cancel" type="button">Cancelar</button>
 <button class="primary-button" disabled="" id="relation-apply" type="button">Usar relação</button>
-</footer>
-</aside>
-<div class="drawer-overlay" hidden="" id="sgpar-overlay"></div>
-<aside aria-hidden="true" aria-labelledby="sgpar-title" class="sgpar-drawer" inert id="sgpar-drawer">
-<header class="drawer-header">
-<div><h2 id="sgpar-title">SGPAR Assistido</h2><span id="sgpar-count">Nenhum documento</span></div>
-<button aria-label="Fechar" class="icon-button" id="sgpar-close" type="button">
-<svg viewbox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-</button>
-</header>
-<div class="sgpar-body">
-<label class="sgpar-url-field">
-<span>Endereço do SGPAR</span>
-<input autocomplete="url" id="sgpar-url" inputmode="url" placeholder="https://endereco-do-sgpar" type="url"/>
-</label>
-<section aria-label="Andamento da busca" class="sgpar-overview">
-<div><strong id="sgpar-found-count">0</strong><span>Localizados</span></div>
-<div><strong id="sgpar-downloaded-count">0</strong><span>Baixados</span></div>
-<div><strong id="sgpar-pending-count">0</strong><span>Pendentes</span></div>
-<div><strong id="sgpar-unresolved-count">0</strong><span>Não encontrados</span></div>
-<div class="sgpar-progress"><i id="sgpar-progress-bar"></i></div>
-</section>
-<section aria-live="polite" class="sgpar-current">
-<div class="sgpar-current-heading">
-<span id="sgpar-position">Documento 0 de 0</span>
-<span class="sgpar-status pending" id="sgpar-current-status">Pendente</span>
-</div>
-<strong id="sgpar-code">—</strong>
-<span id="sgpar-expected-file">—</span>
-<div class="sgpar-search-actions">
-<button class="secondary-button" id="sgpar-copy" type="button">Copiar código</button>
-<button class="primary-button" id="sgpar-copy-open" type="button">Copiar e abrir SGPAR</button>
-</div>
-<div class="sgpar-result-actions">
-<button class="state-button downloaded" id="sgpar-mark-downloaded" type="button">Baixado</button>
-<button class="state-button missing" id="sgpar-mark-missing" type="button">Não encontrado</button>
-<button class="state-button neutral" id="sgpar-skip" type="button">Depois</button>
-</div>
-</section>
-<div class="sgpar-queue-heading">
-<strong>Fila</strong>
-<div>
-<button aria-label="Documento anterior" class="queue-nav" id="sgpar-previous" type="button">←</button>
-<button aria-label="Próximo documento" class="queue-nav" id="sgpar-next" type="button">→</button>
-</div>
-</div>
-<div class="sgpar-queue" id="sgpar-queue"></div>
-<label class="sgpar-file-picker">
-<input accept=".pdf" id="sgpar-files" multiple="" type="file"/>
-<svg viewbox="0 0 24 24"><path d="M12 4v11M8 8l4-4 4 4M5 14v5h14v-5"></path></svg>
-<span><strong>Adicionar PDFs baixados</strong><small id="sgpar-files-meta">Nenhum PDF adicionado</small></span>
-</label>
-</div>
-<footer class="drawer-footer">
-<button class="secondary-button" id="sgpar-cancel" type="button">Fechar</button>
-<button class="primary-button" id="sgpar-analyze" type="button">Continuar para análise</button>
 </footer>
 </aside>
 <div class="drawer-overlay" hidden="" id="drawer-overlay"></div>
