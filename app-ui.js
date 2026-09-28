@@ -232,7 +232,7 @@
         return "Processamento dos arquivos";
     }
     function enhanceProgress() {
-        $(".progress-wrap,.progress").forEach((container) => {
+        $$(".progress-wrap,.progress").forEach((container) => {
             container.setAttribute("role", "progressbar");
             container.setAttribute("aria-valuemin", "0");
             container.setAttribute("aria-valuemax", "100");
