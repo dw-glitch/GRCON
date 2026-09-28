@@ -31,6 +31,27 @@ async function waitForServiceWorker(page) {
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
 }
 
+async function addCloudAuthBypassStyles(page) {
+  const content = [
+    "html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }",
+    "#grcon-cloud-auth { display: none !important; }",
+  ].join("\n");
+  let lastError = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded", { timeout: 30000 });
+      await page.addStyleTag({ content });
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached/i.test(message)) throw error;
+      await page.waitForLoadState("domcontentloaded", { timeout: 30000 }).catch(() => {});
+    }
+  }
+  throw lastError || new Error("Não foi possível estabilizar a página para aplicar o bypass visual do QA.");
+}
+
 async function probe(page, pathname) {
   return page.evaluate(async (target) => {
     const response = await fetch(target, { cache: "no-store" });
@@ -74,10 +95,7 @@ async function probe(page, pathname) {
     assert.equal(response.status(), 200, "A raiz do pacote Cloudflare deve responder 200.");
 
     await waitForServiceWorker(page);
-    await page.addStyleTag({ content: [
-      "html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }",
-      "#grcon-cloud-auth { display: none !important; }",
-    ].join("\n") });
+    await addCloudAuthBypassStyles(page);
 
     await page.waitForFunction(() => Boolean(window.GRCONModuleLoader), null, { timeout: 15000 });
     await page.waitForFunction(() => Boolean(window.GrconMascot), null, { timeout: 15000 });
