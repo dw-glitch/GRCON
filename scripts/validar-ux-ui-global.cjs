@@ -245,7 +245,7 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
         if (message.type() === "error" && !expectedExternal(message.text())) consoleErrors.push(message.text());
       });
       page.on("pageerror", (error) => {
-        if (!expectedExternal(error.message)) pageErrors.push(error.message);
+        if (!expectedExternal(error.message)) pageErrors.push(error.stack || error.message);
       });
       await installQaShellBypass(page);
       const response = await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
