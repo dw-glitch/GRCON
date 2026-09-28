@@ -114,10 +114,6 @@
     analysisValidUntil: 0,
     analysisRecentDays: 30,
     analysisLdSignature: "",
-    sgparQueue: [],
-    sgparCurrent: 0,
-    sgparLoading: false,
-    sgparAddedFiles: [],
     egrdtSequenceCursor: 0,
     manualEgrdtSequenceStart: null,
     manualEgrdtSequences: [],
@@ -607,7 +603,6 @@
     listInput: $("#list-input"),
     packageInput: $("#pdf-input"),
     relationStart: $("#relation-start"),
-    sgparStart: $("#sgpar-start"),
     ldMeta: $("#ld-meta"),
     listMeta: $("#list-meta"),
     packageMeta: $("#pdf-meta"),
@@ -709,32 +704,6 @@
     relationPreviewMeta: $("#relation-preview-meta"),
     relationPreviewList: $("#relation-preview"),
     relationEmpty: $("#relation-empty"),
-    sgparDrawer: $("#sgpar-drawer"),
-    sgparOverlay: $("#sgpar-overlay"),
-    sgparClose: $("#sgpar-close"),
-    sgparCancel: $("#sgpar-cancel"),
-    sgparAnalyze: $("#sgpar-analyze"),
-    sgparUrl: $("#sgpar-url"),
-    sgparCount: $("#sgpar-count"),
-    sgparFoundCount: $("#sgpar-found-count"),
-    sgparDownloadedCount: $("#sgpar-downloaded-count"),
-    sgparPendingCount: $("#sgpar-pending-count"),
-    sgparUnresolvedCount: $("#sgpar-unresolved-count"),
-    sgparProgressBar: $("#sgpar-progress-bar"),
-    sgparPosition: $("#sgpar-position"),
-    sgparCurrentStatus: $("#sgpar-current-status"),
-    sgparCode: $("#sgpar-code"),
-    sgparExpectedFile: $("#sgpar-expected-file"),
-    sgparCopy: $("#sgpar-copy"),
-    sgparCopyOpen: $("#sgpar-copy-open"),
-    sgparMarkDownloaded: $("#sgpar-mark-downloaded"),
-    sgparMarkMissing: $("#sgpar-mark-missing"),
-    sgparSkip: $("#sgpar-skip"),
-    sgparPrevious: $("#sgpar-previous"),
-    sgparNext: $("#sgpar-next"),
-    sgparQueue: $("#sgpar-queue"),
-    sgparFiles: $("#sgpar-files"),
-    sgparFilesMeta: $("#sgpar-files-meta"),
     compatibilityOpen: $("#ld-compatibility-open"),
     compatibilityStatus: $("#ld-compatibility-status"),
     toast: $("#toast"),
@@ -1281,7 +1250,6 @@
     els.packageInput.disabled = busy;
     els.relationStart.disabled = busy;
     if (els.compatibilityOpen) els.compatibilityOpen.disabled = busy;
-    els.sgparStart.disabled = busy || state.sgparLoading || !state.ldFiles.length || !hasRelationSource();
     els.recentDays.disabled = busy;
     if (busy) {
       if (els.progress) els.progress.hidden = false;
@@ -1530,7 +1498,6 @@
     const compatibilityInspected = !state.ldFiles.length || !L || inspectedLdFiles.length === state.ldFiles.length;
     const compatibilityCanStart = Boolean(PerformanceCore && PerformanceCore.supported) || compatibilityReady || !compatibilityInspected;
     els.analyze.disabled = state.busy || !state.ldFiles.length || !compatibilityCanStart || (!state.packageFiles.length && !hasRelationSource());
-    els.sgparStart.disabled = state.busy || state.sgparLoading || !state.ldFiles.length || !compatibilityCanStart || !hasRelationSource();
     if (els.compatibilityOpen && els.compatibilityStatus) {
       els.compatibilityOpen.hidden = !ldFile;
       els.compatibilityStatus.hidden = !ldFile;
@@ -1828,7 +1795,6 @@
   }
 
   function openRelationDrawer() {
-    closeSgparDrawer();
     closeEgrdtDrawer();
     state.relationDraft = state.relationSavedText;
     els.relationText.value = state.relationDraft;
@@ -1857,7 +1823,6 @@
   function applyRelationText() {
     const preview = state.relationPreview;
     if (!preview.entries.length) return;
-    clearSgparQueue();
     invalidateAnalysisResults();
     state.textEntries = preview.entries;
     state.relationSavedText = state.relationDraft;
@@ -1968,294 +1933,6 @@
       .map((file) => ({ name: file.name, reason: "fora da relação" }));
     state.listSummary = { total: entries.length, matched: matchedItems, files: matchedFiles.length, missing: missing.length };
     return { matchedFiles, missing, sourceByPhysicalKey, documentLookupByPhysicalKey };
-  }
-
-  function sgparStatusLabel(status) {
-    return {
-      pending: "Pendente",
-      downloaded: "Baixado",
-      located: "Localizado",
-      missing: "Não encontrado",
-      skipped: "Depois",
-      review: "Conferir",
-    }[status] || "Pendente";
-  }
-
-  function sgparSearchCode(entry) {
-    return String(entry && (entry.document || entry.searchCode || entry.raw) || "")
-      .trim()
-      .replace(/\.pdf$/i, "");
-  }
-
-  function sgparCandidateFiles(entry) {
-    const pdfs = state.packageFiles.filter((file) => extensionOf(file.name) === "pdf");
-    const baseName = listBaseName(entry.fileName || entry.raw);
-    let candidates = pdfs.filter((file) => C.norm(file.name) === C.norm(baseName));
-    if (!candidates.length && !/\.pdf$/i.test(baseName)) {
-      candidates = pdfs.filter((file) => C.norm(file.name.replace(/\.pdf$/i, "")) === C.norm(baseName));
-    }
-    if (!candidates.length && entry.document && state.index) {
-      candidates = pdfs.filter((file) => {
-        const matches = C.matchDocuments(file.name, state.index);
-        return matches.length === 1 && C.key(matches[0].document) === C.key(entry.document);
-      });
-    }
-    return [...new Map(candidates.map((file) => [listPhysicalKey(file), file])).values()];
-  }
-
-  function reconcileSgparFiles() {
-    state.sgparQueue.forEach((entry) => {
-      const matches = sgparCandidateFiles(entry);
-      if (matches.length === 1) {
-        entry.status = "located";
-        entry.matchedFileName = matches[0].name;
-      } else if (matches.length > 1) {
-        entry.status = "review";
-        entry.matchedFileName = `${matches.length} arquivos correspondentes`;
-      } else {
-        if (entry.status === "located" || entry.status === "review") entry.status = "pending";
-        entry.matchedFileName = "";
-      }
-    });
-  }
-
-  function sgparCounts() {
-    return state.sgparQueue.reduce((counts, entry) => {
-      if (entry.status === "located") counts.located += 1;
-      else if (entry.status === "downloaded") counts.downloaded += 1;
-      else if (entry.status === "missing") counts.missing += 1;
-      else if (entry.status === "review") counts.review += 1;
-      else counts.pending += 1;
-      return counts;
-    }, { located: 0, downloaded: 0, missing: 0, review: 0, pending: 0 });
-  }
-
-  function renderSgpar() {
-    const total = state.sgparQueue.length;
-    const counts = sgparCounts();
-    const current = total ? state.sgparQueue[Math.max(0, Math.min(state.sgparCurrent, total - 1))] : null;
-    const unresolved = counts.missing + counts.review;
-    const completed = total - counts.pending;
-    els.sgparCount.textContent = total ? `${total} documento${total === 1 ? "" : "s"} na fila` : "Nenhum documento";
-    els.sgparFoundCount.textContent = String(counts.located);
-    els.sgparDownloadedCount.textContent = String(counts.downloaded);
-    els.sgparPendingCount.textContent = String(counts.pending);
-    els.sgparUnresolvedCount.textContent = String(unresolved);
-    els.sgparProgressBar.style.width = `${total ? Math.round((completed / total) * 100) : 0}%`;
-    els.sgparPosition.textContent = current ? `Documento ${state.sgparCurrent + 1} de ${total}` : "Documento 0 de 0";
-    els.sgparCurrentStatus.textContent = current ? sgparStatusLabel(current.status) : "Pendente";
-    els.sgparCurrentStatus.className = `sgpar-status ${current ? current.status : "pending"}`;
-    els.sgparCode.textContent = current ? sgparSearchCode(current) : "—";
-    els.sgparExpectedFile.textContent = current
-      ? current.matchedFileName || current.fileName || current.raw
-      : "—";
-    [els.sgparCopy, els.sgparCopyOpen, els.sgparMarkDownloaded, els.sgparMarkMissing, els.sgparSkip,
-      els.sgparPrevious, els.sgparNext].forEach((button) => { button.disabled = !current; });
-    els.sgparQueue.innerHTML = state.sgparQueue.map((entry, index) => `
-      <button class="sgpar-queue-item${index === state.sgparCurrent ? " active" : ""}" type="button" data-sgpar-index="${index}">
-        <b>${index + 1}</b>
-        <span><strong>${escapeHtml(sgparSearchCode(entry))}</strong><small>${escapeHtml(entry.matchedFileName || entry.fileName || entry.raw)}</small></span>
-        <span class="sgpar-status ${escapeHtml(entry.status)}">${escapeHtml(sgparStatusLabel(entry.status))}</span>
-      </button>
-    `).join("");
-    els.sgparFilesMeta.textContent = state.sgparAddedFiles.length
-      ? `${state.sgparAddedFiles.length} PDF(s) adicionado(s) · ${counts.located} conciliado(s)`
-      : "Nenhum PDF adicionado";
-    els.sgparAnalyze.disabled = !state.ldFiles.length || !hasRelationSource();
-  }
-
-  function openSgparDrawer() {
-    closeRelationDrawer();
-    closeEgrdtDrawer();
-    renderSgpar();
-    els.sgparOverlay.hidden = false;
-    els.sgparDrawer.inert = false;
-    els.sgparDrawer.classList.add("open");
-    els.sgparDrawer.setAttribute("aria-hidden", "false");
-  }
-
-  function closeSgparDrawer() {
-    els.sgparDrawer.classList.remove("open");
-    els.sgparDrawer.setAttribute("aria-hidden", "true");
-    els.sgparDrawer.inert = true;
-    els.sgparOverlay.hidden = true;
-  }
-
-  function clearSgparQueue(closeDrawer = true) {
-    state.sgparQueue = [];
-    state.sgparCurrent = 0;
-    state.sgparAddedFiles = [];
-    els.sgparFiles.value = "";
-    if (closeDrawer) closeSgparDrawer();
-    renderSgpar();
-  }
-
-  async function prepareSgparQueue() {
-    if (!state.ldFiles.length || !hasRelationSource() || state.sgparLoading) return;
-    if (state.sgparQueue.length) {
-      reconcileSgparFiles();
-      openSgparDrawer();
-      return;
-    }
-    state.sgparLoading = true;
-    if (Workspace) Workspace.start("sgpar-queue", "Preparação SGPAR");
-    els.sgparStart.disabled = true;
-    const originalText = els.sgparStart.querySelector("span").textContent;
-    els.sgparStart.querySelector("span").textContent = state.textEntries.length ? "Preparando…" : "Lendo lista…";
-    try {
-      if (!state.index) {
-        const ldFile = state.ldFiles[0];
-        if (L) {
-          await ensureRuntime("xlsx");
-          await L.prepare(ldFile, { interactive: true });
-          if (!L.ready(ldFile)) throw new Error("Confirme a estrutura da LD antes de continuar.");
-        }
-        const workbook = L && L.workbookFor(ldFile) || await readWorkbook(ldFile, true);
-        const parsed = C.parseWorkbook(workbook, ldFile.name, ldFile.lastModified, L && L.profileFor(ldFile));
-        const integrity = validateLdIntegrity(ldFile, parsed);
-        if (!integrity.valid) throw new Error(`A integridade da LD foi reprovada: ${integrity.issues.join("; ")}.`);
-        state.records = parsed.records;
-        state.history = parsed.history;
-        syncEgrdtSequenceFromLd(state.records, state.history);
-        state.index = C.buildIndex(state.records, state.history);
-      }
-      const entries = await currentRelationEntries();
-      state.sgparQueue = entries.map((entry, index) => ({
-        ...entry,
-        id: `sgpar-${index + 1}`,
-        searchCode: sgparSearchCode(entry),
-        status: "pending",
-        matchedFileName: "",
-      }));
-      state.sgparCurrent = 0;
-      reconcileSgparFiles();
-      openSgparDrawer();
-    } catch (error) {
-      console.error(error);
-      showToast(error.message || "Não foi possível preparar a fila do SGPAR.", "error");
-    } finally {
-      state.sgparLoading = false;
-      if (Workspace) Workspace.finish("sgpar-queue");
-      els.sgparStart.querySelector("span").textContent = originalText;
-      updateInputMeta();
-    }
-  }
-
-  function moveSgpar(step) {
-    const total = state.sgparQueue.length;
-    if (!total) return;
-    state.sgparCurrent = (state.sgparCurrent + step + total) % total;
-    renderSgpar();
-  }
-
-  function advanceSgpar() {
-    const total = state.sgparQueue.length;
-    if (!total) return;
-    for (let offset = 1; offset <= total; offset += 1) {
-      const index = (state.sgparCurrent + offset) % total;
-      if (state.sgparQueue[index].status === "pending") {
-        state.sgparCurrent = index;
-        renderSgpar();
-        return;
-      }
-    }
-    for (let offset = 1; offset <= total; offset += 1) {
-      const index = (state.sgparCurrent + offset) % total;
-      if (state.sgparQueue[index].status === "skipped") {
-        state.sgparCurrent = index;
-        renderSgpar();
-        return;
-      }
-    }
-    moveSgpar(1);
-  }
-
-  function markSgpar(status) {
-    const current = state.sgparQueue[state.sgparCurrent];
-    if (!current) return;
-    current.status = status;
-    if (status !== "located" && status !== "review") current.matchedFileName = "";
-    advanceSgpar();
-  }
-
-  function fallbackCopy(value) {
-    const area = document.createElement("textarea");
-    area.value = value;
-    area.setAttribute("readonly", "");
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    let copied = false;
-    try { copied = typeof document.execCommand === "function" && document.execCommand("copy"); } catch (_) { console.debug("[App] execCommand copy:", _); copied = false; }
-    area.remove();
-    return copied;
-  }
-
-  async function copySgparCode() {
-    const current = state.sgparQueue[state.sgparCurrent];
-    const value = sgparSearchCode(current);
-    if (!value) return false;
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-        await navigator.clipboard.writeText(value);
-        return true;
-      }
-    } catch (_) { console.debug("[App] clipboard.writeText:", _); /* tenta o método compatível abaixo */ }
-    return fallbackCopy(value);
-  }
-
-  function sgparUrlForCurrent() {
-    const raw = String(els.sgparUrl.value || "").trim();
-    if (!raw) return "";
-    const code = sgparSearchCode(state.sgparQueue[state.sgparCurrent]);
-    let value = raw.replace(/\{codigo\}/gi, encodeURIComponent(code));
-    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) value = `https://${value}`;
-    try {
-      const parsed = new URL(value);
-      if (!/^https?:$/.test(parsed.protocol)) return "";
-      return parsed.href;
-    } catch (_) {
-      return "";
-    }
-  }
-
-  async function copyAndOpenSgpar() {
-    const current = state.sgparQueue[state.sgparCurrent];
-    if (!current) return;
-    const url = sgparUrlForCurrent();
-    const copyPromise = copySgparCode();
-    let opened = null;
-    if (url) opened = window.open(url, "_blank", "noopener,noreferrer");
-    const copied = await copyPromise;
-    if (!url) {
-      els.sgparUrl.focus();
-      showToast(copied ? "Código copiado. Informe o endereço do SGPAR para abri-lo." : "Informe o endereço do SGPAR e copie o código.", "warn");
-    } else if (!opened) {
-      showToast("Código copiado. O navegador bloqueou a nova aba; permita pop-ups para abrir o SGPAR.", "warn");
-    } else {
-      showToast(copied ? "Código copiado e SGPAR aberto." : "SGPAR aberto. Copie o código exibido para pesquisar.", "success");
-    }
-  }
-
-  function addSgparFiles(files) {
-    const pdfs = [...files].filter((file) => extensionOf(file.name) === "pdf");
-    if (!pdfs.length) {
-      showToast("Selecione pelo menos um arquivo PDF.", "warn");
-      return;
-    }
-    const merged = new Map(state.packageCandidates.map((file) => [listPhysicalKey(file), file]));
-    pdfs.forEach((file) => merged.set(listPhysicalKey(file), file));
-    state.packageCandidates = [...merged.values()];
-    const added = new Map(state.sgparAddedFiles.map((file) => [listPhysicalKey(file), file]));
-    pdfs.forEach((file) => added.set(listPhysicalKey(file), file));
-    state.sgparAddedFiles = [...added.values()];
-    invalidateAnalysisResults(true);
-    updateInputMeta();
-    reconcileSgparFiles();
-    renderSgpar();
-    const counts = sgparCounts();
-    showToast(`${pdfs.length} PDF(s) adicionado(s) · ${counts.located} item(ns) conciliado(s).`, counts.review ? "warn" : "success");
   }
 
   function extensionOf(name) {
@@ -4152,7 +3829,6 @@
       return;
     }
     closeRelationDrawer();
-    closeSgparDrawer();
     state.drawerIndices = valid;
     const multiple = valid.length > 1;
     els.drawerCount.textContent = multiple ? `${valid.length} documentos selecionados` : state.results[valid[0]].document;
@@ -4379,11 +4055,9 @@
     state.analysisLdSignature = "";
     closeEgrdtDrawer();
     closeRelationDrawer();
-    clearSgparQueue();
     els.ldInput.value = "";
     els.listInput.value = "";
     els.packageInput.value = "";
-    els.sgparUrl.value = Workspace ? String(Workspace.preference("sgparUrl", "")) : "";
     els.relationText.value = "";
     els.search.value = "";
     els.sheetFilter.value = "todos";
@@ -5396,7 +5070,6 @@
   }
 
   els.ldInput.addEventListener("change", async (event) => {
-    clearSgparQueue();
     state.conflictResolutions.clear();
     invalidateAnalysisResults();
     const files = [...event.target.files].filter((file) => /\.(xlsx?|xlsm)$/i.test(file.name));
@@ -5434,7 +5107,6 @@
     if (event.detail && state.ldFiles.includes(event.detail.file)) updateInputMeta();
   });
   els.listInput.addEventListener("change", async (event) => {
-    clearSgparQueue();
     invalidateAnalysisResults();
     const files = [...event.target.files].filter((file) => /\.(xlsx?|xlsm|csv)$/i.test(file.name));
     state.listFiles = [];
@@ -5463,7 +5135,7 @@
     }
   });
   els.packageInput.addEventListener("change", async (event) => {
-    invalidateAnalysisResults(state.sgparQueue.length > 0);
+    invalidateAnalysisResults();
     state.packageCandidates = [...event.target.files];
     state.packageSelectionPending = true;
     state.packageSelectionReady = false;
@@ -5487,12 +5159,7 @@
       updateInputMeta();
       refreshPerformancePanel(`${state.packageFiles.length.toLocaleString("pt-BR")} arquivo(s) prontos para análise.`);
     }
-    if (state.sgparQueue.length) {
-      reconcileSgparFiles();
-      renderSgpar();
-    }
   });
-  els.sgparStart.addEventListener("click", prepareSgparQueue);
   els.relationStart.addEventListener("click", openRelationDrawer);
   els.relationClose.addEventListener("click", cancelRelationDrawer);
   els.relationCancel.addEventListener("click", cancelRelationDrawer);
@@ -5510,35 +5177,8 @@
     els.recentDays.value = String(days);
     if (Workspace) Workspace.setPreference("recentDays", days);
   });
-  els.sgparUrl.addEventListener("change", () => {
-    if (Workspace) Workspace.setPreference("sgparUrl", String(els.sgparUrl.value || "").trim());
-  });
   els.allocationCenterSave?.addEventListener("click", saveAllocationCenter);
   els.allocationCenterClear?.addEventListener("click", clearAllocationCenter);
-  els.sgparClose.addEventListener("click", closeSgparDrawer);
-  els.sgparCancel.addEventListener("click", closeSgparDrawer);
-  els.sgparOverlay.addEventListener("click", closeSgparDrawer);
-  els.sgparCopy.addEventListener("click", async () => {
-    const copied = await copySgparCode();
-    showToast(copied ? "Código copiado." : "Não foi possível copiar automaticamente. Selecione o código exibido.", copied ? "success" : "warn");
-  });
-  els.sgparCopyOpen.addEventListener("click", copyAndOpenSgpar);
-  els.sgparMarkDownloaded.addEventListener("click", () => markSgpar("downloaded"));
-  els.sgparMarkMissing.addEventListener("click", () => markSgpar("missing"));
-  els.sgparSkip.addEventListener("click", () => markSgpar("skipped"));
-  els.sgparPrevious.addEventListener("click", () => moveSgpar(-1));
-  els.sgparNext.addEventListener("click", () => moveSgpar(1));
-  els.sgparQueue.addEventListener("click", (event) => {
-    const item = event.target.closest("[data-sgpar-index]");
-    if (!item) return;
-    state.sgparCurrent = Number(item.dataset.sgparIndex);
-    renderSgpar();
-  });
-  els.sgparFiles.addEventListener("change", (event) => addSgparFiles(event.target.files));
-  els.sgparAnalyze.addEventListener("click", () => {
-    closeSgparDrawer();
-    analyze();
-  });
   els.analyze.addEventListener("click", analyze);
   els.reset.addEventListener("click", reset);
 
@@ -5548,7 +5188,6 @@
       if (!state.ldFiles.length) return;
       state.ldFiles = [];
       els.ldInput.value = "";
-      clearSgparQueue();
       state.conflictResolutions.clear();
       invalidateAnalysisResults();
       updateInputMeta();
@@ -5585,7 +5224,6 @@
       state.listIgnoredFiles = [];
       els.listInput.value = "";
       if (window.Workspace) window.Workspace.clearDraft("grdtRelation");
-      clearSgparQueue();
       invalidateAnalysisResults();
       updateInputMeta();
       showToast("Relação e texto removidos.", "success");
@@ -5814,7 +5452,6 @@
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && els.drawer.classList.contains("open")) closeEgrdtDrawer();
-    if (event.key === "Escape" && els.sgparDrawer.classList.contains("open")) closeSgparDrawer();
     if (event.key === "Escape" && els.relationDrawer.classList.contains("open")) cancelRelationDrawer();
   });
 
@@ -5822,7 +5459,6 @@
     const savedRecentDays = Math.max(1, Math.min(365, Number(Workspace.preference("recentDays", 30)) || 30));
     state.recentDays = savedRecentDays;
     els.recentDays.value = String(savedRecentDays);
-    els.sgparUrl.value = String(Workspace.preference("sgparUrl", ""));
     const savedRelation = String(Workspace.draft("grdtRelation", "") || "");
     state.relationSavedText = savedRelation;
     state.relationDraft = savedRelation;
@@ -5834,7 +5470,6 @@
         els.recentDays.value = String(days);
         state.recentDays = days;
       }
-      if (document.activeElement !== els.sgparUrl) els.sgparUrl.value = String(Workspace.preference("sgparUrl", ""));
     });
   }
   function syncTriageVirtualRowHeight() {
@@ -5910,8 +5545,6 @@
   renderEgrdtBatchSettings();
   updateInputMeta();
   renderRelationPreview();
-  renderSgpar();
-  
   // Verifica se há LD anterior para sugerir reload
   if (window.GrconLdMemory && !state.ldFiles.length) {
     const lastLd = window.GrconLdMemory.get();
