@@ -38,24 +38,27 @@
     style.id = "pc-document-aggregate-style";
     style.textContent = `
       .pc-kpis > div small{display:block;margin-top:.28rem;color:var(--muted,#64748b);font-size:.72rem;line-height:1.25}
-      .pc-table .pc-document-code{display:flex;flex-direction:column;gap:.3rem;min-width:15rem}
-      .pc-table .pc-document-code small{color:var(--muted,#64748b);font-weight:500}
-      .pc-send-history{min-width:13.5rem}
-      .pc-send-history summary{cursor:pointer;display:flex;flex-direction:column;gap:.2rem;list-style:none}
+      .pc-table .pc-document-code{display:grid;gap:.32rem;min-width:0;max-width:100%}
+      .pc-table .pc-document-code small{display:block;color:var(--muted,#64748b);font-weight:500;line-height:1.35}
+      .pc-send-history{display:block;width:100%;min-width:0;max-width:100%}
+      .pc-send-history summary{cursor:pointer;display:grid;gap:.2rem;min-width:0;list-style:none}
       .pc-send-history summary::-webkit-details-marker{display:none}
-      .pc-send-history summary strong{color:var(--primary,#155c8a)}
-      .pc-send-history summary span{font-size:.74rem;color:var(--muted,#64748b)}
+      .pc-send-history summary strong{display:block;color:var(--primary,#155c8a);line-height:1.25}
+      .pc-send-history summary span{display:block;min-width:0;font-size:.74rem;line-height:1.35;color:var(--muted,#64748b);overflow-wrap:anywhere}
       .pc-send-history[open] summary{margin-bottom:.55rem}
       .pc-send-history-list{display:grid;gap:.4rem;max-height:18rem;overflow:auto;padding-right:.2rem}
-      .pc-send-event{display:grid;gap:.12rem;padding:.48rem .55rem;border:1px solid var(--border,#d5dee5);border-radius:.55rem;background:var(--surface-subtle,#f8fafc)}
-      .pc-send-event .pc-link{text-align:left;white-space:normal}
-      .pc-send-event small{font-size:.72rem;color:var(--muted,#64748b)}
+      .pc-send-event{display:grid;gap:.12rem;min-width:0;padding:.48rem .55rem;border:1px solid var(--border,#d5dee5);border-radius:.55rem;background:var(--surface-subtle,#f8fafc)}
+      .pc-send-event .pc-link{text-align:left;white-space:normal;overflow-wrap:anywhere}
+      .pc-send-event small{display:block;min-width:0;font-size:.72rem;line-height:1.35;color:var(--muted,#64748b);overflow-wrap:anywhere}
       .pc-send-event .pc-event-status{font-weight:700}
-      .pc-latest-send{display:flex;flex-direction:column;gap:.2rem;min-width:8rem}
-      .pc-latest-send small{color:var(--muted,#64748b)}
-      .pc-consolidation-note{display:inline-flex;align-items:center;gap:.35rem;margin-top:.3rem;padding:.2rem .45rem;border-radius:999px;background:var(--surface-subtle,#eef4f8);font-size:.7rem;color:var(--muted,#64748b)}
+      .pc-latest-send{display:grid;gap:.25rem;min-width:0;max-width:100%}
+      .pc-latest-send strong,.pc-latest-send small{display:block;min-width:0;max-width:100%}
+      .pc-latest-send small{color:var(--muted,#64748b);line-height:1.35;overflow-wrap:anywhere}
+      .pc-revision-stack{display:grid;gap:.24rem;min-width:0;max-width:100%;justify-items:center}
+      .pc-revision-stack>strong{display:block;line-height:1.2}
+      .pc-revision-stack>small{display:block;min-width:0;max-width:100%;font-size:.72rem;line-height:1.32;color:var(--muted,#64748b);overflow-wrap:anywhere}
+      .pc-consolidation-note{display:inline-flex;align-items:center;max-width:100%;gap:.35rem;margin-top:.3rem;padding:.2rem .45rem;border-radius:999px;background:var(--surface-subtle,#eef4f8);font-size:.7rem;line-height:1.3;color:var(--muted,#64748b);white-space:normal;overflow-wrap:anywhere}
       .pc-table-wrap{overscroll-behavior:contain}
-      @media (max-width:900px){.pc-send-history{min-width:11rem}.pc-table .pc-document-code{min-width:12rem}}
     `;
     document.head.appendChild(style);
   }
@@ -308,7 +311,7 @@
   }
 
   function documentsTable(rows) {
-    return `<table class="pc-table"><thead><tr><th>Documento</th><th>Tipo</th><th>Disciplina</th><th>Envios / eGRDTs</th><th>Último envio</th><th>Rev. atual</th><th>Rev. SIGEM</th><th>Conferência</th><th>Status SIGEM</th><th>Confirmado em</th><th>Observação</th></tr></thead><tbody>${rows.map((row) => `<tr><td><div class="pc-document-code"><strong>${escapeHtml(row.document)}</strong>${row.sendCount > 1 ? `<span class="pc-consolidation-note">1 documento · ${fmt(row.sendCount)} envios</span>` : ""}${row.historicalPreserved ? '<small>Confirmação histórica preservada</small>' : ""}</div></td><td>${escapeHtml(row.documentFamily || row.sheet || "—")}</td><td>${escapeHtml(row.discipline || "—")}</td><td>${sendHistory(row)}</td><td><div class="pc-latest-send"><strong>${fmtDate(row.latestSendAt || row.generatedAt, false)}</strong><small>${escapeHtml(row.latestEgrdtNumber || row.egrdtNumber || "—")}</small></div></td><td><strong>${escapeHtml(row.currentRevision || row.revisionSent || "—")}</strong>${row.revisionCount > 1 ? `<small>${fmt(row.revisionCount)} revisões no histórico</small>` : ""}</td><td>${escapeHtml(row.revisionFound || "—")}</td><td>${statusChip(row)}</td><td><span class="pc-sigem-status">${escapeHtml(row.sigemStatus || "—")}</span></td><td>${fmtDate(row.firstConfirmedAt, true)}</td><td class="pc-note" title="${escapeHtml(row.note)}">${escapeHtml(row.note)}</td></tr>`).join("")}</tbody></table>`;
+    return `<table class="pc-table pc-document-table" aria-label="Documentos conferidos"><colgroup><col class="pc-col-document"/><col class="pc-col-type"/><col class="pc-col-discipline"/><col class="pc-col-sends"/><col class="pc-col-latest"/><col class="pc-col-revision"/><col class="pc-col-sigem-revision"/><col class="pc-col-conference"/><col class="pc-col-sigem-status"/><col class="pc-col-confirmed"/><col class="pc-col-note"/></colgroup><thead><tr><th scope="col">Documento</th><th scope="col">Tipo</th><th scope="col">Disciplina</th><th scope="col">Envios / eGRDTs</th><th scope="col">Último envio</th><th scope="col">Rev. atual</th><th scope="col">Rev. SIGEM</th><th scope="col">Conferência</th><th scope="col">Status SIGEM</th><th scope="col">Confirmado em</th><th scope="col">Observação</th></tr></thead><tbody>${rows.map((row) => `<tr><td class="pc-cell pc-cell-document"><div class="pc-document-code"><strong>${escapeHtml(row.document)}</strong>${row.sendCount > 1 ? `<span class="pc-consolidation-note">1 documento · ${fmt(row.sendCount)} envios</span>` : ""}${row.historicalPreserved ? '<small>Confirmação histórica preservada</small>' : ""}</div></td><td class="pc-cell pc-cell-type">${escapeHtml(row.documentFamily || row.sheet || "—")}</td><td class="pc-cell pc-cell-discipline">${escapeHtml(row.discipline || "—")}</td><td class="pc-cell pc-cell-sends">${sendHistory(row)}</td><td class="pc-cell pc-cell-latest"><div class="pc-latest-send"><strong>${fmtDate(row.latestSendAt || row.generatedAt, false)}</strong><small>${escapeHtml(row.latestEgrdtNumber || row.egrdtNumber || "—")}</small></div></td><td class="pc-cell pc-cell-revision"><div class="pc-revision-stack"><strong>${escapeHtml(row.currentRevision || row.revisionSent || "—")}</strong>${row.revisionCount > 1 ? `<small>${fmt(row.revisionCount)} revisões no histórico</small>` : ""}</div></td><td class="pc-cell pc-cell-sigem-revision">${escapeHtml(row.revisionFound || "—")}</td><td class="pc-cell pc-cell-conference">${statusChip(row)}</td><td class="pc-cell pc-cell-sigem-status"><span class="pc-sigem-status">${escapeHtml(row.sigemStatus || "—")}</span></td><td class="pc-cell pc-cell-confirmed">${fmtDate(row.firstConfirmedAt, true)}</td><td class="pc-cell pc-cell-note pc-note" title="${escapeHtml(row.note)}">${escapeHtml(row.note)}</td></tr>`).join("")}</tbody></table>`;
   }
 
   function filteredGroups() {
