@@ -111,7 +111,9 @@ async function auditGeometry(page, label) {
       }
     });
 
-    const offscreenDialogs = [...document.querySelectorAll('[role="dialog"],aside')]
+    const offscreenDialogs = [...document.querySelectorAll('[role="dialog"],aside[aria-hidden="false"],.ops-inspector.open')]
+      .filter((node) => !node.classList.contains("ops-sidebar"))
+      .filter((node) => !node.hasAttribute("hidden") && !node.hasAttribute("inert"))
       .filter(visible)
       .filter((node) => {
         const rect = node.getBoundingClientRect();
