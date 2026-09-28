@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "posting_conference_app.js"
+      - "posting_conference_refinement.js"
       - "posting-conference.css"
       - "scripts/check-conference-layout.cjs"
       - "scripts/validar-ux-ui-global.cjs"
