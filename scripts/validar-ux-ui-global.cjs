@@ -71,6 +71,20 @@ async function auditGeometry(page, label) {
       tableClientWidth: conferenceTable?.clientWidth || 0,
       tableScrollWidth: conferenceTable?.scrollWidth || 0,
     };
+    const conferenceOverflowNodes = conferenceTable
+      ? [...conferenceTable.querySelectorAll("*")]
+          .filter(visible)
+          .map((node) => ({
+            target: node.className || node.tagName,
+            text: node.textContent.trim().slice(0, 120),
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+            overflow: node.scrollWidth - node.clientWidth,
+          }))
+          .filter((item) => item.overflow > 2)
+          .sort((a, b) => b.overflow - a.overflow)
+          .slice(0, 30)
+      : [];
     const horizontalScrollRegions = [...document.querySelectorAll("main.workspace *")]
       .filter(visible)
       .map((node) => {
@@ -173,7 +187,7 @@ async function auditGeometry(page, label) {
       });
     });
 
-    return { pageOverflow, conferenceOverflow, horizontalScrollRegions, tableOverlaps, flowOverlaps, offscreenDialogs, criticalTextOverflow, conferenceEscapes, viewport };
+    return { pageOverflow, conferenceOverflow, conferenceOverflowNodes, horizontalScrollRegions, tableOverlaps, flowOverlaps, offscreenDialogs, criticalTextOverflow, conferenceEscapes, viewport };
   });
 
   assert.ok(result.pageOverflow <= 2, `${label}: overflow horizontal global de ${result.pageOverflow}px`);
@@ -185,7 +199,7 @@ async function auditGeometry(page, label) {
   if (label.startsWith("Conferência") && result.conferenceOverflow.tableClientWidth) {
     assert.ok(
       result.conferenceOverflow.tableScrollWidth <= result.conferenceOverflow.tableClientWidth + 2,
-      `${label}: tabela da Conferência com overflow horizontal de ${result.conferenceOverflow.tableScrollWidth - result.conferenceOverflow.tableClientWidth}px`
+      `${label}: tabela da Conferência com overflow horizontal de ${result.conferenceOverflow.tableScrollWidth - result.conferenceOverflow.tableClientWidth}px; nós: ${JSON.stringify(result.conferenceOverflowNodes)}`
     );
     assert.ok(
       result.conferenceOverflow.wrapScrollWidth <= result.conferenceOverflow.wrapClientWidth + 2,
