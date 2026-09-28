@@ -5411,7 +5411,6 @@
   if (els.egrdtBatchSave) els.egrdtBatchSave.addEventListener("click", saveEgrdtBatchLimit);
   if (els.egrdtBatchLimit) {
     els.egrdtBatchLimit.addEventListener("keydown", (event) => { if (event.key === "Enter") saveEgrdtBatchLimit(); });
-    els.egrdtBatchLimit.addEventListener("blur", () => renderEgrdtBatchSettings());
   }
   if (els.clearLdCache) els.clearLdCache.addEventListener("click", async () => {
     try {
