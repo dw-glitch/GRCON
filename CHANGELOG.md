@@ -1,3 +1,13 @@
+## 5.44.0 — 2026-09-28
+
+### Consolidação da modernização e gate final do Controle de GRDT
+
+- Removido integralmente o fluxo legado **SGPAR assistido** do Controle de GRDT, incluindo botão, drawer, estado, handlers, preferências, guardas e estilos exclusivos.
+- A faixa principal do Controle foi recomposta para desktop sem deixar lacunas ou sobreposições após a remoção do SGPAR.
+- O gate Chromium passa a validar o botão **Aplicar** do limite configurável, os modos **Separar por disciplina** e **Somente por limite**, ausência de SGPAR e estabilidade visual antes de exercitar a Repostagem.
+- Repostagem continua usando o mesmo motor compartilhado de loteamento da geração normal, preservando limite configurável, histórico, sincronização e validações existentes.
+- O cache do Service Worker foi renovado para impedir que instalações existentes mantenham UI legada do SGPAR após a publicação.
+
 ## 2026-09-11 — Exportação XLSX da lista filtrada no Dashboard SIGEM × PW
 
 - “Situação das Revisões” ganhou o botão `Exportar lista filtrada` ao lado do contador do filtro.
