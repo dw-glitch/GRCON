@@ -2195,29 +2195,22 @@ check("faixa Retomar só aparece com histórico real e nunca inventa número", (
   assert.match(js, /History\.summary\(lista\)/);
 });
 
-check("auditoria de tela: selo de planilha, painel SGPAR no escuro e campo com rótulo", () => {
+check("auditoria de tela: SGPAR removido, selo de planilha e campo com rótulo", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const guard = fs.readFileSync(path.join(root, "analysis_runtime_guard.js"), "utf8");
   const legado = fs.readFileSync(path.join(root, "legacy-compat.css"), "utf8");
 
-  // O selo da planilha era a letra "X" solta. Medido no navegador, ela saía
-  // rgb(10,82,125) sobre rgb(228,242,248) — o mesmo par do selo de pasta —,
-  // porque o token do design-system vence a regra branca sobre verde. Um "X"
-  // azul nos dois pontos de entrada do app é lido como erro ou fechar.
+  assert.doesNotMatch(html, /sgpar/i, "o Controle de GRDT não pode reexibir botão ou drawer do SGPAR");
+  assert.doesNotMatch(app, /sgpar/i, "o runtime não pode manter estado, handlers ou preferências do SGPAR");
+  assert.doesNotMatch(guard, /sgpar/i, "o guard de analyze não deve observar um fluxo removido");
+  assert.doesNotMatch(legado, /sgpar/i, "CSS exclusivo do SGPAR deve permanecer removido");
+
   assert.doesNotMatch(html, /class="source-icon excel">X</,
     "o selo de planilha não pode voltar a ser a letra X");
   assert.match(html, /class="source-icon excel">\s*<svg/, "o selo de planilha usa ícone");
   assert.match(legado, /\.source-icon\.excel svg/, "o ícone do selo precisa de tamanho e traço próprios");
 
-  // No modo escuro o cartão do SGPAR ficava com texto claro sobre fundo branco
-  // literal: 1,26:1 medido, ou seja, os números somem. O gêmeo
-  // .relation-summary > div já estava na lista de escuro; este ficou de fora.
-  assert.match(legado, /body\.p2-dark \.sgpar-overview > div:not\(\.sgpar-progress\)/,
-    "o cartão do SGPAR precisa de fundo escuro no modo escuro");
-  assert.match(legado, /body\.p2-dark \.sgpar-overview strong/,
-    "o número do cartão tem cor fixa e precisa da versão escura");
-
-  // O Histórico de análises agora é uma React Island; o contrato acessível
-  // continua existindo no componente que renderiza a busca unificada.
   const historyReact = fs.readFileSync(path.join(root, "src/react/historico-analises/components/HistoricoAnalisesComponents.tsx"), "utf8");
   assert.match(historyReact, /aria-label="[^"]+"[\s\S]{0,240}id="unified-search-text"/,
     "a busca unificada precisa de rótulo acessível");
