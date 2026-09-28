@@ -70,6 +70,12 @@ async function validateControlShell(page) {
   assert.equal(await page.locator("#sgpar-start").count(), 0, "botão SGPAR removido não pode reaparecer");
   assert.equal(await page.locator("#sgpar-drawer").count(), 0, "drawer SGPAR removido não pode reaparecer");
 
+  await page.waitForFunction(() => Boolean(
+    window.GrconEgrdtBatchPlan?.getLimit
+    && window.GrconEgrdtBatchPlan?.getMode
+    && document.querySelector("#egrdt-batch-limit-save")
+  ), null, { timeout: 30000 });
+
   const advanced = page.locator("#advanced-toggle");
   const panel = page.locator("#advanced-panel");
   if (await panel.getAttribute("hidden") !== null) await advanced.click();
