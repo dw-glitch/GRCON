@@ -67,6 +67,29 @@ async function probe(page, pathname) {
   }, pathname);
 }
 
+
+async function revealAuthenticatedShell(page) {
+  const css = [
+    "html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }",
+    "#grcon-cloud-auth { display: none !important; }",
+  ].join("\n");
+  let lastError = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded", { timeout: 30000 });
+      await page.addStyleTag({ content: css });
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached/i.test(message)) throw error;
+      await page.waitForLoadState("domcontentloaded", { timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(100);
+    }
+  }
+  throw lastError || new Error("Não foi possível estabilizar a página após o Service Worker.");
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const results = { viewports: {}, probes: {}, api: null, pwa: null, mascot: null };
@@ -95,7 +118,7 @@ async function probe(page, pathname) {
     assert.equal(response.status(), 200, "A raiz do pacote Cloudflare deve responder 200.");
 
     await waitForServiceWorker(page);
-    await addCloudAuthBypassStyles(page);
+    await revealAuthenticatedShell(page);
 
     await page.waitForFunction(() => Boolean(window.GRCONModuleLoader), null, { timeout: 15000 });
     await page.waitForFunction(() => Boolean(window.GrconMascot), null, { timeout: 15000 });
