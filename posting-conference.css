@@ -74,3 +74,112 @@
 .pc-heading-actions svg{flex-shrink:0}
 .pc-audit-card article>div{min-width:0;overflow-wrap:anywhere}
 @media(prefers-reduced-motion:reduce){.pc-progress i{animation:none}}
+
+
+/* UX/UI 2026-09-28 — tabela documental da Conferência.
+   Mantém todas as informações, mas impede que conteúdo de células vizinhas
+   compartilhe o mesmo espaço visual. O excedente fica no scroll local da tabela. */
+.pc-table-wrap{
+  position:relative;
+  isolation:isolate;
+  overflow:auto;
+  overscroll-behavior:contain;
+}
+.pc-document-table{
+  width:1850px;
+  min-width:1850px;
+  max-width:none;
+  table-layout:fixed;
+}
+.pc-document-table .pc-col-document{width:270px}
+.pc-document-table .pc-col-type{width:100px}
+.pc-document-table .pc-col-discipline{width:120px}
+.pc-document-table .pc-col-sends{width:225px}
+.pc-document-table .pc-col-latest{width:190px}
+.pc-document-table .pc-col-revision{width:110px}
+.pc-document-table .pc-col-sigem-revision{width:100px}
+.pc-document-table .pc-col-conference{width:150px}
+.pc-document-table .pc-col-sigem-status{width:165px}
+.pc-document-table .pc-col-confirmed{width:150px}
+.pc-document-table .pc-col-note{width:270px}
+.pc-document-table th,
+.pc-document-table td{
+  box-sizing:border-box;
+  min-width:0;
+  max-width:none;
+}
+.pc-document-table td{
+  vertical-align:top;
+  overflow:hidden;
+}
+.pc-document-table td > *,
+.pc-document-table td details,
+.pc-document-table td summary{
+  box-sizing:border-box;
+  min-width:0;
+  max-width:100%;
+}
+.pc-document-table .pc-cell-type,
+.pc-document-table .pc-cell-discipline,
+.pc-document-table .pc-cell-sigem-revision,
+.pc-document-table .pc-cell-confirmed{
+  overflow-wrap:anywhere;
+  word-break:normal;
+}
+.pc-document-table .pc-cell-revision,
+.pc-document-table .pc-cell-sigem-revision,
+.pc-document-table .pc-cell-conference{
+  text-align:center;
+}
+.pc-document-table .pc-cell-sends,
+.pc-document-table .pc-cell-latest,
+.pc-document-table .pc-cell-revision,
+.pc-document-table .pc-cell-conference,
+.pc-document-table .pc-cell-sigem-status{
+  padding-top:13px;
+}
+.pc-document-table .pc-cell-confirmed{
+  line-height:1.35;
+}
+.pc-document-table .pc-cell-note{
+  min-width:0;
+  max-width:none;
+  line-height:1.42;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.pc-document-table .pc-latest-send,
+.pc-document-table .pc-revision-stack,
+.pc-document-table .pc-send-history,
+.pc-document-table .pc-status,
+.pc-document-table .pc-sigem-status{
+  position:relative;
+  z-index:0;
+}
+.pc-document-table .pc-latest-send small{
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.pc-document-table .pc-send-history summary{
+  padding:1px 0;
+}
+.pc-document-table .pc-send-history summary span{
+  white-space:normal;
+}
+.pc-document-table .pc-revision-stack small{
+  text-align:center;
+}
+.pc-document-table .pc-status,
+.pc-document-table .pc-sigem-status{
+  width:100%;
+  justify-content:center;
+}
+.pc-document-table .pc-sigem-status{
+  text-align:center;
+}
+@media (max-width:1450px){
+  .pc-document-table{
+    width:1850px;
+    min-width:1850px;
+  }
+}
