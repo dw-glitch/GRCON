@@ -77,40 +77,56 @@
 
 
 /* UX/UI 2026-09-28 — tabela documental da Conferência.
-   Mantém todas as informações, mas impede que conteúdo de células vizinhas
-   compartilhe o mesmo espaço visual. O excedente fica no scroll local da tabela. */
+   As onze colunas anteriores foram recompostas em seis blocos semânticos.
+   A tabela ocupa somente a largura real do workspace; conteúdo longo cresce
+   verticalmente e permanece integralmente identificável. */
 .pc-table-wrap{
   position:relative;
   isolation:isolate;
   overflow:auto;
   overscroll-behavior:contain;
 }
-.pc-document-table{
-  width:1850px;
-  min-width:1850px;
-  max-width:none;
+.pc-table.pc-document-table{
+  width:100%;
+  min-width:0;
+  max-width:100%;
   table-layout:fixed;
 }
-.pc-document-table .pc-col-document{width:270px}
-.pc-document-table .pc-col-type{width:100px}
-.pc-document-table .pc-col-discipline{width:120px}
-.pc-document-table .pc-col-sends{width:225px}
-.pc-document-table .pc-col-latest{width:190px}
-.pc-document-table .pc-col-revision{width:110px}
-.pc-document-table .pc-col-sigem-revision{width:100px}
-.pc-document-table .pc-col-conference{width:150px}
-.pc-document-table .pc-col-sigem-status{width:165px}
-.pc-document-table .pc-col-confirmed{width:150px}
-.pc-document-table .pc-col-note{width:270px}
+.pc-document-table .pc-col-document{width:24%}
+.pc-document-table .pc-col-sends{width:21%}
+.pc-document-table .pc-col-revisions{width:12%}
+.pc-document-table .pc-col-situation{width:18%}
+.pc-document-table .pc-col-confirmation{width:10%}
+.pc-document-table .pc-col-note{width:15%}
 .pc-document-table th,
 .pc-document-table td{
   box-sizing:border-box;
   min-width:0;
   max-width:none;
 }
+.pc-document-table th{
+  white-space:normal;
+  line-height:1.25;
+}
+.pc-document-table th:first-child{
+  left:auto;
+  box-shadow:none;
+}
+.pc-document-table td:first-child{
+  position:static;
+  left:auto;
+  box-shadow:none;
+}
+.pc-document-table tbody tr:nth-child(even) td:first-child{
+  background:color-mix(in srgb,var(--surface,#fff) 97%,var(--accent,#155c8a) 3%);
+}
+.pc-document-table tbody tr:hover td:first-child{
+  background:var(--surface-hover,#f8fafb);
+}
 .pc-document-table td{
   vertical-align:top;
-  overflow:hidden;
+  padding:11px 10px;
+  line-height:1.38;
 }
 .pc-document-table td > *,
 .pc-document-table td details,
@@ -119,67 +135,251 @@
   min-width:0;
   max-width:100%;
 }
-.pc-document-table .pc-cell-type,
-.pc-document-table .pc-cell-discipline,
-.pc-document-table .pc-cell-sigem-revision,
-.pc-document-table .pc-cell-confirmed{
+.pc-document-code{
+  display:grid;
+  gap:5px;
+  min-width:0;
+}
+.pc-document-table .pc-document-code>strong{
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:normal;
+  line-height:1.38;
+  color:var(--heading,#17364b);
+}
+.pc-document-meta{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:3px 6px;
+  min-width:0;
+  color:var(--muted,#657580);
+  font-size:10.5px;
+  font-weight:700;
+  line-height:1.3;
+}
+.pc-block-label{
+  display:block;
+  margin-bottom:3px;
+  color:var(--muted,#657580);
+  font-size:9px;
+  font-weight:800;
+  line-height:1.2;
+  letter-spacing:.045em;
+  text-transform:uppercase;
+}
+.pc-send-overview{
+  display:grid;
+  gap:9px;
+  min-width:0;
+}
+.pc-send-count{
+  display:grid;
+  gap:2px;
+  min-width:0;
+}
+.pc-send-count>strong{
+  color:var(--heading,#17364b);
+  font-size:12px;
+  line-height:1.2;
+}
+.pc-send-count>small{
+  min-width:0;
+  color:var(--muted,#657580);
+  font-size:10px;
+  line-height:1.3;
+  overflow-wrap:anywhere;
+}
+.pc-document-table .pc-latest-send{
+  display:grid;
+  gap:2px;
+  min-width:0;
+}
+.pc-document-table .pc-latest-send>strong{
+  font-size:11px;
+  line-height:1.25;
+}
+.pc-latest-egrdt,
+.pc-document-table .pc-send-event .pc-link{
+  display:block;
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:normal;
+  line-height:1.32;
+}
+.pc-document-table .pc-send-history{
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+}
+.pc-document-table .pc-send-history>summary{
+  width:fit-content;
+  max-width:100%;
+  cursor:pointer;
+  color:var(--accent,#155c8a);
+  font-size:10.5px;
+  font-weight:800;
+  line-height:1.3;
+  list-style:none;
+}
+.pc-document-table .pc-send-history>summary::-webkit-details-marker{display:none}
+.pc-document-table .pc-send-history>summary::before{
+  content:"▸";
+  display:inline-block;
+  margin-right:5px;
+  transition:transform .16s ease;
+}
+.pc-document-table .pc-send-history[open]>summary::before{transform:rotate(90deg)}
+.pc-document-table .pc-send-history[open]>summary{margin-bottom:7px}
+.pc-document-table .pc-send-history-list{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+}
+.pc-document-table .pc-send-event{
+  min-width:0;
+  max-width:100%;
+}
+.pc-document-table .pc-send-event small{
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.pc-cell-revisions{
+  text-align:center;
+}
+.pc-revision-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:5px;
+  min-width:0;
+}
+.pc-revision-grid>div{
+  min-width:0;
+  padding:5px 3px;
+  border:1px solid var(--line-soft,#e8edf1);
+  border-radius:7px;
+  background:var(--surface-2,#f5f8fa);
+}
+.pc-revision-grid strong{
+  display:block;
+  font-size:12px;
+  line-height:1.2;
+  overflow-wrap:anywhere;
+}
+.pc-revision-history{
+  display:block;
+  margin-top:6px;
+  color:var(--muted,#657580);
+  font-size:9.5px;
+  line-height:1.3;
+  text-align:center;
+  overflow-wrap:anywhere;
+}
+.pc-situation-stack{
+  display:grid;
+  gap:8px;
+  min-width:0;
+}
+.pc-situation-stack>div{
+  min-width:0;
+}
+.pc-document-table .pc-status,
+.pc-document-table .pc-sigem-status{
+  width:fit-content;
+  max-width:100%;
+  justify-content:flex-start;
+  text-align:left;
+  white-space:normal;
   overflow-wrap:anywhere;
   word-break:normal;
 }
-.pc-document-table .pc-cell-revision,
-.pc-document-table .pc-cell-sigem-revision,
-.pc-document-table .pc-cell-conference{
-  text-align:center;
+.pc-cell-confirmation{
+  min-width:0;
 }
-.pc-document-table .pc-cell-sends,
-.pc-document-table .pc-cell-latest,
-.pc-document-table .pc-cell-revision,
-.pc-document-table .pc-cell-conference,
-.pc-document-table .pc-cell-sigem-status{
-  padding-top:13px;
-}
-.pc-document-table .pc-cell-confirmed{
+.pc-cell-confirmation>strong{
+  display:block;
+  max-width:100%;
+  color:var(--heading,#17364b);
+  font-size:10.5px;
+  font-weight:750;
   line-height:1.35;
+  white-space:normal;
+  overflow-wrap:anywhere;
 }
+.pc-empty-value{color:var(--muted,#657580)}
 .pc-document-table .pc-cell-note{
   min-width:0;
   max-width:none;
+  color:var(--muted,#657580);
+  white-space:normal;
+}
+.pc-note-text,
+.pc-note-full{
+  min-width:0;
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:normal;
   line-height:1.42;
+}
+.pc-note-details{
+  min-width:0;
+  max-width:100%;
+}
+.pc-note-details>summary{
+  display:grid;
+  gap:4px;
+  cursor:pointer;
+  list-style:none;
+}
+.pc-note-details>summary::-webkit-details-marker{display:none}
+.pc-note-details>summary span{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  overflow:hidden;
+  min-width:0;
+  max-width:100%;
   white-space:normal;
   overflow-wrap:anywhere;
 }
-.pc-document-table .pc-latest-send,
-.pc-document-table .pc-revision-stack,
-.pc-document-table .pc-send-history,
-.pc-document-table .pc-status,
-.pc-document-table .pc-sigem-status{
-  position:relative;
-  z-index:0;
+.pc-note-details>summary em{
+  color:var(--accent,#155c8a);
+  font-size:10px;
+  font-style:normal;
+  font-weight:800;
 }
-.pc-document-table .pc-latest-send small{
-  white-space:normal;
-  overflow-wrap:anywhere;
+.pc-note-details[open]>summary span{
+  -webkit-line-clamp:unset;
 }
-.pc-document-table .pc-send-history summary{
-  padding:1px 0;
+.pc-note-details[open]>summary em{display:none}
+.pc-note-full{
+  margin-top:6px;
+  color:var(--text,#253746);
 }
-.pc-document-table .pc-send-history summary span{
-  white-space:normal;
+@media(max-width:1450px){
+  .pc-document-table td{padding:10px 8px}
+  .pc-document-table th{padding:9px 8px;font-size:9.5px}
+  .pc-document-table .pc-col-document{width:23%}
+  .pc-document-table .pc-col-sends{width:21%}
+  .pc-document-table .pc-col-revisions{width:12%}
+  .pc-document-table .pc-col-situation{width:19%}
+  .pc-document-table .pc-col-confirmation{width:10%}
+  .pc-document-table .pc-col-note{width:15%}
 }
-.pc-document-table .pc-revision-stack small{
-  text-align:center;
+@media(max-width:1180px){
+  .pc-document-table td{padding:9px 7px}
+  .pc-document-table .pc-col-document{width:22%}
+  .pc-document-table .pc-col-sends{width:21%}
+  .pc-document-table .pc-col-revisions{width:12%}
+  .pc-document-table .pc-col-situation{width:20%}
+  .pc-document-table .pc-col-confirmation{width:10%}
+  .pc-document-table .pc-col-note{width:15%}
+  .pc-document-meta,.pc-send-count>small,.pc-revision-history{font-size:9px}
 }
-.pc-document-table .pc-status,
-.pc-document-table .pc-sigem-status{
-  width:100%;
-  justify-content:center;
-}
-.pc-document-table .pc-sigem-status{
-  text-align:center;
-}
-@media (max-width:1450px){
-  .pc-document-table{
-    width:1850px;
-    min-width:1850px;
-  }
+@media(prefers-reduced-motion:reduce){
+  .pc-document-table .pc-send-history>summary::before{transition:none}
 }
