@@ -1,3 +1,15 @@
+## 5.44.1 — 2026-09-28
+
+### Hardening UX/UI da Conferência e auditoria navegacional
+
+- Reestruturada a tabela de **Conferência de Postagem** para impedir colisões entre documento, envios/eGRDTs, data, revisão, histórico, conferência e Status SIGEM.
+- As 11 colunas passam a ter responsabilidades e larguras explícitas; conteúdo longo quebra dentro da própria célula e o excedente horizontal permanece no scroll local da tabela.
+- Preservados múltiplos envios, histórico expandível, primeira coluna fixa, temas claro/escuro e todos os dados operacionais.
+- Adicionado QA geométrico real da Conferência em 1920, 1600, 1440, 1366 e 1280 px, incluindo códigos/eGRDTs longos e revisões múltiplas.
+- Adicionado smoke navegacional UX/UI que percorre os módulos principais, Ferramentas adicionais e SIGEM × PW, verificando overflow global, sobreposição, drawers/modais e erros de console.
+- A auditoria completa não encontrou outra colisão de layout reproduzível nas telas percorridas; os falsos positivos do próprio QA para drawers fechados e bootstrap inicial foram corrigidos antes da integração.
+- Cache do Service Worker renovado para entregar imediatamente a correção visual publicada.
+
 ## 5.44.0 — 2026-09-28
 
 ### Consolidação da modernização e gate final do Controle de GRDT
