@@ -62,6 +62,67 @@ async function waitForStableServiceWorkerPage(page) {
   if (lastError) throw lastError;
 }
 
+async function validateControlShell(page) {
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await waitForStableServiceWorkerPage(page).catch(() => {});
+  await revealApp(page);
+
+  assert.equal(await page.locator("#sgpar-start").count(), 0, "botão SGPAR removido não pode reaparecer");
+  assert.equal(await page.locator("#sgpar-drawer").count(), 0, "drawer SGPAR removido não pode reaparecer");
+
+  const advanced = page.locator("#advanced-toggle");
+  const panel = page.locator("#advanced-panel");
+  if (await panel.getAttribute("hidden") !== null) await advanced.click();
+  await panel.waitFor({ state: "visible", timeout: 10000 });
+
+  await page.locator("#egrdt-batch-mode").selectOption("limit-only");
+  await page.locator("#egrdt-batch-limit").fill("72");
+  await page.locator("#egrdt-batch-limit-save").click();
+  await page.waitForFunction(() => window.GrconEgrdtBatchPlan?.getLimit?.() === 72
+    && window.GrconEgrdtBatchPlan?.getMode?.() === "limit-only");
+  const status72 = await page.locator("#egrdt-batch-limit-status").textContent();
+  assert.match(status72 || "", /72/, "Aplicar precisa refletir o limite configurado no Controle");
+  assert.match(status72 || "", /Somente limite|Somente por limite/i, "modo sem disciplina deve ficar explícito");
+
+  const layout = await page.evaluate(() => {
+    const row = document.querySelector(".source-row");
+    const controls = row ? Array.from(row.children).filter((node) => {
+      const rect = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    }) : [];
+    const rects = controls.map((node) => {
+      const r = node.getBoundingClientRect();
+      return { id: node.id || node.className, left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+    });
+    let overlap = false;
+    for (let i = 0; i < rects.length; i += 1) {
+      for (let j = i + 1; j < rects.length; j += 1) {
+        const a = rects[i], b = rects[j];
+        const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (x > 1 && y > 1) overlap = true;
+      }
+    }
+    return {
+      overlap,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      rects,
+    };
+  });
+  assert.equal(layout.overlap, false, "controles da faixa principal não podem se sobrepor");
+  assert.ok(layout.overflow <= 2, "Controle de GRDT não deve gerar overflow horizontal da página em desktop");
+
+  await page.screenshot({ path: path.join(outputDir, "controle-desktop-sem-sgpar.png"), fullPage: true });
+
+  await page.locator("#egrdt-batch-mode").selectOption("discipline");
+  await page.locator("#egrdt-batch-limit").fill("48");
+  await page.locator("#egrdt-batch-limit-save").click();
+  await page.waitForFunction(() => window.GrconEgrdtBatchPlan?.getLimit?.() === 48
+    && window.GrconEgrdtBatchPlan?.getMode?.() === "discipline");
+  return { status72, layout };
+}
+
 async function clickVisibleView(page, view) {
   await page.waitForFunction((wanted) => Array.from(document.querySelectorAll('[data-grcon-view="' + wanted + '"]')).some((node) => {
     const style = getComputedStyle(node);
@@ -123,6 +184,9 @@ async function lookup(page, count) {
 
   const metrics = {};
   try {
+    const control = await validateControlShell(page);
+    metrics.controlBatchApply = control.status72;
+    metrics.controlOverflow = control.layout.overflow;
     await openReissue(page);
     await installFixtures(page);
     await page.locator("#grdt-reissue-batch-mode").selectOption("limit-only");
@@ -198,7 +262,7 @@ async function lookup(page, count) {
     });
     assert.equal(unexpectedErrors.length, 0, "console/page errors: " + unexpectedErrors.join("\\n"));
     fs.writeFileSync(path.join(outputDir, "metrics.json"), JSON.stringify({ metrics, interaction, mobile, filteredBootstrapErrors: errors.length - unexpectedErrors.length }, null, 2));
-    console.log("OK — Repostagem validada no Chromium em 48/96/240 linhas, edição incremental e mobile.");
+    console.log("OK — Controle de GRDT sem SGPAR e Aplicar 72/48 validado; Repostagem validada no Chromium em 48/96/240 linhas, edição incremental e mobile.");
   } finally {
     await browser.close();
   }
