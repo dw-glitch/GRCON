@@ -1337,7 +1337,6 @@ html[data-app="GRCON"][data-ui-generation="3"][data-theme="dark"] :is(
   .compact-source,
   .relation-source,
   .relation-text-button,
-  .sgpar-button,
   .settings-button,
   .p2-theme-toggle
 ) {
@@ -1363,7 +1362,6 @@ html[data-app="GRCON"][data-ui-generation="3"][data-theme="dark"] :is(
   background: var(--brand-50);
 }
 html[data-app="GRCON"][data-ui-generation="3"][data-theme="dark"] :is(
-  .sgpar-button,
   .primary-button,
   .analyze-button,
   .final-package-button
@@ -1607,12 +1605,11 @@ html[data-app="GRCON"] #relation-slot > .relation-text-button {
   min-width: 5rem;
 }
 
-html[data-app="GRCON"] .source-row > :is(.source-slot, .sgpar-button, .settings-button, .analyze-button) {
+html[data-app="GRCON"] .source-row > :is(.source-slot, .settings-button, .analyze-button) {
   min-width: 0;
   max-width: 100%;
 }
 
-html[data-app="GRCON"] .sgpar-button,
 html[data-app="GRCON"] .settings-button,
 html[data-app="GRCON"] .analyze-button {
   display: inline-flex;
@@ -1622,7 +1619,6 @@ html[data-app="GRCON"] .analyze-button {
   overflow: hidden;
 }
 
-html[data-app="GRCON"] .sgpar-button > span,
 html[data-app="GRCON"] .analyze-button > span,
 html[data-app="GRCON"] .settings-button-label {
   min-width: 0;
@@ -1631,7 +1627,6 @@ html[data-app="GRCON"] .settings-button-label {
   text-align: center;
 }
 
-html[data-app="GRCON"] .sgpar-button > svg,
 html[data-app="GRCON"] .settings-button > svg,
 html[data-app="GRCON"] .analyze-button > svg {
   flex: 0 0 auto;
@@ -1645,7 +1640,7 @@ html[data-app="GRCON"] .settings-button-label {
   font-weight: 750;
 }
 
-html[data-app="GRCON"] :is(.relation-text-button, .sgpar-button, .settings-button, .analyze-button):focus-visible {
+html[data-app="GRCON"] :is(.relation-text-button, .settings-button, .analyze-button):focus-visible {
   outline: 3px solid color-mix(in srgb, var(--brand-500, #2782bd) 35%, transparent);
   outline-offset: 2px;
 }
@@ -1724,17 +1719,14 @@ html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .source-slot {
   grid-column: span 4;
 }
 
-html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .sgpar-button {
-  grid-column: span 4;
-}
 
 html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .settings-button {
-  grid-column: span 1;
+  grid-column: span 2;
   width: 100%;
 }
 
 html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button {
-  grid-column: span 7;
+  grid-column: span 10;
 }
 
 @container (max-width: 76rem) {
@@ -1742,9 +1734,8 @@ html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .source-slot { grid-column: auto; }
-  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .sgpar-button { grid-column: 1 / 3; }
-  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .settings-button { grid-column: 3; width: 100%; }
-  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button { grid-column: 1 / -1; }
+  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .settings-button { grid-column: 1; width: 100%; }
+  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button { grid-column: 2 / 4; }
 }
 
 @container (max-width: 54rem) {
@@ -1754,9 +1745,8 @@ html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button {
   html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .source-slot:nth-child(1),
   html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .source-slot:nth-child(2) { grid-column: auto; }
   html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .source-slot:nth-child(3) { grid-column: 1 / -1; }
-  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .sgpar-button { grid-column: 1; }
-  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .settings-button { grid-column: 2; width: 100%; }
-  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button { grid-column: 1 / -1; }
+  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .settings-button { grid-column: 1; width: 100%; }
+  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button { grid-column: 2; }
   html[data-app="GRCON"] .settings-button-label { display: inline; }
 }
 
