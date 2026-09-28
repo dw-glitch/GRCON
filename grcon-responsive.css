@@ -308,7 +308,7 @@ html[data-app="GRCON"][data-ui-generation="3"] :where(
   }
 
   html[data-app="GRCON"][data-ui-generation="3"] :where(
-    .relation-drawer, .sgpar-drawer, .egrdt-drawer, .compatibility-drawer,
+    .relation-drawer, .egrdt-drawer, .compatibility-drawer,
     .ld-compatibility-drawer, .databook-assistant-drawer, .pending-panel-drawer,
     .task-center-drawer, .ops-inspector
   ) {
@@ -415,7 +415,7 @@ html[data-app="GRCON"][data-ui-generation="3"] :where(
     overflow-wrap: anywhere;
   }
 
-  html[data-app="GRCON"][data-ui-generation="3"] :where(.progress-wrap, .progress, .sgpar-progress) {
+  html[data-app="GRCON"][data-ui-generation="3"] :where(.progress-wrap, .progress) {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -425,7 +425,7 @@ html[data-app="GRCON"][data-ui-generation="3"] :where(
 /* Janelas baixas: nenhum painel importante fica maior que a área visível. */
 @media (max-height: 46rem) {
   html[data-app="GRCON"][data-ui-generation="3"] :where(
-    .relation-drawer, .sgpar-drawer, .egrdt-drawer, .compatibility-drawer,
+    .relation-drawer, .egrdt-drawer, .compatibility-drawer,
     .ld-compatibility-drawer, .databook-assistant-drawer, .pending-panel-drawer,
     .task-center-drawer, .ops-inspector
   ) {

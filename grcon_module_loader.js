@@ -245,9 +245,10 @@
     if (scrollingElement) scrollingElement.scrollTop = 0;
     if (root.scrollY) root.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.querySelectorAll("[data-grcon-view]").forEach((button) => {
-      const nestedToolView = view === "pdf-tools" || view === "cover-document";
-      const active = button.dataset.grconView === view
-        || (nestedToolView && button.dataset.grconView === "additional-tools" && button.classList.contains("ops-nav-button"));
+      const nestedToolView = view === "grdt-reissue" || view === "pdf-tools" || view === "cover-document";
+      const additionalToolsNav = button.dataset.grconView === "additional-tools"
+        && (button.classList.contains("ops-nav-button") || button.id === "tab-additional-tools");
+      const active = button.dataset.grconView === view || (nestedToolView && additionalToolsNav);
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
     });

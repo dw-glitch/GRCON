@@ -5,7 +5,7 @@
   // nem altera as regras documentais; ele somente garante que um gesto do
   // operador não dispare duas execuções concorrentes e registra diagnósticos
   // de erros externos sem transformá-los em falha do GRCON.
-  const ANALYZE_IDS = new Set(["analyze", "sgpar-analyze"]);
+  const ANALYZE_IDS = new Set(["analyze"]);
   const EXTENSION_SCHEMES = /^(?:chrome|moz|edge|safari-web)-extension:\/\//i;
   let locked = false;
   let busyObserved = false;

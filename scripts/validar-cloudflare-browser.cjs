@@ -31,6 +31,49 @@ async function waitForServiceWorker(page) {
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 10000 });
 }
 
+async function installCloudAuthBypass(page) {
+  const content = [
+    "html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }",
+    "#grcon-cloud-auth { display: none !important; }",
+  ].join("\n");
+  await page.addInitScript((css) => {
+    const styleId = "grcon-cloud-qa-auth-bypass";
+    const ensureStyle = () => {
+      const host = document.head || document.documentElement;
+      if (!host || document.getElementById(styleId)) return;
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = css;
+      host.appendChild(style);
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", ensureStyle, { once: true });
+    }
+    ensureStyle();
+  }, content);
+}
+
+async function waitForCloudAuthBypass(page) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded", { timeout: 30000 });
+      await page.waitForFunction(
+        () => Boolean(document.getElementById("grcon-cloud-qa-auth-bypass")),
+        null,
+        { timeout: 5000 }
+      );
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = String(error && error.message ? error.message : error);
+      if (!/Execution context was destroyed|navigation|frame was detached|Timeout/i.test(message)) throw error;
+      await page.waitForTimeout(150);
+    }
+  }
+  throw lastError || new Error("Não foi possível estabilizar a página após o Service Worker.");
+}
+
 async function probe(page, pathname) {
   return page.evaluate(async (target) => {
     const response = await fetch(target, { cache: "no-store" });
@@ -46,12 +89,15 @@ async function probe(page, pathname) {
   }, pathname);
 }
 
+
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const results = { viewports: {}, probes: {}, api: null, pwa: null, mascot: null };
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
+    await installCloudAuthBypass(page);
     const pageErrors = [];
     const consoleErrors = [];
     const badLocalResponses = [];
@@ -74,10 +120,7 @@ async function probe(page, pathname) {
     assert.equal(response.status(), 200, "A raiz do pacote Cloudflare deve responder 200.");
 
     await waitForServiceWorker(page);
-    await page.addStyleTag({ content: [
-      "html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }",
-      "#grcon-cloud-auth { display: none !important; }",
-    ].join("\n") });
+    await waitForCloudAuthBypass(page);
 
     await page.waitForFunction(() => Boolean(window.GRCONModuleLoader), null, { timeout: 15000 });
     await page.waitForFunction(() => Boolean(window.GrconMascot), null, { timeout: 15000 });
