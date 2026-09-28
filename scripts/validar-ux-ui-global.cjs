@@ -20,14 +20,18 @@ async function installQaShellBypass(page) {
       "#grcon-cloud-auth{display:none!important;pointer-events:none!important}",
     ].join("\n");
     const install = () => {
-      if (document.getElementById("grcon-ux-ui-qa-style")) return;
+      if (document.getElementById("grcon-ux-ui-qa-style")) return true;
+      const host = document.head || document.documentElement;
+      if (!host) return false;
       const style = document.createElement("style");
       style.id = "grcon-ux-ui-qa-style";
       style.textContent = css;
-      (document.head || document.documentElement).appendChild(style);
+      host.appendChild(style);
+      return true;
     };
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
-    install();
+    if (!install()) {
+      document.addEventListener("DOMContentLoaded", install, { once: true });
+    }
   });
 }
 
