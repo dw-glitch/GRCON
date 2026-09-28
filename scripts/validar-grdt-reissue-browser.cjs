@@ -152,7 +152,13 @@ async function openReissue(page) {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
   await waitForStableServiceWorkerPage(page).catch(() => {});
   await revealApp(page);
-  await clickVisibleView(page, "grdt-reissue");
+  const topLevelReissue = page.locator('aside .ops-nav-button[data-grcon-view="grdt-reissue"], nav.grcon-view-tabs > [data-grcon-view="grdt-reissue"]');
+  assert.equal(await topLevelReissue.count(), 0, "Repostagem deve existir somente dentro de Ferramentas adicionais");
+  await clickVisibleView(page, "additional-tools");
+  await page.locator("#additional-tools-module").waitFor({ state: "visible", timeout: 10000 });
+  const reissueCard = page.locator('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]');
+  await reissueCard.waitFor({ state: "visible", timeout: 10000 });
+  await reissueCard.click();
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("grdt-reissue");
   });
