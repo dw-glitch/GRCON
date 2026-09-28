@@ -114,9 +114,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .analyze-button { height: 54px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 7px; color: white; background: var(--navy); font-size: 12px; font-weight: 800; }
 .analyze-button:not(:disabled):hover { background: #0f3151; }
 .analyze-button svg { width: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.sgpar-button { height: 54px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; border: 1px solid #8da5ba; border-radius: 7px; color: #244b6d; background: #f7fafc; font-size: 11px; font-weight: 800; white-space: nowrap; }
-.sgpar-button:not(:disabled):hover { border-color: #557c9e; color: #173f63; background: #eef5fa; }
-.sgpar-button svg { width: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
 .advanced-panel { min-height: 47px; display: flex; align-items: center; gap: 18px; margin-top: 11px; padding: 9px 12px; border-top: 1px solid var(--line); color: #526174; background: #fafbfd; font-size: 10px; }
 .inline-setting { display: flex; align-items: center; gap: 7px; font-weight: 700; }
@@ -237,8 +234,6 @@ td { height: 48px; padding: 7px 10px; vertical-align: middle; border-bottom: 1px
 .drawer-overlay { position: fixed; inset: 0; z-index: 40; background: rgba(15, 31, 48, .28); backdrop-filter: blur(1px); }
 .egrdt-drawer { position: fixed; inset: 0 0 0 auto; z-index: 41; width: min(470px, 92vw); display: flex; flex-direction: column; background: white; box-shadow: -16px 0 38px rgba(14, 32, 52, .18); transform: translateX(105%); transition: transform .2s ease; }
 .egrdt-drawer.open { transform: translateX(0); }
-.sgpar-drawer { position: fixed; inset: 0 0 0 auto; z-index: 41; width: min(560px, 94vw); display: flex; flex-direction: column; background: #f7f9fb; box-shadow: -16px 0 38px rgba(14, 32, 52, .18); transform: translateX(105%); transition: transform .2s ease; }
-.sgpar-drawer.open { transform: translateX(0); }
 .relation-drawer { position: fixed; inset: 0 0 0 auto; z-index: 41; width: min(620px, 95vw); display: flex; flex-direction: column; background: #f7f9fb; box-shadow: -16px 0 38px rgba(14, 32, 52, .18); transform: translateX(105%); transition: transform .2s ease; }
 .relation-drawer.open { transform: translateX(0); }
 .drawer-header { min-height: 70px; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
@@ -285,54 +280,13 @@ body.p2-dark .drawer-hint { color: #93a5b3; }
 .relation-preview-status.ignored { color: #617182; background: var(--gray-soft); }
 .relation-empty { padding: 42px 16px; text-align: center; color: #8793a0; border: 1px dashed var(--line-dark); border-radius: 7px; background: white; font-size: 9px; }
 
-.sgpar-body { flex: 1; overflow: auto; padding: 18px; }
-.sgpar-url-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; color: #58697a; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
-.sgpar-url-field input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--line-dark); border-radius: 6px; outline: 0; color: var(--ink); background: white; font-size: 10px; text-transform: none; letter-spacing: normal; }
-.sgpar-url-field input:focus { border-color: #6f9cbc; box-shadow: 0 0 0 2px rgba(37,111,163,.08); }
-.sgpar-overview { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-bottom: 12px; padding-bottom: 5px; overflow: hidden; border: 1px solid var(--line); border-radius: 7px; background: var(--line); }
-.sgpar-overview > div:not(.sgpar-progress) { min-width: 0; padding: 10px 9px 9px; text-align: center; background: white; }
-.sgpar-overview strong { display: block; color: #27394c; font-size: 17px; }
-.sgpar-overview span { display: block; margin-top: 2px; overflow: hidden; color: #788595; font-size: 8px; font-weight: 750; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.sgpar-progress { position: absolute; inset: auto 0 0; height: 5px; background: #e4e9ef; }
-.sgpar-progress i { display: block; width: 0; height: 100%; background: #2779b5; transition: width .2s ease; }
-.sgpar-current { padding: 14px; border: 1px solid #ccd7e1; border-radius: 8px; background: white; box-shadow: 0 4px 14px rgba(24,45,68,.05); }
-.sgpar-current-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; color: #708092; font-size: 9px; font-weight: 750; text-transform: uppercase; }
-.sgpar-current > strong { display: block; overflow-wrap: anywhere; color: #1c3349; font-size: 14px; line-height: 1.35; }
-.sgpar-current > span:not(.sgpar-status) { display: block; margin-top: 5px; overflow-wrap: anywhere; color: #778595; font-size: 9px; }
-.sgpar-status { display: inline-flex; align-items: center; min-height: 21px; padding: 0 7px; border-radius: 999px; font-size: 8px; font-weight: 850; text-transform: uppercase; white-space: nowrap; }
-.sgpar-status.pending { color: #5d6c7c; background: #edf1f4; }
-.sgpar-status.downloaded { color: #29698e; background: #e8f4fb; }
-.sgpar-status.located { color: var(--green); background: var(--green-soft); }
-.sgpar-status.missing { color: var(--red); background: var(--red-soft); }
-.sgpar-status.skipped, .sgpar-status.review { color: var(--amber); background: var(--amber-soft); }
-.sgpar-search-actions, .sgpar-result-actions { display: flex; gap: 7px; margin-top: 13px; }
-.sgpar-search-actions button { flex: 1; }
-.sgpar-result-actions { padding-top: 11px; border-top: 1px solid #e5eaf0; }
 .state-button { flex: 1; height: 31px; border: 1px solid var(--line-dark); border-radius: 6px; background: white; font-size: 9px; font-weight: 800; }
 .state-button.downloaded { color: #246c94; }
 .state-button.missing { color: #a7372e; }
 .state-button.neutral { color: #657486; }
 .state-button:hover { background: #f5f8fa; }
-.sgpar-queue-heading { display: flex; align-items: center; justify-content: space-between; margin: 15px 0 7px; color: #526274; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
-.sgpar-queue-heading > div { display: flex; gap: 4px; }
 .queue-nav { width: 27px; height: 25px; border: 1px solid var(--line-dark); border-radius: 5px; color: #53687b; background: white; font-weight: 800; }
 .queue-nav:hover { color: var(--blue); background: #f4f8fb; }
-.sgpar-queue { max-height: 214px; overflow: auto; border: 1px solid var(--line); border-radius: 7px; background: white; }
-.sgpar-queue-item { width: 100%; display: grid; grid-template-columns: 28px minmax(0,1fr) auto; align-items: center; gap: 9px; padding: 8px 9px; border: 0; border-bottom: 1px solid #e8edf1; color: inherit; text-align: left; background: white; }
-.sgpar-queue-item:last-child { border-bottom: 0; }
-.sgpar-queue-item:hover, .sgpar-queue-item.active { background: #f1f6fa; }
-.sgpar-queue-item > b { color: #8290a0; font-size: 9px; text-align: center; }
-.sgpar-queue-item > span:nth-child(2) { min-width: 0; }
-.sgpar-queue-item strong { display: block; overflow: hidden; color: #2b4054; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.sgpar-queue-item small { display: block; margin-top: 2px; overflow: hidden; color: #7b8795; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.sgpar-file-picker { position: relative; min-height: 52px; display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 8px 11px; border: 1px dashed #9eafbf; border-radius: 7px; color: #315979; background: white; cursor: pointer; }
-.sgpar-file-picker:hover { border-color: #557c9e; background: #f8fbfd; }
-.sgpar-file-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.sgpar-file-picker svg { width: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.sgpar-file-picker > span { min-width: 0; }
-.sgpar-file-picker strong, .sgpar-file-picker small { display: block; }
-.sgpar-file-picker strong { font-size: 10px; }
-.sgpar-file-picker small { margin-top: 3px; overflow: hidden; color: #788596; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 
 .toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; max-width: 440px; padding: 12px 15px; border-radius: 7px; color: white; background: #26384c; box-shadow: 0 12px 30px rgba(13,31,51,.2); font-size: 11px; font-weight: 700; transform: translateY(18px); opacity: 0; pointer-events: none; transition: .2s ease; }
 .toast.show { transform: translateY(0); opacity: 1; }
@@ -545,8 +499,8 @@ body { min-width: 980px; line-height: 1.45; }
 .compact-source strong, .relation-file-trigger strong { font-size: 13px; }
 .compact-source small, .relation-file-trigger small { font-size: 11px; }
 .relation-text-button { font-size: 10px; }
-.settings-button, .analyze-button, .sgpar-button { height: 58px; }
-.analyze-button, .sgpar-button { font-size: 12px; }
+.settings-button, .analyze-button { height: 58px; }
+.analyze-button { font-size: 12px; }
 .advanced-panel { font-size: 11px; }
 .summary-bar { height: 64px; }
 .summary-item span { font-size: 11px; }
@@ -583,7 +537,7 @@ td, td span, .cell-primary, .cell-secondary { font-size: 10px; }
 
 @media (max-width: 1250px) {
   .source-row { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
-  .source-row > .sgpar-button, .source-row > .settings-button, .source-row > .analyze-button { min-width: 0; }
+  .source-row > .settings-button, .source-row > .analyze-button { min-width: 0; }
 }
 
 
@@ -591,8 +545,8 @@ td, td span, .cell-primary, .cell-secondary { font-size: 10px; }
    UX/UI v5.8 — fluxo guiado, ações claras e leitura operacional
    ===================================================================== */
 .control-panel { padding: 16px; border: 1px solid #d7e1e8; background: linear-gradient(180deg,#fff 0%,#fbfcfd 100%); }
-.source-row { grid-template-columns: minmax(230px,1.15fr) minmax(230px,1.15fr) minmax(250px,1.2fr) 160px 48px 142px; gap: 12px; }
-.compact-source, .sgpar-button, .analyze-button, .settings-button { border-radius: 10px; }
+.source-row { grid-template-columns: minmax(230px,1.15fr) minmax(230px,1.15fr) minmax(250px,1.2fr) 48px 142px; gap: 12px; }
+.compact-source, .analyze-button, .settings-button { border-radius: 10px; }
 .compact-source { border-color: #cbd8e1; background: #fff; }
 .compact-source:hover { border-color: #77a6c5; box-shadow: 0 4px 14px rgba(24,82,122,.09); }
 .analyze-button { font-size: 13px; font-weight: 800; box-shadow: 0 6px 16px rgba(26,104,157,.18); }
@@ -810,9 +764,9 @@ button:disabled, input:disabled, select:disabled, textarea:disabled {
 .p2-filter-chip:hover { border-color: var(--p2-primary); background: #e2f1f9; }
 .p2-filter-chip b { font-size: 15px; line-height: 1; }
 
-.progress-wrap, .progress, .sgpar-progress { position: relative; }
-.progress-track, .progress > div, .sgpar-progress { min-height: 7px; }
-.progress-bar, .progress i, .sgpar-progress i { min-height: 7px; }
+.progress-wrap, .progress { position: relative; }
+.progress-track, .progress > div { min-height: 7px; }
+.progress-bar, .progress i { min-height: 7px; }
 .p2-processing .topbar::after {
   content: "Processando arquivos…";
   position: absolute;
@@ -990,18 +944,7 @@ html[data-app="GRCON"] .relation-preview-item strong,
 html[data-app="GRCON"] .relation-preview-item small,
 html[data-app="GRCON"] .relation-preview-status,
 html[data-app="GRCON"] .relation-empty,
-html[data-app="GRCON"] .sgpar-url-field,
-html[data-app="GRCON"] .sgpar-overview span,
-html[data-app="GRCON"] .sgpar-current-heading,
-html[data-app="GRCON"] .sgpar-current > span:not(.sgpar-status),
-html[data-app="GRCON"] .sgpar-status,
 html[data-app="GRCON"] .state-button,
-html[data-app="GRCON"] .sgpar-queue-heading,
-html[data-app="GRCON"] .sgpar-queue-item > b,
-html[data-app="GRCON"] .sgpar-queue-item strong,
-html[data-app="GRCON"] .sgpar-queue-item small,
-html[data-app="GRCON"] .sgpar-file-picker strong,
-html[data-app="GRCON"] .sgpar-file-picker small,
 html[data-app="GRCON"] .module-nav-item,
 html[data-app="GRCON"] .module-kicker,
 html[data-app="GRCON"] .databook-assistant-button,
@@ -1024,7 +967,6 @@ html[data-app="GRCON"] .document-code,
 html[data-app="GRCON"] .revision-value,
 html[data-app="GRCON"] .drawer-body input,
 html[data-app="GRCON"] .drawer-body select,
-html[data-app="GRCON"] .sgpar-url-field input,
 html[data-app="GRCON"] .assistant-field input,
 html[data-app="GRCON"] .databook-level-grid input {
   font-size: 12px;
@@ -1217,7 +1159,7 @@ body.p2-dark .history-summary > div, body.p2-dark .history-chart-card, body.p2-d
 body.p2-dark .compact-source, body.p2-dark .relation-source, body.p2-dark .advanced-panel { color: #dfe8ef; border-color: #354756; background: #17222b; }
 body.p2-dark .compact-source:hover, body.p2-dark .relation-file-trigger:hover, body.p2-dark .relation-text-button:hover { background: #1a2b38; }
 body.p2-dark .relation-text-button { color: #9bcae6; border-color: #354756; background: #15232e; }
-body.p2-dark .icon-button, body.p2-dark .sgpar-button, body.p2-dark .secondary-button,
+body.p2-dark .icon-button, body.p2-dark .secondary-button,
 body.p2-dark .text-action, body.p2-dark .state-button, body.p2-dark .queue-nav { color: #c7d8e4; border-color: #435564; background: #18242e; }
 body.p2-dark .secondary-button:hover, body.p2-dark .icon-button:hover { color: #7bc8f1; background: #1d3443; }
 body.p2-dark input, body.p2-dark select, body.p2-dark textarea { color: #e4edf4; border-color: #425462; background-color: #111b23; }
@@ -1262,23 +1204,16 @@ body.p2-dark .history-detail-numbers strong, body.p2-dark .history-detail-meta d
 body.p2-dark .history-detail-meta dt { color: #90a4b2; }
 body.p2-dark .history-detail-meta dd span { color: #a7d9f3; background: #19374a; }
 body.p2-dark .drawer-overlay, body.p2-dark .task-center-overlay { background: rgba(0,0,0,.58); }
-body.p2-dark .relation-drawer, body.p2-dark .sgpar-drawer, body.p2-dark .egrdt-drawer,
+body.p2-dark .relation-drawer, body.p2-dark .egrdt-drawer,
 body.p2-dark .task-center-drawer, body.p2-dark .compatibility-dialog, body.p2-dark .p1-confirm-dialog { color: #dce7ee; border-color: #344653; background: #121c24; }
 body.p2-dark .drawer-header, body.p2-dark .task-center-drawer header { background: #163e59; }
 body.p2-dark .drawer-footer, body.p2-dark .task-center-drawer footer { border-color: #2c3c48; background: #101920; }
 body.p2-dark .relation-preview, body.p2-dark .relation-summary > div, body.p2-dark .relation-empty,
-body.p2-dark .sgpar-current, body.p2-dark .sgpar-queue, body.p2-dark .sgpar-queue-item,
-body.p2-dark .sgpar-file-picker, body.p2-dark .task-center-item, body.p2-dark .ignored-details ul,
-/* O cartão do painel SGPAR ficou de fora desta lista, ao contrário do gêmeo
-   .relation-summary > div. No modo escuro o texto herdava a cor clara da
-   gaveta enquanto o fundo continuava no "background: white" literal da regra
-   de cima: contraste de 1,26:1, ou seja, os números somem. */
-body.p2-dark .sgpar-overview > div:not(.sgpar-progress) { color: #dce7ee; border-color: #344653; background: #17232c; }
-/* O número e o rótulo têm cor própria e fixa na regra clara, então escurecer
-   só o cartão jogava o número para 1,35:1. Mesmos tons dos cartões de
-   .history-detail-numbers, para os dois painéis combinarem no escuro. */
-body.p2-dark .sgpar-overview strong { color: #dceaf3; }
-body.p2-dark .sgpar-overview > div:not(.sgpar-progress) span { color: #b9c8d3; }
+body.p2-dark .task-center-item, body.p2-dark .ignored-details ul {
+  color: #dce7ee;
+  border-color: #344653;
+  background: #17232c;
+}
 body.p2-dark .detail-reason, body.p2-dark .ld-values-grid > div, body.p2-dark .revision-timeline-step,
 body.p2-dark .revision-timeline-summary span, body.p2-dark .databook-comparison > div,
 body.p2-dark .databook-library-toolbar, body.p2-dark .databook-library-table-wrap,
@@ -1490,11 +1425,9 @@ html[data-app="GRCON"][data-ops-ui="enabled"] .source-row {
   align-items: stretch;
 }
 html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .source-slot { grid-column: span 4; }
-html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .sgpar-button { grid-column: span 4; }
-html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .settings-button { grid-column: span 1; width: 100%; }
-html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button { grid-column: span 7; }
+html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .settings-button { grid-column: span 2; width: 100%; }
+html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button { grid-column: span 10; }
 html[data-app="GRCON"][data-ops-ui="enabled"] .compact-source,
-html[data-app="GRCON"][data-ops-ui="enabled"] .sgpar-button,
 html[data-app="GRCON"][data-ops-ui="enabled"] .settings-button,
 html[data-app="GRCON"][data-ops-ui="enabled"] .analyze-button {
   width: 100%;
@@ -1510,7 +1443,6 @@ html[data-app="GRCON"][data-ops-ui="enabled"] .compact-source small,
 html[data-app="GRCON"][data-ops-ui="enabled"] .relation-file-trigger small { font-size: 10px; }
 html[data-app="GRCON"][data-ops-ui="enabled"] .analyze-button { border-color: var(--ops-navy); color: #fff; background: var(--ops-navy); }
 html[data-app="GRCON"][data-ops-ui="enabled"] .analyze-button:not(:disabled):hover { background: #0b304d; }
-html[data-app="GRCON"][data-ops-ui="enabled"] .sgpar-button { background: var(--ops-soft); }
 html[data-app="GRCON"][data-ops-ui="enabled"] .advanced-panel { flex-wrap: wrap; border-color: var(--ops-line); border-radius: 8px; background: var(--ops-soft); }
 
 html[data-app="GRCON"][data-ops-ui="enabled"] .p1-context-bar { border-color: var(--ops-line); border-left-color: var(--ops-blue); border-radius: 9px; background: var(--ops-surface); }
@@ -1617,10 +1549,9 @@ html[data-app="GRCON"][data-ops-ui="enabled"] body.p2-dark .brand-logo { padding
 
 @media (min-width: 1700px) {
   html[data-app="GRCON"][data-ops-ui="enabled"] .source-row {
-    grid-template-columns: repeat(3,minmax(190px,1fr)) 150px 48px 160px;
+    grid-template-columns: repeat(3,minmax(190px,1fr)) 48px 160px;
   }
   html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .source-slot,
-  html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .sgpar-button,
   html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .settings-button,
   html[data-app="GRCON"][data-ops-ui="enabled"] .source-row > .analyze-button { grid-column: auto; }
 }
