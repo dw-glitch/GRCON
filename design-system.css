@@ -372,13 +372,13 @@
   .drawer-overlay, .p1-confirm-overlay, .ops-inspector-overlay, .pending-panel-overlay {
     position: fixed; z-index: 600; inset: 0; background: rgb(4 18 27 / 48%); backdrop-filter: blur(3px);
   }
-  .relation-drawer, .sgpar-drawer, .egrdt-drawer, .compatibility-drawer, .databook-assistant-drawer, .pending-panel-drawer, .ops-inspector {
+  .relation-drawer, .egrdt-drawer, .compatibility-drawer, .databook-assistant-drawer, .pending-panel-drawer, .ops-inspector {
     position: fixed; z-index: 610; inset: 0 0 0 auto; width: min(42rem, 94vw); height: 100dvh;
     display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden;
     background: var(--surface-1); border-left: 1px solid var(--border-1); box-shadow: var(--shadow-2);
     transform: translateX(102%); transition: transform 220ms ease;
   }
-  .relation-drawer[aria-hidden="false"], .sgpar-drawer[aria-hidden="false"], .egrdt-drawer[aria-hidden="false"],
+  .relation-drawer[aria-hidden="false"], .egrdt-drawer[aria-hidden="false"],
   .compatibility-drawer[aria-hidden="false"], .databook-assistant-drawer[aria-hidden="false"],
   .pending-panel-drawer[aria-hidden="false"], .ops-inspector.open { transform: translateX(0); }
   .drawer-header, .compatibility-drawer > header, .pending-panel-drawer > header, .ops-inspector > header {
@@ -400,7 +400,7 @@
   .p1-output-audit-state.warning { color: #8a5a00; }
   .p1-output-audit-state.error { color: var(--danger-700); }
 
-  .progress-wrap, .progress, .sgpar-progress { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; align-items: center; gap: .65rem; }
+  .progress-wrap, .progress { display: grid; grid-template-columns: minmax(8rem, 1fr) auto; align-items: center; gap: .65rem; }
   .progress-track { height: .45rem; overflow: hidden; background: var(--surface-3); border-radius: 999px; }
   .progress-bar { width: 0; height: 100%; background: linear-gradient(90deg, var(--brand-700), var(--accent-700)); border-radius: inherit; transition: width 180ms ease; }
 
