@@ -1,0 +1,77 @@
+name: QA — Consulta Geral SIGEM compartilhada
+
+on:
+  pull_request:
+    paths:
+      - "app.js"
+      - "posting_conference_app.js"
+      - "posting_conference_core.js"
+      - "shared_sigem_query_app.js"
+      - "shared_sigem_query_core.js"
+      - "grdt_reissue_app.js"
+      - "src/react/sigem-pw/**"
+      - "workers/shared_sigem_query.worker.js"
+      - "tests/shared_sigem_query.cjs"
+      - "scripts/validar-shared-sigem-browser.cjs"
+      - ".github/workflows/shared-sigem-query.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app.js"
+      - "posting_conference_app.js"
+      - "posting_conference_core.js"
+      - "shared_sigem_query_app.js"
+      - "shared_sigem_query_core.js"
+      - "grdt_reissue_app.js"
+      - "src/react/sigem-pw/**"
+      - "workers/shared_sigem_query.worker.js"
+      - "tests/shared_sigem_query.cjs"
+      - "scripts/validar-shared-sigem-browser.cjs"
+      - ".github/workflows/shared-sigem-query.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shared-sigem:
+    name: Consulta Geral compartilhada — Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Validar regras centrais
+        run: |
+          node tests/shared_sigem_query.cjs
+          npm run check:syntax
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: QA real no Chromium
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-shared-sigem.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-shared-sigem-browser.cjs
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: shared-sigem-browser
+          path: |
+            artifacts/shared-sigem/*.png
+            artifacts/shared-sigem/*.json
+            artifacts/shared-sigem/*.xls
+          if-no-files-found: warn
