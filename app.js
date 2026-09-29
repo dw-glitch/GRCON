@@ -770,6 +770,13 @@
     return true;
   }
 
+  function changeEgrdtBatchMode() {
+    if (!els.egrdtBatchMode) return;
+    const mode = normalizeEgrdtBatchMode(els.egrdtBatchMode.value);
+    window.GrconEgrdtBatchPlan.setMode(mode);
+    showToast(`${egrdtBatchModeLabel(mode)}: ${mode === "limit-only" ? "disciplinas misturadas na ordem atual" : "lotes por disciplina"}, até ${currentEgrdtBatchLimit()} por eGRDT.`, "success");
+  }
+
   function metricDuration(value) {
     const ms = Number(value && value.durationMs);
     if (!Number.isFinite(ms)) return "—";
@@ -2253,7 +2260,22 @@
           ? [{ name: row.virtualFileName, finalName: row.finalName, file: null, virtual: true }]
           : [];
       const n1710Pair = E && E.validateN1710Pair ? E.validateN1710Pair(row, pairSources) : { applies: false, valid: true, sources: pairSources, errors: [] };
-      if (n1710Pair.applies) row.files = n1710Pair.sources.filter((entry) => entry && entry.file);
+      if (n1710Pair.applies) {
+        row.files = n1710Pair.sources.filter((entry) => entry && entry.file);
+        // O validador N-1710 também elimina colisões de nome controlado.
+        // Registre-as como duplicatas para manter a conferência de origem fiel
+        // aos arquivos selecionados, inclusive no caminho do Worker.
+        (n1710Pair.ignoredDuplicates || []).forEach((entry) => {
+          row.duplicateFiles.push(entry);
+          state.ignoredFiles.push({
+            name: entry.name,
+            reason: `arquivo duplicado do documento ${row.document} — ignorado; foi mantida somente a primeira cópia de ${entry.finalName || entry.name}`,
+          });
+        });
+        row.duplicateFileWarning = row.duplicateFiles.length
+          ? `${row.duplicateFiles.length} arquivo(s) duplicado(s) ignorado(s). Apenas uma cópia de cada arquivo seguirá para a GRDT.`
+          : "";
+      }
       if (n1710Pair.applies && !n1710Pair.valid) {
         row.decision = C.REVIEW;
         row.hardBlock = true;
@@ -4010,10 +4032,13 @@
     els.selectAllReady.checked = selectableIndices.length > 0 && selectableIndices.every((index) => state.selected.has(index));
     els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
-    const selectedBatchCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
+    const selectedItemCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + amount, 0);
+    const selectedBatchCount = currentEgrdtBatchMode() === "limit-only"
+      ? Math.ceil(selectedItemCount / currentEgrdtBatchLimit())
+      : [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
     const selectedDisciplineCount = selectedItemsByDiscipline.size;
     const manualRevisionSelectedCount = manuallyAlteredRevisionCount(state.selected);
-    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}${manualRevisionSelectedCount ? ` · ${manualRevisionSelectedCount.toLocaleString("pt-BR")} revisão${manualRevisionSelectedCount === 1 ? "" : "ões"} alterada${manualRevisionSelectedCount === 1 ? "" : "s"} manualmente` : ""}`;
+    els.selectedCount.textContent = `${state.selected.size.toLocaleString("pt-BR")} selecionado${state.selected.size === 1 ? "" : "s"}${selectedBatchCount ? ` · ${selectedDisciplineCount.toLocaleString("pt-BR")} disciplina${selectedDisciplineCount === 1 ? "" : "s"} · ${selectedBatchCount.toLocaleString("pt-BR")} eGRDT${selectedBatchCount === 1 ? "" : "s"} de até ${currentEgrdtBatchLimit()}${currentEgrdtBatchMode() === "limit-only" ? " · somente por limite" : " · por disciplina"}` : ""}${logicalSelected.length ? ` · ${logicalSelected.length.toLocaleString("pt-BR")} somente na relação` : ""}${incomplete ? ` · ${incomplete.toLocaleString("pt-BR")} GRDT incompleta${incomplete === 1 ? "" : "s"}` : ""}${manualRevisionSelectedCount ? ` · ${manualRevisionSelectedCount.toLocaleString("pt-BR")} revisão${manualRevisionSelectedCount === 1 ? "" : "ões"} alterada${manualRevisionSelectedCount === 1 ? "" : "s"} manualmente` : ""}`;
     window.dispatchEvent(new CustomEvent("grcon:ui-update"));
   }
 
@@ -4699,7 +4724,9 @@
       startIndex: group.startIndex,
       endIndex: group.endIndex,
       limit: group.limit,
+      batchMode: group.batchMode,
       discipline: group.discipline,
+      disciplines: group.disciplines,
       disciplineBatchNumber: group.disciplineBatchNumber,
       disciplineBatchCount: group.disciplineBatchCount,
       items: (group.items || []).map((item) => ({ ...item })),
@@ -5409,6 +5436,7 @@
     if (els.performanceStatus) els.performanceStatus.textContent = "Cancelando e descartando resultados parciais…";
   });
   if (els.egrdtBatchSave) els.egrdtBatchSave.addEventListener("click", saveEgrdtBatchLimit);
+  if (els.egrdtBatchMode) els.egrdtBatchMode.addEventListener("change", changeEgrdtBatchMode);
   if (els.egrdtBatchLimit) {
     els.egrdtBatchLimit.addEventListener("keydown", (event) => { if (event.key === "Enter") saveEgrdtBatchLimit(); });
   }
