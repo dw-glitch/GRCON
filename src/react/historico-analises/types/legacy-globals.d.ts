@@ -6,7 +6,6 @@ import type {
   DetailContext,
   EgrdtHistoryRecord,
   EgrdtHistoryFile,
-  PostingRecord,
   RestoreResult,
   SavedAnalysisFilter,
   SaveFilterResult,
@@ -64,19 +63,6 @@ interface GrconHistoryUiApi {
   performanceSnapshot?(): object;
 }
 
-interface GrconSigemPostingApi {
-  STATUSES: Record<string, string>;
-  registerGenerated(records: EgrdtHistoryRecord[], options: { appVersion: string }): { persistence?: Promise<unknown> } | void;
-  read(): PostingRecord[];
-  statusLabel(status: string): string;
-  audit(record: PostingRecord, records: PostingRecord[]): { ready: boolean };
-}
-
-interface GrconSigemUiApi {
-  render?(): void;
-  select?(id: string): void;
-}
-
 interface GrconEnhancementsApi {
   confirmAction?(message: string, detail?: string): Promise<boolean>;
 }
@@ -92,8 +78,6 @@ declare global {
     GrconMacro5Flow?: GrconMacro5FlowApi;
     GrconHistory?: GrconHistoryApi;
     GrconHistoryUi?: GrconHistoryUiApi;
-    GrconSigemPosting?: GrconSigemPostingApi;
-    GrconSigemUi?: GrconSigemUiApi;
     GrconEnhancements?: GrconEnhancementsApi;
     GrconAuditLog?: GrconAuditLogApi;
     GrconAnalysisHistoryUi?: {
