@@ -294,6 +294,23 @@ async function measure(page) {
       }
     }
     fs.writeFileSync(path.join(outputDir, "conference-metrics.json"), JSON.stringify(metrics, null, 2));
+    for (const item of cases.filter((entry) => entry.viewport !== 1024)) {
+      const result = metrics[`${item.name}-light`]?.closed;
+      if (!result) continue;
+      console.log(
+        `METRIC ${item.name}: container client=${result.wrapClientWidth}px scroll=${result.wrapScrollWidth}px; `
+        + `table client=${result.tableClientWidth}px scroll=${result.tableScrollWidth}px; `
+        + `overflow=${Math.max(0, result.wrapScrollWidth - result.wrapClientWidth, result.tableScrollWidth - result.tableClientWidth)}px`
+      );
+    }
+    const scaleResult = metrics["1024-scale125-light"]?.closed;
+    if (scaleResult) {
+      console.log(
+        `METRIC 125%-equiv: container client=${scaleResult.wrapClientWidth}px scroll=${scaleResult.wrapScrollWidth}px; `
+        + `table client=${scaleResult.tableClientWidth}px scroll=${scaleResult.tableScrollWidth}px; `
+        + `overflow=${Math.max(0, scaleResult.wrapScrollWidth - scaleResult.wrapClientWidth, scaleResult.tableScrollWidth - scaleResult.tableClientWidth)}px`
+      );
+    }
     console.log("OK — Conferência: 0 overflow horizontal, 6 blocos semânticos, 6 fixtures, temas claro/escuro, 1920/1600/1440/1366/1280 e escala equivalente a 125%.");
   } finally {
     await browser.close();
