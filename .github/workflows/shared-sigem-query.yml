@@ -49,10 +49,11 @@ jobs:
       - name: Instalar dependências
         run: npm ci --ignore-scripts
 
-      - name: Validar regras centrais
+      - name: Validar regras centrais e build
         run: |
           node tests/shared_sigem_query.cjs
           npm run check:syntax
+          npm run build
 
       - name: Instalar Chromium
         run: |
