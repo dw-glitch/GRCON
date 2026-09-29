@@ -106,6 +106,14 @@
     const status = allocationState(item.allocationStatus);
     const number = allocationNumberInfo(item.allocation);
     const tracked = Boolean(text(item.allocationStatusColumn));
+    if (item.plannedDocumentsSnapshot) return {
+      ...status,
+      tracked: true,
+      evidence: "planned-documents",
+      cell: "",
+      allocationNumber: number.valid ? number.raw : "",
+      source: `Documentos Previstos (${text(item.plannedDocumentsFile) || "base compartilhada"})`,
+    };
     if (status.kind !== "empty") {
       return {
         ...status,
@@ -2331,7 +2339,7 @@
       // alocado" fazia quem lê a LD — onde o número da ALOC está preenchido —
       // achar que o GRCON contradizia a planilha.
       const alocEnviada = allocationNumberInfo(firstBlocked.allocation);
-      const aguardandoRetorno = alocEnviada.valid;
+      const aguardandoRetorno = !firstBlocked.plannedDocumentsSnapshot && alocEnviada.valid;
       return reviewResult(input, {
         document: match.document,
         documentKey: match.documentKey,
@@ -2341,7 +2349,9 @@
         status: aguardandoRetorno ? "Aguardando retorno da alocação" : "Não alocado",
         reason: aguardandoRetorno
           ? `A alocação ${alocEnviada.raw} está registrada na LD, mas a confirmação continua “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""} — a ALOC foi enviada e o retorno ainda não veio. Enquanto a confirmação não mudar, a postagem permanece bloqueada.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}${ldCurrencyReason ? ` ${ldCurrencyReason}` : ""}`
-          : `A coluna de confirmação de alocação contém “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""}, sem número de alocação registrado. Esta condição é bloqueante e não pode ser substituída por outra linha, por resolução manual ou por evidência histórica.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}${ldCurrencyReason ? ` ${ldCurrencyReason}` : ""}`,
+          : firstBlocked.plannedDocumentsSnapshot
+            ? `O documento não consta na base compartilhada de Documentos Previstos (${text(firstBlocked.plannedDocumentsFile) || "arquivo publicado"}); por isso é Não Alocado. A presença de número ou status anterior na LD não substitui esta fonte.${blockedComments ? ` Comentário da Fiscal na LD: ${blockedComments}.` : ""}`
+            : `A coluna de confirmação de alocação contém “NÃO ALOCADO”${recordLocation(firstBlocked) ? ` em ${recordLocation(firstBlocked)}` : ""}, sem número de alocação registrado. Esta condição é bloqueante e não pode ser substituída por outra linha, por resolução manual ou por evidência histórica.${blockedComments ? ` Comentário da Fiscal: ${blockedComments}.` : ""}${ldCurrencyReason ? ` ${ldCurrencyReason}` : ""}`,
         finalName: input.name || `${match.document}.pdf`,
         documentSource: identitySource,
         allocationStatus: "NÃO ALOCADO",
@@ -2352,10 +2362,10 @@
             : "Não alocado",
           awaitingReturn: aguardandoRetorno,
           status: text(firstBlocked.allocationStatus) || "NÃO ALOCADO",
-          sheet: text(firstBlocked.sheet),
+          sheet: firstBlocked.plannedDocumentsSnapshot ? "Documentos Previstos" : text(firstBlocked.sheet),
           column: text(firstBlocked.allocationStatusColumn),
           header: text(firstBlocked.allocationStatusHeader),
-          row: Number(firstBlocked.row) || 0,
+          row: firstBlocked.plannedDocumentsSnapshot ? 0 : Number(firstBlocked.row) || 0,
         },
         fiscalComment: blockedComments,
         record: firstBlocked,
@@ -2510,10 +2520,10 @@
       tracked: allocationDecision.tracked,
       status: allocationStatus,
       allocationNumber: allocationDecision.allocationNumber || "",
-      sheet: text(technicalRecord && technicalRecord.sheet),
+      sheet: technicalRecord && technicalRecord.plannedDocumentsSnapshot ? "Documentos Previstos" : text(technicalRecord && technicalRecord.sheet),
       column: text(technicalRecord && technicalRecord.allocationStatusColumn),
       header: text(technicalRecord && technicalRecord.allocationStatusHeader),
-      row: Number(technicalRecord && technicalRecord.row) || 0,
+      row: technicalRecord && technicalRecord.plannedDocumentsSnapshot ? 0 : Number(technicalRecord && technicalRecord.row) || 0,
     };
     const fiscalComment = text(technicalRecord && technicalRecord.fiscalComment);
     let evidence = [];
@@ -2532,9 +2542,9 @@
       const allocationNumber = text(technicalRecord && technicalRecord.allocation);
       const allocationStage = text(technicalRecord && technicalRecord.allocationStage);
       const ldVersionSent = text(technicalRecord && technicalRecord.ldVersion);
-      const allocationReasonParts = [
-        "A coluna de confirmação de alocação está marcada como Não Alocado, portanto a postagem permanece bloqueada.",
-      ];
+      const allocationReasonParts = [technicalRecord && technicalRecord.plannedDocumentsSnapshot
+        ? `O documento não consta em Documentos Previstos (${text(technicalRecord.plannedDocumentsFile) || "base compartilhada"}); permanece Não Alocado.`
+        : "A coluna de confirmação de alocação está marcada como Não Alocado, portanto a postagem permanece bloqueada."];
       if (fiscalComment) allocationReasonParts.push(`Comentário da Fiscal: ${fiscalComment}.`);
       else allocationReasonParts.push("A linha não contém comentário da Fiscal explicando o motivo da não alocação.");
       if (allocationNumber) allocationReasonParts.push(`Alocação registrada: ${allocationNumber}.`);

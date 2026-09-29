@@ -20,7 +20,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.2";
+  const APP_VERSION = "5.44.3";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -114,6 +114,7 @@
     analysisValidUntil: 0,
     analysisRecentDays: 30,
     analysisLdSignature: "",
+    analysisPlannedSnapshot: "",
     egrdtSequenceCursor: 0,
     manualEgrdtSequenceStart: null,
     manualEgrdtSequences: [],
@@ -1330,7 +1331,8 @@
 
   function currentAnalysisSignature() {
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
-    return [currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`].join("###");
+    return [currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
+      `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`].join("###");
   }
 
   function saveSmartAnalysisCache(signature) {
@@ -1346,6 +1348,7 @@
         analysisValidUntil: state.analysisValidUntil,
         analysisRecentDays: state.analysisRecentDays,
         analysisLdSignature: state.analysisLdSignature,
+        analysisPlannedSnapshot: state.analysisPlannedSnapshot,
         ldIntegrity: state.ldIntegrity,
       },
     };
@@ -1369,6 +1372,7 @@
     state.analysisValidUntil = Number(snapshot.analysisValidUntil) || (state.analysisAt + ANALYSIS_VALIDITY_MS);
     state.analysisRecentDays = Number(snapshot.analysisRecentDays) || state.recentDays;
     state.analysisLdSignature = snapshot.analysisLdSignature || currentLdSignature();
+    state.analysisPlannedSnapshot = snapshot.analysisPlannedSnapshot || "";
     state.ldIntegrity = snapshot.ldIntegrity || null;
     return true;
   }
@@ -2462,6 +2466,7 @@
         state.records.push(...parsed.records);
         state.history.push(...parsed.history);
       });
+      state.records = window.GrconPlannedDocuments?.applyRecords(state.records) || state.records;
       syncEgrdtSequenceFromLd(state.records, state.history);
       if (!state.records.length || !state.history.length) {
         throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
@@ -2582,6 +2587,7 @@
       state.analysisValidUntil = state.analysisAt + ANALYSIS_VALIDITY_MS;
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
+      state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) lida(s) nesta análise · até ${validUntil}`;
       els.analysisStamp.title = `GRCON ${APP_VERSION} · ${ldDisplayName()}`;
@@ -2631,6 +2637,13 @@
     // ainda está sendo carregado ou quando a resposta virá do cache.
     pulseMascotProcessing();
     try { await ensureRuntime("performance"); } catch (_) { console.debug("[App] ensureRuntime performance:", _); /* usa compatibilidade */ }
+    if (window.GrconCloud?.state?.membership) {
+      try { await window.GrconPlannedDocuments.refresh(); }
+      catch (error) {
+        showToast(`Não foi possível confirmar Documentos Previstos no banco: ${error.message || error}. Tente novamente.`, "error");
+        return;
+      }
+    }
     if (!PerformanceCore || !PerformanceCore.supported) return analyzeLegacy();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
 
@@ -2706,7 +2719,8 @@
       }
       state.ldIntegrity = combineLdIntegrity(loadedLds);
       if (!state.ldIntegrity.valid) throw new Error(`A integridade da LD foi reprovada: ${state.ldIntegrity.issues.join("; ")}.`);
-      state.records = loadedLds.flatMap((item) => item.parsed.records);
+      state.records = window.GrconPlannedDocuments?.applyRecords(loadedLds.flatMap((item) => item.parsed.records))
+        || loadedLds.flatMap((item) => item.parsed.records);
       state.history = loadedLds.flatMap((item) => item.parsed.history);
       state.index = C.buildIndex(state.records, state.history);
       if (!state.records.length || !state.history.length) throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
@@ -2808,6 +2822,7 @@
       state.analysisValidUntil = state.analysisAt + ANALYSIS_VALIDITY_MS;
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
+      state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) preparadas · válidas até ${validUntil}`;
       els.analysisStamp.title = `GRCON ${APP_VERSION} · ${ldDisplayName()}`;
@@ -2885,6 +2900,14 @@
     if (!state.ldFiles.length || currentLdSignature() !== state.analysisLdSignature) {
       showToast("O conjunto de LDs usado na análise foi alterado. Analise novamente antes de emitir.", "error");
       return false;
+    }
+    if (window.GrconCloud?.state?.membership) {
+      try { await window.GrconPlannedDocuments.refresh(); }
+      catch (_) { showToast("Não foi possível confirmar a base atual de Documentos Previstos. Reconecte e tente novamente.", "error"); return false; }
+      if ((window.GrconPlannedDocuments.current()?.id || "") !== state.analysisPlannedSnapshot) {
+        showToast("Documentos Previstos foram atualizados após esta análise. Analise novamente antes de gerar a GRDT.", "error");
+        return false;
+      }
     }
     return true;
   }

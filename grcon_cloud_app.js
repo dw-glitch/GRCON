@@ -8,6 +8,7 @@
     client: null,
     session: null,
     membership: null,
+    plannedSnapshot: null,
     online: navigator.onLine,
     syncing: false,
     syncQueued: false,
@@ -511,6 +512,67 @@
     } catch (error) {
       return { ok: false, indisponivel: navigator.onLine === false, error: error?.message || "Não foi possível remover a central de alocação." };
     }
+  }
+
+  // A publicação diária é um snapshot: os blocos só passam a valer para a
+  // equipe depois da confirmação final no banco. Nenhum arquivo é armazenado.
+  async function loadPlannedDocuments() {
+    if (!state.client || !state.membership?.workspace_id || !state.online) {
+      if (state.plannedSnapshot) return state.plannedSnapshot;
+      throw new Error("Documentos Previstos indisponível: conecte-se ao banco antes da análise.");
+    }
+    const workspace = state.membership.workspace_id;
+    const { data, error } = await state.client.rpc("grcon_planned_documents_current", { target_workspace: workspace });
+    if (error) throw error;
+    const meta = Array.isArray(data) ? data[0] : data;
+    if (!meta?.snapshot_id) {
+      state.plannedSnapshot = null;
+      window.dispatchEvent(new CustomEvent("grcon:planned-documents-updated"));
+      return null;
+    }
+    if (state.plannedSnapshot?.id === meta.snapshot_id) return state.plannedSnapshot;
+    const keys = new Set();
+    let after = "";
+    do {
+      const page = await state.client.rpc("grcon_planned_documents_page", {
+        target_workspace: workspace, target_snapshot: meta.snapshot_id, after_key: after, page_size: 2000,
+      });
+      if (page.error) throw page.error;
+      const items = page.data || [];
+      for (const item of items) keys.add(item.document_key);
+      if (items.length < 2000) break;
+      after = items[items.length - 1].document_key;
+    } while (true);
+    if (keys.size !== Number(meta.document_count)) throw new Error("A base compartilhada de Documentos Previstos chegou incompleta. Tente novamente.");
+    state.plannedSnapshot = {
+      id: meta.snapshot_id, fileName: meta.file_name, updatedAt: meta.published_at,
+      count: keys.size, keys,
+    };
+    window.dispatchEvent(new CustomEvent("grcon:planned-documents-updated", { detail: { snapshot: state.plannedSnapshot } }));
+    return state.plannedSnapshot;
+  }
+
+  async function publishPlannedDocuments(parsed, fileName) {
+    if (!state.online || !state.client || !state.membership?.workspace_id) throw new Error("Conecte-se ao banco para atualizar a base compartilhada.");
+    if (!canManageMembers()) throw new Error("Somente o proprietário pode atualizar Documentos Previstos.");
+    const target_workspace = state.membership.workspace_id;
+    const begin = await state.client.rpc("grcon_planned_documents_begin", {
+      target_workspace, source_file: String(fileName || "").slice(0, 255), expected_count: parsed.count,
+    });
+    if (begin.error) throw begin.error;
+    const upload_id = begin.data;
+    for (let offset = 0; offset < parsed.keys.length; offset += 1200) {
+      const chunk = await state.client.rpc("grcon_planned_documents_chunk", {
+        target_workspace, upload_id, document_keys: parsed.keys.slice(offset, offset + 1200),
+      });
+      if (chunk.error) throw chunk.error;
+      window.dispatchEvent(new CustomEvent("grcon:planned-documents-progress", {
+        detail: { done: Math.min(offset + 1200, parsed.count), total: parsed.count },
+      }));
+    }
+    const finish = await state.client.rpc("grcon_planned_documents_publish", { target_workspace, upload_id });
+    if (finish.error) throw finish.error;
+    return loadPlannedDocuments();
   }
 
   /* ── Consultas ── */
@@ -1663,6 +1725,8 @@
       updateAccountMenu();
       await loadMembers();
       await loadAllocationCenter();
+      try { await loadPlannedDocuments(); }
+      catch (error) { console.warn("GRCON Cloud: Documentos Previstos indisponível", error); }
       if (state.online) {
         await runSyncCycle();
         subscribeRealtime();
@@ -1690,6 +1754,7 @@
   function showLogin() {
     state.session = null;
     state.membership = null;
+    state.plannedSnapshot = null;
     state.activationKey = "";
     state.passwordRecovery = false;
     updateHistoryClearControl();
@@ -1840,6 +1905,8 @@
     loadAllocationCenter,
     saveAllocationCenter,
     clearAllocationCenter,
+    loadPlannedDocuments,
+    publishPlannedDocuments,
     getExportTemplates,
     saveExportTemplate,
     deleteExportTemplate,
