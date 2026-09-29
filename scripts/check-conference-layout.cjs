@@ -20,7 +20,12 @@ const css = [
   "grcon-ui-fix.css",
   "grcon-responsive.css",
   "posting-conference.css",
+  "grcon-reposting.css",
 ].map((file) => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
+
+const repostingSource = fs.readFileSync(path.join(root, "grcon_reposting_app.js"), "utf8");
+assert.doesNotMatch(repostingSource, /<th class=["']grcon-repost-select/, "Repostagem não pode injetar um sétimo <th> na Conferência");
+assert.doesNotMatch(repostingSource, /<td class=["']grcon-repost-select/, "Repostagem não pode injetar uma sétima célula na linha documental");
 
 const fixtures = [
   {
@@ -168,7 +173,7 @@ function tableMarkup() {
         <colgroup><col class="pc-col-document"/><col class="pc-col-sends"/><col class="pc-col-revisions"/><col class="pc-col-situation"/><col class="pc-col-confirmation"/><col class="pc-col-note"/></colgroup>
         <thead><tr><th scope="col">Documento</th><th scope="col">Envios</th><th scope="col">Revisões</th><th scope="col">Situação</th><th scope="col">Confirmação</th><th scope="col">Observação</th></tr></thead>
         <tbody>${fixtures.map((row) => `<tr data-fixture="${row.id}">
-          <td class="pc-cell pc-cell-document"><div class="pc-document-code"><strong>${breakableCode(row.document)}</strong><div class="pc-document-meta"><span>${row.family}</span><span aria-hidden="true">·</span><span>${row.discipline}</span></div>${row.sendCount > 1 ? `<span class="pc-consolidation-note">1 documento · ${row.sendCount} envios</span>` : ""}</div></td>
+          <td class="pc-cell pc-cell-document"><div class="pc-document-code"><strong>${breakableCode(row.document)}</strong><div class="pc-document-meta"><span>${row.family}</span><span aria-hidden="true">·</span><span>${row.discipline}</span><label class="grcon-repost-select" title="Selecionar para repostagem"><input aria-label="Selecionar para repostagem" type="checkbox"/></label></div>${row.sendCount > 1 ? `<span class="pc-consolidation-note">1 documento · ${row.sendCount} envios</span>` : ""}</div></td>
           <td class="pc-cell pc-cell-sends">${sendHistory(row)}</td>
           <td class="pc-cell pc-cell-revisions"><div class="pc-revision-grid"><div><span class="pc-block-label">Atual</span><strong>${row.revision}</strong></div><div><span class="pc-block-label">SIGEM</span><strong>${row.sigemRevision}</strong></div></div>${row.revisionCount > 1 ? `<small class="pc-revision-history">${row.revisionCount} revisões no histórico</small>` : ""}</td>
           <td class="pc-cell pc-cell-situation"><div class="pc-situation-stack"><div><span class="pc-block-label">Conferência</span><span class="pc-status ${row.id === "C" ? "review" : row.id === "D" || row.id === "E" ? "confirmed" : "neutral"}">${row.conference}</span></div><div><span class="pc-block-label">Status SIGEM</span><span class="pc-sigem-status">${row.sigem}</span></div></div></td>
@@ -220,7 +225,31 @@ async function measure(page) {
       .filter(visible)
       .filter((node) => node.scrollWidth > node.clientWidth + 2)
       .map((node) => ({ className: node.className, text: node.textContent.trim().slice(0, 100), clientWidth: node.clientWidth, scrollWidth: node.scrollWidth }));
-    const headings = [...document.querySelectorAll(".pc-document-table thead th")].map((node) => node.textContent.trim());
+    const headingNodes = [...document.querySelectorAll(".pc-document-table thead th")].filter(visible);
+    const headings = headingNodes.map((node) => node.textContent.trim());
+    const headingRects = headingNodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, height: rect.height };
+    });
+    const firstRowCells = [...document.querySelectorAll(".pc-document-table tbody tr:first-child > td")].filter(visible).map((node) => {
+      const rect = node.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, height: rect.height };
+    });
+    const topValues = headingRects.map((rect) => rect.top);
+    const heightValues = headingRects.map((rect) => rect.height);
+    const edgeDeltas = headingRects.map((rect, index) => {
+      const body = firstRowCells[index];
+      return body ? Math.max(Math.abs(rect.left - body.left), Math.abs(rect.right - body.right)) : Infinity;
+    });
+    const headerMetrics = {
+      count: headingNodes.length,
+      emptyCount: headings.filter((value) => !value).length,
+      topSpread: topValues.length ? Math.max(...topValues) - Math.min(...topValues) : Infinity,
+      heightSpread: heightValues.length ? Math.max(...heightValues) - Math.min(...heightValues) : Infinity,
+      observationTopDelta: headingRects.length === 6 ? Math.abs(headingRects[5].top - headingRects[0].top) : Infinity,
+      columnEdgeDelta: edgeDeltas.length ? Math.max(...edgeDeltas) : Infinity,
+      rects: headingRects,
+    };
     const visibleFacts = {
       document: Boolean(document.querySelector(".pc-document-code strong")),
       latestSend: Boolean(document.querySelector(".pc-latest-send strong")),
@@ -242,6 +271,7 @@ async function measure(page) {
       tableScrollWidth: table?.scrollWidth || 0,
       tableWidth: table?.getBoundingClientRect().width || 0,
       headings,
+      headerMetrics,
       visibleFacts,
       cellEscapes,
       rowOverlaps,
@@ -281,6 +311,12 @@ async function measure(page) {
         assert.deepEqual(closed.rowOverlaps, [], `Adjacent table cells overlapped at ${item.name}px / ${theme}`);
         assert.deepEqual(closed.textOverflow, [], `Key table content overflowed at ${item.name}px / ${theme}`);
         assert.deepEqual(closed.headings, ["Documento", "Envios", "Revisões", "Situação", "Confirmação", "Observação"], `Unexpected document-table hierarchy at ${item.name}px / ${theme}`);
+        assert.equal(closed.headerMetrics.count, 6, `Conference header must have exactly 6 cells at ${item.name}px / ${theme}`);
+        assert.equal(closed.headerMetrics.emptyCount, 0, `Conference header has an empty heading at ${item.name}px / ${theme}`);
+        assert.ok(closed.headerMetrics.topSpread <= 2, `Conference headings are not on the same visual row at ${item.name}px / ${theme}: ${closed.headerMetrics.topSpread}px`);
+        assert.ok(closed.headerMetrics.heightSpread <= 2, `Conference headings have different heights at ${item.name}px / ${theme}: ${closed.headerMetrics.heightSpread}px`);
+        assert.ok(closed.headerMetrics.observationTopDelta <= 2, `Observação is vertically displaced at ${item.name}px / ${theme}: ${closed.headerMetrics.observationTopDelta}px`);
+        assert.ok(closed.headerMetrics.columnEdgeDelta <= 2, `Header/body column edges diverged at ${item.name}px / ${theme}: ${closed.headerMetrics.columnEdgeDelta}px`);
         assert.ok(Object.values(closed.visibleFacts).every(Boolean), `Important information is missing at ${item.name}px / ${theme}`);
         assert.ok(Math.abs(opened.tableWidth - closed.tableWidth) <= 2, `History expansion changed table width at ${item.name}px / ${theme}`);
         assert.ok(opened.wrapScrollWidth <= opened.wrapClientWidth + 2, `Expanded history introduced horizontal overflow at ${item.name}px / ${theme}`);
@@ -300,7 +336,8 @@ async function measure(page) {
       console.log(
         `METRIC ${item.name}: container client=${result.wrapClientWidth}px scroll=${result.wrapScrollWidth}px; `
         + `table client=${result.tableClientWidth}px scroll=${result.tableScrollWidth}px; `
-        + `overflow=${Math.max(0, result.wrapScrollWidth - result.wrapClientWidth, result.tableScrollWidth - result.tableClientWidth)}px`
+        + `overflow=${Math.max(0, result.wrapScrollWidth - result.wrapClientWidth, result.tableScrollWidth - result.tableClientWidth)}px; `
+        + `headerTopSpread=${result.headerMetrics.topSpread.toFixed(2)}px; headerHeightSpread=${result.headerMetrics.heightSpread.toFixed(2)}px`
       );
     }
     const scaleResult = metrics["1024-scale125-light"]?.closed;
