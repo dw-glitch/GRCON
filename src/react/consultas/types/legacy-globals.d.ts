@@ -7,7 +7,6 @@
  * diretamente — só `services/consultasAdapter.ts`.
  */
 import type {
-  AllocationCenterIndex,
   DocumentIndex,
   ExportRow,
   ExportTemplate,
@@ -36,12 +35,6 @@ interface GrconRequestsReportApi {
   normalizeExportTemplate(value: unknown): ExportTemplate;
   writeConsultationSheet(sheet: unknown, rows: ExportRow[], options: Record<string, unknown>): void;
   attachBrandLogo(workbook: unknown, sheet: unknown, brandAssets: unknown, fetchImpl: typeof fetch): Promise<void>;
-}
-
-interface GrconAllocationCenterApi {
-  parseAllocationCenter(workbook: unknown, deps: { xlsx: unknown; core: TriagemCoreApi }): AllocationCenterIndex;
-  allocationCenterLookup(document: string, index: AllocationCenterIndex, core: TriagemCoreApi): unknown;
-  centerFields(lookup: unknown): Record<string, unknown>;
 }
 
 interface GrconFileAccessApi {
@@ -79,7 +72,6 @@ declare global {
     TriagemCore?: TriagemCoreApi;
     GrconRequestsCore?: GrconRequestsCoreApi;
     GrconRequestsReport?: GrconRequestsReportApi;
-    GrconAllocationCenter?: GrconAllocationCenterApi;
     GrconFileAccess?: GrconFileAccessApi;
     GRCONModuleLoader?: GRCONModuleLoaderApi;
     GrconGrdtHistoryIndicator?: GrconGrdtHistoryIndicatorApi;
