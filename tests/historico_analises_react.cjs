@@ -161,10 +161,12 @@ function loadAdapter(windowOverrides = {}) {
     "Analisado em", "Documento", "Revisão atual", "Próxima revisão", "Resultado GRCON",
     "SIGEM", "Alocação", "LD", "Motivo", "Baixar relatório",
     "Decisão desta análise", "Evidência e motivo", "Linha do tempo deste documento", "eGRDT relacionada",
-    "Abrir eGRDT no histórico", "Preparar no SIGEM",
+    "Abrir eGRDT no histórico",
   ]) {
     assert.ok(components.includes(text), "UI React precisa preservar: " + text);
   }
+  assert.doesNotMatch(components, /Preparar no SIGEM/);
+
   for (const id of [
     "analysis-history-search", "analysis-history-status", "analysis-history-start", "analysis-history-end",
     "analysis-history-session", "analysis-history-export", "analysis-history-clear",

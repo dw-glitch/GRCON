@@ -48,11 +48,6 @@ const fixtures = [
   record("fixture-c", 3, "2026-09-30T12:00:00-03:00", "CV"),
 ];
 
-const postingFixtures = [
-  { id: "posting-b", historyId: "fixture-b", egrdtNumber: fixtures[1].egrdtNumber, status: "POSTADO", files: [] },
-  { id: "posting-c", historyId: "fixture-c", egrdtNumber: fixtures[2].egrdtNumber, status: "PENDENCIA", files: [] },
-];
-
 async function revealApp(page) {
   await page.addStyleTag({ content: [
     "html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }",
@@ -88,15 +83,12 @@ async function openHistory(page) {
   await page.waitForFunction(() => Boolean(document.querySelector('link[href="history-phase-b.css"]')));
 }
 
-async function installFixtureAdapters(page, rows = fixtures, postings = postingFixtures) {
-  await page.evaluate(({ rows, postings }) => {
+async function installFixtureAdapters(page, rows = fixtures) {
+  await page.evaluate((rows) => {
     window.__historyFixtureRecords = rows.map((row) => window.GrconHistory.cleanRecord(row));
-    window.__historyPostingFixtures = postings.map((row) => ({ ...row }));
-    window.__postingReadCalls = 0;
     window.__historyOriginalRead = window.__historyOriginalRead || window.GrconHistory.read;
     window.__historyOriginalDeleteOne = window.__historyOriginalDeleteOne || window.GrconHistory.deleteOne;
     window.__historyOriginalUpdateNumber = window.__historyOriginalUpdateNumber || window.GrconHistory.updateNumber;
-    window.__postingOriginalRead = window.__postingOriginalRead || window.GrconSigemPosting?.read;
 
     window.GrconHistory.read = () => window.__historyFixtureRecords.map((row) => ({
       ...row,
@@ -104,16 +96,9 @@ async function installFixtureAdapters(page, rows = fixtures, postings = postingF
       files: row.files.map((file) => ({ ...file })),
     }));
 
-    if (window.GrconSigemPosting) {
-      window.GrconSigemPosting.read = () => {
-        window.__postingReadCalls += 1;
-        return window.__historyPostingFixtures.map((row) => ({ ...row, files: [...(row.files || [])] }));
-      };
-    }
-
     window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { fixture: true } }));
     window.GrconHistoryUi?.render?.();
-  }, { rows, postings });
+  }, rows);
   await page.waitForTimeout(220);
 }
 
@@ -130,7 +115,6 @@ async function resetFilters(page) {
   await page.locator("#history-search").fill("");
   await page.locator("#history-year").selectOption("");
   await page.locator("#history-type").selectOption("");
-  await page.locator("#history-posting-status").selectOption("");
   await page.locator("#history-sort").selectOption("recent");
   await page.locator("#history-date-start").fill("");
   await page.locator("#history-date-end").fill("");
@@ -278,7 +262,7 @@ async function setSharedHistoryFixture(page, enabled) {
     await revealApp(page);
     await openHistory(page);
 
-    await installFixtureAdapters(page, [], []);
+    await installFixtureAdapters(page, []);
     await expectCount(page, 0);
     await shot(page, "01-history-egrdt-empty-1366.png");
 
@@ -391,13 +375,9 @@ async function setSharedHistoryFixture(page, enabled) {
     assert.match(await page.locator("#history-period-error").innerText(), /igual ou posterior/i);
     await page.locator("#history-clear-period").click();
 
-    // Filtros combinados: data + postagem, data + família, ano + data.
+    // Filtros combinados: data + família e ano + data.
     await page.locator("#history-date-start").fill("2026-09-10");
     await page.locator("#history-date-end").fill("2026-09-20");
-    await page.locator("#history-posting-status").selectOption("POSTADO");
-    await expectCount(page, 1);
-    assert.match(await page.locator("#history-list").innerText(), /0002-2026/);
-    await page.locator("#history-posting-status").selectOption("");
 
     await page.locator("#history-period-document-type").selectOption("N-1710");
     await expectCount(page, 1);
@@ -425,8 +405,6 @@ async function setSharedHistoryFixture(page, enabled) {
     await page.locator('[data-history-id="fixture-b"]').click();
     await page.locator("#history-detail").waitFor({ state: "visible" });
     await shot(page, "05-history-egrdt-detail-1366.png");
-    await page.locator(".history-workflow-section").scrollIntoViewIfNeeded();
-    await shot(page, "06-history-egrdt-workflow-1366.png");
 
     // Ações operacionais em navegador real, sem chamar webhook:
     // Teams abre somente a confirmação (Enviar permanece desabilitado) e o
@@ -445,18 +423,6 @@ async function setSharedHistoryFixture(page, enabled) {
     await page.locator("#egrdt-email-panel").waitFor({ state: "visible" });
     await page.locator('[data-egrdt-email-action="close"]').click();
     await page.locator("#egrdt-email-panel").waitFor({ state: "hidden" });
-
-    // Preparar no SIGEM é testado por último porque a ação real navega para o
-    // módulo SIGEM. O navegador do CI usa apenas o armazenamento efêmero.
-    await page.evaluate(() => {
-      window.__prepareSigemReady = new Promise((resolve) => {
-        window.addEventListener("grcon:sigem-updated", resolve, { once: true });
-      });
-    });
-    await page.locator('[data-history-action="prepare-sigem"]').click();
-    await page.evaluate(() => window.__prepareSigemReady);
-    await page.evaluate(() => window.GrconHistoryUi?.activate?.("history"));
-    await page.locator(".history-detail-more > summary").waitFor({ state: "visible" });
 
     // Editor: inválido, duplicado e válido sem tocar no Core persistente.
     await page.locator(".history-detail-more > summary").click();
@@ -524,19 +490,17 @@ async function setSharedHistoryFixture(page, enabled) {
       const day = String((index % 28) + 1).padStart(2, "0");
       return record("volume-" + sequence, sequence, "2026-09-" + day + "T12:00:00-03:00", sequence % 3 === 0 ? "ET" : "N-1710");
     });
-    await installFixtureAdapters(page, volumeRows, []);
+    await installFixtureAdapters(page, volumeRows);
     await expectCount(page, 1000);
     const volumeSnapshot = await page.evaluate(() => ({
       rendered: document.querySelectorAll("#history-list [data-history-id]").length,
       filtered: window.GrconHistoryUi?.state?.filtered?.length || 0,
       performance: window.GrconHistoryUi?.performanceSnapshot?.(),
-      postingReads: window.__postingReadCalls,
       scrollHeight: document.documentElement.scrollHeight,
     }));
     console.log("volume-1000", JSON.stringify(volumeSnapshot));
     assert.equal(volumeSnapshot.filtered, 1000);
     assert.ok(volumeSnapshot.rendered <= 200);
-    assert.ok((volumeSnapshot.performance?.postingReadsLastRender || 0) <= 1);
     assert.ok(volumeSnapshot.scrollHeight < 15000, "scroll interno deve impedir página gigantesca no volume inicial");
 
     const dateStarted = Date.now();

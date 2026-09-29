@@ -2,18 +2,7 @@ import { useEffect, useRef } from "react";
 import { UiMetaPill, UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
 import { historicoEgrdtAdapter as Adapter } from "./services/historicoEgrdtAdapter";
 import { useHistoricoEgrdt, LIST_PAGE_SIZE } from "./hooks/useHistoricoEgrdt";
-import type { EgrdtHistoryRecord } from "./types/domain";
 
-const POSTING_LABELS: Record<string, string> = {
-  AGUARDANDO: "Aguardando preparação",
-  GERADO: "Gerado",
-  VALIDADO: "Pacote conferido",
-  PRONTO: "Pronto para SIGEM",
-  POSTADO: "Postado",
-  PENDENCIA: "Com pendência",
-  FALHA: "Falha",
-  CANCELADO: "Cancelado",
-};
 
 const SORT_LABELS: Record<string, string> = {
   recent: "Mais recentes",
@@ -30,38 +19,16 @@ function countLabel(value: number, singular: string, plural: string): string {
   return `${numberBr(value)} ${value === 1 ? singular : plural}`;
 }
 
-function PostingBadge({ record, cache }: { record: EgrdtHistoryRecord; cache: ReturnType<typeof Adapter.readPostingCache> }) {
-  const presentation = Adapter.postingPresentation(cache, record);
-  return <span className={"history-posting-status " + presentation.tone}>{presentation.label}</span>;
-}
-
 function Summary({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
-  const entries: Array<{ label: string; value: number; tone: string; hint: string; status?: string }> = [
-    { label: "eGRDTs", value: h.summary.egrdts, tone: "neutral", hint: "No recorte atual" },
-    { label: "Documentos", value: h.summary.documents, tone: "neutral", hint: "Registrados no recorte" },
-    { label: "Alocações", value: h.summary.allocations, tone: "neutral", hint: "Relacionadas no recorte" },
-    { label: "Aguardando SIGEM", value: h.summary.awaiting, tone: "awaiting", hint: "Filtrar por situação", status: "AGUARDANDO" },
-    { label: "Postadas", value: h.summary.posted, tone: "posted", hint: "Filtrar por situação", status: "POSTADO" },
-    { label: "Pendências/Falhas", value: h.summary.attention, tone: "attention", hint: "Indicador informativo" },
+  const entries = [
+    { label: "eGRDTs", value: h.summary.egrdts, hint: "No recorte atual" },
+    { label: "Documentos", value: h.summary.documents, hint: "Registrados no recorte" },
+    { label: "Alocações", value: h.summary.allocations, hint: "Relacionadas no recorte" },
   ];
-
   return (
     <section aria-label="Resumo do histórico" className="history-summary history-phase-b-summary" id="history-summary">
-      {entries.map((entry) => entry.status ? (
-        <button
-          aria-pressed={h.filters.postingStatus === entry.status}
-          className={"history-kpi " + entry.tone}
-          data-history-kpi-status={entry.status}
-          key={entry.label}
-          type="button"
-          onClick={() => h.setFilter("postingStatus", h.filters.postingStatus === entry.status ? "" : entry.status!)}
-        >
-          <span>{entry.label}</span>
-          <strong>{numberBr(entry.value)}</strong>
-          <small>{entry.hint}</small>
-        </button>
-      ) : (
-        <div className={"history-kpi " + entry.tone} key={entry.label}>
+      {entries.map((entry) => (
+        <div className="history-kpi neutral" key={entry.label}>
           <span>{entry.label}</span>
           <strong>{numberBr(entry.value)}</strong>
           <small>{entry.hint}</small>
@@ -81,13 +48,6 @@ function activeFilters(h: ReturnType<typeof useHistoricoEgrdt>) {
   }
   if (h.filters.outputType) {
     items.push({ key: "outputType", label: "Saída: " + h.filters.outputType, clear: () => h.setFilter("outputType", "") });
-  }
-  if (h.filters.postingStatus) {
-    items.push({
-      key: "postingStatus",
-      label: "Postagem: " + (POSTING_LABELS[h.filters.postingStatus] || h.filters.postingStatus),
-      clear: () => h.setFilter("postingStatus", ""),
-    });
   }
   if (h.filters.sort !== "recent") {
     items.push({ key: "sort", label: "Ordem: " + SORT_LABELS[h.filters.sort], clear: () => h.setFilter("sort", "recent") });
@@ -156,19 +116,6 @@ function Toolbar({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           <select id="history-type" value={h.filters.outputType} onChange={(event) => h.setFilter("outputType", event.target.value)}>
             <option value="">Todas</option>
             {h.filterOptions.outputTypes.map((type) => <option key={type} value={type}>{type}</option>)}
-          </select>
-        </label>
-        <label><span>Postagem</span>
-          <select id="history-posting-status" value={h.filters.postingStatus} onChange={(event) => h.setFilter("postingStatus", event.target.value)}>
-            <option value="">Todas</option>
-            <option value="AGUARDANDO">Aguardando preparação</option>
-            <option value="GERADO">Gerado</option>
-            <option value="VALIDADO">Pacote conferido</option>
-            <option value="PRONTO">Pronto para SIGEM</option>
-            <option value="POSTADO">Postado</option>
-            <option value="PENDENCIA">Com pendência</option>
-            <option value="FALHA">Falha</option>
-            <option value="CANCELADO">Cancelado</option>
           </select>
         </label>
         <label><span>Ordem</span>
@@ -278,7 +225,7 @@ function RecordList({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           <strong id="history-list-title">Emissões localizadas</strong>
           <small id="history-result-count">{resultText}</small>
         </div>
-        <p>Selecione uma eGRDT para conferir workflow, metadados e documentos.</p>
+        <p>Selecione uma eGRDT para conferir metadados e documentos.</p>
       </header>
 
       <div className="history-list-scroll">
@@ -300,7 +247,6 @@ function RecordList({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                     <strong>{record.egrdtNumber}</strong>
                     <span>{Adapter.formatDate(record.generatedAt, true)} · {record.outputType}</span>
                   </div>
-                  <PostingBadge record={record} cache={h.postingCache} />
                 </div>
                 <div className="history-record-facts">
                   <span>{countLabel(record.documentCount, "documento", "documentos")}</span>
@@ -333,31 +279,6 @@ function RecordList({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
   );
 }
 
-function Workflow({ h, record }: { h: ReturnType<typeof useHistoricoEgrdt>; record: EgrdtHistoryRecord }) {
-  const steps = Adapter.workflow(h.postingCache, record);
-  return (
-    <section className="history-detail-section history-workflow-section" aria-labelledby="history-workflow-title">
-      <div className="history-detail-section-heading">
-        <span>STATUS / WORKFLOW</span>
-        <strong id="history-workflow-title">Fluxo até a postagem no SIGEM</strong>
-      </div>
-      <nav className="posting-flow" aria-label="Fluxo da eGRDT até o SIGEM">
-        {steps.map((step, index) => (
-          <div
-            aria-current={step.current ? "step" : undefined}
-            className={"posting-flow-step " + (step.complete ? "complete " : "") + (step.current ? "current" : "")}
-            data-step={index + 1}
-            key={step.key || step.label + "-" + index}
-          >
-            <i aria-hidden="true">{step.complete ? "✓" : index + 1}</i>
-            <strong>{step.label}</strong>
-          </div>
-        ))}
-      </nav>
-    </section>
-  );
-}
-
 function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
   const record = h.selectedRecord;
   if (!record) {
@@ -366,7 +287,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
         <div aria-live="polite" className="history-detail-empty" id="history-detail" tabIndex={-1}>
           <span aria-hidden="true">↗</span>
           <strong id="history-detail-empty-title">Selecione uma eGRDT</strong>
-          <p>Workflow, documentos, LD e alocações aparecerão aqui sem sair do histórico.</p>
+          <p>Documentos, LD e alocações aparecerão aqui sem sair do histórico.</p>
         </div>
       </UiPanel>
     );
@@ -387,13 +308,10 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
             {creator ? <p className="history-record-user">Gerado por {creator}</p> : null}
           </div>
           <div className="history-detail-identity-meta">
-            <PostingBadge record={record} cache={h.postingCache} />
             <UiMetaPill>{countLabel(record.documentCount, "documento", "documentos")}</UiMetaPill>
             <UiMetaPill>{countLabel(record.fileCount, "arquivo", "arquivos")}</UiMetaPill>
           </div>
         </section>
-
-        <Workflow h={h} record={record} />
 
         <section className="history-detail-section history-actions-section" aria-labelledby="history-actions-title">
           <div className="history-detail-section-heading">
@@ -401,9 +319,6 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
             <strong id="history-actions-title">Próximos passos</strong>
           </div>
           <div className="history-detail-actions">
-            <button className="primary-button" data-history-action="prepare-sigem" type="button" onClick={() => { void h.prepareForSigem(); }}>
-              Preparar no SIGEM
-            </button>
             {teamsAction ? (
               <span className="egrdt-teams-history-action">
                 <button
@@ -482,7 +397,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
             <strong id="history-documents-title">Arquivos e rastreabilidade da GRDT</strong>
           </div>
           <p className="history-table-note">
-            <strong>Como ler esta tabela:</strong> Conferência e Status SIGEM atual usam a Consulta Geral importada. Situação na geração, alocação e prazo da LD são registros da época da emissão. As revisões registradas como postadas vêm do controle interno do GRCON.
+            <strong>Como ler esta tabela:</strong> Conferência e Status SIGEM atual usam a Consulta Geral importada. Situação na geração, alocação e prazo da LD são registros da época da emissão.
           </p>
           <div className="history-detail-table" tabIndex={0} role="region" aria-label="Documentos da eGRDT; role horizontalmente para ver todas as colunas">
             <table>
@@ -492,8 +407,6 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                 <th data-history-column="sent">Arquivo enviado</th>
                 <th>Revisão gerada na GRDT</th>
                 <th>Propósito da GRDT</th>
-                <th>Revisão desta GRDT postada</th>
-                <th>Outra revisão postada</th>
                 <th title="Situação registrada na triagem na época da emissão; pode incluir pendências de alocação">Situação na geração</th>
                 <th>Alocação</th>
                 <th>Versão da LD enviada</th>
@@ -501,7 +414,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
               </tr></thead>
               <tbody>
                 {record.files.map((file, index) => {
-                  const relation = Adapter.revisionRelation(record, file, h.postingCache.records);
+                  const relation = Adapter.revisionRelation(record, file);
                   return (
                     <tr key={(file.document || "doc") + "-" + (file.finalName || index) + "-" + index}>
                       <td data-label="Documento"><strong>{file.document || "—"}</strong></td>
@@ -509,8 +422,6 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                       <td data-label="Arquivo enviado">{file.finalName || "—"}</td>
                       <td data-label="Revisão gerada"><span className="history-revision-badge">{relation.generated}</span>{file.revisionManual ? <span className="history-revision-manual" title={"Alterada manualmente na triagem · sugestão do sistema na época: " + (file.revisionSuggested || "—")}>Alterada manualmente</span> : null}</td>
                       <td data-label="Propósito da GRDT">{file.purpose || "Não registrado"}</td>
-                      <td data-label="Postada nesta GRDT"><span className="history-revision-badge posted">{relation.posted}</span></td>
-                      <td data-label="Outra postada"><span className="history-revision-badge other">{relation.other}</span></td>
                       <td data-label="Situação na geração">{file.sigemStatus || "—"}</td>
                       <td data-label="Alocação">{file.allocation || "—"}</td>
                       <td data-label="Versão da LD enviada">{file.ldPrazo || "Não registrado"}</td>

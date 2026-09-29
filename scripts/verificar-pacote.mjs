@@ -59,9 +59,9 @@ const exportWorker = fs.readFileSync(path.join(root, workers.export.file), "utf8
 check(exportWorker.includes("writeExecutiveSummarySheet"), "worker de exportação não usa o construtor compartilhado do Resumo");
 check(!/DADOS DA ANÁLISE|Arquitetura de desempenho/.test(exportWorker), "worker de exportação ainda monta o Resumo antigo por conta própria");
 check(!/addWorksheet\(["']Auditoria detalhada["']/.test(exportWorker), "worker de exportação ainda gera a aba duplicada Auditoria detalhada");
-// O cadastro continua como referência de origem no Resumo, mas nunca pode
-// voltar a produzir fórmula ou conexão externa no arquivo Excel.
-check(exportWorker.includes("allocationCenter"), "worker de exportação não repassa a referência da central ao Resumo");
+// A Central de Alocação foi aposentada do runtime e não pode voltar por um
+// caminho alternativo de exportação.
+check(!exportWorker.includes("allocationCenter"), "worker de exportação ainda referencia a Central de Alocação aposentada");
 
 const reportSummarySource = fs.readFileSync(path.join(root, "report_summary.js"), "utf8");
 check(!reportSummarySource.includes("allocationCenterFormula"), "Resumo ainda expõe o gerador de fórmula externa da central");
@@ -69,7 +69,7 @@ check(!reportSummarySource.includes("XLOOKUP("), "Resumo ainda grava PROCX/XLOOK
 
 const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
 check(appSource.includes("writeExecutiveSummarySheet"), "construtor de reserva não usa o construtor compartilhado do Resumo");
-check(appSource.includes("allocationCenterConfig()"), "app.js não envia a referência da central para a geração do relatório");
+check(!appSource.includes("allocationCenterConfig()"), "app.js ainda referencia a Central de Alocação aposentada");
 check(!/workbook\.addWorksheet\(["']Auditoria detalhada["']/.test(appSource), "construtor de reserva ainda gera a aba duplicada Auditoria detalhada");
 
 if (problems.length) {

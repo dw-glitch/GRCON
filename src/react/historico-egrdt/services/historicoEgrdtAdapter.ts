@@ -6,11 +6,8 @@ import type {
   EgrdtHistoryRecord,
   EgrdtHistorySummary,
   HistoryPerformanceSnapshot,
-  PostingCache,
-  PostingRecord,
   RevisionRelation,
   UpdateNumberResult,
-  WorkflowStep,
 } from "../types/domain";
 
 const REFRESH_EVENT = "grcon:history-react-refresh";
@@ -18,10 +15,8 @@ const SELECT_EVENT = "grcon:history-react-select";
 let reportWorker: Worker | null = null;
 let performanceSnapshot: HistoryPerformanceSnapshot = {
   lastRenderMs: 0,
-  postingReadsLastRender: 0,
   renderedRecords: 0,
   totalFiltered: 0,
-  postingCount: 0,
   totalRecords: 0,
 };
 
@@ -73,27 +68,6 @@ function readRecords(): EgrdtHistoryRecord[] {
   return history().read() as unknown as EgrdtHistoryRecord[];
 }
 
-function readPostingCache(): PostingCache {
-  const Posting = window.GrconSigemPosting;
-  const records = Posting?.read?.() || [];
-  const byHistoryId = new Map<string, PostingRecord>();
-  const byId = new Map<string, PostingRecord>();
-  const byEgrdt = new Map<string, PostingRecord>();
-  records.forEach((item) => {
-    if (item.historyId && !byHistoryId.has(item.historyId)) byHistoryId.set(item.historyId, item);
-    if (item.id && !byId.has(item.id)) byId.set(item.id, item);
-    if (item.egrdtNumber && !byEgrdt.has(item.egrdtNumber)) byEgrdt.set(item.egrdtNumber, item);
-  });
-  return { records, byHistoryId, byId, byEgrdt, reads: Posting ? 1 : 0 };
-}
-
-function postingRecord(cache: PostingCache, record: EgrdtHistoryRecord): PostingRecord | null {
-  return cache.byHistoryId.get(record.id)
-    || cache.byId.get(record.id)
-    || cache.byEgrdt.get(record.egrdtNumber)
-    || null;
-}
-
 function filterOptions(records: EgrdtHistoryRecord[]): EgrdtHistoryFilterOptions {
   const years = [...new Set(records.map((record) => parsedNumber(record)?.year).filter(Boolean).map(String))]
     .sort((a, b) => Number(b) - Number(a));
@@ -105,20 +79,11 @@ function filterOptions(records: EgrdtHistoryRecord[]): EgrdtHistoryFilterOptions
 function filterRecords(
   records: EgrdtHistoryRecord[],
   filters: EgrdtHistoryFilters,
-  cache: PostingCache,
 ): EgrdtHistoryRecord[] {
   const History = history();
   let filtered = History.filter(records, filters.query) as unknown as EgrdtHistoryRecord[];
   if (filters.year) filtered = filtered.filter((record) => String(parsedNumber(record)?.year || "") === filters.year);
   if (filters.outputType) filtered = filtered.filter((record) => record.outputType === filters.outputType);
-  if (filters.postingStatus) {
-    filtered = filtered.filter((record) => {
-      const posting = postingRecord(cache, record);
-      return filters.postingStatus === "AGUARDANDO"
-        ? !posting
-        : posting?.status === filters.postingStatus;
-    });
-  }
   filtered = History.filterByDate(filtered, filters.startDate, filters.endDate) as unknown as EgrdtHistoryRecord[];
   if (typeof History.filterByDocumentFamily === "function") {
     filtered = History.filterByDocumentFamily(filtered, filters.documentFamily) as unknown as EgrdtHistoryRecord[];
@@ -134,46 +99,13 @@ function filterRecords(
   });
 }
 
-function summary(records: EgrdtHistoryRecord[], cache: PostingCache): EgrdtHistorySummary {
+function summary(records: EgrdtHistoryRecord[]): EgrdtHistorySummary {
   const base = history().summary(records);
-  const postingRecords = records.map((record) => postingRecord(cache, record));
-  const statuses = window.GrconSigemPosting?.STATUSES || {};
-  return {
-    egrdts: base.egrdts,
-    documents: base.documents,
-    allocations: base.allocations,
-    awaiting: postingRecords.filter((record) => !record).length,
-    posted: postingRecords.filter((record) => record?.status === statuses.POSTADO).length,
-    attention: postingRecords.filter((record) => [statuses.PENDENCIA, statuses.FALHA].includes(record?.status || "")).length,
-  };
+  return { egrdts: base.egrdts, documents: base.documents, allocations: base.allocations };
 }
 
-function postingPresentation(cache: PostingCache, record: EgrdtHistoryRecord): { label: string; tone: string } {
-  const posting = postingRecord(cache, record);
-  const Posting = window.GrconSigemPosting;
-  const status = posting?.status || Posting?.STATUSES?.GERADO || "GERADO";
-  return {
-    label: posting && Posting ? Posting.statusLabel(status) : "Aguardando preparação",
-    tone: window.GrconMacro5Flow?.postingTone?.(status) || "neutral",
-  };
-}
-
-function workflow(cache: PostingCache, record: EgrdtHistoryRecord): WorkflowStep[] {
-  const posting = postingRecord(cache, record);
-  const Posting = window.GrconSigemPosting;
-  const audit = posting && Posting ? Posting.audit(posting, cache.records) : { ready: false };
-  return window.GrconMacro5Flow?.workflowSteps?.(posting?.status || "GERADO", Boolean(audit.ready)) || [];
-}
-
-function revisionRelation(
-  record: EgrdtHistoryRecord,
-  file: EgrdtHistoryFile,
-  postings: PostingRecord[],
-): RevisionRelation {
-  return {
-    generated: history().generatedRevision(file) || "—",
-    ...report().revisionRelation(record, file, postings),
-  };
+function revisionRelation(_record: EgrdtHistoryRecord, file: EgrdtHistoryFile): RevisionRelation {
+  return { generated: history().generatedRevision(file) || "—" };
 }
 
 function periodLabel(records: EgrdtHistoryRecord[], filters: EgrdtHistoryFilters): string {
@@ -276,19 +208,6 @@ async function clearHistory(): Promise<boolean> {
   return history().clear();
 }
 
-async function prepareForSigem(record: EgrdtHistoryRecord): Promise<PostingRecord | null> {
-  const Posting = window.GrconSigemPosting;
-  if (!Posting) return null;
-  const saved = Posting.registerGenerated([record], { appVersion: appVersion() }) as { persistence?: Promise<unknown> } | undefined;
-  if (saved?.persistence) await saved.persistence.catch(() => null);
-  const cache = readPostingCache();
-  await window.GRCONModuleLoader?.ensureModule?.("sigem");
-  const posting = postingRecord(cache, record);
-  if (posting) window.GrconSigemUi?.select?.(posting.id);
-  window.dispatchEvent(new CustomEvent("grcon:sigem-updated", { detail: { record: posting, preparedFromHistory: true } }));
-  return posting;
-}
-
 function openEmailReply(record: EgrdtHistoryRecord): void {
   if (!window.GrconEgrdtEmailReplyUi) throw new Error("O painel da resposta de e-mail não está disponível nesta sessão.");
   window.GrconEgrdtEmailReplyUi.open?.([record]);
@@ -330,11 +249,11 @@ function subscribeUpdates(callback: () => void): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key === history().STORAGE_KEY) callback();
   };
-  ["grcon:history-updated", "grcon:sigem-updated", "grcon:egrdt-teams-state", "grcon:egrdt-teams-notified", REFRESH_EVENT]
+  ["grcon:history-updated", "grcon:egrdt-teams-state", "grcon:egrdt-teams-notified", REFRESH_EVENT]
     .forEach((name) => window.addEventListener(name, simple));
   window.addEventListener("storage", onStorage);
   return () => {
-    ["grcon:history-updated", "grcon:sigem-updated", "grcon:egrdt-teams-state", "grcon:egrdt-teams-notified", REFRESH_EVENT]
+    ["grcon:history-updated", "grcon:egrdt-teams-state", "grcon:egrdt-teams-notified", REFRESH_EVENT]
       .forEach((name) => window.removeEventListener(name, simple));
     window.removeEventListener("storage", onStorage);
   };
@@ -370,7 +289,6 @@ function activateView(view: string): void {
     "analysis-history": "analysis-history-module",
     history: "history-module",
     dashboard: "dashboard-module",
-    sigem: "sigem-module",
     requests: "requests-module",
     "pdf-tools": "pdf-tools-module",
   };
@@ -389,9 +307,6 @@ function activateView(view: string): void {
   } else if (view === "history") {
     requestRefresh();
     window.setTimeout(() => document.querySelector<HTMLElement>("#history-search")?.focus(), 0);
-  } else if (view === "sigem") {
-    window.GrconSigemUi?.render?.();
-    window.setTimeout(() => document.querySelector<HTMLElement>("#sigem-search")?.focus(), 0);
   }
 }
 
@@ -415,7 +330,7 @@ function getCompatibilityState() {
 function confirmDelete(record: EgrdtHistoryRecord): boolean {
   const shared = isSharedHistory();
   return window.confirm(
-    `Excluir somente ${record.egrdtNumber} do histórico ${shared ? "compartilhado" : "local"}?\n\n${shared ? "A reserva desse número também será removida e ele poderá ser usado novamente. " : ""}Os arquivos já baixados e os registros da fila SIGEM não serão alterados.`,
+    `Excluir somente ${record.egrdtNumber} do histórico ${shared ? "compartilhado" : "local"}?\n\n${shared ? "A reserva desse número também será removida e ele poderá ser usado novamente. " : ""}Os arquivos já baixados não serão alterados.`,
   );
 }
 
@@ -435,13 +350,9 @@ export const historicoEgrdtAdapter = {
   formatDate,
   parsedNumber,
   readRecords,
-  readPostingCache,
-  postingRecord,
   filterOptions,
   filterRecords,
   summary,
-  postingPresentation,
-  workflow,
   revisionRelation,
   periodLabel,
   exportPeriodReport,
@@ -450,7 +361,6 @@ export const historicoEgrdtAdapter = {
   isSharedHistory,
   deleteRecord,
   clearHistory,
-  prepareForSigem,
   openEmailReply,
   openTeams,
   teamsPresentation,

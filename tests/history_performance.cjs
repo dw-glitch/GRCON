@@ -12,21 +12,17 @@ function check(name, fn) {
   catch (error) { console.error(`✗ ${name}`); throw error; }
 }
 
-check("Histórico lê Postagem SIGEM uma vez para montar índice do ciclo", () => {
+check("Histórico não consulta a fila da Postagem SIGEM para montar a UI", () => {
   const matches = adapter.match(/Posting\?\.read\?\.\(\)/g) || [];
-  assert.equal(matches.length, 1, "Posting.read não deve voltar a ser chamado por linha/cartão");
-  assert.match(adapter, /function readPostingCache\(\)/);
-  assert.match(adapter, /const byHistoryId = new Map/);
-  assert.match(adapter, /const byEgrdt = new Map/);
+  assert.equal(matches.length, 0, "Histórico não deve depender da fila de postagem aposentada");
+  assert.doesNotMatch(adapter, /function readPostingCache\(\)/);
 });
 
-check("postingRecord consulta Maps e não executa find sobre toda a fila", () => {
-  const block = adapter.slice(adapter.indexOf("function postingRecord"), adapter.indexOf("function filterOptions"));
-  assert.match(block, /cache\.byHistoryId\.get/);
-  assert.match(block, /cache\.byId\.get/);
-  assert.match(block, /cache\.byEgrdt\.get/);
-  assert.doesNotMatch(block, /Posting\.read/);
-  assert.doesNotMatch(block, /\.find\(/);
+check("relação de revisão usa somente os dados registrados na própria eGRDT", () => {
+  const block = adapter.slice(adapter.indexOf("function revisionRelation"), adapter.indexOf("function periodLabel"));
+  assert.match(block, /generated/);
+  assert.doesNotMatch(block, /Posting/);
+  assert.doesNotMatch(block, /postingRecord/);
 });
 
 check("lista grande usa carregamento incremental de 50 registros", () => {
@@ -42,8 +38,8 @@ check("pesquisa usa debounce de 120 ms sem afetar os demais filtros", () => {
   assert.match(hook, /setVisibleLimit\(LIST_PAGE_SIZE\)/);
 });
 
-check("métrica de compatibilidade continua exposta", () => {
-  assert.match(adapter, /postingReadsLastRender/);
+check("métrica de compatibilidade continua exposta sem contador legado de postagem", () => {
+  assert.doesNotMatch(adapter, /postingReadsLastRender/);
   assert.match(adapter, /renderedRecords/);
   assert.match(adapter, /getPerformanceSnapshot/);
 });

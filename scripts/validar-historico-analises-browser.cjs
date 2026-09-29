@@ -137,12 +137,10 @@ async function seedHistory(page, fixture) {
 }
 
 async function installIntegrationFixture(page) {
-  // Carregue os módulos reais primeiro. O carregamento do SIGEM pode mudar a
-  // view ativa e a navegação de retorno pode remontar a UI do Histórico.
+  // Carregue o Histórico real antes de instalar o stub de integração.
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) {
       await window.GRCONModuleLoader.ensureModule("history");
-      await window.GRCONModuleLoader.ensureModule("sigem");
     }
   });
   await openHistory(page);
@@ -163,13 +161,6 @@ async function installIntegrationFixture(page) {
     window.GrconHistoryUi = Object.assign({}, window.GrconHistoryUi || {}, {
       select: (id) => { window.__phaseBHistorySelected = id; },
     });
-    window.GrconSigemPosting = Object.assign({}, window.GrconSigemPosting || {}, {
-      registerGenerated: () => { window.__phaseBSigemRegistered = true; },
-      read: () => [{ id: "posting-fixture", historyId: record.id }],
-    });
-    window.GrconSigemUi = Object.assign({}, window.GrconSigemUi || {}, {
-      select: (id) => { window.__phaseBSigemSelected = id; },
-    });
     const loader = window.GRCONModuleLoader;
     if (loader) {
       const ensure = typeof loader.ensure === "function" ? loader.ensure.bind(loader) : undefined;
@@ -178,7 +169,7 @@ async function installIntegrationFixture(page) {
         ...loader,
         ...(ensure ? { ensure } : {}),
         ensureModule: async (name) => {
-          if (name === "history" || name === "sigem") return;
+          if (name === "history") return;
           return ensureModule?.(name);
         },
       };
@@ -456,15 +447,7 @@ async function resetFilters(page) {
 
     await page.getByRole("button", { name: "Abrir eGRDT no histórico" }).click();
     await page.waitForFunction(() => window.__phaseBHistorySelected === "history-egrdt-fixture");
-    // Retorna ao Histórico de análises, recompõe o fixture de globals e testa SIGEM.
-    await openHistory(page);
-    await installIntegrationFixture(page);
-    await page.locator("#analysis-history-search").fill("DOC-HISTORY-0001");
-    await page.waitForFunction(() => /2 de 240/.test(document.querySelector("#analysis-history-result-count")?.textContent || ""));
-    await page.locator('#analysis-history-body tr[aria-label="Abrir detalhes de DOC-HISTORY-0001"]').first().click();
-    await page.locator(".analysis-history-detail-panel").waitFor();
-    await page.getByRole("button", { name: "Preparar no SIGEM" }).click();
-    await page.waitForFunction(() => window.__phaseBSigemRegistered === true && window.__phaseBSigemSelected === "posting-fixture");
+    // Retorna ao Histórico de análises; a preparação SIGEM foi aposentada deste fluxo.
     await openHistory(page);
     await resetFilters(page);
 

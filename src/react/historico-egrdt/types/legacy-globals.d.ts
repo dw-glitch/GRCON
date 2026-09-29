@@ -1,13 +1,7 @@
-import type {
-  EgrdtHistoryFile,
-  EgrdtHistoryRecord,
-  PostingRecord,
-  RevisionRelation,
-} from "./domain";
+import type { EgrdtHistoryRecord } from "./domain";
 
 interface GrconHistoryReportApi {
   periodLabel(records: EgrdtHistoryRecord[], startDate: string, endDate: string): string;
-  revisionRelation(record: EgrdtHistoryRecord, file: EgrdtHistoryFile, postings: PostingRecord[]): Omit<RevisionRelation, "generated">;
   buildWorkbook(records: EgrdtHistoryRecord[], options: Record<string, unknown>): Promise<ArrayBuffer>;
   downloadName(records: EgrdtHistoryRecord[], options: Record<string, unknown>): string;
 }

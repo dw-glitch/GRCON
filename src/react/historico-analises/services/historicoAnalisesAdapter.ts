@@ -211,21 +211,11 @@ async function detailContext(item: AnalysisDocument): Promise<DetailContext> {
   return { timeline, related, changes };
 }
 
-async function openRelatedHistory(id: string, prepareSigem: boolean): Promise<void> {
+async function openRelatedHistory(id: string): Promise<void> {
   await window.GRCONModuleLoader?.ensureModule?.("history");
   window.GrconHistoryUi?.select?.(id);
 
-  if (prepareSigem) {
-    const record = window.GrconHistory?.read?.().find((entry) => entry.id === id);
-    if (record && window.GrconSigemPosting) {
-      window.GrconSigemPosting.registerGenerated([record], { appVersion: APP_VERSION });
-      await window.GRCONModuleLoader?.ensureModule?.("sigem");
-      const posting = window.GrconSigemPosting.read().find((entry) => entry.historyId === id || entry.id === id);
-      if (posting) window.GrconSigemUi?.select?.(posting.id);
-    }
-  }
 }
-
 async function exportReport(payload: ExportPayload): Promise<number> {
   const Report = report();
   await window.GRCONModuleLoader?.ensure("excel");

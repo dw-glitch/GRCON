@@ -91,7 +91,7 @@ export function HistoricoAnalisesApp() {
       <DetailPanel
         detail={h.detail}
         onClose={h.closeDetail}
-        onRelated={(id, prepareSigem) => { void h.openRelatedHistory(id, prepareSigem); }}
+        onRelated={(id) => { void h.openRelatedHistory(id); }}
       />
     </div>
   );

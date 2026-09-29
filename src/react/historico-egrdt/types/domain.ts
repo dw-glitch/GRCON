@@ -40,32 +40,10 @@ export interface EgrdtHistoryRecord {
   createdByEmail?: string;
 }
 
-export interface PostingFile {
-  document?: string;
-  revision?: string;
-}
-
-export interface PostingRecord {
-  id: string;
-  historyId?: string;
-  egrdtNumber?: string;
-  status?: string;
-  files?: PostingFile[];
-}
-
-export interface PostingCache {
-  records: PostingRecord[];
-  byHistoryId: Map<string, PostingRecord>;
-  byId: Map<string, PostingRecord>;
-  byEgrdt: Map<string, PostingRecord>;
-  reads: number;
-}
-
 export interface EgrdtHistoryFilters {
   query: string;
   year: string;
   outputType: string;
-  postingStatus: string;
   sort: "recent" | "oldest" | "number-desc" | "number-asc";
   startDate: string;
   endDate: string;
@@ -81,9 +59,6 @@ export interface EgrdtHistorySummary {
   egrdts: number;
   documents: number;
   allocations: number;
-  awaiting: number;
-  posted: number;
-  attention: number;
 }
 
 export interface ParsedEgrdtNumber {
@@ -94,24 +69,12 @@ export interface ParsedEgrdtNumber {
 
 export interface RevisionRelation {
   generated: string;
-  posted: string;
-  other: string;
-}
-
-export interface WorkflowStep {
-  key?: string;
-  label: string;
-  complete?: boolean;
-  current?: boolean;
-  tone?: string;
 }
 
 export interface HistoryPerformanceSnapshot {
   lastRenderMs: number;
-  postingReadsLastRender: number;
   renderedRecords: number;
   totalFiltered: number;
-  postingCount: number;
   totalRecords: number;
 }
 

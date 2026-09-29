@@ -18,6 +18,7 @@ const retomar = read("retomar.js");
 const phaseB = read("history-phase-b.css");
 const parity = read("docs/phase-b-historico-egrdt-parity.md");
 const browserValidation = read("scripts/validar-historico-egrdt-browser.cjs");
+const sigemPostingApp = read("sigem_posting_app.js");
 
 assert.match(html, /id="history-module"/);
 assert.match(html, /id="grcon-history-root"/);
@@ -46,7 +47,6 @@ assert.match(index, /GrconHistoricoEgrdtReact/);
   "history-search",
   "history-year",
   "history-type",
-  "history-posting-status",
   "history-sort",
   "history-date-start",
   "history-date-end",
@@ -65,16 +65,12 @@ assert.match(app, /UiMetaPill/);
 assert.match(app, /Gerenciar histórico/);
 assert.match(app, /Limpar período/);
 assert.match(app, /Filtros ativos/);
-assert.match(app, /data-history-kpi-status/);
 assert.match(app, /history-list-scroll/);
 assert.match(app, /Exibindo/);
 assert.match(app, /Mais ações/);
-assert.match(app, /Preparar no SIGEM/);
 assert.match(app, /Resposta de e-mail/);
 assert.match(app, /Editar número/);
 assert.match(app, /Versão da LD enviada/);
-assert.match(app, /Revisão desta GRDT postada/);
-assert.match(app, /Outra revisão postada/);
 assert.match(hook, /LIST_PAGE_SIZE = 50/);
 assert.match(hook, /loading/);
 assert.match(app, /history-initial-loading/);
@@ -109,7 +105,11 @@ assert.match(parity, /state\.filtered representa todo o recorte filtrado/);
 assert.match(parity, /Power Automate\/payload\/webhook\/menções não alterados/);
 assert.match(app, /teamsPresentation/);
 assert.match(retomar, /GrconHistoricoEgrdtReact\?\.mounted/);
-assert.match(adapter, /readPostingCache/);
+assert.doesNotMatch(app, /Preparar no SIGEM/);
+assert.doesNotMatch(app, /Aguardando preparação/);
+assert.doesNotMatch(app, /history-posting-status/);
+assert.match(sigemPostingApp, /const history = History\.read\(\)/);
+assert.match(sigemPostingApp, /history\.map\(\(record\) => Posting\.fromHistory/);
 assert.match(adapter, /buildWorkbookInWorker/);
 assert.match(adapter, /deleteHistoryRecord/);
 assert.match(adapter, /GrconEgrdtTeamsNotification/);

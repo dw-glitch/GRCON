@@ -43,12 +43,6 @@
     { header: "REVISÃO EMITIDA NO SIGEM", key: "issuedRevisionCell", width: 24 },
     { header: "REVISÃO NA COLAR SIGEM", key: "sigemLdRevisionCell", width: 25 },
     { header: "STATUS NO SIGEM", key: "sigemStatus", width: 24 },
-    // Vêm da aba "Central de alocação" do Controle de Solicitações, quando ela
-    // é anexada. Sem central estas três saem vazias — nunca com "não alocado",
-    // que seria afirmar o que não se apurou.
-    { header: "STATUS DA ALOCAÇÃO (CENTRAL)", key: "centerStatus", width: 30 },
-    { header: "RESPOSTA DA FISCAL 01", key: "centerFiscalAnswer", width: 60 },
-    { header: "ALOC ENVIADA (CENTRAL)", key: "centerAllocationCell", width: 28 },
     { header: "LD CONSIDERADA", key: "ld", width: 34 },
     { header: "LDs EM QUE FOI LOCALIZADO", key: "allLds", width: 42 },
     { header: "COMO ESTE RESULTADO FOI OBTIDO", key: "rule", width: 62 },

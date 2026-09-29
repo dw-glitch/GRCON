@@ -8,7 +8,6 @@ import { useConsultas } from "./hooks/useConsultas";
 import { consultasAdapter } from "./services/consultasAdapter";
 import {
   ActionsBar,
-  CentralPanel,
   DocumentsPanel,
   FiltersBar,
   LdPanel,
@@ -90,7 +89,6 @@ export function ConsultasApp() {
           onAdd={c.addDocuments}
           onPasteClipboard={onPasteClipboard}
         />
-        <CentralPanel central={c.central} onAttach={c.attachCentral} onClear={c.removeCentral} />
       </div>
 
       <ActionsBar
@@ -155,7 +153,6 @@ export function ConsultasApp() {
           onToggleAll={c.toggleSelectAll}
           allSelected={c.documents.length > 0 && c.selectedCount === c.documents.length}
           someSelected={c.selectedCount > 0}
-          central={c.central}
           filterKey={filterKey}
         />
       </UiPanel>

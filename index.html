@@ -164,17 +164,6 @@
 <button class="secondary-button compact" id="planned-documents-publish" type="button">Publicar nova base</button>
 <small hidden id="planned-documents-owner-note">Somente o proprietário pode atualizar esta base; todos os usuários recebem a versão publicada.</small>
 </section>
-<section class="allocation-center-settings settings-embedded" aria-labelledby="allocation-center-title">
-<div><strong id="allocation-center-title">Referência da central de alocação</strong><small id="allocation-center-status">Carregando…</small></div>
-<label><span>Caminho do arquivo na rede</span><input id="allocation-center-path" type="text" autocomplete="off" spellcheck="false" placeholder="\\servidor\qualidade\Central de Alocacao.xlsx"/></label>
-<label><span>Aba</span><input id="allocation-center-sheet" type="text" autocomplete="off" spellcheck="false" placeholder="Central"/></label>
-<label><span>Coluna da alocação</span><input id="allocation-center-key" type="text" autocomplete="off" spellcheck="false" maxlength="3" placeholder="B"/></label>
-<label><span>Coluna do comentário da fiscal</span><input id="allocation-center-comment" type="text" autocomplete="off" spellcheck="false" maxlength="3" placeholder="H"/></label>
-<label><span>Última linha a consultar</span><input id="allocation-center-last-row" type="number" min="2" step="1" inputmode="numeric" placeholder="20000"/></label>
-<small class="allocation-center-hint">Este cadastro aparece somente como referência de origem no RESUMO. Para abrir o Excel com segurança, o relatório não cria PROCX nem vínculo com arquivo de rede. STATUS INTERNO usa o comentário existente na LD ou a situação apurada pelo GRCON.</small>
-<div class="settings-inline-actions"><button class="secondary-button compact" id="allocation-center-save" type="button">Salvar referência</button><button class="text-button" id="allocation-center-clear" type="button">Remover cadastro</button></div>
-<small class="allocation-center-owner-note" hidden id="allocation-center-owner-note">Somente o proprietário pode alterar a central. Você está vendo o cadastro em uso.</small>
-</section>
 <details class="ignored-details" hidden="" id="ignored-details"><summary id="ignored-summary">Arquivos ignorados</summary><ul id="ignored-list"></ul></details>
 <div class="settings-inline-actions"><button class="text-button" id="reset" type="button">Limpar seleção</button><button class="compatibility-open-button" hidden="" id="ld-compatibility-open" type="button">Estrutura da LD</button><span class="compatibility-status" hidden="" id="ld-compatibility-status"></span></div>
 </div>
@@ -572,7 +561,7 @@
 <script defer="" src="ld_conflicts.js"></script>
 <script defer="" src="apendice_base.js"></script>
 <script defer="" src="apendice_tagueados.js"></script>
-<script defer="" src="allocation_center.js"></script>
+<script defer="" src=></script>
 <script defer="" src="report_summary.js"></script>
 <script defer="" src="grcon_output_guard.js"></script>
 <script defer="" src="output_audit.js"></script>

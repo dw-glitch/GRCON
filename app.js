@@ -14,7 +14,6 @@
   const PackageLayout = window.GrconPackageLayout;
   const SequenceCore = window.GrconEgrdtSequenceCore;
   const History = window.GrconHistory;
-  const Posting = window.GrconSigemPosting;
   const AnalysisHistory = window.GrconAnalysisHistory;
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
@@ -383,34 +382,26 @@
     });
   }
 
-  function prepareSigemOutput(generated, outputType, packageName, generatedAt) {
-    const historyRecords = createGeneratedHistoryRecords(generated, outputType, { generatedAt });
-    if (!Posting) return { historyRecords, postingDrafts: [], packageName, generatedAt };
-    const postingDrafts = Posting.createDrafts(historyRecords, { packageName, appVersion: APP_VERSION });
-    return { historyRecords, postingDrafts, packageName, generatedAt };
+  function prepareHistoryOutput(generated, outputType, packageName, generatedAt) {
+    return {
+      historyRecords: createGeneratedHistoryRecords(generated, outputType, { generatedAt }),
+      packageName,
+      generatedAt,
+    };
   }
 
-  // A postagem continua totalmente manual. Nenhum manifesto de automação é incluído no ZIP.
-  function sigemWorkerPayload() { return {}; }
-  function addSigemManifests() { /* intencionalmente vazio */ }
-
-  function saveGeneratedHistory(generated, outputType, postingContext, preparedRecords) {
+  function saveGeneratedHistory(generated, outputType, historyContext, preparedRecords) {
     if (!History || !generated || !generated.length) return;
     let records = preparedRecords || [];
     let historySaved = false;
     try {
-      const info = postingContext || {};
+      const info = historyContext || {};
       // O histórico é reconstruído depois que o XLS foi gerado e reaberto pelo verificador.
       // Assim, a revisão registrada vem da própria eGRDT, e não apenas da prévia da emissão.
       const verifiedRecords = createGeneratedHistoryRecords(generated, outputType, { generatedAt: info.generatedAt });
       records = verifiedRecords.length ? verifiedRecords : (preparedRecords || []);
       const saved = History.saveMany(records);
       historySaved = Boolean(saved.saved);
-      if (Posting) {
-        const postingSaved = Posting.registerGenerated(records, { packageName: info.packageName, appVersion: APP_VERSION });
-        if (postingSaved.saved) window.dispatchEvent(new CustomEvent("grcon:sigem-updated", { detail: { records: postingSaved.created } }));
-        if (postingSaved.error) console.warn("GRCON: registros de postagem SIGEM indisponíveis", postingSaved.error);
-      }
       // A emissão apenas atualiza o histórico. A resposta de e-mail é aberta
       // deliberadamente pelo operador na eGRDT selecionada no Histórico.
       if (saved.saved) window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { records, outputType } }));
@@ -444,140 +435,6 @@
     // Sem área compartilhada configurada, o app é de uso local: não há a quem restringir.
     if (!Cloud || !Cloud.state?.membership) return true;
     return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
-  }
-
-  // ---------------------------------------------------------------------------
-  // Central de alocação
-  //
-  // Fica numa pasta de rede, fora do alcance do navegador. O cadastro é mantido
-  // apenas como referência da origem no Resumo. O relatório não grava PROCX ou
-  // conexão externa, para abrir sem reparo e sem aviso de fonte não confiável.
-  // ---------------------------------------------------------------------------
-  const ALLOCATION_CENTER_PREFERENCE = "allocationCenter";
-
-  function allocationCenterConfig() {
-    if (!Workspace) return null;
-    const saved = Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null);
-    if (!saved || typeof saved !== "object") return null;
-    return ReportSummary && ReportSummary.normalizeAllocationCenter
-      ? ReportSummary.normalizeAllocationCenter(saved)
-      : saved;
-  }
-
-  function refreshAllocationCenterStatus() {
-    if (!els.allocationCenterStatus) return;
-    const central = allocationCenterConfig();
-    if (!central) {
-      els.allocationCenterStatus.textContent = "Não cadastrada. STATUS INTERNO usa o comentário da LD ou a situação apurada pelo GRCON.";
-      return;
-    }
-    // O alcance importa: o cadastro é da equipe quando veio do banco, e só deste
-    // navegador quando a área compartilhada estava fora do ar na hora de salvar.
-    const salvo = Workspace ? Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null) : null;
-    const alcance = salvo && salvo.compartilhada ? "Referência cadastrada para todos" : "Referência cadastrada somente neste navegador";
-    els.allocationCenterStatus.textContent = `${alcance}: ${central.fileName} · aba ${central.sheet}. O relatório não cria conexão externa.`;
-  }
-
-  // O cadastro é o mesmo para toda a área de trabalho, então quem não é
-  // proprietário vê o que está valendo, mas não altera.
-  function aplicarPermissaoCentralAlocacao() {
-    const dono = ehProprietario();
-    [els.allocationCenterPath, els.allocationCenterSheet, els.allocationCenterKey,
-      els.allocationCenterComment, els.allocationCenterLastRow].forEach((campo) => {
-      if (campo) campo.readOnly = !dono;
-    });
-    if (els.allocationCenterSave) els.allocationCenterSave.hidden = !dono;
-    if (els.allocationCenterClear) els.allocationCenterClear.hidden = !dono;
-    if (els.allocationCenterOwnerNote) els.allocationCenterOwnerNote.hidden = dono;
-  }
-
-  function loadAllocationCenterFields() {
-    if (!els.allocationCenterPath) return;
-    const saved = Workspace ? Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null) : null;
-    const central = saved && typeof saved === "object" ? saved : {};
-    els.allocationCenterPath.value = String(central.path || "");
-    els.allocationCenterSheet.value = String(central.sheet || "");
-    els.allocationCenterKey.value = String(central.keyColumn || "");
-    els.allocationCenterComment.value = String(central.commentColumn || "");
-    els.allocationCenterLastRow.value = central.lastRow ? String(central.lastRow) : "";
-    refreshAllocationCenterStatus();
-    aplicarPermissaoCentralAlocacao();
-  }
-
-  async function saveAllocationCenter() {
-    if (!Workspace) { showToast("Não foi possível salvar: armazenamento local indisponível.", "warn"); return; }
-    const informado = {
-      path: String(els.allocationCenterPath?.value || "").trim(),
-      sheet: String(els.allocationCenterSheet?.value || "").trim(),
-      keyColumn: String(els.allocationCenterKey?.value || "").trim(),
-      commentColumn: String(els.allocationCenterComment?.value || "").trim(),
-      lastRow: Number(els.allocationCenterLastRow?.value) || undefined,
-    };
-    const central = ReportSummary && ReportSummary.normalizeAllocationCenter
-      ? ReportSummary.normalizeAllocationCenter(informado)
-      : null;
-    if (!central) {
-      showToast("Informe o caminho do arquivo, a aba e as duas colunas da central.", "warn");
-      return;
-    }
-    const guardado = {
-      path: central.path,
-      sheet: central.sheet,
-      keyColumn: central.keyColumn,
-      commentColumn: central.commentColumn,
-      lastRow: central.lastRow,
-    };
-    // O cadastro vale para todos, então quem manda é o banco. A cópia local é
-    // só para o relatório continuar saindo com a PROCX quando estiver offline.
-    const Cloud = window.GrconCloud;
-    if (Cloud?.saveAllocationCenter) {
-      if (els.allocationCenterSave) els.allocationCenterSave.disabled = true;
-      try {
-        const resultado = await Cloud.saveAllocationCenter(guardado);
-        if (resultado.ok) {
-          loadAllocationCenterFields();
-          showToast("Central de alocação salva para todos. Os próximos relatórios já trazem o comentário da fiscal.", "success");
-          return;
-        }
-        // Recusa por permissão para aí; só falta de área compartilhada cai na
-        // cópia local, senão quem não é proprietário burlaria a regra.
-        if (!resultado.indisponivel) { showToast(resultado.error, "warn"); return; }
-      } finally {
-        if (els.allocationCenterSave) els.allocationCenterSave.disabled = false;
-      }
-    }
-    Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, guardado);
-    loadAllocationCenterFields();
-    showToast("Referência cadastrada somente neste navegador: a área compartilhada está indisponível agora. O relatório continuará sem conexão externa.", "warn");
-  }
-
-  function limparCamposCentralAlocacao() {
-    if (!els.allocationCenterPath) return;
-    els.allocationCenterPath.value = "";
-    els.allocationCenterSheet.value = "";
-    els.allocationCenterKey.value = "";
-    els.allocationCenterComment.value = "";
-    els.allocationCenterLastRow.value = "";
-  }
-
-  async function clearAllocationCenter() {
-    const Cloud = window.GrconCloud;
-    // Remover só a cópia local não resolveria: a próxima leitura da área
-    // compartilhada devolveria o cadastro.
-    if (Cloud?.clearAllocationCenter) {
-      const resultado = await Cloud.clearAllocationCenter();
-      if (resultado.ok) {
-        limparCamposCentralAlocacao();
-        refreshAllocationCenterStatus();
-        showToast("Cadastro da central removido para todos.", "info");
-        return;
-      }
-      if (!resultado.indisponivel) { showToast(resultado.error, "warn"); return; }
-    }
-    if (Workspace) Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, null);
-    limparCamposCentralAlocacao();
-    refreshAllocationCenterStatus();
-    showToast("Cadastro removido somente neste navegador: a área compartilhada está indisponível agora.", "warn");
   }
 
   function reportDownloadName() {
@@ -624,15 +481,6 @@
     exportPendingAllocationPdfs: $("#export-pending-allocation-pdfs"),
     exportZip: $("#export-zip"),
     exportEgrdt: $("#export-egrdt"),
-    allocationCenterPath: $("#allocation-center-path"),
-    allocationCenterSheet: $("#allocation-center-sheet"),
-    allocationCenterKey: $("#allocation-center-key"),
-    allocationCenterComment: $("#allocation-center-comment"),
-    allocationCenterLastRow: $("#allocation-center-last-row"),
-    allocationCenterSave: $("#allocation-center-save"),
-    allocationCenterClear: $("#allocation-center-clear"),
-    allocationCenterStatus: $("#allocation-center-status"),
-    allocationCenterOwnerNote: $("#allocation-center-owner-note"),
     exportFinalPackage: $("#export-final-package"),
     advancedToggle: $("#advanced-toggle"),
     advancedPanel: $("#advanced-panel"),
@@ -4489,7 +4337,6 @@
         ldName: ldDisplayName(),
         ldVersion: reportLdVersion,
         relationLabel: relationSourceLabel(),
-        allocationCenter: allocationCenterConfig(),
       });
     }
     await addReportLogo(workbook, summarySheet);
@@ -4553,10 +4400,8 @@
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
       // O worker não enxerga localStorage nem o índice de histórico, então o
-      // mapa documento -> eGRDT(s) anterior(es) e o cadastro da central de
-      // alocação vão prontos no payload.
+      // mapa documento -> eGRDT(s) anterior(es) segue no payload.
       historyByDocument: historyByDocumentMap(results),
-      allocationCenter: allocationCenterConfig(),
     };
     const buffer = await PerformanceCore.buildReport(payload, workerProgress("Relatório Excel"));
     refreshPerformancePanel("Relatório Excel concluído.");
@@ -4795,7 +4640,6 @@
       ldIntegrity: state.ldIntegrity,
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
-      allocationCenter: allocationCenterConfig(),
     };
   }
 
@@ -4823,7 +4667,7 @@
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = previewGenerated.length === 1 ? previewGenerated[0].fileName : PackageLayout.archiveName(previewGenerated, timestamp);
-      const sigemPrepared = prepareSigemOutput(previewGenerated, "eGRDT final", packageName, generatedAt);
+      const historyPrepared = prepareHistoryOutput(previewGenerated, "eGRDT final", packageName, generatedAt);
       let generated;
       if (PerformanceCore && PerformanceCore.supported) {
         if (groups.length === 1) {
@@ -4841,7 +4685,6 @@
             groups: exportWorkerGroups(groups, false),
             officialNumbers,
             limit: currentEgrdtBatchLimit(),
-            ...sigemWorkerPayload(sigemPrepared),
           }, workerProgress("eGRDT + ZIP"));
           generated = restoreWorkerGenerated(built.generated, groups);
           downloadBlob(new Blob([built.bytes], { type: "application/zip" }), packageName);
@@ -4864,11 +4707,10 @@
           const zip = new JSZip();
           generated.forEach((file) => zip.folder(file.official.baseName).file(file.fileName, file.data));
           zip.file("ORGANIZACAO_DOS_LOTES.txt", buildBatchSummaryText(generated));
-          addSigemManifests(zip, sigemPrepared);
           downloadBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), packageName);
         }
       }
-      saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${generated.length} GRDT final(is) verificada(s) e registrada(s) para a etapa SIGEM.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar a GRDT final.");
@@ -4939,7 +4781,7 @@
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
-      const sigemPrepared = prepareSigemOutput(previewGenerated, "Arquivos + eGRDT", packageName, generatedAt);
+      const historyPrepared = prepareHistoryOutput(previewGenerated, "Arquivos + eGRDT", packageName, generatedAt);
       let generated;
       let blob;
       if (PerformanceCore && PerformanceCore.supported) {
@@ -4949,7 +4791,6 @@
           groups: exportWorkerGroups(groups, true),
           officialNumbers,
           limit: currentEgrdtBatchLimit(),
-          ...sigemWorkerPayload(sigemPrepared),
         }, workerProgress("Arquivos + eGRDT + ZIP"));
         generated = restoreWorkerGenerated(built.generated, groups);
         blob = new Blob([built.bytes], { type: "application/zip" });
@@ -4967,11 +4808,10 @@
         });
         const zip = new JSZip();
         PackageLayout.addFolders(zip, generated, [{ name: "ORGANIZACAO_DOS_LOTES.txt", data: buildBatchSummaryText(generated) }]);
-        addSigemManifests(zip, sigemPrepared);
         blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } });
       }
       downloadBlob(blob, packageName);
-      saveGeneratedHistory(generated, "Arquivos + eGRDT", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      saveGeneratedHistory(generated, "Arquivos + eGRDT", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${plan.entries.length} arquivo(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar os arquivos com a eGRDT.");
@@ -5054,7 +4894,7 @@
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
-      const sigemPrepared = prepareSigemOutput(previewGenerated, "Pacote completo", packageName, generatedAt);
+      const historyPrepared = prepareHistoryOutput(previewGenerated, "Pacote completo", packageName, generatedAt);
       let generated;
       let blob;
       if (PerformanceCore && PerformanceCore.supported) {
@@ -5075,7 +4915,6 @@
           },
           reportName: `Relatorio_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}_${timestamp}.xlsx`,
           manifestName: `Conferencia_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}.xlsx`,
-          ...sigemWorkerPayload(sigemPrepared),
         }, workerProgress("Pacote final"));
         generated = restoreWorkerGenerated(built.generated, groups);
         generated.forEach((file) => file.group.entries.forEach((entry) => {
@@ -5103,11 +4942,10 @@
           { name: `Conferencia_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}.xlsx`, data: buildConferenceFile(plan) },
           { name: `Relatorio_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}_${timestamp}.xlsx`, data: await buildReportFile() },
         ]);
-        addSigemManifests(zip, sigemPrepared);
         blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } });
       }
       downloadBlob(blob, packageName);
-      saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${plan.entries.length} arquivo(s), ${generated.length} eGRDT(s) e o relatório de conferência validados no pacote final.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar o pacote final.");
@@ -5227,8 +5065,6 @@
     els.recentDays.value = String(days);
     if (Workspace) Workspace.setPreference("recentDays", days);
   });
-  els.allocationCenterSave?.addEventListener("click", saveAllocationCenter);
-  els.allocationCenterClear?.addEventListener("click", clearAllocationCenter);
   els.analyze.addEventListener("click", analyze);
   els.reset.addEventListener("click", reset);
 
@@ -5287,11 +5123,6 @@
     els.advancedToggle.setAttribute("aria-expanded", String(open));
   });
   initializeResultColumnFilters();
-  loadAllocationCenterFields();
-  // A área compartilhada é quem manda no cadastro: quando ela responde, os
-  // campos passam a mostrar o que está valendo para todos.
-  window.addEventListener("grcon:allocation-center-updated", loadAllocationCenterFields);
-  window.addEventListener("grcon:cloud-ready", loadAllocationCenterFields);
   if (els.clearColumnFilters) els.clearColumnFilters.addEventListener("click", clearResultColumnFilters);
   els.search.addEventListener("input", (event) => {
     state.search = event.target.value;
