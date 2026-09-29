@@ -281,7 +281,7 @@
     if (ui.state.view === "grdts") {
       const groups = pageGroups();
       bodyRows.forEach((tr,index) => {
-        const group = groups[index]; if (!group || $("td.grcon-repost-select", tr)) return;
+        const group = groups[index]; if (!group) return;
         const keys = group.rows.map((row) => row.key);
         const checked = keys.length > 0 && keys.every((key) => state.selected.has(key));
         tr.dataset.repostGrdt = group.egrdtNumber;
