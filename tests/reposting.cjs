@@ -108,6 +108,10 @@ const appSource = fs.readFileSync(path.join(__dirname, "..", "grcon_reposting_ap
 assert.match(appSource, /Arquivos preparados ≠ documento postado/);
 assert.match(appSource, /Consulta Geral continua sendo a evidência final/);
 assert.match(appSource, /data-repost-grdt/);
+assert.doesNotMatch(appSource, /<th class=["']grcon-repost-select/, "Repostagem não deve adicionar heading vazio à Conferência");
+assert.doesNotMatch(appSource, /<td class=["']grcon-repost-select/, "Repostagem não deve adicionar uma sétima célula à tabela documental");
+assert.match(appSource, /cleanupLegacySelectionCells/);
+assert.match(appSource, /\.pc-document-meta/);
 assert.match(appSource, /Selecionar filtrados/);
 assert.match(appSource, /PERMISSION_REQUIRED/);
 assert.match(appSource, /editNumber && editNumber\.parentElement === actions/);
