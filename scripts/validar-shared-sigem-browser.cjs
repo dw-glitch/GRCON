@@ -150,10 +150,15 @@ function rpc(name,args) {
  assert.equal(analyzedSnapshots.analysisSigemSnapshot,updatedActive.snapshot_id);
  assert.equal(analyzedSnapshots.currentSigemSnapshot,updatedActive.snapshot_id);
  backend.active=originalActive;
+ const remotelyRefreshed=await a.page.evaluate(async()=>{
+   await window.GrconSharedSigemQuery.refreshLatest();
+   return window.GrconSharedSigemQuery.current()?.meta?.snapshotId || '';
+ });
+ assert.equal(remotelyRefreshed,originalActive.snapshot_id);
+ assert.equal(await a.page.locator('#export-egrdt').isEnabled(),true);
  await a.page.locator('#export-egrdt').click();
  await a.page.waitForFunction(()=>document.getElementById('toast')?.textContent.includes('Consulta Geral SIGEM foi atualizada'));
  assert.match(await a.page.locator('#toast').innerText(),/Analise novamente antes de gerar a GRDT/);
- assert.equal(await a.page.evaluate(()=>window.GrconSharedSigemQuery.current()?.meta?.snapshotId),originalActive.snapshot_id);
  backend.active=updatedActive;
  await a.page.evaluate(()=>window.GrconSharedSigemQuery.refreshLatest());
  const downloadPromise=a.page.waitForEvent('download');await a.page.locator('#export-egrdt').click();await a.page.locator('#p1-sequence-confirm').check();await a.page.locator('#p1-confirm-ok').click();const generated=await downloadPromise;
