@@ -71,6 +71,28 @@ async function auditGeometry(page, label) {
       tableClientWidth: conferenceTable?.clientWidth || 0,
       tableScrollWidth: conferenceTable?.scrollWidth || 0,
     };
+    const conferenceHeaderNodes = conferenceTable ? [...conferenceTable.querySelectorAll("thead th")].filter(visible) : [];
+    const conferenceHeaderLabels = conferenceHeaderNodes.map((node) => node.textContent.trim());
+    const conferenceHeaderRects = conferenceHeaderNodes.map(rectOf);
+    const conferenceBodyRects = conferenceTable
+      ? [...conferenceTable.querySelectorAll("tbody tr:first-child > td")].filter(visible).map(rectOf)
+      : [];
+    const headerTopValues = conferenceHeaderRects.map((rect) => rect.top);
+    const headerHeightValues = conferenceHeaderRects.map((rect) => rect.height);
+    const headerEdgeDeltas = conferenceHeaderRects.map((rect, index) => {
+      const body = conferenceBodyRects[index];
+      return body ? Math.max(Math.abs(rect.left - body.left), Math.abs(rect.right - body.right)) : Infinity;
+    });
+    const conferenceHeader = {
+      labels: conferenceHeaderLabels,
+      count: conferenceHeaderNodes.length,
+      emptyCount: conferenceHeaderLabels.filter((value) => !value).length,
+      topSpread: headerTopValues.length ? Math.max(...headerTopValues) - Math.min(...headerTopValues) : 0,
+      heightSpread: headerHeightValues.length ? Math.max(...headerHeightValues) - Math.min(...headerHeightValues) : 0,
+      observationTopDelta: conferenceHeaderRects.length === 6 ? Math.abs(conferenceHeaderRects[5].top - conferenceHeaderRects[0].top) : Infinity,
+      columnEdgeDelta: headerEdgeDeltas.length ? Math.max(...headerEdgeDeltas) : 0,
+      rects: conferenceHeaderRects,
+    };
     const conferenceOverflowNodes = conferenceTable
       ? [...conferenceTable.querySelectorAll("*")]
           .filter(visible)
@@ -187,7 +209,7 @@ async function auditGeometry(page, label) {
       });
     });
 
-    return { pageOverflow, conferenceOverflow, conferenceOverflowNodes, horizontalScrollRegions, tableOverlaps, flowOverlaps, offscreenDialogs, criticalTextOverflow, conferenceEscapes, viewport };
+    return { pageOverflow, conferenceOverflow, conferenceHeader, conferenceOverflowNodes, horizontalScrollRegions, tableOverlaps, flowOverlaps, offscreenDialogs, criticalTextOverflow, conferenceEscapes, viewport };
   });
 
   assert.ok(result.pageOverflow <= 2, `${label}: overflow horizontal global de ${result.pageOverflow}px`);
@@ -197,6 +219,13 @@ async function auditGeometry(page, label) {
   assert.deepEqual(result.criticalTextOverflow, [], `${label}: badge/status com texto escapando`);
   assert.deepEqual(result.conferenceEscapes, [], `${label}: conteúdo da Conferência escapou da própria célula`);
   if (label.startsWith("Conferência") && result.conferenceOverflow.tableClientWidth) {
+    assert.deepEqual(result.conferenceHeader.labels, ["Documento", "Envios", "Revisões", "Situação", "Confirmação", "Observação"], `${label}: cabeçalho documental inesperado`);
+    assert.equal(result.conferenceHeader.count, 6, `${label}: cabeçalho deve conter exatamente 6 células`);
+    assert.equal(result.conferenceHeader.emptyCount, 0, `${label}: existe heading vazio`);
+    assert.ok(result.conferenceHeader.topSpread <= 2, `${label}: headings fora da mesma linha visual (${result.conferenceHeader.topSpread}px)`);
+    assert.ok(result.conferenceHeader.heightSpread <= 2, `${label}: headings com alturas divergentes (${result.conferenceHeader.heightSpread}px)`);
+    assert.ok(result.conferenceHeader.observationTopDelta <= 2, `${label}: Observação deslocada verticalmente (${result.conferenceHeader.observationTopDelta}px)`);
+    assert.ok(result.conferenceHeader.columnEdgeDelta <= 2, `${label}: colunas do cabeçalho não coincidem com o tbody (${result.conferenceHeader.columnEdgeDelta}px)`);
     assert.ok(
       result.conferenceOverflow.tableScrollWidth <= result.conferenceOverflow.tableClientWidth + 2,
       `${label}: tabela da Conferência com overflow horizontal de ${result.conferenceOverflow.tableScrollWidth - result.conferenceOverflow.tableClientWidth}px; nós: ${JSON.stringify(result.conferenceOverflowNodes)}`
