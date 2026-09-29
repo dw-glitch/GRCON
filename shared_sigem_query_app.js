@@ -5,6 +5,7 @@
   let epoch = 0;
   let lastEmission = "";
   let indexedShared = null, indexedLocal = null;
+  const CONFERENCE_WORKSPACE_KEY = "shared-sigem-conference-workspace";
   function cloud() { return root.GrconCloud; }
   function emit() {
     const stamp = [state.workspace, state.shared?.meta?.snapshotId, state.local?.meta?.importedAt, state.stale, state.error].join("|");
@@ -40,7 +41,24 @@
   }
   async function cachePut(workspace, base) {
     const conference = await runtime();
-    await conference.kvSetMany([[cacheKey(workspace), base], [conference.BASE_KEY, base]]);
+    await conference.kvSet(cacheKey(workspace), base);
+  }
+  async function activateConferenceWorkspace(workspace) {
+    const conference = await runtime();
+    const previous = await conference.kvGet(CONFERENCE_WORKSPACE_KEY, "");
+    if (previous && previous !== workspace) {
+      await conference.kvSetMany([
+        [conference.BASE_KEY, { meta: null, records: [] }],
+        [conference.STATE_KEY, { version: 1, updatedAt: "", items: {} }],
+        [conference.AUDIT_KEY, []],
+        [CONFERENCE_WORKSPACE_KEY, workspace || ""],
+      ]);
+      try { root.localStorage.removeItem(conference.HISTORY_INDEX_KEY); } catch (_) { /* armazenamento opcional */ }
+      root.dispatchEvent(new CustomEvent("grcon:conference-workspace-reset", { detail: { previous, workspace: workspace || "" } }));
+      return;
+    }
+    if (workspace && previous !== workspace) await conference.kvSet(CONFERENCE_WORKSPACE_KEY, workspace);
+    if (!workspace && previous) await conference.kvSet(CONFERENCE_WORKSPACE_KEY, "");
   }
   function reset() {
     epoch++;
@@ -51,9 +69,18 @@
   async function refresh() {
     const membership = cloud()?.state?.membership;
     const workspace = membership?.workspace_id;
-    if (!workspace) { reset(); return null; }
+    if (!workspace) {
+      try { await activateConferenceWorkspace(""); } catch (error) { console.warn("Consulta Geral: não foi possível limpar a projeção da Conferência ao sair do workspace", error); }
+      reset();
+      return null;
+    }
     if (state.refreshPromise && state.workspace === workspace) return state.refreshPromise;
-    if (state.workspace !== workspace) { reset(); state.workspace = workspace; }
+    if (state.workspace !== workspace) {
+      try { await activateConferenceWorkspace(workspace); }
+      catch (error) { console.warn("Consulta Geral: não foi possível isolar a projeção da Conferência por workspace", error); }
+      reset();
+      state.workspace = workspace;
+    }
     const ticket = epoch;
     const valid = () => ticket === epoch && cloud()?.state?.membership?.workspace_id === workspace;
     const promise = (async () => {
