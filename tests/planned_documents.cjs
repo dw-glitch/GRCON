@@ -35,4 +35,18 @@ assert.equal(source[2].allocationStatus, 'ALOCADO');
 assert.equal(C.allocationEvidenceState(applied[2]).allocationNumber, 'ALOC-1000');
 assert.equal(Planned.applyToRecords(source, null), source);
 assert.throws(() => Planned.parseWorkbook({ SheetNames: ['Outra'], Sheets: { Outra: X.utils.aoa_to_sheet([['Código'], [code]]) } }), /DOCUMENTO/);
+
+const technical = { document: code, revision: '0', sheet: 'ET', source: 'LD.xlsx',
+  allocationStatus: 'NÃO ALOCADO', status: 'Não Postado', sigemStatus: 'Não Postado' };
+function triage(keys) {
+  const records = Planned.applyToRecords([technical], { ...snapshot, keys });
+  return C.triageOne({ id: code, name: `${code}.pdf` }, C.buildIndex(records, []), {});
+}
+const allocated = triage(new Set([code]));
+assert.equal(allocated.decision, C.READY);
+assert.equal(allocated.allocationFinding.kind, 'allocated');
+const absent = triage(new Set());
+assert.equal(absent.hardBlock, true);
+assert.equal(absent.allocationFinding.kind, 'not_allocated');
+assert.match(absent.reason, /não consta.*Documentos Previstos/i);
 console.log('OK — DOCUMENTO decide alocação, S/N não altera, duplicatas e rodapé não entram, LD original preservada.');
