@@ -44,4 +44,6 @@ assert.match(sharedAppSource,/shared-sigem-conference-workspace/);
 assert.match(sharedAppSource,/conference\.STATE_KEY[\s\S]*conference\.AUDIT_KEY/);
 const conferenceAppSource=fs.readFileSync(path.join(__dirname,'..','posting_conference_app.js'),'utf8');
 assert.match(conferenceAppSource,/grconWorkspaceId/);
+assert.match(conferenceAppSource,/conferenceProjection\(/);
+assert.match(conferenceAppSource,/shared-general-query-empty/);
 console.log(`shared_sigem_query: prioridade, revisão, identidade/EAP, duplicidade/data, parser, triagem e alocação independentes OK; 25k indexação+consultas ${(performance.now()-started).toFixed(0)}ms`);
