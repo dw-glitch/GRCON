@@ -43,6 +43,7 @@
     includedAt: ["INCLUIDO EM", "INCLUÍDO EM", "DATA INCLUSAO", "DATA INCLUSÃO", "INCLUDED AT"],
     title: ["TITULO", "TÍTULO", "TITLE"],
     status: ["STATUS", "STATUS SIGEM", "SITUACAO", "SITUAÇÃO"],
+    discipline: ["DISCIPLINA", "DISCIPLINE"],
     documentType: ["TIPO DE DOCUMENTO", "TIPO DOCUMENTO", "DOCUMENT TYPE"],
     situation: ["SITUACAO DO DOCUMENTO", "SITUAÇÃO DO DOCUMENTO"],
     observation: ["OBSERVACAO", "OBSERVAÇÃO", "OBS", "COMENTARIO", "COMENTÁRIO"],
@@ -186,6 +187,7 @@
         title: rowValue(row, detection.columns.title),
         status: rowValue(row, detection.columns.status),
         documentType: rowValue(row, detection.columns.documentType),
+        discipline: rowValue(row, detection.columns.discipline),
         situation: rowValue(row, detection.columns.situation),
         observation: rowValue(row, detection.columns.observation),
         sourceRow: detection.headerRow + offset + 1,
@@ -756,7 +758,11 @@
 
   async function prepareWorkbookImport(workbook, fileMeta, historyRecords, options) {
     const parsed = parseWorkbook(workbook, fileMeta);
-    if (!parsed.ok) throw new Error(parsed.errors.join(" ") || "Não foi possível ler a Consulta Geral.");
+    return prepareParsedImport(parsed, historyRecords, options);
+  }
+
+  async function prepareParsedImport(parsed, historyRecords, options) {
+    if (!parsed.ok) throw new Error((parsed.errors || []).join(" ") || "Não foi possível ler a Consulta Geral.");
     const [previousBase, previousState, audit] = await Promise.all([loadBase(), loadState(), loadAudit()]);
     const base = { meta: parsed.meta, records: parsed.records };
     const prefs = readPreferences();
@@ -863,6 +869,6 @@
     statusLabel, aggregateStatus, filterRows, pendingRows,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
     kvGet, kvSet, kvSetMany, storedValue, putKv,
-    readHistoryIndex, historyAggregate, reconcilePersisted, prepareWorkbookImport, commitPreparedImport, importWorkbook,
+    readHistoryIndex, historyAggregate, reconcilePersisted, prepareWorkbookImport, prepareParsedImport, commitPreparedImport, importWorkbook,
   });
 });

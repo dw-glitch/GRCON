@@ -1,10 +1,10 @@
 (function (root, factory) {
   const contracts = root.GrconContracts || (typeof module === "object" && module.exports ? require("./grcon_contracts.js") : null);
   const disciplines = root.GrconDiscipline || (typeof module === "object" && module.exports ? require("./discipline_resolver.js") : null);
-  const api = factory(contracts, disciplines);
+  const api = factory(contracts, disciplines, root);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.TriagemCore = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (Contracts, Disciplines) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Contracts, Disciplines, root) {
   "use strict";
 
   if (!Disciplines || !Array.isArray(Disciplines.OFFICIAL_DISCIPLINES)) {
@@ -1952,7 +1952,16 @@
     return { ...selected, status: "EVIDÊNCIA DE POSTAGEM INCOMPLETA", explanation: selected.grdt ? `A LD informa a GRDT ${selected.grdt}, mas a Data Efetiva de Emissão está vazia ou inválida.` : `A LD informa a Data Efetiva de Emissão ${formatDateBR(selected.effectiveDate)}, mas o número da GRDT está vazio.` };
   }
 
-  function statusForRevision(group, revision) {
+  function statusForRevision(group, revision, context) {
+    const document = group.records?.[0]?.document || group.history?.[0]?.document;
+    const query = root.GrconSharedSigemQueryCore;
+    if (query && context && document) {
+      return query.resolve(document, revision, context, () => legacyStatusForRevision(group, revision));
+    }
+    return legacyStatusForRevision(group, revision);
+  }
+
+  function legacyStatusForRevision(group, revision) {
     const rev = normalizeRevision(revision);
     const history = (group.history || [])
       .filter((item) => normalizeRevision(item.revision) === rev)
@@ -2533,11 +2542,12 @@
     let decision = REVIEW;
     let reason = "A revisão precisa de conferência manual.";
     let displayStatus = "Sem status";
+    let resolvedSigemStatus = null;
 
     if (allocationDecision.kind === "not_allocated") {
       const codeValidation = validateDocumentCode(document, controlledSheet);
       const blockedSigem = revision
-        ? statusForRevision(group, revision).status
+        ? statusForRevision(group, revision, settings.sigemQueryContext).status
         : text(technicalRecord && (technicalRecord.sigemStatus || technicalRecord.status)) || "Não confirmado";
       const allocationNumber = text(technicalRecord && technicalRecord.allocation);
       const allocationStage = text(technicalRecord && technicalRecord.allocationStage);
@@ -2648,7 +2658,8 @@
     const traversed = [];
     let completed = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const statusInfo = statusForRevision(group, revision);
+      const statusInfo = statusForRevision(group, revision, settings.sigemQueryContext);
+      resolvedSigemStatus = statusInfo;
       const currentStatus = text(statusInfo.status) || "Não Postado";
       const kind = statusKind(currentStatus);
       displayStatus = currentStatus;
@@ -2737,6 +2748,9 @@
       reason = "Não foi possível localizar uma revisão Não Postado após 100 incrementos; verifique o histórico do documento.";
     }
 
+    if (resolvedSigemStatus?.source === "shared-general-query" || resolvedSigemStatus?.source === "local-general-query") {
+      reason = reason.replace(/Colar SIGEM/g, "Consulta Geral SIGEM");
+    }
     const recentEmission = Boolean(grdt) && isRecentDate(effectiveDate, recentDays, nowValue);
     const codeValidation = validateDocumentCode(document, controlledSheet);
     let codeValidationWarning = "";
@@ -2785,6 +2799,8 @@
       revisionSource,
       status: displayStatus || "Sem status",
       statusOriginal: displayStatus || "Sem status",
+      sigemStatusSource: resolvedSigemStatus?.source || "legacy-fallback",
+      sigemStatusSnapshotId: resolvedSigemStatus?.snapshotId || "",
       statusOperational: normalizeSigemStatus(displayStatus || "Sem status").normalized,
       decision,
       reason,
@@ -2956,6 +2972,7 @@
     documentLookup,
     normalizeSigemStatus,
     statusKind,
+    statusForRevision,
     normalizeRevision,
     revisionInfo,
     revisionRank,

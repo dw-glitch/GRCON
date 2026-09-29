@@ -1644,6 +1644,7 @@
       const cached = cachedMembershipFor(session.user.id);
       if (!state.online && cached) {
         state.membership = normalizeMembership(cached);
+        void window.GrconSharedSigemQuery?.refresh();
         updateHistoryCopy();
         unlockApp();
         updateAccountMenu();
@@ -1663,6 +1664,7 @@
     state.session = null;
     state.membership = null;
     state.plannedSnapshot = null;
+    window.GrconSharedSigemQuery?.reset();
     state.activationKey = "";
     state.passwordRecovery = false;
     updateHistoryClearControl();

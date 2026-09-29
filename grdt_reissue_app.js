@@ -162,6 +162,12 @@
     }
     setBusy(state.busy);
   }
+  function sigemStatus(row) {
+    const sourceRevision = root.TriagemCore?.normalizeRevision(row.sourceFile?.grdtRevision || row.sourceFile?.revision);
+    const targetRevision = root.TriagemCore?.normalizeRevision(row.item.revision);
+    const legacy = sourceRevision === targetRevision ? row.sourceFile?.sigemStatus || "—" : "—";
+    return root.GrconSharedSigemQuery?.resolveSigemStatus(row.item.document, row.item.revision, legacy) || { status: legacy, source: "legacy-fallback" };
+  }
   function rowStatusHtml(row) {
     return row.errors.length
       ? `<span class="grdt-reissue-missing" title="${esc(row.errors.join(" · "))}">Revisar ${row.errors.length}</span>`
@@ -187,7 +193,7 @@
       <td data-label="Tipo de documento">${fieldInput(row, index, "documentType")}</td>
       <td data-label="Propósito">${fieldInput(row, index, "purpose", "12rem")}</td>
       <td data-label="Caminho Databook">${fieldInput(row, index, "databook", "18rem")}</td>
-      <td data-label="Situação" data-row-status>${rowStatusHtml(row)}</td>
+      <td data-label="Situação" data-row-status>${rowStatusHtml(row)}<small title="${esc(root.GrconSharedSigemQuery?.sourceLabel(sigemStatus(row).source) || "LD / Colar SIGEM")}">Status SIGEM: ${esc(sigemStatus(row).status)}</small></td>
     </tr>`).join("")}</tbody></table>`;
     setBusy(false);
   }
@@ -217,7 +223,7 @@
     if (rowElement) {
       rowElement.classList.toggle("is-incomplete", next.errors.length > 0);
       const status = rowElement.querySelector("[data-row-status]");
-      if (status) status.innerHTML = rowStatusHtml(next);
+      if (status) status.innerHTML = `${rowStatusHtml(next)}<small title="${esc(root.GrconSharedSigemQuery?.sourceLabel(sigemStatus(next).source) || "LD / Colar SIGEM")}">Status SIGEM: ${esc(sigemStatus(next).status)}</small>`;
     }
     renderSummary();
   }
@@ -254,6 +260,9 @@
       const reopened = verification?.rows?.[index] || row.item;
       return {
         ...previous,
+        sigemStatus: sigemStatus(row).status,
+        sigemStatusSource: sigemStatus(row).source,
+        sigemStatusSnapshotId: sigemStatus(row).snapshotId || "",
         document: row.item.document,
         title: row.item.title,
         originalName: previous.originalName || previous.finalName || row.item.fileName,
@@ -299,6 +308,7 @@
     }
   }
   async function generate() {
+    await root.GrconSharedSigemQuery?.refresh();
     const validation = Core.validateRows(state.rows);
     if (!validation.valid) {
       notify("Complete todos os campos destacados antes de gerar a repostagem.", "warning");
@@ -363,11 +373,13 @@
     }
   }
   function activate() {
+    void root.GrconSharedSigemQuery?.refresh();
     state.batchMode = initialBatchMode();
     state.batchLimit = initialBatchLimit();
     renderSummary();
     root.GRCONMascot?.refresh?.();
   }
+  root.addEventListener("grcon:shared-sigem-updated", () => { if (!state.busy) render(); });
   function init() {
     ensureOptionLists();
     const modeSelect = $("#grdt-reissue-batch-mode");

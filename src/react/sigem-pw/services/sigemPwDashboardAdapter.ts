@@ -337,15 +337,21 @@ async function importSigem(file: File): Promise<void> {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await window.GRCONModuleLoader.ensure("xlsx");
     const conference = await ensureConferenceRuntime();
-    const workbook = xlsx().read(await file.arrayBuffer(), { type: "array", cellDates: false, dense: false });
-    validateSigemWorkbook(workbook, conference);
-    const importedAt = new Date().toISOString();
-    const prepared = await conference.prepareWorkbookImport(
-      workbook,
-      { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt },
-      window.GrconHistory?.read?.() || [],
-      { now: importedAt, reason: "sigem-pw-dashboard" },
-    ) as PreparedConferenceImport;
+    let prepared: PreparedConferenceImport;
+    if (window.GrconSharedSigemQuery) {
+      const base = await window.GrconSharedSigemQuery.parseFile(file);
+      prepared = await conference.prepareParsedImport({ ok: true, ...base }, window.GrconHistory?.read?.() || [], { reason: "sigem-pw-dashboard" }) as PreparedConferenceImport;
+    } else {
+      const workbook = xlsx().read(await file.arrayBuffer(), { type: "array", cellDates: false, dense: false });
+      validateSigemWorkbook(workbook, conference);
+      const importedAt = new Date().toISOString();
+      prepared = await conference.prepareWorkbookImport(
+        workbook,
+        { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt },
+        window.GrconHistory?.read?.() || [],
+        { now: importedAt, reason: "sigem-pw-dashboard" },
+      ) as PreparedConferenceImport;
+    }
     const candidate: SigemPwBase = { meta: prepared.parsed.meta, records: prepared.parsed.records };
     const previousHistory = state.history;
     const recorded = await registerHistoryBeforeActivation("sigem", candidate, { reason: "sigem-import" });
@@ -364,7 +370,10 @@ async function importSigem(file: File): Promise<void> {
       }
       throw new Error(`${messageOf(error, "Falha ao ativar a Consulta Geral.")} A base anterior e o histórico foram restaurados.`);
     }
-    state.sigem = saved;
+    await window.GrconSharedSigemQuery?.setLocal(candidate);
+    const shared = window.GrconSharedSigemQuery?.current();
+    if (shared?.meta) await conference.saveBase(shared);
+    state.sigem = shared?.meta ? await Core().saveSigemBase(shared) : saved;
     state.history = await Core().loadHistory();
     await rebuildModelAsync();
     renderFromModel(true);
@@ -498,7 +507,16 @@ async function refresh(reason = ""): Promise<void> {
   refreshPromise = (async () => {
     try {
       const resetApplied = await clearPreStage7BasesOnce();
+      await window.GrconSharedSigemQuery?.refresh();
       const bases = await Core().loadBases();
+      const shared = window.GrconSharedSigemQuery?.current();
+      if (shared?.meta) {
+        if (bases.sigem?.meta?.snapshotId !== shared.meta.snapshotId) {
+          const recorded = await registerHistoryBeforeActivation("sigem", shared, { pwBase: bases.pw, ldRecords: bases.ld?.records || [], reason: "shared-general-query" });
+          shared.meta.historySourceSnapshotId = recorded.sigem?.snapshot?.id;
+        }
+        bases.sigem = await Core().saveSigemBase(shared);
+      }
       state.sigem = bases.sigem?.meta ? bases.sigem : EMPTY_BASE();
       state.pw = bases.pw?.meta ? bases.pw : EMPTY_BASE();
       state.ld = bases.ld?.meta ? bases.ld : EMPTY_BASE();
@@ -708,9 +726,11 @@ function installExternalListeners(): () => void {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
     if (detail?.source !== "sigem-pw-dashboard" && detail?.source !== "sigem-pw-dashboard-ld") void refresh("base PW atualizada em outro módulo");
   };
+  window.addEventListener("grcon:shared-sigem-updated", conference);
   window.addEventListener("grcon:conference-updated", conference);
   window.addEventListener("grcon:pw-base-updated", pw);
   return () => {
+    window.removeEventListener("grcon:shared-sigem-updated", conference);
     window.removeEventListener("grcon:conference-updated", conference);
     window.removeEventListener("grcon:pw-base-updated", pw);
     externalListenersInstalled = false;

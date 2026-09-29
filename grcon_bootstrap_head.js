@@ -8,10 +8,10 @@
     document.documentElement.dataset.theme = "light";
   }
 
-  // A persistência durável registra o listener de inicialização ainda no <head>.
-  // Assim, quando DOMContentLoaded ocorrer, history_core.js e
-  // sigem_posting_core.js já terão sido avaliados pelos scripts defer, mas a
-  // pessoa ainda não teve oportunidade de iniciar uma operação. A versão v2
+  // A persistência durável só é carregada após os scripts defer de Histórico
+  // e Postagem SIGEM. Scripts dinâmicos no head podiam executar enquanto o
+  // documento já estava interactive, antes das dependências, gerando erros
+  // transitórios de inicialização observados no QA Chromium. A versão v2
   // mantém o mesmo banco e acrescenta migração idempotente, validação real de
   // escrita e recuperação automática de bloqueios transitórios entre abas.
   function installOperationalPersistence() {
@@ -25,7 +25,7 @@
     document.head.appendChild(script);
   }
 
-  installOperationalPersistence();
+  document.addEventListener("DOMContentLoaded", installOperationalPersistence, { once: true });
 
   // As folhas de estilo dos módulos que abrem ocultos entram no HTML com
   // media="print" para não bloquear a primeira pintura. Assim que o navegador

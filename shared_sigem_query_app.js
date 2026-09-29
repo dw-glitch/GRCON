@@ -1,0 +1,175 @@
+(function (root) {
+  "use strict";
+  const Core = root.GrconSharedSigemQueryCore;
+  const state = { shared: null, local: null, stale: false, error: "", busy: false, workspace: "", context: Core.context(), refreshPromise: null };
+  let epoch = 0;
+  let lastEmission = "";
+  let indexedShared = null, indexedLocal = null;
+  function cloud() { return root.GrconCloud; }
+  function emit() {
+    const stamp = [state.workspace, state.shared?.meta?.snapshotId, state.local?.meta?.importedAt, state.stale, state.error].join("|");
+    if (stamp === lastEmission) return;
+    lastEmission = stamp;
+    if (indexedShared !== state.shared || indexedLocal !== state.local) {
+      state.context = Core.context(state.shared, state.local);
+      indexedShared = state.shared; indexedLocal = state.local;
+    }
+    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-updated", { detail: { meta: current()?.meta, stale: state.stale, error: state.error } }));
+  }
+  function current() { return state.shared || state.local; }
+  function canPublish() { return ["owner", "admin"].includes(cloud()?.state?.membership?.role); }
+  function cacheKey(workspace) { return `shared-sigem-query:${workspace}`; }
+  async function runtime() {
+    await root.GRCONModuleLoader.ensure("posting_conference_core.js");
+    return root.GrconPostingConference;
+  }
+  async function request(name, args) {
+    let timer;
+    try {
+      const response = await Promise.race([
+        cloud().state.client.rpc(`grcon_sigem_query_${name}`, args),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("O banco não respondeu a tempo. A última base válida permanece disponível.")), 45000); }),
+      ]);
+      if (response.error) throw response.error;
+      return response.data;
+    } finally { clearTimeout(timer); }
+  }
+  async function cacheGet(workspace) {
+    const conference = await runtime();
+    return conference.kvGet(cacheKey(workspace), null);
+  }
+  async function cachePut(workspace, base) {
+    const conference = await runtime();
+    await conference.kvSetMany([[cacheKey(workspace), base], [conference.BASE_KEY, base]]);
+  }
+  function reset() {
+    epoch++;
+    state.shared = null; state.local = null; state.workspace = ""; state.stale = false; state.error = "";
+    state.context = Core.context();
+    emit();
+  }
+  async function refresh() {
+    const membership = cloud()?.state?.membership;
+    const workspace = membership?.workspace_id;
+    if (!workspace) { reset(); return null; }
+    if (state.refreshPromise && state.workspace === workspace) return state.refreshPromise;
+    if (state.workspace !== workspace) { reset(); state.workspace = workspace; }
+    const ticket = epoch;
+    const valid = () => ticket === epoch && cloud()?.state?.membership?.workspace_id === workspace;
+    const promise = (async () => {
+      try {
+        try {
+          if (!state.local) {
+            const local = await (await runtime()).kvGet(`local-sigem-query:${workspace}`, null);
+            if (local && valid()) { Core.validate(local); state.local = local; emit(); }
+          }
+          if (!state.shared) {
+            const cached = await cacheGet(workspace);
+            if (cached && valid()) { Core.validate(cached); state.shared = cached; state.stale = true; emit(); }
+          }
+        } catch (error) { console.warn("Consulta Geral: cache indisponível; consultando o banco", error); }
+        if (!cloud()?.state?.online) throw new Error("Sem conexão. Usando a última Consulta Geral válida em cache.");
+        const data = await request("current", { target_workspace: workspace });
+        const meta = Array.isArray(data) ? data[0] : data;
+        if (!valid()) return null;
+        if (!meta?.snapshot_id) { state.stale = false; state.error = ""; return current(); }
+        if (state.shared?.meta?.snapshotId === meta.snapshot_id) { const changed = state.stale || state.error; state.stale = false; state.error = ""; if (changed) emit(); return state.shared; }
+        const records = [];
+        let after = 0;
+        while (records.length < meta.record_count) {
+          const page = await request("page", { target_workspace: workspace, target_snapshot: meta.snapshot_id, after_row: after, page_size: 1000 });
+          if (!Array.isArray(page) || !page.length) throw new Error("A Consulta Geral recebida está incompleta.");
+          for (const entry of page) { if (entry.row_number <= after) throw new Error("Paginação inválida."); records.push(entry.payload); after = entry.row_number; }
+        }
+        if (records.length !== meta.record_count) throw new Error("Contagem da Consulta Geral divergente.");
+        const base = Core.validate({ meta: { ...meta.metadata, snapshotId: meta.snapshot_id, fileName: meta.file_name,
+          importedAt: meta.published_at, recordCount: meta.record_count, source: "shared-general-query" }, records });
+        if (!valid()) return null;
+        let cacheWarning = "";
+        try { await cachePut(workspace, base); }
+        catch (_) { cacheWarning = "Consulta Geral atual carregada. O cache offline não pôde ser atualizado."; }
+        if (!valid()) return null;
+        state.shared = base; state.stale = false; state.error = cacheWarning; emit(); return base;
+      } catch (error) {
+        if (!valid()) return null;
+        state.stale = Boolean(state.shared); state.error = String(error.message || error); emit(); return current();
+      }
+    })();
+    state.refreshPromise = promise;
+    try { return await promise; } finally { if (state.refreshPromise === promise) state.refreshPromise = null; }
+  }
+  async function setLocal(base) {
+    Core.validate(base);
+    state.local = { meta: { ...base.meta, source: "local-general-query" }, records: base.records };
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (workspace) {
+      try { await (await runtime()).kvSet(`local-sigem-query:${workspace}`, state.local); }
+      catch (_) { state.error = "Consulta Geral local disponível nesta sessão; o cache não pôde ser salvo."; }
+    }
+    emit();
+    return current();
+  }
+  async function parseFile(file) {
+    if (!/\.(xlsx|xls|xlsm)$/i.test(file.name)) throw new Error("Selecione uma Consulta Geral Excel (.xlsx ou .xls).");
+    const buffer = await file.arrayBuffer();
+    const meta = { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt: new Date().toISOString() };
+    if (typeof Worker === "function") {
+      return new Promise((resolve, reject) => {
+        const worker = new Worker(new URL("workers/shared_sigem_query.worker.js", document.baseURI));
+        const timer = setTimeout(() => { worker.terminate(); reject(new Error("Tempo excedido ao ler a Consulta Geral.")); }, 120000);
+        const done = () => { clearTimeout(timer); worker.terminate(); };
+        worker.onmessage = (event) => { done(); try { event.data.ok ? resolve(Core.validate(event.data.base)) : reject(new Error(event.data.error)); } catch (error) { reject(error); } };
+        worker.onerror = (event) => { done(); reject(new Error(event.message || "Falha no leitor da Consulta Geral.")); };
+        worker.postMessage({ buffer, meta }, [buffer]);
+      });
+    }
+    const conference = await runtime();
+    await root.GRCONModuleLoader.ensure("xlsx");
+    const parsed = conference.parseWorkbook(root.XLSX.read(buffer, { type: "array" }), meta);
+    if (!parsed.ok) throw new Error(parsed.errors.join(" "));
+    return Core.validate({ meta: parsed.meta, records: parsed.records });
+  }
+  async function publish(base) {
+    Core.validate(base);
+    if (!canPublish()) throw new Error("Somente o proprietário ou administrador pode publicar a Consulta Geral.");
+    if (!cloud().state.online) throw new Error("Conecte-se para publicar a Consulta Geral.");
+    if (state.busy) throw new Error("Já existe uma publicação em andamento.");
+    state.busy = true;
+    const target_workspace = cloud().state.membership.workspace_id;
+    try {
+      const expected = await request("current", { target_workspace });
+      const active = Array.isArray(expected) ? expected[0] : expected;
+      const digest = await root.crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(base.records)));
+      const checksum = Array.from(new Uint8Array(digest), (v) => v.toString(16).padStart(2, "0")).join("");
+      const upload_id = await request("begin", { target_workspace, source_file: base.meta.fileName,
+        expected_count: base.records.length, source_metadata: { ...base.meta, checksum }, expected_active: active?.snapshot_id || null });
+      const ensureWorkspace = () => {
+        if (cloud()?.state?.membership?.workspace_id !== target_workspace) throw new Error("A área de trabalho mudou durante o envio. A base anterior permanece ativa.");
+      };
+      for (let offset = 0; offset < base.records.length; offset += 500) {
+        ensureWorkspace();
+        await request("chunk", { target_workspace, upload_id, first_row: offset + 1, rows: base.records.slice(offset, offset + 500) });
+        root.dispatchEvent(new CustomEvent("grcon:shared-sigem-progress", { detail: { done: Math.min(offset + 500, base.records.length), total: base.records.length } }));
+      }
+      ensureWorkspace();
+      await request("publish", { target_workspace, upload_id });
+      await refresh();
+      if (state.shared?.meta?.snapshotId !== upload_id) {
+        const error = new Error("A base foi publicada, mas o download ainda não foi confirmado. Atualize a página para consultá-la.");
+        error.published = true; throw error;
+      }
+      state.local = null;
+      try { await (await runtime()).kvSet(`local-sigem-query:${target_workspace}`, null); }
+      catch (_) { console.warn("Consulta Geral publicada; não foi possível limpar a prévia local em cache."); }
+      emit(); return state.shared;
+    } finally { state.busy = false; }
+  }
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, reset, canPublish, parseFile, setLocal, publish,
+    context: () => state.context,
+    sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
+    resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });
+  root.addEventListener("grcon:cloud-ready", () => void refresh());
+  root.addEventListener("online", () => void refresh());
+  root.document.addEventListener("visibilitychange", () => { if (!root.document.hidden) void refresh(); });
+  setInterval(() => { if (!root.document.hidden && cloud()?.state?.membership) void refresh(); }, 60000);
+})(window);
