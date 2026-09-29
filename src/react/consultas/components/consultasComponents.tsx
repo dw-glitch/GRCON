@@ -8,7 +8,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { UiDrawer } from "../../core/ui/UiPrimitives";
 import type {
-  AllocationCenterIndex,
   ConsultationRow,
   DocumentEntry,
   ExportTemplate,
@@ -211,58 +210,6 @@ export function LdPanel({ lds, readyCount, lastLd, onAddFiles, onRemove, onClear
           : null}
         {Boolean(lds.length)
           ? <button className="text-button danger" type="button" onClick={onClear}>Remover todas</button>
-          : null}
-      </div>
-    </SetupPanel>
-  );
-}
-
-export function CentralPanel({ central, onAttach, onClear }: {
-  central: AllocationCenterIndex | null;
-  onAttach: (file: File | null | undefined) => void;
-  onClear: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  let statusText = "Nenhuma central anexada. A consulta responde sem as colunas da fiscal.";
-  let hasError = false;
-
-  if (central) {
-    if (!central.ok) {
-      statusText = central.error || "Não foi possível ler a central.";
-      hasError = true;
-    } else {
-      statusText = `${central.nomeArquivo} · aba "${central.sheetName}" · ${formatBr(central.count)} envio(s) de ALOC para ${formatBr(central.documents)} documento(s).`;
-    }
-  }
-
-  return (
-    <SetupPanel
-      step="+"
-      title="Central de alocação"
-      description="Anexe o Controle de Solicitações somente quando precisar do status de alocação e da resposta da fiscal."
-      complete={Boolean(central?.ok)}
-      summary={central?.ok ? statusText : "Central não anexada"}
-      defaultExpanded={false}
-      optional
-      className="requests-central-panel"
-    >
-      <p aria-live="polite" className={`requests-central-status${hasError ? " tem-erro" : ""}`}>{statusText}</p>
-      <div className="requests-inline-actions">
-        <button className="secondary-button compact" type="button" onClick={() => inputRef.current?.click()}>
-          Anexar o Controle de Solicitações
-        </button>
-        <input
-          ref={inputRef}
-          accept=".xlsx,.xls,.xlsm"
-          hidden
-          type="file"
-          onChange={(event) => {
-            onAttach(event.target.files?.[0]);
-            event.target.value = "";
-          }}
-        />
-        {Boolean(central)
-          ? <button className="text-button danger" type="button" onClick={onClear}>Remover</button>
           : null}
       </div>
     </SetupPanel>
@@ -632,18 +579,6 @@ function celulaTaxonomiaInterna(linha: ConsultationRow | null) {
   return <span title="Taxonomia Interna da mesma linha da LD considerada">{value}</span>;
 }
 
-function celulaCentralStatus(central: AllocationCenterIndex | null, linha: ConsultationRow | null) {
-  if (!central || !central.ok) return celulaVazio("sem central");
-  if (!linha || !linha.centerFound) return celulaVazio("não consta na central");
-  const extra = linha.centerAllocation
-    ? <small className="requests-multi">{`${linha.centerAllocation}${linha.centerSentAt ? ` · ${linha.centerSentAt}` : ""}`}</small>
-    : null;
-  const envios = Number(linha.centerSubmissions) > 1
-    ? <small className="requests-rule">{`${linha.centerSubmissions} envios; vale o mais recente.`}</small>
-    : null;
-  return <>{linha.centerStatus || celulaVazio()}{extra}{envios}</>;
-}
-
 function selo(linha: ConsultationRow | null) {
   if (!linha) return <span className="requests-badge pendente">Não consultado</span>;
   if (linha.situation === "Localizado") return <span className="requests-badge ok">✓ Localizado</span>;
@@ -729,9 +664,8 @@ function DetailField({ label, children, wide = false }: {
   );
 }
 
-export function DocumentDetailsDrawer({ entry, central, onClose }: {
+export function DocumentDetailsDrawer({ entry, onClose }: {
   entry: { item: DocumentEntry; linha: ConsultationRow | null } | null;
-  central: AllocationCenterIndex | null;
   onClose: () => void;
 }) {
   if (!entry) return null;
@@ -805,8 +739,6 @@ export function DocumentDetailsDrawer({ entry, central, onClose }: {
           <dl className="requests-detail-grid">
             <DetailField label="Alocado?">{linha?.allocated || celulaVazio()}</DetailField>
             <DetailField label="Alocação">{linha?.allocation || celulaVazio()}</DetailField>
-            <DetailField label="Status da central" wide>{celulaCentralStatus(central, linha)}</DetailField>
-            <DetailField label="Resposta fiscal" wide>{linha?.centerFiscalAnswer || celulaVazio()}</DetailField>
           </dl>
         </section>
 
@@ -833,7 +765,6 @@ export function ResultsTable({
   onToggleAll,
   allSelected,
   someSelected,
-  central,
   filterKey = "",
 }: {
   visibleRows: Array<{ item: DocumentEntry; linha: ConsultationRow | null }>;
@@ -842,7 +773,6 @@ export function ResultsTable({
   onToggleAll: (selected: boolean) => void;
   allSelected: boolean;
   someSelected: boolean;
-  central: AllocationCenterIndex | null;
   filterKey?: string;
 }) {
   const [page, setPage] = useState(1);
@@ -905,7 +835,7 @@ export function ResultsTable({
           </nav>
         : null}
 
-      <DocumentDetailsDrawer entry={detail} central={central} onClose={() => setDetail(null)} />
+      <DocumentDetailsDrawer entry={detail} onClose={() => setDetail(null)} />
     </>
   );
 }
