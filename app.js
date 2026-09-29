@@ -14,7 +14,6 @@
   const PackageLayout = window.GrconPackageLayout;
   const SequenceCore = window.GrconEgrdtSequenceCore;
   const History = window.GrconHistory;
-  const Posting = window.GrconSigemPosting;
   const AnalysisHistory = window.GrconAnalysisHistory;
   const PendingAllocationPackage = window.GrconPendingAllocationPackage;
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
@@ -383,34 +382,26 @@
     });
   }
 
-  function prepareSigemOutput(generated, outputType, packageName, generatedAt) {
-    const historyRecords = createGeneratedHistoryRecords(generated, outputType, { generatedAt });
-    if (!Posting) return { historyRecords, postingDrafts: [], packageName, generatedAt };
-    const postingDrafts = Posting.createDrafts(historyRecords, { packageName, appVersion: APP_VERSION });
-    return { historyRecords, postingDrafts, packageName, generatedAt };
+  function prepareHistoryOutput(generated, outputType, packageName, generatedAt) {
+    return {
+      historyRecords: createGeneratedHistoryRecords(generated, outputType, { generatedAt }),
+      packageName,
+      generatedAt,
+    };
   }
 
-  // A postagem continua totalmente manual. Nenhum manifesto de automação é incluído no ZIP.
-  function sigemWorkerPayload() { return {}; }
-  function addSigemManifests() { /* intencionalmente vazio */ }
-
-  function saveGeneratedHistory(generated, outputType, postingContext, preparedRecords) {
+  function saveGeneratedHistory(generated, outputType, historyContext, preparedRecords) {
     if (!History || !generated || !generated.length) return;
     let records = preparedRecords || [];
     let historySaved = false;
     try {
-      const info = postingContext || {};
+      const info = historyContext || {};
       // O histórico é reconstruído depois que o XLS foi gerado e reaberto pelo verificador.
       // Assim, a revisão registrada vem da própria eGRDT, e não apenas da prévia da emissão.
       const verifiedRecords = createGeneratedHistoryRecords(generated, outputType, { generatedAt: info.generatedAt });
       records = verifiedRecords.length ? verifiedRecords : (preparedRecords || []);
       const saved = History.saveMany(records);
       historySaved = Boolean(saved.saved);
-      if (Posting) {
-        const postingSaved = Posting.registerGenerated(records, { packageName: info.packageName, appVersion: APP_VERSION });
-        if (postingSaved.saved) window.dispatchEvent(new CustomEvent("grcon:sigem-updated", { detail: { records: postingSaved.created } }));
-        if (postingSaved.error) console.warn("GRCON: registros de postagem SIGEM indisponíveis", postingSaved.error);
-      }
       // A emissão apenas atualiza o histórico. A resposta de e-mail é aberta
       // deliberadamente pelo operador na eGRDT selecionada no Histórico.
       if (saved.saved) window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { records, outputType } }));
@@ -4676,7 +4667,7 @@
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = previewGenerated.length === 1 ? previewGenerated[0].fileName : PackageLayout.archiveName(previewGenerated, timestamp);
-      const sigemPrepared = prepareSigemOutput(previewGenerated, "eGRDT final", packageName, generatedAt);
+      const historyPrepared = prepareHistoryOutput(previewGenerated, "eGRDT final", packageName, generatedAt);
       let generated;
       if (PerformanceCore && PerformanceCore.supported) {
         if (groups.length === 1) {
@@ -4694,7 +4685,6 @@
             groups: exportWorkerGroups(groups, false),
             officialNumbers,
             limit: currentEgrdtBatchLimit(),
-            ...sigemWorkerPayload(sigemPrepared),
           }, workerProgress("eGRDT + ZIP"));
           generated = restoreWorkerGenerated(built.generated, groups);
           downloadBlob(new Blob([built.bytes], { type: "application/zip" }), packageName);
@@ -4717,11 +4707,10 @@
           const zip = new JSZip();
           generated.forEach((file) => zip.folder(file.official.baseName).file(file.fileName, file.data));
           zip.file("ORGANIZACAO_DOS_LOTES.txt", buildBatchSummaryText(generated));
-          addSigemManifests(zip, sigemPrepared);
           downloadBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), packageName);
         }
       }
-      saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${generated.length} GRDT final(is) verificada(s) e registrada(s) para a etapa SIGEM.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar a GRDT final.");
@@ -4792,7 +4781,7 @@
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
-      const sigemPrepared = prepareSigemOutput(previewGenerated, "Arquivos + eGRDT", packageName, generatedAt);
+      const historyPrepared = prepareHistoryOutput(previewGenerated, "Arquivos + eGRDT", packageName, generatedAt);
       let generated;
       let blob;
       if (PerformanceCore && PerformanceCore.supported) {
@@ -4802,7 +4791,6 @@
           groups: exportWorkerGroups(groups, true),
           officialNumbers,
           limit: currentEgrdtBatchLimit(),
-          ...sigemWorkerPayload(sigemPrepared),
         }, workerProgress("Arquivos + eGRDT + ZIP"));
         generated = restoreWorkerGenerated(built.generated, groups);
         blob = new Blob([built.bytes], { type: "application/zip" });
@@ -4820,11 +4808,10 @@
         });
         const zip = new JSZip();
         PackageLayout.addFolders(zip, generated, [{ name: "ORGANIZACAO_DOS_LOTES.txt", data: buildBatchSummaryText(generated) }]);
-        addSigemManifests(zip, sigemPrepared);
         blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } });
       }
       downloadBlob(blob, packageName);
-      saveGeneratedHistory(generated, "Arquivos + eGRDT", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      saveGeneratedHistory(generated, "Arquivos + eGRDT", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${plan.entries.length} arquivo(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar os arquivos com a eGRDT.");
@@ -4907,7 +4894,7 @@
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
-      const sigemPrepared = prepareSigemOutput(previewGenerated, "Pacote completo", packageName, generatedAt);
+      const historyPrepared = prepareHistoryOutput(previewGenerated, "Pacote completo", packageName, generatedAt);
       let generated;
       let blob;
       if (PerformanceCore && PerformanceCore.supported) {
@@ -4928,7 +4915,6 @@
           },
           reportName: `Relatorio_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}_${timestamp}.xlsx`,
           manifestName: `Conferencia_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}.xlsx`,
-          ...sigemWorkerPayload(sigemPrepared),
         }, workerProgress("Pacote final"));
         generated = restoreWorkerGenerated(built.generated, groups);
         generated.forEach((file) => file.group.entries.forEach((entry) => {
@@ -4956,11 +4942,10 @@
           { name: `Conferencia_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}.xlsx`, data: buildConferenceFile(plan) },
           { name: `Relatorio_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}_${timestamp}.xlsx`, data: await buildReportFile() },
         ]);
-        addSigemManifests(zip, sigemPrepared);
         blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } });
       }
       downloadBlob(blob, packageName);
-      saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, sigemPrepared.historyRecords);
+      saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${plan.entries.length} arquivo(s), ${generated.length} eGRDT(s) e o relatório de conferência validados no pacote final.`, "success");
     } catch (error) {
       handleWorkerTaskError(error, "Não foi possível gerar o pacote final.");
