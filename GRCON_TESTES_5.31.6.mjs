@@ -17,7 +17,6 @@ const ExcelJS = require(path.join(root, "exceljs.min.js"));
 const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
 const XLSX = require(path.join(root, "xlsx.full.min.js"));
-const AllocationCenter = require(path.join(root, "allocation_center.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const Requests = require(path.join(root, "requests_core.js"));
 const RequestsReport = require(path.join(root, "requests_report.js"));
@@ -1128,23 +1127,6 @@ check("modelos de exportação passam pelo banco com papel conferido e sem RLS n
   assert.match(hook, /não existe mais\. Escolha outro para exportar/);
 });
 
-check("central de alocação só é aceita com caminho, aba e as duas colunas", () => {
-  assert.equal(ReportSummary.normalizeAllocationCenter(null), null);
-  assert.equal(ReportSummary.normalizeAllocationCenter({ path: "\\\\srv\\q\\Central.xlsx", sheet: "Central", keyColumn: "B" }), null);
-  const central = ReportSummary.normalizeAllocationCenter({
-    path: "\\\\servidor\\qualidade\\Central de Alocacao.xlsx",
-    sheet: "Central",
-    keyColumn: "b",
-    commentColumn: "h",
-  });
-  assert.equal(central.fileName, "Central de Alocacao.xlsx");
-  assert.equal(central.directory, "\\\\servidor\\qualidade\\");
-  assert.equal(central.keyColumn, "B");
-  assert.equal(central.commentColumn, "H");
-  assert.equal(central.lastRow, 20000);
-  assert.equal(ReportSummary.normalizeAllocationCenter({ ...central, lastRow: 500 }).lastRow, 500);
-});
-
 check("STATUS INTERNO prioriza o comentário da fiscal presente na LD", () => {
   assert.equal(ReportSummary.internalStatusText({ fiscalComment: "Liberado pela fiscalização", sigemStatus: "Não Postado" }), "Liberado pela fiscalização");
 });
@@ -1845,24 +1827,6 @@ check("fluxo acelerado preenche A4 quando a LD não informa o formato", () => {
   assert.match(source, /rawResults\.forEach\(\(result\)\s*=>\s*\{[\s\S]*?const formatDefaulted = Boolean\(result\.egrdt && !result\.egrdt\.format\);[\s\S]*?if \(formatDefaulted\) result\.egrdt\.format = "A4";[\s\S]*?const logical = logicalMeta\.get\(result\.id\);/);
 });
 
-check("central de alocação é compartilhada pelo banco e só o proprietário altera", () => {
-  const cloud = fs.readFileSync(path.join(root, "grcon_cloud_app.js"), "utf8");
-  for (const rpc of ["grcon_get_allocation_center", "grcon_set_allocation_center", "grcon_clear_allocation_center"]) {
-    assert.match(cloud, new RegExp(`rpc\\("${rpc}"`));
-  }
-  // Gravar e remover exigem o papel de proprietário antes de chamar o banco.
-  assert.match(cloud, /async function saveAllocationCenter[\s\S]*?if \(!canManageMembers\(\)\)/);
-  assert.match(cloud, /async function clearAllocationCenter[\s\S]*?if \(!canManageMembers\(\)\)/);
-  // A carga entra junto com o restante da área compartilhada, no login.
-  assert.match(cloud, /await loadMembers\(\);\s*await loadAllocationCenter\(\);/);
-
-  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-  // Remover só a cópia local deixaria o cadastro voltar na próxima leitura.
-  assert.match(app, /Cloud\?\.clearAllocationCenter/);
-  assert.match(app, /Cloud\?\.saveAllocationCenter/);
-  assert.match(app, /window\.addEventListener\("grcon:allocation-center-updated"/);
-});
-
 check("migração da central usa invólucro invoker e confere o papel no schema privado", () => {
   const sql = fs.readFileSync(path.join(root, "SUPABASE_MIGRACAO_5.32.6.sql"), "utf8");
   assert.match(sql, /revoke all on table private\.grcon_allocation_center from public, anon, authenticated;/);
@@ -1877,6 +1841,20 @@ check("migração da central usa invólucro invoker e confere o papel no schema 
   }
   // Nenhuma política de RLS é criada nesta migração.
   assert.doesNotMatch(sql, /create\s+policy/i);
+});
+
+check("runtime não carrega a Central de Alocação aposentada e preserva Postagem SIGEM", () => {
+  const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const sigem = fs.readFileSync(path.join(root, "sigem_posting_app.js"), "utf8");
+
+  assert.equal(fs.existsSync(path.join(root, "allocation_center.js")), false);
+  assert.doesNotMatch(loader, /allocation_center\.js/);
+  assert.doesNotMatch(html, /allocation-center|Central de Alocação|Salvar referência|Remover cadastro/i);
+  assert.doesNotMatch(app, /saveAllocationCenter|clearAllocationCenter|GrconAllocationCenter/);
+  assert.match(sigem, /const history = History\.read\(\)/);
+  assert.match(sigem, /Posting\.fromHistory/);
 });
 
 check("sincronização usa RPC de exclusão e evita a segunda leitura quando não há envio", () => {
@@ -1985,7 +1963,6 @@ check("service worker publica o cache isolado da versão atual", () => {
     ldName: "LD_TESTE.xlsx",
     ldVersion: "TESTE",
     relationLabel: "Relação de teste",
-    allocationCenter: { path: "\\\\servidor\\qualidade\\Central.xlsx", sheet: "Central", keyColumn: "B", commentColumn: "H" },
   });
   const bytes = await workbook.xlsx.writeBuffer();
   const archive = await JSZip.loadAsync(bytes);
@@ -2001,9 +1978,7 @@ check("service worker publica o cache isolado da versão atual", () => {
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 7).value, "STATUS INTERNO");
   assert.equal(reopened.getWorksheet("Resumo").getCell(summaryLayout.headerRow, 8).value, "SERÁ RENOMEADO?");
   assert.match(String(reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 8).value), /De:.*Para:/i);
-  // Mesmo com uma central cadastrada, a célula precisa ser texto puro. Uma
-  // PROCX externa fazia o Excel reparar o arquivo e avisar sobre fonte não
-  // confiável.
+  // STATUS INTERNO permanece texto puro e o arquivo não cria vínculos externos.
   const internal = reopened.getWorksheet("Resumo").getCell(summaryLayout.dataStart, 7);
   assert.equal(internal.formula, undefined);
   assert.equal(internal.value, "Código que consta " + ntBaseDocument);
@@ -2066,7 +2041,6 @@ check("Consulta React mantém tabela principal legível e evidências completas 
     "as evidências retiradas da tabela principal precisam continuar acessíveis");
   assert.match(components, /Código localizado na LD/);
   assert.match(components, /Revisão Colar SIGEM/);
-  assert.match(components, /Resposta fiscal/);
   assert.match(components, /Todas as LDs/);
 
   const report = fs.readFileSync(path.join(root, "requests_report.js"), "utf8");
@@ -2075,78 +2049,6 @@ check("Consulta React mantém tabela principal legível e evidências completas 
   const iStatus = report.indexOf("STATUS NO SIGEM");
   assert.ok(iAlocado < iColar && iColar < iStatus,
     "a modernização visual não pode alterar a ordem histórica das colunas exportadas");
-});
-check("central de alocação responde status e comentário da fiscal por documento", () => {
-  const AC = AllocationCenter;
-
-  // Planilha no formato real: cabeçalho na segunda linha, porque a primeira
-  // traz só um total, e NomeDocumento como chave.
-  const cabecalho = ["ABA", "VERSÃO \nDA LD", "DATA DO ENVIO\n DA ALOC", "Retorno da Fiscal 01\n (Renata)",
-    "Resposta da Fiscal 01\n (Renata)", "Retorno da Fiscal 02\n (Nani)", "STATUS DA ALOCAÇÃO", "ALOCAÇÃO", "FAROL", "NomeDocumento"];
-  const doc = "C1O_RNEST_U32_3.8.2.1_TUB_RUFF_U32-AR-05655";
-  const planilha = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(planilha, XLSX.utils.aoa_to_sheet([
-    ["", "", "", "", "", "", 2],
-    cabecalho,
-    ["ET_LD_004", "0", new Date(2026, 7, 13), new Date(2026, 4, 5), "Recusado: falta o TAG", "", "FISCAL 01 - RECUSADO", "C1O-ALOC-CM-0058-2026", "0", doc],
-    ["ET_LD_004", "0", new Date(2026, 7, 18), "", "Aceita sem comentários", "", "FISCAL 01 - AGUARDANDO RETORNO", "C1O-ALOC-CM-0230-2026", "0", doc],
-  ], { cellDates: true }), "Central de alocação");
-
-  const indice = AC.parseAllocationCenter(planilha, { xlsx: XLSX, core: Core });
-  assert.equal(indice.ok, true);
-  assert.equal(indice.sheetName, "Central de alocação");
-  assert.equal(indice.headerRow, 2, "o cabeçalho não está na primeira linha");
-  assert.equal(indice.count, 2);
-  assert.equal(indice.documents, 1, "o mesmo documento em dois envios é um documento");
-
-  // A aba registra cada ALOC enviada; vale o envio mais recente, porque é ele
-  // que descreve a situação de hoje.
-  const achado = AC.allocationCenterLookup(doc, indice, Core);
-  assert.equal(achado.found, true);
-  assert.equal(achado.all.length, 2, "o histórico dos envios é preservado");
-  assert.equal(achado.chosen.status, "FISCAL 01 - AGUARDANDO RETORNO");
-  assert.equal(achado.chosen.allocation, "C1O-ALOC-CM-0230-2026");
-  assert.match(achado.rule, /2 envios/, "a regra aplicada precisa estar escrita");
-
-  const campos = AC.centerFields(achado);
-  assert.equal(campos.centerStatus, "FISCAL 01 - AGUARDANDO RETORNO");
-  // O texto da fiscal sai exatamente como está na planilha.
-  assert.equal(campos.centerFiscalAnswer, "Aceita sem comentários");
-  assert.match(campos.centerAllocationCell, /C1O-ALOC-CM-0230-2026\n/);
-
-  // Documento fora da central é "não consta", que não é "não alocado".
-  const fora = AC.allocationCenterLookup("C1O_RNEST_U32_9.9.9.9_INS_RIR_INEXISTENTE", indice, Core);
-  assert.equal(fora.found, false);
-  assert.equal(AC.centerFields(fora).centerStatus, "", "sem registro não se afirma situação");
-});
-
-check("empate de data na central desempata pelo número da ALOC", () => {
-  const AC = AllocationCenter;
-  // Acontece no arquivo real: dois envios na mesma data com status diferentes.
-  // O número da ALOC é sequencial e cresce com a data, então serve de critério.
-  assert.ok(AC.allocationSequence("C1O-ALOC-CM-0230-2026") > AC.allocationSequence("C1O-ALOC-CM-0058-2026"));
-  // O ano pesa mais que o sequencial, para a ordem não inverter na virada.
-  assert.ok(AC.allocationSequence("C1O-ALOC-CM-0001-2027") > AC.allocationSequence("C1O-ALOC-CM-9999-2026"));
-  assert.equal(AC.allocationSequence(""), 0);
-  assert.equal(AC.allocationSequence("sem número"), 0);
-});
-
-check("colunas da central chegam à React e à exportação sem afirmar o que não se apurou", () => {
-  const report = fs.readFileSync(path.join(root, "requests_report.js"), "utf8");
-  const adapterSource = fs.readFileSync(path.join(root, "src/react/consultas/services/consultasAdapter.ts"), "utf8");
-  const components = fs.readFileSync(path.join(root, "src/react/consultas/components/consultasComponents.tsx"), "utf8");
-
-  for (const coluna of ["STATUS DA ALOCAÇÃO (CENTRAL)", "RESPOSTA DA FISCAL 01", "ALOC ENVIADA (CENTRAL)"]) {
-    assert.ok(report.includes(coluna), `a exportação precisa da coluna ${coluna}`);
-  }
-  for (const campo of ["centerStatus", "centerFiscalAnswer", "centerAllocationCell"]) {
-    assert.match(adapterSource, new RegExp(`${campo}: linha\\.${campo}`), `a exportação precisa levar ${campo}`);
-  }
-
-  assert.match(components, /Anexar o Controle de Solicitações/);
-  assert.match(adapterSource, /GrconAllocationCenter/);
-  assert.match(components, /sem central/);
-  assert.match(components, /não consta na central/);
 });
 check("tabela larga avisa que rola, e a sombra vem do estado real da rolagem", () => {
   const js = fs.readFileSync(path.join(root, "ui-v3.js"), "utf8");
