@@ -3,7 +3,6 @@ import { historicoEgrdtAdapter as Adapter } from "../services/historicoEgrdtAdap
 import type {
   EgrdtHistoryFilters,
   EgrdtHistoryRecord,
-  PostingCache,
 } from "../types/domain";
 
 export const LIST_PAGE_SIZE = 50;
@@ -13,7 +12,6 @@ const EMPTY_FILTERS: EgrdtHistoryFilters = {
   query: "",
   year: "",
   outputType: "",
-  postingStatus: "",
   sort: "recent",
   startDate: "",
   endDate: "",
@@ -32,13 +30,6 @@ function useDebouncedValue(value: string, delay: number): string {
 export function useHistoricoEgrdt() {
   const [records, setRecords] = useState<EgrdtHistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [postingCache, setPostingCache] = useState<PostingCache>(() => ({
-    records: [],
-    byHistoryId: new Map(),
-    byId: new Map(),
-    byEgrdt: new Map(),
-    reads: 0,
-  }));
   const [filters, setFilters] = useState<EgrdtHistoryFilters>(EMPTY_FILTERS);
   const debouncedQuery = useDebouncedValue(filters.query, SEARCH_DEBOUNCE_MS);
   const [selectedId, setSelectedId] = useState("");
@@ -60,9 +51,7 @@ export function useHistoricoEgrdt() {
   useEffect(() => {
     try {
       const nextRecords = Adapter.readRecords();
-      const nextPostingCache = Adapter.readPostingCache();
       setRecords(nextRecords);
-      setPostingCache(nextPostingCache);
       Adapter.updateExternalCount(nextRecords.length);
     } finally {
       setLoading(false);
@@ -73,7 +62,6 @@ export function useHistoricoEgrdt() {
     query: debouncedQuery,
     year: filters.year,
     outputType: filters.outputType,
-    postingStatus: filters.postingStatus,
     sort: filters.sort,
     startDate: filters.startDate,
     endDate: filters.endDate,
@@ -82,7 +70,6 @@ export function useHistoricoEgrdt() {
     debouncedQuery,
     filters.year,
     filters.outputType,
-    filters.postingStatus,
     filters.sort,
     filters.startDate,
     filters.endDate,
@@ -91,10 +78,10 @@ export function useHistoricoEgrdt() {
 
   const filteredResult = useMemo(() => {
     const started = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
-    const rows = Adapter.filterRecords(records, effectiveFilters, postingCache);
+    const rows = Adapter.filterRecords(records, effectiveFilters);
     const ended = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
     return { rows, elapsed: Math.round((ended - started) * 100) / 100 };
-  }, [records, effectiveFilters, postingCache]);
+  }, [records, effectiveFilters]);
 
   const filtered = filteredResult.rows;
   const visibleRecords = useMemo(
@@ -120,16 +107,14 @@ export function useHistoricoEgrdt() {
   useEffect(() => {
     Adapter.setPerformanceSnapshot({
       lastRenderMs: filteredResult.elapsed,
-      postingReadsLastRender: postingCache.reads,
       renderedRecords: visibleRecords.length,
       totalFiltered: filtered.length,
-      postingCount: postingCache.records.length,
       totalRecords: records.length,
     });
-  }, [filteredResult.elapsed, postingCache, visibleRecords.length, filtered.length, records.length]);
+  }, [filteredResult.elapsed, visibleRecords.length, filtered.length, records.length]);
 
   const filterOptions = useMemo(() => Adapter.filterOptions(records), [records]);
-  const summary = useMemo(() => Adapter.summary(filtered, postingCache), [filtered, postingCache]);
+  const summary = useMemo(() => Adapter.summary(filtered), [filtered]);
   const selectedRecord = useMemo(
     () => records.find((record) => record.id === selectedId) || null,
     [records, selectedId],
@@ -198,12 +183,6 @@ export function useHistoricoEgrdt() {
       current: result.record.egrdtNumber,
     });
   }, [selectedRecord, editValue]);
-
-  const prepareForSigem = useCallback(async () => {
-    if (!selectedRecord) return;
-    await Adapter.prepareForSigem(selectedRecord);
-    Adapter.notify("eGRDT preparada na fila de postagem SIGEM.", "success");
-  }, [selectedRecord]);
 
   const openEmailReply = useCallback(() => {
     if (!selectedRecord) return;
@@ -290,7 +269,6 @@ export function useHistoricoEgrdt() {
     setFilter,
     setSearch,
     filterOptions,
-    postingCache,
     filtered,
     visibleRecords,
     visibleLimit,
@@ -309,7 +287,6 @@ export function useHistoricoEgrdt() {
     cancelEditing,
     changeEditValue,
     saveEditedNumber,
-    prepareForSigem,
     openEmailReply,
     openTeams,
     deleteSelectedRecord,
