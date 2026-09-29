@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.44.2" data-version="5.44.2" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.44.3" data-version="5.44.3" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -32,7 +32,7 @@
 <noscript><link href="requests.css" rel="stylesheet"/><link href="react-ui.css" rel="stylesheet"/><link href="requests-phase-b.css" rel="stylesheet"/><link href="pdf-merge.css" rel="stylesheet"/><link href="cover-document.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="analysis-history-phase-b.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/><link href="egrdt-email-reply.css" rel="stylesheet"/><link href="grdt-reissue.css" rel="stylesheet"/></noscript>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
-<meta content="5.44.2" name="application-version"/></head>
+<meta content="5.44.3" name="application-version"/></head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
 <header class="topbar">
@@ -156,6 +156,13 @@
 <label><span>Modo</span><select id="egrdt-batch-mode"><option value="discipline">Separar por disciplina</option><option value="limit-only">Somente por limite</option></select></label>
 <label><span>Máx. por lote</span><input id="egrdt-batch-limit" type="number" min="1" step="1" value="48" inputmode="numeric" aria-describedby="egrdt-batch-limit-status"/></label>
 <button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar</button>
+</section>
+<section class="planned-documents-settings settings-embedded" aria-labelledby="planned-documents-title">
+<div><strong id="planned-documents-title">Documentos Previstos · fonte da alocação</strong><small id="planned-documents-status" role="status" aria-live="polite">Carregando base compartilhada…</small></div>
+<p>Se o código constar na coluna DOCUMENTO, está alocado. A ausência indica Não Alocado. A coluna JA_EMITIDO_NO_SIGEM não altera essa regra.</p>
+<label><span>Atualizar planilha para toda a equipe</span><input id="planned-documents-file" type="file" accept=".xlsx,.xls" aria-describedby="planned-documents-status"/></label>
+<button class="secondary-button compact" id="planned-documents-publish" type="button">Publicar nova base</button>
+<small hidden id="planned-documents-owner-note">Somente o proprietário pode atualizar esta base; todos os usuários recebem a versão publicada.</small>
 </section>
 <section class="allocation-center-settings settings-embedded" aria-labelledby="allocation-center-title">
 <div><strong id="allocation-center-title">Referência da central de alocação</strong><small id="allocation-center-status">Carregando…</small></div>
@@ -437,7 +444,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.44.2 · <span id="footer-view">Controle de GRDT</span></span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.44.3 · <span id="footer-view">Controle de GRDT</span></span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">
@@ -561,6 +568,7 @@
 <script defer src="grcon_config.js"></script><script defer src="grcon_utils.js"></script>
 <script defer src="requests_core.js"></script><script defer src="requests_report.js"></script><script defer src="grcon_file_access.js"></script>
 <script defer="" src="core.js"></script>
+<script defer src="planned_documents_core.js"></script>
 <script defer="" src="ld_conflicts.js"></script>
 <script defer="" src="apendice_base.js"></script>
 <script defer="" src="apendice_tagueados.js"></script>
@@ -576,6 +584,7 @@
 <script defer="" src="supabase.min.js"></script>
 <script defer="" src="grcon_cloud_config.js"></script>
 <script defer="" src="grcon_cloud_app.js"></script>
+<script defer src="planned_documents_app.js"></script>
 <script defer="" src="egrdt_teams_notification_app.js"></script>
 <script defer="" src="pending_allocation_history_core.js"></script>
 <script defer="" src="analysis_history_core.js"></script>
