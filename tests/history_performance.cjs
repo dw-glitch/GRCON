@@ -19,7 +19,7 @@ check("Histórico não consulta a fila da Postagem SIGEM para montar a UI", () =
 });
 
 check("relação de revisão usa somente os dados registrados na própria eGRDT", () => {
-  const block = adapter.slice(adapter.indexOf("function revisionRelation"), adapter.indexOf("function filterOptions"));
+  const block = adapter.slice(adapter.indexOf("function revisionRelation"), adapter.indexOf("function periodLabel"));
   assert.match(block, /generated/);
   assert.doesNotMatch(block, /Posting/);
   assert.doesNotMatch(block, /postingRecord/);
