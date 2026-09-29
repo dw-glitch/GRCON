@@ -97,7 +97,6 @@ const ASSETS = [
   "react-dist/cover-document-app.js",
   "apendice_base.js",
   "apendice_tagueados.js",
-  "allocation_center.js",
   "report_summary.js",
   "grcon_output_guard.js",
   "output_audit.js",
