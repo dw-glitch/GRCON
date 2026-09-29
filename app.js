@@ -2757,7 +2757,9 @@
   }
 
   async function ensureFreshAnalysis() {
-    await window.GrconSharedSigemQuery?.refresh();
+    const sharedSigem = window.GrconSharedSigemQuery;
+    if (sharedSigem?.refreshLatest) await sharedSigem.refreshLatest();
+    else await sharedSigem?.refresh();
     if (!state.analysisAt || !state.results.length) {
       showToast("Execute uma análise antes de gerar arquivos.", "error");
       return false;
@@ -5416,6 +5418,8 @@
       density: state.resultDensity,
       filtered: filteredResultIndices().length,
       total: state.results.length,
+      analysisSigemSnapshot: state.analysisSigemSnapshot,
+      currentSigemSnapshot: currentSigemQuerySnapshot(),
     }),
     getResult: (index) => state.results[Number(index)] || null,
     filteredIndices: () => [...filteredResultIndices()],

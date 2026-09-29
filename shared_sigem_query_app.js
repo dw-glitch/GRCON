@@ -125,6 +125,13 @@
     state.refreshPromise = promise;
     try { return await promise; } finally { if (state.refreshPromise === promise) state.refreshPromise = null; }
   }
+  async function refreshLatest() {
+    const pending = state.refreshPromise;
+    if (pending) {
+      try { await pending; } catch (_) { /* a nova leitura abaixo decide a fonte válida */ }
+    }
+    return refresh();
+  }
   async function setLocal(base) {
     Core.validate(base);
     state.local = { meta: { ...base.meta, source: "local-general-query" }, records: base.records };
@@ -180,7 +187,7 @@
       }
       ensureWorkspace();
       await request("publish", { target_workspace, upload_id });
-      await refresh();
+      await refreshLatest();
       if (state.shared?.meta?.snapshotId !== upload_id) {
         const error = new Error("A base foi publicada, mas o download ainda não foi confirmado. Atualize a página para consultá-la.");
         error.published = true; throw error;
@@ -191,7 +198,7 @@
       emit(); return state.shared;
     } finally { state.busy = false; }
   }
-  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, reset, canPublish, parseFile, setLocal, publish,
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish,
     context: () => state.context,
     sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
     resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });

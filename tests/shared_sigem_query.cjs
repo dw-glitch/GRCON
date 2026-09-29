@@ -37,10 +37,12 @@ for(let i=0;i<25000;i++) assert.equal(Query.resolve(`RL-5290.00-22313-ABC-C1O-${
 const appSource=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 assert.match(appSource,/analysisSigemSnapshot/);
 assert.match(appSource,/currentSigemQuerySnapshot\(\)\s*!==\s*state\.analysisSigemSnapshot/);
+assert.match(appSource,/sharedSigem\?\.refreshLatest/);
 assert.match(appSource,/Consulta Geral SIGEM foi atualizada após esta análise/);
 const sharedAppSource=fs.readFileSync(path.join(__dirname,'..','shared_sigem_query_app.js'),'utf8');
 assert.doesNotMatch(sharedAppSource,/\[conference\.BASE_KEY,\s*base\]/);
 assert.match(sharedAppSource,/shared-sigem-conference-workspace/);
+assert.match(sharedAppSource,/async function refreshLatest\(\)/);
 assert.match(sharedAppSource,/conference\.STATE_KEY[\s\S]*conference\.AUDIT_KEY/);
 const conferenceAppSource=fs.readFileSync(path.join(__dirname,'..','posting_conference_app.js'),'utf8');
 assert.match(conferenceAppSource,/grconWorkspaceId/);

@@ -145,14 +145,17 @@ function rpc(name,args) {
  assert.equal(await a.page.evaluate(()=>window.GrconTriageUiApi.getResult(0).status),'Não Postado');
  await a.page.locator('#batch-egrdt').click();await a.page.locator('#drawer-revision').fill('B');await a.page.locator('#drawer-save').click();
  await a.page.locator('#select-row-0').check();
- // A Consulta Geral mudou depois da análise: a geração deve ser recusada até nova análise.
+ // A Consulta Geral mudou remotamente depois da análise: a geração deve forçar uma leitura nova e ser recusada.
+ const analyzedSnapshots=await a.page.evaluate(()=>window.GrconTriageUiApi.snapshot());
+ assert.equal(analyzedSnapshots.analysisSigemSnapshot,updatedActive.snapshot_id);
+ assert.equal(analyzedSnapshots.currentSigemSnapshot,updatedActive.snapshot_id);
  backend.active=originalActive;
- await a.page.evaluate(()=>window.GrconSharedSigemQuery.refresh());
  await a.page.locator('#export-egrdt').click();
  await a.page.waitForFunction(()=>document.getElementById('toast')?.textContent.includes('Consulta Geral SIGEM foi atualizada'));
  assert.match(await a.page.locator('#toast').innerText(),/Analise novamente antes de gerar a GRDT/);
+ assert.equal(await a.page.evaluate(()=>window.GrconSharedSigemQuery.current()?.meta?.snapshotId),originalActive.snapshot_id);
  backend.active=updatedActive;
- await a.page.evaluate(()=>window.GrconSharedSigemQuery.refresh());
+ await a.page.evaluate(()=>window.GrconSharedSigemQuery.refreshLatest());
  const downloadPromise=a.page.waitForEvent('download');await a.page.locator('#export-egrdt').click();await a.page.locator('#p1-sequence-confirm').check();await a.page.locator('#p1-confirm-ok').click();const generated=await downloadPromise;
  await generated.saveAs(path.join(output,'normal-generated.xls'));
  await a.page.waitForFunction(()=>window.GrconHistory.read().some(r=>r.outputType==='eGRDT final'&&r.files.some(f=>f.sigemStatusSource==='shared-general-query')));
