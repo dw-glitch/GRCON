@@ -541,24 +541,6 @@ html[data-app="GRCON"] .history-module .history-record-main > span {
   font-size: .66rem;
 }
 
-html[data-app="GRCON"] .history-module .history-posting-status {
-  flex: 0 0 auto;
-  max-width: 10rem;
-  padding: .24rem .42rem;
-  border: 1px solid var(--border-1);
-  border-radius: 999px;
-  overflow: hidden;
-  color: var(--text-2);
-  background: var(--surface-2);
-  font-size: .61rem;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-html[data-app="GRCON"] .history-module .history-posting-status.success { border-color: color-mix(in srgb, var(--success-700) 42%, var(--border-1)); color: var(--success-700); }
-html[data-app="GRCON"] .history-module .history-posting-status.warning { border-color: color-mix(in srgb, var(--warning-700) 42%, var(--border-1)); color: var(--warning-700); }
-html[data-app="GRCON"] .history-module .history-posting-status.danger { border-color: color-mix(in srgb, var(--danger-700) 42%, var(--border-1)); color: var(--danger-700); }
 
 html[data-app="GRCON"] .history-module .history-record-facts {
   display: flex;
@@ -1332,10 +1314,6 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
   html[data-app="GRCON"] .history-module .history-record-main > strong {
     white-space: normal;
     overflow-wrap: anywhere;
-  }
-
-  html[data-app="GRCON"] .history-module .history-posting-status {
-    justify-self: start;
   }
 
   html[data-app="GRCON"] .history-module .history-list-footer {

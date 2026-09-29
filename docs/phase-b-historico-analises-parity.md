@@ -186,8 +186,8 @@
 - [x] Data/hora.
 - [x] Quantidade de documentos.
 - [x] Abrir eGRDT no histórico.
-- [x] Preparar no SIGEM.
-- [x] Eventos e APIs de Histórico/SIGEM preservados.
+- [x] Ação aposentada de preparação removida do Histórico de análises.
+- [x] Eventos e APIs atuais de Histórico preservados, sem dependência do fluxo legado.
 
 ## Exportação Excel
 

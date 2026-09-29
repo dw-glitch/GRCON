@@ -20,7 +20,7 @@ Esta FASE B moderniza somente UI/UX. A arquitetura permanece React → Hook → 
 - [x] detalhe
 
 ## Ações operacionais
-- [x] Preparar no SIGEM
+- [x] Ação aposentada de preparação removida do Histórico; a Postagem SIGEM permanece no módulo dedicado.
 - [x] Avisar/Reenviar no Teams via teamsPresentation/openTeams
 - [x] resposta de e-mail
 - [x] editar número

@@ -352,7 +352,7 @@ Validação executada sobre a branch `phase-a/historico-analises-react` após a 
 - `npm run build`: PASS, gerando `react-dist/consultas-app.js` e `react-dist/historico-analises-app.js`.
 - `npm test`: PASS integral, incluindo `historico_analises_react.cjs` e a suíte de Consultas.
 - Chromium — fluxo principal: PASS; abertura ~222 ms, busca com debounce ~390 ms, 200 linhas/página, filtros, paginação, filtros salvos, busca unificada, detalhes, Excel, backup/restauração, navegação repetida, estado vazio, confirmação destrutiva e reload com Service Worker.
-- Chromium — paridade complementar: PASS; Últimos 7 dias, Incluídos, período inválido sem erro no IndexedDB, Espaço/Enter, Escape/overlay, timeline, eGRDT relacionada, preparar no SIGEM, excluir sessão, foco/atalho, evento externo e smoke dos módulos.
+- Chromium — paridade complementar: PASS; Últimos 7 dias, Incluídos, período inválido sem erro no IndexedDB, Espaço/Enter, Escape/overlay, timeline, eGRDT relacionada, ações operacionais atuais, excluir sessão, foco/atalho, evento externo e smoke dos módulos.
 - Chromium — Consultas: PASS; carregar LD, consultar documento, filtrar e exportar Excel.
 - Console relevante nos fluxos acima: zero erros.
 - `analysis_history_app.js`: removido depois dessas validações; teste automatizado impede reintrodução concorrente.

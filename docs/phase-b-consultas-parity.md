@@ -6,7 +6,7 @@ Base auditada: `main@ea6aa19eae622b1ab357f9b8854926154b62292c`.
 - Consultas é uma ilha React/TypeScript montada em `#grcon-consultas-root`.
 - Estado/orquestração: `src/react/consultas/hooks/useConsultas.ts`.
 - Fronteira com legado: `src/react/consultas/services/consultasAdapter.ts`.
-- Motores continuam em `core.js`, `requests_core.js`, `requests_report.js`, `allocation_center.js` e módulos auxiliares.
+- Motores continuam em `core.js`, `requests_core.js`, `requests_report.js` e módulos auxiliares atuais.
 - `requests_app.js` permanece apenas para Modelos de exportação.
 - Não há segunda UI de consulta concorrente.
 - Bundle é carregado sob demanda pelo grupo `requests` do `grcon_module_loader.js`.
@@ -14,7 +14,7 @@ Base auditada: `main@ea6aa19eae622b1ab357f9b8854926154b62292c`.
 ## Controles e entradas
 - Upload múltiplo de LD (.xlsx/.xls/.xlsm), drag-and-drop, remoção individual e remoção de todas.
 - Reutilização orientativa da última LD.
-- Central de alocação opcional: anexar/remover Controle de Solicitações.
+- A alocação usa a fonte compartilhada de Documentos Previstos; Consultas não mantém uma central paralela.
 - Entrada de documentos por textarea, Ctrl/Cmd+Enter e leitura da área de transferência.
 - Seleção individual, selecionar todos e limpar seleção.
 

@@ -1848,11 +1848,17 @@ check("runtime não carrega a Central de Alocação aposentada e preserva Postag
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const sigem = fs.readFileSync(path.join(root, "sigem_posting_app.js"), "utf8");
+  const retomar = fs.readFileSync(path.join(root, "retomar.js"), "utf8");
+  const finalCss = fs.readFileSync(path.join(root, "grcon-final.css"), "utf8");
+  const historyCss = fs.readFileSync(path.join(root, "history-phase-b.css"), "utf8");
 
   assert.equal(fs.existsSync(path.join(root, "allocation_center.js")), false);
   assert.doesNotMatch(loader, /allocation_center\.js/);
   assert.doesNotMatch(html, /allocation-center|Central de Alocação|Salvar referência|Remover cadastro/i);
   assert.doesNotMatch(app, /saveAllocationCenter|clearAllocationCenter|GrconAllocationCenter/);
+  assert.doesNotMatch(retomar, /history-posting-status/);
+  assert.doesNotMatch(finalCss, /\.history-posting-status/);
+  assert.doesNotMatch(historyCss, /\.history-posting-status/);
   assert.match(sigem, /const history = History\.read\(\)/);
   assert.match(sigem, /Posting\.fromHistory/);
 });
