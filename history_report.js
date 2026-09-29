@@ -1,11 +1,10 @@
 (function (root, factory) {
   const History = root.GrconHistory || (typeof module === "object" && module.exports ? require("./history_core.js") : null);
-  const Posting = root.GrconSigemPosting || (typeof module === "object" && module.exports ? require("./sigem_posting_core.js") : null);
   const getExcel = () => root.ExcelJS || (typeof module === "object" && module.exports ? require("./exceljs.min.js") : null);
-  const api = factory(History, Posting, getExcel, root.GRCONBrandAssets || null);
+  const api = factory(History, getExcel, root.GRCONBrandAssets || null);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconHistoryReport = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (History, Posting, getExcel, defaultBrand) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (History, getExcel, defaultBrand) {
   "use strict";
 
   const _U = (typeof globalThis !== "undefined" ? globalThis : this).GrconUtils || {};
@@ -122,39 +121,8 @@
       "NÚMEROS ANTERIORES": (record.numberHistory || []).join(" · "),
     }));
   }
-  function revisionRelation(record, file, postingRecords) {
-    if (!Posting) return { posted: "", other: "" };
-    const source = postingRecords || [];
-    const ids = new Set([record.id, record.clientRecordId].map(text).filter(Boolean));
-    const own = source.find((item) => ids.has(text(item.historyId)) || ids.has(text(item.id)))
-      || source.find((item) => text(record.egrdtNumber) && norm(item.egrdtNumber) === norm(record.egrdtNumber)) || null;
-    const identity = (value) => norm(value).replace(/\s*([_.-])\s*/g, "$1")
-      .replace(/^([A-Z0-9]{3}_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9.-]+_)NT-/, "$1");
-    const sameDocument = (item) => identity(item && item.document) === identity(file && file.document);
-    const revision = grdtRevision(file);
-    const posted = own && own.status === Posting.STATUSES.POSTADO
-      ? [...new Set((own.files || []).filter(sameDocument).map((item) => text(item.revision)).filter((value) => value && norm(value) === norm(revision)))]
-      : [];
-    const other = [];
-    const seen = new Set();
-    source
-      .filter((item) => item.status === Posting.STATUSES.POSTADO && (!own || item.id !== own.id))
-      .sort((a, b) => String(b.resultAt || b.updatedAt).localeCompare(String(a.resultAt || a.updatedAt)))
-      .forEach((item) => (item.files || []).filter(sameDocument).forEach((entry) => {
-        if (!text(entry.revision) || Posting.norm(entry.revision) === Posting.norm(revision)) return;
-        const label = `Rev. ${text(entry.revision)} · ${text(item.postingGrdtNumber || item.egrdtNumber)}`;
-        const key = Posting.norm(label);
-        if (!seen.has(key)) { seen.add(key); other.push(label); }
-      }));
-    return {
-      posted: posted.length ? posted.join(" · ") : "Não confirmada nesta GRDT",
-      other: other.length ? other.join(" | ") : "Sem outra revisão registrada como postada no GRCON",
-    };
-  }
-  function documentRows(records, postingRecords) {
-    const postings = Array.isArray(postingRecords) ? postingRecords : Posting?.read?.() || [];
+  function documentRows(records) {
     return (records || []).flatMap((record) => (record.files || []).map((file) => {
-      const relation = revisionRelation(record, file, postings);
       return {
       "DATA DA GERAÇÃO / POSTAGEM": formatDate(record.generatedAt, true),
       "EGRDT": text(record.egrdtNumber),
@@ -168,8 +136,6 @@
       "ARQUIVO POSTADO": text(file.finalName),
       "REVISÃO ENVIADA NA GRDT": grdtRevision(file),
       "FONTE DA REVISÃO ENVIADA": text(file.revisionSource) || "Histórico registrado",
-      "REVISÃO DESTA GRDT POSTADA": relation.posted,
-      "OUTRA REVISÃO POSTADA DO DOCUMENTO": relation.other,
       "DATA EFETIVA DE EMISSÃO": formatDateOnlyBR(file.effectiveDate),
       "GRDT ANTERIOR NA LD": text(file.grdt),
       "STATUS SIGEM": text(file.sigemStatus),
@@ -387,5 +353,5 @@
     return `GRCON_Relacao_eGRDTs_${family}_${start}_a_${end}_${compactStamp()}.xlsx`;
   }
 
-  return Object.freeze({ formatDate, periodLabel, filterRecords, familyLabel, allocationReason, revisionRelation, egrdtRows, documentRows, summary, buildWorkbook, downloadName });
+  return Object.freeze({ formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, summary, buildWorkbook, downloadName });
 });
