@@ -179,13 +179,19 @@
     }));
   }
 
+  function conferenceProjection(base) {
+    const workspace = root.GrconCloud?.state?.membership?.workspace_id || "";
+    if (!base || !Array.isArray(base.records) || !workspace) return base;
+    return { ...base, meta: { ...(base.meta || {}), grconWorkspaceId: workspace } };
+  }
+
   async function importFile(file) {
     setBusy(true, "Validando e indexando a Consulta Geral…");
     await new Promise((resolve) => requestAnimationFrame(resolve));
     try {
       const base = await root.GrconSharedSigemQuery.parseFile(file);
       await root.GrconSharedSigemQuery.setLocal(base);
-      await Conference.saveBase(root.GrconSharedSigemQuery.current());
+      await Conference.saveBase(conferenceProjection(root.GrconSharedSigemQuery.current()));
       const result = await Conference.reconcilePersisted(History?.read?.() || [], { reason: "local-general-query" });
       result.parsed = root.GrconSharedSigemQuery.current();
       state.base = { meta: result.parsed.meta, records: result.parsed.records };
@@ -217,8 +223,12 @@
   async function adoptSharedBase() {
     const query = root.GrconSharedSigemQuery;
     const base = query?.current();
-    if (!base) return;
-    await Conference.saveBase(base);
+    if (!base) {
+      if (state.ready) await reconcileCurrent({ reason: "shared-general-query-empty" });
+      else state.base = await Conference.loadBase();
+      return;
+    }
+    await Conference.saveBase(conferenceProjection(base));
     if (state.ready) await reconcileCurrent({ reason: "shared-general-query" });
   }
 
