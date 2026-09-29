@@ -104,34 +104,6 @@
     return text(row && row.document);
   }
 
-  // ---------------------------------------------------------------------------
-  // Central de alocação
-  //
-  // A central é uma planilha que vive numa pasta de rede: o GRCON roda no
-  // navegador e não alcança esse caminho. O cadastro continua servindo como
-  // referência da origem, mas o relatório não grava fórmulas nem conexões
-  // externas. Isso evita o reparo do .xlsx e o aviso de fonte não confiável do
-  // Excel. O STATUS INTERNO fica com o comentário presente na LD ou, quando
-  // ele não existe, com a situação apurada pelo próprio GRCON.
-  // ---------------------------------------------------------------------------
-  const ALLOCATION_CENTER_LAST_ROW = 20000;
-
-  function normalizeAllocationCenter(raw) {
-    const config = raw || {};
-    const fullPath = text(config.path);
-    const sheet = text(config.sheet);
-    const keyColumn = text(config.keyColumn).toUpperCase().replace(/[^A-Z]/g, "");
-    const commentColumn = text(config.commentColumn).toUpperCase().replace(/[^A-Z]/g, "");
-    if (!fullPath || !sheet || !keyColumn || !commentColumn) return null;
-    const separator = fullPath.lastIndexOf("\\") >= fullPath.lastIndexOf("/") ? "\\" : "/";
-    const cut = fullPath.lastIndexOf(separator);
-    const fileName = cut >= 0 ? fullPath.slice(cut + 1) : fullPath;
-    const directory = cut >= 0 ? fullPath.slice(0, cut + 1) : "";
-    if (!fileName) return null;
-    const lastRow = Math.max(2, Math.min(1048576, Math.trunc(Number(config.lastRow)) || ALLOCATION_CENTER_LAST_ROW));
-    return { path: fullPath, directory, fileName, sheet, keyColumn, commentColumn, lastRow };
-  }
-
   /** Comentário da fiscal na LD ou situação apurada pelo próprio GRCON. */
   function internalStatusText(item) {
     const normalize = (value) => (C && C.norm ? C.norm(value) : text(value).toUpperCase());
@@ -970,14 +942,10 @@
     const linhasBloco = Math.max(briefing.perguntas.length, motivos.length);
     const origemRow = 12 + linhasBloco;
     faixa(origemRow, "DE ONDE VEIO ESTA ANÁLISE", "A", dashboardLastColumn);
-    const central = normalizeAllocationCenter(settings.allocationCenter);
     const origem = [
       ["Lista de documentos (LD)", text(settings.ldName) || "Não informado"],
       ["Versão da LD enviada", text(settings.ldVersion) || "Não informada"],
       ["Documentos conferidos a partir de", text(settings.relationLabel) || "Pasta documental"],
-      ["Referência da central de alocação", central
-        ? `${central.path} · aba ${central.sheet} · cadastro informativo, sem conexão externa no relatório`
-        : "Não cadastrada — STATUS INTERNO usa a LD e a situação apurada pelo GRCON"],
     ];
     origem.forEach(([label, value], index) => {
       const row = origemRow + 1 + index;
@@ -997,7 +965,7 @@
     });
 
     const tableStart = origemRow + origem.length + 2;
-    const layout = await writeExecutiveTableAsync(worksheet, rows, tableStart, { allocationCenter: settings.allocationCenter });
+    const layout = await writeExecutiveTableAsync(worksheet, rows, tableStart);
     worksheet.pageSetup = {
       orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0,
       margins: { left: .2, right: .2, top: .4, bottom: .4, header: .2, footer: .2 },
@@ -1017,7 +985,6 @@
     executiveBriefing,
     executiveRows,
     internalStatusText,
-    normalizeAllocationCenter,
     writeTable,
     writeTableAsync,
     writeExecutiveTable,
