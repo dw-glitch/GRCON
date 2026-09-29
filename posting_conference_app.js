@@ -303,15 +303,47 @@
     return Conference.filterRows(eventRows(), state.filters);
   }
 
+  function breakableCode(value) {
+    return escapeHtml(value || "—").replace(/([_.-])/g, "$1<wbr>");
+  }
+
   function sendHistory(row) {
     const sends = row.sends || [];
     const countLabel = `${fmt(row.sendCount)} ${plural(row.sendCount, "envio")}`;
     const meta = `${fmt(row.egrdtCount)} ${plural(row.egrdtCount, "eGRDT")} · ${fmt(row.repostCount)} ${plural(row.repostCount, "repostagem", "repostagens")}`;
-    return `<details class="pc-send-history"><summary><strong>${escapeHtml(countLabel)}</strong><span>${escapeHtml(meta)} · ver histórico</span></summary><div class="pc-send-history-list">${sends.map((send, index) => `<article class="pc-send-event"><button class="pc-link" data-pc-grdt="${escapeHtml(send.egrdtNumber)}" type="button">${escapeHtml(send.egrdtNumber || "eGRDT não informada")}</button><small>${escapeHtml(fmtDate(send.generatedAt, false))} · Rev. ${escapeHtml(send.revisionSent || "—")}${index === 0 ? " · envio mais recente" : ""}</small><small class="pc-event-status">${escapeHtml(send.conferenceLabel || send.statusLabel || Conference.statusLabel(send.status))}</small></article>`).join("")}</div></details>`;
+    const latestNumber = row.latestEgrdtNumber || row.egrdtNumber || sends[0]?.egrdtNumber || "";
+    const latestAt = row.latestSendAt || row.generatedAt || sends[0]?.generatedAt || "";
+    const latestNumberMarkup = latestNumber
+      ? `<button class="pc-link pc-latest-egrdt" data-pc-grdt="${escapeHtml(latestNumber)}" type="button" title="${escapeHtml(latestNumber)}">${breakableCode(latestNumber)}</button>`
+      : '<span class="pc-empty-value">—</span>';
+    return `<div class="pc-send-overview">
+      <div class="pc-send-count"><strong>${escapeHtml(countLabel)}</strong><small>${escapeHtml(meta)}</small></div>
+      <div class="pc-latest-send"><span class="pc-block-label">Último envio</span><strong>${fmtDate(latestAt, false)}</strong>${latestNumberMarkup}</div>
+      <details class="pc-send-history">
+        <summary>Ver histórico</summary>
+        <div class="pc-send-history-list">${sends.map((send, index) => `<article class="pc-send-event"><button class="pc-link" data-pc-grdt="${escapeHtml(send.egrdtNumber)}" type="button" title="${escapeHtml(send.egrdtNumber || "eGRDT não informada")}">${breakableCode(send.egrdtNumber || "eGRDT não informada")}</button><small>${escapeHtml(fmtDate(send.generatedAt, false))} · Rev. ${escapeHtml(send.revisionSent || "—")}${index === 0 ? " · envio mais recente" : ""}</small><small class="pc-event-status">${escapeHtml(send.conferenceLabel || send.statusLabel || Conference.statusLabel(send.status))}</small></article>`).join("")}</div>
+      </details>
+    </div>`;
+  }
+
+  function observationCell(row) {
+    const note = Conference.text(row.note).trim();
+    if (!note) return '<span class="pc-empty-value">—</span>';
+    const limit = 150;
+    if (note.length <= limit) return `<div class="pc-note-text">${escapeHtml(note)}</div>`;
+    const preview = `${note.slice(0, limit).trimEnd()}…`;
+    return `<details class="pc-note-details"><summary><span>${escapeHtml(preview)}</span><em>Ver observação completa</em></summary><div class="pc-note-full">${escapeHtml(note)}</div></details>`;
   }
 
   function documentsTable(rows) {
-    return `<table class="pc-table pc-document-table" aria-label="Documentos conferidos"><colgroup><col class="pc-col-document"/><col class="pc-col-type"/><col class="pc-col-discipline"/><col class="pc-col-sends"/><col class="pc-col-latest"/><col class="pc-col-revision"/><col class="pc-col-sigem-revision"/><col class="pc-col-conference"/><col class="pc-col-sigem-status"/><col class="pc-col-confirmed"/><col class="pc-col-note"/></colgroup><thead><tr><th scope="col">Documento</th><th scope="col">Tipo</th><th scope="col">Disciplina</th><th scope="col">Envios / eGRDTs</th><th scope="col">Último envio</th><th scope="col">Rev. atual</th><th scope="col">Rev. SIGEM</th><th scope="col">Conferência</th><th scope="col">Status SIGEM</th><th scope="col">Confirmado em</th><th scope="col">Observação</th></tr></thead><tbody>${rows.map((row) => `<tr><td class="pc-cell pc-cell-document"><div class="pc-document-code"><strong>${escapeHtml(row.document)}</strong>${row.sendCount > 1 ? `<span class="pc-consolidation-note">1 documento · ${fmt(row.sendCount)} envios</span>` : ""}${row.historicalPreserved ? '<small>Confirmação histórica preservada</small>' : ""}</div></td><td class="pc-cell pc-cell-type">${escapeHtml(row.documentFamily || row.sheet || "—")}</td><td class="pc-cell pc-cell-discipline">${escapeHtml(row.discipline || "—")}</td><td class="pc-cell pc-cell-sends">${sendHistory(row)}</td><td class="pc-cell pc-cell-latest"><div class="pc-latest-send"><strong>${fmtDate(row.latestSendAt || row.generatedAt, false)}</strong><small>${escapeHtml(row.latestEgrdtNumber || row.egrdtNumber || "—")}</small></div></td><td class="pc-cell pc-cell-revision"><div class="pc-revision-stack"><strong>${escapeHtml(row.currentRevision || row.revisionSent || "—")}</strong>${row.revisionCount > 1 ? `<small>${fmt(row.revisionCount)} revisões no histórico</small>` : ""}</div></td><td class="pc-cell pc-cell-sigem-revision">${escapeHtml(row.revisionFound || "—")}</td><td class="pc-cell pc-cell-conference">${statusChip(row)}</td><td class="pc-cell pc-cell-sigem-status"><span class="pc-sigem-status">${escapeHtml(row.sigemStatus || "—")}</span></td><td class="pc-cell pc-cell-confirmed">${fmtDate(row.firstConfirmedAt, true)}</td><td class="pc-cell pc-cell-note pc-note" title="${escapeHtml(row.note)}">${escapeHtml(row.note)}</td></tr>`).join("")}</tbody></table>`;
+    return `<table class="pc-table pc-document-table" aria-label="Documentos conferidos"><colgroup><col class="pc-col-document"/><col class="pc-col-sends"/><col class="pc-col-revisions"/><col class="pc-col-situation"/><col class="pc-col-confirmation"/><col class="pc-col-note"/></colgroup><thead><tr><th scope="col">Documento</th><th scope="col">Envios</th><th scope="col">Revisões</th><th scope="col">Situação</th><th scope="col">Confirmação</th><th scope="col">Observação</th></tr></thead><tbody>${rows.map((row) => `<tr>
+      <td class="pc-cell pc-cell-document"><div class="pc-document-code"><strong title="${escapeHtml(row.document)}">${breakableCode(row.document)}</strong><div class="pc-document-meta"><span>${escapeHtml(row.documentFamily || row.sheet || "—")}</span><span aria-hidden="true">·</span><span>${escapeHtml(row.discipline || "—")}</span></div>${row.sendCount > 1 ? `<span class="pc-consolidation-note">1 documento · ${fmt(row.sendCount)} envios</span>` : ""}${row.historicalPreserved ? '<small>Confirmação histórica preservada</small>' : ""}</div></td>
+      <td class="pc-cell pc-cell-sends">${sendHistory(row)}</td>
+      <td class="pc-cell pc-cell-revisions"><div class="pc-revision-grid"><div><span class="pc-block-label">Atual</span><strong>${escapeHtml(row.currentRevision || row.revisionSent || "—")}</strong></div><div><span class="pc-block-label">SIGEM</span><strong>${escapeHtml(row.revisionFound || "—")}</strong></div></div>${row.revisionCount > 1 ? `<small class="pc-revision-history">${fmt(row.revisionCount)} revisões no histórico</small>` : ""}</td>
+      <td class="pc-cell pc-cell-situation"><div class="pc-situation-stack"><div><span class="pc-block-label">Conferência</span>${statusChip(row)}</div><div><span class="pc-block-label">Status SIGEM</span><span class="pc-sigem-status">${escapeHtml(row.sigemStatus || "—")}</span></div></div></td>
+      <td class="pc-cell pc-cell-confirmation"><span class="pc-block-label">Confirmado em</span><strong>${fmtDate(row.firstConfirmedAt, true)}</strong></td>
+      <td class="pc-cell pc-cell-note pc-note">${observationCell(row)}</td>
+    </tr>`).join("")}</tbody></table>`;
   }
 
   function filteredGroups() {

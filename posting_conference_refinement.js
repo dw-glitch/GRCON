@@ -517,6 +517,23 @@
     const conferenceIndex = headings.findIndex((th) => /^(Situação|Conferência)$/i.test(trimmed(th.textContent)));
     if (conferenceIndex < 0) return;
     const conferenceHeading = headings[conferenceIndex];
+    const rows = visibleRows();
+    const nativeSituation = /^Situação$/i.test(trimmed(conferenceHeading.textContent));
+
+    if (nativeSituation) {
+      [...table.querySelectorAll("tbody tr")].forEach((tr, index) => {
+        const cells = [...tr.children].filter((node) => node.tagName === "TD");
+        const statusCell = cells[conferenceIndex];
+        const row = rows[index];
+        if (!statusCell || !row) return;
+        const chip = statusCell.querySelector(".pc-status");
+        const sigem = statusCell.querySelector(".pc-sigem-status");
+        if (chip) setText(chip, row.conferenceLabel || conferenceLabel(row.status, root.GrconPostingConference));
+        if (sigem) setText(sigem, rawText(row.sigemStatus) || "—");
+      });
+      return;
+    }
+
     setText(conferenceHeading, "Conferência");
     const nextHeading = conferenceHeading.nextElementSibling;
     const hasNativeSigem = nextHeading && /Status SIGEM/i.test(trimmed(nextHeading.textContent));
@@ -528,7 +545,6 @@
         conferenceHeading.insertAdjacentElement("afterend", sigemHeading);
       }
       setText(sigemHeading, "Status SIGEM");
-      const rows = visibleRows();
       [...table.querySelectorAll("tbody tr")].forEach((tr, index) => {
         const cells = [...tr.children].filter((node) => node.tagName === "TD");
         const statusCell = cells[conferenceIndex];

@@ -63,6 +63,43 @@ async function auditGeometry(page, label) {
 
     const viewport = { width: innerWidth, height: innerHeight };
     const pageOverflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    const conferenceWrap = document.querySelector(".pc-table-wrap");
+    const conferenceTable = document.querySelector(".pc-document-table");
+    const conferenceOverflow = {
+      wrapClientWidth: conferenceWrap?.clientWidth || 0,
+      wrapScrollWidth: conferenceWrap?.scrollWidth || 0,
+      tableClientWidth: conferenceTable?.clientWidth || 0,
+      tableScrollWidth: conferenceTable?.scrollWidth || 0,
+    };
+    const conferenceOverflowNodes = conferenceTable
+      ? [...conferenceTable.querySelectorAll("*")]
+          .filter(visible)
+          .map((node) => ({
+            target: node.className || node.tagName,
+            text: node.textContent.trim().slice(0, 120),
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+            overflow: node.scrollWidth - node.clientWidth,
+          }))
+          .filter((item) => item.overflow > 2)
+          .sort((a, b) => b.overflow - a.overflow)
+          .slice(0, 30)
+      : [];
+    const horizontalScrollRegions = [...document.querySelectorAll("main.workspace *")]
+      .filter(visible)
+      .map((node) => {
+        const style = getComputedStyle(node);
+        const overflow = node.scrollWidth - node.clientWidth;
+        return {
+          target: node.id || node.className || node.tagName,
+          overflow,
+          overflowX: style.overflowX,
+          width: node.clientWidth,
+          scrollWidth: node.scrollWidth,
+        };
+      })
+      .filter((item) => item.overflow > 2 && ["auto", "scroll"].includes(item.overflowX))
+      .slice(0, 80);
 
     const tableOverlaps = [];
     document.querySelectorAll("table").forEach((table, tableIndex) => {
@@ -150,7 +187,7 @@ async function auditGeometry(page, label) {
       });
     });
 
-    return { pageOverflow, tableOverlaps, flowOverlaps, offscreenDialogs, criticalTextOverflow, conferenceEscapes, viewport };
+    return { pageOverflow, conferenceOverflow, conferenceOverflowNodes, horizontalScrollRegions, tableOverlaps, flowOverlaps, offscreenDialogs, criticalTextOverflow, conferenceEscapes, viewport };
   });
 
   assert.ok(result.pageOverflow <= 2, `${label}: overflow horizontal global de ${result.pageOverflow}px`);
@@ -159,6 +196,16 @@ async function auditGeometry(page, label) {
   assert.deepEqual(result.offscreenDialogs, [], `${label}: drawer/modal fora da viewport`);
   assert.deepEqual(result.criticalTextOverflow, [], `${label}: badge/status com texto escapando`);
   assert.deepEqual(result.conferenceEscapes, [], `${label}: conteúdo da Conferência escapou da própria célula`);
+  if (label.startsWith("Conferência") && result.conferenceOverflow.tableClientWidth) {
+    assert.ok(
+      result.conferenceOverflow.tableScrollWidth <= result.conferenceOverflow.tableClientWidth + 2,
+      `${label}: tabela da Conferência com overflow horizontal de ${result.conferenceOverflow.tableScrollWidth - result.conferenceOverflow.tableClientWidth}px; nós: ${JSON.stringify(result.conferenceOverflowNodes)}`
+    );
+    assert.ok(
+      result.conferenceOverflow.wrapScrollWidth <= result.conferenceOverflow.wrapClientWidth + 2,
+      `${label}: container da Conferência com overflow horizontal de ${result.conferenceOverflow.wrapScrollWidth - result.conferenceOverflow.wrapClientWidth}px`
+    );
+  }
   return result;
 }
 
@@ -222,8 +269,8 @@ async function injectConferenceFixture(page) {
   });
 }
 
-async function screenshot(page, name, viewport) {
-  if (viewport !== 1440) return;
+async function screenshot(page, name, viewport, allViewports = false) {
+  if (!allViewports && viewport !== 1440) return;
   await page.screenshot({ path: path.join(outputDir, `${name}-${viewport}.png`), fullPage: true });
 }
 
@@ -290,7 +337,7 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
       await injectConferenceFixture(page);
       await page.waitForTimeout(150);
       viewportMetrics.push({ label: "Conferência com dados", geometry: await auditGeometry(page, "Conferência com dados") });
-      await screenshot(page, "conferencia-dados", viewport);
+      await screenshot(page, "conferencia-dados", viewport, true);
 
       const historySummary = await clickVisible(page, ".pc-send-history summary");
       if (historySummary) {

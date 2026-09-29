@@ -1,3 +1,15 @@
+## 5.44.2 — 2026-09-28
+
+### Conferência sem rolagem horizontal
+
+- Corrigida a regressão visual introduzida em 5.44.1: a tabela documental deixa de usar largura fixa de 1850 px e passa a caber integralmente no workspace.
+- As 11 colunas independentes foram recompostas em 6 blocos semânticos: Documento, Envios, Revisões, Situação, Confirmação e Observação, preservando todos os dados operacionais.
+- Tipo e Disciplina passam a acompanhar Documento; último envio e última eGRDT ficam visíveis em Envios; revisão atual/SIGEM e Conferência/Status SIGEM ficam agrupados por contexto.
+- Observações extensas podem ser expandidas verticalmente; histórico de envios continua expansível sem alterar a largura da tabela.
+- O QA da Conferência agora exige zero overflow horizontal da tabela e do container em 1920, 1600, 1440, 1366 e 1280 px, além de uma condição equivalente a aproximadamente 125% de escala.
+- A auditoria global passa a registrar regiões com rolagem horizontal e aplica gate explícito de zero overflow à Conferência.
+- Cache do Service Worker renovado para entregar a correção 5.44.2 imediatamente.
+
 ## 5.44.1 — 2026-09-28
 
 ### Hardening UX/UI da Conferência e auditoria navegacional
