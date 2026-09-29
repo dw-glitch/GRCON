@@ -1,7 +1,7 @@
 /**
  * GRCON — Estado da ilha React de Consultas.
  *
- * Hook único que orquestra o fluxo (LDs, central, documentos, consulta,
+ * Hook único que orquestra o fluxo (LDs, documentos, consulta,
  * filtros, exportação). Toda regra de negócio vive no adaptador
  * (consultasAdapter); aqui só há estado de tela e a orquestração de quando
  * chamar o quê — inclusive o processamento em blocos de 100 (com um `await`
@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { consultasAdapter } from "../services/consultasAdapter";
 import type {
-  AllocationCenterIndex,
   ConsultationRow,
   DocumentEntry,
   DocumentIndex,
@@ -32,7 +31,6 @@ export function useConsultas() {
   const Adapter = consultasAdapter;
 
   const [lds, setLds] = useState<LdEntry[]>([]);
-  const [central, setCentral] = useState<AllocationCenterIndex | null>(null);
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [results, setResults] = useState<Map<string, ConsultationRow>>(new Map());
   const [running, setRunning] = useState(false);
@@ -95,25 +93,6 @@ export function useConsultas() {
     indexRef.current = null;
     setResults(new Map());
   }, []);
-
-  const attachCentral = useCallback(async (file: File | null | undefined) => {
-    if (!file) return;
-    try {
-      const indice = await Adapter.parseAllocationCenterFile(file);
-      setCentral(indice);
-      if (!indice.ok) { notify(indice.error || "Não foi possível ler esta planilha.", "warn"); return; }
-      notify(`Central lida: ${indice.count} envio(s) para ${indice.documents} documento(s).`, "success");
-    } catch (error) {
-      const falha: AllocationCenterIndex = { ok: false, error: (error instanceof Error && error.message) || "Não foi possível ler esta planilha.", nomeArquivo: file.name };
-      setCentral(falha);
-      notify(falha.error || "", "error");
-    }
-  }, [notify, Adapter]);
-
-  const removeCentral = useCallback(() => {
-    setCentral(null);
-    notify("Central de alocação removida.", "info");
-  }, [notify]);
 
   const guardarParaDesfazer = useCallback((label: string, snapshot: DocumentEntry[]) => {
     undoRef.current = [...undoRef.current, { label, documents: snapshot }].slice(-20);
@@ -183,7 +162,7 @@ export function useConsultas() {
         const fim = Math.min(total, inicio + 100);
         for (let i = inicio; i < fim; i += 1) {
           const item = alvos[i];
-          novosResultados.set(item.id, Adapter.lookupDocument(item.document, item.requestedTitle, indexRef.current, central));
+          novosResultados.set(item.id, Adapter.lookupDocument(item.document, item.requestedTitle, indexRef.current));
         }
         setProgress({ done: fim, total });
         if (fim < total) await new Promise((resolve) => window.setTimeout(resolve, 0));
@@ -202,7 +181,7 @@ export function useConsultas() {
     } finally {
       setRunning(false);
     }
-  }, [running, documents, results, central, notify, Adapter]);
+  }, [running, documents, results, notify, Adapter]);
 
   const exportRows = useMemo(() => documents
     .filter((item) => results.has(item.id))
@@ -291,13 +270,13 @@ export function useConsultas() {
   }, [results]);
 
   return {
-    lds, central, documents, results, running, progress, search, situation, allocation, sort,
+    lds, documents, results, running, progress, search, situation, allocation, sort,
     templates, selectedTemplateId, lastExport, banner, visibleRows, exportRows, selectedCount, ldsReady, summary,
     lastLd: Adapter.getLastLd(),
     canUndo: undoRef.current.length > 0,
     indexReady: Boolean(indexRef.current),
     setSearch, setSituation, setAllocation, setSort, setSelectedTemplateId, setBanner,
-    addLds, removeLd, clearLds, attachCentral, removeCentral,
+    addLds, removeLd, clearLds,
     addDocuments, removeDuplicates, clearConsulta, undo,
     toggleSelect, toggleSelectAll, runQuery, copyResults, exportExcel, repeatLastExport,
   };
