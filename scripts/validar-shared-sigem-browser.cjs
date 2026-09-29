@@ -62,6 +62,7 @@ function rpc(name,args) {
  assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','C','LEGACY').status),'LEGACY');
  // Invalid/empty file leaves both shared and local last valid sources.
  const activeId=backend.active.snapshot_id;
+ const originalActive={...backend.active};
  await a.page.locator('#pc-file').setInputFiles(empty); await a.page.waitForFunction(()=>!window.GrconPostingConferenceUi.state.busy);
  assert.equal(await a.page.evaluate(()=>window.GrconSharedSigemQuery.current().meta.snapshotId),activeId);
  // Interrupted upload preserves active version; newest local never supersedes shared match.
@@ -69,6 +70,7 @@ function rpc(name,args) {
  assert.equal(await a.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B').status),'Em análise');
  backend.fail=true;await a.page.locator('#pc-publish').click();await a.page.waitForFunction(()=>!window.GrconSharedSigemQuery.state.busy);assert.equal(backend.active.snapshot_id,activeId);
  backend.fail=false;await a.page.locator('#pc-publish').click();await a.page.waitForFunction(()=>window.GrconSharedSigemQuery.state.shared?.records.length===1&&!window.GrconSharedSigemQuery.state.busy);
+ const updatedActive={...backend.active};
  await b.page.evaluate(()=>window.GrconSharedSigemQuery.refresh());
  await b.page.waitForFunction(()=>window.GrconSigemPwDashboardUi.state.sigem.records.length===1);
  assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B').status),'Recusado');
@@ -79,8 +81,23 @@ function rpc(name,args) {
  await b.page.reload();await b.page.waitForFunction(()=>window.GrconSharedSigemQuery&&window.GrconCloud);
  await b.page.evaluate(async()=>{window.GrconCloud.state.membership={workspace_id:'qa-shared-workspace',role:'operator'};window.GrconCloud.state.online=false;await window.GrconSharedSigemQuery.refresh();});
  assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B','LEGACY').status),'Recusado');
+ // Workspace isolation: switching accounts/workspaces must not expose the previous Conference projection.
+ await b.page.evaluate(async()=>{
+   window.GrconCloud.state.membership={workspace_id:'qa-empty-workspace',role:'operator'};
+   window.GrconCloud.state.online=false;
+   await window.GrconSharedSigemQuery.refresh();
+ });
+ assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.current()),null);
+ assert.equal(await b.page.evaluate(async()=>(await window.GrconPostingConference.loadBase()).records.length),0);
+ backend.offline=false;
+ await b.page.evaluate(async()=>{
+   window.GrconCloud.state.membership={workspace_id:'qa-shared-workspace',role:'operator'};
+   window.GrconCloud.state.online=true;
+   await window.GrconSharedSigemQuery.refresh();
+ });
+ assert.equal(await b.page.evaluate(()=>window.GrconSharedSigemQuery.resolveSigemStatus('RL-5290.00-22313-ABC-C1O-001','B','LEGACY').status),'Recusado');
  // Reissue preview status and revision edits.
- backend.offline=false;await a.page.evaluate(async()=>{
+ await a.page.evaluate(async()=>{
    await window.GRCONModuleLoader.ensure('grdt-reissue');
    window.GrconHistory.saveMany([{id:'qa-history',egrdtNumber:'QA-eGRDT',generatedAt:'2026-09-29T12:00:00Z',files:[{document:'RL-5290.00-22313-ABC-C1O-001',revision:'B',grdtRevision:'B',title:'RELATÓRIO',finalName:'RL-5290.00-22313-ABC-C1O-001_0001_B.pdf',format:'A4',discipline:'CIVIL',documentType:'RL',purpose:'Para Construção',databook:'Databook'}]}]);
    document.querySelectorAll('main.workspace>section').forEach(s=>s.hidden=s.id!=='grdt-reissue-module');
@@ -128,13 +145,21 @@ function rpc(name,args) {
  assert.equal(await a.page.evaluate(()=>window.GrconTriageUiApi.getResult(0).status),'Não Postado');
  await a.page.locator('#batch-egrdt').click();await a.page.locator('#drawer-revision').fill('B');await a.page.locator('#drawer-save').click();
  await a.page.locator('#select-row-0').check();
+ // A Consulta Geral mudou depois da análise: a geração deve ser recusada até nova análise.
+ backend.active=originalActive;
+ await a.page.evaluate(()=>window.GrconSharedSigemQuery.refresh());
+ await a.page.locator('#export-egrdt').click();
+ await a.page.waitForFunction(()=>document.getElementById('toast')?.textContent.includes('Consulta Geral SIGEM foi atualizada'));
+ assert.match(await a.page.locator('#toast').innerText(),/Analise novamente antes de gerar a GRDT/);
+ backend.active=updatedActive;
+ await a.page.evaluate(()=>window.GrconSharedSigemQuery.refresh());
  const downloadPromise=a.page.waitForEvent('download');await a.page.locator('#export-egrdt').click();await a.page.locator('#p1-sequence-confirm').check();await a.page.locator('#p1-confirm-ok').click();const generated=await downloadPromise;
  await generated.saveAs(path.join(output,'normal-generated.xls'));
  await a.page.waitForFunction(()=>window.GrconHistory.read().some(r=>r.outputType==='eGRDT final'&&r.files.some(f=>f.sigemStatusSource==='shared-general-query')));
  const history=await a.page.evaluate(()=>window.GrconHistory.read().find(r=>r.outputType==='eGRDT final'&&r.files.some(f=>f.sigemStatusSource==='shared-general-query')));
  assert.equal(history.files[0].sigemStatus,'Recusado');assert.equal(history.files[0].grdtRevision,'B');assert.equal(history.files[0].purpose,'Para Cancelamento');
  await a.page.screenshot({path:path.join(output,'control-shared.png'),fullPage:true});
- fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({passed:true,backend:'RPC fixtures + real SQL transactional tests separately',cases:['worker Excel import','preview','publish','user B auto-load','shared dashboard ID','control resolver','revision exactness','empty file preservation','upload failure preservation','update propagation','offline cache','reload cache','reissue revision status','normal control worker without Colar SIGEM','manual revision exact status','normal XLS generation and history source'],pageErrors:errors},null,2));
+ fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({passed:true,backend:'RPC fixtures + real SQL transactional tests separately',cases:['worker Excel import','preview','publish','user B auto-load','shared dashboard ID','control resolver','revision exactness','empty file preservation','upload failure preservation','update propagation','offline cache','reload cache','workspace isolation','reissue revision status','normal control worker without Colar SIGEM','manual revision exact status','generation blocked after SIGEM snapshot change','normal XLS generation and history source'],pageErrors:errors},null,2));
  assert.deepEqual(errors,[]);
  console.log('Chromium shared SIGEM: all cases passed');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
