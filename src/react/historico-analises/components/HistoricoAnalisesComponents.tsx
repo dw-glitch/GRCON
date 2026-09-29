@@ -492,7 +492,7 @@ function DetailField({ label, value, wide = false }: { label: string; value: unk
 export function DetailPanel(props: {
   detail: DetailState;
   onClose: () => void;
-  onRelated: (id: string, prepareSigem: boolean) => void;
+  onRelated: (id: string) => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const open = Boolean(props.detail.item);
@@ -576,8 +576,7 @@ export function DetailPanel(props: {
                     <span>{numberBr(context.related.documentCount || 0)} documento(s)</span>
                   </div>
                   <div className="analysis-detail-actions">
-                    <button className="primary-button" data-analysis-detail-action="open-egrdt" data-history-id={context.related.id} type="button" onClick={() => props.onRelated(context.related!.id, false)}>Abrir eGRDT no histórico</button>
-                    <button className="secondary-button" data-analysis-detail-action="prepare-sigem" data-history-id={context.related.id} type="button" onClick={() => props.onRelated(context.related!.id, true)}>Preparar no SIGEM</button>
+                    <button className="primary-button" data-analysis-detail-action="open-egrdt" data-history-id={context.related.id} type="button" onClick={() => props.onRelated(context.related!.id)}>Abrir eGRDT no histórico</button>
                   </div>
                 </>
               ) : <p>Este documento ainda não possui uma eGRDT relacionada no histórico local.</p>}
