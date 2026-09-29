@@ -52,5 +52,26 @@
     });
   }
 
-  return { key, parseWorkbook, applyToRecords };
+  // O PostgREST pode devolver menos linhas que o limite pedido. Só uma página
+  // vazia encerra a leitura; a contagem final protege contra carga parcial.
+  async function collectPages(fetchPage, expectedCount, pageSize = 1000) {
+    const keys = new Set();
+    let after = "";
+    for (;;) {
+      const items = await fetchPage(after, pageSize);
+      if (!Array.isArray(items)) throw new Error("Resposta inválida ao ler Documentos Previstos.");
+      if (!items.length) break;
+      const next = String(items[items.length - 1].document_key || "");
+      if (!next || next === after) throw new Error("A paginação de Documentos Previstos não avançou.");
+      for (const item of items) keys.add(item.document_key);
+      if (keys.size > Number(expectedCount)) throw new Error("A base compartilhada contém mais códigos que a contagem publicada.");
+      after = next;
+    }
+    if (keys.size !== Number(expectedCount)) {
+      throw new Error(`A base compartilhada de Documentos Previstos chegou incompleta (${keys.size} de ${expectedCount}). Tente novamente.`);
+    }
+    return keys;
+  }
+
+  return { key, parseWorkbook, applyToRecords, collectPages };
 });

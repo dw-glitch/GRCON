@@ -49,4 +49,19 @@ const absent = triage(new Set());
 assert.equal(absent.hardBlock, true);
 assert.equal(absent.allocationFinding.kind, 'not_allocated');
 assert.match(absent.reason, /não consta.*Documentos Previstos/i);
-console.log('OK — DOCUMENTO decide alocação, S/N não altera, duplicatas e rodapé não entram, LD original preservada.');
+
+// Em produção, o PostgREST limita a resposta a 1.000 linhas mesmo quando o
+// cliente pede mais. A leitura deve prosseguir até uma página vazia.
+(async () => {
+  const all = Array.from({ length: 27191 }, (_, index) => ({ document_key: `DOC-${String(index).padStart(6, '0')}` }));
+  let pages = 0;
+  const keys = await Planned.collectPages(async (after, requested) => {
+    pages += 1;
+    const start = after ? all.findIndex((item) => item.document_key === after) + 1 : 0;
+    return all.slice(start, start + Math.min(requested, 1000));
+  }, all.length, 2000);
+  assert.equal(keys.size, all.length);
+  assert.equal(pages, 29);
+  await assert.rejects(() => Planned.collectPages(async () => all.slice(0, 1000), all.length), /não avançou/);
+  console.log('OK — regra de alocação e leitura das 27.191 entradas com limite de 1.000 linhas por resposta.');
+})().catch((error) => { console.error(error); process.exitCode = 1; });

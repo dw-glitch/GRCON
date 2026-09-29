@@ -531,19 +531,13 @@
       return null;
     }
     if (state.plannedSnapshot?.id === meta.snapshot_id) return state.plannedSnapshot;
-    const keys = new Set();
-    let after = "";
-    do {
+    const keys = await window.GrconPlannedDocumentsCore.collectPages(async (after, pageSize) => {
       const page = await state.client.rpc("grcon_planned_documents_page", {
-        target_workspace: workspace, target_snapshot: meta.snapshot_id, after_key: after, page_size: 2000,
+        target_workspace: workspace, target_snapshot: meta.snapshot_id, after_key: after, page_size: pageSize,
       });
       if (page.error) throw page.error;
-      const items = page.data || [];
-      for (const item of items) keys.add(item.document_key);
-      if (items.length < 2000) break;
-      after = items[items.length - 1].document_key;
-    } while (true);
-    if (keys.size !== Number(meta.document_count)) throw new Error("A base compartilhada de Documentos Previstos chegou incompleta. Tente novamente.");
+      return page.data;
+    }, meta.document_count);
     state.plannedSnapshot = {
       id: meta.snapshot_id, fileName: meta.file_name, updatedAt: meta.published_at,
       count: keys.size, keys,
@@ -572,7 +566,12 @@
     }
     const finish = await state.client.rpc("grcon_planned_documents_publish", { target_workspace, upload_id });
     if (finish.error) throw finish.error;
-    return loadPlannedDocuments();
+    try { return await loadPlannedDocuments(); }
+    catch (error) {
+      const loadingError = new Error(`A base foi publicada no banco, mas não foi possível carregá-la nesta sessão: ${error?.message || error}`);
+      loadingError.published = true;
+      throw loadingError;
+    }
   }
 
   /* ── Consultas ── */
