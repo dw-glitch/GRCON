@@ -44,8 +44,14 @@
       root.GrconNotify?.(`Documentos Previstos atualizados para todos: ${parsed.count.toLocaleString("pt-BR")} códigos. Faça uma nova análise para usar esta base.`, "success");
       root.dispatchEvent(new CustomEvent("grcon:planned-documents-published"));
     } catch (error) {
-      state.error = `Atualização não concluída: ${error?.message || error}. A base anterior permanece em uso.`;
-      root.GrconNotify?.("Não foi possível publicar Documentos Previstos; a base anterior foi mantida.", "error");
+      if (error?.published) {
+        input.value = "";
+        state.error = `${error.message} Atualize a página para consultar a versão publicada.`;
+        root.GrconNotify?.("A base foi publicada no banco. Atualize a página para carregar os documentos.", "warning");
+      } else {
+        state.error = `Atualização não concluída: ${error?.message || error}. A base anterior permanece em uso.`;
+        root.GrconNotify?.("Não foi possível publicar Documentos Previstos; a base anterior foi mantida.", "error");
+      }
       return;
     } finally {
       state.busy = false;
@@ -59,7 +65,7 @@
     applyRecords: (records) => Core.applyToRecords(records, root.GrconCloud?.state?.plannedSnapshot),
   });
   root.addEventListener("grcon:cloud-ready", render);
-  root.addEventListener("grcon:planned-documents-updated", render);
+  root.addEventListener("grcon:planned-documents-updated", () => { state.error = ""; render(); });
   root.addEventListener("grcon:planned-documents-progress", (event) => {
     const status = $("#planned-documents-status");
     if (status) status.textContent = `Enviando ${event.detail.done.toLocaleString("pt-BR")} de ${event.detail.total.toLocaleString("pt-BR")} códigos. A base atual permanece ativa.`;
