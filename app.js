@@ -446,140 +446,6 @@
     return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
   }
 
-  // ---------------------------------------------------------------------------
-  // Central de alocação
-  //
-  // Fica numa pasta de rede, fora do alcance do navegador. O cadastro é mantido
-  // apenas como referência da origem no Resumo. O relatório não grava PROCX ou
-  // conexão externa, para abrir sem reparo e sem aviso de fonte não confiável.
-  // ---------------------------------------------------------------------------
-  const ALLOCATION_CENTER_PREFERENCE = "allocationCenter";
-
-  function allocationCenterConfig() {
-    if (!Workspace) return null;
-    const saved = Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null);
-    if (!saved || typeof saved !== "object") return null;
-    return ReportSummary && ReportSummary.normalizeAllocationCenter
-      ? ReportSummary.normalizeAllocationCenter(saved)
-      : saved;
-  }
-
-  function refreshAllocationCenterStatus() {
-    if (!els.allocationCenterStatus) return;
-    const central = allocationCenterConfig();
-    if (!central) {
-      els.allocationCenterStatus.textContent = "Não cadastrada. STATUS INTERNO usa o comentário da LD ou a situação apurada pelo GRCON.";
-      return;
-    }
-    // O alcance importa: o cadastro é da equipe quando veio do banco, e só deste
-    // navegador quando a área compartilhada estava fora do ar na hora de salvar.
-    const salvo = Workspace ? Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null) : null;
-    const alcance = salvo && salvo.compartilhada ? "Referência cadastrada para todos" : "Referência cadastrada somente neste navegador";
-    els.allocationCenterStatus.textContent = `${alcance}: ${central.fileName} · aba ${central.sheet}. O relatório não cria conexão externa.`;
-  }
-
-  // O cadastro é o mesmo para toda a área de trabalho, então quem não é
-  // proprietário vê o que está valendo, mas não altera.
-  function aplicarPermissaoCentralAlocacao() {
-    const dono = ehProprietario();
-    [els.allocationCenterPath, els.allocationCenterSheet, els.allocationCenterKey,
-      els.allocationCenterComment, els.allocationCenterLastRow].forEach((campo) => {
-      if (campo) campo.readOnly = !dono;
-    });
-    if (els.allocationCenterSave) els.allocationCenterSave.hidden = !dono;
-    if (els.allocationCenterClear) els.allocationCenterClear.hidden = !dono;
-    if (els.allocationCenterOwnerNote) els.allocationCenterOwnerNote.hidden = dono;
-  }
-
-  function loadAllocationCenterFields() {
-    if (!els.allocationCenterPath) return;
-    const saved = Workspace ? Workspace.preference(ALLOCATION_CENTER_PREFERENCE, null) : null;
-    const central = saved && typeof saved === "object" ? saved : {};
-    els.allocationCenterPath.value = String(central.path || "");
-    els.allocationCenterSheet.value = String(central.sheet || "");
-    els.allocationCenterKey.value = String(central.keyColumn || "");
-    els.allocationCenterComment.value = String(central.commentColumn || "");
-    els.allocationCenterLastRow.value = central.lastRow ? String(central.lastRow) : "";
-    refreshAllocationCenterStatus();
-    aplicarPermissaoCentralAlocacao();
-  }
-
-  async function saveAllocationCenter() {
-    if (!Workspace) { showToast("Não foi possível salvar: armazenamento local indisponível.", "warn"); return; }
-    const informado = {
-      path: String(els.allocationCenterPath?.value || "").trim(),
-      sheet: String(els.allocationCenterSheet?.value || "").trim(),
-      keyColumn: String(els.allocationCenterKey?.value || "").trim(),
-      commentColumn: String(els.allocationCenterComment?.value || "").trim(),
-      lastRow: Number(els.allocationCenterLastRow?.value) || undefined,
-    };
-    const central = ReportSummary && ReportSummary.normalizeAllocationCenter
-      ? ReportSummary.normalizeAllocationCenter(informado)
-      : null;
-    if (!central) {
-      showToast("Informe o caminho do arquivo, a aba e as duas colunas da central.", "warn");
-      return;
-    }
-    const guardado = {
-      path: central.path,
-      sheet: central.sheet,
-      keyColumn: central.keyColumn,
-      commentColumn: central.commentColumn,
-      lastRow: central.lastRow,
-    };
-    // O cadastro vale para todos, então quem manda é o banco. A cópia local é
-    // só para o relatório continuar saindo com a PROCX quando estiver offline.
-    const Cloud = window.GrconCloud;
-    if (Cloud?.saveAllocationCenter) {
-      if (els.allocationCenterSave) els.allocationCenterSave.disabled = true;
-      try {
-        const resultado = await Cloud.saveAllocationCenter(guardado);
-        if (resultado.ok) {
-          loadAllocationCenterFields();
-          showToast("Central de alocação salva para todos. Os próximos relatórios já trazem o comentário da fiscal.", "success");
-          return;
-        }
-        // Recusa por permissão para aí; só falta de área compartilhada cai na
-        // cópia local, senão quem não é proprietário burlaria a regra.
-        if (!resultado.indisponivel) { showToast(resultado.error, "warn"); return; }
-      } finally {
-        if (els.allocationCenterSave) els.allocationCenterSave.disabled = false;
-      }
-    }
-    Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, guardado);
-    loadAllocationCenterFields();
-    showToast("Referência cadastrada somente neste navegador: a área compartilhada está indisponível agora. O relatório continuará sem conexão externa.", "warn");
-  }
-
-  function limparCamposCentralAlocacao() {
-    if (!els.allocationCenterPath) return;
-    els.allocationCenterPath.value = "";
-    els.allocationCenterSheet.value = "";
-    els.allocationCenterKey.value = "";
-    els.allocationCenterComment.value = "";
-    els.allocationCenterLastRow.value = "";
-  }
-
-  async function clearAllocationCenter() {
-    const Cloud = window.GrconCloud;
-    // Remover só a cópia local não resolveria: a próxima leitura da área
-    // compartilhada devolveria o cadastro.
-    if (Cloud?.clearAllocationCenter) {
-      const resultado = await Cloud.clearAllocationCenter();
-      if (resultado.ok) {
-        limparCamposCentralAlocacao();
-        refreshAllocationCenterStatus();
-        showToast("Cadastro da central removido para todos.", "info");
-        return;
-      }
-      if (!resultado.indisponivel) { showToast(resultado.error, "warn"); return; }
-    }
-    if (Workspace) Workspace.setPreference(ALLOCATION_CENTER_PREFERENCE, null);
-    limparCamposCentralAlocacao();
-    refreshAllocationCenterStatus();
-    showToast("Cadastro removido somente neste navegador: a área compartilhada está indisponível agora.", "warn");
-  }
-
   function reportDownloadName() {
     const next = egrdtSequenceInfo(0);
     const ld = safeOutputPart(state.ldFiles.length === 1 ? state.ldFiles[0].name : `${state.ldFiles.length}_LDs`, "LD");
@@ -624,15 +490,6 @@
     exportPendingAllocationPdfs: $("#export-pending-allocation-pdfs"),
     exportZip: $("#export-zip"),
     exportEgrdt: $("#export-egrdt"),
-    allocationCenterPath: $("#allocation-center-path"),
-    allocationCenterSheet: $("#allocation-center-sheet"),
-    allocationCenterKey: $("#allocation-center-key"),
-    allocationCenterComment: $("#allocation-center-comment"),
-    allocationCenterLastRow: $("#allocation-center-last-row"),
-    allocationCenterSave: $("#allocation-center-save"),
-    allocationCenterClear: $("#allocation-center-clear"),
-    allocationCenterStatus: $("#allocation-center-status"),
-    allocationCenterOwnerNote: $("#allocation-center-owner-note"),
     exportFinalPackage: $("#export-final-package"),
     advancedToggle: $("#advanced-toggle"),
     advancedPanel: $("#advanced-panel"),
@@ -4489,7 +4346,6 @@
         ldName: ldDisplayName(),
         ldVersion: reportLdVersion,
         relationLabel: relationSourceLabel(),
-        allocationCenter: allocationCenterConfig(),
       });
     }
     await addReportLogo(workbook, summarySheet);
@@ -4553,10 +4409,8 @@
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
       // O worker não enxerga localStorage nem o índice de histórico, então o
-      // mapa documento -> eGRDT(s) anterior(es) e o cadastro da central de
-      // alocação vão prontos no payload.
+      // mapa documento -> eGRDT(s) anterior(es) segue no payload.
       historyByDocument: historyByDocumentMap(results),
-      allocationCenter: allocationCenterConfig(),
     };
     const buffer = await PerformanceCore.buildReport(payload, workerProgress("Relatório Excel"));
     refreshPerformancePanel("Relatório Excel concluído.");
@@ -4795,7 +4649,6 @@
       ldIntegrity: state.ldIntegrity,
       recentDays: state.recentDays,
       logoBase64: brand.reportLogoBase64 || "",
-      allocationCenter: allocationCenterConfig(),
     };
   }
 
@@ -5227,8 +5080,6 @@
     els.recentDays.value = String(days);
     if (Workspace) Workspace.setPreference("recentDays", days);
   });
-  els.allocationCenterSave?.addEventListener("click", saveAllocationCenter);
-  els.allocationCenterClear?.addEventListener("click", clearAllocationCenter);
   els.analyze.addEventListener("click", analyze);
   els.reset.addEventListener("click", reset);
 
@@ -5287,11 +5138,6 @@
     els.advancedToggle.setAttribute("aria-expanded", String(open));
   });
   initializeResultColumnFilters();
-  loadAllocationCenterFields();
-  // A área compartilhada é quem manda no cadastro: quando ela responde, os
-  // campos passam a mostrar o que está valendo para todos.
-  window.addEventListener("grcon:allocation-center-updated", loadAllocationCenterFields);
-  window.addEventListener("grcon:cloud-ready", loadAllocationCenterFields);
   if (els.clearColumnFilters) els.clearColumnFilters.addEventListener("click", clearResultColumnFilters);
   els.search.addEventListener("input", (event) => {
     state.search = event.target.value;
