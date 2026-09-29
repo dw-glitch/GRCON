@@ -2,7 +2,7 @@
  * GRCON — Adaptador entre a ilha React de Consultas e os módulos legados.
  *
  * Nenhum componente React deve tocar em `window`, `TriagemCore`,
- * `GrconRequestsCore`, `GrconRequestsReport`, `GrconAllocationCenter`,
+ * `GrconRequestsCore`, `GrconRequestsReport`,
  * `GrconFileAccess`, `GRCONModuleLoader`, `GrconGrdtHistoryIndicator`,
  * `GrconLdMemory`, `GrconNotify` ou `GrconCloud` diretamente: tudo passa por
  * aqui. Isso mantém a regra documental (parseWorkbook/buildIndex/lookupDocument
@@ -10,7 +10,6 @@
  * nada em React.
  */
 import type {
-  AllocationCenterIndex,
   ConsultationRow,
   DocumentIndex,
   ExportRow,
@@ -43,9 +42,6 @@ function requestsReport() {
   const api = window.GrconRequestsReport;
   if (!api) throw new Error("O gerador de relatório (GrconRequestsReport) não está disponível.");
   return api;
-}
-function allocationCenter() {
-  return window.GrconAllocationCenter;
 }
 
 function notify(message: string, kind?: string): void {
@@ -91,24 +87,6 @@ function getLastLd(): { name: string } | null {
   return null;
 }
 
-/** Lê e indexa o Controle de Solicitações (central de alocação), opcional. */
-async function parseAllocationCenterFile(file: File): Promise<AllocationCenterIndex> {
-  const AC = allocationCenter();
-  if (!AC) throw new Error("O leitor da central não está disponível.");
-  await ensureGroup("xlsx");
-  const buffer = await readFileBuffer(file, "o Controle de Solicitações");
-  const workbook = window.XLSX!.read(buffer, { type: "array", cellDates: true, cellStyles: false });
-  const indice = AC.parseAllocationCenter(workbook, { xlsx: window.XLSX, core: core() });
-  indice.nomeArquivo = file.name;
-  return indice;
-}
-
-function centerFieldsFor(document: string, centralIndex: AllocationCenterIndex | null): Record<string, unknown> {
-  const AC = allocationCenter();
-  if (!AC || !centralIndex || !centralIndex.ok) return {};
-  return AC.centerFields(AC.allocationCenterLookup(document, centralIndex, core()));
-}
-
 function parseDocumentList(input: string): ParsedDocument[] {
   return requestsCore().parseDocumentList(input);
 }
@@ -143,22 +121,20 @@ function refreshHistoryIndicator(): void {
 
 /**
  * Consulta um único documento e devolve a linha já mesclada (situação,
- * alocação, GRDT/SIGEM e, quando houver central, status da fiscal). Usa
+ * alocação e GRDT/SIGEM. Usa
  * exatamente as mesmas três chamadas de requests_app.js — nenhuma regra é
  * reescrita aqui.
  */
 function lookupDocument(
   document: string,
   requestedTitle: string | undefined,
-  index: DocumentIndex,
-  centralIndex: AllocationCenterIndex | null,
+  index: DocumentIndex
 ): ConsultationRow {
   const RC = requestsCore();
   const resultado = RC.lookupDocument(document, index, { requestedTitle });
   return {
     ...RC.consultationRow(resultado),
     ...RC.issuedColumns(historyEntriesFor(resultado, document)),
-    ...centerFieldsFor(document, centralIndex),
   } as unknown as ConsultationRow;
 }
 
@@ -190,9 +166,6 @@ function buildExportRow(document: string, linha: ConsultationRow): ExportRow {
     issuedRevision: linha.issuedRevision,
     issuedRevisionCell: linha.issuedRevisionCell,
     sigemStatus: linha.sigemStatus,
-    centerStatus: linha.centerStatus,
-    centerFiscalAnswer: linha.centerFiscalAnswer,
-    centerAllocationCell: linha.centerAllocationCell,
     ld: linha.ld,
     allLds: linha.allLds,
     rule: linha.rule,
@@ -300,7 +273,6 @@ export const consultasAdapter = Object.freeze({
   buildIndex,
   rememberLastLd,
   getLastLd,
-  parseAllocationCenterFile,
   parseDocumentList,
   dedupeDocuments,
   lookupDocument,
