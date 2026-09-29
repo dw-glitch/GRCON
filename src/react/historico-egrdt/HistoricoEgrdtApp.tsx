@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { UiMetaPill, UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
 import { historicoEgrdtAdapter as Adapter } from "./services/historicoEgrdtAdapter";
 import { useHistoricoEgrdt, LIST_PAGE_SIZE } from "./hooks/useHistoricoEgrdt";
-import type { EgrdtHistoryRecord } from "./types/domain";
 
 
 const SORT_LABELS: Record<string, string> = {
