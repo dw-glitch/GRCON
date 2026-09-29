@@ -87,17 +87,45 @@
   overscroll-behavior:contain;
 }
 .pc-table.pc-document-table{
+  display:block;
   width:100%;
   min-width:0;
   max-width:100%;
-  table-layout:fixed;
+  table-layout:auto;
 }
-.pc-document-table .pc-col-document{width:24%}
-.pc-document-table .pc-col-sends{width:21%}
-.pc-document-table .pc-col-revisions{width:12%}
-.pc-document-table .pc-col-situation{width:18%}
-.pc-document-table .pc-col-confirmation{width:10%}
-.pc-document-table .pc-col-note{width:15%}
+.pc-document-table colgroup{display:none}
+.pc-document-table thead,
+.pc-document-table tbody{
+  display:block;
+  width:100%;
+  min-width:0;
+}
+.pc-document-table thead{
+  position:sticky;
+  top:0;
+  z-index:3;
+}
+.pc-document-table tr{
+  display:grid;
+  grid-template-columns:minmax(0,24fr) minmax(0,21fr) minmax(0,12fr) minmax(0,18fr) minmax(0,10fr) minmax(0,15fr);
+  width:100%;
+  min-width:0;
+}
+.pc-document-table th,
+.pc-document-table td{
+  display:block;
+  width:auto;
+  min-width:0;
+}
+.pc-document-table th{
+  position:static;
+}
+.pc-document-table .pc-col-document,
+.pc-document-table .pc-col-sends,
+.pc-document-table .pc-col-revisions,
+.pc-document-table .pc-col-situation,
+.pc-document-table .pc-col-confirmation,
+.pc-document-table .pc-col-note{width:auto}
 .pc-document-table th,
 .pc-document-table td{
   box-sizing:border-box;
@@ -363,21 +391,11 @@
 @media(max-width:1450px){
   .pc-document-table td{padding:10px 8px}
   .pc-document-table th{padding:9px 8px;font-size:9.5px}
-  .pc-document-table .pc-col-document{width:23%}
-  .pc-document-table .pc-col-sends{width:21%}
-  .pc-document-table .pc-col-revisions{width:12%}
-  .pc-document-table .pc-col-situation{width:19%}
-  .pc-document-table .pc-col-confirmation{width:10%}
-  .pc-document-table .pc-col-note{width:15%}
+  .pc-document-table tr{grid-template-columns:minmax(0,23fr) minmax(0,21fr) minmax(0,12fr) minmax(0,19fr) minmax(0,10fr) minmax(0,15fr)}
 }
 @media(max-width:1180px){
   .pc-document-table td{padding:9px 7px}
-  .pc-document-table .pc-col-document{width:22%}
-  .pc-document-table .pc-col-sends{width:21%}
-  .pc-document-table .pc-col-revisions{width:12%}
-  .pc-document-table .pc-col-situation{width:20%}
-  .pc-document-table .pc-col-confirmation{width:10%}
-  .pc-document-table .pc-col-note{width:15%}
+  .pc-document-table tr{grid-template-columns:minmax(0,22fr) minmax(0,21fr) minmax(0,12fr) minmax(0,20fr) minmax(0,10fr) minmax(0,15fr)}
   .pc-document-meta,.pc-send-count>small,.pc-revision-history{font-size:9px}
 }
 @media(prefers-reduced-motion:reduce){
