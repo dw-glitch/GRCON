@@ -224,8 +224,18 @@
     const query = root.GrconSharedSigemQuery;
     const base = query?.current();
     if (!base) {
-      if (state.ready) await reconcileCurrent({ reason: "shared-general-query-empty" });
-      else state.base = await Conference.loadBase();
+      const [storedBase, storedState, storedAudit] = await Promise.all([
+        Conference.loadBase(),
+        Conference.loadState(),
+        Conference.loadAudit(),
+      ]);
+      state.base = storedBase;
+      state.audit = storedAudit;
+      if (state.ready) {
+        const prefs = Conference.readPreferences();
+        state.result = Conference.reconcile(History?.read?.() || [], storedBase.records || [], storedState, { ...prefs, reason: "shared-general-query-empty" });
+        render();
+      }
       return;
     }
     await Conference.saveBase(conferenceProjection(base));
