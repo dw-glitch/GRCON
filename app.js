@@ -114,6 +114,7 @@
     analysisRecentDays: 30,
     analysisLdSignature: "",
     analysisPlannedSnapshot: "",
+    analysisSigemSnapshot: "",
     egrdtSequenceCursor: 0,
     manualEgrdtSequenceStart: null,
     manualEgrdtSequences: [],
@@ -1177,10 +1178,15 @@
     return "sem-relacao";
   }
 
+  function currentSigemQuerySnapshot() {
+    const current = window.GrconSharedSigemQuery?.current();
+    return current?.meta?.snapshotId || current?.meta?.importedAt || "";
+  }
+
   function currentAnalysisSignature() {
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
     return [currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
-      `sigem:${window.GrconSharedSigemQuery?.current()?.meta?.snapshotId || window.GrconSharedSigemQuery?.current()?.meta?.importedAt || "sem-base"}`,
+      `sigem:${currentSigemQuerySnapshot() || "sem-base"}`,
       `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`].join("###");
   }
 
@@ -1198,6 +1204,7 @@
         analysisRecentDays: state.analysisRecentDays,
         analysisLdSignature: state.analysisLdSignature,
         analysisPlannedSnapshot: state.analysisPlannedSnapshot,
+        analysisSigemSnapshot: state.analysisSigemSnapshot,
         ldIntegrity: state.ldIntegrity,
       },
     };
@@ -1222,6 +1229,7 @@
     state.analysisRecentDays = Number(snapshot.analysisRecentDays) || state.recentDays;
     state.analysisLdSignature = snapshot.analysisLdSignature || currentLdSignature();
     state.analysisPlannedSnapshot = snapshot.analysisPlannedSnapshot || "";
+    state.analysisSigemSnapshot = snapshot.analysisSigemSnapshot || currentSigemQuerySnapshot();
     state.ldIntegrity = snapshot.ldIntegrity || null;
     return true;
   }
@@ -2300,6 +2308,8 @@
     state.analysisAt = 0;
     state.analysisValidUntil = 0;
     state.analysisLdSignature = "";
+    state.analysisPlannedSnapshot = "";
+    state.analysisSigemSnapshot = "";
     els.analysisStamp.hidden = true;
     els.resultsSection.hidden = true;
     setProgress(3, "Verificando a integridade da LD…");
@@ -2446,6 +2456,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) lida(s) nesta análise · até ${validUntil}`;
       els.analysisStamp.title = `GRCON ${APP_VERSION} · ${ldDisplayName()}`;
@@ -2545,6 +2556,8 @@
     state.analysisAt = 0;
     state.analysisValidUntil = 0;
     state.analysisLdSignature = "";
+    state.analysisPlannedSnapshot = "";
+    state.analysisSigemSnapshot = "";
     if (els.analysisStamp) els.analysisStamp.hidden = true;
     if (els.resultsSection) els.resultsSection.hidden = true;
     if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
@@ -2682,6 +2695,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) preparadas · válidas até ${validUntil}`;
       els.analysisStamp.title = `GRCON ${APP_VERSION} · ${ldDisplayName()}`;
@@ -2744,7 +2758,6 @@
 
   async function ensureFreshAnalysis() {
     await window.GrconSharedSigemQuery?.refresh();
-    refreshSelectedSigemStatuses();
     if (!state.analysisAt || !state.results.length) {
       showToast("Execute uma análise antes de gerar arquivos.", "error");
       return false;
@@ -2762,6 +2775,11 @@
       showToast("O conjunto de LDs usado na análise foi alterado. Analise novamente antes de emitir.", "error");
       return false;
     }
+    if (currentSigemQuerySnapshot() !== state.analysisSigemSnapshot) {
+      showToast("A Consulta Geral SIGEM foi atualizada após esta análise. Analise novamente antes de gerar a GRDT.", "error");
+      return false;
+    }
+    refreshSelectedSigemStatuses();
     if (window.GrconCloud?.state?.membership) {
       try { await window.GrconPlannedDocuments.refresh(); }
       catch (_) { showToast("Não foi possível confirmar a base atual de Documentos Previstos. Reconecte e tente novamente.", "error"); return false; }
@@ -3962,6 +3980,8 @@
     state.analysisAt = 0;
     state.analysisValidUntil = 0;
     state.analysisLdSignature = "";
+    state.analysisPlannedSnapshot = "";
+    state.analysisSigemSnapshot = "";
     closeEgrdtDrawer();
     closeRelationDrawer();
     els.ldInput.value = "";
@@ -4005,6 +4025,8 @@
     state.analysisAt = 0;
     state.analysisValidUntil = 0;
     state.analysisLdSignature = "";
+    state.analysisPlannedSnapshot = "";
+    state.analysisSigemSnapshot = "";
     els.resultsSection.hidden = true;
     els.analysisStamp.hidden = true;
   }
