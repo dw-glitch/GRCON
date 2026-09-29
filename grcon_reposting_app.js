@@ -247,7 +247,21 @@
     if (count) count.textContent = `${fmt(state.selected.size)} selecionado(s)`;
     const prepare = $("#grcon-repost-prepare", shell); if (prepare) prepare.disabled = state.selected.size === 0;
   }
-  function selectionCell(key, checked) { return `<td class="grcon-repost-select"><input aria-label="Selecionar para repostagem" data-repost-key="${esc(key)}" type="checkbox" ${checked ? "checked" : ""}/></td>`; }
+  function selectionControl(attributes, checked, label) {
+    return `<label class="grcon-repost-select" title="${esc(label)}"><input aria-label="${esc(label)}" ${attributes} type="checkbox" ${checked ? "checked" : ""}/></label>`;
+  }
+  function syncSelectionControl(host, selector, markup, checked) {
+    if (!host) return;
+    let input = $(selector, host);
+    if (!input) {
+      host.insertAdjacentHTML("beforeend", markup);
+      input = $(selector, host);
+    }
+    if (input) input.checked = Boolean(checked);
+  }
+  function cleanupLegacySelectionCells(table) {
+    $$("thead th.grcon-repost-select,tbody td.grcon-repost-select", table).forEach((node) => node.remove());
+  }
   function decorateConference() {
     const shell = state.conferenceShell;
     const ui = root.GrconPostingConferenceUi;
@@ -262,24 +276,39 @@
     }
     const table = $("#pc-table-wrap table", shell);
     if (!table) { updateSelectionToolbar(); return; }
-    const headRow = $("thead tr", table);
-    if (headRow && !$("th.grcon-repost-select", headRow)) headRow.insertAdjacentHTML("afterbegin", '<th class="grcon-repost-select" aria-label="Selecionar"></th>');
+    cleanupLegacySelectionCells(table);
     const bodyRows = $$("tbody tr", table);
     if (ui.state.view === "grdts") {
       const groups = pageGroups();
       bodyRows.forEach((tr,index) => {
-        const group = groups[index]; if (!group || $("td.grcon-repost-select", tr)) return;
+        const group = groups[index]; if (!group) return;
         const keys = group.rows.map((row) => row.key);
         const checked = keys.length > 0 && keys.every((key) => state.selected.has(key));
         tr.dataset.repostGrdt = group.egrdtNumber;
-        tr.insertAdjacentHTML("afterbegin", `<td class="grcon-repost-select"><input aria-label="Selecionar eGRDT inteira para repostagem" data-repost-grdt="${esc(group.egrdtNumber)}" type="checkbox" ${checked ? "checked" : ""}/></td>`);
+        const firstCell = $("td:first-child", tr);
+        const label = "Selecionar eGRDT inteira para repostagem";
+        syncSelectionControl(
+          firstCell,
+          "input[data-repost-grdt]",
+          selectionControl(`data-repost-grdt="${esc(group.egrdtNumber)}"`, checked, label),
+          checked,
+        );
       });
     } else {
       const rows = pageRows();
       bodyRows.forEach((tr,index) => {
-        const row = rows[index]; if (!row || $("td.grcon-repost-select", tr)) return;
+        const row = rows[index]; if (!row) return;
         tr.dataset.repostRowKey = row.key;
-        tr.insertAdjacentHTML("afterbegin", selectionCell(row.key, state.selected.has(row.key)));
+        const firstCell = $("td:first-child", tr);
+        const host = $(".pc-document-meta", firstCell) || firstCell;
+        const checked = state.selected.has(row.key);
+        const label = "Selecionar para repostagem";
+        syncSelectionControl(
+          host,
+          "input[data-repost-key]",
+          selectionControl(`data-repost-key="${esc(row.key)}"`, checked, label),
+          checked,
+        );
       });
     }
     updateSelectionToolbar();

@@ -6,6 +6,8 @@ on:
       - "posting_conference_app.js"
       - "posting_conference_refinement.js"
       - "posting-conference.css"
+      - "grcon_reposting_app.js"
+      - "grcon-reposting.css"
       - "scripts/check-conference-layout.cjs"
       - "scripts/validar-ux-ui-global.cjs"
       - ".github/workflows/ux-ui-audit.yml"
