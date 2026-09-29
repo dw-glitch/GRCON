@@ -63,7 +63,9 @@ assert.match(refinamento, /function setText\(node, value\) \{\s*if \(node && nod
 assert.doesNotMatch(refinamento, /cell\.textContent = "";\s*const badge = document\.createElement/);
 assert.match(refinamento, /if \(!badge \|\| !badge\.classList\.contains\("pc-sigem-status"\)\)/);
 assert.match(refinamento, /const nativeSituation = \/\^Situação\$\/i\.test/);
-assert.match(refinamento, /if \(nativeSituation\) \{[\s\S]*?querySelector\("\\.pc-sigem-status"\)[\s\S]*?return;/);
+assert.match(refinamento, /if \(nativeSituation\)/);
+assert.match(refinamento, /statusCell\.querySelector\("\.pc-sigem-status"\)/);
+assert.match(refinamento, /if \(nativeSituation\) \{[\s\S]*?setText\(sigem,[\s\S]*?return;/);
 const refinamentoSemAuxiliar = refinamento.replace(/if \(node && node\.textContent !== value\) node\.textContent = value;/g, "");
 const textosCrus = (refinamentoSemAuxiliar.match(/\.textContent = (?!"";)/g) || []);
 assert.equal(textosCrus.length, 0, `posting_conference_refinement.js voltou a escrever textContent sem comparar antes (${textosCrus.length}). Use setText.`);
