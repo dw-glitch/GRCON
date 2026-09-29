@@ -107,7 +107,6 @@
       "history-search",
       "history-year",
       "history-type",
-      "history-posting-status",
       "history-sort",
       "history-date-start",
       "history-date-end",
