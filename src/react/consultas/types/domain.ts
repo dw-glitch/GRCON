@@ -25,17 +25,6 @@ export type LookupResult = Record<string, unknown> & {
   needsManualValidation?: boolean;
 };
 
-/** Índice do Controle de Solicitações (central de alocação), quando anexado. */
-export interface AllocationCenterIndex {
-  ok: boolean;
-  error?: string;
-  nomeArquivo?: string;
-  sheetName?: string;
-  count?: number;
-  documents?: number;
-  [key: string]: unknown;
-}
-
 /** Uma LD anexada na tela, com o resultado da leitura (ou o erro). */
 export interface LdEntry {
   id: string;
@@ -68,7 +57,7 @@ export interface SigemRevisionEntry {
   status?: string;
 }
 
-/** Linha de resultado já mesclada (situação, alocação, GRDT/SIGEM, central). */
+/** Linha de resultado já mesclada (situação, alocação e GRDT/SIGEM). */
 export interface ConsultationRow {
   situation: string;
   ldDocument?: string;
@@ -97,13 +86,6 @@ export interface ConsultationRow {
   issuedCount?: number;
   issuedAll?: IssuedEntry[];
   sigemStatus?: string;
-  centerFound?: boolean;
-  centerStatus?: string;
-  centerFiscalAnswer?: string;
-  centerAllocation?: string;
-  centerSentAt?: string;
-  centerSubmissions?: number;
-  centerAllocationCell?: string;
   ld?: string;
   allLds?: string;
   occurrenceCount?: number;
@@ -150,9 +132,6 @@ export interface ExportRow {
   issuedRevision?: string;
   issuedRevisionCell?: string;
   sigemStatus?: string;
-  centerStatus?: string;
-  centerFiscalAnswer?: string;
-  centerAllocationCell?: string;
   ld?: string;
   allLds?: string;
   rule?: string;
