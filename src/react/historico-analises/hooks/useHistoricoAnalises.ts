@@ -262,9 +262,9 @@ export function useHistoricoAnalises() {
     setDetail({ item: null, loading: false, error: "", context: null });
   }, []);
 
-  const openRelatedHistory = useCallback(async (id: string, prepareSigem: boolean) => {
+  const openRelatedHistory = useCallback(async (id: string) => {
     try {
-      await Adapter.openRelatedHistory(id, prepareSigem);
+      await Adapter.openRelatedHistory(id);
       closeDetail();
     } catch (error) {
       Adapter.notify(error instanceof Error ? error.message : "Não foi possível abrir a eGRDT relacionada.", "error");
