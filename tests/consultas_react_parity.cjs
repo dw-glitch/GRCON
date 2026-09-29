@@ -80,9 +80,6 @@ function transpileModule(filePath, jsx, overrides = {}) {
     issuedRevision: "B",
     issuedRevisionCell: "B",
     sigemStatus: "Em Análise",
-    centerStatus: "Postado",
-    centerFiscalAnswer: "Conforme",
-    centerAllocationCell: "C1O-ALOC-CM-0001-2026",
     ld: "LD_003.xlsx",
     allLds: "LD_003.xlsx | LD_005.xlsx",
     rule: "correspondência exata",
@@ -167,7 +164,6 @@ function transpileModule(filePath, jsx, overrides = {}) {
     onToggleAll: () => {},
     allSelected: true,
     someSelected: true,
-    central: { ok: true },
     filterKey: "",
   }));
   assert.ok(markup.indexOf("Documento") < markup.indexOf("Título"));
@@ -182,7 +178,6 @@ function transpileModule(filePath, jsx, overrides = {}) {
 
   const detailMarkup = ReactDOMServer.renderToStaticMarkup(React.createElement(components.DocumentDetailsDrawer, {
     entry: { item, linha: sourceRow },
-    central: { ok: true },
     onClose: () => {},
   }));
   assert.match(detailMarkup, /Código localizado na LD/);
@@ -192,8 +187,6 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(detailMarkup, /Revisão emitida/);
   assert.match(detailMarkup, /Revisão Colar SIGEM/);
   assert.match(detailMarkup, /Status SIGEM/);
-  assert.match(detailMarkup, /Status da central/);
-  assert.match(detailMarkup, /Resposta fiscal/);
   assert.match(detailMarkup, /Todas as LDs/);
   assert.match(detailMarkup, /Regra \/ evidência/);
   assert.match(detailMarkup, /TX-LITERAL \/ A01/);
@@ -217,7 +210,6 @@ function transpileModule(filePath, jsx, overrides = {}) {
     onToggleAll: () => {},
     allSelected: true,
     someSelected: true,
-    central: { ok: true },
     filterKey: "",
   }));
   const taxCell = emptyMarkup.match(/<td class="requests-col-taxonomia">([\s\S]*?)<\/td>/);
@@ -235,7 +227,6 @@ function transpileModule(filePath, jsx, overrides = {}) {
     onToggleAll: () => {},
     allSelected: true,
     someSelected: true,
-    central: { ok: true },
     filterKey: "",
   }));
   assert.equal((pagedMarkup.match(/data-doc=/g) || []).length, 100,
@@ -284,7 +275,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
   const groupEnd = loader.indexOf("],", groupStart);
   const requestGroup = loader.slice(groupStart, groupEnd);
   for (const dependency of [
-    "core.js", "requests_core.js", "requests_report.js", "allocation_center.js",
+    "core.js", "requests_core.js", "requests_report.js",
     "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
     "requests_taxonomy_core.js", "requests_app.js", "react-dist/consultas-app.js",
   ]) {
@@ -314,6 +305,9 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(phaseBCss, /prefers-reduced-motion/);
 
   const componentSource = fs.readFileSync(componentsPath, "utf8");
+  assert.doesNotMatch(componentSource, /Status da central/);
+  assert.doesNotMatch(componentSource, /Resposta fiscal/);
+  assert.doesNotMatch(loader, /allocation_center\.js/);
   assert.match(componentSource, /<UiDrawer/,
     "Consultas precisa usar o drawer compartilhado");
   assert.match(uiSource, /body\.style\.overflow = "hidden"/,
