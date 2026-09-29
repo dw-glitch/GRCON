@@ -260,7 +260,7 @@
     if (input) input.checked = Boolean(checked);
   }
   function cleanupLegacySelectionCells(table) {
-    $("thead th.grcon-repost-select,tbody td.grcon-repost-select", table).forEach((node) => node.remove());
+    $$("thead th.grcon-repost-select,tbody td.grcon-repost-select", table).forEach((node) => node.remove());
   }
   function decorateConference() {
     const shell = state.conferenceShell;
