@@ -9,6 +9,7 @@ const ExcelJS = require("../exceljs.min.js");
 const Triagem = require("../core.js");
 const RequestsOriginal = require("../requests_core.js");
 const ReportOriginal = require("../requests_report.js");
+const Planned = require("../planned_documents_core.js");
 
 globalThis.TriagemCore = Triagem;
 globalThis.GrconRequestsCore = RequestsOriginal;
@@ -56,9 +57,95 @@ function transpileModule(filePath, jsx, overrides = {}) {
   const hookPath = path.join(root, "src/react/consultas/hooks/useConsultas.ts");
 
   const adapterLoad = transpileModule(adapterPath, false, {
-    window: { GrconRequestsReport: Report },
+    window: {
+      TriagemCore: Triagem,
+      GrconRequestsCore: RequestsOriginal,
+      GrconRequestsReport: Report,
+      GrconPlannedDocumentsCore: Planned,
+    },
   });
   const adapter = adapterLoad.exports.consultasAdapter;
+
+
+  const plannedDocument = "C1O_RNEST_U32_3.8.9.1_TUB_REP_VM-320236";
+  const staleLdRecord = {
+    document: plannedDocument,
+    documentKey: Triagem.key(plannedDocument),
+    revision: "B",
+    status: "",
+    sigemStatus: "Não Postado",
+    title: "DOCUMENTO CONTROLADO",
+    grdt: "",
+    effectiveDate: "",
+    allocationStatus: "NÃO ALOCADO",
+    allocation: "",
+    allocationStage: "",
+    sheet: "TUB",
+    row: 2,
+    source: "LD_DESATUALIZADA.xlsx",
+    sourceTimestamp: 100,
+    sourceOrder: 0,
+    ldColumns: [],
+  };
+  let currentPlannedSnapshot = {
+    id: "planned-v1",
+    fileName: "Documentos Previstos v1.xlsx",
+    updatedAt: "2026-09-30T12:00:00Z",
+    count: 1,
+    keys: new Set([Triagem.key(plannedDocument)]),
+  };
+  adapterLoad.sandbox.window.GrconCloud = {
+    loadPlannedDocuments: async () => currentPlannedSnapshot,
+  };
+
+  const loadedPlanned = await adapter.loadPlannedDocumentsSnapshot();
+  assert.equal(loadedPlanned.id, "planned-v1");
+  const officialIndex = adapter.buildIndex([{
+    id: "ld-planned",
+    file: {},
+    name: "LD_DESATUALIZADA.xlsx",
+    size: 1,
+    records: [staleLdRecord],
+    history: [],
+    error: "",
+  }], loadedPlanned);
+  const plannedRow = adapter.lookupDocument(plannedDocument, undefined, officialIndex, loadedPlanned);
+  assert.equal(plannedRow.allocated, "SIM — Alocado",
+    "Consultas deve ignorar NÃO ALOCADO da LD quando o documento existe em Documentos Previstos");
+  assert.equal(plannedRow.allocationSource, "Documentos Previstos compartilhado");
+  assert.equal(plannedRow.plannedDocumentsSnapshot, "planned-v1");
+  assert.equal(plannedRow.situation, "Localizado");
+
+  const missingFromLdAndPlanned = "C1O_RNEST_U32_3.8.9.1_TUB_REP_VM-999999";
+  const absentRow = adapter.lookupDocument(missingFromLdAndPlanned, undefined, officialIndex, loadedPlanned);
+  assert.equal(absentRow.situation, "Não localizado");
+  assert.equal(absentRow.allocated, "NÃO — Não alocado",
+    "a alocação precisa ser determinada mesmo quando o documento não é localizado na LD");
+
+  currentPlannedSnapshot = {
+    ...currentPlannedSnapshot,
+    id: "planned-v2",
+    fileName: "Documentos Previstos v2.xlsx",
+    count: 0,
+    keys: new Set(),
+  };
+  const updatedPlanned = await adapter.loadPlannedDocumentsSnapshot();
+  const updatedIndex = adapter.buildIndex([{
+    id: "ld-planned",
+    file: {},
+    name: "LD_DESATUALIZADA.xlsx",
+    size: 1,
+    records: [staleLdRecord],
+    history: [],
+    error: "",
+  }], updatedPlanned);
+  const updatedRow = adapter.lookupDocument(plannedDocument, undefined, updatedIndex, updatedPlanned);
+  assert.equal(updatedRow.allocated, "NÃO — Não alocado",
+    "trocar o snapshot compartilhado precisa trocar a classificação sem usar cache antigo");
+
+  adapterLoad.sandbox.window.GrconCloud = { loadPlannedDocuments: async () => null };
+  await assert.rejects(() => adapter.loadPlannedDocumentsSnapshot(), /Nenhuma base compartilhada de Documentos Previstos válida/,
+    "Consultas não pode transformar indisponibilidade da base em Não alocado");
 
   const sourceRow = {
     situation: "Localizado",
@@ -71,6 +158,8 @@ function transpileModule(filePath, jsx, overrides = {}) {
     sigemLdRevision: "B",
     sigemLdRevisionCell: "B",
     allocated: "SIM — Alocado",
+    allocationSource: "Documentos Previstos compartilhado",
+    plannedDocumentsFile: "Documentos Previstos v1.xlsx",
     allocation: "C1O-ALOC-CM-0001-2026",
     lastGrdt: "GRDT-2026-0001",
     issued: "SIM",
@@ -190,6 +279,9 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(detailMarkup, /Todas as LDs/);
   assert.match(detailMarkup, /Regra \/ evidência/);
   assert.match(detailMarkup, /TX-LITERAL \/ A01/);
+  assert.match(detailMarkup, /Fonte da alocação/);
+  assert.match(detailMarkup, /Documentos Previstos compartilhado/);
+  assert.match(detailMarkup, /Documentos Previstos v1\.xlsx/);
   assert.match(detailMarkup, /role="dialog"/);
   assert.match(detailMarkup, /aria-modal="true"/);
   assert.match(detailMarkup, /requests-detail-drawer[^>]*tabindex="-1"/);
@@ -269,6 +361,9 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(runQuery, /finally\s*\{/);
   assert.ok(runQuery.indexOf("setRunning(false)") > runQuery.indexOf("finally"));
   assert.match(runQuery, /Não foi possível concluir a consulta/);
+  assert.match(runQuery, /loadPlannedDocumentsSnapshot/);
+  assert.match(runQuery, /buildIndex\(lds, plannedSnapshot\)/);
+  assert.match(runQuery, /lookupDocument\(item\.document, item\.requestedTitle, officialIndex, plannedSnapshot\)/);
 
   const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
   const groupStart = loader.indexOf("requests: [");
