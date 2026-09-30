@@ -36,6 +36,56 @@ assert.equal(C.allocationEvidenceState(applied[2]).allocationNumber, 'ALOC-1000'
 assert.equal(Planned.applyToRecords(source, null), source);
 assert.throws(() => Planned.parseWorkbook({ SheetNames: ['Outra'], Sheets: { Outra: X.utils.aoa_to_sheet([['Código'], [code]]) } }), /DOCUMENTO/);
 
+// Consultas: a existência do código normalizado na versão compartilhada é a
+// única autoridade para Alocado / Não alocado. Revisão e valor antigo da LD
+// não participam da decisão.
+const sharedV1 = {
+  id: 'shared-v1',
+  fileName: 'Documentos Previstos V1.xlsx',
+  updatedAt: '2026-09-30T12:00:00Z',
+  keys: new Set([C.key('DOC-001'), C.key('DOC-002')]),
+};
+assert.equal(Planned.classifyDocument('DOC-001', sharedV1).label, 'Alocado', 'caso 1 — documento existente');
+assert.equal(Planned.classifyDocument('DOC-003', sharedV1).label, 'Não alocado', 'caso 2 — documento inexistente');
+assert.equal(Planned.classifyDocument('DOC-001', sharedV1).label, 'Alocado', 'caso 3 — revisão não faz parte da chave');
+assert.equal(Planned.classifyDocument(' doc-001  ', sharedV1).label, 'Alocado', 'caso 4 — normalização canônica');
+
+const legacyRow = {
+  situation: 'Localizado',
+  allocated: 'NÃO — Não alocado',
+  allocationKind: 'not_allocated',
+  allocation: 'ALOC-ANTIGA-999',
+};
+const plannedRow = Planned.applyToConsultationRow(legacyRow, ' DOC-001 ', sharedV1);
+assert.equal(plannedRow.allocated, 'Alocado');
+assert.equal(plannedRow.allocationKind, 'allocated');
+assert.equal(plannedRow.allocationSource, 'Documentos Previstos');
+assert.equal(plannedRow.plannedDocumentsSnapshot, 'shared-v1');
+// O número histórico da LD pode continuar visível como metadado, mas não
+// influencia a classificação objetiva.
+assert.equal(plannedRow.allocation, 'ALOC-ANTIGA-999');
+
+const sharedV2 = {
+  ...sharedV1,
+  id: 'shared-v2',
+  fileName: 'Documentos Previstos V2.xlsx',
+  keys: new Set([C.key('DOC-001'), C.key('DOC-002'), C.key('DOC-003')]),
+};
+assert.equal(Planned.classifyDocument('DOC-003', sharedV1).label, 'Não alocado');
+assert.equal(Planned.classifyDocument('DOC-003', sharedV2).label, 'Alocado', 'caso 5 — nova versão atualiza a decisão');
+
+for (const user of ['owner', 'admin', 'operator']) {
+  assert.equal(Planned.classifyDocument('DOC-002', sharedV2).label, 'Alocado', `caso 6 — ${user} usa o mesmo snapshot compartilhado`);
+}
+
+const unavailable = Planned.classifyDocument('DOC-001', null);
+assert.equal(unavailable.available, false, 'caso 7 — indisponibilidade não vira Não alocado');
+assert.equal(unavailable.label, '');
+assert.equal(unavailable.kind, 'unavailable');
+const unavailableRow = Planned.applyToConsultationRow(legacyRow, 'DOC-001', null);
+assert.equal(unavailableRow.allocated, '');
+assert.equal(unavailableRow.allocationKind, 'unavailable');
+
 const technical = { document: code, revision: '0', sheet: 'ET', source: 'LD.xlsx',
   allocationStatus: 'NÃO ALOCADO', status: 'Não Postado', sigemStatus: 'Não Postado' };
 function triage(keys) {
