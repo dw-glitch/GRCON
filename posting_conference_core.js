@@ -148,13 +148,30 @@
     return index >= 0 && Array.isArray(row) ? text(row[index]) : "";
   }
 
+  function isSigemFooterRow(row, detection) {
+    if (!Array.isArray(row) || !detection?.columns) return false;
+    const document = rowValue(row, detection.columns.document);
+    const revision = normalizeRevision(rowValue(row, detection.columns.revision));
+    if (!document || revision) return false;
+
+    // Exportações da Consulta Geral do SIGEM encerram a planilha com uma
+    // assinatura textual na coluna Documento. Ela não é um documento e não
+    // pode invalidar a publicação da base compartilhada.
+    const footer = normalizeHeader(document);
+    if (!footer.startsWith("SIGEM SISTEMA INTEGRADO DE GERENCIAMENTO DE EMPREENDIMENTOS")) return false;
+
+    return Object.entries(detection.columns)
+      .filter(([field, index]) => field !== "document" && index >= 0)
+      .every(([, index]) => !rowValue(row, index));
+  }
+
   function parseMatrix(matrix, options) {
     const detection = detectColumns(matrix, options && options.maxHeaderRows);
     if (!detection) {
       return {
         ok: false,
         records: [],
-        meta: { recordCount: 0, duplicateCount: 0, invalidCount: 0, headerRow: 0, columns: {} },
+        meta: { recordCount: 0, duplicateCount: 0, invalidCount: 0, ignoredFooterCount: 0, headerRow: 0, columns: {} },
         errors: ["Não foi possível identificar simultaneamente as colunas Documento e Revisão da Consulta Geral."],
       };
     }
@@ -163,12 +180,18 @@
     const records = [];
     const dedupe = new Map();
     let invalidCount = 0;
+    let ignoredFooterCount = 0;
     let duplicateCount = 0;
 
     rows.forEach((row, offset) => {
       const document = rowValue(row, detection.columns.document);
       const revision = normalizeRevision(rowValue(row, detection.columns.revision));
       if (!document) return;
+      if (isSigemFooterRow(row, detection)) {
+        ignoredFooterCount += 1;
+        return;
+      }
+      if (!revision) invalidCount += 1;
       const keys = documentKeys(document);
       if (!keys.length) {
         invalidCount += 1;
@@ -210,6 +233,7 @@
         sourceRowCount: rows.length,
         duplicateCount,
         invalidCount,
+        ignoredFooterCount,
         headerRow: detection.headerRow,
         columns: Object.fromEntries(Object.entries(detection.columns).filter(([, index]) => index >= 0).map(([field, index]) => [field, detection.headers[index] || field])),
       },
