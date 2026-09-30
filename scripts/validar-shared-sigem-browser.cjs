@@ -40,7 +40,9 @@ function rpc(name,args) {
  await a.page.locator('[data-pc-open="sidebar"]').click();await a.page.waitForSelector('#pc-update');
  await a.page.locator('#pc-file').setInputFiles(source);
  await a.page.waitForFunction(()=>window.GrconSharedSigemQuery.state.local?.records.length===2&&!window.GrconPostingConferenceUi.state.busy);
- assert.match(await a.page.locator('#pc-local-preview').innerText(),/Em análise/);
+ assert.equal(await a.page.locator('#pc-local-preview').count(),0);
+ assert.equal(await a.page.locator('#pc-publish').isVisible(),true);
+ assert.match(await a.page.locator('#pc-base-card').innerText(),/consulta\.xlsx/i);
  await a.page.locator('#pc-publish').click();await a.page.waitForFunction(()=>window.GrconSharedSigemQuery.state.shared?.records.length===2&&!window.GrconSharedSigemQuery.state.busy);
  assert.equal(backend.active.record_count,2);
  await a.page.screenshot({path:path.join(output,'conference-shared.png'),fullPage:true});
@@ -167,7 +169,7 @@ function rpc(name,args) {
  const history=await a.page.evaluate(()=>window.GrconHistory.read().find(r=>r.outputType==='eGRDT final'&&r.files.some(f=>f.sigemStatusSource==='shared-general-query')));
  assert.equal(history.files[0].sigemStatus,'Recusado');assert.equal(history.files[0].grdtRevision,'B');assert.equal(history.files[0].purpose,'Para Cancelamento');
  await a.page.screenshot({path:path.join(output,'control-shared.png'),fullPage:true});
- fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({passed:true,backend:'RPC fixtures + real SQL transactional tests separately',cases:['worker Excel import','preview','publish','user B auto-load','shared dashboard ID','control resolver','revision exactness','empty file preservation','upload failure preservation','update propagation','offline cache','reload cache','workspace isolation','reissue revision status','normal control worker without Colar SIGEM','manual revision exact status','generation blocked after SIGEM snapshot change','normal XLS generation and history source'],pageErrors:errors},null,2));
+ fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({passed:true,backend:'RPC fixtures + real SQL transactional tests separately',cases:['worker Excel import','no local preview UI','publish','user B auto-load','shared dashboard ID','control resolver','revision exactness','empty file preservation','upload failure preservation','update propagation','offline cache','reload cache','workspace isolation','reissue revision status','normal control worker without Colar SIGEM','manual revision exact status','generation blocked after SIGEM snapshot change','normal XLS generation and history source'],pageErrors:errors},null,2));
  assert.deepEqual(errors,[]);
  console.log('Chromium shared SIGEM: all cases passed');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
