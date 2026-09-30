@@ -140,10 +140,17 @@ function applyPlannedAllocation(
   row: ConsultationRow,
   snapshot: PlannedDocumentsSnapshot,
 ): ConsultationRow {
-  const applied = plannedDocumentsCore().applyToRecords([
-    { document, documentKey: document },
-  ], snapshot)[0] as Record<string, unknown> | undefined;
-  const allocationStatus = text(applied?.allocationStatus).toUpperCase();
+  // A LD pode ter resolvido a grafia oficial (por exemplo, variante com/sem
+  // nt- ou correção controlada do código). Isso serve apenas para identidade:
+  // a decisão continua sendo presença/ausência no snapshot oficial.
+  const candidates = [...new Set([document, row.ldDocument].map(text).filter(Boolean))];
+  const applied = plannedDocumentsCore().applyToRecords(
+    candidates.map((candidate) => ({ document: candidate, documentKey: candidate })),
+    snapshot,
+  ) as Array<Record<string, unknown>>;
+  const allocationStatus = applied.some((item) => text(item.allocationStatus).toUpperCase() === "ALOCADO")
+    ? "ALOCADO"
+    : applied.length ? "NÃO ALOCADO" : "";
   if (allocationStatus !== "ALOCADO" && allocationStatus !== "NÃO ALOCADO") {
     throw new Error("Não foi possível determinar a alocação pela base compartilhada de Documentos Previstos.");
   }
