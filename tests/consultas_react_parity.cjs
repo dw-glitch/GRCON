@@ -117,6 +117,12 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.equal(plannedRow.plannedDocumentsSnapshot, "planned-v1");
   assert.equal(plannedRow.situation, "Localizado");
 
+
+  const ntVariantInput = plannedDocument.replace("_VM-320236", "_nt-VM-320236");
+  const ntVariantRow = adapter.lookupDocument(ntVariantInput, undefined, officialIndex, loadedPlanned);
+  assert.equal(ntVariantRow.allocated, "SIM — Alocado",
+    "a forma consultada pode usar a grafia equivalente resolvida pela LD sem mudar a fonte da decisão");
+
   const missingFromLdAndPlanned = "C1O_RNEST_U32_3.8.9.1_TUB_REP_VM-999999";
   const absentRow = adapter.lookupDocument(missingFromLdAndPlanned, undefined, officialIndex, loadedPlanned);
   assert.equal(absentRow.situation, "Não localizado");
