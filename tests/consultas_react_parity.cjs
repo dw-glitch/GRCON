@@ -313,8 +313,8 @@ function transpileModule(filePath, jsx, overrides = {}) {
   const adapterSource = fs.readFileSync(adapterPath, "utf8");
   assert.match(adapterSource, /plannedDocuments\(\)\.applyRecords\(registrosOriginais\)/,
     "índice de Consultas deve sobrescrever a alocação da LD pela base compartilhada");
-  assert.match(adapterSource, /service\.classify\(resolvedDocument\)/,
-    "resultado final deve ser classificado por Documentos Previstos");
+  assert.match(adapterSource, /service\.classify\(document\)/,
+    "resultado final deve ser classificado pelo código consultado em Documentos Previstos");
   assert.match(adapterSource, /refreshPlannedDocuments/,
     "Consultas deve confirmar a versão vigente antes de consultar");
 
