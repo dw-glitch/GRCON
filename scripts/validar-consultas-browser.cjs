@@ -265,14 +265,14 @@ async function clearLds(page) {
     await page.screenshot({path:path.join(outputDir,"03-resultados-1366.png"),fullPage:true});
 
     for (const label of ["Localizados","A validar","Não localizados","Total"]) { const k=page.getByRole("button",{name:new RegExp("^"+label+"\\s+\\d+$")}); await k.click(); assert.equal(await k.getAttribute("aria-pressed"),"true"); }
-    await page.getByRole("button",{name:/^Localizados\s+\d+$/}).click(); await page.locator(".requests-search input").fill("SPE-AST-320020"); await page.locator(".requests-filterbar select").nth(0).selectOption("sim"); await page.locator(".requests-filterbar select").nth(1).selectOption("documento"); await page.waitForTimeout(100); assert.match(await page.locator(".requests-filter-count").innerText(),/Exibindo 1 de 500/); assert.match(await page.locator(".requests-col-allocation").nth(1).innerText(),/Alocado/); await page.getByRole("button",{name:"Limpar filtros"}).click(); await page.getByRole("button",{name:/^Total\s+\d+$/}).click();
+    await page.getByRole("button",{name:/^Localizados\s+\d+$/}).click(); await page.locator(".requests-search input").fill("SPE-AST-320020"); await page.locator(".requests-filterbar select").nth(0).selectOption("sim"); await page.locator(".requests-filterbar select").nth(1).selectOption("documento"); await page.waitForTimeout(100); assert.match(await page.locator(".requests-filter-count").innerText(),/Exibindo 1 de 500/); assert.match(await page.locator(".requests-col-allocation").first().innerText(),/Alocado/); await page.getByRole("button",{name:"Limpar filtros"}).click(); await page.getByRole("button",{name:/^Total\s+\d+$/}).click();
 
     // Uma nova versão publicada enquanto Consultas está aberta precisa
     // reclassificar resultados existentes sem limpar estado nem reenviar LD.
     const updatedCode=P+"nt-ZZ-000010";
     await page.locator(".requests-search input").fill("ZZ-000010");
     await page.waitForTimeout(100);
-    assert.match(await page.locator(".requests-col-allocation").nth(1).innerText(),/Não alocado/);
+    assert.match(await page.locator(".requests-col-allocation").first().innerText(),/Não alocado/);
     await page.evaluate(function (code) {
       const P="C1O_RNEST_U32_3.1.1.1_INS_RIR_";
       window.__grconQaPublishPlannedDocuments("qa-planned-v2", [
