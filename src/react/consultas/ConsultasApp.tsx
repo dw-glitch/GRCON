@@ -43,6 +43,10 @@ export function ConsultasApp() {
 
   const setupReady = c.ldsReady > 0 && c.documents.length > 0;
   const filterKey = [c.search, c.situation, c.allocation, c.sort].join("|");
+  const plannedReady = c.plannedDocuments.status === "ready";
+  const plannedMessage = plannedReady
+    ? `${c.plannedDocuments.count.toLocaleString("pt-BR")} documentos · ${c.plannedDocuments.fileName || "base compartilhada"}${c.plannedDocuments.updatedAt ? ` · atualizada em ${new Date(c.plannedDocuments.updatedAt).toLocaleString("pt-BR")}` : ""}`
+    : c.plannedDocuments.message;
 
   const clearFilters = useCallback(() => {
     c.setSearch("");
@@ -66,6 +70,15 @@ export function ConsultasApp() {
           </div>
         )}
       />
+
+      <div
+        className={`requests-planned-source is-${c.plannedDocuments.status}`}
+        role={c.plannedDocuments.status === "error" ? "alert" : "status"}
+        aria-live="polite"
+      >
+        <strong>Alocação · Documentos Previstos</strong>
+        <span>{plannedMessage || "Verificando alocação…"}</span>
+      </div>
 
       <StepsIndicator
         ldsReady={c.ldsReady}
@@ -92,7 +105,7 @@ export function ConsultasApp() {
       </div>
 
       <ActionsBar
-        canQuery={c.documents.length > 0 && c.indexReady && !c.running}
+        canQuery={c.documents.length > 0 && c.ldsReady > 0 && !c.running}
         hasSelection={c.selectedCount > 0}
         hasDocuments={c.documents.length > 0}
         hasResults={c.results.size > 0}
