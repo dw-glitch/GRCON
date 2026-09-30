@@ -1,3 +1,13 @@
+## 5.44.5 — 2026-09-30
+
+### Consultas usa Documentos Previstos como fonte oficial de alocação
+
+- **Alocado / Não alocado** no módulo Consultas passa a ser determinado exclusivamente pela presença do código na base compartilhada de **Documentos Previstos**.
+- A coluna de alocação da LD deixa de participar da decisão e de criar falsos conflitos; título, revisão, SIGEM, histórico e demais evidências continuam vindo das fontes atuais.
+- A mesma versão do snapshot compartilhado é usada durante toda a execução, inclusive para documentos não localizados na LD; troca de snapshot invalida resultados e exportações antigos.
+- Quando Documentos Previstos não está disponível ou válido, a consulta falha de forma explícita e não classifica ausência de fonte como “Não alocado”.
+- O detalhe da consulta identifica a fonte e o arquivo publicado; o cache do Service Worker foi renovado para distribuir a correção imediatamente.
+
 ## 5.44.2 — 2026-09-28
 
 ### Conferência sem rolagem horizontal
