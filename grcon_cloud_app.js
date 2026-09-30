@@ -845,10 +845,10 @@
     event.preventDefault();
     if (!adminPasswordModal || adminPasswordModal.submitting || !canManageMembers()) return;
     if (!validateAdminPasswordForm(true)) return;
-    pendingAdminPassword = String($("#grcon-admin-new-password")?.value || "");
+    const nextPassword = String($("#grcon-admin-new-password")?.value || "");
     const target = adminPasswordModal.target;
     clearAdminPasswordSecrets();
-    pendingAdminPassword = String(pendingAdminPassword || "");
+    pendingAdminPassword = nextPassword;
     $("#grcon-admin-password-confirm-name").textContent = target?.name || "Usuário";
     $("#grcon-admin-password-confirm-email").textContent = target?.email || "";
     $("#grcon-admin-password-edit").hidden = true;
