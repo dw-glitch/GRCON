@@ -232,6 +232,12 @@ export function useConsultas() {
 
       Adapter.refreshHistoryIndicator();
       const novosResultados = new Map(results);
+      // Mesmo ao consultar somente a seleção, nenhuma linha já exibida pode
+      // continuar vinculada a uma versão anterior de Documentos Previstos.
+      for (const item of documents) {
+        const previous = novosResultados.get(item.id);
+        if (previous) novosResultados.set(item.id, Adapter.applyPlannedAllocation(item.document, previous));
+      }
       for (let inicio = 0; inicio < total; inicio += 100) {
         const fim = Math.min(total, inicio + 100);
         for (let i = inicio; i < fim; i += 1) {
