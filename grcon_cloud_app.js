@@ -799,7 +799,7 @@
     const submit = $("#grcon-admin-password-next");
     if (submit) submit.disabled = Boolean(problem) || Boolean(adminPasswordModal?.submitting);
 
-    if (showMessage || confirmationInvalid) {
+    if (showMessage || passwordInvalid || confirmationInvalid) {
       setAdminPasswordMessage(problem, problem ? "error" : "info");
     } else if (!problem) {
       setAdminPasswordMessage("", "info");
