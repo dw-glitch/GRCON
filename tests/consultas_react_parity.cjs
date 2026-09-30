@@ -9,11 +9,11 @@ const ExcelJS = require("../exceljs.min.js");
 const Triagem = require("../core.js");
 const RequestsOriginal = require("../requests_core.js");
 const ReportOriginal = require("../requests_report.js");
-const Planned = require("../planned_documents_core.js");
 
 globalThis.TriagemCore = Triagem;
 globalThis.GrconRequestsCore = RequestsOriginal;
 globalThis.GrconRequestsReport = ReportOriginal;
+const Planned = require("../planned_documents_core.js");
 const Taxonomy = require("../requests_taxonomy_core.js");
 const Report = Taxonomy.wrapReport(ReportOriginal);
 
