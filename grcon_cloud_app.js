@@ -36,6 +36,9 @@
     onlineUserIds: new Set(),
   };
 
+  let adminPasswordModal = null;
+  let pendingAdminPassword = "";
+
   const $ = (selector, context) => (context || document).querySelector(selector);
   const escapeHtml = (value) => String(value == null ? "" : value)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -84,6 +87,13 @@
     if (!/[A-Z]/.test(value)) return "Inclua pelo menos uma letra maiúscula.";
     if (!/\d/.test(value)) return "Inclua pelo menos um número.";
     if (!/[^A-Za-z0-9]/.test(value)) return "Inclua pelo menos um símbolo.";
+    return "";
+  }
+
+  function adminPasswordFormProblem(password, confirmation) {
+    const problem = passwordProblem(password);
+    if (problem) return problem;
+    if (String(password || "") !== String(confirmation || "")) return "As senhas informadas não coincidem.";
     return "";
   }
 
@@ -726,6 +736,289 @@
     }
   }
 
+
+  function adminPasswordRequirements(password) {
+    const value = String(password || "");
+    return {
+      length: value.length >= 12,
+      upper: /[A-Z]/.test(value),
+      lower: /[a-z]/.test(value),
+      number: /\d/.test(value),
+      symbol: /[^A-Za-z0-9]/.test(value),
+    };
+  }
+
+  function setAdminPasswordMessage(message, tone) {
+    const target = $("#grcon-admin-password-message");
+    if (!target) return;
+    target.textContent = message || "";
+    target.dataset.tone = tone || "info";
+  }
+
+  function clearAdminPasswordSecrets() {
+    pendingAdminPassword = "";
+    const password = $("#grcon-admin-new-password");
+    const confirmation = $("#grcon-admin-confirm-password");
+    if (password) {
+      password.value = "";
+      password.type = "password";
+      password.setAttribute("aria-invalid", "false");
+    }
+    if (confirmation) {
+      confirmation.value = "";
+      confirmation.type = "password";
+      confirmation.setAttribute("aria-invalid", "false");
+    }
+    const show = $("#grcon-admin-show-password");
+    if (show) show.checked = false;
+  }
+
+  function renderAdminPasswordRequirements(password) {
+    const requirements = adminPasswordRequirements(password);
+    Object.entries(requirements).forEach(([key, met]) => {
+      const item = document.querySelector('[data-admin-password-rule="' + key + '"]');
+      if (!item) return;
+      item.classList.toggle("is-met", Boolean(met));
+      item.setAttribute("aria-label", (met ? "Atendido: " : "Pendente: ") + (item.dataset.label || ""));
+      const marker = item.querySelector("span");
+      if (marker) marker.textContent = met ? "✓" : "○";
+    });
+    return requirements;
+  }
+
+  function validateAdminPasswordForm(showMessage) {
+    const password = String($("#grcon-admin-new-password")?.value || "");
+    const confirmation = String($("#grcon-admin-confirm-password")?.value || "");
+    const requirements = renderAdminPasswordRequirements(password);
+    const passwordInvalid = password.length > 0 && Object.values(requirements).some((value) => !value);
+    const confirmationInvalid = confirmation.length > 0 && password !== confirmation;
+    $("#grcon-admin-new-password")?.setAttribute("aria-invalid", String(passwordInvalid));
+    $("#grcon-admin-confirm-password")?.setAttribute("aria-invalid", String(confirmationInvalid));
+
+    const problem = adminPasswordFormProblem(password, confirmation);
+    const submit = $("#grcon-admin-password-next");
+    if (submit) submit.disabled = Boolean(problem) || Boolean(adminPasswordModal?.submitting);
+
+    if (showMessage || confirmationInvalid) {
+      setAdminPasswordMessage(problem, problem ? "error" : "info");
+    } else if (!problem) {
+      setAdminPasswordMessage("", "info");
+    }
+    return !problem;
+  }
+
+  function adminPasswordFocusable() {
+    const root = adminPasswordModal?.root;
+    if (!root || root.hidden) return [];
+    return [...root.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((node) => !node.closest("[hidden]") && node.getClientRects().length > 0);
+  }
+
+  function closeAdminPasswordModal(options) {
+    if (!adminPasswordModal || (adminPasswordModal.submitting && !options?.force)) return;
+    const returnFocus = adminPasswordModal.returnFocus;
+    clearAdminPasswordSecrets();
+    adminPasswordModal.target = null;
+    adminPasswordModal.returnFocus = null;
+    adminPasswordModal.submitting = false;
+    adminPasswordModal.root.hidden = true;
+    adminPasswordModal.root.removeAttribute("aria-busy");
+    setAdminPasswordMessage("", "info");
+    if (returnFocus && typeof returnFocus.focus === "function") {
+      try { returnFocus.focus({ preventScroll: true }); } catch (_) { returnFocus.focus(); }
+    }
+  }
+
+  function showAdminPasswordEditStep(message, tone) {
+    const edit = $("#grcon-admin-password-edit");
+    const confirm = $("#grcon-admin-password-confirm");
+    if (edit) edit.hidden = false;
+    if (confirm) confirm.hidden = true;
+    renderAdminPasswordRequirements("");
+    setAdminPasswordMessage(message || "", tone || "info");
+    const next = $("#grcon-admin-password-next");
+    if (next) next.disabled = true;
+    requestAnimationFrame(() => $("#grcon-admin-new-password")?.focus());
+  }
+
+  function prepareAdminPasswordConfirmation(event) {
+    event.preventDefault();
+    if (!adminPasswordModal || adminPasswordModal.submitting || !canManageMembers()) return;
+    if (!validateAdminPasswordForm(true)) return;
+    pendingAdminPassword = String($("#grcon-admin-new-password")?.value || "");
+    const target = adminPasswordModal.target;
+    clearAdminPasswordSecrets();
+    pendingAdminPassword = String(pendingAdminPassword || "");
+    $("#grcon-admin-password-confirm-name").textContent = target?.name || "Usuário";
+    $("#grcon-admin-password-confirm-email").textContent = target?.email || "";
+    $("#grcon-admin-password-edit").hidden = true;
+    $("#grcon-admin-password-confirm").hidden = false;
+    requestAnimationFrame(() => $("#grcon-admin-password-submit")?.focus());
+  }
+
+  async function adminPasswordErrorMessage(error) {
+    const context = error?.context;
+    if (context && typeof context.clone === "function") {
+      try {
+        const payload = await context.clone().json();
+        if (payload?.message) return String(payload.message);
+      } catch (_) {
+        // A resposta pode não ser JSON; nunca ecoar o corpo bruto.
+      }
+    }
+    return "Não foi possível alterar a senha agora.";
+  }
+
+  async function submitAdminPasswordChange() {
+    if (!adminPasswordModal || adminPasswordModal.submitting || !pendingAdminPassword) return;
+    const target = adminPasswordModal.target;
+    if (!target || !canManageMembers() || !state.client || !state.membership?.workspace_id) {
+      clearAdminPasswordSecrets();
+      showAdminPasswordEditStep("Somente o proprietário pode alterar senhas de usuários.", "error");
+      return;
+    }
+
+    adminPasswordModal.submitting = true;
+    adminPasswordModal.root.setAttribute("aria-busy", "true");
+    const submit = $("#grcon-admin-password-submit");
+    const cancel = $("#grcon-admin-password-confirm-cancel");
+    const close = $("#grcon-admin-password-close");
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = "Alterando senha...";
+    }
+    if (cancel) cancel.disabled = true;
+    if (close) close.disabled = true;
+
+    try {
+      const { data, error } = await state.client.functions.invoke("owner-change-user-password", {
+        body: {
+          targetUserId: target.userId,
+          workspaceId: state.membership.workspace_id,
+          newPassword: pendingAdminPassword,
+        },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error("Resposta inválida ao alterar a senha.");
+      pendingAdminPassword = "";
+      closeAdminPasswordModal({ force: true });
+      notify("Senha alterada com sucesso.", "success");
+      const auditPanel = $("#grcon-cloud-audit-panel");
+      if (auditPanel?.open) loadAuditEvents();
+    } catch (error) {
+      pendingAdminPassword = "";
+      const message = await adminPasswordErrorMessage(error);
+      clearAdminPasswordSecrets();
+      showAdminPasswordEditStep(message, "error");
+    } finally {
+      if (adminPasswordModal) {
+        adminPasswordModal.submitting = false;
+        adminPasswordModal.root.removeAttribute("aria-busy");
+      }
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = "Confirmar alteração";
+      }
+      if (cancel) cancel.disabled = false;
+      if (close) close.disabled = false;
+    }
+  }
+
+  function ensureAdminPasswordModal() {
+    if (adminPasswordModal) return adminPasswordModal;
+    const root = document.createElement("div");
+    root.className = "grcon-admin-password-backdrop";
+    root.id = "grcon-admin-password-modal";
+    root.hidden = true;
+    root.innerHTML = [
+      '<section class="grcon-admin-password-dialog" role="dialog" aria-modal="true" aria-labelledby="grcon-admin-password-title">',
+      '<button class="grcon-admin-password-close" id="grcon-admin-password-close" type="button" aria-label="Fechar alteração de senha">×</button>',
+      '<div id="grcon-admin-password-edit">',
+      '<span class="grcon-cloud-eyebrow">ADMINISTRAÇÃO · USUÁRIOS</span>',
+      '<h2 id="grcon-admin-password-title">Alterar senha</h2>',
+      '<dl class="grcon-admin-password-user"><div><dt>Usuário</dt><dd id="grcon-admin-password-name"></dd></div><div><dt>E-mail</dt><dd id="grcon-admin-password-email"></dd></div></dl>',
+      '<form id="grcon-admin-password-form" novalidate>',
+      '<label for="grcon-admin-new-password"><span>Nova senha</span><input id="grcon-admin-new-password" type="password" autocomplete="new-password" minlength="12" required aria-describedby="grcon-admin-password-rules grcon-admin-password-message"/></label>',
+      '<label for="grcon-admin-confirm-password"><span>Confirmar nova senha</span><input id="grcon-admin-confirm-password" type="password" autocomplete="new-password" minlength="12" required aria-describedby="grcon-admin-password-message"/></label>',
+      '<label class="grcon-admin-password-show" for="grcon-admin-show-password"><input id="grcon-admin-show-password" type="checkbox"/> <span>Mostrar senha</span></label>',
+      '<ul class="grcon-admin-password-rules" id="grcon-admin-password-rules" aria-label="Requisitos da senha">',
+      '<li data-admin-password-rule="length" data-label="12 caracteres"><span>○</span> 12 caracteres</li>',
+      '<li data-admin-password-rule="upper" data-label="Letra maiúscula"><span>○</span> Letra maiúscula</li>',
+      '<li data-admin-password-rule="lower" data-label="Letra minúscula"><span>○</span> Letra minúscula</li>',
+      '<li data-admin-password-rule="number" data-label="Número"><span>○</span> Número</li>',
+      '<li data-admin-password-rule="symbol" data-label="Símbolo"><span>○</span> Símbolo</li>',
+      '</ul>',
+      '<p class="grcon-admin-password-message" id="grcon-admin-password-message" role="status" aria-live="polite"></p>',
+      '<footer><button class="secondary-button compact" id="grcon-admin-password-cancel" type="button">Cancelar</button><button class="primary-button compact" id="grcon-admin-password-next" type="submit" disabled>Alterar senha</button></footer>',
+      '</form>',
+      '</div>',
+      '<div id="grcon-admin-password-confirm" hidden>',
+      '<span class="grcon-cloud-eyebrow">CONFIRMAÇÃO</span>',
+      '<h2>Alterar senha deste usuário?</h2>',
+      '<dl class="grcon-admin-password-user"><div><dt>Usuário</dt><dd id="grcon-admin-password-confirm-name"></dd></div><div><dt>E-mail</dt><dd id="grcon-admin-password-confirm-email"></dd></div></dl>',
+      '<p>Esta ação substituirá imediatamente a senha atual deste usuário.</p>',
+      '<footer><button class="secondary-button compact" id="grcon-admin-password-confirm-cancel" type="button">Cancelar</button><button class="primary-button compact" id="grcon-admin-password-submit" type="button">Confirmar alteração</button></footer>',
+      '</div>',
+      '</section>',
+    ].join("");
+    document.body.appendChild(root);
+
+    adminPasswordModal = { root, target: null, returnFocus: null, submitting: false };
+
+    $("#grcon-admin-password-form", root).addEventListener("submit", prepareAdminPasswordConfirmation);
+    $("#grcon-admin-new-password", root).addEventListener("input", () => validateAdminPasswordForm(false));
+    $("#grcon-admin-confirm-password", root).addEventListener("input", () => validateAdminPasswordForm(false));
+    $("#grcon-admin-show-password", root).addEventListener("change", (event) => {
+      const type = event.currentTarget.checked ? "text" : "password";
+      const password = $("#grcon-admin-new-password");
+      const confirmation = $("#grcon-admin-confirm-password");
+      if (password) password.type = type;
+      if (confirmation) confirmation.type = type;
+    });
+    $("#grcon-admin-password-cancel", root).addEventListener("click", () => closeAdminPasswordModal());
+    $("#grcon-admin-password-confirm-cancel", root).addEventListener("click", () => closeAdminPasswordModal());
+    $("#grcon-admin-password-close", root).addEventListener("click", () => closeAdminPasswordModal());
+    $("#grcon-admin-password-submit", root).addEventListener("click", submitAdminPasswordChange);
+    root.addEventListener("click", (event) => {
+      if (event.target === root) closeAdminPasswordModal();
+    });
+    root.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        if (!adminPasswordModal?.submitting) {
+          event.preventDefault();
+          closeAdminPasswordModal();
+        }
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = adminPasswordFocusable();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+    return adminPasswordModal;
+  }
+
+  function openAdminPasswordModal(target, trigger) {
+    if (!canManageMembers() || !target || !["admin", "operator"].includes(target.role)) return;
+    ensureAdminPasswordModal();
+    adminPasswordModal.target = target;
+    adminPasswordModal.returnFocus = trigger || document.activeElement;
+    adminPasswordModal.submitting = false;
+    clearAdminPasswordSecrets();
+    $("#grcon-admin-password-name").textContent = target.name || "Usuário";
+    $("#grcon-admin-password-email").textContent = target.email || "";
+    adminPasswordModal.root.hidden = false;
+    showAdminPasswordEditStep("", "info");
+  }
+
   function createAccountMenu() {
     if ($("#grcon-cloud-account")) return;
     const host = $(".runtime-status");
@@ -902,9 +1195,13 @@
           .map(([value, label]) => `<option value="${value}" ${membership.role === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
           .join("");
         const isSelf = membership.user_id === selfId;
+        const passwordAction = membership.active && ["admin", "operator"].includes(membership.role)
+          ? `<button class="secondary-button compact" data-member-password="${escapeHtml(membership.user_id)}" type="button">Alterar senha</button>`
+          : "";
         return `<div data-member-user-id="${escapeHtml(membership.user_id)}" class="grcon-cloud-member-row ${online ? "is-online" : ""} ${membership.active ? "" : "is-inactive"}">
           <span><i class="grcon-cloud-member-dot" title="${online ? "Online agora" : "Offline"}"></i><strong>${name}</strong><small>${mail}</small>${inactiveTag}</span>
           <select aria-label="Perfil de ${name}" data-member-role="${escapeHtml(membership.user_id)}">${options}</select>
+          ${passwordAction}
           <button class="secondary-button compact" data-member-active="${escapeHtml(membership.user_id)}" data-next-active="${membership.active ? "false" : "true"}" ${isSelf ? "disabled title='Você não pode desativar a si mesmo'" : ""} type="button">${membership.active ? "Desativar" : "Reativar"}</button>
         </div>`;
       }).join("") || "<small>Nenhum usuário ativo.</small>";
@@ -917,6 +1214,21 @@
           button.addEventListener("click", (event) => {
             const el = event.currentTarget;
             setMemberActive(el.dataset.memberActive, el.dataset.nextActive === "true");
+          });
+        });
+        target.querySelectorAll("[data-member-password]").forEach((button) => {
+          button.addEventListener("click", (event) => {
+            const el = event.currentTarget;
+            const userId = el.dataset.memberPassword || "";
+            const membership = (memberships || []).find((item) => item.user_id === userId);
+            const profile = state.profiles.get(userId) || {};
+            if (!membership) return;
+            openAdminPasswordModal({
+              userId,
+              role: membership.role,
+              name: profile.display_name || profile.email || "Usuário",
+              email: profile.email || "",
+            }, el);
           });
         });
       }
@@ -983,6 +1295,7 @@
     update_role: "Perfil alterado",
     deactivate: "Usuário desativado",
     reactivate: "Usuário reativado",
+    user_password_changed: "Senha de usuário alterada",
   });
 
   // Histórico de quem fez o quê no workspace. Somente owner/admin conseguem
@@ -1012,7 +1325,9 @@
           ? ` · ${event.metadata.egrdt_number}`
           : event.metadata && event.metadata.new_role
             ? ` · ${roleLabels[event.metadata.new_role] || event.metadata.new_role}`
-            : "";
+            : event.metadata && event.metadata.targetEmail
+              ? ` · ${event.metadata.targetEmail}`
+              : "";
         return `<div class="grcon-cloud-audit-item"><span><strong>${escapeHtml(what)}</strong><small>${escapeHtml(who)}${escapeHtml(detail)}</small></span><time>${escapeHtml(formatDateTime(event.created_at))}</time></div>`;
       }).join("") || "<small>Nenhuma atividade registrada.</small>";
     } catch (error) {
