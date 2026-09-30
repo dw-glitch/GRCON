@@ -228,9 +228,9 @@ async function clearLds(page) {
     await page.getByRole("button",{name:"Consultar documentos",exact:true}).click(); await page.waitForFunction(function(){return document.querySelector(".requests-progress")&&document.querySelector(".requests-progress").hidden&&document.querySelector(".requests-summary");},{},{timeout:20000});
     assert.equal(await page.locator(".requests-kpi").first().locator("strong").innerText(),"500"); assert.match(await page.locator(".requests-pagination").innerText(),/Página 1 de 5/);
     const allocationCells = page.locator(".requests-col-allocation");
-    assert.match(await allocationCells.nth(1).innerText(),/^NÃO — Não alocado$/, "LD diz ALOCADO, mas ausência em Documentos Previstos deve prevalecer");
-    assert.match(await allocationCells.nth(2).innerText(),/^SIM — Alocado$/, "presença em Documentos Previstos deve prevalecer");
-    assert.equal(await allocationCells.nth(2).locator("span").getAttribute("title"), "Documentos Previstos compartilhado");
+    assert.match(await allocationCells.nth(0).innerText(),/^NÃO — Não alocado$/, "LD diz ALOCADO, mas ausência em Documentos Previstos deve prevalecer");
+    assert.match(await allocationCells.nth(1).innerText(),/^SIM — Alocado$/, "presença em Documentos Previstos deve prevalecer");
+    assert.equal(await allocationCells.nth(1).locator("span").getAttribute("title"), "Documentos Previstos compartilhado");
     const mascotLight=await inspectRealMascotTransparency(page);
     assert.ok(mascotLight.transparentEdgeRatio>=0.72,"interface real: o mascote precisa estar realmente transparente nas bordas");
     assert.equal(mascotLight.hostBackground,"rgba(0, 0, 0, 0)");
