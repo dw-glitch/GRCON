@@ -35,7 +35,14 @@
   }
 
   function classifyDocument(documentCode, snapshot) {
-    const documentKey = key(String(documentCode || "").replace(/\u0000/g, ""));
+    const cleanCode = String(documentCode || "").replace(/\u0000/g, "");
+    const documentKey = key(cleanCode);
+    // Reutiliza somente equivalências canônicas já controladas pelo GRCON.
+    // Para ET isso inclui a mesma codificação com/sem o prefixo nt-; não há
+    // fuzzy match, revisão ou consulta à LD para decidir alocação.
+    const searchKeys = typeof Core.documentSearchKeys === "function"
+      ? [...new Set(Core.documentSearchKeys(cleanCode).map(key).filter(Boolean))]
+      : [documentKey].filter(Boolean);
     if (!snapshot || !snapshot.id || !(snapshot.keys instanceof Set)) {
       return {
         available: false,
@@ -44,12 +51,15 @@
         label: "",
         status: "",
         documentKey,
+        searchKeys,
+        matchedKey: "",
         snapshotId: "",
         fileName: "",
         updatedAt: "",
       };
     }
-    const allocated = Boolean(documentKey) && snapshot.keys.has(documentKey);
+    const matchedKey = searchKeys.find((candidate) => snapshot.keys.has(candidate)) || "";
+    const allocated = Boolean(matchedKey);
     return {
       available: true,
       allocated,
@@ -57,6 +67,8 @@
       label: allocated ? "Alocado" : "Não alocado",
       status: allocated ? "ALOCADO" : "NÃO ALOCADO",
       documentKey,
+      searchKeys,
+      matchedKey,
       snapshotId: snapshot.id,
       fileName: snapshot.fileName || "",
       updatedAt: snapshot.updatedAt || "",
