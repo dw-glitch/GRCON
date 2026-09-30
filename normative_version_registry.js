@@ -45,7 +45,8 @@
     const item = normalizeRecord(record);
     const explicit = norm(item.explicitStatus);
     if (["CANCELLED", "CANCELED", "CANCELADA", "CANCELADO"].includes(explicit)) return "cancelled";
-    if (["SUPERSEDED", "SUBSTITUIDA", "SUBSTITUIDO"].includes(explicit)) return "superseded";\n    if (["SOURCE-CONFIRMED", "SOURCE_CONFIRMED", "FONTE-CONFIRMADA"].includes(explicit)) return "source-confirmed";
+    if (["SUPERSEDED", "SUBSTITUIDA", "SUBSTITUIDO"].includes(explicit)) return "superseded";
+    if (["SOURCE-CONFIRMED", "SOURCE_CONFIRMED", "FONTE-CONFIRMADA"].includes(explicit)) return "source-confirmed";
     if (!item.revision) return "invalid";
     if (!item.catalogRevision) return "catalog-unconfirmed";
     if (item.catalogRevision !== item.revision) return "catalog-mismatch";
