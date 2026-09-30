@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
-import { authorizePasswordChange, passwordProblem } from "./policy.mjs";
+import { authorizeActor, authorizeTarget, passwordProblem } from "./policy.mjs";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -103,17 +103,15 @@ Deno.serve(async (req: Request) => {
     return response(500, { code: "AUTHORIZATION_CHECK_FAILED", message: "Não foi possível validar sua permissão agora." });
   }
 
-  const preliminaryAuthorization = authorizePasswordChange({
+  const actorAuthorization = authorizeActor({
     authenticated: true,
     actorMembership,
-    targetExists: true,
-    targetMemberships: [{ workspace_id: workspaceId, role: "operator", active: true }],
     workspaceId,
   });
-  if (!preliminaryAuthorization.ok && preliminaryAuthorization.code === "OWNER_REQUIRED") {
-    return response(preliminaryAuthorization.status, {
-      code: preliminaryAuthorization.code,
-      message: preliminaryAuthorization.message,
+  if (!actorAuthorization.ok) {
+    return response(actorAuthorization.status, {
+      code: actorAuthorization.code,
+      message: actorAuthorization.message,
     });
   }
 
@@ -132,9 +130,7 @@ Deno.serve(async (req: Request) => {
     return response(500, { code: "TARGET_CHECK_FAILED", message: "Não foi possível validar o usuário agora." });
   }
 
-  const authorizationResult = authorizePasswordChange({
-    authenticated: true,
-    actorMembership,
+  const authorizationResult = authorizeTarget({
     targetExists: true,
     targetMemberships: Array.isArray(targetMemberships) ? targetMemberships : [],
     workspaceId,
