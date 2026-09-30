@@ -1,0 +1,74 @@
+name: QA — Consultas e Documentos Previstos
+
+on:
+  pull_request:
+    paths:
+      - "planned_documents_core.js"
+      - "planned_documents_app.js"
+      - "grcon_cloud_app.js"
+      - "requests_core.js"
+      - "requests-phase-b.css"
+      - "src/react/consultas/**"
+      - "tests/planned_documents.cjs"
+      - "tests/consultas_react_parity.cjs"
+      - "scripts/validar-consultas-browser.cjs"
+      - "sw.js"
+      - ".github/workflows/consultas-planned-documents.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grcon-consultas-planned-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  consultas:
+    name: Regra compartilhada + Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck, build e testes
+        run: npm run verify
+
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: QA Chromium de Consultas
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-consultas-server.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              cat "$RUNNER_TEMP/grcon-consultas-server.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          node scripts/validar-consultas-browser.cjs
+
+      - name: Publicar evidências de Consultas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: consultas-planned-documents
+          path: |
+            artifacts/consultas-browser/*.png
+            artifacts/consultas-browser/*.json
+          if-no-files-found: warn
