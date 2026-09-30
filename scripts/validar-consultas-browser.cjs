@@ -90,13 +90,55 @@ async function clickVisibleView(page, view) {
   assert.equal(clicked, true, "deve existir navegação visível para " + view);
 }
 
+async function installQaPlannedDocuments(page) {
+  await page.evaluate(function () {
+    const P = "C1O_RNEST_U32_3.1.1.1_INS_RIR_";
+    const buildSnapshot = function (id, codes) {
+      return {
+        id: id,
+        fileName: "Documentos Previstos QA.xlsx",
+        updatedAt: new Date().toISOString(),
+        count: codes.length,
+        keys: new Set(codes.map(function (code) { return window.TriagemCore.key(code); })),
+      };
+    };
+    window.__grconQaPlannedSnapshot = buildSnapshot("qa-planned-v1", [
+      P+"SPE-AST-320019",
+      P+"nt-SPE-AST-320019",
+      P+"nt-SPE-AST-320020",
+    ]);
+    if (window.GrconCloud && window.GrconCloud.state) {
+      window.GrconCloud.state.membership = { workspace_id:"qa-workspace", role:"owner" };
+      window.GrconCloud.state.online = true;
+      window.GrconCloud.state.plannedSnapshot = window.__grconQaPlannedSnapshot;
+    }
+    window.GrconPlannedDocuments = Object.freeze({
+      current: function () { return window.__grconQaPlannedSnapshot; },
+      refresh: async function () { return window.__grconQaPlannedSnapshot; },
+      classify: function (code) { return window.GrconPlannedDocumentsCore.classifyDocument(code, window.__grconQaPlannedSnapshot); },
+      isAllocated: function (code) {
+        const result = window.GrconPlannedDocumentsCore.classifyDocument(code, window.__grconQaPlannedSnapshot);
+        return result.available ? result.allocated : null;
+      },
+      applyRecords: function (records) { return window.GrconPlannedDocumentsCore.applyToRecords(records, window.__grconQaPlannedSnapshot); },
+      applyConsultationRow: function (row, code) { return window.GrconPlannedDocumentsCore.applyToConsultationRow(row, code, window.__grconQaPlannedSnapshot); },
+    });
+    window.__grconQaPublishPlannedDocuments = function (id, codes) {
+      window.__grconQaPlannedSnapshot = buildSnapshot(id, codes);
+      if (window.GrconCloud && window.GrconCloud.state) window.GrconCloud.state.plannedSnapshot = window.__grconQaPlannedSnapshot;
+      window.dispatchEvent(new CustomEvent("grcon:planned-documents-updated", { detail:{ snapshot:window.__grconQaPlannedSnapshot } }));
+    };
+  });
+}
+
 async function openConsultas(page) {
   await page.goto(baseUrl, { waitUntil:"domcontentloaded", timeout:30000 });
   await waitForStableServiceWorkerPage(page);
-  // Este roteiro valida Consultas, não autenticação/cloud. Em vez de mutar o
-  // estado assíncrono do login (que pode relocar o gate após getSession), a
-  // página de teste recebe apenas uma sobrescrita visual. O código publicado,
-  // a sessão Supabase e os eventos do app permanecem intocados.
+  // Este roteiro valida Consultas, não autenticação. A classificação de
+  // alocação, porém, exige obrigatoriamente a fonte compartilhada; por isso o
+  // QA injeta um snapshot determinístico no mesmo contrato público usado em
+  // produção, sem escrever no Supabase real.
+  await installQaPlannedDocuments(page);
   await page.addStyleTag({ content: [
     'html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; }',
     '#grcon-cloud-auth { display: none !important; }',
@@ -189,6 +231,9 @@ async function clearLds(page) {
     page.on("console", function (m) { if (m.type()==="error") errors.push("console: "+m.text()); });
     page.on("response", function (r) { try { responses.set(new URL(r.url()).pathname, {status:r.status(), type:r.headers()["content-type"]||""}); } catch (_) {} });
     await openConsultas(page);
+    await page.locator(".requests-planned-source.is-ready").waitFor({ state:"visible", timeout:5000 });
+    assert.match(await page.locator(".requests-planned-source").innerText(), /Documentos Previstos/);
+    assert.match(await page.locator(".requests-planned-source").innerText(), /Documentos Previstos QA\.xlsx/);
     await page.screenshot({ path:path.join(outputDir,"01-consultas-vazia-1366.png"), fullPage:true });
 
     const head = await page.evaluate(function () {
@@ -220,7 +265,29 @@ async function clearLds(page) {
     await page.screenshot({path:path.join(outputDir,"03-resultados-1366.png"),fullPage:true});
 
     for (const label of ["Localizados","A validar","Não localizados","Total"]) { const k=page.getByRole("button",{name:new RegExp("^"+label+"\\s+\\d+$")}); await k.click(); assert.equal(await k.getAttribute("aria-pressed"),"true"); }
-    await page.getByRole("button",{name:/^Localizados\s+\d+$/}).click(); await page.locator(".requests-search input").fill("SPE-AST-320020"); await page.locator(".requests-filterbar select").nth(0).selectOption("sim"); await page.locator(".requests-filterbar select").nth(1).selectOption("documento"); await page.waitForTimeout(100); assert.match(await page.locator(".requests-filter-count").innerText(),/Exibindo 1 de 500/); await page.getByRole("button",{name:"Limpar filtros"}).click(); await page.getByRole("button",{name:/^Total\s+\d+$/}).click();
+    await page.getByRole("button",{name:/^Localizados\s+\d+$/}).click(); await page.locator(".requests-search input").fill("SPE-AST-320020"); await page.locator(".requests-filterbar select").nth(0).selectOption("sim"); await page.locator(".requests-filterbar select").nth(1).selectOption("documento"); await page.waitForTimeout(100); assert.match(await page.locator(".requests-filter-count").innerText(),/Exibindo 1 de 500/); assert.match(await page.locator(".requests-col-allocation").nth(1).innerText(),/Alocado/); await page.getByRole("button",{name:"Limpar filtros"}).click(); await page.getByRole("button",{name:/^Total\s+\d+$/}).click();
+
+    // Uma nova versão publicada enquanto Consultas está aberta precisa
+    // reclassificar resultados existentes sem limpar estado nem reenviar LD.
+    const updatedCode=P+"nt-ZZ-000010";
+    await page.locator(".requests-search input").fill("ZZ-000010");
+    await page.waitForTimeout(100);
+    assert.match(await page.locator(".requests-col-allocation").nth(1).innerText(),/Não alocado/);
+    await page.evaluate(function (code) {
+      const P="C1O_RNEST_U32_3.1.1.1_INS_RIR_";
+      window.__grconQaPublishPlannedDocuments("qa-planned-v2", [
+        P+"SPE-AST-320019",
+        P+"nt-SPE-AST-320019",
+        P+"nt-SPE-AST-320020",
+        code,
+      ]);
+    }, updatedCode);
+    await page.waitForFunction(function () {
+      const cell=document.querySelector(".requests-table tbody .requests-col-allocation");
+      return Boolean(cell && /Alocado/.test(cell.textContent||"") && !/Não alocado/.test(cell.textContent||""));
+    }, null, { timeout:5000 });
+    assert.match(await page.locator(".requests-planned-source").innerText(),/qa|Documentos Previstos QA/i);
+    await page.getByRole("button",{name:"Limpar filtros"}).click();
 
     for(let i=0;i<4;i+=1)await page.getByRole("button",{name:"Próxima"}).click(); assert.match(await page.locator(".requests-pagination").innerText(),/Página 5 de 5/); assert.match(await page.locator(".requests-pagination").innerText(),/401–500/); await page.locator(".requests-search input").fill("ZZ-000499"); await page.waitForTimeout(100); assert.equal(await page.locator(".requests-pagination").count(),0); await page.getByRole("button",{name:"Limpar filtros"}).click(); await page.waitForTimeout(100); assert.match(await page.locator(".requests-pagination").innerText(),/Página 1 de 5/);
 
@@ -244,7 +311,7 @@ async function clearLds(page) {
     await page.screenshot({path:path.join(outputDir,"07-dark-mode-1366.png"),fullPage:true}); await page.evaluate(function(){document.documentElement.dataset.theme="";});
 
     for(let i=0;i<3;i+=1){await clickVisibleView(page, "control"); await clickVisibleView(page, "requests"); await page.locator("#requests-area-consulta-react").waitFor({state:"visible"}); assert.equal(await page.locator("#requests-area-consulta-react").count(),1); assert.equal(await page.locator(".requests-detail-drawer").count(),0); assert.equal(await page.locator(".requests-more-actions[open]").count(),0);}
-    await page.evaluate(async function(){await navigator.serviceWorker.ready;}); await page.reload({waitUntil:"networkidle"}); await page.addStyleTag({content:'html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; } #grcon-cloud-auth { display: none !important; }'}); await page.waitForFunction(function(){return Boolean(navigator.serviceWorker.controller);},null,{timeout:10000}); const caches=await page.evaluate(function(){return window.caches.keys();}); assert.ok(caches.some(function(k){return k.includes("phase-b-consultas-ui1-hardening1");})); await clickVisibleView(page, "requests"); await page.locator("#requests-area-consulta-react").waitFor();
+    await page.evaluate(async function(){await navigator.serviceWorker.ready;}); await page.reload({waitUntil:"networkidle"}); await installQaPlannedDocuments(page); await page.addStyleTag({content:'html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script) { visibility: visible !important; } #grcon-cloud-auth { display: none !important; }'}); await page.waitForFunction(function(){return Boolean(navigator.serviceWorker.controller);},null,{timeout:10000}); const caches=await page.evaluate(function(){return window.caches.keys();}); assert.ok(caches.some(function(k){return k.includes("phase-b-consultas-ui1-hardening1");})); await clickVisibleView(page, "requests"); await page.locator("#requests-area-consulta-react").waitFor();
     ["/requests.css","/react-ui.css","/requests-phase-b.css","/react-dist/consultas-app.js"].forEach(function(p){const r=responses.get(p);assert.equal(r&&r.status,200,p);});
     const relevant=errors.filter(function(x){return /ReferenceError|TypeError|Unhandled|React|duplicate key|Content Security Policy|CSP|service worker/i.test(x);}); assert.deepEqual(relevant,[]);
     fs.writeFileSync(path.join(outputDir,"metrics.json"),JSON.stringify({head:head,widths:widths,mobile:mobile,drawerMobile:dm,mascotLight:mascotLight,mascotDarkMobile:mascotDarkMobile,mascotDarkDesktop:mascotDarkDesktop,caches:caches,errors:errors},null,2));
