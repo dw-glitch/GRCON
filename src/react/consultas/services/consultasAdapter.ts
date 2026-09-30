@@ -93,13 +93,14 @@ async function refreshPlannedDocuments(): Promise<PlannedDocumentsState> {
   }
 }
 
-function onPlannedDocumentsChanged(listener: () => void): () => void {
-  const handler = () => listener();
-  window.addEventListener("grcon:planned-documents-updated", handler);
-  window.addEventListener("grcon:cloud-ready", handler);
+function onPlannedDocumentsChanged(listener: (reason: "updated" | "cloud-ready") => void): () => void {
+  const updated = () => listener("updated");
+  const cloudReady = () => listener("cloud-ready");
+  window.addEventListener("grcon:planned-documents-updated", updated);
+  window.addEventListener("grcon:cloud-ready", cloudReady);
   return () => {
-    window.removeEventListener("grcon:planned-documents-updated", handler);
-    window.removeEventListener("grcon:cloud-ready", handler);
+    window.removeEventListener("grcon:planned-documents-updated", updated);
+    window.removeEventListener("grcon:cloud-ready", cloudReady);
   };
 }
 
