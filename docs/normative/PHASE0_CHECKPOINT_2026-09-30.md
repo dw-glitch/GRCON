@@ -48,6 +48,19 @@ Catálogo PETROBRAS de jul/2024:
 
 O catálogo de jul/2024 é uma referência externa complementar e não substitui o Catálogo contido no pacote do usuário nem prova, sozinho, a vigência em 2026.
 
+### Especificação contratual/projeto RNEST confirmada
+
+Foi auditada a `ET-5290.00-22000-912-1LV-001 — Definição de Codificação de Documentos`, Rev. P de 17/06/2026. A própria ET determina, para documentação de projeto, o uso da N-1710 e define regras específicas para documentação administrativa e relatórios do RNEST. Entre os pontos relevantes:
+
+- tabela de siglas de disciplinas/temas usada pelo projeto;
+- relatórios codificados por grupos separados por underscore;
+- código da unidade UHDT-D incluindo U32;
+- código de relatório RIR = Relatório de Inspeção de Recebimento;
+- TAG deve preservar a codificação existente;
+- para itens não tagueados, o Grupo 7 deve iniciar com `nt-` em minúsculo.
+
+Essas regras são classificadas como **contractual/project-specific** e recebem `applicability.projects = ["RNEST"]`; não podem ser aplicadas universalmente fora do projeto.
+
 ### Planilha real
 
 `Carga em Lote de Documentos(1).XLS` foi localizada e preservada. O arquivo é XLS legado/binário e o indexador não expôs conteúdo tabular legível neste ambiente. A comparação direta célula-a-célula com o arquivo real permanece pendente. O gerador atual, entretanto, já possui as nove colunas solicitadas e verificação de round-trip do próprio arquivo produzido.
@@ -83,6 +96,9 @@ A camada normativa deve permanecer separada das regras operacionais atuais:
 | Linha FIM/sem vazios intermediários | gerador atual + instrução do modelo | operacional | modelo de carga | modelo atual | operational | exportação GRDT | FIM já gerada | golden real pendente | rejeição de importação | round-trip + golden | BLOQUEIO após golden | grdt_workbook |
 | CAMINHO DATABOOK obrigatório | regras internas/fluxos atuais | não confirmado | — | — | operational | depende do fluxo | divergência normal x repostagem | política inconsistente | bloqueio indevido | manter operacional até fonte contratual/normativa confirmada | ALERTA no motor normativo | GRDT/Repostagem |
 | Documento alocado | Documentos Previstos compartilhado | operacional | — | vigente do banco | operational | todos os usuários | corrigido na main | nenhum gap normativo | regressão de fonte | preservar autoridade atual | regra operacional existente | Consultas/GRDT |
+| Relatórios RNEST usam estrutura própria de grupos | ET do projeto | ET-5290.00-22000-912-1LV-001 | 7.1 | P | contractual | projeto RNEST | regras parcialmente inferidas por padrões atuais | falta fonte estruturada | aplicar padrão fora do projeto | registrar regra com project applicability | ALERTA candidato até promoção | ReconDocs/Conferência/GRDT |
+| Item não tagueado usa prefixo nt- minúsculo | ET do projeto | ET-5290.00-22000-912-1LV-001 | 7.1.7.3 | P | contractual | relatórios RNEST / itens não tagueados | GRCON já normaliza variantes nt- em fluxos específicos | regra ainda não rastreada à ET | rejeição por grafia ou aplicação universal | validador contratual escopado ao RNEST | candidato a BLOQUEIO após validação do fluxo | Core/GRDT/Conferência |
+| RIR possui código de relatório definido | ET do projeto | ET-5290.00-22000-912-1LV-001 | Tabela 13 | P | contractual | relatórios RNEST | ReconDocs/RIR possuem lógica própria | falta catálogo contratual versionado | classificação divergente | estruturar tabela de códigos sem hardcode disperso | ALERTA inicialmente | ReconDocs |
 
 ## 5. Módulos impactados
 
