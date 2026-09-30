@@ -82,7 +82,6 @@
         <div class="pc-heading-actions"><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Relatório Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><button class="secondary-button" id="pc-publish" type="button" hidden>Publicar Consulta Geral compartilhada</button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
       </header>
       <section class="pc-hero" aria-live="polite"><div><span>CONFERÊNCIA GERAL</span><strong id="pc-hero-main">Carregue a Consulta Geral</strong><small id="pc-hero-note">O histórico permanece preservado como origem dos eventos de envio.</small></div><div class="pc-base-card" id="pc-base-card"></div></section>
-      <section class="pc-audit-card" id="pc-local-preview" hidden></section>
       <section class="pc-kpis" id="pc-kpis" aria-label="Resumo da conferência"></section>
       <section class="pc-toolbar-card">
         <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">Pendências de Postagem</button></div>
@@ -452,15 +451,6 @@
     const query = root.GrconSharedSigemQuery;
     el("pc-publish").hidden = !query?.canPublish() || !query?.state.local;
     el("pc-publish").disabled = state.busy || query?.state.busy;
-    const preview = el("pc-local-preview");
-    preview.hidden = !query?.state.local;
-    if (query?.state.local) {
-      const local = query.state.local;
-      preview.innerHTML = `<header><strong>Prévia local · ${escapeHtml(local.meta.fileName)}</strong><small>${fmt(local.records.length)} registros válidos · ${fmt(local.meta.invalidCount)} inválidos · ${fmt(local.meta.duplicateCount)} duplicados. A base compartilhada tem prioridade até a publicação.</small></header><div>${local.records.slice(0, 5).map((row) => `<p><strong>${escapeHtml(row.document)}</strong> · Rev. ${escapeHtml(row.revision)} · ${escapeHtml(row.status || "Sem status")}</p>`).join("")}</div>`;
-    }
-    if (query?.state.local && query.canPublish()) {
-      el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: `Prévia local: ${fmt(query.state.local.records.length)} registros · ${query.state.local.meta.fileName}. Pronta para publicar.` }));
-    }
     if (query?.state.shared) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.stale ? "Consulta Geral compartilhada em cache; pode estar desatualizada." : "Consulta Geral compartilhada em uso." }));
     if (query?.state.error) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.error }));
     el("pc-export").disabled = state.busy || !documentRows().length;
