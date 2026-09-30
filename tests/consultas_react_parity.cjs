@@ -9,6 +9,7 @@ const ExcelJS = require("../exceljs.min.js");
 const Triagem = require("../core.js");
 const RequestsOriginal = require("../requests_core.js");
 const ReportOriginal = require("../requests_report.js");
+const Planned = require("../planned_documents_core.js");
 
 globalThis.TriagemCore = Triagem;
 globalThis.GrconRequestsCore = RequestsOriginal;
@@ -70,7 +71,11 @@ function transpileModule(filePath, jsx, overrides = {}) {
     internalTaxonomy: "TX-LITERAL / A01",
     sigemLdRevision: "B",
     sigemLdRevisionCell: "B",
-    allocated: "SIM — Alocado",
+    allocated: "Alocado",
+    allocationKind: "allocated",
+    allocationSource: "Documentos Previstos",
+    plannedDocumentsFile: "Documentos Previstos.xlsx",
+    plannedDocumentsUpdatedAt: "2026-09-30T12:00:00Z",
     allocation: "C1O-ALOC-CM-0001-2026",
     lastGrdt: "GRDT-2026-0001",
     issued: "SIM",
@@ -87,6 +92,55 @@ function transpileModule(filePath, jsx, overrides = {}) {
     needsManualValidation: false,
   };
   const exportRow = adapter.buildExportRow("DOC-TESTE", sourceRow);
+
+  let activeSnapshot = {
+    id: "planned-v1",
+    fileName: "Documentos Previstos V1.xlsx",
+    updatedAt: "2026-09-30T12:00:00Z",
+    count: 1,
+    keys: new Set([Triagem.key("DOC-001")]),
+  };
+  const plannedService = {
+    current: () => activeSnapshot,
+    refresh: async () => activeSnapshot,
+    classify: (document) => Planned.classifyDocument(document, activeSnapshot),
+    isAllocated: (document) => Planned.classifyDocument(document, activeSnapshot).allocated,
+    applyRecords: (records) => Planned.applyToRecords(records, activeSnapshot),
+    applyConsultationRow: (row, document) => Planned.applyToConsultationRow(row, document, activeSnapshot),
+  };
+  const plannedAdapterLoad = transpileModule(adapterPath, false, {
+    window: {
+      TriagemCore: Triagem,
+      GrconRequestsCore: RequestsOriginal,
+      GrconRequestsReport: Report,
+      GrconPlannedDocuments: plannedService,
+      GrconCloud: { state: { membership: { workspace_id: "workspace-1" }, online: true } },
+    },
+  });
+  const plannedAdapter = plannedAdapterLoad.exports.consultasAdapter;
+  let plannedRow = plannedAdapter.applyPlannedAllocation(" DOC-001 ", {
+    ...sourceRow,
+    ldDocument: "",
+    allocated: "Não alocado",
+    allocationKind: "not_allocated",
+  });
+  assert.equal(plannedRow.allocated, "Alocado");
+  assert.equal(plannedRow.allocationKind, "allocated");
+  assert.equal(plannedRow.allocationSource, "Documentos Previstos");
+  assert.equal(plannedRow.plannedDocumentsSnapshot, "planned-v1");
+
+  activeSnapshot = {
+    ...activeSnapshot,
+    id: "planned-v2",
+    fileName: "Documentos Previstos V2.xlsx",
+    keys: new Set([Triagem.key("DOC-002")]),
+  };
+  plannedRow = plannedAdapter.applyPlannedAllocation("DOC-001", plannedRow);
+  assert.equal(plannedRow.allocated, "Não alocado", "nova versão compartilhada deve substituir o resultado anterior");
+  assert.equal(plannedRow.plannedDocumentsSnapshot, "planned-v2");
+  const plannedReady = await plannedAdapter.refreshPlannedDocuments();
+  assert.equal(plannedReady.status, "ready");
+  assert.equal(plannedReady.id, "planned-v2");
 
   for (const column of Report.COLUMNS) {
     assert.ok(Object.prototype.hasOwnProperty.call(exportRow, column.key),
@@ -256,6 +310,14 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.equal(exportedDocumentCount, 500,
     "Excel precisa receber o dataset completo, não somente a página visual");
 
+  const adapterSource = fs.readFileSync(adapterPath, "utf8");
+  assert.match(adapterSource, /plannedDocuments\(\)\.applyRecords\(registrosOriginais\)/,
+    "índice de Consultas deve sobrescrever a alocação da LD pela base compartilhada");
+  assert.match(adapterSource, /service\.classify\(resolvedDocument\)/,
+    "resultado final deve ser classificado por Documentos Previstos");
+  assert.match(adapterSource, /refreshPlannedDocuments/,
+    "Consultas deve confirmar a versão vigente antes de consultar");
+
   const hookSource = fs.readFileSync(hookPath, "utf8");
   assert.match(hookSource, /const exportRows = useMemo\(\(\) => documents/,
     "cópia/exportação precisa continuar derivada do conjunto completo de documentos");
@@ -269,6 +331,12 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.match(runQuery, /finally\s*\{/);
   assert.ok(runQuery.indexOf("setRunning(false)") > runQuery.indexOf("finally"));
   assert.match(runQuery, /Não foi possível concluir a consulta/);
+  assert.match(runQuery, /Adapter\.refreshPlannedDocuments\(\)/,
+    "cada nova consulta deve confirmar a versão compartilhada vigente");
+  assert.match(hookSource, /linha\?\.allocationKind === "allocated"/,
+    "filtro Alocado deve usar o mesmo estado centralizado da linha");
+  assert.match(hookSource, /linha\?\.allocationKind === "not_allocated"/,
+    "filtro Não alocado deve usar o mesmo estado centralizado da linha");
 
   const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");
   const groupStart = loader.indexOf("requests: [");
