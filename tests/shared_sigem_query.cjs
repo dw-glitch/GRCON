@@ -22,6 +22,24 @@ assert.throws(()=>Query.validate({records:[]}),/vazia/);
 assert.throws(()=>Query.validate({records:[{document:doc,revision:'',status:'Em análise'}]}),/revisão/);
 const parsed = Conference.parseMatrix([['Documento','Revisão','Status','Disciplina'],[doc,'B','Em análise','TUB']]);
 assert.equal(parsed.records[0].discipline,'TUB');
+
+const sigemExportWithFooter = Conference.parseMatrix([
+  ['Documento','Revisão','Status','Disciplina'],
+  [doc,'B','Em análise','TUB'],
+  ['SIGEM - Sistema Integrado de Gerenciamento de Empreendimentos','','',''],
+]);
+assert.equal(sigemExportWithFooter.records.length,1);
+assert.equal(sigemExportWithFooter.meta.ignoredFooterCount,1);
+assert.equal(sigemExportWithFooter.meta.invalidCount,0);
+assert.doesNotThrow(()=>Query.validate({records:sigemExportWithFooter.records}));
+
+const malformedDocumentRow = Conference.parseMatrix([
+  ['Documento','Revisão','Status','Disciplina'],
+  [doc,'','Em análise','TUB'],
+]);
+assert.equal(malformedDocumentRow.records.length,1);
+assert.equal(malformedDocumentRow.meta.invalidCount,1);
+assert.throws(()=>Query.validate({records:malformedDocumentRow.records}),/revisão/);
 const technical={document:doc,revision:'B',sheet:'ET',title:'Título',discipline:'TUBULAÇÃO',documentType:'REP',databook:'Databook',allocationStatus:'ALOCADO'};
 const history={document:doc,revision:'B',status:'Não Postado',sheet:'Colar SIGEM'};
 const index=Core.buildIndex([technical],[history]);
