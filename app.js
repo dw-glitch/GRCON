@@ -5421,6 +5421,7 @@
       analysisSigemSnapshot: state.analysisSigemSnapshot,
       currentSigemSnapshot: currentSigemQuerySnapshot(),
     }),
+    ensureFreshAnalysis: () => ensureFreshAnalysis(),
     getResult: (index) => state.results[Number(index)] || null,
     filteredIndices: () => [...filteredResultIndices()],
     setGroupByStatus: (value) => {
