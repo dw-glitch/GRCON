@@ -45,6 +45,7 @@ export function useConsultas() {
   const [banner, setBanner] = useState<{ kind: "error" | "info"; message: string } | null>(null);
 
   const indexRef = useRef<DocumentIndex | null>(null);
+  const plannedSnapshotIdRef = useRef("");
   const undoRef = useRef<UndoEntry[]>([]);
 
   const notify = useCallback((message: string, kind?: NotifyKind) => Adapter.notify(message, kind), [Adapter]);
@@ -156,13 +157,23 @@ export function useConsultas() {
     const total = alvos.length;
     setProgress({ done: 0, total });
     try {
+      // A alocação de Consultas só pode ser decidida com a versão oficial
+      // compartilhada. O snapshot é carregado uma vez por execução e o índice
+      // das LDs é reconstruído com essa mesma versão para todo o lote.
+      const plannedSnapshot = await Adapter.loadPlannedDocumentsSnapshot();
+      const officialIndex = Adapter.buildIndex(lds, plannedSnapshot);
+      if (!officialIndex) throw new Error("Nenhuma LD válida está disponível para a consulta.");
+      indexRef.current = officialIndex;
+
       Adapter.refreshHistoryIndicator();
-      const novosResultados = new Map(results);
+      const sameSnapshot = plannedSnapshotIdRef.current === plannedSnapshot.id;
+      plannedSnapshotIdRef.current = plannedSnapshot.id;
+      const novosResultados = sameSnapshot ? new Map(results) : new Map<string, ConsultationRow>();
       for (let inicio = 0; inicio < total; inicio += 100) {
         const fim = Math.min(total, inicio + 100);
         for (let i = inicio; i < fim; i += 1) {
           const item = alvos[i];
-          novosResultados.set(item.id, Adapter.lookupDocument(item.document, item.requestedTitle, indexRef.current));
+          novosResultados.set(item.id, Adapter.lookupDocument(item.document, item.requestedTitle, officialIndex, plannedSnapshot));
         }
         setProgress({ done: fim, total });
         if (fim < total) await new Promise((resolve) => window.setTimeout(resolve, 0));
@@ -175,19 +186,30 @@ export function useConsultas() {
         ? `${total} documento(s) consultados. ${validar} precisam de conferência.`
         : `${total} documento(s) consultados.`, validar ? "warn" : "success");
     } catch (error) {
+      // Não preservar uma classificação anterior quando a fonte oficial não
+      // pôde ser validada: isso impediria distinguir resultado atual de cache.
+      setResults(new Map());
       console.error("[Consultas/React] Falha ao consultar documentos:", error);
       const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
       notify(`Não foi possível concluir a consulta${detail}`, "error");
     } finally {
       setRunning(false);
     }
-  }, [running, documents, results, notify, Adapter]);
+  }, [running, documents, results, lds, notify, Adapter]);
 
   const exportRows = useMemo(() => documents
     .filter((item) => results.has(item.id))
     .map((item) => Adapter.buildExportRow(item.document, results.get(item.id)!)), [documents, results, Adapter]);
 
   useEffect(() => { Adapter.setExportRowsProvider(() => exportRows); }, [exportRows, Adapter]);
+
+  useEffect(() => Adapter.onPlannedDocumentsChanged(() => {
+    // Qualquer troca do snapshot torna Alocado/Não alocado anterior obsoleto.
+    // Limpar também remove esses valores de filtros, detalhes, cópia e Excel.
+    plannedSnapshotIdRef.current = "";
+    setResults(new Map());
+    setProgress({ done: 0, total: 0 });
+  }), [Adapter]);
 
   const copyResults = useCallback(async () => {
     if (!exportRows.length) return;
