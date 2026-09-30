@@ -157,21 +157,8 @@ function rpc(name,args) {
  assert.equal(remotelyRefreshed,originalActive.snapshot_id);
  assert.equal(await a.page.locator('#export-egrdt').isEnabled(),true);
  await a.page.locator('#export-egrdt').click();
- await a.page.waitForTimeout(500);
- const staleGuardDiagnostic=await a.page.evaluate(()=>({
-   toast:document.getElementById('toast')?.textContent||'',
-   toastClass:document.getElementById('toast')?.className||'',
-   buttonDisabled:document.getElementById('export-egrdt')?.disabled,
-   buttonText:document.getElementById('export-egrdt')?.textContent||'',
-   snapshots:window.GrconTriageUiApi.snapshot(),
-   currentShared:window.GrconSharedSigemQuery.current()?.meta?.snapshotId||'',
- }));
- fs.writeFileSync(path.join(output,'stale-guard-diagnostic.json'),JSON.stringify(staleGuardDiagnostic,null,2));
- if(!staleGuardDiagnostic.toast.includes('Consulta Geral SIGEM foi atualizada')){
-   await a.page.screenshot({path:path.join(output,'stale-guard-failure.png'),fullPage:true});
-   throw new Error('Stale SIGEM guard did not notify: '+JSON.stringify(staleGuardDiagnostic));
- }
- assert.match(staleGuardDiagnostic.toast,/Analise novamente antes de gerar a GRDT/);
+ await a.page.waitForFunction(()=>document.getElementById('toast')?.textContent.includes('Consulta Geral SIGEM foi atualizada'),null,{timeout:5000});
+ assert.match(await a.page.locator('#toast').innerText(),/Analise novamente antes de gerar a GRDT/);
  backend.active=updatedActive;
  await a.page.evaluate(()=>window.GrconSharedSigemQuery.refreshLatest());
  const downloadPromise=a.page.waitForEvent('download');await a.page.locator('#export-egrdt').click();await a.page.locator('#p1-sequence-confirm').check();await a.page.locator('#p1-confirm-ok').click();const generated=await downloadPromise;
