@@ -1,0 +1,15 @@
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.GrconNormativeRegistry=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
+'use strict';
+const TYPES=new Set(['mandatory','recommended','contractual','operational','informational']);
+const SEVERITIES=new Set(['block','warning','info']);
+const STATUSES=new Set(['active','draft','superseded','disabled']);
+const SCOPE_KEYS=['disciplines','documentTypes','documentCategories','documentFamilies','phases','projects','installations','languages'];
+const text=v=>String(v??'').trim();
+const token=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[–—]/g,'-').replace(/\s+/g,' ').toUpperCase();
+const list=v=>Object.freeze([...new Set((Array.isArray(v)?v:v==null||v===''?[]:[v]).map(text).filter(Boolean))]);
+function applicability(v){const src=v&&typeof v==='object'&&!Array.isArray(v)?v:{};const out={};for(const k of SCOPE_KEYS){const x=list(src[k]);if(x.length)out[k]=x;}if(src.notes)out.notes=text(src.notes);return Object.freeze(out);}
+function normalizeRule(input){const s=input||{};const r={ruleId:text(s.ruleId),norm:text(s.norm),revision:text(s.revision),section:text(s.section),title:text(s.title),description:text(s.description),type:text(s.type),severity:text(s.severity),applicability:applicability(s.applicability),discipline:list(s.discipline),documentCategory:list(s.documentCategory),effectiveDate:text(s.effectiveDate),source:Object.freeze({kind:text(s.source?.kind||'unknown'),label:text(s.source?.label),part:text(s.source?.part||'body'),catalogEdition:text(s.source?.catalogEdition)}),status:text(s.status||'draft'),overrideAllowed:s.overrideAllowed===true,correctionHint:text(s.correctionHint)};
+const missing=['ruleId','norm','revision','section','title','description','type','severity'].filter(k=>!r[k]);if(missing.length)throw new Error(`Regra normativa incompleta: ${missing.join(', ')}.`);if(!TYPES.has(r.type))throw new Error(`Tipo normativo inválido: ${r.type}.`);if(!SEVERITIES.has(r.severity))throw new Error(`Severidade normativa inválida: ${r.severity}.`);if(!STATUSES.has(r.status))throw new Error(`Status normativo inválido: ${r.status}.`);if(!/^[A-Za-z0-9._:-]+$/.test(r.ruleId))throw new Error(`ruleId inválido: ${r.ruleId}.`);return Object.freeze(r);}
+function createRegistry(seed=[]){const map=new Map();const register=(v,opt={})=>{const r=normalizeRule(v);if(map.has(r.ruleId)&&!opt.replace)throw new Error(`Regra normativa duplicada: ${r.ruleId}.`);map.set(r.ruleId,r);return r;};const get=id=>map.get(text(id))||null;const listRules=(f={})=>Object.freeze([...map.values()].filter(r=>(!f.norm||token(r.norm)===token(f.norm))&&(!f.type||r.type===f.type)&&(!f.status||r.status===f.status)));seed.forEach(register);return Object.freeze({register,get,list:listRules,size:()=>map.size});}
+return Object.freeze({TYPES:Object.freeze([...TYPES]),SEVERITIES:Object.freeze([...SEVERITIES]),STATUSES:Object.freeze([...STATUSES]),SCOPE_KEYS:Object.freeze(SCOPE_KEYS),text,token,list,applicability,normalizeRule,createRegistry});
+});
