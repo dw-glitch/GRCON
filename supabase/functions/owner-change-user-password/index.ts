@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { authorizePasswordChange, passwordProblem } from "./policy.mjs";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -19,15 +20,6 @@ function response(status: number, payload: Record<string, unknown>) {
 
 function validUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function passwordProblem(password: string) {
-  if (password.length < 12) return "Use pelo menos 12 caracteres.";
-  if (!/[a-z]/.test(password)) return "Inclua pelo menos uma letra minúscula.";
-  if (!/[A-Z]/.test(password)) return "Inclua pelo menos uma letra maiúscula.";
-  if (!/\d/.test(password)) return "Inclua pelo menos um número.";
-  if (!/[^A-Za-z0-9]/.test(password)) return "Inclua pelo menos um símbolo.";
-  return "";
 }
 
 function secretKey() {
@@ -110,8 +102,19 @@ Deno.serve(async (req: Request) => {
   if (actorMembershipError) {
     return response(500, { code: "AUTHORIZATION_CHECK_FAILED", message: "Não foi possível validar sua permissão agora." });
   }
-  if (!actorMembership || actorMembership.role !== "owner") {
-    return response(403, { code: "OWNER_REQUIRED", message: "Somente o proprietário pode alterar senhas de usuários." });
+
+  const preliminaryAuthorization = authorizePasswordChange({
+    authenticated: true,
+    actorMembership,
+    targetExists: true,
+    targetMemberships: [{ workspace_id: workspaceId, role: "operator", active: true }],
+    workspaceId,
+  });
+  if (!preliminaryAuthorization.ok && preliminaryAuthorization.code === "OWNER_REQUIRED") {
+    return response(preliminaryAuthorization.status, {
+      code: preliminaryAuthorization.code,
+      message: preliminaryAuthorization.message,
+    });
   }
 
   const { data: targetAuth, error: targetAuthError } = await admin.auth.admin.getUserById(targetUserId);
@@ -129,23 +132,17 @@ Deno.serve(async (req: Request) => {
     return response(500, { code: "TARGET_CHECK_FAILED", message: "Não foi possível validar o usuário agora." });
   }
 
-  const memberships = Array.isArray(targetMemberships) ? targetMemberships : [];
-  const workspaceMembership = memberships.find((membership) => membership.workspace_id === workspaceId);
-  if (!workspaceMembership) {
-    return response(403, { code: "TARGET_OUTSIDE_WORKSPACE", message: "Usuário não pertence a este workspace." });
-  }
-
-  if (memberships.some((membership) => membership.role === "owner")) {
-    return response(403, {
-      code: "TARGET_OWNER_FORBIDDEN",
-      message: "A senha de outro proprietário não pode ser alterada por esta função.",
-    });
-  }
-
-  if (!["admin", "operator"].includes(String(workspaceMembership.role || ""))) {
-    return response(403, {
-      code: "TARGET_ROLE_FORBIDDEN",
-      message: "Somente usuários administradores ou operadores podem ter a senha alterada por esta ação.",
+  const authorizationResult = authorizePasswordChange({
+    authenticated: true,
+    actorMembership,
+    targetExists: true,
+    targetMemberships: Array.isArray(targetMemberships) ? targetMemberships : [],
+    workspaceId,
+  });
+  if (!authorizationResult.ok) {
+    return response(authorizationResult.status, {
+      code: authorizationResult.code,
+      message: authorizationResult.message,
     });
   }
 
