@@ -57,6 +57,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
   const hookPath = path.join(root, "src/react/consultas/hooks/useConsultas.ts");
 
   const adapterLoad = transpileModule(adapterPath, false, {
+    Set,
     window: {
       TriagemCore: Triagem,
       GrconRequestsCore: RequestsOriginal,
