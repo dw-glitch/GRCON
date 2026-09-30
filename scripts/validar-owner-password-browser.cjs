@@ -24,8 +24,10 @@ function instrument(value) {
 `);
 }
 
+let browser;
+
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await page.setContent("<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><style>" + styles + "</style></head><body><div class='runtime-status'></div></body></html>");
   await page.addScriptTag({ content: instrument(source) });
@@ -150,9 +152,12 @@ function instrument(value) {
 
   await page.screenshot({ path: path.join(outputDir, "owner-password-management.png"), fullPage: true });
   fs.writeFileSync(path.join(outputDir, "result.json"), JSON.stringify({ passed: true, requests: qa.requestCount }, null, 2));
-  await browser.close();
   console.log("owner_password_browser: ok");
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
+}).finally(async () => {
+  if (browser) {
+    await browser.close().catch(() => {});
+  }
 });
