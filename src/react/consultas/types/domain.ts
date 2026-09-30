@@ -57,6 +57,15 @@ export interface SigemRevisionEntry {
   status?: string;
 }
 
+export interface PlannedDocumentsState {
+  status: "loading" | "ready" | "error";
+  id: string;
+  fileName: string;
+  updatedAt: string;
+  count: number;
+  message: string;
+}
+
 /** Linha de resultado já mesclada (situação, alocação e GRDT/SIGEM). */
 export interface ConsultationRow {
   situation: string;
@@ -75,6 +84,12 @@ export interface ConsultationRow {
   sigemLdRevisionAll?: SigemRevisionEntry[];
   sigemLdRevisionLabel?: string;
   allocated?: string;
+  allocationKind?: "allocated" | "not_allocated" | "unavailable" | string;
+  allocationSource?: string;
+  allocationUnavailable?: boolean;
+  plannedDocumentsSnapshot?: string;
+  plannedDocumentsFile?: string;
+  plannedDocumentsUpdatedAt?: string;
   allocation?: string;
   lastGrdt?: string;
   issued?: string;

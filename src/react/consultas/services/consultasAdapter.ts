@@ -19,6 +19,7 @@ import type {
   LdRecord,
   LookupResult,
   ParsedDocument,
+  PlannedDocumentsState,
 } from "../types/domain";
 // Os tipos ambientes de window.* (types/legacy-globals.d.ts) são globais e
 // pegos automaticamente pelo tsconfig — nenhum import é necessário (e um
@@ -42,6 +43,65 @@ function requestsReport() {
   const api = window.GrconRequestsReport;
   if (!api) throw new Error("O gerador de relatório (GrconRequestsReport) não está disponível.");
   return api;
+}
+
+function plannedDocuments() {
+  const api = window.GrconPlannedDocuments;
+  if (!api) throw new Error("O serviço compartilhado de Documentos Previstos não está disponível.");
+  return api;
+}
+
+function plannedState(
+  status: PlannedDocumentsState["status"],
+  snapshot?: { id?: string; fileName?: string; updatedAt?: string; count?: number } | null,
+  message = "",
+): PlannedDocumentsState {
+  return {
+    status,
+    id: String(snapshot?.id || ""),
+    fileName: String(snapshot?.fileName || ""),
+    updatedAt: String(snapshot?.updatedAt || ""),
+    count: Number(snapshot?.count) || 0,
+    message,
+  };
+}
+
+function getPlannedDocumentsState(): PlannedDocumentsState {
+  const snapshot = window.GrconPlannedDocuments?.current?.() || null;
+  return snapshot?.id
+    ? plannedState("ready", snapshot, "Fonte oficial de alocação carregada.")
+    : plannedState("loading", null, "Verificando a base compartilhada de Documentos Previstos…");
+}
+
+async function refreshPlannedDocuments(): Promise<PlannedDocumentsState> {
+  const cloud = window.GrconCloud;
+  if (!cloud?.state?.membership?.workspace_id) {
+    return plannedState("loading", null, "Aguardando a conexão com a área de trabalho para consultar Documentos Previstos.");
+  }
+  if (cloud.state.online === false) {
+    return plannedState("error", null, "Não foi possível consultar a versão vigente de Documentos Previstos: o GRCON está sem conexão com o banco.");
+  }
+  try {
+    const snapshot = await plannedDocuments().refresh();
+    if (!snapshot?.id) {
+      return plannedState("error", null, "Nenhuma base compartilhada de Documentos Previstos está publicada para esta área de trabalho.");
+    }
+    return plannedState("ready", snapshot, "Fonte oficial de alocação carregada.");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error || "");
+    return plannedState("error", null, `Não foi possível consultar a base de Documentos Previstos${detail ? `: ${detail}` : "."}`);
+  }
+}
+
+function onPlannedDocumentsChanged(listener: (reason: "updated" | "cloud-ready") => void): () => void {
+  const updated = () => listener("updated");
+  const cloudReady = () => listener("cloud-ready");
+  window.addEventListener("grcon:planned-documents-updated", updated);
+  window.addEventListener("grcon:cloud-ready", cloudReady);
+  return () => {
+    window.removeEventListener("grcon:planned-documents-updated", updated);
+    window.removeEventListener("grcon:cloud-ready", cloudReady);
+  };
 }
 
 function notify(message: string, kind?: string): void {
@@ -71,7 +131,14 @@ async function parseLd(file: File): Promise<{ records: LdRecord[]; history: LdHi
 function buildIndex(lds: LdEntry[]): DocumentIndex | null {
   const validas = lds.filter((item) => !item.error && item.records.length);
   if (!validas.length) return null;
-  const registros = validas.flatMap((item) => item.records);
+  const snapshot = window.GrconPlannedDocuments?.current?.() || null;
+  if (!snapshot?.id) return null;
+
+  // A LD continua fornecendo título, revisão, SIGEM e demais metadados, mas
+  // qualquer valor antigo de alocação é sobrescrito antes de construir o índice.
+  // Assim conflitos da coluna "Alocado" da LD não contaminam a escolha da linha.
+  const registrosOriginais = validas.flatMap((item) => item.records);
+  const registros = plannedDocuments().applyRecords(registrosOriginais);
   const historico = validas.flatMap((item) => item.history || []);
   return core().buildIndex(registros, historico);
 }
@@ -125,6 +192,17 @@ function refreshHistoryIndicator(): void {
  * exatamente as mesmas três chamadas de requests_app.js — nenhuma regra é
  * reescrita aqui.
  */
+function applyPlannedAllocation(document: string, row: ConsultationRow): ConsultationRow {
+  const service = plannedDocuments();
+  // A identificação para alocação vem do código consultado. O código encontrado
+  // na LD pode ajudar em título/revisão, mas nunca substitui a fonte objetiva.
+  const classification = service.classify(document);
+  if (!classification.available) {
+    throw new Error("Documentos Previstos ainda não está disponível; a alocação não foi calculada.");
+  }
+  return service.applyConsultationRow(row as unknown as Record<string, unknown>, document) as unknown as ConsultationRow;
+}
+
 function lookupDocument(
   document: string,
   requestedTitle: string | undefined,
@@ -132,10 +210,11 @@ function lookupDocument(
 ): ConsultationRow {
   const RC = requestsCore();
   const resultado = RC.lookupDocument(document, index, { requestedTitle });
-  return {
+  const row = {
     ...RC.consultationRow(resultado),
     ...RC.issuedColumns(historyEntriesFor(resultado, document)),
   } as unknown as ConsultationRow;
+  return applyPlannedAllocation(document, row);
 }
 
 /**
@@ -270,6 +349,10 @@ function setExportRowsProvider(provider?: () => ExportRow[]): void { exportRowsP
 export const consultasAdapter = Object.freeze({
   notify,
   parseLd,
+  getPlannedDocumentsState,
+  refreshPlannedDocuments,
+  onPlannedDocumentsChanged,
+  applyPlannedAllocation,
   buildIndex,
   rememberLastLd,
   getLastLd,

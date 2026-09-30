@@ -34,11 +34,52 @@
     throw new Error("Não foi encontrada a coluna DOCUMENTO na planilha de Documentos Previstos.");
   }
 
+  function classifyDocument(documentCode, snapshot) {
+    const cleanCode = String(documentCode || "").replace(/\u0000/g, "");
+    const documentKey = key(cleanCode);
+    // Reutiliza somente equivalências canônicas já controladas pelo GRCON.
+    // Para ET isso inclui a mesma codificação com/sem o prefixo nt-; não há
+    // fuzzy match, revisão ou consulta à LD para decidir alocação.
+    const searchKeys = typeof Core.documentSearchKeys === "function"
+      ? [...new Set(Core.documentSearchKeys(cleanCode).map(key).filter(Boolean))]
+      : [documentKey].filter(Boolean);
+    if (!snapshot || !snapshot.id || !(snapshot.keys instanceof Set)) {
+      return {
+        available: false,
+        allocated: null,
+        kind: "unavailable",
+        label: "",
+        status: "",
+        documentKey,
+        searchKeys,
+        matchedKey: "",
+        snapshotId: "",
+        fileName: "",
+        updatedAt: "",
+      };
+    }
+    const matchedKey = searchKeys.find((candidate) => snapshot.keys.has(candidate)) || "";
+    const allocated = Boolean(matchedKey);
+    return {
+      available: true,
+      allocated,
+      kind: allocated ? "allocated" : "not_allocated",
+      label: allocated ? "Alocado" : "Não alocado",
+      status: allocated ? "ALOCADO" : "NÃO ALOCADO",
+      documentKey,
+      searchKeys,
+      matchedKey,
+      snapshotId: snapshot.id,
+      fileName: snapshot.fileName || "",
+      updatedAt: snapshot.updatedAt || "",
+    };
+  }
+
   function applyToRecords(records, snapshot) {
     if (!snapshot || !snapshot.id || !(snapshot.keys instanceof Set)) return records;
     return (records || []).map((record) => {
-      const allocated = snapshot.keys.has(key(String(record.documentKey || record.document || "").replace(/\u0000/g, "")));
-      const allocationStatus = allocated ? "ALOCADO" : "NÃO ALOCADO";
+      const classification = classifyDocument(record.documentKey || record.document || "", snapshot);
+      const allocationStatus = classification.status;
       return {
         ...record,
         allocationStatus,
@@ -47,9 +88,36 @@
         allocationStatusColumn: "A",
         plannedDocumentsSnapshot: snapshot.id,
         plannedDocumentsFile: snapshot.fileName || "",
+        plannedDocumentsUpdatedAt: snapshot.updatedAt || "",
         originalLdAllocationStatus: record.allocationStatus || "",
       };
     });
+  }
+
+  function applyToConsultationRow(row, documentCode, snapshot) {
+    const classification = classifyDocument(documentCode, snapshot);
+    if (!classification.available) {
+      return {
+        ...(row || {}),
+        allocated: "",
+        allocationKind: "unavailable",
+        allocationSource: "Documentos Previstos",
+        allocationUnavailable: true,
+        plannedDocumentsSnapshot: "",
+        plannedDocumentsFile: "",
+        plannedDocumentsUpdatedAt: "",
+      };
+    }
+    return {
+      ...(row || {}),
+      allocated: classification.label,
+      allocationKind: classification.kind,
+      allocationSource: "Documentos Previstos",
+      allocationUnavailable: false,
+      plannedDocumentsSnapshot: classification.snapshotId,
+      plannedDocumentsFile: classification.fileName,
+      plannedDocumentsUpdatedAt: classification.updatedAt,
+    };
   }
 
   // O PostgREST pode devolver menos linhas que o limite pedido. Só uma página
@@ -73,5 +141,5 @@
     return keys;
   }
 
-  return { key, parseWorkbook, applyToRecords, collectPages };
+  return { key, parseWorkbook, classifyDocument, applyToRecords, applyToConsultationRow, collectPages };
 });

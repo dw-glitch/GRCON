@@ -59,10 +59,39 @@ interface GrconLdMemoryApi {
 
 interface GrconCloudApi {
   getExportTemplates?(): Promise<ExportTemplate[]>;
-  state?: { membership?: { workspace_id?: string } };
+  state?: { membership?: { workspace_id?: string }; plannedSnapshot?: GrconPlannedDocumentsSnapshot | null; online?: boolean };
   canManageHistory?(): boolean;
   deleteHistoryRecord?(record: unknown): Promise<unknown>;
   clearHistory?(): Promise<boolean>;
+}
+
+interface GrconPlannedDocumentsSnapshot {
+  id: string;
+  fileName?: string;
+  updatedAt?: string;
+  count?: number;
+  keys?: Set<string>;
+}
+
+interface GrconPlannedDocumentClassification {
+  available: boolean;
+  allocated: boolean | null;
+  kind: "allocated" | "not_allocated" | "unavailable" | string;
+  label: string;
+  status: string;
+  documentKey: string;
+  snapshotId: string;
+  fileName: string;
+  updatedAt: string;
+}
+
+interface GrconPlannedDocumentsApi {
+  current(): GrconPlannedDocumentsSnapshot | null;
+  refresh(): Promise<GrconPlannedDocumentsSnapshot | null>;
+  classify(documentCode: string): GrconPlannedDocumentClassification;
+  isAllocated(documentCode: string): boolean | null;
+  applyRecords<T extends Record<string, unknown>>(records: T[]): T[];
+  applyConsultationRow<T extends Record<string, unknown>>(row: T, documentCode: string): T;
 }
 
 type NotifyFn = (message: string, kind?: string) => void;
@@ -77,6 +106,7 @@ declare global {
     GrconGrdtHistoryIndicator?: GrconGrdtHistoryIndicatorApi;
     GrconLdMemory?: GrconLdMemoryApi;
     GrconCloud?: GrconCloudApi;
+    GrconPlannedDocuments?: GrconPlannedDocumentsApi;
     GrconNotify?: NotifyFn;
     GRCONBrandAssets?: unknown;
     XLSX?: {
