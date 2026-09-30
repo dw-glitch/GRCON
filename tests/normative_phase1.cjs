@@ -24,6 +24,17 @@ check("registro inicial contém N-2064, N-1710 e N-381 com revisão explícita",
   assert.equal(norms.find((item) => item.norma === "N-381").revision, "M");
 });
 
+check("ET RNEST Rev. P é fonte contratual confirmada e escopada ao projeto", () => {
+  const registry = Registry.create();
+  const et = registry.versions.get("ET-5290.00-22000-912-1LV-001", "P");
+  assert.equal(et.status, "source-confirmed");
+  const rule = registry.getRule("ET5290P-7.1.7.3-NT-PREFIX");
+  assert.equal(Applicability.matches(rule.applicability, { project: "RNEST" }), true);
+  assert.equal(Applicability.matches(rule.applicability, { project: "OUTRO" }), false);
+  assert.equal(rule.type, "contractual");
+  assert.equal(rule.promotionState, "candidate");
+});
+
 check("regra N-1710 não se aplica fora do contexto N-1710", () => {
   const registry = Registry.create();
   const rule = registry.getRule("N1710-5.1-SEVEN-GROUPS");
