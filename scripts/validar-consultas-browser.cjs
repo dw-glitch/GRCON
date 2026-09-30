@@ -189,6 +189,25 @@ async function clearLds(page) {
     page.on("console", function (m) { if (m.type()==="error") errors.push("console: "+m.text()); });
     page.on("response", function (r) { try { responses.set(new URL(r.url()).pathname, {status:r.status(), type:r.headers()["content-type"]||""}); } catch (_) {} });
     await openConsultas(page);
+    // O QA de Consultas precisa da mesma fonte oficial exigida em produção.
+    // O fixture simula um snapshot já publicado: 320020 e 320021 existem;
+    // 320019 não existe, embora a LD diga ALOCADO, comprovando que a LD não
+    // decide mais esse campo.
+    await page.evaluate(function () {
+      const P = "C1O_RNEST_U32_3.1.1.1_INS_RIR_";
+      window.GrconCloud.loadPlannedDocuments = async function () {
+        return {
+          id: "qa-planned-documents-v1",
+          fileName: "Documentos Previstos QA.xlsx",
+          updatedAt: "2026-09-30T12:00:00Z",
+          count: 2,
+          keys: new Set([
+            P + "SPE-AST-320020",
+            P + "nt-SPE-AST-320021",
+          ].map(function (value) { return window.TriagemCore.key(value); })),
+        };
+      };
+    });
     await page.screenshot({ path:path.join(outputDir,"01-consultas-vazia-1366.png"), fullPage:true });
 
     const head = await page.evaluate(function () {
@@ -208,6 +227,10 @@ async function clearLds(page) {
     await page.locator("#requests-paste").fill(docs.join("\n")); await page.getByRole("button",{name:"Adicionar à lista"}).click(); await page.waitForFunction(function(){return document.querySelector(".requests-selection-note")&&document.querySelector(".requests-selection-note").textContent.includes("500 de 500");});
     await page.getByRole("button",{name:"Consultar documentos",exact:true}).click(); await page.waitForFunction(function(){return document.querySelector(".requests-progress")&&document.querySelector(".requests-progress").hidden&&document.querySelector(".requests-summary");},{},{timeout:20000});
     assert.equal(await page.locator(".requests-kpi").first().locator("strong").innerText(),"500"); assert.match(await page.locator(".requests-pagination").innerText(),/Página 1 de 5/);
+    const allocationCells = page.locator(".requests-col-allocation");
+    assert.match(await allocationCells.nth(0).innerText(),/^NÃO — Não alocado$/, "LD diz ALOCADO, mas ausência em Documentos Previstos deve prevalecer");
+    assert.match(await allocationCells.nth(1).innerText(),/^SIM — Alocado$/, "presença em Documentos Previstos deve prevalecer");
+    assert.equal(await allocationCells.nth(1).locator("span").getAttribute("title"), "Documentos Previstos compartilhado");
     const mascotLight=await inspectRealMascotTransparency(page);
     assert.ok(mascotLight.transparentEdgeRatio>=0.72,"interface real: o mascote precisa estar realmente transparente nas bordas");
     assert.equal(mascotLight.hostBackground,"rgba(0, 0, 0, 0)");
@@ -227,7 +250,9 @@ async function clearLds(page) {
     await page.evaluate(function(){return navigator.clipboard.writeText("");}); await page.getByRole("button",{name:"Copiar",exact:true}).click(); await page.waitForFunction(async function(){const value=await navigator.clipboard.readText();return value.startsWith("SITUAÇÃO\t");},null,{timeout:5000}); const clip=await page.evaluate(function(){return navigator.clipboard.readText();}); const clipLines=clip.split(/\r?\n/).filter(Boolean); const clipHeaders=clipLines[0].split("\t"); const clipDocumentIndex=clipHeaders.indexOf("DOCUMENTO"); assert.ok(clipDocumentIndex>=0); const copiedDocuments=clipLines.slice(1).map(function(line){return line.split("\t")[clipDocumentIndex]||"";}).filter(Boolean); assert.equal(copiedDocuments.length,500); assert.equal(new Set(copiedDocuments).size,500);
     const downloadPromise=page.waitForEvent("download"); await page.getByRole("button",{name:"Exportar Excel"}).click(); const dl=await downloadPromise; const exportPath=path.join(fixtureDir,"export.xlsx"); await dl.saveAs(exportPath); const wb=XLSX.read(fs.readFileSync(exportPath),{type:"buffer"}); const matrix=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""}); const hi=matrix.findIndex(function(r){return String(r[0]||"").toUpperCase()==="SITUAÇÃO";}); assert.ok(hi>=0); assert.equal(matrix.slice(hi+1).filter(function(r){return String(r[0]||"").trim();}).length,500);
 
-    const opener=page.locator('button[aria-label^="Abrir detalhes"]').first(); await opener.focus(); await opener.click(); await page.locator('.requests-detail-drawer[role="dialog"][aria-modal="true"]').waitFor(); assert.equal(await page.evaluate(function(){return document.body.style.overflow;}),"hidden"); assert.equal(await page.evaluate(function(){return document.querySelector(".requests-detail-drawer").contains(document.activeElement);}),true); await page.screenshot({path:path.join(outputDir,"04-drawer-aberto-1366.png"),fullPage:true}); await page.keyboard.press("Tab"); assert.equal(await page.evaluate(function(){return document.querySelector(".requests-detail-drawer").contains(document.activeElement);}),true); await page.keyboard.press("Shift+Tab"); assert.equal(await page.evaluate(function(){return document.querySelector(".requests-detail-drawer").contains(document.activeElement);}),true); await page.keyboard.press("Escape"); await page.locator(".requests-detail-drawer").waitFor({state:"detached"}); assert.equal(await page.evaluate(function(){return document.body.style.overflow;}),""); assert.match(await page.evaluate(function(){return document.activeElement&&document.activeElement.getAttribute("aria-label")||"";}),/^Abrir detalhes/);
+    const opener=page.locator('button[aria-label^="Abrir detalhes"]').first(); await opener.focus(); await opener.click(); await page.locator('.requests-detail-drawer[role="dialog"][aria-modal="true"]').waitFor();
+    assert.match(await page.locator(".requests-detail-drawer").innerText(),/Fonte da alocação\s+Documentos Previstos compartilhado/i);
+    assert.match(await page.locator(".requests-detail-drawer").innerText(),/Base publicada\s+Documentos Previstos QA\.xlsx/i); assert.equal(await page.evaluate(function(){return document.body.style.overflow;}),"hidden"); assert.equal(await page.evaluate(function(){return document.querySelector(".requests-detail-drawer").contains(document.activeElement);}),true); await page.screenshot({path:path.join(outputDir,"04-drawer-aberto-1366.png"),fullPage:true}); await page.keyboard.press("Tab"); assert.equal(await page.evaluate(function(){return document.querySelector(".requests-detail-drawer").contains(document.activeElement);}),true); await page.keyboard.press("Shift+Tab"); assert.equal(await page.evaluate(function(){return document.querySelector(".requests-detail-drawer").contains(document.activeElement);}),true); await page.keyboard.press("Escape"); await page.locator(".requests-detail-drawer").waitFor({state:"detached"}); assert.equal(await page.evaluate(function(){return document.body.style.overflow;}),""); assert.match(await page.evaluate(function(){return document.activeElement&&document.activeElement.getAttribute("aria-label")||"";}),/^Abrir detalhes/);
     await opener.click(); await page.locator(".requests-detail-overlay").click({position:{x:5,y:5}}); await page.locator(".requests-detail-drawer").waitFor({state:"detached"});
 
     await page.locator(".requests-more-actions summary").click(); await page.getByRole("button",{name:"Remover duplicados"}).click(); assert.equal(await page.locator(".requests-more-actions").getAttribute("open"),null); await page.locator(".requests-more-actions summary").click(); await page.keyboard.press("Escape"); assert.equal(await page.locator(".requests-more-actions").getAttribute("open"),null); await page.locator(".requests-more-actions summary").click(); await page.locator("body").click({position:{x:2,y:2}}); assert.equal(await page.locator(".requests-more-actions").getAttribute("open"),null);

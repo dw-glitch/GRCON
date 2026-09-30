@@ -57,7 +57,20 @@ interface GrconLdMemoryApi {
   getLastLd?(): { name: string } | null;
 }
 
+interface PlannedDocumentsSnapshot {
+  id: string;
+  fileName?: string;
+  updatedAt?: string;
+  count?: number;
+  keys: Set<string>;
+}
+
+interface GrconPlannedDocumentsCoreApi {
+  applyToRecords(records: LdRecord[], snapshot: PlannedDocumentsSnapshot): LdRecord[];
+}
+
 interface GrconCloudApi {
+  loadPlannedDocuments?(): Promise<PlannedDocumentsSnapshot | null>;
   getExportTemplates?(): Promise<ExportTemplate[]>;
   state?: { membership?: { workspace_id?: string } };
   canManageHistory?(): boolean;
@@ -77,6 +90,7 @@ declare global {
     GrconGrdtHistoryIndicator?: GrconGrdtHistoryIndicatorApi;
     GrconLdMemory?: GrconLdMemoryApi;
     GrconCloud?: GrconCloudApi;
+    GrconPlannedDocumentsCore?: GrconPlannedDocumentsCoreApi;
     GrconNotify?: NotifyFn;
     GRCONBrandAssets?: unknown;
     XLSX?: {

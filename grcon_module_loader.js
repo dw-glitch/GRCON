@@ -40,7 +40,7 @@
       "xlsx", "excel", "brand",
       // Dependências de domínio obrigatórias da ilha. Mesmo quando já vieram
       // do carregamento inicial, a ordem fica explícita e auditável aqui.
-      "core.js", "requests_core.js", "requests_report.js", "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
+      "core.js", "planned_documents_core.js", "requests_core.js", "requests_report.js", "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
       // Taxonomia envolve GrconRequestsCore/Report antes de qualquer leitura da
       // ilha; requests_app mantém somente a aba legada de modelos.
       "requests_taxonomy_core.js", "requests_app.js",

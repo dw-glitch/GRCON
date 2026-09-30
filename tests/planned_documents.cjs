@@ -33,6 +33,11 @@ assert.ok(applied.every((item) => C.allocationEvidenceState(item).evidence === '
 assert.equal(source[0].allocationStatus, 'NÃO ALOCADO');
 assert.equal(source[2].allocationStatus, 'ALOCADO');
 assert.equal(C.allocationEvidenceState(applied[2]).allocationNumber, 'ALOC-1000');
+const revisionIndependent = Planned.applyToRecords([
+  { document: code, revision: 'Z', allocationStatus: 'NÃO ALOCADO', allocation: '' },
+], snapshot);
+assert.equal(C.allocationEvidenceState(revisionIndependent[0]).kind, 'allocated',
+  'a revisão da linha não participa da identidade em Documentos Previstos');
 assert.equal(Planned.applyToRecords(source, null), source);
 assert.throws(() => Planned.parseWorkbook({ SheetNames: ['Outra'], Sheets: { Outra: X.utils.aoa_to_sheet([['Código'], [code]]) } }), /DOCUMENTO/);
 

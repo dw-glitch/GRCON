@@ -75,6 +75,11 @@ export interface ConsultationRow {
   sigemLdRevisionAll?: SigemRevisionEntry[];
   sigemLdRevisionLabel?: string;
   allocated?: string;
+  allocationKind?: string;
+  allocationSource?: string;
+  plannedDocumentsSnapshot?: string;
+  plannedDocumentsFile?: string;
+  plannedDocumentsUpdatedAt?: string;
   allocation?: string;
   lastGrdt?: string;
   issued?: string;

@@ -611,7 +611,11 @@ function ResultsRow({ item, linha, onToggle, onOpen }: {
       </td>
       <td className="requests-col-title">{linha?.title || celulaVazio()}</td>
       <td className="requests-col-taxonomia">{celulaTaxonomiaInterna(linha)}</td>
-      <td className="requests-col-allocation">{linha?.allocated || celulaVazio()}</td>
+      <td className="requests-col-allocation">
+        {linha?.allocated
+          ? <span title={linha.allocationSource || "Documentos Previstos compartilhado"}>{linha.allocated}</span>
+          : celulaVazio()}
+      </td>
       <td className="requests-col-sigem">{linha?.sigemStatus || celulaVazio()}</td>
       <td className="requests-col-ld">
         {linha?.ld || celulaVazio()}
@@ -738,7 +742,9 @@ export function DocumentDetailsDrawer({ entry, onClose }: {
           <h4>Alocação e fiscal</h4>
           <dl className="requests-detail-grid">
             <DetailField label="Alocado?">{linha?.allocated || celulaVazio()}</DetailField>
-            <DetailField label="Alocação">{linha?.allocation || celulaVazio()}</DetailField>
+            <DetailField label="Fonte da alocação">{linha?.allocationSource || celulaVazio()}</DetailField>
+            <DetailField label="Base publicada" wide>{linha?.plannedDocumentsFile || celulaVazio()}</DetailField>
+            <DetailField label="Alocação registrada na LD">{linha?.allocation || celulaVazio()}</DetailField>
           </dl>
         </section>
 
