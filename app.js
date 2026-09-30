@@ -114,6 +114,7 @@
     analysisRecentDays: 30,
     analysisLdSignature: "",
     analysisPlannedSnapshot: "",
+    analysisSigemSnapshot: "",
     egrdtSequenceCursor: 0,
     manualEgrdtSequenceStart: null,
     manualEgrdtSequences: [],
@@ -1027,7 +1028,7 @@
     const issues = [];
     const warnings = [];
     if (!parsed.records.length) issues.push("nenhuma linha técnica reconhecida");
-    if (!parsed.history.length) issues.push("nenhuma linha reconhecida em Colar SIGEM");
+    if (!parsed.history.length && !window.GrconSharedSigemQuery?.current()?.records.length) issues.push("nenhuma linha reconhecida em Colar SIGEM");
     const technicalFields = new Set(parsed.mappedFields && parsed.mappedFields.technical || []);
     const historyFields = new Set(parsed.mappedFields && parsed.mappedFields.history || []);
     if (!technicalFields.has("revision") && !hasLdHeader(parsed.records, (header) => header === "REVISAO" || header === "REV" || header === "REV.")) issues.push("coluna REVISÃO ausente nas abas técnicas");
@@ -1039,7 +1040,7 @@
       || /^(ALOCADO|DOCUMENTO ALOCADO|ALOCACAO CONFIRMADA)$/.test(header)
     ));
     if (!allocationAvailable) warnings.push("confirmação de alocação indisponível nesta LD; a decisão usará a aba Colar SIGEM");
-    if (!historyFields.has("status") && !historyFields.has("sigemStatus") && !hasLdHeader(parsed.history, (header) => header === "STATUS" || header.includes("STATUS SIGEM"))) issues.push("coluna STATUS ausente na base SIGEM");
+    if (!window.GrconSharedSigemQuery?.current()?.records.length && !historyFields.has("status") && !historyFields.has("sigemStatus") && !hasLdHeader(parsed.history, (header) => header === "STATUS" || header.includes("STATUS SIGEM"))) issues.push("coluna STATUS ausente na base SIGEM");
     const ageDays = file.lastModified ? (Date.now() - Number(file.lastModified)) / 86400000 : null;
     if (ageDays !== null && ageDays < -1) issues.push("data de modificação da LD está no futuro");
     if (ageDays !== null && ageDays > 14) issues.push(`LD modificada há ${Math.floor(ageDays)} dias`);
@@ -1177,9 +1178,15 @@
     return "sem-relacao";
   }
 
+  function currentSigemQuerySnapshot() {
+    const current = window.GrconSharedSigemQuery?.current();
+    return current?.meta?.snapshotId || current?.meta?.importedAt || "";
+  }
+
   function currentAnalysisSignature() {
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
     return [currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
+      `sigem:${currentSigemQuerySnapshot() || "sem-base"}`,
       `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`].join("###");
   }
 
@@ -1197,6 +1204,7 @@
         analysisRecentDays: state.analysisRecentDays,
         analysisLdSignature: state.analysisLdSignature,
         analysisPlannedSnapshot: state.analysisPlannedSnapshot,
+        analysisSigemSnapshot: state.analysisSigemSnapshot,
         ldIntegrity: state.ldIntegrity,
       },
     };
@@ -1221,6 +1229,7 @@
     state.analysisRecentDays = Number(snapshot.analysisRecentDays) || state.recentDays;
     state.analysisLdSignature = snapshot.analysisLdSignature || currentLdSignature();
     state.analysisPlannedSnapshot = snapshot.analysisPlannedSnapshot || "";
+    state.analysisSigemSnapshot = snapshot.analysisSigemSnapshot || currentSigemQuerySnapshot();
     state.ldIntegrity = snapshot.ldIntegrity || null;
     return true;
   }
@@ -1380,7 +1389,7 @@
 
   function triageSettings() {
     state.recentDays = Math.max(1, Number(els.recentDays.value) || 30);
-    return { recentDays: state.recentDays, now: new Date(), conflictResolutions: state.conflictResolutions };
+    return { recentDays: state.recentDays, now: new Date(), conflictResolutions: state.conflictResolutions, sigemQueryContext: window.GrconSharedSigemQuery?.context() };
   }
 
   function normalizeFileAccessError(error, file, context) {
@@ -2202,6 +2211,12 @@
     Promise.resolve(logger("ajuste_manual_grdt", detail)).catch(() => null);
   }
 
+  function resolveRowSigemStatus(row, revision) {
+    const group = state.index?.byDocument?.get(row.documentKey || C.key(row.document));
+    const fallback = group ? C.statusForRevision(group, revision) : { status: "Não Postado" };
+    return window.GrconSharedSigemQuery?.resolveSigemStatus(row.document, revision, fallback);
+  }
+
   function applyRevisionOverride(row, rawValue) {
     if (!row) return { ok: false, error: "Documento inválido." };
     const previousRevision = row.revision || "";
@@ -2221,6 +2236,8 @@
       ...entry,
       finalName: C.proposedFileName(entry.name, row.document, row.revision, row.sheet),
     }));
+    const resolved = resolveRowSigemStatus(row, row.revision);
+    if (resolved) { row.status = resolved.status; row.sigemStatusSource = resolved.source; row.sigemStatusSnapshotId = resolved.snapshotId || ""; }
     const primary = row.files.find((entry) => extensionOf(entry.name) === "pdf") || row.files[0] || null;
     row.finalName = primary
       ? primary.finalName
@@ -2267,6 +2284,7 @@
   }
 
   async function analyzeLegacy() {
+    await window.GrconSharedSigemQuery?.refresh();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
     setBusy(true, "Analisando documentos");
     state.records = [];
@@ -2290,6 +2308,8 @@
     state.analysisAt = 0;
     state.analysisValidUntil = 0;
     state.analysisLdSignature = "";
+    state.analysisPlannedSnapshot = "";
+    state.analysisSigemSnapshot = "";
     els.analysisStamp.hidden = true;
     els.resultsSection.hidden = true;
     setProgress(3, "Verificando a integridade da LD…");
@@ -2316,7 +2336,7 @@
       });
       state.records = window.GrconPlannedDocuments?.applyRecords(state.records) || state.records;
       syncEgrdtSequenceFromLd(state.records, state.history);
-      if (!state.records.length || !state.history.length) {
+      if (!state.records.length || (!state.history.length && !window.GrconSharedSigemQuery?.current()?.records.length)) {
         throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
       }
       state.index = C.buildIndex(state.records, state.history);
@@ -2436,6 +2456,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) lida(s) nesta análise · até ${validUntil}`;
       els.analysisStamp.title = `GRCON ${APP_VERSION} · ${ldDisplayName()}`;
@@ -2495,6 +2516,7 @@
     if (!PerformanceCore || !PerformanceCore.supported) return analyzeLegacy();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
 
+    await window.GrconSharedSigemQuery?.refresh();
     const analysisSignature = currentAnalysisSignature();
     if (restoreSmartAnalysisCache(analysisSignature)) {
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -2534,6 +2556,8 @@
     state.analysisAt = 0;
     state.analysisValidUntil = 0;
     state.analysisLdSignature = "";
+    state.analysisPlannedSnapshot = "";
+    state.analysisSigemSnapshot = "";
     if (els.analysisStamp) els.analysisStamp.hidden = true;
     if (els.resultsSection) els.resultsSection.hidden = true;
     if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
@@ -2571,7 +2595,7 @@
         || loadedLds.flatMap((item) => item.parsed.records);
       state.history = loadedLds.flatMap((item) => item.parsed.history);
       state.index = C.buildIndex(state.records, state.history);
-      if (!state.records.length || !state.history.length) throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
+      if (!state.records.length || (!state.history.length && !window.GrconSharedSigemQuery?.current()?.records.length)) throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
       syncEgrdtSequenceFromLd(state.records, state.history);
       const cachedCount = loadedLds.filter((item) => item.ldResult.cacheHit).length;
       const cacheMessage = cachedCount
@@ -2671,6 +2695,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) preparadas · válidas até ${validUntil}`;
       els.analysisStamp.title = `GRCON ${APP_VERSION} · ${ldDisplayName()}`;
@@ -2732,6 +2757,9 @@
   }
 
   async function ensureFreshAnalysis() {
+    const sharedSigem = window.GrconSharedSigemQuery;
+    if (sharedSigem?.refreshLatest) await sharedSigem.refreshLatest();
+    else await sharedSigem?.refresh();
     if (!state.analysisAt || !state.results.length) {
       showToast("Execute uma análise antes de gerar arquivos.", "error");
       return false;
@@ -2749,6 +2777,11 @@
       showToast("O conjunto de LDs usado na análise foi alterado. Analise novamente antes de emitir.", "error");
       return false;
     }
+    if (currentSigemQuerySnapshot() !== state.analysisSigemSnapshot) {
+      showToast("A Consulta Geral SIGEM foi atualizada após esta análise. Analise novamente antes de gerar a GRDT.", "error");
+      return false;
+    }
+    refreshSelectedSigemStatuses();
     if (window.GrconCloud?.state?.membership) {
       try { await window.GrconPlannedDocuments.refresh(); }
       catch (_) { showToast("Não foi possível confirmar a base atual de Documentos Previstos. Reconecte e tente novamente.", "error"); return false; }
@@ -3674,7 +3707,7 @@
         <td><span class="grdt-code" title="${escapeHtml(grdt)}">${escapeHtml(grdt)}</span></td>
         <td><span class="text-cell" title="${escapeHtml(technicalStatus)}">${escapeHtml(technicalStatus)}</span></td>
         <td><span class="sigem-status" title="${escapeHtml(ldSigemStatus)}">${escapeHtml(ldSigemStatus)}</span></td>
-        <td><span class="sigem-status" title="${escapeHtml(row.status)}">${escapeHtml(row.status || "—")}</span></td>
+        <td><span class="sigem-status" title="${escapeHtml(`${row.status} · Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || 'LD / Colar SIGEM'}`)}">${escapeHtml(row.status || "—")}</span></td>
         <td><span class="posting-evidence ${row.postingEvidence && row.postingEvidence.complete ? "posted" : row.postingEvidence && row.postingEvidence.partial ? "review" : "none"}" title="${escapeHtml(row.postingEvidence && row.postingEvidence.explanation || "")}">${escapeHtml(row.postingStatus || (row.postingEvidence && row.postingEvidence.status) || "Sem evidência na LD")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(fiscalComment)}">${escapeHtml(fiscalComment)}</span></td>
         <td><span class="text-cell">${escapeHtml(allocation)}</span></td>
@@ -3949,6 +3982,8 @@
     state.analysisAt = 0;
     state.analysisValidUntil = 0;
     state.analysisLdSignature = "";
+    state.analysisPlannedSnapshot = "";
+    state.analysisSigemSnapshot = "";
     closeEgrdtDrawer();
     closeRelationDrawer();
     els.ldInput.value = "";
@@ -3992,6 +4027,8 @@
     state.analysisAt = 0;
     state.analysisValidUntil = 0;
     state.analysisLdSignature = "";
+    state.analysisPlannedSnapshot = "";
+    state.analysisSigemSnapshot = "";
     els.resultsSection.hidden = true;
     els.analysisStamp.hidden = true;
   }
@@ -4490,8 +4527,8 @@
   }
 
   async function exportPendingAllocationPdfs() {
-    await ensureRuntime("zip");
     if (!(await ensureFreshAnalysis())) return;
+    await ensureRuntime("zip");
     const bundle = refreshPendingAllocationBundle();
     if (!bundle.pdfCount) {
       showToast("Nenhum PDF atende ao critério: Não Alocado, com número real de alocação e sem indicação de recusa ou cancelamento.", "warn");
@@ -4545,7 +4582,20 @@
     download: exportPendingAllocationPdfs,
   });
 
+  function refreshSelectedSigemStatuses() {
+    for (const index of state.selected) {
+      const row = state.results[index];
+      if (!row) continue;
+      const resolved = resolveRowSigemStatus(row, row.egrdt?.revision || row.revision);
+      if (!resolved) continue;
+      row.status = resolved.status;
+      row.sigemStatusSource = resolved.source;
+      row.sigemStatusSnapshotId = resolved.snapshotId || "";
+    }
+  }
+
   function buildEgrdtItems() {
+    refreshSelectedSigemStatuses();
     state.selected.forEach((index) => {
       const row = state.results[index];
       if (row && row.egrdt && C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
@@ -4648,8 +4698,8 @@
   }
 
   async function exportEgrdt() {
-    await ensureRuntime("export");
     if (!(await ensureFreshAnalysis())) return;
+    await ensureRuntime("export");
     const prepared = buildEgrdtItems();
     if (prepared.errors.length) {
       showToast(`GRDT bloqueada: ${prepared.errors.slice(0, 3).join(" ")}`, "error");
@@ -4752,8 +4802,8 @@
   }
 
   async function exportZip() {
-    await ensureRuntime("export");
     if (!(await ensureFreshAnalysis())) return;
+    await ensureRuntime("export");
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
@@ -4865,8 +4915,8 @@
   }
 
   async function exportFinalPackage() {
-    await ensureRuntime("export");
     if (!(await ensureFreshAnalysis())) return;
+    await ensureRuntime("export");
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
@@ -5368,7 +5418,10 @@
       density: state.resultDensity,
       filtered: filteredResultIndices().length,
       total: state.results.length,
+      analysisSigemSnapshot: state.analysisSigemSnapshot,
+      currentSigemSnapshot: currentSigemQuerySnapshot(),
     }),
+    ensureFreshAnalysis: () => ensureFreshAnalysis(),
     getResult: (index) => state.results[Number(index)] || null,
     filteredIndices: () => [...filteredResultIndices()],
     setGroupByStatus: (value) => {

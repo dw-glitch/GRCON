@@ -334,7 +334,7 @@
   function protectButton(id, buildConfig) {
     const button = document.getElementById(id);
     if (!button) return;
-    button.addEventListener("click", (event) => {
+    button.addEventListener("click", async (event) => {
       if (state.bypass.has(id)) {
         state.bypass.delete(id);
         return;
@@ -343,6 +343,14 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       const config = buildConfig();
+      if (typeof config.preflight === "function") {
+        try {
+          if ((await config.preflight()) === false) return;
+        } catch (error) {
+          window.GrconNotify?.(error?.message || "Não foi possível validar a análise antes da geração.", "error");
+          return;
+        }
+      }
       openConfirm({
         ...config,
         onConfirm: () => {
@@ -368,6 +376,7 @@
 
   function installConfirmations() {
     protectButton("export-egrdt", () => ({
+      preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
       title: "Confirmar a eGRDT final",
       message: "Revise este resumo antes de gerar o arquivo que será usado na postagem.",
       facts: selectedFacts(),
@@ -385,6 +394,7 @@
     protectButton("export-pending-allocation-pdfs", () => {
       const preview = window.GrconPendingAllocationUi?.preview?.() || {};
       return {
+        preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
         title: "Baixar PDFs aguardando retorno?",
         message:
           "Estes PDFs serão separados para uso futuro. Eles continuarão bloqueados e nenhuma eGRDT será criada.",
@@ -397,6 +407,7 @@
       };
     });
     protectButton("export-zip", () => ({
+      preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
       title: "Baixar PDFs e eGRDT?",
       message: "O pacote conterá somente os documentos selecionados e a eGRDT correspondente.",
       facts: selectedFacts(),
@@ -406,6 +417,7 @@
       audit: () => window.GrconOutputPreview?.(),
     }));
     protectButton("export-final-package", () => ({
+      preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
       title: "Confirmar pacote completo",
       message: "Confira a quantidade de documentos antes de criar o pacote final.",
       facts: selectedFacts(),

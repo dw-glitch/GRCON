@@ -11,3 +11,6 @@ react-dist/
 
 # Artefato de produção gerado para Cloudflare Workers Static Assets.
 dist-cloudflare/
+
+# Estado temporário da CLI Supabase
+supabase/.temp/

@@ -79,9 +79,10 @@
     shell.innerHTML = `
       <header class="pc-heading">
         <div><span>HISTÓRICO DE eGRDTs × CONSULTA GERAL SIGEM</span><h2>Conferência de Postagem</h2><p>Cada documento aparece uma única vez; reenvios ficam agrupados no histórico do documento.</p></div>
-        <div class="pc-heading-actions"><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Relatório Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
+        <div class="pc-heading-actions"><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Relatório Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><button class="secondary-button" id="pc-publish" type="button" hidden>Publicar Consulta Geral compartilhada</button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
       </header>
       <section class="pc-hero" aria-live="polite"><div><span>CONFERÊNCIA GERAL</span><strong id="pc-hero-main">Carregue a Consulta Geral</strong><small id="pc-hero-note">O histórico permanece preservado como origem dos eventos de envio.</small></div><div class="pc-base-card" id="pc-base-card"></div></section>
+      <section class="pc-audit-card" id="pc-local-preview" hidden></section>
       <section class="pc-kpis" id="pc-kpis" aria-label="Resumo da conferência"></section>
       <section class="pc-toolbar-card">
         <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">Pendências de Postagem</button></div>
@@ -120,6 +121,7 @@
       event.target.value = "";
       if (file) void importFile(file);
     });
+    el("pc-publish").addEventListener("click", () => void publishShared());
     el("pc-export").addEventListener("click", () => void exportReport());
     shell.querySelectorAll("[data-pc-view]").forEach((button) => button.addEventListener("click", () => {
       state.view = button.dataset.pcView;
@@ -171,29 +173,27 @@
     const progress = el("pc-progress");
     progress.hidden = !busy;
     progress.querySelector("span").textContent = label || "Processando…";
-    [el("pc-update"), el("pc-export")].forEach((button) => { button.disabled = busy; });
+    [el("pc-update"), el("pc-export"), el("pc-publish")].forEach((button) => { button.disabled = busy; });
     root.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
       detail: { active: Boolean(busy), state: "checking-document", task: label || "Conferindo documentos" },
     }));
   }
 
+  function conferenceProjection(base) {
+    const workspace = root.GrconCloud?.state?.membership?.workspace_id || "";
+    if (!base || !Array.isArray(base.records) || !workspace) return base;
+    return { ...base, meta: { ...(base.meta || {}), grconWorkspaceId: workspace } };
+  }
+
   async function importFile(file) {
-    if (!root.XLSX) {
-      notify("O leitor de planilhas não foi carregado.", "error");
-      return;
-    }
     setBusy(true, "Validando e indexando a Consulta Geral…");
     await new Promise((resolve) => requestAnimationFrame(resolve));
     try {
-      const buffer = await file.arrayBuffer();
-      const workbook = root.XLSX.read(buffer, { type: "array", cellDates: false, dense: false });
-      const importedAt = new Date().toISOString();
-      const result = await Conference.importWorkbook(workbook, {
-        fileName: file.name,
-        fileSize: file.size,
-        lastModified: file.lastModified,
-        importedAt,
-      }, History?.read?.() || [], { now: importedAt });
+      const base = await root.GrconSharedSigemQuery.parseFile(file);
+      await root.GrconSharedSigemQuery.setLocal(base);
+      await Conference.saveBase(conferenceProjection(root.GrconSharedSigemQuery.current()));
+      const result = await Conference.reconcilePersisted(History?.read?.() || [], { reason: "local-general-query" });
+      result.parsed = root.GrconSharedSigemQuery.current();
       state.base = { meta: result.parsed.meta, records: result.parsed.records };
       state.result = result;
       state.audit = await Conference.loadAudit();
@@ -207,6 +207,39 @@
     } finally {
       setBusy(false);
     }
+  }
+
+  async function publishShared() {
+    if (state.busy || !root.GrconSharedSigemQuery.state.local) return;
+    setBusy(true, "Publicando Consulta Geral para a equipe…");
+    try {
+      await root.GrconSharedSigemQuery.publish(root.GrconSharedSigemQuery.state.local);
+      await adoptSharedBase();
+      notify("Consulta Geral publicada para todos os usuários.", "success");
+    } catch (error) { notify(error.message, error.published ? "warning" : "error"); }
+    finally { setBusy(false); render(); }
+  }
+
+  async function adoptSharedBase() {
+    const query = root.GrconSharedSigemQuery;
+    const base = query?.current();
+    if (!base) {
+      const [storedBase, storedState, storedAudit] = await Promise.all([
+        Conference.loadBase(),
+        Conference.loadState(),
+        Conference.loadAudit(),
+      ]);
+      state.base = storedBase;
+      state.audit = storedAudit;
+      if (state.ready) {
+        const prefs = Conference.readPreferences();
+        state.result = Conference.reconcile(History?.read?.() || [], storedBase.records || [], storedState, { ...prefs, reason: "shared-general-query-empty" });
+        render();
+      }
+      return;
+    }
+    await Conference.saveBase(conferenceProjection(base));
+    if (state.ready) await reconcileCurrent({ reason: "shared-general-query" });
   }
 
   async function reconcileCurrent(options) {
@@ -416,6 +449,20 @@
     refreshFilterOptions();
     renderTableOnly();
     renderAudit();
+    const query = root.GrconSharedSigemQuery;
+    el("pc-publish").hidden = !query?.canPublish() || !query?.state.local;
+    el("pc-publish").disabled = state.busy || query?.state.busy;
+    const preview = el("pc-local-preview");
+    preview.hidden = !query?.state.local;
+    if (query?.state.local) {
+      const local = query.state.local;
+      preview.innerHTML = `<header><strong>Prévia local · ${escapeHtml(local.meta.fileName)}</strong><small>${fmt(local.records.length)} registros válidos · ${fmt(local.meta.invalidCount)} inválidos · ${fmt(local.meta.duplicateCount)} duplicados. A base compartilhada tem prioridade até a publicação.</small></header><div>${local.records.slice(0, 5).map((row) => `<p><strong>${escapeHtml(row.document)}</strong> · Rev. ${escapeHtml(row.revision)} · ${escapeHtml(row.status || "Sem status")}</p>`).join("")}</div>`;
+    }
+    if (query?.state.local && query.canPublish()) {
+      el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: `Prévia local: ${fmt(query.state.local.records.length)} registros · ${query.state.local.meta.fileName}. Pronta para publicar.` }));
+    }
+    if (query?.state.shared) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.stale ? "Consulta Geral compartilhada em cache; pode estar desatualizada." : "Consulta Geral compartilhada em uso." }));
+    if (query?.state.error) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.error }));
     el("pc-export").disabled = state.busy || !documentRows().length;
   }
 
@@ -456,6 +503,8 @@
   async function activate() {
     createShell();
     shell.hidden = false;
+    await root.GrconSharedSigemQuery?.refresh();
+    await adoptSharedBase();
     if (!state.ready) {
       state.ready = true;
       setBusy(true, "Carregando a conferência salva…");
@@ -472,6 +521,8 @@
     render();
     setTimeout(() => el("pc-search")?.focus(), 0);
   }
+
+  root.addEventListener("grcon:shared-sigem-updated", () => { if (state.ready && !state.busy) void adoptSharedBase(); });
 
   root.addEventListener("grcon:history-updated", () => {
     if (!state.ready) return;

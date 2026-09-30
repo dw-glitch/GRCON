@@ -35,7 +35,9 @@ interface PreparedConferenceImport {
 }
 interface ConferenceDetection { score: number; columns: Record<string, number>; }
 interface PostingConferenceApi {
+  saveBase(base: SigemPwBase): Promise<SigemPwBase>;
   detectColumns(matrix: string[][], maxColumns?: number): ConferenceDetection | null;
+  prepareParsedImport(parsed: { ok: boolean; meta: SigemPwBaseMeta | null; records: SigemPwRecord[] }, history: unknown[], options: Record<string, unknown>): Promise<PreparedConferenceImport>;
   prepareWorkbookImport(workbook: unknown, fileMeta: Record<string, unknown>, history: unknown[], options: Record<string, unknown>): Promise<PreparedConferenceImport>;
   commitPreparedImport(result: PreparedConferenceImport): Promise<unknown>;
 }
@@ -164,6 +166,12 @@ declare global {
     GrconSigemPwDashboardBootstrap?: SigemPwBootstrapApi;
     GrconSigemPwDashboardReact?: { mounted: boolean };
     GrconPostingConference?: PostingConferenceApi;
+    GrconSharedSigemQuery?: {
+      current(): SigemPwBase | null;
+      refresh(): Promise<SigemPwBase | null>;
+      setLocal(base: SigemPwBase): Promise<SigemPwBase | null>;
+      parseFile(file: File): Promise<SigemPwBase>;
+    };
   }
   interface WindowEventMap {
     "grcon:conference-updated": CustomEvent<{ source?: string; [key: string]: unknown }>;
