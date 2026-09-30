@@ -194,12 +194,13 @@ function refreshHistoryIndicator(): void {
  */
 function applyPlannedAllocation(document: string, row: ConsultationRow): ConsultationRow {
   const service = plannedDocuments();
-  const resolvedDocument = text(row.ldDocument) || document;
-  const classification = service.classify(resolvedDocument);
+  // A identificação para alocação vem do código consultado. O código encontrado
+  // na LD pode ajudar em título/revisão, mas nunca substitui a fonte objetiva.
+  const classification = service.classify(document);
   if (!classification.available) {
     throw new Error("Documentos Previstos ainda não está disponível; a alocação não foi calculada.");
   }
-  return service.applyConsultationRow(row as unknown as Record<string, unknown>, resolvedDocument) as unknown as ConsultationRow;
+  return service.applyConsultationRow(row as unknown as Record<string, unknown>, document) as unknown as ConsultationRow;
 }
 
 function lookupDocument(
