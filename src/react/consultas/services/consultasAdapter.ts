@@ -27,6 +27,15 @@ import type {
 const CHAVE_MODELOS = "grcon-requests-export-templates";
 const CHAVE_ULTIMA = "grcon-requests-last-export";
 const EVENTO_MODELOS = "grcon:export-templates-changed";
+const EVENTO_DOCUMENTOS_PREVISTOS = "grcon:planned-documents-updated";
+
+interface PlannedDocumentsSnapshot {
+  id: string;
+  fileName?: string;
+  updatedAt?: string;
+  count?: number;
+  keys: Set<string>;
+}
 
 function core() {
   const api = window.TriagemCore;
@@ -41,6 +50,11 @@ function requestsCore() {
 function requestsReport() {
   const api = window.GrconRequestsReport;
   if (!api) throw new Error("O gerador de relatório (GrconRequestsReport) não está disponível.");
+  return api;
+}
+function plannedDocumentsCore() {
+  const api = window.GrconPlannedDocumentsCore;
+  if (!api) throw new Error("A regra de Documentos Previstos não está disponível.");
   return api;
 }
 
@@ -68,12 +82,19 @@ async function parseLd(file: File): Promise<{ records: LdRecord[]; history: LdHi
 }
 
 /** Reconstrói o índice de busca a partir das LDs válidas anexadas. */
-function buildIndex(lds: LdEntry[]): DocumentIndex | null {
+function buildIndex(lds: LdEntry[], plannedSnapshot?: PlannedDocumentsSnapshot): DocumentIndex | null {
   const validas = lds.filter((item) => !item.error && item.records.length);
   if (!validas.length) return null;
   const registros = validas.flatMap((item) => item.records);
   const historico = validas.flatMap((item) => item.history || []);
-  return core().buildIndex(registros, historico);
+  // Em Consultas, a coluna de alocação da LD nunca pode decidir Alocado/Não
+  // alocado. Quando há snapshot oficial, todas as ocorrências entram no índice
+  // já sobrescritas pela mesma fonte compartilhada. Isso também elimina falsos
+  // conflitos entre LDs que apenas divergem na coluna antiga de alocação.
+  const registrosOficiais = plannedSnapshot
+    ? plannedDocumentsCore().applyToRecords(registros, plannedSnapshot)
+    : registros;
+  return core().buildIndex(registrosOficiais, historico);
 }
 
 function rememberLastLd(file: File): void {
@@ -97,6 +118,45 @@ function dedupeDocuments<T extends { document: string }>(items: T[]): { items: T
 
 function text(value: unknown): string {
   return value === null || value === undefined ? "" : String(value).trim();
+}
+
+async function loadPlannedDocumentsSnapshot(): Promise<PlannedDocumentsSnapshot> {
+  const Cloud = window.GrconCloud;
+  if (!Cloud?.loadPlannedDocuments) {
+    throw new Error("A base compartilhada de Documentos Previstos não está disponível nesta sessão.");
+  }
+  const snapshot = await Cloud.loadPlannedDocuments();
+  if (!snapshot?.id || !(snapshot.keys instanceof Set)) {
+    throw new Error("Nenhuma base compartilhada de Documentos Previstos válida está carregada. Publique ou sincronize a base antes de consultar.");
+  }
+  if (Number.isFinite(snapshot.count) && Number(snapshot.count) !== snapshot.keys.size) {
+    throw new Error("A base compartilhada de Documentos Previstos está incompleta. Atualize a sessão antes de consultar.");
+  }
+  return snapshot;
+}
+
+function applyPlannedAllocation(
+  document: string,
+  row: ConsultationRow,
+  snapshot: PlannedDocumentsSnapshot,
+): ConsultationRow {
+  const applied = plannedDocumentsCore().applyToRecords([
+    { document, documentKey: document },
+  ], snapshot)[0] as Record<string, unknown> | undefined;
+  const allocationStatus = text(applied?.allocationStatus).toUpperCase();
+  if (allocationStatus !== "ALOCADO" && allocationStatus !== "NÃO ALOCADO") {
+    throw new Error("Não foi possível determinar a alocação pela base compartilhada de Documentos Previstos.");
+  }
+  const allocated = allocationStatus === "ALOCADO";
+  return {
+    ...row,
+    allocated: allocated ? "SIM — Alocado" : "NÃO — Não alocado",
+    allocationKind: allocated ? "allocated" : "not_allocated",
+    allocationSource: "Documentos Previstos compartilhado",
+    plannedDocumentsSnapshot: snapshot.id,
+    plannedDocumentsFile: snapshot.fileName || "",
+    plannedDocumentsUpdatedAt: snapshot.updatedAt || "",
+  };
 }
 
 /**
@@ -128,14 +188,19 @@ function refreshHistoryIndicator(): void {
 function lookupDocument(
   document: string,
   requestedTitle: string | undefined,
-  index: DocumentIndex
+  index: DocumentIndex,
+  plannedSnapshot: PlannedDocumentsSnapshot,
 ): ConsultationRow {
   const RC = requestsCore();
   const resultado = RC.lookupDocument(document, index, { requestedTitle });
-  return {
+  const row = {
     ...RC.consultationRow(resultado),
     ...RC.issuedColumns(historyEntriesFor(resultado, document)),
   } as unknown as ConsultationRow;
+  // A decisão final independe de a LD ter localizado o documento: se o código
+  // normalizado existe no snapshot compartilhado, é Alocado; se não existe, é
+  // Não alocado. Revisão, SIGEM, PW, histórico e campos da LD não entram aqui.
+  return applyPlannedAllocation(document, row, plannedSnapshot);
 }
 
 /**
@@ -223,6 +288,11 @@ function onExportTemplatesChanged(callback: EventListener): () => void {
   return () => window.removeEventListener(EVENTO_MODELOS, callback);
 }
 
+function onPlannedDocumentsChanged(callback: EventListener): () => void {
+  window.addEventListener(EVENTO_DOCUMENTOS_PREVISTOS, callback);
+  return () => window.removeEventListener(EVENTO_DOCUMENTOS_PREVISTOS, callback);
+}
+
 /**
  * Gera e baixa o arquivo Excel com o mesmo construtor da Triagem (mesmo
  * layout, mesma logomarca).
@@ -271,6 +341,7 @@ export const consultasAdapter = Object.freeze({
   notify,
   parseLd,
   buildIndex,
+  loadPlannedDocumentsSnapshot,
   rememberLastLd,
   getLastLd,
   parseDocumentList,
@@ -280,6 +351,7 @@ export const consultasAdapter = Object.freeze({
   copyRowsToClipboard,
   loadExportTemplates,
   onExportTemplatesChanged,
+  onPlannedDocumentsChanged,
   exportRowsToExcel,
   normalizeExportTemplate,
   getLastExport,
