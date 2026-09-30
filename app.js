@@ -4527,8 +4527,8 @@
   }
 
   async function exportPendingAllocationPdfs() {
-    await ensureRuntime("zip");
     if (!(await ensureFreshAnalysis())) return;
+    await ensureRuntime("zip");
     const bundle = refreshPendingAllocationBundle();
     if (!bundle.pdfCount) {
       showToast("Nenhum PDF atende ao critério: Não Alocado, com número real de alocação e sem indicação de recusa ou cancelamento.", "warn");
@@ -4698,8 +4698,8 @@
   }
 
   async function exportEgrdt() {
-    await ensureRuntime("export");
     if (!(await ensureFreshAnalysis())) return;
+    await ensureRuntime("export");
     const prepared = buildEgrdtItems();
     if (prepared.errors.length) {
       showToast(`GRDT bloqueada: ${prepared.errors.slice(0, 3).join(" ")}`, "error");
@@ -4802,8 +4802,8 @@
   }
 
   async function exportZip() {
-    await ensureRuntime("export");
     if (!(await ensureFreshAnalysis())) return;
+    await ensureRuntime("export");
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
@@ -4915,8 +4915,8 @@
   }
 
   async function exportFinalPackage() {
-    await ensureRuntime("export");
     if (!(await ensureFreshAnalysis())) return;
+    await ensureRuntime("export");
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
