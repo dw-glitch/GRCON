@@ -371,7 +371,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
   const groupEnd = loader.indexOf("],", groupStart);
   const requestGroup = loader.slice(groupStart, groupEnd);
   for (const dependency of [
-    "core.js", "requests_core.js", "requests_report.js",
+    "core.js", "planned_documents_core.js", "requests_core.js", "requests_report.js",
     "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
     "requests_taxonomy_core.js", "requests_app.js", "react-dist/consultas-app.js",
   ]) {
