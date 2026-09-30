@@ -1,10 +1,12 @@
 -- Execute with SQL administration access. All fixture changes roll back.
 begin;
 do $$
-declare w uuid; actor uuid; prior uuid; a uuid; b uuid; active uuid; n integer;
+declare w uuid; actor uuid; admin_actor uuid; prior uuid; a uuid; b uuid; active uuid; n integer;
 begin
  select workspace_id,user_id into w,actor from public.grcon_memberships m where m.active and m.role='owner' limit 1;
  if w is null then raise exception 'QA requer um workspace com proprietário.'; end if;
+ select user_id into admin_actor from public.grcon_memberships m where m.workspace_id=w and m.active and m.role='admin' limit 1;
+ if admin_actor is null then raise exception 'QA requer um administrador no workspace para validar a restrição owner-only.'; end if;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'role','authenticated')::text,true);
  execute 'set local role authenticated';
  select snapshot_id into prior from public.grcon_sigem_query_current(w);
@@ -22,6 +24,8 @@ begin
  begin perform public.grcon_sigem_query_publish(w,b); raise exception 'Conflito concorrente foi aceito'; exception when sqlstate '40001' then null; end;
  select count(*) into n from public.grcon_sigem_query_page(w,a,0,1000);
  if n<>2 then raise exception 'Paginação incompleta'; end if;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',admin_actor,'role','authenticated')::text,true);
+ begin perform public.grcon_sigem_query_begin(w,'QA-ADMIN.xlsx',1,'{}',active); raise exception 'Administrador publicou base compartilhada'; exception when insufficient_privilege then null; end;
  perform set_config('request.jwt.claims','{"sub":"00000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
  begin perform public.grcon_sigem_query_current(w); raise exception 'Não membro leu dados'; exception when insufficient_privilege then null; end;
  begin perform public.grcon_sigem_query_begin(w,'QA.xlsx',1,'{}',null); raise exception 'Não membro publicou'; exception when insufficient_privilege then null; end;

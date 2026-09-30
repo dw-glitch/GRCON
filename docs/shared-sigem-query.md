@@ -4,9 +4,9 @@ A Consulta Geral publicada no Supabase é a fonte prioritária do status SIGEM n
 
 ## Uso
 
-Na Conferência, selecionar **Atualizar Consulta Geral** para carregar Excel. O arquivo é processado em Worker pelo parser existente da Conferência. A prévia mostra arquivo, contagens e amostra de documento/revisão/status. Proprietário e administrador podem selecionar **Publicar Consulta Geral compartilhada**. Os demais membros recebem a versão automaticamente ao abrir o módulo, recuperar a conexão, voltar à aba ou pelo polling de 60 segundos.
+Na Conferência, qualquer membro autorizado pode selecionar **Atualizar Consulta Geral** para carregar Excel e usar essa carga apenas localmente no próprio navegador/computador. O arquivo é processado em Worker pelo parser existente da Conferência. Somente o **proprietário (owner)** pode selecionar **Publicar Consulta Geral compartilhada** e substituir a base da equipe. Administradores e operadores não podem publicar no Supabase; eles recebem a versão compartilhada automaticamente ao abrir o módulo, recuperar a conexão, voltar à aba ou pelo polling de 60 segundos.
 
-Uma prévia local não substitui um status válido encontrado na versão compartilhada. Não é preciso importar novamente a Consulta Geral no Dashboard. Na ausência de uma versão compartilhada, a importação local continua disponível. Uma LD sem Colar SIGEM pode ser analisada quando houver Consulta Geral válida; as demais validações da LD foram mantidas.
+A carga local não altera o Supabase nem a base dos demais usuários. Não é preciso importar novamente a Consulta Geral no Dashboard. Na ausência de uma versão compartilhada, a importação local continua disponível. Uma LD sem Colar SIGEM pode ser analisada quando houver Consulta Geral válida; as demais validações da LD foram mantidas.
 
 ## Prioridade e identidade
 
@@ -20,7 +20,7 @@ O motor operacional de avanço de revisão e os overrides manuais existentes for
 
 ## Banco
 
-Migração: `supabase/migrations/20260929223549_shared_sigem_query.sql`, aplicada ao projeto GRCON (`kvyrttccwzdhasplfxnr`).
+Migrações: `supabase/migrations/20260929223549_shared_sigem_query.sql` e `supabase/migrations/20260930110844_owner_only_shared_sigem_publish.sql`, aplicadas ao projeto GRCON (`kvyrttccwzdhasplfxnr`).
 
 - `private.grcon_sigem_query_snapshots`: arquivo, autor, datas, contagem esperada/confirmada, metadados do parser, checksum SHA-256, versão anterior esperada e estado.
 - `private.grcon_sigem_query_rows`: linhas JSON imutáveis de uma versão publicada, indexadas por versão + número da linha.
@@ -28,7 +28,7 @@ Migração: `supabase/migrations/20260929223549_shared_sigem_query.sql`, aplicad
 
 O cliente envia lotes de 500 linhas. Leitura por keyset em páginas de 1.000 linhas; toda a versão é baixada antes da troca em memória. O índice único parcial garante uma única versão ativa por workspace. Publicação bloqueia o workspace, confirma a contagem e verifica a versão anterior esperada. Publicação concorrente obsoleta é rejeitada com SQLSTATE 40001. Carga incompleta não altera a versão ativa. Versões arquivadas ficam disponíveis por sete dias; uploads abandonados, por um dia. Não foram criados índices de status/código sem consulta SQL que os utilize: as buscas por documento/revisão são mapas em memória após uma única carga em lote.
 
-Tabelas privadas com RLS e sem grants diretos ao frontend. Wrappers públicos são SECURITY INVOKER e sem execução para anon/PUBLIC. Implementações privadas verificam `auth.uid()` e membership/papel antes de operar. Leitura: membro ativo do workspace. Publicação: owner/admin. Nenhuma service role é usada no frontend. Auditoria registra publicação, arquivo, quantidade e checksum. Advisor: apenas aviso informativo de tabelas privadas sem policies, esperado porque todo acesso ocorre por RPC autorizada; aviso de proteção de senhas comprometidas já existente no projeto não foi alterado.
+Tabelas privadas com RLS e sem grants diretos ao frontend. Wrappers públicos são SECURITY INVOKER e sem execução para anon/PUBLIC. Implementações privadas verificam `auth.uid()` e membership/papel antes de operar. Leitura: membro ativo do workspace. Publicação: somente owner. Admin e operator têm importação local, sem permissão de publicação compartilhada. Nenhuma service role é usada no frontend. Auditoria registra publicação, arquivo, quantidade e checksum. Advisor: apenas aviso informativo de tabelas privadas sem policies, esperado porque todo acesso ocorre por RPC autorizada; aviso de proteção de senhas comprometidas já existente no projeto não foi alterado.
 
 ## Cache e desempenho
 

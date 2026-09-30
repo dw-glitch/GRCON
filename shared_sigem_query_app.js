@@ -18,7 +18,7 @@
     root.dispatchEvent(new CustomEvent("grcon:shared-sigem-updated", { detail: { meta: current()?.meta, stale: state.stale, error: state.error } }));
   }
   function current() { return state.shared || state.local; }
-  function canPublish() { return ["owner", "admin"].includes(cloud()?.state?.membership?.role); }
+  function canPublish() { return cloud()?.state?.membership?.role === "owner"; }
   function cacheKey(workspace) { return `shared-sigem-query:${workspace}`; }
   async function runtime() {
     await root.GRCONModuleLoader.ensure("posting_conference_core.js");
@@ -165,7 +165,7 @@
   }
   async function publish(base) {
     Core.validate(base);
-    if (!canPublish()) throw new Error("Somente o proprietário ou administrador pode publicar a Consulta Geral.");
+    if (!canPublish()) throw new Error("Somente o proprietário pode publicar a Consulta Geral compartilhada.");
     if (!cloud().state.online) throw new Error("Conecte-se para publicar a Consulta Geral.");
     if (state.busy) throw new Error("Já existe uma publicação em andamento.");
     state.busy = true;
