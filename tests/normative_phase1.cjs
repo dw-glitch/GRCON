@@ -38,6 +38,13 @@ check("registro de regra não sobrescreve silenciosamente o histórico", () => {
   assert.throws(() => registry.registerRule({ ...existing, title: "Título divergente" }), /já existe com conteúdo diferente/i);
 });
 
+check("N-2064 C é detectada como divergente do catálogo de referência", () => {
+  const registry = Registry.create();
+  const n2064 = registry.versions.get("N-2064", "C");
+  assert.equal(n2064.status, "catalog-mismatch");
+  assert.equal(n2064.catalogRevision, "D");
+});
+
 check("norma sem revisão de catálogo permanece não confirmada", () => {
   const registry = Registry.create();
   const n1710 = registry.versions.get("N-1710", "N");
