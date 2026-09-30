@@ -45,6 +45,7 @@ export function useConsultas() {
   const [banner, setBanner] = useState<{ kind: "error" | "info"; message: string } | null>(null);
 
   const indexRef = useRef<DocumentIndex | null>(null);
+  const plannedSnapshotIdRef = useRef("");
   const undoRef = useRef<UndoEntry[]>([]);
 
   const notify = useCallback((message: string, kind?: NotifyKind) => Adapter.notify(message, kind), [Adapter]);
@@ -165,7 +166,9 @@ export function useConsultas() {
       indexRef.current = officialIndex;
 
       Adapter.refreshHistoryIndicator();
-      const novosResultados = new Map(results);
+      const sameSnapshot = plannedSnapshotIdRef.current === plannedSnapshot.id;
+      plannedSnapshotIdRef.current = plannedSnapshot.id;
+      const novosResultados = sameSnapshot ? new Map(results) : new Map<string, ConsultationRow>();
       for (let inicio = 0; inicio < total; inicio += 100) {
         const fim = Math.min(total, inicio + 100);
         for (let i = inicio; i < fim; i += 1) {
@@ -203,6 +206,7 @@ export function useConsultas() {
   useEffect(() => Adapter.onPlannedDocumentsChanged(() => {
     // Qualquer troca do snapshot torna Alocado/Não alocado anterior obsoleto.
     // Limpar também remove esses valores de filtros, detalhes, cópia e Excel.
+    plannedSnapshotIdRef.current = "";
     setResults(new Map());
     setProgress({ done: 0, total: 0 });
   }), [Adapter]);
