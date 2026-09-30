@@ -474,7 +474,6 @@ export function FiltersBar({
           <option value="">Todas</option>
           <option value="sim">Alocado</option>
           <option value="nao">Não alocado</option>
-          <option value="revisar">A revisar</option>
         </select>
       </label>
 
@@ -735,10 +734,16 @@ export function DocumentDetailsDrawer({ entry, onClose }: {
         </section>
 
         <section className="requests-detail-section">
-          <h4>Alocação e fiscal</h4>
+          <h4>Alocação</h4>
           <dl className="requests-detail-grid">
             <DetailField label="Alocado?">{linha?.allocated || celulaVazio()}</DetailField>
-            <DetailField label="Alocação">{linha?.allocation || celulaVazio()}</DetailField>
+            <DetailField label="Fonte">{linha?.allocationSource || celulaVazio()}</DetailField>
+            <DetailField label="Base compartilhada" wide>
+              {linha?.plannedDocumentsFile
+                ? `${linha.plannedDocumentsFile}${linha.plannedDocumentsUpdatedAt ? ` · ${new Date(linha.plannedDocumentsUpdatedAt).toLocaleString("pt-BR")}` : ""}`
+                : celulaVazio()}
+            </DetailField>
+            <DetailField label="Nº/registro de alocação na LD">{linha?.allocation || celulaVazio()}</DetailField>
           </dl>
         </section>
 
