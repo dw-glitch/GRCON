@@ -658,3 +658,254 @@ html[data-theme="dark"] .grcon-cloud-account-menu > header strong { color: var(-
 html[data-theme="dark"] .grcon-cloud-sync-line { color: var(--text-2); }
 html[data-theme="dark"] .grcon-cloud-invitation.is-expired strong { color: var(--danger-700); }
 html[data-theme="dark"] .grcon-cloud-members > div.is-inactive { opacity: .62; }
+
+
+/* Administração · alteração de senha por usuário */
+.grcon-cloud-member-row [data-member-password] {
+  white-space: nowrap;
+}
+
+.grcon-admin-password-backdrop {
+  align-items: center;
+  background: rgb(17 31 39 / 58%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 2147483000;
+}
+
+.grcon-admin-password-backdrop[hidden] {
+  display: none;
+}
+
+.grcon-admin-password-dialog {
+  background: #fff;
+  border: 1px solid #d8e3e9;
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgb(20 43 55 / 28%);
+  color: #203541;
+  max-height: min(760px, calc(100vh - 48px));
+  max-width: 520px;
+  overflow: auto;
+  padding: 26px;
+  position: relative;
+  width: min(100%, 520px);
+}
+
+.grcon-admin-password-dialog h2 {
+  color: #203541;
+  font-size: 20px;
+  margin: 6px 0 16px;
+}
+
+.grcon-admin-password-close {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: #617985;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 22px;
+  height: 34px;
+  justify-content: center;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 34px;
+}
+
+.grcon-admin-password-close:hover,
+.grcon-admin-password-close:focus-visible {
+  background: #edf4f7;
+  color: #244b60;
+  outline: 2px solid #72a9c2;
+  outline-offset: 1px;
+}
+
+.grcon-admin-password-user {
+  background: #f5f9fb;
+  border: 1px solid #e0e9ee;
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+}
+
+.grcon-admin-password-user div {
+  display: grid;
+  gap: 2px;
+}
+
+.grcon-admin-password-user dt {
+  color: #70838e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.grcon-admin-password-user dd {
+  color: #203541;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+#grcon-admin-password-form {
+  display: grid;
+  gap: 12px;
+}
+
+#grcon-admin-password-form > label:not(.grcon-admin-password-show) {
+  display: grid;
+  gap: 6px;
+}
+
+#grcon-admin-password-form > label > span {
+  color: #405966;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+#grcon-admin-password-form input[type="password"],
+#grcon-admin-password-form input[type="text"] {
+  background: #fff;
+  border: 1px solid #bdcfd9;
+  border-radius: 8px;
+  color: #203541;
+  font: inherit;
+  min-height: 40px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+#grcon-admin-password-form input[aria-invalid="true"] {
+  border-color: #c5584c;
+  box-shadow: 0 0 0 2px rgb(197 88 76 / 12%);
+}
+
+.grcon-admin-password-show {
+  align-items: center;
+  color: #536b77;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  gap: 8px;
+  justify-self: start;
+}
+
+.grcon-admin-password-show input {
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.grcon-admin-password-rules {
+  display: grid;
+  gap: 5px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.grcon-admin-password-rules li {
+  color: #7c6060;
+  font-size: 10px;
+}
+
+.grcon-admin-password-rules li span {
+  display: inline-block;
+  font-weight: 800;
+  width: 14px;
+}
+
+.grcon-admin-password-rules li.is-met {
+  color: #0c7657;
+}
+
+.grcon-admin-password-message {
+  color: #6f7f87;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  min-height: 16px;
+}
+
+.grcon-admin-password-message[data-tone="error"] {
+  color: #a63e34;
+}
+
+.grcon-admin-password-dialog footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+#grcon-admin-password-confirm > p {
+  color: #526a76;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.grcon-admin-password-dialog[aria-busy="true"],
+.grcon-admin-password-backdrop[aria-busy="true"] .grcon-admin-password-dialog {
+  cursor: progress;
+}
+
+@media (max-width: 600px) {
+  .grcon-admin-password-backdrop { padding: 12px; }
+  .grcon-admin-password-dialog { max-height: calc(100vh - 24px); padding: 22px 18px; }
+  .grcon-admin-password-rules { grid-template-columns: 1fr; }
+  .grcon-admin-password-dialog footer > button { flex: 1 1 auto; }
+}
+
+html[data-theme="dark"] .grcon-admin-password-dialog {
+  background: var(--surface-2);
+  border-color: var(--border-1);
+  box-shadow: var(--shadow-2);
+  color: var(--text-1);
+}
+
+html[data-theme="dark"] .grcon-admin-password-dialog h2,
+html[data-theme="dark"] .grcon-admin-password-user dd {
+  color: var(--text-1);
+}
+
+html[data-theme="dark"] .grcon-admin-password-user {
+  background: var(--surface-1);
+  border-color: var(--border-1);
+}
+
+html[data-theme="dark"] .grcon-admin-password-user dt,
+html[data-theme="dark"] #grcon-admin-password-form > label > span,
+html[data-theme="dark"] #grcon-admin-password-confirm > p,
+html[data-theme="dark"] .grcon-admin-password-show,
+html[data-theme="dark"] .grcon-admin-password-message {
+  color: var(--text-2);
+}
+
+html[data-theme="dark"] #grcon-admin-password-form input[type="password"],
+html[data-theme="dark"] #grcon-admin-password-form input[type="text"] {
+  background: var(--surface-1);
+  border-color: var(--border-2);
+  color: var(--text-1);
+}
+
+html[data-theme="dark"] .grcon-admin-password-close {
+  color: var(--text-2);
+}
+
+html[data-theme="dark"] .grcon-admin-password-close:hover,
+html[data-theme="dark"] .grcon-admin-password-close:focus-visible {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
