@@ -43,15 +43,71 @@ export function useConsultas() {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [lastExport, setLastExport] = useState(Adapter.getLastExport());
   const [banner, setBanner] = useState<{ kind: "error" | "info"; message: string } | null>(null);
+  const [plannedDocuments, setPlannedDocuments] = useState(() => Adapter.getPlannedDocumentsState());
 
   const indexRef = useRef<DocumentIndex | null>(null);
   const undoRef = useRef<UndoEntry[]>([]);
+  const ldsRef = useRef<LdEntry[]>([]);
+  const documentsRef = useRef<DocumentEntry[]>([]);
 
   const notify = useCallback((message: string, kind?: NotifyKind) => Adapter.notify(message, kind), [Adapter]);
 
   const reindex = useCallback((nextLds: LdEntry[]) => {
     indexRef.current = Adapter.buildIndex(nextLds);
   }, [Adapter]);
+
+  useEffect(() => { ldsRef.current = lds; }, [lds]);
+  useEffect(() => { documentsRef.current = documents; }, [documents]);
+
+  const applyReadyPlannedDocuments = useCallback((base: ReturnType<typeof Adapter.getPlannedDocumentsState>) => {
+    setPlannedDocuments(base);
+    reindex(ldsRef.current);
+    setResults((previous) => {
+      if (!previous.size) return previous;
+      const next = new Map(previous);
+      for (const item of documentsRef.current) {
+        const row = previous.get(item.id);
+        if (row) next.set(item.id, Adapter.applyPlannedAllocation(item.document, row));
+      }
+      return next;
+    });
+    setBanner(null);
+  }, [Adapter, reindex]);
+
+  const refreshPlannedDocuments = useCallback(async () => {
+    const base = await Adapter.refreshPlannedDocuments();
+    if (base.status === "ready") {
+      applyReadyPlannedDocuments(base);
+    } else {
+      setPlannedDocuments(base);
+      indexRef.current = null;
+      if (base.status === "error") setBanner({ kind: "error", message: base.message });
+    }
+    return base;
+  }, [Adapter, applyReadyPlannedDocuments]);
+
+  useEffect(() => {
+    void refreshPlannedDocuments();
+    return Adapter.onPlannedDocumentsChanged((reason) => {
+      if (reason === "cloud-ready") {
+        void refreshPlannedDocuments();
+        return;
+      }
+      const current = Adapter.getPlannedDocumentsState();
+      if (current.status === "ready") {
+        applyReadyPlannedDocuments(current);
+      } else {
+        indexRef.current = null;
+        const unavailable = {
+          ...current,
+          status: "error" as const,
+          message: "Nenhuma base compartilhada de Documentos Previstos está publicada para esta área de trabalho.",
+        };
+        setPlannedDocuments(unavailable);
+        setBanner({ kind: "error", message: unavailable.message });
+      }
+    });
+  }, [Adapter, applyReadyPlannedDocuments, refreshPlannedDocuments]);
 
   const addLds = useCallback(async (fileList: FileList | null | undefined) => {
     const arquivos = [...(fileList || [])];
@@ -148,7 +204,10 @@ export function useConsultas() {
 
   const runQuery = useCallback(async (onlySelected?: boolean) => {
     if (running) return;
-    if (!indexRef.current) { notify("Anexe pelo menos uma LD válida antes de consultar.", "warn"); return; }
+    if (!lds.some((item) => !item.error && item.records.length)) {
+      notify("Anexe pelo menos uma LD válida antes de consultar.", "warn");
+      return;
+    }
     const alvos = onlySelected ? documents.filter((item) => item.selected) : documents;
     if (!alvos.length) { notify(onlySelected ? "Nenhum documento selecionado." : "Informe pelo menos um documento.", "warn"); return; }
 
@@ -156,6 +215,21 @@ export function useConsultas() {
     const total = alvos.length;
     setProgress({ done: 0, total });
     try {
+      const base = await Adapter.refreshPlannedDocuments();
+      if (base.status !== "ready") {
+        setPlannedDocuments(base);
+        indexRef.current = null;
+        const message = base.message || "Não foi possível consultar a base de Documentos Previstos.";
+        setBanner({ kind: base.status === "error" ? "error" : "info", message });
+        notify(message, base.status === "error" ? "error" : "info");
+        return;
+      }
+      setPlannedDocuments(base);
+      const currentIndex = Adapter.buildIndex(lds);
+      if (!currentIndex) throw new Error("A base de Documentos Previstos ainda não está pronta para cruzar as LDs.");
+      indexRef.current = currentIndex;
+      setBanner(null);
+
       Adapter.refreshHistoryIndicator();
       const novosResultados = new Map(results);
       for (let inicio = 0; inicio < total; inicio += 100) {
@@ -181,7 +255,7 @@ export function useConsultas() {
     } finally {
       setRunning(false);
     }
-  }, [running, documents, results, notify, Adapter]);
+  }, [running, lds, documents, results, notify, Adapter]);
 
   const exportRows = useMemo(() => documents
     .filter((item) => results.has(item.id))
@@ -241,10 +315,9 @@ export function useConsultas() {
     if (situation) linhas = linhas.filter(({ linha }) => linha && linha.situation === situation);
     if (allocation) {
       linhas = linhas.filter(({ linha }) => {
-        const valor = String(linha?.allocated || "").toUpperCase();
-        if (allocation === "sim") return valor.startsWith("SIM");
-        if (allocation === "nao") return valor.startsWith("NÃO");
-        return valor.startsWith("REVISAR");
+        if (allocation === "sim") return linha?.allocationKind === "allocated";
+        if (allocation === "nao") return linha?.allocationKind === "not_allocated";
+        return false;
       });
     }
     if (busca) {
@@ -271,10 +344,10 @@ export function useConsultas() {
 
   return {
     lds, documents, results, running, progress, search, situation, allocation, sort,
-    templates, selectedTemplateId, lastExport, banner, visibleRows, exportRows, selectedCount, ldsReady, summary,
+    templates, selectedTemplateId, lastExport, banner, plannedDocuments, visibleRows, exportRows, selectedCount, ldsReady, summary,
     lastLd: Adapter.getLastLd(),
     canUndo: undoRef.current.length > 0,
-    indexReady: Boolean(indexRef.current),
+    indexReady: Boolean(indexRef.current) && plannedDocuments.status === "ready",
     setSearch, setSituation, setAllocation, setSort, setSelectedTemplateId, setBanner,
     addLds, removeLd, clearLds,
     addDocuments, removeDuplicates, clearConsulta, undo,
