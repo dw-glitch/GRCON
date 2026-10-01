@@ -33,7 +33,8 @@
     STORAGE_MAX_BYTES: 4_200_000,
 
     /* ── Alfabeto de revisão ────────────────────────────────── */
-    REVISION_ALPHABET: "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    REVISION_ALPHABET: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    RECOMMENDED_REVISION_ALPHABET: "ABCDEFGHJKLMNPQRSTUVWXYZ",
 
     /* ── Categorias N1710 ───────────────────────────────────── */
     N1710_CATEGORIES: Object.freeze([
