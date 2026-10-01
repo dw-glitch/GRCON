@@ -2585,8 +2585,12 @@
     // sempre usar a revisão controlada pela LD/histórico. Claims externos só
     // são mantidos para comparação quando eles próprios forem revisões válidas.
     const externalRevisionClaims = [inputRevisionClaim, fromFileClaim, fromPdf].filter(Boolean);
-    const validExternalRevisionClaims = externalRevisionClaims.filter((value) => revisionInfo(value).valid);
-    const invalidExternalRevisionClaims = [...new Set(externalRevisionClaims.filter((value) => !revisionInfo(value).valid))];
+    // RIR é um sufixo operacional conhecido no acervo e não pode ser reinterpretado
+    // como revisão apenas porque a Rev. D passou a admitir I como letra válida.
+    const nonRevisionExternalClaims = new Set(["RIR"]);
+    const isValidExternalRevisionClaim = (value) => revisionInfo(value).valid && !nonRevisionExternalClaims.has(norm(value));
+    const validExternalRevisionClaims = externalRevisionClaims.filter(isValidExternalRevisionClaim);
+    const invalidExternalRevisionClaims = [...new Set(externalRevisionClaims.filter((value) => !isValidExternalRevisionClaim(value)))];
     const ldRevision = technicalRecord ? normalizeRevision(technicalRecord.revision) : "";
     const latestHistoryRev = latestHistory ? normalizeRevision(latestHistory.revision) : "";
     const controlledRevisions = [
