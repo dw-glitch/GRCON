@@ -24,14 +24,21 @@ export function validateCover(
   if (!data.documentNumber.trim()) push("error", "code", "Código/número do documento obrigatório.");
   const coverCore = (window as unknown as {
     TriagemCore?: {
-      revisionInfo?: (value: unknown) => { valid: boolean };
+      revisionInfo?: (value: unknown) => { valid: boolean; recommended?: boolean; warnings?: string[] };
       EGRDT_OPTIONS?: { documentTypes?: string[] };
     };
   }).TriagemCore;
   if (!data.revision.trim()) {
     push("error", "revision", "Revisão obrigatória; informe manualmente a revisão que será aplicada à capa.");
-  } else if (coverCore?.revisionInfo && !coverCore.revisionInfo(data.revision).valid) {
-    push("error", "revision-rule", "Revisão fora da regra oficial do GRCON.");
+  } else if (coverCore?.revisionInfo) {
+    const revision = coverCore.revisionInfo(data.revision);
+    if (!revision.valid) {
+      push("error", "revision-rule", "Revisão fora da regra oficial do GRCON.");
+    } else {
+      (revision.warnings || []).forEach((message, index) => {
+        push("warning", `revision-recommendation-${index}`, message);
+      });
+    }
   }
   if (!data.revisionDate.trim()) push("error", "date", "A data atual da emissão não pôde ser definida.");
   if (!data.revisionDescription.trim()) push("error", "revision-description", "Descrição da revisão obrigatória.");
