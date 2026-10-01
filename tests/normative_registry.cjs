@@ -13,7 +13,7 @@ assert.equal(versions.get("N-1710", "Anexo G").revision, "CN");
 
 const n2064 = versions.promotionDecision("N-2064", "body");
 assert.equal(n2064.allowed, false);
-assert.equal(n2064.code, "outdated_candidate");
+assert.equal(n2064.code, "unconfirmed");
 
 const n1710 = versions.promotionDecision("N-1710", "body");
 assert.equal(n1710.allowed, true);
