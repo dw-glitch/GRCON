@@ -28,6 +28,15 @@
   ];
   const MIME = "application/vnd.ms-excel";
   const EXTENSION = ".xls";
+  const TECHNICAL_ROW_LIMIT = 65526;
+  const MODEL_REFERENCE = Object.freeze({
+    fileName: "Carga em Lote de Documentos.XLS",
+    sha256: "25e1dd4224661e4170b91b7d0e14402373dca707e44c558ced94d039cba08ac2",
+    sizeBytes: 74240,
+    format: "BIFF8",
+    verifiedCopies: 5,
+    capturedAt: "2026-09-30",
+  });
   const CFB_SIGNATURE = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
   const RECORD = Object.freeze({
     BOF: 0x0809,
@@ -48,6 +57,81 @@
 
   function value(input) {
     return input === null || input === undefined ? "" : String(input);
+  }
+
+  function list(options, key) {
+    const selected = options && options[key];
+    return Array.isArray(selected) ? selected.map((item) => value(item).trim()).filter(Boolean) : [];
+  }
+
+  function hasFileExtension(input) {
+    return /\.[A-Z0-9]{1,8}$/i.test(value(input).trim());
+  }
+
+  function auditRows(items, options) {
+    const source = Array.isArray(items) ? items : [];
+    const errors = [];
+    const warnings = [];
+    const rows = [];
+    const formats = list(options, "formats");
+    const documentTypes = list(options, "documentTypes");
+    const purposes = list(options, "purposes");
+
+    if (!source.length) errors.push("Nenhum item foi informado para a GRDT.");
+    if (source.length > TECHNICAL_ROW_LIMIT) {
+      errors.push("A quantidade de documentos excede a capacidade técnica de linhas do formato XLS BIFF8.");
+    }
+
+    source.forEach((item, index) => {
+      const line = index + 2;
+      const rowErrors = [];
+      const rowWarnings = [];
+      const document = value(item && item.document).trim();
+      const revision = value(item && item.revision).trim();
+      const title = value(item && item.title).trim();
+      const fileName = value(item && item.fileName).trim();
+      const format = value(item && item.format).trim();
+      const discipline = value(item && item.discipline).trim();
+      const documentType = value(item && item.documentType).trim();
+      const purpose = value(item && item.purpose).trim();
+      const databook = value(item && item.databook).trim();
+
+      if (!document) rowErrors.push(`Linha ${line}: DOCUMENTO está vazio.`);
+      if (!revision) rowErrors.push(`Linha ${line}: REVISÃO está vazia; o modelo oficial não permite revisão em branco.`);
+      if (!fileName) rowErrors.push(`Linha ${line}: ARQUIVO está vazio.`);
+      else if (!hasFileExtension(fileName)) rowErrors.push(`Linha ${line}: ARQUIVO está sem extensão.`);
+      if (!format) rowErrors.push(`Linha ${line}: FORMATO está vazio.`);
+      else if (formats.length && !formats.includes(format)) rowErrors.push(`Linha ${line}: FORMATO “${format}” está fora da lista oficial.`);
+      if (!discipline) rowErrors.push(`Linha ${line}: DISCIPLINA está vazia.`);
+      else if (!Disciplines || typeof Disciplines.isAllowed !== "function" || !Disciplines.isAllowed(discipline)) {
+        rowErrors.push(`Linha ${line}: DISCIPLINA “${discipline}” fora da lista oficial da eGRDT.`);
+      }
+      if (!documentType) rowErrors.push(`Linha ${line}: TIPO DE DOCUMENTO está vazio.`);
+      else if (documentTypes.length && !documentTypes.includes(documentType)) {
+        rowErrors.push(`Linha ${line}: TIPO DE DOCUMENTO “${documentType}” está fora da lista oficial.`);
+      }
+
+      // A geração normal já trata estes três campos como informativos. A FASE 6
+      // os audita sem transformar essa decisão histórica em novo bloqueio.
+      if (!title) rowWarnings.push(`Linha ${line}: TÍTULO está vazio.`);
+      if (!purpose) rowWarnings.push(`Linha ${line}: PROPÓSITO está vazio.`);
+      else if (purposes.length && !purposes.includes(purpose)) {
+        rowWarnings.push(`Linha ${line}: PROPÓSITO “${purpose}” está fora da lista oficial e requer conferência.`);
+      }
+      if (!databook) rowWarnings.push(`Linha ${line}: CAMINHO DATABOOK está vazio.`);
+
+      errors.push(...rowErrors);
+      warnings.push(...rowWarnings);
+      rows.push(Object.freeze({ line, errors: Object.freeze(rowErrors), warnings: Object.freeze(rowWarnings) }));
+    });
+
+    return Object.freeze({
+      valid: errors.length === 0,
+      errors: Object.freeze(errors),
+      warnings: Object.freeze(warnings),
+      rows: Object.freeze(rows),
+      modelReference: MODEL_REFERENCE,
+    });
   }
 
   function bytes(input) {
@@ -270,6 +354,54 @@
     return concat(output);
   }
 
+  function inspectBinaryContract(buffer) {
+    if (!XLSX || !XLSX.CFB) throw new Error("O leitor CFB do XLS oficial da GRDT não foi carregado.");
+    const data = bytes(buffer);
+    if (!isLegacyXls(data)) throw new Error("A eGRDT não é um arquivo XLS BIFF8 válido.");
+    const cfb = XLSX.CFB.read(data, { type: "buffer" });
+    const workbook = workbookStream(cfb);
+    const start = sheetOffset(workbook.data);
+    const sheetRecords = records(workbook.data, start, workbook.data.length);
+    const dvCount = sheetRecords.filter((entry) => entry.id === RECORD.DV).length;
+    const dimensions = sheetRecords.find((entry) => entry.id === RECORD.DIMENSIONS);
+    const window2 = sheetRecords.find((entry) => entry.id === RECORD.WINDOW_2);
+    if (!dimensions || !window2) throw new Error("A estrutura BIFF8 da aba GRDT está incompleta.");
+    return Object.freeze({
+      format: "BIFF8",
+      dataValidationRules: dvCount,
+      hasDataValidation: dvCount > 0,
+      hasDimensions: true,
+      hasWindowDefinition: true,
+      workbookStreamBytes: workbook.data.length,
+    });
+  }
+
+  function inspectTemplate(buffer) {
+    if (!XLSX || !XLSX.utils || typeof XLSX.read !== "function") {
+      throw new Error("O leitor XLS da GRDT não foi carregado.");
+    }
+    const binary = inspectBinaryContract(buffer);
+    const workbook = XLSX.read(buffer, { type: "array", cellStyles: true, cellText: false });
+    const sheet = workbook.Sheets.GRDT;
+    if (!sheet) throw new Error("A planilha GRDT não foi encontrada no modelo oficial.");
+
+    HEADERS.forEach((header, index) => {
+      const cell = sheet[XLSX.utils.encode_cell({ r: 0, c: index })];
+      if (value(cell && cell.v) !== header) {
+        throw new Error(`Modelo oficial inconsistente: cabeçalho ${header} ausente na coluna ${index + 1}.`);
+      }
+    });
+    if (!binary.hasDataValidation) {
+      throw new Error("O modelo oficial da GRDT não contém os combos/validações de dados esperados.");
+    }
+    return Object.freeze({
+      valid: true,
+      headers: Object.freeze([...HEADERS]),
+      binary,
+      modelReference: MODEL_REFERENCE,
+    });
+  }
+
   function dataRecords(items, template) {
     const output = [];
     const headerRow = template.rowPayloads.get(0);
@@ -307,18 +439,15 @@
     return concat(output);
   }
 
-  async function build(items) {
+  async function build(items, options) {
     if (!XLSX || !XLSX.CFB || !XLSX.utils) throw new Error("O gerador XLS oficial da GRDT não foi carregado.");
-    if (!Array.isArray(items) || !items.length) throw new Error("Nenhum item foi informado para a GRDT.");
-    if (items.length > 65526) throw new Error("A quantidade de documentos excede a capacidade técnica de linhas do formato XLS BIFF8.");
     if (!Disciplines || typeof Disciplines.isAllowed !== "function") throw new Error("O catálogo oficial de disciplinas da eGRDT não foi carregado.");
-    items.forEach((item, index) => {
-      if (!Disciplines.isAllowed(item && item.discipline)) {
-        throw new Error(`A linha ${index + 2} não pode ser gerada: DISCIPLINA “${value(item && item.discipline) || "não informada"}” fora da lista oficial da eGRDT.`);
-      }
-    });
+    const audit = auditRows(items, options);
+    if (!audit.valid) throw new Error(`A eGRDT não pode ser gerada: ${audit.errors.join(" ")}`);
 
-    const cfb = XLSX.CFB.read(await loadTemplate(), { type: "buffer" });
+    const templateBytes = await loadTemplate();
+    inspectTemplate(templateBytes);
+    const cfb = XLSX.CFB.read(templateBytes, { type: "buffer" });
     const workbook = workbookStream(cfb);
     const start = sheetOffset(workbook.data);
     const template = extractTemplate(workbook.data, start);
@@ -380,6 +509,11 @@
       const cell = sheet[XLSX.utils.encode_cell({ r: fimIndex, c: column })];
       if (value(cell && cell.v) !== "") throw new Error(`GRDT inconsistente: a linha FIM contém valor inesperado na coluna ${column + 1}.`);
     }
+    const binaryContract = inspectBinaryContract(buffer);
+    if (!binaryContract.hasDataValidation) {
+      throw new Error("GRDT inconsistente: os combos/validações de dados do modelo oficial não foram preservados.");
+    }
+    const rowAudit = auditRows(reopenedRows);
     return {
       valid: true,
       format: "BIFF8",
@@ -387,6 +521,9 @@
       officialTemplate: true,
       checkedRows: reopenedRows.length,
       rows: reopenedRows,
+      warnings: rowAudit.warnings,
+      binaryContract,
+      modelReference: MODEL_REFERENCE,
     };
   }
 
@@ -440,6 +577,7 @@
     if (fimRow < 0) throw new Error("A linha FIM não foi encontrada na eGRDT corrigida.");
     if (!rows.length) throw new Error("A eGRDT corrigida não contém documentos.");
     if (rows.length > 65526) throw new Error("A eGRDT corrigida excede a capacidade técnica de linhas do formato XLS BIFF8.");
+    const rowAudit = auditRows(rows);
     return {
       valid: true,
       format: "BIFF8",
@@ -448,8 +586,24 @@
       checkedRows: rows.length,
       fimRow: fimRow + 1,
       rows,
+      rowAudit,
+      binaryContract: inspectBinaryContract(buffer),
+      modelReference: MODEL_REFERENCE,
     };
   }
 
-  return { HEADERS, MIME, EXTENSION, build, verify, inspect, isLegacyXls };
+  return {
+    HEADERS,
+    MIME,
+    EXTENSION,
+    TECHNICAL_ROW_LIMIT,
+    MODEL_REFERENCE,
+    auditRows,
+    inspectBinaryContract,
+    inspectTemplate,
+    build,
+    verify,
+    inspect,
+    isLegacyXls,
+  };
 });
