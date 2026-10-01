@@ -24,6 +24,10 @@ assert.equal(N2064.validateTransition(null,'#1').valid,true);
 assert.equal(N2064.validateTransition(null,'0').valid,true);
 assert.equal(N2064.validateTransition(null,'A').valid,false);
 assert.equal(N2064.validateTransition('#2','0').valid,true);
+assert.equal(N2064.validateTransition('#1','#2').valid,true);
+assert.equal(N2064.validateTransition('A1','A2').valid,true);
+assert.equal(N2064.validateTransition('01','02').valid,true);
+assert.equal(N2064.validateTransition('A1','B1').valid,false);
 assert.equal(N2064.validateTransition('0','01').valid,true);
 assert.equal(N2064.validateTransition('A','A3').valid,true);
 assert.equal(N2064.validateTransition('A','B').valid,true);
@@ -32,10 +36,13 @@ assert.ok(N2064.validateTransition('A','C').warnings.length>0);
 
 assert.equal(N2064.validateAction({action:'cancel',previouslyEmitted:false,document:'DOC'}).valid,false);
 assert.equal(N2064.validateAction({action:'cancel',previouslyEmitted:true,document:'DOC'}).valid,true);
+assert.equal(N2064.validateAction({action:'cancel',document:'DOC'}).valid,true,'histórico desconhecido não prova ausência de emissão');
+assert.ok(N2064.validateAction({action:'cancel',document:'DOC'}).warnings.length);
 assert.equal(N2064.validateAction({action:'replace',previouslyEmitted:true,document:'DOC'}).valid,false);
 assert.equal(N2064.validateAction({action:'replace',previouslyEmitted:true,document:'DOC',replacementDocument:'DOC-2'}).valid,true);
 assert.equal(N2064.validateAction({action:'renumber',previouslyEmitted:true,document:'DOC',newDocument:'DOC-2',newRevision:'A'}).valid,false);
 assert.equal(N2064.validateAction({action:'renumber',previouslyEmitted:true,document:'DOC',newDocument:'DOC-2',newRevision:'0'}).valid,true);
+assert.equal(N2064.validateAction({action:'renumber',previouslyEmitted:true,document:'DOC',newDocument:'doc',newRevision:'0'}).valid,false);
 assert.equal(N2064.validateAction({action:'translate',newDocument:'DOC-PT'}).valid,false);
 assert.equal(N2064.validateAction({action:'translate',newDocument:'DOC-PT',sourceRevision:'B'}).valid,true);
 assert.ok(N2064.validateAction({purposeChanged:true}).warnings.some(x=>/caracteriza revisão/i.test(x)));
@@ -49,3 +56,19 @@ assert.equal(promotion.allowed,false);
 assert.equal(promotion.code,'unconfirmed');
 
 console.log('n2064_revision_lifecycle: OK — Rev D reconhecida; #n/0n/A3/AA válidos; I/O são alerta; cancelamento, substituição, renumeração e tradução auditados.');
+
+const History=require('../history_core.js');
+const RevisionControl=require('../grcon_revision_control.js');
+const Reposting=require('../grcon_reposting_core.js');
+const doc='RL-5290.00-22313-91B-C1O-002';
+for(const revision of ['#1','#2','01','02','A1','AA','I','O']){
+  const name=`${doc}_0001_${revision}.pdf`;
+  assert.equal(Core.revisionFromName(name,doc),revision);
+  assert.equal(Core.revisionFromText(`${doc} REVISÃO: ${revision}`,doc),revision);
+  assert.equal(History.generatedRevision({document:doc,finalName:name}),revision);
+  assert.equal(Reposting.revisionFromName(name,doc),revision);
+  assert.equal(RevisionControl.validRevision(revision),true);
+  assert.equal(Core.proposedFileName(name,doc,'B','N-1710'),`${doc}_0001_B.pdf`);
+}
+assert.equal(Core.revisionFromName(`${doc}_RIR.pdf`,doc),'','RIR permanece sufixo operacional');
+assert.equal(Core.claimedRevisionFromName(`${doc}_0001.pdf`,doc),'','0001 é identificador da folha, não revisão');

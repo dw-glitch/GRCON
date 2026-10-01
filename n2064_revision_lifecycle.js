@@ -52,13 +52,21 @@ function validateTransition(previousRevision,nextRevisionValue){
   }
 
   if(nextInfo.lifecycleKind==='preliminary_before_original'){
+    if(previous.lifecycleKind==='preliminary_before_original'){
+      if(nextInfo.sequence<=previous.sequence) warnings.push('A sequência preliminar não avançou; conferir histórico/justificativa.');
+      return result(errors,warnings,{previous,next:nextInfo});
+    }
     errors.push('Revisão preliminar #n só é aplicável antes da emissão original (Rev. 0).');
     return result(errors,warnings,{previous,next:nextInfo});
   }
 
   if(nextInfo.lifecycleKind==='preliminary_after_revision'){
-    if(nextInfo.baseRevision!==previous.revision){
+    const previousBase=previous.baseRevision||previous.revision;
+    if(nextInfo.baseRevision!==previousBase){
       errors.push(`A versão preliminar ${nextInfo.revision} deve partir da última revisão emitida ${previous.revision}.`);
+    }
+    if(previous.lifecycleKind==='preliminary_after_revision'&&nextInfo.sequence<=previous.sequence){
+      warnings.push('A sequência preliminar não avançou; conferir histórico/justificativa.');
     }
     return result(errors,warnings,{previous,next:nextInfo});
   }
@@ -89,7 +97,6 @@ function validateAction(input={}){
   const action=text(input.action).toLowerCase();
   const errors=[];
   const warnings=[];
-  const previouslyEmitted=input.previouslyEmitted===true;
   const currentDocument=text(input.document);
   const replacementDocument=text(input.replacementDocument||input.newDocument);
   const revisionDescription=text(input.revisionDescription);
@@ -100,8 +107,11 @@ function validateAction(input={}){
     warnings.push('A mudança de finalidade da emissão caracteriza revisão e deve permanecer rastreável no histórico.');
   }
 
-  if(['cancel','replace','renumber'].includes(action)&&!previouslyEmitted){
+  if(['cancel','replace','renumber'].includes(action)&&input.previouslyEmitted===false){
     errors.push('Documento ainda não emitido não deve ser cancelado/substituído/renumerado; deve ser retirado do planejamento aplicável.');
+  }
+  if(['cancel','replace','renumber'].includes(action)&&input.previouslyEmitted==null){
+    warnings.push('Não foi possível confirmar a emissão anterior; consulte Histórico e Consulta Geral antes de decidir.');
   }
 
   if(action==='cancel'){
@@ -112,6 +122,7 @@ function validateAction(input={}){
     if(!revisionDescription) warnings.push('Substituição deve registrar a relação “cancelado/substituído por” na descrição da revisão.');
   }else if(action==='renumber'){
     if(!replacementDocument) errors.push('Renumeração exige o novo número do documento.');
+    if(replacementDocument&&currentDocument&&replacementDocument.toUpperCase()===currentDocument.toUpperCase()) errors.push('Renumeração exige um número diferente do documento original.');
     if(newRevision!=='0') errors.push('Documento renumerado deve nascer como novo documento em revisão 0.');
   }else if(action==='translate'){
     if(!replacementDocument) errors.push('Tradução exige novo número/identidade documental.');

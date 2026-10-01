@@ -16,7 +16,6 @@
   const REVIEW = "revisar";
 
   const REVISION_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const RECOMMENDED_REVISION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
   const NON_RECOMMENDED_REVISION_LETTERS = new Set(["I", "O"]);
   const N1710_CATEGORIES = new Set([
     "CE", "CR", "DB", "DE", "EC", "ET", "FD", "IM", "IS", "LA",
@@ -1713,9 +1712,9 @@
     let tail = stem;
     if (document && new RegExp(escaped, "i").test(stem)) tail = stem.replace(new RegExp(`^.*?${escaped}`, "i"), "");
     const patterns = [
-      /_0001[_ -](?:REV[_ -]?)?([A-Z]{1,3}\d*|0)$/i,
-      /[_ -]REV(?:ISAO)?[_ -]?([A-Z]{1,3}\d*|0)$/i,
-      /[_ -]([A-Z]{1,3}\d*|0)$/i,
+      /_0001[_ -](?:REV[_ -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}\d*)$/i,
+      /[_ -]REV(?:ISAO)?[_ -]?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}\d*)$/i,
+      /[_ -](#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}\d*)$/i,
     ];
     for (const pattern of patterns) {
       const m = tail.match(pattern);
@@ -1726,7 +1725,7 @@
 
   function revisionFromName(fileName, document) {
     const claim = claimedRevisionFromName(fileName, document);
-    return revisionInfo(claim).valid ? claim : "";
+    return claim !== "RIR" && revisionInfo(claim).valid ? claim : "";
   }
 
   function revisionFromText(pdfText, document) {
@@ -1739,10 +1738,10 @@
       scope = value.slice(Math.max(0, position - 180), position + documentKey.length + 260);
     }
     const patterns = [
-      /REVISAO\s*[:\-]?\s*([A-HJ-NP-Z]{1,3}|0)\b/g,
-      /\bREV\.?\s*[:\-]?\s*([A-HJ-NP-Z]{1,3}|0)\b/g,
-      /\bREVISION\s*[:\-]?\s*([A-HJ-NP-Z]{1,3}|0)\b/g,
-      /_0001[_ -]([A-HJ-NP-Z]{1,3}|0)\b/g,
+      /REVISAO\s*[:\-]?\s*(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)\b/g,
+      /\bREV\.?\s*[:\-]?\s*(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)\b/g,
+      /\bREVISION\s*[:\-]?\s*(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)\b/g,
+      /_0001[_ -](#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)\b/g,
     ];
     const revisions = [];
     for (const pattern of patterns) {
@@ -2082,7 +2081,7 @@
     const ext = /\.[^.]+$/.exec(text(inputName));
     const extension = ext ? ext[0].toLowerCase() : ".pdf";
     const originalStem = text(inputName).replace(/\.[^.]+$/, "");
-    const revisionPattern = "(?:0|[A-HJ-NP-Z]+)";
+    const revisionPattern = "(?:0|#[1-9]\\d*|0[1-9]\\d*|[A-Z]+(?:[1-9]\\d*)?)";
     const sequenceExpression = new RegExp(`_0001(?:[_ -](?:REV[_ -]?)?${revisionPattern})?$`, "i");
     const trailingExpression = new RegExp(`[_ -](?:REV(?:ISAO)?[_ -]?)?${revisionPattern}$`, "i");
     const hasSequence = sequenceExpression.test(originalStem);
@@ -2733,7 +2732,7 @@
         revision,
         revisionSource,
         status: "Revisão inválida",
-        reason: "A revisão não atende à sequência válida (0, A…Z sem I/O, AA…).",
+        reason: "A revisão não atende aos formatos válidos (0, A…Z, AA…, #1, 01, A1…).",
         finalName: input.name || `${document}.pdf`,
         grdt,
         effectiveDate,
@@ -2860,6 +2859,8 @@
           ? `Alocação evidenciada pelo número ${allocationFinding.allocationNumber}, registrado na LD sem preenchimento do campo de confirmação.`
           : "";
     if (allocationNote) reason = `${reason} ${allocationNote}`.trim();
+    const revisionWarnings = revisionInfo(revision).warnings || [];
+    if (revisionWarnings.length) reason = `${reason} ${revisionWarnings.join(" ")}`.trim();
     const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
     const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
     const disciplineResolution = egrdt.disciplineResolution || resolveDiscipline(document, best, { sheetName: controlledSheet });
@@ -2886,6 +2887,7 @@
       revisionManual: false,
       revisionSource,
       status: displayStatus || "Sem status",
+      revisionWarnings,
       statusOriginal: displayStatus || "Sem status",
       sigemStatusSource: resolvedSigemStatus?.source || "legacy-fallback",
       sigemStatusSnapshotId: resolvedSigemStatus?.snapshotId || "",

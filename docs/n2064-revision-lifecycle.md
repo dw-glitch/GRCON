@@ -53,3 +53,13 @@ Guardrails relevantes:
 ## Integração segura
 
 A validação efetivamente usada pelo GRCON continua em `TriagemCore.revisionInfo` / `nextRevision`. O auditor de ciclo de vida é modular e fica disponível para a camada central de compliance e para histórico/overrides nas fases seguintes.
+
+## Continuação e regressões corrigidas — 01/10/2026
+
+- A mesma gramática de revisões é reconhecida no nome recebido, PDF, nome final, Histórico e localização de arquivos para Repostagem.
+- `_0001` permanece identificador de folha, nunca preliminar; `RIR` permanece sufixo operacional.
+- `#1 → #2`, `01 → 02` e `A1 → A2` são transições preliminares válidas.
+- Histórico desconhecido gera alerta; só evidência explícita de nunca emitido caracteriza a inconsistência de cancelamento.
+- Renumeração exige identidade diferente da original.
+- Avisos de I/O acompanham o resultado da triagem; aceitar o formato não apaga a recomendação.
+- A infraestrutura ainda não promove regras N-2064 a novos bloqueios de produção.
