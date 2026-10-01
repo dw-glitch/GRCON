@@ -1624,3 +1624,8 @@
     block-size: clamp(20rem, calc(100vh - 21rem), 60rem);
   }
 }
+
+@layer utilities {
+  /* O painel da LD deve ficar acima do mesmo overlay usado pelos demais drawers. */
+  html[data-app="GRCON"] .ld-compatibility-drawer { z-index: 610; }
+}

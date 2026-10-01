@@ -149,6 +149,15 @@
     };
   }
 
+  function cleanNormativeValidation(value) {
+    if (!value || typeof value !== "object" || !value.normativeValidationVersion) return null;
+    const snapshot = JSON.parse(JSON.stringify(value));
+    // Resultados CONFORME são representados por rulesChecked/counts. Mantemos
+    // as evidências de alertas e bloqueios sem duplicar cada regra em results.
+    delete snapshot.results;
+    return snapshot;
+  }
+
   function cleanFile(file) {
     const revision = generatedRevision(file);
     return {
@@ -185,6 +194,7 @@
       databook: text(file && file.databook),
       virtual: Boolean(file && file.virtual),
       discipline: text(file && file.discipline),
+      normativeValidation: cleanNormativeValidation(file && file.normativeValidation),
     };
   }
 
@@ -213,6 +223,7 @@
         ? Number(record.batchLimit)
         : 0,
       reissueSources: Array.isArray(record && record.reissueSources) ? record.reissueSources.map(text).filter(Boolean) : [],
+      normativeValidation: cleanNormativeValidation(record && record.normativeValidation),
       numberHistory: Array.isArray(record && record.numberHistory) ? record.numberHistory.map(text).filter(Boolean) : [],
       cloudId,
       workspaceId,
@@ -418,6 +429,7 @@
         format: entry.item && entry.item.format || row.egrdt && row.egrdt.format || "",
         documentType: entry.item && entry.item.documentType || row.egrdt && row.egrdt.documentType || "",
         purpose: entry.item && entry.item.purpose || row.egrdt && row.egrdt.purpose || record.purpose || "",
+        normativeValidation: entry.normativeValidation || null,
       });
     });
     const generatedAt = text(info.generatedAt) || new Date().toISOString();
@@ -433,6 +445,8 @@
       batchLimit: Number(info.batchLimit) || Number(file && file.group && file.group.limit) || 0,
       reservationRequestId: text(file && file.official && file.official.requestId),
       reservationIds: [text(file && file.official && file.official.reservationId)].filter(Boolean),
+      normativeValidation: typeof globalThis !== "undefined" && globalThis.GrconDocumentaryCompliance
+        ? globalThis.GrconDocumentaryCompliance.combine(files.map(item => item.normativeValidation)) : null,
       files,
     });
   }

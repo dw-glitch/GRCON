@@ -389,6 +389,9 @@
           errors.push(`${row.document}: a disciplina “${sourceDiscipline || "não informada"}” não possui uma equivalência oficial confirmada. Abra Editar GRDT e escolha uma opção da lista oficial.`);
         }
         if (C && C.enforceDocumentFormat) C.enforceDocumentFormat(item);
+        const compliance = typeof globalThis !== "undefined" && globalThis.GrconDocumentaryCompliance;
+        const normativeValidation = compliance ? compliance.auditRow(row, item) : null;
+        (normativeValidation?.warnings || []).forEach(finding => warnings.push(`${row.document}: ${finding.message}`));
         const itemErrors = C.validateEgrdtData(item);
         if (itemErrors.length) errors.push(`${row.document} / ${finalName}: ${itemErrors.join("; ")}.`);
 
@@ -407,6 +410,7 @@
           virtual: Boolean(source.virtual || !source.file),
           manualAllocationOverride,
           item,
+          normativeValidation,
         };
         entries.push(entry);
         items.push(item);

@@ -1,4 +1,15 @@
+export interface NormativeValidation {
+  normativeValidationVersion: string;
+  generatedAt?: string;
+  rulesChecked?: string[];
+  normsApplied?: { norm: string; revision: string; part?: string }[];
+  warnings?: { message: string; ruleId: string; norm: string; revision: string; section: string }[];
+  blocks?: { message: string; ruleId: string; norm: string; revision: string; section: string }[];
+  information?: { message: string; ruleId: string; norm: string; revision: string; section: string }[];
+}
+
 export interface EgrdtHistoryFile {
+  normativeValidation?: NormativeValidation | null;
   document?: string;
   originalName?: string;
   finalName?: string;
@@ -18,6 +29,7 @@ export interface EgrdtHistoryFile {
 }
 
 export interface EgrdtHistoryRecord {
+  normativeValidation?: NormativeValidation | null;
   id: string;
   clientRecordId?: string;
   cloudId?: string;

@@ -42,11 +42,16 @@ function record(id, sequence, generatedAt, sheet = "N-1710") {
   };
 }
 
+const Compliance = require("../documentary_compliance");
 const fixtures = [
   record("fixture-a", 1, "2026-09-01T12:00:00-03:00", "ET"),
   record("fixture-b", 2, "2026-09-15T12:00:00-03:00", "N-1710"),
   record("fixture-c", 3, "2026-09-30T12:00:00-03:00", "CV"),
 ];
+
+const fixtureAudit = Compliance.audit({ document: fixtures[1].files[0].document, revision: 'I', documentType: 'RL' });
+fixtures[1].files[0].normativeValidation = fixtureAudit;
+fixtures[1].normativeValidation = Compliance.combine([fixtureAudit]);
 
 async function revealApp(page) {
   await page.addStyleTag({ content: [
@@ -402,8 +407,14 @@ async function setSharedHistoryFixture(page, enabled) {
     await page.waitForTimeout(150);
     await expectCount(page, 3);
 
+    await page.locator('[data-history-id="fixture-a"]').click();
+    if (!await page.locator('.history-detail-compliance').evaluate(node => node.open)) await page.locator('.history-detail-compliance > summary').click();
+    assert.match(await page.locator('.history-detail-compliance').innerText(), /não possui validação normativa registrada/);
     await page.locator('[data-history-id="fixture-b"]').click();
     await page.locator("#history-detail").waitFor({ state: "visible" });
+    if (!await page.locator('.history-detail-compliance').evaluate(node => node.open)) await page.locator('.history-detail-compliance > summary').click();
+    assert.match(await page.locator('.history-detail-compliance').innerText(), /documentary-compliance-1/);
+    assert.match(await page.locator('.history-detail-compliance').innerText(), /recomenda não utilizar I/);
     await shot(page, "05-history-egrdt-detail-1366.png");
 
     // Ações operacionais em navegador real, sem chamar webhook:

@@ -1,0 +1,63 @@
+name: QA — Conformidade documental
+
+on:
+  pull_request:
+    paths:
+      - "documentary_compliance*.js"
+      - "documentary-compliance.css"
+      - "normative_*.js"
+      - "n1710_*.js"
+      - "n2064_*.js"
+      - "app.js"
+      - "emission.js"
+      - "history_core.js"
+      - "history_report.js"
+      - "grdt_reissue*.js"
+      - "grcon_module_loader.js"
+      - "grcon-ui.css"
+      - "index.html"
+      - "sw.js"
+      - "src/react/historico-egrdt/**"
+      - "tests/documentary_compliance.cjs"
+      - "scripts/validar-documentary-compliance-browser.cjs"
+      - ".github/workflows/documentary-compliance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    name: N-1710 + N-2064 + snapshots — Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Verificar integração e build
+        run: |
+          npm run typecheck
+          npm run build
+          node tests/documentary_compliance.cjs
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Conferir fluxo no navegador
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-compliance.log" 2>&1 &
+          QA_SERVER_PID=$!
+          trap 'kill "$QA_SERVER_PID"' EXIT
+          node scripts/validar-documentary-compliance-browser.cjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: documentary-compliance-browser
+          path: |
+            artifacts/documentary-compliance/*.png
+            artifacts/documentary-compliance/metrics.json
+          if-no-files-found: warn

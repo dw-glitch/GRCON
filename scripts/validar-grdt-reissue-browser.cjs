@@ -241,6 +241,11 @@ async function lookup(page, count) {
     assert.equal(interaction.focusPreserved, true, "edição incremental não pode substituir o input focado");
     assert.equal(interaction.afterScroll, interaction.beforeScroll, "edição não pode resetar a rolagem da tabela");
     assert.equal(interaction.revision, "C");
+    assert.ok(await page.locator('.grdt-reissue-compliance').count() > 0, 'Repostagem apresenta conformidade antes da geração');
+    const compliance = page.locator('[data-reissue-row="0"] .grdt-reissue-compliance');
+    await compliance.locator('summary').click();
+    assert.match(await compliance.innerText(), /n1710.group4.class.catalog/);
+    await compliance.locator('summary').click();
     assert.match(interaction.fileName, /_C\.pdf$/i, "arquivo deve acompanhar a revisão");
     assert.equal(interaction.purposeInvalid, "true");
     assert.match(interaction.purposeError, /PROPÓSITO fora da lista oficial/i);

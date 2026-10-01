@@ -313,6 +313,17 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           </div>
         </section>
 
+        <details className="history-detail-compliance">
+          <summary>Conformidade documental registrada</summary>
+          {record.normativeValidation ? <div>
+            <p>Versão {record.normativeValidation.normativeValidationVersion} · {(record.normativeValidation.rulesChecked || []).length} regras verificadas na geração.</p>
+            <p>{(record.normativeValidation.normsApplied || []).map(norm => `${norm.norm} ${norm.part || "body"} Rev. ${norm.revision}`).join(" · ")}</p>
+            <ul>{[...(record.normativeValidation.warnings || []), ...(record.normativeValidation.blocks || []), ...(record.normativeValidation.information || [])].map((finding, index) => <li key={`${finding.ruleId}-${index}`}>
+              {finding.message}<small> · {finding.ruleId} · {finding.norm} Rev. {finding.revision} § {finding.section}</small>
+            </li>)}</ul>
+          </div> : <p>Esta eGRDT não possui validação normativa registrada. O histórico original foi preservado.</p>}
+        </details>
+
         <section className="history-detail-section history-actions-section" aria-labelledby="history-actions-title">
           <div className="history-detail-section-heading">
             <span>AÇÕES</span>

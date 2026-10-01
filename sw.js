@@ -1,5 +1,5 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.44.5
+// Versão: 5.44.6
 // Estratégia: rede primeiro para todo o código do GRCON (HTML/CSS/JS), para
 // que uma correção publicada apareça na hora; e stale-while-revalidate para os
 // arquivos pesados (bibliotecas, imagens e os pacotes gerados), que assim
@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.44.5-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1-hardening1-cover-backcover2-deploy2-mascot-runtime5-transparent1-phase-b-evolution-ui1-grdt-reissue1-history-purpose1-mascot-shell-runner1-hybrid-media2-alpha2-ux-polish2-workspace-runner1-planned-documents2-shared-sigem1-consultas-planned-documents1-owner-password1";
+const CACHE_NAME = "grcon-v5.44.6-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1-hardening1-cover-backcover2-deploy2-mascot-runtime5-transparent1-phase-b-evolution-ui1-grdt-reissue1-history-purpose1-mascot-shell-runner1-hybrid-media2-alpha2-ux-polish2-workspace-runner1-planned-documents2-shared-sigem1-consultas-planned-documents1-owner-password1-documentary-compliance1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -20,6 +20,16 @@ const ASSETS = [
   "sigem-posting.css",
   "egrdt-email-reply.css",
   "grdt-reissue.css",
+  "documentary-compliance.css",
+  "normative_registry.js",
+  "normative_version_registry.js",
+  "normative_applicability.js",
+  "normative_rule_engine.js",
+  "n1710_catalog.js",
+  "n1710_parser.js",
+  "n2064_revision_lifecycle.js",
+  "documentary_compliance.js",
+  "documentary_compliance_ui.js",
   "analysis-history.css",
   "analysis-history-phase-b.css",
   "history-phase-b.css",
