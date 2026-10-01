@@ -31,6 +31,7 @@
   function validRevision(value) {
     const revision = normalizeRevision(value);
     if (!revision) return false;
+    if (Core && typeof Core.revisionInfo === "function") return Core.revisionInfo(revision).valid;
     if (Core && typeof Core.revisionRank === "function") return Core.revisionRank(revision) >= 0;
     return /^(?:0|[A-HJ-NP-Z]+)$/.test(revision);
   }

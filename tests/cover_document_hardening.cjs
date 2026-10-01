@@ -112,7 +112,9 @@ assert.equal(Validation.validateCover(exact, baseData, sourceStub, 1).some((item
 assert.ok(Validation.validateCover(exact, baseData, sourceStub, 1).some((item) => item.id === "backcover-missing" && item.level === "warning"));
 assert.ok(Validation.validateCover(exact, baseData, { ...sourceStub, originalPages: 2 }, 2).some((item) => item.id === "backcover-preserved" && item.level === "info"));
 assert.ok(Validation.validateCover(exact, { ...baseData, taxonomy: "" }, sourceStub, 2).some((item) => item.id === "taxonomy" && item.level === "error"));
-assert.ok(Validation.validateCover(exact, { ...baseData, revision: "O" }, sourceStub, 2).some((item) => item.id === "revision-rule" && item.level === "error"));
+const revisionOValidation = Validation.validateCover(exact, { ...baseData, revision: "O" }, sourceStub, 2);
+assert.equal(revisionOValidation.some((item) => item.id === "revision-rule" && item.level === "error"), false);
+assert.ok(revisionOValidation.some((item) => item.id.startsWith("revision-recommendation-") && item.level === "warning" && /alerta, não bloqueio/i.test(item.message)));
 assert.ok(Validation.validateCover(exact, { ...baseData, category: "ZZ" }, sourceStub, 2).some((item) => item.id === "category-rule" && item.level === "error"));
 
 const fetchCounts = new Map();

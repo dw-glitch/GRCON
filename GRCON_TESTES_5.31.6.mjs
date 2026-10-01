@@ -3339,14 +3339,18 @@ check("Resumo da triagem mostra a revisão sugerida e sinaliza a alteração man
   assert.equal(summary.revisionManual, "SIM");
 });
 
-check("validação de revisão continua usando as regras já existentes: incomum e legítima passa, formato inválido continua barrado", () => {
+check("validação de revisão preserva formatos legítimos e trata I/O como alerta da N-2064 Rev. D", () => {
   // Revisão "de campo" (letra+número) já era aceita pelo GRCON antes desta
   // melhoria — não é uma restrição nova, então a edição manual não bloqueia.
   assert.equal(Core.revisionInfo("A1").valid, true);
   assert.equal(Core.revisionInfo("AB").valid, true);
   // Formato claramente inválido continua barrado — regra herdada, não nova.
   assert.equal(Core.revisionInfo("1A").valid, false);
-  assert.equal(Core.revisionInfo("O").valid, false);
+  // Na Rev. D, I/O são prática recomendada a evitar: permanecem válidos,
+  // mas carregam aviso e continuam fora da sequência sugerida automaticamente.
+  assert.equal(Core.revisionInfo("O").valid, true);
+  assert.equal(Core.revisionInfo("O").recommended, false);
+  assert.ok(Core.revisionInfo("O").warnings.some((message) => /alerta, não bloqueio/i.test(message)));
 
   const document = "ET-5290.00-22000-912-1LV-907";
   const record = { ...ldDocumentRecord(document), revision: "A" };

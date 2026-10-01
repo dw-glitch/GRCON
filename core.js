@@ -15,7 +15,8 @@
   const DISCARD = "descartar";
   const REVIEW = "revisar";
 
-  const REVISION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const REVISION_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const NON_RECOMMENDED_REVISION_LETTERS = new Set(["I", "O"]);
   const N1710_CATEGORIES = new Set([
     "CE", "CR", "DB", "DE", "EC", "ET", "FD", "IM", "IS", "LA",
     "LD", "LI", "LO", "MA", "MC", "MD", "MO", "PR", "PT", "RL",
@@ -558,23 +559,113 @@
     return norm(value).replace(/^REV(?:ISAO)?\.?\s*/, "").replace(/\s+/g, "");
   }
 
+  function alphabeticRank(revision) {
+    let rank = 0;
+    for (const letter of revision) rank = rank * REVISION_ALPHABET.length + REVISION_ALPHABET.indexOf(letter) + 1;
+    return rank * 1000;
+  }
+
+  function incrementAlphabeticRevision(revision) {
+    const digits = [...revision].map((letter) => REVISION_ALPHABET.indexOf(letter));
+    if (digits.some((digit) => digit < 0)) return "";
+    let position = digits.length - 1;
+    while (position >= 0 && digits[position] === REVISION_ALPHABET.length - 1) {
+      digits[position] = 0;
+      position -= 1;
+    }
+    if (position < 0) digits.unshift(0);
+    else digits[position] += 1;
+    return digits.map((digit) => REVISION_ALPHABET[digit]).join("");
+  }
+
+  function nextRecommendedAlphabeticRevision(revision) {
+    let candidate = incrementAlphabeticRevision(revision);
+    let guard = 0;
+    while (candidate && [...candidate].some((letter) => NON_RECOMMENDED_REVISION_LETTERS.has(letter)) && guard < 1000) {
+      candidate = incrementAlphabeticRevision(candidate);
+      guard += 1;
+    }
+    return candidate;
+  }
+
   function revisionInfo(value) {
     const revision = normalizeRevision(value);
-    if (revision === "0") return { revision, valid: true, kind: "standard", rank: 0 };
-    if (/^[A-Z]+$/.test(revision)) {
-      if ([...revision].some((letter) => !REVISION_ALPHABET.includes(letter))) {
-        return { revision, valid: false, kind: "invalid", rank: -1 };
-      }
-      let rank = 0;
-      for (const letter of revision) rank = rank * REVISION_ALPHABET.length + REVISION_ALPHABET.indexOf(letter) + 1;
-      return { revision, valid: true, kind: "standard", rank: rank * 1000 };
+    if (revision === "0") {
+      return { revision, valid: true, kind: "standard", lifecycleKind: "original", rank: 0, recommended: true, warnings: [] };
     }
+
+    const preliminaryInitial = revision.match(/^#([1-9]\d*)$/);
+    if (preliminaryInitial) {
+      const sequence = Number(preliminaryInitial[1]);
+      return {
+        revision,
+        valid: true,
+        kind: "preliminary",
+        lifecycleKind: "preliminary_before_original",
+        baseRevision: "",
+        targetRevision: "0",
+        sequence,
+        rank: -100000 + sequence,
+        recommended: true,
+        warnings: [],
+      };
+    }
+
+    const preliminaryAfterZero = revision.match(/^0([1-9]\d*)$/);
+    if (preliminaryAfterZero) {
+      const sequence = Number(preliminaryAfterZero[1]);
+      return {
+        revision,
+        valid: true,
+        kind: "field",
+        lifecycleKind: "preliminary_after_revision",
+        baseRevision: "0",
+        targetRevision: "A",
+        sequence,
+        rank: sequence,
+        recommended: true,
+        warnings: [],
+      };
+    }
+
+    if (/^[A-Z]+$/.test(revision)) {
+      const invalidLetter = [...revision].find((letter) => !REVISION_ALPHABET.includes(letter));
+      if (invalidLetter) return { revision, valid: false, kind: "invalid", rank: -1, recommended: false, warnings: [] };
+      const nonRecommended = [...new Set([...revision].filter((letter) => NON_RECOMMENDED_REVISION_LETTERS.has(letter)))];
+      const warnings = nonRecommended.length
+        ? [`N-2064 Rev. D 4.2.3 recomenda não utilizar ${nonRecommended.join(" e ")} na identificação de revisões; a ocorrência é alerta, não bloqueio.`]
+        : [];
+      return {
+        revision,
+        valid: true,
+        kind: "standard",
+        lifecycleKind: "issued_revision",
+        rank: alphabeticRank(revision),
+        recommended: warnings.length === 0,
+        warnings,
+      };
+    }
+
     const field = revision.match(/^([A-Z]+)([1-9]\d*)$/);
     if (field && [...field[1]].every((letter) => REVISION_ALPHABET.includes(letter))) {
       const base = revisionInfo(field[1]);
-      return { revision, valid: true, kind: "field", rank: base.rank + Number(field[2]) };
+      if (!base.valid) return { revision, valid: false, kind: "invalid", rank: -1, recommended: false, warnings: [] };
+      const sequence = Number(field[2]);
+      return {
+        revision,
+        valid: true,
+        // "field" é mantido por compatibilidade com consumidores existentes.
+        kind: "field",
+        lifecycleKind: "preliminary_after_revision",
+        baseRevision: field[1],
+        targetRevision: nextRecommendedAlphabeticRevision(field[1]),
+        sequence,
+        rank: base.rank + sequence,
+        recommended: base.recommended,
+        warnings: [...(base.warnings || [])],
+      };
     }
-    return { revision, valid: false, kind: "invalid", rank: -1 };
+    return { revision, valid: false, kind: "invalid", lifecycleKind: "invalid", rank: -1, recommended: false, warnings: [] };
   }
 
   function revisionRank(value) {
@@ -585,15 +676,7 @@
     const info = revisionInfo(value);
     if (!info.valid || info.kind !== "standard") return "";
     if (info.revision === "0") return "A";
-    const digits = [...info.revision].map((letter) => REVISION_ALPHABET.indexOf(letter));
-    let position = digits.length - 1;
-    while (position >= 0 && digits[position] === REVISION_ALPHABET.length - 1) {
-      digits[position] = 0;
-      position -= 1;
-    }
-    if (position < 0) digits.unshift(0);
-    else digits[position] += 1;
-    return digits.map((digit) => REVISION_ALPHABET[digit]).join("");
+    return nextRecommendedAlphabeticRevision(info.revision);
   }
 
   function parseDate(value) {
@@ -1629,9 +1712,9 @@
     let tail = stem;
     if (document && new RegExp(escaped, "i").test(stem)) tail = stem.replace(new RegExp(`^.*?${escaped}`, "i"), "");
     const patterns = [
-      /_0001[_ -](?:REV[_ -]?)?([A-Z]{1,3}\d*|0)$/i,
-      /[_ -]REV(?:ISAO)?[_ -]?([A-Z]{1,3}\d*|0)$/i,
-      /[_ -]([A-Z]{1,3}\d*|0)$/i,
+      /_0001[_ -](?:REV[_ -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}\d*)$/i,
+      /[_ -]REV(?:ISAO)?[_ -]?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}\d*)$/i,
+      /[_ -](#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}\d*)$/i,
     ];
     for (const pattern of patterns) {
       const m = tail.match(pattern);
@@ -1642,7 +1725,7 @@
 
   function revisionFromName(fileName, document) {
     const claim = claimedRevisionFromName(fileName, document);
-    return revisionInfo(claim).valid ? claim : "";
+    return claim !== "RIR" && revisionInfo(claim).valid ? claim : "";
   }
 
   function revisionFromText(pdfText, document) {
@@ -1655,10 +1738,10 @@
       scope = value.slice(Math.max(0, position - 180), position + documentKey.length + 260);
     }
     const patterns = [
-      /REVISAO\s*[:\-]?\s*([A-HJ-NP-Z]{1,3}|0)\b/g,
-      /\bREV\.?\s*[:\-]?\s*([A-HJ-NP-Z]{1,3}|0)\b/g,
-      /\bREVISION\s*[:\-]?\s*([A-HJ-NP-Z]{1,3}|0)\b/g,
-      /_0001[_ -]([A-HJ-NP-Z]{1,3}|0)\b/g,
+      /REVISAO\s*[:\-]?\s*(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)\b/g,
+      /\bREV\.?\s*[:\-]?\s*(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)\b/g,
+      /\bREVISION\s*[:\-]?\s*(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)\b/g,
+      /_0001[_ -](#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)\b/g,
     ];
     const revisions = [];
     for (const pattern of patterns) {
@@ -1998,7 +2081,7 @@
     const ext = /\.[^.]+$/.exec(text(inputName));
     const extension = ext ? ext[0].toLowerCase() : ".pdf";
     const originalStem = text(inputName).replace(/\.[^.]+$/, "");
-    const revisionPattern = "(?:0|[A-HJ-NP-Z]+)";
+    const revisionPattern = "(?:0|#[1-9]\\d*|0[1-9]\\d*|[A-Z]+(?:[1-9]\\d*)?)";
     const sequenceExpression = new RegExp(`_0001(?:[_ -](?:REV[_ -]?)?${revisionPattern})?$`, "i");
     const trailingExpression = new RegExp(`[_ -](?:REV(?:ISAO)?[_ -]?)?${revisionPattern}$`, "i");
     const hasSequence = sequenceExpression.test(originalStem);
@@ -2501,8 +2584,12 @@
     // sempre usar a revisão controlada pela LD/histórico. Claims externos só
     // são mantidos para comparação quando eles próprios forem revisões válidas.
     const externalRevisionClaims = [inputRevisionClaim, fromFileClaim, fromPdf].filter(Boolean);
-    const validExternalRevisionClaims = externalRevisionClaims.filter((value) => revisionInfo(value).valid);
-    const invalidExternalRevisionClaims = [...new Set(externalRevisionClaims.filter((value) => !revisionInfo(value).valid))];
+    // RIR é um sufixo operacional conhecido no acervo e não pode ser reinterpretado
+    // como revisão apenas porque a Rev. D passou a admitir I como letra válida.
+    const nonRevisionExternalClaims = new Set(["RIR"]);
+    const isValidExternalRevisionClaim = (value) => revisionInfo(value).valid && !nonRevisionExternalClaims.has(norm(value));
+    const validExternalRevisionClaims = externalRevisionClaims.filter(isValidExternalRevisionClaim);
+    const invalidExternalRevisionClaims = [...new Set(externalRevisionClaims.filter((value) => !isValidExternalRevisionClaim(value)))];
     const ldRevision = technicalRecord ? normalizeRevision(technicalRecord.revision) : "";
     const latestHistoryRev = latestHistory ? normalizeRevision(latestHistory.revision) : "";
     const controlledRevisions = [
@@ -2645,7 +2732,7 @@
         revision,
         revisionSource,
         status: "Revisão inválida",
-        reason: "A revisão não atende à sequência válida (0, A…Z sem I/O, AA…).",
+        reason: "A revisão não atende aos formatos válidos (0, A…Z, AA…, #1, 01, A1…).",
         finalName: input.name || `${document}.pdf`,
         grdt,
         effectiveDate,
@@ -2772,6 +2859,8 @@
           ? `Alocação evidenciada pelo número ${allocationFinding.allocationNumber}, registrado na LD sem preenchimento do campo de confirmação.`
           : "";
     if (allocationNote) reason = `${reason} ${allocationNote}`.trim();
+    const revisionWarnings = revisionInfo(revision).warnings || [];
+    if (revisionWarnings.length) reason = `${reason} ${revisionWarnings.join(" ")}`.trim();
     const finalName = proposedFileName(input.name || `${document}.pdf`, document, revision, controlledSheet);
     const egrdt = buildEgrdtData(document, revision, finalName, best, controlledSheet, input.pdfFormat);
     const disciplineResolution = egrdt.disciplineResolution || resolveDiscipline(document, best, { sheetName: controlledSheet });
@@ -2798,6 +2887,7 @@
       revisionManual: false,
       revisionSource,
       status: displayStatus || "Sem status",
+      revisionWarnings,
       statusOriginal: displayStatus || "Sem status",
       sigemStatusSource: resolvedSigemStatus?.source || "legacy-fallback",
       sigemStatusSnapshotId: resolvedSigemStatus?.snapshotId || "",

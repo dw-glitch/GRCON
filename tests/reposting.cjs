@@ -41,7 +41,9 @@ assert.equal(changed.previousRevision, "A");
 assert.equal(changed.newRevision, "B");
 assert.equal(Revision.validRevision("0"), true);
 assert.equal(Revision.validRevision("A"), true);
-assert.equal(Revision.validRevision("I"), false);
+assert.equal(Revision.validRevision("I"), true, "I é recomendação, não proibição");
+assert.equal(Revision.validRevision("#1"), true);
+assert.equal(Revision.validRevision("1A"), false);
 
 // A Conferência passa a usar a revisão B do registro corrigido, sem qualquer
 // conhecimento especial da UI de edição.

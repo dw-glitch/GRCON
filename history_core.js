@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(root.TriagemCore || (typeof module === "object" && module.exports ? require("./core.js") : null));
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconHistory = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (C) {
   "use strict";
 
   const STORAGE_KEY = "grcon.egrdt.history.v1";
@@ -120,7 +120,7 @@
       if (normalizedStem === normalizedBase) return "0";
       if (!normalizedStem.startsWith(`${normalizedBase}_`)) continue;
       const candidate = normalizedStem.slice(normalizedBase.length + 1).trim();
-      if (/^(?:0|[A-HJ-NP-Z]+)$/.test(candidate)) return candidate;
+      if (C && typeof C.revisionInfo === "function" ? C.revisionInfo(candidate).valid : /^(?:0|#[1-9]\d*|0[1-9]\d*|[A-Z]+(?:[1-9]\d*)?)$/.test(candidate)) return candidate;
     }
     return "";
   }
