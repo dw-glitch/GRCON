@@ -15,7 +15,9 @@
   const DISCARD = "descartar";
   const REVIEW = "revisar";
 
-  const REVISION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const REVISION_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const RECOMMENDED_REVISION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const NON_RECOMMENDED_REVISION_LETTERS = new Set(["I", "O"]);
   const N1710_CATEGORIES = new Set([
     "CE", "CR", "DB", "DE", "EC", "ET", "FD", "IM", "IS", "LA",
     "LD", "LI", "LO", "MA", "MC", "MD", "MO", "PR", "PT", "RL",
@@ -558,23 +560,113 @@
     return norm(value).replace(/^REV(?:ISAO)?\.?\s*/, "").replace(/\s+/g, "");
   }
 
+  function alphabeticRank(revision) {
+    let rank = 0;
+    for (const letter of revision) rank = rank * REVISION_ALPHABET.length + REVISION_ALPHABET.indexOf(letter) + 1;
+    return rank * 1000;
+  }
+
+  function incrementAlphabeticRevision(revision) {
+    const digits = [...revision].map((letter) => REVISION_ALPHABET.indexOf(letter));
+    if (digits.some((digit) => digit < 0)) return "";
+    let position = digits.length - 1;
+    while (position >= 0 && digits[position] === REVISION_ALPHABET.length - 1) {
+      digits[position] = 0;
+      position -= 1;
+    }
+    if (position < 0) digits.unshift(0);
+    else digits[position] += 1;
+    return digits.map((digit) => REVISION_ALPHABET[digit]).join("");
+  }
+
+  function nextRecommendedAlphabeticRevision(revision) {
+    let candidate = incrementAlphabeticRevision(revision);
+    let guard = 0;
+    while (candidate && [...candidate].some((letter) => NON_RECOMMENDED_REVISION_LETTERS.has(letter)) && guard < 1000) {
+      candidate = incrementAlphabeticRevision(candidate);
+      guard += 1;
+    }
+    return candidate;
+  }
+
   function revisionInfo(value) {
     const revision = normalizeRevision(value);
-    if (revision === "0") return { revision, valid: true, kind: "standard", rank: 0 };
-    if (/^[A-Z]+$/.test(revision)) {
-      if ([...revision].some((letter) => !REVISION_ALPHABET.includes(letter))) {
-        return { revision, valid: false, kind: "invalid", rank: -1 };
-      }
-      let rank = 0;
-      for (const letter of revision) rank = rank * REVISION_ALPHABET.length + REVISION_ALPHABET.indexOf(letter) + 1;
-      return { revision, valid: true, kind: "standard", rank: rank * 1000 };
+    if (revision === "0") {
+      return { revision, valid: true, kind: "standard", lifecycleKind: "original", rank: 0, recommended: true, warnings: [] };
     }
+
+    const preliminaryInitial = revision.match(/^#([1-9]\d*)$/);
+    if (preliminaryInitial) {
+      const sequence = Number(preliminaryInitial[1]);
+      return {
+        revision,
+        valid: true,
+        kind: "preliminary",
+        lifecycleKind: "preliminary_before_original",
+        baseRevision: "",
+        targetRevision: "0",
+        sequence,
+        rank: -100000 + sequence,
+        recommended: true,
+        warnings: [],
+      };
+    }
+
+    const preliminaryAfterZero = revision.match(/^0([1-9]\d*)$/);
+    if (preliminaryAfterZero) {
+      const sequence = Number(preliminaryAfterZero[1]);
+      return {
+        revision,
+        valid: true,
+        kind: "field",
+        lifecycleKind: "preliminary_after_revision",
+        baseRevision: "0",
+        targetRevision: "A",
+        sequence,
+        rank: sequence,
+        recommended: true,
+        warnings: [],
+      };
+    }
+
+    if (/^[A-Z]+$/.test(revision)) {
+      const invalidLetter = [...revision].find((letter) => !REVISION_ALPHABET.includes(letter));
+      if (invalidLetter) return { revision, valid: false, kind: "invalid", rank: -1, recommended: false, warnings: [] };
+      const nonRecommended = [...new Set([...revision].filter((letter) => NON_RECOMMENDED_REVISION_LETTERS.has(letter)))];
+      const warnings = nonRecommended.length
+        ? [`N-2064 Rev. D 4.2.3 recomenda não utilizar ${nonRecommended.join(" e ")} na identificação de revisões; a ocorrência é alerta, não bloqueio.`]
+        : [];
+      return {
+        revision,
+        valid: true,
+        kind: "standard",
+        lifecycleKind: "issued_revision",
+        rank: alphabeticRank(revision),
+        recommended: warnings.length === 0,
+        warnings,
+      };
+    }
+
     const field = revision.match(/^([A-Z]+)([1-9]\d*)$/);
     if (field && [...field[1]].every((letter) => REVISION_ALPHABET.includes(letter))) {
       const base = revisionInfo(field[1]);
-      return { revision, valid: true, kind: "field", rank: base.rank + Number(field[2]) };
+      if (!base.valid) return { revision, valid: false, kind: "invalid", rank: -1, recommended: false, warnings: [] };
+      const sequence = Number(field[2]);
+      return {
+        revision,
+        valid: true,
+        // "field" é mantido por compatibilidade com consumidores existentes.
+        kind: "field",
+        lifecycleKind: "preliminary_after_revision",
+        baseRevision: field[1],
+        targetRevision: nextRecommendedAlphabeticRevision(field[1]),
+        sequence,
+        rank: base.rank + sequence,
+        recommended: base.recommended,
+        warnings: [...(base.warnings || [])],
+      };
     }
-    return { revision, valid: false, kind: "invalid", rank: -1 };
+    return { revision, valid: false, kind: "invalid", lifecycleKind: "invalid", rank: -1, recommended: false, warnings: [] };
   }
 
   function revisionRank(value) {
@@ -585,15 +677,7 @@
     const info = revisionInfo(value);
     if (!info.valid || info.kind !== "standard") return "";
     if (info.revision === "0") return "A";
-    const digits = [...info.revision].map((letter) => REVISION_ALPHABET.indexOf(letter));
-    let position = digits.length - 1;
-    while (position >= 0 && digits[position] === REVISION_ALPHABET.length - 1) {
-      digits[position] = 0;
-      position -= 1;
-    }
-    if (position < 0) digits.unshift(0);
-    else digits[position] += 1;
-    return digits.map((digit) => REVISION_ALPHABET[digit]).join("");
+    return nextRecommendedAlphabeticRevision(info.revision);
   }
 
   function parseDate(value) {
