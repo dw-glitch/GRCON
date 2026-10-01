@@ -3,7 +3,7 @@
 
   const Core = root.GrconEgrdtTeamsNotificationCore;
   const STORAGE_KEY = "grcon.egrdt.teams.notifications.v1";
-  const APP_VERSION = root.GrconConfig?.APP_VERSION || document.documentElement.dataset.version || "5.44.5";
+  const APP_VERSION = root.GrconConfig?.APP_VERSION || document.documentElement.dataset.version || "5.44.6";
   const state = { latest: [], sending: new Set(), dialogRecord: null };
 
   function text(value) { return String(value === null || value === undefined ? "" : value).trim(); }

@@ -19,7 +19,7 @@ const checks = [
 // publicação: quando ficava de fora desta conferência, ele envelhecia em
 // silêncio e carimbava a versão errada nos relatórios gerados por esses
 // módulos.
-const fallbackChecks = ["src/react/historico-egrdt/services/historicoEgrdtAdapter.ts", "sigem_posting_app.js"];
+const fallbackChecks = ["src/react/historico-egrdt/services/historicoEgrdtAdapter.ts", "sigem_posting_app.js", "egrdt_teams_notification_app.js"];
 for (const file of fallbackChecks) {
   checks.push([file, new RegExp(`\\|\\|\\s*["']${version.replaceAll(".", "\\.")}["']`)]);
 }

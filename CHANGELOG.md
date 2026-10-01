@@ -1,3 +1,14 @@
+## 5.44.6 — 2026-10-01
+
+### Conformidade documental registrada na emissão
+
+- Análise e Repostagem apresentam verificações N-1710 e alertas N-2064 com regra, norma, parte e revisão.
+- Geração registra um snapshot por documento e eGRDT, preservado no Histórico e incluído em sua exportação. Registros antigos não são recalculados.
+- Fontes pendentes, revisão divergente e avaliações inconclusivas continuam sem criar bloqueios normativos.
+- Corrigida a confirmação da estrutura da LD que ficava atrás do overlay.
+- Paginação de 50 documentos, cache por conteúdo/versão e QA Chromium em desktop/celular.
+- Versão e cache de distribuição atualizados; etapas restantes documentadas em docs/documentary-compliance.md.
+
 ## 5.44.5 — 2026-09-30
 
 ### Consultas usa Documentos Previstos como fonte oficial de alocação
