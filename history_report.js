@@ -148,6 +148,10 @@
       "LINHA LD": Number(file.ldRow) || "",
       "VERSÃO DA LD ENVIADA": text(file.ldPrazo),
       "CAMINHO DATABOOK": text(file.databook),
+      "VERSÃO DA VALIDAÇÃO NORMATIVA": text(file.normativeValidation?.normativeValidationVersion) || "Não registrada",
+      "NORMAS APLICADAS": (file.normativeValidation?.normsApplied || []).map(item => `${item.norm} ${item.part || "body"} Rev. ${item.revision}`).join(" · "),
+      "ALERTAS NORMATIVOS": (file.normativeValidation?.warnings || []).map(item => item.message).join(" · "),
+      "BLOQUEIOS NORMATIVOS": (file.normativeValidation?.blocks || []).map(item => item.message).join(" · "),
       "LD UTILIZADA": text(record.ldName),
       "ORIGEM DOS DOCUMENTOS": text(record.sourceName),
       };

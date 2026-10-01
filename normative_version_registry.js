@@ -40,12 +40,14 @@ function normalizeEntry(value){
 
 function createVersionRegistry(seed=[]){
   const map=new Map();
+  let generation=0;
 
   const register=(value,opt={})=>{
     const entry=normalizeEntry(value);
     const entryKey=key(entry.norm,entry.part);
     if(map.has(entryKey)&&!opt.replace)throw new Error(`Versão normativa duplicada: ${entryKey}.`);
     map.set(entryKey,entry);
+    generation+=1;
     return entry;
   };
 
@@ -88,6 +90,7 @@ function createVersionRegistry(seed=[]){
     list,
     promotionDecision,
     isUsable:(n,p)=>promotionDecision(n,p).allowed,
+    generation:()=>generation,
   });
 }
 

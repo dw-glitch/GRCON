@@ -6,13 +6,14 @@
   const moduleState = new Map();
 
   const groups = {
+    compliance: ["core.js", "normative_registry.js", "normative_version_registry.js", "normative_applicability.js", "normative_rule_engine.js", "n1710_catalog.js", "n1710_parser.js", "n2064_revision_lifecycle.js", "documentary_compliance.js", "documentary_compliance_ui.js"],
     xlsx: ["xlsx.full.min.js", "grdt_workbook.js"],
     excel: ["exceljs.min.js"],
     zip: ["jszip.min.js"],
     brand: ["grcon_brand_assets.js"],
     performance: ["performance_workers.js"],
     report: ["excel", "brand", "performance"],
-    export: ["xlsx", "excel", "zip", "brand", "performance"],
+    export: ["compliance", "xlsx", "excel", "zip", "brand", "performance"],
     navigation: ["history_report.js"],
     history: ["navigation", "sigem_posting_core.js", "macro5_flow_core.js", "react-dist/historico-egrdt-app.js"],
     // O Dashboard é construído por retomar.js e já existe no carregamento inicial.
@@ -46,7 +47,7 @@
       "requests_taxonomy_core.js", "requests_app.js",
       "react-dist/consultas-app.js",
     ],
-    "grdt-reissue": ["xlsx", "zip", "sigem_posting_core.js", "emission.js", "grdt_reissue_core.js", "grdt_reissue_app.js"],
+    "grdt-reissue": ["xlsx", "zip", "compliance", "sigem_posting_core.js", "emission.js", "grdt_reissue_core.js", "grdt_reissue_app.js"],
     // Hub estático: não carrega dependências até o operador escolher uma ferramenta.
     "additional-tools": [],
     // O combinador é isolado do banco. A interface é uma ilha React; o Core
@@ -58,6 +59,7 @@
   };
 
   const moduleRequirements = {
+    compliance: ["GrconDocumentaryCompliance", "GrconDocumentaryComplianceUi"],
     history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi", "GrconHistoricoEgrdtReact"],
     dashboard: ["GrconHistoryDashboard"],
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi", "GrconHistoricoAnalisesReact"],

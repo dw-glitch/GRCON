@@ -197,6 +197,8 @@
         document: text(row && row.item && row.item.document),
         item: { ...(row && row.item || {}) },
         reissueRow: row,
+        normativeValidation: typeof globalThis !== "undefined" && globalThis.GrconDocumentaryCompliance
+          ? globalThis.GrconDocumentaryCompliance.auditRow(row, row.item) : null,
       })),
     };
     return Emission.splitPlan(plan, limit, normalizeBatchMode(mode)).map((group) => ({

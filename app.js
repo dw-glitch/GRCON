@@ -19,7 +19,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.5";
+  const APP_VERSION = "5.44.6";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -2505,6 +2505,8 @@
     // A reação começa no próprio clique, inclusive enquanto o motor sob demanda
     // ainda está sendo carregado ou quando a resposta virá do cache.
     pulseMascotProcessing();
+    try { await ensureRuntime("compliance"); }
+    catch (error) { showToast(`Não foi possível preparar a conformidade documental: ${error.message || error}. Tente novamente.`, "error"); return; }
     try { await ensureRuntime("performance"); } catch (_) { console.debug("[App] ensureRuntime performance:", _); /* usa compatibilidade */ }
     if (window.GrconCloud?.state?.membership) {
       try { await window.GrconPlannedDocuments.refresh(); }
@@ -3622,6 +3624,7 @@
   }
 
   function renderTable() {
+    window.GrconDocumentaryComplianceUi?.render(state.results);
     const virtualInfo = virtualResults();
     const rows = virtualInfo.visibleIndices.map((index, offset) => ({
       row: state.results[index],
