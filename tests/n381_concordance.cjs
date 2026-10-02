@@ -25,9 +25,15 @@ assert.ok(audit({ inspection: inspection([N.extractPage([])]) }).warnings.some(r
 assert.ok(audit({ inspection: { status: 'partial', totalPages: 300, pages: [page()] } }).warnings.some(r => r.ruleId === 'n381.pdf.partial'));
 const cover = { executor: 'ANA', checker: 'ANA', approver: 'CARLOS', revisionDate: '02/10/2026' };
 assert.equal(audit({ cover }).blocks.length, 0);
-assert.equal(audit({ cover, applicability: 'confirmed' }).blocks[0].ruleId, 'n381.cover.distinct-responsibles');
+assert.equal(audit({ cover, applicability: 'confirmed' }).blocks.length, 0, 'Escopo confirmado não promove texto com emendas não auditadas.');
+const completeVersions = V.createVersionRegistry(V.SEED);
+completeVersions.register({ norm: 'N-0381', part: 'amendments', revision: 'M', status: 'active', sourceAvailable: true, verificationSource: 'Fonte completa confirmada no cenário unitário' });
+assert.equal(audit({ cover, applicability: 'confirmed', versions: completeVersions }).blocks[0].ruleId, 'n381.cover.distinct-responsibles');
+completeVersions.register({ ...completeVersions.get('N-0381', 'amendments'), revision: 'N' }, { replace: true });
+assert.equal(audit({ cover, applicability: 'confirmed', versions: completeVersions }).blocks.length, 0, 'Emendas de outra revisão não promovem uma regra M.');
+completeVersions.register({ ...completeVersions.get('N-0381', 'amendments'), revision: 'M' }, { replace: true });
 assert.equal(audit({ cover, applicability: 'not-applicable' }).blocks.length, 0);
-assert.ok(audit({ cover: { ...cover, executor: '' }, applicability: 'confirmed' }).blocks.some(r => r.ruleId === 'n381.cover.executor'));
+assert.ok(audit({ cover: { ...cover, executor: '' }, applicability: 'confirmed', versions: completeVersions }).blocks.some(r => r.ruleId === 'n381.cover.executor'));
 assert.equal(audit({ cover: { ...cover, checker: 'BRUNO' }, applicability: 'confirmed' }).blocks.length, 0);
 const references = [{ source: 'LD', document: expected.documentNumber, revision: 'A', title: expected.title }, { source: 'Histórico / GRDT antiga', document: expected.documentNumber, revision: '0' }];
 assert.equal(audit({ references }).blocks.length, 0, 'Revisões históricas nunca substituem a revisão manual de destino.');

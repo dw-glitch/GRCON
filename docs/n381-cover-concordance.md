@@ -4,15 +4,15 @@ Baseline: main `566478b`, GRCON 5.44.6. Entrega: 5.44.7.
 
 ## Fonte e decisões
 
-Fonte primária: PDF fornecido N-0381 revisão M, maio/2022, errata junho/2022. Foram relidos o escopo (§1.3–1.6), a legenda (§3.5.1–3.5.4), os campos e as exceções; a revisão coincide com o inventário confirmado da fase 0. O catálogo de março/2025 é a referência da base, não uma promessa de verificação contínua de vigência.
+Fonte primária: PDF fornecido N-0381 revisão M, maio/2022, errata junho/2022. Foram relidos o escopo (§1.3–1.6), a legenda (§3.5.1–3.5.4), os campos e as exceções; a revisão coincide com o inventário confirmado da fase 0. O catálogo de março/2025 é a referência da base, não uma promessa de verificação contínua de vigência. O PDF disponível não contém conjunto completo de emendas posteriores; a parte `amendments` foi registrada como não confirmada. Escopo declarado pelo operador não promove essa fonte. Requisitos derivados da norma permanecem em alerta até auditoria e aprovação da fonte completa; concordância operacional inequívoca continua bloqueante.
 
 | Regra | Fonte | Decisão |
 |---|---|---|
 | Número/revisão inequívocos no PDF × destino escolhido | Concordância operacional GRCON, campos 15/16 da N-381 | BLOQUEIO em página preservada |
 | Revisão diferente na primeira capa que será substituída | Operação de substituir capa | ALERTA, permite corrigir a capa |
 | Revisão por folha explicitamente declarada | Exceção contextual do controle documental | Divergência de revisão vira ALERTA; número continua conferido |
-| Execução/verificação/aprovação/data preenchidas | §3.5.4 campos 8/9/10/13 | BLOQUEIO somente com aplicabilidade confirmada e fonte promovível |
-| Execução diferente de verificação | §3.5.4 campos 8–9, nota 2 | Mesmo guard de escopo/fonte |
+| Execução/verificação/aprovação/data preenchidas | §3.5.4 campos 8/9/10/13 | ALERTA na base atual; BLOQUEIO exige aplicabilidade e corpo/emendas completos promovíveis |
+| Execução diferente de verificação | §3.5.4 campos 8–9, nota 2 | ALERTA até confirmação das emendas; mesmo guard de escopo/fonte |
 | Título/categoria/data/finalidade/responsáveis/projeto/classificação/formato | §3.5.4 | Comparação quando ambos os valores existem; divergência é ALERTA |
 | Total de folhas e dimensões mínimas A4 | §3.5.4 campo 14; §3.1 | ALERTA; não inferir numeração física absoluta nem rejeitar formato composto |
 | Texto ausente, legenda ambígua, campo indisponível ou extração parcial | Evidência técnica insuficiente | Inconclusivo/ALERTA; nunca BLOQUEIO inferido |

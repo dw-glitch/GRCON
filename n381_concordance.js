@@ -7,6 +7,7 @@
   'use strict';
   const VERSION = 'n381-concordance-1';
   const versions = Versions.createVersionRegistry(Versions.SEED);
+  versions.register({ norm: 'N-0381', part: 'amendments', revision: 'M', status: 'unconfirmed', sourceAvailable: false, verificationSource: 'PDF fornecido contém a errata de 06/2022; conjunto completo de emendas posteriores não auditado.' });
   const text = value => String(value ?? '').trim();
   const norm = value => text(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[–—]/g, '-').replace(/\s+/g, ' ').toUpperCase();
   const fields = {
@@ -45,6 +46,9 @@
   function audit(options = {}) {
     const results = [], expected = options.expected || {}, pages = options.inspection?.pages || [];
     const scope = options.applicability === 'confirmed';
+    const sourceVersions = options.versions || versions;
+    const amendmentsReviewed = sourceVersions.promotionDecision('N-0381', 'amendments').allowed && sourceVersions.get('N-0381', 'amendments')?.revision === 'M';
+    const normativeBlockAllowed = scope && amendmentsReviewed;
     function check(id, title, section, passed, found, wanted, severity = 'warning', type = 'mandatory') {
       const r = rule(id, title, section, severity, type);
       results.push(Engine.evaluateRule(r, { document: expected.documentNumber }, () => ({ passed, message: title, valueFound: text(found), valueExpected: text(wanted) }), options.versions || versions));
@@ -55,11 +59,12 @@
       check('n381.scope', 'Aplicabilidade contratual da N-381 não confirmada; requisitos normativos permanecem como alertas.', '1.3–1.6', undefined, 'Não confirmada', 'Confirmar projeto/contrato');
     }
     if (options.cover && options.applicability !== 'not-applicable') {
+      if (!amendmentsReviewed) check('n381.source-completeness', 'Fonte auditada: M com errata 06/2022. Emendas posteriores não confirmadas; requisitos normativos permanecem em alerta.', '1.3–1.6', undefined, 'Conjunto de emendas não auditado', 'Fonte completa e aprovada antes de promover bloqueios normativos');
       const cover = options.cover;
       for (const [field, label, section] of [['executor', 'Execução', '3.5.4 campo 8'], ['checker', 'Verificação', '3.5.4 campo 9'], ['approver', 'Aprovação', '3.5.4 campo 10'], ['revisionDate', 'Data', '3.5.4 campo 13']]) {
-        check(`n381.cover.${field}`, `${label}: ${text(cover[field]) ? 'campo informado' : 'preencha o campo da capa'}.`, section, Boolean(text(cover[field])), cover[field], 'Campo preenchido', scope ? 'block' : 'warning');
+        check(`n381.cover.${field}`, `${label}: ${text(cover[field]) ? 'campo informado' : 'preencha o campo da capa'}.`, section, Boolean(text(cover[field])), cover[field], 'Campo preenchido', normativeBlockAllowed ? 'block' : 'warning');
       }
-      if (text(cover.executor) && text(cover.checker)) check('n381.cover.distinct-responsibles', 'Execução e verificação devem ter responsáveis diferentes.', '3.5.4 campos 8–9, nota 2', norm(cover.executor) !== norm(cover.checker), `${cover.executor} / ${cover.checker}`, 'Responsáveis distintos', scope ? 'block' : 'warning');
+      if (text(cover.executor) && text(cover.checker)) check('n381.cover.distinct-responsibles', 'Execução e verificação devem ter responsáveis diferentes.', '3.5.4 campos 8–9, nota 2', norm(cover.executor) !== norm(cover.checker), `${cover.executor} / ${cover.checker}`, 'Responsáveis distintos', normativeBlockAllowed ? 'block' : 'warning');
       if (text(cover.revision) && norm(cover.revision) !== '0') check('n381.cover.original-emission', 'Confira a preservação dos dados da emissão original (revisão 0). O preenchimento da nova capa não comprova o histórico de responsáveis e datas.', '3.5.4 campos 22–25, notas 1–2', undefined, 'Histórico de emissão original não comprovado', 'Dados da emissão original preservados; exceção de versão preliminar exige contexto');
       for (const [field, label] of [['project', 'Projeto'], ['classification', 'Classificação documental']]) {
         if (!text(cover[field])) check(`n381.cover.${field}`, `${label}: sem evidência suficiente; confira a legenda original e as condições do contrato.`, '3.5.4 campos 3/27', undefined, 'Não identificado', 'Conferência manual; classificação pode estar no AIP');
@@ -102,7 +107,7 @@
       if (norm(reference.documentNumber || reference.document) !== norm(expected.documentNumber)) continue;
       if (reference.title && expected.title) check(`n381.reference.${index}.title`, `Título × ${text(reference.source) || 'fonte de referência'}: ${norm(reference.title) === norm(expected.title) ? 'consistente' : 'divergente'}.`, '3.5.4 campo 5', norm(reference.title) === norm(expected.title), reference.title, expected.title, 'warning', 'operational');
     }
-    return { ...Engine.createSnapshot(results), concordanceVersion: VERSION, extraction: { status: options.inspection?.status || 'unavailable', totalPages: options.inspection?.totalPages || 0, inspectedPages: pages.length }, applicability: options.applicability || 'unknown', revisionBySheet: options.revisionBySheet === true, references: (options.references || []).map(r => ({ source: text(r.source), document: text(r.documentNumber || r.document), revision: text(r.revision), title: text(r.title) })) };
+    return { ...Engine.createSnapshot(results), concordanceVersion: VERSION, sourceReview: { edition: "05/2022 + errata 06/2022", amendmentsReviewed }, extraction: { status: options.inspection?.status || 'unavailable', totalPages: options.inspection?.totalPages || 0, inspectedPages: pages.length }, applicability: options.applicability || 'unknown', revisionBySheet: options.revisionBySheet === true, references: (options.references || []).map(r => ({ source: text(r.source), document: text(r.documentNumber || r.document), revision: text(r.revision), title: text(r.title) })) };
   }
   return Object.freeze({ VERSION, versions, extractPage, audit });
 });
