@@ -1,3 +1,10 @@
+## 5.44.7 — 2026-10-02
+
+- N-381 M: conferência da capa e do texto do PDF em Adicionar Capa e Conferência.
+- Divergência inequívoca de número/revisão nas páginas preservadas impede gerar a capa; revisão por folha e primeira capa substituída recebem tratamento próprio.
+- Fonte, página, valores e snapshot auditáveis; PDFs sem texto/extração ambígua ficam inconclusivos.
+- Leitor local e worker carregados sob demanda, com recursos disponíveis no cache offline.
+
 ## 5.44.6 — 2026-10-01
 
 ### Conformidade documental registrada na emissão

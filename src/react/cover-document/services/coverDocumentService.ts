@@ -164,7 +164,15 @@ export async function inspectSourceDocument(file: File): Promise<SourceDocumentI
 
   if (kind === "pdf") {
     const pdf = await getPdfLib().PDFDocument.load(await file.arrayBuffer());
-    return { file, kind, originalPages: pdf.getPageCount(), pageCountSource: "exact" };
+    let inspection: import('../../pdf-document/types').PdfInspection;
+    try {
+      await window.GRCONModuleLoader?.ensure("pdf-document");
+      if (!window.GrconPdfDocument) throw new Error("Leitor de texto indisponível.");
+      inspection = await window.GrconPdfDocument.inspect(file);
+    } catch (_) {
+      inspection = { status: 'unavailable', pages: [], totalPages: pdf.getPageCount(), reason: 'Texto indisponível; confira a legenda manualmente.' };
+    }
+    return { file, kind, originalPages: pdf.getPageCount(), pageCountSource: "exact", inspection };
   }
 
   const zip = await getZip().loadAsync(await file.arrayBuffer());

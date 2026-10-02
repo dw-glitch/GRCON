@@ -7,6 +7,12 @@ on:
       - "grcon_module_loader.js"
       - "grcon-ui-fix.css"
       - "src/react/cover-document/**"
+      - "src/react/pdf-document/**"
+      - "n381_concordance.js"
+      - "posting_conference_app.js"
+      - "tests/n381_concordance.cjs"
+      - "scripts/validar-n381-browser.cjs"
+      - "scripts/copy-pdf-worker.mjs"
       - "assets/templates/CAPA_PAGE1_*"
       - "performance_workers.js"
       - "workers/ld.worker.js"
@@ -49,6 +55,7 @@ jobs:
           node tests/additional_tools_navigation.cjs
           node tests/cover_document_react.cjs
           node tests/cover_document_hardening.cjs
+          node tests/n381_concordance.cjs
 
       - name: Instalar Chromium
         run: |
@@ -61,6 +68,7 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-cover-document-browser.cjs
+          node scripts/validar-n381-browser.cjs
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -70,4 +78,5 @@ jobs:
             artifacts/cover-document-browser/*.png
             artifacts/cover-document-browser/*.pdf
             artifacts/cover-document-browser/metrics.json
+            artifacts/n381-browser/
           if-no-files-found: warn

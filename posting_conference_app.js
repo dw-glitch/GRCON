@@ -83,6 +83,7 @@
       </header>
       <section class="pc-hero" aria-live="polite"><div><span>CONFERÊNCIA GERAL</span><strong id="pc-hero-main">Carregue a Consulta Geral</strong><small id="pc-hero-note">O histórico permanece preservado como origem dos eventos de envio.</small></div><div class="pc-base-card" id="pc-base-card"></div></section>
       <section class="pc-kpis" id="pc-kpis" aria-label="Resumo da conferência"></section>
+      <section class="pc-toolbar-card pc-pdf-card"><button class="secondary-button" id="pc-check-pdf" type="button">Conferir legenda e páginas do PDF</button><div id="pc-pdf-root" hidden></div></section>
       <section class="pc-toolbar-card">
         <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">Pendências de Postagem</button></div>
         <div class="pc-filters" id="pc-filters">
@@ -113,7 +114,29 @@
 
   function el(id) { return shell?.querySelector(`#${id}`); }
 
+  function pdfReferences() {
+    return [
+      ...state.base.records.map(record => ({ ...record, source: `Consulta Geral · linha ${record.sourceRow || '—'}` })),
+      ...(History?.read?.() || []).flatMap(record => (record.files || []).map(file => ({ ...file, source: `Histórico / GRDT ${record.egrdtNumber}` }))),
+    ];
+  }
+
   function bind() {
+    el("pc-check-pdf").addEventListener("click", async () => {
+      const button = el("pc-check-pdf");
+      button.disabled = true;
+      try {
+        await root.GRCONModuleLoader.ensure('pdf-document');
+        if (!document.querySelector('link[href$="cover-document.css"]')) {
+          const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'cover-document.css'; document.head.appendChild(css);
+        }
+        const host = el('pc-pdf-root');
+        host.hidden = false;
+        root.GrconPdfConcordanceUi.mount(host, pdfReferences());
+        button.hidden = true;
+      } catch (error) { notify(error.message || 'Conferência do PDF indisponível.', 'error'); }
+      finally { button.disabled = false; }
+    });
     el("pc-update").addEventListener("click", () => el("pc-file").click());
     el("pc-file").addEventListener("change", (event) => {
       const file = event.target.files && event.target.files[0];
@@ -442,6 +465,8 @@
   }
 
   function render() {
+    const pdfHost = el('pc-pdf-root');
+    if (pdfHost && !pdfHost.hidden && root.GrconPdfConcordanceUi) root.GrconPdfConcordanceUi.mount(pdfHost, pdfReferences());
     createShell();
     renderHero();
     renderKpis();

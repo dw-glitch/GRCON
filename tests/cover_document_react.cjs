@@ -30,7 +30,7 @@ assert.doesNotMatch(html, /cover-tool\.css/);
 
 assert.match(loader, /"cover-document"/);
 assert.match(loader, /react-dist\/cover-document-app\.js/);
-assert.match(loader, /"cover-document": \["xlsx", "zip", "pdf-lib\.min\.js", "core\.js", "requests_core\.js", "requests_report\.js", "requests_taxonomy_core\.js", "ld_memory\.js", "performance_workers\.js", "react-dist\/cover-document-app\.js"\]/);
+assert.match(loader, /"cover-document": \["compliance", "n381_concordance\.js", "xlsx", "zip", "pdf-lib\.min\.js", "core\.js", "requests_core\.js", "requests_report\.js", "requests_taxonomy_core\.js", "ld_memory\.js", "performance_workers\.js", "react-dist\/cover-document-app\.js"\]/);
 assert.match(loader, /GrconCoverDocumentUi/);
 assert.doesNotMatch(loader, /GrconCoverUi/);
 
