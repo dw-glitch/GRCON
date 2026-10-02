@@ -1,4 +1,3 @@
-import type { PdfInspection } from '../../pdf-document/types';
 export type ValidationLevel = "error" | "warning" | "info";
 export type SourceDocumentKind = "pdf" | "docx";
 export type CoverPlacementMode = "replace-first-page" | "prepend";
@@ -67,7 +66,6 @@ export interface CoverDocumentData {
 }
 
 export interface SourceDocumentInfo {
-  inspection?: PdfInspection;
   file: File;
   kind: SourceDocumentKind;
   originalPages: number | null;

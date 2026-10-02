@@ -82,7 +82,7 @@ Pontos confirmados:
 - 3.5.1 — todas as folhas abrangidas devem conter quadro de legenda;
 - 3.5.4 — preenchimento dos campos da legenda.
 
-A N-381 não deve virar um validador universal de todo PDF sem antes resolver tipo documental, fase e aplicabilidade contratual.
+A N-381 permanece como referência normativa catalogada, porém o GRCON não abre documentos técnicos PDF para conferir seu conteúdo. Legendas, carimbos, textos, revisões, títulos, datas, responsáveis, dimensões ou qualquer outro dado interno do PDF não são fonte automática de conformidade; quando necessários, os dados devem vir de bases estruturadas ou de entrada explícita do operador.
 
 ### Catálogo público complementar
 
@@ -141,8 +141,8 @@ Também foi identificado que o contexto N-1710 atual ainda não é um parser nor
 | Categoria deve existir no anexo | PDF + Anexo A | N-1710 | 1.2/6.2 | N/A=W | mandatory | N-1710 | catálogo parcial | anexos não centralizados | código semântico inválido | catálogo versionado por anexo | ALERTA primeiro | Core |
 | Instalação deve usar Anexo B | PDF + Anexo B | N-1710 | 5.2/6.3 | N/B=CJ | mandatory | N-1710 | inferências atuais | falta validação por grupo | falso aceite/rejeição | validar Grupo 2 | ALERTA primeiro | Core |
 | Área/classe usam anexos corretos | PDF + C/D/E/F | N-1710 | 5.2/6.4–6.5 | versões independentes | mandatory | conforme instalação/contexto | parcial | risco de usar anexo errado | seleção explícita C/D vs E/F | ALERTA primeiro | Core/ReconDocs |
-| Legenda em todas as folhas abrangidas | PDF confirmado | N-381 | 3.5.1 | M | mandatory | documentos em escopo | capa/PDF parcial | aplicabilidade incompleta | falso positivo universal | validador escopado | ALERTA primeiro | Adicionar Capa/Conferência |
-| Campos da legenda | PDF confirmado | N-381 | 3.5.4 | M | mandatory | conforme tipo/formato | alguns campos tratados | sem cruzamento único | metadados divergentes | validador por campo/fonte | ALERTA; bloquear só inequívoco | Adicionar Capa |
+| Legenda em todas as folhas abrangidas | PDF confirmado | N-381 | 3.5.1 | M | mandatory | documentos em escopo | não automatizado | leitura interna de PDF retirada por decisão arquitetural | falso positivo e perda de autonomia | conferir fora do GRCON; no sistema usar somente dados estruturados | NÃO IMPLEMENTAR VIA PDF | — |
+| Campos da legenda | PDF confirmado | N-381 | 3.5.4 | M | mandatory | conforme tipo/formato | não automatizado por leitura do arquivo | conteúdo interno do PDF não é fonte do GRCON | falso bloqueio por interpretação textual | usar metadados estruturados equivalentes quando existirem; nunca extrair do PDF | INFORMAÇÃO ESTRUTURADA | GRDT/Conferência |
 | 9 colunas e ordem da eGRDT | modelo XLS + código atual | operacional/contratual | modelo de carga | atual | operational | exportação eGRDT | implementado | golden real pendente | incompatibilidade SIGEM | teste golden BIFF8 | BLOQUEIO após golden | grdt_workbook |
 | FIM/sem linha vazia intermediária | modelo XLS + código | operacional | modelo de carga | atual | operational | exportação | implementado | golden real pendente | rejeição na carga | golden + round-trip | BLOQUEIO após golden | grdt_workbook |
 | Disciplina oficial da eGRDT | template/contrato | operacional/contratual | — | vigente | operational | eGRDT | resolver existente | autoridade precisa ser versionada | lista divergente | registry separado de template | BLOQUEIO apenas por fonte vigente | GRDT |
@@ -251,3 +251,19 @@ Esse desenho permite continuar a evolução sem inventar vigência e sem paralis
 ## Escopo atualizado em 02/10/2026
 
 Por instrução explícita do usuário, as fases seguintes se limitam a GRCON e RECON. Referências históricas a ReconDocs não autorizam alterações nesse aplicativo. PR F: docs/discipline-document-matrix.md.
+
+
+## 8. Decisão arquitetural definitiva — 2026-10-02
+
+O GRCON não realiza inspeção de conteúdo interno de documentos técnicos PDF. As regras de conferência utilizam códigos e dados estruturados provenientes das bases operacionais. PDFs podem ser manipulados pelas ferramentas de capa/combinação, mas seu conteúdo não constitui fonte automática de conformidade.
+
+Consequências obrigatórias:
+
+- não usar PDF.js, `getTextContent()`, OCR ou interpretação de páginas para conferir documento;
+- não inferir código, revisão, título, categoria, finalidade, data, responsáveis, classificação, projeto, formato ou quantidade declarada de folhas a partir do PDF;
+- não gerar alerta ou bloqueio porque um dado foi ou deixou de ser encontrado dentro de PDF;
+- manter validação N-1710 sobre o código documental e demais cruzamentos estruturados;
+- manter não conformidades normativas consultivas sem retirar automaticamente documentos da GRDT nem suprimir a decisão do operador;
+- a matriz documental trabalha somente com registros/metadados das fontes estruturadas; nenhum documento técnico PDF é aberto para determinar conformidade.
+
+A estratégia de inspeção interna introduzida na versão 5.44.7 / PR #179 foi retirada e não deve ser retomada em fases futuras.

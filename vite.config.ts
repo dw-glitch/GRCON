@@ -3,12 +3,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const BUILDS = {
-  "pdf-document": {
-    entry: "src/react/pdf-document/index.tsx",
-    fileName: "pdf-document-app.js",
-    bundleName: "GrconPdfDocumentBundle",
-    emptyOutDir: false,
-  },
   consultas: {
     entry: "src/react/consultas/index.tsx",
     fileName: "consultas-app.js",
