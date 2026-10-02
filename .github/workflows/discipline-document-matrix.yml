@@ -18,7 +18,7 @@ jobs:
           QA_SERVER_PID=$!
           trap 'kill "$QA_SERVER_PID"' EXIT
           node scripts/validar-discipline-matrix-browser.cjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: discipline-matrix-chromium
