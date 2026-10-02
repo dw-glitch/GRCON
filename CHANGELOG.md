@@ -1,3 +1,8 @@
+## 5.44.8 — 2026-10-02
+
+- Matriz documental por disciplina: fontes LD, SCON, escopo e Documentos Previstos, com alertas consultivos e rastreabilidade.
+- Relatórios JSON e CSV e consulta de snapshots do RECON, sem alteração da alocação.
+
 ## 5.44.7 — 2026-10-02
 
 - N-381 M: conferência da capa e do texto do PDF em Adicionar Capa e Conferência.

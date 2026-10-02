@@ -220,7 +220,7 @@ Somente após fonte/aplicabilidade/testes:
 - **PR C** — N-1710 + parser 7 grupos + anexos versionados;
 - **PR D** — golden test do XLS real;
 - **PR E** — N-381 / Adicionar Capa;
-- **PR F** — matriz disciplinar / ReconDocs;
+- **PR F** — matriz disciplinar / GRCON e RECON (escopo corrigido pelo usuário em 02/10/2026);
 - **PR G** — histórico, auditoria e overrides;
 - **PR H** — módulo Normas Petrobras / governança owner;
 - **PR I** — hardening e deploy.
@@ -247,3 +247,7 @@ As fases de enforcement permanecem condicionadas às fontes específicas de cada
 - PR F: exige PDFs aplicáveis da disciplina/contrato antes de bloquear.
 
 Esse desenho permite continuar a evolução sem inventar vigência e sem paralisar a arquitetura.
+
+## Escopo atualizado em 02/10/2026
+
+Por instrução explícita do usuário, as fases seguintes se limitam a GRCON e RECON. Referências históricas a ReconDocs não autorizam alterações nesse aplicativo. PR F: docs/discipline-document-matrix.md.

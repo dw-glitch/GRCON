@@ -6,6 +6,7 @@
   const moduleState = new Map();
 
   const groups = {
+    "discipline-matrix": ["xlsx", "discipline_document_catalog.js", "discipline_document_matrix.js", "discipline_document_matrix_ui.js"],
     compliance: ["core.js", "normative_registry.js", "normative_version_registry.js", "normative_applicability.js", "normative_rule_engine.js", "n1710_catalog.js", "n1710_parser.js", "n2064_revision_lifecycle.js", "documentary_compliance.js", "documentary_compliance_ui.js"],
     xlsx: ["xlsx.full.min.js", "grdt_workbook.js"],
     excel: ["exceljs.min.js"],
@@ -60,6 +61,7 @@
   };
 
   const moduleRequirements = {
+    "discipline-matrix": ["DisciplineDocumentMatrix", "DisciplineDocumentMatrixUi"],
     compliance: ["GrconDocumentaryCompliance", "GrconDocumentaryComplianceUi"],
     history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi", "GrconHistoricoEgrdtReact"],
     dashboard: ["GrconHistoryDashboard"],
@@ -226,6 +228,7 @@
     if (view !== "cover-document") root.GrconCoverDocumentUi?.deactivate?.();
 
     const modules = {
+      "discipline-matrix": "discipline-matrix-module",
       control: "grdt-module",
       "analysis-history": "analysis-history-module",
       history: "history-module",
@@ -247,7 +250,7 @@
     if (scrollingElement) scrollingElement.scrollTop = 0;
     if (root.scrollY) root.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.querySelectorAll("[data-grcon-view]").forEach((button) => {
-      const nestedToolView = view === "grdt-reissue" || view === "pdf-tools" || view === "cover-document";
+      const nestedToolView = view === "discipline-matrix" || view === "grdt-reissue" || view === "pdf-tools" || view === "cover-document";
       const additionalToolsNav = button.dataset.grconView === "additional-tools"
         && (button.classList.contains("ops-nav-button") || button.id === "tab-additional-tools");
       const active = button.dataset.grconView === view || (nestedToolView && additionalToolsNav);
@@ -261,6 +264,7 @@
   // com outra aberta. Quem chega à tela pelo link de outra pessoa lia o nome
   // errado da área em que está.
   const NOMES = {
+    "discipline-matrix": "Matriz documental",
     control: "Controle de GRDT",
     requests: "Consultas",
     "grdt-reissue": "Repostagem de GRDT",
@@ -290,7 +294,7 @@
   }
 
   function activateReadyModule(module) {
-    if (module === "additional-tools") return;
+    if (module === "additional-tools" || module === "discipline-matrix") return;
     if (module === "dashboard") {
       root.GrconHistoryDashboard?.activate?.();
       return;
