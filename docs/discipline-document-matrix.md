@@ -44,3 +44,8 @@ RECON: Matriz documental no menu lateral; URL #matrix.
 - Chromium: upload XLSX real, Documentos Previstos, relatório JSON, consulta entre apps, mudança de contexto, recorte, navegação, desktop 1440/1024 e tema escuro.
 
 Próxima fase: rastreabilidade de conferências e tratamento de exceções justificados dentro de GRCON e RECON.
+
+
+## Guardrail de fontes
+
+A matriz trabalha somente com registros e metadados das fontes estruturadas (LD, SCON, escopo, Documentos Previstos e Consulta Geral). Nenhum documento técnico PDF é aberto, lido, submetido a OCR ou interpretado para determinar conformidade.

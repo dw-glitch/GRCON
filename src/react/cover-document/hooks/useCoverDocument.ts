@@ -15,7 +15,6 @@ import {
 } from "../services/coverDocumentService";
 import { validateCover } from "../services/coverValidationService";
 import { coverDocumentBridge } from "../services/coverDocumentBridge";
-import { coverReferences } from '../services/coverConcordanceService';
 import { beginMascotOperation } from "../../shared/mascot";
 import type {
   CoverDebugState,
@@ -95,8 +94,6 @@ export function useCoverDocument() {
   const [status, setStatus] = useState("Carregue uma ou mais LDs para começar.");
   const [previewUrl, setPreviewUrl] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [n381Applicability, setN381Applicability] = useState('unknown');
-  const [revisionBySheet, setRevisionBySheet] = useState(false);
   const stateRef = useRef<CoverDebugState | null>(null);
   const previewToken = useRef(0);
 
@@ -111,13 +108,7 @@ export function useCoverDocument() {
     ? (source?.kind === "pdf" && coverMode === "replace-first-page" ? originalPages : originalPages + 1)
     : null;
   const validations = useMemo(() => validateCover(selected, data, source, totalPages), [selected, data, source, totalPages]);
-  const normativeValidation = useMemo(() => selected && source ? window.GrconN381Concordance.audit({
-    expected: data, cover: data, inspection: source.inspection,
-    applicability: n381Applicability, revisionBySheet,
-    replaceFirstPage: source.kind === 'pdf' && coverMode === 'replace-first-page',
-    references: coverReferences(selected),
-  }) : null, [selected, source, data, n381Applicability, revisionBySheet, coverMode]);
-  const hasErrors = validations.some((item) => item.level === "error") || Boolean(normativeValidation?.blocks.length);
+  const hasErrors = validations.some((item) => item.level === "error");
   const overrides = useMemo(() => new Set((Object.keys(data) as Array<keyof CoverDocumentData>).filter((key) => data[key] !== baseData[key])), [baseData, data]);
 
   stateRef.current = {
@@ -126,7 +117,7 @@ export function useCoverDocument() {
     selectedDocument: selected?.documentNumber || "",
     sourceName: source?.file.name || "",
     busy,
-    validationErrors: validations.filter((item) => item.level === "error").length + (normativeValidation?.blocks.length || 0),
+    validationErrors: validations.filter((item) => item.level === "error").length,
     coverMode,
   };
 
@@ -163,8 +154,6 @@ export function useCoverDocument() {
   }, [busy, notify]);
 
   const chooseCandidate = useCallback((candidate: CoverDocumentCandidate) => {
-    setN381Applicability('unknown');
-    setRevisionBySheet(false);
     const mapped = fromCandidate(candidate);
     setSelected(candidate);
     setBaseData(mapped);
@@ -268,8 +257,6 @@ export function useCoverDocument() {
     try {
       const outputData = { ...data, revisionDate: currentCoverDate() };
       if (outputData.revisionDate !== data.revisionDate) setData(outputData);
-      const finalValidation = window.GrconN381Concordance.audit({ expected: outputData, cover: outputData, inspection: source.inspection, applicability: n381Applicability, revisionBySheet, replaceFirstPage: source.kind === 'pdf' && coverMode === 'replace-first-page', references: coverReferences(selected) });
-      if (finalValidation.blocks.length) throw new Error('Resolva os bloqueios da conferência da capa/PDF antes de gerar.');
       const generated = kind === "pdf"
         ? await generatePdf(outputData, source, coverMode)
         : await generateDocx(outputData, source, totalPages);
@@ -287,14 +274,13 @@ export function useCoverDocument() {
           sourceName: source.file.name,
           outputName: generated.fileName,
           kind,
-          normativeValidation: { ...finalValidation, results: undefined },
           coverMode: kind === "pdf" ? coverMode : "prepend",
         };
         const history = Array.isArray(previous) ? [entry, ...previous].slice(0, 200) : [entry];
         window.localStorage.setItem(key, JSON.stringify(history));
         window.dispatchEvent(new CustomEvent("grcon:cover-generated", { detail: entry }));
       } catch (_) {
-        notify('Arquivo gerado, mas o histórico local da capa não pôde ser salvo. Baixe o relatório da conferência para preservar a auditoria.', 'warning');
+        // A geração não deve falhar caso o armazenamento local esteja indisponível.
       }
       setStatus(`${generated.fileName} gerado com sucesso.`);
       notify("Arquivo com capa gerado com sucesso.", "success");
@@ -307,7 +293,7 @@ export function useCoverDocument() {
     } finally {
       setBusy(false);
     }
-  }, [busy, coverMode, data, hasErrors, notify, selected, source, totalPages, n381Applicability, revisionBySheet, normativeValidation]);
+  }, [busy, coverMode, data, hasErrors, notify, selected, source, totalPages]);
 
   const clear = useCallback(() => {
     setRecords([]);
@@ -322,8 +308,6 @@ export function useCoverDocument() {
     setCoverMode("replace-first-page");
     setStatus("Carregue uma ou mais LDs para começar.");
     setAdvancedOpen(false);
-    setN381Applicability('unknown');
-    setRevisionBySheet(false);
   }, []);
 
   const activate = useCallback(() => {
@@ -350,11 +334,6 @@ export function useCoverDocument() {
     busy,
     status,
     validations,
-    normativeValidation,
-    n381Applicability,
-    setN381Applicability,
-    revisionBySheet,
-    setRevisionBySheet,
     hasErrors,
     overrides,
     previewUrl,

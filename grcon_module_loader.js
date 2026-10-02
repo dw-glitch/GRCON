@@ -56,8 +56,7 @@
     // o operador realmente inicia a combinação.
     "pdf-tools": ["pdf_merge_core.js", "react-dist/pdf-tools-app.js"],
     // Capa oficial: LD + template local; nenhum documento deixa o navegador.
-    "pdf-document": ["compliance", "n381_concordance.js", "react-dist/pdf-document-app.js"],
-    "cover-document": ["compliance", "n381_concordance.js", "xlsx", "zip", "pdf-lib.min.js", "core.js", "requests_core.js", "requests_report.js", "requests_taxonomy_core.js", "ld_memory.js", "performance_workers.js", "react-dist/cover-document-app.js"],
+    "cover-document": ["xlsx", "zip", "pdf-lib.min.js", "core.js", "requests_core.js", "requests_report.js", "requests_taxonomy_core.js", "ld_memory.js", "performance_workers.js", "react-dist/cover-document-app.js"],
   };
 
   const moduleRequirements = {

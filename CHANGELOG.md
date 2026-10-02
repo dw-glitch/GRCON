@@ -1,9 +1,20 @@
 ## 5.44.8 — 2026-10-02
 
+### Correção arquitetural — inspeção interna de PDF retirada
+
+- O GRCON deixa de abrir, extrair ou interpretar conteúdo interno de PDFs para conferência normativa.
+- Removidos PDF.js, worker, bundle `pdf-document`, concordância N-381 por páginas e bloqueios derivados do conteúdo do PDF.
+- Adicionar Capa e Combinar PDFs permanecem como ferramentas de manipulação estrutural; `pdf-lib` continua preservado.
+- Conferências passam a depender somente de código e metadados estruturados das bases operacionais.
+- Adicionado teste de regressão para impedir que extração textual/OCR volte ao fluxo de Conferência ou Adicionar Capa.
+
 - Matriz documental por disciplina: fontes LD, SCON, escopo e Documentos Previstos, com alertas consultivos e rastreabilidade.
 - Relatórios JSON e CSV e consulta de snapshots do RECON, sem alteração da alocação.
 
-## 5.44.7 — 2026-10-02
+## 5.44.7 — 2026-10-02 — ESTRATÉGIA RETIRADA EM 5.44.8
+
+> Registro histórico: a inspeção interna de PDFs desta versão foi removida do runtime na correção arquitetural de 5.44.8.
+
 
 - N-381 M: conferência da capa e do texto do PDF em Adicionar Capa e Conferência.
 - Divergência inequívoca de número/revisão nas páginas preservadas impede gerar a capa; revisão por folha e primeira capa substituída recebem tratamento próprio.
