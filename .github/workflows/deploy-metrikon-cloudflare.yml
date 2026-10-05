@@ -85,7 +85,7 @@ jobs:
             await new Promise(resolve=>setTimeout(resolve,5000));
           }
           if(!verified)throw new Error('Metadados públicos não correspondem ao código publicado');
-          for(const path of ['/','/instrumentos','/metrikon-logo.png','/manifest.webmanifest']){
+          for(const path of ['/','/metrikon-logo.png','/manifest.webmanifest']){
             const r=await fetch(origin+path,{signal:AbortSignal.timeout(15000)});
             if(!r.ok)throw new Error(path+' retornou HTTP '+r.status);
             if(path==='/metrikon-logo.png'&&!r.headers.get('content-type')?.includes('image/png'))throw new Error('Logo inválida');
@@ -94,7 +94,12 @@ jobs:
           try{
             const page=await browser.newPage({viewport:{width:1366,height:900}});
             const errors=[];page.on('pageerror',e=>errors.push(e.message));
-            await page.goto(origin,{waitUntil:'networkidle'});
+            for(const route of ['/','/instrumentos']){
+            const response=await page.goto(origin+route,{waitUntil:'networkidle'});
+            if(!response?.ok())throw new Error('Navegação SPA retornou HTTP '+response?.status());
+            await page.getByRole('heading',{name:'Metrikon',exact:true}).waitFor();
+            await page.getByRole('button',{name:'Entrar',exact:true}).waitFor();
+            }
             await page.getByRole('heading',{name:'Metrikon',exact:true}).waitFor();
             await page.getByRole('button',{name:'Entrar',exact:true}).waitFor();
             if(await page.getByText('Ambiente operacional: configuração pendente',{exact:true}).count())throw new Error('Frontend publicado sem a configuração operacional');
