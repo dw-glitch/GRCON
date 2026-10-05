@@ -1,0 +1,115 @@
+name: Deploy Metrikon Cloudflare
+
+on:
+  push:
+    branches: [infra/metrikon-cloudflare-deploy]
+    paths: [.github/workflows/deploy-metrikon-cloudflare.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: metrikon-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publicar Metrikon independente
+    if: github.repository == 'dw-glitch/GRCON' && github.ref == 'refs/heads/infra/metrikon-cloudflare-deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Obter somente a versão validada do Metrikon
+        uses: actions/checkout@v4
+        with:
+          repository: dw-glitch/Metrikon
+          ref: db53260950d612b7e43c6d929b20f04a74230d81
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Verificar destino independente e configuração pública
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          const config = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const env = readFileSync('deployment-public.env.example', 'utf8');
+          if (config.name !== 'metrikon' || config.assets?.directory !== './dist' || config.main || pkg.scripts['deploy:cloudflare'] !== 'wrangler deploy') throw new Error('Destino de implantação inesperado');
+          if (!env.includes('VITE_SUPABASE_URL=https://aimvjsbrxnyqjurgicec.supabase.co') || !/^VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_/m.test(env)) throw new Error('Configuração independente ausente');
+          JS
+          cp deployment-public.env.example .env.local
+      - name: Instalar dependências da versão fixada
+        run: npm ci --ignore-scripts
+      - name: Executar testes e compilar produção
+        run: npm run verify
+      - name: Validar pacote sem publicar
+        run: npm run deploy:cloudflare -- --dry-run --config wrangler.jsonc --name metrikon
+      - name: Instalar Chromium
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Verificar interface antes da publicação
+        run: npm run test:ui
+      - name: Registrar a versão do código no pacote
+        run: |
+          node --input-type=module <<'JS'
+          import {writeFileSync} from 'node:fs';
+          writeFileSync('dist/deployment-meta.json', JSON.stringify({app:'Metrikon', repository:'dw-glitch/Metrikon', sourceSha:'db53260950d612b7e43c6d929b20f04a74230d81', runId:process.env.GITHUB_RUN_ID, deployedAt:new Date().toISOString()}, null, 2));
+          JS
+      - name: Publicar somente o Worker metrikon
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Secret CLOUDFLARE_API_TOKEN indisponível'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Secret CLOUDFLARE_ACCOUNT_ID indisponível'; exit 1; }
+          set -o pipefail
+          npm run deploy:cloudflare -- --config wrangler.jsonc --name metrikon 2>&1 | tee /tmp/metrikon-deploy.log
+      - name: Validar a versão publicada e a tela de acesso
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync,writeFileSync,appendFileSync} from 'node:fs';
+          import {chromium} from 'playwright';
+          const log=readFileSync('/tmp/metrikon-deploy.log','utf8');
+          const origin=log.match(/https:\/\/metrikon\.[a-z0-9-]+\.workers\.dev\b/)?.[0];
+          if(!origin)throw new Error('Wrangler não informou a URL pública do Metrikon');
+          const version=log.match(/Current Version ID:\s*([a-f0-9-]+)/i)?.[1] || 'consultar log';
+          let verified=false;
+          for(let attempt=0;attempt<12;attempt++){
+            try{
+              const r=await fetch(origin+'/deployment-meta.json',{signal:AbortSignal.timeout(10000)});
+              if(r.ok){const meta=await r.json();if(meta.app==='Metrikon'&&meta.sourceSha==='db53260950d612b7e43c6d929b20f04a74230d81'){verified=true;break;}}
+            }catch{}
+            await new Promise(resolve=>setTimeout(resolve,5000));
+          }
+          if(!verified)throw new Error('Metadados públicos não correspondem ao código publicado');
+          for(const path of ['/','/instrumentos','/metrikon-logo.png','/manifest.webmanifest']){
+            const r=await fetch(origin+path,{signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw new Error(path+' retornou HTTP '+r.status);
+            if(path==='/metrikon-logo.png'&&!r.headers.get('content-type')?.includes('image/png'))throw new Error('Logo inválida');
+          }
+          const browser=await chromium.launch({headless:true});
+          try{
+            const page=await browser.newPage({viewport:{width:1366,height:900}});
+            const errors=[];page.on('pageerror',e=>errors.push(e.message));
+            await page.goto(origin,{waitUntil:'networkidle'});
+            await page.getByRole('heading',{name:'Metrikon',exact:true}).waitFor();
+            await page.getByRole('button',{name:'Entrar',exact:true}).waitFor();
+            if(await page.getByText('Ambiente operacional: configuração pendente',{exact:true}).count())throw new Error('Frontend publicado sem a configuração operacional');
+            await page.screenshot({path:'test-results/cloudflare-login-desktop.png',fullPage:true});
+            await page.setViewportSize({width:390,height:844});
+            await page.screenshot({path:'test-results/cloudflare-login-mobile.png',fullPage:true});
+            if(errors.length)throw new Error(errors.join('\n'));
+          }finally{await browser.close();}
+          writeFileSync('test-results/cloudflare-deployment.json',JSON.stringify({url:origin,versionId:version,sourceSha:'db53260950d612b7e43c6d929b20f04a74230d81',publicSmoke:'passed',authenticatedQA:'pending'},null,2));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,`## Metrikon publicado\n\nURL: ${origin}\n\nCódigo: db53260950d612b7e43c6d929b20f04a74230d81\n\nCloudflare version: ${version}\n\nHTTP, rota SPA, logo, manifesto e login desktop/mobile aprovados. Login autenticado e upload real aguardam o proprietário.\n`);
+          console.log('Publicação validada:',origin,'Version:',version);
+          JS
+      - name: Preservar evidências
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metrikon-cloudflare-qa
+          path: test-results/
