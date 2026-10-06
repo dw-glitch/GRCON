@@ -62,7 +62,7 @@ O catálogo em produção é privado:
 
 - `private.grcon_document_files`;
 - RPC pública `grcon_document_catalog`, executável somente pelo papel de servidor;
-- RPC pública `grcon_document_vault_list`, executável somente pelo papel de servidor;
+- RPC pública `grcon_document_vault_list`, executável somente pelo papel de servidor;\n- RPC pública `grcon_document_vault_lookup`, executável somente pelo papel de servidor, para localizar em lote códigos usados pela Central de GRDT;
 - autenticação do usuário é validada pelo Worker antes de informar `actor_id`;
 - membership ativa no workspace é conferida novamente pelas funções do banco;
 - Documentos Previstos é a fonte oficial de `allocated`.
@@ -92,6 +92,6 @@ O arquivo original não é renomeado nem alterado fisicamente. A chave R2 é int
 - multipart → pausar, retomar e concluir;
 - arquivo inexistente no R2 → erro controlado sem apagar catálogo;
 - Alocado/Não alocado → conferir contra o snapshot ativo de Documentos Previstos;
-- documento selecionado no Cofre → entra no mesmo seletor e motor do Fazer GRDT.
+- códigos colados na Central de GRDT → busca exata em lote no Cofre → revisão escolhida quando houver mais de uma → arquivos encontrados entram no mesmo seletor e motor do Fazer GRDT;\n- a busca da Central é isolada pelo contrato ativo e nunca substitui automaticamente um código inexistente por outro parecido.
 
 A publicação automática continua restrita à `main` pelo workflow `Deploy Cloudflare`.

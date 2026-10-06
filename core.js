@@ -1780,6 +1780,10 @@
     const sheet = norm(sheetName);
     const errors = [];
     if (!raw) return { valid: false, family: sheet, errors: ["Código documental vazio."] };
+    const contract = root.GrconCloud?.state?.contract || root.GrconContractContext;
+    if (contract && contract.code !== "UHDT-D" && contract.settings?.inheritLegacyRules !== true) {
+      return { valid: true, family: sheet, errors: [], validationSkipped: true, explanation: "As regras documentais deste contrato ainda não foram definidas. As regras específicas da UHDT não foram aplicadas." };
+    }
 
     if (sheet === "ET" || raw.includes("_RNEST_")) {
       const group7 = reportGroup7Info(raw);

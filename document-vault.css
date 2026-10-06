@@ -14,7 +14,7 @@
 .vault-dropzone{margin:16px;border:1px dashed #9aa9ba;border-radius:12px;min-height:112px;display:grid;place-content:center;text-align:center;gap:6px;padding:20px;cursor:pointer;background:rgba(95,116,138,.035);outline:none}
 .vault-dropzone:hover,.vault-dropzone:focus-visible,.vault-dropzone.dragging{border-style:solid;border-color:var(--accent,#296b9b);background:rgba(41,107,155,.075)}
 .vault-dropzone span{font-size:12px;opacity:.72}
-.vault-toolbar{display:grid;grid-template-columns:minmax(260px,1fr) 190px auto;gap:12px;align-items:end;padding:14px 18px}
+.vault-toolbar{display:grid;grid-template-columns:minmax(260px,1fr) 190px;gap:12px;align-items:end;padding:14px 18px}
 .vault-toolbar label{display:grid;gap:5px;font-size:12px;font-weight:700}
 .vault-toolbar input,.vault-toolbar select,.vault-queue-panel input{width:100%;min-height:36px;border:1px solid var(--border,#ccd5df);border-radius:8px;background:var(--surface,#fff);color:inherit;padding:7px 9px}
 .vault-selection-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-height:36px}
@@ -51,4 +51,39 @@
 .vault-selection-actions{grid-column:auto;justify-content:flex-start;flex-wrap:wrap}
 .vault-dropzone{margin:14px;padding:16px}
 .vault-progress{max-width:100%}
+}
+
+#pdf-slot[hidden]{display:none!important}
+.grdt-vault-source-card{margin-top:12px;border:1px solid var(--border,#d8dee7);border-radius:12px;background:var(--panel,#fff);padding:14px;display:grid;gap:12px;min-width:0}
+.grdt-vault-source-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.grdt-vault-source-head>strong{font-size:13px}
+.grdt-vault-source-options{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.grdt-vault-source-options label{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;cursor:pointer}
+.grdt-vault-source-panel{display:grid;gap:12px;min-width:0}
+.grdt-vault-source-panel[hidden]{display:none!important}
+.grdt-vault-codes-label{display:grid;gap:6px;font-size:12px;font-weight:700}
+.grdt-vault-codes-label textarea{width:100%;min-height:126px;resize:vertical;border:1px solid var(--border,#ccd5df);border-radius:9px;background:var(--surface,#fff);color:inherit;padding:10px 11px;font:inherit;line-height:1.45}
+.grdt-vault-source-actions,.grdt-vault-prepare-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.grdt-vault-source-actions span{font-size:12px;opacity:.76}
+.grdt-vault-result-table-wrap{overflow:auto;max-width:100%;border:1px solid var(--border,#e1e6ed);border-radius:10px}
+.grdt-vault-result-table{width:100%;min-width:780px;border-collapse:separate;border-spacing:0;font-size:12px}
+.grdt-vault-result-table th{position:sticky;top:0;background:var(--panel,#fff);z-index:1;text-align:left;padding:9px 10px;border-bottom:1px solid var(--border,#d8dee7);white-space:nowrap}
+.grdt-vault-result-table td{padding:9px 10px;border-bottom:1px solid var(--border,#edf0f4);vertical-align:top}
+.grdt-vault-result-table td strong,.grdt-vault-result-table td small{display:block}
+.grdt-vault-result-table td small{margin-top:3px;opacity:.68}
+.grdt-vault-result-table select{min-width:135px;min-height:34px;border:1px solid var(--border,#ccd5df);border-radius:8px;background:var(--surface,#fff);color:inherit;padding:6px 8px}
+.vault-lookup-status{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800;white-space:nowrap}
+.vault-lookup-status.found{background:rgba(31,132,77,.11);color:#197443}
+.vault-lookup-status.missing{background:rgba(181,48,48,.1);color:#9f2e2e}
+.vault-lookup-status.choice{background:rgba(175,119,14,.12);color:#8f640f}
+.grdt-vault-prepare-row{justify-content:flex-end}
+@media(max-width:900px){
+  .grdt-vault-source-head{align-items:flex-start}
+  .grdt-vault-source-options{width:100%}
+}
+@media(max-width:600px){
+  .grdt-vault-source-card{padding:12px}
+  .grdt-vault-source-options{display:grid;gap:8px}
+  .grdt-vault-source-actions,.grdt-vault-prepare-row{align-items:stretch}
+  .grdt-vault-source-actions button,.grdt-vault-prepare-row button{width:100%}
 }

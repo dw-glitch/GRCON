@@ -7,6 +7,7 @@
 <meta content="light dark" name="color-scheme"/>
 <meta content="#155c8a" name="theme-color"/>
 <meta content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data: https://kvyrttccwzdhasplfxnr.supabase.co wss://kvyrttccwzdhasplfxnr.supabase.co; object-src 'none'; frame-src 'self' blob:; base-uri 'self'; form-action 'self'; manifest-src 'self'" http-equiv="Content-Security-Policy"/>
+<script src="contract_storage.js"></script>
 <script src="grcon_bootstrap_head.js"></script>
 <meta content="Aplicativo corporativo de controle documental com processamento local e acessível." name="description"/>
 <title>GRCON — Central Operacional da Qualidade</title>
@@ -28,6 +29,7 @@
 <link href="analysis-history-phase-b.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="sigem-posting.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="egrdt-email-reply.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
+<link href="sigem-status-monitoring.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="posting-flow.css" rel="stylesheet"/>
 <link href="grdt-reissue.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="documentary-compliance.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
@@ -334,6 +336,7 @@
 <nav class="requests-subnav" aria-label="Áreas de Consultas">
 <button class="requests-subnav-button active" data-requests-area="consulta" type="button">Consulta de documentos</button>
 <button class="requests-subnav-button" data-requests-area="modelos" type="button">Modelos de exportação</button>
+<button class="requests-subnav-button" data-requests-area="sigem-monitoring" type="button">Consulta Geral × SIGEM</button>
 </nav>
 <div id="requests-area-consulta">
 <div id="grcon-consultas-root"></div>
@@ -377,6 +380,9 @@
 </div>
 <small class="requests-tipos-hint">Coluna que o GRCON não sabe preencher sai em branco: a estrutura da sua planilha é reproduzida sem que nenhum campo seja preenchido por suposição. Ao importar, o casamento é por nome idêntico da coluna — nunca por semelhança.</small>
 </section>
+</div>
+<div hidden id="requests-area-sigem-monitoring">
+  <div class="sigem-monitoring-root" id="grcon-sigem-monitoring-root"></div>
 </div>
 </section>
 <section id="grdt-reissue-module" class="grdt-reissue-module" hidden="" role="tabpanel" aria-label="Repostagem de GRDT">
@@ -600,10 +606,13 @@
 <script defer="" src="retomar.js"></script>
 <script defer="" src="supabase.min.js"></script>
 <script defer="" src="grcon_cloud_config.js"></script>
-<script defer="" src="grcon_cloud_app.js"></script>\n<script defer src="document_vault_app.js"></script>
+<script defer="" src="grcon_cloud_app.js"></script>\n<script defer src="document_vault_core.js"></script>
+<script defer src="document_vault_app.js"></script>
 <script defer src="planned_documents_app.js"></script>
 <script defer src="allocation_registry_app.js"></script>
 <script defer src="shared_sigem_query_app.js"></script>
+<script defer src="sigem_status_monitoring_app.js"></script>
+<script defer src="contract_admin_app.js"></script>
 <script defer="" src="egrdt_teams_notification_app.js"></script>
 <script defer="" src="pending_allocation_history_core.js"></script>
 <script defer="" src="analysis_history_core.js"></script>

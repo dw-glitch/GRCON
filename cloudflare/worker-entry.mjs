@@ -103,6 +103,14 @@ async function listCatalog(env, workspaceId, actorId, input = {}) {
   });
 }
 
+async function lookupCatalog(env, workspaceId, actorId, input = {}) {
+  return rpc(env, "grcon_document_vault_lookup", {
+    target_workspace: workspaceId,
+    actor_id: actorId,
+    input,
+  });
+}
+
 function workspaceFrom(request, body) {
   const url = new URL(request.url);
   return safeUuid(body?.workspaceId || body?.workspace_id || request.headers.get("x-grcon-workspace") || url.searchParams.get("workspace"));
@@ -143,11 +151,16 @@ function normalizeMetadata(body) {
   const relativePath = safeText(body?.relativePath || body?.relative_path || fileName, 4096);
   const documentCode = safeText(body?.documentCode || body?.document_code, 255).toUpperCase();
   const revision = safeText(body?.revision, 40).toUpperCase();
-  const format = safeText(body?.format || fileName.split(".").pop(), 40).toLowerCase();
+  const lastDot = fileName.lastIndexOf(".");
+  const inferredFormat = lastDot > 0 ? fileName.slice(lastDot + 1) : "";
+  const format = safeText(body?.format || inferredFormat, 40).toLowerCase();
   const sha256 = safeText(body?.sha256, 64).toLowerCase();
   const sizeBytes = Number(body?.sizeBytes ?? body?.size_bytes);
   if (!fileName || !/^[a-f0-9]{64}$/.test(sha256) || !Number.isSafeInteger(sizeBytes) || sizeBytes < 0) {
     throw Object.assign(new Error("Nome, tamanho ou hash do arquivo inválido."), { status: 400, code: "INVALID_FILE" });
+  }
+  if (["zip","rar","7z","tar","gz"].includes(format)) {
+    throw Object.assign(new Error("Arquivo compactado ignorado."), { status: 400, code: "ARCHIVE_IGNORED" });
   }
   return { file_name: fileName, relative_path: relativePath, document_code: documentCode, revision, format, sha256, size_bytes: sizeBytes };
 }
@@ -176,6 +189,32 @@ async function handleList(request, env) {
     allocation: safeText(url.searchParams.get("allocation") || "all", 32),
   });
   return json({ ok: true, ...data });
+}
+
+async function handleLookup(request, env) {
+  const user = await authenticatedUser(request, env);
+  const body = await parseJson(request);
+  const workspaceId = workspaceFrom(request, body);
+  if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
+  const sourceItems = Array.isArray(body?.items) ? body.items : [];
+  if (!sourceItems.length || sourceItems.length > 500) {
+    return apiError("Informe entre 1 e 500 documentos por consulta.", 400, "LOOKUP_SIZE_INVALID");
+  }
+  const items = sourceItems.map((item, index) => {
+    const documentCode = safeText(item?.documentCode || item?.document_code, 255).replace(/\s+/g, "").toUpperCase();
+    const revision = safeText(item?.revision, 40).toUpperCase();
+    if (!documentCode) {
+      throw Object.assign(new Error("Código documental vazio na posição " + (index + 1) + "."), { status: 400, code: "LOOKUP_ITEM_INVALID" });
+    }
+    return {
+      requestId: safeText(item?.requestId || item?.request_id || String(index + 1), 64),
+      input: safeText(item?.input || documentCode, 512),
+      documentCode,
+      revision,
+    };
+  });
+  const data = await lookupCatalog(env, workspaceId, user.id, { items });
+  return json({ ok: true, results: Array.isArray(data?.results) ? data.results : [] });
 }
 
 async function handleInit(request, env) {
@@ -378,6 +417,7 @@ async function routeVault(request, env) {
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
   if (action === "health" && request.method === "GET") return handleHealth(env);
   if (action === "list" && request.method === "GET") return handleList(request, env);
+  if (action === "lookup" && request.method === "POST") return handleLookup(request, env);
   if (action === "init" && request.method === "POST") return handleInit(request, env);
   if (action === "upload" && request.method === "PUT") return handleSingleUpload(request, env);
   if (action === "multipart/start" && request.method === "POST") return handleMultipartStart(request, env);

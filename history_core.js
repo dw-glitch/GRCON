@@ -267,13 +267,35 @@
     };
   }
 
-  function read(storage) {
+  function readAll(storage) {
     const target = storageOf(storage);
     if (!target) return [];
     try {
       const parsed = JSON.parse(target.getItem(STORAGE_KEY) || "[]");
       return Array.isArray(parsed) ? parsed.map(cleanRecord).filter((record) => record.egrdtNumber).sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)) : [];
     } catch (_) { console.debug("[HistoryCore] context:", _); return []; }
+  }
+
+  function activeWorkspaceContext() {
+    const cloud = typeof globalThis !== "undefined" ? globalThis.GrconCloud : null;
+    return {
+      workspaceId: text(cloud && cloud.state && cloud.state.membership && cloud.state.membership.workspace_id),
+      contractCode: text(cloud && cloud.state && cloud.state.contract && cloud.state.contract.code),
+    };
+  }
+
+  // A UI sempre enxerga somente o contrato ativo. O armazenamento continua
+  // contendo os workspaces lado a lado para que a troca de contrato não apague
+  // a cópia local de outro contrato. Registros antigos, anteriores ao
+  // multi-contrato, pertencem à UHDT-D por migração.
+  function read(storage) {
+    const records = readAll(storage);
+    const context = activeWorkspaceContext();
+    if (!context.workspaceId) return records;
+    return records.filter((record) =>
+      record.workspaceId === context.workspaceId
+      || (!record.workspaceId && context.contractCode === "UHDT-D")
+    );
   }
 
   // Devolve também POR QUE registros foram descartados, para que a interface
@@ -304,7 +326,7 @@
     const target = storageOf(storage);
     if (!target) return { saved: 0, records: [], error: "Armazenamento local indisponível." };
     const incoming = (records || []).map(cleanRecord).filter((record) => record.egrdtNumber);
-    const merged = new Map(read(target).map((record) => [record.id, record]));
+    const merged = new Map(readAll(target).map((record) => [record.id, record]));
     incoming.forEach((record) => merged.set(record.id, record));
     const ajuste = fitDetailed([...merged.values()].sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)));
     const fitted = ajuste.kept;
@@ -321,7 +343,7 @@
         error: "",
       };
     } catch (error) {
-      return { saved: 0, records: read(target), error: error && error.message || "Não foi possível salvar o histórico." };
+      return { saved: 0, records: readAll(target), error: error && error.message || "Não foi possível salvar o histórico." };
     }
   }
 
@@ -333,7 +355,7 @@
       .filter((record) => record.egrdtNumber);
     const cloudIds = new Set(incoming.map((record) => record.cloudId).filter(Boolean));
     const cloudClientIds = new Set(incoming.map((record) => record.clientRecordId).filter(Boolean));
-    const current = read(target);
+    const current = readAll(target);
     const preserved = [];
     const pendingKeys = new Set();
     let removed = 0;
@@ -373,7 +395,7 @@
   function markSynced(recordId, cloudRecord, storage) {
     const target = storageOf(storage);
     if (!target) return { updated: false, records: [], error: "Armazenamento local indisponível." };
-    const records = read(target);
+    const records = readAll(target);
     const wanted = text(recordId);
     const index = records.findIndex((record) => record.id === wanted || record.clientRecordId === wanted);
     if (index < 0) return { updated: false, records, error: "Registro local não localizado." };
@@ -388,23 +410,35 @@
     });
     try {
       target.setItem(STORAGE_KEY, JSON.stringify(fit(records.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)))));
-      return { updated: true, record: records[index], records: read(target), error: "" };
+      return { updated: true, record: records[index], records: readAll(target), error: "" };
     } catch (error) {
-      return { updated: false, records: read(target), error: error && error.message || "Não foi possível confirmar a sincronização local." };
+      return { updated: false, records: readAll(target), error: error && error.message || "Não foi possível confirmar a sincronização local." };
     }
   }
 
   function clear(storage) {
     const target = storageOf(storage);
     if (!target) return false;
-    try { target.removeItem(STORAGE_KEY); return true; } catch (_) { console.debug("[HistoryCore] context:", _); return false; }
+    try {
+      const context = activeWorkspaceContext();
+      if (!context.workspaceId) {
+        target.removeItem(STORAGE_KEY);
+        return true;
+      }
+      const preserved = readAll(target).filter((record) =>
+        record.workspaceId !== context.workspaceId
+        && !(context.contractCode === "UHDT-D" && !record.workspaceId)
+      );
+      target.setItem(STORAGE_KEY, JSON.stringify(preserved));
+      return true;
+    } catch (_) { console.debug("[HistoryCore] context:", _); return false; }
   }
 
   function deleteOne(recordId, storage) {
     const target = storageOf(storage);
     if (!target) return { deleted: false, record: null, records: [], error: "Armazenamento local indisponível." };
     const id = text(recordId);
-    const records = read(target);
+    const records = readAll(target);
     const record = records.find((item) => item.id === id) || null;
     if (!record) return { deleted: false, record: null, records, error: "Registro do histórico não localizado." };
     const remaining = records.filter((item) => item.id !== id);
@@ -475,6 +509,7 @@
       reservationIds: [text(file && file.official && file.official.reservationId)].filter(Boolean),
       normativeValidation: typeof globalThis !== "undefined" && globalThis.GrconDocumentaryCompliance
         ? globalThis.GrconDocumentaryCompliance.combine(files.map(item => item.normativeValidation)) : null,
+      workspaceId: activeWorkspaceContext().workspaceId,
       files,
     });
   }
@@ -496,7 +531,7 @@
   function updateNumber(recordId, value, storage) {
     const target = storageOf(storage);
     if (!target) return { updated: false, error: "Armazenamento local indisponível." };
-    const records = read(target);
+    const records = readAll(target);
     const index = records.findIndex((record) => record.id === text(recordId));
     if (index < 0) return { updated: false, error: "Registro do histórico não localizado." };
     const current = records[index];
@@ -520,7 +555,7 @@
     records[index] = updatedRecord;
     try {
       target.setItem(STORAGE_KEY, JSON.stringify(fit(records.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)))));
-      return { updated: true, record: updatedRecord, previous, records: read(target) };
+      return { updated: true, record: updatedRecord, previous, records: readAll(target) };
     } catch (error) {
       return { updated: false, error: error && error.message || "Não foi possível atualizar o histórico." };
     }
@@ -572,5 +607,5 @@
     };
   }
 
-  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
+  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, readAll, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
 });

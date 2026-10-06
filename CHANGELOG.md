@@ -4,8 +4,8 @@
 - A organização dos lotes pode manter tudo junto ou separar postagens/repostagens antes de disciplina e limite configurável, usando o mesmo plano na prévia e nas saídas.
 - Documentos Previstos continua sendo a fonte oficial de Alocado/Não alocado; a Central de alocação compartilhada acrescenta solicitação, workflow e rastreabilidade sem substituir essa regra.
 - Novo **Cofre** integrado ao GRCON: catálogo privado Supabase + binários no R2 privado `grcon-documents`, com autenticação por workspace, SHA-256, deduplicação, conflito explícito, multipart e retomada.
-- O Cofre aceita arquivos, pasta e arrastar/soltar; possui fila com progresso/pausa/retomada/retry, busca/paginação no servidor e filtros Todos/Alocados/Não alocados.
-- Documentos selecionados no Cofre entram no mesmo seletor e motor do Fazer GRDT. O Histórico existente preserva `vaultFileId`; nenhum histórico paralelo é criado.
+- O Cofre aceita arquivos, pasta e arrastar/soltar; ignora ZIP/RAR/7Z/TAR/GZ antes do envio, identifica arquivo sem sufixo como revisão 0, aceita extensões documentais sem allowlist rígida e processa pastas grandes em lotes com concorrência controlada, progresso, pausa/retomada e UI responsiva.
+- O Cofre passa a funcionar como repositório: não há mais seleção manual para GRDT dentro dele. Na Central de Controle de GRDT, o operador escolhe **Base documental: Cofre**, cola códigos, localiza documentos/revisões em lote e envia somente os encontrados ao mesmo motor normal de GRDT. O Histórico existente preserva `vaultFileId`; nenhum histórico paralelo é criado.
 - A entrada antiga **Repostagem de GRDT** foi retirada das Ferramentas adicionais para existir um único fluxo operacional. O núcleo legado permanece apenas para compatibilidade e QA de registros antigos.
 - O navegador não recebe credenciais R2/Supabase privilegiadas. Upload e download passam pelo Cloudflare Worker e pelo binding privado `GRCON_DOCUMENTS`.
 - As migrations do Cofre no repositório agora correspondem exatamente às migrations aplicadas no projeto Supabase GRCON. A versão preliminar que criaria um catálogo público paralelo foi removida.
