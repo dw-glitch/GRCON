@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: dw-glitch/Metrikon
-          ref: 707b08196ef738b818f56e6c882d7ae8373ea943
+          ref: f2494793fa8d3ef0b3a45f6dd3720fc928ae36b4
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -55,7 +55,7 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import {writeFileSync} from 'node:fs';
-          writeFileSync('dist/deployment-meta.json', JSON.stringify({app:'Metrikon', repository:'dw-glitch/Metrikon', sourceSha:'707b08196ef738b818f56e6c882d7ae8373ea943', runId:process.env.GITHUB_RUN_ID, deployedAt:new Date().toISOString()}, null, 2));
+          writeFileSync('dist/deployment-meta.json', JSON.stringify({app:'Metrikon', repository:'dw-glitch/Metrikon', sourceSha:'f2494793fa8d3ef0b3a45f6dd3720fc928ae36b4', runId:process.env.GITHUB_RUN_ID, deployedAt:new Date().toISOString()}, null, 2));
           JS
       - name: Publicar somente o Worker metrikon
         env:
@@ -80,7 +80,7 @@ jobs:
           for(let attempt=0;attempt<12;attempt++){
             try{
               const r=await fetch(origin+'/deployment-meta.json',{signal:AbortSignal.timeout(10000)});
-              if(r.ok){const meta=await r.json();if(meta.app==='Metrikon'&&meta.sourceSha==='707b08196ef738b818f56e6c882d7ae8373ea943'){verified=true;break;}}
+              if(r.ok){const meta=await r.json();if(meta.app==='Metrikon'&&meta.sourceSha==='f2494793fa8d3ef0b3a45f6dd3720fc928ae36b4'){verified=true;break;}}
             }catch{}
             await new Promise(resolve=>setTimeout(resolve,5000));
           }
@@ -138,8 +138,8 @@ jobs:
             await page.getByRole('button',{name:'Entrar',exact:true}).waitFor();
             if(errors.length)throw new Error(errors.join('\n'));
           }finally{await browser.close();}
-          writeFileSync('test-results/cloudflare-deployment.json',JSON.stringify({url:origin,versionId:version,sourceSha:'707b08196ef738b818f56e6c882d7ae8373ea943',publicSmoke:'passed',authenticatedQA:'pending'},null,2));
-          appendFileSync(process.env.GITHUB_STEP_SUMMARY,`## Metrikon publicado\n\nURL: ${origin}\n\nCódigo: 707b08196ef738b818f56e6c882d7ae8373ea943\n\nCloudflare version: ${version}\n\nHTTP, rota SPA, logo, manifesto, login desktop/mobile e workspace mínimo e campos condicionais SCC de demonstração aprovados. Login autenticado e upload real aguardam o proprietário.\n`);
+          writeFileSync('test-results/cloudflare-deployment.json',JSON.stringify({url:origin,versionId:version,sourceSha:'f2494793fa8d3ef0b3a45f6dd3720fc928ae36b4',publicSmoke:'passed',authenticatedQA:'pending'},null,2));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,`## Metrikon publicado\n\nURL: ${origin}\n\nCódigo: f2494793fa8d3ef0b3a45f6dd3720fc928ae36b4\n\nCloudflare version: ${version}\n\nHTTP, rota SPA, logo, manifesto, login desktop/mobile e workspace mínimo e campos condicionais SCC de demonstração aprovados. Login autenticado e upload real aguardam o proprietário.\n`);
           console.log('Publicação validada:',origin,'Version:',version);
           JS
       - name: Preservar evidências
