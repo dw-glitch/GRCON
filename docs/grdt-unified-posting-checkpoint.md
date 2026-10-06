@@ -31,7 +31,7 @@ Backend:
 - autenticação Supabase do bearer do usuário + validação de membership;
 - catálogo privado no Supabase;
 - paginação/busca/filtro de alocação no servidor;
-- SHA-256, deduplicação física, conflito de identidade, upload único/multipart, retomada, download autenticado.
+- SHA-256, deduplicação física, conflito de identidade, upload único/multipart, retomada, download autenticado;\n- consulta exata em lote por código/revisão, indexada e isolada por contrato;\n- arquivos sem sufixo de revisão são revisão 0; compactados são ignorados antes de storage; demais extensões documentais podem ser armazenadas mesmo sem preview.
 
 Frontend:
 
