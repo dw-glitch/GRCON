@@ -395,6 +395,9 @@
         const itemErrors = C.validateEgrdtData(item);
         if (itemErrors.length) errors.push(`${row.document} / ${finalName}: ${itemErrors.join("; ")}.`);
 
+        const vaultSource = typeof globalThis !== "undefined" && globalThis.GrconDocumentVault?.lookupSource
+          ? globalThis.GrconDocumentVault.lookupSource(source.file)
+          : null;
         const entry = {
           rowIndex,
           document: row.document,
@@ -403,7 +406,7 @@
           discipline: item.discipline,
           sourceLd: String(row.record && row.record.source || "").trim(),
           allocation: String(row.record && row.record.allocation || "").trim(),
-          sharedAllocationContext: row.record && row.record.sharedAllocationContext || null,
+          sharedAllocationContext: row.record && row.record.sharedAllocationContext || null,\n          vaultFileId: text(vaultSource && vaultSource.id),
           originalName: source.name,
           relativePath: source.relativePath || source.name,
           finalName,
@@ -454,7 +457,7 @@
   }
 
   function postingGroup(entry) {
-    return text(entry && entry.emissionKind).toUpperCase() === "REPOST" ? "REPOST" : "POSTING";
+    return text(entry && (entry.emissionKind || entry.historyClassification && entry.historyClassification.emissionKind)).toUpperCase() === "REPOST" ? "REPOST" : "POSTING";
   }
 
   function splitPlan(plan, size, mode, options) {
