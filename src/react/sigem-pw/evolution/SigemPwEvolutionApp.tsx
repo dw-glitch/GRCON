@@ -4,6 +4,7 @@ import { useSigemPwEvolution } from "./hooks/useSigemPwEvolution";
 import {
   EVOLUTION_LIST_LABELS,
   EVOLUTION_PAGE_SIZE,
+  EVOLUTION_TAB_MODES,
   type EvolutionListMode,
   type EvolutionRecord,
   type EvolutionSnapshot,
@@ -156,7 +157,15 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
   );
 }
 
-function AuditArticle({ label, snapshot }: { label: string; snapshot: EvolutionSnapshot | null }) {
+function AuditArticle({
+  label,
+  snapshot,
+  onExcluded,
+}: {
+  label: string;
+  snapshot: EvolutionSnapshot | null;
+  onExcluded?(): void;
+}) {
   if (!snapshot) return <article><strong>{label}</strong><p>Selecione uma base para ver a auditoria.</p></article>;
   const audit = snapshot.audit || {};
   return (
@@ -165,6 +174,34 @@ function AuditArticle({ label, snapshot }: { label: string; snapshot: EvolutionS
       <p>
         {fmt(audit.uniqueDocuments)} documentos únicos · {fmt(audit.validRevisionRecords)} registros/revisões válidos · {fmt(audit.technicalDuplicates)} duplicidade(s) técnica(s).
       </p>
+      <p className="spw-evo-audit-secondary">
+        {fmt(audit.rawRecords)} linhas brutas → {fmt(audit.acceptedRecords)} aceitas → {fmt(audit.documentRevisionRecords)} documento + revisão
+        {snapshot.system === "pw" ? " · " + fmt(audit.emittedDocumentRevisionRecords) + " emitidos" : ""}.
+      </p>
+      <small>Regra: {audit.registrationRule || "regra vigente do motor SIGEM × PW"}</small>
+      {Number(audit.discardedRecords || 0) > 0 && onExcluded ? (
+        <button type="button" className="text-button" data-evo-audit-excluded={snapshot.system} onClick={onExcluded}>
+          Ver {fmt(audit.discardedRecords)} excluído(s) e motivos
+        </button>
+      ) : null}
+    </article>
+  );
+}
+
+function ActiveBase({ label, snapshot }: { label: string; snapshot: EvolutionSnapshot | null }) {
+  const audit = snapshot?.audit || {};
+  const shortHash = String(snapshot?.contentFingerprint || "").slice(-12);
+  return (
+    <article className="spw-evo-active-base">
+      <span>{label}</span>
+      <strong>{snapshot?.fileName || "Nenhuma base selecionada"}</strong>
+      {snapshot ? (
+        <small>
+          {fmtDate(snapshot.importedAt)} · {fmt(audit.acceptedRecords)} registros válidos
+          {snapshot.importedBy ? " · por " + snapshot.importedBy : ""}
+          {shortHash ? " · " + shortHash : ""}
+        </small>
+      ) : <small>Selecione uma base no comparativo.</small>}
     </article>
   );
 }
