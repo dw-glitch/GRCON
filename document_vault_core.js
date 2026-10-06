@@ -15,10 +15,12 @@
   function fileParts(value) {
     const clean = text(value).split(/[\\/]/).pop() || "";
     const dot = clean.lastIndexOf(".");
+    const suffix = dot > 0 ? clean.slice(dot + 1) : "";
+    const hasFileExtension = dot > 0 && /^[A-Za-z0-9]{1,20}$/.test(suffix);
     return {
       clean,
-      stem: dot > 0 ? clean.slice(0, dot) : clean,
-      format: dot > 0 ? clean.slice(dot + 1).toLowerCase() : "",
+      stem: hasFileExtension ? clean.slice(0, dot) : clean,
+      format: hasFileExtension ? suffix.toLowerCase() : "",
     };
   }
 
