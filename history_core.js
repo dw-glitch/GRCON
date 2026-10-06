@@ -194,6 +194,18 @@
       databook: text(file && file.databook),
       virtual: Boolean(file && file.virtual),
       discipline: text(file && file.discipline),
+      emissionKind: ["FIRST_POSTING", "NEW_REVISION", "REPOST"].includes(text(file && file.emissionKind).toUpperCase())
+        ? text(file.emissionKind).toUpperCase()
+        : "",
+      previousHistoryId: text(file && file.previousHistoryId),
+      previousRevision: text(file && file.previousRevision),
+      previousGrdt: text(file && file.previousGrdt),
+      originalEmissionId: text(file && file.originalEmissionId),
+      repostCount: Math.max(0, Number(file && file.repostCount) || 0),
+      vaultDocumentId: text(file && file.vaultDocumentId),
+      vaultObjectId: text(file && file.vaultObjectId),
+      vaultObjectKey: text(file && file.vaultObjectKey),
+      vaultSha256: text(file && file.vaultSha256),
       normativeValidation: cleanNormativeValidation(file && file.normativeValidation),
     };
   }
@@ -219,6 +231,7 @@
       ldName: text(record && record.ldName),
       sourceName: text(record && record.sourceName),
       batchMode: ["discipline", "limit-only"].includes(text(record && record.batchMode)) ? text(record && record.batchMode) : "",
+      postingMode: text(record && record.postingMode) === "separate" ? "separate" : "mixed",
       batchLimit: Number.isSafeInteger(Number(record && record.batchLimit)) && Number(record && record.batchLimit) >= 1
         ? Number(record.batchLimit)
         : 0,
@@ -429,6 +442,16 @@
         format: entry.item && entry.item.format || row.egrdt && row.egrdt.format || "",
         documentType: entry.item && entry.item.documentType || row.egrdt && row.egrdt.documentType || "",
         purpose: entry.item && entry.item.purpose || row.egrdt && row.egrdt.purpose || record.purpose || "",
+        emissionKind: row.emissionKind || entry.emissionKind || row.historyClassification && row.historyClassification.emissionKind || "",
+        previousHistoryId: row.historyClassification && row.historyClassification.previousHistoryId || "",
+        previousRevision: row.historyClassification && row.historyClassification.previousRevision || "",
+        previousGrdt: row.historyClassification && row.historyClassification.previousGrdt || "",
+        originalEmissionId: row.historyClassification && row.historyClassification.originalEmissionId || "",
+        repostCount: row.historyClassification && row.historyClassification.repostCount || 0,
+        vaultDocumentId: row.vaultDocumentId || "",
+        vaultObjectId: row.vaultObjectId || "",
+        vaultObjectKey: row.vaultObjectKey || "",
+        vaultSha256: row.vaultSha256 || "",
         normativeValidation: entry.normativeValidation || null,
       });
     });
@@ -442,6 +465,7 @@
       ldName: info.ldName,
       sourceName: info.sourceName,
       batchMode: text(info.batchMode) || text(file && file.group && file.group.batchMode),
+      postingMode: text(info.postingMode) || (text(file && file.group && file.group.emissionGroup) === "MIXED" ? "mixed" : "separate"),
       batchLimit: Number(info.batchLimit) || Number(file && file.group && file.group.limit) || 0,
       reservationRequestId: text(file && file.official && file.official.requestId),
       reservationIds: [text(file && file.official && file.official.reservationId)].filter(Boolean),
