@@ -35,6 +35,10 @@ assert.match(html, /class="additional-tool-card" data-grcon-view="cover-document
 assert.match(html, /class="additional-tool-card" data-grcon-view="grdt-reissue"/);
 assert.match(html, /id="pdf-tools-module"/);
 assert.match(html, /id="cover-document-module"/);
+assert.doesNotMatch(html, /data-grcon-view="discipline-matrix"/);
+assert.doesNotMatch(html, /discipline-matrix-module/);
+assert.doesNotMatch(html, /Matriz documental por disciplina/);
+assert.doesNotMatch(loader, /discipline-matrix/);
 
 assert.match(loader, /"additional-tools": \[\]/);
 assert.match(loader, /"additional-tools": "additional-tools-module"/);
