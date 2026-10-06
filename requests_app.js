@@ -301,6 +301,8 @@
   function mostrarArea(area) {
     els.areaConsulta.hidden = area !== "consulta";
     els.areaModelos.hidden = area !== "modelos";
+    if (els.areaSigemMonitoring) els.areaSigemMonitoring.hidden = area !== "sigem-monitoring";
+    if (area === "sigem-monitoring") root.GrconSigemStatusMonitoring?.load?.();
     document.querySelectorAll("[data-requests-area]").forEach((botao) => {
       botao.classList.toggle("active", botao.dataset.requestsArea === area);
     });
@@ -313,6 +315,7 @@
   function ligar() {
     els.areaConsulta = $("#requests-area-consulta");
     els.areaModelos = $("#requests-area-modelos");
+    els.areaSigemMonitoring = $("#requests-area-sigem-monitoring");
     els.modelosTbody = $("#requests-modelos-tbody");
     els.modeloNew = $("#requests-modelo-new");
     els.modeloImport = $("#requests-modelo-import");
