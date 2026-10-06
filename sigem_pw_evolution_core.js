@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const CALCULATION_VERSION = "sigem-pw-evolution-records-3";
+  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4";
   const VALID_CLASSES = new Set(["ET", "N-1710"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
@@ -20,6 +20,19 @@
   }
   function normalizeRevision(value) {
     return norm(value).replace(/^REV(?:ISAO)?\.?\s*/, "").replace(/\s+/g, "");
+  }
+  const EMISSION_FLAGS = Object.freeze({
+    CURRENT: norm(Dashboard && Dashboard.EMISSION_FLAGS && Dashboard.EMISSION_FLAGS.CURRENT || "SIM"),
+    HISTORICAL: norm(Dashboard && Dashboard.EMISSION_FLAGS && Dashboard.EMISSION_FLAGS.HISTORICAL || "NAO"),
+    PLANNED: norm(Dashboard && Dashboard.EMISSION_FLAGS && Dashboard.EMISSION_FLAGS.PLANNED || "PREVISTO"),
+  });
+  function emissionInfo(value) {
+    const flag = norm(value);
+    if (!flag) return { flag: "", kind: "missing", emitted: false, recognized: false, reason: "Última emissão não informada" };
+    if (flag === EMISSION_FLAGS.CURRENT) return { flag, kind: "current", emitted: true, recognized: true, reason: "Última emissão = SIM (evidência atual)" };
+    if (flag === EMISSION_FLAGS.HISTORICAL) return { flag, kind: "historical", emitted: true, recognized: true, reason: "Última emissão = NÃO (evidência histórica, conforme regra vigente do Dashboard)" };
+    if (flag === EMISSION_FLAGS.PLANNED) return { flag, kind: "planned", emitted: false, recognized: true, reason: "Última emissão = PREVISTO (cadastro sem evidência de emissão)" };
+    return { flag, kind: "unknown", emitted: false, recognized: false, reason: `Valor de Última emissão não reconhecido: ${text(value)}` };
   }
   function normalizeDate(value) {
     const raw = text(value);
@@ -203,6 +216,10 @@
     const strong = strongOccurrenceId(record, system);
     return [norm(identity.key), revision, version, strong].join("|");
   }
+  function documentRevisionKey(record) {
+    const identity = documentIdentity(record && record.document);
+    return [norm(identity.key), revisionOf(record)].join("|");
+  }
   function matchKey(record) {
     const identity = documentIdentity(record && record.document);
     return [norm(identity.key), revisionOf(record), versionOf(record)].join("|");
@@ -219,8 +236,7 @@
   function compactRecord(raw, system, universe, ldMatch) {
     const identity = documentIdentity(raw && raw.document);
     const cls = documentClass(raw && raw.document);
-    const emissionFlag = norm(raw && raw.lastEmission);
-    const emitted = system === SYSTEMS.PW ? ["SIM", "NAO"].includes(emissionFlag) : null;
+    const emission = system === SYSTEMS.PW ? emissionInfo(raw && raw.lastEmission) : null;
     const match = ldMatch || null;
     return {
       system,
@@ -241,8 +257,14 @@
       modifiedAt: text(raw && raw.modifiedAt),
       createdAt: text(raw && raw.createdAt),
       stateChangedAt: text(raw && raw.stateChangedAt),
+      registrationDate: system === SYSTEMS.PW ? text(raw && raw.createdAt) : text(raw && raw.includedAt),
+      emissionDate: system === SYSTEMS.PW ? text(raw && raw.sentDate) : "",
       lastEmission: text(raw && raw.lastEmission),
-      emitted,
+      emissionFlag: emission ? emission.flag : "",
+      emissionKind: emission ? emission.kind : "",
+      emissionRecognized: emission ? emission.recognized : null,
+      emissionReason: emission ? emission.reason : "",
+      emitted: emission ? emission.emitted : null,
       fileName: text(raw && raw.fileName),
       category: text(raw && raw.category),
       sentGrd: text(raw && raw.sentGrd),
@@ -256,6 +278,8 @@
       ldRow: Number(match && match.row) || 0,
       ldPrazo: text(match && match.prazo),
       ldValidated: Boolean(universe && universe.available && match),
+      inclusionReason: cls === "N-1710" ? "Código N-1710 válido e localizado na LD da Qualidade" : "Código ET válido pela regra estrutural",
+      documentRevisionKey: documentRevisionKey(raw),
       occurrenceKey: occurrenceKey(raw, system),
       matchKey: matchKey(raw),
       technicalFingerprint: technicalFingerprint(raw, system),
@@ -266,13 +290,18 @@
     return {
       system,
       document: text(raw && raw.document),
+      documentKey: norm(documentIdentity(raw && raw.document).key),
       revision: revisionOf(raw),
+      documentRevisionKey: documentRevisionKey(raw),
       documentType: text(raw && raw.documentType),
       status: statusOf(raw, system),
       discipline: text(raw && (raw.disciplineDesc || raw.discipline)),
       date: dateOf(raw, system),
+      lastEmission: system === SYSTEMS.PW ? text(raw && raw.lastEmission) : "",
+      emissionKind: system === SYSTEMS.PW ? emissionInfo(raw && raw.lastEmission).kind : "",
       sourceRow: Number(raw && raw.sourceRow) || 0,
       reason: text(reason) || "fora_do_escopo_grcon",
+      exclusionReason: text(reason) || "fora_do_escopo_grcon",
     };
   }
 
@@ -329,7 +358,18 @@
     const accepted = prepared.accepted.length;
     const scopeDiscarded = prepared.rejected.length;
     const technicalDuplicates = prepared.duplicates.length;
-    const uniqueDocuments = new Set(prepared.accepted.map((row) => row.documentKey)).size;
+    const uniqueDocuments = new Set(prepared.accepted.map((row) => row.documentKey).filter(Boolean)).size;
+    const documentRevisionKeys = new Set(prepared.accepted.map((row) => row.documentRevisionKey).filter(Boolean));
+    const emittedRows = system === SYSTEMS.PW ? prepared.accepted.filter((row) => row.emitted) : [];
+    const emittedRevisionKeys = new Set(emittedRows.map((row) => row.documentRevisionKey).filter(Boolean));
+    const emittedDocumentKeys = new Set(emittedRows.map((row) => row.documentKey).filter(Boolean));
+    const emissionBreakdown = { current: 0, historical: 0, planned: 0, unknown: 0, missing: 0 };
+    if (system === SYSTEMS.PW) {
+      for (const row of prepared.accepted) {
+        const kind = text(row.emissionKind) || "missing";
+        emissionBreakdown[kind] = (emissionBreakdown[kind] || 0) + 1;
+      }
+    }
     return {
       rawRecords: rawCount,
       acceptedRecords: accepted,
@@ -337,13 +377,26 @@
       scopeDiscardedRecords: scopeDiscarded,
       parserInvalidRecords: parserInvalid,
       technicalDuplicates,
+      technicalVariantsSameDocumentRevision: Math.max(0, accepted - documentRevisionKeys.size),
       uniqueDocuments,
+      documentRevisionRecords: documentRevisionKeys.size,
       validRevisionRecords: accepted,
+      emittedTechnicalRecords: emittedRows.length,
+      emittedDocumentRevisionRecords: emittedRevisionKeys.size,
+      emittedUniqueDocuments: emittedDocumentKeys.size,
+      notEmittedDocumentRevisionRecords: system === SYSTEMS.PW ? Math.max(0, documentRevisionKeys.size - emittedRevisionKeys.size) : 0,
+      emissionBreakdown,
       classes: classCounts(prepared.accepted),
       discardReasons: { ...prepared.reasons },
       validationMode: universe && universe.qualityAvailable ? "ld-qualidade" : "coding",
       ldDocuments: universe && universe.qualityAvailable ? universe.qualityDocumentCount : 0,
       ldFingerprint: universe && universe.available ? universe.fingerprint : "",
+      comparisonGranularity: "ocorrencia-tecnica; documento+revisao auditavel em paralelo",
+      registrationRule: system === SYSTEMS.PW ? "Cadastrado = documento+revisão válido presente na relação PW" : "Presente = documento+revisão válido na Consulta Geral",
+      emissionRule: system === SYSTEMS.PW ? "Emitido = Última emissão SIM (atual) ou NÃO (histórica); PREVISTO/ausente/desconhecido não conta como emitido" : "",
+      registrationDateField: system === SYSTEMS.PW ? "datacriacao" : "Data de inclusão/modificação quando disponível",
+      emissionDateField: system === SYSTEMS.PW ? "DataEnvioGRDCliente (fallback operacional: mudança de state/criação/entrada)" : "",
+      snapshotDateField: "data/hora de importação ou data operacional editada do snapshot",
     };
   }
 
@@ -362,11 +415,13 @@
       sourceSnapshotId: text(options && options.sourceSnapshotId) || text(options && options.snapshotId),
       system,
       calculationVersion: CALCULATION_VERSION,
+      analysisVersion: CALCULATION_VERSION,
       contentFingerprint,
       importedAt: text(base.meta.importedAt) || new Date().toISOString(),
       fileName: text(base.meta.fileName),
       fileSize: Number(base.meta.fileSize) || 0,
       lastModified: Number(base.meta.lastModified) || 0,
+      importedBy: text(base.meta.importedBy || base.meta.updatedBy || base.meta.userName || base.meta.ownerName),
       sourceVersion: Number(base.meta.version) || 0,
       audit: buildAudit(system, base, prepared, universe),
       records: prepared.accepted,
@@ -475,14 +530,82 @@
     return [...newEmitted, ...confirmed].sort((a, b) => a.matchKey.localeCompare(b.matchKey));
   }
 
+  function representativeByDocumentRevision(records) {
+    const map = new Map();
+    for (const row of records || []) {
+      const key = text(row.documentRevisionKey) || documentRevisionKey(row);
+      if (!key) continue;
+      const previous = map.get(key);
+      if (!previous || Number(row.sourceRow || 0) >= Number(previous.sourceRow || 0)) map.set(key, row);
+      if (row.emitted && map.get(key) && !map.get(key).emitted) map.set(key, row);
+    }
+    return map;
+  }
+
+  function documentRevisionDelta(previousRecords, currentRecords) {
+    const previous = representativeByDocumentRevision(previousRecords);
+    const current = representativeByDocumentRevision(currentRecords);
+    const previousDocuments = new Set([...previous.values()].map((row) => row.documentKey).filter(Boolean));
+    const currentDocuments = new Set([...current.values()].map((row) => row.documentKey).filter(Boolean));
+    const added = [];
+    const removed = [];
+    current.forEach((row, key) => { if (!previous.has(key)) added.push(row); });
+    previous.forEach((row, key) => { if (!current.has(key)) removed.push(row); });
+    const newDocuments = added.filter((row) => !previousDocuments.has(row.documentKey));
+    const newRevisions = added.filter((row) => previousDocuments.has(row.documentKey));
+    return {
+      added,
+      removed,
+      newDocuments,
+      newRevisions,
+      previousCount: previous.size,
+      currentCount: current.size,
+      previousUniqueDocuments: previousDocuments.size,
+      currentUniqueDocuments: currentDocuments.size,
+      net: added.length - removed.length,
+    };
+  }
+
+  function currentRelations(sigemRecords, pwRecords) {
+    const sigem = representativeByDocumentRevision(sigemRecords);
+    const pw = representativeByDocumentRevision(pwRecords);
+    const both = [];
+    const onlySigem = [];
+    const onlyPw = [];
+    const bothEmitted = [];
+    const bothNotEmitted = [];
+    const pwOnlyEmitted = [];
+    const pwOnlyNotEmitted = [];
+    sigem.forEach((sigemRow, key) => {
+      const pwRow = pw.get(key);
+      if (!pwRow) {
+        onlySigem.push({ ...sigemRow, movement: "Somente SIGEM" });
+        return;
+      }
+      const linked = { ...sigemRow, matchedPw: pwRow, movement: pwRow.emitted ? "SIGEM + PW emitido" : "SIGEM + PW não emitido" };
+      both.push(linked);
+      (pwRow.emitted ? bothEmitted : bothNotEmitted).push(linked);
+    });
+    pw.forEach((pwRow, key) => {
+      if (sigem.has(key)) return;
+      const linked = { ...pwRow, movement: pwRow.emitted ? "Somente PW emitido" : "Somente PW não emitido" };
+      onlyPw.push(linked);
+      (pwRow.emitted ? pwOnlyEmitted : pwOnlyNotEmitted).push(linked);
+    });
+    return { both, onlySigem, onlyPw, bothEmitted, bothNotEmitted, pwOnlyEmitted, pwOnlyNotEmitted };
+  }
+
   function compareSnapshots(previousSnapshot, currentSnapshot) {
     if (!previousSnapshot || !currentSnapshot) return null;
     if (previousSnapshot.system !== currentSnapshot.system) throw new Error("Snapshots de sistemas diferentes não podem ser comparados entre si.");
+    const technical = compareRecords(previousSnapshot.records || [], currentSnapshot.records || []);
     return {
       system: currentSnapshot.system,
       previousSnapshotId: previousSnapshot.id,
       currentSnapshotId: currentSnapshot.id,
-      ...compareRecords(previousSnapshot.records || [], currentSnapshot.records || []),
+      analysisVersion: CALCULATION_VERSION,
+      ...technical,
+      documentRevision: documentRevisionDelta(previousSnapshot.records || [], currentSnapshot.records || []),
     };
   }
 
@@ -490,7 +613,37 @@
     const sigem = sigemPrevious && sigemCurrent ? compareSnapshots(sigemPrevious, sigemCurrent) : null;
     const pw = pwPrevious && pwCurrent ? compareSnapshots(pwPrevious, pwCurrent) : null;
     const relation = classifyEvolution(sigem, pw, pwCurrent && pwCurrent.records || []);
-    return { sigem, pw, relation, pwEmissions: emissionTransitions(pw) };
+    const current = currentRelations(sigemCurrent && sigemCurrent.records || [], pwCurrent && pwCurrent.records || []);
+    return {
+      analysisVersion: CALCULATION_VERSION,
+      sigem,
+      pw,
+      relation,
+      current,
+      pwEmissions: emissionTransitions(pw),
+    };
+  }
+
+  function diagnosticsForSnapshot(snapshot) {
+    if (!snapshot) return null;
+    const audit = snapshot.audit || {};
+    const revisionRecords = Number(audit.documentRevisionRecords || 0);
+    const uniqueDocuments = Number(audit.uniqueDocuments || 0);
+    return {
+      system: snapshot.system,
+      rawRecords: Number(audit.rawRecords || 0),
+      acceptedRecords: Number(audit.acceptedRecords || 0),
+      uniqueDocuments,
+      documentRevisionRecords: revisionRecords,
+      additionalRevisions: Math.max(0, revisionRecords - uniqueDocuments),
+      technicalVariantsSameDocumentRevision: Number(audit.technicalVariantsSameDocumentRevision || 0),
+      technicalDuplicates: Number(audit.technicalDuplicates || 0),
+      discardedRecords: Number(audit.discardedRecords || 0),
+      discardReasons: { ...(audit.discardReasons || {}) },
+      emissionBreakdown: { ...(audit.emissionBreakdown || {}) },
+      emittedDocumentRevisionRecords: Number(audit.emittedDocumentRevisionRecords || 0),
+      notEmittedDocumentRevisionRecords: Number(audit.notEmittedDocumentRevisionRecords || 0),
+    };
   }
 
   function transitionSeries(snapshots) {
@@ -536,8 +689,8 @@
     CALCULATION_VERSION, VALID_CLASSES, SYSTEMS,
     text, norm, normalizeRevision, normalizeDate, fingerprint,
     documentIdentity, documentClass, inferEap, searchKeysFor,
-    buildLdUniverse, findLdMatches, findQualityMatch, occurrenceKey, matchKey, technicalFingerprint,
+    buildLdUniverse, findLdMatches, findQualityMatch, occurrenceKey, documentRevisionKey, matchKey, technicalFingerprint, emissionInfo,
     prepareRecords, buildAudit, sourceFingerprint, buildSnapshot,
-    compareRecords, multisetMatch, classifyEvolution, emissionTransitions, compareSnapshots, comparePeriod, transitionSeries, buildDailyTimeline,
+    compareRecords, documentRevisionDelta, currentRelations, diagnosticsForSnapshot, multisetMatch, classifyEvolution, emissionTransitions, compareSnapshots, comparePeriod, transitionSeries, buildDailyTimeline,
   });
 });
