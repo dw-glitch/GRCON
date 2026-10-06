@@ -25,6 +25,22 @@ const base = (system, records, importedAt) => Evo.buildSnapshot(system, {
   records,
 }, universe);
 
+(function normalizationIsExplicitAndNonDestructive() {
+  const sigemEt = " c1o_rnest_u32_3.1.1.1_ins_rir_nt-pi-321530.pdf ";
+  const pwEt = "C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-321530";
+  assert.equal(Evo.documentIdentity(sigemEt).key, Evo.documentIdentity(pwEt).key, "caixa, espaços, extensão, separadores e nt- equivalentes devem convergir");
+  assert.equal(Evo.normalizeRevision(" Rev. a "), "A");
+  assert.equal(Evo.normalizeRevision("rev B"), "B");
+
+  const eapA = "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-321530";
+  const eapB = "C1O_RNEST_U32_3.1.1.2_INS_RIR_PI-321530";
+  assert.notEqual(Evo.documentIdentity(eapA).key, Evo.documentIdentity(eapB).key, "EAP diferente não pode ser unido por normalização");
+
+  const n1710A = "CE-5290.00-22313-856-C1O-001";
+  const n1710B = "CE-5290.00-22313-856-C1O-002";
+  assert.notEqual(Evo.documentIdentity(n1710A).key, Evo.documentIdentity(n1710B).key, "sequencial N-1710 diferente deve permanecer distinto");
+})();
+
 (function emissionSemanticsAreExplicit() {
   assert.deepEqual(Evo.emissionInfo("Sim"), {
     flag: "SIM", kind: "current", emitted: true, recognized: true, reason: "Última emissão = SIM (evidência atual)",
