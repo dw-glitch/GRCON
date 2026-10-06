@@ -43,7 +43,7 @@ const base = (system, records, importedAt) => Evo.buildSnapshot(system, {
 
 (function emissionSemanticsAreExplicit() {
   assert.deepEqual(Evo.emissionInfo("Sim"), {
-    flag: "SIM", kind: "current", emitted: true, recognized: true, reason: "Última emissão = SIM (evidência atual)",
+    flag: "SIM", kind: "current", state: "emitted", emitted: true, recognized: true, reason: "Última emissão = SIM (evidência atual)",
   });
   assert.equal(Evo.emissionInfo("Não").kind, "historical");
   assert.equal(Evo.emissionInfo("Não").emitted, true, "NÃO preserva a semântica histórica vigente do Dashboard");
@@ -77,7 +77,8 @@ const pwCurrent = base("pw", pwRows, "2026-10-05T09:00:00Z");
   assert.equal(audit.uniqueDocuments, 4);
   assert.equal(audit.emittedDocumentRevisionRecords, 3);
   assert.equal(audit.emittedUniqueDocuments, 2, "A possui duas revisões emitidas, mas é um documento único");
-  assert.equal(audit.notEmittedDocumentRevisionRecords, 2);
+  assert.equal(audit.notEmittedDocumentRevisionRecords, 1);
+  assert.equal(audit.indeterminateEmissionDocumentRevisionRecords, 1);
   assert.deepEqual(audit.emissionBreakdown, { current: 2, historical: 1, planned: 1, unknown: 1, missing: 0 });
   assert.match(audit.emissionRule, /SIM.*NÃO.*PREVISTO/i);
   assert.equal(pwCurrent.analysisVersion, Evo.CALCULATION_VERSION);
@@ -92,7 +93,8 @@ const pwCurrent = base("pw", pwRows, "2026-10-05T09:00:00Z");
   assert.equal(relation.onlySigem[0].document, et("B"));
   assert.equal(relation.onlyPw.length, 3);
   assert.equal(relation.pwOnlyEmitted.length, 1);
-  assert.equal(relation.pwOnlyNotEmitted.length, 2);
+  assert.equal(relation.pwOnlyNotEmitted.length, 1);
+  assert.equal(relation.pwOnlyIndeterminate.length, 1);
 })();
 
 (function newDocumentAndNewRevisionAreNotConfused() {
@@ -110,7 +112,16 @@ const pwCurrent = base("pw", pwRows, "2026-10-05T09:00:00Z");
   assert.equal(comparison.pw.documentRevision.newDocuments.length, 2);
   assert.equal(comparison.pw.documentRevision.newRevisions.length, 1);
   assert.equal(comparison.pw.documentRevision.newRevisions[0].revision, "A");
-  assert.equal(comparison.pwEmissions.length, 2, "somente novas entradas emitidas/transições devem formar novas emissões");
+  assert.equal(comparison.pwEmissions.length, 2, "somente novas entradas emitidas/transições determináveis devem formar novas emissões");
+})();
+
+(function indeterminateToEmittedIsNotInventedAsNewEmission() {
+  const before = base("pw", [p("D", "0", "Valor inesperado")], "2026-10-01T09:00:00Z");
+  const after = base("pw", [p("D", "0", "Sim")], "2026-10-05T09:00:00Z");
+  const delta = Evo.compareSnapshots(before, after);
+  assert.equal(delta.added.length, 0);
+  assert.equal(delta.metadataChanged.length, 1);
+  assert.equal(Evo.emissionTransitions(delta).length, 0, "estado anterior indeterminado não permite afirmar que a emissão ocorreu entre snapshots");
 })();
 
 (function largeDocumentRevisionDeltaRemainsIndexed() {
@@ -162,6 +173,8 @@ const pwCurrent = base("pw", pwRows, "2026-10-05T09:00:00Z");
   assert.match(app, /PW ativo/);
   assert.match(domain, /documentRevisionRecords/);
   assert.match(domain, /emittedUniqueDocuments/);
+  assert.match(domain, /indeterminateEmissionDocumentRevisionRecords/);
+  assert.match(app, /Emissão indeterminada/);
 })();
 
 console.log("sigem_pw_evolution_auditability: OK — granularidade dupla, emissão, diagnóstico, cache e rastreabilidade validados.");
