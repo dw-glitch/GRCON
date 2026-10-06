@@ -237,7 +237,16 @@ async function probe(page, pathname) {
 
     assert.deepEqual([...new Set(badLocalResponses)], [], "Não pode haver resposta local 4xx/5xx fora da rota API.");
     assert.deepEqual(pageErrors.filter((message) => !isExpectedExternalError(message)), []);
-    assert.deepEqual(consoleErrors, []);
+    const expectedVaultHealth503 = vaultHealth.status() === 503;
+    const vaultHealthConsoleErrors = consoleErrors.filter((message) =>
+      /Failed to load resource: the server responded with a status of 503 \(Service Unavailable\)/i.test(message)
+    );
+    if (expectedVaultHealth503) {
+      assert.ok(vaultHealthConsoleErrors.length <= 1, "Somente o 503 esperado do health local do Cofre pode aparecer no console.");
+    } else {
+      assert.equal(vaultHealthConsoleErrors.length, 0, "Cofre configurado não pode gerar 503 no console.");
+    }
+    assert.deepEqual(consoleErrors.filter((message) => !vaultHealthConsoleErrors.includes(message)), []);
 
     fs.writeFileSync(path.join(outputDir, "metrics.json"), JSON.stringify({ passed: true, ...results }, null, 2));
     console.log("cloudflare_browser: ok", JSON.stringify({ metadata, ...results }));
