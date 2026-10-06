@@ -668,20 +668,39 @@ export function SigemPwEvolutionApp() {
         )}
       </div>
 
+      <section className="spw-evo-diagnostics" id="spw-evo-diagnostics">
+        <header>
+          <div><strong>Diagnóstico da contagem</strong><small>Diferenças objetivas que podem explicar um número maior informado pelo time do PW.</small></div>
+          <button type="button" className="text-button" onClick={() => setAuditMetric("pw-emitted-current")}>Ver regra de emissão</button>
+        </header>
+        <div className="spw-evo-diagnostic-grid">
+          <article><strong>{fmt(Math.max(0, Number(selectedPw?.audit?.documentRevisionRecords || 0) - Number(selectedPw?.audit?.uniqueDocuments || 0)))}</strong><span>revisões adicionais do mesmo documento no PW</span></article>
+          <article><strong>{fmt(selectedPw?.audit?.technicalVariantsSameDocumentRevision)}</strong><span>variações técnicas da mesma chave documento + revisão</span></article>
+          <article><strong>{fmt(selectedPw?.audit?.technicalDuplicates)}</strong><span>duplicidades técnicas exatas removidas</span></article>
+          <article><strong>{fmt(selectedPw?.audit?.discardedRecords)}</strong><span>registros PW fora do universo válido / inválidos</span></article>
+          <article><strong>{fmt(selectedPw?.audit?.emissionBreakdown?.planned)}</strong><span>registros PW com emissão PREVISTO</span></article>
+          <article><strong>{fmt(Number(selectedPw?.audit?.emissionBreakdown?.unknown || 0) + Number(selectedPw?.audit?.emissionBreakdown?.missing || 0))}</strong><span>registros PW sem regra de emissão determinável</span></article>
+        </div>
+        <p>O GRCON não ajusta esses valores para coincidir com uma expectativa externa. Cada grupo acima pode alterar a interpretação entre documento, documento + revisão, cadastrado e emitido.</p>
+      </section>
+
       <nav className="spw-evo-tabs" id="spw-evo-tabs" aria-label="Listas da evolução">
-        {(Object.entries(EVOLUTION_LIST_LABELS) as Array<[EvolutionListMode, readonly [string, string]]>).map(([key, [label]]) => (
-          <button
-            type="button"
-            key={key}
-            className={state.listMode === key ? "active" : ""}
-            data-evo-list={key}
-            disabled={!hasValidatedLd}
-            aria-pressed={state.listMode === key}
-            onClick={() => adapter.setListMode(key)}
-          >
-            {label} · {hasValidatedLd ? fmt(counts[key]) : "—"}
-          </button>
-        ))}
+        {EVOLUTION_TAB_MODES.map((key) => {
+          const [label] = EVOLUTION_LIST_LABELS[key];
+          return (
+            <button
+              type="button"
+              key={key}
+              className={state.listMode === key ? "active" : ""}
+              data-evo-list={key}
+              disabled={!hasValidatedLd}
+              aria-pressed={state.listMode === key}
+              onClick={() => adapter.setListMode(key)}
+            >
+              {label} · {hasValidatedLd ? fmt(counts[key]) : "—"}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="spw-evo-filters">
@@ -720,7 +739,7 @@ export function SigemPwEvolutionApp() {
           <div className="spw-evo-empty"><strong>{activeFilterCount ? "Nenhum resultado para estes filtros." : comparison ? "Nenhum registro nesta relação." : "Selecione as bases para comparar."}</strong>{activeFilterCount ? "Ajuste ou limpe os filtros para ver os documentos." : "A contagem e a lista usam exatamente a mesma origem de dados."}</div>
         ) : (
           <table className="spw-evo-table">
-            <thead><tr><th>Código</th><th>Rev.</th><th>Classe</th><th>Tipo</th><th>Status</th><th>Disciplina</th><th>TAG</th><th>EAP</th><th>Data</th><th>Origem</th></tr></thead>
+            <thead><tr><th>Código</th><th>Rev.</th><th>Classe</th><th>Tipo</th><th>Status</th><th>Disciplina</th><th>TAG</th><th>EAP</th><th>Data</th><th>Origem</th><th>Classificação / motivo</th></tr></thead>
             <tbody>
               {pageData.visible.map((row, index) => (
                 <tr
@@ -740,7 +759,7 @@ export function SigemPwEvolutionApp() {
                     }
                   }}
                 >
-                  <td title={row.document}><strong>{row.document || "—"}</strong></td><td>{row.revision || "—"}</td><td>{row.documentClass || "—"}</td><td>{row.documentType || "—"}</td><td><span className="spw-evo-cell-badge">{row.status || "—"}</span></td><td>{row.discipline || "—"}</td><td>{row.tag || "—"}</td><td>{row.eap || "—"}</td><td title={row.date}>{row.date || "—"}</td><td><span className="spw-evo-cell-badge">{(row.system || "").toUpperCase() || "—"}</span></td>
+                  <td title={row.document}><strong>{row.document || "—"}</strong></td><td>{row.revision || "—"}</td><td>{row.documentClass || "—"}</td><td>{row.documentType || "—"}</td><td><span className="spw-evo-cell-badge">{row.status || "—"}</span></td><td>{row.discipline || "—"}</td><td>{row.tag || "—"}</td><td>{row.eap || "—"}</td><td title={row.date}>{row.date || "—"}</td><td><span className="spw-evo-cell-badge">{(row.system || "").toUpperCase() || "—"}</span></td><td>{row.exclusionReason || row.reason || row.movement || row.inclusionReason || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -765,6 +784,13 @@ export function SigemPwEvolutionApp() {
         listMode={state.listMode}
         onClose={() => adapter.closeDetail()}
         selected={(system, role) => adapter.selectedSnapshot(system, role)}
+      />
+      <MetricAuditDrawer
+        metric={auditMetric}
+        onClose={() => setAuditMetric(null)}
+        comparison={comparison}
+        sigem={selectedSigem}
+        pw={selectedPw}
       />
     </section>
   );
