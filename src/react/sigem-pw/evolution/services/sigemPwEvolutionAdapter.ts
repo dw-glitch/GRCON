@@ -385,37 +385,82 @@ async function readLdUniverse(force: boolean): Promise<ReturnType<EvolutionCoreA
   return state.ldUniverse;
 }
 
-async function readHistoryMaps(): Promise<{ payloads: Map<string, EvolutionPayload>; prepared: Map<string, EvolutionSnapshot> }> {
+async function readHistoryMaps(
+  sources: Array<{ system: EvolutionSystem; metadata: EvolutionSourceSnapshotMeta[] }>,
+  universe: EvolutionUiState["ldUniverse"],
+): Promise<{ payloads: Map<string, EvolutionPayload>; prepared: Map<string, EvolutionSnapshot> }> {
   const started = now();
   const history = History();
   const management = Management();
   const payloads = new Map<string, EvolutionPayload>();
   const prepared = new Map<string, EvolutionSnapshot>();
-  const db = await history.openDb();
-  try {
-    const values = await new Promise<MetaRecord[]>((resolve, reject) => {
-      const tx = db.transaction(history.STORES.meta, "readonly");
-      const request = tx.objectStore(history.STORES.meta).getAll();
-      request.onsuccess = () => resolve((request.result || []) as MetaRecord[]);
-      request.onerror = () => reject(request.error || new Error("Falha ao ler payloads históricos."));
-    });
-    const prefix = management?.PAYLOAD_PREFIX || "sourcePayload:";
-    values.forEach((row) => {
-      const key = text(row?.key);
-      const value = row?.value;
-      if (key.startsWith(prefix) && value && "records" in value && Array.isArray(value.records)) {
-        const payload = value as EvolutionPayload;
-        payloads.set(text(payload.snapshotId) || key.slice(prefix.length), payload);
-        return;
-      }
-      if (key.startsWith(PREPARED_CACHE_PREFIX) && value && "snapshot" in value) {
-        const cached = value as PreparedSnapshotCacheValue;
-        if (cached.snapshot && Array.isArray(cached.snapshot.records)) prepared.set(key, cached.snapshot);
-      }
-    });
-  } finally {
-    db.close();
+  const prefix = management?.PAYLOAD_PREFIX || "sourcePayload:";
+  const allSources = sources.flatMap(({ system, metadata }) => metadata.map((source) => ({ system, source })));
+
+  const readMany = async (keys: string[]): Promise<Map<string, unknown>> => {
+    const output = new Map<string, unknown>();
+    if (!keys.length) return output;
+    const db = await history.openDb();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(history.STORES.meta, "readonly");
+        const store = tx.objectStore(history.STORES.meta);
+        let pending = keys.length;
+        let failed = false;
+        keys.forEach((key) => {
+          const request = store.get(key);
+          request.onsuccess = () => {
+            const row = request.result as MetaRecord | undefined;
+            if (row?.value !== undefined) output.set(key, row.value);
+            pending -= 1;
+            if (!pending && !failed) resolve();
+          };
+          request.onerror = () => {
+            if (failed) return;
+            failed = true;
+            reject(request.error || new Error("Falha ao ler histórico da Evolução."));
+          };
+        });
+      });
+    } finally {
+      db.close();
+    }
+    return output;
+  };
+
+  const persistedKeys: string[] = [];
+  const persistedKeyBySource = new Map<string, string>();
+  for (const { system, source } of allSources) {
+    const key = preparedCacheKey(system, source, universe);
+    persistedKeyBySource.set(system + ":" + source.id, key);
+    const memory = preparedSnapshotCache.get(key);
+    if (memory && memory.analysisVersion === Core().CALCULATION_VERSION) {
+      prepared.set(key, memory);
+    } else {
+      persistedKeys.push(key);
+    }
   }
+
+  const persistedValues = await readMany([...new Set(persistedKeys)]);
+  persistedValues.forEach((value, key) => {
+    const cached = value as PreparedSnapshotCacheValue;
+    if (cached?.snapshot && cached.snapshot.analysisVersion === Core().CALCULATION_VERSION && Array.isArray(cached.snapshot.records)) {
+      prepared.set(key, cached.snapshot);
+      preparedSnapshotCache.set(key, cached.snapshot);
+    }
+  });
+
+  const misses = allSources.filter(({ system, source }) => {
+    const key = persistedKeyBySource.get(system + ":" + source.id);
+    return !key || !prepared.has(key);
+  });
+  const payloadKeys = misses.map(({ source }) => prefix + source.id);
+  const rawValues = await readMany([...new Set(payloadKeys)]);
+  for (const { source } of misses) {
+    const value = rawValues.get(prefix + source.id) as EvolutionPayload | undefined;
+    if (value && Array.isArray(value.records)) payloads.set(text(value.snapshotId) || source.id, value);
+  }
+
   state.metrics.evolutionHistoryReadMs = now() - started;
   return { payloads, prepared };
 }
@@ -569,11 +614,14 @@ async function loadSnapshots(forceLd = false): Promise<void> {
       return;
     }
 
-    const [sigemMeta, pwMeta, historyMaps] = await Promise.all([
+    const [sigemMeta, pwMeta] = await Promise.all([
       History().listSourceSnapshots("sigem"),
       History().listSourceSnapshots("pw"),
-      readHistoryMaps(),
     ]);
+    const historyMaps = await readHistoryMaps([
+      { system: "sigem", metadata: sigemMeta },
+      { system: "pw", metadata: pwMeta },
+    ], universe);
     const [sigem, pw] = await Promise.all([
       buildPreparedSnapshots("sigem", sigemMeta, historyMaps.payloads, historyMaps.prepared, universe),
       buildPreparedSnapshots("pw", pwMeta, historyMaps.payloads, historyMaps.prepared, universe),
