@@ -176,6 +176,7 @@ const ASSETS = [
   "workers/export.worker.js",
   "workers/pdf-merge.worker.js",
   "workers/sigem_pw_dashboard.worker.js",
+  "workers/sigem_pw_evolution.worker.js",
 ];
 
 const CRITICAL_ASSETS = [
