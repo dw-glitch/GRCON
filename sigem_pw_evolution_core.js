@@ -28,11 +28,11 @@
   });
   function emissionInfo(value) {
     const flag = norm(value);
-    if (!flag) return { flag: "", kind: "missing", emitted: false, recognized: false, reason: "Última emissão não informada" };
-    if (flag === EMISSION_FLAGS.CURRENT) return { flag, kind: "current", emitted: true, recognized: true, reason: "Última emissão = SIM (evidência atual)" };
-    if (flag === EMISSION_FLAGS.HISTORICAL) return { flag, kind: "historical", emitted: true, recognized: true, reason: "Última emissão = NÃO (evidência histórica, conforme regra vigente do Dashboard)" };
-    if (flag === EMISSION_FLAGS.PLANNED) return { flag, kind: "planned", emitted: false, recognized: true, reason: "Última emissão = PREVISTO (cadastro sem evidência de emissão)" };
-    return { flag, kind: "unknown", emitted: false, recognized: false, reason: `Valor de Última emissão não reconhecido: ${text(value)}` };
+    if (!flag) return { flag: "", kind: "missing", state: "indeterminate", emitted: false, recognized: false, reason: "Última emissão não informada; emissão não determinável" };
+    if (flag === EMISSION_FLAGS.CURRENT) return { flag, kind: "current", state: "emitted", emitted: true, recognized: true, reason: "Última emissão = SIM (evidência atual)" };
+    if (flag === EMISSION_FLAGS.HISTORICAL) return { flag, kind: "historical", state: "emitted", emitted: true, recognized: true, reason: "Última emissão = NÃO (evidência histórica, conforme regra vigente do Dashboard)" };
+    if (flag === EMISSION_FLAGS.PLANNED) return { flag, kind: "planned", state: "not-emitted", emitted: false, recognized: true, reason: "Última emissão = PREVISTO (cadastro sem evidência de emissão)" };
+    return { flag, kind: "unknown", state: "indeterminate", emitted: false, recognized: false, reason: `Valor de Última emissão não reconhecido; emissão não determinável: ${text(value)}` };
   }
   function normalizeDate(value) {
     const raw = text(value);
@@ -263,6 +263,7 @@
       emissionFlag: emission ? emission.flag : "",
       emissionKind: emission ? emission.kind : "",
       emissionRecognized: emission ? emission.recognized : null,
+      emissionState: emission ? emission.state : "",
       emissionReason: emission ? emission.reason : "",
       emitted: emission ? emission.emitted : null,
       fileName: text(raw && raw.fileName),
@@ -360,9 +361,13 @@
     const technicalDuplicates = prepared.duplicates.length;
     const uniqueDocuments = new Set(prepared.accepted.map((row) => row.documentKey).filter(Boolean)).size;
     const documentRevisionKeys = new Set(prepared.accepted.map((row) => row.documentRevisionKey).filter(Boolean));
-    const emittedRows = system === SYSTEMS.PW ? prepared.accepted.filter((row) => row.emitted) : [];
+    const emittedRows = system === SYSTEMS.PW ? prepared.accepted.filter((row) => row.emissionState === "emitted") : [];
+    const notEmittedRows = system === SYSTEMS.PW ? prepared.accepted.filter((row) => row.emissionState === "not-emitted") : [];
+    const indeterminateRows = system === SYSTEMS.PW ? prepared.accepted.filter((row) => row.emissionState === "indeterminate") : [];
     const emittedRevisionKeys = new Set(emittedRows.map((row) => row.documentRevisionKey).filter(Boolean));
     const emittedDocumentKeys = new Set(emittedRows.map((row) => row.documentKey).filter(Boolean));
+    const notEmittedRevisionKeys = new Set(notEmittedRows.map((row) => row.documentRevisionKey).filter(Boolean));
+    const indeterminateRevisionKeys = new Set(indeterminateRows.map((row) => row.documentRevisionKey).filter(Boolean));
     const emissionBreakdown = { current: 0, historical: 0, planned: 0, unknown: 0, missing: 0 };
     if (system === SYSTEMS.PW) {
       for (const row of prepared.accepted) {
@@ -384,7 +389,9 @@
       emittedTechnicalRecords: emittedRows.length,
       emittedDocumentRevisionRecords: emittedRevisionKeys.size,
       emittedUniqueDocuments: emittedDocumentKeys.size,
-      notEmittedDocumentRevisionRecords: system === SYSTEMS.PW ? Math.max(0, documentRevisionKeys.size - emittedRevisionKeys.size) : 0,
+      notEmittedDocumentRevisionRecords: system === SYSTEMS.PW ? notEmittedRevisionKeys.size : 0,
+      indeterminateEmissionDocumentRevisionRecords: system === SYSTEMS.PW ? indeterminateRevisionKeys.size : 0,
+      indeterminateEmissionTechnicalRecords: system === SYSTEMS.PW ? indeterminateRows.length : 0,
       emissionBreakdown,
       classes: classCounts(prepared.accepted),
       discardReasons: { ...prepared.reasons },
@@ -393,7 +400,7 @@
       ldFingerprint: universe && universe.available ? universe.fingerprint : "",
       comparisonGranularity: "ocorrencia-tecnica; documento+revisao auditavel em paralelo",
       registrationRule: system === SYSTEMS.PW ? "Cadastrado = documento+revisão válido presente na relação PW" : "Presente = documento+revisão válido na Consulta Geral",
-      emissionRule: system === SYSTEMS.PW ? "Emitido = Última emissão SIM (atual) ou NÃO (histórica); PREVISTO/ausente/desconhecido não conta como emitido" : "",
+      emissionRule: system === SYSTEMS.PW ? "Emitido = Última emissão SIM (atual) ou NÃO (histórica); não emitido determinável = PREVISTO; ausente/desconhecido = indeterminado" : "",
       registrationDateField: system === SYSTEMS.PW ? "datacriacao" : "Data de inclusão/modificação quando disponível",
       emissionDateField: system === SYSTEMS.PW ? "DataEnvioGRDCliente; se ausente, a data de emissão fica não determinável" : "",
       relevantDateFallback: system === SYSTEMS.PW ? "DataEnvioGRDCliente → DataAlteracaoState → datacriacao → DataGRDEntrada (somente para ordenação/data relevante da ocorrência, não para inventar data de emissão)" : "Data de inclusão → data de modificação",
@@ -524,9 +531,9 @@
 
   function emissionTransitions(pwDelta) {
     if (!pwDelta) return [];
-    const newEmitted = (pwDelta.added || []).filter((row) => row.emitted).map((row) => ({ ...row, movement: "Nova entrada emitida" }));
+    const newEmitted = (pwDelta.added || []).filter((row) => row.emissionState === "emitted").map((row) => ({ ...row, movement: "Nova entrada emitida" }));
     const confirmed = (pwDelta.metadataChanged || [])
-      .filter((change) => !change.before?.emitted && change.after?.emitted)
+      .filter((change) => change.before?.emissionState === "not-emitted" && change.after?.emissionState === "emitted")
       .map((change) => ({ ...change.after, movement: "Emissão confirmada", previous: change.before }));
     return [...newEmitted, ...confirmed].sort((a, b) => a.matchKey.localeCompare(b.matchKey));
   }
@@ -575,25 +582,33 @@
     const onlyPw = [];
     const bothEmitted = [];
     const bothNotEmitted = [];
+    const bothIndeterminate = [];
     const pwOnlyEmitted = [];
     const pwOnlyNotEmitted = [];
+    const pwOnlyIndeterminate = [];
     sigem.forEach((sigemRow, key) => {
       const pwRow = pw.get(key);
       if (!pwRow) {
         onlySigem.push({ ...sigemRow, movement: "Somente SIGEM" });
         return;
       }
-      const linked = { ...sigemRow, matchedPw: pwRow, movement: pwRow.emitted ? "SIGEM + PW emitido" : "SIGEM + PW não emitido" };
+      const indeterminate = pwRow.emissionState === "indeterminate";
+      const linked = { ...sigemRow, matchedPw: pwRow, movement: pwRow.emitted ? "SIGEM + PW emitido" : indeterminate ? "SIGEM + PW emissão indeterminada" : "SIGEM + PW não emitido" };
       both.push(linked);
-      (pwRow.emitted ? bothEmitted : bothNotEmitted).push(linked);
+      if (pwRow.emitted) bothEmitted.push(linked);
+      else if (indeterminate) bothIndeterminate.push(linked);
+      else bothNotEmitted.push(linked);
     });
     pw.forEach((pwRow, key) => {
       if (sigem.has(key)) return;
-      const linked = { ...pwRow, movement: pwRow.emitted ? "Somente PW emitido" : "Somente PW não emitido" };
+      const indeterminate = pwRow.emissionState === "indeterminate";
+      const linked = { ...pwRow, movement: pwRow.emitted ? "Somente PW emitido" : indeterminate ? "Somente PW emissão indeterminada" : "Somente PW não emitido" };
       onlyPw.push(linked);
-      (pwRow.emitted ? pwOnlyEmitted : pwOnlyNotEmitted).push(linked);
+      if (pwRow.emitted) pwOnlyEmitted.push(linked);
+      else if (indeterminate) pwOnlyIndeterminate.push(linked);
+      else pwOnlyNotEmitted.push(linked);
     });
-    return { both, onlySigem, onlyPw, bothEmitted, bothNotEmitted, pwOnlyEmitted, pwOnlyNotEmitted };
+    return { both, onlySigem, onlyPw, bothEmitted, bothNotEmitted, bothIndeterminate, pwOnlyEmitted, pwOnlyNotEmitted, pwOnlyIndeterminate };
   }
 
   function compareSnapshots(previousSnapshot, currentSnapshot) {
