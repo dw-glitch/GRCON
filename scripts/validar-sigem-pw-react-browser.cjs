@@ -1269,6 +1269,30 @@ async function waitEvolutionReady(page) {
       "TAG", "EAP", "Data", "Origem", "Emissão PW", "LD origem", "LD aba", "Prazo LD",
     ]);
 
+    // Auditoria completa: workbook precisa conter resumo, rastreabilidade e exclusões.
+    const auditDownloadPromise = page.waitForEvent("download");
+    await page.locator("#spw-evo-export-audit").click();
+    const auditDownload = await auditDownloadPromise;
+    const auditPath = path.join(fixtureDir, "sigem-pw-evolution-audit.xlsx");
+    await auditDownload.saveAs(auditPath);
+    const auditBook = XLSX.read(fs.readFileSync(auditPath), { type: "buffer" });
+    for (const sheet of ["Resumo", "SIGEM x PW", "Novos", "Novas revisões", "Emitidos", "Não emitidos", "Somente SIGEM", "Somente PW", "Excluídos da análise", "Regras da análise"]) {
+      assert.ok(auditBook.SheetNames.includes(sheet), "aba de auditoria ausente: " + sheet);
+    }
+    const ruleRows = XLSX.utils.sheet_to_json(auditBook.Sheets["Regras da análise"], { defval: "" });
+    assert.ok(ruleRows.some((row) => String(row.Item || "").includes("analysisVersion")), "auditoria precisa registrar analysisVersion");
+    assert.ok(ruleRows.some((row) => String(row.Valor || "").includes("SIM") && String(row.Valor || "").includes("PREVISTO")), "auditoria precisa registrar a regra de emissão");
+
+    // Explicação do KPI deve abrir sem trocar a lista nem desmontar a página.
+    const listModeBeforeAuditDrawer = await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.listMode);
+    await page.locator(".spw-evo-kpi-shell .spw-evo-explain").first().click();
+    await page.locator("#spw-evo-audit-drawer").waitFor({ state: "visible" });
+    assert.match(await page.locator("#spw-evo-audit-drawer").textContent(), /COMO ESTE NÚMERO FOI CALCULADO\?/i);
+    assert.match(await page.locator("#spw-evo-audit-drawer").textContent(), /Documento \+ revisão novos/i);
+    await page.locator("#spw-evo-audit-overlay").click({ position: { x: 10, y: 10 } });
+    await page.waitForFunction(() => !document.getElementById("spw-evo-audit-drawer"));
+    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.listMode), listModeBeforeAuditDrawer);
+
     // Detalhe pelo mouse: conteúdo, foco, trap, scroll lock, clique interno e overlay.
     const firstEvolutionRow = page.locator("#spw-evo-table tbody tr").first();
     const firstEvolutionIdentity = await firstEvolutionRow.getAttribute("data-analysis-id");
@@ -1401,6 +1425,8 @@ async function waitEvolutionReady(page) {
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
 
+    const rowsBeforeRefresh = await page.locator("#spw-evo-table tbody tr").count();
+    const activeBasesBeforeRefresh = await page.locator("#spw-evo-active-bases").textContent();
     await page.evaluate(() => {
       const original = window.GrconSigemPwHistory;
       window.__evolutionHistoryOriginalForDark = original;
@@ -1415,6 +1441,9 @@ async function waitEvolutionReady(page) {
     });
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.busy);
     assert.equal(await page.locator('.spw-evo-message[role="status"]').count(), 1, "loading deve continuar visível em dark mode");
+    assert.equal(await page.locator("#spw-evo-table tbody tr").count(), rowsBeforeRefresh, "refresh não pode zerar/sumir com a tabela atual");
+    assert.equal(await page.locator("#spw-evo-active-bases").textContent(), activeBasesBeforeRefresh, "refresh não pode esconder as bases ativas");
+    assert.match(await page.locator('.spw-evo-message[role="status"]').textContent(), /dados atuais permanecem visíveis/i);
     await page.evaluate(async () => { await window.__evolutionDarkLoadingPromise; });
 
     await page.evaluate(async () => {
