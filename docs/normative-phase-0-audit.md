@@ -220,7 +220,6 @@ Somente após fonte/aplicabilidade/testes:
 - **PR C** — N-1710 + parser 7 grupos + anexos versionados;
 - **PR D** — golden test do XLS real;
 - **PR E** — N-381 / Adicionar Capa;
-- **PR F** — matriz disciplinar / GRCON e RECON (escopo corrigido pelo usuário em 02/10/2026);
 - **PR G** — histórico, auditoria e overrides;
 - **PR H** — módulo Normas Petrobras / governança owner;
 - **PR I** — hardening e deploy.
@@ -244,13 +243,12 @@ As fases de enforcement permanecem condicionadas às fontes específicas de cada
 
 - PR B: exige N-2064 Rev. D;
 - PR D: exige golden test reprodutível do XLS real;
-- PR F: exige PDFs aplicáveis da disciplina/contrato antes de bloquear.
 
 Esse desenho permite continuar a evolução sem inventar vigência e sem paralisar a arquitetura.
 
 ## Escopo atualizado em 02/10/2026
 
-Por instrução explícita do usuário, as fases seguintes se limitam a GRCON e RECON. Referências históricas a ReconDocs não autorizam alterações nesse aplicativo. PR F: docs/discipline-document-matrix.md.
+Por instrução explícita do usuário, as fases seguintes se limitam a GRCON e RECON. Referências históricas a ReconDocs não autorizam alterações nesse aplicativo.
 
 
 ## 8. Decisão arquitetural definitiva — 2026-10-02
@@ -264,6 +262,5 @@ Consequências obrigatórias:
 - não gerar alerta ou bloqueio porque um dado foi ou deixou de ser encontrado dentro de PDF;
 - manter validação N-1710 sobre o código documental e demais cruzamentos estruturados;
 - manter não conformidades normativas consultivas sem retirar automaticamente documentos da GRDT nem suprimir a decisão do operador;
-- a matriz documental trabalha somente com registros/metadados das fontes estruturadas; nenhum documento técnico PDF é aberto para determinar conformidade.
 
 A estratégia de inspeção interna introduzida na versão 5.44.7 / PR #179 foi retirada e não deve ser retomada em fases futuras.
