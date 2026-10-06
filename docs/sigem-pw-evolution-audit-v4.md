@@ -34,11 +34,11 @@ A semântica vigente do Dashboard é mantida e explicitada:
 |---|---|---|
 | SIM | evidência de emissão atual | sim |
 | NÃO | evidência de emissão histórica | sim |
-| PREVISTO | cadastro sem evidência de emissão | não |
-| vazio | informação insuficiente | não |
-| valor desconhecido | regra não determinável | não |
+| PREVISTO | não emitido determinável | não |
+| vazio | informação insuficiente | indeterminado |
+| valor desconhecido | regra não determinável | indeterminado |
 
-Nenhum valor desconhecido é estimado como emitido.
+Valores vazios/desconhecidos não entram nem em “emitido” nem em “não emitido determinável”. Nenhum estado é estimado para completar KPI.
 
 ## Evolução
 
