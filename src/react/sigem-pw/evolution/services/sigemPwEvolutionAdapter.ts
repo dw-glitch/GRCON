@@ -942,7 +942,9 @@ async function exportAuditWorkbook(): Promise<number> {
       { Métrica: "Somente SIGEM (doc+rev)", Valor: comparison?.current.onlySigem.length || 0 },
       { Métrica: "Somente PW (doc+rev)", Valor: comparison?.current.onlyPw.length || 0 },
       { Métrica: "SIGEM + PW (doc+rev)", Valor: comparison?.current.both.length || 0 },
-      { Métrica: "Novas emissões no período", Valor: comparison?.pwEmissions.length || 0 },
+      { Métrica: "Novas emissões no período · documento + revisão", Valor: comparison?.pwEmissions.length || 0 },
+      { Métrica: "Movimentos técnicos emitidos · compatibilidade", Valor: comparison?.pwEmissionsTechnical.length || 0 },
+      { Métrica: "Indeterminado anterior → emitido atual · não atribuído como nova emissão", Valor: comparison?.pwEmissionIndeterminateToEmitted.length || 0 },
     ]);
     append("SIGEM x PW", [
       ...(comparison?.current.both || []).map((row) => auditRow(row, row.movement || "SIGEM + PW")),
