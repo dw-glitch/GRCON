@@ -665,6 +665,7 @@
       emissionBreakdown: { ...(audit.emissionBreakdown || {}) },
       emittedDocumentRevisionRecords: Number(audit.emittedDocumentRevisionRecords || 0),
       notEmittedDocumentRevisionRecords: Number(audit.notEmittedDocumentRevisionRecords || 0),
+      indeterminateEmissionDocumentRevisionRecords: Number(audit.indeterminateEmissionDocumentRevisionRecords || 0),
     };
   }
 
