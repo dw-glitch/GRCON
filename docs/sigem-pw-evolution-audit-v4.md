@@ -111,6 +111,7 @@ O relatório Excel inclui:
 - Novas revisões;
 - Emitidos;
 - Não emitidos;
+- Emissão indeterminada;
 - Somente SIGEM;
 - Somente PW;
 - Excluídos da análise;
