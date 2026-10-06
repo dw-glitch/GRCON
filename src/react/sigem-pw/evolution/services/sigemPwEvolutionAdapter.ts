@@ -89,6 +89,7 @@ const state: EvolutionUiState = {
   error: "",
   metrics: {
     evolutionSnapshotBuildMs: 0,
+    evolutionWorkerBuildMs: 0,
     evolutionHistoryReadMs: 0,
     evolutionComparisonMs: 0,
     evolutionTimelineMs: 0,
@@ -144,6 +145,12 @@ let snapshot: EvolutionUiSnapshot = { ...state, revision };
 const subscribers = new Set<Subscriber>();
 let externalListenersInstalled = false;
 let eventTimer: number | null = null;
+let evolutionWorker: Worker | null = null;
+let evolutionWorkerSequence = 0;
+const evolutionWorkerPending = new Map<number, {
+  resolve(snapshot: EvolutionSnapshot): void;
+  reject(error: Error): void;
+}>();
 
 function Core(): EvolutionCoreApi {
   const api = window.GrconSigemPwEvolution;
@@ -167,6 +174,66 @@ function Management(): EvolutionManagementApi | null {
 
 function runtime(): RuntimeWindow {
   return window as unknown as RuntimeWindow;
+}
+
+function failEvolutionWorker(error: Error): void {
+  evolutionWorkerPending.forEach(({ reject }) => reject(error));
+  evolutionWorkerPending.clear();
+  evolutionWorker?.terminate();
+  evolutionWorker = null;
+}
+
+function getEvolutionWorker(): Worker | null {
+  if (typeof Worker !== "function") return null;
+  if (evolutionWorker) return evolutionWorker;
+  try {
+    const worker = new Worker(new URL("workers/sigem_pw_evolution.worker.js", document.baseURI));
+    worker.onmessage = (event: MessageEvent) => {
+      const payload = event.data || {};
+      if (payload.type !== "evolution-snapshot") return;
+      const requestId = Number(payload.requestId);
+      const pending = evolutionWorkerPending.get(requestId);
+      if (!pending) return;
+      evolutionWorkerPending.delete(requestId);
+      if (payload.ok && payload.snapshot) pending.resolve(payload.snapshot as EvolutionSnapshot);
+      else pending.reject(new Error(text(payload.error) || "Falha no worker da Evolução."));
+    };
+    worker.onerror = () => failEvolutionWorker(new Error("Worker da Evolução ficou indisponível."));
+    evolutionWorker = worker;
+    return worker;
+  } catch (error) {
+    debugMetric("worker-unavailable", { message: messageOf(error, "Worker indisponível") });
+    evolutionWorker = null;
+    return null;
+  }
+}
+
+async function buildSnapshotOffThread(
+  system: EvolutionSystem,
+  base: { meta: Record<string, unknown>; records: SigemPwRecord[] },
+  universe: ReturnType<EvolutionCoreApi["buildLdUniverse"]>,
+  options: Record<string, unknown>,
+): Promise<EvolutionSnapshot> {
+  const worker = getEvolutionWorker();
+  if (!worker) return Core().buildSnapshot(system, base, universe, options);
+  const requestId = ++evolutionWorkerSequence;
+  const started = now();
+  try {
+    const result = await new Promise<EvolutionSnapshot>((resolve, reject) => {
+      evolutionWorkerPending.set(requestId, { resolve, reject });
+      try {
+        worker.postMessage({ type: "evolution-snapshot", requestId, system, base, universe, options });
+      } catch (error) {
+        evolutionWorkerPending.delete(requestId);
+        reject(error instanceof Error ? error : new Error("Falha ao enviar snapshot para o worker."));
+      }
+    });
+    state.metrics.evolutionWorkerBuildMs += now() - started;
+    return result;
+  } catch (error) {
+    debugMetric("worker-fallback", { system, message: messageOf(error, "Falha no worker") });
+    return Core().buildSnapshot(system, base, universe, options);
+  }
 }
 
 function emit(): void {
@@ -529,7 +596,7 @@ async function buildPreparedSnapshots(
       records: payload.records,
     };
     try {
-      const prepared = Core().buildSnapshot(system, base, universe, {
+      const prepared = await buildSnapshotOffThread(system, base, universe, {
         snapshotId: sourceSnapshot.id,
         sourceSnapshotId: sourceSnapshot.id,
       });
@@ -634,6 +701,7 @@ async function loadSnapshots(forceLd = false): Promise<void> {
     debugMetric("snapshots", {
       ms: state.metrics.evolutionSnapshotBuildMs,
       historyReadMs: state.metrics.evolutionHistoryReadMs,
+      workerBuildMs: state.metrics.evolutionWorkerBuildMs,
       cacheHits: state.metrics.evolutionCacheHitCount,
       cacheMisses: state.metrics.evolutionCacheMissCount,
       sigem: state.sigem.length,
