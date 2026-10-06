@@ -46,6 +46,25 @@ const sequenceRev = Core.parseStoredFileIdentity("RL-5290.00-22313-856-C1O-017_0
 assert.equal(sequenceRev.documentCode, "RL-5290.00-22313-856-C1O-017");
 assert.equal(sequenceRev.revision, "B");
 
+const sequenceOnly = Core.parseStoredFileIdentity("RL-5290.00-22313-856-C1O-017_0001.pdf");
+assert.equal(sequenceOnly.documentCode, "RL-5290.00-22313-856-C1O-017");
+assert.equal(sequenceOnly.revision, "0");
+
+const sequenceRir = Core.parseStoredFileIdentity("RL-5290.00-22313-856-C1O-017_0001_RIR.pdf");
+assert.equal(sequenceRir.documentCode, "RL-5290.00-22313-856-C1O-017");
+assert.equal(sequenceRir.revision, "0");
+assert.equal(Core.isRevisionToken("RIR"), false);
+
+const numericRev = Core.parseStoredFileIdentity("DOCUMENTO_1.xlsx");
+assert.equal(numericRev.documentCode, "DOCUMENTO");
+assert.equal(numericRev.revision, "1");
+
+for (const revision of ["01","A1","AA","#1"]) {
+  const parsed = Core.parseStoredFileIdentity("DOCUMENTO_" + revision + ".pdf");
+  assert.equal(parsed.documentCode, "DOCUMENTO");
+  assert.equal(parsed.revision, revision);
+}
+
 for (const name of ["DOCUMENTO.xlsx","DOCUMENTO.dwg","DOCUMENTO.dgn","DOCUMENTO.docx","DOCUMENTO.msg","DOCUMENTO.csv","DOCUMENTO.tif","DOCUMENTO.xyz"]) {
   const parsed = Core.parseStoredFileIdentity(name);
   assert.equal(parsed.ignored, false, name + " deve ser aceito");
