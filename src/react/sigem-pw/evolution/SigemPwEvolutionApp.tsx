@@ -244,7 +244,7 @@ function MetricAuditDrawer({
     },
     "pw-emitted": {
       title: "Novas emissões no período",
-      formula: "Soma novas entradas já emitidas com registros que passaram de sem evidência de emissão para emitidos. SIM = evidência atual; NÃO = evidência histórica; PREVISTO não conta como emitido.",
+      formula: "Soma novas entradas já emitidas com registros que passaram de PREVISTO (não emitido determinável) para emitidos. Estado anterior ausente/desconhecido é indeterminado e não é tratado automaticamente como nova emissão.",
       rows: [
         ["Novas emissões/transições", comparison?.pwEmissions.length || 0],
         ["PW atual · documento + revisão emitido", pwAudit.emittedDocumentRevisionRecords || 0],
@@ -281,10 +281,17 @@ function MetricAuditDrawer({
     },
     "pw-current-not-emitted": {
       title: "Não emitidos no PW atual",
-      formula: "Documento + revisão cadastrado cuja evidência de emissão é PREVISTO, ausente ou desconhecida.",
+      formula: "Documento + revisão cadastrado cuja Última emissão é PREVISTO. Valores ausentes ou desconhecidos ficam fora desta métrica e são classificados como indeterminados.",
       rows: [
-        ["Documento + revisão não emitido", pwAudit.notEmittedDocumentRevisionRecords || 0],
+        ["Documento + revisão não emitido determinável", pwAudit.notEmittedDocumentRevisionRecords || 0],
         ["PREVISTO", pwAudit.emissionBreakdown?.planned || 0],
+      ],
+    },
+    "pw-current-indeterminate": {
+      title: "Emissão indeterminada no PW",
+      formula: "A fonte não permite afirmar emitido nem não emitido: Última emissão está ausente ou contém valor não reconhecido.",
+      rows: [
+        ["Documento + revisão indeterminado", pwAudit.indeterminateEmissionDocumentRevisionRecords || 0],
         ["Sem valor", pwAudit.emissionBreakdown?.missing || 0],
         ["Valor desconhecido", pwAudit.emissionBreakdown?.unknown || 0],
       ],
@@ -305,12 +312,13 @@ function MetricAuditDrawer({
       rows: [
         ["SIGEM + PW", comparison?.current?.both.length || 0],
         ["Ambos · emitidos", comparison?.current?.bothEmitted.length || 0],
-        ["Ambos · não emitidos", comparison?.current?.bothNotEmitted.length || 0],
+        ["Ambos · não emitidos determináveis", comparison?.current?.bothNotEmitted.length || 0],
+        ["Ambos · emissão indeterminada", comparison?.current?.bothIndeterminate.length || 0],
       ],
     },
     "pw-emitted-current": {
       title: "Regra de emissão PW",
-      formula: String(pwAudit.emissionRule || "SIM/NÃO são evidências de emissão; PREVISTO não é emissão."),
+      formula: String(pwAudit.emissionRule || "SIM/NÃO = emitido; PREVISTO = não emitido determinável; ausente/desconhecido = indeterminado."),
       rows: [
         ["SIM", pwAudit.emissionBreakdown?.current || 0],
         ["NÃO", pwAudit.emissionBreakdown?.historical || 0],
@@ -466,8 +474,9 @@ export function SigemPwEvolutionApp() {
     "removed-sigem": comparison?.sigem?.removed.length || 0,
     "removed-pw": comparison?.pw?.removed.length || 0,
     "pw-current": selectedPw?.records.length || 0,
-    "pw-current-emitted": selectedPw?.records.filter((row) => row.emitted).length || 0,
-    "pw-current-not-emitted": selectedPw?.records.filter((row) => !row.emitted).length || 0,
+    "pw-current-emitted": selectedPw?.records.filter((row) => row.emissionState === "emitted").length || 0,
+    "pw-current-not-emitted": selectedPw?.records.filter((row) => row.emissionState === "not-emitted").length || 0,
+    "pw-current-indeterminate": selectedPw?.records.filter((row) => row.emissionState === "indeterminate").length || 0,
     "only-sigem": comparison?.current?.onlySigem.length || 0,
     "only-pw": comparison?.current?.onlyPw.length || 0,
     "current-both": comparison?.current?.both.length || 0,
@@ -494,7 +503,7 @@ export function SigemPwEvolutionApp() {
         <div>
           <span className="spw-kicker">EVOLUÇÃO SIGEM × PW</span>
           <h3>O que mudou entre as bases</h3>
-          <p>A comparação usa os dois snapshots escolhidos. Cada código + revisão é uma entrada independente; revisão 0 e revisão A do mesmo documento contam como duas linhas.</p>
+          <p>A comparação usa os snapshots escolhidos. A auditoria separa documento único de documento + revisão; a evolução técnica histórica preserva multiplicidades reais da origem sem fundi-las silenciosamente.</p>
         </div>
         <div className="spw-evo-actions">
           <button className="secondary-button compact" id="spw-evo-export-audit" type="button" disabled={state.exporting || !hasValidatedLd} onClick={() => { void adapter.exportAuditWorkbook(); }}>
@@ -634,7 +643,7 @@ export function SigemPwEvolutionApp() {
           <article>
             <span>PW emitido</span>
             <strong>{hasValidatedLd ? fmt(selectedPw?.audit?.emittedDocumentRevisionRecords) : "—"}</strong>
-            <small>{fmt(selectedPw?.audit?.emittedUniqueDocuments)} documentos únicos</small>
+            <small>{fmt(selectedPw?.audit?.emittedUniqueDocuments)} documentos únicos · {fmt(selectedPw?.audit?.indeterminateEmissionDocumentRevisionRecords)} indeterminado(s)</small>
             <div><button type="button" data-evo-current-list="pw-current-emitted" onClick={() => adapter.setListMode("pw-current-emitted")}>Ver emitidos</button><button type="button" onClick={() => setAuditMetric("pw-current-emitted")}>Como calculado?</button></div>
           </article>
           <article>
@@ -679,7 +688,7 @@ export function SigemPwEvolutionApp() {
           <article><strong>{fmt(selectedPw?.audit?.technicalDuplicates)}</strong><span>duplicidades técnicas exatas removidas</span></article>
           <article><strong>{fmt(selectedPw?.audit?.discardedRecords)}</strong><span>registros PW fora do universo válido / inválidos</span></article>
           <article><strong>{fmt(selectedPw?.audit?.emissionBreakdown?.planned)}</strong><span>registros PW com emissão PREVISTO</span></article>
-          <article><strong>{fmt(Number(selectedPw?.audit?.emissionBreakdown?.unknown || 0) + Number(selectedPw?.audit?.emissionBreakdown?.missing || 0))}</strong><span>registros PW sem regra de emissão determinável</span></article>
+          <article><strong>{fmt(selectedPw?.audit?.indeterminateEmissionDocumentRevisionRecords)}</strong><span>documento + revisão com emissão indeterminada <button type="button" className="text-button" onClick={() => adapter.setListMode("pw-current-indeterminate")}>ver registros</button></span></article>
         </div>
         <p>O GRCON não ajusta esses valores para coincidir com uma expectativa externa. Cada grupo acima pode alterar a interpretação entre documento, documento + revisão, cadastrado e emitido.</p>
       </section>
