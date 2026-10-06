@@ -505,17 +505,17 @@ async function buildPreparedSnapshots(
   let unavailable = 0;
   const ldFingerprint = text(universe?.fingerprint);
   for (const sourceSnapshot of metadata.slice().sort((a, b) => Date.parse(text(a.importedAt)) - Date.parse(text(b.importedAt)))) {
-    const payload = payloads.get(sourceSnapshot.id);
-    if (!payload || !Array.isArray(payload.records)) {
-      unavailable += 1;
-      continue;
-    }
     const key = preparedCacheKey(system, sourceSnapshot, state.ldUniverse);
     const cached = preparedSnapshotCache.get(key) || storedPrepared.get(key);
     if (cached && cached.analysisVersion === Core().CALCULATION_VERSION && Array.isArray(cached.records)) {
       preparedSnapshotCache.set(key, cached);
       output.push(cached);
       state.metrics.evolutionCacheHitCount += 1;
+      continue;
+    }
+    const payload = payloads.get(sourceSnapshot.id);
+    if (!payload || !Array.isArray(payload.records)) {
+      unavailable += 1;
       continue;
     }
     state.metrics.evolutionCacheMissCount += 1;
