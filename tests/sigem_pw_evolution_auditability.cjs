@@ -1,0 +1,143 @@
+"use strict";
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const root = path.resolve(__dirname, "..");
+const Evo = require(path.join(root, "sigem_pw_evolution_core.js"));
+
+const et = (id) => "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-" + id;
+const s = (id, revision, extra = {}) => ({ document: et(id), revision, status: "Em análise", ...extra });
+const p = (id, revision, lastEmission, extra = {}) => ({
+  document: et(id),
+  revision,
+  revisionComplete: revision,
+  state: lastEmission === "Previsto" ? "Cadastrado" : "Liberado",
+  lastEmission,
+  ...extra,
+});
+const universe = Evo.buildLdUniverse(
+  ["A", "B", "C", "D", "E"].map((id) => ({ document: et(id), discipline: "INS" })),
+  [],
+);
+const base = (system, records, importedAt) => Evo.buildSnapshot(system, {
+  meta: { fileName: system.toUpperCase() + ".csv", importedAt, sourceRowCount: records.length },
+  records,
+}, universe);
+
+(function emissionSemanticsAreExplicit() {
+  assert.deepEqual(Evo.emissionInfo("Sim"), {
+    flag: "SIM", kind: "current", emitted: true, recognized: true, reason: "Última emissão = SIM (evidência atual)",
+  });
+  assert.equal(Evo.emissionInfo("Não").kind, "historical");
+  assert.equal(Evo.emissionInfo("Não").emitted, true, "NÃO preserva a semântica histórica vigente do Dashboard");
+  assert.equal(Evo.emissionInfo("Previsto").emitted, false);
+  assert.equal(Evo.emissionInfo("valor novo").kind, "unknown");
+  assert.equal(Evo.emissionInfo("valor novo").emitted, false);
+})();
+
+const sigemCurrent = base("sigem", [
+  s("A", "0"),
+  s("A", "A"),
+  s("B", "0"),
+], "2026-10-05T08:00:00Z");
+
+const pwRows = [
+  p("A", "0", "Sim"),
+  p("A", "A", "Não"),
+  p("C", "0", "Previsto"),
+  p("D", "0", "Valor inesperado"),
+  p("E", "0", "Sim"),
+  p("E", "0", "Sim"),
+];
+const pwCurrent = base("pw", pwRows, "2026-10-05T09:00:00Z");
+
+(function auditExplainsRawToKpi() {
+  const audit = pwCurrent.audit;
+  assert.equal(audit.rawRecords, 6);
+  assert.equal(audit.acceptedRecords, 5, "duplicidade técnica exata não entra duas vezes");
+  assert.equal(audit.technicalDuplicates, 1);
+  assert.equal(audit.documentRevisionRecords, 5);
+  assert.equal(audit.uniqueDocuments, 4);
+  assert.equal(audit.emittedDocumentRevisionRecords, 3);
+  assert.equal(audit.emittedUniqueDocuments, 2, "A possui duas revisões emitidas, mas é um documento único");
+  assert.equal(audit.notEmittedDocumentRevisionRecords, 2);
+  assert.deepEqual(audit.emissionBreakdown, { current: 2, historical: 1, planned: 1, unknown: 1, missing: 0 });
+  assert.match(audit.emissionRule, /SIM.*NÃO.*PREVISTO/i);
+  assert.equal(pwCurrent.analysisVersion, Evo.CALCULATION_VERSION);
+})();
+
+(function currentRelationsAreDocumentRevisionBased() {
+  const relation = Evo.currentRelations(sigemCurrent.records, pwCurrent.records);
+  assert.equal(relation.both.length, 2);
+  assert.equal(relation.bothEmitted.length, 2);
+  assert.equal(relation.bothNotEmitted.length, 0);
+  assert.equal(relation.onlySigem.length, 1);
+  assert.equal(relation.onlySigem[0].document, et("B"));
+  assert.equal(relation.onlyPw.length, 3);
+  assert.equal(relation.pwOnlyEmitted.length, 1);
+  assert.equal(relation.pwOnlyNotEmitted.length, 2);
+})();
+
+(function newDocumentAndNewRevisionAreNotConfused() {
+  const sigemPrevious = base("sigem", [s("A", "0")], "2026-10-01T08:00:00Z");
+  const pwPrevious = base("pw", [p("A", "0", "Sim"), p("C", "0", "Previsto")], "2026-10-01T09:00:00Z");
+  const comparison = Evo.comparePeriod(sigemPrevious, sigemCurrent, pwPrevious, pwCurrent);
+
+  assert.equal(comparison.sigem.documentRevision.added.length, 2);
+  assert.equal(comparison.sigem.documentRevision.newDocuments.length, 1);
+  assert.equal(comparison.sigem.documentRevision.newDocuments[0].document, et("B"));
+  assert.equal(comparison.sigem.documentRevision.newRevisions.length, 1);
+  assert.equal(comparison.sigem.documentRevision.newRevisions[0].revision, "A");
+
+  assert.equal(comparison.pw.documentRevision.added.length, 3);
+  assert.equal(comparison.pw.documentRevision.newDocuments.length, 2);
+  assert.equal(comparison.pw.documentRevision.newRevisions.length, 1);
+  assert.equal(comparison.pw.documentRevision.newRevisions[0].revision, "A");
+  assert.equal(comparison.pwEmissions.length, 2, "somente novas entradas emitidas/transições devem formar novas emissões");
+})();
+
+(function largeDocumentRevisionDeltaRemainsIndexed() {
+  const size = 20000;
+  const before = new Array(size);
+  const after = new Array(size + 500);
+  for (let i = 0; i < size; i += 1) {
+    const row = { document: et("P" + String(i).padStart(5, "0")), revision: "0", documentKey: "DOC-" + i, documentRevisionKey: "DOC-" + i + "|0", sourceRow: i + 2 };
+    before[i] = row;
+    after[i] = row;
+  }
+  for (let i = 0; i < 500; i += 1) {
+    const index = size + i;
+    after[index] = { document: et("P" + String(i).padStart(5, "0")), revision: "A", documentKey: "DOC-" + i, documentRevisionKey: "DOC-" + i + "|A", sourceRow: index + 2 };
+  }
+  const started = performance.now();
+  const delta = Evo.documentRevisionDelta(before, after);
+  const elapsed = performance.now() - started;
+  assert.equal(delta.added.length, 500);
+  assert.equal(delta.newRevisions.length, 500);
+  assert.ok(elapsed < 3000, "delta 20k deve permanecer linear/rápido; medido " + elapsed.toFixed(1) + " ms");
+  console.log("auditability doc+rev perf 20k=" + elapsed.toFixed(1) + "ms");
+})();
+
+(function sourceContractsGuardSelectionAndCacheRegression() {
+  const adapter = fs.readFileSync(path.join(root, "src/react/sigem-pw/evolution/services/sigemPwEvolutionAdapter.ts"), "utf8");
+  const app = fs.readFileSync(path.join(root, "src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx"), "utf8");
+  const domain = fs.readFileSync(path.join(root, "src/react/sigem-pw/evolution/types/domain.ts"), "utf8");
+  assert.match(adapter, /PREFERENCES_KEY/);
+  assert.match(adapter, /sessionStorage/);
+  assert.match(adapter, /preparedSnapshotCache/);
+  assert.match(adapter, /evolutionPrepared:sigem-pw-evolution-audit-v4/);
+  assert.match(adapter, /timelineCache/);
+  assert.match(adapter, /preferredSelections/);
+  assert.match(adapter, /exportAuditWorkbook/);
+  assert.match(app, /Como foi calculado\?/);
+  assert.match(app, /Diagnóstico da contagem/);
+  assert.match(app, /PW cadastrado/);
+  assert.match(app, /PW emitido/);
+  assert.match(app, /SIGEM ativo/);
+  assert.match(app, /PW ativo/);
+  assert.match(domain, /documentRevisionRecords/);
+  assert.match(domain, /emittedUniqueDocuments/);
+})();
+
+console.log("sigem_pw_evolution_auditability: OK — granularidade dupla, emissão, diagnóstico, cache e rastreabilidade validados.");
