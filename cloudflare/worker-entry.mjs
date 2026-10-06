@@ -1,352 +1,407 @@
 import legacyWorker from "./worker.mjs";
 
-const VAULT_PREFIX = "/api/document-vault/";
-const R2_BUCKET = "grcon-documents";
-const URL_TTL_SECONDS = 15 * 60;
-const MAX_JSON_BYTES = 256_000;
+const PREFIX = "/api/document-vault/";
+const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
+const MIB = 1024 * 1024;
 
-const API_HEADERS = Object.freeze({
-  "Cache-Control": "no-store",
-  "Content-Type": "application/json; charset=utf-8",
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "SAMEORIGIN",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-});
-
-function json(status, payload, extra = {}) {
-  return new Response(JSON.stringify(payload), { status, headers: { ...API_HEADERS, ...extra } });
+function json(value, status = 200, headers = {}) {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      ...headers,
+    },
+  });
 }
 
-function text(value, max = 600) {
-  return String(value === null || value === undefined ? "" : value).trim().slice(0, max);
+function apiError(message, status = 400, code = "VAULT_ERROR", detail) {
+  return json({ ok: false, error: code, message, detail: detail || undefined }, status);
 }
 
-async function readJsonBody(request) {
-  const bytes = await request.arrayBuffer();
-  if (bytes.byteLength > MAX_JSON_BYTES) throw Object.assign(new Error("Solicitação muito grande."), { status: 413, code: "PAYLOAD_TOO_LARGE" });
-  return JSON.parse(new TextDecoder().decode(bytes) || "{}");
+function safeText(value, max = 4096) {
+  return String(value == null ? "" : value).trim().slice(0, max);
+}
+
+function safeUuid(value) {
+  const text = safeText(value, 64);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text) ? text : "";
 }
 
 function bearerToken(request) {
-  const match = text(request.headers.get("authorization"), 6000).match(/^Bearer\s+(.+)$/i);
-  if (!match) throw Object.assign(new Error("Sessão do GRCON não informada."), { status: 401, code: "MISSING_SESSION" });
-  return match[1];
+  const value = request.headers.get("authorization") || "";
+  const match = value.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
 }
 
 function supabaseConfig(env) {
-  const url = text(env.SUPABASE_URL, 1000).replace(/\/$/, "");
-  const key = text(env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY, 2000);
-  if (!url || !key) throw Object.assign(new Error("Supabase do GRCON não configurado no Worker."), { status: 503, code: "SUPABASE_NOT_CONFIGURED" });
-  return { url, key };
+  const url = safeText(env.SUPABASE_URL, 2048).replace(/\/+$/, "");
+  const secret = safeText(env.SUPABASE_SECRET_KEY, 8192);
+  if (!url || !secret) throw new Error("Cofre indisponível: SUPABASE_URL/SUPABASE_SECRET_KEY não configurados no Worker.");
+  return { url, secret };
 }
 
-function restHeaders(token, env, prefer) {
-  const config = supabaseConfig(env);
-  return {
-    Authorization: `Bearer ${token}`,
-    apikey: config.key,
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    ...(prefer ? { Prefer: prefer } : {}),
+function serviceHeaders(secret) {
+  const headers = {
+    apikey: secret,
+    "content-type": "application/json",
   };
+  // Compatibilidade com o service_role JWT legado. As chaves sb_secret_* novas
+  // funcionam pelo cabeçalho apikey e não devem ser tratadas como JWT.
+  if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(secret)) {
+    headers.authorization = `Bearer ${secret}`;
+  }
+  return headers;
 }
 
-async function restJson(path, token, env, options = {}) {
-  const { url } = supabaseConfig(env);
-  const response = await fetch(`${url}/rest/v1/${path}`, {
-    method: options.method || "GET",
-    headers: restHeaders(token, env, options.prefer),
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    signal: AbortSignal.timeout(12_000),
+async function authenticatedUser(request, env) {
+  const token = bearerToken(request);
+  if (!token) throw Object.assign(new Error("Sessão obrigatória."), { status: 401, code: "AUTH_REQUIRED" });
+  const { url, secret } = supabaseConfig(env);
+  const response = await fetch(`${url}/auth/v1/user`, {
+    headers: { apikey: secret, authorization: `Bearer ${token}` },
   });
-  const raw = await response.text();
-  let data = null;
-  try { data = raw ? JSON.parse(raw) : null; } catch (_) { data = raw; }
   if (!response.ok) {
-    const message = data && (data.message || data.hint || data.details) || raw || "Falha ao registrar metadados do Cofre.";
-    throw Object.assign(new Error(text(message, 500)), { status: response.status, code: "VAULT_DATABASE_ERROR" });
+    throw Object.assign(new Error("Sessão inválida ou expirada."), { status: 401, code: "AUTH_INVALID" });
+  }
+  const user = await response.json();
+  if (!user?.id) throw Object.assign(new Error("Usuário não identificado."), { status: 401, code: "AUTH_INVALID" });
+  return user;
+}
+
+async function rpc(env, name, payload) {
+  const { url, secret } = supabaseConfig(env);
+  const response = await fetch(`${url}/rest/v1/rpc/${name}`, {
+    method: "POST",
+    headers: serviceHeaders(secret),
+    body: JSON.stringify(payload),
+  });
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) { data = text; }
+  if (!response.ok) {
+    const message = data?.message || data?.error_description || data?.hint || "Falha no catálogo do Cofre.";
+    throw Object.assign(new Error(message), { status: response.status === 403 ? 403 : 400, code: data?.code || "CATALOG_ERROR", detail: data });
   }
   return data;
 }
 
-async function verifyMembership(token, workspaceId, env, allowedRoles) {
-  const { url } = supabaseConfig(env);
-  const headers = restHeaders(token, env);
-  const userResponse = await fetch(`${url}/auth/v1/user`, { headers, signal: AbortSignal.timeout(10_000) });
-  if (!userResponse.ok) throw Object.assign(new Error("Sessão inválida ou expirada."), { status: 401, code: "INVALID_SESSION" });
-  const user = await userResponse.json();
-  if (!user || !user.id) throw Object.assign(new Error("Usuário não identificado."), { status: 401, code: "INVALID_SESSION" });
-
-  const query = new URLSearchParams({
-    select: "workspace_id,role,active",
-    user_id: `eq.${user.id}`,
-    workspace_id: `eq.${workspaceId}`,
-    active: "eq.true",
-    limit: "1",
+async function catalog(env, workspaceId, actorId, operation, input = {}) {
+  return rpc(env, "grcon_document_catalog", {
+    target_workspace: workspaceId,
+    actor_id: actorId,
+    operation,
+    input,
   });
-  const rows = await restJson(`grcon_memberships?${query}`, token, env);
-  if (!Array.isArray(rows) || !rows.length || !allowedRoles.includes(rows[0].role)) {
-    throw Object.assign(new Error("Seu perfil não tem permissão para esta operação no Cofre."), { status: 403, code: "NOT_ALLOWED" });
+}
+
+async function listCatalog(env, workspaceId, actorId, input = {}) {
+  return rpc(env, "grcon_document_vault_list", {
+    target_workspace: workspaceId,
+    actor_id: actorId,
+    input,
+  });
+}
+
+function workspaceFrom(request, body) {
+  const url = new URL(request.url);
+  return safeUuid(body?.workspaceId || body?.workspace_id || request.headers.get("x-grcon-workspace") || url.searchParams.get("workspace"));
+}
+
+function partSizeFor(sizeBytes) {
+  const size = Math.max(0, Number(sizeBytes) || 0);
+  return Math.max(16 * MIB, Math.ceil(size / 10000 / MIB) * MIB);
+}
+
+function cleanEtag(value) {
+  return safeText(value, 255).replace(/^"+|"+$/g, "");
+}
+
+function contentDisposition(name) {
+  const fallback = safeText(name, 255).replace(/[\r\n"]/g, "_") || "documento";
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(fallback)}`;
+}
+
+function requireBucket(env) {
+  if (!env.GRCON_DOCUMENTS) throw new Error("Binding R2 GRCON_DOCUMENTS não configurado.");
+  return env.GRCON_DOCUMENTS;
+}
+
+async function parseJson(request) {
+  try { return await request.json(); }
+  catch (_) { throw Object.assign(new Error("Corpo JSON inválido."), { status: 400, code: "INVALID_JSON" }); }
+}
+
+async function getOwnedOrReady(env, workspaceId, actorId, id) {
+  const file = await catalog(env, workspaceId, actorId, "get", { id });
+  if (!file?.id) throw Object.assign(new Error("Documento não localizado no Cofre."), { status: 404, code: "NOT_FOUND" });
+  return file;
+}
+
+function normalizeMetadata(body) {
+  const fileName = safeText(body?.fileName || body?.file_name, 255).split(/[\\/]/).pop();
+  const relativePath = safeText(body?.relativePath || body?.relative_path || fileName, 4096);
+  const documentCode = safeText(body?.documentCode || body?.document_code, 255).toUpperCase();
+  const revision = safeText(body?.revision, 40).toUpperCase();
+  const format = safeText(body?.format || fileName.split(".").pop(), 40).toLowerCase();
+  const sha256 = safeText(body?.sha256, 64).toLowerCase();
+  const sizeBytes = Number(body?.sizeBytes ?? body?.size_bytes);
+  if (!fileName || !/^[a-f0-9]{64}$/.test(sha256) || !Number.isSafeInteger(sizeBytes) || sizeBytes < 0) {
+    throw Object.assign(new Error("Nome, tamanho ou hash do arquivo inválido."), { status: 400, code: "INVALID_FILE" });
   }
-  return { id: user.id, email: text(user.email, 200), role: rows[0].role };
+  return { file_name: fileName, relative_path: relativePath, document_code: documentCode, revision, format, sha256, size_bytes: sizeBytes };
 }
 
-function normalizeHash(value) {
-  const hash = text(value, 80).toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(hash)) throw Object.assign(new Error("SHA-256 inválido."), { status: 400, code: "INVALID_SHA256" });
-  return hash;
+async function handleHealth(env) {
+  let supabase = false;
+  try { supabase = Boolean(supabaseConfig(env)); } catch (_) { supabase = false; }
+  return json({
+    ok: Boolean(supabase && env.GRCON_DOCUMENTS),
+    service: "grcon-document-vault",
+    supabaseConfigured: supabase,
+    r2Configured: Boolean(env.GRCON_DOCUMENTS),
+    bucket: safeText(env.R2_BUCKET_NAME || "grcon-documents", 120),
+  }, supabase && env.GRCON_DOCUMENTS ? 200 : 503);
 }
 
-function normalizeMeta(input) {
-  const sizeBytes = Number(input && input.sizeBytes);
-  const workspaceId = text(input && input.workspaceId, 80);
-  const originalFileName = text(input && input.originalFileName, 500);
-  if (!workspaceId) throw Object.assign(new Error("Workspace não informado."), { status: 400, code: "WORKSPACE_REQUIRED" });
-  if (!originalFileName) throw Object.assign(new Error("Nome do arquivo não informado."), { status: 400, code: "FILE_NAME_REQUIRED" });
-  if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0) throw Object.assign(new Error("Tamanho de arquivo inválido."), { status: 400, code: "INVALID_FILE_SIZE" });
-  return {
-    workspaceId,
-    originalFileName,
-    sizeBytes,
-    mimeType: text(input && input.mimeType, 180) || "application/octet-stream",
-    sha256: normalizeHash(input && input.sha256),
-    documentCode: text(input && input.documentCode, 300),
-    documentCodeNormalized: text(input && input.documentCodeNormalized, 300),
-    revision: text(input && input.revision, 40),
-    revisionNormalized: text(input && input.revisionNormalized, 40),
-    sourceKind: ["upload", "folder-import", "grdt"].includes(text(input && input.sourceKind, 30)) ? text(input.sourceKind, 30) : "upload",
-    originalRelativePath: text(input && input.originalRelativePath, 1000),
-  };
-}
-
-function rfc3986(value) {
-  return encodeURIComponent(String(value)).replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
-}
-
-function bytesToHex(value) {
-  return [...new Uint8Array(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function digestHex(value) {
-  return bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
-}
-
-async function hmac(keyBytes, value) {
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value)));
-}
-
-async function signR2Url(method, objectKey, env, expires = URL_TTL_SECONDS) {
-  const accountId = text(env.CLOUDFLARE_ACCOUNT_ID, 100);
-  const accessKey = text(env.R2_ACCESS_KEY_ID, 300);
-  const secretKey = text(env.R2_SECRET_ACCESS_KEY, 500);
-  const bucket = text(env.R2_BUCKET_NAME, 100) || R2_BUCKET;
-  if (!accountId || !accessKey || !secretKey) {
-    throw Object.assign(new Error("Credenciais temporárias do Cofre ainda não foram configuradas no Worker."), { status: 503, code: "R2_SIGNING_NOT_CONFIGURED" });
-  }
-
-  const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
-  const dateStamp = amzDate.slice(0, 8);
-  const host = `${accountId}.r2.cloudflarestorage.com`;
-  const canonicalUri = `/${rfc3986(bucket)}/${String(objectKey).split("/").map(rfc3986).join("/")}`;
-  const scope = `${dateStamp}/auto/s3/aws4_request`;
-  const params = {
-    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
-    "X-Amz-Credential": `${accessKey}/${scope}`,
-    "X-Amz-Date": amzDate,
-    "X-Amz-Expires": String(Math.max(1, Math.min(3600, Number(expires) || URL_TTL_SECONDS))),
-    "X-Amz-SignedHeaders": "host",
-  };
-  const canonicalQuery = Object.entries(params)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${rfc3986(key)}=${rfc3986(value)}`)
-    .join("&");
-  const canonicalRequest = [method.toUpperCase(), canonicalUri, canonicalQuery, `host:${host}\n`, "host", "UNSIGNED-PAYLOAD"].join("\n");
-  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, await digestHex(canonicalRequest)].join("\n");
-
-  const kDate = await hmac(new TextEncoder().encode(`AWS4${secretKey}`), dateStamp);
-  const kRegion = await hmac(kDate, "auto");
-  const kService = await hmac(kRegion, "s3");
-  const kSigning = await hmac(kService, "aws4_request");
-  const signingKey = await crypto.subtle.importKey("raw", kSigning, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signature = bytesToHex(await crypto.subtle.sign("HMAC", signingKey, new TextEncoder().encode(stringToSign)));
-
-  return `https://${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
-}
-
-async function findStoredObject(meta, token, env) {
-  const query = new URLSearchParams({
-    select: "id,object_key,sha256,size_bytes,mime_type,original_file_name,state",
-    workspace_id: `eq.${meta.workspaceId}`,
-    sha256: `eq.${meta.sha256}`,
-    size_bytes: `eq.${meta.sizeBytes}`,
-    state: "eq.available",
-    limit: "1",
+async function handleList(request, env) {
+  const user = await authenticatedUser(request, env);
+  const url = new URL(request.url);
+  const workspaceId = workspaceFrom(request);
+  if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
+  const data = await listCatalog(env, workspaceId, user.id, {
+    after: Math.max(0, Number(url.searchParams.get("after")) || 0),
+    limit: Math.min(200, Math.max(1, Number(url.searchParams.get("limit")) || 100)),
+    q: safeText(url.searchParams.get("q"), 160),
+    allocation: safeText(url.searchParams.get("allocation") || "all", 32),
   });
-  const rows = await restJson(`grcon_document_objects?${query}`, token, env);
-  return Array.isArray(rows) && rows[0] || null;
-}
-
-async function conflictFor(meta, objectId, token, env) {
-  if (!meta.documentCodeNormalized || !meta.revisionNormalized) return false;
-  const query = new URLSearchParams({
-    select: "object_id",
-    workspace_id: `eq.${meta.workspaceId}`,
-    document_code_normalized: `eq.${meta.documentCodeNormalized}`,
-    revision_normalized: `eq.${meta.revisionNormalized}`,
-    deleted_at: "is.null",
-  });
-  const rows = await restJson(`grcon_vault_documents?${query}`, token, env);
-  return Array.isArray(rows) && rows.some((row) => row.object_id && row.object_id !== objectId);
-}
-
-async function ensureVaultDocument(meta, objectId, user, token, env) {
-  const conflict = await conflictFor(meta, objectId, token, env);
-  const state = !meta.documentCodeNormalized || !meta.revisionNormalized ? "unidentified" : conflict ? "conflict" : "identified";
-  const payload = {
-    workspace_id: meta.workspaceId,
-    object_id: objectId,
-    document_code: meta.documentCode || null,
-    document_code_normalized: meta.documentCodeNormalized || null,
-    revision: meta.revision || null,
-    revision_normalized: meta.revisionNormalized || null,
-    identification_state: state,
-    source_kind: meta.sourceKind,
-    original_relative_path: meta.originalRelativePath || null,
-    created_by: user.id,
-  };
-  const rows = await restJson("grcon_vault_documents?on_conflict=workspace_id,object_id,document_code_normalized,revision_normalized", token, env, {
-    method: "POST",
-    prefer: "resolution=ignore-duplicates,return=representation",
-    body: payload,
-  });
-  if (Array.isArray(rows) && rows[0]) return rows[0];
-  const lookup = new URLSearchParams({ select: "*", workspace_id: `eq.${meta.workspaceId}`, object_id: `eq.${objectId}`, limit: "1" });
-  const found = await restJson(`grcon_vault_documents?${lookup}`, token, env);
-  return Array.isArray(found) && found[0] || { identification_state: state };
-}
-
-async function audit(workspaceId, user, action, entityType, entityId, metadata, token, env) {
-  await restJson("grcon_document_audit", token, env, {
-    method: "POST",
-    prefer: "return=minimal",
-    body: { workspace_id: workspaceId, actor_id: user.id, action, entity_type: entityType, entity_id: String(entityId || ""), metadata: metadata || {} },
-  });
+  return json({ ok: true, ...data });
 }
 
 async function handleInit(request, env) {
-  const token = bearerToken(request);
-  const meta = normalizeMeta(await readJsonBody(request));
-  const user = await verifyMembership(token, meta.workspaceId, env, ["owner", "admin", "operator"]);
-  const existing = await findStoredObject(meta, token, env);
-  if (existing) {
-    const document = await ensureVaultDocument(meta, existing.id, user, token, env);
-    await audit(meta.workspaceId, user, "reuse", "document_object", existing.id, { sha256: meta.sha256, vaultDocumentId: document.id || null }, token, env);
-    return json(200, { ok: true, deduplicated: true, object: existing, document });
-  }
+  const user = await authenticatedUser(request, env);
+  const body = await parseJson(request);
+  const workspaceId = workspaceFrom(request, body);
+  if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
+  const metadata = normalizeMetadata(body);
 
-  const objectKey = `documents/${crypto.randomUUID()}`;
-  const inserted = await restJson("grcon_document_objects", token, env, {
-    method: "POST",
-    prefer: "return=representation",
-    body: {
-      workspace_id: meta.workspaceId,
-      object_key: objectKey,
-      sha256: meta.sha256,
-      size_bytes: meta.sizeBytes,
-      mime_type: meta.mimeType,
-      original_file_name: meta.originalFileName,
-      storage_bucket: text(env.R2_BUCKET_NAME, 100) || R2_BUCKET,
-      state: "pending",
-      created_by: user.id,
+  const hashMatches = await catalog(env, workspaceId, user.id, "find_hash", {
+    sha256: metadata.sha256,
+    size_bytes: metadata.size_bytes,
+  });
+  const reusable = Array.isArray(hashMatches) ? hashMatches.find((item) => item?.id && item?.status === "ready") : null;
+  const result = await catalog(env, workspaceId, user.id, "begin", {
+    ...metadata,
+    reuse_id: reusable?.id || null,
+    allow_conflict: Boolean(body?.allowConflict),
+  });
+  if (result?.conflict) {
+    return apiError("Já existe o mesmo documento/revisão/formato com conteúdo diferente. Confirme explicitamente para manter uma variante.", 409, "IDENTITY_CONFLICT", result);
+  }
+  if (result?.error) return apiError(result.message || "Não foi possível reservar o arquivo.", 409, result.error, result);
+  const file = result?.file;
+  if (!file?.id) return apiError("O catálogo não retornou a reserva do arquivo.", 500, "CATALOG_INVALID");
+  const ready = file.status === "ready";
+  const multipart = !ready && Number(file.size_bytes) > SINGLE_UPLOAD_LIMIT;
+  return json({
+    ok: true,
+    duplicate: Boolean(result.duplicate),
+    reused: Boolean(result.reused),
+    ready,
+    uploadMode: ready ? "none" : multipart ? "multipart" : "single",
+    partSize: multipart ? partSizeFor(file.size_bytes) : null,
+    file: {
+      id: file.id,
+      file_name: file.file_name,
+      document_code: file.document_code,
+      revision: file.revision,
+      format: file.format,
+      size_bytes: Number(file.size_bytes),
+      sha256: file.sha256,
+      status: file.status,
+      object_key: file.object_key,
+      multipart_id: file.multipart_id || null,
+      parts: Array.isArray(file.parts) ? file.parts : [],
     },
   });
-  const object = Array.isArray(inserted) && inserted[0];
-  if (!object) throw Object.assign(new Error("Não foi possível iniciar o upload."), { status: 500, code: "VAULT_INIT_FAILED" });
-  await audit(meta.workspaceId, user, "upload_started", "document_object", object.id, { sha256: meta.sha256, sizeBytes: meta.sizeBytes }, token, env);
-  return json(200, { ok: true, deduplicated: false, object, uploadUrl: await signR2Url("PUT", objectKey, env), expiresIn: URL_TTL_SECONDS });
 }
 
-async function handleComplete(request, env) {
-  const token = bearerToken(request);
-  const input = await readJsonBody(request);
-  const meta = normalizeMeta(input);
-  const objectId = text(input && input.objectId, 100);
-  const objectKey = text(input && input.objectKey, 700);
-  if (!objectId || !objectKey) throw Object.assign(new Error("Objeto do upload não informado."), { status: 400, code: "VAULT_OBJECT_REQUIRED" });
-  const user = await verifyMembership(token, meta.workspaceId, env, ["owner", "admin", "operator"]);
+async function handleSingleUpload(request, env) {
+  const user = await authenticatedUser(request, env);
+  const workspaceId = workspaceFrom(request);
+  const id = safeUuid(request.headers.get("x-grcon-file-id") || new URL(request.url).searchParams.get("id"));
+  if (!workspaceId || !id || !request.body) return apiError("Upload incompleto.", 400, "UPLOAD_INVALID");
+  const file = await getOwnedOrReady(env, workspaceId, user.id, id);
+  if (file.status === "ready") return json({ ok: true, file, duplicate: true });
+  if (Number(file.size_bytes) > SINGLE_UPLOAD_LIMIT) return apiError("Arquivo exige upload multipart.", 409, "MULTIPART_REQUIRED");
 
-  if (!env.GRCON_DOCUMENTS || typeof env.GRCON_DOCUMENTS.head !== "function") {
-    throw Object.assign(new Error("Binding R2 do Cofre não configurado."), { status: 503, code: "R2_BINDING_NOT_CONFIGURED" });
-  }
-  const stored = await env.GRCON_DOCUMENTS.head(objectKey);
-  if (!stored) throw Object.assign(new Error("O arquivo ainda não foi localizado no Cofre."), { status: 409, code: "R2_OBJECT_MISSING" });
-  if (Number(stored.size) !== meta.sizeBytes) throw Object.assign(new Error("O tamanho armazenado difere do arquivo original."), { status: 409, code: "R2_SIZE_MISMATCH" });
-
-  const filter = new URLSearchParams({ id: `eq.${objectId}`, workspace_id: `eq.${meta.workspaceId}`, object_key: `eq.${objectKey}` });
-  const updated = await restJson(`grcon_document_objects?${filter}`, token, env, {
-    method: "PATCH",
-    prefer: "return=representation",
-    body: { state: "available", updated_at: new Date().toISOString() },
+  const bucket = requireBucket(env);
+  const object = await bucket.put(file.object_key, request.body, {
+    httpMetadata: { contentType: request.headers.get("content-type") || "application/octet-stream" },
+    customMetadata: { sha256: file.sha256, fileId: file.id, workspaceId },
   });
-  const object = Array.isArray(updated) && updated[0];
-  if (!object) throw Object.assign(new Error("Metadados do objeto não foram localizados."), { status: 409, code: "VAULT_OBJECT_METADATA_MISSING" });
-  const document = await ensureVaultDocument(meta, objectId, user, token, env);
-  await audit(meta.workspaceId, user, document.identification_state === "conflict" ? "conflict" : "upload_completed", "vault_document", document.id || objectId, {
-    sha256: meta.sha256, objectId, objectKey,
-  }, token, env);
-  return json(200, { ok: true, object, document, integrity: { sizeVerified: true, sha256Recorded: meta.sha256 } });
+  const head = await bucket.head(file.object_key);
+  const ok = Boolean(head && Number(head.size) === Number(file.size_bytes));
+  const completed = await catalog(env, workspaceId, user.id, "complete", {
+    id: file.id,
+    object_key: file.object_key,
+    ok,
+    size: Number(head?.size || 0),
+    sha256: file.sha256,
+    etag: cleanEtag(object?.httpEtag || object?.etag || head?.httpEtag || head?.etag || "r2"),
+  });
+  if (!ok || completed?.error) return apiError(completed?.message || "O arquivo chegou ao R2 com tamanho divergente.", 409, completed?.error || "INTEGRITY_ERROR", completed);
+  return json({ ok: true, file: completed });
+}
+
+async function handleMultipartStart(request, env) {
+  const user = await authenticatedUser(request, env);
+  const body = await parseJson(request);
+  const workspaceId = workspaceFrom(request, body);
+  const id = safeUuid(body?.id);
+  if (!workspaceId || !id) return apiError("Envio multipart inválido.", 400, "MULTIPART_INVALID");
+  const file = await getOwnedOrReady(env, workspaceId, user.id, id);
+  if (file.status === "ready") return json({ ok: true, ready: true, file });
+  if (file.multipart_id) {
+    return json({ ok: true, uploadId: file.multipart_id, partSize: partSizeFor(file.size_bytes), parts: file.parts || [], file });
+  }
+  const upload = await requireBucket(env).createMultipartUpload(file.object_key, {
+    httpMetadata: { contentType: safeText(body?.contentType, 255) || "application/octet-stream" },
+    customMetadata: { sha256: file.sha256, fileId: file.id, workspaceId },
+  });
+  const updated = await catalog(env, workspaceId, user.id, "multipart", {
+    id: file.id,
+    object_key: file.object_key,
+    multipart_id: upload.uploadId,
+  });
+  if (updated?.error) {
+    try { await upload.abort(); } catch (_) {}
+    return apiError(updated.message || "Não foi possível iniciar o multipart.", 409, updated.error, updated);
+  }
+  return json({ ok: true, uploadId: upload.uploadId, partSize: partSizeFor(file.size_bytes), parts: updated.parts || [], file: updated });
+}
+
+async function handleMultipartPart(request, env) {
+  const user = await authenticatedUser(request, env);
+  const url = new URL(request.url);
+  const workspaceId = workspaceFrom(request);
+  const id = safeUuid(request.headers.get("x-grcon-file-id") || url.searchParams.get("id"));
+  const partNumber = Number(request.headers.get("x-grcon-part-number") || url.searchParams.get("part"));
+  if (!workspaceId || !id || !Number.isInteger(partNumber) || partNumber < 1 || !request.body) {
+    return apiError("Parte de upload inválida.", 400, "PART_INVALID");
+  }
+  const file = await getOwnedOrReady(env, workspaceId, user.id, id);
+  if (!file.multipart_id) return apiError("Sessão multipart não iniciada.", 409, "MULTIPART_NOT_STARTED");
+  const expectedSize = Number(request.headers.get("content-length"));
+  if (!Number.isSafeInteger(expectedSize) || expectedSize < 0) return apiError("Tamanho da parte ausente.", 411, "PART_SIZE_REQUIRED");
+
+  const upload = requireBucket(env).resumeMultipartUpload(file.object_key, file.multipart_id);
+  const part = await upload.uploadPart(partNumber, request.body);
+  const etag = cleanEtag(part.etag);
+  const updated = await catalog(env, workspaceId, user.id, "part", {
+    id: file.id,
+    object_key: file.object_key,
+    multipart_id: file.multipart_id,
+    part: { partNumber, etag, size: expectedSize },
+  });
+  if (updated?.error) return apiError(updated.message || "A sessão multipart mudou.", 409, updated.error, updated);
+  return json({ ok: true, part: { partNumber, etag, size: expectedSize } });
+}
+
+async function handleMultipartComplete(request, env) {
+  const user = await authenticatedUser(request, env);
+  const body = await parseJson(request);
+  const workspaceId = workspaceFrom(request, body);
+  const id = safeUuid(body?.id);
+  if (!workspaceId || !id) return apiError("Conclusão multipart inválida.", 400, "MULTIPART_INVALID");
+  const file = await getOwnedOrReady(env, workspaceId, user.id, id);
+  if (file.status === "ready") return json({ ok: true, file });
+  if (!file.multipart_id) return apiError("Sessão multipart não iniciada.", 409, "MULTIPART_NOT_STARTED");
+  const parts = (Array.isArray(file.parts) ? file.parts : [])
+    .map((part) => ({ partNumber: Number(part.partNumber), etag: safeText(part.etag, 255) }))
+    .filter((part) => Number.isInteger(part.partNumber) && part.partNumber > 0 && part.etag)
+    .sort((a, b) => a.partNumber - b.partNumber);
+  const expected = Math.max(1, Math.ceil(Number(file.size_bytes) / partSizeFor(file.size_bytes)));
+  if (parts.length !== expected) return apiError(`Upload incompleto: ${parts.length} de ${expected} partes confirmadas.`, 409, "PARTS_MISSING");
+
+  const object = await requireBucket(env).resumeMultipartUpload(file.object_key, file.multipart_id).complete(parts);
+  const head = await requireBucket(env).head(file.object_key);
+  const ok = Boolean(head && Number(head.size) === Number(file.size_bytes));
+  const completed = await catalog(env, workspaceId, user.id, "complete", {
+    id: file.id,
+    object_key: file.object_key,
+    ok,
+    size: Number(head?.size || 0),
+    sha256: file.sha256,
+    etag: cleanEtag(object?.httpEtag || object?.etag || head?.httpEtag || head?.etag || "multipart"),
+  });
+  if (!ok || completed?.error) return apiError(completed?.message || "Integridade final divergente.", 409, completed?.error || "INTEGRITY_ERROR", completed);
+  return json({ ok: true, file: completed });
+}
+
+async function handleRestart(request, env) {
+  const user = await authenticatedUser(request, env);
+  const body = await parseJson(request);
+  const workspaceId = workspaceFrom(request, body);
+  const id = safeUuid(body?.id);
+  if (!workspaceId || !id) return apiError("Reinício inválido.", 400, "RESTART_INVALID");
+  const file = await getOwnedOrReady(env, workspaceId, user.id, id);
+  if (file.multipart_id && file.status !== "ready") {
+    try { await requireBucket(env).resumeMultipartUpload(file.object_key, file.multipart_id).abort(); } catch (_) {}
+  }
+  const restarted = await catalog(env, workspaceId, user.id, "restart", { id: file.id });
+  return json({ ok: true, file: restarted });
 }
 
 async function handleDownload(request, env) {
-  const token = bearerToken(request);
-  const input = await readJsonBody(request);
-  const workspaceId = text(input && input.workspaceId, 80);
-  const vaultDocumentId = text(input && input.vaultDocumentId, 100);
-  if (!workspaceId || !vaultDocumentId) throw Object.assign(new Error("Documento do Cofre não informado."), { status: 400, code: "VAULT_DOCUMENT_REQUIRED" });
-  const user = await verifyMembership(token, workspaceId, env, ["owner", "admin", "operator", "viewer"]);
-
-  const docsQuery = new URLSearchParams({ select: "id,object_id,document_code,revision,identification_state", id: `eq.${vaultDocumentId}`, workspace_id: `eq.${workspaceId}`, deleted_at: "is.null", limit: "1" });
-  const docs = await restJson(`grcon_vault_documents?${docsQuery}`, token, env);
-  const document = Array.isArray(docs) && docs[0];
-  if (!document) throw Object.assign(new Error("Documento não localizado no Cofre."), { status: 404, code: "VAULT_DOCUMENT_NOT_FOUND" });
-
-  const objectQuery = new URLSearchParams({ select: "id,object_key,original_file_name,mime_type,size_bytes,sha256,state", id: `eq.${document.object_id}`, workspace_id: `eq.${workspaceId}`, state: "eq.available", limit: "1" });
-  const objects = await restJson(`grcon_document_objects?${objectQuery}`, token, env);
-  const object = Array.isArray(objects) && objects[0];
-  if (!object) throw Object.assign(new Error("Arquivo do documento está indisponível."), { status: 404, code: "VAULT_OBJECT_NOT_FOUND" });
-
-  await audit(workspaceId, user, "download_authorized", "vault_document", vaultDocumentId, { objectId: object.id }, token, env);
-  return json(200, { ok: true, document, object, downloadUrl: await signR2Url("GET", object.object_key, env, 300), expiresIn: 300 });
+  const user = await authenticatedUser(request, env);
+  const url = new URL(request.url);
+  const workspaceId = workspaceFrom(request);
+  const id = safeUuid(url.searchParams.get("id"));
+  if (!workspaceId || !id) return apiError("Documento inválido.", 400, "DOWNLOAD_INVALID");
+  const file = await getOwnedOrReady(env, workspaceId, user.id, id);
+  if (file.status !== "ready") return apiError("Documento ainda não está disponível.", 409, "NOT_READY");
+  const object = await requireBucket(env).get(file.object_key);
+  if (!object?.body) return apiError("Arquivo não encontrado no R2. O catálogo foi preservado para recuperação.", 409, "OBJECT_MISSING");
+  const headers = new Headers();
+  object.writeHttpMetadata?.(headers);
+  headers.set("content-type", headers.get("content-type") || "application/octet-stream");
+  headers.set("content-length", String(object.size));
+  headers.set("content-disposition", contentDisposition(file.file_name));
+  headers.set("cache-control", "private, no-store");
+  headers.set("x-grcon-document-id", file.id);
+  return new Response(object.body, { status: 200, headers });
 }
 
-async function handleVault(request, env, pathname) {
-  if (request.method !== "POST") return json(405, { ok: false, code: "METHOD_NOT_ALLOWED", message: "Use POST nesta operação." }, { Allow: "POST" });
-  try {
-    if (pathname === `${VAULT_PREFIX}init`) return await handleInit(request, env);
-    if (pathname === `${VAULT_PREFIX}complete`) return await handleComplete(request, env);
-    if (pathname === `${VAULT_PREFIX}download`) return await handleDownload(request, env);
-    return json(404, { ok: false, code: "NOT_FOUND", message: "Operação do Cofre não encontrada." });
-  } catch (error) {
-    const status = Number(error && error.status) || 400;
-    const code = text(error && error.code, 80) || "VAULT_REQUEST_FAILED";
-    console.error("GRCON Document Vault", code, error && error.message);
-    return json(status, { ok: false, code, message: status >= 500 ? "Não foi possível concluir a operação do Cofre agora." : text(error && error.message, 400) || "Operação inválida." });
-  }
+async function routeVault(request, env) {
+  const url = new URL(request.url);
+  const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
+  if (action === "health" && request.method === "GET") return handleHealth(env);
+  if (action === "list" && request.method === "GET") return handleList(request, env);
+  if (action === "init" && request.method === "POST") return handleInit(request, env);
+  if (action === "upload" && request.method === "PUT") return handleSingleUpload(request, env);
+  if (action === "multipart/start" && request.method === "POST") return handleMultipartStart(request, env);
+  if (action === "multipart/part" && request.method === "PUT") return handleMultipartPart(request, env);
+  if (action === "multipart/complete" && request.method === "POST") return handleMultipartComplete(request, env);
+  if (action === "restart" && request.method === "POST") return handleRestart(request, env);
+  if (action === "download" && request.method === "GET") return handleDownload(request, env);
+  return apiError("Rota do Cofre não encontrada.", 404, "NOT_FOUND");
 }
 
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    if (url.pathname.startsWith(VAULT_PREFIX)) return handleVault(request, env, url.pathname);
-    return legacyWorker.fetch(request, env, ctx);
+    try {
+      const url = new URL(request.url);
+      if (url.pathname.startsWith(PREFIX)) return await routeVault(request, env, ctx);
+      return legacyWorker.fetch(request, env, ctx);
+    } catch (error) {
+      console.error("GRCON document vault:", error?.code || error?.name || "error", error?.message || error);
+      return apiError(
+        error?.message || "Falha interna no Cofre.",
+        Number(error?.status) || 500,
+        error?.code || "VAULT_INTERNAL",
+        error?.status && error?.status < 500 ? error?.detail : undefined,
+      );
+    }
   },
 };
-
-export const _internal = Object.freeze({
-  normalizeMeta,
-  signR2Url,
-  verifyMembership,
-  handleVault,
-});
