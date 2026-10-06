@@ -909,3 +909,80 @@ html[data-theme="dark"] .grcon-admin-password-close:focus-visible {
   background: var(--surface-3);
   color: var(--text-1);
 }
+
+
+/* Multi-contrato: o contexto ativo precisa ficar explícito sem transformar o
+   topo em um painel de administração. */
+.grcon-active-contract-badge {
+  align-items: center;
+  background: #eef6fa;
+  border: 1px solid #c5dce8;
+  border-radius: 999px;
+  color: #155c8a;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  min-height: 32px;
+  padding: 0 11px;
+  white-space: nowrap;
+}
+.grcon-contract-context {
+  background: #f4f8fb;
+  border: 1px solid #d8e5ec;
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 8px;
+  padding: 10px;
+}
+.grcon-contract-context label,
+.grcon-contract-create label {
+  display: grid;
+  gap: 5px;
+}
+.grcon-contract-context label > span,
+.grcon-contract-create label > span {
+  color: #526977;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.grcon-contract-context select,
+.grcon-contract-create input {
+  background: #fff;
+  border: 1px solid #bdcfd9;
+  border-radius: 8px;
+  color: #203541;
+  font: inherit;
+  font-size: 11px;
+  min-height: 36px;
+  padding: 0 9px;
+  width: 100%;
+}
+.grcon-contract-context small,
+.grcon-contract-create > small {
+  color: #6b7e89;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.grcon-contract-create {
+  border: 1px solid #e0e9ee;
+  border-radius: 10px;
+  margin-bottom: 9px;
+  padding: 0 10px 10px;
+}
+.grcon-contract-create[hidden] { display: none; }
+.grcon-contract-create summary {
+  color: #294b60;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 10px 0;
+}
+.grcon-contract-create form {
+  display: grid;
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .grcon-active-contract-badge { display: none; }
+}
