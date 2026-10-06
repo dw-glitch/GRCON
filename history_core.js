@@ -158,6 +158,16 @@
     return snapshot;
   }
 
+  function cleanHistoryClassification(value) {
+    if (!value || value.classificationVersion !== "1.0.0") return null;
+    const snapshot = {};
+    for (const field of ["classificationVersion", "classificationStatus", "emissionKind", "label", "documentCodeNormalized", "revisionNormalized", "previousHistoryId", "previousRevision", "previousGrdt", "previousGeneratedAt", "originalEmissionId", "source"]) snapshot[field] = text(value[field]);
+    for (const field of ["occurrenceCount", "repostCount", "historicalDocumentCount"]) snapshot[field] = Math.max(0, Number(value[field]) || 0);
+    snapshot.warnings = (Array.isArray(value.warnings) ? value.warnings : []).map(text);
+    for (const field of ["firstEmission", "lastEmission"]) snapshot[field] = value[field] ? { historyId: text(value[field].historyId), grdt: text(value[field].grdt), generatedAt: text(value[field].generatedAt), revision: text(value[field].revision) } : null;
+    return snapshot;
+  }
+
   function cleanFile(file) {
     const revision = generatedRevision(file);
     return {
@@ -195,6 +205,8 @@
       virtual: Boolean(file && file.virtual),
       discipline: text(file && file.discipline),
       normativeValidation: cleanNormativeValidation(file && file.normativeValidation),
+      historyClassification: cleanHistoryClassification(file && file.historyClassification),
+      vaultFileId: text(file && file.vaultFileId),
     };
   }
 
@@ -222,6 +234,7 @@
       batchLimit: Number.isSafeInteger(Number(record && record.batchLimit)) && Number(record && record.batchLimit) >= 1
         ? Number(record.batchLimit)
         : 0,
+      postingMode: text(record && record.postingMode),
       reissueSources: Array.isArray(record && record.reissueSources) ? record.reissueSources.map(text).filter(Boolean) : [],
       normativeValidation: cleanNormativeValidation(record && record.normativeValidation),
       numberHistory: Array.isArray(record && record.numberHistory) ? record.numberHistory.map(text).filter(Boolean) : [],
@@ -430,6 +443,8 @@
         documentType: entry.item && entry.item.documentType || row.egrdt && row.egrdt.documentType || "",
         purpose: entry.item && entry.item.purpose || row.egrdt && row.egrdt.purpose || record.purpose || "",
         normativeValidation: entry.normativeValidation || null,
+        historyClassification: entry.historyClassification || null,
+        vaultFileId: entry.vaultFileId || "",
       });
     });
     const generatedAt = text(info.generatedAt) || new Date().toISOString();
@@ -442,6 +457,7 @@
       ldName: info.ldName,
       sourceName: info.sourceName,
       batchMode: text(info.batchMode) || text(file && file.group && file.group.batchMode),
+      postingMode: text(file && file.group && file.group.postingMode),
       batchLimit: Number(info.batchLimit) || Number(file && file.group && file.group.limit) || 0,
       reservationRequestId: text(file && file.official && file.official.requestId),
       reservationIds: [text(file && file.official && file.official.reservationId)].filter(Boolean),
@@ -504,7 +520,7 @@
     return (records || []).filter((record) => norm([
       record.egrdtNumber, ...(record.numberHistory || []), ...(record.reissueSources || []), record.outputType, record.ldName, record.sourceName, record.batchMode,
       ...(record.allocations || []),
-      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline, file.documentType, file.purpose]),
+      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline, file.documentType, file.purpose, file.historyClassification?.label, file.historyClassification?.previousGrdt]),
     ].join(" ")).includes(wanted));
   }
 

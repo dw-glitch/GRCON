@@ -1,0 +1,13 @@
+.posting-history-summary { padding: 14px 16px; margin: 12px 0; border: 1px solid var(--border-color, #bccbd7); border-radius: 10px; background: var(--surface, transparent); }
+.posting-history-summary p { margin: 0 0 6px; font-weight: 600; font-size: 14px; }
+.posting-history-summary small { font-size: 13px; }
+.posting-history-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px; }
+.posting-history-controls label { display: grid; gap: 4px; font-size: 14px; }
+.posting-history-controls select { padding: 6px; max-width: 100%; }
+.posting-history-controls [aria-pressed="true"] { outline: 2px solid var(--accent, #1766a4); outline-offset: 1px; }
+.posting-history-detail { font-size: 12px; margin-top: 4px; }
+.posting-history-detail summary { cursor: pointer; font-weight: 600; }
+.posting-history-detail p { margin: 4px 0; overflow-wrap: anywhere; }
+.posting-kind-REPOST { color: var(--warning, #9a6400); }
+.posting-kind-NEW_REVISION { color: var(--accent, #1766a4); }
+.posting-history-detail[open] { min-width: 200px; }

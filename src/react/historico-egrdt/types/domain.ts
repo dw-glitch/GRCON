@@ -9,6 +9,8 @@ export interface NormativeValidation {
 }
 
 export interface EgrdtHistoryFile {
+  historyClassification?: { label: string; emissionKind: string; previousGrdt: string; previousRevision: string; previousGeneratedAt: string; occurrenceCount: number; repostCount: number; warnings: string[] } | null;
+
   normativeValidation?: NormativeValidation | null;
   document?: string;
   originalName?: string;

@@ -1,3 +1,7 @@
+## Em desenvolvimento — Migração GRDT integrada, fases A–E
+
+Classificação no fluxo normal por documento + revisão, Histórico compartilhado completo em lote, aviso de revisão regressiva, filtros de postagem/repostagem, organização mista/separada antes de disciplina/limite e snapshot auditável no Histórico. Colunas existentes de exportação preservadas. Cofre/R2 e remoção da interface antiga permanecem nas fases seguintes. Checkpoint: `docs/grdt-unified-posting-checkpoint.md`.
+
 ## 5.44.9 — 2026-10-06
 
 - Removida de Ferramentas adicionais a funcionalidade “Matriz documental por disciplina”, incluindo rota, runtime, cache e artefatos exclusivos; os demais módulos permanecem inalterados.

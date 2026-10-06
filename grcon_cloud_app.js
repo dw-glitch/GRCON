@@ -1403,18 +1403,36 @@
   async function fetchHistoryRows(columns) {
     const rows = [];
     const pageSize = 500;
-    for (let from = 0; ; from += pageSize) {
+    for (let from = 0; ;) {
       const response = await state.client.from("grcon_history")
         .select(columns)
         .eq("workspace_id", state.membership.workspace_id)
         .is("deleted_at", null)
         .order("generated_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(from, from + pageSize - 1);
       if (response.error) throw response.error;
-      rows.push(...(response.data || []));
-      if ((response.data || []).length < pageSize) break;
+      const page = response.data || [];
+      if (!page.length) break;
+      rows.push(...page);
+      // PostgREST may cap pages below the requested size. Only an empty page
+      // proves exhaustion; advance by what was actually returned.
+      from += page.length;
     }
     return rows;
+  }
+
+  async function loadClassificationHistory() {
+    if (!state.online || !state.session?.access_token || !state.membership?.workspace_id) throw new Error("Histórico compartilhado indisponível.");
+    const workspaceId = state.membership.workspace_id;
+    const userId = state.session.user?.id;
+    const rows = await fetchHistoryRows("id, workspace_id, client_record_id, egrdt_number, generated_at, output_type, payload, updated_at");
+    if (workspaceId !== state.membership?.workspace_id || userId !== state.session?.user?.id) throw new Error("A sessão mudou durante a consulta.");
+    const cloud = rows.map(cloudHistoryRecord);
+    const ids = new Set(cloud.map(record => record.clientRecordId || record.id));
+    const pending = History.read().filter(record => record.workspaceId === workspaceId && record.syncState !== "synced" && !ids.has(record.clientRecordId || record.id));
+    // Do not pass the full result through the bounded local working copy.
+    return [...cloud, ...pending];
   }
 
   async function fetchHistoryChanges(columns, since) {
@@ -2128,6 +2146,7 @@
     canManageHistory,
     canManageMembers,
     loadPlannedDocuments,
+    loadClassificationHistory,
     publishPlannedDocuments,
     getExportTemplates,
     saveExportTemplate,

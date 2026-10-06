@@ -28,9 +28,11 @@
 <link href="analysis-history-phase-b.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="sigem-posting.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="egrdt-email-reply.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
+<link href="posting-flow.css" rel="stylesheet"/>
 <link href="grdt-reissue.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="documentary-compliance.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
-<noscript><link href="requests.css" rel="stylesheet"/><link href="react-ui.css" rel="stylesheet"/><link href="requests-phase-b.css" rel="stylesheet"/><link href="pdf-merge.css" rel="stylesheet"/><link href="cover-document.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="analysis-history-phase-b.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/><link href="egrdt-email-reply.css" rel="stylesheet"/><link href="grdt-reissue.css" rel="stylesheet"/></noscript>
+<noscript><link href="requests.css" rel="stylesheet"/><link href="react-ui.css" rel="stylesheet"/><link href="requests-phase-b.css" rel="stylesheet"/><link href="pdf-merge.css" rel="stylesheet"/><link href="cover-document.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="analysis-history-phase-b.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/><link href="egrdt-email-reply.css" rel="stylesheet"/><link href="posting-flow.css" rel="stylesheet"/>
+<link href="grdt-reissue.css" rel="stylesheet"/></noscript>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
 <meta content="5.44.9" name="application-version"/></head>
@@ -272,6 +274,16 @@
 </section>
 <div aria-label="Filtros ativos da triagem" class="triage-active-filters" hidden id="triage-active-filters"></div>
 <span class="grdt-batch-limit-chip" id="egrdt-batch-policy-text">Limite: 48 por eGRDT</span>
+<section id="posting-history-summary" class="posting-history-summary" aria-label="Postagens e repostagens">
+<p id="posting-history-counts" aria-live="polite"></p>
+<small id="posting-history-source"></small>
+<div class="posting-history-controls"><div role="group" aria-label="Visualizar documentos por postagem">
+<button type="button" class="secondary-button compact" data-posting-filter="all" aria-pressed="true">Todos</button>
+<button type="button" class="secondary-button compact" data-posting-filter="postings" aria-pressed="false">Postagens</button>
+<button type="button" class="secondary-button compact" data-posting-filter="reposts" aria-pressed="false">Repostagens</button>
+<button type="button" class="secondary-button compact" data-posting-filter="unconfirmed" aria-pressed="false">A confirmar</button></div>
+<label>Organização de postagem e repostagem<select id="posting-batch-mode"><option value="mixed">Permitir na mesma GRDT</option><option value="separate">Separar em GRDTs diferentes</option></select></label></div>
+</section>
 <div class="table-card">
 <div class="table-scroll virtual-table-scroll" id="results-scroll" tabindex="0" aria-label="Resultados virtualizados da triagem">
 <table class="grcon-results-table" id="results-table">
@@ -599,7 +611,10 @@
 <script defer="" src="ld_compatibility.js"></script>
 <script defer="" src="timeline_core.js"></script>
 <script defer="" src="grdt_databook_support.js"></script>
+<script defer="" src="history_classification.js"></script>
+<script defer="" src="posting_batch_planner.js"></script>
 <script defer="" src="emission.js"></script>
+<script defer="" src="posting_flow.js"></script>
 <script defer="" src="pending_allocation_package.js"></script>
 
 
