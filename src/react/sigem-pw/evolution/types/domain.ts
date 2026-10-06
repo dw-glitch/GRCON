@@ -92,6 +92,7 @@ export interface EvolutionAudit {
   emissionRule?: string;
   registrationDateField?: string;
   emissionDateField?: string;
+  relevantDateFallback?: string;
   snapshotDateField?: string;
   [key: string]: unknown;
 }
