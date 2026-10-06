@@ -556,6 +556,32 @@
     return map;
   }
 
+  function documentRevisionEmissionTransitions(previousRecords, currentRecords) {
+    const previous = representativeByDocumentRevision(previousRecords);
+    const current = representativeByDocumentRevision(currentRecords);
+    const transitions = [];
+    const indeterminateToEmitted = [];
+    current.forEach((after, key) => {
+      if (after.emissionState !== "emitted") return;
+      const before = previous.get(key);
+      if (!before) {
+        transitions.push({ ...after, movement: "Nova entrada documento + revisão já emitida" });
+        return;
+      }
+      if (before.emissionState === "not-emitted") {
+        transitions.push({ ...after, movement: "Documento + revisão passou de não emitido para emitido", previous: before });
+        return;
+      }
+      if (before.emissionState === "indeterminate") {
+        indeterminateToEmitted.push({ ...after, movement: "Emitido no snapshot atual; estado anterior indeterminado", previous: before });
+      }
+    });
+    return {
+      transitions: transitions.sort((a, b) => a.documentRevisionKey.localeCompare(b.documentRevisionKey)),
+      indeterminateToEmitted: indeterminateToEmitted.sort((a, b) => a.documentRevisionKey.localeCompare(b.documentRevisionKey)),
+    };
+  }
+
   function documentRevisionDelta(previousRecords, currentRecords) {
     const previous = representativeByDocumentRevision(previousRecords);
     const current = representativeByDocumentRevision(currentRecords);
@@ -628,6 +654,9 @@
       analysisVersion: CALCULATION_VERSION,
       ...technical,
       documentRevision: documentRevisionDelta(previousSnapshot.records || [], currentSnapshot.records || []),
+      documentRevisionEmissions: currentSnapshot.system === SYSTEMS.PW
+        ? documentRevisionEmissionTransitions(previousSnapshot.records || [], currentSnapshot.records || [])
+        : null,
     };
   }
 
@@ -642,7 +671,9 @@
       pw,
       relation,
       current,
-      pwEmissions: emissionTransitions(pw),
+      pwEmissions: pw && pw.documentRevisionEmissions ? pw.documentRevisionEmissions.transitions : [],
+      pwEmissionsTechnical: emissionTransitions(pw),
+      pwEmissionIndeterminateToEmitted: pw && pw.documentRevisionEmissions ? pw.documentRevisionEmissions.indeterminateToEmitted : [],
     };
   }
 
@@ -685,7 +716,7 @@
         added: delta.added.length,
         removed: delta.removed.length,
         net: delta.net,
-        emitted: current.system === SYSTEMS.PW ? emissionTransitions(delta).length : 0,
+        emitted: current.system === SYSTEMS.PW && delta.documentRevisionEmissions ? delta.documentRevisionEmissions.transitions.length : 0,
       });
     }
     return output;
@@ -714,6 +745,6 @@
     documentIdentity, documentClass, inferEap, searchKeysFor,
     buildLdUniverse, findLdMatches, findQualityMatch, occurrenceKey, documentRevisionKey, matchKey, technicalFingerprint, emissionInfo,
     prepareRecords, buildAudit, sourceFingerprint, buildSnapshot,
-    compareRecords, documentRevisionDelta, currentRelations, diagnosticsForSnapshot, multisetMatch, classifyEvolution, emissionTransitions, compareSnapshots, comparePeriod, transitionSeries, buildDailyTimeline,
+    compareRecords, documentRevisionDelta, documentRevisionEmissionTransitions, currentRelations, diagnosticsForSnapshot, multisetMatch, classifyEvolution, emissionTransitions, compareSnapshots, comparePeriod, transitionSeries, buildDailyTimeline,
   });
 });
