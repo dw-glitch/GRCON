@@ -404,6 +404,12 @@ function DetailDrawer({
     ["Prazo LD", row.ldPrazo],
     ["Chave da ocorrência", row.occurrenceKey],
     ["Situação SIGEM × PW", row.matchedPw ? `Correspondência: ${row.matchedPw.document} · Rev. ${row.matchedPw.revision}` : listMode === "missing-pw" ? "Ainda não identificada no PW atual" : "—"],
+    ["Data de cadastro PW", row.matchedPw?.registrationDate || (row.system === "pw" ? row.registrationDate : "")],
+    ["Data de emissão PW", row.matchedPw?.emissionDate || (row.system === "pw" ? row.emissionDate : "")],
+    ["Motivo de inclusão", row.inclusionReason],
+    ["Motivo de exclusão", row.exclusionReason || row.reason],
+    ["Regra/evidência de emissão", row.matchedPw?.emissionReason || row.emissionReason],
+    ["Chave documento + revisão", row.documentRevisionKey],
   ];
   return (
     <UiDrawer
@@ -443,6 +449,7 @@ function DetailDrawer({
 
 export function SigemPwEvolutionApp() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [auditMetric, setAuditMetric] = useState<EvolutionListMode | "pw-emitted-current" | null>(null);
   const { state, periodSigem, periodPw, pageData, adapter } = useSigemPwEvolution();
   const hasValidatedLd = Boolean(state.ldUniverse?.qualityAvailable);
   const comparison = state.comparison;
@@ -458,6 +465,14 @@ export function SigemPwEvolutionApp() {
     "missing-pw": relation?.newSigemMissingPw.length || 0,
     "removed-sigem": comparison?.sigem?.removed.length || 0,
     "removed-pw": comparison?.pw?.removed.length || 0,
+    "pw-current": selectedPw?.records.length || 0,
+    "pw-current-emitted": selectedPw?.records.filter((row) => row.emitted).length || 0,
+    "pw-current-not-emitted": selectedPw?.records.filter((row) => !row.emitted).length || 0,
+    "only-sigem": comparison?.current?.onlySigem.length || 0,
+    "only-pw": comparison?.current?.onlyPw.length || 0,
+    "current-both": comparison?.current?.both.length || 0,
+    "excluded-sigem": selectedSigem?.rejected?.length || 0,
+    "excluded-pw": selectedPw?.rejected?.length || 0,
   };
 
   const value = (deltaAvailable: boolean, amount: number, plus = false) =>
@@ -482,6 +497,9 @@ export function SigemPwEvolutionApp() {
           <p>A comparação usa os dois snapshots escolhidos. Cada código + revisão é uma entrada independente; revisão 0 e revisão A do mesmo documento contam como duas linhas.</p>
         </div>
         <div className="spw-evo-actions">
+          <button className="secondary-button compact" id="spw-evo-export-audit" type="button" disabled={state.exporting || !hasValidatedLd} onClick={() => { void adapter.exportAuditWorkbook(); }}>
+            Exportar auditoria
+          </button>
           <button className="text-button" id="spw-history-manage" type="button" onClick={() => adapter.openHistoryManager()}>
             Gerenciar histórico
           </button>
@@ -506,7 +524,12 @@ export function SigemPwEvolutionApp() {
       </div>
 
       {state.error ? <div className="spw-evo-message error" role="alert">{state.error}</div> : null}
-      {state.busy ? <div className="spw-evo-message" role="status" aria-live="polite">Carregando snapshots da evolução…</div> : null}
+      {state.busy ? <div className="spw-evo-message" role="status" aria-live="polite">{state.ready ? "Atualizando bases; os dados atuais permanecem visíveis." : "Carregando snapshots da evolução…"}</div> : null}
+
+      <div className="spw-evo-active-bases" id="spw-evo-active-bases" aria-label="Bases ativas da Evolução">
+        <ActiveBase label="SIGEM ativo" snapshot={selectedSigem} />
+        <ActiveBase label="PW ativo" snapshot={selectedPw} />
+      </div>
 
       <div className="spw-evo-period">
         <strong className="spw-evo-section-label">1 · Período</strong>
