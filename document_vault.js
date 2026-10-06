@@ -541,7 +541,7 @@
       if (!root.GrconAnalysisSources?.loadVaultFiles) throw new Error("O Fazer GRDT ainda não está preparado para receber documentos do Cofre.");
       await root.GrconAnalysisSources.loadVaultFiles(items);
       state.pickerMode = false;
-      await root.GrconModuleLoader?.ensureModule?.("control");
+      await root.GRCONModuleLoader?.ensureModule?.("control");
       notify(`${items.length} documento(s) do Cofre carregado(s) no mesmo motor do Fazer GRDT.`, "success");
     } catch (error) {
       notify(error?.message || "Não foi possível usar os documentos no Fazer GRDT.", "error");
@@ -646,7 +646,7 @@
     refresh: () => loadFiles({ reset: true }),
     openPicker: async () => {
       state.pickerMode = true;
-      await root.GrconModuleLoader?.ensureModule?.("vault");
+      await root.GRCONModuleLoader?.ensureModule?.("vault");
       await activate({ picker: true });
     },
   });
