@@ -1,7 +1,17 @@
 {
   "name": "grcon-cloudflare",
   "compatibility_date": "2026-09-24",
-  "main": "./cloudflare/worker.mjs",
+  "main": "./cloudflare/worker-entry.mjs",
+  "vars": {
+    "SUPABASE_URL": "https://kvyrttccwzdhasplfxnr.supabase.co",
+    "R2_BUCKET_NAME": "grcon-documents"
+  },
+  "r2_buckets": [
+    {
+      "binding": "GRCON_DOCUMENTS",
+      "bucket_name": "grcon-documents"
+    }
+  ],
   "assets": {
     "directory": "./dist-cloudflare",
     "binding": "ASSETS",
