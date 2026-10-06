@@ -65,9 +65,9 @@ CORS não torna o bucket público. A permissão continua vindo da autorização 
 
 ## 5. Conectar o banco correto antes da ativação
 
-Na conexão Supabase do ChatGPT, permitir o projeto **GRCON**, ref **kvyrttccwzdhasplfxnr**. Nesta conversa só está acessível **CCP CONSAG**, outro projeto. Este impedimento bloqueou a conferência de schema e aplicação de migrations da fase F.
+O projeto **GRCON**, ref **kvyrttccwzdhasplfxnr**, está acessível nesta conversa desde 06/10/2026. As dependências reais de workspace, membership, papel e auditoria foram conferidas.
 
-A nova Central compartilhada tem uma migration adicional, testada localmente e ainda não aplicada; veja `docs/grdt-shared-allocation-setup.md`. Documentos Previstos determina Alocado/Não alocado, e a Central informa o vínculo e o status.
+A migration da Central compartilhada foi aplicada com sucesso ao GRCON em 06/10/2026; veja `docs/grdt-shared-allocation-setup.md`. A interface continua na PR, ainda não publicada. Documentos Previstos determina Alocado/Não alocado, e a Central informa o vínculo e o status.
 
 Com o acesso correto, a próxima implementação fará catálogo de metadados, RLS, auditoria e vínculos ao Histórico. Os binários ficarão no R2, não no PostgreSQL.
 

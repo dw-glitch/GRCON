@@ -1,6 +1,6 @@
 # Controle de Solicitações compartilhado e organização do Cofre
 
-Esta extensão está na PR da migração; ainda não foi publicada no GRCON. A migration foi testada em Postgres local e não foi aplicada ao projeto de produção. O Cofre e sua interface dependem das fases F–I.
+Esta extensão está na PR da migração; a interface ainda não foi publicada no GRCON. A migration, testada em Postgres local, foi aplicada ao banco GRCON em 06/10/2026. O Cofre e sua interface dependem das fases F–I.
 
 ## Fontes e regras
 
@@ -31,13 +31,15 @@ Não são publicados o Excel completo, e-mails, responsáveis ou comentários fi
 
 ## Ativar o banco correto
 
-É necessário permitir o projeto Supabase GRCON (`kvyrttccwzdhasplfxnr`) na conexão desta conversa. O projeto disponível continua sendo CCP CONSAG, que não deve receber estas tabelas.
+O projeto Supabase GRCON (`kvyrttccwzdhasplfxnr`) está acessível na conexão desta conversa desde 06/10/2026.
 
-Depois de conferir as funções existentes de membership/roles e a tabela de auditoria no GRCON, aplicar `supabase/migrations/20261006143737_shared_allocation_registry.sql`. A migration verifica essas dependências antes de criar objetos. Não confundir execução local dos testes com aplicação em produção.
+As funções existentes de membership/roles e a tabela de auditoria foram conferidas no projeto real. `supabase/migrations/20261006143737_shared_allocation_registry.sql` foi aplicada com sucesso pelo conector Supabase. As duas tabelas foram criadas vazias; nenhuma planilha real foi publicada nesta operação.
 
 A migration cria duas tabelas privadas com RLS e sem acesso direto pelos papéis de cliente. Funções internas verificam sessão, workspace e papel; wrappers públicos usam SECURITY INVOKER. Somente o proprietário publica; membros consultam. Publicação é atômica, verifica contagem, detecta atualização concorrente e permite repetir a confirmação após perda da resposta. A versão anterior fica disponível para leituras já iniciadas, com retenção limitada.
 
-Após aplicar, validar com contas de proprietário e membro: publicar, consultar em outra sessão, rejeitar publicação pelo membro, isolar workspaces e preservar a base anterior quando o envio falhar. Os testes locais cobrem esses contratos; ainda falta confirmar schema/RLS no projeto real.
+Após a aplicação, o catálogo real confirmou RLS ativo, ausência de leitura direta por anon/authenticated, execução RPC negada a anon e wrappers SECURITY INVOKER. O advisor registrou INFO de RLS sem políticas nas duas tabelas privadas: intencional, pois o acesso ocorre por funções internas com verificação explícita de sessão/workspace/papel. Referência: https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy . A configuração Auth já existente tem um aviso de proteção contra senhas vazadas desativada; referência: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection . Nenhuma configuração Auth foi alterada nesta migration.
+
+Após publicar a interface, ainda validar com contas reais de proprietário e membro: publicar, consultar em outra sessão, rejeitar publicação pelo membro, isolar workspaces e preservar a base anterior quando o envio falhar. Os testes locais cobrem esses contratos; não equivalem a essa validação com sessões reais.
 
 ## Validação desta extensão
 

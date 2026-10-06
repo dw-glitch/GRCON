@@ -31,7 +31,7 @@ O chat anterior estava na auditoria inicial. Não havia PR nova nem implementaç
 
 ## Extensão solicitada: alocação no Cofre e base de Solicitações
 
-Publicação compartilhada da Central implementada com prévia, páginas completas e ativação atômica; consulta dos vínculos/status/workflow no Fazer GRDT e snapshot no Histórico. Parser validado com uma versão da planilha real (3.546 vínculos), sem publicar dados reais no repositório. `document_allocation_context.js` mantém Documentos Previstos como autoridade de Alocado/Não alocado e oferece filtros para o Cofre. Migration criada pela CLI e validada em Postgres local; ainda não aplicada ao banco GRCON. A interface do Cofre continua pendente. Operação e ativação: `docs/grdt-shared-allocation-setup.md`.
+Publicação compartilhada da Central implementada com prévia, páginas completas e ativação atômica; consulta dos vínculos/status/workflow no Fazer GRDT e snapshot no Histórico. Parser validado com uma versão da planilha real (3.546 vínculos), sem publicar dados reais no repositório. `document_allocation_context.js` mantém Documentos Previstos como autoridade de Alocado/Não alocado e oferece filtros para o Cofre. Migration criada pela CLI, validada em Postgres local e aplicada ao banco GRCON em 06/10/2026 após conferir as dependências reais. Privilégios/RLS/RPC conferidos no catálogo real; tabelas novas vazias. A interface do Cofre continua pendente. Operação e ativação: `docs/grdt-shared-allocation-setup.md`.
 
 ## Ainda pendente
 
@@ -39,17 +39,17 @@ Publicação compartilhada da Central implementada com prévia, páginas complet
 |---|---|
 | A | Auditoria concluída |
 | B–E | Implementadas na branch; verificação e QA registrados na PR |
-| F | Bloqueada na verificação do projeto Supabase GRCON e configuração R2; não aplicada |
+| F | Acesso ao Supabase GRCON liberado; Central compartilhada aplicada. Catálogo de arquivos e Document API/R2 ainda pendentes |
 | G–I | Cofre, fila/hash/deduplicação/multipart/retomada e integração ainda não implementados |
 | J | Interface antiga preservada até paridade funcional; não removida prematuramente |
 | K | Testes de classificação/lotes e QA desta etapa; QA de armazenamento depende de F–I |
 | L | Não publicada; não mesclar antes de completar e validar as fases dependentes |
 
-## Impedimento concreto de F
+## Próximo ponto de F
 
-A integração Supabase desta conversa lista apenas `CCP CONSAG` (`aimvjsbrxnyqjurgicec`). A consulta de metadados de `kvyrttccwzdhasplfxnr` (banco utilizado pelo GRCON) foi recusada por falta de permissão. Não aplicar tabelas do GRCON em outro projeto nem executar migrations em produção sem conferir o schema real.
+A integração Supabase passou a disponibilizar o projeto GRCON (`kvyrttccwzdhasplfxnr`) em 06/10/2026. A conferência das funções de membership/roles e da tabela de auditoria passou, e a migration da Central compartilhada foi aplicada com sucesso. Não foram enviados dados reais nem publicada a interface.
 
-Próximo ponto: autorizar o projeto GRCON na conexão Supabase; confirmar tabelas/roles/RLS e desenhar metadados/índices/idempotência. Depois implementar Document API privada, verificação de identidade e autorização por workspace, R2 privado e os endpoints de upload/download. O bucket solicitado é `grcon-documents`. Não há acesso autenticado à administração Cloudflare disponível nesta conversa para cadastrar bindings/secrets.
+Próximo ponto: concluir a auditoria do catálogo existente e desenhar metadados/índices/idempotência de arquivos. Depois implementar Document API privada, verificação de identidade e autorização por workspace, R2 privado e os endpoints de upload/download. O bucket solicitado é `grcon-documents`. Não há acesso autenticado à administração Cloudflare disponível nesta conversa para cadastrar bindings/secrets. O usuário está em grcon-cloudflare → Settings → Production; orientado a preparar binding e credenciais pelo painel.
 
 Ver `docs/grdt-r2-setup.md` para preparo pelo painel web. Esse preparo não liga o Cofre sozinho: a fase F ainda precisa implementar e validar a API e o catálogo.
 
