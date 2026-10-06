@@ -44,4 +44,6 @@ O diagnóstico de RLS sem políticas em tabelas `private` corresponde à arquite
 - Chromium: consulta de dois códigos no Cofre, um encontrado e um ausente; DOCX sem sufixo preparado e analisado como revisão 0, eGRDT XLS gerada pelo fluxo normal e histórico contendo o vínculo ao arquivo do Cofre.
 - Teste do Worker real de triagem: outros contratos respeitam a configuração de herança das regras, e UHDT preserva a validação anterior.
 
-O banco e a função de administração de usuários já receberam as correções. O código integrado está registrado localmente na branch `feat/grcon-cofre-contract-monitoring`. O envio ao GitHub e a publicação dessa versão no Cloudflare permanecem pendentes: a revisão automática exigiu autorização explícita para enviar ao repositório público `dw-glitch/GRCON`.
+O banco e a função de administração de usuários já receberam as correções. A integração está na branch `feat/grcon-cofre-contract-monitoring`, PR #188, com envio e publicação autorizados pelo solicitante. A publicação executa uma verificação da versão exata em produção, dos módulos, da configuração do Cofre e da exigência de sessão para consultar seu catálogo.
+
+Endereço de referência do GRCON: https://grcon-cloudflare.grcon-qualidade.workers.dev/. Usar somente a origem Cloudflare nas verificações e nos links apresentados ao solicitante.
