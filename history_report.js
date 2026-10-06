@@ -154,6 +154,15 @@
       "BLOQUEIOS NORMATIVOS": (file.normativeValidation?.blocks || []).map(item => item.message).join(" · "),
       "LD UTILIZADA": text(record.ldName),
       "ORIGEM DOS DOCUMENTOS": text(record.sourceName),
+      "CLASSIFICAÇÃO DA EMISSÃO": text(file.historyClassification?.label) || "Não registrada",
+      "TIPO DE EMISSÃO": text(file.historyClassification?.emissionKind),
+      "GRDT ANTERIOR NO HISTÓRICO": text(file.historyClassification?.previousGrdt),
+      "REVISÃO ANTERIOR NO HISTÓRICO": text(file.historyClassification?.previousRevision),
+      "DATA ANTERIOR NO HISTÓRICO": text(file.historyClassification?.previousGeneratedAt),
+      "REPOSTAGENS ANTERIORES": file.historyClassification?.repostCount ?? "",
+      "ALERTAS HISTÓRICOS": (file.historyClassification?.warnings || []).join(" · "),
+      "STATUS NA CENTRAL DE ALOCAÇÃO": (file.sharedAllocationContext?.references || []).map(item => `${item.allocation}: ${item.allocationStatus}`).join(" · "),
+      "BASE CENTRAL DE ALOCAÇÃO": text(file.sharedAllocationContext?.centralFileName),
       };
     }));
   }

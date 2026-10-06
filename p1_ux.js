@@ -215,6 +215,8 @@
         : group.disciplineBatchCount > 1
           ? `GRDT ${group.disciplineBatchNumber} de ${group.disciplineBatchCount} desta disciplina`
           : "Uma GRDT para esta disciplina";
+      const postingCounts = group.postingCounts || {};
+      const postingText = `Primeira postagem: ${postingCounts.FIRST_POSTING || 0} · Nova revisão: ${postingCounts.NEW_REVISION || 0} · Repostagem: ${postingCounts.REPOST || 0} · A confirmar: ${postingCounts.UNCONFIRMED || 0}`;
       const disciplineText = limitOnly
         ? (group.disciplines || [group.discipline]).filter(Boolean).join(" · ") || "Sem disciplina"
         : group.discipline || "Sem disciplina";
@@ -225,6 +227,7 @@
           <label><span>Número sequencial</span><input id="p1-batch-sequence-${group.index}" name="p1-batch-sequence-${group.index}" autocomplete="off" class="p1-batch-sequence-input" data-batch-index="${group.index}" inputmode="numeric" maxlength="4" pattern="[0-9]{1,4}" type="text" value="${escapeHtml(value)}"/></label>
           <div><span>Nome final da eGRDT</span><strong data-batch-name>${escapeHtml(name)}</strong></div>
         </div>
+        <p>${escapeHtml(postingText)}</p>
         <p title="${escapeHtml(range)}">${escapeHtml(range)}</p>
         <small data-batch-warning></small>
       </article>`;
@@ -293,8 +296,9 @@
     state.sequenceEdited = false;
     const facts = [...(config.facts || [])];
     if (batchPlan && batchPlan.valid) {
+      facts.push(batchPlan.postingMode === "separate" ? "Postagens e repostagens serão separadas antes de aplicar disciplina e limite; itens com Histórico a confirmar terão lotes próprios." : "Postagens e repostagens podem entrar na mesma GRDT.");
       facts.push(batchPlan.batchMode === "limit-only"
-        ? `${batchPlan.totalItems} documento(s) manterão a ordem atual e serão divididos somente pelo limite de ${batchPlan.limit}, resultando em ${batchPlan.count} eGRDT${batchPlan.count === 1 ? "" : "s"}.`
+        ? `${batchPlan.totalItems} documento(s) manterão a ordem dentro de cada conjunto e serão divididos pelo limite de ${batchPlan.limit}, resultando em ${batchPlan.count} eGRDT${batchPlan.count === 1 ? "" : "s"}.`
         : `${batchPlan.totalItems} documento(s) serão separados por ${batchPlan.disciplineCount} disciplina${batchPlan.disciplineCount === 1 ? "" : "s"} em ${batchPlan.count} eGRDT${batchPlan.count === 1 ? "" : "s"} de até ${batchPlan.limit}.`);
       if (batchPlan.count > 1) facts.push("Cada eGRDT será criada em uma pasta separada com seus próprios PDFs.");
     }
@@ -351,6 +355,7 @@
           return;
         }
       }
+      if (["export-egrdt", "export-zip", "export-final-package"].includes(id) && window.GrconPostingFlow) await window.GrconPostingFlow.refresh(true);
       openConfirm({
         ...config,
         onConfirm: () => {

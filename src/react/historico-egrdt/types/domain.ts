@@ -9,6 +9,9 @@ export interface NormativeValidation {
 }
 
 export interface EgrdtHistoryFile {
+  sharedAllocationContext?: { centralFileName: string; references: { allocation: string; allocationStatus: string; workflow: string; sourceRow: number }[]; warnings: string[] } | null;
+  historyClassification?: { label: string; emissionKind: string; previousGrdt: string; previousRevision: string; previousGeneratedAt: string; occurrenceCount: number; repostCount: number; warnings: string[] } | null;
+
   normativeValidation?: NormativeValidation | null;
   document?: string;
   originalName?: string;

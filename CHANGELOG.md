@@ -1,3 +1,16 @@
+## Em desenvolvimento — GRDT unificado + Cofre documental
+
+- Fazer GRDT classifica cada documento + revisão pelo Histórico compartilhado completo como primeira postagem, nova revisão ou repostagem; a regra é consultiva e não retira a autonomia do operador.
+- A organização dos lotes pode manter tudo junto ou separar postagens/repostagens antes de disciplina e limite configurável, usando o mesmo plano na prévia e nas saídas.
+- Documentos Previstos continua sendo a fonte oficial de Alocado/Não alocado; a Central de alocação compartilhada acrescenta solicitação, workflow e rastreabilidade sem substituir essa regra.
+- Novo **Cofre** integrado ao GRCON: catálogo privado Supabase + binários no R2 privado `grcon-documents`, com autenticação por workspace, SHA-256, deduplicação, conflito explícito, multipart e retomada.
+- O Cofre aceita arquivos, pasta e arrastar/soltar; possui fila com progresso/pausa/retomada/retry, busca/paginação no servidor e filtros Todos/Alocados/Não alocados.
+- Documentos selecionados no Cofre entram no mesmo seletor e motor do Fazer GRDT. O Histórico existente preserva `vaultFileId`; nenhum histórico paralelo é criado.
+- A entrada antiga **Repostagem de GRDT** foi retirada das Ferramentas adicionais para existir um único fluxo operacional. O núcleo legado permanece apenas para compatibilidade e QA de registros antigos.
+- O navegador não recebe credenciais R2/Supabase privilegiadas. Upload e download passam pelo Cloudflare Worker e pelo binding privado `GRCON_DOCUMENTS`.
+- As migrations do Cofre no repositório agora correspondem exatamente às migrations aplicadas no projeto Supabase GRCON. A versão preliminar que criaria um catálogo público paralelo foi removida.
+- Service Worker e QA Cloudflare passam a incluir a interface, worker de hash e estilos do Cofre. Checkpoint: `docs/grdt-unified-posting-checkpoint.md`.
+
 ## 5.44.9 — 2026-10-06
 
 - Removida de Ferramentas adicionais a funcionalidade “Matriz documental por disciplina”, incluindo rota, runtime, cache e artefatos exclusivos; os demais módulos permanecem inalterados.

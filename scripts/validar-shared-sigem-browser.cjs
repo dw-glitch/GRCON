@@ -13,6 +13,7 @@ const backend={active:null,uploads:new Map(),fail:false,offline:false,serial:0};
 function rpc(name,args) {
  if(backend.offline) return {data:null,error:{message:'QA offline'}};
  if(name==='current') return {data:backend.active?[backend.active]:[],error:null};
+ if(name==='grcon_allocation_registry_current') return {data:[],error:null};
  if(name==='page') return {data:backend.uploads.get(args.target_snapshot).rows.map((payload,i)=>({row_number:i+1,payload})).filter(r=>r.row_number>args.after_row).slice(0,args.page_size),error:null};
  if(name==='begin') {const id='00000000-0000-4000-8000-'+String(++backend.serial).padStart(12,'0');backend.uploads.set(id,{...args,rows:[]});return {data:id,error:null};}
  if(name==='chunk') {if(backend.fail)return {data:null,error:{message:'QA upload interrompido'}};const u=backend.uploads.get(args.upload_id);u.rows.splice(args.first_row-1,args.rows.length,...args.rows);return {data:u.rows.length,error:null};}

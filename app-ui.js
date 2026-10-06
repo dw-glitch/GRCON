@@ -433,7 +433,7 @@
             return;
         document.addEventListener("click", (event) => {
             const target = event.target;
-            if (target?.closest("input,select,textarea,a,button") && !target.closest(".expand-button"))
+            if (target?.closest("input,select,textarea,a,button,.posting-history-detail") && !target.closest(".expand-button"))
                 return;
             const clicked = target?.closest("#results-body .result-row");
             const expand = target?.closest("#results-body .expand-button");

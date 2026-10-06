@@ -5,6 +5,8 @@
   const T = window.TimelineCore;
   const L = window.GrconLdCompatibility;
   const E = window.GrconEmission;
+  const PostingFlow = window.GrconPostingFlow;
+  const splitPostingPlan = (plan, limit, mode) => PostingFlow ? PostingFlow.splitPlan(plan, limit, mode) : E.splitPlan(plan, limit, mode);
   const Q = window.GrconTitleQuality;
   const D = window.GrconDatabookSupport;
   const Workspace = window.GrconWorkspace;
@@ -114,6 +116,7 @@
     analysisRecentDays: 30,
     analysisLdSignature: "",
     analysisPlannedSnapshot: "",
+    analysisAllocationSnapshot: "",
     analysisSigemSnapshot: "",
     egrdtSequenceCursor: 0,
     manualEgrdtSequenceStart: null,
@@ -1187,7 +1190,8 @@
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
     return [currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
       `sigem:${currentSigemQuerySnapshot() || "sem-base"}`,
-      `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`].join("###");
+      `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`,
+      `central:${window.GrconAllocationRegistry?.signature() || "sem-base"}`].join("###");
   }
 
   function saveSmartAnalysisCache(signature) {
@@ -1204,6 +1208,7 @@
         analysisRecentDays: state.analysisRecentDays,
         analysisLdSignature: state.analysisLdSignature,
         analysisPlannedSnapshot: state.analysisPlannedSnapshot,
+        analysisAllocationSnapshot: state.analysisAllocationSnapshot,
         analysisSigemSnapshot: state.analysisSigemSnapshot,
         ldIntegrity: state.ldIntegrity,
       },
@@ -1870,7 +1875,7 @@
       meta: `${row.document} · revisão ${row.revision || "—"}`,
     })));
     const previewPlan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
-    const previewGroups = previewPlan.errors.length ? [] : E.splitPlan(previewPlan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+    const previewGroups = previewPlan.errors.length ? [] : splitPostingPlan(previewPlan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
     const batchCount = Math.max(1, previewGroups.length || Math.ceil(items.length / currentEgrdtBatchLimit()));
     const sequences = suggestedEgrdtSequences(batchCount);
     const officialNumber = batchCount === 1
@@ -1964,7 +1969,7 @@
       return physicalOnly ? Boolean(row.files && row.files.length) : Boolean(rowOutputSources(row).length);
     }));
     const plan = E.createPlan(state.results, selection, { manualForceIndices: state.manualForceInclude });
-    const groups = plan.errors.length ? [] : E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+    const groups = plan.errors.length ? [] : splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
     const suggested = groups.length ? suggestedEgrdtSequences(groups.length) : [];
     return {
       valid: plan.errors.length === 0 && groups.length > 0,
@@ -1973,6 +1978,7 @@
       totalItems: plan.entries.length,
       limit: currentEgrdtBatchLimit(),
       batchMode: currentEgrdtBatchMode(),
+      postingMode: PostingFlow?.getMode() || "mixed",
       modeLabel: egrdtBatchModeLabel(currentEgrdtBatchMode()),
       count: groups.length,
       disciplineCount: new Set(plan.entries.map((entry) => C.norm(entry && entry.item && entry.item.discipline)).filter(Boolean)).size,
@@ -1986,6 +1992,9 @@
         discipline: group.discipline,
         disciplines: group.disciplines || [group.discipline].filter(Boolean),
         batchMode: group.batchMode || currentEgrdtBatchMode(),
+        postingMode: group.postingMode,
+        postingGroup: group.postingGroup,
+        postingCounts: group.postingCounts,
         disciplineBatchNumber: group.disciplineBatchNumber,
         disciplineBatchCount: group.disciplineBatchCount,
         suggested: suggested[index],
@@ -2285,6 +2294,7 @@
 
   async function analyzeLegacy() {
     await window.GrconSharedSigemQuery?.refresh();
+    await window.GrconAllocationRegistry?.refresh();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
     setBusy(true, "Analisando documentos");
     state.records = [];
@@ -2335,6 +2345,7 @@
         state.history.push(...parsed.history);
       });
       state.records = window.GrconPlannedDocuments?.applyRecords(state.records) || state.records;
+      state.records = window.GrconAllocationRegistry?.applyRecords(state.records) || state.records;
       syncEgrdtSequenceFromLd(state.records, state.history);
       if (!state.records.length || (!state.history.length && !window.GrconSharedSigemQuery?.current()?.records.length)) {
         throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
@@ -2456,6 +2467,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisAllocationSnapshot = window.GrconAllocationRegistry?.current()?.id || "";
       state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) lida(s) nesta análise · até ${validUntil}`;
@@ -2519,6 +2531,7 @@
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
 
     await window.GrconSharedSigemQuery?.refresh();
+    await window.GrconAllocationRegistry?.refresh();
     const analysisSignature = currentAnalysisSignature();
     if (restoreSmartAnalysisCache(analysisSignature)) {
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -2595,6 +2608,7 @@
       if (!state.ldIntegrity.valid) throw new Error(`A integridade da LD foi reprovada: ${state.ldIntegrity.issues.join("; ")}.`);
       state.records = window.GrconPlannedDocuments?.applyRecords(loadedLds.flatMap((item) => item.parsed.records))
         || loadedLds.flatMap((item) => item.parsed.records);
+      state.records = window.GrconAllocationRegistry?.applyRecords(state.records) || state.records;
       state.history = loadedLds.flatMap((item) => item.parsed.history);
       state.index = C.buildIndex(state.records, state.history);
       if (!state.records.length || (!state.history.length && !window.GrconSharedSigemQuery?.current()?.records.length)) throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
@@ -2697,6 +2711,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisAllocationSnapshot = window.GrconAllocationRegistry?.current()?.id || "";
       state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) preparadas · válidas até ${validUntil}`;
@@ -2781,6 +2796,11 @@
     }
     if (currentSigemQuerySnapshot() !== state.analysisSigemSnapshot) {
       showToast("A Consulta Geral SIGEM foi atualizada após esta análise. Analise novamente antes de gerar a GRDT.", "error");
+      return false;
+    }
+    await window.GrconAllocationRegistry?.refresh();
+    if ((window.GrconAllocationRegistry?.current()?.id || "") !== state.analysisAllocationSnapshot) {
+      showToast("A Central de alocação foi atualizada. Analise novamente para usar os vínculos e status atuais.", "warn");
       return false;
     }
     refreshSelectedSigemStatuses();
@@ -3152,12 +3172,13 @@
   function filteredResultIndices() {
     const columnFilters = activeColumnFilters();
     const columnSignature = columnFilters.map(([keyName, values]) => `${keyName}:${[...values].sort().join(",")}`).join("|");
-    const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${C.norm(state.search)}|${columnSignature}|group:${state.groupByStatus ? "1" : "0"}`;
+    const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${C.norm(state.search)}|${columnSignature}|group:${state.groupByStatus ? "1" : "0"}|posting:${PostingFlow?.signature() || ""}`;
     if (state.filteredCache && state.filteredCache.signature === signature) return state.filteredCache.indices;
     const indices = [];
     for (let index = 0; index < state.results.length; index += 1) {
       const row = state.results[index];
       if (!rowPassesBaseFilters(row)) continue;
+      if (PostingFlow && !PostingFlow.matches(row)) continue;
       if (!rowPassesColumnFilters(row, null, columnFilters)) continue;
       indices.push(index);
     }
@@ -3691,7 +3712,7 @@
           <span class="status-chip ${resultClass}">${compactDecisionLabel(row)}</span>
         </div></td>
         <td>${renderRowFileList(row, false)}</td>
-        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
+        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.tagged)}</span></td>
@@ -3713,7 +3734,7 @@
         <td><span class="sigem-status" title="${escapeHtml(`${row.status} · Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || 'LD / Colar SIGEM'}`)}">${escapeHtml(row.status || "—")}</span></td>
         <td><span class="posting-evidence ${row.postingEvidence && row.postingEvidence.complete ? "posted" : row.postingEvidence && row.postingEvidence.partial ? "review" : "none"}" title="${escapeHtml(row.postingEvidence && row.postingEvidence.explanation || "")}">${escapeHtml(row.postingStatus || (row.postingEvidence && row.postingEvidence.status) || "Sem evidência na LD")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(fiscalComment)}">${escapeHtml(fiscalComment)}</span></td>
-        <td><span class="text-cell">${escapeHtml(allocation)}</span></td>
+        <td><span class="text-cell">${escapeHtml(allocation)}</span>${window.GrconAllocationRegistry?.badge(row.document) || ""}</td>
         <td><span class="text-cell" title="${escapeHtml(allocationStage)}">${escapeHtml(allocationStage)}</span></td>
         <td><span class="allocation-state ${allocationClass}" title="${escapeHtml(conflitoAlocacao ? row.allocationFinding.source || "" : "")}">${escapeHtml(allocationStatus)}</span></td>
         <td><span class="text-cell" title="${escapeHtml(databook)}">${escapeHtml(databook)}</span></td>
@@ -3883,6 +3904,7 @@
         state.manualForceInclude.delete(index);
       }
     });
+    if (PostingFlow) PostingFlow.render(state.results, state.selected);
     renderSummary();
     renderSheetFilter();
     renderTable();
@@ -3940,7 +3962,7 @@
     els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
     const selectedItemCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + amount, 0);
-    const selectedBatchCount = currentEgrdtBatchMode() === "limit-only"
+    const selectedBatchCount = PostingFlow ? splitPostingPlan(E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude }), currentEgrdtBatchLimit(), currentEgrdtBatchMode()).length : currentEgrdtBatchMode() === "limit-only"
       ? Math.ceil(selectedItemCount / currentEgrdtBatchLimit())
       : [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
     const selectedDisciplineCount = selectedItemsByDiscipline.size;
@@ -4603,7 +4625,8 @@
       const row = state.results[index];
       if (row && row.egrdt && C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
     });
-    return E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
+    const plan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
+    return PostingFlow ? PostingFlow.classifyPlan(plan) : plan;
   }
 
   function previewEgrdtRows() {
@@ -4646,6 +4669,9 @@
       endIndex: group.endIndex,
       limit: group.limit,
       batchMode: group.batchMode,
+      postingMode: group.postingMode,
+      postingGroup: group.postingGroup,
+      postingCounts: group.postingCounts,
       discipline: group.discipline,
       disciplines: group.disciplines,
       disciplineBatchNumber: group.disciplineBatchNumber,
@@ -4663,6 +4689,8 @@
         finalName: entry.finalName,
         virtual: Boolean(entry.virtual),
         manualAllocationOverride: Boolean(entry.manualAllocationOverride),
+        historyClassification: entry.historyClassification,
+        sharedAllocationContext: entry.sharedAllocationContext,
         item: { ...(entry.item || {}) },
         file: includeFiles ? entry.file : null,
       })),
@@ -4703,6 +4731,7 @@
   async function exportEgrdt() {
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
+    if (PostingFlow) await PostingFlow.refresh(true);
     const prepared = buildEgrdtItems();
     if (prepared.errors.length) {
       showToast(`GRDT bloqueada: ${prepared.errors.slice(0, 3).join(" ")}`, "error");
@@ -4716,7 +4745,7 @@
     try {
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(prepared, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+      const groups = splitPostingPlan(prepared, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = previewGenerated.length === 1 ? previewGenerated[0].fileName : PackageLayout.archiveName(previewGenerated, timestamp);
@@ -4807,6 +4836,7 @@
   async function exportZip() {
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
+    if (PostingFlow) await PostingFlow.refresh(true);
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
@@ -4830,7 +4860,7 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+      const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
@@ -4880,6 +4910,7 @@
     const lines = [
       "GRCON — ORGANIZAÇÃO DOS LOTES PARA POSTAGEM NO SIGEM",
       `Modo de distribuição: ${egrdtBatchModeLabel(currentEgrdtBatchMode())}.`,
+      `Postagem/repostagem: ${PostingFlow?.getMode() === "separate" ? "Separadas" : "Permitidas na mesma GRDT"}.`,
       `Limite configurado pelo usuário: ${currentEgrdtBatchLimit()} documentos por eGRDT.`,
       `Total de eGRDTs: ${generated.length}.`,
       "",
@@ -4920,6 +4951,7 @@
   async function exportFinalPackage() {
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
+    if (PostingFlow) await PostingFlow.refresh(true);
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
@@ -4943,7 +4975,7 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+      const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
@@ -5238,7 +5270,7 @@
       }
       return;
     }
-    if (event.target.closest("input, button, select, a")) return;
+    if (event.target.closest("input, button, select, a, .posting-history-detail")) return;
     if (event.target.closest(".result-row")) {
       if (state.expanded.has(index)) state.expanded.delete(index);
       else state.expanded.add(index);
@@ -5410,6 +5442,8 @@
     state.virtual.rowHeight = state.resultDensity === "compact" ? 56 : state.groupByStatus ? 88 : 68;
     return state.virtual.rowHeight;
   }
+
+  window.addEventListener("grcon:posting-classification-updated", () => { if (!state.busy) renderAll(); });
 
   window.GrconTriageUiApi = Object.freeze({
     snapshot: () => ({

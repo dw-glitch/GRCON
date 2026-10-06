@@ -28,9 +28,11 @@
 <link href="analysis-history-phase-b.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="sigem-posting.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="egrdt-email-reply.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
+<link href="posting-flow.css" rel="stylesheet"/>
 <link href="grdt-reissue.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
 <link href="documentary-compliance.css" rel="stylesheet" media="print" data-grcon-async-style=""/>
-<noscript><link href="requests.css" rel="stylesheet"/><link href="react-ui.css" rel="stylesheet"/><link href="requests-phase-b.css" rel="stylesheet"/><link href="pdf-merge.css" rel="stylesheet"/><link href="cover-document.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="analysis-history-phase-b.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/><link href="egrdt-email-reply.css" rel="stylesheet"/><link href="grdt-reissue.css" rel="stylesheet"/></noscript>
+<noscript><link href="requests.css" rel="stylesheet"/><link href="react-ui.css" rel="stylesheet"/><link href="requests-phase-b.css" rel="stylesheet"/><link href="pdf-merge.css" rel="stylesheet"/><link href="cover-document.css" rel="stylesheet"/><link href="analysis-history.css" rel="stylesheet"/><link href="analysis-history-phase-b.css" rel="stylesheet"/><link href="sigem-posting.css" rel="stylesheet"/><link href="egrdt-email-reply.css" rel="stylesheet"/><link href="posting-flow.css" rel="stylesheet"/>
+<link href="grdt-reissue.css" rel="stylesheet"/></noscript>
 <link href="grcon-ui-fix.css" rel="stylesheet"/>
 <link href="grcon-responsive.css" rel="stylesheet"/>
 <meta content="5.44.9" name="application-version"/></head>
@@ -165,6 +167,15 @@
 <button class="secondary-button compact" id="planned-documents-publish" type="button">Publicar nova base</button>
 <small hidden id="planned-documents-owner-note">Somente o proprietário pode atualizar esta base; todos os usuários recebem a versão publicada.</small>
 </section>
+<section class="planned-documents-settings settings-embedded" aria-labelledby="allocation-registry-title">
+<div><strong id="allocation-registry-title">Controle de Solicitações · Central de alocação</strong><small id="allocation-registry-status" role="status" aria-live="polite">Carregando referência compartilhada…</small></div>
+<p>Documentos Previstos informa Alocado/Não alocado. Esta base informa a alocação vinculada, o status da alocação e o workflow registrado.</p>
+<label><span>Selecionar Controle de Solicitações para toda a equipe</span><input id="allocation-registry-file" type="file" accept=".xlsx,.xls" aria-describedby="allocation-registry-status"/></label>
+<div id="allocation-registry-preview" hidden style="overflow:auto"></div>
+<button class="secondary-button compact" id="allocation-registry-publish" type="button" disabled>Publicar Central para a equipe</button>
+<button class="text-button" id="allocation-registry-refresh" type="button">Atualizar consulta</button>
+<small hidden id="allocation-registry-owner-note">Somente o proprietário pode publicar esta base. Todos os membros consultam a versão compartilhada.</small>
+</section>
 <details class="ignored-details" hidden="" id="ignored-details"><summary id="ignored-summary">Arquivos ignorados</summary><ul id="ignored-list"></ul></details>
 <div class="settings-inline-actions"><button class="text-button" id="reset" type="button">Limpar seleção</button><button class="compatibility-open-button" hidden="" id="ld-compatibility-open" type="button">Estrutura da LD</button><span class="compatibility-status" hidden="" id="ld-compatibility-status"></span></div>
 </div>
@@ -272,6 +283,16 @@
 </section>
 <div aria-label="Filtros ativos da triagem" class="triage-active-filters" hidden id="triage-active-filters"></div>
 <span class="grdt-batch-limit-chip" id="egrdt-batch-policy-text">Limite: 48 por eGRDT</span>
+<section id="posting-history-summary" class="posting-history-summary" aria-label="Postagens e repostagens">
+<p id="posting-history-counts" aria-live="polite"></p>
+<small id="posting-history-source"></small>
+<div class="posting-history-controls"><div role="group" aria-label="Visualizar documentos por postagem">
+<button type="button" class="secondary-button compact" data-posting-filter="all" aria-pressed="true">Todos</button>
+<button type="button" class="secondary-button compact" data-posting-filter="postings" aria-pressed="false">Postagens</button>
+<button type="button" class="secondary-button compact" data-posting-filter="reposts" aria-pressed="false">Repostagens</button>
+<button type="button" class="secondary-button compact" data-posting-filter="unconfirmed" aria-pressed="false">A confirmar</button></div>
+<label>Organização de postagem e repostagem<select id="posting-batch-mode"><option value="mixed">Permitir na mesma GRDT</option><option value="separate">Separar em GRDTs diferentes</option></select></label></div>
+</section>
 <div class="table-card">
 <div class="table-scroll virtual-table-scroll" id="results-scroll" tabindex="0" aria-label="Resultados virtualizados da triagem">
 <table class="grcon-results-table" id="results-table">
@@ -378,14 +399,9 @@
 </section>
 <section id="additional-tools-module" class="additional-tools-module" hidden="" role="tabpanel" aria-labelledby="tab-additional-tools">
 <header class="additional-tools-heading">
-<div><span>FERRAMENTAS ADICIONAIS</span><h2>Utilitários documentais</h2><p>Abra apenas a ferramenta necessária. Repostagem de GRDT, Combinar PDFs e Adicionar Capa ficam reunidos fora da navegação operacional principal.</p></div>
+<div><span>FERRAMENTAS ADICIONAIS</span><h2>Utilitários documentais</h2><p>Abra apenas a ferramenta necessária. Combinar PDFs e Adicionar Capa ficam reunidos fora da navegação operacional principal.</p></div>
 </header>
 <div class="additional-tools-grid" role="list">
-<button class="additional-tool-card" data-grcon-view="grdt-reissue" type="button" role="listitem">
-<span class="additional-tool-icon" aria-hidden="true"><svg viewbox="0 0 24 24"><path d="M5 4h12v16H5zM8 8h6M8 12h6"></path><path d="M17 8a5 5 0 1 1-1 8M17 8v4h-4"></path></svg></span>
-<span><strong>Repostagem de GRDT</strong><small>Recupere a última emissão do Histórico e gere uma nova eGRDT mantendo as regras de loteamento.</small></span>
-<span class="additional-tool-open" aria-hidden="true">Abrir →</span>
-</button>
 <button class="additional-tool-card" data-grcon-view="pdf-tools" type="button" role="listitem">
 <span class="additional-tool-icon" aria-hidden="true"><svg viewbox="0 0 24 24"><path d="M5 3h9l4 4v12H5zM14 3v4h4"></path><path d="M9 11h5M9 15h5M19 10h2v11H8v-2"></path></svg></span>
 <span><strong>Combinar PDFs</strong><small>Organize vários PDFs e gere um único arquivo no próprio navegador.</small></span>
@@ -568,6 +584,8 @@
 <script defer src="shared_sigem_query_core.js"></script>
 <script defer="" src="core.js"></script>
 <script defer src="planned_documents_core.js"></script>
+<script defer src="allocation_registry_core.js"></script>
+<script defer src="document_allocation_context.js"></script>
 <script defer="" src="ld_conflicts.js"></script>
 <script defer="" src="apendice_base.js"></script>
 <script defer="" src="apendice_tagueados.js"></script>
@@ -582,8 +600,9 @@
 <script defer="" src="retomar.js"></script>
 <script defer="" src="supabase.min.js"></script>
 <script defer="" src="grcon_cloud_config.js"></script>
-<script defer="" src="grcon_cloud_app.js"></script>
+<script defer="" src="grcon_cloud_app.js"></script>\n<script defer src="document_vault_app.js"></script>
 <script defer src="planned_documents_app.js"></script>
+<script defer src="allocation_registry_app.js"></script>
 <script defer src="shared_sigem_query_app.js"></script>
 <script defer="" src="egrdt_teams_notification_app.js"></script>
 <script defer="" src="pending_allocation_history_core.js"></script>
@@ -599,7 +618,10 @@
 <script defer="" src="ld_compatibility.js"></script>
 <script defer="" src="timeline_core.js"></script>
 <script defer="" src="grdt_databook_support.js"></script>
+<script defer="" src="history_classification.js"></script>
+<script defer="" src="posting_batch_planner.js"></script>
 <script defer="" src="emission.js"></script>
+<script defer="" src="posting_flow.js"></script>
 <script defer="" src="pending_allocation_package.js"></script>
 
 

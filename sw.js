@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.44.9-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1-hardening1-cover-backcover2-deploy2-mascot-runtime5-transparent1-phase-b-evolution-ui1-grdt-reissue1-history-purpose1-mascot-shell-runner1-hybrid-media2-alpha2-ux-polish2-workspace-runner1-planned-documents2-shared-sigem1-consultas-planned-documents1-owner-password1-documentary-compliance1-feature-cleanup1";
+const CACHE_NAME = "grcon-v5.44.9-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1-hardening1-cover-backcover2-deploy2-mascot-runtime5-transparent1-phase-b-evolution-ui1-grdt-reissue1-history-purpose1-mascot-shell-runner1-hybrid-media2-alpha2-ux-polish2-workspace-runner1-planned-documents2-shared-sigem1-consultas-planned-documents1-owner-password1-documentary-compliance1-feature-cleanup1-unified-posting2-document-vault1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -37,6 +37,7 @@ const ASSETS = [
   "grcon-ui-fix.css",
   "grcon-responsive.css",
   "grcon_cloud.css",
+  "document-vault.css",
   "requests.css",
   "react-ui.css",
   "requests-phase-b.css",
@@ -80,6 +81,10 @@ const ASSETS = [
   "core.js",
   "planned_documents_core.js",
   "planned_documents_app.js",
+  "allocation_registry_core.js",
+  "document_allocation_context.js",
+  "document_hash_worker.js",
+  "allocation_registry_app.js",
   "shared_sigem_query_core.js",
   "shared_sigem_query_app.js",
   "workers/shared_sigem_query.worker.js",
@@ -124,6 +129,7 @@ const ASSETS = [
   "supabase.min.js",
   "grcon_cloud_config.js",
   "grcon_cloud_app.js",
+  "document_vault_app.js",
   "history_report.js",
   "history_report_worker.js",
   "pending_allocation_history_core.js",
@@ -139,6 +145,10 @@ const ASSETS = [
   "ld_compatibility.js",
   "timeline_core.js",
   "grdt_databook_support.js",
+  "history_classification.js",
+  "posting_batch_planner.js",
+  "posting_flow.js",
+  "posting-flow.css",
   "emission.js",
   "pending_allocation_package.js",
   "grdt-template.xlsx",
