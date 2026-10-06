@@ -84,6 +84,19 @@ const pwCurrent = base("pw", pwRows, "2026-10-05T09:00:00Z");
   assert.equal(pwCurrent.analysisVersion, Evo.CALCULATION_VERSION);
 })();
 
+(function documentRevisionStateIsExclusiveAcrossTechnicalVariants() {
+  const mixed = base("pw", [
+    p("C", "0", "Previsto", { sourceRow: 2, fileName: "c-previsto.pdf" }),
+    p("C", "0", "Valor inesperado", { sourceRow: 3, fileName: "c-desconhecido.pdf" }),
+  ], "2026-10-05T09:00:00Z");
+  assert.equal(mixed.audit.documentRevisionRecords, 1);
+  assert.equal(mixed.audit.technicalVariantsSameDocumentRevision, 1);
+  assert.equal(mixed.audit.notEmittedTechnicalRecords, 1);
+  assert.equal(mixed.audit.indeterminateEmissionTechnicalRecords, 1);
+  assert.equal(mixed.audit.notEmittedDocumentRevisionRecords, 0);
+  assert.equal(mixed.audit.indeterminateEmissionDocumentRevisionRecords, 1, "uma chave doc+rev deve ocupar um único estado final");
+})();
+
 (function currentRelationsAreDocumentRevisionBased() {
   const relation = Evo.currentRelations(sigemCurrent.records, pwCurrent.records);
   assert.equal(relation.both.length, 2);
