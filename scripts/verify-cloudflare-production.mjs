@@ -27,8 +27,9 @@ for (const path of ['contract_storage.js', 'contract_admin_app.js', 'sigem_statu
   assert.ok((await response.text()).length > 100, 'Módulo vazio: ' + path);
 }
 const healthResponse = await get('/api/document-vault/health');
-assert.equal(healthResponse.status, 200);
-const health = await healthResponse.json();
+const health = await healthResponse.json().catch(() => null);
+const configured = value => typeof value === 'boolean' ? String(value) : 'desconhecido';
+assert.equal(healthResponse.status, 200, 'Saúde do Cofre HTTP ' + healthResponse.status + ': Supabase configurado=' + configured(health?.supabaseConfigured) + ', R2 configurado=' + configured(health?.r2Configured) + '. O health verifica presença da configuração, não a validade da chave.');
 assert.equal(health.ok, true, 'Cofre deve estar configurado.');
 assert.equal(health.r2Configured, true);
 assert.equal(health.supabaseConfigured, true);

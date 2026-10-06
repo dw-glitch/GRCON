@@ -1,5 +1,6 @@
 {
   "name": "grcon-cloudflare",
+  "keep_vars": true,
   "compatibility_date": "2026-09-24",
   "main": "./cloudflare/worker-entry.mjs",
   "vars": {

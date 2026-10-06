@@ -56,6 +56,10 @@ Use preferencialmente uma chave Supabase `sb_secret_...` exclusiva para esse bac
 
 O endpoint `GET /api/document-vault/health` confirma apenas se Supabase e R2 estão configurados; ele não retorna valores de segredo.
 
+O deploy usa `keep_vars: true` para preservar variáveis de texto cadastradas no painel. Sem essa opção, o Wrangler substitui variáveis de texto pelas declaradas no arquivo de configuração. Secrets são preservados pelo Cloudflare independentemente dessa opção. `keep_vars` não recupera valores que já tenham sido removidos.
+
+Um HTTP 503 nesse endpoint não prova que uma chave cadastrada foi apagada ou recusada pelo Supabase: verifique separadamente `supabaseConfigured` e `r2Configured`. O nome esperado no Worker de produção `grcon-cloudflare` é exatamente `SUPABASE_SECRET_KEY`; uma chave cadastrada apenas no Supabase, em outro Worker, em outro ambiente ou com outro nome não chega a essa configuração. Não recadastre nem gere uma nova chave sem identificar a causa.
+
 ## Catálogo Supabase
 
 O catálogo em produção é privado:
