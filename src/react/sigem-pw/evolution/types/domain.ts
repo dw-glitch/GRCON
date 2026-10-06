@@ -10,6 +10,7 @@ export type EvolutionListMode =
   | "pw-current"
   | "pw-current-emitted"
   | "pw-current-not-emitted"
+  | "pw-current-indeterminate"
   | "only-sigem"
   | "only-pw"
   | "current-both"
@@ -51,6 +52,7 @@ export interface EvolutionRecord {
   emissionFlag?: string;
   emissionKind?: "current" | "historical" | "planned" | "unknown" | "missing" | string;
   emissionRecognized?: boolean | null;
+  emissionState?: "emitted" | "not-emitted" | "indeterminate" | string;
   emissionReason?: string;
   emitted?: boolean | null;
   ldSource?: string;
@@ -85,6 +87,8 @@ export interface EvolutionAudit {
   emittedDocumentRevisionRecords?: number;
   emittedUniqueDocuments?: number;
   notEmittedDocumentRevisionRecords?: number;
+  indeterminateEmissionDocumentRevisionRecords?: number;
+  indeterminateEmissionTechnicalRecords?: number;
   emissionBreakdown?: Record<string, number>;
   discardReasons?: Record<string, number>;
   comparisonGranularity?: string;
@@ -165,8 +169,10 @@ export interface EvolutionComparison {
     onlyPw: EvolutionRecord[];
     bothEmitted: EvolutionRecord[];
     bothNotEmitted: EvolutionRecord[];
+    bothIndeterminate: EvolutionRecord[];
     pwOnlyEmitted: EvolutionRecord[];
     pwOnlyNotEmitted: EvolutionRecord[];
+    pwOnlyIndeterminate: EvolutionRecord[];
   };
   pwEmissions: EvolutionRecord[];
 }
@@ -275,7 +281,8 @@ export const EVOLUTION_LIST_LABELS: Readonly<Record<EvolutionListMode, readonly 
   "removed-pw": ["Não encontrados nesta base PW", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],
   "pw-current": ["Cadastrados no PW atual", "Todos os registros válidos da base PW atual; documento + revisão é exibido em paralelo à ocorrência técnica."],
   "pw-current-emitted": ["Emitidos no PW atual", "Registros PW atuais com evidência de emissão reconhecida pela regra vigente."],
-  "pw-current-not-emitted": ["Não emitidos no PW atual", "Registros PW atuais sem evidência de emissão reconhecida."],
+  "pw-current-not-emitted": ["Não emitidos no PW atual", "Registros PW atuais com PREVISTO, isto é, não emissão determinável pela regra vigente."],
+  "pw-current-indeterminate": ["Emissão indeterminada no PW", "Registros PW com Última emissão ausente ou com valor não reconhecido; não entram como emitidos nem como não emitidos determináveis."],
   "only-sigem": ["Somente SIGEM", "Documento + revisão presente no SIGEM atual e ausente no PW atual."],
   "only-pw": ["Somente PW", "Documento + revisão presente no PW atual e ausente no SIGEM atual."],
   "current-both": ["SIGEM + PW", "Documento + revisão presente nas duas bases atuais."],
