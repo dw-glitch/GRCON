@@ -39,27 +39,49 @@
 
   function isRevisionToken(value) {
     const token = normalizeRevision(value);
+    if (!token || token === "RIR") return false;
     return token === "0"
-      || /^[A-Z]{1,3}$/.test(token)
-      || /^[1-9]\d{0,2}$/.test(token)
-      || /^#[1-9]\d*$/.test(token);
+      || /^#[1-9]\d*$/.test(token)
+      || /^0[1-9]\d*$/.test(token)
+      || /^[1-9]\d*$/.test(token)
+      || /^[A-Z]{1,3}\d*$/.test(token);
   }
 
   function splitRevision(stem) {
     const raw = text(stem);
     if (!raw) return { documentCode: "", revision: "", explicitRevision: false };
 
-    let match = raw.match(/^(.+?)_(\d{4})_([A-Z]{1,3}|0|[1-9]\d{0,2}|#[1-9]\d*)$/i);
-    if (match && isRevisionToken(match[3])) {
+    let match = raw.match(/^(.+?)_0001_(.+)$/i);
+    if (match && isRevisionToken(match[2])) {
       return {
         documentCode: normalizeDocumentCode(match[1]),
-        revision: normalizeRevision(match[3]),
+        revision: normalizeRevision(match[2]),
         explicitRevision: true,
-        sequence: match[2],
+        sequence: "0001",
       };
     }
 
-    match = raw.match(/^(.+?)_([A-Z]{1,3}|0|[1-9]\d{0,2}|#[1-9]\d*)$/i);
+    match = raw.match(/^(.+?)_0001(?:_RIR)?$/i);
+    if (match) {
+      return {
+        documentCode: normalizeDocumentCode(match[1]),
+        revision: "",
+        explicitRevision: false,
+        sequence: "0001",
+        operationalSuffix: /_RIR$/i.test(raw) ? "RIR" : "",
+      };
+    }
+
+    match = raw.match(/^(.+?)[_ -]REV(?:ISAO|ISÃO)?[_ -]?(.+)$/i);
+    if (match && isRevisionToken(match[2])) {
+      return {
+        documentCode: normalizeDocumentCode(match[1]),
+        revision: normalizeRevision(match[2]),
+        explicitRevision: true,
+      };
+    }
+
+    match = raw.match(/^(.+?)_([^_]+)$/);
     if (match && isRevisionToken(match[2])) {
       return {
         documentCode: normalizeDocumentCode(match[1]),
@@ -153,6 +175,7 @@
     normalizeRevision,
     normalizeDocumentCode,
     identityCode,
+    isRevisionToken,
     isArchiveFileName,
     parseStoredFileIdentity,
     parseLookupInput,
