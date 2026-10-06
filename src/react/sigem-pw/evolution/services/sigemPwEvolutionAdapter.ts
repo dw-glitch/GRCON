@@ -261,18 +261,14 @@ function pairDefaults(system: EvolutionSystem): void {
   const ids = new Set(list.map((row) => row.id));
   const preferredCurrent = preferredSelections[currentKey];
   const preferredPrevious = preferredSelections[previousKey];
-  const existingCurrent = state.selections[currentKey];
-  const existingPrevious = state.selections[previousKey];
 
   const current = (preferredCurrent && ids.has(preferredCurrent) ? preferredCurrent : "")
-    || (existingCurrent && ids.has(existingCurrent) ? existingCurrent : "")
     || list[list.length - 1].id;
   state.selections[currentKey] = current;
 
   const currentIndex = list.findIndex((row) => row.id === current);
   const fallbackPrevious = currentIndex > 0 ? list[currentIndex - 1].id : "";
   const previous = (preferredPrevious && preferredPrevious !== current && ids.has(preferredPrevious) ? preferredPrevious : "")
-    || (existingPrevious && existingPrevious !== current && ids.has(existingPrevious) ? existingPrevious : "")
     || fallbackPrevious;
   state.selections[previousKey] = previous;
 }
@@ -527,9 +523,9 @@ function fullTimeline(): EvolutionUiState["timeline"] {
   const key = [
     Core().CALCULATION_VERSION,
     state.ldUniverse?.fingerprint || "",
-    ...state.sigem.map((row) => row.id),
+    ...state.sigem.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@")),
     "|",
-    ...state.pw.map((row) => row.id),
+    ...state.pw.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@")),
   ].join(":");
   const cached = timelineCache.get(key);
   if (cached) return cached;
