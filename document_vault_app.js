@@ -127,7 +127,7 @@
         if (event.lengthComputable && typeof onProgress === "function") onProgress(event.loaded, event.total);
       };
       xhr.onerror = () => reject(Object.assign(new Error("Falha de rede durante o upload."), { code: "NETWORK_ERROR" }));
-      xhr.onabort = () => reject(Object.assign(new DOMException("Upload pausado.", "AbortError"), { code: "ABORTED" }));
+      xhr.onabort = () => reject(new DOMException("Upload pausado.", "AbortError"));
       xhr.onload = () => {
         let payload = null;
         try { payload = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (_) { payload = { message: xhr.responseText }; }
@@ -152,6 +152,12 @@
       const worker = new Worker("document_hash_worker.js");
       const id = task.id;
       task.hashWorker = worker;
+      task.abortHash = () => {
+        try { worker.terminate(); } catch (_) {}
+        task.hashWorker = null;
+        task.abortHash = null;
+        reject(new DOMException("Hash pausado.", "AbortError"));
+      };
       worker.addEventListener("message", event => {
         const message = event.data || {};
         if (message.id !== id) return;
@@ -163,16 +169,19 @@
         } else if (message.type === "done") {
           worker.terminate();
           task.hashWorker = null;
+          task.abortHash = null;
           resolve(message.sha256);
         } else if (message.type === "error") {
           worker.terminate();
           task.hashWorker = null;
+          task.abortHash = null;
           reject(new Error(message.message || "Falha ao calcular SHA-256."));
         }
       });
       worker.addEventListener("error", event => {
         worker.terminate();
         task.hashWorker = null;
+        task.abortHash = null;
         reject(new Error(event.message || "Falha no worker de hash."));
       });
       worker.postMessage({ type: "hash", id, file: task.file, chunkSize: 4 * 1024 * 1024 });
@@ -229,6 +238,34 @@
     pump();
   }
 
+  async function filesFromDrop(dataTransfer) {
+    const items = Array.from(dataTransfer?.items || []);
+    if (!items.length || !items.some(item => typeof item.webkitGetAsEntry === "function")) {
+      return Array.from(dataTransfer?.files || []);
+    }
+    const output = [];
+    async function walk(entry) {
+      if (!entry) return;
+      if (entry.isFile) {
+        const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+        if (file) output.push(file);
+        return;
+      }
+      if (!entry.isDirectory) return;
+      const reader = entry.createReader();
+      while (true) {
+        const entries = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+        if (!entries.length) break;
+        for (const child of entries) await walk(child);
+      }
+    }
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry?.();
+      if (entry) await walk(entry);
+    }
+    return output.length ? output : Array.from(dataTransfer?.files || []);
+  }
+
   async function uploadTask(task) {
     if (state.paused || !task || !["pending","paused"].includes(task.status)) return;
     if (!text(task.documentCode) || !text(task.revision)) {
@@ -264,6 +301,7 @@
           allowConflict: task.allowConflict,
         }),
       });
+      if (state.paused) throw new DOMException("Fila pausada.", "AbortError");
       task.serverFile = init.file;
       task.duplicate = Boolean(init.duplicate);
       task.reused = Boolean(init.reused);
@@ -368,14 +406,9 @@
       if (task.activeXhr) {
         try { task.activeXhr.abort(); } catch (_) {}
       }
-      if (task.hashWorker) {
-        try { task.hashWorker.terminate(); } catch (_) {}
-        task.hashWorker = null;
-        if (task.status === "hashing") {
-          task.status = "paused";
-          task.phase = "Pausado durante o hash";
-          task.sha256 = "";
-        }
+      if (task.abortHash) {
+        task.abortHash();
+        task.sha256 = "";
       }
     });
     renderQueue();
@@ -766,7 +799,7 @@
     zone?.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); document.getElementById("vault-files-input")?.click(); } });
     ["dragenter","dragover"].forEach(type => zone?.addEventListener(type, event => { event.preventDefault(); zone.classList.add("dragging"); }));
     ["dragleave","drop"].forEach(type => zone?.addEventListener(type, event => { event.preventDefault(); zone.classList.remove("dragging"); }));
-    zone?.addEventListener("drop", event => enqueueFiles(event.dataTransfer?.files));
+    zone?.addEventListener("drop", event => { void filesFromDrop(event.dataTransfer).then(enqueueFiles).catch(error => notify(error.message || "Não foi possível ler a pasta.", "error")); });
     document.getElementById("vault-pause")?.addEventListener("click", pauseQueue);
     document.getElementById("vault-resume")?.addEventListener("click", resumeQueue);
     document.getElementById("vault-refresh")?.addEventListener("click", () => void refreshList(true));
