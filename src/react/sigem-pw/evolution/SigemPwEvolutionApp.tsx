@@ -123,7 +123,7 @@ function Timeline({ rows }: { rows: EvolutionUiState["timeline"] }) {
       <header>
         <div>
           <strong>Histórico diário · últimas {fmt(visible.length)} datas</strong><br />
-          <small>Cada barra soma as movimentações entre snapshots consecutivos daquele dia.</small>
+          <small>Eixo = data do snapshot (importação/data operacional editada). Cada barra soma movimentações entre snapshots consecutivos; não é a data individual de cadastro/emissão.</small>
         </div>
         <div className="spw-evo-legend">
           <span><i className="sigem"></i>SIGEM</span>
