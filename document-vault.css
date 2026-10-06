@@ -1,11 +1,11 @@
-.document-vault-module{display:grid;gap:18px;align-content:start}
+.document-vault-module{display:grid;gap:18px;align-content:start;min-width:0;max-width:100%}
 .document-vault-module[hidden]{display:none!important}
 .vault-heading{align-items:flex-start}
 .vault-heading>div:first-child>span{font-size:11px;font-weight:800;letter-spacing:.12em;opacity:.68}
 .vault-health{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid var(--border,#d7dde5);border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
 .vault-health.ok{border-color:#8bc8a3;background:rgba(37,135,77,.08)}
 .vault-health.error{border-color:#e6a2a2;background:rgba(177,44,44,.08)}
-.vault-upload-card,.vault-queue-panel,.vault-browser-card{border:1px solid var(--border,#d8dee7);border-radius:14px;background:var(--panel,#fff);box-shadow:0 8px 28px rgba(25,37,54,.06)}
+.vault-upload-card,.vault-queue-panel,.vault-browser-card{border:1px solid var(--border,#d8dee7);border-radius:14px;background:var(--panel,#fff);box-shadow:0 8px 28px rgba(25,37,54,.06);min-width:0;max-width:100%}
 .vault-upload-card>header,.vault-queue-panel>header,.vault-browser-card>header{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:15px 18px;border-bottom:1px solid var(--border,#e1e6ed)}
 .vault-upload-card header div:first-child,.vault-queue-panel header div:first-child,.vault-browser-card header div:first-child{display:grid;gap:3px}
 .vault-upload-card header small,.vault-queue-panel header small,.vault-browser-card header small{opacity:.7}
@@ -19,7 +19,7 @@
 .vault-toolbar input,.vault-toolbar select,.vault-queue-panel input{width:100%;min-height:36px;border:1px solid var(--border,#ccd5df);border-radius:8px;background:var(--surface,#fff);color:inherit;padding:7px 9px}
 .vault-selection-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-height:36px}
 .vault-selection-actions span{font-size:12px;opacity:.72}
-.vault-table-wrap{overflow:auto;border-top:1px solid var(--border,#e1e6ed)}
+.vault-table-wrap{overflow:auto;border-top:1px solid var(--border,#e1e6ed);min-width:0;max-width:100%}
 .vault-table-wrap table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;min-width:980px}
 .vault-table-wrap th{position:sticky;top:0;z-index:2;background:var(--panel,#fff);text-align:left;padding:10px 12px;border-bottom:1px solid var(--border,#d8dee7);white-space:nowrap}
 .vault-table-wrap td{padding:10px 12px;border-bottom:1px solid var(--border,#edf0f4);vertical-align:middle}
@@ -41,4 +41,14 @@
 .vault-more{display:flex;justify-content:center;padding:13px}
 .vault-empty{display:grid;place-items:center;gap:5px;padding:36px;text-align:center;opacity:.74}
 #vault-list-status.error{color:#a52f2f}
-@media(max-width:900px){.vault-toolbar{grid-template-columns:1fr 180px}.vault-selection-actions{grid-column:1/-1;justify-content:flex-start}}
+@media(max-width:900px){.vault-toolbar{grid-template-columns:minmax(0,1fr) 180px}.vault-selection-actions{grid-column:1/-1;justify-content:flex-start}}
+@media(max-width:600px){
+.vault-upload-card>header,.vault-queue-panel>header,.vault-browser-card>header{align-items:flex-start;flex-wrap:wrap;padding:13px 14px}
+.vault-upload-card>header>div,.vault-queue-panel>header>div,.vault-browser-card>header>div{min-width:0;max-width:100%}
+.vault-upload-actions,.vault-queue-panel>header>div:last-child{width:100%}
+.vault-health{white-space:normal;max-width:100%}
+.vault-toolbar{grid-template-columns:minmax(0,1fr);padding:12px 14px}
+.vault-selection-actions{grid-column:auto;justify-content:flex-start;flex-wrap:wrap}
+.vault-dropzone{margin:14px;padding:16px}
+.vault-progress{max-width:100%}
+}
