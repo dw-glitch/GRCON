@@ -395,8 +395,9 @@
       registrationRule: system === SYSTEMS.PW ? "Cadastrado = documento+revisão válido presente na relação PW" : "Presente = documento+revisão válido na Consulta Geral",
       emissionRule: system === SYSTEMS.PW ? "Emitido = Última emissão SIM (atual) ou NÃO (histórica); PREVISTO/ausente/desconhecido não conta como emitido" : "",
       registrationDateField: system === SYSTEMS.PW ? "datacriacao" : "Data de inclusão/modificação quando disponível",
-      emissionDateField: system === SYSTEMS.PW ? "DataEnvioGRDCliente (fallback operacional: mudança de state/criação/entrada)" : "",
-      snapshotDateField: "data/hora de importação ou data operacional editada do snapshot",
+      emissionDateField: system === SYSTEMS.PW ? "DataEnvioGRDCliente; se ausente, a data de emissão fica não determinável" : "",
+      relevantDateFallback: system === SYSTEMS.PW ? "DataEnvioGRDCliente → DataAlteracaoState → datacriacao → DataGRDEntrada (somente para ordenação/data relevante da ocorrência, não para inventar data de emissão)" : "Data de inclusão → data de modificação",
+      snapshotDateField: "data/hora de importação ou data operacional editada do snapshot; é o eixo temporal do gráfico entre snapshots",
     };
   }
 
