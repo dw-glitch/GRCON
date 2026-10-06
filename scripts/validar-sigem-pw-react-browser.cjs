@@ -1276,7 +1276,7 @@ async function waitEvolutionReady(page) {
     const auditPath = path.join(fixtureDir, "sigem-pw-evolution-audit.xlsx");
     await auditDownload.saveAs(auditPath);
     const auditBook = XLSX.read(fs.readFileSync(auditPath), { type: "buffer" });
-    for (const sheet of ["Resumo", "SIGEM x PW", "Novos", "Novas revisões", "Emitidos", "Não emitidos", "Somente SIGEM", "Somente PW", "Excluídos da análise", "Regras da análise"]) {
+    for (const sheet of ["Resumo", "SIGEM x PW", "Novos", "Novas revisões", "Emitidos", "Não emitidos", "Emissão indeterminada", "Somente SIGEM", "Somente PW", "Excluídos da análise", "Regras da análise"]) {
       assert.ok(auditBook.SheetNames.includes(sheet), "aba de auditoria ausente: " + sheet);
     }
     const ruleRows = XLSX.utils.sheet_to_json(auditBook.Sheets["Regras da análise"], { defval: "" });
