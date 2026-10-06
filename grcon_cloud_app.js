@@ -1474,6 +1474,15 @@
     });
   }
 
+  async function historyRecordsForClassification() {
+    if (!History) return [];
+    if (!state.online || !state.membership?.workspace_id || !state.client) return History.read();
+    const columns = "id, client_record_id, egrdt_number, generated_at, output_type, document_count, file_count, allocations, payload, created_by, updated_at, deleted_at";
+    const rows = await fetchHistoryRows(columns);
+    const activeRows = rows.filter((row) => !row.deleted_at);
+    return activeRows.map(cloudHistoryRecord);
+  }
+
   async function pushLocalHistory(records) {
     const pending = (records || []).filter((record) => record?.syncState !== "synced"
       && (!record.workspaceId || record.workspaceId === state.membership?.workspace_id));
@@ -2137,6 +2146,7 @@
     inviteUser,
     completeEgrdtReservationRequest,
     clearHistory: clearSharedHistory,
+    historyRecordsForClassification,
   };
 
   init();
