@@ -570,18 +570,30 @@ export function SigemPwEvolutionApp() {
       </div>
 
       <div className="spw-evo-kpis" id="spw-evo-kpis">
-        <button className="spw-evo-kpi sigem" data-evo-list="sigem-new" aria-pressed={state.listMode === "sigem-new"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("sigem-new")}>
-          <span>Entraram no SIGEM</span><strong>{value(Boolean(comparison?.sigem), counts["sigem-new"], true)}</strong><small>Código + revisão novos na Consulta Geral</small>
-        </button>
-        <button className="spw-evo-kpi pw" data-evo-list="pw-new" aria-pressed={state.listMode === "pw-new"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-new")}>
-          <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>Cadastros novos na relação ProjectWise</small>
-        </button>
-        <button className="spw-evo-kpi emitted" data-evo-list="pw-emitted" aria-pressed={state.listMode === "pw-emitted"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-emitted")}>
-          <span>Emitidos no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-emitted"], true)}</strong><small>Novos emitidos ou emissão confirmada</small>
-        </button>
-        <button className="spw-evo-kpi pending" data-evo-list="missing-pw" aria-pressed={state.listMode === "missing-pw"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("missing-pw")}>
-          <span>SIGEM novo sem PW</span><strong>{value(Boolean(comparison?.sigem), counts["missing-pw"])}</strong><small>Entradas ainda não localizadas no PW atual</small>
-        </button>
+        <div className="spw-evo-kpi-shell">
+          <button className="spw-evo-kpi sigem" data-evo-list="sigem-new" aria-pressed={state.listMode === "sigem-new"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("sigem-new")}>
+            <span>Entraram no SIGEM</span><strong>{value(Boolean(comparison?.sigem), counts["sigem-new"], true)}</strong><small>Ocorrências técnicas novas · doc+rev {fmt(comparison?.sigem?.documentRevision?.added.length)}</small>
+          </button>
+          <button type="button" className="spw-evo-explain" disabled={!comparison?.sigem} onClick={() => setAuditMetric("sigem-new")}>Como foi calculado?</button>
+        </div>
+        <div className="spw-evo-kpi-shell">
+          <button className="spw-evo-kpi pw" data-evo-list="pw-new" aria-pressed={state.listMode === "pw-new"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-new")}>
+            <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>Cadastros novos · doc+rev {fmt(comparison?.pw?.documentRevision?.added.length)}</small>
+          </button>
+          <button type="button" className="spw-evo-explain" disabled={!comparison?.pw} onClick={() => setAuditMetric("pw-new")}>Como foi calculado?</button>
+        </div>
+        <div className="spw-evo-kpi-shell">
+          <button className="spw-evo-kpi emitted" data-evo-list="pw-emitted" aria-pressed={state.listMode === "pw-emitted"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-emitted")}>
+            <span>Emitidos no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-emitted"], true)}</strong><small>Novas emissões/transições do período</small>
+          </button>
+          <button type="button" className="spw-evo-explain" disabled={!comparison?.pw} onClick={() => setAuditMetric("pw-emitted")}>Como foi calculado?</button>
+        </div>
+        <div className="spw-evo-kpi-shell">
+          <button className="spw-evo-kpi pending" data-evo-list="missing-pw" aria-pressed={state.listMode === "missing-pw"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("missing-pw")}>
+            <span>SIGEM novo sem PW</span><strong>{value(Boolean(comparison?.sigem), counts["missing-pw"])}</strong><small>Entradas ainda não localizadas no PW atual</small>
+          </button>
+          <button type="button" className="spw-evo-explain" disabled={!comparison?.sigem} onClick={() => setAuditMetric("missing-pw")}>Como foi calculado?</button>
+        </div>
       </div>
 
       <div className="spw-evo-net" id="spw-evo-net">
@@ -608,13 +620,45 @@ export function SigemPwEvolutionApp() {
         )}
       </div>
 
+      <section className="spw-evo-current" id="spw-evo-current">
+        <header>
+          <div><strong>Leitura da base atual</strong><small>Documento + revisão é mostrado em paralelo a documentos únicos para eliminar ambiguidade de contagem.</small></div>
+        </header>
+        <div className="spw-evo-current-grid">
+          <article>
+            <span>PW cadastrado</span>
+            <strong>{hasValidatedLd ? fmt(selectedPw?.audit?.documentRevisionRecords) : "—"}</strong>
+            <small>{fmt(selectedPw?.audit?.uniqueDocuments)} documentos únicos</small>
+            <div><button type="button" data-evo-current-list="pw-current" onClick={() => adapter.setListMode("pw-current")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("pw-current")}>Como calculado?</button></div>
+          </article>
+          <article>
+            <span>PW emitido</span>
+            <strong>{hasValidatedLd ? fmt(selectedPw?.audit?.emittedDocumentRevisionRecords) : "—"}</strong>
+            <small>{fmt(selectedPw?.audit?.emittedUniqueDocuments)} documentos únicos</small>
+            <div><button type="button" data-evo-current-list="pw-current-emitted" onClick={() => adapter.setListMode("pw-current-emitted")}>Ver emitidos</button><button type="button" onClick={() => setAuditMetric("pw-current-emitted")}>Como calculado?</button></div>
+          </article>
+          <article>
+            <span>Somente SIGEM</span>
+            <strong>{hasValidatedLd ? fmt(comparison?.current?.onlySigem.length) : "—"}</strong>
+            <small>documento + revisão</small>
+            <div><button type="button" data-evo-current-list="only-sigem" onClick={() => adapter.setListMode("only-sigem")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("only-sigem")}>Como calculado?</button></div>
+          </article>
+          <article>
+            <span>Somente PW</span>
+            <strong>{hasValidatedLd ? fmt(comparison?.current?.onlyPw.length) : "—"}</strong>
+            <small>documento + revisão</small>
+            <div><button type="button" data-evo-current-list="only-pw" onClick={() => adapter.setListMode("only-pw")}>Ver registros</button><button type="button" onClick={() => setAuditMetric("only-pw")}>Como calculado?</button></div>
+          </article>
+        </div>
+      </section>
+
       <Timeline rows={state.timeline} />
 
       <div className="spw-evo-audit" id="spw-evo-audit">
         {hasValidatedLd ? (
           <>
-            <AuditArticle label="SIGEM atual" snapshot={selectedSigem} />
-            <AuditArticle label="PW atual" snapshot={selectedPw} />
+            <AuditArticle label="SIGEM atual" snapshot={selectedSigem} onExcluded={() => adapter.setListMode("excluded-sigem")} />
+            <AuditArticle label="PW atual" snapshot={selectedPw} onExcluded={() => adapter.setListMode("excluded-pw")} />
           </>
         ) : (
           <>
