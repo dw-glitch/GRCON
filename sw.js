@@ -129,7 +129,7 @@ const ASSETS = [
   "supabase.min.js",
   "grcon_cloud_config.js",
   "grcon_cloud_app.js",
-  "document_vault_app.js",
+  "document_vault_core.js",\n  "document_vault_app.js",
   "history_report.js",
   "history_report_worker.js",
   "pending_allocation_history_core.js",
