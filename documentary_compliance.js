@@ -19,6 +19,13 @@
   function audit(input = {}) {
     const context = { ...input, document: text(input.document), documentFamily: input.documentFamily || (Core.isN1710Context(input.sheet, input.document) ? 'N-1710' : 'OUTROS') };
     const results = [];
+    const contract = root.GrconCloud?.state?.contract;
+    if (contract && contract.code !== 'UHDT-D' && contract.settings?.inheritLegacyRules !== true) {
+      return Object.freeze({ ...Engine.createSnapshot([]), normativeValidationVersion: VERSION, engineVersion: Engine.VERSION,
+        document: context.document, revision: text(input.revision), components: null, outcome: 'NÃO APLICÁVEL',
+        information: Object.freeze([]), warnings: Object.freeze([]), lifecycleFindings: Object.freeze([]), policy: 'advisory',
+        explanation: 'Regras normativas do contrato ainda não configuradas. Regras da UHDT não herdadas.' });
+    }
     let components = null;
     if (context.documentFamily === 'N-1710') {
       const parsed = Parser.evaluate(context.document, { expectedCategory: input.documentType });

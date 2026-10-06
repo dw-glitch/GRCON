@@ -489,3 +489,12 @@
     max-height: 18rem;
   }
 }
+
+#egrdt-email-model-editor { padding:16px; border:1px solid var(--border,#cbd5e1); border-radius:12px; }
+#egrdt-email-model-fields { display:grid; gap:14px; margin-top:16px; }
+#egrdt-email-model-fields label { display:grid; gap:5px; font-size:12px; }
+#egrdt-email-model-fields input, #egrdt-email-model-fields select, #egrdt-email-model-fields textarea { min-width:0; padding:8px; border:1px solid #94a3b8; border-radius:6px; background:var(--panel,#fff); color:inherit; }
+.email-model-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.email-model-columns { display:grid; gap:8px; }
+.email-model-columns > div { display:grid; grid-template-columns:2fr 2fr 60px 75px 90px; gap:8px; align-items:center; }
+@media(max-width:720px) { .email-model-grid { grid-template-columns:1fr 1fr; } .email-model-columns > div { grid-template-columns:1fr 1fr; } }

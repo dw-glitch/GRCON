@@ -909,3 +909,92 @@ html[data-theme="dark"] .grcon-admin-password-close:focus-visible {
   background: var(--surface-3);
   color: var(--text-1);
 }
+
+
+/* Multi-contrato: o contexto ativo precisa ficar explícito sem transformar o
+   topo em um painel de administração. */
+.grcon-active-contract-badge {
+  align-items: center;
+  background: #eef6fa;
+  border: 1px solid #c5dce8;
+  border-radius: 999px;
+  color: #155c8a;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  min-height: 32px;
+  padding: 0 11px;
+  white-space: nowrap;
+}
+.grcon-contract-context {
+  background: #f4f8fb;
+  border: 1px solid #d8e5ec;
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 8px;
+  padding: 10px;
+}
+.grcon-contract-context label,
+.grcon-contract-create label {
+  display: grid;
+  gap: 5px;
+}
+.grcon-contract-context label > span,
+.grcon-contract-create label > span {
+  color: #526977;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.grcon-contract-context select,
+.grcon-contract-create input {
+  background: #fff;
+  border: 1px solid #bdcfd9;
+  border-radius: 8px;
+  color: #203541;
+  font: inherit;
+  font-size: 11px;
+  min-height: 36px;
+  padding: 0 9px;
+  width: 100%;
+}
+.grcon-contract-context small,
+.grcon-contract-create > small {
+  color: #6b7e89;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.grcon-contract-create {
+  border: 1px solid #e0e9ee;
+  border-radius: 10px;
+  margin-bottom: 9px;
+  padding: 0 10px 10px;
+}
+.grcon-contract-create[hidden] { display: none; }
+.grcon-contract-create summary {
+  color: #294b60;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 10px 0;
+}
+.grcon-contract-create form {
+  display: grid;
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .grcon-active-contract-badge { display: none; }
+}
+#grcon-admin-dialog { width:min(1100px,94vw); max-height:88vh; padding:24px; border:1px solid #94a3b8; border-radius:16px; background:var(--panel,#fff); color:var(--text,#10222f); overflow:auto; }
+#grcon-admin-dialog::backdrop { background:#0f172a80; }
+#grcon-admin-dialog header { display:flex; align-items:center; justify-content:space-between; }
+#grcon-admin-dialog label { display:grid; gap:6px; font-size:13px; margin:10px 0; }
+#grcon-admin-dialog input, #grcon-admin-dialog select { min-width:0; border:1px solid #94a3b8; border-radius:6px; padding:9px; color:inherit; background:var(--panel,#fff); }
+#grcon-admin-dialog button { padding:8px 12px; border-radius:6px; border:1px solid #94a3b8; cursor:pointer; }
+#grcon-admin-dialog section, #grcon-admin-dialog details { margin-top:20px; border-top:1px solid #cbd5e1; padding-top:16px; }
+.grcon-admin-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0 16px; }
+.grcon-admin-table-wrap { overflow:auto; }
+.grcon-admin-table-wrap table { width:100%; border-collapse:collapse; font-size:12px; }
+.grcon-admin-table-wrap th,.grcon-admin-table-wrap td { text-align:left; padding:10px; border-bottom:1px solid #cbd5e1; }
+@media(max-width:720px) { .grcon-admin-grid { grid-template-columns:1fr; } }

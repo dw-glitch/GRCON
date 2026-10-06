@@ -1394,7 +1394,7 @@
 
   function triageSettings() {
     state.recentDays = Math.max(1, Number(els.recentDays.value) || 30);
-    return { recentDays: state.recentDays, now: new Date(), conflictResolutions: state.conflictResolutions, sigemQueryContext: window.GrconSharedSigemQuery?.context() };
+    return { recentDays: state.recentDays, now: new Date(), conflictResolutions: state.conflictResolutions, sigemQueryContext: window.GrconSharedSigemQuery?.context(), contractContext: window.GrconCloud?.state?.contract || null };
   }
 
   function normalizeFileAccessError(error, file, context) {

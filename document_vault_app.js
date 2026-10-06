@@ -15,6 +15,7 @@
   const QUEUE_RENDER_LIMIT = 220;
   const LOOKUP_BATCH_SIZE = 500;
   const sourceRegistry = new Map();
+  let contextEpoch = 0;
 
   const state = {
     files: [],
@@ -217,6 +218,7 @@
     return {
       id: root.crypto?.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2)),
       file,
+      workspaceId: workspaceId(),
       documentCode: identity.documentCode,
       revision: identity.revision,
       format: identity.format,
@@ -306,6 +308,10 @@
       return;
     }
 
+    if (!task.workspaceId) task.workspaceId = workspaceId();
+    if (task.workspaceId !== workspaceId()) {
+      task.status = "paused"; task.phase = "Envio pertence a outro contrato"; renderQueue(); return;
+    }
     task.status = "hashing";
     task.error = "";
     renderQueue();
@@ -321,7 +327,7 @@
       const init = await requestJson("/init", {
         method: "POST",
         body: JSON.stringify({
-          workspaceId: workspaceId(),
+          workspaceId: task.workspaceId,
           fileName: task.file.name,
           relativePath: task.file.webkitRelativePath || task.file.name,
           documentCode: task.documentCode,
@@ -350,7 +356,7 @@
       renderQueue();
       const common = {
         "x-grcon-file-id": init.file.id,
-        "x-grcon-workspace": workspaceId(),
+        "x-grcon-workspace": task.workspaceId,
       };
 
       if (init.uploadMode === "single") {
@@ -362,7 +368,7 @@
       } else {
         const started = await requestJson("/multipart/start", {
           method: "POST",
-          body: JSON.stringify({ workspaceId: workspaceId(), id: init.file.id, contentType: task.file.type || "application/octet-stream" }),
+          body: JSON.stringify({ workspaceId: task.workspaceId, id: init.file.id, contentType: task.file.type || "application/octet-stream" }),
         });
         const partSize = Number(started.partSize || init.partSize) || 16 * 1024 * 1024;
         const confirmed = new Set((started.parts || []).map(part => Number(part.partNumber)));
@@ -391,7 +397,7 @@
         }
         await requestJson("/multipart/complete", {
           method: "POST",
-          body: JSON.stringify({ workspaceId: workspaceId(), id: init.file.id }),
+          body: JSON.stringify({ workspaceId: task.workspaceId, id: init.file.id }),
         });
       }
 
@@ -571,6 +577,8 @@
       if (body) body.innerHTML = '<tr><td colspan="7"><div class="vault-empty">Entre no GRCON para consultar o Cofre.</div></td></tr>';
       return;
     }
+    const epoch = contextEpoch;
+    const workspace = workspaceId();
     state.loading = true;
     renderListStatus("Consultando documentos…");
     try {
@@ -587,6 +595,7 @@
       });
       if (!reset && state.next) params.set("after", String(state.next));
       const payload = await requestJson("/list?" + params.toString(), { method: "GET" });
+      if (epoch !== contextEpoch || workspace !== workspaceId()) return;
       const rows = Array.isArray(payload.files) ? payload.files : [];
       state.files = reset ? rows : state.files.concat(rows);
       state.next = payload.next ?? null;
@@ -801,6 +810,8 @@
       return;
     }
 
+    const epoch = contextEpoch;
+    const workspace = workspaceId();
     state.lookupBusy = true;
     state.vaultPrepared = false;
     if (button) button.disabled = true;
@@ -828,6 +839,7 @@
         chunk.forEach(item => combined.push(normalizeLookupResult(byId.get(item.requestId) || {}, item)));
         await yieldMain();
       }
+      if (epoch !== contextEpoch || workspace !== workspaceId()) return;
       state.lookupRows = combined;
       const missing = combined.filter(row => !row.found).length;
       if (missing) notify(missing + " documento(s) não localizado(s) no Cofre. Os encontrados continuam disponíveis.", "warning");
@@ -858,6 +870,8 @@
   async function prepareVaultForGrdt() {
     const button = document.getElementById("grdt-vault-prepare");
     const summary = document.getElementById("grdt-vault-lookup-summary");
+    const epoch = contextEpoch;
+    const workspace = workspaceId();
     const selectedRows = state.lookupRows.filter(row => row.included && row.selectedRevision);
     const selectedFiles = [];
     const seenIds = new Set();
@@ -899,6 +913,7 @@
       const good = downloaded.filter(item => item?.ok).map(item => item.file);
       const failed = downloaded.filter(item => !item?.ok);
       if (!good.length) throw failed[0]?.error || new Error("Nenhum arquivo pôde ser recuperado.");
+      if (epoch !== contextEpoch || workspace !== workspaceId()) return;
       setPackageFiles(good);
       state.vaultPrepared = true;
       if (summary) summary.textContent = selectedRows.length + " documento(s) · " + good.length + " arquivo(s) preparados para o fluxo normal da GRDT" + (failed.length ? " · " + failed.length + " falha(s)" : "");
@@ -1141,6 +1156,13 @@
         void checkHealth();
         void refreshList(true);
       }
+    });
+    root.addEventListener("grcon:contract-context-changed", () => {
+      contextEpoch++;
+      state.files = []; state.lookupRows = []; state.next = null; state.hasMore = false;
+      state.vaultPrepared = false; sourceRegistry.clear();
+      renderVaultList(); renderLookupResults();
+      if (state.open) void refreshList(true);
     });
     root.addEventListener("grcon:planned-documents-published", () => {
       if (state.open) void refreshList(true);

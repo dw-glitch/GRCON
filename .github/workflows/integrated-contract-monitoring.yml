@@ -1,0 +1,35 @@
+name: QA — Cofre, contratos e monitoramento integrados
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: grcon-integrated-contract-qa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: node tests/integrated_contract_monitoring.cjs && node tests/contract_storage.cjs && node tests/email_template_configuration.cjs
+      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Verificar interface integrada
+        run: |
+          python3 -m http.server 8778 --bind 127.0.0.1 > /tmp/grcon-integrated-server.log 2>&1 &
+          node scripts/validar-integrated-contracts-browser.cjs
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: grcon-integrated-contracts-chromium
+          path: artifacts/integrated-contracts/
