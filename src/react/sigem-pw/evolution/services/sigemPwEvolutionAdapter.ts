@@ -359,8 +359,9 @@ function rowsForMode(): EvolutionRecord[] {
   if (state.listMode === "removed-sigem") return comparison?.sigem?.removed || [];
   if (state.listMode === "removed-pw") return comparison?.pw?.removed || [];
   if (state.listMode === "pw-current") return pwCurrent?.records || [];
-  if (state.listMode === "pw-current-emitted") return (pwCurrent?.records || []).filter((row) => row.emitted);
-  if (state.listMode === "pw-current-not-emitted") return (pwCurrent?.records || []).filter((row) => !row.emitted);
+  if (state.listMode === "pw-current-emitted") return (pwCurrent?.records || []).filter((row) => row.emissionState === "emitted");
+  if (state.listMode === "pw-current-not-emitted") return (pwCurrent?.records || []).filter((row) => row.emissionState === "not-emitted");
+  if (state.listMode === "pw-current-indeterminate") return (pwCurrent?.records || []).filter((row) => row.emissionState === "indeterminate");
   if (state.listMode === "only-sigem") return current?.onlySigem || [];
   if (state.listMode === "only-pw") return current?.onlyPw || [];
   if (state.listMode === "current-both") return current?.both || [];
@@ -936,6 +937,8 @@ async function exportAuditWorkbook(): Promise<number> {
       { Métrica: "PW · documento + revisão cadastrado", Valor: pwAudit.documentRevisionRecords || 0 },
       { Métrica: "PW · documento + revisão emitido", Valor: pwAudit.emittedDocumentRevisionRecords || 0 },
       { Métrica: "PW · documentos únicos emitidos", Valor: pwAudit.emittedUniqueDocuments || 0 },
+      { Métrica: "PW · documento + revisão não emitido determinável", Valor: pwAudit.notEmittedDocumentRevisionRecords || 0 },
+      { Métrica: "PW · emissão indeterminada (documento + revisão)", Valor: pwAudit.indeterminateEmissionDocumentRevisionRecords || 0 },
       { Métrica: "Somente SIGEM (doc+rev)", Valor: comparison?.current.onlySigem.length || 0 },
       { Métrica: "Somente PW (doc+rev)", Valor: comparison?.current.onlyPw.length || 0 },
       { Métrica: "SIGEM + PW (doc+rev)", Valor: comparison?.current.both.length || 0 },
@@ -954,8 +957,9 @@ async function exportAuditWorkbook(): Promise<number> {
       ...(comparison?.sigem?.documentRevision?.newRevisions || []).map((row) => auditRow(row, "Nova revisão SIGEM")),
       ...(comparison?.pw?.documentRevision?.newRevisions || []).map((row) => auditRow(row, "Nova revisão PW")),
     ]);
-    append("Emitidos", (pwCurrent?.records || []).filter((row) => row.emitted).map((row) => auditRow(row, "Emitido")));
-    append("Não emitidos", (pwCurrent?.records || []).filter((row) => !row.emitted).map((row) => auditRow(row, "Não emitido")));
+    append("Emitidos", (pwCurrent?.records || []).filter((row) => row.emissionState === "emitted").map((row) => auditRow(row, "Emitido")));
+    append("Não emitidos", (pwCurrent?.records || []).filter((row) => row.emissionState === "not-emitted").map((row) => auditRow(row, "Não emitido determinável")));
+    append("Emissão indeterminada", (pwCurrent?.records || []).filter((row) => row.emissionState === "indeterminate").map((row) => auditRow(row, "Emissão indeterminada")));
     append("Somente SIGEM", (comparison?.current.onlySigem || []).map((row) => auditRow(row, "Somente SIGEM")));
     append("Somente PW", (comparison?.current.onlyPw || []).map((row) => auditRow(row, "Somente PW")));
     append("Excluídos da análise", [
@@ -968,7 +972,7 @@ async function exportAuditWorkbook(): Promise<number> {
       { Item: "analysisVersion", Valor: comparison?.analysisVersion || Core().CALCULATION_VERSION },
       { Item: "Granularidade técnica", Valor: "A evolução legada preserva ocorrências técnicas para compatibilidade histórica." },
       { Item: "Granularidade auditável", Valor: "Documento + revisão é calculado em paralelo e usado para explicar novos documentos, novas revisões e presença entre sistemas." },
-      { Item: "Emissão PW", Valor: "SIM = evidência atual; NÃO = evidência histórica; PREVISTO/ausente/desconhecido = não emitido." },
+      { Item: "Emissão PW", Valor: "SIM = evidência atual; NÃO = evidência histórica; PREVISTO = não emitido determinável; ausente/desconhecido = indeterminado." },
       ...snapshotRuleRows("SIGEM atual", sigemCurrent),
       ...snapshotRuleRows("PW atual", pwCurrent),
     ]);
