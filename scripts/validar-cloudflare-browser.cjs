@@ -129,7 +129,7 @@ async function probe(page, pathname) {
       "/", "/index.html", "/sw.js", "/manifest.json", "/grcon_cloud_config.js",
       "/grcon_mascot_controller_v4.js", "/deployment-meta.json",
       "/react-dist/consultas-app.js", "/react-dist/cover-document-app.js",
-      "/document_vault_app.js", "/document_hash_worker.js", "/document-vault.css",
+      "/document_vault_core.js", "/document_vault_app.js", "/document_hash_worker.js", "/document-vault.css",
       "/assets/mascot/video/grcon-mascot-idle-alpha.webm",
       "/workers/sigem_pw_dashboard.worker.js",
     ];
@@ -207,12 +207,18 @@ async function probe(page, pathname) {
       moduleVisible: !document.getElementById("document-vault-module")?.hidden,
       folderPicker: Boolean(document.getElementById("vault-folder-input")?.hasAttribute("webkitdirectory")),
       allocationOptions: Array.from(document.querySelectorAll("#vault-allocation option")).map(option => option.value),
+      centralSourceOptions: Array.from(document.querySelectorAll('input[name="grdt-document-source"]')).map(input => input.value),
+      centralLookup: Boolean(document.getElementById("grdt-vault-lookup") && document.getElementById("grdt-vault-codes")),
+      manualGrdtSelectionInVault: Boolean(document.getElementById("vault-use-grdt") || document.querySelector("[data-vault-select]")),
       oldReissueCard: Boolean(document.querySelector('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]')),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     }));
     assert.equal(vaultUi.moduleVisible, true);
     assert.equal(vaultUi.folderPicker, true);
     assert.deepEqual(vaultUi.allocationOptions, ["all", "allocated", "not_allocated"]);
+    assert.deepEqual(vaultUi.centralSourceOptions, ["local", "vault"]);
+    assert.equal(vaultUi.centralLookup, true);
+    assert.equal(vaultUi.manualGrdtSelectionInVault, false);
     assert.equal(vaultUi.oldReissueCard, false);
     assert.ok(vaultUi.overflow <= 1, "Cofre não pode gerar overflow horizontal global.");
     results.vault = { health: { status: vaultHealth.status(), body: vaultHealthBody }, ui: vaultUi };
