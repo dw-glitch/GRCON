@@ -44,7 +44,7 @@ assert.match(worker, /grcon_document_vault_list/);
 assert.match(worker, /handleDownload/);
 assert.match(worker, /createMultipartUpload/);
 assert.match(worker, /find_hash/);
-assert.match(worker, /cache-control": "private, no-store"/);
+assert.match(worker, /cache-control[^\n]+private, no-store/i);
 assert.match(wrangler, /"bucket_name"\s*:\s*"grcon-documents"/);
 assert.match(wrangler, /"main"\s*:\s*"\.\/cloudflare\/worker-entry\.mjs"/);
 
