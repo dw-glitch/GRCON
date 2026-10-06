@@ -84,6 +84,7 @@ export interface EvolutionAudit {
   technicalDuplicates?: number;
   technicalVariantsSameDocumentRevision?: number;
   emittedTechnicalRecords?: number;
+  notEmittedTechnicalRecords?: number;
   emittedDocumentRevisionRecords?: number;
   emittedUniqueDocuments?: number;
   notEmittedDocumentRevisionRecords?: number;
