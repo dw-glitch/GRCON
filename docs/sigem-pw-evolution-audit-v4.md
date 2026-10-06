@@ -1,6 +1,6 @@
 # SIGEM × PW — Evolução auditável v4
 
-Versão da regra: `sigem-pw-evolution-audit-v4`.
+Versão da regra: `sigem-pw-evolution-audit-v4.1`.
 
 ## Objetivo
 
@@ -84,7 +84,6 @@ Cada snapshot derivado registra:
 
 ## Datas
 
-- cadastro PW: campo de criação do PW quando disponível;
 - cadastro PW: `datacriacao`, quando disponível;
 - emissão PW: `DataEnvioGRDCliente`; se estiver ausente, a data de emissão é não determinável;
 - snapshot: data/hora de importação ou data operacional editada; esta é a data usada no eixo do gráfico entre snapshots;
@@ -120,3 +119,25 @@ O relatório Excel inclui:
 - Regras da análise.
 
 A aba **Regras da análise** registra versão, snapshots, fingerprints, volumes e regras utilizadas.
+
+## Diagnóstico e correções da retomada (5.44.9)
+
+| Problema encontrado | Comportamento final |
+|---|---|
+| Releitura de todos os payloads e recomputação a cada evento | Leitura por chave; cache versionado em memória e IndexedDB |
+| Seleção redefinida ao atualizar o período/histórico | Escolhas manuais preservadas; ausência explícita de base anterior também persiste |
+| Primeira construção de snapshots/gráfico bloqueava a interface | Worker usa o mesmo motor, identidade, catálogo e filtro de escopo do runtime principal |
+| Comparações repetidas reprocessavam as mesmas bases | Cache limitado a 12 pares; gráfico limitado a quatro históricos derivados |
+| Variante PREVISTO posterior podia substituir uma evidência de emissão | SIM prevalece sobre NÃO; ambos prevalecem sobre indeterminado, que prevalece sobre PREVISTO; empate usa linha da origem |
+| KPI documento + revisão abria/exportava ocorrências técnicas | Listas dos estados atuais e abas de emissão usam um representante por documento + revisão |
+| Duas revisões de um documento novo apareciam como dois documentos novos | Documento novo conta uma vez; novas chaves documento + revisão seguem listadas separadamente |
+| Exportação de relação SIGEM + PW omitindo evidência do PW | Status e evidência PW acompanham a relação, sem substituir o status SIGEM |
+| Atualização sem troca de versão PWA | Versão 5.44.9 renova o cache e a regra v4.1 invalida resultados derivados anteriores |
+
+### Como conciliar com o número informado pelo PW
+
+O número de operações informado pelo time pode incluir múltiplas emissões da mesma revisão, movimentos que ocorreram e foram revertidos entre duas exportações, versões/arquivos da mesma revisão e documentos fora do escopo. A Evolução compara fotografias das relações recebidas. Não afirma conhecer todas as operações executadas entre elas.
+
+Entradas que já chegam com SIM/NÃO e transições de PREVISTO para emitido são mostradas separadamente na explicação do KPI. Uma entrada já emitida não prova que sua emissão ocorreu entre os dois snapshots. Para reconciliar uma diferença operacional concreta ainda são necessários os CSVs/snapshots correspondentes e o relatório de operações do PW com a mesma granularidade, escopo e período.
+
+Se a importação antiga guardou somente a quantidade de linhas inválidas, sem seu conteúdo, o total continua diagnosticado, mas não é possível reconstruir a evidência por linha. Arquivo, fingerprint e versão da regra identificam a origem; não são uma assinatura criptográfica de autenticidade.

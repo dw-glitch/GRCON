@@ -243,10 +243,12 @@ function MetricAuditDrawer({
       ],
     },
     "pw-emitted": {
-      title: "Novas emissões no período",
-      formula: "Soma novas entradas já emitidas com registros que passaram de PREVISTO (não emitido determinável) para emitidos. Estado anterior ausente/desconhecido é indeterminado e não é tratado automaticamente como nova emissão.",
+      title: "Emissões identificadas entre bases",
+      formula: "Soma entradas que já chegam emitidas com revisões que passaram de PREVISTO para emitidas. Uma entrada já emitida pode ter sido emitida antes do intervalo. Duas bases são fotografias: não mostram todas as operações realizadas entre elas nem emissões repetidas da mesma revisão. Estado anterior desconhecido fica fora desta movimentação.",
       rows: [
-        ["Novas emissões · documento + revisão", comparison?.pwEmissions.length || 0],
+        ["Emissões identificadas · documento + revisão", comparison?.pwEmissions.length || 0],
+        ["Entradas já emitidas ao aparecer na base", comparison?.pwEmissions.filter(row => !row.previous).length || 0],
+        ["Transições de PREVISTO para emitido", comparison?.pwEmissions.filter(row => row.previous).length || 0],
         ["Movimentos técnicos emitidos · compatibilidade", comparison?.pwEmissionsTechnical.length || 0],
         ["Indeterminado anterior → emitido atual (não atribuído como nova emissão)", comparison?.pwEmissionIndeterminateToEmitted.length || 0],
         ["PW atual · documento + revisão emitido", pwAudit.emittedDocumentRevisionRecords || 0],
@@ -595,7 +597,7 @@ export function SigemPwEvolutionApp() {
         </div>
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi emitted" data-evo-list="pw-emitted" aria-pressed={state.listMode === "pw-emitted"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-emitted")}>
-            <span>Emitidos no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-emitted"], true)}</strong><small>Novas emissões/transições do período</small>
+            <span>Emitidos no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-emitted"], true)}</strong><small>Entradas emitidas/transições entre bases · doc. + revisão</small>
           </button>
           <button type="button" className="spw-evo-explain" disabled={!comparison?.pw} onClick={() => setAuditMetric("pw-emitted")}>Como foi calculado?</button>
         </div>

@@ -136,6 +136,7 @@ interface SigemPwEvolutionCoreApi {
     pwPrevious: EvolutionSnapshot | null,
     pwCurrent: EvolutionSnapshot | null,
   ): EvolutionComparison;
+  documentRevisionRecords(records: EvolutionRecord[]): EvolutionRecord[];
   buildDailyTimeline(sigemSnapshots: EvolutionSnapshot[], pwSnapshots: EvolutionSnapshot[]): EvolutionTimelineDay[];
 }
 interface SigemPwEvolutionUiApi {

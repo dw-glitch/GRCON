@@ -104,9 +104,11 @@ const state: EvolutionUiState = {
   },
 };
 
+const explicitlyEmptyPrevious = new Set<string>();
 const PREFERENCES_KEY = "grcon:sigem-pw:evolution:ui:v2";
 const PREPARED_CACHE_PREFIX = "evolutionPrepared:sigem-pw-evolution-audit-v4:";
 const preparedSnapshotCache = new Map<string, EvolutionSnapshot>();
+const comparisonCache = new Map<string, NonNullable<EvolutionUiState["comparison"]>>();
 const timelineCache = new Map<string, EvolutionUiState["timeline"]>();
 
 function restorePreferences(): void {
@@ -116,6 +118,8 @@ function restorePreferences(): void {
     const saved = JSON.parse(raw) as Partial<Pick<EvolutionUiState, "period" | "selections" | "listMode" | "filters" | "rawFilters">>;
     if (saved.period) state.period = { ...state.period, ...saved.period };
     if (saved.selections) state.selections = { ...state.selections, ...saved.selections };
+    const emptyPrevious = (saved as typeof saved & { emptyPrevious?: string[] }).emptyPrevious;
+    for (const key of emptyPrevious || []) explicitlyEmptyPrevious.add(key);
     if (saved.listMode) state.listMode = saved.listMode;
     if (saved.filters) state.filters = { ...state.filters, ...saved.filters };
     if (saved.rawFilters) state.rawFilters = { ...state.rawFilters, ...saved.rawFilters };
@@ -128,7 +132,8 @@ function persistPreferences(): void {
   try {
     window.sessionStorage?.setItem(PREFERENCES_KEY, JSON.stringify({
       period: state.period,
-      selections: state.selections,
+      selections: preferredSelections,
+      emptyPrevious: [...explicitlyEmptyPrevious],
       listMode: state.listMode,
       filters: state.filters,
       rawFilters: state.rawFilters,
@@ -149,6 +154,11 @@ let evolutionWorker: Worker | null = null;
 let evolutionWorkerSequence = 0;
 const evolutionWorkerPending = new Map<number, {
   resolve(snapshot: EvolutionSnapshot): void;
+  reject(error: Error): void;
+}>();
+
+const evolutionTimelinePending = new Map<number, {
+  resolve(timeline: EvolutionUiState["timeline"]): void;
   reject(error: Error): void;
 }>();
 
@@ -179,6 +189,8 @@ function runtime(): RuntimeWindow {
 function failEvolutionWorker(error: Error): void {
   evolutionWorkerPending.forEach(({ reject }) => reject(error));
   evolutionWorkerPending.clear();
+  evolutionTimelinePending.forEach(({ reject }) => reject(error));
+  evolutionTimelinePending.clear();
   evolutionWorker?.terminate();
   evolutionWorker = null;
 }
@@ -190,8 +202,16 @@ function getEvolutionWorker(): Worker | null {
     const worker = new Worker(new URL("workers/sigem_pw_evolution.worker.js", document.baseURI));
     worker.onmessage = (event: MessageEvent) => {
       const payload = event.data || {};
-      if (payload.type !== "evolution-snapshot") return;
       const requestId = Number(payload.requestId);
+      if (payload.type === "evolution-timeline") {
+        const pending = evolutionTimelinePending.get(requestId);
+        if (!pending) return;
+        evolutionTimelinePending.delete(requestId);
+        if (payload.ok && Array.isArray(payload.timeline)) pending.resolve(payload.timeline);
+        else pending.reject(new Error(text(payload.error) || "Falha no histórico diário."));
+        return;
+      }
+      if (payload.type !== "evolution-snapshot") return;
       const pending = evolutionWorkerPending.get(requestId);
       if (!pending) return;
       evolutionWorkerPending.delete(requestId);
@@ -335,8 +355,8 @@ function pairDefaults(system: EvolutionSystem): void {
 
   const currentIndex = list.findIndex((row) => row.id === current);
   const fallbackPrevious = currentIndex > 0 ? list[currentIndex - 1].id : "";
-  const previous = (preferredPrevious && preferredPrevious !== current && ids.has(preferredPrevious) ? preferredPrevious : "")
-    || fallbackPrevious;
+  const previous = explicitlyEmptyPrevious.has(previousKey) ? ""
+    : (preferredPrevious && preferredPrevious !== current && ids.has(preferredPrevious) ? preferredPrevious : fallbackPrevious);
   state.selections[previousKey] = previous;
 }
 
@@ -358,10 +378,10 @@ function rowsForMode(): EvolutionRecord[] {
   if (state.listMode === "missing-pw") return relation?.newSigemMissingPw || [];
   if (state.listMode === "removed-sigem") return comparison?.sigem?.removed || [];
   if (state.listMode === "removed-pw") return comparison?.pw?.removed || [];
-  if (state.listMode === "pw-current") return pwCurrent?.records || [];
-  if (state.listMode === "pw-current-emitted") return (pwCurrent?.records || []).filter((row) => row.emissionState === "emitted");
-  if (state.listMode === "pw-current-not-emitted") return (pwCurrent?.records || []).filter((row) => row.emissionState === "not-emitted");
-  if (state.listMode === "pw-current-indeterminate") return (pwCurrent?.records || []).filter((row) => row.emissionState === "indeterminate");
+  if (state.listMode === "pw-current") return Core().documentRevisionRecords(pwCurrent?.records || []);
+  if (state.listMode === "pw-current-emitted") return Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "emitted");
+  if (state.listMode === "pw-current-not-emitted") return Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "not-emitted");
+  if (state.listMode === "pw-current-indeterminate") return Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "indeterminate");
   if (state.listMode === "only-sigem") return current?.onlySigem || [];
   if (state.listMode === "only-pw") return current?.onlyPw || [];
   if (state.listMode === "current-both") return current?.both || [];
@@ -620,26 +640,54 @@ function recalculate(): void {
     return;
   }
   const started = now();
-  state.comparison = Core().comparePeriod(
-    selectedSnapshot("sigem", "previous"),
-    selectedSnapshot("sigem", "current"),
-    selectedSnapshot("pw", "previous"),
-    selectedSnapshot("pw", "current"),
-  );
+  const pair = [selectedSnapshot("sigem", "previous"), selectedSnapshot("sigem", "current"),
+    selectedSnapshot("pw", "previous"), selectedSnapshot("pw", "current")] as const;
+  const key = [Core().CALCULATION_VERSION, state.ldUniverse?.fingerprint,
+    ...pair.map((row) => row ? `${row.id}@${row.importedAt}@${row.contentFingerprint}` : "none")].join("|");
+  const cached = comparisonCache.get(key);
+  state.comparison = cached || Core().comparePeriod(...pair);
+  if (!cached) {
+    comparisonCache.set(key, state.comparison);
+    if (comparisonCache.size > 12) comparisonCache.delete(comparisonCache.keys().next().value!);
+  }
   state.metrics.evolutionComparisonMs = now() - started;
   state.page = 1;
   state.detailRow = null;
   syncFilteredRows();
 }
 
+function timelineKey(sigem = state.sigem, pw = state.pw): string {
+  return [Core().CALCULATION_VERSION, state.ldUniverse?.fingerprint || "",
+    ...sigem.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@")), "|",
+    ...pw.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@"))].join(":");
+}
+
+async function prepareTimeline(sigem: EvolutionSnapshot[], pw: EvolutionSnapshot[]): Promise<void> {
+  const key = timelineKey(sigem, pw);
+  if (timelineCache.has(key)) return;
+  const started = now();
+  const worker = getEvolutionWorker();
+  let rows: EvolutionUiState["timeline"];
+  if (worker) {
+    const requestId = ++evolutionWorkerSequence;
+    try {
+      rows = await new Promise<EvolutionUiState["timeline"]>((resolve, reject) => {
+        evolutionTimelinePending.set(requestId, { resolve, reject });
+        try { worker.postMessage({ type: "evolution-timeline", requestId, sigem, pw }); }
+        catch (error) { evolutionTimelinePending.delete(requestId); reject(error); }
+      });
+    } catch (error) {
+      debugMetric("timeline-worker-fallback", { message: messageOf(error, "Worker indisponível") });
+      rows = Core().buildDailyTimeline(sigem, pw);
+    }
+  } else rows = Core().buildDailyTimeline(sigem, pw);
+  state.metrics.evolutionTimelineMs = now() - started;
+  timelineCache.set(key, rows);
+  if (timelineCache.size > 4) timelineCache.delete(timelineCache.keys().next().value!);
+}
+
 function fullTimeline(): EvolutionUiState["timeline"] {
-  const key = [
-    Core().CALCULATION_VERSION,
-    state.ldUniverse?.fingerprint || "",
-    ...state.sigem.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@")),
-    "|",
-    ...state.pw.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@")),
-  ].join(":");
+  const key = timelineKey();
   const cached = timelineCache.get(key);
   if (cached) return cached;
   const started = now();
@@ -694,8 +742,11 @@ async function loadSnapshots(forceLd = false): Promise<void> {
       buildPreparedSnapshots("sigem", sigemMeta, historyMaps.payloads, historyMaps.prepared, universe),
       buildPreparedSnapshots("pw", pwMeta, historyMaps.payloads, historyMaps.prepared, universe),
     ]);
-    state.sigem = ordered(sigem.output);
-    state.pw = ordered(pw.output);
+    const orderedSigem = ordered(sigem.output);
+    const orderedPw = ordered(pw.output);
+    await prepareTimeline(orderedSigem, orderedPw);
+    state.sigem = orderedSigem;
+    state.pw = orderedPw;
     state.unavailable = { sigem: sigem.unavailable, pw: pw.unavailable };
     applyPeriod();
     state.metrics.evolutionSnapshotBuildMs = now() - started;
@@ -763,6 +814,10 @@ function clearPeriod(): void {
 }
 
 function setSelection(key: keyof EvolutionUiState["selections"], value: string): void {
+  if (key.endsWith("Prev")) {
+    if (!value) explicitlyEmptyPrevious.add(key);
+    else explicitlyEmptyPrevious.delete(key);
+  }
   preferredSelections = { ...preferredSelections, [key]: value };
   state.selections = { ...state.selections, [key]: value };
   recalculate();
@@ -840,6 +895,7 @@ function currentFiltersForExport(): EvolutionFilters {
 }
 
 function auditRow(row: EvolutionRecord, situation = ""): Record<string, unknown> {
+  const pw = row.system === "pw" ? row : row.matchedPw;
   return {
     Código: row.document || "",
     Revisão: row.revision || "",
@@ -848,10 +904,11 @@ function auditRow(row: EvolutionRecord, situation = ""): Record<string, unknown>
     Título: row.title || "",
     Origem: (row.system || "").toUpperCase(),
     "Status SIGEM/PW": row.status || "",
-    "Última emissão": row.lastEmission || "",
-    "Regra de emissão": row.emissionReason || "",
+    "Última emissão": pw?.lastEmission || "",
+    "Regra de emissão": pw?.emissionReason || "",
     "Data de cadastro": row.registrationDate || "",
-    "Data de emissão": row.emissionDate || "",
+    "Data de emissão": pw?.emissionDate || "",
+    "Status PW": pw?.status || "",
     "Data relevante": row.date || "",
     Situação: situation || row.movement || "",
     "Motivo de inclusão": row.inclusionReason || "",
@@ -942,7 +999,7 @@ async function exportAuditWorkbook(): Promise<number> {
       { Métrica: "Somente SIGEM (doc+rev)", Valor: comparison?.current.onlySigem.length || 0 },
       { Métrica: "Somente PW (doc+rev)", Valor: comparison?.current.onlyPw.length || 0 },
       { Métrica: "SIGEM + PW (doc+rev)", Valor: comparison?.current.both.length || 0 },
-      { Métrica: "Novas emissões no período · documento + revisão", Valor: comparison?.pwEmissions.length || 0 },
+      { Métrica: "Emissões identificadas entre bases · documento + revisão", Valor: comparison?.pwEmissions.length || 0 },
       { Métrica: "Movimentos técnicos emitidos · compatibilidade", Valor: comparison?.pwEmissionsTechnical.length || 0 },
       { Métrica: "Indeterminado anterior → emitido atual · não atribuído como nova emissão", Valor: comparison?.pwEmissionIndeterminateToEmitted.length || 0 },
     ]);
@@ -959,9 +1016,9 @@ async function exportAuditWorkbook(): Promise<number> {
       ...(comparison?.sigem?.documentRevision?.newRevisions || []).map((row) => auditRow(row, "Nova revisão SIGEM")),
       ...(comparison?.pw?.documentRevision?.newRevisions || []).map((row) => auditRow(row, "Nova revisão PW")),
     ]);
-    append("Emitidos", (pwCurrent?.records || []).filter((row) => row.emissionState === "emitted").map((row) => auditRow(row, "Emitido")));
-    append("Não emitidos", (pwCurrent?.records || []).filter((row) => row.emissionState === "not-emitted").map((row) => auditRow(row, "Não emitido determinável")));
-    append("Emissão indeterminada", (pwCurrent?.records || []).filter((row) => row.emissionState === "indeterminate").map((row) => auditRow(row, "Emissão indeterminada")));
+    append("Emitidos", Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "emitted").map((row) => auditRow(row, "Emitido")));
+    append("Não emitidos", Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "not-emitted").map((row) => auditRow(row, "Não emitido determinável")));
+    append("Emissão indeterminada", Core().documentRevisionRecords(pwCurrent?.records || []).filter((row) => row.emissionState === "indeterminate").map((row) => auditRow(row, "Emissão indeterminada")));
     append("Somente SIGEM", (comparison?.current.onlySigem || []).map((row) => auditRow(row, "Somente SIGEM")));
     append("Somente PW", (comparison?.current.onlyPw || []).map((row) => auditRow(row, "Somente PW")));
     append("Excluídos da análise", [
@@ -1072,6 +1129,7 @@ function scheduleRefresh(forceLd = false): void {
   if (eventTimer !== null) window.clearTimeout(eventTimer);
   eventTimer = window.setTimeout(() => {
     eventTimer = null;
+    if (state.busy) { scheduleRefresh(forceLd); return; }
     void refresh(forceLd).catch((error) => console.error("[SIGEM×PW][evolução] atualização:", error));
   }, EVOLUTION_EVENT_DEBOUNCE_MS);
 }

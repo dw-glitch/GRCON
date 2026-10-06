@@ -283,7 +283,7 @@ export const EMPTY_EVOLUTION_FILTERS = (): EvolutionFilters => ({
 export const EVOLUTION_LIST_LABELS: Readonly<Record<EvolutionListMode, readonly [string, string]>> = Object.freeze({
   "sigem-new": ["Cadastrados no SIGEM", "Ocorrências técnicas novas entre os dois snapshots SIGEM; a auditoria mostra também documento + revisão."],
   "pw-new": ["Encontrados no ProjectWise", "Ocorrências técnicas novas entre os dois snapshots PW; presença no PW significa cadastro, não emissão."],
-  "pw-emitted": ["Novas emissões no ProjectWise", "Novas entradas com evidência de emissão ou registros que passaram de não emitido para emitido."],
+  "pw-emitted": ["Emissões identificadas entre bases PW", "Entradas já emitidas e transições de PREVISTO para emitido. Fotografias da base não representam todas as operações realizadas no intervalo."],
   both: ["Chegaram nas duas bases", "Novas ocorrências equivalentes no SIGEM e no PW no período selecionado."],
   "missing-pw": ["Novos SIGEM ainda não identificados no PW", "Novas ocorrências SIGEM sem correspondência na base PW atual."],
   "removed-sigem": ["Não encontrados nesta base SIGEM", "Ocorrências presentes na base anterior e ausentes na atual; não significam exclusão definitiva."],

@@ -88,6 +88,7 @@ jobs:
           node tests/sigem_pw_history_stage5.cjs
           node tests/sigem_pw_evolution.cjs
           node tests/sigem_pw_evolution_auditability.cjs
+          node tests/sigem_pw_evolution_worker.cjs
           node tests/sigem_pw_audit.cjs
           node tests/sigem_pw_stage7_atomic_import.cjs
           node tests/sigem_pw_stage8_acceptance.cjs

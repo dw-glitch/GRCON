@@ -97,6 +97,27 @@ const pwCurrent = base("pw", pwRows, "2026-10-05T09:00:00Z");
   assert.equal(mixed.audit.indeterminateEmissionDocumentRevisionRecords, 1, "uma chave doc+rev deve ocupar um único estado final");
 })();
 
+(function evidenceIsIndependentOfSourceOrderAndDrillDownMatchesKpi() {
+  for (const flags of [["Sim", "Previsto"], ["Previsto", "Sim"], ["Não", "Previsto"], ["Previsto", "Não"], ["Sim", "Valor inesperado"], ["Valor inesperado", "Sim"], ["Previsto", "Valor inesperado"], ["Valor inesperado", "Previsto"]]) {
+    const mixed = base("pw", flags.map((flag, i) => p("C", "0", flag, { sourceRow: i + 2, fileName: "variant-" + i + ".pdf" })), "2026-10-05T09:00:00Z");
+    const rows = Evo.documentRevisionRecords(mixed.records);
+    assert.equal(rows.length, mixed.audit.documentRevisionRecords);
+    const expected = flags.some(flag => ["Sim", "Não"].includes(flag)) ? "emitted" : "indeterminate";
+    assert.equal(rows[0].emissionState, expected, "source order cannot change a document+revision state: " + flags);
+    assert.equal(rows.filter(row => row.emissionState === "emitted").length, mixed.audit.emittedDocumentRevisionRecords);
+    assert.equal(rows.filter(row => row.emissionState === "not-emitted").length, mixed.audit.notEmittedDocumentRevisionRecords);
+    assert.equal(rows.filter(row => row.emissionState === "indeterminate").length, mixed.audit.indeterminateEmissionDocumentRevisionRecords);
+  }
+})();
+
+(function newDocumentsCountPhysicalDocumentsOnce() {
+  const before = base("sigem", [s("A", "0")], "2026-10-01T08:00:00Z");
+  const after = base("sigem", [s("A", "0"), s("B", "0"), s("B", "A")], "2026-10-05T08:00:00Z");
+  const delta = Evo.compareSnapshots(before, after).documentRevision;
+  assert.equal(delta.added.length, 2);
+  assert.equal(delta.newDocuments.length, 1, "two revisions of a newly seen document still represent one new document");
+})();
+
 (function currentRelationsAreDocumentRevisionBased() {
   const relation = Evo.currentRelations(sigemCurrent.records, pwCurrent.records);
   assert.equal(relation.both.length, 2);

@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4";
+  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.1";
   const VALID_CLASSES = new Set(["ET", "N-1710"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
@@ -550,10 +550,19 @@
       const key = text(row.documentRevisionKey) || documentRevisionKey(row);
       if (!key) continue;
       const previous = map.get(key);
-      if (!previous || Number(row.sourceRow || 0) >= Number(previous.sourceRow || 0)) map.set(key, row);
-      if (row.emitted && map.get(key) && !map.get(key).emitted) map.set(key, row);
+      // Evidence wins over row order: a later PREVISTO cannot erase an emission.
+      // Unknown evidence also prevents asserting non-emission for the whole key.
+      const rank = (item) => item.emissionState === "emitted"
+        ? (item.emissionKind === "current" ? 4 : 3)
+        : item.emissionState === "indeterminate" ? 2 : 1;
+      if (!previous || rank(row) > rank(previous)
+        || (rank(row) === rank(previous) && Number(row.sourceRow || 0) >= Number(previous.sourceRow || 0))) map.set(key, row);
     }
     return map;
+  }
+
+  function documentRevisionRecords(records) {
+    return [...representativeByDocumentRevision(records).values()];
   }
 
   function documentRevisionEmissionTransitions(previousRecords, currentRecords) {
@@ -591,7 +600,7 @@
     const removed = [];
     current.forEach((row, key) => { if (!previous.has(key)) added.push(row); });
     previous.forEach((row, key) => { if (!current.has(key)) removed.push(row); });
-    const newDocuments = added.filter((row) => !previousDocuments.has(row.documentKey));
+    const newDocuments = [...new Map(added.filter((row) => !previousDocuments.has(row.documentKey)).map((row) => [row.documentKey, row])).values()];
     const newRevisions = added.filter((row) => previousDocuments.has(row.documentKey));
     return {
       added,
@@ -743,7 +752,7 @@
     CALCULATION_VERSION, VALID_CLASSES, SYSTEMS,
     text, norm, normalizeRevision, normalizeDate, fingerprint,
     documentIdentity, documentClass, inferEap, searchKeysFor,
-    buildLdUniverse, findLdMatches, findQualityMatch, occurrenceKey, documentRevisionKey, matchKey, technicalFingerprint, emissionInfo,
+    buildLdUniverse, findLdMatches, findQualityMatch, occurrenceKey, documentRevisionKey, matchKey, technicalFingerprint, emissionInfo, documentRevisionRecords,
     prepareRecords, buildAudit, sourceFingerprint, buildSnapshot,
     compareRecords, documentRevisionDelta, documentRevisionEmissionTransitions, currentRelations, diagnosticsForSnapshot, multisetMatch, classifyEvolution, emissionTransitions, compareSnapshots, comparePeriod, transitionSeries, buildDailyTimeline,
   });
