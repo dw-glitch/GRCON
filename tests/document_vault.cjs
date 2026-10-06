@@ -78,6 +78,14 @@ const lookupPlain = Core.parseLookupInput(" DOC-001 ");
 assert.equal(lookupPlain.documentCode, "DOC-001");
 assert.equal(lookupPlain.revision, "");
 assert.equal(lookupPlain.explicitRevision, false);
+
+const lookupPetrobras = Core.parseLookupInput("RL-5290.00-22313-856-C1O-017");
+assert.equal(lookupPetrobras.documentCode, "RL-5290.00-22313-856-C1O-017");
+assert.equal(lookupPetrobras.revision, "");
+
+const lookupPetrobrasRev = Core.parseLookupInput("RL-5290.00-22313-856-C1O-017_A.pdf");
+assert.equal(lookupPetrobrasRev.documentCode, "RL-5290.00-22313-856-C1O-017");
+assert.equal(lookupPetrobrasRev.revision, "A");
 const lookupRev = Core.parseLookupInput("DOC-001_A");
 assert.equal(lookupRev.documentCode, "DOC-001");
 assert.equal(lookupRev.revision, "A");
