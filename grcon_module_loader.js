@@ -16,6 +16,7 @@
     export: ["compliance", "xlsx", "excel", "zip", "brand", "performance"],
     navigation: ["history_report.js"],
     history: ["navigation", "sigem_posting_core.js", "macro5_flow_core.js", "react-dist/historico-egrdt-app.js"],
+    vault: ["document_vault.js"],
     // O Dashboard é construído por retomar.js e já existe no carregamento inicial.
     // Ele é uma view lógica, não um arquivo chamado /dashboard.
     dashboard: [],
@@ -61,6 +62,7 @@
   const moduleRequirements = {
     compliance: ["GrconDocumentaryCompliance", "GrconDocumentaryComplianceUi"],
     history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi", "GrconHistoricoEgrdtReact"],
+    vault: ["GrconDocumentVault"],
     dashboard: ["GrconHistoryDashboard"],
     "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi", "GrconHistoricoAnalisesReact"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
@@ -226,6 +228,7 @@
 
     const modules = {
       control: "grdt-module",
+      vault: "vault-module",
       "analysis-history": "analysis-history-module",
       history: "history-module",
       dashboard: "dashboard-module",
@@ -261,6 +264,7 @@
   // errado da área em que está.
   const NOMES = {
     control: "Controle de GRDT",
+    vault: "Cofre de Documentos",
     requests: "Consultas",
     "grdt-reissue": "Repostagem de GRDT",
     "additional-tools": "Ferramentas adicionais",
@@ -290,6 +294,10 @@
 
   function activateReadyModule(module) {
     if (module === "additional-tools") return;
+    if (module === "vault") {
+      root.GrconDocumentVault?.activate?.();
+      return;
+    }
     if (module === "dashboard") {
       root.GrconHistoryDashboard?.activate?.();
       return;
