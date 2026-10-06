@@ -360,14 +360,19 @@
     const scopeDiscarded = prepared.rejected.length;
     const technicalDuplicates = prepared.duplicates.length;
     const uniqueDocuments = new Set(prepared.accepted.map((row) => row.documentKey).filter(Boolean)).size;
-    const documentRevisionKeys = new Set(prepared.accepted.map((row) => row.documentRevisionKey).filter(Boolean));
+    const revisionRepresentatives = representativeByDocumentRevision(prepared.accepted);
+    const documentRevisionKeys = new Set(revisionRepresentatives.keys());
     const emittedRows = system === SYSTEMS.PW ? prepared.accepted.filter((row) => row.emissionState === "emitted") : [];
     const notEmittedRows = system === SYSTEMS.PW ? prepared.accepted.filter((row) => row.emissionState === "not-emitted") : [];
     const indeterminateRows = system === SYSTEMS.PW ? prepared.accepted.filter((row) => row.emissionState === "indeterminate") : [];
-    const emittedRevisionKeys = new Set(emittedRows.map((row) => row.documentRevisionKey).filter(Boolean));
-    const emittedDocumentKeys = new Set(emittedRows.map((row) => row.documentKey).filter(Boolean));
-    const notEmittedRevisionKeys = new Set(notEmittedRows.map((row) => row.documentRevisionKey).filter(Boolean));
-    const indeterminateRevisionKeys = new Set(indeterminateRows.map((row) => row.documentRevisionKey).filter(Boolean));
+    const representativeRows = system === SYSTEMS.PW ? [...revisionRepresentatives.values()] : [];
+    const emittedRevisionRows = representativeRows.filter((row) => row.emissionState === "emitted");
+    const notEmittedRevisionRows = representativeRows.filter((row) => row.emissionState === "not-emitted");
+    const indeterminateRevisionRows = representativeRows.filter((row) => row.emissionState === "indeterminate");
+    const emittedRevisionKeys = new Set(emittedRevisionRows.map((row) => row.documentRevisionKey).filter(Boolean));
+    const emittedDocumentKeys = new Set(emittedRevisionRows.map((row) => row.documentKey).filter(Boolean));
+    const notEmittedRevisionKeys = new Set(notEmittedRevisionRows.map((row) => row.documentRevisionKey).filter(Boolean));
+    const indeterminateRevisionKeys = new Set(indeterminateRevisionRows.map((row) => row.documentRevisionKey).filter(Boolean));
     const emissionBreakdown = { current: 0, historical: 0, planned: 0, unknown: 0, missing: 0 };
     if (system === SYSTEMS.PW) {
       for (const row of prepared.accepted) {
@@ -387,6 +392,7 @@
       documentRevisionRecords: documentRevisionKeys.size,
       validRevisionRecords: accepted,
       emittedTechnicalRecords: emittedRows.length,
+      notEmittedTechnicalRecords: notEmittedRows.length,
       emittedDocumentRevisionRecords: emittedRevisionKeys.size,
       emittedUniqueDocuments: emittedDocumentKeys.size,
       notEmittedDocumentRevisionRecords: system === SYSTEMS.PW ? notEmittedRevisionKeys.size : 0,
