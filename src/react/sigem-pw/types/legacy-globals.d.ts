@@ -125,6 +125,7 @@ interface EvolutionBase {
   records: SigemPwRecord[];
 }
 interface SigemPwEvolutionCoreApi {
+  readonly CALCULATION_VERSION: string;
   norm(value: unknown): string;
   normalizeRevision(value: unknown): string;
   buildLdUniverse(records: SigemPwRecord[], history: SigemPwRecord[], options?: { qualityRecords?: SigemPwRecord[] }): EvolutionLdUniverse;
@@ -143,6 +144,7 @@ interface SigemPwEvolutionUiApi {
   readonly state: EvolutionUiState;
   filteredRows(): EvolutionRecord[];
   exportFilteredRows(): Promise<number>;
+  exportAuditWorkbook(): Promise<number>;
 }
 interface SigemPwBootstrapApi { open(): Promise<void>; openEvolution(): Promise<unknown>; deactivate(): void; }
 interface LegacyActivationApi {
