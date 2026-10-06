@@ -83,9 +83,10 @@ Cada snapshot derivado registra:
 ## Datas
 
 - cadastro PW: campo de criação do PW quando disponível;
-- emissão PW: data de envio GRD ao cliente quando disponível;
-- snapshot: data/hora de importação ou data operacional editada;
-- fallback operacional de ordenação: campos de mudança de estado/criação/entrada já utilizados pelo motor.
+- cadastro PW: `datacriacao`, quando disponível;
+- emissão PW: `DataEnvioGRDCliente`; se estiver ausente, a data de emissão é não determinável;
+- snapshot: data/hora de importação ou data operacional editada; esta é a data usada no eixo do gráfico entre snapshots;
+- data relevante de uma ocorrência PW, usada para ordenação/contexto: `DataEnvioGRDCliente → DataAlteracaoState → datacriacao → DataGRDEntrada`. Esse fallback **não** transforma o valor encontrado em “data de emissão”.
 
 Quando a fonte não possui data operacional suficiente, a interface/exportação não deve inventar precisão.
 
