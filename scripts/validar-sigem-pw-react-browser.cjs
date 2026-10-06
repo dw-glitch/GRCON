@@ -1320,7 +1320,8 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(() => window.__evolutionHistoryManagerCalls), 1);
     await page.evaluate(() => { window.GrconSigemPwHistoryRuntimeFix = window.__evolutionHistoryRuntimeOriginal; });
 
-    // Eventos rápidos devem ser agrupados em um único refresh pesado.
+    // Eventos rápidos devem ser agrupados e snapshots já preparados não podem ser reprocessados.
+    const selectionsBeforeExternalRefresh = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections }));
     await page.evaluate(() => {
       const original = window.GrconSigemPwEvolution;
       window.__evolutionEventCoreOriginal = original;
@@ -1337,8 +1338,9 @@ async function waitEvolutionReady(page) {
       window.dispatchEvent(new CustomEvent("grcon:sigem-pw-base-date-updated"));
     });
     await page.waitForTimeout(850);
-    await page.waitForFunction(() => !window.GrconSigemPwEvolutionUi.state.busy && window.__evolutionBuildSnapshotCalls > 0, null, { timeout: 10000 });
-    assert.equal(await page.evaluate(() => window.__evolutionBuildSnapshotCalls), 8, "três eventos rápidos devem resultar em um único rebuild de 4+4 snapshots");
+    await page.waitForFunction(() => !window.GrconSigemPwEvolutionUi.state.busy, null, { timeout: 10000 });
+    assert.equal(await page.evaluate(() => window.__evolutionBuildSnapshotCalls), 0, "snapshots idênticos devem ser atendidos pelo cache derivado");
+    assert.deepEqual(await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections })), selectionsBeforeExternalRefresh, "refresh externo não pode apagar as bases selecionadas");
     await page.evaluate(() => { window.GrconSigemPwEvolution = window.__evolutionEventCoreOriginal; });
 
     // Responsividade específica da Evolução, com scroll horizontal somente local à tabela.
@@ -1431,8 +1433,9 @@ async function waitEvolutionReady(page) {
     });
     await waitEvolutionReady(page);
 
-    // Reentrada: Dashboard -> Evolução -> Consultas -> Dashboard -> Evolução sem duplicação.
+    // Reentrada: Dashboard -> Evolução -> Consultas -> Dashboard -> Evolução sem duplicação e sem perder a seleção.
     const evolutionBundleCountBeforeReentry = await page.evaluate(() => performance.getEntriesByType("resource").filter((entry) => /react-dist\/sigem-pw-evolution-app\.js(?:\?|$)/.test(entry.name)).length);
+    const selectionsBeforeReentry = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections }));
     await page.evaluate(() => {
       window.__spwModelRef = window.GrconSigemPwDashboardUi.state.model;
       window.__revisionGenerationBeforeNavigation = window.GrconSigemPwRevisionUi.state.analysisGeneration;
@@ -1445,6 +1448,7 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.locator("#grcon-sigem-pw-evolution-root").count(), 1);
     assert.equal(await page.locator("#spw-evolution-section").count(), 1);
     assert.equal(await page.locator("#spw-evo-overlay").count(), 0, "não pode haver overlay órfão");
+    assert.deepEqual(await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections })), selectionsBeforeReentry, "reentrada deve preservar SIGEM/PW selecionados");
     assert.equal(await page.evaluate(() => window.__spwModelRef === window.GrconSigemPwDashboardUi.state.model), true, "reabertura não deve reconstruir modelo sem mudança");
     assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration), await page.evaluate(() => window.__revisionGenerationBeforeNavigation), "reentrada não deve reanalisar o mesmo modelo");
     const evolutionBundleCountAfterReentry = await page.evaluate(() => performance.getEntriesByType("resource").filter((entry) => /react-dist\/sigem-pw-evolution-app\.js(?:\?|$)/.test(entry.name)).length);
