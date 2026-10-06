@@ -1,0 +1,38 @@
+name: Publish Metrikon using GRCON Cloudflare credentials
+
+on:
+  push:
+    branches:
+      - ops/metrikon-cloudflare-publish-20261006
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Metrikon
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Metrikon
+        uses: actions/checkout@v4
+        with:
+          repository: dw-glitch/Metrikon
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Metrikon
+        run: npm run verify
+
+      - name: Deploy Metrikon to Cloudflare Workers
+        run: npm run deploy:cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
