@@ -292,7 +292,7 @@ async function handleMultipartPart(request, env) {
   }
   const file = await getOwnedOrReady(env, workspaceId, user.id, id);
   if (!file.multipart_id) return apiError("Sessão multipart não iniciada.", 409, "MULTIPART_NOT_STARTED");
-  const expectedSize = Number(request.headers.get("content-length"));
+  const expectedSize = Number(request.headers.get("x-grcon-part-size") || request.headers.get("content-length"));
   if (!Number.isSafeInteger(expectedSize) || expectedSize < 0) return apiError("Tamanho da parte ausente.", 411, "PART_SIZE_REQUIRED");
 
   const upload = requireBucket(env).resumeMultipartUpload(file.object_key, file.multipart_id);
