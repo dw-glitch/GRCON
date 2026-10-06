@@ -156,11 +156,16 @@ async function openReissue(page) {
   assert.equal(await topLevelReissue.count(), 0, "Repostagem deve existir somente dentro de Ferramentas adicionais");
   await clickVisibleView(page, "additional-tools");
   await page.locator("#additional-tools-module").waitFor({ state: "visible", timeout: 10000 });
-  const reissueCard = page.locator('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]');
-  await reissueCard.waitFor({ state: "visible", timeout: 10000 });
-  await reissueCard.click();
+  assert.equal(
+    await page.locator('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]').count(),
+    0,
+    "Repostagem antiga não deve permanecer como fluxo paralelo visível"
+  );
+  // O módulo legado continua carregável somente para QA de compatibilidade dos
+  // dados antigos; o usuário operacional usa exclusivamente Fazer GRDT.
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("grdt-reissue");
+    document.querySelectorAll("main.workspace > section").forEach((section) => { section.hidden = section.id !== "grdt-reissue-module"; });
   });
   await page.locator("#grdt-reissue-module").waitFor({ state: "visible", timeout: 30000 });
   await page.waitForFunction(() => Boolean(window.GrconGrdtReissueUi && window.GrconGrdtReissueCore && window.GrconHistory));
