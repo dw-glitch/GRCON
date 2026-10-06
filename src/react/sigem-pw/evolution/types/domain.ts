@@ -141,6 +141,11 @@ export interface EvolutionDocumentRevisionDelta {
   net: number;
 }
 
+export interface EvolutionDocumentRevisionEmissions {
+  transitions: EvolutionRecord[];
+  indeterminateToEmitted: EvolutionRecord[];
+}
+
 export interface EvolutionDelta {
   added: EvolutionRecord[];
   removed: EvolutionRecord[];
@@ -151,6 +156,7 @@ export interface EvolutionDelta {
   currentCount: number;
   analysisVersion?: string;
   documentRevision?: EvolutionDocumentRevisionDelta;
+  documentRevisionEmissions?: EvolutionDocumentRevisionEmissions | null;
 }
 
 export interface EvolutionComparison {
@@ -176,6 +182,8 @@ export interface EvolutionComparison {
     pwOnlyIndeterminate: EvolutionRecord[];
   };
   pwEmissions: EvolutionRecord[];
+  pwEmissionsTechnical: EvolutionRecord[];
+  pwEmissionIndeterminateToEmitted: EvolutionRecord[];
 }
 
 export interface EvolutionTimelineDay {
