@@ -1,5 +1,6 @@
 ## 5.44.9 — 2026-10-06
 
+- Removida de Ferramentas adicionais a funcionalidade “Matriz documental por disciplina”, incluindo rota, runtime, cache e artefatos exclusivos; os demais módulos permanecem inalterados.
 - Evolução SIGEM × PW: cache de snapshots, comparações e gráfico; preparação em worker com paridade de identidade e escopo.
 - Bases selecionadas preservadas em refresh, navegação e recarga, incluindo a escolha sem base anterior.
 - Contagens por documento, documento + revisão e ocorrência técnica explicadas separadamente; evidência de emissão independente da ordem das linhas.
