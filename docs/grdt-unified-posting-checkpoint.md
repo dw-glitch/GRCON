@@ -29,6 +29,10 @@ O chat anterior estava na auditoria inicial. Não havia PR nova nem implementaç
 - Novas colunas de exportação são acrescentadas ao final: não deslocar posições existentes, inclusive a coluna W utilizada nas planilhas de controle.
 - SW inclui os novos arquivos e um sufixo novo de cache; número de release será fechado na publicação final.
 
+## Extensão solicitada: alocação no Cofre e base de Solicitações
+
+Publicação compartilhada da Central implementada com prévia, páginas completas e ativação atômica; consulta dos vínculos/status/workflow no Fazer GRDT e snapshot no Histórico. Parser validado com uma versão da planilha real (3.546 vínculos), sem publicar dados reais no repositório. `document_allocation_context.js` mantém Documentos Previstos como autoridade de Alocado/Não alocado e oferece filtros para o Cofre. Migration criada pela CLI e validada em Postgres local; ainda não aplicada ao banco GRCON. A interface do Cofre continua pendente. Operação e ativação: `docs/grdt-shared-allocation-setup.md`.
+
 ## Ainda pendente
 
 | Fase | Situação |
@@ -43,7 +47,7 @@ O chat anterior estava na auditoria inicial. Não havia PR nova nem implementaç
 
 ## Impedimento concreto de F
 
-A integração Supabase desta conversa lista apenas `CCP CONSAG` (`aimvjsbrxnyqjurgicec`). A consulta de metadados de `kvyrttccwzdhasplfxnr` (banco utilizado pelo GRCON) foi recusada por falta de permissão. Não criar tabelas do GRCON em outro projeto nem inventar uma migration sem conferir o schema real.
+A integração Supabase desta conversa lista apenas `CCP CONSAG` (`aimvjsbrxnyqjurgicec`). A consulta de metadados de `kvyrttccwzdhasplfxnr` (banco utilizado pelo GRCON) foi recusada por falta de permissão. Não aplicar tabelas do GRCON em outro projeto nem executar migrations em produção sem conferir o schema real.
 
 Próximo ponto: autorizar o projeto GRCON na conexão Supabase; confirmar tabelas/roles/RLS e desenhar metadados/índices/idempotência. Depois implementar Document API privada, verificação de identidade e autorização por workspace, R2 privado e os endpoints de upload/download. O bucket solicitado é `grcon-documents`. Não há acesso autenticado à administração Cloudflare disponível nesta conversa para cadastrar bindings/secrets.
 

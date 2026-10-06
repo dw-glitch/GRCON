@@ -168,6 +168,16 @@
     return snapshot;
   }
 
+  function cleanAllocationContext(value) {
+    if (!value || value.version !== "1.0.0") return null;
+    const clean = {};
+    for (const field of ["version", "kind", "label", "plannedSnapshotId", "centralSnapshotId", "centralFileName", "centralUpdatedAt"]) clean[field] = text(value[field]);
+    clean.allocations = (Array.isArray(value.allocations) ? value.allocations : []).map(text);
+    clean.warnings = (Array.isArray(value.warnings) ? value.warnings : []).map(text);
+    clean.references = (Array.isArray(value.references) ? value.references : []).map(item => ({ document: text(item.document), allocation: text(item.allocation), allocationStatus: text(item.allocationStatus), workflow: text(item.workflow), sourceRow: Number(item.sourceRow) || 0 }));
+    return clean;
+  }
+
   function cleanFile(file) {
     const revision = generatedRevision(file);
     return {
@@ -206,6 +216,7 @@
       discipline: text(file && file.discipline),
       normativeValidation: cleanNormativeValidation(file && file.normativeValidation),
       historyClassification: cleanHistoryClassification(file && file.historyClassification),
+      sharedAllocationContext: cleanAllocationContext(file && file.sharedAllocationContext),
       vaultFileId: text(file && file.vaultFileId),
     };
   }
@@ -444,6 +455,7 @@
         purpose: entry.item && entry.item.purpose || row.egrdt && row.egrdt.purpose || record.purpose || "",
         normativeValidation: entry.normativeValidation || null,
         historyClassification: entry.historyClassification || null,
+        sharedAllocationContext: entry.sharedAllocationContext || null,
         vaultFileId: entry.vaultFileId || "",
       });
     });

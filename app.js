@@ -116,6 +116,7 @@
     analysisRecentDays: 30,
     analysisLdSignature: "",
     analysisPlannedSnapshot: "",
+    analysisAllocationSnapshot: "",
     analysisSigemSnapshot: "",
     egrdtSequenceCursor: 0,
     manualEgrdtSequenceStart: null,
@@ -1189,7 +1190,8 @@
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
     return [currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
       `sigem:${currentSigemQuerySnapshot() || "sem-base"}`,
-      `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`].join("###");
+      `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`,
+      `central:${window.GrconAllocationRegistry?.signature() || "sem-base"}`].join("###");
   }
 
   function saveSmartAnalysisCache(signature) {
@@ -1206,6 +1208,7 @@
         analysisRecentDays: state.analysisRecentDays,
         analysisLdSignature: state.analysisLdSignature,
         analysisPlannedSnapshot: state.analysisPlannedSnapshot,
+        analysisAllocationSnapshot: state.analysisAllocationSnapshot,
         analysisSigemSnapshot: state.analysisSigemSnapshot,
         ldIntegrity: state.ldIntegrity,
       },
@@ -2291,6 +2294,7 @@
 
   async function analyzeLegacy() {
     await window.GrconSharedSigemQuery?.refresh();
+    await window.GrconAllocationRegistry?.refresh();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
     setBusy(true, "Analisando documentos");
     state.records = [];
@@ -2341,6 +2345,7 @@
         state.history.push(...parsed.history);
       });
       state.records = window.GrconPlannedDocuments?.applyRecords(state.records) || state.records;
+      state.records = window.GrconAllocationRegistry?.applyRecords(state.records) || state.records;
       syncEgrdtSequenceFromLd(state.records, state.history);
       if (!state.records.length || (!state.history.length && !window.GrconSharedSigemQuery?.current()?.records.length)) {
         throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
@@ -2462,6 +2467,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisAllocationSnapshot = window.GrconAllocationRegistry?.current()?.id || "";
       state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) lida(s) nesta análise · até ${validUntil}`;
@@ -2525,6 +2531,7 @@
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
 
     await window.GrconSharedSigemQuery?.refresh();
+    await window.GrconAllocationRegistry?.refresh();
     const analysisSignature = currentAnalysisSignature();
     if (restoreSmartAnalysisCache(analysisSignature)) {
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -2601,6 +2608,7 @@
       if (!state.ldIntegrity.valid) throw new Error(`A integridade da LD foi reprovada: ${state.ldIntegrity.issues.join("; ")}.`);
       state.records = window.GrconPlannedDocuments?.applyRecords(loadedLds.flatMap((item) => item.parsed.records))
         || loadedLds.flatMap((item) => item.parsed.records);
+      state.records = window.GrconAllocationRegistry?.applyRecords(state.records) || state.records;
       state.history = loadedLds.flatMap((item) => item.parsed.history);
       state.index = C.buildIndex(state.records, state.history);
       if (!state.records.length || (!state.history.length && !window.GrconSharedSigemQuery?.current()?.records.length)) throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
@@ -2703,6 +2711,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisAllocationSnapshot = window.GrconAllocationRegistry?.current()?.id || "";
       state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) preparadas · válidas até ${validUntil}`;
@@ -2787,6 +2796,11 @@
     }
     if (currentSigemQuerySnapshot() !== state.analysisSigemSnapshot) {
       showToast("A Consulta Geral SIGEM foi atualizada após esta análise. Analise novamente antes de gerar a GRDT.", "error");
+      return false;
+    }
+    await window.GrconAllocationRegistry?.refresh();
+    if ((window.GrconAllocationRegistry?.current()?.id || "") !== state.analysisAllocationSnapshot) {
+      showToast("A Central de alocação foi atualizada. Analise novamente para usar os vínculos e status atuais.", "warn");
       return false;
     }
     refreshSelectedSigemStatuses();
@@ -3720,7 +3734,7 @@
         <td><span class="sigem-status" title="${escapeHtml(`${row.status} · Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || 'LD / Colar SIGEM'}`)}">${escapeHtml(row.status || "—")}</span></td>
         <td><span class="posting-evidence ${row.postingEvidence && row.postingEvidence.complete ? "posted" : row.postingEvidence && row.postingEvidence.partial ? "review" : "none"}" title="${escapeHtml(row.postingEvidence && row.postingEvidence.explanation || "")}">${escapeHtml(row.postingStatus || (row.postingEvidence && row.postingEvidence.status) || "Sem evidência na LD")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(fiscalComment)}">${escapeHtml(fiscalComment)}</span></td>
-        <td><span class="text-cell">${escapeHtml(allocation)}</span></td>
+        <td><span class="text-cell">${escapeHtml(allocation)}</span>${window.GrconAllocationRegistry?.badge(row.document) || ""}</td>
         <td><span class="text-cell" title="${escapeHtml(allocationStage)}">${escapeHtml(allocationStage)}</span></td>
         <td><span class="allocation-state ${allocationClass}" title="${escapeHtml(conflitoAlocacao ? row.allocationFinding.source || "" : "")}">${escapeHtml(allocationStatus)}</span></td>
         <td><span class="text-cell" title="${escapeHtml(databook)}">${escapeHtml(databook)}</span></td>
@@ -4676,6 +4690,7 @@
         virtual: Boolean(entry.virtual),
         manualAllocationOverride: Boolean(entry.manualAllocationOverride),
         historyClassification: entry.historyClassification,
+        sharedAllocationContext: entry.sharedAllocationContext,
         item: { ...(entry.item || {}) },
         file: includeFiles ? entry.file : null,
       })),

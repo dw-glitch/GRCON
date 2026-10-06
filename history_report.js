@@ -161,6 +161,8 @@
       "DATA ANTERIOR NO HISTÓRICO": text(file.historyClassification?.previousGeneratedAt),
       "REPOSTAGENS ANTERIORES": file.historyClassification?.repostCount ?? "",
       "ALERTAS HISTÓRICOS": (file.historyClassification?.warnings || []).join(" · "),
+      "STATUS NA CENTRAL DE ALOCAÇÃO": (file.sharedAllocationContext?.references || []).map(item => `${item.allocation}: ${item.allocationStatus}`).join(" · "),
+      "BASE CENTRAL DE ALOCAÇÃO": text(file.sharedAllocationContext?.centralFileName),
       };
     }));
   }

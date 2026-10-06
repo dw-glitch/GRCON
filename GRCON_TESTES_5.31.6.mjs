@@ -1854,7 +1854,7 @@ check("runtime não carrega a Central de Alocação aposentada e preserva Postag
 
   assert.equal(fs.existsSync(path.join(root, "allocation_center.js")), false);
   assert.doesNotMatch(loader, /allocation_center\.js/);
-  assert.doesNotMatch(html, /allocation-center|Central de Alocação|Salvar referência|Remover cadastro/i);
+  assert.doesNotMatch(html, /allocation-center|Salvar referência|Remover cadastro/i);
   assert.doesNotMatch(app, /saveAllocationCenter|clearAllocationCenter|GrconAllocationCenter/);
   assert.doesNotMatch(retomar, /history-posting-status/);
   assert.doesNotMatch(finalCss, /\.history-posting-status/);

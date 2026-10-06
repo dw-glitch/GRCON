@@ -2,6 +2,8 @@
 
 Classificação no fluxo normal por documento + revisão, Histórico compartilhado completo em lote, aviso de revisão regressiva, filtros de postagem/repostagem, organização mista/separada antes de disciplina/limite e snapshot auditável no Histórico. Colunas existentes de exportação preservadas. Cofre/R2 e remoção da interface antiga permanecem nas fases seguintes. Checkpoint: `docs/grdt-unified-posting-checkpoint.md`.
 
+Controle de Solicitações pode ser publicado pelo proprietário como Central de alocação compartilhada, com prévia e troca atômica. Fazer GRDT consulta vínculos/status/workflow e registra a fonte no Histórico. Documentos Previstos permanece fonte de Alocado/Não alocado; serviço compartilhado prepara essa organização para o Cofre. Migration testada localmente, ainda não aplicada no banco GRCON.
+
 ## 5.44.9 — 2026-10-06
 
 - Removida de Ferramentas adicionais a funcionalidade “Matriz documental por disciplina”, incluindo rota, runtime, cache e artefatos exclusivos; os demais módulos permanecem inalterados.

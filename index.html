@@ -167,6 +167,15 @@
 <button class="secondary-button compact" id="planned-documents-publish" type="button">Publicar nova base</button>
 <small hidden id="planned-documents-owner-note">Somente o proprietário pode atualizar esta base; todos os usuários recebem a versão publicada.</small>
 </section>
+<section class="planned-documents-settings settings-embedded" aria-labelledby="allocation-registry-title">
+<div><strong id="allocation-registry-title">Controle de Solicitações · Central de alocação</strong><small id="allocation-registry-status" role="status" aria-live="polite">Carregando referência compartilhada…</small></div>
+<p>Documentos Previstos informa Alocado/Não alocado. Esta base informa a alocação vinculada, o status da alocação e o workflow registrado.</p>
+<label><span>Selecionar Controle de Solicitações para toda a equipe</span><input id="allocation-registry-file" type="file" accept=".xlsx,.xls" aria-describedby="allocation-registry-status"/></label>
+<div id="allocation-registry-preview" hidden style="overflow:auto"></div>
+<button class="secondary-button compact" id="allocation-registry-publish" type="button" disabled>Publicar Central para a equipe</button>
+<button class="text-button" id="allocation-registry-refresh" type="button">Atualizar consulta</button>
+<small hidden id="allocation-registry-owner-note">Somente o proprietário pode publicar esta base. Todos os membros consultam a versão compartilhada.</small>
+</section>
 <details class="ignored-details" hidden="" id="ignored-details"><summary id="ignored-summary">Arquivos ignorados</summary><ul id="ignored-list"></ul></details>
 <div class="settings-inline-actions"><button class="text-button" id="reset" type="button">Limpar seleção</button><button class="compatibility-open-button" hidden="" id="ld-compatibility-open" type="button">Estrutura da LD</button><span class="compatibility-status" hidden="" id="ld-compatibility-status"></span></div>
 </div>
@@ -580,6 +589,8 @@
 <script defer src="shared_sigem_query_core.js"></script>
 <script defer="" src="core.js"></script>
 <script defer src="planned_documents_core.js"></script>
+<script defer src="allocation_registry_core.js"></script>
+<script defer src="document_allocation_context.js"></script>
 <script defer="" src="ld_conflicts.js"></script>
 <script defer="" src="apendice_base.js"></script>
 <script defer="" src="apendice_tagueados.js"></script>
@@ -596,6 +607,7 @@
 <script defer="" src="grcon_cloud_config.js"></script>
 <script defer="" src="grcon_cloud_app.js"></script>
 <script defer src="planned_documents_app.js"></script>
+<script defer src="allocation_registry_app.js"></script>
 <script defer src="shared_sigem_query_app.js"></script>
 <script defer="" src="egrdt_teams_notification_app.js"></script>
 <script defer="" src="pending_allocation_history_core.js"></script>

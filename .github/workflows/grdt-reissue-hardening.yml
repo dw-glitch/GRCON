@@ -6,6 +6,13 @@ on:
       - "app.js"
       - "app-ui.js"
       - "emission.js"
+      - "allocation_registry_core.js"
+      - "allocation_registry_app.js"
+      - "document_allocation_context.js"
+      - "supabase/migrations/*shared_allocation_registry.sql"
+      - "tests/allocation_registry*.cjs"
+      - "package.json"
+      - "package-lock.json"
       - "history_classification.js"
       - "posting_flow.js"
       - "posting_batch_planner.js"
@@ -53,6 +60,8 @@ jobs:
           npm run check:syntax
           node tests/history_classification.cjs
           node tests/cloud_history_pagination.cjs
+          node tests/allocation_registry.cjs
+          node tests/allocation_registry_database.cjs
           node tests/grdt_reissue.cjs
           node tests/discipline.mjs
 

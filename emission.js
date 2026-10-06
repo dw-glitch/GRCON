@@ -403,6 +403,7 @@
           discipline: item.discipline,
           sourceLd: String(row.record && row.record.source || "").trim(),
           allocation: String(row.record && row.record.allocation || "").trim(),
+          sharedAllocationContext: row.record && row.record.sharedAllocationContext || null,
           originalName: source.name,
           relativePath: source.relativePath || source.name,
           finalName,
