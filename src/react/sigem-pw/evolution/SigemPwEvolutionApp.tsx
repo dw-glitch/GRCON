@@ -246,7 +246,9 @@ function MetricAuditDrawer({
       title: "Novas emissões no período",
       formula: "Soma novas entradas já emitidas com registros que passaram de PREVISTO (não emitido determinável) para emitidos. Estado anterior ausente/desconhecido é indeterminado e não é tratado automaticamente como nova emissão.",
       rows: [
-        ["Novas emissões/transições", comparison?.pwEmissions.length || 0],
+        ["Novas emissões · documento + revisão", comparison?.pwEmissions.length || 0],
+        ["Movimentos técnicos emitidos · compatibilidade", comparison?.pwEmissionsTechnical.length || 0],
+        ["Indeterminado anterior → emitido atual (não atribuído como nova emissão)", comparison?.pwEmissionIndeterminateToEmitted.length || 0],
         ["PW atual · documento + revisão emitido", pwAudit.emittedDocumentRevisionRecords || 0],
         ["PW atual · documentos únicos emitidos", pwAudit.emittedUniqueDocuments || 0],
       ],
