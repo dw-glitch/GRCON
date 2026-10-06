@@ -93,7 +93,7 @@ async function probe(page, pathname) {
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
-  const results = { viewports: {}, probes: {}, api: null, pwa: null, mascot: null };
+  const results = { viewports: {}, probes: {}, api: null, vault: null, pwa: null, mascot: null };
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
@@ -129,6 +129,7 @@ async function probe(page, pathname) {
       "/", "/index.html", "/sw.js", "/manifest.json", "/grcon_cloud_config.js",
       "/grcon_mascot_controller_v4.js", "/deployment-meta.json",
       "/react-dist/consultas-app.js", "/react-dist/cover-document-app.js",
+      "/document_vault_app.js", "/document_hash_worker.js", "/document-vault.css",
       "/assets/mascot/video/grcon-mascot-idle-alpha.webm",
       "/workers/sigem_pw_dashboard.worker.js",
     ];
@@ -185,6 +186,36 @@ async function probe(page, pathname) {
     assert.equal(results.api.get.allow, "POST");
     assert.equal(results.api.post.status, 401);
     assert.equal(results.api.post.body.code, "MISSING_SESSION");
+
+    const vaultHealth = await context.request.get(baseUrl + "/api/document-vault/health");
+    const vaultHealthBody = await vaultHealth.json().catch(() => ({}));
+    assert.ok([200, 503].includes(vaultHealth.status()), "Health do Cofre deve responder 200 configurado ou 503 sem secrets locais.");
+    assert.equal(vaultHealthBody.service, "grcon-document-vault");
+
+    await page.waitForFunction(() => Boolean(window.GrconDocumentVault && document.querySelector("[data-vault-open]")), null, { timeout: 15000 });
+    await page.evaluate(() => {
+      const target = Array.from(document.querySelectorAll("[data-vault-open]")).find((node) => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      });
+      if (!target) throw new Error("Navegação do Cofre não localizada.");
+      target.click();
+    });
+    await page.locator("#document-vault-module").waitFor({ state: "visible", timeout: 10000 });
+    const vaultUi = await page.evaluate(() => ({
+      moduleVisible: !document.getElementById("document-vault-module")?.hidden,
+      folderPicker: Boolean(document.getElementById("vault-folder-input")?.hasAttribute("webkitdirectory")),
+      allocationOptions: Array.from(document.querySelectorAll("#vault-allocation option")).map(option => option.value),
+      oldReissueCard: Boolean(document.querySelector('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]')),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }));
+    assert.equal(vaultUi.moduleVisible, true);
+    assert.equal(vaultUi.folderPicker, true);
+    assert.deepEqual(vaultUi.allocationOptions, ["all", "allocated", "not_allocated"]);
+    assert.equal(vaultUi.oldReissueCard, false);
+    assert.ok(vaultUi.overflow <= 1, "Cofre não pode gerar overflow horizontal global.");
+    results.vault = { health: { status: vaultHealth.status(), body: vaultHealthBody }, ui: vaultUi };
 
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport);
