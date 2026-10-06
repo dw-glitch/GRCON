@@ -52,9 +52,11 @@ Para cada sistema são produzidos:
 - novas revisões;
 - alterações de metadados.
 
-Para o PW também são identificadas novas emissões:
-- nova entrada já emitida;
-- transição de não emitido para emitido.
+Para o PW também são identificadas novas emissões por **documento + revisão**:
+- nova chave documento + revisão que já chega emitida;
+- chave documento + revisão que passa de PREVISTO (não emitido determinável) para emitida.
+
+A movimentação técnica antiga continua calculada em paralelo para diagnóstico/compatibilidade, mas não infla o KPI principal quando várias ocorrências técnicas pertencem à mesma chave documento + revisão. Uma passagem de estado indeterminado para emitido é mostrada como diagnóstico, sem afirmar que a emissão ocorreu entre os dois snapshots.
 
 ## Relação atual SIGEM × PW
 
