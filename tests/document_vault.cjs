@@ -12,6 +12,7 @@ const html = read("index.html");
 const emission = read("emission.js");
 const worker = read("cloudflare/worker-entry.mjs");
 const wrangler = read("wrangler.jsonc");
+const sw = read("sw.js");
 const migrations = fs.readdirSync(path.join(root, "supabase", "migrations"))
   .filter(name => /^202610061(63921|70344|70405|70533|70546)_document_vault/.test(name))
   .map(name => read(path.join("supabase", "migrations", name)))
