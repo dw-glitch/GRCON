@@ -1435,6 +1435,17 @@
     return [...cloud, ...pending];
   }
 
+  async function historyRecordsForClassification() {
+    if (!History) return [];
+    if (!state.online || !state.membership?.workspace_id || !state.client) return History.read();
+    try {
+      return await loadClassificationHistory();
+    } catch (error) {
+      console.warn("GRCON Cloud: histórico completo indisponível; classificação usando cópia local.", error);
+      return History.read();
+    }
+  }
+
   async function fetchHistoryChanges(columns, since) {
     const rows = [];
     const pageSize = 500;
@@ -2147,6 +2158,7 @@
     canManageMembers,
     loadPlannedDocuments,
     loadClassificationHistory,
+    historyRecordsForClassification,
     publishPlannedDocuments,
     getExportTemplates,
     saveExportTemplate,
