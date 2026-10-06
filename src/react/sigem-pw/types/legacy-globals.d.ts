@@ -125,6 +125,7 @@ interface EvolutionBase {
   records: SigemPwRecord[];
 }
 interface SigemPwEvolutionCoreApi {
+  readonly CALCULATION_VERSION: string;
   norm(value: unknown): string;
   normalizeRevision(value: unknown): string;
   buildLdUniverse(records: SigemPwRecord[], history: SigemPwRecord[], options?: { qualityRecords?: SigemPwRecord[] }): EvolutionLdUniverse;
@@ -135,6 +136,7 @@ interface SigemPwEvolutionCoreApi {
     pwPrevious: EvolutionSnapshot | null,
     pwCurrent: EvolutionSnapshot | null,
   ): EvolutionComparison;
+  documentRevisionRecords(records: EvolutionRecord[]): EvolutionRecord[];
   buildDailyTimeline(sigemSnapshots: EvolutionSnapshot[], pwSnapshots: EvolutionSnapshot[]): EvolutionTimelineDay[];
 }
 interface SigemPwEvolutionUiApi {
@@ -143,6 +145,7 @@ interface SigemPwEvolutionUiApi {
   readonly state: EvolutionUiState;
   filteredRows(): EvolutionRecord[];
   exportFilteredRows(): Promise<number>;
+  exportAuditWorkbook(): Promise<number>;
 }
 interface SigemPwBootstrapApi { open(): Promise<void>; openEvolution(): Promise<unknown>; deactivate(): void; }
 interface LegacyActivationApi {

@@ -1,3 +1,12 @@
+## 5.44.9 — 2026-10-06
+
+- Evolução SIGEM × PW: cache de snapshots, comparações e gráfico; preparação em worker com paridade de identidade e escopo.
+- Bases selecionadas preservadas em refresh, navegação e recarga, incluindo a escolha sem base anterior.
+- Contagens por documento, documento + revisão e ocorrência técnica explicadas separadamente; evidência de emissão independente da ordem das linhas.
+- Listas e Excel dos KPIs atuais usam a mesma granularidade e incluem regras, fontes, exclusões e emissão indeterminada.
+- A movimentação por snapshots é explicitamente diferenciada do total de operações do PW; entradas já emitidas não recebem data de emissão presumida.
+- Cache PWA atualizado; regressões funcionais, paridade do worker e teste Chromium com bases de 20 mil registros.
+
 ## 5.44.8 — 2026-10-02
 
 ### Correção arquitetural — inspeção interna de PDF retirada

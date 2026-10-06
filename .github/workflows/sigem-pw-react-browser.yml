@@ -11,6 +11,7 @@ on:
       - "sigem_pw_readiness_core.js"
       - "sigem_pw_scope_fix.js"
       - "workers/sigem_pw_dashboard.worker.js"
+      - "workers/sigem_pw_evolution.worker.js"
       - "sigem_pw_dashboard_bootstrap.js"
       - "sigem_pw_revision_core.js"
       - "sigem_pw_revision_section.js"
@@ -86,6 +87,8 @@ jobs:
           node tests/sigem_pw_history_postmerge.cjs
           node tests/sigem_pw_history_stage5.cjs
           node tests/sigem_pw_evolution.cjs
+          node tests/sigem_pw_evolution_auditability.cjs
+          node tests/sigem_pw_evolution_worker.cjs
           node tests/sigem_pw_audit.cjs
           node tests/sigem_pw_stage7_atomic_import.cjs
           node tests/sigem_pw_stage8_acceptance.cjs

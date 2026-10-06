@@ -1269,6 +1269,30 @@ async function waitEvolutionReady(page) {
       "TAG", "EAP", "Data", "Origem", "Emissão PW", "LD origem", "LD aba", "Prazo LD",
     ]);
 
+    // Auditoria completa: workbook precisa conter resumo, rastreabilidade e exclusões.
+    const auditDownloadPromise = page.waitForEvent("download");
+    await page.locator("#spw-evo-export-audit").click();
+    const auditDownload = await auditDownloadPromise;
+    const auditPath = path.join(fixtureDir, "sigem-pw-evolution-audit.xlsx");
+    await auditDownload.saveAs(auditPath);
+    const auditBook = XLSX.read(fs.readFileSync(auditPath), { type: "buffer" });
+    for (const sheet of ["Resumo", "SIGEM x PW", "Novos", "Novas revisões", "Emitidos", "Não emitidos", "Emissão indeterminada", "Somente SIGEM", "Somente PW", "Excluídos da análise", "Regras da análise"]) {
+      assert.ok(auditBook.SheetNames.includes(sheet), "aba de auditoria ausente: " + sheet);
+    }
+    const ruleRows = XLSX.utils.sheet_to_json(auditBook.Sheets["Regras da análise"], { defval: "" });
+    assert.ok(ruleRows.some((row) => String(row.Item || "").includes("analysisVersion")), "auditoria precisa registrar analysisVersion");
+    assert.ok(ruleRows.some((row) => String(row.Valor || "").includes("SIM") && String(row.Valor || "").includes("PREVISTO")), "auditoria precisa registrar a regra de emissão");
+
+    // Explicação do KPI deve abrir sem trocar a lista nem desmontar a página.
+    const listModeBeforeAuditDrawer = await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.listMode);
+    await page.locator(".spw-evo-kpi-shell .spw-evo-explain").first().click();
+    await page.locator("#spw-evo-audit-drawer").waitFor({ state: "visible" });
+    assert.match(await page.locator("#spw-evo-audit-drawer").textContent(), /COMO ESTE NÚMERO FOI CALCULADO\?/i);
+    assert.match(await page.locator("#spw-evo-audit-drawer").textContent(), /Documento \+ revisão novos/i);
+    await page.locator("#spw-evo-audit-overlay").click({ position: { x: 10, y: 10 } });
+    await page.waitForFunction(() => !document.getElementById("spw-evo-audit-drawer"));
+    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.listMode), listModeBeforeAuditDrawer);
+
     // Detalhe pelo mouse: conteúdo, foco, trap, scroll lock, clique interno e overlay.
     const firstEvolutionRow = page.locator("#spw-evo-table tbody tr").first();
     const firstEvolutionIdentity = await firstEvolutionRow.getAttribute("data-analysis-id");
@@ -1320,7 +1344,8 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.evaluate(() => window.__evolutionHistoryManagerCalls), 1);
     await page.evaluate(() => { window.GrconSigemPwHistoryRuntimeFix = window.__evolutionHistoryRuntimeOriginal; });
 
-    // Eventos rápidos devem ser agrupados em um único refresh pesado.
+    // Eventos rápidos devem ser agrupados e snapshots já preparados não podem ser reprocessados.
+    const selectionsBeforeExternalRefresh = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections }));
     await page.evaluate(() => {
       const original = window.GrconSigemPwEvolution;
       window.__evolutionEventCoreOriginal = original;
@@ -1337,8 +1362,9 @@ async function waitEvolutionReady(page) {
       window.dispatchEvent(new CustomEvent("grcon:sigem-pw-base-date-updated"));
     });
     await page.waitForTimeout(850);
-    await page.waitForFunction(() => !window.GrconSigemPwEvolutionUi.state.busy && window.__evolutionBuildSnapshotCalls > 0, null, { timeout: 10000 });
-    assert.equal(await page.evaluate(() => window.__evolutionBuildSnapshotCalls), 8, "três eventos rápidos devem resultar em um único rebuild de 4+4 snapshots");
+    await page.waitForFunction(() => !window.GrconSigemPwEvolutionUi.state.busy, null, { timeout: 10000 });
+    assert.equal(await page.evaluate(() => window.__evolutionBuildSnapshotCalls), 0, "snapshots idênticos devem ser atendidos pelo cache derivado");
+    assert.deepEqual(await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections })), selectionsBeforeExternalRefresh, "refresh externo não pode apagar as bases selecionadas");
     await page.evaluate(() => { window.GrconSigemPwEvolution = window.__evolutionEventCoreOriginal; });
 
     // Responsividade específica da Evolução, com scroll horizontal somente local à tabela.
@@ -1399,6 +1425,8 @@ async function waitEvolutionReady(page) {
     await page.locator("#spw-evo-drawer").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
 
+    const rowsBeforeRefresh = await page.locator("#spw-evo-table tbody tr").count();
+    const activeBasesBeforeRefresh = await page.locator("#spw-evo-active-bases").textContent();
     await page.evaluate(() => {
       const original = window.GrconSigemPwHistory;
       window.__evolutionHistoryOriginalForDark = original;
@@ -1413,6 +1441,9 @@ async function waitEvolutionReady(page) {
     });
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.busy);
     assert.equal(await page.locator('.spw-evo-message[role="status"]').count(), 1, "loading deve continuar visível em dark mode");
+    assert.equal(await page.locator("#spw-evo-table tbody tr").count(), rowsBeforeRefresh, "refresh não pode zerar/sumir com a tabela atual");
+    assert.equal(await page.locator("#spw-evo-active-bases").textContent(), activeBasesBeforeRefresh, "refresh não pode esconder as bases ativas");
+    assert.match(await page.locator('.spw-evo-message[role="status"]').textContent(), /dados atuais permanecem visíveis/i);
     await page.evaluate(async () => { await window.__evolutionDarkLoadingPromise; });
 
     await page.evaluate(async () => {
@@ -1431,8 +1462,9 @@ async function waitEvolutionReady(page) {
     });
     await waitEvolutionReady(page);
 
-    // Reentrada: Dashboard -> Evolução -> Consultas -> Dashboard -> Evolução sem duplicação.
+    // Reentrada: Dashboard -> Evolução -> Consultas -> Dashboard -> Evolução sem duplicação e sem perder a seleção.
     const evolutionBundleCountBeforeReentry = await page.evaluate(() => performance.getEntriesByType("resource").filter((entry) => /react-dist\/sigem-pw-evolution-app\.js(?:\?|$)/.test(entry.name)).length);
+    const selectionsBeforeReentry = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections }));
     await page.evaluate(() => {
       window.__spwModelRef = window.GrconSigemPwDashboardUi.state.model;
       window.__revisionGenerationBeforeNavigation = window.GrconSigemPwRevisionUi.state.analysisGeneration;
@@ -1445,6 +1477,7 @@ async function waitEvolutionReady(page) {
     assert.equal(await page.locator("#grcon-sigem-pw-evolution-root").count(), 1);
     assert.equal(await page.locator("#spw-evolution-section").count(), 1);
     assert.equal(await page.locator("#spw-evo-overlay").count(), 0, "não pode haver overlay órfão");
+    assert.deepEqual(await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections })), selectionsBeforeReentry, "reentrada deve preservar SIGEM/PW selecionados");
     assert.equal(await page.evaluate(() => window.__spwModelRef === window.GrconSigemPwDashboardUi.state.model), true, "reabertura não deve reconstruir modelo sem mudança");
     assert.equal(await page.evaluate(() => window.GrconSigemPwRevisionUi.state.analysisGeneration), await page.evaluate(() => window.__revisionGenerationBeforeNavigation), "reentrada não deve reanalisar o mesmo modelo");
     const evolutionBundleCountAfterReentry = await page.evaluate(() => performance.getEntriesByType("resource").filter((entry) => /react-dist\/sigem-pw-evolution-app\.js(?:\?|$)/.test(entry.name)).length);
@@ -1465,9 +1498,61 @@ async function waitEvolutionReady(page) {
       window.dispatchEvent(new CustomEvent("grcon:conference-updated"));
     });
     await page.waitForTimeout(850);
-    await page.waitForFunction(() => !window.GrconSigemPwEvolutionUi.state.busy && window.__evolutionReentryBuildCalls > 0, null, { timeout: 10000 });
-    assert.equal(await page.evaluate(() => window.__evolutionReentryBuildCalls), 8, "reentrada não pode duplicar listeners/refreshes");
+    await page.waitForFunction(() => !window.GrconSigemPwEvolutionUi.state.busy, null, { timeout: 10000 });
+    assert.equal(await page.evaluate(() => window.__evolutionReentryBuildCalls), 0, "reentrada deve reutilizar snapshots cacheados");
     await page.evaluate(() => { window.GrconSigemPwEvolution = window.__evolutionReentryCoreOriginal; });
+
+    // Volumes operacionais: duas bases de 20k, novas revisões e navegação cacheada.
+    const large = await page.evaluate(async () => {
+      const history = window.GrconSigemPwHistory;
+      const management = window.GrconSigemPwHistoryManagement;
+      const ldRecords = window.GrconSigemPwDashboardUi.state.ld.records;
+      const sigem = Array.from({ length: 20000 }, (_, i) => ({ document: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${600000 + i}`, revision: "0", status: "Postado", sourceRow: i + 2 }));
+      const pw = sigem.map(row => ({ document: row.document.replaceAll("_", "-"), revision: "0", revisionComplete: "0", state: "Cadastrado", lastEmission: "Previsto", sourceRow: row.sourceRow }));
+      const nextSigem = [...sigem, ...sigem.slice(0, 500).map((row, i) => ({ ...row, revision: "A", sourceRow: 20002 + i }))];
+      const nextPw = [...pw, ...pw.slice(0, 500).map((row, i) => ({ ...row, revision: "A", revisionComplete: "A", state: "Liberado", lastEmission: "Sim", sourceRow: 20002 + i }))];
+      const ids = [];
+      for (const [index, date] of ["2026-10-01T12:00:00Z", "2026-10-05T12:00:00Z"].entries()) {
+        const sRows = index ? nextSigem : sigem;
+        const pRows = index ? nextPw : pw;
+        const sBase = { meta: { fileName: "SIGEM_20K_" + index + ".xlsx", importedAt: date, recordCount: sRows.length, sourceRowCount: sRows.length }, records: sRows };
+        const pBase = { meta: { fileName: "PW_20K_" + index + ".csv", importedAt: date, recordCount: pRows.length, sourceRowCount: pRows.length }, records: pRows };
+        const saved = await history.recordActiveBases(sBase, pBase, { recordedAt: date, ldRecords });
+        await management.capturePayload("sigem", sBase, saved.sigem.snapshot.id, { sigemBase: sBase, pwBase: pBase, ldRecords });
+        await management.capturePayload("pw", pBase, saved.pw.snapshot.id, { sigemBase: sBase, pwBase: pBase, ldRecords });
+        ids.push({ sigem: saved.sigem.snapshot.id, pw: saved.pw.snapshot.id });
+      }
+      let ticks = 0;
+      const timer = setInterval(() => { ticks += 1; }, 10);
+      const start = performance.now();
+      try { await window.GrconSigemPwEvolutionUi.refresh(false); }
+      finally { clearInterval(timer); }
+      return { ids, coldMs: performance.now() - start, ticks };
+    });
+    assert.ok(large.ticks > 2, "20k snapshot preparation must yield the UI thread");
+    for (const system of ["sigem", "pw"]) {
+      await page.locator(`[data-evo-select="${system}Current"]`).selectOption(large.ids[1][system]);
+      await page.locator(`[data-evo-select="${system}Prev"]`).selectOption(large.ids[0][system]);
+    }
+    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.comparison.sigem.documentRevision.newRevisions.length), 500);
+    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.comparison.pwEmissions.length), 500);
+    await page.locator('[data-evo-select="sigemCurrent"]').selectOption(large.ids[0].sigem);
+    await page.locator('[data-evo-select="sigemCurrent"]').selectOption(large.ids[1].sigem);
+    await page.evaluate(() => {
+      window.__largeEvolutionOriginal = window.GrconSigemPwEvolution;
+      window.__largeComparisonCalls = 0;
+      window.GrconSigemPwEvolution = Object.freeze({ ...window.__largeEvolutionOriginal,
+        comparePeriod(...args) { window.__largeComparisonCalls += 1; return window.__largeEvolutionOriginal.comparePeriod(...args); },
+      });
+    });
+    const warmStart = Date.now();
+    for (let i = 0; i < 3; i += 1) {
+      await page.locator('[data-evo-select="sigemCurrent"]').selectOption(large.ids[0].sigem);
+      await page.locator('[data-evo-select="sigemCurrent"]').selectOption(large.ids[1].sigem);
+    }
+    assert.equal(await page.evaluate(() => window.__largeComparisonCalls), 0, "repeated 20k pairs must not be compared again");
+    await page.evaluate(() => { window.GrconSigemPwEvolution = window.__largeEvolutionOriginal; });
+    metrics.evolution20k = { ...large, warmSixSelectionsMs: Date.now() - warmStart };
 
     metrics.evolution = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.metrics }));
     for (const key of ["evolutionSnapshotBuildMs", "evolutionPeriodChangeMs", "evolutionFilterMs", "evolutionSearchMs", "evolutionPageChangeMs", "evolutionDetailMs", "evolutionExportMs"]) {
@@ -1476,10 +1561,15 @@ async function waitEvolutionReady(page) {
     assert.ok(await page.locator("#spw-revision-section").count() === 1);
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwHistoryManagement && window.GrconSigemPwRevisionUi?.state?.analysis)), true, "History Management deve enxergar a facade React de Revisões");
 
+    await page.locator('[data-evo-select="sigemPrev"]').selectOption("");
+    const selectionsBeforeReload = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections }));
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForStablePage(page);
     await exposeApp(page);
     await clickSpw(page);
+    await page.locator("#spw-evolution-open").click();
+    await waitEvolutionReady(page);
+    assert.deepEqual(await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections })), selectionsBeforeReload, "reload must preserve manual selection, including no previous base");
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwDashboardUi.state.sigem.meta && window.GrconSigemPwDashboardUi.state.pw.meta && window.GrconSigemPwDashboardUi.state.ld.meta)), true);
     const caches = await page.evaluate(async () => await window.caches.keys());
     assert.ok(caches.some((key) => key.includes("phase-b-sigem-pw-revision-ui1")));
