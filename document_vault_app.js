@@ -846,11 +846,14 @@
       if (standard && state.open) deactivateShell();
     }, true);
 
-    root.addEventListener("grcon:cloud-state", () => {
+    root.addEventListener("grcon:cloud-ready", () => {
       if (state.open) {
         void checkHealth();
         void refreshList(true);
       }
+    });
+    root.addEventListener("grcon:planned-documents-published", () => {
+      if (state.open) void refreshList(true);
     });
   }
 
