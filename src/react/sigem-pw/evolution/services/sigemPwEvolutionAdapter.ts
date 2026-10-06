@@ -878,6 +878,7 @@ function snapshotRuleRows(label: string, snapshot: EvolutionSnapshot | null): Ar
     { Item: `${label} · regra de emissão`, Valor: audit.emissionRule || "" },
     { Item: `${label} · data de cadastro`, Valor: audit.registrationDateField || "" },
     { Item: `${label} · data de emissão`, Valor: audit.emissionDateField || "" },
+    { Item: `${label} · fallback de data relevante`, Valor: audit.relevantDateFallback || "" },
     { Item: `${label} · data do snapshot`, Valor: audit.snapshotDateField || "" },
   ];
 }
