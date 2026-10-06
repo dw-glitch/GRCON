@@ -135,6 +135,19 @@ const pwCurrent = base("pw", pwRows, "2026-10-05T09:00:00Z");
   assert.equal(delta.added.length, 0);
   assert.equal(delta.metadataChanged.length, 1);
   assert.equal(Evo.emissionTransitions(delta).length, 0, "estado anterior indeterminado não permite afirmar que a emissão ocorreu entre snapshots");
+  assert.equal(delta.documentRevisionEmissions.transitions.length, 0);
+  assert.equal(delta.documentRevisionEmissions.indeterminateToEmitted.length, 1);
+})();
+
+(function technicalMultiplicityDoesNotInflatePrimaryEmissionKpi() {
+  const before = base("pw", [p("C", "0", "Previsto", { fileName: "c-previsto.pdf" })], "2026-10-01T09:00:00Z");
+  const after = base("pw", [
+    p("C", "0", "Sim", { fileName: "c-emissao-a.pdf", sourceRow: 2 }),
+    p("C", "0", "Sim", { fileName: "c-emissao-b.pdf", sourceRow: 3 }),
+  ], "2026-10-05T09:00:00Z");
+  const delta = Evo.compareSnapshots(before, after);
+  assert.equal(Evo.emissionTransitions(delta).length, 2, "movimento técnico permanece auditável para compatibilidade");
+  assert.equal(delta.documentRevisionEmissions.transitions.length, 1, "KPI principal deve contar uma única transição documento + revisão");
 })();
 
 (function largeDocumentRevisionDeltaRemainsIndexed() {
