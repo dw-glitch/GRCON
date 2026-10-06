@@ -206,6 +206,158 @@ function ActiveBase({ label, snapshot }: { label: string; snapshot: EvolutionSna
   );
 }
 
+function MetricAuditDrawer({
+  metric,
+  onClose,
+  comparison,
+  sigem,
+  pw,
+}: {
+  metric: EvolutionListMode | "pw-emitted-current" | null;
+  onClose(): void;
+  comparison: EvolutionUiState["comparison"];
+  sigem: EvolutionSnapshot | null;
+  pw: EvolutionSnapshot | null;
+}) {
+  if (!metric) return null;
+  const pwAudit = pw?.audit || {};
+  const details: Record<string, { title: string; formula: string; rows: Array<[string, unknown]> }> = {
+    "sigem-new": {
+      title: "Entraram no SIGEM",
+      formula: "Ocorrências técnicas presentes no snapshot SIGEM atual e ausentes no anterior. Em paralelo, documento + revisão distingue documento novo de nova revisão.",
+      rows: [
+        ["Ocorrências técnicas novas", comparison?.sigem?.added.length || 0],
+        ["Documento + revisão novos", comparison?.sigem?.documentRevision?.added.length || 0],
+        ["Documentos novos", comparison?.sigem?.documentRevision?.newDocuments.length || 0],
+        ["Novas revisões", comparison?.sigem?.documentRevision?.newRevisions.length || 0],
+      ],
+    },
+    "pw-new": {
+      title: "Entraram no PW",
+      formula: "Presença válida na relação ProjectWise significa cadastro, não emissão. A evolução compara o snapshot atual contra o anterior.",
+      rows: [
+        ["Ocorrências técnicas novas", comparison?.pw?.added.length || 0],
+        ["Documento + revisão novos", comparison?.pw?.documentRevision?.added.length || 0],
+        ["Documentos novos", comparison?.pw?.documentRevision?.newDocuments.length || 0],
+        ["Novas revisões", comparison?.pw?.documentRevision?.newRevisions.length || 0],
+      ],
+    },
+    "pw-emitted": {
+      title: "Novas emissões no período",
+      formula: "Soma novas entradas já emitidas com registros que passaram de sem evidência de emissão para emitidos. SIM = evidência atual; NÃO = evidência histórica; PREVISTO não conta como emitido.",
+      rows: [
+        ["Novas emissões/transições", comparison?.pwEmissions.length || 0],
+        ["PW atual · documento + revisão emitido", pwAudit.emittedDocumentRevisionRecords || 0],
+        ["PW atual · documentos únicos emitidos", pwAudit.emittedUniqueDocuments || 0],
+      ],
+    },
+    "missing-pw": {
+      title: "SIGEM novo sem PW",
+      formula: "Novas ocorrências SIGEM do período sem correspondência código + revisão na base PW atual selecionada.",
+      rows: [
+        ["Novos SIGEM sem PW atual", comparison?.relation?.newSigemMissingPw.length || 0],
+        ["Somente SIGEM no snapshot atual", comparison?.current?.onlySigem.length || 0],
+      ],
+    },
+    "pw-current": {
+      title: "Cadastrados no PW atual",
+      formula: "Todo documento + revisão válido presente na base PW atual conta como cadastrado, independentemente de estar emitido.",
+      rows: [
+        ["Linhas brutas", pwAudit.rawRecords || 0],
+        ["Registros técnicos aceitos", pwAudit.acceptedRecords || 0],
+        ["Documento + revisão", pwAudit.documentRevisionRecords || 0],
+        ["Documentos únicos", pwAudit.uniqueDocuments || 0],
+      ],
+    },
+    "pw-current-emitted": {
+      title: "Emitidos no PW atual",
+      formula: "Documento + revisão válido cuja coluna Última emissão traz SIM (evidência atual) ou NÃO (evidência histórica), preservando a semântica vigente do Dashboard.",
+      rows: [
+        ["Documento + revisão emitido", pwAudit.emittedDocumentRevisionRecords || 0],
+        ["Documentos únicos emitidos", pwAudit.emittedUniqueDocuments || 0],
+        ["Evidência atual · SIM", pwAudit.emissionBreakdown?.current || 0],
+        ["Evidência histórica · NÃO", pwAudit.emissionBreakdown?.historical || 0],
+      ],
+    },
+    "pw-current-not-emitted": {
+      title: "Não emitidos no PW atual",
+      formula: "Documento + revisão cadastrado cuja evidência de emissão é PREVISTO, ausente ou desconhecida.",
+      rows: [
+        ["Documento + revisão não emitido", pwAudit.notEmittedDocumentRevisionRecords || 0],
+        ["PREVISTO", pwAudit.emissionBreakdown?.planned || 0],
+        ["Sem valor", pwAudit.emissionBreakdown?.missing || 0],
+        ["Valor desconhecido", pwAudit.emissionBreakdown?.unknown || 0],
+      ],
+    },
+    "only-sigem": {
+      title: "Somente SIGEM",
+      formula: "Documento + revisão válido presente no SIGEM atual e ausente no PW atual.",
+      rows: [["Somente SIGEM", comparison?.current?.onlySigem.length || 0]],
+    },
+    "only-pw": {
+      title: "Somente PW",
+      formula: "Documento + revisão válido presente no PW atual e ausente no SIGEM atual.",
+      rows: [["Somente PW", comparison?.current?.onlyPw.length || 0]],
+    },
+    "current-both": {
+      title: "Presentes nas duas bases",
+      formula: "Documento + revisão válido localizado simultaneamente nos snapshots SIGEM e PW atuais.",
+      rows: [
+        ["SIGEM + PW", comparison?.current?.both.length || 0],
+        ["Ambos · emitidos", comparison?.current?.bothEmitted.length || 0],
+        ["Ambos · não emitidos", comparison?.current?.bothNotEmitted.length || 0],
+      ],
+    },
+    "pw-emitted-current": {
+      title: "Regra de emissão PW",
+      formula: String(pwAudit.emissionRule || "SIM/NÃO são evidências de emissão; PREVISTO não é emissão."),
+      rows: [
+        ["SIM", pwAudit.emissionBreakdown?.current || 0],
+        ["NÃO", pwAudit.emissionBreakdown?.historical || 0],
+        ["PREVISTO", pwAudit.emissionBreakdown?.planned || 0],
+        ["Desconhecido/ausente", Number(pwAudit.emissionBreakdown?.unknown || 0) + Number(pwAudit.emissionBreakdown?.missing || 0)],
+      ],
+    },
+  };
+  const fallback = EVOLUTION_LIST_LABELS[metric as EvolutionListMode];
+  const info = details[metric] || {
+    title: fallback?.[0] || "Auditoria da métrica",
+    formula: fallback?.[1] || "Contagem derivada dos snapshots selecionados.",
+    rows: [],
+  };
+  return (
+    <UiDrawer
+      open={Boolean(metric)}
+      onClose={onClose}
+      labelledBy="spw-evo-audit-drawer-title"
+      drawerClassName="spw-evo-drawer spw-evo-audit-drawer"
+      overlayClassName="spw-evo-overlay"
+      drawerId="spw-evo-audit-drawer"
+      overlayId="spw-evo-audit-overlay"
+    >
+      <header>
+        <div><span className="spw-kicker">COMO ESTE NÚMERO FOI CALCULADO?</span><h3 id="spw-evo-audit-drawer-title">{info.title}</h3></div>
+        <button className="spw-evo-close" type="button" aria-label="Fechar auditoria" onClick={onClose}>×</button>
+      </header>
+      <div className="spw-evo-detail">
+        <section className="spw-evo-audit-rule"><strong>Regra</strong><p>{info.formula}</p></section>
+        <section className="spw-evo-detail-group">
+          <h4>Contagem</h4>
+          <div className="spw-evo-detail-grid">
+            {info.rows.map(([label, value]) => <div key={label}><span>{label}</span><strong>{fmt(value)}</strong></div>)}
+          </div>
+        </section>
+        <section className="spw-evo-audit-sources">
+          <h4>Bases usadas</h4>
+          <p><strong>SIGEM:</strong> {sigem ? (sigem.fileName || "base") + " · " + fmtDate(sigem.importedAt) : "não selecionado"}</p>
+          <p><strong>PW:</strong> {pw ? (pw.fileName || "base") + " · " + fmtDate(pw.importedAt) : "não selecionado"}</p>
+          <small>Versão da análise: {comparison?.analysisVersion || sigem?.analysisVersion || pw?.analysisVersion || "—"}</small>
+        </section>
+      </div>
+    </UiDrawer>
+  );
+}
+
 function DetailDrawer({
   row,
   listMode,
