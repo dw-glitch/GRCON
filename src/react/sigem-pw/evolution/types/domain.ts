@@ -197,6 +197,7 @@ export interface EvolutionSelections {
 
 export interface EvolutionMetrics {
   evolutionSnapshotBuildMs: number;
+  evolutionWorkerBuildMs: number;
   evolutionHistoryReadMs: number;
   evolutionComparisonMs: number;
   evolutionTimelineMs: number;
