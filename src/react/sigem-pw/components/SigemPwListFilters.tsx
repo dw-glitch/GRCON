@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { SigemPwDocumentClass } from "../types/domain";
 
 export function SigemPwListFilters({ query, documentClass, revision, sigemStatus, inPw, sigemStatusOptions, busy, onQuery, onClass, onRevision, onSigemStatus, onInPw, onClear }: {
@@ -16,11 +17,22 @@ export function SigemPwListFilters({ query, documentClass, revision, sigemStatus
   onClear(): void;
 }) {
   const hasFilters = Boolean(query || documentClass || revision || sigemStatus || inPw);
+  const [searchValue, setSearchValue] = useState(query);
+  const searchTimer = useRef<number | null>(null);
+  const onQueryRef = useRef(onQuery);
+  onQueryRef.current = onQuery;
+  useEffect(() => { setSearchValue(query); }, [query]);
+  useEffect(() => () => { if (searchTimer.current !== null) window.clearTimeout(searchTimer.current); }, []);
+  const scheduleQuery = (value: string) => {
+    setSearchValue(value);
+    if (searchTimer.current !== null) window.clearTimeout(searchTimer.current);
+    searchTimer.current = window.setTimeout(() => onQueryRef.current(value), 180);
+  };
   return (
     <div className="spw-list-filters">
       <label className="spw-filter-control spw-search-control" htmlFor="spw-query">
         <span>Pesquisar na relação</span>
-        <input id="spw-query" type="search" value={query} placeholder="Documento, revisão, status ou situação" onChange={(event) => onQuery(event.target.value)} />
+        <input id="spw-query" type="search" value={searchValue} placeholder="Documento, revisão, status ou situação" onChange={(event) => scheduleQuery(event.target.value)} />
       </label>
       <label className="spw-filter-control" htmlFor="spw-class">
         <span>Classe documental</span>
