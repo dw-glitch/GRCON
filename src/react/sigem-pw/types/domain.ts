@@ -58,6 +58,7 @@ export interface SigemPwRow {
   revision: string;
   documentClass: string;
   sigemStatus: string;
+  sigemDate?: string;
   pwStatus: string;
   pwEmission: string;
   situation: string;
