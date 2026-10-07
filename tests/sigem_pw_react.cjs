@@ -93,6 +93,7 @@ const revisionModel = Dashboard.createModel([
 ], [], []);
 const revisionResult = Dashboard.aggregateModel(revisionModel);
 assert.equal(revisionResult.summary.sigem, 3);
+assert.equal(revisionResult.lists.sigem.length, revisionResult.summary.sigem, "lista detalhada SIGEM deve ser a própria composição do KPI");
 assert.equal(revisionResult.summary.sigemOnly, 3);
 assert.deepEqual(revisionResult.lists.sigemOnly.map((row) => row.revision), ["0","A","B"]);
 
