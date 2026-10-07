@@ -42,13 +42,23 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
   w.GrconCloud.state.contracts=[{workspace_id:workspace,role:'owner',code:'QA'}];w.GrconCloud.state.online=true;
   w.GrconCloud.state.client={rpc:async(name,args)=>{
    w.__sharedQa.calls.push(name);
-   if(name==='grcon_sigem_query_current')return {data:[versions[0]]};
+   if(name==='grcon_sigem_query_current'){const active=versions.find(v=>v.status==='active');return {data:active?[active]:[]};}
    if(name==='grcon_sigem_query_versions')return {data:versions};
    if(name==='grcon_sigem_query_page')return w.__sharedQa.unavailable&&args.target_snapshot==='shared-old'?{error:{message:'Não foi possível carregar esta versão da Consulta Geral.'}}:{data:rows[args.target_snapshot].slice(args.after_row,args.after_row+1000).map((payload,i)=>({row_number:args.after_row+i+1,payload}))};
    if(name==='grcon_sigem_query_set_date'){
     const version=versions.find(v=>v.snapshot_id===args.target_snapshot);
     if((version.metadata.referenceDate||null)!==args.expected_date)return {error:{message:'A data foi alterada por outro usuário.'}};
     version.metadata.referenceDate=args.reference_date;w.__sharedQa.dateWrites.push({...args});return {data:version.metadata};
+   }
+   if(name==='grcon_sigem_query_activate'){
+    const target=versions.find(v=>v.snapshot_id===args.target_snapshot);if(!target)return {error:{message:'Base indisponível.'}};
+    versions.forEach(v=>{v.status='archived';});target.status='active';return {data:target.snapshot_id};
+   }
+   if(name==='grcon_sigem_query_delete'){
+    const index=versions.findIndex(v=>v.snapshot_id===args.target_snapshot);if(index<0)return {error:{message:'Base indisponível.'}};
+    const [removed]=versions.splice(index,1);let activeSnapshotId=null;
+    if(removed.status==='active'&&versions.length){const replacement=[...versions].sort((a,b)=>String(b.published_at).localeCompare(String(a.published_at)))[0];replacement.status='active';activeSnapshotId=replacement.snapshot_id;}
+    return {data:{removedSnapshotId:removed.snapshot_id,removedWasCurrent:removed.status==='active',activeSnapshotId}};
    }
    return {data:[]};
   }};
@@ -123,7 +133,17 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(()=>window.__sharedQa.unavailable=false);
  await page.getByText('Tentar novamente',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),1);
+ // Owner can promote a historical shared base, then delete the active base; the backend replacement becomes official.
+ page.once('dialog',dialog=>dialog.accept());
+ await page.getByText('Tornar base atual',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-old');
+ assert.equal(await page.inputValue('#spw-analysis-sigem'),'');
+ assert.equal(await page.evaluate(()=>window.__sharedQa.versions.find(v=>v.snapshot_id==='shared-old').status),'active');
+ page.once('dialog',dialog=>dialog.accept());
+ await page.getByText('Excluir base atual',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-current');
+ assert.equal(await page.evaluate(()=>window.__sharedQa.versions.some(v=>v.snapshot_id==='shared-old')),false);
+ assert.equal(await page.locator('#spw-analysis-sigem option[value="shared-old"]').count(),0);
+ assert.equal(await page.evaluate(()=>window.__sharedQa.calls.includes('grcon_sigem_query_activate')&&window.__sharedQa.calls.includes('grcon_sigem_query_delete')),true);
  assert.deepEqual(errors,[]);
- console.log('Chromium: owner/admin/operator/viewer, direct access, 20k records, historical selection, 4 independent combinations, revision scopes, XLSX provenance, preserved selection and bidirectional date passed.');
+ console.log('Chromium: owner/admin/operator/viewer, 20k records, historical selection, revision scopes, XLSX provenance, bidirectional dates, shared activation and deletion with replacement passed.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
