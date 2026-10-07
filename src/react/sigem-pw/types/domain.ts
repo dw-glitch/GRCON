@@ -1,6 +1,7 @@
 export type SigemPwBaseKind = "sigem" | "pw" | "ld";
 export type SigemPwEditableBaseKind = "sigem" | "pw";
 export type SigemPwDocumentClass = "" | "ET" | "N-1710";
+export type SigemPwRevisionScope = "revision0" | "all";
 export type SigemPwListKey = "all" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
 export type SigemPwReadinessStatus = "empty" | "partial" | "ready" | "attention";
 
@@ -105,6 +106,7 @@ export interface SigemPwQuality {
 }
 
 export interface SigemPwResult {
+  revisionScope: SigemPwRevisionScope;
   summary: SigemPwSummary;
   classes: SigemPwClassSummary[];
   lists: Record<string, SigemPwRow[]>;
@@ -127,6 +129,12 @@ export interface SigemPwAggregateMap {
   all: SigemPwResult;
   ET: SigemPwResult;
   "N-1710": SigemPwResult;
+  "revision0:all": SigemPwResult;
+  "revision0:ET": SigemPwResult;
+  "revision0:N-1710": SigemPwResult;
+  "all:all": SigemPwResult;
+  "all:ET": SigemPwResult;
+  "all:N-1710": SigemPwResult;
 }
 
 export interface SigemPwReadinessCheck {
@@ -177,6 +185,7 @@ export interface SigemPwState {
   dateEditSnapshotId: string;
   dateEditor: SigemPwDateEditor;
   historyDialogOpen: boolean;
+  revisionScope: SigemPwRevisionScope;
   filters: SigemPwFilters;
   activeList: SigemPwListKey;
   page: number;
