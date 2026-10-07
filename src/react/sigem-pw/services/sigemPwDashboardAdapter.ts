@@ -6,6 +6,7 @@ import type {
   SigemPwListKey,
   SigemPwRecord,
   SigemPwResult,
+  SigemPwRevisionScope,
   SigemPwState,
   SigemPwUiSnapshot,
   WorkerModelPayload,
@@ -63,6 +64,7 @@ const state: SigemPwState = {
   dateEditSnapshotId: "",
   dateEditor: { open: false, system: "", snapshotId: "", value: "" },
   historyDialogOpen: false,
+  revisionScope: "revision0",
   filters: { documentClass: "", query: "" },
   activeList: "all",
   page: 1,
@@ -156,8 +158,9 @@ function renderFromModel(resetPage: boolean): void {
     return;
   }
   if (resetPage) state.page = 1;
-  const aggregateKey = state.filters.documentClass || "all";
-  state.result = state.aggregates[aggregateKey];
+  const classKey = state.filters.documentClass || "all";
+  const aggregateKey = `${state.revisionScope}:${classKey}` as keyof typeof state.aggregates;
+  state.result = state.aggregates[aggregateKey] || state.aggregates[`all:${classKey}` as keyof typeof state.aggregates];
   state.readiness = Readiness().assess(state, state.aggregates.all);
   emit();
 }
@@ -208,11 +211,27 @@ async function rebuildModelAsync(): Promise<boolean> {
       type: "model",
       generation,
       model,
-      aggregates: {
-        all: core.aggregateModel(model),
-        ET: core.aggregateModel(model, { documentClass: "ET" }),
-        "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }),
-      },
+      aggregates: (() => {
+        const allScope = {
+          all: core.aggregateModel(model, {}, { revisionScope: "all" }),
+          ET: core.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "all" }),
+          "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "all" }),
+        };
+        const revision0Scope = {
+          all: core.aggregateModel(model, {}, { revisionScope: "revision0" }),
+          ET: core.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "revision0" }),
+          "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "revision0" }),
+        };
+        return {
+          ...allScope,
+          "revision0:all": revision0Scope.all,
+          "revision0:ET": revision0Scope.ET,
+          "revision0:N-1710": revision0Scope["N-1710"],
+          "all:all": allScope.all,
+          "all:ET": allScope.ET,
+          "all:N-1710": allScope["N-1710"],
+        };
+      })(),
     };
   }
   if (generation !== state.modelGeneration || built.generation !== generation || !built.model || !built.aggregates) return false;
@@ -572,6 +591,13 @@ function setDocumentClass(value: SigemPwDocumentClass): void {
   state.page = 1;
   renderFromModel(false);
 }
+function setRevisionScope(value: SigemPwRevisionScope): void {
+  const next = value === "all" ? "all" : "revision0";
+  if (state.revisionScope === next) return;
+  state.revisionScope = next;
+  state.page = 1;
+  renderFromModel(false);
+}
 function clearFilters(): void {
   state.filters.documentClass = "";
   state.filters.query = "";
@@ -612,7 +638,7 @@ async function exportCurrentList(): Promise<void> {
     const workbook = api.utils.book_new();
     api.utils.book_append_sheet(workbook, worksheet, "Relação");
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    api.writeFile(workbook, `GRCON_SIGEM_PW_${state.activeList}_${stamp}.xlsx`, { compression: true });
+    api.writeFile(workbook, `GRCON_SIGEM_PW_${state.revisionScope}_${state.activeList}_${stamp}.xlsx`, { compression: true });
     notify(`Lista exportada com ${fmt(rows.length)} registros.`, "success");
   } catch (error) {
     console.error("[SIGEM×PW] exportação:", error);
@@ -749,6 +775,7 @@ export const sigemPwDashboardAdapter = {
   importLd,
   setQuery,
   setDocumentClass,
+  setRevisionScope,
   clearFilters,
   setActiveList,
   setPage,

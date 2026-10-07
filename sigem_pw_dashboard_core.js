@@ -35,6 +35,7 @@
     PW_ONLY_EMITTED: "Emitido no PW, mas não localizado no SIGEM",
   });
   const REQUIRED_PW_FIELDS = Object.freeze(["document", "revision", "documentType", "state", "lastEmission"]);
+  const REVISION_SCOPES = Object.freeze({ REVISION0: "revision0", ALL: "all" });
 
   const PW_HEADER_ALIASES = Object.freeze({
     document: ["NumeroDocumentoCliente", "NúmeroDocumentoCliente", "Numero Documento Cliente", "Número Documento Cliente"],
@@ -146,6 +147,18 @@
     const revision = norm(value).replace(/^REV(?:ISAO)?\.?\s*/, "").replace(/\s+/g, "");
     if (!revision || /^(?:SEMREVISAO|NAOINFORMAD[AO]|NA|N\/A|-)$/.test(revision)) return "__SEM_REVISAO__";
     return revision;
+  }
+
+  function normalizeRevisionScope(value) {
+    return text(value).toLowerCase() === REVISION_SCOPES.REVISION0
+      ? REVISION_SCOPES.REVISION0
+      : REVISION_SCOPES.ALL;
+  }
+
+  function scopeRevisionMap(map, revisionScope) {
+    const scope = normalizeRevisionScope(revisionScope);
+    if (scope === REVISION_SCOPES.ALL) return map;
+    return new Map([...map].filter(([, entry]) => entry && entry.revisionKey === "0"));
   }
 
   function revisionLabel(value) {
@@ -850,10 +863,13 @@
         : left.documentClass.localeCompare(right.documentClass, "pt-BR", { numeric: true }));
   }
 
-  function aggregateModel(model, filters) {
+  function aggregateModel(model, filters, options) {
     const source = model || { normalizedSigem: [], normalizedPw: [], sigemAll: new Map(), pwAll: new Map() };
-    const sigemAll = source.sigemEntries || source.sigemAll || new Map();
-    const pwAll = source.pwEntries || source.pwAll || new Map();
+    const revisionScope = normalizeRevisionScope(options && options.revisionScope);
+    const sigemSource = source.sigemEntries || source.sigemAll || new Map();
+    const pwSource = source.pwEntries || source.pwAll || new Map();
+    const sigemAll = scopeRevisionMap(sigemSource, revisionScope);
+    const pwAll = scopeRevisionMap(pwSource, revisionScope);
     const sigem = filterMap(sigemAll, "sigem", filters);
     const pw = filterMap(pwAll, "pw", filters);
     const sigemKeys = new Set(sigem.keys());
@@ -875,6 +891,7 @@
     if (classifiedTotal !== expectedTotal) throw new Error("Inconsistência matemática: total classificado difere do universo comparado.");
 
     return {
+      revisionScope,
       summary: {
         sigem: sigemKeys.size,
         pwRegistered: pwKeys.size,
@@ -1203,9 +1220,9 @@
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
     PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, N1710_CODE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
-    EMISSION_FLAGS, EMISSION_RULE, COMPARISON_SITUATIONS, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS,
+    EMISSION_FLAGS, EMISSION_RULE, COMPARISON_SITUATIONS, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS, REVISION_SCOPES,
     text, norm, normalizeHeader, canonicalDocumentCode, documentIdentity, documentClass,
-    revisionKey, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
+    revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
     openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,

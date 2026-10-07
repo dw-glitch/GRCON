@@ -7,6 +7,7 @@ import type {
   SigemPwReadiness,
   SigemPwRecord,
   SigemPwResult,
+  SigemPwRevisionScope,
   SigemPwState,
   WorkerModelPayload,
 } from "./domain";
@@ -48,7 +49,7 @@ interface SigemPwDashboardCoreApi {
   parseLdMatrix(matrix: string[][], meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   sanitizePwBase(base: SigemPwBase, ld: SigemPwBase | SigemPwRecord[]): SigemPwBase;
   createModel(sigem: SigemPwRecord[], pw: SigemPwRecord[], ld: SigemPwRecord[]): SigemPwModel;
-  aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }): SigemPwResult;
+  aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }, options?: { revisionScope?: SigemPwRevisionScope }): SigemPwResult;
   loadBases(): Promise<{ sigem: SigemPwBase; pw: SigemPwBase; ld: SigemPwBase; history: SigemPwHistory }>;
   loadHistory(): Promise<SigemPwHistory>;
   saveSigemBase(base: SigemPwBase): Promise<SigemPwBase>;

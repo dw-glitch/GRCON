@@ -38,19 +38,20 @@ export function SigemPwSituationCards({ state, activeList, onSelect }: {
 }) {
   const s = state.result?.summary;
   const both = Boolean(state.sigem.meta && state.pw.meta);
+  const unit = state.revisionScope === "revision0" ? "revisão 0" : "Documento + Revisão";
 
   return (
     <>
       <section className="spw-actions-grid" id="spw-actions-grid" aria-label="Situações exclusivas entre as bases">
-        <Card label="SIGEM: falta cadastrar no PW" value={s?.sigemOnly || 0} css="" note="Postado no SIGEM; código + revisão ainda não cadastrados no PW." available={both} listKey="sigemOnly" active={activeList === "sigemOnly"} onSelect={onSelect} />
-        <Card label="SIGEM + PW: ainda não emitido" value={s?.bothNotEmitted || 0} css="warn" note="Postado no SIGEM e cadastrado no PW. Falta evidência de emissão no PW." available={both} listKey="bothNotEmitted" active={activeList === "bothNotEmitted"} onSelect={onSelect} />
-        <Card label="SIGEM + PW: emitido" value={s?.bothEmitted || 0} css="ok" note="Postado no SIGEM e emitido no PW; a revisão é usada quando informada." available={both} listKey="bothEmitted" active={activeList === "bothEmitted"} onSelect={onSelect} />
-        <Card label="Só PW: ainda não emitido" value={s?.pwOnlyNotEmitted || 0} css="pw warn" note="Cadastrado no PW, sem emissão e não localizado no SIGEM." available={both} listKey="pwOnlyNotEmitted" active={activeList === "pwOnlyNotEmitted"} onSelect={onSelect} />
-        <Card label="Só PW: emitido" value={s?.pwOnlyEmitted || 0} css="pw" note="Emitido no PW, mas o código + revisão não foi localizado no SIGEM." available={both} listKey="pwOnlyEmitted" active={activeList === "pwOnlyEmitted"} onSelect={onSelect} />
+        <Card label="SIGEM: falta cadastrar no PW" value={s?.sigemOnly || 0} css="" note={`Postado no SIGEM; ${unit} ainda não cadastrado no PW.`} available={both} listKey="sigemOnly" active={activeList === "sigemOnly"} onSelect={onSelect} />
+        <Card label="SIGEM + PW: ainda não emitido" value={s?.bothNotEmitted || 0} css="warn" note={`Postado no SIGEM e cadastrado no PW no universo ${unit}. Falta evidência de emissão no PW.`} available={both} listKey="bothNotEmitted" active={activeList === "bothNotEmitted"} onSelect={onSelect} />
+        <Card label="SIGEM + PW: emitido" value={s?.bothEmitted || 0} css="ok" note={`Postado no SIGEM e emitido no PW no universo ${unit}.`} available={both} listKey="bothEmitted" active={activeList === "bothEmitted"} onSelect={onSelect} />
+        <Card label="Só PW: ainda não emitido" value={s?.pwOnlyNotEmitted || 0} css="pw warn" note={`Cadastrado no PW em ${unit}, sem emissão e não localizado no SIGEM.`} available={both} listKey="pwOnlyNotEmitted" active={activeList === "pwOnlyNotEmitted"} onSelect={onSelect} />
+        <Card label="Só PW: emitido" value={s?.pwOnlyEmitted || 0} css="pw" note={`Emitido no PW, mas ${unit} não foi localizado no SIGEM.`} available={both} listKey="pwOnlyEmitted" active={activeList === "pwOnlyEmitted"} onSelect={onSelect} />
       </section>
       <p className="spw-classification-note" id="spw-classification-note">
         {both
-          ? <><strong>Contagem conciliada:</strong> {fmt(s?.classifiedTotal || 0)} registro(s) distribuídos uma única vez entre as cinco situações. Revisão ausente no PW é conciliada pelo código do documento.</>
+          ? <><strong>Contagem conciliada — {state.revisionScope === "revision0" ? "Rev. 0" : "todas as revisões"}:</strong> {fmt(s?.classifiedTotal || 0)} registro(s) distribuídos uma única vez entre as cinco situações. {state.revisionScope === "all" ? "Revisão ausente no PW é conciliada pelo código do documento." : "Somente a ocorrência normalizada como revisão 0 participa deste universo."}</>
           : "Carregue as bases SIGEM e PW para obter a classificação completa."}
       </p>
     </>

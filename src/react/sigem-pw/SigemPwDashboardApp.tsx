@@ -3,6 +3,7 @@ import { SigemPwHeader } from "./components/SigemPwHeader";
 import { SigemPwReadiness } from "./components/SigemPwReadiness";
 import { SigemPwBases } from "./components/SigemPwBases";
 import { SigemPwSystemsSummary } from "./components/SigemPwSystemsSummary";
+import { SigemPwRevisionScopeSelector } from "./components/SigemPwRevisionScopeSelector";
 import { SigemPwSituationCards } from "./components/SigemPwSituationCards";
 import { SigemPwListFilters } from "./components/SigemPwListFilters";
 import { SigemPwTable } from "./components/SigemPwTable";
@@ -65,10 +66,13 @@ export function SigemPwDashboardApp() {
           <div>
             <span className="spw-kicker">VISÃO CONSOLIDADA</span>
             <h3 id="spw-overview-title">Totais e pendências operacionais</h3>
-            <p>Os totais usam a mesma agregação do Core. Cada ocorrência entra em uma única situação operacional.</p>
+            <p>{state.revisionScope === "revision0"
+              ? "Visão principal do cadastro inicial: somente ocorrências em revisão 0 nos dois sistemas."
+              : "Visão de movimentação documental: cada Documento + Revisão é uma ocorrência independente."}</p>
           </div>
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
+        <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
         <SigemPwSystemsSummary state={state} />
         <SigemPwSituationCards
           state={state}
@@ -82,7 +86,9 @@ export function SigemPwDashboardApp() {
           <div>
             <span className="spw-kicker">RELAÇÃO DETALHADA</span>
             <strong id="spw-list-title">{activeLabel}</strong>
-            <small>Pesquise, filtre por classe e navegue pela lista sem alterar o modelo conciliado.</small>
+            <small>{state.revisionScope === "revision0"
+              ? "Detalhamento auditável somente da revisão 0; os demais filtros permanecem ativos."
+              : "Detalhamento auditável por Documento + Revisão; os demais filtros permanecem ativos."}</small>
           </div>
           <UiMetaPill><strong>{fmt(pageData.rows.length)}</strong> registro(s)</UiMetaPill>
         </header>
