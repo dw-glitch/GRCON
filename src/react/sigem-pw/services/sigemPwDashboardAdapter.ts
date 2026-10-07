@@ -157,8 +157,7 @@ function renderFromModel(resetPage: boolean): void {
     return;
   }
   if (resetPage) state.page = 1;
-  const aggregateKey = state.filters.documentClass || "all";
-  state.result = state.aggregates[aggregateKey];
+  state.result = state.aggregates.all;
   state.readiness = Readiness().assess(state, state.aggregates.all);
   emit();
 }
@@ -558,6 +557,7 @@ function filteredRows(): SigemPwResult["lists"][string] {
   const revisionFilter = Core().norm(state.filters.revision);
   const statusFilter = Core().norm(state.filters.sigemStatus);
   return rows.filter((row) => {
+    if (state.filters.documentClass && row.documentClass !== state.filters.documentClass) return false;
     if (query && !Core().norm([row.document,row.revision,row.documentClass,row.sigemStatus,row.pwStatus,row.pwEmission,row.situation].join(" ")).includes(query)) return false;
     if (revisionFilter && Core().norm(row.revision) !== revisionFilter) return false;
     if (statusFilter && Core().norm(row.sigemStatus) !== statusFilter) return false;
@@ -582,7 +582,7 @@ function setQuery(value: string): void {
 function setDocumentClass(value: SigemPwDocumentClass): void {
   state.filters.documentClass = value;
   state.page = 1;
-  renderFromModel(false);
+  emit();
 }
 function setRevision(value: string): void { state.filters.revision = value; state.page = 1; emit(); }
 function setSigemStatus(value: string): void { state.filters.sigemStatus = value; state.page = 1; emit(); }
@@ -594,7 +594,7 @@ function clearFilters(): void {
   state.filters.sigemStatus = "";
   state.filters.inPw = "";
   state.page = 1;
-  renderFromModel(false);
+  emit();
 }
 function setActiveList(value: SigemPwListKey): void {
   state.activeList = value;
