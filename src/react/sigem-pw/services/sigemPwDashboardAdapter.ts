@@ -158,8 +158,7 @@ function renderFromModel(resetPage: boolean): void {
     return;
   }
   if (resetPage) state.page = 1;
-  const aggregateKey = state.filters.documentClass || "all";
-  state.result = state.aggregates[aggregateKey];
+  state.result = state.aggregates.all;
   state.readiness = Readiness().assess(state, state.aggregates.all);
   emit();
 }
@@ -554,7 +553,8 @@ async function activate(): Promise<void> {
 }
 
 function filteredRows(): SigemPwResult["lists"][string] {
-  let rows = state.result?.lists?.[state.activeList] || [];
+  let rows = state.aggregates?.all?.lists?.[state.activeList] || state.result?.lists?.[state.activeList] || [];
+  if (state.filters.documentClass) rows = rows.filter((row) => row.documentClass === state.filters.documentClass);
   const revisionFilter = Core().norm(state.filters.revision);
   const statusFilter = Core().norm(state.filters.sigemStatus);
   if (revisionFilter) rows = rows.filter((row) => Core().norm(row.revision) === revisionFilter);
@@ -582,7 +582,7 @@ function setQuery(value: string): void {
 function setDocumentClass(value: SigemPwDocumentClass): void {
   state.filters.documentClass = value;
   state.page = 1;
-  renderFromModel(false);
+  emit();
 }
 function setRevision(value: string): void {
   state.filters.revision = value;
