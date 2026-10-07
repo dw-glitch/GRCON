@@ -11,7 +11,7 @@ function valueOrDash(value: string): string {
   return value || "—";
 }
 
-export function SigemPwTable({ rows, caption }: { rows: SigemPwRow[]; caption: string }) {
+export function SigemPwTable({ rows, caption, ldFileName }: { rows: SigemPwRow[]; caption: string; ldFileName?: string }) {
   return (
     <div className="spw-table-wrap" id="spw-table" tabIndex={0} aria-label={`Tabela: ${caption}`}>
       {rows.length ? (
@@ -23,9 +23,12 @@ export function SigemPwTable({ rows, caption }: { rows: SigemPwRow[]; caption: s
               <th>Documento</th>
               <th>Revisão</th>
               <th>Status SIGEM</th>
+              <th>Data SIGEM</th>
+              <th>Existe no PW</th>
               <th>Status PW</th>
               <th>Emissão PW</th>
               <th>Situação</th>
+              <th>LD</th>
             </tr>
           </thead>
           <tbody>
@@ -35,9 +38,12 @@ export function SigemPwTable({ rows, caption }: { rows: SigemPwRow[]; caption: s
                 <td className="spw-code">{row.document}</td>
                 <td><span className="spw-revision">{row.revision}</span></td>
                 <td><span className="spw-status">{valueOrDash(row.sigemStatus)}</span></td>
+                <td><span className="spw-status">{valueOrDash(row.sigemDate || "")}</span></td>
+                <td><span className="spw-status">{row.inPw ? "SIM" : "NÃO"}</span></td>
                 <td><span className="spw-status">{valueOrDash(row.pwStatus)}</span></td>
                 <td><span className="spw-status spw-emission">{row.pwEmission}</span></td>
                 <td><span className={`spw-situation ${situationClass(row)}`}>{row.situation}</span></td>
+                <td><span className="spw-status">{row.documentClass === "N-1710" ? valueOrDash(ldFileName || "") : "—"}</span></td>
               </tr>
             ))}
           </tbody>
