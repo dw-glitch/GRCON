@@ -299,6 +299,92 @@ function ordered(list: EvolutionSnapshot[]): EvolutionSnapshot[] {
   return list.slice().sort((a, b) => Date.parse(a.importedAt || "0") - Date.parse(b.importedAt || "0"));
 }
 
+function normalizedRevisionScope(value: unknown): EvolutionRevisionScope {
+  const dashboard = window.GrconSigemPwDashboard;
+  if (dashboard?.normalizeRevisionScope) return dashboard.normalizeRevisionScope(value);
+  return value === "all" ? "all" : "revision0";
+}
+
+function dashboardRevisionKey(value: unknown): string {
+  const dashboard = window.GrconSigemPwDashboard;
+  if (dashboard?.revisionKey) return dashboard.revisionKey(value);
+  return Core().normalizeRevision(value);
+}
+
+function revisionScopeLabel(scope = state.revisionScope): string {
+  return scope === "revision0" ? "Revisão 0" : "Todas as revisões";
+}
+
+function scopeSnapshot(source: EvolutionSnapshot): EvolutionSnapshot {
+  const scope = normalizedRevisionScope(state.revisionScope);
+  if (scope === "all") return source;
+  const cacheKey = [scope, source.id, source.contentFingerprint || "", source.importedAt || ""].join("|");
+  const cached = scopedSnapshotCache.get(cacheKey);
+  if (cached) return cached;
+
+  const rawRecords = (source.records || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
+  const records = Core().documentRevisionRecords(rawRecords);
+  const rejected = (source.rejected || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
+  const duplicates = (source.duplicates || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
+  const uniqueDocuments = new Set(records.map((row) => text(row.documentKey) || Core().norm(row.document)).filter(Boolean)).size;
+  const emitted = source.system === "pw" ? records.filter((row) => row.emissionState === "emitted") : [];
+  const notEmitted = source.system === "pw" ? records.filter((row) => row.emissionState === "not-emitted") : [];
+  const indeterminate = source.system === "pw" ? records.filter((row) => row.emissionState === "indeterminate") : [];
+  const emissionBreakdown: Record<string, number> = { current: 0, historical: 0, planned: 0, unknown: 0, missing: 0 };
+  for (const row of source.system === "pw" ? records : []) {
+    const kind = text(row.emissionKind) || "missing";
+    emissionBreakdown[kind] = (emissionBreakdown[kind] || 0) + 1;
+  }
+  const classes = records.reduce<Record<string, number>>((acc, row) => {
+    const key = text(row.documentClass);
+    if (key) acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const audit = {
+    ...(source.audit || {}),
+    revisionScope: scope,
+    rawRecords: rawRecords.length + rejected.length + duplicates.length,
+    acceptedRecords: records.length,
+    discardedRecords: rejected.length,
+    scopeDiscardedRecords: rejected.length,
+    parserInvalidRecords: 0,
+    validRevisionRecords: records.length,
+    documentRevisionRecords: records.length,
+    uniqueDocuments,
+    technicalDuplicates: duplicates.length,
+    technicalVariantsSameDocumentRevision: Math.max(0, rawRecords.length - records.length),
+    emittedTechnicalRecords: emitted.length,
+    notEmittedTechnicalRecords: notEmitted.length,
+    indeterminateEmissionTechnicalRecords: indeterminate.length,
+    emittedDocumentRevisionRecords: emitted.length,
+    emittedUniqueDocuments: new Set(emitted.map((row) => text(row.documentKey) || Core().norm(row.document)).filter(Boolean)).size,
+    notEmittedDocumentRevisionRecords: notEmitted.length,
+    indeterminateEmissionDocumentRevisionRecords: indeterminate.length,
+    emissionBreakdown,
+    classes,
+    comparisonGranularity: "revisão 0; uma ocorrência por documento + revisão",
+    registrationRule: source.system === "pw"
+      ? "Cadastrado = documento válido em revisão 0 presente na relação PW"
+      : "Presente = documento válido em revisão 0 na Consulta Geral",
+  };
+  const scoped: EvolutionSnapshot = {
+    ...source,
+    revisionScope: scope,
+    contentFingerprint: String(source.contentFingerprint || source.id || source.system) + ":revision0",
+    audit,
+    records,
+    rejected,
+    duplicates,
+  };
+  scopedSnapshotCache.set(cacheKey, scoped);
+  if (scopedSnapshotCache.size > 120) scopedSnapshotCache.delete(scopedSnapshotCache.keys().next().value!);
+  return scoped;
+}
+
+function scopedSnapshots(rows: EvolutionSnapshot[]): EvolutionSnapshot[] {
+  return state.revisionScope === "all" ? rows : rows.map(scopeSnapshot);
+}
+
 function preparedCacheKey(system: EvolutionSystem, source: EvolutionSourceSnapshotMeta, universe: EvolutionUiState["ldUniverse"]): string {
   return [
     PREPARED_CACHE_PREFIX,
@@ -321,7 +407,8 @@ function selectionKey(system: EvolutionSystem, role: "previous" | "current"): ke
 
 function selectedSnapshot(system: EvolutionSystem, role: "previous" | "current"): EvolutionSnapshot | null {
   const key = selectionKey(system, role);
-  return state[system].find((item) => item.id === state.selections[key]) || null;
+  const selected = state[system].find((item) => item.id === state.selections[key]) || null;
+  return selected ? scopeSnapshot(selected) : null;
 }
 
 function localDateKey(value: unknown): string {
