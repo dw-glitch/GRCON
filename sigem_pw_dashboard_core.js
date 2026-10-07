@@ -723,6 +723,11 @@
       inPw: Boolean(pwEntry),
       pwEmitted: Boolean(pwEntry && pwEntry.emitted),
       matchMode: text(settings.matchMode) || (sigemEntry && pwEntry ? "document-revision" : "unmatched"),
+      sigemDate: text(sigemEntry && sigemEntry.current && (
+        sigemEntry.current.modifiedAt || sigemEntry.current.includedAt ||
+        sigemEntry.current.stateChangedAt || sigemEntry.current.createdAt
+      )),
+      sigemSourceRow: Number(sigemEntry && sigemEntry.current && sigemEntry.current.sourceRow) || 0,
     };
   }
 
@@ -862,6 +867,9 @@
     if (emittedKeys.size > pwKeys.size) throw new Error("Inconsistência matemática: PW emitido maior que PW cadastrado.");
 
     const lists = buildComparisonLists(sigem, pw);
+    if (lists.sigem.length !== sigemKeys.size) {
+      throw new Error("Inconsistência matemática: a lista detalhada do SIGEM difere do KPI.");
+    }
     const gapSigemToPw = new Set(lists.sigemOnly.map((row) => row.key));
     const gapPwToEmitted = setDifference(pwKeys, emittedKeys);
     const pwExclusive = new Set([...lists.pwOnlyNotEmitted, ...lists.pwOnlyEmitted].map((row) => row.key));
