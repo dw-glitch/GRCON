@@ -101,4 +101,20 @@ const conferenceUi = ler("posting_conference_app.js");
 assert.match(spwRevision, /DocumentClassBadge/);
 assert.match(conferenceUi, /document-class-badge/);
 
+function hexLuminance(hex) {
+  const rgb = hex.replace("#", "").match(/.{2}/g).map((part) => parseInt(part, 16) / 255).map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
+  );
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+function contrastRatio(first, second) {
+  const a = hexLuminance(first);
+  const b = hexLuminance(second);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+assert.ok(contrastRatio("#0a4f83", "#e6f1fa") >= 4.5, "ET precisa manter contraste AA no badge");
+assert.ok(contrastRatio("#542c84", "#f1eaf8") >= 4.5, "N-1710 precisa manter contraste AA no badge");
+assert.ok(contrastRatio("#ffffff", "#0b63a3") >= 4.5, "ET precisa manter contraste AA no gráfico");
+assert.ok(contrastRatio("#ffffff", "#6b3fa0") >= 4.5, "N-1710 precisa manter contraste AA no gráfico");
+
 console.log("ui_stability: sem escrita incondicional em ui-v3 e na Conferência — ciclo de repintura não pode voltar");
