@@ -5,7 +5,14 @@
 .vault-health{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid var(--border,#d7dde5);border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
 .vault-health.ok{border-color:#8bc8a3;background:rgba(37,135,77,.08)}
 .vault-health.error{border-color:#e6a2a2;background:rgba(177,44,44,.08)}
-.vault-upload-card,.vault-queue-panel,.vault-browser-card{border:1px solid var(--border,#d8dee7);border-radius:14px;background:var(--panel,#fff);box-shadow:0 8px 28px rgba(25,37,54,.06);min-width:0;max-width:100%}
+.vault-storage-card{display:grid;grid-template-columns:minmax(180px,1fr) minmax(260px,1.5fr) auto;gap:18px;align-items:center;padding:14px 18px}
+.vault-storage-card>div:not(.vault-storage-actions){display:grid;gap:3px;min-width:0}
+.vault-storage-card small,.vault-storage-card span{font-size:12px;opacity:.72}
+.vault-storage-card strong{font-size:15px;overflow-wrap:anywhere}
+.vault-storage-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.vault-storage-integrity.ok{color:#197443}
+.vault-storage-integrity.warning{color:#8f640f}
+.vault-upload-card,.vault-queue-panel,.vault-browser-card,.vault-storage-card{border:1px solid var(--border,#d8dee7);border-radius:14px;background:var(--panel,#fff);box-shadow:0 8px 28px rgba(25,37,54,.06);min-width:0;max-width:100%}
 .vault-upload-card>header,.vault-queue-panel>header,.vault-browser-card>header{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:15px 18px;border-bottom:1px solid var(--border,#e1e6ed)}
 .vault-upload-card header div:first-child,.vault-queue-panel header div:first-child,.vault-browser-card header div:first-child{display:grid;gap:3px}
 .vault-upload-card header small,.vault-queue-panel header small,.vault-browser-card header small{opacity:.7}
@@ -31,6 +38,7 @@
 .vault-status,.vault-allocation{display:inline-flex;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800;white-space:nowrap}
 .vault-task-success .vault-status,.vault-allocation.yes{background:rgba(31,132,77,.11);color:#197443}
 .vault-task-error .vault-status,.vault-allocation.no{background:rgba(181,48,48,.1);color:#9f2e2e}
+.vault-allocation.unknown{background:rgba(80,95,115,.12);color:inherit}
 .vault-task-warning .vault-status{background:rgba(175,119,14,.12);color:#8f640f}
 .vault-task-paused .vault-status{background:rgba(80,95,115,.12)}
 .vault-progress{width:132px;height:7px;border-radius:999px;background:rgba(94,108,126,.14);overflow:hidden}
@@ -41,12 +49,13 @@
 .vault-more{display:flex;justify-content:center;padding:13px}
 .vault-empty{display:grid;place-items:center;gap:5px;padding:36px;text-align:center;opacity:.74}
 #vault-list-status.error{color:#a52f2f}
-@media(max-width:900px){.vault-toolbar{grid-template-columns:minmax(0,1fr) 180px}.vault-selection-actions{grid-column:1/-1;justify-content:flex-start}}
+@media(max-width:900px){.vault-storage-card{grid-template-columns:1fr 1fr}.vault-storage-actions{grid-column:1/-1;justify-content:flex-start}.vault-toolbar{grid-template-columns:minmax(0,1fr) 180px}.vault-selection-actions{grid-column:1/-1;justify-content:flex-start}}
 @media(max-width:600px){
 .vault-upload-card>header,.vault-queue-panel>header,.vault-browser-card>header{align-items:flex-start;flex-wrap:wrap;padding:13px 14px}
 .vault-upload-card>header>div,.vault-queue-panel>header>div,.vault-browser-card>header>div{min-width:0;max-width:100%}
 .vault-upload-actions,.vault-queue-panel>header>div:last-child{width:100%}
 .vault-health{white-space:normal;max-width:100%}
+.vault-storage-card{grid-template-columns:1fr;padding:13px 14px}.vault-storage-actions{grid-column:auto;justify-content:flex-start}
 .vault-toolbar{grid-template-columns:minmax(0,1fr);padding:12px 14px}
 .vault-selection-actions{grid-column:auto;justify-content:flex-start;flex-wrap:wrap}
 .vault-dropzone{margin:14px;padding:16px}
@@ -86,4 +95,88 @@
   .grdt-vault-source-options{display:grid;gap:8px}
   .grdt-vault-source-actions,.grdt-vault-prepare-row{align-items:stretch}
   .grdt-vault-source-actions button,.grdt-vault-prepare-row button{width:100%}
+}
+
+
+/* Entrada por texto: pasta opcional + fallback automático do Cofre */
+.grdt-source-help {
+  margin: 8px 0 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border-subtle, #d9e2ea);
+  border-radius: 10px;
+  background: var(--surface-subtle, #f7f9fb);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary, #536273);
+}
+
+.missing-documents-panel {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, #b45309 34%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, #f59e0b 8%, transparent);
+}
+
+.missing-documents-panel[hidden] { display: none !important; }
+
+.missing-documents-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.missing-documents-panel header div {
+  display: grid;
+  gap: 2px;
+}
+
+.missing-documents-panel header small {
+  color: var(--text-secondary, #667788);
+}
+
+.missing-documents-panel ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.missing-documents-panel li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #ffffff 78%, transparent);
+}
+
+.missing-documents-panel code {
+  font: inherit;
+  font-weight: 650;
+}
+
+.missing-documents-panel li span {
+  color: var(--text-secondary, #667788);
+  font-size: 12px;
+}
+
+.result-file-origin {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary, #667788);
+}
+
+@media (max-width: 900px) {
+  .missing-documents-panel header,
+  .missing-documents-panel li {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }

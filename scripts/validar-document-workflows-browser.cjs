@@ -17,11 +17,13 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  const page=await context.newPage();const errors=[],calls=[],metrics=[];
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://kvyrttccwzdhasplfxnr.supabase.co/**',r=>r.fulfill({status:401,contentType:'application/json',body:'{"message":"QA session"}'}));
- let files=Array.from({length:103},(_,i)=>({id:'qa-'+i,sequence:i+1,document_code:'DOC-'+String(i).padStart(3,'0'),identity_code:'DOC-'+String(i).padStart(3,'0'),revision:'0',file_name:'DOC-'+String(i).padStart(3,'0')+'_0.pdf',format:'pdf',size_bytes:3,sha256:String(i).padStart(64,'0'),allocated:i%2===0,status:'ready',created_by:'technical-id',created_by_name:'Owner QA',created_at:'2026-10-07T12:00:00Z'}));
+ let files=Array.from({length:103},(_,i)=>({id:'qa-'+i,sequence:i+1,document_code:'DOC-'+String(i).padStart(3,'0'),identity_code:'DOC-'+String(i).padStart(3,'0'),revision:'0',file_name:'DOC-'+String(i).padStart(3,'0')+'_0.pdf',format:'pdf',size_bytes:3,sha256:String(i).padStart(64,'0'),allocated:i%2===0,allocation_identified:i%2===0,allocation_label:i%2===0?'C1O-ALOC-QA-'+String(i).padStart(4,'0'):'Não identificado',allocation_source:'Controle de Solicitações',status:'ready',created_by:'technical-id',created_by_name:'Owner QA',created_at:'2026-10-07T12:00:00Z'}));
  await page.route('**/api/document-vault/**',async route=>{
   const req=route.request(),url=new URL(req.url()),action=url.pathname.split('/').pop();calls.push({action,method:req.method(),query:Object.fromEntries(url.searchParams)});
   let data={ok:true};
   if(action==='health')data={ok:true,supabaseConfigured:true,r2Configured:true};
+  if(action==='usage')data={ok:true,storage:{checkedAt:'2026-10-07T14:30:00Z',physicalObjects:files.length,physicalBytes:files.reduce((n,f)=>n+f.size_bytes,0),catalogObjects:files.length,catalogDocuments:files.length,missingObjects:0,sizeMismatches:0,orphanObjects:0,removedPendingFinalization:0,healthy:true}};
+  if(action==='reconcile')data={ok:true,storage:{checkedAt:'2026-10-07T14:31:00Z',physicalObjects:files.length,physicalBytes:files.reduce((n,f)=>n+f.size_bytes,0),catalogObjects:files.length,catalogDocuments:files.length,missingObjects:0,sizeMismatches:0,orphanObjects:0,removedPendingFinalization:0,healthy:true},audit:{eventId:null}};
   if(action==='list'){
    const q=url.searchParams.get('q')||'',a=url.searchParams.get('allocation'),after=Number(url.searchParams.get('after')||0),limit=Number(url.searchParams.get('limit')||50);
    const all=files.filter(f=>f.sequence>after&&f.document_code.includes(q)&&(a==='all'||(a==='allocated'?f.allocated:!f.allocated)));
@@ -65,20 +67,23 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.waitForFunction(()=>window.GrconDocumentVault.state.allocation==='allocated'&&!window.GrconDocumentVault.state.loading);
  const download=page.waitForEvent('download');await page.locator('#vault-export').click();const exported=await download;await exported.saveAs(path.join(out,'cofre.xlsx'));
  const cofre=XLSX.read(fs.readFileSync(path.join(out,'cofre.xlsx')),{type:'buffer'}),cofreRows=XLSX.utils.sheet_to_json(cofre.Sheets.Cofre);
- assert.equal(cofreRows.length,52,'export includes all matching pages, not only visible 50');assert.ok(cofreRows.every(r=>r.Situação==='Alocado'));assert.ok(!JSON.stringify(cofreRows).includes('sha256'));assert.ok(!JSON.stringify(cofreRows).includes('technical-id'));assert.equal(cofreRows[0]['Incluído por'],'Owner QA');
+ assert.equal(cofreRows.length,52,'export includes all matching pages, not only visible 50');assert.ok(cofreRows.every(r=>String(r['Alocação']).startsWith('C1O-ALOC-QA-')));assert.ok(cofreRows.every(r=>r['Fonte da alocação']==='Controle de Solicitações'));assert.ok(!JSON.stringify(cofreRows).includes('sha256'));assert.ok(!JSON.stringify(cofreRows).includes('technical-id'));assert.equal(cofreRows[0]['Incluído por'],'Owner QA');
  page.once('dialog',d=>d.dismiss());await page.locator('[data-vault-delete]').first().click();assert.equal(calls.filter(c=>c.action==='delete').length,0);
  page.once('dialog',d=>d.accept());await page.locator('[data-vault-delete]').first().click();await page.waitForFunction(()=>!document.querySelector('[data-vault-delete="qa-0"]'));
  assert.equal(calls.filter(c=>c.action==='delete').length,1);
  await page.screenshot({path:path.join(out,'cofre-1366.png')});
- await page.locator('[data-grcon-view="control"]').first().click();await page.locator('input[name="grdt-document-source"][value="vault"]').check();
- for(const size of [10,50,100]) {
-  const codes=Array.from({length:size},(_,i)=>'DOC-'+String(i+1).padStart(3,'0')).join('\n');
-  await page.locator('#grdt-vault-codes').fill(codes);const start=performance.now(),beforeDownload=calls.filter(c=>c.action==='download').length;
-  await page.locator('#grdt-vault-lookup').click();await page.waitForFunction(n=>window.GrconDocumentVault.state.lookupRows.length===n&&!window.GrconDocumentVault.state.lookupBusy,size);
-  const previewMs=performance.now()-start;assert.equal(calls.filter(c=>c.action==='download').length,beforeDownload,'metadata preview never downloads binaries');
-  const prepareStart=performance.now();await page.locator('#grdt-vault-prepare').click();await page.waitForFunction(n=>document.querySelector('#pdf-input').files.length===n,size);
-  metrics.push({documents:size,lookupAndPreviewMs:Math.round(previewMs),prepareMs:Math.round(performance.now()-prepareStart)});
- }
+ assert.match(await page.locator('#vault-storage-used').text(),/B|KB|MB|GB/);
+ await page.locator('#vault-storage-reconcile').click();
+ await page.waitForFunction(()=>!document.querySelector('#vault-storage-reconcile').disabled);
+ assert.ok(calls.some(c=>c.action==='reconcile'),'admin reconciliation reaches read-only storage audit endpoint');
+ const fallbackCodes=[...Array.from({length:27},(_,i)=>'DOC-'+String(i+1).padStart(3,'0')),'DOC-900','DOC-901','DOC-902'];
+ const lookupBefore=calls.filter(c=>c.action==='lookup').length;
+ const fallback=await page.evaluate(async codes=>window.GrconDocumentVault.resolveMissingEntries(codes.map((document,i)=>({document,fileName:document+'.pdf',raw:document,sheetName:'Entrada por texto',rowNumber:i+1}))),fallbackCodes);
+ assert.equal(fallback.files.length,27);assert.equal(fallback.recovered.length,27);assert.equal(fallback.missing.length,3);assert.equal(fallback.queried,30);
+ const autoLookups=calls.filter(c=>c.action==='lookup').slice(lookupBefore);assert.equal(autoLookups.length,1,'only the missing subset is queried in one batch');
+ metrics.push({automaticFallbackRequested:30,recoveredFromVault:27,stillMissing:3});
+ await page.locator('[data-grcon-view="control"]').first().click();
+ assert.equal(await page.locator('input[name="grdt-document-source"]').count(),0,'manual Base documental selector must not exist');
  await page.locator('[data-grcon-view="requests"]').first().click();await page.evaluate(()=>window.GRCONModuleLoader.ensureModule('requests'));
  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Documento','Título','Responsável'],['DOC-001','Pedido de documento','Vinício']]),'Solicitações');
  const fixture=path.join(out,'controle-fixture.xlsx');fs.writeFileSync(fixture,XLSX.write(wb,{type:'buffer',bookType:'xlsx'}));

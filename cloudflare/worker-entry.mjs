@@ -111,6 +111,143 @@ async function lookupCatalog(env, workspaceId, actorId, input = {}) {
   });
 }
 
+
+async function storageCatalog(env, workspaceId, actorId) {
+  return rpc(env, "grcon_document_vault_storage_catalog", {
+    target_workspace: workspaceId,
+    actor_id: actorId,
+  });
+}
+
+async function storageUsageCatalog(env, workspaceId, actorId) {
+  return rpc(env, "grcon_document_vault_storage_usage", {
+    target_workspace: workspaceId,
+    actor_id: actorId,
+  });
+}
+
+async function r2Inventory(env, workspaceId) {
+  const bucket = requireBucket(env);
+  const prefix = `workspaces/${workspaceId}/documents/`;
+  const objects = [];
+  let cursor;
+  do {
+    const page = await bucket.list({ prefix, limit: 1000, ...(cursor ? { cursor } : {}) });
+    (page?.objects || []).forEach((item) => {
+      const key = safeText(item?.key, 4096);
+      if (key) objects.push({ key, size: Math.max(0, Number(item?.size) || 0) });
+    });
+    cursor = page?.truncated && page?.cursor ? page.cursor : undefined;
+  } while (cursor);
+  return objects;
+}
+
+async function storageUsageSnapshot(env, workspaceId, actorId) {
+  const data = await storageUsageCatalog(env, workspaceId, actorId);
+  let usedBytes = Math.max(0, Number(data?.used_bytes) || 0);
+  let fileCount = Math.max(0, Number(data?.file_count) || 0);
+  const pending = Array.isArray(data?.pending_objects) ? data.pending_objects : [];
+  if (pending.length) {
+    const bucket = requireBucket(env);
+    const existence = await Promise.all(pending.map(async item => {
+      const key = safeText(item?.object_key, 4096);
+      if (!key) return { exists: true, size: 0 };
+      const object = await bucket.head(key);
+      return { exists: Boolean(object), size: Math.max(0, Number(item?.size_bytes) || 0) };
+    }));
+    for (const item of existence) {
+      if (!item.exists) {
+        usedBytes = Math.max(0, usedBytes - item.size);
+        fileCount = Math.max(0, fileCount - 1);
+      }
+    }
+  }
+  return {
+    checkedAt: new Date().toISOString(),
+    source: "catalog",
+    usedBytes,
+    fileCount,
+    catalogDocuments: Math.max(0, Number(data?.catalog_documents) || 0),
+    pendingChecked: pending.length,
+    lastReconciledAt: data?.last_reconciled_at || null,
+  };
+}
+
+async function storageSnapshot(env, workspaceId, actorId) {
+  const [catalogData, physical] = await Promise.all([
+    storageCatalog(env, workspaceId, actorId),
+    r2Inventory(env, workspaceId),
+  ]);
+  const catalogRows = Array.isArray(catalogData?.files) ? catalogData.files : [];
+  const catalogByKey = new Map();
+  for (const row of catalogRows) {
+    const key = safeText(row?.object_key, 4096);
+    if (!key) continue;
+    const current = catalogByKey.get(key);
+    if (!current) {
+      catalogByKey.set(key, {
+        key,
+        size: Math.max(0, Number(row?.size_bytes) || 0),
+        statuses: new Set([safeText(row?.status, 32)]),
+        documents: 1,
+      });
+    } else {
+      current.statuses.add(safeText(row?.status, 32));
+      current.documents++;
+    }
+  }
+  const physicalByKey = new Map(physical.map((item) => [item.key, item]));
+  let missingObjects = 0, sizeMismatches = 0, removedPendingFinalization = 0;
+  for (const expected of catalogByKey.values()) {
+    const actual = physicalByKey.get(expected.key);
+    if (!actual) {
+      if ([...expected.statuses].some((status) => status === "deleting" || status === "delete_failed")) removedPendingFinalization++;
+      else missingObjects++;
+      continue;
+    }
+    if (actual.size !== expected.size) sizeMismatches++;
+  }
+  let orphanObjects = 0;
+  for (const actual of physical) if (!catalogByKey.has(actual.key)) orphanObjects++;
+  const physicalBytes = physical.reduce((sum, item) => sum + item.size, 0);
+  return {
+    checkedAt: new Date().toISOString(),
+    source: "r2",
+    usedBytes: physicalBytes,
+    fileCount: physical.length,
+    physicalObjects: physical.length,
+    physicalBytes,
+    catalogObjects: catalogByKey.size,
+    catalogDocuments: catalogRows.length,
+    missingObjects,
+    sizeMismatches,
+    orphanObjects,
+    removedPendingFinalization,
+    healthy: missingObjects === 0 && sizeMismatches === 0 && orphanObjects === 0,
+  };
+}
+
+async function handleUsage(request, env) {
+  const user = await authenticatedUser(request, env);
+  const workspaceId = workspaceFrom(request);
+  if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
+  return json({ ok: true, storage: await storageUsageSnapshot(env, workspaceId, user.id) });
+}
+
+async function handleReconcile(request, env) {
+  const user = await authenticatedUser(request, env);
+  const body = await parseJson(request);
+  const workspaceId = workspaceFrom(request, body);
+  if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
+  const storage = await storageSnapshot(env, workspaceId, user.id);
+  const audit = await rpc(env, "grcon_document_vault_reconcile_log", {
+    target_workspace: workspaceId,
+    actor_id: user.id,
+    input: storage,
+  });
+  return json({ ok: true, storage, audit: { eventId: audit?.event_id || null } });
+}
+
 function workspaceFrom(request, body) {
   const url = new URL(request.url);
   return safeUuid(body?.workspaceId || body?.workspace_id || request.headers.get("x-grcon-workspace") || url.searchParams.get("workspace"));
@@ -454,6 +591,8 @@ async function routeVault(request, env) {
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
   if (action === "health" && request.method === "GET") return handleHealth(env);
   if (action === "list" && request.method === "GET") return handleList(request, env);
+  if (action === "usage" && request.method === "GET") return handleUsage(request, env);
+  if (action === "reconcile" && request.method === "POST") return handleReconcile(request, env);
   if (action === "lookup" && request.method === "POST") return handleLookup(request, env);
   if (action === "delete" && request.method === "POST") return handleDelete(request, env);
   if (action === "init" && request.method === "POST") return handleInit(request, env);
