@@ -81,7 +81,7 @@ export function SigemPwDashboardApp() {
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
         <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
-        <SigemPwSystemsSummary state={state} />
+        <SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.setActiveList("sigem")} />
         <SigemPwSituationCards
           state={state}
           activeList={state.activeList}
