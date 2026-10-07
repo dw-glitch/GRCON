@@ -2466,6 +2466,12 @@
       };
       const rawResults = await mapLarge(inputs, (input) => {
         const result = C.triageOne(input, state.index, settings);
+        // A referência física precisa sobreviver à triagem em todos os caminhos
+        // (READY/REVIEW/guards). O merge e a emissão nunca devem depender de o
+        // Core repetir implicitamente propriedades do input.
+        result.file = input.file;
+        result.name = result.name || input.name;
+        result.relativePath = result.relativePath || input.relativePath;
         result.fileOrigin = input.fileOrigin || "Pasta local";
         result.vaultAllocationLabel = input.vaultAllocationLabel || "";
         result.vaultAllocationSource = input.vaultAllocationSource || "";
