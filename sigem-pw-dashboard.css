@@ -1175,24 +1175,28 @@
 }
 
 
-/* Document class semantic overrides: ET/N-1710 stay distinct from status colors. */
+/* Document class accents: preserve identification without colored card/badge fills. */
 #sigem-pw-dashboard-module .spw-pill[data-document-class="ET"] {
   border: 1px solid var(--document-et-border, #74a9d2);
-  background: var(--document-et-background, #e6f1fa);
+  background: var(--spw-surface);
   color: var(--document-et-color, #0a4f83);
 }
 #sigem-pw-dashboard-module .spw-pill[data-document-class="N-1710"] {
   border: 1px solid var(--document-n1710-border, #a889c7);
-  background: var(--document-n1710-background, #f1eaf8);
+  background: var(--spw-surface);
   color: var(--document-n1710-color, #542c84);
+}
+#sigem-pw-dashboard-module .document-class-badge[data-document-class="ET"],
+#sigem-pw-dashboard-module .document-class-badge[data-document-class="N-1710"] {
+  background: var(--spw-surface);
 }
 #sigem-pw-dashboard-module .spw-system-split div[data-document-class="ET"] {
   border-color: var(--document-et-border, #74a9d2);
-  background: var(--document-et-background, #e6f1fa);
+  background: var(--spw-surface);
 }
 #sigem-pw-dashboard-module .spw-system-split div[data-document-class="N-1710"] {
   border-color: var(--document-n1710-border, #a889c7);
-  background: var(--document-n1710-background, #f1eaf8);
+  background: var(--spw-surface);
 }
 #sigem-pw-dashboard-module .spw-system-split div[data-document-class] strong {
   color: var(--spw-text);
