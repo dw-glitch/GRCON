@@ -82,7 +82,7 @@ for (const relative of allFiles.filter((name) => /\.(?:html|js|css)$/i.test(name
   }
 }
 const sw = await readFile(path.join(outDir, "sw.js"), "utf8");
-for (const ref of serviceWorkerAssetRefs(sw)) if (!await exists(ref)) broken.push(`sw.js ASSETS -> ${ref}`);
+for (const ref of serviceWorkerAssetRefs(sw)) if (!await exists(ref.split(/[?#]/)[0])) broken.push(`sw.js ASSETS -> ${ref}`);
 if (broken.length) throw new Error(`Referências locais quebradas no pacote Cloudflare:\n${broken.slice(0, 80).join("\n")}`);
 
 const metadata = JSON.parse(await readFile(path.join(outDir, "deployment-meta.json"), "utf8"));
