@@ -12,6 +12,8 @@ import type {
   WorkerModelPayload,
 } from "../types/domain";
 
+import { ensureSharedSigemHistoryCompatibility } from "./sharedSigemHistoryCompatibility";
+
 const PRE_STAGE7_RESET_KEY = "sigem-pw-stage7-preupdate-reset-v1";
 const EMPTY_BASE = (): SigemPwBase => ({ meta: null, records: [] });
 const EMPTY_HISTORY = () => ({ version: 3, snapshots: [] as Array<{ meta: SigemPwBaseMeta; records: SigemPwRecord[] }> });
@@ -531,6 +533,7 @@ async function refresh(reason = ""): Promise<void> {
   refreshPromise = (async () => {
     try {
       const resetApplied = await clearPreStage7BasesOnce();
+      ensureSharedSigemHistoryCompatibility();
       await window.GrconSharedSigemQuery?.refresh();
       const bases = await Core().loadBases();
       const shared = window.GrconSharedSigemQuery?.current();

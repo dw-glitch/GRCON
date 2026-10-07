@@ -56,6 +56,7 @@ interface SigemPwDashboardCoreApi {
   savePwBase(base: SigemPwBase, ld?: SigemPwBase | SigemPwRecord[]): Promise<SigemPwBase>;
   saveLdAndReprocessPw(ld: SigemPwBase, pw: SigemPwBase): Promise<{ ld: SigemPwBase; pw: SigemPwBase | null }>;
   updateSnapshotDate(kind: SigemPwEditableBaseKind, snapshotId: string, importedAt: string): Promise<{ current?: SigemPwBase; importedAt: string }>;
+  updateSnapshotMetadata(kind: SigemPwEditableBaseKind, snapshotId: string, metadata: SigemPwBaseMeta): Promise<unknown>;
   deleteSnapshot(snapshotId: string): Promise<unknown>;
   kvGet<T>(key: string, fallback: T): Promise<T>;
   kvSet(key: string, value: unknown): Promise<unknown>;

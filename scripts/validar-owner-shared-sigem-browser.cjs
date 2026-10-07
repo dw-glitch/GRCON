@@ -6,6 +6,23 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  const page=await browser.newPage({viewport:{width:1366,height:768},acceptDownloads:true,serviceWorkers:"block"});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://**/*',route=>route.abort());
+ if(process.env.GRCON_QA_LEGACY_SHARED==='1') await page.route('**/shared_sigem_query_app.js*',async route=>{
+  const response=await route.fetch();
+  const source=await response.text();
+  await route.fulfill({response,body:source+`\n(function(){
+   const api=window.GrconSharedSigemQuery;
+   const {listVersions,loadSnapshot,...legacy}=api;
+   legacy.setReferenceDate=async value=>{
+    const base=api.current();
+    const response=await window.GrconCloud.state.client.rpc('grcon_sigem_query_set_date',{target_workspace:window.GrconCloud.state.membership.workspace_id,target_snapshot:base.meta.snapshotId,reference_date:value,expected_date:base.meta.referenceDate||null});
+    if(response.error)throw response.error;
+    base.meta={...base.meta,...response.data};
+    window.dispatchEvent(new CustomEvent('grcon:shared-sigem-date-updated',{detail:{meta:base.meta}}));
+    return base;
+   };
+   window.GrconSharedSigemQuery=Object.freeze(legacy);
+  })();`});
+ });
  try{
  await page.goto(process.env.GRCON_PREVIEW_URL||'http://127.0.0.1:8765');
  await page.waitForFunction(()=>window.GrconCloud&&window.GrconSharedSigemQuery);
