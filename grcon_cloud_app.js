@@ -2178,6 +2178,15 @@
 
     channel
       .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "grcon_notifications",
+        filter: `workspace_id=eq.${state.membership.workspace_id}`,
+      }, () => {
+        if (attemptId !== state.realtimeAttemptId || state.realtime !== channel) return;
+        window.dispatchEvent(new CustomEvent("grcon:notifications-updated"));
+      })
+      .on("postgres_changes", {
         event: "*",
         schema: "public",
         table: "grcon_history",
@@ -2296,6 +2305,7 @@
     state.membership = null;
     state.contracts = [];
     state.contract = null;
+    window.dispatchEvent(new CustomEvent("grcon:cloud-signed-out"));
     state.plannedSnapshot = null;
     window.GrconSharedSigemQuery?.reset();
     state.activationKey = "";

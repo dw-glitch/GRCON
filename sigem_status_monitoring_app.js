@@ -16,6 +16,7 @@
     unreadCount: 0,
     epoch: 0,
   };
+  const delivery = { context: "", timer: 0, debounce: 0, request: null, seen: new Set(), popup: new Map() };
 
   const $ = (selector, context) => (context || document).querySelector(selector);
   const escapeHtml = (value) => String(value == null ? "" : value)
@@ -237,6 +238,132 @@
     if (mark) mark.disabled = !state.notifications.some((item) => !item.is_read);
   }
 
+  function deliveryContext() {
+    const user = cloud()?.state?.session?.user?.id;
+    return user && workspaceId() ? user + ":" + workspaceId() : "";
+  }
+  function seenKey() { return "grcon.cloud.notification-popups.v1." + delivery.context; }
+  function hidePopup() {
+    delivery.popup.clear();
+    $("#sigem-monitor-popup")?.remove();
+  }
+  function rememberShown(ids) {
+    // Delivery acknowledgements are local to this user and contract. Closing a
+    // popup never marks the shared alert as read (nor reads it for another user).
+    for (const id of ids) delivery.seen.add(id);
+    try { localStorage.setItem(seenKey(), JSON.stringify([...delivery.seen])); } catch (_) { /* session still deduplicates */ }
+  }
+  async function openNotificationCenter() {
+    await root.GRCONModuleLoader?.ensureModule?.("requests");
+    document.querySelector('[data-grcon-view="requests"]')?.click();
+    document.querySelector('[data-requests-area="sigem-monitoring"]')?.click();
+    await loadAll();
+    $("#sigem-monitor-notifications")?.scrollIntoView({ block: "center" });
+  }
+  function showPopup(items) {
+    for (const item of items) delivery.popup.set(item.id, item);
+    let popup = $("#sigem-monitor-popup");
+    if (!popup) {
+      popup = document.createElement("aside");
+      popup.id = "sigem-monitor-popup";
+      popup.className = "sigem-monitor-popup";
+      popup.setAttribute("role", "alert");
+      popup.setAttribute("aria-live", "assertive");
+      popup.setAttribute("aria-atomic", "true");
+      document.body.appendChild(popup);
+    }
+    const rows = [...delivery.popup.values()];
+    const contract = cloud()?.state?.contract?.code || cloud()?.state?.membership?.contract_code || "Contrato ativo";
+    popup.innerHTML = '<header><div><small>' + escapeHtml(contract) + ' · Consulta Geral atualizada</small><strong>Documento monitorado mudou de status</strong></div><button type="button" data-popup-close aria-label="Fechar aviso">×</button></header>' +
+      '<p>' + rows.length + (rows.length === 1 ? ' alteração para acompanhar.' : ' alterações para acompanhar.') + '</p><ul>' +
+      rows.slice(0, 4).map(item => '<li><strong>' + escapeHtml(item.document_code || item.title) + '</strong><span>' + escapeHtml(item.previous_status || "—") + ' → ' + escapeHtml(item.current_status || "—") + '</span></li>').join("") + '</ul>' +
+      (rows.length > 4 ? '<p>Mais ' + (rows.length - 4) + ' alteração(ões) na central de alertas.</p>' : '') +
+      '<footer><button type="button" class="primary-button compact" data-popup-open>Ver notificações</button><button type="button" class="text-button" data-popup-read>Marcar estes avisos como lidos</button></footer>';
+    popup.querySelector('[data-popup-close]').addEventListener("click", hidePopup);
+    popup.querySelector('[data-popup-open]').addEventListener("click", () => {
+      hidePopup();
+      void openNotificationCenter().catch(error => notify(error.message, "error"));
+    });
+    popup.querySelector('[data-popup-read]').addEventListener("click", async event => {
+      const context = delivery.context;
+      event.currentTarget.disabled = true;
+      try {
+        await rpc("grcon_notifications_mark_read", { target_workspace: workspaceId(), target_ids: rows.map(item => item.id) });
+        if (context !== delivery.context) return;
+        hidePopup();
+        await refreshNotifications();
+      } catch (error) {
+        notify(error.message || "Não foi possível atualizar os avisos.", "error");
+        if (context === delivery.context) showPopup([]);
+      }
+    });
+    rememberShown(items.map(item => item.id));
+  }
+  async function refreshNotifications() {
+    const context = deliveryContext();
+    if (!context || context !== delivery.context || document.hidden || cloud()?.state?.online === false) return;
+    if (delivery.request) return delivery.request;
+    const workspace = workspaceId();
+    const request = (async () => {
+      try {
+        const [notifications, unread] = await Promise.all([
+          rpc("grcon_notifications_list", { target_workspace: workspace, only_unread: true, limit_count: 500 }),
+          rpc("grcon_notifications_unread_count", { target_workspace: workspace }),
+        ]);
+        if (context !== delivery.context || context !== deliveryContext() || document.hidden) return;
+        const rows = Array.isArray(notifications) ? notifications : [];
+        state.unreadCount = Number(unread || 0);
+        const badge = $("#grcon-notification-count");
+        if (badge) { badge.textContent = String(state.unreadCount); badge.hidden = !state.unreadCount; }
+        // A different session of this user may have read a visible alert.
+        if (!state.unreadCount) hidePopup();
+        const fresh = rows.filter(item => item.id && !item.is_read && !delivery.seen.has(item.id));
+        if (fresh.length) {
+          showPopup(fresh.reverse());
+          // Refresh the visible monitoring screen without reloading the app.
+          if (!$("#requests-area-sigem-monitoring")?.hidden) void loadAll();
+        }
+      } catch (_) {
+        // Reconnection/focus and the next poll retry silently. No toast storm
+        // when a corporate network blocks WebSocket or the device is offline.
+      }
+    })();
+    delivery.request = request;
+    try { await request; } finally { if (delivery.request === request) delivery.request = null; }
+  }
+  function scheduleNotifications() {
+    root.clearTimeout(delivery.debounce);
+    delivery.debounce = root.setTimeout(() => void refreshNotifications(), 350);
+  }
+  function stopDelivery() {
+    root.clearInterval(delivery.timer);
+    root.clearTimeout(delivery.debounce);
+    delivery.timer = 0;
+    delivery.context = "";
+    delivery.request = null;
+    delivery.seen.clear();
+    hidePopup();
+    const badge = $("#grcon-notification-count");
+    if (badge) { badge.textContent = "0"; badge.hidden = true; }
+  }
+  function startDelivery() {
+    const context = deliveryContext();
+    if (context !== delivery.context) {
+      stopDelivery();
+      delivery.context = context;
+      if (context) {
+        try {
+          const ids = JSON.parse(localStorage.getItem(seenKey()) || "[]");
+          delivery.seen = new Set(Array.isArray(ids) ? ids : []);
+        } catch (_) { delivery.seen = new Set(); }
+      }
+    }
+    if (!context) return;
+    // HTTP polling is a fallback even when the main Realtime socket is blocked.
+    if (!delivery.timer) delivery.timer = root.setInterval(() => void refreshNotifications(), 15000);
+    void refreshNotifications();
+  }
+
   async function rpc(name, args) {
     const client = cloud()?.state?.client;
     if (!client) throw new Error("Conexão compartilhada indisponível.");
@@ -434,10 +561,7 @@
     button.innerHTML = 'Notificações <b id="grcon-notification-count" hidden>0</b>';
     button.addEventListener("click", async () => {
       try {
-        await root.GRCONModuleLoader?.ensureModule?.("requests");
-        document.querySelector('[data-grcon-view="requests"]')?.click();
-        document.querySelector('[data-requests-area="sigem-monitoring"]')?.click();
-        $("#sigem-monitor-notifications")?.scrollIntoView({block:"center"});
+        await openNotificationCenter();
       } catch (error) { root.GrconNotify?.(error.message || "Não foi possível abrir as notificações.", "error"); }
     });
     ($(".runtime-status") || $(".topbar"))?.appendChild(button);
@@ -466,7 +590,14 @@
   }
 
   root.addEventListener("grcon:cloud-ready", loadAll);
+  root.addEventListener("grcon:cloud-ready", startDelivery);
+  root.addEventListener("grcon:notifications-updated", scheduleNotifications);
+  root.addEventListener("grcon:cloud-signed-out", stopDelivery);
+  root.addEventListener("online", startDelivery);
+  root.addEventListener("focus", startDelivery);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) startDelivery(); });
   root.addEventListener("grcon:contract-context-changed", () => {
+    startDelivery();
     state.epoch++;
     state.unreadCount = 0;
     state.versions = [];
@@ -479,11 +610,13 @@
     void loadAll();
   });
   root.addEventListener("grcon:shared-sigem-updated", loadAll);
+  root.addEventListener("grcon:shared-sigem-updated", scheduleNotifications);
   document.addEventListener("DOMContentLoaded", () => {
     ensureUi();
     installBadge();
+    startDelivery();
     if (workspaceId()) void loadAll();
   });
 
-  root.GrconSigemStatusMonitoring = { load: loadAll, openComparison, filteredChanges };
+  root.GrconSigemStatusMonitoring = { load: loadAll, openComparison, filteredChanges, refreshNotifications };
 })(typeof globalThis !== "undefined" ? globalThis : this);

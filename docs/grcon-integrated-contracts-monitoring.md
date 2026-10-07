@@ -20,6 +20,10 @@ A tela oferece filtros por código/texto, tipo, status anterior/atual, revisão,
 
 Documentos monitorados podem ser adicionados, editados, ativados, desativados e removidos. Sua saída de análise gera alerta de maior relevância; entrada e outras alterações geram aviso informativo. Notificações persistem no banco com leitura individual por usuário e contador de não lidas no cabeçalho. Uma reimportação operacionalmente idêntica não gera novos alertas.
 
+Uma mudança publicada abre um pop-up para todos os usuários conectados com acesso ao contrato ativo, mesmo em outro módulo. Mostra documento e status anterior/atual; permanece até ser fechado e reúne mudanças da mesma atualização. Fechar não marca como lido. A entrega usa o canal Realtime compartilhado e uma consulta HTTP a cada 15 segundos como alternativa para redes que bloqueiam WebSocket. Ao voltar ao aplicativo, avisos pendentes ainda não apresentados são exibidos. A apresentação é lembrada por usuário/contrato para não repetir o mesmo pop-up ao recarregar; a leitura continua individual e salva no banco.
+
+A migration `20261006230732_monitored_notification_realtime.sql` inclui somente `public.grcon_notifications` na publicação existente. Mantém a política de acesso dos membros e não permite consultas anônimas. QA com duas sessões verifica entrega, alternativa periódica, fechamento, leitura individual, recarga e troca de contrato. O layout usa a altura real do cabeçalho e foi validado em nove dimensões, de 390 a 1920 pixels de largura, incluindo janelas de notebook e área equivalente ao zoom de 125%.
+
 ## Modelo da resposta de e-mail
 
 No Histórico, **Resposta de e-mail → Editar modelo da resposta** permite alterar mensagem, fonte/tamanho, tabela/cabeçalho, cores, bordas, espaçamento, largura, ordem, visibilidade, nomes e alinhamento das colunas. O HTML usa estilos inline e mantém a saída compatível com a tabela colada no Outlook. O modelo do contrato tem precedência sobre o global e o padrão interno. Salvar/restaurar cria uma nova versão; as anteriores permanecem preservadas. Edição do texto desta resposta continua disponível a todos os perfis que usam o Histórico.
