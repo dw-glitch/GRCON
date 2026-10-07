@@ -116,6 +116,19 @@ O runtime prioriza apenas mídia necessária:
 - a corrida continua lazy no runner;
 - idle não baixa WebM.
 
+## Pilotos semânticos Higgsfield — 07/10/2026
+
+Foram gerados dois pilotos com o **elemento oficial do mascote** e Seedance 2.0, sem substituir qualquer mídia ativa:
+
+| Estado piloto | Job Higgsfield | Fonte | Alpha técnico | Runtime |
+| --- | --- | --- | --- | --- |
+| `searching-files` | `42ebdce9-4561-4b66-9177-45ddb35cd726` | 5 s, 720×720, silencioso | WebM VP9 640×640, `alpha_mode=1`, 655.186 bytes | não integrado |
+| `checking-document` | `662ace1a-f95e-45af-98ad-1ee6a0239b84` | 5 s, 720×720, silencioso | WebM VP9 640×640, `alpha_mode=1`, 595.634 bytes | não integrado |
+
+O rebuild de alpha passou a aceitar fontes MP4 ou WebM por autodetecção do codec de entrada. A saída continua VP9 com alpha. A checagem técnica em frame intermediário confirmou área realmente transparente e bordas com alpha parcial.
+
+**Aprovação visual não é inferida do teste técnico.** Os pilotos permanecem fora do registro `ASSETS` e os aliases atuais continuam válidos até revisão humana confirmar identidade, proporções, bordas/halo e qualidade de movimento.
+
 ## QA
 
 A validação automática exige:
