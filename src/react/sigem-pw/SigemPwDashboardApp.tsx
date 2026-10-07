@@ -84,7 +84,7 @@ export function SigemPwDashboardApp() {
             <strong id="spw-list-title">{activeLabel}</strong>
             <small>Pesquise, filtre por classe e navegue pela lista sem alterar o modelo conciliado.</small>
           </div>
-          <UiMetaPill><strong>{fmt(pageData.rows.length)}</strong> de {fmt(state.result?.lists?.[state.activeList]?.length || 0)} registro(s)</UiMetaPill>
+          <UiMetaPill>Exibindo <strong>{fmt(pageData.rows.length)}</strong> de {fmt(state.result?.lists?.[state.activeList]?.length || 0)} registro(s)</UiMetaPill>
         </header>
 
         <div className="spw-list-tabs" id="spw-list-tabs" role="tablist" aria-label="Situações da relação detalhada">
