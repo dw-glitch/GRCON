@@ -445,7 +445,8 @@ async function waitEvolutionReady(page) {
       window.GrconSigemPwDashboardUi.state.model = null;
       await window.GrconSigemPwRevisionUi.refresh();
     });
-    await page.waitForFunction(() => document.querySelector("#spw-rev-table-wrap")?.textContent.includes("Carregue as bases para analisar as revisões"));
+    await page.locator("#spw-rev-table-wrap").scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => document.querySelector("#spw-rev-table-wrap")?.innerText.includes("Carregue as bases para analisar as revisões"));
     assert.match(await page.locator("#spw-rev-table-wrap").innerText(), /Carregue as bases para analisar as revisões/i);
     await page.screenshot({ path: path.join(outputDir, "01-revision-empty-1366.png"), fullPage: true });
     await page.evaluate(async () => {

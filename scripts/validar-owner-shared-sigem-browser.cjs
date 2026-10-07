@@ -20,7 +20,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
    {snapshot_id:'shared-old',version:1,file_name:'Antiga.xlsx',record_count:1,status:'archived',metadata:{referenceDate:'2026-10-05',importedAt:'2026-10-05T13:00:00Z'}},
   ].map(v=>({...v,published_at:v.metadata.importedAt,created_at:v.metadata.importedAt,created_by_name:'Owner QA'}));
   const rows={'shared-current':[...Array.from({length:20000},(_,i)=>row(i+1)),row(1,'A')],'shared-middle':[row(1),row(2),row(1,'A')],'shared-old':[row(1)]};
-  w.__sharedQa={versions,rows,calls:[],unavailable:false};
+  w.__sharedQa={versions,rows,calls:[],dateWrites:[],unavailable:false};
   w.GrconCloud.state.session={user:{id:'qa'}};w.GrconCloud.state.membership={workspace_id:workspace,role:'owner'};
   w.GrconCloud.state.contracts=[{workspace_id:workspace,role:'owner',code:'QA'}];w.GrconCloud.state.online=true;
   w.GrconCloud.state.client={rpc:async(name,args)=>{
@@ -31,7 +31,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
    if(name==='grcon_sigem_query_set_date'){
     const version=versions.find(v=>v.snapshot_id===args.target_snapshot);
     if((version.metadata.referenceDate||null)!==args.expected_date)return {error:{message:'A data foi alterada por outro usuário.'}};
-    version.metadata.referenceDate=args.reference_date;return {data:version.metadata};
+    version.metadata.referenceDate=args.reference_date;w.__sharedQa.dateWrites.push({...args});return {data:version.metadata};
    }
    return {data:[]};
   }};
@@ -93,9 +93,10 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.modelGeneration),generation,'metadata-only update reuses the model');
  // Active date flows to the Conferência projection even when that module was not open.
  await page.locator('[data-pc-open="sidebar"]').click();
- await page.waitForFunction(()=>window.GrconPostingConferenceUi?.state.base?.meta?.referenceDate==='2026-10-03');
+ await page.waitForFunction(()=>window.GrconPostingConferenceUi?.state.ready&&!window.GrconPostingConferenceUi.state.busy&&window.GrconPostingConferenceUi.state.base?.meta?.referenceDate==='2026-10-03');
  await page.fill('#pc-reference-date','2026-10-02');await page.locator('#pc-save-date').click();
- await page.waitForFunction(()=>window.GrconSigemPwDashboardUi.state.sigem.meta.referenceDate==='2026-10-02');
+ try { await page.waitForFunction(()=>window.GrconSigemPwDashboardUi.state.sigem.meta.referenceDate==='2026-10-02'); }
+ catch(error){console.error(await page.evaluate(()=>({dateWrites:window.__sharedQa.dateWrites,current:window.GrconSharedSigemQuery.current()?.meta,dashboard:window.GrconSigemPwDashboardUi.state.sigem.meta,conference:window.GrconPostingConferenceUi.state.base.meta,input:document.querySelector('#pc-reference-date').value,toasts:document.querySelector('#toast')?.textContent})));throw error;}
  fs.mkdirSync('artifacts/owner-shared-sigem',{recursive:true});await page.screenshot({path:'artifacts/owner-shared-sigem/conference-date.png'});
  await page.evaluate(()=>window.GrconSigemPwDashboardBootstrap.open());
  await page.evaluate(()=>{window.__sharedQa.unavailable=true;window.__sharedQa.versions[2].metadata.referenceDate='2026-10-01';});
