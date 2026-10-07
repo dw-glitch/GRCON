@@ -50,7 +50,7 @@ No filtro Pendências de postagem, o Excel mantém a aba Detalhamento com todos 
 
 ## Remoção de Análises
 
-Menu, painel, rota ativa, mapeamento do loader, build React, assets de precache e implementação React exclusiva foram removidos. A rota antiga abre a Central de Controle de GRDT. Os utilitários de histórico de análise usados por backup e GRDT foram preservados. As declarações globais necessárias ao Histórico eGRDT foram movidas para o próprio módulo. Workflows e testes exclusivos obsoletos foram removidos; verificações úteis foram mantidas.
+Menu, painel, rota ativa, mapeamento do loader, build React, assets de precache e implementação React exclusiva, CSS sem referências e callbacks exclusivos da tela antiga foram removidos. A rota antiga abre a Central de Controle de GRDT. Os utilitários de histórico de análise usados por backup e GRDT foram preservados. As declarações globais necessárias ao Histórico eGRDT foram movidas para o próprio módulo. Workflows e testes exclusivos obsoletos foram removidos; verificações úteis foram mantidas.
 
 ## Cofre → GRDT: gargalos e otimizações
 
@@ -84,7 +84,7 @@ O advisor não apontou novo ERROR/WARN de segurança. As três tabelas privadas 
 ## Validação executada
 
 - `npm run verify`: typecheck, builds, sintaxe, workers, referências, versões, dependências, Supabase e suíte completa passaram.
-- `npm run build:cloudflare` + `npm run verify:cloudflare`: pacote de 222 arquivos com referências íntegras.
+- `npm run build:cloudflare` + `npm run verify:cloudflare`: pacote de 221 arquivos com referências íntegras.
 - `tests/document_workflows.cjs`: seis documentos/três GRDTs, filtros combinados, ausência/rótulos inválidos, identificação do último envio, ordem natural, XLSX real de duas abas, parsing e caracteres acentuados; repetido após os ajustes finais.
 - `tests/document_workflows_database.cjs`: migrations em Postgres/PGlite; papéis e contratos; Worker real e binding R2; exclusão, arquivo compartilhado, falha R2, falha DB após remoção física, retry e idempotência; histórico/auditoria; lookup e autor da listagem; publicação parcial/concorrente e leitura da base; edição de data sem mudanças de linhas, snapshots, comparações ou alertas. Repetido após sincronizar nomes das migrations.
 - Testes de Conferência, agregação documental e verdade atual repetidos após o tratamento final de identificadores.
@@ -114,9 +114,11 @@ M	.github/workflows/integrated-contract-monitoring.yml
 M	.github/workflows/pdf-tools-react-browser.yml
 M	.github/workflows/sigem-pw-react-browser.yml
 M	GRCON_TESTES_5.31.6.mjs
+D	analysis-history.css
 M	cloudflare/worker-entry.mjs
 M	document_vault_app.js
 M	grcon_module_loader.js
+M	grcon_enhancements.js
 M	index.html
 M	package.json
 M	posting-conference.css
