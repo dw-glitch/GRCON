@@ -13,7 +13,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
   const request=route.request(),url=new URL(request.url());
   let data={ok:true};
   if(url.pathname.endsWith('/health'))data={ok:true,supabaseConfigured:true,r2Configured:true};
-  else if(url.pathname.endsWith('/lookup')){const items=request.postDataJSON().items;data={results:items.map(item=>({requestId:item.requestId,documentCode:item.documentCode,matches:item.documentCode===code?[{id:'qa-file',document_code:code,revision:'0',file_name:code+'.docx',format:'docx',size_bytes:16,allocated:true}]:[]}))};}
+  else if(url.pathname.endsWith('/lookup')){const items=request.postDataJSON().items;data={results:items.map(item=>({requestId:item.requestId,documentCode:item.documentCode,matches:item.documentCode===code?[{id:'qa-file',sequence:77,document_code:code,revision:'0',file_name:code+'.docx',format:'docx',size_bytes:16,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',created_at:'2026-10-07T12:00:00Z',verified_at:'2026-10-07T12:01:00Z',allocated:true}]:[]}))};}
   else if(url.pathname.endsWith('/download'))return route.fulfill({status:200,contentType:'application/octet-stream',body:Buffer.from('documento QA')});
   else if(url.pathname.endsWith('/list'))data={files:[],has_more:false};
   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
@@ -67,6 +67,8 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.screenshot({path:path.join(out,'cofre-central.png')});
  await page.locator('#select-row-0').check();const grdtDownloadPromise=page.waitForEvent('download');await page.locator('#export-egrdt').click();await page.locator('#p1-sequence-confirm').check();await page.locator('#p1-confirm-ok').click();const generated=await grdtDownloadPromise;await generated.saveAs(path.join(out,'cofre-generated.xls'));
  await page.waitForFunction(()=>window.GrconHistory.read().some(r=>r.files?.some(f=>f.vaultFileId==='qa-file')));
+ const provenance=await page.evaluate(()=>window.GrconHistory.read().flatMap(r=>r.files||[]).find(f=>f.vaultFileId==='qa-file')?.fileProvenance||null);
+ assert.deepEqual(provenance,{source:'cofre',fileName:code+'.docx',revision:'0',format:'docx',sizeBytes:16,vaultFileId:'qa-file',catalogSequence:77,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',createdAt:'2026-10-07T12:00:00Z',verifiedAt:'2026-10-07T12:01:00Z'});
  await page.screenshot({path:path.join(out,'cofre-generated.png')});
  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({ok:true,rowsLoaded:2201,pageSize:100,filteredExport:3,emailTemplateSaved:true,cofreFilesPrepared:1,cofreGrdtGenerated:true,errors},null,2));console.log('Chromium integrated: 2201 changes/100-page, filtered XLSX, history, unread badge, admin, email editor and Cofre → DOCX/revision 0 analysis → GRDT/history passed.');
  }finally{await browser.close();}
