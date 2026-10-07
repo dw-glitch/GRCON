@@ -76,9 +76,8 @@ Deno.serve(async (req: Request) => {
 
   const activeMemberships = Array.isArray(actorMemberships) ? actorMemberships : [];
   const globalOwner = activeMemberships.some((item) => item.role === "owner");
-  const targetMembership = activeMemberships.find((item) => item.workspace_id === workspaceId);
-  const canManage = globalOwner || targetMembership?.role === "admin";
-  if (!canManage) return response(403, { code: "FORBIDDEN", message: "Sem permissão para administrar usuários deste contrato." });
+  const canManage = globalOwner;
+  if (!canManage) return response(403, { code: "FORBIDDEN", message: "Acesso restrito ao proprietário." });
 
   const { data: contract, error: contractError } = await admin
     .from("grcon_contracts")

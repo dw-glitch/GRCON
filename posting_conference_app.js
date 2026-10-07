@@ -542,9 +542,9 @@
   }
 
   root.addEventListener("grcon:shared-sigem-updated", () => { if (state.ready && !state.busy) void adoptSharedBase(); });
-  root.addEventListener("grcon:shared-sigem-date-updated", async () => {
+  root.addEventListener("grcon:shared-sigem-date-updated", async event => {
     const base = root.GrconSharedSigemQuery.current();
-    if (!base || !state.ready) return;
+    if (!base || !state.ready || event.detail?.meta?.snapshotId !== base.meta.snapshotId) return;
     state.base.meta = { ...state.base.meta, ...base.meta };
     await Conference.saveBase(state.base);
     render();

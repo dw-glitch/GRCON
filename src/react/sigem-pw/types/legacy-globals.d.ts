@@ -171,6 +171,9 @@ declare global {
     GrconSigemPwDashboardReact?: { mounted: boolean };
     GrconPostingConference?: PostingConferenceApi;
     GrconSharedSigemQuery?: {
+      listVersions(): Promise<import("./domain").SigemPwSharedVersion[]>;
+      loadSnapshot(id: string, versions?: import("./domain").SigemPwSharedVersion[]): Promise<SigemPwBase>;
+      setReferenceDate(value: string, targetId?: string): Promise<SigemPwBase | undefined>;
       current(): SigemPwBase | null;
       refresh(): Promise<SigemPwBase | null>;
       setLocal(base: SigemPwBase): Promise<SigemPwBase | null>;

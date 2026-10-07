@@ -167,7 +167,7 @@
     const documents = minimalDocuments(system, model);
     const fingerprint = contentFingerprint(system, base.records);
     const sourceImportedAt = text(base.meta.importedAt) || nowIso();
-    const importedAt = text(options && options.effectiveAt) || sourceImportedAt;
+    const importedAt = text(options && options.effectiveAt) || (system === SYSTEMS.SIGEM && base.meta.referenceDate ? new Date(`${base.meta.referenceDate}T12:00:00`).toISOString() : sourceImportedAt);
     const snapshot = {
       id: `${system}:${fingerprint}`,
       kind: "source",

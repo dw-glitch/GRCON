@@ -1,6 +1,7 @@
 import { UiMetaPill, UiPanel } from "../core/ui/UiPrimitives";
 import { SigemPwHeader } from "./components/SigemPwHeader";
 import { SigemPwReadiness } from "./components/SigemPwReadiness";
+import { SigemPwAnalysisSources } from "./components/SigemPwAnalysisSources";
 import { SigemPwBases } from "./components/SigemPwBases";
 import { SigemPwSystemsSummary } from "./components/SigemPwSystemsSummary";
 import { SigemPwRevisionScopeSelector } from "./components/SigemPwRevisionScopeSelector";
@@ -52,6 +53,7 @@ export function SigemPwDashboardApp() {
           </div>
           <UiMetaPill><strong>{loadedBases}/3</strong> carregadas</UiMetaPill>
         </div>
+        <SigemPwAnalysisSources state={state} onSelect={(system, id) => { void adapter.selectAnalysisBase(system, id); }} />
         <SigemPwBases
           state={state}
           onImportSigem={(file) => { void adapter.importSigem(file); }}

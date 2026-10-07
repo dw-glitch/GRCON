@@ -1097,6 +1097,16 @@
     return { snapshot: updated, current: currentBase, importedAt };
   }
 
+  async function updateSnapshotMetadata(kind, id, metadata) {
+    const history = await loadHistory();
+    const snapshots = history.snapshots.map(item => item.meta.snapshotId === id && item.meta.kind === kind
+      ? { ...item, meta: { ...item.meta, ...metadata } } : item);
+    const current = await kvGet(baseKey(kind), { meta: null, records: [] });
+    const writes = [[HISTORY_KEY, { ...history, snapshots }]];
+    if (current?.meta?.snapshotId === id) writes.push([baseKey(kind), { ...current, meta: { ...current.meta, ...metadata } }]);
+    await kvSetMany(writes);
+  }
+
   async function deleteSnapshot(id) {
     const history = await loadHistory();
     const removed = history.snapshots.find((item) => item.meta.snapshotId === id);
@@ -1226,6 +1236,6 @@
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
     openDb, storedValue, putKv, kvGet, kvSet, kvSetMany, loadSigemBase, loadPwBase, loadLdBase, loadHistory,
-    saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, updateSnapshotDate, deleteSnapshot, migrateLegacyBases, loadBases,
+    saveBase, saveSigemBase, savePwBase, saveLdBase, saveLdAndReprocessPw, updateSnapshotDate, updateSnapshotMetadata, deleteSnapshot, migrateLegacyBases, loadBases,
   });
 });

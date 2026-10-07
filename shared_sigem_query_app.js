@@ -3,12 +3,14 @@
   const Core = root.GrconSharedSigemQueryCore;
   const state = { shared: null, local: null, stale: false, error: "", busy: false, workspace: "", context: Core.context(), refreshPromise: null };
   let epoch = 0;
+  const snapshotCache = new Map();
+  const dateChannel = typeof BroadcastChannel === "function" ? new BroadcastChannel("grcon-shared-sigem-dates") : null;
   let lastEmission = "";
   let indexedShared = null, indexedLocal = null;
   const CONFERENCE_WORKSPACE_KEY = "shared-sigem-conference-workspace";
   function cloud() { return root.GrconCloud; }
   function emit() {
-    const stamp = [state.workspace, state.shared?.meta?.snapshotId, state.local?.meta?.importedAt, state.stale, state.error].join("|");
+    const stamp = [state.workspace, state.shared?.meta?.snapshotId, state.local?.meta?.importedAt, current()?.meta?.referenceDate, state.stale, state.error].join("|");
     if (stamp === lastEmission) return;
     lastEmission = stamp;
     if (indexedShared !== state.shared || indexedLocal !== state.local) {
@@ -61,7 +63,7 @@
     if (!workspace && previous) await conference.kvSet(CONFERENCE_WORKSPACE_KEY, "");
   }
   function reset() {
-    epoch++;
+    epoch++; snapshotCache.clear();
     state.shared = null; state.local = null; state.workspace = ""; state.stale = false; state.error = "";
     state.context = Core.context();
     emit();
@@ -99,7 +101,7 @@
         const data = await request("current", { target_workspace: workspace });
         const meta = Array.isArray(data) ? data[0] : data;
         if (!valid()) return null;
-        if (!meta?.snapshot_id) { state.stale = false; state.error = ""; return current(); }
+        if (!meta?.snapshot_id) { state.shared = null; await cachePut(workspace, null); state.stale = false; state.error = ""; emit(); return current(); }
         if (state.shared?.meta?.snapshotId === meta.snapshot_id) {
           const dateChanged = state.shared.meta.referenceDate !== meta.metadata?.referenceDate;
           const changed = state.stale || state.error;
@@ -107,9 +109,10 @@
           if (dateChanged) {
             state.shared.meta = { ...state.shared.meta, ...meta.metadata };
             await cachePut(workspace, state.shared);
+            await syncDateProjection(state.shared);
             root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: state.shared.meta } }));
           }
-          if (changed) emit();
+          if (changed || dateChanged) emit();
           return state.shared;
         }
         const records = [];
@@ -209,22 +212,88 @@
       emit(); return state.shared;
     } finally { state.busy = false; }
   }
-  async function setReferenceDate(value) {
-    const base = current(), workspace = cloud()?.state?.membership?.workspace_id;
-    if (!base || !["owner", "admin"].includes(cloud()?.state?.membership?.role)) throw new Error("Sem permissão para editar a data.");
+  async function listVersions() {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace || !cloud()?.state?.online) return [];
+    const versions = await request("versions", { target_workspace: workspace });
+    if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a leitura.");
+    const available = new Set(versions.map(v => v.snapshot_id));
+    for (const [id, cached] of snapshotCache) {
+      const version = versions.find(v => v.snapshot_id === id);
+      if (!available.has(id) || JSON.stringify(cached.meta.referenceDate) !== JSON.stringify(version?.metadata?.referenceDate)) snapshotCache.delete(id);
+    }
+    return versions;
+  }
+  function versionMeta(version) {
+    return { ...version.metadata, snapshotId: version.snapshot_id, version: version.version, fileName: version.file_name,
+      importedAt: version.metadata?.importedAt || version.published_at || version.created_at,
+      publishedAt: version.published_at, recordCount: version.record_count, createdByName: version.created_by_name,
+      source: "shared-general-query" };
+  }
+  async function loadSnapshot(id, versions) {
+    const workspace = cloud()?.state?.membership?.workspace_id, ticket = epoch;
+    const version = (versions || await listVersions()).find(v => v.snapshot_id === id);
+    if (!version) throw new Error("Não foi possível carregar esta versão da Consulta Geral. Ela pode ter sido excluída.");
+    if (state.shared?.meta?.snapshotId === id) return { ...state.shared, meta: { ...state.shared.meta, ...versionMeta(version) } };
+    if (snapshotCache.has(id)) {
+      const cached = snapshotCache.get(id);
+      return { ...cached, meta: { ...cached.meta, ...versionMeta(version) } };
+    }
+    const records = []; let after = 0;
+    while (records.length < version.record_count) {
+      const page = await request("page", { target_workspace: workspace, target_snapshot: id, after_row: after, page_size: 1000 });
+      if (ticket !== epoch || workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a leitura.");
+      if (!Array.isArray(page) || !page.length) throw new Error("Não foi possível carregar esta versão da Consulta Geral: dados incompletos.");
+      for (const entry of page) { if (entry.row_number <= after) throw new Error("Paginação inválida."); records.push(entry.payload); after = entry.row_number; }
+    }
+    if (records.length !== version.record_count) throw new Error("Contagem da Consulta Geral divergente.");
+    const base = Core.validate({ meta: versionMeta(version), records });
+    snapshotCache.set(id, base);
+    while (snapshotCache.size > 3) snapshotCache.delete(snapshotCache.keys().next().value);
+    return base;
+  }
+  async function syncDateProjection(base) {
+    await Promise.all([root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js"), root.GRCONModuleLoader.ensure("sigem_pw_history_core.js")]);
+    const dashboard = root.GrconSigemPwDashboard, history = root.GrconSigemPwHistory;
+    await dashboard.updateSnapshotMetadata("sigem", base.meta.snapshotId, base.meta);
+    const id = base.meta.historySourceSnapshotId || `sigem:${history.contentFingerprint("sigem", base.records)}`;
+    const date = `${base.meta.referenceDate}T12:00:00`;
+    if (base.meta.referenceDate) await history.updateSourceSnapshotDate("sigem", id, date);
+    root.dispatchEvent(new CustomEvent("grcon:sigem-pw-base-date-updated", { detail: { system: "sigem", snapshotId: base.meta.snapshotId, referenceDate: base.meta.referenceDate } }));
+  }
+  async function setReferenceDate(value, targetId) {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!["owner", "admin"].includes(cloud()?.state?.membership?.role)) throw new Error("Sem permissão para editar a data.");
+    const id = targetId || current()?.meta?.snapshotId;
+    const sharedTarget = targetId || state.shared?.meta?.snapshotId;
+    const base = sharedTarget ? await loadSnapshot(id) : current();
+    if (!base) throw new Error("Consulta Geral não localizada.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Informe a data da Consulta Geral.");
-    if (state.shared) {
-      const metadata = await request("set_date", { target_workspace: workspace, target_snapshot: base.meta.snapshotId, reference_date: value, expected_date: base.meta.referenceDate || null });
+    if (sharedTarget) {
+      const metadata = await request("set_date", { target_workspace: workspace, target_snapshot: id, reference_date: value, expected_date: base.meta.referenceDate || null });
       if (workspace !== cloud()?.state?.membership?.workspace_id) return;
       base.meta = { ...base.meta, ...metadata };
-      await cachePut(workspace, base);
+      snapshotCache.delete(id);
+      if (state.shared?.meta?.snapshotId === id) {
+        state.shared = { ...state.shared, meta: { ...state.shared.meta, ...metadata } };
+        try { await cachePut(workspace, state.shared); } catch (_) { state.error = "Data salva no banco; cache offline indisponível."; }
+      }
     } else {
       base.meta = { ...base.meta, referenceDate: value };
       await (await runtime()).kvSet(`local-sigem-query:${workspace}`, base);
     }
-    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: base.meta } }));
+    try { await syncDateProjection(base); } catch (error) { console.warn("Data compartilhada salva; projeção local será recuperada na próxima leitura.", error); }
+    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: base.meta, workspace } }));
+    dateChannel?.postMessage({ workspace });
+    return base;
   }
-  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, setReferenceDate,
+  dateChannel?.addEventListener("message", event => {
+    if (event.data?.workspace === cloud()?.state?.membership?.workspace_id) {
+      snapshotCache.clear(); void refreshLatest();
+      root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
+    }
+  });
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, setReferenceDate, listVersions, loadSnapshot,
     context: () => state.context,
     sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
     resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });

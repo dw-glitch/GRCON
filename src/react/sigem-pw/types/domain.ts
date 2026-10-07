@@ -168,7 +168,17 @@ export interface SigemPwDateEditor {
   value: string;
 }
 
+export interface SigemPwSharedVersion {
+  snapshot_id: string; version: number; file_name: string; record_count: number; status: string;
+  published_at: string; created_at: string; created_by_name?: string; metadata: SigemPwBaseMeta;
+}
+
 export interface SigemPwState {
+  sigemVersions: SigemPwSharedVersion[];
+  analysisSigemId: string;
+  analysisPwId: string;
+  analysisError: string;
+  officialSigem: SigemPwBaseMeta | null;
   ready: boolean;
   busy: boolean;
   progressMessage: string;
