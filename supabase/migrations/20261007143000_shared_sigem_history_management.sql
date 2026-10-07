@@ -208,7 +208,7 @@ grant execute on function public.grcon_sigem_query_delete(uuid,uuid) to authenti
 create or replace function private.grcon_sigem_query_page(target_workspace uuid,target_snapshot uuid,after_row integer default 0,page_size integer default 1000)
 returns table(row_number integer,payload jsonb)
 language plpgsql security definer set search_path=''
-as $
+as $page$
 begin
  if auth.uid() is null or not private.grcon_is_member(target_workspace) then raise exception 'Sem acesso à área de trabalho.' using errcode='42501'; end if;
  if not exists(
@@ -222,12 +222,12 @@ begin
  where r.snapshot_id=target_snapshot and r.row_number>coalesce(after_row,0)
  order by r.row_number
  limit least(greatest(coalesce(page_size,1000),1),1000);
-end $;
+end $page$;
 
 create or replace function public.grcon_sigem_query_page(target_workspace uuid,target_snapshot uuid,after_row integer default 0,page_size integer default 1000)
 returns table(row_number integer,payload jsonb)
 language sql security invoker set search_path=''
-as $ select * from private.grcon_sigem_query_page(target_workspace,target_snapshot,after_row,page_size); $;
+as $page_public$ select * from private.grcon_sigem_query_page(target_workspace,target_snapshot,after_row,page_size); $page_public$;
 
 revoke all on function private.grcon_sigem_query_page(uuid,uuid,integer,integer) from public,anon;
 revoke all on function public.grcon_sigem_query_page(uuid,uuid,integer,integer) from public,anon;
