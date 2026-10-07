@@ -1055,6 +1055,31 @@ async function waitEvolutionReady(page) {
       pwCurrent: evolutionFixture.pwIds[3],
     });
 
+    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.revisionScope), "revision0", "Evolução deve abrir em Revisão 0");
+    assert.equal(await page.locator('[data-evolution-revision-scope="revision0"]').getAttribute("aria-pressed"), "true");
+    const revision0Selections = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections }));
+    const revision0Timeline = [
+      { date: "2026-09-10", sigemAdded: 0, sigemRemoved: 0, pwAdded: 1, pwRemoved: 0, pwEmitted: 0, events: 2 },
+      { date: "2026-09-20", sigemAdded: 1, sigemRemoved: 0, pwAdded: 1, pwRemoved: 0, pwEmitted: 0, events: 2 },
+      { date: "2026-09-30", sigemAdded: 125, sigemRemoved: 1, pwAdded: 2, pwRemoved: 1, pwEmitted: 2, events: 2 },
+    ];
+    assert.deepEqual(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.timeline), revision0Timeline, "timeline Rev. 0 deve recalcular todas as transições");
+    const revision0Overview = await page.evaluate(() => ({
+      sigemAdded: window.GrconSigemPwEvolutionUi.state.comparison?.sigem?.added.length,
+      sigemRemoved: window.GrconSigemPwEvolutionUi.state.comparison?.sigem?.removed.length,
+      pwAdded: window.GrconSigemPwEvolutionUi.state.comparison?.pw?.added.length,
+      pwRemoved: window.GrconSigemPwEvolutionUi.state.comparison?.pw?.removed.length,
+      pwEmitted: window.GrconSigemPwEvolutionUi.state.comparison?.pwEmissions.length,
+      both: window.GrconSigemPwEvolutionUi.state.comparison?.relation?.newInBoth.length,
+      missingPw: window.GrconSigemPwEvolutionUi.state.comparison?.relation?.newSigemMissingPw.length,
+    }));
+    assert.deepEqual(revision0Overview, { sigemAdded: 125, sigemRemoved: 1, pwAdded: 2, pwRemoved: 1, pwEmitted: 2, both: 0, missingPw: 125 });
+
+    await page.locator('[data-evolution-revision-scope="all"]').click();
+    await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.revisionScope === "all");
+    assert.deepEqual(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.selections), revision0Selections, "troca de escopo deve preservar as bases escolhidas");
+    assert.equal(await page.locator('[data-evolution-revision-scope="all"]').getAttribute("aria-pressed"), "true");
+
     const expectedTimeline = [
       { date: "2026-09-10", sigemAdded: 1, sigemRemoved: 0, pwAdded: 1, pwRemoved: 0, pwEmitted: 0, events: 2 },
       { date: "2026-09-20", sigemAdded: 1, sigemRemoved: 0, pwAdded: 1, pwRemoved: 0, pwEmitted: 0, events: 2 },
