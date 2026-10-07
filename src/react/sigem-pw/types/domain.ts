@@ -1,7 +1,7 @@
 export type SigemPwBaseKind = "sigem" | "pw" | "ld";
 export type SigemPwEditableBaseKind = "sigem" | "pw";
 export type SigemPwDocumentClass = "" | "ET" | "N-1710";
-export type SigemPwListKey = "all" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
+export type SigemPwListKey = "all" | "sigem" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
 export type SigemPwReadinessStatus = "empty" | "partial" | "ready" | "attention";
 
 export interface SigemPwBaseMeta {
@@ -151,6 +151,13 @@ export interface SigemPwReadiness {
 export interface SigemPwFilters {
   documentClass: SigemPwDocumentClass;
   query: string;
+  revision: string;
+  sigemStatus: string;
+  inPw: "" | "yes" | "no";
+}
+export interface SharedSigemHistoryItem {
+  snapshotId: string; fileName: string; recordCount: number; publishedAt?: string; createdAt?: string; createdBy?: string;
+  metadata?: Record<string, unknown>; status?: string; isActive: boolean;
 }
 
 export interface SigemPwDateEditor {
@@ -168,6 +175,7 @@ export interface SigemPwState {
   pw: SigemPwBase;
   ld: SigemPwBase;
   history: SigemPwHistory;
+  sharedSigemHistory: SharedSigemHistoryItem[];
   model: SigemPwModel | null;
   result: SigemPwResult | null;
   readiness: SigemPwReadiness | null;
@@ -198,6 +206,7 @@ export interface WorkerModelPayload {
 
 export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.freeze({
   all: "Todas as situações",
+  sigem: "Documentos do KPI SIGEM",
   sigemOnly: "SIGEM: falta cadastrar no PW",
   bothNotEmitted: "SIGEM + PW: ainda não emitido",
   bothEmitted: "SIGEM + PW: emitido",
