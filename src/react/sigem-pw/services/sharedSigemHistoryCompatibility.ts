@@ -99,7 +99,7 @@ export function ensureSharedSigemHistoryCompatibility(): SharedApi | undefined {
     const legacyState = (original as SharedApi & { state?: { shared?: SigemPwBase | null } }).state;
     if (legacyState) legacyState.shared = null;
     await original!.refresh();
-    window.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
+    window.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated", { detail: { workspace: workspace() } }));
     return result;
   }
   async function setReferenceDate(value: string, targetId?: string): Promise<SigemPwBase | undefined> {
