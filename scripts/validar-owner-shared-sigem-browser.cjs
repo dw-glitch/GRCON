@@ -80,6 +80,12 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(()=>window.GrconSigemPwDashboardBootstrap.open());
  await page.waitForFunction(()=>window.GrconSigemPwDashboardUi?.state.ready&&!window.GrconSigemPwDashboardUi.state.busy);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20000);
+ // The SIGEM headline KPI is auditable and its detail list must equal the number shown for the active revision scope.
+ await page.locator('[data-summary-list="sigem"]').click();
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.activeList),'sigem');
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),20000);
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length===window.GrconSigemPwDashboardUi.state.result.summary.sigem),true);
+ await page.locator('[data-list="all"]').click();
  const baseline=await page.evaluate(()=>JSON.stringify(window.__sharedQa.versions));
  async function choose(id,pw){
   await page.selectOption('#spw-analysis-sigem',id);await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy);
