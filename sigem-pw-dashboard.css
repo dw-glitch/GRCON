@@ -1197,3 +1197,9 @@
 #sigem-pw-dashboard-module .spw-system-split div[data-document-class] strong {
   color: var(--spw-text);
 }
+
+.spw-analysis-sources { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid var(--border-color, #aab4c3); border-radius: 10px; }
+.spw-analysis-sources label { display: grid; gap: 6px; min-width: 0; font-weight: 600; }
+.spw-analysis-sources select { width: 100%; min-width: 0; padding: 8px; }
+.spw-analysis-sources p, .spw-analysis-sources [role=alert] { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 800px) { .spw-analysis-sources { grid-template-columns: minmax(0, 1fr); } }

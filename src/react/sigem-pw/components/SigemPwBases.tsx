@@ -51,7 +51,7 @@ function BaseInfo({ kind, title, empty, base, result }: {
         <b className="spw-base-status loaded">Carregada</b>
       </div>
       <strong title={String(base.meta.fileName || "")}>{String(base.meta.fileName || title)}</strong>
-      <small>Data da base: {fmtDate(base.meta.importedAt)}{originalDate}</small>
+      <small>Data da base: {kind === "sigem" && base.meta.referenceDate ? String(base.meta.referenceDate).split("-").reverse().join("/") : fmtDate(base.meta.importedAt)}{originalDate}{kind === "sigem" && base.meta.referenceDate ? ` · Upload: ${fmtDate(base.meta.importedAt)}` : ""}</small>
       <em>{fmt(Number(count) || 0)} {suffix}</em>
     </div>
   );

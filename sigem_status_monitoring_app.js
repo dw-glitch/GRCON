@@ -159,13 +159,16 @@
     const prev = $("#sigem-monitor-previous");
     const current = $("#sigem-monitor-current");
     if (!prev || !current) return;
-    const options = state.versions.map((version) => '<option value="' + escapeHtml(version.snapshot_id) + '">v' + escapeHtml(version.version || "—") + ' · ' + escapeHtml(version.file_name || "Consulta Geral") + ' · ' + escapeHtml(formatDate(version.published_at || version.created_at)) + '</option>').join("");
+    const options = state.versions.map((version) => '<option value="' + escapeHtml(version.snapshot_id) + '">v' + escapeHtml(version.version || "—") + ' · ' + escapeHtml(version.file_name || "Consulta Geral") + ' · ' + escapeHtml((version.metadata?.referenceDate ? version.metadata.referenceDate.split("-").reverse().join("/") : "Data não informada") + " · Upload: " + formatDate(version.published_at || version.created_at)) + '</option>').join("");
+    const previousId = prev.value, currentId = current.value;
     prev.innerHTML = options;
     current.innerHTML = options;
     if (state.versions.length > 1) {
       current.value = state.versions[0].snapshot_id;
       prev.value = state.versions[1].snapshot_id;
     }
+    if (state.versions.some(v => v.snapshot_id === previousId)) prev.value = previousId;
+    if (state.versions.some(v => v.snapshot_id === currentId)) current.value = currentId;
     $("#sigem-monitor-compare").disabled = state.versions.length < 2;
   }
 
@@ -380,7 +383,7 @@
     state.loading = true;
     try {
       const [versions, comparisons, monitored, notifications, unread] = await Promise.all([
-        rpc("grcon_sigem_versions", { target_workspace: workspace }),
+        rpc("grcon_sigem_query_versions", { target_workspace: workspace }),
         rpc("grcon_sigem_comparison_history", { target_workspace: workspace }),
         rpc("grcon_monitored_documents_list", { target_workspace: workspace }),
         rpc("grcon_notifications_list", { target_workspace: workspace, only_unread: false, limit_count: 100 }),
@@ -610,6 +613,8 @@
     void loadAll();
   });
   root.addEventListener("grcon:shared-sigem-updated", loadAll);
+  root.addEventListener("grcon:shared-sigem-date-updated", loadAll);
+  root.addEventListener("grcon:shared-sigem-metadata-invalidated", loadAll);
   root.addEventListener("grcon:shared-sigem-updated", scheduleNotifications);
   document.addEventListener("DOMContentLoaded", () => {
     ensureUi();

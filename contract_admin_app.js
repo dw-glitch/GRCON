@@ -4,10 +4,12 @@
   const $ = selector => document.querySelector(selector);
   const escape = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const cloud = () => root.GrconCloud;
-  const owner = () => cloud()?.state?.contracts?.some(c => c.role === "owner");
-  const manager = () => owner() || cloud()?.state?.membership?.role === "admin";
+  const normalizedRole = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const owner = () => Boolean(cloud()?.state?.session && cloud()?.state?.membership && cloud()?.state?.contracts?.some(c => ["owner", "proprietario"].includes(normalizedRole(c.role))));
+  const manager = owner;
   const notify = (message, kind) => root.GrconNotify?.(message, kind || "info");
   async function usersApi(operation, input = {}) {
+    if (!owner()) throw new Error("Acesso restrito ao proprietário.");
     const response = await cloud().state.client.functions.invoke("owner-manage-users", { body: { operation, workspaceId: state.workspace, ...input } });
     if (response.error) {
       const detail = await response.error.context?.json?.().catch(() => null);
@@ -34,7 +36,14 @@
   }
   function permissions() {
     install();
-    $("#grcon-administration").hidden = !manager();
+    if (!$("#grcon-administration")) return;
+    $("#grcon-administration").hidden = !owner();
+    if (!owner()) {
+      if ($("#grcon-admin-dialog").open) $("#grcon-admin-dialog").close();
+      state.users = []; state.editing = null; state.workspace = "";
+      $("#grcon-admin-users").textContent = "";
+      $("#grcon-admin-user-form").reset();
+    }
     $("#grcon-admin-contract-settings").hidden = !owner();
     $("#admin-user-new").hidden = !owner();
   }
@@ -62,13 +71,13 @@
     editUser(null);
     try {
       const data = await usersApi("list");
-      if (workspace !== state.workspace) return;
+      if (workspace !== state.workspace || !owner()) return;
       state.users = data.users || [];
       $("#grcon-admin-users").innerHTML = '<div class="grcon-admin-table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Contrato</th><th>Status</th><th>Último acesso</th><th>Ação</th></tr></thead><tbody>' + state.users.map(u => '<tr><td>' + escape(u.name) + '</td><td>' + escape(u.email) + '</td><td>' + escape(u.role) + '</td><td>' + escape(data.contract?.code) + '</td><td>' + (u.active ? "Ativo" : "Inativo") + '</td><td>' + escape(u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("pt-BR") : "Sem acesso registrado") + '</td><td>' + (u.role === "owner" ? "Proprietário" : '<button type="button" data-admin-edit="' + escape(u.id) + '">Editar</button>') + '</td></tr>').join("") + '</tbody></table></div>';
     } catch (error) { $("#grcon-admin-users").textContent = error.message; }
   }
   function open() {
-    if (!manager()) return;
+    if (!owner()) { notify("Acesso restrito ao proprietário.", "error"); return; }
     permissions(); state.open = true;
     $("#grcon-admin-contract").innerHTML = cloud().state.contracts.filter(c => owner() || c.workspace_id === cloud().state.membership.workspace_id).map(c => '<option value="' + escape(c.workspace_id) + '">' + escape(c.code) + (c.active ? "" : " · inativo") + '</option>').join("");
     state.workspace = cloud().state.membership.workspace_id;
@@ -87,7 +96,7 @@
     } catch (error) { notify(error.message, "error"); }
   }
   async function saveUser(event) {
-    event.preventDefault(); if (!manager()) return;
+    event.preventDefault(); if (!owner()) { notify("Acesso restrito ao proprietário.", "error"); return; }
     const id = $("#admin-user-id").value;
     if (!id && !owner()) return;
     const button = event.target.querySelector('[type="submit"]'); button.disabled = true;
@@ -99,6 +108,7 @@
     } catch (error) { notify(error.message, "error"); } finally { button.disabled = false; }
   }
   root.addEventListener("grcon:cloud-ready", permissions);
+  root.addEventListener("grcon:cloud-signed-out", permissions);
   root.addEventListener("grcon:contract-context-changed", () => { if (state.open) $("#grcon-admin-dialog").close(); permissions(); });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once:true }); else install();
 })(window);

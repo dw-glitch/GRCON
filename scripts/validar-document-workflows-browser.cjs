@@ -48,8 +48,9 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
     if(args.operation==='publish'){requestBase.status='active';data={id:'qa-base'};}
     if(args.operation==='page')data=requestRows.slice(input.after||0,(input.after||0)+1000).map((payload,i)=>({row_number:(input.after||0)+i+1,payload}));
    }
-   if(name==='grcon_sigem_query_current')data=null;
-   if(name==='grcon_sigem_query_set_date'){window.qaDateCalls++;data={referenceDate:args.reference_date};}
+   if(name==='grcon_sigem_query_current')data=window.qaSigemVersion||null;
+   if(name==='grcon_sigem_query_versions')data=window.qaSigemVersion?[window.qaSigemVersion]:[];
+   if(name==='grcon_sigem_query_set_date'){window.qaDateCalls++;window.qaSigemVersion.metadata.referenceDate=args.reference_date;data={referenceDate:args.reference_date};}
    if(name==='grcon_notifications_unread_count')data=0;
    return {then(resolve){resolve({data,error:null})},range(){return Promise.resolve({data,error:null})}};
   }}},loadPlannedDocuments:async()=>({id:'qa-planned',fileName:'Previstos.xlsx',count:1,keys:new Set(['DOC-001'])})};
@@ -96,6 +97,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
   await window.GRCONModuleLoader.ensure('posting_conference_report.js');await window.GRCONModuleLoader.ensure('posting_conference_app.js');await window.GrconPostingConferenceUi.activate();
   const rows=['100','100','100','101','102','102'].map((n,i)=>{const send={document:'DOC-00'+(i+1),egrdtNumber:'GRDT-'+n,revisionSent:'0',discipline:i<4?'X':'Y',status:'AGUARDANDO',generatedAt:'2026-10-07T12:00:00Z'};return {...send,sends:[send],sendCount:1,egrdtCount:1,revisions:['0'],latestEgrdtNumber:send.egrdtNumber,currentRevision:'0'};});
   const ui=window.GrconPostingConferenceUi;ui.state.result={...ui.state.result,documentRows:rows,rows,summary:{total:6,pending:6}};ui.state.base={meta:{fileName:'Consulta.xlsx',recordCount:6,referenceDate:'2026-10-03',importedAt:'2026-10-07T12:00:00Z'},records:[]};ui.state.view='pending';
+  window.qaSigemVersion={snapshot_id:'qa-snapshot',version:1,file_name:'Consulta.xlsx',record_count:6,status:'active',published_at:'2026-10-07T12:00:00Z',metadata:{referenceDate:'2026-10-03',importedAt:'2026-10-07T12:00:00Z'}};
   window.GrconSharedSigemQuery.state.shared={meta:{...ui.state.base.meta,snapshotId:'qa-snapshot'},records:[]};ui.render();
  });
  assert.match(await page.locator('#pc-pending-grdts').textContent(),/Documentos pendentes: 6 · GRDTs pendentes: 3/);
@@ -103,7 +105,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  const pendingDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await (await pendingDownload).saveAs(path.join(out,'pendencias.xlsx'));
  const pend=XLSX.read(fs.readFileSync(path.join(out,'pendencias.xlsx')),{type:'buffer'});assert.deepEqual(pend.SheetNames,['Detalhamento','GRDTs Pendentes']);assert.equal(XLSX.utils.sheet_to_json(pend.Sheets['GRDTs Pendentes']).length,3);
  await page.locator('#pc-discipline').selectOption('X');assert.match(await page.locator('#pc-pending-grdts').textContent(),/Documentos pendentes: 4 · GRDTs pendentes: 2/);
- await page.locator('#pc-reference-date').fill('2026-10-02');await page.locator('#pc-save-date').click();await page.waitForFunction(()=>window.GrconSharedSigemQuery.current().meta.referenceDate==='2026-10-02');assert.equal(await page.evaluate(()=>window.qaDateCalls),1);
+ await page.locator('#pc-reference-date').fill('2026-10-02');await page.locator('#pc-save-date').click();await page.waitForFunction(()=>window.GrconSharedSigemQuery.current()?.meta.referenceDate==='2026-10-02');assert.equal(await page.evaluate(()=>window.qaDateCalls),1);
  await page.screenshot({path:path.join(out,'pendencias-1366.png')});
  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({ok:true,metrics,cofreExport:52,details:6,uniqueGrdts:3,filteredDetails:4,filteredGrdts:2,errors},null,2));
  console.log('Chromium document workflows passed: '+JSON.stringify(metrics));
