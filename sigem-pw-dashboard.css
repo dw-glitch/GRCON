@@ -1138,3 +1138,14 @@
 #sigem-pw-dashboard-module .spw-system-split div[data-document-class] strong {
   color: var(--spw-text);
 }
+
+#sigem-pw-dashboard-module .spw-system-total-button{appearance:none;border:1px solid transparent;border-radius:10px;background:transparent;padding:6px 8px;color:inherit;font:inherit;cursor:pointer}
+#sigem-pw-dashboard-module .spw-system-total-button:not(:disabled):hover{border-color:var(--brand-300,#8ecae4);background:var(--brand-50,#eaf5fb)}
+#sigem-pw-dashboard-module .spw-system-total-button em{display:block;margin-top:5px;color:var(--brand-700,#155c8a);font-size:.62rem;font-style:normal;font-weight:900}
+#sigem-pw-dashboard-module .spw-list-filters{grid-template-columns:minmax(240px,1.4fr) minmax(145px,.7fr) minmax(120px,.55fr) minmax(170px,.8fr) minmax(145px,.7fr) auto}
+#sigem-pw-dashboard-module .spw-history-section-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:12px 0 6px;border-bottom:1px solid var(--spw-border)}
+#sigem-pw-dashboard-module .spw-history-section-title small{color:var(--spw-muted)}
+#sigem-pw-dashboard-module .spw-shared-history{margin-bottom:12px}
+#sigem-pw-dashboard-module .spw-empty.compact{min-height:110px}
+#sigem-pw-dashboard-module .danger-button{color:var(--danger-700,#9c332c)}
+@media(max-width:1400px){#sigem-pw-dashboard-module .spw-list-filters{grid-template-columns:repeat(3,minmax(160px,1fr))}}
