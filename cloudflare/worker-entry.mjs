@@ -1,6 +1,7 @@
 import legacyWorker from "./worker.mjs";
 
 const PREFIX = "/api/document-vault/";
+const MASTER_REGISTER_PATH = "/api/master-register/lookup";
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
 const MIB = 1024 * 1024;
 
@@ -355,6 +356,21 @@ async function handleLookup(request, env) {
   return json({ ok: true, results: Array.isArray(data?.results) ? data.results : [] });
 }
 
+async function handleMasterRegisterLookup(request, env) {
+  const user = await authenticatedUser(request, env);
+  const body = await parseJson(request);
+  const workspaceId = workspaceFrom(request, body);
+  if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
+  const documentCode = safeText(body?.documentCode || body?.document_code, 255).replace(/\s+/g, "").toUpperCase();
+  if (!documentCode) return apiError("Informe o código do documento.", 400, "DOCUMENT_REQUIRED");
+  const record = await rpc(env, "grcon_master_register_lookup", {
+    target_workspace: workspaceId,
+    actor_id: user.id,
+    input_code: documentCode,
+  });
+  return json({ ok: true, record: record || null });
+}
+
 async function handleInit(request, env) {
   const user = await authenticatedUser(request, env);
   const body = await parseJson(request);
@@ -609,10 +625,11 @@ export default {
   async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
+      if (url.pathname === MASTER_REGISTER_PATH && request.method === "POST") return await handleMasterRegisterLookup(request, env);
       if (url.pathname.startsWith(PREFIX)) return await routeVault(request, env, ctx);
       return legacyWorker.fetch(request, env, ctx);
     } catch (error) {
-      console.error("GRCON document vault:", error?.code || error?.name || "error", error?.message || error);
+      console.error("GRCON Worker API:", error?.code || error?.name || "error", error?.message || error);
       return apiError(
         error?.message || "Falha interna no Cofre.",
         Number(error?.status) || 500,
