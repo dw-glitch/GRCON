@@ -3,6 +3,7 @@
   const Core = root.GrconSharedSigemQueryCore;
   const state = { shared: null, local: null, stale: false, error: "", busy: false, workspace: "", context: Core.context(), refreshPromise: null };
   let epoch = 0;
+  let versionsStamp = "";
   const snapshotCache = new Map();
   const dateChannel = typeof BroadcastChannel === "function" ? new BroadcastChannel("grcon-shared-sigem-dates") : null;
   let lastEmission = "";
@@ -63,7 +64,7 @@
     if (!workspace && previous) await conference.kvSet(CONFERENCE_WORKSPACE_KEY, "");
   }
   function reset() {
-    epoch++; snapshotCache.clear();
+    epoch++; snapshotCache.clear(); versionsStamp = "";
     state.shared = null; state.local = null; state.workspace = ""; state.stale = false; state.error = "";
     state.context = Core.context();
     emit();
@@ -222,6 +223,10 @@
       const version = versions.find(v => v.snapshot_id === id);
       if (!available.has(id) || JSON.stringify(cached.meta.referenceDate) !== JSON.stringify(version?.metadata?.referenceDate)) snapshotCache.delete(id);
     }
+    const stamp = JSON.stringify(versions.map(v => [v.snapshot_id, v.metadata?.referenceDate, v.status]));
+    const changed = versionsStamp && stamp !== versionsStamp;
+    versionsStamp = stamp;
+    if (changed) root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
     return versions;
   }
   function versionMeta(version) {
@@ -300,5 +305,9 @@
   root.addEventListener("grcon:cloud-ready", () => void refresh());
   root.addEventListener("online", () => void refresh());
   root.document.addEventListener("visibilitychange", () => { if (!root.document.hidden) void refresh(); });
-  setInterval(() => { if (!root.document.hidden && cloud()?.state?.membership) void refresh(); }, 60000);
+  setInterval(async () => {
+    if (root.document.hidden || !cloud()?.state?.membership) return;
+    await refresh();
+    try { await listVersions(); } catch (_) { /* a base confirmada continua disponível */ }
+  }, 15000);
 })(window);

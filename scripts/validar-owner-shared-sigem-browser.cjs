@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.GRCON_CHROMIUM_PATH?{executablePath:process.env.GRCON_CHROMIUM_PATH}:{})});
- const page=await browser.newPage({viewport:{width:1366,height:768},acceptDownloads:true});
+ const page=await browser.newPage({viewport:{width:1366,height:768},acceptDownloads:true,serviceWorkers:"block"});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://**/*',route=>route.abort());
  try{

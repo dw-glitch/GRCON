@@ -1,0 +1,36 @@
+name: QA — Administração e datas SIGEM integradas
+on:
+  pull_request:
+    paths:
+      - 'shared_sigem_query_app.js'
+      - 'contract_admin_app.js'
+      - 'src/react/sigem-pw/**'
+      - 'scripts/validar-owner-shared-sigem-browser.cjs'
+      - '.github/workflows/owner-shared-sigem-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: node tests/owner_admin_edge.cjs && node tests/document_workflows_database.cjs
+      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Chromium integrado
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/grcon-owner-shared-server.log 2>&1 &
+          node scripts/validar-owner-shared-sigem-browser.cjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: owner-shared-sigem-browser
+          path: artifacts/owner-shared-sigem/
