@@ -91,6 +91,7 @@ O advisor não apontou novo ERROR/WARN de segurança. As três tabelas privadas 
 - `scripts/validar-integrated-contracts-browser.cjs`: regressão Chromium com 2.201 mudanças, paginação, Excel filtrado, histórico, badge, admin, editor de e-mail e Cofre → DOCX revisão 0 → análise → GRDT/histórico.
 - `scripts/validar-document-workflows-browser.cjs`: interface real em Chromium; rota antiga segura; Cofre exporta 52 documentos filtrados de um catálogo de 103, além dos 50 visíveis; cancelamento não chama exclusão; confirmação remove da listagem; fonte de solicitações funciona sem LD; seis documentos/três GRDTs e filtro adicional com quatro documentos/duas GRDTs; Excel de duas abas; edição de data; cenários 10/50/100; zero erros de página. Repetido depois dos ajustes finais.
 - `git diff --check` passou. Os novos testes e o runner foram adicionados ao workflow integrado para execução em PR/push.
+- Após a correção da disputa de foco identificada no CI, TypeScript/build, estabilidade e os runners Chromium completos de SIGEM × PW, Consultas, PDFs e Histórico eGRDT passaram localmente, incluindo foco inicial, Tab/Shift+Tab, Escape e restauração do foco.
 
 ### Regressões encontradas e corrigidas
 
@@ -102,6 +103,7 @@ O advisor não apontou novo ERROR/WARN de segurança. As três tabelas privadas 
 6. Normalização própria de solicitações não preservava integralmente variantes NT/EAP: substituída pelo motor documental existente e coberta por teste.
 7. Detalhamento e consolidado podiam escolher campos diferentes quando latestEgrdtNumber e egrdtNumber coexistiam: escolha pertinente centralizada para tela, resumo e Excel.
 8. Arquivos de migration tinham timestamps de criação diferentes das versões atribuídas na aplicação remota: nomes e teste sincronizados com o histórico do banco.
+9. O CI revelou disputa entre o gerenciador de foco React e o aprimoramento legado de diálogos: os drawers React agora identificam que gerenciam seu próprio foco, trap e Escape. O legado respeita esse controle, preservando o foco inicial e seu retorno ao fechar.
 
 ## Arquivos da entrega
 
@@ -119,6 +121,8 @@ M	cloudflare/worker-entry.mjs
 M	document_vault_app.js
 M	grcon_module_loader.js
 M	grcon_enhancements.js
+M	ui-v3.js
+M	src/react/core/ui/UiPrimitives.tsx
 M	index.html
 M	package.json
 M	posting-conference.css

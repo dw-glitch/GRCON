@@ -177,6 +177,7 @@ export function UiDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
+        data-ui-focus-managed="true"
         tabIndex={-1}
       >
         {children}
