@@ -23,6 +23,9 @@ export function SigemPwDashboardApp() {
   const activeLabel = SIGEM_PW_LISTS[state.activeList];
   const classifiedTotal = state.result?.summary?.classifiedTotal || 0;
   const loadedBases = [state.sigem.meta, state.pw.meta, state.ld.meta].filter(Boolean).length;
+  const sourceRows = state.result?.lists?.[state.activeList] || [];
+  const revisions = [...new Set(sourceRows.map((row) => row.revision).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR",{numeric:true}));
+  const sigemStatuses = [...new Set(sourceRows.map((row) => row.sigemStatus).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
 
   return (
     <div className="spw-dashboard-shell spw-phase-b">
@@ -69,7 +72,7 @@ export function SigemPwDashboardApp() {
           </div>
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
-        <SigemPwSystemsSummary state={state} />
+        <SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} />
         <SigemPwSituationCards
           state={state}
           activeList={state.activeList}
@@ -107,12 +110,21 @@ export function SigemPwDashboardApp() {
         <SigemPwListFilters
           query={state.filters.query}
           documentClass={state.filters.documentClass}
+          revision={state.filters.revision}
+          sigemStatus={state.filters.sigemStatus}
+          pwPresence={state.filters.pwPresence}
+          revisions={revisions}
+          sigemStatuses={sigemStatuses}
           busy={state.busy}
           onQuery={(value) => adapter.setQuery(value)}
           onClass={(value: SigemPwDocumentClass) => adapter.setDocumentClass(value)}
+          onRevision={(value) => adapter.setRevision(value)}
+          onSigemStatus={(value) => adapter.setSigemStatus(value)}
+          onPwPresence={(value) => adapter.setPwPresence(value)}
           onClear={() => adapter.clearFilters()}
         />
-        <SigemPwTable rows={pageData.visible} caption={activeLabel} />
+        <div className="spw-filter-count" role="status">Exibindo <strong>{fmt(pageData.rows.length)}</strong> de <strong>{fmt(sourceRows.length)}</strong> registros</div>
+        <SigemPwTable rows={pageData.visible} caption={activeLabel} ldFileName={String(state.ld.meta?.fileName || "")} />
         <SigemPwPager
           page={state.page}
           pages={pageData.pages}
@@ -130,6 +142,7 @@ export function SigemPwDashboardApp() {
         onClose={() => adapter.closeHistory()}
         onEdit={(kind, id) => adapter.openBaseDateEditor(kind, id)}
         onDelete={(id) => { void adapter.removeSnapshot(id); }}
+        onSelectShared={(id) => { void adapter.selectSharedSigemSnapshot(id); }}
       />
       <SigemPwBaseDateDialog
         state={state}
