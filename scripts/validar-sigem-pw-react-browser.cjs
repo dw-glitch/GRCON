@@ -494,6 +494,26 @@ async function waitEvolutionReady(page) {
     await page.waitForSelector("#spw-revision-section", { timeout: 30000 });
     await page.screenshot({ path: path.join(outputDir, "02-sigem-pw-bases-1366.png"), fullPage: true });
 
+    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "revision0", "Dashboard deve abrir em Revisão 0");
+    assert.equal(await page.locator('[data-revision-scope="revision0"]').getAttribute("aria-pressed"), "true");
+    const revision0Summary = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.result.summary);
+    assert.equal(revision0Summary.sigem, 251);
+    assert.equal(revision0Summary.pwRegistered, 5);
+    assert.equal(revision0Summary.sigemOnly, 248);
+    assert.equal(revision0Summary.classifiedTotal, 253);
+    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.result.lists.all.every((row) => row.revision === "0")), true);
+
+    const generationBeforeScopeSwitch = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration);
+    const filtersBeforeScopeSwitch = await page.evaluate(() => ({ ...window.GrconSigemPwDashboardUi.state.filters }));
+    let scopeStarted = Date.now();
+    await page.locator('[data-revision-scope="all"]').click();
+    await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.revisionScope === "all");
+    metrics.revisionScopeSwitchMs = Date.now() - scopeStarted;
+    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration), generationBeforeScopeSwitch, "troca de universo não pode reconstruir o modelo");
+    assert.deepEqual(await page.evaluate(() => ({ ...window.GrconSigemPwDashboardUi.state.filters })), filtersBeforeScopeSwitch, "troca de universo deve preservar filtros");
+    assert.equal(await page.locator('[data-revision-scope="all"]').getAttribute("aria-pressed"), "true");
+    await page.screenshot({ path: path.join(outputDir, "02b-sigem-pw-all-revisions-1366.png"), fullPage: true });
+
     const summary = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.aggregates.all.summary);
     assert.equal(summary.sigemOnly, 250);
     assert.equal(summary.bothNotEmitted, 1);
