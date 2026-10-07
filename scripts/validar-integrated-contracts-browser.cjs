@@ -61,7 +61,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('#ld-input').setInputFiles(ldPath);await page.locator('#analyze').click();
  try { await page.waitForFunction(()=>window.GrconTriageUiApi?.getResult(0)&&!document.querySelector('#analyze').disabled); }
  catch(error){await page.screenshot({path:path.join(out,'analysis-failure.png'),fullPage:true});console.error(await page.locator('#toast').textContent(),errors);throw error;}
- const analyzed=await page.evaluate(()=>{const r=window.GrconTriageUiApi.getResult(0);const first=(r.files||[])[0];return {document:r.document,revision:r.revision,files:(r.files||[]).map(f=>f.name),source:first?window.GrconDocumentVault.lookupSource(first):null}});assert.equal(analyzed.document,code);assert.equal(analyzed.revision,'0');assert.deepEqual(analyzed.files,[code+'.docx']);assert.equal(analyzed.source?.id,'qa-file');
+ const analyzed=await page.evaluate(()=>{const r=window.GrconTriageUiApi.getResult(0);const first=(r.files||[])[0];return {document:r.document,revision:r.revision,files:(r.files||[]).map(f=>f.name),source:first?.file?window.GrconDocumentVault.lookupSource(first.file):null}});assert.equal(analyzed.document,code);assert.equal(analyzed.revision,'0');assert.deepEqual(analyzed.files,[code+'.docx']);assert.equal(analyzed.source?.id,'qa-file');
  assert.match(await page.locator('#pdf-meta').textContent(),/1 recuperado\(s\) do Cofre/);
  await page.locator('#missing-documents').waitFor({state:'visible'});assert.match(await page.locator('#missing-documents').textContent(),/RL-5290\.00-22313-856-C1O-018/);
  await page.screenshot({path:path.join(out,'cofre-central.png')});
