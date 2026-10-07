@@ -1020,9 +1020,15 @@
         });
         registerSource(file, {
           id: item.id,
+          sequence: Number(item.sequence) || 0,
+          fileName: item.file_name || file.name,
           documentCode: item.document_code || item.identity_code || "",
           revision: item.revision || "0",
+          format: item.format || "",
+          sizeBytes: Number(item.size_bytes) || file.size || 0,
           sha256: item.sha256 || "",
+          createdAt: item.created_at || "",
+          verifiedAt: item.verified_at || "",
           allocated: Boolean(item.allocated),
           allocationLabel: allocationLabel(item),
           allocationSource: item.allocation_source || "Controle de Solicitações",
