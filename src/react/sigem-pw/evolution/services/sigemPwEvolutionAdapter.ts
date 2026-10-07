@@ -7,6 +7,7 @@ import {
   type EvolutionListMode,
   type EvolutionPageData,
   type EvolutionRecord,
+  type EvolutionRevisionScope,
   type EvolutionSnapshot,
   type EvolutionSourceSnapshotMeta,
   type EvolutionSystem,
@@ -109,6 +110,7 @@ const explicitlyEmptyPrevious = new Set<string>();
 const PREFERENCES_KEY = "grcon:sigem-pw:evolution:ui:v2";
 const PREPARED_CACHE_PREFIX = "evolutionPrepared:sigem-pw-evolution-audit-v4:";
 const preparedSnapshotCache = new Map<string, EvolutionSnapshot>();
+const scopedSnapshotCache = new Map<string, EvolutionSnapshot>();
 const comparisonCache = new Map<string, NonNullable<EvolutionUiState["comparison"]>>();
 const timelineCache = new Map<string, EvolutionUiState["timeline"]>();
 
@@ -116,9 +118,10 @@ function restorePreferences(): void {
   try {
     const raw = window.sessionStorage?.getItem(PREFERENCES_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw) as Partial<Pick<EvolutionUiState, "period" | "selections" | "listMode" | "filters" | "rawFilters">>;
+    const saved = JSON.parse(raw) as Partial<Pick<EvolutionUiState, "period" | "selections" | "revisionScope" | "listMode" | "filters" | "rawFilters">>;
     if (saved.period) state.period = { ...state.period, ...saved.period };
     if (saved.selections) state.selections = { ...state.selections, ...saved.selections };
+    if (saved.revisionScope === "revision0" || saved.revisionScope === "all") state.revisionScope = saved.revisionScope;
     const emptyPrevious = (saved as typeof saved & { emptyPrevious?: string[] }).emptyPrevious;
     for (const key of emptyPrevious || []) explicitlyEmptyPrevious.add(key);
     if (saved.listMode) state.listMode = saved.listMode;
@@ -134,6 +137,7 @@ function persistPreferences(): void {
     window.sessionStorage?.setItem(PREFERENCES_KEY, JSON.stringify({
       period: state.period,
       selections: preferredSelections,
+      revisionScope: state.revisionScope,
       emptyPrevious: [...explicitlyEmptyPrevious],
       listMode: state.listMode,
       filters: state.filters,
