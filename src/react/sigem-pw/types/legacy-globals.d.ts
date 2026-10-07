@@ -86,6 +86,7 @@ interface SigemPwDashboardUiApi {
   activate(): Promise<void>;
   refresh(reason?: string): Promise<void>;
   clearPreStage7BasesOnce(): Promise<boolean>;
+  filteredRows(): SigemPwRow[];
   state: SigemPwState;
 }
 interface RevisionAnalyzeOptions {
