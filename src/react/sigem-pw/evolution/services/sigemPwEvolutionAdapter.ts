@@ -734,7 +734,7 @@ function recalculate(): void {
   const started = now();
   const pair = [selectedSnapshot("sigem", "previous"), selectedSnapshot("sigem", "current"),
     selectedSnapshot("pw", "previous"), selectedSnapshot("pw", "current")] as const;
-  const key = [Core().CALCULATION_VERSION, state.ldUniverse?.fingerprint,
+  const key = [Core().CALCULATION_VERSION, state.revisionScope, state.ldUniverse?.fingerprint,
     ...pair.map((row) => row ? `${row.id}@${row.importedAt}@${row.contentFingerprint}` : "none")].join("|");
   const cached = comparisonCache.get(key);
   state.comparison = cached || Core().comparePeriod(...pair);
@@ -749,7 +749,7 @@ function recalculate(): void {
 }
 
 function timelineKey(sigem = state.sigem, pw = state.pw): string {
-  return [Core().CALCULATION_VERSION, state.ldUniverse?.fingerprint || "",
+  return [Core().CALCULATION_VERSION, state.revisionScope, state.ldUniverse?.fingerprint || "",
     ...sigem.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@")), "|",
     ...pw.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@"))].join(":");
 }
@@ -758,6 +758,8 @@ async function prepareTimeline(sigem: EvolutionSnapshot[], pw: EvolutionSnapshot
   const key = timelineKey(sigem, pw);
   if (timelineCache.has(key)) return;
   const started = now();
+  const scopedSigem = scopedSnapshots(sigem);
+  const scopedPw = scopedSnapshots(pw);
   const worker = getEvolutionWorker();
   let rows: EvolutionUiState["timeline"];
   if (worker) {
@@ -765,14 +767,14 @@ async function prepareTimeline(sigem: EvolutionSnapshot[], pw: EvolutionSnapshot
     try {
       rows = await new Promise<EvolutionUiState["timeline"]>((resolve, reject) => {
         evolutionTimelinePending.set(requestId, { resolve, reject });
-        try { worker.postMessage({ type: "evolution-timeline", requestId, sigem, pw }); }
+        try { worker.postMessage({ type: "evolution-timeline", requestId, sigem: scopedSigem, pw: scopedPw }); }
         catch (error) { evolutionTimelinePending.delete(requestId); reject(error); }
       });
     } catch (error) {
       debugMetric("timeline-worker-fallback", { message: messageOf(error, "Worker indisponível") });
-      rows = Core().buildDailyTimeline(sigem, pw);
+      rows = Core().buildDailyTimeline(scopedSigem, scopedPw);
     }
-  } else rows = Core().buildDailyTimeline(sigem, pw);
+  } else rows = Core().buildDailyTimeline(scopedSigem, scopedPw);
   state.metrics.evolutionTimelineMs = now() - started;
   timelineCache.set(key, rows);
   if (timelineCache.size > 4) timelineCache.delete(timelineCache.keys().next().value!);
@@ -783,7 +785,7 @@ function fullTimeline(): EvolutionUiState["timeline"] {
   const cached = timelineCache.get(key);
   if (cached) return cached;
   const started = now();
-  const built = Core().buildDailyTimeline(state.sigem, state.pw);
+  const built = Core().buildDailyTimeline(scopedSnapshots(state.sigem), scopedSnapshots(state.pw));
   state.metrics.evolutionTimelineMs = now() - started;
   timelineCache.set(key, built);
   return built;
@@ -913,6 +915,18 @@ function setSelection(key: keyof EvolutionUiState["selections"], value: string):
   preferredSelections = { ...preferredSelections, [key]: value };
   state.selections = { ...state.selections, [key]: value };
   recalculate();
+  emit();
+}
+
+function setRevisionScope(value: EvolutionRevisionScope): void {
+  const next = normalizedRevisionScope(value);
+  if (state.revisionScope === next) return;
+  state.revisionScope = next;
+  state.filters = { ...state.filters, revision: "" };
+  state.page = 1;
+  state.detailRow = null;
+  state.exportMessage = "";
+  applyPeriod();
   emit();
 }
 
@@ -1266,6 +1280,7 @@ export const sigemPwEvolutionAdapter = {
   setPeriod,
   clearPeriod,
   setSelection,
+  setRevisionScope,
   setListMode,
   setFilter,
   setRawFilter,
