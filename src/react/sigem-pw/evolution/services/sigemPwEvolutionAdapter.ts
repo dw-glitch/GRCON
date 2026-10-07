@@ -75,6 +75,7 @@ const state: EvolutionUiState = {
   ldSignature: "",
   period: { start: "", end: "" },
   selections: { sigemPrev: "", sigemCurrent: "", pwPrev: "", pwCurrent: "" },
+  revisionScope: "revision0",
   comparison: null,
   timeline: [],
   listMode: "sigem-new",
