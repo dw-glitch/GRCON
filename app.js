@@ -3716,7 +3716,7 @@
         <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.tagged)}</span></td>
-        <td><span class="sheet-badge">${escapeHtml(row.sheet || "—")}</span></td>
+        <td><span class="sheet-badge document-class-badge" data-document-class="${escapeHtml(row.sheet === "ET" || row.sheet === "N-1710" ? row.sheet : "")}">${escapeHtml(row.sheet || "—")}</span></td>
         <td><span class="revision-value" title="Revisão encontrada na LD">${escapeHtml(ldRevision)}</span></td>
         <td class="revision-grdt-cell">
           <input class="revision-grdt-input" data-revision-input data-index="${index}" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="8" value="${escapeHtml(row.revision || "")}" aria-label="Revisão do documento ${escapeHtml(row.document)} nesta GRDT" title="Revisão deste documento na GRDT · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">
