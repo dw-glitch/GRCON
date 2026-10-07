@@ -1093,6 +1093,7 @@ async function exportAuditWorkbook(): Promise<number> {
     const sigemAudit = sigemCurrent?.audit || {};
     const pwAudit = pwCurrent?.audit || {};
     append("Resumo", [
+      { Métrica: "Escopo de revisão", Valor: revisionScopeLabel() },
       { Métrica: "Versão da análise", Valor: comparison?.analysisVersion || Core().CALCULATION_VERSION },
       { Métrica: "SIGEM · documentos únicos", Valor: sigemAudit.uniqueDocuments || 0 },
       { Métrica: "SIGEM · documento + revisão", Valor: sigemAudit.documentRevisionRecords || 0 },
@@ -1134,6 +1135,7 @@ async function exportAuditWorkbook(): Promise<number> {
       ...(pwCurrent?.duplicates || []).map((row) => auditRow(row, "Duplicidade exata PW")),
     ]);
     append("Regras da análise", [
+      { Item: "Escopo de revisão", Valor: revisionScopeLabel() },
       { Item: "analysisVersion", Valor: comparison?.analysisVersion || Core().CALCULATION_VERSION },
       { Item: "Granularidade técnica", Valor: "A evolução legada preserva ocorrências técnicas para compatibilidade histórica." },
       { Item: "Granularidade auditável", Valor: "Documento + revisão é calculado em paralelo e usado para explicar novos documentos, novas revisões e presença entre sistemas." },
@@ -1144,7 +1146,7 @@ async function exportAuditWorkbook(): Promise<number> {
 
     const output = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    downloadBlob(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `GRCON_Auditoria_SIGEM_PW_${date}.xlsx`);
+    downloadBlob(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `GRCON_Auditoria_SIGEM_PW_${state.revisionScope}_${date}.xlsx`);
     state.metrics.evolutionExportMs = now() - started;
     state.exportMessage = "Relatório de auditoria gerado com sucesso.";
     state.exportMessageKind = "success";
@@ -1202,13 +1204,18 @@ async function exportFilteredRows(): Promise<number> {
       "Prazo LD": row.ldPrazo || "",
     }));
     const sheet = xlsx.utils.json_to_sheet(data);
+    const scopeSheet = xlsx.utils.json_to_sheet([
+      { Item: "Escopo de revisão", Valor: revisionScopeLabel() },
+      { Item: "Regra", Valor: state.revisionScope === "revision0" ? "Somente ocorrências cuja revisão normalizada pelo Dashboard é 0." : "Todas as ocorrências Documento + Revisão válidas." },
+    ]);
     const workbook = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(workbook, sheet, "Evolução");
+    xlsx.utils.book_append_sheet(workbook, scopeSheet, "Escopo");
     const output = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     downloadBlob(
       new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-      `GRCON_Evolucao_${state.listMode}_${date}.xlsx`,
+      `GRCON_Evolucao_${state.revisionScope}_${state.listMode}_${date}.xlsx`,
     );
     state.exportMessage = `Excel gerado com sucesso. ${fmt(rows.length)} registro(s) exportado(s).`;
     state.exportMessageKind = "success";
