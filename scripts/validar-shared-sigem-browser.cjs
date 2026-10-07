@@ -12,6 +12,7 @@ const update=workbook('atualizada.xlsx',[[documentCode,'B','Recusado','RELATÓRI
 const backend={active:null,uploads:new Map(),fail:false,offline:false,serial:0};
 function rpc(name,args) {
  if(backend.offline) return {data:null,error:{message:'QA offline'}};
+ if(name==='versions') return {data:[],error:null};
  if(name==='current') return {data:backend.active?[backend.active]:[],error:null};
  if(name==='grcon_allocation_registry_current') return {data:[],error:null};
  // This legacy fixture tests the shared-query flow; the monitoring fixture is
