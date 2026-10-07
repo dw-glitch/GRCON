@@ -2763,15 +2763,13 @@
       // Ausentes nunca viram linhas virtuais. Eles permanecem apenas no painel
       // "Documentos não encontrados" e não entram na triagem, GRDT ou histórico.
       if (!workerInputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta ou no Cofre.");
-      if (!workerInputs.length && missingFromList.length) {
-        throw new Error(vaultLookupError
-          ? "Não foi possível consultar o Cofre e nenhum arquivo local solicitado foi encontrado."
-          : "Nenhum dos documentos solicitados foi localizado na pasta ou no Cofre.");
-      }
 
       const settings = triageSettings();
-      await PerformanceCore.initializeTriage(state.index, [], settings, workerProgress("Preparando triagem"));
-      const rawResults = await PerformanceCore.triage(workerInputs, settings, workerProgress("Triagem"));
+      let rawResults = [];
+      if (workerInputs.length) {
+        await PerformanceCore.initializeTriage(state.index, [], settings, workerProgress("Preparando triagem"));
+        rawResults = await PerformanceCore.triage(workerInputs, settings, workerProgress("Triagem"));
+      }
       rawResults.forEach((result) => {
         const physical = physicalById.get(result.id);
         if (physical) result.file = physical;
