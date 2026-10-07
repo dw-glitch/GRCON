@@ -99,7 +99,13 @@
         const data = await request("current", { target_workspace: workspace });
         const meta = Array.isArray(data) ? data[0] : data;
         if (!valid()) return null;
-        if (!meta?.snapshot_id) { state.stale = false; state.error = ""; return current(); }
+        if (!meta?.snapshot_id) {
+          const hadShared = Boolean(state.shared);
+          state.shared = null; indexedShared = null; state.stale = false; state.error = "";
+          try { await cachePut(workspace, null); } catch (_) { /* cache opcional */ }
+          if (hadShared) emit();
+          return state.local;
+        }
         if (state.shared?.meta?.snapshotId === meta.snapshot_id) {
           const dateChanged = state.shared.meta.referenceDate !== meta.metadata?.referenceDate;
           const changed = state.stale || state.error;
@@ -209,6 +215,55 @@
       emit(); return state.shared;
     } finally { state.busy = false; }
   }
+  async function listHistory() {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace) return [];
+    const data = await request("history", { target_workspace: workspace });
+    return (Array.isArray(data) ? data : []).map((item) => ({
+      snapshotId: item.snapshot_id,
+      fileName: item.file_name,
+      recordCount: Number(item.record_count) || 0,
+      uniqueDocumentCount: Number(item.unique_document_count) || 0,
+      etCount: Number(item.et_count) || 0,
+      n1710Count: Number(item.n1710_count) || 0,
+      publishedAt: item.published_at || "",
+      createdAt: item.created_at || "",
+      status: item.status || "",
+      isCurrent: Boolean(item.is_current),
+      createdBy: item.created_by || "",
+      createdByName: item.created_by_name || "",
+      createdByEmail: item.created_by_email || "",
+      metadata: item.metadata || {},
+    }));
+  }
+  async function clearSharedCache(workspace, clearLocal) {
+    state.shared = null; indexedShared = null; state.stale = false; state.error = "";
+    try { await cachePut(workspace, null); } catch (_) { /* cache opcional */ }
+    if (clearLocal) {
+      state.local = null; indexedLocal = null;
+      try { await (await runtime()).kvSet(`local-sigem-query:${workspace}`, null); } catch (_) { /* cache opcional */ }
+    }
+    state.context = Core.context(state.shared, state.local);
+    lastEmission = "";
+    emit();
+  }
+  async function activateSnapshot(snapshotId) {
+    if (!canPublish()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace || !snapshotId) throw new Error("Base da Consulta Geral inválida.");
+    await request("activate", { target_workspace: workspace, target_snapshot: snapshotId });
+    await clearSharedCache(workspace, false);
+    return refreshLatest();
+  }
+  async function deleteSnapshot(snapshotId) {
+    if (!canPublish()) throw new Error("Somente o proprietário pode excluir bases da Consulta Geral.");
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace || !snapshotId) throw new Error("Base da Consulta Geral inválida.");
+    const result = await request("delete", { target_workspace: workspace, target_snapshot: snapshotId });
+    await clearSharedCache(workspace, true);
+    await refreshLatest();
+    return result || {};
+  }
   async function setReferenceDate(value) {
     const base = current(), workspace = cloud()?.state?.membership?.workspace_id;
     if (!base || !["owner", "admin"].includes(cloud()?.state?.membership?.role)) throw new Error("Sem permissão para editar a data.");
@@ -224,7 +279,7 @@
     }
     root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: base.meta } }));
   }
-  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, setReferenceDate,
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, listHistory, activateSnapshot, deleteSnapshot, setReferenceDate,
     context: () => state.context,
     sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
     resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });
