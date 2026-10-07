@@ -102,7 +102,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(()=>{window.__sharedQa.unavailable=true;window.__sharedQa.versions[2].metadata.referenceDate='2026-10-01';});
  await choose('shared-old');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result),null,'unavailable version never shows another source numbers');
- assert.ok(await page.locator('[role="alert"]').filter({hasText:'Não foi possível carregar'}).count());
+ await page.locator('[role="alert"]').filter({hasText:'Não foi possível carregar'}).waitFor({state:'visible'});
  await page.evaluate(()=>window.__sharedQa.unavailable=false);
  await page.getByText('Tentar novamente',{exact:true}).click();await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),1);
