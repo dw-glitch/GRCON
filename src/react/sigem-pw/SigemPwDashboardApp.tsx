@@ -53,7 +53,13 @@ export function SigemPwDashboardApp() {
           </div>
           <UiMetaPill><strong>{loadedBases}/3</strong> carregadas</UiMetaPill>
         </div>
-        <SigemPwAnalysisSources state={state} onSelect={(system, id) => { void adapter.selectAnalysisBase(system, id); }} />
+        <SigemPwAnalysisSources
+          state={state}
+          onSelect={(system, id) => { void adapter.selectAnalysisBase(system, id); }}
+          canManageSigemHistory={Boolean(window.GrconSharedSigemQuery?.canManageHistory?.())}
+          onActivateSigem={(id) => { void adapter.activateSharedSigemVersion(id); }}
+          onDeleteSigem={(id) => { void adapter.deleteSharedSigemVersion(id); }}
+        />
         <SigemPwBases
           state={state}
           onImportSigem={(file) => { void adapter.importSigem(file); }}
