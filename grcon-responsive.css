@@ -449,3 +449,113 @@ html[data-app="GRCON"][data-ui-generation="3"] :where(
 .history-detail-table th[data-history-column="document"],.history-detail-table th[data-history-column="original"],.history-detail-table th[data-history-column="sent"] { min-width: 280px; }
 .history-detail-table th[data-history-column="sheet"] { min-width: 160px; }
 .history-table-note { margin: 0; padding: 10px 18px; color: var(--muted,#657580); font-size: 12px; line-height: 1.5; }
+
+/* A altura do cabeçalho depende dos controles da conta e do zoom. O quadro
+   usa o espaço restante real, sem subtrair um cabeçalho fixo de 64 pixels. */
+html[data-app="GRCON"][data-ui-generation="3"] .topbar {
+  height: auto;
+  min-block-size: 0;
+  flex-wrap: wrap;
+  gap: .65rem 1rem;
+  padding: .65rem clamp(.75rem, 1.6vw, 1.5rem);
+}
+html[data-app="GRCON"][data-ui-generation="3"] .brand {
+  flex: 1 1 21rem;
+  min-inline-size: 0;
+}
+html[data-app="GRCON"][data-ui-generation="3"] .brand > div { min-inline-size: 0; }
+html[data-app="GRCON"][data-ui-generation="3"] .brand-title {
+  white-space: normal;
+  line-height: 1.25;
+  font-size: clamp(.95rem, 1.1vw, 1.25rem);
+}
+html[data-app="GRCON"][data-ui-generation="3"] .runtime-status {
+  flex: 1 1 32rem;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+html[data-app="GRCON"][data-ui-generation="3"] .grcon-cloud-account-button {
+  max-inline-size: 100%;
+}
+@media (min-width: 58.001rem) {
+  html[data-app="GRCON"][data-ui-generation="3"] {
+    block-size: 100%;
+    overflow: hidden;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] body {
+    display: flex;
+    flex-direction: column;
+    block-size: 100vh;
+    block-size: 100dvh;
+    min-block-size: 0;
+    overflow: hidden;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .topbar {
+    position: relative;
+    top: auto;
+    flex: 0 0 auto;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .app-shell {
+    flex: 1 1 0;
+    block-size: auto;
+    min-block-size: 0;
+    inline-size: 100%;
+    align-items: stretch;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .ops-sidebar {
+    position: static;
+    align-self: stretch;
+    block-size: auto;
+    min-block-size: 0;
+    overflow-y: auto;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .workspace {
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block-start: 1rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .app-footer { grid-column: 1 / -1; }
+}
+@media (max-width: 58rem) {
+  html[data-app="GRCON"][data-ui-generation="3"] .topbar { position: relative; top: auto; }
+  html[data-app="GRCON"][data-ui-generation="3"] .app-shell { min-block-size: 0; }
+  html[data-app="GRCON"][data-ui-generation="3"] .brand,
+  html[data-app="GRCON"][data-ui-generation="3"] .runtime-status { flex-basis: 100%; }
+}
+@media (max-width: 44rem) {
+  html[data-app="GRCON"][data-ui-generation="3"] .runtime-status { display: flex; justify-content: flex-start; }
+  html[data-app="GRCON"][data-ui-generation="3"] .runtime-status > * { inline-size: auto; }
+}
+
+/* O aviso fica visível até o usuário fechá-lo; não interrompe a operação. */
+.sigem-monitor-popup {
+  position: fixed;
+  z-index: 950;
+  inset-block-start: 1rem;
+  inset-inline-end: 1rem;
+  inline-size: min(27rem, calc(100vw - 2rem));
+  max-block-size: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: 1rem;
+  color: var(--text-1, #172733);
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--brand-600, #155c8a);
+  border-inline-start-width: 5px;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgb(16 48 68 / 22%);
+}
+.sigem-monitor-popup header { display: flex; align-items: flex-start; gap: .75rem; }
+.sigem-monitor-popup header > div { flex: 1; min-inline-size: 0; }
+.sigem-monitor-popup header strong, .sigem-monitor-popup header small { display: block; }
+.sigem-monitor-popup header strong { margin-block-start: .35rem; font-size: 1rem; }
+.sigem-monitor-popup header > button { flex: 0 0 auto; border: 0; background: transparent; color: inherit; font-size: 1.4rem; }
+.sigem-monitor-popup p { margin: .65rem 0; font-size: .85rem; }
+.sigem-monitor-popup ul { display: grid; gap: .6rem; list-style: none; padding: 0; margin: .75rem 0; }
+.sigem-monitor-popup li { display: grid; gap: .2rem; overflow-wrap: anywhere; font-size: .85rem; }
+.sigem-monitor-popup li span { color: var(--text-2, #536777); }
+.sigem-monitor-popup footer { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+@media (max-width: 44rem) {
+  .sigem-monitor-popup { inset-block-start: .5rem; inset-inline-end: .5rem; inline-size: calc(100vw - 1rem); max-block-size: calc(100dvh - 1rem); }
+}

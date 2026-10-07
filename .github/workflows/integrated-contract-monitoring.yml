@@ -28,6 +28,7 @@ jobs:
         run: |
           python3 -m http.server 8778 --bind 127.0.0.1 > /tmp/grcon-integrated-server.log 2>&1 &
           node scripts/validar-integrated-contracts-browser.cjs
+          node scripts/validar-monitoring-popups-responsive.cjs
       - uses: actions/upload-artifact@v6
         if: always()
         with:
