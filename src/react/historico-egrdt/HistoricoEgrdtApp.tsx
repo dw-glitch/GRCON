@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { UiMetaPill, UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
+import { DocumentClassBadge } from "../core/ui/DocumentClassBadge";
 import { historicoEgrdtAdapter as Adapter } from "./services/historicoEgrdtAdapter";
 import { useHistoricoEgrdt, LIST_PAGE_SIZE } from "./hooks/useHistoricoEgrdt";
 
@@ -436,7 +437,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                       <td data-label="Situação na geração">{file.sigemStatus || "—"}</td>
                       <td data-label="Alocação">{file.allocation || "—"}{file.sharedAllocationContext?.references.length ? <details><summary>Status na Central</summary>{file.sharedAllocationContext.references.map((item, i) => <p key={i}>{item.allocation || "Sem alocação"} · {item.allocationStatus || "Sem status"} · {item.workflow || "Sem workflow"} · linha {item.sourceRow}</p>)}<small>{file.sharedAllocationContext.centralFileName}</small></details> : null}</td>
                       <td data-label="Versão da LD enviada">{file.ldPrazo || "Não registrado"}</td>
-                      <td data-label="Aba LD">{file.sheet || "—"}</td>
+                      <td data-label="Aba LD"><DocumentClassBadge value={file.sheet} /></td>
                     </tr>
                   );
                 })}

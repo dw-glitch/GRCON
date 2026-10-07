@@ -73,4 +73,48 @@ assert.equal(textosCrus.length, 0, `posting_conference_refinement.js voltou a es
 // 6. O refinamento da Conferência mantém o descarte dos próprios registros.
 assert.match(refinamento, /moduleObserver\?\.takeRecords\?\.\(\)/);
 
+// 7. document-class visual contract: cores ficam centralizadas e as principais
+//    superfícies usam identificação textual + semântica, sem reaproveitar cores de status.
+const classCss = ler("grcon-ui.css");
+assert.match(classCss, /--document-et-color:\s*#0a4f83/);
+assert.match(classCss, /--document-et-background:\s*#e6f1fa/);
+assert.match(classCss, /--document-n1710-color:\s*#542c84/);
+assert.match(classCss, /--document-n1710-background:\s*#f1eaf8/);
+assert.match(classCss, /\.document-class-badge\[data-document-class="ET"\]/);
+assert.match(classCss, /\.document-class-badge\[data-document-class="N-1710"\]/);
+
+const dashboard = ler("retomar.js");
+assert.doesNotMatch(dashboard, /--dash-et:#0b7895/);
+assert.doesNotMatch(dashboard, /--dash-n1710:#6d4ac7/);
+assert.match(dashboard, /--dash-et:var\(--document-et-accent/);
+assert.match(dashboard, /data-document-class="ET"/);
+assert.match(dashboard, /data-document-class="N-1710"/);
+
+const spwTable = ler("src/react/sigem-pw/components/SigemPwTable.tsx");
+const spwEvolution = ler("src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx");
+const historyReact = ler("src/react/historico-egrdt/HistoricoEgrdtApp.tsx");
+assert.match(spwTable, /DocumentClassBadge/);
+assert.match(spwEvolution, /DocumentClassBadge/);
+assert.match(historyReact, /DocumentClassBadge/);
+const spwRevision = ler("src/react/sigem-pw/revision/components/SigemPwRevisionTable.tsx");
+const conferenceUi = ler("posting_conference_app.js");
+assert.match(spwRevision, /DocumentClassBadge/);
+assert.match(conferenceUi, /document-class-badge/);
+
+function hexLuminance(hex) {
+  const rgb = hex.replace("#", "").match(/.{2}/g).map((part) => parseInt(part, 16) / 255).map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
+  );
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+function contrastRatio(first, second) {
+  const a = hexLuminance(first);
+  const b = hexLuminance(second);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+assert.ok(contrastRatio("#0a4f83", "#e6f1fa") >= 4.5, "ET precisa manter contraste AA no badge");
+assert.ok(contrastRatio("#542c84", "#f1eaf8") >= 4.5, "N-1710 precisa manter contraste AA no badge");
+assert.ok(contrastRatio("#ffffff", "#0b63a3") >= 4.5, "ET precisa manter contraste AA no gráfico");
+assert.ok(contrastRatio("#ffffff", "#6b3fa0") >= 4.5, "N-1710 precisa manter contraste AA no gráfico");
+
 console.log("ui_stability: sem escrita incondicional em ui-v3 e na Conferência — ciclo de repintura não pode voltar");

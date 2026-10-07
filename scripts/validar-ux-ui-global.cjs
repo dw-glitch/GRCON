@@ -303,6 +303,26 @@ async function screenshot(page, name, viewport, allViewports = false) {
   await page.screenshot({ path: path.join(outputDir, `${name}-${viewport}.png`), fullPage: true });
 }
 
+async function auditDocumentClassVisuals(page) {
+  return page.evaluate(() => {
+    const read = (selector) => {
+      const node = document.querySelector(selector);
+      if (!node) return null;
+      const style = getComputedStyle(node);
+      return {
+        text: node.textContent.trim(),
+        color: style.color,
+        background: style.backgroundColor,
+        border: style.borderColor,
+      };
+    };
+    return {
+      et: read('[data-dashboard-family="ET"]'),
+      n1710: read('[data-dashboard-family="N-1710"]'),
+    };
+  });
+}
+
 async function visit(page, selector, label, viewport, waitMs = 800) {
   const clicked = await clickVisible(page, selector);
   if (!clicked) return { label, skipped: true };
@@ -317,7 +337,8 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
   const metrics = {};
   try {
     for (const viewport of [1920, 1600, 1440, 1366, 1280]) {
-      const context = await browser.newContext({ viewport: { width: viewport, height: 900 }, serviceWorkers: "block" });
+      const viewportHeight = viewport === 1366 ? 768 : viewport === 1920 ? 1080 : 900;
+      const context = await browser.newContext({ viewport: { width: viewport, height: viewportHeight }, serviceWorkers: "block" });
       const page = await context.newPage();
       const consoleErrors = [];
       const pageErrors = [];
@@ -345,6 +366,18 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="requests"]', "Consultas", viewport, 1100));
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="analysis-history"]', "Histórico de análises", viewport, 1100));
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="history"]', "Histórico de eGRDTs", viewport, 1100));
+      const dashboardVisit = await visit(page, '.ops-sidebar [data-grcon-view="dashboard"]', "Dashboard", viewport, 700);
+      viewportMetrics.push(dashboardVisit);
+      if (!dashboardVisit.skipped) {
+        const classVisuals = await auditDocumentClassVisuals(page);
+        assert.equal(classVisuals.et?.text, "ET", "Dashboard deve manter identificação textual ET");
+        assert.equal(classVisuals.n1710?.text, "N-1710", "Dashboard deve manter identificação textual N-1710");
+        assert.notEqual(classVisuals.et?.color, classVisuals.n1710?.color, "ET e N-1710 precisam de cores distintas");
+        assert.notEqual(classVisuals.et?.background, classVisuals.n1710?.background, "ET e N-1710 precisam de fundos distintos");
+        assert.notEqual(classVisuals.et?.border, classVisuals.n1710?.border, "ET e N-1710 precisam de bordas distintas");
+        viewportMetrics.push({ label: "Dashboard · ET × N-1710", visuals: classVisuals });
+        await screenshot(page, "dashboard-et-n1710", viewport, true);
+      }
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="sigem"]', "Postagem SIGEM", viewport, 900));
 
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="additional-tools"]', "Ferramentas adicionais", viewport, 500));
@@ -396,7 +429,7 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
     }
 
     fs.writeFileSync(path.join(outputDir, "global-ux-ui-metrics.json"), JSON.stringify(metrics, null, 2));
-    console.log("OK — auditoria UX/UI navegacional: 5 viewports, módulos principais, ferramentas, Conferência, SIGEM × PW, drawers/toggles e console.");
+    console.log("OK — auditoria UX/UI navegacional: 5 viewports (incluindo 1366×768 e 1920×1080), Dashboard ET/N-1710, módulos principais, ferramentas, Conferência, SIGEM × PW, drawers/toggles e console.");
   } finally {
     await browser.close();
   }
