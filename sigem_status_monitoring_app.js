@@ -16,7 +16,7 @@
     unreadCount: 0,
     epoch: 0,
   };
-  const delivery = { context: "", timer: 0, debounce: 0, request: null, seen: new Set(), popup: new Map() };
+  const delivery = { context: "", timer: 0, debounce: 0, request: null, toastTimer: 0, seen: new Set(), popup: new Map() };
 
   const $ = (selector, context) => (context || document).querySelector(selector);
   const escapeHtml = (value) => String(value == null ? "" : value)
@@ -233,12 +233,75 @@
     if (meta && state.activeComparison) meta.textContent = rows.length.toLocaleString("pt-BR") + " alteração(ões) exibida(s). A exportação usa exatamente este filtro.";
   }
 
+  function notificationTitle(item) {
+    if (item?.previous_status || item?.current_status || item?.kind === "MONITORED_STATUS_CHANGE") return "Documento monitorado atualizado";
+    return item?.title || "Atualização de documento monitorado";
+  }
+  function relativeDate(value) {
+    const date = new Date(value || "");
+    if (Number.isNaN(date.getTime())) return "Agora";
+    const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    if (seconds < 45) return "Agora";
+    if (seconds < 3600) return "Há " + Math.max(1, Math.floor(seconds / 60)) + " min";
+    if (seconds < 86400) return "Há " + Math.floor(seconds / 3600) + " h";
+    return formatDate(value);
+  }
+  function notificationCardMarkup(item, readAttribute) {
+    const unread = !item?.is_read;
+    const transition = item?.previous_status || item?.current_status
+      ? '<div class="grcon-notification-transition"><span>Status</span><strong>' + escapeHtml(item.previous_status || "—") + '<b aria-hidden="true">→</b>' + escapeHtml(item.current_status || "—") + '</strong></div>'
+      : "";
+    const message = item?.message ? '<p>' + escapeHtml(item.message) + '</p>' : "";
+    const action = unread
+      ? '<button class="text-button compact grcon-notification-read" type="button" ' + readAttribute + '="' + escapeHtml(item.id) + '">Marcar como lida</button>'
+      : '<span class="grcon-notification-read-state">Lida</span>';
+    return '<article class="grcon-notification-item ' + (unread ? "is-unread" : "is-read") + '">' +
+      '<span class="grcon-notification-dot" aria-hidden="true"></span>' +
+      '<div class="grcon-notification-copy"><div class="grcon-notification-line"><strong>' + escapeHtml(notificationTitle(item)) + '</strong><time datetime="' + escapeHtml(item.created_at || "") + '">' + escapeHtml(relativeDate(item.created_at)) + '</time></div>' +
+      '<code class="grcon-notification-code">' + escapeHtml(item.document_code || "Documento monitorado") + '</code>' +
+      transition + message + '</div>' + action + '</article>';
+  }
+  function notificationEmptyMarkup() {
+    return '<div class="grcon-notification-empty"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg><strong>Nenhuma notificação</strong><span>As atualizações dos documentos que você monitora aparecerão aqui.</span></div>';
+  }
+  function renderUnreadBadge() {
+    const badge = $("#grcon-notification-count");
+    const button = $("#grcon-notification-button");
+    if (badge) {
+      badge.textContent = String(state.unreadCount || 0);
+      badge.hidden = !state.unreadCount;
+    }
+    if (button) {
+      button.setAttribute("aria-label", state.unreadCount
+        ? "Notificações, " + state.unreadCount + " não lida" + (state.unreadCount === 1 ? "" : "s")
+        : "Notificações");
+    }
+  }
   function renderNotifications() {
     const target = $("#sigem-monitor-notifications");
-    if (!target) return;
-    target.innerHTML = state.notifications.map((item) => '<button class="sigem-monitor-notification ' + (item.is_read ? "is-read" : "is-unread") + '" data-sigem-notification="' + escapeHtml(item.id) + '" type="button"><span><strong>' + escapeHtml(item.title) + '</strong><small>' + escapeHtml(item.document_code || "") + (item.previous_status || item.current_status ? " · " + escapeHtml(item.previous_status || "—") + " → " + escapeHtml(item.current_status || "—") : "") + '</small><em>' + escapeHtml(item.message) + '</em></span><time>' + escapeHtml(formatDate(item.created_at)) + '</time></button>').join("") || '<p class="sigem-monitor-empty">Nenhuma notificação deste contrato.</p>';
+    if (target) {
+      target.innerHTML = state.notifications.length
+        ? state.notifications.map((item) => notificationCardMarkup(item, "data-sigem-notification")).join("")
+        : notificationEmptyMarkup();
+    }
     const mark = $("#sigem-monitor-read-all");
     if (mark) mark.disabled = !state.notifications.some((item) => !item.is_read);
+    renderUnreadBadge();
+    renderNotificationCenter();
+  }
+  function renderNotificationCenter() {
+    const target = $("#grcon-notification-center-list");
+    if (!target) return;
+    const unread = Number(state.unreadCount || 0);
+    target.innerHTML = state.notifications.length
+      ? state.notifications.slice(0, 100).map((item) => notificationCardMarkup(item, "data-notification-center-read")).join("")
+      : notificationEmptyMarkup();
+    const summary = $("#grcon-notification-center-summary");
+    if (summary) summary.textContent = unread
+      ? unread + " não lida" + (unread === 1 ? "" : "s")
+      : "Tudo em dia";
+    const markAll = $("#grcon-notification-center-read-all");
+    if (markAll) markAll.disabled = !unread;
   }
 
   function deliveryContext() {
@@ -246,22 +309,69 @@
     return user && workspaceId() ? user + ":" + workspaceId() : "";
   }
   function seenKey() { return "grcon.cloud.notification-popups.v1." + delivery.context; }
+  function closeNotificationCenter(restoreFocus) {
+    const popover = $("#grcon-notification-popover");
+    const button = $("#grcon-notification-button");
+    if (!popover || popover.hidden) return;
+    popover.hidden = true;
+    button?.setAttribute("aria-expanded", "false");
+    if (restoreFocus) button?.focus();
+  }
+  async function refreshNotificationCenterData() {
+    const context = deliveryContext();
+    const workspace = workspaceId();
+    if (!context || !workspace) {
+      state.notifications = [];
+      state.unreadCount = 0;
+      renderNotifications();
+      return;
+    }
+    const [notifications, unread] = await Promise.all([
+      rpc("grcon_notifications_list", { target_workspace: workspace, only_unread: false, limit_count: 100 }),
+      rpc("grcon_notifications_unread_count", { target_workspace: workspace }),
+    ]);
+    if (context !== deliveryContext()) return;
+    state.notifications = Array.isArray(notifications) ? notifications : [];
+    state.unreadCount = Number(unread || 0);
+    renderNotifications();
+  }
+  async function openNotificationCenter(forceOpen) {
+    installBadge();
+    const popover = $("#grcon-notification-popover");
+    const button = $("#grcon-notification-button");
+    if (!popover || !button) return;
+    const shouldOpen = forceOpen == null ? popover.hidden : Boolean(forceOpen);
+    if (!shouldOpen) {
+      closeNotificationCenter(false);
+      return;
+    }
+    popover.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    renderNotificationCenter();
+    try {
+      await refreshNotificationCenterData();
+    } catch (error) {
+      notify(error?.message || "Não foi possível atualizar as notificações.", "error");
+    }
+  }
+  function positionNotificationToast() {
+    const popup = $("#sigem-monitor-popup");
+    if (!popup) return;
+    const topbar = $(".topbar");
+    const top = Math.max(12, Math.ceil((topbar?.getBoundingClientRect().bottom || 0) + 12));
+    popup.style.insetBlockStart = top + "px";
+  }
   function hidePopup() {
     delivery.popup.clear();
+    root.clearTimeout(delivery.toastTimer);
+    delivery.toastTimer = 0;
     $("#sigem-monitor-popup")?.remove();
   }
   function rememberShown(ids) {
-    // Delivery acknowledgements are local to this user and contract. Closing a
-    // popup never marks the shared alert as read (nor reads it for another user).
+    // A apresentação é individual por usuário/contrato. Fechar ou aguardar o
+    // desaparecimento do toast nunca equivale a marcar a notificação como lida.
     for (const id of ids) delivery.seen.add(id);
     try { localStorage.setItem(seenKey(), JSON.stringify([...delivery.seen])); } catch (_) { /* session still deduplicates */ }
-  }
-  async function openNotificationCenter() {
-    await root.GRCONModuleLoader?.ensureModule?.("requests");
-    document.querySelector('[data-grcon-view="requests"]')?.click();
-    document.querySelector('[data-requests-area="sigem-monitoring"]')?.click();
-    await loadAll();
-    $("#sigem-monitor-notifications")?.scrollIntoView({ block: "center" });
   }
   function showPopup(items) {
     for (const item of items) delivery.popup.set(item.id, item);
@@ -269,37 +379,35 @@
     if (!popup) {
       popup = document.createElement("aside");
       popup.id = "sigem-monitor-popup";
-      popup.className = "sigem-monitor-popup";
-      popup.setAttribute("role", "alert");
-      popup.setAttribute("aria-live", "assertive");
+      popup.className = "sigem-monitor-popup grcon-notification-toast";
+      popup.setAttribute("role", "status");
+      popup.setAttribute("aria-live", "polite");
       popup.setAttribute("aria-atomic", "true");
       document.body.appendChild(popup);
     }
     const rows = [...delivery.popup.values()];
     const contract = cloud()?.state?.contract?.code || cloud()?.state?.membership?.contract_code || "Contrato ativo";
-    popup.innerHTML = '<header><div><small>' + escapeHtml(contract) + ' · Consulta Geral atualizada</small><strong>Documento monitorado mudou de status</strong></div><button type="button" data-popup-close aria-label="Fechar aviso">×</button></header>' +
-      '<p>' + rows.length + (rows.length === 1 ? ' alteração para acompanhar.' : ' alterações para acompanhar.') + '</p><ul>' +
-      rows.slice(0, 4).map(item => '<li><strong>' + escapeHtml(item.document_code || item.title) + '</strong><span>' + escapeHtml(item.previous_status || "—") + ' → ' + escapeHtml(item.current_status || "—") + '</span></li>').join("") + '</ul>' +
-      (rows.length > 4 ? '<p>Mais ' + (rows.length - 4) + ' alteração(ões) na central de alertas.</p>' : '') +
-      '<footer><button type="button" class="primary-button compact" data-popup-open>Ver notificações</button><button type="button" class="text-button" data-popup-read>Marcar estes avisos como lidos</button></footer>';
-    popup.querySelector('[data-popup-close]').addEventListener("click", hidePopup);
-    popup.querySelector('[data-popup-open]').addEventListener("click", () => {
+    popup.innerHTML =
+      '<header><span class="grcon-notification-toast-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg></span><div><small>' + escapeHtml(contract) + '</small><strong>Documento monitorado atualizado</strong></div><button type="button" data-popup-close aria-label="Fechar notificação">×</button></header>' +
+      '<div class="grcon-notification-toast-list">' +
+      rows.slice(0, 3).map((item) =>
+        '<article><code>' + escapeHtml(item.document_code || "Documento monitorado") + '</code>' +
+        (item.previous_status || item.current_status
+          ? '<span><small>Status</small><strong>' + escapeHtml(item.previous_status || "—") + '<b aria-hidden="true">→</b>' + escapeHtml(item.current_status || "—") + '</strong></span>'
+          : '<span><strong>' + escapeHtml(item.message || item.title || "Atualização disponível") + '</strong></span>') +
+        '<time>' + escapeHtml(relativeDate(item.created_at)) + '</time></article>'
+      ).join("") +
+      '</div>' +
+      (rows.length > 3 ? '<p class="grcon-notification-toast-more">+' + (rows.length - 3) + ' atualização(ões) na central.</p>' : '') +
+      '<footer><button type="button" class="secondary-button compact" data-popup-open>Abrir notificações</button></footer>';
+    popup.querySelector("[data-popup-close]").addEventListener("click", hidePopup);
+    popup.querySelector("[data-popup-open]").addEventListener("click", () => {
       hidePopup();
-      void openNotificationCenter().catch(error => notify(error.message, "error"));
+      void openNotificationCenter(true);
     });
-    popup.querySelector('[data-popup-read]').addEventListener("click", async event => {
-      const context = delivery.context;
-      event.currentTarget.disabled = true;
-      try {
-        await rpc("grcon_notifications_mark_read", { target_workspace: workspaceId(), target_ids: rows.map(item => item.id) });
-        if (context !== delivery.context) return;
-        hidePopup();
-        await refreshNotifications();
-      } catch (error) {
-        notify(error.message || "Não foi possível atualizar os avisos.", "error");
-        if (context === delivery.context) showPopup([]);
-      }
-    });
+    positionNotificationToast();
+    root.clearTimeout(delivery.toastTimer);
+    delivery.toastTimer = root.setTimeout(hidePopup, 8000);
     rememberShown(items.map(item => item.id));
   }
   async function refreshNotifications() {
@@ -316,14 +424,13 @@
         if (context !== delivery.context || context !== deliveryContext() || document.hidden) return;
         const rows = Array.isArray(notifications) ? notifications : [];
         state.unreadCount = Number(unread || 0);
-        const badge = $("#grcon-notification-count");
-        if (badge) { badge.textContent = String(state.unreadCount); badge.hidden = !state.unreadCount; }
-        // A different session of this user may have read a visible alert.
+        const incoming = new Set(rows.map((item) => item.id));
+        state.notifications = rows.concat(state.notifications.filter((item) => item?.id && !incoming.has(item.id))).slice(0, 100);
+        renderNotifications();
         if (!state.unreadCount) hidePopup();
         const fresh = rows.filter(item => item.id && !item.is_read && !delivery.seen.has(item.id));
         if (fresh.length) {
           showPopup(fresh.reverse());
-          // Refresh the visible monitoring screen without reloading the app.
           if (!$("#requests-area-sigem-monitoring")?.hidden) void loadAll();
         }
       } catch (_) {
@@ -341,13 +448,16 @@
   function stopDelivery() {
     root.clearInterval(delivery.timer);
     root.clearTimeout(delivery.debounce);
+    root.clearTimeout(delivery.toastTimer);
     delivery.timer = 0;
+    delivery.toastTimer = 0;
     delivery.context = "";
     delivery.request = null;
     delivery.seen.clear();
     hidePopup();
-    const badge = $("#grcon-notification-count");
-    if (badge) { badge.textContent = "0"; badge.hidden = true; }
+    closeNotificationCenter(false);
+    state.unreadCount = 0;
+    renderUnreadBadge();
   }
   function startDelivery() {
     const context = deliveryContext();
@@ -495,7 +605,15 @@
   async function markRead(ids) {
     try {
       await rpc("grcon_notifications_mark_read", { target_workspace: workspaceId(), target_ids: ids || null });
-      await loadAll();
+      const selected = Array.isArray(ids) ? new Set(ids) : null;
+      state.notifications = state.notifications.map((item) =>
+        !selected || selected.has(item.id) ? { ...item, is_read: true } : item
+      );
+      state.unreadCount = selected
+        ? state.notifications.filter((item) => !item.is_read).length
+        : 0;
+      renderNotifications();
+      await refreshNotificationCenterData();
     } catch (error) {
       notify(error?.message || "Não foi possível atualizar as notificações.", "error");
     }
@@ -559,15 +677,41 @@
   }
 
   function installBadge() {
-    if ($( "#grcon-notification-button")) return;
-    const button = document.createElement("button"); button.id = "grcon-notification-button"; button.type = "button"; button.className = "secondary-button compact";
-    button.innerHTML = 'Notificações <b id="grcon-notification-count" hidden>0</b>';
-    button.addEventListener("click", async () => {
-      try {
-        await openNotificationCenter();
-      } catch (error) { root.GrconNotify?.(error.message || "Não foi possível abrir as notificações.", "error"); }
+    if ($("#grcon-notification-button")) return;
+    const host = $(".runtime-status") || $(".topbar");
+    if (!host) return;
+    const control = document.createElement("div");
+    control.id = "grcon-notification-control";
+    control.className = "grcon-notification-control";
+    control.innerHTML =
+      '<button id="grcon-notification-button" class="secondary-button compact grcon-notification-button" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="grcon-notification-popover">' +
+      '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg><span>Notificações</span><b id="grcon-notification-count" hidden aria-hidden="true">0</b></button>' +
+      '<section id="grcon-notification-popover" class="grcon-notification-popover" role="dialog" aria-label="Central de notificações" hidden>' +
+      '<header><div><strong>Notificações</strong><span id="grcon-notification-center-summary">Tudo em dia</span></div><button class="grcon-notification-close" type="button" data-notification-center-close aria-label="Fechar notificações">×</button></header>' +
+      '<div class="grcon-notification-center-list" id="grcon-notification-center-list"></div>' +
+      '<footer><span>Somente atualizações dos documentos que você monitora.</span><button class="text-button compact" id="grcon-notification-center-read-all" data-notification-center-read-all type="button">Marcar todas como lidas</button></footer>' +
+      '</section>';
+    host.appendChild(control);
+    const button = $("#grcon-notification-button");
+    const popover = $("#grcon-notification-popover");
+    button.addEventListener("click", () => void openNotificationCenter());
+    popover.addEventListener("click", (event) => {
+      const read = event.target.closest("[data-notification-center-read]")?.dataset.notificationCenterRead;
+      if (read) void markRead([read]);
+      if (event.target.closest("[data-notification-center-read-all]")) void markAllRead();
+      if (event.target.closest("[data-notification-center-close]")) closeNotificationCenter(true);
     });
-    ($(".runtime-status") || $(".topbar"))?.appendChild(button);
+    document.addEventListener("pointerdown", (event) => {
+      if (!control.contains(event.target)) closeNotificationCenter(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !popover.hidden) {
+        event.preventDefault();
+        closeNotificationCenter(true);
+      }
+    });
+    renderUnreadBadge();
+    renderNotificationCenter();
   }
   function editMonitored(id) {
     const item = state.monitored.find(m => m.id === id); if (!item || !canManage()) return;
@@ -598,6 +742,7 @@
   root.addEventListener("grcon:cloud-signed-out", stopDelivery);
   root.addEventListener("online", startDelivery);
   root.addEventListener("focus", startDelivery);
+  root.addEventListener("resize", positionNotificationToast);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) startDelivery(); });
   root.addEventListener("grcon:contract-context-changed", () => {
     startDelivery();
@@ -623,5 +768,5 @@
     if (workspaceId()) void loadAll();
   });
 
-  root.GrconSigemStatusMonitoring = { load: loadAll, openComparison, filteredChanges, refreshNotifications };
+  root.GrconSigemStatusMonitoring = { load: loadAll, openComparison, filteredChanges, refreshNotifications, openNotificationCenter, closeNotificationCenter };
 })(typeof globalThis !== "undefined" ? globalThis : this);
