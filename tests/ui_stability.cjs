@@ -96,5 +96,9 @@ const historyReact = ler("src/react/historico-egrdt/HistoricoEgrdtApp.tsx");
 assert.match(spwTable, /DocumentClassBadge/);
 assert.match(spwEvolution, /DocumentClassBadge/);
 assert.match(historyReact, /DocumentClassBadge/);
+const spwRevision = ler("src/react/sigem-pw/revision/components/SigemPwRevisionTable.tsx");
+const conferenceUi = ler("posting_conference_app.js");
+assert.match(spwRevision, /DocumentClassBadge/);
+assert.match(conferenceUi, /document-class-badge/);
 
 console.log("ui_stability: sem escrita incondicional em ui-v3 e na Conferência — ciclo de repintura não pode voltar");
