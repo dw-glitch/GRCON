@@ -86,10 +86,10 @@ assert.match(classCss, /\.document-class-badge\[data-document-class="N-1710"\]/)
 // O Dashboard SIGEM × PW mantém ET/N-1710 identificáveis por contorno/texto,
 // mas sem preenchimento azul/lilás nos cards e badges do resumo.
 const sigemPwCss = ler("sigem-pw-dashboard.css");
-assert.match(sigemPwCss, /\.spw-system-split div\[data-document-class="ET"\][\\s\\S]*?background:\s*var\(--spw-surface\)/);
-assert.match(sigemPwCss, /\.spw-system-split div\[data-document-class="N-1710"\][\\s\\S]*?background:\s*var\(--spw-surface\)/);
-assert.match(sigemPwCss, /\.document-class-badge\[data-document-class="ET"\],[\\s\\S]*?\.document-class-badge\[data-document-class="N-1710"\][\\s\\S]*?background:\s*var\(--spw-surface\)/);
-assert.doesNotMatch(sigemPwCss, /\.spw-system-split div\[data-document-class="(?:ET|N-1710)"\][\\s\\S]*?background:\s*var\(--document-(?:et|n1710)-background/);
+assert.match(sigemPwCss, /\.spw-system-split div\[data-document-class="ET"\][\s\S]*?background:\s*var\(--spw-surface\)/);
+assert.match(sigemPwCss, /\.spw-system-split div\[data-document-class="N-1710"\][\s\S]*?background:\s*var\(--spw-surface\)/);
+assert.match(sigemPwCss, /\.document-class-badge\[data-document-class="ET"\],[\s\S]*?\.document-class-badge\[data-document-class="N-1710"\][\s\S]*?background:\s*var\(--spw-surface\)/);
+assert.doesNotMatch(sigemPwCss, /\.spw-system-split div\[data-document-class="(?:ET|N-1710)"\][\s\S]*?background:\s*var\(--document-(?:et|n1710)-background/);
 
 const dashboard = ler("retomar.js");
 assert.doesNotMatch(dashboard, /--dash-et:#0b7895/);
