@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
   const Core = root.GrconSharedSigemQueryCore;
-  const state = { shared: null, local: null, stale: false, error: "", busy: false, workspace: "", context: Core.context(), refreshPromise: null };
+  const state = { shared: null, local: null, history: [], stale: false, error: "", busy: false, workspace: "", context: Core.context(), refreshPromise: null };
   let epoch = 0;
   let lastEmission = "";
   let indexedShared = null, indexedLocal = null;
@@ -99,7 +99,13 @@
         const data = await request("current", { target_workspace: workspace });
         const meta = Array.isArray(data) ? data[0] : data;
         if (!valid()) return null;
-        if (!meta?.snapshot_id) { state.stale = false; state.error = ""; return current(); }
+        if (!meta?.snapshot_id) {
+          const hadShared = Boolean(state.shared);
+          state.shared = null; state.stale = false; state.error = "";
+          try { await cachePut(workspace, null); } catch (_) { /* cache opcional */ }
+          if (hadShared) emit();
+          return current();
+        }
         if (state.shared?.meta?.snapshotId === meta.snapshot_id) {
           const dateChanged = state.shared.meta.referenceDate !== meta.metadata?.referenceDate;
           const changed = state.stale || state.error;
@@ -209,6 +215,42 @@
       emit(); return state.shared;
     } finally { state.busy = false; }
   }
+  async function listHistory() {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace || !cloud()?.state?.online) return state.history || [];
+    const data = await request("history", { target_workspace: workspace });
+    state.history = (Array.isArray(data) ? data : []).map((item) => ({
+      snapshotId: item.snapshot_id, fileName: item.file_name, recordCount: Number(item.record_count || 0),
+      publishedAt: item.published_at, createdAt: item.created_at, createdBy: item.created_by,
+      metadata: item.metadata || {}, status: item.status, isActive: Boolean(item.is_active),
+    }));
+    return state.history;
+  }
+  async function activateSnapshot(snapshotId) {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!canPublish()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral ativa.");
+    if (!workspace || !snapshotId) throw new Error("Consulta Geral inválida.");
+    await request("activate", { target_workspace: workspace, target_snapshot: snapshotId });
+    state.shared = null; state.stale = false; state.error = "";
+    try { await cachePut(workspace, null); } catch (_) {}
+    await refreshLatest(); await listHistory(); return state.shared;
+  }
+  async function deleteSnapshot(snapshotId) {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!canPublish()) throw new Error("Somente o proprietário pode excluir Consultas Gerais compartilhadas.");
+    if (!workspace || !snapshotId) throw new Error("Consulta Geral inválida.");
+    const deletedCurrent = state.shared?.meta?.snapshotId === snapshotId;
+    const result = await request("delete", { target_workspace: workspace, target_snapshot: snapshotId });
+    state.shared = null; state.stale = false; state.error = "";
+    try { await cachePut(workspace, null); } catch (_) {}
+    if (deletedCurrent && !result?.activeSnapshotId) {
+      state.local = null;
+      try { await (await runtime()).kvSet(`local-sigem-query:${workspace}`, null); } catch (_) {}
+    }
+    await refreshLatest(); await listHistory();
+    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-deleted", { detail: result || { deletedSnapshotId: snapshotId } }));
+    return result;
+  }
   async function setReferenceDate(value) {
     const base = current(), workspace = cloud()?.state?.membership?.workspace_id;
     if (!base || !["owner", "admin"].includes(cloud()?.state?.membership?.role)) throw new Error("Sem permissão para editar a data.");
@@ -224,7 +266,7 @@
     }
     root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: base.meta } }));
   }
-  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, setReferenceDate,
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, sharedCurrent: () => state.shared, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, listHistory, activateSnapshot, deleteSnapshot, setReferenceDate,
     context: () => state.context,
     sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
     resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });
