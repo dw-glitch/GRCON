@@ -50,12 +50,12 @@ const et = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
   assert.match(app, /state\.shared = null; indexedShared = null; state\.stale = false; state\.error = "";/);
   assert.doesNotMatch(app, /if \(!meta\?\.snapshot_id\) \{ state\.stale = false; state\.error = ""; return current\(\); \}/);
 
-  assert.match(migration, /status in \('pending','active','archived','deleted'\)/);
+  assert.match(migration, /add column if not exists deleted_at timestamptz/);
   assert.match(migration, /grcon_sigem_query_history/);
   assert.match(migration, /grcon_sigem_query_activate/);
   assert.match(migration, /grcon_sigem_query_delete/);
   assert.match(migration, /private\.grcon_has_role\(target_workspace,array\['owner'\]\)/);
-  assert.match(migration, /set status='deleted',deleted_at=now\(\),deleted_by=auth\.uid\(\)/);
+  assert.match(migration, /set status=case when status='active' then 'archived' else status end,[\s\S]*deleted_at=now\(\),deleted_by=auth\.uid\(\)/);
   assert.match(migration, /order by coalesce\(s\.published_at,s\.created_at\) desc/);
   assert.doesNotMatch(migration, /delete from private\.grcon_sigem_query_snapshots\s+where id=target_snapshot/i, "exclusão compartilhada deve preservar snapshot para rastreabilidade");
 })();
