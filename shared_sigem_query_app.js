@@ -22,6 +22,7 @@
   }
   function current() { return state.shared || state.local; }
   function canPublish() { return cloud()?.state?.membership?.role === "owner"; }
+  function canManageHistory() { return canPublish(); }
   function cacheKey(workspace) { return `shared-sigem-query:${workspace}`; }
   async function runtime() {
     await root.GRCONModuleLoader.ensure("posting_conference_core.js");
@@ -257,6 +258,33 @@
     while (snapshotCache.size > 3) snapshotCache.delete(snapshotCache.keys().next().value);
     return base;
   }
+  async function refreshAfterHistoryMutation(workspace) {
+    snapshotCache.clear(); versionsStamp = "";
+    if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
+    state.shared = null; state.stale = false; state.error = "";
+    await refreshLatest();
+    if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
+    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
+    return current();
+  }
+  async function activateVersion(id) {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace || !cloud()?.state?.online) throw new Error("Conecte-se para selecionar a Consulta Geral atual.");
+    if (!canManageHistory()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
+    if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
+    await request("activate", { target_workspace: workspace, target_snapshot: id });
+    return refreshAfterHistoryMutation(workspace);
+  }
+  async function deleteVersion(id) {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace || !cloud()?.state?.online) throw new Error("Conecte-se para excluir a base da Consulta Geral.");
+    if (!canManageHistory()) throw new Error("Somente o proprietário pode excluir bases da Consulta Geral.");
+    if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
+    const result = await request("delete", { target_workspace: workspace, target_snapshot: id });
+    snapshotCache.delete(id);
+    await refreshAfterHistoryMutation(workspace);
+    return result;
+  }
   async function syncDateProjection(base) {
     await Promise.all([root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js"), root.GRCONModuleLoader.ensure("sigem_pw_history_core.js")]);
     const dashboard = root.GrconSigemPwDashboard, history = root.GrconSigemPwHistory;
@@ -298,7 +326,7 @@
       root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
     }
   });
-  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, setReferenceDate, listVersions, loadSnapshot,
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, canManageHistory, parseFile, setLocal, publish, setReferenceDate, listVersions, loadSnapshot, activateVersion, deleteVersion,
     context: () => state.context,
     sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
     resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });
