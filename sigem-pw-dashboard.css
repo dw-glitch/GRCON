@@ -1138,3 +1138,24 @@
 #sigem-pw-dashboard-module .spw-system-split div[data-document-class] strong {
   color: var(--spw-text);
 }
+
+
+/* Consulta Geral compartilhada + auditoria do KPI SIGEM */
+#sigem-pw-dashboard-module .spw-system-total-action{font:inherit;color:inherit;border:1px solid transparent;background:transparent;border-radius:10px;padding:7px 9px;cursor:pointer;text-align:right}
+#sigem-pw-dashboard-module .spw-system-total-action:hover:not(:disabled),#sigem-pw-dashboard-module .spw-system-total-action:focus-visible{border-color:var(--border,#dce4eb);background:var(--surface-soft,#f5f8fa);outline:2px solid color-mix(in srgb,var(--accent,#287a72) 25%,transparent);outline-offset:2px}
+#sigem-pw-dashboard-module .spw-system-total-action:disabled{cursor:default;opacity:.7}
+#sigem-pw-dashboard-module .spw-system-total-action small{display:block;margin-top:3px;font-size:.62rem;font-weight:800}
+#sigem-pw-dashboard-module .spw-list-filters{grid-template-columns:minmax(240px,2fr) repeat(4,minmax(135px,1fr)) auto}
+#sigem-pw-dashboard-module .spw-filter-count{margin:4px 0 9px;color:var(--text-muted,#66798a);font-size:.72rem}
+#sigem-pw-dashboard-module .spw-history-section{display:grid;gap:8px}
+#sigem-pw-dashboard-module .spw-history-section+.spw-history-section{margin-top:18px;padding-top:16px;border-top:1px solid var(--border,#dce4eb)}
+#sigem-pw-dashboard-module .spw-history-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#sigem-pw-dashboard-module .spw-history-section-head h4{margin:2px 0 0;color:var(--text-strong,#183247)}
+#sigem-pw-dashboard-module .spw-history-guidance{margin:0;padding:8px 10px;border-radius:9px;background:var(--surface-soft,#f5f8fa);color:var(--text-muted,#66798a);font-size:.72rem}
+#sigem-pw-dashboard-module .spw-history-empty-state{font-size:.68rem;font-weight:800;color:var(--text-muted,#66798a)}
+#sigem-pw-dashboard-module .spw-history-main{min-width:0}
+#sigem-pw-dashboard-module .spw-history-metrics{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:5px;color:var(--text-muted,#66798a);font-size:.67rem}
+#sigem-pw-dashboard-module .spw-history-metrics b{color:var(--text-strong,#183247)}
+#sigem-pw-dashboard-module .spw-danger-button{border-color:color-mix(in srgb,var(--danger-500,#c74b43) 42%,var(--border,#dce4eb));color:var(--danger-700,#9d342f)}
+@media(max-width:1320px){#sigem-pw-dashboard-module .spw-list-filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){#sigem-pw-dashboard-module .spw-list-filters{grid-template-columns:1fr 1fr}#sigem-pw-dashboard-module .spw-history-row-shared{grid-template-columns:auto 1fr}#sigem-pw-dashboard-module .spw-history-row-shared .spw-history-actions{grid-column:1/-1;justify-content:flex-end}}
