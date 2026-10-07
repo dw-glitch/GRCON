@@ -9,6 +9,7 @@ import type {
   SigemPwResult,
   SigemPwState,
   WorkerModelPayload,
+  SharedSigemHistoryItem,
 } from "./domain";
 import type {
   RevisionAnalysis,
@@ -172,8 +173,13 @@ declare global {
     GrconSharedSigemQuery?: {
       current(): SigemPwBase | null;
       refresh(): Promise<SigemPwBase | null>;
+      refreshLatest(): Promise<SigemPwBase | null>;
+      canPublish(): boolean;
       setLocal(base: SigemPwBase): Promise<SigemPwBase | null>;
       parseFile(file: File): Promise<SigemPwBase>;
+      listHistory(): Promise<SharedSigemHistoryItem[]>;
+      activateSnapshot(snapshotId: string): Promise<SigemPwBase | null>;
+      deleteSnapshot(snapshotId: string): Promise<{ removedSnapshotId?: string; removedWasCurrent?: boolean; activeSnapshotId?: string }>;
     };
   }
   interface WindowEventMap {
