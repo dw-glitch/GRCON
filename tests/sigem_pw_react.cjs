@@ -42,7 +42,7 @@ assert.match(adapter, /rollbackStagedImport/);
 assert.match(adapter, /rollbackRecordedActiveBases/);
 assert.match(adapter, /modelGeneration/);
 assert.match(adapter, /new Worker\(new URL\("workers\/sigem_pw_dashboard\.worker\.js"/);
-assert.match(adapter, /aggregates\[aggregateKey\]/);
+assert.match(adapter, /state\.result = state\.aggregates\.all/);
 assert.match(adapter, /GRCONModuleLoader\.ensure\("xlsx"\)/);
 assert.match(adapter, /filteredRows\(\)/);
 assert.match(adapter, /rows\.slice\(start, start \+ 100\)/);
