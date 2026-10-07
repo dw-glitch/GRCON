@@ -81,7 +81,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions[2].metadata.referenceDate),'2026-10-04');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions[2].metadata.importedAt),'2026-10-05T13:00:00Z');
  const downloadPromise=page.waitForEvent('download');await page.locator('#spw-export').click();const download=await downloadPromise;
- const out=path.join('/tmp',download.suggestedFilename());await download.saveAs(out);const wb=XLSX.readFile(out);
+ const out=path.join('/tmp',download.suggestedFilename());await download.saveAs(out);const wb=XLSX.read(fs.readFileSync(out),{type:'buffer'});
  const meta=XLSX.utils.sheet_to_json(wb.Sheets.Metadados),rows=XLSX.utils.sheet_to_json(wb.Sheets['Relação']);
  assert.equal(meta.find(r=>r.Item==='Consulta Geral ID').Valor,'shared-old');assert.equal(meta.find(r=>r.Item==='Consulta Geral utilizada').Valor,'2026-10-04');assert.equal(meta.find(r=>r.Item==='PW ID').Valor,'pw-b');
  assert.equal(rows.length,await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.lists.all.length));assert.ok(rows.every(r=>String(r['Revisão'])==='0'));
