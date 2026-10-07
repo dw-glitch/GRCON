@@ -264,7 +264,7 @@
     state.shared = null; state.stale = false; state.error = "";
     await refreshLatest();
     if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
-    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
+    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated", { detail: { workspace } }));
     return current();
   }
   async function activateVersion(id) {
