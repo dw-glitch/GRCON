@@ -69,7 +69,7 @@ export function SigemPwDashboardApp() {
           </div>
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
-        <SigemPwSystemsSummary state={state} />
+        <SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} />
         <SigemPwSituationCards
           state={state}
           activeList={state.activeList}
@@ -107,9 +107,16 @@ export function SigemPwDashboardApp() {
         <SigemPwListFilters
           query={state.filters.query}
           documentClass={state.filters.documentClass}
+          revision={state.filters.revision}
+          sigemStatus={state.filters.sigemStatus}
+          inPw={state.filters.inPw}
+          sigemStatusOptions={Array.from(new Set((state.result?.lists?.sigem || []).map((row) => row.sigemStatus).filter(Boolean))).sort((a,b)=>a.localeCompare(b,"pt-BR"))}
           busy={state.busy}
           onQuery={(value) => adapter.setQuery(value)}
           onClass={(value: SigemPwDocumentClass) => adapter.setDocumentClass(value)}
+          onRevision={(value) => adapter.setRevision(value)}
+          onSigemStatus={(value) => adapter.setSigemStatus(value)}
+          onInPw={(value) => adapter.setInPw(value)}
           onClear={() => adapter.clearFilters()}
         />
         <SigemPwTable rows={pageData.visible} caption={activeLabel} />
@@ -130,6 +137,8 @@ export function SigemPwDashboardApp() {
         onClose={() => adapter.closeHistory()}
         onEdit={(kind, id) => adapter.openBaseDateEditor(kind, id)}
         onDelete={(id) => { void adapter.removeSnapshot(id); }}
+        onSelectShared={(id) => { void adapter.activateSharedSigemSnapshot(id); }}
+        onDeleteShared={(id) => { void adapter.deleteSharedSigemSnapshot(id); }}
       />
       <SigemPwBaseDateDialog
         state={state}
