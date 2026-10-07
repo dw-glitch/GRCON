@@ -1,0 +1,100 @@
+.grcon-master-button {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+}
+.grcon-master-button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.grcon-master-dialog {
+  inline-size: min(74rem, calc(100vw - 2rem));
+  max-inline-size: none;
+  max-block-size: calc(100dvh - 2rem);
+  padding: 0;
+  color: var(--text-1, #17222d);
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border-1, #d7dee5);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-2, 0 18px 50px rgba(0,0,0,.18));
+}
+.grcon-master-dialog::backdrop { background: rgba(10, 20, 30, .42); backdrop-filter: blur(2px); }
+.grcon-master-shell { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); max-block-size: calc(100dvh - 2rem); }
+.grcon-master-shell > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.15rem .9rem;
+  border-bottom: 1px solid var(--border-1, #d7dee5);
+}
+.grcon-master-shell > header span,
+.grcon-master-result-heading span {
+  color: var(--brand-700, #155c8a);
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.grcon-master-shell > header h2 { margin: .15rem 0 .2rem; font-size: 1.15rem; }
+.grcon-master-shell > header p { margin: 0; max-inline-size: 48rem; color: var(--text-3, #667582); font-size: .76rem; }
+.grcon-master-close {
+  flex: 0 0 auto;
+  inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-2, #3f4d58);
+  background: transparent;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.grcon-master-close:hover { background: var(--surface-2, #f4f6f8); }
+.grcon-master-search { padding: .9rem 1.15rem; border-bottom: 1px solid var(--border-1, #d7dee5); }
+.grcon-master-search label { display: block; margin-block-end: .35rem; font-size: .72rem; font-weight: 760; }
+.grcon-master-search > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .55rem; }
+.grcon-master-search input { min-inline-size: 0; }
+.grcon-master-search small { display: block; margin-block-start: .3rem; color: var(--text-3, #667582); font-size: .66rem; }
+.grcon-master-status { min-block-size: 2.1rem; padding: .55rem 1.15rem; color: var(--text-3, #667582); font-size: .7rem; background: var(--surface-2, #f6f8fa); }
+.grcon-master-results { overflow: auto; overscroll-behavior: contain; padding: .9rem 1.15rem 1.25rem; }
+.grcon-master-result-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block-end: .8rem; }
+.grcon-master-result-heading h3 { margin: .1rem 0 0; font-size: 1rem; overflow-wrap: anywhere; }
+.grcon-master-result-heading > strong { color: var(--text-3, #667582); font-size: .7rem; white-space: nowrap; }
+.grcon-master-section { border: 1px solid var(--border-1, #d7dee5); border-radius: var(--radius-md, 12px); overflow: hidden; }
+.grcon-master-section + .grcon-master-section { margin-block-start: .7rem; }
+.grcon-master-section > header { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .65rem .75rem; background: var(--surface-2, #f6f8fa); }
+.grcon-master-section > header h4 { margin: 0; font-size: .78rem; }
+.grcon-master-section > header p { margin: .12rem 0 0; color: var(--text-3, #667582); font-size: .62rem; }
+.grcon-master-count { flex: 0 0 auto; padding: .2rem .45rem; border: 1px solid var(--border-1, #d7dee5); border-radius: 999px; color: var(--text-2, #3f4d58); background: var(--surface-1, #fff); font-size: .62rem; font-weight: 760; }
+.grcon-master-fact { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem .8rem; padding: .8rem; }
+.grcon-master-fact strong { font-size: .82rem; }
+.grcon-master-fact span { color: var(--text-3, #667582); font-size: .68rem; }
+.grcon-master-fact.is-positive strong { color: var(--success-700, #197044); }
+.grcon-master-table-wrap { overflow: auto; max-block-size: 20rem; }
+.grcon-master-table-wrap table { inline-size: 100%; border-collapse: collapse; font-size: .68rem; }
+.grcon-master-table-wrap th,
+.grcon-master-table-wrap td { padding: .52rem .65rem; text-align: left; vertical-align: top; border-top: 1px solid var(--border-1, #d7dee5); }
+.grcon-master-table-wrap th { position: sticky; inset-block-start: 0; z-index: 1; color: var(--text-3, #667582); background: var(--surface-1, #fff); font-size: .62rem; text-transform: uppercase; letter-spacing: .035em; white-space: nowrap; }
+.grcon-master-table-wrap td { max-inline-size: 24rem; overflow-wrap: anywhere; }
+.grcon-master-empty,
+.grcon-master-error { padding: .85rem; color: var(--text-3, #667582); font-size: .7rem; }
+.grcon-master-error { display: grid; gap: .2rem; }
+.grcon-master-error strong { color: var(--danger-700, #a12b2b); }
+@media (max-width: 68rem) {
+  .grcon-master-button span { display: none; }
+  .grcon-master-button { inline-size: 2.4rem; justify-content: center; padding-inline: 0; }
+}
+@media (max-width: 44rem) {
+  .grcon-master-dialog { inline-size: calc(100vw - 1rem); max-block-size: calc(100dvh - 1rem); }
+  .grcon-master-shell { max-block-size: calc(100dvh - 1rem); }
+  .grcon-master-search > div { grid-template-columns: 1fr; }
+  .grcon-master-result-heading { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grcon-master-dialog::backdrop { backdrop-filter: none; }
+}
