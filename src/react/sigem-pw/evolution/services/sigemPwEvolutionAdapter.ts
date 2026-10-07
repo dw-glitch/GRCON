@@ -7,6 +7,7 @@ import {
   type EvolutionListMode,
   type EvolutionPageData,
   type EvolutionRecord,
+  type EvolutionRevisionScope,
   type EvolutionSnapshot,
   type EvolutionSourceSnapshotMeta,
   type EvolutionSystem,
@@ -75,6 +76,7 @@ const state: EvolutionUiState = {
   ldSignature: "",
   period: { start: "", end: "" },
   selections: { sigemPrev: "", sigemCurrent: "", pwPrev: "", pwCurrent: "" },
+  revisionScope: "revision0",
   comparison: null,
   timeline: [],
   listMode: "sigem-new",
@@ -108,6 +110,7 @@ const explicitlyEmptyPrevious = new Set<string>();
 const PREFERENCES_KEY = "grcon:sigem-pw:evolution:ui:v2";
 const PREPARED_CACHE_PREFIX = "evolutionPrepared:sigem-pw-evolution-audit-v4:";
 const preparedSnapshotCache = new Map<string, EvolutionSnapshot>();
+const scopedSnapshotCache = new Map<string, EvolutionSnapshot>();
 const comparisonCache = new Map<string, NonNullable<EvolutionUiState["comparison"]>>();
 const timelineCache = new Map<string, EvolutionUiState["timeline"]>();
 
@@ -115,9 +118,10 @@ function restorePreferences(): void {
   try {
     const raw = window.sessionStorage?.getItem(PREFERENCES_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw) as Partial<Pick<EvolutionUiState, "period" | "selections" | "listMode" | "filters" | "rawFilters">>;
+    const saved = JSON.parse(raw) as Partial<Pick<EvolutionUiState, "period" | "selections" | "revisionScope" | "listMode" | "filters" | "rawFilters">>;
     if (saved.period) state.period = { ...state.period, ...saved.period };
     if (saved.selections) state.selections = { ...state.selections, ...saved.selections };
+    if (saved.revisionScope === "revision0" || saved.revisionScope === "all") state.revisionScope = saved.revisionScope;
     const emptyPrevious = (saved as typeof saved & { emptyPrevious?: string[] }).emptyPrevious;
     for (const key of emptyPrevious || []) explicitlyEmptyPrevious.add(key);
     if (saved.listMode) state.listMode = saved.listMode;
@@ -133,6 +137,7 @@ function persistPreferences(): void {
     window.sessionStorage?.setItem(PREFERENCES_KEY, JSON.stringify({
       period: state.period,
       selections: preferredSelections,
+      revisionScope: state.revisionScope,
       emptyPrevious: [...explicitlyEmptyPrevious],
       listMode: state.listMode,
       filters: state.filters,
@@ -294,6 +299,92 @@ function ordered(list: EvolutionSnapshot[]): EvolutionSnapshot[] {
   return list.slice().sort((a, b) => Date.parse(a.importedAt || "0") - Date.parse(b.importedAt || "0"));
 }
 
+function normalizedRevisionScope(value: unknown): EvolutionRevisionScope {
+  const dashboard = window.GrconSigemPwDashboard;
+  if (dashboard?.normalizeRevisionScope) return dashboard.normalizeRevisionScope(value);
+  return value === "all" ? "all" : "revision0";
+}
+
+function dashboardRevisionKey(value: unknown): string {
+  const dashboard = window.GrconSigemPwDashboard;
+  if (dashboard?.revisionKey) return dashboard.revisionKey(value);
+  return Core().normalizeRevision(value);
+}
+
+function revisionScopeLabel(scope = state.revisionScope): string {
+  return scope === "revision0" ? "Revisão 0" : "Todas as revisões";
+}
+
+function scopeSnapshot(source: EvolutionSnapshot): EvolutionSnapshot {
+  const scope = normalizedRevisionScope(state.revisionScope);
+  if (scope === "all") return source;
+  const cacheKey = [scope, source.id, source.contentFingerprint || "", source.importedAt || ""].join("|");
+  const cached = scopedSnapshotCache.get(cacheKey);
+  if (cached) return cached;
+
+  const rawRecords = (source.records || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
+  const records = Core().documentRevisionRecords(rawRecords);
+  const rejected = (source.rejected || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
+  const duplicates = (source.duplicates || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
+  const uniqueDocuments = new Set(records.map((row) => text(row.documentKey) || Core().norm(row.document)).filter(Boolean)).size;
+  const emitted = source.system === "pw" ? records.filter((row) => row.emissionState === "emitted") : [];
+  const notEmitted = source.system === "pw" ? records.filter((row) => row.emissionState === "not-emitted") : [];
+  const indeterminate = source.system === "pw" ? records.filter((row) => row.emissionState === "indeterminate") : [];
+  const emissionBreakdown: Record<string, number> = { current: 0, historical: 0, planned: 0, unknown: 0, missing: 0 };
+  for (const row of source.system === "pw" ? records : []) {
+    const kind = text(row.emissionKind) || "missing";
+    emissionBreakdown[kind] = (emissionBreakdown[kind] || 0) + 1;
+  }
+  const classes = records.reduce<Record<string, number>>((acc, row) => {
+    const key = text(row.documentClass);
+    if (key) acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const audit = {
+    ...(source.audit || {}),
+    revisionScope: scope,
+    rawRecords: rawRecords.length + rejected.length + duplicates.length,
+    acceptedRecords: records.length,
+    discardedRecords: rejected.length,
+    scopeDiscardedRecords: rejected.length,
+    parserInvalidRecords: 0,
+    validRevisionRecords: records.length,
+    documentRevisionRecords: records.length,
+    uniqueDocuments,
+    technicalDuplicates: duplicates.length,
+    technicalVariantsSameDocumentRevision: Math.max(0, rawRecords.length - records.length),
+    emittedTechnicalRecords: emitted.length,
+    notEmittedTechnicalRecords: notEmitted.length,
+    indeterminateEmissionTechnicalRecords: indeterminate.length,
+    emittedDocumentRevisionRecords: emitted.length,
+    emittedUniqueDocuments: new Set(emitted.map((row) => text(row.documentKey) || Core().norm(row.document)).filter(Boolean)).size,
+    notEmittedDocumentRevisionRecords: notEmitted.length,
+    indeterminateEmissionDocumentRevisionRecords: indeterminate.length,
+    emissionBreakdown,
+    classes,
+    comparisonGranularity: "revisão 0; uma ocorrência por documento + revisão",
+    registrationRule: source.system === "pw"
+      ? "Cadastrado = documento válido em revisão 0 presente na relação PW"
+      : "Presente = documento válido em revisão 0 na Consulta Geral",
+  };
+  const scoped: EvolutionSnapshot = {
+    ...source,
+    revisionScope: scope,
+    contentFingerprint: String(source.contentFingerprint || source.id || source.system) + ":revision0",
+    audit,
+    records,
+    rejected,
+    duplicates,
+  };
+  scopedSnapshotCache.set(cacheKey, scoped);
+  if (scopedSnapshotCache.size > 120) scopedSnapshotCache.delete(scopedSnapshotCache.keys().next().value!);
+  return scoped;
+}
+
+function scopedSnapshots(rows: EvolutionSnapshot[]): EvolutionSnapshot[] {
+  return state.revisionScope === "all" ? rows : rows.map(scopeSnapshot);
+}
+
 function preparedCacheKey(system: EvolutionSystem, source: EvolutionSourceSnapshotMeta, universe: EvolutionUiState["ldUniverse"]): string {
   return [
     PREPARED_CACHE_PREFIX,
@@ -316,7 +407,8 @@ function selectionKey(system: EvolutionSystem, role: "previous" | "current"): ke
 
 function selectedSnapshot(system: EvolutionSystem, role: "previous" | "current"): EvolutionSnapshot | null {
   const key = selectionKey(system, role);
-  return state[system].find((item) => item.id === state.selections[key]) || null;
+  const selected = state[system].find((item) => item.id === state.selections[key]) || null;
+  return selected ? scopeSnapshot(selected) : null;
 }
 
 function localDateKey(value: unknown): string {
@@ -642,7 +734,7 @@ function recalculate(): void {
   const started = now();
   const pair = [selectedSnapshot("sigem", "previous"), selectedSnapshot("sigem", "current"),
     selectedSnapshot("pw", "previous"), selectedSnapshot("pw", "current")] as const;
-  const key = [Core().CALCULATION_VERSION, state.ldUniverse?.fingerprint,
+  const key = [Core().CALCULATION_VERSION, state.revisionScope, state.ldUniverse?.fingerprint,
     ...pair.map((row) => row ? `${row.id}@${row.importedAt}@${row.contentFingerprint}` : "none")].join("|");
   const cached = comparisonCache.get(key);
   state.comparison = cached || Core().comparePeriod(...pair);
@@ -657,7 +749,7 @@ function recalculate(): void {
 }
 
 function timelineKey(sigem = state.sigem, pw = state.pw): string {
-  return [Core().CALCULATION_VERSION, state.ldUniverse?.fingerprint || "",
+  return [Core().CALCULATION_VERSION, state.revisionScope, state.ldUniverse?.fingerprint || "",
     ...sigem.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@")), "|",
     ...pw.map((row) => [row.id, row.importedAt, row.contentFingerprint || ""].join("@"))].join(":");
 }
@@ -666,6 +758,8 @@ async function prepareTimeline(sigem: EvolutionSnapshot[], pw: EvolutionSnapshot
   const key = timelineKey(sigem, pw);
   if (timelineCache.has(key)) return;
   const started = now();
+  const scopedSigem = scopedSnapshots(sigem);
+  const scopedPw = scopedSnapshots(pw);
   const worker = getEvolutionWorker();
   let rows: EvolutionUiState["timeline"];
   if (worker) {
@@ -673,14 +767,14 @@ async function prepareTimeline(sigem: EvolutionSnapshot[], pw: EvolutionSnapshot
     try {
       rows = await new Promise<EvolutionUiState["timeline"]>((resolve, reject) => {
         evolutionTimelinePending.set(requestId, { resolve, reject });
-        try { worker.postMessage({ type: "evolution-timeline", requestId, sigem, pw }); }
+        try { worker.postMessage({ type: "evolution-timeline", requestId, sigem: scopedSigem, pw: scopedPw }); }
         catch (error) { evolutionTimelinePending.delete(requestId); reject(error); }
       });
     } catch (error) {
       debugMetric("timeline-worker-fallback", { message: messageOf(error, "Worker indisponível") });
-      rows = Core().buildDailyTimeline(sigem, pw);
+      rows = Core().buildDailyTimeline(scopedSigem, scopedPw);
     }
-  } else rows = Core().buildDailyTimeline(sigem, pw);
+  } else rows = Core().buildDailyTimeline(scopedSigem, scopedPw);
   state.metrics.evolutionTimelineMs = now() - started;
   timelineCache.set(key, rows);
   if (timelineCache.size > 4) timelineCache.delete(timelineCache.keys().next().value!);
@@ -691,7 +785,7 @@ function fullTimeline(): EvolutionUiState["timeline"] {
   const cached = timelineCache.get(key);
   if (cached) return cached;
   const started = now();
-  const built = Core().buildDailyTimeline(state.sigem, state.pw);
+  const built = Core().buildDailyTimeline(scopedSnapshots(state.sigem), scopedSnapshots(state.pw));
   state.metrics.evolutionTimelineMs = now() - started;
   timelineCache.set(key, built);
   return built;
@@ -821,6 +915,18 @@ function setSelection(key: keyof EvolutionUiState["selections"], value: string):
   preferredSelections = { ...preferredSelections, [key]: value };
   state.selections = { ...state.selections, [key]: value };
   recalculate();
+  emit();
+}
+
+function setRevisionScope(value: EvolutionRevisionScope): void {
+  const next = normalizedRevisionScope(value);
+  if (state.revisionScope === next) return;
+  state.revisionScope = next;
+  state.filters = { ...state.filters, revision: "" };
+  state.page = 1;
+  state.detailRow = null;
+  state.exportMessage = "";
+  applyPeriod();
   emit();
 }
 
@@ -987,6 +1093,7 @@ async function exportAuditWorkbook(): Promise<number> {
     const sigemAudit = sigemCurrent?.audit || {};
     const pwAudit = pwCurrent?.audit || {};
     append("Resumo", [
+      { Métrica: "Escopo de revisão", Valor: revisionScopeLabel() },
       { Métrica: "Versão da análise", Valor: comparison?.analysisVersion || Core().CALCULATION_VERSION },
       { Métrica: "SIGEM · documentos únicos", Valor: sigemAudit.uniqueDocuments || 0 },
       { Métrica: "SIGEM · documento + revisão", Valor: sigemAudit.documentRevisionRecords || 0 },
@@ -1028,6 +1135,7 @@ async function exportAuditWorkbook(): Promise<number> {
       ...(pwCurrent?.duplicates || []).map((row) => auditRow(row, "Duplicidade exata PW")),
     ]);
     append("Regras da análise", [
+      { Item: "Escopo de revisão", Valor: revisionScopeLabel() },
       { Item: "analysisVersion", Valor: comparison?.analysisVersion || Core().CALCULATION_VERSION },
       { Item: "Granularidade técnica", Valor: "A evolução legada preserva ocorrências técnicas para compatibilidade histórica." },
       { Item: "Granularidade auditável", Valor: "Documento + revisão é calculado em paralelo e usado para explicar novos documentos, novas revisões e presença entre sistemas." },
@@ -1038,7 +1146,7 @@ async function exportAuditWorkbook(): Promise<number> {
 
     const output = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    downloadBlob(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `GRCON_Auditoria_SIGEM_PW_${date}.xlsx`);
+    downloadBlob(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `GRCON_Auditoria_SIGEM_PW_${state.revisionScope}_${date}.xlsx`);
     state.metrics.evolutionExportMs = now() - started;
     state.exportMessage = "Relatório de auditoria gerado com sucesso.";
     state.exportMessageKind = "success";
@@ -1096,13 +1204,18 @@ async function exportFilteredRows(): Promise<number> {
       "Prazo LD": row.ldPrazo || "",
     }));
     const sheet = xlsx.utils.json_to_sheet(data);
+    const scopeSheet = xlsx.utils.json_to_sheet([
+      { Item: "Escopo de revisão", Valor: revisionScopeLabel() },
+      { Item: "Regra", Valor: state.revisionScope === "revision0" ? "Somente ocorrências cuja revisão normalizada pelo Dashboard é 0." : "Todas as ocorrências Documento + Revisão válidas." },
+    ]);
     const workbook = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(workbook, sheet, "Evolução");
+    xlsx.utils.book_append_sheet(workbook, scopeSheet, "Escopo");
     const output = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     downloadBlob(
       new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-      `GRCON_Evolucao_${state.listMode}_${date}.xlsx`,
+      `GRCON_Evolucao_${state.revisionScope}_${state.listMode}_${date}.xlsx`,
     );
     state.exportMessage = `Excel gerado com sucesso. ${fmt(rows.length)} registro(s) exportado(s).`;
     state.exportMessageKind = "success";
@@ -1174,6 +1287,7 @@ export const sigemPwEvolutionAdapter = {
   setPeriod,
   clearPeriod,
   setSelection,
+  setRevisionScope,
   setListMode,
   setFilter,
   setRawFilter,
