@@ -5,11 +5,6 @@ alter table private.grcon_sigem_query_snapshots
   add column if not exists deleted_at timestamptz,
   add column if not exists deleted_by uuid;
 
-alter table private.grcon_sigem_query_snapshots
-  drop constraint if exists grcon_sigem_query_snapshots_status_check;
-alter table private.grcon_sigem_query_snapshots
-  add constraint grcon_sigem_query_snapshots_status_check
-  check (status in ('pending','active','archived','deleted'));
 
 create or replace function private.grcon_sigem_query_history(target_workspace uuid)
 returns table(
@@ -63,6 +58,7 @@ begin
   left join public.grcon_profiles p on p.id=s.created_by
   where s.workspace_id=target_workspace
     and s.status in ('active','archived')
+    and s.deleted_at is null
   group by s.id,p.display_name,p.email
   order by (s.status='active') desc, coalesce(s.published_at,s.created_at) desc, s.id desc;
 end $$;
@@ -108,7 +104,7 @@ begin
   perform 1 from public.grcon_workspaces where id=target_workspace for update;
   select * into target
   from private.grcon_sigem_query_snapshots
-  where id=target_snapshot and workspace_id=target_workspace and status in ('active','archived')
+  where id=target_snapshot and workspace_id=target_workspace and status in ('active','archived') and deleted_at is null
   for update;
 
   if not found then raise exception 'Base indisponível.' using errcode='22023'; end if;
@@ -156,7 +152,7 @@ begin
   perform 1 from public.grcon_workspaces where id=target_workspace for update;
   select * into target
   from private.grcon_sigem_query_snapshots
-  where id=target_snapshot and workspace_id=target_workspace and status in ('active','archived')
+  where id=target_snapshot and workspace_id=target_workspace and status in ('active','archived') and deleted_at is null
   for update;
 
   if not found then raise exception 'Base indisponível ou já removida.' using errcode='22023'; end if;
@@ -166,13 +162,15 @@ begin
     from private.grcon_sigem_query_snapshots s
     where s.workspace_id=target_workspace
       and s.status='archived'
+      and s.deleted_at is null
       and s.id<>target_snapshot
     order by coalesce(s.published_at,s.created_at) desc,s.id desc
     limit 1;
   end if;
 
   update private.grcon_sigem_query_snapshots
-  set status='deleted',deleted_at=now(),deleted_by=auth.uid()
+  set status=case when status='active' then 'archived' else status end,
+      deleted_at=now(),deleted_by=auth.uid()
   where id=target_snapshot;
 
   if replacement is not null then
@@ -205,5 +203,35 @@ revoke all on function private.grcon_sigem_query_delete(uuid,uuid) from public,a
 revoke all on function public.grcon_sigem_query_delete(uuid,uuid) from public,anon;
 grant execute on function private.grcon_sigem_query_delete(uuid,uuid) to authenticated;
 grant execute on function public.grcon_sigem_query_delete(uuid,uuid) to authenticated;
+
+
+create or replace function private.grcon_sigem_query_page(target_workspace uuid,target_snapshot uuid,after_row integer default 0,page_size integer default 1000)
+returns table(row_number integer,payload jsonb)
+language plpgsql security definer set search_path=''
+as $
+begin
+ if auth.uid() is null or not private.grcon_is_member(target_workspace) then raise exception 'Sem acesso à área de trabalho.' using errcode='42501'; end if;
+ if not exists(
+   select 1 from private.grcon_sigem_query_snapshots s
+   where s.id=target_snapshot and s.workspace_id=target_workspace
+     and s.status in ('active','archived') and s.deleted_at is null
+ ) then raise exception 'Versão indisponível.' using errcode='22023'; end if;
+ return query
+ select r.row_number,r.payload
+ from private.grcon_sigem_query_rows r
+ where r.snapshot_id=target_snapshot and r.row_number>coalesce(after_row,0)
+ order by r.row_number
+ limit least(greatest(coalesce(page_size,1000),1),1000);
+end $;
+
+create or replace function public.grcon_sigem_query_page(target_workspace uuid,target_snapshot uuid,after_row integer default 0,page_size integer default 1000)
+returns table(row_number integer,payload jsonb)
+language sql security invoker set search_path=''
+as $ select * from private.grcon_sigem_query_page(target_workspace,target_snapshot,after_row,page_size); $;
+
+revoke all on function private.grcon_sigem_query_page(uuid,uuid,integer,integer) from public,anon;
+revoke all on function public.grcon_sigem_query_page(uuid,uuid,integer,integer) from public,anon;
+grant execute on function private.grcon_sigem_query_page(uuid,uuid,integer,integer) to authenticated;
+grant execute on function public.grcon_sigem_query_page(uuid,uuid,integer,integer) to authenticated;
 
 commit;
