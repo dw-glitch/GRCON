@@ -221,8 +221,10 @@
     const data = await request("history", { target_workspace: workspace });
     state.history = (Array.isArray(data) ? data : []).map((item) => ({
       snapshotId: item.snapshot_id, fileName: item.file_name, recordCount: Number(item.record_count || 0),
+      uniqueDocumentCount: Number(item.unique_document_count || 0), etCount: Number(item.et_count || 0), n1710Count: Number(item.n1710_count || 0),
       publishedAt: item.published_at, createdAt: item.created_at, createdBy: item.created_by,
-      metadata: item.metadata || {}, status: item.status, isActive: Boolean(item.is_active),
+      createdByName: item.created_by_name || "", createdByEmail: item.created_by_email || "",
+      metadata: item.metadata || {}, status: item.status, isActive: Boolean(item.is_current ?? item.is_active),
     }));
     return state.history;
   }
