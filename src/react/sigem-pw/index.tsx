@@ -24,6 +24,7 @@ function installCompatibilityApi(): void {
     activate: () => sigemPwDashboardAdapter.activate(),
     refresh: (reason?: string) => sigemPwDashboardAdapter.refresh(reason),
     clearPreStage7BasesOnce: () => sigemPwDashboardAdapter.clearPreStage7BasesOnce(),
+    filteredRows: () => sigemPwDashboardAdapter.filteredRows(),
     state: sigemPwDashboardAdapter.state,
   });
   window.GrconSigemPwRevisionUi = Object.freeze({
