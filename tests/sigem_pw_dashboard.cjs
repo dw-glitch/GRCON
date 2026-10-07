@@ -57,6 +57,8 @@ assert.deepStrictEqual(result.summary, {
   sigemOnly: 1, bothNotEmitted: 1, bothEmitted: 2, pwOnlyNotEmitted: 0, pwOnlyEmitted: 0, classifiedTotal: 4,
 });
 assert.strictEqual(result.classes.find((row) => row.documentClass === "N-1710").sigem, 3);
+assert.strictEqual(result.lists.sigem.length, result.summary.sigem, "KPI SIGEM deve ser exatamente a quantidade da lista auditável");
+assert.ok(result.lists.sigem.every((row) => row.inSigem), "lista do KPI SIGEM não pode incluir registros exclusivos do PW");
 assert.strictEqual(result.lists.toRegisterPw[0].document, "PR-5290.00-22313-122-C1O-003");
 assert.strictEqual(result.lists.pwNotEmitted[0].revision, "A");
 assert.ok(!result.lists.all.some((row) => row.document.includes("999-C1O-999")), "N-1710 fora da LD deve ser descartado silenciosamente");
@@ -124,6 +126,8 @@ assert.ok(!/MutationObserver/.test(appSource));
 assert.ok(!/location\.reload\s*\(/.test(appSource));
 assert.ok(/Gerenciar histórico/.test(appSource));
 assert.ok(/Exportar lista/.test(appSource));
+assert.ok(/Documentos do KPI SIGEM/.test(appSource));
+assert.ok(/openSigemDetails/.test(appSource));
 assert.ok(/workers\/sigem_pw_dashboard\.worker\.js/.test(appSource));
 assert.ok(/savePwBase\(candidate, state\.ld\)/.test(appSource), "importação PW deve sanear com a LD vigente");
 assert.ok(/saveLdAndReprocessPw/.test(appSource), "troca de LD deve reprocessar a base PW ativa");
@@ -136,3 +140,9 @@ for (const fileName of ["src/react/sigem-pw/evolution/SigemPwEvolutionApp.tsx", 
 }
 
 console.log("sigem_pw_dashboard: OK");
+
+const sharedQuerySource=fs.readFileSync(path.join(rootDir,"shared_sigem_query_app.js"),"utf8");
+assert.ok(/listHistory/.test(sharedQuerySource));
+assert.ok(/activateSnapshot/.test(sharedQuerySource));
+assert.ok(/deleteSnapshot/.test(sharedQuerySource));
+assert.ok(/cachePut\(workspace, null\)/.test(sharedQuerySource),"sem base ativa deve invalidar cache compartilhado");
