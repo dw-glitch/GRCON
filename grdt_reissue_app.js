@@ -412,7 +412,7 @@
     });
     reissueResults?.addEventListener("change", (event) => {
       const input = event.target.closest("[data-row][data-field]");
-      if (input && input.dataset.field !== "revision") updateEditedRow(input);
+      if (input) updateEditedRow(input);
     });
     render();
   }
