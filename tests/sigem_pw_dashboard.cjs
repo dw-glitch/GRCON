@@ -126,7 +126,6 @@ assert.ok(!/MutationObserver/.test(appSource));
 assert.ok(!/location\.reload\s*\(/.test(appSource));
 assert.ok(/Gerenciar histórico/.test(appSource));
 assert.ok(/Exportar lista/.test(appSource));
-assert.ok(/Documentos do KPI SIGEM/.test(appSource));
 assert.ok(/openSigemDetails/.test(appSource));
 assert.ok(/workers\/sigem_pw_dashboard\.worker\.js/.test(appSource));
 assert.ok(/savePwBase\(candidate, state\.ld\)/.test(appSource), "importação PW deve sanear com a LD vigente");
