@@ -93,7 +93,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.modelGeneration),generation,'metadata-only update reuses the model');
  // Active date flows to the Conferência projection even when that module was not open.
  await page.locator('[data-pc-open="sidebar"]').click();
- await page.waitForFunction(()=>window.GrconPostingConferenceUi.state.base.meta.referenceDate==='2026-10-03');
+ await page.waitForFunction(()=>window.GrconPostingConferenceUi?.state.base?.meta?.referenceDate==='2026-10-03');
  await page.fill('#pc-reference-date','2026-10-02');await page.locator('#pc-save-date').click();
  await page.waitForFunction(()=>window.GrconSigemPwDashboardUi.state.sigem.meta.referenceDate==='2026-10-02');
  fs.mkdirSync('artifacts/owner-shared-sigem',{recursive:true});await page.screenshot({path:'artifacts/owner-shared-sigem/conference-date.png'});
