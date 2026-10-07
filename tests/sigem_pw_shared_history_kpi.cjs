@@ -43,7 +43,7 @@ const et = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
 
 (function sharedHistoryIsAuthoritativeAndDeletionIsTraceable() {
   const app = read("shared_sigem_query_app.js");
-  const migration = read("supabase/migrations/20261007143000_shared_sigem_history_management.sql");
+  const migration = read("supabase/migrations/20261007144040_shared_sigem_history_management.sql");
   assert.match(app, /async function listHistory\(\)/);
   assert.match(app, /async function activateSnapshot\(snapshotId\)/);
   assert.match(app, /async function deleteSnapshot\(snapshotId\)/);
