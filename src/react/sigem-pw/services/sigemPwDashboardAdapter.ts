@@ -781,6 +781,51 @@ async function saveBaseDate(): Promise<void> {
   }
 }
 
+async function activateSharedSigemVersion(id: string): Promise<void> {
+  const snapshotId = text(id);
+  const target = state.sigemVersions.find(version => version.snapshot_id === snapshotId);
+  if (!target) { notify("A base selecionada não está mais disponível.", "warning"); return; }
+  if (target.status === "active") { state.analysisSigemId = ""; await refresh("base compartilhada atual"); notify("Esta já é a Consulta Geral atual.", "info"); return; }
+  const api = ensureSharedSigemHistoryCompatibility() || window.GrconSharedSigemQuery;
+  if (!api?.activateVersion) { notify("Gerenciamento do histórico da Consulta Geral indisponível nesta aba. Atualize a página.", "error"); return; }
+  if (!window.confirm(`Tornar “${text(target.file_name) || "base selecionada"}” a Consulta Geral atual para todos os usuários deste contrato?`)) return;
+  setBusy(true, "Ativando base compartilhada da Consulta Geral…");
+  try {
+    await api.activateVersion(snapshotId);
+    state.analysisSigemId = ""; state.analysisError = "";
+    await refresh("base compartilhada ativada");
+    notify("Consulta Geral atualizada para a versão selecionada.", "success");
+  } catch (error) {
+    notify(messageOf(error, "Não foi possível tornar esta base a Consulta Geral atual."), "error");
+  } finally { setBusy(false); }
+}
+
+async function deleteSharedSigemVersion(id: string): Promise<void> {
+  const snapshotId = text(id);
+  const target = state.sigemVersions.find(version => version.snapshot_id === snapshotId);
+  if (!target) { notify("A base selecionada não está mais disponível.", "warning"); return; }
+  const api = ensureSharedSigemHistoryCompatibility() || window.GrconSharedSigemQuery;
+  if (!api?.deleteVersion) { notify("Gerenciamento do histórico da Consulta Geral indisponível nesta aba. Atualize a página.", "error"); return; }
+  const isCurrent = target.status === "active";
+  const message = isCurrent
+    ? `Excluir a Consulta Geral atual “${text(target.file_name) || "sem nome"}”? A versão histórica mais recente será promovida automaticamente, se existir.`
+    : `Excluir a base histórica “${text(target.file_name) || "sem nome"}” da Consulta Geral?`;
+  if (!window.confirm(message)) return;
+  setBusy(true, isCurrent ? "Excluindo base atual e selecionando a substituta…" : "Excluindo base histórica…");
+  try {
+    const result = await api.deleteVersion(snapshotId);
+    if (state.analysisSigemId === snapshotId || isCurrent) state.analysisSigemId = "";
+    state.analysisError = "";
+    if (result?.removedWasCurrent && !result.activeSnapshotId) await Core().kvSet(Core().SIGEM_BASE_KEY, EMPTY_BASE());
+    await refresh("base compartilhada excluída");
+    if (result?.removedWasCurrent) {
+      notify(result.activeSnapshotId ? "Base atual excluída. A versão histórica mais recente agora é a Consulta Geral atual." : "Base atual excluída. Não há outra Consulta Geral compartilhada ativa.", "success");
+    } else notify("Base histórica excluída.", "success");
+  } catch (error) {
+    notify(messageOf(error, "Não foi possível excluir esta base da Consulta Geral."), "error");
+  } finally { setBusy(false); }
+}
+
 async function openEvolution(): Promise<void> {
   await window.GrconSigemPwDashboardBootstrap?.openEvolution?.();
 }
@@ -850,6 +895,8 @@ export const sigemPwDashboardAdapter = {
   closeBaseDateEditor,
   setBaseDateValue,
   saveBaseDate,
+  activateSharedSigemVersion,
+  deleteSharedSigemVersion,
   openEvolution,
   selectAnalysisBase,
   subscribeExternalEvents: installExternalListeners,
