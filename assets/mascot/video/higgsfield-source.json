@@ -13,5 +13,51 @@
     "warning": "5e34f23c-8e8e-4485-8e12-285c4246957e",
     "success": "4c337668-0cec-413a-a1d1-aeac9e5822c5",
     "run": "c7291bc5-1af8-4e96-956b-08c75a342a42"
+  },
+  "pilots": {
+    "preparedAt": "2026-10-07",
+    "model": "seedance_2_0",
+    "officialElementId": "5d684379-9c43-47db-913a-6af9d779e8b2",
+    "policy": "Pilot assets are not active runtime media until visual identity and alpha QA are explicitly approved.",
+    "states": {
+      "searching-files": {
+        "jobId": "42ebdce9-4561-4b66-9177-45ddb35cd726",
+        "sourceFormat": "MP4",
+        "durationSeconds": 5,
+        "resolution": "720x720",
+        "alphaRebuild": {
+          "output": "WebM VP9 alpha pilot",
+          "sizeBytes": 655186,
+          "width": 640,
+          "height": 640,
+          "fps": 24,
+          "alphaMode": 1,
+          "transparentFrameShareAt2s": 0.759,
+          "partialAlphaFrameShareAt2s": 0.1084
+        },
+        "approved": false,
+        "integrated": false,
+        "reason": "Technical alpha extraction passed; visual identity and edge/halo approval still require human visual review."
+      },
+      "checking-document": {
+        "jobId": "662ace1a-f95e-45af-98ad-1ee6a0239b84",
+        "sourceFormat": "MP4",
+        "durationSeconds": 5,
+        "resolution": "720x720",
+        "alphaRebuild": {
+          "output": "WebM VP9 alpha pilot",
+          "sizeBytes": 595634,
+          "width": 640,
+          "height": 640,
+          "fps": 24,
+          "alphaMode": 1,
+          "transparentFrameShareAt2s": 0.7465,
+          "partialAlphaFrameShareAt2s": 0.101
+        },
+        "approved": false,
+        "integrated": false,
+        "reason": "Technical alpha extraction passed; visual identity and edge/halo approval still require human visual review."
+      }
+    }
   }
 }
