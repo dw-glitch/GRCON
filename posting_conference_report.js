@@ -136,7 +136,7 @@
       Number(row.sendCount || 0),
       Number(row.repostCount || 0),
       fmtDate(row.latestSendAt || row.generatedAt, false),
-      row.latestEgrdtNumber || row.egrdtNumber,
+      Conference.pertinentGrdt(row) || "GRDT não identificada",
       row.currentRevision || row.revisionSent,
       (row.revisions || []).join(" · "),
       row.revisionFound,
@@ -180,7 +180,7 @@
     const headers = mode === "documents" ? documentHeaders() : eventHeaders();
     const columnCount = headers.length;
     const lastColumn = String.fromCharCode(64 + Math.min(columnCount, 26));
-    const sheet = workbook.addWorksheet("RESUMO", { views: [{ state: "frozen", ySplit: 10, xSplit: 2 }] });
+    const sheet = workbook.addWorksheet(options?.pending ? "Detalhamento" : "RESUMO", { views: [{ state: "frozen", ySplit: 10, xSplit: 2 }] });
     sheet.properties.defaultRowHeight = 18;
 
     sheet.mergeCells("A1:C3");
@@ -293,6 +293,15 @@
     sheet.pageMargins = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
     sheet.headerFooter.oddFooter = "&LGRCON&CRelatório de Conferência — Consulta Geral × Histórico&R&P / &N";
 
+    if (options?.pending) {
+      const consolidated = Conference.pendingGrdts(source);
+      const pending = workbook.addWorksheet("GRDTs Pendentes", { views: [{ state: "frozen", ySplit: 1 }] });
+      pending.columns = [{ header: "GRDT", key: "grdt", width: 48 }, { header: "Quantidade de documentos", key: "documentCount", width: 28 }];
+      consolidated.grdts.forEach(item => pending.addRow(item));
+      pending.getRow(1).font = { bold: true, color: { argb: WHITE } };
+      pending.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: DARK } };
+      pending.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, pending.rowCount), column: 2 } };
+    }
     return workbook.xlsx.writeBuffer();
   }
 

@@ -17,6 +17,8 @@ import type {
 } from "./domain";
 
 interface TriagemCoreApi {
+  key(value: unknown): string;
+  documentSearchKeys(value: unknown): string[];
   parseWorkbook(workbook: unknown, fileName: string, lastModified: number): { records: LdRecord[]; history: LdHistoryEntry[] };
   buildIndex(records: LdRecord[], history: LdHistoryEntry[]): DocumentIndex;
 }
@@ -72,7 +74,7 @@ interface GrconPlannedDocumentsCoreApi {
 interface GrconCloudApi {
   loadPlannedDocuments?(): Promise<PlannedDocumentsSnapshot | null>;
   getExportTemplates?(): Promise<ExportTemplate[]>;
-  state?: { membership?: { workspace_id?: string } };
+  state?: { membership?: { workspace_id?: string; role?: string } };
   canManageHistory?(): boolean;
   deleteHistoryRecord?(record: unknown): Promise<unknown>;
   clearHistory?(): Promise<boolean>;
@@ -90,6 +92,12 @@ declare global {
     GrconGrdtHistoryIndicator?: GrconGrdtHistoryIndicatorApi;
     GrconLdMemory?: GrconLdMemoryApi;
     GrconCloud?: GrconCloudApi;
+    GrconRequestsControl?: {
+      current(): { id: string; file_name: string; records: Array<{ document: string; sheet: string; sourceRow: number; data: Record<string, string> }> } | null;
+      refresh(): Promise<unknown>;
+      publish(file: File): Promise<unknown>;
+      find(document: string): Array<{ document: string; sheet: string; sourceRow: number; data: Record<string, string> }>;
+    };
     GrconPlannedDocumentsCore?: GrconPlannedDocumentsCoreApi;
     GrconNotify?: NotifyFn;
     GRCONBrandAssets?: unknown;

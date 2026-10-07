@@ -31,6 +31,18 @@ export function useConsultas() {
   const Adapter = consultasAdapter;
 
   const [lds, setLds] = useState<LdEntry[]>([]);
+  const [requestsBase, setRequestsBase] = useState(Adapter.requestsBaseInfo());
+  const [baseBusy, setBaseBusy] = useState(false);
+  const updateRequestsBase = useCallback(async (file?: File) => {
+    const token = Adapter.contextToken();
+    setBaseBusy(true);
+    try {
+      if (file) await Adapter.publishRequestsBase(file); else await Adapter.refreshRequestsBase();
+      if (token !== Adapter.contextToken()) return;
+      setRequestsBase(Adapter.requestsBaseInfo()); indexRef.current = Adapter.buildIndex(lds); setResults(new Map());
+    } catch (error) { Adapter.notify(error instanceof Error ? error.message : "Falha na base de solicitações.", "error"); }
+    finally { setBaseBusy(false); }
+  }, [Adapter, lds]);
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [results, setResults] = useState<Map<string, ConsultationRow>>(new Map());
   const [running, setRunning] = useState(false);
@@ -45,8 +57,10 @@ export function useConsultas() {
   const [banner, setBanner] = useState<{ kind: "error" | "info"; message: string } | null>(null);
 
   const indexRef = useRef<DocumentIndex | null>(null);
+  const sourceEpochRef = useRef(0);
   const plannedSnapshotIdRef = useRef("");
   const undoRef = useRef<UndoEntry[]>([]);
+  useEffect(() => { void updateRequestsBase(); }, []);
 
   const notify = useCallback((message: string, kind?: NotifyKind) => Adapter.notify(message, kind), [Adapter]);
 
@@ -149,7 +163,8 @@ export function useConsultas() {
 
   const runQuery = useCallback(async (onlySelected?: boolean) => {
     if (running) return;
-    if (!indexRef.current) { notify("Anexe pelo menos uma LD válida antes de consultar.", "warn"); return; }
+    const token = Adapter.contextToken(), sourceEpoch = sourceEpochRef.current;
+    const valid = () => token === Adapter.contextToken() && sourceEpoch === sourceEpochRef.current;
     const alvos = onlySelected ? documents.filter((item) => item.selected) : documents;
     if (!alvos.length) { notify(onlySelected ? "Nenhum documento selecionado." : "Informe pelo menos um documento.", "warn"); return; }
 
@@ -161,8 +176,9 @@ export function useConsultas() {
       // compartilhada. O snapshot é carregado uma vez por execução e o índice
       // das LDs é reconstruído com essa mesma versão para todo o lote.
       const plannedSnapshot = await Adapter.loadPlannedDocumentsSnapshot();
+      if (!valid()) return;
       const officialIndex = Adapter.buildIndex(lds, plannedSnapshot);
-      if (!officialIndex) throw new Error("Nenhuma LD válida está disponível para a consulta.");
+      if (!officialIndex) throw new Error("Carregue uma LD ou um Controle de Solicitações válido antes de consultar.");
       indexRef.current = officialIndex;
 
       Adapter.refreshHistoryIndicator();
@@ -170,6 +186,7 @@ export function useConsultas() {
       plannedSnapshotIdRef.current = plannedSnapshot.id;
       const novosResultados = sameSnapshot ? new Map(results) : new Map<string, ConsultationRow>();
       for (let inicio = 0; inicio < total; inicio += 100) {
+        if (!valid()) return;
         const fim = Math.min(total, inicio + 100);
         for (let i = inicio; i < fim; i += 1) {
           const item = alvos[i];
@@ -186,6 +203,7 @@ export function useConsultas() {
         ? `${total} documento(s) consultados. ${validar} precisam de conferência.`
         : `${total} documento(s) consultados.`, validar ? "warn" : "success");
     } catch (error) {
+      if (!valid()) return;
       // Não preservar uma classificação anterior quando a fonte oficial não
       // pôde ser validada: isso impediria distinguir resultado atual de cache.
       setResults(new Map());
@@ -203,12 +221,17 @@ export function useConsultas() {
 
   useEffect(() => { Adapter.setExportRowsProvider(() => exportRows); }, [exportRows, Adapter]);
 
-  useEffect(() => Adapter.onPlannedDocumentsChanged(() => {
+  useEffect(() => Adapter.onPlannedDocumentsChanged((event: Event) => {
+    sourceEpochRef.current++;
     // Qualquer troca do snapshot torna Alocado/Não alocado anterior obsoleto.
     // Limpar também remove esses valores de filtros, detalhes, cópia e Excel.
     plannedSnapshotIdRef.current = "";
     setResults(new Map());
     setProgress({ done: 0, total: 0 });
+    setRequestsBase(Adapter.requestsBaseInfo());
+    if (event.type === "grcon:contract-context-changed") {
+      setLds([]); setDocuments([]); indexRef.current = null; undoRef.current = [];
+    }
   }), [Adapter]);
 
   const copyResults = useCallback(async () => {
@@ -296,7 +319,8 @@ export function useConsultas() {
     templates, selectedTemplateId, lastExport, banner, visibleRows, exportRows, selectedCount, ldsReady, summary,
     lastLd: Adapter.getLastLd(),
     canUndo: undoRef.current.length > 0,
-    indexReady: Boolean(indexRef.current),
+    requestsBase, baseBusy, updateRequestsBase,
+    indexReady: Boolean(indexRef.current || Adapter.requestsBaseInfo() !== "Nenhuma base compartilhada"),
     setSearch, setSituation, setAllocation, setSort, setSelectedTemplateId, setBanner,
     addLds, removeLd, clearLds,
     addDocuments, removeDuplicates, clearConsulta, undo,

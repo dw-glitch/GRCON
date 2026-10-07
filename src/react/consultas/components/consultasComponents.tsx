@@ -609,7 +609,7 @@ function ResultsRow({ item, linha, onToggle, onOpen }: {
           ? <small className="requests-table-subtext">{linha.rule}</small>
           : null}
       </td>
-      <td className="requests-col-title">{linha?.title || celulaVazio()}</td>
+      <td className="requests-col-title">{linha?.title || celulaVazio()}{linha?.consultationSources ? <small className="requests-table-subtext">Fonte: {linha.consultationSources}</small> : null}</td>
       <td className="requests-col-taxonomia">{celulaTaxonomiaInterna(linha)}</td>
       <td className="requests-col-allocation">
         {linha?.allocated
@@ -757,6 +757,13 @@ export function DocumentDetailsDrawer({ entry, onClose }: {
             <DetailField label="Regra / evidência" wide>{linha?.rule || celulaVazio()}</DetailField>
           </dl>
         </section>
+        {linha?.requestControlMatches?.length ? <section className="requests-detail-section">
+          <h4>Fonte: Controle de Solicitações</h4>
+          {linha.requestControlMatches.map((item, i) => <div key={`${item.sheet}-${item.sourceRow}-${i}`}>
+            <p>{item.sheet} · linha {item.sourceRow}</p>
+            <dl className="requests-detail-grid">{Object.entries(item.data).map(([label, value]) => <DetailField label={label} key={label}>{value || celulaVazio()}</DetailField>)}</dl>
+          </div>)}
+        </section> : null}
       </div>
     </UiDrawer>
   );

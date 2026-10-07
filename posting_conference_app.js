@@ -83,6 +83,7 @@
       </header>
       <section class="pc-hero" aria-live="polite"><div><span>CONFERÊNCIA GERAL</span><strong id="pc-hero-main">Carregue a Consulta Geral</strong><small id="pc-hero-note">O histórico permanece preservado como origem dos eventos de envio.</small></div><div class="pc-base-card" id="pc-base-card"></div></section>
       <section class="pc-kpis" id="pc-kpis" aria-label="Resumo da conferência"></section>
+      <section class="pc-toolbar-card pc-date-controls"><label>Data da Consulta Geral <input id="pc-reference-date" type="date"/></label> <button id="pc-save-date" type="button" class="secondary-button">Salvar data</button><small>Data da base, independente do upload.</small></section>
       <section class="pc-toolbar-card">
         <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">Pendências de Postagem</button></div>
         <div class="pc-filters" id="pc-filters">
@@ -102,6 +103,7 @@
       <section class="pc-table-card">
         <header><div><span id="pc-table-kicker">DOCUMENTOS CONFERIDOS</span><strong id="pc-result-count">0 documento(s)</strong></div><small id="pc-table-help">Cada documento aparece apenas uma vez. Reenvios em diferentes eGRDTs não aumentam os totais.</small></header>
         <div class="pc-progress" id="pc-progress" hidden><i></i><span>Processando…</span></div>
+        <div id="pc-pending-grdts" class="pc-toolbar-card" hidden></div>
         <div class="pc-table-wrap" id="pc-table-wrap"></div>
         <empty-state id="pc-empty"><strong>Nenhuma conferência disponível</strong><span>Atualize a Consulta Geral para iniciar a comparação com o Histórico.</span></empty-state>
         <footer class="pc-pagination" id="pc-pagination"><button class="secondary-button compact" id="pc-prev" type="button">Anterior</button><span id="pc-page">Página 1</span><button class="secondary-button compact" id="pc-next" type="button">Próxima</button></footer>
@@ -114,6 +116,17 @@
   function el(id) { return shell?.querySelector(`#${id}`); }
 
   function bind() {
+    el("pc-save-date").addEventListener("click", async () => {
+      el("pc-save-date").disabled = true;
+      try { await root.GrconSharedSigemQuery.setReferenceDate(el("pc-reference-date").value); notify("Data da Consulta Geral atualizada.", "success"); }
+      catch (error) { notify(error.message, "error"); }
+      finally { render(); }
+    });
+    el("pc-pending-grdts").addEventListener("click", async event => {
+      if (!event.target.closest("[data-copy-pending-grdts]")) return;
+      try { await navigator.clipboard.writeText(pendingSummary().grdts.map(item => item.grdt).join("\n")); notify("GRDTs copiadas.", "success"); }
+      catch (_) { notify("Selecione e copie a lista de GRDTs.", "warning"); }
+    });
     el("pc-update").addEventListener("click", () => el("pc-file").click());
     el("pc-file").addEventListener("change", (event) => {
       const file = event.target.files && event.target.files[0];
@@ -189,6 +202,7 @@
     await new Promise((resolve) => requestAnimationFrame(resolve));
     try {
       const base = await root.GrconSharedSigemQuery.parseFile(file);
+      base.meta.referenceDate = el("pc-reference-date").value || new Date().toLocaleDateString("sv-SE");
       await root.GrconSharedSigemQuery.setLocal(base);
       await Conference.saveBase(conferenceProjection(root.GrconSharedSigemQuery.current()));
       const result = await Conference.reconcilePersisted(History?.read?.() || [], { reason: "local-general-query" });
@@ -278,7 +292,7 @@
       ? "Carregue a planilha recebida do SIGEM. O arquivo fica somente neste navegador."
       : `${fmt(summary.total)} documento(s) único(s) · ${fmt(summary.sendCount)} envio(s) · ${fmt(summary.repostCount)} repostagem(ns) · ${fmt(summary.pending)} pendência(s).`;
     el("pc-base-card").innerHTML = meta
-      ? `<span>CONSULTA GERAL ATUAL</span><strong title="${escapeHtml(meta.fileName)}">${escapeHtml(meta.fileName)}</strong><small>${fmt(meta.recordCount)} registros · atualizada ${fmtDate(meta.importedAt, true)}</small><em>${meta.duplicateCount ? `${fmt(meta.duplicateCount)} duplicata(s) exata(s) da base consolidadas` : "Sem duplicação exata na importação"}</em>`
+      ? `<span>CONSULTA GERAL ATUAL</span><strong title="${escapeHtml(meta.fileName)}">${escapeHtml(meta.fileName)}</strong><small>${fmt(meta.recordCount)} registros · Data da Consulta Geral: ${meta.referenceDate ? meta.referenceDate.split("-").reverse().join("/") : "Não informada"} · Upload: ${fmtDate(meta.importedAt, true)}</small><em>${meta.duplicateCount ? `${fmt(meta.duplicateCount)} duplicata(s) exata(s) da base consolidadas` : "Sem duplicação exata na importação"}</em>`
       : `<span>BASE SIGEM</span><strong>Nenhum arquivo</strong><small>Use “Atualizar Consulta Geral”.</small>`;
   }
 
@@ -325,11 +339,16 @@
     if (![...el("pc-wait").options].some((option) => option.value === el("pc-wait").value)) el("pc-wait").value = "48";
   }
 
+  let filteredCache = null;
   function filteredDocumentRows() {
+    const key = state.view + JSON.stringify(state.filters);
+    if (filteredCache?.result === state.result && filteredCache.key === key) return filteredCache.rows;
     let rows = Conference.filterRows(documentRows(), state.filters);
     if (state.view === "pending") rows = Conference.pendingRows(rows);
+    filteredCache = { result: state.result, key, rows, pending: state.view === "pending" ? Conference.pendingGrdts(rows) : null };
     return rows;
   }
+  function pendingSummary() { filteredDocumentRows(); return filteredCache.pending || Conference.pendingGrdts([]); }
 
   function filteredEventRows() {
     return Conference.filterRows(eventRows(), state.filters);
@@ -343,11 +362,11 @@
     const sends = row.sends || [];
     const countLabel = `${fmt(row.sendCount)} ${plural(row.sendCount, "envio")}`;
     const meta = `${fmt(row.egrdtCount)} ${plural(row.egrdtCount, "eGRDT")} · ${fmt(row.repostCount)} ${plural(row.repostCount, "repostagem", "repostagens")}`;
-    const latestNumber = row.latestEgrdtNumber || row.egrdtNumber || sends[0]?.egrdtNumber || "";
+    const latestNumber = Conference.pertinentGrdt(row);
     const latestAt = row.latestSendAt || row.generatedAt || sends[0]?.generatedAt || "";
     const latestNumberMarkup = latestNumber
       ? `<button class="pc-link pc-latest-egrdt" data-pc-grdt="${escapeHtml(latestNumber)}" type="button" title="${escapeHtml(latestNumber)}">${breakableCode(latestNumber)}</button>`
-      : '<span class="pc-empty-value">—</span>';
+      : '<span class="pc-empty-value">GRDT não identificada</span>';
     return `<div class="pc-send-overview">
       <div class="pc-send-count"><strong>${escapeHtml(countLabel)}</strong><small>${escapeHtml(meta)}</small></div>
       <div class="pc-latest-send"><span class="pc-block-label">Último envio</span><strong>${fmtDate(latestAt, false)}</strong>${latestNumberMarkup}</div>
@@ -396,6 +415,8 @@
     let total = 0;
     let pages = 1;
     let content = "";
+    const consolidated = el("pc-pending-grdts");
+    consolidated.hidden = state.view !== "pending";
 
     if (state.view === "grdts") {
       const groups = filteredGroups();
@@ -409,6 +430,10 @@
       el("pc-result-count").textContent = `${fmt(total)} eGRDT(s)`;
     } else {
       const rows = filteredDocumentRows();
+      if (state.view === "pending") {
+        const summary = pendingSummary();
+        consolidated.innerHTML = `<strong>GRDTs pendentes de postagem</strong><p>Documentos pendentes: ${fmt(summary.documentCount)} · GRDTs pendentes: ${fmt(summary.grdtCount)}${summary.missing ? ` · Pendências sem GRDT identificada: ${fmt(summary.missing)}` : ""}</p><button type="button" data-copy-pending-grdts>Copiar GRDTs</button><pre style="white-space:pre-wrap;max-height:220px;overflow:auto">${escapeHtml(summary.grdts.map(item => item.grdt).join("\n"))}</pre>`;
+      }
       total = rows.length;
       pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
       state.page = Math.min(state.page, pages);
@@ -444,6 +469,10 @@
   function render() {
     createShell();
     renderHero();
+    const canEditDate = ["owner", "admin"].includes(root.GrconCloud?.state?.membership?.role);
+    el("pc-reference-date").disabled = !canEditDate;
+    el("pc-save-date").disabled = !canEditDate || !state.base.meta || state.busy;
+    if (state.base.meta?.referenceDate) el("pc-reference-date").value = state.base.meta.referenceDate;
     renderKpis();
     refreshFilterOptions();
     renderTableOnly();
@@ -470,7 +499,7 @@
         mode = "documents";
       }
       const scopeLabel = state.view === "pending" ? "Pendencias" : state.view === "grdts" ? "Por_eGRDT" : state.filters.grdt ? state.filters.grdt.replace(/[^A-Z0-9-]+/gi, "_") : "";
-      const buffer = await Report.buildWorkbook(rows, { mode, scopeLabel, baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
+      const buffer = await Report.buildWorkbook(rows, { mode, scopeLabel, pending: state.view === "pending", baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -513,6 +542,13 @@
   }
 
   root.addEventListener("grcon:shared-sigem-updated", () => { if (state.ready && !state.busy) void adoptSharedBase(); });
+  root.addEventListener("grcon:shared-sigem-date-updated", async () => {
+    const base = root.GrconSharedSigemQuery.current();
+    if (!base || !state.ready) return;
+    state.base.meta = { ...state.base.meta, ...base.meta };
+    await Conference.saveBase(state.base);
+    render();
+  });
 
   root.addEventListener("grcon:history-updated", () => {
     if (!state.ready) return;

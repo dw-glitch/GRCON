@@ -84,8 +84,15 @@ async function parseLd(file: File): Promise<{ records: LdRecord[]; history: LdHi
 /** Reconstrói o índice de busca a partir das LDs válidas anexadas. */
 function buildIndex(lds: LdEntry[], plannedSnapshot?: PlannedDocumentsSnapshot): DocumentIndex | null {
   const validas = lds.filter((item) => !item.error && item.records.length);
-  if (!validas.length) return null;
-  const registros = validas.flatMap((item) => item.records);
+  const control = window.GrconRequestsControl?.current();
+  if (!validas.length && !control?.records.length) return null;
+  const ldRecords = validas.flatMap((item) => item.records);
+  const ldKeys = new Set(ldRecords.flatMap(row => core().documentSearchKeys(row.document).map(value => core().key(value))));
+  const registros = [...ldRecords, ...(control?.records || []).filter(row => !core().documentSearchKeys(row.document).some(value => ldKeys.has(core().key(value)))).map(row => ({
+    document: row.document, documentKey: row.document, source: "Controle de Solicitações", sheet: row.sheet, row: row.sourceRow,
+    title: Object.entries(row.data).find(([label]) => /^(?:T[IÍ]TULO(?: DO DOCUMENTO)?|DESCRI[CÇ][AÃ]O)$/i.test(label))?.[1] || "",
+    sourceTimestamp: 0,
+  }))];
   const historico = validas.flatMap((item) => item.history || []);
   // Em Consultas, a coluna de alocação da LD nunca pode decidir Alocado/Não
   // alocado. Quando há snapshot oficial, todas as ocorrências entram no índice
@@ -207,7 +214,9 @@ function lookupDocument(
   // A decisão final independe de a LD ter localizado o documento: se o código
   // normalizado existe no snapshot compartilhado, é Alocado; se não existe, é
   // Não alocado. Revisão, SIGEM, PW, histórico e campos da LD não entram aqui.
-  return applyPlannedAllocation(document, row, plannedSnapshot);
+  const matches = window.GrconRequestsControl?.find(document) || [];
+  const withSources = { ...row, requestControlMatches: matches, consultationSources: [row.ld, matches.length ? "Controle de Solicitações" : ""].filter(Boolean).join(" · ") };
+  return applyPlannedAllocation(document, withSources, plannedSnapshot);
 }
 
 /**
@@ -297,8 +306,20 @@ function onExportTemplatesChanged(callback: EventListener): () => void {
 
 function onPlannedDocumentsChanged(callback: EventListener): () => void {
   window.addEventListener(EVENTO_DOCUMENTOS_PREVISTOS, callback);
-  return () => window.removeEventListener(EVENTO_DOCUMENTOS_PREVISTOS, callback);
+  window.addEventListener("grcon:requests-control-updated", callback);
+  window.addEventListener("grcon:contract-context-changed", callback);
+  return () => {
+    window.removeEventListener(EVENTO_DOCUMENTOS_PREVISTOS, callback);
+    window.removeEventListener("grcon:requests-control-updated", callback);
+    window.removeEventListener("grcon:contract-context-changed", callback);
+  };
 }
+
+function requestsBaseInfo(): string { return window.GrconRequestsControl?.current()?.file_name || "Nenhuma base compartilhada"; }
+function contextToken(): string { return window.GrconCloud?.state?.membership?.workspace_id || ""; }
+function canManageRequestsBase(): boolean { return ["owner", "admin"].includes(window.GrconCloud?.state?.membership?.role || ""); }
+async function refreshRequestsBase(): Promise<void> { await window.GrconRequestsControl?.refresh(); }
+async function publishRequestsBase(file: File): Promise<void> { await window.GrconRequestsControl?.publish(file); }
 
 /**
  * Gera e baixa o arquivo Excel com o mesmo construtor da Triagem (mesmo
@@ -345,6 +366,7 @@ function getExportRows(): ExportRow[] { return exportRowsProvider(); }
 function setExportRowsProvider(provider?: () => ExportRow[]): void { exportRowsProvider = provider || (() => []); }
 
 export const consultasAdapter = Object.freeze({
+  requestsBaseInfo, refreshRequestsBase, publishRequestsBase, contextToken, canManageRequestsBase,
   notify,
   parseLd,
   buildIndex,

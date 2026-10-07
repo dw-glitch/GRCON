@@ -185,18 +185,6 @@
     // Botões destrutivos e seus confirmadores
     const destructiveActions = [
       {
-        id: "analysis-history-clear",
-        message: "Limpar todo o histórico de análises?",
-        detail: "Esta ação é irreversível. Todos os registros de análises anteriores serão excluídos permanentemente.",
-        event: "click",
-        handler: async (e, originalHandler) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const confirmed = await confirmAction("Limpar todo o histórico de análises?", "Esta ação é irreversível. Todos os registros de análises anteriores serão excluídos permanentemente. Recomenda-se fazer um backup antes.");
-          if (confirmed) originalHandler();
-        }
-      },
-      {
         id: "sigem-clear",
         message: "Limpar todos os registros de postagem?",
         detail: "Esta ação é irreversível. Todos os registros de postagem SIGEM serão excluídos.",
@@ -324,7 +312,6 @@
       { id: "export-zip", action: "pacote_exportado" },
       { id: "export-final-package", action: "pacote_completo_exportado" },
       { id: "export-report", action: "relatorio_exportado" },
-      { id: "analysis-history-clear", action: "historico_analises_limpo" },
       { id: "history-clear", action: "historico_egrdts_limpo" },
       { id: "sigem-clear", action: "postagens_limpas" },
       { id: "macro6-clear-operational", action: "historico_operacional_limpo" },

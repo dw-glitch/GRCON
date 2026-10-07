@@ -477,3 +477,9 @@ html[data-app="GRCON"] .requests-filter-empty { border: 1px dashed var(--border-
 @media (prefers-reduced-motion: reduce) {
   html[data-app="GRCON"] .requests-progress-bar i { transition: none; }
 }
+
+.requests-control-base { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.requests-control-base h3, .requests-control-base p { margin: 0; }
+.requests-control-base p { margin-top: 6px; color: var(--muted, #5b6770); }
+.requests-control-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.requests-control-actions .secondary-button { width: auto; }

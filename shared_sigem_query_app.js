@@ -100,7 +100,18 @@
         const meta = Array.isArray(data) ? data[0] : data;
         if (!valid()) return null;
         if (!meta?.snapshot_id) { state.stale = false; state.error = ""; return current(); }
-        if (state.shared?.meta?.snapshotId === meta.snapshot_id) { const changed = state.stale || state.error; state.stale = false; state.error = ""; if (changed) emit(); return state.shared; }
+        if (state.shared?.meta?.snapshotId === meta.snapshot_id) {
+          const dateChanged = state.shared.meta.referenceDate !== meta.metadata?.referenceDate;
+          const changed = state.stale || state.error;
+          state.stale = false; state.error = "";
+          if (dateChanged) {
+            state.shared.meta = { ...state.shared.meta, ...meta.metadata };
+            await cachePut(workspace, state.shared);
+            root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: state.shared.meta } }));
+          }
+          if (changed) emit();
+          return state.shared;
+        }
         const records = [];
         let after = 0;
         while (records.length < meta.record_count) {
@@ -110,7 +121,7 @@
         }
         if (records.length !== meta.record_count) throw new Error("Contagem da Consulta Geral divergente.");
         const base = Core.validate({ meta: { ...meta.metadata, snapshotId: meta.snapshot_id, fileName: meta.file_name,
-          importedAt: meta.published_at, recordCount: meta.record_count, source: "shared-general-query" }, records });
+          importedAt: meta.metadata?.importedAt || meta.published_at, publishedAt: meta.published_at, recordCount: meta.record_count, source: "shared-general-query" }, records });
         if (!valid()) return null;
         let cacheWarning = "";
         try { await cachePut(workspace, base); }
@@ -198,7 +209,22 @@
       emit(); return state.shared;
     } finally { state.busy = false; }
   }
-  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish,
+  async function setReferenceDate(value) {
+    const base = current(), workspace = cloud()?.state?.membership?.workspace_id;
+    if (!base || !["owner", "admin"].includes(cloud()?.state?.membership?.role)) throw new Error("Sem permissão para editar a data.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Informe a data da Consulta Geral.");
+    if (state.shared) {
+      const metadata = await request("set_date", { target_workspace: workspace, target_snapshot: base.meta.snapshotId, reference_date: value, expected_date: base.meta.referenceDate || null });
+      if (workspace !== cloud()?.state?.membership?.workspace_id) return;
+      base.meta = { ...base.meta, ...metadata };
+      await cachePut(workspace, base);
+    } else {
+      base.meta = { ...base.meta, referenceDate: value };
+      await (await runtime()).kvSet(`local-sigem-query:${workspace}`, base);
+    }
+    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: base.meta } }));
+  }
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, setReferenceDate,
     context: () => state.context,
     sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
     resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });

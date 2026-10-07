@@ -635,7 +635,7 @@
           '<td>' + esc(bytes(file.size_bytes)) + '</td>' +
           '<td>' + esc(dateLabel(file.created_at)) + '</td>' +
           '<td><span class="vault-allocation ' + (file.allocated ? "yes" : "no") + '">' + esc(allocationLabel(file)) + '</span></td>' +
-          '<td><div class="vault-row-actions"><button type="button" data-vault-open-file="' + esc(id) + '">Abrir</button><button type="button" class="quiet" data-vault-download="' + esc(id) + '">Baixar</button></div></td>' +
+          '<td><div class="vault-row-actions">' + (file.status === 'ready' ? '<button type="button" data-vault-open-file="' + esc(id) + '">Abrir</button><button type="button" class="quiet" data-vault-download="' + esc(id) + '">Baixar</button>' : '<span>Exclusão pendente</span>') + (canDelete() ? '<button type="button" data-vault-delete="' + esc(id) + '">' + (file.status === 'ready' ? 'Excluir' : 'Tentar excluir novamente') + '</button>' : '') + '</div></td>' +
           '</tr>';
       }).join("");
     }
@@ -676,6 +676,76 @@
     } catch (error) {
       notify(error.message || "Falha ao recuperar documento.", "error");
     }
+  }
+
+  function canDelete() { return ["owner", "admin"].includes(root.GrconCloud?.state?.membership?.role); }
+
+  async function deleteDocument(id) {
+    const file = state.files.find(item => item.id === id);
+    if (!file || !canDelete()) return;
+    const workspace = workspaceId(), epoch = contextEpoch;
+    if (!root.confirm("Excluir documento?\n\n" + (file.document_code || file.file_name) + "\nRevisão " + file.revision + "\n\nO arquivo também será removido do armazenamento do Cofre. O Histórico de GRDT será preservado.")) return;
+    sourceRegistry.clear(); state.lookupRows = []; state.vaultPrepared = false;
+    if (state.grdtSource === "vault") setPackageFiles([]);
+    renderLookupResults();
+    try {
+      await requestJson("/delete", { method: "POST", body: JSON.stringify({ workspaceId: workspace, id }) });
+      if (epoch !== contextEpoch) return;
+      sourceRegistry.clear();
+      state.lookupRows = []; state.vaultPrepared = false;
+      if (state.grdtSource === "vault") setPackageFiles([]);
+      renderLookupResults();
+      await refreshList(true);
+      notify("Documento excluído do Cofre e do armazenamento.", "success");
+    } catch (error) {
+      if (epoch !== contextEpoch) return;
+      await refreshList(true);
+      notify(error.message, "error");
+    }
+  }
+
+  async function exportVault() {
+    const button = document.getElementById("vault-export");
+    const workspace = workspaceId(), epoch = contextEpoch;
+    const filters = { q: state.query, allocation: state.allocation };
+    if (button) button.disabled = true;
+    try {
+      await root.GRCONModuleLoader.ensure("excel");
+      const workbook = new root.ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Cofre", { views: [{ state: "frozen", ySplit: 1 }] });
+      sheet.columns = [
+        ["Contrato", "contract", 24], ["Código do documento", "document", 38], ["Revisão", "revision", 12],
+        ["Nome do arquivo", "name", 52], ["Extensão", "format", 12], ["Tipo", "type", 14],
+        ["Tamanho (bytes)", "size", 20], ["Data de inclusão", "date", 24], ["Incluído por", "actor", 38], ["Situação", "status", 30],
+      ].map(([header, key, width]) => ({ header, key, width }));
+      let after = null;
+      do {
+        if (epoch !== contextEpoch) throw new Error("O contrato mudou. Exporte novamente.");
+        const params = new URLSearchParams({ workspace, limit: "200", ...filters });
+        if (after) params.set("after", String(after));
+        const page = await requestJson("/list?" + params, { method: "GET" });
+        if (epoch !== contextEpoch) throw new Error("O contrato mudou. Exporte novamente.");
+        for (const file of page.files || []) sheet.addRow({
+          contract: root.GrconCloud?.state?.contract?.display_name || root.GrconCloud?.state?.contract?.code || root.GrconCloud?.state?.membership?.contract_code || "Contrato atual",
+          document: file.document_code, revision: file.revision, name: file.file_name, format: file.format,
+          type: file.document_type || "", size: Number(file.size_bytes), date: new Date(file.created_at),
+          actor: file.created_by_name || file.created_by_email || "", status: file.status === "ready" ? allocationLabel(file) : "Exclusão pendente — tentar novamente",
+        });
+        after = page.next;
+      } while (after);
+      sheet.getColumn("date").numFmt = "dd/mm/yyyy hh:mm";
+      sheet.getColumn("size").numFmt = "#,##0";
+      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
+      sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: 10 } };
+      const buffer = await workbook.xlsx.writeBuffer();
+      if (epoch !== contextEpoch) throw new Error("O contrato mudou. Exporte novamente.");
+      const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const anchor = document.createElement("a"); anchor.href = url; anchor.download = "GRCON_Cofre_" + new Date().toISOString().slice(0,10) + ".xlsx";
+      document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+      notify((sheet.rowCount - 1) + " documentos exportados com os filtros selecionados.", "success");
+    } catch (error) { notify(error.message, "error"); }
+    finally { if (button) button.disabled = false; }
   }
 
   function setPackageFiles(files) {
@@ -820,8 +890,9 @@
 
     try {
       const combined = [];
-      for (let offset = 0; offset < parsed.length; offset += LOOKUP_BATCH_SIZE) {
-        const chunk = parsed.slice(offset, offset + LOOKUP_BATCH_SIZE);
+      const chunks = [];
+      for (let offset = 0; offset < parsed.length; offset += LOOKUP_BATCH_SIZE) chunks.push(parsed.slice(offset, offset + LOOKUP_BATCH_SIZE));
+      const batches = await mapLimit(chunks, 3, async chunk => {
         const payload = await requestJson("/lookup", {
           method: "POST",
           body: JSON.stringify({
@@ -836,9 +907,9 @@
         });
         const results = Array.isArray(payload.results) ? payload.results : [];
         const byId = new Map(results.map(result => [text(result.requestId || result.request_id), result]));
-        chunk.forEach(item => combined.push(normalizeLookupResult(byId.get(item.requestId) || {}, item)));
-        await yieldMain();
-      }
+        return chunk.map(item => normalizeLookupResult(byId.get(item.requestId) || {}, item));
+      });
+      batches.forEach(batch => combined.push(...batch));
       if (epoch !== contextEpoch || workspace !== workspaceId()) return;
       state.lookupRows = combined;
       const missing = combined.filter(row => !row.found).length;
@@ -889,9 +960,13 @@
     if (button) button.disabled = true;
     if (summary) summary.textContent = "Preparando " + selectedFiles.length + " arquivo(s) encontrados…";
     try {
+      let completed = 0;
+      const blobRequests = new Map();
       const downloaded = await mapLimit(selectedFiles, DOWNLOAD_CONCURRENCY, async item => {
         try {
-          const blob = await downloadBlob(item);
+          const objectIdentity = item.sha256 ? item.sha256 + ":" + item.size_bytes : item.id;
+          if (!blobRequests.has(objectIdentity)) blobRequests.set(objectIdentity, downloadBlob(item));
+          const blob = await blobRequests.get(objectIdentity);
           const file = new File([blob], item.file_name || ((item.document_code || item.identity_code) + "." + (item.format || "bin")), {
             type: blob.type || "application/octet-stream",
             lastModified: Date.now(),
@@ -907,12 +982,15 @@
           return { ok: true, file };
         } catch (error) {
           return { ok: false, item, error };
+        } finally {
+          completed++;
+          if (epoch === contextEpoch && summary) summary.textContent = "Preparando documentos do Cofre: " + completed + " de " + selectedFiles.length + " preparados";
         }
       });
 
       const good = downloaded.filter(item => item?.ok).map(item => item.file);
       const failed = downloaded.filter(item => !item?.ok);
-      if (!good.length) throw failed[0]?.error || new Error("Nenhum arquivo pôde ser recuperado.");
+      if (failed.length) throw new Error(failed.length + " arquivo(s) não puderam ser preparados. Tente novamente antes de gerar a GRDT.");
       if (epoch !== contextEpoch || workspace !== workspaceId()) return;
       setPackageFiles(good);
       state.vaultPrepared = true;
@@ -1024,7 +1102,7 @@
         <div class="vault-table-wrap"><table><thead><tr><th>Arquivo</th><th>Código</th><th>Revisão</th><th>Situação</th><th>Progresso</th><th>Ações</th></tr></thead><tbody id="vault-queue-body"></tbody></table></div>
       </section>
       <section class="vault-browser-card">
-        <header><div><strong>Documentos armazenados</strong><small id="vault-list-status">Carregando…</small></div><button id="vault-refresh" type="button" class="secondary-button">Atualizar</button></header>
+        <header><div><strong>Documentos armazenados</strong><small id="vault-list-status">Carregando…</small></div><div><button id="vault-export" type="button" class="secondary-button">Exportar Excel</button><button id="vault-refresh" type="button" class="secondary-button">Atualizar</button></div></header>
         <div class="vault-toolbar">
           <label class="vault-search"><span>Pesquisar documentos</span><input id="vault-search" type="search" placeholder="Código, arquivo ou revisão"></label>
           <label><span>Alocação</span><select id="vault-allocation"><option value="all">Todos</option><option value="allocated">Alocados</option><option value="not_allocated">Não alocados</option></select></label>
@@ -1084,6 +1162,7 @@
     zone?.addEventListener("drop", event => { void filesFromDrop(event.dataTransfer).then(enqueueFiles).catch(error => notify(error.message || "Não foi possível ler a pasta.", "error")); });
     document.getElementById("vault-pause")?.addEventListener("click", pauseQueue);
     document.getElementById("vault-resume")?.addEventListener("click", resumeQueue);
+    document.getElementById("vault-export")?.addEventListener("click", () => void exportVault());
     document.getElementById("vault-refresh")?.addEventListener("click", () => void refreshList(true));
     document.getElementById("vault-load-more")?.addEventListener("click", () => void refreshList(false));
 
@@ -1114,6 +1193,8 @@
       if (open) void downloadAction(open.dataset.vaultOpenFile, true);
       const download = event.target.closest?.("[data-vault-download]");
       if (download) void downloadAction(download.dataset.vaultDownload, false);
+      const deletion = event.target.closest?.("[data-vault-delete]");
+      if (deletion) void deleteDocument(deletion.dataset.vaultDelete);
     });
 
     document.getElementById("grdt-document-source")?.addEventListener("change", event => {

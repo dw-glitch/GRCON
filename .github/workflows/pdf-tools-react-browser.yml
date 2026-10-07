@@ -22,7 +22,6 @@ on:
       - "tests/pdf_tools_react.cjs"
       - "scripts/validar-pdf-tools-browser.cjs"
       - "scripts/validar-consultas-browser.cjs"
-      - "scripts/validar-historico-analises-browser.cjs"
       - "docs/phase-b-pdf-tools-parity.md"
       - ".github/workflows/pdf-tools-react-browser.yml"
   workflow_dispatch:
@@ -81,7 +80,6 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-pdf-tools-browser.cjs
-          node scripts/validar-historico-analises-browser.cjs
           node scripts/validar-consultas-browser.cjs
 
       - uses: actions/upload-artifact@v7
@@ -91,8 +89,6 @@ jobs:
           path: |
             artifacts/pdf-tools-browser/*.png
             artifacts/pdf-tools-browser/metrics.json
-            artifacts/historico-analises-browser/*.png
-            artifacts/historico-analises-browser/metrics.json
             artifacts/consultas-browser/*.png
             artifacts/consultas-browser/metrics.json
           if-no-files-found: error
