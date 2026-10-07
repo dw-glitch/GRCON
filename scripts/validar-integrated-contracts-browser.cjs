@@ -40,7 +40,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('#sigem-monitor-help > summary').click();
  assert.notEqual(await page.locator('#sigem-monitor-help').getAttribute('open'),null);
  assert.match(await page.locator('#sigem-monitor-help').textContent(),/Monitore[\s\S]*GRCON acompanha[\s\S]*Receba a notificação/);
- assert.equal(await page.locator('[data-grcon-view="requests"]').first().getAttribute('aria-selected'),'true');
+ assert.equal(await page.locator('#requests-module').isVisible(),true);
  assert.equal(await page.locator('#sigem-monitor-change-body tr').count(),100);
  assert.equal(await page.locator('#grcon-notification-count').textContent(),'1');
  await page.locator('#sigem-monitor-next-page').click();assert.match(await page.locator('#sigem-monitor-change-body').textContent(),/DOC-00100/);
