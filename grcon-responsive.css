@@ -529,33 +529,310 @@ html[data-app="GRCON"][data-ui-generation="3"] .grcon-cloud-account-button {
   html[data-app="GRCON"][data-ui-generation="3"] .runtime-status > * { inline-size: auto; }
 }
 
-/* O aviso fica visível até o usuário fechá-lo; não interrompe a operação. */
+/* Central de notificações: contextual, leve e ancorada ao cabeçalho. */
+.grcon-notification-control {
+  position: relative;
+  z-index: 140;
+  display: inline-flex;
+  align-items: center;
+}
+.grcon-notification-button { position: relative; white-space: nowrap; }
+.grcon-notification-button > svg { width: 1rem; height: 1rem; }
+#grcon-notification-count {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 1.35rem;
+  block-size: 1.35rem;
+  padding-inline: .35rem;
+  border-radius: 999px;
+  color: var(--surface-1);
+  background: var(--brand-800);
+  font-size: .7rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.grcon-notification-popover {
+  position: absolute;
+  z-index: 1200;
+  inset-block-start: calc(100% + .55rem);
+  inset-inline-end: 0;
+  inline-size: min(27rem, calc(100vw - 1.5rem));
+  max-block-size: min(36rem, calc(100dvh - 6rem));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text-1);
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+}
+.grcon-notification-popover > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .9rem 1rem .8rem;
+  border-bottom: 1px solid var(--border-1);
+}
+.grcon-notification-popover > header > div { min-inline-size: 0; }
+.grcon-notification-popover > header strong { display: block; font-size: .95rem; }
+.grcon-notification-popover > header span {
+  display: block;
+  margin-block-start: .15rem;
+  color: var(--text-3);
+  font-size: .72rem;
+}
+.grcon-notification-close {
+  min-block-size: 2rem;
+  inline-size: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-2);
+  background: transparent;
+  font-size: 1.25rem;
+}
+.grcon-notification-center-list {
+  min-block-size: 8rem;
+  max-block-size: min(28rem, calc(100dvh - 13rem));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: .45rem;
+}
+.grcon-notification-popover > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  padding: .7rem .85rem;
+  border-top: 1px solid var(--border-1);
+  background: var(--surface-2);
+}
+.grcon-notification-popover > footer > span {
+  color: var(--text-3);
+  font-size: .68rem;
+  line-height: 1.35;
+}
+.grcon-notification-item {
+  display: grid;
+  grid-template-columns: .5rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: .65rem;
+  min-inline-size: 0;
+  padding: .8rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+.grcon-notification-item + .grcon-notification-item { margin-block-start: .2rem; }
+.grcon-notification-item.is-unread {
+  background: var(--brand-50);
+  border-color: color-mix(in srgb, var(--brand-600) 18%, var(--border-1));
+}
+.grcon-notification-dot {
+  inline-size: .45rem;
+  block-size: .45rem;
+  margin-block-start: .38rem;
+  border-radius: 50%;
+  background: transparent;
+}
+.grcon-notification-item.is-unread .grcon-notification-dot {
+  background: var(--brand-700);
+  box-shadow: 0 0 0 3px var(--brand-100);
+}
+.grcon-notification-copy { min-inline-size: 0; }
+.grcon-notification-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .65rem;
+}
+.grcon-notification-line strong { min-inline-size: 0; font-size: .78rem; }
+.grcon-notification-line time,
+.grcon-notification-read-state {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-size: .66rem;
+  font-weight: 650;
+}
+.grcon-notification-code {
+  display: block;
+  width: fit-content;
+  max-inline-size: 100%;
+  margin-block-start: .26rem;
+  overflow: hidden;
+  color: var(--brand-800);
+  background: transparent;
+  font-size: .72rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grcon-notification-transition {
+  display: grid;
+  gap: .1rem;
+  margin-block-start: .45rem;
+}
+.grcon-notification-transition > span {
+  color: var(--text-3);
+  font-size: .64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.grcon-notification-transition > strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+  color: var(--text-1);
+  font-size: .73rem;
+  font-weight: 700;
+}
+.grcon-notification-transition b { color: var(--text-3); font-weight: 600; }
+.grcon-notification-copy > p {
+  margin: .38rem 0 0;
+  color: var(--text-2);
+  font-size: .7rem;
+  line-height: 1.4;
+}
+.grcon-notification-read { min-block-size: 1.85rem; align-self: center; white-space: nowrap; font-size: .68rem; }
+.grcon-notification-read-state { align-self: center; padding: .35rem .45rem; }
+.grcon-notification-empty {
+  display: grid;
+  justify-items: center;
+  gap: .35rem;
+  padding: 1.8rem 1rem;
+  text-align: center;
+}
+.grcon-notification-empty svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.grcon-notification-empty strong { font-size: .82rem; }
+.grcon-notification-empty span { max-inline-size: 20rem; color: var(--text-3); font-size: .72rem; }
+
+/* Toast transitório para uma mudança recém-detectada. A leitura continua no banco. */
 .sigem-monitor-popup {
   position: fixed;
-  z-index: 950;
-  inset-block-start: 1rem;
+  z-index: 1250;
   inset-inline-end: 1rem;
-  inline-size: min(27rem, calc(100vw - 2rem));
+  inline-size: min(25rem, calc(100vw - 2rem));
   max-block-size: calc(100dvh - 2rem);
   overflow: auto;
-  padding: 1rem;
-  color: var(--text-1, #172733);
-  background: var(--surface-1, #fff);
-  border: 1px solid var(--brand-600, #155c8a);
-  border-inline-start-width: 5px;
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgb(16 48 68 / 22%);
+  padding: .9rem;
+  color: var(--text-1);
+  background: var(--surface-1);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  animation: grcon-notification-in 180ms ease-out;
 }
-.sigem-monitor-popup header { display: flex; align-items: flex-start; gap: .75rem; }
-.sigem-monitor-popup header > div { flex: 1; min-inline-size: 0; }
-.sigem-monitor-popup header strong, .sigem-monitor-popup header small { display: block; }
-.sigem-monitor-popup header strong { margin-block-start: .35rem; font-size: 1rem; }
-.sigem-monitor-popup header > button { flex: 0 0 auto; border: 0; background: transparent; color: inherit; font-size: 1.4rem; }
-.sigem-monitor-popup p { margin: .65rem 0; font-size: .85rem; }
-.sigem-monitor-popup ul { display: grid; gap: .6rem; list-style: none; padding: 0; margin: .75rem 0; }
-.sigem-monitor-popup li { display: grid; gap: .2rem; overflow-wrap: anywhere; font-size: .85rem; }
-.sigem-monitor-popup li span { color: var(--text-2, #536777); }
-.sigem-monitor-popup footer { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.sigem-monitor-popup header {
+  display: grid;
+  grid-template-columns: 2.1rem minmax(0, 1fr) 2rem;
+  align-items: start;
+  gap: .65rem;
+}
+.sigem-monitor-popup header > div { min-inline-size: 0; }
+.sigem-monitor-popup header strong,
+.sigem-monitor-popup header small { display: block; }
+.sigem-monitor-popup header strong { margin-block-start: .12rem; font-size: .88rem; }
+.sigem-monitor-popup header small { color: var(--text-3); font-size: .66rem; font-weight: 700; }
+.sigem-monitor-popup header > button {
+  min-block-size: 2rem;
+  inline-size: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-2);
+  background: transparent;
+  font-size: 1.2rem;
+}
+.grcon-notification-toast-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 2.1rem;
+  block-size: 2.1rem;
+  border-radius: var(--radius-sm);
+  color: var(--brand-800);
+  background: var(--brand-100);
+}
+.grcon-notification-toast-icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.grcon-notification-toast-list { display: grid; gap: .45rem; margin-block-start: .75rem; }
+.grcon-notification-toast-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .25rem .6rem;
+  padding: .65rem .7rem;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.grcon-notification-toast-list code {
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--brand-800);
+  background: transparent;
+  font-size: .72rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grcon-notification-toast-list article > span { grid-column: 1 / -1; }
+.grcon-notification-toast-list article > span small {
+  display: block;
+  color: var(--text-3);
+  font-size: .62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.grcon-notification-toast-list article > span strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+  margin-block-start: .12rem;
+  font-size: .72rem;
+}
+.grcon-notification-toast-list article > span b { color: var(--text-3); }
+.grcon-notification-toast-list time { color: var(--text-3); font-size: .64rem; white-space: nowrap; }
+.grcon-notification-toast-more { margin: .55rem 0 0; color: var(--text-3); font-size: .68rem; }
+.sigem-monitor-popup footer { display: flex; justify-content: flex-end; margin-block-start: .7rem; }
+@keyframes grcon-notification-in {
+  from { opacity: 0; transform: translateY(-.35rem) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (max-width: 58rem) {
+  .grcon-notification-popover { inset-inline-start: 0; inset-inline-end: auto; }
+}
 @media (max-width: 44rem) {
-  .sigem-monitor-popup { inset-block-start: .5rem; inset-inline-end: .5rem; inline-size: calc(100vw - 1rem); max-block-size: calc(100dvh - 1rem); }
+  .grcon-notification-control { max-inline-size: 100%; }
+  .grcon-notification-popover {
+    inline-size: min(27rem, calc(100vw - 1rem));
+    max-block-size: calc(100dvh - 1rem);
+  }
+  .grcon-notification-popover > footer { align-items: flex-start; flex-direction: column; }
+  .grcon-notification-item { grid-template-columns: .45rem minmax(0, 1fr); }
+  .grcon-notification-read,
+  .grcon-notification-read-state { grid-column: 2; justify-self: start; }
+  .sigem-monitor-popup { inset-inline: .5rem; inline-size: auto; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .sigem-monitor-popup { animation: none; }
+}
+
