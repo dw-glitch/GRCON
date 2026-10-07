@@ -171,9 +171,15 @@ declare global {
     GrconPostingConference?: PostingConferenceApi;
     GrconSharedSigemQuery?: {
       current(): SigemPwBase | null;
+      sharedCurrent(): SigemPwBase | null;
       refresh(): Promise<SigemPwBase | null>;
+      refreshLatest(): Promise<SigemPwBase | null>;
+      canPublish(): boolean;
       setLocal(base: SigemPwBase): Promise<SigemPwBase | null>;
       parseFile(file: File): Promise<SigemPwBase>;
+      listHistory(): Promise<Array<{ snapshotId:string; fileName:string; recordCount:number; publishedAt?:string; createdAt?:string; createdBy?:string; metadata?:Record<string,unknown>; status?:string; isActive:boolean }>>;
+      activateSnapshot(snapshotId:string): Promise<SigemPwBase | null>;
+      deleteSnapshot(snapshotId:string): Promise<{ deletedSnapshotId?:string; wasActive?:boolean; activeSnapshotId?:string | null }>;
     };
   }
   interface WindowEventMap {
