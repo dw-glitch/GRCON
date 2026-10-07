@@ -63,7 +63,9 @@ const state: SigemPwState = {
   dateEditSnapshotId: "",
   dateEditor: { open: false, system: "", snapshotId: "", value: "" },
   historyDialogOpen: false,
-  filters: { documentClass: "", query: "" },
+  sharedSigemHistory: [],
+  canManageSharedSigem: false,
+  filters: { documentClass: "", query: "", revision: "", sigemStatus: "", pwPresence: "" },
   activeList: "all",
   page: 1,
 };
@@ -509,13 +511,17 @@ async function refresh(reason = ""): Promise<void> {
       const resetApplied = await clearPreStage7BasesOnce();
       await window.GrconSharedSigemQuery?.refresh();
       const bases = await Core().loadBases();
-      const shared = window.GrconSharedSigemQuery?.current();
+      const sharedApi = window.GrconSharedSigemQuery;
+      const shared = sharedApi?.current();
       if (shared?.meta) {
         if (bases.sigem?.meta?.snapshotId !== shared.meta.snapshotId) {
           const recorded = await registerHistoryBeforeActivation("sigem", shared, { pwBase: bases.pw, ldRecords: bases.ld?.records || [], reason: "shared-general-query" });
           shared.meta.historySourceSnapshotId = recorded.sigem?.snapshot?.id;
         }
         bases.sigem = await Core().saveSigemBase(shared);
+      } else if (sharedApi) {
+        bases.sigem = EMPTY_BASE();
+        await Core().kvSet(Core().SIGEM_BASE_KEY, bases.sigem);
       }
       state.sigem = bases.sigem?.meta ? bases.sigem : EMPTY_BASE();
       state.pw = bases.pw?.meta ? bases.pw : EMPTY_BASE();
@@ -548,7 +554,13 @@ async function activate(): Promise<void> {
 }
 
 function filteredRows(): SigemPwResult["lists"][string] {
-  const rows = state.result?.lists?.[state.activeList] || [];
+  let rows = state.result?.lists?.[state.activeList] || [];
+  const revisionFilter = Core().norm(state.filters.revision);
+  const statusFilter = Core().norm(state.filters.sigemStatus);
+  if (revisionFilter) rows = rows.filter((row) => Core().norm(row.revision) === revisionFilter);
+  if (statusFilter) rows = rows.filter((row) => Core().norm(row.sigemStatus) === statusFilter);
+  if (state.filters.pwPresence === "yes") rows = rows.filter((row) => Boolean(row.inPw));
+  if (state.filters.pwPresence === "no") rows = rows.filter((row) => !row.inPw);
   const query = Core().norm(state.filters.query);
   return query
     ? rows.filter((row) => Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.situation].join(" ")).includes(query))
@@ -572,16 +584,44 @@ function setDocumentClass(value: SigemPwDocumentClass): void {
   state.page = 1;
   renderFromModel(false);
 }
+function setRevision(value: string): void {
+  state.filters.revision = value;
+  state.page = 1;
+  emit();
+}
+function setSigemStatus(value: string): void {
+  state.filters.sigemStatus = value;
+  state.page = 1;
+  emit();
+}
+function setPwPresence(value: "" | "yes" | "no"): void {
+  state.filters.pwPresence = value;
+  state.page = 1;
+  emit();
+}
 function clearFilters(): void {
   state.filters.documentClass = "";
   state.filters.query = "";
+  state.filters.revision = "";
+  state.filters.sigemStatus = "";
+  state.filters.pwPresence = "";
   state.page = 1;
   renderFromModel(false);
 }
 function setActiveList(value: SigemPwListKey): void {
   state.activeList = value;
   state.page = 1;
+  state.filters.revision = "";
+  state.filters.sigemStatus = "";
+  state.filters.pwPresence = "";
   emit();
+}
+function openSigemDetails(): void {
+  setActiveList("sigem");
+  window.setTimeout(() => {
+    document.getElementById("spw-list-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById("spw-table")?.focus({ preventScroll: true });
+  }, 0);
 }
 function setPage(page: number): void {
   state.page = Math.max(1, Math.floor(page || 1));
@@ -603,12 +643,15 @@ async function exportCurrentList(): Promise<void> {
       Documento: row.document,
       "Revisão": row.revision,
       "Status SIGEM": row.sigemStatus,
+      "Data SIGEM": row.sigemDate || "",
+      "Existe no PW": row.inPw ? "SIM" : "NÃO",
       "Status PW": row.pwStatus,
       "Emissão PW": row.pwEmission,
-      "Situação": row.situation,
+      "Situação SIGEM × PW": row.situation,
+      "LD": row.documentClass === "N-1710" ? text(state.ld.meta?.fileName) : "",
     }));
     const worksheet = api.utils.json_to_sheet(data);
-    (worksheet as Record<string, unknown>)["!cols"] = [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 34 }];
+    (worksheet as Record<string, unknown>)["!cols"] = [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 20 }, { wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 34 }, { wch: 34 }];
     const workbook = api.utils.book_new();
     api.utils.book_append_sheet(workbook, worksheet, "Relação");
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -620,8 +663,23 @@ async function exportCurrentList(): Promise<void> {
   }
 }
 
+async function loadSharedHistory(): Promise<void> {
+  const sharedApi = window.GrconSharedSigemQuery;
+  state.canManageSharedSigem = Boolean(sharedApi?.canPublish?.());
+  if (!sharedApi?.listHistory) {
+    state.sharedSigemHistory = [];
+    return;
+  }
+  try {
+    state.sharedSigemHistory = await sharedApi.listHistory();
+  } catch (error) {
+    console.warn("[SIGEM×PW] histórico compartilhado SIGEM:", error);
+    state.sharedSigemHistory = [];
+  }
+}
 async function openHistory(): Promise<void> {
   state.history = await Core().loadHistory();
+  await loadSharedHistory();
   state.historyDialogOpen = true;
   emit();
 }
@@ -629,7 +687,59 @@ function closeHistory(): void {
   state.historyDialogOpen = false;
   emit();
 }
+async function selectSharedSigemSnapshot(id: string): Promise<void> {
+  const item = state.sharedSigemHistory.find((entry) => entry.snapshotId === id);
+  if (!item || item.isCurrent) return;
+  if (!state.canManageSharedSigem || !window.GrconSharedSigemQuery?.activateSnapshot) {
+    notify("Somente o proprietário pode selecionar a Consulta Geral atual.", "warning");
+    return;
+  }
+  try {
+    setBusy(true, "Selecionando Consulta Geral…");
+    await window.GrconSharedSigemQuery.activateSnapshot(id);
+    await refresh("Consulta Geral selecionada");
+    await loadSharedHistory();
+    emit();
+    notify("Consulta Geral selecionada como atual.", "success");
+  } catch (error) {
+    notify(messageOf(error, "Não foi possível selecionar a Consulta Geral."), "error");
+  } finally {
+    setBusy(false);
+  }
+}
+async function removeSharedSigemSnapshot(id: string): Promise<void> {
+  const item = state.sharedSigemHistory.find((entry) => entry.snapshotId === id);
+  if (!item) return;
+  if (!state.canManageSharedSigem || !window.GrconSharedSigemQuery?.deleteSnapshot) {
+    notify("Somente o proprietário pode excluir bases da Consulta Geral.", "warning");
+    return;
+  }
+  const message = item.isCurrent
+    ? `Excluir a Consulta Geral ATUAL “${item.fileName || "sem nome"}”? A versão compartilhada será removida e a base histórica mais recente disponível assumirá automaticamente. Se não houver outra, o SIGEM ficará sem base ativa.`
+    : `Excluir a Consulta Geral “${item.fileName || "sem nome"}” do histórico compartilhado?`;
+  if (!window.confirm(message)) return;
+  try {
+    setBusy(true, "Excluindo Consulta Geral…");
+    const result = await window.GrconSharedSigemQuery.deleteSnapshot(id);
+    await Core().deleteSnapshot(id).catch(() => undefined);
+    await refresh("Consulta Geral compartilhada excluída");
+    await loadSharedHistory();
+    emit();
+    const active = text((result as { activeSnapshotId?: string }).activeSnapshotId);
+    notify(item.isCurrent && !active
+      ? "Consulta Geral excluída. Nenhuma Consulta Geral ativa; carregue uma nova base."
+      : "Consulta Geral excluída e referências atuais recalculadas.", "success");
+  } catch (error) {
+    notify(messageOf(error, "Não foi possível excluir a Consulta Geral."), "error");
+  } finally {
+    setBusy(false);
+  }
+}
 async function removeSnapshot(id: string): Promise<void> {
+  if (state.sharedSigemHistory.some((entry) => entry.snapshotId === id)) {
+    await removeSharedSigemSnapshot(id);
+    return;
+  }
   const item = state.history.snapshots.find((entry) => entry.meta.snapshotId === id);
   if (!item || !window.confirm(`Excluir a base “${text(item.meta.fileName) || "sem nome"}” do histórico?`)) return;
   try {
@@ -749,14 +859,19 @@ export const sigemPwDashboardAdapter = {
   importLd,
   setQuery,
   setDocumentClass,
+  setRevision,
+  setSigemStatus,
+  setPwPresence,
   clearFilters,
   setActiveList,
+  openSigemDetails,
   setPage,
   filteredRows,
   pageRows,
   exportCurrentList,
   openHistory,
   closeHistory,
+  selectSharedSigemSnapshot,
   removeSnapshot,
   openBaseDateEditor,
   closeBaseDateEditor,
