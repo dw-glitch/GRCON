@@ -15,7 +15,10 @@ const pdfHook = read("src/react/pdf-tools/hooks/usePdfMerge.ts");
 const coverHook = read("src/react/cover-document/hooks/useCoverDocument.ts");
 const bridge = read("src/react/shared/mascot/mascotController.ts");
 const types = read("src/react/shared/mascot/mascot.types.ts");
-const source = JSON.parse(read("assets/mascot/video/higgsfield-source.json"));
+const source = JSON.parse(read("assets/mascot/video/higgsfield-source.json"));\nconst alphaRebuild = read("scripts/rebuild_mascot_alpha.py");
+assert.doesNotMatch(alphaRebuild, /"-c:v",\s*"libvpx-vp9",\s*"-i",\s*str\(source\)/, "decoder deve ser auto-detectado para aceitar fontes MP4 e WebM");
+assert.match(alphaRebuild, /"-c:v",\s*"libvpx-vp9"/, "saída continua codificada em VP9 com alpha");
+
 const sprite = read("grcon-mascot-sprite.png", null);
 const approvedRunning = read("assets/mascot/video/grcon-mascot-running-alpha.webm", null);
 
