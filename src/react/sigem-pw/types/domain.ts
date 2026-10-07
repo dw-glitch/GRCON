@@ -157,7 +157,8 @@ export interface SigemPwFilters {
   inPw: "" | "yes" | "no";
 }
 export interface SharedSigemHistoryItem {
-  snapshotId: string; fileName: string; recordCount: number; publishedAt?: string; createdAt?: string; createdBy?: string;
+  snapshotId: string; fileName: string; recordCount: number; uniqueDocumentCount?: number; etCount?: number; n1710Count?: number;
+  publishedAt?: string; createdAt?: string; createdBy?: string; createdByName?: string; createdByEmail?: string;
   metadata?: Record<string, unknown>; status?: string; isActive: boolean;
 }
 
