@@ -1,4 +1,5 @@
 export type EvolutionSystem = "sigem" | "pw";
+export type EvolutionRevisionScope = "revision0" | "all";
 export type EvolutionListMode =
   | "sigem-new"
   | "pw-new"
@@ -238,6 +239,7 @@ export interface EvolutionUiState {
   ldSignature: string;
   period: { start: string; end: string };
   selections: EvolutionSelections;
+  revisionScope: EvolutionRevisionScope;
   comparison: EvolutionComparison | null;
   timeline: EvolutionTimelineDay[];
   listMode: EvolutionListMode;
