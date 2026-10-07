@@ -103,7 +103,8 @@ function sourceRegression() {
   assert.doesNotMatch(dashboardOpenSource, /sigem_pw_evolution|GrconSigemPwEvolutionUi/, "evolução não deve bloquear a abertura principal");
   assert.doesNotMatch(bootstrapSource, /sigem_pw_history_(?:app|postmerge|runtime_fix)\.js/, "a UI histórica removida não deve bloquear a abertura");
   assert.match(dashboardAppSource, /function modelInWorker\(generation: number\)/, "a montagem pesada deve sair da thread de interface");
-  assert.match(dashboardAppSource, /state\.aggregates\[aggregateKey\]/, "trocar ET e N-1710 deve reutilizar agregados prontos");
+  assert.match(dashboardAppSource, /state\.result = state\.aggregates\.all/, "filtros da lista devem preservar o agregado total do KPI");
+  assert.match(dashboardAppSource, /state\.filters\.documentClass && row\.documentClass !== state\.filters\.documentClass/, "ET e N-1710 devem filtrar linhas sem recalcular o KPI");
   assert.match(dashboardAppSource, /id="spw-evolution-open"/, "evolução deve permanecer acessível por ação explícita");
   assert.match(evolutionAppSource, /id="spw-evo-date-start"/);
   assert.match(evolutionAppSource, /id="spw-evo-date-end"/);
