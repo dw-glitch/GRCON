@@ -161,7 +161,7 @@ function renderFromModel(resetPage: boolean): void {
   const classKey = state.filters.documentClass || "all";
   const aggregateKey = `${state.revisionScope}:${classKey}` as keyof typeof state.aggregates;
   state.result = state.aggregates[aggregateKey] || state.aggregates[`all:${classKey}` as keyof typeof state.aggregates];
-  state.readiness = Readiness().assess(state, state.aggregates["all:all"] || state.aggregates.all);
+  state.readiness = Readiness().assess(state, state.aggregates.all);
   emit();
 }
 
