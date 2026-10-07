@@ -627,6 +627,7 @@ async function exportCurrentList(): Promise<void> {
       Documento: row.document,
       "Revisão": row.revision,
       "Status SIGEM": row.sigemStatus,
+      "Data SIGEM": row.sigemDate || "",
       "Existe no PW": row.inPw ? "SIM" : "NÃO",
       "Status PW": row.pwStatus,
       "Emissão PW": row.pwEmission,
