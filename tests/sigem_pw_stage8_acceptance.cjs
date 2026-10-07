@@ -110,7 +110,7 @@ function validResult() {
   assert.match(bootstrap, /root\.GrconSigemPwReadiness/);
   assert.match(app, /id="spw-readiness"/);
   assert.match(app, /Readiness\(\)\.assess\(state, state\.aggregates\.all\)/);
-  assert.match(app, /state\.result = state\.aggregates\[aggregateKey\]/);
+  assert.match(app, /state\.result = state\.aggregates\.all/, "filtros exploratórios devem preservar o KPI base");
   assert.match(app, /aria-live="polite"/);
   assert.match(app, /data-status=\{assessment\.status\}/);
   assert.match(app, /data-edit-base-date="sigem"/);
