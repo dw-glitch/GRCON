@@ -1,7 +1,8 @@
 export type SigemPwBaseKind = "sigem" | "pw" | "ld";
 export type SigemPwEditableBaseKind = "sigem" | "pw";
 export type SigemPwDocumentClass = "" | "ET" | "N-1710";
-export type SigemPwListKey = "all" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
+export type SigemPwListKey = "all" | "sigem" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
+export type SigemPwPwPresence = "" | "yes" | "no";
 export type SigemPwReadinessStatus = "empty" | "partial" | "ready" | "attention";
 
 export interface SigemPwBaseMeta {
@@ -66,6 +67,8 @@ export interface SigemPwRow {
   inPw?: boolean;
   pwEmitted?: boolean;
   matchMode?: string;
+  sigemDate?: string;
+  sigemSourceRow?: number;
 }
 
 export interface SigemPwClassSummary {
@@ -151,6 +154,26 @@ export interface SigemPwReadiness {
 export interface SigemPwFilters {
   documentClass: SigemPwDocumentClass;
   query: string;
+  revision: string;
+  sigemStatus: string;
+  pwPresence: SigemPwPwPresence;
+}
+
+export interface SharedSigemHistoryItem {
+  snapshotId: string;
+  fileName: string;
+  recordCount: number;
+  uniqueDocumentCount: number;
+  etCount: number;
+  n1710Count: number;
+  publishedAt: string;
+  createdAt: string;
+  status: string;
+  isCurrent: boolean;
+  createdBy: string;
+  createdByName: string;
+  createdByEmail: string;
+  metadata: Record<string, unknown>;
 }
 
 export interface SigemPwDateEditor {
@@ -177,6 +200,8 @@ export interface SigemPwState {
   dateEditSnapshotId: string;
   dateEditor: SigemPwDateEditor;
   historyDialogOpen: boolean;
+  sharedSigemHistory: SharedSigemHistoryItem[];
+  canManageSharedSigem: boolean;
   filters: SigemPwFilters;
   activeList: SigemPwListKey;
   page: number;
@@ -198,6 +223,7 @@ export interface WorkerModelPayload {
 
 export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.freeze({
   all: "Todas as situações",
+  sigem: "SIGEM: documentos postados/emitidos",
   sigemOnly: "SIGEM: falta cadastrar no PW",
   bothNotEmitted: "SIGEM + PW: ainda não emitido",
   bothEmitted: "SIGEM + PW: emitido",
