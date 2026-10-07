@@ -186,6 +186,11 @@ assert.match(appMain, /csv\|dwg\|dxf\|dgn\|rvt\|ifc/);
 assert.match(appMain, /não entram na tabela de resultados, na GRDT nem no histórico/);
 
 assert.match(emission, /vaultFileId:\s*text\(vaultSource/);
+assert.match(emission, /fileProvenance:\s*vaultSource/);
+assert.match(emission, /sha256:\s*text\(vaultSource\.sha256\)/);
+assert.match(history, /fileProvenance:\s*cleanFileProvenance/);
+assert.match(history, /catalogSequence/);
+assert.match(history, /lastModified/);
 assert.match(emission, /historyClassification/);
 
 console.log("Document Vault contracts: OK");
