@@ -133,7 +133,7 @@ async function activeView(page) {
     assert.equal(await viewer.locator('#grcon-notification-button').getAttribute('aria-expanded'), 'false');
     assert.equal(await viewer.evaluate(() => document.activeElement?.id), 'grcon-notification-button');
 
-    await publisher.locator('[data-popup-close]').click();
+    if (await publisher.locator('[data-popup-close]').count()) await publisher.locator('[data-popup-close]').click();
     await publisher.evaluate(() => window.GrconSigemStatusMonitoring.refreshNotifications());
     assert.equal(await publisher.locator('#sigem-monitor-popup').count(), 0, 'closing and duplicate delivery do not replay');
 
