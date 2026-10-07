@@ -1,4 +1,5 @@
 import type { SigemPwRow } from "../types/domain";
+import { DocumentClassBadge } from "../../core/ui/DocumentClassBadge";
 
 function situationClass(row: SigemPwRow): string {
   if (row.situationKey === "bothEmitted") return "ok";
@@ -30,7 +31,7 @@ export function SigemPwTable({ rows, caption }: { rows: SigemPwRow[]; caption: s
           <tbody>
             {rows.map((row) => (
               <tr key={row.key}>
-                <td><span className="spw-pill">{row.documentClass}</span></td>
+                <td><DocumentClassBadge className="spw-pill" value={row.documentClass} /></td>
                 <td className="spw-code">{row.document}</td>
                 <td><span className="spw-revision">{row.revision}</span></td>
                 <td><span className="spw-status">{valueOrDash(row.sigemStatus)}</span></td>
