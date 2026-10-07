@@ -33,6 +33,14 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('[data-grcon-view="requests"]').first().click();
  await page.locator('[data-requests-area="sigem-monitoring"]').click();
  await page.waitForFunction(()=>document.querySelector('#sigem-monitor-page')?.textContent.includes('2201'));
+ assert.equal(await page.locator('label:has(#sigem-monitor-code) > span').first().textContent(),'Código do documento');
+ assert.equal(await page.locator('label:has(#sigem-monitor-priority) > span').first().textContent(),'Prioridade');
+ assert.match(await page.locator('label:has(#sigem-monitor-note) > span').first().textContent(),/Observação/);
+ assert.equal(await page.locator('#sigem-monitor-help').getAttribute('open'),null);
+ await page.locator('#sigem-monitor-help > summary').click();
+ assert.notEqual(await page.locator('#sigem-monitor-help').getAttribute('open'),null);
+ assert.match(await page.locator('#sigem-monitor-help').textContent(),/Monitore[\s\S]*GRCON acompanha[\s\S]*Receba a notificação/);
+ assert.equal(await page.locator('[data-grcon-view="requests"]').first().getAttribute('aria-selected'),'true');
  assert.equal(await page.locator('#sigem-monitor-change-body tr').count(),100);
  assert.equal(await page.locator('#grcon-notification-count').textContent(),'1');
  await page.locator('#sigem-monitor-next-page').click();assert.match(await page.locator('#sigem-monitor-change-body').textContent(),/DOC-00100/);
