@@ -90,7 +90,10 @@ function Readiness() {
 }
 function text(value: unknown): string { return value == null ? "" : String(value).trim(); }
 function fmt(value: number): string { return Number(value || 0).toLocaleString("pt-BR"); }
-function messageOf(error: unknown, fallback: string): string { return error instanceof Error && error.message ? error.message : fallback; }
+function messageOf(error: unknown, fallback: string): string {
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string" && error.message.trim()) return error.message;
+  return fallback;
+}
 function emit(): void {
   revision += 1;
   snapshot = { ...state, revision };
