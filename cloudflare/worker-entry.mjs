@@ -143,6 +143,7 @@ async function parseJson(request) {
 async function getOwnedOrReady(env, workspaceId, actorId, id) {
   const file = await catalog(env, workspaceId, actorId, "get", { id });
   if (!file?.id) throw Object.assign(new Error("Documento não localizado no Cofre."), { status: 404, code: "NOT_FOUND" });
+  if (["deleting", "delete_failed"].includes(file.status)) throw Object.assign(new Error("Documento com exclusão pendente."), { status: 409, code: "DELETE_PENDING" });
   return file;
 }
 
@@ -240,6 +241,7 @@ async function handleInit(request, env) {
   if (result?.error) return apiError(result.message || "Não foi possível reservar o arquivo.", 409, result.error, result);
   const file = result?.file;
   if (!file?.id) return apiError("O catálogo não retornou a reserva do arquivo.", 500, "CATALOG_INVALID");
+  if (["deleting", "delete_failed"].includes(file.status)) return apiError("Conclua a exclusão antes de enviar novamente.", 409, "DELETE_PENDING");
   const ready = file.status === "ready";
   const multipart = !ready && Number(file.size_bytes) > SINGLE_UPLOAD_LIMIT;
   return json({
@@ -412,12 +414,48 @@ async function handleDownload(request, env) {
   return new Response(object.body, { status: 200, headers });
 }
 
+async function handleDelete(request, env) {
+  const user = await authenticatedUser(request, env);
+  const body = await parseJson(request);
+  const workspaceId = workspaceFrom(request, body);
+  const id = safeUuid(body.id);
+  if (!workspaceId || !id) return apiError("Documento inválido.", 400, "DELETE_INVALID");
+  const operate = (operation, input = {}) => rpc(env, "grcon_document_delete", {
+    target_workspace: workspaceId, actor_id: user.id, operation, input: { id, ...input },
+  });
+  const bucket = requireBucket(env);
+  const job = await operate("begin");
+  if (job.completed) return json({ ok: true, id });
+  try {
+    // A reused binary may back another catalog entry. Preserve that entry first.
+    if (job.shared_object) {
+      if (!await bucket.head(job.retained_key)) {
+        const original = await bucket.get(job.object_key);
+        if (!original?.body) throw new Error("Arquivo compartilhado indisponível. A exclusão pode ser tentada novamente.");
+        await bucket.put(job.retained_key, original.body, {
+          httpMetadata: original.httpMetadata, customMetadata: original.customMetadata,
+        });
+      }
+      await operate("retain");
+    }
+    await bucket.delete(job.object_key);
+    if (await bucket.head(job.object_key)) throw new Error("O armazenamento ainda não confirmou a exclusão.");
+    await operate("finish");
+    return json({ ok: true, id });
+  } catch (error) {
+    try { await operate("fail", { error: String(error.message || error) }); }
+    catch (auditError) { console.error("Falha ao registrar exclusão pendente", auditError.message); }
+    return apiError("A exclusão não foi concluída. O documento ficou indisponível para GRDT. Tente excluir novamente.", 409, "DELETE_INCOMPLETE");
+  }
+}
+
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
   if (action === "health" && request.method === "GET") return handleHealth(env);
   if (action === "list" && request.method === "GET") return handleList(request, env);
   if (action === "lookup" && request.method === "POST") return handleLookup(request, env);
+  if (action === "delete" && request.method === "POST") return handleDelete(request, env);
   if (action === "init" && request.method === "POST") return handleInit(request, env);
   if (action === "upload" && request.method === "PUT") return handleSingleUpload(request, env);
   if (action === "multipart/start" && request.method === "POST") return handleMultipartStart(request, env);

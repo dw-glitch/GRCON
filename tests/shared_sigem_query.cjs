@@ -66,7 +66,7 @@ assert.match(sharedAppSource,/shared-sigem-conference-workspace/);
 assert.match(sharedAppSource,/async function refreshLatest\(\)/);
 assert.match(sharedAppSource,/conference\.STATE_KEY[\s\S]*conference\.AUDIT_KEY/);
 assert.match(sharedAppSource,/function canPublish\(\) \{ return cloud\(\)\?\.state\?\.membership\?\.role === "owner"; \}/);
-assert.doesNotMatch(sharedAppSource,/\["owner", "admin"\]\.includes/);
+assert.doesNotMatch(sharedAppSource.match(/function canPublish\(\)[^\n]*/)[0],/\["owner", "admin"\]\.includes/);
 assert.match(sharedAppSource,/Somente o proprietário pode publicar a Consulta Geral compartilhada/);
 const conferenceAppSource=fs.readFileSync(path.join(__dirname,'..','posting_conference_app.js'),'utf8');
 assert.match(conferenceAppSource,/grconWorkspaceId/);

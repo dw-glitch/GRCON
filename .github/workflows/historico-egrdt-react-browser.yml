@@ -94,7 +94,6 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-historico-egrdt-browser.cjs
           node scripts/validar-consultas-browser.cjs
-          node scripts/validar-historico-analises-browser.cjs
           node scripts/validar-pdf-tools-browser.cjs
           node scripts/validar-sigem-pw-react-browser.cjs
           node scripts/validar-mascote-video-browser.cjs

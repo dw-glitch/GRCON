@@ -2119,9 +2119,7 @@ check("auditoria de tela: SGPAR removido, selo de planilha e campo com rótulo",
   assert.match(html, /class="source-icon excel">\s*<svg/, "o selo de planilha usa ícone");
   assert.match(legado, /\.source-icon\.excel svg/, "o ícone do selo precisa de tamanho e traço próprios");
 
-  const historyReact = fs.readFileSync(path.join(root, "src/react/historico-analises/components/HistoricoAnalisesComponents.tsx"), "utf8");
-  assert.match(historyReact, /aria-label="[^"]+"[\s\S]{0,240}id="unified-search-text"/,
-    "a busca unificada precisa de rótulo acessível");
+  assert.doesNotMatch(html, /data-grcon-view="analysis-history"/, "o módulo Análises foi removido da navegação");
 });
 
 check("número da eGRDT não vira texto vertical quando o painel fica estreito", () => {

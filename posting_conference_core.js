@@ -884,13 +884,35 @@
       .sort((a, b) => priorityRank(a.status) - priorityRank(b.status) || String(a.generatedAt).localeCompare(String(b.generatedAt)));
   }
 
+  function pertinentGrdt(row) {
+    const grdt = text(row.latestEgrdtNumber || row.egrdtNumber || row.sends?.[0]?.egrdtNumber).replace(/\s+/g, " ");
+    // Historical identifiers can be numeric or include a contract prefix.
+    // Labels and placeholders cannot identify a GRDT.
+    return /\d/.test(grdt) ? grdt : "";
+  }
+
+  function pendingGrdts(rows) {
+    const groups = new Map();
+    let missing = 0;
+    for (const row of rows || []) {
+      // Use the same pertinent (latest) GRDT shown by the document detail.
+      const grdt = pertinentGrdt(row);
+      if (!grdt) { missing++; continue; }
+      const key = grdt.toLocaleUpperCase("pt-BR");
+      if (!groups.has(key)) groups.set(key, { grdt, documentCount: 0 });
+      groups.get(key).documentCount++;
+    }
+    const grdts = Array.from(groups.values()).sort((a, b) => a.grdt.localeCompare(b.grdt, "pt-BR", { numeric: true, sensitivity: "base" }));
+    return { documentCount: (rows || []).length, grdtCount: grdts.length, missing, grdts };
+  }
+
   return Object.freeze({
     DB_NAME, DB_VERSION, BASE_KEY, STATE_KEY, AUDIT_KEY, HISTORY_INDEX_KEY, PREFS_KEY,
     DEFAULT_WAIT_HOURS, STATUSES, AGGREGATE_STATUSES, HEADER_ALIASES,
     text, norm, normalizeRevision, normalizeHeader, documentKeys, documentIdentity, displayDocument, revisionRank,
     isPostedSigemStatus, parseSourceDate, effectiveRecordTimestamp, resolvePostingEvidence,
     detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
-    statusLabel, aggregateStatus, filterRows, pendingRows,
+    statusLabel, aggregateStatus, filterRows, pendingRows, pertinentGrdt, pendingGrdts,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
     kvGet, kvSet, kvSetMany, storedValue, putKv,
     readHistoryIndex, historyAggregate, reconcilePersisted, prepareWorkbookImport, prepareParsedImport, commitPreparedImport, importWorkbook,

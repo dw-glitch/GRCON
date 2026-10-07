@@ -9,12 +9,6 @@ const BUILDS = {
     bundleName: "GrconConsultasBundle",
     emptyOutDir: true,
   },
-  "historico-analises": {
-    entry: "src/react/historico-analises/index.tsx",
-    fileName: "historico-analises-app.js",
-    bundleName: "GrconHistoricoAnalisesBundle",
-    emptyOutDir: false,
-  },
   "historico-egrdt": {
     entry: "src/react/historico-egrdt/index.tsx",
     fileName: "historico-egrdt-app.js",

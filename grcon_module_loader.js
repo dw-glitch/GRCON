@@ -19,14 +19,6 @@
     // O Dashboard é construído por retomar.js e já existe no carregamento inicial.
     // Ele é uma view lógica, não um arquivo chamado /dashboard.
     dashboard: [],
-    "analysis-history": [
-      "navigation",
-      "analysis_history_core.js",
-      "analysis_history_report.js",
-      "analysis_history_storage_fallback.js",
-      "macro5_flow_core.js",
-      "react-dist/historico-analises-app.js",
-    ],
     "ld-posting": ["xlsx", "zip", "ld_posting_writer.js"],
     sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; a Taxonomia Interna é projetada da
@@ -62,7 +54,6 @@
     compliance: ["GrconDocumentaryCompliance", "GrconDocumentaryComplianceUi"],
     history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi", "GrconHistoricoEgrdtReact"],
     dashboard: ["GrconHistoryDashboard"],
-    "analysis-history": ["GrconAnalysisHistory", "GrconAnalysisHistoryReport", "GrconAnalysisHistoryUi", "GrconHistoricoAnalisesReact"],
     sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsTaxonomy", "GrconRequestsUi", "GrconConsultasReact"],
     "grdt-reissue": ["GrconGrdtReissueCore", "GrconGrdtReissueUi", "GrdtWorkbook"],
@@ -226,7 +217,6 @@
 
     const modules = {
       control: "grdt-module",
-      "analysis-history": "analysis-history-module",
       history: "history-module",
       dashboard: "dashboard-module",
       sigem: "sigem-module",
@@ -264,7 +254,6 @@
     requests: "Consultas",
     "grdt-reissue": "Repostagem de GRDT",
     "additional-tools": "Ferramentas adicionais",
-    "analysis-history": "Histórico de análises",
     history: "Histórico de eGRDTs",
     dashboard: "Dashboard de emissões",
     sigem: "Postagem SIGEM",
@@ -310,7 +299,7 @@
   }
 
   async function ensureModule(view) {
-    const module = view || "control";
+    const module = view === "analysis-history" ? "control" : view || "control";
     if (module === "control") {
       directActivate("control");
       return;
