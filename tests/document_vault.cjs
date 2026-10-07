@@ -13,6 +13,7 @@ const app = read("document_vault_app.js");
 const appMain = read("app.js");
 const html = read("index.html");
 const emission = read("emission.js");
+const history = read("history_core.js");
 const worker = read("cloudflare/worker-entry.mjs");
 const wrangler = read("wrangler.jsonc");
 const sw = read("sw.js");
