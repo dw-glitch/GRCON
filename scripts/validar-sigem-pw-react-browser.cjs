@@ -503,6 +503,17 @@ async function waitEvolutionReady(page) {
     assert.equal(revision0Summary.classifiedTotal, 253);
     assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.result.lists.all.every((row) => row.revision === "0")), true);
 
+    const revision0ExportPromise = page.waitForEvent("download");
+    await page.locator("#spw-export").click();
+    const revision0Download = await revision0ExportPromise;
+    assert.match(revision0Download.suggestedFilename(), /revision0/i, "nome do Excel deve identificar o universo Revisão 0");
+    const revision0ExportPath = path.join(fixtureDir, "sigem-pw-export-revision0.xlsx");
+    await revision0Download.saveAs(revision0ExportPath);
+    const revision0Workbook = XLSX.read(fs.readFileSync(revision0ExportPath), { type: "buffer" });
+    const revision0Rows = XLSX.utils.sheet_to_json(revision0Workbook.Sheets[revision0Workbook.SheetNames[0]], { defval: "" });
+    assert.equal(revision0Rows.length, revision0Summary.classifiedTotal, "Excel Rev. 0 deve exportar toda a relação comparada, sem paginação");
+    assert.equal(revision0Rows.every((row) => String(row["Revisão"]).trim() === "0"), true, "Excel Rev. 0 não pode misturar revisões A/B/C ou numéricas diferentes de 0");
+
     const generationBeforeScopeSwitch = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.modelGeneration);
     const filtersBeforeScopeSwitch = await page.evaluate(() => ({ ...window.GrconSigemPwDashboardUi.state.filters }));
     let scopeStarted = Date.now();
