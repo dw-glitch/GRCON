@@ -508,7 +508,9 @@ export function SigemPwEvolutionApp() {
         <div>
           <span className="spw-kicker">EVOLUÇÃO SIGEM × PW</span>
           <h3>O que mudou entre as bases</h3>
-          <p>A comparação usa os snapshots escolhidos. A auditoria separa documento único de documento + revisão; a evolução técnica histórica preserva multiplicidades reais da origem sem fundi-las silenciosamente.</p>
+          <p>{state.revisionScope === "revision0"
+            ? "Visão de cadastro inicial: somente a revisão 0 participa de KPIs, séries, listas e exportações."
+            : "Visão histórica completa: cada Documento + Revisão participa do comparativo entre snapshots."}</p>
         </div>
         <div className="spw-evo-actions">
           <button className="secondary-button compact" id="spw-evo-export-audit" type="button" disabled={state.exporting || !hasValidatedLd} onClick={() => { void adapter.exportAuditWorkbook(); }}>
@@ -543,6 +545,37 @@ export function SigemPwEvolutionApp() {
       <div className="spw-evo-active-bases" id="spw-evo-active-bases" aria-label="Bases ativas da Evolução">
         <ActiveBase label="SIGEM ativo" snapshot={selectedSigem} />
         <ActiveBase label="PW ativo" snapshot={selectedPw} />
+      </div>
+
+      <div className="spw-revision-scope-block spw-evo-revision-scope-block">
+        <strong className="spw-evo-section-label">Escopo da evolução</strong>
+        <div className="spw-revision-scope" role="group" aria-label="Escopo de revisão da Evolução">
+          <button
+            type="button"
+            data-evolution-revision-scope="revision0"
+            aria-pressed={state.revisionScope === "revision0"}
+            className={state.revisionScope === "revision0" ? "active" : ""}
+            onClick={() => adapter.setRevisionScope("revision0")}
+          >
+            <strong>Revisão 0</strong>
+            <span>Cadastro inicial</span>
+          </button>
+          <button
+            type="button"
+            data-evolution-revision-scope="all"
+            aria-pressed={state.revisionScope === "all"}
+            className={state.revisionScope === "all" ? "active" : ""}
+            onClick={() => adapter.setRevisionScope("all")}
+          >
+            <strong>Todas as revisões</strong>
+            <span>Documento + Revisão</span>
+          </button>
+        </div>
+        <p className="spw-revision-scope-note" aria-live="polite">
+          {state.revisionScope === "revision0"
+            ? "Somente ocorrências cuja revisão normalizada pela mesma regra do Dashboard é 0 entram nos cálculos."
+            : "Todas as revisões válidas são comparadas como ocorrências Documento + Revisão independentes."}
+        </p>
       </div>
 
       <div className="spw-evo-period">
@@ -586,13 +619,13 @@ export function SigemPwEvolutionApp() {
       <div className="spw-evo-kpis" id="spw-evo-kpis">
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi sigem" data-evo-list="sigem-new" aria-pressed={state.listMode === "sigem-new"} disabled={!hasValidatedLd || !comparison?.sigem} onClick={() => adapter.setListMode("sigem-new")}>
-            <span>Entraram no SIGEM</span><strong>{value(Boolean(comparison?.sigem), counts["sigem-new"], true)}</strong><small>Ocorrências técnicas novas · doc+rev {fmt(comparison?.sigem?.documentRevision?.added.length)}</small>
+            <span>Entraram no SIGEM</span><strong>{value(Boolean(comparison?.sigem), counts["sigem-new"], true)}</strong><small>{state.revisionScope === "revision0" ? "Revisão 0" : "Ocorrências técnicas novas"} · doc+rev {fmt(comparison?.sigem?.documentRevision?.added.length)}</small>
           </button>
           <button type="button" className="spw-evo-explain" disabled={!comparison?.sigem} onClick={() => setAuditMetric("sigem-new")}>Como foi calculado?</button>
         </div>
         <div className="spw-evo-kpi-shell">
           <button className="spw-evo-kpi pw" data-evo-list="pw-new" aria-pressed={state.listMode === "pw-new"} disabled={!hasValidatedLd || !comparison?.pw} onClick={() => adapter.setListMode("pw-new")}>
-            <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>Cadastros novos · doc+rev {fmt(comparison?.pw?.documentRevision?.added.length)}</small>
+            <span>Entraram no PW</span><strong>{value(Boolean(comparison?.pw), counts["pw-new"], true)}</strong><small>{state.revisionScope === "revision0" ? "Cadastros novos na revisão 0" : "Cadastros novos"} · doc+rev {fmt(comparison?.pw?.documentRevision?.added.length)}</small>
           </button>
           <button type="button" className="spw-evo-explain" disabled={!comparison?.pw} onClick={() => setAuditMetric("pw-new")}>Como foi calculado?</button>
         </div>
@@ -636,7 +669,7 @@ export function SigemPwEvolutionApp() {
 
       <section className="spw-evo-current" id="spw-evo-current">
         <header>
-          <div><strong>Leitura da base atual</strong><small>Documento + revisão é mostrado em paralelo a documentos únicos para eliminar ambiguidade de contagem.</small></div>
+          <div><strong>Leitura da base atual</strong><small>{state.revisionScope === "revision0" ? "Somente revisão 0; documento + revisão e documentos únicos permanecem auditáveis." : "Documento + revisão é mostrado em paralelo a documentos únicos para eliminar ambiguidade de contagem."}</small></div>
         </header>
         <div className="spw-evo-current-grid">
           <article>
@@ -732,7 +765,7 @@ export function SigemPwEvolutionApp() {
         </button>
         <div className="spw-evo-advanced-filters" id="spw-evo-advanced-filters" hidden={!advancedOpen}>
         <label><span>Tipo documental</span><input id="spw-evo-filter-document-type" placeholder="REP, RL, DE..." value={state.filters.documentType} onChange={onSimpleFilter("documentType")} /></label>
-        <label><span>Revisão</span><input id="spw-evo-filter-revision" placeholder="A" value={state.filters.revision} onChange={onSimpleFilter("revision")} /></label>
+        <label><span>Revisão</span><input id="spw-evo-filter-revision" placeholder={state.revisionScope === "revision0" ? "0" : "A"} disabled={state.revisionScope === "revision0"} value={state.filters.revision} onChange={onSimpleFilter("revision")} /></label>
         <label><span>Status</span><input id="spw-evo-filter-status" placeholder="Status" value={state.filters.status} onChange={onSimpleFilter("status")} /></label>
         <label><span>Disciplina</span><input id="spw-evo-filter-discipline" placeholder="Disciplina" value={state.filters.discipline} onChange={onSimpleFilter("discipline")} /></label>
         <label><span>TAG</span><input id="spw-evo-filter-tag" placeholder="TAG" value={state.rawFilters.tag} onChange={(event) => adapter.setRawFilter("tag", event.target.value)} /></label>
