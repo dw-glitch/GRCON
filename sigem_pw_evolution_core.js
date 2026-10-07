@@ -12,6 +12,7 @@
   const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.1";
   const VALID_CLASSES = new Set(["ET", "N-1710"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
+  const REVISION_SCOPES = Object.freeze({ REVISION0: "revision0", ALL: "all" });
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
   function norm(value) {
