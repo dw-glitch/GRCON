@@ -405,9 +405,14 @@
     }
     $("#grdt-reissue-find")?.addEventListener("click", findLatest);
     $("#grdt-reissue-generate")?.addEventListener("click", () => void generate());
-    $("#grdt-reissue-results")?.addEventListener("change", (event) => {
-      const input = event.target.closest("[data-row][data-field]");
+    const reissueResults = $("#grdt-reissue-results");
+    reissueResults?.addEventListener("input", (event) => {
+      const input = event.target.closest('[data-row][data-field="revision"]');
       if (input) updateEditedRow(input);
+    });
+    reissueResults?.addEventListener("change", (event) => {
+      const input = event.target.closest("[data-row][data-field]");
+      if (input && input.dataset.field !== "revision") updateEditedRow(input);
     });
     render();
   }
