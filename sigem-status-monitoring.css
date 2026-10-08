@@ -5,3 +5,21 @@
 .sigem-monitor-filters.extra label { display:grid; gap:4px; font-size:12px; }
 #sigem-monitor-document-history { max-width:800px; max-height:80vh; overflow:auto; border:1px solid #94a3b8; border-radius:12px; padding:24px; }
 #grcon-notification-count { padding:3px 7px; border-radius:20px; background:#bf5700; color:#fff; }
+
+
+/* UX pilot 2026-10-07: labels persistentes e ajuda contextual, sem alterar o fluxo operacional. */
+.sigem-monitor-help{margin:-2px 0 14px;border:1px solid var(--border,#dce6ec);border-radius:9px;background:var(--surface-soft,#f5f8fa)}
+.sigem-monitor-help>summary{display:flex;align-items:center;gap:6px;min-height:36px;padding:7px 10px;color:var(--brand-700,#155c8a);font-size:.72rem;font-weight:800;cursor:pointer;list-style-position:inside}
+.sigem-monitor-help>summary:focus-visible{outline:2px solid var(--brand-500,#2f7ea7);outline-offset:2px}
+.sigem-monitor-help>div{display:grid;gap:6px;padding:0 10px 10px}
+.sigem-monitor-help p{margin:0!important;font-size:.72rem!important;line-height:1.45!important}
+.sigem-monitor-help p strong{color:var(--text-strong,#203b4d)}
+.sigem-monitor-add>label{display:grid;gap:5px;min-width:0}
+.sigem-monitor-add>label>span{color:var(--text-muted,#687b89);font-size:.68rem;font-weight:800}
+.sigem-monitor-add>label>span small{font:inherit;font-weight:600;opacity:.8}
+.sigem-monitor-add>button{align-self:end}
+@media(max-width:1100px){.sigem-monitor-add>label:last-of-type{grid-column:1/-1}}
+@media(max-width:760px){.sigem-monitor-add>label:last-of-type{grid-column:auto}}
+
+.sigem-monitor-filters>label:not(.sigem-monitor-check){display:grid;gap:5px;min-width:0}
+.sigem-monitor-filters>label>span{color:var(--text-muted,#687b89);font-size:.68rem;font-weight:800}

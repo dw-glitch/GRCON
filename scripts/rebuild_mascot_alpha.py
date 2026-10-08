@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild GRCON mascot WebMs with a real VP9 alpha plane.
 
-The source clips use a smooth studio backdrop.  We estimate that backdrop from
+The source clips may be MP4 or WebM and use a smooth studio backdrop.  We let ffmpeg\nauto-detect the input codec, then estimate that backdrop from
 both vertical borders on every frame, build a foreground matte from colour
 distance, retain the central connected subject, and encode straight RGBA to
 VP9.  This is an offline asset operation; the browser never performs chroma
@@ -89,7 +89,7 @@ def rebuild(source: Path, destination: Path, cpu_used: int, candidate_low: float
     height = max(2, round(source_height * scale / 2) * 2)
     frame_bytes = width * height * 4
     decoder = subprocess.Popen(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-c:v", "libvpx-vp9", "-i", str(source),
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(source),
          "-vf", f"scale={width}:{height}:flags=lanczos,format=rgba", "-f", "rawvideo", "-pix_fmt", "rgba", "-"],
         stdout=subprocess.PIPE,
     )

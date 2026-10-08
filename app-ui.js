@@ -127,6 +127,23 @@
         const host = APP === "GRCON" ? $(".runtime-status") : $(".runtime-actions");
         if (!host || $("#ui-runtime-tools"))
             return;
+        const shortcuts = $("#grcon-app-shortcuts");
+        if (shortcuts) {
+            const close = (returnFocus = false) => {
+                if (!shortcuts.open) return;
+                shortcuts.open = false;
+                if (returnFocus) shortcuts.querySelector("summary")?.focus();
+            };
+            document.addEventListener("click", event => {
+                if (!shortcuts.contains(event.target) || event.target.closest("a")) close();
+            });
+            document.addEventListener("keydown", event => {
+                if (event.key === "Escape" && shortcuts.open) {
+                    event.preventDefault();
+                    close(true);
+                }
+            });
+        }
         const tools = document.createElement("div");
         tools.id = "ui-runtime-tools";
         tools.className = "p2-runtime-tools";
