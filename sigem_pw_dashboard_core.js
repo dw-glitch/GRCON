@@ -704,6 +704,8 @@
     const settings = options || {};
     const reference = sigemEntry || pwEntry;
     const sigemStatus = currentStatus(sigemEntry, "sigem");
+    const sigemCurrent = sigemEntry && sigemEntry.current;
+    const sigemDate = text(sigemCurrent && (sigemCurrent.modifiedAt || sigemCurrent.includedAt || sigemCurrent.stateChangedAt || sigemCurrent.createdAt));
     const pwStatus = currentStatus(pwEntry, "pw");
     const pwEmission = pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : "Não cadastrado";
     let situationKey = "bothEmitted";
@@ -728,6 +730,7 @@
       revision: text(settings.revision) || reference.revision,
       documentClass: reference.documentClass,
       sigemStatus,
+      sigemDate,
       pwStatus,
       pwEmission,
       situation,
