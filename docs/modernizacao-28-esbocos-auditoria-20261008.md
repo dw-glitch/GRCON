@@ -80,3 +80,13 @@ O pacote de revisão da branch `feat/ux-28-unified-review-20261008` reúne sem c
 **As outras sugestões dos 28 esboços continuam sujeitas a inspeção visual no app real, implementação e homologação.** A existência de funcionalidade preexistente não substitui comparação de telas. Todos os dados e valores de demonstração das imagens foram mantidos fora do código.
 
 **Regra de publicação:** não integrar a `main` ou publicar no Cloudflare sem aprovação. Antes de merge, exigir CI verde, inspeção visual no ambiente de homologação, uso real em resoluções desktop, modo escuro, zoom e revisão das regras documentais.
+
+## Consulta Geral × SIGEM — refinamento do histórico e monitoramento
+
+- Pesquisas locais para documentos monitorados e comparações históricas, tolerando maiúsculas/acentos.
+- Histórico apresenta os 25 primeiros registros encontrados por padrão e disponibiliza mais 25 sob comando explícito; **os registros continuam disponíveis e a comparação/exportação não foram limitadas**.
+- Contagens derivadas das listas reais devolvidas pelas RPCs do contrato atual, sem KPIs fictícios.
+- Sem novas chamadas de rede ao digitar; sem mudanças no banco, status, notificações ou filtros/exportações de alterações.
+- Regressão: `tests/sigem_monitor_search_ui.cjs` incluída na suíte.
+
+**Pendente:** comparação visual em sessão autenticada, capturas antes/depois e homologação dos dados reais. Não encerrar o conjunto de 28 esboços sem essa evidência.
