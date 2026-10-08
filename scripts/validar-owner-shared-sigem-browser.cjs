@@ -4,7 +4,8 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.GRCON_CHROMIUM_PATH?{executablePath:process.env.GRCON_CHROMIUM_PATH}:{})});
  const page=await browser.newPage({viewport:{width:1366,height:768},acceptDownloads:true,serviceWorkers:"block"});
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const errors=[],consoleErrors=[];page.on('pageerror',e=>errors.push(e.message));
+ page.on('console',message=>{if(message.type()==='error')consoleErrors.push(message.text());});
  await page.route('https://**/*',route=>route.abort());
  if(process.env.GRCON_QA_LEGACY_SHARED==='1') await page.route('**/shared_sigem_query_app.js*',async route=>{
   const response=await route.fetch();
@@ -199,7 +200,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.deepEqual(errors,[]);
  console.log('Chromium: owner/admin/operator/viewer, 20k records, historical selection, revision scopes, XLSX provenance, bidirectional dates, shared activation and deletion with replacement passed.');
  }catch(error){
-  console.error('Browser diagnostics',JSON.stringify({errors,ui:await page.evaluate(()=>({body:document.querySelector('#grcon-sigem-pw-root')?.innerText.slice(0,1500),filterCount:document.querySelectorAll('#spw-pw-presence-filter').length,toasts:document.querySelector('#toast')?.textContent}))}));
+  console.error('Browser diagnostics',JSON.stringify({errors,consoleErrors,ui:await page.evaluate(()=>({body:document.querySelector('#grcon-sigem-pw-root')?.innerText.slice(0,1500),filterCount:document.querySelectorAll('#spw-pw-presence-filter').length,toasts:document.querySelector('#toast')?.textContent}))}));
   throw error;
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
