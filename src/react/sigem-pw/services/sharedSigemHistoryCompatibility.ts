@@ -12,7 +12,7 @@ interface CloudState {
 // its listeners, timers, current base and unsaved work.
 export function ensureSharedSigemHistoryCompatibility(): SharedApi | undefined {
   const original = window.GrconSharedSigemQuery;
-  if (!original || (typeof original.listVersions === "function" && typeof original.loadSnapshot === "function")) return original;
+  if (!original || (typeof original.listVersions === "function" && typeof original.loadSnapshot === "function" && typeof original.activateVersion === "function" && typeof original.deleteVersion === "function")) return original;
   const cloud = () => window.GrconCloud?.state as CloudState | undefined;
   const cache = new Map<string, SigemPwBase>();
   let cacheWorkspace = "";
@@ -79,6 +79,29 @@ export function ensureSharedSigemHistoryCompatibility(): SharedApi | undefined {
     while (cache.size > 3) cache.delete(cache.keys().next().value!);
     return base;
   }
+  function canManageHistory(): boolean { return cloud()?.membership?.role === "owner"; }
+  async function activateVersion(id: string): Promise<SigemPwBase | null | undefined> {
+    if (!canManageHistory()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
+    if (!id) throw new Error("Selecione uma base da Consulta Geral.");
+    await request<unknown>("activate", { target_workspace: workspace(), target_snapshot: id });
+    cache.clear();
+    const legacyState = (original as SharedApi & { state?: { shared?: SigemPwBase | null } }).state;
+    if (legacyState) legacyState.shared = null;
+    await original!.refresh();
+    window.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated", { detail: { workspace: workspace() } }));
+    return original!.current();
+  }
+  async function deleteVersion(id: string): Promise<{ removedSnapshotId?: string; removedWasCurrent?: boolean; activeSnapshotId?: string | null }> {
+    if (!canManageHistory()) throw new Error("Somente o proprietário pode excluir bases da Consulta Geral.");
+    if (!id) throw new Error("Selecione uma base da Consulta Geral.");
+    const result = await request<{ removedSnapshotId?: string; removedWasCurrent?: boolean; activeSnapshotId?: string | null }>("delete", { target_workspace: workspace(), target_snapshot: id });
+    cache.clear();
+    const legacyState = (original as SharedApi & { state?: { shared?: SigemPwBase | null } }).state;
+    if (legacyState) legacyState.shared = null;
+    await original!.refresh();
+    window.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated", { detail: { workspace: workspace() } }));
+    return result;
+  }
   async function setReferenceDate(value: string, targetId?: string): Promise<SigemPwBase | undefined> {
     // Old setReferenceDate only edits the current base; never pass it a historical ID.
     const current = original!.current();
@@ -99,7 +122,7 @@ export function ensureSharedSigemHistoryCompatibility(): SharedApi | undefined {
     window.dispatchEvent(new CustomEvent("grcon:shared-sigem-date-updated", { detail: { meta: base.meta, workspace: workspace() } }));
     return base;
   }
-  const compatible = Object.freeze({ ...original, listVersions, loadSnapshot, setReferenceDate });
+  const compatible = Object.freeze({ ...original, listVersions, loadSnapshot, setReferenceDate, canManageHistory, activateVersion, deleteVersion });
   window.GrconSharedSigemQuery = compatible;
   return compatible;
 }

@@ -74,7 +74,7 @@ interface GrconPlannedDocumentsCoreApi {
 interface GrconCloudApi {
   loadPlannedDocuments?(): Promise<PlannedDocumentsSnapshot | null>;
   getExportTemplates?(): Promise<ExportTemplate[]>;
-  state?: { membership?: { workspace_id?: string; role?: string } };
+  state?: { online?: boolean; membership?: { workspace_id?: string; role?: string } };
   canManageHistory?(): boolean;
   deleteHistoryRecord?(record: unknown): Promise<unknown>;
   clearHistory?(): Promise<boolean>;

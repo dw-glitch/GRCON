@@ -14,7 +14,7 @@
   const ENQUEUE_CHUNK_SIZE = 250;
   const QUEUE_RENDER_LIMIT = 220;
   const LOOKUP_BATCH_SIZE = 500;
-  const sourceRegistry = new Map();
+  let sourceRegistry = new WeakMap();
   let contextEpoch = 0;
 
   const state = {
@@ -66,13 +66,8 @@
     else if (kind === "error") console.error(message);
   }
 
-  function sourceKey(file) {
-    return file ? [file.name, Number(file.size) || 0, Number(file.lastModified) || 0].join("\u0000") : "";
-  }
-
   function registerSource(file, metadata) {
-    const key = sourceKey(file);
-    if (key) sourceRegistry.set(key, { ...metadata });
+    sourceRegistry.set(file, { ...metadata });
     try {
       Object.defineProperty(file, "grconVaultFileId", { value: metadata.id, configurable: true });
     } catch (_) {}
@@ -81,7 +76,8 @@
 
   function lookupSource(file) {
     if (!file) return null;
-    return sourceRegistry.get(sourceKey(file)) || (file.grconVaultFileId ? { id: file.grconVaultFileId } : null);
+    const source = sourceRegistry.get(file);
+    return source ? { ...source } : null;
   }
 
   function parseIdentity(fileName) {
@@ -693,13 +689,14 @@
     if (!file || !canDelete()) return;
     const workspace = workspaceId(), epoch = contextEpoch;
     if (!root.confirm("Excluir documento?\n\n" + (file.document_code || file.file_name) + "\nRevisão " + file.revision + "\n\nO arquivo também será removido do armazenamento do Cofre. O Histórico de GRDT será preservado.")) return;
-    sourceRegistry.clear(); state.lookupRows = []; state.vaultPrepared = false;
+    // A File already downloaded keeps its original catalogue metadata even
+    // if the catalogue object is later deleted or deletion fails.
+    state.lookupRows = []; state.vaultPrepared = false;
     if (state.grdtSource === "vault") setPackageFiles([]);
     renderLookupResults();
     try {
       await requestJson("/delete", { method: "POST", body: JSON.stringify({ workspaceId: workspace, id }) });
       if (epoch !== contextEpoch) return;
-      sourceRegistry.clear();
       state.lookupRows = []; state.vaultPrepared = false;
       if (state.grdtSource === "vault") setPackageFiles([]);
       renderLookupResults();
@@ -1146,9 +1143,15 @@
           });
           registerSource(file, {
             id: item.id,
+            sequence: Number(item.sequence) || 0,
+            fileName: item.file_name || file.name,
             documentCode: item.document_code || item.identity_code || "",
             revision: item.revision || "0",
+            format: item.format || "",
+            sizeBytes: Number(item.size_bytes) || file.size || 0,
             sha256: item.sha256 || "",
+            createdAt: item.created_at || "",
+            verifiedAt: item.verified_at || "",
             allocated: Boolean(item.allocated),
             source: "vault",
           });
@@ -1361,7 +1364,7 @@
     root.addEventListener("grcon:contract-context-changed", () => {
       contextEpoch++;
       state.files = []; state.lookupRows = []; state.next = null; state.hasMore = false; state.storage = null;
-      state.vaultPrepared = false; sourceRegistry.clear();
+      state.vaultPrepared = false; sourceRegistry = new WeakMap();
       renderVaultList(); renderLookupResults(); renderStorage();
       if (state.open) { void refreshList(true); void refreshStorage(); }
     });
