@@ -136,10 +136,12 @@ const XLSX = require('../xlsx.full.min.js');
     });
 
     assert.equal(await page.locator('input[name="grdt-document-source"]').count(), 0, 'manual Local/Cofre selector must not exist');
-    assert.equal(await page.locator('#grdt-auto-source-help').count(), 1, 'automatic source guidance must exist');
-    assert.match(await page.locator('#grdt-auto-source-help').textContent(), /pasta documental é opcional/i);
+    assert.equal(await page.locator('#grdt-auto-source-help').count(), 0, 'redundant source guidance must not exist');
+    assert.equal(await page.locator('#grcon-control-help').count(), 0, 'redundant GRDT help must not exist');
+    assert.equal(await page.locator('#missing-documents').count(), 1, 'missing documents panel must remain available');
 
     await page.evaluate(() => window.GrconDocumentVault.open());
+    assert.equal(await page.locator('#grcon-vault-help').count(), 0, 'redundant vault help must not exist');
     await page.waitForFunction(() => document.querySelectorAll('#vault-list-body tr').length > 0);
     assert.match(await page.locator('#vault-storage-used').textContent(), /B|KB|MB|GB/);
     assert.match(await page.locator('#vault-storage-integrity').textContent(), /catálogo/i);

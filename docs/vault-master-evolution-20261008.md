@@ -44,3 +44,12 @@ O Cofre preserva versões anteriores e o Histórico identifica o arquivo efetiva
 - Registro Mestre limita cada fonte compartilhada a 100 registros e busca PW local a 50 resultados; detalhes identificam a limitação.
 - Execução agendada real do novo Cron somente será observável após o primeiro horário programado. Sua lógica foi exercitada nos testes com inventário físico.
 - Não é necessária ação manual no painel Cloudflare para esta alteração. Para validação operacional, abrir Cofre, enviar duas versões do mesmo documento/revisão, gerar GRDT e recuperar a versão anterior pelo Histórico/Registro Mestre; conferir armazenamento e escopo do proprietário.
+
+## Continuação e correções de integração
+
+- Integrada a main de 8 de outubro, preservando a remoção dos painéis redundantes e renovando o cache PWA.
+- Corrigida a preservação de arquivos locais selecionados na emissão: o fluxo passa a chamar o uploader existente, em vez de uma função inexistente.
+- Corrigida a normalização da origem interna `vault` para `cofre` no snapshot da emissão. Assim, o sanitizador do Histórico conserva origem, identificador, versão e SHA-256.
+- Atualizada a fixture integrada para exigir `fileVersion: 1` e acrescentada regressão Chromium para preservar arquivo local, versão 2 e SHA-256 calculado dos bytes reais.
+- Revalidação local: `npm run verify` aprovado; pacote Cloudflare com 222 arquivos íntegros; Chromium Registro Mestre, Consulta Geral compartilhada e Cofre → análise → GRDT → Histórico aprovados. Nenhuma publicação presumida antes da confirmação do pipeline e do commit servido.
+- Confirmadas as migrations 20261008100836/20261008101708 no banco GRCON e a ausência de EXECUTE para authenticated nas novas funções privilegiadas.

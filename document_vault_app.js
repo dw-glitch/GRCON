@@ -1254,7 +1254,6 @@
         <div><span>COFRE</span><h2>Documentos armazenados</h2><p>Adicione arquivos ou uma pasta, pesquise documentos e consulte as versões disponíveis.</p></div>
         <div id="vault-health" class="vault-health">Verificando disponibilidade…</div>
       </header>
-      <details class="grcon-context-help" id="grcon-vault-help"><summary>Como funciona · arquivos e alocação no Cofre</summary><div><p>Adicione arquivos ou uma pasta para disponibilizá-los à equipe do contrato. A busca usa código, revisão e formato do arquivo.</p><p>A alocação vem do Controle de Solicitações compartilhado. Sem vínculo identificado, o Cofre mostra Não identificado.</p><p>Excluir remove o arquivo do armazenamento. As emissões já registradas no Histórico preservam os dados do arquivo utilizado.</p></div></details>
       <section class="vault-storage-card" aria-label="Armazenamento do Cofre">
         <div><small id="vault-storage-scope">Uso do contrato atual</small><strong id="vault-storage-used">—</strong><span id="vault-storage-objects">—</span></div>
         <div><small>Rastreabilidade</small><strong id="vault-storage-integrity" class="vault-storage-integrity">—</strong><span id="vault-storage-checked"></span></div>
@@ -1429,7 +1428,7 @@
       task.sha256 = await hashFile(task);
       if (epoch !== contextEpoch || target !== workspaceId()) throw new Error("O contrato mudou. Analise novamente.");
       if (target && ["owner", "admin", "operator"].includes(root.GrconCloud?.state?.membership?.role)) {
-        await runTask(task);
+        await uploadTask(task);
       }
       const item = task.status === "done" ? task.serverFile : null;
       if (!item && target) failed++;
@@ -1444,7 +1443,7 @@
       const meta = provenance.get(entry.file);
       if (!meta) continue;
       entry.vaultFileId = meta.id || "";
-      entry.fileProvenance = { ...(entry.fileProvenance || {}), source: meta.source || "cofre", vaultFileId: meta.id || "",
+      entry.fileProvenance = { ...(entry.fileProvenance || {}), source: meta.source === "local" ? "local" : "cofre", vaultFileId: meta.id || "",
         sha256: meta.sha256 || "", fileVersion: meta.fileVersion || 0, sizeBytes: meta.sizeBytes || entry.file.size };
     }
     if (failed) notify(failed + " arquivo(s) local(is) não puderam ser preservados no Cofre. O histórico manterá o hash; a emissão pode continuar.", "warning");
