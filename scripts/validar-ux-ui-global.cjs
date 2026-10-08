@@ -50,6 +50,14 @@ async function setQaTheme(page, dark) {
     html.classList.toggle("theme-dark", darkMode);
     document.body.classList.toggle("p2-dark", darkMode);
   }, dark);
+  // O tema altera as cores por transições CSS. Medir no mesmo quadro pode
+  // capturar a cor anterior e reprovar um tema que ainda está sendo pintado.
+  await page.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await Promise.all(document.getAnimations()
+      .filter(animation => animation instanceof CSSTransition)
+      .map(animation => animation.finished.catch(() => {})));
+  });
 }
 
 async function clickVisible(page, selector) {

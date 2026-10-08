@@ -125,6 +125,16 @@ assert.equal(result.rows[0].purpose, "Para Cancelamento");
 
 console.log("posting_conference_intelligent_grdt: OK");
 
+// A decisão é manual, por ocorrência/revisão; presença histórica também exclui reenvio.
+const selection = run([emission('selective', [[d[0], 'A'], [d[1], 'C'], [d[2], '0']])], [sigem(d[0], 'A', 'Em Workflow'), sigem(d[1], 'B')]);
+assert.equal(C.repostEligibility(selection.rows.find(row => row.document === C.displayDocument(d[0]))).eligible, false);
+assert.equal(C.repostEligibility(selection.rows.find(row => row.document === C.displayDocument(d[1]))).eligible, true);
+assert.equal(C.repostEligibility(selection.rows.find(row => row.document === C.displayDocument(d[2]))).eligible, true);
+assert.equal(C.repostEligibility({ ...selection.rows[2], historicalPreserved: true }).eligible, false);
+assert.equal(C.repostEligibility({ ...selection.rows[2], ambiguity: true }).eligible, false);
+assert.equal(C.repostEligibility({ ...selection.rows[2], status: C.STATUSES.NOT_VERIFIED }).eligible, false);
+assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eligible, false);
+
 // Arquivo XLSX real: separar pendências sem omitir os confirmados do detalhamento.
 (async () => {
   global.ExcelJS = require('../exceljs.min.js');

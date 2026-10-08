@@ -696,6 +696,23 @@
     };
   }
 
+  function repostEligibility(row) {
+    if (!row || row.status === STATUSES.CONFIRMED || row.historicalPreserved) {
+      return { eligible: false, reason: "Já confirmado: não reenviar." };
+    }
+    if (row.ambiguity || ![STATUSES.NOT_FOUND, STATUSES.AWAITING, STATUSES.REVISION_DIVERGENT].includes(row.status)) {
+      return { eligible: false, reason: "Atualize a base e resolva a análise antes de selecionar." };
+    }
+    if (!text(row.key) || !normalizeRevision(row.revisionSent)) {
+      return { eligible: false, reason: "Documento/revisão não identificados." };
+    }
+    return { eligible: true, reason: row.status === STATUSES.AWAITING
+      ? "Ainda no prazo de confirmação. Verifique o retorno antes de reenviar."
+      : row.status === STATUSES.REVISION_DIVERGENT
+        ? "Outra revisão localizada. Confirme a revisão enviada antes de reenviar."
+        : "Sem confirmação na base atual. Verifique alocação e retorno antes de reenviar." };
+  }
+
   function summarize(rows) {
     const source = rows || [];
     const confirmed = source.filter((row) => row.status === STATUSES.CONFIRMED).length;
@@ -1020,7 +1037,7 @@
     text, norm, normalizeRevision, normalizeHeader, documentKeys, documentIdentity, displayDocument, revisionRank,
     isPostedSigemStatus, parseSourceDate, effectiveRecordTimestamp, resolvePostingEvidence,
     detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
-    statusLabel, aggregateStatus, diagnoseRow, filterRows, pendingRows, pertinentGrdt, pendingGrdts,
+    statusLabel, aggregateStatus, diagnoseRow, repostEligibility, filterRows, pendingRows, pertinentGrdt, pendingGrdts,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
     kvGet, kvSet, kvSetMany, storedValue, putKv,
     readHistoryIndex, historyAggregate, reconcilePersisted, prepareWorkbookImport, prepareParsedImport, commitPreparedImport, importWorkbook,
