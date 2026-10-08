@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { PGlite } = require('@electric-sql/pglite');
 const sql = fs.readFileSync(require.resolve('../supabase/migrations/20261006143737_shared_allocation_registry.sql'),'utf8');
+const fiscalSql = fs.readFileSync(require.resolve('../supabase/migrations/20261008123900_consultas_fiscal01_comments.sql'),'utf8');
 const workspace='00000000-0000-0000-0000-000000000001', other='00000000-0000-0000-0000-000000000002';
 const owner='00000000-0000-0000-0000-000000000010', operator='00000000-0000-0000-0000-000000000011';
 (async()=>{
@@ -16,6 +17,7 @@ const owner='00000000-0000-0000-0000-000000000010', operator='00000000-0000-0000
    create function private.grcon_has_role(w uuid,roles text[]) returns boolean language sql as $$ select w='${workspace}'::uuid and auth.uid()='${owner}'::uuid and 'owner'=any(roles) $$;
    insert into public.grcon_workspaces values('${workspace}'),('${other}');`);
   await db.exec(sql);await db.exec(sql); // Migration may be safely re-applied.
+  await db.exec(fiscalSql);await db.exec(fiscalSql); // Aditiva e idempotente.
   async function as(user,role='authenticated'){await db.exec(`reset role; set request.jwt.claim.sub='${user}'; set role ${role};`);}
   const current=()=>db.query('select * from public.grcon_allocation_registry_current($1)',[workspace]);
   const begin=(count,active=null)=>db.query('select public.grcon_allocation_registry_begin($1,$2,$3,$4,$5) as id',[workspace,'Controle-QA.xlsx',count,{version:'1.0.0',sheetName:'Central de alocação'},active]).then(r=>r.rows[0].id);
@@ -25,8 +27,9 @@ const owner='00000000-0000-0000-0000-000000000010', operator='00000000-0000-0000
   await as(owner);assert.equal((await current()).rows.length,0);
   const id=await begin(2);await chunk(id,1,[record(1)]);
   await assert.rejects(publish(id),/Carga incompleta/);assert.equal((await current()).rows.length,0);
-  await chunk(id,1,[record(1)]); // Retry replaces the same pending position, never adds a duplicate.
+  await chunk(id,1,[{...record(1),fiscalComment:'Liberado pela fiscalização.\\nRevisão Á'}]); // Retry replaces the same pending position.
   await assert.rejects(chunk(id,2,[{...record(2),unexpected:'data'}]),/campos inválidos/);
+  await assert.rejects(chunk(id,2,[{...record(2),fiscalComment:'x'.repeat(8193)}]),/campos inválidos/);
   await assert.rejects(chunk(id,2,[{...record(2),sourceRow:1.2}]),/campos inválidos/);
   await assert.rejects(chunk(id,2,[{...record(2),sourceRow:1048577}]),/campos inválidos/);
   await chunk(id,2,[record(2)]);await publish(id);assert.equal((await current()).rows[0].record_count,2);

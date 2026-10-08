@@ -215,7 +215,16 @@ function lookupDocument(
   // normalizado existe no snapshot compartilhado, é Alocado; se não existe, é
   // Não alocado. Revisão, SIGEM, PW, histórico e campos da LD não entram aqui.
   const matches = window.GrconRequestsControl?.find(document) || [];
-  const withSources = { ...row, requestControlMatches: matches, consultationSources: [row.ld, matches.length ? "Controle de Solicitações" : ""].filter(Boolean).join(" · ") };
+  const registry = window.GrconAllocationRegistry;
+  const fiscalComments = [...new Set([row.ldDocument, document].map(text).filter(Boolean))]
+    .map((candidate) => registry?.fiscalComments(candidate) || [])
+    .find((comments) => comments.length) || [];
+  const withSources = {
+    ...row,
+    fiscalComment: fiscalComments.join("\n"),
+    requestControlMatches: matches,
+    consultationSources: [row.ld, matches.length ? "Controle de Solicitações" : ""].filter(Boolean).join(" · "),
+  };
   return applyPlannedAllocation(document, withSources, plannedSnapshot);
 }
 
@@ -239,6 +248,7 @@ function buildExportRow(document: string, linha: ConsultationRow): ExportRow {
     sigemLdRevisionCell: linha.sigemLdRevisionCell,
     allocated: linha.allocated,
     allocation: linha.allocation,
+    fiscalComment: linha.fiscalComment || "",
     lastGrdt: linha.lastGrdt,
     issued: linha.issued,
     issuedCell: linha.issuedCell,
@@ -307,10 +317,12 @@ function onExportTemplatesChanged(callback: EventListener): () => void {
 function onPlannedDocumentsChanged(callback: EventListener): () => void {
   window.addEventListener(EVENTO_DOCUMENTOS_PREVISTOS, callback);
   window.addEventListener("grcon:requests-control-updated", callback);
+  window.addEventListener("grcon:allocation-registry-updated", callback);
   window.addEventListener("grcon:contract-context-changed", callback);
   return () => {
     window.removeEventListener(EVENTO_DOCUMENTOS_PREVISTOS, callback);
     window.removeEventListener("grcon:requests-control-updated", callback);
+    window.removeEventListener("grcon:allocation-registry-updated", callback);
     window.removeEventListener("grcon:contract-context-changed", callback);
   };
 }
@@ -319,6 +331,7 @@ function requestsBaseInfo(): string { return window.GrconRequestsControl?.curren
 function contextToken(): string { return window.GrconCloud?.state?.membership?.workspace_id || ""; }
 function canManageRequestsBase(): boolean { return ["owner", "admin"].includes(window.GrconCloud?.state?.membership?.role || ""); }
 async function refreshRequestsBase(): Promise<void> { await window.GrconRequestsControl?.refresh(); }
+async function refreshFiscalCommentsSource(): Promise<void> { await window.GrconAllocationRegistry?.refresh(); }
 async function publishRequestsBase(file: File): Promise<void> { await window.GrconRequestsControl?.publish(file); }
 
 /**
@@ -389,6 +402,7 @@ export const consultasAdapter = Object.freeze({
   normalizeExportTemplate,
   getLastExport,
   refreshHistoryIndicator,
+  refreshFiscalCommentsSource,
   getExportRows,
   setExportRowsProvider,
 });
