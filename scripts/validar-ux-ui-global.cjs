@@ -416,7 +416,16 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
             htmlTheme: document.documentElement.dataset.theme,
             surfaceToken: getComputedStyle(document.body).getPropertyValue("--ops-surface").trim(),
             background: getComputedStyle(node).backgroundColor,
+            backgroundImage: getComputedStyle(node).backgroundImage,
             parent: node.parentElement?.className || "",
+            inlineStyle: node.getAttribute("style") || "",
+            stylesheetLastRules: (() => {
+              const link = document.querySelector('link[href="sigem-status-monitoring.css"]');
+              try {
+                return [...(link?.sheet?.cssRules || [])].slice(-8).map((rule) =>
+                  rule.cssText.slice(0, 240));
+              } catch (error) { return [String(error)]; }
+            })(),
           }));
           assert.notEqual(darkBg, lightBg,
             "Campos de pesquisa devem adaptar o fundo ao modo escuro real: " + JSON.stringify(darkDiagnostics));
