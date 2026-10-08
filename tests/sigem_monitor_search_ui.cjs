@@ -26,5 +26,12 @@ assert.match(app, /target_workspace: workspace/);
 assert.match(app, /function exportFiltered\(\)/);
 assert.match(css, /\.sigem-monitor-local-search input:focus-visible/);
 assert.match(css, /--surface-1/);
+assert.match(app, /sigem-monitor-documents-card/);
+assert.match(app, /sigem-monitor-history-card/);
+assert.match(app, /sigem-monitor-changes-card/);
+assert.match(app, /sigem-monitor-notifications-card/);
+assert.match(css, /@container \(min-width: 76rem\)/);
+assert.match(css, /grid-template-columns: minmax\(0, 1\.2fr\) minmax\(0, 1fr\)/);
+
 assert.doesNotMatch(app, /mockComparison|fakeHistory|demoHistory/);
 console.log("sigem_monitor_search_ui: ok");
