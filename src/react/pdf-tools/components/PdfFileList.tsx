@@ -13,6 +13,7 @@ interface PdfFileListProps {
   formatBytes(value: number): string;
   onAdd(): void;
   onClear(): void;
+  onSortNaturally(): void;
   onMove(id: string, delta: number): void;
   onRemove(id: string): void;
   onDragStart(id: string): void;
@@ -55,6 +56,14 @@ export function PdfFileList(props: PdfFileListProps) {
         </div>
         <div className="pdf-merge-toolbar-actions">
           <button className="secondary-button compact" id="pdf-merge-add" type="button" disabled={props.busy} onClick={props.onAdd}>+ Adicionar</button>
+          <button
+            className="secondary-button compact pdf-merge-natural-sort"
+            id="pdf-merge-sort-natural"
+            type="button"
+            disabled={props.busy || props.items.length < 2}
+            title="Ordenar somente quando solicitado, considerando números nos nomes (1, 2, 10)."
+            onClick={props.onSortNaturally}
+          >Ordenar automaticamente</button>
           <button className="text-button danger" id="pdf-merge-clear" type="button" disabled={props.busy || !props.items.length} onClick={props.onClear}>Limpar lista</button>
         </div>
       </div>
