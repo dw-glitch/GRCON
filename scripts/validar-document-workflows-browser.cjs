@@ -113,13 +113,15 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  assert.match(await page.locator('#pc-pending-grdts').textContent(),/1 GRDT\(s\) com risco de duplicidade/);
  assert.match(await page.locator('#pc-pending-grdts').textContent(),/3 GRDT\(s\) requerem acompanhamento/);
  assert.equal(await page.locator('.pc-grdt-details').count(),3);
+ assert.equal(await page.locator('.pc-grdt-table input[type=checkbox]').count(),0,'seleção legada não pode associar índices aos grupos');
+ assert.equal(await page.locator('#grcon-repost-toolbar').isVisible(),false,'preparação legada não está habilitada na visão agrupada');
  await page.locator('.pc-grdt-details summary').first().click();
  assert.match(await page.locator('.pc-grdt-details[open]').textContent(),/Não reenviar o pacote integral/);
  assert.match(await page.locator('.pc-grdt-details[open]').textContent(),/DOC-001/);
  assert.match(await page.locator('.pc-grdt-details[open]').textContent(),/NÃO REENVIAR/);
- await page.locator('.pc-grdt-details[open] input').fill('DOC-002');
+ await page.locator('.pc-grdt-details[open] input[type=search]').fill('DOC-002');
  assert.equal(await page.locator('.pc-grdt-details[open] tbody tr:visible').count(),1);
- await page.locator('.pc-grdt-details[open] input').fill('');
+ await page.locator('.pc-grdt-details[open] input[type=search]').fill('');
  const pendingDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await (await pendingDownload).saveAs(path.join(out,'pendencias.xlsx'));
  assert.ok(await page.evaluate(()=>window.GrconPerformance?.metrics()['export-spreadsheet']), 'exportação agrupada deve usar o Web Worker');
  const pend=XLSX.read(fs.readFileSync(path.join(out,'pendencias.xlsx')),{type:'buffer'});

@@ -275,6 +275,12 @@
       header.appendChild(tools);
     }
     const table = $("#pc-table-wrap table", shell);
+    const toolbar = $("#grcon-repost-toolbar", shell);
+    const grouped = Boolean(table?.classList.contains("pc-grdt-table"));
+    if (toolbar) toolbar.hidden = grouped;
+    // A seleção legada pressupõe uma linha por documento. As novas tabelas
+    // agrupadas contêm resumos e detalhes; seus índices não são selecionáveis.
+    if (grouped) return;
     if (!table) { updateSelectionToolbar(); return; }
     cleanupLegacySelectionCells(table);
     const bodyRows = $$("tbody tr", table);
@@ -328,6 +334,7 @@
       }
     });
     shell.addEventListener("click", (event) => {
+      if ($("#pc-table-wrap > table.pc-grdt-table", shell)) return;
       if (event.target.closest("#grcon-repost-select-filtered")) {
         const rows = conferenceFilteredRows();
         if (!rows.length) return;
