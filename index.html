@@ -100,6 +100,15 @@
 </nav>
 <section id="grdt-module" class="module-view" role="tabpanel" aria-labelledby="tab-control">
 <header class="ops-page-heading"><div><h2 id="grcon-module-title-1">Controle de GRDT</h2><p>LD e documentos prontos para análise.</p></div></header>
+<nav class="grdt-stages" id="grdt-stages" aria-label="Etapas do Controle de GRDT" data-active-stage="1">
+  <ol class="grdt-stages-list">
+    <li class="grdt-stage is-current" data-grdt-stage="prepare" aria-current="step"><span class="grdt-stage-number" aria-hidden="true">1</span><span class="grdt-stage-text"><strong>Preparar</strong><small>LD, relação e arquivos</small></span></li>
+    <li class="grdt-stage" data-grdt-stage="analyze"><span class="grdt-stage-number" aria-hidden="true">2</span><span class="grdt-stage-text"><strong>Analisar</strong><small>Conferência documental</small></span></li>
+    <li class="grdt-stage" data-grdt-stage="review"><span class="grdt-stage-number" aria-hidden="true">3</span><span class="grdt-stage-text"><strong>Revisar</strong><small>Decisões e ajustes</small></span></li>
+    <li class="grdt-stage" data-grdt-stage="emit"><span class="grdt-stage-number" aria-hidden="true">4</span><span class="grdt-stage-text"><strong>Emitir</strong><small>eGRDT e comunicação</small></span></li>
+  </ol>
+  <span class="sr-only" role="status" aria-live="polite" id="grdt-stage-announcement">Etapa atual: Preparar.</span>
+</nav>
 <section aria-live="polite" class="p1-context-bar" hidden="" id="p1-grdt-context">
 <metric-chip><span>LD carregada</span><strong id="p1-context-ld">—</strong></metric-chip>
 <metric-chip><span>Documentos</span><strong id="p1-context-source">—</strong></metric-chip>
@@ -660,6 +669,7 @@
 <script defer src="macro5_flow_app.js"></script>
 <script defer src="productivity_center.js"></script>
 <script defer src="grcon_enhancements.js"></script>
+<script defer src="grdt-stage-progress.js"></script>
 <script defer src="grcon-ui-fix.js"></script>
 <script defer src="grcon_service_worker.js"></script>
 </body>
