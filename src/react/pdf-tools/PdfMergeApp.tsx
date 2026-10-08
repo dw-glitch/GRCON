@@ -86,6 +86,7 @@ export function PdfMergeApp() {
             formatBytes={merge.formatBytes}
             onAdd={() => inputRef.current?.click()}
             onClear={merge.clear}
+            onSortNaturally={merge.sortNaturally}
             onMove={merge.moveItem}
             onRemove={merge.removeItem}
             onDragStart={merge.startDrag}

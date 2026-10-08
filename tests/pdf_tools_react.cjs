@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const ts = require("typescript");
 
 const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
@@ -84,6 +85,27 @@ assert.match(list, /data-pdf-action="down"/);
 assert.match(list, /data-pdf-action="remove"/);
 assert.match(list, /padStart\(2, "0"\)/);
 assert.match(list, /title="Remover"/);
+assert.match(list, /id="pdf-merge-sort-natural"/);
+assert.match(list, /onClick=\{props\.onSortNaturally\}/);
+assert.match(app, /onSortNaturally=\{merge\.sortNaturally\}/);
+assert.match(hook, /sortPdfItemsNaturally\(current\)/);
+assert.match(hook, /if \(busyRef\.current \|\| itemsRef\.current\.length < 2\) return/);
+// A ordenação deve ser numérica/natural, estável e não mutar a relação original.
+const orderSource = read("src/react/pdf-tools/services/pdfNaturalOrder.ts");
+const compiledOrder = ts.transpileModule(orderSource, {
+  compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
+}).outputText;
+const orderModule = { exports: {} };
+new Function("module", "exports", compiledOrder)(orderModule, orderModule.exports);
+const { sortPdfItemsNaturally } = orderModule.exports;
+const names = ["prancha10.pdf", "Prancha2.pdf", "prancha1.pdf", "anexo3.pdf", "ANEXO3.pdf"];
+const originals = names.map((name, id) => ({ name, id }));
+const ordered = sortPdfItemsNaturally(originals);
+assert.deepEqual(ordered.map((entry) => entry.name),
+  ["anexo3.pdf", "ANEXO3.pdf", "prancha1.pdf", "Prancha2.pdf", "prancha10.pdf"]);
+assert.deepEqual(originals.map((entry) => entry.name), names, "A lista original deve permanecer intacta.");
+assert.deepEqual(sortPdfItemsNaturally([]), []);
+
 
 assert.match(output, /id="pdf-merge-output-name"/);
 assert.match(output, /maxLength=\{124\}/);
