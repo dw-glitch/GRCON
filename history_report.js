@@ -170,6 +170,7 @@
       "TAMANHO DO ARQUIVO (BYTES)": file.fileProvenance?.sizeBytes ?? "",
       "ID DO ARQUIVO NO COFRE": text(file.fileProvenance?.vaultFileId),
       "SEQUÊNCIA DO CATÁLOGO COFRE": file.fileProvenance?.catalogSequence || "",
+      "VERSÃO DO ARQUIVO NO COFRE": file.fileProvenance?.fileVersion || "",
       "SHA-256 DO ARQUIVO UTILIZADO": text(file.fileProvenance?.sha256),
       "INCLUSÃO NO COFRE": text(file.fileProvenance?.createdAt),
       "VERIFICAÇÃO NO COFRE": text(file.fileProvenance?.verifiedAt),

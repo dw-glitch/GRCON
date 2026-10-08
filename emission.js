@@ -409,7 +409,8 @@
           sharedAllocationContext: row.record && row.record.sharedAllocationContext || null,
           vaultFileId: text(vaultSource && vaultSource.id),
           fileProvenance: vaultSource ? {
-            source: "cofre",
+            source: vaultSource.source === "local" ? "local" : "cofre",
+            fileVersion: Number(vaultSource.fileVersion) || 0,
             vaultFileId: text(vaultSource.id),
             catalogSequence: Math.max(0, Number(vaultSource.sequence) || 0),
             fileName: text(vaultSource.fileName) || source.name,

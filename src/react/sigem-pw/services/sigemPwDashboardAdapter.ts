@@ -634,6 +634,8 @@ function setRevisionScope(value: SigemPwRevisionScope): void {
   state.revisionScope = next;
   state.page = 1;
   renderFromModel(false);
+  document.documentElement.dataset.sigemPwRevisionScope = next;
+  window.dispatchEvent(new CustomEvent("grcon:sigem-pw-revision-scope-changed", { detail: { scope: next } }));
 }
 function setRevision(value: string): void { state.filters.revision = value; state.page = 1; emit(); }
 function setSigemStatus(value: string): void { state.filters.sigemStatus = value; state.page = 1; emit(); }
@@ -871,6 +873,9 @@ async function selectAnalysisBase(system: "sigem" | "pw", id: string): Promise<v
 function installExternalListeners(): () => void {
   if (externalListenersInstalled) return () => undefined;
   externalListenersInstalled = true;
+  const scope = (event: Event) => setRevisionScope((event as CustomEvent).detail?.scope);
+  window.addEventListener("grcon:sigem-pw-revision-scope-changed", scope);
+  setRevisionScope(document.documentElement.dataset.sigemPwRevisionScope === "all" ? "all" : "revision0");
   const conference = (event: Event) => {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
     if (detail?.source !== "sigem-pw-dashboard") void refresh("Consulta Geral atualizada em outro módulo");
@@ -888,6 +893,7 @@ function installExternalListeners(): () => void {
   window.addEventListener("grcon:conference-updated", conference);
   window.addEventListener("grcon:pw-base-updated", pw);
   return () => {
+    window.removeEventListener("grcon:sigem-pw-revision-scope-changed", scope);
     window.removeEventListener("grcon:contract-context-changed", context);
     window.removeEventListener("grcon:shared-sigem-date-updated", dates);
     window.removeEventListener("grcon:shared-sigem-metadata-invalidated", dates);
