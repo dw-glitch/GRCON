@@ -322,6 +322,8 @@
           historyRecordId: text(record.id),
           egrdtNumber: text(record.egrdtNumber),
           generatedAt: text(record.generatedAt),
+          workspaceId: text(record.workspaceId),
+          title: text(file && file.title),
           document: displayDocument(document),
           documentIdentity: identity,
           searchKeys: documentKeys(document),
@@ -567,6 +569,7 @@
       sigemStatus: evidence ? text(evidence.status) : "",
       sigemStatusRevision: evidence ? normalizeRevision(evidence.revision) : "",
       sigemSourceRow: evidence ? Number(evidence.sourceRow) || null : null,
+      title: text(historyRow.title) || (evidence ? text(evidence.title) : ""),
       ambiguity: Boolean(resolved.ambiguity),
     };
   }
@@ -618,6 +621,7 @@
             : ambiguous > 0 ? "REQUER_INVESTIGACAO" : "NENHUM_DOCUMENTO_CONFIRMADO";
       return {
         ...group, ...counts, status: aggregateStatus(group.rows), classification,
+        workspaceId: text(group.rows[0] && group.rows[0].workspaceId),
         confirmedOrPreserved, inTransit, ambiguous,
         distinctDocuments: new Set(group.rows.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
         riskOfDuplicateResend: confirmedOrPreserved > 0 && confirmedOrPreserved < counts.total,
