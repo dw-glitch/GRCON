@@ -67,6 +67,9 @@
       .pc-grdt-details td,.pc-grdt-details th{padding:.55rem;border-bottom:1px solid var(--border,#ddd);vertical-align:top;text-align:left;overflow-wrap:anywhere}
       .pc-grdt-details th{background:var(--surface-subtle,#eaf2f7)}
       .pc-grdt-details small{display:block;color:var(--muted,#64748b)}
+      .pc-repost-choice{display:flex;align-items:flex-start;gap:.4rem;margin-top:.5rem;font-size:.8rem}
+      .pc-repost-choice input{flex:none;margin-top:.15rem}
+      .pc-repost-group-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem;margin-top:.8rem}
       .pc-grdt-warning{display:block;padding:.6rem;border-left:3px solid #d97706;font-weight:700}
       .pc-grdt-table .pc-grdt-detail-row>td{background:var(--surface-subtle,#f8fafc);padding:.65rem}
       .pc-grdt-filter{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:.5rem 0}
@@ -460,8 +463,16 @@
   }
 
   function grdtDetails(group) {
+    const groupKey = group.historyId || group.egrdtNumber;
+    const selected = root.GrconRepostingUi?.state?.selected || new Set();
+    const selectedCount = group.rows.filter(row => selected.has(row.key) && Conference.repostEligibility(row).eligible).length;
     const all = group.rows.map((row) => {
       const d = row.diagnosis;
+      const choice = Conference.repostEligibility(row);
+      const control = '<label class="pc-repost-choice"><input type="checkbox" data-repost-event-key="' + escapeHtml(row.key) +
+        '" aria-label="Selecionar ' + escapeHtml(row.document) + ' revisão ' + escapeHtml(row.revisionSent) + ' para repostagem"' +
+        (choice.eligible ? (selected.has(row.key) ? ' checked' : '') : ' disabled') + '><span>' +
+        escapeHtml(choice.eligible ? "Selecionar para repostagem" : choice.reason) + '</span></label>';
       const references = (d.allocationReferences || []).map((ref) => [
         ref.allocation, ref.allocationStatus,
         ref.workflow ? "Central: " + ref.workflow : "",
@@ -469,7 +480,7 @@
         ref.sourceRow ? "Linha: " + ref.sourceRow : "",
       ].filter(Boolean).join(" · ")).join(" | ");
       return '<tr><td><strong>' + breakableCode(row.document) + '</strong><small>' + escapeHtml(row.discipline || row.documentFamily || "—") +
-        '</small>' + (row.title ? '<small>' + escapeHtml(row.title) + '</small>' : '') + '</td><td>' + escapeHtml(row.revisionSent || "—") + '</td><td>' + escapeHtml(row.revisionFound || "—") +
+        '</small>' + (row.title ? '<small>' + escapeHtml(row.title) + '</small>' : '') + control + '</td><td>' + escapeHtml(row.revisionSent || "—") + '</td><td>' + escapeHtml(row.revisionFound || "—") +
         '</td><td>' + statusChip(row) + '<small>SIGEM: ' + escapeHtml(row.sigemStatus || "Não informado") +
         (row.sigemStatusRevision ? ' · revisão ' + escapeHtml(row.sigemStatusRevision) : '') + '</small></td><td>' +
         escapeHtml(row.allocation.label || "Alocação a confirmar") + '<small>' +
@@ -488,7 +499,10 @@
       escapeHtml(root.GrconPlannedDocuments?.current?.()?.fileName || "não disponível") + ' · Central: ' +
       escapeHtml(root.GrconAllocationRegistry?.current?.()?.fileName || "não disponível") +
       (group.workspaceId ? ' · Workspace: ' + escapeHtml(group.workspaceId) : '') +
-      '. A presença da revisão no SIGEM não comprova qual dos múltiplos envios a originou.</small></details>';
+      '. A presença da revisão no SIGEM não comprova qual dos múltiplos envios a originou.</small>' +
+      '<div class="pc-repost-group-actions"><button type="button" class="secondary-button compact" data-repost-pending-group="' + escapeHtml(groupKey) + '"' +
+      (!selectedCount || state.busy ? ' disabled' : '') + '>Preparar selecionados desta GRDT (' + fmt(selectedCount) + ')</button>' +
+      '<small>Selecione somente os documentos que decidiu reenviar. Os já confirmados ficam excluídos.</small></div></details>';
   }
 
   function grdtTable(groups) {

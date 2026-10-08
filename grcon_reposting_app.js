@@ -20,6 +20,7 @@
     revisionOptions: [],
     pendingRevision: null,
     resolverTargetId: "",
+    selectiveContext: null,
   };
 
   const doc = root.document;
@@ -324,6 +325,15 @@
     shell.dataset.grconRepostingBound = "1";
     state.conferenceShell = shell;
     shell.addEventListener("change", (event) => {
+      const eventInput = event.target.closest("[data-repost-event-key]");
+      if (eventInput) {
+        const ui = root.GrconPostingConferenceUi;
+        const row = (ui.state.result.eventRows || ui.state.result.rows || []).find(row => row.key === eventInput.dataset.repostEventKey);
+        if (eventInput.checked && !ui.state.busy && root.GrconPostingConference.repostEligibility(row).eligible) state.selected.add(row.key);
+        else { state.selected.delete(eventInput.dataset.repostEventKey); eventInput.checked = false; }
+        updateGroupButton(eventInput.closest(".pc-grdt-details"));
+        return;
+      }
       const keyInput = event.target.closest("[data-repost-key]");
       if (keyInput) { if (keyInput.checked) state.selected.add(keyInput.dataset.repostKey); else state.selected.delete(keyInput.dataset.repostKey); updateSelectionToolbar(); return; }
       const grdtInput = event.target.closest("[data-repost-grdt]");
@@ -334,6 +344,8 @@
       }
     });
     shell.addEventListener("click", (event) => {
+      const groupButton = event.target.closest("[data-repost-pending-group]");
+      if (groupButton) { void openGroupReposting(groupButton.dataset.repostPendingGroup); return; }
       if ($("#pc-table-wrap > table.pc-grdt-table", shell)) return;
       if (event.target.closest("#grcon-repost-select-filtered")) {
         const rows = conferenceFilteredRows();
@@ -351,6 +363,44 @@
     const tableWrap = $("#pc-table-wrap", shell); if (tableWrap) observer.observe(tableWrap, { childList: true, subtree: true });
     queueMicrotask(decorateConference);
   }
+
+  function updateGroupButton(details) {
+    const button = $("[data-repost-pending-group]", details);
+    if (!button) return;
+    const ui = root.GrconPostingConferenceUi;
+    const rows = groupEventRows(button.dataset.repostPendingGroup);
+    const count = rows.filter(row => state.selected.has(row.key) && root.GrconPostingConference.repostEligibility(row).eligible).length;
+    button.disabled = !count || ui.state.busy;
+    button.textContent = `Preparar selecionados desta GRDT (${fmt(count)})`;
+  }
+  function groupEventRows(key) {
+    const result = root.GrconPostingConferenceUi.state.result;
+    return (result.eventRows || result.rows || []).filter(row => text(row.historyId || row.egrdtNumber) === key);
+  }
+  async function openGroupReposting(key) {
+    const ui = root.GrconPostingConferenceUi;
+    if (ui.state.busy || state.busy) return;
+    const rows = groupEventRows(key).filter(row => state.selected.has(row.key) && root.GrconPostingConference.repostEligibility(row).eligible);
+    if (!rows.length) return notify("Selecione os documentos pendentes que decidiu reenviar nesta GRDT.", "warning");
+    state.selectiveContext = { result: ui.state.result, workspaceId: text(root.GrconCloud?.state?.membership?.workspace_id), keys: rows.map(row => row.key) };
+    await openReposting(rows);
+  }
+  function selectiveContextValid(context = state.selectiveContext) {
+    if (!context) return true;
+    if (context !== state.selectiveContext) return false;
+    const ui = root.GrconPostingConferenceUi;
+    if (context.result !== ui.state.result || ui.state.busy || context.workspaceId !== text(root.GrconCloud?.state?.membership?.workspace_id)) return false;
+    const rows = ui.state.result.eventRows || ui.state.result.rows || [];
+    return context.keys.every(key => root.GrconPostingConference.repostEligibility(rows.find(row => row.key === key)).eligible);
+  }
+  function invalidateSelectiveReposting(force) {
+    if (!state.selectiveContext || (!force && selectiveContextValid())) return;
+    state.controller?.abort();
+    state.selectiveContext = null;
+    state.selected.clear(); state.targets = []; state.results = [];
+    const overlay = $("#grcon-repost-overlay"); if (overlay) overlay.hidden = true;
+    notify("A conferência ou o contrato mudou. Revise os pendentes antes de preparar novamente.", "warning");
+  }
   function watchConference() {
     const existing = $("#posting-conference-module"); if (existing) installConferenceIntegration(existing);
     const workspace = $("main.workspace"); if (!workspace) return;
@@ -364,9 +414,10 @@
     const history = History.read();
     return rows.filter((row) => state.selected.has(row.key)).map((row) => Core.targetFromConference(row, history));
   }
-  async function openReposting() {
+  async function openReposting(rows) {
     ensureShells();
-    state.targets = selectedTargets();
+    if (!Array.isArray(rows)) state.selectiveContext = null;
+    state.targets = Array.isArray(rows) ? rows.map(row => Core.targetFromConference(row, History.read())) : selectedTargets();
     if (!state.targets.length) return notify("Selecione ao menos um documento na Conferência.", "warning");
     state.results = state.targets.map((target) => ({ state: Core.STATES.UNCHECKED, target, candidates: [], selected: [], evidence: "Aguardando localização." }));
     $("#grcon-repost-overlay").hidden = false;
@@ -552,10 +603,13 @@
     return { id: `repost-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, createdAt: new Date().toISOString(), summary, results: state.results.map((result) => ({ state: result.state, evidence: result.evidence, manualResolution: Boolean(result.manualResolution), target: result.target, selected: (result.selected || []).map(({ __fileRef, ...entry }) => entry), candidates: [] })) };
   }
   async function prepareDelivery(mode) {
+    const context = state.selectiveContext;
+    if (!selectiveContextValid()) { invalidateSelectiveReposting(); return; }
     const entries = deliveryEntries();
     if (!entries.length) return notify("Nenhum arquivo confirmado está disponível para preparar.", "warning");
     if (!allowPartialDelivery()) return;
     const batch = sanitizedBatch(); await Storage.saveBatch(batch).catch(() => null);
+    if (!selectiveContextValid(context)) return;
     if (mode === "copy") {
       if (!Storage.supportsDirectoryPicker()) return notify("A cópia direta requer navegador Chromium compatível. Use ZIP ou downloads.", "warning");
       try {
@@ -571,6 +625,7 @@
       let controller = null;
       try {
         await root.GRCONModuleLoader?.ensure?.("zip"); if (!root.JSZip) throw new Error("Módulo ZIP indisponível.");
+        if (!selectiveContextValid(context)) return;
         controller = beginOperation("Lendo arquivos para o ZIP…"); const zip = new root.JSZip();
         const organize = $("#grcon-organize-egrdt").checked;
         const used = new Set(); const paths = new Set(); let added = 0;
@@ -584,12 +639,14 @@
           if (used.has(signature)) continue; used.add(signature);
           const file = await Storage.resolveEntry(item.entry, { requestPermission: false });
           const buffer = root.GrconFileAccess?.read ? await root.GrconFileAccess.read(file,{ context:"o arquivo da repostagem", retries:1 }) : await file.arrayBuffer();
+          if (controller.signal.aborted || !selectiveContextValid(context)) { const error = new Error("Conferência alterada."); error.name="AbortError"; throw error; }
           const folder = organize ? `${folderSegment(item.egrdtNumber) || "SEM-eGRDT"}/` : "";
           zip.file(uniqueZipPath(paths, `${folder}${file.name}`), buffer); added += 1;
           setProgress(`Lendo ${index+1}/${entries.length}: ${file.name}`, true);
         }
         if (!added) throw new Error("Nenhum arquivo pôde ser lido para o ZIP.");
         const blob = await zip.generateAsync({ type:"blob", compression:"DEFLATE", compressionOptions:{ level:3 } }, (meta) => setProgress(`Gerando ZIP: ${Math.round(meta.percent)}%`, true));
+        if (controller.signal.aborted || !selectiveContextValid(context)) { const error = new Error("Conferência alterada."); error.name="AbortError"; throw error; }
         downloadBlob(blob, `GRCON_Repostagem_${new Date().toISOString().slice(0,10).replace(/-/g,"")}.zip`); endOperation(`ZIP preparado: ${fmt(added)} arquivo(s).`); notify(`Pacote ZIP preparado com ${fmt(added)} arquivo(s). Isso não marca nenhum documento como postado no SIGEM.`, "success");
       } catch (error) { endOperation(); if (error?.name === "AbortError" || controller?.signal?.aborted) notify("Geração do ZIP cancelada.", "info"); else notify(error.message || "Não foi possível gerar o ZIP.", "error"); }
       return;
@@ -602,6 +659,7 @@
           if (controller.signal.aborted) { const error = new Error("Downloads cancelados."); error.name="AbortError"; throw error; }
           const signature = `${item.entry.rootId}|${item.entry.relativePath}`; if (used.has(signature)) continue; used.add(signature);
           const file = await Storage.resolveEntry(item.entry,{ requestPermission:false });
+          if (controller.signal.aborted || !selectiveContextValid(context)) { const error = new Error("Conferência alterada."); error.name="AbortError"; throw error; }
           downloadBlob(file,file.name); downloaded += 1; setProgress(`Preparando downloads: ${downloaded}`,true);
           // Um clique sintético atrás do outro, no mesmo quadro, faz o navegador
           // descartar parte dos downloads sem avisar: o lote saía incompleto e
@@ -626,9 +684,11 @@
 
   function installGlobalListeners() {
     root.addEventListener("grcon:history-updated", (event) => {
+      invalidateSelectiveReposting(true);
       if (event.detail?.manualRevision) { state.selected.clear(); state.targets=[]; state.results=[]; queueMicrotask(decorateConference); }
     });
-    root.addEventListener("grcon:conference-updated", () => queueMicrotask(decorateConference));
+    root.addEventListener("grcon:conference-updated", () => { state.selected.clear(); invalidateSelectiveReposting(); queueMicrotask(decorateConference); });
+    root.addEventListener("grcon:cloud-ready", () => invalidateSelectiveReposting());
   }
   function init() { ensureShells(); installHistoryAction(); watchConference(); installGlobalListeners(); }
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once:true }); else init();

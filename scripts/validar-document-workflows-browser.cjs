@@ -113,7 +113,9 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  assert.match(await page.locator('#pc-pending-grdts').textContent(),/1 GRDT\(s\) com risco de duplicidade/);
  assert.match(await page.locator('#pc-pending-grdts').textContent(),/3 GRDT\(s\) requerem acompanhamento/);
  assert.equal(await page.locator('.pc-grdt-details').count(),3);
- assert.equal(await page.locator('.pc-grdt-table input[type=checkbox]').count(),0,'seleção legada não pode associar índices aos grupos');
+ assert.equal(await page.locator('.pc-grdt-table input[data-repost-key]').count(),0,'seleção legada não pode associar índices aos grupos');
+ assert.equal(await page.locator('.pc-grdt-table input[data-repost-event-key]:checked').count(),0,'nenhum reenvio é pré-selecionado');
+ assert.equal(await page.locator('.pc-grdt-table input[data-repost-event-key]:disabled').count(),1,'confirmado não pode entrar no reenvio');
  assert.equal(await page.locator('#grcon-repost-toolbar').isVisible(),false,'preparação legada não está habilitada na visão agrupada');
  await page.locator('.pc-grdt-details summary').first().click();
  assert.match(await page.locator('.pc-grdt-details[open]').textContent(),/Não reenviar o pacote integral/);
@@ -122,6 +124,33 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.locator('.pc-grdt-details[open] input[type=search]').fill('DOC-002');
  assert.equal(await page.locator('.pc-grdt-details[open] tbody tr:visible').count(),1);
  await page.locator('.pc-grdt-details[open] input[type=search]').fill('');
+ // Escolha explícita de apenas um pendente, sem incluir confirmado nem outro grupo.
+ const firstGroup=page.locator('.pc-grdt-details').first();
+ await firstGroup.locator('input[data-repost-event-key]:enabled').first().check();
+ await firstGroup.locator('[data-repost-pending-group]').click();
+ await page.locator('#grcon-repost-overlay').waitFor({state:'visible'});
+ assert.deepEqual(await page.evaluate(()=>window.GrconRepostingUi.state.targets.map(t=>({document:t.document,revision:t.revision,egrdt:t.egrdtNumber}))),[{document:'DOC-002',revision:'0',egrdt:'GRDT-100'}]);
+ const sourceDir=path.join(out,'selective-source');fs.mkdirSync(sourceDir,{recursive:true});
+ fs.writeFileSync(path.join(sourceDir,'DOC-001_0.pdf'),'QA confirmed file');
+ fs.writeFileSync(path.join(sourceDir,'DOC-002_0.pdf'),'QA selected pending file');
+ await page.locator('#grcon-root-session-input').setInputFiles(sourceDir);
+ await page.waitForFunction(()=>window.GrconRepostingUi.state.sessionEntries.length===2);
+ await page.locator('#grcon-repost-search').click();
+ await page.waitForFunction(()=>window.GrconRepostingUi.state.results[0]?.state==='ENCONTRADO');
+ const selectiveDownload=page.waitForEvent('download');await page.locator('#grcon-download-zip').click();
+ const selectiveZip=path.join(out,'repostagem-seletiva.zip');await(await selectiveDownload).saveAs(selectiveZip);
+ const zipped=await require('../jszip.min.js').loadAsync(fs.readFileSync(selectiveZip));
+ const zipFiles=Object.values(zipped.files).filter(file=>!file.dir);
+ assert.deepEqual(zipFiles.map(file=>file.name),['GRDT-100/DOC-002_0.pdf']);
+ assert.equal(await zipFiles[0].async('string'),'QA selected pending file');
+ const beforePosting=await page.evaluate(()=>window.GrconPostingConferenceUi.state.result.rows.map(row=>row.status));
+ await page.locator('#grcon-repost-overlay [data-repost-close]').first().click();
+ assert.deepEqual(await page.evaluate(()=>window.GrconPostingConferenceUi.state.result.rows.map(row=>row.status)),beforePosting,'preparação não altera confirmação no SIGEM');
+ // Uma base alterada invalida a preparação, antes de copiar/baixar arquivos.
+ await firstGroup.locator('[data-repost-pending-group]').click();
+ await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.result={...ui.state.result};window.dispatchEvent(new CustomEvent('grcon:conference-updated'));});
+ await page.waitForFunction(()=>document.querySelector('#grcon-repost-overlay').hidden);
+ assert.equal(await page.evaluate(()=>window.GrconRepostingUi.state.targets.length),0);
  const pendingDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await (await pendingDownload).saveAs(path.join(out,'pendencias.xlsx'));
  assert.ok(await page.evaluate(()=>window.GrconPerformance?.metrics()['export-spreadsheet']), 'exportação agrupada deve usar o Web Worker');
  const pend=XLSX.read(fs.readFileSync(path.join(out,'pendencias.xlsx')),{type:'buffer'});
