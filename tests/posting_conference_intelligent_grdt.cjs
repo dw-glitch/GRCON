@@ -107,6 +107,10 @@ result = C.reconcile([emission("111", [[d[0], "A"]])], [sigem(d[1], "A")], prev.
   now: NOW, waitHours: 48, baseReferenceDate: "2026-10-08",
 });
 assert.equal(result.rows[0].historicalPreserved, true);
+assert.equal(result.groups[0].classification, "REQUER_INVESTIGACAO",
+  "confirmação histórica não é presença garantida na Consulta Geral atual");
+assert.equal(result.groups[0].confirmed, 0);
+assert.equal(result.groups[0].preservedOnly, 1);
 assert.equal(C.diagnoseRow(result.rows[0], {}).action, "NÃO REENVIAR");
 
 // Propósito de emissão vinculado ao evento original da GRDT.
