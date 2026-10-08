@@ -1,5 +1,5 @@
 // GRCON — Service Worker para cache offline
-// Versão: 5.44.5
+// Versão: 5.44.9
 // Estratégia: rede primeiro para todo o código do GRCON (HTML/CSS/JS), para
 // que uma correção publicada apareça na hora; e stale-while-revalidate para os
 // arquivos pesados (bibliotecas, imagens e os pacotes gerados), que assim
@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.44.5-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1-hardening1-cover-backcover2-deploy2-mascot-runtime5-transparent1-phase-b-evolution-ui1-grdt-reissue1-history-purpose1-mascot-shell-runner1-hybrid-media2-alpha2-ux-polish2-workspace-runner1-planned-documents2-shared-sigem1-consultas-planned-documents1-owner-password1";
+const CACHE_NAME = "grcon-v5.44.9-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1-hardening1-cover-backcover2-deploy2-mascot-runtime5-transparent1-phase-b-evolution-ui1-grdt-reissue1-history-purpose1-mascot-shell-runner1-hybrid-media2-alpha2-ux-polish2-workspace-runner1-planned-documents2-shared-sigem1-consultas-planned-documents1-owner-password1-documentary-compliance1-feature-cleanup1-unified-posting2-document-vault1-multi-contract-sigem2-cofre-integration1-monitoring-popups-responsive1-document-workflows2-document-class-contrast1-sigem-pw-revision-scope1-owner-admin-shared-date-history1-history-api-compat2-notification-center1-ux-audit1-evolution-revision-scope1-cofre-auto-fallback-storage1-shared-history-management1-file-provenance1-higgsfield-ux-phase5-help-panel-cleanup1-vault-versions-master2-performance-large-bases1-ux-28-unified1-monitor-search1-fiscal01-comments1-conference-grdt-diagnostics1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -19,14 +19,24 @@ const ASSETS = [
   "grcon-ui.css",
   "sigem-posting.css",
   "egrdt-email-reply.css",
+  "sigem-status-monitoring.css",
   "grdt-reissue.css",
-  "analysis-history.css",
-  "analysis-history-phase-b.css",
+  "documentary-compliance.css",
+  "normative_registry.js",
+  "normative_version_registry.js",
+  "normative_applicability.js",
+  "normative_rule_engine.js",
+  "n1710_catalog.js",
+  "n1710_parser.js",
+  "n2064_revision_lifecycle.js",
+  "documentary_compliance.js",
+  "documentary_compliance_ui.js",
   "history-phase-b.css",
   "grcon-final.css",
   "grcon-ui-fix.css",
   "grcon-responsive.css",
   "grcon_cloud.css",
+  "document-vault.css",
   "requests.css",
   "react-ui.css",
   "requests-phase-b.css",
@@ -39,6 +49,8 @@ const ASSETS = [
   "manifest.json",
   "offline_resources.js",
   "grcon_bootstrap_head.js",
+  "contract_storage.js",
+  "contract_admin_app.js",
   "operational_persistence_v2.js",
   "grcon_service_worker.js",
   "grcon_mascot_header.js",
@@ -70,16 +82,23 @@ const ASSETS = [
   "core.js",
   "planned_documents_core.js",
   "planned_documents_app.js",
+  "allocation_registry_core.js",
+  "document_allocation_context.js",
+  "document_hash_worker.js",
+  "allocation_registry_app.js",
   "shared_sigem_query_core.js",
   "shared_sigem_query_app.js",
+  "shared_sigem_query_app.js?v=history-api-2",
+  "sigem_status_monitoring_app.js",
   "workers/shared_sigem_query.worker.js",
   "ld_conflicts.js",
+  "requests_control_core.js",
+  "requests_control_app.js",
   "requests_core.js",
   "requests_report.js",
   "requests_taxonomy_core.js",
   "requests_app.js",
   "react-dist/consultas-app.js",
-  "react-dist/historico-analises-app.js",
   "react-dist/historico-egrdt-app.js",
   "pdf_merge_core.js",
   "pdf_merge_engine.js",
@@ -114,6 +133,9 @@ const ASSETS = [
   "supabase.min.js",
   "grcon_cloud_config.js",
   "grcon_cloud_app.js",
+  "document_vault_core.js",
+  "document_vault_app.js",
+  "document_master_app.js",
   "history_report.js",
   "history_report_worker.js",
   "pending_allocation_history_core.js",
@@ -129,6 +151,10 @@ const ASSETS = [
   "ld_compatibility.js",
   "timeline_core.js",
   "grdt_databook_support.js",
+  "history_classification.js",
+  "posting_batch_planner.js",
+  "posting_flow.js",
+  "posting-flow.css",
   "emission.js",
   "pending_allocation_package.js",
   "grdt-template.xlsx",
@@ -153,6 +179,7 @@ const ASSETS = [
   "discipline_resolver.js",
   "grcon_file_access.js",
   "grcon_enhancements.js",
+  "grdt-stage-progress.js",
   "grcon_brand_assets.js",
   "grdt_workbook.js",
   "ld_posting_writer.js",
@@ -162,11 +189,14 @@ const ASSETS = [
   "workers/export.worker.js",
   "workers/pdf-merge.worker.js",
   "workers/sigem_pw_dashboard.worker.js",
+  "workers/sigem_pw_evolution.worker.js",
 ];
 
 const CRITICAL_ASSETS = [
   "index.html",
   "grcon_bootstrap_head.js",
+  "contract_storage.js",
+  "contract_admin_app.js",
   "operational_persistence_v2.js",
   "grcon_service_worker.js",
   "analysis_runtime_guard.js",

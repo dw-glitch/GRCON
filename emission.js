@@ -389,9 +389,15 @@
           errors.push(`${row.document}: a disciplina “${sourceDiscipline || "não informada"}” não possui uma equivalência oficial confirmada. Abra Editar GRDT e escolha uma opção da lista oficial.`);
         }
         if (C && C.enforceDocumentFormat) C.enforceDocumentFormat(item);
+        const compliance = typeof globalThis !== "undefined" && globalThis.GrconDocumentaryCompliance;
+        const normativeValidation = compliance ? compliance.auditRow(row, item) : null;
+        (normativeValidation?.warnings || []).forEach(finding => warnings.push(`${row.document}: ${finding.message}`));
         const itemErrors = C.validateEgrdtData(item);
         if (itemErrors.length) errors.push(`${row.document} / ${finalName}: ${itemErrors.join("; ")}.`);
 
+        const vaultSource = typeof globalThis !== "undefined" && globalThis.GrconDocumentVault?.lookupSource
+          ? globalThis.GrconDocumentVault.lookupSource(source.file)
+          : null;
         const entry = {
           rowIndex,
           document: row.document,
@@ -400,13 +406,38 @@
           discipline: item.discipline,
           sourceLd: String(row.record && row.record.source || "").trim(),
           allocation: String(row.record && row.record.allocation || "").trim(),
+          sharedAllocationContext: row.record && row.record.sharedAllocationContext || null,
+          vaultFileId: text(vaultSource && vaultSource.id),
+          fileProvenance: vaultSource ? {
+            source: vaultSource.source === "local" ? "local" : "cofre",
+            fileVersion: Number(vaultSource.fileVersion) || 0,
+            vaultFileId: text(vaultSource.id),
+            catalogSequence: Math.max(0, Number(vaultSource.sequence) || 0),
+            fileName: text(vaultSource.fileName) || source.name,
+            revision: text(vaultSource.revision) || row.revision,
+            format: text(vaultSource.format),
+            sizeBytes: Math.max(0, Number(vaultSource.sizeBytes) || Number(source.file && source.file.size) || 0),
+            sha256: text(vaultSource.sha256).toLowerCase(),
+            createdAt: text(vaultSource.createdAt),
+            verifiedAt: text(vaultSource.verifiedAt),
+          } : source.file ? {
+            source: "local",
+            fileName: source.name,
+            revision: C.revisionFromName(source.name, row.document) || "0",
+            format: text(source.name).includes(".") ? text(source.name).split(".").pop().toLowerCase() : "",
+            sizeBytes: Math.max(0, Number(source.file && source.file.size) || 0),
+            lastModified: Number(source.file && source.file.lastModified) || 0,
+          } : null,
           originalName: source.name,
           relativePath: source.relativePath || source.name,
           finalName,
           file: source.file,
           virtual: Boolean(source.virtual || !source.file),
           manualAllocationOverride,
+          emissionKind: text(row && (row.emissionKind || row.historyClassification && row.historyClassification.emissionKind)) || "FIRST_POSTING",
+          historyClassification: row && row.historyClassification ? { ...row.historyClassification } : null,
           item,
+          normativeValidation,
         };
         entries.push(entry);
         items.push(item);
@@ -446,51 +477,26 @@
     return text(value).toLowerCase() === "limit-only" ? "limit-only" : "discipline";
   }
 
-  function splitPlan(plan, size, mode) {
+  function postingGroup(entry) {
+    return text(entry && (entry.emissionKind || entry.historyClassification && entry.historyClassification.emissionKind)).toUpperCase() === "REPOST" ? "REPOST" : "POSTING";
+  }
+
+  function splitPlan(plan, size, mode, options) {
     const parsedLimit = Math.trunc(Number(size));
     const limit = Number.isSafeInteger(parsedLimit) && parsedLimit >= 1 ? parsedLimit : 48;
     const batchMode = normalizeBatchMode(mode);
+    const settings = options || {};
+    const separatePostRepost = Boolean(settings.separatePostRepost || settings.postRepostMode === "separate");
     const source = (plan && plan.entries || []).map((entry, originalIndex) => ({ entry, originalIndex }));
     const groups = [];
+    let outputIndex = 0;
 
-    if (batchMode === "limit-only") {
-      const total = Math.ceil(source.length / limit);
-      for (let start = 0; start < source.length; start += limit) {
-        const slice = source.slice(start, start + limit);
+    const emitLimitOnly = (items, emissionGroup) => {
+      const total = Math.ceil(items.length / limit);
+      for (let start = 0; start < items.length; start += limit) {
+        const slice = items.slice(start, start + limit);
         const entries = slice.map((item) => item.entry);
         const disciplines = [...new Set(entries.map((entry) => text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA"))];
-        groups.push({
-          entries,
-          items: entries.map((entry) => entry.item),
-          number: groups.length + 1,
-          startIndex: start,
-          endIndex: start + entries.length - 1,
-          originalIndices: slice.map((item) => item.originalIndex),
-          limit,
-          batchMode,
-          discipline: disciplines.length === 1 ? disciplines[0] : "MISTO",
-          disciplines,
-          disciplineBatchNumber: groups.length + 1,
-          disciplineBatchCount: total,
-        });
-      }
-      return groups;
-    }
-
-    const byDiscipline = new Map();
-    source.forEach(({ entry, originalIndex }) => {
-      const discipline = text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA";
-      const disciplineKey = norm(discipline);
-      if (!byDiscipline.has(disciplineKey)) byDiscipline.set(disciplineKey, { discipline, entries: [] });
-      byDiscipline.get(disciplineKey).entries.push({ entry, originalIndex });
-    });
-    const disciplines = [...byDiscipline.values()].sort((left, right) => norm(left.discipline).localeCompare(norm(right.discipline), "pt-BR"));
-    let outputIndex = 0;
-    disciplines.forEach((bucket) => {
-      const disciplineBatchCount = Math.ceil(bucket.entries.length / limit);
-      for (let start = 0; start < bucket.entries.length; start += limit) {
-        const slice = bucket.entries.slice(start, start + limit);
-        const entries = slice.map((item) => item.entry);
         groups.push({
           entries,
           items: entries.map((entry) => entry.item),
@@ -500,14 +506,65 @@
           originalIndices: slice.map((item) => item.originalIndex),
           limit,
           batchMode,
-          discipline: bucket.discipline,
-          disciplines: [bucket.discipline],
+          emissionGroup: emissionGroup || "MIXED",
+          discipline: disciplines.length === 1 ? disciplines[0] : "MISTO",
+          disciplines,
           disciplineBatchNumber: Math.floor(start / limit) + 1,
-          disciplineBatchCount,
+          disciplineBatchCount: total,
         });
         outputIndex += entries.length;
       }
-    });
+    };
+
+    const emitByDiscipline = (items, emissionGroup) => {
+      const byDiscipline = new Map();
+      items.forEach(({ entry, originalIndex }) => {
+        const discipline = text(entry && entry.item && entry.item.discipline) || "SEM DISCIPLINA";
+        const disciplineKey = norm(discipline);
+        if (!byDiscipline.has(disciplineKey)) byDiscipline.set(disciplineKey, { discipline, entries: [] });
+        byDiscipline.get(disciplineKey).entries.push({ entry, originalIndex });
+      });
+      const disciplines = [...byDiscipline.values()].sort((left, right) => norm(left.discipline).localeCompare(norm(right.discipline), "pt-BR"));
+      disciplines.forEach((bucket) => {
+        const disciplineBatchCount = Math.ceil(bucket.entries.length / limit);
+        for (let start = 0; start < bucket.entries.length; start += limit) {
+          const slice = bucket.entries.slice(start, start + limit);
+          const entries = slice.map((item) => item.entry);
+          groups.push({
+            entries,
+            items: entries.map((entry) => entry.item),
+            number: groups.length + 1,
+            startIndex: outputIndex,
+            endIndex: outputIndex + entries.length - 1,
+            originalIndices: slice.map((item) => item.originalIndex),
+            limit,
+            batchMode,
+            emissionGroup: emissionGroup || "MIXED",
+            discipline: bucket.discipline,
+            disciplines: [bucket.discipline],
+            disciplineBatchNumber: Math.floor(start / limit) + 1,
+            disciplineBatchCount,
+          });
+          outputIndex += entries.length;
+        }
+      });
+    };
+
+    const emit = (items, emissionGroup) => {
+      if (!items.length) return;
+      if (batchMode === "limit-only") emitLimitOnly(items, emissionGroup);
+      else emitByDiscipline(items, emissionGroup);
+    };
+
+    if (!separatePostRepost) {
+      emit(source, "MIXED");
+      return groups;
+    }
+
+    const postings = source.filter((item) => postingGroup(item.entry) === "POSTING");
+    const reposts = source.filter((item) => postingGroup(item.entry) === "REPOST");
+    emit(postings, "POSTING");
+    emit(reposts, "REPOST");
     return groups;
   }
 
@@ -516,8 +573,15 @@
     return (plan.entries || []).map((entry, index) => ({
       "DOCUMENTO": entry.document,
       "REVISÃO": entry.revision,
+      "CLASSIFICAÇÃO": entry.emissionKind || "FIRST_POSTING",
       "ARQUIVO ORIGINAL": entry.originalName,
       "ARQUIVO FINAL NO PACOTE": entry.finalName,
+      "ORIGEM DO ARQUIVO": entry.fileProvenance?.source === "cofre" ? "Cofre" : entry.fileProvenance?.source === "local" ? "Pasta local" : "Não registrada",
+      "REVISÃO DO ARQUIVO UTILIZADO": text(entry.fileProvenance?.revision),
+      "ID DO ARQUIVO NO COFRE": text(entry.fileProvenance?.vaultFileId),
+      "SEQUÊNCIA DO CATÁLOGO COFRE": entry.fileProvenance?.catalogSequence || "",
+      "SHA-256 DO ARQUIVO UTILIZADO": text(entry.fileProvenance?.sha256),
+      "TAMANHO DO ARQUIVO (BYTES)": entry.fileProvenance?.sizeBytes ?? "",
       "ARQUIVO DESCRITO NA GRDT": entry.item.fileName,
       "NOME CONSISTENTE": entry.finalName === entry.item.fileName ? "SIM" : "NÃO",
       "GRDT REABERTA E VALIDADA": entry.grdtReopened ? "SIM" : "NÃO",
@@ -533,5 +597,5 @@
     }));
   }
 
-  return { createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, normalizeBatchMode, splitPlan, manifestRows };
+  return { createPlan, validateN1710Pair, validateEtPlanningPair, consistencyErrors, normalizeBatchMode, postingGroup, splitPlan, manifestRows };
 });

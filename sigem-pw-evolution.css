@@ -176,3 +176,54 @@
   #spw-evolution-section .spw-evo-pager span{text-align:center}
   .spw-evo-detail-grid{grid-template-columns:1fr}
 }
+
+/* Auditoria explicável + estabilidade visual da Evolução. */
+#spw-evolution-section .spw-evo-active-bases{position:sticky;top:0;z-index:3;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 10px;padding:7px;border:1px solid var(--border,#dce4eb);border-radius:11px;background:color-mix(in srgb,var(--surface,#fff) 94%,transparent);backdrop-filter:blur(8px)}
+#spw-evolution-section .spw-evo-active-base{display:grid;gap:2px;min-width:0;padding:8px 10px;border-radius:8px;background:var(--surface-soft,#f7fafc)}
+#spw-evolution-section .spw-evo-active-base span{font-size:.56rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-active-base strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.73rem;color:var(--text-strong,#294258)}
+#spw-evolution-section .spw-evo-active-base small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.61rem;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-kpi-shell{display:grid;min-width:0;border:1px solid var(--border,#dce4eb);border-radius:13px;background:var(--surface,#fff);overflow:hidden}
+#spw-evolution-section .spw-evo-kpi-shell .spw-evo-kpi{width:100%;border:0;border-radius:0;box-shadow:none}
+#spw-evolution-section .spw-evo-explain{min-height:30px;border:0;border-top:1px solid var(--border,#edf1f4);background:var(--surface-soft,#f7fafc);color:var(--brand-700,#155c8a);font-size:.62rem;font-weight:900;cursor:pointer}
+#spw-evolution-section .spw-evo-explain:disabled{opacity:.5;cursor:not-allowed}
+#spw-evolution-section .spw-evo-current{margin:0 0 10px;padding:10px;border:1px solid var(--border,#dce4eb);border-radius:12px;background:var(--surface,#fff)}
+#spw-evolution-section .spw-evo-current>header{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px}
+#spw-evolution-section .spw-evo-current>header strong{display:block;font-size:.78rem;color:var(--text-strong,#294258)}
+#spw-evolution-section .spw-evo-current>header small{font-size:.64rem;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-current-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+#spw-evolution-section .spw-evo-current-grid article{display:grid;gap:4px;min-width:0;padding:10px;border:1px solid var(--border,#e5ebef);border-radius:9px;background:var(--surface-soft,#f8fafc)}
+#spw-evolution-section .spw-evo-current-grid article>span{font-size:.58rem;font-weight:900;text-transform:uppercase;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-current-grid article>strong{font-size:1.25rem;color:var(--text-strong,#294258)}
+#spw-evolution-section .spw-evo-current-grid article>small{font-size:.61rem;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-current-grid article>div{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+#spw-evolution-section .spw-evo-current-grid button{border:0;background:transparent;padding:2px 0;color:var(--brand-700,#155c8a);font-size:.6rem;font-weight:900;cursor:pointer}
+#spw-evolution-section .spw-evo-current-grid button+button{margin-left:auto}
+#spw-evolution-section .spw-evo-audit-secondary{font-weight:700;color:var(--text-strong,#294258)}
+#spw-evolution-section .spw-evo-audit article>small{display:block;margin-top:4px;font-size:.6rem;line-height:1.4;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-audit article>.text-button{margin-top:5px}
+#spw-evolution-section .spw-evo-diagnostics{margin:0 0 10px;padding:10px;border:1px solid var(--border,#dce4eb);border-radius:12px;background:var(--surface,#fff)}
+#spw-evolution-section .spw-evo-diagnostics>header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+#spw-evolution-section .spw-evo-diagnostics>header strong{display:block;font-size:.78rem;color:var(--text-strong,#294258)}
+#spw-evolution-section .spw-evo-diagnostics>header small{font-size:.64rem;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:8px}
+#spw-evolution-section .spw-evo-diagnostic-grid article{display:flex;gap:7px;align-items:flex-start;padding:8px;border-radius:8px;background:var(--surface-soft,#f7fafc)}
+#spw-evolution-section .spw-evo-diagnostic-grid strong{min-width:36px;color:var(--text-strong,#294258)}
+#spw-evolution-section .spw-evo-diagnostic-grid span{font-size:.62rem;line-height:1.35;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-diagnostics>p{margin:8px 0 0;font-size:.62rem;line-height:1.45;color:var(--text-muted,#66798a)}
+.spw-evo-audit-drawer .spw-evo-audit-rule,.spw-evo-audit-drawer .spw-evo-audit-sources{padding:12px;border:1px solid var(--border,#dce4eb);border-radius:9px;background:var(--surface-soft,#f7fafc)}
+.spw-evo-audit-drawer .spw-evo-audit-rule p,.spw-evo-audit-drawer .spw-evo-audit-sources p{margin:5px 0;font-size:.72rem;line-height:1.5;color:var(--text-muted,#66798a)}
+.spw-evo-audit-drawer .spw-evo-audit-sources small{font-size:.64rem;color:var(--text-muted,#66798a)}
+#spw-evolution-section .spw-evo-table{min-width:1360px}
+#spw-evolution-section .spw-evo-table th:last-child{width:260px}
+#spw-evolution-section .spw-evo-table td:last-child{max-width:260px;white-space:normal;line-height:1.35}
+[data-theme="dark"] #spw-evolution-section .spw-evo-kpi-shell,[data-theme="dark"] #spw-evolution-section .spw-evo-current,[data-theme="dark"] #spw-evolution-section .spw-evo-diagnostics{box-shadow:none}
+@media(max-width:920px){
+  #spw-evolution-section .spw-evo-current-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #spw-evolution-section .spw-evo-diagnostic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:600px){
+  #spw-evolution-section .spw-evo-active-bases{position:static;grid-template-columns:1fr}
+  #spw-evolution-section .spw-evo-current-grid,#spw-evolution-section .spw-evo-diagnostic-grid{grid-template-columns:1fr}
+  #spw-evolution-section .spw-evo-diagnostics>header{display:grid}
+}

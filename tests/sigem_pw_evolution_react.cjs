@@ -50,6 +50,8 @@ assert.match(domain, /EVOLUTION_PAGE_SIZE\s*=\s*100/);
 assert.match(domain, /EVOLUTION_SEARCH_DEBOUNCE_MS\s*=\s*180/);
 assert.match(domain, /interface EvolutionUiState/);
 assert.match(domain, /interface EvolutionComparison/);
+assert.ok(domain.includes('export type EvolutionRevisionScope = "revision0" | "all";'));
+assert.ok(domain.includes("revisionScope: EvolutionRevisionScope;"));
 assert.match(domain, /Cadastrados no SIGEM/);
 assert.match(domain, /Encontrados no ProjectWise/);
 
@@ -64,6 +66,11 @@ assert.match(adapter, /GRCONModuleLoader\.ensure\("xlsx"\)/);
 assert.match(adapter, /bookType:\s*"xlsx"/);
 assert.match(adapter, /rows\.slice\(start, start \+ EVOLUTION_PAGE_SIZE\)/);
 assert.match(adapter, /function currentFiltersForExport\(\)/);
+assert.ok(adapter.includes('revisionScope: "revision0"'));
+assert.ok(adapter.includes("function setRevisionScope("));
+assert.ok(adapter.includes("dashboardRevisionKey("));
+assert.ok(adapter.includes("scopeSnapshot("));
+assert.ok(adapter.includes("scopedSnapshots("));
 assert.match(adapter, /return \{ \.\.\.state\.filters, \.\.\.state\.rawFilters \}/);
 
 for (const label of ["Entraram no SIGEM", "Entraram no PW", "Emitidos no PW", "SIGEM novo sem PW", "Gerenciar histórico"]) {
@@ -73,6 +80,10 @@ for (const id of ["spw-evo-date-start", "spw-evo-date-end", "spw-evo-filter-quer
   assert.ok(app.includes(id), "controle ausente: " + id);
 }
 assert.match(app, /data-evolution-version="react-phase-a"/);
+assert.ok(app.includes('data-evolution-revision-scope="revision0"'));
+assert.ok(app.includes('data-evolution-revision-scope="all"'));
+assert.ok(app.includes("Revisão 0"));
+assert.ok(app.includes("Todas as revisões"));
 assert.match(app, /data-evo-select/);
 assert.match(app, /data-evo-row/);
 assert.match(app, /UiDrawer/);

@@ -156,6 +156,8 @@
     if (alert) {
       const notices = [];
       if (state.missingDocuments.length) notices.push(`Sem eGRDT anterior: ${state.missingDocuments.join("; ")}.`);
+      const normativeWarnings = state.rows.filter(row => root.GrconDocumentaryCompliance?.auditRow(row, row.item).warnings.length).length;
+      if (normativeWarnings) notices.push(`${normativeWarnings} documento(s) têm alertas de conformidade; confira os detalhes na coluna Situação.`);
       if (validation.incomplete.length) notices.push(`${validation.incomplete.length} linha(s) precisam ter os campos destacados completados ou corrigidos antes da geração.`);
       alert.textContent = notices.join(" ");
       alert.hidden = !notices.length;
@@ -169,9 +171,13 @@
     return root.GrconSharedSigemQuery?.resolveSigemStatus(row.item.document, row.item.revision, legacy) || { status: legacy, source: "legacy-fallback" };
   }
   function rowStatusHtml(row) {
-    return row.errors.length
+    const operational = row.errors.length
       ? `<span class="grdt-reissue-missing" title="${esc(row.errors.join(" · "))}">Revisar ${row.errors.length}</span>`
       : '<span class="grdt-reissue-ready">Pronto</span>';
+    const audit = root.GrconDocumentaryCompliance?.auditRow(row, row.item);
+    const findings = [...(audit?.warnings || []), ...(audit?.information || [])];
+    if (!findings.length) return operational;
+    return `${operational}<details class="grdt-reissue-compliance"><summary>Conformidade: ${audit.warnings.length} alerta(s) · ${audit.information.length} informação(ões)</summary><ul>${findings.map(finding => `<li>${esc(finding.message)}<small>${esc(finding.ruleId)} · ${esc(finding.norm)} · ${esc(finding.source?.label)} Rev. ${esc(finding.revision)} § ${esc(finding.section)}</small></li>`).join('')}</ul></details>`;
   }
   function render() {
     const host = $("#grdt-reissue-results");
@@ -278,6 +284,7 @@
         purpose: row.item.purpose,
         databook: row.item.databook,
         virtual: true,
+        normativeValidation: group.entries[index]?.normativeValidation || null,
       };
     });
     return History.cleanRecord({
@@ -292,6 +299,7 @@
       reissueSources: sourceNumbers,
       reservationRequestId: text(official.requestId),
       reservationIds: [text(official.reservationId)].filter(Boolean),
+      normativeValidation: root.GrconDocumentaryCompliance?.combine(files.map(file => file.normativeValidation)) || null,
       files,
     });
   }
@@ -397,7 +405,12 @@
     }
     $("#grdt-reissue-find")?.addEventListener("click", findLatest);
     $("#grdt-reissue-generate")?.addEventListener("click", () => void generate());
-    $("#grdt-reissue-results")?.addEventListener("change", (event) => {
+    const reissueResults = $("#grdt-reissue-results");
+    reissueResults?.addEventListener("input", (event) => {
+      const input = event.target.closest('[data-row][data-field="revision"]');
+      if (input) updateEditedRow(input);
+    });
+    reissueResults?.addEventListener("change", (event) => {
       const input = event.target.closest("[data-row][data-field]");
       if (input) updateEditedRow(input);
     });

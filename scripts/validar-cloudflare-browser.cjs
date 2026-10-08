@@ -93,7 +93,7 @@ async function probe(page, pathname) {
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
-  const results = { viewports: {}, probes: {}, api: null, pwa: null, mascot: null };
+  const results = { viewports: {}, probes: {}, api: null, vault: null, pwa: null, mascot: null };
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
@@ -129,6 +129,7 @@ async function probe(page, pathname) {
       "/", "/index.html", "/sw.js", "/manifest.json", "/grcon_cloud_config.js",
       "/grcon_mascot_controller_v4.js", "/deployment-meta.json",
       "/react-dist/consultas-app.js", "/react-dist/cover-document-app.js",
+      "/document_vault_core.js", "/document_vault_app.js", "/document_hash_worker.js", "/document-vault.css",
       "/assets/mascot/video/grcon-mascot-idle-alpha.webm",
       "/workers/sigem_pw_dashboard.worker.js",
     ];
@@ -186,6 +187,49 @@ async function probe(page, pathname) {
     assert.equal(results.api.post.status, 401);
     assert.equal(results.api.post.body.code, "MISSING_SESSION");
 
+    const vaultHealth = await context.request.get(baseUrl + "/api/document-vault/health");
+    const vaultHealthBody = await vaultHealth.json().catch(() => ({}));
+    assert.ok([200, 503].includes(vaultHealth.status()), "Health do Cofre deve responder 200 configurado ou 503 sem secrets locais.");
+    assert.equal(vaultHealthBody.service, "grcon-document-vault");
+    assert.equal(typeof vaultHealthBody.powerAutomateConfigured, "boolean");
+    assert.equal(typeof vaultHealthBody.powerAutomateUrlValid, "boolean");
+    assert.equal(vaultHealthBody.powerAutomateConfigured, false, "Preview local não deve inventar secret do Power Automate.");
+    assert.equal(vaultHealthBody.powerAutomateUrlValid, false);
+
+    await page.waitForFunction(() => Boolean(window.GrconDocumentVault && document.querySelector("[data-vault-open]")), null, { timeout: 15000 });
+    await page.evaluate(() => {
+      const target = Array.from(document.querySelectorAll("[data-vault-open]")).find((node) => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      });
+      if (!target) throw new Error("Navegação do Cofre não localizada.");
+      target.click();
+    });
+    await page.locator("#document-vault-module").waitFor({ state: "visible", timeout: 10000 });
+    const vaultUi = await page.evaluate(() => ({
+      moduleVisible: !document.getElementById("document-vault-module")?.hidden,
+      folderPicker: Boolean(document.getElementById("vault-folder-input")?.hasAttribute("webkitdirectory")),
+      allocationOptions: Array.from(document.querySelectorAll("#vault-allocation option")).map(option => option.value),
+      centralSourceOptions: Array.from(document.querySelectorAll('input[name="grdt-document-source"]')).map(input => input.value),
+      centralLookup: Boolean(document.getElementById("grdt-vault-lookup") && document.getElementById("grdt-vault-codes")),
+      automaticSourceHelp: Boolean(document.getElementById("grdt-auto-source-help")),
+      manualGrdtSelectionInVault: Boolean(document.getElementById("vault-use-grdt") || document.querySelector("[data-vault-select]")),
+      oldReissueCard: Boolean(document.querySelector('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]')),
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }));
+    assert.equal(vaultUi.moduleVisible, true);
+    assert.equal(vaultUi.folderPicker, true);
+    assert.deepEqual(vaultUi.allocationOptions, ["all", "allocated", "not_allocated", "not_identified"]);
+    assert.deepEqual(vaultUi.centralSourceOptions, []);
+    assert.equal(vaultUi.centralLookup, false);
+    assert.equal(vaultUi.automaticSourceHelp, false);
+    assert.equal(await page.locator("#grcon-vault-help").count(), 0);
+    assert.equal(vaultUi.manualGrdtSelectionInVault, false);
+    assert.equal(vaultUi.oldReissueCard, false);
+    assert.ok(vaultUi.overflow <= 1, "Cofre não pode gerar overflow horizontal global.");
+    results.vault = { health: { status: vaultHealth.status(), body: vaultHealthBody }, ui: vaultUi };
+
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(250);
@@ -206,7 +250,16 @@ async function probe(page, pathname) {
 
     assert.deepEqual([...new Set(badLocalResponses)], [], "Não pode haver resposta local 4xx/5xx fora da rota API.");
     assert.deepEqual(pageErrors.filter((message) => !isExpectedExternalError(message)), []);
-    assert.deepEqual(consoleErrors, []);
+    const expectedVaultHealth503 = vaultHealth.status() === 503;
+    const vaultHealthConsoleErrors = consoleErrors.filter((message) =>
+      /Failed to load resource: the server responded with a status of 503 \(Service Unavailable\)/i.test(message)
+    );
+    if (expectedVaultHealth503) {
+      assert.ok(vaultHealthConsoleErrors.length <= 1, "Somente o 503 esperado do health local do Cofre pode aparecer no console.");
+    } else {
+      assert.equal(vaultHealthConsoleErrors.length, 0, "Cofre configurado não pode gerar 503 no console.");
+    }
+    assert.deepEqual(consoleErrors.filter((message) => !vaultHealthConsoleErrors.includes(message)), []);
 
     fs.writeFileSync(path.join(outputDir, "metrics.json"), JSON.stringify({ passed: true, ...results }, null, 2));
     console.log("cloudflare_browser: ok", JSON.stringify({ metadata, ...results }));

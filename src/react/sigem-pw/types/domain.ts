@@ -1,7 +1,8 @@
 export type SigemPwBaseKind = "sigem" | "pw" | "ld";
 export type SigemPwEditableBaseKind = "sigem" | "pw";
 export type SigemPwDocumentClass = "" | "ET" | "N-1710";
-export type SigemPwListKey = "all" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
+export type SigemPwRevisionScope = "revision0" | "all";
+export type SigemPwListKey = "all" | "sigem" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
 export type SigemPwReadinessStatus = "empty" | "partial" | "ready" | "attention";
 
 export interface SigemPwBaseMeta {
@@ -58,6 +59,7 @@ export interface SigemPwRow {
   revision: string;
   documentClass: string;
   sigemStatus: string;
+  sigemDate?: string;
   pwStatus: string;
   pwEmission: string;
   situation: string;
@@ -105,6 +107,7 @@ export interface SigemPwQuality {
 }
 
 export interface SigemPwResult {
+  revisionScope: SigemPwRevisionScope;
   summary: SigemPwSummary;
   classes: SigemPwClassSummary[];
   lists: Record<string, SigemPwRow[]>;
@@ -127,6 +130,12 @@ export interface SigemPwAggregateMap {
   all: SigemPwResult;
   ET: SigemPwResult;
   "N-1710": SigemPwResult;
+  "revision0:all": SigemPwResult;
+  "revision0:ET": SigemPwResult;
+  "revision0:N-1710": SigemPwResult;
+  "all:all": SigemPwResult;
+  "all:ET": SigemPwResult;
+  "all:N-1710": SigemPwResult;
 }
 
 export interface SigemPwReadinessCheck {
@@ -151,6 +160,9 @@ export interface SigemPwReadiness {
 export interface SigemPwFilters {
   documentClass: SigemPwDocumentClass;
   query: string;
+  revision: string;
+  sigemStatus: string;
+  inPw: "" | "yes" | "no";
 }
 
 export interface SigemPwDateEditor {
@@ -160,7 +172,17 @@ export interface SigemPwDateEditor {
   value: string;
 }
 
+export interface SigemPwSharedVersion {
+  snapshot_id: string; version: number; file_name: string; record_count: number; status: string;
+  published_at: string; created_at: string; created_by_name?: string; metadata: SigemPwBaseMeta;
+}
+
 export interface SigemPwState {
+  sigemVersions: SigemPwSharedVersion[];
+  analysisSigemId: string;
+  analysisPwId: string;
+  analysisError: string;
+  officialSigem: SigemPwBaseMeta | null;
   ready: boolean;
   busy: boolean;
   progressMessage: string;
@@ -177,7 +199,9 @@ export interface SigemPwState {
   dateEditSnapshotId: string;
   dateEditor: SigemPwDateEditor;
   historyDialogOpen: boolean;
+  revisionScope: SigemPwRevisionScope;
   filters: SigemPwFilters;
+  filterResetKey: number;
   activeList: SigemPwListKey;
   page: number;
 }
@@ -198,6 +222,7 @@ export interface WorkerModelPayload {
 
 export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.freeze({
   all: "Todas as situações",
+  sigem: "Documentos do total SIGEM",
   sigemOnly: "SIGEM: falta cadastrar no PW",
   bothNotEmitted: "SIGEM + PW: ainda não emitido",
   bothEmitted: "SIGEM + PW: emitido",

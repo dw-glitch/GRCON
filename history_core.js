@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(root.TriagemCore || (typeof module === "object" && module.exports ? require("./core.js") : null));
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconHistory = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (C) {
   "use strict";
 
   const STORAGE_KEY = "grcon.egrdt.history.v1";
@@ -120,7 +120,7 @@
       if (normalizedStem === normalizedBase) return "0";
       if (!normalizedStem.startsWith(`${normalizedBase}_`)) continue;
       const candidate = normalizedStem.slice(normalizedBase.length + 1).trim();
-      if (/^(?:0|[A-HJ-NP-Z]+)$/.test(candidate)) return candidate;
+      if (C && typeof C.revisionInfo === "function" ? C.revisionInfo(candidate).valid : /^(?:0|#[1-9]\d*|0[1-9]\d*|[A-Z]+(?:[1-9]\d*)?)$/.test(candidate)) return candidate;
     }
     return "";
   }
@@ -147,6 +147,59 @@
       revision: text(entry && entry.item && entry.item.revision) || text(entry && entry.revision) || text(row && row.egrdt && row.egrdt.revision) || text(row && row.revision),
       source: "Dados usados para gerar a eGRDT",
     };
+  }
+
+  function cleanNormativeValidation(value) {
+    if (!value || typeof value !== "object" || !value.normativeValidationVersion) return null;
+    const snapshot = JSON.parse(JSON.stringify(value));
+    // Resultados CONFORME são representados por rulesChecked/counts. Mantemos
+    // as evidências de alertas e bloqueios sem duplicar cada regra em results.
+    delete snapshot.results;
+    return snapshot;
+  }
+
+  function cleanHistoryClassification(value) {
+    if (!value || value.classificationVersion !== "1.0.0") return null;
+    const snapshot = {};
+    for (const field of ["classificationVersion", "classificationStatus", "emissionKind", "label", "documentCodeNormalized", "revisionNormalized", "previousHistoryId", "previousRevision", "previousGrdt", "previousGeneratedAt", "originalEmissionId", "source"]) snapshot[field] = text(value[field]);
+    for (const field of ["occurrenceCount", "repostCount", "historicalDocumentCount"]) snapshot[field] = Math.max(0, Number(value[field]) || 0);
+    snapshot.warnings = (Array.isArray(value.warnings) ? value.warnings : []).map(text);
+    for (const field of ["firstEmission", "lastEmission"]) snapshot[field] = value[field] ? { historyId: text(value[field].historyId), grdt: text(value[field].grdt), generatedAt: text(value[field].generatedAt), revision: text(value[field].revision) } : null;
+    return snapshot;
+  }
+
+  function cleanAllocationContext(value) {
+    if (!value || value.version !== "1.0.0") return null;
+    const clean = {};
+    for (const field of ["version", "kind", "label", "plannedSnapshotId", "centralSnapshotId", "centralFileName", "centralUpdatedAt"]) clean[field] = text(value[field]);
+    clean.allocations = (Array.isArray(value.allocations) ? value.allocations : []).map(text);
+    clean.warnings = (Array.isArray(value.warnings) ? value.warnings : []).map(text);
+    clean.references = (Array.isArray(value.references) ? value.references : []).map(item => ({ document: text(item.document), allocation: text(item.allocation), allocationStatus: text(item.allocationStatus), workflow: text(item.workflow), sourceRow: Number(item.sourceRow) || 0 }));
+    return clean;
+  }
+
+  function cleanFileProvenance(value) {
+    if (!value || typeof value !== "object") return null;
+    const source = text(value.source).toLowerCase();
+    if (source !== "cofre" && source !== "local") return null;
+    const number = value => Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
+    const clean = {
+      source,
+      fileName: text(value.fileName),
+      revision: text(value.revision),
+      format: text(value.format).toLowerCase(),
+      sizeBytes: number(value.sizeBytes),
+    };
+    if (source === "cofre" || value.vaultFileId || value.sha256) {
+      clean.vaultFileId = text(value.vaultFileId);
+      clean.catalogSequence = number(value.catalogSequence);
+      clean.fileVersion = number(value.fileVersion);
+      clean.sha256 = /^[a-f0-9]{64}$/i.test(text(value.sha256)) ? text(value.sha256).toLowerCase() : "";
+      clean.createdAt = text(value.createdAt);
+      clean.verifiedAt = text(value.verifiedAt);
+    }
+    if (source === "local") clean.lastModified = number(value.lastModified);
+    return clean;
   }
 
   function cleanFile(file) {
@@ -185,6 +238,11 @@
       databook: text(file && file.databook),
       virtual: Boolean(file && file.virtual),
       discipline: text(file && file.discipline),
+      normativeValidation: cleanNormativeValidation(file && file.normativeValidation),
+      historyClassification: cleanHistoryClassification(file && file.historyClassification),
+      sharedAllocationContext: cleanAllocationContext(file && file.sharedAllocationContext),
+      vaultFileId: text(file && file.vaultFileId),
+      fileProvenance: cleanFileProvenance(file && file.fileProvenance),
     };
   }
 
@@ -212,7 +270,9 @@
       batchLimit: Number.isSafeInteger(Number(record && record.batchLimit)) && Number(record && record.batchLimit) >= 1
         ? Number(record.batchLimit)
         : 0,
+      postingMode: text(record && record.postingMode),
       reissueSources: Array.isArray(record && record.reissueSources) ? record.reissueSources.map(text).filter(Boolean) : [],
+      normativeValidation: cleanNormativeValidation(record && record.normativeValidation),
       numberHistory: Array.isArray(record && record.numberHistory) ? record.numberHistory.map(text).filter(Boolean) : [],
       cloudId,
       workspaceId,
@@ -232,13 +292,35 @@
     };
   }
 
-  function read(storage) {
+  function readAll(storage) {
     const target = storageOf(storage);
     if (!target) return [];
     try {
       const parsed = JSON.parse(target.getItem(STORAGE_KEY) || "[]");
       return Array.isArray(parsed) ? parsed.map(cleanRecord).filter((record) => record.egrdtNumber).sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)) : [];
     } catch (_) { console.debug("[HistoryCore] context:", _); return []; }
+  }
+
+  function activeWorkspaceContext() {
+    const cloud = typeof globalThis !== "undefined" ? globalThis.GrconCloud : null;
+    return {
+      workspaceId: text(cloud && cloud.state && cloud.state.membership && cloud.state.membership.workspace_id),
+      contractCode: text(cloud && cloud.state && cloud.state.contract && cloud.state.contract.code),
+    };
+  }
+
+  // A UI sempre enxerga somente o contrato ativo. O armazenamento continua
+  // contendo os workspaces lado a lado para que a troca de contrato não apague
+  // a cópia local de outro contrato. Registros antigos, anteriores ao
+  // multi-contrato, pertencem à UHDT-D por migração.
+  function read(storage) {
+    const records = readAll(storage);
+    const context = activeWorkspaceContext();
+    if (!context.workspaceId) return records;
+    return records.filter((record) =>
+      record.workspaceId === context.workspaceId
+      || (!record.workspaceId && context.contractCode === "UHDT-D")
+    );
   }
 
   // Devolve também POR QUE registros foram descartados, para que a interface
@@ -269,7 +351,7 @@
     const target = storageOf(storage);
     if (!target) return { saved: 0, records: [], error: "Armazenamento local indisponível." };
     const incoming = (records || []).map(cleanRecord).filter((record) => record.egrdtNumber);
-    const merged = new Map(read(target).map((record) => [record.id, record]));
+    const merged = new Map(readAll(target).map((record) => [record.id, record]));
     incoming.forEach((record) => merged.set(record.id, record));
     const ajuste = fitDetailed([...merged.values()].sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)));
     const fitted = ajuste.kept;
@@ -286,7 +368,7 @@
         error: "",
       };
     } catch (error) {
-      return { saved: 0, records: read(target), error: error && error.message || "Não foi possível salvar o histórico." };
+      return { saved: 0, records: readAll(target), error: error && error.message || "Não foi possível salvar o histórico." };
     }
   }
 
@@ -298,7 +380,7 @@
       .filter((record) => record.egrdtNumber);
     const cloudIds = new Set(incoming.map((record) => record.cloudId).filter(Boolean));
     const cloudClientIds = new Set(incoming.map((record) => record.clientRecordId).filter(Boolean));
-    const current = read(target);
+    const current = readAll(target);
     const preserved = [];
     const pendingKeys = new Set();
     let removed = 0;
@@ -338,7 +420,7 @@
   function markSynced(recordId, cloudRecord, storage) {
     const target = storageOf(storage);
     if (!target) return { updated: false, records: [], error: "Armazenamento local indisponível." };
-    const records = read(target);
+    const records = readAll(target);
     const wanted = text(recordId);
     const index = records.findIndex((record) => record.id === wanted || record.clientRecordId === wanted);
     if (index < 0) return { updated: false, records, error: "Registro local não localizado." };
@@ -353,23 +435,35 @@
     });
     try {
       target.setItem(STORAGE_KEY, JSON.stringify(fit(records.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)))));
-      return { updated: true, record: records[index], records: read(target), error: "" };
+      return { updated: true, record: records[index], records: readAll(target), error: "" };
     } catch (error) {
-      return { updated: false, records: read(target), error: error && error.message || "Não foi possível confirmar a sincronização local." };
+      return { updated: false, records: readAll(target), error: error && error.message || "Não foi possível confirmar a sincronização local." };
     }
   }
 
   function clear(storage) {
     const target = storageOf(storage);
     if (!target) return false;
-    try { target.removeItem(STORAGE_KEY); return true; } catch (_) { console.debug("[HistoryCore] context:", _); return false; }
+    try {
+      const context = activeWorkspaceContext();
+      if (!context.workspaceId) {
+        target.removeItem(STORAGE_KEY);
+        return true;
+      }
+      const preserved = readAll(target).filter((record) =>
+        record.workspaceId !== context.workspaceId
+        && !(context.contractCode === "UHDT-D" && !record.workspaceId)
+      );
+      target.setItem(STORAGE_KEY, JSON.stringify(preserved));
+      return true;
+    } catch (_) { console.debug("[HistoryCore] context:", _); return false; }
   }
 
   function deleteOne(recordId, storage) {
     const target = storageOf(storage);
     if (!target) return { deleted: false, record: null, records: [], error: "Armazenamento local indisponível." };
     const id = text(recordId);
-    const records = read(target);
+    const records = readAll(target);
     const record = records.find((item) => item.id === id) || null;
     if (!record) return { deleted: false, record: null, records, error: "Registro do histórico não localizado." };
     const remaining = records.filter((item) => item.id !== id);
@@ -418,6 +512,11 @@
         format: entry.item && entry.item.format || row.egrdt && row.egrdt.format || "",
         documentType: entry.item && entry.item.documentType || row.egrdt && row.egrdt.documentType || "",
         purpose: entry.item && entry.item.purpose || row.egrdt && row.egrdt.purpose || record.purpose || "",
+        normativeValidation: entry.normativeValidation || null,
+        historyClassification: entry.historyClassification || null,
+        sharedAllocationContext: entry.sharedAllocationContext || null,
+        vaultFileId: entry.vaultFileId || "",
+        fileProvenance: entry.fileProvenance || null,
       });
     });
     const generatedAt = text(info.generatedAt) || new Date().toISOString();
@@ -430,9 +529,13 @@
       ldName: info.ldName,
       sourceName: info.sourceName,
       batchMode: text(info.batchMode) || text(file && file.group && file.group.batchMode),
+      postingMode: text(file && file.group && file.group.postingMode),
       batchLimit: Number(info.batchLimit) || Number(file && file.group && file.group.limit) || 0,
       reservationRequestId: text(file && file.official && file.official.requestId),
       reservationIds: [text(file && file.official && file.official.reservationId)].filter(Boolean),
+      normativeValidation: typeof globalThis !== "undefined" && globalThis.GrconDocumentaryCompliance
+        ? globalThis.GrconDocumentaryCompliance.combine(files.map(item => item.normativeValidation)) : null,
+      workspaceId: activeWorkspaceContext().workspaceId,
       files,
     });
   }
@@ -454,7 +557,7 @@
   function updateNumber(recordId, value, storage) {
     const target = storageOf(storage);
     if (!target) return { updated: false, error: "Armazenamento local indisponível." };
-    const records = read(target);
+    const records = readAll(target);
     const index = records.findIndex((record) => record.id === text(recordId));
     if (index < 0) return { updated: false, error: "Registro do histórico não localizado." };
     const current = records[index];
@@ -478,7 +581,7 @@
     records[index] = updatedRecord;
     try {
       target.setItem(STORAGE_KEY, JSON.stringify(fit(records.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)))));
-      return { updated: true, record: updatedRecord, previous, records: read(target) };
+      return { updated: true, record: updatedRecord, previous, records: readAll(target) };
     } catch (error) {
       return { updated: false, error: error && error.message || "Não foi possível atualizar o histórico." };
     }
@@ -490,7 +593,7 @@
     return (records || []).filter((record) => norm([
       record.egrdtNumber, ...(record.numberHistory || []), ...(record.reissueSources || []), record.outputType, record.ldName, record.sourceName, record.batchMode,
       ...(record.allocations || []),
-      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline, file.documentType, file.purpose]),
+      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline, file.documentType, file.purpose, file.historyClassification?.label, file.historyClassification?.previousGrdt, file.fileProvenance?.source, file.fileProvenance?.vaultFileId, file.fileProvenance?.sha256, file.fileProvenance?.fileName]),
     ].join(" ")).includes(wanted));
   }
 
@@ -530,5 +633,5 @@
     };
   }
 
-  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
+  return { STORAGE_KEY, MAX_RECORDS, MAX_BYTES, HISTORY_FAMILIES, text, norm, normalizedHistoryFamily, documentFamily, recordFamilies, filterByDocumentFamily, generatedRevision, revisionFromVerifiedGrdt, cleanRecord, read, readAll, saveMany, replaceWorkspaceSnapshot, markSynced, clear, deleteOne, recordFromGenerated, createRecords, normalizeEgrdtNumber, updateNumber, filter, localDateKey, filterByDate, periodBounds, summary };
 });

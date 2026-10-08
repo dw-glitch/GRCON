@@ -1,0 +1,147 @@
+.sigem-monitoring-root{display:grid;gap:14px}.sigem-monitor-card{background:var(--surface,#fff);border:1px solid var(--border,#dce6ec);border-radius:14px;padding:16px}.sigem-monitor-card>header{align-items:flex-start;display:flex;gap:14px;justify-content:space-between;margin-bottom:14px}.sigem-monitor-card>header span{color:var(--brand-700,#155c8a);font-size:.67rem;font-weight:900;letter-spacing:.08em}.sigem-monitor-card h3{color:var(--text-strong,#1d3546);font-size:1rem;margin:3px 0}.sigem-monitor-card p{color:var(--text-muted,#657887);font-size:.78rem;line-height:1.45;margin:0}.sigem-monitor-kpis{display:grid;gap:9px;grid-template-columns:repeat(6,minmax(0,1fr));margin-bottom:14px}.sigem-monitor-kpis>div{background:var(--surface-soft,#f5f8fa);border:1px solid var(--border,#e0e8ed);border-radius:10px;display:grid;gap:4px;padding:10px}.sigem-monitor-kpis span{color:var(--text-muted,#687b89);font-size:.66rem;font-weight:800}.sigem-monitor-kpis strong{color:var(--text-strong,#203b4d);font-size:1.15rem}.sigem-monitor-compare,.sigem-monitor-add,.sigem-monitor-filters{align-items:end;display:grid;gap:9px}.sigem-monitor-compare{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}.sigem-monitor-compare>small{grid-column:1/-1}.sigem-monitor-compare label,.sigem-monitor-add label{display:grid;gap:5px}.sigem-monitor-compare label>span{color:var(--text-muted,#687b89);font-size:.68rem;font-weight:800}.sigem-monitor-compare select,.sigem-monitor-add input,.sigem-monitor-add select,.sigem-monitor-filters input,.sigem-monitor-filters select{background:var(--surface,#fff);border:1px solid var(--border-strong,#c7d5de);border-radius:8px;color:var(--text,#263e4e);font:inherit;font-size:.78rem;min-height:38px;padding:0 9px}.sigem-monitor-add{grid-template-columns:minmax(260px,1.4fr) 120px minmax(200px,1fr) auto}.sigem-monitor-list{display:grid;gap:7px}.sigem-monitor-list article{align-items:center;border:1px solid var(--border,#e0e8ed);border-radius:9px;display:grid;gap:10px;grid-template-columns:minmax(0,1fr) minmax(130px,.6fr) auto auto;padding:9px 11px}.sigem-monitor-list article>div{display:grid;gap:2px}.sigem-monitor-list article strong{font-size:.78rem}.sigem-monitor-list article small{color:var(--text-muted,#6d7f8c);font-size:.69rem}.sigem-monitor-list article>span{font-size:.72rem}.sigem-monitor-list article>b{background:#eef4f7;border-radius:999px;font-size:.62rem;padding:4px 7px;text-transform:uppercase}.sigem-monitor-list article[data-priority="alta"]>b{background:#fff3d8;color:#8a5d00}.sigem-monitor-list article[data-priority="critica"]>b{background:#fde8e6;color:#9f342a}.sigem-monitor-comparisons{display:grid;gap:7px}.sigem-monitor-comparison{align-items:center;background:transparent;border:1px solid var(--border,#e0e8ed);border-radius:9px;color:inherit;cursor:pointer;display:flex;font:inherit;justify-content:space-between;padding:10px 12px;text-align:left;width:100%}.sigem-monitor-comparison:hover,.sigem-monitor-comparison.is-active{background:var(--surface-soft,#f5f8fa);border-color:var(--brand-300,#8bb8cf)}.sigem-monitor-comparison>span{display:grid;gap:2px}.sigem-monitor-comparison strong{font-size:.76rem}.sigem-monitor-comparison small{color:var(--text-muted,#687b89);font-size:.67rem}.sigem-monitor-comparison>b{color:var(--brand-700,#155c8a);font-size:.72rem}.sigem-monitor-filters{grid-template-columns:minmax(240px,1fr) 220px auto;margin-bottom:10px}.sigem-monitor-check{align-items:center;display:flex;font-size:.72rem;gap:6px;min-height:38px}.sigem-monitor-table-wrap{border:1px solid var(--border,#e0e8ed);border-radius:10px;max-height:440px;overflow:auto}.sigem-monitor-table{border-collapse:collapse;font-size:.72rem;width:100%}.sigem-monitor-table th,.sigem-monitor-table td{border-bottom:1px solid var(--border,#e7edf1);padding:9px 10px;text-align:left;vertical-align:top}.sigem-monitor-table thead th{background:var(--surface-soft,#f6f9fb);color:var(--text-muted,#607483);font-size:.63rem;letter-spacing:.03em;position:sticky;text-transform:uppercase;top:0;z-index:1}.sigem-monitor-table td:first-child{min-width:260px}.sigem-monitor-table td:first-child strong,.sigem-monitor-table td:first-child small{display:block}.sigem-monitor-table td:first-child small{color:var(--text-muted,#6a7d8a);margin-top:3px}.sigem-monitor-change-type{background:#eef4f7;border-radius:999px;display:inline-block;font-size:.65rem;font-weight:800;padding:4px 7px;white-space:nowrap}.sigem-monitor-change-type[data-type="ENTROU_EM_ANALISE"]{background:#e7f5ee;color:#176744}.sigem-monitor-change-type[data-type="SAIU_DE_ANALISE"]{background:#fff0e8;color:#9a4924}.sigem-monitor-notifications{display:grid;gap:7px}.sigem-monitor-notification{align-items:flex-start;background:transparent;border:1px solid var(--border,#e1e8ed);border-radius:9px;color:inherit;cursor:pointer;display:flex;font:inherit;gap:12px;justify-content:space-between;padding:10px 12px;text-align:left;width:100%}.sigem-monitor-notification.is-unread{background:#f2f8fb;border-color:#b8d6e6}.sigem-monitor-notification>span{display:grid;gap:2px}.sigem-monitor-notification strong{font-size:.75rem}.sigem-monitor-notification small,.sigem-monitor-notification em,.sigem-monitor-notification time{color:var(--text-muted,#6a7c88);font-size:.66rem;font-style:normal}.sigem-monitor-notification time{white-space:nowrap}.sigem-monitor-empty{color:var(--text-muted,#687b89);font-size:.75rem;padding:14px;text-align:center}.sigem-monitor-empty[hidden]{display:none}@media(max-width:1100px){.sigem-monitor-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.sigem-monitor-add{grid-template-columns:1fr 120px}.sigem-monitor-add input:nth-of-type(2){grid-column:1/-1}.sigem-monitor-list article{grid-template-columns:minmax(0,1fr) auto auto}.sigem-monitor-list article>span{grid-column:1/-1}}@media(max-width:760px){.sigem-monitor-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.sigem-monitor-compare,.sigem-monitor-add,.sigem-monitor-filters{grid-template-columns:1fr}.sigem-monitor-list article{grid-template-columns:1fr auto}.sigem-monitor-table-wrap{max-height:360px}.sigem-monitor-card>header{display:grid}.sigem-monitor-notification{display:grid}.sigem-monitor-notification time{white-space:normal}}
+.sigem-monitor-kpis>button { display:grid; gap:6px; padding:12px; text-align:left; color:inherit; background:var(--surface-soft,#f5f8fa); border:1px solid var(--border,#dce6ec); border-radius:10px; cursor:pointer; }
+.sigem-monitor-pagination { display:flex; justify-content:flex-end; align-items:center; gap:12px; padding:12px; font-size:12px; }
+.sigem-monitor-filters.extra { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.sigem-monitor-filters.extra label { display:grid; gap:4px; font-size:12px; }
+#sigem-monitor-document-history { max-width:800px; max-height:80vh; overflow:auto; border:1px solid #94a3b8; border-radius:12px; padding:24px; }
+#grcon-notification-count { padding:3px 7px; border-radius:20px; background:#bf5700; color:#fff; }
+
+
+/* UX pilot 2026-10-07: labels persistentes e ajuda contextual, sem alterar o fluxo operacional. */
+.sigem-monitor-help{margin:-2px 0 14px;border:1px solid var(--border,#dce6ec);border-radius:9px;background:var(--surface-soft,#f5f8fa)}
+.sigem-monitor-help>summary{display:flex;align-items:center;gap:6px;min-height:36px;padding:7px 10px;color:var(--brand-700,#155c8a);font-size:.72rem;font-weight:800;cursor:pointer;list-style-position:inside}
+.sigem-monitor-help>summary:focus-visible{outline:2px solid var(--brand-500,#2f7ea7);outline-offset:2px}
+.sigem-monitor-help>div{display:grid;gap:6px;padding:0 10px 10px}
+.sigem-monitor-help p{margin:0!important;font-size:.72rem!important;line-height:1.45!important}
+.sigem-monitor-help p strong{color:var(--text-strong,#203b4d)}
+.sigem-monitor-add>label{display:grid;gap:5px;min-width:0}
+.sigem-monitor-add>label>span{color:var(--text-muted,#687b89);font-size:.68rem;font-weight:800}
+.sigem-monitor-add>label>span small{font:inherit;font-weight:600;opacity:.8}
+.sigem-monitor-add>button{align-self:end}
+@media(max-width:1100px){.sigem-monitor-add>label:last-of-type{grid-column:1/-1}}
+@media(max-width:760px){.sigem-monitor-add>label:last-of-type{grid-column:auto}}
+
+.sigem-monitor-filters>label:not(.sigem-monitor-check){display:grid;gap:5px;min-width:0}
+.sigem-monitor-filters>label>span{color:var(--text-muted,#687b89);font-size:.68rem;font-weight:800}
+
+
+/* Histórico e monitoramento: pesquisa local com carregamento progressivo de linhas,
+   mantendo as ações e os registros reais já disponibilizados pela Consulta Geral. */
+.sigem-monitor-local-search {
+  display: grid;
+  gap: .35rem;
+  min-width: 0;
+  margin: 0 0 .65rem;
+}
+.sigem-monitor-local-search label {
+  font-size: .72rem;
+  color: var(--text-muted, #475766);
+  font-weight: 720;
+}
+.sigem-monitor-local-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.4rem;
+  padding: .5rem .7rem;
+  border: 1px solid var(--border-strong, #c6d2da);
+  border-radius: var(--radius-sm, 9px);
+  background: var(--surface, #fff);
+  color: var(--text, #16212b);
+}
+.sigem-monitor-local-search input:focus-visible {
+  border-color: var(--brand-600, #1479a6);
+  box-shadow: var(--focus, 0 0 0 3px rgb(20 121 166 / 23%));
+}
+.sigem-monitor-list-count {
+  margin: 0 0 .45rem !important;
+  color: var(--text-muted, #5e6f7c) !important;
+  font-size: .71rem !important;
+  font-variant-numeric: tabular-nums;
+}
+.sigem-monitor-load-more {
+  display: flex;
+  justify-content: center;
+  padding: .65rem 0 0;
+}
+.sigem-monitor-load-more [hidden] { display: none !important; }
+.sigem-monitor-comparisons { min-width: 0; }
+/* Evitar cortes de títulos longos, inclusive em telas de notebook. */
+.sigem-monitor-comparison > span { min-width: 0; overflow-wrap: anywhere; }
+.sigem-monitor-comparison > b { flex: 0 0 auto; }
+.sigem-monitor-list article { min-width: 0; }
+.sigem-monitor-list article > div { min-width: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  .sigem-monitor-comparison { scroll-behavior: auto; }
+}
+
+
+/* Grade responsiva nas telas amplas de Consulta Geral × SIGEM.
+   A tabela de alterações e as notificações continuam com largura total. */
+@media (min-width: 1600px) {
+  .sigem-monitoring-root {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .sigem-monitor-overview,
+  .sigem-monitor-changes-card,
+  .sigem-monitor-notifications-card {
+    grid-column: 1 / -1;
+  }
+  .sigem-monitor-documents-card,
+  .sigem-monitor-history-card { min-width: 0; align-self: stretch; }
+  .sigem-monitor-documents-card .sigem-monitor-add {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-add > label:nth-of-type(2) {
+    min-width: 7rem;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-add > label:nth-of-type(3) {
+    grid-column: 1 / -1;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-add > button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-list article {
+    grid-template-columns: minmax(0,1fr) auto;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-list article > span,
+  .sigem-monitor-documents-card .sigem-monitor-list article > small {
+    grid-column: 1 / -1;
+  }
+  .sigem-monitor-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+
+/* Os tokens gerais --surface/--text não são definidos em todos os modos da UI.
+   Na raiz escura, usar os tokens operacionais já suportados pelo GRCON. */
+body.p2-dark .sigem-monitor-local-search input {
+  background: var(--ops-surface, #17232d) !important;
+  color: var(--ops-ink, #e7eef4) !important;
+  border-color: var(--ops-line-strong, #405260);
+  color-scheme: dark;
+}
+body.p2-dark .sigem-monitor-local-search input::placeholder {
+  color: var(--ops-muted, #9babb8);
+}
+body.p2-dark .sigem-monitor-local-search label,
+body.p2-dark .sigem-monitor-list-count {
+  color: var(--ops-muted, #9babb8) !important;
+}
+body.p2-dark .sigem-monitor-local-search input:focus-visible {
+  border-color: var(--ops-blue, #63b1df);
+  box-shadow: 0 0 0 3px rgb(99 177 223 / 23%);
+}
+
+
+/* Em Consultas, estilos globais dos campos podem ter maior especificidade.
+   Restringir a exceção aos dois controles locais deste módulo. */
+html[data-app="GRCON"][data-theme="dark"] body.p2-dark #sigem-monitor-history-search,
+html[data-app="GRCON"][data-theme="dark"] body.p2-dark #sigem-monitor-monitored-search {
+  background-color: var(--ops-surface, #17232d) !important;
+  background-image: none !important;
+  color: var(--ops-ink, #e7eef4) !important;
+  border-color: var(--ops-line-strong, #405260) !important;
+}

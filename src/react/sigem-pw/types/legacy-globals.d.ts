@@ -7,6 +7,7 @@ import type {
   SigemPwReadiness,
   SigemPwRecord,
   SigemPwResult,
+  SigemPwRevisionScope,
   SigemPwState,
   WorkerModelPayload,
 } from "./domain";
@@ -44,17 +45,19 @@ interface PostingConferenceApi {
 interface SigemPwDashboardCoreApi {
   SIGEM_BASE_KEY: string; PW_BASE_KEY: string; LD_BASE_KEY: string; HISTORY_KEY: string; LEGACY_SIGEM_BASE_KEY: string; LEGACY_PW_BASE_KEY: string; HISTORY_VERSION: number; PW_SCOPE_VERSION: number;
   normalizeHeader(value: unknown): string; norm(value: unknown): string; parseDateMs(value: unknown): number;
+  revisionKey(value: unknown): string; normalizeRevisionScope(value: unknown): SigemPwRevisionScope;
   parsePwCsv(source: string, meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   parseLdMatrix(matrix: string[][], meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   sanitizePwBase(base: SigemPwBase, ld: SigemPwBase | SigemPwRecord[]): SigemPwBase;
   createModel(sigem: SigemPwRecord[], pw: SigemPwRecord[], ld: SigemPwRecord[]): SigemPwModel;
-  aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }): SigemPwResult;
+  aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }, options?: { revisionScope?: SigemPwRevisionScope }): SigemPwResult;
   loadBases(): Promise<{ sigem: SigemPwBase; pw: SigemPwBase; ld: SigemPwBase; history: SigemPwHistory }>;
   loadHistory(): Promise<SigemPwHistory>;
   saveSigemBase(base: SigemPwBase): Promise<SigemPwBase>;
   savePwBase(base: SigemPwBase, ld?: SigemPwBase | SigemPwRecord[]): Promise<SigemPwBase>;
   saveLdAndReprocessPw(ld: SigemPwBase, pw: SigemPwBase): Promise<{ ld: SigemPwBase; pw: SigemPwBase | null }>;
   updateSnapshotDate(kind: SigemPwEditableBaseKind, snapshotId: string, importedAt: string): Promise<{ current?: SigemPwBase; importedAt: string }>;
+  updateSnapshotMetadata(kind: SigemPwEditableBaseKind, snapshotId: string, metadata: SigemPwBaseMeta): Promise<unknown>;
   deleteSnapshot(snapshotId: string): Promise<unknown>;
   kvGet<T>(key: string, fallback: T): Promise<T>;
   kvSet(key: string, value: unknown): Promise<unknown>;
@@ -83,6 +86,7 @@ interface SigemPwDashboardUiApi {
   activate(): Promise<void>;
   refresh(reason?: string): Promise<void>;
   clearPreStage7BasesOnce(): Promise<boolean>;
+  filteredRows(): SigemPwRow[];
   state: SigemPwState;
 }
 interface RevisionAnalyzeOptions {
@@ -125,6 +129,7 @@ interface EvolutionBase {
   records: SigemPwRecord[];
 }
 interface SigemPwEvolutionCoreApi {
+  readonly CALCULATION_VERSION: string;
   norm(value: unknown): string;
   normalizeRevision(value: unknown): string;
   buildLdUniverse(records: SigemPwRecord[], history: SigemPwRecord[], options?: { qualityRecords?: SigemPwRecord[] }): EvolutionLdUniverse;
@@ -135,6 +140,7 @@ interface SigemPwEvolutionCoreApi {
     pwPrevious: EvolutionSnapshot | null,
     pwCurrent: EvolutionSnapshot | null,
   ): EvolutionComparison;
+  documentRevisionRecords(records: EvolutionRecord[]): EvolutionRecord[];
   buildDailyTimeline(sigemSnapshots: EvolutionSnapshot[], pwSnapshots: EvolutionSnapshot[]): EvolutionTimelineDay[];
 }
 interface SigemPwEvolutionUiApi {
@@ -143,6 +149,7 @@ interface SigemPwEvolutionUiApi {
   readonly state: EvolutionUiState;
   filteredRows(): EvolutionRecord[];
   exportFilteredRows(): Promise<number>;
+  exportAuditWorkbook(): Promise<number>;
 }
 interface SigemPwBootstrapApi { open(): Promise<void>; openEvolution(): Promise<unknown>; deactivate(): void; }
 interface LegacyActivationApi {
@@ -167,6 +174,12 @@ declare global {
     GrconSigemPwDashboardReact?: { mounted: boolean };
     GrconPostingConference?: PostingConferenceApi;
     GrconSharedSigemQuery?: {
+      listVersions(): Promise<import("./domain").SigemPwSharedVersion[]>;
+      loadSnapshot(id: string, versions?: import("./domain").SigemPwSharedVersion[]): Promise<SigemPwBase>;
+      setReferenceDate(value: string, targetId?: string): Promise<SigemPwBase | undefined>;
+      canManageHistory?(): boolean;
+      activateVersion(id: string): Promise<SigemPwBase | null | undefined>;
+      deleteVersion(id: string): Promise<{ removedSnapshotId?: string; removedWasCurrent?: boolean; activeSnapshotId?: string | null }>;
       current(): SigemPwBase | null;
       refresh(): Promise<SigemPwBase | null>;
       setLocal(base: SigemPwBase): Promise<SigemPwBase | null>;

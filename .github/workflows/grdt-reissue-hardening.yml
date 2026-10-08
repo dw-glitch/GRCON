@@ -4,8 +4,24 @@ on:
   pull_request:
     paths:
       - "app.js"
+      - "app-ui.js"
       - "emission.js"
+      - "allocation_registry_core.js"
+      - "allocation_registry_app.js"
+      - "document_allocation_context.js"
+      - "supabase/migrations/*shared_allocation_registry.sql"
+      - "tests/allocation_registry*.cjs"
+      - "package.json"
+      - "package-lock.json"
+      - "history_classification.js"
+      - "posting_flow.js"
+      - "posting_batch_planner.js"
+      - "posting-flow.css"
+      - "scripts/validar-unified-posting-browser.cjs"
       - "history_core.js"
+      - "grcon_cloud_app.js"
+      - "tests/history_classification.cjs"
+      - "tests/cloud_history_pagination.cjs"
       - "grdt_reissue_core.js"
       - "grdt_reissue_app.js"
       - "grdt-reissue.css"
@@ -42,6 +58,10 @@ jobs:
           npm run typecheck
           npm run build
           npm run check:syntax
+          node tests/history_classification.cjs
+          node tests/cloud_history_pagination.cjs
+          node tests/allocation_registry.cjs
+          node tests/allocation_registry_database.cjs
           node tests/grdt_reissue.cjs
           node tests/discipline.mjs
 
@@ -56,6 +76,7 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-grdt-reissue-browser.cjs
+          node scripts/validar-unified-posting-browser.cjs
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -64,4 +85,6 @@ jobs:
           path: |
             artifacts/grdt-reissue-browser/*.png
             artifacts/grdt-reissue-browser/metrics.json
+            artifacts/unified-posting/*.png
+            artifacts/unified-posting/metrics.json
           if-no-files-found: warn

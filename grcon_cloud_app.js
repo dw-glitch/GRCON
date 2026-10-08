@@ -8,6 +8,8 @@
     client: null,
     session: null,
     membership: null,
+    contracts: [],
+    contract: null,
     plannedSnapshot: null,
     online: navigator.onLine,
     syncing: false,
@@ -367,6 +369,8 @@
       workspaceId: membership.workspace_id,
       workspaceName: membership.workspace_name,
       role: membership.role,
+      contractId: membership.contract_id || "",
+      contractCode: membership.contract_code || "",
       email: state.session.user.email || "",
       cachedAt: new Date().toISOString(),
     });
@@ -378,7 +382,259 @@
       workspace_id: value.workspace_id || value.workspaceId,
       workspace_name: value.workspace_name || value.workspaceName || "GRCON Compartilhado",
       role: value.role || "viewer",
+      contract_id: value.contract_id || value.contractId || "",
+      contract_code: value.contract_code || value.contractCode || "",
     };
+  }
+
+  const ACTIVE_CONTRACT_STORAGE = "grcon.cloud.active-contract.v1";
+
+  function normalizeContract(value) {
+    if (!value) return null;
+    return {
+      contract_id: String(value.contract_id || value.id || ""),
+      workspace_id: String(value.workspace_id || ""),
+      slug: String(value.slug || ""),
+      code: String(value.code || ""),
+      name: String(value.name || ""),
+      display_name: String(value.display_name || value.workspace_name || value.name || "GRCON"),
+      company: String(value.company || "CONSAG"),
+      client: String(value.client || ""),
+      site: String(value.site || ""),
+      project: String(value.project || ""),
+      active: value.active !== false,
+      role: String(value.role || "viewer"),
+      settings: value.settings && typeof value.settings === "object" ? value.settings : {},
+    };
+  }
+
+  function contractMembership(contract) {
+    return normalizeMembership({
+      workspace_id: contract.workspace_id,
+      workspace_name: contract.display_name,
+      role: contract.role,
+      contract_id: contract.contract_id,
+      contract_code: contract.code,
+    });
+  }
+
+  function storedContractId() {
+    const userId = state.session?.user?.id;
+    if (!userId) return "";
+    const value = readJson(ACTIVE_CONTRACT_STORAGE, null);
+    return value && value.userId === userId ? String(value.contractId || "") : "";
+  }
+
+  function storeActiveContract(contract) {
+    const userId = state.session?.user?.id;
+    if (!userId || !contract?.contract_id) return;
+    writeJson(ACTIVE_CONTRACT_STORAGE, { userId, contractId: contract.contract_id, savedAt: new Date().toISOString() });
+  }
+
+  function chooseContract(contracts, fallbackWorkspace) {
+    const list = (contracts || []).filter((item) => item && item.active !== false);
+    if (!list.length) return null;
+    const preferred = storedContractId();
+    if (preferred) {
+      const saved = list.find((item) => item.contract_id === preferred);
+      if (saved) return saved;
+    }
+    const sameWorkspace = list.find((item) => item.workspace_id === fallbackWorkspace);
+    if (sameWorkspace) return sameWorkspace;
+    return list.find((item) => item.code === "UHDT-D") || list[0];
+  }
+
+  async function loadContractContext(fallbackMembership) {
+    if (!state.client || !state.online) {
+      state.contracts = [];
+      state.contract = null;
+      return fallbackMembership;
+    }
+    const { data, error } = await state.client.rpc("grcon_contract_context");
+    if (error) throw error;
+    const contracts = (Array.isArray(data) ? data : []).map(normalizeContract).filter((item) => item?.workspace_id);
+    state.contracts = contracts;
+    const selected = chooseContract(contracts, fallbackMembership?.workspace_id);
+    state.contract = selected;
+    return selected ? contractMembership(selected) : fallbackMembership;
+  }
+
+  function contractRuleStatus(contract) {
+    const settings = contract?.settings || {};
+    const profile = String(settings.ruleProfile || "").trim();
+    if (profile && profile !== "UNCONFIGURED") return profile;
+    return "Regras não configuradas";
+  }
+
+  function renderContractContext() {
+    const select = $("#grcon-contract-select");
+    const badge = $("#grcon-active-contract-badge");
+    if (select) {
+      select.innerHTML = state.contracts.map((contract) =>
+        `<option value="${escapeHtml(contract.contract_id)}">${escapeHtml(contract.code)} · ${escapeHtml(contract.name)}</option>`
+      ).join("");
+      select.value = state.contract?.contract_id || "";
+      select.disabled = state.contracts.length < 2 || state.syncing || state.clearingHistory;
+    }
+    if (badge) {
+      badge.textContent = state.contract?.code ? `GRCON | ${state.contract.code}` : "GRCON";
+      badge.title = state.contract?.display_name || "Contrato ativo";
+    }
+    const profile = $("#grcon-contract-rule-profile");
+    if (profile) profile.textContent = contractRuleStatus(state.contract);
+    const create = $("#grcon-contract-create");
+    if (create) create.hidden = !canManageMembers();
+    document.body.dataset.grconContractCode = state.contract?.code || "";
+    document.body.dataset.grconRuleProfile = String(state.contract?.settings?.ruleProfile || "");
+    const subtitle = $("#brand-subtitle");
+    if (subtitle) subtitle.textContent = state.contract?.code ? `Controle de GRDT · ${state.contract.code}` : "Controle de GRDT";
+  }
+
+  async function switchContract(contractId) {
+    const next = state.contracts.find((item) => item.contract_id === contractId);
+    if (!next || next.contract_id === state.contract?.contract_id) return true;
+    if (state.syncing || state.clearingHistory) {
+      notify("Aguarde a sincronização atual terminar antes de trocar de contrato.", "warning");
+      renderContractContext();
+      return false;
+    }
+    if (window.GrconDocumentVault?.state?.active || window.GrconSharedSigemQuery?.state?.busy) {
+      notify("Aguarde o envio atual terminar antes de trocar de contrato.", "warning");
+      renderContractContext();
+      return false;
+    }
+    dropRealtime();
+    stopRealtimeFallbackPolling();
+    state.contract = next;
+    state.membership = contractMembership(next);
+    state.plannedSnapshot = null;
+    state.historyFullSyncDone = false;
+    state.historySyncSince = "";
+    state.onlineUserIds = new Set();
+    storeActiveContract(next);
+    storeMembership(state.membership);
+    if (window.GrconContractStorage) { window.location.reload(); return true; }
+    window.GrconSharedSigemQuery?.reset?.();
+    renderContractContext();
+    updateHistoryCopy();
+    updateAccountMenu();
+    await loadMembers();
+    try { await loadPlannedDocuments(); } catch (error) { console.warn("GRCON Cloud: Documentos Previstos do contrato indisponíveis", error); }
+    try { await window.GrconSharedSigemQuery?.refresh?.(); } catch (error) { console.warn("GRCON Cloud: Consulta Geral do contrato indisponível", error); }
+    if (state.online) {
+      await runSyncCycle();
+      subscribeRealtime();
+    }
+    window.dispatchEvent(new CustomEvent("grcon:contract-context-changed", {
+      detail: { contract: next, membership: state.membership },
+    }));
+    window.dispatchEvent(new CustomEvent("grcon:history-updated", { detail: { contractChanged: true } }));
+    return true;
+  }
+
+  function slugifyContract(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  }
+
+  async function createContract(event) {
+    event?.preventDefault?.();
+    if (!canManageMembers()) return;
+    const codeInput = $("#grcon-contract-new-code");
+    const nameInput = $("#grcon-contract-new-name");
+    const button = $("#grcon-contract-create button[type='submit']");
+    const code = String(codeInput?.value || "").trim().toUpperCase();
+    const name = String(nameInput?.value || "").trim();
+    if (!code || !name) {
+      notify("Informe o código e o nome do novo contrato.", "warning");
+      return;
+    }
+    if (button) button.disabled = true;
+    try {
+      const input = {
+        code,
+        slug: slugifyContract(code),
+        name,
+        displayName: `CONSAG / RNEST / ${code}`,
+        company: "CONSAG",
+        client: "PETROBRAS",
+        site: "RNEST",
+        project: code,
+        active: true,
+        settings: {
+          ruleProfile: "UNCONFIGURED",
+          inheritLegacyRules: false,
+          documentRules: {},
+          taxonomyRules: {},
+          ldConfiguration: {},
+          grdtConfiguration: {},
+          sigemConfiguration: {},
+          pwConfiguration: {},
+          forecastConfiguration: {},
+          emailConfiguration: {},
+          conferenceConfiguration: {},
+          notificationConfiguration: {},
+          enabledModules: { legacyUhdtRules: false },
+        },
+      };
+      const { data, error } = await state.client.rpc("grcon_contract_save", { input });
+      if (error) throw error;
+      const created = Array.isArray(data) ? data[0] : data;
+      const fallback = state.membership;
+      await loadContractContext(fallback);
+      renderContractContext();
+      const target = state.contracts.find((item) => item.contract_id === created?.id || item.code === code);
+      if (codeInput) codeInput.value = "";
+      if (nameInput) nameInput.value = "";
+      notify(`Contrato ${code} criado. Ele inicia sem herdar regras específicas da UHDT-D.`, "success");
+      if (target) await switchContract(target.contract_id);
+    } catch (error) {
+      notify(error?.message || "Não foi possível criar o contrato.", "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function refreshContracts() {
+    state.membership = await loadContractContext(state.membership);
+    storeMembership(state.membership);
+    if (window.GrconContractStorage?.needsReload(state.membership)) { window.location.reload(); return; }
+    renderContractContext();
+  }
+
+  async function emailTemplateGet() {
+    if (!state.client || !state.membership?.workspace_id) return null;
+    const { data, error } = await state.client.rpc("grcon_email_template_get", { target_workspace: state.membership.workspace_id });
+    if (error) throw error;
+    return Array.isArray(data) ? (data[0] || null) : data;
+  }
+
+  async function emailTemplateVersions() {
+    if (!state.client || !state.membership?.workspace_id) return [];
+    const { data, error } = await state.client.rpc("grcon_email_template_versions", { target_workspace: state.membership.workspace_id });
+    if (error) throw error;
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function emailTemplateSave(scope, configuration) {
+    if (!state.client || !state.membership?.workspace_id) throw new Error("Contrato compartilhado indisponível.");
+    const { data, error } = await state.client.rpc("grcon_email_template_save", {
+      target_workspace: state.membership.workspace_id,
+      target_scope: scope || "contract",
+      input: configuration || {},
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async function emailTemplateRestore(templateId) {
+    if (!state.client || !state.membership?.workspace_id) throw new Error("Contrato compartilhado indisponível.");
+    const { data, error } = await state.client.rpc("grcon_email_template_restore", {
+      target_workspace: state.membership.workspace_id,
+      target_template: templateId,
+    });
+    if (error) throw error;
+    return data;
   }
 
   async function acceptMembership() {
@@ -1019,7 +1275,20 @@
     showAdminPasswordEditStep("", "info");
   }
 
+
+  function ensureContractBadge() {
+    if ($("#grcon-active-contract-badge")) return;
+    const host = $(".runtime-status");
+    if (!host) return;
+    const badge = document.createElement("span");
+    badge.id = "grcon-active-contract-badge";
+    badge.className = "grcon-active-contract-badge";
+    badge.textContent = "GRCON";
+    host.insertBefore(badge, host.querySelector("#grcon-cloud-account") || null);
+  }
+
   function createAccountMenu() {
+    ensureContractBadge();
     if ($("#grcon-cloud-account")) return;
     const host = $(".runtime-status");
     if (!host) return;
@@ -1034,6 +1303,19 @@
       </button>
       <section class="grcon-cloud-account-menu" hidden id="grcon-cloud-account-menu">
         <header><strong id="grcon-cloud-menu-workspace">GRCON Compartilhado</strong><span id="grcon-cloud-menu-email"></span><span id="grcon-cloud-online-count" class="grcon-cloud-online-count" title="Usuários com o GRCON aberto agora"></span></header>
+        <section class="grcon-contract-context" aria-label="Contrato ativo">
+          <label><span>Contrato</span><select id="grcon-contract-select" aria-label="Selecionar contrato"></select></label>
+          <small>Perfil de regras: <strong id="grcon-contract-rule-profile">—</strong></small>
+        </section>
+        <details class="grcon-contract-create" id="grcon-contract-create" hidden>
+          <summary>Novo contrato</summary>
+          <form id="grcon-contract-create-form">
+            <label><span>Código</span><input id="grcon-contract-new-code" maxlength="60" placeholder="Ex.: HDT" required></label>
+            <label><span>Nome</span><input id="grcon-contract-new-name" maxlength="160" placeholder="Nome do contrato/unidade" required></label>
+            <button class="primary-button compact" type="submit">Criar contrato</button>
+          </form>
+          <small>Novos contratos são criados isolados e sem herdar regras específicas da UHDT-D.</small>
+        </details>
         <div class="grcon-cloud-sync-line"><i></i><span id="grcon-cloud-sync-label">Histórico sincronizado</span></div>
         <div class="grcon-cloud-invite" hidden id="grcon-cloud-invite">
           <h3>Convidar usuário</h3>
@@ -1062,6 +1344,8 @@
     $("#grcon-cloud-copy-link").addEventListener("click", copyAppLink);
     $("#grcon-cloud-change-password").addEventListener("click", () => { closeAccountMenu(); openPasswordChange({ recovery: false }); });
     $("#grcon-cloud-invite-form").addEventListener("submit", inviteUser);
+    $("#grcon-contract-select").addEventListener("change", (event) => { void switchContract(event.currentTarget.value); });
+    $("#grcon-contract-create-form").addEventListener("submit", createContract);
     $("#grcon-cloud-invitations-panel").addEventListener("toggle", (event) => {
       if (event.target.open) loadInvitations();
     });
@@ -1098,6 +1382,7 @@
     if (invitationsPanel) invitationsPanel.hidden = !canManageHistory();
     if (auditPanel) auditPanel.hidden = !canManageHistory();
     document.body.dataset.grconCloudRole = state.membership?.role || "viewer";
+    renderContractContext();
     setSyncLabel(state.online ? "Histórico sincronizado" : "Offline · alterações ficam neste navegador", state.online ? "success" : "warn");
     updateHistoryClearControl();
   }
@@ -1403,18 +1688,47 @@
   async function fetchHistoryRows(columns) {
     const rows = [];
     const pageSize = 500;
-    for (let from = 0; ; from += pageSize) {
+    for (let from = 0; ;) {
       const response = await state.client.from("grcon_history")
         .select(columns)
         .eq("workspace_id", state.membership.workspace_id)
         .is("deleted_at", null)
         .order("generated_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(from, from + pageSize - 1);
       if (response.error) throw response.error;
-      rows.push(...(response.data || []));
-      if ((response.data || []).length < pageSize) break;
+      const page = response.data || [];
+      if (!page.length) break;
+      rows.push(...page);
+      // PostgREST may cap pages below the requested size. Only an empty page
+      // proves exhaustion; advance by what was actually returned.
+      from += page.length;
     }
     return rows;
+  }
+
+  async function loadClassificationHistory() {
+    if (!state.online || !state.session?.access_token || !state.membership?.workspace_id) throw new Error("Histórico compartilhado indisponível.");
+    const workspaceId = state.membership.workspace_id;
+    const userId = state.session.user?.id;
+    const rows = await fetchHistoryRows("id, workspace_id, client_record_id, egrdt_number, generated_at, output_type, payload, updated_at");
+    if (workspaceId !== state.membership?.workspace_id || userId !== state.session?.user?.id) throw new Error("A sessão mudou durante a consulta.");
+    const cloud = rows.map(cloudHistoryRecord);
+    const ids = new Set(cloud.map(record => record.clientRecordId || record.id));
+    const pending = History.read().filter(record => record.workspaceId === workspaceId && record.syncState !== "synced" && !ids.has(record.clientRecordId || record.id));
+    // Do not pass the full result through the bounded local working copy.
+    return [...cloud, ...pending];
+  }
+
+  async function historyRecordsForClassification() {
+    if (!History) return [];
+    if (!state.online || !state.membership?.workspace_id || !state.client) return History.read();
+    try {
+      return await loadClassificationHistory();
+    } catch (error) {
+      console.warn("GRCON Cloud: histórico completo indisponível; classificação usando cópia local.", error);
+      return History.read();
+    }
   }
 
   async function fetchHistoryChanges(columns, since) {
@@ -1864,6 +2178,15 @@
 
     channel
       .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "grcon_notifications",
+        filter: `workspace_id=eq.${state.membership.workspace_id}`,
+      }, () => {
+        if (attemptId !== state.realtimeAttemptId || state.realtime !== channel) return;
+        window.dispatchEvent(new CustomEvent("grcon:notifications-updated"));
+      })
+      .on("postgres_changes", {
         event: "*",
         schema: "public",
         table: "grcon_history",
@@ -1937,12 +2260,14 @@
         return;
       }
       $("#grcon-cloud-auth-retry").hidden = true;
-      state.membership = membership;
+      state.membership = await loadContractContext(membership);
+      if (state.contract) storeActiveContract(state.contract);
       // Uma nova ativação sempre começa com um espelho completo; só depois o
       // polling passa para alterações incrementais.
       state.historyFullSyncDone = false;
       state.historySyncSince = "";
-      storeMembership(membership);
+      storeMembership(state.membership);
+      if (window.GrconContractStorage?.needsReload(state.membership)) { window.location.reload(); return; }
       updateHistoryCopy();
       createAccountMenu();
       unlockApp();
@@ -1954,7 +2279,7 @@
         await runSyncCycle();
         subscribeRealtime();
       }
-      window.dispatchEvent(new CustomEvent("grcon:cloud-ready", { detail: { membership } }));
+      window.dispatchEvent(new CustomEvent("grcon:cloud-ready", { detail: { membership: state.membership } }));
     } catch (error) {
       const cached = cachedMembershipFor(session.user.id);
       if (!state.online && cached) {
@@ -1978,6 +2303,9 @@
   function showLogin() {
     state.session = null;
     state.membership = null;
+    state.contracts = [];
+    state.contract = null;
+    window.dispatchEvent(new CustomEvent("grcon:cloud-signed-out"));
     state.plannedSnapshot = null;
     window.GrconSharedSigemQuery?.reset();
     state.activationKey = "";
@@ -2003,6 +2331,7 @@
     state.historyFullSyncDone = false;
     state.historySyncSince = "";
     $("#grcon-cloud-account")?.remove();
+    $("#grcon-active-contract-badge")?.remove();
     showLogin();
   }
 
@@ -2127,7 +2456,16 @@
     canWriteHistory,
     canManageHistory,
     canManageMembers,
+    switchContract,
+    loadContractContext,
+    refreshContracts,
+    emailTemplateGet,
+    emailTemplateVersions,
+    emailTemplateSave,
+    emailTemplateRestore,
     loadPlannedDocuments,
+    loadClassificationHistory,
+    historyRecordsForClassification,
     publishPlannedDocuments,
     getExportTemplates,
     saveExportTemplate,

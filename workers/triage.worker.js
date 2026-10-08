@@ -27,6 +27,7 @@ self.onmessage = async (event) => {
   try {
     if (action === "initialize") {
       activeIndex = payload.index; catalogEntries = payload.catalogEntries || []; baseSettings = payload.settings || {};
+      self.GrconContractContext = baseSettings.contractContext || null;
       self.postMessage({ taskId, type: "done", result: { initialized: true, documents: activeIndex && activeIndex.documents ? activeIndex.documents.length : 0 }, metrics: { stage: "triage-initialize", durationMs: performance.now()-started, memoryMb: memoryMb() } }); return;
     }
     if (!activeIndex) throw new Error("O Worker de triagem não recebeu o índice da LD.");

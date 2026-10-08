@@ -416,6 +416,7 @@
     buildReport,
     buildEgrdts,
     buildPackage,
+    buildSpreadsheet: (kind, payload) => run("export", "spreadsheet", { kind, ...payload }),
     cancel,
     cancelAll: () => cancel(),
     clearLdCache: () => run("ld", "clear-cache", {}),

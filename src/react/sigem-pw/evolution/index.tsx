@@ -18,6 +18,7 @@ function installCompatibilityApi(): void {
     state: sigemPwEvolutionAdapter.state,
     filteredRows: () => sigemPwEvolutionAdapter.state.filteredRows,
     exportFilteredRows: () => sigemPwEvolutionAdapter.exportFilteredRows(),
+    exportAuditWorkbook: () => sigemPwEvolutionAdapter.exportAuditWorkbook(),
   });
 }
 

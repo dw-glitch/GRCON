@@ -59,6 +59,8 @@ export interface SigemRevisionEntry {
 
 /** Linha de resultado já mesclada (situação, alocação e GRDT/SIGEM). */
 export interface ConsultationRow {
+  requestControlMatches?: Array<{ document: string; sheet: string; sourceRow: number; data: Record<string, string> }>;
+  consultationSources?: string;
   situation: string;
   ldDocument?: string;
   ldForm?: string;
@@ -81,6 +83,7 @@ export interface ConsultationRow {
   plannedDocumentsFile?: string;
   plannedDocumentsUpdatedAt?: string;
   allocation?: string;
+  fiscalComment?: string;
   lastGrdt?: string;
   issued?: string;
   issuedCell?: string;

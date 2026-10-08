@@ -115,7 +115,7 @@ function validResult() {
   assert.match(app, /data-status=\{assessment\.status\}/);
   assert.match(app, /data-edit-base-date="sigem"/);
   assert.match(app, /data-edit-base-date="pw"/);
-  assert.match(app, /id="spw-date-input" type="datetime-local"/);
+  assert.match(app, /id="spw-date-input" type=\{shared \? "date" : "datetime-local"\}/);
   assert.match(app, /grcon:sigem-pw-base-date-updated/);
   assert.match(dashboardCore, /async function updateSnapshotDate\(/);
   assert.match(bootstrap, /openEvolution/);

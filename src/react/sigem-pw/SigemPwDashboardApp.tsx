@@ -1,8 +1,11 @@
+import { useMemo } from "react";
 import { UiMetaPill, UiPanel } from "../core/ui/UiPrimitives";
 import { SigemPwHeader } from "./components/SigemPwHeader";
 import { SigemPwReadiness } from "./components/SigemPwReadiness";
+import { SigemPwAnalysisSources } from "./components/SigemPwAnalysisSources";
 import { SigemPwBases } from "./components/SigemPwBases";
 import { SigemPwSystemsSummary } from "./components/SigemPwSystemsSummary";
+import { SigemPwRevisionScopeSelector } from "./components/SigemPwRevisionScopeSelector";
 import { SigemPwSituationCards } from "./components/SigemPwSituationCards";
 import { SigemPwListFilters } from "./components/SigemPwListFilters";
 import { SigemPwTable } from "./components/SigemPwTable";
@@ -21,6 +24,7 @@ export function SigemPwDashboardApp() {
   const { state, adapter } = useSigemPwDashboard();
   const pageData = adapter.pageRows();
   const activeLabel = SIGEM_PW_LISTS[state.activeList];
+  const sigemStatusOptions = useMemo(() => [...new Set((state.result?.lists?.[state.activeList] || []).map(row => row.sigemStatus).filter(Boolean))].sort(), [state.result, state.activeList]);
   const classifiedTotal = state.result?.summary?.classifiedTotal || 0;
   const loadedBases = [state.sigem.meta, state.pw.meta, state.ld.meta].filter(Boolean).length;
 
@@ -51,6 +55,13 @@ export function SigemPwDashboardApp() {
           </div>
           <UiMetaPill><strong>{loadedBases}/3</strong> carregadas</UiMetaPill>
         </div>
+        <SigemPwAnalysisSources
+          state={state}
+          onSelect={(system, id) => { void adapter.selectAnalysisBase(system, id); }}
+          canManageSigemHistory={Boolean(window.GrconSharedSigemQuery?.canManageHistory?.())}
+          onActivateSigem={(id) => { void adapter.activateSharedSigemVersion(id); }}
+          onDeleteSigem={(id) => { void adapter.deleteSharedSigemVersion(id); }}
+        />
         <SigemPwBases
           state={state}
           onImportSigem={(file) => { void adapter.importSigem(file); }}
@@ -65,11 +76,14 @@ export function SigemPwDashboardApp() {
           <div>
             <span className="spw-kicker">VISÃO CONSOLIDADA</span>
             <h3 id="spw-overview-title">Totais e pendências operacionais</h3>
-            <p>Os totais usam a mesma agregação do Core. Cada ocorrência entra em uma única situação operacional.</p>
+            <p>{state.revisionScope === "revision0"
+              ? "Visão principal do cadastro inicial: somente ocorrências em revisão 0 nos dois sistemas."
+              : "Visão de movimentação documental: cada Documento + Revisão é uma ocorrência independente."}</p>
           </div>
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
-        <SigemPwSystemsSummary state={state} />
+        <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
+        <SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} />
         <SigemPwSituationCards
           state={state}
           activeList={state.activeList}
@@ -82,7 +96,9 @@ export function SigemPwDashboardApp() {
           <div>
             <span className="spw-kicker">RELAÇÃO DETALHADA</span>
             <strong id="spw-list-title">{activeLabel}</strong>
-            <small>Pesquise, filtre por classe e navegue pela lista sem alterar o modelo conciliado.</small>
+            <small>{state.revisionScope === "revision0"
+              ? "Detalhamento auditável somente da revisão 0; os demais filtros permanecem ativos."
+              : "Detalhamento auditável por Documento + Revisão; os demais filtros permanecem ativos."}</small>
           </div>
           <UiMetaPill><strong>{fmt(pageData.rows.length)}</strong> registro(s)</UiMetaPill>
         </header>
@@ -105,7 +121,15 @@ export function SigemPwDashboardApp() {
         </div>
 
         <SigemPwListFilters
+          key={`${state.activeList}:${state.filterResetKey}`}
           query={state.filters.query}
+          revision={state.filters.revision}
+          sigemStatus={state.filters.sigemStatus}
+          inPw={state.filters.inPw}
+          sigemStatusOptions={sigemStatusOptions}
+          onRevision={adapter.setRevision}
+          onSigemStatus={adapter.setSigemStatus}
+          onInPw={adapter.setInPw}
           documentClass={state.filters.documentClass}
           busy={state.busy}
           onQuery={(value) => adapter.setQuery(value)}

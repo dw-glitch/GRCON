@@ -1,7 +1,27 @@
 import { useEffect, useRef } from "react";
 import { UiMetaPill, UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
+import { DocumentClassBadge } from "../core/ui/DocumentClassBadge";
 import { historicoEgrdtAdapter as Adapter } from "./services/historicoEgrdtAdapter";
 import { useHistoricoEgrdt, LIST_PAGE_SIZE } from "./hooks/useHistoricoEgrdt";
+import type { EgrdtHistoryFile } from "./types/domain";
+
+function FileProvenance({ file }: { file: EgrdtHistoryFile }) {
+  const source = file.fileProvenance;
+  if (!source) return <small>Origem não registrada nesta emissão</small>;
+  return <details className="history-file-provenance">
+    <summary>Origem: {source.source === "cofre" ? "Cofre" : "pasta local"}</summary>
+    <p>Arquivo utilizado: {source.fileName}</p>
+    <p>Revisão do arquivo: {source.revision || "Não registrada"} · Formato: {source.format || "Não registrado"} · {numberBr(source.sizeBytes)} bytes</p>
+    {source.source === "cofre" || source.vaultFileId || source.sha256 ? <>
+      <p>ID do arquivo: {source.vaultFileId || "Não registrado"} · Sequência: {source.catalogSequence || "Não registrada"}</p>
+      <p>Incluído em: {source.createdAt ? Adapter.formatDate(source.createdAt, true) : "Não registrado"}</p>
+      <p>Verificado em: {source.verifiedAt ? Adapter.formatDate(source.verifiedAt, true) : "Não registrado"}</p>
+      <p>Versão no Cofre: {source.fileVersion || "Não registrada"}</p>
+      {source.vaultFileId ? <button type="button" className="text-button" onClick={() => window.GrconDocumentMaster?.openFile(source.vaultFileId!)}>Recuperar arquivo utilizado</button> : null}
+      <p>SHA-256: <code style={{ overflowWrap: "anywhere" }}>{source.sha256 || "Não registrado"}</code></p>
+    </> : <p>Modificado em: {source.lastModified ? Adapter.formatDate(new Date(source.lastModified), true) : "Não registrado"}</p>}
+  </details>;
+}
 
 
 const SORT_LABELS: Record<string, string> = {
@@ -418,14 +438,14 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                   return (
                     <tr key={(file.document || "doc") + "-" + (file.finalName || index) + "-" + index}>
                       <td data-label="Documento"><strong>{file.document || "—"}</strong></td>
-                      <td data-label="Arquivo original">{file.originalName || "—"}</td>
+                      <td data-label="Arquivo original">{file.originalName || "—"}<FileProvenance file={file} /></td>
                       <td data-label="Arquivo enviado">{file.finalName || "—"}</td>
-                      <td data-label="Revisão gerada"><span className="history-revision-badge">{relation.generated}</span>{file.revisionManual ? <span className="history-revision-manual" title={"Alterada manualmente na triagem · sugestão do sistema na época: " + (file.revisionSuggested || "—")}>Alterada manualmente</span> : null}</td>
+                      <td data-label="Revisão gerada"><span className="history-revision-badge">{relation.generated}</span>{file.historyClassification ? <details><summary>{file.historyClassification.label}</summary>{file.historyClassification.previousGrdt ? <p>Anterior: Rev. {file.historyClassification.previousRevision || "não registrada"} · {file.historyClassification.previousGrdt} · {file.historyClassification.previousGeneratedAt}</p> : null}<p>{file.historyClassification.occurrenceCount} emissão(ões) anteriores nesta revisão; {file.historyClassification.repostCount} repostagem(ns) anteriores.</p>{file.historyClassification.warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details> : null}{file.revisionManual ? <span className="history-revision-manual" title={"Alterada manualmente na triagem · sugestão do sistema na época: " + (file.revisionSuggested || "—")}>Alterada manualmente</span> : null}</td>
                       <td data-label="Propósito da GRDT">{file.purpose || "Não registrado"}</td>
                       <td data-label="Situação na geração">{file.sigemStatus || "—"}</td>
-                      <td data-label="Alocação">{file.allocation || "—"}</td>
+                      <td data-label="Alocação">{file.allocation || "—"}{file.sharedAllocationContext?.references.length ? <details><summary>Status na Central</summary>{file.sharedAllocationContext.references.map((item, i) => <p key={i}>{item.allocation || "Sem alocação"} · {item.allocationStatus || "Sem status"} · {item.workflow || "Sem workflow"} · linha {item.sourceRow}</p>)}<small>{file.sharedAllocationContext.centralFileName}</small></details> : null}</td>
                       <td data-label="Versão da LD enviada">{file.ldPrazo || "Não registrado"}</td>
-                      <td data-label="Aba LD">{file.sheet || "—"}</td>
+                      <td data-label="Aba LD"><DocumentClassBadge value={file.sheet} /></td>
                     </tr>
                   );
                 })}

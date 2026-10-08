@@ -219,7 +219,7 @@
   }
 
   function focusModal(element) {
-    if (!element || element.dataset.uiV3Focused === "true") return;
+    if (!element || element.dataset.uiFocusManaged === "true" || element.dataset.uiV3Focused === "true") return;
     hadModal = true;
     setData(element, "uiV3Focused", "true");
     const target = element.querySelector('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]');
@@ -286,7 +286,7 @@
 
   document.addEventListener("keydown", (event) => {
     const modal = visibleModal();
-    if (!modal) return;
+    if (!modal || modal.dataset.uiFocusManaged === "true") return;
     if (event.key === "Escape") {
       const closer = modal.querySelector("[id$='close'], [id$='cancel'], .drawer-close, [aria-label^='Fechar']");
       if (closer) {

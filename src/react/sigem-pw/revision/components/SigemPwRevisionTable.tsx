@@ -1,4 +1,5 @@
 import type { RevisionHistoryItem, RevisionRow } from "../types/domain";
+import { DocumentClassBadge } from "../../../core/ui/DocumentClassBadge";
 
 function HistoryItems({ items, pw }: { items: RevisionHistoryItem[]; pw?: boolean }) {
   if (!items.length) return <span className="spw-rev-history-empty">Nenhuma revisão localizada.</span>;
@@ -106,7 +107,7 @@ export function SigemPwRevisionTable({
             <FragmentRow key={row.key}>
               <tr>
                 <td className="spw-rev-doc" title={row.document}><strong>{row.document}</strong></td>
-                <td><span className="spw-rev-class">{row.documentClass || "—"}</span></td>
+                <td><DocumentClassBadge className="spw-rev-class" value={row.documentClass} /></td>
                 <td><span className="spw-rev-revision">{sigemRevision}</span></td>
                 <td><span className="spw-rev-status" title={row.sigemStatus || ""}>{valueOrDash(row.sigemStatus)}</span></td>
                 <td><span className="spw-rev-revision">{pwRevision}</span></td>

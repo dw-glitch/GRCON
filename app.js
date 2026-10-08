@@ -5,6 +5,8 @@
   const T = window.TimelineCore;
   const L = window.GrconLdCompatibility;
   const E = window.GrconEmission;
+  const PostingFlow = window.GrconPostingFlow;
+  const splitPostingPlan = (plan, limit, mode) => PostingFlow ? PostingFlow.splitPlan(plan, limit, mode) : E.splitPlan(plan, limit, mode);
   const Q = window.GrconTitleQuality;
   const D = window.GrconDatabookSupport;
   const Workspace = window.GrconWorkspace;
@@ -19,7 +21,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.5";
+  const APP_VERSION = "5.44.9";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -89,6 +91,7 @@
     packageFiles: [],
     ignoredFiles: [],
     listIgnoredFiles: [],
+    missingRequestedFiles: [],
     listSummary: null,
     records: [],
     history: [],
@@ -114,6 +117,7 @@
     analysisRecentDays: 30,
     analysisLdSignature: "",
     analysisPlannedSnapshot: "",
+    analysisAllocationSnapshot: "",
     analysisSigemSnapshot: "",
     egrdtSequenceCursor: 0,
     manualEgrdtSequenceStart: null,
@@ -137,7 +141,7 @@
   // Lista histórica mantida para ET/CV e demais famílias. Para N-1710, a
   // extensão não é critério de bloqueio: o arquivo só precisa trazer um código
   // N-1710 reconhecível para chegar à triagem, onde a LD decide a identidade.
-  const PACKAGE_EXTENSION = /\.(pdf|doc|docx|txt|xls|xlsx|xlsm|xlsb|dwg|dgn|ppt|pptx)$/i;
+  const PACKAGE_EXTENSION = /\.(pdf|doc|docx|txt|xls|xlsx|xlsm|xlsb|csv|dwg|dxf|dgn|rvt|ifc|ppt|pptx|msg|eml|xml|jpg|jpeg|png|tif|tiff)$/i;
 
   function n1710FileCandidate(fileName) {
     const baseName = String(fileName || "").trim().split(/[\\/]/).pop() || "";
@@ -457,6 +461,24 @@
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
+  function installAutomaticDocumentSourceUi() {
+    const panel = document.querySelector("#grdt-module .control-panel");
+    const sourceRow = panel?.querySelector(".source-row");
+    if (sourceRow && !document.getElementById("missing-documents")) {
+      const missing = document.createElement("section");
+      missing.id = "missing-documents";
+      missing.className = "missing-documents-panel";
+      missing.hidden = true;
+      missing.setAttribute("aria-live", "polite");
+      missing.innerHTML = '<header><div><strong>Documentos não encontrados</strong><small id="missing-documents-count">0 documento(s)</small></div><button class="secondary-button compact" id="copy-missing-documents" type="button">Copiar códigos não encontrados</button></header><ul id="missing-documents-list"></ul>';
+      sourceRow.insertAdjacentElement("afterend", missing);
+    }
+    const packageInput = document.getElementById("pdf-input");
+    if (packageInput) packageInput.accept = ".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.xlsb,.csv,.txt,.dwg,.dxf,.dgn,.rvt,.ifc,.ppt,.pptx,.msg,.eml,.xml,.jpg,.jpeg,.png,.tif,.tiff";
+  }
+
+  installAutomaticDocumentSourceUi();
+
   const els = {
     ldInput: $("#ld-input"),
     listInput: $("#list-input"),
@@ -488,6 +510,10 @@
     ignoredDetails: $("#ignored-details"),
     ignoredSummary: $("#ignored-summary"),
     ignoredList: $("#ignored-list"),
+    missingDetails: $("#missing-documents"),
+    missingCount: $("#missing-documents-count"),
+    missingList: $("#missing-documents-list"),
+    copyMissing: $("#copy-missing-documents"),
     sheetFilter: $("#sheet-filter"),
     analysisStamp: $("#analysis-stamp"),
     selectedCount: $("#selected-count"),
@@ -1187,7 +1213,8 @@
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
     return [currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
       `sigem:${currentSigemQuerySnapshot() || "sem-base"}`,
-      `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`].join("###");
+      `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`,
+      `central:${window.GrconAllocationRegistry?.signature() || "sem-base"}`].join("###");
   }
 
   function saveSmartAnalysisCache(signature) {
@@ -1204,6 +1231,7 @@
         analysisRecentDays: state.analysisRecentDays,
         analysisLdSignature: state.analysisLdSignature,
         analysisPlannedSnapshot: state.analysisPlannedSnapshot,
+        analysisAllocationSnapshot: state.analysisAllocationSnapshot,
         analysisSigemSnapshot: state.analysisSigemSnapshot,
         ldIntegrity: state.ldIntegrity,
       },
@@ -1339,11 +1367,11 @@
     els.ldMeta.textContent = state.ldFiles.length ? ldDisplayName() : "Selecionar arquivo";
     els.listMeta.textContent = state.textEntries.length
       ? state.listSummary
-        ? `${state.listSummary.total} por texto · ${state.listSummary.files} arquivo(s) físico(s)`
+        ? `${state.listSummary.total} por texto · ${state.listSummary.files} encontrado(s) · ${state.listSummary.missing || 0} ausente(s)`
         : `${state.textEntries.length} item(ns) por texto`
       : state.listFiles.length
         ? state.listSummary
-          ? `${state.listSummary.total} item(ns) lido(s) · ${state.listSummary.files} arquivo(s) físico(s)`
+          ? `${state.listSummary.total} item(ns) lido(s) · ${state.listSummary.files} encontrado(s) · ${state.listSummary.missing || 0} ausente(s)`
           : state.listFiles[0].name
         : "Excel ou texto";
     const packageLabel = fileLabel(state.packageFiles, "arquivo encontrado", "arquivos encontrados");
@@ -1351,14 +1379,25 @@
       ? `Processando ${state.packageCandidates.length} arquivo(s)...`
       : state.listSummary
       ? state.listSummary.files
-        ? `${state.listSummary.files} arquivo(s) da relação localizado(s)`
-        : "Sem arquivo físico · GRDT disponível pela relação"
+        ? `${state.listSummary.files} arquivo(s) da relação localizado(s)${state.listSummary.vaultFiles ? ` · ${state.listSummary.vaultFiles} recuperado(s) do Cofre` : ""}${state.listSummary.missing ? ` · ${state.listSummary.missing} ausente(s)` : ""}`
+        : state.listSummary.missing
+          ? `Nenhum arquivo solicitado localizado · ${state.listSummary.missing} ausente(s)`
+          : "Nenhum arquivo solicitado localizado"
       : state.ignoredFiles.length ? `${packageLabel} · ${state.ignoredFiles.length} ignorado(s)` : packageLabel;
     els.ignoredDetails.hidden = state.ignoredFiles.length === 0 || state.packageSelectionPending;
     els.ignoredSummary.textContent = `Ignorados: ${state.ignoredFiles.length}`;
     els.ignoredList.innerHTML = state.ignoredFiles.slice(0, 100).map((item) => (
       `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.reason)}</span></li>`
     )).join("");
+    if (els.missingDetails && els.missingCount && els.missingList) {
+      const missing = state.missingRequestedFiles || [];
+      els.missingDetails.hidden = missing.length === 0;
+      els.missingCount.textContent = missing.length.toLocaleString("pt-BR") + " documento(s)";
+      els.missingList.innerHTML = missing.slice(0, 250).map((item) => {
+        const code = item.document || item.fileName || item.raw || item.name || "Documento solicitado";
+        return `<li><code>${escapeHtml(code)}</code><span>${escapeHtml(item.reason || "Não localizado na pasta nem no Cofre.")}</span></li>`;
+      }).join("");
+    }
     const ldFile = state.ldFiles[0];
     const inspectedLdFiles = L ? state.ldFiles.filter((file) => L.inspectionFor(file)) : [];
     const readyLdFiles = L ? state.ldFiles.filter((file) => L.ready(file)) : state.ldFiles;
@@ -1389,7 +1428,7 @@
 
   function triageSettings() {
     state.recentDays = Math.max(1, Number(els.recentDays.value) || 30);
-    return { recentDays: state.recentDays, now: new Date(), conflictResolutions: state.conflictResolutions, sigemQueryContext: window.GrconSharedSigemQuery?.context() };
+    return { recentDays: state.recentDays, now: new Date(), conflictResolutions: state.conflictResolutions, sigemQueryContext: window.GrconSharedSigemQuery?.context(), contractContext: window.GrconCloud?.state?.contract || null };
   }
 
   function normalizeFileAccessError(error, file, context) {
@@ -1720,33 +1759,30 @@
 
   function selectPdfsFromList(entries) {
     const allFiles = state.packageFiles;
-    const pdfs = allFiles.filter((file) => extensionOf(file.name) === "pdf");
     const exactNames = new Map();
     const exactStems = new Map();
-    const byDocumentPdf = new Map();
     const byDocumentAll = new Map();
 
     function indexByDocument(file, target) {
       const inferredDocument = listDocumentName(file.name);
       const exact = C.exactDocumentMatch ? C.exactDocumentMatch(inferredDocument, state.index) : null;
       const matches = exact ? [exact] : C.matchDocuments(file.name, state.index);
-      // Só indexa quando a LD devolve UMA correspondência segura. Código
-      // parecido com dois documentos não entra por aproximação.
+      // Só indexa quando a LD devolve UMA correspondência segura. O lookup
+      // inicial usa apenas nome, extensão e caminho; nenhum conteúdo é aberto.
       if (matches.length !== 1) return;
       const documentKey = C.key(matches[0].document);
       if (!target.has(documentKey)) target.set(documentKey, []);
       target.get(documentKey).push(file);
     }
 
-    allFiles.forEach((file) => indexByDocument(file, byDocumentAll));
-    pdfs.forEach((file) => {
+    allFiles.forEach((file) => {
+      indexByDocument(file, byDocumentAll);
       const nameKey = C.norm(file.name);
-      const stemKey = C.norm(file.name.replace(/\.pdf$/i, ""));
+      const stemKey = C.norm(file.name.replace(/\.[^.]+$/i, ""));
       if (!exactNames.has(nameKey)) exactNames.set(nameKey, []);
       if (!exactStems.has(stemKey)) exactStems.set(stemKey, []);
       exactNames.get(nameKey).push(file);
       exactStems.get(stemKey).push(file);
-      indexByDocument(file, byDocumentPdf);
     });
 
     const selected = new Map();
@@ -1757,19 +1793,14 @@
 
     entries.forEach((entry) => {
       const n1710 = Boolean(C && C.isN1710Context && C.isN1710Context("", entry.document));
-      let candidates = [];
+      const baseName = listBaseName(entry.fileName || entry.raw);
+      let candidates = exactNames.get(C.norm(baseName)) || [];
 
-      if (n1710 && entry.document) {
-        // A relação identifica o documento lógico. Para N-1710, todos os
-        // arquivos físicos associados com segurança ao mesmo código devem
-        // acompanhar esse documento, independentemente da extensão.
+      if (!candidates.length && baseName && !/\.[^.]+$/i.test(baseName)) {
+        candidates = exactStems.get(C.norm(baseName)) || [];
+      }
+      if (!candidates.length && entry.document) {
         candidates = byDocumentAll.get(C.key(entry.document)) || [];
-      } else {
-        // Comportamento histórico das outras famílias: a relação seleciona PDF.
-        const baseName = listBaseName(entry.fileName || entry.raw);
-        candidates = exactNames.get(C.norm(baseName)) || [];
-        if (!candidates.length && !/\.pdf$/i.test(baseName)) candidates = exactStems.get(C.norm(baseName)) || [];
-        if (!candidates.length && entry.document) candidates = byDocumentPdf.get(C.key(entry.document)) || [];
       }
 
       const unique = [...new Map(candidates.map((file) => [listPhysicalKey(file), file])).values()];
@@ -1785,11 +1816,9 @@
       } else {
         missing.push({
           ...entry,
-          reason: n1710
-            ? `Nenhum arquivo físico associado com segurança ao código “${entry.document || entry.raw}” foi localizado na pasta.`
-            : unique.length > 1
-              ? `Mais de um PDF da pasta corresponde ao item “${entry.raw}”; informe o nome exato com a extensão na lista.`
-              : `O PDF “${entry.raw}” está na relação, mas não foi localizado na pasta selecionada.`,
+          reason: unique.length > 1
+            ? `Mais de um arquivo da pasta corresponde ao item “${entry.raw}”; informe a revisão ou o nome exato para selecionar com segurança.`
+            : `O documento “${entry.document || entry.raw}” foi solicitado, mas não foi localizado na pasta selecionada.`,
         });
       }
     });
@@ -1870,7 +1899,7 @@
       meta: `${row.document} · revisão ${row.revision || "—"}`,
     })));
     const previewPlan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
-    const previewGroups = previewPlan.errors.length ? [] : E.splitPlan(previewPlan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+    const previewGroups = previewPlan.errors.length ? [] : splitPostingPlan(previewPlan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
     const batchCount = Math.max(1, previewGroups.length || Math.ceil(items.length / currentEgrdtBatchLimit()));
     const sequences = suggestedEgrdtSequences(batchCount);
     const officialNumber = batchCount === 1
@@ -1964,7 +1993,7 @@
       return physicalOnly ? Boolean(row.files && row.files.length) : Boolean(rowOutputSources(row).length);
     }));
     const plan = E.createPlan(state.results, selection, { manualForceIndices: state.manualForceInclude });
-    const groups = plan.errors.length ? [] : E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+    const groups = plan.errors.length ? [] : splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
     const suggested = groups.length ? suggestedEgrdtSequences(groups.length) : [];
     return {
       valid: plan.errors.length === 0 && groups.length > 0,
@@ -1973,6 +2002,7 @@
       totalItems: plan.entries.length,
       limit: currentEgrdtBatchLimit(),
       batchMode: currentEgrdtBatchMode(),
+      postingMode: PostingFlow?.getMode() || "mixed",
       modeLabel: egrdtBatchModeLabel(currentEgrdtBatchMode()),
       count: groups.length,
       disciplineCount: new Set(plan.entries.map((entry) => C.norm(entry && entry.item && entry.item.discipline)).filter(Boolean)).size,
@@ -1986,6 +2016,9 @@
         discipline: group.discipline,
         disciplines: group.disciplines || [group.discipline].filter(Boolean),
         batchMode: group.batchMode || currentEgrdtBatchMode(),
+        postingMode: group.postingMode,
+        postingGroup: group.postingGroup,
+        postingCounts: group.postingCounts,
         disciplineBatchNumber: group.disciplineBatchNumber,
         disciplineBatchCount: group.disciplineBatchCount,
         suggested: suggested[index],
@@ -2285,6 +2318,7 @@
 
   async function analyzeLegacy() {
     await window.GrconSharedSigemQuery?.refresh();
+    await window.GrconAllocationRegistry?.refresh();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
     setBusy(true, "Analisando documentos");
     state.records = [];
@@ -2303,6 +2337,7 @@
     state.manualForceInclude.clear();
     state.drawerIndices = [];
     state.listIgnoredFiles = [];
+    state.missingRequestedFiles = [];
     state.listSummary = null;
     state.ldIntegrity = null;
     state.analysisAt = 0;
@@ -2335,6 +2370,7 @@
         state.history.push(...parsed.history);
       });
       state.records = window.GrconPlannedDocuments?.applyRecords(state.records) || state.records;
+      state.records = window.GrconAllocationRegistry?.applyRecords(state.records) || state.records;
       syncEgrdtSequenceFromLd(state.records, state.history);
       if (!state.records.length || (!state.history.length && !window.GrconSharedSigemQuery?.current()?.records.length)) {
         throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
@@ -2353,22 +2389,69 @@
         missingFromList = listSelection.missing;
         listSourceByPhysicalKey = listSelection.sourceByPhysicalKey;
         documentLookupByPhysicalKey = listSelection.documentLookupByPhysicalKey;
+
+        let vaultFiles = [];
+        if (missingFromList.length && window.GrconDocumentVault?.resolveMissingEntries) {
+          setProgress(33, `Buscando no Cofre os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
+          try {
+            const fallback = await window.GrconDocumentVault.resolveMissingEntries(missingFromList);
+            vaultFiles = fallback.files || [];
+            analysisFiles = analysisFiles.concat(vaultFiles);
+            missingFromList = fallback.missing || [];
+            (fallback.recovered || []).forEach(({ entry, files }) => {
+              (files || []).forEach((file) => {
+                const physicalKey = listPhysicalKey(file);
+                listSourceByPhysicalKey.set(physicalKey, [`${entry.sheetName} · linha ${entry.rowNumber} · Cofre`]);
+                if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
+              });
+            });
+          } catch (error) {
+            missingFromList = missingFromList.map((entry) => ({
+              ...entry,
+              reason: `${entry.reason} Busca automática no Cofre indisponível: ${error.message || "falha de consulta"}.`,
+            }));
+          }
+        }
+
+        const unrelatedLocal = state.listIgnoredFiles.filter((item) => item.reason === "fora da relação");
+        state.missingRequestedFiles = missingFromList.map((entry) => ({
+          ...entry,
+          name: entry.document || entry.fileName || entry.raw || "Documento solicitado",
+          reason: entry.reason || "Não localizado na pasta nem no Cofre.",
+        }));
+        state.listIgnoredFiles = unrelatedLocal;
+        state.listSummary = {
+          total: listEntries.length,
+          matched: Math.max(0, listEntries.length - missingFromList.length),
+          files: analysisFiles.length,
+          localFiles: listSelection.matchedFiles.length,
+          vaultFiles: vaultFiles.length,
+          missing: missingFromList.length,
+        };
+        state.ignoredFiles = [...state.ignoredFiles.filter((item) => item.reason !== "fora da relação"), ...unrelatedLocal];
+        updateInputMeta();
       }
 
-      const inputs = analysisFiles.map((file, index) => ({
-        id: `arquivo-${index + 1}`,
-        name: file.name,
-        relativePath: file.webkitRelativePath || file.name,
-        file,
-        hintedSheet: "",
-        documentSource: hasRelationSource() ? `${relationSourceLabel()} e nome do arquivo` : "nome do arquivo",
-        listSource: (listSourceByPhysicalKey.get(listPhysicalKey(file)) || []).join(" | "),
-        documentLookupHint: documentLookupByPhysicalKey.get(listPhysicalKey(file)) || null,
-      }));
-      if (!inputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta.");
+      const inputs = analysisFiles.map((file, index) => {
+        const vaultSource = window.GrconDocumentVault?.lookupSource?.(file) || null;
+        return {
+          id: `arquivo-${index + 1}`,
+          name: file.name,
+          relativePath: file.webkitRelativePath || file.name,
+          file,
+          hintedSheet: "",
+          documentSource: hasRelationSource() ? `${relationSourceLabel()} e nome do arquivo` : "nome do arquivo",
+          listSource: (listSourceByPhysicalKey.get(listPhysicalKey(file)) || []).join(" | "),
+          documentLookupHint: documentLookupByPhysicalKey.get(listPhysicalKey(file)) || null,
+          fileOrigin: vaultSource ? "Cofre" : "Pasta local",
+          vaultAllocationLabel: vaultSource?.allocationLabel || "",
+          vaultAllocationSource: vaultSource?.allocationSource || "",
+        };
+      });
+      if (!inputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta ou no Cofre.");
 
       const settings = triageSettings();
-      const totalTriageItems = inputs.length + missingFromList.length;
+      const totalTriageItems = inputs.length;
       let processedTriageItems = 0;
       const progressAnalysis = (done) => {
         processedTriageItems = done;
@@ -2377,6 +2460,15 @@
       };
       const rawResults = await mapLarge(inputs, (input) => {
         const result = C.triageOne(input, state.index, settings);
+        // A referência física precisa sobreviver à triagem em todos os caminhos
+        // (READY/REVIEW/guards). O merge e a emissão nunca devem depender de o
+        // Core repetir implicitamente propriedades do input.
+        result.file = input.file;
+        result.name = result.name || input.name;
+        result.relativePath = result.relativePath || input.relativePath;
+        result.fileOrigin = input.fileOrigin || "Pasta local";
+        result.vaultAllocationLabel = input.vaultAllocationLabel || "";
+        result.vaultAllocationSource = input.vaultAllocationSource || "";
         // O conteúdo binário dos PDFs não é aberto, lido ou validado. A revisão
         // e o nome final dependem exclusivamente da LD e do histórico SIGEM.
         if (result.egrdt && !result.egrdt.format) result.egrdt.format = "A4";
@@ -2393,34 +2485,10 @@
         throw new Error("A conferência de origem falhou: um resultado não corresponde aos arquivos selecionados nem às duplicatas registradas.");
       }
       if (missingFromList.length) {
-        const logicalResults = await mapLarge(missingFromList, (entry, index) => {
-          const listedName = /\.pdf$/i.test(entry.fileName || "")
-            ? entry.fileName
-            : `${entry.fileName || entry.document || entry.raw}.pdf`;
-          const input = {
-            id: `lista-ausente-${index + 1}`,
-            name: listedName,
-            relativePath: `${relationSourceLabel()} · ${entry.sheetName} · linha ${entry.rowNumber}`,
-            file: null,
-            document: entry.document,
-            hintedSheet: C.inferSheetFromName(entry.document || entry.raw),
-            documentSource: state.textEntries.length ? "Entrada por texto" : "lista Excel",
-            listSource: `${entry.sheetName} · linha ${entry.rowNumber}`,
-            documentLookupHint: entry.documentLookup || null,
-          };
-          const result = C.triageOne(input, state.index, settings);
-          result.virtualFileName = listedName;
-          result.listSource = input.listSource;
-          const warnings = [entry.reason];
-          if (result.egrdt && !result.egrdt.format) {
-            result.egrdt.format = "A4";
-            warnings.push("Como o PDF físico não foi fornecido, o formato foi preenchido como A4 e deve ser confirmado antes da postagem.");
-          }
-          result.documentRevisionWarning = warnings.join(" ");
-          return result;
-        }, (done) => progressAnalysis(inputs.length + done));
-        const mergedLogicalResults = mergePackageResults(logicalResults);
-        mergedLogicalResults.forEach((row) => state.results.push(row));
+        // Itens solicitados que não existem fisicamente na pasta nem puderam ser
+        // recuperados do Cofre permanecem somente no resumo de ausentes. Eles
+        // não entram na tabela de resultados, na GRDT nem no histórico.
+        setProgress(74, `${inputs.length.toLocaleString("pt-BR")} arquivo(s) físico(s) encontrado(s) · ${missingFromList.length.toLocaleString("pt-BR")} solicitado(s) ausente(s)`);
       }
       await forEachLarge(state.results, (row, index) => {
         row._resultIndex = index;
@@ -2456,6 +2524,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisAllocationSnapshot = window.GrconAllocationRegistry?.current()?.id || "";
       state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) lida(s) nesta análise · até ${validUntil}`;
@@ -2473,7 +2542,8 @@
       focarResultados();
       const counts = C.resultCounts(state.results);
       const ignored = state.ignoredFiles.length ? ` · ${state.ignoredFiles.length} arquivo(s) ignorado(s)` : "";
-      showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar${ignored}.`, counts.revisar || counts.bloqueado ? "warn" : "success");
+      const missingNotice = missingFromList.length ? ` · ${missingFromList.length} solicitado(s) não localizado(s)` : "";
+      showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar${ignored}${missingNotice}.`, counts.revisar || counts.bloqueado || missingFromList.length ? "warn" : "success");
       window.setTimeout(() => { els.progress.hidden = true; }, 900);
     } catch (error) {
       console.error(error);
@@ -2505,6 +2575,8 @@
     // A reação começa no próprio clique, inclusive enquanto o motor sob demanda
     // ainda está sendo carregado ou quando a resposta virá do cache.
     pulseMascotProcessing();
+    try { await ensureRuntime("compliance"); }
+    catch (error) { showToast(`Não foi possível preparar a conformidade documental: ${error.message || error}. Tente novamente.`, "error"); return; }
     try { await ensureRuntime("performance"); } catch (_) { console.debug("[App] ensureRuntime performance:", _); /* usa compatibilidade */ }
     if (window.GrconCloud?.state?.membership) {
       try { await window.GrconPlannedDocuments.refresh(); }
@@ -2517,6 +2589,7 @@
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
 
     await window.GrconSharedSigemQuery?.refresh();
+    await window.GrconAllocationRegistry?.refresh();
     const analysisSignature = currentAnalysisSignature();
     if (restoreSmartAnalysisCache(analysisSignature)) {
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -2551,6 +2624,7 @@
     state.manualForceInclude.clear();
     state.drawerIndices = [];
     state.listIgnoredFiles = [];
+    state.missingRequestedFiles = [];
     state.listSummary = null;
     state.ldIntegrity = null;
     state.analysisAt = 0;
@@ -2593,6 +2667,7 @@
       if (!state.ldIntegrity.valid) throw new Error(`A integridade da LD foi reprovada: ${state.ldIntegrity.issues.join("; ")}.`);
       state.records = window.GrconPlannedDocuments?.applyRecords(loadedLds.flatMap((item) => item.parsed.records))
         || loadedLds.flatMap((item) => item.parsed.records);
+      state.records = window.GrconAllocationRegistry?.applyRecords(state.records) || state.records;
       state.history = loadedLds.flatMap((item) => item.parsed.history);
       state.index = C.buildIndex(state.records, state.history);
       if (!state.records.length || (!state.history.length && !window.GrconSharedSigemQuery?.current()?.records.length)) throw new Error("A LD precisa conter ao menos uma aba técnica e uma base de status do SIGEM.");
@@ -2607,6 +2682,8 @@
       let missingFromList = [];
       let listSourceByPhysicalKey = new Map();
       let documentLookupByPhysicalKey = new Map();
+      let vaultFiles = [];
+      let vaultLookupError = null;
       if (hasRelationSource()) {
         const listEntries = await currentRelationEntries();
         const listSelection = selectPdfsFromList(listEntries);
@@ -2614,13 +2691,64 @@
         missingFromList = listSelection.missing;
         listSourceByPhysicalKey = listSelection.sourceByPhysicalKey;
         documentLookupByPhysicalKey = listSelection.documentLookupByPhysicalKey;
+
+        // A relação é o filtro absoluto. Pasta local é apenas a primeira fonte;
+        // todo item solicitado que faltar nela é resolvido automaticamente no Cofre.
+        if (missingFromList.length && window.GrconDocumentVault?.resolveMissingEntries) {
+          setProgress(33, `Buscando no Cofre os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
+          try {
+            const fallback = await window.GrconDocumentVault.resolveMissingEntries(missingFromList);
+            vaultFiles = fallback.files || [];
+            analysisFiles = analysisFiles.concat(vaultFiles);
+            missingFromList = fallback.missing || [];
+            (fallback.recovered || []).forEach(({ entry, files }) => {
+              (files || []).forEach((file) => {
+                const physicalKey = listPhysicalKey(file);
+                listSourceByPhysicalKey.set(physicalKey, [`${entry.sheetName} · linha ${entry.rowNumber} · Cofre`]);
+                if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
+              });
+            });
+          } catch (error) {
+            vaultLookupError = error;
+            missingFromList = missingFromList.map((entry) => ({
+              ...entry,
+              reason: `Não foi possível consultar o Cofre: ${error.message || "falha de consulta"}. O documento não foi classificado como inexistente.`,
+              lookupFailed: true,
+            }));
+          }
+        }
+
+        const unrelatedLocal = state.listIgnoredFiles.filter((item) => item.reason === "fora da relação");
+        state.missingRequestedFiles = missingFromList.map((entry) => ({
+          ...entry,
+          name: entry.document || entry.fileName || entry.raw || "Documento solicitado",
+          reason: entry.reason || (state.packageFiles.length ? "Não localizado na pasta nem no Cofre." : "Não localizado no Cofre."),
+        }));
+        state.listIgnoredFiles = unrelatedLocal;
+        state.listSummary = {
+          total: listEntries.length,
+          matched: Math.max(0, listEntries.length - missingFromList.length),
+          files: analysisFiles.length,
+          localFiles: listSelection.matchedFiles.length,
+          vaultFiles: vaultFiles.length,
+          missing: missingFromList.length,
+          vaultLookupFailed: Boolean(vaultLookupError),
+        };
+        state.ignoredFiles = [...state.ignoredFiles.filter((item) => item.reason !== "fora da relação"), ...unrelatedLocal];
+        updateInputMeta();
       }
 
       const physicalById = new Map();
-      const logicalMeta = new Map();
+      const physicalMetaById = new Map();
       const workerInputs = analysisFiles.map((file, index) => {
         const id = `arquivo-${index + 1}`;
+        const vaultSource = window.GrconDocumentVault?.lookupSource?.(file) || null;
         physicalById.set(id, file);
+        physicalMetaById.set(id, {
+          fileOrigin: vaultSource ? "Cofre" : "Pasta local",
+          vaultAllocationLabel: vaultSource?.allocationLabel || "",
+          vaultAllocationSource: vaultSource?.allocationSource || "",
+        });
         return {
           id,
           name: file.name,
@@ -2632,45 +2760,29 @@
           documentLookupHint: documentLookupByPhysicalKey.get(listPhysicalKey(file)) || null,
         };
       });
-      missingFromList.forEach((entry, index) => {
-        const id = `lista-ausente-${index + 1}`;
-        const listedName = /\.pdf$/i.test(entry.fileName || "") ? entry.fileName : `${entry.fileName || entry.document || entry.raw}.pdf`;
-        workerInputs.push({
-          id,
-          name: listedName,
-          relativePath: `${relationSourceLabel()} · ${entry.sheetName} · linha ${entry.rowNumber}`,
-          file: null,
-          document: entry.document,
-          hintedSheet: C.inferSheetFromName(entry.document || entry.raw),
-          documentSource: state.textEntries.length ? "Entrada por texto" : "lista Excel",
-          listSource: `${entry.sheetName} · linha ${entry.rowNumber}`,
-          documentLookupHint: entry.documentLookup || null,
-        });
-        logicalMeta.set(id, { listedName, reason: entry.reason, listSource: `${entry.sheetName} · linha ${entry.rowNumber}` });
-      });
-      if (!workerInputs.length) throw new Error("Nenhum documento válido foi encontrado na entrada.");
+      // Ausentes nunca viram linhas virtuais. Eles permanecem apenas no painel
+      // "Documentos não encontrados" e não entram na triagem, GRDT ou histórico.
+      if (!workerInputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta ou no Cofre.");
 
       const settings = triageSettings();
-      await PerformanceCore.initializeTriage(state.index, [], settings, workerProgress("Preparando triagem"));
-      const rawResults = await PerformanceCore.triage(workerInputs, settings, workerProgress("Triagem"));
+      let rawResults = [];
+      if (workerInputs.length) {
+        await PerformanceCore.initializeTriage(state.index, [], settings, workerProgress("Preparando triagem"));
+        rawResults = await PerformanceCore.triage(workerInputs, settings, workerProgress("Triagem"));
+      }
       rawResults.forEach((result) => {
         const physical = physicalById.get(result.id);
         if (physical) result.file = physical;
-        // O Worker aplica as regras da LD, mas não abre o conteúdo binário do
-        // PDF para inferir o tamanho da folha. Preserve o mesmo padrão seguro
-        // do fluxo legado quando a LD não possuir a coluna FORMATO.
+        const physicalMeta = physicalMetaById.get(result.id);
+        if (physicalMeta) {
+          result.fileOrigin = physicalMeta.fileOrigin;
+          result.vaultAllocationLabel = physicalMeta.vaultAllocationLabel;
+          result.vaultAllocationSource = physicalMeta.vaultAllocationSource;
+        }
+        // O Worker aplica as regras da LD, mas não abre o conteúdo binário para
+        // inferir o tamanho da folha. Preserve o mesmo padrão seguro do fluxo legado.
         const formatDefaulted = Boolean(result.egrdt && !result.egrdt.format);
         if (formatDefaulted) result.egrdt.format = "A4";
-        const logical = logicalMeta.get(result.id);
-        if (logical) {
-          result.virtualFileName = logical.listedName;
-          result.listSource = logical.listSource;
-          const warnings = [logical.reason].filter(Boolean);
-          if (formatDefaulted) {
-            warnings.push("Como o PDF físico não foi fornecido, o formato foi preenchido como A4 e deve ser confirmado antes da postagem.");
-          }
-          result.documentRevisionWarning = warnings.join(" ");
-        }
       });
 
       state.results = mergePackageResults(rawResults);
@@ -2680,6 +2792,9 @@
       const physicalCount = state.results.reduce((total, row) => total + (row.files || []).length, 0);
       const logicalDuplicateCount = state.results.reduce((total, row) => total + (row.duplicateFiles || []).length, 0);
       if (physicalCount + logicalDuplicateCount !== analysisFiles.length) throw new Error("A conferência de origem falhou: a quantidade de arquivos físicos e duplicatas registradas não confere.");
+      if (missingFromList.length) {
+        setProgress(74, `${analysisFiles.length.toLocaleString("pt-BR")} arquivo(s) físico(s) encontrado(s) · ${missingFromList.length.toLocaleString("pt-BR")} solicitado(s) ausente(s)`);
+      }
 
       refreshPendingAllocationBundle();
       state.selected.clear();
@@ -2695,6 +2810,7 @@
       state.analysisRecentDays = state.recentDays;
       state.analysisLdSignature = currentLdSignature();
       state.analysisPlannedSnapshot = window.GrconPlannedDocuments?.current()?.id || "";
+      state.analysisAllocationSnapshot = window.GrconAllocationRegistry?.current()?.id || "";
       state.analysisSigemSnapshot = currentSigemQuerySnapshot();
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
       els.analysisStamp.textContent = `${state.ldFiles.length} LD(s) preparadas · válidas até ${validUntil}`;
@@ -2779,6 +2895,11 @@
     }
     if (currentSigemQuerySnapshot() !== state.analysisSigemSnapshot) {
       showToast("A Consulta Geral SIGEM foi atualizada após esta análise. Analise novamente antes de gerar a GRDT.", "error");
+      return false;
+    }
+    await window.GrconAllocationRegistry?.refresh();
+    if ((window.GrconAllocationRegistry?.current()?.id || "") !== state.analysisAllocationSnapshot) {
+      showToast("A Central de alocação foi atualizada. Analise novamente para usar os vínculos e status atuais.", "warn");
       return false;
     }
     refreshSelectedSigemStatuses();
@@ -3150,12 +3271,13 @@
   function filteredResultIndices() {
     const columnFilters = activeColumnFilters();
     const columnSignature = columnFilters.map(([keyName, values]) => `${keyName}:${[...values].sort().join(",")}`).join("|");
-    const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${C.norm(state.search)}|${columnSignature}|group:${state.groupByStatus ? "1" : "0"}`;
+    const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${C.norm(state.search)}|${columnSignature}|group:${state.groupByStatus ? "1" : "0"}|posting:${PostingFlow?.signature() || ""}`;
     if (state.filteredCache && state.filteredCache.signature === signature) return state.filteredCache.indices;
     const indices = [];
     for (let index = 0; index < state.results.length; index += 1) {
       const row = state.results[index];
       if (!rowPassesBaseFilters(row)) continue;
+      if (PostingFlow && !PostingFlow.matches(row)) continue;
       if (!rowPassesColumnFilters(row, null, columnFilters)) continue;
       indices.push(index);
     }
@@ -3621,7 +3743,14 @@
     }).join("")}</div>`;
   }
 
+  function renderFileOrigin(row) {
+    const origin = row && row.fileOrigin || (String(row && row.listSource || "").includes("Cofre") ? "Cofre" : "Pasta local");
+    const allocation = origin === "Cofre" && row && row.vaultAllocationLabel ? ` · Alocação: ${row.vaultAllocationLabel}` : "";
+    return `<span class="result-file-origin">Origem: ${escapeHtml(origin + allocation)}</span>`;
+  }
+
   function renderTable() {
+    window.GrconDocumentaryComplianceUi?.render(state.results);
     const virtualInfo = virtualResults();
     const rows = virtualInfo.visibleIndices.map((index, offset) => ({
       row: state.results[index],
@@ -3687,12 +3816,12 @@
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
           <span class="status-chip ${resultClass}">${compactDecisionLabel(row)}</span>
         </div></td>
-        <td>${renderRowFileList(row, false)}</td>
-        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
+        <td>${renderRowFileList(row, false)}${renderFileOrigin(row)}</td>
+        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.tagged)}</span></td>
-        <td><span class="sheet-badge">${escapeHtml(row.sheet || "—")}</span></td>
+        <td><span class="sheet-badge document-class-badge" data-document-class="${escapeHtml(row.sheet === "ET" || row.sheet === "N-1710" ? row.sheet : "")}">${escapeHtml(row.sheet || "—")}</span></td>
         <td><span class="revision-value" title="Revisão encontrada na LD">${escapeHtml(ldRevision)}</span></td>
         <td class="revision-grdt-cell">
           <input class="revision-grdt-input" data-revision-input data-index="${index}" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="8" value="${escapeHtml(row.revision || "")}" aria-label="Revisão do documento ${escapeHtml(row.document)} nesta GRDT" title="Revisão deste documento na GRDT · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">
@@ -3710,7 +3839,7 @@
         <td><span class="sigem-status" title="${escapeHtml(`${row.status} · Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || 'LD / Colar SIGEM'}`)}">${escapeHtml(row.status || "—")}</span></td>
         <td><span class="posting-evidence ${row.postingEvidence && row.postingEvidence.complete ? "posted" : row.postingEvidence && row.postingEvidence.partial ? "review" : "none"}" title="${escapeHtml(row.postingEvidence && row.postingEvidence.explanation || "")}">${escapeHtml(row.postingStatus || (row.postingEvidence && row.postingEvidence.status) || "Sem evidência na LD")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(fiscalComment)}">${escapeHtml(fiscalComment)}</span></td>
-        <td><span class="text-cell">${escapeHtml(allocation)}</span></td>
+        <td><span class="text-cell">${escapeHtml(allocation)}</span>${window.GrconAllocationRegistry?.badge(row.document) || ""}</td>
         <td><span class="text-cell" title="${escapeHtml(allocationStage)}">${escapeHtml(allocationStage)}</span></td>
         <td><span class="allocation-state ${allocationClass}" title="${escapeHtml(conflitoAlocacao ? row.allocationFinding.source || "" : "")}">${escapeHtml(allocationStatus)}</span></td>
         <td><span class="text-cell" title="${escapeHtml(databook)}">${escapeHtml(databook)}</span></td>
@@ -3880,6 +4009,7 @@
         state.manualForceInclude.delete(index);
       }
     });
+    if (PostingFlow) PostingFlow.render(state.results, state.selected);
     renderSummary();
     renderSheetFilter();
     renderTable();
@@ -3937,7 +4067,7 @@
     els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
     const selectedItemCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + amount, 0);
-    const selectedBatchCount = currentEgrdtBatchMode() === "limit-only"
+    const selectedBatchCount = PostingFlow ? splitPostingPlan(E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude }), currentEgrdtBatchLimit(), currentEgrdtBatchMode()).length : currentEgrdtBatchMode() === "limit-only"
       ? Math.ceil(selectedItemCount / currentEgrdtBatchLimit())
       : [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
     const selectedDisciplineCount = selectedItemsByDiscipline.size;
@@ -3958,6 +4088,7 @@
     state.packageFiles = [];
     state.ignoredFiles = [];
     state.listIgnoredFiles = [];
+    state.missingRequestedFiles = [];
     state.listSummary = null;
     state.records = [];
     state.history = [];
@@ -4022,6 +4153,7 @@
     state.expanded.clear();
     state.manualEgrdtSequences = [];
     state.listIgnoredFiles = [];
+    state.missingRequestedFiles = [];
     state.listSummary = null;
     state.ldIntegrity = null;
     state.analysisAt = 0;
@@ -4062,7 +4194,7 @@
         fiscalComment: row.fiscalComment || record.fiscalComment,
         includedInEgrdt: manuallyIncluded(row) ? "SIM — MANUAL; LD NÃO ALOCADO" : row.hardBlock ? "NÃO — DESMARCADO POR PADRÃO" : row.decision === C.READY ? "SIM — AUTOMÁTICO" : "SIM — SE SELECIONADO APÓS CONFERÊNCIA",
         databook: record.databook || "",
-        inputSource: row.listSource || row.relativePath || row.name || "",
+        inputSource: [row.fileOrigin, row.listSource || row.relativePath || row.name || ""].filter(Boolean).join(" · "),
         packageWarning: [row.packageWarning, row.documentRevisionWarning, row.codeValidationWarning].filter(Boolean).join(" | "),
         virtual: !(row.files || []).length,
       };
@@ -4195,6 +4327,8 @@
         "PESQUISA COM/SEM nt- E TAG NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
+        "ORIGEM DO ARQUIVO": row.fileOrigin || (String(row.listSource || "").includes("Cofre") ? "Cofre" : "Pasta local"),
+        "ALOCAÇÃO INFORMADA PELO COFRE": row.vaultAllocationLabel || "",
         "TÍTULO": row.record && row.record.title || "",
         "ABA LD": row.sheet,
         "REVISÃO": row.record && row.record.revision || "",
@@ -4600,7 +4734,8 @@
       const row = state.results[index];
       if (row && row.egrdt && C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
     });
-    return E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
+    const plan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
+    return PostingFlow ? PostingFlow.classifyPlan(plan) : plan;
   }
 
   function previewEgrdtRows() {
@@ -4643,6 +4778,9 @@
       endIndex: group.endIndex,
       limit: group.limit,
       batchMode: group.batchMode,
+      postingMode: group.postingMode,
+      postingGroup: group.postingGroup,
+      postingCounts: group.postingCounts,
       discipline: group.discipline,
       disciplines: group.disciplines,
       disciplineBatchNumber: group.disciplineBatchNumber,
@@ -4660,6 +4798,8 @@
         finalName: entry.finalName,
         virtual: Boolean(entry.virtual),
         manualAllocationOverride: Boolean(entry.manualAllocationOverride),
+        historyClassification: entry.historyClassification,
+        sharedAllocationContext: entry.sharedAllocationContext,
         item: { ...(entry.item || {}) },
         file: includeFiles ? entry.file : null,
       })),
@@ -4700,6 +4840,7 @@
   async function exportEgrdt() {
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
+    if (PostingFlow) await PostingFlow.refresh(true);
     const prepared = buildEgrdtItems();
     if (prepared.errors.length) {
       showToast(`GRDT bloqueada: ${prepared.errors.slice(0, 3).join(" ")}`, "error");
@@ -4713,7 +4854,8 @@
     try {
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(prepared, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+      await window.GrconDocumentVault?.persistEmissionFiles?.(prepared);
+      const groups = splitPostingPlan(prepared, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = previewGenerated.length === 1 ? previewGenerated[0].fileName : PackageLayout.archiveName(previewGenerated, timestamp);
@@ -4804,6 +4946,7 @@
   async function exportZip() {
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
+    if (PostingFlow) await PostingFlow.refresh(true);
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
@@ -4827,7 +4970,8 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+      await window.GrconDocumentVault?.persistEmissionFiles?.(plan);
+      const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
@@ -4877,6 +5021,7 @@
     const lines = [
       "GRCON — ORGANIZAÇÃO DOS LOTES PARA POSTAGEM NO SIGEM",
       `Modo de distribuição: ${egrdtBatchModeLabel(currentEgrdtBatchMode())}.`,
+      `Postagem/repostagem: ${PostingFlow?.getMode() === "separate" ? "Separadas" : "Permitidas na mesma GRDT"}.`,
       `Limite configurado pelo usuário: ${currentEgrdtBatchLimit()} documentos por eGRDT.`,
       `Total de eGRDTs: ${generated.length}.`,
       "",
@@ -4917,6 +5062,7 @@
   async function exportFinalPackage() {
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
+    if (PostingFlow) await PostingFlow.refresh(true);
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
@@ -4940,7 +5086,8 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const groups = E.splitPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
+      await window.GrconDocumentVault?.persistEmissionFiles?.(plan);
+      const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
@@ -5117,6 +5264,19 @@
   });
   els.analyze.addEventListener("click", analyze);
   els.reset.addEventListener("click", reset);
+  if (els.copyMissing) els.copyMissing.addEventListener("click", async () => {
+    const codes = (state.missingRequestedFiles || [])
+      .map((item) => item.document || item.fileName || item.raw || item.name || "")
+      .filter(Boolean)
+      .join("\n");
+    if (!codes) return;
+    try {
+      await navigator.clipboard.writeText(codes);
+      showToast("Códigos não encontrados copiados.", "success");
+    } catch (_) {
+      showToast("Não foi possível copiar automaticamente. Selecione os códigos da lista.", "warn");
+    }
+  });
 
   // ─── Limpar fontes individuais ──────────────────────────────────────────────
   if (els.clearLdBtn) {
@@ -5138,6 +5298,7 @@
       state.packageFiles = [];
       state.ignoredFiles = [];
       state.listIgnoredFiles = [];
+      state.missingRequestedFiles = [];
       state.listSummary = null;
       state.packageSelectionPending = false;
       state.packageSelectionReady = false;
@@ -5158,6 +5319,7 @@
       state.relationPreview = { entries: [], duplicates: [], ignored: [] };
       state.listSummary = null;
       state.listIgnoredFiles = [];
+      state.missingRequestedFiles = [];
       els.listInput.value = "";
       if (window.Workspace) window.Workspace.clearDraft("grdtRelation");
       invalidateAnalysisResults();
@@ -5235,7 +5397,7 @@
       }
       return;
     }
-    if (event.target.closest("input, button, select, a")) return;
+    if (event.target.closest("input, button, select, a, .posting-history-detail")) return;
     if (event.target.closest(".result-row")) {
       if (state.expanded.has(index)) state.expanded.delete(index);
       else state.expanded.add(index);
@@ -5407,6 +5569,8 @@
     state.virtual.rowHeight = state.resultDensity === "compact" ? 56 : state.groupByStatus ? 88 : 68;
     return state.virtual.rowHeight;
   }
+
+  window.addEventListener("grcon:posting-classification-updated", () => { if (!state.busy) renderAll(); });
 
   window.GrconTriageUiApi = Object.freeze({
     snapshot: () => ({

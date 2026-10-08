@@ -156,11 +156,16 @@ async function openReissue(page) {
   assert.equal(await topLevelReissue.count(), 0, "Repostagem deve existir somente dentro de Ferramentas adicionais");
   await clickVisibleView(page, "additional-tools");
   await page.locator("#additional-tools-module").waitFor({ state: "visible", timeout: 10000 });
-  const reissueCard = page.locator('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]');
-  await reissueCard.waitFor({ state: "visible", timeout: 10000 });
-  await reissueCard.click();
+  assert.equal(
+    await page.locator('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]').count(),
+    0,
+    "Repostagem antiga não deve permanecer como fluxo paralelo visível"
+  );
+  // O módulo legado continua carregável somente para QA de compatibilidade dos
+  // dados antigos; o usuário operacional usa exclusivamente Fazer GRDT.
   await page.evaluate(async () => {
     if (window.GRCONModuleLoader?.ensureModule) await window.GRCONModuleLoader.ensureModule("grdt-reissue");
+    document.querySelectorAll("main.workspace > section").forEach((section) => { section.hidden = section.id !== "grdt-reissue-module"; });
   });
   await page.locator("#grdt-reissue-module").waitFor({ state: "visible", timeout: 30000 });
   await page.waitForFunction(() => Boolean(window.GrconGrdtReissueUi && window.GrconGrdtReissueCore && window.GrconHistory));
@@ -241,6 +246,11 @@ async function lookup(page, count) {
     assert.equal(interaction.focusPreserved, true, "edição incremental não pode substituir o input focado");
     assert.equal(interaction.afterScroll, interaction.beforeScroll, "edição não pode resetar a rolagem da tabela");
     assert.equal(interaction.revision, "C");
+    assert.ok(await page.locator('.grdt-reissue-compliance').count() > 0, 'Repostagem apresenta conformidade antes da geração');
+    const compliance = page.locator('[data-reissue-row="0"] .grdt-reissue-compliance');
+    await compliance.locator('summary').click();
+    assert.match(await compliance.innerText(), /n1710.group4.class.catalog/);
+    await compliance.locator('summary').click();
     assert.match(interaction.fileName, /_C\.pdf$/i, "arquivo deve acompanhar a revisão");
     assert.equal(interaction.purposeInvalid, "true");
     assert.match(interaction.purposeError, /PROPÓSITO fora da lista oficial/i);

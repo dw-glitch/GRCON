@@ -410,3 +410,17 @@
 @media(prefers-reduced-motion:reduce){
   .pc-document-table .pc-send-history>summary::before{transition:none}
 }
+
+.pc-date-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.pc-date-controls label { display: grid; gap: 6px; }
+.pc-date-controls input[type="date"] { width: 190px; max-width: 100%; }
+.pc-date-controls small { align-self: center; }
+#pc-pending-grdts { margin: 12px; }
+
+/* Legibilidade documental: o fallback de --heading é escuro; não o reutilizar
+   para códigos e contagens na Conferência quando o tema escuro estiver ativo. */
+body.p2-dark .pc-document-table .pc-document-code > strong,
+body.p2-dark .pc-document-table .pc-send-count > strong,
+body.p2-dark .pc-document-table .pc-cell-confirmation > strong {
+  color: var(--ops-ink, #e7eef4);
+}

@@ -63,6 +63,69 @@ assert.ok(!result.lists.all.some((row) => row.document.includes("999-C1O-999")),
 assert.strictEqual(Core.aggregateModel(model, { documentClass: "ET" }).summary.sigem, 1);
 assert.throws(() => Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0"), /campo\(s\) obrigatório\(s\)/i);
 
+(function dashboardRevisionScopesAreExplicitAndAuditable() {
+  const doc = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
+  const sigemRows = [
+    { document: doc("300001"), revision: "0", status: "Postado" },
+    { document: doc("300001"), revision: "A", status: "Postado" },
+    { document: doc("300001"), revision: "B", status: "Postado" },
+    { document: doc("300002"), revision: 0, status: "Postado" },
+    { document: doc("300002"), revision: "A", status: "Postado" },
+    { document: doc("300003"), revision: "0", status: "Postado" },
+    { document: doc("300003"), revision: "0", status: "Postado", sourceRow: 99 },
+  ];
+  const pwRows = [
+    { document: doc("300001"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
+    { document: doc("300001"), revision: "A", state: "Liberado", lastEmission: "Sim" },
+    { document: doc("300002"), revision: "0", state: "Liberado", lastEmission: "Sim" },
+    { document: doc("300004"), revision: "0", state: "Cadastrado", lastEmission: "Previsto" },
+    { document: doc("300004"), revision: "B", state: "Liberado", lastEmission: "Sim" },
+  ];
+  const scopedModel = Core.createModel(sigemRows, pwRows);
+  const revision0 = Core.aggregateModel(scopedModel, {}, { revisionScope: "revision0" });
+  const allRevisions = Core.aggregateModel(scopedModel, {}, { revisionScope: "all" });
+
+  assert.equal(Core.normalizeRevisionScope("revision0"), "revision0");
+  assert.equal(Core.normalizeRevisionScope("anything-else"), "all");
+  assert.equal(Core.revisionKey("00"), "00", "revisão 00 não pode ser convertida em 0");
+  assert.equal(revision0.revisionScope, "revision0");
+  assert.equal(revision0.summary.sigem, 3, "Rev. 0 deve deduplicar documento + revisão equivalentes");
+  assert.equal(revision0.summary.pwRegistered, 3);
+  assert.equal(revision0.summary.matched, 2);
+  assert.equal(revision0.summary.sigemOnly, 1);
+  assert.equal(revision0.summary.pwOnlyNotEmitted, 1);
+  assert.ok(revision0.lists.all.every((row) => row.revision === "0"), "detalhamento Rev. 0 deve conter somente revisão 0");
+
+  assert.equal(allRevisions.revisionScope, "all");
+  assert.equal(allRevisions.summary.sigem, 6, "0/A/B do mesmo documento são ocorrências independentes");
+  assert.equal(allRevisions.summary.pwRegistered, 5);
+  assert.equal(allRevisions.lists.all.length, allRevisions.summary.classifiedTotal, "KPI deve ser reproduzível pela lista detalhada");
+  assert.equal(new Set(allRevisions.lists.all.map((row) => row.key)).size, allRevisions.lists.all.length, "não pode haver duplicidade na relação");
+})();
+
+(function dashboardRevisionScopesHandleOperationalVolume() {
+  const count = 20000;
+  const sigemRows = Array.from({ length: count }, (_, index) => ({
+    document: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${String(500000 + index).padStart(6, "0")}`,
+    revision: "0",
+    status: "Postado",
+  }));
+  const pwRows = sigemRows.map((row) => ({ document: row.document, revision: "0", state: "Cadastrado", lastEmission: "Previsto" }));
+  for (let index = 0; index < 500; index += 1) {
+    sigemRows.push({ ...sigemRows[index], revision: "A" });
+    pwRows.push({ ...pwRows[index], revision: "A", lastEmission: "Sim" });
+  }
+  const started = Date.now();
+  const volumeModel = Core.createModel(sigemRows, pwRows);
+  const revision0 = Core.aggregateModel(volumeModel, {}, { revisionScope: "revision0" });
+  const allRevisions = Core.aggregateModel(volumeModel, {}, { revisionScope: "all" });
+  assert.equal(revision0.summary.sigem, count);
+  assert.equal(revision0.summary.pwRegistered, count);
+  assert.equal(allRevisions.summary.sigem, count + 500);
+  assert.equal(allRevisions.summary.pwRegistered, count + 500);
+  assert.ok(Date.now() - started < 10000, "escopos do Dashboard devem permanecer operacionais acima de 20 mil registros");
+})();
+
 (function exclusiveOperationalSituationsAreReliable() {
   const et = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
   const sigemRows = ["000001", "000002", "000003"].map((id) => ({ document: et(id), revision: "0", status: "Postado" }));

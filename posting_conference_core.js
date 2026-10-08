@@ -293,7 +293,7 @@
 
   function flattenHistory(records) {
     const result = [];
-    const seen = new Set();
+    const seen = new Map();
     (records || []).forEach((rawRecord) => {
       const record = History && typeof History.cleanRecord === "function" ? History.cleanRecord(rawRecord) : rawRecord || {};
       const stableId = historyStableId(record);
@@ -303,14 +303,27 @@
         if (!document) return;
         const identity = documentIdentity(document);
         const rowKey = `${stableId}|${identity}|${revision}`;
-        if (seen.has(rowKey)) return;
-        seen.add(rowKey);
-        result.push({
+        const purpose = text(file && file.purpose);
+        if (seen.has(rowKey)) {
+          // Mesmo envio/revisão com propósitos diferentes não tem evidência inequívoca.
+          const previous = seen.get(rowKey);
+          if (purpose && previous.purpose && norm(purpose) !== norm(previous.purpose)) {
+            previous.purpose = "";
+            previous.purposeAmbiguous = true;
+          } else if (!previous.purpose && !previous.purposeAmbiguous) {
+            previous.purpose = purpose;
+          }
+          return;
+        }
+        const event = {
           key: rowKey,
+          purpose,
           historyId: stableId,
           historyRecordId: text(record.id),
           egrdtNumber: text(record.egrdtNumber),
           generatedAt: text(record.generatedAt),
+          workspaceId: text(record.workspaceId),
+          title: text(file && file.title),
           document: displayDocument(document),
           documentIdentity: identity,
           searchKeys: documentKeys(document),
@@ -320,7 +333,9 @@
           sheet: text(file && file.sheet),
           sourceName: text(record.sourceName),
           ldName: text(record.ldName),
-        });
+        };
+        seen.set(rowKey, event);
+        result.push(event);
       });
     });
     return result;
@@ -486,16 +501,25 @@
       resolved = resolvePostingEvidence(historyRow, matched);
       if (!resolved) {
         const age = hoursSince(historyRow.generatedAt, now);
+        // A geração da eGRDT não comprova a data da postagem. Uma base mais
+        // antiga que a emissão nunca prova ausência na data do envio.
+        const referenceAt = parseSourceDate(options && options.baseReferenceDate);
+        const emittedAt = parseSourceDate(historyRow.generatedAt);
+        const basePrecedesEvent = Number.isFinite(referenceAt) && Number.isFinite(emittedAt)
+          && referenceAt + 86400000 <= emittedAt;
         resolved = {
-          status: age <= waitHours ? STATUSES.AWAITING : STATUSES.NOT_FOUND,
+          status: basePrecedesEvent ? STATUSES.NOT_VERIFIED
+            : age <= waitHours ? STATUSES.AWAITING : STATUSES.NOT_FOUND,
           revisionFound: "",
           revisionsFound: [],
           currentEvidence: false,
           ambiguity: false,
           evidence: null,
-          note: age <= waitHours
-            ? `Ainda não confirmado na Consulta Geral. A eGRDT tem menos de ${waitHours} hora(s); a ausência não é tratada como falha.`
-            : "Código não localizado na Consulta Geral atual. A ausência é uma pendência de confirmação e, isoladamente, não prova que a postagem não ocorreu.",
+          note: basePrecedesEvent
+            ? "Consulta Geral anterior à data de geração da eGRDT; esta base não permite verificar a ausência. Solicite uma Consulta Geral mais recente."
+            : age <= waitHours
+              ? `Ainda não confirmado na Consulta Geral. A eGRDT tem menos de ${waitHours} hora(s); a ausência não é tratada como falha.`
+              : "Código não localizado na Consulta Geral atual. A ausência é uma pendência de confirmação e, isoladamente, não prova que a postagem não ocorreu.",
         };
       }
     } else {
@@ -545,6 +569,7 @@
       sigemStatus: evidence ? text(evidence.status) : "",
       sigemStatusRevision: evidence ? normalizeRevision(evidence.revision) : "",
       sigemSourceRow: evidence ? Number(evidence.sourceRow) || null : null,
+      title: text(historyRow.title) || (evidence ? text(evidence.title) : ""),
       ambiguity: Boolean(resolved.ambiguity),
     };
   }
@@ -584,8 +609,91 @@
         review: group.rows.filter((row) => row.status === STATUSES.REVIEW).length,
         notVerified: group.rows.filter((row) => row.status === STATUSES.NOT_VERIFIED).length,
       };
-      return { ...group, ...counts, status: aggregateStatus(group.rows) };
+      const currentlyLocated = group.rows.filter((row) => row.status === STATUSES.CONFIRMED);
+      const preservedOnly = group.rows.filter((row) => row.status !== STATUSES.CONFIRMED && row.historicalPreserved).length;
+      const inTransit = group.rows.filter((row) => row.currentEvidence && row.sigemStatus
+        && /^(EM ANALISE|EM WORKFLOW)$/.test(norm(row.sigemStatus))
+        && normalizeRevision(row.sigemStatusRevision) === normalizeRevision(row.revisionSent)).length;
+      const ambiguous = group.rows.filter((row) => row.ambiguity || row.status === STATUSES.REVIEW).length;
+      const classification = counts.notVerified === counts.total ? "NAO_VERIFICADA"
+        : counts.confirmed === counts.total ? "TOTALMENTE_CONFIRMADA"
+          : counts.confirmed > 0 ? "PARCIALMENTE_CONFIRMADA"
+            : preservedOnly || ambiguous || counts.notVerified ? "REQUER_INVESTIGACAO" : "NENHUM_DOCUMENTO_CONFIRMADO";
+      return {
+        ...group, ...counts, status: aggregateStatus(group.rows), classification,
+        workspaceId: text(group.rows[0] && group.rows[0].workspaceId),
+        confirmedOrPreserved: counts.confirmed + preservedOnly, preservedOnly, inTransit, ambiguous,
+        distinctDocuments: new Set(group.rows.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
+        locatedDocuments: new Set(currentlyLocated.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
+        riskOfDuplicateResend: counts.confirmed + preservedOnly > 0 && counts.confirmed + preservedOnly < counts.total,
+      };
     }).sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)));
+  }
+
+  // O diagnóstico é derivado de evidências verificáveis e não altera o estado da postagem.
+  // allocationContext é resolvido pelas fontes oficiais do contrato ativo.
+  function diagnoseRow(row, allocationContext, baseMeta) {
+    const context = allocationContext || {};
+    const kind = text(context.kind) || "unconfirmed";
+    const confirmed = row.status === STATUSES.CONFIRMED && row.currentEvidence;
+    const preserved = Boolean(row.historicalPreserved);
+    const revision = normalizeRevision(row.revisionSent);
+    const foundRevision = normalizeRevision(row.sigemStatusRevision);
+    const sigemStatus = text(row.sigemStatus);
+    const sameRevision = revision && revision === foundRevision;
+    const workflow = sameRevision && /^(EM ANALISE|EM WORKFLOW)$/.test(norm(sigemStatus));
+    const baseOlder = row.status === STATUSES.NOT_VERIFIED && /anterior/i.test(text(row.note));
+    let action = "ANÁLISE MANUAL OBRIGATÓRIA";
+    let evidenceLevel = "CAUSA INDETERMINADA";
+    let reason = text(row.note) || "Dados insuficientes para concluir a conferência.";
+    if (confirmed || preserved) {
+      action = "NÃO REENVIAR";
+      evidenceLevel = "SITUAÇÃO CONSTATADA";
+      if (preserved && !confirmed) reason = "Confirmação histórica preservada; conferir a evidência atual antes de qualquer ação.";
+      else if (workflow) reason = `Documento/revisão ${revision} localizados no SIGEM. Status atual: ${sigemStatus}. Acompanhar o processamento, sem repostar.`;
+      else reason = `Documento/revisão ${revision} localizados na Consulta Geral.`;
+    } else if (row.status === STATUSES.REVISION_DIVERGENT) {
+      action = "INVESTIGAR REVISÃO";
+      evidenceLevel = "SITUAÇÃO CONSTATADA";
+      reason = `Revisão ${revision || "não informada"} não localizada. Revisão(ões) encontradas: ${text(row.revisionFound) || "não informadas"}.${sigemStatus ? ` Status ${sigemStatus} da revisão ${foundRevision || "não identificada"}.` : ""}`;
+    } else if (row.status === STATUSES.AWAITING) {
+      action = "AGUARDAR CONFIRMAÇÃO";
+      evidenceLevel = "SITUAÇÃO CONSTATADA";
+    } else if (row.status === STATUSES.NOT_FOUND) {
+      action = kind === "not_allocated" ? "VERIFICAR ALOCAÇÃO" : "AVALIAR REENVIO";
+      evidenceLevel = kind === "not_allocated" ? "INDÍCIO DE POSSÍVEL CAUSA" : "CAUSA INDETERMINADA";
+      reason = kind === "not_allocated"
+        ? "Documento não encontrado em Documentos Previstos. Possível pendência de alocação; não é prova de rejeição pelo SIGEM."
+        : kind === "allocated"
+          ? "Documento consta em Documentos Previstos, porém não foi localizado na Consulta Geral. Verificar atualização e retorno do SIGEM."
+          : "Documento não localizado na Consulta Geral; não foi possível confirmar a situação de alocação.";
+    } else if (baseOlder) {
+      action = "AGUARDAR BASE ATUALIZADA";
+      evidenceLevel = "SITUAÇÃO CONSTATADA";
+    } else if (row.status === STATUSES.NOT_VERIFIED) {
+      action = "ANÁLISE MANUAL OBRIGATÓRIA";
+    }
+    if (row.ambiguity) {
+      action = "ANÁLISE MANUAL OBRIGATÓRIA";
+      evidenceLevel = "CAUSA INDETERMINADA";
+    }
+    return {
+      presence: confirmed ? "DOCUMENTO E REVISÃO LOCALIZADOS"
+        : row.status === STATUSES.REVISION_DIVERGENT ? "OUTRA REVISÃO LOCALIZADA"
+          : row.status === STATUSES.NOT_VERIFIED ? "NÃO VERIFICADO" : "SEM CONFIRMAÇÃO DA REVISÃO",
+      statusSigem: sigemStatus || "Não informado",
+      statusSigemRevision: foundRevision,
+      allocationKind: kind,
+      allocations: Array.isArray(context.allocations) ? context.allocations : [],
+      allocationReferences: Array.isArray(context.references) ? context.references : [],
+      allocationWarnings: Array.isArray(context.warnings) ? context.warnings : [],
+      plannedSnapshotId: text(context.plannedSnapshotId),
+      centralSnapshotId: text(context.centralSnapshotId),
+      baseReferenceDate: text(baseMeta && baseMeta.referenceDate),
+      baseFileName: text(baseMeta && baseMeta.fileName),
+      evidenceLevel, reason, action,
+      canPreselectResend: false, // Decisão sempre manual após verificar SIGEM e alocação.
+    };
   }
 
   function summarize(rows) {
@@ -774,7 +882,7 @@
   async function reconcilePersisted(historyRecords, options) {
     const [base, previousState] = await Promise.all([loadBase(), loadState()]);
     const prefs = readPreferences();
-    const result = reconcile(historyRecords || (History && History.read ? History.read() : []), base.records || [], previousState, { ...prefs, ...(options || {}) });
+    const result = reconcile(historyRecords || (History && History.read ? History.read() : []), base.records || [], previousState, { ...prefs, ...(options || {}), baseReferenceDate: text(base.meta && base.meta.referenceDate) });
     await saveState(result.state);
     writeHistoryIndex(result.groups, base.meta);
     return { ...result, baseMeta: base.meta || null };
@@ -794,7 +902,7 @@
       historyRecords || (History && History.read ? History.read() : []),
       base.records,
       previousState,
-      { ...prefs, ...(options || {}) }
+      { ...prefs, ...(options || {}), baseReferenceDate: text(base.meta && base.meta.referenceDate) }
     );
     const entry = {
       id: `${parsed.meta.importedAt}|${parsed.meta.fileName}`,
@@ -884,13 +992,35 @@
       .sort((a, b) => priorityRank(a.status) - priorityRank(b.status) || String(a.generatedAt).localeCompare(String(b.generatedAt)));
   }
 
+  function pertinentGrdt(row) {
+    const grdt = text(row.latestEgrdtNumber || row.egrdtNumber || row.sends?.[0]?.egrdtNumber).replace(/\s+/g, " ");
+    // Historical identifiers can be numeric or include a contract prefix.
+    // Labels and placeholders cannot identify a GRDT.
+    return /\d/.test(grdt) ? grdt : "";
+  }
+
+  function pendingGrdts(rows) {
+    const groups = new Map();
+    let missing = 0;
+    for (const row of rows || []) {
+      // Use the same pertinent (latest) GRDT shown by the document detail.
+      const grdt = pertinentGrdt(row);
+      if (!grdt) { missing++; continue; }
+      const key = grdt.toLocaleUpperCase("pt-BR");
+      if (!groups.has(key)) groups.set(key, { grdt, documentCount: 0 });
+      groups.get(key).documentCount++;
+    }
+    const grdts = Array.from(groups.values()).sort((a, b) => a.grdt.localeCompare(b.grdt, "pt-BR", { numeric: true, sensitivity: "base" }));
+    return { documentCount: (rows || []).length, grdtCount: grdts.length, missing, grdts };
+  }
+
   return Object.freeze({
     DB_NAME, DB_VERSION, BASE_KEY, STATE_KEY, AUDIT_KEY, HISTORY_INDEX_KEY, PREFS_KEY,
     DEFAULT_WAIT_HOURS, STATUSES, AGGREGATE_STATUSES, HEADER_ALIASES,
     text, norm, normalizeRevision, normalizeHeader, documentKeys, documentIdentity, displayDocument, revisionRank,
     isPostedSigemStatus, parseSourceDate, effectiveRecordTimestamp, resolvePostingEvidence,
     detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
-    statusLabel, aggregateStatus, filterRows, pendingRows,
+    statusLabel, aggregateStatus, diagnoseRow, filterRows, pendingRows, pertinentGrdt, pendingGrdts,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
     kvGet, kvSet, kvSetMany, storedValue, putKv,
     readHistoryIndex, historyAggregate, reconcilePersisted, prepareWorkbookImport, prepareParsedImport, commitPreparedImport, importWorkbook,

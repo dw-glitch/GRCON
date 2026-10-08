@@ -35,6 +35,23 @@ async function installQaShellBypass(page) {
   });
 }
 
+// A classe do body sozinha não ativa todos os tokens de tema do GRCON.
+async function setQaTheme(page, dark) {
+  await page.evaluate((darkMode) => {
+    const html = document.documentElement;
+    const button = document.querySelector("#ui-theme-toggle");
+    // Preferir a mesma ação do usuário para disparar eventos e sincronizar tokens.
+    if (button && (html.dataset.theme === "dark") !== darkMode) {
+      button.click();
+      return;
+    }
+    html.dataset.theme = darkMode ? "dark" : "light";
+    html.style.colorScheme = darkMode ? "dark" : "light";
+    html.classList.toggle("theme-dark", darkMode);
+    document.body.classList.toggle("p2-dark", darkMode);
+  }, dark);
+}
+
 async function clickVisible(page, selector) {
   return page.evaluate((wanted) => {
     const visible = (node) => {
@@ -303,6 +320,26 @@ async function screenshot(page, name, viewport, allViewports = false) {
   await page.screenshot({ path: path.join(outputDir, `${name}-${viewport}.png`), fullPage: true });
 }
 
+async function auditDocumentClassVisuals(page) {
+  return page.evaluate(() => {
+    const read = (selector) => {
+      const node = document.querySelector(selector);
+      if (!node) return null;
+      const style = getComputedStyle(node);
+      return {
+        text: node.textContent.trim(),
+        color: style.color,
+        background: style.backgroundColor,
+        border: style.borderColor,
+      };
+    };
+    return {
+      et: read('[data-dashboard-family="ET"]'),
+      n1710: read('[data-dashboard-family="N-1710"]'),
+    };
+  });
+}
+
 async function visit(page, selector, label, viewport, waitMs = 800) {
   const clicked = await clickVisible(page, selector);
   if (!clicked) return { label, skipped: true };
@@ -317,7 +354,8 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
   const metrics = {};
   try {
     for (const viewport of [1920, 1600, 1440, 1366, 1280]) {
-      const context = await browser.newContext({ viewport: { width: viewport, height: 900 }, serviceWorkers: "block" });
+      const viewportHeight = viewport === 1366 ? 768 : viewport === 1920 ? 1080 : 900;
+      const context = await browser.newContext({ viewport: { width: viewport, height: viewportHeight }, serviceWorkers: "block" });
       const page = await context.newPage();
       const consoleErrors = [];
       const pageErrors = [];
@@ -335,6 +373,8 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
 
       const viewportMetrics = [];
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="control"]', "Controle de GRDT", viewport));
+      assert.equal(await page.locator("#grdt-stages [data-grdt-stage]").count(), 4,
+        "Controle de GRDT precisa apresentar quatro etapas documentais acessíveis.");
       const advancedOpened = await clickVisible(page, "#advanced-toggle");
       if (advancedOpened) {
         await page.waitForTimeout(150);
@@ -343,8 +383,71 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
       }
 
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="requests"]', "Consultas", viewport, 1100));
+      const modelsVisit = await visit(page, '.requests-subnav [data-requests-area="modelos"]', "Modelos de exportação", viewport, 420);
+      viewportMetrics.push(modelsVisit);
+      if (!modelsVisit.skipped) {
+        assert.equal(await page.locator("#requests-modelo-search").count(), 1,
+          "Modelos precisam oferecer a pesquisa local.");
+      }
+      const monitorVisit = await visit(page, '.requests-subnav [data-requests-area="sigem-monitoring"]',
+        "Consulta Geral × SIGEM", viewport, 500);
+      viewportMetrics.push(monitorVisit);
+      if (!monitorVisit.skipped) {
+        assert.equal(await page.locator("#sigem-monitor-history-search").count(), 1,
+          "Histórico deve oferecer busca em comparações.");
+        assert.equal(await page.locator("#sigem-monitor-monitored-search").count(), 1,
+          "Monitoramento deve oferecer busca local dos documentos.");
+        if (viewport >= 1600) {
+          const monitorColumns = await page.locator(".sigem-monitoring-root").evaluate((node) =>
+            getComputedStyle(node).gridTemplateColumns.split(/\s+/).filter(Boolean).length);
+          assert.equal(monitorColumns, 2,
+            "Monitoramento e histórico devem ocupar duas colunas em telas largas.");
+        }
+        if (viewport === 1440) {
+          const lightBg = await page.locator("#sigem-monitor-history-search").evaluate((node) =>
+            getComputedStyle(node).backgroundColor);
+          await setQaTheme(page, true);
+          const darkBg = await page.locator("#sigem-monitor-history-search").evaluate((node) =>
+            getComputedStyle(node).backgroundColor);
+          const darkDiagnostics = await page.locator("#sigem-monitor-history-search").evaluate((node) => ({
+            matched: node.matches("body.p2-dark .sigem-monitor-local-search input"),
+            media: document.querySelector('link[href="sigem-status-monitoring.css"]')?.media || "not-found",
+            darkBody: document.body.classList.contains("p2-dark"),
+            htmlTheme: document.documentElement.dataset.theme,
+            surfaceToken: getComputedStyle(document.body).getPropertyValue("--ops-surface").trim(),
+            background: getComputedStyle(node).backgroundColor,
+            backgroundImage: getComputedStyle(node).backgroundImage,
+            parent: node.parentElement?.className || "",
+            inlineStyle: node.getAttribute("style") || "",
+            stylesheetLastRules: (() => {
+              const link = document.querySelector('link[href="sigem-status-monitoring.css"]');
+              try {
+                return [...(link?.sheet?.cssRules || [])].slice(-8).map((rule) =>
+                  rule.cssText.slice(0, 240));
+              } catch (error) { return [String(error)]; }
+            })(),
+          }));
+          assert.notEqual(darkBg, lightBg,
+            "Campos de pesquisa devem adaptar o fundo ao modo escuro real: " + JSON.stringify(darkDiagnostics));
+          await screenshot(page, "consulta-geral-sigem-dark", viewport);
+          await setQaTheme(page, false);
+        }
+      }
+
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="analysis-history"]', "Histórico de análises", viewport, 1100));
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="history"]', "Histórico de eGRDTs", viewport, 1100));
+      const dashboardVisit = await visit(page, '.ops-sidebar [data-grcon-view="dashboard"]', "Dashboard", viewport, 700);
+      viewportMetrics.push(dashboardVisit);
+      if (!dashboardVisit.skipped) {
+        const classVisuals = await auditDocumentClassVisuals(page);
+        assert.equal(classVisuals.et?.text, "ET", "Dashboard deve manter identificação textual ET");
+        assert.equal(classVisuals.n1710?.text, "N-1710", "Dashboard deve manter identificação textual N-1710");
+        assert.notEqual(classVisuals.et?.color, classVisuals.n1710?.color, "ET e N-1710 precisam de cores distintas");
+        assert.notEqual(classVisuals.et?.background, classVisuals.n1710?.background, "ET e N-1710 precisam de fundos distintos");
+        assert.notEqual(classVisuals.et?.border, classVisuals.n1710?.border, "ET e N-1710 precisam de bordas distintas");
+        viewportMetrics.push({ label: "Dashboard · ET × N-1710", visuals: classVisuals });
+        await screenshot(page, "dashboard-et-n1710", viewport, true);
+      }
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="sigem"]', "Postagem SIGEM", viewport, 900));
 
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="additional-tools"]', "Ferramentas adicionais", viewport, 500));
@@ -381,10 +484,16 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
         }
       }
 
-      await page.evaluate(() => document.body.classList.add("p2-dark"));
+      await setQaTheme(page, true);
+      const darkConferenceText = await page.locator(".pc-document-table .pc-document-code > strong").first().evaluate((node) => {
+        const color = getComputedStyle(node).color.match(/\d+/g).map(Number);
+        return (color[0] + color[1] + color[2]) / 3;
+      });
+      assert.ok(darkConferenceText > 150,
+        "Códigos dos documentos devem estar claros e legíveis na Conferência em modo escuro.");
       viewportMetrics.push({ label: "Conferência tema escuro", geometry: await auditGeometry(page, "Conferência tema escuro") });
       if (viewport === 1440) await page.screenshot({ path: path.join(outputDir, "conferencia-dark-1440.png"), fullPage: true });
-      await page.evaluate(() => document.body.classList.remove("p2-dark"));
+      await setQaTheme(page, false);
 
       await page.waitForFunction(() => Boolean(document.querySelector("[data-spw-open]")), null, { timeout: 10000 });
       viewportMetrics.push(await visit(page, '[data-spw-open="sidebar"]', "SIGEM × PW", viewport, 1500));
@@ -396,7 +505,7 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
     }
 
     fs.writeFileSync(path.join(outputDir, "global-ux-ui-metrics.json"), JSON.stringify(metrics, null, 2));
-    console.log("OK — auditoria UX/UI navegacional: 5 viewports, módulos principais, ferramentas, Conferência, SIGEM × PW, drawers/toggles e console.");
+    console.log("OK — auditoria UX/UI navegacional: 5 viewports (incluindo 1366×768 e 1920×1080), Dashboard ET/N-1710, módulos principais, ferramentas, Conferência, SIGEM × PW, drawers/toggles e console.");
   } finally {
     await browser.close();
   }

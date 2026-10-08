@@ -1,0 +1,7 @@
+const assert=require('node:assert/strict');const Reply=require('../egrdt_email_reply.js');
+const records=[{generatedAt:'2026-10-06T12:00:00Z',egrdtNumber:'QA-001',files:[{document:'DOC-001',revision:'A',title:'<script>unsafe</script>',finalName:'DOC-001_A.pdf'}]}];
+const cfg={columns:['REVISÃO','DOCUMENTO'],columnLabels:{DOCUMENTO:'Código & número'},columnWidths:{DOCUMENTO:300,REVISÃO:100},columnAlign:{DOCUMENTO:'right'},styles:{fontFamily:'Arial',fontSize:12,tableWidth:75,padding:8,borderWidth:2,bodyBackground:'#FAFAFA'},messageTemplate:'Enviado {{egrdt}}: {{documentos}} documento(s)'};
+const reply=Reply.build(records,cfg);assert.deepEqual(reply.columns,['REVISÃO','DOCUMENTO']);assert.match(reply.tableHtml,/width:75%/);assert.match(reply.tableHtml,/width:75%;|width:75%/);assert.match(reply.tableHtml,/text-align:right/);assert.match(reply.tableHtml,/padding:8px/);assert.match(reply.tableHtml,/Código &amp; número/);assert.match(reply.message,/Enviado QA-001: 1 documento/);assert.match(reply.tableText,/Código & número/);
+assert.doesNotMatch(Reply.build(records,{...cfg,showHeader:false}).tableHtml,/<thead>/);
+const hostile=Reply.build(records,{columns:['TÍTULO'],styles:{borderColor:'red;position:fixed',fontFamily:'evil',fontSize:999}});assert.doesNotMatch(hostile.tableHtml,/position:fixed/);assert.match(hostile.tableHtml,/&lt;script&gt;unsafe/);assert.match(hostile.tableHtml,/font-size:24pt/);
+console.log('Email template: message fields, order, labels, relative widths, styling, escaping and hidden header verified.');

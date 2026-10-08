@@ -1,3 +1,67 @@
+@layer tokens {
+  html[data-app="GRCON"] {
+    --document-et-color: #0a4f83;
+    --document-et-accent: #0b63a3;
+    --document-et-background: #e6f1fa;
+    --document-et-border: #74a9d2;
+    --document-n1710-color: #542c84;
+    --document-n1710-accent: #6b3fa0;
+    --document-n1710-background: #f1eaf8;
+    --document-n1710-border: #a889c7;
+  }
+
+  html[data-app="GRCON"][data-theme="dark"],
+  html[data-app="GRCON"] body.p2-dark {
+    --document-et-color: #9bd5fb;
+    --document-et-accent: #6db8ea;
+    --document-et-background: rgba(44, 139, 200, .18);
+    --document-et-border: #4d94c1;
+    --document-n1710-color: #d1b4ef;
+    --document-n1710-accent: #b993e0;
+    --document-n1710-background: rgba(128, 84, 173, .22);
+    --document-n1710-border: #8d65b3;
+  }
+}
+
+@layer components {
+  html[data-app="GRCON"] .document-class-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.55rem;
+    max-width: 100%;
+    padding: .18rem .48rem;
+    border: 1px solid var(--border-1, #d7e0e8);
+    border-radius: 999px;
+    background: var(--surface-2, #f6f9fb);
+    color: var(--text-2, #52687b);
+    font-size: .72rem;
+    font-weight: 850;
+    line-height: 1.1;
+    letter-spacing: .02em;
+    white-space: nowrap;
+  }
+
+  html[data-app="GRCON"] .document-class-badge[data-document-class="ET"],
+  html[data-app="GRCON"] .sheet-badge[data-document-class="ET"] {
+    border-color: var(--document-et-border);
+    background: var(--document-et-background);
+    color: var(--document-et-color);
+  }
+
+  html[data-app="GRCON"] .document-class-badge[data-document-class="N-1710"],
+  html[data-app="GRCON"] .sheet-badge[data-document-class="N-1710"] {
+    border-color: var(--document-n1710-border);
+    background: var(--document-n1710-background);
+    color: var(--document-n1710-color);
+  }
+
+  html[data-app="GRCON"] .document-class-badge:focus-visible {
+    outline: 2px solid var(--focus-ring, #2382ad);
+    outline-offset: 2px;
+  }
+}
+
 @layer modules {
   html[data-app="GRCON"] .workspace { display: flex; flex-direction: column; gap: 1rem; }
 
@@ -1623,4 +1687,9 @@
   html[data-app="GRCON"] .virtual-table-scroll {
     block-size: clamp(20rem, calc(100vh - 21rem), 60rem);
   }
+}
+
+@layer utilities {
+  /* O painel da LD deve ficar acima do mesmo overlay usado pelos demais drawers. */
+  html[data-app="GRCON"] .ld-compatibility-drawer { z-index: 610; }
 }

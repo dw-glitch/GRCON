@@ -305,9 +305,84 @@
     return paragraphs.map((paragraph) => `<p style="${MESSAGE_PARAGRAPH_STYLE}">${paragraph}</p>`).join("");
   }
 
-  function replyHtml(rows, message, defaultSummary) {
+  function templateMessage(template, summary) {
+    const raw = text(template);
+    if (!raw) return defaultMessage(summary);
+    const numbers = summary && summary.egrdtNumbers || [];
+    const values = {
+      "{{egrdt}}": numbers[0] || "",
+      "{{egrdts}}": joinList(numbers),
+      "{{data}}": summary && summary.generatedAt ? datePhrase(summary.generatedAt) : "",
+      "{{documentos}}": String(summary && summary.documents || 0),
+      "{{arquivos}}": String(summary && summary.files || 0),
+    };
+    return Object.entries(values).reduce((value, pair) => value.split(pair[0]).join(pair[1]), raw);
+  }
+
+  function normalizeColumns(value) {
+    const requested = Array.isArray(value) ? value.map(text).filter((column) => COLUMNS.includes(column)) : [];
+    const unique = [...new Set(requested)];
+    return unique.length ? unique : [...COLUMNS];
+  }
+
+  function safeColor(value, fallback) {
+    const candidate = text(value);
+    return /^#[0-9A-F]{6}$/i.test(candidate) ? candidate.toUpperCase() : fallback;
+  }
+
+  function safeFont(value) {
+    const allowed = {
+      "Segoe UI": "Segoe UI,Calibri,Arial,sans-serif",
+      "Calibri": "Calibri,Segoe UI,Arial,sans-serif",
+      "Arial": "Arial,Helvetica,sans-serif",
+      "Verdana": "Verdana,Arial,sans-serif",
+    };
+    return allowed[text(value)] || "Segoe UI,Calibri,Arial,sans-serif";
+  }
+
+  function bounded(value, fallback, min, max) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
+  }
+
+  function configurableTableText(rows, columns, config) {
+    const selected = normalizeColumns(columns);
+    const labels = config?.columnLabels || {};
+    const lines = [(config?.showHeader === false ? [] : selected.map(column => text(labels[column]) || column)).join("\t")].filter(Boolean);
+    (rows || []).forEach((row) => lines.push(selected.map((column) => text(row[column]).replace(/[\t\r\n]+/g, " ")).join("\t")));
+    return lines.join("\n");
+  }
+
+  function configurableTableHtml(rows, options) {
+    const config = options || {};
+    const columns = normalizeColumns(config.columns);
+    const styles = config.styles || {};
+    const font = safeFont(styles.fontFamily);
+    const size = bounded(styles.fontSize, 10, 8, 24);
+    const border = safeColor(styles.borderColor, "#9FB3C3");
+    const borderWidth = bounded(styles.borderWidth, 1, 0, 4);
+    const padding = bounded(styles.padding, 6, 0, 24);
+    const headerBackground = safeColor(styles.headerBackground, "#EAF1F6");
+    const headerColor = safeColor(styles.headerColor, "#10222F");
+    const bodyColor = safeColor(styles.bodyColor, "#10222F");
+    const bodyBackground = safeColor(styles.bodyBackground, "#FFFFFF");
+    const baseWidths = columns.map(column => bounded(config.columnWidths?.[column], COLUMN_WIDTHS[column] || 100, 1, 1000));
+    const total = baseWidths.reduce((sum, width) => sum + width, 0) || 1;
+    const widths = Object.fromEntries(columns.map((column, index) => [column, Math.round(baseWidths[index] / total * 10000) / 100]));
+    const width = bounded(styles.tableWidth, 100, 20, 100);
+    const alignment = column => ["left", "center", "right"].includes(config.columnAlign?.[column]) ? config.columnAlign[column] : align(column);
+    const tableStyle = "border-collapse:collapse;table-layout:fixed;width:" + width + "%;border:" + borderWidth + "px solid " + border + ";font-family:" + font + ";font-size:" + size + "pt;color:" + bodyColor;
+    const common = "border:" + borderWidth + "px solid " + border + ";padding:" + padding + "px;vertical-align:top;font-size:" + size + "pt;word-wrap:break-word;word-break:break-word";
+    const headStyle = common + ";background-color:" + headerBackground + ";color:" + headerColor + ";font-weight:bold";
+    const cellStyle = common + ";background-color:" + bodyBackground + ";color:" + bodyColor;
+    const head = columns.map(column => '<th style="' + headStyle + ';text-align:' + alignment(column) + ';width:' + widths[column] + '%" width="' + widths[column] + '%">' + escapeHtml(config.columnLabels?.[column] || column) + '</th>').join("");
+    const body = (rows || []).map(row => "<tr>" + columns.map(column => '<td style="' + cellStyle + ';text-align:' + alignment(column) + ';width:' + widths[column] + '%" width="' + widths[column] + '%">' + escapeHtml(row[column]) + '</td>').join("") + "</tr>").join("");
+    return '<table style="' + tableStyle + '" width="' + width + '%">' + (config.showHeader === false ? "" : '<thead><tr>' + head + '</tr></thead>') + '<tbody>' + body + '</tbody></table>';
+  }
+
+  function replyHtml(rows, message, defaultSummary, options) {
     const intro = defaultSummary ? defaultMessageHtml(defaultSummary) : (text(message) ? messageHtml(message) : "");
-    return `<div>${intro}${tableHtml(rows)}</div>`;
+    return `<div>${intro}${options ? configurableTableHtml(rows, options) : tableHtml(rows)}</div>`;
   }
 
   function replyText(rows, message) {
@@ -324,18 +399,23 @@
     const rows = rowsFromRecords(records);
     const summary = summarize(records);
     const standardMessage = defaultMessage(summary);
-    const message = config.message === null || config.message === undefined ? standardMessage : text(config.message);
-    const useStandardHtml = message === standardMessage;
+    const configuredDefault = config.messageTemplate ? templateMessage(config.messageTemplate, summary) : standardMessage;
+    const message = config.message === null || config.message === undefined ? configuredDefault : text(config.message);
+    const useStandardHtml = !config.messageTemplate && message === standardMessage;
+    const columns = normalizeColumns(config.columns);
+    const customTableHtml = configurableTableHtml(rows, config);
+    const customTableText = configurableTableText(rows, columns, config);
     return {
-      columns: [...COLUMNS],
+      columns,
       rows,
       summary,
       subject: text(config.subject) || defaultSubject(summary),
       message,
-      html: replyHtml(rows, message, useStandardHtml ? summary : null),
-      text: replyText(rows, message),
-      tableHtml: tableHtml(rows),
-      tableText: tableText(rows),
+      html: replyHtml(rows, message, useStandardHtml ? summary : null, config.columns || config.styles ? config : null),
+      text: message ? message + "\n\n" + customTableText : customTableText,
+      tableHtml: config.columns || config.styles ? customTableHtml : tableHtml(rows),
+      tableText: config.columns ? customTableText : tableText(rows),
+      template: { ...config, columns, styles: config.styles || {}, messageTemplate: text(config.messageTemplate) },
     };
   }
 
@@ -355,5 +435,5 @@
     return { url: `mailto:?subject=${subject}&body=${short}`, truncated: true };
   }
 
-  return { COLUMNS, COLUMN_WIDTHS, COLUMN_PERCENTS, COLUMN_ALIGN, TABLE_WIDTH, revision, rowsFromRecords, summarize, defaultMessage, defaultSubject, tableText, tableHtml, replyText, replyHtml, build, mailtoUrl };
+  return { COLUMNS, COLUMN_WIDTHS, COLUMN_PERCENTS, COLUMN_ALIGN, TABLE_WIDTH, revision, rowsFromRecords, summarize, defaultMessage, defaultSubject, templateMessage, normalizeColumns, configurableTableText, configurableTableHtml, tableText, tableHtml, replyText, replyHtml, build, mailtoUrl };
 });

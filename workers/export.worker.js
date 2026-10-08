@@ -48,4 +48,38 @@ function summaryText(generated,limit){
 }
 async function buildManifest(entries,metadata,logo){const wb=new ExcelJS.Workbook();wb.creator="GRCON";const ws=wb.addWorksheet("Conferência",{views:[{state:"frozen",ySplit:1}]});const rows=entries.map((entry,index)=>({"DOCUMENTO":entry.document,"REVISÃO":entry.revision,"ARQUIVO ORIGINAL":entry.originalName,"ARQUIVO FINAL NO PACOTE":entry.finalName,"ARQUIVO DESCRITO NA GRDT":entry.item&&entry.item.fileName||"","NOME CONSISTENTE":entry.finalName===(entry.item&&entry.item.fileName)?"SIM":"NÃO","INCLUSÃO MANUAL — LD NÃO ALOCADO":entry.manualAllocationOverride?"SIM":"NÃO","DISCIPLINA":entry.item&&entry.item.discipline||entry.discipline||"","LD DE ORIGEM":entry.sourceLd||"","GRDT":entry.grdtFile||"","LDS UTILIZADAS NA ANÁLISE":metadata.ldName||"","LISTA EXCEL":metadata.listName||"","VERSÃO GRCON":metadata.appVersion||"","DATA DA ANÁLISE":metadata.analysisAt||"","LINHA":index+1}));const headers=rows.length?Object.keys(rows[0]):["DOCUMENTO"];ws.addRow(headers);styleHeader(ws.getRow(1));rows.forEach((item,i)=>{const row=ws.addRow(headers.map(h=>item[h]));styleData(row,i,0);});headers.forEach((h,i)=>ws.getColumn(i+1).width=reportWidth(h));return wb.xlsx.writeBuffer();}
 async function buildPackage(payload,taskId){const generated=await buildEgrdts(payload.groups||[],payload.officialNumbers||[],taskId);const zip=new JSZip();for(const file of generated){ensure(taskId);const folder=zip.folder(file.official.baseName);if(payload.includeFiles){for(const entry of file.group.entries){if(!entry.file)throw new Error(`${entry.document||entry.finalName}: PDF físico ausente.`);folder.file(entry.finalName,entry.file);}}folder.file(file.fileName,file.data);}zip.file("ORGANIZACAO_DOS_LOTES.txt",summaryText(generated,payload.limit));if(payload.mode==="final"){const report=await buildReport(payload.report,taskId);const allEntries=generated.flatMap(file=>file.group.entries.map(entry=>({...entry,grdtFile:file.fileName})));const manifest=await buildManifest(allEntries,payload.manifest||{},payload.report&&payload.report.logoBase64);zip.file(payload.reportName,report);zip.file(payload.manifestName,manifest);}self.postMessage({taskId,type:"progress",progress:.9,message:"Compactando pacote final"});const bytes=await zip.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:4}},meta=>{if(meta.percent%10<1)self.postMessage({taskId,type:"progress",progress:.9+meta.percent/100*.1,message:"Compactando ZIP"});});return {bytes,generated:generated.map(f=>({official:f.official,fileName:f.fileName,verification:f.verification,group:{number:f.group.number,entries:f.group.entries.map(e=>({document:e.document,revision:e.revision,finalName:e.finalName,originalName:e.originalName,item:e.item}))}}))};}
-self.onmessage=async(event)=>{const{taskId,action,payload={}}=event.data||{};if(action==="cancel"){cancelled.add(payload.taskId||taskId);return;}const started=performance.now();try{let result,transfer=[];if(action==="report"){const built=await buildReport(payload,taskId);result=built instanceof ArrayBuffer?built:built.buffer.slice(built.byteOffset,built.byteOffset+built.byteLength);transfer=[result];}else if(action==="egrdts"){const generated=await buildEgrdts(payload.groups||[],payload.officialNumbers||[],taskId);result={generated:generated.map(f=>({...f,data:f.data.buffer.slice(f.data.byteOffset,f.data.byteOffset+f.data.byteLength)}))};transfer=result.generated.map(f=>f.data);}else if(action==="package"){const built=await buildPackage(payload,taskId);result={...built,bytes:built.bytes.buffer.slice(built.bytes.byteOffset,built.bytes.byteOffset+built.bytes.byteLength)};transfer=[result.bytes];}else throw new Error("Ação desconhecida no Worker de exportação.");self.postMessage({taskId,type:"done",result,metrics:{stage:`export-${action}`,durationMs:performance.now()-started,memoryMb:memoryMb()}},transfer);}catch(error){self.postMessage({taskId,type:error&&error.name==="AbortError"?"cancelled":"error",error:String(error&&error.message||error),stack:String(error&&error.stack||"")});}finally{cancelled.delete(taskId);}};
+async function buildSpreadsheet(payload) {
+  if (payload.kind === "sigem-dashboard") {
+    const book = XLSX.utils.book_new();
+    for (const tab of payload.sheets || []) {
+      const sheet = XLSX.utils.json_to_sheet(tab.rows);
+      if (tab.columns) sheet["!cols"] = tab.columns;
+      XLSX.utils.book_append_sheet(book, sheet, tab.name);
+    }
+    return XLSX.write(book, { type: "array", bookType: "xlsx", compression: true });
+  }
+  if (payload.kind === "conference") {
+    if (!self.GrconPostingConferenceReport) importScripts("../history_core.js", "../posting_conference_core.js", "../grcon_brand_assets.js", "../posting_conference_report.js");
+    return self.GrconPostingConferenceReport.buildWorkbook(payload.rows, payload.options);
+  }
+  const book = new ExcelJS.Workbook();
+  if (payload.kind === "consultation") {
+    if (!self.GrconRequestsReport) importScripts("../requests_report.js", "../grcon_brand_assets.js");
+    book.creator = "GRCON"; book.company = "CONSAG Engenharia"; book.title = payload.title;
+    const sheet = book.addWorksheet("Consulta", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
+    self.GrconRequestsReport.writeConsultationSheet(sheet, payload.rows, payload.options);
+    await self.GrconRequestsReport.attachBrandLogo(book, sheet, self.GRCONBrandAssets,
+      (url, options) => fetch(new URL(url, new URL("../", self.location.href)), options));
+  } else if (payload.kind === "vault") {
+    const sheet = book.addWorksheet("Cofre", { views: [{ state: "frozen", ySplit: 1 }] });
+    sheet.columns = payload.columns;
+    for (const row of payload.rows) sheet.addRow(row);
+    sheet.getColumn("date").numFmt = "dd/mm/yyyy hh:mm";
+    sheet.getColumn("size").numFmt = "#,##0";
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
+    sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: sheet.columns.length } };
+  } else throw new Error("Formato de planilha desconhecido.");
+  return book.xlsx.writeBuffer();
+}
+self.onmessage=async(event)=>{const{taskId,action,payload={}}=event.data||{};if(action==="cancel"){cancelled.add(payload.taskId||taskId);return;}const started=performance.now();try{let result,transfer=[];if(action==="spreadsheet"){const built=await buildSpreadsheet(payload);result=built instanceof ArrayBuffer?built:built.buffer.slice(built.byteOffset,built.byteOffset+built.byteLength);transfer=[result];}else if(action==="report"){const built=await buildReport(payload,taskId);result=built instanceof ArrayBuffer?built:built.buffer.slice(built.byteOffset,built.byteOffset+built.byteLength);transfer=[result];}else if(action==="egrdts"){const generated=await buildEgrdts(payload.groups||[],payload.officialNumbers||[],taskId);result={generated:generated.map(f=>({...f,data:f.data.buffer.slice(f.data.byteOffset,f.data.byteOffset+f.data.byteLength)}))};transfer=result.generated.map(f=>f.data);}else if(action==="package"){const built=await buildPackage(payload,taskId);result={...built,bytes:built.bytes.buffer.slice(built.bytes.byteOffset,built.bytes.byteOffset+built.bytes.byteLength)};transfer=[result.bytes];}else throw new Error("Ação desconhecida no Worker de exportação.");self.postMessage({taskId,type:"done",result,metrics:{stage:`export-${action}`,durationMs:performance.now()-started,memoryMb:memoryMb()}},transfer);}catch(error){self.postMessage({taskId,type:error&&error.name==="AbortError"?"cancelled":"error",error:String(error&&error.message||error),stack:String(error&&error.stack||"")});}finally{cancelled.delete(taskId);}};

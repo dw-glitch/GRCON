@@ -2,7 +2,7 @@
  * GRCON — Composição da tela de Consulta de documentos em React.
  * FASE B: hierarquia visual e fluxo operacional; domínio permanece no adapter.
  */
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { UiMetaPill, UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
 import { useConsultas } from "./hooks/useConsultas";
 import { consultasAdapter } from "./services/consultasAdapter";
@@ -19,6 +19,7 @@ import {
 
 export function ConsultasApp() {
   const c = useConsultas();
+  const requestsFileRef = useRef<HTMLInputElement>(null);
 
   const onPasteClipboard = useCallback(async (setValue: (value: string) => void) => {
     try {
@@ -73,6 +74,15 @@ export function ConsultasApp() {
         resultsCount={c.results.size}
         compact={setupReady || c.results.size > 0}
       />
+
+      <UiPanel className="requests-results-panel requests-control-base" labelledBy="requests-base-control-title">
+        <div><h3 id="requests-base-control-title">Controle de Solicitações</h3><p>{c.requestsBase} · Base de consulta deste contrato</p></div>
+        <div className="requests-control-actions">
+          <input ref={requestsFileRef} aria-label="Arquivo do Controle de Solicitações" type="file" accept=".xlsx,.xls,.xlsm" hidden onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void c.updateRequestsBase(file); }}/>
+          {consultasAdapter.canManageRequestsBase() ? <button type="button" className="secondary-button" disabled={c.baseBusy || c.running} onClick={() => requestsFileRef.current?.click()}>Carregar / Atualizar</button> : null}
+          <button type="button" className="secondary-button" disabled={c.baseBusy || c.running} onClick={() => void c.updateRequestsBase()}>{c.baseBusy ? "Atualizando…" : "Sincronizar base"}</button>
+        </div>
+      </UiPanel>
 
       <div className="requests-setup-layout" aria-label="Preparação da consulta">
         <LdPanel

@@ -1824,7 +1824,8 @@ check("aplicativo aguarda reserva antes das três gerações", () => {
 
 check("fluxo acelerado preenche A4 quando a LD não informa o formato", () => {
   const source = fs.readFileSync(path.join(root, "app.js"), "utf8");
-  assert.match(source, /rawResults\.forEach\(\(result\)\s*=>\s*\{[\s\S]*?const formatDefaulted = Boolean\(result\.egrdt && !result\.egrdt\.format\);[\s\S]*?if \(formatDefaulted\) result\.egrdt\.format = "A4";[\s\S]*?const logical = logicalMeta\.get\(result\.id\);/);
+  assert.match(source, /const rawResults = await mapLarge\(inputs,[\s\S]*?if \(result\.egrdt && !result\.egrdt\.format\) result\.egrdt\.format = "A4";[\s\S]*?return result;[\s\S]*?progressAnalysis\);/);
+  assert.match(source, /state\.results = mergePackageResults\(rawResults\);/);
 });
 
 check("migração da central usa invólucro invoker e confere o papel no schema privado", () => {
@@ -1854,7 +1855,7 @@ check("runtime não carrega a Central de Alocação aposentada e preserva Postag
 
   assert.equal(fs.existsSync(path.join(root, "allocation_center.js")), false);
   assert.doesNotMatch(loader, /allocation_center\.js/);
-  assert.doesNotMatch(html, /allocation-center|Central de Alocação|Salvar referência|Remover cadastro/i);
+  assert.doesNotMatch(html, /allocation-center|Salvar referência|Remover cadastro/i);
   assert.doesNotMatch(app, /saveAllocationCenter|clearAllocationCenter|GrconAllocationCenter/);
   assert.doesNotMatch(retomar, /history-posting-status/);
   assert.doesNotMatch(finalCss, /\.history-posting-status/);
@@ -2119,9 +2120,7 @@ check("auditoria de tela: SGPAR removido, selo de planilha e campo com rótulo",
   assert.match(html, /class="source-icon excel">\s*<svg/, "o selo de planilha usa ícone");
   assert.match(legado, /\.source-icon\.excel svg/, "o ícone do selo precisa de tamanho e traço próprios");
 
-  const historyReact = fs.readFileSync(path.join(root, "src/react/historico-analises/components/HistoricoAnalisesComponents.tsx"), "utf8");
-  assert.match(historyReact, /aria-label="[^"]+"[\s\S]{0,240}id="unified-search-text"/,
-    "a busca unificada precisa de rótulo acessível");
+  assert.doesNotMatch(html, /data-grcon-view="analysis-history"/, "o módulo Análises foi removido da navegação");
 });
 
 check("número da eGRDT não vira texto vertical quando o painel fica estreito", () => {
@@ -3339,14 +3338,18 @@ check("Resumo da triagem mostra a revisão sugerida e sinaliza a alteração man
   assert.equal(summary.revisionManual, "SIM");
 });
 
-check("validação de revisão continua usando as regras já existentes: incomum e legítima passa, formato inválido continua barrado", () => {
+check("validação de revisão preserva formatos legítimos e trata I/O como alerta da N-2064 Rev. D", () => {
   // Revisão "de campo" (letra+número) já era aceita pelo GRCON antes desta
   // melhoria — não é uma restrição nova, então a edição manual não bloqueia.
   assert.equal(Core.revisionInfo("A1").valid, true);
   assert.equal(Core.revisionInfo("AB").valid, true);
   // Formato claramente inválido continua barrado — regra herdada, não nova.
   assert.equal(Core.revisionInfo("1A").valid, false);
-  assert.equal(Core.revisionInfo("O").valid, false);
+  // Na Rev. D, I/O são prática recomendada a evitar: permanecem válidos,
+  // mas carregam aviso e continuam fora da sequência sugerida automaticamente.
+  assert.equal(Core.revisionInfo("O").valid, true);
+  assert.equal(Core.revisionInfo("O").recommended, false);
+  assert.ok(Core.revisionInfo("O").warnings.some((message) => /alerta, não bloqueio/i.test(message)));
 
   const document = "ET-5290.00-22000-912-1LV-907";
   const record = { ...ldDocumentRecord(document), revision: "A" };

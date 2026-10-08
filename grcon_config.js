@@ -1,6 +1,6 @@
 /**
  * GRCON — Configuração Centralizada
- * Versão: 5.44.5
+ * Versão: 5.44.9
  *
  * Arquivo único de configuração para constantes, limites e opções
  * usados em todo o projeto. Evita hardcoding disperso.
@@ -20,7 +20,7 @@
 
   const CONFIG = Object.freeze({
     /* ── Versão ─────────────────────────────────────────────── */
-    APP_VERSION: "5.44.5",
+    APP_VERSION: "5.44.9",
 
     /* ── Limites de processamento ───────────────────────────── */
     EGRDT_BATCH_LIMIT: 48,
@@ -33,7 +33,8 @@
     STORAGE_MAX_BYTES: 4_200_000,
 
     /* ── Alfabeto de revisão ────────────────────────────────── */
-    REVISION_ALPHABET: "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    REVISION_ALPHABET: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    RECOMMENDED_REVISION_ALPHABET: "ABCDEFGHJKLMNPQRSTUVWXYZ",
 
     /* ── Categorias N1710 ───────────────────────────────────── */
     N1710_CATEGORIES: Object.freeze([

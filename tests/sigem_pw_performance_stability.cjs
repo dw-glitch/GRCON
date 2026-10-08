@@ -108,7 +108,8 @@ function sourceRegression() {
   assert.match(evolutionAppSource, /id="spw-evo-date-start"/);
   assert.match(evolutionAppSource, /id="spw-evo-date-end"/);
   assert.match(workerSource, /payload\.type === "model"/, "o worker deve aceitar a montagem completa do comparativo");
-  assert.match(workerSource, /Dashboard\.aggregateModel\(model, \{ documentClass: "N-1710" \}\)/);
+  assert.match(workerSource, /Dashboard\.aggregateModel\(model, \{ documentClass: "N-1710" \}, \{ revisionScope: "all" \}\)/, "worker deve pré-calcular todas as revisões");
+  assert.match(workerSource, /Dashboard\.aggregateModel\(model, \{ documentClass: "N-1710" \}, \{ revisionScope: "revision0" \}\)/, "worker deve pré-calcular revisão 0");
   assert.doesNotMatch(indexSource, /id="workspace-new-tab"/, "o atalho Nova tarefa removido não deve voltar");
   assert.doesNotMatch(indexSource, /id="workspace-status"/, "o marcador de aba livre removido não deve voltar");
   assert.doesNotMatch(indexSource, /src="task_center\.js"/, "o botão Tarefas removido não deve voltar");

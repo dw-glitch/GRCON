@@ -1,3 +1,60 @@
+## Em desenvolvimento — GRDT unificado + Cofre documental
+
+- Fazer GRDT classifica cada documento + revisão pelo Histórico compartilhado completo como primeira postagem, nova revisão ou repostagem; a regra é consultiva e não retira a autonomia do operador.
+- A organização dos lotes pode manter tudo junto ou separar postagens/repostagens antes de disciplina e limite configurável, usando o mesmo plano na prévia e nas saídas.
+- Documentos Previstos continua sendo a fonte oficial de Alocado/Não alocado; a Central de alocação compartilhada acrescenta solicitação, workflow e rastreabilidade sem substituir essa regra.
+- Novo **Cofre** integrado ao GRCON: catálogo privado Supabase + binários no R2 privado `grcon-documents`, com autenticação por workspace, SHA-256, deduplicação, conflito explícito, multipart e retomada.
+- O Cofre aceita arquivos, pasta e arrastar/soltar; ignora ZIP/RAR/7Z/TAR/GZ antes do envio, identifica arquivo sem sufixo como revisão 0, aceita extensões documentais sem allowlist rígida e processa pastas grandes em lotes com concorrência controlada, progresso, pausa/retomada e UI responsiva.
+- O Cofre passa a funcionar como repositório: não há mais seleção manual para GRDT dentro dele. Na Central de Controle de GRDT, o operador escolhe **Base documental: Cofre**, cola códigos, localiza documentos/revisões em lote e envia somente os encontrados ao mesmo motor normal de GRDT. O Histórico existente preserva `vaultFileId`; nenhum histórico paralelo é criado.
+- A entrada antiga **Repostagem de GRDT** foi retirada das Ferramentas adicionais para existir um único fluxo operacional. O núcleo legado permanece apenas para compatibilidade e QA de registros antigos.
+- O navegador não recebe credenciais R2/Supabase privilegiadas. Upload e download passam pelo Cloudflare Worker e pelo binding privado `GRCON_DOCUMENTS`.
+- As migrations do Cofre no repositório agora correspondem exatamente às migrations aplicadas no projeto Supabase GRCON. A versão preliminar que criaria um catálogo público paralelo foi removida.
+- Service Worker e QA Cloudflare passam a incluir a interface, worker de hash e estilos do Cofre. Checkpoint: `docs/grdt-unified-posting-checkpoint.md`.
+
+## 5.44.9 — 2026-10-06
+
+- Removida de Ferramentas adicionais a funcionalidade “Matriz documental por disciplina”, incluindo rota, runtime, cache e artefatos exclusivos; os demais módulos permanecem inalterados.
+- Evolução SIGEM × PW: cache de snapshots, comparações e gráfico; preparação em worker com paridade de identidade e escopo.
+- Bases selecionadas preservadas em refresh, navegação e recarga, incluindo a escolha sem base anterior.
+- Contagens por documento, documento + revisão e ocorrência técnica explicadas separadamente; evidência de emissão independente da ordem das linhas.
+- Listas e Excel dos KPIs atuais usam a mesma granularidade e incluem regras, fontes, exclusões e emissão indeterminada.
+- A movimentação por snapshots é explicitamente diferenciada do total de operações do PW; entradas já emitidas não recebem data de emissão presumida.
+- Cache PWA atualizado; regressões funcionais, paridade do worker e teste Chromium com bases de 20 mil registros.
+
+## 5.44.8 — 2026-10-02
+
+### Correção arquitetural — inspeção interna de PDF retirada
+
+- O GRCON deixa de abrir, extrair ou interpretar conteúdo interno de PDFs para conferência normativa.
+- Removidos PDF.js, worker, bundle `pdf-document`, concordância N-381 por páginas e bloqueios derivados do conteúdo do PDF.
+- Adicionar Capa e Combinar PDFs permanecem como ferramentas de manipulação estrutural; `pdf-lib` continua preservado.
+- Conferências passam a depender somente de código e metadados estruturados das bases operacionais.
+- Adicionado teste de regressão para impedir que extração textual/OCR volte ao fluxo de Conferência ou Adicionar Capa.
+
+- Matriz documental por disciplina: fontes LD, SCON, escopo e Documentos Previstos, com alertas consultivos e rastreabilidade.
+- Relatórios JSON e CSV e consulta de snapshots do RECON, sem alteração da alocação.
+
+## 5.44.7 — 2026-10-02 — ESTRATÉGIA RETIRADA EM 5.44.8
+
+> Registro histórico: a inspeção interna de PDFs desta versão foi removida do runtime na correção arquitetural de 5.44.8.
+
+
+- N-381 M: conferência da capa e do texto do PDF em Adicionar Capa e Conferência.
+- Divergência inequívoca de número/revisão nas páginas preservadas impede gerar a capa; revisão por folha e primeira capa substituída recebem tratamento próprio.
+- Fonte, página, valores e snapshot auditáveis; PDFs sem texto/extração ambígua ficam inconclusivos.
+- Leitor local e worker carregados sob demanda, com recursos disponíveis no cache offline.
+
+## 5.44.6 — 2026-10-01
+
+### Conformidade documental registrada na emissão
+
+- Análise e Repostagem apresentam verificações N-1710 e alertas N-2064 com regra, norma, parte e revisão.
+- Geração registra um snapshot por documento e eGRDT, preservado no Histórico e incluído em sua exportação. Registros antigos não são recalculados.
+- Fontes pendentes, revisão divergente e avaliações inconclusivas continuam sem criar bloqueios normativos.
+- Corrigida a confirmação da estrutura da LD que ficava atrás do overlay.
+- Paginação de 50 documentos, cache por conteúdo/versão e QA Chromium em desktop/celular.
+- Versão e cache de distribuição atualizados; etapas restantes documentadas em docs/documentary-compliance.md.
+
 ## 5.44.5 — 2026-09-30
 
 ### Consultas usa Documentos Previstos como fonte oficial de alocação

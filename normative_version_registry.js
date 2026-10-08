@@ -40,12 +40,14 @@ function normalizeEntry(value){
 
 function createVersionRegistry(seed=[]){
   const map=new Map();
+  let generation=0;
 
   const register=(value,opt={})=>{
     const entry=normalizeEntry(value);
     const entryKey=key(entry.norm,entry.part);
     if(map.has(entryKey)&&!opt.replace)throw new Error(`Versão normativa duplicada: ${entryKey}.`);
     map.set(entryKey,entry);
+    generation+=1;
     return entry;
   };
 
@@ -88,6 +90,7 @@ function createVersionRegistry(seed=[]){
     list,
     promotionDecision,
     isUsable:(n,p)=>promotionDecision(n,p).allowed,
+    generation:()=>generation,
   });
 }
 
@@ -95,14 +98,14 @@ const SEED=Object.freeze([
   normalizeEntry({
     norm:'N-2064',
     part:'body',
-    revision:'C',
-    edition:'08/2003 + emendas até 02/2014',
+    revision:'D',
+    edition:'10/2017',
     catalogRevision:'D',
     catalogEdition:'10/2017',
-    status:'outdated_candidate',
+    status:'unconfirmed',
     sourceAvailable:true,
-    verificationSource:'PDF fornecido Rev. C + Catálogo público PETROBRAS Mar/2025',
-    notes:'O catálogo público confirma Rev. D, mas o texto da Rev. D não foi auditado. Nenhuma regra da Rev. C pode bloquear produção como se fosse a Rev. D.',
+    verificationSource:'Catálogo oficial PETROBRAS Mar/2025 + cópia pública da Rev. D auditada nas seções 4.1 a 5.3; pacote fornecido contém Rev. C',
+    notes:'A revisão vigente foi confirmada no catálogo oficial e o texto público da Rev. D foi usado para corrigir falsos bloqueios/formatos de revisão. Como o pacote entregue não contém o PDF primário Rev. D, a camada normativa ainda não promove automaticamente essas regras a BLOQUEIO.',
   }),
   normalizeEntry({
     norm:'N-1710',

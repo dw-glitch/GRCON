@@ -43,7 +43,7 @@ function report() {
 function appVersion(): string {
   return window.GrconConfig?.APP_VERSION
     || document.documentElement.dataset.version
-    || "5.44.5";
+    || "5.44.9";
 }
 
 function notify(message: string, kind = "info"): void {
@@ -284,9 +284,9 @@ function updateExternalCount(count: number): void {
 }
 
 function activateView(view: string): void {
+  if (view === "analysis-history") view = "control";
   const modules: Record<string, string> = {
     control: "grdt-module",
-    "analysis-history": "analysis-history-module",
     history: "history-module",
     dashboard: "dashboard-module",
     requests: "requests-module",
@@ -301,10 +301,7 @@ function activateView(view: string): void {
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
   });
-  if (view === "analysis-history") {
-    window.GrconAnalysisHistoryUi?.render?.();
-    window.setTimeout(() => document.querySelector<HTMLElement>("#analysis-history-search")?.focus(), 0);
-  } else if (view === "history") {
+  if (view === "history") {
     requestRefresh();
     window.setTimeout(() => document.querySelector<HTMLElement>("#history-search")?.focus(), 0);
   }

@@ -1,0 +1,10 @@
+.documentary-compliance { margin: 12px 0; padding: 14px 18px; border: 1px solid var(--border-1, #cedce7); border-radius: 12px; background: var(--surface-1, #fff); color: var(--text-1, #18394a); }
+.documentary-compliance > summary { cursor: pointer; font-weight: 700; overflow-wrap: anywhere; }
+.documentary-compliance p { margin: 12px 0; font-size: 13px; }
+.documentary-compliance input { max-width: 100%; width: 340px; margin-bottom: 12px; }
+.compliance-document { border-top: 1px solid var(--border-1, #cedce7); padding: 10px 0; overflow-wrap: anywhere; }
+.compliance-document summary { cursor: pointer; font-weight: 600; }
+.compliance-document li { margin: 8px 0; }
+.compliance-document small { display: block; opacity: .85; }
+.compliance-components { display: grid; grid-template-columns: minmax(100px, 150px) minmax(0, 1fr); gap: 5px 12px; }
+.compliance-components dd { margin: 0; }

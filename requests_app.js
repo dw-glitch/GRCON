@@ -22,6 +22,7 @@
   const state = {
     modelos: [],        // modelos de exportação: embutidos + salvos aqui + da equipe
     modeloEditor: null,  // modelo aberto no editor de colunas
+    modeloBusca: "",     // filtro local de pesquisa, sem alterar a coleção oficial
   };
 
   function notify(mensagem, tipo) {
@@ -103,10 +104,23 @@
     return modelo.scope === "equipe" ? "da equipe" : "salvo neste navegador";
   }
 
-  function renderModelos() {
+  function normalizarPesquisaModelo(value) {
+    return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
+  }
+
+  function renderModelos(preservarEditor) {
     if (!els.modelosTbody) return;
     const dono = ehProprietario();
-    els.modelosTbody.innerHTML = state.modelos.map((modelo) => {
+    const query = normalizarPesquisaModelo(state.modeloBusca);
+    const modelosVisiveis = query ? state.modelos.filter((modelo) => {
+      const base = root.GrconRequestsReport.TEMPLATE_BASES[modelo.base]?.label || modelo.base;
+      return normalizarPesquisaModelo([modelo.name, base, origemDoModelo(modelo)].join(" ")).includes(query);
+    }) : state.modelos;
+    if (els.modeloContagem) {
+      els.modeloContagem.textContent = modelosVisiveis.length.toLocaleString("pt-BR") +
+        " de " + state.modelos.length.toLocaleString("pt-BR") + " modelo(s)";
+    }
+    els.modelosTbody.innerHTML = modelosVisiveis.length ? modelosVisiveis.map((modelo) => {
       const semDado = modelo.columns.filter((coluna) => !coluna.key).length;
       return `<tr>
         <td><strong>${escapeHtml(modelo.name)}</strong></td>
@@ -118,8 +132,9 @@
           ${modelo.builtIn || (!dono && modelo.scope === "equipe") ? "" : `<button class="text-button danger" data-modelo-remove="${escapeHtml(modelo.id)}" type="button">Excluir</button>`}
         </td>
       </tr>`;
-    }).join("");
-    renderEditorModelo();
+    }).join("") : '<tr><td colspan="5" class="requests-modelos-vazio">Nenhum modelo corresponde à pesquisa.</td></tr>';
+    // Digitar na busca atualiza apenas as linhas da lista; não recria o editor aberto.
+    if (!preservarEditor) renderEditorModelo();
   }
 
   function abrirEditorModelo(id) {
@@ -301,6 +316,8 @@
   function mostrarArea(area) {
     els.areaConsulta.hidden = area !== "consulta";
     els.areaModelos.hidden = area !== "modelos";
+    if (els.areaSigemMonitoring) els.areaSigemMonitoring.hidden = area !== "sigem-monitoring";
+    if (area === "sigem-monitoring") root.GrconSigemStatusMonitoring?.load?.();
     document.querySelectorAll("[data-requests-area]").forEach((botao) => {
       botao.classList.toggle("active", botao.dataset.requestsArea === area);
     });
@@ -313,7 +330,10 @@
   function ligar() {
     els.areaConsulta = $("#requests-area-consulta");
     els.areaModelos = $("#requests-area-modelos");
+    els.areaSigemMonitoring = $("#requests-area-sigem-monitoring");
     els.modelosTbody = $("#requests-modelos-tbody");
+    els.modeloSearch = $("#requests-modelo-search");
+    els.modeloContagem = $("#requests-modelo-contagem");
     els.modeloNew = $("#requests-modelo-new");
     els.modeloImport = $("#requests-modelo-import");
     els.modeloImportInput = $("#requests-modelo-import-input");
@@ -329,6 +349,11 @@
     els.modeloSave = $("#requests-modelo-save");
     els.modeloCancel = $("#requests-modelo-cancel");
     if (!els.modelosTbody) return false;
+
+    els.modeloSearch?.addEventListener("input", (event) => {
+      state.modeloBusca = event.currentTarget.value;
+      renderModelos(true);
+    });
 
     els.modeloNew.addEventListener("click", () => novoModelo(els.modeloBase.value));
     els.modeloImport.addEventListener("click", () => els.modeloImportInput.click());

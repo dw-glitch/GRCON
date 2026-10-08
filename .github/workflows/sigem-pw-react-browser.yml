@@ -10,7 +10,12 @@ on:
       - "sigem_pw_dashboard_core.js"
       - "sigem_pw_readiness_core.js"
       - "sigem_pw_scope_fix.js"
+      - "performance_workers.js"
+      - "workers/export.worker.js"
+      - "shared_sigem_query_app.js"
+      - "scripts/validar-performance-browser.cjs"
       - "workers/sigem_pw_dashboard.worker.js"
+      - "workers/sigem_pw_evolution.worker.js"
       - "sigem_pw_dashboard_bootstrap.js"
       - "sigem_pw_revision_core.js"
       - "sigem_pw_revision_section.js"
@@ -86,6 +91,8 @@ jobs:
           node tests/sigem_pw_history_postmerge.cjs
           node tests/sigem_pw_history_stage5.cjs
           node tests/sigem_pw_evolution.cjs
+          node tests/sigem_pw_evolution_auditability.cjs
+          node tests/sigem_pw_evolution_worker.cjs
           node tests/sigem_pw_audit.cjs
           node tests/sigem_pw_stage7_atomic_import.cjs
           node tests/sigem_pw_stage8_acceptance.cjs
@@ -109,9 +116,10 @@ jobs:
           python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-sigem-pw.log" 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-performance-browser.cjs
           node scripts/validar-sigem-pw-react-browser.cjs
+          node scripts/validar-owner-shared-sigem-browser.cjs
           node scripts/validar-consultas-browser.cjs
-          node scripts/validar-historico-analises-browser.cjs
           node scripts/validar-pdf-tools-browser.cjs
           node scripts/validar-historico-egrdt-browser.cjs
 
@@ -122,8 +130,10 @@ jobs:
         with:
           name: sigem-pw-evolution-react-phase-a-hardening
           path: |
+            artifacts/owner-shared-sigem/*.png
             artifacts/sigem-pw-react/*.png
             artifacts/sigem-pw-react/metrics.json
+            artifacts/performance/metrics.json
             react-dist/sigem-pw-evolution-app.js
           if-no-files-found: warn
           retention-days: 14

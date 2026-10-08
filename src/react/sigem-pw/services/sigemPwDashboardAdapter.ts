@@ -6,10 +6,13 @@ import type {
   SigemPwListKey,
   SigemPwRecord,
   SigemPwResult,
+  SigemPwRevisionScope,
   SigemPwState,
   SigemPwUiSnapshot,
   WorkerModelPayload,
 } from "../types/domain";
+
+import { ensureSharedSigemHistoryCompatibility } from "./sharedSigemHistoryCompatibility";
 
 const PRE_STAGE7_RESET_KEY = "sigem-pw-stage7-preupdate-reset-v1";
 const EMPTY_BASE = (): SigemPwBase => ({ meta: null, records: [] });
@@ -47,6 +50,7 @@ interface PreparedConferenceImport {
 type Subscriber = () => void;
 
 const state: SigemPwState = {
+  sigemVersions: [], analysisSigemId: "", analysisPwId: "", analysisError: "", officialSigem: null,
   ready: false,
   busy: false,
   progressMessage: "",
@@ -63,7 +67,9 @@ const state: SigemPwState = {
   dateEditSnapshotId: "",
   dateEditor: { open: false, system: "", snapshotId: "", value: "" },
   historyDialogOpen: false,
-  filters: { documentClass: "", query: "" },
+  revisionScope: "revision0",
+  filterResetKey: 0,
+  filters: { documentClass: "", query: "", revision: "", sigemStatus: "", inPw: "" },
   activeList: "all",
   page: 1,
 };
@@ -73,6 +79,7 @@ let snapshot: SigemPwUiSnapshot = { ...state, revision };
 const subscribers = new Set<Subscriber>();
 let refreshPromise: Promise<void> | null = null;
 let externalListenersInstalled = false;
+let lastModelSources = "";
 
 function Core() {
   const api = window.GrconSigemPwDashboard;
@@ -86,7 +93,10 @@ function Readiness() {
 }
 function text(value: unknown): string { return value == null ? "" : String(value).trim(); }
 function fmt(value: number): string { return Number(value || 0).toLocaleString("pt-BR"); }
-function messageOf(error: unknown, fallback: string): string { return error instanceof Error && error.message ? error.message : fallback; }
+function messageOf(error: unknown, fallback: string): string {
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string" && error.message.trim()) return error.message;
+  return fallback;
+}
 function emit(): void {
   revision += 1;
   snapshot = { ...state, revision };
@@ -118,13 +128,13 @@ function xlsx(): XlsxApi {
   if (!api?.read || !api.utils) throw new Error("Biblioteca XLSX indisponível.");
   return api;
 }
-function workbookMatrix(sheet: XlsxSheet | undefined, maxColumns: number): string[][] {
+function workbookMatrix(sheet: XlsxSheet | undefined, maxColumns: number, maxRows = Infinity): string[][] {
   const api = xlsx();
   if (!sheet || !sheet["!ref"]) return [];
   const range = api.utils.decode_range(sheet["!ref"]);
   const endColumn = Math.min(range.e.c, Math.max(1, Number(maxColumns) || 40) - 1);
   const output: string[][] = [];
-  for (let row = range.s.r; row <= range.e.r; row += 1) {
+  for (let row = range.s.r; row <= Math.min(range.e.r, range.s.r + maxRows - 1); row += 1) {
     const values: string[] = [];
     for (let column = range.s.c; column <= endColumn; column += 1) {
       const cell = sheet[api.utils.encode_cell({ r: row, c: column })] as XlsxCell | undefined;
@@ -156,8 +166,9 @@ function renderFromModel(resetPage: boolean): void {
     return;
   }
   if (resetPage) state.page = 1;
-  const aggregateKey = state.filters.documentClass || "all";
-  state.result = state.aggregates[aggregateKey];
+  const classKey = state.filters.documentClass || "all";
+  const aggregateKey = `${state.revisionScope}:${classKey}` as keyof typeof state.aggregates;
+  state.result = state.aggregates[aggregateKey] || state.aggregates[`all:${classKey}` as keyof typeof state.aggregates];
   state.readiness = Readiness().assess(state, state.aggregates.all);
   emit();
 }
@@ -208,11 +219,27 @@ async function rebuildModelAsync(): Promise<boolean> {
       type: "model",
       generation,
       model,
-      aggregates: {
-        all: core.aggregateModel(model),
-        ET: core.aggregateModel(model, { documentClass: "ET" }),
-        "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }),
-      },
+      aggregates: (() => {
+        const allScope = {
+          all: core.aggregateModel(model, {}, { revisionScope: "all" }),
+          ET: core.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "all" }),
+          "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "all" }),
+        };
+        const revision0Scope = {
+          all: core.aggregateModel(model, {}, { revisionScope: "revision0" }),
+          ET: core.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "revision0" }),
+          "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "revision0" }),
+        };
+        return {
+          ...allScope,
+          "revision0:all": revision0Scope.all,
+          "revision0:ET": revision0Scope.ET,
+          "revision0:N-1710": revision0Scope["N-1710"],
+          "all:all": allScope.all,
+          "all:ET": allScope.ET,
+          "all:N-1710": allScope["N-1710"],
+        };
+      })(),
     };
   }
   if (generation !== state.modelGeneration || built.generation !== generation || !built.model || !built.aggregates) return false;
@@ -231,7 +258,7 @@ async function ensureConferenceRuntime() {
 function validateSigemWorkbook(workbook: XlsxWorkbook, conference: NonNullable<typeof window.GrconPostingConference>): void {
   let best: { score: number; columns: Record<string, number> } | null = null;
   workbook.SheetNames.forEach((sheetName) => {
-    const detection = conference.detectColumns(workbookMatrix(workbook.Sheets[sheetName], 80).slice(0, 40), 40);
+    const detection = conference.detectColumns(workbookMatrix(workbook.Sheets[sheetName], 80, 40), 40);
     if (detection && (!best || detection.score > best.score)) best = detection;
   });
   if (!best) throw new Error("Consulta Geral inválida: não foi possível localizar Documento e Revisão nas primeiras linhas.");
@@ -507,27 +534,56 @@ async function refresh(reason = ""): Promise<void> {
   refreshPromise = (async () => {
     try {
       const resetApplied = await clearPreStage7BasesOnce();
+      ensureSharedSigemHistoryCompatibility();
       await window.GrconSharedSigemQuery?.refresh();
       const bases = await Core().loadBases();
       const shared = window.GrconSharedSigemQuery?.current();
+      state.officialSigem = shared?.meta || null;
+      state.sigemVersions = await window.GrconSharedSigemQuery?.listVersions() || [];
       if (shared?.meta) {
         if (bases.sigem?.meta?.snapshotId !== shared.meta.snapshotId) {
           const recorded = await registerHistoryBeforeActivation("sigem", shared, { pwBase: bases.pw, ldRecords: bases.ld?.records || [], reason: "shared-general-query" });
           shared.meta.historySourceSnapshotId = recorded.sigem?.snapshot?.id;
         }
-        bases.sigem = await Core().saveSigemBase(shared);
+        const projectionChanged = !bases.sigem?.meta || Object.entries(shared.meta).some(([key, value]) =>
+          JSON.stringify(bases.sigem.meta?.[key]) !== JSON.stringify(value));
+        if (projectionChanged) {
+          bases.sigem = await Core().saveSigemBase(shared);
+          bases.history = await Core().loadHistory();
+        }
+      } else if (window.GrconSharedSigemQuery && window.GrconCloud?.state?.online
+        && window.GrconCloud.state.membership?.workspace_id
+        && bases.sigem?.meta?.source === "shared-general-query") {
+        bases.sigem = EMPTY_BASE();
+        // The legacy Conference projection is also read by loadBases(). Leaving
+        // it behind would migrate the deleted shared base into the dashboard.
+        const legacy = await Core().kvGet(Core().LEGACY_SIGEM_BASE_KEY, EMPTY_BASE()) as SigemPwBase;
+        const writes: Array<[string, unknown]> = [[Core().SIGEM_BASE_KEY, bases.sigem]];
+        if (legacy?.meta?.source === "shared-general-query") writes.push([Core().LEGACY_SIGEM_BASE_KEY, EMPTY_BASE()]);
+        await Core().kvSetMany(writes);
+        window.dispatchEvent(new CustomEvent("grcon:shared-sigem-updated", { detail: { source: "sigem-pw-dashboard", meta: null } }));
       }
       state.sigem = bases.sigem?.meta ? bases.sigem : EMPTY_BASE();
       state.pw = bases.pw?.meta ? bases.pw : EMPTY_BASE();
+      if (state.analysisSigemId) state.sigem = await window.GrconSharedSigemQuery!.loadSnapshot(state.analysisSigemId, state.sigemVersions);
+      if (state.analysisPwId) {
+        const selected = bases.history.snapshots.find(item => item.meta.kind === "pw" && item.meta.snapshotId === state.analysisPwId);
+        if (!selected) throw new Error("A base PW selecionada não está disponível.");
+        state.pw = selected;
+      }
       state.ld = bases.ld?.meta ? bases.ld : EMPTY_BASE();
-      state.history = bases.history || EMPTY_HISTORY();
-      await rebuildModelAsync();
+      state.history = bases.history;
+      state.analysisError = "";
+      const sources = [state.sigem.meta?.snapshotId, state.pw.meta?.snapshotId, state.ld.meta?.snapshotId, state.pw.meta?.scopeLdSnapshotId].join("|");
+      if (!state.model || sources !== lastModelSources) { await rebuildModelAsync(); lastModelSources = sources; }
       state.ready = true;
       renderFromModel(true);
       if (resetApplied) notify("Bases anteriores SIGEM, PW e LD removidas. O módulo está pronto para novas importações.", "success");
     } catch (error) {
       console.error(`[SIGEM×PW] atualização ${reason}:`, error);
-      notify(messageOf(error, "Não foi possível ler as bases persistidas do Dashboard."), "error");
+      state.analysisError = messageOf(error, "Não foi possível ler as bases persistidas do Dashboard.");
+      state.sigem = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; state.readiness = null; state.ready = true;
+      notify(state.analysisError, "error");
       emit();
     }
   })().finally(() => { refreshPromise = null; });
@@ -547,12 +603,30 @@ async function activate(): Promise<void> {
   }
 }
 
+const rowSearchText = new WeakMap<object, string>();
+let filteredCache: { source: SigemPwResult["lists"][string]; key: string; rows: SigemPwResult["lists"][string] } | null = null;
 function filteredRows(): SigemPwResult["lists"][string] {
   const rows = state.result?.lists?.[state.activeList] || [];
   const query = Core().norm(state.filters.query);
-  return query
-    ? rows.filter((row) => Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.situation].join(" ")).includes(query))
-    : rows;
+  const revision = Core().norm(state.filters.revision);
+  const status = Core().norm(state.filters.sigemStatus);
+  const key = JSON.stringify([query, revision, status, state.filters.inPw]);
+  if (filteredCache?.source === rows && filteredCache.key === key) return filteredCache.rows;
+  const filtered = !query && !revision && !status && !state.filters.inPw ? rows : rows.filter(row => {
+    if (query) {
+      let search = rowSearchText.get(row);
+      if (search === undefined) {
+        search = Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.situation].join(" "));
+        rowSearchText.set(row, search);
+      }
+      if (!search.includes(query)) return false;
+    }
+    if (revision && Core().norm(row.revision) !== revision) return false;
+    if (status && Core().norm(row.sigemStatus) !== status) return false;
+    return state.filters.inPw === "yes" ? row.inPw : state.filters.inPw === "no" ? !row.inPw : true;
+  });
+  filteredCache = { source: rows, key, rows: filtered };
+  return filtered;
 }
 function pageRows(): { rows: ReturnType<typeof filteredRows>; visible: ReturnType<typeof filteredRows>; pages: number; start: number } {
   const rows = filteredRows();
@@ -572,9 +646,28 @@ function setDocumentClass(value: SigemPwDocumentClass): void {
   state.page = 1;
   renderFromModel(false);
 }
+function setRevisionScope(value: SigemPwRevisionScope): void {
+  const next = value === "all" ? "all" : "revision0";
+  if (state.revisionScope === next) return;
+  state.revisionScope = next;
+  state.page = 1;
+  renderFromModel(false);
+  document.documentElement.dataset.sigemPwRevisionScope = next;
+  window.dispatchEvent(new CustomEvent("grcon:sigem-pw-revision-scope-changed", { detail: { scope: next } }));
+}
+function setRevision(value: string): void { state.filters.revision = value; state.page = 1; emit(); }
+function setSigemStatus(value: string): void { state.filters.sigemStatus = value; state.page = 1; emit(); }
+function setInPw(value: "" | "yes" | "no"): void { state.filters.inPw = value; state.page = 1; emit(); }
+function openSigemDetails(): void {
+  state.filterResetKey++;
+  state.filters.query = ""; state.filters.revision = ""; state.filters.sigemStatus = ""; state.filters.inPw = "";
+  setActiveList("sigem");
+  document.getElementById("spw-list-title")?.scrollIntoView({ block: "start" });
+}
 function clearFilters(): void {
   state.filters.documentClass = "";
   state.filters.query = "";
+  state.filters.revision = ""; state.filters.sigemStatus = ""; state.filters.inPw = "";
   state.page = 1;
   renderFromModel(false);
 }
@@ -591,6 +684,8 @@ function setPage(page: number): void {
 async function exportCurrentList(): Promise<void> {
   try {
     const rows = filteredRows();
+    const exportMeta = { sigem: { ...state.sigem.meta }, pw: { ...state.pw.meta }, scope: state.revisionScope, list: state.activeList, filters: { ...state.filters }, generatedAt: new Date().toISOString() };
+    if (state.analysisError) throw new Error(state.analysisError);
     if (!rows.length) {
       notify("Não há registros na lista filtrada para exportar.", "info");
       return;
@@ -603,16 +698,46 @@ async function exportCurrentList(): Promise<void> {
       Documento: row.document,
       "Revisão": row.revision,
       "Status SIGEM": row.sigemStatus,
+      "Data SIGEM": row.sigemDate || "",
+      "Existe no PW": row.inPw ? "SIM" : "NÃO",
       "Status PW": row.pwStatus,
       "Emissão PW": row.pwEmission,
       "Situação": row.situation,
     }));
-    const worksheet = api.utils.json_to_sheet(data);
-    (worksheet as Record<string, unknown>)["!cols"] = [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 34 }];
-    const workbook = api.utils.book_new();
-    api.utils.book_append_sheet(workbook, worksheet, "Relação");
+    const sheets = [
+      { name: "Relação", rows: data, columns: [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 16 }, { wch: 28 }, { wch: 16 }, { wch: 34 }] },
+      { name: "Metadados", rows: [
+      { Item: "Consulta Geral utilizada", Valor: text(exportMeta.sigem.referenceDate) || text(exportMeta.sigem.importedAt) },
+      { Item: "Consulta Geral ID", Valor: text(exportMeta.sigem.snapshotId) },
+      { Item: "Consulta Geral arquivo", Valor: text(exportMeta.sigem.fileName) },
+      { Item: "PW utilizada", Valor: text(exportMeta.pw.importedAt) },
+      { Item: "PW ID", Valor: text(exportMeta.pw.snapshotId) },
+      { Item: "Escopo de revisão", Valor: exportMeta.scope === "revision0" ? "Revisão 0" : "Todas as revisões" },
+      { Item: "Filtros", Valor: JSON.stringify(exportMeta.filters) },
+      { Item: "Lista", Valor: exportMeta.list },
+      { Item: "Data da geração", Valor: exportMeta.generatedAt },
+    ] },
+    ];
+    let buffer: ArrayBuffer | undefined;
+    try {
+      await window.GRCONModuleLoader.ensure("performance");
+      if (window.GrconPerformance?.supported) buffer = await window.GrconPerformance.buildSpreadsheet("sigem-dashboard", { sheets });
+    } catch (error) { console.warn("[SIGEM×PW] Exportação em modo compatível", error); }
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    api.writeFile(workbook, `GRCON_SIGEM_PW_${state.activeList}_${stamp}.xlsx`, { compression: true });
+    const filename = `GRCON_SIGEM_PW_${exportMeta.scope}_${exportMeta.list}_${stamp}.xlsx`;
+    if (buffer) {
+      const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } else {
+      const workbook = api.utils.book_new();
+      for (const tab of sheets) {
+        const worksheet = api.utils.json_to_sheet(tab.rows);
+        if ("columns" in tab) worksheet["!cols"] = tab.columns;
+        api.utils.book_append_sheet(workbook, worksheet, tab.name);
+      }
+      api.writeFile(workbook, filename, { compression: true });
+    }
     notify(`Lista exportada com ${fmt(rows.length)} registros.`, "success");
   } catch (error) {
     console.error("[SIGEM×PW] exportação:", error);
@@ -652,7 +777,7 @@ function openBaseDateEditor(system: SigemPwEditableBaseKind, snapshotId?: string
   const id = text(base.meta.snapshotId);
   state.dateEditSystem = system;
   state.dateEditSnapshotId = id;
-  state.dateEditor = { open: true, system, snapshotId: id, value: localDateTimeValue(base.meta.importedAt) };
+  state.dateEditor = { open: true, system, snapshotId: id, value: system === "sigem" && base.meta.source === "shared-general-query" ? text(base.meta.referenceDate) || text(base.meta.importedAt).slice(0, 10) : localDateTimeValue(base.meta.importedAt) };
   emit();
 }
 function closeBaseDateEditor(): void {
@@ -673,6 +798,17 @@ async function saveBaseDate(): Promise<void> {
     return;
   }
   const original = baseForDateEdit(system, snapshotId);
+  if (system === "sigem" && original?.meta?.source === "shared-general-query") {
+    setBusy(true, "Salvando data compartilhada da Consulta Geral…");
+    try {
+      await window.GrconSharedSigemQuery!.setReferenceDate(state.dateEditor.value.slice(0, 10), snapshotId);
+      await refresh("data compartilhada corrigida");
+      state.dateEditor = { ...state.dateEditor, open: false };
+      notify("Data da Consulta Geral salva no banco e sincronizada.", "success");
+    } catch (error) { notify(messageOf(error, "Não foi possível salvar a data compartilhada."), "error"); }
+    finally { setBusy(false); }
+    return;
+  }
   const originalDate = text(original?.meta?.importedAt);
   let dashboardUpdated = false;
   let historyUpdated = false;
@@ -711,13 +847,70 @@ async function saveBaseDate(): Promise<void> {
   }
 }
 
+async function activateSharedSigemVersion(id: string): Promise<void> {
+  const snapshotId = text(id);
+  const target = state.sigemVersions.find(version => version.snapshot_id === snapshotId);
+  if (!target) { notify("A base selecionada não está mais disponível.", "warning"); return; }
+  if (target.status === "active") { state.analysisSigemId = ""; await refresh("base compartilhada atual"); notify("Esta já é a Consulta Geral atual.", "info"); return; }
+  const api = ensureSharedSigemHistoryCompatibility() || window.GrconSharedSigemQuery;
+  if (!api?.activateVersion) { notify("Gerenciamento do histórico da Consulta Geral indisponível nesta aba. Atualize a página.", "error"); return; }
+  if (!window.confirm(`Tornar “${text(target.file_name) || "base selecionada"}” a Consulta Geral atual para todos os usuários deste contrato?`)) return;
+  setBusy(true, "Ativando base compartilhada da Consulta Geral…");
+  try {
+    await api.activateVersion(snapshotId);
+    state.analysisSigemId = ""; state.analysisError = "";
+    await refresh("base compartilhada ativada");
+    notify("Consulta Geral atualizada para a versão selecionada.", "success");
+  } catch (error) {
+    notify(messageOf(error, "Não foi possível tornar esta base a Consulta Geral atual."), "error");
+  } finally { setBusy(false); }
+}
+
+async function deleteSharedSigemVersion(id: string): Promise<void> {
+  const snapshotId = text(id);
+  const target = state.sigemVersions.find(version => version.snapshot_id === snapshotId);
+  if (!target) { notify("A base selecionada não está mais disponível.", "warning"); return; }
+  const api = ensureSharedSigemHistoryCompatibility() || window.GrconSharedSigemQuery;
+  if (!api?.deleteVersion) { notify("Gerenciamento do histórico da Consulta Geral indisponível nesta aba. Atualize a página.", "error"); return; }
+  const isCurrent = target.status === "active";
+  const message = isCurrent
+    ? `Excluir a Consulta Geral atual “${text(target.file_name) || "sem nome"}”? A versão histórica mais recente será promovida automaticamente, se existir.`
+    : `Excluir a base histórica “${text(target.file_name) || "sem nome"}” da Consulta Geral?`;
+  if (!window.confirm(message)) return;
+  setBusy(true, isCurrent ? "Excluindo base atual e selecionando a substituta…" : "Excluindo base histórica…");
+  try {
+    const result = await api.deleteVersion(snapshotId);
+    if (state.analysisSigemId === snapshotId || isCurrent) state.analysisSigemId = "";
+    state.analysisError = "";
+    if (result?.removedWasCurrent && !result.activeSnapshotId) await Core().kvSet(Core().SIGEM_BASE_KEY, EMPTY_BASE());
+    await refresh("base compartilhada excluída");
+    if (result?.removedWasCurrent) {
+      notify(result.activeSnapshotId ? "Base atual excluída. A versão histórica mais recente agora é a Consulta Geral atual." : "Base atual excluída. Não há outra Consulta Geral compartilhada ativa.", "success");
+    } else notify("Base histórica excluída.", "success");
+  } catch (error) {
+    notify(messageOf(error, "Não foi possível excluir esta base da Consulta Geral."), "error");
+  } finally { setBusy(false); }
+}
+
 async function openEvolution(): Promise<void> {
   await window.GrconSigemPwDashboardBootstrap?.openEvolution?.();
+}
+
+async function selectAnalysisBase(system: "sigem" | "pw", id: string): Promise<void> {
+  if (state.busy) return;
+  if (system === "sigem") state.analysisSigemId = id; else state.analysisPwId = id;
+  setBusy(true, "Carregando base selecionada para análise…");
+  // Remove the previous numbers while the selected identity is loading.
+  state.result = null; state.model = null; state.aggregates = null; emit();
+  try { await refresh("seleção temporária de base"); } finally { setBusy(false); }
 }
 
 function installExternalListeners(): () => void {
   if (externalListenersInstalled) return () => undefined;
   externalListenersInstalled = true;
+  const scope = (event: Event) => setRevisionScope((event as CustomEvent).detail?.scope);
+  window.addEventListener("grcon:sigem-pw-revision-scope-changed", scope);
+  setRevisionScope(document.documentElement.dataset.sigemPwRevisionScope === "all" ? "all" : "revision0");
   const conference = (event: Event) => {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
     if (detail?.source !== "sigem-pw-dashboard") void refresh("Consulta Geral atualizada em outro módulo");
@@ -726,10 +919,19 @@ function installExternalListeners(): () => void {
     const detail = (event as CustomEvent<{ source?: string }>).detail;
     if (detail?.source !== "sigem-pw-dashboard" && detail?.source !== "sigem-pw-dashboard-ld") void refresh("base PW atualizada em outro módulo");
   };
+  const dates = () => { if (!state.busy) void refresh("metadados compartilhados atualizados"); };
+  const context = () => { state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; emit(); void refresh("contrato alterado"); };
+  window.addEventListener("grcon:contract-context-changed", context);
+  window.addEventListener("grcon:shared-sigem-date-updated", dates);
+  window.addEventListener("grcon:shared-sigem-metadata-invalidated", dates);
   window.addEventListener("grcon:shared-sigem-updated", conference);
   window.addEventListener("grcon:conference-updated", conference);
   window.addEventListener("grcon:pw-base-updated", pw);
   return () => {
+    window.removeEventListener("grcon:sigem-pw-revision-scope-changed", scope);
+    window.removeEventListener("grcon:contract-context-changed", context);
+    window.removeEventListener("grcon:shared-sigem-date-updated", dates);
+    window.removeEventListener("grcon:shared-sigem-metadata-invalidated", dates);
     window.removeEventListener("grcon:shared-sigem-updated", conference);
     window.removeEventListener("grcon:conference-updated", conference);
     window.removeEventListener("grcon:pw-base-updated", pw);
@@ -748,7 +950,12 @@ export const sigemPwDashboardAdapter = {
   importPw,
   importLd,
   setQuery,
+  setRevision,
+  setSigemStatus,
+  setInPw,
+  openSigemDetails,
   setDocumentClass,
+  setRevisionScope,
   clearFilters,
   setActiveList,
   setPage,
@@ -762,7 +969,10 @@ export const sigemPwDashboardAdapter = {
   closeBaseDateEditor,
   setBaseDateValue,
   saveBaseDate,
+  activateSharedSigemVersion,
+  deleteSharedSigemVersion,
   openEvolution,
+  selectAnalysisBase,
   subscribeExternalEvents: installExternalListeners,
 };
 
