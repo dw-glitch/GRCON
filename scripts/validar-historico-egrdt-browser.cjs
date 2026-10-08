@@ -408,13 +408,12 @@ async function setSharedHistoryFixture(page, enabled) {
     await expectCount(page, 3);
 
     await page.locator('[data-history-id="fixture-a"]').click();
-    if (!await page.locator('.history-detail-compliance').evaluate(node => node.open)) await page.locator('.history-detail-compliance > summary').click();
-    assert.match(await page.locator('.history-detail-compliance').innerText(), /não possui validação normativa registrada/);
+    assert.equal(await page.locator('.history-detail-compliance').count(), 0, 'painel redundante removido mesmo sem dados normativos');
     await page.locator('[data-history-id="fixture-b"]').click();
     await page.locator("#history-detail").waitFor({ state: "visible" });
-    if (!await page.locator('.history-detail-compliance').evaluate(node => node.open)) await page.locator('.history-detail-compliance > summary').click();
-    assert.match(await page.locator('.history-detail-compliance').innerText(), /documentary-compliance-1/);
-    assert.match(await page.locator('.history-detail-compliance').innerText(), /recomenda não utilizar I/);
+    assert.equal(await page.locator('.history-detail-compliance').count(), 0, 'painel redundante removido sem alterar os registros');
+    assert.equal(fixtures[1].normativeValidation.normativeValidationVersion, 'documentary-compliance-1');
+    assert.match(JSON.stringify(fixtures[1].normativeValidation), /recomenda não utilizar I/);
     await shot(page, "05-history-egrdt-detail-1366.png");
 
     // Ações operacionais em navegador real, sem chamar webhook:
