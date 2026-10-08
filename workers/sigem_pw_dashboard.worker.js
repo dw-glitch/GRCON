@@ -5,6 +5,29 @@ importScripts("../sigem_pw_dashboard_core.js");
 self.addEventListener("message", (event) => {
   try {
     const payload = event.data || {};
+    if (payload.type === "quality-ld") {
+      importScripts("../xlsx.full.min.js");
+      const index = self.XLSX.read(payload.buffer, { type: "array", bookSheets: true });
+      const sheetName = index.SheetNames.find(name => self.GrconSigemPwDashboard.normalizeHeader(name) === "N 1710");
+      if (!sheetName) throw new Error("LD inválida: a aba N-1710 não foi localizada.");
+      const book = self.XLSX.read(payload.buffer, { type: "array", cellDates: false, dense: false, sheets: [sheetName] });
+      const sheet = book.Sheets[sheetName];
+      const matrix = [];
+      if (sheet && sheet["!ref"]) {
+        const range = self.XLSX.utils.decode_range(sheet["!ref"]);
+        for (let row = range.s.r; row <= range.e.r; row += 1) {
+          const values = [];
+          for (let column = range.s.c; column <= Math.min(range.e.c, 39); column += 1) {
+            const cell = sheet[self.XLSX.utils.encode_cell({ r: row, c: column })];
+            values[column - range.s.c] = cell ? self.GrconSigemPwDashboard.text(cell.w !== undefined ? cell.w : cell.v) : "";
+          }
+          matrix.push(values);
+        }
+      }
+      const parsed = self.GrconSigemPwDashboard.parseLdMatrix(matrix, { ...payload.meta, sheetName });
+      self.postMessage({ ok: true, type: "quality-ld", parsed });
+      return;
+    }
     if (payload.type === "model") {
       const Dashboard = self.GrconSigemPwDashboard;
       const model = Dashboard.createModel(payload.sigemRecords || [], payload.pwRecords || [], payload.ldRecords || []);

@@ -22,7 +22,7 @@ function writeFixtures() {
 
   const ldBook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(ldBook, XLSX.utils.aoa_to_sheet([
-    ["ITEM", "DOCUMENTO", "REVISÃO", "TÍTULO"],
+    ["ITEM", "DOCUMENTO \r\nN-1710 ", "REVISÃO", "TÍTULO"],
     ["1", n1710, "0", "Documento N-1710 de teste"],
   ]), "N-1710");
   fs.writeFileSync(ldFile, XLSX.write(ldBook, { type: "buffer", bookType: "xlsx" }));
@@ -454,7 +454,9 @@ async function waitEvolutionReady(page) {
       await window.GrconSigemPwRevisionUi.refresh();
     });
 
+    const ldWorkerStarted = page.waitForEvent("worker", { predicate: worker => worker.url().endsWith("sigem_pw_dashboard.worker.js") });
     await importFile(page, "#spw-ld-file", fixtures.ldFile);
+    await ldWorkerStarted;
     assert.deepEqual(await page.evaluate(() => ({
       sigem: Boolean(window.GrconSigemPwDashboardUi.state.sigem.meta),
       pw: Boolean(window.GrconSigemPwDashboardUi.state.pw.meta),
