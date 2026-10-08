@@ -72,6 +72,32 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  page.once('dialog',d=>d.accept());await page.locator('[data-vault-delete]').first().click();await page.waitForFunction(()=>!document.querySelector('[data-vault-delete="qa-0"]'));
  assert.equal(calls.filter(c=>c.action==='delete').length,1);
  await page.screenshot({path:path.join(out,'cofre-1366.png')});
+ // A mesma tabela e os mesmos comandos em desktop, nos dois temas e com zoom.
+ for(const width of [1366,1440,1920])for(const dark of [false,true])for(const zoom of [1,1.25]){
+  await page.setViewportSize({width,height:900});
+  await page.evaluate(({dark,zoom})=>{
+   if((document.documentElement.dataset.theme==='dark')!==dark)document.querySelector('#ui-theme-toggle').click();
+   document.documentElement.style.zoom=String(zoom);
+  },{dark,zoom});
+  await page.evaluate(async()=>{
+   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   await Promise.all(document.getAnimations().filter(a=>a instanceof CSSTransition).map(a=>a.finished.catch(()=>{})));
+  });
+  await page.locator('.vault-browser-card').scrollIntoViewIfNeeded();
+  const geometry=await page.evaluate(()=>{
+   const row=document.querySelector('#vault-list-body tr'),buttons=[...row.querySelectorAll('.vault-row-actions button')];
+   const rects=buttons.map(b=>b.getBoundingClientRect());
+   return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowHeight:row.getBoundingClientRect().height/Number(document.documentElement.style.zoom),buttons:buttons.map(b=>b.textContent),oneLine:rects.every(r=>Math.abs(r.top-rects[0].top)<1),overlap:rects.some((r,i)=>i>0&&r.left<rects[i-1].right),emptyDetailsHidden:getComputedStyle(document.querySelector('#vault-storage-details')).display==='none'};
+  });
+  assert.ok(geometry.overflow<=1,'Cofre mantém rolagem da tabela dentro do módulo');
+  assert.ok(geometry.rowHeight<=80,'linha compacta preserva código, arquivo e versão');
+  assert.deepEqual(geometry.buttons,['Detalhes','Abrir','Baixar','Excluir']);
+  assert.equal(geometry.oneLine,true);assert.equal(geometry.overlap,false);assert.equal(geometry.emptyDetailsHidden,true);
+  metrics.push({view:'cofre',width,dark,zoom,...geometry});
+  await page.screenshot({path:path.join(out,`cofre-${width}-${dark?'dark':'light'}-zoom${Math.round(zoom*100)}.png`)});
+ }
+ await page.setViewportSize({width:1366,height:768});
+ await page.evaluate(()=>{document.documentElement.style.zoom='';if(document.documentElement.dataset.theme==='dark')document.querySelector('#ui-theme-toggle').click();});
  assert.match(await page.locator('#vault-storage-used').textContent(),/B|KB|MB|GB/);
  await page.locator('#vault-storage-reconcile').click();
  await page.waitForFunction(()=>!document.querySelector('#vault-storage-reconcile').disabled);

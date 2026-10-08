@@ -15,6 +15,7 @@ on:
       - "grcon-final.css"
       - "grcon-responsive.css"
       - "design-system.css"
+      - "document-vault.css"
       - "legacy-compat.css"
       - "index.html"
   workflow_dispatch:

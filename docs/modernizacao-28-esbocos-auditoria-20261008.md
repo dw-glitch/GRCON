@@ -1,92 +1,70 @@
-# GRCON — recuperação das 28 referências visuais (08/10/2026)
+# GRCON — rastreabilidade das 28 referências visuais
 
-> Documento de rastreabilidade da modernização. A existência de um módulo ou PR anterior **não** prova paridade visual com o esboço. Não usar valores ou documentos fictícios das imagens.
+Revisão de 08/10/2026. Este inventário distingue implementação, testes automatizados e homologação pelo operador. Os valores e documentos demonstrativos das imagens não são dados do aplicativo.
 
-## Fontes e linha de base
+## Publicações concluídas antes deste lote
 
-- Especificação: `Texto colado(20261008-151124).txt` (779 linhas).
-- Referências: arquivo `Nova pasta(2).zip`, 28 imagens PNG verificadas individualmente em grade de inspeção.
-- Código: `dw-glitch/GRCON`, branch `main`. Um ZIP anterior (v5.44.9) serviu apenas para inspeção local; antes de publicar alterações, todos os arquivos tocados foram conferidos com o GitHub atual.
-- PRs anteriores preservadas: #204 (UX/Higgsfield), #208 (Cofre/Registro Mestre), #211 (desempenho).
-- Estado deste lote: **intervenção específica na ordenação de PDFs**; os demais esboços ainda não estão homologados. Não interpretar a revisão de material como implementação das 28 telas.
+- #216 integrou #212–#215: PDFs, etapas da GRDT, Cofre e Modelos.
+- #218 publicou o preparo seletivo de pendências, com invalidação ao trocar base, histórico ou contrato.
+- #219 refinou Ferramentas e Capa; a saída A4 oficial permaneceu preservada.
+- #220 reconheceu o cabeçalho da Fiscal 01 com nome do responsável. A importação real de 02/10 passou; ela não foi ativada sobre a base mais nova.
+- Validação técnica: `npm run verify`, CI e capturas Chromium. Navegação e geometria cobertas em 1280/1366/1440/1600/1920; claro/escuro e zoom CSS de 125%. Isso não substitui uso autenticado no PC corporativo.
 
-## Inventário das 28 imagens
+## Referências e cobertura
 
-| # | Arquivo de referência | Módulo / papel | Estado da implementação neste lote |
+| # | Referência | Módulo / papel | Implementação ou evidência |
 |---|---|---|---|
-| 1 | Cofre de Documentos GRCON.png | Cofre | Métricas/versionamento existentes; legibilidade/contraste/upload refinados; adequação visual ainda não homologada |
-| 2 | Colagem de telas do sistema GRCON.png | Galeria multitelas | Avaliação transversal pendente |
-| 3 | Controle de GRDT_ Análise e Emissão de Documentos.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
-| 4 | Dashboard GRCON de Controle de GRDT.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
-| 5 | Dashboard GRCON_ Combinar PDFs.png | Combinar PDFs | Fluxo local existente; ver #10 |
-| 6 | Fluxo GRCON_ Telas 08 a 18.png | Galeria multitelas | Avaliação transversal pendente |
-| 7 | Galeria de Dashboards GRCON em Azul e Branco.png | Galeria SIGEM/PW, histórico e conferência | Avaliação transversal pendente |
-| 8 | Galeria de Interfaces GRCON em Português.png | Galeria SIGEM/PW, histórico e conferência | Avaliação transversal pendente |
-| 9 | image-gen-1(1).png | Ferramentas Adicionais | Dois acessos já existentes; paridade visual pendente |
-| 10 | image-gen-2.png | Combinar PDFs | Ordenação natural explícita implementada; validação visual pendente |
-| 11 | image-gen-3.png | Adicionar Capa | Motor oficial existente; paridade visual pendente |
-| 12 | Painel Corporativo GRCON em Nove Telas.png | Galeria multitelas | Avaliação transversal pendente |
-| 13 | Painel de comparação documental SaaS.png | Consulta Geral × SIGEM | Comparação existente; paridade visual pendente |
-| 14 | Painel de Consultas Documentais GRCON.png | Consultas | Módulo React existente; paridade visual pendente |
-| 15 | Painel de Consultas Operacionais GRCON.png | Consulta Geral × SIGEM | Comparação existente; paridade visual pendente |
-| 16 | Painel de Controle de GRDT.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
-| 17 | Painel de Modelos de Exportação GRCON.png | Modelos de Exportação | Ferramentas de modelos existentes; **pesquisa local implementada**; paridade visual pendente |
-| 18 | Painel de Monitoramento de Documentos.png | Monitoramento | Monitoramento existente; paridade visual pendente |
-| 19 | Painel GRCON de Controle de GRDT.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
-| 20 | Painel GRCON Flow de Solicitações.png | Atalho externo | Preservar navegação externa, sem duplicar GRCON Flow |
-| 21 | Painel GRCON para Combinar PDFs.png | Combinar PDFs | Referência complementar; fluxo independente preservado |
-| 22 | Painel GRCON_ Configurações Gerais.png | Configurações | Paridade visual pendente; manter controles restritos ao proprietário |
-| 23 | Painel GRCON_ Ferramentas e Monitoramento.png | Galeria multitelas | Avaliação transversal pendente |
-| 24 | Painel GRCON_ Fluxo Operacional Completo.png | Galeria multitelas | Avaliação transversal pendente |
-| 25 | Painel GRCON_ Histórico de Comparações.png | Histórico de comparações | Histórico existente; paridade visual pendente |
-| 26 | Painel GRCON_ Visão Geral do Sistema.png | Galeria multitelas | Avaliação transversal pendente |
-| 27 | Tela de Controle de GRDT Revisado.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
-| 28 | Visão geral do sistema GRCON em 18 telas.png | Galeria multitelas | Avaliação transversal pendente |
+| 1 | Cofre de Documentos GRCON.png | Cofre | Cofre: contraste e upload acessível (#216); densidade da tabela e espaçamento revisados neste lote. |
+| 2 | Colagem de telas do sistema GRCON.png | Galeria multitelas | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
+| 3 | Controle de GRDT_ Análise e Emissão de Documentos.png | Controle de GRDT | GRDT: trilha Preparar → Analisar → Revisar → Emitir (#216); regras e geração preservadas. |
+| 4 | Dashboard GRCON de Controle de GRDT.png | Controle de GRDT | GRDT: trilha das quatro etapas e verificação geométrica. |
+| 5 | Dashboard GRCON_ Combinar PDFs.png | Combinar PDFs | PDFs: fluxo local, ordem manual e natural sob comando (#216). |
+| 6 | Fluxo GRCON_ Telas 08 a 18.png | Galeria multitelas | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
+| 7 | Galeria de Dashboards GRCON em Azul e Branco.png | Galeria SIGEM/PW, histórico e conferência | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
+| 8 | Galeria de Interfaces GRCON em Português.png | Galeria SIGEM/PW, histórico e conferência | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
+| 9 | image-gen-1(1).png | Ferramentas Adicionais | Ferramentas: cartões e ações alinhados; temas claro/escuro (#219). |
+| 10 | image-gen-2.png | Combinar PDFs | PDFs: ordenação natural explícita e inventário visual (#216). |
+| 11 | image-gen-3.png | Adicionar Capa | Capa: quatro etapas, prévia vazia compacta e saída oficial A4 (#219). |
+| 12 | Painel Corporativo GRCON em Nove Telas.png | Galeria multitelas | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
+| 13 | Painel de comparação documental SaaS.png | Consulta Geral × SIGEM | Consulta Geral × SIGEM: pesquisa e histórico paginado; exportações preservadas (#216). |
+| 14 | Painel de Consultas Documentais GRCON.png | Consultas | Consultas: React, Controle central e Fiscal 01 (#210/#217/#220); dados Fiscal 01 aguardam planilha atual. |
+| 15 | Painel de Consultas Operacionais GRCON.png | Consulta Geral × SIGEM | Consulta Geral × SIGEM: pesquisa e histórico paginado; comparação preservada. |
+| 16 | Painel de Controle de GRDT.png | Controle de GRDT | GRDT: quatro etapas e regressões de triagem/revisão/emissão. |
+| 17 | Painel de Modelos de Exportação GRCON.png | Modelos de Exportação | Modelos: pesquisa por nome, base e escopo (#216). |
+| 18 | Painel de Monitoramento de Documentos.png | Monitoramento | Monitoramento: pesquisa, filtros e histórico; Chromium com backend de teste. |
+| 19 | Painel GRCON de Controle de GRDT.png | Controle de GRDT | GRDT: quatro etapas e regressões de triagem/revisão/emissão. |
+| 20 | Painel GRCON Flow de Solicitações.png | Atalho externo | Navegação externa para GRCON Flow preservada. |
+| 21 | Painel GRCON para Combinar PDFs.png | Combinar PDFs | PDFs: ordem natural/manual e geração local preservadas. |
+| 22 | Painel GRCON_ Configurações Gerais.png | Configurações | Configurações: navegação verificada; permissões de proprietário cobertas pelas suítes administrativas. |
+| 23 | Painel GRCON_ Ferramentas e Monitoramento.png | Galeria multitelas | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
+| 24 | Painel GRCON_ Fluxo Operacional Completo.png | Galeria multitelas | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
+| 25 | Painel GRCON_ Histórico de Comparações.png | Histórico de comparações | Histórico: pesquisa/paginação; integridade e exportações cobertas por regressões. |
+| 26 | Painel GRCON_ Visão Geral do Sistema.png | Galeria multitelas | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
+| 27 | Tela de Controle de GRDT Revisado.png | Controle de GRDT | GRDT: quatro etapas e regressões de triagem/revisão/emissão. |
+| 28 | Visão geral do sistema GRCON em 18 telas.png | Galeria multitelas | Galeria transversal: módulos correspondentes incluídos no QA de navegação/geometria; não representa uma tela independente nem comprova paridade pixel a pixel. |
 
-**Observação:** títulos e valores das referências são demonstrativos. Não devem substituir nomenclaturas, dados, regras ou permissões do produto.
+## Lacunas corrigidas nesta continuação
 
-## Primeiro ajuste implementado — Combinar PDFs
+- LD de comissionamento: cabeçalho oficial DOCUMENTO N-1710, inclusive com quebra de linha. Rejeita colunas ambíguas e mantém os critérios documentais.
+- Leitura da LD: somente a aba N-1710 e processamento em worker; erros não ativam uma base incompleta.
+- Cofre: quatro ações na mesma linha, sem esconder Detalhes/Abrir/Baixar/Excluir; alvo de 32 px e manutenção da rolagem interna. O painel de métricas adicional ocupa espaço apenas quando contém dados.
+- QA do Cofre: 1366/1440/1920, claro/escuro e zoom CSS 100/125%; mesmos filtros, exclusão autorizada e exportação integral de todas as páginas.
 
-- Constatado na implementação React: drag-and-drop, reordenação manual, processamento em Web Worker e geração local já existentes.
-- Lacuna: ordenação natural automática **sob comando** (ex.: prancha1, prancha2, prancha10) ausente na interface atual.
-- Solução: botão "Ordenar automaticamente" na barra da lista; ordenação `Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" })` estável e sem mutar a origem.
-- Não ordena a lista quando arquivos são adicionados; não muda o critério de geração; não modifica Core, Engine nem Worker; bloqueia mudança durante processamento; resultado anterior é invalidado somente quando a ordem efetivamente mudar.
-- Testes locais executados: `tests/pdf_tools_react.cjs`, `tests/additional_tools_navigation.cjs`, `tests/cover_document_react.cjs` e compilação TypeScript isolada do novo utilitário.
-- **Não** foi possível executar `npm run verify` completo sobre o snapshot local, pois ele não contém `node_modules`/dependências React e Vite. A PR deve passar por CI no GitHub e homologação visual antes de merge.
-- Nenhuma alteração de banco, worker de borda, Supabase, R2 ou Cloudflare é necessária.
+## Dados reais e limites da validação
 
-## Próximas frentes não concluídas
+- PW disponível: arquivo histórico enviado em setembro, 20.956 registros. LDs da Qualidade disponíveis desde setembro: 3.675 e 56 documentos. São fontes de teste; não foram publicadas como bases atuais.
+- SIGEM de 08/10: 23.417 linhas, consultadas em modo somente leitura.
+- Seis visões (ET/N-1710/total × revisão 0/todas), identidade por documento+revisão e cinco partições exclusivas verificadas. Análises síncrona/assíncrona produzem resultados iguais.
+- Excel filtrado: 2.298 linhas reabertas e comparadas célula a célula.
+- Evolução SIGEM: duas fontes reais de setembro/outubro; snapshots e linha do tempo do worker coincidem com o motor principal. Há somente uma base PW real disponível, portanto sua evolução temporal real permanece sem segunda fonte.
+- Medições de desempenho feitas no Node local; não representam medição no PC corporativo.
 
-1. Controle de GRDT (cinco esboços): confrontar telas reais de preparação, triagem, revisão e geração sem alterar loteamento ou repostagem.
-2. Cofre, Consultas e Conferência: comparar tabelas e filtros às referências, preservando fonte de alocação, exportação e desempenho de grandes bases. Considerar #210 (Consultas) ainda aberta para não sobrescrever alterações.
-3. Ferramentas: página de acesso e Adicionar Capa, preservando motores locais, modelo oficial e nomenclatura real.
-4. SIGEM × PW/Evolução, Consulta Geral, monitoramento e histórico: harmonizar hierarquias sem modificar contagens de revisão ou status.
-5. Modelos, dashboard e configurações: apenas indicadores calculáveis e ações realmente autorizadas.
-6. Comparação visual/funcional nas larguras 1366/1440/1920, zoom e modo escuro, com capturas antes/depois e validação operacional.
+## Pendências que exigem outra fonte ou sessão
 
-**Status:** modernização geral **em andamento**. Nenhum dos 28 esboços foi declarado integralmente homologado apenas por estar presente neste inventário.
+1. Reimportar Fiscal 01 com o Controle de Solicitações atual. A base ativa contém 12.696 vínculos; o arquivo disponível de 02/10 contém 12.541. Publicá-lo substituiria dados mais novos.
+2. Homologação operacional autenticada pelo operador no PC corporativo, incluindo integrações e referências visuais. As capturas de CI usam backend e usuários de teste e não comprovam uma operação corporativa real.
+3. Evolução temporal PW com duas bases reais de datas distintas.
 
-## Consolidação técnica para uma única aprovação
+## Publicação por fase
 
-O pacote de revisão da branch `feat/ux-28-unified-review-20261008` reúne sem conflitos as seguintes PRs de desenvolvimento: **#212, #213, #214 e #215**.
-
-| Implementação | Fonte visual | Teste de regressão |
-|---|---|---|
-| Ordenar PDFs naturalmente sob comando explícito | `image-gen-2.png` | `tests/pdf_tools_react.cjs` |
-| Trilha Preparar → Analisar → Revisar → Emitir na GRDT | Cinco imagens do Controle de GRDT | `tests/grdt_visual_steps.cjs` |
-| Melhor contraste do Cofre e upload acessível | `Cofre de Documentos GRCON.png` | `tests/vault_visual_parity.cjs` |
-| Pesquisar modelos por nome, base e escopo, sem refazer editor | `Painel de Modelos de Exportação GRCON.png` | `tests/export_templates_search_ui.cjs` |
-
-**As outras sugestões dos 28 esboços continuam sujeitas a inspeção visual no app real, implementação e homologação.** A existência de funcionalidade preexistente não substitui comparação de telas. Todos os dados e valores de demonstração das imagens foram mantidos fora do código.
-
-**Regra de publicação:** não integrar a `main` ou publicar no Cloudflare sem aprovação. Antes de merge, exigir CI verde, inspeção visual no ambiente de homologação, uso real em resoluções desktop, modo escuro, zoom e revisão das regras documentais.
-
-## Consulta Geral × SIGEM — refinamento do histórico e monitoramento
-
-- Pesquisas locais para documentos monitorados e comparações históricas, tolerando maiúsculas/acentos.
-- Histórico apresenta os 25 primeiros registros encontrados por padrão e disponibiliza mais 25 sob comando explícito; **os registros continuam disponíveis e a comparação/exportação não foram limitadas**.
-- Contagens derivadas das listas reais devolvidas pelas RPCs do contrato atual, sem KPIs fictícios.
-- Sem novas chamadas de rede ao digitar; sem mudanças no banco, status, notificações ou filtros/exportações de alterações.
-- Regressão: `tests/sigem_monitor_search_ui.cjs` incluída na suíte.
-
-**Pendente:** comparação visual em sessão autenticada, capturas antes/depois e homologação dos dados reais. Não encerrar o conjunto de 28 esboços sem essa evidência.
+A continuação foi autorizada pelo usuário. Cada PR deve passar por verificações, inspeção das evidências e integração sequencial. O inventário registra cobertura técnica; não declara as 28 referências integralmente homologadas pelo operador.
