@@ -115,7 +115,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
    const entry=detailRows.find(row=>row.Código==='DOC-00'+(i+1));
    assert.ok(entry,'documento presente no arquivo Excel: '+i);
    assert.match(String(entry['PROPÓSITO DE EMISSÃO']),new RegExp(i===5?'Não identificado':i%2?'Para Cancelamento':'Para Construção'));
-   assert.match(String(entry['PROPÓSITO DE EMISSÃO']),/GRDT-10[012] — Rev\\. 0/);
+   assert.match(String(entry['PROPÓSITO DE EMISSÃO']),/GRDT-10[012] — Rev\. 0/);
  }
  // Auditar também a exportação real da visão por ocorrência/eGRDT.
  await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.view='grdts';ui.render();});
