@@ -802,9 +802,11 @@ function applyPeriod(): boolean {
   return true;
 }
 
+let contextEpoch = 0;
 async function loadSnapshots(forceLd = false): Promise<void> {
   if (state.busy) return;
   state.busy = true;
+  const epoch = contextEpoch;
   state.error = "";
   emit();
   const started = now();
@@ -812,6 +814,7 @@ async function loadSnapshots(forceLd = false): Promise<void> {
     const management = Management();
     if (management?.ensureCurrentPayloads) await management.ensureCurrentPayloads();
     const universe = await readLdUniverse(Boolean(forceLd));
+    if (epoch !== contextEpoch) { state.ldUniverse = null; state.ldSignature = ""; return; }
     if (!universe.qualityAvailable) {
       state.sigem = [];
       state.pw = [];
@@ -839,6 +842,7 @@ async function loadSnapshots(forceLd = false): Promise<void> {
     const orderedSigem = ordered(sigem.output);
     const orderedPw = ordered(pw.output);
     await prepareTimeline(orderedSigem, orderedPw);
+    if (epoch !== contextEpoch) return;
     state.sigem = orderedSigem;
     state.pw = orderedPw;
     state.unavailable = { sigem: sigem.unavailable, pw: pw.unavailable };
@@ -860,6 +864,7 @@ async function loadSnapshots(forceLd = false): Promise<void> {
       });
     }
   } catch (error) {
+    if (epoch !== contextEpoch) return;
     state.error = messageOf(error, "Não foi possível carregar a Evolução SIGEM × PW.");
     throw error;
   } finally {
@@ -928,6 +933,8 @@ function setRevisionScope(value: EvolutionRevisionScope): void {
   state.exportMessage = "";
   applyPeriod();
   emit();
+  document.documentElement.dataset.sigemPwRevisionScope = next;
+  window.dispatchEvent(new CustomEvent("grcon:sigem-pw-revision-scope-changed", { detail: { scope: next } }));
 }
 
 function setListMode(mode: EvolutionListMode): void {
@@ -1250,7 +1257,18 @@ function scheduleRefresh(forceLd = false): void {
 function subscribeExternalEvents(): () => void {
   if (externalListenersInstalled) return () => undefined;
   externalListenersInstalled = true;
+  const onScope = (event: Event) => setRevisionScope((event as CustomEvent).detail?.scope);
+  window.addEventListener("grcon:sigem-pw-revision-scope-changed", onScope);
+  state.revisionScope = document.documentElement.dataset.sigemPwRevisionScope === "all" ? "all" : "revision0";
   const onBaseUpdate = () => scheduleRefresh(false);
+  const onContext = () => {
+    contextEpoch++; state.sigem = []; state.pw = []; state.ldUniverse = null; state.ldSignature = "";
+    state.comparison = null; state.timeline = []; state.filteredRows = []; state.ready = false;
+    state.selections = { sigemPrev: "", sigemCurrent: "", pwPrev: "", pwCurrent: "" };
+    comparisonCache.clear(); timelineCache.clear(); scopedSnapshotCache.clear(); preparedSnapshotCache.clear();
+    emit(); scheduleRefresh(true);
+  };
+  window.addEventListener("grcon:contract-context-changed", onContext);
   const onLdInput = () => {
     state.ldSignature = "";
     scheduleRefresh(true);
@@ -1262,6 +1280,8 @@ function subscribeExternalEvents(): () => void {
   ldInput?.addEventListener("change", onLdInput);
 
   return () => {
+    window.removeEventListener("grcon:contract-context-changed", onContext);
+    window.removeEventListener("grcon:sigem-pw-revision-scope-changed", onScope);
     window.removeEventListener("grcon:conference-updated", onBaseUpdate);
     window.removeEventListener("grcon:pw-base-updated", onBaseUpdate);
     window.removeEventListener("grcon:sigem-pw-base-date-updated", onBaseUpdate);

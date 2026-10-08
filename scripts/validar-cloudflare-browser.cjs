@@ -213,7 +213,7 @@ async function probe(page, pathname) {
       allocationOptions: Array.from(document.querySelectorAll("#vault-allocation option")).map(option => option.value),
       centralSourceOptions: Array.from(document.querySelectorAll('input[name="grdt-document-source"]')).map(input => input.value),
       centralLookup: Boolean(document.getElementById("grdt-vault-lookup") && document.getElementById("grdt-vault-codes")),
-      automaticSourceHelp: /procura nela primeiro.*Cofre/i.test(document.getElementById("grdt-auto-source-help")?.textContent || ""),
+      automaticSourceHelp: Boolean(document.getElementById("grdt-auto-source-help")),
       manualGrdtSelectionInVault: Boolean(document.getElementById("vault-use-grdt") || document.querySelector("[data-vault-select]")),
       oldReissueCard: Boolean(document.querySelector('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]')),
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -223,7 +223,8 @@ async function probe(page, pathname) {
     assert.deepEqual(vaultUi.allocationOptions, ["all", "allocated", "not_allocated", "not_identified"]);
     assert.deepEqual(vaultUi.centralSourceOptions, []);
     assert.equal(vaultUi.centralLookup, false);
-    assert.equal(vaultUi.automaticSourceHelp, true);
+    assert.equal(vaultUi.automaticSourceHelp, false);
+    assert.equal(await page.locator("#grcon-vault-help").count(), 0);
     assert.equal(vaultUi.manualGrdtSelectionInVault, false);
     assert.equal(vaultUi.oldReissueCard, false);
     assert.ok(vaultUi.overflow <= 1, "Cofre não pode gerar overflow horizontal global.");

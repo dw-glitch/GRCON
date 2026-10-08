@@ -3,6 +3,25 @@ import { UiMetaPill, UiPageHeader, UiPanel } from "../core/ui/UiPrimitives";
 import { DocumentClassBadge } from "../core/ui/DocumentClassBadge";
 import { historicoEgrdtAdapter as Adapter } from "./services/historicoEgrdtAdapter";
 import { useHistoricoEgrdt, LIST_PAGE_SIZE } from "./hooks/useHistoricoEgrdt";
+import type { EgrdtHistoryFile } from "./types/domain";
+
+function FileProvenance({ file }: { file: EgrdtHistoryFile }) {
+  const source = file.fileProvenance;
+  if (!source) return <small>Origem não registrada nesta emissão</small>;
+  return <details className="history-file-provenance">
+    <summary>Origem: {source.source === "cofre" ? "Cofre" : "pasta local"}</summary>
+    <p>Arquivo utilizado: {source.fileName}</p>
+    <p>Revisão do arquivo: {source.revision || "Não registrada"} · Formato: {source.format || "Não registrado"} · {numberBr(source.sizeBytes)} bytes</p>
+    {source.source === "cofre" || source.vaultFileId || source.sha256 ? <>
+      <p>ID do arquivo: {source.vaultFileId || "Não registrado"} · Sequência: {source.catalogSequence || "Não registrada"}</p>
+      <p>Incluído em: {source.createdAt ? Adapter.formatDate(source.createdAt, true) : "Não registrado"}</p>
+      <p>Verificado em: {source.verifiedAt ? Adapter.formatDate(source.verifiedAt, true) : "Não registrado"}</p>
+      <p>Versão no Cofre: {source.fileVersion || "Não registrada"}</p>
+      {source.vaultFileId ? <button type="button" className="text-button" onClick={() => window.GrconDocumentMaster?.openFile(source.vaultFileId!)}>Recuperar arquivo utilizado</button> : null}
+      <p>SHA-256: <code style={{ overflowWrap: "anywhere" }}>{source.sha256 || "Não registrado"}</code></p>
+    </> : <p>Modificado em: {source.lastModified ? Adapter.formatDate(new Date(source.lastModified), true) : "Não registrado"}</p>}
+  </details>;
+}
 
 
 const SORT_LABELS: Record<string, string> = {
@@ -314,17 +333,6 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           </div>
         </section>
 
-        <details className="history-detail-compliance">
-          <summary>Conformidade documental registrada</summary>
-          {record.normativeValidation ? <div>
-            <p>Versão {record.normativeValidation.normativeValidationVersion} · {(record.normativeValidation.rulesChecked || []).length} regras verificadas na geração.</p>
-            <p>{(record.normativeValidation.normsApplied || []).map(norm => `${norm.norm} ${norm.part || "body"} Rev. ${norm.revision}`).join(" · ")}</p>
-            <ul>{[...(record.normativeValidation.warnings || []), ...(record.normativeValidation.blocks || []), ...(record.normativeValidation.information || [])].map((finding, index) => <li key={`${finding.ruleId}-${index}`}>
-              {finding.message}<small> · {finding.ruleId} · {finding.norm} Rev. {finding.revision} § {finding.section}</small>
-            </li>)}</ul>
-          </div> : <p>Esta eGRDT não possui validação normativa registrada. O histórico original foi preservado.</p>}
-        </details>
-
         <section className="history-detail-section history-actions-section" aria-labelledby="history-actions-title">
           <div className="history-detail-section-heading">
             <span>AÇÕES</span>
@@ -430,7 +438,7 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                   return (
                     <tr key={(file.document || "doc") + "-" + (file.finalName || index) + "-" + index}>
                       <td data-label="Documento"><strong>{file.document || "—"}</strong></td>
-                      <td data-label="Arquivo original">{file.originalName || "—"}</td>
+                      <td data-label="Arquivo original">{file.originalName || "—"}<FileProvenance file={file} /></td>
                       <td data-label="Arquivo enviado">{file.finalName || "—"}</td>
                       <td data-label="Revisão gerada"><span className="history-revision-badge">{relation.generated}</span>{file.historyClassification ? <details><summary>{file.historyClassification.label}</summary>{file.historyClassification.previousGrdt ? <p>Anterior: Rev. {file.historyClassification.previousRevision || "não registrada"} · {file.historyClassification.previousGrdt} · {file.historyClassification.previousGeneratedAt}</p> : null}<p>{file.historyClassification.occurrenceCount} emissão(ões) anteriores nesta revisão; {file.historyClassification.repostCount} repostagem(ns) anteriores.</p>{file.historyClassification.warnings.map((warning, i) => <p key={i}>{warning}</p>)}</details> : null}{file.revisionManual ? <span className="history-revision-manual" title={"Alterada manualmente na triagem · sugestão do sistema na época: " + (file.revisionSuggested || "—")}>Alterada manualmente</span> : null}</td>
                       <td data-label="Propósito da GRDT">{file.purpose || "Não registrado"}</td>

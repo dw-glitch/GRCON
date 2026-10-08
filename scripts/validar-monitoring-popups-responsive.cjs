@@ -248,6 +248,20 @@ async function activeView(page) {
         assert.ok(control.x >= -1 && control.right <= width + 1, 'header child fits width: ' + width + ' ' + control.label);
       }
       if (width > 928) assert.ok(metrics.footerBottom <= height + 1, 'footer fits actual remaining height: ' + width);
+      const menu = publisher.locator('#grcon-app-shortcuts');
+      const trigger = menu.locator('summary');
+      await trigger.focus();
+      await publisher.keyboard.press('Enter');
+      await menu.locator('.grcon-app-shortcuts-panel').waitFor({ state: 'visible' });
+      const menuBox = await menu.locator('.grcon-app-shortcuts-panel').boundingBox();
+      assert.ok(menuBox.x >= -1 && menuBox.x + menuBox.width <= width + 1, 'menu Aplicativos cabe na viewport: ' + width);
+      assert.equal(await menu.locator('a').count(), 2);
+      await publisher.keyboard.press('Escape');
+      assert.equal(await menu.getAttribute('open'), null);
+      assert.equal(await trigger.evaluate(el => document.activeElement === el), true, 'Escape devolve foco a Aplicativos');
+      await trigger.click();
+      await publisher.locator('.brand-title').click();
+      assert.equal(await menu.getAttribute('open'), null, 'clique fora fecha Aplicativos');
       layout.push(metrics);
       await publisher.screenshot({ path: path.join(out, 'layout-' + width + 'x' + height + '.png') });
     }

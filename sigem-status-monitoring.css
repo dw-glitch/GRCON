@@ -5,3 +5,143 @@
 .sigem-monitor-filters.extra label { display:grid; gap:4px; font-size:12px; }
 #sigem-monitor-document-history { max-width:800px; max-height:80vh; overflow:auto; border:1px solid #94a3b8; border-radius:12px; padding:24px; }
 #grcon-notification-count { padding:3px 7px; border-radius:20px; background:#bf5700; color:#fff; }
+
+
+/* UX pilot 2026-10-07: labels persistentes e ajuda contextual, sem alterar o fluxo operacional. */
+.sigem-monitor-help{margin:-2px 0 14px;border:1px solid var(--border,#dce6ec);border-radius:9px;background:var(--surface-soft,#f5f8fa)}
+.sigem-monitor-help>summary{display:flex;align-items:center;gap:6px;min-height:36px;padding:7px 10px;color:var(--brand-700,#155c8a);font-size:.72rem;font-weight:800;cursor:pointer;list-style-position:inside}
+.sigem-monitor-help>summary:focus-visible{outline:2px solid var(--brand-500,#2f7ea7);outline-offset:2px}
+.sigem-monitor-help>div{display:grid;gap:6px;padding:0 10px 10px}
+.sigem-monitor-help p{margin:0!important;font-size:.72rem!important;line-height:1.45!important}
+.sigem-monitor-help p strong{color:var(--text-strong,#203b4d)}
+.sigem-monitor-add>label{display:grid;gap:5px;min-width:0}
+.sigem-monitor-add>label>span{color:var(--text-muted,#687b89);font-size:.68rem;font-weight:800}
+.sigem-monitor-add>label>span small{font:inherit;font-weight:600;opacity:.8}
+.sigem-monitor-add>button{align-self:end}
+@media(max-width:1100px){.sigem-monitor-add>label:last-of-type{grid-column:1/-1}}
+@media(max-width:760px){.sigem-monitor-add>label:last-of-type{grid-column:auto}}
+
+.sigem-monitor-filters>label:not(.sigem-monitor-check){display:grid;gap:5px;min-width:0}
+.sigem-monitor-filters>label>span{color:var(--text-muted,#687b89);font-size:.68rem;font-weight:800}
+
+
+/* Histórico e monitoramento: pesquisa local com carregamento progressivo de linhas,
+   mantendo as ações e os registros reais já disponibilizados pela Consulta Geral. */
+.sigem-monitor-local-search {
+  display: grid;
+  gap: .35rem;
+  min-width: 0;
+  margin: 0 0 .65rem;
+}
+.sigem-monitor-local-search label {
+  font-size: .72rem;
+  color: var(--text-muted, #475766);
+  font-weight: 720;
+}
+.sigem-monitor-local-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.4rem;
+  padding: .5rem .7rem;
+  border: 1px solid var(--border-strong, #c6d2da);
+  border-radius: var(--radius-sm, 9px);
+  background: var(--surface, #fff);
+  color: var(--text, #16212b);
+}
+.sigem-monitor-local-search input:focus-visible {
+  border-color: var(--brand-600, #1479a6);
+  box-shadow: var(--focus, 0 0 0 3px rgb(20 121 166 / 23%));
+}
+.sigem-monitor-list-count {
+  margin: 0 0 .45rem !important;
+  color: var(--text-muted, #5e6f7c) !important;
+  font-size: .71rem !important;
+  font-variant-numeric: tabular-nums;
+}
+.sigem-monitor-load-more {
+  display: flex;
+  justify-content: center;
+  padding: .65rem 0 0;
+}
+.sigem-monitor-load-more [hidden] { display: none !important; }
+.sigem-monitor-comparisons { min-width: 0; }
+/* Evitar cortes de títulos longos, inclusive em telas de notebook. */
+.sigem-monitor-comparison > span { min-width: 0; overflow-wrap: anywhere; }
+.sigem-monitor-comparison > b { flex: 0 0 auto; }
+.sigem-monitor-list article { min-width: 0; }
+.sigem-monitor-list article > div { min-width: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  .sigem-monitor-comparison { scroll-behavior: auto; }
+}
+
+
+/* Grade responsiva nas telas amplas de Consulta Geral × SIGEM.
+   A tabela de alterações e as notificações continuam com largura total. */
+@media (min-width: 1600px) {
+  .sigem-monitoring-root {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .sigem-monitor-overview,
+  .sigem-monitor-changes-card,
+  .sigem-monitor-notifications-card {
+    grid-column: 1 / -1;
+  }
+  .sigem-monitor-documents-card,
+  .sigem-monitor-history-card { min-width: 0; align-self: stretch; }
+  .sigem-monitor-documents-card .sigem-monitor-add {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-add > label:nth-of-type(2) {
+    min-width: 7rem;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-add > label:nth-of-type(3) {
+    grid-column: 1 / -1;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-add > button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-list article {
+    grid-template-columns: minmax(0,1fr) auto;
+  }
+  .sigem-monitor-documents-card .sigem-monitor-list article > span,
+  .sigem-monitor-documents-card .sigem-monitor-list article > small {
+    grid-column: 1 / -1;
+  }
+  .sigem-monitor-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+
+/* Os tokens gerais --surface/--text não são definidos em todos os modos da UI.
+   Na raiz escura, usar os tokens operacionais já suportados pelo GRCON. */
+body.p2-dark .sigem-monitor-local-search input {
+  background: var(--ops-surface, #17232d) !important;
+  color: var(--ops-ink, #e7eef4) !important;
+  border-color: var(--ops-line-strong, #405260);
+  color-scheme: dark;
+}
+body.p2-dark .sigem-monitor-local-search input::placeholder {
+  color: var(--ops-muted, #9babb8);
+}
+body.p2-dark .sigem-monitor-local-search label,
+body.p2-dark .sigem-monitor-list-count {
+  color: var(--ops-muted, #9babb8) !important;
+}
+body.p2-dark .sigem-monitor-local-search input:focus-visible {
+  border-color: var(--ops-blue, #63b1df);
+  box-shadow: 0 0 0 3px rgb(99 177 223 / 23%);
+}
+
+
+/* Em Consultas, estilos globais dos campos podem ter maior especificidade.
+   Restringir a exceção aos dois controles locais deste módulo. */
+html[data-app="GRCON"][data-theme="dark"] body.p2-dark #sigem-monitor-history-search,
+html[data-app="GRCON"][data-theme="dark"] body.p2-dark #sigem-monitor-monitored-search {
+  background-color: var(--ops-surface, #17232d) !important;
+  background-image: none !important;
+  color: var(--ops-ink, #e7eef4) !important;
+  border-color: var(--ops-line-strong, #405260) !important;
+}

@@ -331,6 +331,11 @@
   flex-wrap: wrap;
 }
 
+/* Controle discreto: a ordenação só ocorre por ação explícita do operador. */
+.pdf-merge-natural-sort {
+  white-space: nowrap;
+}
+
 .pdf-merge-list-wrap {
   max-height: min(55vh, 600px);
   overflow: auto;

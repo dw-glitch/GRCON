@@ -75,7 +75,7 @@
       let imageConfig = null;
       if (brand.reportLogoBase64) imageConfig = { base64: brand.reportLogoBase64, extension: "png" };
       else if (typeof fetch === "function") {
-        const response = await fetch(brand.reportLogoFile || "grcon-logo-report.png", { cache: "no-store" });
+        const response = await fetch(root.document ? (brand.reportLogoFile || "grcon-logo-report.png") : new URL("../" + (brand.reportLogoFile || "grcon-logo-report.png"), root.location.href), { cache: "no-store" });
         if (response.ok) imageConfig = { buffer: await response.arrayBuffer(), extension: "png" };
       }
       if (!imageConfig) return false;
@@ -102,6 +102,21 @@
     ].join(" — ")).join("\n");
   }
 
+  function emissionPurpose(value) {
+    return text(value) || "Não identificado";
+  }
+
+  function documentPurpose(row) {
+    const sends = Array.isArray(row.sends) ? row.sends : [];
+    if (!sends.length) return emissionPurpose(row.purpose);
+    // Cada propósito permanece associado à própria eGRDT e revisão, mesmo em repostagens.
+    return sends.map((send) => [
+      text(send.egrdtNumber) || "eGRDT não identificada",
+      `Rev. ${text(send.revisionSent) || "—"}`,
+      emissionPurpose(send.purpose),
+    ].join(" — ")).join("\n");
+  }
+
   function dataRowHeight(row, mode) {
     const noteLength = String(row?.note || "").length;
     const sends = mode === "documents" ? Math.min(6, Number(row?.sendCount || 1)) : 1;
@@ -115,7 +130,7 @@
   function documentHeaders() {
     return [
       "Código", "Tipo", "Disciplina", "eGRDTs emitidas / histórico de envios", "Qtd. envios", "Repostagens",
-      "Último envio", "eGRDT mais recente", "Revisão atual", "Revisões históricas", "Revisão encontrada",
+      "Último envio", "eGRDT mais recente", "PROPÓSITO DE EMISSÃO", "Revisão atual", "Revisões históricas", "Revisão encontrada",
       "Conferência", "Status SIGEM", "Data da confirmação", "Última conferência", "Observação",
     ];
   }
@@ -123,7 +138,7 @@
   function eventHeaders() {
     return [
       "Código", "Tipo", "Disciplina", "eGRDT", "Data eGRDT", "Revisão enviada",
-      "Revisão encontrada", "Conferência", "Status SIGEM", "Data da confirmação", "Última conferência", "Observação",
+      "PROPÓSITO DE EMISSÃO", "Revisão encontrada", "Conferência", "Status SIGEM", "Data da confirmação", "Última conferência", "Observação",
     ];
   }
 
@@ -137,6 +152,7 @@
       Number(row.repostCount || 0),
       fmtDate(row.latestSendAt || row.generatedAt, false),
       Conference.pertinentGrdt(row) || "GRDT não identificada",
+      documentPurpose(row),
       row.currentRevision || row.revisionSent,
       (row.revisions || []).join(" · "),
       row.revisionFound,
@@ -156,6 +172,7 @@
       row.egrdtNumber,
       fmtDate(row.generatedAt, false),
       row.revisionSent,
+      emissionPurpose(row.purpose),
       row.revisionFound,
       statusText(row),
       sigemValue(row.sigemStatus),
@@ -166,6 +183,12 @@
   }
 
   async function buildWorkbook(rows, options) {
+    if (root.document && typeof Worker === "function") {
+      try {
+        await root.GRCONModuleLoader?.ensure("performance");
+        if (root.GrconPerformance?.supported) return await root.GrconPerformance.buildSpreadsheet("conference", { rows, options });
+      } catch (error) { console.warn("[GRCON] Exportação da Conferência em modo compatível", error); }
+    }
     if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");
     const source = rows || [];
     const mode = options?.mode === "events" ? "events" : "documents";
@@ -263,7 +286,7 @@
       excelRow.font = { name: "Arial", size: 9, color: { argb: TEXT } };
       excelRow.alignment = { vertical: "top", wrapText: true };
       excelRow.eachCell((cell) => { cell.border = borderStyle(); });
-      const conferenceColumn = mode === "documents" ? 12 : 8;
+      const conferenceColumn = mode === "documents" ? 13 : 9;
       const sigemColumn = conferenceColumn + 1;
       if (index % 2 === 1) {
         excelRow.eachCell((cell, colNumber) => {
@@ -274,19 +297,19 @@
       applySigemStyle(excelRow.getCell(sigemColumn));
       excelRow.getCell(1).font = { name: "Arial", size: 9, bold: true, color: { argb: DARK } };
       if (mode === "documents") {
-        [5, 6, 7, 9, 11, 14, 15].forEach((col) => { excelRow.getCell(col).alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
+        [5, 6, 7, 10, 12, 15, 16].forEach((col) => { excelRow.getCell(col).alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
       } else {
-        [5, 6, 7, 10, 11].forEach((col) => { excelRow.getCell(col).alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
+        [5, 6, 8, 11, 12].forEach((col) => { excelRow.getCell(col).alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
       }
     });
 
     const lastRow = Math.max(10, 10 + source.length);
     sheet.autoFilter = { from: { row: 10, column: 1 }, to: { row: lastRow, column: columnCount } };
     sheet.columns = mode === "documents" ? [
-      { width: 34 }, { width: 13 }, { width: 18 }, { width: 56 }, { width: 12 }, { width: 13 }, { width: 14 }, { width: 31 },
+      { width: 34 }, { width: 13 }, { width: 18 }, { width: 56 }, { width: 12 }, { width: 13 }, { width: 14 }, { width: 31 }, { width: 50 },
       { width: 13 }, { width: 20 }, { width: 19 }, { width: 20 }, { width: 24 }, { width: 20 }, { width: 20 }, { width: 48 },
     ] : [
-      { width: 34 }, { width: 13 }, { width: 18 }, { width: 31 }, { width: 13 }, { width: 15 },
+      { width: 34 }, { width: 13 }, { width: 18 }, { width: 31 }, { width: 13 }, { width: 15 }, { width: 38 },
       { width: 19 }, { width: 20 }, { width: 24 }, { width: 20 }, { width: 20 }, { width: 48 },
     ];
     sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };

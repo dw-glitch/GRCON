@@ -22,6 +22,7 @@
   }
   function current() { return state.shared || state.local; }
   function canPublish() { return cloud()?.state?.membership?.role === "owner"; }
+  function canManageHistory() { return canPublish(); }
   function cacheKey(workspace) { return `shared-sigem-query:${workspace}`; }
   async function runtime() {
     await root.GRCONModuleLoader.ensure("posting_conference_core.js");
@@ -68,6 +69,35 @@
     state.shared = null; state.local = null; state.workspace = ""; state.stale = false; state.error = "";
     state.context = Core.context();
     emit();
+  }
+  // Published snapshots contain contiguous rows 1..record_count. Fetch at most
+  // four pages together; preserve ordering and reject incomplete/cross-contract data.
+  async function readSnapshotRecords(workspace, snapshotId, count, valid) {
+    const total = Number(count), pageSize = 1000, concurrency = 4;
+    if (!Number.isInteger(total) || total < 1 || total > 100000) throw new Error("Contagem da Consulta Geral inválida.");
+    const records = new Array(total);
+    const started = performance.now();
+    for (let first = 0; first < total; first += pageSize * concurrency) {
+      if (!valid()) throw new Error("O contrato mudou durante a leitura.");
+      const offsets = [];
+      for (let offset = first; offset < Math.min(total, first + pageSize * concurrency); offset += pageSize) offsets.push(offset);
+      const pages = await Promise.all(offsets.map(after_row => request("page", {
+        target_workspace: workspace, target_snapshot: snapshotId, after_row, page_size: pageSize,
+      })));
+      if (!valid()) throw new Error("O contrato mudou durante a leitura.");
+      pages.forEach((page, index) => {
+        const offset = offsets[index], expected = Math.min(pageSize, total - offset);
+        if (!Array.isArray(page) || page.length !== expected) throw new Error("A Consulta Geral recebida está incompleta.");
+        page.forEach((entry, row) => {
+          if (entry.row_number !== offset + row + 1) throw new Error("Paginação inválida.");
+          records[offset + row] = entry.payload;
+        });
+      });
+    }
+    root.dispatchEvent(new CustomEvent("grcon:performance-metrics", { detail: {
+      stage: "shared-sigem-download", durationMs: performance.now() - started, records: total, concurrency,
+    } }));
+    return records;
   }
   async function refresh() {
     const membership = cloud()?.state?.membership;
@@ -116,14 +146,7 @@
           if (changed || dateChanged) emit();
           return state.shared;
         }
-        const records = [];
-        let after = 0;
-        while (records.length < meta.record_count) {
-          const page = await request("page", { target_workspace: workspace, target_snapshot: meta.snapshot_id, after_row: after, page_size: 1000 });
-          if (!Array.isArray(page) || !page.length) throw new Error("A Consulta Geral recebida está incompleta.");
-          for (const entry of page) { if (entry.row_number <= after) throw new Error("Paginação inválida."); records.push(entry.payload); after = entry.row_number; }
-        }
-        if (records.length !== meta.record_count) throw new Error("Contagem da Consulta Geral divergente.");
+        const records = await readSnapshotRecords(workspace, meta.snapshot_id, meta.record_count, valid);
         const base = Core.validate({ meta: { ...meta.metadata, snapshotId: meta.snapshot_id, fileName: meta.file_name,
           importedAt: meta.metadata?.importedAt || meta.published_at, publishedAt: meta.published_at, recordCount: meta.record_count, source: "shared-general-query" }, records });
         if (!valid()) return null;
@@ -244,18 +267,43 @@
       const cached = snapshotCache.get(id);
       return { ...cached, meta: { ...cached.meta, ...versionMeta(version) } };
     }
-    const records = []; let after = 0;
-    while (records.length < version.record_count) {
-      const page = await request("page", { target_workspace: workspace, target_snapshot: id, after_row: after, page_size: 1000 });
-      if (ticket !== epoch || workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a leitura.");
-      if (!Array.isArray(page) || !page.length) throw new Error("Não foi possível carregar esta versão da Consulta Geral: dados incompletos.");
-      for (const entry of page) { if (entry.row_number <= after) throw new Error("Paginação inválida."); records.push(entry.payload); after = entry.row_number; }
-    }
-    if (records.length !== version.record_count) throw new Error("Contagem da Consulta Geral divergente.");
+    const records = await readSnapshotRecords(workspace, id, version.record_count,
+      () => ticket === epoch && workspace === cloud()?.state?.membership?.workspace_id);
     const base = Core.validate({ meta: versionMeta(version), records });
     snapshotCache.set(id, base);
     while (snapshotCache.size > 3) snapshotCache.delete(snapshotCache.keys().next().value);
     return base;
+  }
+  async function refreshAfterHistoryMutation(workspace) {
+    snapshotCache.clear(); versionsStamp = "";
+    if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
+    if (state.refreshPromise) await state.refreshPromise;
+    if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
+    await cachePut(workspace, null);
+    state.shared = null; state.stale = false; state.error = "";
+    await refreshLatest();
+    if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
+    root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated", { detail: { workspace } }));
+    dateChannel?.postMessage({ workspace });
+    return current();
+  }
+  async function activateVersion(id) {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace || !cloud()?.state?.online) throw new Error("Conecte-se para selecionar a Consulta Geral atual.");
+    if (!canManageHistory()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
+    if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
+    await request("activate", { target_workspace: workspace, target_snapshot: id });
+    return refreshAfterHistoryMutation(workspace);
+  }
+  async function deleteVersion(id) {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    if (!workspace || !cloud()?.state?.online) throw new Error("Conecte-se para excluir a base da Consulta Geral.");
+    if (!canManageHistory()) throw new Error("Somente o proprietário pode excluir bases da Consulta Geral.");
+    if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
+    const result = await request("delete", { target_workspace: workspace, target_snapshot: id });
+    snapshotCache.delete(id);
+    await refreshAfterHistoryMutation(workspace);
+    return result;
   }
   async function syncDateProjection(base) {
     await Promise.all([root.GRCONModuleLoader.ensure("sigem_pw_dashboard_core.js"), root.GRCONModuleLoader.ensure("sigem_pw_history_core.js")]);
@@ -298,7 +346,7 @@
       root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
     }
   });
-  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, parseFile, setLocal, publish, setReferenceDate, listVersions, loadSnapshot,
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, canManageHistory, parseFile, setLocal, publish, setReferenceDate, listVersions, loadSnapshot, activateVersion, deleteVersion,
     context: () => state.context,
     sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
     resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });

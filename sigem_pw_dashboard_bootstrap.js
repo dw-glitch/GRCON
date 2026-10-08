@@ -28,7 +28,7 @@
       document.querySelector("main.workspace")?.appendChild(module);
     }
     if (!module.querySelector("#grcon-sigem-pw-root")) {
-      module.innerHTML = '<div id="grcon-sigem-pw-root"><div style="padding:18px;color:var(--text-muted,#66798a)">Carregando Dashboard SIGEM × ProjectWise…</div></div>';
+      module.innerHTML = '<details class="grcon-context-help" id="grcon-sigem-pw-help"><summary>Como funciona · revisão 0 e todas as revisões</summary><div><p><strong>Revisão 0</strong> compara somente a revisão inicial no SIGEM com os documentos cadastrados no PW. É a visão padrão.</p><p><strong>Todas as revisões</strong> considera cada combinação de documento e revisão como uma ocorrência. A Evolução acompanha o escopo escolhido.</p><p>Selecione uma base do Histórico para comparar datas diferentes. A exportação usa o escopo e os filtros da visualização atual.</p></div></details><div id="grcon-sigem-pw-root"><div style="padding:18px;color:var(--text-muted,#66798a)">Carregando Dashboard SIGEM × ProjectWise…</div></div>';
     }
     return module;
   }
@@ -58,7 +58,7 @@
       button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", "false");
       button.setAttribute("aria-controls", MODULE_ID);
-      button.innerHTML = `${navSvg()}<span><strong>Dashboard SIGEM × PW</strong><small>Consulta Geral × ProjectWise</small></span>`;
+      button.innerHTML = `${navSvg()}<span><strong>SIGEM × PW</strong><small>Consulta Geral × ProjectWise</small></span>`;
       if (tabBefore?.parentElement === tabs) tabs.insertBefore(button, tabBefore);
       else tabs.appendChild(button);
     }

@@ -12,6 +12,9 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Utils, Core) {
   "use strict";
 
+  const textOrder = new Intl.Collator("pt-BR");
+  const numericOrder = new Intl.Collator("pt-BR", { numeric: true });
+
   const DB_NAME = "grcon-posting-conference";
   const DB_STORE = "kv";
   const LEGACY_SIGEM_BASE_KEY = "current-base";
@@ -137,7 +140,10 @@
 
   /** Classe do dashboard. O universo desta fase é somente ET e N-1710. */
   function documentClass(value) {
-    const identity = documentIdentity(value);
+    return classFromIdentity(documentIdentity(value));
+  }
+
+  function classFromIdentity(identity) {
     if (/^C1O_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_.+$/i.test(identity.canonical)) return "ET";
     if (N1710_CODE_RE.test(identity.canonical)) return "N-1710";
     return UNCLASSIFIED;
@@ -474,8 +480,11 @@
   }
 
   function scopeClassFor(document, ldUniverse, enforceLd) {
-    const identity = documentIdentity(document);
-    const candidateClass = documentClass(identity.canonical);
+    return scopeClassFromIdentity(documentIdentity(document), ldUniverse, enforceLd);
+  }
+
+  function scopeClassFromIdentity(identity, ldUniverse, enforceLd) {
+    const candidateClass = classFromIdentity(identity);
     if (candidateClass === "ET") return "ET";
     if (!enforceLd && identity.canonical.includes("_RNEST_")) return "ET";
     if (candidateClass === "N-1710" && (!enforceLd || (ldUniverse && ldUniverse.has(identity.key)))) return "N-1710";
@@ -486,7 +495,7 @@
     return (records || []).map((record) => {
       const identity = documentIdentity(record && record.document);
       const rawRevision = record && (record.revisionComplete || record.revision);
-      const scopedClass = scopeClassFor(record && record.document, ldUniverse, enforceLd);
+      const scopedClass = scopeClassFromIdentity(identity, ldUniverse, enforceLd);
       const emissionFlag = kind === "pw" ? norm(record && record.lastEmission) : "";
       return {
         ...record,
@@ -642,7 +651,7 @@
     });
     return [...counts.entries()]
       .map(([label, count]) => ({ label, count }))
-      .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "pt-BR"));
+      .sort((left, right) => right.count - left.count || textOrder.compare(left.label, right.label));
   }
 
   function summarizeClasses(sigemMap, pwMap) {
@@ -673,7 +682,7 @@
     }).sort((left, right) => {
       if (left.documentClass === UNCLASSIFIED) return 1;
       if (right.documentClass === UNCLASSIFIED) return -1;
-      return left.documentClass.localeCompare(right.documentClass, "pt-BR", { numeric: true });
+      return numericOrder.compare(left.documentClass, right.documentClass);
     });
   }
 
@@ -704,6 +713,8 @@
     const settings = options || {};
     const reference = sigemEntry || pwEntry;
     const sigemStatus = currentStatus(sigemEntry, "sigem");
+    const sigemCurrent = sigemEntry && sigemEntry.current;
+    const sigemDate = text(sigemCurrent && (sigemCurrent.modifiedAt || sigemCurrent.includedAt || sigemCurrent.stateChangedAt || sigemCurrent.createdAt));
     const pwStatus = currentStatus(pwEntry, "pw");
     const pwEmission = pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : "Não cadastrado";
     let situationKey = "bothEmitted";
@@ -728,6 +739,7 @@
       revision: text(settings.revision) || reference.revision,
       documentClass: reference.documentClass,
       sigemStatus,
+      sigemDate,
       pwStatus,
       pwEmission,
       situation,
@@ -747,7 +759,7 @@
     });
     groups.forEach((entries) => entries.sort((left, right) =>
       revisionRank(right.entry.revision) - revisionRank(left.entry.revision)
-      || right.entry.revision.localeCompare(left.entry.revision, "pt-BR", { numeric: true })));
+      || numericOrder.compare(right.entry.revision, left.entry.revision)));
     return groups;
   }
 
@@ -775,7 +787,8 @@
     // registro sem revisão é conciliado uma vez, pelo código, com a revisão
     // SIGEM mais recente ainda não usada. As demais revisões SIGEM continuam
     // visíveis como registros próprios.
-    const sigemByDocument = groupEntriesByDocument(sigem);
+    const needsFallback = [...pw].some(([key, entry]) => !consumedPw.has(key) && entry.revisionKey === "__SEM_REVISAO__");
+    const sigemByDocument = needsFallback ? groupEntriesByDocument(sigem) : new Map();
     pw.forEach((pwEntry, pwKey) => {
       if (consumedPw.has(pwKey) || pwEntry.revisionKey !== "__SEM_REVISAO__") return;
       const candidate = (sigemByDocument.get(pwEntry.documentKey) || [])
@@ -800,8 +813,8 @@
       }
     });
 
-    all.sort((left, right) => left.documentClass.localeCompare(right.documentClass, "pt-BR")
-        || left.document.localeCompare(right.document, "pt-BR", { numeric: true })
+    all.sort((left, right) => textOrder.compare(left.documentClass, right.documentClass)
+        || numericOrder.compare(left.document, right.document)
         || revisionRank(left.revision) - revisionRank(right.revision));
     const bySituation = (key) => all.filter((row) => row.situationKey === key);
     const sigemOnly = bySituation("sigemOnly");
@@ -860,7 +873,7 @@
     [...lists.bothNotEmitted, ...lists.bothEmitted].forEach((entry) => { ensure(entry.documentClass).matched += 1; });
     return [...classes.values()].sort((left, right) => left.documentClass === UNCLASSIFIED ? 1
       : right.documentClass === UNCLASSIFIED ? -1
-        : left.documentClass.localeCompare(right.documentClass, "pt-BR", { numeric: true }));
+        : numericOrder.compare(left.documentClass, right.documentClass));
   }
 
   function aggregateModel(model, filters, options) {
@@ -884,7 +897,8 @@
     const matched = new Set([...lists.bothNotEmitted, ...lists.bothEmitted].map((row) => row.key));
 
     const classRows = summarizeClassesFromLists(sigem, pw, lists);
-    const allClassRows = summarizeClassesFromLists(sigemAll, pwAll, buildComparisonLists(sigemAll, pwAll));
+    const allClassRows = sigem.size === sigemAll.size && pw.size === pwAll.size
+      ? classRows : summarizeClassesFromLists(sigemAll, pwAll, buildComparisonLists(sigemAll, pwAll));
     const classifiedTotal = lists.sigemOnly.length + lists.bothNotEmitted.length + lists.bothEmitted.length
       + lists.pwOnlyNotEmitted.length + lists.pwOnlyEmitted.length;
     const expectedTotal = sigemKeys.size + pwKeys.size - matched.size;
@@ -1151,7 +1165,9 @@
     const writes = [];
     let historyChanged = false;
     candidates.forEach(([kind, base]) => {
-      const prepared = kind === "pw" ? sanitizePwBase(base, ldCurrent) : base;
+      const ldId = text(ldCurrent?.meta?.snapshotId) || (ldCurrent?.meta ? snapshotId("ld", ldCurrent.meta) : "");
+      const alreadyScoped = Number(base.meta.scopeVersion) === PW_SCOPE_VERSION && text(base.meta.scopeLdSnapshotId) === ldId;
+      const prepared = kind === "pw" && !alreadyScoped ? sanitizePwBase(base, ldCurrent) : base;
       const normalized = normalizeBase(kind, prepared);
       const compact = historySnapshot(normalized);
       const snapshotIndex = snapshots.findIndex((item) => item.meta.snapshotId === normalized.meta.snapshotId);

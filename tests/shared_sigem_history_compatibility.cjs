@@ -20,6 +20,8 @@ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind
       if (name.endsWith("versions")) return { data: versions };
       if (name.endsWith("page")) return { data: incomplete ? [] : rows.slice(args.after_row, args.after_row + 1000).map((payload, i) => ({ row_number: args.after_row + i + 1, payload })) };
       if (name.endsWith("set_date")) { versions[0].metadata.referenceDate = args.reference_date; return { data: versions[0].metadata }; }
+      if (name.endsWith("activate")) return { data: args.target_snapshot };
+      if (name.endsWith("delete")) return { data: { removedSnapshotId: args.target_snapshot, removedWasCurrent: false, activeSnapshotId: "current" } };
       throw new Error(name);
     } } } },
     GrconSigemPwDashboard: { updateSnapshotMetadata: async (...args) => projections.push(args) },
@@ -41,18 +43,28 @@ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind
   await api.setReferenceDate("2026-09-30", "old");
   assert.equal(current.meta.referenceDate, "2026-10-07", "old API cannot redirect historical date to current base");
   assert.equal(versions[0].metadata.referenceDate, "2026-09-30"); assert.equal(projections.length, 2); assert.equal(events.length, 1);
+  assert.equal(api.canManageHistory(), true);
+  await api.activateVersion("old");
+  assert.ok(calls.some(c => c.name.endsWith("activate") && c.args.target_snapshot === "old"));
+  const deletion = await api.deleteVersion("old");
+  assert.equal(deletion.activeSnapshotId, "current");
+  assert.ok(calls.some(c => c.name.endsWith("delete") && c.args.target_snapshot === "old"));
+  assert.equal(events.filter(event => event.type === "grcon:shared-sigem-metadata-invalidated").length, 2);
   await assert.rejects(api.loadSnapshot("deleted"), /excluída/);
   window.GrconCloud.state.membership.role = "viewer";
+  assert.equal(api.canManageHistory(), false);
   await assert.rejects(api.setReferenceDate("2026-09-29", "old"), /permissão/);
+  await assert.rejects(api.activateVersion("old"), /proprietário/);
+  await assert.rejects(api.deleteVersion("old"), /proprietário/);
   window.GrconCloud.state.membership.role = "owner";
   versions[0].metadata.referenceDate = "2026-09-28"; incomplete = true;
   await api.listVersions();
   await assert.rejects(api.loadSnapshot("old"), /incompletos/);
   incomplete = false; switchWorkspace = true;
   await assert.rejects(api.listVersions(), /contrato mudou/);
-  const modern = Object.freeze({ listVersions() {}, loadSnapshot() {} });
+  const modern = Object.freeze({ listVersions() {}, loadSnapshot() {}, activateVersion() {}, deleteVersion() {} });
   window.GrconSharedSigemQuery = modern;
   assert.equal(ensure(), modern, "modern implementation is untouched");
   window.GrconSharedSigemQuery = undefined; assert.equal(ensure(), undefined);
-  console.log("shared_sigem_history_compatibility: old/new API, pagination, cache invalidation, historical identity/date, permissions, incomplete data and contract isolation OK");
+  console.log("shared_sigem_history_compatibility: old/new API, pagination, cache invalidation, historical identity/date, activate/delete, permissions, incomplete data and contract isolation OK");
 })().catch(error => { console.error(error); process.exitCode = 1; });

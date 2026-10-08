@@ -47,6 +47,9 @@
 </div>
 <div class="grcon-mascot-header-slot" id="grcon-mascot-header-slot" data-grcon-mascot-shell="header"></div>
 <div class="runtime-status">
+<details class="grcon-app-shortcuts" id="grcon-app-shortcuts">
+<summary>Aplicativos</summary>
+<div class="grcon-app-shortcuts-panel">
 <a aria-label="Abrir o RECON em uma nova aba" class="app-shortcut-link app-shortcut-link-recon" href="https://recon-ivory.vercel.app/" rel="noopener noreferrer" target="_blank" title="Abrir RECON">
 <svg aria-hidden="true" viewbox="0 0 24 24"><path d="M8 5H5v14h14v-3M13 5h6v6M19 5l-8 8"></path></svg>
 <span>RECON</span>
@@ -55,6 +58,9 @@
 <svg aria-hidden="true" viewbox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.4 4.56M14 11a5 5 0 0 0-7.07 0l-2.83 2.83a5 5 0 0 0 7.07 7.07L12.6 19.44"></path></svg>
 <span>VINCULA</span>
 </a>
+<small>Abrem em uma nova aba</small>
+</div>
+</details>
 <quality-status class="local-status" tone="success"><i></i>Pronto para uso</quality-status>
 </div>
 </header>
@@ -62,7 +68,7 @@
 <aside aria-label="Áreas do GRCON" class="ops-sidebar">
 <div class="ops-sidebar-label">Operação</div>
 <button aria-current="page" class="ops-nav-button active" data-grcon-view="control" type="button">
-<svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Gerar eGRDT</strong></span>
+<svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Controle de GRDT</strong></span>
 </button>
 <button class="ops-nav-button" data-grcon-view="requests" type="button">
 <svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong></span>
@@ -74,7 +80,7 @@
 <svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Abre o GRCON Flow</small></span><svg aria-hidden="true" class="ops-nav-external-icon" viewbox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M7 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"></path></svg>
 </a>
 <button class="ops-nav-button" data-grcon-view="history" type="button">
-<svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico</strong></span><b hidden="" id="ops-history-count">0</b>
+<svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico de eGRDTs</strong></span><b hidden="" id="ops-history-count">0</b>
 </button>
 <button class="ops-nav-button" data-grcon-view="sigem" type="button">
 <svg viewbox="0 0 24 24"><path d="M4 4h16v12H4zM8 20h8M12 16v4M7 8h10M7 12h6"></path></svg><span><strong>Postagem SIGEM</strong></span><b hidden="" id="ops-sigem-count">0</b>
@@ -88,12 +94,21 @@
 <button id="tab-control" aria-controls="grdt-module" aria-selected="true" class="active" data-grcon-view="control" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path></svg><span><strong>Controle de GRDT</strong><small>Analisar e gerar eGRDT</small></span></button>
 <button id="tab-requests" aria-controls="requests-module" aria-selected="false" data-grcon-view="requests" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"></path><circle cx="17.5" cy="14.5" r="3"></circle><path d="M19.6 16.6L22 19"></path></svg><span><strong>Consultas</strong><small>Consultar documentos na LD</small></span></button>
 <button id="tab-additional-tools" aria-controls="additional-tools-module" aria-selected="false" data-grcon-view="additional-tools" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3M9 12h6M12 9v6"></path></svg><span><strong>Ferramentas adicionais</strong><small>Combinar PDFs e adicionar capas</small></span></button>
-<a class="ops-nav-external" href="https://grcon-flow.vercel.app/" rel="noopener noreferrer" target="_blank" role="tab" title="Abrir o GRCON Flow em outra aba"><svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Abre o GRCON Flow, em outra aba</small></span><svg aria-hidden="true" class="ops-nav-external-icon" viewbox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M7 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"></path></svg></a>
+<a class="ops-nav-external" href="https://grcon-flow.vercel.app/" rel="noopener noreferrer" target="_blank" title="Abrir o GRCON Flow em outra aba"><svg viewbox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5"></path></svg><span><strong>Solicitações</strong><small>Abre o GRCON Flow, em outra aba</small></span><svg aria-hidden="true" class="ops-nav-external-icon" viewbox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M7 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-2"></path></svg></a>
 <button id="tab-history" aria-controls="history-module" aria-selected="false" data-grcon-view="history" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8M4 4v4h4M12 8v5l3 2"></path></svg><span><strong>Histórico de eGRDTs</strong><small>Arquivos e alocações</small></span><b hidden="" id="history-tab-count">0</b></button>
 <button id="tab-sigem" aria-controls="sigem-module" aria-selected="false" data-grcon-view="sigem" role="tab" type="button"><svg viewbox="0 0 24 24"><path d="M4 4h16v12H4zM8 20h8M12 16v4M7 8h10M7 12h6"></path></svg><span><strong>Postagem SIGEM</strong><small>Conferir, copiar e registrar</small></span><b hidden="" id="sigem-tab-count">0</b></button>
 </nav>
 <section id="grdt-module" class="module-view" role="tabpanel" aria-labelledby="tab-control">
 <header class="ops-page-heading"><div><h2 id="grcon-module-title-1">Controle de GRDT</h2><p>LD e documentos prontos para análise.</p></div></header>
+<nav class="grdt-stages" id="grdt-stages" aria-label="Etapas do Controle de GRDT" data-active-stage="1">
+  <ol class="grdt-stages-list">
+    <li class="grdt-stage is-current" data-grdt-stage="prepare" aria-current="step"><span class="grdt-stage-number" aria-hidden="true">1</span><span class="grdt-stage-text"><strong>Preparar</strong><small>LD, relação e arquivos</small></span></li>
+    <li class="grdt-stage" data-grdt-stage="analyze"><span class="grdt-stage-number" aria-hidden="true">2</span><span class="grdt-stage-text"><strong>Analisar</strong><small>Conferência documental</small></span></li>
+    <li class="grdt-stage" data-grdt-stage="review"><span class="grdt-stage-number" aria-hidden="true">3</span><span class="grdt-stage-text"><strong>Revisar</strong><small>Decisões e ajustes</small></span></li>
+    <li class="grdt-stage" data-grdt-stage="emit"><span class="grdt-stage-number" aria-hidden="true">4</span><span class="grdt-stage-text"><strong>Emitir</strong><small>eGRDT e comunicação</small></span></li>
+  </ol>
+  <span class="sr-only" role="status" aria-live="polite" id="grdt-stage-announcement">Etapa atual: Preparar.</span>
+</nav>
 <section aria-live="polite" class="p1-context-bar" hidden="" id="p1-grdt-context">
 <metric-chip><span>LD carregada</span><strong id="p1-context-ld">—</strong></metric-chip>
 <metric-chip><span>Documentos</span><strong id="p1-context-source">—</strong></metric-chip>
@@ -349,6 +364,8 @@
 <button class="secondary-button compact" id="requests-modelo-new" type="button">Novo modelo</button>
 <button class="secondary-button compact" id="requests-modelo-import" type="button">Importar estrutura de uma planilha</button>
 <input accept=".xlsx,.xls,.xlsm" hidden id="requests-modelo-import-input" type="file"/>
+<label class="requests-modelo-pesquisa"><span>Pesquisar modelos</span><input id="requests-modelo-search" type="search" placeholder="Nome, base ou armazenamento" autocomplete="off" maxlength="120" /></label>
+<span class="requests-modelo-contagem" id="requests-modelo-contagem" role="status" aria-live="polite"></span>
 </div>
 <div class="requests-batch-table-wrap" id="requests-modelos-table-wrap">
 <table class="requests-batch-table">
@@ -423,6 +440,7 @@
 <div id="grcon-cover-document-root"></div>
 </section>
 <section id="history-module" class="history-module history-module-v2" hidden="" role="tabpanel" aria-labelledby="tab-history">
+<details class="grcon-context-help" id="grcon-history-help"><summary>Como funciona · histórico e origem dos arquivos</summary><div><p>Abra uma eGRDT para conferir os documentos, a revisão enviada e a origem do arquivo utilizado. Nas novas emissões, o registro da origem permanece salvo mesmo após mudanças no Cofre.</p><p>A exportação respeita os filtros aplicados. Registros antigos podem mostrar origem não registrada. A conferência de postagem usa a Consulta Geral compartilhada.</p></div></details>
 <div id="grcon-history-root" class="history-react-root" style="display: contents"><section class="history-initial-loading" role="status" aria-live="polite"><span class="history-loading-spinner" aria-hidden="true"></span><strong>Carregando Histórico de eGRDTs…</strong><small>Preparando filtros e emissões compartilhadas.</small></section></div>
 </section>
 <section id="sigem-module" class="sigem-module" hidden="" role="tabpanel" aria-labelledby="tab-sigem">
@@ -603,6 +621,7 @@
 <script defer="" src="grcon_cloud_app.js"></script>
 <script defer src="document_vault_core.js"></script>
 <script defer src="document_vault_app.js"></script>
+<script defer src="document_master_app.js"></script>
 <script defer src="planned_documents_app.js"></script>
 <script defer src="allocation_registry_app.js"></script>
 <script defer src="shared_sigem_query_app.js?v=history-api-2"></script>
@@ -652,6 +671,7 @@
 <script defer src="macro5_flow_app.js"></script>
 <script defer src="productivity_center.js"></script>
 <script defer src="grcon_enhancements.js"></script>
+<script defer src="grdt-stage-progress.js"></script>
 <script defer src="grcon-ui-fix.js"></script>
 <script defer src="grcon_service_worker.js"></script>
 </body>

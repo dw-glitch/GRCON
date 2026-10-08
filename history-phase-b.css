@@ -1398,7 +1398,3 @@ html[data-theme="dark"][data-app="GRCON"] .history-module .history-detail-table 
 }
 .history-initial-loading{display:grid;place-items:center;align-content:center;gap:.55rem;min-height:clamp(18rem,55vh,34rem);padding:2rem;border:1px solid var(--border-1,#d8e1e7);border-radius:16px;background:var(--surface-1,#fff);color:var(--text-2,#5f6e78);text-align:center}.history-initial-loading strong{color:var(--text-1,#16212b);font-size:1rem}.history-initial-loading small{font-size:.8rem}.history-loading-spinner{width:2rem;height:2rem;border:3px solid var(--border-1,#d8e1e7);border-top-color:var(--brand-600,#1a6f9f);border-radius:50%;animation:history-loading-spin .8s linear infinite}@keyframes history-loading-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.history-loading-spinner{animation:none;border-top-color:var(--border-1,#d8e1e7);background:var(--brand-600,#1a6f9f);box-shadow:inset 0 0 0 .45rem var(--surface-1,#fff)}}
 
-html[data-app="GRCON"] .history-detail-compliance { margin: 1rem 0; padding: .85rem; border: 1px solid var(--border-1); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
-html[data-app="GRCON"] .history-detail-compliance > summary { cursor: pointer; font-weight: 700; }
-html[data-app="GRCON"] .history-detail-compliance li { margin: .65rem 0; }
-html[data-app="GRCON"] .history-detail-compliance small { display: block; color: var(--text-2); }

@@ -13,6 +13,9 @@
     filters: { query: "", type: "all", monitored: false, previous: "", current: "", revision: "", discipline: "", from: "", to: "" },
     loading: false,
     page: 0,
+    historyQuery: "",
+    historyLimit: 25,
+    monitoredQuery: "",
     unreadCount: 0,
     epoch: 0,
   };
@@ -82,27 +85,33 @@
       '<label><span>Versão anterior</span><select id="sigem-monitor-previous"></select></label>',
       '<label><span>Versão atual</span><select id="sigem-monitor-current"></select></label>',
       '<button class="secondary-button compact" id="sigem-monitor-compare" type="button">Comparar versões</button>',
-      '<small>Comparações manuais não geram alertas. A publicação de uma nova Consulta Geral já cria a comparação automática.</small>',
+      '<small>Comparações manuais não geram notificações. A publicação de uma nova Consulta Geral já cria a comparação automática.</small>',
       '</div></section>',
-      '<section class="sigem-monitor-card">',
-      '<header><div><span>DOCUMENTOS PRIORITÁRIOS</span><h3>Monitoramento por código</h3><p>Cadastre somente os documentos que precisam de aviso de mudança de status.</p></div></header>',
+      '<section class="sigem-monitor-card sigem-monitor-documents-card">',
+      '<header><div><span>MONITORAMENTO</span><h3>Monitoramento por código</h3><p>Cadastre somente os documentos que precisam de aviso de mudança de status.</p></div></header>',
+      '<details class="sigem-monitor-help" id="sigem-monitor-help"><summary>Como funciona</summary><div><p><strong>1. Monitore.</strong> Cadastre o código do documento que precisa de acompanhamento.</p><p><strong>2. O GRCON acompanha.</strong> Quando uma nova Consulta Geral é publicada, o sistema compara as versões automaticamente.</p><p><strong>3. Receba a notificação.</strong> Se o documento monitorado mudar de status, a atualização aparece no cabeçalho sem tirar você da tela atual.</p></div></details>',
       '<form class="sigem-monitor-add" id="sigem-monitor-add">',
-      '<input id="sigem-monitor-code" placeholder="Código do documento" maxlength="255" required>',
-      '<select id="sigem-monitor-priority"><option value="normal">Normal</option><option value="alta">Alta</option><option value="critica">Crítica</option></select>',
-      '<input id="sigem-monitor-note" placeholder="Observação (opcional)" maxlength="500">',
+      '<label><span>Código do documento</span><input id="sigem-monitor-code" placeholder="Digite o código conforme a Consulta Geral" autocomplete="off" maxlength="255" required></label>',
+      '<label><span>Prioridade</span><select id="sigem-monitor-priority"><option value="normal">Normal</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></label>',
+      '<label><span>Observação <small>(opcional)</small></span><input id="sigem-monitor-note" placeholder="Contexto para o acompanhamento" maxlength="500"></label>',
       '<button class="primary-button compact" type="submit">Adicionar</button>',
       '</form>',
+      '<div class="sigem-monitor-local-search"><label for="sigem-monitor-monitored-search">Pesquisar documentos monitorados</label><input id="sigem-monitor-monitored-search" type="search" autocomplete="off" placeholder="Código, título, observação ou prioridade"></div>',
+      '<p class="sigem-monitor-list-count" id="sigem-monitor-monitored-count" role="status" aria-live="polite"></p>',
       '<div class="sigem-monitor-list" id="sigem-monitor-list"></div>',
       '</section>',
-      '<section class="sigem-monitor-card">',
+      '<section class="sigem-monitor-card sigem-monitor-history-card">',
       '<header><div><span>HISTÓRICO COMPARÁVEL</span><h3>Comparações salvas</h3><p>Abra qualquer comparação para auditar documento, revisão e mudança de status.</p></div></header>',
+      '<div class="sigem-monitor-local-search"><label for="sigem-monitor-history-search">Buscar no histórico de comparações</label><input id="sigem-monitor-history-search" type="search" autocomplete="off" placeholder="Arquivo, data ou tipo de comparação"></div>',
+      '<p class="sigem-monitor-list-count" id="sigem-monitor-comparisons-count" role="status" aria-live="polite"></p>',
       '<div class="sigem-monitor-comparisons" id="sigem-monitor-comparisons"></div>',
+      '<div class="sigem-monitor-load-more"><button id="sigem-monitor-history-more" type="button" class="secondary-button compact" hidden>Mostrar mais comparações</button></div>',
       '</section>',
-      '<section class="sigem-monitor-card">',
+      '<section class="sigem-monitor-card sigem-monitor-changes-card">',
       '<header><div><span>ALTERAÇÕES</span><h3 id="sigem-monitor-change-title">Selecione uma comparação</h3><p id="sigem-monitor-change-meta">O resultado mantém o status original e usa a normalização somente para reconhecer o fluxo Em análise/Em workflow.</p></div><button class="secondary-button compact" id="sigem-monitor-export" type="button" disabled>Exportar Excel filtrado</button></header>',
       '<div class="sigem-monitor-filters">',
-      '<input id="sigem-monitor-search" type="search" placeholder="Buscar documento, título, revisão ou status">',
-      '<select id="sigem-monitor-type"><option value="all">Todas as alterações</option><option value="status">Alterações de status</option><option value="ENTROU_EM_ANALISE">Entrou em análise</option><option value="SAIU_DE_ANALISE">Saiu de análise</option><option value="MUDANCA_DE_STATUS">Mudança de status</option><option value="NOVO_NA_CONSULTA">Novos</option><option value="REMOVIDO_DA_CONSULTA">Não localizados</option></select>',
+      '<label><span>Buscar nas alterações</span><input id="sigem-monitor-search" type="search" placeholder="Documento, título, revisão ou status"></label>',
+      '<label><span>Tipo de alteração</span><select id="sigem-monitor-type"><option value="all">Todas as alterações</option><option value="status">Alterações de status</option><option value="ENTROU_EM_ANALISE">Entrou em análise</option><option value="SAIU_DE_ANALISE">Saiu de análise</option><option value="MUDANCA_DE_STATUS">Mudança de status</option><option value="NOVO_NA_CONSULTA">Novos</option><option value="REMOVIDO_DA_CONSULTA">Não localizados</option></select></label>',
       '<label class="sigem-monitor-check"><input id="sigem-monitor-only-monitored" type="checkbox"> Somente monitorados</label>',
       '</div>',
       '<div class="sigem-monitor-filters extra">' + [
@@ -112,8 +121,8 @@
       '<div class="sigem-monitor-pagination"><button id="sigem-monitor-prev-page" type="button">Anterior</button><span id="sigem-monitor-page"></span><button id="sigem-monitor-next-page" type="button">Próxima</button></div>',
       '<p class="sigem-monitor-empty" id="sigem-monitor-change-empty">Nenhuma comparação selecionada.</p>',
       '</section>',
-      '<section class="sigem-monitor-card">',
-      '<header><div><span>CENTRAL DE ALERTAS</span><h3>Notificações do contrato</h3><p>Alertas são gerados somente para documentos monitorados e não duplicam a mesma transição.</p></div><button class="text-button" id="sigem-monitor-read-all" type="button">Marcar todas como lidas</button></header>',
+      '<section class="sigem-monitor-card sigem-monitor-notifications-card">',
+      '<header><div><span>NOTIFICAÇÕES</span><h3>Notificações do contrato</h3><p>Atualizações são geradas somente para documentos monitorados e não duplicam a mesma transição.</p></div><button class="text-button" id="sigem-monitor-read-all" type="button">Marcar todas como lidas</button></header>',
       '<div class="sigem-monitor-notifications" id="sigem-monitor-notifications"></div>',
       '</section>',
     ].join("");
@@ -121,6 +130,19 @@
     $("#sigem-monitor-refresh").addEventListener("click", () => void loadAll());
     $("#sigem-monitor-compare").addEventListener("click", () => void compareSelected());
     $("#sigem-monitor-add").addEventListener("submit", saveMonitored);
+    $("#sigem-monitor-monitored-search").addEventListener("input", (event) => {
+      state.monitoredQuery = event.currentTarget.value;
+      renderMonitored();
+    });
+    $("#sigem-monitor-history-search").addEventListener("input", (event) => {
+      state.historyQuery = event.currentTarget.value;
+      state.historyLimit = 25;
+      renderComparisons();
+    });
+    $("#sigem-monitor-history-more").addEventListener("click", () => {
+      state.historyLimit += 25;
+      renderComparisons();
+    });
     $("#sigem-monitor-search").addEventListener("input", (event) => { state.filters.query = event.target.value; renderChanges(); });
     $("#sigem-monitor-type").addEventListener("change", (event) => { state.filters.type = event.target.value; renderChanges(); });
     $("#sigem-monitor-only-monitored").addEventListener("change", (event) => { state.filters.monitored = event.target.checked; renderChanges(); });
@@ -196,21 +218,44 @@
     const form = $("#sigem-monitor-add");
     if (!target) return;
     if (form) form.hidden = !canManage();
-    target.innerHTML = state.monitored.map((item) => {
+    const query = normalizedSearch(state.monitoredQuery.trim());
+    const visible = query ? state.monitored.filter((item) =>
+      normalizedSearch([item.document_code, item.title, item.description, item.note,
+        item.current_status, item.priority].join(" ")).includes(query)
+    ) : state.monitored;
+    const countNode = $("#sigem-monitor-monitored-count");
+    if (countNode) countNode.textContent = visible.length.toLocaleString("pt-BR") +
+      " de " + state.monitored.length.toLocaleString("pt-BR") + " documento(s) monitorado(s)";
+    target.innerHTML = visible.map((item) => {
       const status = item.current_status || "Não localizado na versão atual";
       const priority = String(item.priority || "normal");
       return '<article data-priority="' + escapeHtml(priority) + '"><div><strong>' + escapeHtml(item.document_code) + '</strong><small>' + escapeHtml(item.title || item.description || item.note || "Documento monitorado") + '</small></div><span>' + escapeHtml(status) + '</span><b>' + escapeHtml(priority) + (item.active ? '' : ' · inativo') + '</b><small>Anterior: ' + escapeHtml(item.last_status || '—') + ' · Alteração: ' + escapeHtml(formatDate(item.last_change)) + ' · Consulta: ' + escapeHtml(formatDate(item.last_snapshot)) + ' · ' + escapeHtml(item.note || '') + '</small>' + (canManage() ? '<button class="text-button" type="button" data-monitor-edit="' + escapeHtml(item.id) + '">Editar</button><button class="text-button" type="button" data-monitor-toggle="' + escapeHtml(item.id) + '">' + (item.active ? 'Desativar' : 'Ativar') + '</button>' : '') + (canManage() ? '<button class="text-button danger" data-sigem-monitor-remove="' + escapeHtml(item.id) + '" type="button">Remover</button>' : '') + '</article>';
-    }).join("") || '<p class="sigem-monitor-empty">Nenhum documento monitorado neste contrato.</p>';
+    }).join("") || '<p class="sigem-monitor-empty">' +
+      (state.monitored.length ? "Nenhum documento corresponde à pesquisa." : "Nenhum documento monitorado neste contrato.") + '</p>';
   }
 
   function renderComparisons() {
     const target = $("#sigem-monitor-comparisons");
     if (!target) return;
-    target.innerHTML = state.comparisons.map((item) => {
+    const query = normalizedSearch(state.historyQuery.trim());
+    const visible = query ? state.comparisons.filter((item) =>
+      normalizedSearch([item.previous_file, item.current_file, formatDate(item.compared_at),
+        item.automatic ? "automática" : "manual"].join(" ")).includes(query)
+    ) : state.comparisons;
+    const shown = visible.slice(0, state.historyLimit);
+    const counter = $("#sigem-monitor-comparisons-count");
+    if (counter) counter.textContent = shown.length.toLocaleString("pt-BR") +
+      " de " + visible.length.toLocaleString("pt-BR") + " comparação(ões)" +
+      (query ? " · " + state.comparisons.length.toLocaleString("pt-BR") + " no histórico" : "");
+    const more = $("#sigem-monitor-history-more");
+    if (more) more.hidden = shown.length >= visible.length;
+    target.innerHTML = shown.map((item) => {
       const counts = item.counts || {};
       const selected = item.comparison_id === state.activeComparison ? " is-active" : "";
       return '<button class="sigem-monitor-comparison' + selected + '" data-sigem-comparison="' + escapeHtml(item.comparison_id) + '" type="button"><span><strong>' + escapeHtml(item.previous_file || "Versão anterior") + ' → ' + escapeHtml(item.current_file || "Versão atual") + '</strong><small>' + escapeHtml(formatDate(item.compared_at)) + ' · ' + (item.automatic ? "automática" : "manual") + '</small></span><b>' + count(counts, "changes").toLocaleString("pt-BR") + ' mudança(s)</b></button>';
-    }).join("") || '<p class="sigem-monitor-empty">Ainda não há duas versões publicadas para formar histórico de comparação.</p>';
+    }).join("") || '<p class="sigem-monitor-empty">' +
+      (state.comparisons.length ? "Nenhuma comparação corresponde à pesquisa." :
+        "Ainda não há duas versões publicadas para formar histórico de comparação.") + '</p>';
   }
 
   function renderChanges() {
@@ -750,6 +795,11 @@
     state.unreadCount = 0;
     state.versions = [];
     state.comparisons = [];
+    state.historyQuery = "";
+    state.historyLimit = 25;
+    state.monitoredQuery = "";
+    if ($("#sigem-monitor-history-search")) $("#sigem-monitor-history-search").value = "";
+    if ($("#sigem-monitor-monitored-search")) $("#sigem-monitor-monitored-search").value = "";
     state.changes = [];
     state.monitored = [];
     state.notifications = [];
