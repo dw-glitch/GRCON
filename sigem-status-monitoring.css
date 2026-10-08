@@ -113,3 +113,24 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+
+/* Os tokens gerais --surface/--text não são definidos em todos os modos da UI.
+   Na raiz escura, usar os tokens operacionais já suportados pelo GRCON. */
+body.p2-dark .sigem-monitor-local-search input {
+  background: var(--ops-surface, #17232d);
+  color: var(--ops-ink, #e7eef4);
+  border-color: var(--ops-line-strong, #405260);
+  color-scheme: dark;
+}
+body.p2-dark .sigem-monitor-local-search input::placeholder {
+  color: var(--ops-muted, #9babb8);
+}
+body.p2-dark .sigem-monitor-local-search label,
+body.p2-dark .sigem-monitor-list-count {
+  color: var(--ops-muted, #9babb8) !important;
+}
+body.p2-dark .sigem-monitor-local-search input:focus-visible {
+  border-color: var(--ops-blue, #63b1df);
+  box-shadow: 0 0 0 3px rgb(99 177 223 / 23%);
+}
