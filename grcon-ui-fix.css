@@ -133,6 +133,34 @@ html[data-app="GRCON"] .grcon-fix-popover-hint[hidden] { display: none; }
 @media(max-width:760px){.additional-tools-module{padding:20px 16px 32px}.additional-tools-grid{grid-template-columns:1fr}.additional-tool-card{grid-template-columns:44px 1fr;padding:18px}.additional-tool-open{grid-column:2}.additional-tools-heading{align-items:flex-start}}
 @media(prefers-reduced-motion:reduce){.additional-tool-card{transition:none}.additional-tool-card:hover{transform:none}}
 
+/* Referência: image-gen-1(1).png. Acesso com descrição e ação destacadas. */
+html[data-app="GRCON"] .additional-tool-card {
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: start;
+  min-height: 10.5rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+}
+html[data-app="GRCON"] .additional-tool-icon {
+  width: 56px;
+  height: 56px;
+  background: var(--brand-100);
+  color: var(--brand-800);
+}
+html[data-app="GRCON"] .additional-tool-card > span:nth-child(2) { min-width: 0; }
+html[data-app="GRCON"] .additional-tool-open {
+  grid-column: 2;
+  justify-self: start;
+  align-self: end;
+  padding: .45rem .75rem;
+  border-radius: var(--radius-xs);
+  background: var(--brand-800);
+  color: var(--surface-1);
+}
+@media (max-width: 760px) {
+  html[data-app="GRCON"] .additional-tool-card { min-height: 0; }
+}
+
 
 /* Etapas da GRDT: prioridade à operação em desktop, derivadas de estado real. */
 html[data-app="GRCON"] .grdt-stages {

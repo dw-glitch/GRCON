@@ -459,10 +459,33 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="sigem"]', "Postagem SIGEM", viewport, 900));
 
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="additional-tools"]', "Ferramentas adicionais", viewport, 500));
+      if (viewport === 1440) {
+        await setQaTheme(page, true);
+        viewportMetrics.push({ label: "Ferramentas tema escuro", geometry: await auditGeometry(page, "Ferramentas tema escuro") });
+        await screenshot(page, "ferramentas-dark", viewport);
+        await setQaTheme(page, false);
+      }
       for (const [view, label] of [["grdt-reissue", "Repostagem de GRDT"], ["pdf-tools", "Combinar PDFs"], ["cover-document", "Adicionar Capa"]]) {
         await clickVisible(page, '.ops-sidebar [data-grcon-view="additional-tools"]');
         await page.waitForTimeout(250);
         viewportMetrics.push(await visit(page, `#additional-tools-module [data-grcon-view="${view}"]`, label, viewport, 900));
+        if (view === "cover-document") {
+          const placeholderHeight = await page.locator(".cover-preview-frame").evaluate(node => node.getBoundingClientRect().height);
+          assert.ok(placeholderHeight < 350, "Prévia vazia deve reservar espaço compacto para manter a saída acessível.");
+          if (viewport === 1440) {
+            const lightBg = await page.locator(".cover-preview-frame").evaluate(node => getComputedStyle(node).backgroundColor);
+            await setQaTheme(page, true);
+            const darkBg = await page.locator(".cover-preview-frame").evaluate(node => getComputedStyle(node).backgroundColor);
+            assert.notEqual(darkBg, lightBg, "Prévia vazia deve acompanhar o tema real.");
+            viewportMetrics.push({ label: "Adicionar Capa tema escuro", geometry: await auditGeometry(page, "Adicionar Capa tema escuro") });
+            await screenshot(page, "adicionar-capa-dark", viewport);
+            await setQaTheme(page, false);
+            await page.evaluate(() => { document.body.style.zoom = "1.25"; });
+            viewportMetrics.push({ label: "Adicionar Capa zoom 125%", geometry: await auditGeometry(page, "Adicionar Capa zoom 125%") });
+            await screenshot(page, "adicionar-capa-zoom125", viewport);
+            await page.evaluate(() => { document.body.style.zoom = ""; });
+          }
+        }
       }
 
       const settings = await clickVisible(page, "[data-ops-open-settings]");
