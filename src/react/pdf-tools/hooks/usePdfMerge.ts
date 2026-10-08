@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pdfMergeAdapter as Adapter, pdfMergeBridge } from "../services/pdfMergeAdapter";
 import { beginMascotOperation } from "../../shared/mascot";
+import { sortPdfItemsNaturally } from "../services/pdfNaturalOrder";
 import type {
   PdfMergeDebugState,
   PdfMergeItem,
@@ -114,6 +115,21 @@ export function usePdfMerge() {
       action: delta < 0 ? "up" : "down",
       token: Date.now(),
     });
+  }, [invalidateResult]);
+
+  const sortNaturally = useCallback((): void => {
+    if (busyRef.current || itemsRef.current.length < 2) return;
+    const current = itemsRef.current;
+    const next = sortPdfItemsNaturally(current);
+    // Uma ordenação que não altera nada não deve invalidar um PDF já gerado.
+    if (next.every((item, index) => item.id === current[index].id)) return;
+    invalidateResult();
+    itemsRef.current = next;
+    setItems(next);
+    setDraggedId("");
+    setDropTargetId("");
+    setFocusRequest(null);
+    Adapter.notify("Arquivos ordenados por nome (ordem natural). Confira a lista antes de combinar.", "success");
   }, [invalidateResult]);
 
   const startDrag = useCallback((id: string): void => {
@@ -322,6 +338,7 @@ export function usePdfMerge() {
     addFiles,
     removeItem,
     moveItem,
+    sortNaturally,
     startDrag,
     overDragTarget,
     dropOnItem,
