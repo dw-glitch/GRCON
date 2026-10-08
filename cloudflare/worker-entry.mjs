@@ -1,4 +1,4 @@
-import legacyWorker from "./worker.mjs";
+import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
 
 const PREFIX = "/api/document-vault/";
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
@@ -349,11 +349,16 @@ function normalizeMetadata(body) {
 async function handleHealth(env) {
   let supabase = false;
   try { supabase = Boolean(supabaseConfig(env)); } catch (_) { supabase = false; }
+  const powerAutomateUrl = safeText(env.POWER_AUTOMATE_EGRDT_WEBHOOK_URL, 4000);
+  const powerAutomateConfigured = Boolean(powerAutomateUrl);
+  const powerAutomateUrlValid = powerAutomateConfigured && Boolean(legacyInternal?.isAllowedFlowUrl?.(powerAutomateUrl));
   return json({
     ok: Boolean(supabase && env.GRCON_DOCUMENTS),
     service: "grcon-document-vault",
     supabaseConfigured: supabase,
     r2Configured: Boolean(env.GRCON_DOCUMENTS),
+    powerAutomateConfigured,
+    powerAutomateUrlValid,
     bucket: safeText(env.R2_BUCKET_NAME || "grcon-documents", 120),
   }, supabase && env.GRCON_DOCUMENTS ? 200 : 503);
 }

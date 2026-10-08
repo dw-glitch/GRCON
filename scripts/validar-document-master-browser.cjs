@@ -24,6 +24,11 @@ const root=path.resolve(__dirname,'..');
  assert.equal(localTrace.provenance.source,'local');assert.equal(localTrace.provenance.fileVersion,2);
  assert.equal(localTrace.provenance.sha256,require('node:crypto').createHash('sha256').update('local QA').digest('hex'));
  assert.equal(localTrace.stored.id,'qa-local');
+ await page.evaluate(async code => {
+   await window.GrconDocumentVault.enqueueFiles([new File(['queue QA'], code+'_0.pdf', {type:'application/pdf'})]);
+ }, code);
+ await page.waitForFunction(() => window.GrconDocumentVault.state.queue[0]?.status === 'done');
+ assert.equal(await page.locator('#vault-queue-body [data-vault-detail]').count(), 1, 'completed upload renders its confirmed server file id');
  await page.locator('#document-master-open').click();await page.locator('#master-query').fill('RL-5290');await page.locator('[data-master-code]').first().waitFor();await page.locator('[data-master-code]').first().click();await page.waitForFunction(()=>document.getElementById('master-content').textContent.includes('QA-001'));
  for(const label of ['SIGEM','ProjectWise','GRDT / eGRDT','Arquivos no Cofre','Controle de Solicitações','Meu monitoramento','Auditoria'])assert.ok((await page.locator('#master-content').textContent()).includes(label));
  assert.match(await page.locator('#master-content').textContent(),/Base PW não carregada/,'missing PW source must not be presented as absent document');

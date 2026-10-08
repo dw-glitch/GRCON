@@ -33,6 +33,8 @@ assert.equal(healthResponse.status, 200, 'Saúde do Cofre HTTP ' + healthRespons
 assert.equal(health.ok, true, 'Cofre deve estar configurado.');
 assert.equal(health.r2Configured, true);
 assert.equal(health.supabaseConfigured, true);
+assert.equal(typeof health.powerAutomateConfigured, 'boolean', 'Health deve informar se o Power Automate está configurado sem expor a URL.');
+assert.equal(typeof health.powerAutomateUrlValid, 'boolean', 'Health deve informar se a URL configurada tem formato aceito.');
 const anonymous = await get('/api/document-vault/list');
 assert.equal(anonymous.status, 401, 'Catálogo deve exigir sessão.');
-console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, cofreConfigured: true, anonymousCatalogStatus: anonymous.status }));
+console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, cofreConfigured: true, powerAutomateConfigured: health.powerAutomateConfigured, powerAutomateUrlValid: health.powerAutomateUrlValid, anonymousCatalogStatus: anonymous.status }));

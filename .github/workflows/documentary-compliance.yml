@@ -53,7 +53,7 @@ jobs:
           QA_SERVER_PID=$!
           trap 'kill "$QA_SERVER_PID"' EXIT
           node scripts/validar-documentary-compliance-browser.cjs
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: documentary-compliance-browser

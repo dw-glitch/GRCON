@@ -191,6 +191,10 @@ async function probe(page, pathname) {
     const vaultHealthBody = await vaultHealth.json().catch(() => ({}));
     assert.ok([200, 503].includes(vaultHealth.status()), "Health do Cofre deve responder 200 configurado ou 503 sem secrets locais.");
     assert.equal(vaultHealthBody.service, "grcon-document-vault");
+    assert.equal(typeof vaultHealthBody.powerAutomateConfigured, "boolean");
+    assert.equal(typeof vaultHealthBody.powerAutomateUrlValid, "boolean");
+    assert.equal(vaultHealthBody.powerAutomateConfigured, false, "Preview local não deve inventar secret do Power Automate.");
+    assert.equal(vaultHealthBody.powerAutomateUrlValid, false);
 
     await page.waitForFunction(() => Boolean(window.GrconDocumentVault && document.querySelector("[data-vault-open]")), null, { timeout: 15000 });
     await page.evaluate(() => {

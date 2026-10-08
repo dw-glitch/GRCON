@@ -54,7 +54,7 @@ Secret obrigatório no Worker:
 
 Use preferencialmente uma chave Supabase `sb_secret_...` exclusiva para esse backend. O Worker também preserva compatibilidade com o `service_role` JWT legado durante a migração. O segredo deve existir apenas em **Workers & Pages → grcon-cloudflare → Settings → Variables and Secrets**, nunca em GitHub, JavaScript do navegador, HTML ou logs.
 
-O endpoint `GET /api/document-vault/health` confirma apenas se Supabase e R2 estão configurados; ele não retorna valores de segredo.
+O endpoint `GET /api/document-vault/health` confirma se Supabase e R2 estão configurados e também retorna somente os booleanos `powerAutomateConfigured` e `powerAutomateUrlValid`. Nenhum valor de segredo, webhook ou chave é exposto. Assim, após o deploy, o próprio log do workflow permite confirmar se `POWER_AUTOMATE_EGRDT_WEBHOOK_URL` chegou ao Worker e se o formato é aceito, sem abrir o painel Cloudflare.
 
 O deploy usa `keep_vars: true` para preservar variáveis de texto cadastradas no painel. Sem essa opção, o Wrangler substitui variáveis de texto pelas declaradas no arquivo de configuração. Secrets são preservados pelo Cloudflare independentemente dessa opção. `keep_vars` não recupera valores que já tenham sido removidos.
 

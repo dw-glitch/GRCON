@@ -75,7 +75,7 @@
       let imageConfig = null;
       if (brand.reportLogoBase64) imageConfig = { base64: brand.reportLogoBase64, extension: "png" };
       else if (typeof fetch === "function") {
-        const response = await fetch(brand.reportLogoFile || "grcon-logo-report.png", { cache: "no-store" });
+        const response = await fetch(root.document ? (brand.reportLogoFile || "grcon-logo-report.png") : new URL("../" + (brand.reportLogoFile || "grcon-logo-report.png"), root.location.href), { cache: "no-store" });
         if (response.ok) imageConfig = { buffer: await response.arrayBuffer(), extension: "png" };
       }
       if (!imageConfig) return false;
@@ -183,6 +183,12 @@
   }
 
   async function buildWorkbook(rows, options) {
+    if (root.document && typeof Worker === "function") {
+      try {
+        await root.GRCONModuleLoader?.ensure("performance");
+        if (root.GrconPerformance?.supported) return await root.GrconPerformance.buildSpreadsheet("conference", { rows, options });
+      } catch (error) { console.warn("[GRCON] Exportação da Conferência em modo compatível", error); }
+    }
     if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");
     const source = rows || [];
     const mode = options?.mode === "events" ? "events" : "documents";
@@ -310,7 +316,77 @@
     sheet.pageMargins = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
     sheet.headerFooter.oddFooter = "&LGRCON&CRelatório de Conferência — Consulta Geral × Histórico&R&P / &N";
 
-    if (options?.pending) {
+    // Relatórios por GRDT partem dos eventos da emissão, e não do documento
+    // consolidado associado à última GRDT. Nenhum documento confirmado é ocultado.
+    const groups = Array.isArray(options?.groups) ? options.groups : [];
+    if (groups.length) {
+      const safe = (value) => {
+        if (value == null) return "";
+        if (typeof value === "number" || typeof value === "boolean") return value;
+        const str = String(value);
+        return /^[=+@]/.test(str) ? "'" + str : str;
+      };
+      const addSheet = (name, headers, rows) => {
+        const ws = workbook.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1, xSplit: 2 }] });
+        ws.columns = headers.map((header, index) => ({ header, width: index === 0 ? 28 : index === headers.length - 1 ? 64 : 22 }));
+        rows.forEach((row) => ws.addRow(row.map(safe)));
+        const top = ws.getRow(1);
+        top.font = { name: "Arial", bold: true, color: { argb: WHITE } };
+        top.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DARK } };
+        top.alignment = { wrapText: true, vertical: "middle" };
+        top.height = 27;
+        ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, ws.rowCount), column: headers.length } };
+        return ws;
+      };
+      const groupRows = groups.flatMap((g) => g.rows.map((row) => ({ group: g, row, d: row.diagnosis || {} })));
+      const detailValues = ({ group: g, row, d }) => [
+        g.egrdtNumber, row.document, row.revisionSent, row.revisionFound,
+        row.purpose || "", row.sigemStatus || "", row.sigemStatusRevision || "",
+        row.statusLabel || row.status || "",
+        row.allocation?.label || "Alocação a confirmar",
+        (d.allocations || []).join(" | "),
+        (d.allocationReferences || []).map((ref) =>
+          [ref.allocation, ref.allocationStatus, ref.workflow, ref.ldSheet, ref.sourceRow ? "Linha " + ref.sourceRow : ""].filter(Boolean).join(" · ")
+        ).join(" | "),
+        d.evidenceLevel || "", d.action || "", d.reason || row.note || "",
+        row.confirmationSource || "", row.sigemSourceRow || "",
+        d.baseReferenceDate || "", d.baseFileName || "",
+      ];
+      const detailHeaders = [
+        "GRDT", "Documento", "Revisão enviada", "Revisão SIGEM", "PROPÓSITO DE EMISSÃO",
+        "Status SIGEM", "Revisão do status SIGEM", "Conferência",
+        "Documentos Previstos", "Número(s) alocação", "Central de Alocação / origem",
+        "Nível da evidência", "Orientação", "Motivo / hipótese", "Fonte da confirmação",
+        "Linha SIGEM", "Data Consulta Geral", "Arquivo Consulta Geral",
+      ];
+      addSheet("RESUMO GRDT", [
+        "GRDT", "Data", "Documentos únicos", "Documentos/revisões", "Localizados",
+        "Aguardando", "Não encontrados", "Revisões divergentes", "Em tramitação",
+        "Alocação pendente", "Requer análise", "Não verificados", "Histórico preservado sem presença atual", "Risco de duplicidade", "Classificação",
+      ], groups.map((g) => [
+        g.egrdtNumber, g.generatedAt, g.distinctDocuments, g.total, g.confirmed,
+        g.awaiting, g.notFound, g.divergent, g.inTransit, g.allocationPending,
+        g.review, g.notVerified, g.preservedOnly, g.riskOfDuplicateResend ? "SIM" : "NÃO", g.classification,
+      ]));
+      addSheet("DOCUMENTOS POR GRDT", detailHeaders, groupRows.map(detailValues));
+      addSheet("PENDENCIAS CONFIRMACAO", detailHeaders, groupRows.filter(({ row }) =>
+        row.status !== Conference.STATUSES.CONFIRMED && !row.historicalPreserved).map(detailValues));
+      addSheet("ALOCACOES A VERIFICAR", detailHeaders, groupRows.filter(({ row, d }) =>
+        row.allocation?.kind !== "allocated" || (d.allocations || []).length > 1).map(detailValues));
+      addSheet("DOCUMENTOS TRAMITACAO", detailHeaders, groupRows.filter(({ row }) =>
+        row.currentEvidence && Conference.normalizeRevision(row.sigemStatusRevision) === Conference.normalizeRevision(row.revisionSent)
+          && /^(EM ANALISE|EM WORKFLOW)$/.test(Conference.norm(row.sigemStatus))).map(detailValues));
+      addSheet("AVALIAR REENVIO", detailHeaders, groupRows.filter(({ d }) =>
+        d.action === "AVALIAR REENVIO").map(detailValues));
+      if (options.pending) {
+        addSheet("GRDTs Pendentes", [
+          "GRDT", "Total de documentos", "Localizados", "Não encontrados", "Revisões divergentes", "Situação",
+        ], groups.filter((g) => g.classification !== "TOTALMENTE_CONFIRMADA").map((g) => [
+          g.egrdtNumber, g.distinctDocuments, g.confirmed, g.notFound, g.divergent, g.classification,
+        ]));
+      }
+    } else if (options?.pending) {
+      // Compatibilidade com exportações legadas por documentos únicos.
       const consolidated = Conference.pendingGrdts(source);
       const pending = workbook.addWorksheet("GRDTs Pendentes", { views: [{ state: "frozen", ySplit: 1 }] });
       pending.columns = [{ header: "GRDT", key: "grdt", width: 48 }, { header: "Quantidade de documentos", key: "documentCount", width: 28 }];

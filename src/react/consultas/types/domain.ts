@@ -83,6 +83,7 @@ export interface ConsultationRow {
   plannedDocumentsFile?: string;
   plannedDocumentsUpdatedAt?: string;
   allocation?: string;
+  fiscalComment?: string;
   lastGrdt?: string;
   issued?: string;
   issuedCell?: string;

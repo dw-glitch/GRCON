@@ -30,7 +30,7 @@ jobs:
           python3 -m http.server 8765 --bind 127.0.0.1 > /tmp/grcon-owner-shared-server.log 2>&1 &
           node scripts/validar-owner-shared-sigem-browser.cjs
           GRCON_QA_LEGACY_SHARED=1 node scripts/validar-owner-shared-sigem-browser.cjs
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: owner-shared-sigem-browser

@@ -128,13 +128,13 @@ function xlsx(): XlsxApi {
   if (!api?.read || !api.utils) throw new Error("Biblioteca XLSX indisponível.");
   return api;
 }
-function workbookMatrix(sheet: XlsxSheet | undefined, maxColumns: number): string[][] {
+function workbookMatrix(sheet: XlsxSheet | undefined, maxColumns: number, maxRows = Infinity): string[][] {
   const api = xlsx();
   if (!sheet || !sheet["!ref"]) return [];
   const range = api.utils.decode_range(sheet["!ref"]);
   const endColumn = Math.min(range.e.c, Math.max(1, Number(maxColumns) || 40) - 1);
   const output: string[][] = [];
-  for (let row = range.s.r; row <= range.e.r; row += 1) {
+  for (let row = range.s.r; row <= Math.min(range.e.r, range.s.r + maxRows - 1); row += 1) {
     const values: string[] = [];
     for (let column = range.s.c; column <= endColumn; column += 1) {
       const cell = sheet[api.utils.encode_cell({ r: row, c: column })] as XlsxCell | undefined;
@@ -258,7 +258,7 @@ async function ensureConferenceRuntime() {
 function validateSigemWorkbook(workbook: XlsxWorkbook, conference: NonNullable<typeof window.GrconPostingConference>): void {
   let best: { score: number; columns: Record<string, number> } | null = null;
   workbook.SheetNames.forEach((sheetName) => {
-    const detection = conference.detectColumns(workbookMatrix(workbook.Sheets[sheetName], 80).slice(0, 40), 40);
+    const detection = conference.detectColumns(workbookMatrix(workbook.Sheets[sheetName], 80, 40), 40);
     if (detection && (!best || detection.score > best.score)) best = detection;
   });
   if (!best) throw new Error("Consulta Geral inválida: não foi possível localizar Documento e Revisão nas primeiras linhas.");
@@ -545,7 +545,12 @@ async function refresh(reason = ""): Promise<void> {
           const recorded = await registerHistoryBeforeActivation("sigem", shared, { pwBase: bases.pw, ldRecords: bases.ld?.records || [], reason: "shared-general-query" });
           shared.meta.historySourceSnapshotId = recorded.sigem?.snapshot?.id;
         }
-        bases.sigem = await Core().saveSigemBase(shared);
+        const projectionChanged = !bases.sigem?.meta || Object.entries(shared.meta).some(([key, value]) =>
+          JSON.stringify(bases.sigem.meta?.[key]) !== JSON.stringify(value));
+        if (projectionChanged) {
+          bases.sigem = await Core().saveSigemBase(shared);
+          bases.history = await Core().loadHistory();
+        }
       } else if (window.GrconSharedSigemQuery && window.GrconCloud?.state?.online
         && window.GrconCloud.state.membership?.workspace_id
         && bases.sigem?.meta?.source === "shared-general-query") {
@@ -567,7 +572,7 @@ async function refresh(reason = ""): Promise<void> {
         state.pw = selected;
       }
       state.ld = bases.ld?.meta ? bases.ld : EMPTY_BASE();
-      state.history = await Core().loadHistory();
+      state.history = bases.history;
       state.analysisError = "";
       const sources = [state.sigem.meta?.snapshotId, state.pw.meta?.snapshotId, state.ld.meta?.snapshotId, state.pw.meta?.scopeLdSnapshotId].join("|");
       if (!state.model || sources !== lastModelSources) { await rebuildModelAsync(); lastModelSources = sources; }
@@ -598,17 +603,30 @@ async function activate(): Promise<void> {
   }
 }
 
+const rowSearchText = new WeakMap<object, string>();
+let filteredCache: { source: SigemPwResult["lists"][string]; key: string; rows: SigemPwResult["lists"][string] } | null = null;
 function filteredRows(): SigemPwResult["lists"][string] {
   const rows = state.result?.lists?.[state.activeList] || [];
   const query = Core().norm(state.filters.query);
   const revision = Core().norm(state.filters.revision);
   const status = Core().norm(state.filters.sigemStatus);
-  return rows.filter(row => {
-    if (query && !Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.situation].join(" ")).includes(query)) return false;
+  const key = JSON.stringify([query, revision, status, state.filters.inPw]);
+  if (filteredCache?.source === rows && filteredCache.key === key) return filteredCache.rows;
+  const filtered = !query && !revision && !status && !state.filters.inPw ? rows : rows.filter(row => {
+    if (query) {
+      let search = rowSearchText.get(row);
+      if (search === undefined) {
+        search = Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.situation].join(" "));
+        rowSearchText.set(row, search);
+      }
+      if (!search.includes(query)) return false;
+    }
     if (revision && Core().norm(row.revision) !== revision) return false;
     if (status && Core().norm(row.sigemStatus) !== status) return false;
     return state.filters.inPw === "yes" ? row.inPw : state.filters.inPw === "no" ? !row.inPw : true;
   });
+  filteredCache = { source: rows, key, rows: filtered };
+  return filtered;
 }
 function pageRows(): { rows: ReturnType<typeof filteredRows>; visible: ReturnType<typeof filteredRows>; pages: number; start: number } {
   const rows = filteredRows();
@@ -686,11 +704,9 @@ async function exportCurrentList(): Promise<void> {
       "Emissão PW": row.pwEmission,
       "Situação": row.situation,
     }));
-    const worksheet = api.utils.json_to_sheet(data);
-    (worksheet as Record<string, unknown>)["!cols"] = [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 16 }, { wch: 28 }, { wch: 16 }, { wch: 34 }];
-    const workbook = api.utils.book_new();
-    api.utils.book_append_sheet(workbook, worksheet, "Relação");
-    api.utils.book_append_sheet(workbook, api.utils.json_to_sheet([
+    const sheets = [
+      { name: "Relação", rows: data, columns: [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 16 }, { wch: 28 }, { wch: 16 }, { wch: 34 }] },
+      { name: "Metadados", rows: [
       { Item: "Consulta Geral utilizada", Valor: text(exportMeta.sigem.referenceDate) || text(exportMeta.sigem.importedAt) },
       { Item: "Consulta Geral ID", Valor: text(exportMeta.sigem.snapshotId) },
       { Item: "Consulta Geral arquivo", Valor: text(exportMeta.sigem.fileName) },
@@ -700,9 +716,28 @@ async function exportCurrentList(): Promise<void> {
       { Item: "Filtros", Valor: JSON.stringify(exportMeta.filters) },
       { Item: "Lista", Valor: exportMeta.list },
       { Item: "Data da geração", Valor: exportMeta.generatedAt },
-    ]), "Metadados");
+    ] },
+    ];
+    let buffer: ArrayBuffer | undefined;
+    try {
+      await window.GRCONModuleLoader.ensure("performance");
+      if (window.GrconPerformance?.supported) buffer = await window.GrconPerformance.buildSpreadsheet("sigem-dashboard", { sheets });
+    } catch (error) { console.warn("[SIGEM×PW] Exportação em modo compatível", error); }
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    api.writeFile(workbook, `GRCON_SIGEM_PW_${exportMeta.scope}_${exportMeta.list}_${stamp}.xlsx`, { compression: true });
+    const filename = `GRCON_SIGEM_PW_${exportMeta.scope}_${exportMeta.list}_${stamp}.xlsx`;
+    if (buffer) {
+      const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } else {
+      const workbook = api.utils.book_new();
+      for (const tab of sheets) {
+        const worksheet = api.utils.json_to_sheet(tab.rows);
+        if ("columns" in tab) worksheet["!cols"] = tab.columns;
+        api.utils.book_append_sheet(workbook, worksheet, tab.name);
+      }
+      api.writeFile(workbook, filename, { compression: true });
+    }
     notify(`Lista exportada com ${fmt(rows.length)} registros.`, "success");
   } catch (error) {
     console.error("[SIGEM×PW] exportação:", error);

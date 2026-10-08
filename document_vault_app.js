@@ -166,7 +166,7 @@
           const total = Number(message.total) || task.file.size || 1;
           task.progress = Math.min(28, Math.round((Number(message.loaded) || 0) / total * 28));
           task.phase = "Preparando arquivo";
-          renderQueue();
+          scheduleQueueProgress();
         } else if (message.type === "done") {
           worker.terminate();
           task.hashWorker = null;
@@ -361,7 +361,7 @@
         const completed = await xhrPut("/upload", task.file, task, common, (loaded, total) => {
           task.progress = 32 + Math.round((loaded / Math.max(1, total)) * 66);
           task.phase = "Enviando";
-          renderQueue();
+          scheduleQueueProgress();
         });
         task.serverFile = completed.file || task.serverFile;
       } else {
@@ -390,7 +390,7 @@
           }, loaded => {
             task.progress = 32 + Math.round(((confirmedBytes + loaded) / Math.max(1, task.file.size)) * 64);
             task.phase = "Parte " + partNumber + " de " + totalParts;
-            renderQueue();
+            scheduleQueueProgress();
           });
           confirmedBytes += partBlob.size;
         }
@@ -510,7 +510,13 @@
     return attention.concat(remaining).slice(0, QUEUE_RENDER_LIMIT);
   }
 
+  let queueProgressTimer = null;
+  function scheduleQueueProgress() {
+    if (queueProgressTimer !== null) return;
+    queueProgressTimer = setTimeout(() => { queueProgressTimer = null; renderQueue(); }, 100);
+  }
   function renderQueue() {
+    if (queueProgressTimer !== null) { clearTimeout(queueProgressTimer); queueProgressTimer = null; }
     const host = document.getElementById("vault-queue-body");
     const panel = document.getElementById("vault-queue-panel");
     const pause = document.getElementById("vault-pause");
@@ -534,6 +540,7 @@
     }
     const visible = queueView();
     host.innerHTML = visible.map(task => {
+      const id = task.serverFile?.id;
       const editable = !["hashing","initializing","uploading","done"].includes(task.status);
       const actions = [];
       if (task.status === "error") actions.push('<button type="button" data-vault-retry="' + esc(task.id) + '">Tentar novamente</button>');
@@ -545,7 +552,7 @@
         '<td><input class="vault-revision-input" data-vault-meta="revision" data-task-id="' + esc(task.id) + '" value="' + esc(task.revision) + '" ' + (editable ? "" : "disabled") + ' aria-label="Revisão"></td>' +
         '<td><span class="vault-status">' + esc(taskStatusLabel(task)) + '</span><small>' + esc(task.error || task.phase) + '</small></td>' +
         '<td><div class="vault-progress"><i style="width:' + Math.max(0, Math.min(100, Number(task.progress) || 0)) + '%"></i></div><small>' + Math.round(Number(task.progress) || 0) + '%</small></td>' +
-        '<td><div class="vault-row-actions"><button type="button" data-vault-detail="' + esc(id) + '">Detalhes</button>' + actions.join("") + '</div></td>' +
+        '<td><div class="vault-row-actions">' + (id ? '<button type="button" data-vault-detail="' + esc(id) + '">Detalhes</button>' : '') + actions.join("") + '</div></td>' +
         '</tr>';
     }).join("");
     if (state.queue.length > visible.length) {
@@ -722,9 +729,8 @@
     if (button) button.disabled = true;
     try {
       await root.GRCONModuleLoader.ensure("excel");
-      const workbook = new root.ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("Cofre", { views: [{ state: "frozen", ySplit: 1 }] });
-      sheet.columns = [
+      const rows = [];
+      const columns = [
         ["Contrato", "contract", 24], ["Código do documento", "document", 38], ["Revisão", "revision", 12],
         ["Nome do arquivo", "name", 52], ["Extensão", "format", 12], ["Tipo", "type", 14],
         ["Tamanho (bytes)", "size", 20], ["Data de inclusão", "date", 24], ["Incluído por", "actor", 38],
@@ -738,7 +744,7 @@
         if (after) params.set("after", String(after));
         const page = await requestJson("/list?" + params, { method: "GET" });
         if (epoch !== contextEpoch) throw new Error("O contrato mudou. Exporte novamente.");
-        for (const file of page.files || []) sheet.addRow({
+        for (const file of page.files || []) rows.push({
           contract: root.GrconCloud?.state?.contract?.display_name || root.GrconCloud?.state?.contract?.code || root.GrconCloud?.state?.membership?.contract_code || "Contrato atual",
           document: file.document_code, revision: file.revision, name: file.file_name, format: file.format,
           type: file.document_type || "", size: Number(file.size_bytes), date: new Date(file.created_at),
@@ -749,17 +755,28 @@
         });
         after = page.next;
       } while (after);
-      sheet.getColumn("date").numFmt = "dd/mm/yyyy hh:mm";
-      sheet.getColumn("size").numFmt = "#,##0";
-      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
-      sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: sheet.columns.length } };
-      const buffer = await workbook.xlsx.writeBuffer();
+      let buffer;
+      try {
+        await root.GRCONModuleLoader.ensure("performance");
+        if (root.GrconPerformance?.supported) buffer = await root.GrconPerformance.buildSpreadsheet("vault", { rows, columns });
+      } catch (error) { console.warn("[GRCON] Exportação do Cofre em modo compatível", error); }
+      if (!buffer) {
+        const workbook = new root.ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("Cofre", { views: [{ state: "frozen", ySplit: 1 }] });
+        sheet.columns = columns;
+        rows.forEach(row => sheet.addRow(row));
+        sheet.getColumn("date").numFmt = "dd/mm/yyyy hh:mm";
+        sheet.getColumn("size").numFmt = "#,##0";
+        sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+        sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
+        sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: sheet.columns.length } };
+        buffer = await workbook.xlsx.writeBuffer();
+      }
       if (epoch !== contextEpoch) throw new Error("O contrato mudou. Exporte novamente.");
       const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
       const anchor = document.createElement("a"); anchor.href = url; anchor.download = "GRCON_Cofre_" + new Date().toISOString().slice(0,10) + ".xlsx";
       document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
-      notify((sheet.rowCount - 1) + " documentos exportados com os filtros selecionados.", "success");
+      notify(rows.length + " documentos exportados com os filtros selecionados.", "success");
     } catch (error) { notify(error.message, "error"); }
     finally { if (button) button.disabled = false; }
   }
@@ -1265,7 +1282,11 @@
         </header>
         <input id="vault-files-input" type="file" multiple hidden>
         <input id="vault-folder-input" type="file" multiple webkitdirectory directory hidden>
-        <div id="vault-dropzone" class="vault-dropzone" tabindex="0" role="button"><strong>Arraste arquivos ou uma pasta para cá</strong><span>Arquivos compactados são ignorados. Os demais documentos são identificados pelo nome do arquivo.</span></div>
+        <div id="vault-dropzone" class="vault-dropzone" tabindex="0" role="button" aria-describedby="vault-dropzone-description" aria-label="Selecionar ou arrastar documentos para o Cofre">
+          <svg class="vault-dropzone-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>
+          <strong>Arraste arquivos ou uma pasta para cá</strong>
+          <span id="vault-dropzone-description">Pressione Enter ou Espaço para selecionar arquivos. Compactados são ignorados; os demais são identificados pelo nome.</span>
+        </div>
       </section>
       <p id="vault-storage-details" class="vault-metrics-details" aria-live="polite"></p>
       <details id="vault-storage-history" hidden><summary>Evolução do consumo · últimas conferências</summary><div class="vault-table-wrap"></div></details>
@@ -1317,8 +1338,7 @@
 
   async function openVault() {
     activateShell();
-    await checkHealth();
-    await Promise.all([refreshList(true), refreshStorage()]);
+    await Promise.all([checkHealth(), refreshList(true), refreshStorage()]);
   }
 
   function installEvents() {
