@@ -7,7 +7,7 @@
  */
 import type { DetailedHTMLProps, HTMLAttributes } from "react";
 
-declare global {
+declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
       "empty-state": DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>;

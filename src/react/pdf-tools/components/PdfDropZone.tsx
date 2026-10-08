@@ -4,7 +4,7 @@ interface PdfDropZoneProps {
   busy: boolean;
   active: boolean;
   hasFiles: boolean;
-  inputRef: RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement | null>;
   onFiles(files: FileList | null): void;
   onEnter(): void;
   onLeave(): void;
