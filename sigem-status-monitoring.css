@@ -134,3 +134,14 @@ body.p2-dark .sigem-monitor-local-search input:focus-visible {
   border-color: var(--ops-blue, #63b1df);
   box-shadow: 0 0 0 3px rgb(99 177 223 / 23%);
 }
+
+
+/* Em Consultas, estilos globais dos campos podem ter maior especificidade.
+   Restringir a exceção aos dois controles locais deste módulo. */
+html[data-app="GRCON"][data-theme="dark"] body.p2-dark #sigem-monitor-history-search,
+html[data-app="GRCON"][data-theme="dark"] body.p2-dark #sigem-monitor-monitored-search {
+  background-color: var(--ops-surface, #17232d) !important;
+  background-image: none !important;
+  color: var(--ops-ink, #e7eef4) !important;
+  border-color: var(--ops-line-strong, #405260) !important;
+}
