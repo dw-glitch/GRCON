@@ -72,7 +72,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  page.once('dialog',d=>d.accept());await page.locator('[data-vault-delete]').first().click();await page.waitForFunction(()=>!document.querySelector('[data-vault-delete="qa-0"]'));
  assert.equal(calls.filter(c=>c.action==='delete').length,1);
  await page.screenshot({path:path.join(out,'cofre-1366.png')});
- assert.match(await page.locator('#vault-storage-used').text(),/B|KB|MB|GB/);
+ assert.match(await page.locator('#vault-storage-used').textContent(),/B|KB|MB|GB/);
  await page.locator('#vault-storage-reconcile').click();
  await page.waitForFunction(()=>!document.querySelector('#vault-storage-reconcile').disabled);
  assert.ok(calls.some(c=>c.action==='reconcile'),'admin reconciliation reaches read-only storage audit endpoint');
