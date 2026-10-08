@@ -91,6 +91,7 @@
     packageFiles: [],
     ignoredFiles: [],
     listIgnoredFiles: [],
+    missingRequestedFiles: [],
     listSummary: null,
     records: [],
     history: [],
@@ -140,7 +141,7 @@
   // Lista histórica mantida para ET/CV e demais famílias. Para N-1710, a
   // extensão não é critério de bloqueio: o arquivo só precisa trazer um código
   // N-1710 reconhecível para chegar à triagem, onde a LD decide a identidade.
-  const PACKAGE_EXTENSION = /\.(pdf|doc|docx|txt|xls|xlsx|xlsm|xlsb|dwg|dgn|ppt|pptx)$/i;
+  const PACKAGE_EXTENSION = /\.(pdf|doc|docx|txt|xls|xlsx|xlsm|xlsb|csv|dwg|dxf|dgn|rvt|ifc|ppt|pptx|msg|eml|xml|jpg|jpeg|png|tif|tiff)$/i;
 
   function n1710FileCandidate(fileName) {
     const baseName = String(fileName || "").trim().split(/[\\/]/).pop() || "";
@@ -460,6 +461,30 @@
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
+  function installAutomaticDocumentSourceUi() {
+    const panel = document.querySelector("#grdt-module .control-panel");
+    const sourceRow = panel?.querySelector(".source-row");
+    if (sourceRow && !document.getElementById("grdt-auto-source-help")) {
+      const help = document.createElement("p");
+      help.id = "grdt-auto-source-help";
+      help.className = "grdt-source-help";
+      help.textContent = "A pasta documental é opcional. Quando houver uma pasta, o GRCON procura nela primeiro e busca automaticamente no Cofre somente o que faltar. Sem pasta, a busca é feita diretamente no Cofre.";
+      sourceRow.insertAdjacentElement("afterend", help);
+
+      const missing = document.createElement("section");
+      missing.id = "missing-documents";
+      missing.className = "missing-documents-panel";
+      missing.hidden = true;
+      missing.setAttribute("aria-live", "polite");
+      missing.innerHTML = '<header><div><strong>Documentos não encontrados</strong><small id="missing-documents-count">0 documento(s)</small></div><button class="secondary-button compact" id="copy-missing-documents" type="button">Copiar códigos não encontrados</button></header><ul id="missing-documents-list"></ul>';
+      help.insertAdjacentElement("afterend", missing);
+    }
+    const packageInput = document.getElementById("pdf-input");
+    if (packageInput) packageInput.accept = ".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.xlsb,.csv,.txt,.dwg,.dxf,.dgn,.rvt,.ifc,.ppt,.pptx,.msg,.eml,.xml,.jpg,.jpeg,.png,.tif,.tiff";
+  }
+
+  installAutomaticDocumentSourceUi();
+
   const els = {
     ldInput: $("#ld-input"),
     listInput: $("#list-input"),
@@ -491,6 +516,10 @@
     ignoredDetails: $("#ignored-details"),
     ignoredSummary: $("#ignored-summary"),
     ignoredList: $("#ignored-list"),
+    missingDetails: $("#missing-documents"),
+    missingCount: $("#missing-documents-count"),
+    missingList: $("#missing-documents-list"),
+    copyMissing: $("#copy-missing-documents"),
     sheetFilter: $("#sheet-filter"),
     analysisStamp: $("#analysis-stamp"),
     selectedCount: $("#selected-count"),
@@ -1344,11 +1373,11 @@
     els.ldMeta.textContent = state.ldFiles.length ? ldDisplayName() : "Selecionar arquivo";
     els.listMeta.textContent = state.textEntries.length
       ? state.listSummary
-        ? `${state.listSummary.total} por texto · ${state.listSummary.files} arquivo(s) físico(s)`
+        ? `${state.listSummary.total} por texto · ${state.listSummary.files} encontrado(s) · ${state.listSummary.missing || 0} ausente(s)`
         : `${state.textEntries.length} item(ns) por texto`
       : state.listFiles.length
         ? state.listSummary
-          ? `${state.listSummary.total} item(ns) lido(s) · ${state.listSummary.files} arquivo(s) físico(s)`
+          ? `${state.listSummary.total} item(ns) lido(s) · ${state.listSummary.files} encontrado(s) · ${state.listSummary.missing || 0} ausente(s)`
           : state.listFiles[0].name
         : "Excel ou texto";
     const packageLabel = fileLabel(state.packageFiles, "arquivo encontrado", "arquivos encontrados");
@@ -1356,14 +1385,25 @@
       ? `Processando ${state.packageCandidates.length} arquivo(s)...`
       : state.listSummary
       ? state.listSummary.files
-        ? `${state.listSummary.files} arquivo(s) da relação localizado(s)`
-        : "Sem arquivo físico · GRDT disponível pela relação"
+        ? `${state.listSummary.files} arquivo(s) da relação localizado(s)${state.listSummary.vaultFiles ? ` · ${state.listSummary.vaultFiles} recuperado(s) do Cofre` : ""}${state.listSummary.missing ? ` · ${state.listSummary.missing} ausente(s)` : ""}`
+        : state.listSummary.missing
+          ? `Nenhum arquivo solicitado localizado · ${state.listSummary.missing} ausente(s)`
+          : "Nenhum arquivo solicitado localizado"
       : state.ignoredFiles.length ? `${packageLabel} · ${state.ignoredFiles.length} ignorado(s)` : packageLabel;
     els.ignoredDetails.hidden = state.ignoredFiles.length === 0 || state.packageSelectionPending;
     els.ignoredSummary.textContent = `Ignorados: ${state.ignoredFiles.length}`;
     els.ignoredList.innerHTML = state.ignoredFiles.slice(0, 100).map((item) => (
       `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.reason)}</span></li>`
     )).join("");
+    if (els.missingDetails && els.missingCount && els.missingList) {
+      const missing = state.missingRequestedFiles || [];
+      els.missingDetails.hidden = missing.length === 0;
+      els.missingCount.textContent = missing.length.toLocaleString("pt-BR") + " documento(s)";
+      els.missingList.innerHTML = missing.slice(0, 250).map((item) => {
+        const code = item.document || item.fileName || item.raw || item.name || "Documento solicitado";
+        return `<li><code>${escapeHtml(code)}</code><span>${escapeHtml(item.reason || "Não localizado na pasta nem no Cofre.")}</span></li>`;
+      }).join("");
+    }
     const ldFile = state.ldFiles[0];
     const inspectedLdFiles = L ? state.ldFiles.filter((file) => L.inspectionFor(file)) : [];
     const readyLdFiles = L ? state.ldFiles.filter((file) => L.ready(file)) : state.ldFiles;
@@ -1725,33 +1765,30 @@
 
   function selectPdfsFromList(entries) {
     const allFiles = state.packageFiles;
-    const pdfs = allFiles.filter((file) => extensionOf(file.name) === "pdf");
     const exactNames = new Map();
     const exactStems = new Map();
-    const byDocumentPdf = new Map();
     const byDocumentAll = new Map();
 
     function indexByDocument(file, target) {
       const inferredDocument = listDocumentName(file.name);
       const exact = C.exactDocumentMatch ? C.exactDocumentMatch(inferredDocument, state.index) : null;
       const matches = exact ? [exact] : C.matchDocuments(file.name, state.index);
-      // Só indexa quando a LD devolve UMA correspondência segura. Código
-      // parecido com dois documentos não entra por aproximação.
+      // Só indexa quando a LD devolve UMA correspondência segura. O lookup
+      // inicial usa apenas nome, extensão e caminho; nenhum conteúdo é aberto.
       if (matches.length !== 1) return;
       const documentKey = C.key(matches[0].document);
       if (!target.has(documentKey)) target.set(documentKey, []);
       target.get(documentKey).push(file);
     }
 
-    allFiles.forEach((file) => indexByDocument(file, byDocumentAll));
-    pdfs.forEach((file) => {
+    allFiles.forEach((file) => {
+      indexByDocument(file, byDocumentAll);
       const nameKey = C.norm(file.name);
-      const stemKey = C.norm(file.name.replace(/\.pdf$/i, ""));
+      const stemKey = C.norm(file.name.replace(/\.[^.]+$/i, ""));
       if (!exactNames.has(nameKey)) exactNames.set(nameKey, []);
       if (!exactStems.has(stemKey)) exactStems.set(stemKey, []);
       exactNames.get(nameKey).push(file);
       exactStems.get(stemKey).push(file);
-      indexByDocument(file, byDocumentPdf);
     });
 
     const selected = new Map();
@@ -1762,19 +1799,14 @@
 
     entries.forEach((entry) => {
       const n1710 = Boolean(C && C.isN1710Context && C.isN1710Context("", entry.document));
-      let candidates = [];
+      const baseName = listBaseName(entry.fileName || entry.raw);
+      let candidates = exactNames.get(C.norm(baseName)) || [];
 
-      if (n1710 && entry.document) {
-        // A relação identifica o documento lógico. Para N-1710, todos os
-        // arquivos físicos associados com segurança ao mesmo código devem
-        // acompanhar esse documento, independentemente da extensão.
+      if (!candidates.length && baseName && !/\.[^.]+$/i.test(baseName)) {
+        candidates = exactStems.get(C.norm(baseName)) || [];
+      }
+      if (!candidates.length && entry.document) {
         candidates = byDocumentAll.get(C.key(entry.document)) || [];
-      } else {
-        // Comportamento histórico das outras famílias: a relação seleciona PDF.
-        const baseName = listBaseName(entry.fileName || entry.raw);
-        candidates = exactNames.get(C.norm(baseName)) || [];
-        if (!candidates.length && !/\.pdf$/i.test(baseName)) candidates = exactStems.get(C.norm(baseName)) || [];
-        if (!candidates.length && entry.document) candidates = byDocumentPdf.get(C.key(entry.document)) || [];
       }
 
       const unique = [...new Map(candidates.map((file) => [listPhysicalKey(file), file])).values()];
@@ -1790,11 +1822,9 @@
       } else {
         missing.push({
           ...entry,
-          reason: n1710
-            ? `Nenhum arquivo físico associado com segurança ao código “${entry.document || entry.raw}” foi localizado na pasta.`
-            : unique.length > 1
-              ? `Mais de um PDF da pasta corresponde ao item “${entry.raw}”; informe o nome exato com a extensão na lista.`
-              : `O PDF “${entry.raw}” está na relação, mas não foi localizado na pasta selecionada.`,
+          reason: unique.length > 1
+            ? `Mais de um arquivo da pasta corresponde ao item “${entry.raw}”; informe a revisão ou o nome exato para selecionar com segurança.`
+            : `O documento “${entry.document || entry.raw}” foi solicitado, mas não foi localizado na pasta selecionada.`,
         });
       }
     });
@@ -2313,6 +2343,7 @@
     state.manualForceInclude.clear();
     state.drawerIndices = [];
     state.listIgnoredFiles = [];
+    state.missingRequestedFiles = [];
     state.listSummary = null;
     state.ldIntegrity = null;
     state.analysisAt = 0;
@@ -2364,22 +2395,69 @@
         missingFromList = listSelection.missing;
         listSourceByPhysicalKey = listSelection.sourceByPhysicalKey;
         documentLookupByPhysicalKey = listSelection.documentLookupByPhysicalKey;
+
+        let vaultFiles = [];
+        if (missingFromList.length && window.GrconDocumentVault?.resolveMissingEntries) {
+          setProgress(33, `Buscando no Cofre os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
+          try {
+            const fallback = await window.GrconDocumentVault.resolveMissingEntries(missingFromList);
+            vaultFiles = fallback.files || [];
+            analysisFiles = analysisFiles.concat(vaultFiles);
+            missingFromList = fallback.missing || [];
+            (fallback.recovered || []).forEach(({ entry, files }) => {
+              (files || []).forEach((file) => {
+                const physicalKey = listPhysicalKey(file);
+                listSourceByPhysicalKey.set(physicalKey, [`${entry.sheetName} · linha ${entry.rowNumber} · Cofre`]);
+                if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
+              });
+            });
+          } catch (error) {
+            missingFromList = missingFromList.map((entry) => ({
+              ...entry,
+              reason: `${entry.reason} Busca automática no Cofre indisponível: ${error.message || "falha de consulta"}.`,
+            }));
+          }
+        }
+
+        const unrelatedLocal = state.listIgnoredFiles.filter((item) => item.reason === "fora da relação");
+        state.missingRequestedFiles = missingFromList.map((entry) => ({
+          ...entry,
+          name: entry.document || entry.fileName || entry.raw || "Documento solicitado",
+          reason: entry.reason || "Não localizado na pasta nem no Cofre.",
+        }));
+        state.listIgnoredFiles = unrelatedLocal;
+        state.listSummary = {
+          total: listEntries.length,
+          matched: Math.max(0, listEntries.length - missingFromList.length),
+          files: analysisFiles.length,
+          localFiles: listSelection.matchedFiles.length,
+          vaultFiles: vaultFiles.length,
+          missing: missingFromList.length,
+        };
+        state.ignoredFiles = [...state.ignoredFiles.filter((item) => item.reason !== "fora da relação"), ...unrelatedLocal];
+        updateInputMeta();
       }
 
-      const inputs = analysisFiles.map((file, index) => ({
-        id: `arquivo-${index + 1}`,
-        name: file.name,
-        relativePath: file.webkitRelativePath || file.name,
-        file,
-        hintedSheet: "",
-        documentSource: hasRelationSource() ? `${relationSourceLabel()} e nome do arquivo` : "nome do arquivo",
-        listSource: (listSourceByPhysicalKey.get(listPhysicalKey(file)) || []).join(" | "),
-        documentLookupHint: documentLookupByPhysicalKey.get(listPhysicalKey(file)) || null,
-      }));
-      if (!inputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta.");
+      const inputs = analysisFiles.map((file, index) => {
+        const vaultSource = window.GrconDocumentVault?.lookupSource?.(file) || null;
+        return {
+          id: `arquivo-${index + 1}`,
+          name: file.name,
+          relativePath: file.webkitRelativePath || file.name,
+          file,
+          hintedSheet: "",
+          documentSource: hasRelationSource() ? `${relationSourceLabel()} e nome do arquivo` : "nome do arquivo",
+          listSource: (listSourceByPhysicalKey.get(listPhysicalKey(file)) || []).join(" | "),
+          documentLookupHint: documentLookupByPhysicalKey.get(listPhysicalKey(file)) || null,
+          fileOrigin: vaultSource ? "Cofre" : "Pasta local",
+          vaultAllocationLabel: vaultSource?.allocationLabel || "",
+          vaultAllocationSource: vaultSource?.allocationSource || "",
+        };
+      });
+      if (!inputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta ou no Cofre.");
 
       const settings = triageSettings();
-      const totalTriageItems = inputs.length + missingFromList.length;
+      const totalTriageItems = inputs.length;
       let processedTriageItems = 0;
       const progressAnalysis = (done) => {
         processedTriageItems = done;
@@ -2388,6 +2466,15 @@
       };
       const rawResults = await mapLarge(inputs, (input) => {
         const result = C.triageOne(input, state.index, settings);
+        // A referência física precisa sobreviver à triagem em todos os caminhos
+        // (READY/REVIEW/guards). O merge e a emissão nunca devem depender de o
+        // Core repetir implicitamente propriedades do input.
+        result.file = input.file;
+        result.name = result.name || input.name;
+        result.relativePath = result.relativePath || input.relativePath;
+        result.fileOrigin = input.fileOrigin || "Pasta local";
+        result.vaultAllocationLabel = input.vaultAllocationLabel || "";
+        result.vaultAllocationSource = input.vaultAllocationSource || "";
         // O conteúdo binário dos PDFs não é aberto, lido ou validado. A revisão
         // e o nome final dependem exclusivamente da LD e do histórico SIGEM.
         if (result.egrdt && !result.egrdt.format) result.egrdt.format = "A4";
@@ -2404,34 +2491,10 @@
         throw new Error("A conferência de origem falhou: um resultado não corresponde aos arquivos selecionados nem às duplicatas registradas.");
       }
       if (missingFromList.length) {
-        const logicalResults = await mapLarge(missingFromList, (entry, index) => {
-          const listedName = /\.pdf$/i.test(entry.fileName || "")
-            ? entry.fileName
-            : `${entry.fileName || entry.document || entry.raw}.pdf`;
-          const input = {
-            id: `lista-ausente-${index + 1}`,
-            name: listedName,
-            relativePath: `${relationSourceLabel()} · ${entry.sheetName} · linha ${entry.rowNumber}`,
-            file: null,
-            document: entry.document,
-            hintedSheet: C.inferSheetFromName(entry.document || entry.raw),
-            documentSource: state.textEntries.length ? "Entrada por texto" : "lista Excel",
-            listSource: `${entry.sheetName} · linha ${entry.rowNumber}`,
-            documentLookupHint: entry.documentLookup || null,
-          };
-          const result = C.triageOne(input, state.index, settings);
-          result.virtualFileName = listedName;
-          result.listSource = input.listSource;
-          const warnings = [entry.reason];
-          if (result.egrdt && !result.egrdt.format) {
-            result.egrdt.format = "A4";
-            warnings.push("Como o PDF físico não foi fornecido, o formato foi preenchido como A4 e deve ser confirmado antes da postagem.");
-          }
-          result.documentRevisionWarning = warnings.join(" ");
-          return result;
-        }, (done) => progressAnalysis(inputs.length + done));
-        const mergedLogicalResults = mergePackageResults(logicalResults);
-        mergedLogicalResults.forEach((row) => state.results.push(row));
+        // Itens solicitados que não existem fisicamente na pasta nem puderam ser
+        // recuperados do Cofre permanecem somente no resumo de ausentes. Eles
+        // não entram na tabela de resultados, na GRDT nem no histórico.
+        setProgress(74, `${inputs.length.toLocaleString("pt-BR")} arquivo(s) físico(s) encontrado(s) · ${missingFromList.length.toLocaleString("pt-BR")} solicitado(s) ausente(s)`);
       }
       await forEachLarge(state.results, (row, index) => {
         row._resultIndex = index;
@@ -2485,7 +2548,8 @@
       focarResultados();
       const counts = C.resultCounts(state.results);
       const ignored = state.ignoredFiles.length ? ` · ${state.ignoredFiles.length} arquivo(s) ignorado(s)` : "";
-      showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar${ignored}.`, counts.revisar || counts.bloqueado ? "warn" : "success");
+      const missingNotice = missingFromList.length ? ` · ${missingFromList.length} solicitado(s) não localizado(s)` : "";
+      showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar${ignored}${missingNotice}.`, counts.revisar || counts.bloqueado || missingFromList.length ? "warn" : "success");
       window.setTimeout(() => { els.progress.hidden = true; }, 900);
     } catch (error) {
       console.error(error);
@@ -2566,6 +2630,7 @@
     state.manualForceInclude.clear();
     state.drawerIndices = [];
     state.listIgnoredFiles = [];
+    state.missingRequestedFiles = [];
     state.listSummary = null;
     state.ldIntegrity = null;
     state.analysisAt = 0;
@@ -2623,6 +2688,8 @@
       let missingFromList = [];
       let listSourceByPhysicalKey = new Map();
       let documentLookupByPhysicalKey = new Map();
+      let vaultFiles = [];
+      let vaultLookupError = null;
       if (hasRelationSource()) {
         const listEntries = await currentRelationEntries();
         const listSelection = selectPdfsFromList(listEntries);
@@ -2630,13 +2697,64 @@
         missingFromList = listSelection.missing;
         listSourceByPhysicalKey = listSelection.sourceByPhysicalKey;
         documentLookupByPhysicalKey = listSelection.documentLookupByPhysicalKey;
+
+        // A relação é o filtro absoluto. Pasta local é apenas a primeira fonte;
+        // todo item solicitado que faltar nela é resolvido automaticamente no Cofre.
+        if (missingFromList.length && window.GrconDocumentVault?.resolveMissingEntries) {
+          setProgress(33, `Buscando no Cofre os ${missingFromList.length.toLocaleString("pt-BR")} item(ns) ausentes da pasta…`);
+          try {
+            const fallback = await window.GrconDocumentVault.resolveMissingEntries(missingFromList);
+            vaultFiles = fallback.files || [];
+            analysisFiles = analysisFiles.concat(vaultFiles);
+            missingFromList = fallback.missing || [];
+            (fallback.recovered || []).forEach(({ entry, files }) => {
+              (files || []).forEach((file) => {
+                const physicalKey = listPhysicalKey(file);
+                listSourceByPhysicalKey.set(physicalKey, [`${entry.sheetName} · linha ${entry.rowNumber} · Cofre`]);
+                if (entry.documentLookup) documentLookupByPhysicalKey.set(physicalKey, entry.documentLookup);
+              });
+            });
+          } catch (error) {
+            vaultLookupError = error;
+            missingFromList = missingFromList.map((entry) => ({
+              ...entry,
+              reason: `Não foi possível consultar o Cofre: ${error.message || "falha de consulta"}. O documento não foi classificado como inexistente.`,
+              lookupFailed: true,
+            }));
+          }
+        }
+
+        const unrelatedLocal = state.listIgnoredFiles.filter((item) => item.reason === "fora da relação");
+        state.missingRequestedFiles = missingFromList.map((entry) => ({
+          ...entry,
+          name: entry.document || entry.fileName || entry.raw || "Documento solicitado",
+          reason: entry.reason || (state.packageFiles.length ? "Não localizado na pasta nem no Cofre." : "Não localizado no Cofre."),
+        }));
+        state.listIgnoredFiles = unrelatedLocal;
+        state.listSummary = {
+          total: listEntries.length,
+          matched: Math.max(0, listEntries.length - missingFromList.length),
+          files: analysisFiles.length,
+          localFiles: listSelection.matchedFiles.length,
+          vaultFiles: vaultFiles.length,
+          missing: missingFromList.length,
+          vaultLookupFailed: Boolean(vaultLookupError),
+        };
+        state.ignoredFiles = [...state.ignoredFiles.filter((item) => item.reason !== "fora da relação"), ...unrelatedLocal];
+        updateInputMeta();
       }
 
       const physicalById = new Map();
-      const logicalMeta = new Map();
+      const physicalMetaById = new Map();
       const workerInputs = analysisFiles.map((file, index) => {
         const id = `arquivo-${index + 1}`;
+        const vaultSource = window.GrconDocumentVault?.lookupSource?.(file) || null;
         physicalById.set(id, file);
+        physicalMetaById.set(id, {
+          fileOrigin: vaultSource ? "Cofre" : "Pasta local",
+          vaultAllocationLabel: vaultSource?.allocationLabel || "",
+          vaultAllocationSource: vaultSource?.allocationSource || "",
+        });
         return {
           id,
           name: file.name,
@@ -2648,45 +2766,29 @@
           documentLookupHint: documentLookupByPhysicalKey.get(listPhysicalKey(file)) || null,
         };
       });
-      missingFromList.forEach((entry, index) => {
-        const id = `lista-ausente-${index + 1}`;
-        const listedName = /\.pdf$/i.test(entry.fileName || "") ? entry.fileName : `${entry.fileName || entry.document || entry.raw}.pdf`;
-        workerInputs.push({
-          id,
-          name: listedName,
-          relativePath: `${relationSourceLabel()} · ${entry.sheetName} · linha ${entry.rowNumber}`,
-          file: null,
-          document: entry.document,
-          hintedSheet: C.inferSheetFromName(entry.document || entry.raw),
-          documentSource: state.textEntries.length ? "Entrada por texto" : "lista Excel",
-          listSource: `${entry.sheetName} · linha ${entry.rowNumber}`,
-          documentLookupHint: entry.documentLookup || null,
-        });
-        logicalMeta.set(id, { listedName, reason: entry.reason, listSource: `${entry.sheetName} · linha ${entry.rowNumber}` });
-      });
-      if (!workerInputs.length) throw new Error("Nenhum documento válido foi encontrado na entrada.");
+      // Ausentes nunca viram linhas virtuais. Eles permanecem apenas no painel
+      // "Documentos não encontrados" e não entram na triagem, GRDT ou histórico.
+      if (!workerInputs.length && !missingFromList.length) throw new Error("Nenhum documento válido foi encontrado na pasta ou no Cofre.");
 
       const settings = triageSettings();
-      await PerformanceCore.initializeTriage(state.index, [], settings, workerProgress("Preparando triagem"));
-      const rawResults = await PerformanceCore.triage(workerInputs, settings, workerProgress("Triagem"));
+      let rawResults = [];
+      if (workerInputs.length) {
+        await PerformanceCore.initializeTriage(state.index, [], settings, workerProgress("Preparando triagem"));
+        rawResults = await PerformanceCore.triage(workerInputs, settings, workerProgress("Triagem"));
+      }
       rawResults.forEach((result) => {
         const physical = physicalById.get(result.id);
         if (physical) result.file = physical;
-        // O Worker aplica as regras da LD, mas não abre o conteúdo binário do
-        // PDF para inferir o tamanho da folha. Preserve o mesmo padrão seguro
-        // do fluxo legado quando a LD não possuir a coluna FORMATO.
+        const physicalMeta = physicalMetaById.get(result.id);
+        if (physicalMeta) {
+          result.fileOrigin = physicalMeta.fileOrigin;
+          result.vaultAllocationLabel = physicalMeta.vaultAllocationLabel;
+          result.vaultAllocationSource = physicalMeta.vaultAllocationSource;
+        }
+        // O Worker aplica as regras da LD, mas não abre o conteúdo binário para
+        // inferir o tamanho da folha. Preserve o mesmo padrão seguro do fluxo legado.
         const formatDefaulted = Boolean(result.egrdt && !result.egrdt.format);
         if (formatDefaulted) result.egrdt.format = "A4";
-        const logical = logicalMeta.get(result.id);
-        if (logical) {
-          result.virtualFileName = logical.listedName;
-          result.listSource = logical.listSource;
-          const warnings = [logical.reason].filter(Boolean);
-          if (formatDefaulted) {
-            warnings.push("Como o PDF físico não foi fornecido, o formato foi preenchido como A4 e deve ser confirmado antes da postagem.");
-          }
-          result.documentRevisionWarning = warnings.join(" ");
-        }
       });
 
       state.results = mergePackageResults(rawResults);
@@ -2696,6 +2798,9 @@
       const physicalCount = state.results.reduce((total, row) => total + (row.files || []).length, 0);
       const logicalDuplicateCount = state.results.reduce((total, row) => total + (row.duplicateFiles || []).length, 0);
       if (physicalCount + logicalDuplicateCount !== analysisFiles.length) throw new Error("A conferência de origem falhou: a quantidade de arquivos físicos e duplicatas registradas não confere.");
+      if (missingFromList.length) {
+        setProgress(74, `${analysisFiles.length.toLocaleString("pt-BR")} arquivo(s) físico(s) encontrado(s) · ${missingFromList.length.toLocaleString("pt-BR")} solicitado(s) ausente(s)`);
+      }
 
       refreshPendingAllocationBundle();
       state.selected.clear();
@@ -3644,6 +3749,12 @@
     }).join("")}</div>`;
   }
 
+  function renderFileOrigin(row) {
+    const origin = row && row.fileOrigin || (String(row && row.listSource || "").includes("Cofre") ? "Cofre" : "Pasta local");
+    const allocation = origin === "Cofre" && row && row.vaultAllocationLabel ? ` · Alocação: ${row.vaultAllocationLabel}` : "";
+    return `<span class="result-file-origin">Origem: ${escapeHtml(origin + allocation)}</span>`;
+  }
+
   function renderTable() {
     window.GrconDocumentaryComplianceUi?.render(state.results);
     const virtualInfo = virtualResults();
@@ -3711,7 +3822,7 @@
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
           <span class="status-chip ${resultClass}">${compactDecisionLabel(row)}</span>
         </div></td>
-        <td>${renderRowFileList(row, false)}</td>
+        <td>${renderRowFileList(row, false)}${renderFileOrigin(row)}</td>
         <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
@@ -3983,6 +4094,7 @@
     state.packageFiles = [];
     state.ignoredFiles = [];
     state.listIgnoredFiles = [];
+    state.missingRequestedFiles = [];
     state.listSummary = null;
     state.records = [];
     state.history = [];
@@ -4047,6 +4159,7 @@
     state.expanded.clear();
     state.manualEgrdtSequences = [];
     state.listIgnoredFiles = [];
+    state.missingRequestedFiles = [];
     state.listSummary = null;
     state.ldIntegrity = null;
     state.analysisAt = 0;
@@ -4087,7 +4200,7 @@
         fiscalComment: row.fiscalComment || record.fiscalComment,
         includedInEgrdt: manuallyIncluded(row) ? "SIM — MANUAL; LD NÃO ALOCADO" : row.hardBlock ? "NÃO — DESMARCADO POR PADRÃO" : row.decision === C.READY ? "SIM — AUTOMÁTICO" : "SIM — SE SELECIONADO APÓS CONFERÊNCIA",
         databook: record.databook || "",
-        inputSource: row.listSource || row.relativePath || row.name || "",
+        inputSource: [row.fileOrigin, row.listSource || row.relativePath || row.name || ""].filter(Boolean).join(" · "),
         packageWarning: [row.packageWarning, row.documentRevisionWarning, row.codeValidationWarning].filter(Boolean).join(" | "),
         virtual: !(row.files || []).length,
       };
@@ -4220,6 +4333,8 @@
         "PESQUISA COM/SEM nt- E TAG NA LD": row.documentLookup && row.documentLookup.message || "",
         "ARQUIVO ORIGINAL": row.name || "",
         "ARQUIVOS ORIGINAIS": (row.files || []).map((entry) => entry.name).join(" | "),
+        "ORIGEM DO ARQUIVO": row.fileOrigin || (String(row.listSource || "").includes("Cofre") ? "Cofre" : "Pasta local"),
+        "ALOCAÇÃO INFORMADA PELO COFRE": row.vaultAllocationLabel || "",
         "TÍTULO": row.record && row.record.title || "",
         "ABA LD": row.sheet,
         "REVISÃO": row.record && row.record.revision || "",
@@ -5152,6 +5267,19 @@
   });
   els.analyze.addEventListener("click", analyze);
   els.reset.addEventListener("click", reset);
+  if (els.copyMissing) els.copyMissing.addEventListener("click", async () => {
+    const codes = (state.missingRequestedFiles || [])
+      .map((item) => item.document || item.fileName || item.raw || item.name || "")
+      .filter(Boolean)
+      .join("\n");
+    if (!codes) return;
+    try {
+      await navigator.clipboard.writeText(codes);
+      showToast("Códigos não encontrados copiados.", "success");
+    } catch (_) {
+      showToast("Não foi possível copiar automaticamente. Selecione os códigos da lista.", "warn");
+    }
+  });
 
   // ─── Limpar fontes individuais ──────────────────────────────────────────────
   if (els.clearLdBtn) {
@@ -5173,6 +5301,7 @@
       state.packageFiles = [];
       state.ignoredFiles = [];
       state.listIgnoredFiles = [];
+      state.missingRequestedFiles = [];
       state.listSummary = null;
       state.packageSelectionPending = false;
       state.packageSelectionReady = false;
@@ -5193,6 +5322,7 @@
       state.relationPreview = { entries: [], duplicates: [], ignored: [] };
       state.listSummary = null;
       state.listIgnoredFiles = [];
+      state.missingRequestedFiles = [];
       els.listInput.value = "";
       if (window.Workspace) window.Workspace.clearDraft("grdtRelation");
       invalidateAnalysisResults();

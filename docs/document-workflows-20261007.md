@@ -161,3 +161,54 @@ A	supabase/migrations/20261007122915_document_vault_set_lookup.sql
 A	tests/document_workflows.cjs
 A	tests/document_workflows_database.cjs
 ```
+
+
+## Integração final — Entrada por texto, alocação e armazenamento do Cofre
+
+### Busca automática pasta → Cofre → ausentes
+
+Quando a GRDT usa **Entrada por texto** ou uma relação Excel, o código solicitado passa por uma sequência única:
+
+1. O GRCON cria um índice dos arquivos físicos selecionados localmente e resolve primeiro o que existe na pasta.
+2. Somente os itens solicitados que não foram encontrados localmente são enviados ao lookup em lote do Cofre (máximo de 500 por chamada).
+3. Uma revisão explícita é respeitada. Se o código sem revisão possuir mais de uma revisão no Cofre, o sistema não escolhe silenciosamente: o item permanece ausente até a revisão ser informada.
+4. Os arquivos recuperados do Cofre entram no fluxo normal de triagem, GRDT e histórico.
+5. O que continuar ausente fica apenas no resumo de itens não localizados. **Não é criado arquivo virtual, linha virtual, GRDT ou histórico para o ausente.**
+6. Falha de download de um documento não invalida os outros documentos encontrados. Um conjunto documental com arquivo físico incompleto permanece fora da GRDT para evitar composição parcial.
+
+### Alocação exibida no Cofre
+
+A coluna **Alocação** do Cofre passa a ser calculada a partir da base compartilhada ativa do **Controle de Solicitações**, no mesmo contrato do usuário.
+
+- O valor mostrado é o conteúdo da coluna `Alocação` da base compartilhada.
+- Mais de uma alocação distinta para o mesmo documento é apresentada de forma explícita, sem escolher uma delas silenciosamente.
+- Documento encontrado no Controle sem valor de alocação: **Não informado no Controle**.
+- Documento sem correspondência segura na base ativa: **Não identificado**.
+- A alocação é resolvida no momento da leitura; atualizar o Controle de Solicitações atualiza o Cofre sem reupload do arquivo.
+- O Excel do Cofre inclui **Alocação**, **Fonte da alocação** e **Situação do arquivo**.
+- A mudança é exclusiva do Cofre; não altera a regra de alocação dos demais módulos.
+
+### Armazenamento e rastreabilidade
+
+O indicador de armazenamento usa a listagem física do bucket R2 com o prefixo do workspace/contrato.
+
+- `physicalBytes`: soma dos objetos que realmente existem no R2.
+- Cada objeto físico é contado uma única vez, mesmo que mais de um registro lógico reutilize o mesmo binário.
+- Um objeto em exclusão continua consumindo armazenamento enquanto ainda existir no R2.
+- Se o R2 removeu o objeto e a finalização no banco falhou, ele deixa de compor o consumo físico e permanece identificado como **exclusão aguardando finalização** para tentativa posterior.
+- Objetos esperados e ausentes, tamanhos divergentes e objetos físicos sem registro ativo são detectados na conferência.
+- **Conferir R2** é restrito a owner/admin, não exclui arquivos e grava um evento `document_vault_storage_reconciled` na auditoria.
+
+### Cobertura adicionada
+
+A suíte cobre:
+- ausência de criação de linhas virtuais;
+- fallback automático em lote e continuidade dos demais itens quando alguns não são encontrados;
+- valor e fonte da alocação no Excel;
+- atualização de alocação sem reupload;
+- filtro antes da paginação;
+- isolamento por contrato;
+- consumo baseado no R2 após falha parcial de exclusão;
+- conferência administrativa com registro de auditoria e sem remoção de objetos.
+
+Os números de performance e o resultado final de produção devem ser registrados a partir das execuções do CI e da verificação pós-deploy; este documento não presume latência de produção a partir de mocks locais.

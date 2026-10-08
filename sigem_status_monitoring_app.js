@@ -102,8 +102,8 @@
       '<section class="sigem-monitor-card">',
       '<header><div><span>ALTERAÇÕES</span><h3 id="sigem-monitor-change-title">Selecione uma comparação</h3><p id="sigem-monitor-change-meta">O resultado mantém o status original e usa a normalização somente para reconhecer o fluxo Em análise/Em workflow.</p></div><button class="secondary-button compact" id="sigem-monitor-export" type="button" disabled>Exportar Excel filtrado</button></header>',
       '<div class="sigem-monitor-filters">',
-      '<input id="sigem-monitor-search" type="search" placeholder="Buscar documento, título, revisão ou status">',
-      '<select id="sigem-monitor-type"><option value="all">Todas as alterações</option><option value="status">Alterações de status</option><option value="ENTROU_EM_ANALISE">Entrou em análise</option><option value="SAIU_DE_ANALISE">Saiu de análise</option><option value="MUDANCA_DE_STATUS">Mudança de status</option><option value="NOVO_NA_CONSULTA">Novos</option><option value="REMOVIDO_DA_CONSULTA">Não localizados</option></select>',
+      '<label><span>Buscar nas alterações</span><input id="sigem-monitor-search" type="search" placeholder="Documento, título, revisão ou status"></label>',
+      '<label><span>Tipo de alteração</span><select id="sigem-monitor-type"><option value="all">Todas as alterações</option><option value="status">Alterações de status</option><option value="ENTROU_EM_ANALISE">Entrou em análise</option><option value="SAIU_DE_ANALISE">Saiu de análise</option><option value="MUDANCA_DE_STATUS">Mudança de status</option><option value="NOVO_NA_CONSULTA">Novos</option><option value="REMOVIDO_DA_CONSULTA">Não localizados</option></select></label>',
       '<label class="sigem-monitor-check"><input id="sigem-monitor-only-monitored" type="checkbox"> Somente monitorados</label>',
       '</div>',
       '<div class="sigem-monitor-filters extra">' + [

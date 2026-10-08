@@ -14,7 +14,7 @@
   const ENQUEUE_CHUNK_SIZE = 250;
   const QUEUE_RENDER_LIMIT = 220;
   const LOOKUP_BATCH_SIZE = 500;
-  const sourceRegistry = new Map();
+  let sourceRegistry = new WeakMap();
   let contextEpoch = 0;
 
   const state = {
@@ -30,11 +30,11 @@
     health: null,
     open: false,
     importStats: { analyzed: 0, accepted: 0, ignoredArchives: 0 },
-    grdtSource: "local",
-    localPackageFiles: [],
     lookupRows: [],
     lookupBusy: false,
     vaultPrepared: false,
+    storage: null,
+    storageLoading: false,
   };
 
   const text = Core.text;
@@ -66,13 +66,8 @@
     else if (kind === "error") console.error(message);
   }
 
-  function sourceKey(file) {
-    return file ? [file.name, Number(file.size) || 0, Number(file.lastModified) || 0].join("\u0000") : "";
-  }
-
   function registerSource(file, metadata) {
-    const key = sourceKey(file);
-    if (key) sourceRegistry.set(key, { ...metadata });
+    sourceRegistry.set(file, { ...metadata });
     try {
       Object.defineProperty(file, "grconVaultFileId", { value: metadata.id, configurable: true });
     } catch (_) {}
@@ -81,7 +76,8 @@
 
   function lookupSource(file) {
     if (!file) return null;
-    return sourceRegistry.get(sourceKey(file)) || (file.grconVaultFileId ? { id: file.grconVaultFileId } : null);
+    const source = sourceRegistry.get(file);
+    return source ? { ...source } : null;
   }
 
   function parseIdentity(fileName) {
@@ -432,7 +428,10 @@
         state.active = Math.max(0, state.active - 1);
         renderQueue();
         if (!state.paused) pump();
-        if (!state.active && state.queue.some(item => item.status === "done")) void refreshList(true);
+        if (!state.active && state.queue.some(item => item.status === "done")) {
+          void refreshList(true);
+          void refreshStorage();
+        }
       });
     }
   }
@@ -616,7 +615,12 @@
   }
 
   function allocationLabel(file) {
-    return file.allocated ? "Alocado" : "Não alocado";
+    return text(file?.allocation_label) || (file?.allocation_identified ? "Não informado no Controle" : "Não identificado");
+  }
+
+  function allocationClass(file) {
+    if (file?.allocated) return "yes";
+    return file?.allocation_identified ? "no" : "unknown";
   }
 
   function renderVaultList() {
@@ -634,7 +638,7 @@
           '<td>' + esc((file.format || "outra").toUpperCase()) + '</td>' +
           '<td>' + esc(bytes(file.size_bytes)) + '</td>' +
           '<td>' + esc(dateLabel(file.created_at)) + '</td>' +
-          '<td><span class="vault-allocation ' + (file.allocated ? "yes" : "no") + '">' + esc(allocationLabel(file)) + '</span></td>' +
+          '<td><span class="vault-allocation ' + allocationClass(file) + '" title="Fonte: ' + esc(file.allocation_source || "Controle de Solicitações") + '">' + esc(allocationLabel(file)) + '</span></td>' +
           '<td><div class="vault-row-actions">' + (file.status === 'ready' ? '<button type="button" data-vault-open-file="' + esc(id) + '">Abrir</button><button type="button" class="quiet" data-vault-download="' + esc(id) + '">Baixar</button>' : '<span>Exclusão pendente</span>') + (canDelete() ? '<button type="button" data-vault-delete="' + esc(id) + '">' + (file.status === 'ready' ? 'Excluir' : 'Tentar excluir novamente') + '</button>' : '') + '</div></td>' +
           '</tr>';
       }).join("");
@@ -685,21 +689,24 @@
     if (!file || !canDelete()) return;
     const workspace = workspaceId(), epoch = contextEpoch;
     if (!root.confirm("Excluir documento?\n\n" + (file.document_code || file.file_name) + "\nRevisão " + file.revision + "\n\nO arquivo também será removido do armazenamento do Cofre. O Histórico de GRDT será preservado.")) return;
-    sourceRegistry.clear(); state.lookupRows = []; state.vaultPrepared = false;
+    // A File already downloaded keeps its original catalogue metadata even
+    // if the catalogue object is later deleted or deletion fails.
+    state.lookupRows = []; state.vaultPrepared = false;
     if (state.grdtSource === "vault") setPackageFiles([]);
     renderLookupResults();
     try {
       await requestJson("/delete", { method: "POST", body: JSON.stringify({ workspaceId: workspace, id }) });
       if (epoch !== contextEpoch) return;
-      sourceRegistry.clear();
       state.lookupRows = []; state.vaultPrepared = false;
       if (state.grdtSource === "vault") setPackageFiles([]);
       renderLookupResults();
       await refreshList(true);
+      await refreshStorage();
       notify("Documento excluído do Cofre e do armazenamento.", "success");
     } catch (error) {
       if (epoch !== contextEpoch) return;
       await refreshList(true);
+      await refreshStorage();
       notify(error.message, "error");
     }
   }
@@ -716,7 +723,8 @@
       sheet.columns = [
         ["Contrato", "contract", 24], ["Código do documento", "document", 38], ["Revisão", "revision", 12],
         ["Nome do arquivo", "name", 52], ["Extensão", "format", 12], ["Tipo", "type", 14],
-        ["Tamanho (bytes)", "size", 20], ["Data de inclusão", "date", 24], ["Incluído por", "actor", 38], ["Situação", "status", 30],
+        ["Tamanho (bytes)", "size", 20], ["Data de inclusão", "date", 24], ["Incluído por", "actor", 38],
+        ["Alocação", "allocation", 34], ["Fonte da alocação", "allocationSource", 28], ["Situação do arquivo", "status", 28],
       ].map(([header, key, width]) => ({ header, key, width }));
       let after = null;
       do {
@@ -729,7 +737,9 @@
           contract: root.GrconCloud?.state?.contract?.display_name || root.GrconCloud?.state?.contract?.code || root.GrconCloud?.state?.membership?.contract_code || "Contrato atual",
           document: file.document_code, revision: file.revision, name: file.file_name, format: file.format,
           type: file.document_type || "", size: Number(file.size_bytes), date: new Date(file.created_at),
-          actor: file.created_by_name || file.created_by_email || "", status: file.status === "ready" ? allocationLabel(file) : "Exclusão pendente — tentar novamente",
+          actor: file.created_by_name || file.created_by_email || "", allocation: allocationLabel(file),
+          allocationSource: file.allocation_source || "Controle de Solicitações",
+          status: file.status === "ready" ? "Disponível" : "Exclusão pendente — tentar novamente",
         });
         after = page.next;
       } while (after);
@@ -737,7 +747,7 @@
       sheet.getColumn("size").numFmt = "#,##0";
       sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
       sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
-      sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: 10 } };
+      sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: 12 } };
       const buffer = await workbook.xlsx.writeBuffer();
       if (epoch !== contextEpoch) throw new Error("O contrato mudou. Exporte novamente.");
       const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
@@ -746,6 +756,77 @@
       notify((sheet.rowCount - 1) + " documentos exportados com os filtros selecionados.", "success");
     } catch (error) { notify(error.message, "error"); }
     finally { if (button) button.disabled = false; }
+  }
+
+  function renderStorage() {
+    const used = document.getElementById("vault-storage-used");
+    const objects = document.getElementById("vault-storage-objects");
+    const integrity = document.getElementById("vault-storage-integrity");
+    const checked = document.getElementById("vault-storage-checked");
+    const reconcile = document.getElementById("vault-storage-reconcile");
+    const refresh = document.getElementById("vault-storage-refresh");
+    if (reconcile) reconcile.hidden = !canDelete();
+    if (refresh) refresh.disabled = state.storageLoading;
+    if (!state.storage) {
+      if (used) used.textContent = state.storageLoading ? "Calculando…" : "—";
+      if (objects) objects.textContent = "—";
+      if (integrity) integrity.textContent = "—";
+      if (checked) checked.textContent = "";
+      return;
+    }
+    const value = state.storage;
+    const usedBytes = Number(value.usedBytes ?? value.physicalBytes ?? 0);
+    const fileCount = Number(value.fileCount ?? value.physicalObjects ?? 0);
+    if (used) used.textContent = bytes(usedBytes);
+    if (objects) objects.textContent = fileCount.toLocaleString("pt-BR") + " arquivo(s)";
+    if (integrity) {
+      const reconciled = value.source === "r2";
+      const issues = Number(value.missingObjects || 0) + Number(value.sizeMismatches || 0) + Number(value.orphanObjects || 0);
+      integrity.textContent = reconciled
+        ? issues
+          ? issues + " divergência(s) · " + Number(value.removedPendingFinalization || 0) + " exclusão(ões) aguardando finalização"
+          : Number(value.removedPendingFinalization || 0)
+            ? Number(value.removedPendingFinalization) + " exclusão(ões) aguardando finalização"
+            : "R2 e catálogo coerentes"
+        : value.lastReconciledAt
+          ? "Uso operacional pelo catálogo · última conferência física " + dateLabel(value.lastReconciledAt)
+          : "Uso operacional pelo catálogo · conferência física disponível para owner/admin";
+      integrity.className = "vault-storage-integrity " + (reconciled && issues ? "warning" : "ok");
+    }
+    if (checked) checked.textContent = value.checkedAt ? (value.source === "r2" ? "Conferido " : "Atualizado ") + dateLabel(value.checkedAt) : "";
+  }
+
+  async function refreshStorage() {
+    if (state.storageLoading || !accessToken() || !workspaceId()) return;
+    const epoch = contextEpoch, workspace = workspaceId();
+    state.storageLoading = true;
+    renderStorage();
+    try {
+      const payload = await requestJson("/usage?workspace=" + encodeURIComponent(workspace), { method: "GET" });
+      if (epoch !== contextEpoch || workspace !== workspaceId()) return;
+      state.storage = payload.storage || null;
+    } catch (error) {
+      if (epoch === contextEpoch) notify(error.message || "Não foi possível calcular o armazenamento do Cofre.", "error");
+    } finally {
+      state.storageLoading = false;
+      renderStorage();
+    }
+  }
+
+  async function reconcileStorage() {
+    if (!canDelete()) return;
+    const button = document.getElementById("vault-storage-reconcile");
+    if (button) button.disabled = true;
+    try {
+      const payload = await requestJson("/reconcile", { method: "POST", body: JSON.stringify({ workspaceId: workspaceId() }) });
+      state.storage = payload.storage || state.storage;
+      renderStorage();
+      notify("Conferência do R2 concluída e registrada na auditoria. Nenhum arquivo foi excluído.", "success");
+    } catch (error) {
+      notify(error.message || "Não foi possível conferir o armazenamento.", "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
   }
 
   function setPackageFiles(files) {
@@ -769,29 +850,6 @@
     try { setPackageFiles([]); } catch (_) {}
     const summary = document.getElementById("grdt-vault-lookup-summary");
     if (summary && state.lookupRows.length) summary.textContent = "Seleção alterada. Prepare novamente os documentos antes de analisar.";
-  }
-
-  function syncGrdtSource() {
-    const checked = document.querySelector('input[name="grdt-document-source"]:checked');
-    const nextSource = checked?.value === "vault" ? "vault" : "local";
-    const input = document.getElementById("pdf-input");
-    const slot = document.getElementById("pdf-slot");
-    const panel = document.getElementById("grdt-vault-source-panel");
-
-    if (nextSource === "vault" && state.grdtSource !== "vault") {
-      state.localPackageFiles = Array.from(input?.files || []);
-      state.grdtSource = "vault";
-      try { setPackageFiles([]); } catch (_) {}
-    } else if (nextSource === "local" && state.grdtSource === "vault") {
-      state.grdtSource = "local";
-      try { setPackageFiles(state.localPackageFiles); } catch (_) {}
-      state.vaultPrepared = false;
-    } else {
-      state.grdtSource = nextSource;
-    }
-
-    if (slot) slot.hidden = nextSource === "vault";
-    if (panel) panel.hidden = nextSource !== "vault";
   }
 
   function normalizeLookupResult(raw, fallback) {
@@ -867,6 +925,118 @@
       }).join("") +
       '</tbody></table></div>';
     if (prepare) prepare.hidden = !state.lookupRows.some(row => row.included && row.selectedRevision);
+  }
+
+  async function resolveMissingEntries(entries) {
+    const source = Array.from(entries || []);
+    if (!source.length) return { files: [], recovered: [], missing: [], queried: 0 };
+    const prepared = source.map((entry, index) => {
+      const parsed = Core.parseLookupInput(entry.fileName || entry.raw || entry.document || "");
+      return {
+        entry,
+        requestId: "auto-" + (index + 1),
+        input: entry.raw || entry.fileName || entry.document || "",
+        documentCode: Core.normalizeDocumentCode(entry.document || parsed.documentCode),
+        revision: parsed.explicitRevision ? parsed.revision : "",
+      };
+    });
+    const invalid = prepared.filter(item => !item.documentCode);
+    const valid = prepared.filter(item => item.documentCode);
+    const normalized = [];
+    const chunks = [];
+    for (let offset = 0; offset < valid.length; offset += LOOKUP_BATCH_SIZE) chunks.push(valid.slice(offset, offset + LOOKUP_BATCH_SIZE));
+    const batches = await mapLimit(chunks, 3, async chunk => {
+      const payload = await requestJson("/lookup", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: workspaceId(),
+          items: chunk.map(item => ({
+            requestId: item.requestId,
+            input: item.input,
+            documentCode: item.documentCode,
+            revision: item.revision,
+          })),
+        }),
+      });
+      const results = Array.isArray(payload.results) ? payload.results : [];
+      const byId = new Map(results.map(result => [text(result.requestId || result.request_id), result]));
+      return chunk.map(item => ({ item, row: normalizeLookupResult(byId.get(item.requestId) || {}, item) }));
+    });
+    batches.forEach(batch => normalized.push(...batch));
+
+    const missing = invalid.map(item => ({ ...item.entry, reason: "O código solicitado não pôde ser identificado para busca no Cofre." }));
+    const selected = [];
+    normalized.forEach(({ item, row }) => {
+      if (!row.found) {
+        missing.push({ ...item.entry, reason: "Não localizado na pasta nem no Cofre." });
+        return;
+      }
+      if (!row.selectedRevision) {
+        missing.push({ ...item.entry, reason: "Há mais de uma revisão no Cofre; informe a revisão explicitamente no texto para selecionar com segurança." });
+        return;
+      }
+      const files = filesForLookupRow(row);
+      if (!files.length) {
+        missing.push({ ...item.entry, reason: "A revisão localizada no Cofre não possui arquivo físico disponível." });
+        return;
+      }
+      selected.push({ entry: item.entry, row, metadata: files });
+    });
+
+    const unique = new Map();
+    selected.forEach(group => group.metadata.forEach(file => {
+      const id = text(file.id);
+      if (id && !unique.has(id)) unique.set(id, file);
+    }));
+    const blobRequests = new Map();
+    const downloaded = await mapLimit([...unique.values()], DOWNLOAD_CONCURRENCY, async item => {
+      try {
+        const objectIdentity = item.sha256 ? item.sha256 + ":" + item.size_bytes : item.id;
+        if (!blobRequests.has(objectIdentity)) blobRequests.set(objectIdentity, downloadBlob(item));
+        const blob = await blobRequests.get(objectIdentity);
+        return { id: text(item.id), item, blob };
+      } catch (error) {
+        return { id: text(item.id), item, error };
+      }
+    });
+    const byFileId = new Map(downloaded.map(result => [result.id, result]));
+    const recovered = [];
+    const outputFiles = [];
+    selected.forEach(group => {
+      const results = group.metadata.map(file => byFileId.get(text(file.id)));
+      const failed = results.filter(result => !result || result.error);
+      if (failed.length) {
+        missing.push({ ...group.entry, reason: failed.length + " arquivo(s) localizado(s) no Cofre não puderam ser recuperados; os demais documentos encontrados continuam válidos." });
+        return;
+      }
+      const files = results.map(result => {
+        const item = result.item;
+        const file = new File([result.blob], item.file_name || ((item.document_code || item.identity_code) + "." + (item.format || "bin")), {
+          type: result.blob.type || "application/octet-stream",
+          lastModified: Date.now(),
+        });
+        registerSource(file, {
+          id: item.id,
+          sequence: Number(item.sequence) || 0,
+          fileName: item.file_name || file.name,
+          documentCode: item.document_code || item.identity_code || "",
+          revision: item.revision || "0",
+          format: item.format || "",
+          sizeBytes: Number(item.size_bytes) || file.size || 0,
+          sha256: item.sha256 || "",
+          createdAt: item.created_at || "",
+          verifiedAt: item.verified_at || "",
+          allocated: Boolean(item.allocated),
+          allocationLabel: allocationLabel(item),
+          allocationSource: item.allocation_source || "Controle de Solicitações",
+          source: "vault-auto",
+        });
+        outputFiles.push(file);
+        return file;
+      });
+      recovered.push({ entry: group.entry, files, revision: group.row.selectedRevision });
+    });
+    return { files: outputFiles, recovered, missing, queried: valid.length };
   }
 
   async function lookupVaultCodes() {
@@ -973,9 +1143,15 @@
           });
           registerSource(file, {
             id: item.id,
+            sequence: Number(item.sequence) || 0,
+            fileName: item.file_name || file.name,
             documentCode: item.document_code || item.identity_code || "",
             revision: item.revision || "0",
+            format: item.format || "",
+            sizeBytes: Number(item.size_bytes) || file.size || 0,
             sha256: item.sha256 || "",
+            createdAt: item.created_at || "",
+            verifiedAt: item.verified_at || "",
             allocated: Boolean(item.allocated),
             source: "vault",
           });
@@ -1002,37 +1178,6 @@
     } finally {
       if (button) button.disabled = false;
     }
-  }
-
-  function installGrdtVaultSource() {
-    if (document.getElementById("grdt-document-source")) return;
-    const panel = document.querySelector("#grdt-module .control-panel");
-    const sourceRow = panel?.querySelector(".source-row");
-    if (!panel || !sourceRow) return;
-    const section = document.createElement("section");
-    section.id = "grdt-document-source";
-    section.className = "grdt-vault-source-card";
-    section.innerHTML = `
-      <div class="grdt-vault-source-head">
-        <strong>Base documental</strong>
-        <div class="grdt-vault-source-options" role="radiogroup" aria-label="Base documental da GRDT">
-          <label><input type="radio" name="grdt-document-source" value="local" checked> Arquivos locais</label>
-          <label><input type="radio" name="grdt-document-source" value="vault"> Cofre</label>
-        </div>
-      </div>
-      <div id="grdt-vault-source-panel" class="grdt-vault-source-panel" hidden>
-        <label class="grdt-vault-codes-label" for="grdt-vault-codes">
-          <span>Documentos</span>
-          <textarea id="grdt-vault-codes" rows="6" placeholder="Cole um código por linha&#10;RL-5290.00-22313-856-C1O-017&#10;RL-5290.00-22313-856-C1O-018_A"></textarea>
-        </label>
-        <div class="grdt-vault-source-actions">
-          <button id="grdt-vault-lookup" type="button">Localizar no Cofre</button>
-          <span id="grdt-vault-lookup-summary">Cole um código por linha.</span>
-        </div>
-        <div id="grdt-vault-lookup-results"></div>
-        <div class="grdt-vault-prepare-row"><button id="grdt-vault-prepare" type="button" hidden>Usar encontrados na GRDT</button></div>
-      </div>`;
-    sourceRow.insertAdjacentElement("afterend", section);
   }
 
   function ensureCss() {
@@ -1089,6 +1234,12 @@
         <div><span>COFRE</span><h2>Documentos armazenados</h2><p>Adicione arquivos ou uma pasta, pesquise documentos e consulte as versões disponíveis.</p></div>
         <div id="vault-health" class="vault-health">Verificando disponibilidade…</div>
       </header>
+      <details class="grcon-context-help" id="grcon-vault-help"><summary>Como funciona · arquivos e alocação no Cofre</summary><div><p>Adicione arquivos ou uma pasta para disponibilizá-los à equipe do contrato. A busca usa código, revisão e formato do arquivo.</p><p>A alocação vem do Controle de Solicitações compartilhado. Sem vínculo identificado, o Cofre mostra Não identificado.</p><p>Excluir remove o arquivo do armazenamento. As emissões já registradas no Histórico preservam os dados do arquivo utilizado.</p></div></details>
+      <section class="vault-storage-card" aria-label="Armazenamento do Cofre">
+        <div><small>Uso do contrato atual</small><strong id="vault-storage-used">—</strong><span id="vault-storage-objects">—</span></div>
+        <div><small>Rastreabilidade</small><strong id="vault-storage-integrity" class="vault-storage-integrity">—</strong><span id="vault-storage-checked"></span></div>
+        <div class="vault-storage-actions"><button id="vault-storage-refresh" type="button" class="secondary-button">Atualizar uso</button><button id="vault-storage-reconcile" type="button" class="secondary-button" hidden>Conferir R2</button></div>
+      </section>
       <section class="vault-upload-card" aria-labelledby="vault-upload-title">
         <header><div><strong id="vault-upload-title">Adicionar documentos</strong><small>Ao adicionar uma pasta, os documentos são registrados individualmente.</small></div>
           <div class="vault-upload-actions"><button id="vault-pick-files" type="button">Adicionar documentos</button><button id="vault-pick-folder" type="button" class="secondary-button">Adicionar pasta</button></div>
@@ -1105,9 +1256,9 @@
         <header><div><strong>Documentos armazenados</strong><small id="vault-list-status">Carregando…</small></div><div><button id="vault-export" type="button" class="secondary-button">Exportar Excel</button><button id="vault-refresh" type="button" class="secondary-button">Atualizar</button></div></header>
         <div class="vault-toolbar">
           <label class="vault-search"><span>Pesquisar documentos</span><input id="vault-search" type="search" placeholder="Código, arquivo ou revisão"></label>
-          <label><span>Alocação</span><select id="vault-allocation"><option value="all">Todos</option><option value="allocated">Alocados</option><option value="not_allocated">Não alocados</option></select></label>
+          <label><span>Alocação</span><select id="vault-allocation"><option value="all">Todos</option><option value="allocated">Alocados</option><option value="not_allocated">Não alocados</option><option value="not_identified">Não identificados</option></select></label>
         </div>
-        <div class="vault-table-wrap vault-list-wrap"><table><thead><tr><th>Código / arquivo</th><th>Revisão</th><th>Tipo</th><th>Tamanho</th><th>Data de envio</th><th>Situação</th><th>Ações</th></tr></thead><tbody id="vault-list-body"></tbody></table></div>
+        <div class="vault-table-wrap vault-list-wrap"><table><thead><tr><th>Código / arquivo</th><th>Revisão</th><th>Tipo</th><th>Tamanho</th><th>Data de envio</th><th>Alocação</th><th>Ações</th></tr></thead><tbody id="vault-list-body"></tbody></table></div>
         <div class="vault-more"><button id="vault-load-more" type="button" class="secondary-button" hidden>Carregar mais</button></div>
       </section>`;
     main.appendChild(section);
@@ -1146,7 +1297,7 @@
   async function openVault() {
     activateShell();
     await checkHealth();
-    await refreshList(true);
+    await Promise.all([refreshList(true), refreshStorage()]);
   }
 
   function installEvents() {
@@ -1164,6 +1315,8 @@
     document.getElementById("vault-resume")?.addEventListener("click", resumeQueue);
     document.getElementById("vault-export")?.addEventListener("click", () => void exportVault());
     document.getElementById("vault-refresh")?.addEventListener("click", () => void refreshList(true));
+    document.getElementById("vault-storage-refresh")?.addEventListener("click", () => void refreshStorage());
+    document.getElementById("vault-storage-reconcile")?.addEventListener("click", () => void reconcileStorage());
     document.getElementById("vault-load-more")?.addEventListener("click", () => void refreshList(false));
 
     let searchTimer = 0;
@@ -1197,36 +1350,6 @@
       if (deletion) void deleteDocument(deletion.dataset.vaultDelete);
     });
 
-    document.getElementById("grdt-document-source")?.addEventListener("change", event => {
-      if (event.target.matches('input[name="grdt-document-source"]')) {
-        syncGrdtSource();
-        return;
-      }
-      const revision = event.target.closest?.("[data-grdt-vault-revision]");
-      if (revision) {
-        const row = state.lookupRows[Number(revision.dataset.grdtVaultRevision)];
-        if (row) {
-          row.selectedRevision = Core.normalizeRevision(revision.value);
-          row.included = Boolean(row.selectedRevision);
-          clearPreparedVaultFiles();
-          renderLookupResults();
-        }
-        return;
-      }
-      const include = event.target.closest?.("[data-grdt-vault-include]");
-      if (include) {
-        const row = state.lookupRows[Number(include.dataset.grdtVaultInclude)];
-        if (row) row.included = Boolean(include.checked && row.selectedRevision);
-        clearPreparedVaultFiles();
-        renderLookupResults();
-      }
-    });
-    document.getElementById("grdt-vault-codes")?.addEventListener("input", () => {
-      if (state.vaultPrepared) clearPreparedVaultFiles();
-    });
-    document.getElementById("grdt-vault-lookup")?.addEventListener("click", () => void lookupVaultCodes());
-    document.getElementById("grdt-vault-prepare")?.addEventListener("click", () => void prepareVaultForGrdt());
-
     document.addEventListener("click", event => {
       const standard = event.target.closest?.("[data-grcon-view]");
       if (standard && state.open) deactivateShell();
@@ -1236,16 +1359,17 @@
       if (state.open) {
         void checkHealth();
         void refreshList(true);
+        void refreshStorage();
       }
     });
     root.addEventListener("grcon:contract-context-changed", () => {
       contextEpoch++;
-      state.files = []; state.lookupRows = []; state.next = null; state.hasMore = false;
-      state.vaultPrepared = false; sourceRegistry.clear();
-      renderVaultList(); renderLookupResults();
-      if (state.open) void refreshList(true);
+      state.files = []; state.lookupRows = []; state.next = null; state.hasMore = false; state.storage = null;
+      state.vaultPrepared = false; sourceRegistry = new WeakMap();
+      renderVaultList(); renderLookupResults(); renderStorage();
+      if (state.open) { void refreshList(true); void refreshStorage(); }
     });
-    root.addEventListener("grcon:planned-documents-published", () => {
+    root.addEventListener("grcon:requests-control-updated", () => {
       if (state.open) void refreshList(true);
     });
   }
@@ -1254,12 +1378,11 @@
     ensureCss();
     installNavigation();
     installModule();
-    installGrdtVaultSource();
     installEvents();
-    syncGrdtSource();
     renderQueue();
     renderVaultList();
     renderLookupResults();
+    renderStorage();
   }
 
   root.GrconDocumentVault = Object.freeze({
@@ -1269,6 +1392,8 @@
     lookupSource,
     parseIdentity,
     parseLookupInput: Core.parseLookupInput,
+    resolveMissingEntries,
+    refreshStorage,
     state,
   });
 

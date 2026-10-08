@@ -146,3 +146,7 @@ A validação automática exige:
 - ausência de overflow horizontal;
 - desktop e mobile;
 - console sem erros.
+
+### Resultado da revisão de 08/10/2026
+
+Os pilotos `searching-files` e `checking-document` foram revisados pelo plugin Higgsfield com comparação de frames ao sprite oficial. O “G” do peito foi substituído por um símbolo verde nos dois vídeos. Os pilotos foram reprovados por identidade e continuam fora do runtime. A revisão técnica de alpha registrada anteriormente não equivale a aprovação visual; nenhuma mídia aprovada foi substituída.

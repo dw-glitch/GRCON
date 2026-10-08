@@ -86,6 +86,7 @@ interface SigemPwDashboardUiApi {
   activate(): Promise<void>;
   refresh(reason?: string): Promise<void>;
   clearPreStage7BasesOnce(): Promise<boolean>;
+  filteredRows(): SigemPwRow[];
   state: SigemPwState;
 }
 interface RevisionAnalyzeOptions {
@@ -176,6 +177,9 @@ declare global {
       listVersions(): Promise<import("./domain").SigemPwSharedVersion[]>;
       loadSnapshot(id: string, versions?: import("./domain").SigemPwSharedVersion[]): Promise<SigemPwBase>;
       setReferenceDate(value: string, targetId?: string): Promise<SigemPwBase | undefined>;
+      canManageHistory?(): boolean;
+      activateVersion(id: string): Promise<SigemPwBase | null | undefined>;
+      deleteVersion(id: string): Promise<{ removedSnapshotId?: string; removedWasCurrent?: boolean; activeSnapshotId?: string | null }>;
       current(): SigemPwBase | null;
       refresh(): Promise<SigemPwBase | null>;
       setLocal(base: SigemPwBase): Promise<SigemPwBase | null>;

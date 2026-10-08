@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { UiMetaPill, UiPanel } from "../core/ui/UiPrimitives";
 import { SigemPwHeader } from "./components/SigemPwHeader";
 import { SigemPwReadiness } from "./components/SigemPwReadiness";
@@ -23,6 +24,7 @@ export function SigemPwDashboardApp() {
   const { state, adapter } = useSigemPwDashboard();
   const pageData = adapter.pageRows();
   const activeLabel = SIGEM_PW_LISTS[state.activeList];
+  const sigemStatusOptions = useMemo(() => [...new Set((state.result?.lists?.[state.activeList] || []).map(row => row.sigemStatus).filter(Boolean))].sort(), [state.result, state.activeList]);
   const classifiedTotal = state.result?.summary?.classifiedTotal || 0;
   const loadedBases = [state.sigem.meta, state.pw.meta, state.ld.meta].filter(Boolean).length;
 
@@ -53,7 +55,13 @@ export function SigemPwDashboardApp() {
           </div>
           <UiMetaPill><strong>{loadedBases}/3</strong> carregadas</UiMetaPill>
         </div>
-        <SigemPwAnalysisSources state={state} onSelect={(system, id) => { void adapter.selectAnalysisBase(system, id); }} />
+        <SigemPwAnalysisSources
+          state={state}
+          onSelect={(system, id) => { void adapter.selectAnalysisBase(system, id); }}
+          canManageSigemHistory={Boolean(window.GrconSharedSigemQuery?.canManageHistory?.())}
+          onActivateSigem={(id) => { void adapter.activateSharedSigemVersion(id); }}
+          onDeleteSigem={(id) => { void adapter.deleteSharedSigemVersion(id); }}
+        />
         <SigemPwBases
           state={state}
           onImportSigem={(file) => { void adapter.importSigem(file); }}
@@ -75,7 +83,7 @@ export function SigemPwDashboardApp() {
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
         <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
-        <SigemPwSystemsSummary state={state} />
+        <SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} />
         <SigemPwSituationCards
           state={state}
           activeList={state.activeList}
@@ -113,7 +121,15 @@ export function SigemPwDashboardApp() {
         </div>
 
         <SigemPwListFilters
+          key={`${state.activeList}:${state.filterResetKey}`}
           query={state.filters.query}
+          revision={state.filters.revision}
+          sigemStatus={state.filters.sigemStatus}
+          inPw={state.filters.inPw}
+          sigemStatusOptions={sigemStatusOptions}
+          onRevision={adapter.setRevision}
+          onSigemStatus={adapter.setSigemStatus}
+          onInPw={adapter.setInPw}
           documentClass={state.filters.documentClass}
           busy={state.busy}
           onQuery={(value) => adapter.setQuery(value)}

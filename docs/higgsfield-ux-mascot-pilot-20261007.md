@@ -138,3 +138,23 @@ A corrida horizontal continua exclusiva da análise real.
 ## 8. Prototipação não é produção
 
 Nenhum código gerado pelo Higgsfield substitui o GRCON. Os protótipos servem para comparar ideias. A fonte de verdade continua sendo `dw-glitch/GRCON`.
+
+## 9. Conclusão da fase 5 — 08/10/2026
+
+As fases 1–3 foram integradas antes desta conclusão. A fase 4 (Power Automate) foi dispensada pelo usuário porque a integração já funciona.
+
+Os quatro jobs existentes foram recuperados pelo plugin Higgsfield. Os conceitos foram visualizados e os dois vídeos tiveram frames de 0, 1, 2, 3 e 4 segundos comparados com o sprite oficial. Ambos trocaram o “G” do peito por um símbolo verde de confirmação. **QA de identidade reprovado: pilotos não ativados.** Não houve nova geração nem alteração dos vídeos aprovados em produção.
+
+Foram aplicadas as ideias úteis dos conceitos, preservando a interface e as regras reais:
+- atalhos RECON/Vincula agrupados em “Aplicativos”, com teclado, Escape, retorno de foco e fechamento por clique fora;
+- Notificações e identificação de contrato continuam disponíveis no cabeçalho;
+- rótulos de Controle de GRDT, Histórico de eGRDTs e SIGEM × PW coerentes nas duas navegações;
+- link externo Solicitações deixa de se anunciar como aba de painel local;
+- ajuda curta no Controle de GRDT, Cofre, Histórico e Dashboard SIGEM × PW;
+- labels persistentes em Monitoramento e nos filtros de alterações;
+- nenhum vídeo ou dependência adicional carregado para ajuda contextual;
+- cache PWA atualizado, preservando correções das fases anteriores.
+
+Os conceitos raster do Higgsfield não são tratados como telas do sistema. Textos fictícios, seletor manual de origem e regras presentes nas imagens não foram copiados. As validações usam o app real com dados de QA identificados; não existe gravação de operador que autorize inferir hesitações ou comportamento.
+
+O storyboard corporativo da seção 6 permanece um material de planejamento. Não é um vídeo final produzido nem parte ativada da interface.

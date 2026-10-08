@@ -18,7 +18,7 @@
     "preparedAt": "2026-10-07",
     "model": "seedance_2_0",
     "officialElementId": "5d684379-9c43-47db-913a-6af9d779e8b2",
-    "policy": "Pilot assets are not active runtime media until visual identity and alpha QA are explicitly approved.",
+    "policy": "Activate only after identity, alpha, movement and browser QA pass; failed pilots stay outside runtime.",
     "states": {
       "searching-files": {
         "jobId": "42ebdce9-4561-4b66-9177-45ddb35cd726",
@@ -37,7 +37,14 @@
         },
         "approved": false,
         "integrated": false,
-        "reason": "Technical alpha extraction passed; visual identity and edge/halo approval still require human visual review."
+        "reason": "Visual QA 2026-10-08: generated clip replaces the official chest G with a green confirmation symbol. Identity check failed; existing runtime asset preserved.",
+        "visualQa": {
+          "reviewedAt": "2026-10-08",
+          "reviewMethod": "Higgsfield decoded frames at 0, 1, 2, 3 and 4 seconds compared with official sprite",
+          "identity": "failed",
+          "decision": "rejected-for-runtime",
+          "alphaVisualApproval": false
+        }
       },
       "checking-document": {
         "jobId": "662ace1a-f95e-45af-98ad-1ee6a0239b84",
@@ -56,7 +63,14 @@
         },
         "approved": false,
         "integrated": false,
-        "reason": "Technical alpha extraction passed; visual identity and edge/halo approval still require human visual review."
+        "reason": "Visual QA 2026-10-08: generated clip replaces the official chest G with a green confirmation symbol. Identity check failed; existing runtime asset preserved.",
+        "visualQa": {
+          "reviewedAt": "2026-10-08",
+          "reviewMethod": "Higgsfield decoded frames at 0, 1, 2, 3 and 4 seconds compared with official sprite",
+          "identity": "failed",
+          "decision": "rejected-for-runtime",
+          "alphaVisualApproval": false
+        }
       }
     }
   }
