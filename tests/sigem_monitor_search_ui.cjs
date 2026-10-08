@@ -1,0 +1,30 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const root = path.resolve(__dirname, "..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const app = read("sigem_status_monitoring_app.js");
+const css = read("sigem-status-monitoring.css");
+
+// Busca filtrada deriva das listas já carregadas para o contrato atual;
+// não cria nova RPC nem modifica o motor de comparação.
+assert.match(app, /historyQuery:\s*""/);
+assert.match(app, /historyLimit:\s*25/);
+assert.match(app, /monitoredQuery:\s*""/);
+assert.match(app, /id="sigem-monitor-monitored-search"/);
+assert.match(app, /id="sigem-monitor-history-search"/);
+assert.match(app, /id="sigem-monitor-history-more"/);
+assert.match(app, /state\.historyLimit \+= 25/);
+assert.match(app, /state\.historyLimit = 25/);
+assert.match(app, /const shown = visible\.slice\(0, state\.historyLimit\)/);
+assert.match(app, /state\.monitored\.filter/);
+assert.match(app, /state\.comparisons\.filter/);
+assert.match(app, /visible\.length\.toLocaleString\("pt-BR"\)/);
+assert.match(app, /sigem-monitor-comparisons-count/);
+assert.match(app, /sigem-monitor-monitored-count/);
+assert.match(app, /target_workspace: workspace/);
+assert.match(app, /function exportFiltered\(\)/);
+assert.match(css, /\.sigem-monitor-local-search input:focus-visible/);
+assert.match(css, /--surface-1/);
+assert.doesNotMatch(app, /mockComparison|fakeHistory|demoHistory/);
+console.log("sigem_monitor_search_ui: ok");
