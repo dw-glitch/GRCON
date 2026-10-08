@@ -163,7 +163,8 @@ export function useConsultas() {
 
   const runQuery = useCallback(async (onlySelected?: boolean) => {
     if (running) return;
-    const token = Adapter.contextToken(), sourceEpoch = sourceEpochRef.current;
+    const token = Adapter.contextToken();
+    let sourceEpoch = sourceEpochRef.current;
     const valid = () => token === Adapter.contextToken() && sourceEpoch === sourceEpochRef.current;
     const alvos = onlySelected ? documents.filter((item) => item.selected) : documents;
     if (!alvos.length) { notify(onlySelected ? "Nenhum documento selecionado." : "Informe pelo menos um documento.", "warn"); return; }
@@ -175,6 +176,12 @@ export function useConsultas() {
       // A alocação de Consultas só pode ser decidida com a versão oficial
       // compartilhada. O snapshot é carregado uma vez por execução e o índice
       // das LDs é reconstruído com essa mesma versão para todo o lote.
+      // O snapshot da Central deve estar atualizado antes de projetar os comentários.
+      // O próprio refresh emite um evento se houver nova versão; aceitá-lo aqui
+      // evita exigir que o operador clique duas vezes para consultar.
+      await Adapter.refreshFiscalCommentsSource();
+      if (token !== Adapter.contextToken()) return;
+      sourceEpoch = sourceEpochRef.current;
       const plannedSnapshot = await Adapter.loadPlannedDocumentsSnapshot();
       if (!valid()) return;
       const officialIndex = Adapter.buildIndex(lds, plannedSnapshot);
@@ -234,52 +241,6 @@ export function useConsultas() {
     }
   }), [Adapter]);
 
-  const copyResults = useCallback(async () => {
-    if (!exportRows.length) return;
-    try {
-      await Adapter.copyRowsToClipboard(exportRows);
-      notify(`${exportRows.length} linha(s) copiadas. Cole direto na planilha.`, "success");
-    } catch (_error) {
-      notify("O navegador bloqueou a cópia automática. Use a exportação para Excel.", "warn");
-    }
-  }, [exportRows, notify, Adapter]);
-
-  const refreshTemplates = useCallback(async () => {
-    const lista = await Adapter.loadExportTemplates();
-    setTemplates(lista);
-    setSelectedTemplateId((atual) => (lista.some((item) => item.id === atual) ? atual : (lista[0] && lista[0].id) || ""));
-  }, [Adapter]);
-
-  useEffect(() => {
-    refreshTemplates();
-    return Adapter.onExportTemplatesChanged(refreshTemplates);
-  }, [refreshTemplates, Adapter]);
-
-  const exportExcel = useCallback(async (templateId?: string) => {
-    if (!exportRows.length) { notify("Consulte os documentos antes de exportar.", "warn"); return; }
-    const escolhido = templates.find((item) => item.id === (templateId || selectedTemplateId)) || templates[0];
-    const modelo = Adapter.normalizeExportTemplate(escolhido);
-    try {
-      const nomesLds = lds.filter((item) => !item.error).map((item) => item.name).join(" · ");
-      await Adapter.exportRowsToExcel(exportRows, modelo, nomesLds);
-      setLastExport({ id: modelo.id, name: modelo.name });
-      notify(`Planilha gerada com ${exportRows.length} linha(s) no modelo "${modelo.name}".`, "success");
-    } catch (error) {
-      notify((error instanceof Error && error.message) || "Não foi possível gerar a planilha.", "error");
-    }
-  }, [exportRows, templates, selectedTemplateId, lds, notify, Adapter]);
-
-  const repeatLastExport = useCallback(async () => {
-    const ultima = Adapter.getLastExport();
-    if (!ultima) return;
-    if (!templates.some((item) => item.id === ultima.id)) {
-      notify(`O modelo "${ultima.name}" não existe mais. Escolha outro para exportar.`, "warn");
-      return;
-    }
-    setSelectedTemplateId(ultima.id);
-    await exportExcel(ultima.id);
-  }, [templates, exportExcel, notify, Adapter]);
-
   const visibleRows = useMemo(() => {
     const busca = search.trim().toLowerCase();
     let linhas = documents.map((item) => ({ item, linha: results.get(item.id) || null }));
@@ -303,6 +264,54 @@ export function useConsultas() {
     };
     return sort === "entrada" ? linhas : [...linhas].sort(ordem[sort] || (() => 0));
   }, [documents, results, search, situation, allocation, sort]);
+
+  const copyResults = useCallback(async () => {
+    if (!exportRows.length) return;
+    try {
+      await Adapter.copyRowsToClipboard(exportRows);
+      notify(`${exportRows.length} linha(s) copiadas. Cole direto na planilha.`, "success");
+    } catch (_error) {
+      notify("O navegador bloqueou a cópia automática. Use a exportação para Excel.", "warn");
+    }
+  }, [exportRows, notify, Adapter]);
+
+  const refreshTemplates = useCallback(async () => {
+    const lista = await Adapter.loadExportTemplates();
+    setTemplates(lista);
+    setSelectedTemplateId((atual) => (lista.some((item) => item.id === atual) ? atual : (lista[0] && lista[0].id) || ""));
+  }, [Adapter]);
+
+  useEffect(() => {
+    refreshTemplates();
+    return Adapter.onExportTemplatesChanged(refreshTemplates);
+  }, [refreshTemplates, Adapter]);
+
+  const exportExcel = useCallback(async (templateId?: string) => {
+    const rowsToExport = visibleRows.filter(({ linha }) => Boolean(linha))
+      .map(({ item, linha }) => Adapter.buildExportRow(item.document, linha!));
+    if (!rowsToExport.length) { notify("Consulte os documentos antes de exportar.", "warn"); return; }
+    const escolhido = templates.find((item) => item.id === (templateId || selectedTemplateId)) || templates[0];
+    const modelo = Adapter.normalizeExportTemplate(escolhido);
+    try {
+      const nomesLds = lds.filter((item) => !item.error).map((item) => item.name).join(" · ");
+      await Adapter.exportRowsToExcel(rowsToExport, modelo, nomesLds);
+      setLastExport({ id: modelo.id, name: modelo.name });
+      notify(`Planilha gerada com ${rowsToExport.length} linha(s) no modelo "${modelo.name}".`, "success");
+    } catch (error) {
+      notify((error instanceof Error && error.message) || "Não foi possível gerar a planilha.", "error");
+    }
+  }, [visibleRows, templates, selectedTemplateId, lds, notify, Adapter]);
+
+  const repeatLastExport = useCallback(async () => {
+    const ultima = Adapter.getLastExport();
+    if (!ultima) return;
+    if (!templates.some((item) => item.id === ultima.id)) {
+      notify(`O modelo "${ultima.name}" não existe mais. Escolha outro para exportar.`, "warn");
+      return;
+    }
+    setSelectedTemplateId(ultima.id);
+    await exportExcel(ultima.id);
+  }, [templates, exportExcel, notify, Adapter]);
 
   const selectedCount = useMemo(() => documents.filter((item) => item.selected).length, [documents]);
   const ldsReady = useMemo(() => lds.filter((item) => !item.error && item.records.length).length, [lds]);
