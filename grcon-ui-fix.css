@@ -132,3 +132,80 @@ html[data-app="GRCON"] .grcon-fix-popover-hint[hidden] { display: none; }
 .additional-tool-open{font-size:.82rem;font-weight:800;color:var(--accent,#2b6f96);white-space:nowrap}
 @media(max-width:760px){.additional-tools-module{padding:20px 16px 32px}.additional-tools-grid{grid-template-columns:1fr}.additional-tool-card{grid-template-columns:44px 1fr;padding:18px}.additional-tool-open{grid-column:2}.additional-tools-heading{align-items:flex-start}}
 @media(prefers-reduced-motion:reduce){.additional-tool-card{transition:none}.additional-tool-card:hover{transform:none}}
+
+
+/* Etapas da GRDT: prioridade à operação em desktop, derivadas de estado real. */
+html[data-app="GRCON"] .grdt-stages {
+  margin: .1rem 0 .85rem;
+  padding: .5rem;
+  border: 1px solid var(--border-1, #d8e1e7);
+  background: var(--surface-1, #fff);
+  border-radius: var(--radius-md, 13px);
+}
+html[data-app="GRCON"] .grdt-stages-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .45rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+html[data-app="GRCON"] .grdt-stage {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: .55rem;
+  padding: .52rem .68rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 9px);
+  color: var(--text-3, #5e6f7c);
+}
+html[data-app="GRCON"] .grdt-stage-number {
+  flex: 0 0 1.8rem;
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid var(--border-2, #c6d2da);
+  border-radius: 50%;
+  font-size: .73rem;
+  font-weight: 800;
+  background: var(--surface-2, #f8fafb);
+}
+html[data-app="GRCON"] .grdt-stage-text { min-width: 0; }
+html[data-app="GRCON"] .grdt-stage-text strong {
+  display: block;
+  color: inherit;
+  font-size: .8rem;
+  line-height: 1.25;
+}
+html[data-app="GRCON"] .grdt-stage-text small {
+  display: block;
+  margin-top: .12rem;
+  color: inherit;
+  font-size: .67rem;
+  line-height: 1.3;
+}
+html[data-app="GRCON"] .grdt-stage.is-current {
+  color: var(--brand-strong, #123f61);
+  border-color: color-mix(in srgb, var(--brand-600, #1479a6) 35%, var(--border-1, #d8e1e7));
+  background: var(--brand-50, #f2f9fc);
+}
+html[data-app="GRCON"] .grdt-stage.is-current .grdt-stage-number {
+  color: var(--surface-1, #fff);
+  background: var(--brand-700, #0c648f);
+  border-color: var(--brand-700, #0c648f);
+}
+html[data-app="GRCON"] .grdt-stage.is-complete { color: var(--text-2, #475766); }
+html[data-app="GRCON"] .grdt-stage.is-complete .grdt-stage-number {
+  color: var(--success-700, #14745f);
+  border-color: var(--success-700, #14745f);
+  background: var(--success-100, #e3f5ef);
+}
+@media (max-width: 900px) {
+  html[data-app="GRCON"] .grdt-stages-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  html[data-app="GRCON"] .grdt-stages-list { grid-template-columns: 1fr; }
+  html[data-app="GRCON"] .grdt-stage { padding: .38rem .55rem; }
+}

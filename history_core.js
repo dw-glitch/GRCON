@@ -190,15 +190,15 @@
       format: text(value.format).toLowerCase(),
       sizeBytes: number(value.sizeBytes),
     };
-    if (source === "cofre") {
+    if (source === "cofre" || value.vaultFileId || value.sha256) {
       clean.vaultFileId = text(value.vaultFileId);
       clean.catalogSequence = number(value.catalogSequence);
+      clean.fileVersion = number(value.fileVersion);
       clean.sha256 = /^[a-f0-9]{64}$/i.test(text(value.sha256)) ? text(value.sha256).toLowerCase() : "";
       clean.createdAt = text(value.createdAt);
       clean.verifiedAt = text(value.verifiedAt);
-    } else {
-      clean.lastModified = number(value.lastModified);
     }
+    if (source === "local") clean.lastModified = number(value.lastModified);
     return clean;
   }
 

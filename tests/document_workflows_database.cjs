@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 const { PGlite } = require('@electric-sql/pglite');
 const root = path.resolve(__dirname,'..');
 const owner='00000000-0000-4000-8000-000000000010', admin='00000000-0000-4000-8000-000000000011', viewer='00000000-0000-4000-8000-000000000012';
@@ -20,7 +21,7 @@ const workspace='00000000-0000-4000-8000-000000000001';
    create function private.grcon_is_member(w uuid) returns boolean language sql security definer set search_path=public as $$ select auth.uid() is not null and exists(select 1 from grcon_memberships where workspace_id=w and user_id=auth.uid() and active) $$;
    create function private.grcon_has_role(w uuid,roles text[]) returns boolean language sql security definer set search_path=public as $$ select auth.uid() is not null and exists(select 1 from grcon_memberships where workspace_id=w and user_id=auth.uid() and active and role=any(roles)) $$;
    create policy members_select on public.grcon_memberships for select to authenticated using(private.grcon_is_member(workspace_id));
-   create table public.grcon_history(id uuid primary key default gen_random_uuid(),workspace_id uuid,generated_at timestamptz,deleted_at timestamptz);
+   create table public.grcon_history(id uuid primary key default gen_random_uuid(),workspace_id uuid,generated_at timestamptz,deleted_at timestamptz,payload jsonb default '{}',egrdt_number text,created_by uuid,updated_by uuid);
    create table public.grcon_audit_events(workspace_id uuid,actor_id uuid,action text,entity_type text,entity_id text,metadata jsonb,created_at timestamptz default now());
    insert into public.grcon_workspaces(id,name) values('${workspace}','GRCON');
    insert into public.grcon_memberships(workspace_id,user_id,role) values('${workspace}','${owner}','owner'),('${workspace}','${admin}','admin'),('${workspace}','${viewer}','viewer');`);
@@ -28,7 +29,9 @@ const workspace='00000000-0000-4000-8000-000000000001';
     create table private.grcon_planned_document_items(snapshot_id uuid,document_key text);
     create table public.grcon_profiles(id uuid primary key,display_name text,email text);
     insert into public.grcon_profiles values('${owner}','Owner QA','owner@example.test');`);
-  for (const file of ['20260929223549_shared_sigem_query.sql','20261006163921_document_vault_catalog.sql','20261006170344_document_vault_search_allocation.sql','20261006170405_document_vault_filter_pagination_fix.sql','20261006170533_document_vault_secret_key_compatibility.sql','20261006170546_document_vault_list_secret_key_compatibility.sql','20261006183921_multi_contract_foundation.sql','20261006184001_sigem_status_monitoring_schema.sql','20261006184118_sigem_status_monitoring_engine.sql','20261006184204_sigem_status_monitoring_api.sql','20261006185349_document_vault_batch_lookup.sql','20261006185728_document_vault_lookup_secret_key_compatibility.sql','20261007122636_document_vault_deletion.sql','20261007122911_shared_sigem_reference_date.sql','20261007122913_requests_control_base.sql','20261007122915_document_vault_set_lookup.sql','20261007143000_document_vault_requests_allocation_storage_audit.sql','20261007144040_shared_sigem_history_management.sql','20261007171210_owner_admin_shared_sigem_dashboard.sql']) await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+  for (const file of ['20260929223549_shared_sigem_query.sql','20261006163921_document_vault_catalog.sql','20261006170344_document_vault_search_allocation.sql','20261006170405_document_vault_filter_pagination_fix.sql','20261006170533_document_vault_secret_key_compatibility.sql','20261006170546_document_vault_list_secret_key_compatibility.sql','20261006183921_multi_contract_foundation.sql','20261006184001_sigem_status_monitoring_schema.sql','20261006184118_sigem_status_monitoring_engine.sql','20261006184204_sigem_status_monitoring_api.sql','20261006185349_document_vault_batch_lookup.sql','20261006185728_document_vault_lookup_secret_key_compatibility.sql','20261007122636_document_vault_deletion.sql','20261007122911_shared_sigem_reference_date.sql','20261007122913_requests_control_base.sql','20261007122915_document_vault_set_lookup.sql','20261007143000_document_vault_requests_allocation_storage_audit.sql','20261007144040_shared_sigem_history_management.sql','20261007171210_owner_admin_shared_sigem_dashboard.sql','20261008100836_vault_versions_traceability_master.sql','20261008101708_master_document_identity_aliases.sql']) await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+  const aliases=(await db.query("select private.grcon_master_document_key('C1O-RNEST-DD-1.2.3.4-CE-DE-nt-TAG-01') a,private.grcon_master_document_key('C1O_RNEST_DD_1.2.3.4_CE_DE_TAG-01') b,private.grcon_master_document_key('RL-5290.00-22313-856-C1O-017') c")).rows[0];
+  assert.equal(aliases.a,aliases.b);assert.equal(aliases.c,'RL-5290.00-22313-856-C1O-017');
   const as = (id, role='authenticated') => db.exec(`reset role; set request.jwt.claim.sub='${id}'; set role ${role};`);
   const rpc = (name,args) => db.query('select public.'+name+'('+args.map((_,i)=>'$'+(i+1)).join(',')+') as data',args).then(r=>r.rows[0].data);
   await as(owner);
@@ -91,8 +94,8 @@ const workspace='00000000-0000-4000-8000-000000000001';
   const originalFetch=global.fetch, objects=new Map([[key,Buffer.from('PDF')]]); let deleted=0, failDelete=true, failFinish=false;
   const bucket={
     async head(k){return objects.has(k)?{size:objects.get(k).length}:null;},
-    async get(k){return objects.has(k)?{body:new Response(objects.get(k)).body}:null;},
-    async put(k,body){objects.set(k,Buffer.from(await new Response(body).arrayBuffer()));},
+    async get(k){return objects.has(k)?{body:new Response(objects.get(k)).body,size:objects.get(k).length}:null;},
+    async put(k,body,options={}){const bytes=Buffer.from(await new Response(body).arrayBuffer());if(options.sha256&&createHash('sha256').update(bytes).digest('hex')!==options.sha256)throw Error('R2 checksum mismatch');objects.set(k,bytes);return {etag:'a'.repeat(32)};},
     async delete(k){if(failDelete)throw Error('R2 offline');deleted++;objects.delete(k);},
     async list({prefix}){return {objects:[...objects.entries()].filter(([k])=>k.startsWith(prefix)).map(([key,value])=>({key,size:value.length})),truncated:false};},
   };
@@ -104,6 +107,7 @@ const workspace='00000000-0000-4000-8000-000000000001';
       if(failFinish && name==='grcon_document_delete' && body.operation==='finish') throw Error('Database temporarily unavailable');
       let data;
       if(name==='grcon_document_vault_storage_catalog' || name==='grcon_document_vault_storage_usage') data=await rpc(name,[body.target_workspace,body.actor_id]);
+      else if(name==='grcon_vault_maintenance') data=await rpc(name,[body.operation,body.input]);
       else if(name==='grcon_document_vault_reconcile_log') data=await rpc(name,[body.target_workspace,body.actor_id,body.input]);
       else data=await rpc(name,[body.target_workspace,body.actor_id,body.operation,body.input]);
       return Response.json(data);
@@ -122,8 +126,8 @@ const workspace='00000000-0000-4000-8000-000000000001';
     assert.equal(usageResponse.status,200);const usage=(await usageResponse.json()).storage;
     assert.equal(usage.usedBytes,3,'operational usage stops counting a pending object already removed from R2');
     assert.equal(usage.fileCount,1,'only the retained physical object remains counted');
-    assert.equal(usage.pendingChecked,1,'normal usage checks only pending deletions in R2 instead of listing the bucket');
-    assert.equal(usage.source,'catalog');
+    assert.equal(usage.physicalObjects,1,'metrics reflect the remaining physical R2 object');
+    assert.equal(usage.source,'r2');
     failFinish=false;assert.equal((await deleteFile()).status,200);assert.equal((await deleteFile()).status,200,'retry after success is idempotent');
     await db.exec('reset role');assert.equal((await db.query('select count(*)::int n from private.grcon_document_files where id=$1',[fileId])).rows[0].n,0);
     assert.equal((await db.query('select count(*)::int n from public.grcon_history')).rows[0].n,1,'old GRDT history is untouched');
@@ -166,6 +170,52 @@ const workspace='00000000-0000-4000-8000-000000000001';
     assert.equal(refreshedAllocation.files[0].allocation_label,'C1O-ALOC-QA-0099');
     const isolated=await rpc('grcon_document_vault_list',[other,owner,{allocation:'all'}]);
     assert.equal(isolated.files.length,0,'vault data remains isolated by contract');
+
+    // Real SQL + authenticated Worker + checksum-enforcing R2 double.
+    Object.defineProperty(crypto, 'DigestStream', { configurable: true, value: class extends WritableStream {
+      constructor() { const hash=createHash('sha256'); let resolve; const digest=new Promise(r=>resolve=r);
+        super({write(chunk){hash.update(chunk);},close(){const bytes=hash.digest();resolve(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));}}); this.digest=digest; }
+    }});
+    const endpoint=(action,body={},actor=owner,method='POST')=>worker.fetch(new Request('https://grcon.test/api/document-vault/'+action+(method==='GET'?'?workspace='+workspace+'&'+new URLSearchParams(body):''),{method,headers:{authorization:'Bearer '+actor,'x-grcon-workspace':workspace,'content-type':'application/json'},...(method==='POST'?{body:JSON.stringify({workspaceId:workspace,...body})}:{})}),env);
+    const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+    const reserve=async(bytes,name='TRACE-003_0.pdf',allowConflict=false)=>{
+      const response=await endpoint('init',{fileName:name,documentCode:'TRACE-003',revision:'0',format:'pdf',sizeBytes:bytes.length,sha256:digest(bytes),allowConflict,mimeType:'application/pdf'});
+      return {status:response.status,data:await response.json()};
+    };
+    const upload=async(id,bytes,actor=owner)=>worker.fetch(new Request('https://grcon.test/api/document-vault/upload',{method:'PUT',headers:{authorization:'Bearer '+actor,'x-grcon-workspace':workspace,'x-grcon-file-id':id,'content-type':'application/pdf'},body:bytes}),env);
+    const bytes1=Buffer.from('%PDF-version-one'),bytes2=Buffer.from('%PDF-version-two');
+    const first=await reserve(bytes1);assert.equal(first.status,200);assert.equal(first.data.file.file_version,1);
+    assert.equal((await upload(first.data.file.id,bytes1)).status,200);
+    const duplicate=await reserve(bytes1);assert.equal(duplicate.data.ready,true);assert.equal(duplicate.data.file.id,first.data.file.id);
+    assert.equal((await reserve(bytes2)).status,409,'different bytes require explicit version confirmation');
+    const second=await reserve(bytes2,'TRACE-003_0.pdf',true);assert.equal(second.data.file.file_version,2);assert.equal(second.data.file.previous_file_id,first.data.file.id);
+    await as('', 'service_role');let detail=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:first.data.file.id}]);assert.equal(detail.file.is_active,true,'pending newer upload does not deactivate ready file');
+    assert.equal((await upload(second.data.file.id,bytes2)).status,200);
+    await as('', 'service_role');detail=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:first.data.file.id}]);assert.equal(detail.file.is_active,false);assert.equal(detail.versions.length,2);assert.ok(detail.file.replaced_at);
+    const lookup=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:[{documentCode:'TRACE-003',requestId:'a'}]}]);assert.equal(lookup.results[0].matches.length,1);assert.equal(lookup.results[0].matches[0].id,second.data.file.id,'operational GRDT lookup uses current verified version');
+    await db.exec('reset role');const emitted=await db.query('insert into public.grcon_history(workspace_id,contract_id,egrdt_number,generated_at,created_by,payload) values($1,$2,$3,now(),$4,$5) returning id',[workspace,contract,'QA-TRACE-GRDT',owner,{files:[{document:'TRACE-003',vaultFileId:first.data.file.id,purpose:'Para Construção',fileProvenance:{sha256:digest(bytes1)}}]}]);
+    await db.query('update public.grcon_history set payload=payload where id=$1',[emitted.rows[0].id]);
+    const beforeDelete=deleted;const protectedResponse=await deleteFile(owner,workspace,first.data.file.id);assert.equal(protectedResponse.status,403);assert.match((await protectedResponse.json()).message,/GRDT/);assert.equal(deleted,beforeDelete,'protected history version is rejected BEFORE R2 deletion');
+    const retrieved=await endpoint('download',{id:first.data.file.id},viewer,'GET');assert.equal(retrieved.status,200);assert.equal(Buffer.from(await retrieved.arrayBuffer()).toString(),bytes1.toString());assert.equal(retrieved.headers.get('cache-control'),'private, no-store');
+    await as('', 'service_role');const master=await rpc('grcon_vault_operations',[workspace,viewer,'master',{code:'TRACE-003'}]);assert.equal(master.vault.length,2);assert.equal(master.history[0].egrdt_number,'QA-TRACE-GRDT');assert.equal(master.vault.find(f=>f.id===first.data.file.id).emissions.length,1,'retry does not duplicate emission links');
+    assert.ok((await rpc('grcon_vault_operations',[workspace,owner,'search',{q:'QA-TRACE-GRDT'}])).results.some(r=>r.code==='TRACE-003'));
+    await assert.rejects(rpc('grcon_vault_operations',[workspace,viewer,'metadata',{id:first.data.file.id,purpose:'Denied'}]),/permissão/);
+    await assert.rejects(rpc('grcon_vault_operations',[other,viewer,'detail',{id:first.data.file.id}]),/acesso/);
+    await rpc('grcon_vault_operations',[workspace,admin,'metadata',{id:first.data.file.id,purpose:'Audited',discipline:'Civil'}]);
+    const metrics=await endpoint('usage',{},viewer,'GET');assert.equal(metrics.status,200);const measured=(await metrics.json()).storage;assert.equal(measured.source,'r2');assert.equal(measured.details.historical,1);assert.ok(measured.usedBytes>=bytes1.length+bytes2.length);
+    assert.equal((await endpoint('usage',{scope:'global'},viewer,'GET')).status,403,'global storage is owner-only');
+    const globalUsage=await endpoint('usage',{scope:'global'},owner,'GET');assert.equal(globalUsage.status,200);assert.ok((await globalUsage.json()).storage.contracts.length>0);
+    const snapshot=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:first.data.file.id}]);assert.ok(snapshot.audit.some(e=>e.action==='document_vault_download'));assert.ok(snapshot.audit.some(e=>e.action==='document_vault_metadata'));
+    objects.delete(snapshot.file.object_key);
+    const restored=await reserve(bytes1);assert.equal(restored.status,200);assert.equal(restored.data.file.id,first.data.file.id,'restoration keeps historical file identity');assert.equal((await upload(restored.data.file.id,bytes1)).status,200);
+    const restDownload=await endpoint('download',{id:first.data.file.id},viewer,'GET');assert.equal(Buffer.from(await restDownload.arrayBuffer()).toString(),bytes1.toString());
+    const malformed=await reserve(Buffer.from('expected-bytes'),'TRACE-BAD.pdf',true);assert.equal((await upload(malformed.data.file.id,Buffer.from('tampered-bytes'))).status,409,'R2 checksum rejects tampered single upload');
+    await as('', 'service_role');assert.equal((await rpc('grcon_document_catalog',[workspace,owner,'get',{id:malformed.data.file.id}])).status,'pending');
+    let maintenance;await worker.scheduled({},env,{waitUntil(p){maintenance=p;}});await maintenance;
+    await as('', 'service_role');assert.ok((await rpc('grcon_vault_operations',[workspace,owner,'metrics',{}])).evolution.length>0,'Cron persists real usage without deleting valid files');
+    await as(viewer);await assert.rejects(rpc('grcon_vault_operations',[workspace,owner,'metrics',{}]),/permission denied/,'browser cannot impersonate owner via service-only RPC');
+    console.log('Vault versions + exact history file + restore + hash + private downloads + Master/search + roles + Cron: passed.');
+    await as('', 'service_role');
     for(const size of [10,50,100]) {const start=performance.now();await rpc('grcon_document_vault_lookup',[workspace,owner,{items:Array.from({length:size},(_,i)=>({requestId:String(i),documentCode:i%2?'DOC-001':'DOC-002'}))}]);console.log('Lookup '+size+' codes: '+(performance.now()-start).toFixed(1)+'ms (local Postgres)');}
   }finally{global.fetch=originalFetch;}
   console.log('Document workflows database + Worker: roles, contracts, actual bucket calls, shared binary, R2/database failures, retry, history/audit, date metadata and request base passed.');

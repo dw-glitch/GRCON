@@ -530,3 +530,45 @@ html[data-app="GRCON"] .requests-central-status.tem-erro { color: var(--danger-7
 html[data-app="GRCON"] .requests-table thead th.requests-col-check { min-width: 2.2rem; width: 2.2rem; }
 html[data-app="GRCON"] .requests-col-doc { min-width: 15rem; }
 html[data-app="GRCON"] .requests-table tbody td:nth-child(4) { min-width: 16rem; }
+
+
+/* Pesquisa de modelos (esboço: Modelos de Exportação).
+   Filtra a lista sem alterar modelos, colunas ou persistência. */
+html[data-app="GRCON"] .requests-modelo-acoes .requests-modelo-pesquisa {
+  flex: 1 1 14rem;
+  max-width: 23rem;
+  min-width: min(100%, 12rem);
+  margin-inline-start: auto;
+}
+html[data-app="GRCON"] .requests-modelo-acoes #requests-modelo-search {
+  min-width: 0;
+  width: 100%;
+  min-height: 2.3rem;
+  padding: .45rem .65rem;
+  color: var(--text-1, #16212b);
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border-2, #c6d2da);
+  border-radius: var(--radius-sm, 9px);
+}
+html[data-app="GRCON"] .requests-modelo-acoes #requests-modelo-search:focus-visible {
+  border-color: var(--brand-600, #1479a6);
+  box-shadow: var(--focus, 0 0 0 3px rgb(20 121 166 / 23%));
+}
+html[data-app="GRCON"] .requests-modelo-contagem {
+  font-size: .75rem;
+  color: var(--text-2, #475766);
+  align-self: center;
+  white-space: nowrap;
+}
+html[data-app="GRCON"] .requests-modelos-vazio {
+  text-align: center;
+  padding: 1.4rem .8rem;
+  color: var(--text-2, #475766);
+}
+@media (max-width: 760px) {
+  html[data-app="GRCON"] .requests-modelo-acoes .requests-modelo-pesquisa {
+    flex-basis: 100%;
+    max-width: 100%;
+    margin-inline-start: 0;
+  }
+}

@@ -34,6 +34,7 @@
     lookupBusy: false,
     vaultPrepared: false,
     storage: null,
+    storageScope: "contract",
     storageLoading: false,
   };
 
@@ -165,7 +166,7 @@
           const total = Number(message.total) || task.file.size || 1;
           task.progress = Math.min(28, Math.round((Number(message.loaded) || 0) / total * 28));
           task.phase = "Preparando arquivo";
-          renderQueue();
+          scheduleQueueProgress();
         } else if (message.type === "done") {
           worker.terminate();
           task.hashWorker = null;
@@ -331,6 +332,7 @@
           format: task.format,
           sha256: task.sha256,
           sizeBytes: task.file.size,
+          mimeType: task.file.type || "application/octet-stream", origin: task.origin || "cofre", purpose: task.purpose || "", discipline: task.discipline || "", documentClass: task.documentClass || "",
           allowConflict: task.allowConflict,
         }),
       });
@@ -356,11 +358,12 @@
       };
 
       if (init.uploadMode === "single") {
-        await xhrPut("/upload", task.file, task, common, (loaded, total) => {
+        const completed = await xhrPut("/upload", task.file, task, common, (loaded, total) => {
           task.progress = 32 + Math.round((loaded / Math.max(1, total)) * 66);
           task.phase = "Enviando";
-          renderQueue();
+          scheduleQueueProgress();
         });
+        task.serverFile = completed.file || task.serverFile;
       } else {
         const started = await requestJson("/multipart/start", {
           method: "POST",
@@ -387,14 +390,15 @@
           }, loaded => {
             task.progress = 32 + Math.round(((confirmedBytes + loaded) / Math.max(1, task.file.size)) * 64);
             task.phase = "Parte " + partNumber + " de " + totalParts;
-            renderQueue();
+            scheduleQueueProgress();
           });
           confirmedBytes += partBlob.size;
         }
-        await requestJson("/multipart/complete", {
+        const completed = await requestJson("/multipart/complete", {
           method: "POST",
           body: JSON.stringify({ workspaceId: task.workspaceId, id: init.file.id }),
         });
+        task.serverFile = completed.file || task.serverFile;
       }
 
       task.status = "done";
@@ -506,7 +510,13 @@
     return attention.concat(remaining).slice(0, QUEUE_RENDER_LIMIT);
   }
 
+  let queueProgressTimer = null;
+  function scheduleQueueProgress() {
+    if (queueProgressTimer !== null) return;
+    queueProgressTimer = setTimeout(() => { queueProgressTimer = null; renderQueue(); }, 100);
+  }
   function renderQueue() {
+    if (queueProgressTimer !== null) { clearTimeout(queueProgressTimer); queueProgressTimer = null; }
     const host = document.getElementById("vault-queue-body");
     const panel = document.getElementById("vault-queue-panel");
     const pause = document.getElementById("vault-pause");
@@ -530,6 +540,7 @@
     }
     const visible = queueView();
     host.innerHTML = visible.map(task => {
+      const id = task.serverFile?.id;
       const editable = !["hashing","initializing","uploading","done"].includes(task.status);
       const actions = [];
       if (task.status === "error") actions.push('<button type="button" data-vault-retry="' + esc(task.id) + '">Tentar novamente</button>');
@@ -541,7 +552,7 @@
         '<td><input class="vault-revision-input" data-vault-meta="revision" data-task-id="' + esc(task.id) + '" value="' + esc(task.revision) + '" ' + (editable ? "" : "disabled") + ' aria-label="Revisão"></td>' +
         '<td><span class="vault-status">' + esc(taskStatusLabel(task)) + '</span><small>' + esc(task.error || task.phase) + '</small></td>' +
         '<td><div class="vault-progress"><i style="width:' + Math.max(0, Math.min(100, Number(task.progress) || 0)) + '%"></i></div><small>' + Math.round(Number(task.progress) || 0) + '%</small></td>' +
-        '<td><div class="vault-row-actions">' + actions.join("") + '</div></td>' +
+        '<td><div class="vault-row-actions">' + (id ? '<button type="button" data-vault-detail="' + esc(id) + '">Detalhes</button>' : '') + actions.join("") + '</div></td>' +
         '</tr>';
     }).join("");
     if (state.queue.length > visible.length) {
@@ -634,12 +645,12 @@
         const id = text(file.id);
         return '<tr>' +
           '<td><strong>' + esc(file.document_code || file.identity_code || "—") + '</strong><small>' + esc(file.file_name || "") + '</small></td>' +
-          '<td>' + esc(file.revision || "0") + '</td>' +
+          '<td>' + esc(file.revision || "0") + '<small>Versão ' + esc(file.file_version || 1) + (file.is_active === false ? ' · histórica' : '') + '</small></td>' +
           '<td>' + esc((file.format || "outra").toUpperCase()) + '</td>' +
           '<td>' + esc(bytes(file.size_bytes)) + '</td>' +
           '<td>' + esc(dateLabel(file.created_at)) + '</td>' +
           '<td><span class="vault-allocation ' + allocationClass(file) + '" title="Fonte: ' + esc(file.allocation_source || "Controle de Solicitações") + '">' + esc(allocationLabel(file)) + '</span></td>' +
-          '<td><div class="vault-row-actions">' + (file.status === 'ready' ? '<button type="button" data-vault-open-file="' + esc(id) + '">Abrir</button><button type="button" class="quiet" data-vault-download="' + esc(id) + '">Baixar</button>' : '<span>Exclusão pendente</span>') + (canDelete() ? '<button type="button" data-vault-delete="' + esc(id) + '">' + (file.status === 'ready' ? 'Excluir' : 'Tentar excluir novamente') + '</button>' : '') + '</div></td>' +
+          '<td><div class="vault-row-actions"><button type="button" data-vault-detail="' + esc(id) + '">Detalhes</button>' + (file.status === 'ready' ? '<button type="button" data-vault-open-file="' + esc(id) + '">Abrir</button><button type="button" class="quiet" data-vault-download="' + esc(id) + '">Baixar</button>' : '<span>Exclusão pendente</span>') + (canDelete() ? '<button type="button" data-vault-delete="' + esc(id) + '">' + (file.status === 'ready' ? 'Excluir' : 'Tentar excluir novamente') + '</button>' : '') + '</div></td>' +
           '</tr>';
       }).join("");
     }
@@ -647,8 +658,8 @@
     renderListStatus(state.files.length + " documento(s) exibido(s)" + (state.hasMore ? " · há mais resultados" : ""));
   }
 
-  async function downloadBlob(file) {
-    const response = await fetch(API + "/download?workspace=" + encodeURIComponent(workspaceId()) + "&id=" + encodeURIComponent(file.id), {
+  async function downloadBlob(file, intent) {
+    const response = await fetch(API + "/download?workspace=" + encodeURIComponent(workspaceId()) + "&id=" + encodeURIComponent(file.id) + "&intent=" + (intent === "view" ? "view" : "download"), {
       headers: requestHeaders(false),
       cache: "no-store",
     });
@@ -663,7 +674,7 @@
     const file = state.files.find(item => text(item.id) === text(id));
     if (!file) return;
     try {
-      const blob = await downloadBlob(file);
+      const blob = await downloadBlob(file, open ? "view" : "download");
       const url = URL.createObjectURL(blob);
       if (open && /pdf/i.test(file.format || blob.type)) {
         root.open(url, "_blank", "noopener,noreferrer");
@@ -718,12 +729,12 @@
     if (button) button.disabled = true;
     try {
       await root.GRCONModuleLoader.ensure("excel");
-      const workbook = new root.ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("Cofre", { views: [{ state: "frozen", ySplit: 1 }] });
-      sheet.columns = [
+      const rows = [];
+      const columns = [
         ["Contrato", "contract", 24], ["Código do documento", "document", 38], ["Revisão", "revision", 12],
         ["Nome do arquivo", "name", 52], ["Extensão", "format", 12], ["Tipo", "type", 14],
         ["Tamanho (bytes)", "size", 20], ["Data de inclusão", "date", 24], ["Incluído por", "actor", 38],
+        ["SHA-256", "hash", 68], ["Versão", "version", 12], ["Ativa", "active", 12], ["Origem", "origin", 18], ["GRDT / eGRDT", "emissions", 40],
         ["Alocação", "allocation", 34], ["Fonte da alocação", "allocationSource", 28], ["Situação do arquivo", "status", 28],
       ].map(([header, key, width]) => ({ header, key, width }));
       let after = null;
@@ -733,39 +744,63 @@
         if (after) params.set("after", String(after));
         const page = await requestJson("/list?" + params, { method: "GET" });
         if (epoch !== contextEpoch) throw new Error("O contrato mudou. Exporte novamente.");
-        for (const file of page.files || []) sheet.addRow({
+        for (const file of page.files || []) rows.push({
           contract: root.GrconCloud?.state?.contract?.display_name || root.GrconCloud?.state?.contract?.code || root.GrconCloud?.state?.membership?.contract_code || "Contrato atual",
           document: file.document_code, revision: file.revision, name: file.file_name, format: file.format,
           type: file.document_type || "", size: Number(file.size_bytes), date: new Date(file.created_at),
+          hash: file.sha256 || "", version: file.file_version || 1, active: file.is_active === false ? "Histórica" : "Atual", origin: file.source_context?.origin || "cofre", emissions: (file.emissions || []).map(item => item.egrdt_number).join(" | "),
           actor: file.created_by_name || file.created_by_email || "", allocation: allocationLabel(file),
           allocationSource: file.allocation_source || "Controle de Solicitações",
           status: file.status === "ready" ? "Disponível" : "Exclusão pendente — tentar novamente",
         });
         after = page.next;
       } while (after);
-      sheet.getColumn("date").numFmt = "dd/mm/yyyy hh:mm";
-      sheet.getColumn("size").numFmt = "#,##0";
-      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
-      sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: 12 } };
-      const buffer = await workbook.xlsx.writeBuffer();
+      let buffer;
+      try {
+        await root.GRCONModuleLoader.ensure("performance");
+        if (root.GrconPerformance?.supported) buffer = await root.GrconPerformance.buildSpreadsheet("vault", { rows, columns });
+      } catch (error) { console.warn("[GRCON] Exportação do Cofre em modo compatível", error); }
+      if (!buffer) {
+        const workbook = new root.ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("Cofre", { views: [{ state: "frozen", ySplit: 1 }] });
+        sheet.columns = columns;
+        rows.forEach(row => sheet.addRow(row));
+        sheet.getColumn("date").numFmt = "dd/mm/yyyy hh:mm";
+        sheet.getColumn("size").numFmt = "#,##0";
+        sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+        sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
+        sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: sheet.columns.length } };
+        buffer = await workbook.xlsx.writeBuffer();
+      }
       if (epoch !== contextEpoch) throw new Error("O contrato mudou. Exporte novamente.");
       const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
       const anchor = document.createElement("a"); anchor.href = url; anchor.download = "GRCON_Cofre_" + new Date().toISOString().slice(0,10) + ".xlsx";
       document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
-      notify((sheet.rowCount - 1) + " documentos exportados com os filtros selecionados.", "success");
+      notify(rows.length + " documentos exportados com os filtros selecionados.", "success");
     } catch (error) { notify(error.message, "error"); }
     finally { if (button) button.disabled = false; }
   }
 
   function renderStorage() {
+    const scopeLabel = document.getElementById("vault-storage-scope");
+    if (scopeLabel) scopeLabel.textContent = state.storageScope === "global" ? "Uso global · contratos autorizados" : "Uso do contrato atual";
+    const global = document.getElementById("vault-storage-global");
+    if (global) { global.hidden = root.GrconCloud?.state?.membership?.role !== "owner"; global.textContent = state.storageScope === "global" ? "Ver contrato atual" : "Visão global"; global.disabled = state.storageLoading; }
     const used = document.getElementById("vault-storage-used");
     const objects = document.getElementById("vault-storage-objects");
     const integrity = document.getElementById("vault-storage-integrity");
     const checked = document.getElementById("vault-storage-checked");
+    const history = document.getElementById("vault-storage-history");
+    const evolution = state.storage?.details?.evolution || [];
+    if (history) { history.hidden = !evolution.length; history.querySelector("div").innerHTML = '<table><thead><tr><th>Conferência</th><th>Consumo físico</th><th>Objetos</th></tr></thead><tbody>' + evolution.map(row => '<tr><td>' + esc(dateLabel(row.created_at)) + '</td><td>' + esc(bytes(row.bytes)) + '</td><td>' + esc(row.objects) + '</td></tr>').join("") + '</tbody></table>'; }
+    const details = document.getElementById("vault-storage-details");
+    if (details) {
+      const d = state.storage?.details;
+      details.textContent = d ? "Média física: " + bytes(state.storage.averageBytes) + " · " + d.active + " versões atuais · " + d.historical + " históricas · " + d.unlinked + " sem emissão · Objetos físicos por tipo: " + Object.entries(state.storage.physicalByType || {}).map(([type, value]) => type.toUpperCase() + ": " + value.objects + " (" + bytes(value.bytes) + ")").join(" / ") : "";
+    }
     const reconcile = document.getElementById("vault-storage-reconcile");
     const refresh = document.getElementById("vault-storage-refresh");
-    if (reconcile) reconcile.hidden = !canDelete();
+    if (reconcile) reconcile.hidden = !canDelete() || state.storageScope === "global";
     if (refresh) refresh.disabled = state.storageLoading;
     if (!state.storage) {
       if (used) used.textContent = state.storageLoading ? "Calculando…" : "—";
@@ -802,7 +837,7 @@
     state.storageLoading = true;
     renderStorage();
     try {
-      const payload = await requestJson("/usage?workspace=" + encodeURIComponent(workspace), { method: "GET" });
+      const payload = await requestJson("/usage?workspace=" + encodeURIComponent(workspace) + "&scope=" + state.storageScope, { method: "GET" });
       if (epoch !== contextEpoch || workspace !== workspaceId()) return;
       state.storage = payload.storage || null;
     } catch (error) {
@@ -1023,6 +1058,7 @@
           revision: item.revision || "0",
           format: item.format || "",
           sizeBytes: Number(item.size_bytes) || file.size || 0,
+          fileVersion: item.file_version || 1,
           sha256: item.sha256 || "",
           createdAt: item.created_at || "",
           verifiedAt: item.verified_at || "",
@@ -1149,6 +1185,7 @@
             revision: item.revision || "0",
             format: item.format || "",
             sizeBytes: Number(item.size_bytes) || file.size || 0,
+            fileVersion: item.file_version || 1,
             sha256: item.sha256 || "",
             createdAt: item.created_at || "",
             verifiedAt: item.verified_at || "",
@@ -1235,9 +1272,9 @@
         <div id="vault-health" class="vault-health">Verificando disponibilidade…</div>
       </header>
       <section class="vault-storage-card" aria-label="Armazenamento do Cofre">
-        <div><small>Uso do contrato atual</small><strong id="vault-storage-used">—</strong><span id="vault-storage-objects">—</span></div>
+        <div><small id="vault-storage-scope">Uso do contrato atual</small><strong id="vault-storage-used">—</strong><span id="vault-storage-objects">—</span></div>
         <div><small>Rastreabilidade</small><strong id="vault-storage-integrity" class="vault-storage-integrity">—</strong><span id="vault-storage-checked"></span></div>
-        <div class="vault-storage-actions"><button id="vault-storage-refresh" type="button" class="secondary-button">Atualizar uso</button><button id="vault-storage-reconcile" type="button" class="secondary-button" hidden>Conferir R2</button></div>
+        <div class="vault-storage-actions"><button id="vault-storage-global" type="button" class="secondary-button" hidden>Visão global</button><button id="vault-storage-refresh" type="button" class="secondary-button">Atualizar uso</button><button id="vault-storage-reconcile" type="button" class="secondary-button" hidden>Conferir R2</button></div>
       </section>
       <section class="vault-upload-card" aria-labelledby="vault-upload-title">
         <header><div><strong id="vault-upload-title">Adicionar documentos</strong><small>Ao adicionar uma pasta, os documentos são registrados individualmente.</small></div>
@@ -1245,8 +1282,14 @@
         </header>
         <input id="vault-files-input" type="file" multiple hidden>
         <input id="vault-folder-input" type="file" multiple webkitdirectory directory hidden>
-        <div id="vault-dropzone" class="vault-dropzone" tabindex="0" role="button"><strong>Arraste arquivos ou uma pasta para cá</strong><span>Arquivos compactados são ignorados. Os demais documentos são identificados pelo nome do arquivo.</span></div>
+        <div id="vault-dropzone" class="vault-dropzone" tabindex="0" role="button" aria-describedby="vault-dropzone-description" aria-label="Selecionar ou arrastar documentos para o Cofre">
+          <svg class="vault-dropzone-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>
+          <strong>Arraste arquivos ou uma pasta para cá</strong>
+          <span id="vault-dropzone-description">Pressione Enter ou Espaço para selecionar arquivos. Compactados são ignorados; os demais são identificados pelo nome.</span>
+        </div>
       </section>
+      <p id="vault-storage-details" class="vault-metrics-details" aria-live="polite"></p>
+      <details id="vault-storage-history" hidden><summary>Evolução do consumo · últimas conferências</summary><div class="vault-table-wrap"></div></details>
       <section id="vault-queue-panel" class="vault-queue-panel" hidden>
         <header><div><strong>Registrando documentos</strong><small id="vault-queue-summary"></small></div><div><button id="vault-pause" type="button" class="secondary-button">Pausar</button><button id="vault-resume" type="button" class="secondary-button" hidden>Retomar</button></div></header>
         <div class="vault-table-wrap"><table><thead><tr><th>Arquivo</th><th>Código</th><th>Revisão</th><th>Situação</th><th>Progresso</th><th>Ações</th></tr></thead><tbody id="vault-queue-body"></tbody></table></div>
@@ -1295,8 +1338,7 @@
 
   async function openVault() {
     activateShell();
-    await checkHealth();
-    await Promise.all([refreshList(true), refreshStorage()]);
+    await Promise.all([checkHealth(), refreshList(true), refreshStorage()]);
   }
 
   function installEvents() {
@@ -1314,6 +1356,7 @@
     document.getElementById("vault-resume")?.addEventListener("click", resumeQueue);
     document.getElementById("vault-export")?.addEventListener("click", () => void exportVault());
     document.getElementById("vault-refresh")?.addEventListener("click", () => void refreshList(true));
+    document.getElementById("vault-storage-global")?.addEventListener("click", () => { state.storageScope = state.storageScope === "global" ? "contract" : "global"; state.storage = null; void refreshStorage(); });
     document.getElementById("vault-storage-refresh")?.addEventListener("click", () => void refreshStorage());
     document.getElementById("vault-storage-reconcile")?.addEventListener("click", () => void reconcileStorage());
     document.getElementById("vault-load-more")?.addEventListener("click", () => void refreshList(false));
@@ -1342,6 +1385,8 @@
       const remove = event.target.closest?.("[data-vault-remove-task]");
       if (remove) removeTask(remove.dataset.vaultRemoveTask);
       const open = event.target.closest?.("[data-vault-open-file]");
+      const detail = event.target.closest?.("[data-vault-detail]");
+      if (detail) void root.GrconDocumentMaster?.openFile(detail.dataset.vaultDetail);
       if (open) void downloadAction(open.dataset.vaultOpenFile, true);
       const download = event.target.closest?.("[data-vault-download]");
       if (download) void downloadAction(download.dataset.vaultDownload, false);
@@ -1363,7 +1408,7 @@
     });
     root.addEventListener("grcon:contract-context-changed", () => {
       contextEpoch++;
-      state.files = []; state.lookupRows = []; state.next = null; state.hasMore = false; state.storage = null;
+      state.files = []; state.lookupRows = []; state.next = null; state.hasMore = false; state.storage = null; state.storageScope = "contract";
       state.vaultPrepared = false; sourceRegistry = new WeakMap();
       renderVaultList(); renderLookupResults(); renderStorage();
       if (state.open) { void refreshList(true); void refreshStorage(); }
@@ -1384,6 +1429,45 @@
     renderStorage();
   }
 
+
+  async function persistEmissionFiles(plan) {
+    const epoch = contextEpoch, target = workspaceId();
+    const entries = (plan?.entries || []).filter(entry => entry.file);
+    const entryByFile = new Map(entries.map(entry => [entry.file, entry]));
+    const unique = [...entryByFile.keys()];
+    const provenance = new Map();
+    let failed = 0;
+    await mapLimit(unique, 3, async file => {
+      const existing = lookupSource(file);
+      if (existing?.id) { provenance.set(file, existing); return; }
+      const identity = parseIdentity(file.name);
+      const task = { id: "emission-" + Math.random().toString(36).slice(2), file, workspaceId: target,
+        documentCode: identity.documentCode, revision: identity.revision, format: identity.format,
+        origin: "local", documentClass: entryByFile.get(file)?.sheet || "", purpose: entryByFile.get(file)?.item?.purpose || "", discipline: entryByFile.get(file)?.discipline || "",
+        allowConflict: true, progress: 0, status: "pending" };
+      task.sha256 = await hashFile(task);
+      if (epoch !== contextEpoch || target !== workspaceId()) throw new Error("O contrato mudou. Analise novamente.");
+      if (target && ["owner", "admin", "operator"].includes(root.GrconCloud?.state?.membership?.role)) {
+        await uploadTask(task);
+      }
+      const item = task.status === "done" ? task.serverFile : null;
+      if (!item && target) failed++;
+      const meta = { id: item?.id || "", source: "local", fileVersion: item?.file_version || 0,
+        fileName: file.name, revision: identity.revision, format: identity.format,
+        sizeBytes: file.size, sha256: task.sha256, createdAt: item?.created_at || "", verifiedAt: item?.verified_at || "" };
+      provenance.set(file, meta);
+      if (item) registerSource(file, meta);
+    });
+    if (epoch !== contextEpoch || target !== workspaceId()) throw new Error("O contrato mudou. Analise novamente.");
+    for (const entry of entries) {
+      const meta = provenance.get(entry.file);
+      if (!meta) continue;
+      entry.vaultFileId = meta.id || "";
+      entry.fileProvenance = { ...(entry.fileProvenance || {}), source: meta.source === "local" ? "local" : "cofre", vaultFileId: meta.id || "",
+        sha256: meta.sha256 || "", fileVersion: meta.fileVersion || 0, sizeBytes: meta.sizeBytes || entry.file.size };
+    }
+    if (failed) notify(failed + " arquivo(s) local(is) não puderam ser preservados no Cofre. O histórico manterá o hash; a emissão pode continuar.", "warning");
+  }
   root.GrconDocumentVault = Object.freeze({
     open: openVault,
     refresh: () => refreshList(true),
@@ -1392,6 +1476,9 @@
     parseIdentity,
     parseLookupInput: Core.parseLookupInput,
     resolveMissingEntries,
+    persistEmissionFiles,
+    request: requestJson,
+    download: downloadBlob,
     refreshStorage,
     state,
   });

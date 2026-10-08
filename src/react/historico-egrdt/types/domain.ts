@@ -17,6 +17,7 @@ export interface EgrdtHistoryFile {
     sizeBytes: number;
     vaultFileId?: string;
     catalogSequence?: number;
+    fileVersion?: number;
     sha256?: string;
     createdAt?: string;
     verifiedAt?: string;

@@ -1055,7 +1055,10 @@ async function waitEvolutionReady(page) {
       pwCurrent: evolutionFixture.pwIds[3],
     });
 
-    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.revisionScope), "revision0", "Evolução deve abrir em Revisão 0");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.revisionScope), await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "Evolução herda o escopo atual do Dashboard");
+    await page.locator('[data-evolution-revision-scope="revision0"]').click();
+    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "revision0", "troca na Evolução sincroniza o Dashboard");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.revisionScope), "revision0");
     assert.equal(await page.locator('[data-evolution-revision-scope="revision0"]').getAttribute("aria-pressed"), "true");
     const revision0Selections = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections }));
     const revision0Timeline = [
@@ -1077,6 +1080,7 @@ async function waitEvolutionReady(page) {
 
     await page.locator('[data-evolution-revision-scope="all"]').click();
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.revisionScope === "all");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "all", "Dashboard acompanha todas as revisões na Evolução");
     assert.deepEqual(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.selections), revision0Selections, "troca de escopo deve preservar as bases escolhidas");
     assert.equal(await page.locator('[data-evolution-revision-scope="all"]').getAttribute("aria-pressed"), "true");
 
