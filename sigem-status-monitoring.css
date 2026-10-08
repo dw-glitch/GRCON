@@ -118,8 +118,8 @@
 /* Os tokens gerais --surface/--text não são definidos em todos os modos da UI.
    Na raiz escura, usar os tokens operacionais já suportados pelo GRCON. */
 body.p2-dark .sigem-monitor-local-search input {
-  background: var(--ops-surface, #17232d);
-  color: var(--ops-ink, #e7eef4);
+  background: var(--ops-surface, #17232d) !important;
+  color: var(--ops-ink, #e7eef4) !important;
   border-color: var(--ops-line-strong, #405260);
   color-scheme: dark;
 }
