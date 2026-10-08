@@ -67,7 +67,7 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-shared-sigem-browser.cjs
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: shared-sigem-browser

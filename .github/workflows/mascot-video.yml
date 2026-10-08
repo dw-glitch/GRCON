@@ -83,7 +83,7 @@ jobs:
           node scripts/validar-mascote-video-browser.cjs
           node scripts/validar-mascote-success-pilot-browser.cjs
           node scripts/validar-consultas-browser.cjs
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: grcon-mascot-video-validation
