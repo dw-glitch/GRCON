@@ -39,6 +39,12 @@ async function installQaShellBypass(page) {
 async function setQaTheme(page, dark) {
   await page.evaluate((darkMode) => {
     const html = document.documentElement;
+    const button = document.querySelector("#ui-theme-toggle");
+    // Preferir a mesma ação do usuário para disparar eventos e sincronizar tokens.
+    if (button && (html.dataset.theme === "dark") !== darkMode) {
+      button.click();
+      return;
+    }
     html.dataset.theme = darkMode ? "dark" : "light";
     html.style.colorScheme = darkMode ? "dark" : "light";
     html.classList.toggle("theme-dark", darkMode);
@@ -403,8 +409,17 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
           await setQaTheme(page, true);
           const darkBg = await page.locator("#sigem-monitor-history-search").evaluate((node) =>
             getComputedStyle(node).backgroundColor);
+          const darkDiagnostics = await page.locator("#sigem-monitor-history-search").evaluate((node) => ({
+            matched: node.matches("body.p2-dark .sigem-monitor-local-search input"),
+            media: document.querySelector('link[href="sigem-status-monitoring.css"]')?.media || "not-found",
+            darkBody: document.body.classList.contains("p2-dark"),
+            htmlTheme: document.documentElement.dataset.theme,
+            surfaceToken: getComputedStyle(document.body).getPropertyValue("--ops-surface").trim(),
+            background: getComputedStyle(node).backgroundColor,
+            parent: node.parentElement?.className || "",
+          }));
           assert.notEqual(darkBg, lightBg,
-            "Campos de pesquisa devem adaptar o fundo ao modo escuro real.");
+            "Campos de pesquisa devem adaptar o fundo ao modo escuro real: " + JSON.stringify(darkDiagnostics));
           await screenshot(page, "consulta-geral-sigem-dark", viewport);
           await setQaTheme(page, false);
         }
