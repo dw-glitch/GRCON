@@ -380,6 +380,12 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
           "Histórico deve oferecer busca em comparações.");
         assert.equal(await page.locator("#sigem-monitor-monitored-search").count(), 1,
           "Monitoramento deve oferecer busca local dos documentos.");
+        if (viewport >= 1600) {
+          const monitorColumns = await page.locator(".sigem-monitoring-root").evaluate((node) =>
+            getComputedStyle(node).gridTemplateColumns.split(/\s+/).filter(Boolean).length);
+          assert.equal(monitorColumns, 2,
+            "Monitoramento e histórico devem ocupar duas colunas em telas largas.");
+        }
       }
 
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="analysis-history"]', "Histórico de análises", viewport, 1100));
