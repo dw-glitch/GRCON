@@ -178,6 +178,30 @@
     return clean;
   }
 
+  function cleanFileProvenance(value) {
+    if (!value || typeof value !== "object") return null;
+    const source = text(value.source).toLowerCase();
+    if (source !== "cofre" && source !== "local") return null;
+    const number = value => Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : 0;
+    const clean = {
+      source,
+      fileName: text(value.fileName),
+      revision: text(value.revision),
+      format: text(value.format).toLowerCase(),
+      sizeBytes: number(value.sizeBytes),
+    };
+    if (source === "cofre") {
+      clean.vaultFileId = text(value.vaultFileId);
+      clean.catalogSequence = number(value.catalogSequence);
+      clean.sha256 = /^[a-f0-9]{64}$/i.test(text(value.sha256)) ? text(value.sha256).toLowerCase() : "";
+      clean.createdAt = text(value.createdAt);
+      clean.verifiedAt = text(value.verifiedAt);
+    } else {
+      clean.lastModified = number(value.lastModified);
+    }
+    return clean;
+  }
+
   function cleanFile(file) {
     const revision = generatedRevision(file);
     return {
@@ -218,6 +242,7 @@
       historyClassification: cleanHistoryClassification(file && file.historyClassification),
       sharedAllocationContext: cleanAllocationContext(file && file.sharedAllocationContext),
       vaultFileId: text(file && file.vaultFileId),
+      fileProvenance: cleanFileProvenance(file && file.fileProvenance),
     };
   }
 
@@ -491,6 +516,7 @@
         historyClassification: entry.historyClassification || null,
         sharedAllocationContext: entry.sharedAllocationContext || null,
         vaultFileId: entry.vaultFileId || "",
+        fileProvenance: entry.fileProvenance || null,
       });
     });
     const generatedAt = text(info.generatedAt) || new Date().toISOString();
@@ -567,7 +593,7 @@
     return (records || []).filter((record) => norm([
       record.egrdtNumber, ...(record.numberHistory || []), ...(record.reissueSources || []), record.outputType, record.ldName, record.sourceName, record.batchMode,
       ...(record.allocations || []),
-      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline, file.documentType, file.purpose, file.historyClassification?.label, file.historyClassification?.previousGrdt]),
+      ...(record.files || []).flatMap((file) => [file.document, file.originalName, file.finalName, file.allocation, file.revision, file.sigemStatus, file.discipline, file.documentType, file.purpose, file.historyClassification?.label, file.historyClassification?.previousGrdt, file.fileProvenance?.source, file.fileProvenance?.vaultFileId, file.fileProvenance?.sha256, file.fileProvenance?.fileName]),
     ].join(" ")).includes(wanted));
   }
 

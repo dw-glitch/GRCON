@@ -9,6 +9,19 @@ export interface NormativeValidation {
 }
 
 export interface EgrdtHistoryFile {
+  fileProvenance?: {
+    source: "cofre" | "local";
+    fileName: string;
+    revision: string;
+    format: string;
+    sizeBytes: number;
+    vaultFileId?: string;
+    catalogSequence?: number;
+    sha256?: string;
+    createdAt?: string;
+    verifiedAt?: string;
+    lastModified?: number;
+  } | null;
   sharedAllocationContext?: { centralFileName: string; references: { allocation: string; allocationStatus: string; workflow: string; sourceRow: number }[]; warnings: string[] } | null;
   historyClassification?: { label: string; emissionKind: string; previousGrdt: string; previousRevision: string; previousGeneratedAt: string; occurrenceCount: number; repostCount: number; warnings: string[] } | null;
 

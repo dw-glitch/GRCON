@@ -163,6 +163,17 @@
       "ALERTAS HISTÓRICOS": (file.historyClassification?.warnings || []).join(" · "),
       "STATUS NA CENTRAL DE ALOCAÇÃO": (file.sharedAllocationContext?.references || []).map(item => `${item.allocation}: ${item.allocationStatus}`).join(" · "),
       "BASE CENTRAL DE ALOCAÇÃO": text(file.sharedAllocationContext?.centralFileName),
+      "ORIGEM DO ARQUIVO UTILIZADO": file.fileProvenance?.source === "cofre" ? "Cofre" : file.fileProvenance?.source === "local" ? "Pasta local" : "Não registrada",
+      "NOME DO ARQUIVO UTILIZADO": text(file.fileProvenance?.fileName),
+      "REVISÃO DO ARQUIVO UTILIZADO": text(file.fileProvenance?.revision),
+      "FORMATO DO ARQUIVO UTILIZADO": text(file.fileProvenance?.format),
+      "TAMANHO DO ARQUIVO (BYTES)": file.fileProvenance?.sizeBytes ?? "",
+      "ID DO ARQUIVO NO COFRE": text(file.fileProvenance?.vaultFileId),
+      "SEQUÊNCIA DO CATÁLOGO COFRE": file.fileProvenance?.catalogSequence || "",
+      "SHA-256 DO ARQUIVO UTILIZADO": text(file.fileProvenance?.sha256),
+      "INCLUSÃO NO COFRE": text(file.fileProvenance?.createdAt),
+      "VERIFICAÇÃO NO COFRE": text(file.fileProvenance?.verifiedAt),
+      "LASTMODIFIED DO ARQUIVO LOCAL": file.fileProvenance?.lastModified || "",
       };
     }));
   }

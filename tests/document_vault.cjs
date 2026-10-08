@@ -13,6 +13,7 @@ const app = read("document_vault_app.js");
 const appMain = read("app.js");
 const html = read("index.html");
 const emission = read("emission.js");
+const history = read("history_core.js");
 const worker = read("cloudflare/worker-entry.mjs");
 const wrangler = read("wrangler.jsonc");
 const sw = read("sw.js");
@@ -186,6 +187,11 @@ assert.match(appMain, /csv\|dwg\|dxf\|dgn\|rvt\|ifc/);
 assert.match(appMain, /não entram na tabela de resultados, na GRDT nem no histórico/);
 
 assert.match(emission, /vaultFileId:\s*text\(vaultSource/);
+assert.match(emission, /fileProvenance:\s*vaultSource/);
+assert.match(emission, /sha256:\s*text\(vaultSource\.sha256\)/);
+assert.match(history, /fileProvenance:\s*cleanFileProvenance/);
+assert.match(history, /catalogSequence/);
+assert.match(history, /lastModified/);
 assert.match(emission, /historyClassification/);
 
 console.log("Document Vault contracts: OK");
