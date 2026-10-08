@@ -35,6 +35,17 @@ async function installQaShellBypass(page) {
   });
 }
 
+// A classe do body sozinha não ativa todos os tokens de tema do GRCON.
+async function setQaTheme(page, dark) {
+  await page.evaluate((darkMode) => {
+    const html = document.documentElement;
+    html.dataset.theme = darkMode ? "dark" : "light";
+    html.style.colorScheme = darkMode ? "dark" : "light";
+    html.classList.toggle("theme-dark", darkMode);
+    document.body.classList.toggle("p2-dark", darkMode);
+  }, dark);
+}
+
 async function clickVisible(page, selector) {
   return page.evaluate((wanted) => {
     const visible = (node) => {
@@ -386,6 +397,17 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
           assert.equal(monitorColumns, 2,
             "Monitoramento e histórico devem ocupar duas colunas em telas largas.");
         }
+        if (viewport === 1440) {
+          const lightBg = await page.locator("#sigem-monitor-history-search").evaluate((node) =>
+            getComputedStyle(node).backgroundColor);
+          await setQaTheme(page, true);
+          const darkBg = await page.locator("#sigem-monitor-history-search").evaluate((node) =>
+            getComputedStyle(node).backgroundColor);
+          assert.notEqual(darkBg, lightBg,
+            "Campos de pesquisa devem adaptar o fundo ao modo escuro real.");
+          await screenshot(page, "consulta-geral-sigem-dark", viewport);
+          await setQaTheme(page, false);
+        }
       }
 
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="analysis-history"]', "Histórico de análises", viewport, 1100));
@@ -438,7 +460,7 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
         }
       }
 
-      await page.evaluate(() => document.body.classList.add("p2-dark"));
+      await setQaTheme(page, true);
       const darkConferenceText = await page.locator(".pc-document-table .pc-document-code > strong").first().evaluate((node) => {
         const color = getComputedStyle(node).color.match(/\d+/g).map(Number);
         return (color[0] + color[1] + color[2]) / 3;
@@ -447,7 +469,7 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
         "Códigos dos documentos devem estar claros e legíveis na Conferência em modo escuro.");
       viewportMetrics.push({ label: "Conferência tema escuro", geometry: await auditGeometry(page, "Conferência tema escuro") });
       if (viewport === 1440) await page.screenshot({ path: path.join(outputDir, "conferencia-dark-1440.png"), fullPage: true });
-      await page.evaluate(() => document.body.classList.remove("p2-dark"));
+      await setQaTheme(page, false);
 
       await page.waitForFunction(() => Boolean(document.querySelector("[data-spw-open]")), null, { timeout: 10000 });
       viewportMetrics.push(await visit(page, '[data-spw-open="sidebar"]', "SIGEM × PW", viewport, 1500));
