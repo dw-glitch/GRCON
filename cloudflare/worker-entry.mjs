@@ -95,6 +95,25 @@ async function catalog(env, workspaceId, actorId, operation, input = {}) {
   });
 }
 
+async function vaultOperation(env, workspaceId, actorId, operation, input = {}) {
+  return rpc(env, "grcon_vault_operations", { target_workspace: workspaceId, actor_id: actorId, operation, input });
+}
+export async function hashStoredObject(object) {
+  if (!object?.body || typeof crypto.DigestStream !== "function") throw Object.assign(new Error("Validação de conteúdo indisponível."), { code: "HASH_UNAVAILABLE" });
+  const digest = new crypto.DigestStream("SHA-256");
+  await object.body.pipeTo(digest);
+  return [...new Uint8Array(await digest.digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+async function handleVaultOperation(request, env, operation) {
+  const user = await authenticatedUser(request, env);
+  const url = new URL(request.url);
+  const body = request.method === "POST" ? await parseJson(request) : {};
+  const workspaceId = workspaceFrom(request, body);
+  if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
+  const input = request.method === "POST" ? body : { id: safeUuid(url.searchParams.get("id")), code: safeText(url.searchParams.get("code"), 255), q: safeText(url.searchParams.get("q"), 160) };
+  return json({ ok: true, ...await vaultOperation(env, workspaceId, user.id, operation, input) });
+}
+
 async function listCatalog(env, workspaceId, actorId, input = {}) {
   return rpc(env, "grcon_document_vault_list", {
     target_workspace: workspaceId,
@@ -174,10 +193,8 @@ async function storageUsageSnapshot(env, workspaceId, actorId) {
 }
 
 async function storageSnapshot(env, workspaceId, actorId) {
-  const [catalogData, physical] = await Promise.all([
-    storageCatalog(env, workspaceId, actorId),
-    r2Inventory(env, workspaceId),
-  ]);
+  const catalogData = await storageCatalog(env, workspaceId, actorId);
+  const physical = await r2Inventory(env, workspaceId);
   const catalogRows = Array.isArray(catalogData?.files) ? catalogData.files : [];
   const catalogByKey = new Map();
   for (const row of catalogRows) {
@@ -208,7 +225,18 @@ async function storageSnapshot(env, workspaceId, actorId) {
     if (actual.size !== expected.size) sizeMismatches++;
   }
   let orphanObjects = 0;
-  for (const actual of physical) if (!catalogByKey.has(actual.key)) orphanObjects++;
+  const types = {}, classes = {};
+  const filesByKey = new Map(catalogRows.map(row => [row.object_key, row]));
+  for (const actual of physical) {
+    const row = filesByKey.get(actual.key);
+    if (!row) orphanObjects++;
+    const type = row?.format || "Não identificado";
+    const cls = row?.source_context?.class || "Não identificado";
+    if (!types[type]) types[type] = { objects: 0, bytes: 0 };
+    if (!classes[cls]) classes[cls] = { objects: 0, bytes: 0 };
+    types[type].objects++; types[type].bytes += actual.size;
+    classes[cls].objects++; classes[cls].bytes += actual.size;
+  }
   const physicalBytes = physical.reduce((sum, item) => sum + item.size, 0);
   return {
     checkedAt: new Date().toISOString(),
@@ -217,6 +245,8 @@ async function storageSnapshot(env, workspaceId, actorId) {
     fileCount: physical.length,
     physicalObjects: physical.length,
     physicalBytes,
+    physicalByType: types,
+    physicalByClass: classes,
     catalogObjects: catalogByKey.size,
     catalogDocuments: catalogRows.length,
     missingObjects,
@@ -231,7 +261,20 @@ async function handleUsage(request, env) {
   const user = await authenticatedUser(request, env);
   const workspaceId = workspaceFrom(request);
   if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
-  return json({ ok: true, storage: await storageUsageSnapshot(env, workspaceId, user.id) });
+  const global = new URL(request.url).searchParams.get("scope") === "global";
+  let storage;
+  if (global) {
+    const { targets } = await vaultOperation(env, workspaceId, user.id, "global_targets");
+    const contracts = [];
+    for (const target of targets || []) contracts.push({ code: target.code, ...await storageSnapshot(env, target.workspace_id, user.id) });
+    storage = { checkedAt: new Date().toISOString(), source: "r2", scope: "global", contracts };
+    for (const key of ["usedBytes","fileCount","catalogDocuments","physicalObjects","physicalBytes","catalogObjects","missingObjects","sizeMismatches","orphanObjects","removedPendingFinalization"]) storage[key] = contracts.reduce((sum, row) => sum + (Number(row[key]) || 0), 0);
+    storage.healthy = contracts.every(row => row.healthy);
+  } else storage = await storageSnapshot(env, workspaceId, user.id);
+  try { if (!global) storage.details = await vaultOperation(env, workspaceId, user.id, "metrics"); }
+  catch (error) { console.error("GRCON vault metrics", error.code || "METRICS_UNAVAILABLE"); }
+  storage.averageBytes = storage.fileCount ? storage.usedBytes / storage.fileCount : 0;
+  return json({ ok: true, storage });
 }
 
 async function handleReconcile(request, env) {
@@ -366,7 +409,20 @@ async function handleInit(request, env) {
     sha256: metadata.sha256,
     size_bytes: metadata.size_bytes,
   });
-  const reusable = Array.isArray(hashMatches) ? hashMatches.find((item) => item?.id && item?.status === "ready") : null;
+  let reusable = null;
+  for (const candidate of Array.isArray(hashMatches) ? hashMatches : []) {
+    if (!candidate?.id || candidate.status !== "ready") continue;
+    const head = await requireBucket(env).head(candidate.object_key);
+    if (!head || Number(head.size) !== metadata.size_bytes) continue;
+    const checksum = head.checksums?.sha256
+      ? [...new Uint8Array(head.checksums.sha256)].map(byte => byte.toString(16).padStart(2, "0")).join("")
+      : await hashStoredObject(await requireBucket(env).get(candidate.object_key));
+    if (checksum === metadata.sha256) { reusable = candidate; break; }
+  }
+  if (!reusable) {
+    const unavailable = (Array.isArray(hashMatches) ? hashMatches : []).find(item => item.status === "ready" && item.document_code === metadata.document_code && item.revision === metadata.revision && item.format === metadata.format);
+    if (unavailable) await vaultOperation(env, workspaceId, user.id, "restore", { id: unavailable.id });
+  }
   const result = await catalog(env, workspaceId, user.id, "begin", {
     ...metadata,
     reuse_id: reusable?.id || null,
@@ -379,6 +435,10 @@ async function handleInit(request, env) {
   const file = result?.file;
   if (!file?.id) return apiError("O catálogo não retornou a reserva do arquivo.", 500, "CATALOG_INVALID");
   if (["deleting", "delete_failed"].includes(file.status)) return apiError("Conclua a exclusão antes de enviar novamente.", 409, "DELETE_PENDING");
+  if (!result.duplicate) await vaultOperation(env, workspaceId, user.id, "metadata", {
+    id: file.id, mime_type: safeText(body?.mimeType, 255) || "application/octet-stream",
+    origin: body?.origin === "local" ? "local" : "cofre", purpose: safeText(body?.purpose, 255), discipline: safeText(body?.discipline, 255), class: safeText(body?.documentClass, 40), normalized_name: safeText(body?.normalizedName || file.file_name, 255),
+  });
   const ready = file.status === "ready";
   const multipart = !ready && Number(file.size_bytes) > SINGLE_UPLOAD_LIMIT;
   return json({
@@ -390,6 +450,11 @@ async function handleInit(request, env) {
     partSize: multipart ? partSizeFor(file.size_bytes) : null,
     file: {
       id: file.id,
+      file_version: file.file_version,
+      is_active: file.is_active,
+      previous_file_id: file.previous_file_id,
+      created_at: file.created_at,
+      verified_at: file.verified_at,
       file_name: file.file_name,
       document_code: file.document_code,
       revision: file.revision,
@@ -414,10 +479,17 @@ async function handleSingleUpload(request, env) {
   if (Number(file.size_bytes) > SINGLE_UPLOAD_LIMIT) return apiError("Arquivo exige upload multipart.", 409, "MULTIPART_REQUIRED");
 
   const bucket = requireBucket(env);
-  const object = await bucket.put(file.object_key, request.body, {
+  let object;
+  try {
+    object = await bucket.put(file.object_key, request.body, {
+    sha256: file.sha256,
     httpMetadata: { contentType: request.headers.get("content-type") || "application/octet-stream" },
     customMetadata: { sha256: file.sha256, fileId: file.id, workspaceId },
   });
+  } catch (error) {
+    if (/checksum|hash mismatch/i.test(error?.message || "")) throw Object.assign(new Error("O conteúdo enviado não corresponde ao SHA-256 declarado. Selecione o arquivo correto e tente novamente."), { status: 409, code: "HASH_MISMATCH" });
+    throw error;
+  }
   const head = await bucket.head(file.object_key);
   const ok = Boolean(head && Number(head.size) === Number(file.size_bytes));
   const completed = await catalog(env, workspaceId, user.id, "complete", {
@@ -504,13 +576,14 @@ async function handleMultipartComplete(request, env) {
 
   const object = await requireBucket(env).resumeMultipartUpload(file.object_key, file.multipart_id).complete(parts);
   const head = await requireBucket(env).head(file.object_key);
-  const ok = Boolean(head && Number(head.size) === Number(file.size_bytes));
+  const actualHash = head ? await hashStoredObject(await requireBucket(env).get(file.object_key)) : "";
+  const ok = Boolean(head && Number(head.size) === Number(file.size_bytes) && actualHash === file.sha256);
   const completed = await catalog(env, workspaceId, user.id, "complete", {
     id: file.id,
     object_key: file.object_key,
     ok,
     size: Number(head?.size || 0),
-    sha256: file.sha256,
+    sha256: actualHash,
     etag: cleanEtag(object?.httpEtag || object?.etag || head?.httpEtag || head?.etag || "multipart"),
   });
   if (!ok || completed?.error) return apiError(completed?.message || "Integridade final divergente.", 409, completed?.error || "INTEGRITY_ERROR", completed);
@@ -541,7 +614,9 @@ async function handleDownload(request, env) {
   if (file.status !== "ready") return apiError("Documento ainda não está disponível.", 409, "NOT_READY");
   const object = await requireBucket(env).get(file.object_key);
   if (!object?.body) return apiError("Arquivo não encontrado no R2. O catálogo foi preservado para recuperação.", 409, "OBJECT_MISSING");
+  await vaultOperation(env, workspaceId, user.id, "access", { id, action: url.searchParams.get("intent") === "view" ? "view" : "download" });
   const headers = new Headers();
+  headers.set("x-content-type-options", "nosniff");
   object.writeHttpMetadata?.(headers);
   headers.set("content-type", headers.get("content-type") || "application/octet-stream");
   headers.set("content-length", String(object.size));
@@ -589,6 +664,8 @@ async function handleDelete(request, env) {
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
+  if (["detail", "metrics", "master", "search"].includes(action) && request.method === "GET") return handleVaultOperation(request, env, action);
+  if (action === "metadata" && request.method === "POST") return handleVaultOperation(request, env, action);
   if (action === "health" && request.method === "GET") return handleHealth(env);
   if (action === "list" && request.method === "GET") return handleList(request, env);
   if (action === "usage" && request.method === "GET") return handleUsage(request, env);
@@ -606,6 +683,17 @@ async function routeVault(request, env) {
 }
 
 export default {
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil((async () => {
+      const targets = await rpc(env, "grcon_vault_maintenance", { operation: "targets", input: {} });
+      for (const target of targets || []) {
+        try {
+          const storage = await storageSnapshot(env, target.workspace_id, target.actor_id);
+          await rpc(env, "grcon_vault_maintenance", { operation: "record", input: { workspace_id: target.workspace_id, ...storage } });
+        } catch (error) { console.error("GRCON vault maintenance", { workspace: target.workspace_id, code: error.code || "INTEGRITY_CHECK_FAILED" }); }
+      }
+    })());
+  },
   async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);

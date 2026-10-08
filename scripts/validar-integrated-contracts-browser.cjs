@@ -96,7 +96,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('#select-row-0').check();const grdtDownloadPromise=page.waitForEvent('download');await page.locator('#export-egrdt').click();await page.locator('#p1-sequence-confirm').check();await page.locator('#p1-confirm-ok').click();const generated=await grdtDownloadPromise;await generated.saveAs(path.join(out,'cofre-generated.xls'));
  await page.waitForFunction(()=>window.GrconHistory.read().some(r=>r.files?.some(f=>f.vaultFileId==='qa-file')));
  const provenance=await page.evaluate(()=>window.GrconHistory.read().flatMap(r=>r.files||[]).find(f=>f.vaultFileId==='qa-file')?.fileProvenance||null);
- assert.deepEqual(provenance,{source:'cofre',fileName:code+'.docx',revision:'0',format:'docx',sizeBytes:16,vaultFileId:'qa-file',catalogSequence:77,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',createdAt:'2026-10-07T12:00:00Z',verifiedAt:'2026-10-07T12:01:00Z'});
+ assert.deepEqual(provenance,{source:'cofre',fileName:code+'.docx',revision:'0',format:'docx',sizeBytes:16,vaultFileId:'qa-file',catalogSequence:77,fileVersion:1,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',createdAt:'2026-10-07T12:00:00Z',verifiedAt:'2026-10-07T12:01:00Z'});
  await page.evaluate(()=>window.GRCONModuleLoader.ensureModule('history'));
  await page.locator('[data-grcon-view="history"]').first().click();
  const historyId=await page.evaluate(()=>window.GrconHistory.read().find(r=>r.files?.some(f=>f.vaultFileId==='qa-file')).id);

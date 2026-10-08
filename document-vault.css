@@ -169,3 +169,21 @@
     flex-direction: column;
   }
 }
+
+.document-master-dialog { width:min(1100px,94vw); max-height:90vh; padding:22px; border:1px solid var(--border,#c8d3dc); border-radius:14px; background:var(--surface,#fff); color:var(--text,#193349); overflow:auto; }
+.document-master-dialog::backdrop { background:rgb(12 27 43 / 45%); }
+.document-master-dialog header,.document-master-dialog #master-search div { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.document-master-dialog input { min-width:0; padding:10px; border:1px solid var(--border,#bccbd5); border-radius:7px; }
+.document-master-dialog #master-query { flex:1; }
+.document-master-dialog label { display:block; font-weight:600; }
+.master-source { margin:18px 0; border-top:1px solid var(--border,#dde5ec); padding-top:12px; }
+.master-source h4 { margin:0 0 10px; }
+.master-source table { width:100%; font-size:12px; }
+.master-source td { max-width:310px; overflow-wrap:anywhere; }
+.master-empty,.vault-metrics-details { color:var(--text-muted,#5e7181); font-size:13px; }
+#master-results { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px; max-height:260px; overflow:auto; }
+.master-result { text-align:left; padding:10px; border:1px solid var(--border,#dae2e8); border-radius:8px; background:var(--surface,#fff); color:inherit; }
+.master-result span { display:block; font-size:12px; }
+.master-file-actions { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+#master-metadata { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+#master-metadata h4 { width:100%; }
