@@ -464,20 +464,14 @@
   function installAutomaticDocumentSourceUi() {
     const panel = document.querySelector("#grdt-module .control-panel");
     const sourceRow = panel?.querySelector(".source-row");
-    if (sourceRow && !document.getElementById("grdt-auto-source-help")) {
-      const help = document.createElement("p");
-      help.id = "grdt-auto-source-help";
-      help.className = "grdt-source-help";
-      help.textContent = "A pasta documental é opcional. Quando houver uma pasta, o GRCON procura nela primeiro e busca automaticamente no Cofre somente o que faltar. Sem pasta, a busca é feita diretamente no Cofre.";
-      sourceRow.insertAdjacentElement("afterend", help);
-
+    if (sourceRow && !document.getElementById("missing-documents")) {
       const missing = document.createElement("section");
       missing.id = "missing-documents";
       missing.className = "missing-documents-panel";
       missing.hidden = true;
       missing.setAttribute("aria-live", "polite");
       missing.innerHTML = '<header><div><strong>Documentos não encontrados</strong><small id="missing-documents-count">0 documento(s)</small></div><button class="secondary-button compact" id="copy-missing-documents" type="button">Copiar códigos não encontrados</button></header><ul id="missing-documents-list"></ul>';
-      help.insertAdjacentElement("afterend", missing);
+      sourceRow.insertAdjacentElement("afterend", missing);
     }
     const packageInput = document.getElementById("pdf-input");
     if (packageInput) packageInput.accept = ".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.xlsb,.csv,.txt,.dwg,.dxf,.dgn,.rvt,.ifc,.ppt,.pptx,.msg,.eml,.xml,.jpg,.jpeg,.png,.tif,.tiff";
