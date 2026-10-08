@@ -27,6 +27,24 @@ const ld = Core.parseLdMatrix([
 ], { fileName: "LD.xlsx", importedAt: "2026-09-13T10:00:00Z" });
 assert.strictEqual(ld.meta.uniqueDocumentCount, 2);
 
+for (const header of ["DOCUMENTO \r\nN-1710 ", "DOCUMENTO N-1710"]) {
+  const commissioning = Core.parseLdMatrix([
+    ["ITEM", header, "REVISÃO", "TÍTULO"],
+    ["1", "PR-5290.00-22313-122-C1O-003", "0", "Procedimento"],
+    ["2", "PR-5290.00-22313-122-C1O-003", "A", "Procedimento"],
+    ["3", "PR-5290.00-22314-122-C1O-003", "0", "Outra área"],
+  ], { fileName: "LD-comissionamento.xlsx", sheetName: "N-1710" });
+  assert.equal(commissioning.records.length, 1, "LD deduplica documentos e preserva o escopo");
+  assert.equal(commissioning.records[0].revision, "0");
+  assert.equal(commissioning.meta.headerRow, 1);
+}
+assert.throws(() => Core.parseLdMatrix([
+  ["DOCUMENTO", "DOCUMENTO N-1710", "REVISÃO"],
+]), /mais de uma coluna DOCUMENTO/);
+assert.throws(() => Core.parseLdMatrix([
+  ["DOCUMENTO N-2064", "REVISÃO"],
+]), /cabeçalho DOCUMENTO não localizado/);
+
 const csv = [
   "NumeroDocumentoCliente;RevisaoCompleta;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão;datacriacao",
   "CE-5290.00-22313-856-C1O-001;0;0;CE;Certificado;QUA;Qualidade;Superado;Não;01/09/2026",

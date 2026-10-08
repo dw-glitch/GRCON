@@ -425,7 +425,12 @@
     let titleColumn = -1;
     for (let rowIndex = 0; rowIndex < Math.min(rows.length, 80); rowIndex += 1) {
       const headers = (rows[rowIndex] || []).map(normalizeHeader);
-      const documentIndex = headers.indexOf("DOCUMENTO");
+      // A LD de comissionamento identifica a coluna em duas linhas:
+      // "DOCUMENTO\r\nN-1710". Aceitar somente os dois rótulos oficiais.
+      const documentColumns = headers.flatMap((header, index) =>
+        ["DOCUMENTO", "DOCUMENTO N 1710"].includes(header) ? [index] : []);
+      if (documentColumns.length > 1) throw new Error("LD da Qualidade inválida: mais de uma coluna DOCUMENTO localizada.");
+      const documentIndex = documentColumns[0] ?? -1;
       if (documentIndex < 0) continue;
       headerRow = rowIndex;
       documentColumn = documentIndex;

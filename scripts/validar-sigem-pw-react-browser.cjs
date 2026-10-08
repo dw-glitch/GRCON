@@ -22,7 +22,7 @@ function writeFixtures() {
 
   const ldBook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(ldBook, XLSX.utils.aoa_to_sheet([
-    ["ITEM", "DOCUMENTO", "REVISÃO", "TÍTULO"],
+    ["ITEM", "DOCUMENTO \r\nN-1710 ", "REVISÃO", "TÍTULO"],
     ["1", n1710, "0", "Documento N-1710 de teste"],
   ]), "N-1710");
   fs.writeFileSync(ldFile, XLSX.write(ldBook, { type: "buffer", bookType: "xlsx" }));

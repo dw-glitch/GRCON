@@ -460,9 +460,12 @@ async function importLd(file: File): Promise<void> {
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await window.GRCONModuleLoader.ensure("xlsx");
-    const workbook = xlsx().read(await file.arrayBuffer(), { type: "array", cellDates: false, dense: false });
-    const sheetName = workbook.SheetNames.find((name) => Core().normalizeHeader(name) === "N 1710");
+    const buffer = await file.arrayBuffer();
+    const sheetIndex = xlsx().read(buffer, { type: "array", bookSheets: true });
+    const sheetName = sheetIndex.SheetNames.find((name) => Core().normalizeHeader(name) === "N 1710");
     if (!sheetName) throw new Error("LD inválida: a aba N-1710 não foi localizada.");
+    await yieldFrame();
+    const workbook = xlsx().read(buffer, { type: "array", cellDates: false, dense: false, sheets: [sheetName] });
     const parsed = Core().parseLdMatrix(workbookMatrix(workbook.Sheets[sheetName], 40), {
       fileName: file.name,
       fileSize: file.size,
