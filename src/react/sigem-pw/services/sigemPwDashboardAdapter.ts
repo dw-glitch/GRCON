@@ -68,7 +68,8 @@ const state: SigemPwState = {
   dateEditor: { open: false, system: "", snapshotId: "", value: "" },
   historyDialogOpen: false,
   revisionScope: "revision0",
-  filters: { documentClass: "", query: "" },
+  filterResetKey: 0,
+  filters: { documentClass: "", query: "", revision: "", sigemStatus: "", inPw: "" },
   activeList: "all",
   page: 1,
 };
@@ -545,6 +546,9 @@ async function refresh(reason = ""): Promise<void> {
           shared.meta.historySourceSnapshotId = recorded.sigem?.snapshot?.id;
         }
         bases.sigem = await Core().saveSigemBase(shared);
+      } else if (window.GrconSharedSigemQuery && window.GrconCloud?.state?.online) {
+        bases.sigem = EMPTY_BASE();
+        await Core().kvSet(Core().SIGEM_BASE_KEY, bases.sigem);
       }
       state.sigem = bases.sigem?.meta ? bases.sigem : EMPTY_BASE();
       state.pw = bases.pw?.meta ? bases.pw : EMPTY_BASE();
@@ -589,9 +593,14 @@ async function activate(): Promise<void> {
 function filteredRows(): SigemPwResult["lists"][string] {
   const rows = state.result?.lists?.[state.activeList] || [];
   const query = Core().norm(state.filters.query);
-  return query
-    ? rows.filter((row) => Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.situation].join(" ")).includes(query))
-    : rows;
+  const revision = Core().norm(state.filters.revision);
+  const status = Core().norm(state.filters.sigemStatus);
+  return rows.filter(row => {
+    if (query && !Core().norm([row.document, row.revision, row.documentClass, row.sigemStatus, row.pwStatus, row.pwEmission, row.situation].join(" ")).includes(query)) return false;
+    if (revision && Core().norm(row.revision) !== revision) return false;
+    if (status && Core().norm(row.sigemStatus) !== status) return false;
+    return state.filters.inPw === "yes" ? row.inPw : state.filters.inPw === "no" ? !row.inPw : true;
+  });
 }
 function pageRows(): { rows: ReturnType<typeof filteredRows>; visible: ReturnType<typeof filteredRows>; pages: number; start: number } {
   const rows = filteredRows();
@@ -618,9 +627,19 @@ function setRevisionScope(value: SigemPwRevisionScope): void {
   state.page = 1;
   renderFromModel(false);
 }
+function setRevision(value: string): void { state.filters.revision = value; state.page = 1; emit(); }
+function setSigemStatus(value: string): void { state.filters.sigemStatus = value; state.page = 1; emit(); }
+function setInPw(value: "" | "yes" | "no"): void { state.filters.inPw = value; state.page = 1; emit(); }
+function openSigemDetails(): void {
+  state.filterResetKey++;
+  state.filters.query = ""; state.filters.revision = ""; state.filters.sigemStatus = ""; state.filters.inPw = "";
+  setActiveList("sigem");
+  document.getElementById("spw-list-title")?.scrollIntoView({ block: "start" });
+}
 function clearFilters(): void {
   state.filters.documentClass = "";
   state.filters.query = "";
+  state.filters.revision = ""; state.filters.sigemStatus = ""; state.filters.inPw = "";
   state.page = 1;
   renderFromModel(false);
 }
@@ -651,12 +670,14 @@ async function exportCurrentList(): Promise<void> {
       Documento: row.document,
       "Revisão": row.revision,
       "Status SIGEM": row.sigemStatus,
+      "Data SIGEM": row.sigemDate || "",
+      "Existe no PW": row.inPw ? "SIM" : "NÃO",
       "Status PW": row.pwStatus,
       "Emissão PW": row.pwEmission,
       "Situação": row.situation,
     }));
     const worksheet = api.utils.json_to_sheet(data);
-    (worksheet as Record<string, unknown>)["!cols"] = [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 34 }];
+    (worksheet as Record<string, unknown>)["!cols"] = [{ wch: 11 }, { wch: 58 }, { wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 16 }, { wch: 28 }, { wch: 16 }, { wch: 34 }];
     const workbook = api.utils.book_new();
     api.utils.book_append_sheet(workbook, worksheet, "Relação");
     api.utils.book_append_sheet(workbook, api.utils.json_to_sheet([
@@ -880,6 +901,10 @@ export const sigemPwDashboardAdapter = {
   importPw,
   importLd,
   setQuery,
+  setRevision,
+  setSigemStatus,
+  setInPw,
+  openSigemDetails,
   setDocumentClass,
   setRevisionScope,
   clearFilters,

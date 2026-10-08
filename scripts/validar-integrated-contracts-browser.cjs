@@ -47,11 +47,12 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  assert.equal(await page.locator('#egrdt-email-message').inputValue(),'Envio QA-001');assert.equal(await page.locator('#egrdt-email-preview th').count(),2);
  await page.locator('[data-egrdt-email-action="edit-model"]').click();await page.locator('[data-model-style="fontSize"]').fill('14');await page.locator('[data-egrdt-email-action="save-model"]').click();await page.waitForFunction(()=>window.qaSavedTemplate?.cfg.styles.fontSize===14);assert.equal(await page.evaluate(()=>window.qaSavedTemplate.scope),'contract');
  await page.screenshot({path:path.join(out,'email-editor.png')});await page.locator('[data-egrdt-email-action="close"]').click();
- await page.locator('[data-grcon-view="control"]').first().click();await page.locator('input[name="grdt-document-source"][value="vault"]').check();
- await page.locator('#grdt-vault-codes').fill(code+'\nDOC-INEXISTENTE');await page.locator('#grdt-vault-lookup').click();await page.waitForFunction(()=>document.querySelector('#grdt-vault-lookup-summary')?.textContent.includes('1 encontrado'));
- assert.match(await page.locator('#grdt-vault-lookup-results').textContent(),/Não encontrado/);await page.locator('#grdt-vault-prepare').click();await page.waitForFunction(()=>document.querySelector('#pdf-input')?.files.length===1);
- const file=await page.evaluate(()=>({name:document.querySelector('#pdf-input').files[0].name,source:window.GrconDocumentVault.lookupSource(document.querySelector('#pdf-input').files[0])}));assert.equal(file.name,code+'.docx');assert.equal(file.source.id,'qa-file');
- await page.screenshot({path:path.join(out,'cofre-central.png')});
+ await page.locator('[data-grcon-view="control"]').first().click();
+ assert.equal(await page.locator('input[name="grdt-document-source"]').count(),0,'a escolha manual Base documental foi removida');
+ await page.locator('#relation-start').click();
+ await page.locator('#relation-text').fill(code+'\nRL-5290.00-22313-856-C1O-018');
+ await page.locator('#relation-apply').click();
+ assert.match(await page.locator('#list-meta').textContent(),/2 item\(ns\) por texto/);
  const ldBook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(ldBook,XLSX.utils.aoa_to_sheet([
   ['DOCUMENTO','REVISÃO','TÍTULO','GRDT','DATA EFETIVA DE EMISSÃO','FORMATO','DISCIPLINA','TIPO DE DOCUMENTO','PROPÓSITO','CAMINHO DATABOOK','ALOCADO'],
   [code,'0','RELATÓRIO QA','','','A4','CIVIL','RL','Para Construção','Databook','ALOCADO']
@@ -60,7 +61,10 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('#ld-input').setInputFiles(ldPath);await page.locator('#analyze').click();
  try { await page.waitForFunction(()=>window.GrconTriageUiApi?.getResult(0)&&!document.querySelector('#analyze').disabled); }
  catch(error){await page.screenshot({path:path.join(out,'analysis-failure.png'),fullPage:true});console.error(await page.locator('#toast').textContent(),errors);throw error;}
- const analyzed=await page.evaluate(()=>{const r=window.GrconTriageUiApi.getResult(0);return {document:r.document,revision:r.revision,files:(r.files||[]).map(f=>f.name)}});assert.equal(analyzed.document,code);assert.equal(analyzed.revision,'0');assert.deepEqual(analyzed.files,[code+'.docx']);
+ const analyzed=await page.evaluate(()=>{const r=window.GrconTriageUiApi.getResult(0);const first=(r.files||[])[0];return {document:r.document,revision:r.revision,files:(r.files||[]).map(f=>f.name),source:first?.file?window.GrconDocumentVault.lookupSource(first.file):null}});assert.equal(analyzed.document,code);assert.equal(analyzed.revision,'0');assert.deepEqual(analyzed.files,[code+'.docx']);assert.equal(analyzed.source?.id,'qa-file');
+ assert.match(await page.locator('#pdf-meta').textContent(),/1 recuperado\(s\) do Cofre/);
+ await page.locator('#missing-documents').waitFor({state:'visible'});assert.match(await page.locator('#missing-documents').textContent(),/RL-5290\.00-22313-856-C1O-018/);
+ await page.screenshot({path:path.join(out,'cofre-central.png')});
  await page.locator('#select-row-0').check();const grdtDownloadPromise=page.waitForEvent('download');await page.locator('#export-egrdt').click();await page.locator('#p1-sequence-confirm').check();await page.locator('#p1-confirm-ok').click();const generated=await grdtDownloadPromise;await generated.saveAs(path.join(out,'cofre-generated.xls'));
  await page.waitForFunction(()=>window.GrconHistory.read().some(r=>r.files?.some(f=>f.vaultFileId==='qa-file')));
  await page.screenshot({path:path.join(out,'cofre-generated.png')});

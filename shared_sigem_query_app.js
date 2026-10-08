@@ -261,10 +261,14 @@
   async function refreshAfterHistoryMutation(workspace) {
     snapshotCache.clear(); versionsStamp = "";
     if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
+    if (state.refreshPromise) await state.refreshPromise;
+    if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
+    await cachePut(workspace, null);
     state.shared = null; state.stale = false; state.error = "";
     await refreshLatest();
     if (workspace !== cloud()?.state?.membership?.workspace_id) throw new Error("O contrato mudou durante a operação.");
     root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated", { detail: { workspace } }));
+    dateChannel?.postMessage({ workspace });
     return current();
   }
   async function activateVersion(id) {

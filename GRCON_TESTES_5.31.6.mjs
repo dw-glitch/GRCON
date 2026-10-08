@@ -1824,7 +1824,8 @@ check("aplicativo aguarda reserva antes das três gerações", () => {
 
 check("fluxo acelerado preenche A4 quando a LD não informa o formato", () => {
   const source = fs.readFileSync(path.join(root, "app.js"), "utf8");
-  assert.match(source, /rawResults\.forEach\(\(result\)\s*=>\s*\{[\s\S]*?const formatDefaulted = Boolean\(result\.egrdt && !result\.egrdt\.format\);[\s\S]*?if \(formatDefaulted\) result\.egrdt\.format = "A4";[\s\S]*?const logical = logicalMeta\.get\(result\.id\);/);
+  assert.match(source, /const rawResults = await mapLarge\(inputs,[\s\S]*?if \(result\.egrdt && !result\.egrdt\.format\) result\.egrdt\.format = "A4";[\s\S]*?return result;[\s\S]*?progressAnalysis\);/);
+  assert.match(source, /state\.results = mergePackageResults\(rawResults\);/);
 });
 
 check("migração da central usa invólucro invoker e confere o papel no schema privado", () => {

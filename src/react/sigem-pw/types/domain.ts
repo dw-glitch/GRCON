@@ -59,6 +59,7 @@ export interface SigemPwRow {
   revision: string;
   documentClass: string;
   sigemStatus: string;
+  sigemDate?: string;
   pwStatus: string;
   pwEmission: string;
   situation: string;
@@ -159,6 +160,9 @@ export interface SigemPwReadiness {
 export interface SigemPwFilters {
   documentClass: SigemPwDocumentClass;
   query: string;
+  revision: string;
+  sigemStatus: string;
+  inPw: "" | "yes" | "no";
 }
 
 export interface SigemPwDateEditor {
@@ -197,6 +201,7 @@ export interface SigemPwState {
   historyDialogOpen: boolean;
   revisionScope: SigemPwRevisionScope;
   filters: SigemPwFilters;
+  filterResetKey: number;
   activeList: SigemPwListKey;
   page: number;
 }

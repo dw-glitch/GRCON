@@ -11,7 +11,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
   const source=await response.text();
   await route.fulfill({response,body:source+`\n(function(){
    const api=window.GrconSharedSigemQuery;
-   const {listVersions,loadSnapshot,...legacy}=api;
+   const {listVersions,loadSnapshot,activateVersion,deleteVersion,canManageHistory,...legacy}=api;
    legacy.setReferenceDate=async value=>{
     const base=api.current();
     const response=await window.GrconCloud.state.client.rpc('grcon_sigem_query_set_date',{target_workspace:window.GrconCloud.state.membership.workspace_id,target_snapshot:base.meta.snapshotId,reference_date:value,expected_date:base.meta.referenceDate||null});
@@ -30,7 +30,7 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(async()=>{
   const w=window, workspace='00000000-0000-4000-8000-000000000001';
   const et=i=>`C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${String(i).padStart(6,'0')}`;
-  const row=(i,rev='0')=>({document:et(i),revision:rev,status:'Emitido',documentType:'RIR'});
+  const row=(i,rev='0')=>({document:et(i),revision:rev,status:i===2?'Recusado':'Emitido',modifiedAt:'2026-10-07',documentType:'RIR'});
   const versions=[
    {snapshot_id:'shared-current',version:3,file_name:'Atual.xlsx',record_count:20001,status:'active',metadata:{referenceDate:'2026-10-07',importedAt:'2026-10-07T13:00:00Z'}},
    {snapshot_id:'shared-middle',version:2,file_name:'Anterior.xlsx',record_count:3,status:'archived',metadata:{referenceDate:'2026-10-06',importedAt:'2026-10-06T13:00:00Z'}},
@@ -85,6 +85,32 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.activeList),'sigem');
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),20000);
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length===window.GrconSigemPwDashboardUi.state.result.summary.sigem),true);
+ // Filters affect the detail list, while the headline keeps the selected revision universe.
+ await page.selectOption('#spw-pw-presence-filter','yes');
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),2);
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20000);
+ await page.selectOption('#spw-pw-presence-filter','no');
+ await page.selectOption('#spw-sigem-status-filter','Recusado');
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),1);
+ const filteredDownloadPromise=page.waitForEvent('download');await page.locator('#spw-export').click();
+ const filteredDownload=await filteredDownloadPromise;const filteredPath=path.join('/tmp','sigem-filtered-qa.xlsx');await filteredDownload.saveAs(filteredPath);
+ const filteredBook=XLSX.read(fs.readFileSync(filteredPath),{type:'buffer'});
+ const filteredRows=XLSX.utils.sheet_to_json(filteredBook.Sheets['Relação']);
+ assert.equal(filteredRows.length,1);assert.equal(filteredRows[0]['Existe no PW'],'NÃO');assert.equal(filteredRows[0]['Status SIGEM'],'Recusado');assert.ok(filteredRows[0]['Data SIGEM']);
+ // Clicking the headline clears detail-only filters so its list equals the headline again.
+ await page.fill('#spw-query','nonexistent');
+ await page.locator('[data-summary-list="sigem"]').click();
+ await page.waitForTimeout(250);
+ assert.equal(await page.inputValue('#spw-query'),'');
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),20000);
+ await page.locator('[data-revision-scope="all"]').click();
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),20001);
+ await page.fill('#spw-revision-filter','A');
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),1);
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20001);
+ await page.locator('[data-summary-list="sigem"]').click();
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.filteredRows().length),20001);
+ await page.locator('[data-revision-scope="revision0"]').click();
  await page.locator('[data-list="all"]').click();
  const baseline=await page.evaluate(()=>JSON.stringify(window.__sharedQa.versions));
  async function choose(id,pw){
@@ -149,6 +175,27 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.equal(await page.evaluate(()=>window.__sharedQa.versions.some(v=>v.snapshot_id==='shared-old')),false);
  assert.equal(await page.locator('#spw-analysis-sigem option[value="shared-old"]').count(),0);
  assert.equal(await page.evaluate(()=>window.__sharedQa.calls.includes('grcon_sigem_query_activate')&&window.__sharedQa.calls.includes('grcon_sigem_query_delete')),true);
+ // Management remains exclusive to owner after the dashboard is mounted.
+ for(const role of ['admin','operator','viewer']){
+  await page.evaluate(async role=>{window.GrconCloud.state.membership.role=role;await window.GrconSigemPwDashboardUi.refresh('role QA');},role);
+  assert.equal(await page.locator('[data-sigem-history-delete]').count(),0);
+  assert.equal(await page.evaluate(async()=>{try{await window.GrconSharedSigemQuery.deleteVersion('shared-current');return false;}catch{return true;}}),true);
+ }
+ await page.evaluate(async()=>{window.GrconCloud.state.membership.role='owner';await window.GrconSigemPwDashboardUi.refresh('owner QA');});
+ page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).click();
+ await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-middle');
+ page.once('dialog',dialog=>dialog.accept());await page.getByText('Excluir base atual',{exact:true}).click();
+ await page.waitForFunction(()=>!window.GrconSigemPwDashboardUi.state.busy&&!window.GrconSigemPwDashboardUi.state.sigem.meta);
+ assert.equal(await page.evaluate(()=>window.GrconSharedSigemQuery.current()),null);
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),0);
+ assert.equal(await page.locator('[data-summary-list="sigem"]').isDisabled(),true);
+ // Another client may have removed the last base while this browser still has its dashboard projection.
+ await page.evaluate(async()=>{
+  await window.GrconSigemPwDashboard.saveSigemBase({meta:{snapshotId:'shared-current',source:'shared-general-query',fileName:'Old.xlsx'},records:window.__sharedQa.rows['shared-current']});
+  await window.GrconSigemPwDashboardUi.refresh('stale projection QA');
+ });
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.sigem.records.length),0);
+ assert.equal(await page.evaluate(async()=>(await window.GrconSigemPwDashboard.loadBases()).sigem.meta),null);
  assert.deepEqual(errors,[]);
  console.log('Chromium: owner/admin/operator/viewer, 20k records, historical selection, revision scopes, XLSX provenance, bidirectional dates, shared activation and deletion with replacement passed.');
  }finally{await browser.close();}
