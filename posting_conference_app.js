@@ -71,6 +71,7 @@
       .pc-grdt-table .pc-grdt-detail-row>td{background:var(--surface-subtle,#f8fafc);padding:.65rem}
       .pc-grdt-filter{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:.5rem 0}
       .pc-grdt-filter select{max-width:18rem}
+      .pc-grdt-details input[type="search"]{display:block;max-width:23rem;margin:.6rem 0;padding:.45rem .6rem;border:1px solid var(--border,#ddd);border-radius:.5rem;background:var(--surface,#fff);color:inherit}
     `;
     document.head.appendChild(style);
   }
@@ -185,6 +186,13 @@
     });
     el("pc-prev").addEventListener("click", () => { if (state.page > 1) { state.page -= 1; renderTableOnly(); } });
     el("pc-next").addEventListener("click", () => { state.page += 1; renderTableOnly(); });
+    el("pc-table-wrap").addEventListener("input", (event) => {
+      if (!event.target.matches(".pc-grdt-details input[type=search]")) return;
+      const term = Conference.norm(event.target.value);
+      event.target.closest(".pc-grdt-details")?.querySelectorAll("tbody tr").forEach((tr) => {
+        tr.hidden = Boolean(term) && !Conference.norm(tr.textContent).includes(term);
+      });
+    });
     el("pc-table-wrap").addEventListener("click", (event) => {
       const button = event.target.closest("[data-pc-grdt]");
       if (!button) return;
@@ -317,11 +325,13 @@
     const cards = [
       ["Documentos únicos enviados", s.total, "", `${fmt(s.sendCount)} envios · ${fmt(s.egrdtCount)} eGRDTs`],
       ["Postagens confirmadas", s.confirmed, "confirmed", "documentos no estado atual"],
-      ["Pendências de postagem", s.pending, "awaiting", "uma contagem por documento"],
+      ["Pendências de confirmação", s.pending, "awaiting", "uma contagem por documento"],
       ["Não postado ainda", s.awaiting, "awaiting", "dentro da janela de confirmação"],
       ["Aguardando retorno do SIGEM", s.divergent, "divergent", "revisão enviada ainda não confirmada"],
       ["Não encontrado", s.notFound, "missing", "documentos únicos"],
       ["Requer análise", s.review, "review", `${fmt(s.documentsWithMultipleSends)} com múltiplos envios`],
+      ["GRDTs parcialmente confirmadas", detailedGroups().filter((g) => g.classification === "PARCIALMENTE_CONFIRMADA").length, "divergent", "conferir documentos individualmente"],
+      ["Risco de repostagem duplicada", detailedGroups().filter((g) => g.riskOfDuplicateResend).length, "review", "mistura de documentos localizados e pendentes"],
     ];
     el("pc-kpis").innerHTML = cards.map(([label, value, css, sub]) => `<div class="${css}"><span>${escapeHtml(label)}</span><strong>${fmt(value)}</strong>${sub ? `<small>${escapeHtml(sub)}</small>` : ""}</div>`).join("");
   }
@@ -459,7 +469,7 @@
         ref.sourceRow ? "Linha: " + ref.sourceRow : "",
       ].filter(Boolean).join(" · ")).join(" | ");
       return '<tr><td><strong>' + breakableCode(row.document) + '</strong><small>' + escapeHtml(row.discipline || row.documentFamily || "—") +
-        '</small></td><td>' + escapeHtml(row.revisionSent || "—") + '</td><td>' + escapeHtml(row.revisionFound || "—") +
+        '</small>' + (row.title ? '<small>' + escapeHtml(row.title) + '</small>' : '') + '</td><td>' + escapeHtml(row.revisionSent || "—") + '</td><td>' + escapeHtml(row.revisionFound || "—") +
         '</td><td>' + statusChip(row) + '<small>SIGEM: ' + escapeHtml(row.sigemStatus || "Não informado") +
         (row.sigemStatusRevision ? ' · revisão ' + escapeHtml(row.sigemStatusRevision) : '') + '</small></td><td>' +
         escapeHtml(row.allocation.label || "Alocação a confirmar") + '<small>' +
@@ -473,10 +483,11 @@
       ? '<strong class="pc-grdt-warning">Esta GRDT possui documentos já localizados no SIGEM. Não reenviar o pacote integral.</strong>' : '';
     return '<details class="pc-grdt-details"><summary>Ver todos os ' + fmt(group.total) +
       ' documentos/revisões desta emissão</summary>' + warning +
-      '<div><table><thead><tr><th>Documento</th><th>Rev. enviada</th><th>Rev. encontrada</th><th>SIGEM</th><th>Alocação</th><th>Diagnóstico / orientação</th></tr></thead><tbody>' +
+      '<input type="search" placeholder="Pesquisar documento nesta GRDT" aria-label="Pesquisar documentos desta GRDT"><div><table><thead><tr><th>Documento</th><th>Rev. enviada</th><th>Rev. encontrada</th><th>SIGEM</th><th>Alocação</th><th>Diagnóstico / orientação</th></tr></thead><tbody>' +
       all + '</tbody></table></div><small>Documentos Previstos: ' +
       escapeHtml(root.GrconPlannedDocuments?.current?.()?.fileName || "não disponível") + ' · Central: ' +
       escapeHtml(root.GrconAllocationRegistry?.current?.()?.fileName || "não disponível") +
+      (group.workspaceId ? ' · Workspace: ' + escapeHtml(group.workspaceId) : '') +
       '. A presença da revisão no SIGEM não comprova qual dos múltiplos envios a originou.</small></details>';
   }
 
