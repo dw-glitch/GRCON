@@ -35,7 +35,7 @@
 }
 .sigem-monitor-local-search label {
   font-size: .72rem;
-  color: var(--text-2, #475766);
+  color: var(--text-muted, #475766);
   font-weight: 720;
 }
 .sigem-monitor-local-search input {
@@ -43,10 +43,10 @@
   min-width: 0;
   min-height: 2.4rem;
   padding: .5rem .7rem;
-  border: 1px solid var(--border-2, #c6d2da);
+  border: 1px solid var(--border-strong, #c6d2da);
   border-radius: var(--radius-sm, 9px);
-  background: var(--surface-1, #fff);
-  color: var(--text-1, #16212b);
+  background: var(--surface, #fff);
+  color: var(--text, #16212b);
 }
 .sigem-monitor-local-search input:focus-visible {
   border-color: var(--brand-600, #1479a6);
@@ -54,7 +54,7 @@
 }
 .sigem-monitor-list-count {
   margin: 0 0 .45rem !important;
-  color: var(--text-3, #5e6f7c) !important;
+  color: var(--text-muted, #5e6f7c) !important;
   font-size: .71rem !important;
   font-variant-numeric: tabular-nums;
 }
@@ -77,7 +77,7 @@
 
 /* Grade responsiva nas telas amplas de Consulta Geral × SIGEM.
    A tabela de alterações e as notificações continuam com largura total. */
-@container (min-width: 76rem) {
+@media (min-width: 1600px) {
   .sigem-monitoring-root {
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     align-items: start;
