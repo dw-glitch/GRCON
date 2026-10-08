@@ -550,7 +550,13 @@ async function refresh(reason = ""): Promise<void> {
         && window.GrconCloud.state.membership?.workspace_id
         && bases.sigem?.meta?.source === "shared-general-query") {
         bases.sigem = EMPTY_BASE();
-        await Core().kvSet(Core().SIGEM_BASE_KEY, bases.sigem);
+        // The legacy Conference projection is also read by loadBases(). Leaving
+        // it behind would migrate the deleted shared base into the dashboard.
+        const legacy = await Core().kvGet(Core().LEGACY_SIGEM_BASE_KEY, EMPTY_BASE()) as SigemPwBase;
+        const writes: Array<[string, unknown]> = [[Core().SIGEM_BASE_KEY, bases.sigem]];
+        if (legacy?.meta?.source === "shared-general-query") writes.push([Core().LEGACY_SIGEM_BASE_KEY, EMPTY_BASE()]);
+        await Core().kvSetMany(writes);
+        window.dispatchEvent(new CustomEvent("grcon:shared-sigem-updated", { detail: { source: "sigem-pw-dashboard", meta: null } }));
       }
       state.sigem = bases.sigem?.meta ? bases.sigem : EMPTY_BASE();
       state.pw = bases.pw?.meta ? bases.pw : EMPTY_BASE();

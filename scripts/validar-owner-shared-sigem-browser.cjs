@@ -197,6 +197,8 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  });
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.sigem.records.length),0);
  assert.equal(await page.evaluate(async()=>(await window.GrconSigemPwDashboard.loadBases()).sigem.meta),null);
+ await page.waitForFunction(()=>!window.GrconPostingConferenceUi.state.base.meta);
+ assert.equal(await page.evaluate(async()=>(await window.GrconPostingConference.loadBase()).meta),null);
  assert.deepEqual(errors,[]);
  console.log('Chromium: owner/admin/operator/viewer, 20k records, historical selection, revision scopes, XLSX provenance, bidirectional dates, shared activation and deletion with replacement passed.');
  }catch(error){
