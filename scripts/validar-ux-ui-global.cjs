@@ -439,6 +439,12 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
       }
 
       await page.evaluate(() => document.body.classList.add("p2-dark"));
+      const darkConferenceText = await page.locator(".pc-document-table .pc-document-code > strong").first().evaluate((node) => {
+        const color = getComputedStyle(node).color.match(/\d+/g).map(Number);
+        return (color[0] + color[1] + color[2]) / 3;
+      });
+      assert.ok(darkConferenceText > 150,
+        "Códigos dos documentos devem estar claros e legíveis na Conferência em modo escuro.");
       viewportMetrics.push({ label: "Conferência tema escuro", geometry: await auditGeometry(page, "Conferência tema escuro") });
       if (viewport === 1440) await page.screenshot({ path: path.join(outputDir, "conferencia-dark-1440.png"), fullPage: true });
       await page.evaluate(() => document.body.classList.remove("p2-dark"));
