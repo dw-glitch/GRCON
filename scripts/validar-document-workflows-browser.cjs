@@ -87,12 +87,15 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
   const geometry=await page.evaluate(()=>{
    const row=document.querySelector('#vault-list-body tr'),buttons=[...row.querySelectorAll('.vault-row-actions button')];
    const rects=buttons.map(b=>b.getBoundingClientRect());
-   return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowHeight:row.getBoundingClientRect().height/Number(document.documentElement.style.zoom),buttons:buttons.map(b=>b.textContent),oneLine:rects.every(r=>Math.abs(r.top-rects[0].top)<1),overlap:rects.some((r,i)=>i>0&&r.left<rects[i-1].right),emptyDetailsHidden:getComputedStyle(document.querySelector('#vault-storage-details')).display==='none'};
+   const luminance=color=>color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+   const contrast=[...document.querySelectorAll('#vault-list-body tr')].slice(0,2).map(tr=>{const style=getComputedStyle(tr.querySelector('td')),fg=luminance(style.color),bg=luminance(style.backgroundColor);return (Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05);});
+   return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowHeight:row.getBoundingClientRect().height/Number(document.documentElement.style.zoom),buttons:buttons.map(b=>b.textContent),oneLine:rects.every(r=>Math.abs(r.top-rects[0].top)<1),overlap:rects.some((r,i)=>i>0&&r.left<rects[i-1].right),clippedButton:buttons.some(b=>b.scrollWidth>b.clientWidth+1),contrast,emptyDetailsHidden:getComputedStyle(document.querySelector('#vault-storage-details')).display==='none'};
   });
   assert.ok(geometry.overflow<=1,'Cofre mantém rolagem da tabela dentro do módulo');
   assert.ok(geometry.rowHeight<=80,'linha compacta preserva código, arquivo e versão');
   assert.deepEqual(geometry.buttons,['Detalhes','Abrir','Baixar','Excluir']);
   assert.equal(geometry.oneLine,true);assert.equal(geometry.overlap,false);assert.equal(geometry.emptyDetailsHidden,true);
+  assert.equal(geometry.clippedButton,false);assert.ok(geometry.contrast.every(ratio=>ratio>=4.5),'texto legível nas linhas pares e ímpares');
   metrics.push({view:'cofre',width,dark,zoom,...geometry});
   await page.screenshot({path:path.join(out,`cofre-${width}-${dark?'dark':'light'}-zoom${Math.round(zoom*100)}.png`)});
  }

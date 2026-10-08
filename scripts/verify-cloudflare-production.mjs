@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 
 const base = process.env.GRCON_PRODUCTION_URL;
 const expectedCommit = process.env.GITHUB_SHA;
@@ -37,4 +39,12 @@ assert.equal(typeof health.powerAutomateConfigured, 'boolean', 'Health deve info
 assert.equal(typeof health.powerAutomateUrlValid, 'boolean', 'Health deve informar se a URL configurada tem formato aceito.');
 const anonymous = await get('/api/document-vault/list');
 assert.equal(anonymous.status, 401, 'Catálogo deve exigir sessão.');
-console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, cofreConfigured: true, powerAutomateConfigured: health.powerAutomateConfigured, powerAutomateUrlValid: health.powerAutomateUrlValid, anonymousCatalogStatus: anonymous.status }));
+const verifiedAssets = ['sigem_pw_dashboard_core.js', 'workers/sigem_pw_dashboard.worker.js', 'react-dist/sigem-pw-dashboard-app.js', 'document-vault.css', 'sw.js'];
+const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+for (const path of verifiedAssets) {
+  const response = await get('/' + path + '?verify=' + expectedCommit);
+  assert.equal(response.status, 200, 'Arquivo publicado indisponível: ' + path);
+  const expected = await readFile(new URL('../' + path, import.meta.url));
+  assert.equal(digest(Buffer.from(await response.arrayBuffer())), digest(expected), 'Arquivo publicado difere do pacote validado: ' + path);
+}
+console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, verifiedAssets, cofreConfigured: true, powerAutomateConfigured: health.powerAutomateConfigured, powerAutomateUrlValid: health.powerAutomateUrlValid, anonymousCatalogStatus: anonymous.status }));

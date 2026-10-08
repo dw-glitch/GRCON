@@ -272,8 +272,11 @@
 html[data-app="GRCON"] .document-vault-module .vault-row-actions {
   flex-wrap: nowrap;
   gap: 6px;
+  width: max-content;
 }
 html[data-app="GRCON"] .document-vault-module .vault-row-actions button {
+  flex: 0 0 auto;
+  min-width: max-content;
   min-height: 32px;
   padding: 5px 8px;
   font-size: .75rem;
@@ -286,6 +289,13 @@ html[data-app="GRCON"] .document-vault-module .vault-row-actions [data-vault-del
 }
 html[data-app="GRCON"] .document-vault-module .vault-table-wrap td {
   padding-block: 8px;
+  background: var(--surface-1, #fff);
+}
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap tbody tr:nth-child(even) td {
+  background: var(--surface-2, #f8fafb);
+}
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap tbody tr:hover td {
+  background: var(--brand-50, #f2f9fc);
 }
 html[data-app="GRCON"] .document-vault-module .vault-metrics-details:empty {
   display: none;
