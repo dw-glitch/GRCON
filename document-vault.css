@@ -269,6 +269,13 @@
 }
 
 /* Ações lado a lado reduzem a altura das linhas sem esconder comandos. */
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap table {
+  table-layout: auto;
+}
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap tr > :last-child {
+  width: 1%;
+  white-space: nowrap;
+}
 html[data-app="GRCON"] .document-vault-module .vault-row-actions {
   flex-wrap: nowrap;
   gap: 6px;
