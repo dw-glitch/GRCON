@@ -356,6 +356,8 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
 
       const viewportMetrics = [];
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="control"]', "Controle de GRDT", viewport));
+      assert.equal(await page.locator("#grdt-stages [data-grdt-stage]").count(), 4,
+        "Controle de GRDT precisa apresentar quatro etapas documentais acessíveis.");
       const advancedOpened = await clickVisible(page, "#advanced-toggle");
       if (advancedOpened) {
         await page.waitForTimeout(150);
@@ -364,6 +366,22 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
       }
 
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="requests"]', "Consultas", viewport, 1100));
+      const modelsVisit = await visit(page, '.requests-subnav [data-requests-area="modelos"]', "Modelos de exportação", viewport, 420);
+      viewportMetrics.push(modelsVisit);
+      if (!modelsVisit.skipped) {
+        assert.equal(await page.locator("#requests-modelo-search").count(), 1,
+          "Modelos precisam oferecer a pesquisa local.");
+      }
+      const monitorVisit = await visit(page, '.requests-subnav [data-requests-area="sigem-monitoring"]',
+        "Consulta Geral × SIGEM", viewport, 500);
+      viewportMetrics.push(monitorVisit);
+      if (!monitorVisit.skipped) {
+        assert.equal(await page.locator("#sigem-monitor-history-search").count(), 1,
+          "Histórico deve oferecer busca em comparações.");
+        assert.equal(await page.locator("#sigem-monitor-monitored-search").count(), 1,
+          "Monitoramento deve oferecer busca local dos documentos.");
+      }
+
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="analysis-history"]', "Histórico de análises", viewport, 1100));
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="history"]', "Histórico de eGRDTs", viewport, 1100));
       const dashboardVisit = await visit(page, '.ops-sidebar [data-grcon-view="dashboard"]', "Dashboard", viewport, 700);
