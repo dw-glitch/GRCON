@@ -12,15 +12,16 @@
     document: ["NOMEDOCUMENTO", "NOME DOCUMENTO", "DOCUMENTO"],
     allocation: ["ALOCACAO", "NUMERO DA ALOCACAO"],
     allocationStatus: ["STATUS DA ALOCACAO", "STATUS DE ALOCACAO"],
+    fiscalComment: ["COMENTARIOS DA FISCAL 01", "COMENTARIO DA FISCAL 01", "COMENTARIOS FISCAL 01", "COMENTARIO FISCAL 01", "RESPOSTA DA FISCAL 01"],
     workflow: ["WORKFLOW"], active: ["DOCUMENTO ATIVO"], databook: ["CAMINHO DATA BOOK", "CAMINHO DATABOOK"],
     ldSheet: ["ABA"], ldVersion: ["VERSAO DA LD"], sentAt: ["DATA DO ENVIO DA ALOC"],
   };
   function cleanRecord(value) {
     const item = {};
-    for (const field of Object.keys(fields)) item[field] = text(value?.[field]);
+    for (const field of Object.keys(fields)) item[field] = field === "fiscalComment" ? String(value?.[field] ?? "") : text(value?.[field]);
     item.sourceRow = Number(value?.sourceRow) || 0;
     if (item.document.length < 7 || item.document.length > 255 || !/\d/.test(item.document)) throw new Error("Código documental inválido na Central de alocação.");
-    if (Object.entries(item).some(([field, v]) => typeof v === "string" && v.length > (field === "databook" ? 2048 : field === "allocationStatus" ? 1024 : 255))) throw new Error("Campo muito extenso na Central de alocação.");
+    if (Object.entries(item).some(([field, v]) => typeof v === "string" && v.length > (field === "fiscalComment" ? 8192 : field === "databook" ? 2048 : field === "allocationStatus" ? 1024 : 255))) throw new Error("Campo muito extenso na Central de alocação.");
     if (!Number.isInteger(item.sourceRow) || item.sourceRow < 1 || item.sourceRow > 1048576) throw new Error("Linha de origem inválida.");
     return item;
   }
@@ -77,5 +78,15 @@
     const exact = key(document);
     return index.byDocument.get(exact) || index.byCanonical.get(exact.replace(/^NT-/, "")) || [];
   }
-  return Object.freeze({ VERSION, key, cleanRecord, parseWorkbook, buildIndex, lookup });
+  function fiscalCommentsForDocument(document, index) {
+    const unique = new Set();
+    for (const record of lookup(document, index)) {
+      const comment = String(record.fiscalComment ?? "");
+      if (comment.trim()) unique.add(comment);
+    }
+    // Todas as observações distintas são mantidas; nunca escolher uma
+    // ocorrência arbitrariamente quando um documento possui várias ALOCs.
+    return [...unique];
+  }
+  return Object.freeze({ VERSION, key, cleanRecord, parseWorkbook, buildIndex, lookup, fiscalCommentsForDocument });
 });

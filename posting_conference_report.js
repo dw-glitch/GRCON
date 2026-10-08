@@ -183,7 +183,7 @@
   }
 
   async function buildWorkbook(rows, options) {
-    if (!options?.groups?.length && root.document && typeof Worker === "function") {
+    if (root.document && typeof Worker === "function") {
       try {
         await root.GRCONModuleLoader?.ensure("performance");
         if (root.GrconPerformance?.supported) return await root.GrconPerformance.buildSpreadsheet("conference", { rows, options });

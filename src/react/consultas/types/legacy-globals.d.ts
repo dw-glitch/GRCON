@@ -98,6 +98,11 @@ declare global {
       publish(file: File): Promise<unknown>;
       find(document: string): Array<{ document: string; sheet: string; sourceRow: number; data: Record<string, string> }>;
     };
+    GrconAllocationRegistry?: {
+      current(): { id: string; stale?: boolean } | null;
+      refresh(): Promise<unknown>;
+      fiscalComments(document: string): string[];
+    };
     GrconPlannedDocumentsCore?: GrconPlannedDocumentsCoreApi;
     GrconNotify?: NotifyFn;
     GRCONBrandAssets?: unknown;

@@ -118,3 +118,27 @@ result = run([emission("112", [[d[0], "A", "Para Cancelamento"]])], [sigem(d[0],
 assert.equal(result.rows[0].purpose, "Para Cancelamento");
 
 console.log("posting_conference_intelligent_grdt: OK");
+
+// Arquivo XLSX real: separar pendências sem omitir os confirmados do detalhamento.
+(async () => {
+  global.ExcelJS = require('../exceljs.min.js');
+  global.GRCONBrandAssets = { reportLogoBase64: 'data:image/png;base64,' + require('node:fs').readFileSync(require('node:path').join(__dirname, '../grcon-logo-report.png')).toString('base64') };
+  const Report = require('../posting_conference_report.js');
+  const mixed = run([emission('113', [[d[0], 'A', 'Para Cancelamento'], [d[1], 'B']])], [sigem(d[0], 'A')]);
+  const rows = mixed.rows.map(row => ({ ...row, allocation: { kind: 'allocated', label: 'Alocado' }, diagnosis: C.diagnoseRow(row, { kind: 'allocated', allocations: ['ALOC-027'] }) }));
+  const groups = C.aggregateByGrdt(rows);
+  const bytes = await Report.buildWorkbook(rows, { mode: 'events', pending: true, groups });
+  const book = new global.ExcelJS.Workbook();
+  await book.xlsx.load(bytes);
+  const values = sheet => {
+    const ws = book.getWorksheet(sheet), headers = ws.getRow(1).values;
+    return Array.from({ length: ws.rowCount - 1 }, (_, i) => Object.fromEntries(headers.slice(1).map((header, j) => [header, ws.getRow(i + 2).getCell(j + 1).value])));
+  };
+  assert.equal(values('RESUMO GRDT')[0]['Classificação'], 'PARCIALMENTE_CONFIRMADA');
+  assert.equal(values('DOCUMENTOS POR GRDT').length, 2);
+  assert.equal(values('PENDENCIAS CONFIRMACAO').length, 1);
+  assert.equal(values('PENDENCIAS CONFIRMACAO')[0].Documento, C.displayDocument(d[1]));
+  assert.equal(values('DOCUMENTOS POR GRDT').find(row => row.Documento === C.displayDocument(d[0]))['PROPÓSITO DE EMISSÃO'], 'Para Cancelamento');
+  assert.equal(values('AVALIAR REENVIO')[0].Documento, C.displayDocument(d[1]));
+  console.log('posting_conference_intelligent_grdt: XLSX real, propósito e pendências seletivas OK');
+})().catch(error => { console.error(error); process.exitCode = 1; });

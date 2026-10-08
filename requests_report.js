@@ -33,6 +33,7 @@
     { header: "TÍTULO NA LD", key: "title", width: 58 },
     { header: "ALOCADO?", key: "allocated", width: 22 },
     { header: "ALOCAÇÃO", key: "allocation", width: 24 },
+    { header: "Comentários da Fiscal 01", key: "fiscalComment", width: 54 },
     { header: "ÚLTIMA GRDT", key: "lastGrdt", width: 26 },
     // O que a LD diz e o que o próprio GRCON já emitiu são duas perguntas
     // diferentes. Nesta coluna o número da eGRDT vem com a data na linha de

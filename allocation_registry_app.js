@@ -99,7 +99,12 @@
     if (!info.centralSnapshotId) return "";
     return `<details class="allocation-registry-detail posting-history-detail"><summary>Central: ${esc(info.allocations.join(" · ") || "sem alocação vinculada")}</summary>${info.references.map(item => `<p>${esc(item.allocation || "Alocação não informada")} · ${esc(item.allocationStatus || "Status não informado")} · ${esc(item.workflow || "Workflow não informado")} · linha ${item.sourceRow}</p>`).join("")}${info.warnings.map(message => `<p>${esc(message)}</p>`).join("")}<small>${esc(info.centralFileName)} · ${esc(info.centralUpdatedAt)}</small></details>`;
   }
-  root.GrconAllocationRegistry = Object.freeze({ current, refresh, publish, resolve, badge,
+  function fiscalComments(document) {
+    const snapshot = current();
+    // Não usar comentários de outro contrato nem snapshots não confirmados.
+    return snapshot && !snapshot.stale ? Core.fiscalCommentsForDocument(document, snapshot.index) : [];
+  }
+  root.GrconAllocationRegistry = Object.freeze({ current, refresh, publish, resolve, badge, fiscalComments,
     signature: () => { const snapshot = current(); return `${snapshot?.id || ""}:${Boolean(snapshot?.stale)}`; },
     applyRecords: records => Context.applyRecords(records, root.GrconPlannedDocuments?.current(), current()) });
   root.addEventListener("grcon:cloud-ready", () => void refresh());
