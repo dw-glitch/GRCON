@@ -609,22 +609,23 @@
         review: group.rows.filter((row) => row.status === STATUSES.REVIEW).length,
         notVerified: group.rows.filter((row) => row.status === STATUSES.NOT_VERIFIED).length,
       };
-      const confirmedRows = group.rows.filter((row) => row.status === STATUSES.CONFIRMED || row.historicalPreserved);
-      const confirmedOrPreserved = confirmedRows.length;
+      const currentlyLocated = group.rows.filter((row) => row.status === STATUSES.CONFIRMED);
+      const preservedOnly = group.rows.filter((row) => row.status !== STATUSES.CONFIRMED && row.historicalPreserved).length;
       const inTransit = group.rows.filter((row) => row.sigemStatus
         && /^(EM ANALISE|EM WORKFLOW)$/.test(norm(row.sigemStatus))
         && normalizeRevision(row.sigemStatusRevision) === normalizeRevision(row.revisionSent)).length;
       const ambiguous = group.rows.filter((row) => row.ambiguity || row.status === STATUSES.REVIEW).length;
       const classification = counts.notVerified === counts.total ? "NAO_VERIFICADA"
-        : confirmedOrPreserved === counts.total ? "TOTALMENTE_CONFIRMADA"
-          : confirmedOrPreserved > 0 ? "PARCIALMENTE_CONFIRMADA"
-            : ambiguous > 0 ? "REQUER_INVESTIGACAO" : "NENHUM_DOCUMENTO_CONFIRMADO";
+        : counts.confirmed === counts.total ? "TOTALMENTE_CONFIRMADA"
+          : counts.confirmed > 0 ? "PARCIALMENTE_CONFIRMADA"
+            : preservedOnly || ambiguous || counts.notVerified ? "REQUER_INVESTIGACAO" : "NENHUM_DOCUMENTO_CONFIRMADO";
       return {
         ...group, ...counts, status: aggregateStatus(group.rows), classification,
         workspaceId: text(group.rows[0] && group.rows[0].workspaceId),
-        confirmedOrPreserved, inTransit, ambiguous,
+        confirmedOrPreserved: counts.confirmed + preservedOnly, preservedOnly, inTransit, ambiguous,
         distinctDocuments: new Set(group.rows.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
-        riskOfDuplicateResend: confirmedOrPreserved > 0 && confirmedOrPreserved < counts.total,
+        locatedDocuments: new Set(currentlyLocated.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
+        riskOfDuplicateResend: counts.confirmed > 0 && counts.confirmed < counts.total,
       };
     }).sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)));
   }
