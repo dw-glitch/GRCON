@@ -75,7 +75,7 @@
       let imageConfig = null;
       if (brand.reportLogoBase64) imageConfig = { base64: brand.reportLogoBase64, extension: "png" };
       else if (typeof fetch === "function") {
-        const response = await fetch(brand.reportLogoFile || "grcon-logo-report.png", { cache: "no-store" });
+        const response = await fetch(root.document ? (brand.reportLogoFile || "grcon-logo-report.png") : new URL("../" + (brand.reportLogoFile || "grcon-logo-report.png"), root.location.href), { cache: "no-store" });
         if (response.ok) imageConfig = { buffer: await response.arrayBuffer(), extension: "png" };
       }
       if (!imageConfig) return false;
@@ -183,6 +183,12 @@
   }
 
   async function buildWorkbook(rows, options) {
+    if (root.document && typeof Worker === "function") {
+      try {
+        await root.GRCONModuleLoader?.ensure("performance");
+        if (root.GrconPerformance?.supported) return await root.GrconPerformance.buildSpreadsheet("conference", { rows, options });
+      } catch (error) { console.warn("[GRCON] Exportação da Conferência em modo compatível", error); }
+    }
     if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");
     const source = rows || [];
     const mode = options?.mode === "events" ? "events" : "documents";

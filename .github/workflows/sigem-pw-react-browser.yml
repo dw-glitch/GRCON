@@ -10,6 +10,10 @@ on:
       - "sigem_pw_dashboard_core.js"
       - "sigem_pw_readiness_core.js"
       - "sigem_pw_scope_fix.js"
+      - "performance_workers.js"
+      - "workers/export.worker.js"
+      - "shared_sigem_query_app.js"
+      - "scripts/validar-performance-browser.cjs"
       - "workers/sigem_pw_dashboard.worker.js"
       - "workers/sigem_pw_evolution.worker.js"
       - "sigem_pw_dashboard_bootstrap.js"
@@ -112,6 +116,7 @@ jobs:
           python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-sigem-pw.log" 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
+          node scripts/validar-performance-browser.cjs
           node scripts/validar-sigem-pw-react-browser.cjs
           node scripts/validar-owner-shared-sigem-browser.cjs
           node scripts/validar-consultas-browser.cjs
@@ -128,6 +133,7 @@ jobs:
             artifacts/owner-shared-sigem/*.png
             artifacts/sigem-pw-react/*.png
             artifacts/sigem-pw-react/metrics.json
+            artifacts/performance/metrics.json
             react-dist/sigem-pw-evolution-app.js
           if-no-files-found: warn
           retention-days: 14

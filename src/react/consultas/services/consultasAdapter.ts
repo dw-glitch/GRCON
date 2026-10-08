@@ -329,20 +329,24 @@ async function exportRowsToExcel(rows: ExportRow[], template: ExportTemplate, ld
   const Report = requestsReport();
   await ensureGroup("excel");
   await ensureGroup("brand");
-  const workbook = new window.ExcelJS!.Workbook();
-  workbook.creator = "GRCON";
-  workbook.company = "CONSAG Engenharia";
-  workbook.title = template.name;
-  const sheet = workbook.addWorksheet("Consulta", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
-  Report.writeConsultationSheet(sheet, rows, {
-    columns: template.columns,
-    title: `GRCON · ${template.name.toUpperCase()}`,
+  const options = {
+    columns: template.columns, title: `GRCON · ${template.name.toUpperCase()}`,
     footer: `GRCON · ${template.name}`,
-    metadata: `${rows.length.toLocaleString("pt-BR")} linha(s) · modelo "${template.name}" · ${new Date().toLocaleString("pt-BR")}`,
-    ldNames,
-  });
-  await Report.attachBrandLogo(workbook, sheet, window.GRCONBrandAssets, window.fetch.bind(window));
-  const buffer = await workbook.xlsx.writeBuffer();
+    metadata: `${rows.length.toLocaleString("pt-BR")} linha(s) · modelo "${template.name}" · ${new Date().toLocaleString("pt-BR")}`, ldNames,
+  };
+  let buffer: ArrayBuffer | undefined;
+  try {
+    await ensureGroup("performance");
+    if (window.GrconPerformance?.supported) buffer = await window.GrconPerformance.buildSpreadsheet("consultation", { rows, options, title: template.name });
+  } catch (error) { console.warn("[GRCON] Exportação em modo compatível", error); }
+  if (!buffer) {
+    const workbook = new window.ExcelJS!.Workbook();
+    workbook.creator = "GRCON"; workbook.company = "CONSAG Engenharia"; workbook.title = template.name;
+    const sheet = workbook.addWorksheet("Consulta", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
+    Report.writeConsultationSheet(sheet, rows, options);
+    await Report.attachBrandLogo(workbook, sheet, window.GRCONBrandAssets, window.fetch.bind(window));
+    buffer = await workbook.xlsx.writeBuffer();
+  }
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
