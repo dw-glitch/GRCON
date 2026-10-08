@@ -362,11 +362,11 @@
       addSheet("RESUMO GRDT", [
         "GRDT", "Data", "Documentos únicos", "Documentos/revisões", "Localizados",
         "Aguardando", "Não encontrados", "Revisões divergentes", "Em tramitação",
-        "Alocação pendente", "Requer análise", "Não verificados", "Risco de duplicidade", "Classificação",
+        "Alocação pendente", "Requer análise", "Não verificados", "Histórico preservado sem presença atual", "Risco de duplicidade", "Classificação",
       ], groups.map((g) => [
-        g.egrdtNumber, g.generatedAt, g.distinctDocuments, g.total, g.confirmedOrPreserved,
+        g.egrdtNumber, g.generatedAt, g.distinctDocuments, g.total, g.confirmed,
         g.awaiting, g.notFound, g.divergent, g.inTransit, g.allocationPending,
-        g.review, g.notVerified, g.riskOfDuplicateResend ? "SIM" : "NÃO", g.classification,
+        g.review, g.notVerified, g.preservedOnly, g.riskOfDuplicateResend ? "SIM" : "NÃO", g.classification,
       ]));
       addSheet("DOCUMENTOS POR GRDT", detailHeaders, groupRows.map(detailValues));
       addSheet("PENDENCIAS CONFIRMACAO", detailHeaders, groupRows.filter(({ row }) =>
@@ -381,7 +381,7 @@
         addSheet("GRDTs Pendentes", [
           "GRDT", "Total de documentos", "Localizados", "Não encontrados", "Revisões divergentes", "Situação",
         ], groups.filter((g) => g.classification !== "TOTALMENTE_CONFIRMADA").map((g) => [
-          g.egrdtNumber, g.distinctDocuments, g.confirmedOrPreserved, g.notFound, g.divergent, g.classification,
+          g.egrdtNumber, g.distinctDocuments, g.confirmed, g.notFound, g.divergent, g.classification,
         ]));
       }
     } else if (options?.pending) {
