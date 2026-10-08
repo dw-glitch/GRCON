@@ -14,25 +14,25 @@
 
 | # | Arquivo de referência | Módulo / papel | Estado da implementação neste lote |
 |---|---|---|---|
-| 1 | Cofre de Documentos GRCON.png | Cofre | Métricas/versionamento existentes; adequação visual ainda não validada |
+| 1 | Cofre de Documentos GRCON.png | Cofre | Métricas/versionamento existentes; legibilidade/contraste/upload refinados; adequação visual ainda não homologada |
 | 2 | Colagem de telas do sistema GRCON.png | Galeria multitelas | Avaliação transversal pendente |
-| 3 | Controle de GRDT_ Análise e Emissão de Documentos.png | Controle de GRDT | Consolidação visual pendente |
-| 4 | Dashboard GRCON de Controle de GRDT.png | Controle de GRDT | Consolidação visual pendente |
+| 3 | Controle de GRDT_ Análise e Emissão de Documentos.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
+| 4 | Dashboard GRCON de Controle de GRDT.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
 | 5 | Dashboard GRCON_ Combinar PDFs.png | Combinar PDFs | Fluxo local existente; ver #10 |
 | 6 | Fluxo GRCON_ Telas 08 a 18.png | Galeria multitelas | Avaliação transversal pendente |
 | 7 | Galeria de Dashboards GRCON em Azul e Branco.png | Galeria SIGEM/PW, histórico e conferência | Avaliação transversal pendente |
 | 8 | Galeria de Interfaces GRCON em Português.png | Galeria SIGEM/PW, histórico e conferência | Avaliação transversal pendente |
 | 9 | image-gen-1(1).png | Ferramentas Adicionais | Dois acessos já existentes; paridade visual pendente |
-| 10 | image-gen-2.png | Combinar PDFs | **Ordenação natural explícita implementada neste lote**; validação visual pendente |
+| 10 | image-gen-2.png | Combinar PDFs | Ordenação natural explícita implementada; validação visual pendente |
 | 11 | image-gen-3.png | Adicionar Capa | Motor oficial existente; paridade visual pendente |
 | 12 | Painel Corporativo GRCON em Nove Telas.png | Galeria multitelas | Avaliação transversal pendente |
 | 13 | Painel de comparação documental SaaS.png | Consulta Geral × SIGEM | Comparação existente; paridade visual pendente |
 | 14 | Painel de Consultas Documentais GRCON.png | Consultas | Módulo React existente; paridade visual pendente |
 | 15 | Painel de Consultas Operacionais GRCON.png | Consulta Geral × SIGEM | Comparação existente; paridade visual pendente |
-| 16 | Painel de Controle de GRDT.png | Controle de GRDT | Consolidação visual pendente |
-| 17 | Painel de Modelos de Exportação GRCON.png | Modelos de Exportação | Ferramentas de modelos existentes; paridade visual pendente |
+| 16 | Painel de Controle de GRDT.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
+| 17 | Painel de Modelos de Exportação GRCON.png | Modelos de Exportação | Ferramentas de modelos existentes; **pesquisa local implementada**; paridade visual pendente |
 | 18 | Painel de Monitoramento de Documentos.png | Monitoramento | Monitoramento existente; paridade visual pendente |
-| 19 | Painel GRCON de Controle de GRDT.png | Controle de GRDT | Consolidação visual pendente |
+| 19 | Painel GRCON de Controle de GRDT.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
 | 20 | Painel GRCON Flow de Solicitações.png | Atalho externo | Preservar navegação externa, sem duplicar GRCON Flow |
 | 21 | Painel GRCON para Combinar PDFs.png | Combinar PDFs | Referência complementar; fluxo independente preservado |
 | 22 | Painel GRCON_ Configurações Gerais.png | Configurações | Paridade visual pendente; manter controles restritos ao proprietário |
@@ -40,7 +40,7 @@
 | 24 | Painel GRCON_ Fluxo Operacional Completo.png | Galeria multitelas | Avaliação transversal pendente |
 | 25 | Painel GRCON_ Histórico de Comparações.png | Histórico de comparações | Histórico existente; paridade visual pendente |
 | 26 | Painel GRCON_ Visão Geral do Sistema.png | Galeria multitelas | Avaliação transversal pendente |
-| 27 | Tela de Controle de GRDT Revisado.png | Controle de GRDT | Consolidação visual pendente |
+| 27 | Tela de Controle de GRDT Revisado.png | Controle de GRDT | Trilha visual das etapas implementada; restante da consolidação pendente |
 | 28 | Visão geral do sistema GRCON em 18 telas.png | Galeria multitelas | Avaliação transversal pendente |
 
 **Observação:** títulos e valores das referências são demonstrativos. Não devem substituir nomenclaturas, dados, regras ou permissões do produto.
@@ -65,3 +65,18 @@
 6. Comparação visual/funcional nas larguras 1366/1440/1920, zoom e modo escuro, com capturas antes/depois e validação operacional.
 
 **Status:** modernização geral **em andamento**. Nenhum dos 28 esboços foi declarado integralmente homologado apenas por estar presente neste inventário.
+
+## Consolidação técnica para uma única aprovação
+
+O pacote de revisão da branch `feat/ux-28-unified-review-20261008` reúne sem conflitos as seguintes PRs de desenvolvimento: **#212, #213, #214 e #215**.
+
+| Implementação | Fonte visual | Teste de regressão |
+|---|---|---|
+| Ordenar PDFs naturalmente sob comando explícito | `image-gen-2.png` | `tests/pdf_tools_react.cjs` |
+| Trilha Preparar → Analisar → Revisar → Emitir na GRDT | Cinco imagens do Controle de GRDT | `tests/grdt_visual_steps.cjs` |
+| Melhor contraste do Cofre e upload acessível | `Cofre de Documentos GRCON.png` | `tests/vault_visual_parity.cjs` |
+| Pesquisar modelos por nome, base e escopo, sem refazer editor | `Painel de Modelos de Exportação GRCON.png` | `tests/export_templates_search_ui.cjs` |
+
+**As outras sugestões dos 28 esboços continuam sujeitas a inspeção visual no app real, implementação e homologação.** A existência de funcionalidade preexistente não substitui comparação de telas. Todos os dados e valores de demonstração das imagens foram mantidos fora do código.
+
+**Regra de publicação:** não integrar a `main` ou publicar no Cloudflare sem aprovação. Antes de merge, exigir CI verde, inspeção visual no ambiente de homologação, uso real em resoluções desktop, modo escuro, zoom e revisão das regras documentais.
