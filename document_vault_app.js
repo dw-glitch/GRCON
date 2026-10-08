@@ -1282,7 +1282,11 @@
         </header>
         <input id="vault-files-input" type="file" multiple hidden>
         <input id="vault-folder-input" type="file" multiple webkitdirectory directory hidden>
-        <div id="vault-dropzone" class="vault-dropzone" tabindex="0" role="button"><strong>Arraste arquivos ou uma pasta para cá</strong><span>Arquivos compactados são ignorados. Os demais documentos são identificados pelo nome do arquivo.</span></div>
+        <div id="vault-dropzone" class="vault-dropzone" tabindex="0" role="button" aria-describedby="vault-dropzone-description" aria-label="Selecionar ou arrastar documentos para o Cofre">
+          <svg class="vault-dropzone-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 16V4M8 8l4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>
+          <strong>Arraste arquivos ou uma pasta para cá</strong>
+          <span id="vault-dropzone-description">Pressione Enter ou Espaço para selecionar arquivos. Compactados são ignorados; os demais são identificados pelo nome.</span>
+        </div>
       </section>
       <p id="vault-storage-details" class="vault-metrics-details" aria-live="polite"></p>
       <details id="vault-storage-history" hidden><summary>Evolução do consumo · últimas conferências</summary><div class="vault-table-wrap"></div></details>
