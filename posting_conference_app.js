@@ -14,6 +14,7 @@
     audit: [],
     view: "documents",
     page: 1,
+    groupClassification: "",
     filters: { search: "", document: "", documentList: "", grdt: "", family: "", discipline: "", revision: "", status: "", startDate: "", endDate: "" },
   };
 
@@ -59,6 +60,18 @@
       .pc-revision-stack>small{display:block;min-width:0;max-width:100%;font-size:.72rem;line-height:1.32;color:var(--muted,#64748b);overflow-wrap:anywhere}
       .pc-consolidation-note{display:inline-flex;align-items:center;max-width:100%;gap:.35rem;margin-top:.3rem;padding:.2rem .45rem;border-radius:999px;background:var(--surface-subtle,#eef4f8);font-size:.7rem;line-height:1.3;color:var(--muted,#64748b);white-space:normal;overflow-wrap:anywhere}
       .pc-table-wrap{overscroll-behavior:contain}
+      .pc-grdt-details summary{cursor:pointer;font-weight:700;color:var(--primary,#155c8a)}
+      .pc-grdt-details[open] summary{margin-bottom:.7rem}
+      .pc-grdt-details>div{max-width:100%;overflow:auto}
+      .pc-grdt-details table{width:100%;border-collapse:collapse;font-size:.83rem}
+      .pc-grdt-details td,.pc-grdt-details th{padding:.55rem;border-bottom:1px solid var(--border,#ddd);vertical-align:top;text-align:left;overflow-wrap:anywhere}
+      .pc-grdt-details th{background:var(--surface-subtle,#eaf2f7)}
+      .pc-grdt-details small{display:block;color:var(--muted,#64748b)}
+      .pc-grdt-warning{display:block;padding:.6rem;border-left:3px solid #d97706;font-weight:700}
+      .pc-grdt-table .pc-grdt-detail-row>td{background:var(--surface-subtle,#f8fafc);padding:.65rem}
+      .pc-grdt-filter{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:.5rem 0}
+      .pc-grdt-filter select{max-width:18rem}
+      .pc-grdt-details input[type="search"]{display:block;max-width:23rem;margin:.6rem 0;padding:.45rem .6rem;border:1px solid var(--border,#ddd);border-radius:.5rem;background:var(--surface,#fff);color:inherit}
     `;
     document.head.appendChild(style);
   }
@@ -85,7 +98,8 @@
       <section class="pc-kpis" id="pc-kpis" aria-label="Resumo da conferência"></section>
       <section class="pc-toolbar-card pc-date-controls"><label>Data da Consulta Geral <input id="pc-reference-date" type="date"/></label> <button id="pc-save-date" type="button" class="secondary-button">Salvar data</button><small>Data da base, independente do upload.</small></section>
       <section class="pc-toolbar-card">
-        <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">Pendências de Postagem</button></div>
+        <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">GRDTs com pendências</button></div>
+        <div class="pc-grdt-filter"><label>Classificação da GRDT <select id="pc-grdt-classification"><option value="">Todas</option><option value="TOTALMENTE_CONFIRMADA">Totalmente confirmada</option><option value="PARCIALMENTE_CONFIRMADA">Parcialmente confirmada</option><option value="NENHUM_DOCUMENTO_CONFIRMADO">Nenhum documento confirmado</option><option value="REQUER_INVESTIGACAO">Requer investigação</option><option value="NAO_VERIFICADA">Não verificada</option><option value="COM_TRAMITACAO">Em tramitação</option><option value="REVISAO_DIVERGENTE">Revisão divergente</option><option value="ALOCACAO_PENDENTE">Alocação pendente</option></select></label><small>A expansão mostra todos os documentos da emissão, inclusive os confirmados.</small></div>
         <div class="pc-filters" id="pc-filters">
           <label class="pc-search"><span>Busca</span><input id="pc-search" type="search" placeholder="Código, eGRDT, disciplina, status ou observação"/></label>
           <label class="pc-document-list"><span>Lista de documentos</span><textarea id="pc-document-list" rows="3" placeholder="Cole vários códigos — um por linha"></textarea><small id="pc-document-list-count">Todos os documentos</small></label>
@@ -122,9 +136,10 @@
       catch (error) { notify(error.message, "error"); }
       finally { render(); }
     });
+    el("pc-grdt-classification").addEventListener("change", event => { state.groupClassification = event.target.value; state.page = 1; renderTableOnly(); });
     el("pc-pending-grdts").addEventListener("click", async event => {
       if (!event.target.closest("[data-copy-pending-grdts]")) return;
-      try { await navigator.clipboard.writeText(pendingSummary().grdts.map(item => item.grdt).join("\n")); notify("GRDTs copiadas.", "success"); }
+      try { await navigator.clipboard.writeText(filteredGroups().map(item => item.egrdtNumber).filter(Boolean).join("\n")); notify("GRDTs copiadas.", "success"); }
       catch (_) { notify("Selecione e copie a lista de GRDTs.", "warning"); }
     });
     el("pc-update").addEventListener("click", () => el("pc-file").click());
@@ -164,11 +179,20 @@
       Object.keys(state.filters).forEach((key) => { state.filters[key] = ""; });
       ["pc-search", "pc-document-list", "pc-grdt", "pc-family", "pc-discipline", "pc-revision", "pc-status", "pc-start", "pc-end"].forEach((id) => { el(id).value = ""; });
       el("pc-document-list-count").textContent = "Todos os documentos";
+      state.groupClassification = "";
+      el("pc-grdt-classification").value = "";
       state.page = 1;
       renderTableOnly();
     });
     el("pc-prev").addEventListener("click", () => { if (state.page > 1) { state.page -= 1; renderTableOnly(); } });
     el("pc-next").addEventListener("click", () => { state.page += 1; renderTableOnly(); });
+    el("pc-table-wrap").addEventListener("input", (event) => {
+      if (!event.target.matches(".pc-grdt-details input[type=search]")) return;
+      const term = Conference.norm(event.target.value);
+      event.target.closest(".pc-grdt-details")?.querySelectorAll("tbody tr").forEach((tr) => {
+        tr.hidden = Boolean(term) && !Conference.norm(tr.textContent).includes(term);
+      });
+    });
     el("pc-table-wrap").addEventListener("click", (event) => {
       const button = event.target.closest("[data-pc-grdt]");
       if (!button) return;
@@ -301,11 +325,13 @@
     const cards = [
       ["Documentos únicos enviados", s.total, "", `${fmt(s.sendCount)} envios · ${fmt(s.egrdtCount)} eGRDTs`],
       ["Postagens confirmadas", s.confirmed, "confirmed", "documentos no estado atual"],
-      ["Pendências de postagem", s.pending, "awaiting", "uma contagem por documento"],
+      ["Pendências de confirmação", s.pending, "awaiting", "uma contagem por documento"],
       ["Não postado ainda", s.awaiting, "awaiting", "dentro da janela de confirmação"],
       ["Aguardando retorno do SIGEM", s.divergent, "divergent", "revisão enviada ainda não confirmada"],
       ["Não encontrado", s.notFound, "missing", "documentos únicos"],
       ["Requer análise", s.review, "review", `${fmt(s.documentsWithMultipleSends)} com múltiplos envios`],
+      ["GRDTs parcialmente confirmadas", detailedGroups().filter((g) => g.classification === "PARCIALMENTE_CONFIRMADA").length, "divergent", "conferir documentos individualmente"],
+      ["Risco de repostagem duplicada", detailedGroups().filter((g) => g.riskOfDuplicateResend).length, "review", "mistura de documentos localizados e pendentes"],
     ];
     el("pc-kpis").innerHTML = cards.map(([label, value, css, sub]) => `<div class="${css}"><span>${escapeHtml(label)}</span><strong>${fmt(value)}</strong>${sub ? `<small>${escapeHtml(sub)}</small>` : ""}</div>`).join("");
   }
@@ -397,13 +423,84 @@
     </tr>`).join("")}</tbody></table>`;
   }
 
+
+  // Grupos por evento de emissão, sem usar a GRDT mais recente do documento
+  // consolidado como substituta do registro histórico original.
+  let detailedGroupsCache = null;
+  function detailedGroups() {
+    const planned = root.GrconPlannedDocuments?.current?.();
+    const central = root.GrconAllocationRegistry?.current?.();
+    const signature = [planned?.id, central?.id, central?.stale, state.base.meta?.snapshotId, state.base.meta?.referenceDate].join("|");
+    if (detailedGroupsCache?.result === state.result && detailedGroupsCache.signature === signature) return detailedGroupsCache.groups;
+    const lookup = new Map();
+    const rows = eventRows().map((row) => {
+      const key = Conference.documentIdentity(row.document);
+      if (!lookup.has(key)) lookup.set(key, root.GrconAllocationRegistry?.resolve?.(row.document)
+        || { kind: "unconfirmed", label: "Alocação a confirmar", allocations: [], references: [], warnings: ["Fonte de alocação indisponível."] });
+      const allocation = lookup.get(key);
+      return { ...row, allocation, diagnosis: Conference.diagnoseRow(row, allocation, state.base.meta) };
+    });
+    const groups = Conference.aggregateByGrdt(rows).map((group) => ({
+      ...group,
+      allocationPending: group.rows.filter((row) => row.allocation.kind === "not_allocated").length,
+    }));
+    detailedGroupsCache = { result: state.result, signature, groups };
+    return groups;
+  }
+
   function filteredGroups() {
-    return Conference.aggregateByGrdt(filteredEventRows());
+    const matched = new Set(filteredEventRows().map((row) => row.key));
+    let groups = detailedGroups().filter((group) => group.rows.some((row) => matched.has(row.key)));
+    if (state.view === "pending") groups = groups.filter((group) => group.classification !== "TOTALMENTE_CONFIRMADA");
+    const kind = state.groupClassification;
+    if (kind) groups = groups.filter((group) => kind === "COM_TRAMITACAO" ? group.inTransit > 0
+      : kind === "REVISAO_DIVERGENTE" ? group.divergent > 0
+        : kind === "ALOCACAO_PENDENTE" ? group.allocationPending > 0 : group.classification === kind);
+    return groups;
+  }
+
+  function grdtDetails(group) {
+    const all = group.rows.map((row) => {
+      const d = row.diagnosis;
+      const references = (d.allocationReferences || []).map((ref) => [
+        ref.allocation, ref.allocationStatus,
+        ref.workflow ? "Central: " + ref.workflow : "",
+        ref.ldSheet ? "Aba: " + ref.ldSheet : "",
+        ref.sourceRow ? "Linha: " + ref.sourceRow : "",
+      ].filter(Boolean).join(" · ")).join(" | ");
+      return '<tr><td><strong>' + breakableCode(row.document) + '</strong><small>' + escapeHtml(row.discipline || row.documentFamily || "—") +
+        '</small>' + (row.title ? '<small>' + escapeHtml(row.title) + '</small>' : '') + '</td><td>' + escapeHtml(row.revisionSent || "—") + '</td><td>' + escapeHtml(row.revisionFound || "—") +
+        '</td><td>' + statusChip(row) + '<small>SIGEM: ' + escapeHtml(row.sigemStatus || "Não informado") +
+        (row.sigemStatusRevision ? ' · revisão ' + escapeHtml(row.sigemStatusRevision) : '') + '</small></td><td>' +
+        escapeHtml(row.allocation.label || "Alocação a confirmar") + '<small>' +
+        escapeHtml(references || (d.allocations || []).join(" · ") || "Referência não identificada") +
+        '</small></td><td><strong>' + escapeHtml(d.action) + '</strong><div>' + escapeHtml(d.reason) + '</div><small>' +
+        escapeHtml(d.evidenceLevel) + ' · ' + escapeHtml(d.presence) + '</small><small>Consulta Geral: ' +
+        escapeHtml(d.baseReferenceDate || "sem data") + ' · ' + escapeHtml(d.baseFileName || "sem arquivo") +
+        (row.sigemSourceRow ? ' · linha ' + escapeHtml(row.sigemSourceRow) : '') + '</small></td></tr>';
+    }).join("");
+    const warning = group.riskOfDuplicateResend
+      ? '<strong class="pc-grdt-warning">Esta GRDT possui documentos já localizados no SIGEM. Não reenviar o pacote integral.</strong>' : '';
+    return '<details class="pc-grdt-details"><summary>Ver todos os ' + fmt(group.total) +
+      ' documentos/revisões desta emissão</summary>' + warning +
+      '<input type="search" placeholder="Pesquisar documento nesta GRDT" aria-label="Pesquisar documentos desta GRDT"><div><table><thead><tr><th>Documento</th><th>Rev. enviada</th><th>Rev. encontrada</th><th>SIGEM</th><th>Alocação</th><th>Diagnóstico / orientação</th></tr></thead><tbody>' +
+      all + '</tbody></table></div><small>Documentos Previstos: ' +
+      escapeHtml(root.GrconPlannedDocuments?.current?.()?.fileName || "não disponível") + ' · Central: ' +
+      escapeHtml(root.GrconAllocationRegistry?.current?.()?.fileName || "não disponível") +
+      (group.workspaceId ? ' · Workspace: ' + escapeHtml(group.workspaceId) : '') +
+      '. A presença da revisão no SIGEM não comprova qual dos múltiplos envios a originou.</small></details>';
   }
 
   function grdtTable(groups) {
-    const label = (status) => ({ CONFIRMADO: "Concluída", PENDENTE: "Pendente", REVISAR: "Revisar", NAO_VERIFICADO: "Não verificada" })[status] || status;
-    return `<table class="pc-table pc-grdt-table"><thead><tr><th>eGRDT</th><th>Data</th><th>Documentos/eventos</th><th>Confirmados</th><th>Não postado ainda</th><th>Divergências</th><th>Não encontrados</th><th>Requer análise</th><th>Situação</th></tr></thead><tbody>${groups.map((group) => `<tr><td><button class="pc-link" data-pc-grdt="${escapeHtml(group.egrdtNumber)}" type="button">${escapeHtml(group.egrdtNumber)}</button></td><td>${fmtDate(group.generatedAt, false)}</td><td>${fmt(group.total)}</td><td>${fmt(group.confirmed)}</td><td>${fmt(group.awaiting)}</td><td>${fmt(group.divergent)}</td><td>${fmt(group.notFound)}</td><td>${fmt(group.review)}</td><td><span class="pc-aggregate ${String(group.status).toLowerCase()}">${escapeHtml(label(group.status))}</span></td></tr>`).join("")}</tbody></table>`;
+    const labels = { TOTALMENTE_CONFIRMADA: "Totalmente confirmada", PARCIALMENTE_CONFIRMADA: "Parcialmente confirmada", NENHUM_DOCUMENTO_CONFIRMADO: "Nenhum documento confirmado", REQUER_INVESTIGACAO: "Requer investigação", NAO_VERIFICADA: "Não verificada" };
+    const body = groups.map((g) =>
+      '<tr><td><strong>' + escapeHtml(g.egrdtNumber || "Sem número") + '</strong></td><td>' + fmtDate(g.generatedAt, false) +
+      '</td><td>' + fmt(g.distinctDocuments) + '</td><td>' + fmt(g.locatedDocuments) + '</td><td>' +
+      fmt(g.notFound) + '</td><td>' + fmt(g.divergent) + '</td><td>' + fmt(g.inTransit) + '</td><td>' +
+      fmt(g.allocationPending) + '</td><td><strong>' + escapeHtml(labels[g.classification] || g.classification) +
+      '</strong></td></tr><tr class="pc-grdt-detail-row"><td colspan="9">' + grdtDetails(g) + '</td></tr>'
+    ).join("");
+    return '<table class="pc-table pc-grdt-table"><thead><tr><th>eGRDT</th><th>Data</th><th>Documentos</th><th>Localizados</th><th>Não encontrados</th><th>Revisões divergentes</th><th>Em tramitação</th><th>Alocação pendente</th><th>Situação</th></tr></thead><tbody>' + body + '</tbody></table>';
   }
 
   function renderTableOnly() {
@@ -418,16 +515,21 @@
     const consolidated = el("pc-pending-grdts");
     consolidated.hidden = state.view !== "pending";
 
-    if (state.view === "grdts") {
+    if (state.view === "grdts" || state.view === "pending") {
       const groups = filteredGroups();
       total = groups.length;
       pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
       state.page = Math.min(state.page, pages);
       const slice = groups.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
       content = grdtTable(slice);
-      el("pc-table-kicker").textContent = "CONFERÊNCIA POR eGRDT";
-      el("pc-table-help").textContent = "Visão de auditoria: cada eGRDT preserva suas ocorrências. Clique no número para localizar os documentos associados.";
+      el("pc-table-kicker").textContent = state.view === "pending" ? "GRDTs COM PENDÊNCIAS DE CONFIRMAÇÃO" : "CONFERÊNCIA POR eGRDT";
+      el("pc-table-help").textContent = "Expanda qualquer GRDT para visualizar também os documentos confirmados, antes de avaliar nova emissão.";
       el("pc-result-count").textContent = `${fmt(total)} eGRDT(s)`;
+      if (state.view === "pending") {
+        const risks = groups.filter((item) => item.riskOfDuplicateResend).length;
+        consolidated.innerHTML = '<strong>' + fmt(risks) + ' GRDT(s) com risco de duplicidade</strong><p>' +
+          fmt(total) + ' GRDT(s) requerem acompanhamento ou investigação; isso não comprova falha de postagem.</p><button type="button" data-copy-pending-grdts>Copiar GRDTs exibidas</button>';
+      }
     } else {
       const rows = filteredDocumentRows();
       if (state.view === "pending") {
@@ -491,15 +593,17 @@
     try {
       let rows;
       let mode;
-      if (state.view === "grdts") {
-        rows = filteredEventRows();
+      let groups = [];
+      if (state.view === "grdts" || state.view === "pending") {
+        groups = filteredGroups();
+        rows = groups.flatMap((group) => group.rows);
         mode = "events";
       } else {
         rows = filteredDocumentRows();
         mode = "documents";
       }
       const scopeLabel = state.view === "pending" ? "Pendencias" : state.view === "grdts" ? "Por_eGRDT" : state.filters.grdt ? state.filters.grdt.replace(/[^A-Z0-9-]+/gi, "_") : "";
-      const buffer = await Report.buildWorkbook(rows, { mode, scopeLabel, pending: state.view === "pending", baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
+      const buffer = await Report.buildWorkbook(rows, { mode, groups: state.view === "grdts" || state.view === "pending" ? groups : [], scopeLabel, pending: state.view === "pending", baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");

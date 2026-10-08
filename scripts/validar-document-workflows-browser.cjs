@@ -100,22 +100,45 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.screenshot({path:path.join(out,'consultas.png')});
  await page.evaluate(async()=>{
   await window.GRCONModuleLoader.ensure('posting_conference_report.js');await window.GRCONModuleLoader.ensure('posting_conference_app.js');await window.GrconPostingConferenceUi.activate();
-  const rows=['100','100','100','101','102','102'].map((n,i)=>{const send={document:'DOC-00'+(i+1),egrdtNumber:'GRDT-'+n,revisionSent:'0',purpose:i===5?'':i%2?'Para Cancelamento':'Para Construção',discipline:i<4?'X':'Y',status:'AGUARDANDO',generatedAt:'2026-10-07T12:00:00Z'};return {...send,sends:[send],sendCount:1,egrdtCount:1,revisions:['0'],latestEgrdtNumber:send.egrdtNumber,currentRevision:'0'};});
-  const ui=window.GrconPostingConferenceUi;ui.state.result={...ui.state.result,documentRows:rows,eventRows:rows.map(row=>row.sends[0]),rows,summary:{total:6,pending:6}};ui.state.base={meta:{fileName:'Consulta.xlsx',recordCount:6,referenceDate:'2026-10-03',importedAt:'2026-10-07T12:00:00Z'},records:[]};ui.state.view='pending';
-  window.qaSigemVersion={snapshot_id:'qa-snapshot',version:1,file_name:'Consulta.xlsx',record_count:6,status:'active',published_at:'2026-10-07T12:00:00Z',metadata:{referenceDate:'2026-10-03',importedAt:'2026-10-07T12:00:00Z'}};
-  window.GrconSharedSigemQuery.state.shared={meta:{...ui.state.base.meta,snapshotId:'qa-snapshot'},records:[]};ui.render();
+  const C=window.GrconPostingConference;
+  const history=['100','101','102'].map((n,group)=>({id:'qa-grdt-'+n,egrdtNumber:'GRDT-'+n,generatedAt:'2026-10-01T12:00:00Z',files:Array.from({length:group===0?3:group===1?1:2},(_,offset)=>{
+   const i=(group===0?0:group===1?3:4)+offset;return {document:'DOC-00'+(i+1),revision:'0',purpose:i===5?'':i%2?'Para Cancelamento':'Para Construção',discipline:i<4?'X':'Y'};
+  })}));
+  const base=C.parseMatrix([['Documento','Revisão','Status'],['DOC-001','0','Emitido'],['DOC-999','0','Emitido']]);
+  const ui=window.GrconPostingConferenceUi;ui.state.result=C.reconcile(history,base.records,null,{now:'2026-10-08T12:00:00Z',baseReferenceDate:'2026-10-08'});
+  ui.state.base={meta:{fileName:'Consulta.xlsx',recordCount:2,referenceDate:'2026-10-08',importedAt:'2026-10-08T12:00:00Z'},records:base.records};ui.state.view='pending';
+  window.qaSigemVersion={snapshot_id:'qa-snapshot',version:1,file_name:'Consulta.xlsx',record_count:2,status:'active',published_at:'2026-10-08T12:00:00Z',metadata:{referenceDate:'2026-10-08',importedAt:'2026-10-08T12:00:00Z'}};
+  window.GrconSharedSigemQuery.state.shared={meta:{...ui.state.base.meta,snapshotId:'qa-snapshot'},records:base.records};ui.render();
  });
- assert.match(await page.locator('#pc-pending-grdts').textContent(),/Documentos pendentes: 6 · GRDTs pendentes: 3/);
- assert.equal(await page.locator('#pc-table-wrap tbody tr').count(),6);
+ assert.match(await page.locator('#pc-pending-grdts').textContent(),/1 GRDT\(s\) com risco de duplicidade/);
+ assert.match(await page.locator('#pc-pending-grdts').textContent(),/3 GRDT\(s\) requerem acompanhamento/);
+ assert.equal(await page.locator('.pc-grdt-details').count(),3);
+ assert.equal(await page.locator('.pc-grdt-table input[type=checkbox]').count(),0,'seleção legada não pode associar índices aos grupos');
+ assert.equal(await page.locator('#grcon-repost-toolbar').isVisible(),false,'preparação legada não está habilitada na visão agrupada');
+ await page.locator('.pc-grdt-details summary').first().click();
+ assert.match(await page.locator('.pc-grdt-details[open]').textContent(),/Não reenviar o pacote integral/);
+ assert.match(await page.locator('.pc-grdt-details[open]').textContent(),/DOC-001/);
+ assert.match(await page.locator('.pc-grdt-details[open]').textContent(),/NÃO REENVIAR/);
+ await page.locator('.pc-grdt-details[open] input[type=search]').fill('DOC-002');
+ assert.equal(await page.locator('.pc-grdt-details[open] tbody tr:visible').count(),1);
+ await page.locator('.pc-grdt-details[open] input[type=search]').fill('');
  const pendingDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await (await pendingDownload).saveAs(path.join(out,'pendencias.xlsx'));
- const pend=XLSX.read(fs.readFileSync(path.join(out,'pendencias.xlsx')),{type:'buffer'});assert.deepEqual(pend.SheetNames,['Detalhamento','GRDTs Pendentes']);assert.equal(XLSX.utils.sheet_to_json(pend.Sheets['GRDTs Pendentes']).length,3);
+ assert.ok(await page.evaluate(()=>window.GrconPerformance?.metrics()['export-spreadsheet']), 'exportação agrupada deve usar o Web Worker');
+ const pend=XLSX.read(fs.readFileSync(path.join(out,'pendencias.xlsx')),{type:'buffer'});
+ for(const name of ['RESUMO GRDT','DOCUMENTOS POR GRDT','PENDENCIAS CONFIRMACAO','ALOCACOES A VERIFICAR','DOCUMENTOS TRAMITACAO','AVALIAR REENVIO','GRDTs Pendentes'])assert.ok(pend.Sheets[name],name);
+ assert.equal(XLSX.utils.sheet_to_json(pend.Sheets['RESUMO GRDT']).length,3);
+ const allDetails=XLSX.utils.sheet_to_json(pend.Sheets['DOCUMENTOS POR GRDT']);
+ assert.equal(allDetails.length,6,'o detalhamento preserva os documentos confirmados');
+ const onlyPending=XLSX.utils.sheet_to_json(pend.Sheets['PENDENCIAS CONFIRMACAO']);
+ assert.equal(onlyPending.length,5);
+ assert.ok(!onlyPending.some(row=>row.Documento==='DOC-001'),'documento confirmado não entra na lista de pendências');
+ assert.equal(allDetails.find(row=>row.Documento==='DOC-001').Orientação,'NÃO REENVIAR');
  const detailRows=XLSX.utils.sheet_to_json(pend.Sheets.Detalhamento,{range:9,defval:''});
- assert.equal(detailRows.length,6,'planilha de pendências deve conter todos os documentos filtrados');
+ assert.equal(detailRows.length,6,'planilha por ocorrência deve conter todos os documentos das GRDTs exibidas');
  for(let i=0;i<6;i++){
    const entry=detailRows.find(row=>row.Código==='DOC-00'+(i+1));
    assert.ok(entry,'documento presente no arquivo Excel: '+i);
-   assert.match(String(entry['PROPÓSITO DE EMISSÃO']),new RegExp(i===5?'Não identificado':i%2?'Para Cancelamento':'Para Construção'));
-   assert.match(String(entry['PROPÓSITO DE EMISSÃO']),/GRDT-10[012] — Rev\. 0/);
+   assert.equal(entry['PROPÓSITO DE EMISSÃO'],i===5?'Não identificado':i%2?'Para Cancelamento':'Para Construção');
  }
  // Auditar também a exportação real da visão por ocorrência/eGRDT.
  await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.view='grdts';ui.render();});
@@ -130,7 +153,12 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
    assert.equal(entry['PROPÓSITO DE EMISSÃO'],i===5?'Não identificado':i%2?'Para Cancelamento':'Para Construção');
  }
  await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.view='pending';ui.render();});
- await page.locator('#pc-discipline').selectOption('X');assert.match(await page.locator('#pc-pending-grdts').textContent(),/Documentos pendentes: 4 · GRDTs pendentes: 2/);
+ await page.locator('#pc-discipline').selectOption('X');assert.match(await page.locator('#pc-pending-grdts').textContent(),/2 GRDT\(s\) requerem acompanhamento/);assert.equal(await page.locator('.pc-grdt-details').count(),2);
+ await page.locator('#pc-grdt-classification').selectOption('PARCIALMENTE_CONFIRMADA');assert.equal(await page.locator('.pc-grdt-details').count(),1);
+ const filteredDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await(await filteredDownload).saveAs(path.join(out,'pendencias-filtradas.xlsx'));
+ const filteredBook=XLSX.read(fs.readFileSync(path.join(out,'pendencias-filtradas.xlsx')),{type:'buffer'});
+ assert.equal(XLSX.utils.sheet_to_json(filteredBook.Sheets['RESUMO GRDT']).length,1);assert.equal(XLSX.utils.sheet_to_json(filteredBook.Sheets['DOCUMENTOS POR GRDT']).length,3);assert.equal(XLSX.utils.sheet_to_json(filteredBook.Sheets['PENDENCIAS CONFIRMACAO']).length,2);
+ await page.locator('#pc-grdt-classification').selectOption('');
  await page.locator('#pc-reference-date').fill('2026-10-02');await page.locator('#pc-save-date').click();await page.waitForFunction(()=>window.GrconSharedSigemQuery.current()?.meta.referenceDate==='2026-10-02');assert.equal(await page.evaluate(()=>window.qaDateCalls),1);
  await page.screenshot({path:path.join(out,'pendencias-1366.png')});
  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({ok:true,metrics,cofreExport:52,details:6,uniqueGrdts:3,filteredDetails:4,filteredGrdts:2,errors},null,2));
