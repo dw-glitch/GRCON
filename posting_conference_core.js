@@ -611,7 +611,7 @@
       };
       const currentlyLocated = group.rows.filter((row) => row.status === STATUSES.CONFIRMED);
       const preservedOnly = group.rows.filter((row) => row.status !== STATUSES.CONFIRMED && row.historicalPreserved).length;
-      const inTransit = group.rows.filter((row) => row.sigemStatus
+      const inTransit = group.rows.filter((row) => row.currentEvidence && row.sigemStatus
         && /^(EM ANALISE|EM WORKFLOW)$/.test(norm(row.sigemStatus))
         && normalizeRevision(row.sigemStatusRevision) === normalizeRevision(row.revisionSent)).length;
       const ambiguous = group.rows.filter((row) => row.ambiguity || row.status === STATUSES.REVIEW).length;
@@ -625,7 +625,7 @@
         confirmedOrPreserved: counts.confirmed + preservedOnly, preservedOnly, inTransit, ambiguous,
         distinctDocuments: new Set(group.rows.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
         locatedDocuments: new Set(currentlyLocated.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
-        riskOfDuplicateResend: counts.confirmed > 0 && counts.confirmed < counts.total,
+        riskOfDuplicateResend: counts.confirmed + preservedOnly > 0 && counts.confirmed + preservedOnly < counts.total,
       };
     }).sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)));
   }

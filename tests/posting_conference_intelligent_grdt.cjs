@@ -113,6 +113,12 @@ assert.equal(result.groups[0].confirmed, 0);
 assert.equal(result.groups[0].preservedOnly, 1);
 assert.equal(C.diagnoseRow(result.rows[0], {}).action, "NÃO REENVIAR");
 
+// Confirmação histórica também pode tornar perigoso reenviar um pacote parcial.
+const historicalMixed = run([emission("111b", [[d[0], "A"], [d[1], "A"]])], [sigem(d[0], "A", "Em Workflow")]);
+const historicalMissing = C.reconcile([emission("111b", [[d[0], "A"], [d[1], "A"]])], [sigem(d[2], "A")], historicalMixed.state, { now: NOW, waitHours: 48, baseReferenceDate: "2026-10-08" });
+assert.equal(historicalMissing.groups[0].riskOfDuplicateResend, true);
+assert.equal(historicalMissing.groups[0].inTransit, 0, "workflow histórico não é evidência da base atual");
+
 // Propósito de emissão vinculado ao evento original da GRDT.
 result = run([emission("112", [[d[0], "A", "Para Cancelamento"]])], [sigem(d[0], "A")]);
 assert.equal(result.rows[0].purpose, "Para Cancelamento");
@@ -124,7 +130,7 @@ console.log("posting_conference_intelligent_grdt: OK");
   global.ExcelJS = require('../exceljs.min.js');
   global.GRCONBrandAssets = { reportLogoBase64: 'data:image/png;base64,' + require('node:fs').readFileSync(require('node:path').join(__dirname, '../grcon-logo-report.png')).toString('base64') };
   const Report = require('../posting_conference_report.js');
-  const mixed = run([emission('113', [[d[0], 'A', 'Para Cancelamento'], [d[1], 'B']])], [sigem(d[0], 'A')]);
+  const mixed = run([emission('113', [[d[0], 'A', 'Para Cancelamento'], [d[1], 'B'], [d[2], 'C']])], [sigem(d[0], 'A', 'Emitido'), sigem(d[2], 'B', 'Em Workflow')]);
   const rows = mixed.rows.map(row => ({ ...row, allocation: { kind: 'allocated', label: 'Alocado' }, diagnosis: C.diagnoseRow(row, { kind: 'allocated', allocations: ['ALOC-027'] }) }));
   const groups = C.aggregateByGrdt(rows);
   const bytes = await Report.buildWorkbook(rows, { mode: 'events', pending: true, groups });
@@ -135,10 +141,11 @@ console.log("posting_conference_intelligent_grdt: OK");
     return Array.from({ length: ws.rowCount - 1 }, (_, i) => Object.fromEntries(headers.slice(1).map((header, j) => [header, ws.getRow(i + 2).getCell(j + 1).value])));
   };
   assert.equal(values('RESUMO GRDT')[0]['Classificação'], 'PARCIALMENTE_CONFIRMADA');
-  assert.equal(values('DOCUMENTOS POR GRDT').length, 2);
-  assert.equal(values('PENDENCIAS CONFIRMACAO').length, 1);
+  assert.equal(values('DOCUMENTOS POR GRDT').length, 3);
+  assert.equal(values('PENDENCIAS CONFIRMACAO').length, 2);
   assert.equal(values('PENDENCIAS CONFIRMACAO')[0].Documento, C.displayDocument(d[1]));
   assert.equal(values('DOCUMENTOS POR GRDT').find(row => row.Documento === C.displayDocument(d[0]))['PROPÓSITO DE EMISSÃO'], 'Para Cancelamento');
   assert.equal(values('AVALIAR REENVIO')[0].Documento, C.displayDocument(d[1]));
+  assert.equal(values('DOCUMENTOS TRAMITACAO').length, 0, 'workflow da revisão B não representa tramitação da revisão C enviada');
   console.log('posting_conference_intelligent_grdt: XLSX real, propósito e pendências seletivas OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });

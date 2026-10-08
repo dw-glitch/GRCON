@@ -374,7 +374,8 @@
       addSheet("ALOCACOES A VERIFICAR", detailHeaders, groupRows.filter(({ row, d }) =>
         row.allocation?.kind !== "allocated" || (d.allocations || []).length > 1).map(detailValues));
       addSheet("DOCUMENTOS TRAMITACAO", detailHeaders, groupRows.filter(({ row }) =>
-        /^(EM ANALISE|EM WORKFLOW)$/.test(Conference.norm(row.sigemStatus))).map(detailValues));
+        row.currentEvidence && Conference.normalizeRevision(row.sigemStatusRevision) === Conference.normalizeRevision(row.revisionSent)
+          && /^(EM ANALISE|EM WORKFLOW)$/.test(Conference.norm(row.sigemStatus))).map(detailValues));
       addSheet("AVALIAR REENVIO", detailHeaders, groupRows.filter(({ d }) =>
         d.action === "AVALIAR REENVIO").map(detailValues));
       if (options.pending) {
