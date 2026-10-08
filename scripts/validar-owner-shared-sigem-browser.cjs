@@ -198,5 +198,8 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  assert.equal(await page.evaluate(async()=>(await window.GrconSigemPwDashboard.loadBases()).sigem.meta),null);
  assert.deepEqual(errors,[]);
  console.log('Chromium: owner/admin/operator/viewer, 20k records, historical selection, revision scopes, XLSX provenance, bidirectional dates, shared activation and deletion with replacement passed.');
+ }catch(error){
+  console.error('Browser diagnostics',JSON.stringify({errors,ui:await page.evaluate(()=>({body:document.querySelector('#grcon-sigem-pw-root')?.innerText.slice(0,1500),filterCount:document.querySelectorAll('#spw-pw-presence-filter').length,toasts:document.querySelector('#toast')?.textContent}))}));
+  throw error;
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

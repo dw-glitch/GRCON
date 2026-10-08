@@ -546,7 +546,9 @@ async function refresh(reason = ""): Promise<void> {
           shared.meta.historySourceSnapshotId = recorded.sigem?.snapshot?.id;
         }
         bases.sigem = await Core().saveSigemBase(shared);
-      } else if (window.GrconSharedSigemQuery && window.GrconCloud?.state?.online) {
+      } else if (window.GrconSharedSigemQuery && window.GrconCloud?.state?.online
+        && window.GrconCloud.state.membership?.workspace_id
+        && bases.sigem?.meta?.source === "shared-general-query") {
         bases.sigem = EMPTY_BASE();
         await Core().kvSet(Core().SIGEM_BASE_KEY, bases.sigem);
       }
