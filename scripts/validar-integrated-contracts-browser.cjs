@@ -62,10 +62,9 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.screenshot({path:path.join(out,'email-editor.png')});await page.locator('[data-egrdt-email-action="close"]').click();
  await page.locator('[data-grcon-view="control"]').first().click();
  assert.equal(await page.locator('input[name="grdt-document-source"]').count(),0,'a escolha manual Base documental foi removida');
- await page.locator('#grcon-control-help > summary').click();
- assert.match(await page.locator('#grcon-control-help').innerText(),/pasta local é opcional/i);
+ assert.equal(await page.locator('#grcon-control-help').count(),0,'ajuda expansível removida');
+ assert.equal(await page.locator('#missing-documents').count(),1,'lista de ausentes preservada');
  assert.equal(await page.locator('#grdt-module').isVisible(),true);
- await page.locator('#grcon-control-help > summary').click();
  await page.locator('#relation-start').click();
  await page.locator('#relation-text').fill(code+'\nRL-5290.00-22313-856-C1O-018');
  await page.locator('#relation-apply').click();
