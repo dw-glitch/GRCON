@@ -454,7 +454,9 @@ async function waitEvolutionReady(page) {
       await window.GrconSigemPwRevisionUi.refresh();
     });
 
+    const ldWorkerStarted = page.waitForEvent("worker", { predicate: worker => worker.url().endsWith("sigem_pw_dashboard.worker.js") });
     await importFile(page, "#spw-ld-file", fixtures.ldFile);
+    await ldWorkerStarted;
     assert.deepEqual(await page.evaluate(() => ({
       sigem: Boolean(window.GrconSigemPwDashboardUi.state.sigem.meta),
       pw: Boolean(window.GrconSigemPwDashboardUi.state.pw.meta),

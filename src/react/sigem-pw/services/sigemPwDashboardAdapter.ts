@@ -453,6 +453,39 @@ async function importPw(file: File): Promise<void> {
   }
 }
 
+async function parseQualityLdFile(file: File): Promise<{ meta: SigemPwBaseMeta; records: SigemPwRecord[] }> {
+  const meta = { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt: new Date().toISOString() };
+  const buffer = await file.arrayBuffer();
+  let worker: Worker | null = null;
+  if (typeof Worker !== "undefined") {
+    try { worker = new Worker(new URL("workers/sigem_pw_dashboard.worker.js", document.baseURI)); }
+    catch (_) { /* Navegadores sem Worker usam a mesma leitura seletiva abaixo. */ }
+  }
+  if (worker) {
+    const instance = worker;
+    return new Promise((resolve, reject) => {
+      const cleanup = () => { clearTimeout(timeout); instance.terminate(); };
+      const timeout = setTimeout(() => { cleanup(); reject(new Error("A leitura da LD não foi concluída. A base anterior foi preservada.")); }, 15 * 60 * 1000);
+      instance.addEventListener("message", (event: MessageEvent<WorkerModelPayload>) => {
+        cleanup();
+        const payload = event.data;
+        if (payload?.ok && payload.parsed) resolve(payload.parsed);
+        else reject(new Error(payload?.error || "Falha ao processar a LD da Qualidade."));
+      }, { once: true });
+      instance.addEventListener("error", event => { cleanup(); reject(new Error(event.message || "Worker da LD falhou.")); }, { once: true });
+      instance.addEventListener("messageerror", () => { cleanup(); reject(new Error("Resposta da leitura da LD inválida.")); }, { once: true });
+      try { instance.postMessage({ type: "quality-ld", buffer, meta }, [buffer]); }
+      catch (error) { cleanup(); reject(error); }
+    });
+  }
+  const sheetIndex = xlsx().read(buffer, { type: "array", bookSheets: true });
+  const sheetName = sheetIndex.SheetNames.find(name => Core().normalizeHeader(name) === "N 1710");
+  if (!sheetName) throw new Error("LD inválida: a aba N-1710 não foi localizada.");
+  await yieldFrame();
+  const workbook = xlsx().read(buffer, { type: "array", cellDates: false, dense: false, sheets: [sheetName] });
+  return Core().parseLdMatrix(workbookMatrix(workbook.Sheets[sheetName], 40), { ...meta, sheetName });
+}
+
 async function importLd(file: File): Promise<void> {
   if (state.busy) return;
   setBusy(true, "Lendo o universo N-1710 da LD da Qualidade…");
@@ -460,19 +493,7 @@ async function importLd(file: File): Promise<void> {
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await window.GRCONModuleLoader.ensure("xlsx");
-    const buffer = await file.arrayBuffer();
-    const sheetIndex = xlsx().read(buffer, { type: "array", bookSheets: true });
-    const sheetName = sheetIndex.SheetNames.find((name) => Core().normalizeHeader(name) === "N 1710");
-    if (!sheetName) throw new Error("LD inválida: a aba N-1710 não foi localizada.");
-    await yieldFrame();
-    const workbook = xlsx().read(buffer, { type: "array", cellDates: false, dense: false, sheets: [sheetName] });
-    const parsed = Core().parseLdMatrix(workbookMatrix(workbook.Sheets[sheetName], 40), {
-      fileName: file.name,
-      fileSize: file.size,
-      lastModified: file.lastModified,
-      importedAt: new Date().toISOString(),
-      sheetName,
-    });
+    const parsed = await parseQualityLdFile(file);
     const candidateLd: SigemPwBase = { meta: parsed.meta, records: parsed.records };
     const candidatePw = state.pw.meta ? Core().sanitizePwBase(state.pw, candidateLd) : null;
     const previousHistory = state.history;

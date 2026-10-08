@@ -45,6 +45,32 @@ assert.throws(() => Core.parseLdMatrix([
   ["DOCUMENTO N-2064", "REVISÃO"],
 ]), /cabeçalho DOCUMENTO não localizado/);
 
+(function qualityLdWorkerUsesTheSameParserAndIgnoresAuxiliarySheets() {
+  const vm = require("node:vm"), XLSX = require("../xlsx.full.min.js");
+  let receive, response;
+  const sandbox = {
+    GrconSigemPwDashboard: Core,
+    addEventListener(type, handler) { if (type === "message") receive = handler; },
+    postMessage(value) { response = JSON.parse(JSON.stringify(value)); },
+    importScripts(file) { if (file.endsWith("xlsx.full.min.js")) sandbox.XLSX = XLSX; },
+  };
+  sandbox.self = sandbox;
+  vm.runInNewContext(fs.readFileSync(path.join(rootDir, "workers/sigem_pw_dashboard.worker.js"), "utf8"), sandbox);
+  const matrix = [["ITEM", "DOCUMENTO \r\nN-1710", "REVISÃO"], ["1", "PR-5290.00-22313-122-C1O-003", "0"]];
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(matrix), "N-1710");
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["DOCUMENTO"], ["CE-5290.00-22313-856-C1O-001"]]), "Colar SIGEM");
+  const meta = { fileName: "LD.xlsx", importedAt: "2026-10-08T00:00:00Z" };
+  receive({ data: { type: "quality-ld", buffer: XLSX.write(book, { type: "array", bookType: "xlsx" }), meta } });
+  assert.equal(response.ok, true);
+  assert.deepEqual(response.parsed, Core.parseLdMatrix(matrix, { ...meta, sheetName: "N-1710" }));
+  const invalid = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(invalid, XLSX.utils.aoa_to_sheet(matrix), "Outra aba");
+  receive({ data: { type: "quality-ld", buffer: XLSX.write(invalid, { type: "array", bookType: "xlsx" }), meta } });
+  assert.equal(response.ok, false);
+  assert.match(response.error, /aba N-1710 não foi localizada/);
+})();
+
 const csv = [
   "NumeroDocumentoCliente;RevisaoCompleta;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão;datacriacao",
   "CE-5290.00-22313-856-C1O-001;0;0;CE;Certificado;QUA;Qualidade;Superado;Não;01/09/2026",
