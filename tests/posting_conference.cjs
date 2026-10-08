@@ -29,6 +29,36 @@ function base(doc, rev, status = "Em Análise") {
 }
 const NOW = "2026-09-02T12:00:00Z";
 
+// A finalidade deve acompanhar a ocorrência da GRDT, não só o código ou a última revisão.
+const purposesHistory = [
+  { id: "purpose-1", egrdtNumber: "GRDT-001", generatedAt: "2026-08-01T10:00:00Z", files: [{ document: "DOC-PROP", revision: "0", purpose: "Para Construção" }] },
+  { id: "purpose-2", egrdtNumber: "GRDT-002", generatedAt: "2026-08-02T10:00:00Z", files: [{ document: "DOC-PROP", revision: "0", purpose: "Para Cancelamento" }] },
+  { id: "purpose-3", egrdtNumber: "GRDT-003", generatedAt: "2026-08-03T10:00:00Z", files: [{ document: "DOC-PROP", revision: "A", purpose: "Para Informação" }] },
+  { id: "purpose-4", egrdtNumber: "GRDT-004", generatedAt: "2026-08-04T10:00:00Z", files: [{ document: "DOC-MISSING", revision: "B" }] },
+];
+const purposesEvents = C.flattenHistory(purposesHistory);
+assert.deepEqual(purposesEvents.map((row) => [row.egrdtNumber, row.revisionSent, row.purpose]), [
+  ["GRDT-001", "0", "Para Construção"],
+  ["GRDT-002", "0", "Para Cancelamento"],
+  ["GRDT-003", "A", "Para Informação"],
+  ["GRDT-004", "B", ""],
+]);
+const purposesAggregates = R.buildDocumentAggregates(purposesEvents.map((row) => ({ ...row, status: C.STATUSES.CONFIRMED })), C);
+assert.deepEqual(purposesAggregates.find((row) => row.document === "DOC-PROP").sends.map((send) => send.purpose), [
+  "Para Informação", "Para Cancelamento", "Para Construção",
+], "revisões e repostagens não podem trocar seus propósitos");
+const conflict = C.flattenHistory([{
+  id: "conflict", egrdtNumber: "GRDT-CONFLICT", generatedAt: "2026-08-05T10:00:00Z",
+  files: [
+    { document: "DOC-CONFLICT", revision: "B", purpose: "Para Construção" },
+    { document: "DOC-CONFLICT", revision: "B", purpose: "Para Cancelamento" },
+  ],
+}]);
+assert.equal(conflict.length, 1);
+assert.equal(conflict[0].purpose, "");
+assert.equal(conflict[0].purposeAmbiguous, true);
+
+
 let r = C.reconcile(hist("MC-5290.00-22313-970-C1O-009", "B"), base("MC-5290.00-22313-970-C1O-009", "B"), null, { now: NOW });
 assert.equal(r.rows[0].status, C.STATUSES.CONFIRMED);
 assert.ok(r.rows[0].firstConfirmedAt);

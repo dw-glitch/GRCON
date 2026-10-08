@@ -293,7 +293,7 @@
 
   function flattenHistory(records) {
     const result = [];
-    const seen = new Set();
+    const seen = new Map();
     (records || []).forEach((rawRecord) => {
       const record = History && typeof History.cleanRecord === "function" ? History.cleanRecord(rawRecord) : rawRecord || {};
       const stableId = historyStableId(record);
@@ -303,10 +303,21 @@
         if (!document) return;
         const identity = documentIdentity(document);
         const rowKey = `${stableId}|${identity}|${revision}`;
-        if (seen.has(rowKey)) return;
-        seen.add(rowKey);
-        result.push({
+        const purpose = text(file && file.purpose);
+        if (seen.has(rowKey)) {
+          // Mesmo envio/revisão com propósitos diferentes não tem evidência inequívoca.
+          const previous = seen.get(rowKey);
+          if (purpose && previous.purpose && norm(purpose) !== norm(previous.purpose)) {
+            previous.purpose = "";
+            previous.purposeAmbiguous = true;
+          } else if (!previous.purpose && !previous.purposeAmbiguous) {
+            previous.purpose = purpose;
+          }
+          return;
+        }
+        const event = {
           key: rowKey,
+          purpose,
           historyId: stableId,
           historyRecordId: text(record.id),
           egrdtNumber: text(record.egrdtNumber),
@@ -320,7 +331,9 @@
           sheet: text(file && file.sheet),
           sourceName: text(record.sourceName),
           ldName: text(record.ldName),
-        });
+        };
+        seen.set(rowKey, event);
+        result.push(event);
       });
     });
     return result;
