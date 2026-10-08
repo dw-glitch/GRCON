@@ -495,7 +495,7 @@
     const labels = { TOTALMENTE_CONFIRMADA: "Totalmente confirmada", PARCIALMENTE_CONFIRMADA: "Parcialmente confirmada", NENHUM_DOCUMENTO_CONFIRMADO: "Nenhum documento confirmado", REQUER_INVESTIGACAO: "Requer investigação", NAO_VERIFICADA: "Não verificada" };
     const body = groups.map((g) =>
       '<tr><td><strong>' + escapeHtml(g.egrdtNumber || "Sem número") + '</strong></td><td>' + fmtDate(g.generatedAt, false) +
-      '</td><td>' + fmt(g.distinctDocuments) + '</td><td>' + fmt(g.confirmedOrPreserved) + '</td><td>' +
+      '</td><td>' + fmt(g.distinctDocuments) + '</td><td>' + fmt(g.locatedDocuments) + '</td><td>' +
       fmt(g.notFound) + '</td><td>' + fmt(g.divergent) + '</td><td>' + fmt(g.inTransit) + '</td><td>' +
       fmt(g.allocationPending) + '</td><td><strong>' + escapeHtml(labels[g.classification] || g.classification) +
       '</strong></td></tr><tr class="pc-grdt-detail-row"><td colspan="9">' + grdtDetails(g) + '</td></tr>'
