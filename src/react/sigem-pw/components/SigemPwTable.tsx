@@ -13,6 +13,7 @@ function valueOrDash(value: string): string {
 
 export function SigemPwTable({ rows, caption }: { rows: SigemPwRow[]; caption: string }) {
   return (
+    <div className="ui-v3-table-shell">
     <div className="spw-table-wrap" id="spw-table" tabIndex={0} aria-label={`Tabela: ${caption}`}>
       {rows.length ? (
         <table>
@@ -54,6 +55,7 @@ export function SigemPwTable({ rows, caption }: { rows: SigemPwRow[]; caption: s
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
