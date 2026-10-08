@@ -34,7 +34,14 @@
     for (let row = 0; row < Math.min(40, rows.length); row++) {
       const candidate = {};
       for (const [field, aliases] of Object.entries(fields)) {
-        const matches = rows[row].map((value, column) => aliases.includes(norm(value)) ? column : -1).filter(column => column >= 0);
+        const matches = rows[row].map((value, column) => {
+          const header = norm(value);
+          // A Central identifica a responsável depois do cabeçalho, por ex.
+          // "Resposta da Fiscal 01\n (Nome)". Só o comentário aceita esse
+          // complemento; retorno/data e Fiscal 02 não são comentários da 01.
+          const identity = field === "fiscalComment" ? header.replace(/\s*\([^()]*\)\s*$/, "").trim() : header;
+          return aliases.includes(identity) ? column : -1;
+        }).filter(column => column >= 0);
         if (matches.length > 1) throw new Error(`Cabeçalho duplicado: ${field}. Confira a planilha antes de publicar.`);
         if (matches.length) candidate[field] = matches[0];
       }

@@ -21,6 +21,22 @@ XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
 const parsed = Registry.parseWorkbook(book, XLSX);
 assert.equal(parsed.count, 4);
 assert.equal(parsed.records[0].fiscalComment, original);
+// Cabeçalho real da Central: quebra de linha e identificação da fiscal.
+const namedBook = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(namedBook, XLSX.utils.aoa_to_sheet([
+  ["NomeDocumento", "ALOCAÇÃO", "STATUS DA ALOCAÇÃO", "Retorno da Fiscal 01\r\n (Responsável)", "Resposta da Fiscal 01\r\n (Responsável)", "Resposta da Fiscal 02 (Outra responsável)"],
+  ["DOC-0001", "ALOC-1", "CONCLUÍDA", "01/10/2026", original, "Comentário de outra fiscal"],
+  ["DOC-0002", "ALOC-2", "CONCLUÍDA", "02/10/2026", "", "Somente Fiscal 02"],
+]), "Central de alocação");
+const namedParsed = Registry.parseWorkbook(namedBook, XLSX);
+assert.equal(namedParsed.records[0].fiscalComment, original);
+assert.equal(namedParsed.records[1].fiscalComment, "");
+const duplicateNamed = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(duplicateNamed, XLSX.utils.aoa_to_sheet([
+  [...headers, "Resposta da Fiscal 01 (Responsável)"],
+  ["DOC-0001", "ALOC-1", "CONCLUÍDA", original, "Outra resposta"],
+]), "Central de alocação");
+assert.throws(() => Registry.parseWorkbook(duplicateNamed, XLSX), /Cabeçalho duplicado: fiscalComment/);
 const index = Registry.buildIndex(parsed.records);
 assert.deepEqual(Registry.fiscalCommentsForDocument("DOC-0001", index), [original, "Outra observação"]);
 assert.deepEqual(Registry.fiscalCommentsForDocument("DOC-0002", index), []);
