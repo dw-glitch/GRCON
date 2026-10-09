@@ -75,6 +75,8 @@
       .pc-grdt-filter{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:.5rem 0}
       .pc-grdt-filter select{max-width:18rem}
       .pc-grdt-details input[type="search"]{display:block;max-width:23rem;margin:.6rem 0;padding:.45rem .6rem;border:1px solid var(--border,#ddd);border-radius:.5rem;background:var(--surface,#fff);color:inherit}
+      .pc-pending-documents{min-width:1080px;table-layout:fixed}.pc-pending-documents th:nth-child(1){width:24%}.pc-pending-documents th:nth-child(2){width:17%}.pc-pending-documents th:nth-child(3){width:19%}.pc-pending-documents th:nth-child(4){width:19%}.pc-pending-documents th:nth-child(5){width:21%}.pc-pending-documents td{text-align:left!important;overflow-wrap:anywhere}.pc-pending-documents td:first-child strong{white-space:normal}.pc-pending-documents td small{display:block;color:var(--muted,#64748b);font-size:.74rem;margin-top:.25rem}.pc-pending-documents .pc-send-history summary span{overflow-wrap:anywhere}.pc-pending-documents .pc-send-event strong{overflow-wrap:anywhere}
+
     `;
     document.head.appendChild(style);
   }
@@ -520,17 +522,54 @@
     });
   }
 
+  function filteredPendingDocuments(pendingEvents) {
+    return Conference.buildPendingDocumentAggregates(pendingEvents || filteredPendingRows(), documentRows());
+  }
+
   function pendingTable(rows) {
-    const body = rows.map(row => '<tr><td><strong>' + breakableCode(row.document) +
-      '</strong></td><td>' + escapeHtml(row.revisionSent || "—") +
-      '</td><td><button type="button" class="text-button" data-pc-pending-grdt data-pc-grdt="' +
-      escapeHtml(row.egrdtNumber || "") + '">' + escapeHtml(row.egrdtNumber || "Não identificada") +
-      '</button></td><td>' + statusChip(row) + (row.historicalPreserved ? '<small>Já confirmado anteriormente; não reenviar.</small>' : '') +
-      '</td><td>' + escapeHtml(row.sigemStatus || "Não informado") +
-      (row.sigemStatusRevision ? '<small>Revisão ' + escapeHtml(row.sigemStatusRevision) + '</small>' : '') +
-      '</td><td><strong>' + escapeHtml(row.pendingScope.label) + '</strong><small>' +
-      escapeHtml(row.pendingScope.detail) + '</small></td></tr>').join("");
-    return '<table class="pc-table pc-grdt-table pc-pending-table"><thead><tr><th>Documento pendente</th><th title="Revisão enviada">Rev.</th><th>eGRDT</th><th>Pendência do documento</th><th>Status SIGEM</th><th>O que está pendente na GRDT?</th></tr></thead><tbody>' + body + '</tbody></table>';
+    const body = rows.map((row) => {
+      const pending = row.pendingEvents || [];
+      const current = row.newestPending || pending[0] || row;
+      const latest = row.latestSend || row;
+      const latestGrdt = row.latestEgrdtNumber || latest.egrdtNumber || "";
+      const history = row.sends || pending;
+      const revisions = (row.pendingRevisions || []).join(", ") || "—";
+      const events = pending.map((send) =>
+        '<article class="pc-send-event"><button class="pc-link" type="button" data-pc-pending-grdt data-pc-grdt="' +
+        escapeHtml(send.egrdtNumber || "") + '">' + breakableCode(send.egrdtNumber || "eGRDT não informada") +
+        '</button><small>Rev. ' + escapeHtml(send.revisionSent || "—") + ' · ' + escapeHtml(fmtDate(send.generatedAt, false)) +
+        ' · ' + escapeHtml(send.conferenceLabel || send.statusLabel || Conference.statusLabel(send.status)) +
+        '</small><strong>' + escapeHtml(send.pendingScope?.label || "GRDT a verificar") +
+        '</strong><small>' + escapeHtml(send.pendingScope?.detail || "Conferir a GRDT completa.") +
+        '</small>' + (send.historicalPreserved ? '<small>Já confirmado anteriormente; não reenviar.</small>' : '') +
+        '</article>').join("");
+      const historyEvents = history.map((send, index) =>
+        '<article class="pc-send-event"><button class="pc-link" type="button" data-pc-grdt="' +
+        escapeHtml(send.egrdtNumber || "") + '">' + breakableCode(send.egrdtNumber || "eGRDT não informada") +
+        '</button><small>Rev. ' + escapeHtml(send.revisionSent || "—") +
+        ' · ' + escapeHtml(fmtDate(send.generatedAt, false)) +
+        (index === 0 ? " · último envio" : "") +
+        '</small><small>' + escapeHtml(send.conferenceLabel || send.statusLabel || Conference.statusLabel(send.status)) +
+        '</small></article>').join("");
+      return '<tr><td><strong>' + breakableCode(row.document) + '</strong><small>' +
+        fmt(row.pendingEventCount) + ' ' + plural(row.pendingEventCount, "envio com pendência", "envios com pendência") +
+        ' · Revisão(ões): ' + escapeHtml(revisions) + '</small></td><td>' +
+        statusChip(current) + '<small>SIGEM: ' + escapeHtml(current.sigemStatus || "Não informado") +
+        '</small></td><td><button class="pc-link" type="button" data-pc-grdt="' +
+        escapeHtml(latestGrdt) + '">' + breakableCode(latestGrdt || "Não identificada") +
+        '</button><small>' + escapeHtml(fmtDate(row.latestSendAt || latest.generatedAt, false)) +
+        ' · Rev. ' + escapeHtml(latest.revisionSent || "—") + '</small></td><td>' +
+        '<details class="pc-send-history"><summary><strong>' + fmt(row.sendCount || history.length) +
+        ' ' + plural(row.sendCount || history.length, "envio") + '</strong><span>Ver histórico completo de eGRDTs</span></summary>' +
+        '<div class="pc-send-history-list">' + historyEvents + '</div></details></td><td>' +
+        '<details class="pc-send-history pc-pending-details"><summary><strong>' + fmt(row.pendingGrdtCount) +
+        ' ' + plural(row.pendingGrdtCount, "eGRDT", "eGRDTs") +
+        ' com pendência</strong><span>Ver cada revisão e a abrangência da GRDT</span></summary>' +
+        '<div class="pc-send-history-list">' + events + '</div></details></td></tr>';
+    }).join("");
+    return '<table class="pc-table pc-grdt-table pc-pending-table pc-pending-documents"><thead><tr>' +
+      '<th>Documento único</th><th>Situação dos envios pendentes</th><th>Última eGRDT enviada</th>' +
+      '<th>Histórico de eGRDTs</th><th>Pendências por eGRDT</th></tr></thead><tbody>' + body + '</tbody></table>';
   }
 
   function grdtTable(groups) {
@@ -558,15 +597,16 @@
     consolidated.hidden = state.view !== "pending";
 
     if (state.view === "pending") {
-      const rows = filteredPendingRows();
+      const pendingEvents = filteredPendingRows();
+      const rows = filteredPendingDocuments(pendingEvents);
       total = rows.length;
       pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
       state.page = Math.min(state.page, pages);
       content = pendingTable(rows.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE));
       el("pc-table-kicker").textContent = "DOCUMENTOS PENDENTES";
-      el("pc-table-help").textContent = "Cada linha mostra uma revisão pendente e sua GRDT. Clique na GRDT para ver a emissão completa.";
-      el("pc-result-count").textContent = `${fmt(total)} documento(s)/revisão(ões) pendente(s)`;
-      consolidated.innerHTML = '<strong>Pendência total ou parcial?</strong><p>A última coluna informa se a GRDT inteira está pendente ou somente os documentos indicados. Pendente significa sem confirmação da revisão enviada na base consultada; não comprova falha de postagem.</p><button type="button" data-copy-pending-grdts>Copiar GRDTs exibidas</button>';
+      el("pc-table-help").textContent = "Um único registro por código, independentemente das revisões e repostagens. Histórico completo e última eGRDT preservados.";
+      el("pc-result-count").textContent = `${fmt(total)} documento(s) único(s) · ${fmt(pendingEvents.length)} envio(s)/revisão(ões) pendente(s)`;
+      consolidated.innerHTML = '<strong>Pendência total ou parcial?</strong><p>Abra Pendências por eGRDT em cada documento para conferir quais revisões faltam e se a emissão foi total ou parcialmente confirmada. O histórico conserva todas as eGRDTs. Ausência na Consulta Geral não comprova falha de postagem.</p><button type="button" data-copy-pending-grdts>Copiar GRDTs exibidas</button>';
     } else if (state.view === "grdts") {
       const groups = filteredGroups();
       total = groups.length;
