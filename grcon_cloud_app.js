@@ -945,6 +945,43 @@
     };
   }
 
+  // Uma única alteração transacional por arquivo: nunca excluir a eGRDT,
+  // suas reservas, confirmações do Teams ou os dados documentais oficiais.
+  async function manageHistoryFile(record, operation, options) {
+    const workspaceId = state.membership?.workspace_id;
+    if (!workspaceId || !state.client || !state.online) throw new Error("Conecte-se ao histórico compartilhado antes de alterar um documento.");
+    if (!canManageHistory()) throw new Error("Somente proprietário ou administrador pode alterar documentos do histórico.");
+    if (!record?.cloudId || !record?.cloudUpdatedAt || record?.workspaceId !== workspaceId) {
+      throw new Error("A eGRDT precisa estar sincronizada com o contrato atual. Atualize o histórico.");
+    }
+    if (operation !== "remove" && operation !== "restore") throw new Error("Operação inválida.");
+    const input = options || {};
+    const { data, error } = await state.client.rpc("grcon_history_file_action", {
+      target_workspace: workspaceId,
+      target_history_id: record.cloudId,
+      operation,
+      target_index: operation === "remove" ? input.index : null,
+      target_removal_id: operation === "restore" ? input.removalId : null,
+      reason_text: operation === "remove" ? input.reason : null,
+      expected_updated_at: record.cloudUpdatedAt,
+    });
+    if (error) throw new Error(error.message || "Não foi possível atualizar o documento no Supabase.");
+    if (!data?.record || data.record.workspace_id !== workspaceId || data.record.id !== record.cloudId) {
+      throw new Error("A alteração não retornou confirmação válida do histórico. Atualize a tela.");
+    }
+    const next = cloudHistoryRecord(data.record);
+    const saved = History.saveMany([next]);
+    if (saved.error) {
+      await pullCloudHistory({ forceFull: true });
+    } else if (saved.persistence) {
+      await saved.persistence.catch(() => pullCloudHistory({ forceFull: true }));
+    }
+    window.dispatchEvent(new CustomEvent("grcon:history-updated", {
+      detail: { fileChanged: true, recordId: next.id, operation, removalId: data.removalId },
+    }));
+    return { record: next, removalId: data.removalId };
+  }
+
   async function clearSharedHistory() {
     const workspaceId = state.membership?.workspace_id;
     if (!workspaceId) {
@@ -2472,6 +2509,7 @@
     deleteExportTemplate,
     reserveEgrdtSequences,
     deleteHistoryRecord: deleteSharedHistoryRecord,
+    manageHistoryFile,
     inviteUser,
     completeEgrdtReservationRequest,
     clearHistory: clearSharedHistory,
