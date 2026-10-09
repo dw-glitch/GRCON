@@ -182,6 +182,97 @@
     ];
   }
 
+  // A planilha de pendências é UMA linha por código documental, mesmo que
+  // tenha múltiplas revisões ou repostagens. Eventos permanecem intactos em
+  // pendingEvents, e a lista completa de envios permanece em sends.
+  function consolidatePendingDocuments(rows) {
+    const groups = new Map();
+    (rows || []).forEach((row) => {
+      if (!row) return;
+      const identity = text(row.documentIdentity) || Conference.documentIdentity(row.document);
+      if (!identity) return;
+      let group = groups.get(identity);
+      if (!group) {
+        group = { identity, aggregate: null, events: new Map() };
+        groups.set(identity, group);
+      }
+      if (Array.isArray(row.sends) && row.sends.length) group.aggregate = row;
+      const pending = Array.isArray(row.pendingEvents) ? row.pendingEvents
+        : (Array.isArray(row.sends) ? row.sends : [row]);
+      pending.filter(event => event && event.status !== Conference.STATUSES.CONFIRMED)
+        .forEach((event) => {
+          const key = text(event.key) || [
+            Conference.norm(event.egrdtNumber), Conference.normalizeRevision(event.revisionSent),
+            text(event.generatedAt),
+          ].join("|");
+          if (!group.events.has(key)) group.events.set(key, event);
+        });
+    });
+    const time = (event) => Date.parse(event?.generatedAt || "") || 0;
+    return [...groups.values()].filter(group => group.events.size).map((group) => {
+      const pendingEvents = [...group.events.values()].sort((a, b) =>
+        time(b) - time(a) || text(b.egrdtNumber).localeCompare(text(a.egrdtNumber), "pt-BR", { numeric: true }));
+      const aggregate = group.aggregate || pendingEvents[0];
+      const sends = Array.isArray(aggregate.sends) && aggregate.sends.length
+        ? aggregate.sends : pendingEvents;
+      const latest = aggregate.latestSend || sends.reduce((best, event) =>
+        !best || time(event) > time(best) ? event : best, null);
+      return {
+        ...pendingEvents[0], ...aggregate,
+        documentIdentity: group.identity,
+        pendingEvents,
+        sends,
+        latestSend: latest,
+        latestEgrdtNumber: aggregate.latestEgrdtNumber || latest?.egrdtNumber || "",
+      };
+    }).sort((a, b) => time(b.pendingEvents[0]) - time(a.pendingEvents[0]));
+  }
+
+  function pendingDetails(row, groupsById) {
+    const scopes = new Map();
+    const events = row.pendingEvents || [];
+    events.forEach(event => {
+      const id = event.historyId || event.egrdtNumber;
+      const key = Conference.norm(event.egrdtNumber) || text(id) || "GRDT não identificada";
+      const sourceGroup = groupsById.get(id) || groupsById.get(event.egrdtNumber);
+      const scope = event.pendingScope || Conference.pendingScope?.(sourceGroup)
+        || { label: "GRDT a verificar", detail: "Não foi possível conferir a emissão completa." };
+      if (!scopes.has(key)) scopes.set(key, { number: text(event.egrdtNumber) || "GRDT não identificada", scope });
+    });
+    const items = [...scopes.values()];
+    if (!items.length) return ["GRDT a verificar", "Não foi possível conferir a emissão."];
+    if (items.length === 1) return [items[0].scope.label, items[0].scope.detail];
+    return [
+      "Múltiplas GRDTs com pendências",
+      items.map(({ number, scope }) => `${number} — ${scope.label}: ${scope.detail}`).join("\n"),
+    ];
+  }
+
+  function pendingValues(row, groupsById) {
+    // Os 13 campos históricos descrevem a ocorrência pendente mais recente.
+    // A última eGRDT real (que pode ser outra) aparece em campo explícito.
+    const pending = row.pendingEvents || [];
+    const representative = pending[0] || row;
+    const [label, detail] = pendingDetails(row, groupsById);
+    const history = row.sends || pending;
+    const historyText = history.map(event => [
+      text(event.egrdtNumber) || "eGRDT não informada",
+      fmtDate(event.generatedAt, false) || "sem data",
+      `Rev. ${text(event.revisionSent) || "—"}`,
+      emissionPurpose(event.purpose),
+      statusText(event),
+    ].join(" — ")).join("\n");
+    const pendingRevisions = [...new Set(pending.map(event =>
+      Conference.normalizeRevision(event.revisionSent)).filter(Boolean))].join(" · ");
+    return [
+      ...eventValues(representative),
+      label, detail,
+      row.latestEgrdtNumber || representative.egrdtNumber || "",
+      historyText,
+      pendingRevisions,
+    ];
+  }
+
   // Todos os relatórios utilizam o padrão visual GRCON. A visão Pendências
   // mantém TODAS as colunas originais de auditoria e acrescenta o alcance
   // da pendência; sua diferença é conter uma única aba com as pendências.
@@ -193,16 +284,14 @@
       } catch (error) { console.warn("[GRCON] Exportação da Conferência em modo compatível", error); }
     }
     if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");
-    const source = options?.pending
-      ? (rows || []).flatMap(row => Array.isArray(row.sends) && row.sends.length ? row.sends : [row])
-        .filter(row => row.status !== Conference.STATUSES.CONFIRMED)
-      : (rows || []);
+    const source = options?.pending ? consolidatePendingDocuments(rows) : (rows || []);
     const mode = options?.pending || options?.mode === "events" ? "events" : "documents";
     // O grupo completo é necessário para distinguir um documento pendente
     // de uma GRDT integralmente pendente, mesmo com filtros aplicados.
     const pendingGroups = new Map((options?.groups || []).map(group =>
       [group.historyId || group.egrdtNumber, group]));
-    const summary = Conference?.summarize ? Conference.summarize(source) : {};
+    const summaryRows = options?.pending ? source.map(row => row.pendingEvents[0]) : source;
+    const summary = Conference?.summarize ? Conference.summarize(summaryRows) : {};
     const workbook = new root.ExcelJS.Workbook();
     workbook.creator = "GRCON";
     workbook.created = new Date();
@@ -211,7 +300,7 @@
     workbook.title = "Relatório de Conferência — Consulta Geral × Histórico";
 
     const headers = options?.pending
-      ? [...eventHeaders(), "Pendência da GRDT", "Detalhamento da pendência"]
+      ? [...eventHeaders(), "Pendência da GRDT", "Detalhamento da pendência", "Última eGRDT enviada", "Histórico de eGRDTs", "Revisões pendentes"]
       : (mode === "documents" ? documentHeaders() : eventHeaders());
     const columnCount = headers.length;
     const lastColumn = String.fromCharCode(64 + Math.min(columnCount, 26));
@@ -244,7 +333,15 @@
     sheet.getRow(4).height = 5;
     await addLogo(workbook, sheet);
 
-    const kpis = mode === "documents" ? [
+    const kpis = options?.pending ? [
+      ["Documentos pendentes", source.length],
+      ["Envios pendentes", source.reduce((sum, row) => sum + row.pendingEvents.length, 0)],
+      ["eGRDTs pendentes", new Set(source.flatMap(row => row.pendingEvents.map(event => Conference.norm(event.egrdtNumber)).filter(Boolean))).size],
+      ["Não postado ainda", summary.awaiting || 0],
+      ["Rev. divergente", summary.divergent || 0],
+      ["Não encontrado", summary.notFound || 0],
+      ["Requer análise", summary.review || 0],
+    ] : mode === "documents" ? [
       ["Documentos únicos", summary.total || 0],
       ["Envios", summary.sendCount || 0],
       ["eGRDTs", summary.egrdtCount || 0],
@@ -295,10 +392,7 @@
     source.forEach((row, index) => {
       const excelRow = sheet.getRow(11 + index);
       if (options?.pending) {
-        const group = pendingGroups.get(row.historyId || row.egrdtNumber);
-        const scope = Conference?.pendingScope?.(group) ||
-          { label: "GRDT a verificar", detail: "Não foi possível conferir a GRDT completa." };
-        excelRow.values = [...eventValues(row), scope.label, scope.detail];
+        excelRow.values = pendingValues(row, pendingGroups);
       } else {
         excelRow.values = mode === "documents" ? documentValues(row) : eventValues(row);
       }
@@ -313,12 +407,16 @@
           if (colNumber !== conferenceColumn && colNumber !== sigemColumn) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F8FAFB" } };
         });
       }
-      applyConferenceStyle(excelRow.getCell(conferenceColumn), row.status);
+      applyConferenceStyle(excelRow.getCell(conferenceColumn),
+        options?.pending ? row.pendingEvents[0].status : row.status);
       applySigemStyle(excelRow.getCell(sigemColumn));
       if (options?.pending) {
         excelRow.getCell(14).font = { name: "Arial", size: 9, bold: true, color: { argb: DARK } };
         excelRow.getCell(15).alignment = { vertical: "middle", wrapText: true };
-        excelRow.height = Math.max(excelRow.height || 0, 42);
+        excelRow.height = Math.min(240, Math.max(excelRow.height || 0, 42, Math.min(row.sends?.length || 1, 8) * 21));
+        excelRow.getCell(16).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+        excelRow.getCell(17).alignment = { vertical: "top", wrapText: true };
+        excelRow.getCell(18).alignment = { vertical: "middle", wrapText: true };
       }
       excelRow.getCell(1).font = { name: "Arial", size: 9, bold: true, color: { argb: DARK } };
       if (mode === "documents") {
@@ -340,6 +438,9 @@
     if (options?.pending) {
       sheet.getColumn(14).width = 32;
       sheet.getColumn(15).width = 56;
+      sheet.getColumn(16).width = 31;
+      sheet.getColumn(17).width = 76;
+      sheet.getColumn(18).width = 24;
     }
     sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
     sheet.pageMargins = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
@@ -412,5 +513,5 @@
     return workbook.xlsx.writeBuffer();
   }
 
-  return Object.freeze({ buildWorkbook, downloadName, eventList });
+  return Object.freeze({ buildWorkbook, downloadName, eventList, consolidatePendingDocuments, pendingDetails });
 });
