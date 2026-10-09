@@ -161,4 +161,15 @@ assert.equal(docs.length, 5000);
 assert.equal(R.summarizeDocuments(docs, C).sendCount, 15000);
 assert.ok(Date.now() - started < 5000, `consolidação 15k eventos excedeu 5s: ${Date.now() - started}ms`);
 
-console.log("posting_conference_document_aggregation: ok");
+// Uma lista grande é preparada uma vez, não novamente para cada documento.
+let identityCalls = 0;
+const measured = R.wrapConference({ ...original, documentIdentity(value) { identityCalls++; return C.documentIdentity(value); } });
+const codes = docs.map(row => row.document);
+const listStarted = Date.now();
+assert.equal(measured.filterRows(docs, { documentList: codes.join('\n') }).length, 5000);
+assert.equal(identityCalls, 5000, 'normalização da lista deve ser linear, sem 25 milhões de comparações');
+const listMs = Date.now() - listStarted;
+assert.equal(measured.filterRows(docs, { documentList: codes[0] + ';' + codes[1] + '\t' + codes[0], revision: 'B' }).length, 2);
+assert.equal(measured.filterRows(docs, { documentList: 'INEXISTENTE' }).length, 0);
+assert.equal(measured.filterRows(docs, { documentList: '' }).length, 5000);
+console.log('posting_conference_document_aggregation: ok; filtro de 5.000 códigos/5.000 documentos em ' + listMs + 'ms');

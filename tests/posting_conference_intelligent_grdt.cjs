@@ -135,7 +135,7 @@ assert.equal(C.repostEligibility({ ...selection.rows[2], ambiguity: true }).elig
 assert.equal(C.repostEligibility({ ...selection.rows[2], status: C.STATUSES.NOT_VERIFIED }).eligible, false);
 assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eligible, false);
 
-// Arquivo XLSX real: separar pendências sem omitir os confirmados do detalhamento.
+// Arquivo XLSX real: uma única aba, somente pendentes e contexto da GRDT completa.
 (async () => {
   global.ExcelJS = require('../exceljs.min.js');
   global.GRCONBrandAssets = { reportLogoBase64: 'data:image/png;base64,' + require('node:fs').readFileSync(require('node:path').join(__dirname, '../grcon-logo-report.png')).toString('base64') };
@@ -146,16 +146,26 @@ assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eli
   const bytes = await Report.buildWorkbook(rows, { mode: 'events', pending: true, groups });
   const book = new global.ExcelJS.Workbook();
   await book.xlsx.load(bytes);
-  const values = sheet => {
-    const ws = book.getWorksheet(sheet), headers = ws.getRow(1).values;
-    return Array.from({ length: ws.rowCount - 1 }, (_, i) => Object.fromEntries(headers.slice(1).map((header, j) => [header, ws.getRow(i + 2).getCell(j + 1).value])));
-  };
-  assert.equal(values('RESUMO GRDT')[0]['Classificação'], 'PARCIALMENTE_CONFIRMADA');
-  assert.equal(values('DOCUMENTOS POR GRDT').length, 3);
-  assert.equal(values('PENDENCIAS CONFIRMACAO').length, 2);
-  assert.equal(values('PENDENCIAS CONFIRMACAO')[0].Documento, C.displayDocument(d[1]));
-  assert.equal(values('DOCUMENTOS POR GRDT').find(row => row.Documento === C.displayDocument(d[0]))['PROPÓSITO DE EMISSÃO'], 'Para Cancelamento');
-  assert.equal(values('AVALIAR REENVIO')[0].Documento, C.displayDocument(d[1]));
-  assert.equal(values('DOCUMENTOS TRAMITACAO').length, 0, 'workflow da revisão B não representa tramitação da revisão C enviada');
+  assert.deepEqual(book.worksheets.map(sheet => sheet.name), ['Detalhamento']);
+  const sheet = book.getWorksheet('Detalhamento');
+  assert.equal(sheet.rowCount - 10, 2);
+  assert.equal(sheet.getCell('A11').value, C.displayDocument(d[1]));
+  assert.equal(sheet.getCell('G11').value, 'Parte da GRDT pendente');
+  assert.match(sheet.getCell('H11').value, /2 de 3.*1 confirmado/);
+  assert.equal(sheet.getCell('E12').value, 'B');
+  assert.equal(sheet.getCell('F12').value, 'Em Workflow');
+  assert.equal(sheet.getCell('I11').value, 'Para Construção');
+  const single = new global.ExcelJS.Workbook();
+  await single.xlsx.load(await Report.buildWorkbook([rows[1]], { pending: true, groups }));
+  assert.match(single.worksheets[0].getCell('H11').value, /2 de 3/, 'filtrar um documento não altera o contexto da GRDT');
+  assert.equal(C.pendingScope(C.aggregateByGrdt(rows.slice(1))[0]).label, 'GRDT inteira pendente');
+  const onePending = C.aggregateByGrdt([rows[0], rows[1]])[0];
+  assert.equal(C.pendingScope(onePending).label, 'Somente este documento pendente');
+  assert.equal(C.pendingScope(historicalMissing.groups[0]).label, 'Conferência atual pendente');
+  assert.equal(C.pendingScope(null).label, 'GRDT a verificar');
+  const full = new global.ExcelJS.Workbook();
+  await full.xlsx.load(await Report.buildWorkbook(rows, { mode: 'events', groups }));
+  assert.equal(full.worksheets.length, 1);
+  assert.equal(full.worksheets[0].getCell('I11').value, 'Para Cancelamento');
   console.log('posting_conference_intelligent_grdt: XLSX real, propósito e pendências seletivas OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });

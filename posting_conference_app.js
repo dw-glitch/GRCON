@@ -95,13 +95,13 @@
     shell.innerHTML = `
       <header class="pc-heading">
         <div><span>HISTÓRICO DE eGRDTs × CONSULTA GERAL SIGEM</span><h2>Conferência de Postagem</h2><p>Cada documento aparece uma única vez; reenvios ficam agrupados no histórico do documento.</p></div>
-        <div class="pc-heading-actions"><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Relatório Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><button class="secondary-button" id="pc-publish" type="button" hidden>Publicar Consulta Geral compartilhada</button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
+        <div class="pc-heading-actions"><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Pendências em Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><button class="secondary-button" id="pc-publish" type="button" hidden>Publicar Consulta Geral compartilhada</button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
       </header>
       <section class="pc-hero" aria-live="polite"><div><span>CONFERÊNCIA GERAL</span><strong id="pc-hero-main">Carregue a Consulta Geral</strong><small id="pc-hero-note">O histórico permanece preservado como origem dos eventos de envio.</small></div><div class="pc-base-card" id="pc-base-card"></div></section>
       <section class="pc-kpis" id="pc-kpis" aria-label="Resumo da conferência"></section>
       <section class="pc-toolbar-card pc-date-controls"><label>Data da Consulta Geral <input id="pc-reference-date" type="date"/></label> <button id="pc-save-date" type="button" class="secondary-button">Salvar data</button><small>Data da base, independente do upload.</small></section>
       <section class="pc-toolbar-card">
-        <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">GRDTs com pendências</button></div>
+        <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">Documentos pendentes</button></div>
         <div class="pc-grdt-filter"><label>Classificação da GRDT <select id="pc-grdt-classification"><option value="">Todas</option><option value="TOTALMENTE_CONFIRMADA">Totalmente confirmada</option><option value="PARCIALMENTE_CONFIRMADA">Parcialmente confirmada</option><option value="NENHUM_DOCUMENTO_CONFIRMADO">Nenhum documento confirmado</option><option value="REQUER_INVESTIGACAO">Requer investigação</option><option value="NAO_VERIFICADA">Não verificada</option><option value="COM_TRAMITACAO">Em tramitação</option><option value="REVISAO_DIVERGENTE">Revisão divergente</option><option value="ALOCACAO_PENDENTE">Alocação pendente</option></select></label><small>A expansão mostra todos os documentos da emissão, inclusive os confirmados.</small></div>
         <div class="pc-filters" id="pc-filters">
           <label class="pc-search"><span>Busca</span><input id="pc-search" type="search" placeholder="Código, eGRDT, disciplina, status ou observação"/></label>
@@ -158,6 +158,7 @@
       state.page = 1;
       render();
     }));
+    let filterRenderTimer;
     const controls = {
       "pc-search": "search", "pc-document-list": "documentList", "pc-grdt": "grdt", "pc-family": "family", "pc-discipline": "discipline",
       "pc-revision": "revision", "pc-status": "status", "pc-start": "startDate", "pc-end": "endDate",
@@ -165,13 +166,15 @@
     Object.entries(controls).forEach(([id, field]) => {
       const control = el(id);
       control.addEventListener(control.tagName === "SELECT" ? "change" : "input", () => {
+        clearTimeout(filterRenderTimer);
         state.filters[field] = control.value;
         if (field === "documentList") {
           const count = control.value.split(/[\r\n,;|\t]+/).map((item) => item.trim()).filter(Boolean).length;
           el("pc-document-list-count").textContent = count ? `${fmt(count)} código(s) no filtro` : "Todos os documentos";
         }
         state.page = 1;
-        renderTableOnly();
+        if (control.tagName === "SELECT" || control.type === "date") renderTableOnly();
+        else filterRenderTimer = setTimeout(renderTableOnly, 180);
       });
     });
     el("pc-wait").addEventListener("change", async () => {
@@ -179,6 +182,7 @@
       await reconcileCurrent({ reason: "preference" });
     });
     el("pc-clear-filters").addEventListener("click", () => {
+      clearTimeout(filterRenderTimer);
       Object.keys(state.filters).forEach((key) => { state.filters[key] = ""; });
       ["pc-search", "pc-document-list", "pc-grdt", "pc-family", "pc-discipline", "pc-revision", "pc-status", "pc-start", "pc-end"].forEach((id) => { el(id).value = ""; });
       el("pc-document-list-count").textContent = "Todos os documentos";
@@ -201,7 +205,7 @@
       if (!button) return;
       state.filters.grdt = button.dataset.pcGrdt;
       el("pc-grdt").value = state.filters.grdt;
-      state.view = "documents";
+      state.view = button.hasAttribute("data-pc-pending-grdt") ? "grdts" : "documents";
       state.page = 1;
       render();
     });
@@ -373,14 +377,17 @@
     const key = state.view + JSON.stringify(state.filters);
     if (filteredCache?.result === state.result && filteredCache.key === key) return filteredCache.rows;
     let rows = Conference.filterRows(documentRows(), state.filters);
-    if (state.view === "pending") rows = Conference.pendingRows(rows);
-    filteredCache = { result: state.result, key, rows, pending: state.view === "pending" ? Conference.pendingGrdts(rows) : null };
+    filteredCache = { result: state.result, key, rows };
     return rows;
   }
-  function pendingSummary() { filteredDocumentRows(); return filteredCache.pending || Conference.pendingGrdts([]); }
 
+  let filteredEventsCache = null;
   function filteredEventRows() {
-    return Conference.filterRows(eventRows(), state.filters);
+    const key = JSON.stringify(state.filters);
+    if (filteredEventsCache?.result === state.result && filteredEventsCache.key === key) return filteredEventsCache.rows;
+    const rows = Conference.filterRows(eventRows(), state.filters);
+    filteredEventsCache = { result: state.result, key, rows };
+    return rows;
   }
 
   function breakableCode(value) {
@@ -505,6 +512,27 @@
       '<small>Selecione somente os documentos que decidiu reenviar. Os já confirmados ficam excluídos.</small></div></details>';
   }
 
+  function filteredPendingRows() {
+    const matched = new Set(Conference.pendingRows(filteredEventRows()).map(row => row.key));
+    return filteredGroups().flatMap(group => {
+      const scope = Conference.pendingScope(group);
+      return group.rows.filter(row => matched.has(row.key)).map(row => ({ ...row, pendingScope: scope }));
+    });
+  }
+
+  function pendingTable(rows) {
+    const body = rows.map(row => '<tr><td><strong>' + breakableCode(row.document) +
+      '</strong></td><td>' + escapeHtml(row.revisionSent || "—") +
+      '</td><td><button type="button" class="text-button" data-pc-pending-grdt data-pc-grdt="' +
+      escapeHtml(row.egrdtNumber || "") + '">' + escapeHtml(row.egrdtNumber || "Não identificada") +
+      '</button></td><td>' + statusChip(row) + (row.historicalPreserved ? '<small>Já confirmado anteriormente; não reenviar.</small>' : '') +
+      '</td><td>' + escapeHtml(row.sigemStatus || "Não informado") +
+      (row.sigemStatusRevision ? '<small>Revisão ' + escapeHtml(row.sigemStatusRevision) + '</small>' : '') +
+      '</td><td><strong>' + escapeHtml(row.pendingScope.label) + '</strong><small>' +
+      escapeHtml(row.pendingScope.detail) + '</small></td></tr>').join("");
+    return '<table class="pc-table pc-grdt-table pc-pending-table"><thead><tr><th>Documento pendente</th><th>Rev. enviada</th><th>eGRDT</th><th>Pendência do documento</th><th>Status SIGEM</th><th>O que está pendente na GRDT?</th></tr></thead><tbody>' + body + '</tbody></table>';
+  }
+
   function grdtTable(groups) {
     const labels = { TOTALMENTE_CONFIRMADA: "Totalmente confirmada", PARCIALMENTE_CONFIRMADA: "Parcialmente confirmada", NENHUM_DOCUMENTO_CONFIRMADO: "Nenhum documento confirmado", REQUER_INVESTIGACAO: "Requer investigação", NAO_VERIFICADA: "Não verificada" };
     const body = groups.map((g) =>
@@ -529,36 +557,35 @@
     const consolidated = el("pc-pending-grdts");
     consolidated.hidden = state.view !== "pending";
 
-    if (state.view === "grdts" || state.view === "pending") {
+    if (state.view === "pending") {
+      const rows = filteredPendingRows();
+      total = rows.length;
+      pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      state.page = Math.min(state.page, pages);
+      content = pendingTable(rows.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE));
+      el("pc-table-kicker").textContent = "DOCUMENTOS PENDENTES";
+      el("pc-table-help").textContent = "Cada linha mostra uma revisão pendente e sua GRDT. Clique na GRDT para ver a emissão completa.";
+      el("pc-result-count").textContent = `${fmt(total)} documento(s)/revisão(ões) pendente(s)`;
+      consolidated.innerHTML = '<strong>Pendência total ou parcial?</strong><p>A última coluna informa se a GRDT inteira está pendente ou somente os documentos indicados. Pendente significa sem confirmação da revisão enviada na base consultada; não comprova falha de postagem.</p><button type="button" data-copy-pending-grdts>Copiar GRDTs exibidas</button>';
+    } else if (state.view === "grdts") {
       const groups = filteredGroups();
       total = groups.length;
       pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
       state.page = Math.min(state.page, pages);
       const slice = groups.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
       content = grdtTable(slice);
-      el("pc-table-kicker").textContent = state.view === "pending" ? "GRDTs COM PENDÊNCIAS DE CONFIRMAÇÃO" : "CONFERÊNCIA POR eGRDT";
+      el("pc-table-kicker").textContent = "CONFERÊNCIA POR eGRDT";
       el("pc-table-help").textContent = "Expanda qualquer GRDT para visualizar também os documentos confirmados, antes de avaliar nova emissão.";
       el("pc-result-count").textContent = `${fmt(total)} eGRDT(s)`;
-      if (state.view === "pending") {
-        const risks = groups.filter((item) => item.riskOfDuplicateResend).length;
-        consolidated.innerHTML = '<strong>' + fmt(risks) + ' GRDT(s) com risco de duplicidade</strong><p>' +
-          fmt(total) + ' GRDT(s) requerem acompanhamento ou investigação; isso não comprova falha de postagem.</p><button type="button" data-copy-pending-grdts>Copiar GRDTs exibidas</button>';
-      }
     } else {
       const rows = filteredDocumentRows();
-      if (state.view === "pending") {
-        const summary = pendingSummary();
-        consolidated.innerHTML = `<strong>GRDTs pendentes de postagem</strong><p>Documentos pendentes: ${fmt(summary.documentCount)} · GRDTs pendentes: ${fmt(summary.grdtCount)}${summary.missing ? ` · Pendências sem GRDT identificada: ${fmt(summary.missing)}` : ""}</p><button type="button" data-copy-pending-grdts>Copiar GRDTs</button><pre style="white-space:pre-wrap;max-height:220px;overflow:auto">${escapeHtml(summary.grdts.map(item => item.grdt).join("\n"))}</pre>`;
-      }
       total = rows.length;
       pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
       state.page = Math.min(state.page, pages);
       const slice = rows.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE);
       content = documentsTable(slice);
-      el("pc-table-kicker").textContent = state.view === "pending" ? "PENDÊNCIAS DE POSTAGEM" : "DOCUMENTOS CONFERIDOS";
-      el("pc-table-help").textContent = state.view === "pending"
-        ? "Uma pendência por documento. Tentativas antigas não geram pendências fantasmas quando a revisão atual já foi confirmada."
-        : "Cada documento aparece apenas uma vez nesta visão. Reenvios em diferentes eGRDTs ficam agrupados e não aumentam os totais.";
+      el("pc-table-kicker").textContent = "DOCUMENTOS CONFERIDOS";
+      el("pc-table-help").textContent = "Cada documento aparece apenas uma vez nesta visão. Reenvios em diferentes eGRDTs ficam agrupados e não aumentam os totais.";
       el("pc-result-count").textContent = `${fmt(total)} documento(s)`;
     }
 
@@ -608,16 +635,11 @@
       let rows;
       let mode;
       let groups = [];
-      if (state.view === "grdts" || state.view === "pending") {
-        groups = filteredGroups();
-        rows = groups.flatMap((group) => group.rows);
-        mode = "events";
-      } else {
-        rows = filteredDocumentRows();
-        mode = "documents";
-      }
-      const scopeLabel = state.view === "pending" ? "Pendencias" : state.view === "grdts" ? "Por_eGRDT" : state.filters.grdt ? state.filters.grdt.replace(/[^A-Z0-9-]+/gi, "_") : "";
-      const buffer = await Report.buildWorkbook(rows, { mode, groups: state.view === "grdts" || state.view === "pending" ? groups : [], scopeLabel, pending: state.view === "pending", baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
+      groups = detailedGroups();
+      rows = filteredPendingRows();
+      mode = "events";
+      const scopeLabel = "Pendencias";
+      const buffer = await Report.buildWorkbook(rows, { mode, groups, scopeLabel, pending: true, baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");

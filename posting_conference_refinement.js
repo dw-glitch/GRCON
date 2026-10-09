@@ -358,21 +358,22 @@
     return Array.isArray(rows) && rows.some((row) => Array.isArray(row && row.sends));
   }
 
-  function aggregateMatches(row, filters, Conference) {
+  function prepareAggregateFilters(filters, Conference) {
     const f = filters || {};
+    const documentList = String(f.documentList || "").split(/[\r\n,;|\t]+/).map(trimmed).filter(Boolean);
+    return {
+      search: Conference.norm(f.search), code: Conference.norm(f.document), grdt: Conference.norm(f.grdt),
+      family: Conference.norm(f.family), discipline: Conference.norm(f.discipline),
+      revision: Conference.normalizeRevision(f.revision), status: trimmed(f.status),
+      start: trimmed(f.startDate), end: trimmed(f.endDate),
+      wantedIdentities: new Set(documentList.map(document => Conference.documentIdentity(document)).filter(Boolean)),
+    };
+  }
+
+  function aggregateMatches(row, filters, Conference) {
+    const { search, code, grdt, family, discipline, revision, status, start, end, wantedIdentities } = filters;
     const sends = row.sends || [];
     const norm = Conference.norm;
-    const search = norm(f.search);
-    const code = norm(f.document);
-    const grdt = norm(f.grdt);
-    const family = norm(f.family);
-    const discipline = norm(f.discipline);
-    const revision = Conference.normalizeRevision(f.revision);
-    const status = trimmed(f.status);
-    const start = trimmed(f.startDate);
-    const end = trimmed(f.endDate);
-    const documentList = String(f.documentList || "").split(/[\r\n,;|\t]+/).map(trimmed).filter(Boolean);
-    const wantedIdentities = new Set(documentList.map((document) => Conference.documentIdentity(document)).filter(Boolean));
 
     if (search) {
       const haystack = [
@@ -425,7 +426,10 @@
         return enrichResult(result, result.parsed && result.parsed.records || [], wrapped);
       },
       filterRows(rows, filters) {
-        if (isAggregateRows(rows)) return (rows || []).filter((row) => aggregateMatches(row, filters, wrapped));
+        if (isAggregateRows(rows)) {
+          const prepared = prepareAggregateFilters(filters, wrapped);
+          return rows.filter(row => aggregateMatches(row, prepared, wrapped));
+        }
         const sourceFilters = { ...(filters || {}) };
         const search = trimmed(sourceFilters.search);
         sourceFilters.search = "";
