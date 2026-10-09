@@ -248,6 +248,14 @@
 
   function cleanRecord(record) {
     const files = Array.isArray(record && record.files) ? record.files.map(cleanFile).filter((file) => file.document || file.originalName || file.finalName) : [];
+    // Arquivos removidos permanecem auditáveis, mas nunca entram em files:
+    // Conferência, repostagem e relatórios continuam enxergando só os ativos.
+    const removedFiles = Array.isArray(record && record.removedFiles) ? record.removedFiles
+      .filter((entry) => entry && entry.id && entry.file)
+      .map((entry) => ({
+        id: text(entry.id), file: cleanFile(entry.file),
+        reason: text(entry.reason), removedAt: text(entry.removedAt), removedBy: text(entry.removedBy),
+      })) : [];
     const allocations = [...new Set((record && record.allocations || files.map((file) => file.allocation)).map(text).filter(Boolean))];
     const documents = [...new Set(files.map((file) => norm(file.document)).filter(Boolean))];
     const cloudId = text(record && record.cloudId);
@@ -289,6 +297,7 @@
       fileCount: files.length,
       allocations,
       files,
+      removedFiles,
     };
   }
 
