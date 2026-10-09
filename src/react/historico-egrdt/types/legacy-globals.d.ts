@@ -26,6 +26,8 @@ interface GrconHistoryUiApi {
 interface GrconHistoryReportApi {
   periodLabel(records: EgrdtHistoryRecord[], startDate: string, endDate: string): string;
   buildWorkbook(records: EgrdtHistoryRecord[], options: Record<string, unknown>): Promise<ArrayBuffer>;
+  buildRemovedAuditWorkbook(records: EgrdtHistoryRecord[]): Promise<ArrayBuffer>;
+  removedAuditDownloadName(): string;
   downloadName(records: EgrdtHistoryRecord[], options: Record<string, unknown>): string;
 }
 
