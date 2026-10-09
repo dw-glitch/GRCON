@@ -1,0 +1,58 @@
+/* GRCON — Versão C, Fase 1: lapidação incremental e não destrutiva. */
+@media (min-width: 74.01rem) {
+  html[data-app="GRCON"][data-ui-generation="3"] {
+    --ui-topbar-height: 64px;
+    --ui-radius: 10px;
+    --ui-radius-sm: 7px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .topbar {
+    min-height: 64px; padding-block: .4rem;
+    box-shadow: 0 2px 12px rgba(19, 51, 84, .045);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .app-shell {
+    grid-template-columns: minmax(206px, 218px) minmax(0, 1fr);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .ops-sidebar {
+    padding: 13px 9px; gap: 4px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .ops-sidebar-label {
+    margin: 2px 10px 7px; font-size: .7rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .ops-nav-button {
+    min-height: 42px; padding: .52rem .65rem; border-radius: 7px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .workspace {
+    padding: clamp(14px, 1.5vw, 22px); gap: .75rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .ops-page-heading,
+  html[data-app="GRCON"][data-ui-generation="3"] .module-heading {
+    margin-bottom: 12px; gap: 10px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] .ops-page-heading h2,
+  html[data-app="GRCON"][data-ui-generation="3"] .module-heading h2 {
+    letter-spacing: -.022em; line-height: 1.13;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module { gap: .75rem; }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .control-panel { padding: .8rem; }
+  html[data-app="GRCON"][data-ui-generation="3"] :is(
+    .control-panel, .card, .history-card, .analysis-history-card, .sigem-panel,
+    .history-list-card, .history-detail, .results-toolbar, .table-wrap, .table-scroll
+  ) {
+    border-radius: 9px;
+    box-shadow: 0 2px 9px rgba(20, 47, 80, .045);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] :is(
+    .results-toolbar, .history-toolbar, .sigem-toolbar, .summary-bar
+  ) { gap: .55rem; }
+  html[data-app="GRCON"][data-ui-generation="3"] :is(
+    .table-wrap, .table-scroll, .history-table-wrap, .analysis-history-table-wrap
+  ) { border-radius: 8px; }
+  html[data-app="GRCON"][data-ui-generation="3"] :is(table thead th, #results-table thead th) {
+    line-height: 1.25; font-weight: 700;
+    background: var(--surface-2, #f2f6f9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="GRCON"] .ops-sidebar *,
+  html[data-app="GRCON"] .grcon-cloud-account-avatar * { transition-duration: 0s !important; }
+}
