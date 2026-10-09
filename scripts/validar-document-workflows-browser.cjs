@@ -252,6 +252,11 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
      observer.observe(document.querySelector('#pc-table-wrap'),{childList:true});
    },{once:true});
  });
+ console.log('Conference volume UI:',JSON.stringify(await page.locator('#pc-document-list').evaluate(input=>({
+   rect:input.getBoundingClientRect().toJSON(),visibility:getComputedStyle(input).visibility,display:getComputedStyle(input).display,
+   ancestors:Array.from((function*(node){while(node){yield node;node=node.parentElement;}})(input)).map(node=>({tag:node.tagName,id:node.id,hidden:node.hidden,display:getComputedStyle(node).display,visibility:getComputedStyle(node).visibility})),
+   documents:window.GrconPostingConferenceUi.state.result.documentRows.length,busy:window.GrconPostingConferenceUi.state.busy,
+ }))));
  await page.locator('#pc-document-list').fill(Array.from({length:5000},(_,i)=>'VOLUME-'+String(i).padStart(5,'0')).join('\n'));
  await page.waitForFunction(()=>window.qaFilterRenderAt>window.qaPasteStarted);
  const listPerformance=await page.evaluate(async()=>{
