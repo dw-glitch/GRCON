@@ -216,6 +216,11 @@ function Toolbar({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
             >
               {h.exporting ? "Gerando relação…" : "Baixar relação Excel"}
             </button>
+            {h.canDeleteHistory && h.removedCount > 0 ? (
+              <button type="button" className="secondary-button" disabled={h.exportingAudit} onClick={() => { void h.exportRemovedAudit(); }}>
+                {h.exportingAudit ? "Preparando auditoria…" : `Auditoria de removidos (${h.removedCount})`}
+              </button>
+            ) : null}
           </div>
         </div>
 
