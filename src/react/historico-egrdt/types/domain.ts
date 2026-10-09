@@ -45,11 +45,22 @@ export interface EgrdtHistoryFile {
   discipline?: string;
 }
 
+export interface RemovedHistoryFile {
+  id: string;
+  file: EgrdtHistoryFile;
+  reason: string;
+  removedAt: string;
+  removedBy: string;
+}
+
 export interface EgrdtHistoryRecord {
   normativeValidation?: NormativeValidation | null;
   id: string;
   clientRecordId?: string;
   cloudId?: string;
+  cloudUpdatedAt?: string;
+  syncState?: string;
+  removedFiles?: RemovedHistoryFile[];
   workspaceId?: string;
   reservationIds?: string[];
   egrdtNumber: string;
