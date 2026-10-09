@@ -19,6 +19,21 @@ const Requests=require('../requests_control_core.js');
    assert.equal(book.getWorksheet('Detalhamento').rowCount-10,subset.length);
    assert.equal(book.getWorksheet('Detalhamento').getCell('N11').value,'GRDT inteira pendente');
  }
+ const repeats=[
+  {document:'DOC-002',revisionSent:'0',generatedAt:'2026-10-01T12:00:00Z',egrdtNumber:'GRDT-100',status:'NAO_ENCONTRADO',key:'rr1'},
+  {document:'DOC-002',revisionSent:'A',generatedAt:'2026-10-02T12:00:00Z',egrdtNumber:'GRDT-101',status:'AGUARDANDO',key:'rr2'},
+  {document:'DOC-002',revisionSent:'B',generatedAt:'2026-10-03T12:00:00Z',egrdtNumber:'GRDT-102',status:'REVISAO_DIVERGENTE',key:'rr3'},
+ ];
+ const repeatWorkbook=new ExcelJS.Workbook();
+ await repeatWorkbook.xlsx.load(await Report.buildWorkbook(repeats,{pending:true,groups:C.aggregateByGrdt(repeats)}));
+ const pendingSheet=repeatWorkbook.getWorksheet('Detalhamento');
+ assert.equal(pendingSheet.rowCount-10,1,'mesmo código só ocupa uma linha no relatório de pendências');
+ assert.equal(pendingSheet.getCell('P11').value,'GRDT-102');
+ assert.match(pendingSheet.getCell('Q11').value,/GRDT-100/);
+ assert.match(pendingSheet.getCell('Q11').value,/GRDT-101/);
+ assert.match(pendingSheet.getCell('Q11').value,/GRDT-102/);
+ assert.equal(pendingSheet.getCell('R11').value,'B · A · 0');
+ assert.equal(pendingSheet.getCell('N11').value,'Múltiplas GRDTs com pendências');
  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['CONTROLE DE SOLICITAÇÕES'],['Documento','Título','Responsável'],['DOC-001','Ação nº 1','Vinício'],['DOC-001','Outra solicitação','Beatriz'],['','','']]),'Solicitações');
  const records=Requests.parseWorkbook(wb,XLSX);assert.equal(records.length,2);assert.equal(Requests.buildIndex(records).get('DOC-001').length,2);assert.equal(records[0].data.Responsável,'Vinício');assert.equal(records[0].sourceRow,3);
  const prefix='C1O_RNEST_U32_3.8.9.1_TUB_REP_';const ntIndex=Requests.buildIndex([{document:prefix+'nt-VM-320236'},{document:'C1O_RNEST_U32_3.8.9.2_TUB_REP_nt-VM-320236'}]);assert.equal(Requests.find(ntIndex,prefix+'VM-320236').length,1,'same engine NT variants preserve EAP identity');

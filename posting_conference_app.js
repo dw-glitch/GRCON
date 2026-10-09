@@ -679,8 +679,9 @@
       let groups = [];
       let mode = "documents";
       if (view === "pending") {
-        rows = filteredPendingRows();
-        const ids = new Set(rows.map(row => row.historyId || row.egrdtNumber));
+        const pendingEvents = filteredPendingRows();
+        rows = filteredPendingDocuments(pendingEvents);
+        const ids = new Set(pendingEvents.map(row => row.historyId || row.egrdtNumber));
         groups = detailedGroups().filter(group => ids.has(group.historyId || group.egrdtNumber));
         mode = "events";
       } else if (view === "grdts") {
@@ -706,7 +707,7 @@
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
       notify(view === "pending"
-        ? `${fmt(rows.length)} pendência(s) exportada(s) em uma única aba.`
+        ? `${fmt(rows.length)} documento(s) pendente(s), sem duplicações, exportado(s) em uma única aba.`
         : mode === "events" ? `${fmt(rows.length)} ocorrência(s) incluída(s) no relatório por eGRDT.`
           : `${fmt(rows.length)} documento(s) único(s) incluído(s) no relatório.`, "success");
     } catch (error) {
