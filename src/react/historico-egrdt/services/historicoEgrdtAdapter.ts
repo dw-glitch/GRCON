@@ -196,6 +196,14 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
   );
 }
 
+async function exportRemovedAudit(records: EgrdtHistoryRecord[]): Promise<void> {
+  if (!canDeleteHistory()) throw new Error("Sem permissão para exportar registros removidos.");
+  const Report = report();
+  if (!records.some((record) => record.removedFiles?.length)) throw new Error("Nenhum documento removido nos filtros atuais.");
+  const buffer = await Report.buildRemovedAuditWorkbook(records);
+  downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), Report.removedAuditDownloadName());
+}
+
 function updateNumber(recordId: string, value: string): UpdateNumberResult {
   return history().updateNumber(recordId, value) as unknown as UpdateNumberResult;
 }
@@ -387,6 +395,7 @@ export const historicoEgrdtAdapter = {
   revisionRelation,
   periodLabel,
   exportPeriodReport,
+  exportRemovedAudit,
   updateNumber,
   canDeleteHistory,
   canManageHistoryFile,
