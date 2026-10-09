@@ -1318,9 +1318,21 @@ async function waitEvolutionReady(page) {
     await page.locator('[data-evo-page="prev"]').click();
 
     // Excel exporta todas as 250 linhas, não somente a página visível.
+    await page.evaluate(() => {
+      const runner = window.GrconPerformance;
+      window.__originalExportRunner = runner;
+      window.__exportScope = window.GrconSigemPwEvolutionUi.state.revisionScope;
+      window.GrconPerformance = { ...runner, buildSpreadsheet(kind, payload) {
+        if (kind !== 'sigem-evolution') return runner.buildSpreadsheet(kind, payload);
+        return new Promise((resolve, reject) => { window.__releaseEvolutionExport = () => runner.buildSpreadsheet(kind, payload).then(resolve, reject); });
+      } };
+    });
     const evolutionExportStart = Date.now();
     const evolutionDownloadPromise = page.waitForEvent("download");
     await page.locator("#spw-evo-export").click();
+    await page.waitForFunction(() => typeof window.__releaseEvolutionExport === 'function');
+    await page.locator('[data-evolution-revision-scope="revision0"]').click();
+    await page.evaluate(() => window.__releaseEvolutionExport());
     const evolutionDownload = await evolutionDownloadPromise;
     const evolutionExportPath = path.join(fixtureDir, "sigem-pw-evolution-export.xlsx");
     await evolutionDownload.saveAs(evolutionExportPath);
@@ -1328,6 +1340,11 @@ async function waitEvolutionReady(page) {
     const evolutionBook = XLSX.read(fs.readFileSync(evolutionExportPath), { type: "buffer" });
     const evolutionRows = XLSX.utils.sheet_to_json(evolutionBook.Sheets[evolutionBook.SheetNames[0]], { defval: "" });
     assert.equal(evolutionRows.length, 250, "Excel da Evolução deve exportar todas as páginas");
+    assert.match(evolutionDownload.suggestedFilename(), /GRCON_Evolucao_all_/);
+    const exportedScope = XLSX.utils.sheet_to_json(evolutionBook.Sheets.Escopo);
+    assert.ok(exportedScope.some(row => row.Valor === 'Todas as revisões'), 'scope metadata must match the rows captured before the async export');
+    await page.evaluate(() => { window.GrconPerformance = window.__originalExportRunner; delete window.__releaseEvolutionExport; });
+    await page.locator('[data-evolution-revision-scope="all"]').click();
     assert.deepEqual(Object.keys(evolutionRows[0]), [
       "Código", "Revisão", "Classe", "Tipo documental", "Título", "Movimento", "Status", "Disciplina",
       "TAG", "EAP", "Data", "Origem", "Emissão PW", "LD origem", "LD aba", "Prazo LD",
