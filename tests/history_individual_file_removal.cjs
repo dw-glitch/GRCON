@@ -8,6 +8,7 @@ const cloud = read("grcon_cloud_app.js");
 const react = read("src/react/historico-egrdt/HistoricoEgrdtApp.tsx");
 const adapter = read("src/react/historico-egrdt/services/historicoEgrdtAdapter.ts");
 const hook = read("src/react/historico-egrdt/hooks/useHistoricoEgrdt.ts");
+const reportSource = read("history_report.js");
 const migration = read("supabase/migrations/20261009160000_history_individual_file_removal.sql");
 
 const docA = { document: "RHDD-001", revision: "0", finalName: "RHDD-001.pdf", allocation: "A-1" };
@@ -56,6 +57,9 @@ for (const fragment of [
   "grant execute on function public.grcon_history_file_action",
 ]) assert.ok(migration.includes(fragment), "migration sem " + fragment);
 assert.match(cloud, /state\.client\.rpc\("grcon_history_file_action"/);
+assert.match(reportSource, /buildRemovedAuditWorkbook/);
+assert.match(reportSource, /Documentos removidos/);
+assert.match(react, /Auditoria de removidos/);
 assert.match(cloud, /manageHistoryFile,/);
 assert.match(cloud, /if \(!canManageHistory\(\)\)/);
 assert.match(adapter, /canManageHistoryFile/);
