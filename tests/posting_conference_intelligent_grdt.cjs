@@ -159,7 +159,9 @@ assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eli
   assert.equal(sheet.getRow(10).getCell(5).value, 'Data eGRDT');
   assert.equal(sheet.getRow(10).getCell(13).value, 'Observação');
   assert.equal(sheet.getRow(10).getCell(15).value, 'Detalhamento da pendência');
-  assert.equal(sheet.columnCount, 18, '13 colunas originais + 2 de pendência + 3 de rastreabilidade');
+  assert.equal(sheet.columnCount, 30, '18 colunas preservadas + 12 campos independentes Teams');
+  assert.equal(sheet.getCell('S10').value, 'Enviado ao Teams?');
+  assert.equal(sheet.getCell('U10').value, 'Postagem confirmada?');
   assert.equal(sheet.getRow(10).getCell(16).value, 'Última eGRDT enviada');
   assert.equal(sheet.getRow(10).getCell(17).value, 'Histórico de eGRDTs');
   assert.equal(sheet.getRow(10).getCell(18).value, 'Revisões pendentes');

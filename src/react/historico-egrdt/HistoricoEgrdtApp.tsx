@@ -89,6 +89,9 @@ function activeFilters(h: ReturnType<typeof useHistoricoEgrdt>) {
       clear: () => h.setFilter("documentFamily", ""),
     });
   }
+  for (const key of ["teamsConfirmation", "teamsResponsible", "teamsDate"] as const) {
+    if (h.filters[key]) items.push({key,label:"Teams: " + h.filters[key],clear:()=>h.setFilter(key, "")});
+  }
   return items;
 }
 
@@ -148,6 +151,14 @@ function Toolbar({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
         </label>
       </section>
 
+      <details>
+        <summary>Filtrar confirmações do Teams</summary>
+        <div className="history-toolbar">
+          <label><span>Confirmação de postagem</span><select id="history-teams-confirmation" value={h.filters.teamsConfirmation || ""} onChange={e=>h.setFilter("teamsConfirmation",e.target.value)}><option value="">Todas</option><option value="total">Total</option><option value="partial">Parcial</option><option value="unconfirmed">Enviada ao fluxo sem confirmação</option><option value="untracked">Sem registro de envio</option></select></label>
+          <label><span>Confirmado por</span><input id="history-teams-responsible" value={h.filters.teamsResponsible || ""} onChange={e=>h.setFilter("teamsResponsible",e.target.value)} /></label>
+          <label><span>Data da confirmação</span><input id="history-teams-date" type="date" value={h.filters.teamsDate || ""} onChange={e=>h.setFilter("teamsDate",e.target.value)} /></label>
+        </div>
+      </details>
       <div className="history-filter-divider" />
 
       <section aria-labelledby="history-period-title" className="history-period-block">
@@ -316,6 +327,8 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
   const creator = record.createdByName || record.createdByEmail;
   const previousNumbers = record.numberHistory || [];
   const teamsAction = Adapter.teamsPresentation(record);
+  const attempts = window.GrconTeamsTrace?.list(record) || [];
+  const sigemEvidence = window.GrconTeamsTrace?.sigemEvidence([record])[record.id];
 
   return (
     <UiPanel className="history-detail" labelledBy="history-detail-number">
@@ -332,6 +345,20 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
             <UiMetaPill>{countLabel(record.fileCount, "arquivo", "arquivos")}</UiMetaPill>
           </div>
         </section>
+
+        <details className="history-detail-section">
+          <summary>Rastreabilidade Teams · {attempts.length} tentativa(s)</summary>
+          {attempts.length ? attempts.map(a => <article key={a.id}>
+            <p><strong>{window.GrconTeamsTraceCore?.label(a)}</strong></p>
+            <p>{a.contract_code} · Solicitado em {new Date(a.requested_at).toLocaleString("pt-BR")} · Entrega: {a.delivered_at ? new Date(a.delivered_at).toLocaleString("pt-BR") : "Não confirmada"}</p>
+            {a.confirmed_at ? <p>{a.confirmed_documents?.length} de {a.documents.length} documentos declarados · {new Date(a.confirmed_at).toLocaleString("pt-BR")}</p> : null}
+            {a.confirmed_at ? <p>Mensagem de confirmação no Teams: {a.notice_status === "sent" ? "Publicada" : "Pendente de confirmação do fluxo"} · Cartão: {a.card_updated_at ? "Atualizado" : "Atualização não confirmada"}</p> : null}
+            <details><summary>Documentos e revisões desta tentativa</summary>{a.documents.map((file,i) => <p key={i}>{file.document} · Rev. {file.revision} · {window.GrconTeamsTraceCore?.confirmed(a,file)}</p>)}</details>
+            {a.message_url ? <a href={a.message_url} target="_blank" rel="noopener noreferrer">Abrir cartão no Teams</a> : null}
+          </article>) : <p>Sem registro de envio ao Teams. A ausência de registro não comprova que a eGRDT deixou de ser postada.</p>}
+          {sigemEvidence ? <p><strong>{sigemEvidence}</strong></p> : null}
+          <p>A confirmação do funcionário é uma declaração de execução. O registro no SIGEM continua sendo conferido na Consulta Geral.</p>
+        </details>
 
         <section className="history-detail-section history-actions-section" aria-labelledby="history-actions-title">
           <div className="history-detail-section-heading">

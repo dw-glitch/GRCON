@@ -82,6 +82,17 @@ function filterRecords(
 ): EgrdtHistoryRecord[] {
   const History = history();
   let filtered = History.filter(records, filters.query) as unknown as EgrdtHistoryRecord[];
+  if (filters.teamsConfirmation || filters.teamsResponsible || filters.teamsDate) {
+    filtered = filtered.filter(record => {
+      const a = window.GrconTeamsTrace?.latest(record);
+      if (filters.teamsConfirmation === "untracked" && a) return false;
+      if (filters.teamsConfirmation === "unconfirmed" && (!a || a.confirmed_at)) return false;
+      if (["total", "partial"].includes(filters.teamsConfirmation || "") && a?.confirmation_type !== filters.teamsConfirmation) return false;
+      if (filters.teamsResponsible && !String(a?.confirmed_by_name || "").toLocaleLowerCase("pt-BR").includes(filters.teamsResponsible.toLocaleLowerCase("pt-BR"))) return false;
+      if (filters.teamsDate && (!a?.confirmed_at || new Date(a.confirmed_at).toLocaleDateString("en-CA", {timeZone:"America/Sao_Paulo"}) !== filters.teamsDate)) return false;
+      return true;
+    });
+  }
   if (filters.year) filtered = filtered.filter((record) => String(parsedNumber(record)?.year || "") === filters.year);
   if (filters.outputType) filtered = filtered.filter((record) => record.outputType === filters.outputType);
   filtered = History.filterByDate(filtered, filters.startDate, filters.endDate) as unknown as EgrdtHistoryRecord[];
@@ -173,6 +184,9 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
     documentFamily: filters.documentFamily,
     appVersion: appVersion(),
     brandAssets: window.GRCONBrandAssets,
+    teamsAttempts: await window.GrconTeamsTrace?.forExport?.() || [],
+    teamsSigemEvidence: window.GrconTeamsTrace?.sigemEvidence(records) || {},
+    workspaceId: window.GrconCloud?.state?.membership?.workspace_id,
   };
   const workerBuffer = await buildWorkbookInWorker(records, options).catch(() => null);
   const buffer = workerBuffer || await HistoryReport.buildWorkbook(records, options);
@@ -231,7 +245,7 @@ function teamsPresentation(record: EgrdtHistoryRecord): {
     recordId: record.id || record.clientRecordId || "",
     label: Teams.buttonLabel?.(record) || (saved ? "Reenviar aviso no Teams" : "Avisar no Teams"),
     statusLabel: Teams.statusLabel?.(record) || (saved ? "Avisado no Teams" : "Ainda não avisado"),
-    sent: Boolean(saved),
+    sent: Boolean(window.GrconTeamsTrace?.latest?.(record)?.delivered_at || saved),
     disabled: Boolean(Teams.isSending?.(record)),
   };
 }

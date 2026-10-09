@@ -19,7 +19,7 @@
     unreadCount: 0,
     epoch: 0,
   };
-  const delivery = { context: "", timer: 0, debounce: 0, request: null, toastTimer: 0, seen: new Set(), popup: new Map() };
+  const delivery = { context: "", timer: 0, debounce: 0, request: null, toastTimer: 0, seen: new Set(), startedAt: Date.now(), popup: new Map() };
 
   const $ = (selector, context) => (context || document).querySelector(selector);
   const escapeHtml = (value) => String(value == null ? "" : value)
@@ -304,7 +304,7 @@
       '<span class="grcon-notification-dot" aria-hidden="true"></span>' +
       '<div class="grcon-notification-copy"><div class="grcon-notification-line"><strong>' + escapeHtml(notificationTitle(item)) + '</strong><time datetime="' + escapeHtml(item.created_at || "") + '">' + escapeHtml(relativeDate(item.created_at)) + '</time></div>' +
       '<code class="grcon-notification-code">' + escapeHtml(item.document_code || "Documento monitorado") + '</code>' +
-      transition + message + '</div>' + action + '</article>';
+      transition + message + (item.link_target?.startsWith('history:') ? '<button class="text-button compact" type="button" data-open-egrdt="' + escapeHtml(item.link_target.slice(8)) + '">Abrir eGRDT</button>' : '') + '</div>' + action + '</article>';
   }
   function notificationEmptyMarkup() {
     return '<div class="grcon-notification-empty"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg><strong>Nenhuma notificação</strong><span>As atualizações dos documentos que você monitora aparecerão aqui.</span></div>';
@@ -433,14 +433,14 @@
     const rows = [...delivery.popup.values()];
     const contract = cloud()?.state?.contract?.code || cloud()?.state?.membership?.contract_code || "Contrato ativo";
     popup.innerHTML =
-      '<header><span class="grcon-notification-toast-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg></span><div><small>' + escapeHtml(contract) + '</small><strong>Documento monitorado atualizado</strong></div><button type="button" data-popup-close aria-label="Fechar notificação">×</button></header>' +
+      '<header><span class="grcon-notification-toast-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg></span><div><small>' + escapeHtml(contract) + '</small><strong>' + escapeHtml(rows.some(item => item.kind === 'TEAMS_POSTING_CONFIRMED') ? 'Postagem confirmada pelo Teams' : 'Documento monitorado atualizado') + '</strong></div><button type="button" data-popup-close aria-label="Fechar notificação">×</button></header>' +
       '<div class="grcon-notification-toast-list">' +
       rows.slice(0, 3).map((item) =>
         '<article><code>' + escapeHtml(item.document_code || "Documento monitorado") + '</code>' +
         (item.previous_status || item.current_status
           ? '<span><small>Status</small><strong>' + escapeHtml(item.previous_status || "—") + '<b aria-hidden="true">→</b>' + escapeHtml(item.current_status || "—") + '</strong></span>'
           : '<span><strong>' + escapeHtml(item.message || item.title || "Atualização disponível") + '</strong></span>') +
-        '<time>' + escapeHtml(relativeDate(item.created_at)) + '</time></article>'
+        '<time>' + escapeHtml(relativeDate(item.created_at)) + '</time>' + (item.link_target?.startsWith('history:') ? '<button class="text-button compact" data-open-egrdt="' + escapeHtml(item.link_target.slice(8)) + '">Abrir eGRDT</button>' : '') + '</article>'
       ).join("") +
       '</div>' +
       (rows.length > 3 ? '<p class="grcon-notification-toast-more">+' + (rows.length - 3) + ' atualização(ões) na central.</p>' : '') +
@@ -473,7 +473,7 @@
         state.notifications = rows.concat(state.notifications.filter((item) => item?.id && !incoming.has(item.id))).slice(0, 100);
         renderNotifications();
         if (!state.unreadCount) hidePopup();
-        const fresh = rows.filter(item => item.id && !item.is_read && !delivery.seen.has(item.id));
+        const fresh = rows.filter(item => item.id && !item.is_read && !delivery.seen.has(item.id) && (item.kind !== "TEAMS_POSTING_CONFIRMED" || Date.parse(item.created_at) >= delivery.startedAt));
         if (fresh.length) {
           showPopup(fresh.reverse());
           if (!$("#requests-area-sigem-monitoring")?.hidden) void loadAll();
@@ -509,6 +509,7 @@
     if (context !== delivery.context) {
       stopDelivery();
       delivery.context = context;
+      delivery.startedAt = Date.now();
       if (context) {
         try {
           const ids = JSON.parse(localStorage.getItem(seenKey()) || "[]");
@@ -734,7 +735,7 @@
       '<section id="grcon-notification-popover" class="grcon-notification-popover" role="dialog" aria-label="Central de notificações" hidden>' +
       '<header><div><strong>Notificações</strong><span id="grcon-notification-center-summary">Tudo em dia</span></div><button class="grcon-notification-close" type="button" data-notification-center-close aria-label="Fechar notificações">×</button></header>' +
       '<div class="grcon-notification-center-list" id="grcon-notification-center-list"></div>' +
-      '<footer><span>Somente atualizações dos documentos que você monitora.</span><button class="text-button compact" id="grcon-notification-center-read-all" data-notification-center-read-all type="button">Marcar todas como lidas</button></footer>' +
+      '<footer><span>Documentos monitorados e confirmações de postagem deste contrato.</span><button class="text-button compact" id="grcon-notification-center-read-all" data-notification-center-read-all type="button">Marcar todas como lidas</button></footer>' +
       '</section>';
     host.appendChild(control);
     const button = $("#grcon-notification-button");
@@ -783,6 +784,12 @@
 
   root.addEventListener("grcon:cloud-ready", loadAll);
   root.addEventListener("grcon:cloud-ready", startDelivery);
+  document.addEventListener("click", event => {
+    const button = event.target.closest("[data-open-egrdt]");
+    if (!button) return;
+    hidePopup(); closeNotificationCenter(false);
+    void root.GrconTeamsTrace?.openHistory?.(button.dataset.openEgrdt);
+  });
   root.addEventListener("grcon:notifications-updated", scheduleNotifications);
   root.addEventListener("grcon:cloud-signed-out", stopDelivery);
   root.addEventListener("online", startDelivery);

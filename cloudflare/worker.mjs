@@ -1,3 +1,4 @@
+import { enabled, prepareTrace, interactiveCard, traceRpc, handleTraceRoute } from './teams-traceability.mjs';
 const DEFAULT_SUPABASE_URL = "https://kvyrttccwzdhasplfxnr.supabase.co";
 const DEFAULT_SUPABASE_KEY = "sb_publishable_K-6GJbXO-MJMWp9Re5lMmg_l1riCpP-";
 const MAX_BODY_BYTES = 64_000;
@@ -227,23 +228,47 @@ async function handleTeamsNotification(request, env) {
     const authorization = text(request.headers.get("authorization"), 5000);
     const match = authorization.match(/^Bearer\s+(.+)$/i);
     if (!match) return json(401, { ok: false, code: "MISSING_SESSION", message: "Sessão do GRCON não informada." });
-    const payload = normalizePayload(await readJsonBody(request), env);
+    const rawInput = await readJsonBody(request);
+    const payload = normalizePayload(rawInput, env);
+    payload.attemptId = rawInput.attemptId;
     const flowUrl = text(env.POWER_AUTOMATE_EGRDT_WEBHOOK_URL, 4000);
     if (!flowUrl) return json(503, { ok: false, code: "POWER_AUTOMATE_NOT_CONFIGURED", message: "O fluxo do Power Automate ainda não foi conectado ao GRCON." });
     if (!isAllowedFlowUrl(flowUrl)) return json(500, { ok: false, code: "INVALID_FLOW_URL", message: "A URL configurada para o Power Automate não é válida." });
     payload.requester = await verifyUserAndMembership(match[1], payload.source.workspaceId, env);
-    const flowResponse = await fetch(flowUrl, {
+    let trace;
+    if (enabled(env)) {
+      trace = await prepareTrace(payload, env);
+      if (!trace.shouldSend) {
+        const complete = ['accepted','delivered'].includes(trace.attempt.delivery_status);
+        return json(complete ? 200 : 409, {ok:complete,code:'ATTEMPT_ALREADY_STARTED',eventId:payload.eventId,attemptId:trace.attempt.id,message:'Esta tentativa já foi iniciada. Confira a rastreabilidade antes de reenviar.'});
+      }
+      payload.message.tableHtml = buildTableHtml(payload.egrdt.number, payload.egrdt.items);
+      payload.message.fallbackText = buildFallbackText(payload);
+      try {
+        payload.message.adaptiveCard = interactiveCard({...payload,message:{...payload.message,adaptiveCard:buildAdaptiveCard(payload,resolveMascotUrl(env))}},trace.attempt);
+      } catch (error) {
+        await traceRpc(env,payload.source.workspaceId,null,'failed',{attemptId:trace.attempt.id}).catch(()=>{});
+        throw error;
+      }
+    }
+    let flowResponse;
+    try { flowResponse = await fetch(flowUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": payload.eventId, "User-Agent": "GRCON-eGRDT-Teams/1.0" },
+      headers: { "Content-Type": "application/json", "Idempotency-Key": trace?.attempt.id || payload.eventId, "User-Agent": "GRCON-eGRDT-Teams/1.0" },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(FLOW_TIMEOUT_MS),
     });
+    } catch (error) {
+      if (trace) await traceRpc(env,payload.source.workspaceId,null,'failed',{attemptId:trace.attempt.id}).catch(()=>{});
+      throw error;
+    }
     if (!flowResponse.ok) {
-      const diagnostic = text(await flowResponse.text().catch(() => ""), 300);
-      console.error("Power Automate recusou o aviso", flowResponse.status, diagnostic);
+      if (trace) await traceRpc(env,payload.source.workspaceId,null,'failed',{attemptId:trace.attempt.id}).catch(()=>{});
+      console.error("Power Automate recusou o aviso", flowResponse.status);
       return json(502, { ok: false, code: "FLOW_REJECTED", message: "O fluxo do Power Automate recusou o aviso. Tente novamente ou confira o fluxo." });
     }
-    return json(200, { ok: true, eventId: payload.eventId, destination: payload.destination.name, notifiedAt: new Date().toISOString() });
+    if (trace) await traceRpc(env,payload.source.workspaceId,null,'accepted',{attemptId:trace.attempt.id});
+    return json(200, { ok: true, attemptId:trace?.attempt.id, receiptOnly:Boolean(trace), eventId: payload.eventId, destination: payload.destination.name, notifiedAt: new Date().toISOString() });
   } catch (error) {
     const status = Number(error && error.status) || (error && (error.name === "AbortError" || error.name === "TimeoutError") ? 504 : 400);
     const code = text(error && error.code, 80) || (status === 504 ? "FLOW_TIMEOUT" : "INVALID_REQUEST");
@@ -259,6 +284,8 @@ async function handleTeamsNotification(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const traceResponse = await handleTraceRoute(request, env);
+    if (traceResponse) return traceResponse;
     if (url.pathname === API_PATH) return handleTeamsNotification(request, env);
     if (url.pathname.startsWith("/api/")) return json(404, { ok: false, code: "NOT_FOUND", message: "Endpoint não encontrado." });
     return env.ASSETS.fetch(request);

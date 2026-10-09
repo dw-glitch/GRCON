@@ -284,6 +284,8 @@
       } catch (error) { console.warn("[GRCON] Exportação da Conferência em modo compatível", error); }
     }
     if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");
+    const Trace = root.GrconTeamsTraceCore || (typeof module === "object" && module.exports ? require("./egrdt_teams_trace_core.js") : null);
+    const traceIndex = Trace?.index(options?.teamsAttempts || root.GrconTeamsTrace?.snapshot?.() || []);
     const source = options?.pending ? consolidatePendingDocuments(rows) : (rows || []);
     const mode = options?.pending || options?.mode === "events" ? "events" : "documents";
     // O grupo completo é necessário para distinguir um documento pendente
@@ -299,11 +301,13 @@
     workbook.subject = "Relatório de Conferência — Consulta Geral × Histórico";
     workbook.title = "Relatório de Conferência — Consulta Geral × Histórico";
 
-    const headers = options?.pending
+    const baseHeaders = options?.pending
       ? [...eventHeaders(), "Pendência da GRDT", "Detalhamento da pendência", "Última eGRDT enviada", "Histórico de eGRDTs", "Revisões pendentes"]
       : (mode === "documents" ? documentHeaders() : eventHeaders());
+    const headers = [...baseHeaders, ...(Trace?.headers || [])];
     const columnCount = headers.length;
-    const lastColumn = String.fromCharCode(64 + Math.min(columnCount, 26));
+    const columnLetter = n => { let value=""; for(let x=n;x>0;x=Math.floor((x-1)/26))value=String.fromCharCode(65+(x-1)%26)+value;return value; };
+    const lastColumn = columnLetter(columnCount);
     const sheet = workbook.addWorksheet(options?.pending ? "Detalhamento" : "RESUMO", { views: [{ state: "frozen", ySplit: 10, xSplit: 2 }] });
     sheet.properties.defaultRowHeight = 18;
 
@@ -406,6 +410,12 @@
         excelRow.eachCell((cell, colNumber) => {
           if (colNumber !== conferenceColumn && colNumber !== sigemColumn) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F8FAFB" } };
         });
+      }
+      if (Trace) {
+        const representative = options?.pending ? row.pendingEvents[0] : row.latestSend || row;
+        const attempt = Trace.attemptsFor(representative, traceIndex, options?.workspaceId)[0];
+        const extra = Trace.values(attempt, representative, Trace.conference(representative, attempt));
+        extra.forEach((value, offset) => { const cell=excelRow.getCell(baseHeaders.length+offset+1);cell.value=value;cell.alignment={vertical:'top',wrapText:true}; });
       }
       applyConferenceStyle(excelRow.getCell(conferenceColumn),
         options?.pending ? row.pendingEvents[0].status : row.status);
