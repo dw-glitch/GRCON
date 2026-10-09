@@ -180,7 +180,7 @@ html[data-app="GRCON"][data-ui-generation="3"] textarea {
   border-radius: var(--ui-radius-sm);
 }
 
-html[data-app="GRCON"][data-ui-generation="3"] :is(button, input, select, textarea, summary, [tabindex]):focus-visible {
+html[data-app="GRCON"][data-ui-generation="3"] :is(button, a[href], input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
   outline: 3px solid var(--ui-focus);
   outline-offset: 2px;
 }
