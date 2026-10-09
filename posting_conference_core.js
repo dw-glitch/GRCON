@@ -630,6 +630,26 @@
     }).sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)));
   }
 
+  // Sempre recebe a emissão completa: filtros e paginação não mudam sua abrangência.
+  function pendingScope(group) {
+    if (!group || !Array.isArray(group.rows) || !group.rows.length) return {
+      label: "GRDT a verificar", detail: "Não foi possível conferir a GRDT completa.",
+    };
+    const total = group.rows.length;
+    const pending = group.rows.filter(row => row.status !== STATUSES.CONFIRMED).length;
+    const confirmed = total - pending;
+    const historical = group.rows.some(row => row.status !== STATUSES.CONFIRMED && row.historicalPreserved);
+    if (!pending) return { label: "Sem pendência", detail: `${total} de ${total} documentos/revisões confirmados.` };
+    if (historical) return {
+      label: confirmed ? "Parte da GRDT pendente" : "Conferência atual pendente",
+      detail: `${pending} de ${total} documentos/revisões sem confirmação atual. Há confirmação histórica; não reenviar esses documentos.`,
+    };
+    return {
+      label: pending === total ? "GRDT inteira pendente" : pending === 1 ? "Somente este documento pendente" : "Parte da GRDT pendente",
+      detail: `${pending} de ${total} documentos/revisões pendentes; ${confirmed} confirmado(s) no SIGEM.`,
+    };
+  }
+
   // O diagnóstico é derivado de evidências verificáveis e não altera o estado da postagem.
   // allocationContext é resolvido pelas fontes oficiais do contrato ativo.
   function diagnoseRow(row, allocationContext, baseMeta) {
@@ -1037,7 +1057,7 @@
     text, norm, normalizeRevision, normalizeHeader, documentKeys, documentIdentity, displayDocument, revisionRank,
     isPostedSigemStatus, parseSourceDate, effectiveRecordTimestamp, resolvePostingEvidence,
     detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
-    statusLabel, aggregateStatus, diagnoseRow, repostEligibility, filterRows, pendingRows, pertinentGrdt, pendingGrdts,
+    statusLabel, aggregateStatus, pendingScope, diagnoseRow, repostEligibility, filterRows, pendingRows, pertinentGrdt, pendingGrdts,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
     kvGet, kvSet, kvSetMany, storedValue, putKv,
     readHistoryIndex, historyAggregate, reconcilePersisted, prepareWorkbookImport, prepareParsedImport, commitPreparedImport, importWorkbook,

@@ -40,6 +40,7 @@ assert.equal(typeof health.powerAutomateUrlValid, 'boolean', 'Health deve inform
 const anonymous = await get('/api/document-vault/list');
 assert.equal(anonymous.status, 401, 'Catálogo deve exigir sessão.');
 const verifiedAssets = ['sigem_pw_dashboard_core.js', 'workers/sigem_pw_dashboard.worker.js', 'react-dist/sigem-pw-dashboard-app.js', 'document-vault.css', 'sw.js', 'sigem_pw_revision_report.js', 'workers/export.worker.js', 'react-dist/sigem-pw-evolution-app.js'];
+verifiedAssets.push('posting_conference_core.js', 'posting_conference_refinement.js', 'posting_conference_app.js', 'posting_conference_report.js', 'posting-conference.css');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 for (const path of verifiedAssets) {
   const response = await get('/' + path + '?verify=' + expectedCommit);
