@@ -14,6 +14,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-gpu'],...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
  try {
  const context=await browser.newContext({viewport:{width:1366,height:768},serviceWorkers:'block',acceptDownloads:true});
+ await context.grantPermissions(['clipboard-read','clipboard-write']);
  const page=await context.newPage();const errors=[],calls=[],metrics=[];
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://kvyrttccwzdhasplfxnr.supabase.co/**',r=>r.fulfill({status:401,contentType:'application/json',body:'{"message":"QA session"}'}));
@@ -225,12 +226,18 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.waitForFunction(()=>document.querySelectorAll('.pc-pending-table tbody tr').length===1);
  assert.match(await page.locator('.pc-pending-table').textContent(),/Parte da GRDT pendente/);
  assert.match(await page.locator('.pc-pending-table').textContent(),/2 de 3/);
+ await page.locator('[data-copy-pending-grdts]').click();
+ assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'GRDT-100');
  const filteredDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await(await filteredDownload).saveAs(path.join(out,'pendencias-filtradas.xlsx'));
  const filteredBook=XLSX.read(fs.readFileSync(path.join(out,'pendencias-filtradas.xlsx')),{type:'buffer'});
  assert.deepEqual(filteredBook.SheetNames,['Detalhamento']);
  const filteredDetails=XLSX.utils.sheet_to_json(filteredBook.Sheets.Detalhamento,{range:9,defval:''});
  assert.equal(filteredDetails.length,1);
  assert.match(filteredDetails[0]['Detalhamento da pendência'],/2 de 3/);
+ await page.locator('#pc-status').selectOption('CONFIRMADO');
+ await page.locator('[data-copy-pending-grdts]').click();
+ assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'','nenhuma GRDT copiada quando não há pendência no filtro');
+ await page.locator('#pc-status').selectOption('');
  await page.locator('#pc-document-list').fill('');
  await page.locator('#pc-grdt-classification').selectOption('');
  await page.locator('#pc-reference-date').fill('2026-10-02');await page.locator('#pc-save-date').click();await page.waitForFunction(()=>window.GrconSharedSigemQuery.current()?.meta.referenceDate==='2026-10-02');assert.equal(await page.evaluate(()=>window.qaDateCalls),1);
@@ -253,7 +260,6 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
    },{once:true});
  });
  await page.locator('#pc-document-list').scrollIntoViewIfNeeded();
- await context.grantPermissions(['clipboard-read','clipboard-write']);
  await page.locator('#pc-document-list').click();
  await page.evaluate(text=>navigator.clipboard.writeText(text),Array.from({length:5000},(_,i)=>'VOLUME-'+String(i).padStart(5,'0')).join('\n'));
  await page.keyboard.press('Control+V');

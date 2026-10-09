@@ -142,7 +142,7 @@
     el("pc-grdt-classification").addEventListener("change", event => { state.groupClassification = event.target.value; state.page = 1; renderTableOnly(); });
     el("pc-pending-grdts").addEventListener("click", async event => {
       if (!event.target.closest("[data-copy-pending-grdts]")) return;
-      try { await navigator.clipboard.writeText(filteredGroups().map(item => item.egrdtNumber).filter(Boolean).join("\n")); notify("GRDTs copiadas.", "success"); }
+      try { await navigator.clipboard.writeText([...new Set(filteredPendingRows().map(row => row.egrdtNumber).filter(Boolean))].join("\n")); notify("GRDTs copiadas.", "success"); }
       catch (_) { notify("Selecione e copie a lista de GRDTs.", "warning"); }
     });
     el("pc-update").addEventListener("click", () => el("pc-file").click());
@@ -632,14 +632,11 @@
     if (!Report || !documentRows().length) return;
     setBusy(true, "Gerando Relatório de Conferência de Postagem…");
     try {
-      let rows;
-      let mode;
-      let groups = [];
-      groups = detailedGroups();
-      rows = filteredPendingRows();
-      mode = "events";
+      const rows = filteredPendingRows();
+      const keys = new Set(rows.map(row => row.historyId || row.egrdtNumber));
+      const groups = detailedGroups().filter(group => keys.has(group.historyId || group.egrdtNumber));
       const scopeLabel = "Pendencias";
-      const buffer = await Report.buildWorkbook(rows, { mode, groups, scopeLabel, pending: true, baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
+      const buffer = await Report.buildWorkbook(rows, { mode: "events", groups, scopeLabel, pending: true, baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -649,7 +646,7 @@
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
-      notify(mode === "events" ? `${fmt(rows.length)} ocorrência(s) incluída(s) no relatório por eGRDT.` : `${fmt(rows.length)} documento(s) único(s) incluído(s) no relatório.`, "success");
+      notify(`${fmt(rows.length)} pendência(s) exportada(s) em uma única aba.`, "success");
     } catch (error) {
       console.error(error);
       notify(error.message || "Não foi possível gerar o relatório.", "error");
