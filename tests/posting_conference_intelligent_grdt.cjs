@@ -155,7 +155,7 @@ assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eli
   assert.equal(sheet.getCell('H12').value, 'B');
   assert.equal(sheet.getCell('J12').value, 'Em Workflow');
   assert.equal(sheet.getCell('G11').value, 'Para Construção');
-  assert.equal(sheet.getCell('E11').value, '01/10/2026', 'preservar a data original de envio');
+  assert.equal(sheet.getCell('E11').value, '30/09/2026', 'preservar a data original de envio');
   assert.equal(sheet.getRow(10).getCell(5).value, 'Data eGRDT');
   assert.equal(sheet.getRow(10).getCell(13).value, 'Observação');
   assert.equal(sheet.getRow(10).getCell(15).value, 'Detalhamento da pendência');
