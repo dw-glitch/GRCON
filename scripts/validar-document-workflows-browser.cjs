@@ -237,7 +237,6 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.locator('#pc-table-wrap').scrollIntoViewIfNeeded();
  await page.screenshot({path:path.join(out,'pendencias-1366.png')});
  // Colar 5 mil códigos em uma conferência com 5 mil documentos mantém o navegador responsivo.
- await page.locator('[data-pc-open="sidebar"]').click();
  await page.locator('#pc-document-list').waitFor({state:'visible'});
  await page.evaluate(()=>{
    const ui=window.GrconPostingConferenceUi,C=window.GrconPostingConference;
