@@ -8,7 +8,7 @@
   const esc = v => t(v).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[ch]));
   const number = n => Number(n || 0).toLocaleString("pt-BR");
   const state = {scope:"",version:"",prepared:[],duplicates:0,options:{search:"",status:"",stage:"",sheet:"",action:"",from:"",to:""},
-    aggregated:null,page:1,pageSize:65,detail:"",loading:false,busy:false};
+    aggregated:null,full:null,fullByAllocation:null,page:1,pageSize:65,detail:"",loading:false,busy:false};
   function shell(){
     const el=$("allocation-dashboard-root");if(!el||el.dataset.ready)return;
     el.dataset.ready="true";
@@ -73,7 +73,7 @@
   }
   function resetContract(){
     if(scope()===state.scope)return;
-    state.scope=scope();state.version="";state.prepared=[];state.duplicates=0;state.page=1;state.detail="";
+    state.scope=scope();state.version="";state.prepared=[];state.duplicates=0;state.full=null;state.fullByAllocation=null;state.page=1;state.detail="";
     state.options={search:"",status:"",stage:"",sheet:"",action:"",from:"",to:""};
     for(const key of Object.keys(state.options)){const el=$("ad-"+key);if(el)el.value="";}
   }
@@ -88,7 +88,7 @@
     }
     if(state.version===snapshot.id)return;
     const p=Model.prepare(snapshot.records);
-    state.prepared=p.rows;state.duplicates=p.duplicateLinks;state.version=snapshot.id;state.page=1;state.detail="";
+    state.prepared=p.rows;state.duplicates=p.duplicateLinks;state.full=Model.aggregate(p.rows);state.fullByAllocation=new Map(state.full.groups.map(g=>[Model.norm(g.allocation),g]));state.version=snapshot.id;state.page=1;state.detail="";
     $("ad-action").innerHTML='<option value="">Todas as ações</option>'+[...new Set(p.rows.map(r=>t(r.action)).filter(Boolean))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
     $("ad-action").value=state.options.action;
     $("ad-meta").textContent=`Base: ${snapshot.fileName||"Central de alocação"} · ${snapshot.updatedAt?new Date(snapshot.updatedAt).toLocaleString("pt-BR"):"Sem data"} · ${number(snapshot.records.length)} vínculos · ${number(p.duplicateLinks)} duplicidades consolidadas`;
@@ -108,7 +108,16 @@
   }
   function render(){
     if(!$("ad-summary"))return;
-    const a=Model.aggregate(Model.filter(state.prepared,state.options));state.aggregated=a;
+    const a=Model.aggregate(Model.filter(state.prepared,state.options));
+    // O filtro escolhe vínculos; a situação da ALOC considera SEMPRE todos os seus documentos.
+    a.groups=a.groups.map(g=>{
+      const complete=state.fullByAllocation?.get(Model.norm(g.allocation));
+      return complete?{...g,situation:complete.situation,documentsCount:complete.documentsCount,
+        completed:complete.completed,pending:complete.pending,allItems:complete.items}:g;
+    });
+    a.completeAllocations=a.groups.filter(g=>g.situation==="Concluída").length;
+    a.partialAllocations=a.groups.filter(g=>g.situation==="Parcialmente concluída").length;
+    state.aggregated=a;
     const cards=[["Alocações",a.groups.length,""],["Documentos",a.documents,""],
       ["Concluídas",a.completeAllocations,"completed"],["Parcialmente concluídas",a.partialAllocations,""],
       ["Fiscal 01 · Aguardando",a.byStatus.fiscal1Waiting,"fiscal1Waiting"],
@@ -131,7 +140,7 @@
         <td>${number(g.completed)}</td><td>${number(g.pending)}</td><td>${esc(g.lastSentAt||"—")}</td>
         <td><button type="button" class="secondary-button" data-ad-detail="${id}" aria-expanded="${state.detail===id}">${state.detail===id?"Fechar":"Documentos"}</button></td></tr>`;
       if(state.detail!==id)return main;
-      const items=g.items.map(r=>`<tr><td>${esc(r.document)}</td><td>${esc(r.allocationStatus||"Não informado")}</td><td>${esc(r.sentAt)}</td>
+      const items=(g.allItems||g.items).map(r=>`<tr><td>${esc(r.document)}</td><td>${esc(r.allocationStatus||"Não informado")}</td><td>${esc(r.sentAt)}</td>
         <td>${esc(r.fiscal1ReturnedAt)}</td><td>${esc(r.fiscal2ReturnedAt)}</td>
         <td>${esc([r.fiscalComment,r.fiscal2Comment,r.remarks].filter(Boolean).join(" · "))}</td></tr>`).join("");
       return main+`<tr class="allocation-dashboard-detail"><td colspan="7"><div class="allocation-dashboard-detail-list">
