@@ -10,9 +10,10 @@ const fs = require('node:fs');
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.route('**/__qa-performance', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>GRCON QA</title><body>QA</body>' }));
+  await page.route('**/__qa-performance', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><meta charset="utf-8"><title>GRCON QA</title><body>QA</body>' }));
   try {
     await page.goto(base + '/__qa-performance');
+    assert.equal(await page.evaluate(() => document.characterSet), 'UTF-8');
     await page.addScriptTag({ url: base + '/performance_workers.js' });
     await page.addScriptTag({ url: base + '/xlsx.full.min.js' });
     const measured = await page.evaluate(async () => {
