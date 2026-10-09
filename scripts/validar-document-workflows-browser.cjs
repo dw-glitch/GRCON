@@ -198,9 +198,12 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  const detailRows=XLSX.utils.sheet_to_json(pend.Sheets.Detalhamento,{range:9,defval:''});
  assert.equal(detailRows.length,5,'planilha contém somente as pendências');
  assert.ok(!detailRows.some(row=>row.Código==='DOC-001'));
+ const pendingHeaders=['Código','Tipo','Disciplina','eGRDT','Data eGRDT','Revisão enviada','PROPÓSITO DE EMISSÃO','Revisão encontrada','Conferência','Status SIGEM','Data da confirmação','Última conferência','Observação','Pendência da GRDT','Detalhamento da pendência'];
+ assert.deepEqual(Object.keys(detailRows[0]),pendingHeaders,'todas as 13 colunas históricas mais duas informações de pendência');
  assert.equal(detailRows.find(row=>row.Código==='DOC-002')['Pendência da GRDT'],'Parte da GRDT pendente');
  assert.match(detailRows.find(row=>row.Código==='DOC-002')['Detalhamento da pendência'],/2 de 3.*1 confirmado/);
  assert.equal(detailRows.find(row=>row.Código==='DOC-004')['Pendência da GRDT'],'GRDT inteira pendente');
+ assert.equal(detailRows.find(row=>row.Código==='DOC-002')['Data eGRDT'],'01/10/2026','data do envio preservada');
  for(let i=1;i<6;i++){
    const entry=detailRows.find(row=>row.Código==='DOC-00'+(i+1));
    assert.ok(entry,'documento presente no arquivo Excel: '+i);
