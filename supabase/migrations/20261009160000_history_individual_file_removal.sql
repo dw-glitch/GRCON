@@ -24,6 +24,7 @@ declare
   event_name text;
   file_count_now integer;
   document_count_now integer;
+  active_allocations text[];
   payload_now jsonb;
 begin
   if auth.uid() is null or not private.grcon_has_role(target_workspace, array['owner','admin']) then
@@ -88,10 +89,14 @@ begin
   file_count_now := jsonb_array_length(active_files);
   select count(distinct upper(btrim(f.value->>'document'))) filter (where nullif(btrim(f.value->>'document'),'') is not null)
     into document_count_now from jsonb_array_elements(active_files) f(value);
+  select coalesce(array_agg(distinct btrim(f.value->>'allocation'))
+    filter (where nullif(btrim(f.value->>'allocation'),'') is not null),'{}'::text[])
+    into active_allocations from jsonb_array_elements(active_files) f(value);
   update public.grcon_history
      set payload=payload_now,
          file_count=file_count_now,
          document_count=coalesce(document_count_now,0),
+         allocations=active_allocations,
          updated_by=auth.uid(),
          updated_at=clock_timestamp()
    where id=h.id
