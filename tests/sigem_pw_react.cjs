@@ -26,6 +26,7 @@ assert.equal(fs.existsSync(path.join(root, "sigem_pw_dashboard_app.js")), false,
 assert.match(vite, /"sigem-pw-dashboard"[\s\S]*src\/react\/sigem-pw\/index\.tsx[\s\S]*sigem-pw-dashboard-app\.js/);
 assert.match(pkg.scripts.build, /vite build --mode sigem-pw-dashboard/);
 assert.match(bootstrap, /id="grcon-sigem-pw-root"/);
+assert.doesNotMatch(bootstrap, /grcon-sigem-pw-help|Como funciona · revisão 0 e todas as revisões/, "a faixa de ajuda do Dashboard não deve ser renderizada");
 assert.match(bootstrap, /ensure\("react-dist\/sigem-pw-dashboard-app\.js"\)/);
 assert.match(bootstrap, /sidebarBefore\?\.parentElement === sidebar/, "navegação lateral precisa tolerar reorganização concorrente do DOM");
 assert.match(bootstrap, /tabBefore\?\.parentElement === tabs/, "abas precisam tolerar reorganização concorrente do DOM");

@@ -22,6 +22,9 @@ const sigemPostingApp = read("sigem_posting_app.js");
 
 assert.match(html, /id="history-module"/);
 assert.match(html, /id="grcon-history-root"/);
+assert.doesNotMatch(html, /grcon-history-help|Como funciona · histórico e origem dos arquivos/, "a ajuda do Histórico não deve ser renderizada");
+assert.doesNotMatch(app, /Rastreabilidade Teams ·|const attempts =|const sigemEvidence =/, "o painel expansível do Teams deve ser removido sem afetar os dados");
+assert.match(app, /Adapter\.teamsPresentation\(record\)/, "a ação do Teams permanece disponível");
 assert.doesNotMatch(html, /id="history-list"/, "a UI estática legada não deve continuar duplicada no HTML");
 
 assert.match(vite, /"historico-egrdt"/);

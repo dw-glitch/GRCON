@@ -1979,12 +1979,7 @@ html[data-app="GRCON"][data-theme="dark"] .settings-group[open] > summary {
   background: var(--surface-2);
 }
 
-/* Fase 5: orientação no fluxo e atalhos secundários compactos. */
-.grcon-context-help { grid-column:1/-1; margin:0 0 12px; border:1px solid var(--border-1); border-radius:9px; background:var(--surface-1); color:var(--text-1); }
-.grcon-context-help > summary { min-height:36px; padding:8px 12px; font-size:.76rem; font-weight:750; cursor:pointer; }
-.grcon-context-help > div { padding:0 12px 10px; display:grid; gap:6px; }
-.grcon-context-help p { margin:0; color:var(--text-muted); font-size:.76rem; line-height:1.5; }
-.grcon-context-help strong { color:var(--text-1); }
+/* Fase 5: atalhos secundários compactos. */
 .grcon-app-shortcuts { position:relative; flex:0 0 auto; }
 .grcon-app-shortcuts > summary { display:flex; align-items:center; justify-content:center; gap:8px; min-height:36px; padding:0 12px; border:1px solid var(--border-1); border-radius:9px; background:var(--surface-1); color:var(--text-1); font-size:.76rem; font-weight:750; cursor:pointer; list-style:none; }
 .grcon-app-shortcuts > summary::-webkit-details-marker { display:none; }
@@ -1994,5 +1989,5 @@ html[data-app="GRCON"][data-theme="dark"] .settings-group[open] > summary {
 .grcon-app-shortcuts:not([open]) > .grcon-app-shortcuts-panel { display:none; }
 .grcon-app-shortcuts-panel > small { color:var(--text-muted); font-size:.68rem; text-align:center; }
 .grcon-app-shortcuts-panel .app-shortcut-link { justify-content:flex-start; }
-.grcon-app-shortcuts > summary:focus-visible, .grcon-context-help > summary:focus-visible { outline:2px solid var(--brand-500); outline-offset:3px; }
+.grcon-app-shortcuts > summary:focus-visible { outline:2px solid var(--brand-500); outline-offset:3px; }
 @media (max-width:928px) { .grcon-app-shortcuts-panel { right:auto; left:0; } }
