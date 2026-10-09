@@ -407,13 +407,7 @@
           && /^(EM ANALISE|EM WORKFLOW)$/.test(Conference.norm(row.sigemStatus))).map(detailValues));
       addSheet("AVALIAR REENVIO", detailHeaders, groupRows.filter(({ d }) =>
         d.action === "AVALIAR REENVIO").map(detailValues));
-      if (options.pending) {
-        addSheet("GRDTs Pendentes", [
-          "GRDT", "Total de documentos", "Localizados", "Não encontrados", "Revisões divergentes", "Situação",
-        ], groups.filter((g) => g.classification !== "TOTALMENTE_CONFIRMADA").map((g) => [
-          g.egrdtNumber, g.distinctDocuments, g.confirmed, g.notFound, g.divergent, g.classification,
-        ]));
-      }
+    }
 
     return workbook.xlsx.writeBuffer();
   }
