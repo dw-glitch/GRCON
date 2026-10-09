@@ -253,7 +253,10 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
    },{once:true});
  });
  await page.locator('#pc-document-list').scrollIntoViewIfNeeded();
- await page.locator('#pc-document-list').fill(Array.from({length:5000},(_,i)=>'VOLUME-'+String(i).padStart(5,'0')).join('\n'));
+ await context.grantPermissions(['clipboard-read','clipboard-write']);
+ await page.locator('#pc-document-list').click();
+ await page.evaluate(text=>navigator.clipboard.writeText(text),Array.from({length:5000},(_,i)=>'VOLUME-'+String(i).padStart(5,'0')).join('\n'));
+ await page.keyboard.press('Control+V');
  await page.waitForFunction(()=>window.qaFilterRenderAt>window.qaPasteStarted);
  const listPerformance=await page.evaluate(async()=>{
    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
