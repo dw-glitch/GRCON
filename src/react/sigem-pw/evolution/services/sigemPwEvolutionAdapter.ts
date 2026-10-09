@@ -1218,6 +1218,8 @@ async function exportFilteredRows(): Promise<number> {
       ] },
     ];
     let output: ArrayBuffer | undefined;
+    try { await window.GRCONModuleLoader.ensure("performance"); }
+    catch (error) { console.warn("[SIGEM×PW] Módulo de exportação em worker indisponível; usando exportador compatível.", error); }
     if (window.GrconPerformance?.supported) {
       try { output = await window.GrconPerformance.buildSpreadsheet("sigem-evolution", { sheets, compression: false }); }
       catch (error) { console.warn("[SIGEM×PW] Excel da Evolução em worker indisponível; usando exportador compatível.", error); }

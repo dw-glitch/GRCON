@@ -88,7 +88,10 @@ const fs = require('node:fs');
       const book = window.XLSX.read(buffer, { type: 'array' });
       const data = window.XLSX.utils.sheet_to_json(book.Sheets['Lista Filtrada'], { defval: '' });
       const expected = window.GrconSigemPwRevisionReport.exportRows(rows);
-      if (JSON.stringify(data) !== JSON.stringify(expected)) throw new Error('Revision worker changed exported cells.');
+      if (JSON.stringify(data) !== JSON.stringify(expected)) {
+        const index = data.findIndex((row, i) => JSON.stringify(row) !== JSON.stringify(expected[i]));
+        throw new Error('Revision worker cell comparison: ' + JSON.stringify({ count: data.length, expectedCount: expected.length, index, actual: data[index], expected: expected[index] }));
+      }
       const filterData = window.XLSX.utils.sheet_to_json(book.Sheets['Filtros Aplicados'], { header: 1 });
       // Real worker and the existing local builder must preserve every cell.
       const smallRows = rows.slice(0, 3);
