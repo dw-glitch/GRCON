@@ -17,7 +17,7 @@ const Requests=require('../requests_control_core.js');
    const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
    assert.deepEqual(book.worksheets.map(x=>x.name),['Detalhamento']);
    assert.equal(book.getWorksheet('Detalhamento').rowCount-10,subset.length);
-   assert.equal(book.getWorksheet('Detalhamento').getCell('G11').value,'GRDT inteira pendente');
+   assert.equal(book.getWorksheet('Detalhamento').getCell('N11').value,'GRDT inteira pendente');
  }
  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['CONTROLE DE SOLICITAÇÕES'],['Documento','Título','Responsável'],['DOC-001','Ação nº 1','Vinício'],['DOC-001','Outra solicitação','Beatriz'],['','','']]),'Solicitações');
  const records=Requests.parseWorkbook(wb,XLSX);assert.equal(records.length,2);assert.equal(Requests.buildIndex(records).get('DOC-001').length,2);assert.equal(records[0].data.Responsável,'Vinício');assert.equal(records[0].sourceRow,3);

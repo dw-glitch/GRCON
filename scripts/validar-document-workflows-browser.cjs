@@ -198,27 +198,60 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  const detailRows=XLSX.utils.sheet_to_json(pend.Sheets.Detalhamento,{range:9,defval:''});
  assert.equal(detailRows.length,5,'planilha contém somente as pendências');
  assert.ok(!detailRows.some(row=>row.Código==='DOC-001'));
+ const pendingHeaders=['Código','Tipo','Disciplina','eGRDT','Data eGRDT','Revisão enviada','PROPÓSITO DE EMISSÃO','Revisão encontrada','Conferência','Status SIGEM','Data da confirmação','Última conferência','Observação','Pendência da GRDT','Detalhamento da pendência'];
+ assert.deepEqual(Object.keys(detailRows[0]),pendingHeaders,'todas as 13 colunas históricas mais duas informações de pendência');
  assert.equal(detailRows.find(row=>row.Código==='DOC-002')['Pendência da GRDT'],'Parte da GRDT pendente');
  assert.match(detailRows.find(row=>row.Código==='DOC-002')['Detalhamento da pendência'],/2 de 3.*1 confirmado/);
  assert.equal(detailRows.find(row=>row.Código==='DOC-004')['Pendência da GRDT'],'GRDT inteira pendente');
+ assert.equal(detailRows.find(row=>row.Código==='DOC-002')['Data eGRDT'],'01/10/2026','data do envio preservada');
  for(let i=1;i<6;i++){
    const entry=detailRows.find(row=>row.Código==='DOC-00'+(i+1));
    assert.ok(entry,'documento presente no arquivo Excel: '+i);
    assert.equal(entry['PROPÓSITO DE EMISSÃO'],i===5?'Não identificado':i%2?'Para Cancelamento':'Para Construção');
  }
- // Auditar também a exportação real da visão por ocorrência/eGRDT.
+ // A visão por eGRDT mantém o relatório original, com todas as abas e todas
+ // as ocorrências do grupo (inclusive documentos confirmados).
  await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.view='grdts';ui.render();});
  const eventDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await(await eventDownload).saveAs(path.join(out,'conferencia_por_egrdt.xlsx'));
  const eventsBook=XLSX.read(fs.readFileSync(path.join(out,'conferencia_por_egrdt.xlsx')),{type:'buffer'});
- assert.deepEqual(eventsBook.SheetNames,['Detalhamento']);
- const eventSheet=eventsBook.Sheets.Detalhamento;
- assert.ok(eventSheet,'relatório por eGRDT exportado');
- const eventDetails=XLSX.utils.sheet_to_json(eventSheet,{range:9,defval:''});
- assert.equal(eventDetails.length,5,'exportação da conferência sempre mostra somente pendências');
- for(let i=1;i<6;i++){
+ assert.deepEqual(eventsBook.SheetNames,['RESUMO','RESUMO GRDT','DOCUMENTOS POR GRDT','PENDENCIAS CONFIRMACAO','ALOCACOES A VERIFICAR','DOCUMENTOS TRAMITACAO','AVALIAR REENVIO']);
+ const eventDetails=XLSX.utils.sheet_to_json(eventsBook.Sheets.RESUMO,{range:9,defval:''});
+ assert.equal(eventDetails.length,6,'relatório completo preserva os documentos confirmados');
+ assert.ok(eventDetails.find(row=>row.Código==='DOC-001'&&row.Conferência==='Postado'));
+ for(let i=0;i<6;i++){
    const entry=eventDetails.find(row=>row.Código==='DOC-00'+(i+1));
+   assert.ok(entry,'documento mantido no Excel completo: '+i);
    assert.equal(entry['PROPÓSITO DE EMISSÃO'],i===5?'Não identificado':i%2?'Para Cancelamento':'Para Construção');
  }
+ const byGrdt=XLSX.utils.sheet_to_json(eventsBook.Sheets['DOCUMENTOS POR GRDT'],{defval:''});
+ assert.equal(byGrdt.length,6,'detalhamento completo por GRDT');
+ // A visão Documentos preserva as 17 colunas, o modelo e a seleção de filtros.
+ await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.view='documents';ui.render();});
+ await page.locator('#pc-document-list').fill('DOC-002');
+ await page.waitForFunction(()=>document.querySelector('#pc-result-count')?.textContent.includes('1'));
+ const docsDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await(await docsDownload).saveAs(path.join(out,'conferencia_documentos_filtrados.xlsx'));
+ const docsBook=XLSX.read(fs.readFileSync(path.join(out,'conferencia_documentos_filtrados.xlsx')),{type:'buffer'});
+ assert.deepEqual(docsBook.SheetNames,['RESUMO']);
+ const docs=XLSX.utils.sheet_to_json(docsBook.Sheets.RESUMO,{range:9,defval:''});
+ assert.equal(docs.length,1,'relatório padrão respeita o filtro de documentos');
+ assert.equal(docs[0].Código,'DOC-002');
+ assert.ok(Object.keys(docs[0]).includes('Repostagens')&&Object.keys(docs[0]).includes('Observação'),'modelo anterior com 17 colunas');
+ assert.match(docs[0]['PROPÓSITO DE EMISSÃO'],/Para Cancelamento/);
+ await page.locator('#pc-document-list').fill('');
+ await page.waitForFunction(()=>document.querySelector('#pc-result-count')?.textContent.includes('6'));
+ // Na visão por GRDT, o filtro seleciona a emissão, mas seu relatório
+ // conserva todos os documentos dessa emissão, evitando auditoria parcial.
+ await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.view='grdts';ui.render();});
+ await page.locator('#pc-document-list').fill('DOC-002');
+ await page.waitForFunction(()=>document.querySelector('#pc-result-count')?.textContent.includes('1'));
+ const groupDownload=page.waitForEvent('download');await page.locator('#pc-export').click();await(await groupDownload).saveAs(path.join(out,'conferencia_grdt_filtrada.xlsx'));
+ const groupBook=XLSX.read(fs.readFileSync(path.join(out,'conferencia_grdt_filtrada.xlsx')),{type:'buffer'});
+ assert.deepEqual(groupBook.SheetNames,eventsBook.SheetNames);
+ const groupRows=XLSX.utils.sheet_to_json(groupBook.Sheets.RESUMO,{range:9,defval:''});
+ assert.equal(groupRows.length,3,'o filtro seleciona a GRDT e mantém a emissão completa');
+ assert.ok(groupRows.some(row=>row.Código==='DOC-001'));
+ await page.locator('#pc-document-list').fill('');
+ await page.waitForFunction(()=>document.querySelector('#pc-result-count')?.textContent.includes('3'));
  await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.view='pending';ui.render();});
  await page.locator('#pc-discipline').selectOption('X');assert.equal(await page.locator('.pc-pending-table tbody tr').count(),3);
  await page.locator('#pc-grdt-classification').selectOption('PARCIALMENTE_CONFIRMADA');assert.equal(await page.locator('.pc-pending-table tbody tr').count(),2);
