@@ -182,71 +182,9 @@
     ];
   }
 
-  // O relatório reduzido pertence exclusivamente à visão Pendências de Postagem.
-  // Nunca altera o modelo completo do Excel das demais visualizações.
-  async function buildPendingWorkbook(rows, options) {
-    if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");
-    // Uma linha por documento/revisão da emissão. O contexto vem da GRDT completa,
-    // nunca da seleção filtrada que será escrita na planilha.
-    const events = (rows || []).flatMap(row => Array.isArray(row.sends) && row.sends.length ? row.sends : [row]);
-    const source = options?.pending ? events.filter(row => row.status !== "CONFIRMADO") : events;
-    const groups = new Map((options?.groups || []).map(group => [group.historyId || group.egrdtNumber, group]));
-    const workbook = new root.ExcelJS.Workbook();
-    workbook.creator = "GRCON";
-    workbook.created = new Date();
-    workbook.title = "Conferência de documentos pendentes";
-    const sheet = workbook.addWorksheet(options?.pending ? "Detalhamento" : "RESUMO", {
-      views: [{ state: "frozen", ySplit: 10, xSplit: 1, showGridLines: false }],
-    });
-    const headers = ["Código", "Revisão enviada", "eGRDT", "Pendência do documento",
-      "Revisão encontrada", "Status SIGEM", "Pendência da GRDT", "Detalhamento da pendência", "PROPÓSITO DE EMISSÃO"];
-    sheet.columns = [34, 12, 27, 27, 12, 24, 32, 46, 26].map(width => ({ width }));
-    sheet.mergeCells("A1:I2");
-    sheet.getCell("A1").value = "CONFERÊNCIA — DOCUMENTOS PENDENTES";
-    sheet.getCell("A1").font = { name: "Arial", size: 16, bold: true, color: { argb: "FFFFFF" } };
-    sheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
-    sheet.getCell("A1").alignment = { vertical: "middle" };
-    sheet.mergeCells("A4:I4");
-    sheet.getCell("A4").value = source.length + " documento(s)/revisão(ões) · " +
-      new Set(source.map(row => row.historyId || row.egrdtNumber).filter(Boolean)).size + " GRDT(s)";
-    sheet.mergeCells("A6:I6");
-    sheet.getCell("A6").value = "Pendente = revisão enviada sem confirmação na base consultada. Não comprova falha de postagem.";
-    sheet.mergeCells("A7:I7");
-    sheet.getCell("A7").value = "A abrangência considera todos os documentos da GRDT, inclusive os confirmados e os ocultos pelos filtros.";
-    sheet.mergeCells("A8:I8");
-    sheet.getCell("A8").value = "Base: " + (text(options?.baseFileName) || "não informada") +
-      (options?.baseImportedAt ? " · Atualizada em " + new Date(options.baseImportedAt).toLocaleString("pt-BR") : "");
-    [4, 6, 7, 8].forEach(index => {
-      sheet.getRow(index).font = { name: "Arial", size: 10, color: { argb: "53606A" } };
-      sheet.getRow(index).alignment = { wrapText: true, vertical: "middle" };
-      sheet.getRow(index).height = index === 6 || index === 7 ? 26 : 20;
-    });
-    const header = sheet.getRow(10);
-    header.values = headers;
-    header.height = 30;
-    header.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFF" } };
-    header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "16324A" } };
-    header.alignment = { wrapText: true, vertical: "middle" };
-    source.forEach((row, index) => {
-      const scope = Conference?.pendingScope?.(groups.get(row.historyId || row.egrdtNumber)) ||
-        { label: "GRDT a verificar", detail: "Não foi possível conferir a GRDT completa." };
-      const excelRow = sheet.getRow(index + 11);
-      excelRow.values = [row.document, row.revisionSent || row.currentRevision || "—", row.egrdtNumber || "Não identificada",
-        statusText(row) + (row.historicalPreserved ? " — já confirmado anteriormente; não reenviar" : ""),
-        row.revisionFound || "—", row.sigemStatus || "Não informado", scope.label, scope.detail,
-        text(row.purpose) || "Não identificado"];
-      excelRow.height = row.historicalPreserved ? 58 : 42;
-      excelRow.font = { name: "Arial", size: 10, color: { argb: "253746" } };
-      excelRow.alignment = { wrapText: true, vertical: "middle" };
-      excelRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: index % 2 ? "F3F6F8" : "FFFFFF" } };
-      excelRow.getCell(1).font = { name: "Arial", size: 10, bold: true, color: { argb: "16324A" } };
-      excelRow.getCell(7).font = { name: "Arial", size: 10, bold: true, color: { argb: "16324A" } };
-    });
-    sheet.autoFilter = { from: { row: 10, column: 1 }, to: { row: Math.max(10, 10 + source.length), column: headers.length } };
-    sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: "10:10" };
-    return workbook.xlsx.writeBuffer();
-  }
-
+  // Todos os relatórios utilizam o padrão visual GRCON. A visão Pendências
+  // mantém TODAS as colunas originais de auditoria e acrescenta o alcance
+  // da pendência; sua diferença é conter uma única aba com as pendências.
   async function buildWorkbook(rows, options) {
     if (root.document && typeof Worker === "function") {
       try {
@@ -255,9 +193,15 @@
       } catch (error) { console.warn("[GRCON] Exportação da Conferência em modo compatível", error); }
     }
     if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");
-    if (options?.pending) return buildPendingWorkbook(rows, options);
-    const source = rows || [];
-    const mode = options?.mode === "events" ? "events" : "documents";
+    const source = options?.pending
+      ? (rows || []).flatMap(row => Array.isArray(row.sends) && row.sends.length ? row.sends : [row])
+        .filter(row => row.status !== Conference.STATUSES.CONFIRMED)
+      : (rows || []);
+    const mode = options?.pending || options?.mode === "events" ? "events" : "documents";
+    // O grupo completo é necessário para distinguir um documento pendente
+    // de uma GRDT integralmente pendente, mesmo com filtros aplicados.
+    const pendingGroups = new Map((options?.groups || []).map(group =>
+      [group.historyId || group.egrdtNumber, group]));
     const summary = Conference?.summarize ? Conference.summarize(source) : {};
     const workbook = new root.ExcelJS.Workbook();
     workbook.creator = "GRCON";
@@ -266,7 +210,9 @@
     workbook.subject = "Relatório de Conferência — Consulta Geral × Histórico";
     workbook.title = "Relatório de Conferência — Consulta Geral × Histórico";
 
-    const headers = mode === "documents" ? documentHeaders() : eventHeaders();
+    const headers = options?.pending
+      ? [...eventHeaders(), "Pendência da GRDT", "Detalhamento da pendência"]
+      : (mode === "documents" ? documentHeaders() : eventHeaders());
     const columnCount = headers.length;
     const lastColumn = String.fromCharCode(64 + Math.min(columnCount, 26));
     const sheet = workbook.addWorksheet(options?.pending ? "Detalhamento" : "RESUMO", { views: [{ state: "frozen", ySplit: 10, xSplit: 2 }] });
@@ -276,9 +222,10 @@
     sheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: WHITE } };
     sheet.mergeCells(`D1:${lastColumn}2`);
     const title = sheet.getCell("D1");
-    title.value = mode === "documents"
-      ? "RELATÓRIO DE CONFERÊNCIA — DOCUMENTOS ÚNICOS"
-      : "RELATÓRIO DE CONFERÊNCIA — AUDITORIA POR eGRDT";
+    title.value = options?.pending
+      ? "RELATÓRIO DE CONFERÊNCIA — DOCUMENTOS PENDENTES"
+      : mode === "documents" ? "RELATÓRIO DE CONFERÊNCIA — DOCUMENTOS ÚNICOS"
+        : "RELATÓRIO DE CONFERÊNCIA — AUDITORIA POR eGRDT";
     title.font = { name: "Arial", size: 15, bold: true, color: { argb: DARK } };
     title.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
 
@@ -347,7 +294,14 @@
 
     source.forEach((row, index) => {
       const excelRow = sheet.getRow(11 + index);
-      excelRow.values = mode === "documents" ? documentValues(row) : eventValues(row);
+      if (options?.pending) {
+        const group = pendingGroups.get(row.historyId || row.egrdtNumber);
+        const scope = Conference?.pendingScope?.(group) ||
+          { label: "GRDT a verificar", detail: "Não foi possível conferir a GRDT completa." };
+        excelRow.values = [...eventValues(row), scope.label, scope.detail];
+      } else {
+        excelRow.values = mode === "documents" ? documentValues(row) : eventValues(row);
+      }
       excelRow.height = dataRowHeight(row, mode);
       excelRow.font = { name: "Arial", size: 9, color: { argb: TEXT } };
       excelRow.alignment = { vertical: "top", wrapText: true };
@@ -361,6 +315,11 @@
       }
       applyConferenceStyle(excelRow.getCell(conferenceColumn), row.status);
       applySigemStyle(excelRow.getCell(sigemColumn));
+      if (options?.pending) {
+        excelRow.getCell(14).font = { name: "Arial", size: 9, bold: true, color: { argb: DARK } };
+        excelRow.getCell(15).alignment = { vertical: "middle", wrapText: true };
+        excelRow.height = Math.max(excelRow.height || 0, 42);
+      }
       excelRow.getCell(1).font = { name: "Arial", size: 9, bold: true, color: { argb: DARK } };
       if (mode === "documents") {
         [5, 6, 7, 10, 12, 15, 16].forEach((col) => { excelRow.getCell(col).alignment = { vertical: "middle", horizontal: "center", wrapText: true }; });
@@ -378,6 +337,10 @@
       { width: 34 }, { width: 13 }, { width: 18 }, { width: 31 }, { width: 13 }, { width: 15 }, { width: 38 },
       { width: 19 }, { width: 20 }, { width: 24 }, { width: 20 }, { width: 20 }, { width: 48 },
     ];
+    if (options?.pending) {
+      sheet.getColumn(14).width = 32;
+      sheet.getColumn(15).width = 56;
+    }
     sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
     sheet.pageMargins = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
     sheet.headerFooter.oddFooter = "&LGRCON&CRelatório de Conferência — Consulta Geral × Histórico&R&P / &N";
@@ -385,7 +348,7 @@
     // Relatórios por GRDT partem dos eventos da emissão, e não do documento
     // consolidado associado à última GRDT. Nenhum documento confirmado é ocultado.
     const groups = Array.isArray(options?.groups) ? options.groups : [];
-    if (groups.length) {
+    if (groups.length && !options?.pending) {
       const safe = (value) => {
         if (value == null) return "";
         if (typeof value === "number" || typeof value === "boolean") return value;
@@ -451,16 +414,7 @@
           g.egrdtNumber, g.distinctDocuments, g.confirmed, g.notFound, g.divergent, g.classification,
         ]));
       }
-    } else if (options?.pending) {
-      // Compatibilidade com exportações legadas por documentos únicos.
-      const consolidated = Conference.pendingGrdts(source);
-      const pending = workbook.addWorksheet("GRDTs Pendentes", { views: [{ state: "frozen", ySplit: 1 }] });
-      pending.columns = [{ header: "GRDT", key: "grdt", width: 48 }, { header: "Quantidade de documentos", key: "documentCount", width: 28 }];
-      consolidated.grdts.forEach(item => pending.addRow(item));
-      pending.getRow(1).font = { bold: true, color: { argb: WHITE } };
-      pending.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: DARK } };
-      pending.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, pending.rowCount), column: 2 } };
-    }
+
     return workbook.xlsx.writeBuffer();
   }
 
