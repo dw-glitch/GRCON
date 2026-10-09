@@ -442,6 +442,11 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           <div className="history-detail-section-heading">
             <span>DOCUMENTOS</span>
             <strong id="history-documents-title">Arquivos e rastreabilidade da GRDT</strong>
+            <label className="history-file-filter">Situação do registro
+              <select aria-label="Situação dos documentos no histórico" value={h.fileStatus} onChange={(event) => h.setFileStatus(event.target.value as "active" | "removed" | "all")}>
+                <option value="active">Ativos</option><option value="removed">Removidos</option><option value="all">Todos</option>
+              </select>
+            </label>
           </div>
           <p className="history-table-note">
             <strong>Como ler esta tabela:</strong> Conferência e Status SIGEM atual usam a Consulta Geral importada. Situação na geração, alocação e prazo da LD são registros da época da emissão.
@@ -458,9 +463,10 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                 <th>Alocação</th>
                 <th>Versão da LD enviada</th>
                 <th data-history-column="sheet">Aba LD</th>
+                <th>Ação individual</th>
               </tr></thead>
               <tbody>
-                {record.files.map((file, index) => {
+                {h.fileStatus !== "removed" && record.files.map((file, index) => {
                   const relation = Adapter.revisionRelation(record, file);
                   return (
                     <tr key={(file.document || "doc") + "-" + (file.finalName || index) + "-" + index}>
@@ -473,12 +479,57 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                       <td data-label="Alocação">{file.allocation || "—"}{file.sharedAllocationContext?.references.length ? <details><summary>Status na Central</summary>{file.sharedAllocationContext.references.map((item, i) => <p key={i}>{item.allocation || "Sem alocação"} · {item.allocationStatus || "Sem status"} · {item.workflow || "Sem workflow"} · linha {item.sourceRow}</p>)}<small>{file.sharedAllocationContext.centralFileName}</small></details> : null}</td>
                       <td data-label="Versão da LD enviada">{file.ldPrazo || "Não registrado"}</td>
                       <td data-label="Aba LD"><DocumentClassBadge value={file.sheet} /></td>
+                      <td data-label="Ação individual">{h.canManageHistoryFile ? <button className="secondary-button compact history-file-remove" type="button" disabled={h.fileActionBusy} onClick={() => h.beginRemoval(index)} aria-label={`Remover somente o documento ${file.document || file.finalName} desta eGRDT`}>Remover do histórico</button> : <small>Somente consulta</small>}</td>
                     </tr>
                   );
                 })}
+                {h.fileStatus !== "active" && (record.removedFiles || []).map((entry) => (
+                  <tr className="history-file-removed-row" key={"removed-" + entry.id}>
+                    <td data-label="Documento"><strong>{entry.file.document || "—"}</strong><small> Removido</small></td>
+                    <td data-label="Arquivo original">{entry.file.originalName || "—"}</td>
+                    <td data-label="Arquivo enviado">{entry.file.finalName || "—"}</td>
+                    <td data-label="Revisão gerada"><span className="history-revision-badge">{entry.file.grdtRevision || entry.file.revision || "0"}</span></td>
+                    <td data-label="Propósito da GRDT">{entry.file.purpose || "Não registrado"}</td>
+                    <td data-label="Situação na geração"><small>Retirado do histórico operacional</small></td>
+                    <td data-label="Alocação">{entry.file.allocation || "—"}</td>
+                    <td data-label="Versão da LD enviada">{entry.file.ldPrazo || "Não registrado"}</td>
+                    <td data-label="Aba LD"><DocumentClassBadge value={entry.file.sheet} /></td>
+                    <td data-label="Ação individual"><small>{Adapter.formatDate(entry.removedAt, true)} · {entry.reason}</small>{h.canManageHistoryFile ? <button className="secondary-button compact" type="button" disabled={h.fileActionBusy} onClick={() => { void h.restoreFile(entry.id); }}>Restaurar</button> : null}</td>
+                  </tr>
+                ))}
+                {((h.fileStatus === "active" && !record.files.length) || (h.fileStatus === "removed" && !record.removedFiles?.length) || (h.fileStatus === "all" && !record.files.length && !record.removedFiles?.length)) ? (
+                  <tr><td colSpan={10}>Nenhum documento nesta situação.</td></tr>
+                ) : null}
               </tbody>
             </table>
           </div>
+          {h.pendingRemoval !== null && record.files[h.pendingRemoval] ? (
+            <div className="history-file-dialog-backdrop">
+              <form className="history-file-dialog" role="dialog" aria-modal="true" aria-labelledby="history-file-dialog-title" onSubmit={(event) => { event.preventDefault(); void h.submitRemoval(); }}>
+                <h4 id="history-file-dialog-title">Remover somente este documento do histórico?</h4>
+                <p><strong>{record.files[h.pendingRemoval].document || record.files[h.pendingRemoval].finalName}</strong> · revisão {record.files[h.pendingRemoval].grdtRevision || record.files[h.pendingRemoval].revision || "0"} · eGRDT {record.egrdtNumber}</p>
+                <p>A eGRDT e os demais documentos permanecem intactos. Esta retirada não cancela o documento no SIGEM nem apaga evidências do Teams.</p>
+                <label>Motivo da remoção
+                  <select value={h.removalReason} required onChange={(event) => h.setRemovalReason(event.target.value)}>
+                    <option value="">Selecione o motivo</option>
+                    <option>Documento incluído por engano</option>
+                    <option>Documento retirado da GRDT</option>
+                    <option>Emissão cancelada</option>
+                    <option>Documento duplicado</option>
+                    <option>Correção de registro operacional</option>
+                    <option>Outro motivo</option>
+                  </select>
+                </label>
+                <label>{h.removalReason === "Outro motivo" ? "Justificativa obrigatória" : "Detalhes adicionais (opcional)"}
+                  <textarea value={h.removalDetails} onChange={(event) => h.setRemovalDetails(event.target.value)} maxLength={400} rows={3} required={h.removalReason === "Outro motivo"} placeholder="Descreva o ocorrido para a auditoria" />
+                </label>
+                <div className="history-file-dialog-actions">
+                  <button type="button" className="secondary-button" disabled={h.fileActionBusy} onClick={h.cancelRemoval}>Cancelar</button>
+                  <button type="submit" className="primary-button" disabled={h.fileActionBusy || !h.removalReason || (h.removalReason === "Outro motivo" && h.removalDetails.trim().length < 3)}>{h.fileActionBusy ? "Removendo…" : "Confirmar remoção"}</button>
+                </div>
+              </form>
+            </div>
+          ) : null}
         </section>
       </div>
     </UiPanel>
