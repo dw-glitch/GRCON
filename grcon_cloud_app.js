@@ -1618,6 +1618,8 @@
     deactivate: "Usuário desativado",
     reactivate: "Usuário reativado",
     user_password_changed: "Senha de usuário alterada",
+    history_file_removed: "Documento retirado do histórico",
+    history_file_restored: "Documento restaurado no histórico",
   });
 
   // Histórico de quem fez o quê no workspace. Somente owner/admin conseguem
