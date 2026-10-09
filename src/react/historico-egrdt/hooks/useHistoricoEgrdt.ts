@@ -37,6 +37,7 @@ export function useHistoricoEgrdt() {
   const [editValue, setEditValue] = useState("");
   const [visibleLimit, setVisibleLimit] = useState(LIST_PAGE_SIZE);
   const [exporting, setExporting] = useState(false);
+  const [exportingAudit, setExportingAudit] = useState(false);
   const [fileStatus, setFileStatus] = useState<"active" | "removed" | "all">("active");
   const [pendingRemoval, setPendingRemoval] = useState<number | null>(null);
   const [removalReason, setRemovalReason] = useState("");
@@ -322,8 +323,25 @@ export function useHistoricoEgrdt() {
     }
   }, [periodInvalid, filtered, effectiveFilters, filters.documentFamily]);
 
+  const removedCount = useMemo(() => filtered.reduce((total, record) => total + (record.removedFiles?.length || 0), 0), [filtered]);
+  const exportRemovedAudit = useCallback(async () => {
+    if (!removedCount || exportingAudit) return;
+    setExportingAudit(true);
+    try {
+      await Adapter.exportRemovedAudit(filtered);
+      Adapter.notify(`${removedCount} documento(s) removido(s) exportado(s) em relatório de auditoria separado.`, "success");
+    } catch (error) {
+      Adapter.notify(error instanceof Error ? error.message : "Não foi possível exportar a auditoria.", "error");
+    } finally {
+      setExportingAudit(false);
+    }
+  }, [filtered, removedCount, exportingAudit]);
+
   return {
     loading,
+    removedCount,
+    exportingAudit,
+    exportRemovedAudit,
     records,
     filters,
     effectiveFilters,
