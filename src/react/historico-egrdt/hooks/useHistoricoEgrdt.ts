@@ -59,6 +59,9 @@ export function useHistoricoEgrdt() {
   }, [refreshNonce]);
 
   const effectiveFilters = useMemo<EgrdtHistoryFilters>(() => ({
+    teamsConfirmation: filters.teamsConfirmation,
+    teamsResponsible: filters.teamsResponsible,
+    teamsDate: filters.teamsDate,
     query: debouncedQuery,
     year: filters.year,
     outputType: filters.outputType,
@@ -68,6 +71,7 @@ export function useHistoricoEgrdt() {
     documentFamily: filters.documentFamily,
   }), [
     debouncedQuery,
+    filters.teamsConfirmation, filters.teamsResponsible, filters.teamsDate,
     filters.year,
     filters.outputType,
     filters.sort,

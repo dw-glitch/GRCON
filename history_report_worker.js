@@ -5,7 +5,7 @@
 
   async function ensureLoaded() {
     if (loaded) return;
-    importScripts("exceljs.min.js", "history_core.js", "sigem_posting_core.js", "history_report.js");
+    importScripts("exceljs.min.js", "history_core.js", "sigem_posting_core.js", "egrdt_teams_trace_core.js", "history_report.js");
     if (!self.GrconHistoryReport || typeof self.GrconHistoryReport.buildWorkbook !== "function") {
       throw new Error("Módulo de relatório do histórico indisponível no worker.");
     }

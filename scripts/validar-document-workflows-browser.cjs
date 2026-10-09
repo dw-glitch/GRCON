@@ -35,6 +35,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
   if(action==='delete')files=files.filter(f=>f.id!==req.postDataJSON().id);
   return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
  });
+ await page.route('**/api/egrdt-teams/page**',r=>r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"data":[]}'}));
  await page.goto(base,{waitUntil:'networkidle'});
  await page.addStyleTag({content:'html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script){visibility:visible!important}#grcon-cloud-auth{display:none!important}'});
  await page.waitForFunction(()=>window.GrconDocumentVault&&window.GrconRequestsControl&&window.GrconSharedSigemQuery);
@@ -198,7 +199,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  const detailRows=XLSX.utils.sheet_to_json(pend.Sheets.Detalhamento,{range:9,defval:''});
  assert.equal(detailRows.length,5,'planilha contém somente as pendências');
  assert.ok(!detailRows.some(row=>row.Código==='DOC-001'));
- const pendingHeaders=['Código','Tipo','Disciplina','eGRDT','Data eGRDT','Revisão enviada','PROPÓSITO DE EMISSÃO','Revisão encontrada','Conferência','Status SIGEM','Data da confirmação','Última conferência','Observação','Pendência da GRDT','Detalhamento da pendência','Última eGRDT enviada','Histórico de eGRDTs','Revisões pendentes'];
+ const pendingHeaders=['Código','Tipo','Disciplina','eGRDT','Data eGRDT','Revisão enviada','PROPÓSITO DE EMISSÃO','Revisão encontrada','Conferência','Status SIGEM','Data da confirmação','Última conferência','Observação','Pendência da GRDT','Detalhamento da pendência','Última eGRDT enviada','Histórico de eGRDTs','Revisões pendentes',...require('../egrdt_teams_trace_core.js').headers];
  assert.deepEqual(Object.keys(detailRows[0]),pendingHeaders,'13 colunas históricas, duas de pendência e três de rastreabilidade');
  assert.equal(detailRows.find(row=>row.Código==='DOC-002')['Pendência da GRDT'],'Parte da GRDT pendente');
  assert.match(detailRows.find(row=>row.Código==='DOC-002')['Detalhamento da pendência'],/2 de 3.*1 confirmado/);

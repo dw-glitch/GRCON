@@ -90,7 +90,9 @@
   function writeConsultationSheet(worksheet, rows, options) {
     const settings = options || {};
     const lista = rows || [];
-    const columns = (settings.columns && settings.columns.length) ? settings.columns : COLUMNS;
+    const baseColumns = (settings.columns && settings.columns.length) ? settings.columns : COLUMNS;
+    const extraHeaders = settings.teamsHeaders || [];
+    const columns = [...baseColumns, ...extraHeaders.map(header => ({key:header,header,width:28}))];
     const columnCount = columns.length;
     const lastColumn = columnLetter(columnCount);
     worksheet.columns = columns.map((column) => ({ width: column.width || 24 }));

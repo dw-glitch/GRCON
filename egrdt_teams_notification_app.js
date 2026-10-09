@@ -4,7 +4,7 @@
   const Core = root.GrconEgrdtTeamsNotificationCore;
   const STORAGE_KEY = "grcon.egrdt.teams.notifications.v1";
   const APP_VERSION = root.GrconConfig?.APP_VERSION || document.documentElement.dataset.version || "5.44.9";
-  const state = { latest: [], sending: new Set(), dialogRecord: null };
+  const state = { latest: [], sending: new Set(), dialogRecord: null, dialogAttemptId: null };
 
   function text(value) { return String(value === null || value === undefined ? "" : value).trim(); }
   function escapeHtml(value) {
@@ -32,8 +32,10 @@
     return status(record) ? "Reenviar aviso no Teams" : "Avisar equipe no Teams";
   }
   function statusLabel(record) {
+    const trace = root.GrconTeamsTrace?.latest?.(record);
+    if (trace) return root.GrconTeamsTraceCore.label(trace);
     const saved = status(record);
-    return saved ? `Avisado no Teams em ${formatDate(saved.sentAt)}` : "Ainda não avisado";
+    return saved ? `${saved.receiptOnly ? "Recebido pelo fluxo" : "Avisado no Teams"} em ${formatDate(saved.sentAt)}` : "Sem registro de envio ao Teams";
   }
   function isSending(record) { return state.sending.has(Core.notificationId(record)); }
   function buttonHtml(record, options) {
@@ -78,6 +80,7 @@
     if (!record) return;
     if (!Core.documentRows(record).length) { notify("Esta eGRDT não possui documentos registrados para o aviso.", "error"); return; }
     state.dialogRecord = record;
+    state.dialogAttemptId = root.crypto.randomUUID();
     const dialog = ensureDialog();
     dialog.querySelector("#egrdt-teams-dialog-body").innerHTML = renderDialog(record);
     if (typeof dialog.showModal === "function") dialog.showModal();
@@ -103,6 +106,7 @@
       confirmedBy: identity.displayName || identity.metadataName || identity.email,
       confirmedByEmail: identity.email,
     });
+    payload.attemptId = state.dialogAttemptId;
     const id = payload.eventId;
     const sendButton = dialog.querySelector("#egrdt-teams-dialog-send");
     state.sending.add(id);
@@ -123,8 +127,9 @@
         throw error;
       }
       const audit = readAudit();
-      audit[id] = { sentAt: result.notifiedAt || new Date().toISOString(), sentBy: identity.email || "", egrdtNumber: record.egrdtNumber };
+      audit[id] = { sentAt: result.notifiedAt || new Date().toISOString(), sentBy: identity.email || "", receiptOnly: result.receiptOnly === true, egrdtNumber: record.egrdtNumber };
       writeAudit(audit);
+      void root.GrconTeamsTrace?.refresh?.();
       notify(`Aviso de ${record.egrdtNumber} enviado ao grupo ${Core.DESTINATION.name}.`, "success");
       root.dispatchEvent(new CustomEvent("grcon:egrdt-teams-notified", { detail: { record, result } }));
       root.setTimeout(() => { if (dialog.open) dialog.close("sent"); }, 700);
@@ -171,6 +176,7 @@
     });
     root.addEventListener("grcon:egrdt-generated", (event) => setLatest(event.detail?.records || []));
     root.addEventListener("grcon:egrdt-teams-notified", renderLatest);
+    root.addEventListener("grcon:teams-trace-updated", renderLatest);
     root.addEventListener("storage", (event) => { if (event.key === STORAGE_KEY) renderLatest(); });
   }
 

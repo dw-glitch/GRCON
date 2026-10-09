@@ -1,3 +1,5 @@
+> Evolução bidirecional: consultar [confirmação total/parcial, callback e implantação](teams-posting-traceability.md). O modo novo exige homologação e configuração; o envio legado abaixo permanece ativo enquanto a flag estiver desligada.
+
 # GRCON → Power Automate → Teams
 
 Esta integração envia, somente após confirmação do operador, o aviso de uma eGRDT pronta para postagem no SIGEM ao grupo **Qualidade - Documentação**. O fluxo deve mencionar as contas corporativas corretas de **Adriana Nojosa da Silva** e **Janecleide Maria de Oliveira**.

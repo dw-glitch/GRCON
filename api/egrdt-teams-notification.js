@@ -271,6 +271,15 @@ async function handler(req, res) {
     res.setHeader("Allow", "POST");
     return send(res, 405, { ok: false, code: "METHOD_NOT_ALLOWED", message: "Use POST para enviar o aviso." });
   }
+  if (process.env.GRCON_TEAMS_TRACEABILITY_ENABLED === "true") {
+    // Same secured implementation in both deployments; legacy path remains intact.
+    const { _internal } = await import("../cloudflare/worker.mjs");
+    try {
+      const payload = await readBody(req);
+      const response = await _internal.handleTeamsNotification(new Request("https://grcon.local/api/egrdt-teams-notification", {method:"POST",headers:req.headers,body:JSON.stringify(payload)}),process.env);
+      return send(res,response.status,await response.json());
+    } catch (_) { return send(res,400,{ok:false,message:"Aviso inválido."}); }
+  }
   try {
     const contentLength = Number(req.headers["content-length"] || 0);
     if (contentLength > MAX_BODY_BYTES) return send(res, 413, { ok: false, code: "PAYLOAD_TOO_LARGE", message: "O aviso excedeu o limite permitido." });
@@ -297,8 +306,7 @@ async function handler(req, res) {
       clearTimeout(timeout);
     }
     if (!flowResponse.ok) {
-      const diagnostic = text(await flowResponse.text().catch(() => ""), 300);
-      console.error("Power Automate recusou o aviso", flowResponse.status, diagnostic);
+      console.error("Power Automate recusou o aviso", flowResponse.status);
       return send(res, 502, { ok: false, code: "FLOW_REJECTED", message: "O fluxo do Power Automate recusou o aviso. Tente novamente ou confira o fluxo." });
     }
     return send(res, 200, { ok: true, eventId: payload.eventId, destination: payload.destination.name, notifiedAt: new Date().toISOString() });

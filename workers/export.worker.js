@@ -63,7 +63,7 @@ async function buildSpreadsheet(payload) {
     return XLSX.write(book, { type: "array", bookType: "xlsx", compression: payload.compression !== false });
   }
   if (payload.kind === "conference") {
-    if (!self.GrconPostingConferenceReport) importScripts("../history_core.js", "../posting_conference_core.js", "../grcon_brand_assets.js", "../posting_conference_report.js");
+    if (!self.GrconPostingConferenceReport) importScripts("../history_core.js", "../posting_conference_core.js", "../grcon_brand_assets.js", "../egrdt_teams_trace_core.js", "../posting_conference_report.js");
     return self.GrconPostingConferenceReport.buildWorkbook(payload.rows, payload.options);
   }
   const book = new ExcelJS.Workbook();

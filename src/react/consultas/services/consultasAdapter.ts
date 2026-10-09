@@ -340,9 +340,12 @@ async function publishRequestsBase(file: File): Promise<void> { await window.Grc
  */
 async function exportRowsToExcel(rows: ExportRow[], template: ExportTemplate, ldNames: string): Promise<void> {
   const Report = requestsReport();
+  const trace = window.GrconTeamsTrace;
+  if (trace) rows = await trace.consultationRows(rows) as ExportRow[];
   await ensureGroup("excel");
   await ensureGroup("brand");
   const options = {
+    teamsHeaders: rows.some(row => row.issuedEgrdt) ? window.GrconTeamsTraceCore?.headers || [] : [],
     columns: template.columns, title: `GRCON · ${template.name.toUpperCase()}`,
     footer: `GRCON · ${template.name}`,
     metadata: `${rows.length.toLocaleString("pt-BR")} linha(s) · modelo "${template.name}" · ${new Date().toLocaleString("pt-BR")}`, ldNames,

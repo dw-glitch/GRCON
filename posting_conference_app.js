@@ -416,6 +416,12 @@
   }
 
   function observationCell(row) {
+    const representative = row.latestSend || row;
+    const a = root.GrconTeamsTrace?.latest?.(representative);
+    const human = a ? '<small>' + escapeHtml(root.GrconTeamsTraceCore.label(a)) + ' · ' + escapeHtml(root.GrconTeamsTraceCore.confirmed(a, representative)) + ' para este documento/revisão. Conferência SIGEM independente.</small>' : '';
+    return human + originalObservationCell(row);
+  }
+  function originalObservationCell(row) {
     const note = Conference.text(row.note).trim();
     if (!note) return '<span class="pc-empty-value">—</span>';
     const limit = 150;
@@ -695,6 +701,8 @@
         : state.filters.grdt ? state.filters.grdt.replace(/[^A-Z0-9-]+/gi, "_") : "";
       const buffer = await Report.buildWorkbook(rows, {
         mode, groups, scopeLabel, pending: view === "pending",
+        teamsAttempts: await root.GrconTeamsTrace?.forExport?.() || [],
+        workspaceId: root.GrconCloud?.state?.membership?.workspace_id,
         baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt,
       });
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -749,6 +757,8 @@
     await Conference.saveBase(state.base);
     render();
   });
+
+  root.addEventListener("grcon:teams-trace-updated", () => { if (state.ready && !state.busy) renderTableOnly(); });
 
   root.addEventListener("grcon:history-updated", () => {
     if (!state.ready) return;

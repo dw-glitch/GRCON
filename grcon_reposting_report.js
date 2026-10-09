@@ -18,6 +18,10 @@
   }
   async function buildWorkbook(batch) {
     if (!root.ExcelJS) throw new Error("ExcelJS indisponível para gerar o relatório do lote.");
+    const attempts = await root.GrconTeamsTrace?.forExport?.() || [];
+    const Trace = root.GrconTeamsTraceCore;
+    const traceIndex = Trace?.index(attempts);
+    const workspace = root.GrconCloud?.state?.membership?.workspace_id;
     const workbook = new root.ExcelJS.Workbook();
     workbook.creator = "GRCON";
     workbook.created = new Date();
@@ -40,7 +44,7 @@
     sheet.mergeCells("E3:F3"); sheet.getCell("E3").value = `Ausentes: ${summary.notFound || 0}`;
     sheet.mergeCells("G3:H3"); sheet.getCell("G3").value = `Ambíguos: ${summary.ambiguous || 0}`;
     ["A3","C3","E3","G3"].forEach((cell) => { sheet.getCell(cell).font = { name: "Arial", size: 10, bold: true }; sheet.getCell(cell).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } }; });
-    const headers = ["eGRDT", "Documento", "Revisão válida", "Conferência", "Status SIGEM", "Arquivo encontrado", "Pasta relativa", "Situação"];
+    const headers = ["eGRDT", "Documento", "Revisão válida", "Conferência", "Status SIGEM", "Arquivo encontrado", "Pasta relativa", "Situação", ...(Trace?.headers || [])];
     const headerRow = sheet.getRow(6);
     headers.forEach((header, index) => { const cell = headerRow.getCell(index + 1); cell.value = header; cell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FFFFFFFF" } }; cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF214D6B" } }; cell.alignment = { vertical: "middle", horizontal: index >= 2 ? "center" : "left" }; });
     headerRow.height = 24;
@@ -49,6 +53,7 @@
       const files = result.selected?.length ? result.selected : [null];
       files.forEach((entry) => rows.push([
         result.target?.egrdtNumber || "—", result.target?.document || "—", result.target?.revision || "—", result.target?.conferenceLabel || result.target?.conferenceStatus || "—", result.target?.sigemStatus || "—", entry?.name || "—", entry?.relativePath || "—", stateLabel(result.state),
+        ...(Trace?.values(Trace.attemptsFor(result.target, traceIndex, workspace)[0], result.target, result.target?.conferenceLabel) || []),
       ]));
     });
     rows.forEach((values, rowIndex) => {
@@ -57,7 +62,8 @@
       row.height = 23;
     });
     sheet.columns = [{ width: 31 }, { width: 39 }, { width: 15 }, { width: 22 }, { width: 24 }, { width: 45 }, { width: 55 }, { width: 20 }];
-    sheet.autoFilter = { from: { row: 6, column: 1 }, to: { row: 6 + rows.length, column: 8 } };
+    if (Trace) Trace.headers.forEach((_,i) => {sheet.getColumn(9+i).width=28;});
+    sheet.autoFilter = { from: { row: 6, column: 1 }, to: { row: 6 + rows.length, column: headers.length } };
     sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 } };
     return workbook.xlsx.writeBuffer();
   }

@@ -70,6 +70,9 @@ export interface EgrdtHistoryRecord {
 }
 
 export interface EgrdtHistoryFilters {
+  teamsConfirmation?: string;
+  teamsResponsible?: string;
+  teamsDate?: string;
   query: string;
   year: string;
   outputType: string;

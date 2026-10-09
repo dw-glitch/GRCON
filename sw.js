@@ -11,7 +11,7 @@
 // site nunca chegava a quem já tinha aberto o app antes — o navegador seguia
 // servindo a versão antiga indefinidamente.
 
-const CACHE_NAME = "grcon-v5.44.9-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1-hardening1-cover-backcover2-deploy2-mascot-runtime5-transparent1-phase-b-evolution-ui1-grdt-reissue1-history-purpose1-mascot-shell-runner1-hybrid-media2-alpha2-ux-polish2-workspace-runner1-planned-documents2-shared-sigem1-consultas-planned-documents1-owner-password1-documentary-compliance1-feature-cleanup1-unified-posting2-document-vault1-multi-contract-sigem2-cofre-integration1-monitoring-popups-responsive1-document-workflows2-document-class-contrast1-sigem-pw-revision-scope1-owner-admin-shared-date-history1-history-api-compat2-notification-center1-ux-audit1-evolution-revision-scope1-cofre-auto-fallback-storage1-shared-history-management1-file-provenance1-higgsfield-ux-phase5-help-panel-cleanup1-vault-versions-master2-performance-large-bases1-ux-28-unified1-monitor-search1-fiscal01-comments1-conference-grdt-diagnostics1-react19-runtime1-selective-repost1-tools-visual2-fiscal-header2-quality-ld-header1-vault-density1-revision-evolution-export-worker1-conference-simple-pending1-large-list1";
+const CACHE_NAME = "grcon-v5.44.9-mascot-pilot1-egrdt-teams-notification1-phase-a-history-react1-phase-b-consultas-ui1-hardening1-phase-b-history-ui1-history-perf-hardening1-phase-a-pdf-tools-react1-phase-b-pdf-tools-ui1-phase-a-egrdt-history-react1-phase-b-egrdt-history-ui1-phase-a-sigem-pw-react1-phase-b-sigem-pw-ui1-ui2-deploy-history-mascot-overlap2-phase-a-sigem-pw-revision-react1-phase-b-sigem-pw-revision-ui1-cover-document4-phase-a-sigem-pw-evolution-react1-hardening1-cover-backcover2-deploy2-mascot-runtime5-transparent1-phase-b-evolution-ui1-grdt-reissue1-history-purpose1-mascot-shell-runner1-hybrid-media2-alpha2-ux-polish2-workspace-runner1-planned-documents2-shared-sigem1-consultas-planned-documents1-owner-password1-documentary-compliance1-feature-cleanup1-unified-posting2-document-vault1-multi-contract-sigem2-cofre-integration1-monitoring-popups-responsive1-document-workflows2-document-class-contrast1-sigem-pw-revision-scope1-owner-admin-shared-date-history1-history-api-compat2-notification-center1-teams-traceability1-ux-audit1-evolution-revision-scope1-cofre-auto-fallback-storage1-shared-history-management1-file-provenance1-higgsfield-ux-phase5-help-panel-cleanup1-vault-versions-master2-performance-large-bases1-ux-28-unified1-monitor-search1-fiscal01-comments1-conference-grdt-diagnostics1-react19-runtime1-selective-repost1-tools-visual2-fiscal-header2-quality-ld-header1-vault-density1-revision-evolution-export-worker1-conference-simple-pending1-large-list1";
 const ASSETS = [
   "index.html",
   "design-system.css",
@@ -131,6 +131,8 @@ const ASSETS = [
   "grdt_reissue_core.js",
   "grdt_reissue_app.js",
   "egrdt_teams_notification_core.js",
+  "egrdt_teams_trace_core.js",
+  "egrdt_teams_trace_app.js",
   "egrdt_teams_notification_app.js",
   "retomar.js",
   "supabase.min.js",

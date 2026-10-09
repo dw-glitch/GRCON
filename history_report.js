@@ -104,7 +104,9 @@
     const items = (record && record.files || []).map((file) => text(file && file.purpose)).filter(Boolean);
     return [...new Set(items)].join(" · ") || "Não registrado";
   }
-  function egrdtRows(records) {
+  const Trace = globalThis.GrconTeamsTraceCore || (typeof module === "object" && module.exports ? require("./egrdt_teams_trace_core.js") : null);
+  function egrdtRows(records, traceOptions = {}) {
+    const attempts = Trace?.index(traceOptions.teamsAttempts || globalThis.GrconTeamsTrace?.snapshot?.() || []);
     return (records || []).map((record) => ({
       "DATA DA GERAÇÃO / POSTAGEM": formatDate(record.generatedAt, true),
       "EGRDT": text(record.egrdtNumber),
@@ -119,9 +121,11 @@
       "LD UTILIZADA": text(record.ldName),
       "ORIGEM DOS DOCUMENTOS": text(record.sourceName),
       "NÚMEROS ANTERIORES": (record.numberHistory || []).join(" · "),
+      ...(Trace?.columns(Trace.attemptsFor(record, attempts, traceOptions.workspaceId)[0], null, traceOptions.teamsSigemEvidence?.[record.id]) || {}),
     }));
   }
-  function documentRows(records) {
+  function documentRows(records, traceOptions = {}) {
+    const attempts = Trace?.index(traceOptions.teamsAttempts || globalThis.GrconTeamsTrace?.snapshot?.() || []);
     return (records || []).flatMap((record) => (record.files || []).map((file) => {
       return {
       "DATA DA GERAÇÃO / POSTAGEM": formatDate(record.generatedAt, true),
@@ -174,6 +178,7 @@
       "SHA-256 DO ARQUIVO UTILIZADO": text(file.fileProvenance?.sha256),
       "INCLUSÃO NO COFRE": text(file.fileProvenance?.createdAt),
       "VERIFICAÇÃO NO COFRE": text(file.fileProvenance?.verifiedAt),
+      ...(Trace?.columns(Trace.attemptsFor(record, attempts, traceOptions.workspaceId)[0], file, traceOptions.teamsSigemEvidence?.[record.id]) || {}),
       "LASTMODIFIED DO ARQUIVO LOCAL": file.fileProvenance?.lastModified || "",
       };
     }));
@@ -279,8 +284,8 @@
     const period = periodLabel(source, settings.startDate, settings.endDate);
     const selectedFamily = familyLabel(settings.documentFamily);
     const metadata = `${source.length.toLocaleString("pt-BR")} eGRDT(s) · Período: ${period} · Tipo: ${selectedFamily} · Histórico local do GRCON · ${new Date().toLocaleString("pt-BR")}`;
-    const egrdts = egrdtRows(source);
-    const documents = documentRows(source);
+    const egrdts = egrdtRows(source, settings);
+    const documents = documentRows(source, settings);
 
     const sheet = workbook.addWorksheet("Resumo", { properties: { defaultRowHeight: 20 }, views: [{ showGridLines: false, zoomScale: 85 }] });
     const columns = 12;
