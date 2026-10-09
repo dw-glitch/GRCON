@@ -159,7 +159,11 @@ assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eli
   assert.equal(sheet.getRow(10).getCell(5).value, 'Data eGRDT');
   assert.equal(sheet.getRow(10).getCell(13).value, 'Observação');
   assert.equal(sheet.getRow(10).getCell(15).value, 'Detalhamento da pendência');
-  assert.equal(sheet.columnCount, 15, '13 colunas originais + 2 colunas novas');
+  assert.equal(sheet.columnCount, 18, '13 colunas originais + 2 de pendência + 3 de rastreabilidade');
+  assert.equal(sheet.getRow(10).getCell(16).value, 'Última eGRDT enviada');
+  assert.equal(sheet.getRow(10).getCell(17).value, 'Histórico de eGRDTs');
+  assert.equal(sheet.getRow(10).getCell(18).value, 'Revisões pendentes');
+  assert.equal(sheet.getCell('P11').value, 'GRDT-113');
   const single = new global.ExcelJS.Workbook();
   await single.xlsx.load(await Report.buildWorkbook([rows[1]], { pending: true, groups }));
   assert.match(single.worksheets[0].getCell('O11').value, /2 de 3/, 'filtrar um documento não altera o contexto da GRDT');
@@ -168,6 +172,35 @@ assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eli
   assert.equal(C.pendingScope(onePending).label, 'Somente este documento pendente');
   assert.equal(C.pendingScope(historicalMissing.groups[0]).label, 'Conferência atual pendente');
   assert.equal(C.pendingScope(null).label, 'GRDT a verificar');
+  // Um código reenviado em revisão A e B não pode gerar três linhas.
+  const repeated = [
+    { ...rows[1], key: 'send-r0', document: d[1], revisionSent: '0', egrdtNumber: 'GRDT-201', generatedAt: '2026-10-01T12:00:00Z', status: C.STATUSES.NOT_FOUND },
+    { ...rows[1], key: 'send-ra', document: d[1], revisionSent: 'A', egrdtNumber: 'GRDT-202', generatedAt: '2026-10-02T12:00:00Z', status: C.STATUSES.AWAITING },
+    { ...rows[1], key: 'send-rb', document: d[1], revisionSent: 'B', egrdtNumber: 'GRDT-203', generatedAt: '2026-10-03T12:00:00Z', status: C.STATUSES.REVISION_DIVERGENT },
+  ];
+  const scopes = repeated.map((event) => ({
+    ...event, pendingScope: { label: 'GRDT inteira pendente', detail: '1 de 1 documentos/revisões sem confirmação.' },
+  }));
+  const aggregated = [{
+    ...repeated[2], documentIdentity: C.documentIdentity(d[1]), latestEgrdtNumber: 'GRDT-203',
+    latestSend: repeated[2], sends: [...repeated].reverse(),
+    pendingEvents: scopes.slice().reverse(), status: C.STATUSES.REVISION_DIVERGENT,
+  }];
+  assert.equal(Report.consolidatePendingDocuments(repeated).length, 1);
+  assert.equal(Report.consolidatePendingDocuments(aggregated).length, 1);
+  const repeatedFile = new global.ExcelJS.Workbook();
+  await repeatedFile.xlsx.load(await Report.buildWorkbook(aggregated, { pending: true, groups: [] }));
+  const repeatedSheet = repeatedFile.getWorksheet('Detalhamento');
+  assert.equal(repeatedSheet.rowCount - 10, 1, 'pendências repetidas consolidam somente uma linha');
+  assert.equal(repeatedSheet.getCell('A11').value, d[1]);
+  assert.equal(repeatedSheet.getCell('P11').value, 'GRDT-203');
+  assert.match(repeatedSheet.getCell('Q11').value, /GRDT-201/);
+  assert.match(repeatedSheet.getCell('Q11').value, /GRDT-202/);
+  assert.match(repeatedSheet.getCell('Q11').value, /GRDT-203/);
+  assert.equal(repeatedSheet.getCell('R11').value, 'B · A · 0');
+  assert.equal(repeatedSheet.getCell('N11').value, 'Múltiplas GRDTs com pendências');
+  assert.match(repeatedSheet.getCell('O11').value, /GRDT-201/);
+  assert.equal(repeatedSheet.getCell('E11').value, '03/10/2026');
   const full = new global.ExcelJS.Workbook();
   await full.xlsx.load(await Report.buildWorkbook(rows, { mode: 'events', groups }));
   assert.deepEqual(full.worksheets.map(sheet => sheet.name), ['RESUMO', 'RESUMO GRDT', 'DOCUMENTOS POR GRDT', 'PENDENCIAS CONFIRMACAO', 'ALOCACOES A VERIFICAR', 'DOCUMENTOS TRAMITACAO', 'AVALIAR REENVIO']);
