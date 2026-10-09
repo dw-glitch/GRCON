@@ -530,7 +530,7 @@
       (row.sigemStatusRevision ? '<small>Revisão ' + escapeHtml(row.sigemStatusRevision) + '</small>' : '') +
       '</td><td><strong>' + escapeHtml(row.pendingScope.label) + '</strong><small>' +
       escapeHtml(row.pendingScope.detail) + '</small></td></tr>').join("");
-    return '<table class="pc-table pc-grdt-table pc-pending-table"><thead><tr><th>Documento pendente</th><th>Rev. enviada</th><th>eGRDT</th><th>Pendência do documento</th><th>Status SIGEM</th><th>O que está pendente na GRDT?</th></tr></thead><tbody>' + body + '</tbody></table>';
+    return '<table class="pc-table pc-grdt-table pc-pending-table"><thead><tr><th>Documento pendente</th><th title="Revisão enviada">Revisão</th><th>eGRDT</th><th>Pendência do documento</th><th>Status SIGEM</th><th>O que está pendente na GRDT?</th></tr></thead><tbody>' + body + '</tbody></table>';
   }
 
   function grdtTable(groups) {
