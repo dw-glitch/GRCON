@@ -110,7 +110,8 @@ begin
 end;
 $$;
 
-revoke all on function private.grcon_history_file_action(uuid,uuid,text,integer,uuid,text,timestamptz) from public,anon,authenticated;
+revoke all on function private.grcon_history_file_action(uuid,uuid,text,integer,uuid,text,timestamptz) from public,anon;
+grant execute on function private.grcon_history_file_action(uuid,uuid,text,integer,uuid,text,timestamptz) to authenticated;
 create or replace function public.grcon_history_file_action(
   target_workspace uuid,
   target_history_id uuid,
