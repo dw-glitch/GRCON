@@ -49,14 +49,18 @@ function summaryText(generated,limit){
 async function buildManifest(entries,metadata,logo){const wb=new ExcelJS.Workbook();wb.creator="GRCON";const ws=wb.addWorksheet("Conferência",{views:[{state:"frozen",ySplit:1}]});const rows=entries.map((entry,index)=>({"DOCUMENTO":entry.document,"REVISÃO":entry.revision,"ARQUIVO ORIGINAL":entry.originalName,"ARQUIVO FINAL NO PACOTE":entry.finalName,"ARQUIVO DESCRITO NA GRDT":entry.item&&entry.item.fileName||"","NOME CONSISTENTE":entry.finalName===(entry.item&&entry.item.fileName)?"SIM":"NÃO","INCLUSÃO MANUAL — LD NÃO ALOCADO":entry.manualAllocationOverride?"SIM":"NÃO","DISCIPLINA":entry.item&&entry.item.discipline||entry.discipline||"","LD DE ORIGEM":entry.sourceLd||"","GRDT":entry.grdtFile||"","LDS UTILIZADAS NA ANÁLISE":metadata.ldName||"","LISTA EXCEL":metadata.listName||"","VERSÃO GRCON":metadata.appVersion||"","DATA DA ANÁLISE":metadata.analysisAt||"","LINHA":index+1}));const headers=rows.length?Object.keys(rows[0]):["DOCUMENTO"];ws.addRow(headers);styleHeader(ws.getRow(1));rows.forEach((item,i)=>{const row=ws.addRow(headers.map(h=>item[h]));styleData(row,i,0);});headers.forEach((h,i)=>ws.getColumn(i+1).width=reportWidth(h));return wb.xlsx.writeBuffer();}
 async function buildPackage(payload,taskId){const generated=await buildEgrdts(payload.groups||[],payload.officialNumbers||[],taskId);const zip=new JSZip();for(const file of generated){ensure(taskId);const folder=zip.folder(file.official.baseName);if(payload.includeFiles){for(const entry of file.group.entries){if(!entry.file)throw new Error(`${entry.document||entry.finalName}: PDF físico ausente.`);folder.file(entry.finalName,entry.file);}}folder.file(file.fileName,file.data);}zip.file("ORGANIZACAO_DOS_LOTES.txt",summaryText(generated,payload.limit));if(payload.mode==="final"){const report=await buildReport(payload.report,taskId);const allEntries=generated.flatMap(file=>file.group.entries.map(entry=>({...entry,grdtFile:file.fileName})));const manifest=await buildManifest(allEntries,payload.manifest||{},payload.report&&payload.report.logoBase64);zip.file(payload.reportName,report);zip.file(payload.manifestName,manifest);}self.postMessage({taskId,type:"progress",progress:.9,message:"Compactando pacote final"});const bytes=await zip.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:4}},meta=>{if(meta.percent%10<1)self.postMessage({taskId,type:"progress",progress:.9+meta.percent/100*.1,message:"Compactando ZIP"});});return {bytes,generated:generated.map(f=>({official:f.official,fileName:f.fileName,verification:f.verification,group:{number:f.group.number,entries:f.group.entries.map(e=>({document:e.document,revision:e.revision,finalName:e.finalName,originalName:e.originalName,item:e.item}))}}))};}
 async function buildSpreadsheet(payload) {
-  if (payload.kind === "sigem-dashboard") {
+  if (payload.kind === "sigem-revisions") {
+    if (!self.GrconSigemPwRevisionReport) importScripts("../sigem_pw_dashboard_core.js", "../sigem_pw_revision_core.js", "../sigem_pw_revision_report.js");
+    return self.GrconSigemPwRevisionReport.buildWorkbook(payload.rows, payload.filters, payload.options);
+  }
+  if (payload.kind === "sigem-dashboard" || payload.kind === "sigem-evolution") {
     const book = XLSX.utils.book_new();
     for (const tab of payload.sheets || []) {
       const sheet = XLSX.utils.json_to_sheet(tab.rows);
       if (tab.columns) sheet["!cols"] = tab.columns;
       XLSX.utils.book_append_sheet(book, sheet, tab.name);
     }
-    return XLSX.write(book, { type: "array", bookType: "xlsx", compression: true });
+    return XLSX.write(book, { type: "array", bookType: "xlsx", compression: payload.compression !== false });
   }
   if (payload.kind === "conference") {
     if (!self.GrconPostingConferenceReport) importScripts("../history_core.js", "../posting_conference_core.js", "../grcon_brand_assets.js", "../posting_conference_report.js");

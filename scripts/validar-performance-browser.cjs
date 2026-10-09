@@ -10,9 +10,10 @@ const fs = require('node:fs');
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.route('**/__qa-performance', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>GRCON QA</title><body>QA</body>' }));
+  await page.route('**/__qa-performance', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><meta charset="utf-8"><title>GRCON QA</title><body>QA</body>' }));
   try {
     await page.goto(base + '/__qa-performance');
+    assert.equal(await page.evaluate(() => document.characterSet), 'UTF-8');
     await page.addScriptTag({ url: base + '/performance_workers.js' });
     await page.addScriptTag({ url: base + '/xlsx.full.min.js' });
     const measured = await page.evaluate(async () => {
@@ -63,9 +64,66 @@ const fs = require('node:fs');
     assert.ok(exports[1].values.includes('QA-COFRE'));
     assert.ok(exports[1].values.includes('a'.repeat(64)));
     assert.ok(exports[2].values.some(value => String(value).includes('QA.xlsx')));
+
+    await page.addScriptTag({ url: base + '/exceljs.min.js' });
+    await page.addScriptTag({ url: base + '/sigem_pw_dashboard_core.js' });
+    await page.addScriptTag({ url: base + '/sigem_pw_revision_core.js' });
+    await page.addScriptTag({ url: base + '/sigem_pw_revision_report.js' });
+    const additional = await page.evaluate(async () => {
+      const runner = window.GrconPerformance;
+      const kinds = [];
+      window.GrconPerformance = { ...runner, buildSpreadsheet(kind, payload) { kinds.push(kind); return runner.buildSpreadsheet(kind, payload); } };
+      const rows = Array.from({ length: 20000 }, (_, i) => ({
+        document: `QA-REV-${String(i).padStart(5, '0')}`, documentClass: 'ET', sigemRevision: '0', pwRevision: '01',
+        sigemStatus: 'Em Análise', pwStatus: 'Aprovado', situation: 'pw-previous', reason: 'Ação necessária\nRevisão anterior',
+        sigemRows: [{ revision: '0', status: 'Em Análise' }], pwRows: [{ revision: '01', state: 'Aprovado', emittedEvidence: true }],
+      }));
+      const filters = { situation: 'all', search: 'QA-REV', documentList: 'QA-REV-00000\nQA-REV-19999' };
+      const options = { createdAt: new Date('2026-10-09T12:00:00Z'), brandAssets: { optionalHelper() {} } };
+      let ticks = 0, last = performance.now(), maxGap = 0;
+      const timer = setInterval(() => { const current = performance.now(); maxGap = Math.max(maxGap, current - last); last = current; ticks++; }, 16);
+      const started = performance.now();
+      const buffer = await window.GrconSigemPwRevisionReport.buildWorkbook(rows, filters, options);
+      clearInterval(timer);
+      const revisionMs = performance.now() - started;
+      const book = window.XLSX.read(buffer, { type: 'array' });
+      const data = window.XLSX.utils.sheet_to_json(book.Sheets['Lista Filtrada'], { defval: '' });
+      const expected = window.GrconSigemPwRevisionReport.exportRows(rows);
+      if (JSON.stringify(data) !== JSON.stringify(expected)) {
+        const index = data.findIndex((row, i) => JSON.stringify(row) !== JSON.stringify(expected[i]));
+        throw new Error('Revision worker cell comparison: ' + JSON.stringify({ count: data.length, expectedCount: expected.length, index, actual: data[index], expected: expected[index] }));
+      }
+      const filterData = window.XLSX.utils.sheet_to_json(book.Sheets['Filtros Aplicados'], { header: 1 });
+      // Real worker and the existing local builder must preserve every cell.
+      const smallRows = rows.slice(0, 3);
+      const workerSmall = await window.GrconSigemPwRevisionReport.buildWorkbook(smallRows, filters, options);
+      window.GrconPerformance = { ...runner, supported: false };
+      const localSmall = await window.GrconSigemPwRevisionReport.buildWorkbook(smallRows, filters, options);
+      const cells = bytes => {
+        const b = window.XLSX.read(bytes, { type: 'array' });
+        return b.SheetNames.map(name => ({ name, cells: window.XLSX.utils.sheet_to_json(b.Sheets[name], { header: 1, defval: '' }) }));
+      };
+      if (JSON.stringify(cells(workerSmall)) !== JSON.stringify(cells(localSmall))) throw new Error('Worker/local revision workbook mismatch.');
+      window.GrconPerformance = { ...runner, supported: true, buildSpreadsheet() { return Promise.reject(new Error('QA worker failure')); } };
+      const fallback = await window.GrconSigemPwRevisionReport.buildWorkbook(smallRows, filters, options);
+      if (JSON.stringify(cells(fallback)) !== JSON.stringify(cells(localSmall))) throw new Error('Compatible fallback changed revision workbook.');
+      window.GrconPerformance = runner;
+      const evoRows = rows.map((row, i) => ({ Código: row.document, Revisão: i % 2 ? 'A' : '0', Título: 'Título com acento', Origem: 'SIGEM' }));
+      const scope = [{ Item: 'Escopo de revisão', Valor: 'Todas as revisões' }];
+      const evolution = await runner.buildSpreadsheet('sigem-evolution', { sheets: [{ name: 'Evolução', rows: evoRows }, { name: 'Escopo', rows: scope }], compression: false });
+      const evolutionBook = window.XLSX.read(evolution, { type: 'array' });
+      if (JSON.stringify(window.XLSX.utils.sheet_to_json(evolutionBook.Sheets['Evolução'])) !== JSON.stringify(evoRows)) throw new Error('Evolution worker changed cells.');
+      return { revision: { count: data.length, ticks, maxGap, elapsed: revisionMs, sheets: book.SheetNames, filtersPreserved: filterData.some(r => r.includes('QA-REV')), workerKinds: kinds, localParity: true, fallbackParity: true }, evolution: { count: evoRows.length, sheets: evolutionBook.SheetNames, cellParity: true } };
+    });
+    assert.equal(additional.revision.count, 20000);
+    assert.ok(additional.revision.ticks > 2, 'revision Excel must leave the interface responding');
+    assert.ok(additional.revision.workerKinds.includes('sigem-revisions'));
+    assert.ok(additional.revision.filtersPreserved);
+    assert.deepEqual(additional.evolution.sheets, ['Evolução', 'Escopo']);
     assert.deepEqual(errors, []);
     fs.mkdirSync('artifacts/performance', { recursive: true });
-    fs.writeFileSync('artifacts/performance/metrics.json', JSON.stringify({ excel20000: measured, exports: exports.map(({ kind, sheets }) => ({ kind, sheets })) }, null, 2));
+    fs.writeFileSync('artifacts/performance/metrics.json', JSON.stringify({ excel20000: measured, exports: exports.map(({ kind, sheets }) => ({ kind, sheets })), additional }, null, 2));
+    console.log('revision-evolution-workers:', JSON.stringify(additional));
     console.log('performance-browser:', JSON.stringify({ excel20000: measured, exports: exports.map(({ kind, sheets }) => ({ kind, sheets })) }));
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

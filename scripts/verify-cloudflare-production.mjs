@@ -39,7 +39,7 @@ assert.equal(typeof health.powerAutomateConfigured, 'boolean', 'Health deve info
 assert.equal(typeof health.powerAutomateUrlValid, 'boolean', 'Health deve informar se a URL configurada tem formato aceito.');
 const anonymous = await get('/api/document-vault/list');
 assert.equal(anonymous.status, 401, 'Catálogo deve exigir sessão.');
-const verifiedAssets = ['sigem_pw_dashboard_core.js', 'workers/sigem_pw_dashboard.worker.js', 'react-dist/sigem-pw-dashboard-app.js', 'document-vault.css', 'sw.js'];
+const verifiedAssets = ['sigem_pw_dashboard_core.js', 'workers/sigem_pw_dashboard.worker.js', 'react-dist/sigem-pw-dashboard-app.js', 'document-vault.css', 'sw.js', 'sigem_pw_revision_report.js', 'workers/export.worker.js', 'react-dist/sigem-pw-evolution-app.js'];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 for (const path of verifiedAssets) {
   const response = await get('/' + path + '?verify=' + expectedCommit);

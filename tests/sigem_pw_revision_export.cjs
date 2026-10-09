@@ -179,7 +179,26 @@ function dataCount(workbook) {
   const name = Report.downloadName(filters({ situation: Core.SITUATIONS.NOT_FOUND }), new Date(2026, 8, 11, 12, 5, 30));
   assert.match(name, /^GRCON_SIGEM_PW_Nao_localizado_no_PW_20260911_120530\.xlsx$/);
 
-  console.log(`sigem_pw_revision_export: OK — filtros, paginação e XLSX real; volume máximo testado=15.050 em ${elapsed}ms`);
+  const localRunner = global.GrconPerformance;
+  try {
+    let packet;
+    const marker = new ArrayBuffer(4);
+    global.GrconPerformance = { supported: true, async buildSpreadsheet(kind, payload) { packet = { kind, payload }; return marker; } };
+    const delegated = await Report.buildWorkbook(specialRows, filters(), {
+      createdAt: new Date('2026-10-09T12:00:00Z'),
+      brandAssets: { reportLogoBase64: 'QA-logo', helper() {} },
+    });
+    assert.equal(delegated, marker);
+    assert.equal(packet.kind, 'sigem-revisions');
+    assert.doesNotThrow(() => structuredClone(packet.payload), 'worker payload must exclude brand functions');
+    assert.equal(packet.payload.options.brandAssets.reportLogoBase64, 'QA-logo');
+    assert.equal(packet.payload.options.createdAt.toISOString(), '2026-10-09T12:00:00.000Z');
+    global.GrconPerformance = { supported: true, async buildSpreadsheet() { throw new Error('QA worker unavailable'); } };
+    const fallback = await workbookFrom(specialRows, filters({ search: 'QA fallback' }));
+    assert.equal(dataCount(fallback.workbook), specialRows.length);
+    assert.equal(fallback.workbook.getWorksheet('Lista Filtrada').getCell(2, 1).value, specialRows[0].document);
+  } finally { global.GrconPerformance = localRunner; }
+  console.log(`sigem_pw_revision_export: OK — filtros, paginação, worker/fallback e XLSX real; volume máximo testado=15.050 em ${elapsed}ms`);
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

@@ -1172,6 +1172,9 @@ async function exportAuditWorkbook(): Promise<number> {
 
 async function exportFilteredRows(): Promise<number> {
   if (state.exporting) return 0;
+  const revisionScope = state.revisionScope;
+  const scopeLabel = revisionScopeLabel();
+  const listMode = state.listMode;
   const rows = computeFilteredRows(currentFiltersForExport());
   if (!rows.length) {
     state.exportMessage = "Não há registros filtrados para exportar.";
@@ -1189,9 +1192,6 @@ async function exportFilteredRows(): Promise<number> {
 
   try {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
-    await window.GRCONModuleLoader.ensure("xlsx");
-    const xlsx = runtime().XLSX;
-    if (!xlsx) throw new Error("Exportador XLSX indisponível.");
     const data = rows.map((row) => ({
       Código: row.document || "",
       Revisão: row.revision || "",
@@ -1210,19 +1210,32 @@ async function exportFilteredRows(): Promise<number> {
       "LD aba": row.ldSheet || "",
       "Prazo LD": row.ldPrazo || "",
     }));
-    const sheet = xlsx.utils.json_to_sheet(data);
-    const scopeSheet = xlsx.utils.json_to_sheet([
-      { Item: "Escopo de revisão", Valor: revisionScopeLabel() },
-      { Item: "Regra", Valor: state.revisionScope === "revision0" ? "Somente ocorrências cuja revisão normalizada pelo Dashboard é 0." : "Todas as ocorrências Documento + Revisão válidas." },
-    ]);
-    const workbook = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(workbook, sheet, "Evolução");
-    xlsx.utils.book_append_sheet(workbook, scopeSheet, "Escopo");
-    const output = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
+    const sheets = [
+      { name: "Evolução", rows: data },
+      { name: "Escopo", rows: [
+        { Item: "Escopo de revisão", Valor: scopeLabel },
+        { Item: "Regra", Valor: revisionScope === "revision0" ? "Somente ocorrências cuja revisão normalizada pelo Dashboard é 0." : "Todas as ocorrências Documento + Revisão válidas." },
+      ] },
+    ];
+    let output: ArrayBuffer | undefined;
+    try { await window.GRCONModuleLoader.ensure("performance"); }
+    catch (error) { console.warn("[SIGEM×PW] Módulo de exportação em worker indisponível; usando exportador compatível.", error); }
+    if (window.GrconPerformance?.supported) {
+      try { output = await window.GrconPerformance.buildSpreadsheet("sigem-evolution", { sheets, compression: false }); }
+      catch (error) { console.warn("[SIGEM×PW] Excel da Evolução em worker indisponível; usando exportador compatível.", error); }
+    }
+    if (!output) {
+      await window.GRCONModuleLoader.ensure("xlsx");
+      const xlsx = runtime().XLSX;
+      if (!xlsx) throw new Error("Exportador XLSX indisponível.");
+      const workbook = xlsx.utils.book_new();
+      for (const tab of sheets) xlsx.utils.book_append_sheet(workbook, xlsx.utils.json_to_sheet(tab.rows), tab.name);
+      output = xlsx.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    }
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     downloadBlob(
       new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-      `GRCON_Evolucao_${state.revisionScope}_${state.listMode}_${date}.xlsx`,
+      `GRCON_Evolucao_${revisionScope}_${listMode}_${date}.xlsx`,
     );
     state.exportMessage = `Excel gerado com sucesso. ${fmt(rows.length)} registro(s) exportado(s).`;
     state.exportMessageKind = "success";

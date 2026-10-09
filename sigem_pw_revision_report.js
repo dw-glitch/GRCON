@@ -5,10 +5,10 @@
   };
   const getExcel = () => root.ExcelJS || safeRequire("./exceljs.min.js");
   const Revision = root.GrconSigemPwRevision || safeRequire("./sigem_pw_revision_core.js");
-  const api = factory(getExcel, Revision, root.GRCONBrandAssets || null);
+  const api = factory(getExcel, Revision, root.GRCONBrandAssets || null, root);
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GrconSigemPwRevisionReport = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (getExcel, Revision, defaultBrand) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (getExcel, Revision, defaultBrand, runtimeRoot) {
   "use strict";
 
   const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -166,6 +166,34 @@
   }
 
   async function buildWorkbook(rows, filters, options) {
+    const settings = options || {};
+    const runner = runtimeRoot.GrconPerformance;
+    if (runner?.supported && typeof runner.buildSpreadsheet === "function") {
+      const brand = settings.brandAssets || defaultBrand || {};
+      // Only the two logo values used by the builder cross the worker boundary;
+      // the complete brand object may contain functions and cannot be cloned.
+      let logoFile = brand.reportLogoFile || "";
+      if (logoFile) {
+        try { logoFile = new URL(logoFile, runtimeRoot.document?.baseURI || runtimeRoot.location?.href).href; }
+        catch (_) { logoFile = ""; }
+      }
+      try {
+        return await runner.buildSpreadsheet("sigem-revisions", {
+          rows, filters,
+          options: {
+            createdAt: settings.createdAt instanceof Date ? settings.createdAt : new Date(),
+            validate: settings.validate,
+            brandAssets: { reportLogoBase64: brand.reportLogoBase64 || "", reportLogoFile: logoFile },
+          },
+        });
+      } catch (error) {
+        console.warn("[SIGEM×PW] Excel em worker indisponível; usando exportador compatível.", error);
+      }
+    }
+    return buildWorkbookLocal(rows, filters, settings);
+  }
+
+  async function buildWorkbookLocal(rows, filters, options) {
     const ExcelJS = getExcel();
     if (!ExcelJS || !ExcelJS.Workbook) throw new Error("Biblioteca ExcelJS indisponível.");
     const source = Array.isArray(rows) ? rows : [];
