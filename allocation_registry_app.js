@@ -115,7 +115,7 @@
       state.parsed = null; state.error = ""; render();
       const file = event.target.files?.[0]; if (!file) { render(); return; }
       try {
-        if (!/\.(xlsx|xls)$/i.test(file.name)) throw new Error("Selecione uma planilha Excel.");
+        if (!/\.(xlsx|xls|xlsm)$/i.test(file.name)) throw new Error("Selecione uma planilha Excel.");
         await root.GRCONModuleLoader.ensure("xlsx");
         const workbook = root.XLSX.read(await file.arrayBuffer(), { type: "array" });
         if (state.parseToken !== parseToken || !validScope(expected)) return;
