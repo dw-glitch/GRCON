@@ -332,8 +332,6 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
   const creator = record.createdByName || record.createdByEmail;
   const previousNumbers = record.numberHistory || [];
   const teamsAction = Adapter.teamsPresentation(record);
-  const attempts = window.GrconTeamsTrace?.list(record) || [];
-  const sigemEvidence = window.GrconTeamsTrace?.sigemEvidence([record])[record.id];
 
   return (
     <UiPanel className="history-detail" labelledBy="history-detail-number">
@@ -351,19 +349,6 @@ function Detail({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
           </div>
         </section>
 
-        <details className="history-detail-section">
-          <summary>Rastreabilidade Teams · {attempts.length} tentativa(s)</summary>
-          {attempts.length ? attempts.map(a => <article key={a.id}>
-            <p><strong>{window.GrconTeamsTraceCore?.label(a)}</strong></p>
-            <p>{a.contract_code} · Solicitado em {new Date(a.requested_at).toLocaleString("pt-BR")} · Entrega: {a.delivered_at ? new Date(a.delivered_at).toLocaleString("pt-BR") : "Não confirmada"}</p>
-            {a.confirmed_at ? <p>{a.confirmed_documents?.length} de {a.documents.length} documentos declarados · {new Date(a.confirmed_at).toLocaleString("pt-BR")}</p> : null}
-            {a.confirmed_at ? <p>Mensagem de confirmação no Teams: {a.notice_status === "sent" ? "Publicada" : "Pendente de confirmação do fluxo"} · Cartão: {a.card_updated_at ? "Atualizado" : "Atualização não confirmada"}</p> : null}
-            <details><summary>Documentos e revisões desta tentativa</summary>{a.documents.map((file,i) => <p key={i}>{file.document} · Rev. {file.revision} · {window.GrconTeamsTraceCore?.confirmed(a,file)}</p>)}</details>
-            {a.message_url ? <a href={a.message_url} target="_blank" rel="noopener noreferrer">Abrir cartão no Teams</a> : null}
-          </article>) : <p>Sem registro de envio ao Teams. A ausência de registro não comprova que a eGRDT deixou de ser postada.</p>}
-          {sigemEvidence ? <p><strong>{sigemEvidence}</strong></p> : null}
-          <p>A confirmação do funcionário é uma declaração de execução. O registro no SIGEM continua sendo conferido na Consulta Geral.</p>
-        </details>
 
         <section className="history-detail-section history-actions-section" aria-labelledby="history-actions-title">
           <div className="history-detail-section-heading">
