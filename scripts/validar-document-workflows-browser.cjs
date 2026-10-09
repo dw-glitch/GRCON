@@ -72,6 +72,39 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  page.once('dialog',d=>d.accept());await page.locator('[data-vault-delete]').first().click();await page.waitForFunction(()=>!document.querySelector('[data-vault-delete="qa-0"]'));
  assert.equal(calls.filter(c=>c.action==='delete').length,1);
  await page.screenshot({path:path.join(out,'cofre-1366.png')});
+ // A mesma tabela e os mesmos comandos em desktop, nos dois temas e com zoom.
+ for(const width of [1366,1440,1920])for(const dark of [false,true])for(const zoom of [1,1.25]){
+  await page.setViewportSize({width,height:900});
+  await page.evaluate(({dark,zoom})=>{
+   if((document.documentElement.dataset.theme==='dark')!==dark)document.querySelector('#ui-theme-toggle').click();
+   document.documentElement.style.zoom=String(zoom);
+  },{dark,zoom});
+  await page.evaluate(async()=>{
+   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   await Promise.all(document.getAnimations().filter(a=>a instanceof CSSTransition).map(a=>a.finished.catch(()=>{})));
+  });
+  await page.locator('.vault-browser-card').scrollIntoViewIfNeeded();
+  await page.locator('.vault-list-wrap').evaluate(node=>{node.scrollLeft=0;});
+  await page.mouse.move(0,0);
+  const geometry=await page.evaluate(()=>{
+   const row=document.querySelector('#vault-list-body tr'),buttons=[...row.querySelectorAll('.vault-row-actions button')];
+   const rects=buttons.map(b=>b.getBoundingClientRect());
+   const actionsCell=row.lastElementChild.getBoundingClientRect();
+   const luminance=color=>color.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+   const contrast=[...document.querySelectorAll('#vault-list-body tr')].slice(0,2).map(tr=>{const style=getComputedStyle(tr.querySelector('td')),fg=luminance(style.color),bg=luminance(style.backgroundColor);return (Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05);});
+   return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,rowHeight:row.getBoundingClientRect().height/Number(document.documentElement.style.zoom),buttons:buttons.map(b=>b.textContent),oneLine:rects.every(r=>Math.abs(r.top-rects[0].top)<1),overlap:rects.some((r,i)=>i>0&&r.left<rects[i-1].right),actionsInsideCell:rects.every(r=>r.left>=actionsCell.left&&r.right<=actionsCell.right),clippedButton:buttons.some(b=>b.scrollWidth>b.clientWidth+1),contrast,emptyDetailsHidden:getComputedStyle(document.querySelector('#vault-storage-details')).display==='none'};
+  });
+  assert.ok(geometry.overflow<=1,'Cofre mantém rolagem da tabela dentro do módulo');
+  assert.ok(geometry.rowHeight<=80,'linha compacta preserva código, arquivo e versão');
+  assert.deepEqual(geometry.buttons,['Detalhes','Abrir','Baixar','Excluir']);
+  assert.equal(geometry.oneLine,true);assert.equal(geometry.overlap,false);assert.equal(geometry.emptyDetailsHidden,true);
+  assert.equal(geometry.clippedButton,false);assert.ok(geometry.contrast.every(ratio=>ratio>=4.5),'texto legível nas linhas pares e ímpares');
+  assert.equal(geometry.actionsInsideCell,true,'todos os comandos cabem na coluna de ações');
+  metrics.push({view:'cofre',width,dark,zoom,...geometry});
+  await page.screenshot({path:path.join(out,`cofre-${width}-${dark?'dark':'light'}-zoom${Math.round(zoom*100)}.png`)});
+ }
+ await page.setViewportSize({width:1366,height:768});
+ await page.evaluate(()=>{document.documentElement.style.zoom='';if(document.documentElement.dataset.theme==='dark')document.querySelector('#ui-theme-toggle').click();});
  assert.match(await page.locator('#vault-storage-used').textContent(),/B|KB|MB|GB/);
  await page.locator('#vault-storage-reconcile').click();
  await page.waitForFunction(()=>!document.querySelector('#vault-storage-reconcile').disabled);

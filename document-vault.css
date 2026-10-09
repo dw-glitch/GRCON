@@ -267,3 +267,43 @@
 @media (prefers-reduced-motion: reduce) {
   .document-vault-module .vault-dropzone { transition: none; }
 }
+
+/* Ações lado a lado reduzem a altura das linhas sem esconder comandos. */
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap table {
+  table-layout: auto;
+}
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap tr > :last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+html[data-app="GRCON"] .document-vault-module .vault-row-actions {
+  flex-wrap: nowrap;
+  gap: 6px;
+  width: max-content;
+}
+html[data-app="GRCON"] .document-vault-module .vault-row-actions button {
+  flex: 0 0 auto;
+  min-width: max-content;
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: .75rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+html[data-app="GRCON"] .document-vault-module .vault-row-actions [data-vault-delete] {
+  color: var(--danger-700, #a33b36);
+  border-color: color-mix(in srgb, var(--danger-700, #a33b36) 35%, var(--border-1, #d8e1e7));
+}
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap td {
+  padding-block: 8px;
+  background: var(--surface-1, #fff);
+}
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap tbody tr:nth-child(even) td {
+  background: var(--surface-2, #f8fafb);
+}
+html[data-app="GRCON"] .document-vault-module .vault-table-wrap tbody tr:hover td {
+  background: var(--brand-50, #f2f9fc);
+}
+html[data-app="GRCON"] .document-vault-module .vault-metrics-details:empty {
+  display: none;
+}
