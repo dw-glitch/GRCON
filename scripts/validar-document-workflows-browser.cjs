@@ -131,7 +131,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.waitForFunction(()=>document.querySelector('.requests-table')?.textContent.includes('Controle de Solicitações'));
  assert.match(await page.locator('.requests-table').textContent(),/Pedido de documento/);
  await page.screenshot({path:path.join(out,'consultas.png')});
- await page.locator('[data-grcon-view="conference"]').first().click();
+ await page.locator('[data-pc-open="sidebar"]').click();
  await page.waitForFunction(()=>window.GrconPostingConferenceUi?.state.ready&&!window.GrconPostingConferenceUi.state.busy);
  await page.evaluate(async()=>{
   await window.GRCONModuleLoader.ensure('posting_conference_report.js');await window.GRCONModuleLoader.ensure('posting_conference_app.js');await window.GrconPostingConferenceUi.activate();
@@ -236,7 +236,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.locator('#pc-reference-date').fill('2026-10-02');await page.locator('#pc-save-date').click();await page.waitForFunction(()=>window.GrconSharedSigemQuery.current()?.meta.referenceDate==='2026-10-02');assert.equal(await page.evaluate(()=>window.qaDateCalls),1);
  await page.screenshot({path:path.join(out,'pendencias-1366.png')});
  // Colar 5 mil códigos em uma conferência com 5 mil documentos mantém o navegador responsivo.
- await page.locator('[data-grcon-view="conference"]').first().click();
+ await page.locator('[data-pc-open="sidebar"]').click();
  await page.locator('#pc-document-list').waitFor({state:'visible'});
  await page.evaluate(()=>{
    const ui=window.GrconPostingConferenceUi,C=window.GrconPostingConference;
