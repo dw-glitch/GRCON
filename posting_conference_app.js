@@ -95,7 +95,7 @@
     shell.innerHTML = `
       <header class="pc-heading">
         <div><span>HISTÓRICO DE eGRDTs × CONSULTA GERAL SIGEM</span><h2>Conferência de Postagem</h2><p>Cada documento aparece uma única vez; reenvios ficam agrupados no histórico do documento.</p></div>
-        <div class="pc-heading-actions"><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Pendências em Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><button class="secondary-button" id="pc-publish" type="button" hidden>Publicar Consulta Geral compartilhada</button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
+        <div class="pc-heading-actions"><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Relatório Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><button class="secondary-button" id="pc-publish" type="button" hidden>Publicar Consulta Geral compartilhada</button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
       </header>
       <section class="pc-hero" aria-live="polite"><div><span>CONFERÊNCIA GERAL</span><strong id="pc-hero-main">Carregue a Consulta Geral</strong><small id="pc-hero-note">O histórico permanece preservado como origem dos eventos de envio.</small></div><div class="pc-base-card" id="pc-base-card"></div></section>
       <section class="pc-kpis" id="pc-kpis" aria-label="Resumo da conferência"></section>
@@ -630,13 +630,32 @@
 
   async function exportReport() {
     if (!Report || !documentRows().length) return;
+    // Todos os filtros selecionados orientam o Excel. Somente a visualização
+    // Pendências de Postagem utiliza o detalhamento simplificado em uma aba.
+    const view = state.view;
     setBusy(true, "Gerando Relatório de Conferência de Postagem…");
     try {
-      const rows = filteredPendingRows();
-      const keys = new Set(rows.map(row => row.historyId || row.egrdtNumber));
-      const groups = detailedGroups().filter(group => keys.has(group.historyId || group.egrdtNumber));
-      const scopeLabel = "Pendencias";
-      const buffer = await Report.buildWorkbook(rows, { mode: "events", groups, scopeLabel, pending: true, baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt });
+      let rows;
+      let groups = [];
+      let mode = "documents";
+      if (view === "pending") {
+        rows = filteredPendingRows();
+        const ids = new Set(rows.map(row => row.historyId || row.egrdtNumber));
+        groups = detailedGroups().filter(group => ids.has(group.historyId || group.egrdtNumber));
+        mode = "events";
+      } else if (view === "grdts") {
+        groups = filteredGroups();
+        rows = groups.flatMap(group => group.rows);
+        mode = "events";
+      } else {
+        rows = filteredDocumentRows();
+      }
+      const scopeLabel = view === "pending" ? "Pendencias" : view === "grdts" ? "Por_eGRDT"
+        : state.filters.grdt ? state.filters.grdt.replace(/[^A-Z0-9-]+/gi, "_") : "";
+      const buffer = await Report.buildWorkbook(rows, {
+        mode, groups, scopeLabel, pending: view === "pending",
+        baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt,
+      });
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -646,7 +665,10 @@
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
-      notify(`${fmt(rows.length)} pendência(s) exportada(s) em uma única aba.`, "success");
+      notify(view === "pending"
+        ? `${fmt(rows.length)} pendência(s) exportada(s) em uma única aba.`
+        : mode === "events" ? `${fmt(rows.length)} ocorrência(s) incluída(s) no relatório por eGRDT.`
+          : `${fmt(rows.length)} documento(s) único(s) incluído(s) no relatório.`, "success");
     } catch (error) {
       console.error(error);
       notify(error.message || "Não foi possível gerar o relatório.", "error");
