@@ -15,13 +15,19 @@
     fiscalComment: ["COMENTARIOS DA FISCAL 01", "COMENTARIO DA FISCAL 01", "COMENTARIOS FISCAL 01", "COMENTARIO FISCAL 01", "RESPOSTA DA FISCAL 01"],
     workflow: ["WORKFLOW"], active: ["DOCUMENTO ATIVO"], databook: ["CAMINHO DATA BOOK", "CAMINHO DATABOOK"],
     ldSheet: ["ABA"], ldVersion: ["VERSAO DA LD"], sentAt: ["DATA DO ENVIO DA ALOC"],
+    fiscal1ReturnedAt: ["RETORNO DA FISCAL 01"],
+    fiscal2ReturnedAt: ["RETORNO DA FISCAL 02"],
+    fiscal2Comment: ["RESPOSTA DA FISCAL 02", "COMENTARIOS DA FISCAL 02", "COMENTARIO DA FISCAL 02"],
+    plannedAt: ["DATA PREVISTA"], action: ["ACAO"], baselineAt: ["DATA DA LINHA BASE"],
+    originalPurpose: ["PROPOSITO DE EMISSAO ORIGINAL"], critical: ["DOCUMENTO CRITICO"],
+    remarks: ["OBSERVACAO", "OBSERVACOES"], signal: ["FAROL"],
   };
   function cleanRecord(value) {
     const item = {};
-    for (const field of Object.keys(fields)) item[field] = field === "fiscalComment" ? String(value?.[field] ?? "") : text(value?.[field]);
+    for (const field of Object.keys(fields)) item[field] = ["fiscalComment", "fiscal2Comment", "remarks"].includes(field) ? String(value?.[field] ?? "") : text(value?.[field]);
     item.sourceRow = Number(value?.sourceRow) || 0;
     if (item.document.length < 7 || item.document.length > 255 || !/\d/.test(item.document)) throw new Error("Código documental inválido na Central de alocação.");
-    if (Object.entries(item).some(([field, v]) => typeof v === "string" && v.length > (field === "fiscalComment" ? 8192 : field === "databook" ? 2048 : field === "allocationStatus" ? 1024 : 255))) throw new Error("Campo muito extenso na Central de alocação.");
+    if (Object.entries(item).some(([field, v]) => typeof v === "string" && v.length > (["fiscalComment", "fiscal2Comment", "remarks"].includes(field) ? 8192 : field === "databook" ? 2048 : field === "allocationStatus" ? 1024 : 255))) throw new Error("Campo muito extenso na Central de alocação.");
     if (!Number.isInteger(item.sourceRow) || item.sourceRow < 1 || item.sourceRow > 1048576) throw new Error("Linha de origem inválida.");
     return item;
   }
@@ -39,7 +45,7 @@
           // A Central identifica a responsável depois do cabeçalho, por ex.
           // "Resposta da Fiscal 01\n (Nome)". Só o comentário aceita esse
           // complemento; retorno/data e Fiscal 02 não são comentários da 01.
-          const identity = field === "fiscalComment" ? header.replace(/\s*\([^()]*\)\s*$/, "").trim() : header;
+          const identity = ["fiscalComment", "fiscal2Comment", "fiscal1ReturnedAt", "fiscal2ReturnedAt"].includes(field) ? header.replace(/\s*\([^()]*\)\s*$/, "").trim() : header;
           return aliases.includes(identity) ? column : -1;
         }).filter(column => column >= 0);
         if (matches.length > 1) throw new Error(`Cabeçalho duplicado: ${field}. Confira a planilha antes de publicar.`);
