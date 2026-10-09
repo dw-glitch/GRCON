@@ -329,7 +329,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  assert.equal(await page.locator('.pc-pending-documents tbody tr').count(),2,'uma linha por código, não por revisão/envio');
  const duplicateRow=page.locator('.pc-pending-documents tbody tr').filter({has:page.locator('td:first-child strong', {hasText:'DOC-002'})});
  assert.equal(await duplicateRow.count(),1);
- assert.match(await duplicateRow.locator('td:nth-child(3)').text(),/GRDT-230/,'última eGRDT correta');
+ assert.match(await duplicateRow.locator('td:nth-child(3)').textContent(),/GRDT-230/,'última eGRDT correta');
  await duplicateRow.locator('td:nth-child(4) summary').click();
  const historyText=await duplicateRow.locator('td:nth-child(4)').textContent();
  assert.match(historyText,/GRDT-210/);
