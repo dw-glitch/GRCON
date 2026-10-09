@@ -77,6 +77,7 @@ interface GrconCloudApi {
   state?: { online?: boolean; membership?: { workspace_id?: string; role?: string } };
   canManageHistory?(): boolean;
   deleteHistoryRecord?(record: unknown): Promise<unknown>;
+  manageHistoryFile?(record: unknown, operation: "remove" | "restore", options: { index?: number; removalId?: string; reason?: string }): Promise<unknown>;
   clearHistory?(): Promise<boolean>;
 }
 

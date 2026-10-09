@@ -196,6 +196,14 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
   );
 }
 
+async function exportRemovedAudit(records: EgrdtHistoryRecord[]): Promise<void> {
+  if (!canDeleteHistory()) throw new Error("Sem permissão para exportar registros removidos.");
+  const Report = report();
+  if (!records.some((record) => record.removedFiles?.length)) throw new Error("Nenhum documento removido nos filtros atuais.");
+  const buffer = await Report.buildRemovedAuditWorkbook(records);
+  downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), Report.removedAuditDownloadName());
+}
+
 function updateNumber(recordId: string, value: string): UpdateNumberResult {
   return history().updateNumber(recordId, value) as unknown as UpdateNumberResult;
 }
@@ -206,6 +214,26 @@ function canDeleteHistory(): boolean {
 
 function isSharedHistory(): boolean {
   return Boolean(window.GrconCloud?.state?.membership?.workspace_id);
+}
+
+function canManageHistoryFile(record: EgrdtHistoryRecord): boolean {
+  const cloud = window.GrconCloud;
+  return Boolean(cloud?.state?.online && cloud.state.membership?.workspace_id && cloud.canManageHistory?.()
+    && record.cloudId && record.cloudUpdatedAt && record.workspaceId === cloud.state.membership.workspace_id);
+}
+
+async function manageFile(record: EgrdtHistoryRecord, operation: "remove" | "restore", options: { index?: number; removalId?: string; reason?: string }) {
+  if (!canManageHistoryFile(record) || !window.GrconCloud?.manageHistoryFile) {
+    throw new Error("Sem permissão ou conexão para alterar este documento. Atualize o histórico compartilhado.");
+  }
+  if (operation === "remove" && (!Number.isInteger(options.index) || !record.files[options.index!]
+    || String(options.reason || "").trim().length < 3)) {
+    throw new Error("Selecione um documento e informe uma justificativa de pelo menos 3 caracteres.");
+  }
+  if (operation === "restore" && !record.removedFiles?.some((item) => item.id === options.removalId)) {
+    throw new Error("Registro removido não encontrado na eGRDT atual.");
+  }
+  return window.GrconCloud.manageHistoryFile(record, operation, options);
 }
 
 async function deleteRecord(record: EgrdtHistoryRecord): Promise<{ result: DeleteOneResult; cloudDeleted: boolean }> {
@@ -367,8 +395,11 @@ export const historicoEgrdtAdapter = {
   revisionRelation,
   periodLabel,
   exportPeriodReport,
+  exportRemovedAudit,
   updateNumber,
   canDeleteHistory,
+  canManageHistoryFile,
+  manageFile,
   isSharedHistory,
   deleteRecord,
   clearHistory,

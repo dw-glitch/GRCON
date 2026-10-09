@@ -383,5 +383,52 @@
     return `GRCON_Relacao_eGRDTs_${family}_${start}_a_${end}_${compactStamp()}.xlsx`;
   }
 
-  return Object.freeze({ formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, summary, buildWorkbook, downloadName });
+  // Auditoria separada: jamais misturar os tombstones com os documentos ativos
+  // nos relatórios regulares. Inclui apenas as eGRDTs que passaram pelos filtros.
+  async function buildRemovedAuditWorkbook(records) {
+    const ExcelJS = getExcel();
+    if (!ExcelJS?.Workbook) throw new Error("O gerador de Excel não está disponível.");
+    const rows = (records || []).flatMap((record) => (record.removedFiles || []).map((entry) => ({
+      egrdt: record.egrdtNumber,
+      sentAt: formatDate(record.generatedAt, true),
+      document: text(entry.file?.document),
+      revision: text(entry.file?.grdtRevision || entry.file?.revision) || "0",
+      purpose: text(entry.file?.purpose),
+      allocation: text(entry.file?.allocation),
+      originalFile: text(entry.file?.originalName),
+      sentFile: text(entry.file?.finalName),
+      removedAt: formatDate(entry.removedAt, true),
+      removedBy: text(entry.removedBy),
+      reason: text(entry.reason),
+      removalId: text(entry.id),
+    })));
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "GRCON";
+    const sheet = workbook.addWorksheet("Documentos removidos", { views: [{ state: "frozen", ySplit: 2 }] });
+    sheet.addRow(["GRCON — AUDITORIA DE DOCUMENTOS REMOVIDOS DO HISTÓRICO"]);
+    sheet.mergeCells(1, 1, 1, 12);
+    sheet.getRow(1).height = 29;
+    sheet.getCell("A1").font = { bold: true, color: { argb: "FFFFFFFF" }, size: 15 };
+    sheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF163B63" } };
+    const headers = ["eGRDT", "Data enviada", "Documento", "Revisão", "Propósito", "Alocação",
+      "Arquivo original", "Arquivo enviado", "Removido em", "Removido por (ID)", "Motivo", "ID da remoção"];
+    sheet.addRow(headers);
+    const headerRow = sheet.getRow(2);
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF285580" } };
+    sheet.columns = [17,20,48,12,20,24,38,38,22,38,50,39].map((width) => ({ width }));
+    for (const row of rows) {
+      sheet.addRow([row.egrdt, row.sentAt, row.document, row.revision, row.purpose,
+        row.allocation, row.originalFile, row.sentFile, row.removedAt, row.removedBy, row.reason, row.removalId]);
+    }
+    sheet.autoFilter = { from: "A2", to: "L" + Math.max(2, sheet.rowCount) };
+    const result = await workbook.xlsx.writeBuffer();
+    return result;
+  }
+
+  function removedAuditDownloadName() {
+    return `GRCON_Auditoria_Documentos_Removidos_${compactStamp()}.xlsx`;
+  }
+
+  return Object.freeze({ formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, summary, buildWorkbook, downloadName, buildRemovedAuditWorkbook, removedAuditDownloadName });
 });

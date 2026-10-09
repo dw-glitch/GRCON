@@ -37,6 +37,12 @@ export function useHistoricoEgrdt() {
   const [editValue, setEditValue] = useState("");
   const [visibleLimit, setVisibleLimit] = useState(LIST_PAGE_SIZE);
   const [exporting, setExporting] = useState(false);
+  const [exportingAudit, setExportingAudit] = useState(false);
+  const [fileStatus, setFileStatus] = useState<"active" | "removed" | "all">("active");
+  const [pendingRemoval, setPendingRemoval] = useState<number | null>(null);
+  const [removalReason, setRemovalReason] = useState("");
+  const [removalDetails, setRemovalDetails] = useState("");
+  const [fileActionBusy, setFileActionBusy] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   const refresh = useCallback(() => setRefreshNonce((value) => value + 1), []);
@@ -45,6 +51,7 @@ export function useHistoricoEgrdt() {
   useEffect(() => Adapter.subscribeSelect((id) => {
     setSelectedId(id);
     setEditingId("");
+    setPendingRemoval(null);
     window.setTimeout(() => document.querySelector<HTMLElement>("#history-detail")?.focus?.(), 0);
   }), []);
 
@@ -231,6 +238,57 @@ export function useHistoricoEgrdt() {
     }
   }, [selectedRecord]);
 
+  const beginRemoval = useCallback((index: number) => {
+    if (!selectedRecord || !Adapter.canManageHistoryFile(selectedRecord) || !selectedRecord.files[index]) return;
+    setPendingRemoval(index);
+    setRemovalReason("");
+    setRemovalDetails("");
+  }, [selectedRecord]);
+
+  const cancelRemoval = useCallback(() => {
+    if (!fileActionBusy) setPendingRemoval(null);
+  }, [fileActionBusy]);
+
+  const submitRemoval = useCallback(async () => {
+    if (!selectedRecord || pendingRemoval === null || fileActionBusy) return;
+    const reason = removalReason === "Outro motivo"
+      ? removalDetails.trim()
+      : [removalReason, removalDetails.trim()].filter(Boolean).join(": ");
+    if (reason.trim().length < 3 || reason.length > 500) {
+      Adapter.notify("Informe o motivo da remoção (3 a 500 caracteres).", "error");
+      return;
+    }
+    setFileActionBusy(true);
+    try {
+      await Adapter.manageFile(selectedRecord, "remove", { index: pendingRemoval, reason });
+      setPendingRemoval(null);
+      refresh();
+      Adapter.notify("Somente este documento foi retirado do histórico operacional. A eGRDT foi preservada.", "success");
+    } catch (error) {
+      Adapter.notify(error instanceof Error ? error.message : "Não foi possível remover o documento.", "error");
+      refresh();
+    } finally {
+      setFileActionBusy(false);
+    }
+  }, [selectedRecord, pendingRemoval, fileActionBusy, removalReason, removalDetails, refresh]);
+
+  const restoreFile = useCallback(async (removalId: string) => {
+    if (!selectedRecord || fileActionBusy) return;
+    const removed = selectedRecord.removedFiles?.find((entry) => entry.id === removalId);
+    if (!removed || !window.confirm(`Restaurar ${removed.file.document || removed.file.finalName} na eGRDT ${selectedRecord.egrdtNumber}?`)) return;
+    setFileActionBusy(true);
+    try {
+      await Adapter.manageFile(selectedRecord, "restore", { removalId });
+      refresh();
+      Adapter.notify("Documento restaurado no histórico operacional.", "success");
+    } catch (error) {
+      Adapter.notify(error instanceof Error ? error.message : "Não foi possível restaurar o documento.", "error");
+      refresh();
+    } finally {
+      setFileActionBusy(false);
+    }
+  }, [selectedRecord, fileActionBusy, refresh]);
+
   const clearHistory = useCallback(async () => {
     if (!records.length || !Adapter.confirmClear()) return;
     try {
@@ -265,8 +323,25 @@ export function useHistoricoEgrdt() {
     }
   }, [periodInvalid, filtered, effectiveFilters, filters.documentFamily]);
 
+  const removedCount = useMemo(() => filtered.reduce((total, record) => total + (record.removedFiles?.length || 0), 0), [filtered]);
+  const exportRemovedAudit = useCallback(async () => {
+    if (!removedCount || exportingAudit) return;
+    setExportingAudit(true);
+    try {
+      await Adapter.exportRemovedAudit(filtered);
+      Adapter.notify(`${removedCount} documento(s) removido(s) exportado(s) em relatório de auditoria separado.`, "success");
+    } catch (error) {
+      Adapter.notify(error instanceof Error ? error.message : "Não foi possível exportar a auditoria.", "error");
+    } finally {
+      setExportingAudit(false);
+    }
+  }, [filtered, removedCount, exportingAudit]);
+
   return {
     loading,
+    removedCount,
+    exportingAudit,
+    exportRemovedAudit,
     records,
     filters,
     effectiveFilters,
@@ -295,6 +370,19 @@ export function useHistoricoEgrdt() {
     openTeams,
     deleteSelectedRecord,
     clearHistory,
+    fileStatus,
+    setFileStatus,
+    pendingRemoval,
+    removalReason,
+    setRemovalReason,
+    removalDetails,
+    setRemovalDetails,
+    fileActionBusy,
+    beginRemoval,
+    cancelRemoval,
+    submitRemoval,
+    restoreFile,
+    canManageHistoryFile: selectedRecord ? Adapter.canManageHistoryFile(selectedRecord) : false,
     canDeleteHistory: Adapter.canDeleteHistory(),
     sharedHistory: Adapter.isSharedHistory(),
   };
