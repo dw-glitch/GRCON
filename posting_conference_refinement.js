@@ -289,6 +289,40 @@
     }).sort((a, b) => compareSendRecency(a.latestSend || a, b.latestSend || b));
   }
 
+  // Uma ocorrência por código documental na lista de pendências, sem apagar
+  // as ocorrências por revisão/eGRDT usadas na auditoria e nos arquivos Excel.
+  // O histórico completo e a última emissão vêm da consolidação geral.
+  function buildPendingDocumentAggregates(pendingEvents, documents, Conference) {
+    if (!Conference) return [];
+    const known = new Map();
+    (documents || []).forEach((document) => {
+      const identity = Conference.documentIdentity(document.document) || document.documentIdentity;
+      if (identity) known.set(identity, document);
+    });
+    const grouped = new Map();
+    (pendingEvents || []).forEach((event) => {
+      if (!event || event.status === Conference.STATUSES.CONFIRMED) return;
+      const identity = Conference.documentIdentity(event.document) || event.documentIdentity || event.key;
+      if (!identity) return;
+      if (!grouped.has(identity)) grouped.set(identity, []);
+      grouped.get(identity).push(event);
+    });
+    return [...grouped].map(([identity, events]) => {
+      const pending = events.slice().sort(compareSendRecency);
+      const document = known.get(identity) || buildDocumentAggregates(events, Conference)[0] || {};
+      const newestPending = pending[0];
+      return {
+        ...document,
+        documentIdentity: identity,
+        pendingEvents: pending,
+        pendingEventCount: pending.length,
+        pendingGrdtCount: new Set(pending.map(event => Conference.norm(event.egrdtNumber)).filter(Boolean)).size,
+        pendingRevisions: [...new Set(pending.map(event => Conference.normalizeRevision(event.revisionSent)).filter(Boolean))],
+        newestPending,
+      };
+    }).sort((a, b) => compareSendRecency(a.newestPending, b.newestPending));
+  }
+
   function enrichResult(result, baseRecords, Conference) {
     if (!result || typeof result !== "object") return result;
     const eventRows = enrichRows(result.eventRows || result.rows || [], baseRecords || [], Conference);
@@ -450,6 +484,9 @@
       },
       buildDocumentAggregates(rows) {
         return buildDocumentAggregates(rows, wrapped);
+      },
+      buildPendingDocumentAggregates(rows, documents) {
+        return buildPendingDocumentAggregates(rows, documents, wrapped);
       },
       summarizeDocuments(rows) {
         return summarizeDocuments(rows, wrapped);
@@ -649,6 +686,7 @@
     repairParsedStatuses,
     wrapConference,
     buildDocumentAggregates,
+    buildPendingDocumentAggregates,
     summarizeDocuments,
     sendEventKey,
     documentRevisionIdentity,

@@ -311,6 +311,47 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.locator('#pc-clear-filters').click();
  assert.equal(await page.locator('.pc-document-table tbody tr').count(),80);
  await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi,saved=window.qaConferenceSaved;ui.state.result=saved.result;ui.state.view=saved.view;ui.state.filters=saved.filters;document.querySelector('#pc-document-list').value=saved.filters.documentList;ui.render();});
+ // Mesmo documento enviado em revisões e eGRDTs diferentes aparece UMA vez
+ // na tabela, mas todas as ocorrências permanecem no histórico e no Excel.
+ await page.evaluate(()=>{
+   const ui=window.GrconPostingConferenceUi,C=window.GrconPostingConference;
+   window.qaDedupSaved={result:ui.state.result,view:ui.state.view,filters:{...ui.state.filters}};
+   const mk=(id,date,files)=>({id,egrdtNumber:id,generatedAt:date,files:files.map(([document,revision])=>({document,revision,purpose:'Para Construção',discipline:'X'}))});
+   const history=[
+     mk('GRDT-210','2026-10-01T12:00:00Z',[['DOC-002','0'],['DOC-003','0']]),
+     mk('GRDT-220','2026-10-02T12:00:00Z',[['DOC-002','A']]),
+     mk('GRDT-230','2026-10-03T12:00:00Z',[['DOC-002','A']]),
+   ];
+   ui.state.result=C.reconcile(history,ui.state.base.records,null,{now:'2026-10-08T12:00:00Z',baseReferenceDate:'2026-10-08'});
+   Object.keys(ui.state.filters).forEach(key=>ui.state.filters[key]='');
+   ui.state.groupClassification='';ui.state.view='pending';ui.state.page=1;ui.render();
+ });
+ assert.equal(await page.locator('.pc-pending-documents tbody tr').count(),2,'uma linha por código, não por revisão/envio');
+ const duplicateRow=page.locator('.pc-pending-documents tbody tr').filter({has:page.locator('td:first-child strong', {hasText:'DOC-002'})});
+ assert.equal(await duplicateRow.count(),1);
+ assert.match(await duplicateRow.locator('td:nth-child(3)').textContent(),/GRDT-230/,'última eGRDT correta');
+ await duplicateRow.locator('td:nth-child(4) summary').click();
+ const historyText=await duplicateRow.locator('td:nth-child(4)').textContent();
+ assert.match(historyText,/GRDT-210/);
+ assert.match(historyText,/GRDT-220/);
+ assert.match(historyText,/GRDT-230/);
+ await duplicateRow.locator('td:nth-child(5) summary').click();
+ assert.equal(await duplicateRow.locator('td:nth-child(5) .pc-send-event').count(),3,'nenhuma pendência/revisão perdida no histórico');
+ assert.match(await duplicateRow.locator('td:nth-child(5)').textContent(),/Rev. A/);
+ const pendingRepeatDownload=page.waitForEvent('download');await page.locator('#pc-export').click();
+ await(await pendingRepeatDownload).saveAs(path.join(out,'pendencias-repetidas.xlsx'));
+ const repeatBook=XLSX.read(fs.readFileSync(path.join(out,'pendencias-repetidas.xlsx')),{type:'buffer'});
+ assert.deepEqual(repeatBook.SheetNames,['Detalhamento']);
+ const repeatRows=XLSX.utils.sheet_to_json(repeatBook.Sheets.Detalhamento,{range:9,defval:''});
+ assert.equal(repeatRows.length,4,'Excel preserva as quatro ocorrências de pendência para auditoria');
+ assert.equal(repeatRows.filter(row=>row.Código==='DOC-002').length,3);
+ await page.getByRole('button',{name:'Documentos',exact:true}).click();
+ assert.equal(await page.locator('.pc-document-table tbody tr').count(),2);
+ assert.match(await page.locator('.pc-document-table tbody tr').filter({hasText:'DOC-002'}).textContent(),/GRDT-230/);
+ await page.evaluate(()=>{
+   const ui=window.GrconPostingConferenceUi,old=window.qaDedupSaved;
+   ui.state.result=old.result;ui.state.view=old.view;ui.state.filters=old.filters;ui.render();
+ });
  assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({ok:true,metrics,cofreExport:52,pendingDocuments:5,uniqueGrdts:3,filteredPendingDocuments:1,listPerformance,errors},null,2));
  console.log('Chromium document workflows passed: '+JSON.stringify(metrics));
  } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

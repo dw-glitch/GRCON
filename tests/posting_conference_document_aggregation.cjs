@@ -121,6 +121,32 @@ docs = R.buildDocumentAggregates(events, C);
 assert.equal(docs[0].status, STATUSES.CONFIRMED);
 assert.equal(W.pendingRows(docs).length, 0);
 
+// Uma pendência pode aparecer em várias revisões/eGRDTs, mas a tabela deve
+// renderizar uma única linha pelo código documental; os eventos não são perdidos.
+events = [
+  event("ONE", "0", "G-200", "2026-08-01T10:00:00Z", STATUSES.CONFIRMED),
+  event("ONE", "A", "G-210", "2026-09-01T10:00:00Z", STATUSES.NOT_FOUND),
+  event("ONE", "B", "G-220", "2026-09-02T10:00:00Z", STATUSES.AWAITING),
+  event("ONE", "B", "G-230", "2026-09-03T10:00:00Z", STATUSES.REVISION_DIVERGENT),
+  event("TWO", "0", "G-230", "2026-09-03T10:00:00Z", STATUSES.NOT_FOUND),
+];
+const allDocumentRows = R.buildDocumentAggregates(events, C);
+const pendingEventRows = events.filter(item => item.status !== STATUSES.CONFIRMED)
+  .map(row => ({ ...row, pendingScope: { label: "Parte da GRDT pendente", detail: "Conferência da emissão inteira." } }));
+const pendingDocs = R.buildPendingDocumentAggregates(pendingEventRows, allDocumentRows, C);
+assert.equal(pendingDocs.length, 2, "quatro pendências em duas linhas de documento");
+const uniquePending = pendingDocs.find(row => row.document === "ONE");
+assert.equal(uniquePending.pendingEventCount, 3);
+assert.equal(uniquePending.sendCount, 4, "preservar também a emissão histórica já confirmada");
+assert.equal(uniquePending.latestEgrdtNumber, "G-230");
+assert.equal(uniquePending.latestSendAt, "2026-09-03T10:00:00Z");
+assert.deepEqual(uniquePending.pendingRevisions, ["B", "A"]);
+assert.deepEqual(uniquePending.pendingEvents.map(row => row.egrdtNumber), ["G-230", "G-220", "G-210"]);
+assert.deepEqual(uniquePending.sends.map(row => row.egrdtNumber), ["G-230", "G-220", "G-210", "G-200"]);
+assert.equal(uniquePending.pendingEvents[0].pendingScope.label, "Parte da GRDT pendente");
+assert.equal(W.buildPendingDocumentAggregates(pendingEventRows, allDocumentRows).length, 2);
+assert.equal(R.buildPendingDocumentAggregates(events.filter(row => row.status === STATUSES.CONFIRMED), allDocumentRows, C).length, 0);
+
 // Mesmo TAG, EAP diferente continua sendo documento diferente.
 const tag = "VM-123456";
 events = [
