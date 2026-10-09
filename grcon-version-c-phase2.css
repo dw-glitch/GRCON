@@ -1,0 +1,438 @@
+/*
+ * GRCON — Versão C, Fase 2 (09/10/2026).
+ * Lapidação dos componentes existentes: GRDT, Cofre e Consultas.
+ * Somente apresentação. Não modifica valores, estados, colunas, fontes ou regras.
+ * A tabela completa continua rolável horizontalmente quando necessário.
+ */
+@media (min-width: 74.01rem) {
+  /* 01 — Controle de GRDT: quatro etapas reais, num fluxo compacto. */
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .grdt-stages {
+    margin: 0 0 .7rem;
+    padding: .42rem .5rem;
+    border: 1px solid var(--border-1);
+    border-radius: 10px;
+    background: var(--surface-1);
+    box-shadow: 0 2px 9px rgba(19, 53, 89, .04);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .grdt-stages-list {
+    gap: .3rem;
+    align-items: stretch;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .grdt-stage {
+    min-height: 51px;
+    padding: .38rem .58rem;
+    gap: .52rem;
+    border-radius: 8px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .grdt-stage-number {
+    flex-basis: 1.75rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: .75rem;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .grdt-stage-text strong {
+    font-size: .77rem;
+    letter-spacing: -.01em;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .grdt-stage-text small {
+    font-size: .66rem;
+    line-height: 1.25;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .grdt-stage.is-current {
+    border-color: color-mix(in srgb, var(--brand-600) 34%, var(--border-1));
+    background: color-mix(in srgb, var(--brand-600) 9%, var(--surface-1));
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .grdt-stage.is-complete {
+    background: color-mix(in srgb, var(--success-700) 3%, var(--surface-1));
+  }
+
+  /* Fontes: manter as três origens e os dois comandos sem encobrir ações. */
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .source-row {
+    gap: .55rem;
+    align-items: stretch;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module :is(
+    .compact-source, .relation-source, .source-slot, .grdt-vault-source-card
+  ) {
+    border-radius: 9px;
+    border-color: var(--border-1);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .source-slot {
+    min-width: 0;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module :is(
+    .compact-source, .relation-file-trigger
+  ) {
+    padding-block: .65rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module :is(
+    .source-slot, .compact-source
+  ):focus-within {
+    outline: 2px solid var(--brand-600);
+    outline-offset: 1px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .settings-button {
+    min-height: 42px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .analyze-button {
+    min-height: 46px;
+    font-weight: 760;
+    letter-spacing: -.01em;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #grdt-module .advanced-panel {
+    border-color: var(--border-1);
+  }
+
+  /* Situação: números reais em cartões proporcionais com seleção evidente. */
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .summary-bar {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: .48rem;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .summary-item {
+    min-width: 0;
+    min-height: 67px;
+    border: 1px solid var(--border-1);
+    border-radius: 9px;
+    background: var(--surface-1);
+    box-shadow: 0 1px 6px rgba(20, 54, 88, .035);
+    transition: border-color .13s, background-color .13s;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .summary-item:hover,
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .summary-item:focus-visible {
+    border-color: var(--brand-600);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .summary-item.active,
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .summary-item[aria-pressed="true"] {
+    border-color: var(--brand-600);
+    background: color-mix(in srgb, var(--brand-600) 7%, var(--surface-1));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-600) 16%, transparent);
+  }
+
+  /* Barra existente em três faixas: pesquisa, filtros e emissão.
+     Cada comando continua presente, com a ordem já usada pelo operador. */
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .results-toolbar {
+    gap: .48rem .58rem;
+    padding: .72rem .78rem;
+    border: 1px solid var(--border-1);
+    border-radius: 10px;
+    background: var(--surface-1);
+    box-shadow: none;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .results-toolbar > .grcon-fix-break {
+    border-top: 1px solid var(--border-1);
+    opacity: .8;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .results-toolbar :is(
+    .search-box, #sheet-filter, .triage-density-control select, button,
+    .triage-column-manager > summary, .secondary-downloads > summary
+  ) {
+    border-radius: 7px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .results-toolbar .selected-count {
+    font-weight: 740;
+    color: var(--text-1);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section #export-egrdt:not(:disabled) {
+    font-weight: 780;
+    box-shadow: 0 3px 9px color-mix(in srgb, var(--brand-600) 18%, transparent);
+  }
+
+  /* A notificação sobre Teams é secundária à tabela: não confundir envio
+     de aviso com confirmação de postagem no SIGEM. */
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .egrdt-teams-ready {
+    margin: .48rem 0 .58rem;
+    padding: .75rem .9rem;
+    border: 1px solid color-mix(in srgb, var(--brand-600) 25%, var(--border-1));
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--brand-600) 5%, var(--surface-1));
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .egrdt-teams-ready-list {
+    margin-top: .5rem;
+    gap: .4rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .egrdt-teams-ready-list article {
+    padding: .52rem .65rem;
+    border: 1px solid var(--border-1);
+    border-radius: 7px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section .posting-history-summary {
+    border-radius: 9px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-scroll {
+    max-width: 100%;
+    max-height: min(65vh, 680px);
+    overflow: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior-inline: contain;
+    border-radius: 8px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-table :is(th, td) {
+    line-height: 1.35;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding-block: .52rem;
+    color: var(--text-2);
+    background: var(--surface-2);
+    white-space: normal;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-table thead th:first-child {
+    z-index: 5;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #results-table tbody tr:focus-within td {
+    background: color-mix(in srgb, var(--brand-600) 5%, var(--surface-1));
+  }
+
+  /* 02 — Cofre: consumo e rastreabilidade são dados reais do serviço R2. */
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module {
+    gap: .75rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-heading {
+    margin-bottom: 0;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-health {
+    border-radius: 999px;
+    padding: .48rem .75rem;
+    font-size: .75rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module :is(
+    .vault-storage-card, .vault-upload-card, .vault-browser-card, .vault-queue-panel
+  ) {
+    border: 1px solid var(--border-1);
+    border-radius: 10px;
+    background: var(--surface-1);
+    box-shadow: 0 2px 9px rgba(20, 48, 78, .045);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-storage-card {
+    gap: .75rem;
+    grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 1.2fr) auto;
+    padding: .72rem 1rem;
+    align-items: center;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-storage-card strong {
+    font-size: 1.02rem;
+    line-height: 1.22;
+    letter-spacing: -.015em;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module :is(
+    .vault-upload-card > header, .vault-queue-panel > header, .vault-browser-card > header
+  ) {
+    gap: .55rem;
+    padding: .7rem .85rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module :is(
+    .vault-upload-card > header, .vault-browser-card > header
+  ) strong {
+    font-size: .91rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-dropzone {
+    margin: .7rem .85rem;
+    min-height: 86px;
+    padding: .65rem 1rem;
+    border-radius: 9px;
+    background: var(--surface-2);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-dropzone:hover,
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-dropzone:focus-visible {
+    border-color: var(--brand-600);
+    background: color-mix(in srgb, var(--brand-600) 7%, var(--surface-1));
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-toolbar {
+    grid-template-columns: minmax(14rem, 1fr) minmax(10rem, 12rem);
+    gap: .65rem;
+    padding: .65rem .85rem;
+    background: var(--surface-2);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-toolbar :is(input,select) {
+    border-radius: 7px;
+    background: var(--surface-1);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-list-wrap {
+    max-height: 62vh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-table-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding: .55rem .6rem;
+    color: var(--text-2);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border-2);
+    font-size: .73rem;
+    font-weight: 760;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-table-wrap tbody td {
+    padding: .55rem .6rem;
+    line-height: 1.34;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-row-actions button {
+    border-radius: 7px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-table-wrap tbody tr:focus-within td {
+    background: color-mix(in srgb, var(--brand-600) 7%, var(--surface-1));
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-allocation {
+    border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    padding: .27rem .48rem;
+  }
+
+  /* 03 — Consultas React: barra de comandos permanece legível ao rolar. */
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module {
+    gap: .75rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-subnav {
+    gap: .4rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module :is(
+    .requests-setup-panel, .requests-results-panel, .requests-commandbar
+  ) {
+    border: 1px solid var(--border-1);
+    border-radius: 10px;
+    background: var(--surface-1);
+    box-shadow: 0 2px 9px rgba(19, 53, 89, .045);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-setup-panel {
+    overflow: clip;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-commandbar {
+    position: sticky;
+    top: calc(var(--ui-topbar-height, 64px) + .35rem);
+    z-index: 9;
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.15fr);
+    gap: .45rem .6rem;
+    padding: .55rem .65rem;
+    backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--surface-1) 97%, transparent);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-command-primary {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-command-results {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-command-secondary {
+    grid-column: 1 / -1;
+    padding-top: .38rem;
+    border-top: 1px solid var(--border-1);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-commandbar :is(button,select) {
+    border-radius: 7px;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-results-panel {
+    gap: .58rem;
+    padding: .75rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .48rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module button.requests-kpi {
+    min-height: 62px;
+    background: var(--surface-1);
+    border-radius: 9px;
+    padding: .55rem .7rem;
+    border: 1px solid var(--border-1);
+    border-inline-start: 3px solid var(--text-3);
+    transition: border-color .13s, background-color .13s;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module button.requests-kpi:is(:hover, :focus-visible, [aria-pressed="true"]) {
+    border-color: var(--brand-600);
+    background: color-mix(in srgb, var(--brand-600) 7%, var(--surface-1));
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module button.requests-kpi.ok {
+    border-inline-start-color: var(--success-700);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module button.requests-kpi.alerta {
+    border-inline-start-color: var(--warning-800);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module button.requests-kpi.erro {
+    border-inline-start-color: var(--danger-700);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-filterbar {
+    grid-template-columns: minmax(14rem, 1fr) minmax(9rem, 11rem) minmax(9rem, 11rem) auto;
+    gap: .45rem .58rem;
+    padding: .65rem;
+    border: 1px solid var(--border-1);
+    border-radius: 9px;
+    background: var(--surface-2);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-filterbar input,
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-filterbar select {
+    border-radius: 7px;
+    background: var(--surface-1);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-filter-count {
+    grid-column: 1 / -1;
+    justify-self: end;
+    margin-top: -.15rem;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-table-wrap {
+    max-width: 100%;
+    max-height: 65vh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border-1);
+    border-radius: 9px;
+    scrollbar-gutter: stable;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-table {
+    width: 100%;
+    min-width: 64rem;
+    /* No truncar colunas; rolagem interna conserva cabeçalhos e exportação. */
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--surface-2);
+    padding: .52rem .55rem;
+    font-size: .71rem;
+    line-height: 1.3;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-table tbody td {
+    padding: .5rem .55rem;
+    line-height: 1.36;
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-table tbody tr:focus-within td {
+    background: color-mix(in srgb, var(--brand-600) 6%, var(--surface-1));
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-pagination {
+    gap: .48rem;
+    align-items: center;
+  }
+}
+
+/* Em notebooks abaixo de 1366px com zoom, conservar blocos legíveis.
+   Nenhuma seção é ocultada e os filtros empilham sem ultrapassar a janela. */
+@media (min-width: 58.01rem) and (max-width: 86rem) {
+  html[data-app="GRCON"][data-ui-generation="3"] #document-vault-module .vault-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(9rem, 11rem);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-commandbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html[data-app="GRCON"][data-ui-generation="3"] #requests-module .requests-command-secondary {
+    grid-column: 1;
+  }
+}
+
+/* Redução de movimento, sem ocultar estado selecionado ou hover. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-app="GRCON"] #results-section .summary-item,
+  html[data-app="GRCON"] #requests-module .requests-kpi {
+    transition: none;
+  }
+}
