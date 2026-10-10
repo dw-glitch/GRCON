@@ -1,5 +1,7 @@
 # Confirmação de postagem pelo Teams — implementação e implantação
 
+Para o caminho **sem Power Automate Premium**, usar [Teams + SharePoint padrão](teams-sharepoint-standard.md). A configuração HTTP/Response abaixo é a alternativa Premium anterior, e não deve ser aplicada ao fluxo padrão.
+
 ## Estado desta entrega
 
 Código implementado, com validação automatizada no PostgreSQL embarcado, Worker e Excel. O teste real no Teams/Power Automate depende do fluxo corporativo, dos segredos do Worker e de homologação com uma eGRDT operacional legítima. A funcionalidade interativa está desativada por padrão; o envio manual existente continua funcionando. Não foram criados documentos fictícios em produção.
