@@ -1,4 +1,5 @@
 import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
+import {syncSharepoint} from './teams-sharepoint.mjs';
 
 const PREFIX = "/api/document-vault/";
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
@@ -689,6 +690,10 @@ async function routeVault(request, env) {
 
 export default {
   async scheduled(controller, env, ctx) {
+    if (controller.cron === '* * * * *') {
+      ctx.waitUntil(syncSharepoint(env).catch(error => console.error('GRCON SharePoint sync', error.code || 'SYNC_FAILED')));
+      return;
+    }
     ctx.waitUntil((async () => {
       const targets = await rpc(env, "grcon_vault_maintenance", { operation: "targets", input: {} });
       for (const target of targets || []) {

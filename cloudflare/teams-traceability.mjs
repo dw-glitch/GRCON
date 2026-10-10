@@ -1,4 +1,5 @@
 // Shared runtime for Cloudflare and the compatible Node API. All secrets stay server-side.
+import {sharepointConfig} from './teams-sharepoint.mjs';
 const PREFIX = '/api/egrdt-teams/';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const json = (data, status = 200) => Response.json(data, {status, headers:{'cache-control':'no-store'}});
@@ -67,6 +68,7 @@ export function interactiveCard(payload, attempt) {
   return card;
 }
 export async function prepareTrace(payload, env) {
+  if (env.GRCON_TEAMS_TRANSPORT === 'sharepoint') sharepointConfig(env);
   if (!UUID.test(payload.attemptId || '')) throw error('Identificador da tentativa obrigatório.');
   const result=await traceRpc(env,payload.source.workspaceId,payload.requester.id,'start',{
     attemptId:payload.attemptId,historyRecordId:payload.source.historyRecordId,clientRecordId:payload.source.clientRecordId

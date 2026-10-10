@@ -24,6 +24,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck && npm run build
       - run: node tests/egrdt_teams_traceability.cjs
+      - run: npm run test:teams-sharepoint
       - run: npm install --no-save --package-lock=false playwright@1.55.0
       - run: npx playwright install --with-deps chromium
       - run: node scripts/validar-teams-trace-browser.cjs
