@@ -1,0 +1,54 @@
+name: GRCON - Retorno autenticado do Teams
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+jobs:
+  relay:
+    if: github.actor == github.repository_owner && (github.event_name == 'workflow_dispatch' || startsWith(github.event.issue.title, '[GRCON]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      GRCON_CALLBACK_URL: https://grcon-cloudflare.grcon-qualidade.workers.dev/api/egrdt-teams/github
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validar identidade e sincronizar sem imprimir dados operacionais
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.parse, urllib.error, time, uuid
+          event=json.load(open(os.environ['GITHUB_EVENT_PATH']))
+          repo=event['repository']; issue=event.get('issue')
+          if not repo.get('private'): raise SystemExit('Repositório privado obrigatório')
+          if issue:
+              if issue['user']['id'] != repo['owner']['id']: raise SystemExit('Autor do registro inválido')
+              record=json.loads(issue['body'])
+              if record.get('schema')!='grcon-teams-github-v1': raise SystemExit('Formato de registro inválido')
+          else: record={'schema':'grcon-teams-github-v1','kind':'probe','nonce':str(uuid.uuid4())}
+          audience='grcon-teams-github'
+          oidc_url=os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']+'&audience='+urllib.parse.quote(audience)
+          req=urllib.request.Request(oidc_url,headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          with urllib.request.urlopen(req,timeout=20) as response: token=json.load(response)['value']
+          payload={'repositoryId':str(repo['id']),'issueId':str(issue['id']) if issue else None,'record':record}
+          data=json.dumps(payload,ensure_ascii=False).encode()
+          result=None
+          for attempt in range(3):
+              req=urllib.request.Request(os.environ['GRCON_CALLBACK_URL'],data=data,headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'},method='POST')
+              try:
+                  with urllib.request.urlopen(req,timeout=25) as response: result=json.load(response)
+                  break
+              except urllib.error.HTTPError as error:
+                  if error.code>=500 and attempt<2: time.sleep(3); continue
+                  result={'ok':False,'code':'GRCON_HTTP_'+str(error.code)}; break
+          if not result: raise SystemExit('Retorno GRCON indisponível')
+          if issue:
+              ack={'schema':'grcon-teams-github-ack-v1','state':'confirmed' if result.get('ok') else 'rejected','record':record,'result':result}
+              req=urllib.request.Request('https://api.github.com/repos/'+repo['full_name']+'/issues/'+str(issue['number']),data=json.dumps({'state':'closed','body':json.dumps(ack,ensure_ascii=False)},ensure_ascii=False).encode(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'},method='PATCH')
+              with urllib.request.urlopen(req,timeout=20) as response: response.read()
+          if not result.get('ok'): raise SystemExit('Registro rejeitado pelo GRCON')
+          print('GRCON bridge '+('probe' if not issue else record['kind'])+' PASS')
+          PY

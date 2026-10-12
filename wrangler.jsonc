@@ -5,7 +5,14 @@
   "main": "./cloudflare/worker-entry.mjs",
   "vars": {
     "SUPABASE_URL": "https://kvyrttccwzdhasplfxnr.supabase.co",
-    "R2_BUCKET_NAME": "grcon-documents"
+    "R2_BUCKET_NAME": "grcon-documents",
+    "GRCON_TEAMS_TRANSPORT": "github",
+    "GRCON_TEAMS_TRACEABILITY_ENABLED": "false",
+    "GRCON_TEAMS_GITHUB_REPOSITORY": "dw-glitch/GRCON-Teams-Retorno",
+    "GRCON_TEAMS_GITHUB_REPOSITORY_ID": "1416220792",
+    "GRCON_TEAMS_GITHUB_OWNER_ID": "202873892",
+    "GRCON_MICROSOFT_TENANT_ID": "9f250032-dc8e-488c-b733-d6b3ef6e8685",
+    "GRCON_TEAMS_CONVERSATION_ID": "19:000ba02b2d5a4f46b9b745319994ab9e@thread.v2"
   },
   "r2_buckets": [
     {
@@ -13,7 +20,12 @@
       "bucket_name": "grcon-documents"
     }
   ],
-  "triggers": { "crons": ["17 5 * * *", "* * * * *"] },
+  "triggers": {
+    "crons": [
+      "17 5 * * *",
+      "* * * * *"
+    ]
+  },
   "assets": {
     "directory": "./dist-cloudflare",
     "binding": "ASSETS",
