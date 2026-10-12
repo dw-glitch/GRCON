@@ -48,4 +48,6 @@ for (const path of verifiedAssets) {
   const expected = await readFile(new URL('../' + path, import.meta.url));
   assert.equal(digest(Buffer.from(await response.arrayBuffer())), digest(expected), 'Arquivo publicado difere do pacote validado: ' + path);
 }
+const githubAnonymous = await fetch(new URL('/api/egrdt-teams/github', base), {method:'POST',body:'{}',signal:AbortSignal.timeout(20000)});
+assert.equal(githubAnonymous.status,401,'Retorno GitHub deve exigir OIDC assinado.');
 console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, verifiedAssets, cofreConfigured: true, powerAutomateConfigured: health.powerAutomateConfigured, powerAutomateUrlValid: health.powerAutomateUrlValid, anonymousCatalogStatus: anonymous.status }));

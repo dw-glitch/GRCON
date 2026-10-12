@@ -1,5 +1,6 @@
 import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
 import {syncSharepoint} from './teams-sharepoint.mjs';
+import {handleGithubRoute} from './teams-github.mjs';
 
 const PREFIX = "/api/document-vault/";
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
@@ -707,6 +708,8 @@ export default {
   async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
+      const githubResponse = await handleGithubRoute(request, env);
+      if (githubResponse) return githubResponse;
       if (url.pathname.startsWith(PREFIX)) return await routeVault(request, env, ctx);
       return legacyWorker.fetch(request, env, ctx);
     } catch (error) {

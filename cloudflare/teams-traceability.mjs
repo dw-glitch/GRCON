@@ -1,5 +1,6 @@
 // Shared runtime for Cloudflare and the compatible Node API. All secrets stay server-side.
 import {sharepointConfig} from './teams-sharepoint.mjs';
+import {githubConfig} from './teams-github-config.mjs';
 const PREFIX = '/api/egrdt-teams/';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const json = (data, status = 200) => Response.json(data, {status, headers:{'cache-control':'no-store'}});
@@ -69,6 +70,7 @@ export function interactiveCard(payload, attempt) {
 }
 export async function prepareTrace(payload, env) {
   if (env.GRCON_TEAMS_TRANSPORT === 'sharepoint') sharepointConfig(env);
+  if (env.GRCON_TEAMS_TRANSPORT === 'github') githubConfig(env);
   if (!UUID.test(payload.attemptId || '')) throw error('Identificador da tentativa obrigatório.');
   const result=await traceRpc(env,payload.source.workspaceId,payload.requester.id,'start',{
     attemptId:payload.attemptId,historyRecordId:payload.source.historyRecordId,clientRecordId:payload.source.clientRecordId
@@ -78,6 +80,14 @@ export async function prepareTrace(payload, env) {
   payload.egrdt.number=a.egrdt_number;payload.egrdt.items=a.documents;payload.egrdt.documentCount=a.documents.length;
   payload.traceability={attemptId:a.id,workspaceId:a.workspace_id,contractId:a.contract_id,contractCode:a.contract_code,expiresAt:a.expires_at};
   return result;
+}
+export function callbackPresentation(a) {
+      const card={type:'AdaptiveCard',version:'1.2',body:[{type:'TextBlock',text:`${a.egrdt_number} · ${a.contract_code}`,weight:'Bolder',wrap:true},{type:'TextBlock',text:a.confirmed_at ? `✅ Postagem ${a.confirmation_type==='partial'?'parcial':'total'} declarada por ${a.confirmed_by_name} em ${new Date(a.confirmed_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}. ${a.confirmed_documents.length} de ${a.documents.length} documentos confirmados. Acompanhar conferência no SIGEM.` : 'Solicitação enviada. Aguardar confirmação.',wrap:true},
+        {type:'TextBlock',text:'Revisões enviadas na GRDT',weight:'Bolder',wrap:true},
+        ...a.documents.map(d=>({type:'TextBlock',text:[`${d.document} · Rev. ${d.revision}`,d.discipline || 'Não informada',d.purpose].filter(Boolean).join(' · '),wrap:true,spacing:'Small'})),
+        {type:'TextBlock',text:'Enviado pelo GRCON',isSubtle:true,size:'Small',wrap:true}
+      ]};
+      return {updatedCard:card,confirmationText:a.confirmed_at ? `✅ POSTAGEM CONFIRMADA — GRCON\neGRDT: ${a.egrdt_number}\nContrato: ${a.contract_code}\nDocumentos: ${a.confirmed_documents.length}/${a.documents.length}\nConfirmado por: ${a.confirmed_by_name}\nData/hora: ${new Date(a.confirmed_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}\nOrigem: Microsoft Teams\nPostagem declarada pelo funcionário. Acompanhar conferência no SIGEM.` : null};
 }
 export async function handleTraceRoute(request,env) {
   const url=new URL(request.url);
@@ -103,12 +113,7 @@ export async function handleTraceRoute(request,env) {
       const result=await traceRpc(env,data.workspaceId,null,data.event,input);
       const a=result.attempt;
       if (!a) return json({ok:true,...result});
-      const card={type:'AdaptiveCard',version:'1.2',body:[{type:'TextBlock',text:`${a.egrdt_number} · ${a.contract_code}`,weight:'Bolder',wrap:true},{type:'TextBlock',text:a.confirmed_at ? `✅ Postagem ${a.confirmation_type==='partial'?'parcial':'total'} declarada por ${a.confirmed_by_name} em ${new Date(a.confirmed_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}. ${a.confirmed_documents.length} de ${a.documents.length} documentos confirmados. Acompanhar conferência no SIGEM.` : 'Solicitação enviada. Aguardar confirmação.',wrap:true},
-        {type:'TextBlock',text:'Revisões enviadas na GRDT',weight:'Bolder',wrap:true},
-        ...a.documents.map(d=>({type:'TextBlock',text:[`${d.document} · Rev. ${d.revision}`,d.discipline || 'Não informada',d.purpose].filter(Boolean).join(' · '),wrap:true,spacing:'Small'})),
-        {type:'TextBlock',text:'Enviado pelo GRCON',isSubtle:true,size:'Small',wrap:true}
-      ]};
-      return json({ok:true,...result,updatedCard:card,confirmationText:a.confirmed_at ? `✅ POSTAGEM CONFIRMADA — GRCON\neGRDT: ${a.egrdt_number}\nContrato: ${a.contract_code}\nDocumentos: ${a.confirmed_documents.length}/${a.documents.length}\nConfirmado por: ${a.confirmed_by_name}\nData/hora: ${new Date(a.confirmed_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}\nOrigem: Microsoft Teams\nPostagem declarada pelo funcionário. Acompanhar conferência no SIGEM.` : null});
+      return json({ok:true,...result,...callbackPresentation(a)});
     }
     if(['page','detail'].includes(route) && request.method==='GET') {
       const user=await actor(request,env),w=workspace(url.searchParams.get('workspace'));
