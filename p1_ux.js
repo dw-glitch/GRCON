@@ -382,10 +382,10 @@
   function installConfirmations() {
     protectButton("export-egrdt", () => ({
       preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
-      title: "Confirmar a eGRDT final",
+      title: "Confirmar download somente da eGRDT",
       message: "Revise este resumo antes de gerar o arquivo que será usado na postagem.",
       facts: selectedFacts(),
-      confirmLabel: "Baixar eGRDT final",
+      confirmLabel: "Baixar somente eGRDT",
       requireSequenceConfirmation: true,
       batchMode: "all",
       audit: () => window.GrconOutputPreview?.(),
