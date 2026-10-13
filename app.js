@@ -2974,33 +2974,35 @@
   ]);
 
   function resultColumnValue(row, keyName) {
+    // Avalia somente a coluna solicitada: antes cada filtro calculava todos os
+    // 22 campos, inclusive repetidas consultas ao Apêndice e à estrutura LD.
     const record = row && row.record || {};
-    const values = {
-      situation: compactDecisionLabel(row),
-      originalFile: [row && row.name, ...(row && row.files || []).map((entry) => entry.name)].filter(Boolean).join(" | "),
-      document: row && row.document,
-      ldCode: apendiceInfo(row).ldCode,
-      apendiceSearch: apendiceInfo(row).search,
-      tagged: apendiceInfo(row).tagged,
-      sheet: row && row.sheet,
-      ldRevision: record.revision,
-      targetRevision: row && row.revision,
-      revisionManual: row && row.revisionManual ? "Sim" : "Não",
-      title: record.title,
-      effectiveDate: formatDateBR(ldValue(record, "DATA EFETIVA DE EMISSÃO") || record.effectiveDate),
-      grdt: record.grdt || row && row.grdt,
-      technicalStatus: record.status,
-      sigemStatus: record.sigemStatus,
-      targetStatus: row && row.status,
-      postingStatus: row && (row.postingStatus || row.postingEvidence && row.postingEvidence.status),
-      fiscalComment: record.fiscalComment,
-      allocation: record.allocation,
-      allocationStage: record.allocationStage || ldValue(record, "ETAPA DA ALOCAÇÃO"),
-      allocationStatus: record.allocationStatus || row && row.allocationStatus,
-      databook: record.databook,
-      finalFile: row && row.finalName,
-    };
-    return values[keyName] || "";
+    switch (keyName) {
+      case "situation": return compactDecisionLabel(row);
+      case "originalFile": return [row?.name, ...(row?.files || []).map(entry => entry.name)].filter(Boolean).join(" | ");
+      case "document": return row?.document || "";
+      case "ldCode": return apendiceInfo(row).ldCode || "";
+      case "apendiceSearch": return apendiceInfo(row).search || "";
+      case "tagged": return apendiceInfo(row).tagged || "";
+      case "sheet": return row?.sheet || "";
+      case "ldRevision": return record.revision || "";
+      case "targetRevision": return row?.revision || "";
+      case "revisionManual": return row?.revisionManual ? "Sim" : "Não";
+      case "title": return record.title || "";
+      case "effectiveDate": return formatDateBR(ldValue(record, "DATA EFETIVA DE EMISSÃO") || record.effectiveDate);
+      case "grdt": return record.grdt || row?.grdt || "";
+      case "technicalStatus": return record.status || "";
+      case "sigemStatus": return record.sigemStatus || "";
+      case "targetStatus": return row?.status || "";
+      case "postingStatus": return row?.postingStatus || row?.postingEvidence?.status || "";
+      case "fiscalComment": return record.fiscalComment || "";
+      case "allocation": return record.allocation || "";
+      case "allocationStage": return record.allocationStage || ldValue(record, "ETAPA DA ALOCAÇÃO") || "";
+      case "allocationStatus": return record.allocationStatus || row?.allocationStatus || "";
+      case "databook": return record.databook || "";
+      case "finalFile": return row?.finalName || "";
+      default: return "";
+    }
   }
 
   // state.columnFilters[key] guarda os valores NORMALIZADOS marcados
