@@ -177,6 +177,7 @@ async function validateDocumentRestoration(page) {
   await page.evaluate(() => { window.GrconCloud = window.__restoreOriginalCloud; });
   await resetFilters(page);
   await installFixtureAdapters(page);
+  await page.waitForFunction(() => document.querySelector("#grcon-context-mascot")?.getAttribute("data-pose") === "history", null, { timeout: 15000 });
   console.log("Histórico: busca de excluídos, cancelamento e restauração na GRDT original passaram no Chromium.");
 }
 
@@ -326,6 +327,7 @@ async function setSharedHistoryFixture(page, enabled) {
 
     await installFixtureAdapters(page);
     await expectCount(page, 3);
+    await validateDocumentRestoration(page);
     assert.equal(await page.locator("#history-list [data-history-id]").count(), 3);
     await shot(page, "02-history-egrdt-results-1366.png");
 
@@ -591,11 +593,6 @@ async function setSharedHistoryFixture(page, enabled) {
     assert.ok(dateFilterMs < 2000, "filtro de data deve permanecer fluido");
     assert.ok(searchMs < 2500, "busca com debounce deve permanecer fluida");
     assert.ok(selectMs < 1500, "seleção deve permanecer fluida");
-
-    // Execute after the geometry checks: restoring intentionally triggers the
-    // success pose before the mascot returns to its normal history context.
-    await resetFilters(page);
-    await validateDocumentRestoration(page);
 
     assert.deepEqual(errors, []);
     console.log("historico-egrdt-browser FASE B: PASS");
