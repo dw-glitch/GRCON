@@ -54,15 +54,19 @@
       row.allocation,row.purpose,row.statusLabel,row.note].some(value=>
       norm(value).includes(term));
   }
-  function filter(data,view,query,filters){
+  function filter(data,view,query,filters,sort){
     const source=rowsForView(data,view),term=norm(query),list=tokenizeList(query);
     const batch=list.length>1,found=new Set(),wanted=new Set(list);
     let rows=source.filter(row=>{
-      if(!batch)return !term||matches(row,term);
+      if(!batch)return !term||matches(row,term)||
+        (view==="grdts"&&(row.rows||[]).some(item=>matches(item,term)));
       let hit=false;
-      for(const key of C.documentKeys(row.document)){
-        const code=norm(key);
-        if(wanted.has(code)){found.add(code);hit=true;}
+      const candidates=view==="grdts"?(row.rows||[]):[row];
+      for(const item of candidates){
+        for(const key of C.documentKeys(item.document)){
+          const code=norm(key);
+          if(wanted.has(code)){found.add(code);hit=true;}
+        }
       }
       return hit;
     });
@@ -80,13 +84,31 @@
       const revisionMatch=!f.revision||(isGrdt?
         row.rows.some(r=>revision(r.revisionSent)===revision(f.revision)):
         revision(row.revisionSent)===revision(f.revision));
+      const candidates=isGrdt?row.rows||[]:[row];
       return statusMatch&&revisionMatch&&
-        (!f.allocationState||row.allocationState===f.allocationState)&&
+        (!f.allocationState||candidates.some(item=>item.allocationState===f.allocationState))&&
+        (!f.discipline||candidates.some(item=>norm(item.discipline)===norm(f.discipline)))&&
+        (!f.purpose||candidates.some(item=>norm(item.purpose).includes(norm(f.purpose))))&&
+        (!f.fiscal||candidates.some(item=>norm([item.fiscalComment,item.fiscal2Comment].join(" ")).includes(norm(f.fiscal))))&&
+        (!f.reposts||candidates.some(item=>(item.repostCount||0)>0))&&
         (!f.start||text(row.generatedAt).slice(0,10)>=f.start)&&
         (!f.end||text(row.generatedAt).slice(0,10)<=f.end);
     });
-    return {rows,missing:batch?list.filter(code=>!found.has(code)):[],
+    return {rows:sortRows(rows,sort),missing:batch?list.filter(code=>!found.has(code)):[],
       listMode:batch,searched:list.length};
+  }
+  function sortRows(rows,sort){
+    if(!sort?.key)return rows;
+    const {key,dir="asc"}=sort,desc=dir==="desc"?-1:1;
+    return rows.slice().sort((a,b)=>{
+      const av=a[key],bv=b[key];
+      if(key==="revisionSent"||key==="revisionFound")
+        return desc*(C.revisionRank(av)-C.revisionRank(bv));
+      if(key==="generatedAt")return desc*(Date.parse(av||0)-Date.parse(bv||0));
+      if(typeof av==="number"||typeof bv==="number")
+        return desc*(Number(av||0)-Number(bv||0));
+      return desc*text(av).localeCompare(text(bv),"pt-BR",{numeric:true,sensitivity:"base"});
+    });
   }
   function csv(rows,keys){
     const columns=Array.isArray(keys)?keys:A.COLUMNS.map(item=>item[0]);
@@ -95,5 +117,5 @@
     return "\uFEFF"+[columns.map(k=>escape(labels[k]||k)).join(";"),
       ...rows.map(row=>columns.map(k=>escape(row[k])).join(";"))].join("\r\n");
   }
-  return Object.freeze({build,consolidate,filter,rowsForView,tokenizeList,csv});
+  return Object.freeze({build,consolidate,filter,rowsForView,tokenizeList,sortRows,csv});
 });
