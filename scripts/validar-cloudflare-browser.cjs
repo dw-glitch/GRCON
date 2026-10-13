@@ -122,6 +122,20 @@ async function probe(page, pathname) {
     await waitForServiceWorker(page);
     await waitForCloudAuthBypass(page);
 
+    // O navegador aplica o CSP do cabeçalho HTTP junto ao meta do HTML.
+    // Uma imagem sintética testa o host privado sem usar fotos ou tokens reais.
+    const avatarUrl = "https://kvyrttccwzdhasplfxnr.supabase.co/storage/v1/object/sign/grcon-profile-photos/fixture/avatar.webp?token=fixture";
+    await page.route(avatarUrl, route => route.fulfill({ status: 200, contentType: "image/png",
+      body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1kAAAAASUVORK5CYII=", "base64") }));
+    const avatarLoaded = await page.evaluate(url => new Promise(resolve => {
+      const image = new Image();
+      image.onload = () => resolve(image.naturalWidth > 0);
+      image.onerror = () => resolve(false);
+      image.src = url;
+    }), avatarUrl);
+    assert.equal(avatarLoaded, true, "CSP Cloudflare deve permitir a imagem privada do perfil.");
+    await page.unroute(avatarUrl);
+
     await page.waitForFunction(() => Boolean(window.GRCONModuleLoader), null, { timeout: 15000 });
     await page.waitForFunction(() => Boolean(window.GrconMascot), null, { timeout: 15000 });
 

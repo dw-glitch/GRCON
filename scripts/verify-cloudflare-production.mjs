@@ -9,6 +9,9 @@ assert.ok(/^[0-9a-f]{40}$/.test(expectedCommit || ''), 'Commit esperado obrigat�
 async function get(path) {
   return fetch(new URL(path, base), { cache: 'no-store', signal: AbortSignal.timeout(20000) });
 }
+const rootResponse = await get('/?verify=' + expectedCommit);
+assert.equal(rootResponse.status, 200, 'Página inicial publicada indisponível.');
+assert.match(rootResponse.headers.get('content-security-policy') || '', /img-src[^;]+https:\/\/kvyrttccwzdhasplfxnr\.supabase\.co/, 'CSP publicada deve permitir a foto privada do perfil.');
 let metadata;
 for (let attempt = 0; attempt < 6; attempt++) {
   const response = await get('/deployment-meta.json?verify=' + expectedCommit);

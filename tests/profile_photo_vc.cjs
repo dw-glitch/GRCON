@@ -15,6 +15,20 @@ assert.match(html, /grcon-profile-avatar\.css/);
 assert.match(html, /grcon-profile-avatar\.js/);
 assert.ok(html.indexOf('src="grcon_cloud_app.js"') < html.indexOf('src="grcon-profile-avatar.js"'));
 assert.match(html, /img-src[^;]+https:\/\/kvyrttccwzdhasplfxnr\.supabase\.co/);
+// Todas as políticas se aplicam cumulativamente. Liberar apenas o <meta>
+// mantém a foto bloqueada pelo cabeçalho HTTP do provedor.
+const policies = [
+  ["HTML", html.match(/<meta content="([^"]+)" http-equiv="Content-Security-Policy"/)[1]],
+  ["Cloudflare", read("cloudflare/_headers").match(/Content-Security-Policy: ([^\n]+)/)[1]],
+  ...JSON.parse(read("vercel.json")).headers.flatMap(rule => rule.headers
+    .filter(header => header.key === "Content-Security-Policy").map(header => ["Vercel", header.value])),
+];
+for (const [provider, policy] of policies) {
+  const images = policy.split(";").map(value => value.trim()).find(value => value.startsWith("img-src ")).split(/\s+/).slice(1);
+  assert.ok(images.includes("https://kvyrttccwzdhasplfxnr.supabase.co"), provider + ": fotos privadas precisam ser aceitas");
+  assert.ok(!images.includes("*") && !images.includes("https:"), provider + ": não liberar imagens de qualquer origem");
+  assert.match(policy, /wss:\/\/kvyrttccwzdhasplfxnr\.supabase\.co/, provider + ": Realtime continua autorizado");
+}
 assert.match(avatar, /grcon:cloud-ready/);
 assert.match(avatar, /grcon:cloud-signed-out/);
 assert.match(avatar, /createSignedUrl\(keyFor\(id\), SIGNED_URL_TTL\)/);

@@ -39,6 +39,7 @@ export function useHistoricoEgrdt() {
   const [exporting, setExporting] = useState(false);
   const [exportingAudit, setExportingAudit] = useState(false);
   const [fileStatus, setFileStatus] = useState<"active" | "removed" | "all">("active");
+  const [showRemovedOnly, setShowRemovedOnly] = useState(false);
   const [pendingRemoval, setPendingRemoval] = useState<number | null>(null);
   const [removalReason, setRemovalReason] = useState("");
   const [removalDetails, setRemovalDetails] = useState("");
@@ -89,10 +90,10 @@ export function useHistoricoEgrdt() {
 
   const filteredResult = useMemo(() => {
     const started = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
-    const rows = Adapter.filterRecords(records, effectiveFilters);
+    const rows = Adapter.filterRecords(records, effectiveFilters, showRemovedOnly);
     const ended = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
     return { rows, elapsed: Math.round((ended - started) * 100) / 100 };
-  }, [records, effectiveFilters]);
+  }, [records, effectiveFilters, showRemovedOnly]);
 
   const filtered = filteredResult.rows;
   const visibleRecords = useMemo(
@@ -125,7 +126,14 @@ export function useHistoricoEgrdt() {
   }, [filteredResult.elapsed, visibleRecords.length, filtered.length, records.length]);
 
   const filterOptions = useMemo(() => Adapter.filterOptions(records), [records]);
-  const summary = useMemo(() => Adapter.summary(filtered), [filtered]);
+  const summary = useMemo(() => Adapter.summary(filtered, showRemovedOnly), [filtered, showRemovedOnly]);
+  const totalRemovedCount = useMemo(() => records.reduce((total, record) => total + (record.removedFiles?.length || 0), 0), [records]);
+  const setRemovedView = useCallback((removedOnly: boolean) => {
+    setShowRemovedOnly(removedOnly);
+    setFileStatus(removedOnly ? "removed" : "active");
+    setVisibleLimit(LIST_PAGE_SIZE);
+    setPendingRemoval(null);
+  }, []);
   const selectedRecord = useMemo(
     () => records.find((record) => record.id === selectedId) || null,
     [records, selectedId],
@@ -279,6 +287,8 @@ export function useHistoricoEgrdt() {
     setFileActionBusy(true);
     try {
       await Adapter.manageFile(selectedRecord, "restore", { removalId });
+      setShowRemovedOnly(false);
+      setFileStatus("active");
       refresh();
       Adapter.notify("Documento restaurado no histórico operacional.", "success");
     } catch (error) {
@@ -339,6 +349,9 @@ export function useHistoricoEgrdt() {
 
   return {
     loading,
+    showRemovedOnly,
+    totalRemovedCount,
+    setRemovedView,
     removedCount,
     exportingAudit,
     exportRemovedAudit,

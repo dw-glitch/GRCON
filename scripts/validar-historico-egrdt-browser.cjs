@@ -127,6 +127,60 @@ async function resetFilters(page) {
   await page.waitForTimeout(170);
 }
 
+async function validateDocumentRestoration(page) {
+  const removedRecord = { ...fixtures[0], files: [], allocations: [],
+    cloudId: "fixture-cloud-history", cloudUpdatedAt: "2026-10-13T12:00:00Z", workspaceId: "fixture-restore",
+    removedFiles: [{ id: "fixture-removal", file: fixtures[0].files[0], reason: "Retirada de teste",
+      removedAt: "2026-10-13T12:00:00Z", removedBy: "fixture-admin" }] };
+  await installFixtureAdapters(page, [removedRecord, fixtures[1]]);
+  await page.evaluate(() => {
+    window.__restoreOriginalCloud = window.GrconCloud;
+    window.__restoreCalls = [];
+    window.GrconCloud = { ...window.GrconCloud,
+      state: { ...window.GrconCloud?.state, online: true, membership: { workspace_id: "fixture-restore" } },
+      canManageHistory: () => true,
+      manageHistoryFile: async (record, operation, options) => {
+        window.__restoreCalls.push({ recordId: record.id, operation, removalId: options.removalId });
+        const target = window.__historyFixtureRecords.find(item => item.id === record.id);
+        const entry = target.removedFiles.find(item => item.id === options.removalId);
+        const next = window.GrconHistory.cleanRecord({ ...target, files: [...target.files, entry.file],
+          removedFiles: target.removedFiles.filter(item => item.id !== entry.id) });
+        window.__historyFixtureRecords = window.__historyFixtureRecords.map(item => item.id === next.id ? next : item);
+        return { record: next, removalId: entry.id };
+      },
+    };
+    window.dispatchEvent(new CustomEvent("grcon:history-updated"));
+  });
+  await page.locator("#history-search").fill(fixtures[0].files[0].document);
+  await expectCount(page, 0);
+  await page.locator("#history-show-removed").click();
+  await expectCount(page, 1);
+  assert.equal(await page.getByRole("combobox", { name: "Situação dos documentos no histórico" }).inputValue(), "removed");
+  assert.equal(await page.locator("#history-export-period").isDisabled(), true);
+  assert.equal(await page.evaluate(() => window.GrconHistoryUi.state.filtered[0].files.length), 0);
+  const restoreButton = page.getByRole("button", { name: "Restaurar", exact: true });
+  await restoreButton.waitFor({ state: "visible" });
+  page.once("dialog", dialog => dialog.dismiss());
+  await restoreButton.click();
+  assert.equal(await page.evaluate(() => window.__restoreCalls.length), 0, "cancelar preserva o documento excluído");
+  page.once("dialog", dialog => dialog.accept());
+  await restoreButton.click();
+  await page.waitForFunction(() => document.querySelector("#history-show-removed")?.getAttribute("aria-pressed") === "false");
+  await expectCount(page, 1);
+  assert.equal(await page.getByRole("combobox", { name: "Situação dos documentos no histórico" }).inputValue(), "active");
+  assert.deepEqual(await page.evaluate(() => window.__restoreCalls), [{ recordId: fixtures[0].id, operation: "restore", removalId: "fixture-removal" }]);
+  const restored = await page.evaluate(() => window.__historyFixtureRecords[0]);
+  assert.equal(restored.files[0].document, fixtures[0].files[0].document);
+  assert.equal(restored.files[0].revision, fixtures[0].files[0].revision);
+  assert.equal(restored.egrdtNumber, fixtures[0].egrdtNumber);
+  assert.equal(restored.removedFiles.length, 0);
+  await page.evaluate(() => { window.GrconCloud = window.__restoreOriginalCloud; });
+  await resetFilters(page);
+  await installFixtureAdapters(page);
+  await page.waitForFunction(() => document.querySelector("#grcon-context-mascot")?.getAttribute("data-pose") === "history", null, { timeout: 15000 });
+  console.log("Histórico: busca de excluídos, cancelamento e restauração na GRDT original passaram no Chromium.");
+}
+
 async function shot(page, name, fullPage = true) {
   await page.screenshot({ path: path.join(artifactDir, name), fullPage });
 }
@@ -273,6 +327,7 @@ async function setSharedHistoryFixture(page, enabled) {
 
     await installFixtureAdapters(page);
     await expectCount(page, 3);
+    await validateDocumentRestoration(page);
     assert.equal(await page.locator("#history-list [data-history-id]").count(), 3);
     await shot(page, "02-history-egrdt-results-1366.png");
 
