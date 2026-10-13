@@ -58,9 +58,24 @@
   }
   function table(s){
     const scroll=$("#sigem-central-table-scroll"),keys=visibleKeys(s);
-    $("#sigem-central-thead").innerHTML='<tr>'+keys.map(key=>
-      '<th>'+h((C.COLUMNS.find(v=>v[0]===key)||[])[1]||key)+'</th>').join("")+'</tr>';
-    scroll.scrollTop=0;
+    $("#sigem-central-thead").innerHTML='<tr>'+keys.map(key=>{
+      const label=(C.COLUMNS.find(v=>v[0]===key)||[])[1]||key;
+      const active=s.sort?.key===key,arrow=active?(s.sort.dir==="desc"?" ↓":" ↑"):"";
+      const width=Number(s.widths?.[key]||0);
+      return '<th'+(active?' aria-sort="'+(s.sort.dir==="desc"?"descending":"ascending")+'"':'')+
+        (width>=90&&width<=600?' style="width:'+width+'px;min-width:'+width+'px"':'')+
+        '><button type="button" class="scc-sort" data-scc-sort="'+h(key)+'">'+h(label+arrow)+'</button></th>';
+    }).join("")+'</tr>';
+    scroll.querySelector("colgroup")?.remove();
+    const colgroup=document.createElement("colgroup");
+    keys.forEach(key=>{
+      const col=document.createElement("col"),width=Number(s.widths?.[key]||0);
+      if(width>=90&&width<=600)col.style.width=width+"px";
+      colgroup.appendChild(col);
+    });
+    scroll.querySelector("table").prepend(colgroup);
+    if(!s.keepScroll)scroll.scrollTop=0;
+    s.keepScroll=false;
     drawRows(s);
   }
   function detail(s,index){
@@ -87,8 +102,19 @@
     panel.querySelector(".scc-close").focus();
   }
   function settings(s){
-    $("#sigem-central-settings-body").innerHTML=C.COLUMNS.map(([key,label])=>
-      '<label><input type="checkbox" data-scc-column="'+h(key)+'" '+(s.columns.includes(key)?"checked":"")+' /> '+h(label)+'</label>').join("");
+    const columns=s.columns,known=new Map(C.COLUMNS);
+    $("#sigem-central-settings-body").innerHTML=C.COLUMNS.map(([key,label])=>{
+      const index=columns.indexOf(key),visible=index>=0;
+      return '<div class="scc-column-option"><label><input type="checkbox" data-scc-column="'+h(key)+
+        '" '+(visible?"checked":"")+'/> '+h(label)+'</label>'+
+        (visible?'<div><button type="button" data-scc-move="'+h(key)+'" data-scc-direction="-1" '+
+        (index===0?'disabled':'')+' aria-label="Mover '+h(label)+' para a esquerda">←</button>'+
+        '<button type="button" data-scc-move="'+h(key)+'" data-scc-direction="1" '+
+        (index===columns.length-1?'disabled':'')+' aria-label="Mover '+h(label)+' para a direita">→</button>'+
+        '<input type="number" min="90" max="600" step="10" value="'+Number(s.widths?.[key]||180)+
+        '" data-scc-width="'+h(key)+'" aria-label="Largura de '+h(label)+' em pixels"/></div>':'')+
+        '</div>';
+    }).join("");
   }
   function draw(s){
     const meta=s.data.meta||{};
