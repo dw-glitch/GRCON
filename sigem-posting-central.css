@@ -124,3 +124,8 @@
 html[data-theme="dark"] #sigem-module :is(.scc-kpi,.scc-table-viewport,.scc-detail,.scc-column-pop,.scc-list,.scc-query input,.scc-filters input,.scc-filters select,.scc-preset-label select,.scc-column-filter) { background:var(--surface-1,#122638); color:var(--text-1,#e5edf4); border-color:var(--border-1,#355064); }
 html[data-theme="dark"] #sigem-module :is(.scc-heading h2,.scc-detail h3,.scc-kpi strong,.scc-views button,.scc-facts dt,.scc-column-pop label) { color:var(--text-1,#e5edf4); }
 html[data-theme="dark"] #sigem-module :is(.scc-base,.scc-table thead th) { background:var(--surface-2,#1b344a);color:var(--text-1,#e5edf4); }
+#sigem-module .scc-list[hidden],#sigem-module .scc-filters label[hidden] { display: none!important; }
+#sigem-module #scc-evolution-panel select { max-width: 300px; width: 300px; }
+#sigem-module .scc-target { display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--border-1,#dce8ed);padding:10px 0; }
+#sigem-module .scc-target span { color:var(--text-2,#536e80);font-size:12px; }
+#sigem-module .scc-target button,#sigem-module #scc-tracking-refresh { padding:6px 10px;border:1px solid var(--border-1,#cbdce6);border-radius:6px;cursor:pointer; }

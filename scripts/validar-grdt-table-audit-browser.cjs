@@ -29,12 +29,15 @@ docs.forEach(doc=>fs.writeFileSync(path.join(output,'bundle',`${doc}_0001_0.pdf`
   const metrics=[];
   for(const density of ['comfortable','compact']){
    await page.locator('#triage-density').selectOption(density);
-   await page.waitForTimeout(150);
+   await page.waitForFunction(()=>{
+    const first=document.querySelector('#results-table thead th:first-child'),doc=document.querySelector('#results-table thead th:nth-child(3)');
+    return Math.abs(first.offsetWidth-parseFloat(getComputedStyle(doc).left))<2;
+   },null,{timeout:5000});
    metrics.push(await page.evaluate(()=>{
     const first=document.querySelector('#results-table thead th:first-child'),doc=document.querySelector('#results-table thead th:nth-child(3)');
     return {density:window.GrconTriageUiApi.snapshot().density,zoom:getComputedStyle(document.documentElement).zoom,scale:first.getBoundingClientRect().width/first.offsetWidth,offset:first.offsetWidth,cellDisplay:getComputedStyle(document.querySelector("td.revision-grdt-cell")).display,inline:doc.getAttribute("style"),width:first.getBoundingClientRect().width,left:parseFloat(getComputedStyle(doc).left),heights:[...document.querySelectorAll('tr.result-row')].map(n=>n.getBoundingClientRect().height)};
    }));
-   const m=metrics.at(-1);assert.ok(Math.abs(m.offset-m.left)<2,'colunas fixas sem sobreposição');
+   const m=metrics.at(-1);assert.ok(Math.abs(m.offset-m.left)<2,'colunas fixas sem sobreposição: '+JSON.stringify(m));
    await page.evaluate(()=>{const el=document.getElementById('results-scroll');el.scrollTop=el.scrollHeight;});
    await page.waitForTimeout(180);
    assert.match(await page.locator('#results-body').innerText(),new RegExp(await page.evaluate(()=>{const api=window.GrconTriageUiApi;return api.getResult(api.filteredIndices().at(-1)).document;})));

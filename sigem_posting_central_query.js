@@ -60,6 +60,7 @@
     return [...new Set(String(raw||"").split(/[\r\n;,|\t]+/).map(text).filter(Boolean).map(norm))];
   }
   function rowsForView(data,view){
+    if(view==="evolucao")return data.evolution||[];
     if(view==="grdts")return data.grdts;
     if(view==="revisoes")return data.revisions;
     if(view==="pendencias")return data.documents.filter(r=>
@@ -71,7 +72,7 @@
     if(!searchCache.has(row))searchCache.set(row,norm([
       row.document,row.title,row.egrdtNumber,row.latestEgrdtNumber,row.revisionSent,
       row.revisionFound,row.sigemStatus,row.discipline,row.allocation,row.purpose,
-      row.statusLabel,row.note,row.egrdtHistory
+      row.statusLabel,row.note,row.egrdtHistory,row.previousStatus,row.currentStatus,row.changeType
     ].filter(Boolean).join(" ")));
     return searchCache.get(row).includes(term);
   }
@@ -97,6 +98,8 @@
     }
     const f=filters||{};
     const memberMatch=item=>
+      (!f.changeType||(f.changeType==='PENDENCIAS_RESOLVIDAS'?item.pendingResolved:f.changeType==='DIVERGENCIAS'?item.divergence:f.changeType==='MUDANCAS_DE_STATUS'?['MUDANCA_DE_STATUS','ENTROU_EM_ANALISE','SAIU_DE_ANALISE'].includes(item.changeType):item.changeType===f.changeType))&&
+      (!f.onlyMonitored||item.monitored)&&
       (!f.status||item.status===f.status)&&
       (!f.revision||revision(item.revisionSent)===revision(f.revision))&&
       (!f.allocationState||item.allocationState===f.allocationState)&&

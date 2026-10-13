@@ -24,7 +24,8 @@
     const confirmed=rows.filter(r=>grdt?r.total>0&&r.confirmed===r.total:r.status==="CONFIRMADO").length;
     const pending=rows.filter(r=>grdt?(r.awaiting+r.notFound)>0:["AGUARDANDO","NAO_ENCONTRADO"].includes(r.status)).length;
     const divergent=rows.filter(r=>grdt?(r.divergent+r.review)>0:["REVISAO_DIVERGENTE","REQUER_ANALISE"].includes(r.status)).length;
-    const values=[["Resultados",total],[grdt?"GRDTs identificadas":"Identificados",confirmed],[grdt?"GRDTs c/ pendências":"Aguardando",pending],[grdt?"GRDTs divergentes":"Divergentes",divergent]];
+    let values=[["Resultados",total],[grdt?"GRDTs identificadas":"Identificados",confirmed],[grdt?"GRDTs c/ pendências":"Aguardando",pending],[grdt?"GRDTs divergentes":"Divergentes",divergent]];
+    if(s.view==='evolucao')values=[["Documento + revisão",total],["Com alteração",rows.filter(r=>r.changeType!=='SEM_ALTERACAO').length],["Localizados nesta versão",rows.filter(r=>r.changeType==='NOVO_NA_CONSULTA').length],["Sem alteração",rows.filter(r=>r.changeType==='SEM_ALTERACAO').length]];
     $("#sigem-central-kpis").innerHTML=values.map(([label,count])=>
       '<div class="scc-kpi"><strong>'+count.toLocaleString("pt-BR")+'</strong><span>'+label+'</span></div>').join("");
     $("#sigem-central-count").textContent=total.toLocaleString("pt-BR")+" resultado(s)";
@@ -108,7 +109,7 @@
     $("#sigem-central-detail-body").innerHTML=
       '<h3>'+h(row.document)+'</h3><p>'+h(row.title||"Sem título")+'</p>'+
       '<dl class="scc-facts">'+
-      [["Conferência",row.statusLabel],["Revisão enviada",row.revisionSent],["Revisão SIGEM",row.revisionFound],
+      [["Status anterior",row.previousStatus],["Status atual",row.currentStatus],["Base anterior",row.previousBaseDate],["Base atual",row.currentBaseDate],["Conferência",row.statusLabel],["Revisão enviada",row.revisionSent],["Revisão SIGEM",row.revisionFound],
         ["Status SIGEM",row.sigemStatus],["Última GRDT",row.egrdtNumber||row.latestEgrdtNumber],
         ["Alocação",row.allocation],["Situação da alocação",row.allocationState],["Workflow",row.allocationWorkflow],["Status da alocação",row.allocationCurrentStatus],["Fonte de alocação",row.allocationSource],["Fonte dos comentários",row.fiscalSource],
         ["Fiscal 01",row.fiscalComment],["Fiscal 02",row.fiscal2Comment],
@@ -125,7 +126,7 @@
         '<span>'+h(r.statusLabel||"—")+' · '+h(r.purpose||"Propósito não informado")+'</span></div>').join("")+'</div>'+
       '<div class="scc-actions"><button type="button" data-scc-copy-code>Copiar código</button>'+
       (row.rows?'<button type="button" data-scc-copy-pending>Copiar itens selecionados</button><button type="button" data-scc-prepare-pending>Preparar pendências na Central de GRDT</button>':'')+
-      '<button type="button" data-scc-open-control>Controle de GRDT</button><button type="button" data-scc-monitor-document>Acompanhar no monitoramento</button></div>'+
+      ((['owner','admin'].includes(root.GrconCloud?.state?.membership?.role))?(row.rows?'<button type="button" data-scc-monitor-grdt>Monitorar esta GRDT</button>':row.revisionSent?'<button type="button" data-scc-monitor-revision>Monitorar esta revisão</button>':''):'')+'<button type="button" data-scc-open-control>Controle de GRDT</button><button type="button" data-scc-monitor-document>Acompanhar no monitoramento</button></div>'+
       '<p class="scc-note">Copiar pendências não autoriza repostagem e não comprova envio. O operador deve conferir a Consulta Geral atual antes de qualquer nova GRDT.</p>';
     panel.hidden=false;
     panel.querySelector(".scc-close").focus();
@@ -154,6 +155,9 @@
       "Consulta Geral indisponível: resultados não verificados";
     $("#sigem-central-base").textContent+=" · Histórico: "+(s.data.historyComplete?"compartilhado completo":"cópia local, pode estar incompleto");
     if(s.lastError)$("#sigem-central-base").textContent+=" · Falha na atualização; mostrando a última consulta válida";
+    if(s.view==='evolucao')$("#sigem-central-base").textContent=s.comparison
+      ?'Comparação: '+s.comparison.previous.file_name+' → '+s.comparison.current.file_name
+      :'Evolução: selecione as versões que deseja comparar.';
     summary(s);table(s);
     if(s.showColumns)settings(s);
     $("#sigem-technical-pane").hidden=s.panel!=="technical";

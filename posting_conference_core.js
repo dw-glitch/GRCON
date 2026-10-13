@@ -320,6 +320,7 @@
           purpose,
           historyId: stableId,
           historyRecordId: text(record.id),
+          cloudHistoryId: text(record.cloudId),
           egrdtNumber: text(record.egrdtNumber),
           generatedAt: text(record.generatedAt),
           workspaceId: text(record.workspaceId),

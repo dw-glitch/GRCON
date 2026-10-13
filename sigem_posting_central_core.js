@@ -26,6 +26,7 @@
     ["allocationWorkflow","Workflow da alocação"],["allocationCurrentStatus","Status da alocação"],
     ["allocationSource","Fonte da alocação"],["fiscalSource","Fonte dos comentários"],["sigemStatusRevision","Revisão do status SIGEM"],
     ["sendEvidenceLabel","Evidência do envio"],["teamsDeliveredAt","Entrega no Teams"],["teamsDeclaration","Postagem declarada no Teams"],
+    ["previousConference","Conferência anterior"],["currentConference","Conferência atual"],["previousStatus","Status anterior"],["currentStatus","Status atual"],["changeType","Mudança"],["previousBaseDate","Data da base anterior"],["currentBaseDate","Data da base atual"],
     ["note","Diagnóstico"]
   ]);
   function historyExtras(records) {

@@ -3,10 +3,11 @@
   const $=(s,n)=>(n||document).querySelector(s);
   const Query=root.GrconSigemCentralQuery,View=root.GrconSigemCentralRender;
   const History=root.GrconHistory;
+  const Tracking=root.GrconSigemCentralTracking;
   const DEFAULT=["document","title","revisionSent","revisionFound",
     "statusLabel","sigemStatus","egrdtNumber","generatedAt","sendCount"];
   const state={view:"documentos",panel:"central",query:"",filters:{},columns:DEFAULT.slice(),
-    showColumns:false,sort:{key:"",dir:"asc"},widths:{},keepScroll:false,data:null,filtered:{rows:[],missing:[]},generation:0,pinned:["document"],savedViews:[]};
+    showColumns:false,sort:{key:"",dir:"asc"},widths:{},keepScroll:false,data:null,filtered:{rows:[],missing:[]},generation:0,pinned:["document"],savedViews:[],comparison:null,comparisonRows:[],trackingLoaded:false,viewColumns:{}};
   function workspace(){return root.GrconCloud?.state?.membership?.workspace_id||"unavailable";}
   function storageKey(){return "grcon.sigem.central.preferences.v2:"+workspace()+":"+(root.GrconCloud?.state?.session?.user?.id||"anonymous");}
   function loadColumns(){
@@ -15,6 +16,7 @@
       const valid=new Set(root.GrconSigemCentralCore.COLUMNS.map(c=>c[0]));
       state.columns=Array.isArray(v?.columns)?[...new Set(v.columns.filter(k=>valid.has(k)))]:DEFAULT.slice();
       if(!state.columns.length)state.columns=DEFAULT.slice();
+      state.viewColumns=Object.fromEntries(Object.entries(v?.viewColumns||{}).map(([view,cols])=>[view,Array.isArray(cols)?cols.filter(k=>valid.has(k)):[]]));
       state.widths=v?.widths&&typeof v.widths==="object"?Object.fromEntries(
         Object.entries(v.widths).filter(([k,n])=>valid.has(k)&&Number(n)>=90&&Number(n)<=600)):{};
       state.sort=valid.has(v?.sort?.key)?{key:v.sort.key,dir:v.sort.dir==="desc"?"desc":"asc"}:{key:"",dir:"asc"};
@@ -25,12 +27,12 @@
         pinned:(Array.isArray(item.pinned)?item.pinned:[]).filter(k=>valid.has(k)),
         sort:valid.has(item.sort?.key)?{key:item.sort.key,dir:item.sort.dir==="desc"?"desc":"asc"}:{key:"",dir:"asc"},
         filters:item.filters&&typeof item.filters==="object"?item.filters:{},
-        view:["documentos","grdts","revisoes","pendencias"].includes(item.view)?item.view:"documentos"
+        view:["documentos","grdts","revisoes","pendencias","evolucao"].includes(item.view)?item.view:"documentos"
       })).filter(item=>item.columns.length):[];
     }catch(_){state.pinned=["document"];state.savedViews=[];state.columns=DEFAULT.slice();state.widths={};state.sort={key:"",dir:"asc"};}
   }
   function saveColumns(){try{localStorage.setItem(storageKey(),JSON.stringify({
-    columns:state.columns,widths:state.widths,sort:state.sort,pinned:state.pinned,savedViews:state.savedViews
+    columns:state.view==="evolucao"?(state.viewColumns.documentos||DEFAULT):state.columns,widths:state.widths,sort:state.sort,pinned:state.pinned,savedViews:state.savedViews,viewColumns:{...state.viewColumns,[state.view]:state.columns}
   }));}catch(_){}}
   function notify(msg,type){
     if(typeof root.GrconNotify==="function")root.GrconNotify(msg,type||"info");
@@ -51,9 +53,15 @@
       '<textarea id="scc-list-input" rows="4" placeholder="Códigos separados por linha, vírgula ou ponto e vírgula"></textarea>'+
       '<button type="button" id="scc-clear-list" class="secondary-button compact">Limpar lista</button></div>'+
       '<nav class="scc-views" aria-label="Tipo de consulta">'+
-      [["documentos","Documentos"],["grdts","GRDTs"],["revisoes","Revisões"],["pendencias","Pendências"]]
+      [["documentos","Documentos"],["grdts","GRDTs"],["revisoes","Revisões"],["pendencias","Pendências"],["evolucao","Evolução"]]
        .map(([key,label])=>'<button type="button" data-scc-view="'+key+'"'+(key===state.view?' class="active"':'')+'>'+label+'</button>').join("")+
       '</nav>'+
+      '<section id="scc-evolution-panel" class="scc-list" hidden><strong>Evolução entre versões da Consulta Geral</strong>'+
+      '<div class="scc-filters"><label>Base anterior <select id="scc-previous-base"></select></label><label>Base atual <select id="scc-current-base"></select></label>'+
+      '<button type="button" id="scc-compare-bases" class="primary-button compact">Comparar</button><label>Mudança <select id="scc-change-type"><option value="">Todas</option>'+
+      '<option value="NOVO_NA_CONSULTA">Localizados nesta versão</option><option value="MUDANCAS_DE_STATUS">Mudanças de status</option><option value="PENDENCIAS_RESOLVIDAS">Pendências resolvidas</option><option value="DIVERGENCIAS">Divergências atuais ou resolvidas</option><option value="MUDANCA_DE_INFORMACOES">Mudança de informações</option><option value="ENTROU_EM_ANALISE">Entrou em análise</option><option value="SAIU_DE_ANALISE">Saiu de análise</option><option value="REMOVIDO_DA_CONSULTA">Ausentes nesta versão</option><option value="SEM_ALTERACAO">Sem alteração</option></select></label>'+
+      '<label class="scc-check"><input type="checkbox" id="scc-only-monitored"/> Somente monitorados</label></div><p id="scc-evolution-message" role="status">Selecione duas bases. A comparação manual não envia notificações.</p></section>'+
+      '<details id="scc-tracking-panel" class="scc-list"><summary>Monitoramentos por revisão e GRDT</summary><button type="button" id="scc-tracking-refresh">Atualizar monitoramentos e versões</button><div id="scc-tracking-targets"></div></details>'+
       '<div class="scc-filters">'+
       '<label>Situação <select id="scc-status"><option value="">Todas</option>'+
       [["CONFIRMADO","Identificado"],["AGUARDANDO","Aguardando"],["NAO_ENCONTRADO","Não encontrado"],
@@ -105,13 +113,39 @@
       '<div id="sigem-central-detail-body"></div></aside>';
     return true;
   }
+  function syncFilterControls(){
+    const controls={ageMinHours:"scc-age-min",status:"scc-status",allocationState:"scc-allocation",revision:"scc-revision",discipline:"scc-discipline",purpose:"scc-purpose",fiscal:"scc-fiscal",start:"scc-start",end:"scc-end",sigemStatus:"scc-sigem-status",reposts:"scc-reposts",multipleRevisions:"scc-multiple-revisions",changeType:"scc-change-type",onlyMonitored:"scc-only-monitored"};
+    Object.entries(controls).forEach(([key,id])=>{const el=$("#"+id);if(el.type==="checkbox")el.checked=Boolean(state.filters[key]);else el.value=state.filters[key]||"";});
+  }
+  function switchView(view){
+    if(state.view===view)return;
+    state.viewColumns[state.view]=state.columns.slice();
+    const evolution=["document","revisionSent","previousStatus","currentStatus","statusLabel","previousBaseDate","currentBaseDate"];
+    if(state.view==='evolucao'||view==='evolucao'){
+      state.columns=state.viewColumns[view]?.length?state.viewColumns[view].slice():view==='evolucao'?evolution:DEFAULT.slice();
+      state.filters={};syncFilterControls();
+    }
+    state.view=view;
+  }
   function filter(){
     if(!state.data)return;
     const listInput=$("#scc-list-input");
     const query=listInput&&!$("#scc-list-panel").hidden&&listInput.value.trim()?listInput.value:state.query;
     state.effectiveQuery=query;
+    state.data.evolution=state.comparisonRows;
+    if(!state.data.indices.evolucao){
+      state.data.indices.evolucao=new Map();
+      state.comparisonRows.forEach(row=>root.GrconSigemCentralCore.Conference.documentKeys(row.document).forEach(key=>{
+        const normalized=root.GrconSigemCentralCore.norm(key),index=state.data.indices.evolucao;
+        if(!index.has(normalized))index.set(normalized,new Set());index.get(normalized).add(row);
+      }));
+    }
     state.filtered=Query.filter(state.data,state.view,query,{...state.filters,listMode:!$("#scc-list-panel").hidden&&Boolean(listInput?.value.trim())},state.sort);
     View.draw(state);
+    $("#scc-evolution-panel").hidden=state.view!=="evolucao";
+    ["scc-status","scc-allocation","scc-purpose","scc-fiscal","scc-start","scc-end","scc-age-min","scc-reposts","scc-multiple-revisions"].forEach(id=>{
+      $("#"+id).closest('label').hidden=state.view==='evolucao';
+    });
     document.querySelectorAll("[data-scc-view]").forEach(button=>
       button.classList.toggle("active",button.dataset.sccView===state.view));
   }
@@ -232,7 +266,8 @@
     if(state.workspace&&
         (state.workspace!==scope||(state.user&&state.user!==currentUser))){
       state.data=null;state.filtered={rows:[],missing:[]};
-      state.query="";state.filters={};state.selectedRow=null;
+      state.query="";state.filters={};state.viewColumns={};state.selectedRow=null;state.comparison=null;state.comparisonRows=[];state.trackingLoaded=false;
+      $("#scc-tracking-targets").innerHTML="";$("#scc-previous-base").innerHTML="";$("#scc-current-base").innerHTML="";
       $("#scc-query").value="";$("#scc-list-input").value="";
       document.querySelectorAll(".scc-filters input,.scc-filters select").forEach(el=>{
         if(el.type==="checkbox")el.checked=false;else el.value="";
@@ -289,6 +324,15 @@
       ["Histórico completo",String(Boolean(state.data.historyComplete))],["Total de resultados",rows.length],["Não encontrados",state.filtered.missing.join(" | ")],
       ["Gerado em",new Date().toISOString()]].map(row=>row.map(safe)));
     XLSX.utils.book_append_sheet(wb,info,"Fonte e filtros");
+    if(state.view==="evolucao"&&state.comparison){
+      const comparison=state.comparison;
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
+        ["Comparação",comparison.id],["Base anterior",comparison.previous.file_name],["Snapshot anterior",comparison.previous.snapshot_id],
+        ["Base atual",comparison.current.file_name],["Snapshot atual",comparison.current.snapshot_id],
+        ["Data anterior",comparison.previous.metadata?.referenceDate||comparison.previous.published_at],
+        ["Data atual",comparison.current.metadata?.referenceDate||comparison.current.published_at]
+      ].map(row=>row.map(safe))),"Versões comparadas");
+    }
     if(state.filtered.missing.length){
       const missing=XLSX.utils.aoa_to_sheet([["Código não encontrado"],...state.filtered.missing.map(code=>[safe(code)])]);
       XLSX.utils.book_append_sheet(wb,missing,"Não encontrados");
@@ -309,7 +353,51 @@
     $("#scc-saved-views").innerHTML='<option value="">Selecione</option>'+state.savedViews.map((v,i)=>
       '<option value="'+i+'">'+View.h(v.name)+'</option>').join("");
   }
+  async function loadTracking(){
+    if(!Tracking)return;
+    const scope=storageKey();
+    try{
+      const data=await Tracking.load();if(!data||scope!==storageKey())return;
+      state.trackingLoaded=true;
+      for(const [id,initial] of [["scc-previous-base",1],["scc-current-base",0]]){
+        const select=$("#"+id),selected=select.value;
+        select.innerHTML='<option value="">Selecione uma versão</option>'+data.versions.map(v=>'<option value="'+View.h(v.snapshot_id)+'">'+View.h(v.file_name+' · '+(v.metadata?.referenceDate||v.published_at||''))+'</option>').join('');
+        select.value=data.versions.some(v=>v.snapshot_id===selected)?selected:data.versions[initial]?.snapshot_id||"";
+      }
+      const canManage=['owner','admin'].includes(root.GrconCloud?.state?.membership?.role);
+      $("#scc-tracking-targets").innerHTML=data.targets.length?data.targets.map(t=>
+        '<article class="scc-target"><strong>'+View.h(t.label)+'</strong><span>'+View.h((t.kind==='grdt'?'GRDT completa':'Revisão exata')+' · '+t.members.length+' integrante(s) · '+(t.active?'Ativo':'Inativo')+(t.sourceAvailable?'':' · Fonte indisponível'))+'</span>'+
+        (canManage?'<button type="button" data-scc-target-toggle="'+View.h(t.id)+'" data-active="'+String(!t.active)+'">'+(t.active?'Desativar':'Ativar')+'</button><button type="button" data-scc-target-delete="'+View.h(t.id)+'">Excluir monitoramento</button>':'')+'</article>'
+      ).join(''):'Nenhum monitoramento por revisão ou GRDT cadastrado.';
+      $("#scc-evolution-message").textContent=data.versions.length>=2?'Selecione duas bases. A comparação manual não envia notificações.':'Este contrato ainda não tem duas versões disponíveis para comparar.';
+    }catch(error){notify(error.message,"error");}
+  }
   function bind(){
+    $("#scc-tracking-refresh").addEventListener("click",()=>void loadTracking());
+    $("#scc-tracking-panel").addEventListener("toggle",()=>{if($("#scc-tracking-panel").open)void loadTracking();});
+    $("#scc-change-type").addEventListener("change",e=>{state.filters.changeType=e.target.value;filter();});
+    $("#scc-only-monitored").addEventListener("change",e=>{state.filters.onlyMonitored=e.target.checked;filter();});
+    $("#scc-compare-bases").addEventListener("click",async()=>{
+      if(!Tracking)return;
+      const scope=storageKey(),button=$("#scc-compare-bases");button.disabled=true;
+      try{
+        const data=await Tracking.compare($("#scc-previous-base").value,$("#scc-current-base").value,(await centralHistory(scope)).records);
+        if(!data||scope!==storageKey())return;
+        state.comparison=data.meta;state.comparisonRows=data.rows;
+        state.data.indices.evolucao=new Map();
+        data.rows.forEach(row=>root.GrconSigemCentralCore.Conference.documentKeys(row.document).forEach(key=>{
+          const normalized=root.GrconSigemCentralCore.norm(key),index=state.data.indices.evolucao;
+          if(!index.has(normalized))index.set(normalized,new Set());index.get(normalized).add(row);
+        }));
+        switchView("evolucao");state.filters={};syncFilterControls();
+        state.query="";$("#scc-query").value="";filter();
+        $("#scc-evolution-message").textContent=data.meta.previous.file_name+' → '+data.meta.current.file_name+' · '+data.rows.length+' documento(s)/revisão(ões).';
+      }catch(error){notify(error.message,"error");}finally{button.disabled=false;}
+    });
+    $("#scc-tracking-targets").addEventListener("click",async e=>{
+      const toggle=e.target.closest('[data-scc-target-toggle]'),remove=e.target.closest('[data-scc-target-delete]');if(!toggle&&!remove)return;
+      try{await Tracking.modify(toggle?'toggle':'delete',{id:toggle?.dataset.sccTargetToggle||remove.dataset.sccTargetDelete,active:toggle?.dataset.active==='true'});await loadTracking();}catch(error){notify(error.message,"error");}
+    });
     $("#scc-view-save").addEventListener("click",()=>{
       const name=$("#scc-view-name").value.trim();if(!name)return;
       const entry={name,columns:state.columns.slice(),widths:{...state.widths},pinned:state.pinned.slice(),sort:{...state.sort},view:state.view,filters:JSON.parse(JSON.stringify(state.filters))};
@@ -319,8 +407,7 @@
     $("#scc-saved-views").addEventListener("change",e=>{
       const entry=state.savedViews[Number(e.target.value)];if(e.target.value===""||!entry)return;
       state.columns=entry.columns.slice();state.widths={...entry.widths};state.pinned=(entry.pinned||[]).slice();state.sort={...entry.sort};state.view=entry.view||"documentos";state.filters=JSON.parse(JSON.stringify(entry.filters||{}));
-      const controls={ageMinHours:"scc-age-min",status:"scc-status",allocationState:"scc-allocation",revision:"scc-revision",discipline:"scc-discipline",purpose:"scc-purpose",fiscal:"scc-fiscal",start:"scc-start",end:"scc-end",sigemStatus:"scc-sigem-status",reposts:"scc-reposts",multipleRevisions:"scc-multiple-revisions"};
-      Object.entries(controls).forEach(([key,id])=>{const el=$("#"+id);if(el.type==="checkbox")el.checked=Boolean(state.filters[key]);else el.value=state.filters[key]||"";});
+      syncFilterControls();if(state.view==="evolucao"&&!state.trackingLoaded)void loadTracking();
       saveColumns();filter();
     });
     $("#scc-view-delete").addEventListener("click",()=>{
@@ -372,15 +459,13 @@
       $("#scc-list-input").value="";filter();
     });
     document.querySelectorAll("[data-scc-view]").forEach(button=>
-      button.addEventListener("click",()=>{state.view=button.dataset.sccView;filter();}));
+      button.addEventListener("click",()=>{switchView(button.dataset.sccView);if(state.view==="evolucao"&&!state.trackingLoaded)void loadTracking();filter();}));
     [["scc-age-min","ageMinHours"],["scc-sigem-status","sigemStatus"],["scc-multiple-revisions","multipleRevisions"],["scc-status","status"],["scc-allocation","allocationState"],["scc-revision","revision"],["scc-discipline","discipline"],["scc-purpose","purpose"],["scc-fiscal","fiscal"],["scc-reposts","reposts"],["scc-start","start"],["scc-end","end"]]
       .forEach(([id,key])=>$("#"+id).addEventListener("input",e=>{
         state.filters[key]=e.target.type==="checkbox"?e.target.checked:e.target.value;filter();
       }));
     $("#scc-clear-filters").addEventListener("click",()=>{
-      state.filters={};
-      ["scc-age-min","scc-sigem-status","scc-status","scc-allocation","scc-revision","scc-discipline","scc-purpose","scc-fiscal","scc-start","scc-end"].forEach(id=>$("#"+id).value="");
-      $("#scc-reposts").checked=false;$("#scc-multiple-revisions").checked=false;
+      state.filters={};syncFilterControls();
       filter();
     });
     $("#scc-preset").addEventListener("change",event=>{
@@ -394,10 +479,9 @@
         grdts:["document","title","statusLabel","sendCount","generatedAt","note"]
       };
       if(!presets[chosen])return;
-      state.columns=presets[chosen].slice();
-      state.view=chosen==="grdts"?"grdts":chosen==="historico"?"revisoes":
-        chosen==="pendencias"?"pendencias":"documentos";
-      saveColumns();filter();
+      switchView(chosen==="grdts"?"grdts":chosen==="historico"?"revisoes":
+        chosen==="pendencias"?"pendencias":"documentos");
+      state.columns=presets[chosen].slice();saveColumns();filter();
     });
     $("#scc-columns").addEventListener("click",()=>{
       state.showColumns=!state.showColumns;
@@ -474,6 +558,14 @@
         $("#sigem-central-detail").hidden=true;
         await root.GRCONModuleLoader.ensureModule("control");
         return;
+      }
+      if(e.target.closest("[data-scc-monitor-revision],[data-scc-monitor-grdt]")){
+        if(!Tracking)return;const row=state.selectedRow,scope=storageKey();
+        try{
+          const input=e.target.closest('[data-scc-monitor-grdt]')?{kind:'grdt',historyId:row.historyId}:{kind:'revision',documentCode:row.document,revision:row.revisionSent};
+          await Tracking.save(input);if(scope!==storageKey())return;
+          notify('Monitoramento cadastrado neste contrato.','success');await loadTracking();
+        }catch(error){notify(error.message,'error');}return;
       }
       if(e.target.closest("[data-scc-monitor-document]")){
         const codes=state.selectedRow?.rows?state.selectedRow.rows.map(r=>r.document):[state.selectedRow?.document];
@@ -567,9 +659,17 @@
     $("#sigem-technical-pane").hidden=true;
     state.keepScroll=true;filter();
   }
+  async function openTarget(kind,value){
+    await root.GRCONModuleLoader.ensureModule('sigem');
+    if(state.workspace!==workspace())await refresh();
+    openCentral();switchView(kind==='grdt'?'grdts':kind==='revision'?'revisoes':'documentos');state.filters={};syncFilterControls();state.query='';$("#scc-list-input").value='';$("#scc-query").value='';filter();
+    const split=String(value).lastIndexOf('|'),code=kind==='revision'?value.slice(0,split):value,rev=kind==='revision'?value.slice(split+1):'';
+    const index=state.filtered.rows.findIndex(row=>kind==='grdt'?(row.rows||[]).some(r=>r.historyId===value||r.historyRecordId===value||r.cloudHistoryId===value)||row.historyId===value:root.GrconSigemCentralCore.identity(row.document)===root.GrconSigemCentralCore.identity(code)&&(kind!=='revision'||root.GrconSigemCentralCore.revision(row.revisionSent)===root.GrconSigemCentralCore.revision(rev)));
+    if(index>=0)View.detail(state,index);else notify('Item indisponível no histórico acessível deste contrato.','warning');
+  }
   if(shell()){
     loadColumns();bind();
-    root.GrconSigemCentralUi=Object.freeze({state,refresh,openTechnical,openCentral});
+    root.GrconSigemCentralUi=Object.freeze({state,refresh,openTechnical,openCentral,openTarget});
     void refresh();
   }
 })(window);

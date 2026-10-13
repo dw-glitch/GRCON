@@ -30,6 +30,8 @@
     const first = els.table?.querySelector("thead th:first-child");
     if (!first) return;
     const offset = first.getBoundingClientRect().width / (Number(getComputedStyle(document.documentElement).zoom) || 1);
+    if (!Number.isFinite(offset) || offset <= 0) return;
+    els.table.style.setProperty("--triage-situation-width", `${offset}px`);
     $$("thead th:nth-child(3),tbody tr.result-row td:nth-child(3)", els.table).forEach(cell => {
       if (Math.abs((parseFloat(cell.style.left) || 0) - offset) > .5) cell.style.left = `${offset}px`;
     });
@@ -134,10 +136,13 @@
   }
 
   let geometryFrame = 0;
+  function scheduleGeometry() {
+    if (!geometryFrame) geometryFrame = requestAnimationFrame(() => { geometryFrame = 0; syncStickyOffset(); });
+  }
   function synchronize() {
     applyColumnVisibility();
     renderActiveFilters();
-    if (!geometryFrame) geometryFrame = requestAnimationFrame(() => { geometryFrame = 0; syncStickyOffset(); });
+    scheduleGeometry();
   }
 
   function install() {
@@ -199,6 +204,9 @@
       preferences = Flow.readTriagePreferences();
       renderColumnOptions(); applyColumnVisibility(); applyDensity(); applyGrouping();
     });
+    // Virtual rows can be rebuilt after the rendered event (for example on density change).
+    // Observe node replacement, not attributes: adjusting offsets must not create a feedback loop.
+    if (typeof MutationObserver === "function") new MutationObserver(scheduleGeometry).observe(els.table, { childList: true, subtree: true });
     synchronize();
     window.addEventListener("resize", syncStickyOffset, { passive: true });
   }

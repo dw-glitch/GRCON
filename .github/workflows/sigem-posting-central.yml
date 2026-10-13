@@ -9,6 +9,11 @@ on:
       - "tests/sigem_posting_central.cjs"
       - "scripts/sigem-central-browser-qa.cjs"
       - "scripts/sigem-central-worker-qa.cjs"
+      - "scripts/sigem-central-tracking-qa.cjs"
+      - "tests/sigem_monitor_targets.cjs"
+      - "supabase/migrations/*grcon_sigem_monitor_targets.sql"
+      - "supabase/migrations/*grcon_sigem_comparison_information.sql"
+      - "supabase/migrations/*grcon_sigem_monitor_revision_links.sql"
       - "scripts/validar-grdt-table-audit-browser.cjs"
       - "workers/sigem_central.worker.js"
       - "app.js"
@@ -34,6 +39,7 @@ jobs:
           node --check sigem_posting_central_query.js
           node --check sigem_posting_central_render.js
           node --check sigem_posting_central_app.js
+          node --check sigem_posting_central_tracking.js
           node --check sigem_posting_app.js
           node --check grcon_module_loader.js
       - name: Test central domain rules
@@ -61,6 +67,7 @@ jobs:
         run: |
           node scripts/sigem-central-browser-qa.cjs
           node scripts/sigem-central-worker-qa.cjs
+          node scripts/sigem-central-tracking-qa.cjs
           python3 -m http.server 8765 > /tmp/grcon-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT

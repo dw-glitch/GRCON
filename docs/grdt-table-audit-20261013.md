@@ -4,7 +4,9 @@ Data: 13/10/2026. Repositório: `dw-glitch/GRCON`. Continuidade da PR #239, bran
 
 ## Resultado
 
-A versão examinada **não estava inteiramente de acordo**. Um teste já existente da busca em lote por integrantes de GRDT falhava. Também foram reproduzidos defeitos de geometria, filtros e isolamento durante atualização. As correções abaixo estão implementadas e os testes específicos passaram. A entrega continua em homologação: não implica publicação nem comprovação de operação autenticada com bases reais.
+A versão inicial não estava inteiramente de acordo. Os defeitos reproduzidos foram corrigidos, e os recursos restantes do pedido foram implementados: evolução integrada, monitoramento exato por revisão e GRDT, exportação histórica e abertura direta pelo alerta. As três migrações foram aplicadas ao GRCON e as APIs passaram na homologação com identidades e papéis reais. A instrução posterior do usuário autoriza executar a integração e publicação.
+
+A validação abrange o código, o banco real e a interface alimentada pelas bases reais. Desempenho no computador corporativo e operação em sua rede dependem do ambiente; as medições abaixo identificam o ambiente efetivamente testado.
 
 ## Problemas identificados e corrigidos
 
@@ -15,7 +17,7 @@ A versão examinada **não estava inteiramente de acordo**. Um teste já existen
 | Alta | Troca de contrato alterava o estado antes de retirar as linhas antigas do DOM durante a leitura assíncrona. | Limpeza imediata da tabela, pesquisa, seleção, painel e preferências; resultados atrasados são descartados pelo contexto e geração da consulta. |
 | Alta | Cópia local do histórico limitada a 1.000 registros era tratada como universo consultável da nova central. | Leitura paginada pelo serviço oficial `loadClassificationHistory`; cache em memória por usuário/contrato. Falha/offline identifica a cópia local como potencialmente incompleta. |
 | Média | Janela virtual da Central podia começar além do fim; todas as rolagens recriavam linhas. | Início limitado ao total, janela calculada pelo viewport, atualização agrupada por frame e reaproveitamento da janela quando não muda. |
-| Média | Coluna fixa de documento ficava 45,3 px sobreposta: largura real da situação 237,3 px e deslocamento 192 px. | Medição após aplicação das colunas, atualização de posição e observação de cabeçalho atual, inclusive após sua substituição. |
+| Média | Coluna fixa de documento ficava 45,3 px sobreposta: largura real da situação 237,3 px e deslocamento 192 px. | Medição após aplicação das colunas, atualização de posição e observação de cabeçalho atual, inclusive após sua substituição e a reconstrução virtual ao alterar densidade. |
 | Média | `display:flex` no próprio `td.revision-grdt-cell` prejudicava a geometria e o alinhamento. | Restauração de `table-cell`, campo de revisão compacto e margens internas delimitadas. |
 | Média | Medição antes de ocultar colunas fazia a altura virtual oscilar; evidências abertas não participavam dos espaçadores. | Medição após evento de apresentação, alturas em coordenadas de layout e offsets incluindo detalhes expandidos. |
 | Média | Pesquisa não considerava o título da LD; filtro do arquivo final ignorava arquivos complementares. | Inclusão de título/alocação na pesquisa, nomes finais por entrada e identificação da última GRDT no filtro correspondente. |
@@ -68,33 +70,38 @@ A consolidação acima é medição do núcleo em Node. O navegador passa a exec
 
 ## Recursos preservados
 
-Geração de PDFs + eGRDT, loteamento por disciplina/somente limite, numeração, inclusão manual, escolha de revisão, histórico, remoção de arquivo, fontes locais/Cofre, relatórios oficiais dos outros módulos, fiscalização, monitoramento e comparação de snapshots existentes. Não há migrações, alterações de RLS, permissões ou credenciais.
+Geração de PDFs + eGRDT, loteamento por disciplina/somente limite, numeração, inclusão manual, escolha de revisão, histórico, remoção de arquivo, fontes locais/Cofre, relatórios oficiais dos outros módulos, fiscalização, monitoramento e comparação de snapshots existentes. O monitoramento amplia o mesmo motor e a mesma central de notificações. As novas tabelas privadas têm RLS e acesso direto revogado; wrappers públicos são invoker, com validação de membro e de papel no servidor. Proprietário/administrador gerenciam assinaturas; operador consulta. Nenhuma credencial privilegiada foi adicionada ao frontend.
 
-## Matriz do prompt anterior
+## Conclusão dos recursos restantes
 
-| Requisito | Situação |
+| Requisito | Entrega e verificação |
 |---|---|
-| Motor oficial, agrupamento, revisão mais recente, GRDT parcial | Implementado e testado sinteticamente. |
-| Integração Consulta Geral / histórico completo / alocação / solicitações | Implementada usando serviços atuais; falta homologação com snapshots reais. |
-| Tabela profissional, visualizações, filtros e teclado | Implementados e testados. |
-| Comparação histórica e exportação de evolução | Reutiliza o módulo existente por navegação; não existe uma segunda tabela de comparação embutida na Central. |
-| Rastreabilidade e tempo desde geração | Implementados; envio real depende das evidências disponíveis. |
-| Monitoramento por código | Integrado ao mecanismo existente; respeita permissões atuais. |
-| Assinatura específica por revisão ou GRDT como entidade de alerta | **Ainda não implementada** no serviço atual, que cadastra códigos. Exigiria ampliação do modelo de monitoramento e testes backend específicos. Não foi simulada com uma anotação. |
-| Preparação de pendências | Implementada por seleção explícita e rascunho, sem envio automático. |
-| Exportações | Consulta, revisões, pendências consolidadas e detalhe de GRDT implementados; evolução continua no módulo existente. |
-| Desempenho | Medido em referência sintética; Worker testado. Homologação corporativa pendente. |
-| Segurança multi-contrato | Testes de troca, concorrência, preferências e saída aprovados. Backend existente preservado; falta homologação autenticada com papéis e contratos reais. |
-| Publicação | Não realizada. O prompt original exige aprovação para integração/publicação e impede publicação automática. |
+| Integração real das bases | 593 GRDTs, 23.574 registros SIGEM, 27.465 documentos previstos, 12.835 vínculos de alocação e 933 solicitações processados pelo aplicativo em Chromium. |
+| Paridade da conferência | 4.823 ocorrências do histórico sem divergência de classificação em relação a `GrconPostingConference.reconcile`; 18.419 documentos consolidados, 593 GRDTs. |
+| Evolução integrada | Seleção de bases, documento/revisão, status anterior/atual, classificação, datas e filtros. 23.574 pares reais comparados: 23.562 sem alteração, 10 saídas de análise e 2 localizados nesta versão. |
+| Pendências resolvidas e divergências | Calculadas por reconciliação oficial das duas bases com o histórico, sem converter todo status presente em confirmação. Filtros de divergências atuais/resolvidas, pendências resolvidas e mudanças de status. |
+| Informações modificadas | Projeção identifica alteração de título, disciplina ou redação do status, sem simular aprovação/postagem ou gerar alertas de status. |
+| Monitoramento por documento/revisão | Assinatura exata normalizada; outra revisão não dispara; idempotência, desativação e exclusão testadas. Link abre a revisão exata, inclusive histórica. |
+| Monitoramento por GRDT | Integrantes derivados no servidor do histórico ativo. Uma notificação agrupada por GRDT/evidência; integrantes removidos não continuam gerando alertas. Link usa a identidade remota correta. |
+| Exportação histórica | Visão filtrada e aba `Versões comparadas`, com identificação das bases, datas, contrato e filtros. Textos protegidos contra interpretação como fórmula. |
+| Isolamento e papéis reais | Proprietário, administrador e operador existentes exercitados com role `authenticated` e claims no PostgreSQL. UHDT-D, UGH e Pátio do Coque verificados; operador impedido de gravar e de consultar contrato sem associação. |
+| Ausência de efeitos da homologação | Gravações de teste em transações revertidas; zero assinaturas artificiais remanescentes e zero notificações emitidas pela comparação manual. |
+| Liberação | Usuário autorizou executar tudo o que estava em aberto. PR #239 integra o código; workflow da `main` valida, publica Cloudflare e confere `deployment-meta.json`. |
 
-## Próximos critérios de liberação
+### Homologação complementar
 
-1. CI do SHA final aprovado, incluindo os testes Chromium ampliados e pacote Cloudflare.
-2. Homologação autenticada com owner/admin/operator e UHDT-D, UGH e Pátio do Coque; arquivos reais e verificações de campos/contagens.
-3. Definir se a assinatura por revisão/GRDT e a comparação embutida precisam integrar esta entrega; são diferenças remanescentes em relação ao prompt completo.
-4. Aprovação explícita antes de merge/publicação, conforme seção 18 do prompt recuperado.
+- `tests/sigem_monitor_targets.cjs`: PostgreSQL/PGlite, assinatura exata, GRDT agrupada, integrantes removidos, idempotência, inatividade, metadados, links, papéis e isolamento.
+- `scripts/sigem-central-tracking-qa.cjs`: Chromium, gerenciamento de assinatura, evolução incluindo itens sem alteração, filtros de pendências/divergências, visualização salva, restauração de colunas, link remoto e interface de operador.
+- `scripts/sigem-central-real-data-qa.cjs`: recebe exportação de leitura autorizada, sem incluir dados operacionais no git/CI. Usa os motores oficiais, Worker real e serviços adaptados à fotografia do banco. Backend e papéis são validados separadamente no próprio PostgreSQL de produção; não simula login com credenciais no navegador de produção.
+- Base real: carga inicial 1.978 ms em Chromium 1366×768; janela virtual limitada; exportação filtrada; página sem transbordamento horizontal em 1024×768; troca de contrato limpa tabela e comparação.
+- Regressão completa `npm run verify` e pacote Cloudflare aprovados localmente. O CI registra o resultado do SHA final e o workflow de produção confirma a versão efetivamente publicada.
+- As três migrações versionadas correspondem às versões registradas no banco: `20261013202339`, `20261013203427`, `20261013203620`.
 
-Não classificar o prompt inteiro como integralmente concluído enquanto esses critérios estiverem pendentes.
+### Segurança das novas APIs
+
+Acesso direto de `authenticated` às tabelas privadas: negado. Execução anônima do novo monitoramento: negada. APIs existentes, notificações e permissões por contrato foram preservadas. O aviso informativo de RLS sem políticas nas tabelas privadas é compatível com a estratégia de acesso exclusivo pelas funções guardadas; não foram criadas políticas permissivas para eliminar esse aviso. Referência: https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy.
+
+O benchmark sintético anterior continua válido como referência, e não como medida do computador corporativo. As medições reais acima substituem a ausência de homologação funcional das bases disponíveis. UGH e Pátio do Coque estavam sem histórico/Consulta Geral no momento da leitura; o estado vazio e as permissões foram verificados sem inventar dados.
 
 ## Arquivos desta auditoria
 
