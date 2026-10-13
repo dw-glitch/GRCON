@@ -574,7 +574,7 @@
       if (file) void verifySelectedFile(file);
     });
 
-    ["grcon:history-updated", "grcon:cloud-ready"].forEach((eventName) => {
+    ["grcon:history-updated", "grcon:cloud-ready", "grcon:contract-context-changed"].forEach((eventName) => {
       window.addEventListener(eventName, render);
     });
     window.addEventListener("storage", (event) => {
