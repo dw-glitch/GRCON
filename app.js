@@ -3029,8 +3029,10 @@
     if (state.sheetFilter !== "todos" && C.norm(row.sheet) !== state.sheetFilter) return false;
     const query = normalizedTriageSearch();
     if (query) {
-      const previousEgrdt = PostingFlow?.lookup(row.document, row.revision).latestEmission?.grdt || "";
-      if (!C.norm(`${row.name} ${row.document} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt} ${row.record?.grdt || ""} ${row.record?.ldCode || ""} ${previousEgrdt}`).includes(query)) return false;
+      const historyNumbers = PostingFlow?.searchText(row.document) || "";
+      const ldDocumentCode = resultColumnValue(row, "ldCode");
+      const fileNames = (row.files || []).map(entry => entry.name).join(" ");
+      if (!C.norm(`${row.name} ${fileNames} ${row.document} ${ldDocumentCode} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt} ${row.record?.grdt || ""} ${historyNumbers}`).includes(query)) return false;
     }
     return true;
   }
@@ -5440,7 +5442,7 @@
     state.search = event.target.value;
     state.resultPage = 1;
     window.clearTimeout(els.search._grconTimer);
-    els.search._grconTimer = window.setTimeout(renderAll, 120);
+    els.search._grconTimer = window.setTimeout(renderAll, 250);
   });
   els.sheetFilter.addEventListener("change", (event) => {
     state.sheetFilter = event.target.value;
