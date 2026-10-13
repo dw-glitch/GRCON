@@ -230,8 +230,31 @@
         if(line)View.detail(state,Number(line.dataset.sccIndex));
       }
     });
-    $("#sigem-central-detail").addEventListener("click",e=>{
-      if(e.target.closest(".scc-close"))$("#sigem-central-detail").hidden=true;
+    $("#sigem-central-detail").addEventListener("click",async e=>{
+      if(e.target.closest(".scc-close")){
+        $("#sigem-central-detail").hidden=true;state.selectedRow=null;return;
+      }
+      if(e.target.closest("[data-scc-open-control]")){
+        $("#sigem-central-detail").hidden=true;
+        await root.GRCONModuleLoader.ensureModule("control");
+        return;
+      }
+      let value="";
+      if(e.target.closest("[data-scc-copy-code]"))value=state.selectedRow?.document||"";
+      if(e.target.closest("[data-scc-copy-pending]")){
+        if(!state.data?.hasBase||root.GrconSharedSigemQuery?.state?.stale){
+          notify("Atualize a Consulta Geral antes de preparar a lista de pendências.","warning");return;
+        }
+        const rows=state.selectedRow?.rows||[];
+        const eligible=rows.filter(row=>root.GrconPostingConference?.repostEligibility?.(row).eligible);
+        value=[...new Set(eligible.map(row=>row.document))].join("\n");
+        if(!eligible.length){notify("Nenhum item elegível para análise automática. Faça a conferência manual.");return;}
+      }
+      if(value){
+        try{await navigator.clipboard.writeText(value);
+          notify("Códigos copiados para avaliação manual.","success");
+        }catch(_){notify("Não foi possível copiar neste navegador.","warning");}
+      }
     });
     $("#scc-monitor-open").addEventListener("click",async()=>{
       const scope=workspace();
