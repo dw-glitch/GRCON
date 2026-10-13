@@ -20,7 +20,7 @@
     // Ele é uma view lógica, não um arquivo chamado /dashboard.
     dashboard: [],
     "ld-posting": ["xlsx", "zip", "ld_posting_writer.js"],
-    sigem: ["navigation", "ld-posting", "sigem_posting_app.js"],
+    sigem: ["navigation", "ld-posting", "posting_conference_core.js", "sigem_posting_central_core.js", "sigem_posting_central_query.js", "sigem_posting_central_render.js", "sigem_posting_central_app.js", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; a Taxonomia Interna é projetada da
     // mesma linha já escolhida pelo motor, antes da tela e das saídas.
     // A tela de "Consulta de documentos" é uma ilha React (src/react/consultas),
@@ -55,7 +55,7 @@
     compliance: ["GrconDocumentaryCompliance", "GrconDocumentaryComplianceUi"],
     history: ["GrconHistory", "GrconHistoryReport", "GrconHistoryUi", "GrconHistoricoEgrdtReact"],
     dashboard: ["GrconHistoryDashboard"],
-    sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemUi"],
+    sigem: ["GrconSigemPosting", "GrconLdPostingWriter", "GrconSigemCentralUi", "GrconSigemUi"],
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsTaxonomy", "GrconRequestsUi", "GrconConsultasReact"],
     "grdt-reissue": ["GrconGrdtReissueCore", "GrconGrdtReissueUi", "GrdtWorkbook"],
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
@@ -259,7 +259,7 @@
     "additional-tools": "Ferramentas adicionais",
     history: "Histórico de eGRDTs",
     dashboard: "Dashboard de emissões",
-    sigem: "Postagem SIGEM",
+    sigem: "Central de Postagem SIGEM",
     "pdf-tools": "Combinar PDFs",
     "cover-document": "Adicionar Capa",
     "allocation-dashboard": "Dashboard de Alocação",
@@ -297,6 +297,10 @@
     }
     if (module === "cover-document") {
       root.GrconCoverDocumentUi?.activate?.();
+      return;
+    }
+    if (module === "sigem") {
+      root.GrconSigemCentralUi?.refresh?.();
       return;
     }
     if (module === "grdt-reissue") {
@@ -353,7 +357,9 @@
     document.addEventListener("click", (event) => {
       const button = event.target && event.target.closest ? event.target.closest("[data-grcon-view]") : null;
       if (!button) return;
-      ensureModule(button.dataset.grconView).catch(() => {});
+      ensureModule(button.dataset.grconView).then(() => {
+        if (button.dataset.sigemPreflight === "true") root.GrconSigemCentralUi?.openTechnical?.();
+      }).catch(() => {});
     });
   }, { once: true });
 
