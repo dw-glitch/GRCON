@@ -142,14 +142,22 @@
       data.revisions.forEach(apply);
     }
     if(token!==state.generation)return;
-    const oldWorkspace=state.workspace;
+    const oldWorkspace=state.workspace,oldUser=state.user;
     state.workspace=workspace();
-    if(oldWorkspace!==state.workspace)loadColumns();
+    state.user=root.GrconCloud?.state?.session?.user?.id||"anonymous";
+    if(oldWorkspace!==state.workspace||oldUser!==state.user)loadColumns();
     state.data=data;
     filter();
   }
   async function refresh(){
     const scope=workspace();
+    const currentUser=root.GrconCloud?.state?.session?.user?.id||"anonymous";
+    if(state.workspace&&
+        (state.workspace!==scope||(state.user&&state.user!==currentUser))){
+      state.data=null;state.filtered={rows:[],missing:[]};
+      state.workspace=scope;state.user=currentUser;
+      loadColumns();
+    }
     try{
       await computeRefresh();
       state.lastError="";
