@@ -46,6 +46,9 @@
        ["NAO_VERIFICADO","Não verificado"],["SEM_ENVIO","Sem envio registrado"]]
        .map(([value,label])=>'<option value="'+value+'">'+label+'</option>').join("")+
       '</select></label>'+
+      '<label>Alocação <select id="scc-allocation"><option value="">Todas</option>'+
+      '<option value="Alocado">Alocado</option><option value="Não alocado">Não alocado</option>'+
+      '<option value="Alocação a confirmar">Não identificado</option></select></label>'+
       '<label>Revisão <input id="scc-revision" placeholder="Todas" maxlength="8"/></label>'+
       '<label>De <input id="scc-start" type="date"/></label>'+
       '<label>Até <input id="scc-end" type="date"/></label>'+
@@ -53,7 +56,8 @@
       '</div>'+
       '<div class="scc-kpis" id="sigem-central-kpis"></div>'+
       '<div class="scc-toolbar"><strong id="sigem-central-count">0 resultados</strong>'+
-      '<div><button id="scc-columns" type="button" class="secondary-button compact">Colunas</button>'+
+      '<div><button id="scc-copy" type="button" class="secondary-button compact">Copiar códigos</button>'+
+      '<button id="scc-columns" type="button" class="secondary-button compact">Colunas</button>'+
       '<button id="scc-export" type="button" class="primary-button compact">Exportar Excel</button></div></div>'+
       '<div id="sigem-central-column-pop" class="scc-column-pop" hidden>'+
       '<strong>Colunas visíveis</strong><div id="sigem-central-settings-body"></div>'+
@@ -148,13 +152,13 @@
     });
     document.querySelectorAll("[data-scc-view]").forEach(button=>
       button.addEventListener("click",()=>{state.view=button.dataset.sccView;filter();}));
-    [["scc-status","status"],["scc-revision","revision"],["scc-start","start"],["scc-end","end"]]
+    [["scc-status","status"],["scc-allocation","allocationState"],["scc-revision","revision"],["scc-start","start"],["scc-end","end"]]
       .forEach(([id,key])=>$("#"+id).addEventListener("input",e=>{
         state.filters[key]=e.target.value;filter();
       }));
     $("#scc-clear-filters").addEventListener("click",()=>{
       state.filters={};
-      ["scc-status","scc-revision","scc-start","scc-end"].forEach(id=>$("#"+id).value="");
+      ["scc-status","scc-allocation","scc-revision","scc-start","scc-end"].forEach(id=>$("#"+id).value="");
       filter();
     });
     $("#scc-columns").addEventListener("click",()=>{
@@ -171,6 +175,14 @@
       state.columns=DEFAULT.slice();saveColumns();filter();
     });
     $("#scc-export").addEventListener("click",exportExcel);
+    $("#scc-copy").addEventListener("click",async()=>{
+      const codes=[...new Set(state.filtered.rows.map(row=>row.document).filter(Boolean))];
+      if(!codes.length){notify("Nenhum código para copiar.");return;}
+      try{
+        await navigator.clipboard.writeText(codes.join("\n"));
+        notify(codes.length+" código(s) copiado(s).","success");
+      }catch(_){notify("Não foi possível copiar os códigos neste navegador.","warning");}
+    });
     $("#sigem-central-table-scroll").addEventListener("scroll",()=>View.drawRows(state),{passive:true});
     $("#sigem-central-tbody").addEventListener("click",e=>{
       const line=e.target.closest("[data-scc-index]");
