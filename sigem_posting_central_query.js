@@ -27,9 +27,20 @@
       now:options&&options.now,waitHours:options&&options.waitHours});
     const events=Refinement.enrichRows(A.enrich(compare.rows,history),records,C);
     const documents=consolidate(events,records);
-    return {documents,events,revisions:events.slice().sort((a,b)=>
-      text(b.generatedAt).localeCompare(text(a.generatedAt))),
-      grdts:C.aggregateByGrdt(events),meta,hasBase:records.length>0};
+    const revisions=events.slice().sort((a,b)=>text(b.generatedAt).localeCompare(text(a.generatedAt)));
+    const grdts=C.aggregateByGrdt(events);
+    const indices={documentos:new Map(),revisoes:new Map(),grdts:new Map()};
+    for(const [view,rows] of [["documentos",documents],["revisoes",revisions],["grdts",grdts]]){
+      for(const row of rows){
+        const items=view==="grdts"?row.rows||[]:[row];
+        for(const item of items)for(const key of C.documentKeys(item.document)){
+          const code=norm(key),map=indices[view];
+          if(!map.has(code))map.set(code,new Set());
+          map.get(code).add(row);
+        }
+      }
+    }
+    return {documents,events,revisions,grdts,indices,meta,hasBase:records.length>0};
   }
   function tokenizeList(raw){
     return [...new Set(String(raw||"").split(/[\r\n;,|\t]+/).map(text).filter(Boolean).map(norm))];
@@ -57,19 +68,22 @@
   function filter(data,view,query,filters,sort){
     const source=rowsForView(data,view),term=norm(query),list=tokenizeList(query);
     const batch=list.length>1,found=new Set(),wanted=new Set(list);
-    let rows=source.filter(row=>{
-      if(!batch)return !term||matches(row,term)||
-        (view==="grdts"&&(row.rows||[]).some(item=>matches(item,term)));
-      let hit=false;
-      const candidates=view==="grdts"?(row.rows||[]):[row];
-      for(const item of candidates){
-        for(const key of C.documentKeys(item.document)){
-          const code=norm(key);
-          if(wanted.has(code)){found.add(code);hit=true;}
+    let rows;
+    if(batch&&data.indices){
+      const index=data.indices[view==="pendencias"?"documentos":view];
+      const matchesFound=new Set();
+      for(const code of list){
+        const matching=index?.get(code);
+        if(matching?.size){
+          found.add(code);
+          for(const item of matching)matchesFound.add(item);
         }
       }
-      return hit;
-    });
+      rows=source.filter(item=>matchesFound.has(item));
+    }else{
+      rows=source.filter(row=>!term||matches(row,term)||
+        (view==="grdts"&&(row.rows||[]).some(item=>matches(item,term))));
+    }
     const f=filters||{};
     rows=rows.filter(row=>{
       const isGrdt=view==="grdts";
