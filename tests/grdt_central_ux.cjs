@@ -29,6 +29,14 @@ const markup = html.match(/<table class="grcon-results-table" id="results-table"
 assert.ok(markup, "Cabeçalho de resultados");
 const headerCount = (markup[1].match(/<th\b/g) || []).length;
 assert.equal(keys.length, headerCount, "Cada coluna visual deve corresponder a exatamente um filtro.");
+const macro = require("../macro5_flow_core.js");
+assert.equal(macro.COLUMNS.length, headerCount, "O gerenciador de colunas deve conhecer todas as colunas reais.");
+assert.deepEqual(macro.COLUMNS.map(c => c.index), Array.from({length:headerCount},(_,i)=>i+1));
+assert.deepEqual(macro.COLUMNS.map(c=>c.key), keys.map(c=>c[1]), "A posição e o campo devem corresponder às opções de cada filtro.");
+assert.ok(macro.defaultTriagePreferences().visibleColumns.includes("document"), "Código + histórico devem permanecer visíveis.");
+assert.ok(macro.defaultTriagePreferences().visibleColumns.includes("targetRevision"), "Revisão editável deve permanecer visível.");
+assert.match(app, /class="grdt-document-original"/);
+
 assert.ok(!keys.some(pair => pair[1] === "revisionManual"), "O filtro que deslocava os demais cabeçalhos foi removido.");
 assert.match(app, /function filteredResultIndices/);
 assert.match(app, /function matchesQuickFilter/);
