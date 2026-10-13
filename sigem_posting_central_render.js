@@ -29,6 +29,7 @@
       '<div class="scc-kpi"><strong>'+count.toLocaleString("pt-BR")+'</strong><span>'+label+'</span></div>').join("");
     $("#sigem-central-count").textContent=total.toLocaleString("pt-BR")+" resultado(s)";
     $("#sigem-central-missing").hidden=!missing.length;
+    $("#scc-copy-missing").hidden=!missing.length;
     $("#sigem-central-missing").textContent=missing.length?missing.length+" código(s) não encontrado(s) na consulta: "+missing.slice(0,15).join(", ")+(missing.length>15?" …":""):"";
   }
   function visibleKeys(s){
@@ -90,7 +91,11 @@
       '<dl class="scc-facts">'+
       [["Conferência",row.statusLabel],["Revisão enviada",row.revisionSent],["Revisão SIGEM",row.revisionFound],
         ["Status SIGEM",row.sigemStatus],["Última GRDT",row.egrdtNumber||row.latestEgrdtNumber],
-        ["Alocação histórica",row.allocation],["Propósito",row.purpose],
+        ["Alocação",row.allocation],["Situação da alocação",row.allocationState],
+        ["Fiscal 01",row.fiscalComment],["Fiscal 02",row.fiscal2Comment],
+        ["Retorno Fiscal 01",row.fiscal1ReturnedAt],["Retorno Fiscal 02",row.fiscal2ReturnedAt],
+        ["Solicitações",row.requestsCount],["Referências",row.requestsDetail],
+        ["Propósito",row.purpose],
         ["Evidência do envio",row.sendEvidenceLabel||"Geração registrada; envio não comprovado"],
         ["Diagnóstico",row.note],["Fonte","Consulta Geral / Histórico GRCON"]].map(([k,v])=>
           '<dt>'+h(k)+'</dt><dd>'+h(v||"—")+'</dd>').join("")+'</dl>'+
