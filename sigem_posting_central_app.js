@@ -82,10 +82,12 @@
   }
   async function refresh(){
     const token=++state.generation;
-    const active=Boolean(root.GrconCloud?.state?.membership?.workspace_id);
+    const activeWorkspace=root.GrconCloud?.state?.membership?.workspace_id;
+    const active=Boolean(activeWorkspace);
     const records=active?History.read():[];
     const shared=root.GrconSharedSigemQuery;
-    const base=active?shared?.current?.():null;
+    // Nunca cruzar registros de um contrato com a Consulta Geral de outro.
+    const base=active&&shared?.state?.workspace===activeWorkspace?shared.current():null;
     const data=Query.build(records,base||{records:[],meta:{}},{});
     if(token!==state.generation)return;
     const oldWorkspace=state.workspace;
