@@ -345,7 +345,7 @@
   }
 
   function buildModuleUi() {
-    const module = $("#sigem-technical-pane");
+    const module = $("#sigem-technical-content");
     if (!module) return false;
     module.innerHTML = `
       <header class="sigem-heading">
