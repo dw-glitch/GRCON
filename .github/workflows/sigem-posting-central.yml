@@ -7,6 +7,8 @@ on:
       - "grcon_module_loader.js"
       - "index.html"
       - "tests/sigem_posting_central.cjs"
+      - "scripts/sigem-central-browser-qa.cjs"
+      - "sigem-posting-central.css"
       - ".github/workflows/sigem-posting-central.yml"
   workflow_dispatch:
 jobs:
@@ -33,3 +35,20 @@ jobs:
         run: |
           node tests/posting_conference.cjs
           node tests/posting_conference_current_truth.cjs
+  browser-smoke:
+    name: Chromium — Central SIGEM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Browser integration smoke
+        run: node scripts/sigem-central-browser-qa.cjs
