@@ -65,7 +65,12 @@
       '<button id="scc-clear-filters" type="button" class="secondary-button compact">Limpar filtros</button>'+
       '</div>'+
       '<div class="scc-kpis" id="sigem-central-kpis"></div>'+
-      '<div class="scc-toolbar"><strong id="sigem-central-count">0 resultados</strong>'+
+      '<div class="scc-toolbar"><div><strong id="sigem-central-count">0 resultados</strong>'+
+      '<label class="scc-preset-label">Visualização <select id="scc-preset" aria-label="Visualização predefinida">'+
+      '<option value="">Personalizada</option><option value="rapida">Consulta rápida</option>'+
+      '<option value="completa">Conferência completa</option><option value="pendencias">Pendências</option>'+
+      '<option value="fiscalizacao">Fiscalização</option><option value="historico">Histórico de revisões</option>'+
+      '<option value="grdts">GRDTs</option></select></label></div>'+
       '<div><button id="scc-copy" type="button" class="secondary-button compact">Copiar códigos</button>'+
       '<button id="scc-columns" type="button" class="secondary-button compact">Colunas</button>'+
       '<button id="scc-export" type="button" class="primary-button compact">Exportar Excel</button></div></div>'+
@@ -218,6 +223,22 @@
       ["scc-status","scc-allocation","scc-revision","scc-discipline","scc-purpose","scc-fiscal","scc-start","scc-end"].forEach(id=>$("#"+id).value="");
       $("#scc-reposts").checked=false;
       filter();
+    });
+    $("#scc-preset").addEventListener("change",event=>{
+      const chosen=event.target.value;
+      const presets={
+        rapida:["document","revisionSent","revisionFound","statusLabel","sigemStatus","egrdtNumber"],
+        completa:root.GrconSigemCentralCore.COLUMNS.map(([key])=>key),
+        pendencias:["document","revisionSent","revisionFound","statusLabel","egrdtNumber","generatedAt","allocationState","note"],
+        fiscalizacao:["document","title","allocation","allocationState","fiscalComment","fiscal2Comment","sigemStatus","statusLabel"],
+        historico:["document","revisionSent","revisionFound","egrdtNumber","purpose","generatedAt","sigemStatus","statusLabel"],
+        grdts:["document","title","statusLabel","sendCount","generatedAt","note"]
+      };
+      if(!presets[chosen])return;
+      state.columns=presets[chosen].slice();
+      state.view=chosen==="grdts"?"grdts":chosen==="historico"?"revisoes":
+        chosen==="pendencias"?"pendencias":"documentos";
+      saveColumns();filter();
     });
     $("#scc-columns").addEventListener("click",()=>{
       state.showColumns=!state.showColumns;
