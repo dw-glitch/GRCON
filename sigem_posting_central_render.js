@@ -96,7 +96,7 @@
       (root.GrconSharedSigemQuery?.state?.stale?" · Cache / possível desatualização":""):
       "Consulta Geral indisponível: resultados não verificados";
     summary(s);table(s);settings(s);
-    $("#sigem-central-technical").hidden=s.panel!=="technical";
+    $("#sigem-technical-pane").hidden=s.panel!=="technical";
     $("#sigem-central-workspace").hidden=s.panel==="technical";
     $("#sigem-central-column-pop").hidden=!s.showColumns;
     $("#sigem-central-detail").hidden=true;
