@@ -24,7 +24,16 @@
 
   let preferences = Flow.readTriagePreferences();
   let applying = false;
+  let observedHeader = null, headerObserver = null;
 
+  function syncStickyOffset() {
+    const first = els.table?.querySelector("thead th:first-child");
+    if (!first) return;
+    const offset = first.getBoundingClientRect().width / (Number(getComputedStyle(document.documentElement).zoom) || 1);
+    $$("thead th:nth-child(3),tbody tr.result-row td:nth-child(3)", els.table).forEach(cell => {
+      if (Math.abs((parseFloat(cell.style.left) || 0) - offset) > .5) cell.style.left = `${offset}px`;
+    });
+  }
   function visibleSet() { return new Set(preferences.visibleColumns); }
 
   function columnWidthRem(column) {
@@ -59,6 +68,18 @@
       els.essential.setAttribute("aria-pressed", String(!all));
       els.essential.textContent = all ? "Usar colunas essenciais" : "Mostrar todas as colunas";
     }
+    const first = els.table.querySelector("thead th:first-child");
+    if (first && first !== observedHeader && typeof ResizeObserver === "function") {
+      headerObserver?.disconnect(); observedHeader = first;
+      headerObserver = new ResizeObserver(syncStickyOffset); headerObserver.observe(first);
+    }
+    if (first) {
+      const offset = first.getBoundingClientRect().width / (Number(getComputedStyle(document.documentElement).zoom) || 1);
+      els.table.style.setProperty("--triage-situation-width", `${offset}px`);
+      $$("thead th:nth-child(3),tbody tr.result-row td:nth-child(3)", els.table).forEach(cell => { cell.style.left = `${offset}px`; });
+    }
+    const visibleCount = Flow.COLUMNS.filter(column => visible.has(column.key)).length;
+    $$("tr.detail-row > td, tr.virtual-spacer-row > td", els.table).forEach(cell => { cell.colSpan = visibleCount; });
     applying = false;
   }
 
@@ -104,7 +125,7 @@
     Object.entries(snapshot.columnFilters || {}).forEach(([key, values]) => {
       const column = Flow.COLUMNS.find((item) => item.key === key);
       const list = Array.isArray(values) ? values : [values];
-      const label = list.length === 1 ? (Flow.text(list[0]) || "(Vazias)") : `${list.length} selecionados`;
+      const label = list.length === 1 ? (Flow.text(list[0]) || "(Vazias)") : list.length ? `${list.length} selecionados` : "Nenhum valor";
       chips.push(chip(`${column?.label || key}: ${label}`, "column", key));
     });
     if (snapshot.groupByStatus) chips.push(chip("Agrupado por situação", "group"));
@@ -112,9 +133,11 @@
     els.filters.hidden = chips.length === 0;
   }
 
+  let geometryFrame = 0;
   function synchronize() {
     applyColumnVisibility();
     renderActiveFilters();
+    if (!geometryFrame) geometryFrame = requestAnimationFrame(() => { geometryFrame = 0; syncStickyOffset(); });
   }
 
   function install() {
@@ -177,6 +200,7 @@
       renderColumnOptions(); applyColumnVisibility(); applyDensity(); applyGrouping();
     });
     synchronize();
+    window.addEventListener("resize", syncStickyOffset, { passive: true });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });

@@ -1,0 +1,12 @@
+'use strict';
+const fs=require('node:fs'),os=require('node:os');const {performance}=require('node:perf_hooks');
+require('../core.js');require('../history_core.js');const C=require('../posting_conference_core.js'),Q=require('../sigem_posting_central_query.js');
+const count=25000,codes=Array.from({length:count},(_,i)=>`RL-5290.00-22313-91B-C1O-${String(i+1).padStart(5,'0')}`);
+const history=codes.map((document,i)=>({id:'bench-'+i,egrdtNumber:'GRDT-'+i,generatedAt:'2026-10-12T10:00:00Z',files:[{document,revision:'A'}]}));
+const records=codes.map(document=>({document,revision:'A',status:'Em análise',documentIdentity:C.documentIdentity(document),searchKeys:C.documentKeys(document)}));
+const start=performance.now();const data=Q.build(history,{records,meta:{referenceDate:'2026-10-13'}},{});const built=performance.now();
+const simple=Q.filter(data,'documentos',codes[1234],{});const searched=performance.now();
+const batch=Q.filter(data,'documentos',codes.slice(0,500).join('\n'),{});const listed=performance.now();
+const result={runtime:process.version,platform:os.platform(),cpu:os.cpus()[0]?.model,documents:count,buildMs:+(built-start).toFixed(2),simpleMs:+(searched-built).toFixed(2),batch500Ms:+(listed-searched).toFixed(2),simpleFound:simple.rows.length,batchFound:batch.rows.length,memoryMB:+(process.memoryUsage().heapUsed/1048576).toFixed(1)};
+fs.mkdirSync('artifacts/sigem-central',{recursive:true});fs.writeFileSync('artifacts/sigem-central/benchmark.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+if(simple.rows.length!==1||batch.rows.length!==500)throw new Error('Resultados divergentes');

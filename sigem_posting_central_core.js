@@ -22,6 +22,10 @@
     ["fiscal1ReturnedAt","Retorno Fiscal 01"],["fiscal2ReturnedAt","Retorno Fiscal 02"],
     ["requestsCount","Solicitações"],["requestsDetail","Referências de solicitações"],
     ["allocationNotes","Observações de alocação"],
+    ["repostCount","Repostagens"],["egrdtHistory","Histórico de eGRDTs"],["ageHours","Horas desde geração"],
+    ["allocationWorkflow","Workflow da alocação"],["allocationCurrentStatus","Status da alocação"],
+    ["allocationSource","Fonte da alocação"],["fiscalSource","Fonte dos comentários"],["sigemStatusRevision","Revisão do status SIGEM"],
+    ["sendEvidenceLabel","Evidência do envio"],["teamsDeliveredAt","Entrega no Teams"],["teamsDeclaration","Postagem declarada no Teams"],
     ["note","Diagnóstico"]
   ]);
   function historyExtras(records) {
@@ -61,7 +65,8 @@
     }
     return [...groups.entries()].map(([id,found])=>{
       const first=found.slice().sort((a,b)=>
-        Conference.effectiveRecordTimestamp(b)-Conference.effectiveRecordTimestamp(a))[0];
+        (Conference.effectiveRecordTimestamp(b)-Conference.effectiveRecordTimestamp(a))||
+        Conference.revisionRank(b.revision)-Conference.revisionRank(a.revision))[0];
       const same=found.filter(r=>revision(r.revision)===revision(first.revision) &&
         Conference.effectiveRecordTimestamp(r)===Conference.effectiveRecordTimestamp(first));
       const conflict=new Set(same.map(r=>norm(r.status))).size>1;

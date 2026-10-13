@@ -289,6 +289,8 @@
     }
     function filterContexts() {
         if (APP === "GRCON") {
+            // A triagem já possui a barra oficial sincronizada com o estado.
+            if ($("#triage-active-filters")) return [];
             const host = $("#results-section .results-toolbar");
             return host ? [{ host, controls: [$("#search"), $("#sheet-filter")].filter(Boolean) }] : [];
         }

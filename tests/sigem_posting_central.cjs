@@ -119,3 +119,46 @@ test("advanced filters intersect rather than expand results",()=>{
   assert.equal(Q.filter(data,"documentos","",{allocationState:"Alocado",discipline:"MEC",fiscal:"Fiscal 01"}).rows.length,1);
   assert.equal(Q.filter(data,"documentos","",{allocationState:"Não alocado",discipline:"MEC"}).rows.length,0);
 });
+test('GRDT filters must match the same member, including revision and status',()=>{
+ const data=Q.build([{id:'combo',egrdtNumber:'GRDT-COMBO',generatedAt:dt,files:[
+  {document:'DOC-C1',revision:'A',discipline:'MEC'},
+  {document:'DOC-C2',revision:'B',discipline:'TUB'}]}],
+  {records:[b('DOC-C1','A','Emitido')],meta:{referenceDate:'2026-10-13'}},{});
+ assert.equal(Q.filter(data,'grdts','',{revision:'A',discipline:'TUB'}).rows.length,0);
+ assert.equal(Q.filter(data,'grdts','',{revision:'B',status:C.STATUSES.CONFIRMED}).rows.length,0);
+ assert.equal(Q.filter(data,'grdts','',{revision:'A',discipline:'MEC'}).rows.length,1);
+});
+test('batch preserves input order and handles a single missing code',()=>{
+ const data=Q.build([h('a','GRDT-1','DOC-1','0'),h('b','GRDT-2','DOC-2','0')],
+ {records:[b('DOC-1','0','Emitido'),b('DOC-2','0','Emitido')],meta:{}},{});
+ assert.deepEqual(Q.filter(data,'documentos','DOC-2\nDOC-1',{}).rows.map(r=>r.document),['DOC-2','DOC-1']);
+ assert.deepEqual(Q.filter(data,'documentos','DOC-999',{listMode:true}).missing,['DOC-999']);
+});
+test('no-date records excluded from period and BR dates sorted chronologically',()=>{
+ const data=Q.build([],{records:[b('DOC-1','0','Emitido')],meta:{}},{});
+ assert.equal(Q.filter(data,'documentos','',{end:'2026-10-13'}).rows.length,0);
+ const rows=[{generatedAt:'13/10/2026'},{generatedAt:'02/09/2026'},{generatedAt:''}];
+ assert.deepEqual(Q.sortRows(rows,{key:'generatedAt',dir:'desc'}).map(r=>r.generatedAt),['13/10/2026','02/09/2026','']);
+});
+test('search historical GRDT and column filters, without losing revision evidence',()=>{
+ const data=Q.build([h('a','GRDT-OLD','DOC-10','A','2026-10-01T10:00:00Z'),h('b','GRDT-NEW','DOC-10','B')],
+  {records:[b('DOC-10','A','Emitido')],meta:{referenceDate:'2026-10-13'}},{});
+ assert.equal(Q.filter(data,'documentos','GRDT-OLD',{}).rows.length,1);
+ assert.equal(Q.filter(data,'documentos','',{columns:{revisionSent:'B'}}).rows.length,1);
+ assert.equal(Q.filter(data,'documentos','',{columns:{revisionSent:'C'}}).rows.length,0);
+ assert.equal(data.documents[0].revisionSent,'B');
+ assert.notEqual(data.documents[0].status,C.STATUSES.CONFIRMED);
+});
+test('base-only uses highest revision when timestamps absent',()=>{
+ const data=Q.build([],{records:[b('DOC-11','0','Emitido'),b('DOC-11','B','Em análise')],meta:{}},{});
+ assert.equal(data.documents[0].revisionFound,'B');
+});
+
+test('historical confirmation never becomes a new current confirmation',()=>{
+ const history=[h('persisted','GRDT-HIST','DOC-HIST','A')];
+ const first=Q.build(history,{records:[b('DOC-HIST','A','Emitido')],meta:{referenceDate:'2026-10-13'}},{},{now:'2026-10-13T12:00:00Z'});
+ const next=Q.build(history,{records:[b('DOC-OTHER','0','Emitido')],meta:{referenceDate:'2026-10-14'}},first.confirmationState,{now:'2026-10-14T12:00:00Z'});
+ assert.equal(next.documents[0].historicalPreserved,true);
+ assert.notEqual(next.documents[0].status,C.STATUSES.CONFIRMED);
+ assert.equal(C.repostEligibility(next.documents[0]).eligible,false);
+});

@@ -8,6 +8,13 @@ on:
       - "index.html"
       - "tests/sigem_posting_central.cjs"
       - "scripts/sigem-central-browser-qa.cjs"
+      - "scripts/sigem-central-worker-qa.cjs"
+      - "scripts/validar-grdt-table-audit-browser.cjs"
+      - "workers/sigem_central.worker.js"
+      - "app.js"
+      - "app-ui.js"
+      - "macro5_flow_app.js"
+      - "grdt-central-ux.css"
       - "sigem-posting-central.css"
       - ".github/workflows/sigem-posting-central.yml"
   workflow_dispatch:
@@ -51,4 +58,17 @@ jobs:
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
       - name: Browser integration smoke
-        run: node scripts/sigem-central-browser-qa.cjs
+        run: |
+          node scripts/sigem-central-browser-qa.cjs
+          node scripts/sigem-central-worker-qa.cjs
+          python3 -m http.server 8765 > /tmp/grcon-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node scripts/validar-grdt-table-audit-browser.cjs
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grdt-table-audit
+          path: artifacts/grdt-table-audit
+          if-no-files-found: ignore
