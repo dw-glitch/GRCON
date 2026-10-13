@@ -20,10 +20,11 @@
   function summary(s){
     const rows=s.filtered.rows,missing=s.filtered.missing;
     const total=rows.length;
-    const confirmed=rows.filter(r=>r.status==="CONFIRMADO").length;
-    const pending=rows.filter(r=>["AGUARDANDO","NAO_ENCONTRADO"].includes(r.status)).length;
-    const divergent=rows.filter(r=>["REVISAO_DIVERGENTE","REQUER_ANALISE"].includes(r.status)).length;
-    const values=[["Resultados",total],["Identificados",confirmed],["Aguardando",pending],["Divergentes",divergent]];
+    const grdt=s.view==="grdts";
+    const confirmed=rows.filter(r=>grdt?r.total>0&&r.confirmed===r.total:r.status==="CONFIRMADO").length;
+    const pending=rows.filter(r=>grdt?(r.awaiting+r.notFound)>0:["AGUARDANDO","NAO_ENCONTRADO"].includes(r.status)).length;
+    const divergent=rows.filter(r=>grdt?(r.divergent+r.review)>0:["REVISAO_DIVERGENTE","REQUER_ANALISE"].includes(r.status)).length;
+    const values=[["Resultados",total],[grdt?"GRDTs identificadas":"Identificados",confirmed],[grdt?"GRDTs c/ pendências":"Aguardando",pending],[grdt?"GRDTs divergentes":"Divergentes",divergent]];
     $("#sigem-central-kpis").innerHTML=values.map(([label,count])=>
       '<div class="scc-kpi"><strong>'+count.toLocaleString("pt-BR")+'</strong><span>'+label+'</span></div>').join("");
     $("#sigem-central-count").textContent=total.toLocaleString("pt-BR")+" resultado(s)";
@@ -124,6 +125,7 @@
     const meta=s.data.meta||{};
     $("#sigem-central-base").textContent=s.data.hasBase?
       "Consulta Geral: "+(meta.fileName||"base disponível")+" · "+(meta.referenceDate||meta.importedAt||"Data não informada")+
+      (meta.snapshotId?" · Snapshot: "+meta.snapshotId:"")+
       (root.GrconSharedSigemQuery?.state?.stale?" · Cache / possível desatualização":""):
       "Consulta Geral indisponível: resultados não verificados";
     summary(s);table(s);settings(s);
