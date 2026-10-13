@@ -67,14 +67,14 @@
   }
   function filter(data,view,query,filters){
     const source=rowsForView(data,view),term=norm(query),list=tokenizeList(query);
-    const batch=list.length>1,found=new Set();
+    const batch=list.length>1,found=new Set(),wanted=new Set(list);
     let rows=source.filter(row=>{
       if(!batch)return !term||matches(row,term);
-      const keys=new Set(C.documentKeys(row.document).map(norm));
-      const hit=list.some((code,i)=>{
-        if(keys.has(code)){found.add(i);return true;}
-        return false;
-      });
+      let hit=false;
+      for(const key of C.documentKeys(row.document)){
+        const code=norm(key);
+        if(wanted.has(code)){found.add(code);hit=true;}
+      }
       return hit;
     });
     const f=filters||{};
@@ -83,7 +83,7 @@
       (!f.revision||revision(row.revisionSent)===revision(f.revision))&&
       (!f.start||text(row.generatedAt).slice(0,10)>=f.start)&&
       (!f.end||text(row.generatedAt).slice(0,10)<=f.end));
-    return {rows,missing:batch?list.filter((_,i)=>!found.has(i)):[],
+    return {rows,missing:batch?list.filter(code=>!found.has(code)):[],
       listMode:batch,searched:list.length};
   }
   function csv(rows,keys){
