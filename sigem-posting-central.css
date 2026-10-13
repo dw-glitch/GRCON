@@ -1,0 +1,88 @@
+/* Central de Postagem SIGEM: escopo isolado da conferência técnica .xls */
+#sigem-module .scc{display:grid;gap:14px;color:var(--text,#18364b);max-width:100%}
+#sigem-module .scc[hidden],#sigem-module .scc-technical[hidden],
+#sigem-module .scc-column-pop[hidden],#sigem-module .scc-list[hidden],
+#sigem-module .scc-detail[hidden],#sigem-module .scc-missing[hidden]{display:none!important}
+#sigem-module .scc-heading{display:flex;align-items:center;justify-content:space-between;gap:15px}
+#sigem-module .scc-heading span{font-size:11px;letter-spacing:.07em;font-weight:700;color:#33739b}
+#sigem-module .scc-heading h2{font-size:clamp(20px,2.1vw,26px);margin:3px 0;color:#143d59}
+#sigem-module .scc-heading p{margin:0;font-size:13px;color:#6a7f8e}
+#sigem-module .scc-base{border:1px solid #d6e7ef;background:#f4f9fc;
+ border-radius:8px;padding:9px 12px;font-size:12px;color:#355a72;margin:0}
+#sigem-module .scc-query{display:flex;gap:9px;align-items:center}
+#sigem-module .scc-query input{flex:1;width:100%;min-width:0;padding:12px 14px;border-radius:9px;
+ border:1px solid #bdd2de;font-size:14px;background:#fff;color:#17374b}
+#sigem-module .scc-views{display:flex;gap:5px;flex-wrap:wrap;border-bottom:1px solid #d8e5ed}
+#sigem-module .scc-views button{background:transparent;border:none;padding:9px 15px;cursor:pointer;
+ border-bottom:3px solid transparent;color:#4b6a7d;font-weight:650}
+#sigem-module .scc-views button.active{border-bottom-color:#1374b0;color:#07578a}
+#sigem-module .scc-filters{display:flex;align-items:end;gap:8px;flex-wrap:wrap}
+#sigem-module .scc-filters label{display:grid;gap:4px;color:#536e80;font-weight:600;font-size:11px}
+#sigem-module .scc-filters select,#sigem-module .scc-filters input{border:1px solid #cddce6;
+ border-radius:6px;background:#fff;padding:8px;color:#1e3f56;min-width:90px;max-width:165px}
+#sigem-module .scc-filters input#scc-revision{max-width:95px}
+#sigem-module .scc-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+#sigem-module .scc-kpi{display:grid;gap:4px;border:1px solid #d9e5ec;border-radius:9px;
+ padding:11px 13px;background:#fff}
+#sigem-module .scc-kpi strong{font-size:22px;color:#14496a;line-height:1.2}
+#sigem-module .scc-kpi span{font-size:12px;color:#61798a}
+#sigem-module .scc-toolbar{display:flex;justify-content:space-between;align-items:center;
+ gap:12px;padding-top:4px}
+#sigem-module .scc-toolbar>div{display:flex;align-items:center;gap:7px}
+#sigem-module .scc-toolbar strong{font-size:13px}
+#sigem-module .scc-table-viewport{height:min(53vh,560px);min-height:280px;
+ overflow:auto;border:1px solid #d5e3ec;border-radius:9px;background:#fff;position:relative}
+#sigem-module .scc-table{width:100%;border-collapse:separate;border-spacing:0;
+ font-size:12px;table-layout:auto}
+#sigem-module .scc-table thead th{position:sticky;top:0;background:#ebf3f8;z-index:3;
+ text-align:left;padding:11px 12px;white-space:nowrap;border-bottom:1px solid #cbdce6;
+ font-weight:700;color:#2b536b}
+#sigem-module .scc-table tbody tr:not(.scc-spacer){height:44px;cursor:pointer}
+#sigem-module .scc-table tbody tr:not(.scc-spacer):hover{background:#f1f8fc}
+#sigem-module .scc-table tbody tr:focus-visible{outline:2px solid #2682bf;outline-offset:-2px}
+#sigem-module .scc-table td{padding:9px 12px;max-width:270px;overflow:hidden;text-overflow:ellipsis;
+ white-space:nowrap;border-bottom:1px solid #edf2f5}
+#sigem-module .scc-spacer td{padding:0!important;border:0!important}
+#sigem-module .scc-status{font-size:11px;font-weight:650;display:inline-flex;
+ border-radius:100px;padding:3px 8px;background:#e8f0f5;color:#375b6e}
+#sigem-module .scc-status.ok{background:#e3f5ec;color:#176d4b}
+#sigem-module .scc-status.pending{background:#fff4dd;color:#875d16}
+#sigem-module .scc-status.alert{background:#ffeaeb;color:#ac333b}
+#sigem-module .scc-status.muted{background:#eef1f4;color:#63717c}
+#sigem-module .scc-empty{padding:35px!important;text-align:center;color:#6d8391}
+#sigem-module .scc-note{margin:0;font-size:11px;color:#718593;line-height:1.5}
+#sigem-module .scc-list{border:1px solid #dce8ed;border-radius:8px;padding:12px;
+ background:#f9fcfe;display:grid;gap:7px}
+#sigem-module .scc-list label{font-size:12px;font-weight:650;color:#42637b}
+#sigem-module .scc-list textarea{width:100%;min-height:95px;border:1px solid #c9dce8;
+ border-radius:7px;padding:9px;font-family:inherit}
+#sigem-module .scc-list button{justify-self:start}
+#sigem-module .scc-missing{padding:10px;background:#fff5e7;color:#865a1c;
+ border-radius:6px;margin:0;font-size:12px;overflow-wrap:anywhere}
+#sigem-module .scc-column-pop{border:1px solid #cfdfe8;padding:12px;border-radius:9px;
+ background:white;box-shadow:0 10px 30px #1b456016;max-width:700px}
+#sigem-module .scc-column-pop>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:8px;padding:12px 0}
+#sigem-module .scc-column-pop label{font-size:12px;cursor:pointer}
+#sigem-module .scc-detail{position:fixed;z-index:1150;top:0;right:0;width:min(490px,95vw);
+ height:100vh;overflow:auto;background:#fff;box-shadow:-12px 0 36px #173c5733;
+ padding:22px;border-left:1px solid #c3d4de}
+#sigem-module .scc-detail h3{color:#144b6d;overflow-wrap:anywhere;padding-right:30px}
+#sigem-module .scc-detail h4{margin:20px 0 10px}
+#sigem-module .scc-close{position:absolute;top:12px;right:14px;border:none;background:#eef4f7;
+ border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:21px}
+#sigem-module .scc-facts{display:grid;grid-template-columns:120px 1fr;gap:10px;
+ font-size:12px;margin:18px 0}
+#sigem-module .scc-facts dt{font-weight:700;color:#517187}
+#sigem-module .scc-facts dd{margin:0;overflow-wrap:anywhere}
+#sigem-module .scc-history{display:grid;gap:10px}
+#sigem-module .scc-history>div{padding:10px;border:1px solid #d9e6ed;
+ border-radius:8px;display:grid;gap:4px;font-size:12px}
+#sigem-module .scc-history span{color:#567185}
+#sigem-module .scc-technical{padding:8px 0}
+#sigem-module #scc-back{margin-bottom:14px}
+@media(max-width:850px){
+ #sigem-module .scc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #sigem-module .scc-heading{align-items:start;flex-direction:column}
+ #sigem-module .scc-column-pop>div{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
