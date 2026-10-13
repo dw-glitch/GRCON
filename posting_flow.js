@@ -4,14 +4,14 @@
   const Planner = root.GrconPostingBatchPlanner;
   const KEY = "grcon.egrdt.posting-mode.v1";
   let postingMode = "mixed", filter = "all", index = Classification.buildIndex([], { complete: false });
-  let loading = null, dirty = true, generation = 0, workspace = "", memo = new Map();
+  let loading = null, dirty = true, generation = 0, workspace = "", memo = new Map(), searchMemo = new Map();
   try { postingMode = Planner.normalizeMode(localStorage.getItem(KEY)); } catch (_) { /* optional preference */ }
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   function scope() { return root.GrconCloud?.state?.membership?.workspace_id || ""; }
   function localRecords() { return (root.GrconHistory?.read() || []).filter(record => scope() ? record.workspaceId === scope() : !record.workspaceId); }
   function install(records, complete, source) {
     index = Classification.buildIndex(records, { complete, workspaceId: scope(), source });
-    memo = new Map(); generation += 1;
+    memo = new Map(); searchMemo = new Map(); generation += 1;
   }
   function lookup(document, revision) {
     if (workspace !== scope()) { workspace = scope(); dirty = true; install(localRecords(), false, "Cópia local do Histórico"); }
@@ -45,6 +45,16 @@
     lookup(document, "");
     const bucket = index.byDocument.get(Classification.documentKey(document));
     return bucket ? bucket.occurrences.slice().reverse() : [];
+  }
+  function searchText(document) {
+    // Indexa identificadores de todas as GRDTs anteriores uma única vez por geração.
+    lookup(document, "");
+    const key = Classification.documentKey(document);
+    if (!searchMemo.has(key)) {
+      const bucket = index.byDocument.get(key);
+      searchMemo.set(key, bucket ? bucket.occurrences.map(entry => entry.grdt).join(" ") : "");
+    }
+    return searchMemo.get(key);
   }
   function status() { return { complete: index.complete, source: index.source, loading: Boolean(loading), workspaceId: workspace }; }
   function setFilter(value) {
@@ -99,7 +109,7 @@
     filter = button.dataset.postingFilter;
     root.GrconTriageUiApi?.render();
   });
-  root.GrconPostingFlow = Object.freeze({ lookup, entries, status, refresh, setFilter, classifyPlan, splitPlan, matches, badge, render,
+  root.GrconPostingFlow = Object.freeze({ lookup, entries, searchText, status, refresh, setFilter, classifyPlan, splitPlan, matches, badge, render,
     signature: () => `${generation}:${filter}`, getMode: () => postingMode,
     setMode(value) { postingMode = Planner.normalizeMode(value); root.GrconTriageUiApi?.render(); return postingMode; },
   });
