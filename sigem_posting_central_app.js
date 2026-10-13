@@ -182,10 +182,33 @@
       const key=e.target.dataset.sccColumn;if(!key)return;
       if(e.target.checked&&!state.columns.includes(key))state.columns.push(key);
       if(!e.target.checked&&state.columns.length>1)state.columns=state.columns.filter(k=>k!==key);
+      state.keepScroll=true;saveColumns();filter();
+    });
+    $("#sigem-central-thead").addEventListener("click",event=>{
+      const key=event.target.closest("[data-scc-sort]")?.dataset.sccSort;
+      if(!key)return;
+      state.sort=state.sort.key===key?{key,dir:state.sort.dir==="asc"?"desc":"asc"}:{key,dir:"asc"};
       saveColumns();filter();
     });
+    $("#sigem-central-settings-body").addEventListener("click",event=>{
+      const button=event.target.closest("[data-scc-move]");
+      if(!button)return;
+      const index=state.columns.indexOf(button.dataset.sccMove);
+      const target=index+Number(button.dataset.sccDirection);
+      if(index<0||target<0||target>=state.columns.length)return;
+      const moved=state.columns.splice(index,1)[0];
+      state.columns.splice(target,0,moved);
+      state.keepScroll=true;saveColumns();filter();
+    });
+    $("#sigem-central-settings-body").addEventListener("change",event=>{
+      const key=event.target.dataset.sccWidth;
+      if(!key)return;
+      state.widths[key]=Math.max(90,Math.min(600,Number(event.target.value)||180));
+      state.keepScroll=true;saveColumns();filter();
+    });
     $("#scc-columns-reset").addEventListener("click",()=>{
-      state.columns=DEFAULT.slice();saveColumns();filter();
+      state.columns=DEFAULT.slice();state.widths={};state.sort={key:"",dir:"asc"};
+      saveColumns();filter();
     });
     $("#scc-export").addEventListener("click",exportExcel);
     $("#scc-copy").addEventListener("click",async()=>{
