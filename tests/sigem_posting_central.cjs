@@ -63,6 +63,6 @@ test("batch normalizes duplicates and reports missing",()=>{
 });
 test("CSV neutralizes formulas and preserves column order",()=>{
   const csv=Q.csv([{document:"=1+2",statusLabel:"Emitido"}],["statusLabel","document"]);
-  assert.match(csv,/Conferência;Documento/);
+  assert.ok(csv.includes('"Conferência";"Documento"'));
   assert.match(csv,/'=1\+2/);
 });
