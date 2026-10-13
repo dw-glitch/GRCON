@@ -326,7 +326,6 @@ async function setSharedHistoryFixture(page, enabled) {
 
     await installFixtureAdapters(page);
     await expectCount(page, 3);
-    await validateDocumentRestoration(page);
     assert.equal(await page.locator("#history-list [data-history-id]").count(), 3);
     await shot(page, "02-history-egrdt-results-1366.png");
 
@@ -592,6 +591,11 @@ async function setSharedHistoryFixture(page, enabled) {
     assert.ok(dateFilterMs < 2000, "filtro de data deve permanecer fluido");
     assert.ok(searchMs < 2500, "busca com debounce deve permanecer fluida");
     assert.ok(selectMs < 1500, "seleção deve permanecer fluida");
+
+    // Execute after the geometry checks: restoring intentionally triggers the
+    // success pose before the mascot returns to its normal history context.
+    await resetFilters(page);
+    await validateDocumentRestoration(page);
 
     assert.deepEqual(errors, []);
     console.log("historico-egrdt-browser FASE B: PASS");
