@@ -89,6 +89,25 @@
     // Nunca cruzar registros de um contrato com a Consulta Geral de outro.
     const base=active&&shared?.state?.workspace===activeWorkspace?shared.current():null;
     const data=Query.build(records,base||{records:[],meta:{}},{});
+    const registry=root.GrconAllocationRegistry;
+    if(active&&registry?.resolve){
+      const resolved=new Map();
+      const apply=row=>{
+        if(!resolved.has(row.documentIdentity)){
+          const info=registry.resolve(row.document);
+          const comments=registry.fiscalComments?.(row.document)||[];
+          resolved.set(row.documentIdentity,{
+            allocationState:info.label||"Alocação a confirmar",
+            allocation:info.allocations?.join(" · ")||"",
+            fiscalComment:comments.join(" | "),
+            allocationNotes:info.warnings?.join(" · ")||"",
+          });
+        }
+        Object.assign(row,resolved.get(row.documentIdentity));
+      };
+      data.documents.forEach(apply);
+      data.revisions.forEach(apply);
+    }
     if(token!==state.generation)return;
     const oldWorkspace=state.workspace;
     state.workspace=workspace();
@@ -174,7 +193,8 @@
       }
     });
     ["grcon:history-updated","grcon:shared-sigem-updated",
-      "grcon:cloud-ready","grcon:conference-workspace-reset"]
+      "grcon:cloud-ready","grcon:conference-workspace-reset",
+      "grcon:allocation-registry-updated","grcon:planned-documents-updated"]
       .forEach(name=>root.addEventListener(name,()=>void refresh()));
     root.addEventListener("grcon:module-ready",e=>{
       if(e.detail?.module==="sigem")void refresh();
