@@ -95,7 +95,7 @@
           '<dt>'+h(k)+'</dt><dd>'+h(v||"—")+'</dd>').join("")+'</dl>'+
       '<h4>Ocorrências no histórico ('+records.length+')</h4>'+
       '<div class="scc-history">'+records.map(r=>
-        '<div><strong>'+h(r.egrdtNumber||"Sem GRDT")+'</strong>'+
+        '<div><strong>'+h(r.egrdtNumber||"Sem GRDT")+'</strong><span>'+h(r.document||"")+'</span>'+
         '<span>Revisão '+h(r.revisionSent||"—")+' · '+h(format(r.generatedAt))+'</span>'+
         '<span>'+h(r.statusLabel||"—")+' · '+h(r.purpose||"Propósito não informado")+'</span></div>').join("")+'</div>'+
       '<div class="scc-actions"><button type="button" data-scc-copy-code>Copiar código</button>'+
