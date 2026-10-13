@@ -65,7 +65,7 @@
       '<p class="scc-note">Base SIGEM e histórico GRCON: uma eGRDT gerada não comprova envio. Clique em uma linha para visualizar todas as ocorrências.</p>'+
       '</section>'+
       '<section id="sigem-technical-pane" class="scc-technical" hidden>'+
-      '<button type="button" id="scc-back" class="secondary-button compact">← Voltar à central</button></section>'+
+      '<button type="button" id="scc-back" class="secondary-button compact">← Voltar à central</button><div id="sigem-technical-content"></div></section>'+
       '<aside class="scc-detail" id="sigem-central-detail" role="dialog" aria-label="Detalhes do documento" hidden>'+
       '<button type="button" class="scc-close" aria-label="Fechar detalhes">×</button>'+
       '<div id="sigem-central-detail-body"></div></aside>';
