@@ -81,6 +81,7 @@
   function detail(s,index){
     const row=s.filtered.rows[index],panel=$("#sigem-central-detail");
     if(!row){panel.hidden=true;return;}
+    s.selectedRow=row;
     const history=row.sends||row.rows||(row.key&&s.data.events.filter(r=>r.key===row.key))||[row];
     const records=history.length?history:[row];
     $("#sigem-central-detail-body").innerHTML=
@@ -97,7 +98,10 @@
         '<div><strong>'+h(r.egrdtNumber||"Sem GRDT")+'</strong>'+
         '<span>Revisão '+h(r.revisionSent||"—")+' · '+h(format(r.generatedAt))+'</span>'+
         '<span>'+h(r.statusLabel||"—")+' · '+h(r.purpose||"Propósito não informado")+'</span></div>').join("")+'</div>'+
-      '<p class="scc-note">A geração da eGRDT não comprova o envio. A localização na Consulta Geral comprova apenas a presença do código e revisão na base consultada.</p>';
+      '<div class="scc-actions"><button type="button" data-scc-copy-code>Copiar código</button>'+
+      (row.rows?'<button type="button" data-scc-copy-pending>Copiar itens para análise</button>':'')+
+      '<button type="button" data-scc-open-control>Controle de GRDT</button></div>'+
+      '<p class="scc-note">Copiar pendências não autoriza repostagem e não comprova envio. O operador deve conferir a Consulta Geral atual antes de qualquer nova GRDT.</p>';
     panel.hidden=false;
     panel.querySelector(".scc-close").focus();
   }
