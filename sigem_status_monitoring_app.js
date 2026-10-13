@@ -292,7 +292,8 @@
     return formatDate(value);
   }
   function notificationOpenButton(item) {
-    const target=item?.link_target||'';
+    const original=item?.link_target||'';
+    const target=original==='conference-status-monitor'&&item?.document_code?'sigem-central-document:'+item.document_code:original;
     if(target.startsWith('history:'))return '<button class="text-button compact" type="button" data-open-egrdt="'+escapeHtml(target.slice(8))+'">Abrir eGRDT</button>';
     if(target.startsWith('sigem-central-grdt:')||target.startsWith('sigem-central-document:')||target.startsWith('sigem-central-revision:'))return '<button class="text-button compact" type="button" data-sigem-central-target="'+escapeHtml(target)+'">Abrir na Central SIGEM</button>';
     return '';

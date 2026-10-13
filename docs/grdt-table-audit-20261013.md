@@ -108,9 +108,9 @@ O benchmark sintético anterior continua válido como referência, e não como m
 - `app.js`, `app-ui.js`, `macro5_flow_app.js`, `grdt-central-ux.css`: triagem, filtros, geometria e rascunho de pendências.
 - `sigem_posting_central_app.js`, `sigem_posting_central_query.js`, `sigem_posting_central_core.js`, `sigem_posting_central_render.js`, `sigem-posting-central.css`: consulta, atualização, fontes, personalização, detalhe e relatórios.
 - `workers/sigem_central.worker.js`: consolidação fora da interface.
-- `tests/sigem_posting_central.cjs`, três scripts Chromium e `scripts/benchmark-sigem-central.cjs`: regressões e medições reproduzíveis.
+- `tests/sigem_posting_central.cjs`, scripts Chromium operacionais, de assinatura e de dados reais, e `scripts/benchmark-sigem-central.cjs`: regressões e medições reproduzíveis.
 - `package.json`, `sw.js`, workflow e documentação: execução obrigatória, cache/artefatos e auditoria.
 
 ## Rollback
 
-Antes de publicação, manter a PR em rascunho e a produção em `f51018c`. Se houver implantação posterior e regressão, reverter o commit de integração/Worker para a versão anterior aprovada e restaurar a versão compatível do Service Worker. Nenhuma alteração de banco exige reversão.
+Se houver regressão de implantação, restaurar o artefato Cloudflare anterior aprovado (`f51018c`) e o cache compatível do Service Worker. Conservar as três migrações e os dados: a ampliação do banco é compatível com o frontend anterior. A autorização posterior do usuário liberou a integração e a publicação.
