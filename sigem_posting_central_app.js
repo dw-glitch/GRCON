@@ -135,7 +135,10 @@
     const keys=state.columns,rows=state.filtered.rows;
     if(!rows.length){notify("Nenhum resultado para exportar.");return;}
     const labels=Object.fromEntries(root.GrconSigemCentralCore.COLUMNS);
-    const safe=v=>{const t=String(v==null?"":v);return /^[=+\-@\t\r]/.test(t)?"'"+t:t;};
+    const safe=v=>{
+      const t=String(v==null?"":v);
+      return /^\s*[=+\-@]/.test(t)||/^[\t\r\n]/.test(t)?"'"+t:t;
+    };
     const meta=state.data.meta||{};
     const cells=[keys.map(k=>labels[k]||k),...rows.map(row=>keys.map(k=>safe(row[k])))];
     const XLSX=root.XLSX;
@@ -146,8 +149,13 @@
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cells),"Consulta");
     const info=XLSX.utils.aoa_to_sheet([["Consulta Geral",meta.fileName||"Indisponível"],
       ["Data de referência",meta.referenceDate||meta.importedAt||""],
-      ["Snapshot",meta.snapshotId||""],["Tipo de consulta",state.view],
-      ["Total de resultados",rows.length],["Gerado em",new Date().toISOString()]]);
+      ["Snapshot",meta.snapshotId||""],["Origem",meta.source||"Consulta Geral compartilhada/local"],
+      ["Contrato",workspace()],["Usuário",root.GrconCloud?.state?.session?.user?.id||""],
+      ["Tipo de consulta",state.view],["Pesquisa",state.query],
+      ["Filtros",JSON.stringify(state.filters)],["Ordenação",JSON.stringify(state.sort)],
+      ["Colunas",keys.join(" | ")],["Base desatualizada",String(Boolean(root.GrconSharedSigemQuery?.state?.stale))],
+      ["Total de resultados",rows.length],["Não encontrados",state.filtered.missing.join(" | ")],
+      ["Gerado em",new Date().toISOString()]]);
     XLSX.utils.book_append_sheet(wb,info,"Fonte e filtros");
     XLSX.writeFile(wb,"GRCON_Central_Postagem_SIGEM_"+new Date().toISOString().slice(0,10)+".xlsx");
   }
