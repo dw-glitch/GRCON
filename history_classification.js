@@ -17,7 +17,8 @@
     const seen = new Set();
     for (const record of records || []) {
       if (!record || record.deleted_at || record.deletedAt || !record.egrdtNumber) continue;
-      if (options.workspaceId && record.workspaceId && record.workspaceId !== options.workspaceId) continue;
+      // Escopo estrito: registros de outro contrato ou sem associação não entram no histórico compartilhado.
+      if (options.workspaceId && record.workspaceId !== options.workspaceId) continue;
       for (const file of record.files || []) {
         const key = documentKey(file.document);
         if (!key) continue;
@@ -29,7 +30,10 @@
         seen.add(identity);
         if (!byDocument.has(key)) byDocument.set(key, { occurrences: [], byRevision: new Map() });
         const bucket = byDocument.get(key);
-        const entry = { historyId: id, cloudId: text(record.cloudId), grdt: text(record.egrdtNumber), generatedAt: text(record.generatedAt), revision };
+        const entry = { historyId: id, cloudId: text(record.cloudId), grdt: text(record.egrdtNumber), generatedAt: text(record.generatedAt), revision,
+          purpose: text(file.purpose || file.emissionPurpose || record.purpose),
+          postingStatus: text(file.postingStatus || record.postingStatus),
+          outputType: text(record.outputType) };
         bucket.occurrences.push(entry);
         if (revision) {
           if (!bucket.byRevision.has(revision)) bucket.byRevision.set(revision, []);
@@ -51,23 +55,25 @@
     const sameRevision = bucket && bucket.byRevision.get(rev) || [];
     const previous = (sameRevision.length ? sameRevision : occurrences).at(-1) || null;
     const first = sameRevision[0] || null;
+    const latest = occurrences.at(-1) || null;
     const warnings = [];
     const currentInfo = Core.revisionInfo(rev);
     if (!key || !rev || !currentInfo.valid) warnings.push("Código ou revisão não identificado; confirme a identificação documental.");
     if (!index.complete) warnings.push("Histórico compartilhado indisponível ou incompleto. A ausência nesta cópia não confirma uma primeira postagem nem uma revisão inédita.");
     if (occurrences.some(entry => !entry.revision)) warnings.push("Há emissões antigas sem revisão registrada; confirme a revisão enviada.");
-    if (currentInfo.valid && occurrences.some(entry => {
+    const hasLaterRevision = currentInfo.valid && occurrences.some(entry => {
       const info = Core.revisionInfo(entry.revision);
       return info.valid && info.rank > currentInfo.rank;
-    })) warnings.push("Existe revisão posterior no Histórico.");
-    const determinate = Boolean(key && currentInfo.valid && (sameRevision.length || index.complete && !occurrences.some(entry => !entry.revision)));
+    });
+    if (hasLaterRevision) warnings.push("Existe revisão posterior no Histórico.");
+    const determinate = Boolean(key && currentInfo.valid && (sameRevision.length || (index.complete && !hasLaterRevision && !occurrences.some(entry => !entry.revision))));
     const emissionKind = determinate ? (sameRevision.length ? "REPOST" : occurrences.length ? "NEW_REVISION" : "FIRST_POSTING") : "";
     return {
       classificationVersion: VERSION, emissionKind, classificationStatus: determinate ? "CONFIRMED" : "UNCONFIRMED",
-      label: LABELS[emissionKind] || "Histórico a confirmar", documentCodeNormalized: key, revisionNormalized: rev,
+      label: LABELS[emissionKind] || (hasLaterRevision && !sameRevision.length ? "Conferir histórico" : "Histórico a confirmar"), documentCodeNormalized: key, revisionNormalized: rev,
       previousHistoryId: previous?.historyId || "", previousRevision: previous?.revision || "", previousGrdt: previous?.grdt || "",
       previousGeneratedAt: previous?.generatedAt || "", originalEmissionId: first?.historyId || "",
-      firstEmission: first, lastEmission: sameRevision.at(-1) || null,
+      firstEmission: first, lastEmission: sameRevision.at(-1) || null, latestEmission: latest,
       occurrenceCount: sameRevision.length, repostCount: Math.max(0, sameRevision.length - 1),
       historicalDocumentCount: occurrences.length, warnings, source: index.source,
     };
