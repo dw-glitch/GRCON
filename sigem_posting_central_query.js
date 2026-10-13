@@ -8,25 +8,14 @@
   "use strict";
   if(!A)return null;
   const {Conference:C,STATUSES:S,text,norm,revision,identity}=A;
+  const Refinement=typeof require==="function"?require("./posting_conference_refinement.js"):globalThis.GrconPostingConferenceRefinement;
   function consolidate(rows,baseRecords){
-    const grouped=new Map();
-    for(const row of rows){
-      const id=row.documentIdentity||identity(row.document);
-      if(!grouped.has(id))grouped.set(id,[]);
-      grouped.get(id).push(row);
-    }
-    const documents=[];
-    for(const [id,sends]of grouped){
-      const recent=A.latest(sends);
-      documents.push({...recent,documentIdentity:id,
-        sends:sends.slice().sort((a,b)=>text(b.generatedAt).localeCompare(text(a.generatedAt))),
-        sendCount:sends.length,
-        revisionCount:new Set(sends.map(r=>revision(r.revisionSent)).filter(Boolean)).size,
-        grdtCount:new Set(sends.map(r=>norm(r.egrdtNumber)).filter(Boolean)).size,
-        latestEgrdtNumber:recent.egrdtNumber});
-    }
-    documents.push(...A.baseOnly(baseRecords,new Set(grouped.keys())));
-    return documents.sort((a,b)=>text(b.generatedAt).localeCompare(text(a.generatedAt))||
+    // Reutiliza a regra oficial: mesma revisão enviada novamente = repostagem,
+    // confirmação de revisão antiga NÃO promove a última revisão.
+    const documents=Refinement.buildDocumentAggregates(rows,C);
+    documents.push(...A.baseOnly(baseRecords,new Set(documents.map(row=>row.documentIdentity))));
+    return documents.sort((a,b)=>
+      text(b.generatedAt).localeCompare(text(a.generatedAt))||
       text(a.document).localeCompare(text(b.document),"pt-BR"));
   }
   function build(historyRecords,base,previousState,options){
@@ -36,7 +25,7 @@
     const compare=C.reconcile(history,records,previousState||{},{
       baseReferenceDate:meta.referenceDate||meta.importedAt||"",
       now:options&&options.now,waitHours:options&&options.waitHours});
-    const events=A.enrich(compare.rows,history);
+    const events=Refinement.enrichRows(A.enrich(compare.rows,history),records,C);
     const documents=consolidate(events,records);
     return {documents,events,revisions:events.slice().sort((a,b)=>
       text(b.generatedAt).localeCompare(text(a.generatedAt))),
