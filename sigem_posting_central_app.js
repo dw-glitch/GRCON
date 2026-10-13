@@ -95,7 +95,7 @@
     document.querySelectorAll("[data-scc-view]").forEach(button=>
       button.classList.toggle("active",button.dataset.sccView===state.view));
   }
-  async function refresh(){
+  async function computeRefresh(){
     const token=++state.generation;
     const activeWorkspace=root.GrconCloud?.state?.membership?.workspace_id;
     const active=Boolean(activeWorkspace);
@@ -142,6 +142,27 @@
     if(oldWorkspace!==state.workspace)loadColumns();
     state.data=data;
     filter();
+  }
+  async function refresh(){
+    const scope=workspace();
+    try{
+      await computeRefresh();
+      state.lastError="";
+    }catch(error){
+      const message=String(error?.message||error||"Erro desconhecido");
+      // Um workspace novo jamais pode visualizar resultados anteriores durante erro.
+      if(state.workspace!==scope){
+        state.data=null;
+        state.workspace=scope;
+        loadColumns();
+      }
+      if(state.lastError!==message)notify("Falha na consulta SIGEM: "+message,"error");
+      state.lastError=message;
+      if(!state.data){
+        state.data=Query.build([],{records:[],meta:{}},{});
+      }
+      filter();
+    }
   }
   function exportExcel(){
     const keys=state.columns,rows=state.filtered.rows;
