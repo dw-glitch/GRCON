@@ -73,6 +73,7 @@
       '<strong>Colunas visíveis</strong><div id="sigem-central-settings-body"></div>'+
       '<button id="scc-columns-reset" type="button">Restaurar padrão</button></div>'+
       '<p id="sigem-central-missing" class="scc-missing" hidden></p>'+
+      '<button type="button" id="scc-copy-missing" class="secondary-button compact" hidden>Copiar todos os não encontrados</button>'+
       '<div id="sigem-central-table-scroll" class="scc-table-viewport" tabindex="0" aria-label="Tabela de consulta SIGEM">'+
       '<table class="scc-table"><thead id="sigem-central-thead"></thead>'+
       '<tbody id="sigem-central-tbody"></tbody></table></div>'+
@@ -168,6 +169,10 @@
       ["Total de resultados",rows.length],["Não encontrados",state.filtered.missing.join(" | ")],
       ["Gerado em",new Date().toISOString()]]);
     XLSX.utils.book_append_sheet(wb,info,"Fonte e filtros");
+    if(state.filtered.missing.length){
+      const missing=XLSX.utils.aoa_to_sheet([["Código não encontrado"],...state.filtered.missing.map(code=>[safe(code)])]);
+      XLSX.utils.book_append_sheet(wb,missing,"Não encontrados");
+    }
     XLSX.writeFile(wb,"GRCON_Central_Postagem_SIGEM_"+new Date().toISOString().slice(0,10)+".xlsx");
   }
   function bind(){
@@ -230,6 +235,13 @@
       saveColumns();filter();
     });
     $("#scc-export").addEventListener("click",exportExcel);
+    $("#scc-copy-missing").addEventListener("click",async()=>{
+      if(!state.filtered.missing.length)return;
+      try{
+        await navigator.clipboard.writeText(state.filtered.missing.join("\n"));
+        notify(state.filtered.missing.length+" código(s) não encontrado(s) copiados.","success");
+      }catch(_){notify("Não foi possível copiar os códigos.","warning");}
+    });
     $("#scc-copy").addEventListener("click",async()=>{
       const codes=[...new Set(state.filtered.rows.map(row=>row.document).filter(Boolean))];
       if(!codes.length){notify("Nenhum código para copiar.");return;}
