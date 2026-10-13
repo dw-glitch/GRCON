@@ -70,7 +70,7 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
   assert.equal(trace.kind,'allocated');assert.equal(trace.references.length,2);
   assert.ok(await page.evaluate(()=>Array.from({length:60},(_,i)=>window.GrconTriageUiApi.getResult(i)).every(row=>row.record.sharedAllocationContext.centralSnapshotId==='qa-central-1')));
   const categories=await page.evaluate(()=>Array.from({length:60},(_,i)=>{const row=window.GrconTriageUiApi.getResult(i);return window.GrconPostingFlow.lookup(row.document,row.revision).emissionKind;}));
-  assert.equal(categories.filter(k=>k==='REPOST').length,20);assert.equal(categories.filter(k=>k==='NEW_REVISION').length,20);assert.equal(categories.filter(k=>k==='FIRST_POSTING').length,20);
+  assert.equal(categories.filter(k=>k==='REPOST').length,20);assert.equal(categories.filter(k=>k==='').length,20,'A revisão selecionada é anterior à revisão A emitida: conferir histórico, não nova revisão');assert.equal(categories.filter(k=>k==='FIRST_POSTING').length,20);
   const mixed=await page.evaluate(()=>window.GrconEgrdtBatchPlan.preview('all'));
   assert.equal(mixed.valid,true,mixed.errors.join('\n'));assert.deepEqual(mixed.groups.map(g=>g.itemCount),[48,12]);
   await page.locator('#posting-batch-mode').selectOption('separate');
