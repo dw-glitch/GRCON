@@ -74,6 +74,7 @@
       [["Conferência",row.statusLabel],["Revisão enviada",row.revisionSent],["Revisão SIGEM",row.revisionFound],
         ["Status SIGEM",row.sigemStatus],["Última GRDT",row.egrdtNumber||row.latestEgrdtNumber],
         ["Alocação histórica",row.allocation],["Propósito",row.purpose],
+        ["Evidência do envio",row.sendEvidenceLabel||"Geração registrada; envio não comprovado"],
         ["Diagnóstico",row.note],["Fonte","Consulta Geral / Histórico GRCON"]].map(([k,v])=>
           '<dt>'+h(k)+'</dt><dd>'+h(v||"—")+'</dd>').join("")+'</dl>'+
       '<h4>Ocorrências no histórico ('+records.length+')</h4>'+
