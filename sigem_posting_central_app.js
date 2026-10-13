@@ -114,3 +114,87 @@
     XLSX.utils.book_append_sheet(wb,info,"Fonte e filtros");
     XLSX.writeFile(wb,"GRCON_Central_Postagem_SIGEM_"+new Date().toISOString().slice(0,10)+".xlsx");
   }
+  function bind(){
+    $("#scc-query").addEventListener("input",e=>{state.query=e.target.value;filter();});
+    $("#scc-list-toggle").addEventListener("click",()=>{
+      $("#scc-list-panel").hidden=!$("#scc-list-panel").hidden;
+      if(!$("#scc-list-panel").hidden)$("#scc-list-input").focus();
+      filter();
+    });
+    $("#scc-list-input").addEventListener("input",filter);
+    $("#scc-clear-list").addEventListener("click",()=>{
+      $("#scc-list-input").value="";filter();
+    });
+    document.querySelectorAll("[data-scc-view]").forEach(button=>
+      button.addEventListener("click",()=>{state.view=button.dataset.sccView;filter();}));
+    [["scc-status","status"],["scc-revision","revision"],["scc-start","start"],["scc-end","end"]]
+      .forEach(([id,key])=>$("#"+id).addEventListener("input",e=>{
+        state.filters[key]=e.target.value;filter();
+      }));
+    $("#scc-clear-filters").addEventListener("click",()=>{
+      state.filters={};
+      ["scc-status","scc-revision","scc-start","scc-end"].forEach(id=>$("#"+id).value="");
+      filter();
+    });
+    $("#scc-columns").addEventListener("click",()=>{
+      state.showColumns=!state.showColumns;
+      $("#sigem-central-column-pop").hidden=!state.showColumns;
+    });
+    $("#sigem-central-settings-body").addEventListener("change",e=>{
+      const key=e.target.dataset.sccColumn;if(!key)return;
+      if(e.target.checked&&!state.columns.includes(key))state.columns.push(key);
+      if(!e.target.checked&&state.columns.length>1)state.columns=state.columns.filter(k=>k!==key);
+      saveColumns();filter();
+    });
+    $("#scc-columns-reset").addEventListener("click",()=>{
+      state.columns=DEFAULT.slice();saveColumns();filter();
+    });
+    $("#scc-export").addEventListener("click",exportExcel);
+    $("#sigem-central-table-scroll").addEventListener("scroll",()=>View.drawRows(state),{passive:true});
+    $("#sigem-central-tbody").addEventListener("click",e=>{
+      const line=e.target.closest("[data-scc-index]");
+      if(line)View.detail(state,Number(line.dataset.sccIndex));
+    });
+    $("#sigem-central-tbody").addEventListener("keydown",e=>{
+      if(e.key==="Enter"){
+        const line=e.target.closest("[data-scc-index]");
+        if(line)View.detail(state,Number(line.dataset.sccIndex));
+      }
+    });
+    $("#sigem-central-detail").addEventListener("click",e=>{
+      if(e.target.closest(".scc-close"))$("#sigem-central-detail").hidden=true;
+    });
+    $("#scc-technical-open").addEventListener("click",()=>openTechnical());
+    $("#scc-back").addEventListener("click",()=>openCentral());
+    root.addEventListener("keydown",e=>{
+      if(e.key==="Escape"&&!$("#sigem-central-detail").hidden){
+        $("#sigem-central-detail").hidden=true;
+      }
+    });
+    ["grcon:history-updated","grcon:shared-sigem-updated",
+      "grcon:cloud-ready","grcon:conference-workspace-reset"]
+      .forEach(name=>root.addEventListener(name,()=>void refresh()));
+    root.addEventListener("grcon:module-ready",e=>{
+      if(e.detail?.module==="sigem")void refresh();
+    });
+    root.addEventListener("storage",e=>{
+      if(e.key===History.STORAGE_KEY)void refresh();
+    });
+  }
+  function openTechnical(){
+    state.panel="technical";
+    $("#sigem-central-workspace").hidden=true;
+    $("#sigem-technical-pane").hidden=false;
+  }
+  function openCentral(){
+    state.panel="central";
+    $("#sigem-central-workspace").hidden=false;
+    $("#sigem-technical-pane").hidden=true;
+    void refresh();
+  }
+  if(shell()){
+    loadColumns();bind();
+    root.GrconSigemCentralUi=Object.freeze({state,refresh,openTechnical,openCentral});
+    void refresh();
+  }
+})(window);
