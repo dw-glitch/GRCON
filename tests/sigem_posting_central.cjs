@@ -37,7 +37,9 @@ test("one document, different revisions and repeated emissions",()=>{
   assert.equal(Q.filter(data,"revisoes","DOC-A",{}).rows.length,3);
 });
 test("partial GRDT with two confirmations, one absent revision",()=>{
-  const records=[h("d","GRDT-X","DOC-1","B"),h("e","GRDT-X","DOC-2","A"),h("f","GRDT-X","DOC-3","C")];
+  const records=[{id:"d",egrdtNumber:"GRDT-X",generatedAt:dt,files:[
+    {document:"DOC-1",revision:"B"},{document:"DOC-2",revision:"A"},
+    {document:"DOC-3",revision:"C"}]}];
   const base={records:[b("DOC-1","B","Emitido"),b("DOC-2","A","Emitido"),b("DOC-3","B","Emitido")],
     meta:{referenceDate:"2026-10-13"}};
   const data=Q.build(records,base,{}, {now:"2026-10-13T10:00:00Z"});
