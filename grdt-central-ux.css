@@ -1,0 +1,71 @@
+/* Central GRDT — hierarquia de downloads, histórico e triagem corporativa */
+#results-section .grdt-main-download {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  min-width: 210px;
+}
+#results-section .grdt-main-download .primary-button {
+  min-height: 42px; padding: 9px 17px; font-weight: 750;
+  background: #1661aa; border-color: #1661aa; color: #fff;
+}
+#results-section .grdt-main-download small { font-size: .71rem; color: #66788d; }
+#results-section .secondary-downloads-menu { min-width: 230px; }
+#results-section #search { min-width: 230px; }
+#results-section .triage-operational-filter { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+#results-section .triage-operational-filter button {
+  border: 1px solid #d3ddea; background: white; color: #30445d;
+  border-radius: 7px; font-size: .73rem; padding: 6px 9px; cursor: pointer;
+}
+#results-section .triage-operational-filter button[aria-pressed="true"] {
+  border-color: #1d65ac; background: #eaf3fc; color: #124b85; font-weight: 750;
+}
+#results-section .triage-operational-filter button:focus-visible,
+#results-section .grdt-history-open:focus-visible { outline: 2px solid #1864ad; outline-offset: 2px; }
+#results-section #triage-sort { max-width: 145px; min-height: 32px; }
+#results-section .grdt-history-inline { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 180px; }
+#results-section .grdt-history-open {
+  display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 3px;
+  border: 0; padding: 2px 1px; background: transparent; color: #1a5793;
+  text-align: left; font-size: .76rem; line-height: 1.35; cursor: pointer;
+}
+#results-section .grdt-history-open:hover strong { text-decoration: underline; }
+#results-section .grdt-history-kicker { font-size: .66rem; color: #65768c; margin-right: 3px; }
+#results-section .grdt-history-open strong { font-weight: 760; }
+#results-section .grdt-history-revision { font-size: .7rem; color: #586b81; }
+#results-section .grdt-history-operation { display: inline-flex; font-size: .66rem; line-height: 1.2; color: #425b77; }
+#results-section .grdt-history-operation[data-kind="REPOST"] { color: #86551b; }
+#results-section .grdt-history-operation[data-kind="NEW_REVISION"] { color: #155e8d; }
+#results-section .grdt-history-operation[data-kind="UNCONFIRMED"] { color: #a15c28; }
+#results-section .result-row .document-code { font-weight: 720; }
+.grdt-history-backdrop:not([hidden]) { position: fixed; z-index: 11090; inset: 0; background: rgba(12, 30, 52, .38); }
+.grdt-history-panel:not([hidden]) {
+  position: fixed; z-index: 11091; top: 0; right: 0; height: 100dvh;
+  width: min(460px, 100vw); display: flex; flex-direction: column;
+  background: #fff; color: #23384f; box-shadow: -5px 0 30px rgba(9, 25, 50, .2);
+}
+.grdt-history-panel-header { display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 14px; padding: 23px 24px 18px; border-bottom: 1px solid #dfe7f0; }
+.grdt-history-panel-header small { letter-spacing: .08em; font-size: .64rem; color: #3972a6; font-weight: 750; }
+.grdt-history-panel-header h2 { font-size: 1.12rem; margin: 4px 0 8px; }
+.grdt-history-document { font-size: .83rem; font-weight: 700; overflow-wrap: anywhere; }
+.grdt-history-close { border: 1px solid #d4e0ea; background: white; border-radius: 8px;
+  padding: 6px 10px; cursor: pointer; color: #345; }
+.grdt-history-panel-content { flex: 1; overflow: auto; padding: 17px 24px 26px; }
+.grdt-history-panel-summary { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.grdt-history-panel-summary strong { font-size: .96rem; }
+.grdt-history-panel-summary small { color: #5d7186; line-height: 1.4; }
+.grdt-history-entry { padding: 12px 0 16px; border-bottom: 1px solid #dfe7f0; }
+.grdt-history-entry-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.grdt-history-entry-head strong { color: #175e9d; font-size: .92rem; }
+.grdt-history-latest { color: #31775e; font-size: .7rem; font-weight: 700; }
+.grdt-history-entry dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 0; }
+.grdt-history-entry dt { font-size: .65rem; color: #66798f; }
+.grdt-history-entry dd { font-size: .76rem; margin: 3px 0 0; font-weight: 640; overflow-wrap: anywhere; }
+.grdt-history-warnings { background: #fff7e9; color: #8c5627; padding: 8px 12px; border-radius: 7px; font-size: .77rem; }
+.grdt-history-warnings p { margin: 4px 0; }
+.grdt-history-empty, .grdt-history-error { font-size: .82rem; line-height: 1.5; }
+.grdt-history-panel-footer { border-top: 1px solid #dfe7f0; padding: 14px 24px;
+  background: #f7f9fc; color: #66778a; font-size: .72rem; line-height: 1.4; }
+@media (max-width: 1024px) {
+  #results-section .triage-operational-filter { max-width: 100%; }
+  #results-section .grdt-main-download { min-width: 170px; }
+}
