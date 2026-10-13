@@ -40,6 +40,17 @@
     })();
     return loading;
   }
+  function entries(document) {
+    // Reutiliza o índice único da classificação; sem N consultas por linha.
+    lookup(document, "");
+    const bucket = index.byDocument.get(Classification.documentKey(document));
+    return bucket ? bucket.occurrences.slice().reverse() : [];
+  }
+  function status() { return { complete: index.complete, source: index.source, loading: Boolean(loading), workspaceId: workspace }; }
+  function setFilter(value) {
+    filter = ["all", "postings", "reposts", "unconfirmed"].includes(value) ? value : "all";
+    root.GrconTriageUiApi?.render();
+  }
   function classifyPlan(plan) {
     for (const entry of plan.entries || []) entry.historyClassification = lookup(entry.document, entry.item?.revision || entry.revision);
     return plan;
@@ -88,7 +99,7 @@
     filter = button.dataset.postingFilter;
     root.GrconTriageUiApi?.render();
   });
-  root.GrconPostingFlow = Object.freeze({ lookup, refresh, classifyPlan, splitPlan, matches, badge, render,
+  root.GrconPostingFlow = Object.freeze({ lookup, entries, status, refresh, setFilter, classifyPlan, splitPlan, matches, badge, render,
     signature: () => `${generation}:${filter}`, getMode: () => postingMode,
     setMode(value) { postingMode = Planner.normalizeMode(value); root.GrconTriageUiApi?.render(); return postingMode; },
   });
