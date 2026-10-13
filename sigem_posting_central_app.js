@@ -104,21 +104,32 @@
     const base=active&&shared?.state?.workspace===activeWorkspace?shared.current():null;
     const data=Query.build(records,base||{records:[],meta:{}},{});
     const registry=root.GrconAllocationRegistry;
-    if(active&&registry?.resolve){
+    const requests=root.GrconRequestsControl;
+    if(active&&(registry?.resolve||requests?.current?.())){
       const resolved=new Map();
       const apply=row=>{
         if(!resolved.has(row.documentIdentity)){
-          const info=registry.resolve(row.document);
-          const comments=registry.fiscalComments?.(row.document)||[];
-          resolved.set(row.documentIdentity,{
+          const info=registry?.resolve?.(row.document)||{};
+          const comments=registry?.fiscalComments?.(row.document)||[];
+          const refs=Array.isArray(info.references)?info.references:[];
+          const unique=values=>[...new Set(values.filter(Boolean))].join(" | ");
+          const requestRows=requests?.current?.()?requests.find(row.document)||[]:[];
+          const entry={
             allocationState:info.label||"Alocação a confirmar",
             allocation:info.allocations?.join(" · ")||"",
-            fiscalComment:comments.length?comments.join(" | "):undefined,
+            fiscalComment:unique(comments)||undefined,
+            fiscal2Comment:unique(refs.map(r=>r.fiscal2Comment))||undefined,
+            fiscal1ReturnedAt:unique(refs.map(r=>r.fiscal1ReturnedAt)),
+            fiscal2ReturnedAt:unique(refs.map(r=>r.fiscal2ReturnedAt)),
+            requestsCount:requestRows.length,
+            requestsDetail:unique(requestRows.map(r=>r.sheet+" · linha "+r.sourceRow)),
             allocationNotes:info.warnings?.join(" · ")||"",
-          });
+          };
+          resolved.set(row.documentIdentity,entry);
         }
         const enrichment={...resolved.get(row.documentIdentity)};
         if(enrichment.fiscalComment===undefined)delete enrichment.fiscalComment;
+        if(enrichment.fiscal2Comment===undefined)delete enrichment.fiscal2Comment;
         Object.assign(row,enrichment);
       };
       data.documents.forEach(apply);
@@ -283,7 +294,8 @@
     });
     ["grcon:history-updated","grcon:shared-sigem-updated",
       "grcon:cloud-ready","grcon:conference-workspace-reset",
-      "grcon:allocation-registry-updated","grcon:planned-documents-updated"]
+      "grcon:allocation-registry-updated","grcon:planned-documents-updated",
+      "grcon:requests-control-updated","grcon:contract-context-changed"]
       .forEach(name=>root.addEventListener(name,()=>void refresh()));
     root.addEventListener("grcon:module-ready",e=>{
       if(e.detail?.module==="sigem")void refresh();
