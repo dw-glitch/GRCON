@@ -36,6 +36,7 @@
     const lookup = historyExtras(records);
     return rows.map(row => ({
       ...row, ...(lookup.get(norm(row.egrdtNumber)+"|"+identity(row.document)+"|"+revision(row.revisionSent))||{}),
+      purpose:row.purpose, // origem por ocorrência, nunca sobrescrever por índice aproximado
       statusLabel:Conference.statusLabel(row.status),
       sendEvidenceLabel:"Geração registrada; envio não comprovado"
     }));
