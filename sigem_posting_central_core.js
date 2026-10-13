@@ -17,7 +17,9 @@
     ["sigemStatus","Status SIGEM"],["egrdtNumber","Última eGRDT"],
     ["generatedAt","Data da geração"],["sendCount","Ocorrências"],
     ["revisionCount","Revisões"],["purpose","Propósito"],["allocation","Alocação"],
-    ["discipline","Disciplina"],["note","Diagnóstico"]
+    ["discipline","Disciplina"],["allocationState","Situação da alocação"],
+    ["fiscalComment","Comentário Fiscal 01"],["allocationNotes","Observações de alocação"],
+    ["note","Diagnóstico"]
   ]);
   function historyExtras(records) {
     const lookup = new Map();
