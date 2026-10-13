@@ -18,7 +18,10 @@
     ["generatedAt","Data da geração"],["sendCount","Ocorrências"],
     ["revisionCount","Revisões"],["purpose","Propósito"],["allocation","Alocação"],
     ["discipline","Disciplina"],["allocationState","Situação da alocação"],
-    ["fiscalComment","Comentário Fiscal 01"],["allocationNotes","Observações de alocação"],
+    ["fiscalComment","Comentário Fiscal 01"],["fiscal2Comment","Comentário Fiscal 02"],
+    ["fiscal1ReturnedAt","Retorno Fiscal 01"],["fiscal2ReturnedAt","Retorno Fiscal 02"],
+    ["requestsCount","Solicitações"],["requestsDetail","Referências de solicitações"],
+    ["allocationNotes","Observações de alocação"],
     ["note","Diagnóstico"]
   ]);
   function historyExtras(records) {
