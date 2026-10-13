@@ -20,7 +20,7 @@
     // Ele é uma view lógica, não um arquivo chamado /dashboard.
     dashboard: [],
     "ld-posting": ["xlsx", "zip", "ld_posting_writer.js"],
-    sigem: ["navigation", "ld-posting", "posting_conference_core.js", "sigem_posting_central_core.js", "sigem_posting_central_query.js", "sigem_posting_central_render.js", "sigem_posting_central_app.js", "sigem_posting_app.js"],
+    sigem: ["navigation", "ld-posting", "posting_conference_core.js", "posting_conference_refinement.js", "sigem_posting_central_core.js", "sigem_posting_central_query.js", "sigem_posting_central_render.js", "sigem_posting_central_app.js", "sigem_posting_app.js"],
     // A consulta lê LDs e exporta Excel; a Taxonomia Interna é projetada da
     // mesma linha já escolhida pelo motor, antes da tela e das saídas.
     // A tela de "Consulta de documentos" é uma ilha React (src/react/consultas),
