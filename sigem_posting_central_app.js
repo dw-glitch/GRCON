@@ -6,17 +6,23 @@
   const DEFAULT=["document","title","revisionSent","revisionFound",
     "statusLabel","sigemStatus","egrdtNumber","generatedAt","sendCount"];
   const state={view:"documentos",panel:"central",query:"",filters:{},columns:DEFAULT.slice(),
-    showColumns:false,data:null,filtered:{rows:[],missing:[]},generation:0};
+    showColumns:false,sort:{key:"",dir:"asc"},widths:{},keepScroll:false,data:null,filtered:{rows:[],missing:[]},generation:0};
   function workspace(){return root.GrconCloud?.state?.membership?.workspace_id||"unavailable";}
-  function storageKey(){return "grcon.sigem.central.columns.v1:"+workspace();}
+  function storageKey(){return "grcon.sigem.central.preferences.v2:"+workspace()+":"+(root.GrconCloud?.state?.session?.user?.id||"anonymous");}
   function loadColumns(){
     try{
       const v=JSON.parse(localStorage.getItem(storageKey())||"null");
-      state.columns=Array.isArray(v)?v.filter(k=>root.GrconSigemCentralCore.COLUMNS.some(c=>c[0]===k)):DEFAULT.slice();
+      const valid=new Set(root.GrconSigemCentralCore.COLUMNS.map(c=>c[0]));
+      state.columns=Array.isArray(v?.columns)?[...new Set(v.columns.filter(k=>valid.has(k)))]:DEFAULT.slice();
       if(!state.columns.length)state.columns=DEFAULT.slice();
-    }catch(_){state.columns=DEFAULT.slice();}
+      state.widths=v?.widths&&typeof v.widths==="object"?Object.fromEntries(
+        Object.entries(v.widths).filter(([k,n])=>valid.has(k)&&Number(n)>=90&&Number(n)<=600)):{};
+      state.sort=valid.has(v?.sort?.key)?{key:v.sort.key,dir:v.sort.dir==="desc"?"desc":"asc"}:{key:"",dir:"asc"};
+    }catch(_){state.columns=DEFAULT.slice();state.widths={};state.sort={key:"",dir:"asc"};}
   }
-  function saveColumns(){try{localStorage.setItem(storageKey(),JSON.stringify(state.columns));}catch(_){}}
+  function saveColumns(){try{localStorage.setItem(storageKey(),JSON.stringify({
+    columns:state.columns,widths:state.widths,sort:state.sort
+  }));}catch(_){}}
   function notify(msg,type){
     if(typeof root.GrconNotify==="function")root.GrconNotify(msg,type||"info");
   }
@@ -50,8 +56,12 @@
       '<option value="Alocado">Alocado</option><option value="Não alocado">Não alocado</option>'+
       '<option value="Alocação a confirmar">Não identificado</option></select></label>'+
       '<label>Revisão <input id="scc-revision" placeholder="Todas" maxlength="8"/></label>'+
+      '<label>Disciplina <input id="scc-discipline" placeholder="Todas"/></label>'+
+      '<label>Propósito <input id="scc-purpose" placeholder="Todos"/></label>'+
+      '<label>Fiscal <input id="scc-fiscal" placeholder="Comentários"/></label>'+
       '<label>De <input id="scc-start" type="date"/></label>'+
       '<label>Até <input id="scc-end" type="date"/></label>'+
+      '<label class="scc-check"><input id="scc-reposts" type="checkbox"/> Com repostagens</label>'+
       '<button id="scc-clear-filters" type="button" class="secondary-button compact">Limpar filtros</button>'+
       '</div>'+
       '<div class="scc-kpis" id="sigem-central-kpis"></div>'+
@@ -79,7 +89,7 @@
     if(!state.data)return;
     const listInput=$("#scc-list-input");
     const query=listInput&&!$("#scc-list-panel").hidden&&listInput.value.trim()?listInput.value:state.query;
-    state.filtered=Query.filter(state.data,state.view,query,state.filters);
+    state.filtered=Query.filter(state.data,state.view,query,state.filters,state.sort);
     View.draw(state);
     document.querySelectorAll("[data-scc-view]").forEach(button=>
       button.classList.toggle("active",button.dataset.sccView===state.view));
@@ -154,13 +164,14 @@
     });
     document.querySelectorAll("[data-scc-view]").forEach(button=>
       button.addEventListener("click",()=>{state.view=button.dataset.sccView;filter();}));
-    [["scc-status","status"],["scc-allocation","allocationState"],["scc-revision","revision"],["scc-start","start"],["scc-end","end"]]
+    [["scc-status","status"],["scc-allocation","allocationState"],["scc-revision","revision"],["scc-discipline","discipline"],["scc-purpose","purpose"],["scc-fiscal","fiscal"],["scc-reposts","reposts"],["scc-start","start"],["scc-end","end"]]
       .forEach(([id,key])=>$("#"+id).addEventListener("input",e=>{
-        state.filters[key]=e.target.value;filter();
+        state.filters[key]=e.target.type==="checkbox"?e.target.checked:e.target.value;filter();
       }));
     $("#scc-clear-filters").addEventListener("click",()=>{
       state.filters={};
-      ["scc-status","scc-allocation","scc-revision","scc-start","scc-end"].forEach(id=>$("#"+id).value="");
+      ["scc-status","scc-allocation","scc-revision","scc-discipline","scc-purpose","scc-fiscal","scc-start","scc-end"].forEach(id=>$("#"+id).value="");
+      $("#scc-reposts").checked=false;
       filter();
     });
     $("#scc-columns").addEventListener("click",()=>{
