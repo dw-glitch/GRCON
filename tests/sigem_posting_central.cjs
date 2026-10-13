@@ -68,3 +68,54 @@ test("CSV neutralizes formulas and preserves column order",()=>{
   assert.ok(csv.includes('"Conferência";"Documento"'));
   assert.match(csv,/'=1\+2/);
 });
+
+test("last sent revision remains pending even when older revision is present",()=>{
+  const data=Q.build([
+    h("g1","GRDT-ONE","DOC-90","A","2026-10-01T12:00:00Z"),
+    h("g2","GRDT-TWO","DOC-90","B","2026-10-12T12:00:00Z")
+  ],{records:[b("DOC-90","A","Emitido")],meta:{referenceDate:"2026-10-13"}},{},
+  {now:"2026-10-13T16:00:00Z"});
+  const doc=data.documents.find(r=>r.document==="DOC-90");
+  assert.equal(doc.revisionSent,"B");
+  assert.equal(doc.revisionCount,2);
+  assert.notEqual(doc.status,C.STATUSES.CONFIRMED);
+  assert.equal(doc.repostCount,0);
+});
+test("same revision resent is a repost, not another revision",()=>{
+  const data=Q.build([
+    h("g1","GRDT-ONE","DOC-91","B","2026-10-01T12:00:00Z"),
+    h("g2","GRDT-TWO","DOC-91","B","2026-10-12T12:00:00Z")
+  ],{records:[b("DOC-91","B","Em análise")],meta:{referenceDate:"2026-10-13"}},{});
+  const doc=data.documents.find(r=>r.document==="DOC-91");
+  assert.equal(doc.revisionCount,1);
+  assert.equal(doc.repostCount,1);
+  assert.equal(doc.sendCount,2);
+});
+test("searching list of document codes inside GRDT checks member rows",()=>{
+  const data=Q.build([{
+    id:"gx",egrdtNumber:"GRDT-99",generatedAt:dt,files:[
+      {document:"DOC-101",revision:"0"},
+      {document:"DOC-102",revision:"0"}]
+  }],{records:[b("DOC-101","0","Emitido"),b("DOC-102","0","Emitido")],meta:{}},{});
+  const found=Q.filter(data,"grdts","DOC-101\nDOC-102\nDOC-999",{});
+  assert.equal(found.rows.length,1);
+  assert.deepEqual(found.missing,["DOC-999"]);
+});
+test("sort document revisions by official revision rank and preserve source order",()=>{
+  const rows=[
+    {revisionSent:"B",document:"Z",generatedAt:"2026-10-12"},
+    {revisionSent:"0",document:"A",generatedAt:"2026-10-10"},
+    {revisionSent:"A",document:"X",generatedAt:"2026-10-11"}
+  ];
+  assert.deepEqual(Q.sortRows(rows,{key:"revisionSent",dir:"asc"}).map(x=>x.revisionSent),["0","A","B"]);
+  assert.equal(rows[0].revisionSent,"B");
+});
+test("advanced filters intersect rather than expand results",()=>{
+  const data=Q.build([h("g1","GRDT-01","DOC-01","0")],
+    {records:[b("DOC-01","0","Emitido")],meta:{}},{});
+  data.documents[0].allocationState="Alocado";
+  data.documents[0].discipline="MEC";
+  data.documents[0].fiscalComment="Fiscal 01: ok";
+  assert.equal(Q.filter(data,"documentos","",{allocationState:"Alocado",discipline:"MEC",fiscal:"Fiscal 01"}).rows.length,1);
+  assert.equal(Q.filter(data,"documentos","",{allocationState:"Não alocado",discipline:"MEC"}).rows.length,0);
+});
