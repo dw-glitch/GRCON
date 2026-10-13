@@ -86,3 +86,22 @@
  #sigem-module .scc-heading{align-items:start;flex-direction:column}
  #sigem-module .scc-column-pop>div{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+/* Complementos da central, sem alterar os outros módulos. */
+#sigem-module .scc-header-actions{display:flex;gap:8px;flex-wrap:wrap}
+#sigem-module .scc-sort{background:transparent;border:0;color:inherit;font:inherit;font-weight:700;
+  padding:0;cursor:pointer;text-align:left;white-space:nowrap}
+#sigem-module .scc-sort:focus-visible{outline:2px solid #0b72ae;outline-offset:3px}
+#sigem-module .scc-check{display:flex;align-items:center;gap:6px;min-height:35px}
+#sigem-module .scc-column-pop>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#sigem-module .scc-column-option{padding:7px;border:1px solid #e0e8ee;border-radius:6px;min-width:0}
+#sigem-module .scc-column-option>div{display:flex;align-items:center;gap:4px;margin-top:5px}
+#sigem-module .scc-column-option button{min-width:26px;min-height:26px;background:#eff5f9;border:1px solid #cbdce6;border-radius:5px}
+#sigem-module .scc-column-option input[type=number]{width:80px;min-width:60px;padding:3px;border:1px solid #cbdce6;border-radius:5px}
+#sigem-module .scc-column-pop{max-width:820px}
+#sigem-module .scc-filters input[type=text]{max-width:165px}
+#sigem-module .scc-table{table-layout:fixed;min-width:850px}
+#sigem-module .scc-table thead th{overflow:hidden;text-overflow:ellipsis}
+#sigem-module .scc-not-found{max-height:150px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+#sigem-module .scc-detail button:not(.scc-close){padding:8px 12px;border:1px solid #c5d9e5;border-radius:7px;background:#eef6fa;cursor:pointer}
+#sigem-module .scc-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+@media(max-width:850px){#sigem-module .scc-column-pop>div{grid-template-columns:minmax(0,1fr)}}
