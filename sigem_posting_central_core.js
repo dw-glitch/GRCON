@@ -72,3 +72,6 @@
       };
     });
   }
+
+  return Object.freeze({COLUMNS,STATUSES,Conference,identity,text,norm,revision,enrich,latest,baseOnly});
+});
