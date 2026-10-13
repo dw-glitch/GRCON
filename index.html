@@ -41,6 +41,7 @@
 <link href="grcon-version-c-phase2.css" rel="stylesheet"/>
 <link href="grcon-profile-avatar.css" rel="stylesheet"/>
 <meta content="5.44.9" name="application-version"/><link rel="stylesheet" href="allocation-dashboard.css" />
+<link rel="stylesheet" href="grdt-central-ux.css" />
 </head>
 <body>
 <a class="skip-link" href="#app-main">Ir direto para o conteúdo principal</a>
@@ -272,7 +273,7 @@
 <div class="results-toolbar">
 <label class="search-box">
 <svg viewbox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M16 16l5 5"></path></svg>
-<input id="search" placeholder="Buscar documento…" type="search"/>
+<input id="search" placeholder="Pesquisar documento, arquivo ou eGRDT..." type="search"/>
 </label>
 <select aria-label="Filtrar por aba" class="filter-select" id="sheet-filter"><option value="todos">Todas as abas</option></select>
 <span class="p1-shown-count" id="p1-shown-count">Nenhum resultado</span>
@@ -289,10 +290,25 @@
 <button class="secondary-button compact" disabled="" id="export-report" title="Baixar relatório de triagem" type="button">Baixar relatório da triagem</button>
 <button class="secondary-button compact" disabled="" id="export-pending-allocation-pdfs" title="Baixar somente os PDFs com número de alocação registrado e confirmação ainda como Não Alocado" type="button">PDFs aguardando alocação</button>
 <button class="secondary-button compact" id="view-pending-allocation-history" title="Ver histórico de documentos aguardando retorno da alocação" type="button">📊 Histórico de alocações pendentes</button>
-<button class="secondary-button compact" disabled="" id="export-zip" type="button">Baixar arquivos + eGRDT</button>
+<button class="secondary-button compact" disabled="" id="export-egrdt" type="button">Baixar somente eGRDT</button>
 <button class="secondary-button compact final-package-button" disabled="" id="export-final-package" type="button">Baixar pacote completo</button>
 </div></details>
-<button class="primary-button" disabled="" id="export-egrdt" type="button">Baixar eGRDT final</button>
+<div class="grdt-main-download"><button class="primary-button" disabled="" id="export-zip" type="button">↓ Baixar PDFs + eGRDT</button><small>PDFs dos documentos e eGRDT para envio</small></div>
+</div>
+<div class="triage-operational-filter" id="triage-operational-filter" aria-label="Filtros rápidos de documentos">
+  <button type="button" data-grdt-quick-filter="all" aria-pressed="true">Todos</button>
+  <button type="button" data-grdt-quick-filter="included" aria-pressed="false">Incluídos</button>
+  <button type="button" data-grdt-quick-filter="excluded" aria-pressed="false">Excluídos</button>
+  <button type="button" data-grdt-quick-filter="issued" aria-pressed="false">Já emitidos</button>
+  <button type="button" data-grdt-quick-filter="repost" aria-pressed="false">Repostagens</button>
+  <button type="button" data-grdt-quick-filter="issues" aria-pressed="false" title="Alertas e bloqueios da triagem; não significa pendência de postagem no SIGEM.">Com pendências da triagem</button>
+  <select aria-label="Ordenar documentos" id="triage-sort" class="filter-select">
+    <option value="original">Ordem original</option><option value="document">Código</option>
+    <option value="file">Arquivo</option><option value="revision">Revisão</option>
+    <option value="status">Situação</option><option value="history">Emissão mais recente</option>
+  </select>
+  <button type="button" id="triage-clear-all">Limpar filtros</button>
+  <small id="triage-filter-result-count" aria-live="polite"></small>
 </div>
 <section aria-live="polite" class="egrdt-teams-ready" hidden id="egrdt-teams-ready">
 <header><div><span>PRÓXIMA ETAPA</span><strong>eGRDT pronta para avisar no Teams</strong><small>Depois de colocar a eGRDT na pasta, confirme o aviso ao grupo “Qualidade - Documentação”.</small></div></header>
@@ -659,6 +675,7 @@
 <script defer="" src="posting_batch_planner.js"></script>
 <script defer="" src="emission.js"></script>
 <script defer="" src="posting_flow.js"></script>
+<script defer="" src="grdt_central_history_ui.js"></script>
 <script defer="" src="pending_allocation_package.js"></script>
 
 
