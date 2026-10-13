@@ -27,7 +27,7 @@
       '<header class="scc-heading"><div><span>CENTRAL OPERACIONAL</span>'+
       '<h2>Central de Postagem SIGEM</h2>'+
       '<p>Consulta, conferência e rastreabilidade documental</p></div>'+
-      '<button type="button" id="scc-technical-open" class="secondary-button compact">Conferir pacote .xls</button></header>'+
+      '<div class="scc-header-actions"><button type="button" id="scc-monitor-open" class="secondary-button compact">Evolução e monitoramento</button><button type="button" id="scc-technical-open" class="secondary-button compact">Conferir pacote .xls</button></div></header>'+
       '<p class="scc-base" id="sigem-central-base" role="status"></p>'+
       '<div class="scc-query"><input type="search" id="scc-query" autocomplete="off" '+
       'placeholder="Pesquisar documento, GRDT, título ou revisão" aria-label="Pesquisa universal"/>'+
@@ -198,6 +198,16 @@
     });
     $("#sigem-central-detail").addEventListener("click",e=>{
       if(e.target.closest(".scc-close"))$("#sigem-central-detail").hidden=true;
+    });
+    $("#scc-monitor-open").addEventListener("click",async()=>{
+      const scope=workspace();
+      try{
+        await root.GRCONModuleLoader.ensureModule("requests");
+        if(scope!==workspace())return;
+        const area=document.querySelector('[data-requests-area="sigem-monitoring"]');
+        if(!area)throw new Error("A área de monitoramento ainda não está disponível.");
+        area.click();
+      }catch(error){notify(error.message||"Não foi possível abrir o monitoramento.","error");}
     });
     $("#scc-technical-open").addEventListener("click",()=>openTechnical());
     $("#scc-back").addEventListener("click",()=>openCentral());
