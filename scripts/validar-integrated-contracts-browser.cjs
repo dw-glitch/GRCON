@@ -93,7 +93,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  assert.match(await page.locator('#pdf-meta').textContent(),/1 recuperado\(s\) do Cofre/);
  await page.locator('#missing-documents').waitFor({state:'visible'});assert.match(await page.locator('#missing-documents').textContent(),/RL-5290\.00-22313-856-C1O-018/);
  await page.screenshot({path:path.join(out,'cofre-central.png')});
- await page.locator('#select-row-0').check();const grdtDownloadPromise=page.waitForEvent('download');await page.locator('#export-egrdt').click();await page.locator('#p1-sequence-confirm').check();await page.locator('#p1-confirm-ok').click();const generated=await grdtDownloadPromise;await generated.saveAs(path.join(out,'cofre-generated.xls'));
+ await page.locator('#select-row-0').check();await page.locator('.secondary-downloads > summary').click();const grdtDownloadPromise=page.waitForEvent('download');await page.locator('#export-egrdt').click();await page.locator('#p1-sequence-confirm').check();await page.locator('#p1-confirm-ok').click();const generated=await grdtDownloadPromise;await generated.saveAs(path.join(out,'cofre-generated.xls'));
  await page.waitForFunction(()=>window.GrconHistory.read().some(r=>r.files?.some(f=>f.vaultFileId==='qa-file')));
  const provenance=await page.evaluate(()=>window.GrconHistory.read().flatMap(r=>r.files||[]).find(f=>f.vaultFileId==='qa-file')?.fileProvenance||null);
  assert.deepEqual(provenance,{source:'cofre',fileName:code+'.docx',revision:'0',format:'docx',sizeBytes:16,vaultFileId:'qa-file',catalogSequence:77,fileVersion:1,sha256:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',createdAt:'2026-10-07T12:00:00Z',verifiedAt:'2026-10-07T12:01:00Z'});

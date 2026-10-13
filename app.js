@@ -101,6 +101,8 @@
     filter: "todos",
     sheetFilter: "todos",
     search: "",
+    quickFilter: "all",
+    sortBy: "original",
     columnFilters: {},
     recentDays: 30,
     busy: false,
@@ -2297,6 +2299,8 @@
       databook: row.record && row.record.databook || "",
     };
     if (C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
+    state.resultVersion += 1;
+    state.filteredCache = { signature: "", indices: [] };
     return { ok: true, manual: row.revisionManual };
   }
 
@@ -2963,40 +2967,42 @@
     ["situation", "Situação"], ["originalFile", "Arquivo original"], ["document", "Documento"],
     ["ldCode", "Código da LD"], ["apendiceSearch", "Busca no Apêndice"], ["tagged", "Tagueado sim ou não?"],
     ["sheet", "Aba LD"],
-    ["ldRevision", "Revisão encontrada"], ["targetRevision", "Revisão do documento"], ["revisionManual", "Alterada manualmente"], ["title", "Título"], ["effectiveDate", "Data efetiva"],
+    ["ldRevision", "Revisão encontrada"], ["targetRevision", "Revisão do documento"], ["title", "Título"], ["effectiveDate", "Data efetiva"],
     ["grdt", "GRDT"], ["technicalStatus", "Status"], ["sigemStatus", "Status SIGEM"], ["targetStatus", "Status da revisão"],
     ["postingStatus", "Situação de postagem"], ["fiscalComment", "Comentário da Fiscal"], ["allocation", "Alocação"],
     ["allocationStage", "Etapa da alocação"], ["allocationStatus", "Confirmação"], ["databook", "Caminho Databook"], ["finalFile", "Arquivo final"],
   ]);
 
   function resultColumnValue(row, keyName) {
+    // Avalia somente a coluna solicitada: antes cada filtro calculava todos os
+    // 22 campos, inclusive repetidas consultas ao Apêndice e à estrutura LD.
     const record = row && row.record || {};
-    const values = {
-      situation: compactDecisionLabel(row),
-      originalFile: [row && row.name, ...(row && row.files || []).map((entry) => entry.name)].filter(Boolean).join(" | "),
-      document: row && row.document,
-      ldCode: apendiceInfo(row).ldCode,
-      apendiceSearch: apendiceInfo(row).search,
-      tagged: apendiceInfo(row).tagged,
-      sheet: row && row.sheet,
-      ldRevision: record.revision,
-      targetRevision: row && row.revision,
-      revisionManual: row && row.revisionManual ? "Sim" : "Não",
-      title: record.title,
-      effectiveDate: formatDateBR(ldValue(record, "DATA EFETIVA DE EMISSÃO") || record.effectiveDate),
-      grdt: record.grdt || row && row.grdt,
-      technicalStatus: record.status,
-      sigemStatus: record.sigemStatus,
-      targetStatus: row && row.status,
-      postingStatus: row && (row.postingStatus || row.postingEvidence && row.postingEvidence.status),
-      fiscalComment: record.fiscalComment,
-      allocation: record.allocation,
-      allocationStage: record.allocationStage || ldValue(record, "ETAPA DA ALOCAÇÃO"),
-      allocationStatus: record.allocationStatus || row && row.allocationStatus,
-      databook: record.databook,
-      finalFile: row && row.finalName,
-    };
-    return values[keyName] || "";
+    switch (keyName) {
+      case "situation": return compactDecisionLabel(row);
+      case "originalFile": return [row?.name, ...(row?.files || []).map(entry => entry.name)].filter(Boolean).join(" | ");
+      case "document": return row?.document || "";
+      case "ldCode": return apendiceInfo(row).ldCode || "";
+      case "apendiceSearch": return apendiceInfo(row).search || "";
+      case "tagged": return apendiceInfo(row).tagged || "";
+      case "sheet": return row?.sheet || "";
+      case "ldRevision": return record.revision || "";
+      case "targetRevision": return row?.revision || "";
+      case "revisionManual": return row?.revisionManual ? "Sim" : "Não";
+      case "title": return record.title || "";
+      case "effectiveDate": return formatDateBR(ldValue(record, "DATA EFETIVA DE EMISSÃO") || record.effectiveDate);
+      case "grdt": return record.grdt || row?.grdt || "";
+      case "technicalStatus": return record.status || "";
+      case "sigemStatus": return record.sigemStatus || "";
+      case "targetStatus": return row?.status || "";
+      case "postingStatus": return row?.postingStatus || row?.postingEvidence?.status || "";
+      case "fiscalComment": return record.fiscalComment || "";
+      case "allocation": return record.allocation || "";
+      case "allocationStage": return record.allocationStage || ldValue(record, "ETAPA DA ALOCAÇÃO") || "";
+      case "allocationStatus": return record.allocationStatus || row?.allocationStatus || "";
+      case "databook": return record.databook || "";
+      case "finalFile": return row?.finalName || "";
+      default: return "";
+    }
   }
 
   // state.columnFilters[key] guarda os valores NORMALIZADOS marcados
@@ -3007,13 +3013,27 @@
     return Object.entries(state.columnFilters || {}).filter(([, values]) => Array.isArray(values) && values.length);
   }
 
+  let lastTriageSearch = "", cachedTriageSearch = "";
+  function normalizedTriageSearch() {
+    if (lastTriageSearch !== state.search) {
+      lastTriageSearch = state.search;
+      cachedTriageSearch = C.norm(lastTriageSearch);
+    }
+    return cachedTriageSearch;
+  }
+
   function rowPassesBaseFilters(row) {
     if (state.filter === "bloqueado" && !row.hardBlock) return false;
     if (state.filter === C.REVIEW && (row.hardBlock || row.decision !== C.REVIEW)) return false;
     if (!["todos", "bloqueado", C.REVIEW].includes(state.filter) && row.decision !== state.filter) return false;
     if (state.sheetFilter !== "todos" && C.norm(row.sheet) !== state.sheetFilter) return false;
-    const query = C.norm(state.search);
-    if (query && !C.norm(`${row.name} ${row.document} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt}`).includes(query)) return false;
+    const query = normalizedTriageSearch();
+    if (query) {
+      const historyNumbers = PostingFlow?.searchText(row.document) || "";
+      const ldDocumentCode = resultColumnValue(row, "ldCode");
+      const fileNames = (row.files || []).map(entry => entry.name).join(" ");
+      if (!C.norm(`${row.name} ${fileNames} ${row.document} ${ldDocumentCode} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt} ${row.record?.grdt || ""} ${historyNumbers}`).includes(query)) return false;
+    }
     return true;
   }
 
@@ -3268,16 +3288,40 @@
     renderAll();
   }
 
+  function matchesQuickFilter(row, index) {
+    switch (state.quickFilter) {
+      case "included": return state.selected.has(index);
+      case "excluded": return !state.selected.has(index);
+      case "issued": return Boolean(PostingFlow?.lookup(row.document, row.revision).latestEmission);
+      case "repost": return PostingFlow?.lookup(row.document, row.revision).emissionKind === "REPOST";
+      case "issues": return Boolean(row.hardBlock || row.revisionFormatWarning || row.decision === C.REVIEW || row.allocationFinding?.awaitingReturn);
+      default: return true;
+    }
+  }
+
+  function compareTriageRows(left, right) {
+    switch (state.sortBy) {
+      case "document": return String(left.document || "").localeCompare(String(right.document || ""), "pt-BR", { numeric: true });
+      case "file": return String(left.name || "").localeCompare(String(right.name || ""), "pt-BR", { numeric: true });
+      case "revision": return (C.revisionInfo(left.revision)?.rank ?? -1) - (C.revisionInfo(right.revision)?.rank ?? -1);
+      case "status": return compactDecisionLabel(left).localeCompare(compactDecisionLabel(right), "pt-BR");
+      case "history": return String(PostingFlow?.lookup(right.document, right.revision).latestEmission?.generatedAt || "").localeCompare(String(PostingFlow?.lookup(left.document, left.revision).latestEmission?.generatedAt || ""));
+      default: return 0;
+    }
+  }
+
   function filteredResultIndices() {
     const columnFilters = activeColumnFilters();
     const columnSignature = columnFilters.map(([keyName, values]) => `${keyName}:${[...values].sort().join(",")}`).join("|");
-    const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${C.norm(state.search)}|${columnSignature}|group:${state.groupByStatus ? "1" : "0"}|posting:${PostingFlow?.signature() || ""}`;
+    const selectionSignature = ["included", "excluded"].includes(state.quickFilter) ? [...state.selected].sort((a, b) => a - b).join(",") : "";
+    const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${C.norm(state.search)}|${columnSignature}|quick:${state.quickFilter}|selected:${selectionSignature}|sort:${state.sortBy}|group:${state.groupByStatus ? "1" : "0"}|posting:${PostingFlow?.signature() || ""}`;
     if (state.filteredCache && state.filteredCache.signature === signature) return state.filteredCache.indices;
     const indices = [];
     for (let index = 0; index < state.results.length; index += 1) {
       const row = state.results[index];
       if (!rowPassesBaseFilters(row)) continue;
       if (PostingFlow && !PostingFlow.matches(row)) continue;
+      if (!matchesQuickFilter(row, index)) continue;
       if (!rowPassesColumnFilters(row, null, columnFilters)) continue;
       indices.push(index);
     }
@@ -3289,8 +3333,11 @@
         const leftKey = decisionGroupKey(left);
         const rightKey = decisionGroupKey(right);
         const difference = (rank[leftKey] ?? 9) - (rank[rightKey] ?? 9);
-        return difference || String(left.document || "").localeCompare(String(right.document || ""), "pt-BR", { numeric: true });
+        return difference || compareTriageRows(left, right) || String(left.document || "").localeCompare(String(right.document || ""), "pt-BR", { numeric: true });
       });
+    }
+    if (!state.groupByStatus && state.sortBy !== "original") {
+      indices.sort((a, b) => compareTriageRows(state.results[a], state.results[b]) || a - b);
     }
     state.filteredCache = { signature, indices };
     return indices;
@@ -3817,7 +3864,7 @@
           <span class="status-chip ${resultClass}">${compactDecisionLabel(row)}</span>
         </div></td>
         <td>${renderRowFileList(row, false)}${renderFileOrigin(row)}</td>
-        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
+        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="grdt-document-text"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span><small class="grdt-document-original" title="${escapeHtml(row.name || "")}">${escapeHtml(row.name || "")}</small></span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryUi ? window.GrconGrdtHistoryUi.row(row.document, row.revision) : PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.tagged)}</span></td>
@@ -3999,6 +4046,32 @@
     showToast(`${amount} item(ns) atualizado(s) somente nesta análise${revisionNote}.`, "success");
   }
 
+  function updateTriageQuickControls() {
+    const host = document.getElementById("triage-operational-filter");
+    if (!host) return;
+    let issued = 0, repost = 0, issues = 0;
+    state.results.forEach(row => {
+      const result = PostingFlow?.lookup(row.document, row.revision);
+      if (result?.latestEmission) issued += 1;
+      if (result?.emissionKind === "REPOST") repost += 1;
+      if (row.hardBlock || row.revisionFormatWarning || row.decision === C.REVIEW || row.allocationFinding?.awaitingReturn) issues += 1;
+    });
+    const counts = {
+      all: state.results.length, included: state.selected.size,
+      excluded: Math.max(0, state.results.length - state.selected.size),
+      issued, repost, issues,
+    };
+    const labels = { all: "Todos", included: "Incluídos", excluded: "Excluídos",
+      issued: "Já emitidos", repost: "Repostagens", issues: "Com pendências da triagem" };
+    host.querySelectorAll("[data-grdt-quick-filter]").forEach(button => {
+      const kind = button.dataset.grdtQuickFilter;
+      button.textContent = `${labels[kind]} (${counts[kind].toLocaleString("pt-BR")})`;
+      button.setAttribute("aria-pressed", String(state.quickFilter === kind));
+    });
+    const counter = document.getElementById("triage-filter-result-count");
+    if (counter) counter.textContent = `${filteredResultIndices().length.toLocaleString("pt-BR")} de ${state.results.length.toLocaleString("pt-BR")} documentos exibidos`;
+  }
+
   function renderAll() {
     state.selected.forEach((index) => {
       const row = state.results[index];
@@ -4013,6 +4086,7 @@
     renderSummary();
     renderSheetFilter();
     renderTable();
+    updateTriageQuickControls();
 
     const filtered = filteredResults();
     const selectableIndices = [];
@@ -4100,6 +4174,9 @@
     state.filter = "todos";
     state.sheetFilter = "todos";
     state.search = "";
+    state.quickFilter = "all";
+    state.sortBy = "original";
+    if (document.getElementById("triage-sort")) document.getElementById("triage-sort").value = "original";
     state.columnFilters = {};
     closeColumnFilterPopover();
     updateColumnFilterTriggerStates();
@@ -5011,7 +5088,7 @@
       handleWorkerTaskError(error, "Não foi possível gerar os arquivos com a eGRDT.");
     } finally {
       if (Workspace) Workspace.finish("grdt-package");
-      els.exportZip.textContent = "Baixar arquivos + eGRDT";
+      els.exportZip.textContent = "↓ Baixar PDFs + eGRDT";
       setBusy(false);
       renderAll();
     }
@@ -5335,12 +5412,37 @@
     els.advancedToggle.setAttribute("aria-expanded", String(open));
   });
   initializeResultColumnFilters();
+  document.querySelectorAll("[data-grdt-quick-filter]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.quickFilter = button.dataset.grdtQuickFilter;
+      if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
+      renderAll();
+    });
+  });
+  document.getElementById("triage-sort")?.addEventListener("change", event => {
+    state.sortBy = event.target.value;
+    if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
+    renderAll();
+  });
+  document.getElementById("triage-clear-all")?.addEventListener("click", () => {
+    state.search = ""; els.search.value = "";
+    state.filter = "todos"; state.sheetFilter = "todos"; state.quickFilter = "all"; state.sortBy = "original";
+    document.getElementById("triage-sort").value = "original";
+    state.columnFilters = {};
+    state.filteredCache = { signature: "", indices: [] };
+    if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
+    closeColumnFilterPopover();
+    updateColumnFilterTriggerStates();
+    if (els.clearColumnFilters) els.clearColumnFilters.hidden = true;
+    PostingFlow?.setFilter("all");
+    renderAll();
+  });
   if (els.clearColumnFilters) els.clearColumnFilters.addEventListener("click", clearResultColumnFilters);
   els.search.addEventListener("input", (event) => {
     state.search = event.target.value;
     state.resultPage = 1;
     window.clearTimeout(els.search._grconTimer);
-    els.search._grconTimer = window.setTimeout(renderAll, 120);
+    els.search._grconTimer = window.setTimeout(renderAll, 250);
   });
   els.sheetFilter.addEventListener("change", (event) => {
     state.sheetFilter = event.target.value;
@@ -5525,7 +5627,14 @@
     window.open("pending_allocation_history.html", "_blank", "noopener,noreferrer");
   });
   els.exportEgrdt.addEventListener("click", exportEgrdt);
-  els.exportZip.addEventListener("click", exportZip);
+  let centralDownloadInProgress = false;
+  els.exportZip.addEventListener("click", async () => {
+    if (centralDownloadInProgress || state.busy) return;
+    centralDownloadInProgress = true;
+    els.exportZip.disabled = true;
+    try { await exportZip(); }
+    finally { centralDownloadInProgress = false; renderAll(); }
+  });
   els.exportFinalPackage.addEventListener("click", exportFinalPackage);
   els.batchEgrdt.addEventListener("click", () => openEgrdtDrawer([...state.selected]));
   els.drawerClose.addEventListener("click", closeEgrdtDrawer);

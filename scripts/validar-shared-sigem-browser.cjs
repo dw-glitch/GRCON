@@ -169,6 +169,7 @@ function rpc(name,args) {
    return window.GrconSharedSigemQuery.current()?.meta?.snapshotId || '';
  });
  assert.equal(remotelyRefreshed,originalActive.snapshot_id);
+ await a.page.locator('.secondary-downloads > summary').click();
  assert.equal(await a.page.locator('#export-egrdt').isEnabled(),true);
  await a.page.locator('#export-egrdt').click();
  await a.page.waitForFunction(()=>document.getElementById('toast')?.textContent.includes('Consulta Geral SIGEM foi atualizada'),null,{timeout:5000});

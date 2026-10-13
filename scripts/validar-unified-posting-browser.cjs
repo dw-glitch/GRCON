@@ -70,22 +70,23 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
   assert.equal(trace.kind,'allocated');assert.equal(trace.references.length,2);
   assert.ok(await page.evaluate(()=>Array.from({length:60},(_,i)=>window.GrconTriageUiApi.getResult(i)).every(row=>row.record.sharedAllocationContext.centralSnapshotId==='qa-central-1')));
   const categories=await page.evaluate(()=>Array.from({length:60},(_,i)=>{const row=window.GrconTriageUiApi.getResult(i);return window.GrconPostingFlow.lookup(row.document,row.revision).emissionKind;}));
-  assert.equal(categories.filter(k=>k==='REPOST').length,20);assert.equal(categories.filter(k=>k==='NEW_REVISION').length,20);assert.equal(categories.filter(k=>k==='FIRST_POSTING').length,20);
+  assert.equal(categories.filter(k=>k==='REPOST').length,20);assert.equal(categories.filter(k=>k==='').length,20,'A revisão selecionada é anterior à revisão A emitida: conferir histórico, não nova revisão');assert.equal(categories.filter(k=>k==='FIRST_POSTING').length,20);
   const mixed=await page.evaluate(()=>window.GrconEgrdtBatchPlan.preview('all'));
   assert.equal(mixed.valid,true,mixed.errors.join('\n'));assert.deepEqual(mixed.groups.map(g=>g.itemCount),[48,12]);
   await page.locator('#posting-batch-mode').selectOption('separate');
   const separate=await page.evaluate(()=>window.GrconEgrdtBatchPlan.preview('all'));
-  assert.deepEqual(separate.groups.map(g=>g.itemCount).sort((a,b)=>a-b),[20,40]);
+  assert.deepEqual(separate.groups.map(g=>g.itemCount).sort((a,b)=>a-b),[20,20,20]);
   assert.ok(separate.groups.every(g=>g.postingGroup!=='MIXED'));
   const beforeCalls=await page.evaluate(()=>window.__qaCalls);
   await page.locator('[data-posting-filter="reposts"]').click();
   assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.snapshot().filtered),20);
   await page.locator('[data-posting-filter="postings"]').click();
-  assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.snapshot().filtered),40);
+  assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.snapshot().filtered),20);
   await page.locator('[data-posting-filter="all"]').click();
   assert.equal(await page.evaluate(()=>window.__qaCalls),beforeCalls,'filtering must not refetch history');
-  await page.locator('.posting-history-detail').first().locator('summary').click();
-  assert.ok((await page.locator('.posting-history-detail[open]').first().innerText()).includes('QA-GRDT'));
+  await page.locator('[data-grdt-history-document]').first().click();
+  assert.ok((await page.locator('.grdt-history-panel-content').innerText()).includes('QA-GRDT'));
+  await page.locator('.grdt-history-close').click();
   const record=await page.evaluate(async()=>{
    await window.GRCONModuleLoader.ensure('export');
    const rows=Array.from({length:60},(_,i)=>window.GrconTriageUiApi.getResult(i));

@@ -53,10 +53,10 @@
     // Ctrl+G → Gerar eGRDT
     if (matchesShortcut(event, SHORTCUTS.GENERATE)) {
       event.preventDefault();
-      const generateButton = document.getElementById("export-egrdt");
+      const generateButton = document.getElementById("export-zip");
       if (generateButton && !generateButton.disabled && !generateButton.hidden) {
         generateButton.click();
-        showShortcutFeedback("Gerando eGRDT...");
+        showShortcutFeedback("Preparando PDFs + eGRDT...");
       }
       return;
     }

@@ -318,7 +318,7 @@
   }
 
   /* ---------- 12. Atalhos visíveis nos próprios botões ---------- */
-  const SHORTCUT_HINT = [["#analyze", "Ctrl+Enter"], ["#export-egrdt", "Ctrl+G"], ["#export-report", "Ctrl+S"]];
+  const SHORTCUT_HINT = [["#analyze", "Ctrl+Enter"], ["#export-zip", "Ctrl+G"], ["#export-report", "Ctrl+S"]];
 
   function annotateShortcuts() {
     SHORTCUT_HINT.forEach(([selector, combo]) => {

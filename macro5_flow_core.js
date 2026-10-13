@@ -8,26 +8,30 @@
   const TRIAGE_PREFERENCES_KEY = "grcon.triage.preferences.v2";
   const ANALYSIS_FILTERS_KEY = "grcon.analysis.saved-filters.v1";
 
+  // A posição é a coluna REAL da tabela (22), inclusive Código LD/Apêndice/TAG.
   const COLUMNS = Object.freeze([
     { key: "situation", label: "Situação", index: 1, essential: true, locked: true },
-    { key: "originalFile", label: "Arquivo original", index: 2, essential: true },
-    { key: "document", label: "Documento", index: 3, essential: true, locked: true },
-    { key: "sheet", label: "Aba LD", index: 4, essential: true },
-    { key: "ldRevision", label: "Revisão encontrada", index: 5, essential: true },
-    { key: "targetRevision", label: "Revisão do documento", index: 6, essential: true },
-    { key: "title", label: "Título", index: 7, essential: true },
-    { key: "effectiveDate", label: "Data efetiva", index: 8, essential: false },
-    { key: "grdt", label: "GRDT", index: 9, essential: false },
-    { key: "technicalStatus", label: "Status técnico", index: 10, essential: false },
-    { key: "sigemStatus", label: "Status SIGEM", index: 11, essential: true },
-    { key: "targetStatus", label: "Status da revisão", index: 12, essential: false },
-    { key: "postingStatus", label: "Situação de postagem", index: 13, essential: false },
-    { key: "fiscalComment", label: "Comentário da Fiscal", index: 14, essential: false },
-    { key: "allocation", label: "Alocação", index: 15, essential: false },
-    { key: "allocationStage", label: "Etapa da alocação", index: 16, essential: false },
-    { key: "allocationStatus", label: "Confirmação da alocação", index: 17, essential: true },
-    { key: "databook", label: "Caminho Databook", index: 18, essential: true },
-    { key: "finalFile", label: "Arquivo final", index: 19, essential: true },
+    { key: "originalFile", label: "Arquivo original", index: 2, essential: false },
+    { key: "document", label: "Documento e histórico", index: 3, essential: true, locked: true },
+    { key: "ldCode", label: "Código da LD", index: 4, essential: false },
+    { key: "apendiceSearch", label: "Busca no Apêndice", index: 5, essential: false },
+    { key: "tagged", label: "TAG", index: 6, essential: false },
+    { key: "sheet", label: "Aba LD", index: 7, essential: true },
+    { key: "ldRevision", label: "Revisão encontrada", index: 8, essential: true },
+    { key: "targetRevision", label: "Revisão do documento", index: 9, essential: true },
+    { key: "title", label: "Título", index: 10, essential: false },
+    { key: "effectiveDate", label: "Data efetiva", index: 11, essential: false },
+    { key: "grdt", label: "GRDT", index: 12, essential: false },
+    { key: "technicalStatus", label: "Status técnico", index: 13, essential: false },
+    { key: "sigemStatus", label: "Status SIGEM", index: 14, essential: true },
+    { key: "targetStatus", label: "Status da revisão", index: 15, essential: false },
+    { key: "postingStatus", label: "Situação de postagem", index: 16, essential: false },
+    { key: "fiscalComment", label: "Comentário da Fiscal", index: 17, essential: false },
+    { key: "allocation", label: "Alocação", index: 18, essential: false },
+    { key: "allocationStage", label: "Etapa da alocação", index: 19, essential: false },
+    { key: "allocationStatus", label: "Confirmação da alocação", index: 20, essential: true },
+    { key: "databook", label: "Caminho Databook", index: 21, essential: false },
+    { key: "finalFile", label: "Arquivo final", index: 22, essential: false },
   ]);
 
   function text(value) { return String(value === null || value === undefined ? "" : value).trim(); }
