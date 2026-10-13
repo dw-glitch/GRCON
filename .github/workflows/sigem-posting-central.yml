@@ -1,0 +1,35 @@
+name: SIGEM posting central
+on:
+  pull_request:
+    paths:
+      - "sigem_posting_central_*.js"
+      - "sigem_posting_app.js"
+      - "grcon_module_loader.js"
+      - "index.html"
+      - "tests/sigem_posting_central.cjs"
+      - ".github/workflows/sigem-posting-central.yml"
+  workflow_dispatch:
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate new JavaScript syntax
+        run: |
+          node --check sigem_posting_central_core.js
+          node --check sigem_posting_central_query.js
+          node --check sigem_posting_central_render.js
+          node --check sigem_posting_central_app.js
+          node --check sigem_posting_app.js
+          node --check grcon_module_loader.js
+      - name: Test central domain rules
+        run: node --test tests/sigem_posting_central.cjs
+      - name: Verify original conference behavior
+        run: |
+          node tests/posting_conference.cjs
+          node tests/posting_conference_current_truth.cjs
