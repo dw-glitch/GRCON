@@ -103,11 +103,13 @@
           resolved.set(row.documentIdentity,{
             allocationState:info.label||"Alocação a confirmar",
             allocation:info.allocations?.join(" · ")||"",
-            fiscalComment:comments.join(" | "),
+            fiscalComment:comments.length?comments.join(" | "):undefined,
             allocationNotes:info.warnings?.join(" · ")||"",
           });
         }
-        Object.assign(row,resolved.get(row.documentIdentity));
+        const enrichment={...resolved.get(row.documentIdentity)};
+        if(enrichment.fiscalComment===undefined)delete enrichment.fiscalComment;
+        Object.assign(row,enrichment);
       };
       data.documents.forEach(apply);
       data.revisions.forEach(apply);
