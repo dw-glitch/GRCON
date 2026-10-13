@@ -4170,6 +4170,9 @@
     state.filter = "todos";
     state.sheetFilter = "todos";
     state.search = "";
+    state.quickFilter = "all";
+    state.sortBy = "original";
+    if (document.getElementById("triage-sort")) document.getElementById("triage-sort").value = "original";
     state.columnFilters = {};
     closeColumnFilterPopover();
     updateColumnFilterTriggerStates();
