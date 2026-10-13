@@ -138,7 +138,7 @@
     font-weight: 740;
     color: var(--text-1);
   }
-  html[data-app="GRCON"][data-ui-generation="3"] #results-section #export-egrdt:not(:disabled) {
+  html[data-app="GRCON"][data-ui-generation="3"] #results-section #export-zip:not(:disabled) {
     font-weight: 780;
     box-shadow: 0 3px 9px color-mix(in srgb, var(--brand-600) 18%, transparent);
   }
