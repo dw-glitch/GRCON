@@ -105,3 +105,8 @@
 #sigem-module .scc-detail button:not(.scc-close){padding:8px 12px;border:1px solid #c5d9e5;border-radius:7px;background:#eef6fa;cursor:pointer}
 #sigem-module .scc-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
 @media(max-width:850px){#sigem-module .scc-column-pop>div{grid-template-columns:minmax(0,1fr)}}
+
+#sigem-module .scc-preset-label{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:#4a6578}
+#sigem-module .scc-preset-label select{border:1px solid #cbdde7;border-radius:6px;background:#fff;color:#20465d;padding:7px;min-width:160px}
+#sigem-module .scc-toolbar{flex-wrap:wrap}
+#sigem-module .scc-toolbar>div{flex-wrap:wrap}
