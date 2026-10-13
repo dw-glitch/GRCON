@@ -69,3 +69,9 @@
   #results-section .triage-operational-filter { max-width: 100%; }
   #results-section .grdt-main-download { min-width: 170px; }
 }
+
+/* Identificação e arquivo juntos na visualização essencial. */
+#results-section .grdt-document-text { display: inline-flex; flex-direction: column; min-width: 0; max-width: 28rem; }
+#results-section .grdt-document-original { display: block; max-width: 100%; font-size: .66rem; color: #65758a; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#results-section #results-table tbody td { vertical-align: top; }
+#results-section #results-table .result-row { line-height: 1.3; }
