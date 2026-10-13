@@ -78,11 +78,24 @@
       return hit;
     });
     const f=filters||{};
-    rows=rows.filter(row=>
-      (!f.status||row.status===f.status)&&
-      (!f.revision||revision(row.revisionSent)===revision(f.revision))&&
-      (!f.start||text(row.generatedAt).slice(0,10)>=f.start)&&
-      (!f.end||text(row.generatedAt).slice(0,10)<=f.end));
+    rows=rows.filter(row=>{
+      const isGrdt=view==="grdts";
+      const statusMatch=!f.status||(isGrdt?(
+        (f.status==="CONFIRMADO"&&row.classification==="TOTALMENTE_CONFIRMADA")||
+        (f.status==="AGUARDANDO"&&row.awaiting>0)||
+        (f.status==="NAO_ENCONTRADO"&&row.notFound>0)||
+        (f.status==="REVISAO_DIVERGENTE"&&row.divergent>0)||
+        (f.status==="REQUER_ANALISE"&&row.review>0)||
+        (f.status==="NAO_VERIFICADO"&&row.notVerified>0)
+      ):row.status===f.status);
+      const revisionMatch=!f.revision||(isGrdt?
+        row.rows.some(r=>revision(r.revisionSent)===revision(f.revision)):
+        revision(row.revisionSent)===revision(f.revision));
+      return statusMatch&&revisionMatch&&
+        (!f.allocationState||row.allocationState===f.allocationState)&&
+        (!f.start||text(row.generatedAt).slice(0,10)>=f.start)&&
+        (!f.end||text(row.generatedAt).slice(0,10)<=f.end);
+    });
     return {rows,missing:batch?list.filter(code=>!found.has(code)):[],
       listMode:batch,searched:list.length};
   }
