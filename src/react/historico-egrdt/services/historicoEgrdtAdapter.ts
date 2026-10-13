@@ -79,9 +79,13 @@ function filterOptions(records: EgrdtHistoryRecord[]): EgrdtHistoryFilterOptions
 function filterRecords(
   records: EgrdtHistoryRecord[],
   filters: EgrdtHistoryFilters,
+  removedOnly = false,
 ): EgrdtHistoryRecord[] {
   const History = history();
-  let filtered = History.filter(records, filters.query) as unknown as EgrdtHistoryRecord[];
+  // Use the saved snapshots only to locate excluded documents. Always return
+  // the original record so operational reports never receive removed files.
+  const source = removedOnly ? removedSearchRecords(records) : records;
+  let filtered = History.filter(source, filters.query) as unknown as EgrdtHistoryRecord[];
   if (filters.teamsConfirmation || filters.teamsResponsible || filters.teamsDate) {
     filtered = filtered.filter(record => {
       const a = window.GrconTeamsTrace?.latest(record);
@@ -99,6 +103,10 @@ function filterRecords(
   if (typeof History.filterByDocumentFamily === "function") {
     filtered = History.filterByDocumentFamily(filtered, filters.documentFamily) as unknown as EgrdtHistoryRecord[];
   }
+  if (removedOnly) {
+    const originals = new Map(records.map((record) => [record.id, record]));
+    filtered = filtered.map((record) => originals.get(record.id)!);
+  }
   return [...filtered].sort((a, b) => {
     if (filters.sort === "oldest") return a.generatedAt.localeCompare(b.generatedAt);
     if (filters.sort === "number-asc" || filters.sort === "number-desc") {
@@ -110,8 +118,17 @@ function filterRecords(
   });
 }
 
-function summary(records: EgrdtHistoryRecord[]): EgrdtHistorySummary {
-  const base = history().summary(records);
+function removedSearchRecords(records: EgrdtHistoryRecord[]): EgrdtHistoryRecord[] {
+  return records.filter((record) => record.removedFiles?.length).map((record) => {
+    const files = record.removedFiles!.map((entry) => entry.file);
+    return { ...record, files, fileCount: files.length,
+      documentCount: new Set(files.map((file) => (file.document || "").trim().toUpperCase()).filter(Boolean)).size,
+      allocations: [...new Set(files.map((file) => file.allocation).filter((value): value is string => Boolean(value)))] };
+  });
+}
+
+function summary(records: EgrdtHistoryRecord[], removedOnly = false): EgrdtHistorySummary {
+  const base = history().summary(removedOnly ? removedSearchRecords(records) : records);
   return { egrdts: base.egrdts, documents: base.documents, allocations: base.allocations };
 }
 

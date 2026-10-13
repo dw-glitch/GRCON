@@ -42,7 +42,7 @@ function countLabel(value: number, singular: string, plural: string): string {
 function Summary({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
   const entries = [
     { label: "eGRDTs", value: h.summary.egrdts, hint: "No recorte atual" },
-    { label: "Documentos", value: h.summary.documents, hint: "Registrados no recorte" },
+    { label: h.showRemovedOnly ? "Documentos excluídos" : "Documentos", value: h.summary.documents, hint: "Registrados no recorte" },
     { label: "Alocações", value: h.summary.allocations, hint: "Relacionadas no recorte" },
   ];
   return (
@@ -60,6 +60,7 @@ function Summary({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
 
 function activeFilters(h: ReturnType<typeof useHistoricoEgrdt>) {
   const items: Array<{ key: string; label: string; clear: () => void }> = [];
+  if (h.showRemovedOnly) items.push({ key: "removed", label: "Documentos excluídos", clear: () => h.setRemovedView(false) });
   if (h.filters.query.trim()) {
     items.push({ key: "query", label: "Busca: " + h.filters.query.trim(), clear: () => h.setSearch("") });
   }
@@ -109,9 +110,14 @@ function Toolbar({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
       <div className="history-filter-heading">
         <div>
           <span>BUSCA E FILTROS</span>
-          <h3 id="history-filter-panel-title">Localize a emissão que precisa conferir</h3>
+          <h3 id="history-filter-panel-title">{h.showRemovedOnly ? "Localize o documento que deseja restaurar" : "Localize a emissão que precisa conferir"}</h3>
           <p>Busca, situação e ordenação refinam a lista sem alterar os dados registrados.</p>
         </div>
+        <button className="secondary-button" id="history-show-removed" type="button"
+          aria-pressed={h.showRemovedOnly} disabled={h.fileActionBusy}
+          onClick={() => h.setRemovedView(!h.showRemovedOnly)}>
+          {h.showRemovedOnly ? "Voltar ao histórico" : `Documentos excluídos (${numberBr(h.totalRemovedCount)})`}
+        </button>
       </div>
 
       <section aria-label="Busca e filtros principais" className="history-toolbar history-main-filters">
@@ -122,7 +128,7 @@ function Toolbar({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
             <input
               autoComplete="off"
               id="history-search"
-              placeholder="Buscar eGRDT, documento ou alocação"
+              placeholder={h.showRemovedOnly ? "Buscar documento excluído, eGRDT ou alocação" : "Buscar eGRDT, documento ou alocação"}
               type="search"
               value={h.filters.query}
               onChange={(event) => h.setSearch(event.target.value)}
@@ -209,7 +215,7 @@ function Toolbar({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
             <span aria-live="polite" id="history-period-status">{h.periodStatus}</span>
             <button
               className="primary-button"
-              disabled={h.exporting || !h.filtered.length || h.periodInvalid || !window.GrconHistoryReport}
+              disabled={h.showRemovedOnly || h.exporting || !h.filtered.length || h.periodInvalid || !window.GrconHistoryReport}
               id="history-export-period"
               type="button"
               onClick={() => { void h.exportPeriodReport(); }}
@@ -258,10 +264,10 @@ function RecordList({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
       <header className="history-list-header">
         <div>
           <span>REGISTROS</span>
-          <strong id="history-list-title">Emissões localizadas</strong>
+          <strong id="history-list-title">{h.showRemovedOnly ? "eGRDTs com documentos excluídos" : "Emissões localizadas"}</strong>
           <small id="history-result-count">{resultText}</small>
         </div>
-        <p>Selecione uma eGRDT para conferir metadados e documentos.</p>
+        <p>{h.showRemovedOnly ? "Selecione a eGRDT e clique em Restaurar no documento desejado." : "Selecione uma eGRDT para conferir metadados e documentos."}</p>
       </header>
 
       <div className="history-list-scroll">
@@ -285,6 +291,7 @@ function RecordList({ h }: { h: ReturnType<typeof useHistoricoEgrdt> }) {
                   </div>
                 </div>
                 <div className="history-record-facts">
+                  {h.showRemovedOnly ? <span>{countLabel(record.removedFiles?.length || 0, "registro excluído", "registros excluídos")}</span> : null}
                   <span>{countLabel(record.documentCount, "documento", "documentos")}</span>
                   <span>{countLabel(record.fileCount, "arquivo", "arquivos")}</span>
                   <span title={allocation}>Alocação: <strong>{allocation}</strong></span>
