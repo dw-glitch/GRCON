@@ -19,9 +19,9 @@ const HEADERS = [
       id: "emissao-2", egrdtNumber: "GR-002",
       generatedAt: "2026-10-14T12:59:00Z", outputType: "Arquivos + eGRDT",
       files: [
-        { document: "RL-5290.00-22313-911-C1O-002", revision: "0", grdtRevision: "B", ldVersion: "F", ldPrazo: "E31" },
+        { document: "RL-5290.00-22313-911-C1O-002", revision: "0", grdtRevision: "B", ldVersion: "F", ldPrazo: "E31", allocation: "C1O-ALOC-CM-0010-2026" },
         { document: "RL-5290.00-22313-911-C1O-003", revision: "0", ldVersion: "E", ldPrazo: "Primeiras versões" },
-        { document: "RL-5290.00-22313-911-C1O-004", revision: "0", ldVersion: "E", ldPrazo: "0" },
+        { document: "RL-5290.00-22313-911-C1O-004", revision: "0", ldVersion: "E", ldPrazo: "0", allocation: "#N/A" },
       ],
       removedFiles: [{ id: "removed", file: { document: "REMOVIDO", ldPrazo: "E88" }, reason: "Cancelado" }],
     }),
@@ -29,7 +29,7 @@ const HEADERS = [
       id: "emissao-1", egrdtNumber: "GR-001",
       generatedAt: "2026-10-13T11:21:00Z",
       files: [
-        { document: "RL-5290.00-22313-911-C1O-002", revision: "A", ldVersion: "E", ldPrazo: "A01" },
+        { document: "RL-5290.00-22313-911-C1O-002", revision: "A", ldVersion: "E", ldPrazo: "A01", allocation: "C1O-ALOC-CM-0005-2026" },
         { document: "RL-5290.00-22313-911-C1O-005", revision: "A", ldVersion: "E" },
       ],
     }),
@@ -54,7 +54,7 @@ const HEADERS = [
   const buffer = await Report.buildWorkbook(source);
   const book = new ExcelJS.Workbook();
   await book.xlsx.load(buffer);
-  assert.deepEqual(book.worksheets.map(sheet => sheet.name), ["Resumo", "eGRDTs", "Documentos", "Colar GRCON"]);
+  assert.deepEqual(book.worksheets.map(sheet => sheet.name), ["Resumo", "eGRDTs", "Documentos", "Colar GRCON", "Colar GRCON v2"]);
   const sheet = book.getWorksheet("Colar GRCON");
   assert.equal(sheet.getCell("A1").value, "COLAR GRCON");
   assert.deepEqual(HEADERS.map((_, i) => sheet.getCell(2, i + 1).value), HEADERS);
@@ -70,6 +70,25 @@ const HEADERS = [
   assert.equal(sheet.getCell("E7").value, null, "falta de prazo nunca vira revisão da LD");
   assert.equal(sheet.getCell("F2").value, null, "F fica disponível para chave auxiliar no Controle");
   assert.equal(book.getWorksheet("Documentos").getCell("W6").value !== undefined, true, "detalhado preservado");
+
+  const v2 = book.getWorksheet("Colar GRCON v2");
+  assert.deepEqual(Report.COLAR_GRCON_HEADERS_V2, [...HEADERS, "ALOCAÇÃO"]);
+  assert.ok(Object.isFrozen(Report.COLAR_GRCON_HEADERS_V2));
+  assert.equal(v2.columnCount, 6);
+  assert.equal(v2.rowCount, sheet.rowCount);
+  assert.deepEqual(Report.colarGrconRowsV2(source).map(row => row.slice(0, 5)), rows);
+  assert.equal(v2.getCell("F2").value, "ALOCAÇÃO");
+  assert.equal(v2.getCell("F3").value, "C1O-ALOC-CM-0010-2026");
+  assert.equal(v2.getCell("F6").value, "C1O-ALOC-CM-0005-2026", "repostagem preserva a alocação da emissão");
+  assert.equal(v2.getCell("F7").value, null, "não inventar alocação histórica ausente");
+  assert.equal(v2.getCell("F5").value, null, "placeholder de alocação não é número de alocação");
+  assert.ok(v2.getCell("A3").value instanceof Date);
+  assert.equal(v2.getCell("D3").value, "B");
+  assert.equal(v2.getCell("E5").value, "0");
+  assert.equal(v2.getCell("A1").font.color.argb, "FF0E2841");
+  assert.equal(v2.getCell("A2").fill.fgColor.argb, "FF1F4E78");
+  assert.equal(v2.getCell("A3").fill.fgColor.argb, "FFAEAEAE");
+  await assert.rejects(Report.buildWorkbook([]), /Nenhuma eGRDT/, "histórico vazio mantém a validação existente");
 
   console.log("OK — Colar GRCON v1: 5 colunas fixas, datas Excel, múltiplas GRDTs/LDs, legado, removidos, relatório original.");
 })().catch(error => { console.error(error); process.exitCode = 1; });
