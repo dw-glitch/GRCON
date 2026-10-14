@@ -223,6 +223,10 @@
   box-shadow: var(--shadow-1);
 }
 
+.egrdt-email-expand { white-space: nowrap; font-size: .76rem; }
+.egrdt-email-review .egrdt-email-preview-heading { flex-shrink: 0; }
+.egrdt-email-review .egrdt-email-hint { flex-shrink: 0; }
+
 .egrdt-email-view:focus-visible {
   outline: none;
   box-shadow: var(--focus);
