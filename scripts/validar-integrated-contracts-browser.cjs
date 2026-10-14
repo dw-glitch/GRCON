@@ -57,7 +57,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('#grcon-administration').click();await page.waitForFunction(()=>document.querySelector('#grcon-admin-users')?.textContent.includes('Operador QA'));assert.match(await page.locator('#grcon-admin-users').textContent(),/UHDT-D/);await page.locator('#grcon-admin-close').click();
  await page.evaluate(()=>window.GrconEgrdtEmailReplyUi.open([{egrdtNumber:'QA-001',generatedAt:'2026-10-06T12:00:00Z',files:[{document:'DOC-001',revision:'A',title:'QA',finalName:'DOC-001_A.pdf'}]}]));
  await page.waitForFunction(()=>document.querySelector('#egrdt-email-model-status')?.textContent.includes('versão 1'));
- assert.equal(await page.locator('#egrdt-email-message').inputValue(),'Envio QA-001');assert.equal(await page.locator('#egrdt-email-preview th').count(),2);
+ assert.equal(await page.locator('#egrdt-email-message').inputValue(),'Envio QA-001');assert.equal(await page.locator('#egrdt-email-preview thead th').count(),3);assert.equal(await page.locator('#egrdt-email-preview tbody td').count(),2);
  const emailText=page.locator('#egrdt-email-message');
  await emailText.fill('Prezado(a),\\n\\nTexto personalizado para conferência e cópia.');
  await page.locator('[data-egrdt-email-view="paste"]').click();
