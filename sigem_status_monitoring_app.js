@@ -291,6 +291,23 @@
     if (seconds < 86400) return "Há " + Math.floor(seconds / 3600) + " h";
     return formatDate(value);
   }
+  function notificationOpenButton(item) {
+    const original=item?.link_target||'';
+    const target=original==='conference-status-monitor'&&item?.document_code?'sigem-central-document:'+item.document_code:original;
+    if(target.startsWith('history:'))return '<button class="text-button compact" type="button" data-open-egrdt="'+escapeHtml(target.slice(8))+'">Abrir eGRDT</button>';
+    if(target.startsWith('sigem-central-grdt:')||target.startsWith('sigem-central-document:')||target.startsWith('sigem-central-revision:'))return '<button class="text-button compact" type="button" data-sigem-central-target="'+escapeHtml(target)+'">Abrir na Central SIGEM</button>';
+    return '';
+  }
+  root.document.addEventListener('click',async event=>{
+    const link=event.target.closest('[data-sigem-central-target]')?.dataset.sigemCentralTarget;if(!link)return;
+    const expected=workspaceId();
+    try{
+      await root.GRCONModuleLoader.ensureModule('sigem');if(expected!==workspaceId())return;
+      const prefix=link.split(':',1)[0],kind=prefix.replace('sigem-central-','');
+      await root.GrconSigemCentralUi.openTarget(kind,link.slice(prefix.length+1));
+      closeNotificationCenter(false);
+    }catch(error){notify(error.message,'error');}
+  });
   function notificationCardMarkup(item, readAttribute) {
     const unread = !item?.is_read;
     const transition = item?.previous_status || item?.current_status
@@ -304,7 +321,7 @@
       '<span class="grcon-notification-dot" aria-hidden="true"></span>' +
       '<div class="grcon-notification-copy"><div class="grcon-notification-line"><strong>' + escapeHtml(notificationTitle(item)) + '</strong><time datetime="' + escapeHtml(item.created_at || "") + '">' + escapeHtml(relativeDate(item.created_at)) + '</time></div>' +
       '<code class="grcon-notification-code">' + escapeHtml(item.document_code || "Documento monitorado") + '</code>' +
-      transition + message + (item.link_target?.startsWith('history:') ? '<button class="text-button compact" type="button" data-open-egrdt="' + escapeHtml(item.link_target.slice(8)) + '">Abrir eGRDT</button>' : '') + '</div>' + action + '</article>';
+      transition + message + notificationOpenButton(item) + '</div>' + action + '</article>';
   }
   function notificationEmptyMarkup() {
     return '<div class="grcon-notification-empty"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg><strong>Nenhuma notificação</strong><span>As atualizações dos documentos que você monitora aparecerão aqui.</span></div>';
@@ -440,7 +457,7 @@
         (item.previous_status || item.current_status
           ? '<span><small>Status</small><strong>' + escapeHtml(item.previous_status || "—") + '<b aria-hidden="true">→</b>' + escapeHtml(item.current_status || "—") + '</strong></span>'
           : '<span><strong>' + escapeHtml(item.message || item.title || "Atualização disponível") + '</strong></span>') +
-        '<time>' + escapeHtml(relativeDate(item.created_at)) + '</time>' + (item.link_target?.startsWith('history:') ? '<button class="text-button compact" data-open-egrdt="' + escapeHtml(item.link_target.slice(8)) + '">Abrir eGRDT</button>' : '') + '</article>'
+        '<time>' + escapeHtml(relativeDate(item.created_at)) + '</time>' + notificationOpenButton(item) + '</article>'
       ).join("") +
       '</div>' +
       (rows.length > 3 ? '<p class="grcon-notification-toast-more">+' + (rows.length - 3) + ' atualização(ões) na central.</p>' : '') +

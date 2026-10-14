@@ -1,0 +1,81 @@
+name: SIGEM posting central
+on:
+  pull_request:
+    paths:
+      - "sigem_posting_central_*.js"
+      - "sigem_posting_app.js"
+      - "grcon_module_loader.js"
+      - "index.html"
+      - "tests/sigem_posting_central.cjs"
+      - "scripts/sigem-central-browser-qa.cjs"
+      - "scripts/sigem-central-worker-qa.cjs"
+      - "scripts/sigem-central-tracking-qa.cjs"
+      - "tests/sigem_monitor_targets.cjs"
+      - "supabase/migrations/*grcon_sigem_monitor_targets.sql"
+      - "supabase/migrations/*grcon_sigem_comparison_information.sql"
+      - "supabase/migrations/*grcon_sigem_monitor_revision_links.sql"
+      - "scripts/validar-grdt-table-audit-browser.cjs"
+      - "workers/sigem_central.worker.js"
+      - "app.js"
+      - "app-ui.js"
+      - "macro5_flow_app.js"
+      - "grdt-central-ux.css"
+      - "sigem-posting-central.css"
+      - ".github/workflows/sigem-posting-central.yml"
+  workflow_dispatch:
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate new JavaScript syntax
+        run: |
+          node --check sigem_posting_central_core.js
+          node --check sigem_posting_central_query.js
+          node --check sigem_posting_central_render.js
+          node --check sigem_posting_central_app.js
+          node --check sigem_posting_central_tracking.js
+          node --check sigem_posting_app.js
+          node --check grcon_module_loader.js
+      - name: Test central domain rules
+        run: node --test tests/sigem_posting_central.cjs
+      - name: Verify original conference behavior
+        run: |
+          node tests/posting_conference.cjs
+          node tests/posting_conference_current_truth.cjs
+  browser-smoke:
+    name: Chromium — Central SIGEM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Browser integration smoke
+        run: |
+          node scripts/sigem-central-browser-qa.cjs
+          node scripts/sigem-central-worker-qa.cjs
+          node scripts/sigem-central-tracking-qa.cjs
+          python3 -m http.server 8765 > /tmp/grcon-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node scripts/validar-grdt-table-audit-browser.cjs
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grdt-table-audit
+          path: artifacts/grdt-table-audit
+          if-no-files-found: ignore

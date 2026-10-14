@@ -2990,7 +2990,7 @@
       case "revisionManual": return row?.revisionManual ? "Sim" : "Não";
       case "title": return record.title || "";
       case "effectiveDate": return formatDateBR(ldValue(record, "DATA EFETIVA DE EMISSÃO") || record.effectiveDate);
-      case "grdt": return record.grdt || row?.grdt || "";
+      case "grdt": return [record.grdt || row?.grdt, PostingFlow?.lookup(row.document, row.revision)?.latestEmission?.grdt].filter(Boolean).join(" | ");
       case "technicalStatus": return record.status || "";
       case "sigemStatus": return record.sigemStatus || "";
       case "targetStatus": return row?.status || "";
@@ -3000,7 +3000,7 @@
       case "allocationStage": return record.allocationStage || ldValue(record, "ETAPA DA ALOCAÇÃO") || "";
       case "allocationStatus": return record.allocationStatus || row?.allocationStatus || "";
       case "databook": return record.databook || "";
-      case "finalFile": return row?.finalName || "";
+      case "finalFile": return rowFileDisplayEntries(row).map(entry => entry.finalName || row.finalName || entry.name).join(" | ");
       default: return "";
     }
   }
@@ -3010,7 +3010,7 @@
   // existe quando é um subconjunto próprio — "tudo marcado" equivale a
   // nenhum filtro, igual ao Excel.
   function activeColumnFilters() {
-    return Object.entries(state.columnFilters || {}).filter(([, values]) => Array.isArray(values) && values.length);
+    return Object.entries(state.columnFilters || {}).filter(([, values]) => Array.isArray(values));
   }
 
   let lastTriageSearch = "", cachedTriageSearch = "";
@@ -3032,7 +3032,7 @@
       const historyNumbers = PostingFlow?.searchText(row.document) || "";
       const ldDocumentCode = resultColumnValue(row, "ldCode");
       const fileNames = (row.files || []).map(entry => entry.name).join(" ");
-      if (!C.norm(`${row.name} ${fileNames} ${row.document} ${ldDocumentCode} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt} ${row.record?.grdt || ""} ${historyNumbers}`).includes(query)) return false;
+      if (!C.norm(`${row.record?.title || ""} ${row.record?.allocation || ""} ${row.name} ${fileNames} ${row.document} ${ldDocumentCode} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt} ${row.record?.grdt || ""} ${historyNumbers}`).includes(query)) return false;
     }
     return true;
   }
@@ -3050,8 +3050,8 @@
   // alcançável dado o restante dos filtros ativos).
   function computeColumnFilterOptions(keyName) {
     const map = new Map();
-    state.results.forEach((row) => {
-      if (!rowPassesBaseFilters(row) || !rowPassesColumnFilters(row, keyName)) return;
+    state.results.forEach((row, index) => {
+      if (!rowPassesBaseFilters(row) || (PostingFlow && !PostingFlow.matches(row)) || !matchesQuickFilter(row, index) || !rowPassesColumnFilters(row, keyName)) return;
       const raw = String(resultColumnValue(row, keyName) ?? "").trim();
       const norm = C.norm(raw);
       if (!map.has(norm)) map.set(norm, { norm, label: raw || "(Vazias)", count: 0 });
@@ -3065,7 +3065,7 @@
   function updateColumnFilterTriggerStates() {
     if (!els.resultsTable) return;
     els.resultsTable.querySelectorAll("[data-column-filter-trigger]").forEach((button) => {
-      const active = Array.isArray(state.columnFilters[button.dataset.columnFilterTrigger]) && state.columnFilters[button.dataset.columnFilterTrigger].length > 0;
+      const active = Array.isArray(state.columnFilters[button.dataset.columnFilterTrigger]);
       button.classList.toggle("is-active", active);
     });
   }
@@ -3092,7 +3092,7 @@
       ? visibleOptions.map((option) => `<label class="column-filter-option"><input type="checkbox" data-column-filter-value="${escapeHtml(option.norm)}" ${pending.has(option.norm) ? "checked" : ""}><span>${escapeHtml(option.label)}</span><b>${option.count}</b></label>`).join("")
       : `<p class="column-filter-empty">Nenhum valor com os filtros atuais.</p>`;
     const applyButton = popover.querySelector(".column-filter-apply");
-    if (applyButton) applyButton.disabled = pending.size === 0;
+    if (applyButton) applyButton.disabled = false;
     // O conteúdo mudou de altura (busca filtrando a lista): reposiciona para o
     // menu continuar dentro da janela.
     if (!popover.hidden && columnFilterPopoverState.triggerEl) positionColumnFilterPopover(columnFilterPopoverState.triggerEl);
@@ -3370,6 +3370,14 @@
     const rowHeight = state.virtual.rowHeight;
     const viewport = scroll ? Math.max(360, scroll.clientHeight || 620) : 620;
     const scrollTop = scroll ? scroll.scrollTop : 0;
+    const offsets = [0];
+    const detailHeights = state.virtual.detailHeights || new Map();
+    for (const index of indices) offsets.push(offsets[offsets.length - 1] + rowHeight +
+      (state.expanded.has(index) ? (detailHeights.get(index) || 360) : 0));
+    let lo = 0, hi = indices.length;
+    while (lo < hi) { const mid = (lo + hi) >>> 1;
+      if (offsets[mid + 1] <= scrollTop) lo = mid + 1; else hi = mid; }
+
     const visibleCount = Math.ceil(viewport / rowHeight);
     // A janela renderizada nunca pode começar depois do que a lista comporta:
     // sem esse limite, rolar até o fim empurrava o espaçador de cima além do
@@ -3377,7 +3385,7 @@
     // depois do último documento.
     const janela = visibleCount + (state.virtual.overscan * 2);
     const maiorInicio = Math.max(0, indices.length - janela);
-    const start = Math.min(maiorInicio, Math.max(0, Math.floor(scrollTop / rowHeight) - state.virtual.overscan));
+    const start = Math.min(maiorInicio, Math.max(0, lo - state.virtual.overscan));
     const end = Math.min(indices.length, start + janela);
     state.virtual.start = start;
     state.virtual.end = end;
@@ -3387,8 +3395,8 @@
       start,
       end,
       total: indices.length,
-      topSpace: start * rowHeight,
-      bottomSpace: Math.max(0, (indices.length - end) * rowHeight),
+      topSpace: offsets[start],
+      bottomSpace: Math.max(0, offsets[indices.length] - offsets[end]),
       firstNumber: indices.length ? start + 1 : 0,
       lastNumber: end,
     };
@@ -3428,17 +3436,23 @@
     let soma = 0;
     let contadas = 0;
     linhas.forEach((linha) => {
-      const altura = linha.getBoundingClientRect().height;
+      const altura = linha.offsetHeight;
       if (altura > 0) { soma += altura; contadas += 1; }
     });
     if (!contadas) return;
     const medida = Math.round(soma / contadas);
-    if (medida < 24 || medida > 400) return;
-    if (Math.abs(medida - state.virtual.rowHeight) <= 1) return;
-    state.virtual.rowHeight = medida;
-    // Só re-renderiza quando há espaçadores em jogo: abaixo do limite virtual a
-    // tabela inteira já está na tela e a altura não muda nada.
-    if (state.virtual.calibrating || filteredResultIndices().length <= VIRTUAL_MIN_ITEMS) return;
+    let changed = false;
+    if (medida >= 24 && medida <= 400 && Math.abs(medida - state.virtual.rowHeight) > 1) {
+      state.virtual.rowHeight = medida; changed = true;
+    }
+    if (!state.virtual.detailHeights) state.virtual.detailHeights = new Map();
+    els.tbody.querySelectorAll("tr.detail-row:not([hidden])").forEach(line => {
+      const height = line.offsetHeight, index = Number(line.dataset.index);
+      if (height > 0 && Math.abs(height - (state.virtual.detailHeights.get(index) || 0)) > 1) {
+        state.virtual.detailHeights.set(index, height); changed = true;
+      }
+    });
+    if (!changed || state.virtual.calibrating || filteredResultIndices().length <= VIRTUAL_MIN_ITEMS) return;
     state.virtual.calibrating = true;
     window.requestAnimationFrame(() => {
       state.virtual.calibrating = false;
@@ -3894,7 +3908,6 @@
       </tr>`;
       return mainRow + detailRow(row, index);
     }).join("") + bottomSpacer;
-    calibrateVirtualRowHeight();
     window.dispatchEvent(new CustomEvent("grcon:triage-rendered", {
       detail: {
         total: virtualInfo.total,
@@ -3903,6 +3916,8 @@
         groupByStatus: state.groupByStatus,
       },
     }));
+    // Mede após os consumidores aplicarem densidade e colunas visíveis.
+    calibrateVirtualRowHeight();
   }
 
   function commonEgrdtValue(indices, field) {
@@ -5695,6 +5710,15 @@
       currentSigemSnapshot: currentSigemQuerySnapshot(),
     }),
     ensureFreshAnalysis: () => ensureFreshAnalysis(),
+    prepareRelationDraft: (codes) => {
+      const entries = [...new Set((Array.isArray(codes) ? codes : []).map(value => String(value || "").trim()).filter(Boolean))];
+      if (!entries.length) return false;
+      openRelationDrawer();
+      els.relationText.value = entries.join("\n");
+      updateRelationDraft(els.relationText.value);
+      // Só preenche o rascunho; o operador aplica, analisa e escolhe a revisão.
+      return true;
+    },
     getResult: (index) => state.results[Number(index)] || null,
     filteredIndices: () => [...filteredResultIndices()],
     setGroupByStatus: (value) => {
