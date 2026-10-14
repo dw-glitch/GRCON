@@ -85,7 +85,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('[data-egrdt-email-action="preview-model"]').click();
  assert.match(await emailText.inputValue(),/Texto personalizado/);
  assert.match(await page.locator('#egrdt-email-preview').innerText(),/Texto personalizado/);await page.locator('[data-egrdt-email-action="save-model"]').click();await page.waitForFunction(()=>window.qaSavedTemplate?.cfg.styles.fontSize===14);assert.equal(await page.evaluate(()=>window.qaSavedTemplate.scope),'contract');
- await page.screenshot({path:path.join(out,'email-editor.png')});await page.locator('[data-egrdt-email-action="close"]').click();
+ await page.screenshot({path:path.join(out,'email-editor.png')});page.once('dialog',dialog=>dialog.accept());await page.locator('[data-egrdt-email-action="close"]').click();
  await page.locator('[data-grcon-view="control"]').first().click();
  assert.equal(await page.locator('input[name="grdt-document-source"]').count(),0,'a escolha manual Base documental foi removida');
  assert.equal(await page.locator('#grcon-control-help').count(),0,'ajuda expansível removida');
