@@ -405,16 +405,18 @@
     const columns = normalizeColumns(config.columns);
     const customTableHtml = configurableTableHtml(rows, config);
     const customTableText = configurableTableText(rows, columns, config);
+    // A configuração de cabeçalho/colunas nunca pode divergir entre prévia, HTML e texto.
+    const customized = ["columns", "styles", "showHeader", "columnLabels", "columnWidths", "columnAlign"].some(key => Object.prototype.hasOwnProperty.call(config, key));
     return {
       columns,
       rows,
       summary,
       subject: text(config.subject) || defaultSubject(summary),
       message,
-      html: replyHtml(rows, message, useStandardHtml ? summary : null, config.columns || config.styles ? config : null),
-      text: message ? message + "\n\n" + customTableText : customTableText,
-      tableHtml: config.columns || config.styles ? customTableHtml : tableHtml(rows),
-      tableText: config.columns ? customTableText : tableText(rows),
+      html: replyHtml(rows, message, useStandardHtml ? summary : null, customized ? config : null),
+      text: message ? message + "\n\n" + (customized ? customTableText : tableText(rows)) : (customized ? customTableText : tableText(rows)),
+      tableHtml: customized ? customTableHtml : tableHtml(rows),
+      tableText: customized ? customTableText : tableText(rows),
       template: { ...config, columns, styles: config.styles || {}, messageTemplate: text(config.messageTemplate) },
     };
   }
@@ -435,5 +437,5 @@
     return { url: `mailto:?subject=${subject}&body=${short}`, truncated: true };
   }
 
-  return { COLUMNS, COLUMN_WIDTHS, COLUMN_PERCENTS, COLUMN_ALIGN, TABLE_WIDTH, revision, rowsFromRecords, summarize, defaultMessage, defaultSubject, templateMessage, normalizeColumns, configurableTableText, configurableTableHtml, tableText, tableHtml, replyText, replyHtml, build, mailtoUrl };
+  return { COLUMNS, COLUMN_WIDTHS, COLUMN_PERCENTS, COLUMN_ALIGN, TABLE_WIDTH, revision, rowsFromRecords, summarize, defaultMessage, defaultSubject, templateMessage, normalizeColumns, configurableTableText, configurableTableHtml, tableText, tableHtml, messageHtml, replyText, replyHtml, build, mailtoUrl };
 });
