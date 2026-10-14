@@ -365,7 +365,8 @@
   }
 
   function clampWeekCount(value) {
-    const parsed = Math.round(Number(value) || 8);
+    const numeric = Number(value);
+    const parsed = Number.isFinite(numeric) ? Math.round(numeric) : 8;
     return Math.min(52, Math.max(1, parsed));
   }
 
