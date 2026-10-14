@@ -5,3 +5,28 @@ const reply=Reply.build(records,cfg);assert.deepEqual(reply.columns,['REVISÃO',
 assert.doesNotMatch(Reply.build(records,{...cfg,showHeader:false}).tableHtml,/<thead>/);
 const hostile=Reply.build(records,{columns:['TÍTULO'],styles:{borderColor:'red;position:fixed',fontFamily:'evil',fontSize:999}});assert.doesNotMatch(hostile.tableHtml,/position:fixed/);assert.match(hostile.tableHtml,/&lt;script&gt;unsafe/);assert.match(hostile.tableHtml,/font-size:24pt/);
 console.log('Email template: message fields, order, labels, relative widths, styling, escaping and hidden header verified.');
+
+// Regressões: a prévia usa exatamente os fragmentos que entram no HTML copiado.
+const edited=Reply.build(records,{...cfg,message:'Texto alterado pelo operador <confidencial>\n\nSegunda linha.'});
+assert.equal(edited.message,'Texto alterado pelo operador <confidencial>\n\nSegunda linha.');
+assert.ok(edited.html.includes(edited.messageHtml));
+assert.ok(edited.html.includes(edited.tableHtml));
+assert.match(edited.messageHtml,/&lt;confidencial&gt;/);
+assert.match(edited.messageHtml,/Segunda linha/);
+assert.doesNotMatch(edited.html,/<confidencial>/);
+const onlyTwo=Reply.build(records,{columns:['DOCUMENTO','REVISÃO'],showHeader:false,styles:{fontSize:9}});
+assert.doesNotMatch(onlyTwo.tableHtml,/<thead>/);
+assert.doesNotMatch(onlyTwo.tableText,/DOCUMENTO.*REVISÃO/);
+assert.ok(onlyTwo.html.includes(onlyTwo.tableHtml));
+const round=Reply.build(records,{columns:['DOCUMENTO','REVISÃO','TÍTULO'],columnWidths:{DOCUMENTO:1,'REVISÃO':1,'TÍTULO':1},styles:{fontSize:10}});
+const fractions=[...round.tableHtml.matchAll(/<th[^>]*width="([\d.]+)%"/g)].map(m=>Number(m[1]));
+assert.equal(fractions.length,3);
+assert.ok(Math.abs(fractions.reduce((a,b)=>a+b,0)-100)<0.001,'larguras fecham 100%');
+const uiSource=require('node:fs').readFileSync(require('node:path').join(__dirname,'..','egrdt_email_reply_ui.js'),'utf8');
+assert.match(uiSource,/addEventListener\("input"/);
+assert.match(uiSource,/function refreshReply\(/);
+assert.match(uiSource,/messageOnly: true/);
+assert.match(uiSource,/state\.messageDirty \|\| currentMessage\(\) !== before/);
+assert.match(uiSource,/function cancelEditor\(/);
+assert.match(uiSource,/function readingTableHtml\(/);
+console.log('Email editor: live draft state, HTML preview/copy parity, styles and column widths verified.');
