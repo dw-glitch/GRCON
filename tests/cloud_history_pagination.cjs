@@ -33,5 +33,13 @@ async function readFixture(total, serverLimit, failureAt = -1) {
   await readFixture(1000, 500);
   await readFixture(0, 100);
   await assert.rejects(readFixture(1201, 100, 200), /network unavailable/, 'a failed page cannot produce a complete snapshot');
+  const state={membership:{workspace_id:'workspace-a'},session:{user:{id:'u1'}},client:null};
+  let requests=0;
+  const query={select(){return this},eq(column,value){assert.equal(value,'workspace-a');return this},is(){return this},order(){return this},
+    async range(){requests++;state.membership.workspace_id='workspace-b';return {data:[{id:'1'}]}}};
+  state.client={from(){return query}};
+  const scoped=new Function('state',`return (${functionSource});`)(state);
+  await assert.rejects(scoped('id'),/A sessão mudou/);
+  assert.equal(requests,1,'a troca de contrato interrompe antes da próxima consulta');
   console.log('Cloud history pagination: server caps, empty termination and failed-page rejection passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

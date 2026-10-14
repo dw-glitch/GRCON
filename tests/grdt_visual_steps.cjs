@@ -50,10 +50,12 @@ stagePath.querySelectorAll = (selector) => {
 const progress = element();
 const results = element();
 const teams = element();
+const download = element();
 const announcement = { textContent: "" };
 const byId = {
   "grdt-stages": stagePath,
   "progress": progress,
+  "grdt-download-progress": download,
   "results-section": results,
   "egrdt-teams-ready": teams,
   "grdt-stage-announcement": announcement,
@@ -70,7 +72,7 @@ class MockMutationObserver {
   constructor(fn) { this.fn = fn; }
   observe(node, options) {
     observed.push(node);
-    assert.deepEqual(Array.from(options.attributeFilter), ["hidden", "style", "aria-hidden"]);
+    assert.deepEqual(Array.from(options.attributeFilter), ["hidden", "style", "aria-hidden", "data-state"]);
     assert.equal(options.attributes, true);
     callback = this.fn;
   }
@@ -85,7 +87,7 @@ function assertActive(index) {
     assert.equal(step.getAttribute("aria-current"), stepIndex === index ? "step" : null);
   });
 }
-assert.deepEqual(observed, [progress, results, teams]);
+assert.deepEqual(observed, [progress, results, teams, download]);
 assertActive(0);
 
 progress.hidden = false;
@@ -100,6 +102,10 @@ progress.hidden = true;
 callback();
 assertActive(2);
 
+download.hidden = false; download.dataset.state = "preparing";
+callback(); assertActive(3);
+download.dataset.state = "preview";callback();assertActive(2);
+download.hidden = true;
 teams.hidden = false;
 callback();
 assertActive(3);

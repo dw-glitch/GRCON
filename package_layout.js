@@ -15,6 +15,11 @@
     return `GRCON_${generated.length}_eGRDTs_${label}_${generated[0].official.year}_${timestamp}.zip`;
   }
 
+  // PDF e formatos Office recentes já comprimem o conteúdo internamente.
+  // Preserva cada byte e evita recompressão cara; planilhas eGRDT continuam DEFLATE.
+  function compressionOptions(name) {
+    return /\.(pdf|docx|xlsx|pptx|jpg|jpeg|png|webp)$/i.test(String(name || "")) ? { compression: "STORE" } : {};
+  }
   function addFolders(zip, generated, rootExtras = []) {
     if (!zip || typeof zip.folder !== "function") throw new Error("Compactador indisponível.");
     if (!Array.isArray(generated) || !generated.length) throw new Error("Nenhuma eGRDT foi gerada.");
@@ -33,7 +38,7 @@
         if (!key) throw new Error(`Existe um PDF sem nome final no lote ${generatedFile.group.number}.`);
         if (fileNames.has(key)) throw new Error(`PDF duplicado na pasta ${folderName}: ${entry.finalName}.`);
         fileNames.add(key);
-        folder.file(entry.finalName, entry.file);
+        folder.file(entry.finalName, entry.file, compressionOptions(entry.finalName));
       });
       folder.file(generatedFile.fileName, generatedFile.data);
     });
@@ -41,5 +46,5 @@
     return generated.map((generatedFile) => generatedFile.official.baseName);
   }
 
-  return { archiveName, addFolders };
+  return { archiveName, addFolders, compressionOptions };
 });

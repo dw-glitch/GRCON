@@ -20,6 +20,16 @@ on:
       - "app-ui.js"
       - "macro5_flow_app.js"
       - "grdt-central-ux.css"
+      - "posting_flow.js"
+      - "history_classification.js"
+      - "grdt_central_history_ui.js"
+      - "grdt_triage_query.js"
+      - "p1_ux.js"
+      - "grdt_download_progress.js"
+      - "document_vault_app.js"
+      - "package_layout.js"
+      - "workers/export.worker.js"
+      - "tests/grdt_master_operational.cjs"
       - "sigem-posting-central.css"
       - ".github/workflows/sigem-posting-central.yml"
   workflow_dispatch:
@@ -71,7 +81,9 @@ jobs:
           python3 -m http.server 8765 > /tmp/grcon-http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
-          node scripts/validar-grdt-table-audit-browser.cjs
+          GRCON_QA_COUNT=100 node scripts/validar-grdt-table-audit-browser.cjs
+          GRCON_QA_COUNT=500 node scripts/validar-grdt-table-audit-browser.cjs
+          GRCON_QA_COUNT=1000 node scripts/validar-grdt-table-audit-browser.cjs
       - name: Preserve browser evidence
         if: always()
         uses: actions/upload-artifact@v4

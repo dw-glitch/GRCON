@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.44.9" data-version="5.44.9" lang="pt-BR">
+<html class="grcon-cloud-pending" data-app="GRCON" data-ops-ui="enabled" data-ui-architecture="scoped-components-v3" data-ui-generation="3" data-ui-version="5.44.10" data-version="5.44.10" lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
@@ -41,7 +41,7 @@
 <link href="grcon-version-c.css" rel="stylesheet"/>
 <link href="grcon-version-c-phase2.css" rel="stylesheet"/>
 <link href="grcon-profile-avatar.css" rel="stylesheet"/>
-<meta content="5.44.9" name="application-version"/><link rel="stylesheet" href="allocation-dashboard.css" />
+<meta content="5.44.10" name="application-version"/><link rel="stylesheet" href="allocation-dashboard.css" />
 <link rel="stylesheet" href="grdt-central-ux.css" />
 </head>
 <body>
@@ -293,10 +293,11 @@
 <button class="secondary-button compact" disabled="" id="export-pending-allocation-pdfs" title="Baixar somente os PDFs com número de alocação registrado e confirmação ainda como Não Alocado" type="button">PDFs aguardando alocação</button>
 <button class="secondary-button compact" id="view-pending-allocation-history" title="Ver histórico de documentos aguardando retorno da alocação" type="button">📊 Histórico de alocações pendentes</button>
 <button class="secondary-button compact" disabled="" id="export-egrdt" type="button">Baixar somente eGRDT</button>
-<button class="secondary-button compact final-package-button" disabled="" id="export-final-package" type="button">Baixar pacote completo</button>
+<button class="secondary-button compact final-package-button" disabled="" id="export-final-package" type="button">Baixar pacote + relatórios</button>
 </div></details>
-<div class="grdt-main-download"><button class="primary-button" disabled="" id="export-zip" type="button">↓ Baixar PDFs + eGRDT</button><small>PDFs dos documentos e eGRDT para envio</small></div>
+<div class="grdt-main-download"><button class="primary-button" disabled="" id="export-zip" type="button">↓ Baixar PDFs + eGRDT</button><small id="grdt-download-status" role="status">PDFs dos documentos e eGRDT para envio</small></div>
 </div>
+<div id="grdt-download-progress" class="grdt-download-progress" hidden role="status" aria-live="polite"><div><strong data-download-message>Preparando arquivos…</strong><small data-download-elapsed>0 s</small><button type="button" class="secondary-button compact" data-download-cancel>Cancelar preparação</button></div><progress max="100" aria-label="Preparação do download"></progress></div>
 <div class="triage-operational-filter" id="triage-operational-filter" aria-label="Filtros rápidos de documentos">
   <button type="button" data-grdt-quick-filter="all" aria-pressed="true">Todos</button>
   <button type="button" data-grdt-quick-filter="included" aria-pressed="false">Incluídos</button>
@@ -307,9 +308,16 @@
   <select aria-label="Ordenar documentos" id="triage-sort" class="filter-select">
     <option value="original">Ordem original</option><option value="document">Código</option>
     <option value="file">Arquivo</option><option value="revision">Revisão</option>
-    <option value="status">Situação</option><option value="history">Emissão mais recente</option>
+    <option value="status">Situação</option><option value="history">Emissão mais recente</option><option value="grdt">eGRDT anterior</option>
   </select>
   <button type="button" id="triage-clear-all">Limpar filtros</button>
+  <details class="triage-operational-details"><summary>Mais filtros</summary><div class="triage-operational-fields">
+    <label>Origem<select data-triage-facet="origin"><option value="">Todas</option></select></label>
+    <label>Tipo de arquivo<select data-triage-facet="extension"><option value="">Todos</option></select></label>
+    <label>Revisões<select data-triage-facet="revision"><option value="">Todas</option><option value="changed">Mudança de revisão</option><option value="divergent">Revisões divergentes / alertas</option></select></label>
+    <label>Histórico<select data-triage-facet="history"><option value="">Todos</option><option value="issued">Com emissão anterior</option><option value="never">Nunca emitidos (histórico confirmado)</option><option value="unconfirmed">Sem histórico confirmado</option><option value="new-revision">Novas revisões</option><option value="repost">Repostagens</option></select></label>
+    <label>Vínculo de alocação<select data-triage-facet="allocation"><option value="">Todos</option><option value="known">Alocação identificada</option><option value="unknown">Alocação não identificada</option></select></label>
+  </div></details>
   <small id="triage-filter-result-count" aria-live="polite"></small>
 </div>
 <section aria-live="polite" class="egrdt-teams-ready" hidden id="egrdt-teams-ready">
@@ -504,7 +512,7 @@
 </div>
 </section>
 </main>
-<footer class="app-footer"><span>GRCON 5.44.9 · <span id="footer-view">Controle de GRDT</span></span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
+<footer class="app-footer"><span>GRCON 5.44.10 · <span id="footer-view">Controle de GRDT</span></span><span>Processamento local · usuários autorizados · histórico compartilhado</span></footer></div>
 <div class="drawer-overlay" hidden="" id="relation-overlay"></div>
 <aside aria-hidden="true" aria-labelledby="relation-title" class="relation-drawer" inert id="relation-drawer">
 <header class="drawer-header">
@@ -677,6 +685,8 @@
 <script defer="" src="posting_batch_planner.js"></script>
 <script defer="" src="emission.js"></script>
 <script defer="" src="posting_flow.js"></script>
+<script defer="" src="grdt_download_progress.js"></script>
+<script defer="" src="grdt_triage_query.js"></script>
 <script defer="" src="grdt_central_history_ui.js"></script>
 <script defer="" src="pending_allocation_package.js"></script>
 

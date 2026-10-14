@@ -7,7 +7,7 @@
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[char]));
   const flow = () => root.GrconPostingFlow;
-  const workspace = () => root.GrconCloud?.state?.membership?.workspace_id || "";
+  const workspace = () => `${root.GrconCloud?.state?.membership?.workspace_id || ""}:${root.GrconCloud?.state?.session?.user?.id || ""}`;
   const date = value => {
     const parsed = Date.parse(value || "");
     return Number.isFinite(parsed) ? new Date(parsed).toLocaleDateString("pt-BR") : "Data não registrada";
@@ -19,6 +19,7 @@
   let current = null;
   let layer = null;
   let panel = null;
+  let returnFocus = null;
 
   function row(documentCode, revision) {
     if (!flow()) return "";
@@ -28,7 +29,7 @@
     const number = latest ? latest.grdt : status.complete ? "Sem emissão anterior" : "Histórico a confirmar";
     const rev = latest && latest.revision ? " · Rev. " + latest.revision : "";
     const warning = result.warnings.length > 0 ? " · Verificar" : "";
-    const title = "Ver todas as eGRDTs do documento " + documentCode;
+    const title = "Ver todas as eGRDTs do documento " + documentCode + (latest ? " · Gerada em " + date(latest.generatedAt) : "");
     return '<div class="grdt-history-inline">' +
       '<button type="button" class="grdt-history-open" data-grdt-history-document="' + esc(documentCode) +
         '" data-grdt-history-revision="' + esc(revision) + '" title="' + esc(title) +
@@ -62,6 +63,9 @@
     document.body.append(layer, panel);
     layer.addEventListener("click", close);
     panel.querySelector(".grdt-history-close").addEventListener("click", close);
+    panel.addEventListener("click", event => {
+      if (event.target.closest("[data-history-retry]") && current) void open(current.documentCode, current.revision, true);
+    });
   }
 
   function close() {
@@ -70,6 +74,9 @@
     panel.hidden = true;
     layer.hidden = true;
     current = null;
+    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+    else document.getElementById("results-scroll")?.focus({ preventScroll: true });
+    returnFocus = null;
   }
 
   function render(documentCode, revision, prefix) {
@@ -82,23 +89,33 @@
     const title = '<div class="grdt-history-panel-summary"><strong>' + esc(label(result.emissionKind)) +
       '</strong><small>Revisão selecionada: ' + esc(revision || "não informada") + ' · ' + esc(source) + '</small></div>';
     const chronological = entries.map((entry, index) => {
+      const record = { id: entry.historyId, clientRecordId: entry.historyId, cloudId: entry.cloudId, egrdtNumber: entry.grdt };
+      const sent = root.GrconEgrdtTeamsNotification?.statusLabel?.(record) || "Sem registro de encaminhamento";
+      const query = root.GrconSharedSigemQuery;
+      const evidence = query?.state?.workspace === currentStatus.workspaceId ? query.resolveSigemStatus(documentCode, entry.revision, null) : null;
+      const posting = evidence && ["shared-general-query", "local-general-query"].includes(evidence.source) ?
+        "Localizada na Consulta Geral · " + (root.TriagemCore?.isWorkflowStatus?.(evidence.status) ? "Em análise" : evidence.status) :
+        entry.postingStatus || "Não confirmada neste histórico";
       const mostRecent = index === 0 ? '<span class="grdt-history-latest">Mais recente</span>' : "";
       return '<article class="grdt-history-entry"><div class="grdt-history-entry-head"><strong>' +
         esc(entry.grdt) + '</strong>' + mostRecent + '</div><dl>' +
         '<div><dt>Revisão</dt><dd>' + esc(entry.revision || "Não registrada") + '</dd></div>' +
         '<div><dt>Gerada em</dt><dd>' + esc(date(entry.generatedAt)) + '</dd></div>' +
         '<div><dt>Propósito</dt><dd>' + esc(entry.purpose || "Não registrado") + '</dd></div>' +
-        '<div><dt>Postagem SIGEM</dt><dd>' + esc(entry.postingStatus || "Não confirmada neste histórico") + '</dd></div>' +
+        '<div><dt>Encaminhamento</dt><dd>' + esc(sent) + '</dd></div>' +
+        '<div><dt>Postagem SIGEM</dt><dd>' + esc(posting) + '</dd></div>' +
         '</dl></article>';
     }).join("");
     const empty = currentStatus.complete ?
       '<p class="grdt-history-empty">Não foi encontrada emissão anterior para este documento.</p>' :
       '<p class="grdt-history-empty">Não é possível confirmar ausência de emissões enquanto o histórico compartilhado estiver indisponível.</p>';
-    box.innerHTML = (prefix || "") + title + notes + (chronological || empty);
+    const error = currentStatus.error ? '<p class="grdt-history-error">Não foi possível consultar o histórico. Os registros locais, se houver, são parciais.</p><button type="button" class="secondary-button compact" data-history-retry>Tentar novamente</button>' : "";
+    box.innerHTML = (prefix || "") + error + title + notes + (chronological || empty);
   }
 
-  async function open(documentCode, revision) {
+  async function open(documentCode, revision, force = false) {
     ensurePanel();
+    if (panel.hidden) returnFocus = document.activeElement;
     const serial = ++requestId;
     const expectedWorkspace = workspace();
     current = { documentCode, revision, expectedWorkspace };
@@ -108,7 +125,7 @@
     panel.hidden = false;
     panel.querySelector(".grdt-history-close").focus({ preventScroll: true });
     try {
-      await flow()?.refresh();
+      await flow()?.refresh(force);
       if (serial !== requestId || expectedWorkspace !== workspace()) return;
       render(documentCode, revision, "");
     } catch (error) {
@@ -127,7 +144,14 @@
     }
   }, true);
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && panel && !panel.hidden) close();
+    if (!panel || panel.hidden) return;
+    if (event.key === "Escape") { event.preventDefault(); close(); return; }
+    if (event.key === "Tab") {
+      const focusable = [...panel.querySelectorAll('button:not([disabled]), a[href], input, select, [tabindex="0"]')];
+      const first = focusable[0], last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
   });
   root.addEventListener("grcon:cloud-state", () => {
     if (current && current.expectedWorkspace !== workspace()) close();
