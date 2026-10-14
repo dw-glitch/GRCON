@@ -94,7 +94,63 @@
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-modal", "true");
     panel.setAttribute("aria-labelledby", "egrdt-email-title");
-    panel.innerHTML = "<header class=\"egrdt-email-header\">\n  <div class=\"egrdt-email-heading\">\n    <span>HISTÓRICO DE EGRDTS / RESPOSTA DE E-MAIL</span>\n    <h2 id=\"egrdt-email-title\">Resposta de e-mail</h2>\n    <p id=\"egrdt-email-subtitle\">Edite, confira e copie para a conversa original no Outlook.</p>\n    <ul class=\"egrdt-email-metrics\" id=\"egrdt-email-metrics\"></ul>\n  </div>\n  <button aria-label=\"Fechar a resposta de e-mail\" class=\"icon-button\" data-egrdt-email-action=\"close\" type=\"button\">✕</button>\n</header>\n<div class=\"egrdt-email-body\">\n  <section class=\"egrdt-email-editor-pane\" aria-label=\"Editar resposta\">\n    <div class=\"egrdt-email-section-heading\"><strong>1. Editar mensagem</strong><small>Somente esta resposta</small></div>\n    <label class=\"egrdt-email-message\">\n      <span>Texto da resposta</span>\n      <textarea id=\"egrdt-email-message\" rows=\"9\" spellcheck=\"true\" aria-describedby=\"egrdt-email-edit-status\"></textarea>\n    </label>\n    <div class=\"egrdt-email-editor-tools\">\n      <small id=\"egrdt-email-edit-status\" role=\"status\">Modelo carregado</small>\n      <button class=\"secondary-button compact\" data-egrdt-email-action=\"reset-message\" type=\"button\">Restaurar texto padrão</button>\n    </div>\n    <details id=\"egrdt-email-quick-settings\" class=\"egrdt-email-quick-settings\">\n      <summary>Personalizar tabela desta resposta</summary>\n      <div class=\"egrdt-email-presets\" role=\"group\" aria-label=\"Estilo da tabela\">\n        <button type=\"button\" data-egrdt-email-action=\"preset-standard\">Padrão</button>\n        <button type=\"button\" data-egrdt-email-action=\"preset-compact\">Compacto</button>\n        <button type=\"button\" data-egrdt-email-action=\"preset-readable\">Leitura facilitada</button>\n      </div>\n      <p class=\"egrdt-email-settings-help\">Marque as colunas que devem aparecer no e-mail. Os dados do histórico não são alterados.</p>\n      <div class=\"egrdt-email-column-options\" id=\"egrdt-email-column-options\"></div>\n    </details>\n    <div class=\"egrdt-email-model-header\">\n      <button class=\"secondary-button compact\" data-egrdt-email-action=\"edit-model\" type=\"button\" hidden>Editar modelo compartilhado</button>\n      <small id=\"egrdt-email-model-status\" role=\"status\"></small>\n    </div>\n    <details id=\"egrdt-email-model-editor\" hidden><summary>Configuração do modelo</summary><div id=\"egrdt-email-model-fields\"></div></details>\n  </section>\n  <section class=\"egrdt-email-preview-pane\" aria-label=\"Conferir resposta\">\n    <div class=\"egrdt-email-section-heading\"><strong>2. Conferir resposta</strong><small id=\"egrdt-email-count\">Nenhuma linha</small></div>\n    <div class=\"egrdt-email-views\" role=\"group\" aria-label=\"Como exibir a relação\">\n      <button aria-pressed=\"false\" class=\"egrdt-email-view\" data-egrdt-email-view=\"paste\" type=\"button\">Visualização para Outlook</button>\n      <button aria-pressed=\"true\" class=\"egrdt-email-view\" data-egrdt-email-view=\"read\" type=\"button\">Conferência</button>\n    </div>\n    <p class=\"egrdt-email-hint\" id=\"egrdt-email-hint\"></p>\n    <div class=\"egrdt-email-preview\" id=\"egrdt-email-preview\" tabindex=\"0\" role=\"region\" aria-label=\"Prévia completa da resposta\"></div>\n  </section>\n</div>\n<footer class=\"egrdt-email-footer\">\n  <span class=\"egrdt-email-footer-note\">Cole na conversa original com Ctrl+V. O GRCON não envia este e-mail.</span>\n  <div class=\"egrdt-email-actions\">\n    <button class=\"secondary-button compact\" data-egrdt-email-action=\"mail\" type=\"button\" title=\"Cria uma nova mensagem; não responde à conversa original\">Criar novo e-mail</button>\n    <button class=\"secondary-button compact\" data-egrdt-email-action=\"copy-text\" type=\"button\">Copiar só texto</button>\n    <button class=\"secondary-button compact\" data-egrdt-email-action=\"copy-table\" type=\"button\">Copiar tabela</button>\n    <button class=\"primary-button compact\" data-egrdt-email-action=\"copy-all\" type=\"button\">Copiar resposta completa</button>\n  </div>\n</footer>";
+    panel.innerHTML = `
+<header class="egrdt-email-header">
+  <div class="egrdt-email-heading">
+    <span>HISTÓRICO DE EGRDTS / RESPOSTA DE E-MAIL</span>
+    <h2 id="egrdt-email-title">Resposta de e-mail</h2>
+    <p id="egrdt-email-subtitle">Edite, confira e copie para a conversa original no Outlook.</p>
+    <ul class="egrdt-email-metrics" id="egrdt-email-metrics"></ul>
+  </div>
+  <button aria-label="Fechar a resposta de e-mail" class="icon-button" data-egrdt-email-action="close" type="button">✕</button>
+</header>
+<div class="egrdt-email-body">
+  <section class="egrdt-email-editor-pane" aria-label="Editar resposta">
+    <div class="egrdt-email-section-heading"><strong>1. Editar mensagem</strong><small>Somente esta resposta</small></div>
+    <label class="egrdt-email-message">
+      <span>Texto da resposta</span>
+      <textarea id="egrdt-email-message" rows="9" spellcheck="true" aria-describedby="egrdt-email-edit-status"></textarea>
+    </label>
+    <div class="egrdt-email-editor-tools">
+      <small id="egrdt-email-edit-status" role="status">Modelo carregado</small>
+      <button class="secondary-button compact" data-egrdt-email-action="reset-message" type="button">Restaurar texto padrão</button>
+    </div>
+    <details id="egrdt-email-quick-settings" class="egrdt-email-quick-settings">
+      <summary>Personalizar tabela desta resposta</summary>
+      <div class="egrdt-email-presets" role="group" aria-label="Estilo da tabela">
+        <button type="button" data-egrdt-email-action="preset-standard">Padrão</button>
+        <button type="button" data-egrdt-email-action="preset-compact">Compacto</button>
+        <button type="button" data-egrdt-email-action="preset-readable">Leitura facilitada</button>
+      </div>
+      <p class="egrdt-email-settings-help">Marque as colunas que devem aparecer no e-mail. Os dados do histórico não são alterados.</p>
+      <div class="egrdt-email-column-options" id="egrdt-email-column-options"></div>
+    </details>
+    <div class="egrdt-email-model-header">
+      <button class="secondary-button compact" data-egrdt-email-action="edit-model" type="button" hidden>Editar modelo compartilhado</button>
+      <small id="egrdt-email-model-status" role="status"></small>
+    </div>
+    <details id="egrdt-email-model-editor" hidden><summary>Configuração do modelo</summary><div id="egrdt-email-model-fields"></div></details>
+  </section>
+  <section class="egrdt-email-preview-pane" aria-label="Conferir resposta">
+    <div class="egrdt-email-section-heading"><strong>2. Conferir resposta</strong><small id="egrdt-email-count">Nenhuma linha</small></div>
+    <div class="egrdt-email-views" role="group" aria-label="Como exibir a relação">
+      <button aria-pressed="false" class="egrdt-email-view" data-egrdt-email-view="paste" type="button">Visualização para Outlook</button>
+      <button aria-pressed="true" class="egrdt-email-view" data-egrdt-email-view="read" type="button">Conferência</button>
+    </div>
+    <p class="egrdt-email-hint" id="egrdt-email-hint"></p>
+    <div class="egrdt-email-preview" id="egrdt-email-preview" tabindex="0" role="region" aria-label="Prévia completa da resposta"></div>
+  </section>
+</div>
+<footer class="egrdt-email-footer">
+  <span class="egrdt-email-footer-note">Cole na conversa original com Ctrl+V. O GRCON não envia este e-mail.</span>
+  <div class="egrdt-email-actions">
+    <button class="secondary-button compact" data-egrdt-email-action="mail" type="button" title="Cria uma nova mensagem; não responde à conversa original">Criar novo e-mail</button>
+    <button class="secondary-button compact" data-egrdt-email-action="copy-text" type="button">Copiar só texto</button>
+    <button class="secondary-button compact" data-egrdt-email-action="copy-table" type="button">Copiar tabela</button>
+    <button class="primary-button compact" data-egrdt-email-action="copy-all" type="button">Copiar resposta completa</button>
+  </div>
+</footer>
+`;
 
     document.body.appendChild(overlay);
     document.body.appendChild(panel);
