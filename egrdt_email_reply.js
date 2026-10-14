@@ -417,7 +417,7 @@
     const customized = Boolean(config.columns || config.styles || config.columnLabels || config.columnWidths || config.columnAlign || config.showHeader === false);
     const outputTableHtml = customized ? customTableHtml : tableHtml(rows);
     const outputTableText = customized ? customTableText : tableText(rows);
-    const outputMessageHtml = useStandardHtml ? defaultMessageHtml(summary) : messageHtml(message);
+    const outputMessageHtml = message ? (useStandardHtml ? defaultMessageHtml(summary) : messageHtml(message)) : "";
     return {
       columns,
       rows,
