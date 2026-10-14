@@ -117,3 +117,22 @@ A exclusão compartilhada exige conexão e perfil de proprietário ou administra
 Na eGRDT selecionada no **Histórico**, o botão **Resposta de e-mail** abre a relação dos arquivos postados nas mesmas oito colunas usadas no relatório: data da geração/postagem, eGRDT, família documental, documento, **revisão**, título, disciplina e arquivo postado. A revisão vem logo depois do documento, como na planilha da GRDT, e é a revisão efetivamente enviada — inclusive quando ela foi escolhida à mão na triagem. Uma linha por arquivo físico — o DOCX e o PDF do mesmo documento continuam sendo duas linhas.
 
 A tabela ocupa toda a largura do corpo da mensagem: ela termina onde a frase acima dela termina, em vez de parar antes num bloco estreito com uma faixa vazia à direita. Cada coluna recebe uma proporção fixa dessa largura, e o texto que não cabe quebra dentro da própria célula. Cabeçalho e células usam fonte 10 pt.
+
+## Contrato fixo — aba “Colar GRCON” (v1)
+
+A **Relação de eGRDTs por período** contém quatro abas: `Resumo`, `eGRDTs`, `Documentos` (detalhada) e **`Colar GRCON`** (interface estável com o Controle de Solicitações).
+
+A aba operacional traz **exatamente cinco colunas A:E, sem fórmulas ou colunas ocultas**:
+
+| Coluna | Cabeçalho imutável | Origem |
+| --- | --- | --- |
+| A | DATA DA GERAÇÃO / POSTAGEM | Data/hora real do histórico, como data/hora numérica do Excel |
+| B | EGRDT | Número exato da eGRDT |
+| C | DOCUMENTO | Código documental |
+| D | REVISÃO ENVIADA NA GRDT | Revisão efetivamente gerada |
+| E | VERSÃO DA LD ENVIADA | Campo literal `Prazo` da LD capturado na geração |
+
+As linhas 1–2 são o título `COLAR GRCON` e os cabeçalhos; os dados começam na linha 3. **Não alterar nomes, posições, início dos dados, tipos nem quantidade das cinco colunas.** Se um dia for preciso ampliar os dados, criar uma nova aba versionada; nunca modificar este contrato v1. Os registros continuam por ocorrência de documento/eGRDT, incluindo repostagens; arquivos excluídos individualmente não são exportados. Prazo desconhecido permanece vazio: não utilizar versão ou revisão da LD como substituto.
+
+**Colagem no Controle de Solicitações:** limpar somente `A:E` da aba de destino `Colar GRCON` e copiar `A1:E<última linha>` da aba exportada para `A1` do destino (colagem de valores e, se necessário, formatos de data). **Não sobrescrever a coluna F**, que contém a chave auxiliar do documento e data. A aba `Solicitações` deve consultar o documento pela coluna C, a data pela A, a eGRDT pela B e o Prazo pela E. Para documentos somente de inclusão/alocação ou com Prazo não informado no histórico, a fórmula da coluna L recorre ao registro correspondente da `Central de alocação` (J = documento; B = versão), sem inventar prazo.
+
