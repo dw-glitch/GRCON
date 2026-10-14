@@ -71,7 +71,7 @@
     const body = (reply.rows || []).map((row, index) => {
       const cells = columns.map((column) =>
         '<td data-column="' + escapeHtml(column) + '" style="text-align:' +
-        escapeHtml(align[column] || defaults[column] || "left") + '">' +
+        escapeHtml(cellAlignment(column)) + '">' +
         escapeHtml(row[column]) + '</td>').join("");
       return '<tr><th scope="row">' + (index + 1) + '</th>' + cells + '</tr>';
     }).join("");
