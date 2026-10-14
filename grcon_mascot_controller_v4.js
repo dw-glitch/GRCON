@@ -545,7 +545,7 @@
       positionDefault();
       const runner = root.GrconMascotRunner;
       if (runner?.run) {
-        Promise.resolve(runner.run({ source: config.source || "api", hold: Boolean(operations.size) })).then((started) => {
+        Promise.resolve(runner.run({ source: config.source || "api", context: currentContext, hold: Boolean(operations.size) })).then((started) => {
           if (!started && currentState === "running") applyState("analyzing", { force: true, message: config.message, source: "runner-unavailable" });
         }).catch(() => {
           if (currentState === "running") applyState("analyzing", { force: true, message: config.message, source: "runner-error" });
@@ -739,13 +739,17 @@
 
   function beginLegacy(detail) {
     if (legacyOperation) legacyOperation.cancel();
+    const controlAnalysis = detail?.context === "control" && /conferência|analis|preparando/i.test(detail?.task || "");
+    if (controlAnalysis) { warningUntil = 0; root.clearTimeout(warningTimer); warningTimer = 0; }
     const running = normalizeState(detail?.state) === "running" || shouldRunLong(detail);
     legacyOperation = begin({
       state: running ? "analyzing" : normalizeState(detail?.state || "analyzing"),
       message: detail?.task || detail?.message || "",
     });
     root.clearTimeout(longOperationTimer);
-    if (running) {
+    if (controlAnalysis) {
+      legacyOperation?.running(detail?.task || "Analisando documentos…");
+    } else if (running) {
       longOperationTimer = root.setTimeout(() => {
         legacyOperation?.running(detail?.task || "Processando dados…");
       }, 1800);
@@ -849,7 +853,7 @@
       overlay.dataset.media = "png";
     } else {
       scheduleLazyPreload();
-      if (currentState === "running") void root.GrconMascotRunner?.run?.({ source: "enabled", hold: Boolean(operations.size) });
+      if (currentState === "running") void root.GrconMascotRunner?.run?.({ source: "enabled", context: currentContext, hold: Boolean(operations.size) });
       else playAsset(currentState === "hidden" ? "idle" : currentState);
     }
     document.documentElement.dataset.grconMascotAnimations = enabled ? "on" : "off";
@@ -980,7 +984,7 @@
       if (document.hidden) {
         try { video?.pause(); } catch (_) {}
       } else if (currentState === "running") {
-        void root.GrconMascotRunner?.run?.({ source: "visibility-resume", hold: Boolean(operations.size) });
+        void root.GrconMascotRunner?.run?.({ source: "visibility-resume", context: currentContext, hold: Boolean(operations.size) });
       } else if (currentState !== "hidden") {
         playAsset(currentState);
       }

@@ -205,7 +205,7 @@ async function main() {
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "idle", null, { timeout: 4000 });
 
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("grcon:processing-state", {
-      detail: { active: true, context: "control", state: "checking-document", task: "Analisar e conferir na LD" },
+      detail: { active: true, context: "control", state: "checking-document", task: "Conferindo regras da LD" },
     })));
     await page.waitForFunction(() => window.GrconMascot.diagnostics().state === "analyzing");
     state = await diagnostics(page);

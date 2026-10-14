@@ -1118,7 +1118,9 @@
     const nextActive = Boolean(active);
     // Estado durável: se o módulo visual terminar de carregar depois do clique,
     // ele ainda encontra a análise em andamento em vez de perder o evento.
+    const previousActive = document.documentElement.dataset.grconControlProcessing;
     document.documentElement.dataset.grconControlProcessing = String(nextActive);
+    if (previousActive === String(nextActive)) return;
     window.dispatchEvent(new CustomEvent("grcon:processing-state", {
       detail: { active: nextActive, context: "control", task: taskLabel },
     }));
@@ -2590,25 +2592,48 @@
   }
 
 
+  let analysisStarting = false;
+  let analysisTiming = null;
+  window.GrconAnalysisTiming = Object.freeze({ current: () => analysisTiming ? { ...analysisTiming } : null });
   async function analyze() {
+    if (analysisStarting || state.busy || state.downloadPreparing) return;
+    if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
+    analysisStarting = true;
+    analysisTiming = { startedAt: performance.now(), feedbackMs: 0, totalMs: null };
+    state.cancelled = false;
+    setBusy(true, "Preparando conferência");
+    setProgress(2, "Preparando a análise…");
+    analysisTiming.feedbackMs = performance.now() - analysisTiming.startedAt;
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    try { await analyzeEngine(); }
+    catch (error) { showToast(error?.name === "AbortError" ? "Processamento cancelado." : error?.message || "Não foi possível preparar a análise. Tente novamente.", error?.name === "AbortError" ? "warn" : "error"); }
+    finally {
+      analysisTiming.totalMs = performance.now() - analysisTiming.startedAt;
+      analysisStarting = false;
+      if (state.busy) { setBusy(false); updateInputMeta(); }
+    }
+  }
+
+  async function analyzeEngine() {
     // A reação começa no próprio clique, inclusive enquanto o motor sob demanda
     // ainda está sendo carregado ou quando a resposta virá do cache.
-    pulseMascotProcessing();
-    try { await ensureRuntime("compliance"); }
-    catch (error) { showToast(`Não foi possível preparar a conformidade documental: ${error.message || error}. Tente novamente.`, "error"); return; }
-    try { await ensureRuntime("performance"); } catch (_) { console.debug("[App] ensureRuntime performance:", _); /* usa compatibilidade */ }
-    if (window.GrconCloud?.state?.membership) {
-      try { await window.GrconPlannedDocuments.refresh(); }
-      catch (error) {
-        showToast(`Não foi possível confirmar Documentos Previstos no banco: ${error.message || error}. Tente novamente.`, "error");
-        return;
-      }
-    }
+    const preparationStarted = performance.now();
+    await Promise.all([
+      ensureRuntime("compliance").catch(error => { throw new Error(`Não foi possível preparar a conformidade documental: ${error.message || error}. Tente novamente.`); }),
+      ensureRuntime("performance").catch(error => { console.debug("[App] ensureRuntime performance:", error); }),
+    ]);
+    if (state.cancelled) throw new DOMException("Processamento cancelado.", "AbortError");
+    analysisTiming.preparationMs = performance.now() - preparationStarted;
+    const basesStarted = performance.now();
+    await Promise.all([
+      window.GrconCloud?.state?.membership ? window.GrconPlannedDocuments.refresh().catch(error => { throw new Error(`Não foi possível confirmar Documentos Previstos no banco: ${error.message || error}. Tente novamente.`); }) : Promise.resolve(),
+      window.GrconSharedSigemQuery?.refresh(),
+      window.GrconAllocationRegistry?.refresh(),
+    ]);
+    if (state.cancelled) throw new DOMException("Processamento cancelado.", "AbortError");
+    analysisTiming.basesMs = performance.now() - basesStarted;
     if (!PerformanceCore || !PerformanceCore.supported) return analyzeLegacy();
     if (!state.ldFiles.length || (!state.packageFiles.length && !hasRelationSource())) return;
-
-    await window.GrconSharedSigemQuery?.refresh();
-    await window.GrconAllocationRegistry?.refresh();
     const analysisSignature = currentAnalysisSignature();
     if (restoreSmartAnalysisCache(analysisSignature)) {
       const validUntil = new Date(state.analysisValidUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
