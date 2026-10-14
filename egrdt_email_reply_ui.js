@@ -116,11 +116,25 @@
       <button class="secondary-button compact" data-egrdt-email-action="reset-message" type="button">Restaurar texto padrão</button>
     </div>
     <details id="egrdt-email-quick-settings" class="egrdt-email-quick-settings">
-      <summary>Personalizar tabela desta resposta</summary>
+      <summary>Personalizar aparência desta resposta</summary>
       <div class="egrdt-email-presets" role="group" aria-label="Estilo da tabela">
         <button type="button" data-egrdt-email-action="preset-standard">Padrão</button>
         <button type="button" data-egrdt-email-action="preset-compact">Compacto</button>
         <button type="button" data-egrdt-email-action="preset-readable">Leitura facilitada</button>
+      </div>
+      <div class="email-model-grid egrdt-email-personal-styles">
+        <label>Fonte<select data-email-style="fontFamily"><option>Calibri</option><option>Segoe UI</option><option>Arial</option><option>Verdana</option></select></label>
+        <label>Tamanho da tabela (pt)<input data-email-style="fontSize" type="number" min="8" max="24" step="0.5"></label>
+        <label>Tamanho da mensagem (pt)<input data-email-style="messageFontSize" type="number" min="8" max="24" step="0.5"></label>
+        <label>Espaço nas células<input data-email-style="padding" type="number" min="0" max="24"></label>
+        <label>Espaço entre parágrafos<input data-email-style="paragraphSpacing" type="number" min="0" max="32"></label>
+        <label>Entrelinhas<input data-email-style="lineHeight" type="number" min="1" max="2.5" step="0.05"></label>
+        <label>Largura da tabela (%)<input data-email-style="tableWidth" type="number" min="20" max="100"></label>
+        <label>Cor do texto<input data-email-style="bodyColor" type="color"></label>
+        <label>Fundo do cabeçalho<input data-email-style="headerBackground" type="color"></label>
+        <label>Cor do cabeçalho<input data-email-style="headerColor" type="color"></label>
+        <label>Fundo da tabela<input data-email-style="bodyBackground" type="color"></label>
+        <label>Cor das bordas<input data-email-style="borderColor" type="color"></label>
       </div>
       <p class="egrdt-email-settings-help">Marque as colunas que devem aparecer no e-mail. Os dados do histórico não são alterados.</p>
       <div class="egrdt-email-column-options" id="egrdt-email-column-options"></div>
@@ -142,7 +156,7 @@
   </section>
 </div>
 <footer class="egrdt-email-footer">
-  <span class="egrdt-email-footer-note">Cole na conversa original com Ctrl+V. O GRCON não envia este e-mail.</span>
+  <span class="egrdt-email-footer-note">No Outlook, cole com “Manter formatação de origem”. O GRCON não envia este e-mail.</span>
   <div class="egrdt-email-actions">
     <button class="secondary-button compact" data-egrdt-email-action="mail" type="button" title="Cria uma nova mensagem; não responde à conversa original">Criar novo e-mail</button>
     <button class="secondary-button compact" data-egrdt-email-action="copy-text" type="button">Copiar só texto</button>
@@ -193,6 +207,19 @@
         columns: target.checked ? Reply.COLUMNS.filter(c => selected.includes(c) || c === column) :
           selected.filter(c => c !== column) };
       state.configurationDirty = true;
+      state.view = VIEWS.PASTE;
+      renderColumnOptions();
+      refreshReply();
+    });
+    panel.querySelector(".egrdt-email-personal-styles").addEventListener("change", event => {
+      const field = event.target;
+      const key = field.dataset.emailStyle;
+      if (!key || !field.checkValidity()) return;
+      state.configuration = { ...state.configuration,
+        styles: { ...(state.configuration.styles || {}), [key]: field.type === "number" ? Number(field.value) : field.value } };
+      state.configurationDirty = true;
+      state.view = VIEWS.PASTE;
+      renderColumnOptions();
       refreshReply();
     });
     state.panel = { overlay, panel };
@@ -239,6 +266,18 @@
       '<label><input type="checkbox" data-email-column="' + escapeHtml(column) +
       '" ' + (columns.includes(column) ? 'checked' : '') + '> ' +
       escapeHtml(state.configuration.columnLabels?.[column] || column) + '</label>').join("");
+    const styles = state.configuration.styles || {};
+    const defaults = { fontFamily: "Segoe UI", fontSize: 10, messageFontSize: styles.fontSize ?? 10.5,
+      padding: 3, paragraphSpacing: 12, lineHeight: 1.3, tableWidth: 100,
+      bodyColor: "#10222F", headerBackground: "#EAF1F6", headerColor: "#10222F", bodyBackground: "#FFFFFF", borderColor: "#9FB3C3" };
+    document.querySelectorAll("[data-email-style]").forEach(field => {
+      field.value = styles[field.dataset.emailStyle] ?? defaults[field.dataset.emailStyle];
+    });
+    const preset = styles.fontSize === 8 && styles.messageFontSize === 8 && styles.padding === 3 && styles.paragraphSpacing === 8 && styles.lineHeight === 1.15 ? "compact" :
+      styles.fontSize === 12 && styles.messageFontSize === 12 && styles.padding === 9 && styles.paragraphSpacing === 16 && styles.lineHeight === 1.4 ? "readable" : "";
+    document.querySelectorAll('.egrdt-email-presets button').forEach(button => {
+      button.setAttribute("aria-pressed", String(Boolean(preset) && button.dataset.egrdtEmailAction === "preset-" + preset));
+    });
   }
 
   function renderPreview() {
@@ -251,13 +290,15 @@
     const message = '<div class="egrdt-email-preview-message">' + reply.messageHtml + '</div>';
     preview.innerHTML = reply.rows.length
       ? (paste
-        ? '<div class="egrdt-email-sheet">' + message + reply.tableHtml + '</div>'
+        ? '<iframe id="egrdt-email-outlook-preview" title="Resposta formatada para Outlook" sandbox="allow-same-origin"></iframe>'
         : '<div class="egrdt-email-reading-sheet">' + message + readingTableHtml(reply) + '</div>')
       : '<p class="egrdt-email-empty">Esta eGRDT não tem arquivos registrados para montar a relação.</p>';
+    const frame = preview.querySelector("iframe");
+    if (frame) frame.srcdoc = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"></head><body style="margin:16px;background:#FFFFFF">' + reply.html + '</body></html>';
     preview.scrollTop = position.top;
     preview.scrollLeft = position.left;
     panel.querySelector("#egrdt-email-hint").textContent = paste
-      ? "Prévia completa com o mesmo texto e HTML de tabela usados na cópia para Outlook. O cliente de e-mail pode ajustar a renderização."
+      ? "Esta é a formatação copiada: mensagem, tabela, fontes, cores e espaços. No Outlook, escolha Manter formatação de origem."
       : "Conferência com códigos legíveis e destaque da revisão. A cópia mantém o formato de Outlook.";
     panel.querySelectorAll("[data-egrdt-email-view]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.egrdtEmailView === state.view));
@@ -270,7 +311,8 @@
     if (!state.records.length) return;
     state.reply = currentReply();
     if (options.messageOnly) {
-      const target = document.querySelector("#egrdt-email-preview .egrdt-email-preview-message");
+      const target = document.getElementById("egrdt-email-outlook-preview")?.contentDocument?.querySelector("[data-grcon-email-message]") ||
+        document.querySelector("#egrdt-email-preview .egrdt-email-preview-message");
       if (target) target.innerHTML = state.reply.messageHtml;
       else renderPreview();
     } else renderPreview();
@@ -319,11 +361,15 @@
       state.configuration = { ...state.savedConfiguration, columns: state.configuration.columns };
     } else {
       styles.fontSize = preset === "compact" ? 8 : 12;
+      styles.messageFontSize = styles.fontSize;
       styles.padding = preset === "compact" ? 3 : 9;
+      styles.paragraphSpacing = preset === "compact" ? 8 : 16;
+      styles.lineHeight = preset === "compact" ? 1.15 : 1.4;
       styles.tableWidth = 100;
       state.configuration = { ...state.configuration, styles };
     }
     state.configurationDirty = true;
+    state.view = VIEWS.PASTE;
     renderColumnOptions();
     refreshReply();
   }
@@ -399,7 +445,7 @@
     const input = (label, key, type, value, attrs = "") => '<label>' + label + '<input data-model-style="' + key + '" type="' + type + '" value="' + escapeHtml(value) + '" ' + attrs + '></label>';
     target.innerHTML = '<label>Mensagem padrão<textarea id="email-model-message" rows="5">' + escapeHtml(cfg.messageTemplate || "Prezado(a),\n\nInformamos que os documentos abaixo foram postados por meio das eGRDTs {{egrdts}} em {{data}}.\n\nSolicitamos consultar a Consulta Geral para verificar a efetivação da postagem.") + '</textarea></label><small>Campos disponíveis: {{egrdt}}, {{egrdts}}, {{data}}, {{documentos}}, {{arquivos}}.</small>' +
       '<div class="email-model-grid"><label>Fonte<select data-model-style="fontFamily">' + ["Segoe UI", "Calibri", "Arial", "Verdana"].map(font => '<option ' + (font === styles.fontFamily ? "selected" : "") + '>' + font + '</option>').join("") + '</select></label>' +
-      input("Tamanho (pt)", "fontSize", "number", styles.fontSize ?? 10, 'min="8" max="24"') + input("Largura da tabela (%)", "tableWidth", "number", styles.tableWidth ?? 100, 'min="20" max="100"') + input("Espaçamento (px)", "padding", "number", styles.padding ?? 6, 'min="0" max="24"') + input("Borda (px)", "borderWidth", "number", styles.borderWidth ?? 1, 'min="0" max="4"') +
+      input("Tamanho (pt)", "fontSize", "number", styles.fontSize ?? 10, 'min="8" max="24"') + input("Tamanho da mensagem (pt)", "messageFontSize", "number", styles.messageFontSize ?? styles.fontSize ?? 10.5, 'min="8" max="24" step="0.5"') + input("Entrelinhas", "lineHeight", "number", styles.lineHeight ?? 1.3, 'min="1" max="2.5" step="0.05"') + input("Espaço entre parágrafos", "paragraphSpacing", "number", styles.paragraphSpacing ?? 12, 'min="0" max="32"') + input("Largura da tabela (%)", "tableWidth", "number", styles.tableWidth ?? 100, 'min="20" max="100"') + input("Espaçamento (px)", "padding", "number", styles.padding ?? 3, 'min="0" max="24"') + input("Borda (px)", "borderWidth", "number", styles.borderWidth ?? 1, 'min="0" max="4"') +
       input("Cor da borda", "borderColor", "color", styles.borderColor || "#9FB3C3") + input("Fundo do cabeçalho", "headerBackground", "color", styles.headerBackground || "#EAF1F6") + input("Texto do cabeçalho", "headerColor", "color", styles.headerColor || "#10222F") + input("Texto da tabela", "bodyColor", "color", styles.bodyColor || "#10222F") + input("Fundo da tabela", "bodyBackground", "color", styles.bodyBackground || "#FFFFFF") + '</div>' +
       '<label><input id="email-model-show-header" type="checkbox" ' + (cfg.showHeader === false ? "" : "checked") + '> Exibir cabeçalho</label>' +
       '<div class="email-model-columns">' + ordered.map((column, index) => '<div data-model-column="' + escapeHtml(column) + '"><label><input type="checkbox" data-model-visible ' + (currentColumns.includes(column) ? "checked" : "") + '>' + escapeHtml(column) + '</label><input aria-label="Nome da coluna" data-model-label value="' + escapeHtml(cfg.columnLabels?.[column] || column) + '"><input aria-label="Ordem da coluna" data-model-order type="number" min="1" max="8" value="' + (index + 1) + '"><input aria-label="Largura relativa da coluna" data-model-width type="number" min="1" max="1000" value="' + (cfg.columnWidths?.[column] || Reply.COLUMN_WIDTHS[column]) + '"><select aria-label="Alinhamento da coluna" data-model-align>' + ["left", "center", "right"].map(a => '<option value="' + a + '" ' + (a === (cfg.columnAlign?.[column] || Reply.COLUMN_ALIGN[column] || "left") ? "selected" : "") + '>' + ({left:"Esquerda",center:"Centro",right:"Direita"}[a]) + '</option>').join("") + '</select></div>').join("") + '</div>' +
@@ -426,6 +472,7 @@
     try {
       state.configuration = editorConfiguration();
       state.configurationDirty = true;
+      state.view = VIEWS.PASTE;
       if (!state.messageDirty) {
         document.getElementById("egrdt-email-message").value =
           Reply.build(state.records, state.configuration).message;
@@ -530,24 +577,24 @@
           "text/html": new Blob([html], { type: "text/html" }),
           "text/plain": new Blob([plain], { type: "text/plain" }),
         })]);
-        return true;
+        return { ok: true, rich: true };
       }
     } catch (error) {
       console.debug("[EmailReply] área de transferência rica indisponível:", error);
     }
-    if (copyBySelection(html)) return true;
+    if (copyBySelection(html, plain)) return { ok: true, rich: true };
     try {
       await navigator.clipboard.writeText(plain);
-      return true;
+      return { ok: true, rich: false };
     } catch (error) {
       console.warn("GRCON: não foi possível copiar a resposta de e-mail.", error);
-      return false;
+      return { ok: false, rich: false };
     }
   }
 
   // Navegadores antigos e contextos sem permissão de escrita continuam
   // copiando pela seleção, que preserva a tabela no formato rico.
-  function copyBySelection(html) {
+  function copyBySelection(html, plain) {
     const holder = document.createElement("div");
     holder.setAttribute("contenteditable", "true");
     holder.style.cssText = "position:fixed;left:-10000px;top:0;opacity:0";
@@ -556,19 +603,32 @@
     const selection = typeof root.getSelection === "function" ? root.getSelection() : null;
     if (!selection) { holder.remove(); return false; }
     const range = document.createRange();
+    const previousRanges = Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange());
+    const active = document.activeElement;
     range.selectNodeContents(holder);
     selection.removeAllRanges();
     selection.addRange(range);
     let copied = false;
-    try { copied = document.execCommand("copy"); } catch (error) { console.debug("[EmailReply] execCommand indisponível:", error); }
+    const onCopy = event => {
+      if (!event.clipboardData) return;
+      event.clipboardData.setData("text/html", html);
+      event.clipboardData.setData("text/plain", plain);
+      event.preventDefault();
+      copied = true;
+    };
+    document.addEventListener("copy", onCopy);
+    try { copied = document.execCommand("copy") && copied; } catch (error) { console.debug("[EmailReply] execCommand indisponível:", error); }
+    document.removeEventListener("copy", onCopy);
     selection.removeAllRanges();
+    previousRanges.forEach(previous => selection.addRange(previous));
     holder.remove();
+    active?.focus({ preventScroll: true });
     return copied;
   }
 
   async function copyText() {
     const copied = await writeClipboard(currentReply().messageHtml, currentMessage());
-    notify(copied ? "Texto copiado." : "Não foi possível copiar o texto.", copied ? "success" : "error");
+    notify(copied.ok ? "Texto copiado." : "Não foi possível copiar o texto.", copied.ok ? "success" : "error");
   }
 
   async function copyReply(tableOnly) {
@@ -578,10 +638,12 @@
       ? await writeClipboard(reply.tableHtml, reply.tableText)
       : await writeClipboard(reply.html, reply.text);
     notify(
-      copied
-        ? (tableOnly ? "Tabela copiada. Cole na resposta do e-mail." : "Resposta copiada. Cole na resposta do e-mail.")
+      copied.ok
+        ? (copied.rich
+          ? (tableOnly ? "Tabela formatada copiada. No Outlook, mantenha a formatação de origem." : "Resposta formatada copiada. No Outlook, mantenha a formatação de origem.")
+          : "O navegador copiou somente texto, sem a formatação. Permita a cópia formatada e tente novamente.")
         : "Não foi possível copiar automaticamente. Selecione o texto do painel e use Ctrl+C.",
-      copied ? "success" : "error",
+      copied.ok ? (copied.rich ? "success" : "warning") : "error",
     );
   }
 
@@ -593,7 +655,7 @@
     root.location.href = link.url;
     notify("Uma nova mensagem será aberta; para responder à conversa original, use Copiar resposta completa.", "info");
     if (link.truncated) notify("A relação é grande para o link do e-mail: ela ficou na área de transferência, use Ctrl+V no corpo da mensagem.", "warning");
-    else if (!copied) notify("O e-mail foi aberto com a resposta; a cópia automática não estava disponível.", "warning");
+    else if (!copied.ok || !copied.rich) notify("O novo e-mail usa texto simples. Para preservar o formato na conversa original, use Copiar resposta completa e Manter formatação de origem.", "warning");
   }
 
   root.addEventListener("grcon:contract-context-changed", () => close(true));

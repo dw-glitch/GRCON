@@ -251,44 +251,32 @@
     return `${COLUMN_PERCENTS[column]}%`;
   }
 
-  // Estilo embutido linha a linha: o Outlook descarta folhas de estilo e
-  // qualquer regra que não esteja no próprio elemento colado.
-  const TABLE_STYLE = "border-collapse:collapse;table-layout:fixed;width:100%;border:1px solid #9FB3C3;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:10pt;color:#10222F";
-  // O Outlook nem sempre herda o tamanho declarado no <table>; por isso o
-  // cabeçalho e cada célula carregam o próprio tamanho no style. Cabeçalho e
-  // corpo ficam ambos em 10 pt: a tabela agora ocupa a largura da mensagem,
-  // então o espaço que antes obrigava a 8/9 pt deixou de ser escasso. O
-  // padding reduzido (era 6px 10px) continua deixando cada linha baixa.
-  //
-  // O cabeçalho quebra em mais de uma linha em vez de cortar o nome da coluna
-  // com reticências: com oito colunas, "DATA DA GERAÇÃO / POSTAGEM" não cabe
-  // em uma linha, e um título cortado deixa quem recebe a resposta sem saber o
-  // que a coluna traz. São duas ou três linhas uma única vez, no topo da
-  // tabela, e a quebra acontece nos espaços. `word-wrap` sozinho (sem
-  // `word-break`) é o que garante isso: ele parte a palavra só quando ela não
-  // cabe sozinha na linha.
-  const HEAD_STYLE = "border:1px solid #9FB3C3;background-color:#EAF1F6;padding:3px 6px;font-size:10pt;font-weight:bold;vertical-align:bottom;white-space:normal;word-wrap:break-word";
-  const CELL_STYLE = "border:1px solid #9FB3C3;padding:3px 6px;vertical-align:top;font-size:10pt;word-wrap:break-word;word-break:break-word";
-
   function tableHtml(rows) {
-    const head = COLUMNS.map((column) => `<th style="${HEAD_STYLE};text-align:${align(column)};width:${columnWidth(column)}" width="${columnWidth(column)}">${escapeHtml(column)}</th>`).join("");
-    const body = (rows || []).map((row) => {
-      const cells = COLUMNS.map((column) => `<td style="${CELL_STYLE};text-align:${align(column)};width:${columnWidth(column)}" width="${columnWidth(column)}">${escapeHtml(row[column])}</td>`).join("");
-      return `<tr>${cells}</tr>`;
-    }).join("");
-    return `<table style="${TABLE_STYLE}" width="100%"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    return configurableTableHtml(rows, { styles: { padding: 3, paddingHorizontal: 6 } });
   }
 
-  const MESSAGE_PARAGRAPH_STYLE = "margin:0 0 12px;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:10.5pt;color:#10222F";
-
-  function messageHtml(message) {
-    return text(message)
-      .split(/\n{2,}/)
-      .map((paragraph) => `<p style="${MESSAGE_PARAGRAPH_STYLE}">${escapeHtml(paragraph).replace(/\n/g, "<br/>")}</p>`)
-      .join("");
+  function messageTypography(options) {
+    const styles = options?.styles || {};
+    const size = bounded(styles.messageFontSize, bounded(styles.fontSize, 10.5, 8, 24), 8, 24);
+    const font = safeFont(styles.fontFamily);
+    const color = safeColor(styles.bodyColor, "#10222F");
+    const line = Math.round(size * bounded(styles.lineHeight, 1.3, 1, 2.5) * 100) / 100;
+    const gap = bounded(styles.paragraphSpacing, 12, 0, 32);
+    const typography = `font-family:${font};font-size:${size}pt;mso-bidi-font-size:${size}pt;line-height:${line}pt;color:${color}`;
+    return { typography, paragraph: `margin:0 0 ${gap}px;mso-margin-top-alt:0;mso-margin-bottom-alt:${gap * 0.75}pt;mso-line-height-rule:at-least;${typography}` };
   }
 
-  function defaultMessageHtml(summary) {
+  function messageParagraphs(paragraphs, options) {
+    const style = messageTypography(options);
+    return paragraphs.map(paragraph => `<p style="${style.paragraph}"><span style="${style.typography}">${paragraph}</span></p>`).join("");
+  }
+
+  function messageHtml(message, options) {
+    return messageParagraphs(text(message).split(/\n{2,}/)
+      .map(paragraph => escapeHtml(paragraph).replace(/\n/g, "<br/>")), options);
+  }
+
+  function defaultMessageHtml(summary, options) {
     const info = summary || { egrdtNumbers: [], generatedAt: "" };
     const numbers = info.egrdtNumbers || [];
     const label = numbers.length === 1 ? "eGRDT" : "eGRDTs";
@@ -297,12 +285,11 @@
       : "";
     const date = info.generatedAt ? datePhrase(info.generatedAt) : "";
     const quando = date ? ` em <strong>${escapeHtml(date)}</strong>` : "";
-    const paragraphs = [
+    return messageParagraphs([
       "Prezado(a),",
       `Informamos que os documentos abaixo foram postados${via}${quando}.`,
       `<strong>${escapeHtml(FOLLOW_UP_MESSAGE)}</strong>`,
-    ];
-    return paragraphs.map((paragraph) => `<p style="${MESSAGE_PARAGRAPH_STYLE}">${paragraph}</p>`).join("");
+    ], options);
   }
 
   function templateMessage(template, summary) {
@@ -361,7 +348,9 @@
     const size = bounded(styles.fontSize, 10, 8, 24);
     const border = safeColor(styles.borderColor, "#9FB3C3");
     const borderWidth = bounded(styles.borderWidth, 1, 0, 4);
-    const padding = bounded(styles.padding, 6, 0, 24);
+    const padding = bounded(styles.padding, 3, 0, 24);
+    const horizontal = bounded(styles.paddingHorizontal, padding, 0, 24);
+    const cellPadding = padding === horizontal ? padding + "px" : padding + "px " + horizontal + "px";
     const headerBackground = safeColor(styles.headerBackground, "#EAF1F6");
     const headerColor = safeColor(styles.headerColor, "#10222F");
     const bodyColor = safeColor(styles.bodyColor, "#10222F");
@@ -381,16 +370,20 @@
     const width = bounded(styles.tableWidth, 100, 20, 100);
     const alignment = column => ["left", "center", "right"].includes(config.columnAlign?.[column]) ? config.columnAlign[column] : align(column);
     const tableStyle = "border-collapse:collapse;table-layout:fixed;width:" + width + "%;border:" + borderWidth + "px solid " + border + ";font-family:" + font + ";font-size:" + size + "pt;color:" + bodyColor;
-    const common = "border:" + borderWidth + "px solid " + border + ";padding:" + padding + "px;vertical-align:top;font-size:" + size + "pt;word-wrap:break-word;word-break:break-word";
-    const headStyle = "border:" + borderWidth + "px solid " + border + ";padding:" + padding + "px;vertical-align:top;font-size:" + size + "pt;background-color:" + headerBackground + ";color:" + headerColor + ";font-weight:bold;white-space:normal;word-wrap:break-word;word-break:normal";
-    const cellStyle = common + ";background-color:" + bodyBackground + ";color:" + bodyColor;
-    const head = columns.map(column => '<th style="' + headStyle + ';text-align:' + alignment(column) + ';width:' + widths[column] + '%" width="' + widths[column] + '%">' + escapeHtml(config.columnLabels?.[column] || column) + '</th>').join("");
-    const body = (rows || []).map(row => "<tr>" + columns.map(column => '<td style="' + cellStyle + ';text-align:' + alignment(column) + ';width:' + widths[column] + '%" width="' + widths[column] + '%">' + escapeHtml(row[column]) + '</td>').join("") + "</tr>").join("");
-    return '<table style="' + tableStyle + '" width="' + width + '%">' + (config.showHeader === false ? "" : '<thead><tr>' + head + '</tr></thead>') + '<tbody>' + body + '</tbody></table>';
+    const line = Math.round(size * bounded(styles.lineHeight, 1.3, 1, 2.5) * 100) / 100;
+    const typography = "font-family:" + font + ";font-size:" + size + "pt;mso-bidi-font-size:" + size + "pt;line-height:" + line + "pt";
+    const officePadding = padding * .75 + "pt " + horizontal * .75 + "pt " + padding * .75 + "pt " + horizontal * .75 + "pt";
+    const common = "border:" + borderWidth + "px solid " + border + ";padding:" + cellPadding + ";vertical-align:top;font-size:" + size + "pt;word-wrap:break-word;word-break:break-word";
+    const headStyle = "border:" + borderWidth + "px solid " + border + ";padding:" + cellPadding + ";vertical-align:top;font-size:" + size + "pt;background-color:" + headerBackground + ";color:" + headerColor + ";font-weight:bold;white-space:normal;word-wrap:break-word;word-break:normal";
+    const cellStyle = common + ";" + typography + ";mso-padding-alt:" + officePadding + ";background-color:" + bodyBackground + ";color:" + bodyColor;
+    const content = (value, color, bold) => '<p style="margin:0;mso-margin-top-alt:0;mso-margin-bottom-alt:0;' + typography + ';color:' + color + ';font-weight:' + (bold ? 'bold' : 'normal') + '"><span style="' + typography + ';color:' + color + ';font-weight:' + (bold ? 'bold' : 'normal') + '">' + escapeHtml(value) + '</span></p>';
+    const head = columns.map(column => '<th bgcolor="' + headerBackground + '" style="' + headStyle + ';' + typography + ';mso-padding-alt:' + officePadding + ';text-align:' + alignment(column) + ';width:' + widths[column] + '%" width="' + widths[column] + '%">' + content(config.columnLabels?.[column] || column, headerColor, true) + '</th>').join("");
+    const body = (rows || []).map(row => "<tr>" + columns.map(column => '<td bgcolor="' + bodyBackground + '" style="' + cellStyle + ';text-align:' + alignment(column) + ';width:' + widths[column] + '%" width="' + widths[column] + '%">' + content(row[column], bodyColor, false) + '</td>').join("") + "</tr>").join("");
+    return '<table cellspacing="0" cellpadding="' + padding + '" style="' + tableStyle + '" width="' + width + '%">' + (config.showHeader === false ? "" : '<thead><tr>' + head + '</tr></thead>') + '<tbody>' + body + '</tbody></table>';
   }
 
   function replyHtml(rows, message, defaultSummary, options) {
-    const intro = defaultSummary ? defaultMessageHtml(defaultSummary) : (text(message) ? messageHtml(message) : "");
+    const intro = defaultSummary ? defaultMessageHtml(defaultSummary, options) : (text(message) ? messageHtml(message, options) : "");
     return `<div>${intro}${options ? configurableTableHtml(rows, options) : tableHtml(rows)}</div>`;
   }
 
@@ -417,7 +410,7 @@
     const customized = Boolean(config.columns || config.styles || config.columnLabels || config.columnWidths || config.columnAlign || config.showHeader === false);
     const outputTableHtml = customized ? customTableHtml : tableHtml(rows);
     const outputTableText = customized ? customTableText : tableText(rows);
-    const outputMessageHtml = message ? (useStandardHtml ? defaultMessageHtml(summary) : messageHtml(message)) : "";
+    const outputMessageHtml = message ? (useStandardHtml ? defaultMessageHtml(summary, config) : messageHtml(message, config)) : "";
     return {
       columns,
       rows,
@@ -426,7 +419,7 @@
       message,
       // A prévia e o conteúdo copiado compartilham os mesmos fragmentos HTML.
       messageHtml: outputMessageHtml,
-      html: '<div>' + outputMessageHtml + outputTableHtml + '</div>',
+      html: '<div data-grcon-email-fragment><div data-grcon-email-message>' + outputMessageHtml + '</div>' + outputTableHtml + '</div>',
       text: message ? message + "\n\n" + outputTableText : outputTableText,
       tableHtml: outputTableHtml,
       tableText: outputTableText,

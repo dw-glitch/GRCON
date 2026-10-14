@@ -727,3 +727,34 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
+
+/* A folha do e-mail é isolada do tema e das tabelas operacionais do GRCON. */
+#egrdt-email-outlook-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 24rem;
+  border: 0;
+  background: #fff;
+}
+#egrdt-email-panel .egrdt-email-personal-styles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: .65rem;
+  margin: .8rem 0;
+}
+#egrdt-email-panel .egrdt-email-personal-styles label {
+  display: grid;
+  gap: .25rem;
+  font-size: .74rem;
+  min-width: 0;
+}
+#egrdt-email-panel .egrdt-email-personal-styles :is(input, select) {
+  width: 100%;
+  min-width: 0;
+}
+#egrdt-email-panel .egrdt-email-presets button[aria-pressed="true"] {
+  border-color: var(--brand-600);
+  background: var(--brand-100);
+  color: var(--brand-700);
+}
