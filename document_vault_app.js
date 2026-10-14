@@ -629,7 +629,7 @@
   }
 
   function allocationLabel(file) {
-    return text(file?.allocation_label) || (file?.allocation_identified ? "Não informado no Controle" : "Não identificado");
+    return text(file?.allocation_label) || (file?.allocation_identified ? "Não informado na Central" : "Não identificado");
   }
 
   function allocationClass(file) {
@@ -652,7 +652,7 @@
           '<td>' + esc((file.format || "outra").toUpperCase()) + '</td>' +
           '<td>' + esc(bytes(file.size_bytes)) + '</td>' +
           '<td>' + esc(dateLabel(file.created_at)) + '</td>' +
-          '<td><span class="vault-allocation ' + allocationClass(file) + '" title="Fonte: ' + esc(file.allocation_source || "Controle de Solicitações") + '">' + esc(allocationLabel(file)) + '</span></td>' +
+          '<td><span class="vault-allocation ' + allocationClass(file) + '" title="Fonte: ' + esc(file.allocation_source || "Controle de Solicitações — Central de alocação") + '">' + esc(allocationLabel(file)) + '</span></td>' +
           '<td><div class="vault-row-actions"><button type="button" data-vault-detail="' + esc(id) + '">Detalhes</button>' + (file.status === 'ready' ? '<button type="button" data-vault-open-file="' + esc(id) + '">Abrir</button><button type="button" class="quiet" data-vault-download="' + esc(id) + '">Baixar</button>' : '<span>Exclusão pendente</span>') + (canDelete() ? '<button type="button" data-vault-delete="' + esc(id) + '">' + (file.status === 'ready' ? 'Excluir' : 'Tentar excluir novamente') + '</button>' : '') + '</div></td>' +
           '</tr>';
       }).join("");
@@ -753,7 +753,7 @@
           type: file.document_type || "", size: Number(file.size_bytes), date: new Date(file.created_at),
           hash: file.sha256 || "", version: file.file_version || 1, active: file.is_active === false ? "Histórica" : "Atual", origin: file.source_context?.origin || "cofre", emissions: (file.emissions || []).map(item => item.egrdt_number).join(" | "),
           actor: file.created_by_name || file.created_by_email || "", allocation: allocationLabel(file),
-          allocationSource: file.allocation_source || "Controle de Solicitações",
+          allocationSource: file.allocation_source || "Controle de Solicitações — Central de alocação",
           status: file.status === "ready" ? "Disponível" : "Exclusão pendente — tentar novamente",
         });
         after = page.next;
@@ -1067,7 +1067,7 @@
           verifiedAt: item.verified_at || "",
           allocated: Boolean(item.allocated),
           allocationLabel: allocationLabel(item),
-          allocationSource: item.allocation_source || "Controle de Solicitações",
+          allocationSource: item.allocation_source || "Controle de Solicitações — Central de alocação",
           source: "vault-auto",
         });
         outputFiles.push(file);
@@ -1415,6 +1415,9 @@
       state.vaultPrepared = false; sourceRegistry = new WeakMap();
       renderVaultList(); renderLookupResults(); renderStorage();
       if (state.open) { void refreshList(true); void refreshStorage(); }
+    });
+    root.addEventListener("grcon:allocation-registry-updated", () => {
+      if (state.open) void refreshList(true);
     });
     root.addEventListener("grcon:requests-control-updated", () => {
       if (state.open) void refreshList(true);

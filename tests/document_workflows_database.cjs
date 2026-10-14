@@ -29,7 +29,8 @@ const workspace='00000000-0000-4000-8000-000000000001';
     create table private.grcon_planned_document_items(snapshot_id uuid,document_key text);
     create table public.grcon_profiles(id uuid primary key,display_name text,email text);
     insert into public.grcon_profiles values('${owner}','Owner QA','owner@example.test');`);
-  for (const file of ['20260929223549_shared_sigem_query.sql','20261006163921_document_vault_catalog.sql','20261006170344_document_vault_search_allocation.sql','20261006170405_document_vault_filter_pagination_fix.sql','20261006170533_document_vault_secret_key_compatibility.sql','20261006170546_document_vault_list_secret_key_compatibility.sql','20261006183921_multi_contract_foundation.sql','20261006184001_sigem_status_monitoring_schema.sql','20261006184118_sigem_status_monitoring_engine.sql','20261006184204_sigem_status_monitoring_api.sql','20261006185349_document_vault_batch_lookup.sql','20261006185728_document_vault_lookup_secret_key_compatibility.sql','20261007122636_document_vault_deletion.sql','20261007122911_shared_sigem_reference_date.sql','20261007122913_requests_control_base.sql','20261007122915_document_vault_set_lookup.sql','20261007143000_document_vault_requests_allocation_storage_audit.sql','20261007144040_shared_sigem_history_management.sql','20261007171210_owner_admin_shared_sigem_dashboard.sql','20261008100836_vault_versions_traceability_master.sql','20261008101708_master_document_identity_aliases.sql']) await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+  for (const file of ['20260929223549_shared_sigem_query.sql','20261006163921_document_vault_catalog.sql','20261006170344_document_vault_search_allocation.sql','20261006170405_document_vault_filter_pagination_fix.sql','20261006170533_document_vault_secret_key_compatibility.sql','20261006170546_document_vault_list_secret_key_compatibility.sql','20261006143737_shared_allocation_registry.sql','20261006183921_multi_contract_foundation.sql','20261006184001_sigem_status_monitoring_schema.sql','20261006184118_sigem_status_monitoring_engine.sql','20261006184204_sigem_status_monitoring_api.sql','20261006185349_document_vault_batch_lookup.sql','20261006185728_document_vault_lookup_secret_key_compatibility.sql','20261007122636_document_vault_deletion.sql','20261007122911_shared_sigem_reference_date.sql','20261007122913_requests_control_base.sql','20261007122915_document_vault_set_lookup.sql','20261007143000_document_vault_requests_allocation_storage_audit.sql','20261007144040_shared_sigem_history_management.sql','20261007171210_owner_admin_shared_sigem_dashboard.sql','20261008100836_vault_versions_traceability_master.sql','20261008101708_master_document_identity_aliases.sql','20261014185039_vault_central_allocation_source.sql']) await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+  await db.exec(fs.readFileSync(path.join(root,'supabase/migrations/20261014185039_vault_central_allocation_source.sql'),'utf8')); // A correção é idempotente.
   const aliases=(await db.query("select private.grcon_master_document_key('C1O-RNEST-DD-1.2.3.4-CE-DE-nt-TAG-01') a,private.grcon_master_document_key('C1O_RNEST_DD_1.2.3.4_CE_DE_TAG-01') b,private.grcon_master_document_key('RL-5290.00-22313-856-C1O-017') c")).rows[0];
   assert.equal(aliases.a,aliases.b);assert.equal(aliases.c,'RL-5290.00-22313-856-C1O-017');
   const as = (id, role='authenticated') => db.exec(`reset role; set request.jwt.claim.sub='${id}'; set role ${role};`);
@@ -38,6 +39,17 @@ const workspace='00000000-0000-4000-8000-000000000001';
   const contract = (await db.query('select contract_id from public.grcon_memberships where workspace_id=$1 and user_id=$2',[workspace,owner])).rows[0].contract_id;
   const other = (await db.query("select workspace_id from public.grcon_contract_context() where code='UGH'")).rows[0].workspace_id;
   const request = (op,input={},target=workspace)=>rpc('grcon_requests_base',[target,op,input]);
+  const centralRow=(document,allocation,sourceRow)=>({document,allocation,allocationStatus:'CONCLUÍDA',sourceRow});
+  async function publishCentral(records,active=null){
+   const meta={version:'1.0.0',sheetName:'Central de alocação',headerRow:7};
+   const id=(await db.query('select public.grcon_allocation_registry_begin($1,$2,$3,$4,$5) as id',[workspace,'Controle.xlsx',records.length,meta,active])).rows[0].id;
+   await db.query('select public.grcon_allocation_registry_chunk($1,$2,$3,$4)',[workspace,id,1,records]);
+   await db.query('select public.grcon_allocation_registry_publish($1,$2)',[workspace,id]);
+   return id;
+  }
+  let centralId=await publishCentral([centralRow('DOC-001','CENTRAL-ALOC-0001',8),centralRow(' nt-DOC-002 ','',9)]);
+  await assert.rejects(db.query('select * from private.grcon_vault_central_allocations($1,$2,$3)',[workspace,contract,centralId]),/permission denied/);
+
   const row = {document:'DOC-001',sheet:'Solicitações',sourceRow:2,data:{Documento:'DOC-001',Título:'Ação solicitada',Responsável:'Vinício',Alocação:'C1O-ALOC-QA-0001'}};
   const begun=await request('begin',{fileName:'Controle.xlsx',count:2,expectedActive:null});
   await request('chunk',{id:begun.id,first:1,rows:[row]});
@@ -139,8 +151,9 @@ const workspace='00000000-0000-4000-8000-000000000001';
     await as('', 'service_role');const result=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:[{requestId:'1',documentCode:'DOC-001'},{requestId:'2',documentCode:'DOC-002'}]}]);
     assert.equal(result.results[0].matches.length,0);assert.equal(result.results[1].matches.length,1);
     const list=await rpc('grcon_document_vault_list',[workspace,owner,{q:'DOC-002',allocation:'all'}]);assert.equal(list.files.length,1);assert.equal(list.files[0].created_by_name,'Owner QA');
-    assert.equal(list.allocation_source,'Controle de Solicitações');
-    assert.equal(list.files[0].allocation_label,'Não informado no Controle');
+    assert.equal(list.allocation_source,'Controle de Solicitações — Central de alocação');
+    assert.equal(list.central_snapshot_id,centralId);
+    assert.equal(list.files[0].allocation_label,'Não informado na Central');
     assert.equal(list.files[0].allocation_identified,true);
     const allocatedPage=await rpc('grcon_document_vault_list',[workspace,owner,{allocation:'allocated',limit:1}]);
     assert.equal(allocatedPage.files.length,0,'DOC-001 was deleted before this check and cannot leak from history');
@@ -165,9 +178,20 @@ const workspace='00000000-0000-4000-8000-000000000001';
     await request('chunk',{id:changed.id,first:1,rows:[{...row,document:'DOC-002',data:{...row.data,Documento:'DOC-002',Alocação:'C1O-ALOC-QA-0099'}}]});
     await request('publish',{id:changed.id});
     await as('', 'service_role');
+
+    const wrongSheetAllocation=await rpc('grcon_document_vault_list',[workspace,owner,{q:'DOC-002',allocation:'allocated'}]);
+    assert.equal(wrongSheetAllocation.files.length,0,'a coluna Alocação de Solicitações não interfere no Cofre');
+    await as(owner);
+    centralId=await publishCentral([centralRow('DOC-002','CENTRAL-ALOC-0099',8),centralRow('NT-DOC-002','CENTRAL-ALOC-0099',9),centralRow('DOC-002','#N/A',10)],centralId);
+    await as('', 'service_role');
     const refreshedAllocation=await rpc('grcon_document_vault_list',[workspace,owner,{q:'DOC-002',allocation:'allocated'}]);
     assert.equal(refreshedAllocation.files.length,1,'allocation changes without reuploading the vault file');
-    assert.equal(refreshedAllocation.files[0].allocation_label,'C1O-ALOC-QA-0099');
+    assert.equal(refreshedAllocation.files[0].allocation_label,'CENTRAL-ALOC-0099');
+    assert.equal(refreshedAllocation.files[0].central_snapshot_id,centralId);
+    const centralLookup=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:[{documentCode:' nt-DOC-002 '}]}]);
+    assert.equal(centralLookup.results[0].matches[0].allocation_label,'CENTRAL-ALOC-0099');
+    const centralDetail=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:aliasId}]);
+    assert.equal(centralDetail.file.allocation_label,'CENTRAL-ALOC-0099','detalhe e versões também usam a Central');
     const isolated=await rpc('grcon_document_vault_list',[other,owner,{allocation:'all'}]);
     assert.equal(isolated.files.length,0,'vault data remains isolated by contract');
 
