@@ -29,7 +29,12 @@
   // relação; forçar as duas numa só era o que deixava a prévia ilegível.
   const VIEWS = { PASTE: "paste", READ: "read" };
 
-  const state = { records: [], reply: null, open: false, lastFocus: null, panel: null, view: VIEWS.PASTE, configuration: {}, templateVersions: [], templateEpoch: 0 };
+  const state = {
+    records: [], reply: null, open: false, lastFocus: null, panel: null, view: VIEWS.READ,
+    configuration: {}, savedConfiguration: {}, templateVersions: [], templateEpoch: 0,
+    messageDirty: false, defaultMessage: "", editorOpen: false, activeModel: null,
+    savingModel: false,
+  };
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
@@ -54,13 +59,24 @@
    */
   function readingTableHtml(reply) {
     const columns = reply.columns || [];
-    const align = Reply.COLUMN_ALIGN || {};
-    const head = columns.map((column) => `<th scope="col" style="text-align:${align[column] || "left"}">${escapeHtml(reply.template?.columnLabels?.[column] || column)}</th>`).join("");
+    const align = reply.template?.columnAlign || {};
+    const defaults = Reply.COLUMN_ALIGN || {};
+    const labels = reply.template?.columnLabels || {};
+    const header = reply.template?.showHeader !== false;
+    const head = columns.map((column) =>
+      '<th scope="col" data-column="' + escapeHtml(column) + '" style="text-align:' +
+      escapeHtml(align[column] || defaults[column] || "left") + '">' +
+      escapeHtml(labels[column] || column) + '</th>').join("");
     const body = (reply.rows || []).map((row, index) => {
-      const cells = columns.map((column) => `<td style="text-align:${align[column] || "left"}">${escapeHtml(row[column])}</td>`).join("");
-      return `<tr><th scope="row">${index + 1}</th>${cells}</tr>`;
+      const cells = columns.map((column) =>
+        '<td data-column="' + escapeHtml(column) + '" style="text-align:' +
+        escapeHtml(align[column] || defaults[column] || "left") + '">' +
+        escapeHtml(row[column]) + '</td>').join("");
+      return '<tr><th scope="row">' + (index + 1) + '</th>' + cells + '</tr>';
     }).join("");
-    return `<table class="egrdt-email-reading"><thead><tr><th scope="col"><span class="sr-only">Linha</span></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    return '<table class="egrdt-email-reading">' +
+      (header ? '<thead><tr><th scope="col">Nº</th>' + head + '</tr></thead>' : '') +
+      '<tbody>' + body + '</tbody></table>';
   }
 
   function ensurePanel() {
@@ -77,51 +93,12 @@
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-modal", "true");
     panel.setAttribute("aria-labelledby", "egrdt-email-title");
-    panel.innerHTML = `
-      <header class="egrdt-email-header">
-        <div class="egrdt-email-heading">
-          <span>RESPOSTA DE E-MAIL</span>
-          <h2 id="egrdt-email-title">Documentos postados</h2>
-          <p id="egrdt-email-subtitle">Relação pronta para colar na resposta.</p>
-          <ul class="egrdt-email-metrics" id="egrdt-email-metrics"></ul>
-        </div>
-        <button aria-label="Fechar a resposta de e-mail" class="icon-button" data-egrdt-email-action="close" type="button">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"></path></svg>
-        </button>
-      </header>
-      <div class="egrdt-email-body">
-        <label class="egrdt-email-message">
-          <span>Mensagem da resposta (edite se precisar)</span>
-          <textarea id="egrdt-email-message" rows="5" spellcheck="false"></textarea>
-        </label>
-        <button class="secondary-button compact" data-egrdt-email-action="edit-model" type="button" hidden>Editar modelo da resposta</button>
-        <small id="egrdt-email-model-status"></small>
-        <details id="egrdt-email-model-editor" hidden><summary>Modelo compartilhado</summary><div id="egrdt-email-model-fields"></div></details>
-        <div class="egrdt-email-preview-heading">
-          <div class="egrdt-email-preview-label">
-            <strong>Relação dos documentos</strong>
-            <small id="egrdt-email-count">Nenhuma linha</small>
-          </div>
-          <div class="egrdt-email-views" role="group" aria-label="Como exibir a relação">
-            <button aria-pressed="true" class="egrdt-email-view" data-egrdt-email-view="paste" type="button">Como será colado</button>
-            <button aria-pressed="false" class="egrdt-email-view" data-egrdt-email-view="read" type="button">Leitura ampla</button>
-          </div>
-        </div>
-        <p class="egrdt-email-hint" id="egrdt-email-hint"></p>
-        <div class="egrdt-email-preview" id="egrdt-email-preview" tabindex="0" role="region" aria-label="Prévia da relação dos documentos"></div>
-      </div>
-      <footer class="egrdt-email-footer">
-        <div class="egrdt-email-actions">
-          <button class="secondary-button compact" data-egrdt-email-action="mail" type="button">Abrir no e-mail</button>
-          <button class="secondary-button compact" data-egrdt-email-action="copy-table" type="button">Copiar só a tabela</button>
-          <button class="primary-button compact" data-egrdt-email-action="copy-all" type="button">Copiar resposta</button>
-        </div>
-      </footer>`;
+    panel.innerHTML = "<header class=\"egrdt-email-header\">\n  <div class=\"egrdt-email-heading\">\n    <span>HISTÓRICO DE EGRDTS / RESPOSTA DE E-MAIL</span>\n    <h2 id=\"egrdt-email-title\">Resposta de e-mail</h2>\n    <p id=\"egrdt-email-subtitle\">Edite, confira e copie para a conversa original no Outlook.</p>\n    <ul class=\"egrdt-email-metrics\" id=\"egrdt-email-metrics\"></ul>\n  </div>\n  <button aria-label=\"Fechar a resposta de e-mail\" class=\"icon-button\" data-egrdt-email-action=\"close\" type=\"button\">✕</button>\n</header>\n<div class=\"egrdt-email-body\">\n  <section class=\"egrdt-email-editor-pane\" aria-label=\"Editar resposta\">\n    <div class=\"egrdt-email-section-heading\"><strong>1. Editar mensagem</strong><small>Somente esta resposta</small></div>\n    <label class=\"egrdt-email-message\">\n      <span>Texto da resposta</span>\n      <textarea id=\"egrdt-email-message\" rows=\"9\" spellcheck=\"true\" aria-describedby=\"egrdt-email-edit-status\"></textarea>\n    </label>\n    <div class=\"egrdt-email-editor-tools\">\n      <small id=\"egrdt-email-edit-status\" role=\"status\">Modelo carregado</small>\n      <button class=\"secondary-button compact\" data-egrdt-email-action=\"reset-message\" type=\"button\">Restaurar texto padrão</button>\n    </div>\n    <details id=\"egrdt-email-quick-settings\" class=\"egrdt-email-quick-settings\">\n      <summary>Personalizar tabela desta resposta</summary>\n      <div class=\"egrdt-email-presets\" role=\"group\" aria-label=\"Estilo da tabela\">\n        <button type=\"button\" data-egrdt-email-action=\"preset-standard\">Padrão</button>\n        <button type=\"button\" data-egrdt-email-action=\"preset-compact\">Compacto</button>\n        <button type=\"button\" data-egrdt-email-action=\"preset-readable\">Leitura facilitada</button>\n      </div>\n      <p class=\"egrdt-email-settings-help\">Marque as colunas que devem aparecer no e-mail. Os dados do histórico não são alterados.</p>\n      <div class=\"egrdt-email-column-options\" id=\"egrdt-email-column-options\"></div>\n    </details>\n    <div class=\"egrdt-email-model-header\">\n      <button class=\"secondary-button compact\" data-egrdt-email-action=\"edit-model\" type=\"button\" hidden>Editar modelo compartilhado</button>\n      <small id=\"egrdt-email-model-status\" role=\"status\"></small>\n    </div>\n    <details id=\"egrdt-email-model-editor\" hidden><summary>Configuração do modelo</summary><div id=\"egrdt-email-model-fields\"></div></details>\n  </section>\n  <section class=\"egrdt-email-preview-pane\" aria-label=\"Conferir resposta\">\n    <div class=\"egrdt-email-section-heading\"><strong>2. Conferir resposta</strong><small id=\"egrdt-email-count\">Nenhuma linha</small></div>\n    <div class=\"egrdt-email-views\" role=\"group\" aria-label=\"Como exibir a relação\">\n      <button aria-pressed=\"false\" class=\"egrdt-email-view\" data-egrdt-email-view=\"paste\" type=\"button\">Visualização para Outlook</button>\n      <button aria-pressed=\"true\" class=\"egrdt-email-view\" data-egrdt-email-view=\"read\" type=\"button\">Conferência</button>\n    </div>\n    <p class=\"egrdt-email-hint\" id=\"egrdt-email-hint\"></p>\n    <div class=\"egrdt-email-preview\" id=\"egrdt-email-preview\" tabindex=\"0\" role=\"region\" aria-label=\"Prévia completa da resposta\"></div>\n  </section>\n</div>\n<footer class=\"egrdt-email-footer\">\n  <span class=\"egrdt-email-footer-note\">Cole na conversa original com Ctrl+V. O GRCON não envia este e-mail.</span>\n  <div class=\"egrdt-email-actions\">\n    <button class=\"secondary-button compact\" data-egrdt-email-action=\"mail\" type=\"button\" title=\"Cria uma nova mensagem; não responde à conversa original\">Criar novo e-mail</button>\n    <button class=\"secondary-button compact\" data-egrdt-email-action=\"copy-text\" type=\"button\">Copiar só texto</button>\n    <button class=\"secondary-button compact\" data-egrdt-email-action=\"copy-table\" type=\"button\">Copiar tabela</button>\n    <button class=\"primary-button compact\" data-egrdt-email-action=\"copy-all\" type=\"button\">Copiar resposta completa</button>\n  </div>\n</footer>";
 
     document.body.appendChild(overlay);
     document.body.appendChild(panel);
 
-    overlay.addEventListener("click", close);
+    overlay.addEventListener("click", () => close());
     panel.addEventListener("click", (event) => {
       const view = event.target.closest("[data-egrdt-email-view]")?.dataset.egrdtEmailView;
       if (view) { setView(view); return; }
@@ -130,10 +107,35 @@
       if (action === "save-model") void saveModel();
       if (action === "restore-model") void restoreModel();
       if (action === "preview-model") previewModel();
+      if (action === "cancel-model") cancelEditor();
+      if (action === "reset-message") resetMessage();
+      if (action === "preset-standard") applyPreset("standard");
+      if (action === "preset-compact") applyPreset("compact");
+      if (action === "preset-readable") applyPreset("readable");
       if (action === "close") close();
       if (action === "copy-all") void copyReply(false);
       if (action === "copy-table") void copyReply(true);
+      if (action === "copy-text") void copyText();
       if (action === "mail") void openMail();
+    });
+    panel.querySelector("#egrdt-email-message").addEventListener("input", () => {
+      state.messageDirty = true;
+      refreshReply({ messageOnly: true });
+    });
+    panel.querySelector("#egrdt-email-column-options").addEventListener("change", (event) => {
+      const target = event.target;
+      if (!target.matches("[data-email-column]")) return;
+      const column = target.dataset.emailColumn;
+      const selected = Reply.normalizeColumns(state.configuration.columns);
+      if (!target.checked && selected.length === 1) {
+        target.checked = true;
+        notify("Mantenha pelo menos uma coluna visível.", "warning");
+        return;
+      }
+      state.configuration = { ...state.configuration,
+        columns: target.checked ? Reply.COLUMNS.filter(c => selected.includes(c) || c === column) :
+          selected.filter(c => c !== column) };
+      refreshReply();
     });
     state.panel = { overlay, panel };
     return state.panel;
@@ -149,61 +151,111 @@
   }
 
   function metric(value, singular, plural) {
-    return `<li><strong>${escapeHtml(value)}</strong> ${escapeHtml(value === 1 ? singular : plural)}</li>`;
+    return '<li><strong>' + escapeHtml(value) + '</strong> ' +
+      escapeHtml(value === 1 ? singular : plural) + '</li>';
   }
 
-  /**
-   * A prévia é a única parte do painel que muda de forma: o cabeçalho, a
-   * mensagem e os botões continuam onde estão quando o operador troca de
-   * leitura — inclusive o texto que ele já editou, que um render completo
-   * apagaria.
-   */
+  function refreshEditStatus() {
+    const status = document.getElementById("egrdt-email-edit-status");
+    if (status) status.textContent = state.messageDirty
+      ? "Texto personalizado nesta resposta"
+      : "Texto do modelo padrão · pode editar livremente";
+  }
+
+  function renderColumnOptions() {
+    const columns = Reply.normalizeColumns(state.configuration.columns);
+    const holder = document.getElementById("egrdt-email-column-options");
+    if (!holder) return;
+    holder.innerHTML = Reply.COLUMNS.map(column =>
+      '<label><input type="checkbox" data-email-column="' + escapeHtml(column) +
+      '" ' + (columns.includes(column) ? 'checked' : '') + '> ' +
+      escapeHtml(state.configuration.columnLabels?.[column] || column) + '</label>').join("");
+  }
+
   function renderPreview() {
     const { panel } = ensurePanel();
     const reply = state.reply;
     const preview = panel.querySelector("#egrdt-email-preview");
+    const position = { top: preview.scrollTop, left: preview.scrollLeft };
     const paste = state.view === VIEWS.PASTE;
     preview.dataset.view = state.view;
-    // A folha de papel do modo "Como será colado" é um invólucro próprio: o
-    // afastamento precisa ficar dentro do conteúdo que rola, e não no quadro,
-    // senão as linhas passam por trás do cabeçalho fixo na faixa do
-    // preenchimento superior.
+    const message = '<div class="egrdt-email-preview-message">' + reply.messageHtml + '</div>';
     preview.innerHTML = reply.rows.length
-      ? (paste ? `<div class="egrdt-email-sheet">${reply.tableHtml}</div>` : readingTableHtml(reply))
-      : `<p class="egrdt-email-empty">Esta eGRDT não tem arquivos registrados para montar a relação.</p>`;
+      ? (paste
+        ? '<div class="egrdt-email-sheet">' + message + reply.tableHtml + '</div>'
+        : '<div class="egrdt-email-reading-sheet">' + message + readingTableHtml(reply) + '</div>')
+      : '<p class="egrdt-email-empty">Esta eGRDT não tem arquivos registrados para montar a relação.</p>';
+    preview.scrollTop = position.top;
+    preview.scrollLeft = position.left;
     panel.querySelector("#egrdt-email-hint").textContent = paste
-      ? "A tabela ocupa toda a largura da mensagem, terminando onde a frase acima dela termina; o texto que não cabe quebra dentro da célula, como o destinatário vai receber."
-      : "Ajustada à tela para conferência — o e-mail continua recebendo a tabela do modo “Como será colado”.";
-    panel.querySelectorAll("[data-egrdt-email-view]").forEach((button) => {
+      ? "Prévia completa com o mesmo texto e HTML de tabela usados na cópia para Outlook. O cliente de e-mail pode ajustar a renderização."
+      : "Conferência com códigos legíveis e destaque da revisão. A cópia mantém o formato de Outlook.";
+    panel.querySelectorAll("[data-egrdt-email-view]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.egrdtEmailView === state.view));
     });
+    panel.querySelector("#egrdt-email-count").textContent =
+      reply.rows.length + " linha(s) · " + reply.columns.length + " colunas";
+  }
+
+  function refreshReply(options = {}) {
+    if (!state.records.length) return;
+    state.reply = currentReply();
+    if (options.messageOnly) {
+      const target = document.querySelector("#egrdt-email-preview .egrdt-email-preview-message");
+      if (target) target.innerHTML = state.reply.messageHtml;
+      else renderPreview();
+    } else renderPreview();
+    refreshEditStatus();
   }
 
   function setView(view) {
     const next = view === VIEWS.READ ? VIEWS.READ : VIEWS.PASTE;
     if (next === state.view) return;
     state.view = next;
-    if (state.reply) renderPreview();
+    refreshReply();
   }
 
   function render() {
     const { panel } = ensurePanel();
     const reply = state.reply;
     const numbers = reply.summary.egrdtNumbers;
-    panel.querySelector("#egrdt-email-title").textContent = numbers.length === 1 ? numbers[0] : "Documentos postados";
+    panel.querySelector("#egrdt-email-title").textContent =
+      numbers.length === 1 ? numbers[0] : "Documentos postados";
     panel.querySelector("#egrdt-email-subtitle").textContent = numbers.length > 1
-      ? `${numbers.length} eGRDTs reunidas nesta resposta`
-      : "Relação pronta para colar na resposta.";
-    // Documentos, arquivos e linhas eram uma frase única com barras: os três
-    // números viram selos, que é o que se lê de relance antes de copiar.
+      ? numbers.length + " eGRDTs reunidas nesta resposta"
+      : "Edite, confira e copie para a conversa original no Outlook.";
     panel.querySelector("#egrdt-email-metrics").innerHTML = [
       metric(reply.summary.documents, "documento", "documentos"),
       metric(reply.summary.files, "arquivo", "arquivos"),
-      metric(reply.rows.length, "linha na tabela", "linhas na tabela"),
+      metric(reply.rows.length, "linha", "linhas"),
     ].join("");
-    panel.querySelector("#egrdt-email-message").value = reply.message;
-    panel.querySelector("#egrdt-email-count").textContent = `${reply.rows.length} linha(s) · ${reply.columns.length} colunas`;
+    // render() não escreve no textarea: reconstruções visuais nunca apagam o rascunho.
+    renderColumnOptions();
+    refreshEditStatus();
     renderPreview();
+  }
+
+  function resetMessage() {
+    if (!state.records.length) return;
+    const message = Reply.build(state.records, state.configuration).message;
+    document.getElementById("egrdt-email-message").value = message;
+    state.messageDirty = false;
+    refreshReply({ messageOnly: true });
+  }
+
+  function applyPreset(preset) {
+    if (!state.records.length) return;
+    const styles = { ...(state.configuration.styles || {}) };
+    if (preset === "standard") {
+      state.configuration = { ...state.savedConfiguration, columns: state.configuration.columns };
+    } else {
+      styles.fontSize = preset === "compact" ? 8 : 12;
+      styles.padding = preset === "compact" ? 3 : 9;
+      styles.tableWidth = 100;
+      state.configuration = { ...state.configuration, styles };
+    }
+    renderColumnOptions();
+    refreshReply();
   }
 
   function onKeydown(event) {
@@ -211,19 +263,28 @@
   }
 
   function open(records, options) {
-    const list = (Array.isArray(records) ? records : [records]).filter((record) => record && (record.files || []).length);
+    const list = (Array.isArray(records) ? records : [records]).filter(record => record && (record.files || []).length);
     if (!list.length) { notify("Esta eGRDT não tem arquivos registrados para montar a resposta.", "warning"); return false; }
+    if (state.open && !close()) return false;
     const { overlay, panel } = ensurePanel();
+    state.lastFocus = document.activeElement;
     state.records = list;
-    state.configuration = {};
-    state.reply = Reply.build(list, options || {});
-    void loadTemplate();
-    render();
+    state.view = VIEWS.READ;
+    state.configuration = { ...(options || {}) };
+    state.savedConfiguration = { ...(options || {}) };
+    state.reply = Reply.build(list, state.configuration);
+    state.messageDirty = false;
+    state.editorOpen = false;
+    const editor = document.getElementById("egrdt-email-model-editor");
+    editor.hidden = true; editor.open = false;
+    panel.querySelector("#egrdt-email-quick-settings").open = false;
+    panel.querySelector("#egrdt-email-message").value = state.reply.message;
     overlay.hidden = false;
     panel.hidden = false;
     state.open = true;
-    state.lastFocus = document.activeElement;
+    render();
     document.addEventListener("keydown", onKeydown, true);
+    void loadTemplate();
     root.setTimeout(() => panel.querySelector("#egrdt-email-message")?.focus(), 0);
     return true;
   }
@@ -232,17 +293,23 @@
   async function loadTemplate() {
     const epoch = ++state.templateEpoch;
     const workspace = root.GrconCloud?.state?.membership?.workspace_id;
-    const before = state.reply.message;
+    const before = currentMessage();
     const editor = document.getElementById("egrdt-email-model-editor");
-    editor.hidden = true; editor.open = false;
+    if (!state.editorOpen) { editor.hidden = true; editor.open = false; }
     document.querySelector('[data-egrdt-email-action="edit-model"]').hidden = !canEditModel();
     try {
       const model = await root.GrconCloud?.emailTemplateGet?.();
       if (epoch !== state.templateEpoch || workspace !== root.GrconCloud?.state?.membership?.workspace_id) return;
-      const edited = currentMessage() !== before;
-      state.configuration = model?.configuration || {};
-      state.reply = Reply.build(state.records, { ...state.configuration, ...(edited ? { message: currentMessage() } : {}) });
-      render();
+      const edited = state.messageDirty || currentMessage() !== before;
+      state.activeModel = model;
+      state.savedConfiguration = { ...(model?.configuration || {}) };
+      state.configuration = { ...state.savedConfiguration };
+      if (!edited) {
+        const defaultReply = Reply.build(state.records, state.configuration);
+        document.getElementById("egrdt-email-message").value = defaultReply.message;
+      }
+      refreshReply();
+      renderColumnOptions();
       document.getElementById("egrdt-email-model-status").textContent = model ? "Modelo " + (model.scope === "global" ? "global" : "do contrato") + " · versão " + model.version : "Modelo padrão do GRCON";
     } catch (error) { notify(error.message || "Não foi possível carregar o modelo compartilhado.", "warning"); }
   }
@@ -261,8 +328,9 @@
       '<label><input id="email-model-show-header" type="checkbox" ' + (cfg.showHeader === false ? "" : "checked") + '> Exibir cabeçalho</label>' +
       '<div class="email-model-columns">' + ordered.map((column, index) => '<div data-model-column="' + escapeHtml(column) + '"><label><input type="checkbox" data-model-visible ' + (currentColumns.includes(column) ? "checked" : "") + '>' + escapeHtml(column) + '</label><input aria-label="Nome da coluna" data-model-label value="' + escapeHtml(cfg.columnLabels?.[column] || column) + '"><input aria-label="Ordem da coluna" data-model-order type="number" min="1" max="8" value="' + (index + 1) + '"><input aria-label="Largura relativa da coluna" data-model-width type="number" min="1" max="1000" value="' + (cfg.columnWidths?.[column] || Reply.COLUMN_WIDTHS[column]) + '"><select aria-label="Alinhamento da coluna" data-model-align>' + ["left", "center", "right"].map(a => '<option value="' + a + '" ' + (a === (cfg.columnAlign?.[column] || Reply.COLUMN_ALIGN[column] || "left") ? "selected" : "") + '>' + ({left:"Esquerda",center:"Centro",right:"Direita"}[a]) + '</option>').join("") + '</select></div>').join("") + '</div>' +
       '<label>Salvar para<select id="email-model-scope"><option value="contract">Este contrato</option>' + (root.GrconCloud?.state?.membership?.role === "owner" ? '<option value="global">Todos os contratos (modelo global)</option>' : "") + '</select></label>' +
-      '<div class="egrdt-email-actions"><button type="button" data-egrdt-email-action="preview-model">Atualizar prévia</button><button type="button" data-egrdt-email-action="save-model">Salvar modelo compartilhado</button></div><label>Versões anteriores<select id="email-model-version"></select></label><button type="button" data-egrdt-email-action="restore-model">Restaurar versão</button>';
+      '<div class="egrdt-email-actions"><button type="button" data-egrdt-email-action="preview-model">Aplicar na prévia</button><button type="button" data-egrdt-email-action="save-model">Salvar modelo compartilhado</button><button type="button" data-egrdt-email-action="cancel-model">Cancelar edição do modelo</button></div><label>Versões anteriores<select id="email-model-version"></select></label><button type="button" data-egrdt-email-action="restore-model">Restaurar versão</button>';
     const editor = document.getElementById("egrdt-email-model-editor"); editor.hidden = false; editor.open = true;
+    state.editorOpen = true;
     try {
       state.templateVersions = await root.GrconCloud.emailTemplateVersions();
       document.getElementById("email-model-version").innerHTML = state.templateVersions.map(v => '<option value="' + escapeHtml(v.template_id) + '">' + escapeHtml(v.scope) + ' · v' + v.version + (v.active ? " · atual" : "") + '</option>').join("");
@@ -277,21 +345,70 @@
     return cfg;
   }
   function previewModel() {
-    try { state.configuration = editorConfiguration(); state.reply = Reply.build(state.records, state.configuration); render(); } catch (error) { notify(error.message, "warning"); }
+    try {
+      state.configuration = editorConfiguration();
+      if (!state.messageDirty) {
+        document.getElementById("egrdt-email-message").value =
+          Reply.build(state.records, state.configuration).message;
+      }
+      refreshReply();
+      renderColumnOptions();
+    } catch (error) { notify(error.message, "warning"); }
   }
+
+  function cancelEditor() {
+    state.configuration = { ...state.savedConfiguration };
+    state.editorOpen = false;
+    const editor = document.getElementById("egrdt-email-model-editor");
+    editor.open = false; editor.hidden = true;
+    refreshReply();
+    renderColumnOptions();
+  }
+
   async function saveModel() {
-    if (!canEditModel()) return;
-    try { const cfg = editorConfiguration(); await root.GrconCloud.emailTemplateSave(document.getElementById("email-model-scope").value, cfg); state.configuration = cfg; state.reply = Reply.build(state.records, cfg); render(); notify("Modelo salvo com uma nova versão.", "success"); await loadTemplate(); } catch (error) { notify(error.message, "error"); }
+    if (!canEditModel() || state.savingModel) return;
+    state.savingModel = true;
+    const button = document.querySelector('[data-egrdt-email-action="save-model"]');
+    if (button) { button.disabled = true; button.textContent = "Salvando..."; }
+    try {
+      const cfg = editorConfiguration();
+      await root.GrconCloud.emailTemplateSave(document.getElementById("email-model-scope").value, cfg);
+      state.savedConfiguration = { ...cfg };
+      state.configuration = { ...cfg };
+      state.editorOpen = false;
+      const editor = document.getElementById("egrdt-email-model-editor");
+      editor.open = false; editor.hidden = true;
+      if (!state.messageDirty) {
+        document.getElementById("egrdt-email-message").value = Reply.build(state.records, cfg).message;
+      }
+      refreshReply();
+      renderColumnOptions();
+      notify("Modelo salvo com uma nova versão.", "success");
+      await loadTemplate();
+    } catch (error) { notify(error.message || "Não foi possível salvar o modelo.", "error"); }
+    finally {
+      state.savingModel = false;
+      if (button) { button.disabled = false; button.textContent = "Salvar modelo compartilhado"; }
+    }
   }
+
   async function restoreModel() {
     if (!canEditModel()) return;
     const id = document.getElementById("email-model-version")?.value;
-    if (!id) return;
-    try { await root.GrconCloud.emailTemplateRestore(id); await loadTemplate(); notify("Modelo restaurado em uma nova versão.", "success"); } catch (error) { notify(error.message, "error"); }
+    if (!id || !root.confirm("Restaurar esta versão do modelo compartilhado?")) return;
+    try {
+      await root.GrconCloud.emailTemplateRestore(id);
+      state.editorOpen = false;
+      await loadTemplate();
+      notify("Modelo restaurado em uma nova versão.", "success");
+    } catch (error) { notify(error.message || "Não foi possível restaurar o modelo.", "error"); }
   }
 
-  function close() {
-    if (!state.open || !state.panel) return;
+  function close(force = false) {
+    if (!state.open || !state.panel) return true;
+    if (!force && (state.messageDirty || state.editorOpen) &&
+      typeof root.confirm === "function" &&
+      !root.confirm("Descartar as alterações desta resposta?")) return false;
     state.panel.overlay.hidden = true;
     state.panel.panel.hidden = true;
     state.open = false;
@@ -299,6 +416,9 @@
     document.removeEventListener("keydown", onKeydown, true);
     if (state.lastFocus && typeof state.lastFocus.focus === "function") state.lastFocus.focus();
     state.lastFocus = null;
+    state.messageDirty = false;
+    state.editorOpen = false;
+    return true;
   }
 
   /**
@@ -349,6 +469,11 @@
     return copied;
   }
 
+  async function copyText() {
+    const copied = await writeClipboard("", currentMessage());
+    notify(copied ? "Texto copiado." : "Não foi possível copiar o texto.", copied ? "success" : "error");
+  }
+
   async function copyReply(tableOnly) {
     if (!state.records.length) return;
     const reply = currentReply();
@@ -369,10 +494,11 @@
     const copied = await writeClipboard(reply.html, reply.text);
     const link = Reply.mailtoUrl(reply);
     root.location.href = link.url;
+    notify("Uma nova mensagem será aberta; para responder à conversa original, use Copiar resposta completa.", "info");
     if (link.truncated) notify("A relação é grande para o link do e-mail: ela ficou na área de transferência, use Ctrl+V no corpo da mensagem.", "warning");
     else if (!copied) notify("O e-mail foi aberto com a resposta; a cópia automática não estava disponível.", "warning");
   }
 
-  root.addEventListener("grcon:contract-context-changed", close);
+  root.addEventListener("grcon:contract-context-changed", () => close(true));
   root.GrconEgrdtEmailReplyUi = { open, close };
 })(typeof globalThis !== "undefined" ? globalThis : this);
