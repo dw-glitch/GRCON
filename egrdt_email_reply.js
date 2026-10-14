@@ -368,12 +368,21 @@
     const bodyBackground = safeColor(styles.bodyBackground, "#FFFFFF");
     const baseWidths = columns.map(column => bounded(config.columnWidths?.[column], COLUMN_WIDTHS[column] || 100, 1, 1000));
     const total = baseWidths.reduce((sum, width) => sum + width, 0) || 1;
-    const widths = Object.fromEntries(columns.map((column, index) => [column, Math.round(baseWidths[index] / total * 10000) / 100]));
+    // Distribuir o arredondamento na última coluna evita um total diferente de 100%.
+    const widths = {};
+    let allocated = 0;
+    columns.forEach((column, index) => {
+      const percentage = index === columns.length - 1
+        ? Math.round((100 - allocated) * 100) / 100
+        : Math.round(baseWidths[index] / total * 10000) / 100;
+      widths[column] = percentage;
+      allocated += percentage;
+    });
     const width = bounded(styles.tableWidth, 100, 20, 100);
     const alignment = column => ["left", "center", "right"].includes(config.columnAlign?.[column]) ? config.columnAlign[column] : align(column);
     const tableStyle = "border-collapse:collapse;table-layout:fixed;width:" + width + "%;border:" + borderWidth + "px solid " + border + ";font-family:" + font + ";font-size:" + size + "pt;color:" + bodyColor;
     const common = "border:" + borderWidth + "px solid " + border + ";padding:" + padding + "px;vertical-align:top;font-size:" + size + "pt;word-wrap:break-word;word-break:break-word";
-    const headStyle = common + ";background-color:" + headerBackground + ";color:" + headerColor + ";font-weight:bold";
+    const headStyle = "border:" + borderWidth + "px solid " + border + ";padding:" + padding + "px;vertical-align:top;font-size:" + size + "pt;background-color:" + headerBackground + ";color:" + headerColor + ";font-weight:bold;white-space:normal;word-wrap:break-word;word-break:normal";
     const cellStyle = common + ";background-color:" + bodyBackground + ";color:" + bodyColor;
     const head = columns.map(column => '<th style="' + headStyle + ';text-align:' + alignment(column) + ';width:' + widths[column] + '%" width="' + widths[column] + '%">' + escapeHtml(config.columnLabels?.[column] || column) + '</th>').join("");
     const body = (rows || []).map(row => "<tr>" + columns.map(column => '<td style="' + cellStyle + ';text-align:' + alignment(column) + ';width:' + widths[column] + '%" width="' + widths[column] + '%">' + escapeHtml(row[column]) + '</td>').join("") + "</tr>").join("");
@@ -405,16 +414,22 @@
     const columns = normalizeColumns(config.columns);
     const customTableHtml = configurableTableHtml(rows, config);
     const customTableText = configurableTableText(rows, columns, config);
+    const customized = Boolean(config.columns || config.styles || config.columnLabels || config.columnWidths || config.columnAlign || config.showHeader === false);
+    const outputTableHtml = customized ? customTableHtml : tableHtml(rows);
+    const outputTableText = customized ? customTableText : tableText(rows);
+    const outputMessageHtml = useStandardHtml ? defaultMessageHtml(summary) : messageHtml(message);
     return {
       columns,
       rows,
       summary,
       subject: text(config.subject) || defaultSubject(summary),
       message,
-      html: replyHtml(rows, message, useStandardHtml ? summary : null, config.columns || config.styles ? config : null),
-      text: message ? message + "\n\n" + customTableText : customTableText,
-      tableHtml: config.columns || config.styles ? customTableHtml : tableHtml(rows),
-      tableText: config.columns ? customTableText : tableText(rows),
+      // A prévia e o conteúdo copiado compartilham os mesmos fragmentos HTML.
+      messageHtml: outputMessageHtml,
+      html: '<div>' + outputMessageHtml + outputTableHtml + '</div>',
+      text: message ? message + "\n\n" + outputTableText : outputTableText,
+      tableHtml: outputTableHtml,
+      tableText: outputTableText,
       template: { ...config, columns, styles: config.styles || {}, messageTemplate: text(config.messageTemplate) },
     };
   }
