@@ -498,3 +498,232 @@
 .email-model-columns { display:grid; gap:8px; }
 .email-model-columns > div { display:grid; grid-template-columns:2fr 2fr 60px 75px 90px; gap:8px; align-items:center; }
 @media(max-width:720px) { .email-model-grid { grid-template-columns:1fr 1fr; } .email-model-columns > div { grid-template-columns:1fr 1fr; } }
+
+
+/* Editor de resposta de e-mail — duas regiões independentes no desktop.
+   Evita que a relação extensa esconda o texto ou os botões de cópia. */
+#egrdt-email-panel.egrdt-email-panel {
+  width: min(92rem, calc(100vw - 2.25rem));
+  max-height: calc(100vh - 2rem);
+  height: min(52rem, calc(100vh - 2rem));
+}
+#egrdt-email-panel .egrdt-email-body {
+  display: grid;
+  grid-template-columns: minmax(20rem, 0.88fr) minmax(0, 1.4fr);
+  gap: 0;
+  padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+#egrdt-email-panel .egrdt-email-editor-pane,
+#egrdt-email-panel .egrdt-email-preview-pane {
+  min-width: 0;
+  min-height: 0;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: .8rem;
+}
+#egrdt-email-panel .egrdt-email-editor-pane {
+  border-right: 1px solid var(--border-1);
+  overflow-y: auto;
+}
+#egrdt-email-panel .egrdt-email-preview-pane {
+  background: var(--surface-2);
+  overflow: hidden;
+}
+#egrdt-email-panel .egrdt-email-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+#egrdt-email-panel .egrdt-email-section-heading strong {
+  color: var(--text-1);
+  font-size: .9rem;
+}
+#egrdt-email-panel .egrdt-email-section-heading small,
+#egrdt-email-panel .egrdt-email-footer-note {
+  color: var(--text-3);
+  font-size: .74rem;
+}
+#egrdt-email-panel .egrdt-email-message {
+  flex: 0 0 auto;
+}
+#egrdt-email-panel .egrdt-email-message textarea {
+  min-height: 13rem;
+  max-height: 26rem;
+  resize: vertical;
+  font-size: .9rem;
+  line-height: 1.6;
+}
+#egrdt-email-panel .egrdt-email-editor-tools,
+#egrdt-email-panel .egrdt-email-model-header {
+  display: flex;
+  gap: .55rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+#egrdt-email-panel .egrdt-email-editor-tools small,
+#egrdt-email-panel .egrdt-email-model-header small {
+  font-size: .73rem;
+  color: var(--text-3);
+}
+#egrdt-email-panel .egrdt-email-quick-settings {
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  padding: .65rem;
+  background: var(--surface-1);
+}
+#egrdt-email-panel .egrdt-email-quick-settings summary {
+  cursor: pointer;
+  font-size: .8rem;
+  font-weight: 600;
+}
+#egrdt-email-panel .egrdt-email-settings-help {
+  color: var(--text-3);
+  font-size: .75rem;
+  line-height: 1.4;
+  margin: .7rem 0;
+}
+#egrdt-email-panel .egrdt-email-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .7rem;
+}
+#egrdt-email-panel .egrdt-email-presets button {
+  font: inherit;
+  font-size: .75rem;
+  cursor: pointer;
+  border: 1px solid var(--border-2);
+  background: var(--surface-2);
+  color: var(--text-1);
+  border-radius: var(--radius-sm);
+  padding: .35rem .55rem;
+}
+#egrdt-email-panel .egrdt-email-presets button:hover {
+  border-color: var(--brand-600);
+}
+#egrdt-email-panel .egrdt-email-column-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .6rem;
+}
+#egrdt-email-panel .egrdt-email-column-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: .3rem;
+  min-width: 0;
+  line-height: 1.4;
+  color: var(--text-2);
+  font-size: .72rem;
+}
+#egrdt-email-panel .egrdt-email-column-options input {
+  margin: .1rem 0 0;
+  flex-shrink: 0;
+}
+#egrdt-email-panel .egrdt-email-views {
+  align-self: flex-start;
+  max-width: 100%;
+}
+#egrdt-email-panel .egrdt-email-preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  background: #e8eef2;
+}
+#egrdt-email-panel .egrdt-email-hint {
+  margin: 0;
+}
+#egrdt-email-panel .egrdt-email-reading-sheet {
+  padding: 1rem;
+  min-width: 100%;
+}
+#egrdt-email-panel .egrdt-email-preview-message {
+  padding: .2rem .25rem .75rem;
+  background: #fff;
+  color: #10222f;
+}
+#egrdt-email-panel .egrdt-email-reading-sheet > .egrdt-email-preview-message {
+  padding: .85rem 1rem;
+  margin: -.4rem -.4rem .7rem;
+  border: 1px solid #d9e1e7;
+  border-radius: 5px;
+}
+#egrdt-email-panel .egrdt-email-preview-message p {
+  margin-top: 0;
+}
+#egrdt-email-panel #egrdt-email-preview[data-view="paste"] .egrdt-email-sheet {
+  background: #fff;
+  padding: 1.2rem;
+}
+#egrdt-email-panel #egrdt-email-preview[data-view="read"] table.egrdt-email-reading {
+  min-width: 100%;
+}
+#egrdt-email-panel #egrdt-email-preview[data-view="read"] table.egrdt-email-reading [data-column="REVISÃO"] {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+#egrdt-email-panel .egrdt-email-footer {
+  justify-content: space-between;
+  gap: .75rem;
+}
+#egrdt-email-panel .egrdt-email-footer-note {
+  max-width: 18rem;
+}
+#egrdt-email-panel #egrdt-email-model-editor {
+  overflow: visible;
+  border-color: var(--border-1);
+}
+#egrdt-email-panel .email-model-columns > div {
+  grid-template-columns: minmax(8rem, 2fr) minmax(7rem, 1fr) repeat(3, minmax(3rem, .6fr));
+}
+#egrdt-email-panel .email-model-columns > div input,
+#egrdt-email-panel .email-model-columns > div select {
+  width: 100%;
+}
+@media (max-width: 65rem) {
+  #egrdt-email-panel .egrdt-email-body {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+  #egrdt-email-panel .egrdt-email-editor-pane {
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-1);
+  }
+  #egrdt-email-panel .egrdt-email-preview-pane {
+    overflow: visible;
+    min-height: 24rem;
+  }
+  #egrdt-email-panel .egrdt-email-preview {
+    min-height: 18rem;
+    max-height: 32rem;
+  }
+  #egrdt-email-panel .egrdt-email-footer-note {
+    display: none;
+  }
+}
+@media (max-width: 40rem) {
+  #egrdt-email-panel.egrdt-email-panel {
+    width: calc(100vw - .75rem);
+    height: calc(100vh - .75rem);
+    max-height: calc(100vh - .75rem);
+  }
+  #egrdt-email-panel .egrdt-email-editor-pane,
+  #egrdt-email-panel .egrdt-email-preview-pane {
+    padding: .8rem;
+  }
+  #egrdt-email-panel .egrdt-email-column-options {
+    grid-template-columns: 1fr;
+  }
+  #egrdt-email-panel .email-model-grid,
+  #egrdt-email-panel .email-model-columns > div {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
