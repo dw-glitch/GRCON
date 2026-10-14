@@ -16,6 +16,10 @@
   let dashboardRange = "30";
   let dashboardStart = "";
   let dashboardEnd = "";
+  const DASHBOARD_VIEW_PREFERENCE_KEY = "grcon.dashboard.emissionView.v1";
+  const DASHBOARD_WEEK_OPTIONS = Object.freeze([4, 8, 12, 16, 26, 52]);
+  let dashboardGranularity = "day";
+  let dashboardWeeks = 8;
   let dashboardBuilt = false;
   let exporting = false;
 
@@ -241,6 +245,45 @@
     return [...days.values()].filter((day) => day.total > 0).sort((left, right) => left.date.localeCompare(right.date));
   }
 
+  function buildDashboardWeeklyData(daily, startDate, endDate) {
+    const start = String(startDate || "").trim();
+    const end = String(endDate || "").trim();
+    if (!start || !end || start > end) return [];
+
+    const firstWeek = startOfWeekKey(start);
+    const lastWeek = startOfWeekKey(end);
+    if (!firstWeek || !lastWeek) return [];
+
+    const buckets = new Map();
+    for (let weekStart = firstWeek; weekStart && weekStart <= lastWeek; weekStart = shiftDate(weekStart, 7)) {
+      const fullEndDate = endOfWeekKey(weekStart);
+      const displayEndDate = fullEndDate > end ? end : fullEndDate;
+      buckets.set(weekStart, {
+        date: weekStart,
+        startDate: weekStart,
+        endDate: displayEndDate,
+        fullEndDate,
+        partial: displayEndDate !== fullEndDate,
+        ET: 0,
+        "N-1710": 0,
+        CV: 0,
+        total: 0,
+        egrdts: 0,
+      });
+    }
+
+    (daily || []).forEach((day) => {
+      const weekStart = startOfWeekKey(day && day.date);
+      const bucket = buckets.get(weekStart);
+      if (!bucket) return;
+      FAMILIES.forEach((family) => { bucket[family] += Number(day[family] || 0); });
+      bucket.total += Number(day.total || 0);
+      bucket.egrdts += Number(day.egrdts || 0);
+    });
+
+    return [...buckets.values()].sort((left, right) => left.startDate.localeCompare(right.startDate));
+  }
+
   function emittedDocuments(records) {
     const rows = [];
     (records || []).forEach((record) => {
@@ -299,6 +342,116 @@
     const date = new Date(`${dateKey}T12:00:00`);
     date.setDate(date.getDate() + Number(days || 0));
     return localDateKey(date);
+  }
+
+  function parseDateKey(dateKey) {
+    const parts = String(dateKey || "").split("-").map(Number);
+    if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null;
+    const date = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0, 0);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function startOfWeekKey(dateKey) {
+    const date = parseDateKey(dateKey);
+    if (!date) return "";
+    const daysSinceMonday = (date.getDay() + 6) % 7;
+    date.setDate(date.getDate() - daysSinceMonday);
+    return localDateKey(date);
+  }
+
+  function endOfWeekKey(dateKey) {
+    const start = startOfWeekKey(dateKey);
+    return start ? shiftDate(start, 6) : "";
+  }
+
+  function clampWeekCount(value) {
+    const parsed = Math.round(Number(value) || 8);
+    return Math.min(52, Math.max(1, parsed));
+  }
+
+  function weeklyRangeFor(weeks, anchorDate) {
+    const count = clampWeekCount(weeks);
+    const end = String(anchorDate || "").trim() || isoToday();
+    const currentWeekStart = startOfWeekKey(end);
+    if (!currentWeekStart) return { weeks: count, start: "", end: "" };
+    return {
+      weeks: count,
+      start: shiftDate(currentWeekStart, -(count - 1) * 7),
+      end,
+    };
+  }
+
+  function dashboardPointLabel(item, withYear) {
+    if (item && item.startDate) {
+      const start = dateLabel(item.startDate, withYear);
+      const end = dateLabel(item.endDate || item.fullEndDate || item.startDate, withYear);
+      return start === end ? start : start + "–" + end;
+    }
+    return dateLabel(item && item.date, withYear);
+  }
+
+  function loadDashboardPreference() {
+    try {
+      const stored = JSON.parse(root.localStorage?.getItem(DASHBOARD_VIEW_PREFERENCE_KEY) || "{}");
+      dashboardGranularity = stored.granularity === "week" ? "week" : "day";
+      dashboardWeeks = clampWeekCount(stored.weeks);
+    } catch {
+      dashboardGranularity = "day";
+      dashboardWeeks = 8;
+    }
+  }
+
+  function saveDashboardPreference() {
+    try {
+      root.localStorage?.setItem(DASHBOARD_VIEW_PREFERENCE_KEY, JSON.stringify({
+        granularity: dashboardGranularity,
+        weeks: dashboardWeeks,
+      }));
+    } catch {
+      // Preferência local é opcional; o dashboard continua funcional sem ela.
+    }
+  }
+
+  function applyWeeklyRange(weeks, anchorDate) {
+    const records = rawHistoryRecords();
+    const keys = records.map((record) => localDateKey(record && record.generatedAt)).filter(Boolean).sort();
+    const fallbackEnd = dashboardEnd || keys[keys.length - 1] || isoToday();
+    const range = weeklyRangeFor(weeks, anchorDate || fallbackEnd);
+    dashboardWeeks = range.weeks;
+    dashboardRange = "weeks";
+    dashboardStart = range.start;
+    dashboardEnd = range.end;
+    const startInput = document.getElementById("dashboard-date-start");
+    const endInput = document.getElementById("dashboard-date-end");
+    if (startInput) startInput.value = dashboardStart;
+    if (endInput) endInput.value = dashboardEnd;
+    saveDashboardPreference();
+  }
+
+  function syncDashboardControlState() {
+    const controls = document.querySelector(".dashboard-controls");
+    if (controls) controls.dataset.granularity = dashboardGranularity;
+    document.querySelectorAll("[data-dashboard-granularity]").forEach((button) => {
+      const active = button.dataset.dashboardGranularity === dashboardGranularity;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    const weekControls = document.getElementById("dashboard-week-controls");
+    if (weekControls) weekControls.hidden = dashboardGranularity !== "week";
+    const dayRanges = document.getElementById("dashboard-day-ranges");
+    if (dayRanges) dayRanges.hidden = dashboardGranularity === "week";
+    const weekInput = document.getElementById("dashboard-week-count");
+    if (weekInput) weekInput.value = String(dashboardWeeks);
+    document.querySelectorAll("[data-dashboard-weeks]").forEach((button) => {
+      button.classList.toggle("active", Number(button.dataset.dashboardWeeks) === dashboardWeeks);
+    });
+    const startInput = document.getElementById("dashboard-date-start");
+    const startLabel = document.getElementById("dashboard-date-start-label");
+    if (startInput) startInput.disabled = dashboardGranularity === "week";
+    if (startLabel) {
+      startLabel.classList.toggle("dashboard-control-disabled", dashboardGranularity === "week");
+      startLabel.title = dashboardGranularity === "week" ? "A data inicial é calculada automaticamente pela quantidade de semanas." : "";
+    }
   }
 
   function daysInPeriod(start, end) {
@@ -377,24 +530,32 @@
         const segmentHeight = Math.max(1, yBottom - yTop);
         const slug = family === "N-1710" ? "n1710" : family.toLowerCase();
         const inside = segmentHeight >= 24 ? `<text class="dashboard-segment-value" x="${x + barWidth / 2}" y="${yTop + segmentHeight / 2 + 4}" text-anchor="middle">${value}</text>` : "";
-        return `<g><rect class="dashboard-bar dashboard-bar-${slug}" x="${x}" y="${yTop}" width="${barWidth}" height="${segmentHeight}" rx="3"><title>${escapeHtml(dateLabel(day.date, true))} · ${escapeHtml(family)}: ${value.toLocaleString("pt-BR")} documento(s)</title></rect>${inside}</g>`;
+        return `<g><rect class="dashboard-bar dashboard-bar-${slug}" x="${x}" y="${yTop}" width="${barWidth}" height="${segmentHeight}" rx="3"><title>${escapeHtml(dashboardPointLabel(day, true))} · ${escapeHtml(family)}: ${value.toLocaleString("pt-BR")} documento(s)</title></rect>${inside}</g>`;
       }).join("");
       const totalLabel = cumulative ? `<text class="dashboard-total-value" x="${x + barWidth / 2}" y="${Math.max(16, yOf(cumulative) - 8)}" text-anchor="middle">${cumulative}</text>` : "";
       const xLabel = (index % labelStep === 0 || index === daily.length - 1)
-        ? `<text class="dashboard-axis-label" x="${x + barWidth / 2}" y="${height - 23}" text-anchor="middle" transform="rotate(-32 ${x + barWidth / 2} ${height - 23})">${escapeHtml(dateLabel(day.date, false))}</text>`
+        ? `<text class="dashboard-axis-label" x="${x + barWidth / 2}" y="${height - 23}" text-anchor="middle" transform="rotate(-32 ${x + barWidth / 2} ${height - 23})">${escapeHtml(dashboardPointLabel(day, false))}</text>`
         : "";
       return `${segments}${totalLabel}${xLabel}`;
     }).join("");
 
-    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Barras empilhadas de documentos ET, N-1710 e CV emitidos por dia"><title>Documentos emitidos por dia</title>${grid}<line class="dashboard-axis-line" x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}"></line>${bars}</svg>`;
+    const unitLabel = dashboardGranularity === "week" ? "por semana" : "por dia";
+    return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Barras empilhadas de documentos ET, N-1710 e CV emitidos ${unitLabel}"><title>Documentos emitidos ${unitLabel}</title>${grid}<line class="dashboard-axis-line" x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}"></line>${bars}</svg>`;
   }
 
-  function insightText(daily, totals) {
-    if (!daily.length) return "Nenhuma emissão encontrada no período selecionado.";
-    const peak = daily.reduce((best, day) => day.total > best.total ? day : best, daily[0]);
+  function insightText(series, totals) {
+    if (!series.length) return "Nenhuma emissão encontrada no período selecionado.";
+    const peak = series.reduce((best, item) => item.total > best.total ? item : best, series[0]);
     const dominant = FAMILIES.map((family) => [family, totals[family]]).sort((a, b) => b[1] - a[1])[0];
-    const average = totals.days ? totals.documents / totals.days : 0;
-    return `Maior movimento em ${dateLabel(peak.date, true)}: ${peak.total.toLocaleString("pt-BR")} documento(s). Média de ${average.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} por dia com emissão. Família com maior volume: ${dominant[0]} (${Number(dominant[1]).toLocaleString("pt-BR")}).`;
+    const weekly = dashboardGranularity === "week";
+    const denominator = weekly ? Math.max(1, series.length) : Math.max(1, totals.days);
+    const average = totals.documents / denominator;
+    const unit = weekly ? "semana" : "dia com emissão";
+    const movement = weekly ? "Maior movimento na semana " : "Maior movimento em ";
+    return movement + dashboardPointLabel(peak, true) + ": "
+      + peak.total.toLocaleString("pt-BR") + " documento(s). Média de "
+      + average.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " por " + unit
+      + ". Família com maior volume: " + dominant[0] + " (" + Number(dominant[1]).toLocaleString("pt-BR") + ").";
   }
 
   function dashboardMarkup() {
@@ -404,20 +565,38 @@
         <button class="secondary-button" id="dashboard-present" type="button">Apresentar</button>
       </header>
       <section class="dashboard-controls" aria-label="Período do dashboard">
-        <div class="dashboard-range-buttons" role="group" aria-label="Atalhos de período">
-          <button type="button" data-dashboard-range="7">7 dias</button>
-          <button type="button" data-dashboard-range="30" class="active">30 dias</button>
-          <button type="button" data-dashboard-range="90">90 dias</button>
-          <button type="button" data-dashboard-range="all">Todo o histórico</button>
+        <div class="dashboard-period-tools">
+          <div class="dashboard-granularity" role="group" aria-label="Agrupar emissões por">
+            <span>Agrupar</span>
+            <button type="button" data-dashboard-granularity="day" class="active" aria-pressed="true">Dia</button>
+            <button type="button" data-dashboard-granularity="week" aria-pressed="false">Semana</button>
+          </div>
+          <div class="dashboard-range-buttons" id="dashboard-day-ranges" role="group" aria-label="Atalhos de período diário">
+            <button type="button" data-dashboard-range="7">7 dias</button>
+            <button type="button" data-dashboard-range="30" class="active">30 dias</button>
+            <button type="button" data-dashboard-range="90">90 dias</button>
+            <button type="button" data-dashboard-range="all">Todo o histórico</button>
+          </div>
+          <div class="dashboard-week-controls" id="dashboard-week-controls" hidden>
+            <div class="dashboard-week-buttons" role="group" aria-label="Quantidade rápida de semanas">
+              <button type="button" data-dashboard-weeks="4">4</button>
+              <button type="button" data-dashboard-weeks="8">8</button>
+              <button type="button" data-dashboard-weeks="12">12</button>
+              <button type="button" data-dashboard-weeks="16">16</button>
+              <button type="button" data-dashboard-weeks="26">26</button>
+              <button type="button" data-dashboard-weeks="52">52</button>
+            </div>
+            <label class="dashboard-week-count"><span>Semanas</span><input id="dashboard-week-count" type="number" min="1" max="52" step="1" inputmode="numeric" value="8"/></label>
+          </div>
         </div>
-        <label><span>Data inicial</span><input id="dashboard-date-start" type="date"/></label>
+        <label id="dashboard-date-start-label"><span>Data inicial</span><input id="dashboard-date-start" type="date"/></label>
         <label><span>Data final</span><input id="dashboard-date-end" type="date"/></label>
         <button class="primary-button" id="dashboard-export-excel" type="button">Exportar Excel</button>
       </section>
       <section class="dashboard-kpis" id="dashboard-kpis" aria-label="Indicadores do período"></section>
       <section class="dashboard-chart-card">
         <header class="dashboard-chart-head">
-          <div><span>LINHA DO TEMPO</span><strong>Documentos emitidos por dia</strong><small id="dashboard-period-label">—</small></div>
+          <div><span>LINHA DO TEMPO</span><strong id="dashboard-chart-title">Documentos emitidos por dia</strong><small id="dashboard-period-label">—</small></div>
           <div class="dashboard-legend" aria-label="Famílias visíveis">
             <button type="button" data-dashboard-family="ET" aria-pressed="true">ET</button>
             <button type="button" data-dashboard-family="N-1710" aria-pressed="true">N-1710</button>
@@ -429,11 +608,11 @@
       </section>
       <section class="dashboard-lower-grid">
         <article class="dashboard-share-card"><header><span>DISTRIBUIÇÃO</span><strong>Participação por família</strong></header><div id="dashboard-share"></div></article>
-        <article class="dashboard-peak-card"><header><span>DESTAQUES</span><strong>Dias de maior emissão</strong></header><div id="dashboard-peaks"></div></article>
+        <article class="dashboard-peak-card"><header><span>DESTAQUES</span><strong id="dashboard-peaks-title">Dias de maior emissão</strong></header><div id="dashboard-peaks"></div></article>
       </section>
       <details class="dashboard-table-card">
-        <summary><span>Detalhamento diário</span><strong id="dashboard-day-count">0 dia(s)</strong></summary>
-        <div class="dashboard-table-wrap"><table><caption>Emissões documentais por dia</caption><thead><tr><th>Data</th><th><span class="document-class-badge" data-document-class="ET">ET</span></th><th><span class="document-class-badge" data-document-class="N-1710">N-1710</span></th><th>CV</th><th>Total</th><th>eGRDTs</th></tr></thead><tbody id="dashboard-table-body"></tbody></table></div>
+        <summary><span id="dashboard-table-title">Detalhamento diário</span><strong id="dashboard-day-count">0 dia(s)</strong></summary>
+        <div class="dashboard-table-wrap"><table><caption id="dashboard-table-caption">Emissões documentais por dia</caption><thead><tr><th>Data</th><th><span class="document-class-badge" data-document-class="ET">ET</span></th><th><span class="document-class-badge" data-document-class="N-1710">N-1710</span></th><th>CV</th><th>Total</th><th>eGRDTs</th></tr></thead><tbody id="dashboard-table-body"></tbody></table></div>
       </details>`;
   }
 
@@ -445,6 +624,7 @@
       #dashboard-module{--dash-et:var(--document-et-accent,#0b63a3);--dash-n1710:var(--document-n1710-accent,#6b3fa0);--dash-cv:#b16a16;min-width:0}
       .dashboard-page-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px}.dashboard-page-heading>div>span,.dashboard-chart-head>div>span,.dashboard-share-card header span,.dashboard-peak-card header span{display:block;font-size:.7rem;font-weight:900;letter-spacing:.12em;color:var(--brand-700,#155c8a);margin-bottom:4px}.dashboard-page-heading h2{margin:0;color:var(--text-strong,#183247);font-size:1.45rem}.dashboard-page-heading p{max-width:850px;margin:6px 0 0;color:var(--text-muted,#66798a);font-size:.9rem}
       .dashboard-controls{display:grid;grid-template-columns:minmax(340px,1fr) auto auto auto;gap:10px;align-items:end;padding:13px;border:1px solid var(--border,#dbe3ea);border-radius:14px;background:var(--surface,#fff);margin-bottom:12px}.dashboard-controls label{display:grid;gap:5px}.dashboard-controls label span{font-size:.7rem;font-weight:800;color:var(--text-muted,#637587);text-transform:uppercase;letter-spacing:.04em}.dashboard-controls input{min-height:38px}.dashboard-range-buttons{display:flex;gap:6px;flex-wrap:wrap}.dashboard-range-buttons button{min-height:36px;padding:0 12px;border:1px solid var(--border,#d7e0e8);border-radius:9px;background:var(--surface-soft,#f7fafc);color:var(--text-strong,#294359);font:inherit;font-size:.78rem;font-weight:800;cursor:pointer}.dashboard-range-buttons button.active{background:var(--brand-50,#eaf5fb);border-color:var(--brand-300,#8ecae4);color:var(--brand-800,#0f537a)}
+      .dashboard-period-tools{display:grid;gap:7px;min-width:0}.dashboard-granularity{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.dashboard-granularity>span{margin-right:2px;font-size:.68rem;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted,#637587)}.dashboard-granularity button,.dashboard-week-buttons button{min-height:32px;padding:0 10px;border:1px solid var(--border,#d7e0e8);border-radius:9px;background:var(--surface-soft,#f7fafc);color:var(--text-strong,#294359);font:inherit;font-size:.76rem;font-weight:900;cursor:pointer}.dashboard-granularity button.active,.dashboard-week-buttons button.active{background:var(--brand-50,#eaf5fb);border-color:var(--brand-300,#8ecae4);color:var(--brand-800,#0f537a)}.dashboard-week-controls{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.dashboard-week-controls[hidden]{display:none}.dashboard-week-buttons{display:flex;gap:5px;flex-wrap:wrap}.dashboard-week-count{display:grid;gap:4px}.dashboard-week-count span{font-size:.64rem!important}.dashboard-week-count input{width:82px;min-height:32px!important}.dashboard-control-disabled{opacity:.58}.dashboard-control-disabled input{cursor:not-allowed}
       .dashboard-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:12px}.dashboard-kpi{position:relative;overflow:hidden;min-height:82px;padding:12px 13px;border:1px solid var(--border,#dce4eb);border-radius:13px;background:var(--surface,#fff);box-shadow:0 5px 18px rgba(32,56,85,.04)}.dashboard-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--brand-500,#2789b6)}.dashboard-kpi span{display:block;font-size:.68rem;font-weight:900;letter-spacing:.045em;text-transform:uppercase;color:var(--text-muted,#687b8c)}.dashboard-kpi strong{display:block;margin-top:8px;font-size:1.5rem;line-height:1;color:var(--text-strong,#17324a)}.dashboard-kpi-trend{display:inline-flex;align-items:center;gap:4px;margin-top:7px;padding:2px 7px 2px 5px;border-radius:999px;font-size:.68rem;font-style:normal;font-weight:800;line-height:1.5;letter-spacing:.01em}.dashboard-kpi-trend b{font-size:.74rem;line-height:1}.dashboard-kpi-trend[data-direction=up]{background:var(--success-100,#e4f5ec);color:var(--success-800,#136c46)}.dashboard-kpi-trend[data-direction=down]{background:var(--danger-100,#fdeceb);color:var(--danger-800,#9c332c)}.dashboard-kpi-trend[data-direction=flat]{background:var(--surface-3,#eef2f5);color:var(--text-muted,#5f7385)}.dashboard-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.dashboard-kpi-et:before{background:var(--dash-et)}.dashboard-kpi-n1710:before{background:var(--dash-n1710)}.dashboard-kpi-cv:before{background:var(--dash-cv)}
       .dashboard-chart-card,.dashboard-share-card,.dashboard-peak-card,.dashboard-table-card{border:1px solid var(--border,#dce4eb);border-radius:14px;background:var(--surface,#fff);box-shadow:0 6px 22px rgba(32,56,85,.045);overflow:hidden}.dashboard-chart-head{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 15px 8px}.dashboard-chart-head strong{display:block;color:var(--text-strong,#183247);font-size:1rem}.dashboard-chart-head small{display:block;margin-top:4px;color:var(--text-muted,#66798a)}
       .dashboard-legend{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.dashboard-legend button{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border,#d7e0e8);border-radius:999px;background:var(--surface-soft,#f8fafc);padding:6px 10px;font:inherit;font-size:.76rem;font-weight:900;cursor:pointer}.dashboard-legend button:before{content:"";width:9px;height:9px;border-radius:3px;background:currentColor}.dashboard-legend button[data-dashboard-family="ET"]{color:var(--document-et-color,#0a4f83);border-color:var(--document-et-border,#74a9d2);background:var(--document-et-background,#e6f1fa)}.dashboard-legend button[data-dashboard-family="N-1710"]{color:var(--document-n1710-color,#542c84);border-color:var(--document-n1710-border,#a889c7);background:var(--document-n1710-background,#f1eaf8)}.dashboard-legend button[data-dashboard-family="CV"]{color:var(--dash-cv)}.dashboard-legend button[aria-pressed="false"]{opacity:.38;filter:saturate(.3)}
@@ -533,11 +713,15 @@
     renderDashboard();
   }
 
-  function periodLabel(daily) {
-    if (!daily.length) return "Nenhuma emissão no período selecionado";
-    const first = dateLabel(daily[0].date, true);
-    const last = dateLabel(daily[daily.length - 1].date, true);
-    return first === last ? first : `${first} — ${last}`;
+  function periodLabel(series) {
+    if (!series.length) return "Nenhuma emissão no período selecionado";
+    const firstItem = series[0];
+    const lastItem = series[series.length - 1];
+    const firstKey = firstItem.startDate || firstItem.date;
+    const lastKey = lastItem.endDate || lastItem.date;
+    const first = dateLabel(firstKey, true);
+    const last = dateLabel(lastKey, true);
+    return first === last ? first : first + " — " + last;
   }
 
   /**
@@ -600,19 +784,34 @@
     }).join("")}</div>`;
   }
 
-  function renderPeaks(daily) {
+  function renderPeaks(series) {
     const target = document.getElementById("dashboard-peaks");
     if (!target) return;
-    const rows = [...daily].sort((a, b) => b.total - a.total || b.date.localeCompare(a.date)).slice(0, 5);
-    target.innerHTML = rows.length ? `<div class="dashboard-peak-list">${rows.map((day) => `<div class="dashboard-peak-row"><span>${escapeHtml(dateLabel(day.date, true))}</span><small>ET ${day.ET} · N-1710 ${day["N-1710"]} · CV ${day.CV}</small><strong>${day.total}</strong></div>`).join("")}</div>` : '<div class="dashboard-empty"><div><strong>Sem emissões</strong><span>Não há dias para destacar.</span></div></div>';
+    const rows = [...series].sort((a, b) => b.total - a.total || String(b.date).localeCompare(String(a.date))).slice(0, 5);
+    const emptyUnit = dashboardGranularity === "week" ? "semanas" : "dias";
+    target.innerHTML = rows.length
+      ? '<div class="dashboard-peak-list">' + rows.map((item) =>
+          '<div class="dashboard-peak-row"><span>' + escapeHtml(dashboardPointLabel(item, true)) + '</span><small>ET '
+          + item.ET + ' · N-1710 ' + item["N-1710"] + ' · CV ' + item.CV + '</small><strong>'
+          + item.total + '</strong></div>'
+        ).join("") + "</div>"
+      : '<div class="dashboard-empty"><div><strong>Sem emissões</strong><span>Não há ' + emptyUnit + ' para destacar.</span></div></div>';
   }
 
-  function renderDailyTable(daily) {
+  function renderDailyTable(series) {
     const body = document.getElementById("dashboard-table-body");
     const count = document.getElementById("dashboard-day-count");
-    if (count) count.textContent = `${daily.length.toLocaleString("pt-BR")} dia(s)`;
+    const weekly = dashboardGranularity === "week";
+    if (count) count.textContent = series.length.toLocaleString("pt-BR") + (weekly ? " semana(s)" : " dia(s)");
     if (!body) return;
-    body.innerHTML = [...daily].reverse().map((day) => `<tr><td>${escapeHtml(dateLabel(day.date, true))}</td><td class="dashboard-class-cell-et">${day.ET.toLocaleString("pt-BR")}</td><td class="dashboard-class-cell-n1710">${day["N-1710"].toLocaleString("pt-BR")}</td><td>${day.CV.toLocaleString("pt-BR")}</td><td><strong>${day.total.toLocaleString("pt-BR")}</strong></td><td>${day.egrdts.toLocaleString("pt-BR")}</td></tr>`).join("");
+    body.innerHTML = [...series].reverse().map((item) =>
+      "<tr><td>" + escapeHtml(dashboardPointLabel(item, true)) + (item.partial ? ' <small title="Semana ainda não encerrada">em andamento</small>' : "") + "</td>"
+      + '<td class="dashboard-class-cell-et">' + item.ET.toLocaleString("pt-BR") + "</td>"
+      + '<td class="dashboard-class-cell-n1710">' + item["N-1710"].toLocaleString("pt-BR") + "</td>"
+      + "<td>" + item.CV.toLocaleString("pt-BR") + "</td>"
+      + "<td><strong>" + item.total.toLocaleString("pt-BR") + "</strong></td>"
+      + "<td>" + item.egrdts.toLocaleString("pt-BR") + "</td></tr>"
+    ).join("");
   }
 
   function renderDashboard() {
@@ -620,23 +819,47 @@
     const periodSelection = currentDashboardPeriod();
     const records = filterRecordsByPeriod(rawHistoryRecords(), periodSelection.start, periodSelection.end);
     const daily = buildDashboardDailyData(records);
+    const series = dashboardGranularity === "week"
+      ? buildDashboardWeeklyData(daily, periodSelection.start, periodSelection.end)
+      : daily;
     const totals = totalsFromDaily(daily);
     const previous = previousPeriodOf(periodSelection.start, periodSelection.end);
     const previousTotals = previous
       ? totalsFromDaily(buildDashboardDailyData(filterRecordsByPeriod(rawHistoryRecords(), previous.start, previous.end)))
       : null;
+
     renderKpis(totals, previousTotals);
     renderShare(totals);
-    renderPeaks(daily);
-    renderDailyTable(daily);
+    renderPeaks(series);
+    renderDailyTable(series);
+
+    const weekly = dashboardGranularity === "week";
     const period = document.getElementById("dashboard-period-label");
     const chart = document.getElementById("dashboard-chart");
     const insight = document.getElementById("dashboard-insight");
-    if (period) period.textContent = `${periodLabel(daily)} · Fonte: Histórico de eGRDTs`;
-    if (insight) insight.textContent = insightText(daily, totals);
-    if (chart) chart.innerHTML = daily.length ? stackedBarSvg(daily) : '<div class="dashboard-empty"><div><strong>Nenhum documento emitido</strong><span>Ajuste o período ou aguarde novas eGRDTs no Histórico.</span></div></div>';
-    document.querySelectorAll("[data-dashboard-range]").forEach((button) => button.classList.toggle("active", button.dataset.dashboardRange === dashboardRange));
+    const chartTitle = document.getElementById("dashboard-chart-title");
+    const peaksTitle = document.getElementById("dashboard-peaks-title");
+    const tableTitle = document.getElementById("dashboard-table-title");
+    const tableCaption = document.getElementById("dashboard-table-caption");
+
+    if (chartTitle) chartTitle.textContent = weekly ? "Documentos emitidos por semana" : "Documentos emitidos por dia";
+    if (peaksTitle) peaksTitle.textContent = weekly ? "Semanas de maior emissão" : "Dias de maior emissão";
+    if (tableTitle) tableTitle.textContent = weekly ? "Detalhamento semanal" : "Detalhamento diário";
+    if (tableCaption) tableCaption.textContent = weekly ? "Emissões documentais por semana" : "Emissões documentais por dia";
+    if (period) {
+      const suffix = weekly ? " · " + dashboardWeeks + " semana(s)" : "";
+      period.textContent = periodLabel(series) + suffix + " · Fonte: Histórico de eGRDTs";
+    }
+    if (insight) insight.textContent = insightText(series, totals);
+    if (chart) {
+      chart.innerHTML = series.length
+        ? stackedBarSvg(series)
+        : '<div class="dashboard-empty"><div><strong>Nenhum documento emitido</strong><span>Ajuste o período ou aguarde novas eGRDTs no Histórico.</span></div></div>';
+    }
+
+    document.querySelectorAll("[data-dashboard-range]").forEach((button) => button.classList.toggle("active", dashboardGranularity === "day" && button.dataset.dashboardRange === dashboardRange));
     document.querySelectorAll("[data-dashboard-family]").forEach((button) => button.setAttribute("aria-pressed", String(visibleFamilies.has(button.dataset.dashboardFamily))));
+    syncDashboardControlState();
   }
 
   function scheduleDashboard() {
@@ -648,12 +871,49 @@
     document.querySelectorAll('[data-grcon-view="dashboard"]').forEach((button) => button.addEventListener("click", activateDashboard));
     document.querySelectorAll('[data-grcon-view]:not([data-grcon-view="dashboard"])').forEach((button) => button.addEventListener("click", hideDashboard));
 
+    document.querySelectorAll("[data-dashboard-granularity]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const next = button.dataset.dashboardGranularity === "week" ? "week" : "day";
+        if (dashboardGranularity === next) return;
+        dashboardGranularity = next;
+        if (next === "week") applyWeeklyRange(dashboardWeeks);
+        else {
+          saveDashboardPreference();
+          applyQuickRange("30");
+        }
+        renderDashboard();
+      });
+    });
+
     document.querySelectorAll("[data-dashboard-range]").forEach((button) => {
       button.addEventListener("click", () => {
+        dashboardGranularity = "day";
+        saveDashboardPreference();
         applyQuickRange(button.dataset.dashboardRange);
         renderDashboard();
       });
     });
+
+    document.querySelectorAll("[data-dashboard-weeks]").forEach((button) => {
+      button.addEventListener("click", () => {
+        dashboardGranularity = "week";
+        applyWeeklyRange(button.dataset.dashboardWeeks);
+        renderDashboard();
+      });
+    });
+
+    const weekInput = document.getElementById("dashboard-week-count");
+    const applyWeekInput = () => {
+      if (!weekInput) return;
+      dashboardGranularity = "week";
+      dashboardWeeks = clampWeekCount(weekInput.value);
+      weekInput.value = String(dashboardWeeks);
+      applyWeeklyRange(dashboardWeeks);
+      renderDashboard();
+    };
+    weekInput?.addEventListener("change", applyWeekInput);
+    weekInput?.addEventListener("blur", applyWeekInput);
+
     document.querySelectorAll("[data-dashboard-family]").forEach((button) => {
       button.addEventListener("click", () => {
         const family = button.dataset.dashboardFamily;
@@ -663,15 +923,18 @@
         renderDashboard();
       });
     });
+
     const start = document.getElementById("dashboard-date-start");
     const end = document.getElementById("dashboard-date-end");
-
-    // Ao sair de um período rápido e escolher uma data manual, a intenção mais
-    // comum é ver aquele único dia. Por isso a primeira data escolhida é copiada
-    // para os dois campos. Depois disso, alterar o outro campo cria normalmente
-    // um intervalo personalizado.
     const syncCustomDate = (changedInput, counterpart) => {
       const value = String(changedInput?.value || "").trim();
+      if (dashboardGranularity === "week") {
+        if (changedInput === end && value) {
+          applyWeeklyRange(dashboardWeeks, value);
+          renderDashboard();
+        }
+        return;
+      }
       if (value && dashboardRange !== "custom" && counterpart) counterpart.value = value;
       dashboardRange = "custom";
       const periodSelection = currentDashboardPeriod();
@@ -679,6 +942,7 @@
       dashboardEnd = periodSelection.end;
       renderDashboard();
     };
+
     if (start) {
       start.addEventListener("input", () => syncCustomDate(start, end));
       start.addEventListener("change", () => syncCustomDate(start, end));
@@ -687,6 +951,7 @@
       end.addEventListener("input", () => syncCustomDate(end, start));
       end.addEventListener("change", () => syncCustomDate(end, start));
     }
+
     document.getElementById("dashboard-present")?.addEventListener("click", () => {
       const active = document.body.classList.toggle("dashboard-presenting");
       const button = document.getElementById("dashboard-present");
@@ -726,7 +991,7 @@
     });
   }
 
-  function drawDashboardChartPng(daily) {
+  function drawDashboardChartPng(series) {
     if (!document.createElement) return "";
     const canvas = document.createElement("canvas");
     const width = 1500;
@@ -737,17 +1002,18 @@
     if (!ctx) return "";
     const colors = { ET: "#0b7895", "N-1710": "#6d4ac7", CV: "#b16a16" };
     const chartFamilies = FAMILIES.filter((family) => visibleFamilies.has(family));
+    const weekly = dashboardGranularity === "week";
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
     ctx.fillStyle = "#17324a";
     ctx.font = "700 28px Arial";
-    ctx.fillText("Documentos emitidos por dia", 70, 48);
+    ctx.fillText(weekly ? "Documentos emitidos por semana" : "Documentos emitidos por dia", 70, 48);
     ctx.fillStyle = "#66798a";
     ctx.font = "16px Arial";
     ctx.fillText("ET · N-1710 · CV — fonte: Histórico de eGRDTs do GRCON", 70, 76);
     const left = 78, right = 34, top = 115, bottom = 90;
     const plotW = width - left - right, plotH = height - top - bottom;
-    const max = niceMaximum(Math.max(1, ...daily.map((day) => chartFamilies.reduce((sum, family) => sum + Number(day[family] || 0), 0))));
+    const max = niceMaximum(Math.max(1, ...series.map((item) => chartFamilies.reduce((sum, family) => sum + Number(item[family] || 0), 0))));
     ctx.font = "13px Arial";
     for (let i = 0; i <= 4; i += 1) {
       const value = Math.round(max * (i / 4));
@@ -758,14 +1024,14 @@
       ctx.textAlign = "right";
       ctx.fillText(String(value), left - 12, y + 4);
     }
-    const slot = plotW / Math.max(1, daily.length);
+    const slot = plotW / Math.max(1, series.length);
     const barW = Math.max(10, Math.min(44, slot * .62));
-    const labelStep = Math.max(1, Math.ceil(daily.length / 14));
-    daily.forEach((day, index) => {
+    const labelStep = Math.max(1, Math.ceil(series.length / 14));
+    series.forEach((item, index) => {
       const x = left + slot * index + (slot - barW) / 2;
       let cumulative = 0;
       chartFamilies.forEach((family) => {
-        const value = Number(day[family] || 0);
+        const value = Number(item[family] || 0);
         if (!value) return;
         const yBottom = top + plotH - (cumulative / max) * plotH;
         cumulative += value;
@@ -777,8 +1043,8 @@
         ctx.fillStyle = "#263e52"; ctx.textAlign = "center"; ctx.font = "700 12px Arial";
         ctx.fillText(String(cumulative), x + barW / 2, top + plotH - (cumulative / max) * plotH - 7);
       }
-      if (index % labelStep === 0 || index === daily.length - 1) {
-        ctx.save(); ctx.translate(x + barW / 2, height - 57); ctx.rotate(-.52); ctx.fillStyle = "#66798a"; ctx.font = "12px Arial"; ctx.textAlign = "right"; ctx.fillText(dateLabel(day.date, false), 0, 0); ctx.restore();
+      if (index % labelStep === 0 || index === series.length - 1) {
+        ctx.save(); ctx.translate(x + barW / 2, height - 57); ctx.rotate(-.52); ctx.fillStyle = "#66798a"; ctx.font = "12px Arial"; ctx.textAlign = "right"; ctx.fillText(dashboardPointLabel(item, false), 0, 0); ctx.restore();
       }
     });
     let legendX = 940;
@@ -799,6 +1065,7 @@
       const periodSelection = currentDashboardPeriod();
       const records = filterRecordsByPeriod(rawHistoryRecords(), periodSelection.start, periodSelection.end);
       const daily = buildDashboardDailyData(records);
+      const series = dashboardGranularity === "week" ? buildDashboardWeeklyData(daily, periodSelection.start, periodSelection.end) : daily;
       if (!daily.length) throw new Error("Não há emissões no período selecionado para exportar.");
       const documentRows = emittedDocuments(records);
       const totals = totalsFromDaily(daily);
@@ -822,7 +1089,7 @@
       summary.getCell("C1").font = { name: "Aptos Display", size: 19, bold: true, color: { argb: "FFFFFFFF" } };
       summary.getCell("C1").alignment = { vertical: "middle" };
       summary.mergeCells("A4:L4");
-      summary.getCell("A4").value = `${totals.documents.toLocaleString("pt-BR")} documento(s) · Período: ${periodLabel(daily)} · Fonte: Histórico de eGRDTs do GRCON · ${new Date().toLocaleString("pt-BR")}`;
+      summary.getCell("A4").value = `${totals.documents.toLocaleString("pt-BR")} documento(s) · Período: ${periodLabel(series)} · Agrupamento: ${dashboardGranularity === "week" ? "Semanal (" + dashboardWeeks + " semana(s))" : "Diário"} · Fonte: Histórico de eGRDTs do GRCON · ${new Date().toLocaleString("pt-BR")}`;
       summary.getCell("A4").font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
       summary.getCell("A4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } };
 
@@ -857,14 +1124,14 @@
         cell.border = { left: { style: "medium", color: { argb: color } }, top: { style: "thin", color: { argb: "FFDCE4EA" } }, right: { style: "thin", color: { argb: "FFDCE4EA" } }, bottom: { style: "thin", color: { argb: "FFDCE4EA" } } };
       });
 
-      const imageBase64 = drawDashboardChartPng(daily);
+      const imageBase64 = drawDashboardChartPng(series);
       if (imageBase64) {
         const imageId = workbook.addImage({ base64: imageBase64, extension: "png" });
         summary.addImage(imageId, { tl: { col: .2, row: 9.4 }, ext: { width: 1160, height: 480 } });
         for (let row = 10; row <= 33; row += 1) summary.getRow(row).height = 20;
       }
       summary.mergeCells("A35:L36");
-      summary.getCell("A35").value = insightText(daily, totals);
+      summary.getCell("A35").value = insightText(series, totals);
       summary.getCell("A35").alignment = { vertical: "middle", wrapText: true };
       summary.getCell("A35").font = { name: "Aptos", size: 10, color: { argb: "FF3D5568" } };
       summary.getCell("A35").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F6F9" } };
@@ -887,6 +1154,26 @@
       dailySheet.autoFilter = { from: "A6", to: `F${daily.length + 6}` };
       if (root.GrconRequestsReport?.attachBrandLogo) await root.GrconRequestsReport.attachBrandLogo(workbook, dailySheet, root.GRCONBrandAssets, root.fetch.bind(root));
 
+
+      let weeklySheet = null;
+      if (dashboardGranularity === "week") {
+        weeklySheet = workbook.addWorksheet("Emissões semanais", { views: [{ state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false }] });
+        const weeklyHeaders = ["INÍCIO DA SEMANA", "FIM CONSIDERADO", "ET", "N-1710", "CV", "TOTAL DE DOCUMENTOS", "eGRDTs COM EMISSÃO"];
+        for (let r = 1; r <= 3; r += 1) for (let c = 1; c <= weeklyHeaders.length; c += 1) weeklySheet.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
+        weeklySheet.mergeCells("C1:G2"); weeklySheet.getCell("C1").value = "GRCON · EMISSÕES SEMANAIS"; weeklySheet.getCell("C1").font = { name: "Aptos Display", size: 17, bold: true, color: { argb: "FFFFFFFF" } };
+        weeklySheet.mergeCells("A4:G4"); weeklySheet.getCell("A4").value = "Semanas de segunda a domingo · " + dashboardWeeks + " semana(s) · dados agregados dos mesmos registros do Dashboard";
+        weeklySheet.getCell("A4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEAF0F4" } }; weeklySheet.getCell("A4").font = { name: "Aptos", size: 9, color: { argb: "FF52687B" } };
+        weeklyHeaders.forEach((header, index) => weeklySheet.getCell(6, index + 1).value = header); styleExcelHeader(weeklySheet.getRow(6));
+        series.forEach((week, index) => {
+          const row = weeklySheet.getRow(index + 7);
+          row.values = [dateLabel(week.startDate, true), dateLabel(week.endDate, true), week.ET, week["N-1710"], week.CV, week.total, week.egrdts];
+          styleExcelData(row, index);
+        });
+        weeklySheet.columns = [{ width: 19 }, { width: 19 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 23 }, { width: 21 }];
+        weeklySheet.autoFilter = { from: "A6", to: "G" + (series.length + 6) };
+        if (root.GrconRequestsReport?.attachBrandLogo) await root.GrconRequestsReport.attachBrandLogo(workbook, weeklySheet, root.GRCONBrandAssets, root.fetch.bind(root));
+      }
+
       const docsSheet = workbook.addWorksheet("Documentos emitidos", { views: [{ state: "frozen", ySplit: 6, activeCell: "A7", showGridLines: false, zoomScale: 80 }] });
       const docHeaders = ["DATA", "eGRDT", "FAMÍLIA", "DOCUMENTO", "REVISÃO", "TÍTULO", "DISCIPLINA", "CAMINHO DATABOOK", "QTD. ARQUIVOS", "ARQUIVOS DA EMISSÃO"];
       for (let r = 1; r <= 3; r += 1) for (let c = 1; c <= docHeaders.length; c += 1) docsSheet.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
@@ -905,14 +1192,14 @@
       const buffer = await workbook.xlsx.writeBuffer();
       const validation = new root.ExcelJS.Workbook();
       await validation.xlsx.load(buffer);
-      if (!validation.getWorksheet("Dashboard") || !validation.getWorksheet("Emissões diárias") || !validation.getWorksheet("Documentos emitidos")) throw new Error("A planilha do Dashboard não pôde ser validada.");
+      if (!validation.getWorksheet("Dashboard") || !validation.getWorksheet("Emissões diárias") || !validation.getWorksheet("Documentos emitidos") || (dashboardGranularity === "week" && !validation.getWorksheet("Emissões semanais"))) throw new Error("A planilha do Dashboard não pôde ser validada.");
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = `GRCON_DASHBOARD_EMISSOES_${(dashboardStart || daily[0].date).replace(/-/g, "")}_A_${(dashboardEnd || daily[daily.length - 1].date).replace(/-/g, "")}.xlsx`;
       document.body.appendChild(link); link.click(); link.remove(); root.setTimeout(() => URL.revokeObjectURL(url), 15000);
-      notify("Planilha do Dashboard gerada com resumo, gráfico, emissões diárias e documentos.", "success");
+      notify(dashboardGranularity === "week" ? "Planilha do Dashboard gerada com resumo, gráfico semanal, emissões diárias, agregação semanal e documentos." : "Planilha do Dashboard gerada com resumo, gráfico, emissões diárias e documentos.", "success");
     } catch (error) {
       console.error("GRCON: falha ao exportar Dashboard", error);
       notify(error && error.message || "Não foi possível gerar a planilha do Dashboard.", "error");
@@ -927,8 +1214,11 @@
     createDashboardNavigation();
     createDashboardModule();
     dashboardBuilt = true;
-    applyQuickRange("30");
+    loadDashboardPreference();
+    if (dashboardGranularity === "week") applyWeeklyRange(dashboardWeeks);
+    else applyQuickRange("30");
     bindDashboardControls();
+    syncDashboardControlState();
     renderDashboard();
   }
 
@@ -953,7 +1243,7 @@
     activate: activateDashboard,
     render: renderDashboard,
     exportExcel: exportDashboardExcel,
-    _debug: Object.freeze({ buildDashboardDailyData, filterRecordsByPeriod, emittedDocuments, totalsFromDaily, kpiTrend, previousPeriodOf, daysInPeriod }),
+    _debug: Object.freeze({ buildDashboardDailyData, buildDashboardWeeklyData, filterRecordsByPeriod, emittedDocuments, totalsFromDaily, kpiTrend, previousPeriodOf, daysInPeriod, startOfWeekKey, endOfWeekKey, clampWeekCount, weeklyRangeFor, dashboardPointLabel }),
   });
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
