@@ -105,6 +105,7 @@ export interface EvolutionAudit {
 
 export interface EvolutionSnapshot {
   id: string;
+  unavailableReason?: string;
   sourceSnapshotId?: string;
   system: EvolutionSystem;
   importedAt: string;

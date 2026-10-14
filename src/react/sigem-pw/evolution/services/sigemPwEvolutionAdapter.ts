@@ -1,4 +1,6 @@
 import type { SigemPwRecord } from "../../types/domain";
+import { ensureSharedSigemHistoryCompatibility } from "../../services/sharedSigemHistoryCompatibility";
+import { buildEvolutionSourceCatalog, type EvolutionSourceCatalog } from "./evolutionSourceCatalog";
 import {
   EMPTY_EVOLUTION_FILTERS,
   EVOLUTION_EVENT_DEBOUNCE_MS,
@@ -394,6 +396,7 @@ function preparedCacheKey(system: EvolutionSystem, source: EvolutionSourceSnapsh
     universe?.fingerprint || "no-ld",
     source.importedAt || source.recordedAt || "",
     source.fileName || "",
+    contextKey(),
   ].join("|");
 }
 
@@ -408,7 +411,7 @@ function selectionKey(system: EvolutionSystem, role: "previous" | "current"): ke
 function selectedSnapshot(system: EvolutionSystem, role: "previous" | "current"): EvolutionSnapshot | null {
   const key = selectionKey(system, role);
   const selected = state[system].find((item) => item.id === state.selections[key]) || null;
-  return selected ? scopeSnapshot(selected) : null;
+  return selected && !selected.unavailableReason ? scopeSnapshot(selected) : null;
 }
 
 function localDateKey(value: unknown): string {
@@ -428,7 +431,7 @@ function periodSnapshots(system: EvolutionSystem): EvolutionSnapshot[] {
 }
 
 function pairDefaults(system: EvolutionSystem): void {
-  const list = periodSnapshots(system);
+  const list = periodSnapshots(system).filter(item => !item.unavailableReason);
   const currentKey = selectionKey(system, "current");
   const previousKey = selectionKey(system, "previous");
   if (!list.length) {
@@ -568,6 +571,8 @@ async function readLdUniverse(force: boolean): Promise<ReturnType<EvolutionCoreA
 async function readHistoryMaps(
   sources: Array<{ system: EvolutionSystem; metadata: EvolutionSourceSnapshotMeta[] }>,
   universe: EvolutionUiState["ldUniverse"],
+  catalog: EvolutionSourceCatalog,
+  isCurrent: () => boolean,
 ): Promise<{ payloads: Map<string, EvolutionPayload>; prepared: Map<string, EvolutionSnapshot> }> {
   const started = now();
   const history = History();
@@ -634,22 +639,58 @@ async function readHistoryMaps(
     const key = persistedKeyBySource.get(system + ":" + source.id);
     return !key || !prepared.has(key);
   });
-  const payloadKeys = misses.map(({ source }) => prefix + source.id);
+  const payloadKeys = misses.filter(({ source }) => !catalog.payloads.has(source.id) && !catalog.sharedIds.has(source.id))
+    .map(({ source }) => prefix + source.id);
   const rawValues = await readMany([...new Set(payloadKeys)]);
   for (const { source } of misses) {
-    const value = rawValues.get(prefix + source.id) as EvolutionPayload | undefined;
-    if (value && Array.isArray(value.records)) payloads.set(text(value.snapshotId) || source.id, value);
+    const value = catalog.payloads.get(source.id) || rawValues.get(prefix + source.id) as EvolutionPayload | undefined;
+    if (value && Array.isArray(value.records)) {
+      const sharedId = text(value.meta?.snapshotId);
+      if (source.system === "sigem" && catalog.versions !== null && value.meta?.source === "shared-general-query"
+        && !catalog.sharedIds.has(sharedId)) {
+        const index = catalog.metadata.sigem.findIndex(item => item.id === source.id);
+        if (index >= 0) catalog.metadata.sigem.splice(index, 1);
+        continue;
+      }
+      if (source.system === "sigem" && sharedId !== source.id && catalog.sharedIds.has(sharedId)) {
+        // A legacy payload may already contain the exact shared snapshot.
+        // Reuse it under the authoritative ID and suppress its extra projection.
+        payloads.set(sharedId, value as EvolutionPayload);
+        catalog.aliases.set(source.id, sharedId);
+        const index = catalog.metadata.sigem.findIndex(item => item.id === source.id);
+        if (index >= 0) catalog.metadata.sigem.splice(index, 1);
+      } else payloads.set(source.id, value as EvolutionPayload);
+    }
   }
+
+  // Reuse prepared snapshots before requesting paginated shared payloads. At most
+  // two versions are read concurrently; never one database query per document.
+  const remote = misses.filter(({ source }) => catalog.sharedIds.has(source.id) && !payloads.has(source.id));
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(2, remote.length) }, async () => {
+    while (next < remote.length && isCurrent()) {
+      const { source } = remote[next++];
+      try {
+        const base = await window.GrconSharedSigemQuery!.loadSnapshot(source.id, catalog.versions || undefined);
+        if (!isCurrent()) return;
+        payloads.set(source.id, base as EvolutionPayload);
+      } catch (error) {
+        if (!isCurrent()) return;
+        state.error = messageOf(error, "Não foi possível consultar uma base anterior do SIGEM.");
+      }
+    }
+  }));
 
   state.metrics.evolutionHistoryReadMs = now() - started;
   return { payloads, prepared };
 }
 
-async function persistPreparedSnapshots(entries: Array<{ key: string; snapshot: EvolutionSnapshot; source: EvolutionSourceSnapshotMeta; ldFingerprint: string }>): Promise<void> {
+async function persistPreparedSnapshots(entries: Array<{ key: string; snapshot: EvolutionSnapshot; source: EvolutionSourceSnapshotMeta; ldFingerprint: string }>, isCurrent: () => boolean): Promise<void> {
   if (!entries.length) return;
   const history = History();
   const db = await history.openDb();
   try {
+    if (!isCurrent()) return;
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(history.STORES.meta, "readwrite");
       const store = tx.objectStore(history.STORES.meta);
@@ -679,13 +720,15 @@ async function buildPreparedSnapshots(
   payloads: Map<string, EvolutionPayload>,
   storedPrepared: Map<string, EvolutionSnapshot>,
   universe: ReturnType<EvolutionCoreApi["buildLdUniverse"]>,
+  isCurrent: () => boolean,
 ): Promise<{ output: EvolutionSnapshot[]; unavailable: number; writes: Array<{ key: string; snapshot: EvolutionSnapshot; source: EvolutionSourceSnapshotMeta; ldFingerprint: string }> }> {
   const output: EvolutionSnapshot[] = [];
   const writes: Array<{ key: string; snapshot: EvolutionSnapshot; source: EvolutionSourceSnapshotMeta; ldFingerprint: string }> = [];
   let unavailable = 0;
   const ldFingerprint = text(universe?.fingerprint);
   for (const sourceSnapshot of metadata.slice().sort((a, b) => Date.parse(text(a.importedAt)) - Date.parse(text(b.importedAt)))) {
-    const key = preparedCacheKey(system, sourceSnapshot, state.ldUniverse);
+    if (!isCurrent()) break;
+    const key = preparedCacheKey(system, sourceSnapshot, universe);
     const cached = preparedSnapshotCache.get(key) || storedPrepared.get(key);
     if (cached && cached.analysisVersion === Core().CALCULATION_VERSION && Array.isArray(cached.records)) {
       preparedSnapshotCache.set(key, cached);
@@ -696,10 +739,12 @@ async function buildPreparedSnapshots(
     const payload = payloads.get(sourceSnapshot.id);
     if (!payload || !Array.isArray(payload.records)) {
       unavailable += 1;
+      output.push(unavailableSnapshot(system, sourceSnapshot, "Conteúdo indisponível; atualize para tentar novamente"));
       continue;
     }
     state.metrics.evolutionCacheMissCount += 1;
     await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    if (!isCurrent()) break;
     const base = {
       meta: {
         ...(payload.meta || {}),
@@ -713,12 +758,14 @@ async function buildPreparedSnapshots(
         snapshotId: sourceSnapshot.id,
         sourceSnapshotId: sourceSnapshot.id,
       });
+      if (!isCurrent()) break;
       preparedSnapshotCache.set(key, prepared);
       output.push(prepared);
       writes.push({ key, snapshot: prepared, source: sourceSnapshot, ldFingerprint });
     } catch (error) {
       console.warn(`[SIGEM×PW][evolução] snapshot ${sourceSnapshot.id}:`, error);
       unavailable += 1;
+      output.push(unavailableSnapshot(system, sourceSnapshot, "Não foi possível preparar esta base"));
     }
     await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
   }
@@ -758,8 +805,8 @@ async function prepareTimeline(sigem: EvolutionSnapshot[], pw: EvolutionSnapshot
   const key = timelineKey(sigem, pw);
   if (timelineCache.has(key)) return;
   const started = now();
-  const scopedSigem = scopedSnapshots(sigem);
-  const scopedPw = scopedSnapshots(pw);
+  const scopedSigem = scopedSnapshots(sigem.filter(item => !item.unavailableReason));
+  const scopedPw = scopedSnapshots(pw.filter(item => !item.unavailableReason));
   const worker = getEvolutionWorker();
   let rows: EvolutionUiState["timeline"];
   if (worker) {
@@ -785,7 +832,10 @@ function fullTimeline(): EvolutionUiState["timeline"] {
   const cached = timelineCache.get(key);
   if (cached) return cached;
   const started = now();
-  const built = Core().buildDailyTimeline(scopedSnapshots(state.sigem), scopedSnapshots(state.pw));
+  const built = hasValidatedLd() ? Core().buildDailyTimeline(
+    scopedSnapshots(state.sigem.filter(item => !item.unavailableReason)),
+    scopedSnapshots(state.pw.filter(item => !item.unavailableReason)),
+  ) : [];
   state.metrics.evolutionTimelineMs = now() - started;
   timelineCache.set(key, built);
   return built;
@@ -803,46 +853,81 @@ function applyPeriod(): boolean {
 }
 
 let contextEpoch = 0;
-async function loadSnapshots(forceLd = false): Promise<void> {
-  if (state.busy) return;
+function contextKey(): string {
+  const cloud = window.GrconCloud?.state as { user?: { id?: string }; membership?: { workspace_id?: string } } | undefined;
+  return `${cloud?.user?.id || "local"}:${cloud?.membership?.workspace_id || "local"}`;
+}
+
+function unavailableSnapshot(system: EvolutionSystem, source: EvolutionSourceSnapshotMeta, reason: string): EvolutionSnapshot {
+  return { id: source.id, sourceSnapshotId: source.id, system, fileName: source.fileName,
+    importedAt: text(source.importedAt || source.recordedAt), records: [], unavailableReason: reason };
+}
+
+async function readSourceCatalog(): Promise<EvolutionSourceCatalog> {
+  const context = contextKey();
+  const shared = ensureSharedSigemHistoryCompatibility();
+  const cloud = window.GrconCloud?.state;
+  const online = Boolean(cloud?.online && cloud.membership?.workspace_id && shared);
+  const [sigem, pw, history, versions] = await Promise.all([
+    History().listSourceSnapshots("sigem"), History().listSourceSnapshots("pw"),
+    window.GrconSigemPwDashboard!.loadHistory(),
+    online ? shared!.listVersions().catch(error => {
+      if (context === contextKey()) state.error = messageOf(error, "Não foi possível consultar as versões compartilhadas do SIGEM.");
+      return null;
+    }) : Promise.resolve(null),
+  ]);
+  return buildEvolutionSourceCatalog({ sigem, pw }, history, versions, History().contentFingerprint);
+}
+
+async function loadSnapshots(forceLd = false): Promise<boolean> {
+  if (state.busy) return false;
   state.busy = true;
   const epoch = contextEpoch;
+  const context = contextKey();
+  const isCurrent = () => epoch === contextEpoch && context === contextKey();
   state.error = "";
   emit();
   const started = now();
   try {
     const management = Management();
     if (management?.ensureCurrentPayloads) await management.ensureCurrentPayloads();
+    if (!isCurrent()) return false;
+    const catalog = await readSourceCatalog();
+    if (!isCurrent()) return false;
+    for (const key of Object.keys(preferredSelections) as Array<keyof typeof preferredSelections>) {
+      preferredSelections[key] = catalog.aliases.get(preferredSelections[key]) || preferredSelections[key];
+    }
     const universe = await readLdUniverse(Boolean(forceLd));
-    if (epoch !== contextEpoch) { state.ldUniverse = null; state.ldSignature = ""; return; }
+    if (!isCurrent()) { state.ldUniverse = null; state.ldSignature = ""; return false; }
     if (!universe.qualityAvailable) {
-      state.sigem = [];
-      state.pw = [];
+      state.sigem = ordered(catalog.metadata.sigem.map(meta => unavailableSnapshot("sigem", meta, "Carregue a LD da Qualidade para comparar")));
+      state.pw = ordered(catalog.metadata.pw.map(meta => unavailableSnapshot("pw", meta, "Carregue a LD da Qualidade para comparar")));
       state.timeline = [];
       state.unavailable = { sigem: 0, pw: 0 };
       state.comparison = null;
       state.page = 1;
       state.detailRow = null;
       syncFilteredRows();
-      return;
+      return true;
     }
 
-    const [sigemMeta, pwMeta] = await Promise.all([
-      History().listSourceSnapshots("sigem"),
-      History().listSourceSnapshots("pw"),
-    ]);
+    const { sigem: sigemMeta, pw: pwMeta } = catalog.metadata;
     const historyMaps = await readHistoryMaps([
       { system: "sigem", metadata: sigemMeta },
       { system: "pw", metadata: pwMeta },
-    ], universe);
+    ], universe, catalog, isCurrent);
+    if (!isCurrent()) return false;
+    for (const key of Object.keys(preferredSelections) as Array<keyof typeof preferredSelections>) {
+      preferredSelections[key] = catalog.aliases.get(preferredSelections[key]) || preferredSelections[key];
+    }
     const [sigem, pw] = await Promise.all([
-      buildPreparedSnapshots("sigem", sigemMeta, historyMaps.payloads, historyMaps.prepared, universe),
-      buildPreparedSnapshots("pw", pwMeta, historyMaps.payloads, historyMaps.prepared, universe),
+      buildPreparedSnapshots("sigem", sigemMeta, historyMaps.payloads, historyMaps.prepared, universe, isCurrent),
+      buildPreparedSnapshots("pw", pwMeta, historyMaps.payloads, historyMaps.prepared, universe, isCurrent),
     ]);
     const orderedSigem = ordered(sigem.output);
     const orderedPw = ordered(pw.output);
     await prepareTimeline(orderedSigem, orderedPw);
-    if (epoch !== contextEpoch) return;
+    if (!isCurrent()) return false;
     state.sigem = orderedSigem;
     state.pw = orderedPw;
     state.unavailable = { sigem: sigem.unavailable, pw: pw.unavailable };
@@ -859,12 +944,13 @@ async function loadSnapshots(forceLd = false): Promise<void> {
     });
     const writes = [...sigem.writes, ...pw.writes];
     if (writes.length) {
-      void persistPreparedSnapshots(writes).catch((error) => {
+      void persistPreparedSnapshots(writes, isCurrent).catch((error) => {
         if ((window as unknown as { GRCON_DEBUG_UI?: boolean }).GRCON_DEBUG_UI === true) console.warn("[SIGEM×PW][evolução] cache derivado:", error);
       });
     }
+    return true;
   } catch (error) {
-    if (epoch !== contextEpoch) return;
+    if (!isCurrent()) return false;
     state.error = messageOf(error, "Não foi possível carregar a Evolução SIGEM × PW.");
     throw error;
   } finally {
@@ -882,14 +968,12 @@ async function activate(): Promise<void> {
     emit();
     return;
   }
-  await loadSnapshots(false);
-  state.ready = true;
+  if (await loadSnapshots(false)) state.ready = true;
   emit();
 }
 
 async function refresh(forceLd = false): Promise<void> {
-  await loadSnapshots(Boolean(forceLd));
-  state.ready = true;
+  if (await loadSnapshots(Boolean(forceLd))) state.ready = true;
   emit();
 }
 
@@ -1254,7 +1338,14 @@ async function exportFilteredRows(): Promise<number> {
 }
 
 function openHistoryManager(): void {
-  runtime().GrconSigemPwHistoryRuntimeFix?.openManager?.();
+  if (window.GrconSigemPwDashboardUi?.openHistory) {
+    void window.GrconSigemPwDashboardUi.openHistory().catch(error => notify(messageOf(error, "Não foi possível abrir o histórico das bases."), "error"));
+  } else {
+    // An already-open tab can still have the previous Dashboard facade.
+    const button = document.getElementById("spw-history-open");
+    if (button) button.click();
+    else runtime().GrconSigemPwHistoryRuntimeFix?.openManager?.();
+  }
 }
 
 function scheduleRefresh(forceLd = false): void {
@@ -1277,6 +1368,7 @@ function subscribeExternalEvents(): () => void {
   const onContext = () => {
     contextEpoch++; state.sigem = []; state.pw = []; state.ldUniverse = null; state.ldSignature = "";
     state.comparison = null; state.timeline = []; state.filteredRows = []; state.ready = false;
+    state.error = "";
     state.selections = { sigemPrev: "", sigemCurrent: "", pwPrev: "", pwCurrent: "" };
     comparisonCache.clear(); timelineCache.clear(); scopedSnapshotCache.clear(); preparedSnapshotCache.clear();
     emit(); scheduleRefresh(true);
@@ -1287,6 +1379,9 @@ function subscribeExternalEvents(): () => void {
     scheduleRefresh(true);
   };
   window.addEventListener("grcon:conference-updated", onBaseUpdate);
+  window.addEventListener("grcon:shared-sigem-updated", onBaseUpdate);
+  window.addEventListener("grcon:shared-sigem-metadata-invalidated", onBaseUpdate);
+  window.addEventListener("grcon:cloud-ready", onBaseUpdate);
   window.addEventListener("grcon:pw-base-updated", onBaseUpdate);
   window.addEventListener("grcon:sigem-pw-base-date-updated", onBaseUpdate);
   const ldInput = document.getElementById("ld-input");
@@ -1296,6 +1391,9 @@ function subscribeExternalEvents(): () => void {
     window.removeEventListener("grcon:contract-context-changed", onContext);
     window.removeEventListener("grcon:sigem-pw-revision-scope-changed", onScope);
     window.removeEventListener("grcon:conference-updated", onBaseUpdate);
+    window.removeEventListener("grcon:shared-sigem-updated", onBaseUpdate);
+    window.removeEventListener("grcon:shared-sigem-metadata-invalidated", onBaseUpdate);
+    window.removeEventListener("grcon:cloud-ready", onBaseUpdate);
     window.removeEventListener("grcon:pw-base-updated", onBaseUpdate);
     window.removeEventListener("grcon:sigem-pw-base-date-updated", onBaseUpdate);
     ldInput?.removeEventListener("change", onLdInput);
