@@ -32,7 +32,7 @@
   const state = {
     records: [], reply: null, open: false, lastFocus: null, panel: null, view: VIEWS.READ,
     configuration: {}, savedConfiguration: {}, templateVersions: [], templateEpoch: 0,
-    messageDirty: false, defaultMessage: "", editorOpen: false, activeModel: null,
+    messageDirty: false, configurationDirty: false, sessionEpoch: 0, editorOpen: false, activeModel: null,
     savingModel: false,
   };
 
@@ -192,6 +192,7 @@
       state.configuration = { ...state.configuration,
         columns: target.checked ? Reply.COLUMNS.filter(c => selected.includes(c) || c === column) :
           selected.filter(c => c !== column) };
+      state.configurationDirty = true;
       refreshReply();
     });
     state.panel = { overlay, panel };
@@ -205,6 +206,17 @@
 
   function currentReply() {
     return Reply.build(state.records, { ...state.configuration, message: currentMessage() });
+  }
+
+  function replyContext() {
+    const membership = root.GrconCloud?.state?.membership;
+    return { epoch: state.sessionEpoch, workspace: membership?.workspace_id, contract: membership?.contract_id };
+  }
+
+  function isCurrentContext(context) {
+    const current = replyContext();
+    return state.open && context.epoch === current.epoch &&
+      context.workspace === current.workspace && context.contract === current.contract;
   }
 
   function metric(value, singular, plural) {
@@ -311,6 +323,7 @@
       styles.tableWidth = 100;
       state.configuration = { ...state.configuration, styles };
     }
+    state.configurationDirty = true;
     renderColumnOptions();
     refreshReply();
   }
@@ -331,6 +344,8 @@
     state.savedConfiguration = { ...(options || {}) };
     state.reply = Reply.build(list, state.configuration);
     state.messageDirty = false;
+    state.configurationDirty = false;
+    state.sessionEpoch++;
     state.editorOpen = false;
     const editor = document.getElementById("egrdt-email-model-editor");
     editor.hidden = true; editor.open = false;
@@ -349,18 +364,18 @@
   function canEditModel() { return ["owner", "admin"].includes(root.GrconCloud?.state?.membership?.role); }
   async function loadTemplate() {
     const epoch = ++state.templateEpoch;
-    const workspace = root.GrconCloud?.state?.membership?.workspace_id;
+    const context = replyContext();
     const before = currentMessage();
     const editor = document.getElementById("egrdt-email-model-editor");
     if (!state.editorOpen) { editor.hidden = true; editor.open = false; }
     document.querySelector('[data-egrdt-email-action="edit-model"]').hidden = !canEditModel();
     try {
       const model = await root.GrconCloud?.emailTemplateGet?.();
-      if (epoch !== state.templateEpoch || workspace !== root.GrconCloud?.state?.membership?.workspace_id) return;
+      if (epoch !== state.templateEpoch || !isCurrentContext(context)) return;
       const edited = state.messageDirty || currentMessage() !== before;
       state.activeModel = model;
       state.savedConfiguration = { ...(model?.configuration || {}) };
-      state.configuration = { ...state.savedConfiguration };
+      if (!state.configurationDirty) state.configuration = { ...state.savedConfiguration };
       if (!edited) {
         const defaultReply = Reply.build(state.records, state.configuration);
         document.getElementById("egrdt-email-message").value = defaultReply.message;
@@ -368,10 +383,14 @@
       refreshReply();
       renderColumnOptions();
       document.getElementById("egrdt-email-model-status").textContent = model ? "Modelo " + (model.scope === "global" ? "global" : "do contrato") + " · versão " + model.version : "Modelo padrão do GRCON";
-    } catch (error) { notify(error.message || "Não foi possível carregar o modelo compartilhado.", "warning"); }
+    } catch (error) {
+      if (epoch === state.templateEpoch && isCurrentContext(context))
+        notify(error.message || "Não foi possível carregar o modelo compartilhado.", "warning");
+    }
   }
   async function openEditor() {
     if (!canEditModel()) return;
+    const context = replyContext();
     const target = document.getElementById("egrdt-email-model-fields");
     const cfg = state.configuration;
     const styles = cfg.styles || {};
@@ -389,9 +408,11 @@
     const editor = document.getElementById("egrdt-email-model-editor"); editor.hidden = false; editor.open = true;
     state.editorOpen = true;
     try {
-      state.templateVersions = await root.GrconCloud.emailTemplateVersions();
+      const versions = await root.GrconCloud.emailTemplateVersions();
+      if (!isCurrentContext(context) || !state.editorOpen) return;
+      state.templateVersions = versions;
       document.getElementById("email-model-version").innerHTML = state.templateVersions.map(v => '<option value="' + escapeHtml(v.template_id) + '">' + escapeHtml(v.scope) + ' · v' + v.version + (v.active ? " · atual" : "") + '</option>').join("");
-    } catch (error) { notify(error.message, "error"); }
+    } catch (error) { if (isCurrentContext(context)) notify(error.message, "error"); }
   }
   function editorConfiguration() {
     const cfg = { styles: {}, columns: [], columnLabels: {}, columnWidths: {}, columnAlign: {}, messageTemplate: document.getElementById("email-model-message").value, showHeader: document.getElementById("email-model-show-header").checked };
@@ -404,6 +425,7 @@
   function previewModel() {
     try {
       state.configuration = editorConfiguration();
+      state.configurationDirty = true;
       if (!state.messageDirty) {
         document.getElementById("egrdt-email-message").value =
           Reply.build(state.records, state.configuration).message;
@@ -415,6 +437,7 @@
 
   function cancelEditor() {
     state.configuration = { ...state.savedConfiguration };
+    state.configurationDirty = false;
     if (!state.messageDirty) {
       document.getElementById("egrdt-email-message").value =
         Reply.build(state.records, state.configuration).message;
@@ -428,14 +451,17 @@
 
   async function saveModel() {
     if (!canEditModel() || state.savingModel) return;
+    const context = replyContext();
     state.savingModel = true;
     const button = document.querySelector('[data-egrdt-email-action="save-model"]');
     if (button) { button.disabled = true; button.textContent = "Salvando..."; }
     try {
       const cfg = editorConfiguration();
       await root.GrconCloud.emailTemplateSave(document.getElementById("email-model-scope").value, cfg);
+      if (!isCurrentContext(context)) return;
       state.savedConfiguration = { ...cfg };
       state.configuration = { ...cfg };
+      state.configurationDirty = false;
       state.editorOpen = false;
       const editor = document.getElementById("egrdt-email-model-editor");
       editor.open = false; editor.hidden = true;
@@ -446,7 +472,9 @@
       renderColumnOptions();
       notify("Modelo salvo com uma nova versão.", "success");
       await loadTemplate();
-    } catch (error) { notify(error.message || "Não foi possível salvar o modelo.", "error"); }
+    } catch (error) {
+      if (isCurrentContext(context)) notify(error.message || "Não foi possível salvar o modelo.", "error");
+    }
     finally {
       state.savingModel = false;
       if (button) { button.disabled = false; button.textContent = "Salvar modelo compartilhado"; }
@@ -457,14 +485,19 @@
     if (!canEditModel()) return;
     const id = document.getElementById("email-model-version")?.value;
     if (!id || !root.confirm("Restaurar esta versão do modelo compartilhado?")) return;
+    const context = replyContext();
     try {
       await root.GrconCloud.emailTemplateRestore(id);
+      if (!isCurrentContext(context)) return;
+      state.configurationDirty = false;
       state.editorOpen = false;
       const editor = document.getElementById("egrdt-email-model-editor");
       editor.hidden = true; editor.open = false;
       await loadTemplate();
       notify("Modelo restaurado em uma nova versão.", "success");
-    } catch (error) { notify(error.message || "Não foi possível restaurar o modelo.", "error"); }
+    } catch (error) {
+      if (isCurrentContext(context)) notify(error.message || "Não foi possível restaurar o modelo.", "error");
+    }
   }
 
   function close(force = false) {
@@ -475,6 +508,7 @@
     state.panel.overlay.hidden = true;
     state.panel.panel.hidden = true;
     state.open = false;
+    state.sessionEpoch++;
     state.templateEpoch++;
     document.removeEventListener("keydown", onKeydown, true);
     if (state.lastFocus && typeof state.lastFocus.focus === "function") state.lastFocus.focus();

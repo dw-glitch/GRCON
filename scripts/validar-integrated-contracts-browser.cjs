@@ -86,6 +86,45 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  assert.match(await emailText.inputValue(),/Texto personalizado/);
  assert.match(await page.locator('#egrdt-email-preview').innerText(),/Texto personalizado/);await page.locator('[data-egrdt-email-action="save-model"]').click();await page.waitForFunction(()=>window.qaSavedTemplate?.cfg.styles.fontSize===14);assert.equal(await page.evaluate(()=>window.qaSavedTemplate.scope),'contract');
  await page.screenshot({path:path.join(out,'email-editor.png')});page.once('dialog',dialog=>dialog.accept());await page.locator('[data-egrdt-email-action="close"]').click();
+ // O modelo atrasado não pode sobrescrever texto nem escolhas individuais da tabela.
+ await page.evaluate(()=>{
+  window.__emailGet=window.GrconCloud.emailTemplateGet;
+  window.__emailSave=window.GrconCloud.emailTemplateSave;
+  window.GrconCloud.emailTemplateGet=()=>new Promise(resolve=>{window.__resolveEmailGet=resolve;});
+  window.GrconEgrdtEmailReplyUi.open([{egrdtNumber:'QA-LATE',files:[{document:'DOC-LATE',revision:'0'}]}]);
+ });
+ await emailText.fill('Rascunho durante carregamento');
+ await page.locator('#egrdt-email-quick-settings > summary').click();
+ await page.locator('[data-email-column="TÍTULO"]').uncheck();
+ const selectedColumns=await page.locator('[data-email-column]:checked').count();
+ await page.evaluate(()=>window.__resolveEmailGet({scope:'contract',version:2,configuration:{columns:['DOCUMENTO','REVISÃO'],messageTemplate:'Modelo tardio {{egrdt}}'}}));
+ await page.waitForFunction(()=>document.querySelector('#egrdt-email-model-status').textContent.includes('versão 2'));
+ assert.equal(await emailText.inputValue(),'Rascunho durante carregamento');
+ assert.equal(await page.locator('[data-email-column]:checked').count(),selectedColumns);
+ assert.equal(await page.locator('[data-email-column="TÍTULO"]').isChecked(),false);
+ // Um salvamento concluído após reabrir o painel não altera a resposta nova.
+ await page.locator('[data-egrdt-email-action="edit-model"]').click();
+ await page.locator('[data-model-style="fontSize"]').fill('18');
+ await page.evaluate(()=>{window.GrconCloud.emailTemplateSave=()=>new Promise(resolve=>{window.__resolveEmailSave=resolve;});});
+ await page.locator('[data-egrdt-email-action="save-model"]').click();
+ await page.waitForFunction(()=>Boolean(window.__resolveEmailSave));
+ await page.evaluate(()=>{
+  window.GrconEgrdtEmailReplyUi.close(true);
+  window.GrconCloud.emailTemplateGet=async()=>({scope:'contract',version:3,configuration:{columns:['DOCUMENTO'],styles:{fontSize:11},messageTemplate:'Resposta nova {{egrdt}}'}});
+  window.GrconEgrdtEmailReplyUi.open([{egrdtNumber:'QA-NEW',files:[{document:'DOC-NEW',revision:'B'}]}]);
+ });
+ await page.waitForFunction(()=>document.querySelector('#egrdt-email-model-status').textContent.includes('versão 3'));
+ await page.evaluate(()=>window.__resolveEmailSave(true));
+ await page.waitForFunction(()=>!document.querySelector('[data-egrdt-email-action="save-model"]').disabled);
+ assert.equal(await emailText.inputValue(),'Resposta nova QA-NEW');
+ assert.equal(await page.locator('[data-email-column]:checked').count(),1);
+ await page.locator('[data-egrdt-email-view="paste"]').click();
+ assert.match(await page.locator('#egrdt-email-preview table').getAttribute('style'),/font-size:11pt/);
+ await page.evaluate(()=>{
+  window.GrconEgrdtEmailReplyUi.close(true);
+  window.GrconCloud.emailTemplateGet=window.__emailGet;
+  window.GrconCloud.emailTemplateSave=window.__emailSave;
+ });
  await page.locator('[data-grcon-view="control"]').first().click();
  assert.equal(await page.locator('input[name="grdt-document-source"]').count(),0,'a escolha manual Base documental foi removida');
  assert.equal(await page.locator('#grcon-control-help').count(),0,'ajuda expansível removida');
