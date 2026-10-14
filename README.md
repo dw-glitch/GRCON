@@ -118,29 +118,23 @@ Na eGRDT selecionada no **Histórico**, o botão **Resposta de e-mail** abre a r
 
 A tabela ocupa toda a largura do corpo da mensagem: ela termina onde a frase acima dela termina, em vez de parar antes num bloco estreito com uma faixa vazia à direita. Cada coluna recebe uma proporção fixa dessa largura, e o texto que não cabe quebra dentro da própria célula. Cabeçalho e células usam fonte 10 pt.
 
-## Contrato fixo — aba “Colar GRCON” (v1)
+## Contrato fixo — Colar GRCON v2
 
-A **Relação de eGRDTs por período** contém `Resumo`, `eGRDTs`, `Documentos` (detalhada), **`Colar GRCON`** (contrato estável v1) e **`Colar GRCON v2`** (controle atualizado com alocação).
-
-A aba operacional traz **exatamente cinco colunas A:E, sem fórmulas ou colunas ocultas**:
+A **Relação de eGRDTs por período** contém quatro abas: `Resumo`, `eGRDTs`, `Documentos` e **`Colar GRCON v2`**, única aba operacional para o Controle de Solicitações.
 
 | Coluna | Cabeçalho imutável | Origem |
 | --- | --- | --- |
-| A | DATA DA GERAÇÃO / POSTAGEM | Data/hora real do histórico, como data/hora numérica do Excel |
+| A | DATA DA GERAÇÃO / POSTAGEM | Data/hora numérica do histórico |
 | B | EGRDT | Número exato da eGRDT |
 | C | DOCUMENTO | Código documental |
-| D | REVISÃO ENVIADA NA GRDT | Revisão efetivamente gerada |
-| E | VERSÃO DA LD ENVIADA | Campo literal `Prazo` da LD capturado na geração |
+| D | REVISÃO ENVIADA NA GRDT | Revisão efetivamente enviada |
+| E | VERSÃO DA LD ENVIADA | Campo literal Prazo capturado na geração |
+| F | ALOCAÇÃO | Número registrado no histórico daquela emissão |
 
-As linhas 1–2 são o título `COLAR GRCON` e os cabeçalhos; os dados começam na linha 3. **Não alterar nomes, posições, início dos dados, tipos nem quantidade das cinco colunas.** Se um dia for preciso ampliar os dados, criar uma nova aba versionada; nunca modificar este contrato v1. Os registros continuam por ocorrência de documento/eGRDT, incluindo repostagens; arquivos excluídos individualmente não são exportados. Prazo desconhecido permanece vazio: não utilizar versão ou revisão da LD como substituto.
+A linha 1 contém `COLAR GRCON`, a linha 2 contém os cabeçalhos e os registros começam na linha 3. Manter os nomes, posições, tipos e as seis colunas A:F. Prazo e alocação ausentes ficam vazios. Repostagens conservam os dados de cada emissão. Arquivos removidos não entram na relação.
 
-**Colagem no Controle de Solicitações:** limpar somente `A:E` da aba de destino `Colar GRCON` e copiar `A1:E<última linha>` da aba exportada para `A1` do destino (colagem de valores e, se necessário, formatos de data). **Não sobrescrever a coluna F**, que contém a chave auxiliar do documento e data. A aba `Solicitações` deve consultar o documento pela coluna C, a data pela A, a eGRDT pela B e o Prazo pela E. Para documentos somente de inclusão/alocação ou com Prazo não informado no histórico, a fórmula da coluna L recorre ao registro correspondente da `Central de alocação` (J = documento; B = versão), sem inventar prazo.
+O visual usa título azul escuro em fundo branco, cabeçalhos azuis e registros cinza.
 
-### Colar GRCON v2 — alocação e visual operacional
+**Colagem:** limpar somente `A:F` da aba de destino `Colar GRCON` e colar os valores de `Colar GRCON v2!A1:F<última linha>` em `A1`. Preservar a coluna **G**, auxiliar. A planilha operacional v2 continua compatível e não precisa ser substituída.
 
-A relação também inclui **`Colar GRCON v2`**. As primeiras cinco colunas e as linhas de título/cabeçalhos continuam iguais ao contrato v1, e a coluna **F — `ALOCAÇÃO`** traz o número capturado por documento no histórico da emissão. Informação ausente permanece vazia. Repostagens conservam a alocação de cada envio. A exportação não consulta a Central atual para preencher o passado.
-
-O visual v2 acompanha o Controle de Solicitações anterior: título azul escuro em fundo branco, cabeçalho azul e registros cinza. A aba v1 de cinco colunas permanece intacta para os controles anteriores.
-
-**No controle atualizado:** limpar somente `A:F` de `Colar GRCON` e colar os valores de `Colar GRCON v2!A1:F<última linha>` em `A1`. Preservar a coluna **G**, auxiliar. Em `Solicitações!M`, procurar primeiro o último número não vazio na `Central de alocação` (J = documento, H = alocação). Se não houver, usar F do envio vinculado por documento e data de recebimento. Se as duas fontes estiverem vazias, deixar vazio. Não usar coincidência parcial entre códigos.
-
+Em `Solicitações!L`, o Prazo da emissão tem prioridade. Quando ausente, consultar a versão na Central de alocação (J = documento, B = versão). Em `Solicitações!M`, procurar primeiro o último número não vazio na Central (J = documento, H = alocação). Se não houver, usar F do envio vinculado por documento e data de recebimento. Se ambas as fontes estiverem vazias, deixar vazio. Não usar correspondência parcial entre códigos.

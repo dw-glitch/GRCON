@@ -9,11 +9,12 @@ const HEADERS = [
   "DOCUMENTO",
   "REVISÃO ENVIADA NA GRDT",
   "VERSÃO DA LD ENVIADA",
+  "ALOCAÇÃO",
 ];
 
 (async () => {
-  assert.deepEqual(Report.COLAR_GRCON_HEADERS_V1, HEADERS, "layout v1 é imutável");
-  assert.equal(Object.isFrozen(Report.COLAR_GRCON_HEADERS_V1), true);
+  assert.deepEqual(Report.COLAR_GRCON_HEADERS_V2, HEADERS, "layout de seis colunas é estável");
+  assert.equal(Object.isFrozen(Report.COLAR_GRCON_HEADERS_V2), true);
   const source = [
     History.cleanRecord({
       id: "emissao-2", egrdtNumber: "GR-002",
@@ -35,16 +36,16 @@ const HEADERS = [
     }),
   ];
 
-  const rows = Report.colarGrconRows(source);
+  const rows = Report.colarGrconRowsV2(source);
   assert.equal(rows.length, 5);
-  assert.equal(rows[0].length, 5);
+  assert.equal(rows[0].length, 6);
   assert.ok(rows[0][0] instanceof Date, "data precisa ser data real do Excel, não texto");
   assert.deepEqual(rows.map(r => r.slice(1)), [
-    ["GR-002", "RL-5290.00-22313-911-C1O-002", "B", "E31"],
-    ["GR-002", "RL-5290.00-22313-911-C1O-003", "0", "Primeiras versões"],
-    ["GR-002", "RL-5290.00-22313-911-C1O-004", "0", "0"],
-    ["GR-001", "RL-5290.00-22313-911-C1O-002", "A", "A01"],
-    ["GR-001", "RL-5290.00-22313-911-C1O-005", "A", ""],
+    ["GR-002", "RL-5290.00-22313-911-C1O-002", "B", "E31", "C1O-ALOC-CM-0010-2026"],
+    ["GR-002", "RL-5290.00-22313-911-C1O-003", "0", "Primeiras versões", ""],
+    ["GR-002", "RL-5290.00-22313-911-C1O-004", "0", "0", ""],
+    ["GR-001", "RL-5290.00-22313-911-C1O-002", "A", "A01", "C1O-ALOC-CM-0005-2026"],
+    ["GR-001", "RL-5290.00-22313-911-C1O-005", "A", "", ""],
   ]);
   const detailed = Report.documentRows(source);
   assert.equal(detailed.length, rows.length, "não perder nem duplicar documentos");
@@ -54,11 +55,12 @@ const HEADERS = [
   const buffer = await Report.buildWorkbook(source);
   const book = new ExcelJS.Workbook();
   await book.xlsx.load(buffer);
-  assert.deepEqual(book.worksheets.map(sheet => sheet.name), ["Resumo", "eGRDTs", "Documentos", "Colar GRCON", "Colar GRCON v2"]);
-  const sheet = book.getWorksheet("Colar GRCON");
+  assert.deepEqual(book.worksheets.map(sheet => sheet.name), ["Resumo", "eGRDTs", "Documentos", "Colar GRCON v2"]);
+  assert.equal(book.getWorksheet("Colar GRCON"), undefined, "não gerar a aba antiga de cinco colunas");
+  const sheet = book.getWorksheet("Colar GRCON v2");
   assert.equal(sheet.getCell("A1").value, "COLAR GRCON");
   assert.deepEqual(HEADERS.map((_, i) => sheet.getCell(2, i + 1).value), HEADERS);
-  assert.equal(sheet.columnCount, 5, "NUNCA expandir esquema de 5 colunas");
+  assert.equal(sheet.columnCount, 6, "preservar o esquema de seis colunas");
   assert.equal(sheet.rowCount, 7);
   assert.ok(sheet.getCell("A3").value instanceof Date, "Excel precisa guardar serial date");
   assert.equal(sheet.getCell("A3").numFmt, "dd/mm/yyyy hh:mm:ss");
@@ -68,15 +70,14 @@ const HEADERS = [
   assert.equal(sheet.getCell("E3").value, "E31");
   assert.equal(sheet.getCell("E6").value, "A01");
   assert.equal(sheet.getCell("E7").value, null, "falta de prazo nunca vira revisão da LD");
-  assert.equal(sheet.getCell("F2").value, null, "F fica disponível para chave auxiliar no Controle");
   assert.equal(book.getWorksheet("Documentos").getCell("W6").value !== undefined, true, "detalhado preservado");
 
   const v2 = book.getWorksheet("Colar GRCON v2");
-  assert.deepEqual(Report.COLAR_GRCON_HEADERS_V2, [...HEADERS, "ALOCAÇÃO"]);
+  assert.deepEqual(Report.COLAR_GRCON_HEADERS_V2, HEADERS);
   assert.ok(Object.isFrozen(Report.COLAR_GRCON_HEADERS_V2));
   assert.equal(v2.columnCount, 6);
   assert.equal(v2.rowCount, sheet.rowCount);
-  assert.deepEqual(Report.colarGrconRowsV2(source).map(row => row.slice(0, 5)), rows);
+  assert.deepEqual(Report.colarGrconRowsV2(source), rows);
   assert.equal(v2.getCell("F2").value, "ALOCAÇÃO");
   assert.equal(v2.getCell("F3").value, "C1O-ALOC-CM-0010-2026");
   assert.equal(v2.getCell("F6").value, "C1O-ALOC-CM-0005-2026", "repostagem preserva a alocação da emissão");
@@ -90,5 +91,5 @@ const HEADERS = [
   assert.equal(v2.getCell("A3").fill.fgColor.argb, "FFAEAEAE");
   await assert.rejects(Report.buildWorkbook([]), /Nenhuma eGRDT/, "histórico vazio mantém a validação existente");
 
-  console.log("OK — Colar GRCON v1: 5 colunas fixas, datas Excel, múltiplas GRDTs/LDs, legado, removidos, relatório original.");
+  console.log("OK — somente Colar GRCON v2: seis colunas, datas Excel, alocação histórica, versões zero, repostagens e removidos.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

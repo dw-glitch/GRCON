@@ -183,18 +183,16 @@
       };
     }));
   }
-  // Contrato operacional v1: usado exclusivamente pela aba "Colar GRCON" do
-  // Controle de Solicitações. A ordem, os nomes e a posição das cinco colunas
-  // são parte de uma interface pública estável. NÃO acrescentar, mover, renomear
-  // ou remover colunas nesta aba. Mudanças incompatíveis exigem outra aba/v2.
-  const COLAR_GRCON_HEADERS_V1 = Object.freeze([
+  // Contrato operacional único: Colar GRCON v2. Preservar as seis colunas,
+  // seus tipos e as linhas iniciais utilizadas pelo Controle de Solicitações.
+  const COLAR_GRCON_HEADERS_V2 = Object.freeze([
     "DATA DA GERAÇÃO / POSTAGEM",
     "EGRDT",
     "DOCUMENTO",
     "REVISÃO ENVIADA NA GRDT",
     "VERSÃO DA LD ENVIADA",
+    "ALOCAÇÃO",
   ]);
-  const COLAR_GRCON_HEADERS_V2 = Object.freeze([...COLAR_GRCON_HEADERS_V1, "ALOCAÇÃO"]);
 
   // O Excel não conserva fuso horário em células de data. Converter o instante
   // armazenado no histórico para a hora civil local que o GRCON já mostra no
@@ -208,49 +206,7 @@
     ));
   }
 
-  function colarGrconRows(records) {
-    return (records || []).flatMap((record) => (record.files || []).map((file) => [
-      pasteExcelDate(record.generatedAt),
-      text(record.egrdtNumber),
-      text(file.document),
-      grdtRevision(file),
-      text(file.ldPrazo), // snapshot literal de Prazo, NUNCA inferir da revisão da LD
-    ]));
-  }
-
-  function addColarGrconSheet(workbook, records) {
-    const sheet = workbook.addWorksheet("Colar GRCON", {
-      properties: { defaultRowHeight: 19 },
-      views: [{ state: "frozen", ySplit: 2, activeCell: "A3", showGridLines: false, zoomScale: 90 }],
-    });
-    // A1:E1 e A2:E2 são idênticas às duas primeiras linhas da aba de destino.
-    // Copiar somente A:E para o Excel de controle (sem tocar na coluna F auxiliar).
-    sheet.getCell("A1").value = "COLAR GRCON";
-    sheet.getCell("A1").font = { name: "Aptos Display", size: 15, bold: true, color: { argb: "FFFFFFFF" } };
-    sheet.getRow(1).height = 30;
-    for (let col = 1; col <= COLAR_GRCON_HEADERS_V1.length; col += 1) {
-      sheet.getCell(1, col).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
-      sheet.getCell(2, col).value = COLAR_GRCON_HEADERS_V1[col - 1];
-    }
-    sheet.columns = [24, 49, 50, 25, 27].map(width => ({ width }));
-    styleHeader(sheet.getRow(2), "FF24689A");
-    sheet.getRow(2).height = 36;
-    const rows = colarGrconRows(records);
-    rows.forEach((values, index) => {
-      const row = sheet.getRow(index + 3);
-      values.forEach((value, col) => { row.getCell(col + 1).value = value === "" ? null : value; });
-      row.getCell(1).numFmt = "dd/mm/yyyy hh:mm:ss";
-      row.height = 19;
-      if (index % 2) for (let col = 1; col <= 5; col += 1) row.getCell(col).fill = {
-        type: "pattern", pattern: "solid", fgColor: { argb: "FFF4F8FB" },
-      };
-    });
-    sheet.autoFilter = { from: "A2", to: `E${Math.max(3, rows.length + 2)}` };
-    return sheet;
-  }
-
-  // v2 acrescenta a alocação capturada na emissão, sem consultar/reinterpretar
-  // a Central atual. A v1 permanece disponível para planilhas já implantadas.
+  // Alocação capturada na emissão, sem reinterpretar a Central atual.
   function colarGrconRowsV2(records) {
     return (records || []).flatMap(record => (record.files || []).map(file => [
       pasteExcelDate(record.generatedAt), text(record.egrdtNumber),
@@ -488,16 +444,12 @@
 
     await addDataSheet(workbook, "eGRDTs", "eGRDTs GERADAS / POSTADAS", egrdts, metadata, settings.brandAssets);
     await addDataSheet(workbook, "Documentos", "DOCUMENTOS POR eGRDT", documents, metadata, settings.brandAssets);
-    addColarGrconSheet(workbook, source);
     addColarGrconSheetV2(workbook, source);
 
     const buffer = await workbook.xlsx.writeBuffer();
     const check = new ExcelJS.Workbook();
     await check.xlsx.load(buffer);
     if (!check.getWorksheet("Resumo") || !check.getWorksheet("eGRDTs") || !check.getWorksheet("Documentos")) throw new Error("A relação por período não pôde ser validada.");
-    const paste = check.getWorksheet("Colar GRCON");
-    if (!paste || COLAR_GRCON_HEADERS_V1.some((header, i) => paste.getCell(2, i + 1).value !== header)
-      || paste.columnCount !== 5) throw new Error("Contrato fixo v1 da aba Colar GRCON inválido.");
     const pasteV2 = check.getWorksheet("Colar GRCON v2");
     if (!pasteV2 || COLAR_GRCON_HEADERS_V2.some((header, i) => pasteV2.getCell(2, i + 1).value !== header)
       || pasteV2.columnCount !== 6) throw new Error("Contrato fixo v2 da aba Colar GRCON inválido.");
@@ -559,5 +511,5 @@
     return `GRCON_Auditoria_Documentos_Removidos_${compactStamp()}.xlsx`;
   }
 
-  return Object.freeze({ COLAR_GRCON_HEADERS_V1, COLAR_GRCON_HEADERS_V2, colarGrconRows, colarGrconRowsV2, formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, summary, buildWorkbook, downloadName, buildRemovedAuditWorkbook, removedAuditDownloadName });
+  return Object.freeze({ COLAR_GRCON_HEADERS_V2, colarGrconRowsV2, formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, summary, buildWorkbook, downloadName, buildRemovedAuditWorkbook, removedAuditDownloadName });
 });
