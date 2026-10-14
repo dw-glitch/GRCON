@@ -628,15 +628,20 @@
     }
   }
 
-  function saveEgrdtBatchLimit() {
+  function saveEgrdtBatchLimit(notify = true) {
     const raw = els.egrdtBatchLimit ? els.egrdtBatchLimit.value : state.egrdtBatchLimit;
-    const parsed = Math.trunc(Number(raw));
+    const parsed = Number(raw);
     if (!Number.isSafeInteger(parsed) || parsed < 1) {
-      showToast("Informe uma quantidade inteira maior ou igual a 1.", "error");
-      renderEgrdtBatchSettings();
+      if (els.egrdtBatchLimit) els.egrdtBatchLimit.setCustomValidity("Informe uma quantidade inteira maior ou igual a 1.");
+      if (notify) {
+        els.egrdtBatchLimit?.reportValidity();
+        showToast("Informe uma quantidade inteira maior ou igual a 1.", "error");
+      }
       return false;
     }
+    if (els.egrdtBatchLimit) els.egrdtBatchLimit.setCustomValidity("");
     const mode = normalizeEgrdtBatchMode(els.egrdtBatchMode ? els.egrdtBatchMode.value : state.egrdtBatchMode);
+    if (parsed === currentEgrdtBatchLimit() && mode === currentEgrdtBatchMode()) return true;
     state.egrdtBatchLimit = parsed;
     state.egrdtBatchMode = mode;
     try {
@@ -646,7 +651,7 @@
     state.manualEgrdtSequences = [];
     renderEgrdtBatchSettings();
     renderAll();
-    showToast(`${egrdtBatchModeLabel(mode)}: eGRDTs de até ${parsed} documento${parsed === 1 ? "" : "s"}.`, "success");
+    if (notify) showToast(`${egrdtBatchModeLabel(mode)}: eGRDTs de até ${parsed} documento${parsed === 1 ? "" : "s"}.`, "success");
     return true;
   }
 
@@ -1139,6 +1144,7 @@
     els.relationStart.disabled = busy;
     if (els.compatibilityOpen) els.compatibilityOpen.disabled = busy;
     els.recentDays.disabled = busy;
+    [els.egrdtBatchLimit, els.egrdtBatchMode, els.egrdtBatchSave].forEach(control => { if (control) control.disabled = busy || state.downloadPreparing; });
     if (busy) {
       if (els.progress) { els.progress.dataset.stage = state.downloadPreparing ? "emit" : "analysis"; els.progress.hidden = state.downloadPreparing; }
       if (els.progressBar) els.progressBar.style.width = "2%";
@@ -1997,7 +2003,9 @@
       if (!row) return false;
       return physicalOnly ? Boolean(row.files && row.files.length) : Boolean(rowOutputSources(row).length);
     }));
+    const settingsValid = saveEgrdtBatchLimit(false);
     const plan = E.createPlan(state.results, selection, { manualForceIndices: state.manualForceInclude });
+    if (!settingsValid) plan.errors.push("Informe uma quantidade inteira maior ou igual a 1 para o lote.");
     const groups = plan.errors.length ? [] : splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
     const suggested = groups.length ? suggestedEgrdtSequences(groups.length) : [];
     return {
@@ -2034,14 +2042,17 @@
   window.GrconEgrdtBatchPlan = Object.freeze({
     getLimit() { return currentEgrdtBatchLimit(); },
     getMode() { return currentEgrdtBatchMode(); },
+    validateSettings() { return saveEgrdtBatchLimit(); },
     setLimit(value) {
       const parsed = normalizeEgrdtBatchLimit(value);
       if (!Number.isSafeInteger(Number(value)) || Number(value) < 1 || Number(value) !== parsed) {
         throw new Error("Informe uma quantidade inteira maior ou igual a 1.");
       }
       state.egrdtBatchLimit = parsed;
+      state.manualEgrdtSequences = [];
       try { localStorage.setItem(EGRDT_BATCH_LIMIT_KEY, String(parsed)); } catch (_) { console.debug("[App] setLimit storage:", _); }
       renderEgrdtBatchSettings();
+      renderAll();
       return parsed;
     },
     setMode(value) {
@@ -4965,6 +4976,7 @@
   }
 
   async function exportEgrdt() {
+    if (!saveEgrdtBatchLimit(false)) { els.egrdtBatchLimit?.reportValidity(); return; }
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
     if (PostingFlow) await PostingFlow.refresh(true);
@@ -5071,6 +5083,7 @@
   }
 
   async function exportZip() {
+    if (!saveEgrdtBatchLimit(false)) { els.egrdtBatchLimit?.reportValidity(); return; }
     if (!(await ensureFreshAnalysis())) { window.GrconGrdtDownloadProgress?.finish("A análise precisa ser atualizada. Confira o aviso e analise novamente.", true); return; }
     window.GrconGrdtDownloadProgress?.phase("Carregando o gerador de arquivos…");
     await ensureRuntime("export");
@@ -5198,6 +5211,7 @@
   }
 
   async function exportFinalPackage() {
+    if (!saveEgrdtBatchLimit(false)) { els.egrdtBatchLimit?.reportValidity(); return; }
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
     if (PostingFlow) await PostingFlow.refresh(true);
@@ -5467,11 +5481,17 @@
   }
   // ────────────────────────────────────────────────────────────────────────────
 
-  els.advancedToggle.addEventListener("click", () => {
-    const open = els.advancedPanel.hidden;
+  function setAnalysisSettingsOpen(open) {
+    if (open) {
+      els.advancedPanel.closest(".control-panel")?.classList.remove("p1-collapsed");
+      const changeSources = document.getElementById("p1-change-sources");
+      if (changeSources) changeSources.textContent = "Ocultar arquivos";
+    }
     els.advancedPanel.hidden = !open;
     els.advancedToggle.setAttribute("aria-expanded", String(open));
-  });
+  }
+  window.GrconAnalysisSettings = Object.freeze({ open() { setAnalysisSettingsOpen(true); } });
+  els.advancedToggle.addEventListener("click", () => setAnalysisSettingsOpen(els.advancedPanel.hidden));
   let operationalOptionsVersion = -1;
   function updateOperationalFilterOptions() {
     document.querySelector(".triage-operational-details")?.classList.toggle("has-filters", Object.values(state.operationalFilters).some(Boolean));
@@ -5697,9 +5717,11 @@
     state.cancelled = true;
     if (els.performanceStatus) els.performanceStatus.textContent = "Cancelando e descartando resultados parciais…";
   });
-  if (els.egrdtBatchSave) els.egrdtBatchSave.addEventListener("click", saveEgrdtBatchLimit);
+  if (els.egrdtBatchSave) els.egrdtBatchSave.addEventListener("click", () => saveEgrdtBatchLimit());
   if (els.egrdtBatchMode) els.egrdtBatchMode.addEventListener("change", changeEgrdtBatchMode);
   if (els.egrdtBatchLimit) {
+    els.egrdtBatchLimit.addEventListener("input", () => saveEgrdtBatchLimit(false));
+    els.egrdtBatchLimit.addEventListener("change", () => saveEgrdtBatchLimit());
     els.egrdtBatchLimit.addEventListener("keydown", (event) => { if (event.key === "Enter") saveEgrdtBatchLimit(); });
   }
   if (els.clearLdCache) els.clearLdCache.addEventListener("click", async () => {
@@ -5723,6 +5745,7 @@
   els.exportEgrdt.addEventListener("click", exportEgrdt);
   function lockDownloadControls(locked) {
     const controls = [els.selectAllReady, els.exportEgrdt, els.exportFinalPackage, els.batchEgrdt,
+      els.egrdtBatchLimit, els.egrdtBatchMode, els.egrdtBatchSave,
       ...els.tbody.querySelectorAll("input,button[data-action=toggle-details],button[data-action=restore-revision]")];
     controls.forEach(control => {
       if (locked) { control.dataset.downloadWasDisabled = String(control.disabled); control.disabled = true; }

@@ -123,7 +123,7 @@
         ? `${numberFrom("#count-total")} analisados · ${numberFrom("#count-ready")} prontos · ${numberFrom("#count-review") + numberFrom("#count-blocked")} para conferir`
         : source.hasSource ? "Pronto para analisar" : "Adicione os documentos";
     }
-    if (hasResults && !state.collapsedOnce) {
+    if (hasResults && !state.collapsedOnce && $("#advanced-panel")?.hidden) {
       state.collapsedOnce = true;
       els.controlPanel?.classList.add("p1-collapsed");
       if (els.changeSources) els.changeSources.textContent = "Alterar arquivos";
@@ -282,6 +282,10 @@
   }
 
   function openConfirm(config) {
+    if (config.requireSequenceConfirmation && window.GrconEgrdtBatchPlan?.validateSettings?.() === false) {
+      window.GrconGrdtDownloadProgress?.finish("Informe uma quantidade inteira maior ou igual a 1 para o lote.", true);
+      return;
+    }
     if (!els.overlay || !els.dialog) {
       if (typeof config.onConfirm === "function") config.onConfirm();
       return;

@@ -76,10 +76,11 @@ async function validateControlShell(page) {
     && document.querySelector("#egrdt-batch-limit-save")
   ), null, { timeout: 30000 });
 
-  const advanced = page.locator("#advanced-toggle");
-  const panel = page.locator("#advanced-panel");
-  if (await panel.getAttribute("hidden") !== null) await advanced.click();
-  await panel.waitFor({ state: "visible", timeout: 10000 });
+  assert.equal(await page.locator('#results-section #egrdt-batch-mode').count(), 1);
+  assert.equal(await page.locator('#advanced-panel #egrdt-batch-mode').count(), 0);
+  // This shell-only check has no document fixture. The analyzed flow is exercised
+  // separately by validar-unified-posting-browser.cjs.
+  await page.evaluate(() => { document.getElementById('results-section').hidden = false; });
 
   await page.locator("#egrdt-batch-mode").selectOption("limit-only");
   await page.locator("#egrdt-batch-limit").fill("72");
