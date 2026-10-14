@@ -29,7 +29,7 @@
   // relação; forçar as duas numa só era o que deixava a prévia ilegível.
   const VIEWS = { PASTE: "paste", READ: "read" };
 
-  const state = { records: [], reply: null, open: false, lastFocus: null, panel: null, view: VIEWS.READ, configuration: {}, templateVersions: [], templateEpoch: 0, messageDirty: false, editorDirty: false, editorMode: "local", editorOriginal: null, previewTimer: null };
+  const state = { records: [], reply: null, open: false, lastFocus: null, panel: null, view: VIEWS.READ, configuration: {}, templateVersions: [], templateEpoch: 0, messageDirty: false, editorDirty: false, editorMode: "local", editorOriginal: null, previewTimer: null, copiedSignature: null };
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
@@ -109,6 +109,7 @@
             <strong>Prévia completa da resposta</strong>
             <small id="egrdt-email-count">Nenhuma linha</small>
           </div>
+          <button class="secondary-button compact egrdt-email-expand" data-egrdt-email-action="expand-preview" type="button" aria-pressed="false">Expandir prévia</button>
           <div class="egrdt-email-views" role="group" aria-label="Como exibir a relação">
             <button aria-pressed="false" class="egrdt-email-view" data-egrdt-email-view="paste" type="button">Visualização para Outlook</button>
             <button aria-pressed="true" class="egrdt-email-view" data-egrdt-email-view="read" type="button">Conferência</button>
@@ -140,6 +141,7 @@
       if (action === "edit-model") void openEditor("shared");
       if (action === "edit-table") void openEditor("local");
       if (action === "reset-message") restoreMessage();
+      if (action === "expand-preview") togglePreviewSize();
       if (action === "cancel-settings") cancelEditor();
       if (action === "apply-settings") applyEditor();
       if (action === "save-model") void saveModel();
@@ -182,7 +184,8 @@
     if (!state.open || !target) return;
     if (target.id === "egrdt-email-message") {
       state.messageDirty = true;
-      renderPreview();
+      root.clearTimeout(state.previewTimer);
+      state.previewTimer = root.setTimeout(renderPreview, 90);
       updateChanges();
       return;
     }
@@ -195,6 +198,20 @@
     updateChanges();
     root.clearTimeout(state.previewTimer);
     state.previewTimer = root.setTimeout(() => previewModel(true), 160);
+  }
+
+  function replySignature() {
+    return JSON.stringify({ message: currentMessage(), configuration: state.configuration });
+  }
+
+  function togglePreviewSize() {
+    const work = state.panel?.panel.querySelector(".egrdt-email-workspace");
+    const button = state.panel?.panel.querySelector('[data-egrdt-email-action="expand-preview"]');
+    if (!work || !button) return;
+    const expanded = work.dataset.expanded !== "true";
+    work.dataset.expanded = String(expanded);
+    button.setAttribute("aria-pressed", String(expanded));
+    button.textContent = expanded ? "Voltar à edição" : "Expandir prévia";
   }
 
   function restoreMessage() {
@@ -288,6 +305,11 @@
     const { overlay, panel } = ensurePanel();
     state.records = list;
     state.configuration = options || {};
+    state.copiedSignature = null;
+    const expanded = panel.querySelector(".egrdt-email-workspace");
+    if (expanded) expanded.dataset.expanded = "false";
+    const expandButton = panel.querySelector('[data-egrdt-email-action="expand-preview"]');
+    if (expandButton) { expandButton.setAttribute("aria-pressed", "false"); expandButton.textContent = "Expandir prévia"; }
     state.messageDirty = false;
     state.editorDirty = false;
     state.editorOriginal = null;
@@ -437,7 +459,7 @@
   function close(reason) {
     if (!state.open || !state.panel) return;
     const contractChange = reason?.type === "grcon:contract-context-changed";
-    if (!contractChange && (state.messageDirty || state.editorDirty) && typeof root.confirm === "function" &&
+    if (!contractChange && (state.editorDirty || ((state.messageDirty || state.editorOriginal) && state.copiedSignature !== replySignature())) && typeof root.confirm === "function" &&
         !root.confirm("Descartar alterações não copiadas desta resposta?")) return;
     root.clearTimeout(state.previewTimer);
     state.previewTimer = null;
@@ -448,6 +470,7 @@
     state.editorDirty = false;
     state.messageDirty = false;
     state.editorOriginal = null;
+    state.copiedSignature = null;
     document.removeEventListener("keydown", onKeydown, true);
     if (state.lastFocus && typeof state.lastFocus.focus === "function") state.lastFocus.focus();
     state.lastFocus = null;
@@ -510,6 +533,7 @@
     const feedback = copied
       ? (mode === "table" ? "Tabela copiada. Cole na conversa do Outlook." : mode === "message" ? "Texto copiado." : "Resposta completa copiada. Cole na conversa do Outlook.")
       : "Não foi possível copiar automaticamente. Verifique a permissão de área de transferência.";
+    if (copied) state.copiedSignature = replySignature();
     showFeedback(feedback);
     notify(feedback, copied ? "success" : "error");
   }
@@ -518,6 +542,7 @@
     if (!state.records.length) return;
     const reply = currentReply();
     const copied = await writeClipboard(reply.html, reply.text);
+    if (copied) state.copiedSignature = replySignature();
     const link = Reply.mailtoUrl(reply);
     root.location.href = link.url;
     showFeedback("Abrindo novo e-mail; para responder à conversa original, use Copiar resposta completa.");
