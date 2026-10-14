@@ -23,6 +23,7 @@ function installCompatibilityApi(): void {
   window.GrconSigemPwDashboardUi = Object.freeze({
     activate: () => sigemPwDashboardAdapter.activate(),
     refresh: (reason?: string) => sigemPwDashboardAdapter.refresh(reason),
+    openHistory: () => sigemPwDashboardAdapter.openHistory(),
     clearPreStage7BasesOnce: () => sigemPwDashboardAdapter.clearPreStage7BasesOnce(),
     filteredRows: () => sigemPwDashboardAdapter.filteredRows(),
     state: sigemPwDashboardAdapter.state,

@@ -33,6 +33,7 @@ function classSummary(rows: EvolutionRecord[]): string {
 }
 
 function optionLabel(snapshot: EvolutionSnapshot): string {
+  if (snapshot.unavailableReason) return `${fmtDate(snapshot.importedAt)} · ${snapshot.fileName || "base"} · ${snapshot.unavailableReason}`;
   return `${fmtDate(snapshot.importedAt)} · ${snapshot.fileName || "base"} · ${fmt(snapshot.audit?.acceptedRecords)} registros`;
 }
 
@@ -64,8 +65,8 @@ function SourceSelector({
       <header>
         <strong>{label}</strong>
         <small>
-          {fmt(list.length)} base(s) utilizável(is)
-          {unavailable ? ` · ${fmt(unavailable)} antiga(s) sem payload bruto` : ""}
+          {fmt(list.length)} base(s) registrada(s)
+          {unavailable ? ` · ${fmt(unavailable)} com conteúdo indisponível` : ""}
         </small>
       </header>
       <div className="spw-evo-pair">
@@ -78,7 +79,7 @@ function SourceSelector({
             onChange={(event) => onSelect(previousKey, event.target.value)}
           >
             <option value="">— sem anterior —</option>
-            {list.map((snapshot) => <option key={snapshot.id} value={snapshot.id}>{optionLabel(snapshot)}</option>)}
+            {list.map((snapshot) => <option key={snapshot.id} value={snapshot.id} disabled={Boolean(snapshot.unavailableReason)}>{optionLabel(snapshot)}</option>)}
           </select>
         </label>
         <span className="spw-evo-arrow" aria-hidden="true">→</span>
@@ -90,8 +91,8 @@ function SourceSelector({
             value={selections[currentKey]}
             onChange={(event) => onSelect(currentKey, event.target.value)}
           >
-            {!list.length ? <option value="">— sem base —</option> : null}
-            {list.map((snapshot) => <option key={snapshot.id} value={snapshot.id}>{optionLabel(snapshot)}</option>)}
+            {!selections[currentKey] ? <option value="">— sem base utilizável —</option> : null}
+            {list.map((snapshot) => <option key={snapshot.id} value={snapshot.id} disabled={Boolean(snapshot.unavailableReason)}>{optionLabel(snapshot)}</option>)}
           </select>
         </label>
       </div>
@@ -513,6 +514,10 @@ export function SigemPwEvolutionApp() {
             : "Visão histórica completa: cada Documento + Revisão participa do comparativo entre snapshots."}</p>
         </div>
         <div className="spw-evo-actions">
+          <button className="text-button" id="spw-evo-refresh-bases" type="button" disabled={state.busy}
+            onClick={() => { void adapter.refresh(false).catch(() => undefined); }}>
+            Atualizar bases
+          </button>
           <button className="secondary-button compact" id="spw-evo-export-audit" type="button" disabled={state.exporting || !hasValidatedLd} onClick={() => { void adapter.exportAuditWorkbook(); }}>
             Exportar auditoria
           </button>
@@ -527,7 +532,7 @@ export function SigemPwEvolutionApp() {
           <>
             <strong>Universo validado</strong>
             <span>{fmt(state.ldUniverse?.qualityDocumentCount)} códigos N-1710 da LD da Qualidade. ET é validado pela codificação e as demais LDs carregadas enriquecem TAG, EAP e disciplina.</span>
-            <button type="button" className="text-button" id="spw-evo-refresh-ld" disabled={state.busy} onClick={() => { void adapter.refresh(true); }}>
+            <button type="button" className="text-button" id="spw-evo-refresh-ld" disabled={state.busy} onClick={() => { void adapter.refresh(true).catch(() => undefined); }}>
               Revalidar LD
             </button>
           </>

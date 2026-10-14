@@ -83,6 +83,7 @@ interface SigemPwHistoryManagementApi {
   activate?: () => Promise<unknown> | unknown;
 }
 interface SigemPwDashboardUiApi {
+  openHistory?(): Promise<void>;
   activate(): Promise<void>;
   refresh(reason?: string): Promise<void>;
   clearPreStage7BasesOnce(): Promise<boolean>;

@@ -237,6 +237,9 @@ async function installEvolutionFixture(page) {
     }
 
     await history.clearHistory();
+    // These controlled historical fixtures replace both persistence projections.
+    await window.GrconSigemPwDashboard.kvSet(window.GrconSigemPwDashboard.HISTORY_KEY, { version: 3, snapshots: [], deletedIds: [] });
+
 
     const sigemDoc = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
     const pwDoc = (id) => `C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-${id}`;
@@ -1413,17 +1416,12 @@ async function waitEvolutionReady(page) {
     await page.locator("#spw-evo-close").click();
     await page.waitForFunction(() => !document.getElementById("spw-evo-drawer"));
 
-    // Gerenciar histórico: contrato de integração deve chamar o RuntimeFix sem alterar seu módulo.
-    await page.evaluate(() => {
-      window.__evolutionHistoryRuntimeOriginal = window.GrconSigemPwHistoryRuntimeFix;
-      window.__evolutionHistoryManagerCalls = 0;
-      window.GrconSigemPwHistoryRuntimeFix = {
-        openManager() { window.__evolutionHistoryManagerCalls += 1; },
-      };
-    });
+    // Gerenciar histórico usa o diálogo React realmente carregado no Dashboard.
     await page.locator("#spw-evolution-section #spw-history-manage").click();
-    assert.equal(await page.evaluate(() => window.__evolutionHistoryManagerCalls), 1);
-    await page.evaluate(() => { window.GrconSigemPwHistoryRuntimeFix = window.__evolutionHistoryRuntimeOriginal; });
+    await page.locator("#spw-base-history").waitFor({ state: "visible" });
+    assert.match(await page.locator("#spw-base-history").textContent(), /Gerenciar histórico/);
+    await page.locator("#spw-base-history-close").click();
+    await page.locator("#spw-base-history").waitFor({ state: "hidden" });
 
     // Eventos rápidos devem ser agrupados e snapshots já preparados não podem ser reprocessados.
     const selectionsBeforeExternalRefresh = await page.evaluate(() => ({ ...window.GrconSigemPwEvolutionUi.state.selections }));
