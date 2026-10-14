@@ -221,6 +221,14 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
    return {started,fallbackVisible};
   });
   assert.deepEqual(fallback,{started:true,fallbackVisible:true});
+  const quickRun=await page.evaluate(()=>{
+   window.GrconCloud.loadPlannedDocuments=async()=>window.GrconCloud.state.plannedSnapshot;
+   document.getElementById('analyze').click();
+   const track=document.querySelector('.grcon-mascot-runner-track').getBoundingClientRect();
+   return {visible:track.right>0&&track.left<innerWidth,active:window.GrconMascotRunner.diagnostics().active};
+  });
+  assert.deepEqual(quickRun,{visible:true,active:true},'quick cached analyses start with the mascot already inside the screen');
+  await page.waitForFunction(()=>!document.getElementById('analyze').disabled&&!window.GrconMascotRunner.diagnostics().active);
   await page.emulateMedia({reducedMotion:'reduce'});
   assert.equal(await page.evaluate(()=>window.GrconMascotRunner.run({context:'control'})),false);
   await page.emulateMedia({reducedMotion:'no-preference'});

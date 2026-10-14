@@ -40,6 +40,9 @@
       "#" + STRIP_ID + " video{display:block;width:100%;height:100%;object-fit:contain;background:transparent!important;border:0;box-shadow:none;filter:drop-shadow(0 6px 10px rgb(7 35 56 / 20%));pointer-events:none}",
       "html[data-theme='dark'] #" + STRIP_ID + " video{filter:drop-shadow(0 7px 12px rgb(0 0 0 / 42%))}",
       "@keyframes grcon-mascot-strip-run{from{transform:translate3d(-120%,0,0)}to{transform:translate3d(calc(100vw + 20%),0,0)}}",
+      "#" + STRIP_ID + "[data-context='control'][data-active='true'] ." + TRACK_CLASS + "{animation-name:grcon-mascot-papers-strip-run}",
+      "@keyframes grcon-mascot-papers-strip-run{from{transform:translate3d(220px,0,0)}to{transform:translate3d(calc(100vw + 20%),0,0)}}",
+      "@media(max-width:700px){@keyframes grcon-mascot-papers-strip-run{from{transform:translate3d(12px,0,0)}to{transform:translate3d(calc(100vw + 20%),0,0)}}}",
       "@media(max-width:700px){#" + STRIP_ID + " ." + TRACK_CLASS + "{width:170px;height:170px}}",
       "@media(max-width:390px){#" + STRIP_ID + " ." + TRACK_CLASS + "{width:150px;height:150px}}",
       "@media(prefers-reduced-motion:reduce){#" + STRIP_ID + "{display:none!important}#" + STRIP_ID + " ." + TRACK_CLASS + "{animation:none!important}}",
@@ -85,6 +88,17 @@
       video.setAttribute("playsinline", "");
       video.setAttribute("disableRemotePlayback", "");
       video.setAttribute("aria-hidden", "true");
+      video.addEventListener("playing", () => {
+        if (!running) return;
+        video.style.visibility = "visible";
+        if (fallback) fallback.hidden = true;
+      });
+      video.addEventListener("error", () => {
+        if (running && activeSource === papersSource && fallback) {
+          video.style.visibility = "hidden";
+          fallback.hidden = false;
+        }
+      });
       track.appendChild(video);
     }
     if (!fallback) {
@@ -125,8 +139,8 @@
     if (running && activeSource.href !== requestedSource.href) stop("context-changed");
     activeSource = requestedSource;
     ensureStrip();
-    fallback.hidden = true;
-    video.style.visibility = "visible";
+    fallback.hidden = activeSource !== papersSource;
+    video.style.visibility = activeSource === papersSource ? "hidden" : "visible";
     strip.dataset.context = config.context || "default";
     if (reducedMotion() || document.hidden) {
       stop(reducedMotion() ? "reduced-motion" : "hidden");
@@ -144,9 +158,11 @@
       video.currentTime = 0;
       const playResult = video.play();
       if (playResult?.then) await playResult;
+      if (!running) return false;
       document.documentElement.dataset.grconMascotRunner = "running";
       return true;
     } catch (error) {
+      if (!running) return false;
       if (activeSource === papersSource && running) {
         video.style.visibility = "hidden";
         fallback.hidden = false;

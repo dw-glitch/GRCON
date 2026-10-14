@@ -266,11 +266,12 @@ const workspace='00000000-0000-4000-8000-000000000001';
     await as('', 'service_role');
     await db.exec('reset role');
     await db.query("insert into private.grcon_allocation_registry_rows(snapshot_id,row_number,payload) select $1,100+n,jsonb_build_object('document','SCALE-'||n,'allocation','SCALE-ALOC-'||n) from generate_series(1,12000) n",[centralId]);
+    await db.query("insert into private.grcon_document_files(id,workspace_id,contract_id,created_by,file_name,relative_path,document_code,identity_code,revision,format,size_bytes,sha256,object_key,status) select gen_random_uuid(),$1,$2,$3,'SCALE-'||n||'.pdf','SCALE-'||n||'.pdf','SCALE-'||n,'SCALE-'||n,'0','pdf',3,$4,'workspaces/'||$1::text||'/documents/'||gen_random_uuid()::text,'ready' from generate_series(1,500) n",[workspace,contract,owner,'a'.repeat(64)]);
     await as('', 'service_role');
     const scaleStarted=performance.now();
-    const scale=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:Array.from({length:500},(_,i)=>({requestId:String(i),documentCode:i%2?'DOC-001':'DOC-002'}))}]);
+    const scale=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:Array.from({length:500},(_,i)=>({requestId:String(i),documentCode:'SCALE-'+(i+1)}))}]);
     assert.equal(scale.results.length,500);
-    assert.ok(scale.results.every(item=>item.matches.length===1),'each batch item retains its active file');
+    assert.ok(scale.results.every((item,i)=>item.matches.length===1&&item.matches[0].document_code==='SCALE-'+(i+1)&&item.matches[0].allocation_label==='SCALE-ALOC-'+(i+1)),'500 distinct documents retain their active files and Central allocations');
     console.log('Lookup 500 items / 12k Central rows: '+(performance.now()-scaleStarted).toFixed(1)+'ms (local Postgres)');
     for(const size of [10,50,100]) {const start=performance.now();await rpc('grcon_document_vault_lookup',[workspace,owner,{items:Array.from({length:size},(_,i)=>({requestId:String(i),documentCode:i%2?'DOC-001':'DOC-002'}))}]);console.log('Lookup '+size+' codes: '+(performance.now()-start).toFixed(1)+'ms (local Postgres)');}
   }finally{global.fetch=originalFetch;}
