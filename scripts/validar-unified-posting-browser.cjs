@@ -10,7 +10,7 @@ const docs=Array.from({length:60},(_,i)=>`RL-5290.00-22313-91B-C1O-${String(i+1)
 const book=XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([
  ['DOCUMENTO','REVISÃO','TÍTULO','FORMATO','DISCIPLINA','TIPO DE DOCUMENTO','PROPÓSITO','CONFIRMAÇÃO DE ALOCAÇÃO','CAMINHO DATABOOK','GRDT','DATA EFETIVA DE EMISSÃO'],
- ...docs.map((doc,i)=>[doc,'0','QA '+i,'A4','DINÂMICOS','RL','Para Construção','ALOCADO','R:\\DB','',''])
+ ...docs.map((doc,i)=>[doc,'0','QA '+i,'A4',i%2?'CIVIL':'DINÂMICOS','RL','Para Construção','ALOCADO','R:\\DB','',''])
 ]),'N-1710');
 XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['DOCUMENTO','REVISÃO','STATUS SIGEM'],...docs.map(doc=>[doc,'0','Não Postado'])]),'Colar SIGEM');
 const ld=path.join(output,'LD_QA.xlsx');fs.writeFileSync(ld,XLSX.write(book,{type:'buffer',bookType:'xlsx'}));
@@ -77,6 +77,68 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
   const separate=await page.evaluate(()=>window.GrconEgrdtBatchPlan.preview('all'));
   assert.deepEqual(separate.groups.map(g=>g.itemCount).sort((a,b)=>a-b),[20,20,20]);
   assert.ok(separate.groups.every(g=>g.postingGroup!=='MIXED'));
+  // Use the visible post-analysis controls, without pressing Aplicar.
+  await page.locator('#posting-batch-mode').selectOption('mixed');
+  await page.locator('#egrdt-batch-limit').fill('17');
+  assert.equal(await page.evaluate(()=>window.GrconEgrdtBatchPlan.getLimit()),17);
+  const controlPosition=await page.evaluate(()=>({
+   control:document.getElementById('egrdt-batch-mode').getBoundingClientRect().top,
+   table:document.getElementById('results-scroll').getBoundingClientRect().top
+  }));
+  assert.ok(controlPosition.control<controlPosition.table,'batch controls must be above the virtual table');
+  await page.locator('#egrdt-batch-limit').fill('1.5');
+  assert.equal(await page.evaluate(()=>window.GrconEgrdtBatchPlan.preview('all').valid),false,'fractional limits must not use the previous value');
+  await page.locator('#egrdt-batch-limit').fill('17');
+  await page.evaluate(()=>{
+   window.GrconDocumentVault.persistEmissionFiles=async()=>{};
+   window.GrconCloud.reserveEgrdtSequences=async(year,count,requested)=>Array.from({length:count},(_,i)=>{
+    const sequence=requested?.[i]||5000+i;
+    return {sequence,sequenceText:String(sequence).padStart(4,'0'),year,baseName:`0130870-C1O-PGV-G-${String(sequence).padStart(4,'0')}-${year} - eGRDT`};
+   });
+  });
+  const generatedBatches={};
+  for(const mode of ['limit-only','discipline']){
+   await page.locator('#egrdt-batch-mode').selectOption(mode);
+   const preview=await page.evaluate(()=>window.GrconEgrdtBatchPlan.preview('all'));
+   assert.deepEqual(preview.groups.map(g=>g.itemCount),mode==='limit-only'?[17,17,17,9]:[17,13,17,13]);
+   if(mode==='limit-only'&&!await page.locator('.secondary-downloads').evaluate(el=>el.open))await page.locator('.secondary-downloads summary').click();
+   await page.locator(mode==='limit-only'?'#export-egrdt':'#export-zip').click();
+   await page.locator('#p1-confirm-dialog').waitFor({state:'visible'});
+   assert.equal(await page.locator('.p1-batch-sequence-card').count(),preview.count);
+   await page.locator('#p1-sequence-confirm').check();
+   const downloaded=page.waitForEvent('download',{timeout:60000});
+   await page.locator('#p1-confirm-ok').click();
+   const download=await downloaded;
+   const zip=await require('../jszip.min.js').loadAsync(fs.readFileSync(await download.path()));
+   const files=Object.values(zip.files).filter(f=>!f.dir&&/\.xls$/i.test(f.name));
+   assert.equal(files.length,preview.count);
+   if(mode==='discipline')assert.equal(Object.values(zip.files).filter(f=>!f.dir&&/\.pdf$/i.test(f.name)).length,60);
+   generatedBatches[mode]=[];
+   for(const file of files){
+    const xls=XLSX.read(await file.async('nodebuffer'),{type:'buffer'});
+    const rows=XLSX.utils.sheet_to_json(xls.Sheets.GRDT,{header:1,defval:''});
+    const documents=rows.filter(row=>docs.includes(row[0]));
+    generatedBatches[mode].push(documents.length);
+    assert.ok(documents.length<=17);
+    if(mode==='discipline')assert.equal(new Set(documents.map(row=>row[5])).size,1);
+   }
+   assert.deepEqual(generatedBatches[mode],preview.groups.map(g=>g.itemCount));
+   await page.waitForFunction(()=>!window.GrconPerformanceDiagnostics.state().busy);
+  }
+  // Auto-collapse after analysis and navigation must never hide an open panel.
+  await page.clock.install();
+  await page.clock.fastForward('20:00');
+  for(let cycle=0;cycle<3;cycle++){
+   await page.evaluate(()=>document.querySelector('#grdt-module .control-panel').classList.add('p1-collapsed'));
+   await page.locator('[data-ops-open-settings]').click();
+   await page.locator('#advanced-panel').waitFor({state:'visible'});
+   assert.equal(await page.locator('#advanced-toggle').getAttribute('aria-expanded'),'true');
+   await page.locator('#advanced-toggle').click();
+   await page.locator('#advanced-panel').waitFor({state:'hidden'});
+  }
+  await page.locator('#egrdt-batch-mode').selectOption('limit-only');
+  await page.locator('#egrdt-batch-limit').fill('48');
+  await page.locator('#posting-batch-mode').selectOption('separate');
   const beforeCalls=await page.evaluate(()=>window.__qaCalls);
   await page.locator('[data-posting-filter="reposts"]').click();
   assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.snapshot().filtered),20);
@@ -84,7 +146,9 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
   assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.snapshot().filtered),20);
   await page.locator('[data-posting-filter="all"]').click();
   assert.equal(await page.evaluate(()=>window.__qaCalls),beforeCalls,'filtering must not refetch history');
-  await page.locator('[data-grdt-history-document]').first().click();
+  await page.evaluate(()=>{document.getElementById('results-scroll').scrollTop=0;window.GrconTriageUiApi.render();});
+  await page.locator(`[data-grdt-history-document="${docs[0]}"]`).click();
+  await page.waitForFunction(()=>document.querySelector('.grdt-history-panel-content')?.textContent.includes('QA-GRDT'));
   assert.ok((await page.locator('.grdt-history-panel-content').innerText()).includes('QA-GRDT'));
   await page.locator('.grdt-history-close').click();
   const record=await page.evaluate(async()=>{
@@ -108,13 +172,13 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
   await page.screenshot({path:path.join(output,'posting-dark.png'),fullPage:true});
   const vaultFilter=await page.evaluate(()=>{const planned={id:'qa-vault-planned',keys:new Set(window.__qaHistory.map(r=>r.files[0].document))};const documents=Array.from({length:60},(_,i)=>({document:`RL-5290.00-22313-91B-C1O-${String(i+1).padStart(3,'0')}`}));return ['allocated','not_allocated','unconfirmed'].map(mode=>window.GrconDocumentAllocationContext.filter(documents,mode,planned,window.GrconAllocationRegistry.current()).length);});
   assert.deepEqual(vaultFilter,[40,20,0]);
-  await page.evaluate(async()=>{window.GrconCloud.loadClassificationHistory=async()=>{throw new Error('offline fixture');};await window.GrconPostingFlow.refresh(true);window.GrconTriageUiApi.render();});
+  await page.evaluate(async()=>{window.GrconHistory.clear();window.GrconCloud.loadClassificationHistory=async()=>{throw new Error('offline fixture');};await window.GrconPostingFlow.refresh(true);window.GrconTriageUiApi.render();});
   const offline=await page.evaluate(()=>{const row=window.GrconTriageUiApi.getResult(0);return window.GrconPostingFlow.lookup(row.document,row.revision);});
   assert.equal(offline.classificationStatus,'UNCONFIRMED');
   await page.locator('[data-posting-filter="unconfirmed"]').click();assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.snapshot().filtered),60);
   await page.reload();await page.waitForFunction(()=>window.GrconPostingFlow);assert.equal(await page.evaluate(()=>window.GrconPostingFlow.getMode()),'separate');
   const meaningful=errors.filter(e=>!/supabase|Failed to fetch|ERR_|storage.*initialize/i.test(e));assert.deepEqual(meaningful,[]);
-  fs.writeFileSync(path.join(output,'metrics.json'),JSON.stringify({passed:true,mixed:mixed.groups.map(g=>g.itemCount),separate:separate.groups.map(g=>g.itemCount),categories:categories.reduce((n,k)=>(n[k]=(n[k]||0)+1,n),{}),historyRoundtrip:true,centralPublished:true,centralShortPages:true,vaultAllocationFilter:vaultFilter,offline:true,preference:true,widths:[1440,1366,1024],errors},null,2));
+  fs.writeFileSync(path.join(output,'metrics.json'),JSON.stringify({passed:true,mixed:mixed.groups.map(g=>g.itemCount),separate:separate.groups.map(g=>g.itemCount),categories:categories.reduce((n,k)=>(n[k]=(n[k]||0)+1,n),{}),generatedBatches,settingsReopened:true,historyRoundtrip:true,centralPublished:true,centralShortPages:true,vaultAllocationFilter:vaultFilter,offline:true,preference:true,widths:[1440,1366,1024],errors},null,2));
   console.log('Unified posting browser: central publication/short pages/allocation filters/analysis/classification/batch/BIFF8/history/offline/preference passed.');
  }catch(e){await page.screenshot({path:path.join(output,'failure.png'),fullPage:true});console.error(await page.evaluate(()=>({summary:document.getElementById('posting-history-summary')?.innerText,ui:window.GrconTriageUiApi?.snapshot(),body:document.body.innerText.slice(-1600)})));throw e;}
  finally{await browser.close();}

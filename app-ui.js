@@ -503,7 +503,9 @@
             if (control && !control.classList.contains("active"))
                 control.click();
             const toggle = $("#advanced-toggle");
-            if (toggle && toggle.getAttribute("aria-expanded") !== "true")
+            if (window.GrconAnalysisSettings?.open)
+                window.GrconAnalysisSettings.open();
+            else if (toggle && toggle.getAttribute("aria-expanded") !== "true")
                 toggle.click();
             window.setTimeout(() => { $("#advanced-panel")?.scrollIntoView({ behavior: "auto", block: "center" }); $("#recent-days")?.focus(); }, 40);
         });

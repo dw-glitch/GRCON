@@ -29,8 +29,8 @@ const workspace='00000000-0000-4000-8000-000000000001';
     create table private.grcon_planned_document_items(snapshot_id uuid,document_key text);
     create table public.grcon_profiles(id uuid primary key,display_name text,email text);
     insert into public.grcon_profiles values('${owner}','Owner QA','owner@example.test');`);
-  for (const file of ['20260929223549_shared_sigem_query.sql','20261006163921_document_vault_catalog.sql','20261006170344_document_vault_search_allocation.sql','20261006170405_document_vault_filter_pagination_fix.sql','20261006170533_document_vault_secret_key_compatibility.sql','20261006170546_document_vault_list_secret_key_compatibility.sql','20261006143737_shared_allocation_registry.sql','20261006183921_multi_contract_foundation.sql','20261006184001_sigem_status_monitoring_schema.sql','20261006184118_sigem_status_monitoring_engine.sql','20261006184204_sigem_status_monitoring_api.sql','20261006185349_document_vault_batch_lookup.sql','20261006185728_document_vault_lookup_secret_key_compatibility.sql','20261007122636_document_vault_deletion.sql','20261007122911_shared_sigem_reference_date.sql','20261007122913_requests_control_base.sql','20261007122915_document_vault_set_lookup.sql','20261007143000_document_vault_requests_allocation_storage_audit.sql','20261007144040_shared_sigem_history_management.sql','20261007171210_owner_admin_shared_sigem_dashboard.sql','20261008100836_vault_versions_traceability_master.sql','20261008101708_master_document_identity_aliases.sql','20261014185039_vault_central_allocation_source.sql']) await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
-  await db.exec(fs.readFileSync(path.join(root,'supabase/migrations/20261014185039_vault_central_allocation_source.sql'),'utf8')); // A correção é idempotente.
+  for (const file of ['20260929223549_shared_sigem_query.sql','20261006163921_document_vault_catalog.sql','20261006170344_document_vault_search_allocation.sql','20261006170405_document_vault_filter_pagination_fix.sql','20261006170533_document_vault_secret_key_compatibility.sql','20261006170546_document_vault_list_secret_key_compatibility.sql','20261006143737_shared_allocation_registry.sql','20261006183921_multi_contract_foundation.sql','20261006184001_sigem_status_monitoring_schema.sql','20261006184118_sigem_status_monitoring_engine.sql','20261006184204_sigem_status_monitoring_api.sql','20261006185349_document_vault_batch_lookup.sql','20261006185728_document_vault_lookup_secret_key_compatibility.sql','20261007122636_document_vault_deletion.sql','20261007122911_shared_sigem_reference_date.sql','20261007122913_requests_control_base.sql','20261007122915_document_vault_set_lookup.sql','20261007143000_document_vault_requests_allocation_storage_audit.sql','20261007144040_shared_sigem_history_management.sql','20261007171210_owner_admin_shared_sigem_dashboard.sql','20261008100836_vault_versions_traceability_master.sql','20261008101708_master_document_identity_aliases.sql','20261014185039_vault_central_allocation_source.sql','20261014190554_vault_central_document_aliases.sql']) await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+  await db.exec(fs.readFileSync(path.join(root,'supabase/migrations/20261014190554_vault_central_document_aliases.sql'),'utf8')); // A correção é idempotente.
   const aliases=(await db.query("select private.grcon_master_document_key('C1O-RNEST-DD-1.2.3.4-CE-DE-nt-TAG-01') a,private.grcon_master_document_key('C1O_RNEST_DD_1.2.3.4_CE_DE_TAG-01') b,private.grcon_master_document_key('RL-5290.00-22313-856-C1O-017') c")).rows[0];
   assert.equal(aliases.a,aliases.b);assert.equal(aliases.c,'RL-5290.00-22313-856-C1O-017');
   const as = (id, role='authenticated') => db.exec(`reset role; set request.jwt.claim.sub='${id}'; set role ${role};`);
@@ -239,6 +239,25 @@ const workspace='00000000-0000-4000-8000-000000000001';
     await as('', 'service_role');assert.ok((await rpc('grcon_vault_operations',[workspace,owner,'metrics',{}])).evolution.length>0,'Cron persists real usage without deleting valid files');
     await as(viewer);await assert.rejects(rpc('grcon_vault_operations',[workspace,owner,'metrics',{}]),/permission denied/,'browser cannot impersonate owner via service-only RPC');
     console.log('Vault versions + exact history file + restore + hash + private downloads + Master/search + roles + Cron: passed.');
+    await as('', 'service_role');
+    const rnHyphen='C1O-RNEST-DD-1.2.3.4-CE-DE-NT-TAG-01';
+    const rnUnderscore='C1O_RNEST_DD_1.2.3.4_CE_DE_TAG-01';
+    await as(owner);
+    centralId=await publishCentral([centralRow(rnUnderscore,'CENTRAL-ALIAS-01',8),centralRow(rnHyphen,'CENTRAL-ALIAS-01',9)],centralId);
+    await as('', 'service_role');
+    for(const identity of [rnHyphen,rnUnderscore]){
+      await db.exec('reset role');
+      await db.query('update private.grcon_document_files set document_code=$1,identity_code=$1 where id=$2',[identity,aliasId]);
+      await as('', 'service_role');
+      const list=await rpc('grcon_document_vault_list',[workspace,owner,{q:'RNEST',allocation:'allocated'}]);
+      assert.equal(list.files.length,1);assert.equal(list.files[0].allocation_label,'CENTRAL-ALIAS-01');
+      const lookup=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:[{documentCode:rnHyphen},{documentCode:rnUnderscore}]}]);
+      assert.ok(lookup.results.every(item=>item.matches.length===1&&item.matches[0].allocation_label==='CENTRAL-ALIAS-01'));
+      const detail=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:aliasId}]);
+      assert.equal(detail.file.allocation_label,'CENTRAL-ALIAS-01');
+    }
+    await db.exec('reset role');
+    await db.query("update private.grcon_document_files set document_code='DOC-002',identity_code='DOC-002' where id=$1",[aliasId]);
     await as('', 'service_role');
     for(const size of [10,50,100]) {const start=performance.now();await rpc('grcon_document_vault_lookup',[workspace,owner,{items:Array.from({length:size},(_,i)=>({requestId:String(i),documentCode:i%2?'DOC-001':'DOC-002'}))}]);console.log('Lookup '+size+' codes: '+(performance.now()-start).toFixed(1)+'ms (local Postgres)');}
   }finally{global.fetch=originalFetch;}

@@ -174,12 +174,7 @@
 <summary><span>Análise e emissão</span><small>Regras operacionais</small></summary>
 <div class="settings-group-body">
 <label class="inline-setting">Emissão recente<input id="recent-days" inputmode="numeric" max="365" min="1" type="number" value="30"/><span>dias</span></label>
-<section class="egrdt-batch-settings settings-embedded compact-limit-setting" aria-labelledby="egrdt-batch-settings-title">
-<div><strong id="egrdt-batch-settings-title">Distribuição das eGRDTs</strong><small id="egrdt-batch-limit-status">Separação por disciplina · até 48 documentos por eGRDT</small></div>
-<label><span>Modo</span><select id="egrdt-batch-mode"><option value="discipline">Separar por disciplina</option><option value="limit-only">Somente por limite</option></select></label>
-<label><span>Máx. por lote</span><input id="egrdt-batch-limit" type="number" min="1" step="1" value="48" inputmode="numeric" aria-describedby="egrdt-batch-limit-status"/></label>
-<button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar</button>
-</section>
+
 <section class="planned-documents-settings settings-embedded" aria-labelledby="planned-documents-title">
 <div><strong id="planned-documents-title">Documentos Previstos · fonte da alocação</strong><small id="planned-documents-status" role="status" aria-live="polite">Carregando base compartilhada…</small></div>
 <p>Se o código constar na coluna DOCUMENTO, está alocado. A ausência indica Não Alocado. A coluna JA_EMITIDO_NO_SIGEM não altera essa regra.</p>
@@ -272,6 +267,13 @@
 <button class="summary-item discard" data-filter="descartar" type="button"><span>Em análise</span><strong id="count-discard">0</strong><b>0</b></button>
 <button class="summary-item review" data-filter="revisar" type="button"><span>Revisar</span><strong id="count-review">0</strong><b>0</b></button>
 </nav>
+<section class="egrdt-batch-settings compact-limit-setting" aria-labelledby="egrdt-batch-settings-title">
+<div><strong id="egrdt-batch-settings-title">Lotes para gerar a GRDT</strong><small id="egrdt-batch-limit-status">Separação por disciplina · até 48 documentos por eGRDT</small></div>
+<label><span>Modo</span><select id="egrdt-batch-mode"><option value="discipline">Separar por disciplina</option><option value="limit-only">Só por limite</option></select></label>
+<label><span>Documentos por lote (máximo)</span><input id="egrdt-batch-limit" type="number" min="1" step="1" value="48" inputmode="numeric" aria-describedby="egrdt-batch-limit-status egrdt-batch-help"/></label>
+<button class="secondary-button compact" id="egrdt-batch-limit-save" type="button">Aplicar</button>
+<small id="egrdt-batch-help">A quantidade e o modo são aplicados automaticamente à prévia e à geração. Por disciplina: cada disciplina fica em seus próprios lotes. Só por limite: as disciplinas podem ficar juntas, respeitando a ordem original dos documentos.</small>
+</section>
 <div class="results-toolbar">
 <label class="search-box">
 <svg viewbox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M16 16l5 5"></path></svg>
