@@ -12,6 +12,10 @@
   const source = new URL("assets/mascot/video/grcon-mascot-running-alpha.webm", root.location.origin + "/");
   source.searchParams.set("v", ASSET_REVISION);
 
+  const papersSource = new URL("assets/mascot/video/grcon-mascot-papers-running-alpha.webm", root.location.origin + "/");
+  papersSource.searchParams.set("v", "20261014.1");
+  let activeSource = source;
+  let fallback = null;
   let strip = null;
   let track = null;
   let video = null;
@@ -31,6 +35,8 @@
       "#" + STRIP_ID + " ." + INNER_CLASS + "{position:relative;width:100%;height:100%;overflow:hidden;pointer-events:none}",
       "#" + STRIP_ID + " ." + TRACK_CLASS + "{position:absolute;left:0;bottom:max(.4rem,env(safe-area-inset-bottom));width:clamp(180px,22vw,240px);height:clamp(180px,22vw,240px);transform:translate3d(-120%,0,0);will-change:transform;pointer-events:none}",
       "#" + STRIP_ID + "[data-active='true'] ." + TRACK_CLASS + "{animation:grcon-mascot-strip-run " + RUN_DURATION_MS + "ms linear infinite}",
+      "#" + STRIP_ID + " img[hidden]{display:none!important}",
+      "#" + STRIP_ID + " img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}",
       "#" + STRIP_ID + " video{display:block;width:100%;height:100%;object-fit:contain;background:transparent!important;border:0;box-shadow:none;filter:drop-shadow(0 6px 10px rgb(7 35 56 / 20%));pointer-events:none}",
       "html[data-theme='dark'] #" + STRIP_ID + " video{filter:drop-shadow(0 7px 12px rgb(0 0 0 / 42%))}",
       "@keyframes grcon-mascot-strip-run{from{transform:translate3d(-120%,0,0)}to{transform:translate3d(calc(100vw + 20%),0,0)}}",
@@ -81,7 +87,14 @@
       video.setAttribute("aria-hidden", "true");
       track.appendChild(video);
     }
-    if (video.getAttribute("src") !== source.href) video.src = source.href;
+    if (!fallback) {
+      fallback = document.createElement("img");
+      fallback.src = new URL("assets/mascot/grcon-mascot-papers-fallback.png", root.location.origin + "/").href;
+      fallback.alt = "";
+      fallback.hidden = true;
+      track.appendChild(fallback);
+    }
+    if (video.getAttribute("src") !== activeSource.href) video.src = activeSource.href;
 
     if (strip.parentNode !== document.body) document.body.appendChild(strip);
     return strip;
@@ -108,7 +121,13 @@
 
   async function run(options) {
     const config = options || {};
+    const requestedSource = config.context === "control" ? papersSource : source;
+    if (running && activeSource.href !== requestedSource.href) stop("context-changed");
+    activeSource = requestedSource;
     ensureStrip();
+    fallback.hidden = true;
+    video.style.visibility = "visible";
+    strip.dataset.context = config.context || "default";
     if (reducedMotion() || document.hidden) {
       stop(reducedMotion() ? "reduced-motion" : "hidden");
       return false;
@@ -128,6 +147,12 @@
       document.documentElement.dataset.grconMascotRunner = "running";
       return true;
     } catch (error) {
+      if (activeSource === papersSource && running) {
+        video.style.visibility = "hidden";
+        fallback.hidden = false;
+        document.documentElement.dataset.grconMascotRunner = "fallback";
+        return true;
+      }
       stop("media-error");
       console.warn("GRCON: vídeo original de corrida do mascote indisponível; a faixa foi encerrada sem bloquear a interface.", error);
       return false;
@@ -141,7 +166,7 @@
     return Object.freeze({
       version: VERSION,
       assetRevision: ASSET_REVISION,
-      source: source.href,
+      source: activeSource.href,
       running,
       active: strip?.dataset.active === "true",
       stripAttached: Boolean(strip?.isConnected),

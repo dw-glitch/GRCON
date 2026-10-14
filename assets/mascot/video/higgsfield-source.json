@@ -73,5 +73,15 @@
         }
       }
     }
+  },
+  "controlAnalysis": {
+    "jobId": "5494a397-b027-45df-86e8-1ee418741129",
+    "asset": "grcon-mascot-papers-running-alpha.webm",
+    "preparedAt": "2026-10-14",
+    "size": "320x320",
+    "durationSeconds": 5.041667,
+    "codec": "VP9 alpha, silent",
+    "backgroundRemoval": "FFmpeg chromakey in YUV; actual alpha verified in Chromium",
+    "sourceUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_3JPlmNBUEodLWC5zqz9TRYPqweG/hf_20261014_133106_5494a397-b027-45df-86e8-1ee418741129.mp4"
   }
 }
