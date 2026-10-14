@@ -208,6 +208,7 @@
           selected.filter(c => c !== column) };
       state.configurationDirty = true;
       state.view = VIEWS.PASTE;
+      renderColumnOptions();
       refreshReply();
     });
     panel.querySelector(".egrdt-email-personal-styles").addEventListener("change", event => {
@@ -218,6 +219,7 @@
         styles: { ...(state.configuration.styles || {}), [key]: field.type === "number" ? Number(field.value) : field.value } };
       state.configurationDirty = true;
       state.view = VIEWS.PASTE;
+      renderColumnOptions();
       refreshReply();
     });
     state.panel = { overlay, panel };
@@ -271,8 +273,8 @@
     document.querySelectorAll("[data-email-style]").forEach(field => {
       field.value = styles[field.dataset.emailStyle] ?? defaults[field.dataset.emailStyle];
     });
-    const preset = styles.fontSize === 8 && styles.padding === 3 ? "compact" :
-      styles.fontSize === 12 && styles.padding === 9 ? "readable" : "";
+    const preset = styles.fontSize === 8 && styles.messageFontSize === 8 && styles.padding === 3 && styles.paragraphSpacing === 8 && styles.lineHeight === 1.15 ? "compact" :
+      styles.fontSize === 12 && styles.messageFontSize === 12 && styles.padding === 9 && styles.paragraphSpacing === 16 && styles.lineHeight === 1.4 ? "readable" : "";
     document.querySelectorAll('.egrdt-email-presets button').forEach(button => {
       button.setAttribute("aria-pressed", String(Boolean(preset) && button.dataset.egrdtEmailAction === "preset-" + preset));
     });
