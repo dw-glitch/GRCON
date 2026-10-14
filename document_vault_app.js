@@ -166,7 +166,8 @@
           const total = Number(message.total) || task.file.size || 1;
           task.progress = Math.min(28, Math.round((Number(message.loaded) || 0) / total * 28));
           task.phase = "Preparando arquivo";
-          scheduleQueueProgress();
+          task.onEmissionProgress?.(task);
+        scheduleQueueProgress();
         } else if (message.type === "done") {
           worker.terminate();
           task.hashWorker = null;
@@ -361,7 +362,8 @@
         const completed = await xhrPut("/upload", task.file, task, common, (loaded, total) => {
           task.progress = 32 + Math.round((loaded / Math.max(1, total)) * 66);
           task.phase = "Enviando";
-          scheduleQueueProgress();
+          task.onEmissionProgress?.(task);
+        scheduleQueueProgress();
         });
         task.serverFile = completed.file || task.serverFile;
       } else {
@@ -390,7 +392,8 @@
           }, loaded => {
             task.progress = 32 + Math.round(((confirmedBytes + loaded) / Math.max(1, task.file.size)) * 64);
             task.phase = "Parte " + partNumber + " de " + totalParts;
-            scheduleQueueProgress();
+            task.onEmissionProgress?.(task);
+        scheduleQueueProgress();
           });
           confirmedBytes += partBlob.size;
         }
@@ -1430,26 +1433,43 @@
   }
 
 
-  async function persistEmissionFiles(plan) {
+  async function persistEmissionFiles(plan, onProgress, options = {}) {
     const epoch = contextEpoch, target = workspaceId();
     const entries = (plan?.entries || []).filter(entry => entry.file);
     const entryByFile = new Map(entries.map(entry => [entry.file, entry]));
     const unique = [...entryByFile.keys()];
     const provenance = new Map();
     let failed = 0;
+    const progress = new Map(unique.map(file => [file, 0]));
+    const totalBytes = unique.reduce((sum, file) => sum + Math.max(1, file.size || 0), 0);
+    function report(file, fraction) {
+      progress.set(file, Math.max(progress.get(file) || 0, fraction));
+      if (options.cancelled?.()) return;
+      onProgress?.({ progress: totalBytes ? unique.reduce((sum, item) => sum + Math.max(1,item.size || 0) * progress.get(item),0)/totalBytes : 1,
+        completed: [...progress.values()].filter(value => value === 1).length, total: unique.length });
+    }
+    function checkCancelled() { if (options.cancelled?.()) throw new DOMException("Preparação cancelada.", "AbortError"); }
     await mapLimit(unique, 3, async file => {
+      checkCancelled();
       const existing = lookupSource(file);
-      if (existing?.id) { provenance.set(file, existing); return; }
+      if (existing?.id) { provenance.set(file, existing); report(file,1); return; }
       const identity = parseIdentity(file.name);
       const task = { id: "emission-" + Math.random().toString(36).slice(2), file, workspaceId: target,
         documentCode: identity.documentCode, revision: identity.revision, format: identity.format,
         origin: "local", documentClass: entryByFile.get(file)?.sheet || "", purpose: entryByFile.get(file)?.item?.purpose || "", discipline: entryByFile.get(file)?.discipline || "",
         allowConflict: true, progress: 0, status: "pending" };
+      task.onEmissionProgress = value => {
+        if (options.cancelled?.()) { value.activeXhr?.abort(); value.abortHash?.(); return; }
+        report(file, Math.min(1, (value.progress || 0)/100));
+      };
       task.sha256 = await hashFile(task);
+      checkCancelled();
       if (epoch !== contextEpoch || target !== workspaceId()) throw new Error("O contrato mudou. Analise novamente.");
       if (target && ["owner", "admin", "operator"].includes(root.GrconCloud?.state?.membership?.role)) {
         await uploadTask(task);
       }
+      checkCancelled();
+      report(file, 1);
       const item = task.status === "done" ? task.serverFile : null;
       if (!item && target) failed++;
       const meta = { id: item?.id || "", source: "local", fileVersion: item?.file_version || 0,

@@ -21,7 +21,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.9";
+  const APP_VERSION = "5.44.10";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -102,6 +102,8 @@
     sheetFilter: "todos",
     search: "",
     quickFilter: "all",
+    operationalFilters: {},
+    downloadPreparing: false,
     sortBy: "original",
     columnFilters: {},
     recentDays: 30,
@@ -710,8 +712,9 @@
       lastPaint = now;
       const total = Number(detail && detail.total) || 0;
       const completed = Number(detail && detail.completed) || 0;
-      const percent = total ? Math.max(0, Math.min(100, Math.round((completed / total) * 100))) : 0;
+      const percent = total ? Math.max(0, Math.min(100, Math.round((completed / total) * 100))) : Math.max(0, Math.min(100, Math.round((Number(detail?.progress) || 0) * 100)));
       state.liveProgress = { stage: stageLabel || "Processamento", completed, total, percent };
+      if (els.progressBar && state.busy && !state.downloadPreparing) els.progressBar.style.width = `${percent}%`;
       if (els.performanceLiveProgress) {
         els.performanceLiveProgress.textContent = total
           ? `${stageLabel}: ${percent}% (${completed.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")})`
@@ -1137,7 +1140,7 @@
     if (els.compatibilityOpen) els.compatibilityOpen.disabled = busy;
     els.recentDays.disabled = busy;
     if (busy) {
-      if (els.progress) els.progress.hidden = false;
+      if (els.progress) { els.progress.dataset.stage = state.downloadPreparing ? "emit" : "analysis"; els.progress.hidden = state.downloadPreparing; }
       if (els.progressBar) els.progressBar.style.width = "2%";
       if (els.progressText) els.progressText.textContent = `${taskLabel}…`;
       els.exportReport.disabled = true;
@@ -1146,7 +1149,7 @@
       els.exportFinalPackage.disabled = true;
       if (els.exportPendingAllocationPdfs) els.exportPendingAllocationPdfs.disabled = true;
     }
-    els.analyze.querySelector("span").textContent = busy ? `${taskLabel}…` : "Analisar e conferir";
+    els.analyze.querySelector("span").textContent = busy && !state.downloadPreparing ? `${taskLabel}…` : "Analisar e conferir";
     if (els.cancelProcessing) els.cancelProcessing.hidden = !busy;
     if (els.clearLdCache) els.clearLdCache.disabled = busy;
     if (els.performancePanel) els.performancePanel.classList.toggle("is-busy", busy);
@@ -2328,6 +2331,7 @@
     state.records = [];
     state.history = [];
     state.results = [];
+    state.resultVersion += 1;
     state.pendingAllocationBundle = { rows: [], entries: [], documentCount: 0, pdfCount: 0 };
     state.packageSelectionReady = false;
     state.smartAnalysisCache = { signature: "", snapshot: null, savedAt: 0 };
@@ -2613,6 +2617,7 @@
     state.records = [];
     state.history = [];
     state.results = [];
+    state.resultVersion += 1;
     state.pendingAllocationBundle = { rows: [], entries: [], documentCount: 0, pdfCount: 0 };
     state.packageSelectionReady = false;
     state.smartAnalysisCache = { signature: "", snapshot: null, savedAt: 0 };
@@ -2876,10 +2881,7 @@
     }
   }
 
-  async function ensureFreshAnalysis() {
-    const sharedSigem = window.GrconSharedSigemQuery;
-    if (sharedSigem?.refreshLatest) await sharedSigem.refreshLatest();
-    else await sharedSigem?.refresh();
+  function checkAnalysisValidity() {
     if (!state.analysisAt || !state.results.length) {
       showToast("Execute uma análise antes de gerar arquivos.", "error");
       return false;
@@ -2901,6 +2903,14 @@
       showToast("A Consulta Geral SIGEM foi atualizada após esta análise. Analise novamente antes de gerar a GRDT.", "error");
       return false;
     }
+    return true;
+  }
+  async function ensureFreshAnalysis() {
+    if (!checkAnalysisValidity()) return false;
+    const sharedSigem = window.GrconSharedSigemQuery;
+    if (sharedSigem?.refreshLatest) await sharedSigem.refreshLatest();
+    else await sharedSigem?.refresh();
+    if (!checkAnalysisValidity()) return false;
     await window.GrconAllocationRegistry?.refresh();
     if ((window.GrconAllocationRegistry?.current()?.id || "") !== state.analysisAllocationSnapshot) {
       showToast("A Central de alocação foi atualizada. Analise novamente para usar os vínculos e status atuais.", "warn");
@@ -2978,7 +2988,7 @@
     // 22 campos, inclusive repetidas consultas ao Apêndice e à estrutura LD.
     const record = row && row.record || {};
     switch (keyName) {
-      case "situation": return compactDecisionLabel(row);
+      case "situation": return state.selected.has(resultIndex(row)) ? compactDecisionLabel(row) : "Excluído";
       case "originalFile": return [row?.name, ...(row?.files || []).map(entry => entry.name)].filter(Boolean).join(" | ");
       case "document": return row?.document || "";
       case "ldCode": return apendiceInfo(row).ldCode || "";
@@ -3013,6 +3023,15 @@
     return Object.entries(state.columnFilters || {}).filter(([, values]) => Array.isArray(values));
   }
 
+  const TriageQuery = window.GrconGrdtTriageQuery;
+  let searchIndexVersion = "", triageSearchIndex = new WeakMap();
+  function triageRowSearch(row) {
+    const version = `${state.resultVersion}:${PostingFlow?.signature() || ""}`;
+    if (searchIndexVersion !== version) { searchIndexVersion = version; triageSearchIndex = new WeakMap(); }
+    if (!triageSearchIndex.has(row)) triageSearchIndex.set(row, TriageQuery.searchText(row,
+      resultColumnValue(row, "ldCode"), PostingFlow?.searchText(row.document) || ""));
+    return triageSearchIndex.get(row);
+  }
   let lastTriageSearch = "", cachedTriageSearch = "";
   function normalizedTriageSearch() {
     if (lastTriageSearch !== state.search) {
@@ -3029,11 +3048,9 @@
     if (state.sheetFilter !== "todos" && C.norm(row.sheet) !== state.sheetFilter) return false;
     const query = normalizedTriageSearch();
     if (query) {
-      const historyNumbers = PostingFlow?.searchText(row.document) || "";
-      const ldDocumentCode = resultColumnValue(row, "ldCode");
-      const fileNames = (row.files || []).map(entry => entry.name).join(" ");
-      if (!C.norm(`${row.record?.title || ""} ${row.record?.allocation || ""} ${row.name} ${fileNames} ${row.document} ${ldDocumentCode} ${row.revision} ${row.status} ${row.sheet} ${row.reason} ${row.allocationStatus} ${row.fiscalComment} ${row.grdt} ${row.record?.grdt || ""} ${historyNumbers}`).includes(query)) return false;
+      if (!triageRowSearch(row).includes(query)) return false;
     }
+    if (!TriageQuery.matches(row, state.operationalFilters, state.operationalFilters.history ? PostingFlow?.lookup(row.document, row.revision) : null, state.operationalFilters.history ? PostingFlow?.status() : null)) return false;
     return true;
   }
 
@@ -3304,7 +3321,8 @@
       case "document": return String(left.document || "").localeCompare(String(right.document || ""), "pt-BR", { numeric: true });
       case "file": return String(left.name || "").localeCompare(String(right.name || ""), "pt-BR", { numeric: true });
       case "revision": return (C.revisionInfo(left.revision)?.rank ?? -1) - (C.revisionInfo(right.revision)?.rank ?? -1);
-      case "status": return compactDecisionLabel(left).localeCompare(compactDecisionLabel(right), "pt-BR");
+      case "status": return resultColumnValue(left, "situation").localeCompare(resultColumnValue(right, "situation"), "pt-BR");
+      case "grdt": return String(PostingFlow?.lookup(left.document, left.revision).latestEmission?.grdt || "").localeCompare(String(PostingFlow?.lookup(right.document, right.revision).latestEmission?.grdt || ""), "pt-BR", { numeric: true });
       case "history": return String(PostingFlow?.lookup(right.document, right.revision).latestEmission?.generatedAt || "").localeCompare(String(PostingFlow?.lookup(left.document, left.revision).latestEmission?.generatedAt || ""));
       default: return 0;
     }
@@ -3313,8 +3331,8 @@
   function filteredResultIndices() {
     const columnFilters = activeColumnFilters();
     const columnSignature = columnFilters.map(([keyName, values]) => `${keyName}:${[...values].sort().join(",")}`).join("|");
-    const selectionSignature = ["included", "excluded"].includes(state.quickFilter) ? [...state.selected].sort((a, b) => a - b).join(",") : "";
-    const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${C.norm(state.search)}|${columnSignature}|quick:${state.quickFilter}|selected:${selectionSignature}|sort:${state.sortBy}|group:${state.groupByStatus ? "1" : "0"}|posting:${PostingFlow?.signature() || ""}`;
+    const selectionSignature = ["included", "excluded"].includes(state.quickFilter) || columnFilters.some(([key]) => key === "situation") || state.sortBy === "status" ? [...state.selected].sort((a, b) => a - b).join(",") : "";
+    const signature = `${state.resultVersion}|${state.filter}|${state.sheetFilter}|${normalizedTriageSearch()}|${JSON.stringify(state.operationalFilters)}|${columnSignature}|quick:${state.quickFilter}|selected:${selectionSignature}|sort:${state.sortBy}|group:${state.groupByStatus ? "1" : "0"}|posting:${PostingFlow?.signature() || ""}`;
     if (state.filteredCache && state.filteredCache.signature === signature) return state.filteredCache.indices;
     const indices = [];
     for (let index = 0; index < state.results.length; index += 1) {
@@ -3347,6 +3365,7 @@
     return filteredResultIndices().map((index) => state.results[index]);
   }
 
+  let virtualOffsetCache = {};
   function virtualResults() {
     const indices = filteredResultIndices();
     // Para conjuntos pequenos, renderiza tudo (sem espaçadores) para preservar
@@ -3370,10 +3389,15 @@
     const rowHeight = state.virtual.rowHeight;
     const viewport = scroll ? Math.max(360, scroll.clientHeight || 620) : 620;
     const scrollTop = scroll ? scroll.scrollTop : 0;
-    const offsets = [0];
     const detailHeights = state.virtual.detailHeights || new Map();
-    for (const index of indices) offsets.push(offsets[offsets.length - 1] + rowHeight +
-      (state.expanded.has(index) ? (detailHeights.get(index) || 360) : 0));
+    const expandedSignature = [...state.expanded].map(index => `${index}:${detailHeights.get(index) || 360}`).join("|");
+    if (virtualOffsetCache.indices !== indices || virtualOffsetCache.rowHeight !== rowHeight || virtualOffsetCache.expandedSignature !== expandedSignature) {
+      const offsets = [0];
+      for (const index of indices) offsets.push(offsets[offsets.length - 1] + rowHeight +
+        (state.expanded.has(index) ? (detailHeights.get(index) || 360) : 0));
+      virtualOffsetCache = { indices, rowHeight, expandedSignature, offsets };
+    }
+    const offsets = virtualOffsetCache.offsets;
     let lo = 0, hi = indices.length;
     while (lo < hi) { const mid = (lo + hi) >>> 1;
       if (offsets[mid + 1] <= scrollTop) lo = mid + 1; else hi = mid; }
@@ -3805,14 +3829,18 @@
   }
 
   function renderFileOrigin(row) {
-    const origin = row && row.fileOrigin || (String(row && row.listSource || "").includes("Cofre") ? "Cofre" : "Pasta local");
+    const origin = TriageQuery.origin(row);
     const allocation = origin === "Cofre" && row && row.vaultAllocationLabel ? ` · Alocação: ${row.vaultAllocationLabel}` : "";
     return `<span class="result-file-origin">Origem: ${escapeHtml(origin + allocation)}</span>`;
   }
 
-  function renderTable() {
-    window.GrconDocumentaryComplianceUi?.render(state.results);
+  let lastRenderedWindow = "";
+  function renderTable(scrollOnly = false) {
+    if (!scrollOnly) window.GrconDocumentaryComplianceUi?.render(state.results);
     const virtualInfo = virtualResults();
+    const windowKey = `${virtualInfo.start}:${virtualInfo.end}:${virtualInfo.total}:${virtualInfo.topSpace}:${virtualInfo.bottomSpace}`;
+    if (scrollOnly && windowKey === lastRenderedWindow) return;
+    lastRenderedWindow = windowKey;
     const rows = virtualInfo.visibleIndices.map((index, offset) => ({
       row: state.results[index],
       index,
@@ -3875,10 +3903,10 @@
           ${groupStart ? `<span class="triage-group-label">${escapeHtml(decisionGroupLabel(row))}</span>` : ""}
           <input id="select-row-${index}" name="select-row-${index}" class="row-select" data-select-row type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Selecionar para GRDT" title="${selectionTitle}">
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
-          <span class="status-chip ${resultClass}">${compactDecisionLabel(row)}</span>
+          <span class="status-chip ${selected ? resultClass : "excluded"}" title="Resultado da triagem: ${escapeHtml(compactDecisionLabel(row))}">${selected ? compactDecisionLabel(row) : "Excluído"}</span>
         </div></td>
         <td>${renderRowFileList(row, false)}${renderFileOrigin(row)}</td>
-        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="grdt-document-text"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span><small class="grdt-document-original" title="${escapeHtml(row.name || "")}">${escapeHtml(row.name || "")}</small></span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryUi ? window.GrconGrdtHistoryUi.row(row.document, row.revision) : PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
+        <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="grdt-document-text"><span class="grdt-document-identity"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span><button type="button" class="grdt-copy-code" data-action="copy-code" aria-label="Copiar código ${escapeHtml(row.document)}" title="Copiar código">⧉</button></span><small class="grdt-document-original" title="${escapeHtml(row.name || "")}">${escapeHtml(row.name || "")}</small><small class="grdt-document-source">${escapeHtml(TriageQuery.origin(row))} · ${escapeHtml(TriageQuery.extensions(row).join(" / ") || "Tipo não identificado")}</small></span></span>${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryUi ? window.GrconGrdtHistoryUi.row(row.document, row.revision) : PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.ldCode)}">${escapeHtml(apendice.ldCode || "—")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.search)}</span>${apendice.suggestion ? `<span class="cell-muted" title="${escapeHtml(apendice.suggestionNote)}">Sugestão: ${escapeHtml(apendice.suggestion)}</span>` : ""}</td>
         <td><span class="text-cell" title="${escapeHtml(apendice.note || "")}">${escapeHtml(apendice.tagged)}</span></td>
@@ -3886,7 +3914,7 @@
         <td><span class="revision-value" title="Revisão encontrada na LD">${escapeHtml(ldRevision)}</span></td>
         <td class="revision-grdt-cell">
           <input class="revision-grdt-input" data-revision-input data-index="${index}" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="8" value="${escapeHtml(row.revision || "")}" aria-label="Revisão do documento ${escapeHtml(row.document)} nesta GRDT" title="Revisão deste documento na GRDT · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">
-          <div class="revision-grdt-meta">
+          <div class="revision-grdt-meta"><span class="grdt-revision-transition" title="Encontrada na LD → selecionada">${escapeHtml(ldRevision)} → ${escapeHtml(row.revision || "—")}</span>
             ${row.revisionManual ? `<button type="button" class="revision-manual-badge" data-action="restore-revision" data-index="${index}" title="Alterada manualmente · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}. Clique para restaurar a sugestão.">Alterada manualmente <span aria-hidden="true">↺</span></button>` : ""}
             ${row.revisionFormatWarning ? `<span class="revision-format-warning" title="${escapeHtml(row.revisionFormatWarning)}" aria-label="${escapeHtml(row.revisionFormatWarning)}">⚠</span>` : ""}
             ${row.timeline ? `<span class="revision-route" title="Histórico de revisões · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">${escapeHtml(timelineRoute(row.timeline))}</span>` : ""}
@@ -4083,8 +4111,9 @@
       button.textContent = `${labels[kind]} (${counts[kind].toLocaleString("pt-BR")})`;
       button.setAttribute("aria-pressed", String(state.quickFilter === kind));
     });
+    updateOperationalFilterOptions();
     const counter = document.getElementById("triage-filter-result-count");
-    if (counter) counter.textContent = `${filteredResultIndices().length.toLocaleString("pt-BR")} de ${state.results.length.toLocaleString("pt-BR")} documentos exibidos`;
+    if (counter) counter.textContent = `${filteredResultIndices().length.toLocaleString("pt-BR")} de ${state.results.length.toLocaleString("pt-BR")} documentos exibidos · ${state.selected.size.toLocaleString("pt-BR")} incluídos para geração`;
   }
 
   function renderAll() {
@@ -4137,7 +4166,9 @@
       }
     });
 
-    els.exportZip.disabled = physicalSelected.length === 0;
+    els.exportZip.disabled = state.busy || state.downloadPreparing || els.exportZip.dataset.preparing === "true" || physicalSelected.length === 0;
+    els.exportZip.setAttribute("aria-busy", String(state.downloadPreparing));
+    if (!state.downloadPreparing) els.exportZip.title = physicalSelected.length ? "Baixar arquivos selecionados e suas eGRDTs" : "Selecione documentos com arquivo físico após a análise";
     els.exportReport.disabled = state.results.length === 0;
     if (els.exportPendingAllocationPdfs) {
       const pending = state.pendingAllocationBundle || { documentCount: 0, pdfCount: 0 };
@@ -4151,7 +4182,7 @@
     }
     els.exportEgrdt.disabled = state.selected.size === 0;
     els.batchEgrdt.disabled = state.selected.size === 0;
-    els.selectAllReady.disabled = selectableIndices.length === 0;
+    els.selectAllReady.disabled = state.downloadPreparing || selectableIndices.length === 0;
     els.selectAllReady.checked = selectableIndices.length > 0 && selectableIndices.every((index) => state.selected.has(index));
     els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
@@ -4183,6 +4214,7 @@
     state.history = [];
     state.index = null;
     state.results = [];
+    state.resultVersion += 1;
     state.pendingAllocationBundle = { rows: [], entries: [], documentCount: 0, pdfCount: 0 };
     state.packageSelectionReady = false;
     state.smartAnalysisCache = { signature: "", snapshot: null, savedAt: 0 };
@@ -4190,6 +4222,8 @@
     state.sheetFilter = "todos";
     state.search = "";
     state.quickFilter = "all";
+    state.operationalFilters = {};
+    document.querySelectorAll("[data-triage-facet]").forEach(select => { select.value = ""; });
     state.sortBy = "original";
     if (document.getElementById("triage-sort")) document.getElementById("triage-sort").value = "original";
     state.columnFilters = {};
@@ -4237,6 +4271,7 @@
       state.index = null;
     }
     state.results = [];
+    state.resultVersion += 1;
     state.pendingAllocationBundle = { rows: [], entries: [], documentCount: 0, pdfCount: 0 };
     state.packageSelectionReady = false;
     state.smartAnalysisCache = { signature: "", snapshot: null, savedAt: 0 };
@@ -5036,23 +5071,27 @@
   }
 
   async function exportZip() {
-    if (!(await ensureFreshAnalysis())) return;
+    if (!(await ensureFreshAnalysis())) { window.GrconGrdtDownloadProgress?.finish("A análise precisa ser atualizada. Confira o aviso e analise novamente.", true); return; }
+    window.GrconGrdtDownloadProgress?.phase("Carregando o gerador de arquivos…");
     await ensureRuntime("export");
+    if (state.cancelled) throw new DOMException("Preparação cancelada.", "AbortError");
+    window.GrconGrdtDownloadProgress?.phase("Consultando histórico de emissões…");
     if (PostingFlow) await PostingFlow.refresh(true);
+    if (state.cancelled) throw new DOMException("Preparação cancelada.", "AbortError");
     const physicalSelection = new Set([...state.selected].filter((index) => {
       const row = state.results[index];
       return row && row.files && row.files.length;
     }));
     if (!physicalSelection.size) {
-      showToast("Nenhum arquivo físico selecionado. Use Baixar eGRDT final para itens recebidos somente por relação.", "warn");
+      showToast("Nenhum arquivo físico selecionado. Use Baixar somente eGRDT para itens recebidos somente por relação.", "warn");
       return;
     }
     const plan = E.createPlan(state.results, physicalSelection, { manualForceIndices: state.manualForceInclude });
     if (plan.errors.length) {
+      window.GrconGrdtDownloadProgress?.finish("Revise as pendências indicadas antes de baixar.", true);
       showToast(`Arquivos + eGRDT bloqueados: ${plan.errors.slice(0, 3).join(" ")}`, "error");
       return;
     }
-    state.cancelled = false;
     setBusy(true, "Montando arquivos, eGRDTs e ZIP");
     els.exportZip.disabled = true;
     els.exportZip.textContent = "Preparando…";
@@ -5062,7 +5101,9 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      await window.GrconDocumentVault?.persistEmissionFiles?.(plan);
+      window.GrconGrdtDownloadProgress?.phase("Preservando arquivos no Cofre…");
+      await window.GrconDocumentVault?.persistEmissionFiles?.(plan, detail => window.GrconGrdtDownloadProgress?.phase(`Preservando arquivos no Cofre (${detail.completed}/${detail.total})…`, detail.progress), { cancelled: () => state.cancelled });
+      window.GrconGrdtDownloadProgress?.phase("Preparando lotes e numeração…");
       const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
@@ -5070,6 +5111,7 @@
       const historyPrepared = prepareHistoryOutput(previewGenerated, "Arquivos + eGRDT", packageName, generatedAt);
       let generated;
       let blob;
+      window.GrconGrdtDownloadProgress?.phase("Gerando eGRDTs e preparando ZIP…");
       if (PerformanceCore && PerformanceCore.supported) {
         const built = await PerformanceCore.buildPackage({
           mode: "pdfs",
@@ -5077,7 +5119,9 @@
           groups: exportWorkerGroups(groups, true),
           officialNumbers,
           limit: currentEgrdtBatchLimit(),
-        }, workerProgress("Arquivos + eGRDT + ZIP"));
+        }, detail => {
+          window.GrconGrdtDownloadProgress?.phase(detail.message || "Gerando eGRDTs e preparando ZIP…", detail.progress);
+        }, { cancelled: () => state.cancelled });
         generated = restoreWorkerGenerated(built.generated, groups);
         blob = new Blob([built.bytes], { type: "application/zip" });
         refreshPerformancePanel(`${plan.entries.length} arquivo(s) e ${generated.length} eGRDT(s) processados.`);
@@ -5094,18 +5138,20 @@
         });
         const zip = new JSZip();
         PackageLayout.addFolders(zip, generated, [{ name: "ORGANIZACAO_DOS_LOTES.txt", data: buildBatchSummaryText(generated) }]);
-        blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } });
+        blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } }, detail => window.GrconGrdtDownloadProgress?.phase("Compactando ZIP…", detail.percent / 100));
       }
+      window.GrconGrdtDownloadProgress?.phase("Registrando a emissão e entregando o pacote…");
       downloadBlob(blob, packageName);
       saveGeneratedHistory(generated, "Arquivos + eGRDT", { packageName, generatedAt }, historyPrepared.historyRecords);
+      window.GrconGrdtDownloadProgress?.finish();
       showToast(`${plan.entries.length} arquivo(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
     } catch (error) {
+      window.GrconGrdtDownloadProgress?.finish(error.name === "AbortError" ? "Preparação cancelada." : "Não foi possível gerar o pacote. Tente novamente.", true);
       handleWorkerTaskError(error, "Não foi possível gerar os arquivos com a eGRDT.");
     } finally {
       if (Workspace) Workspace.finish("grdt-package");
       els.exportZip.textContent = "↓ Baixar PDFs + eGRDT";
       setBusy(false);
-      renderAll();
     }
   }
 
@@ -5426,6 +5472,26 @@
     els.advancedPanel.hidden = !open;
     els.advancedToggle.setAttribute("aria-expanded", String(open));
   });
+  let operationalOptionsVersion = -1;
+  function updateOperationalFilterOptions() {
+    document.querySelector(".triage-operational-details")?.classList.toggle("has-filters", Object.values(state.operationalFilters).some(Boolean));
+    if (operationalOptionsVersion === state.resultVersion) return;
+    operationalOptionsVersion = state.resultVersion;
+    const origins = new Set(), types = new Set();
+    state.results.forEach(row => { origins.add(TriageQuery.origin(row)); TriageQuery.extensions(row).forEach(type => types.add(type)); });
+    for (const [key, values] of [["origin", origins], ["extension", types]]) {
+      const select = document.querySelector(`[data-triage-facet="${key}"]`);
+      select.innerHTML = '<option value="">Todos</option>' + [...values].sort().map(value => `<option value="${escapeHtml(key === "origin" ? C.norm(value) : value)}">${escapeHtml(value)}</option>`).join("");
+      select.value = state.operationalFilters[key] || "";
+    }
+    document.querySelector(".triage-operational-details")?.classList.toggle("has-filters", Object.values(state.operationalFilters).some(Boolean));
+  }
+  document.querySelectorAll("[data-triage-facet]").forEach(select => select.addEventListener("change", () => {
+    state.operationalFilters[select.dataset.triageFacet] = select.value;
+    document.querySelector(".triage-operational-details")?.classList.toggle("has-filters", Object.values(state.operationalFilters).some(Boolean));
+    if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
+    renderAll();
+  }));
   initializeResultColumnFilters();
   document.querySelectorAll("[data-grdt-quick-filter]").forEach(button => {
     button.addEventListener("click", () => {
@@ -5441,7 +5507,8 @@
   });
   document.getElementById("triage-clear-all")?.addEventListener("click", () => {
     state.search = ""; els.search.value = "";
-    state.filter = "todos"; state.sheetFilter = "todos"; state.quickFilter = "all"; state.sortBy = "original";
+    state.filter = "todos"; state.sheetFilter = "todos"; state.quickFilter = "all"; state.sortBy = "original"; state.operationalFilters = {};
+    document.querySelectorAll("[data-triage-facet]").forEach(select => { select.value = ""; });
     document.getElementById("triage-sort").value = "original";
     state.columnFilters = {};
     state.filteredCache = { signature: "", indices: [] };
@@ -5484,6 +5551,11 @@
     if (!rowElement) return;
     const index = Number(rowElement.dataset.index);
     const action = event.target.closest("[data-action]")?.dataset.action;
+    if (action === "copy-code") {
+      navigator.clipboard.writeText(state.results[index].document).then(() => showToast("Código copiado.", "success"), () => showToast("Não foi possível copiar. Selecione o código e use Ctrl+C.", "warn"));
+      return;
+    }
+    if (state.downloadPreparing) return;
     if (action === "toggle-details") {
       if (state.expanded.has(index)) state.expanded.delete(index);
       else state.expanded.add(index);
@@ -5508,7 +5580,7 @@
       const result = restoreSuggestedRevision(row);
       if (result.ok) {
         showToast(`Revisão restaurada para a sugestão do sistema (${row.revision}).`, "success");
-        renderTable();
+        renderAll();
       } else if (result.error) {
         showToast(result.error, "warn");
       }
@@ -5522,6 +5594,12 @@
     }
   });
   els.tbody.addEventListener("change", (event) => {
+    if (state.downloadPreparing) {
+      const index = Number(event.target.closest("tr[data-index]")?.dataset.index);
+      if (event.target.hasAttribute("data-revision-input")) event.target.value = state.results[index]?.revision || "";
+      else event.target.checked = state.selected.has(index);
+      return;
+    }
     if (event.target.hasAttribute("data-revision-input")) {
       const rowElement = event.target.closest("tr[data-index]");
       if (!rowElement) return;
@@ -5534,7 +5612,7 @@
         return;
       }
       if (result.manual) showToast(`Revisão do documento alterada manualmente para ${row.revision}.`, "warn");
-      renderTable();
+      renderAll();
       return;
     }
     const isSelectRow = event.target.hasAttribute("data-select-row");
@@ -5585,6 +5663,7 @@
     }
   });
   els.selectAllReady.addEventListener("change", (event) => {
+    if (state.downloadPreparing) return;
     const visibleIndices = filteredResultIndices();
     visibleIndices.forEach((index) => {
       const row = state.results[index];
@@ -5609,7 +5688,7 @@
       if (els.resultsScroll._grconVirtualFrame) return;
       els.resultsScroll._grconVirtualFrame = requestAnimationFrame(() => {
         els.resultsScroll._grconVirtualFrame = 0;
-        renderTable();
+        renderTable(true);
       });
     }, { passive: true });
   }
@@ -5642,13 +5721,32 @@
     window.open("pending_allocation_history.html", "_blank", "noopener,noreferrer");
   });
   els.exportEgrdt.addEventListener("click", exportEgrdt);
+  function lockDownloadControls(locked) {
+    const controls = [els.selectAllReady, els.exportEgrdt, els.exportFinalPackage, els.batchEgrdt,
+      ...els.tbody.querySelectorAll("input,button[data-action=toggle-details],button[data-action=restore-revision]")];
+    controls.forEach(control => {
+      if (locked) { control.dataset.downloadWasDisabled = String(control.disabled); control.disabled = true; }
+      else if (control.dataset.downloadWasDisabled !== undefined) { control.disabled = control.dataset.downloadWasDisabled === "true"; delete control.dataset.downloadWasDisabled; }
+    });
+  }
   let centralDownloadInProgress = false;
   els.exportZip.addEventListener("click", async () => {
     if (centralDownloadInProgress || state.busy) return;
     centralDownloadInProgress = true;
+    state.downloadPreparing = true; state.cancelled = false; lockDownloadControls(true);
     els.exportZip.disabled = true;
+    els.exportZip.setAttribute("aria-busy", "true");
+    els.exportZip.textContent = "Preparando arquivos…";
+    document.getElementById("grdt-download-status").textContent = "Conferindo dados e preparando o pacote…";
+    window.GrconGrdtDownloadProgress?.start("Conferindo bases atuais…");
     try { await exportZip(); }
-    finally { centralDownloadInProgress = false; renderAll(); }
+    catch (error) { window.GrconGrdtDownloadProgress?.finish(error.name === "AbortError" ? "Preparação cancelada." : "Não foi possível preparar o download. Tente novamente.", true); handleWorkerTaskError(error, "Não foi possível preparar o download. Tente novamente."); }
+    finally {
+      centralDownloadInProgress = false; state.downloadPreparing = false; lockDownloadControls(false);
+      els.exportZip.textContent = "↓ Baixar PDFs + eGRDT";
+      document.getElementById("grdt-download-status").textContent = "PDFs dos documentos e eGRDT para envio";
+      renderAll();
+    }
   });
   els.exportFinalPackage.addEventListener("click", exportFinalPackage);
   els.batchEgrdt.addEventListener("click", () => openEgrdtDrawer([...state.selected]));
@@ -5694,7 +5792,7 @@
     return state.virtual.rowHeight;
   }
 
-  window.addEventListener("grcon:posting-classification-updated", () => { if (!state.busy) renderAll(); });
+  window.addEventListener("grcon:posting-classification-updated", () => { if (!state.busy && !state.downloadPreparing && els.exportZip.dataset.preparing !== "true") renderAll(); });
 
   window.GrconTriageUiApi = Object.freeze({
     snapshot: () => ({
@@ -5710,6 +5808,7 @@
       currentSigemSnapshot: currentSigemQuerySnapshot(),
     }),
     ensureFreshAnalysis: () => ensureFreshAnalysis(),
+    checkAnalysisValidity,
     prepareRelationDraft: (codes) => {
       const entries = [...new Set((Array.isArray(codes) ? codes : []).map(value => String(value || "").trim()).filter(Boolean))];
       if (!entries.length) return false;

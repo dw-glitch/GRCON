@@ -11,6 +11,7 @@
 
     const progress = document.getElementById("progress");
     const results = document.getElementById("results-section");
+    const download = document.getElementById("grdt-download-progress");
     const teams = document.getElementById("egrdt-teams-ready");
     const announcement = document.getElementById("grdt-stage-announcement");
     const titles = ["Preparar", "Analisar", "Revisar", "Emitir"];
@@ -23,7 +24,8 @@
     }
 
     function resolveStage() {
-      if (isShown(progress)) return 1;
+      if (isShown(download) && download.dataset.state === "preparing") return 3;
+      if (isShown(progress)) return progress.dataset.stage === "emit" ? 3 : 1;
       if (isShown(results)) return isShown(teams) ? 3 : 2;
       return 0;
     }
@@ -46,10 +48,10 @@
     }
 
     const observer = new MutationObserver(sync);
-    [progress, results, teams].forEach((node) => {
+    [progress, results, teams, download].forEach((node) => {
       if (node) observer.observe(node, {
         attributes: true,
-        attributeFilter: ["hidden", "style", "aria-hidden"],
+        attributeFilter: ["hidden", "style", "aria-hidden", "data-state"],
       });
     });
     document.addEventListener("grcon:triage-rendered", sync);

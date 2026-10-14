@@ -100,3 +100,32 @@ html[data-app="GRCON"] #results-table tbody tr.result-row > td { padding-block: 
 html[data-app="GRCON"] #results-table .document-cell { display: flex; align-items: flex-start; gap: 4px; }
 html[data-app="GRCON"] #results-table .grdt-document-text { min-width: 0; }
 html[data-app="GRCON"] .table-card.macro5-density-compact #results-table tbody tr.result-row > td { padding-block: 3px; }
+
+#results-section .triage-operational-details { position: relative; font-size: .75rem; }
+#results-section .triage-operational-details summary { cursor: pointer; padding: 6px 9px; border: 1px solid #d3ddea; border-radius: 7px; }
+#results-section .triage-operational-details.has-filters summary { background: #eaf3fc; color: #124b85; border-color: #1d65ac; }
+#results-section .triage-operational-fields { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0; }
+#results-section .triage-operational-fields label { display: flex; flex-direction: column; gap: 4px; color: #4d637b; font-size: .72rem; }
+#results-section .triage-operational-fields select { max-width: 240px; min-height: 30px; border: 1px solid #d3ddea; border-radius: 6px; background: white; color: #23384f; }
+#results-section .grdt-document-source { color: #65758a; font-size: .64rem; }
+#results-section .grdt-copy-code { border: 0; color: #1a5793; background: transparent; cursor: pointer; padding: 1px 4px; align-self: flex-start; }
+#results-section .grdt-copy-code:focus-visible { outline: 2px solid #1864ad; outline-offset: 2px; }
+#results-section .grdt-revision-transition { display: block; font-size: .7rem; color: #4d637b; white-space: nowrap; }
+
+#results-section .grdt-document-identity { display: flex; align-items: baseline; gap: 3px; }
+html[data-app="GRCON"] #results-table .grdt-copy-code {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 22px; height: 22px; min-width: 22px; padding: 0 3px;
+}
+html[data-app="GRCON"] #results-table .manual-row-select { display: none; }
+html[data-app="GRCON"] #results-table .revision-manual-badge { min-height: 20px; padding: 1px 4px; }
+html[data-app="GRCON"] #results-table .status-chip.excluded { background: #edf1f5; color: #54657a; }
+html[data-app="GRCON"] #results-table .grdt-document-identity .document-code {
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.grdt-download-progress:not([hidden]) { display: grid; gap: 6px; padding: 10px 12px; background: #f0f6fc; border: 1px solid #d1e2f4; border-radius: 8px; margin: 8px 0; }
+.grdt-download-progress > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.grdt-download-progress strong { font-size: .78rem; color: #235687; }
+.grdt-download-progress small { font-size: .73rem; color: #61758c; white-space: nowrap; }
+.grdt-download-progress progress { width: 100%; height: 10px; accent-color: #1661aa; }
+.grdt-download-progress[data-state="error"] strong { color: #a33d34; }

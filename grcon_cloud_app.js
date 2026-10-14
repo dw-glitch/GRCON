@@ -1727,10 +1727,12 @@
   async function fetchHistoryRows(columns) {
     const rows = [];
     const pageSize = 500;
+    const workspaceId = state.membership?.workspace_id, userId = state.session?.user?.id;
     for (let from = 0; ;) {
+      if (workspaceId !== state.membership?.workspace_id || userId !== state.session?.user?.id) throw new Error("A sessão mudou durante a consulta.");
       const response = await state.client.from("grcon_history")
         .select(columns)
-        .eq("workspace_id", state.membership.workspace_id)
+        .eq("workspace_id", workspaceId)
         .is("deleted_at", null)
         .order("generated_at", { ascending: false })
         .order("id", { ascending: false })

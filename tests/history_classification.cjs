@@ -27,6 +27,7 @@ assert.equal(C.classify('X','',index).emissionKind,'');
 assert.equal(C.classify('X','B',C.buildIndex([...records].reverse())).previousGrdt,'1003');
 const unrecorded=C.buildIndex([{id:'old',egrdtNumber:'1',files:[{document:'X'}]}]);assert.equal(C.classify('X','0',unrecorded).emissionKind,'');
 assert.equal(C.classify('X','B',C.buildIndex(records.map(r=>({...r,workspaceId:'other'})),{workspaceId:'current'})).emissionKind,'FIRST_POSTING');
+assert.equal(C.classify('X','A',C.buildIndex([{id:'invalid',egrdtNumber:'1',files:[{document:'X',revision:'?!'}]}])).emissionKind,'');
 const roundTrip=H.cleanRecord({id:'new',egrdtNumber:'2000',files:[{document:'X',revision:'B',historyClassification:repost}]});
 assert.deepEqual(H.cleanRecord(JSON.parse(JSON.stringify(roundTrip))).files[0].historyClassification,roundTrip.files[0].historyClassification);
 assert.equal(H.cleanRecord(records[0]).files[0].historyClassification,null);

@@ -18,6 +18,8 @@
     auditBlocked: false,
     sequencePreview: null,
     sequenceEdited: false,
+    preparingOutput: false,
+    outputContext: "",
   };
 
   const els = {
@@ -216,7 +218,7 @@
           ? `GRDT ${group.disciplineBatchNumber} de ${group.disciplineBatchCount} desta disciplina`
           : "Uma GRDT para esta disciplina";
       const postingCounts = group.postingCounts || {};
-      const postingText = `Primeira postagem: ${postingCounts.FIRST_POSTING || 0} · Nova revisão: ${postingCounts.NEW_REVISION || 0} · Repostagem: ${postingCounts.REPOST || 0} · A confirmar: ${postingCounts.UNCONFIRMED || 0}`;
+      const postingText = `Nova emissão: ${postingCounts.FIRST_POSTING || 0} · Nova revisão: ${postingCounts.NEW_REVISION || 0} · Repostagem: ${postingCounts.REPOST || 0} · A confirmar: ${postingCounts.UNCONFIRMED || 0}`;
       const disciplineText = limitOnly
         ? (group.disciplines || [group.discipline]).filter(Boolean).join(" · ") || "Sem disciplina"
         : group.discipline || "Sem disciplina";
@@ -335,38 +337,47 @@
     state.confirmAction = null;
   }
 
+  function outputContext() { return `${window.GrconCloud?.state?.membership?.workspace_id || ""}:${window.GrconCloud?.state?.session?.user?.id || ""}`; }
   function protectButton(id, buildConfig) {
     const button = document.getElementById(id);
     if (!button) return;
     button.addEventListener("click", async (event) => {
-      if (state.bypass.has(id)) {
-        state.bypass.delete(id);
-        return;
+      if (state.bypass.has(id)) { state.bypass.delete(id); return; }
+      if (button.disabled || window.GrconPerformanceDiagnostics?.state().busy || window.GrconGrdtDownloadProgress?.metrics().active || state.preparingOutput || (state.confirmAction && !els.dialog.hidden)) {
+        event.preventDefault(); event.stopImmediatePropagation(); return;
       }
-      if (button.disabled) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const config = buildConfig();
-      if (typeof config.preflight === "function") {
-        try {
-          if ((await config.preflight()) === false) return;
-        } catch (error) {
-          window.GrconNotify?.(error?.message || "Não foi possível validar a análise antes da geração.", "error");
-          return;
-        }
+      event.preventDefault(); event.stopImmediatePropagation();
+      const config = buildConfig(), previousText = button.textContent, expectedContext = outputContext(), postingSignature = window.GrconPostingFlow?.signature();
+      if (id === "export-zip") window.GrconGrdtDownloadProgress?.start("Preparando a prévia dos lotes…");
+      state.preparingOutput = true; button.dataset.preparing = "true";
+      button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Preparando arquivos…";
+      try {
+        if (typeof config.preflight === "function" && (await config.preflight()) === false) return;
+        if (window.GrconPostingFlow) await window.GrconPostingFlow.refresh();
+        if (expectedContext !== outputContext()) { if (id === "export-zip") window.GrconGrdtDownloadProgress?.finish("Contrato ou sessão alterado. Analise novamente.",true); return; }
+        if (id === "export-zip" && window.GrconGrdtDownloadProgress?.metrics().cancelled) { window.GrconGrdtDownloadProgress.finish("Preparação cancelada.", true); return; }
+        state.outputContext = expectedContext;
+        if (id === "export-zip") window.GrconGrdtDownloadProgress?.waitForPreview();
+        openConfirm({
+          ...config,
+          onConfirm: () => {
+            if (expectedContext !== outputContext()) { closeConfirm(); return; }
+            closeConfirm(); state.bypass.add(id); state.dirty = false; button.click();
+          },
+        });
+      } catch (error) {
+        if (id === "export-zip") window.GrconGrdtDownloadProgress?.finish("Não foi possível preparar a prévia. Tente novamente.", true);
+        window.GrconNotify?.(error?.message || "Não foi possível preparar o download. Tente novamente.", "error");
+      } finally {
+        state.preparingOutput = false; delete button.dataset.preparing;
+        button.textContent = previousText; button.setAttribute("aria-busy", "false"); button.disabled = false;
+        if (postingSignature !== window.GrconPostingFlow?.signature() || expectedContext !== outputContext()) window.GrconTriageUiApi?.render();
       }
-      if (["export-egrdt", "export-zip", "export-final-package"].includes(id) && window.GrconPostingFlow) await window.GrconPostingFlow.refresh(true);
-      openConfirm({
-        ...config,
-        onConfirm: () => {
-          closeConfirm();
-          state.bypass.add(id);
-          if (["export-egrdt", "export-zip", "export-final-package"].includes(id)) state.dirty = false;
-          button.click();
-        },
-      });
     }, true);
   }
+  window.addEventListener("grcon:cloud-state", () => {
+    if (state.confirmAction && state.outputContext !== outputContext()) closeConfirm();
+  });
 
   function selectedFacts() {
     const selected = numberFrom("#selected-count");
@@ -381,7 +392,7 @@
 
   function installConfirmations() {
     protectButton("export-egrdt", () => ({
-      preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
+      preflight: () => window.GrconTriageUiApi?.checkAnalysisValidity?.() ?? true,
       title: "Confirmar download somente da eGRDT",
       message: "Revise este resumo antes de gerar o arquivo que será usado na postagem.",
       facts: selectedFacts(),
@@ -390,29 +401,8 @@
       batchMode: "all",
       audit: () => window.GrconOutputPreview?.(),
     }));
-    protectButton("export-report", () => ({
-      title: "Baixar relatório da triagem?",
-      message: "O relatório explica o resultado da análise e a origem de cada decisão.",
-      facts: [`${numberFrom("#count-total")} documento(s) analisado(s)`, "Nenhum PDF ou LD será alterado."],
-      confirmLabel: "Baixar relatório",
-    }));
-    protectButton("export-pending-allocation-pdfs", () => {
-      const preview = window.GrconPendingAllocationUi?.preview?.() || {};
-      return {
-        preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
-        title: "Baixar PDFs aguardando retorno?",
-        message:
-          "Estes PDFs serão separados para uso futuro. Eles continuarão bloqueados e nenhuma eGRDT será criada.",
-        facts: [
-          `${preview.documentCount || 0} documento(s) aguardando retorno`,
-          `${preview.pdfCount || 0} PDF(s) no pacote`,
-          "Atualize a LD para ALOCADO e analise novamente antes de gerar a eGRDT.",
-        ],
-        confirmLabel: "Baixar somente os PDFs",
-      };
-    });
     protectButton("export-zip", () => ({
-      preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
+      preflight: () => window.GrconTriageUiApi?.checkAnalysisValidity?.() ?? true,
       title: "Baixar PDFs e eGRDT?",
       message: "O pacote conterá somente os documentos selecionados e a eGRDT correspondente.",
       facts: selectedFacts(),
@@ -422,7 +412,7 @@
       audit: () => window.GrconOutputPreview?.(),
     }));
     protectButton("export-final-package", () => ({
-      preflight: () => window.GrconTriageUiApi?.ensureFreshAnalysis?.() ?? true,
+      preflight: () => window.GrconTriageUiApi?.checkAnalysisValidity?.() ?? true,
       title: "Confirmar pacote completo",
       message: "Confira a quantidade de documentos antes de criar o pacote final.",
       facts: selectedFacts(),

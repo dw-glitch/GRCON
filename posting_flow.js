@@ -4,41 +4,59 @@
   const Planner = root.GrconPostingBatchPlanner;
   const KEY = "grcon.egrdt.posting-mode.v1";
   let postingMode = "mixed", filter = "all", index = Classification.buildIndex([], { complete: false });
-  let loading = null, dirty = true, generation = 0, workspace = "", memo = new Map(), searchMemo = new Map();
+  let loading = null, dirty = true, generation = 0, workspace = "", memo = new Map(), searchMemo = new Map(), contextKey = "", loadError = "", epoch = 0;
   try { postingMode = Planner.normalizeMode(localStorage.getItem(KEY)); } catch (_) { /* optional preference */ }
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   function scope() { return root.GrconCloud?.state?.membership?.workspace_id || ""; }
+  function context() { return `${scope()}:${root.GrconCloud?.state?.session?.user?.id || ""}`; }
+  function syncContext() {
+    if (contextKey === context()) return;
+    contextKey = context(); workspace = scope(); dirty = true; epoch += 1; loading = null; loadError = "";
+    install(localRecords(), false, "Cópia local do Histórico");
+  }
   function localRecords() { return (root.GrconHistory?.read() || []).filter(record => scope() ? record.workspaceId === scope() : !record.workspaceId); }
   function install(records, complete, source) {
     index = Classification.buildIndex(records, { complete, workspaceId: scope(), source });
     memo = new Map(); searchMemo = new Map(); generation += 1;
   }
   function lookup(document, revision) {
-    if (workspace !== scope()) { workspace = scope(); dirty = true; install(localRecords(), false, "Cópia local do Histórico"); }
+    syncContext();
     const key = JSON.stringify([Classification.documentKey(document), Classification.revisionKey(revision)]);
     if (!memo.has(key)) memo.set(key, Classification.classify(document, revision, index));
     return memo.get(key);
   }
   async function refresh(force = false) {
-    if (loading) return loading;
-    if (!dirty && !force && workspace === scope()) return index;
-    workspace = scope();
-    const expected = workspace;
+    syncContext();
+    if (loading) return loading.promise;
+    if (!dirty && !force) return index;
+    const expected = contextKey, startedEpoch = epoch;
     install(localRecords(), false, "Cópia local do Histórico");
     const startedGeneration = generation;
-    dirty = false;
-    loading = (async () => {
+    dirty = false; loadError = "";
+    const request = {};
+    loading = request;
+    request.promise = (async () => {
       await Promise.resolve();
       try {
-        if (!root.GrconCloud?.loadClassificationHistory || !expected) return index;
+        if (!root.GrconCloud?.loadClassificationHistory || !workspace) throw new Error("Histórico compartilhado indisponível.");
         const records = await root.GrconCloud.loadClassificationHistory();
-        if (scope() !== expected || generation !== startedGeneration) { dirty = true; return index; }
+        if (context() !== expected || epoch !== startedEpoch) return index;
+        if (generation !== startedGeneration) { dirty = true; return index; }
         install(records, true, "Histórico compartilhado completo");
-      } catch (_) { /* Keep explicit incomplete evidence, never infer absence. */ }
-      finally { loading = null; root.dispatchEvent(new CustomEvent("grcon:posting-classification-updated")); }
+      } catch (_) {
+        if (context() === expected && epoch === startedEpoch) {
+          loadError = "Não foi possível consultar o histórico.";
+          // Preserva evidências locais sem afirmar ausência. Retry explícito no painel.
+        }
+      } finally {
+        if (loading === request) {
+          loading = null;
+          root.dispatchEvent(new CustomEvent("grcon:posting-classification-updated"));
+        }
+      }
       return index;
     })();
-    return loading;
+    return request.promise;
   }
   function entries(document) {
     // Reutiliza o índice único da classificação; sem N consultas por linha.
@@ -56,7 +74,7 @@
     }
     return searchMemo.get(key);
   }
-  function status() { return { complete: index.complete, source: index.source, loading: Boolean(loading), workspaceId: workspace }; }
+  function status() { syncContext(); return { complete: index.complete, source: index.source, loading: Boolean(loading), workspaceId: workspace, context: contextKey, error: loadError }; }
   function setFilter(value) {
     filter = ["all", "postings", "reposts", "unconfirmed"].includes(value) ? value : "all";
     root.GrconTriageUiApi?.render();
@@ -88,7 +106,7 @@
       counts[result.emissionKind || "UNCONFIRMED"] += 1;
       if (result.warnings.length) counts.warnings += 1;
     }
-    document.getElementById("posting-history-counts").textContent = `Primeira postagem: ${counts.FIRST_POSTING} · Nova revisão: ${counts.NEW_REVISION} · Repostagem: ${counts.REPOST} · A confirmar: ${counts.UNCONFIRMED} · Atenções: ${counts.warnings} · Total selecionado: ${seen.size}`;
+    document.getElementById("posting-history-counts").textContent = `Nova emissão: ${counts.FIRST_POSTING} · Nova revisão: ${counts.NEW_REVISION} · Repostagem: ${counts.REPOST} · A confirmar: ${counts.UNCONFIRMED} · Atenções: ${counts.warnings} · Total selecionado: ${seen.size}`;
     document.getElementById("posting-history-source").textContent = loading ? "Consultando o Histórico compartilhado…" : index.complete ? "Fonte: Histórico compartilhado completo. Contagem por documento + revisão; formatos adicionais não são outra emissão." : "Histórico compartilhado a confirmar. Você pode continuar; a classificação ficará registrada com essa ressalva.";
     const control = document.getElementById("posting-batch-mode");
     if (control && control.value !== postingMode) control.value = postingMode;
@@ -96,7 +114,7 @@
     if (dirty && rows.length) void refresh();
   }
   root.addEventListener("grcon:history-updated", () => { dirty = true; install(localRecords(), false, "Cópia local do Histórico"); });
-  root.addEventListener("grcon:cloud-state", () => { dirty = true; });
+  root.addEventListener("grcon:cloud-state", () => { syncContext(); dirty = true; });
   document.addEventListener("change", event => {
     if (event.target.id !== "posting-batch-mode") return;
     postingMode = Planner.normalizeMode(event.target.value);
@@ -110,7 +128,7 @@
     root.GrconTriageUiApi?.render();
   });
   root.GrconPostingFlow = Object.freeze({ lookup, entries, searchText, status, refresh, setFilter, classifyPlan, splitPlan, matches, badge, render,
-    signature: () => `${generation}:${filter}`, getMode: () => postingMode,
+    signature: () => { syncContext(); return `${generation}:${filter}`; }, getMode: () => postingMode,
     setMode(value) { postingMode = Planner.normalizeMode(value); root.GrconTriageUiApi?.render(); return postingMode; },
   });
 })(window);

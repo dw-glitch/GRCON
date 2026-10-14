@@ -5,7 +5,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Core) {
   "use strict";
   const VERSION = "1.0.0";
-  const LABELS = Object.freeze({ FIRST_POSTING: "Primeira postagem", NEW_REVISION: "Nova revisão", REPOST: "Repostagem" });
+  const LABELS = Object.freeze({ FIRST_POSTING: "Nova emissão", NEW_REVISION: "Nova revisão", REPOST: "Repostagem" });
   const text = value => String(value == null ? "" : value).trim();
   function documentKey(value) {
     return text(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[–—]/g, "-").toUpperCase().replace(/\s+/g, " ").replace(/^NT-/, "");
@@ -61,12 +61,14 @@
     if (!key || !rev || !currentInfo.valid) warnings.push("Código ou revisão não identificado; confirme a identificação documental.");
     if (!index.complete) warnings.push("Histórico compartilhado indisponível ou incompleto. A ausência nesta cópia não confirma uma primeira postagem nem uma revisão inédita.");
     if (occurrences.some(entry => !entry.revision)) warnings.push("Há emissões antigas sem revisão registrada; confirme a revisão enviada.");
+    const hasUnknownRevision = occurrences.some(entry => !Core.revisionInfo(entry.revision).valid);
+    if (hasUnknownRevision && occurrences.some(entry => entry.revision)) warnings.push("Há emissões com revisão não reconhecida; confira o histórico.");
     const hasLaterRevision = currentInfo.valid && occurrences.some(entry => {
       const info = Core.revisionInfo(entry.revision);
       return info.valid && info.rank > currentInfo.rank;
     });
     if (hasLaterRevision) warnings.push("Existe revisão posterior no Histórico.");
-    const determinate = Boolean(key && currentInfo.valid && (sameRevision.length || (index.complete && !hasLaterRevision && !occurrences.some(entry => !entry.revision))));
+    const determinate = Boolean(key && currentInfo.valid && (sameRevision.length || (index.complete && !hasLaterRevision && !hasUnknownRevision)));
     const emissionKind = determinate ? (sameRevision.length ? "REPOST" : occurrences.length ? "NEW_REVISION" : "FIRST_POSTING") : "";
     return {
       classificationVersion: VERSION, emissionKind, classificationStatus: determinate ? "CONFIRMED" : "UNCONFIRMED",

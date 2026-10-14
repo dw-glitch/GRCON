@@ -39,7 +39,7 @@
   function visibleSet() { return new Set(preferences.visibleColumns); }
 
   function columnWidthRem(column) {
-    return ({ situation: 12, originalFile: 15, document: 26, ldCode: 12, apendiceSearch: 12, tagged: 8, sheet: 6, ldRevision: 7, targetRevision: 10, title: 18, effectiveDate: 11, grdt: 12, technicalStatus: 9, sigemStatus: 10, targetStatus: 13, postingStatus: 17, fiscalComment: 11, allocation: 12, allocationStage: 16, allocationStatus: 18, databook: 16, finalFile: 15 })[column.key] || 11;
+    return ({ situation: 10, originalFile: 15, document: 24, ldCode: 12, apendiceSearch: 12, tagged: 8, sheet: 6, ldRevision: 7, targetRevision: 10, title: 18, effectiveDate: 11, grdt: 12, technicalStatus: 9, sigemStatus: 10, targetStatus: 13, postingStatus: 17, fiscalComment: 11, allocation: 12, allocationStage: 16, allocationStatus: 14, databook: 16, finalFile: 15 })[column.key] || 11;
   }
 
   function savePreferences() { preferences = Flow.saveTriagePreferences(preferences); }

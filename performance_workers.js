@@ -334,7 +334,7 @@
     return run("export", "egrdts", payload, { onProgress });
   }
 
-  async function preparePackageFiles(payload, onProgress) {
+  async function preparePackageFiles(payload, onProgress, options = {}) {
     const source = payload || {};
     if (!source.includeFiles) return { payload: source, transfer: [] };
 
@@ -354,39 +354,39 @@
     const snapshots = new WeakMap();
     let completed = 0;
 
-    for (const entry of entries) {
-      const file = entry.file;
-      // Já estabilizado por uma chamada anterior: não lê nem transfere de novo.
-      if (file instanceof ArrayBuffer || ArrayBuffer.isView(file)) {
+    let cursor = 0, preparationError = null;
+    const checkCancelled = () => {
+      if (preparationError) throw preparationError;
+      if (options.cancelled?.()) throw new DOMException("Preparação cancelada.", "AbortError");
+    };
+    // Quatro leituras simultâneas reduzem a latência de pastas de rede sem abrir
+    // todos os arquivos de uma vez. Arquivos repetidos compartilham a mesma leitura.
+    try { await Promise.all(Array.from({ length: Math.min(4, entries.length) }, async () => {
+      while (cursor < entries.length) {
+        checkCancelled();
+        const entry = entries[cursor++], file = entry.file;
+        if (file instanceof ArrayBuffer || ArrayBuffer.isView(file)) { completed += 1; continue; }
+        let reading = snapshots.get(file);
+        if (!reading) {
+          reading = FileAccess.read(file, { context: "o arquivo da pasta documental", retries: 3 }).then(buffer => {
+            transfer.push(buffer); return buffer;
+          });
+          snapshots.set(file, reading);
+        }
+        const buffer = await reading;
+        checkCancelled();
+        entry.file = new Uint8Array(buffer);
         completed += 1;
-        continue;
+        onProgress?.({ type: "progress", progress: entries.length ? (completed / entries.length) * 0.12 : 0.12,
+          message: `Lendo arquivos (${completed}/${entries.length})`, completed, total: entries.length });
       }
-
-      let buffer = snapshots.get(file);
-      if (!buffer) {
-        buffer = await FileAccess.read(file, {
-          context: "o arquivo da pasta documental",
-          retries: 3,
-        });
-        snapshots.set(file, buffer);
-        transfer.push(buffer);
-      }
-      entry.file = new Uint8Array(buffer);
-      completed += 1;
-      if (onProgress && (completed === entries.length || completed % 8 === 0)) {
-        onProgress({
-          type: "progress",
-          progress: entries.length ? (completed / entries.length) * 0.12 : 0.12,
-          message: `Estabilizando arquivos da pasta de rede (${completed}/${entries.length})`,
-        });
-      }
-    }
+    })); } catch (error) { preparationError = error; throw error; }
 
     return { payload: { ...source, groups }, transfer };
   }
 
-  async function buildPackage(payload, onProgress) {
-    const prepared = await preparePackageFiles(payload, onProgress);
+  async function buildPackage(payload, onProgress, options = {}) {
+    const prepared = await preparePackageFiles(payload, onProgress, options);
     const workerProgress = onProgress ? (message) => {
       const value = message || {};
       onProgress({
