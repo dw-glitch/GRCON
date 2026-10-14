@@ -60,12 +60,13 @@
   function readingTableHtml(reply) {
     const columns = reply.columns || [];
     const align = reply.template?.columnAlign || {};
-    const defaults = Reply.COLUMN_ALIGN || {};
+    const cellAlignment = column => ["left", "center", "right"].includes(align[column])
+      ? align[column] : (Reply.COLUMN_ALIGN?.[column] || "left");
     const labels = reply.template?.columnLabels || {};
     const header = reply.template?.showHeader !== false;
     const head = columns.map((column) =>
       '<th scope="col" data-column="' + escapeHtml(column) + '" style="text-align:' +
-      escapeHtml(align[column] || defaults[column] || "left") + '">' +
+      escapeHtml(cellAlignment(column)) + '">' +
       escapeHtml(labels[column] || column) + '</th>').join("");
     const body = (reply.rows || []).map((row, index) => {
       const cells = columns.map((column) =>
@@ -358,6 +359,10 @@
 
   function cancelEditor() {
     state.configuration = { ...state.savedConfiguration };
+    if (!state.messageDirty) {
+      document.getElementById("egrdt-email-message").value =
+        Reply.build(state.records, state.configuration).message;
+    }
     state.editorOpen = false;
     const editor = document.getElementById("egrdt-email-model-editor");
     editor.open = false; editor.hidden = true;
@@ -399,6 +404,8 @@
     try {
       await root.GrconCloud.emailTemplateRestore(id);
       state.editorOpen = false;
+      const editor = document.getElementById("egrdt-email-model-editor");
+      editor.hidden = true; editor.open = false;
       await loadTemplate();
       notify("Modelo restaurado em uma nova versão.", "success");
     } catch (error) { notify(error.message || "Não foi possível restaurar o modelo.", "error"); }
@@ -470,7 +477,7 @@
   }
 
   async function copyText() {
-    const copied = await writeClipboard("", currentMessage());
+    const copied = await writeClipboard(currentReply().messageHtml, currentMessage());
     notify(copied ? "Texto copiado." : "Não foi possível copiar o texto.", copied ? "success" : "error");
   }
 
