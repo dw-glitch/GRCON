@@ -65,6 +65,21 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('[data-egrdt-email-view="read"]').click();
  assert.match(await page.locator('#egrdt-email-preview').innerText(),/Texto personalizado/);
  assert.match(await emailText.inputValue(),/Texto personalizado/);
+ await page.evaluate(() => {
+   window.__grconCopied=null;
+   Object.defineProperty(window,'ClipboardItem',{configurable:true,value:class {constructor(items){this.items=items;}}});
+   Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async items=>{window.__grconCopied=items[0];}}});
+ });
+ await page.locator('[data-egrdt-email-action="copy-all"]').click();
+ await page.waitForFunction(()=>Boolean(window.__grconCopied));
+ const copied=await page.evaluate(async()=>({
+   html:await window.__grconCopied.items['text/html'].text(),
+   plain:await window.__grconCopied.items['text/plain'].text(),
+ }));
+ assert.match(copied.html,/Texto personalizado/);
+ assert.match(copied.html,/<table/);
+ assert.match(copied.plain,/Texto personalizado/);
+ assert.match(copied.plain,/DOC-001/);
  await page.locator('[data-egrdt-email-action="edit-model"]').click();
  await page.locator('[data-model-style="fontSize"]').fill('14');
  await page.locator('[data-egrdt-email-action="preview-model"]').click();
