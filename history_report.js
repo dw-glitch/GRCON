@@ -183,6 +183,77 @@
       };
     }));
   }
+  // Contrato de interoperabilidade v1: somente estes cinco campos, nesta ordem.
+  // A planilha Controle de Solicitações cola A2:E... em "Colar GRCON"!A2.
+  // A primeira linha é uma instrução; os dados começam sempre na linha 3.
+  const COLAR_GRCON_COLUMNS_V1 = Object.freeze([
+    "DATA DA GERAÇÃO / POSTAGEM",
+    "EGRDT",
+    "DOCUMENTO",
+    "REVISÃO ENVIADA NA GRDT",
+    "VERSÃO DA LD ENVIADA",
+  ]);
+
+  function colarGrconRows(records) {
+    const unique = new Map();
+    (records || []).forEach((record) => {
+      const egrdt = text(record && record.egrdtNumber);
+      if (!egrdt) return;
+      (record.files || []).forEach((file) => {
+        const document = text(file && file.document);
+        if (!document) return;
+        const revision = grdtRevision(file);
+        // XLSX/PDF do mesmo documento e mesma revisão na mesma emissão
+        // são uma única ocorrência para a planilha de solicitações.
+        const id = [egrdt, norm(document), norm(revision), text(record.generatedAt)].join("\u001F");
+        const item = {
+          [COLAR_GRCON_COLUMNS_V1[0]]: formatDate(record.generatedAt, true),
+          [COLAR_GRCON_COLUMNS_V1[1]]: egrdt,
+          [COLAR_GRCON_COLUMNS_V1[2]]: document,
+          [COLAR_GRCON_COLUMNS_V1[3]]: revision,
+          [COLAR_GRCON_COLUMNS_V1[4]]: text(file.ldPrazo),
+        };
+        const earlier = unique.get(id);
+        if (!earlier) unique.set(id, item);
+        else if (!earlier[COLAR_GRCON_COLUMNS_V1[4]] && item[COLAR_GRCON_COLUMNS_V1[4]]) {
+          earlier[COLAR_GRCON_COLUMNS_V1[4]] = item[COLAR_GRCON_COLUMNS_V1[4]];
+        }
+      });
+    });
+    return [...unique.values()];
+  }
+
+  function addColarGrconSheet(workbook, rows) {
+    const sheet = workbook.addWorksheet("Colar GRCON", {
+      properties: { defaultRowHeight: 19 },
+      views: [{ state: "frozen", ySplit: 2, activeCell: "A3", showGridLines: false, zoomScale: 90 }],
+    });
+    sheet.columns = [24, 49, 53, 25, 29].map((width) => ({ width }));
+    sheet.mergeCells("A1:E1");
+    sheet.getCell("A1").value = "GRCON · layout fixo v1 · copie A2:E até a última linha e cole em A2 da aba Colar GRCON do Controle de Solicitações";
+    sheet.getCell("A1").font = { name: "Aptos", bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+    sheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF153A5C" } };
+    sheet.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
+    sheet.getRow(1).height = 31;
+    COLAR_GRCON_COLUMNS_V1.forEach((header, index) => { sheet.getCell(2, index + 1).value = header; });
+    styleHeader(sheet.getRow(2), "FF24689A");
+    rows.forEach((item, index) => {
+      const row = sheet.getRow(index + 3);
+      COLAR_GRCON_COLUMNS_V1.forEach((header, column) => {
+        const value = item[header];
+        row.getCell(column + 1).value = value === "" || value == null ? null : value;
+      });
+      // Uma linha por documento/GRDT; não há fórmulas nem colunas ocultas no arquivo exportado.
+      row.height = 20;
+      if (index % 2) row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F8FB" } };
+      });
+    });
+    sheet.autoFilter = { from: "A2", to: "E" + Math.max(2, rows.length + 2) };
+    sheet.pageSetup = { printTitlesRow: "2:2" };
+    return sheet;
+  }
+
   function summary(records) {
     const source = records || [];
     return {
@@ -367,11 +438,13 @@
 
     await addDataSheet(workbook, "eGRDTs", "eGRDTs GERADAS / POSTADAS", egrdts, metadata, settings.brandAssets);
     await addDataSheet(workbook, "Documentos", "DOCUMENTOS POR eGRDT", documents, metadata, settings.brandAssets);
+    // A aba compacta não modifica o formato de "Documentos" nem das abas existentes.
+    addColarGrconSheet(workbook, colarGrconRows(source));
 
     const buffer = await workbook.xlsx.writeBuffer();
     const check = new ExcelJS.Workbook();
     await check.xlsx.load(buffer);
-    if (!check.getWorksheet("Resumo") || !check.getWorksheet("eGRDTs") || !check.getWorksheet("Documentos")) throw new Error("A relação por período não pôde ser validada.");
+    if (!check.getWorksheet("Resumo") || !check.getWorksheet("eGRDTs") || !check.getWorksheet("Documentos") || !check.getWorksheet("Colar GRCON")) throw new Error("A relação por período não pôde ser validada.");
     return buffer;
   }
   function downloadName(records, options) {
@@ -430,5 +503,5 @@
     return `GRCON_Auditoria_Documentos_Removidos_${compactStamp()}.xlsx`;
   }
 
-  return Object.freeze({ formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, summary, buildWorkbook, downloadName, buildRemovedAuditWorkbook, removedAuditDownloadName });
+  return Object.freeze({ formatDate, periodLabel, filterRecords, familyLabel, allocationReason, egrdtRows, documentRows, colarGrconRows, COLAR_GRCON_COLUMNS_V1, summary, buildWorkbook, downloadName, buildRemovedAuditWorkbook, removedAuditDownloadName });
 });
