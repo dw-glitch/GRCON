@@ -139,14 +139,15 @@
     if (running && activeSource.href !== requestedSource.href) stop("context-changed");
     activeSource = requestedSource;
     ensureStrip();
-    fallback.hidden = activeSource !== papersSource;
-    video.style.visibility = activeSource === papersSource ? "hidden" : "visible";
-    strip.dataset.context = config.context || "default";
+    if (video.getAttribute("src") !== activeSource.href) video.src = activeSource.href;
     if (reducedMotion() || document.hidden) {
       stop(reducedMotion() ? "reduced-motion" : "hidden");
       return false;
     }
     if (running) return true;
+    fallback.hidden = activeSource !== papersSource;
+    video.style.visibility = activeSource === papersSource ? "hidden" : "visible";
+    strip.dataset.context = config.context || "default";
 
     running = true;
     strip.hidden = false;

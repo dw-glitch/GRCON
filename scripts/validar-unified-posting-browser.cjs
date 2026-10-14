@@ -72,8 +72,10 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
    const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(video,0,0,320,320);
    const pixels=ctx.getImageData(0,0,320,320).data;
    const cornerAlpha=[pixels[3],pixels[(319*4)+3],pixels[((319*320)*4)+3],pixels[((320*320-1)*4)+3]];
-   return {...window.GrconMascotRunner.diagnostics(),cornerAlpha};
+   return {...window.GrconMascotRunner.diagnostics(),cornerAlpha,playedSource:video.currentSrc,width:video.videoWidth,height:video.videoHeight};
   });
+  assert.ok(runner.playedSource.includes('papers-running-alpha.webm'),'the video element must actually play the Higgsfield papers asset');
+  assert.equal(runner.width,320);assert.equal(runner.height,320);
   assert.equal(runner.nonBlocking,true);assert.ok(runner.cornerAlpha.every(a=>a<10),'WebM must decode with real alpha in Chromium');
   await page.evaluate(()=>{document.getElementById('analyze').click();document.getElementById('analyze').click();});
   }
@@ -229,6 +231,12 @@ const fixture=docs.slice(0,40).map((doc,i)=>({id:'qa-'+i,clientRecordId:'qa-'+i,
   });
   assert.deepEqual(quickRun,{visible:true,active:true},'quick cached analyses start with the mascot already inside the screen');
   await page.waitForFunction(()=>!document.getElementById('analyze').disabled&&!window.GrconMascotRunner.diagnostics().active);
+  const originalRun=await page.evaluate(async()=>{
+   await window.GrconMascotRunner.run({context:'sigem-pw'});
+   const played=document.querySelector('.grcon-mascot-runner-video').currentSrc;
+   window.GrconMascotRunner.stop('QA-original');return played;
+  });
+  assert.ok(originalRun.includes('/grcon-mascot-running-alpha.webm'),'SIGEM × PW retains its actual original video');
   await page.emulateMedia({reducedMotion:'reduce'});
   assert.equal(await page.evaluate(()=>window.GrconMascotRunner.run({context:'control'})),false);
   await page.emulateMedia({reducedMotion:'no-preference'});
