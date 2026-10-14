@@ -29,7 +29,7 @@
   // relação; forçar as duas numa só era o que deixava a prévia ilegível.
   const VIEWS = { PASTE: "paste", READ: "read" };
 
-  const state = { records: [], reply: null, open: false, lastFocus: null, panel: null, view: VIEWS.PASTE, configuration: {}, templateVersions: [], templateEpoch: 0 };
+  const state = { records: [], reply: null, open: false, lastFocus: null, panel: null, view: VIEWS.READ, configuration: {}, templateVersions: [], templateEpoch: 0, messageDirty: false, editorDirty: false, editorMode: "local", editorOriginal: null, previewTimer: null };
 
   function notify(message, kind) {
     if (typeof root.GrconNotify === "function") root.GrconNotify(message, kind || "info");
@@ -54,13 +54,15 @@
    */
   function readingTableHtml(reply) {
     const columns = reply.columns || [];
-    const align = Reply.COLUMN_ALIGN || {};
-    const head = columns.map((column) => `<th scope="col" style="text-align:${align[column] || "left"}">${escapeHtml(reply.template?.columnLabels?.[column] || column)}</th>`).join("");
+    const align = { ...(Reply.COLUMN_ALIGN || {}), ...(reply.template?.columnAlign || {}) };
+    const labels = reply.template?.columnLabels || {};
+    const head = columns.map(column => '<th scope="col" data-email-column="' + escapeHtml(column) + '" style="text-align:' + escapeHtml(align[column] || "left") + '">' + escapeHtml(labels[column] || column) + '</th>').join("");
     const body = (reply.rows || []).map((row, index) => {
-      const cells = columns.map((column) => `<td style="text-align:${align[column] || "left"}">${escapeHtml(row[column])}</td>`).join("");
-      return `<tr><th scope="row">${index + 1}</th>${cells}</tr>`;
+      const cells = columns.map(column => '<td data-email-column="' + escapeHtml(column) + '" style="text-align:' + escapeHtml(align[column] || "left") + '">' + escapeHtml(row[column]) + '</td>').join("");
+      return '<tr><th scope="row">' + (index + 1) + '</th>' + cells + '</tr>';
     }).join("");
-    return `<table class="egrdt-email-reading"><thead><tr><th scope="col"><span class="sr-only">Linha</span></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    const tableHead = reply.template?.showHeader === false ? "" : '<thead><tr><th scope="col"><span class="sr-only">Linha</span></th>' + head + '</tr></thead>';
+    return '<table class="egrdt-email-reading">' + tableHead + '<tbody>' + body + '</tbody></table>';
   }
 
   function ensurePanel() {
@@ -90,29 +92,38 @@
         </button>
       </header>
       <div class="egrdt-email-body">
+        <div class="egrdt-email-workspace">
+          <section class="egrdt-email-compose" aria-label="Editar resposta">
+        <div class="egrdt-email-compose-heading"><strong>Editar resposta</strong><small>Personalize o texto desta eGRDT sem alterar o modelo compartilhado.</small></div>
         <label class="egrdt-email-message">
-          <span>Mensagem da resposta (edite se precisar)</span>
-          <textarea id="egrdt-email-message" rows="5" spellcheck="false"></textarea>
+          <span>Texto da mensagem</span>
+          <textarea id="egrdt-email-message" rows="8" spellcheck="true"></textarea>
         </label>
-        <button class="secondary-button compact" data-egrdt-email-action="edit-model" type="button" hidden>Editar modelo da resposta</button>
+        <div class="egrdt-email-compose-actions"><button class="secondary-button compact" data-egrdt-email-action="reset-message" type="button">Restaurar texto padrão</button><button class="secondary-button compact" data-egrdt-email-action="edit-table" type="button">Personalizar tabela</button><button class="secondary-button compact" data-egrdt-email-action="edit-model" type="button" hidden>Editar modelo compartilhado</button></div>
         <small id="egrdt-email-model-status"></small>
-        <details id="egrdt-email-model-editor" hidden><summary>Modelo compartilhado</summary><div id="egrdt-email-model-fields"></div></details>
+        <details id="egrdt-email-model-editor" hidden><summary>Configurações da tabela</summary><div id="egrdt-email-model-fields"></div></details>
+          </section>
+          <section class="egrdt-email-review" aria-label="Visualização da resposta">
         <div class="egrdt-email-preview-heading">
           <div class="egrdt-email-preview-label">
-            <strong>Relação dos documentos</strong>
+            <strong>Prévia completa da resposta</strong>
             <small id="egrdt-email-count">Nenhuma linha</small>
           </div>
           <div class="egrdt-email-views" role="group" aria-label="Como exibir a relação">
-            <button aria-pressed="true" class="egrdt-email-view" data-egrdt-email-view="paste" type="button">Como será colado</button>
-            <button aria-pressed="false" class="egrdt-email-view" data-egrdt-email-view="read" type="button">Leitura ampla</button>
+            <button aria-pressed="false" class="egrdt-email-view" data-egrdt-email-view="paste" type="button">Visualização para Outlook</button>
+            <button aria-pressed="true" class="egrdt-email-view" data-egrdt-email-view="read" type="button">Conferência</button>
           </div>
         </div>
         <p class="egrdt-email-hint" id="egrdt-email-hint"></p>
-        <div class="egrdt-email-preview" id="egrdt-email-preview" tabindex="0" role="region" aria-label="Prévia da relação dos documentos"></div>
+        <div class="egrdt-email-preview" id="egrdt-email-preview" tabindex="0" role="region" aria-label="Prévia completa da resposta de e-mail"></div>
+          </section>
+        </div>
       </div>
       <footer class="egrdt-email-footer">
+        <small id="egrdt-email-feedback" role="status" aria-live="polite"></small>
         <div class="egrdt-email-actions">
-          <button class="secondary-button compact" data-egrdt-email-action="mail" type="button">Abrir no e-mail</button>
+          <button class="secondary-button compact" data-egrdt-email-action="mail" type="button" title="Abre uma nova mensagem; não responde à conversa original">Novo e-mail</button>
+          <button class="secondary-button compact" data-egrdt-email-action="copy-message" type="button">Copiar só o texto</button>
           <button class="secondary-button compact" data-egrdt-email-action="copy-table" type="button">Copiar só a tabela</button>
           <button class="primary-button compact" data-egrdt-email-action="copy-all" type="button">Copiar resposta</button>
         </div>
@@ -126,15 +137,22 @@
       const view = event.target.closest("[data-egrdt-email-view]")?.dataset.egrdtEmailView;
       if (view) { setView(view); return; }
       const action = event.target.closest("[data-egrdt-email-action]")?.dataset.egrdtEmailAction;
-      if (action === "edit-model") void openEditor();
+      if (action === "edit-model") void openEditor("shared");
+      if (action === "edit-table") void openEditor("local");
+      if (action === "reset-message") restoreMessage();
+      if (action === "cancel-settings") cancelEditor();
+      if (action === "apply-settings") applyEditor();
       if (action === "save-model") void saveModel();
       if (action === "restore-model") void restoreModel();
       if (action === "preview-model") previewModel();
       if (action === "close") close();
-      if (action === "copy-all") void copyReply(false);
-      if (action === "copy-table") void copyReply(true);
+      if (action === "copy-all") void copyReply("all");
+      if (action === "copy-table") void copyReply("table");
+      if (action === "copy-message") void copyReply("message");
       if (action === "mail") void openMail();
     });
+    panel.addEventListener("input", handleEditorInput);
+    panel.addEventListener("change", handleEditorInput);
     state.panel = { overlay, panel };
     return state.panel;
   }
@@ -160,7 +178,7 @@
    */
   function renderPreview() {
     const { panel } = ensurePanel();
-    const reply = state.reply;
+    const reply = currentReply();
     const preview = panel.querySelector("#egrdt-email-preview");
     const paste = state.view === VIEWS.PASTE;
     preview.dataset.view = state.view;
@@ -169,11 +187,12 @@
     // senão as linhas passam por trás do cabeçalho fixo na faixa do
     // preenchimento superior.
     preview.innerHTML = reply.rows.length
-      ? (paste ? `<div class="egrdt-email-sheet">${reply.tableHtml}</div>` : readingTableHtml(reply))
+      ? (paste ? `<div class="egrdt-email-sheet">${reply.html}</div>` : `<div class="egrdt-email-reading-message">${Reply.messageHtml(reply.message)}</div>${readingTableHtml(reply)}`)
       : `<p class="egrdt-email-empty">Esta eGRDT não tem arquivos registrados para montar a relação.</p>`;
     panel.querySelector("#egrdt-email-hint").textContent = paste
-      ? "A tabela ocupa toda a largura da mensagem, terminando onde a frase acima dela termina; o texto que não cabe quebra dentro da célula, como o destinatário vai receber."
-      : "Ajustada à tela para conferência — o e-mail continua recebendo a tabela do modo “Como será colado”.";
+      ? "Mostra o HTML efetivamente copiado, com texto e tabela. O Outlook pode ajustar fontes e larguras conforme o cliente."
+      : "Texto e tabela para conferência rápida. A cópia continua usando a formatação do modo Outlook.";
+    panel.querySelector("#egrdt-email-count").textContent = `${reply.rows.length} linha(s) · ${reply.columns.length} colunas`;
     panel.querySelectorAll("[data-egrdt-email-view]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.egrdtEmailView === state.view));
     });
@@ -186,7 +205,7 @@
     if (state.reply) renderPreview();
   }
 
-  function render() {
+  function render(options = {}) {
     const { panel } = ensurePanel();
     const reply = state.reply;
     const numbers = reply.summary.egrdtNumbers;
@@ -201,7 +220,7 @@
       metric(reply.summary.files, "arquivo", "arquivos"),
       metric(reply.rows.length, "linha na tabela", "linhas na tabela"),
     ].join("");
-    panel.querySelector("#egrdt-email-message").value = reply.message;
+    if (!options.preserveMessage) panel.querySelector("#egrdt-email-message").value = reply.message;
     panel.querySelector("#egrdt-email-count").textContent = `${reply.rows.length} linha(s) · ${reply.columns.length} colunas`;
     renderPreview();
   }
@@ -215,10 +234,14 @@
     if (!list.length) { notify("Esta eGRDT não tem arquivos registrados para montar a resposta.", "warning"); return false; }
     const { overlay, panel } = ensurePanel();
     state.records = list;
-    state.configuration = {};
-    state.reply = Reply.build(list, options || {});
-    void loadTemplate();
+    state.configuration = options || {};
+    state.messageDirty = false;
+    state.editorDirty = false;
+    state.editorOriginal = null;
+    state.view = VIEWS.READ;
+    state.reply = Reply.build(list, state.configuration);
     render();
+    void loadTemplate();
     overlay.hidden = false;
     panel.hidden = false;
     state.open = true;
