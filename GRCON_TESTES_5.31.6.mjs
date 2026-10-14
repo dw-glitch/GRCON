@@ -3045,7 +3045,9 @@ check("resposta de e-mail monta as oito colunas da relação e cola como tabela"
   assert.equal((reply.tableHtml.match(/<th /g) || []).length, 8);
   assert.equal((reply.tableHtml.match(/<tr>/g) || []).length, 4);
   assert.match(reply.tableHtml, /border-collapse:collapse/);
-  assert.equal((reply.tableHtml.match(/font-size:10pt/g) || []).length, 33, "table, os 8 cabeçalhos e as 24 células usam fonte 10 pt");
+  const estilosDiretos = [...reply.tableHtml.matchAll(/<(?:table|th|td|span)\b[^>]*style="([^"]+)"/g)];
+  assert.ok(estilosDiretos.length >= 33, "a fonte também deve ser aplicada diretamente ao texto das células");
+  assert.ok(estilosDiretos.every(([, style]) => /(?:^|;)font-size:10pt(?:;|$)/.test(style)), "table, cabeçalhos, células e texto usam fonte 10 pt");
   assert.doesNotMatch(reply.tableHtml, /font-size:[89]pt/, "os tamanhos menores, de quando a tabela era estreita, não voltam");
   assert.match(reply.html, /<p style=/);
 
@@ -3078,7 +3080,7 @@ check("resposta de e-mail monta as oito colunas da relação e cola como tabela"
   // O cabeçalho não pode partir palavra ao meio ("FAMÍL / IA DOCU / MENT / AL"):
   // cada coluna é larga o bastante para a maior palavra do próprio título, e o
   // cabeçalho quebra nos espaços, não em qualquer letra.
-  assert.doesNotMatch(reply.tableHtml.split("<tbody>")[0], /word-break/, "o cabeçalho quebra nos espaços, nunca no meio da palavra");
+  assert.doesNotMatch(reply.tableHtml.split("<tbody>")[0], /word-break:(?:break-word|break-all)/, "o cabeçalho quebra nos espaços, nunca no meio da palavra");
   // Com o cabeçalho a 10 pt, e não mais a 8 pt, cada piso cresce um quarto.
   const pisos = {
     "DATA DA GERAÇÃO / POSTAGEM": 91, "EGRDT": 62, "FAMÍLIA DOCUMENTAL": 108, "DOCUMENTO": 102,
@@ -3122,7 +3124,7 @@ check("resposta de e-mail monta as oito colunas da relação e cola como tabela"
   // Só a tabela: quem já escreveu o próprio texto cola apenas a relação.
   const somenteTabela = EmailReply.build([postado], { message: "" });
   assert.equal(somenteTabela.text, somenteTabela.tableText);
-  assert.equal(somenteTabela.html.includes("<p style="), false);
+  assert.equal(somenteTabela.messageHtml, "", "sem parágrafos de introdução quando só a tabela foi solicitada");
 
   // Campo em branco vira travessão, e não uma célula vazia que desalinha a
   // leitura da tabela no e-mail.

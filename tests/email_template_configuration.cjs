@@ -30,3 +30,16 @@ assert.match(uiSource,/state\.messageDirty \|\| currentMessage\(\) !== before/);
 assert.match(uiSource,/function cancelEditor\(/);
 assert.match(uiSource,/function readingTableHtml\(/);
 console.log('Email editor: live draft state, HTML preview/copy parity, styles and column widths verified.');
+
+const personal=Reply.build(records,{message:'Primeiro parágrafo.\n\nSegundo parágrafo.',styles:{fontFamily:'Calibri',fontSize:8,messageFontSize:13,paragraphSpacing:18,lineHeight:1.5,padding:3,headerBackground:'#FEDCBA',bodyColor:'#123456'}});
+assert.match(personal.messageHtml,/font-size:13pt/);
+assert.match(personal.messageHtml,/margin:0 0 18px/);
+assert.match(personal.messageHtml,/mso-margin-bottom-alt:13.5pt/);
+assert.equal((personal.messageHtml.match(/<p /g)||[]).length,2);
+assert.match(personal.tableHtml,/<table cellspacing="0" cellpadding="3"/);
+assert.match(personal.tableHtml,/<span style="[^"]*font-size:8pt/);
+assert.match(personal.tableHtml,/line-height:12pt/);
+assert.match(personal.tableHtml,/bgcolor="#FEDCBA"/);
+assert.match(personal.tableHtml,/mso-padding-alt:2.25pt 2.25pt 2.25pt 2.25pt/);
+assert.ok(personal.html.includes(personal.messageHtml) && personal.html.includes(personal.tableHtml));
+assert.doesNotMatch(Reply.build(records,{styles:{messageFontSize:'12pt;position:fixed',lineHeight:999,paragraphSpacing:-10}}).html,/position:fixed/);

@@ -61,7 +61,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  const emailText=page.locator('#egrdt-email-message');
  await emailText.fill('Prezado(a),\\n\\nTexto personalizado para conferência e cópia.');
  await page.locator('[data-egrdt-email-view="paste"]').click();
- assert.match(await page.locator('#egrdt-email-preview').innerText(),/Texto personalizado/);
+ assert.match(await page.frameLocator('#egrdt-email-outlook-preview').locator('body').innerText(),/Texto personalizado/);
  await page.locator('[data-egrdt-email-view="read"]').click();
  assert.match(await page.locator('#egrdt-email-preview').innerText(),/Texto personalizado/);
  assert.match(await emailText.inputValue(),/Texto personalizado/);
@@ -84,7 +84,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  await page.locator('[data-model-style="fontSize"]').fill('14');
  await page.locator('[data-egrdt-email-action="preview-model"]').click();
  assert.match(await emailText.inputValue(),/Texto personalizado/);
- assert.match(await page.locator('#egrdt-email-preview').innerText(),/Texto personalizado/);await page.locator('[data-egrdt-email-action="save-model"]').click();await page.waitForFunction(()=>window.qaSavedTemplate?.cfg.styles.fontSize===14);assert.equal(await page.evaluate(()=>window.qaSavedTemplate.scope),'contract');
+ assert.match(await page.frameLocator('#egrdt-email-outlook-preview').locator('body').innerText(),/Texto personalizado/);await page.locator('[data-egrdt-email-action="save-model"]').click();await page.waitForFunction(()=>window.qaSavedTemplate?.cfg.styles.fontSize===14);assert.equal(await page.evaluate(()=>window.qaSavedTemplate.scope),'contract');
  await page.screenshot({path:path.join(out,'email-editor.png')});page.once('dialog',dialog=>dialog.accept());await page.locator('[data-egrdt-email-action="close"]').click();
  // O modelo atrasado não pode sobrescrever texto nem escolhas individuais da tabela.
  await page.evaluate(()=>{
@@ -119,7 +119,7 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  assert.equal(await emailText.inputValue(),'Resposta nova QA-NEW');
  assert.equal(await page.locator('[data-email-column]:checked').count(),1);
  await page.locator('[data-egrdt-email-view="paste"]').click();
- assert.match(await page.locator('#egrdt-email-preview table').getAttribute('style'),/font-size:11pt/);
+ assert.match(await page.frameLocator('#egrdt-email-outlook-preview').locator('table').getAttribute('style'),/font-size:11pt/);
  await page.evaluate(()=>{
   window.GrconEgrdtEmailReplyUi.close(true);
   window.GrconCloud.emailTemplateGet=window.__emailGet;
