@@ -11,8 +11,8 @@ const zero = doc.replace('320236', '320237');
 const unknown = doc.replace('320236', '320238');
 const book = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
-  ['DOCUMENTO','REVISÃO','TÍTULO','FORMATO','DISCIPLINA','TIPO DE DOCUMENTO','PROPÓSITO','CONFIRMAÇÃO DE ALOCAÇÃO'],
-  ...[doc, zero, unknown].map(d => [d,'B','RELATÓRIO DE INSPEÇÃO','A4','TUBULAÇÃO','REP','Para Construção','ALOCADO']),
+  ['DOCUMENTO','REVISÃO','TÍTULO','FORMATO','DISCIPLINA','TIPO DE DOCUMENTO','PROPÓSITO','CONFIRMAÇÃO DE ALOCAÇÃO','GRDT','DATA EFETIVA DE EMISSÃO'],
+  ...[doc, zero, unknown].map(d => [d,'B','RELATÓRIO DE INSPEÇÃO','A4','TUBULAÇÃO','REP','Para Construção','ALOCADO','','']),
 ]), 'ET');
 XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
   ['DOCUMENTO','REVISÃO','STATUS SIGEM'], [doc,'A','Sem Comentários'], [zero,'0','Sem Comentários'],
