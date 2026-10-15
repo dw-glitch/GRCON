@@ -38,10 +38,8 @@ async function waitForStableServiceWorkerPage(page) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
       await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
-      await page.waitForFunction(function () {
-        return Boolean(navigator.serviceWorker && navigator.serviceWorker.controller);
-      }, null, { timeout: 15000 });
-      // A tomada de controle é silenciosa; aguarde apenas o ciclo de ativação.
+      await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+      // A primeira página aguarda a ativação, sem exigir tomada de controle.
       await page.waitForTimeout(200);
       await page.waitForLoadState("domcontentloaded", { timeout: 15000 });
       return;

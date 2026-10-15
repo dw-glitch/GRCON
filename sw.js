@@ -319,7 +319,8 @@ self.addEventListener("install", (event) => {
       if (failed) console.warn(`SW: ${failed} asset(s) opcional(is) não foram pré-cacheados.`);
     })()
   );
-  self.skipWaiting();
+  // Uma atualização espera o encerramento das páginas controladas. Forçar
+  // skipWaiting reativaria o listener de recarga de versões antigas já abertas.
 });
 
 self.addEventListener("activate", (event) => {
@@ -331,7 +332,8 @@ self.addEventListener("activate", (event) => {
       );
     })()
   );
-  self.clients.claim();
+  // A primeira instalação passa a controlar a próxima navegação normal.
+  // Não reivindique páginas abertas: elas podem estar editando ou processando.
 });
 
 self.addEventListener("fetch", (event) => {

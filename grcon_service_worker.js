@@ -70,10 +70,9 @@
     || (location.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname));
   if (!("serviceWorker" in navigator) || !window.isSecureContext || !canRegister) return;
 
-  // A primeira instalação também dispara controllerchange por clients.claim().
-  // O Worker atualiza o cache em segundo plano; assumir o controle não exige
-  // reiniciar a página nem interromper campos, análises ou downloads abertos.
-  // O código novo da interface entra na próxima navegação normal do usuário.
+  // Registrar ou atualizar o Worker não deve reiniciar a interface. O cache é
+  // preparado em segundo plano e o Worker aguarda as páginas anteriores saírem.
+  // A primeira instalação controla a próxima navegação normal do usuário.
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((registration) => {
       console.log("GRCON SW registrado:", registration.scope);

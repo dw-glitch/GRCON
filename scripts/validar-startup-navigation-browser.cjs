@@ -5,7 +5,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require('playwright');
 const root = path.resolve(__dirname, '..');
-let revision = 1, failRetry = true, releaseContext;
+let revision = 1, failRetry = true, releaseContext, legacy = !!process.env.GRCON_STARTUP_BASELINE;
 const mime = {'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.webm':'video/webm','.svg':'image/svg+xml'};
 const server = http.createServer((req, res) => {
   const name = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -20,7 +20,9 @@ const server = http.createServer((req, res) => {
   fs.readFile(file, (error, bytes) => {
     if (error) {res.writeHead(404).end();return;}
     if (name === '/grcon_service_worker.js' && process.env.GRCON_STARTUP_BASELINE) bytes = fs.readFileSync(process.env.GRCON_STARTUP_BASELINE);
+    else if (name === '/grcon_service_worker.js' && legacy) bytes=Buffer.from(bytes.toString()+'\n(function(){let reloading=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(reloading)return;reloading=true;location.reload();});})();');
     if (name === '/sw.js') bytes = Buffer.from(bytes.toString().replace(/const CACHE_NAME = .*;/, 'const CACHE_NAME = "startup-qa-' + revision + '";') + '\n// startup revision ' + revision);
+    if (name === '/sw.js' && legacy) bytes=Buffer.from(bytes.toString()+'\nself.addEventListener("install",()=>self.skipWaiting());self.addEventListener("activate",event=>event.waitUntil(self.clients.claim()));');
     res.writeHead(200, {'Content-Type':mime[path.extname(file)] || 'application/octet-stream','Cache-Control':'no-store'}).end(bytes);
   });
 });
@@ -29,6 +31,9 @@ async function untilController(page) {
     try {await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, {timeout:45000});return;}
     catch (error) {if (!/context was destroyed|navigation/i.test(error.message) || attempt === 4) throw error;}
   }
+}
+async function untilReady(page) {
+  await page.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));
 }
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -46,7 +51,7 @@ async function untilController(page) {
       Object.defineProperty(window,'GrconLargeInput',{configurable:true,get:()=>largeInput,set:value=>{largeInput={...value};}});
     });
     await page.goto(base, {waitUntil:'load'});
-    await untilController(page);
+    if(legacy)await untilController(page);else await untilReady(page);
     await page.waitForTimeout(800);
     const firstBoots = await page.evaluate(() => Number(sessionStorage.getItem('startup-qa-boots')));
     if (process.env.GRCON_STARTUP_BASELINE) {
@@ -123,27 +128,43 @@ async function untilController(page) {
     await page.evaluate(()=>{GrconLargeInput.forEachInChunks=startupQaOriginalChunks;const data=new DataTransfer();data.items.add(new File(['pdf'],'RETRY.pdf'));const input=document.getElementById('pdf-input');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.waitForFunction(()=>[...document.querySelectorAll('[data-operation="grdt-folder-import"]')].at(0)?.dataset.state==='completed');
     assert.equal(await page.locator('#pdf-input').isDisabled(),false);
+    await page.reload({waitUntil:'load'});await untilController(page);
+    assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('startup-qa-boots'))),2);
     await page.evaluate(() => {
-      const field = document.createElement('input');field.id='startup-qa-draft';field.value='Conteúdo em edição';document.body.append(field);
-      window.startupQaOperation = GrconOperations.begin('startup-qa-active','Operação em andamento');
-      window.startupQaControllers = 0;navigator.serviceWorker.addEventListener('controllerchange', () => window.startupQaControllers++);
+      const field=document.createElement('input');field.id='startup-qa-draft';field.value='Conteúdo em edição';document.body.append(field);
+      window.startupQaOperation=GrconOperations.begin('startup-qa-active','Operação em andamento');
+      window.startupQaControllers=0;navigator.serviceWorker.addEventListener('controllerchange',()=>window.startupQaControllers++);
     });
     revision++;
-    await page.evaluate(async () => {await (await navigator.serviceWorker.getRegistration()).update();});
-    await page.waitForFunction(() => window.startupQaControllers >= 1, null, {timeout:45000});
-    await page.waitForTimeout(300);
-    const update = await page.evaluate(() => ({boots:Number(sessionStorage.getItem('startup-qa-boots')),draft:document.getElementById('startup-qa-draft')?.value,active:GrconOperations.isActive('startup-qa-active')}));
-    assert.deepEqual(update, {boots:1,draft:'Conteúdo em edição',active:true});
-    assert.equal(navigations, 1, 'background update must not navigate');
-    await page.evaluate(() => window.startupQaOperation.finish());
-    await page.reload({waitUntil:'load'});await untilController(page);
-    assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('startup-qa-boots'))), 2, 'only the requested reload may restart');
-    const cache = await page.evaluate(async () => (await caches.keys()).filter(name => name.startsWith('startup-qa-')));
-    assert.deepEqual(cache, ['startup-qa-2']);
-    await context.setOffline(true);
-    await page.reload({waitUntil:'load'});
-    assert.equal(await page.locator('html').getAttribute('data-app'), 'GRCON', 'offline opening must keep working');
+    await page.evaluate(async()=>{await(await navigator.serviceWorker.getRegistration()).update();});
+    await page.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);
+    const update=await page.evaluate(()=>({boots:Number(sessionStorage.getItem('startup-qa-boots')),draft:document.getElementById('startup-qa-draft')?.value,active:GrconOperations.isActive('startup-qa-active'),changes:startupQaControllers}));
+    assert.deepEqual(update,{boots:2,draft:'Conteúdo em edição',active:true,changes:0});
+    assert.equal(navigations,2,'waiting update must not navigate');
+    await page.evaluate(()=>startupQaOperation.finish());await page.close();
+    const reopened=await context.newPage();await reopened.goto(base,{waitUntil:'load'});await untilReady(reopened);
+    await reopened.waitForFunction(async()=>JSON.stringify((await caches.keys()).filter(name=>name.startsWith('startup-qa-')))==='["startup-qa-2"]');
+    await context.setOffline(true);await reopened.reload({waitUntil:'load'});
+    assert.equal(await reopened.locator('html').getAttribute('data-app'),'GRCON','offline opening must keep working');
     await context.close();
+
+    // A page already running the old reload listener must survive the rollout.
+    legacy=true;revision++;
+    const legacyContext=await browser.newContext();
+    await legacyContext.route('**/*.supabase.co/**',route=>route.fulfill({status:401,contentType:'application/json',body:'{}'}));
+    const legacyPage=await legacyContext.newPage();let legacyNavigations=0;
+    legacyPage.on('framenavigated',frame=>{if(frame===legacyPage.mainFrame())legacyNavigations++;});
+    await legacyPage.addInitScript(()=>sessionStorage.setItem('legacy-boots',String(Number(sessionStorage.getItem('legacy-boots')||0)+1)));
+    await legacyPage.goto(base,{waitUntil:'load'});await untilController(legacyPage);await legacyPage.waitForTimeout(800);
+    assert.equal(legacyNavigations,2,'fixture must reproduce the old first-install reload');
+    await legacyPage.evaluate(()=>{const field=document.createElement('input');field.id='legacy-draft';field.value='Trabalho preservado';document.body.append(field);window.legacyOperation=GrconOperations.begin('legacy-active','Operação ativa');});
+    legacy=false;revision++;
+    await legacyPage.evaluate(async()=>{await(await navigator.serviceWorker.getRegistration()).update();});
+    await legacyPage.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);
+    await legacyPage.waitForTimeout(300);
+    const legacyRollout=await legacyPage.evaluate(()=>({boots:Number(sessionStorage.getItem('legacy-boots')),draft:document.getElementById('legacy-draft')?.value,active:GrconOperations.isActive('legacy-active')}));
+    assert.deepEqual(legacyRollout,{boots:2,draft:'Trabalho preservado',active:true});assert.equal(legacyNavigations,2);
+    await legacyContext.close();
 
     const loaderContext = await browser.newContext({serviceWorkers:'block'});
     const loaderPage = await loaderContext.newPage();await loaderPage.goto(base+'/__loader');
@@ -163,7 +184,7 @@ async function untilController(page) {
     const operation = await loaderPage.evaluate(async () => {const op=GrconOperations.begin('real-operation','Gerar arquivo');const visible=!!document.querySelector('[data-operation="real-operation"] progress');op.finish();return visible;});
     assert.equal(operation,true,'progress for real operations must remain available');
     await loaderContext.close();
-    const result={passed:true,firstBoots,navigationsBeforeManualReload:1,update,offline:true,realModules,moduleOpeningCards:0,retry:true,contextGuard:true,operationalProgress:true,ldBytes,folderProgress,folderAndLdErrorRecovery:true};
+    const result={passed:true,firstBoots,navigationsBeforeManualReload:1,update,waitingUpdate:true,legacyRollout,offline:true,realModules,moduleOpeningCards:0,retry:true,contextGuard:true,operationalProgress:true,ldBytes,folderProgress,folderAndLdErrorRecovery:true};
     if(process.env.GRCON_STARTUP_QA_OUTPUT){fs.mkdirSync(path.dirname(process.env.GRCON_STARTUP_QA_OUTPUT),{recursive:true});fs.writeFileSync(process.env.GRCON_STARTUP_QA_OUTPUT,JSON.stringify(result,null,2));}
     console.log(JSON.stringify(result));
   } finally {await browser.close();}
