@@ -38,10 +38,11 @@
     node.append(title, message, announcement, bar, elapsed, close); host.prepend(node);
     let feedbackMs = null, lastAnnouncement = 0;
     const paintOperation = async () => { await paint(); if (feedbackMs == null) feedbackMs = Math.round(performance.now() - started); };
-    let settled = false, lastPaint = 0, pending = null, scheduled = null, phase = "Preparando…";
+    let settled = false, lastPaint = 0, pending = null, scheduled = null, phase = "Preparando…", phaseKey = "";
     function flush() {
       scheduled = null; if (!pending || settled) return;
       const detail = pending; pending = null; lastPaint = performance.now();
+      if(detail.phase)phaseKey=detail.phase;
       const total = Number(detail.total), done = Number(detail.done);
       const value = detail.progress != null ? Number(detail.progress) : total > 0 && Number.isFinite(done) ? done / total : null;
       const nextPhase = String(detail.message || detail.phase || phase);
@@ -54,9 +55,9 @@
     function update(detail = {}) {
       if (settled) return;
       if (typeof detail === "string") detail = { message: detail };
-      const changed = (detail.message || detail.phase) && (detail.message || detail.phase) !== phase;
+      const changed = detail.phase && detail.phase !== phaseKey;
       pending = detail;
-      if (changed || performance.now() - lastPaint >= 120) { if (scheduled) clearTimeout(scheduled); flush(); }
+      if (!lastPaint || changed || performance.now() - lastPaint >= 120) { if (scheduled) clearTimeout(scheduled); flush(); }
       else if (!scheduled) scheduled = setTimeout(flush, 120);
     }
     function finish(error) {

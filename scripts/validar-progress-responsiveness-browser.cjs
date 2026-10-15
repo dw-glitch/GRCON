@@ -28,13 +28,18 @@ const server = http.createServer((req,res) => {
       await new Promise(r=>setTimeout(r,80));
       const unknown=!document.querySelector('[data-operation="duplicate"] progress').hasAttribute('value');
       release();const values=await Promise.all([first,duplicate]);
+      const burst=Ops.begin('burst','Progresso frequente');
+      const progressNode=document.querySelector('[data-operation="burst"]');let mutations=0;
+      const observer=new MutationObserver(entries=>mutations+=entries.length);observer.observe(progressNode,{subtree:true,childList:true,attributes:true,characterData:true});
+      for(let i=0;i<1000;i++)burst.update({message:'Recebendo bytes · '+i,done:i,total:1000});
+      await new Promise(resolve=>setTimeout(resolve,180));burst.finish();await burst.paint();observer.disconnect();
       try{await Ops.run('error','Falha prevista',async()=>{throw new Error('Falha de teste');});}catch{}
       try{await Ops.run('cancel','Cancelamento',async()=>{throw new DOMException('Cancelado','AbortError');});}catch{}
       const statuses=Object.fromEntries(T.list().map(t=>[t.label,t.status]));
       const buttonRestored=!document.querySelector('#qa-button').disabled&&document.querySelector('#qa-button').textContent==='Executar';
-      return {calls,values,unknown,statuses,buttonRestored};
+      return {calls,values,unknown,statuses,buttonRestored,mutations};
     });
-    assert.equal(lifecycle.calls,1);assert.deepEqual(lifecycle.values,[42,42]);assert.equal(lifecycle.unknown,true);assert.equal(lifecycle.buttonRestored,true);
+    assert.ok(lifecycle.mutations<25,"frequent progress must not rebuild the UI per chunk");assert.equal(lifecycle.calls,1);assert.deepEqual(lifecycle.values,[42,42]);assert.equal(lifecycle.unknown,true);assert.equal(lifecycle.buttonRestored,true);
     assert.equal(lifecycle.statuses['Falha prevista'],'failed');assert.equal(lifecycle.statuses.Cancelamento,'cancelled');assert.equal(lifecycle.statuses['Duplicação'],'completed');
     const worker=await page.evaluate(async()=>{
       const n=50000,rows=Array.from({length:n},(_,i)=>['N-1710','E31','14/10/2026',i%3?'FISCAL 01 - AGUARDANDO RETORNO':'CONCLUÍDA','ALOC-'+i%500,'ET-3010.00-1200-800-ABC-'+String(i).padStart(6,'0')]);

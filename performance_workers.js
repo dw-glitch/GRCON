@@ -244,7 +244,9 @@
       return lookup;
     }
     const readStarted = performance.now();
-    const buffer = await file.arrayBuffer();
+    const buffer = root.GrconFileAccess?.read
+      ? await root.GrconFileAccess.read(file, { context: "a LD controlada", retries: 1 })
+      : await file.arrayBuffer();
     setMetric({ stage: "ld-file-read", durationMs: performance.now() - readStarted, bytes: buffer.byteLength });
     return run("ld", "parse", {
       key,
