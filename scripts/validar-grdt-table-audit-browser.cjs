@@ -83,7 +83,7 @@ docs.forEach(doc=>fs.writeFileSync(path.join(output,'bundle',`${doc}_0001_0.pdf`
   await page.locator('[data-revision-input]').first().fill('A');await page.locator('[data-revision-input]').first().press('Tab');
   assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.getResult(window.GrconTriageUiApi.filteredIndices()[0]).revision),'A');
   assert.equal(await page.evaluate(()=>window.GrconPerformanceDiagnostics.state().selected),count-1);
-  assert.match(await page.locator('.grdt-revision-transition').first().innerText(),/0 → A/);
+  assert.match(await page.locator('.grdt-revision-transition').first().innerText(),/Arquivo: 0 · GRDT: A/);
   await page.locator('[data-triage-facet="revision"]').selectOption('changed');
   assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.filteredIndices().length),1);
   await page.locator('#triage-clear-all').click();

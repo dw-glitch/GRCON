@@ -145,7 +145,8 @@ function rpc(name,args) {
  await a.page.locator('#relation-apply').click();await a.page.locator('#analyze').click();
  await a.page.waitForFunction(()=>window.GrconTriageUiApi.getResult(0)&&!document.getElementById('analyze').disabled,{timeout:30000});
  const row=await a.page.evaluate(()=>window.GrconTriageUiApi.getResult(0));
- assert.equal(row.document,documentCode);assert.equal(row.revision,'C'); // shared B Recusado advances normally, then legacy absence C
+ assert.equal(row.document,documentCode);assert.equal(row.revision,'B'); // arquivo B permanece B após o retorno Recusado
+ assert.equal(row.decision,'descartar');assert.equal(row.status,'Recusado');
  await a.page.screenshot({path:path.join(output,'control-before-edit.png'),fullPage:true});
  await a.page.locator('#select-row-0').check();
  await a.page.locator('#batch-egrdt').click();

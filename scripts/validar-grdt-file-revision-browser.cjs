@@ -44,7 +44,12 @@ names.forEach(name => fs.writeFileSync(path.join(bundle, name), '%PDF-1.4\n%%EOF
         await page.locator('#ld-compatibility-confirm').click();
         await page.locator('#analyze').click();
       }
-      await page.waitForFunction(() => window.GrconTriageUiApi.snapshot().total === 4 && !window.GrconPerformanceDiagnostics.state().busy, null, { timeout:60000 });
+      await page.waitForFunction(() => window.GrconTriageUiApi.snapshot().total > 0 && !window.GrconPerformanceDiagnostics.state().busy, null, { timeout:30000 }).catch(async error => {
+        console.error('analysis state', await page.evaluate(() => ({snapshot:window.GrconTriageUiApi.snapshot(), diagnostics:window.GrconPerformanceDiagnostics.state(), toast:document.getElementById('toast')?.innerText, text:document.body.innerText.slice(-12000)})));
+        await page.screenshot({path:path.join(output, worker ? 'worker-failure.png' : 'legacy-failure.png'), fullPage:true});
+        throw error;
+      });
+      assert.equal(await page.evaluate(() => window.GrconTriageUiApi.snapshot().total), 4);
       const rows = await page.evaluate(() => window.GrconTriageUiApi.filteredIndices().map(i => {
         const r = window.GrconTriageUiApi.getResult(i);
         return { index:i, document:r.document, revision:r.revision, fileRevision:r.fileRevision, decision:r.decision, files:r.files.length };
