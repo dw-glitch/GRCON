@@ -13,6 +13,7 @@ import type {
   LdHistoryEntry,
   LdRecord,
   LookupResult,
+  LdEntry,
   ParsedDocument,
 } from "./domain";
 
@@ -85,6 +86,7 @@ type NotifyFn = (message: string, kind?: string) => void;
 
 declare global {
   interface Window {
+    GrconConsultationIndex: { buildIndex(lds: LdEntry[], plannedSnapshot?: PlannedDocumentsSnapshot, control?: unknown): DocumentIndex | null };
     TriagemCore?: TriagemCoreApi;
     GrconRequestsCore?: GrconRequestsCoreApi;
     GrconRequestsReport?: GrconRequestsReportApi;

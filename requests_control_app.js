@@ -48,15 +48,24 @@
     if (!/\.(xlsx|xls|xlsm)$/i.test(file.name)) throw new Error("Selecione uma planilha Excel.");
     ensureScope(); const target = workspace(), ticket = epoch;
     const valid = () => { if (ticket !== epoch || target !== workspace()) throw new Error("O contrato mudou. Carregue novamente a base."); };
-    await root.GRCONModuleLoader.ensure("xlsx");
-    const records = Core.parseWorkbook(root.XLSX.read(await file.arrayBuffer(), { type: "array" }), root.XLSX);
+    const operation = root.GrconOperations?.begin("requests-base-publish", "Atualizar Controle de Solicitações", { host: "#requests-module" });
+    try {
+    await operation?.paint();
+    await root.GRCONModuleLoader.ensure("performance");
+    let records;
+    if (root.GrconPerformance?.supported) records = await root.GrconPerformance.importWorkbook(file, "requests", operation?.update);
+    else { await root.GRCONModuleLoader.ensure("xlsx"); records = Core.parseWorkbook(root.XLSX.read(await file.arrayBuffer(), { type: "array" }), root.XLSX); }
+    operation?.assertCurrent();
     valid(); const active = await rpc("current", {}, target); valid();
     const begun = await rpc("begin", { fileName: file.name, count: records.length, expectedActive: active?.id || null }, target);
     for (let offset = 0; offset < records.length; offset += 500) {
+      operation?.update({ message: "Enviando registros", done: offset, total: records.length });
       valid(); await rpc("chunk", { id: begun.id, first: offset + 1, rows: records.slice(offset, offset + 500) }, target);
     }
+    operation?.update("Confirmando publicação…");
     valid(); await rpc("publish", { id: begun.id }, target);
-    return refresh();
+    const result = await refresh(); operation?.assertCurrent(); operation?.finish(); return result;
+    } catch (error) { operation?.fail(error); throw error; }
   }
   root.GrconRequestsControl = Object.freeze({ current, refresh, publish,
     find(document) { ensureScope(); return Core.find(index, document); } });

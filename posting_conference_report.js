@@ -276,11 +276,11 @@
   // Todos os relatórios utilizam o padrão visual GRCON. A visão Pendências
   // mantém TODAS as colunas originais de auditoria e acrescenta o alcance
   // da pendência; sua diferença é conter uma única aba com as pendências.
-  async function buildWorkbook(rows, options) {
+  async function buildWorkbook(rows, options, onProgress) {
     if (root.document && typeof Worker === "function") {
       try {
         await root.GRCONModuleLoader?.ensure("performance");
-        if (root.GrconPerformance?.supported) return await root.GrconPerformance.buildSpreadsheet("conference", { rows, options });
+        if (root.GrconPerformance?.supported) return await root.GrconPerformance.buildSpreadsheet("conference", { rows, options }, onProgress);
       } catch (error) { console.warn("[GRCON] Exportação da Conferência em modo compatível", error); }
     }
     if (!root.ExcelJS) throw new Error("ExcelJS não está disponível para gerar o relatório.");

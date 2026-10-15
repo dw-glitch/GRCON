@@ -128,11 +128,14 @@ export function useCoverDocument() {
   const loadLds = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files);
     if (!list.length || busy) return;
+    const operation = window.GrconOperations?.begin("cover-ld", "Ler LDs para capa", { host: "#cover-document-module" });
     const mascotOperation = beginMascotOperation({ state: "analyzing", message: "Conferindo LD…", source: "cover-document-ld" });
     setBusy(true);
     setStatus("Lendo LDs com o parser do GRCON…");
     try {
-      const loaded = await loadLdRecords(list);
+      await operation?.paint();
+      const loaded = await loadLdRecords(list, operation?.update);
+      operation?.assertCurrent();
       setRecords(loaded);
       setLdNames(list.map((file) => file.name));
       setSelected(null);
@@ -144,11 +147,13 @@ export function useCoverDocument() {
       notify("LD carregada para a ferramenta de capa.", "success");
       mascotOperation.success({ message: "LD conferida." });
     } catch (error) {
+      operation?.fail(error);
       const message = error instanceof Error ? error.message : "Não foi possível ler a LD.";
       setStatus(message);
       notify(message, "error");
       mascotOperation.warning({ message });
     } finally {
+      operation?.finish();
       setBusy(false);
     }
   }, [busy, notify]);
@@ -170,11 +175,14 @@ export function useCoverDocument() {
 
   const attachSource = useCallback(async (file: File | null) => {
     if (!file || busy) return;
+    const operation = window.GrconOperations?.begin("cover-source", "Conferir documento de origem", { host: "#cover-document-module" });
     const mascotOperation = beginMascotOperation({ state: "analyzing", message: "Conferindo documento…", source: "cover-document-source" });
     setBusy(true);
     setStatus("Conferindo o documento de origem…");
     try {
+      await operation?.paint();
       const inspected = await inspectSourceDocument(file);
+      operation?.assertCurrent();
       setSource(inspected);
       setManualOriginalPages(null);
       if (inspected.kind === "pdf") setCoverMode("replace-first-page");
@@ -186,12 +194,14 @@ export function useCoverDocument() {
         : `${file.name}: confirme manualmente a quantidade de páginas do DOCX.`);
       mascotOperation.success({ message: "Documento conferido." });
     } catch (error) {
+      operation?.fail(error);
       const message = error instanceof Error ? error.message : "Não foi possível abrir o documento.";
       setSource(null);
       setStatus(message);
       notify(message, "error");
       mascotOperation.warning({ message });
     } finally {
+      operation?.finish();
       setBusy(false);
     }
   }, [busy, notify]);
@@ -247,6 +257,7 @@ export function useCoverDocument() {
 
   const generate = useCallback(async (kind: "pdf" | "docx") => {
     if (!source || !selected || !totalPages || hasErrors || busy) return;
+    const operation = window.GrconOperations?.begin("cover-generate", "Gerar documento com capa", { host: "#cover-document-module" });
     const mascotOperation = beginMascotOperation({ state: "analyzing", message: "Gerando arquivo com capa…", source: "cover-document-generate" });
     setBusy(true);
     setStatus(kind === "pdf"
@@ -255,11 +266,14 @@ export function useCoverDocument() {
         : "Adicionando a capa antes do documento e preservando as páginas originais…")
       : "Montando a capa Word editável e incorporando o documento original…");
     try {
+      await operation?.paint();
+      operation?.update(kind === "pdf" ? "Montando páginas e capa PDF…" : "Montando documento Word editável…");
       const outputData = { ...data, revisionDate: currentCoverDate() };
       if (outputData.revisionDate !== data.revisionDate) setData(outputData);
       const generated = kind === "pdf"
         ? await generatePdf(outputData, source, coverMode)
         : await generateDocx(outputData, source, totalPages);
+      operation?.assertCurrent();
       downloadGenerated(generated);
       try {
         const key = "grcon_cover_document_history_v1";
@@ -286,11 +300,13 @@ export function useCoverDocument() {
       notify("Arquivo com capa gerado com sucesso.", "success");
       mascotOperation.success({ message: "Arquivo com capa gerado." });
     } catch (error) {
+      operation?.fail(error);
       const message = error instanceof Error ? error.message : "Não foi possível gerar o arquivo.";
       setStatus(message);
       notify(message, "error");
       mascotOperation.warning({ message });
     } finally {
+      operation?.finish();
       setBusy(false);
     }
   }, [busy, coverMode, data, hasErrors, notify, selected, source, totalPages]);

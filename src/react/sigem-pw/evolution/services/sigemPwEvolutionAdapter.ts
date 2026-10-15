@@ -881,6 +881,7 @@ async function readSourceCatalog(): Promise<EvolutionSourceCatalog> {
 
 async function loadSnapshots(forceLd = false): Promise<boolean> {
   if (state.busy) return false;
+  const operation = window.GrconOperations?.begin("sigem-pw-evolution-load", "Preparar Evolução SIGEM × PW");
   state.busy = true;
   const epoch = contextEpoch;
   const context = contextKey();
@@ -889,6 +890,8 @@ async function loadSnapshots(forceLd = false): Promise<boolean> {
   emit();
   const started = now();
   try {
+    await operation?.paint();
+    operation?.update("Carregando histórico das bases…");
     const management = Management();
     if (management?.ensureCurrentPayloads) await management.ensureCurrentPayloads();
     if (!isCurrent()) return false;
@@ -897,6 +900,7 @@ async function loadSnapshots(forceLd = false): Promise<boolean> {
     for (const key of Object.keys(preferredSelections) as Array<keyof typeof preferredSelections>) {
       preferredSelections[key] = catalog.aliases.get(preferredSelections[key]) || preferredSelections[key];
     }
+    operation?.update("Preparando universo documental da LD…");
     const universe = await readLdUniverse(Boolean(forceLd));
     if (!isCurrent()) { state.ldUniverse = null; state.ldSignature = ""; return false; }
     if (!universe.qualityAvailable) {
@@ -950,10 +954,12 @@ async function loadSnapshots(forceLd = false): Promise<boolean> {
     }
     return true;
   } catch (error) {
+    operation?.fail(error);
     if (!isCurrent()) return false;
     state.error = messageOf(error, "Não foi possível carregar a Evolução SIGEM × PW.");
     throw error;
   } finally {
+    operation?.finish();
     state.busy = false;
     emit();
   }

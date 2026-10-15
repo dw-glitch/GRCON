@@ -47,7 +47,10 @@
           if (records.length > meta.record_count) throw new Error("Contagem divergente na Central compartilhada.");
         }
         if (!validScope(expected)) return null;
-        state.snapshot = { id: meta.snapshot_id, fileName: meta.file_name, updatedAt: meta.published_at, count: records.length, index: Core.buildIndex(records), records, stale: false };
+        await root.GRCONModuleLoader.ensure("performance");
+        const index = root.GrconPerformance?.supported ? await root.GrconPerformance.processData("allocation-index", { records }) : Core.buildIndex(records);
+        if (!validScope(expected)) return null;
+        state.snapshot = { id: meta.snapshot_id, fileName: meta.file_name, updatedAt: meta.published_at, count: records.length, index, records, stale: false };
         state.error = ""; emit(); return state.snapshot;
       } catch (error) {
         if (!validScope(expected)) return null;
@@ -62,24 +65,29 @@
     const expected = ensureScope(), parsed = state.parsed;
     if (!parsed || state.busy) return;
     if (cloud()?.state?.membership?.role !== "owner") throw new Error("Somente o proprietário pode publicar esta base.");
+    const operation = root.GrconOperations?.begin("allocation-publish", "Publicar Central de alocação", { host: $("allocation-registry-status")?.parentElement });
     state.busy = true; render(); let published = false, publishAttempted = false;
     try {
+      await operation?.paint();
       const upload_id = await rpc("begin", { target_workspace: expected.workspace, source_file: state.fileName, expected_count: parsed.count,
         source_metadata: parsed.metadata, expected_active: current()?.id || null });
       for (let offset = 0; offset < parsed.count; offset += 500) {
         if (!validScope(expected)) throw new Error("A sessão mudou durante o envio.");
         await rpc("chunk", { target_workspace: expected.workspace, upload_id, first_row: offset + 1, rows: parsed.records.slice(offset, offset + 500) });
+        operation?.update({ message: "Enviando vínculos", done: Math.min(offset + 500, parsed.count), total: parsed.count });
         $("allocation-registry-status").textContent = `Enviando ${Math.min(offset + 500, parsed.count)} de ${parsed.count} vínculos. A base anterior continua ativa.`;
       }
       if (!validScope(expected)) throw new Error("A sessão mudou durante o envio.");
+      operation?.update("Confirmando publicação…");
       publishAttempted = true;
       await rpc("publish", { target_workspace: expected.workspace, upload_id }); published = true;
       if (!validScope(expected)) return;
       state.parsed = null; $("allocation-registry-file").value = ""; await refresh();
       root.GrconNotify?.(state.snapshot?.id === upload_id && !state.snapshot.stale ? "Central de alocação publicada para a equipe. Faça nova análise para usar a versão atual." : "Central publicada. Atualize a consulta para confirmar a versão carregada.", state.snapshot?.id === upload_id && !state.snapshot.stale ? "success" : "warning");
     } catch (error) {
+      operation?.fail(error);
       if (validScope(expected)) { state.error = `${published ? "A base foi publicada; atualize a página para carregá-la" : (publishAttempted ? "Não foi possível confirmar a publicação; atualize a consulta" : "Publicação não concluída; a base anterior foi mantida")}: ${error.message || error}`; root.GrconNotify?.(state.error, "warning"); }
-    } finally { state.busy = false; render(); }
+    } finally { operation?.finish(); state.busy = false; render(); }
   }
   function render() {
     if (!$("allocation-registry-status")) return;
@@ -114,13 +122,19 @@
       const expected = ensureScope(), parseToken = {}; state.parseToken = parseToken;
       state.parsed = null; state.error = ""; render();
       const file = event.target.files?.[0]; if (!file) { render(); return; }
+      const operation = root.GrconOperations?.begin("allocation-import", "Ler Central de alocação", { host: $("allocation-registry-status")?.parentElement });
+      state.busy = true; render();
       try {
+        await operation?.paint();
         if (!/\.(xlsx|xls|xlsm)$/i.test(file.name)) throw new Error("Selecione uma planilha Excel.");
-        await root.GRCONModuleLoader.ensure("xlsx");
-        const workbook = root.XLSX.read(await file.arrayBuffer(), { type: "array" });
+        await root.GRCONModuleLoader.ensure("performance");
+        let parsed;
+        if (root.GrconPerformance?.supported) parsed = await root.GrconPerformance.importWorkbook(file, "allocation", operation?.update);
+        else { await root.GRCONModuleLoader.ensure("xlsx"); const workbook = root.XLSX.read(await file.arrayBuffer(), { type: "array" }); parsed = Core.parseWorkbook(workbook, root.XLSX); }
         if (state.parseToken !== parseToken || !validScope(expected)) return;
-        state.parsed = Core.parseWorkbook(workbook, root.XLSX); state.fileName = file.name; render();
-      } catch (error) { if (state.parseToken === parseToken && validScope(expected)) { state.error = error.message || String(error); render(); } }
+        operation?.assertCurrent(); state.parsed = parsed; state.fileName = file.name; render();
+      } catch (error) { operation?.fail(error); if (state.parseToken === parseToken && validScope(expected)) { state.error = error.message || String(error); render(); } }
+      finally { operation?.finish(); if (state.parseToken === parseToken && validScope(expected)) { state.busy = false; render(); } }
     });
     $("allocation-registry-refresh")?.addEventListener("click", () => void refresh());
     $("allocation-registry-publish")?.addEventListener("click", () => void publish().catch(error => { state.error = error.message; render(); }));

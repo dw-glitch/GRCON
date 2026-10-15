@@ -86,6 +86,8 @@
   }
   async function saveContract(event) {
     event.preventDefault(); if (!owner()) return;
+    if(root.GrconOperations?.isActive("admin-contract-save"))return;
+    const operation=root.GrconOperations?.begin("admin-contract-save","Salvar contrato",{host:event.target,button:event.target.querySelector('[type="submit"]')});
     const code = $("#admin-contract-code").value.trim().toUpperCase();
     const inherit = $("#admin-contract-inherit").checked;
     const input = { id: $("#admin-contract-id").value || null, code, slug: code.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""), name: $("#admin-contract-name").value.trim(), displayName: $("#admin-contract-display").value.trim(), company: $("#admin-contract-company").value.trim(), client: $("#admin-contract-client").value.trim(), site: $("#admin-contract-site").value.trim(), project: $("#admin-contract-project").value.trim(), active: $("#admin-contract-active").checked, settings: { ...(state.editing?.settings || {}), ruleProfile: $("#admin-contract-profile").value.trim() || "UNCONFIGURED", inheritLegacyRules: inherit, enabledModules: { ...(state.editing?.settings?.enabledModules || {}), legacyUhdtRules: inherit } } };
@@ -93,7 +95,7 @@
       const { error } = await cloud().state.client.rpc("grcon_contract_save", { input }); if (error) throw error;
       await cloud().refreshContracts();
       notify("Contrato salvo. O histórico foi preservado.", "success"); open();
-    } catch (error) { notify(error.message, "error"); }
+    } catch (error) { operation?.fail(error); notify(error.message, "error"); } finally {operation?.finish();}
   }
   async function saveUser(event) {
     event.preventDefault(); if (!owner()) { notify("Acesso restrito ao proprietário.", "error"); return; }

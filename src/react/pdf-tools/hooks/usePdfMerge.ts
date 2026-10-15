@@ -211,17 +211,22 @@ export function usePdfMerge() {
     const normalizedName = Adapter.outputFileName(outputNameRef.current);
     outputNameRef.current = normalizedName;
     setOutputNameState(normalizedName);
+    const operation = window.GrconOperations?.begin("pdf-merge", "Combinar PDFs", { host: "#pdf-tools-module" });
     busyRef.current = true;
     setBusy(true);
     setProgress({ percent: 1, message: "Preparando os PDFs…" });
 
     try {
+      await operation?.paint();
       const outcome = await Adapter.merge(currentItems, normalizedName, (entry) => {
         if (!mountedRef.current) return;
-        setProgress(Adapter.progressState(entry, currentItems.length));
+        const next = Adapter.progressState(entry, currentItems.length);
+        operation?.update({ message: next.message, progress: next.percent / 100 });
+        setProgress(next);
       });
       if (!mountedRef.current) return;
 
+      operation?.assertCurrent();
       const nextResult = Adapter.createResult(outcome, normalizedName);
       replaceResult(nextResult);
       setProgress({ percent: 100, message: "PDF combinado com sucesso." });
@@ -237,6 +242,7 @@ export function usePdfMerge() {
       }
     } catch (error) {
       const failure = error as { code?: string; message?: string };
+      operation?.fail(failure.code === "CANCELLED" ? new DOMException("Combinação cancelada.", "AbortError") : error);
       if (failure.code !== "CANCELLED") {
         const message = failure.message || "Não foi possível combinar os arquivos.";
         Adapter.notify(message, "error");
@@ -245,6 +251,7 @@ export function usePdfMerge() {
         mascotOperation.cancel();
       }
     } finally {
+      operation?.finish();
       if (mountedRef.current) {
         busyRef.current = false;
         setBusy(false);
@@ -286,13 +293,9 @@ export function usePdfMerge() {
       deactivate,
       addFiles,
       clear,
-      getDebugState: () => stateRef.current || {
-        items: [],
-        busy: false,
-        outputName: Adapter.DEFAULT_OUTPUT_NAME,
-        result: null,
-        workerActive: Adapter.hasActiveWorker(),
-      },
+      getDebugState: () => ({ ...(stateRef.current || {
+        items: [], busy: false, outputName: Adapter.DEFAULT_OUTPUT_NAME, result: null, workerActive: false,
+      }), workerActive: Adapter.hasActiveWorker() }),
     });
     return unregister;
   }, [activate, deactivate, addFiles, clear]);

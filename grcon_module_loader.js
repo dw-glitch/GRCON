@@ -4,6 +4,7 @@
   const loaded = new Set();
   const loading = new Map();
   const moduleState = new Map();
+  let requestedView = "control";
 
   const groups = {
     compliance: ["core.js", "normative_registry.js", "normative_version_registry.js", "normative_applicability.js", "normative_rule_engine.js", "n1710_catalog.js", "n1710_parser.js", "n2064_revision_lifecycle.js", "documentary_compliance.js", "documentary_compliance_ui.js"],
@@ -33,7 +34,7 @@
       "xlsx", "excel", "brand",
       // Dependências de domínio obrigatórias da ilha. Mesmo quando já vieram
       // do carregamento inicial, a ordem fica explícita e auditável aqui.
-      "core.js", "planned_documents_core.js", "requests_core.js", "requests_report.js", "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
+      "core.js", "planned_documents_core.js", "consultation_index.js", "requests_core.js", "requests_report.js", "grcon_file_access.js", "ld_memory.js", "grdt_history_indicator.js",
       // Taxonomia envolve GrconRequestsCore/Report antes de qualquer leitura da
       // ilha; requests_app mantém somente a aba legada de modelos.
       "requests_taxonomy_core.js", "requests_app.js",
@@ -106,7 +107,11 @@
           : new Error(event.message || `Falha ao executar ${src}`);
       };
 
-      const cleanup = () => root.removeEventListener("error", onRuntimeError);
+      const timeout = root.setTimeout(() => {
+        cleanup(); script.remove(); loaded.delete(src);
+        reject(new Error("O carregamento demorou além do esperado. Clique no módulo para tentar novamente."));
+      }, 45000);
+      const cleanup = () => { root.clearTimeout(timeout); root.removeEventListener("error", onRuntimeError); };
       root.addEventListener("error", onRuntimeError);
 
       script.addEventListener("load", () => {
@@ -153,9 +158,10 @@
               retry.src = retryUrl.href;
               retry.async = false;
               retry.dataset.grconLazy = `${url}::retry`;
-              retry.addEventListener("load", candidateResolve, { once: true });
+              const retryTimer = root.setTimeout(() => { retry.remove(); candidateReject(new Error("O recurso não respondeu. Tente abrir o módulo novamente.")); }, 15000);
+              retry.addEventListener("load", () => { root.clearTimeout(retryTimer); candidateResolve(); }, { once: true });
               retry.addEventListener("error", () => {
-                retry.remove();
+                root.clearTimeout(retryTimer); retry.remove();
                 candidateReject(new Error(`Falha ao carregar ${url}.`));
               }, { once: true });
               document.head.appendChild(retry);
@@ -312,6 +318,7 @@
 
   async function ensureModule(view) {
     const module = view === "analysis-history" ? "control" : view || "control";
+    requestedView = module;
     if (module === "control") {
       directActivate("control");
       return;
@@ -329,19 +336,28 @@
     moduleState.set(module, "loading");
     directActivate(module);
 
+    const operation = root.GrconOperations?.begin("module:" + module, "Abrindo módulo…");
     const promise = (async () => {
       try {
-        await ensure(module);
+        await operation?.paint();
+        const dependencies = groups[module] || [module];
+        for (let i = 0; i < dependencies.length; i++) {
+          operation?.update({ message: "Carregando recursos do módulo…", done: i, total: dependencies.length });
+          await ensure(dependencies[i]);
+        }
+        operation?.assertCurrent();
         assertModuleReady(module);
         moduleState.set(module, "ready");
-        activateReadyModule(module);
+        if (requestedView === module) activateReadyModule(module);
         root.dispatchEvent(new CustomEvent("grcon:module-ready", { detail: { module } }));
       } catch (error) {
+        operation?.fail(error);
         moduleState.set(module, "failed");
         console.error(error);
         root.GrconNotify?.(error.message || `Falha ao carregar ${module}.`, "error");
         throw error;
       } finally {
+        operation?.finish();
         loading.delete(`module:${module}`);
       }
     })();

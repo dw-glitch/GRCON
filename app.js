@@ -21,7 +21,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.11";
+  const APP_VERSION = "5.44.12";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -1101,6 +1101,7 @@
 
   function setProgress(percent, message) {
     const bounded = Math.max(0, Math.min(100, Number(percent) || 0));
+    Workspace?.update?.("grdt-analysis", bounded, message);
     if (els.progress) els.progress.hidden = false;
     if (els.progressBar) els.progressBar.style.width = `${bounded}%`;
     if (els.progressText && message) els.progressText.textContent = message;
@@ -2579,6 +2580,7 @@
           source: hasRelationSource() ? "list" : "folder"
         });
       } else {
+        failWorkspaceTasks(error);
         const rawMessage = String(error && error.message || "");
         const corrupted = /bad compressed size|invalid zip|central directory|unexpected end|corrupt|truncated/i.test(rawMessage);
         showToast(corrupted
@@ -2606,7 +2608,7 @@
     analysisTiming.feedbackMs = performance.now() - analysisTiming.startedAt;
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
     try { await analyzeEngine(); }
-    catch (error) { showToast(error?.name === "AbortError" ? "Processamento cancelado." : error?.message || "Não foi possível preparar a análise. Tente novamente.", error?.name === "AbortError" ? "warn" : "error"); }
+    catch (error) { failWorkspaceTasks(error); showToast(error?.name === "AbortError" ? "Processamento cancelado." : error?.message || "Não foi possível preparar a análise. Tente novamente.", error?.name === "AbortError" ? "warn" : "error"); }
     finally {
       analysisTiming.totalMs = performance.now() - analysisTiming.startedAt;
       analysisStarting = false;
@@ -2902,11 +2904,13 @@
     } catch (error) {
       if (error && error.name === "AbortError") {
         state.cancelled = true;
+        failWorkspaceTasks(error);
         if (els.performancePanel) els.performancePanel.classList.add("is-cancelled");
         refreshPerformancePanel("Processamento cancelado. Nenhum resultado parcial foi usado.");
         showToast("Processamento cancelado com segurança.", "warn");
       } else {
         console.error(error);
+        failWorkspaceTasks(error);
         const rawMessage = String(error && error.message || "");
         const corrupted = /bad compressed size|invalid zip|central directory|unexpected end|corrupt|truncated/i.test(rawMessage);
         showToast(corrupted ? "A LD está corrompida ou incompleta. Exporte ou copie o arquivo novamente." : rawMessage || "Não foi possível concluir a análise.", "error");
@@ -4742,7 +4746,11 @@
     return buffer;
   }
 
+  function failWorkspaceTasks(error) {
+    for (const key of ["grdt-analysis", "grdt-export", "grdt-package", "grdt-final-package", "pending-allocation-pdfs"]) Workspace?.fail?.(key, error);
+  }
   function handleWorkerTaskError(error, fallbackMessage) {
+    failWorkspaceTasks(error);
     if (error && error.name === "AbortError") {
       state.cancelled = true;
       refreshPerformancePanel("Processamento cancelado. Nenhum arquivo parcial foi usado.");

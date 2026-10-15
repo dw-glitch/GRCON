@@ -5,6 +5,7 @@
     ld: "workers/ld.worker.js",
     triage: "workers/triage.worker.js",
     export: "workers/export.worker.js",
+    data: "workers/data.worker.js",
   });
   const workers = new Map();
   const pending = new Map();
@@ -243,7 +244,9 @@
       return lookup;
     }
     const readStarted = performance.now();
-    const buffer = await file.arrayBuffer();
+    const buffer = root.GrconFileAccess?.read
+      ? await root.GrconFileAccess.read(file, { context: "a LD controlada", retries: 1 })
+      : await file.arrayBuffer();
     setMetric({ stage: "ld-file-read", durationMs: performance.now() - readStarted, bytes: buffer.byteLength });
     return run("ld", "parse", {
       key,
@@ -406,6 +409,11 @@
     } : null;
   }
 
+  const dataScope = () => `${root.GrconCloud?.state?.membership?.workspace_id || ""}:${root.GrconCloud?.state?.session?.user?.id || ""}`;
+  let lastDataScope = dataScope();
+  const invalidateData = () => { const next = dataScope(); if(next === lastDataScope)return;lastDataScope=next;disposeWorker("data",new DOMException("O contrato ou a sessão mudou.","AbortError")); };
+  root.addEventListener?.("grcon:contract-context-changed",invalidateData);
+  root.addEventListener?.("grcon:cloud-signed-out",invalidateData);
   root.GrconPerformance = Object.freeze({
     get version() { return appVersion(); },
     supported: supported(),
@@ -416,7 +424,46 @@
     buildReport,
     buildEgrdts,
     buildPackage,
-    buildSpreadsheet: (kind, payload) => run("export", "spreadsheet", { kind, ...payload }),
+    buildSpreadsheet: (kind, payload, onProgress) => {
+      const work = async operation => {
+        const update = detail => { operation?.update(detail); onProgress?.(detail); };
+        if(supported())return run("export", "spreadsheet", { kind, ...payload }, { onProgress: update });
+        update({message:"Preparando arquivo em modo compatível…"});
+        await root.GrconOperations?.paint();
+        await root.GRCONModuleLoader.ensure("excel");
+        if(kind === "emission-dashboard") {
+          await root.GRCONModuleLoader.ensure("brand");
+          await root.GRCONModuleLoader.ensure("requests_report.js");
+          await root.GRCONModuleLoader.ensure("emission_dashboard_report.js");
+          return root.GrconEmissionDashboardReport.buildWorkbook(payload,update);
+        }
+        if(kind === "monitor") {
+          const book=new root.ExcelJS.Workbook();book.creator="GRCON";
+          const sheet=book.addWorksheet("Alterações SIGEM");sheet.columns=payload.columns;
+          for(let index=0;index<payload.rows.length;index++){sheet.addRow(payload.rows[index]);if(index%500===0)await root.GrconOperations?.paint();}
+          sheet.getRow(1).font={bold:true};sheet.autoFilter={from:"A1",to:"L1"};sheet.views=[{state:"frozen",ySplit:1}];
+          return book.xlsx.writeBuffer();
+        }
+        throw new Error("Web Workers não são suportados neste navegador.");
+      };
+      return root.GrconOperations && !onProgress ? root.GrconOperations.run("excel:" + kind, "Gerar relatório Excel", work, { success: "Arquivo Excel preparado." }) : work(null);
+    },
+    async processData(action, payload, onProgress) {
+      if(supported())return run("data", action, payload, { onProgress });
+      onProgress?.({message:"Preparando arquivo em modo compatível…"});
+      await root.GrconOperations?.paint();
+      await root.GRCONModuleLoader.ensure("xlsx");
+      await root.GRCONModuleLoader.ensure("allocation_dashboard_core.js");
+      await root.GRCONModuleLoader.ensure("data_exports.js");
+      const method=({"central-export":"central","allocation-export":"allocation","xlsx":"sheets"})[action];
+      if(!method)throw new Error("Operação de dados indisponível neste navegador.");
+      return root.GrconDataExports[method](payload,onProgress);
+    },
+    async importWorkbook(file, kind, onProgress) {
+      onProgress?.({ message: "Lendo " + file.name + "…" });
+      const buffer = root.GrconFileAccess?.read ? await root.GrconFileAccess.read(file, { context: "a base compartilhada", retries: 1 }) : await file.arrayBuffer();
+      return run("data", "import", { buffer, kind }, { onProgress, transfer: [buffer] });
+    },
     cancel,
     cancelAll: () => cancel(),
     clearLdCache: () => run("ld", "clear-cache", {}),

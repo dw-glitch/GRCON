@@ -99,8 +99,16 @@
 
   async function requestJson(path, options) {
     const settings = options || {};
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    settings.signal?.addEventListener("abort", abort, { once: true });
+    if(settings.signal?.aborted)controller.abort();
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 120000);
+    try {
     const response = await fetch(API + path, {
       ...settings,
+      signal: controller.signal,
       headers: { ...requestHeaders(settings.body != null), ...(settings.headers || {}) },
     });
     const raw = await response.text();
@@ -114,6 +122,10 @@
       throw error;
     }
     return payload || {};
+    } catch(error) {
+      if(timedOut){const failure=new Error(settings.method === "POST" ? "O servidor não confirmou a operação. Atualize a consulta para conferir o resultado antes de repetir." : "A consulta não respondeu a tempo. Tente atualizar novamente.");failure.code="VAULT_TIMEOUT";throw failure;}
+      throw error;
+    } finally {clearTimeout(timeout);settings.signal?.removeEventListener("abort",abort);}
   }
 
   function xhrPut(path, blob, task, extraHeaders, onProgress) {
@@ -661,26 +673,61 @@
     renderListStatus(state.files.length + " documento(s) exibido(s)" + (state.hasMore ? " · há mais resultados" : ""));
   }
 
-  async function downloadBlob(file, intent) {
+  async function downloadBlob(file, intent, operation) {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    operation?.signal.addEventListener("abort",abort,{once:true});
+    if(operation?.signal.aborted)controller.abort();
+    let timeout, timedOut=false;
+    const resetTimeout=()=>{clearTimeout(timeout);timeout=setTimeout(()=>{timedOut=true;controller.abort();},120000);};
+    resetTimeout();
+    try {
     const response = await fetch(API + "/download?workspace=" + encodeURIComponent(workspaceId()) + "&id=" + encodeURIComponent(file.id) + "&intent=" + (intent === "view" ? "view" : "download"), {
       headers: requestHeaders(false),
       cache: "no-store",
+      signal: controller.signal,
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(payload.message || "Não foi possível baixar o documento.");
     }
-    return response.blob();
+    if (!response.body?.getReader) return response.blob();
+    const reader = response.body.getReader(), chunks = [];
+    const encoded = response.headers.get("content-encoding");
+    const total = !encoded || encoded === "identity" ? Number(response.headers.get("content-length")) : 0;
+    let received = 0;
+    try {
+      while (true) {
+        operation?.assertCurrent();
+        const { done, value } = await reader.read(); if (done) break;
+        resetTimeout(); chunks.push(value); received += value.byteLength;
+        operation?.update({ message: "Recebendo arquivo · " + bytes(received), done: received, total: total || undefined });
+      }
+    } catch (error) { await reader.cancel().catch(() => {}); throw error; }
+    finally { reader.releaseLock(); }
+    return new Blob(chunks, { type: response.headers.get("content-type") || "application/octet-stream" });
+    } catch(error){if(timedOut)throw new Error("O recebimento do arquivo ficou sem resposta. Tente baixar novamente.");throw error;}
+    finally{clearTimeout(timeout);operation?.signal.removeEventListener("abort",abort);}
   }
 
   async function downloadAction(id, open) {
     const file = state.files.find(item => text(item.id) === text(id));
     if (!file) return;
+    const key = "vault-download:" + id + ":" + Boolean(open);
+    if (root.GrconOperations?.isActive(key)) return;
+    const epoch = contextEpoch;
+    const operation = root.GrconOperations?.begin(key, open ? "Abrir documento do Cofre" : "Baixar documento do Cofre", { host: "#document-vault-module", success: "Arquivo recebido. Confira a abertura no navegador." });
+    // Open while the user activation is still available, before awaiting bytes.
+    const preview = open && /pdf/i.test(file.format || "") ? root.open("about:blank", "_blank") : null;
+    if (preview) { preview.opener = null; preview.document.title = "Preparando documento…"; preview.document.body.textContent = "Recebendo documento do Cofre…"; }
     try {
-      const blob = await downloadBlob(file, open ? "view" : "download");
+      await operation?.paint();
+      const blob = await downloadBlob(file, open ? "view" : "download", operation);
+      operation?.assertCurrent(); if (epoch !== contextEpoch) throw new DOMException("O contrato mudou.", "AbortError");
       const url = URL.createObjectURL(blob);
       if (open && /pdf/i.test(file.format || blob.type)) {
-        root.open(url, "_blank", "noopener,noreferrer");
+        if (preview && !preview.closed) preview.location.replace(url);
+        else { const anchor = document.createElement("a"); anchor.href = url; anchor.download = file.file_name || "documento.pdf"; anchor.click(); }
         root.setTimeout(() => URL.revokeObjectURL(url), 60000);
       } else {
         const anchor = document.createElement("a");
@@ -692,8 +739,9 @@
         root.setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
     } catch (error) {
+      operation?.fail(error); if (preview && !preview.closed) preview.close();
       notify(error.message || "Falha ao recuperar documento.", "error");
-    }
+    } finally { operation?.finish(); }
   }
 
   function canDelete() { return ["owner", "admin"].includes(root.GrconCloud?.state?.membership?.role); }
@@ -701,14 +749,17 @@
   async function deleteDocument(id) {
     const file = state.files.find(item => item.id === id);
     if (!file || !canDelete()) return;
+    if (root.GrconOperations?.isActive("vault-delete:" + id)) return;
     const workspace = workspaceId(), epoch = contextEpoch;
     if (!root.confirm("Excluir documento?\n\n" + (file.document_code || file.file_name) + "\nRevisão " + file.revision + "\n\nO arquivo também será removido do armazenamento do Cofre. O Histórico de GRDT será preservado.")) return;
+    const operation = root.GrconOperations?.begin("vault-delete:" + id, "Excluir documento do Cofre", { host: "#document-vault-module", detail: "Aguardando confirmação da exclusão…" });
     // A File already downloaded keeps its original catalogue metadata even
     // if the catalogue object is later deleted or deletion fails.
     state.lookupRows = []; state.vaultPrepared = false;
     if (state.grdtSource === "vault") setPackageFiles([]);
     renderLookupResults();
     try {
+      await operation?.paint();
       await requestJson("/delete", { method: "POST", body: JSON.stringify({ workspaceId: workspace, id }) });
       if (epoch !== contextEpoch) return;
       state.lookupRows = []; state.vaultPrepared = false;
@@ -721,16 +772,19 @@
       if (epoch !== contextEpoch) return;
       await refreshList(true);
       await refreshStorage();
-      notify(error.message, "error");
-    }
+      operation?.fail(error); notify(error.message, "error");
+    } finally { operation?.finish(); }
   }
 
   async function exportVault() {
     const button = document.getElementById("vault-export");
     const workspace = workspaceId(), epoch = contextEpoch;
     const filters = { q: state.query, allocation: state.allocation };
+    if (root.GrconOperations?.isActive("vault-catalog-export")) return;
+    const operation = root.GrconOperations?.begin("vault-catalog-export", "Exportar catálogo do Cofre", { host: "#document-vault-module", button, success: "Arquivo Excel preparado." });
     if (button) button.disabled = true;
     try {
+      await operation?.paint();
       await root.GRCONModuleLoader.ensure("excel");
       const rows = [];
       const columns = [
@@ -757,11 +811,13 @@
           status: file.status === "ready" ? "Disponível" : "Exclusão pendente — tentar novamente",
         });
         after = page.next;
+        operation?.update("Consultando catálogo · " + rows.length.toLocaleString("pt-BR") + " registros recebidos…");
       } while (after);
+      operation?.update("Montando planilha Excel…");
       let buffer;
       try {
         await root.GRCONModuleLoader.ensure("performance");
-        if (root.GrconPerformance?.supported) buffer = await root.GrconPerformance.buildSpreadsheet("vault", { rows, columns });
+        if (root.GrconPerformance?.supported) buffer = await root.GrconPerformance.buildSpreadsheet("vault", { rows, columns }, operation?.update);
       } catch (error) { console.warn("[GRCON] Exportação do Cofre em modo compatível", error); }
       if (!buffer) {
         const workbook = new root.ExcelJS.Workbook();
@@ -780,8 +836,8 @@
       const anchor = document.createElement("a"); anchor.href = url; anchor.download = "GRCON_Cofre_" + new Date().toISOString().slice(0,10) + ".xlsx";
       document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
       notify(rows.length + " documentos exportados com os filtros selecionados.", "success");
-    } catch (error) { notify(error.message, "error"); }
-    finally { if (button) button.disabled = false; }
+    } catch (error) { operation?.fail(error); notify(error.message, "error"); }
+    finally { operation?.finish(); if (button) button.disabled = false; }
   }
 
   function renderStorage() {
@@ -854,16 +910,21 @@
   async function reconcileStorage() {
     if (!canDelete()) return;
     const button = document.getElementById("vault-storage-reconcile");
+    if (root.GrconOperations?.isActive("vault-reconcile")) return;
+    const epoch = contextEpoch;
+    const operation = root.GrconOperations?.begin("vault-reconcile", "Conferir armazenamento do Cofre", { button, host: "#document-vault-module", detail: "Comparando arquivos e catálogo no servidor…" });
     if (button) button.disabled = true;
     try {
+      await operation?.paint();
       const payload = await requestJson("/reconcile", { method: "POST", body: JSON.stringify({ workspaceId: workspaceId() }) });
+      operation?.assertCurrent(); if (epoch !== contextEpoch) return;
       state.storage = payload.storage || state.storage;
       renderStorage();
       notify("Conferência do R2 concluída e registrada na auditoria. Nenhum arquivo foi excluído.", "success");
     } catch (error) {
-      notify(error.message || "Não foi possível conferir o armazenamento.", "error");
+      operation?.fail(error); notify(error.message || "Não foi possível conferir o armazenamento.", "error");
     } finally {
-      if (button) button.disabled = false;
+      operation?.finish(); if (button) button.disabled = false;
     }
   }
 

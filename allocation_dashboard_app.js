@@ -44,7 +44,7 @@
     $("ad-status").innerHTML='<option value="">Todos os status</option>'+Object.entries(Model.STATUS).map(([c,v])=>`<option value="${c}">${esc(v)}</option>`).join("");
     const keys=["search","status","stage","sheet","action","from","to"];
     for(const key of keys)$("ad-"+key).addEventListener(key==="search"||key==="sheet"?"input":"change",ev=>{
-      state.options[key]=ev.target.value;state.page=1;state.detail="";render();
+      state.options[key]=ev.target.value;state.page=1;state.detail="";scheduleRender();
     });
     $("ad-clear").addEventListener("click",()=>{
       state.options={search:"",status:"",stage:"",sheet:"",action:"",from:"",to:""};
@@ -62,7 +62,8 @@
       $("ad-status").value=state.options.status;state.page=1;state.detail="";render();
     });
     $("ad-table").addEventListener("click",ev=>{
-      const b=ev.target.closest("button[data-ad-detail]");if(!b)return;
+      const more=ev.target.closest("button[data-ad-more]");if(more){state.detailLimit=(state.detailLimit||100)+100;void render();return;}
+      const b=ev.target.closest("button[data-ad-detail]");if(!b)return;state.detailLimit=100;
       state.detail=state.detail===b.dataset.adDetail?"":b.dataset.adDetail;render();
     });
   }
@@ -73,12 +74,20 @@
   }
   function resetContract(){
     if(scope()===state.scope)return;
+    snapshotGeneration++;renderGeneration++;if(filterTimer)clearTimeout(filterTimer);filterTimer=null;calculationPending=false;calculationCache=null;renderOperation?.abort();renderOperation=null;
     state.scope=scope();state.version="";state.prepared=[];state.duplicates=0;state.full=null;state.fullByAllocation=null;state.page=1;state.detail="";
     state.options={search:"",status:"",stage:"",sheet:"",action:"",from:"",to:""};
     for(const key of Object.keys(state.options)){const el=$("ad-"+key);if(el)el.value="";}
   }
-  function readSnapshot(){
+  let renderGeneration=0, calculationCache=null, renderOperation=null, snapshotGeneration=0, filterTimer=null, calculationPending=false;
+  function scheduleRender(){
+    if(filterTimer)clearTimeout(filterTimer);
+    renderGeneration++;calculationPending=true;$("ad-export").disabled=true;
+    filterTimer=setTimeout(()=>{filterTimer=null;void render();},160);
+  }
+  async function readSnapshot(){
     resetContract();
+    const generation=++snapshotGeneration;
     const snapshot=registry()?.current?.();
     if(!snapshot||snapshot.stale||!snapshot.id||!Array.isArray(snapshot.records)){
       state.version="";state.prepared=[];render();
@@ -87,28 +96,55 @@
       return;
     }
     if(state.version===snapshot.id)return;
-    const p=Model.prepare(snapshot.records);
-    state.prepared=p.rows;state.duplicates=p.duplicateLinks;state.full=Model.aggregate(p.rows);state.fullByAllocation=new Map(state.full.groups.map(g=>[Model.norm(g.allocation),g]));state.version=snapshot.id;state.page=1;state.detail="";
+    const expected=scope();
+    await root.GRCONModuleLoader.ensure("performance");
+    const prepared=root.GrconPerformance?.supported
+      ?await root.GrconPerformance.processData("allocation-prepare",{key:expected+":"+snapshot.id,records:snapshot.records})
+      :null;
+    if(expected!==scope()||generation!==snapshotGeneration)return;
+    calculationCache=null;
+    const p=prepared?.prepared||Model.prepare(snapshot.records);
+    state.prepared=p.rows;state.duplicates=p.duplicateLinks;state.full=prepared?.full||Model.aggregate(p.rows);state.fullByAllocation=new Map(state.full.groups.map(g=>[Model.norm(g.allocation),g]));state.version=snapshot.id;state.page=1;state.detail="";
     $("ad-action").innerHTML='<option value="">Todas as ações</option>'+[...new Set(p.rows.map(r=>t(r.action)).filter(Boolean))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
     $("ad-action").value=state.options.action;
     $("ad-meta").textContent=`Base: ${snapshot.fileName||"Central de alocação"} · ${snapshot.updatedAt?new Date(snapshot.updatedAt).toLocaleString("pt-BR"):"Sem data"} · ${number(snapshot.records.length)} vínculos · ${number(p.duplicateLinks)} duplicidades consolidadas`;
-    show("");render();
+    show("");await render();
   }
   async function load(force=false){
     shell();resetContract();const expected=scope();
     if(!expected){show("Entre no GRCON e selecione o contrato para consultar os dados.",true);return;}
     if(state.loading)return;
+    const operation=root.GrconOperations?.begin("allocation-sync","Sincronizar Dashboard de Alocação",{host:"#allocation-dashboard-root"});
     state.loading=true;$("ad-sync").disabled=true;
     try{
+      await operation?.paint();
+      operation?.update("Consultando a Central compartilhada…");
       const snap=registry()?.current?.();
       if(force||!snap||snap.stale)await registry()?.refresh?.();
-      if(scope()===expected)readSnapshot();
-    }catch(err){if(scope()===expected){show("Falha na sincronização: "+t(err.message||err),true);readSnapshot();}}
-    finally{state.loading=false;$("ad-sync").disabled=false;}
+      if(scope()===expected){operation?.update("Calculando indicadores…");await readSnapshot();}
+    }catch(err){operation?.fail(err);if(scope()===expected){show("Falha na sincronização: "+t(err.message||err),true);}}
+    finally{operation?.finish();state.loading=false;$("ad-sync").disabled=false;}
   }
-  function render(){
+  async function render(){
     if(!$("ad-summary"))return;
-    const a=Model.aggregate(Model.filter(state.prepared,state.options));
+    const generation=++renderGeneration,expected=scope();
+    const cacheKey=state.version+":"+JSON.stringify(state.options);
+    let a;
+    try {
+      if(calculationCache?.key===cacheKey)a=calculationCache.value;
+      else if(state.version&&state.prepared.length>=2000&&root.GrconPerformance?.supported){
+        if(!renderOperation&&!root.GrconOperations?.isActive("allocation-filter"))renderOperation=root.GrconOperations?.begin("allocation-filter","Atualizar indicadores",{host:"#allocation-dashboard-root"});
+        await renderOperation?.paint();
+        a=await root.GrconPerformance.processData("allocation-filter",{key:expected+":"+state.version,options:{...state.options}},renderOperation?.update);
+      }else a=Model.aggregate(Model.filter(state.prepared,state.options));
+      if(generation!==renderGeneration||expected!==scope())return;
+      calculationPending=false;
+      // Cache unmodified domain aggregation; visible group enrichment is derived below.
+      calculationCache={key:cacheKey,value:{...a,groups:[...a.groups]}};
+      a={...a,groups:[...a.groups]};
+      renderOperation?.finish();renderOperation=null;
+    } catch(error){if(generation===renderGeneration){calculationPending=false;renderOperation?.fail(error);renderOperation=null;show(error.message||String(error),true);}return;}
+
     // O filtro escolhe vínculos; a situação da ALOC considera SEMPRE todos os seus documentos.
     a.groups=a.groups.map(g=>{
       const complete=state.fullByAllocation?.get(Model.norm(g.allocation));
@@ -140,11 +176,11 @@
         <td>${number(g.completed)}</td><td>${number(g.pending)}</td><td>${esc(g.lastSentAt||"—")}</td>
         <td><button type="button" class="secondary-button" data-ad-detail="${id}" aria-expanded="${state.detail===id}">${state.detail===id?"Fechar":"Documentos"}</button></td></tr>`;
       if(state.detail!==id)return main;
-      const items=(g.allItems||g.items).map(r=>`<tr><td>${esc(r.document)}</td><td>${esc(r.allocationStatus||"Não informado")}</td><td>${esc(r.sentAt)}</td>
+      const items=(g.allItems||g.items).slice(0,state.detailLimit||100).map(r=>`<tr><td>${esc(r.document)}</td><td>${esc(r.allocationStatus||"Não informado")}</td><td>${esc(r.sentAt)}</td>
         <td>${esc(r.fiscal1ReturnedAt)}</td><td>${esc(r.fiscal2ReturnedAt)}</td>
         <td>${esc([r.fiscalComment,r.fiscal2Comment,r.remarks].filter(Boolean).join(" · "))}</td></tr>`).join("");
       return main+`<tr class="allocation-dashboard-detail"><td colspan="7"><div class="allocation-dashboard-detail-list">
-        <strong>Documentos: ${esc(g.allocation)}</strong>
+        <strong>Documentos: ${esc(g.allocation)}</strong>${(g.allItems||g.items).length>(state.detailLimit||100)?`<button type="button" class="secondary-button" data-ad-more="${id}">Mostrar mais 100 documentos (${state.detailLimit||100} de ${(g.allItems||g.items).length})</button>`:""}
         <table><thead><tr><th>Documento</th><th>Status</th><th>Envio</th><th>Retorno Fiscal 01</th><th>Retorno Fiscal 02</th><th>Comentários / observações</th></tr></thead><tbody>${items}</tbody></table>
         </div></td></tr>`;
     }).join("")||'<tr><td colspan="7">Nenhuma alocação encontrada.</td></tr>';
@@ -154,29 +190,25 @@
     $("ad-export").disabled=!a.links||!state.version||state.busy;
   }
   async function exportExcel(){
-    if(!state.version||!state.aggregated?.links||state.busy)return;
+    if(!state.version||!state.aggregated?.links||state.busy||calculationPending||filterTimer)return;
     const snapshot=registry()?.current?.();
     if(!snapshot||snapshot.stale||snapshot.id!==state.version){show("Sincronize a base antes de exportar.",true);return;}
+    const operation=root.GrconOperations?.begin("allocation-export","Exportar Dashboard de Alocação",{host:"#allocation-dashboard-root"});
     state.busy=true;$("ad-export").disabled=true;
     try{
-      await root.GRCONModuleLoader.ensure("xlsx");
-      const XLSX=root.XLSX;if(!XLSX)throw Error("Biblioteca Excel indisponível.");
-      const data=Model.exportData(state.aggregated,{
+      await operation?.paint();
+      await root.GRCONModuleLoader.ensure("performance");
+      const buffer=await root.GrconPerformance.processData("allocation-export",{aggregated:state.aggregated,options:{
         contract:root.GrconCloud?.state?.membership?.workspace_name||"Contrato atual",
         fileName:snapshot.fileName,updatedAt:snapshot.updatedAt,
-        filters:Object.entries(state.options).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(" · ")||"Sem filtros"});
-      const wb=XLSX.utils.book_new();
-      for(const [name,rows] of [["Resumo",data.summary],["Alocações",data.allocations],["Documentos",data.documents]]){
-        const safe=rows.map(line=>line.map(v=>typeof v==="string"&&/^[=+\-@\t\r]/.test(v)?"'"+v:v));
-        const sh=XLSX.utils.aoa_to_sheet(safe);
-        sh["!cols"]=rows[0].map(label=>({wch:Math.min(40,Math.max(16,t(label).length+5))}));
-        sh["!autofilter"]={ref:sh["!ref"]};XLSX.utils.book_append_sheet(wb,sh,name);
-      }
-      XLSX.writeFile(wb,"GRCON_Dashboard_Alocacao_"+new Date().toISOString().slice(0,10)+".xlsx");show("");
-    }catch(err){show("Não foi possível exportar: "+t(err.message||err),true);}
-    finally{state.busy=false;render();}
+        filters:Object.entries(state.options).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(" · ")||"Sem filtros"}},operation?.update);
+      operation?.assertCurrent();
+      const url=URL.createObjectURL(new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+      const anchor=document.createElement("a");anchor.href=url;anchor.download="GRCON_Dashboard_Alocacao_"+new Date().toISOString().slice(0,10)+".xlsx";anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);show("");
+    }catch(err){operation?.fail(err);show("Não foi possível exportar: "+t(err.message||err),true);}
+    finally{operation?.finish();state.busy=false;void render();}
   }
   root.GrconAllocationDashboardUi=Object.freeze({activate:()=>{shell();void load();},refresh:()=>load(true)});
-  root.addEventListener("grcon:allocation-registry-updated",()=>{if($("allocation-dashboard-root")?.dataset.ready)readSnapshot();});
+  root.addEventListener("grcon:allocation-registry-updated",()=>{if($("allocation-dashboard-root")?.dataset.ready)void readSnapshot().catch(error=>show(error.message,true));});
   root.addEventListener("grcon:contract-context-changed",()=>{if($("allocation-dashboard-root")?.dataset.ready)void load(true);});
 })(window);

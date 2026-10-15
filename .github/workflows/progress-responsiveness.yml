@@ -1,0 +1,66 @@
+name: QA — Progresso e responsividade
+on:
+  pull_request:
+    paths:
+      - "operation_*"
+      - "performance_workers.js"
+      - "workers/**"
+      - "src/react/**"
+      - "allocation_*"
+      - "requests_control_app.js"
+      - "planned_documents_app.js"
+      - "sigem_posting_central_app.js"
+      - "sigem_status_monitoring_app.js"
+      - "history_report_worker.js"
+      - "posting_conference_*"
+      - "retomar.js"
+      - "emission_dashboard_report.js"
+      - "data_exports.js"
+      - "consultation_index.js"
+      - "workspace.js"
+      - "app.js"
+      - "index.html"
+      - "grcon_module_loader.js"
+      - "package*.json"
+      - "scripts/validar-progress-*.cjs"
+      - ".github/workflows/progress-responsiveness.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Importação, relatórios e estados
+        env:
+          GRCON_PROGRESS_QA_OUTPUT: artifacts/progress-browser.json
+        run: |
+          mkdir -p artifacts
+          node scripts/validar-progress-responsiveness-browser.cjs
+      - name: Navegação e Configurações em uso continuado
+        env:
+          GRCON_SOAK_MS: 600000
+          GRCON_SOAK_OUTPUT: artifacts/progress-soak.json
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-progress-server.log" 2>&1 &
+          PROGRESS_QA_SERVER=$!
+          trap 'kill "$PROGRESS_QA_SERVER"' EXIT
+          node scripts/validar-progress-soak-browser.cjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: progress-responsiveness
+          path: artifacts/progress-*.json
+          if-no-files-found: warn
