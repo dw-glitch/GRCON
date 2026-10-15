@@ -22,6 +22,7 @@ on:
       - "index.html"
       - "grcon_module_loader.js"
       - "grcon_service_worker.js"
+      - "grcon_file_access.js"
       - "sw.js"
       - "scripts/validar-startup-navigation-browser.cjs"
       - "package*.json"

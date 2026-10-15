@@ -39,7 +39,12 @@ async function untilController(page) {
     await context.route('**/*.supabase.co/**', route => route.fulfill({status:401,contentType:'application/json',body:'{"message":"QA isolado"}'}));
     const page = await context.newPage();let navigations = 0;
     page.on('framenavigated', frame => {if (frame === page.mainFrame()) navigations++;});
-    await page.addInitScript(() => {sessionStorage.setItem('startup-qa-boots', String(Number(sessionStorage.getItem('startup-qa-boots') || 0) + 1));});
+    await page.addInitScript(() => {
+      sessionStorage.setItem('startup-qa-boots', String(Number(sessionStorage.getItem('startup-qa-boots') || 0) + 1));
+      // Keep the real chunk functions, allowing only fixture latency/failure injection.
+      let largeInput;
+      Object.defineProperty(window,'GrconLargeInput',{configurable:true,get:()=>largeInput,set:value=>{largeInput={...value};}});
+    });
     await page.goto(base, {waitUntil:'load'});
     await untilController(page);
     await page.waitForTimeout(800);
@@ -50,6 +55,7 @@ async function untilController(page) {
     }
     assert.equal(firstBoots, 1, 'first installation must not restart the application');
     assert.equal(navigations, 1);
+    await page.addStyleTag({content:'html.grcon-cloud-pending body > :not(.grcon-cloud-auth):not(script){visibility:visible!important}#grcon-cloud-auth{display:none!important}'});
     const realModules = await page.evaluate(async () => {
       const visited=[];let openingCards=0;
       const inspect=node=>{if(node.nodeType===1){if(node.matches('[data-operation^="module:"]'))openingCards++;openingCards+=node.querySelectorAll('[data-operation^="module:"]').length;}};
@@ -61,6 +67,62 @@ async function untilController(page) {
       return {visited,openingCards};
     });
     assert.deepEqual(realModules,{visited:['requests','pdf-tools','cover-document'],openingCards:0});
+    // LDs: a seleção deve sinalizar antes da leitura e exibir bytes reais.
+    await page.evaluate(() => {
+      window.startupQaReadEvents=[];
+      const Reader=window.FileReader;
+      window.FileReader=class extends Reader {
+        constructor(){super();this.addEventListener('progress',event=>startupQaReadEvents.push({loaded:event.loaded,total:event.total}));}
+        readAsArrayBuffer(file){setTimeout(()=>super.readAsArrayBuffer(file),200);}
+      };
+      const data=new DataTransfer();
+      data.items.add(new File([new Uint8Array(4096)],'LD_01.xlsx'));
+      data.items.add(new File([new Uint8Array(8192)],'LD_02.xlsx'));
+      const input=document.getElementById('ld-input');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+    });
+    await page.waitForSelector('[data-operation="grdt-ld-import"][data-state="running"]');
+    assert.equal(await page.locator('#analyze').isDisabled(),true);
+    assert.equal(await page.locator('#ld-input').isDisabled(),true);
+    await page.waitForFunction(()=>[...document.querySelectorAll('[data-operation="grdt-ld-import"]')].at(0)?.dataset.state==='completed');
+    assert.equal(await page.evaluate(()=>GrconRuntimeFiles.currentLd()?.name),'LD_01.xlsx');
+    const ldBytes=await page.evaluate(()=>startupQaReadEvents.map(event=>event.loaded));
+    assert.ok(ldBytes.includes(4096)&&ldBytes.includes(8192),'both native reads must report byte progress');
+    assert.equal(await page.locator('#ld-input').isDisabled(),false);
+    await page.evaluate(()=>{const data=new DataTransfer();data.items.add(new File([],'LD_vazia.xlsx'));const input=document.getElementById('ld-input');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));});
+    await page.waitForFunction(()=>[...document.querySelectorAll('[data-operation="grdt-ld-import"]')].at(0)?.dataset.state==='failed');
+    assert.equal(await page.evaluate(()=>GrconRuntimeFiles.currentLd()),null);
+    assert.equal(await page.locator('#ld-input').isDisabled(),false);
+    // Pasta: contagem por metadados, filtragem preservada e pintura antes do trabalho.
+    await page.evaluate(()=>{
+      window.startupQaFolderProgress=[];
+      const original=GrconLargeInput.forEachInChunks;
+      window.startupQaOriginalChunks=original;
+      GrconLargeInput.forEachInChunks=async(items,callback,options)=>{
+        await new Promise(resolve=>window.startupQaReleaseFolder=resolve);
+        return original(items,callback,{...options,onProgress:(done,total)=>{startupQaFolderProgress.push({done,total});options.onProgress?.(done,total);}});
+      };
+      const files=new DataTransfer();
+      for(let i=0;i<3600;i++)files.items.add(new File(['pdf'],'DOC-'+i+'.pdf',{lastModified:1234}));
+      for(let i=0;i<25;i++)files.items.add(new File(['zip'],'IGNORADO-'+i+'.zip',{lastModified:1234}));
+      files.items.add(new File(['pdf'],'DOC-0.pdf',{lastModified:1234}));
+      const input=document.getElementById('pdf-input');input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+    });
+    await page.waitForFunction(()=>typeof startupQaReleaseFolder==='function');
+    assert.equal(await page.locator('[data-operation="grdt-folder-import"][data-state="running"] progress').count(),1);
+    assert.equal(await page.locator('#pdf-input').isDisabled(),true);
+    assert.equal(await page.locator('#analyze').isDisabled(),true);
+    await page.evaluate(()=>startupQaReleaseFolder());
+    await page.waitForFunction(()=>[...document.querySelectorAll('[data-operation="grdt-folder-import"]')].at(0)?.dataset.state==='completed');
+    const folderProgress=await page.evaluate(()=>startupQaFolderProgress.at(-1));
+    assert.deepEqual(folderProgress,{done:3626,total:3626});
+    assert.match(await page.locator('#pdf-meta').textContent(),/3[.\s]?600/);
+    assert.match(await page.locator('#ignored-summary').textContent(),/26/);
+    await page.evaluate(()=>{GrconLargeInput.forEachInChunks=async()=>{throw new Error('Falha prevista na pasta');};const data=new DataTransfer();data.items.add(new File(['pdf'],'RETRY.pdf'));const input=document.getElementById('pdf-input');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));});
+    await page.waitForFunction(()=>[...document.querySelectorAll('[data-operation="grdt-folder-import"]')].at(0)?.dataset.state==='failed');
+    assert.equal(await page.locator('#pdf-input').isDisabled(),false);
+    await page.evaluate(()=>{GrconLargeInput.forEachInChunks=startupQaOriginalChunks;const data=new DataTransfer();data.items.add(new File(['pdf'],'RETRY.pdf'));const input=document.getElementById('pdf-input');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));});
+    await page.waitForFunction(()=>[...document.querySelectorAll('[data-operation="grdt-folder-import"]')].at(0)?.dataset.state==='completed');
+    assert.equal(await page.locator('#pdf-input').isDisabled(),false);
     await page.evaluate(() => {
       const field = document.createElement('input');field.id='startup-qa-draft';field.value='Conteúdo em edição';document.body.append(field);
       window.startupQaOperation = GrconOperations.begin('startup-qa-active','Operação em andamento');
@@ -101,7 +163,7 @@ async function untilController(page) {
     const operation = await loaderPage.evaluate(async () => {const op=GrconOperations.begin('real-operation','Gerar arquivo');const visible=!!document.querySelector('[data-operation="real-operation"] progress');op.finish();return visible;});
     assert.equal(operation,true,'progress for real operations must remain available');
     await loaderContext.close();
-    const result={passed:true,firstBoots,navigationsBeforeManualReload:1,update,offline:true,realModules,moduleOpeningCards:0,retry:true,contextGuard:true,operationalProgress:true};
+    const result={passed:true,firstBoots,navigationsBeforeManualReload:1,update,offline:true,realModules,moduleOpeningCards:0,retry:true,contextGuard:true,operationalProgress:true,ldBytes,folderProgress,folderAndLdErrorRecovery:true};
     if(process.env.GRCON_STARTUP_QA_OUTPUT){fs.mkdirSync(path.dirname(process.env.GRCON_STARTUP_QA_OUTPUT),{recursive:true});fs.writeFileSync(process.env.GRCON_STARTUP_QA_OUTPUT,JSON.stringify(result,null,2));}
     console.log(JSON.stringify(result));
   } finally {await browser.close();}
