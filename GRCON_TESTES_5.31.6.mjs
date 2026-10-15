@@ -302,7 +302,7 @@ check("Em Workflow interrompe a progressão de revisões como Em Análise", () =
   assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.IN_ANALYSIS_RECENT);
 });
 
-check("Conforme Construído libera a próxima revisão sem repetir a revisão atual", () => {
+check("Conforme Construído exclui o arquivo da revisão já postada sem avançar", () => {
   const technical = {
     ...ldDocumentRecord(ntDocument),
     revision: "0",
@@ -323,14 +323,14 @@ check("Conforme Construído libera a próxima revisão sem repetir a revisão at
     {},
   );
 
-  assert.equal(result.decision, Core.READY);
-  assert.equal(result.revision, "B");
-  assert.equal(result.status, "Não Postado");
-  assert.match(result.reason, /A \(Conforme Construído\).*B/i);
-  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.READY);
+  assert.equal(result.decision, Core.DISCARD);
+  assert.equal(result.revision, "0");
+  assert.equal(result.status, "Conforme Construído");
+  assert.match(result.reason, /não será convertido em uma revisão posterior/i);
+  assert.equal(Core.decisionMessage(result).code, Core.DECISION_CODES.FILE_REVISION_ALREADY_POSTED);
 });
 
-check("status concluídos avançam da revisão 0 para A; Em Workflow segue a regra de Em Análise", () => {
+check("status concluídos preservam a revisão 0 do arquivo; Em Workflow segue a regra de Em Análise", () => {
   const statuses = [
     "Com Comentários",
     "Sem Comentários",
@@ -358,9 +358,9 @@ check("status concluídos avançam da revisão 0 para A; Em Workflow segue a reg
       Core.buildIndex([technical], [history]),
       {},
     );
-    assert.equal(result.decision, Core.READY, status);
-    assert.equal(result.revision, "A", status);
-    assert.equal(result.status, "Não Postado", status);
+    assert.equal(result.decision, Core.DISCARD, status);
+    assert.equal(result.revision, "0", status);
+    assert.equal(result.status, status, status);
   });
 
 
@@ -415,7 +415,7 @@ check("Em Análise nunca avança sozinho: para na própria revisão e cai no bal
     { ...technical, sheet: "Colar SIGEM", row: 4, revision: "A", status: "Em Análise", sigemStatus: "Em Análise" },
   ];
   const resultadoEncadeado = Core.triageOne(
-    { id: "em-analise-apos-avanco", name: `${ntDocument}.pdf` },
+    { id: "em-analise-apos-avanco", name: `${ntDocument}_A.pdf` },
     Core.buildIndex([technical], encadeado),
     {},
   );
@@ -434,7 +434,7 @@ check("Em Análise adota GRDT e data efetiva da revisão realmente analisada, n�
     { ...technical, sheet: "Colar SIGEM", row: 4, revision: "A", status: "Em Análise", sigemStatus: "Em Análise", grdt: "GRDT-000A", effectiveDate: "15/03/2026" },
   ];
   const result = Core.triageOne(
-    { id: "em-analise-evidencia", name: `${ntDocument}.pdf` },
+    { id: "em-analise-evidencia", name: `${ntDocument}_A.pdf` },
     Core.buildIndex([technical], encadeado),
     {},
   );
@@ -2707,7 +2707,7 @@ check("Histórico filtra também a lista de eGRDTs por N-1710, ET e CV", () => {
   assert.match(report, /\["Tipo de documento", selectedFamily\]/);
 });
 
-check("nome com código + título usa somente a codificação oficial da LD e segue com alerta", () => {
+check("nome com código + título localiza a LD mas exige conferência da revisão", () => {
   const document = "DE-5290.00-22313-142-C1O-076";
   const index = Core.buildIndex([{
     ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
@@ -2718,13 +2718,13 @@ check("nome com código + título usa somente a codificação oficial da LD e se
   const sourceName = `${document} - DESENHO GERAL DE CIVIL.dwg`;
   const result = Core.triageOne({ id: "titulo-no-nome", name: sourceName }, index, {});
   assert.equal(result.document, document);
-  assert.equal(result.decision, Core.READY);
-  assert.equal(result.finalName, `${document}_0001_A.dwg`);
-  assert.match(result.fileNameFormattingWarning, /fora do padrão/i);
-  assert.match(result.fileNameFormattingWarning, /reconheceu o documento pela LD/i);
+  assert.equal(result.decision, Core.REVIEW);
+  assert.equal(result.revision, "");
+  assert.equal(result.reasonCode, Core.DECISION_CODES.FILE_REVISION_UNKNOWN);
+  assert.equal(result.finalName, sourceName);
 });
 
-check("separadores errados na codificação são normalizados pela LD sem bloquear", () => {
+check("separadores errados com título localizam a LD sem inventar revisão", () => {
   const document = "DE-5290.00-22313-142-C1O-076";
   const index = Core.buildIndex([{
     ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
@@ -2739,12 +2739,13 @@ check("separadores errados na codificação são normalizados pela LD sem bloque
   assert.equal(matches[0].matchKind, "code-format-variant");
   const result = Core.triageOne({ id: "formato-incorreto", name: sourceName }, index, {});
   assert.equal(result.document, document);
-  assert.equal(result.decision, Core.READY);
-  assert.equal(result.finalName, `${document}_0001_A.dwg`);
-  assert.match(result.fileNameFormattingWarning, /codificação\/nome fora do padrão/i);
+  assert.equal(result.decision, Core.REVIEW);
+  assert.equal(result.revision, "");
+  assert.equal(result.reasonCode, Core.DECISION_CODES.FILE_REVISION_UNKNOWN);
+  assert.equal(result.finalName, sourceName);
 });
 
-check("um erro de transcrição no código é corrigido somente quando a LD é inequívoca", () => {
+check("um erro de transcrição localiza a LD inequívoca sem inventar revisão", () => {
   const document = "DE-5290.00-22313-142-C1O-076";
   const index = Core.buildIndex([{
     ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
@@ -2759,9 +2760,10 @@ check("um erro de transcrição no código é corrigido somente quando a LD é i
   assert.equal(matches[0].matchKind, "code-transcription-variant");
   const result = Core.triageOne({ id: "transcricao-codigo", name: sourceName }, index, {});
   assert.equal(result.document, document);
-  assert.equal(result.decision, Core.READY);
-  assert.equal(result.finalName, `${document}_0001_A.dwg`);
-  assert.match(result.fileNameFormattingWarning, /fora do padrão/i);
+  assert.equal(result.decision, Core.REVIEW);
+  assert.equal(result.revision, "");
+  assert.equal(result.reasonCode, Core.DECISION_CODES.FILE_REVISION_UNKNOWN);
+  assert.equal(result.finalName, sourceName);
 });
 
 check("título no nome desempata códigos vizinhos quando há um erro de transcrição", () => {
@@ -2811,7 +2813,7 @@ check("arquivo duplicado vira alerta e somente uma cópia entra na eGRDT", () =>
     files: [
       { name: `${document}_0001_A.dwg`, finalName: `${document}_0001_A.dwg`, file: { size: 1 } },
       { name: `${document}_0001_A.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 2 } },
-      { name: `${document}_0001_A - COPIA.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 3 } },
+      { name: `${document}_0001_REV_A.pdf`, finalName: `${document}_0001_A.pdf`, file: { size: 3 } },
     ],
   };
   const plan = Emission.createPlan([row], new Set([0]));
@@ -2824,7 +2826,7 @@ check("nome final divergente é corrigido na emissão e não bloqueia", () => {
   const document = "DE-5290.00-22313-142-C1O-076";
   const row = {
     document,
-    revision: "A",
+    revision: "A", revisionManual: true,
     sheet: "N-1710",
     decision: Core.READY,
     hardBlock: false,
@@ -2843,45 +2845,16 @@ check("nome final divergente é corrigido na emissão e não bloqueia", () => {
 });
 
 
-check("MC N-1710 ignora sufixo _RIR inválido e usa revisão controlada da LD", () => {
+check("MC N-1710 com sufixo operacional RIR exige revisão manual", () => {
   const document = "MC-5290.00-22313-970-C1O-009";
-  const record = {
-    ...ldDocumentRecord(document, "ALOCADO", "N-1710"),
-    revision: "0",
-    title: "PROGRESSO QUINZENAL DE INSPEÇÃO DE RECEBIMENTO - AGOSTO DE 2026_1",
-    discipline: "RNEST UHDTD U-32 PLANEJAMENTO",
-    documentType: "MC",
-    purpose: "Para Construção",
-    databook: "RHDD-MCA-PLA-EX-GERA-INP-PT-",
-    allocation: "C1O-ALOC-CM-0022-2026",
-    source: "LD-5290.00-22313-91A-C1O-001_0001_E.xlsx",
-  };
-  const index = Core.buildIndex([record], []);
-  const xlsx = Core.triageOne({ id: "mc-rir-xlsx", name: `${document}_0001_RIR.xlsx`, file: { size: 1 } }, index, {});
-  const pdf = Core.triageOne({ id: "mc-rir-pdf", name: `${document}_0001_RIR.pdf`, file: { size: 1 } }, index, {});
-
-  [xlsx, pdf].forEach((result) => {
-    assert.equal(result.decision, Core.READY);
-    assert.equal(result.revision, "0");
-    assert.equal(result.claimedRevision, "", "RIR não pode virar revisão declarada válida");
-    assert.match(result.fileNameFormattingWarning, /RIR/);
-    assert.match(result.fileNameFormattingWarning, /ignorou/i);
-    assert.deepEqual(Core.validateEgrdtData(result.egrdt), []);
-  });
-  assert.equal(xlsx.finalName, `${document}_0001_0.xlsx`);
-  assert.equal(pdf.finalName, `${document}_0001_0.pdf`);
-
-  const row = {
-    ...xlsx,
-    files: [
-      { name: `${document}_0001_RIR.xlsx`, finalName: xlsx.finalName, file: { size: 1 } },
-      { name: `${document}_0001_RIR.pdf`, finalName: pdf.finalName, file: { size: 1 } },
-    ],
-  };
-  const plan = Emission.createPlan([row], new Set([0]));
-  assert.deepEqual(plan.errors, []);
-  assert.deepEqual(plan.entries.map((entry) => entry.finalName), [`${document}_0001_0.xlsx`, `${document}_0001_0.pdf`]);
-  assert.deepEqual(plan.items.map((item) => item.revision), ["0", "0"]);
+  const index = Core.buildIndex([ldDocumentRecord(document, "ALOCADO", "N-1710")], []);
+  for (const extension of ["xlsx", "pdf"]) {
+    const result = Core.triageOne({ name: `${document}_0001_RIR.${extension}` }, index, {});
+    assert.equal(result.decision, Core.REVIEW);
+    assert.equal(result.revision, "");
+    assert.equal(result.fileRevisionEvidence.valid, false);
+    assert.equal(result.reasonCode, Core.DECISION_CODES.FILE_REVISION_UNKNOWN);
+  }
 });
 
 check("documentos DE usam sempre formato A3 na eGRDT", () => {
@@ -3665,7 +3638,7 @@ await (async () => {
 
   // A mesma LD passando pela triagem: Em Análise para na própria revisão e
   // leva a GRDT e a data da revisão analisada, não a da linha técnica.
-  const emAnalise = Core.triageOne({ id: "ld-em-analise", name: `${P}nt-SPE-AST-320021.pdf` }, index, {});
+  const emAnalise = Core.triageOne({ id: "ld-em-analise", name: `${P}nt-SPE-AST-320021_A.pdf` }, index, {});
   assert.equal(emAnalise.decision, Core.DISCARD);
   assert.equal(emAnalise.revision, "A");
   assert.equal(emAnalise.status, "Em Análise");

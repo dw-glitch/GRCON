@@ -222,6 +222,8 @@
       // enviada e revisionManual para "não alterada", sem quebrar o histórico.
       revisionSuggested: text(file && file.revisionSuggested) || revision,
       revisionManual: Boolean(file && file.revisionManual),
+      fileRevision: text(file && file.fileRevision),
+      manualRevisionOverride: Boolean(file && file.manualRevisionOverride),
       effectiveDate: text(file && file.effectiveDate),
       grdt: text(file && file.grdt),
       sigemStatus: text(file && file.sigemStatus),
@@ -502,6 +504,8 @@
         revisionSource: grdtRevision.source,
         revisionSuggested: row.revisionSuggested || "",
         revisionManual: Boolean(row.revisionManual),
+        fileRevision: entry.fileRevision || row.fileRevision || "",
+        manualRevisionOverride: Boolean(entry.manualRevisionOverride),
         effectiveDate: row.effectiveDate || record.effectiveDate,
         grdt: row.grdt || record.grdt,
         sigemStatus: row.status || row.sigemStatus || record.sigemStatus || record.status,

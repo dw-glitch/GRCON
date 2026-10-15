@@ -336,8 +336,20 @@
         errors.push(`${row.document}: nenhum arquivo físico selecionado.`);
         return;
       }
-      const etPlanningPair = validateEtPlanningPair(row, sources);
-      const pairValidation = etPlanningPair.applies ? etPlanningPair : validateN1710Pair(row, sources);
+      const manualRevisionOverride = Boolean(manualForce.has(rowIndex) || row.revisionManual);
+      // Exclude revision mismatches before pairing/deduplication: an old PDF
+      // must not replace the correct one merely because both rename alike.
+      const eligibleSources = sources.filter((source) => {
+        const fileRevision = C.fileRevisionEvidence(source.name, row.document, source.fileRevisionEvidence?.matchedDocument);
+        if (fileRevision.applicable && (!fileRevision.valid || fileRevision.revision !== C.normalizeRevision(row.revision)) && !manualRevisionOverride) {
+          warnings.push(`${row.document} / ${source.name}: excluído da GRDT; revisão do arquivo ${fileRevision.revision || "não identificada"} difere da revisão ${row.revision || "não informada"}. Confira e marque manualmente para incluir.`);
+          return false;
+        }
+        return true;
+      });
+      if (!eligibleSources.length) return;
+      const etPlanningPair = validateEtPlanningPair(row, eligibleSources);
+      const pairValidation = etPlanningPair.applies ? etPlanningPair : validateN1710Pair(row, eligibleSources);
       if (pairValidation.ignoredDuplicates && pairValidation.ignoredDuplicates.length) {
         warnings.push(`${row.document}: ${pairValidation.ignoredDuplicates.length} arquivo(s) duplicado(s) ignorado(s); somente uma cópia de cada nome final seguirá para a eGRDT.`);
       }
@@ -352,6 +364,12 @@
       }
 
       orderedSources.forEach((source) => {
+        const fileRevision = C.fileRevisionEvidence(source.name, row.document, source.fileRevisionEvidence?.matchedDocument);
+        const revisionMismatch = fileRevision.applicable && (!fileRevision.valid
+          || fileRevision.revision !== C.normalizeRevision(row.revision));
+        if (revisionMismatch) {
+          warnings.push(`${row.document} / ${source.name}: inclusão manual com revisão ${row.revision}; revisão identificada no arquivo: ${fileRevision.revision || "não identificada"}.`);
+        }
         const receivedFinalName = source.receivedFinalName || source.finalName;
         const fileNameCheck = C.validateFinalFileName(receivedFinalName, source.name, row.document, row.revision, row.sheet);
         if (!fileNameCheck.valid) {
@@ -371,6 +389,8 @@
           ...(row.egrdt || {}),
           document: row.document,
           revision: row.revision,
+          fileRevision: fileRevision.revision || "",
+          manualRevisionOverride: revisionMismatch && manualRevisionOverride,
           title: resolveEgrdtTitle(row),
           purpose: resolveEgrdtPurpose(row),
           discipline: resolveEgrdtDiscipline(row),
@@ -402,6 +422,8 @@
           rowIndex,
           document: row.document,
           revision: row.revision,
+          fileRevision: fileRevision.revision || "",
+          manualRevisionOverride: revisionMismatch && manualRevisionOverride,
           sheet: row.sheet,
           discipline: item.discipline,
           sourceLd: String(row.record && row.record.source || "").trim(),

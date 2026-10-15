@@ -17,7 +17,7 @@ const merge = Function("C", "E", "state", "extensionOf", `${source.slice(start, 
 );
 
 const document = "RL-5290.00-22313-970-C1O-00001";
-const names = [`${document}_A.pdf`, `${document}_A - COPIA.pdf`, `${document}_A.xlsx`];
+const names = [`${document}_A.pdf`, `${document}_REV_A.pdf`, `${document}_A.xlsx`];
 const rows = names.map((name, index) => ({
   id: `arquivo-${index + 1}`, documentKey: document, document, revision: "A",
   sheet: "LD_001", decision: Core.READY, name, file: { name }, record: {},

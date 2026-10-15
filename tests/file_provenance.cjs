@@ -9,7 +9,7 @@ const ExcelJS = require('../exceljs.min.js');
   const code = 'RL-5290.00-22313-856-C1O-017';
   const local = { name: code + '_A.docx', size: 12, lastModified: 1791374400000,
     arrayBuffer() { throw new Error('Não recalcular o binário na emissão'); } };
-  const row = { document: code, sheet: 'N-1710', revision: 'B',
+  const row = { document: code, sheet: 'N-1710', revision: 'B', revisionManual: true,
     record: { discipline: 'CIVIL', title: 'QA', purpose: 'Para Construção' },
     egrdt: { format: 'A4', discipline: 'CIVIL', documentType: 'RL', purpose: 'Para Construção' },
     files: [{ name: local.name, file: local }] };

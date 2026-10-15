@@ -17,6 +17,8 @@
     RECORD_CONFLICT: "RECORD_CONFLICT",
     REVISION_MISSING: "REVISION_MISSING",
     REVISION_INVALID: "REVISION_INVALID",
+    FILE_REVISION_UNKNOWN: "FILE_REVISION_UNKNOWN",
+    FILE_REVISION_ALREADY_POSTED: "FILE_REVISION_ALREADY_POSTED",
     SIGEM_STATUS_MISSING: "SIGEM_STATUS_MISSING",
     SIGEM_STATUS_CONFLICT: "SIGEM_STATUS_CONFLICT",
     IN_ANALYSIS_RECENT: "IN_ANALYSIS_RECENT",
@@ -72,6 +74,8 @@
     const status = norm(item.statusOperational || item.status);
     const reason = norm(item.reason);
     const allocationKind = item.record && item.record.allocationStatusState && item.record.allocationStatusState.kind;
+    if (item.reasonCode === CODES.FILE_REVISION_UNKNOWN) return CODES.FILE_REVISION_UNKNOWN;
+    if (item.reasonCode === CODES.FILE_REVISION_ALREADY_POSTED) return CODES.FILE_REVISION_ALREADY_POSTED;
 
     // O conflito vem antes: a LD com duas respostas para o mesmo documento não é
     // uma não alocação, e dizer que "a LD informa que não está alocado" contradiz
@@ -119,6 +123,18 @@
     const onde = local ? ` (${local})` : "";
     const alocEnviada = text(finding.allocationNumber);
     const messages = {
+      [CODES.FILE_REVISION_UNKNOWN]: {
+        severity: "warning",
+        title: "Confira a revisão do arquivo.",
+        explanation: text(item.reason),
+        nextAction: "Informe a revisão correta e marque manualmente se desejar incluir na GRDT.",
+      },
+      [CODES.FILE_REVISION_ALREADY_POSTED]: {
+        severity: "info",
+        title: "Esta revisão do arquivo já está postada.",
+        explanation: text(item.reason),
+        nextAction: "Adicione o arquivo da nova revisão ou marque a inclusão manual para reenviar esta mesma revisão.",
+      },
       [CODES.READY]: {
         severity: "success",
         title: "Será incluído na eGRDT.",
