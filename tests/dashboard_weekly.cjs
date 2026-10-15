@@ -91,7 +91,7 @@ const source = fs.readFileSync(path.join(root, "retomar.js"), "utf8");
 assert.match(source, /data-dashboard-granularity="week"/);
 assert.match(source, /data-dashboard-weeks="52"/);
 assert.match(source, /id="dashboard-week-count"[^>]*min="1"[^>]*max="52"/);
-assert.match(source, /workbook\.addWorksheet\("Emissões semanais"/);
+assert.match(fs.readFileSync(path.join(root, "emission_dashboard_report.js"), "utf8"), /workbook\.addWorksheet\("Emissões semanais"/);
 assert.match(source, /dashboardGranularity === "week"\s*\? buildDashboardWeeklyData/);
 
 console.log("OK — Dashboard de emissões suporta agrupamento semanal, semanas vazias, parcial e virada de ano.");

@@ -43,7 +43,7 @@ function report() {
 function appVersion(): string {
   return window.GrconConfig?.APP_VERSION
     || document.documentElement.dataset.version
-    || "5.44.11";
+    || "5.44.12";
 }
 
 function notify(message: string, kind = "info"): void {
@@ -156,7 +156,7 @@ function downloadBlob(blob: Blob, name: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-function buildWorkbookInWorker(records: EgrdtHistoryRecord[], options: Record<string, unknown>): Promise<ArrayBuffer | null> {
+function buildWorkbookInWorker(records: EgrdtHistoryRecord[], options: Record<string, unknown>, onProgress?: (detail: { message?: string }) => void): Promise<ArrayBuffer | null> {
   const webOrigin = location.protocol === "http:" || location.protocol === "https:";
   if (typeof Worker !== "function" || !webOrigin) return Promise.resolve(null);
   try {
@@ -166,13 +166,18 @@ function buildWorkbookInWorker(records: EgrdtHistoryRecord[], options: Record<st
     return Promise.reject(error);
   }
   const worker = reportWorker;
+  const requestId = `history-${Date.now()}-${Math.random()}`;
   return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => { cleanup(); worker.terminate(); if (reportWorker === worker) reportWorker = null; reject(new Error("O relatório não respondeu. Tente gerar novamente.")); }, 8 * 60 * 1000);
     const cleanup = () => {
+      window.clearTimeout(timeout);
       worker.removeEventListener("message", onMessage);
       worker.removeEventListener("error", onError);
     };
     const onMessage = (event: MessageEvent) => {
       const payload = event.data || {};
+      if (payload.requestId !== requestId) return;
+      if (payload.type === "history-report-progress") { onProgress?.(payload); return; }
       if (payload.type !== "history-report-result") return;
       cleanup();
       if (payload.ok) resolve(payload.buffer);
@@ -186,12 +191,15 @@ function buildWorkbookInWorker(records: EgrdtHistoryRecord[], options: Record<st
     };
     worker.addEventListener("message", onMessage);
     worker.addEventListener("error", onError);
-    worker.postMessage({ type: "history-report-build", records, options });
+    try { worker.postMessage({ type: "history-report-build", requestId, records, options }); } catch (error) { cleanup(); reject(error); }
   });
 }
 
 async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtHistoryFilters): Promise<void> {
   if (!records.length) return;
+  const operation = window.GrconOperations?.begin("history-period-report", "Exportar Histórico de eGRDTs", { host: "#history-module" });
+  try {
+  await operation?.paint();
   const HistoryReport = report();
   await window.GRCONModuleLoader?.ensure?.("excel");
   await window.GRCONModuleLoader?.ensure?.("brand");
@@ -205,12 +213,15 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
     teamsSigemEvidence: window.GrconTeamsTrace?.sigemEvidence(records) || {},
     workspaceId: window.GrconCloud?.state?.membership?.workspace_id,
   };
-  const workerBuffer = await buildWorkbookInWorker(records, options).catch(() => null);
+  const workerBuffer = await buildWorkbookInWorker(records, options, operation?.update).catch(() => null);
   const buffer = workerBuffer || await HistoryReport.buildWorkbook(records, options);
+  operation?.assertCurrent();
   downloadBlob(
     new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
     HistoryReport.downloadName(records, options),
   );
+  operation?.assertCurrent(); operation?.finish();
+  } catch (error) { operation?.fail(error); throw error; }
 }
 
 async function exportRemovedAudit(records: EgrdtHistoryRecord[]): Promise<void> {

@@ -39,13 +39,18 @@ export function useConsultas() {
     try {
       if (file) await Adapter.publishRequestsBase(file); else await Adapter.refreshRequestsBase();
       if (token !== Adapter.contextToken()) return;
-      setRequestsBase(Adapter.requestsBaseInfo()); indexRef.current = Adapter.buildIndex(lds); setResults(new Map());
+      const refreshedIndex = await Adapter.buildIndexAsync(lds);
+      if (token !== Adapter.contextToken()) return;
+      setRequestsBase(Adapter.requestsBaseInfo()); indexRef.current = refreshedIndex; setResults(new Map());
     } catch (error) { Adapter.notify(error instanceof Error ? error.message : "Falha na base de solicitações.", "error"); }
     finally { setBaseBusy(false); }
   }, [Adapter, lds]);
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [results, setResults] = useState<Map<string, ConsultationRow>>(new Map());
   const [running, setRunning] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importingRef = useRef(false);
+  const exportingRef = useRef(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [search, setSearch] = useState("");
   const [situation, setSituation] = useState("");
@@ -57,6 +62,7 @@ export function useConsultas() {
   const [banner, setBanner] = useState<{ kind: "error" | "info"; message: string } | null>(null);
 
   const indexRef = useRef<DocumentIndex | null>(null);
+  const indexRequestRef = useRef(0);
   const sourceEpochRef = useRef(0);
   const plannedSnapshotIdRef = useRef("");
   const undoRef = useRef<UndoEntry[]>([]);
@@ -64,48 +70,65 @@ export function useConsultas() {
 
   const notify = useCallback((message: string, kind?: NotifyKind) => Adapter.notify(message, kind), [Adapter]);
 
-  const reindex = useCallback((nextLds: LdEntry[]) => {
-    indexRef.current = Adapter.buildIndex(nextLds);
+  const reindex = useCallback(async (nextLds: LdEntry[]) => {
+    const token = Adapter.contextToken(), request = ++indexRequestRef.current;
+    const index = await Adapter.buildIndexAsync(nextLds);
+    if(token === Adapter.contextToken() && request === indexRequestRef.current) indexRef.current = index;
   }, [Adapter]);
 
   const addLds = useCallback(async (fileList: FileList | null | undefined) => {
+    if (importingRef.current || running) return;
     const arquivos = [...(fileList || [])];
     if (!arquivos.length) return;
     const novos: LdEntry[] = arquivos
       .filter((file) => !lds.some((item) => item.name === file.name && item.size === file.size))
       .map((file) => ({ id: `ld-${proximoLdId++}-${Date.now()}`, file, name: file.name, size: file.size, records: [], history: [], error: "" }));
     if (!novos.length) return;
-    setLds((prev) => [...prev, ...novos]);
+    importingRef.current = true; setImporting(true);
+    const operation = window.GrconOperations?.begin("consultas-ld-import", "Ler LDs para consulta", { host: "#requests-module" });
+    const token = Adapter.contextToken();
+    const next = [...lds, ...novos];
+    setLds(next);
+    try {
+    await operation?.paint();
     for (const entrada of novos) {
       try {
-        const parsed = await Adapter.parseLd(entrada.file);
+        operation?.update({ message: "Lendo " + entrada.name });
+        const parsed = await Adapter.parseLd(entrada.file, operation?.update);
+        if (token !== Adapter.contextToken()) throw new DOMException("O contrato mudou durante a leitura.", "AbortError");
+        operation?.assertCurrent();
         entrada.records = parsed.records;
         entrada.history = parsed.history;
         if (!entrada.records.length) entrada.error = "Nenhuma linha de documento foi reconhecida nesta planilha.";
       } catch (error) {
         entrada.error = (error instanceof Error && error.message) || "Não foi possível ler este arquivo.";
       }
-      setLds((prev) => {
-        const atualizado = prev.map((item) => (item.id === entrada.id ? { ...entrada } : item));
-        reindex(atualizado);
-        return atualizado;
-      });
+      if (token !== Adapter.contextToken()) return;
+      setLds([...next]);
+      operation?.update({ message: "LDs lidas", done: novos.indexOf(entrada) + 1, total: novos.length });
     }
+    if (token !== Adapter.contextToken()) return;
+    operation?.update("Organizando índice de consulta…"); await operation?.paint();
+    await reindex(next);
+    setLds([...next]);
+    if (novos.some(entry => entry.error)) throw new Error("Leitura finalizada com erro em uma ou mais LDs. Confira os arquivos indicados.");
     if (arquivos[0]) Adapter.rememberLastLd(arquivos[0]);
-  }, [lds, reindex, Adapter]);
+    operation?.finish();
+    } catch (error) { operation?.fail(error); }
+    finally { if (token !== Adapter.contextToken()) { setLds([]); indexRef.current = null; } importingRef.current = false; setImporting(false); }
+  }, [lds, reindex, Adapter, running]);
 
   const removeLd = useCallback((id: string) => {
-    setLds((prev) => {
-      const atualizado = prev.filter((item) => item.id !== id);
-      reindex(atualizado);
-      return atualizado;
-    });
-    setResults(new Map());
-  }, [reindex]);
+    if (importingRef.current) return;
+    const next = lds.filter(item => item.id !== id);
+    setLds(next); indexRef.current = null; setResults(new Map());
+    void reindex(next).then(() => setLds(current => [...current])).catch(error => notify(error instanceof Error ? error.message : "Falha ao atualizar o índice.", "error"));
+  }, [lds, reindex, notify]);
 
   const clearLds = useCallback(() => {
+    if (importingRef.current) return;
     setLds([]);
-    indexRef.current = null;
+    indexRequestRef.current++; indexRef.current = null;
     setResults(new Map());
   }, []);
 
@@ -162,7 +185,7 @@ export function useConsultas() {
   }, []);
 
   const runQuery = useCallback(async (onlySelected?: boolean) => {
-    if (running) return;
+    if (running || importingRef.current) return;
     const token = Adapter.contextToken();
     let sourceEpoch = sourceEpochRef.current;
     const valid = () => token === Adapter.contextToken() && sourceEpoch === sourceEpochRef.current;
@@ -184,7 +207,8 @@ export function useConsultas() {
       sourceEpoch = sourceEpochRef.current;
       const plannedSnapshot = await Adapter.loadPlannedDocumentsSnapshot();
       if (!valid()) return;
-      const officialIndex = Adapter.buildIndex(lds, plannedSnapshot);
+      const officialIndex = await Adapter.buildIndexAsync(lds, plannedSnapshot);
+      if (!valid()) return;
       if (!officialIndex) throw new Error("Carregue uma LD ou um Controle de Solicitações válido antes de consultar.");
       indexRef.current = officialIndex;
 
@@ -237,7 +261,7 @@ export function useConsultas() {
     setProgress({ done: 0, total: 0 });
     setRequestsBase(Adapter.requestsBaseInfo());
     if (event.type === "grcon:contract-context-changed") {
-      setLds([]); setDocuments([]); indexRef.current = null; undoRef.current = [];
+      setLds([]); setDocuments([]); indexRequestRef.current++; indexRef.current = null; undoRef.current = [];
     }
   }), [Adapter]);
 
@@ -287,19 +311,25 @@ export function useConsultas() {
   }, [refreshTemplates, Adapter]);
 
   const exportExcel = useCallback(async (templateId?: string) => {
+    if (exportingRef.current) return;
     const rowsToExport = visibleRows.filter(({ linha }) => Boolean(linha))
       .map(({ item, linha }) => Adapter.buildExportRow(item.document, linha!));
     if (!rowsToExport.length) { notify("Consulte os documentos antes de exportar.", "warn"); return; }
     const escolhido = templates.find((item) => item.id === (templateId || selectedTemplateId)) || templates[0];
     const modelo = Adapter.normalizeExportTemplate(escolhido);
+    exportingRef.current = true;
+    const operation = window.GrconOperations?.begin("consultas-export", "Exportar consulta de documentos", { host: "#requests-module" });
     try {
+      await operation?.paint();
       const nomesLds = lds.filter((item) => !item.error).map((item) => item.name).join(" · ");
-      await Adapter.exportRowsToExcel(rowsToExport, modelo, nomesLds);
+      await Adapter.exportRowsToExcel(rowsToExport, modelo, nomesLds, operation?.update);
+      operation?.assertCurrent();
       setLastExport({ id: modelo.id, name: modelo.name });
       notify(`Planilha gerada com ${rowsToExport.length} linha(s) no modelo "${modelo.name}".`, "success");
     } catch (error) {
+      operation?.fail(error);
       notify((error instanceof Error && error.message) || "Não foi possível gerar a planilha.", "error");
-    }
+    } finally { operation?.finish(); exportingRef.current = false; }
   }, [visibleRows, templates, selectedTemplateId, lds, notify, Adapter]);
 
   const repeatLastExport = useCallback(async () => {
@@ -324,7 +354,7 @@ export function useConsultas() {
   }, [results]);
 
   return {
-    lds, documents, results, running, progress, search, situation, allocation, sort,
+    lds, documents, results, running, importing, progress, search, situation, allocation, sort,
     templates, selectedTemplateId, lastExport, banner, visibleRows, exportRows, selectedCount, ldsReady, summary,
     lastLd: Adapter.getLastLd(),
     canUndo: undoRef.current.length > 0,

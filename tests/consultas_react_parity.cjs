@@ -34,7 +34,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
     exports: testModule.exports,
     require,
     console,
-    window: {},
+    window: { GrconConsultationIndex: require("../consultation_index.js") },
     navigator: { clipboard: { writeText: async () => {} } },
     document: {},
     Blob,
@@ -44,6 +44,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
     fetch: globalThis.fetch,
     ...overrides,
   };
+  sandbox.window.GrconConsultationIndex = require("../consultation_index.js");
   sandbox.globalThis = sandbox;
   vm.runInNewContext(compiled, sandbox, { filename: filePath });
   return { exports: testModule.exports, sandbox };
@@ -369,7 +370,7 @@ function transpileModule(filePath, jsx, overrides = {}) {
   assert.ok(runQuery.indexOf("setRunning(false)") > runQuery.indexOf("finally"));
   assert.match(runQuery, /Não foi possível concluir a consulta/);
   assert.match(runQuery, /loadPlannedDocumentsSnapshot/);
-  assert.match(runQuery, /buildIndex\(lds, plannedSnapshot\)/);
+  assert.match(runQuery, /await Adapter\.buildIndexAsync\(lds, plannedSnapshot\)/);
   assert.match(runQuery, /lookupDocument\(item\.document, item\.requestedTitle, officialIndex, plannedSnapshot\)/);
 
   const loader = fs.readFileSync(path.join(root, "grcon_module_loader.js"), "utf8");

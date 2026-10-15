@@ -208,11 +208,11 @@
     return taskKey;
   }
 
-  function finish(key) {
+  function finish(key, error) {
     const taskKey = String(key || "");
     tasks.delete(taskKey);
     if (root.QualityTaskCenter && taskCenterIds.has(taskKey)) {
-      root.QualityTaskCenter.finish(taskCenterIds.get(taskKey));
+      root.QualityTaskCenter[error ? error.name === "AbortError" ? "cancel" : "fail" : "finish"](taskCenterIds.get(taskKey), error);
       taskCenterIds.delete(taskKey);
     }
     render();
@@ -276,6 +276,8 @@
     tabId,
     start,
     finish,
+    fail: (key, error) => finish(key, error || new Error("Operação não concluída.")),
+    update: (key, progress, detail) => { if (taskCenterIds.has(key)) root.QualityTaskCenter?.update(taskCenterIds.get(key), progress, detail); },
     setTask,
     status,
     preference,

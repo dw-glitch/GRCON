@@ -16,14 +16,16 @@
     const payload = event && event.data || {};
     if (payload.type !== "history-report-build") return;
     try {
+      self.postMessage({ type: "history-report-progress", requestId: payload.requestId, message: "Preparando relatório do histórico…" });
       await ensureLoaded();
       const records = Array.isArray(payload.records) ? payload.records : [];
       const options = payload.options || {};
+      self.postMessage({ type: "history-report-progress", requestId: payload.requestId, message: "Montando e compactando planilha…" });
       const buffer = await self.GrconHistoryReport.buildWorkbook(records, options);
-      self.postMessage({ type: "history-report-result", ok: true, buffer }, [buffer]);
+      self.postMessage({ type: "history-report-result", requestId: payload.requestId, ok: true, buffer }, [buffer]);
     } catch (error) {
       self.postMessage({
-        type: "history-report-result",
+        type: "history-report-result", requestId: payload.requestId,
         ok: false,
         error: error && error.message || "Falha ao gerar relatório no worker.",
       });

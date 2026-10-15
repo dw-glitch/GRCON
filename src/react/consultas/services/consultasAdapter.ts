@@ -73,7 +73,12 @@ async function readFileBuffer(file: File, context: string): Promise<ArrayBuffer>
 }
 
 /** Lê uma LD anexada com o mesmo motor da Triagem de GRDT. */
-async function parseLd(file: File): Promise<{ records: LdRecord[]; history: LdHistoryEntry[] }> {
+async function parseLd(file: File, onProgress?: (detail: { message?: string; done?: number; total?: number; progress?: number }) => void): Promise<{ records: LdRecord[]; history: LdHistoryEntry[] }> {
+  await ensureGroup("performance");
+  if (window.GrconPerformance?.supported && window.GrconPerformance.loadLd) {
+    const result = await window.GrconPerformance.loadLd(file, null, onProgress);
+    return { records: (result.parsed.records || []) as LdRecord[], history: (result.parsed.history || []) as LdHistoryEntry[] };
+  }
   await ensureGroup("xlsx");
   const buffer = await readFileBuffer(file, "a LD controlada");
   const workbook = window.XLSX!.read(buffer, { type: "array", cellDates: true, cellStyles: false });
@@ -83,25 +88,16 @@ async function parseLd(file: File): Promise<{ records: LdRecord[]; history: LdHi
 
 /** Reconstrói o índice de busca a partir das LDs válidas anexadas. */
 function buildIndex(lds: LdEntry[], plannedSnapshot?: PlannedDocumentsSnapshot): DocumentIndex | null {
-  const validas = lds.filter((item) => !item.error && item.records.length);
-  const control = window.GrconRequestsControl?.current();
-  if (!validas.length && !control?.records.length) return null;
-  const ldRecords = validas.flatMap((item) => item.records);
-  const ldKeys = new Set(ldRecords.flatMap(row => core().documentSearchKeys(row.document).map(value => core().key(value))));
-  const registros = [...ldRecords, ...(control?.records || []).filter(row => !core().documentSearchKeys(row.document).some(value => ldKeys.has(core().key(value)))).map(row => ({
-    document: row.document, documentKey: row.document, source: "Controle de Solicitações", sheet: row.sheet, row: row.sourceRow,
-    title: Object.entries(row.data).find(([label]) => /^(?:T[IÍ]TULO(?: DO DOCUMENTO)?|DESCRI[CÇ][AÃ]O)$/i.test(label))?.[1] || "",
-    sourceTimestamp: 0,
-  }))];
-  const historico = validas.flatMap((item) => item.history || []);
-  // Em Consultas, a coluna de alocação da LD nunca pode decidir Alocado/Não
-  // alocado. Quando há snapshot oficial, todas as ocorrências entram no índice
-  // já sobrescritas pela mesma fonte compartilhada. Isso também elimina falsos
-  // conflitos entre LDs que apenas divergem na coluna antiga de alocação.
-  const registrosOficiais = plannedSnapshot
-    ? plannedDocumentsCore().applyToRecords(registros, plannedSnapshot)
-    : registros;
-  return core().buildIndex(registrosOficiais, historico);
+  return window.GrconConsultationIndex.buildIndex(lds, plannedSnapshot, window.GrconRequestsControl?.current());
+}
+async function buildIndexAsync(lds: LdEntry[], plannedSnapshot?: PlannedDocumentsSnapshot): Promise<DocumentIndex | null> {
+  await ensureGroup("performance");
+  if (window.GrconPerformance?.supported && window.GrconPerformance.processData) {
+    const entries = lds.map(({ records, history, error }) => ({ records, history, error }));
+    const control = window.GrconRequestsControl?.current();
+    return await window.GrconPerformance.processData("consultation-index", { lds: entries, plannedSnapshot, control: control ? { records: control.records } : null }) as DocumentIndex | null;
+  }
+  return buildIndex(lds, plannedSnapshot);
 }
 
 function rememberLastLd(file: File): void {
@@ -338,7 +334,7 @@ async function publishRequestsBase(file: File): Promise<void> { await window.Grc
  * Gera e baixa o arquivo Excel com o mesmo construtor da Triagem (mesmo
  * layout, mesma logomarca).
  */
-async function exportRowsToExcel(rows: ExportRow[], template: ExportTemplate, ldNames: string): Promise<void> {
+async function exportRowsToExcel(rows: ExportRow[], template: ExportTemplate, ldNames: string, onProgress?: (detail: { message?: string; done?: number; total?: number; progress?: number }) => void): Promise<void> {
   const Report = requestsReport();
   const trace = window.GrconTeamsTrace;
   if (trace) rows = await trace.consultationRows(rows) as ExportRow[];
@@ -353,7 +349,7 @@ async function exportRowsToExcel(rows: ExportRow[], template: ExportTemplate, ld
   let buffer: ArrayBuffer | undefined;
   try {
     await ensureGroup("performance");
-    if (window.GrconPerformance?.supported) buffer = await window.GrconPerformance.buildSpreadsheet("consultation", { rows, options, title: template.name });
+    if (window.GrconPerformance?.supported) buffer = await window.GrconPerformance.buildSpreadsheet("consultation", { rows, options, title: template.name }, onProgress);
   } catch (error) { console.warn("[GRCON] Exportação em modo compatível", error); }
   if (!buffer) {
     const workbook = new window.ExcelJS!.Workbook();
@@ -390,6 +386,7 @@ export const consultasAdapter = Object.freeze({
   notify,
   parseLd,
   buildIndex,
+  buildIndexAsync,
   loadPlannedDocumentsSnapshot,
   rememberLastLd,
   getLastLd,

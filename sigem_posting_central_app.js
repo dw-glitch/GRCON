@@ -298,53 +298,24 @@
       filter();
     }
   }
-  function exportExcel(){
-    const keys=state.columns,rows=state.filtered.rows;
-    if(!rows.length){notify("Nenhum resultado para exportar.");return;}
-    const labels=Object.fromEntries(root.GrconSigemCentralCore.COLUMNS);
-    const safe=v=>{
-      const t=String(v==null?"":v);
-      return /^\s*[=+\-@]/.test(t)||/^[\t\r\n]/.test(t)?"'"+t:t;
-    };
-    const meta=state.data.meta||{};
-    const cells=[keys.map(k=>labels[k]||k),...rows.map(row=>keys.map(k=>safe(row[k])))];
-    const XLSX=root.XLSX;
-    if(!XLSX?.utils?.aoa_to_sheet||!XLSX.writeFile){
-      notify("Leitor Excel indisponível. Reabra o módulo e tente novamente.","error");return;
-    }
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cells),"Consulta");
-    const info=XLSX.utils.aoa_to_sheet([["Consulta Geral",meta.fileName||"Indisponível"],
-      ["Data de referência",meta.referenceDate||meta.importedAt||""],
-      ["Snapshot",meta.snapshotId||""],["Origem",meta.source||"Consulta Geral compartilhada/local"],
-      ["Contrato",workspace()],["Usuário",root.GrconCloud?.state?.session?.user?.id||""],
-      ["Tipo de consulta",state.view],["Pesquisa",state.effectiveQuery],
-      ["Filtros",JSON.stringify(state.filters)],["Ordenação",JSON.stringify(state.sort)],
-      ["Colunas",keys.join(" | ")],["Base desatualizada",String(Boolean(root.GrconSharedSigemQuery?.state?.stale))],
-      ["Histórico completo",String(Boolean(state.data.historyComplete))],["Total de resultados",rows.length],["Não encontrados",state.filtered.missing.join(" | ")],
-      ["Gerado em",new Date().toISOString()]].map(row=>row.map(safe)));
-    XLSX.utils.book_append_sheet(wb,info,"Fonte e filtros");
-    if(state.view==="evolucao"&&state.comparison){
-      const comparison=state.comparison;
-      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
-        ["Comparação",comparison.id],["Base anterior",comparison.previous.file_name],["Snapshot anterior",comparison.previous.snapshot_id],
-        ["Base atual",comparison.current.file_name],["Snapshot atual",comparison.current.snapshot_id],
-        ["Data anterior",comparison.previous.metadata?.referenceDate||comparison.previous.published_at],
-        ["Data atual",comparison.current.metadata?.referenceDate||comparison.current.published_at]
-      ].map(row=>row.map(safe))),"Versões comparadas");
-    }
-    if(state.filtered.missing.length){
-      const missing=XLSX.utils.aoa_to_sheet([["Código não encontrado"],...state.filtered.missing.map(code=>[safe(code)])]);
-      XLSX.utils.book_append_sheet(wb,missing,"Não encontrados");
-    }
-    if(state.view==="grdts"){
-      const details=rows.flatMap(group=>(group.rows||[]).map(row=>[
-        group.egrdtNumber,row.document,row.revisionSent,row.revisionFound,row.statusLabel,row.sigemStatus,row.purpose,row.generatedAt,row.note
-      ].map(safe)));
-      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([["eGRDT","Documento","Revisão registrada","Revisão SIGEM","Conferência","Status SIGEM","Propósito","Data da geração","Diagnóstico"],...details]),"Documentos das GRDTs");
-    }
-    XLSX.writeFile(wb,"GRCON_Central_Postagem_SIGEM_"+new Date().toISOString().slice(0,10)+".xlsx");
+  async function exportExcel(){
+    if(!state.filtered.rows.length){notify("Nenhum resultado para exportar.");return;}
+    if(root.GrconOperations?.isActive("sigem-central-export"))return;
+    const operation=root.GrconOperations?.begin("sigem-central-export","Exportar Central de Postagem SIGEM",{host:"#sigem-module"});
+    try{
+      await operation?.paint();
+      await root.GRCONModuleLoader.ensure("performance");
+      const buffer=await root.GrconPerformance.processData("central-export",{
+        columns:root.GrconSigemCentralCore.COLUMNS,workspace:workspace(),userId:root.GrconCloud?.state?.session?.user?.id||"",
+        state:{columns:state.columns,filtered:state.filtered,data:{meta:state.data.meta,historyComplete:state.data.historyComplete},view:state.view,effectiveQuery:state.effectiveQuery,filters:state.filters,sort:state.sort,comparison:state.comparison}
+      },operation?.update);
+      operation?.assertCurrent();
+      const url=URL.createObjectURL(new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+      const anchor=document.createElement("a");anchor.href=url;anchor.download="GRCON_Central_Postagem_SIGEM_"+new Date().toISOString().slice(0,10)+".xlsx";anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+    }catch(error){operation?.fail(error);notify(error.message||"Não foi possível exportar a consulta.","error");}
+    finally{operation?.finish();}
   }
+
   function closeDetail(){
     $("#sigem-central-detail").hidden=true;state.selectedRow=null;
     if(state.detailReturnFocus?.isConnected)state.detailReturnFocus.focus();

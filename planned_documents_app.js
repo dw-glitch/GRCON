@@ -29,21 +29,29 @@
       root.GrconNotify?.("Selecione uma planilha Excel (.xlsx ou .xls).", "error");
       return;
     }
+    const operation = root.GrconOperations?.begin("planned-publish", "Atualizar Documentos Previstos", { host: $("#planned-documents-status")?.parentElement });
     state.busy = true;
     state.error = "";
     render();
     const status = $("#planned-documents-status");
     try {
       status.textContent = "Lendo a coluna DOCUMENTO…";
-      await root.GRCONModuleLoader?.ensure?.("xlsx");
-      const workbook = root.XLSX.read(await file.arrayBuffer(), { type: "array", dense: true });
-      const parsed = Core.parseWorkbook(workbook);
+      await operation?.paint();
+      await root.GRCONModuleLoader?.ensure?.("performance");
+      let parsed;
+      if (root.GrconPerformance?.supported) parsed = await root.GrconPerformance.importWorkbook(file, "planned", operation?.update);
+      else { await root.GRCONModuleLoader?.ensure?.("xlsx"); const workbook = root.XLSX.read(await file.arrayBuffer(), { type: "array", dense: true }); parsed = Core.parseWorkbook(workbook); }
+      operation?.assertCurrent();
       status.textContent = `Enviando ${parsed.count.toLocaleString("pt-BR")} códigos únicos. A base atual permanece ativa até concluir.`;
-      await root.GrconCloud.publishPlannedDocuments(parsed, file.name);
+      const onProgress = event => operation?.update({ message: "Enviando códigos", ...event.detail });
+      root.addEventListener("grcon:planned-documents-progress", onProgress);
+      try { await root.GrconCloud.publishPlannedDocuments(parsed, file.name); }
+      finally { root.removeEventListener("grcon:planned-documents-progress", onProgress); }
       input.value = "";
       root.GrconNotify?.(`Documentos Previstos atualizados para todos: ${parsed.count.toLocaleString("pt-BR")} códigos. Faça uma nova análise para usar esta base.`, "success");
       root.dispatchEvent(new CustomEvent("grcon:planned-documents-published"));
     } catch (error) {
+      operation?.fail(error);
       if (error?.published) {
         input.value = "";
         state.error = `${error.message} Atualize a página para consultar a versão publicada.`;
@@ -54,6 +62,7 @@
       }
       return;
     } finally {
+      operation?.finish();
       state.busy = false;
       render();
     }

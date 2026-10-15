@@ -102,7 +102,7 @@ export function ConsultasApp() {
       </div>
 
       <ActionsBar
-        canQuery={c.documents.length > 0 && c.indexReady && !c.running}
+        canQuery={c.documents.length > 0 && c.indexReady && !c.running && !c.importing}
         hasSelection={c.selectedCount > 0}
         hasDocuments={c.documents.length > 0}
         hasResults={c.results.size > 0}

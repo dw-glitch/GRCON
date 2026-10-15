@@ -213,7 +213,10 @@
     });
   }
 
+  let currentOperation = null;
   function setBusy(busy, label) {
+    if(busy){if(!currentOperation&&!root.GrconOperations?.isActive("posting-conference"))currentOperation=root.GrconOperations?.begin("posting-conference",label||"Conferir postagem",{host:"#posting-conference-module"});else currentOperation?.update(label||"Processando…");}
+    else {currentOperation?.finish();currentOperation=null;}
     state.busy = busy;
     const progress = el("pc-progress");
     progress.hidden = !busy;
@@ -232,9 +235,11 @@
 
   async function importFile(file) {
     setBusy(true, "Validando e indexando a Consulta Geral…");
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await (root.GrconOperations?.paint() || new Promise(resolve=>setTimeout(resolve,0)));
     try {
       const base = await root.GrconSharedSigemQuery.parseFile(file);
+      currentOperation?.update("Atualizando base e conferindo histórico…");
+      currentOperation?.assertCurrent();
       base.meta.referenceDate = el("pc-reference-date").value || new Date().toLocaleDateString("sv-SE");
       await root.GrconSharedSigemQuery.setLocal(base);
       await Conference.saveBase(conferenceProjection(root.GrconSharedSigemQuery.current()));
@@ -248,6 +253,7 @@
       notify(`Consulta Geral atualizada: ${fmt(result.summary.total)} documento(s) único(s) · ${fmt(result.summary.sendCount)} envio(s) conferido(s).`, "success");
       render();
     } catch (error) {
+      currentOperation?.fail(error);
       console.error(error);
       notify(error.message || "Não foi possível processar a Consulta Geral.", "error");
     } finally {
@@ -262,7 +268,8 @@
       await root.GrconSharedSigemQuery.publish(root.GrconSharedSigemQuery.state.local);
       await adoptSharedBase();
       notify("Consulta Geral publicada para todos os usuários.", "success");
-    } catch (error) { notify(error.message, error.published ? "warning" : "error"); }
+    } catch (error) {
+      currentOperation?.fail(error); notify(error.message, error.published ? "warning" : "error"); }
     finally { setBusy(false); render(); }
   }
 
@@ -290,7 +297,7 @@
 
   async function reconcileCurrent(options) {
     setBusy(true, "Recalculando a conferência…");
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await (root.GrconOperations?.paint() || new Promise(resolve=>setTimeout(resolve,0)));
     try {
       state.result = await Conference.reconcilePersisted(History?.read?.() || [], options || {});
       state.base = await Conference.loadBase();
@@ -298,6 +305,7 @@
       root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: state.result.summary, eventSummary: state.result.eventSummary, consolidation: state.result.consolidation, changes: state.result.changes, baseMeta: state.base.meta } }));
       render();
     } catch (error) {
+      currentOperation?.fail(error);
       console.error(error);
       notify(error.message || "Não foi possível recalcular a conferência.", "error");
     } finally {
@@ -704,7 +712,7 @@
         teamsAttempts: await root.GrconTeamsTrace?.forExport?.() || [],
         workspaceId: root.GrconCloud?.state?.membership?.workspace_id,
         baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt,
-      });
+      }, currentOperation?.update);
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -719,6 +727,7 @@
         : mode === "events" ? `${fmt(rows.length)} ocorrência(s) incluída(s) no relatório por eGRDT.`
           : `${fmt(rows.length)} documento(s) único(s) incluído(s) no relatório.`, "success");
     } catch (error) {
+      currentOperation?.fail(error);
       console.error(error);
       notify(error.message || "Não foi possível gerar o relatório.", "error");
     } finally {
@@ -739,6 +748,7 @@
         [state.base, state.audit] = await Promise.all([Conference.loadBase(), Conference.loadAudit()]);
         state.result = await Conference.reconcilePersisted(History?.read?.() || [], { reason: "activate" });
       } catch (error) {
+      currentOperation?.fail(error);
         console.error(error);
         notify(error.message || "Não foi possível carregar a conferência salva.", "error");
       } finally {

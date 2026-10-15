@@ -138,20 +138,21 @@ export function toCandidate(record: LdDocumentRecord, score = 0): CoverDocumentC
   };
 }
 
-export async function loadLdRecords(files: FileList | File[]): Promise<LdDocumentRecord[]> {
+export async function loadLdRecords(files: FileList | File[], onProgress?: (detail: { message?: string; done?: number; total?: number; progress?: number }) => void): Promise<LdDocumentRecord[]> {
   if (!window.TriagemCore) throw new Error("Leitor de LD do GRCON não está disponível.");
   const records: LdDocumentRecord[] = [];
   for (const file of Array.from(files)) {
+    onProgress?.({ message: "Lendo " + file.name + "…" });
     if (!/\.(?:xlsx?|xlsm)$/i.test(file.name)) continue;
     let parsed: { records: LdDocumentRecord[] };
     const performanceCore = (window as unknown as {
       GrconPerformance?: {
         supported?: boolean;
-        loadLd?: (input: File, profile?: unknown) => Promise<{ parsed?: { records?: unknown[] } }>;
+        loadLd?: (input: File, profile?: unknown, onProgress?: (detail: { message?: string; done?: number; total?: number; progress?: number }) => void) => Promise<{ parsed?: { records?: unknown[] } }>;
       };
     }).GrconPerformance;
     if (performanceCore?.supported && typeof performanceCore.loadLd === "function") {
-      const result = await performanceCore.loadLd(file, null);
+      const result = await performanceCore.loadLd(file, null, onProgress);
       parsed = { records: (result.parsed?.records || []) as unknown as LdDocumentRecord[] };
     } else {
       if (!window.XLSX) throw new Error("Leitor de planilhas do GRCON não está disponível.");

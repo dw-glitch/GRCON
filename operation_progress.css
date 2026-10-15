@@ -1,0 +1,15 @@
+.grcon-operation-progress{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;padding:10px 14px;margin:8px 0 12px;border:1px solid #b9d0df;border-radius:8px;background:#edf5fa;color:#173d59;font-size:12px;min-width:0;grid-column:1/-1}
+.grcon-operation-progress strong,.grcon-operation-progress [role=status],.grcon-operation-progress progress{grid-column:1/-1;overflow-wrap:anywhere}
+.grcon-operation-progress progress{width:100%;height:7px;accent-color:#2675a5}
+.grcon-operation-progress small{color:#526b7e}.grcon-operation-progress button{justify-self:end;padding:3px 9px;border:1px solid #b9cbd7;border-radius:5px;background:transparent;color:inherit;cursor:pointer}
+.grcon-operation-progress[data-state=failed]{background:#fff3ef;border-color:#d8a696;color:#86381f}.grcon-operation-progress[data-state=completed]{background:#edf7f1;border-color:#a5cbb5;color:#245a3d}
+.task-center-item progress{width:100%;height:7px;accent-color:#2675a5}.task-center-item.cancelled,.task-center-item.interrupted{opacity:.85}
+@media(prefers-reduced-motion:reduce){.grcon-operation-progress progress:indeterminate{animation:none}}
+
+.grcon-operation-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+html[data-theme=dark] .grcon-operation-progress{background:#173247;color:#deedf6;border-color:#3c617a}
+html[data-theme=dark] .grcon-operation-progress small{color:#adc5d5}
+html[data-theme=dark] .grcon-operation-progress[data-state=completed]{background:#163b2d;color:#d7f1e2;border-color:#47765b}
+html[data-theme=dark] .grcon-operation-progress[data-state=failed]{background:#482921;color:#ffddd2;border-color:#975d49}
+
+.grcon-operation-progress > span:not(.grcon-operation-announcement){grid-column:1/-1}

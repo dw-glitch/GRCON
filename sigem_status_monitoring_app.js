@@ -620,14 +620,19 @@
       notify("Selecione duas versões diferentes.", "warning");
       return;
     }
+    if(root.GrconOperations?.isActive("sigem-monitor-compare"))return;
+    const operation=root.GrconOperations?.begin("sigem-monitor-compare","Comparar versões da Consulta Geral",{detail:"Aguardando comparação no servidor…"});
     try {
+      await operation?.paint();
       const id = await rpc("grcon_sigem_compare_versions", { target_workspace: workspaceId(), previous_snapshot: previous, current_snapshot: current });
+      operation?.assertCurrent();
       notify("Comparação manual concluída. Nenhum alerta foi disparado.", "success");
       await loadAll();
       if (id) await openComparison(id);
     } catch (error) {
+      operation?.fail(error);
       notify(error?.message || "Não foi possível comparar as versões.", "error");
-    }
+    } finally { operation?.finish(); }
   }
 
   async function saveMonitored(event) {
@@ -685,14 +690,12 @@
 
   async function exportFiltered() {
     const rows = filteredChanges();
-    if (!rows.length) return;
+    if (!rows.length || root.GrconOperations?.isActive("sigem-monitor-export")) return;
+    const operation=root.GrconOperations?.begin("sigem-monitor-export","Exportar alterações SIGEM");
     try {
-      await root.GRCONModuleLoader?.ensure?.("excel");
-      if (!root.ExcelJS) throw new Error("Biblioteca Excel indisponível.");
-      const workbook = new root.ExcelJS.Workbook();
-      workbook.creator = "GRCON";
-      const sheet = workbook.addWorksheet("Alterações SIGEM");
-      sheet.columns = [
+      await operation?.paint();
+      await root.GRCONModuleLoader?.ensure?.("performance");
+      const columns = [
         { header: "CONTRATO", key:"contrato", width:20 },
         { header: "DATA DA COMPARAÇÃO", key:"data", width:24 },
         { header: "CONSULTA ANTERIOR", key:"consultaAnterior", width:36 },
@@ -707,21 +710,13 @@
         { header: "MONITORADO", key: "monitorado", width: 14 },
       ];
       const comparison = state.comparisons.find(c => c.comparison_id === state.activeComparison);
-      rows.forEach((row) => sheet.addRow({
+      const reportRows = rows.map(row => ({
         contrato: cloud()?.state?.contract?.code || "", data: formatDate(comparison?.compared_at), consultaAnterior: comparison?.previous_file || "", consultaAtual: comparison?.current_file || "",
-        documento: row.document_code || "",
-        revisao: row.revision || "",
-        alteracao: changeLabel(row.change_type),
-        anterior: row.previous_status || "",
-        atual: row.current_status || "",
-        titulo: row.title || "",
-        disciplina: row.discipline || "",
-        monitorado: row.monitored ? "SIM" : "NÃO",
+        documento: row.document_code || "", revisao: row.revision || "", alteracao: changeLabel(row.change_type),
+        anterior: row.previous_status || "", atual: row.current_status || "", titulo: row.title || "", disciplina: row.discipline || "", monitorado: row.monitored ? "SIM" : "NÃO",
       }));
-      sheet.getRow(1).font = { bold: true };
-      sheet.autoFilter = { from: "A1", to: "L1" };
-      sheet.views = [{ state: "frozen", ySplit: 1 }];
-      const buffer = await workbook.xlsx.writeBuffer();
+      const buffer = await root.GrconPerformance.buildSpreadsheet("monitor", { columns, rows: reportRows },operation?.update);
+      operation?.assertCurrent();
       const contract = cloud()?.state?.contract?.code || "CONTRATO";
       const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -735,8 +730,9 @@
       root.setTimeout(() => URL.revokeObjectURL(url), 30000);
       notify(rows.length.toLocaleString("pt-BR") + " alteração(ões) exportada(s) conforme os filtros.", "success");
     } catch (error) {
+      operation?.fail(error);
       notify(error?.message || "Não foi possível gerar o Excel.", "error");
-    }
+    } finally { operation?.finish(); }
   }
 
   function installBadge() {
