@@ -336,28 +336,29 @@
     moduleState.set(module, "loading");
     directActivate(module);
 
-    const operation = root.GrconOperations?.begin("module:" + module, "Abrindo módulo…");
+    // Navegar entre módulos não é uma operação documental com barra de progresso.
+    // Preserve o isolamento de contexto sem criar cartões ou tarefas de abertura.
+    const context = () => `${root.GrconCloud?.state?.membership?.workspace_id || ""}:${root.GrconCloud?.state?.session?.user?.id || ""}`;
+    const scope = context();
     const promise = (async () => {
       try {
-        await operation?.paint();
+        // Publique a Promise compartilhada antes de concluir grupos sem recursos.
+        await Promise.resolve();
         const dependencies = groups[module] || [module];
         for (let i = 0; i < dependencies.length; i++) {
-          operation?.update({ message: "Carregando recursos do módulo…", done: i, total: dependencies.length });
           await ensure(dependencies[i]);
         }
-        operation?.assertCurrent();
+        if (scope !== context()) throw new DOMException("O contexto mudou durante a abertura do módulo.", "AbortError");
         assertModuleReady(module);
         moduleState.set(module, "ready");
         if (requestedView === module) activateReadyModule(module);
         root.dispatchEvent(new CustomEvent("grcon:module-ready", { detail: { module } }));
       } catch (error) {
-        operation?.fail(error);
         moduleState.set(module, "failed");
         console.error(error);
         root.GrconNotify?.(error.message || `Falha ao carregar ${module}.`, "error");
         throw error;
       } finally {
-        operation?.finish();
         loading.delete(`module:${module}`);
       }
     })();

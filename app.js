@@ -21,7 +21,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.12";
+  const APP_VERSION = "5.44.13";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -80,6 +80,7 @@
   }
   const state = {
     ldFiles: [],
+    ldSelectionPending: false,
     listFiles: [],
     textEntries: [],
     relationDraft: "",
@@ -1046,6 +1047,7 @@
     const output = [];
     for (let index = 0; index < items.length; index += 1) {
       output.push(mapper(items[index], index, items));
+      if (typeof progress === "function" && ((index + 1) % PROCESS_CHUNK_SIZE === 0 || index + 1 === items.length)) progress(index + 1, items.length);
       if (index && index % PROCESS_CHUNK_SIZE === 0) await new Promise((resolve) => setTimeout(resolve, 0));
     }
     return output;
@@ -1295,17 +1297,7 @@
       else packageFiles.push(file);
     };
 
-    if (LARGE && LARGE.forEachInChunks) {
-      await LARGE.forEachInChunks(state.packageCandidates, processFile, {
-        chunkSize: PROCESS_CHUNK_SIZE,
-        onProgress: (completed, total) => {
-          if (typeof onProgress === "function") onProgress(completed, total);
-        },
-      });
-    } else {
-      state.packageCandidates.forEach(processFile);
-      if (typeof onProgress === "function") onProgress(state.packageCandidates.length, state.packageCandidates.length);
-    }
+    await forEachLarge(state.packageCandidates, processFile, onProgress);
 
     state.packageFiles = packageFiles;
     state.ignoredFiles = [...ignoredFiles, ...state.listIgnoredFiles];
@@ -1418,7 +1410,12 @@
     const compatibilityReady = !state.ldFiles.length || !L || readyLdFiles.length === state.ldFiles.length;
     const compatibilityInspected = !state.ldFiles.length || !L || inspectedLdFiles.length === state.ldFiles.length;
     const compatibilityCanStart = Boolean(PerformanceCore && PerformanceCore.supported) || compatibilityReady || !compatibilityInspected;
-    els.analyze.disabled = state.busy || !state.ldFiles.length || !compatibilityCanStart || (!state.packageFiles.length && !hasRelationSource());
+    const preparingInputs = state.ldSelectionPending || state.packageSelectionPending;
+    els.analyze.disabled = state.busy || preparingInputs || !state.ldFiles.length || !compatibilityCanStart || (!state.packageFiles.length && !hasRelationSource());
+    els.reset.disabled = state.busy || preparingInputs;
+    els.ldInput.disabled = state.busy || state.ldSelectionPending;
+    els.packageInput.disabled = state.busy || state.packageSelectionPending;
+    [els.clearLdBtn, els.clearPdfBtn].forEach(button => { if (button) button.disabled = state.busy || preparingInputs; });
     if (els.compatibilityOpen && els.compatibilityStatus) {
       els.compatibilityOpen.hidden = !ldFile;
       els.compatibilityStatus.hidden = !ldFile;
@@ -1450,10 +1447,10 @@
     return FileAccess.isNotReadableError(error) ? FileAccess.fileAccessError(file, context, error) : error;
   }
 
-  async function stableSelectedFiles(files, context, onProgress) {
+  async function stableSelectedFiles(files, context, onProgress, onReadProgress) {
     const source = Array.from(files || []);
     if (!FileAccess || !source.length) return source;
-    return FileAccess.snapshotMany(source, { context, retries: 1, onProgress });
+    return FileAccess.snapshotMany(source, { context, retries: 1, onProgress, onReadProgress });
   }
 
   async function loadLdSafely(file, profile, onProgress) {
@@ -5340,29 +5337,51 @@
   }
 
   els.ldInput.addEventListener("change", async (event) => {
+    if (state.busy || state.ldSelectionPending) return;
     state.conflictResolutions.clear();
     invalidateAnalysisResults();
     const files = [...event.target.files].filter((file) => /\.(xlsx?|xlsm)$/i.test(file.name));
     state.ldFiles = [];
     updateInputMeta();
     if (!files.length) return;
+    state.ldSelectionPending = true;
+    const operation = window.GrconOperations?.begin("grdt-ld-import", "Carregar LD", { host: "#grdt-module .control-panel", detail: "Preparando a leitura da LD…", success: "LD carregada e pronta para análise." });
+    const totalBytes = files.reduce((total, file) => total + (Number(file.size) || 0), 0);
+    let completedBytes = 0;
+    const readableSize = bytes => bytes >= 1048576
+      ? `${(bytes / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`
+      : `${(bytes / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} KB`;
+    updateInputMeta();
     els.ldInput.disabled = true;
     els.ldMeta.textContent = files.length === 1 ? "Preparando LD para leitura segura…" : `Preparando ${files.length} LDs…`;
     try {
-      state.ldFiles = await stableSelectedFiles(files, "a LD controlada", (completed, total) => {
+      await operation?.paint();
+      const loaded = await stableSelectedFiles(files, "a LD controlada", (completed, total) => {
+        operation?.assertCurrent();
+        completedBytes += Number(files[completed - 1].size) || 0;
+        operation?.update({ message: `${completed} de ${total} LD(s) carregada(s)`, progress: totalBytes ? completedBytes / totalBytes : completed / total });
         if (total > 1) els.ldMeta.textContent = `Copiando LD ${completed} de ${total} para memória…`;
+      }, detail => {
+        if (operation?.signal.aborted) return;
+        const loadedBytes = detail.completedBytes + detail.loaded;
+        operation?.update({ message: `Lendo LD ${detail.index + 1} de ${files.length}: ${detail.file.name}${totalBytes ? ` · ${readableSize(loadedBytes)} de ${readableSize(totalBytes)}` : ""}`, progress: totalBytes ? loadedBytes / totalBytes : undefined });
       });
+      operation?.assertCurrent();
+      state.ldFiles = loaded;
       if (window.GrconLdMemory) window.GrconLdMemory.save(state.ldFiles[0]);
       refreshPerformancePanel(`${state.ldFiles.length} LD(s) copiadas para memória e prontas para análise.`);
       showToast(`${state.ldFiles.length} LD(s) preparada(s) para leitura segura.`, "success");
     } catch (error) {
+      operation?.fail(error);
       state.ldFiles = [];
       event.target.value = "";
       const friendly = normalizeFileAccessError(error, files[0], "a LD controlada");
       console.warn("GRCON: falha ao preparar a LD selecionada.", friendly);
       showToast(friendly && friendly.message || "Não foi possível ler a LD selecionada.", "error");
     } finally {
-      els.ldInput.disabled = false;
+      state.ldSelectionPending = false;
+      operation?.finish();
+      els.ldInput.disabled = state.busy;
       updateInputMeta();
     }
   });
@@ -5405,6 +5424,7 @@
     }
   });
   els.packageInput.addEventListener("change", async (event) => {
+    if (state.busy || state.packageSelectionPending) return;
     invalidateAnalysisResults();
     state.packageCandidates = [...event.target.files];
     state.packageSelectionPending = true;
@@ -5412,22 +5432,38 @@
     state.packageFiles = [];
     state.ignoredFiles = [];
     updateInputMeta();
+    const operation = state.packageCandidates.length ? window.GrconOperations?.begin("grdt-folder-import", "Carregar pasta documental", { host: "#grdt-module .control-panel", detail: "Preparando a conferência dos arquivos…", success: "Pasta documental preparada para análise." }) : null;
     let lastPaint = 0;
+    let prepared = false;
     try {
       if (state.packageCandidates.length) {
+        await operation?.paint();
+        operation?.update({ message: "Conferindo arquivos da pasta", done: 0, total: state.packageCandidates.length });
         await refreshPackageSelectionAsync((completed, total) => {
+          operation?.assertCurrent();
+          operation?.update({ message: "Conferindo arquivos da pasta", done: completed, total });
           const now = performance.now();
           if (now - lastPaint < 180 && completed < total) return;
           lastPaint = now;
           if (els.packageMeta) els.packageMeta.textContent = `Processando pasta documental: ${completed.toLocaleString("pt-BR")}/${total.toLocaleString("pt-BR")}`;
           refreshPerformancePanel(`Carregamento progressivo: ${completed.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} arquivo(s).`);
         });
+        operation?.assertCurrent();
       }
+      prepared = true;
+    } catch (error) {
+      operation?.fail(error);
+      state.packageCandidates = [];
+      state.packageFiles = [];
+      state.ignoredFiles = [];
+      event.target.value = "";
+      showToast(error.message || "Não foi possível preparar a pasta documental. Selecione-a novamente.", "error");
     } finally {
+      operation?.finish();
       state.packageSelectionPending = false;
       state.packageSelectionReady = true;
       updateInputMeta();
-      refreshPerformancePanel(`${state.packageFiles.length.toLocaleString("pt-BR")} arquivo(s) prontos para análise.`);
+      refreshPerformancePanel(prepared ? `${state.packageFiles.length.toLocaleString("pt-BR")} arquivo(s) prontos para análise.` : "A pasta não foi preparada. Selecione-a novamente.");
     }
   });
   els.relationStart.addEventListener("click", openRelationDrawer);

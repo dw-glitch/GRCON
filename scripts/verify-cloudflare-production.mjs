@@ -45,6 +45,8 @@ assert.equal(anonymous.status, 401, 'Catálogo deve exigir sessão.');
 const verifiedAssets = ['sigem_pw_dashboard_core.js', 'workers/sigem_pw_dashboard.worker.js', 'react-dist/sigem-pw-dashboard-app.js', 'document-vault.css', 'sw.js', 'sigem_pw_revision_report.js', 'workers/export.worker.js', 'react-dist/sigem-pw-evolution-app.js'];
 verifiedAssets.push('grcon_mascot_controller_v4.js', 'grcon_mascot_runner.js', 'assets/mascot/video/grcon-mascot-papers-running-alpha.webm', 'assets/mascot/grcon-mascot-papers-fallback.png');
 verifiedAssets.push('app.js', 'app-ui.js', 'p1_ux.js', 'document_vault_app.js');
+verifiedAssets.push('grcon_service_worker.js');
+verifiedAssets.push('grcon_file_access.js');
 verifiedAssets.push('egrdt_email_reply.js', 'egrdt_email_reply_ui.js', 'egrdt-email-reply.css');
 verifiedAssets.push('posting_conference_core.js', 'posting_conference_refinement.js', 'posting_conference_app.js', 'posting_conference_report.js', 'posting-conference.css');
 verifiedAssets.push('performance_workers.js', 'operation_tasks.js', 'operation_progress.js', 'operation_progress.css', 'workers/data.worker.js', 'consultation_index.js', 'data_exports.js', 'emission_dashboard_report.js', 'allocation_dashboard_app.js', 'allocation_registry_app.js', 'planned_documents_app.js', 'requests_control_app.js', 'sigem_posting_central_app.js', 'sigem_status_monitoring_app.js', 'history_report_worker.js', 'retomar.js', 'grcon_module_loader.js', 'workspace.js', 'react-dist/consultas-app.js', 'react-dist/historico-egrdt-app.js', 'react-dist/pdf-tools-app.js', 'react-dist/cover-document-app.js');

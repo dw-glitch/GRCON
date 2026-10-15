@@ -45,7 +45,17 @@
     let lastError = null;
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
-        const buffer = await file.arrayBuffer();
+        const buffer = typeof settings.onReadProgress === "function" && typeof root.FileReader === "function" && typeof root.Blob === "function" && file instanceof root.Blob
+          ? await new Promise((resolve, reject) => {
+            const reader = new root.FileReader();
+            reader.onprogress = event => settings.onReadProgress({ file, loaded: event.loaded, total: event.lengthComputable ? event.total : file.size });
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error || new Error("Não foi possível ler o arquivo."));
+            reader.onabort = () => reject(new DOMException("Leitura interrompida.", "AbortError"));
+            settings.onReadProgress({ file, loaded: 0, total: file.size });
+            reader.readAsArrayBuffer(file);
+          })
+          : await file.arrayBuffer();
         if (settings.requireContent !== false && (!buffer || !buffer.byteLength)) {
           const empty = new Error("O arquivo selecionado está vazio.");
           empty.name = "EmptyFileError";
@@ -97,8 +107,14 @@
   async function snapshotMany(files, options) {
     const source = Array.from(files || []);
     const output = [];
+    let completedBytes = 0;
     for (let index = 0; index < source.length; index += 1) {
-      output.push(await snapshot(source[index], options));
+      const settings = options && typeof options.onReadProgress === "function" ? {
+        ...options,
+        onReadProgress: detail => options.onReadProgress({ ...detail, index, totalFiles: source.length, completedBytes }),
+      } : options;
+      output.push(await snapshot(source[index], settings));
+      completedBytes += Number(source[index].size) || 0;
       if (options && typeof options.onProgress === "function") options.onProgress(index + 1, source.length);
     }
     return output;

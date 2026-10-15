@@ -21,6 +21,10 @@ on:
       - "app.js"
       - "index.html"
       - "grcon_module_loader.js"
+      - "grcon_service_worker.js"
+      - "grcon_file_access.js"
+      - "sw.js"
+      - "scripts/validar-startup-navigation-browser.cjs"
       - "package*.json"
       - "scripts/validar-progress-*.cjs"
       - ".github/workflows/progress-responsiveness.yml"
@@ -49,6 +53,10 @@ jobs:
         run: |
           mkdir -p artifacts
           node scripts/validar-progress-responsiveness-browser.cjs
+      - name: Primeira abertura, atualização silenciosa e navegação
+        env:
+          GRCON_STARTUP_QA_OUTPUT: artifacts/progress-startup.json
+        run: node scripts/validar-startup-navigation-browser.cjs
       - name: Navegação e Configurações em uso continuado
         env:
           GRCON_SOAK_MS: 600000
