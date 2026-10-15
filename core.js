@@ -1728,6 +1728,33 @@
     return claim !== "RIR" && revisionInfo(claim).valid ? claim : "";
   }
 
+  // Read only the suffix OUTSIDE the document code. In particular, an ET code
+  // contains underscores of its own and a N-1710 sheet (_0001) is not a revision.
+  // Unknown suffixes stay unknown; neither the LD nor SIGEM can describe the
+  // contents of a file received under a different revision.
+  function fileRevisionEvidence(fileName, document, matchedDocument) {
+    const name = text(fileName).split(/[\\/]/).pop();
+    const stem = canonicalId(name.replace(/\.[A-Z0-9]{1,8}$/i, ""));
+    const code = canonicalId(document);
+    if (!name || !code) return { applicable: false, valid: false, revision: "", source: "" };
+    const sameDocument = (value) => Boolean(value && (
+      key(value) === key(code)
+      || (text(matchedDocument) && key(value) === key(matchedDocument))
+      || (isEtDocument(code) && ntNeutralKey(value) === ntNeutralKey(code))
+      || etTagVariantKind(value, code)
+      || compactDocumentCode(value) === compactDocumentCode(code)
+    ));
+    const result = (revision, source) => ({ applicable: true, valid: true, revision, source, name, matchedDocument: text(matchedDocument) });
+    if (sameDocument(stem)) return result("0", "nome do arquivo (sem sufixo = revisão 0)");
+    const sheetOnly = stem.match(/^(.*)_\d{4}$/);
+    if (sheetOnly && sameDocument(sheetOnly[1])) return result("0", "nome do arquivo (folha sem revisão = revisão 0)");
+    const suffix = stem.match(/^(.*?)(?:_\d{4})?[_ -](?:REV(?:ISAO)?[_. -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)$/);
+    if (suffix && sameDocument(suffix[1]) && suffix[2] !== "RIR" && revisionInfo(suffix[2]).valid) {
+      return result(normalizeRevision(suffix[2]), "nome do arquivo");
+    }
+    return { applicable: true, valid: false, revision: "", source: "nome do arquivo (revisão não identificada)", name };
+  }
+
   function revisionFromText(pdfText, document) {
     const value = canonicalId(pdfText);
     const documentKey = canonicalId(document);
@@ -2227,6 +2254,8 @@
 
   function reviewResult(input, values) {
     const item = values || {};
+    const fileRevision = fileRevisionEvidence(input.name, item.document || input.document, input.fileRevisionDocument);
+    const revision = fileRevision.valid ? fileRevision.revision : normalizeRevision(item.revision);
     const result = {
       ...input,
       id: input.id,
@@ -2234,10 +2263,12 @@
       documentKey: item.documentKey || "",
       sheet: item.sheet || "",
       sheetSource: item.sheetSource || "não identificada",
-      revision: normalizeRevision(item.revision),
-      revisionSuggested: item.revisionSuggested !== undefined ? item.revisionSuggested : normalizeRevision(item.revision),
+      revision,
+      fileRevision: fileRevision.valid ? fileRevision.revision : "",
+      fileRevisionEvidence: fileRevision,
+      revisionSuggested: fileRevision.valid ? revision : item.revisionSuggested !== undefined ? item.revisionSuggested : revision,
       revisionManual: Boolean(item.revisionManual),
-      revisionSource: item.revisionSource || "não confirmada",
+      revisionSource: fileRevision.valid ? fileRevision.source : item.revisionSource || "não confirmada",
       status: item.status || "Não consta na LD",
       decision: REVIEW,
       reason: item.reason || "A informação precisa de conferência manual.",
@@ -2310,6 +2341,12 @@
         finalName: input.name || "arquivo.pdf",
         documentSource: identitySource,
       });
+    }
+
+    // Identity aliases are established by the existing unique document lookup,
+    // independently of revision detection (e.g. an ET code corrected by TAG).
+    if (/^(?:report-tag(?:-transcription)?|tag-(?:format|transcription)-variant)$/.test(match.matchKind || "")) {
+      input = { ...input, fileRevisionDocument: match.matchedSearchKey };
     }
 
     let group = match.group;
@@ -2583,10 +2620,7 @@
     const fromFileClaim = claimedRevisionFromName(input.name || "", document);
     const fromPdf = revisionFromText(input.pdfText || "", document);
     const inputRevisionClaim = normalizeRevision(input.revision || "");
-    // O nome recebido nunca é fonte autoritativa da revisão. Um sufixo extra
-    // (ex.: _RIR, _CÓPIA, _ERRADO) pode parecer uma revisão, mas a eGRDT deve
-    // sempre usar a revisão controlada pela LD/histórico. Claims externos só
-    // são mantidos para comparação quando eles próprios forem revisões válidas.
+    const fileRevision = fileRevisionEvidence(input.name, document, input.fileRevisionDocument);
     const externalRevisionClaims = [inputRevisionClaim, fromFileClaim, fromPdf].filter(Boolean);
     // RIR é um sufixo operacional conhecido no acervo e não pode ser reinterpretado
     // como revisão apenas porque a Rev. D passou a admitir I como letra válida.
@@ -2601,11 +2635,15 @@
       { value: latestHistoryRev, source: "histórico SIGEM" },
     ].filter((candidate) => revisionInfo(candidate.value).valid)
       .sort((a, b) => revisionRank(b.value) - revisionRank(a.value));
-    let revision = controlledRevisions.length ? controlledRevisions[0].value : "";
-    let revisionSource = controlledRevisions.length ? controlledRevisions[0].source : "LD";
-    const claimedRevision = validExternalRevisionClaims[0] || "";
-    let grdt = text(technicalRecord && technicalRecord.grdt);
-    let effectiveDate = text(technicalRecord && technicalRecord.effectiveDate);
+    let revision = fileRevision.applicable ? fileRevision.revision : controlledRevisions.length ? controlledRevisions[0].value : "";
+    let revisionSource = fileRevision.applicable ? fileRevision.source : controlledRevisions.length ? controlledRevisions[0].source : "LD";
+    const claimedRevision = fileRevision.valid ? fileRevision.revision : validExternalRevisionClaims[0] || "";
+    const revisionRecord = fileRevision.valid
+      ? recordForRevision(group, revision, inferredSheet)
+        || (normalizeRevision(technicalRecord.revision) === revision ? technicalRecord : null)
+      : technicalRecord;
+    let grdt = text(revisionRecord && revisionRecord.grdt);
+    let effectiveDate = text(revisionRecord && revisionRecord.effectiveDate);
     const databook = text(technicalRecord && technicalRecord.databook);
     const allocationStatus = text(technicalRecord && technicalRecord.allocationStatus);
     // A alocação é lida da linha inteira: status, número de ALOC e a própria
@@ -2634,6 +2672,16 @@
     let reason = "A revisão precisa de conferência manual.";
     let displayStatus = "Sem status";
     let resolvedSigemStatus = null;
+
+    if (fileRevision.applicable && !fileRevision.valid) {
+      return reviewResult(input, {
+        document, documentKey: match.documentKey, sheet: controlledSheet,
+        revision: "", revisionSource, status: "Revisão não identificada no arquivo",
+        reason: `Não foi possível identificar com segurança a revisão de “${input.name}”. O item fica fora da seleção automática. Confira o nome; você pode informar a revisão e marcar a inclusão manualmente.`,
+        reasonCode: "FILE_REVISION_UNKNOWN", record: best, allocationStatus, allocationFinding,
+        fiscalComment, databook, documentSource: identitySource,
+      });
+    }
 
     if (allocationDecision.kind === "not_allocated") {
       const codeValidation = validateDocumentCode(document, controlledSheet);
@@ -2816,7 +2864,14 @@
         break;
       }
 
-      // Regra operacional: a única situação que permite postar a própria
+      if (fileRevision.valid) {
+        decision = DISCARD;
+        reason = `O arquivo recebido é da revisão ${revision}, já registrada com status oficial “${currentStatus}” na Colar SIGEM. Ele foi retirado da seleção automática e não será convertido em uma revisão posterior. Para nova revisão, forneça o arquivo correspondente; a inclusão manual continua disponível.`;
+        completed = true;
+        break;
+      }
+
+      // Para entradas lógicas sem nome de arquivo, a única situação que permite postar a própria
       // revisão é “Não Postado”. Qualquer outro status oficial preenchido
       // comprova que essa combinação DOCUMENTO-REVISÃO já está controlada no
       // SIGEM e, portanto, a triagem deve procurar a revisão seguinte. Status
@@ -2887,9 +2942,12 @@
       sheet: controlledSheet,
       sheetSource: input.hintedSheet ? "lista informada" : inferredSheet ? "prefixo do arquivo" : "LD",
       revision,
+      fileRevision: fileRevision.valid ? fileRevision.revision : "",
+      fileRevisionEvidence: fileRevision,
       revisionSuggested: revision,
       revisionManual: false,
       revisionSource,
+      reasonCode: fileRevision.valid && decision === DISCARD && statusKind(displayStatus) !== "analysis" ? "FILE_REVISION_ALREADY_POSTED" : "",
       status: displayStatus || "Sem status",
       revisionWarnings,
       statusOriginal: displayStatus || "Sem status",
@@ -2922,7 +2980,7 @@
       fileNameFormattingWarning: [
         fileNameFormattingWarning(input.name || "", document, revision, controlledSheet, match.matchKind),
         invalidExternalRevisionClaims.length
-          ? `ALERTA: o nome recebido contém sufixo(s) que não representam uma revisão válida (${invalidExternalRevisionClaims.join(", ")}). O GRCON ignorou esse conteúdo e usará a revisão controlada ${revision} da ${revisionSource}.`
+          ? `ALERTA: revisão informada externamente diverge ou não é válida (${invalidExternalRevisionClaims.join(", ")}). A revisão ${revision} foi identificada pela fonte: ${revisionSource}.`
           : "",
       ].filter(Boolean).join(" "),
       matchKind: match.matchKind || "exact",
@@ -3089,6 +3147,7 @@
     reportGroup7Info,
     controlArtifactKind,
     revisionFromName,
+    fileRevisionEvidence,
     claimedRevisionFromName,
     revisionFromText,
     validateDocumentCode,

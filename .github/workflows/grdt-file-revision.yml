@@ -1,0 +1,45 @@
+name: QA — Revisão do arquivo na GRDT
+on:
+  pull_request:
+    paths:
+      - "core.js"
+      - "app.js"
+      - "emission.js"
+      - "history_core.js"
+      - "grcon_contracts.js"
+      - "workers/triage.worker.js"
+      - "tests/grdt_file_revision.cjs"
+      - "scripts/validar-grdt-file-revision-browser.cjs"
+      - ".github/workflows/grdt-file-revision.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  revision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: node tests/grdt_file_revision.cjs
+      - name: Instalar Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Revisão, seleção e geração — Worker e legado
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-file-revision.log" 2>&1 &
+          REVISION_QA_SERVER=$!
+          trap 'kill "$REVISION_QA_SERVER"' EXIT
+          node scripts/validar-grdt-file-revision-browser.cjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: grdt-file-revision-browser
+          path: artifacts/grdt-file-revision/*.png
+          if-no-files-found: warn

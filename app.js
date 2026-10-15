@@ -21,7 +21,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.13";
+  const APP_VERSION = "5.44.14";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -912,6 +912,8 @@
       reason: item.reason || "",
       status: item.status || "",
       revision: item.revision || "",
+      fileRevision: item.fileRevision || "",
+      fileRevisionEvidence: item.fileRevisionEvidence ? { ...item.fileRevisionEvidence } : null,
       revisionSource: item.revisionSource || "",
       revisionSuggested: item.revisionSuggested || "",
       revisionManual: Boolean(item.revisionManual),
@@ -1227,7 +1229,7 @@
 
   function currentAnalysisSignature() {
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
-    return [currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
+    return [`versao:${APP_VERSION}`, currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
       `sigem:${currentSigemQuerySnapshot() || "sem-base"}`,
       `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`,
       `central:${window.GrconAllocationRegistry?.signature() || "sem-base"}`].join("###");
@@ -2079,13 +2081,19 @@
   function mergePackageResults(rawResults) {
     const grouped = new Map();
     rawResults.forEach((row) => {
-      const groupKey = row.documentKey ? `doc:${row.documentKey}` : `file:${row.id}`;
+      const fileRevision = row.fileRevisionEvidence || C.fileRevisionEvidence(row.name, row.document);
+      // A PDF in revision A and a native file in revision B are independent
+      // packages. Never merge them and rename one as if it contained the other.
+      const revisionKey = fileRevision.valid ? fileRevision.revision : `unknown:${row.id}`;
+      const groupKey = row.documentKey ? `doc:${row.documentKey}:rev:${revisionKey}` : `file:${row.id}`;
       const fileEntry = row.file ? {
         file: row.file,
         name: row.name,
         relativePath: row.relativePath || row.name,
         finalName: C.proposedFileName(row.name, row.document, row.revision, row.sheet),
         matchKind: row.matchKind || "",
+        fileRevision: fileRevision.valid ? fileRevision.revision : "",
+        fileRevisionEvidence: fileRevision,
       } : null;
       if (!grouped.has(groupKey)) {
         grouped.set(groupKey, { ...row, files: fileEntry ? [fileEntry] : [] });
@@ -2110,10 +2118,7 @@
       const claimedRevisionConflict = existing.claimedRevision && row.claimedRevision && existing.claimedRevision !== row.claimedRevision;
       if (!existing.claimedRevision && row.claimedRevision) existing.claimedRevision = row.claimedRevision;
       if (claimedRevisionConflict) {
-        // Divergência escrita no nome do arquivo é apenas informativa. A revisão
-        // que governa a eGRDT é a revisão controlada pela LD/histórico, portanto
-        // PDF/nativo não devem ser bloqueados por sufixos divergentes no nome.
-        const alert = `ALERTA: arquivos do mesmo documento trazem revisões/sufixos diferentes no nome (${existing.claimedRevision} e ${row.claimedRevision}). O GRCON ignorará essa divergência e usará a revisão controlada ${existing.revision || row.revision || "da LD"}.`;
+        const alert = `ALERTA: arquivos do mesmo documento trazem revisões diferentes (${existing.claimedRevision} e ${row.claimedRevision}). Confira os arquivos antes de incluir manualmente.`;
         existing.documentRevisionWarning = [existing.documentRevisionWarning, alert].filter(Boolean).join(" ");
       }
       if (existing.revision !== row.revision || existing.decision !== row.decision || existing.sheet !== row.sheet) {
@@ -2488,8 +2493,8 @@
         result.fileOrigin = input.fileOrigin || "Pasta local";
         result.vaultAllocationLabel = input.vaultAllocationLabel || "";
         result.vaultAllocationSource = input.vaultAllocationSource || "";
-        // O conteúdo binário dos PDFs não é aberto, lido ou validado. A revisão
-        // e o nome final dependem exclusivamente da LD e do histórico SIGEM.
+        // A revisão vem do nome recebido; o SIGEM informa a situação dessa
+        // combinação exata. Não há inspeção do conteúdo binário do arquivo.
         if (result.egrdt && !result.egrdt.format) result.egrdt.format = "A4";
         return result;
       }, progressAnalysis);
@@ -3623,7 +3628,7 @@
       ].filter((entry) => entry[1]);
       const tags = [
         item.latest ? '<span class="revision-tag latest">Última registrada</span>' : "",
-        item.target ? '<span class="revision-tag suggested">Revisão sugerida</span>' : "",
+        item.target ? '<span class="revision-tag suggested">Próxima disponível no SIGEM</span>' : "",
         isGrdtRevision ? '<span class="revision-tag target">Revisão do documento</span>' : "",
         item.predicted ? '<span class="revision-tag calculated">Calculada</span>' : "",
       ].filter(Boolean).join("");
@@ -3635,17 +3640,17 @@
         <div class="revision-step-body">
           <span class="revision-step-status ${escapeHtml(item.statusClass || "neutral")}">${escapeHtml(item.status || "Sem status")}</span>
           <small class="revision-status-source">${escapeHtml(item.statusSource || "LD")}</small>
-          <p>${escapeHtml(timelineStepExplanation(item, timeline.revisions[index + 1]))}</p>
+          <p>${escapeHtml(isGrdtRevision ? `Revisão ${grdtRevision} selecionada na GRDT. ${row.fileRevisionEvidence?.source || row.revisionSource || ""}.` : timelineStepExplanation(item, timeline.revisions[index + 1]))}</p>
           ${metadata.length ? `<dl>${metadata.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd title="${escapeHtml(value)}">${escapeHtml(value)}</dd></div>`).join("")}</dl>` : ""}
         </div>
       </article>`;
     }).join("");
     return `<section class="revision-timeline-inline">
       <div class="revision-timeline-heading">
-        <div><h3>Linha do tempo da revisão</h3><p>${escapeHtml(timelineExplanation(timeline))}</p></div>
+        <div><h3>Linha do tempo da revisão</h3><p>${escapeHtml(row.fileRevisionEvidence?.applicable ? `A revisão do arquivo é ${row.fileRevision || "não identificada"}. O histórico SIGEM informa o status; ele não altera a revisão do arquivo.` : timelineExplanation(timeline))}</p></div>
         <div class="revision-timeline-summary">
           <span>Última registrada <strong>${escapeHtml(timeline.latestRevision || "—")}</strong></span>
-          <span>Revisão sugerida <strong>${escapeHtml(timeline.targetRevision || row.revisionSuggested || "—")}</strong></span>
+          <span>Revisão do arquivo <strong>${escapeHtml(row.fileRevision || "Conferir")}</strong></span>
           <span>Revisão do documento <strong>${escapeHtml(grdtRevision || "—")}</strong>${manual ? ' <span class="revision-manual-badge" title="Alterada manualmente pelo usuário">Alterada manualmente</span>' : ""}</span>
         </div>
       </div>
@@ -3951,8 +3956,9 @@
         <td><span class="revision-value" title="Revisão encontrada na LD">${escapeHtml(ldRevision)}</span></td>
         <td class="revision-grdt-cell">
           <input class="revision-grdt-input" data-revision-input data-index="${index}" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="8" value="${escapeHtml(row.revision || "")}" aria-label="Revisão do documento ${escapeHtml(row.document)} nesta GRDT" title="Revisão deste documento na GRDT · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">
-          <div class="revision-grdt-meta"><span class="grdt-revision-transition" title="Encontrada na LD → selecionada">${escapeHtml(ldRevision)} → ${escapeHtml(row.revision || "—")}</span>
+          <div class="revision-grdt-meta"><span class="grdt-revision-transition" title="${escapeHtml(row.fileRevisionEvidence?.source || "Revisão identificada no arquivo")}">Arquivo: ${escapeHtml(row.fileRevision || "Conferir")} · GRDT: ${escapeHtml(row.revision || "—")}</span>
             ${row.revisionManual ? `<button type="button" class="revision-manual-badge" data-action="restore-revision" data-index="${index}" title="Alterada manualmente · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}. Clique para restaurar a sugestão.">Alterada manualmente <span aria-hidden="true">↺</span></button>` : ""}
+            ${row.fileRevision && row.fileRevision !== row.revision ? `<span class="revision-format-warning" title="A revisão informada manualmente difere da revisão ${escapeHtml(row.fileRevision)} identificada no arquivo.">Arquivo: ${escapeHtml(row.fileRevision)}</span>` : ""}
             ${row.revisionFormatWarning ? `<span class="revision-format-warning" title="${escapeHtml(row.revisionFormatWarning)}" aria-label="${escapeHtml(row.revisionFormatWarning)}">⚠</span>` : ""}
             ${row.timeline ? `<span class="revision-route" title="Histórico de revisões · sugestão do sistema: ${escapeHtml(row.revisionSuggested || "—")}">${escapeHtml(timelineRoute(row.timeline))}</span>` : ""}
           </div>
@@ -4500,6 +4506,7 @@
         "REVISÃO PARA POSTAR": row.revision,
         "REVISÃO SUGERIDA PELO SISTEMA": row.revisionSuggested || row.revision || "",
         "REVISÃO ALTERADA MANUALMENTE": row.revisionManual ? "SIM" : "NÃO",
+        "REVISÃO IDENTIFICADA NO ARQUIVO": row.fileRevision || "Não identificada",
         "STATUS": row.record && row.record.status || "",
         "STATUS SIGEM": row.record && row.record.sigemStatus || "",
         "STATUS DA REVISÃO PARA POSTAR": row.status,
@@ -4958,6 +4965,8 @@
         rowIndex: entry.rowIndex,
         document: entry.document,
         revision: entry.revision,
+        fileRevision: entry.fileRevision || "",
+        manualRevisionOverride: Boolean(entry.manualRevisionOverride),
         discipline: entry.discipline,
         sourceLd: entry.sourceLd,
         allocation: entry.allocation,
