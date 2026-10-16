@@ -83,5 +83,33 @@
     "codec": "VP9 alpha, silent",
     "backgroundRemoval": "FFmpeg chromakey in YUV; actual alpha verified in Chromium",
     "sourceUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_3JPlmNBUEodLWC5zqz9TRYPqweG/hf_20261014_133106_5494a397-b027-45df-86e8-1ee418741129.mp4"
+  },
+  "idleDance": {
+    "jobId": "56ab7174-04f6-414b-9c2e-fded35f45e96",
+    "model": "seedance_2_5",
+    "asset": "grcon-mascot-dance-alpha.webm",
+    "preparedAt": "2026-10-16",
+    "durationSeconds": 6.041666666666667,
+    "size": "384x384",
+    "codec": "VP9 alpha, silent",
+    "backgroundRemoval": "Offline magenta matte, smooth alpha and edge decontamination; no runtime chroma key",
+    "sourceUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_3JPlmNBUEodLWC5zqz9TRYPqweG/hf_20261016_162947_56ab7174-04f6-414b-9c2e-fded35f45e96.mp4",
+    "idleAfterMs": 120000,
+    "validation": {
+      "browser": "Chromium",
+      "passed": [
+        "two-minute inactivity deadline",
+        "lazy video loading",
+        "actual decoded alpha",
+        "lower-right positioning",
+        "immediate dismissal on interaction",
+        "animation preference",
+        "reduced motion",
+        "operation suppression",
+        "modal suppression"
+      ],
+      "visualReview": "Official G preserved; clean matte on light and dark backgrounds",
+      "sizeBytes": 669284
+    }
   }
 }
