@@ -48,6 +48,7 @@ verifiedAssets.push('app.js', 'app-ui.js', 'p1_ux.js', 'document_vault_app.js');
 verifiedAssets.push('grcon_service_worker.js');
 verifiedAssets.push('grcon_file_access.js');
 verifiedAssets.push('egrdt_email_reply.js', 'egrdt_email_reply_ui.js', 'egrdt-email-reply.css');
+verifiedAssets.push('background_jobs_app.js','background-jobs.css');
 verifiedAssets.push('posting_conference_core.js', 'posting_conference_refinement.js', 'posting_conference_app.js', 'posting_conference_report.js', 'posting-conference.css');
 verifiedAssets.push('performance_workers.js', 'operation_tasks.js', 'operation_progress.js', 'operation_progress.css', 'workers/data.worker.js', 'consultation_index.js', 'data_exports.js', 'emission_dashboard_report.js', 'allocation_dashboard_app.js', 'allocation_registry_app.js', 'planned_documents_app.js', 'requests_control_app.js', 'sigem_posting_central_app.js', 'sigem_status_monitoring_app.js', 'history_report_worker.js', 'retomar.js', 'grcon_module_loader.js', 'workspace.js', 'react-dist/consultas-app.js', 'react-dist/historico-egrdt-app.js', 'react-dist/pdf-tools-app.js', 'react-dist/cover-document-app.js');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -57,6 +58,8 @@ for (const path of verifiedAssets) {
   const expected = await readFile(new URL('../' + path, import.meta.url));
   assert.equal(digest(Buffer.from(await response.arrayBuffer())), digest(expected), 'Arquivo publicado difere do pacote validado: ' + path);
 }
+const jobsAnonymous=await fetch(new URL('/api/background-jobs/list?workspace=00000000-0000-4000-8000-000000000001',base),{signal:AbortSignal.timeout(20000)});
+assert.equal(jobsAnonymous.status,401,'Tarefas devem exigir sessão.');
 const githubAnonymous = await fetch(new URL('/api/egrdt-teams/github', base), {method:'POST',body:'{}',signal:AbortSignal.timeout(20000)});
 assert.equal(githubAnonymous.status,401,'Retorno GitHub deve exigir OIDC assinado.');
 console.log(JSON.stringify({ ok: true, url: base, commit: metadata.commit, provider: metadata.provider, modules: 5, verifiedAssets, cofreConfigured: true, powerAutomateConfigured: health.powerAutomateConfigured, powerAutomateUrlValid: health.powerAutomateUrlValid, anonymousCatalogStatus: anonymous.status }));

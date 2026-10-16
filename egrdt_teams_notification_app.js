@@ -35,7 +35,7 @@
     const trace = root.GrconTeamsTrace?.latest?.(record);
     if (trace) return root.GrconTeamsTraceCore.label(trace);
     const saved = status(record);
-    return saved ? `${saved.receiptOnly ? "Recebido pelo fluxo" : "Avisado no Teams"} em ${formatDate(saved.sentAt)}` : "Sem registro de envio ao Teams";
+    return saved ? `${saved.queued ? "Tarefa registrada" : saved.receiptOnly ? "Recebido pelo fluxo" : "Avisado no Teams"} em ${formatDate(saved.sentAt)}` : "Sem registro de envio ao Teams";
   }
   function isSending(record) { return state.sending.has(Core.notificationId(record)); }
   function buttonHtml(record, options) {
@@ -127,10 +127,10 @@
         throw error;
       }
       const audit = readAudit();
-      audit[id] = { sentAt: result.notifiedAt || new Date().toISOString(), sentBy: identity.email || "", receiptOnly: result.receiptOnly === true, egrdtNumber: record.egrdtNumber };
+      audit[id] = { sentAt: result.notifiedAt || new Date().toISOString(), sentBy: identity.email || "", receiptOnly: result.receiptOnly === true, queued: result.queued === true, jobId: result.jobId, egrdtNumber: record.egrdtNumber };
       writeAudit(audit);
       void root.GrconTeamsTrace?.refresh?.();
-      notify(`Aviso de ${record.egrdtNumber} enviado ao grupo ${Core.DESTINATION.name}.`, "success");
+      notify(result.queued ? `Aviso de ${record.egrdtNumber} registrado. Acompanhe o envio em Tarefas.` : `Aviso de ${record.egrdtNumber} enviado ao grupo ${Core.DESTINATION.name}.`, "success");
       root.dispatchEvent(new CustomEvent("grcon:egrdt-teams-notified", { detail: { record, result } }));
       root.setTimeout(() => { if (dialog.open) dialog.close("sent"); }, 700);
     } catch (error) {

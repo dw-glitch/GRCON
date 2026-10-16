@@ -156,7 +156,7 @@ assert.match(worker, /createMultipartUpload/);
 assert.match(worker, /find_hash/);
 assert.match(worker, /cache-control[^\n]+private, no-store/i);
 assert.match(wrangler, /"bucket_name"\s*:\s*"grcon-documents"/);
-assert.match(wrangler, /"main"\s*:\s*"\.\/cloudflare\/worker-entry\.mjs"/);
+assert.match(wrangler, /"main"\s*:\s*"\.\/cloudflare\/worker-runtime\.mjs"/);
 
 assert.match(migrations, /create table private\.grcon_document_files/i);
 assert.match(migrations, /grcon_planned_document_snapshots/i);

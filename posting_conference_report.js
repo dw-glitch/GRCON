@@ -13,13 +13,22 @@
   const TEXT = "253746";
   const MUTED = "5B6770";
   const SIGEM_FILL = "F3F6F8";
+  const dateFormat = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
+  const dateTimeFormat = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const timeZoneFormats = new Map();
 
   function text(value) { return Conference?.text ? Conference.text(value) : String(value ?? "").trim(); }
   function fmtDate(value, withTime) {
     if (!value) return "";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return text(value);
-    return new Intl.DateTimeFormat("pt-BR", withTime ? { dateStyle: "short", timeStyle: "short" } : { dateStyle: "short" }).format(date);
+    const zone = root.GRCON_REPORT_TIME_ZONE;
+    if (zone && !timeZoneFormats.has(zone)) timeZoneFormats.set(zone, [
+      new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: zone }),
+      new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: zone }),
+    ]);
+    const formats = zone ? timeZoneFormats.get(zone) : [dateFormat, dateTimeFormat];
+    return formats[withTime ? 1 : 0].format(date);
   }
 
   function safeName(value) {
@@ -523,5 +532,26 @@
     return workbook.xlsx.writeBuffer();
   }
 
-  return Object.freeze({ buildWorkbook, downloadName, eventList, consolidatePendingDocuments, pendingDetails });
+  function tabularData(rows, options = {}) {
+    const Trace = root.GrconTeamsTraceCore;
+    const source = options.pending ? consolidatePendingDocuments(rows) : rows || [];
+    const mode = options.pending || options.mode === "events" ? "events" : "documents";
+    const groups = new Map((options.groups || []).map(group => [group.historyId || group.egrdtNumber, group]));
+    const baseHeaders = options.pending
+      ? [...eventHeaders(), "Pendência da GRDT", "Detalhamento da pendência", "Última eGRDT enviada", "Histórico de eGRDTs", "Revisões pendentes"]
+      : mode === "events" ? eventHeaders() : documentHeaders();
+    const traceIndex = Trace?.index(options.teamsAttempts || []);
+    return {
+      headers: [...baseHeaders, ...(Trace?.headers || [])],
+      rows: source.map(row => {
+        const values = options.pending ? pendingValues(row, groups) : mode === "events" ? eventValues(row) : documentValues(row);
+        if (!Trace) return values;
+        const representative = options.pending ? row.pendingEvents[0] : row.latestSend || row;
+        const attempt = Trace.attemptsFor(representative, traceIndex, options.workspaceId)[0];
+        return [...values, ...Trace.values(attempt, representative, Trace.conference(representative, attempt))];
+      }),
+    };
+  }
+
+  return Object.freeze({ buildWorkbook, tabularData, downloadName, eventList, consolidatePendingDocuments, pendingDetails });
 });
