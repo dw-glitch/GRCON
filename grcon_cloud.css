@@ -998,3 +998,19 @@ html[data-theme="dark"] .grcon-admin-password-close:focus-visible {
 .grcon-admin-table-wrap table { width:100%; border-collapse:collapse; font-size:12px; }
 .grcon-admin-table-wrap th,.grcon-admin-table-wrap td { text-align:left; padding:10px; border-bottom:1px solid #cbd5e1; }
 @media(max-width:720px) { .grcon-admin-grid { grid-template-columns:1fr; } }
+
+/* Tela exclusiva do proprietário master. */
+#grcon-admin-dialog { width: min(1320px, 96vw); max-height: 94dvh; padding: 28px; color: var(--text-1, #10222f); background: var(--surface-1, #fff); }
+#grcon-admin-dialog header { gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border-1, #dce3e8); }
+#grcon-admin-dialog header h2 { margin: 5px 0; font-size: 24px; }
+#grcon-admin-dialog header p { margin: 0; color: var(--text-2, #526574); }
+#grcon-admin-dialog header small { font-size: 11px; letter-spacing: .08em; color: var(--text-2, #526574); }
+.grcon-admin-toolbar { display: flex; align-items: end; gap: 18px; flex-wrap: wrap; margin: 16px 0; }
+.grcon-admin-toolbar label { flex: 1 1 200px; }
+.grcon-admin-toolbar button { margin-bottom: 10px; }
+.grcon-admin-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#grcon-admin-editor { background: var(--surface-2, #f5f8fa); border-radius: 12px; padding: 20px; }
+#grcon-admin-dialog [hidden] { display: none !important; }
+#grcon-admin-dialog[aria-busy="true"] { cursor: progress; }
+#grcon-admin-feedback { min-height: 20px; color: var(--text-2, #526574); }
+#admin-user-password { overflow-wrap: anywhere; padding: 12px; border: 1px solid var(--border-1, #94a3b8); }

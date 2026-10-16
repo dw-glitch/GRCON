@@ -283,6 +283,7 @@
   }
 
   async function removeSourceSnapshot(snapshotId) {
+    if (!root.GrconCloud?.isMasterOwner?.()) throw new Error("Somente o proprietário master pode excluir o histórico.");
     if (state.busy) throw new Error("Já existe uma exclusão em andamento.");
     const allSources = [
       ...(await History.listSourceSnapshots("sigem")),
@@ -390,7 +391,7 @@
     const rows = snapshots.slice().reverse().map((snapshot) => {
       const current = snapshot.id === currentId;
       const docs = snapshot.metrics && snapshot.metrics.comparableDocuments;
-      return `<tr><td>${esc(fmtDate(snapshot.importedAt))}</td><td class="file"><strong>${esc(snapshot.fileName || (system === "sigem" ? "Consulta Geral" : "Base PW"))}</strong></td><td>${fmt(docs)}</td><td><span class="spw-history-state ${current ? "current" : "historical"}">${current ? "Base atual" : "Base histórica"}</span></td><td class="actions"><button type="button" class="spw-history-remove" data-spw-remove-source="${esc(snapshot.id)}">Remover do histórico</button></td></tr>`;
+      return `<tr><td>${esc(fmtDate(snapshot.importedAt))}</td><td class="file"><strong>${esc(snapshot.fileName || (system === "sigem" ? "Consulta Geral" : "Base PW"))}</strong></td><td>${fmt(docs)}</td><td><span class="spw-history-state ${current ? "current" : "historical"}">${current ? "Base atual" : "Base histórica"}</span></td><td class="actions">${root.GrconCloud?.isMasterOwner?.() ? `<button type="button" class="spw-history-remove" data-spw-remove-source="${esc(snapshot.id)}">Remover do histórico</button>` : ""}</td></tr>`;
     }).join("");
     return `<div class="spw-history-manage-table-wrap"><table class="spw-history-manage-table"><thead><tr><th>Importada em</th><th>Arquivo</th><th>Documentos</th><th>Situação</th><th>Ações</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }

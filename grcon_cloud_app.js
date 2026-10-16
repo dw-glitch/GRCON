@@ -8,6 +8,8 @@
     client: null,
     session: null,
     membership: null,
+    masterOwner: false,
+    masterOwnerUserId: "",
     contracts: [],
     contract: null,
     plannedSnapshot: null,
@@ -682,12 +684,30 @@
     return ["owner", "admin", "operator"].includes(state.membership?.role);
   }
 
-  function canManageHistory() {
-    return ["owner", "admin"].includes(state.membership?.role);
+  function isMasterOwner() {
+    return Boolean(state.session?.user?.id && state.masterOwner === true
+      && state.masterOwnerUserId === state.session.user.id && state.membership?.workspace_id);
   }
 
-  function canManageMembers() {
-    return state.membership?.role === "owner";
+  function canManageHistory() { return isMasterOwner(); }
+  function canManageMembers() { return isMasterOwner(); }
+  function canManageWorkspace() { return state.membership?.role === "owner"; }
+
+  async function refreshMasterOwner() {
+    const userId = state.session?.user?.id;
+    state.masterOwner = false;
+    state.masterOwnerUserId = "";
+    if (userId && state.client && state.online) {
+      try {
+        const { data, error } = await state.client.rpc("grcon_is_master_owner");
+        if (!error && data === true && state.session?.user?.id === userId) {
+          state.masterOwner = true;
+          state.masterOwnerUserId = userId;
+        }
+      } catch (_) { /* Falha fechada: nenhuma permissão privilegiada é presumida. */ }
+    }
+    window.dispatchEvent(new CustomEvent("grcon:permissions-changed"));
+    return isMasterOwner();
   }
 
   // A publicação diária é um snapshot: os blocos só passam a valer para a
@@ -724,7 +744,7 @@
 
   async function publishPlannedDocuments(parsed, fileName) {
     if (!state.online || !state.client || !state.membership?.workspace_id) throw new Error("Conecte-se ao banco para atualizar a base compartilhada.");
-    if (!canManageMembers()) throw new Error("Somente o proprietário pode atualizar Documentos Previstos.");
+    if (!canManageWorkspace()) throw new Error("Somente o proprietário pode atualizar Documentos Previstos.");
     const target_workspace = state.membership.workspace_id;
     const begin = await state.client.rpc("grcon_planned_documents_begin", {
       target_workspace, source_file: String(fileName || "").slice(0, 255), expected_count: parsed.count,
@@ -780,7 +800,7 @@
 
   async function saveExportTemplate(modelo) {
     if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
-    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode salvar modelos para a equipe." };
+    if (!canManageWorkspace()) return { ok: false, error: "Somente o proprietário pode salvar modelos para a equipe." };
     if (!modelo || !modelo.id || !modelo.name) return { ok: false, error: "O modelo precisa de um nome." };
     try {
       const { error } = await state.client.rpc("grcon_save_export_template", {
@@ -799,7 +819,7 @@
 
   async function deleteExportTemplate(id) {
     if (centralIndisponivel()) return { ok: false, indisponivel: true, error: "Área compartilhada indisponível agora." };
-    if (!canManageMembers()) return { ok: false, error: "Somente o proprietário pode excluir modelos da equipe." };
+    if (!canManageWorkspace()) return { ok: false, error: "Somente o proprietário pode excluir modelos da equipe." };
     try {
       const { error } = await state.client.rpc("grcon_delete_export_template", {
         target_workspace: state.membership.workspace_id,
@@ -906,7 +926,7 @@
     const authorized = Boolean(state.membership?.workspace_id) && canManageHistory();
     clear.hidden = !authorized;
     clear.disabled = !authorized || !state.online || state.syncing || state.clearingHistory;
-    if (!authorized) clear.title = "Somente proprietários e administradores podem limpar o histórico compartilhado.";
+    if (!authorized) clear.title = "Somente o proprietário master pode limpar o histórico compartilhado.";
     else if (!state.online) clear.title = "Reconecte o GRCON para apagar o histórico também no Supabase.";
     else if (state.syncing || state.clearingHistory) clear.title = "Aguarde a sincronização atual terminar.";
     else clear.title = "Apaga o histórico deste workspace no navegador e no Supabase e libera as numerações excluídas para reutilização.";
@@ -950,7 +970,7 @@
   async function manageHistoryFile(record, operation, options) {
     const workspaceId = state.membership?.workspace_id;
     if (!workspaceId || !state.client || !state.online) throw new Error("Conecte-se ao histórico compartilhado antes de alterar um documento.");
-    if (!canManageHistory()) throw new Error("Somente proprietário ou administrador pode alterar documentos do histórico.");
+    if (!canManageHistory()) throw new Error("Somente o proprietário master pode alterar documentos do histórico.");
     if (!record?.cloudId || !record?.cloudUpdatedAt || record?.workspaceId !== workspaceId) {
       throw new Error("A eGRDT precisa estar sincronizada com o contrato atual. Atualize o histórico.");
     }
@@ -1115,6 +1135,7 @@
     adminPasswordModal.returnFocus = null;
     adminPasswordModal.submitting = false;
     adminPasswordModal.root.hidden = true;
+    if (adminPasswordModal.root.parentElement?.id === "grcon-admin-dialog") document.body.appendChild(adminPasswordModal.root);
     adminPasswordModal.root.removeAttribute("aria-busy");
     setAdminPasswordMessage("", "info");
     if (returnFocus && typeof returnFocus.focus === "function") {
@@ -1167,7 +1188,7 @@
     const target = adminPasswordModal.target;
     if (!target || !canManageMembers() || !state.client || !state.membership?.workspace_id) {
       clearAdminPasswordSecrets();
-      showAdminPasswordEditStep("Somente o proprietário pode alterar senhas de usuários.", "error");
+      showAdminPasswordEditStep("Somente o proprietário master pode alterar senhas de usuários.", "error");
       return;
     }
 
@@ -1187,7 +1208,7 @@
       const { data, error } = await state.client.functions.invoke("owner-change-user-password", {
         body: {
           targetUserId: target.userId,
-          workspaceId: state.membership.workspace_id,
+          workspaceId: target.workspaceId || state.membership.workspace_id,
           newPassword: pendingAdminPassword,
         },
       });
@@ -1277,8 +1298,9 @@
     });
     root.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
         if (!adminPasswordModal?.submitting) {
-          event.preventDefault();
           closeAdminPasswordModal();
         }
         return;
@@ -1300,8 +1322,10 @@
   }
 
   function openAdminPasswordModal(target, trigger) {
-    if (!canManageMembers() || !target || !["admin", "operator"].includes(target.role)) return;
+    if (!canManageMembers() || !target || target.isMaster || !["owner", "admin", "operator", "viewer"].includes(target.role)) return;
     ensureAdminPasswordModal();
+    const administration = $("#grcon-admin-dialog");
+    if (administration?.open) administration.appendChild(adminPasswordModal.root);
     adminPasswordModal.target = target;
     adminPasswordModal.returnFocus = trigger || document.activeElement;
     adminPasswordModal.submitting = false;
@@ -1354,24 +1378,7 @@
           <small>Novos contratos são criados isolados e sem herdar regras específicas da UHDT-D.</small>
         </details>
         <div class="grcon-cloud-sync-line"><i></i><span id="grcon-cloud-sync-label">Histórico sincronizado</span></div>
-        <div class="grcon-cloud-invite" hidden id="grcon-cloud-invite">
-          <h3>Convidar usuário</h3>
-          <form id="grcon-cloud-invite-form">
-            <input aria-label="E-mail do usuário" autocomplete="email" id="grcon-cloud-invite-email" placeholder="nome@empresa.com" required type="email"/>
-            <select aria-label="Perfil" id="grcon-cloud-invite-role"><option value="operator">Operador</option><option value="viewer">Consulta</option><option value="admin">Administrador</option></select>
-            <button class="primary-button compact" type="submit">Autorizar</button>
-          </form>
-          <small>Autorize somente contas existentes no Supabase Auth. O usuário entra pelo mesmo link com e-mail e senha.</small>
-        </div>
         <div class="grcon-cloud-members" id="grcon-cloud-members"></div>
-        <details class="grcon-cloud-panel" hidden id="grcon-cloud-invitations-panel">
-          <summary>Convites pendentes</summary>
-          <div id="grcon-cloud-invitations"></div>
-        </details>
-        <details class="grcon-cloud-panel" hidden id="grcon-cloud-audit-panel">
-          <summary>Registro de atividades</summary>
-          <div id="grcon-cloud-audit"></div>
-        </details>
         <footer><button class="secondary-button compact" id="grcon-cloud-change-password" type="button">Alterar senha</button><button class="secondary-button compact" id="grcon-cloud-copy-link" type="button">Copiar link</button><button class="secondary-button compact" id="grcon-cloud-signout" type="button">Sair</button></footer>
       </section>`;
     host.appendChild(container);
@@ -1380,15 +1387,8 @@
     $("#grcon-cloud-signout").addEventListener("click", signOut);
     $("#grcon-cloud-copy-link").addEventListener("click", copyAppLink);
     $("#grcon-cloud-change-password").addEventListener("click", () => { closeAccountMenu(); openPasswordChange({ recovery: false }); });
-    $("#grcon-cloud-invite-form").addEventListener("submit", inviteUser);
     $("#grcon-contract-select").addEventListener("change", (event) => { void switchContract(event.currentTarget.value); });
     $("#grcon-contract-create-form").addEventListener("submit", createContract);
-    $("#grcon-cloud-invitations-panel").addEventListener("toggle", (event) => {
-      if (event.target.open) loadInvitations();
-    });
-    $("#grcon-cloud-audit-panel").addEventListener("toggle", (event) => {
-      if (event.target.open) loadAuditEvents();
-    });
     document.addEventListener("click", (event) => {
       if (!container.contains(event.target)) closeAccountMenu();
     });
@@ -1399,7 +1399,7 @@
     const email = state.session?.user?.email || "Usuário";
     const name = state.profiles.get(state.session?.user?.id)?.display_name || email.split("@")[0];
     $("#grcon-cloud-account-name").textContent = name;
-    $("#grcon-cloud-account-role").textContent = `${roleLabels[state.membership?.role] || "Usuário"} · ${state.online ? "online" : "offline"}`;
+    $("#grcon-cloud-account-role").textContent = `${isMasterOwner() ? "Proprietário master" : roleLabels[state.membership?.role] || "Usuário"} · ${state.online ? "online" : "offline"}`;
     $("#grcon-cloud-menu-workspace").textContent = state.membership?.workspace_name || "GRCON Compartilhado";
     $("#grcon-cloud-menu-email").textContent = email;
     const onlineCount = $("#grcon-cloud-online-count");
@@ -1413,11 +1413,6 @@
       else if (state.realtimeStatus === "ativo") onlineCount.textContent = total ? `${total} usuário${total === 1 ? "" : "s"} online agora` : "";
       else onlineCount.textContent = "";
     }
-    $("#grcon-cloud-invite").hidden = !canManageHistory();
-    const invitationsPanel = $("#grcon-cloud-invitations-panel");
-    const auditPanel = $("#grcon-cloud-audit-panel");
-    if (invitationsPanel) invitationsPanel.hidden = !canManageHistory();
-    if (auditPanel) auditPanel.hidden = !canManageHistory();
     document.body.dataset.grconCloudRole = state.membership?.role || "viewer";
     renderContractContext();
     setSyncLabel(state.online ? "Histórico sincronizado" : "Offline · alterações ficam neste navegador", state.online ? "success" : "warn");
@@ -1485,13 +1480,9 @@
     if (!target || !state.membership?.workspace_id) return;
     target.innerHTML = "<small>Atualizando usuários…</small>";
     try {
-      const manage = canManageMembers();
-      // O proprietário também precisa enxergar quem está desativado para
-      // poder reativar; os demais perfis continuam vendo só os ativos.
-      let query = state.client.from("grcon_memberships")
+      const query = state.client.from("grcon_memberships")
         .select("user_id, role, active, joined_at")
-        .eq("workspace_id", state.membership.workspace_id);
-      if (!manage) query = query.eq("active", true);
+        .eq("workspace_id", state.membership.workspace_id).eq("active", true);
       const { data: memberships, error } = await query.order("joined_at");
       if (error) throw error;
       const ids = [...new Set((memberships || []).map((item) => item.user_id))];
@@ -1509,51 +1500,8 @@
         const online = state.onlineUserIds.has(membership.user_id);
         const name = escapeHtml(profile.display_name || profile.email || "Usuário");
         const mail = escapeHtml(profile.email || "");
-        const inactiveTag = membership.active ? "" : `<em class="grcon-cloud-member-inactive">Desativado</em>`;
-        if (!manage) {
-          return `<div data-member-user-id="${escapeHtml(membership.user_id)}" class="${online ? "is-online" : ""}"><span><i class="grcon-cloud-member-dot" title="${online ? "Online agora" : "Offline"}"></i><strong>${name}</strong><small>${mail}</small></span><b>${escapeHtml(roleLabels[membership.role] || membership.role)}</b></div>`;
-        }
-        const options = Object.entries(roleLabels)
-          .map(([value, label]) => `<option value="${value}" ${membership.role === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
-          .join("");
-        const isSelf = membership.user_id === selfId;
-        const passwordAction = membership.active && ["admin", "operator"].includes(membership.role)
-          ? `<button class="secondary-button compact" data-member-password="${escapeHtml(membership.user_id)}" type="button">Alterar senha</button>`
-          : "";
-        return `<div data-member-user-id="${escapeHtml(membership.user_id)}" class="grcon-cloud-member-row ${online ? "is-online" : ""} ${membership.active ? "" : "is-inactive"}">
-          <span><i class="grcon-cloud-member-dot" title="${online ? "Online agora" : "Offline"}"></i><strong>${name}</strong><small>${mail}</small>${inactiveTag}</span>
-          <select aria-label="Perfil de ${name}" data-member-role="${escapeHtml(membership.user_id)}">${options}</select>
-          ${passwordAction}
-          <button class="secondary-button compact" data-member-active="${escapeHtml(membership.user_id)}" data-next-active="${membership.active ? "false" : "true"}" ${isSelf ? "disabled title='Você não pode desativar a si mesmo'" : ""} type="button">${membership.active ? "Desativar" : "Reativar"}</button>
-        </div>`;
+        return `<div data-member-user-id="${escapeHtml(membership.user_id)}" class="${online ? "is-online" : ""}"><span><i class="grcon-cloud-member-dot" title="${online ? "Online agora" : "Offline"}"></i><strong>${name}</strong><small>${mail}</small></span><b>${escapeHtml(roleLabels[membership.role] || membership.role)}</b></div>`;
       }).join("") || "<small>Nenhum usuário ativo.</small>";
-
-      if (manage) {
-        target.querySelectorAll("[data-member-role]").forEach((select) => {
-          select.addEventListener("change", (event) => changeMemberRole(event.target.dataset.memberRole, event.target.value));
-        });
-        target.querySelectorAll("[data-member-active]").forEach((button) => {
-          button.addEventListener("click", (event) => {
-            const el = event.currentTarget;
-            setMemberActive(el.dataset.memberActive, el.dataset.nextActive === "true");
-          });
-        });
-        target.querySelectorAll("[data-member-password]").forEach((button) => {
-          button.addEventListener("click", (event) => {
-            const el = event.currentTarget;
-            const userId = el.dataset.memberPassword || "";
-            const membership = (memberships || []).find((item) => item.user_id === userId);
-            const profile = state.profiles.get(userId) || {};
-            if (!membership) return;
-            openAdminPasswordModal({
-              userId,
-              role: membership.role,
-              name: profile.display_name || profile.email || "Usuário",
-              email: profile.email || "",
-            }, el);
-          });
-        });
-      }
     } catch (error) {
       target.innerHTML = `<small>${escapeHtml(error?.message || "Usuários indisponíveis.")}</small>`;
     }
@@ -1567,14 +1515,14 @@
 
   // Convites já criados que ainda não viraram acesso. A leitura e a exclusão
   // usam as permissões que já existiam para owner/admin — nada foi alterado.
-  async function loadInvitations() {
+  async function loadInvitations(workspaceId = state.membership?.workspace_id) {
     const target = $("#grcon-cloud-invitations");
     if (!target || !state.membership?.workspace_id || !canManageHistory()) return;
     target.innerHTML = "<small>Carregando convites…</small>";
     try {
       const { data, error } = await state.client.from("grcon_invitations")
         .select("id, email, role, created_at, expires_at, accepted_at")
-        .eq("workspace_id", state.membership.workspace_id)
+        .eq("workspace_id", workspaceId)
         .is("accepted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -1587,26 +1535,26 @@
         </div>`;
       }).join("") || "<small>Nenhum convite pendente.</small>";
       target.querySelectorAll("[data-invitation-cancel]").forEach((button) => {
-        button.addEventListener("click", (event) => cancelInvitation(event.currentTarget.dataset.invitationCancel));
+        button.addEventListener("click", (event) => cancelInvitation(event.currentTarget.dataset.invitationCancel, workspaceId));
       });
     } catch (error) {
       target.innerHTML = `<small>${escapeHtml(error?.message || "Convites indisponíveis.")}</small>`;
     }
   }
 
-  async function cancelInvitation(invitationId) {
+  async function cancelInvitation(invitationId, workspaceId = state.membership?.workspace_id) {
     if (!invitationId || !canManageHistory()) return;
     try {
       const { error } = await state.client.from("grcon_invitations")
         .delete()
         .eq("id", invitationId)
-        .eq("workspace_id", state.membership.workspace_id);
+        .eq("workspace_id", workspaceId);
       if (error) throw error;
       notify("Convite cancelado.", "success");
     } catch (error) {
       notify(error?.message || "Não foi possível cancelar o convite.", "error");
     }
-    await loadInvitations();
+    await loadInvitations(workspaceId);
   }
 
   const auditActionLabels = Object.freeze({
@@ -1624,14 +1572,14 @@
 
   // Histórico de quem fez o quê no workspace. Somente owner/admin conseguem
   // ler esta tabela — permissão que já existia antes desta alteração.
-  async function loadAuditEvents() {
+  async function loadAuditEvents(workspaceId = state.membership?.workspace_id) {
     const target = $("#grcon-cloud-audit");
     if (!target || !state.membership?.workspace_id || !canManageHistory()) return;
     target.innerHTML = "<small>Carregando atividades…</small>";
     try {
       const { data, error } = await state.client.from("grcon_audit_events")
         .select("id, actor_id, action, entity_type, entity_id, metadata, created_at")
-        .eq("workspace_id", state.membership.workspace_id)
+        .eq("workspace_id", workspaceId)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -1960,6 +1908,7 @@
     state.syncQueued = false;
     updateHistoryClearControl();
     try {
+      await refreshMasterOwner();
       await flushDeleteQueue();
       await pullCloudHistory();
       const pushed = await pushLocalHistory(History.read());
@@ -2287,7 +2236,7 @@
     // que fazia a tela "piscar" e deixava tudo mais lento. A ativação completa
     // só precisa acontecer quando muda o usuário.
     const key = session.user.id;
-    if (state.activationKey === key) return;
+    if (state.activationKey === key) { await refreshMasterOwner(); updateAccountMenu(); return; }
     state.activationKey = key;
     lockApp();
     authMessage("Confirmando sua autorização…", "info");
@@ -2302,6 +2251,7 @@
       }
       $("#grcon-cloud-auth-retry").hidden = true;
       state.membership = await loadContractContext(membership);
+      await refreshMasterOwner();
       if (state.contract) storeActiveContract(state.contract);
       // Uma nova ativação sempre começa com um espelho completo; só depois o
       // polling passa para alterações incrementais.
@@ -2343,6 +2293,8 @@
 
   function showLogin() {
     state.session = null;
+    state.masterOwner = false;
+    state.masterOwnerUserId = "";
     state.membership = null;
     state.contracts = [];
     state.contract = null;
@@ -2497,6 +2449,13 @@
     canWriteHistory,
     canManageHistory,
     canManageMembers,
+    canManageWorkspace,
+    isMasterOwner,
+    refreshMasterOwner,
+    openAdminPasswordModal,
+    closeAdminPasswordModal,
+    loadInvitations,
+    loadAuditEvents,
     switchContract,
     loadContractContext,
     refreshContracts,

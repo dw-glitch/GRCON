@@ -1891,7 +1891,7 @@ check("limpeza compartilhada só remove o histórico local após confirmação d
   const rpcPosition = cloud.indexOf('state.client.rpc("grcon_clear_history"');
   const localClearPosition = cloud.indexOf("History?.clear?.()", rpcPosition);
   assert.ok(rpcPosition >= 0 && localClearPosition > rpcPosition);
-  assert.match(cloud, /\["owner", "admin"\]\.includes\(state\.membership\?\.role\)/);
+  assert.match(cloud, /function canManageHistory\(\) \{ return isMasterOwner\(\); \}/);
   assert.match(ui, /Os registros serão apagados também do Supabase/);
   assert.match(ui, /await window\.GrconCloud\?\.clearHistory\?\.\(\)/);
   assert.match(ui, /numerações consumidas serão liberadas para reutilização/i);

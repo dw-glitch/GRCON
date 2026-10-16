@@ -444,7 +444,7 @@
     const Cloud = window.GrconCloud;
     // Sem área compartilhada configurada, o app é de uso local: não há a quem restringir.
     if (!Cloud || !Cloud.state?.membership) return true;
-    return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
+    return Boolean((Cloud.canManageWorkspace || Cloud.canManageMembers)?.());
   }
 
   function reportDownloadName() {

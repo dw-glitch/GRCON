@@ -237,7 +237,7 @@ function updateNumber(recordId: string, value: string): UpdateNumberResult {
 }
 
 function canDeleteHistory(): boolean {
-  return !window.GrconCloud?.state?.membership || Boolean(window.GrconCloud.canManageHistory?.());
+  return Boolean(window.GrconCloud?.canManageHistory?.());
 }
 
 function isSharedHistory(): boolean {
@@ -265,6 +265,7 @@ async function manageFile(record: EgrdtHistoryRecord, operation: "remove" | "res
 }
 
 async function deleteRecord(record: EgrdtHistoryRecord): Promise<{ result: DeleteOneResult; cloudDeleted: boolean }> {
+  if (!canDeleteHistory()) throw new Error("Somente o proprietário master pode excluir o histórico.");
   let cloudDeleted = false;
   if (isSharedHistory()) {
     if (!window.GrconCloud?.deleteHistoryRecord) throw new Error("Atualize o GRCON para concluir a exclusão no Supabase.");
@@ -274,6 +275,7 @@ async function deleteRecord(record: EgrdtHistoryRecord): Promise<{ result: Delet
 }
 
 async function clearHistory(): Promise<boolean> {
+  if (!canDeleteHistory()) throw new Error("Somente o proprietário master pode limpar o histórico.");
   if (isSharedHistory()) return Boolean(await window.GrconCloud?.clearHistory?.());
   return history().clear();
 }

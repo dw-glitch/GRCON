@@ -243,6 +243,7 @@
     } catch (error) { notify(error.message || "Não foi possível exportar o histórico.", "error"); }
   }
   async function manageHistory() {
+    if (!root.GrconCloud?.isMasterOwner?.()) return notify("Somente o proprietário master pode limpar o histórico.", "error");
     const total = state.sourceSigem.length + state.sourcePw.length + state.comparisons.length; if (!total) return notify("O histórico ainda está vazio.", "info");
     if (!root.confirm(`Gerenciar histórico\n\nExistem ${total} snapshots locais.\n\nOK = limpar o histórico de evolução desta máquina.\nCancelar = manter tudo.\n\nAs bases SIGEM/PW ativas não serão apagadas.`)) return;
     if (!root.confirm("Confirma a exclusão permanente dos snapshots históricos locais? As bases ativas permanecem intactas.")) return;
