@@ -114,7 +114,7 @@
     shell();resetContract();const expected=scope();
     if(!expected){show("Entre no GRCON e selecione o contrato para consultar os dados.",true);return;}
     if(state.loading)return;
-    const operation=root.GrconOperations?.begin("allocation-sync","Sincronizar Dashboard de Alocação",{host:"#allocation-dashboard-root"});
+    const operation=root.GrconOperations?.begin("allocation-sync","Sincronizar Dashboard de Alocação",{host:"#allocation-dashboard-root",silent:true});
     state.loading=true;$("ad-sync").disabled=true;
     try{
       await operation?.paint();
@@ -133,7 +133,7 @@
     try {
       if(calculationCache?.key===cacheKey)a=calculationCache.value;
       else if(state.version&&state.prepared.length>=2000&&root.GrconPerformance?.supported){
-        if(!renderOperation&&!root.GrconOperations?.isActive("allocation-filter"))renderOperation=root.GrconOperations?.begin("allocation-filter","Atualizar indicadores",{host:"#allocation-dashboard-root"});
+        if(!renderOperation&&!root.GrconOperations?.isActive("allocation-filter"))renderOperation=root.GrconOperations?.begin("allocation-filter","Atualizar indicadores",{host:"#allocation-dashboard-root",silent:true});
         await renderOperation?.paint();
         a=await root.GrconPerformance.processData("allocation-filter",{key:expected+":"+state.version,options:{...state.options}},renderOperation?.update);
       }else a=Model.aggregate(Model.filter(state.prepared,state.options));
