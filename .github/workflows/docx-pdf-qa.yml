@@ -1,4 +1,4 @@
-name: QA — Conversor DOCX para PDF
+name: QA — Conversor PDF para DOCX
 
 on:
   pull_request:
@@ -8,6 +8,7 @@ on:
       - 'grcon_module_loader.js'
       - 'index.html'
       - 'scripts/validar-docx-pdf-browser.cjs'
+      - 'scripts/prepare-pdfjs-assets.mjs'
       - '.github/workflows/docx-pdf-qa.yml'
   push:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - 'grcon_module_loader.js'
       - 'index.html'
       - 'scripts/validar-docx-pdf-browser.cjs'
+      - 'scripts/prepare-pdfjs-assets.mjs'
   workflow_dispatch:
 
 permissions:
@@ -38,6 +40,8 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
+      - name: Preparar leitor PDF.js local
+        run: node scripts/prepare-pdfjs-assets.mjs
       - name: Conversão real e navegação
         run: |
           node scripts/validar-docx-pdf-browser.cjs
