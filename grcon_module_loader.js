@@ -49,7 +49,7 @@
     // o operador realmente inicia a combinação.
     "pdf-tools": ["pdf_merge_core.js", "react-dist/pdf-tools-app.js"],
     // Capa oficial: LD + template local; nenhum documento deixa o navegador.
-    "docx-to-pdf": ["zip", "pdf-lib.min.js", "docx_pdf_core.js", "docx_pdf_app.js"],
+    "docx-to-pdf": ["zip", "docx_pdf_core.js", "docx_pdf_app.js"],
     "cover-document": ["xlsx", "zip", "pdf-lib.min.js", "core.js", "requests_core.js", "requests_report.js", "requests_taxonomy_core.js", "ld_memory.js", "performance_workers.js", "react-dist/cover-document-app.js"],
   };
 
@@ -272,7 +272,7 @@
     sigem: "Central de Postagem SIGEM",
     "pdf-tools": "Combinar PDFs",
     "cover-document": "Adicionar Capa",
-    "docx-to-pdf": "Converter DOCX em PDF",
+    "docx-to-pdf": "Converter PDF em DOCX",
     "allocation-dashboard": "Dashboard de Alocação",
   };
 
