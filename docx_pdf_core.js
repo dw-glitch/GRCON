@@ -10,7 +10,7 @@
   const child = (node, name) => node ? Array.from(node.children || []).find(el => el.localName === name) || null : null;
   const descendants = (node, name) => node ? Array.from(node.getElementsByTagNameNS("*", name)) : [];
   const attr = (node, name) => node?.getAttribute(name) ?? node?.getAttribute("w:" + name) ?? node?.getAttribute("r:" + name) ?? null;
-  const number = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  const number = (value, fallback) => value == null || value === "" ? fallback : Number.isFinite(Number(value)) ? Number(value) : fallback;
   const twips = (value, fallback) => number(value, fallback * 20) / 20;
   const warn = (warnings, message) => { if (!warnings.includes(message)) warnings.push(message); };
   const xml = (str) => {
@@ -216,6 +216,7 @@
         const widths=available/Math.max(1,row.length);
         const layouts=row.map(v=>wrapTokens([{text:normalizedText(v,model.warnings),bold:false,italic:false}],9,Math.max(30,widths-12)));
         const required=Math.max(21,...layouts.map(lines=>lines.length*12+10));
+        if(required > H-m.top-m.bottom-12) throw new Error("Uma linha de tabela é alta demais para uma página. Ajuste a tabela no Word.");
         ensure(required+3);
         let x=m.left;
         row.forEach((value,i)=>{
