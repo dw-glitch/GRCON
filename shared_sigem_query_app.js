@@ -22,7 +22,7 @@
   }
   function current() { return state.shared || state.local; }
   function canPublish() { return cloud()?.state?.membership?.role === "owner"; }
-  function canManageHistory() { return canPublish(); }
+  function canManageHistory() { return Boolean(cloud()?.isMasterOwner?.()); }
   function cacheKey(workspace) { return `shared-sigem-query:${workspace}`; }
   async function runtime() {
     await root.GRCONModuleLoader.ensure("posting_conference_core.js");
@@ -290,7 +290,7 @@
   async function activateVersion(id) {
     const workspace = cloud()?.state?.membership?.workspace_id;
     if (!workspace || !cloud()?.state?.online) throw new Error("Conecte-se para selecionar a Consulta Geral atual.");
-    if (!canManageHistory()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
+    if (!canPublish()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
     if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
     await request("activate", { target_workspace: workspace, target_snapshot: id });
     return refreshAfterHistoryMutation(workspace);
@@ -298,7 +298,7 @@
   async function deleteVersion(id) {
     const workspace = cloud()?.state?.membership?.workspace_id;
     if (!workspace || !cloud()?.state?.online) throw new Error("Conecte-se para excluir a base da Consulta Geral.");
-    if (!canManageHistory()) throw new Error("Somente o proprietário pode excluir bases da Consulta Geral.");
+    if (!canManageHistory()) throw new Error("Somente o proprietário master pode excluir bases da Consulta Geral.");
     if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
     const result = await request("delete", { target_workspace: workspace, target_snapshot: id });
     snapshotCache.delete(id);

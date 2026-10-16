@@ -10,11 +10,11 @@ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind
   const rows = Array.from({ length: 2501 }, (_, i) => ({ document: `DOC-${i}`, revision: "0", status: "Emitido" }));
   const versions = [{ snapshot_id: "old", record_count: rows.length, metadata: { referenceDate: "2026-10-01" }, file_name: "Anterior.xlsx" }];
   const calls = [], events = [], projections = [];
-  let switchWorkspace = false, incomplete = false;
+  let switchWorkspace = false, incomplete = false, master = true;
   const oldState = { shared: current }, refresh = async () => current;
   const original = Object.freeze({ state: oldState, current: () => current, refresh, setReferenceDate: async value => { current.meta.referenceDate = value; return current; } });
   const window = { GrconSharedSigemQuery: original, dispatchEvent: event => events.push(event),
-    GrconCloud: { state: { online: true, membership: { workspace_id: "one", role: "owner" }, client: { rpc: async (name, args) => {
+    GrconCloud: { isMasterOwner: () => window.GrconCloud.state.membership.role === "owner" && master, state: { online: true, membership: { workspace_id: "one", role: "owner" }, client: { rpc: async (name, args) => {
       calls.push({ name, args });
       if (switchWorkspace) window.GrconCloud.state.membership.workspace_id = "two";
       if (name.endsWith("versions")) return { data: versions };
@@ -44,6 +44,8 @@ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind
   assert.equal(current.meta.referenceDate, "2026-10-07", "old API cannot redirect historical date to current base");
   assert.equal(versions[0].metadata.referenceDate, "2026-09-30"); assert.equal(projections.length, 2); assert.equal(events.length, 1);
   assert.equal(api.canManageHistory(), true);
+  master = false; assert.equal(api.canManageHistory(), false, "ordinary owner cannot delete history");
+  await assert.rejects(api.deleteVersion("old"), /proprietário master/); master = true;
   await api.activateVersion("old");
   assert.ok(calls.some(c => c.name.endsWith("activate") && c.args.target_snapshot === "old"));
   const deletion = await api.deleteVersion("old");

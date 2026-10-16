@@ -179,6 +179,7 @@ declare global {
       loadSnapshot(id: string, versions?: import("./domain").SigemPwSharedVersion[]): Promise<SigemPwBase>;
       setReferenceDate(value: string, targetId?: string): Promise<SigemPwBase | undefined>;
       canManageHistory?(): boolean;
+      isMasterOwner?(): boolean;
       activateVersion(id: string): Promise<SigemPwBase | null | undefined>;
       deleteVersion(id: string): Promise<{ removedSnapshotId?: string; removedWasCurrent?: boolean; activeSnapshotId?: string | null }>;
       current(): SigemPwBase | null;

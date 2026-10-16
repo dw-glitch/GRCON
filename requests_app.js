@@ -310,7 +310,7 @@
   function ehProprietario() {
     const Cloud = root.GrconCloud;
     if (!Cloud || !Cloud.state?.membership) return true;
-    return Boolean(Cloud.canManageMembers && Cloud.canManageMembers());
+    return Boolean((Cloud.canManageWorkspace || Cloud.canManageMembers)?.());
   }
 
   function mostrarArea(area) {

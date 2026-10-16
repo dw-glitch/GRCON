@@ -1,0 +1,81 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { PGlite } = require('@electric-sql/pglite');
+const migration = fs.readFileSync('supabase/migrations/20261016093411_master_owner_user_administration.sql','utf8');
+const w='00000000-0000-4000-8000-000000000001', c='00000000-0000-4000-8000-000000000002';
+const master='00000000-0000-4000-8000-000000000010', owner='00000000-0000-4000-8000-000000000011', operator='00000000-0000-4000-8000-000000000012', admin='00000000-0000-4000-8000-000000000013';
+(async()=>{
+const db=new PGlite();
+try {
+await db.exec(`create schema private; create schema auth; create role anon; create role authenticated; create role service_role;
+grant usage on schema private,public,auth to authenticated,service_role;
+create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+create function auth.jwt() returns jsonb language sql as $$ select jsonb_build_object('role',current_setting('request.jwt.claim.role',true)) $$;
+create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');
+create table public.grcon_workspaces(id uuid primary key,name text);
+create table public.grcon_contracts(id uuid primary key,workspace_id uuid,active boolean default true);
+create table public.grcon_profiles(id uuid primary key,email text,display_name text,updated_at timestamptz default now());
+create table public.grcon_memberships(workspace_id uuid,user_id uuid,role text,active boolean default true,invited_by uuid,joined_at timestamptz default now(),contract_id uuid,primary key(workspace_id,user_id));
+create table public.grcon_invitations(id uuid default gen_random_uuid(),workspace_id uuid,contract_id uuid,email text,role text,invited_by uuid,accepted_at timestamptz,expires_at timestamptz default now()+interval '30 days');
+create table public.grcon_history(id uuid default gen_random_uuid(),workspace_id uuid,deleted_at timestamptz);
+create table public.grcon_audit_events(workspace_id uuid,actor_id uuid,action text,entity_type text,entity_id text,metadata jsonb);
+create function private.grcon_has_role(w uuid,r text[]) returns boolean language sql security definer set search_path='' as $$select exists(select 1 from public.grcon_memberships where workspace_id=w and user_id=auth.uid() and active and role=any(r))$$;
+create function private.grcon_invite_user(target_email text,target_role text default 'operator') returns void language plpgsql security definer as $$begin insert into public.grcon_invitations(workspace_id,email,role,invited_by) values('${w}',target_email,target_role,auth.uid());end$$;
+create function private.grcon_clear_history(target_workspace uuid) returns bigint language plpgsql security definer as $$begin delete from public.grcon_history where workspace_id=target_workspace;return 1;end$$;
+create function private.grcon_delete_history_record(target_workspace uuid) returns void language plpgsql security definer as $$begin delete from public.grcon_history where workspace_id=target_workspace;end$$;
+create function private.grcon_history_file_action(target_workspace uuid) returns void language plpgsql security definer as $$begin delete from public.grcon_history where workspace_id=target_workspace;end$$;
+create function private.grcon_sigem_query_delete(target_workspace uuid) returns void language plpgsql security definer as $$begin delete from public.grcon_history where workspace_id=target_workspace;end$$;
+create function private.grcon_prune_history_storage() returns bigint language plpgsql security definer as $$begin delete from public.grcon_history;return 1;end$$;
+insert into public.grcon_workspaces values('${w}','QA');insert into public.grcon_contracts(id,workspace_id) values('${c}','${w}');
+insert into auth.users(id,email) values('${master}','master@qa.test'),('${owner}','owner@qa.test'),('${operator}','operator@qa.test'),('${admin}','admin@qa.test');
+insert into public.grcon_memberships(workspace_id,contract_id,user_id,role) values('${w}','${c}','${master}','owner'),('${w}','${c}','${owner}','owner'),('${w}','${c}','${operator}','operator'),('${w}','${c}','${admin}','admin');
+insert into public.grcon_profiles(id,email,display_name) select id,email,email from auth.users;
+insert into public.grcon_history(workspace_id) values('${w}');
+grant select,insert,update,delete on public.grcon_memberships,public.grcon_profiles,public.grcon_invitations,public.grcon_history to authenticated;
+create policy broad_membership_access on public.grcon_memberships for all to authenticated using(true) with check(true);
+create policy broad_invitation_access on public.grcon_invitations for all to authenticated using(true) with check(true);
+create policy broad_history_access on public.grcon_history for all to authenticated using(true) with check(true);`);
+await db.exec(fs.readFileSync('SUPABASE_MIGRACAO_5.31.8.sql','utf8'));
+await db.exec(migration);await db.exec(migration);
+await db.exec(fs.readFileSync("supabase/migrations/20261016093715_master_owner_explicit_deny_policy.sql","utf8"));
+async function as(user,role='authenticated'){await db.exec(`reset role;set request.jwt.claim.sub='${user}';set request.jwt.claim.role='${role}';set role ${role};`);}
+const isMaster=async()=> (await db.query('select public.grcon_is_master_owner() as yes')).rows[0].yes;
+await as(master);assert.equal(await isMaster(),false,'no owner fallback when unprovisioned');
+await db.exec(`reset role;set request.jwt.claim.sub='';insert into private.grcon_master_owner(user_id) values('${master}');`);
+await assert.rejects(db.exec(`insert into private.grcon_master_owner(user_id) values('${owner}')`),/duplicate key/);
+await as(master);assert.equal(await isMaster(),true);
+const save=(user,role='operator',active=true,name='QA')=>db.query('select public.grcon_master_save_user($1,$2,$3,$4,$5,false)',[w,user,name,role,active]);
+for(const user of [owner,operator,admin]){
+ await as(user);assert.equal(await isMaster(),false);
+ await assert.rejects(save(operator),/proprietário master/);
+ await assert.rejects(db.query('select private.grcon_clear_history($1)',[w]),/proprietário master/);
+ await assert.rejects(db.query('select private.grcon_delete_history_record($1)',[w]),/proprietário master/);
+ await assert.rejects(db.query('select private.grcon_invite_user($1,$2)',['x@qa.test','admin']),/proprietário master/);
+ await assert.rejects(db.query('select public.grcon_update_member_role($1,$2,$3)',[w,master,'operator']),/proprietário master/);
+ await assert.rejects(db.query('select public.grcon_set_member_active($1,$2,false)',[w,master]),/proprietário master/);
+ const changed=await db.query(`update public.grcon_memberships set role='owner' where user_id='${operator}' returning user_id`);assert.equal(changed.rows.length,0);
+ await assert.rejects(db.exec(`insert into private.grcon_master_owner(user_id) values('${owner}')`),/permission denied/);
+ await assert.rejects(db.exec(`update public.grcon_profiles set display_name='hacked' where id='${master}'`),/proprietário master/);
+ assert.equal((await db.query('select private.grcon_prune_history_storage() as removed')).rows[0].removed,0,'normal saves skip protected pruning');
+}
+await as(master);
+await assert.rejects(save(master,'operator'),/protegida/);
+await assert.rejects(db.exec(`update public.grcon_memberships set role='admin' where user_id='${master}'`),/protegida/);
+await assert.rejects(save(owner,'master_owner'),/válidos/);
+await save(owner,'admin',false,'Owner edited by master');
+assert.equal((await db.query('select role,active from public.grcon_memberships where user_id=$1',[owner])).rows[0].active,false);
+await save(owner,'owner',true);
+await assert.rejects(db.query('select public.grcon_master_save_user($1,$2,$3,$4,true,false)',[c,owner,'Name','admin']),/Contrato não encontrado/);
+// Logging in may never reset an existing user's role or reactivate their account.
+await save(operator,'operator',false);
+await db.exec(`reset role;set request.jwt.claim.sub='';insert into public.grcon_invitations(workspace_id,contract_id,email,role,invited_by) values('${w}','${c}','operator@qa.test','admin','${master}');`);
+await as(operator);await db.query('select * from private.grcon_accept_my_invitation()');
+assert.equal((await db.query('select active from public.grcon_memberships where user_id=$1',[operator])).rows[0].active,false);
+await as(master);await save(operator);
+await as('','anon');await assert.rejects(isMaster(),/permission denied/);
+await as('','service_role');await assert.rejects(db.query('select * from private.grcon_master_owner'),/permission denied/);
+await as(master);assert.equal(await isMaster(),true);
+console.log('Master database: singleton, live capability, owner/admin/operator denial, RPC/RLS/trigger guards, protected master, roles, atomic edits, invitations, login and retention passed.');
+} finally {await db.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

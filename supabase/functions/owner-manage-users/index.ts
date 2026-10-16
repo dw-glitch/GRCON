@@ -11,7 +11,7 @@ const JSON_HEADERS = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
 };
-const ROLES = new Set(["admin", "operator", "viewer"]);
+const ROLES = new Set(["owner", "admin", "operator", "viewer"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -67,17 +67,14 @@ Deno.serve(async (req: Request) => {
   const actorId = actorAuth?.user?.id || "";
   if (actorAuthError || !actorId) return response(401, { code: "SESSION_EXPIRED", message: "Sua sessão expirou. Entre novamente." });
 
-  const { data: actorMemberships, error: actorMembershipError } = await admin
-    .from("grcon_memberships")
-    .select("workspace_id, role, active")
-    .eq("user_id", actorId)
-    .eq("active", true);
-  if (actorMembershipError) return response(500, { code: "AUTHORIZATION_CHECK_FAILED", message: "Não foi possível validar sua permissão." });
-
-  const activeMemberships = Array.isArray(actorMemberships) ? actorMemberships : [];
-  const globalOwner = activeMemberships.some((item) => item.role === "owner");
-  const canManage = globalOwner;
-  if (!canManage) return response(403, { code: "FORBIDDEN", message: "Acesso restrito ao proprietário." });
+  // Verify the live database capability with the caller's JWT, never user_metadata.
+  const caller = createClient(supabaseUrl, adminKey, {
+    global: { headers: { Authorization: `Bearer ${tokenMatch[1]}` } },
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+  const { data: masterOwner, error: masterError } = await caller.rpc("grcon_is_master_owner");
+  if (masterError) return response(503, { code: "AUTHORIZATION_CHECK_FAILED", message: "Não foi possível validar sua permissão." });
+  if (masterOwner !== true) return response(403, { code: "MASTER_OWNER_REQUIRED", message: "Acesso restrito ao proprietário master." });
 
   const { data: contract, error: contractError } = await admin
     .from("grcon_contracts")
@@ -122,6 +119,7 @@ Deno.serve(async (req: Request) => {
           name: profile.display_name || "",
           email: profile.email || "",
           role: membership.role,
+          isMaster: membership.user_id === actorId,
           active: membership.active,
           joinedAt: membership.joined_at,
           lastSignInAt: authById.get(membership.user_id)?.lastSignInAt || null,
@@ -131,7 +129,6 @@ Deno.serve(async (req: Request) => {
   }
 
   if (operation === "create") {
-    if (!globalOwner) return response(403, { code: "OWNER_REQUIRED", message: "Somente o proprietário pode criar contas." });
     if (!contract.active) return response(400, { code: "INACTIVE_CONTRACT", message: "Ative o contrato antes de criar usuários." });
     const email = clean(body.email).toLowerCase();
     const name = clean(body.name);
@@ -157,37 +154,14 @@ Deno.serve(async (req: Request) => {
     }
 
     const userId = created.data.user.id;
-    const profile = await admin.from("grcon_profiles").upsert({
-      id: userId,
-      email,
-      display_name: name,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "id" });
-    if (profile.error) {
-      await admin.auth.admin.deleteUser(userId);
-      return response(500, { code: "PROFILE_CREATE_FAILED", message: "A conta não foi mantida porque o perfil não pôde ser criado." });
-    }
-
-    const membership = await admin.from("grcon_memberships").upsert({
-      workspace_id: workspaceId,
-      user_id: userId,
-      role,
-      active,
-      invited_by: actorId,
-    }, { onConflict: "workspace_id,user_id" });
-    if (membership.error) {
+    const saved = await caller.rpc("grcon_master_save_user", {
+      target_workspace: workspaceId, target_user: userId, user_name: name,
+      target_role: role, is_active: active, creating: true,
+    });
+    if (saved.error) {
       await admin.auth.admin.deleteUser(userId);
       return response(500, { code: "MEMBERSHIP_CREATE_FAILED", message: "A conta não foi mantida porque o vínculo ao contrato falhou." });
     }
-
-    await admin.from("grcon_audit_events").insert({
-      workspace_id: workspaceId,
-      actor_id: actorId,
-      action: "user_created",
-      entity_type: "auth_user",
-      entity_id: userId,
-      metadata: { email, role, contract: contract.code, active },
-    });
 
     return response(201, {
       ok: true,
@@ -209,33 +183,13 @@ Deno.serve(async (req: Request) => {
       return response(400, { code: "SELF_DISABLE", message: "Você não pode desativar seu próprio acesso." });
     }
 
-    const { data: targetMembership, error: targetError } = await admin
-      .from("grcon_memberships")
-      .select("user_id, role, active")
-      .eq("workspace_id", workspaceId)
-      .eq("user_id", targetUserId)
-      .maybeSingle();
-    if (targetError || !targetMembership) return response(404, { code: "USER_NOT_FOUND", message: "Usuário não encontrado neste contrato." });
-    if (targetMembership.role === "owner") return response(403, { code: "OWNER_PROTECTED", message: "O proprietário global não pode ser rebaixado por esta tela." });
-
-    const profileUpdate = await admin.from("grcon_profiles").update({
-      display_name: name,
-      updated_at: new Date().toISOString(),
-    }).eq("id", targetUserId);
-    if (profileUpdate.error) return response(500, { code: "PROFILE_UPDATE_FAILED", message: "Não foi possível atualizar o perfil." });
-
-    const membershipUpdate = await admin.from("grcon_memberships").update({ role, active })
-      .eq("workspace_id", workspaceId).eq("user_id", targetUserId);
-    if (membershipUpdate.error) return response(500, { code: "MEMBERSHIP_UPDATE_FAILED", message: "Não foi possível atualizar o acesso." });
-
-    await admin.from("grcon_audit_events").insert({
-      workspace_id: workspaceId,
-      actor_id: actorId,
-      action: "user_updated",
-      entity_type: "auth_user",
-      entity_id: targetUserId,
-      metadata: { role, active, contract: contract.code },
+    // The master account cannot be edited or downgraded through any admin route.
+    if (targetUserId === actorId) return response(403, { code: "MASTER_OWNER_PROTECTED", message: "Esta conta é protegida." });
+    const saved = await caller.rpc("grcon_master_save_user", {
+      target_workspace: workspaceId, target_user: targetUserId, user_name: name,
+      target_role: role, is_active: active, creating: false,
     });
+    if (saved.error) return response(400, { code: "USER_UPDATE_FAILED", message: saved.error.message || "Não foi possível atualizar o acesso." });
     return response(200, { ok: true });
   }
 

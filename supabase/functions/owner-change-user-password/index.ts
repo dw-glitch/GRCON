@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const adminKey = secretKey();
+  const adminKey = secretKey() || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   if (!supabaseUrl || !adminKey) {
     return response(500, { code: "SERVER_CONFIGURATION", message: "Não foi possível concluir a alteração agora." });
   }
@@ -91,21 +91,16 @@ Deno.serve(async (req: Request) => {
     return response(401, { code: "SESSION_EXPIRED", message: "Sua sessão expirou. Entre novamente." });
   }
 
-  const { data: actorMembership, error: actorMembershipError } = await admin
-    .from("grcon_memberships")
-    .select("workspace_id, role, active")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", actorId)
-    .eq("active", true)
-    .maybeSingle();
-
-  if (actorMembershipError) {
-    return response(500, { code: "AUTHORIZATION_CHECK_FAILED", message: "Não foi possível validar sua permissão agora." });
-  }
+  const caller = createClient(supabaseUrl, adminKey, {
+    global: { headers: { Authorization: `Bearer ${tokenMatch[1]}` } },
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+  const { data: isMasterOwner, error: masterError } = await caller.rpc("grcon_is_master_owner");
+  if (masterError) return response(503, { code: "AUTHORIZATION_CHECK_FAILED", message: "Não foi possível validar sua permissão agora." });
 
   const actorAuthorization = authorizeActor({
     authenticated: true,
-    actorMembership,
+    isMasterOwner,
     workspaceId,
   });
   if (!actorAuthorization.ok) {
@@ -123,8 +118,7 @@ Deno.serve(async (req: Request) => {
   const { data: targetMemberships, error: targetMembershipsError } = await admin
     .from("grcon_memberships")
     .select("workspace_id, role, active")
-    .eq("user_id", targetUserId)
-    .eq("active", true);
+    .eq("user_id", targetUserId);
 
   if (targetMembershipsError) {
     return response(500, { code: "TARGET_CHECK_FAILED", message: "Não foi possível validar o usuário agora." });
@@ -132,6 +126,7 @@ Deno.serve(async (req: Request) => {
 
   const authorizationResult = authorizeTarget({
     targetExists: true,
+    targetIsMaster: targetUserId === actorId,
     targetMemberships: Array.isArray(targetMemberships) ? targetMemberships : [],
     workspaceId,
   });

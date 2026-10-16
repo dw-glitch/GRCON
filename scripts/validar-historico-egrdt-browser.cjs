@@ -90,6 +90,8 @@ async function openHistory(page) {
 
 async function installFixtureAdapters(page, rows = fixtures) {
   await page.evaluate((rows) => {
+    // Fixtures authorize the master explicitly; absence of membership never grants cleanup.
+    window.GrconCloud = { ...window.GrconCloud, canManageHistory: () => true };
     window.__historyFixtureRecords = rows.map((row) => window.GrconHistory.cleanRecord(row));
     window.__historyOriginalRead = window.__historyOriginalRead || window.GrconHistory.read;
     window.__historyOriginalDeleteOne = window.__historyOriginalDeleteOne || window.GrconHistory.deleteOne;
@@ -305,7 +307,7 @@ async function setSharedHistoryFixture(page, enabled) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}) });
   const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -516,6 +518,17 @@ async function setSharedHistoryFixture(page, enabled) {
     await page.locator('[data-history-action="save"]').click();
     await page.waitForTimeout(80);
     assert.equal(await page.locator("#history-number-editor").count(), 0);
+
+    // Ordinary owners cannot delete; only the explicit master fixture can.
+    await page.evaluate(() => {
+      window.GrconCloud.canManageHistory = () => false;
+      window.dispatchEvent(new CustomEvent("grcon:history-react-refresh"));
+    });
+    assert.equal(await page.locator('[data-history-action="delete"]').count(), 0);
+    await page.evaluate(() => {
+      window.GrconCloud.canManageHistory = () => true;
+      window.dispatchEvent(new CustomEvent("grcon:history-react-refresh"));
+    });
 
     // Exclusão local segura: mock altera somente fixtures em memória.
     await page.locator('[data-history-id="fixture-b"]').click();

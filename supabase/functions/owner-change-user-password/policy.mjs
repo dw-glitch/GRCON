@@ -14,9 +14,8 @@ export function authorizeActor(input) {
     return { ok: false, status: 401, code: "SESSION_EXPIRED", message: "Sua sessão expirou. Entre novamente." };
   }
 
-  const actorMembership = input?.actorMembership || null;
-  if (!actorMembership || actorMembership.active !== true || actorMembership.workspace_id !== workspaceId || actorMembership.role !== "owner") {
-    return { ok: false, status: 403, code: "OWNER_REQUIRED", message: "Somente o proprietário pode alterar senhas de usuários." };
+  if (input?.isMasterOwner !== true) {
+    return { ok: false, status: 403, code: "MASTER_OWNER_REQUIRED", message: "Somente o proprietário master pode administrar usuários." };
   }
 
   return { ok: true, status: 200 };
@@ -29,29 +28,18 @@ export function authorizeTarget(input) {
   }
 
   const targetMemberships = Array.isArray(input?.targetMemberships) ? input.targetMemberships : [];
-  const activeMemberships = targetMemberships.filter((membership) => membership?.active === true);
+  const activeMemberships = targetMemberships;
   const workspaceMembership = activeMemberships.find((membership) => membership.workspace_id === workspaceId);
 
   if (!workspaceMembership) {
     return { ok: false, status: 403, code: "TARGET_OUTSIDE_WORKSPACE", message: "Usuário não pertence a este workspace." };
   }
 
-  if (activeMemberships.some((membership) => membership.role === "owner")) {
-    return {
-      ok: false,
-      status: 403,
-      code: "TARGET_OWNER_FORBIDDEN",
-      message: "A senha de outro proprietário não pode ser alterada por esta função.",
-    };
+  if (input?.targetIsMaster !== false) {
+    return { ok: false, status: 403, code: "MASTER_OWNER_PROTECTED", message: "Esta conta é protegida." };
   }
-
-  if (!["admin", "operator"].includes(String(workspaceMembership.role || ""))) {
-    return {
-      ok: false,
-      status: 403,
-      code: "TARGET_ROLE_FORBIDDEN",
-      message: "Somente usuários administradores ou operadores podem ter a senha alterada por esta ação.",
-    };
+  if (!["owner", "admin", "operator", "viewer"].includes(String(workspaceMembership.role || ""))) {
+    return { ok: false, status: 403, code: "TARGET_ROLE_FORBIDDEN", message: "Perfil de usuário inválido." };
   }
 
   return { ok: true, status: 200, workspaceMembership };

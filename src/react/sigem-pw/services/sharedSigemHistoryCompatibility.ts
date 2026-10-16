@@ -79,9 +79,9 @@ export function ensureSharedSigemHistoryCompatibility(): SharedApi | undefined {
     while (cache.size > 3) cache.delete(cache.keys().next().value!);
     return base;
   }
-  function canManageHistory(): boolean { return cloud()?.membership?.role === "owner"; }
+  function canManageHistory(): boolean { return Boolean(window.GrconCloud?.isMasterOwner?.()); }
   async function activateVersion(id: string): Promise<SigemPwBase | null | undefined> {
-    if (!canManageHistory()) throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
+    if (cloud()?.membership?.role !== "owner") throw new Error("Somente o proprietário pode selecionar a Consulta Geral atual.");
     if (!id) throw new Error("Selecione uma base da Consulta Geral.");
     await request<unknown>("activate", { target_workspace: workspace(), target_snapshot: id });
     cache.clear();
@@ -92,7 +92,7 @@ export function ensureSharedSigemHistoryCompatibility(): SharedApi | undefined {
     return original!.current();
   }
   async function deleteVersion(id: string): Promise<{ removedSnapshotId?: string; removedWasCurrent?: boolean; activeSnapshotId?: string | null }> {
-    if (!canManageHistory()) throw new Error("Somente o proprietário pode excluir bases da Consulta Geral.");
+    if (!canManageHistory()) throw new Error("Somente o proprietário master pode excluir bases da Consulta Geral.");
     if (!id) throw new Error("Selecione uma base da Consulta Geral.");
     const result = await request<{ removedSnapshotId?: string; removedWasCurrent?: boolean; activeSnapshotId?: string | null }>("delete", { target_workspace: workspace(), target_snapshot: id });
     cache.clear();
