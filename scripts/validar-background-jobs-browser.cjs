@@ -30,7 +30,7 @@ const {chromium}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES?path.joi
   assert.equal(await page.locator('#grcon-technical-shortcut').count(),0);
   assert.equal(await page.locator('#grcon-tasks-shortcut').count(),1,'Tarefas permanecem disponíveis para operadores');
   assert.equal(await page.locator('#grcon-jobs-dialog').getAttribute('open'),null);
-  assert.equal(await page.locator('#grcon-jobs-content').textContent(),'');
+  await page.waitForFunction(()=>document.querySelector('#grcon-jobs-content')?.textContent==='');
   await page.evaluate(()=>window.GrconBackgroundJobs.submit('conference_report',{rows:[{document:'DOC-001'}]},'request-1'));
   const submit=calls.find(c=>c.action==='submit');assert.equal(submit.headers['x-grcon-kind'],'conference_report');assert.match(submit.headers['x-grcon-fingerprint'],/^[a-f0-9]{64}$/);assert.equal(JSON.parse(submit.body).rows[0].document,'DOC-001');
   await page.evaluate(()=>{window.GrconCloud.state.session=null;window.dispatchEvent(new CustomEvent('grcon:cloud-signed-out'));});assert.equal(await page.locator('#grcon-tasks-shortcut').count(),0);assert.equal(await page.locator('#grcon-jobs-dialog').count(),0);
