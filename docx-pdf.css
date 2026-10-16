@@ -1,0 +1,50 @@
+/* GRCON | Ferramentas adicionais — DOCX → PDF. Sem elementos externos à área de trabalho. */
+.docx-pdf-module{padding:24px 28px 40px;max-width:1280px;margin:0 auto;box-sizing:border-box}
+.docx-pdf-layout{color:var(--text,#183449)}
+.docx-pdf-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:22px}
+.docx-pdf-heading span,.docx-pdf-panel-heading span{font-size:.72rem;letter-spacing:.11em;color:var(--text-muted,#687b8c);font-weight:800}
+.docx-pdf-heading h2{font-size:clamp(1.5rem,2vw,2.05rem);line-height:1.22;margin:6px 0 8px;color:var(--text-strong,#244158)}
+.docx-pdf-heading p{max-width:780px;margin:0;color:var(--text-muted,#687b8c);line-height:1.6}
+.docx-pdf-heading button{flex-shrink:0}
+.docx-pdf-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.85fr);align-items:start;gap:18px}
+.docx-pdf-panel{min-width:0;border-radius:17px;border:1px solid var(--border,#d8e1e8);background:var(--surface,#fff);padding:22px;box-shadow:0 6px 22px rgba(20,45,65,.045)}
+.docx-pdf-panel-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}
+.docx-pdf-panel-heading h3{margin:4px 0 0;font-size:1.08rem;color:var(--text-strong,#244158)}
+.docx-pdf-format-chip{border-radius:999px;padding:6px 12px;color:var(--accent,#236e91);background:var(--surface-muted,#eef4f7);font-size:.76rem;font-weight:800;white-space:nowrap}
+.docx-pdf-drop{min-height:224px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:7px;padding:28px 18px;border:2px dashed var(--border,#c3d3df);border-radius:14px;background:color-mix(in srgb,var(--surface-muted,#eef4f7) 65%,var(--surface,#fff));cursor:pointer;transition:border-color .2s,background .2s}
+.docx-pdf-drop:hover,.docx-pdf-drop.dragover,.docx-pdf-drop:focus-visible{border-color:var(--accent,#2878a8);background:var(--surface-muted,#eef4f7)}
+.docx-pdf-drop[aria-disabled=true]{opacity:.6;pointer-events:none}
+.docx-pdf-drop svg{width:44px;height:44px;stroke:var(--accent,#2878a8);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin-bottom:7px}
+.docx-pdf-drop strong{color:var(--text-strong,#244158);font-size:1.04rem}
+.docx-pdf-drop span{font-size:.9rem;color:var(--text,#183449)}
+.docx-pdf-drop small{color:var(--text-muted,#687b8c);font-size:.78rem;line-height:1.5;margin-top:4px}
+.docx-pdf-files-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:22px 0 12px}
+.docx-pdf-files-heading strong{color:var(--text-strong,#244158)}
+.docx-pdf-list{margin:0;padding:0;list-style:none;display:grid;gap:9px}
+.docx-pdf-empty{border:1px dashed var(--border,#d8e1e8);padding:16px;border-radius:10px;text-align:center;color:var(--text-muted,#687b8c)}
+.docx-pdf-file{display:flex;justify-content:space-between;gap:13px;align-items:center;border:1px solid var(--border,#d8e1e8);border-radius:11px;padding:12px;background:var(--surface,#fff)}
+.docx-pdf-file-info{display:grid;gap:5px;min-width:0;flex:1}
+.docx-pdf-file-info strong{font-size:.88rem;overflow-wrap:anywhere;color:var(--text-strong,#244158)}
+.docx-pdf-file-info small{color:var(--text-muted,#687b8c);font-size:.76rem;line-height:1.4}
+.docx-pdf-file-info .docx-pdf-warning{color:#ad6812}
+.docx-pdf-file-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.docx-pdf-file-actions button{white-space:nowrap}
+.docx-pdf-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:0 0 18px}
+.docx-pdf-facts div{border-radius:10px;padding:11px 12px;background:var(--surface-muted,#eef4f7);display:grid;gap:4px}
+.docx-pdf-facts dt{font-size:.72rem;color:var(--text-muted,#687b8c)}
+.docx-pdf-facts dd{margin:0;color:var(--text-strong,#244158);font-weight:800;font-size:.83rem}
+.docx-pdf-limits{border-left:3px solid var(--accent,#2878a8);padding:5px 0 5px 13px;margin-bottom:18px}
+.docx-pdf-limits strong{font-size:.9rem}
+.docx-pdf-limits p{font-size:.8rem;color:var(--text-muted,#687b8c);margin:6px 0 0;line-height:1.55}
+.docx-pdf-ack{display:flex;gap:10px;align-items:flex-start;font-size:.82rem;line-height:1.5;margin-bottom:16px;cursor:pointer;color:var(--text,#183449)}
+.docx-pdf-ack input{margin:3px 0 0;flex:none}
+.docx-pdf-settings>.primary-button,.docx-pdf-settings>#docx-pdf-cancel{width:100%;justify-content:center;margin-bottom:10px}
+.docx-pdf-progress{margin:12px 0 14px}
+.docx-pdf-progress>div{display:flex;justify-content:space-between;gap:8px;font-size:.81rem;margin-bottom:8px}
+.docx-pdf-progress progress{width:100%;accent-color:var(--accent,#2878a8)}
+.docx-pdf-progress small{color:var(--text-muted,#687b8c);font-size:.75rem}
+.docx-pdf-feedback{font-size:.8rem;line-height:1.5;margin:10px 0;color:var(--text,#183449)}
+.docx-pdf-privacy{font-size:.76rem;line-height:1.5;color:var(--text-muted,#687b8c);margin:14px 0 0;border-top:1px solid var(--border,#d8e1e8);padding-top:12px}
+@media(max-width:920px){.docx-pdf-grid{grid-template-columns:1fr}.docx-pdf-module{padding:20px 16px 30px}}
+@media(max-width:590px){.docx-pdf-heading{flex-direction:column}.docx-pdf-panel{padding:16px}.docx-pdf-file{align-items:flex-start;flex-direction:column}.docx-pdf-file-actions{justify-content:flex-start}}
+@media(prefers-reduced-motion:reduce){.docx-pdf-drop{transition:none}}
