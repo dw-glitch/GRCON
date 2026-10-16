@@ -27,8 +27,7 @@
   }
   install();
   $('#grcon-technical-shortcut')?.remove();
-  if(master())$('#grcon-tasks-shortcut')?.remove();
-  else if(!$('#grcon-tasks-shortcut')){
+  if(!$('#grcon-tasks-shortcut')){
    const host=$('.runtime-status');if(host){const button=document.createElement('button');button.id='grcon-tasks-shortcut';button.type='button';button.className='secondary-button compact';button.textContent='Tarefas';host.insertBefore(button,$('#grcon-cloud-account'));button.addEventListener('click',()=>void open(false));}
   }
   if(!master()&&(state.technical||state.embedded)){unmount();$('#grcon-jobs-dialog')?.close();}
@@ -59,8 +58,10 @@
   void refresh();
  }
  async function open(technical=false){
-  if(master())return root.GrconAdministration?.open(technical?'technical':'tasks');
-  if(technical){permissions();return;}
+  if(technical){
+   if(master())return root.GrconAdministration?.open('technical');
+   permissions();return;
+  }
   install();if(!$('#grcon-jobs-dialog'))return;unmount();state.open=true;
   $('#grcon-jobs-title').textContent='Tarefas em segundo plano';
   $('#grcon-jobs-help').textContent='As tarefas continuam no servidor após fechar esta tela ou o navegador. Os resultados permanecem disponíveis aqui.';

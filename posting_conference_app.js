@@ -721,10 +721,8 @@
         workspaceId: root.GrconCloud?.state?.membership?.workspace_id,
         baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt,
       };
-      if (rows.length <= 10000 && root.GrconBackgroundJobs?.available?.()) {
-        await root.GrconBackgroundJobs.submit("conference_report", { rows, options: reportOptions });
-        return;
-      }
+      // O comando "Relatório Excel" sempre baixa o XLSX neste clique.
+      // A conferência em segundo plano permanece uma ação separada.
       const buffer = await Report.buildWorkbook(rows, reportOptions, currentOperation?.update);
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
