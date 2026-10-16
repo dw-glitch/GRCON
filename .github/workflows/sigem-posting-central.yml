@@ -86,7 +86,7 @@ jobs:
           GRCON_QA_COUNT=1000 node scripts/validar-grdt-table-audit-browser.cjs
       - name: Preserve browser evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: grdt-table-audit
           path: artifacts/grdt-table-audit
