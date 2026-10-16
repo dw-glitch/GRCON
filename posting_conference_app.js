@@ -220,12 +220,12 @@
   }
 
   let currentOperation = null;
-  function setBusy(busy, label) {
-    if(busy){if(!currentOperation&&!root.GrconOperations?.isActive("posting-conference"))currentOperation=root.GrconOperations?.begin("posting-conference",label||"Conferir postagem",{host:"#posting-conference-module"});else currentOperation?.update(label||"Processando…");}
+  function setBusy(busy, label, options = {}) {
+    if(busy){if(!currentOperation&&!root.GrconOperations?.isActive("posting-conference"))currentOperation=root.GrconOperations?.begin("posting-conference",label||"Conferir postagem",{host:"#posting-conference-module",silent:options.silent === true});else currentOperation?.update(label||"Processando…");}
     else {currentOperation?.finish();currentOperation=null;}
     state.busy = busy;
     const progress = el("pc-progress");
-    progress.hidden = !busy;
+    progress.hidden = !busy || options.silent === true;
     progress.querySelector("span").textContent = label || "Processando…";
     [el("pc-update"), el("pc-export"), el("pc-publish")].forEach((button) => { button.disabled = busy; });
     root.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
@@ -756,7 +756,7 @@
     await adoptSharedBase();
     if (!state.ready) {
       state.ready = true;
-      setBusy(true, "Carregando a conferência salva…");
+      setBusy(true, "Carregando a conferência salva…", {silent:true});
       try {
         [state.base, state.audit] = await Promise.all([Conference.loadBase(), Conference.loadAudit()]);
         state.result = await Conference.reconcilePersisted(History?.read?.() || [], { reason: "activate" });

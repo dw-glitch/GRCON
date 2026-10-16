@@ -22,7 +22,7 @@
   function begin(key, label, options = {}) {
     if (active.has(key)) throw new Error("Esta operação já está em andamento.");
     const started = performance.now(), scope = context(), controller = new AbortController();
-    const taskId = root.QualityTaskCenter?.start(label, options.detail || "Preparando…");
+    const taskId = options.silent ? null : root.QualityTaskCenter?.start(label, options.detail || "Preparando…");
     const button = element(options.button), previous = button && { children: [...button.childNodes], disabled: button.disabled, busy: button.getAttribute("aria-busy") };
     if (button) { button.disabled = true; button.textContent = options.busyLabel || "Processando…"; button.setAttribute("aria-busy", "true"); }
     const host = element(options.host) || document.querySelector("dialog[open],.module-view:not([hidden])") || document.querySelector("main") || document.body;
@@ -35,7 +35,7 @@
     const elapsed = document.createElement("small");
     const close = document.createElement("button"); close.type = "button"; close.textContent = "Fechar"; close.setAttribute("aria-label","Fechar acompanhamento de " + label); close.hidden = true;
     close.addEventListener("click", () => node.remove(), { once: true });
-    node.append(title, message, announcement, bar, elapsed, close); host.prepend(node);
+    node.append(title, message, announcement, bar, elapsed, close); if (!options.silent) host.prepend(node);
     let feedbackMs = null, lastAnnouncement = 0;
     const paintOperation = async () => { await paint(); if (feedbackMs == null) feedbackMs = Math.round(performance.now() - started); };
     let settled = false, lastPaint = 0, pending = null, scheduled = null, phase = "Preparando…", phaseKey = "";
