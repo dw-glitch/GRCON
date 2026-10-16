@@ -59,7 +59,7 @@ Deno.serve(async(request:Request)=>{
   const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'Detalhamento');
   const bytes=XLSX.write(book,{type:'array',bookType:'xlsx',compression:false});
   await rpc('execute'); // Do not return data if the user's access was revoked during generation.
-  return new Response(bytes,{headers:{'content-type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','cache-control':'no-store'}});
+  return new Response(bytes,{headers:{'content-type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','content-length':String(bytes.byteLength),'cache-control':'no-store'}});
  }catch(error){
   const code=/^[A-Z_]{1,80}$/.test((error as any)?.code||'')?(error as any).code:'TASK_FAILED';
   return json({ok:false,code},code==='AUTH_INVALID'?401:code==='ACCESS_DENIED'?403:code==='BASE_CHANGED'?409:500);
