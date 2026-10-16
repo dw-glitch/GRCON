@@ -6,7 +6,7 @@ import path from "node:path";
 const VERSION="4.10.38";
 const base="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+VERSION+"/";
 const dir=path.resolve("assets/vendor/pdfjs");
-const files=[["pdf.min.mjs","pdf.min.js"],["pdf.worker.min.mjs","pdf.worker.min.js"]];
+const files=[["pdf.min.mjs","pdf.min.mjs"],["pdf.worker.min.mjs","pdf.worker.min.mjs"]];
 async function fetchFile(from,to){
   const target=path.join(dir,to);
   try{const existing=await readFile(target);if(existing.byteLength>100000){console.log("PDF.js preparado:",to,createHash("sha256").update(existing).digest("hex"));return;}}catch(_){}
