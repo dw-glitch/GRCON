@@ -6,9 +6,11 @@ O banco limita o cadastro master a uma linha. Nenhuma rota do aplicativo, Edge F
 
 A conta master já foi identificada e vinculada no banco de produção durante esta implantação. As migrações de estrutura não contêm identificadores pessoais nem concedem master em instalações novas. Se o registro estiver vazio ou a verificação falhar, as ações privilegiadas ficam bloqueadas.
 
-Somente master tem o atalho **Administração de usuários** no cabeçalho. A tela concentra criação de contas, edição de nome e função, ativação e desativação, alteração de senhas, convites pendentes e atividades. Não há opção master no seletor. A própria conta master aparece protegida e não pode ser rebaixada, desativada ou ter a senha redefinida por esses fluxos. A troca da própria senha continua no menu pessoal.
+Somente master tem o atalho **Administração** no cabeçalho. Ele abre uma tela inteira com navegação entre **Usuários e acessos**, **Contratos**, **Tarefas**, **Painel técnico** e **Registro de atividades**. Os três atalhos anteriores não são montados para o master. Usuários e acessos concentra criação de contas, edição de nome e função, ativação e desativação, alteração de senhas e convites pendentes. A criação de contratos foi retirada do menu pessoal e fica na seção Contratos. Não há opção master no seletor. A própria conta master aparece protegida e não pode ser rebaixada, desativada ou ter a senha redefinida por esses fluxos. A troca da própria senha continua no menu pessoal.
 
-Outros usuários não recebem o conteúdo da tela. O menu da conta mantém a lista da equipe apenas para consulta, sem edição de perfil ou ações administrativas. A função especial aparece somente para o próprio master; os vínculos públicos continuam sendo `owner`.
+Tarefas e diagnósticos são renderizados dentro da mesma tela, sem abrir outra janela por cima. O seletor de contrato administrado não altera o contrato operacional do aplicativo; tarefas enviadas continuam vinculadas ao contrato operacional. O painel técnico apresenta todos os contratos. A atualização automática é interrompida ao sair da seção ou fechar a tela, e respostas antigas não repovoam a seção depois da navegação.
+
+Outros usuários não recebem o conteúdo da tela. O atalho operacional Tarefas continua disponível para a equipe, sem diagnósticos nem administração. A abertura programática também exige validação master; sair da conta, perder a capacidade ou trocar de contrato fecha a tela e limpa o conteúdo privilegiado. O menu da conta mantém a lista da equipe apenas para consulta, sem edição de perfil ou ações administrativas. A função especial aparece somente para o próprio master; os vínculos públicos continuam sendo `owner`.
 
 ## Controles no servidor
 
@@ -21,6 +23,6 @@ Outros usuários não recebem o conteúdo da tela. O menu da conta mantém a lis
 
 ## Validação
 
-`npm test` inclui testes PostgreSQL com PGlite para unicidade, autorização, escritas diretas, conta protegida, login, convites e retenção. `scripts/validar-master-owner-browser.cjs` testa o fluxo visual com dados fictícios, incluindo edição de proprietário comum, senha, criação de conta, limpeza de senha temporária e remoção completa da tela ao revogar a capacidade.
+`npm test` inclui testes PostgreSQL com PGlite para unicidade, autorização, escritas diretas, conta protegida, login, convites e retenção. `scripts/validar-master-owner-browser.cjs` testa o fluxo visual com dados fictícios, incluindo entrada única, navegação das cinco seções, tarefas e diagnóstico embutidos, isolamento do contrato operacional, edição de proprietário comum, senha, criação de conta, limpeza de senha temporária, layouts de notebook e remoção completa da tela ao revogar a capacidade ou sair da conta. Também verifica bloqueio da abertura programática para owner/admin/operator/viewer e preservação das tarefas operacionais da equipe.
 
 A validação do banco de produção usa transação com rollback: comprova a permissão master, a edição de um proprietário comum e os bloqueios, sem manter alterações nos colaboradores nem apagar histórico.

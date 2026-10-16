@@ -1368,15 +1368,6 @@
           <label><span>Contrato</span><select id="grcon-contract-select" aria-label="Selecionar contrato"></select></label>
           <small>Perfil de regras: <strong id="grcon-contract-rule-profile">—</strong></small>
         </section>
-        <details class="grcon-contract-create" id="grcon-contract-create" hidden>
-          <summary>Novo contrato</summary>
-          <form id="grcon-contract-create-form">
-            <label><span>Código</span><input id="grcon-contract-new-code" maxlength="60" placeholder="Ex.: HDT" required></label>
-            <label><span>Nome</span><input id="grcon-contract-new-name" maxlength="160" placeholder="Nome do contrato/unidade" required></label>
-            <button class="primary-button compact" type="submit">Criar contrato</button>
-          </form>
-          <small>Novos contratos são criados isolados e sem herdar regras específicas da UHDT-D.</small>
-        </details>
         <div class="grcon-cloud-sync-line"><i></i><span id="grcon-cloud-sync-label">Histórico sincronizado</span></div>
         <div class="grcon-cloud-members" id="grcon-cloud-members"></div>
         <footer><button class="secondary-button compact" id="grcon-cloud-change-password" type="button">Alterar senha</button><button class="secondary-button compact" id="grcon-cloud-copy-link" type="button">Copiar link</button><button class="secondary-button compact" id="grcon-cloud-signout" type="button">Sair</button></footer>
@@ -1388,7 +1379,6 @@
     $("#grcon-cloud-copy-link").addEventListener("click", copyAppLink);
     $("#grcon-cloud-change-password").addEventListener("click", () => { closeAccountMenu(); openPasswordChange({ recovery: false }); });
     $("#grcon-contract-select").addEventListener("change", (event) => { void switchContract(event.currentTarget.value); });
-    $("#grcon-contract-create-form").addEventListener("submit", createContract);
     document.addEventListener("click", (event) => {
       if (!container.contains(event.target)) closeAccountMenu();
     });

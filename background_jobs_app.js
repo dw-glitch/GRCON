@@ -2,7 +2,7 @@
  'use strict';
  const cloud=()=>root.GrconCloud, $=s=>document.querySelector(s), master=()=>Boolean(cloud()?.isMasterOwner?.());
  const completedImports=new Set();
- const state={jobs:[],open:false,technical:false,ticket:0,timer:null};
+ const state={jobs:[],open:false,technical:false,ticket:0,timer:null,embedded:false,workspace:null};
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const labels={uploading:'Recebendo dados',queued:'Na fila',running:'Em andamento',retry_wait:'Nova tentativa agendada',succeeded:'Concluída',failed:'Falhou',needs_review:'Conferir entrega',cancelled:'Cancelada'};
  const notify=(text,kind='info')=>root.GrconNotify?.(text,kind);
@@ -10,7 +10,7 @@
  function available(){return Boolean(cloud()?.state?.session?.user?.id&&cloud()?.state?.membership?.workspace_id&&cloud()?.state?.client?.auth?.getSession&&cloud()?.state?.online!==false);}
  async function api(action,{method='GET',data,id,bodyText,metadata}={}){
   const client=cloud()?.state?.client;if(!client)throw new Error('Entre no GRCON para continuar.');
-  const identity=context(),workspace=cloud().state.membership?.workspace_id;
+  const identity=context(),workspace=(action!=='submit'&&state.workspace)||cloud().state.membership?.workspace_id;
   const {data:sessionData,error}=await client.auth.getSession();
   const token=sessionData?.session?.access_token;
   if(error||!token||identity!==context())throw new Error('A sessão mudou. Entre novamente.');
@@ -23,34 +23,47 @@
  function permissions(){
   state.ticket++;clearTimeout(state.timer);
   if(!cloud()?.state?.session?.user?.id||!cloud()?.state?.membership?.workspace_id){
-   $('#grcon-tasks-shortcut')?.remove();$('#grcon-technical-shortcut')?.remove();$('#grcon-jobs-dialog')?.close();$('#grcon-jobs-dialog')?.remove();state.open=false;state.jobs=[];return;
+   unmount();$('#grcon-tasks-shortcut')?.remove();$('#grcon-technical-shortcut')?.remove();$('#grcon-jobs-dialog')?.close();$('#grcon-jobs-dialog')?.remove();return;
   }
-  install();if(!$('#grcon-tasks-shortcut'))return;
-  if(master()&&!$('#grcon-technical-shortcut')){
-   const button=document.createElement('button');button.id='grcon-technical-shortcut';button.type='button';button.className='secondary-button compact';button.textContent='Painel técnico';$('#grcon-tasks-shortcut').after(button);button.addEventListener('click',()=>void open(true));
+  install();
+  $('#grcon-technical-shortcut')?.remove();
+  if(master())$('#grcon-tasks-shortcut')?.remove();
+  else if(!$('#grcon-tasks-shortcut')){
+   const host=$('.runtime-status');if(host){const button=document.createElement('button');button.id='grcon-tasks-shortcut';button.type='button';button.className='secondary-button compact';button.textContent='Tarefas';host.insertBefore(button,$('#grcon-cloud-account'));button.addEventListener('click',()=>void open(false));}
   }
-  if(!master()){$('#grcon-technical-shortcut')?.remove();if(state.technical){state.open=false;$('#grcon-jobs-content')?.replaceChildren();$('#grcon-jobs-dialog')?.close();state.technical=false;}}
+  if(!master()&&(state.technical||state.embedded)){unmount();$('#grcon-jobs-dialog')?.close();}
   if(state.open)void refresh();
  }
  function install(){
-  if($('#grcon-tasks-shortcut'))return;
-  const host=$('.runtime-status');if(!host)return;
-  const button=document.createElement('button');button.id='grcon-tasks-shortcut';button.type='button';button.className='secondary-button compact';button.textContent='Tarefas';host.insertBefore(button,$('#grcon-cloud-account'));button.addEventListener('click',()=>void open(false));
-  document.body.insertAdjacentHTML('beforeend','<dialog id="grcon-jobs-dialog" aria-labelledby="grcon-jobs-title"><header><div><h2 id="grcon-jobs-title">Tarefas em segundo plano</h2><p id="grcon-jobs-help"></p></div><button type="button" data-jobs-close>Voltar ao GRCON</button></header><div class="grcon-jobs-actions"><button type="button" data-jobs-refresh>Atualizar</button><span id="grcon-jobs-feedback" role="status" aria-live="polite"></span></div><div id="grcon-jobs-content"></div></dialog>');
-  const dialog=$('#grcon-jobs-dialog');dialog.addEventListener('close',()=>{if(dialog.open)return;state.open=false;state.ticket++;clearTimeout(state.timer);$('#grcon-jobs-content')?.replaceChildren();});
-  dialog.addEventListener('click',event=>{
-   if(event.target.closest('[data-jobs-close]'))dialog.close();
+  if($('#grcon-jobs-dialog'))return;
+  document.body.insertAdjacentHTML('beforeend','<dialog id="grcon-jobs-dialog" aria-labelledby="grcon-jobs-title"><header><div><h2 id="grcon-jobs-title">Tarefas em segundo plano</h2><p id="grcon-jobs-help"></p></div><button type="button" data-jobs-close>Voltar ao GRCON</button></header><div id="grcon-jobs-view"><div class="grcon-jobs-actions"><button type="button" data-jobs-refresh>Atualizar</button><span id="grcon-jobs-feedback" role="status" aria-live="polite"></span></div><div id="grcon-jobs-content"></div></div></dialog>');
+  const dialog=$('#grcon-jobs-dialog');dialog.addEventListener('close',()=>{if(!dialog.open&&!state.embedded)unmount();});
+  dialog.querySelector('[data-jobs-close]').addEventListener('click',()=>dialog.close());
+  $('#grcon-jobs-view').addEventListener('click',event=>{
    if(event.target.closest('[data-jobs-refresh]'))void refresh();
    const download=event.target.closest('[data-job-download]'),retry=event.target.closest('[data-job-retry]');
    if(download)void downloadJob(download.dataset.jobDownload);
    if(retry)void api('retry',{method:'POST',id:retry.dataset.jobRetry}).then(()=>refresh()).catch(error=>notify(error.message,'error'));
   });
  }
+ function unmount(){
+  state.open=false;state.ticket++;clearTimeout(state.timer);state.timer=null;
+  state.jobs=[];state.embedded=false;state.workspace=null;state.technical=false;
+  $('#grcon-jobs-content')?.replaceChildren();
+  if($('#grcon-jobs-view'))$('#grcon-jobs-dialog')?.append($('#grcon-jobs-view'));
+ }
+ function mount(container,{technical=false,workspace=null}={}){
+  if(!master()||!container?.isConnected)return;
+  install();unmount();$('#grcon-jobs-dialog').close();
+  container.append($('#grcon-jobs-view'));state.open=true;state.embedded=true;state.technical=technical;state.workspace=workspace;
+  void refresh();
+ }
  async function open(technical=false){
-  if(technical&&!await cloud()?.refreshMasterOwner?.()){permissions();return;}
-  install();if(!$('#grcon-jobs-dialog'))return;state.open=true;state.technical=technical;
-  $('#grcon-jobs-title').textContent=technical?'Painel técnico do proprietário master':'Tarefas em segundo plano';
-  $('#grcon-jobs-help').textContent=technical?'Saúde dos serviços, processamento e falhas. Acesso exclusivo do proprietário master.':'As tarefas continuam no servidor após fechar esta tela ou o navegador. Os resultados permanecem disponíveis aqui.';
+  if(master())return root.GrconAdministration?.open(technical?'technical':'tasks');
+  if(technical){permissions();return;}
+  install();if(!$('#grcon-jobs-dialog'))return;unmount();state.open=true;
+  $('#grcon-jobs-title').textContent='Tarefas em segundo plano';
+  $('#grcon-jobs-help').textContent='As tarefas continuam no servidor após fechar esta tela ou o navegador. Os resultados permanecem disponíveis aqui.';
   $('#grcon-jobs-dialog').showModal();await refresh();
  }
  function table(jobs){
@@ -67,7 +80,7 @@
   const ticket=++state.ticket,identity=context();$('#grcon-jobs-feedback').textContent='Atualizando…';
   try{
    const result=await api(state.technical?'technical':'list');
-   if(ticket!==state.ticket||identity!==context()||!state.open||state.technical&&!master())return;
+   if(ticket!==state.ticket||identity!==context()||!state.open||(state.technical||state.embedded)&&!master())return;
    state.jobs=result.jobs||[];$('#grcon-jobs-content').innerHTML=state.technical?technical(result):table(state.jobs);$('#grcon-jobs-feedback').textContent='Atualizado agora';
    if(state.jobs.some(j=>!['succeeded','failed','needs_review','cancelled'].includes(j.status))||state.technical)state.timer=setTimeout(()=>void refresh(),8000);
    for(const job of state.jobs.filter(j=>j.kind==='sigem_import'&&j.status==='succeeded'&&!completedImports.has(j.id))){completedImports.add(job.id);const query=root.GrconSharedSigemQuery;void(query?.completeBackgroundPublication?.()||query?.refreshLatest?.())?.catch(()=>{});}
@@ -91,7 +104,7 @@
  async function downloadJob(id){
   try{const blob=await api('download',{id}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=state.jobs.find(j=>j.id===id)?.output_name||'GRCON_Resultado.xlsx';document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}catch(error){notify(error.message,'error');}
  }
- for(const event of ['grcon:cloud-ready','grcon:cloud-signed-out','grcon:permissions-changed','grcon:contract-context-changed'])root.addEventListener(event,permissions);
- root.GrconBackgroundJobs=Object.freeze({submit,open,refresh,available,state});
+ for(const event of ['grcon:cloud-ready','grcon:cloud-signed-out','grcon:permissions-changed','grcon:contract-context-changed'])root.addEventListener(event,()=>{if(event==='grcon:contract-context-changed')unmount();permissions();});
+ root.GrconBackgroundJobs=Object.freeze({submit,open,refresh,mount,unmount,available,state});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',permissions,{once:true});else permissions();
 })(window);
