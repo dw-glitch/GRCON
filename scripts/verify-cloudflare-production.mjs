@@ -49,7 +49,7 @@ verifiedAssets.push('grcon_service_worker.js');
 verifiedAssets.push('grcon_file_access.js');
 verifiedAssets.push('egrdt_email_reply.js', 'egrdt_email_reply_ui.js', 'egrdt-email-reply.css');
 verifiedAssets.push('background_jobs_app.js','background-jobs.css');
-verifiedAssets.push('docx-pdf.css','docx_pdf_core.js','docx_pdf_app.js');
+verifiedAssets.push('docx-pdf.css','docx_pdf_core.js','docx_pdf_app.js','assets/vendor/pdfjs/pdf.min.js','assets/vendor/pdfjs/pdf.worker.min.js');
 verifiedAssets.push('posting_conference_core.js', 'posting_conference_refinement.js', 'posting_conference_app.js', 'posting_conference_report.js', 'posting-conference.css');
 verifiedAssets.push('performance_workers.js', 'operation_tasks.js', 'operation_progress.js', 'operation_progress.css', 'workers/data.worker.js', 'consultation_index.js', 'data_exports.js', 'emission_dashboard_report.js', 'allocation_dashboard_app.js', 'allocation_registry_app.js', 'planned_documents_app.js', 'requests_control_app.js', 'sigem_posting_central_app.js', 'sigem_status_monitoring_app.js', 'history_report_worker.js', 'retomar.js', 'grcon_module_loader.js', 'workspace.js', 'react-dist/consultas-app.js', 'react-dist/historico-egrdt-app.js', 'react-dist/pdf-tools-app.js', 'react-dist/cover-document-app.js');
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
