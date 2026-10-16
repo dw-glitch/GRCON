@@ -16,7 +16,7 @@
       '<div class="docx-pdf-grid"><section class="docx-pdf-panel" aria-labelledby="docx-pdf-upload-title">'+
       '<div class="docx-pdf-panel-heading"><div><span>ETAPA 1</span><h3 id="docx-pdf-upload-title">Selecionar documentos</h3></div><span class="docx-pdf-format-chip">PDF → DOCX</span></div>'+
       '<div id="docx-pdf-drop" class="docx-pdf-drop" role="button" tabindex="0" aria-label="Selecionar documentos PDF ou arrastar arquivos"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7zM14 3v5h5M12 11v7M9 14h6"/></svg><strong>Arraste os arquivos PDF aqui</strong><span>ou clique para escolher no computador</span><small>Até 12 documentos · 20 MB por arquivo · 70 MB por lote</small></div>'+
-      '<input id="docx-pdf-input" type="file" accept=".pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden>'+
+      '<input id="docx-pdf-input" type="file" accept=".pdf,application/pdf" multiple hidden>'+
       '<div class="docx-pdf-files-heading"><strong>Arquivos selecionados</strong><button class="secondary-button compact" type="button" id="docx-pdf-clear">Limpar lista</button></div>'+
       '<ul id="docx-pdf-list" class="docx-pdf-list" aria-live="polite"></ul></section>'+
       '<aside class="docx-pdf-panel docx-pdf-settings" aria-labelledby="docx-pdf-options-title"><div class="docx-pdf-panel-heading"><div><span>ETAPA 2</span><h3 id="docx-pdf-options-title">Gerar DOCX</h3></div></div>'+
@@ -53,7 +53,7 @@
   function addFiles(fileList){
     if(!fileList||state.busy)return;
     const files=Array.from(fileList);
-    const invalid=files.filter(f=>!/\.docx$/i.test(f.name)||f.size>root.GrconDocxPdfCore.MAX_INPUT||f.size<=0);
+    const invalid=files.filter(f=>!/\.pdf$/i.test(f.name)||f.size>root.GrconDocxPdfCore.MAX_INPUT||f.size<=0);
     if(invalid.length)notify("Somente arquivos PDF válidos, entre 1 byte e 20 MB, são aceitos.","error");
     const accepted=files.filter(f=>!invalid.includes(f));
     let repeated=0;
