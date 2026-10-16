@@ -32,6 +32,12 @@ assert.match(html, /id="cover-document-module"[^>]+aria-label="Adicionar Capa"/)
 assert.match(html, /id="grdt-reissue-module"[^>]+aria-label="Repostagem de GRDT"/);
 assert.match(html, /class="additional-tool-card" data-grcon-view="pdf-tools"/);
 assert.match(html, /class="additional-tool-card" data-grcon-view="cover-document"/);
+assert.match(html, /class="additional-tool-card" data-grcon-view="docx-to-pdf"/);
+assert.match(html, /id="docx-to-pdf-module"[^>]+aria-label="Converter DOCX em PDF"/);
+assert.match(loader, /"docx-to-pdf": \["zip", "pdf-lib.min.js", "docx_pdf_core.js", "docx_pdf_app.js"\]/);
+assert.match(loader, /"docx-to-pdf": "docx-to-pdf-module"/);
+assert.match(loader, /"docx-to-pdf": "Converter DOCX em PDF"/);
+assert.match(loader, /GrconDocxPdfUi\?\.activate/);
 assert.doesNotMatch(html, /class="additional-tool-card" data-grcon-view="grdt-reissue"/);
 assert.match(html, /id="pdf-tools-module"/);
 assert.match(html, /id="cover-document-module"/);
