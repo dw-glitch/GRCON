@@ -1,0 +1,44 @@
+name: QA — Conversor DOCX para PDF
+
+on:
+  pull_request:
+    paths:
+      - 'docx_pdf_*.js'
+      - 'docx-pdf.css'
+      - 'grcon_module_loader.js'
+      - 'index.html'
+      - 'scripts/validar-docx-pdf-browser.cjs'
+      - '.github/workflows/docx-pdf-qa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docx_pdf_*.js'
+      - 'docx-pdf.css'
+      - 'grcon_module_loader.js'
+      - 'index.html'
+      - 'scripts/validar-docx-pdf-browser.cjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Dependências
+        run: npm ci --ignore-scripts
+      - name: Instalar ambiente de teste Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Conversão real e navegação
+        run: |
+          node scripts/validar-docx-pdf-browser.cjs
+          node tests/additional_tools_navigation.cjs
