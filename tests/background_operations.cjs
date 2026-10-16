@@ -65,7 +65,9 @@ const {randomUUID}=require('node:crypto');
    sends++;return delivery(sends);
   };
   const env={SUPABASE_URL:'https://db.test',SUPABASE_SECRET_KEY:'sb_secret_test',POWER_AUTOMATE_EGRDT_WEBHOOK_URL:'https://test.logic.azure.com/webhook',GRCON_DOCUMENTS:{get:async k=>objects.has(k)?{json:async()=>JSON.parse(objects.get(k))}:null,head:async k=>objects.has(k)?{}:null,put:async(k,v)=>objects.set(k,v)}};
-  const step={do:async(name,options,fn)=>(fn||options)(),sleep:async()=>sleeps++};
+  // Production validates StepConfig before registering the step. Local Miniflare
+  // fills a missing retry delay, which previously hid this rejection in tests.
+  const step={do:async(name,options,fn)=>{if(options?.retries)assert.notEqual(options.retries.delay,undefined,'Cloudflare WorkflowStepConfig.retries.delay is required, including limit:0');return (fn||options)();},sleep:async()=>sleeps++};
   const result=await runJob(env,{id:job.id,generation:0},step,async()=>new Uint8Array([1,2,3]));return {result,changes,sends,sleeps,objects};
  }
  try{

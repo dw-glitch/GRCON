@@ -161,7 +161,7 @@ export async function runJob(env,params,step,buildReport){
    if(!prepared.alreadySent){
     let sent=false;deliveryStarted=true;
     for(let attempt=0;attempt<5;attempt++){
-     const result=await step.do(`deliver-${attempt}`,{retries:{limit:0},timeout:'1 minute'},async()=>{
+     const result=await step.do(`deliver-${attempt}`,{retries:{limit:0,delay:'1 second',backoff:'constant'},timeout:'1 minute'},async()=>{
       await authorize();
       const flow=env.POWER_AUTOMATE_EGRDT_WEBHOOK_URL;
       if(!Teams.isAllowedFlowUrl(flow))return {retry:true,code:'FLOW_UNAVAILABLE'};
