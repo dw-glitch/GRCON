@@ -236,6 +236,21 @@
       emit(); return state.shared;
     } finally { state.busy = false; }
   }
+  async function completeBackgroundPublication() {
+    const workspace = cloud()?.state?.membership?.workspace_id;
+    const local = state.local;
+    await refreshLatest();
+    if (!local || state.local !== local || cloud()?.state?.membership?.workspace_id !== workspace
+      || !state.shared?.meta?.checksum) return;
+    const digest = await root.crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(local.records)));
+    const checksum = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
+    if (state.local !== local || cloud()?.state?.membership?.workspace_id !== workspace
+      || checksum !== state.shared?.meta?.checksum) return;
+    state.local = null;
+    try { await (await runtime()).kvSet(`local-sigem-query:${workspace}`, null); }
+    catch (_) { /* A base compartilhada continua sendo a fonte oficial. */ }
+    emit();
+  }
   async function listVersions() {
     const workspace = cloud()?.state?.membership?.workspace_id;
     if (!workspace || !cloud()?.state?.online) return [];
@@ -346,7 +361,7 @@
       root.dispatchEvent(new CustomEvent("grcon:shared-sigem-metadata-invalidated"));
     }
   });
-  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, canManageHistory, parseFile, setLocal, publish, setReferenceDate, listVersions, loadSnapshot, activateVersion, deleteVersion,
+  root.GrconSharedSigemQuery = Object.freeze({ state, current, refresh, refreshLatest, reset, canPublish, canManageHistory, parseFile, setLocal, publish, completeBackgroundPublication, setReferenceDate, listVersions, loadSnapshot, activateVersion, deleteVersion,
     context: () => state.context,
     sourceLabel: (source) => ({ "shared-general-query": "Consulta Geral compartilhada", "local-general-query": "Consulta Geral local", "legacy-fallback": "LD / Colar SIGEM", manual: "Manual" })[source] || "LD / Colar SIGEM",
     resolveSigemStatus: (document, revision, fallback) => Core.resolve(document, revision, state.context, fallback) });

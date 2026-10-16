@@ -8,6 +8,7 @@ async function scenario({ broken = false, switchContract = false } = {}) {
   let active = 0, peak = 0, pageCalls = 0;
   const metrics = [];
   const root = {
+    crypto: require('node:crypto').webcrypto,
     GrconSharedSigemQueryCore: Query,
     GrconCloud: { state: { membership: { workspace_id: 'QA', role: 'owner' }, online: true } },
     GRCONModuleLoader: { ensure: async () => {} },
@@ -36,7 +37,7 @@ async function scenario({ broken = false, switchContract = false } = {}) {
     return { data };
   } };
   vm.runInNewContext(fs.readFileSync(require.resolve('../shared_sigem_query_app.js'), 'utf8'), {
-    window: root, console, performance, setTimeout, clearTimeout, setInterval() {},
+    window: root, console, performance, TextEncoder, setTimeout, clearTimeout, setInterval() {},
     CustomEvent: class { constructor(type, { detail }) { this.type = type; this.detail = detail; } },
   });
   const started = performance.now();
@@ -60,6 +61,16 @@ async function scenario({ broken = false, switchContract = false } = {}) {
   const historic = await api.loadSnapshot('v1', [version]);
   assert.equal(historic.records.at(-1).document, `QA-${total}`);
   assert.equal(pageCalls, before + 21);
+  api.state.shared = result;
+  version.metadata.checksum = require('node:crypto').createHash('sha256').update(JSON.stringify(result.records)).digest('hex');
+  api.state.shared.meta.checksum = version.metadata.checksum;
+  api.state.local = { records: result.records, meta: { importedAt: 'local-1' } };
+  await api.completeBackgroundPublication();
+  assert.equal(api.state.local, null, 'a prévia publicada em segundo plano deixa de aparecer como pendente de publicação');
+  const anotherPreview = { records: [result.records[0]], meta: { importedAt: 'local-2' } };
+  api.state.local = anotherPreview;
+  await api.completeBackgroundPublication();
+  assert.equal(api.state.local, anotherPreview, 'uma prévia nova não pode ser apagada pela conclusão de outra tarefa');
   console.log(`shared_sigem_parallel_download: 20,001 ordered records, max 4 requests, ${Math.round(performance.now() - started)} ms including indexing + historical read`);
 }
 (async () => {

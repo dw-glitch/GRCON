@@ -271,7 +271,7 @@
     if (state.busy || !root.GrconSharedSigemQuery.state.local) return;
     setBusy(true, "Publicando Consulta Geral para a equipe…");
     try {
-      if (root.GrconBackgroundJobs && root.GrconCloud?.state?.session?.access_token) {
+      if (root.GrconBackgroundJobs?.available?.()) {
         await root.GrconBackgroundJobs.submit("sigem_import", root.GrconSharedSigemQuery.state.local);
         return;
       }
@@ -685,7 +685,7 @@
     if (query?.state.shared) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.stale ? "Consulta Geral compartilhada em cache; pode estar desatualizada." : "Consulta Geral compartilhada em uso." }));
     if (query?.state.error) el("pc-base-card").appendChild(Object.assign(document.createElement("small"), { textContent: query.state.error }));
     el("pc-export").disabled = state.busy || !documentRows().length;
-    el("pc-check-background").hidden = !root.GrconBackgroundJobs || !root.GrconCloud?.state?.session?.access_token;
+    el("pc-check-background").hidden = !root.GrconBackgroundJobs?.available?.();
     el("pc-check-background").disabled = state.busy || !documentRows().length;
   }
 
@@ -721,7 +721,7 @@
         workspaceId: root.GrconCloud?.state?.membership?.workspace_id,
         baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt,
       };
-      if (rows.length <= 10000 && root.GrconBackgroundJobs && root.GrconCloud?.state?.session?.access_token) {
+      if (rows.length <= 10000 && root.GrconBackgroundJobs?.available?.()) {
         await root.GrconBackgroundJobs.submit("conference_report", { rows, options: reportOptions });
         return;
       }
