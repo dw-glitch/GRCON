@@ -25,7 +25,11 @@ const { chromium } = require('playwright');
     const video = page.locator('#grcon-mascot-idle-dance video');
     assert.equal(await video.evaluate(v => v.muted && v.loop && !v.paused), true);
     const box = await page.locator('#grcon-mascot-idle-dance').boundingBox();
-    assert.ok(box.x > 1200 && box.y > 650 && box.x + box.width <= 1440 && box.y + box.height <= 900);
+    const headerBox = await page.locator('#grcon-context-mascot').boundingBox();
+    assert.deepEqual(box, headerBox, 'dance occupies exactly the existing header mascot');
+    assert.ok(box.y < 140, 'dance remains inside header');
+    assert.equal(await page.locator('#grcon-context-mascot > #grcon-mascot-idle-dance').count(), 1);
+    assert.equal(await page.locator('#grcon-context-mascot > .grcon-mascot-stage').evaluate(v => getComputedStyle(v).visibility), 'hidden', 'static mascot hidden while dancing');
     assert.equal(await video.evaluate(v => getComputedStyle(v.parentElement).pointerEvents), 'none');
     const alpha = await video.evaluate(v => {
       const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -43,6 +47,7 @@ const { chromium } = require('playwright');
     for (const event of ['pointermove', 'keydown', 'wheel', 'pointerdown', 'touchstart', 'focusin']) {
       await page.evaluate(type => window.dispatchEvent(new Event(type)), event);
       assert.equal((await state()).active, false, event + ' must hide immediately');
+      assert.equal(await page.locator('#grcon-context-mascot > .grcon-mascot-stage').evaluate(v => getComputedStyle(v).visibility), 'visible', 'original header mascot returns');
       await page.clock.runFor(120_100);
       await page.waitForFunction(() => window.GrconMascotIdleDance.diagnostics().active);
     }
@@ -67,6 +72,6 @@ const { chromium } = require('playwright');
     assert.equal((await state()).active, false, 'modal opening hides dance');
     assert.equal(await page.locator('#grcon-mascot-idle-dance').count(), 1);
     assert.deepEqual(errors, []);
-    console.log('Idle dance: delay, alpha, corner position, lazy loading, activity, preferences, processing, modal and reduced motion OK');
+    console.log('Idle dance: delay, alpha, same header position and single visible mascot, lazy loading, activity, preferences, processing, modal and reduced motion OK');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

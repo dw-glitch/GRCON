@@ -95,13 +95,14 @@
     "backgroundRemoval": "Offline magenta matte, smooth alpha and edge decontamination; no runtime chroma key",
     "sourceUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_3JPlmNBUEodLWC5zqz9TRYPqweG/hf_20261016_162947_56ab7174-04f6-414b-9c2e-fded35f45e96.mp4",
     "idleAfterMs": 120000,
+    "presentation": "Replaces the static mascot inside its existing header container",
     "validation": {
       "browser": "Chromium",
       "passed": [
         "two-minute inactivity deadline",
         "lazy video loading",
         "actual decoded alpha",
-        "lower-right positioning",
+        "same header mascot positioning, single visible character",
         "immediate dismissal on interaction",
         "animation preference",
         "reduced motion",

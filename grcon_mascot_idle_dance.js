@@ -1,4 +1,4 @@
-/* GRCON — dança silenciosa com alfa real, somente após inatividade. */
+/* GRCON — dança silenciosa com alfa real, no próprio mascote do cabeçalho, após inatividade. */
 (function (root) {
   "use strict";
   if (root.GrconMascotIdleDance) return;
@@ -23,6 +23,7 @@
       !document.documentElement.classList.contains("grcon-cloud-pending") &&
       root.GrconMascot?.isEnabled?.() === true && runtime?.ready === true &&
       runtime.state === "idle" && runtime.activeOperations === 0 &&
+      Boolean(document.querySelector("#grcon-mascot-header-slot #grcon-context-mascot")) &&
       !document.querySelector('dialog[open], [aria-modal="true"]:not([hidden]):not([aria-hidden="true"])');
   }
 
@@ -35,13 +36,13 @@
   }
 
   function ensureVideo() {
-    if (host) return;
+    if (host?.isConnected) return;
     const style = document.createElement("style");
     style.textContent = [
       "#" + ID + "[hidden]{display:none!important}",
-      "#" + ID + "{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));width:clamp(140px,15vw,190px);height:clamp(140px,15vw,190px);z-index:310;pointer-events:none;user-select:none;background:transparent;border:0;box-shadow:none}",
-      "#" + ID + " video{display:block;width:100%;height:100%;object-fit:contain;background:transparent;pointer-events:none}",
-      "html[data-grcon-mascot-idle-dance='active'] #grcon-context-mascot{visibility:hidden!important}",
+      "#" + ID + "{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;user-select:none;background:transparent;border:0;box-shadow:none}",
+      "#" + ID + " video{display:block;width:100%;height:100%;object-fit:contain;background:transparent;pointer-events:none;opacity:1!important}",
+      "html[data-grcon-mascot-idle-dance='active'] #grcon-context-mascot > .grcon-mascot-stage{visibility:hidden!important}",
       "@media(prefers-reduced-motion:reduce){#" + ID + "{display:none!important}}",
     ].join("\n");
     document.head.appendChild(style);
@@ -61,7 +62,7 @@
     video.setAttribute("disableRemotePlayback", "");
     video.addEventListener("error", () => { failed = true; hide(); });
     host.appendChild(video);
-    document.body.appendChild(host);
+    document.getElementById("grcon-context-mascot").appendChild(host);
   }
 
   function schedule() {
