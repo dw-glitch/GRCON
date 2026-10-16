@@ -15,7 +15,7 @@ const root=process.cwd();
    }
    const file=path.resolve(root,'.'+u.pathname);
    if(!file.startsWith(root+path.sep)||!fs.existsSync(file)){res.writeHead(404);return res.end('404');}
-   res.setHeader('content-type',file.endsWith('.css')?'text/css':'application/javascript');
+   res.setHeader('content-type',/\.m?js$/.test(file)?'application/javascript':'text/css');
    res.end(fs.readFileSync(file));
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
