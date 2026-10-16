@@ -1,0 +1,28 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),XLSX=require('../xlsx.full.min.js');
+require('../core.js');require('../history_core.js');require('../posting_conference_core.js');require('../posting_conference_refinement.js');require('../egrdt_teams_trace_core.js');require('../posting_conference_report.js');
+(async()=>{
+ let handler,kind='conference_report',published=false;const calls=[];
+ const entry=fs.readFileSync('supabase/functions/grcon-background-processor/index.ts','utf8');
+ const vm=require('node:vm'),sandbox=vm.createContext({console,TextEncoder,TextDecoder,URL,structuredClone});
+ for(const match of entry.matchAll(/import '\.\/generated\/([^']+)';/g))vm.runInContext(fs.readFileSync(match[1],'utf8'),sandbox,{filename:match[1]});
+ assert.ok(sandbox.GrconPostingConferenceReport.tabularData,'os mesmos módulos devem inicializar sem require/module, como no Deno');
+ const source=entry.replace(/^import .*;$/gm,'');
+ const javascript=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
+ const fetch=async(url,request)=>{const input=JSON.parse(request.body);calls.push(input);if(input.operation==='import_publish')published=true;return Response.json({id:'00000000-0000-4000-8000-000000000001',kind,status:'running',context:{published}});};
+ new Function('Deno','XLSX','fetch',javascript)({serve:fn=>handler=fn,env:{get:()=> 'https://db.test'}},XLSX,fetch);
+ const request=data=>new Request('https://edge.test',{method:'POST',headers:{apikey:'sb_secret_test','x-grcon-job':'00000000-0000-4000-8000-000000000001','x-grcon-generation':'0','content-type':'application/json'},body:JSON.stringify(data)});
+ assert.equal((await handler(new Request('https://edge.test',{method:'POST',body:'{}'}))).status,401);
+ const history=[{id:'old',egrdtNumber:'GRDT-100',generatedAt:'2026-10-01T12:00:00Z',files:[{document:'DOC-001',revision:'0'},{document:'DOC-002',revision:'0'}]},{id:'new',egrdtNumber:'GRDT-101',generatedAt:'2026-10-03T12:00:00Z',files:[{document:'DOC-001',revision:'A'}]}];
+ const response=await handler(request({reconcile:true,history,records:[{document:'OTHER',revision:'0',status:'Emitido'}],requestedAt:'2026-10-16T12:00:00Z',meta:{referenceDate:'2026-10-16'}}));assert.equal(response.status,200);
+ const book=XLSX.read(await response.arrayBuffer(),{type:'array'}),rows=XLSX.utils.sheet_to_json(book.Sheets.Detalhamento,{range:9});assert.equal(rows.length,2);
+ const older=rows.find(r=>r.Código==='DOC-002'),latest=rows.find(r=>r.Código==='DOC-001');
+ assert.equal(older['Pendência da GRDT'],'Somente este documento pendente');assert.equal(latest['Última eGRDT enviada'],'GRDT-101');assert.equal(latest['Revisões pendentes'],'A');assert.match(latest['Histórico de eGRDTs'],/GRDT-100/);
+ assert.ok(rows[0]['Enviado ao Teams?']);
+ kind='sigem_import';calls.length=0;
+ const base={records:Array.from({length:1200},(_,i)=>({document:'DOC-'+i,revision:'0',status:'Emitido'})),meta:{fileName:'base.xlsx'}};
+ assert.equal((await handler(request(base))).status,200);assert.equal(calls.filter(c=>c.operation==='import_chunk').length,3);assert.equal(calls.filter(c=>c.operation==='import_publish').length,1);
+ calls.length=0;assert.equal((await handler(request(base))).status,200);assert.equal(calls.filter(c=>c.operation==='import_chunk').length,0,'a repetição após publicar não reimporta a base');
+ kind='conference_report';const volume={rows:Array.from({length:10000},(_,i)=>({document:'DOC-'+i,revisionSent:'0',egrdtNumber:'GRDT-100',status:'AGUARDANDO',generatedAt:'2026-10-16T12:00:00Z'})),options:{mode:'events'}};
+ const started=Date.now(),cpu=process.cpuUsage();const large=await handler(request(volume));assert.equal(large.status,200);const bytes=await large.arrayBuffer();const used=process.cpuUsage(cpu);console.log('Background processor: XLSX, latest GRDT scope, canonical columns, imports/replay and 10k rows passed: '+JSON.stringify({ms:Date.now()-started,cpuMs:(used.user+used.system)/1000,bytes:bytes.byteLength}));
+})().catch(e=>{console.error(e);process.exitCode=1});

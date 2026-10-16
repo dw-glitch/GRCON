@@ -2,7 +2,10 @@
   "name": "grcon-cloudflare",
   "keep_vars": true,
   "compatibility_date": "2026-09-24",
-  "main": "./cloudflare/worker-entry.mjs",
+  "main": "./cloudflare/worker-runtime.mjs",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {"enabled": true},
+  "workflows": [{"name": "grcon-tasks", "binding": "GRCON_TASKS", "class_name": "GrconTaskWorkflow"}],
   "vars": {
     "SUPABASE_URL": "https://kvyrttccwzdhasplfxnr.supabase.co",
     "R2_BUCKET_NAME": "grcon-documents",
