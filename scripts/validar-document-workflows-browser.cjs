@@ -335,7 +335,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  assert.match(historyText,/GRDT-220/);
  assert.match(historyText,/GRDT-230/);
  await duplicateRow.locator('td:nth-child(5) summary').click();
- assert.equal(await duplicateRow.locator('td:nth-child(5) .pc-send-event').count(),3,'nenhuma pendência/revisão perdida no histórico');
+ assert.equal(await duplicateRow.locator('td:nth-child(5) .pc-send-event').count(),1,'somente a última GRDT determina a pendência');
  assert.match(await duplicateRow.locator('td:nth-child(5)').textContent(),/Rev. A/);
  const pendingRepeatDownload=page.waitForEvent('download');await page.locator('#pc-export').click();
  await(await pendingRepeatDownload).saveAs(path.join(out,'pendencias-repetidas.xlsx'));
@@ -351,12 +351,20 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  assert.match(onlyRepeat['Histórico de eGRDTs'],/GRDT-230/);
  assert.match(onlyRepeat['Histórico de eGRDTs'],/Rev. 0/);
  assert.match(onlyRepeat['Histórico de eGRDTs'],/Rev. A/);
- assert.equal(onlyRepeat['Revisões pendentes'],'A · 0');
- assert.equal(onlyRepeat['Pendência da GRDT'],'Múltiplas GRDTs com pendências');
- assert.match(onlyRepeat['Detalhamento da pendência'],/GRDT-210/);
- assert.match(onlyRepeat['Detalhamento da pendência'],/GRDT-220/);
- assert.match(onlyRepeat['Detalhamento da pendência'],/GRDT-230/);
+ assert.equal(onlyRepeat['Revisões pendentes'],'A');
+ assert.equal(onlyRepeat['Pendência da GRDT'],'GRDT inteira pendente');
+ assert.doesNotMatch(onlyRepeat['Detalhamento da pendência'],/GRDT-210/);
+ assert.doesNotMatch(onlyRepeat['Detalhamento da pendência'],/GRDT-220/);
+ assert.match(onlyRepeat['Detalhamento da pendência'],/1 de 1/);
  assert.equal(onlyRepeat['Data eGRDT'],'03/10/2026');
+ const olderPending=repeatRows.find(row=>row.Código==='DOC-003');
+ assert.equal(olderPending['Pendência da GRDT'],'Somente este documento pendente',
+   'a repostagem do outro documento impede classificar a GRDT antiga inteira como pendente');
+ await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.filters.grdt='GRDT-210';ui.render();});
+ assert.equal(await page.locator('.pc-pending-documents tbody tr').count(),1,
+   'o filtro da GRDT antiga só mostra o documento que não foi reenviado');
+ assert.doesNotMatch(await page.locator('.pc-pending-documents tbody').textContent(),/DOC-002/);
+ await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.filters.grdt='';ui.render();});
  await page.getByRole('button',{name:'Documentos',exact:true}).click();
  assert.equal(await page.locator('.pc-document-table tbody tr').count(),2);
  assert.match(await page.locator('.pc-document-table tbody tr').filter({hasText:'DOC-002'}).textContent(),/GRDT-230/);
