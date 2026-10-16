@@ -30,7 +30,7 @@
     host.insertBefore(button, $("#grcon-cloud-account"));
     document.body.insertAdjacentHTML("beforeend", `<dialog id="grcon-admin-dialog" aria-labelledby="grcon-admin-title">
       <header><div><small>ÁREA EXCLUSIVA</small><h2 id="grcon-admin-title">Administração</h2><p>Controle de usuários, contratos e operações do GRCON.</p></div><button id="grcon-admin-close" type="button" aria-label="Voltar ao GRCON">Voltar ao GRCON</button></header>
-      <div class="grcon-admin-layout"><nav class="grcon-admin-nav" aria-label="Administração"><button type="button" data-admin-section="users" aria-current="page">Usuários e acessos</button><button type="button" data-admin-section="contracts">Contratos</button><button type="button" data-admin-section="tasks">Tarefas</button><button type="button" data-admin-section="technical">Painel técnico</button><button type="button" data-admin-section="activity">Registro de atividades</button><small>Exclusivo do proprietário master</small></nav><div class="grcon-admin-main">
+      <div class="grcon-admin-layout"><nav class="grcon-admin-nav" aria-label="Administração"><button type="button" data-admin-section="users" aria-current="page">Usuários e acessos</button><button type="button" data-admin-section="contracts">Contratos</button><button type="button" data-admin-section="technical">Painel técnico</button><button type="button" data-admin-section="activity">Registro de atividades</button><small>Exclusivo do proprietário master</small></nav><div class="grcon-admin-main">
       <div class="grcon-admin-toolbar"><label>Contrato administrado<select id="grcon-admin-contract"></select></label></div>
       <p id="grcon-admin-feedback" role="status" aria-live="polite"></p>
       <section data-admin-panel="users" aria-labelledby="grcon-admin-users-title"><h3 id="grcon-admin-users-title" tabindex="-1">Usuários e acessos</h3><div class="grcon-admin-toolbar"><label>Buscar colaborador<input id="grcon-admin-search" type="search" placeholder="Nome ou e-mail"></label><button id="admin-user-new" type="button">Novo usuário</button></div>
@@ -39,7 +39,6 @@
       <details id="grcon-cloud-invitations-panel"><summary>Convites pendentes</summary><div id="grcon-cloud-invitations"></div></details>
       </section><section data-admin-panel="activity" hidden aria-labelledby="grcon-admin-activity-title"><h3 id="grcon-admin-activity-title" tabindex="-1">Registro de atividades</h3><details id="grcon-cloud-audit-panel" open><summary>Registro de atividades</summary><div id="grcon-cloud-audit"></div></details>
       </section><section data-admin-panel="contracts" hidden aria-labelledby="grcon-admin-contracts-title"><h3 id="grcon-admin-contracts-title" tabindex="-1">Contratos e configurações</h3><div id="grcon-admin-contract-settings"><form id="grcon-admin-contract-form"><input id="admin-contract-id" type="hidden"><div class="grcon-admin-grid"><label>Código<input id="admin-contract-code" required maxlength="60"></label><label>Nome<input id="admin-contract-name" required maxlength="160"></label><label>Identificação<input id="admin-contract-display" required maxlength="255"></label><label>Empresa<input id="admin-contract-company" maxlength="100"></label><label>Cliente<input id="admin-contract-client" maxlength="100"></label><label>Local<input id="admin-contract-site" maxlength="100"></label><label>Projeto<input id="admin-contract-project" maxlength="100"></label><label>Perfil de regras<input id="admin-contract-profile" maxlength="100"></label><label><input id="admin-contract-active" type="checkbox"> Contrato ativo</label><label><input id="admin-contract-inherit" type="checkbox"> Usar regras documentais da UHDT</label></div><div class="egrdt-email-actions"><button type="submit">Salvar contrato</button><button id="admin-contract-new" type="button">Novo contrato</button></div><small>Desativar preserva os dados e o histórico. Novos contratos começam com suas próprias configurações.</small></form></div></section>
-      <section data-admin-panel="tasks" hidden aria-labelledby="grcon-admin-tasks-title"><h3 id="grcon-admin-tasks-title" tabindex="-1">Tarefas</h3><p>Acompanhe suas tarefas em segundo plano no contrato selecionado e baixe os resultados.</p><div id="grcon-admin-tasks"></div></section>
       <section data-admin-panel="technical" hidden aria-labelledby="grcon-admin-technical-title"><h3 id="grcon-admin-technical-title" tabindex="-1">Painel técnico</h3><p>Saúde dos serviços, integrações, falhas e tarefas de todos os contratos.</p><div id="grcon-admin-technical"></div></section>
       </div></div>
     </dialog>`);
@@ -130,7 +129,7 @@
     } catch (error) { if (generation === state.generation && $("#grcon-admin-users")) $("#grcon-admin-users").textContent = error.message; }
   }
   async function selectSection(section, focus = true) {
-    if (!master() || !state.open || !["users", "contracts", "tasks", "technical", "activity"].includes(section)) return;
+    if (!master() || !state.open || !["users", "contracts", "technical", "activity"].includes(section)) return;
     root.GrconBackgroundJobs?.unmount?.();
     state.section = section; state.generation++; clearSecrets();
     $("#grcon-admin-editor").hidden = true;
@@ -145,7 +144,7 @@
     if (section === "users") await loadUsers();
     else if (section === "contracts") renderContract();
     else if (section === "activity") { $("#grcon-cloud-audit").textContent = ""; await cloud().loadAuditEvents(state.workspace); }
-    else if (root.GrconBackgroundJobs?.mount) root.GrconBackgroundJobs.mount($("#grcon-admin-" + section), { technical: section === "technical", workspace: state.workspace });
+    else if (section === "technical" && root.GrconBackgroundJobs?.mount) root.GrconBackgroundJobs.mount($("#grcon-admin-technical"), { technical: true, workspace: state.workspace });
   }
   async function open(section = "users") {
     const opening = ++state.opening;
@@ -159,7 +158,7 @@
     $("#grcon-admin-contract").value = state.workspace;
     $("#grcon-admin-search").value = "";
     renderContract(); if (!$("#grcon-admin-dialog").open) $("#grcon-admin-dialog").showModal();
-    await selectSection(["users", "contracts", "tasks", "technical", "activity"].includes(section) ? section : "users");
+    await selectSection(["users", "contracts", "technical", "activity"].includes(section) ? section : "users");
   }
   async function saveContract(event) {
     event.preventDefault(); if (!master() || state.saving) return;
