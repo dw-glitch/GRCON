@@ -1014,3 +1014,39 @@ html[data-theme="dark"] .grcon-admin-password-close:focus-visible {
 #grcon-admin-dialog[aria-busy="true"] { cursor: progress; }
 #grcon-admin-feedback { min-height: 20px; color: var(--text-2, #526574); }
 #admin-user-password { overflow-wrap: anywhere; padding: 12px; border: 1px solid var(--border-1, #94a3b8); }
+
+/* Tela exclusiva: um único ponto de entrada para a administração master. */
+#grcon-admin-dialog { box-sizing: border-box; width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden; font-family: inherit; }
+#grcon-admin-dialog[open] { display: flex; flex-direction: column; }
+#grcon-admin-dialog > header { flex: 0 0 auto; padding: 22px 32px; }
+#grcon-admin-dialog > header button { flex-shrink: 0; background: var(--surface-2, #f5f8fa); color: inherit; }
+.grcon-admin-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+.grcon-admin-nav { display: flex; flex-direction: column; gap: 8px; padding: 24px 16px; border-right: 1px solid var(--border-1, #dce3e8); background: var(--surface-2, #f5f8fa); overflow: auto; }
+#grcon-admin-dialog .grcon-admin-nav button { text-align: left; padding: 13px 14px; background: transparent; color: inherit; border-color: transparent; font: inherit; font-size: 14px; }
+#grcon-admin-dialog .grcon-admin-nav button[aria-current="page"] { color: #07556a; background: #dff1f4; border-color: #a5d2db; font-weight: 700; }
+#grcon-admin-dialog .grcon-admin-nav button:hover { border-color: #82b9c5; }
+.grcon-admin-nav small { margin-top: auto; padding: 20px 14px 0; color: var(--text-2, #526574); line-height: 1.5; }
+.grcon-admin-main { padding: 8px 32px 32px; overflow: auto; min-width: 0; }
+#grcon-admin-dialog .grcon-admin-main > section { margin-top: 0; border-top: 0; padding-top: 0; }
+#grcon-admin-dialog .grcon-admin-main h3 { font-size: 20px; margin: 8px 0 20px; }
+#grcon-admin-dialog button:focus-visible, #grcon-admin-dialog select:focus-visible, #grcon-admin-dialog input:focus-visible { outline: 3px solid #1793ad; outline-offset: 3px; }
+#grcon-admin-dialog .grcon-admin-toolbar > label:only-child { max-width: 420px; }
+#grcon-admin-feedback:empty { display: none; }
+#grcon-admin-dialog .grcon-admin-table-wrap { border: 1px solid var(--border-1, #dce3e8); border-radius: 10px; }
+#grcon-admin-dialog table { font-size: 13px; }
+#grcon-admin-dialog th { background: var(--surface-2, #f5f8fa); font-weight: 600; }
+html[data-theme="dark"] #grcon-admin-dialog .grcon-admin-nav button[aria-current="page"] { background: #163e4b; color: #bbf1fc; border-color: #397685; }
+@media (max-width: 900px) {
+  #grcon-admin-dialog > header { padding: 16px 20px; }
+  .grcon-admin-layout { grid-template-columns: 180px minmax(0, 1fr); }
+  .grcon-admin-main { padding: 8px 20px 24px; }
+  .grcon-admin-nav { padding: 20px 10px; }
+}
+@media (max-width: 600px) {
+  .grcon-admin-layout { display: flex; flex-direction: column; }
+  .grcon-admin-nav { flex-shrink: 0; flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 8px; border-right: 0; border-bottom: 1px solid var(--border-1, #dce3e8); }
+  .grcon-admin-nav small { display: none; }
+  #grcon-admin-dialog > header { align-items: flex-start; gap: 12px; }
+  #grcon-admin-dialog > header h2 { font-size: 21px; }
+  #grcon-admin-dialog > header p { font-size: 12px; }
+}
