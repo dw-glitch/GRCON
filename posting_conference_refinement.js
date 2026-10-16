@@ -125,8 +125,8 @@
   }
 
   function compareSendRecency(left, right) {
-    const byTime = historyTimestamp(right) - historyTimestamp(left);
-    if (Number.isFinite(byTime) && byTime) return byTime;
+    const leftTime = historyTimestamp(left), rightTime = historyTimestamp(right);
+    if (leftTime !== rightTime) return leftTime < rightTime ? 1 : -1;
     const bySequence = egrdtSequence(right && right.egrdtNumber) - egrdtSequence(left && left.egrdtNumber);
     if (bySequence) return bySequence;
     return trimmed(right && right.egrdtNumber).localeCompare(trimmed(left && left.egrdtNumber), "pt-BR", { numeric: true });
@@ -204,10 +204,11 @@
     (rows || []).forEach((row) => {
       const identity = trimmed(row && row.documentIdentity) || Conference.documentIdentity(row && row.document);
       if (!identity) return;
-      let group = groups.get(identity);
+      const scopedIdentity = Conference.latestDocumentKey ? Conference.latestDocumentKey(row) : identity;
+      let group = groups.get(scopedIdentity);
       if (!group) {
         group = { identity, rawRows: [], eventMap: new Map(), exactDuplicateCount: 0 };
-        groups.set(identity, group);
+        groups.set(scopedIdentity, group);
       }
       group.rawRows.push(row);
       const eventKey = sendEventKey(row, Conference);
@@ -216,12 +217,11 @@
     });
 
     return [...groups.values()].map((group) => {
-      const sends = [...group.eventMap.values()].sort(compareSendRecency);
+      const sends = [...group.eventMap.values()].sort(Conference.compareSendRecency || compareSendRecency);
       const latestSend = sends[0] || group.rawRows[0] || {};
       const currentRevision = Conference.normalizeRevision(latestSend.revisionSent);
       const currentRevisionSends = sends.filter((row) => Conference.normalizeRevision(row.revisionSent) === currentRevision);
-      const confirmedCurrent = currentRevisionSends.filter((row) => row.status === Conference.STATUSES.CONFIRMED).sort(compareSendRecency);
-      const current = confirmedCurrent[0] || currentRevisionSends[0] || latestSend;
+      const current = latestSend;
       const revisions = [...new Set(sends.map((row) => Conference.normalizeRevision(row.revisionSent)).filter(Boolean))]
         .sort((a, b) => Conference.revisionRank(a) - Conference.revisionRank(b) || a.localeCompare(b, "pt-BR"));
       const revisionCounts = new Map();
@@ -242,7 +242,7 @@
       return {
         ...latestSend,
         ...current,
-        key: `document::${group.identity}`,
+        key: `document::${latestSend.workspaceId ? trimmed(latestSend.workspaceId) + "::" : ""}${group.identity}`,
         identity: group.identity,
         documentIdentity: group.identity,
         documentRevisionIdentity: `${group.identity}::${currentRevision}`,
@@ -289,31 +289,35 @@
     }).sort((a, b) => compareSendRecency(a.latestSend || a, b.latestSend || b));
   }
 
-  // Uma ocorrência por código documental na lista de pendências, sem apagar
-  // as ocorrências por revisão/eGRDT usadas na auditoria e nos arquivos Excel.
-  // O histórico completo e a última emissão vêm da consolidação geral.
+  // Só o último envio determina pendência. O histórico completo continua em sends.
   function buildPendingDocumentAggregates(pendingEvents, documents, Conference) {
     if (!Conference) return [];
     const known = new Map();
+    const identityOf = row => Conference.latestDocumentKey ? Conference.latestDocumentKey(row)
+      : Conference.documentIdentity(row.document) || row.documentIdentity;
     (documents || []).forEach((document) => {
-      const identity = Conference.documentIdentity(document.document) || document.documentIdentity;
+      const identity = identityOf(document);
       if (identity) known.set(identity, document);
     });
     const grouped = new Map();
     (pendingEvents || []).forEach((event) => {
-      if (!event || event.status === Conference.STATUSES.CONFIRMED) return;
-      const identity = Conference.documentIdentity(event.document) || event.documentIdentity || event.key;
+      if (!event || event.superseded || event.status === Conference.STATUSES.CONFIRMED) return;
+      const identity = identityOf(event) || event.key;
       if (!identity) return;
+      const document = known.get(identity);
+      const latest = document?.latestSend;
+      if (latest && (document.status === Conference.STATUSES.CONFIRMED
+        || sendEventKey(event, Conference) !== sendEventKey(latest, Conference))) return;
       if (!grouped.has(identity)) grouped.set(identity, []);
       grouped.get(identity).push(event);
     });
     return [...grouped].map(([identity, events]) => {
-      const pending = events.slice().sort(compareSendRecency);
+      const pending = events.slice().sort(Conference.compareSendRecency || compareSendRecency).slice(0, 1);
       const document = known.get(identity) || buildDocumentAggregates(events, Conference)[0] || {};
       const newestPending = pending[0];
       return {
         ...document,
-        documentIdentity: identity,
+        documentIdentity: document.documentIdentity || Conference.documentIdentity(document.document),
         pendingEvents: pending,
         pendingEventCount: pending.length,
         pendingGrdtCount: new Set(pending.map(event => Conference.norm(event.egrdtNumber)).filter(Boolean)).size,
@@ -325,7 +329,8 @@
 
   function enrichResult(result, baseRecords, Conference) {
     if (!result || typeof result !== "object") return result;
-    const eventRows = enrichRows(result.eventRows || result.rows || [], baseRecords || [], Conference);
+    const enriched = enrichRows(result.eventRows || result.rows || [], baseRecords || [], Conference);
+    const eventRows = Conference.markLatestSends ? Conference.markLatestSends(enriched) : enriched;
     const documentRows = buildDocumentAggregates(eventRows, Conference);
     const summary = summarizeDocuments(documentRows, Conference);
     const eventSummary = result.eventSummary || result.summary || (Conference.summarize ? Conference.summarize(eventRows) : {});

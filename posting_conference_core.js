@@ -593,40 +593,92 @@
     return AGGREGATE_STATUSES.PENDING;
   }
 
+  // A data do envio prevalece sobre a numeração; empates usam a sequência
+  // da GRDT, nunca a ordem em que o histórico foi carregado.
+  function compareSendRecency(left, right) {
+    const timestamp = row => {
+      const value = parseSourceDate(row && row.generatedAt);
+      return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+    };
+    const leftTime = timestamp(left), rightTime = timestamp(right);
+    if (leftTime !== rightTime) return leftTime < rightTime ? 1 : -1;
+    const number = row => text(row && row.egrdtNumber);
+    const sequence = row => {
+      const value = number(row);
+      const standard = value.match(/-G-(\d+)-(\d{4})(?:\D|$)/i);
+      return standard ? [+standard[2], +standard[1]] : [0, +(value.match(/\d+/g) || []).pop() || 0];
+    };
+    const a = sequence(left), b = sequence(right);
+    return b[0] - a[0] || b[1] - a[1]
+      || number(right).localeCompare(number(left), "pt-BR", { numeric: true })
+      || revisionRank(right && right.revisionSent) - revisionRank(left && left.revisionSent)
+      || text(right && right.key).localeCompare(text(left && left.key));
+  }
+
+  function latestDocumentKey(row) {
+    return `${text(row && row.workspaceId)}::${text(row && row.documentIdentity) || documentIdentity(row && row.document)}`;
+  }
+
+  function sameSend(left, right) {
+    return latestDocumentKey(left) === latestDocumentKey(right)
+      && norm(left.egrdtNumber || left.historyId || left.key) === norm(right.egrdtNumber || right.historyId || right.key)
+      && normalizeRevision(left.revisionSent) === normalizeRevision(right.revisionSent);
+  }
+
+  function markLatestSends(rows) {
+    const latest = new Map();
+    (rows || []).forEach(row => {
+      const identity = latestDocumentKey(row);
+      if (!latest.has(identity) || compareSendRecency(row, latest.get(identity)) < 0) latest.set(identity, row);
+    });
+    return (rows || []).map(row => {
+      // Metadados calculados sobre o histórico completo sobrevivem aos filtros.
+      if (row.latestSendKey) return row;
+      const current = latest.get(latestDocumentKey(row));
+      return { ...row, latestSendKey: current.key || current.historyId || current.egrdtNumber,
+        latestEgrdtNumber: current.egrdtNumber, latestSendAt: current.generatedAt,
+        superseded: !sameSend(row, current) };
+    });
+  }
+
   function aggregateByGrdt(rows) {
     const groups = new Map();
-    (rows || []).forEach((row) => {
+    markLatestSends(rows).forEach((row) => {
       const key = row.historyId || row.egrdtNumber;
       if (!groups.has(key)) groups.set(key, { historyId: row.historyId, egrdtNumber: row.egrdtNumber, generatedAt: row.generatedAt, rows: [] });
       groups.get(key).rows.push(row);
     });
     return [...groups.values()].map((group) => {
+      const active = group.rows.filter(row => !row.superseded);
       const counts = {
         total: group.rows.length,
-        confirmed: group.rows.filter((row) => row.status === STATUSES.CONFIRMED).length,
-        awaiting: group.rows.filter((row) => row.status === STATUSES.AWAITING).length,
-        divergent: group.rows.filter((row) => row.status === STATUSES.REVISION_DIVERGENT).length,
-        notFound: group.rows.filter((row) => row.status === STATUSES.NOT_FOUND).length,
-        review: group.rows.filter((row) => row.status === STATUSES.REVIEW).length,
-        notVerified: group.rows.filter((row) => row.status === STATUSES.NOT_VERIFIED).length,
+        superseded: group.rows.length - active.length,
+        confirmed: active.filter((row) => row.status === STATUSES.CONFIRMED).length,
+        awaiting: active.filter((row) => row.status === STATUSES.AWAITING).length,
+        divergent: active.filter((row) => row.status === STATUSES.REVISION_DIVERGENT).length,
+        notFound: active.filter((row) => row.status === STATUSES.NOT_FOUND).length,
+        review: active.filter((row) => row.status === STATUSES.REVIEW).length,
+        notVerified: active.filter((row) => row.status === STATUSES.NOT_VERIFIED).length,
       };
       const currentlyLocated = group.rows.filter((row) => row.status === STATUSES.CONFIRMED);
-      const preservedOnly = group.rows.filter((row) => row.status !== STATUSES.CONFIRMED && row.historicalPreserved).length;
-      const inTransit = group.rows.filter((row) => row.currentEvidence && row.sigemStatus
+      const preservedOnly = active.filter((row) => row.status !== STATUSES.CONFIRMED && row.historicalPreserved).length;
+      const inTransit = active.filter((row) => row.currentEvidence && row.sigemStatus
         && /^(EM ANALISE|EM WORKFLOW)$/.test(norm(row.sigemStatus))
         && normalizeRevision(row.sigemStatusRevision) === normalizeRevision(row.revisionSent)).length;
-      const ambiguous = group.rows.filter((row) => row.ambiguity || row.status === STATUSES.REVIEW).length;
-      const classification = counts.notVerified === counts.total ? "NAO_VERIFICADA"
-        : counts.confirmed === counts.total ? "TOTALMENTE_CONFIRMADA"
+      const ambiguous = active.filter((row) => row.ambiguity || row.status === STATUSES.REVIEW).length;
+      const classification = !active.length ? "SUPERADA_POR_ENVIO_RECENTE"
+        : counts.notVerified === active.length ? "NAO_VERIFICADA"
+        : counts.confirmed === active.length ? (counts.superseded ? "SEM_PENDENCIA_ATUAL" : "TOTALMENTE_CONFIRMADA")
           : counts.confirmed > 0 ? "PARCIALMENTE_CONFIRMADA"
             : preservedOnly || ambiguous || counts.notVerified ? "REQUER_INVESTIGACAO" : "NENHUM_DOCUMENTO_CONFIRMADO";
       return {
-        ...group, ...counts, status: aggregateStatus(group.rows), classification,
+        ...group, ...counts, status: aggregateStatus(active), classification,
         workspaceId: text(group.rows[0] && group.rows[0].workspaceId),
         confirmedOrPreserved: counts.confirmed + preservedOnly, preservedOnly, inTransit, ambiguous,
         distinctDocuments: new Set(group.rows.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
         locatedDocuments: new Set(currentlyLocated.map((row) => row.documentIdentity || documentIdentity(row.document))).size,
-        riskOfDuplicateResend: counts.confirmed + preservedOnly > 0 && counts.confirmed + preservedOnly < counts.total,
+        riskOfDuplicateResend: active.some(row => row.status !== STATUSES.CONFIRMED)
+          && (counts.superseded > 0 || (counts.confirmed + preservedOnly > 0 && counts.confirmed + preservedOnly < active.length)),
       };
     }).sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)));
   }
@@ -637,17 +689,20 @@
       label: "GRDT a verificar", detail: "Não foi possível conferir a GRDT completa.",
     };
     const total = group.rows.length;
-    const pending = group.rows.filter(row => row.status !== STATUSES.CONFIRMED).length;
-    const confirmed = total - pending;
-    const historical = group.rows.some(row => row.status !== STATUSES.CONFIRMED && row.historicalPreserved);
-    if (!pending) return { label: "Sem pendência", detail: `${total} de ${total} documentos/revisões confirmados.` };
+    const active = group.rows.filter(row => !row.superseded);
+    const superseded = total - active.length;
+    const pending = active.filter(row => row.status !== STATUSES.CONFIRMED).length;
+    const confirmed = active.length - pending;
+    const historical = active.some(row => row.status !== STATUSES.CONFIRMED && row.historicalPreserved);
+    const recent = superseded ? ` ${superseded} envio(s) anterior(es) substituído(s) por GRDT mais recente; não contam como pendência desta GRDT.` : "";
+    if (!pending) return { label: "Sem pendência", detail: `${confirmed} documento(s)/revisão(ões) confirmado(s).${recent}` };
     if (historical) return {
       label: confirmed ? "Parte da GRDT pendente" : "Conferência atual pendente",
-      detail: `${pending} de ${total} documentos/revisões sem confirmação atual. Há confirmação histórica; não reenviar esses documentos.`,
+      detail: `${pending} de ${total} documentos/revisões sem confirmação atual. Há confirmação histórica; não reenviar esses documentos.${recent}`,
     };
     return {
       label: pending === total ? "GRDT inteira pendente" : pending === 1 ? "Somente este documento pendente" : "Parte da GRDT pendente",
-      detail: `${pending} de ${total} documentos/revisões pendentes; ${confirmed} confirmado(s) no SIGEM.`,
+      detail: `${pending} de ${total} documentos/revisões pendentes; ${confirmed} confirmado(s) no SIGEM.${recent}`,
     };
   }
 
@@ -698,6 +753,11 @@
       action = "ANÁLISE MANUAL OBRIGATÓRIA";
       evidenceLevel = "CAUSA INDETERMINADA";
     }
+    if (row.superseded) {
+      action = "CONSULTAR ÚLTIMO ENVIO";
+      evidenceLevel = "ENVIO HISTÓRICO";
+      reason = `Documento reenviado na ${text(row.latestEgrdtNumber) || "GRDT mais recente"}. A pendência é determinada pelo último envio; esta ocorrência permanece apenas no histórico.`;
+    }
     return {
       presence: confirmed ? "DOCUMENTO E REVISÃO LOCALIZADOS"
         : row.status === STATUSES.REVISION_DIVERGENT ? "OUTRA REVISÃO LOCALIZADA"
@@ -718,6 +778,7 @@
   }
 
   function repostEligibility(row) {
+    if (row && row.superseded) return { eligible: false, reason: "Envio anterior: consulte a GRDT mais recente deste documento." };
     if (!row || row.status === STATUSES.CONFIRMED || row.historicalPreserved) {
       return { eligible: false, reason: "Já confirmado: não reenviar." };
     }
@@ -755,7 +816,7 @@
     const index = buildBaseIndex(base);
     const previousItems = previousStateMap(previousState);
     const nextItems = {};
-    const rows = historyRows.map((historyRow) => {
+    const rows = markLatestSends(historyRows.map((historyRow) => {
       const row = compareOne(historyRow, base, index, previousItems[historyRow.key], options);
       nextItems[historyRow.key] = {
         firstConfirmedAt: row.firstConfirmedAt,
@@ -769,7 +830,7 @@
         lastRevisionSent: row.revisionSent,
       };
       return row;
-    });
+    }));
 
     const changes = {
       newlyConfirmed: rows.filter((row) => row.status === STATUSES.CONFIRMED && previousItems[row.key] && previousItems[row.key].lastStatus !== STATUSES.CONFIRMED).length
@@ -1026,7 +1087,7 @@
   }
 
   function pendingRows(rows) {
-    return (rows || []).filter((row) => row.status !== STATUSES.CONFIRMED)
+    return markLatestSends(rows).filter((row) => !row.superseded && row.status !== STATUSES.CONFIRMED)
       .sort((a, b) => priorityRank(a.status) - priorityRank(b.status) || String(a.generatedAt).localeCompare(String(b.generatedAt)));
   }
 
@@ -1059,6 +1120,7 @@
     isPostedSigemStatus, parseSourceDate, effectiveRecordTimestamp, resolvePostingEvidence,
     detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
     statusLabel, aggregateStatus, pendingScope, diagnoseRow, repostEligibility, filterRows, pendingRows, pertinentGrdt, pendingGrdts,
+    compareSendRecency, latestDocumentKey, sameSend, markLatestSends,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
     kvGet, kvSet, kvSetMany, storedValue, putKv,
     readHistoryIndex, historyAggregate, reconcilePersisted, prepareWorkbookImport, prepareParsedImport, commitPreparedImport, importWorkbook,

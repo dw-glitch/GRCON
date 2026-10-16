@@ -443,8 +443,7 @@
   }
 
 
-  // Grupos por evento de emissão, sem usar a GRDT mais recente do documento
-  // consolidado como substituta do registro histórico original.
+  // Preserva cada emissão, mas só o último envio de cada documento gera pendência.
   let detailedGroupsCache = null;
   function detailedGroups() {
     const planned = root.GrconPlannedDocuments?.current?.();
@@ -461,7 +460,7 @@
     });
     const groups = Conference.aggregateByGrdt(rows).map((group) => ({
       ...group,
-      allocationPending: group.rows.filter((row) => row.allocation.kind === "not_allocated").length,
+      allocationPending: group.rows.filter((row) => !row.superseded && row.allocation.kind === "not_allocated").length,
     }));
     detailedGroupsCache = { result: state.result, signature, groups };
     return groups;
@@ -470,7 +469,7 @@
   function filteredGroups() {
     const matched = new Set(filteredEventRows().map((row) => row.key));
     let groups = detailedGroups().filter((group) => group.rows.some((row) => matched.has(row.key)));
-    if (state.view === "pending") groups = groups.filter((group) => group.classification !== "TOTALMENTE_CONFIRMADA");
+    if (state.view === "pending") groups = groups.filter((group) => group.rows.some(row => !row.superseded && row.status !== Conference.STATUSES.CONFIRMED));
     return groups;
   }
 
@@ -503,7 +502,7 @@
         (row.sigemSourceRow ? ' · linha ' + escapeHtml(row.sigemSourceRow) : '') + '</small></td></tr>';
     }).join("");
     const warning = group.riskOfDuplicateResend
-      ? '<strong class="pc-grdt-warning">Esta GRDT possui documentos já localizados no SIGEM. Não reenviar o pacote integral.</strong>' : '';
+      ? '<strong class="pc-grdt-warning">Esta GRDT possui documentos já localizados ou com envio mais recente. Não reenviar o pacote integral.</strong>' : '';
     return '<details class="pc-grdt-details"><summary>Ver todos os ' + fmt(group.total) +
       ' documentos/revisões desta emissão</summary>' + warning +
       '<input type="search" placeholder="Pesquisar documento nesta GRDT" aria-label="Pesquisar documentos desta GRDT"><div><table><thead><tr><th>Documento</th><th>Rev. enviada</th><th>Rev. encontrada</th><th>SIGEM</th><th>Alocação</th><th>Diagnóstico / orientação</th></tr></thead><tbody>' +
@@ -521,7 +520,7 @@
     const matched = new Set(Conference.pendingRows(filteredEventRows()).map(row => row.key));
     return filteredGroups().flatMap(group => {
       const scope = Conference.pendingScope(group);
-      return group.rows.filter(row => matched.has(row.key)).map(row => ({ ...row, pendingScope: scope }));
+      return group.rows.filter(row => !row.superseded && matched.has(row.key)).map(row => ({ ...row, pendingScope: scope }));
     });
   }
 
@@ -576,7 +575,7 @@
   }
 
   function grdtTable(groups) {
-    const labels = { TOTALMENTE_CONFIRMADA: "Totalmente confirmada", PARCIALMENTE_CONFIRMADA: "Parcialmente confirmada", NENHUM_DOCUMENTO_CONFIRMADO: "Nenhum documento confirmado", REQUER_INVESTIGACAO: "Requer investigação", NAO_VERIFICADA: "Não verificada" };
+    const labels = { SUPERADA_POR_ENVIO_RECENTE: "Substituída por envios mais recentes", SEM_PENDENCIA_ATUAL: "Sem pendência atual", TOTALMENTE_CONFIRMADA: "Totalmente confirmada", PARCIALMENTE_CONFIRMADA: "Parcialmente confirmada", NENHUM_DOCUMENTO_CONFIRMADO: "Nenhum documento confirmado", REQUER_INVESTIGACAO: "Requer investigação", NAO_VERIFICADA: "Não verificada" };
     const body = groups.map((g) =>
       '<tr><td><strong>' + escapeHtml(g.egrdtNumber || "Sem número") + '</strong></td><td>' + fmtDate(g.generatedAt, false) +
       '</td><td>' + fmt(g.distinctDocuments) + '</td><td>' + fmt(g.locatedDocuments) + '</td><td>' +
@@ -607,9 +606,9 @@
       state.page = Math.min(state.page, pages);
       content = pendingTable(rows.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE));
       el("pc-table-kicker").textContent = "DOCUMENTOS PENDENTES";
-      el("pc-table-help").textContent = "Um único registro por código, independentemente das revisões e repostagens. Histórico completo e última eGRDT preservados.";
+      el("pc-table-help").textContent = "Pendência determinada pela última GRDT de cada documento, incluindo repostagens. Envios anteriores permanecem somente no histórico.";
       el("pc-result-count").textContent = `${fmt(total)} documento(s) único(s) · ${fmt(pendingEvents.length)} envio(s)/revisão(ões) pendente(s)`;
-      consolidated.innerHTML = '<strong>Pendência total ou parcial?</strong><p>Abra Pendências por eGRDT em cada documento para conferir quais revisões faltam e se a emissão foi total ou parcialmente confirmada. O histórico conserva todas as eGRDTs. Ausência na Consulta Geral não comprova falha de postagem.</p><button type="button" data-copy-pending-grdts>Copiar GRDTs exibidas</button>';
+      consolidated.innerHTML = '<strong>Pendência total ou parcial?</strong><p>Somente o último envio de cada documento conta como pendência. Uma repostagem substitui a tentativa anterior nesta avaliação. A abrangência considera a GRDT completa, mesmo com filtros. Ausência na Consulta Geral não comprova falha de postagem.</p><button type="button" data-copy-pending-grdts>Copiar GRDTs exibidas</button>';
     } else if (state.view === "grdts") {
       const groups = filteredGroups();
       total = groups.length;

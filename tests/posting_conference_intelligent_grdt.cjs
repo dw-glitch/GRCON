@@ -123,6 +123,49 @@ assert.equal(historicalMissing.groups[0].inTransit, 0, "workflow histórico não
 result = run([emission("112", [[d[0], "A", "Para Cancelamento"]])], [sigem(d[0], "A")]);
 assert.equal(result.rows[0].purpose, "Para Cancelamento");
 
+// A repostagem substitui a tentativa anterior, inclusive de outra revisão.
+const repostHistory = [
+  emission('300', [[d[0], 'A'], [d[1], 'A'], [d[2], 'A']], '2026-10-01T12:00:00Z'),
+  emission('301', [[d[0], 'B'], [d[2], 'A']], '2026-10-08T12:00:00Z'),
+];
+const reposted = run(repostHistory, [sigem(d[0], 'B')]);
+const oldGroup = reposted.groups.find(group => group.egrdtNumber === 'GRDT-300');
+const newGroup = reposted.groups.find(group => group.egrdtNumber === 'GRDT-301');
+assert.equal(C.pendingScope(oldGroup).label, 'Somente este documento pendente');
+assert.equal(C.pendingScope(newGroup).label, 'Somente este documento pendente');
+assert.equal(oldGroup.superseded, 2);
+assert.equal(oldGroup.notFound, 1);
+assert.equal(oldGroup.total, 3, 'o histórico da emissão inteira permanece visível');
+const actualPending = C.pendingRows(reposted.rows);
+assert.equal(actualPending.length, 2);
+assert.deepEqual(actualPending.map(row => row.egrdtNumber).sort(), ['GRDT-300', 'GRDT-301']);
+assert.equal(actualPending.find(row => row.egrdtNumber === 'GRDT-301').status, C.STATUSES.AWAITING,
+  'a janela de confirmação é calculada a partir da repostagem mais recente');
+const oldOnly = C.pendingRows(C.filterRows(reposted.rows, { grdt: 'GRDT-300' }));
+assert.deepEqual(oldOnly.map(row => row.document), [C.displayDocument(d[1])],
+  'filtrar a GRDT antiga não ressuscita as tentativas substituídas');
+const superseded = reposted.rows.find(row => row.superseded);
+assert.equal(C.repostEligibility(superseded).eligible, false);
+assert.equal(C.diagnoseRow(superseded, {}).action, 'CONSULTAR ÚLTIMO ENVIO');
+const latestWhole = run([repostHistory[1]], [sigem(d[3], '0')]);
+assert.equal(C.pendingScope(latestWhole.groups[0]).label, 'GRDT inteira pendente');
+const allReposted = run([
+  emission('310', [[d[0], 'A']], '2026-10-01T12:00:00Z'),
+  emission('311', [[d[0], 'A']], '2026-10-08T12:00:00Z'),
+], [sigem(d[0], 'A')]);
+assert.equal(C.pendingRows(allReposted.rows).length, 0);
+assert.equal(C.pendingScope(allReposted.groups.find(g => g.egrdtNumber === 'GRDT-310')).label, 'Sem pendência');
+assert.equal(allReposted.groups.find(g => g.egrdtNumber === 'GRDT-310').classification, 'SUPERADA_POR_ENVIO_RECENTE');
+assert.deepEqual(C.markLatestSends(reposted.rows.slice().reverse()).filter(row => !row.superseded).map(row => row.key).sort(),
+  reposted.rows.filter(row => !row.superseded).map(row => row.key).sort());
+assert.ok(C.compareSendRecency({ generatedAt: '2026-10-08', egrdtNumber: 'GRDT-1' }, { generatedAt: '', egrdtNumber: 'GRDT-999' }) < 0);
+assert.ok(C.compareSendRecency({ generatedAt: '2026-10-08', egrdtNumber: 'X-G-0100-2026' }, { generatedAt: '2026-10-08', egrdtNumber: 'X-G-0099-2026' }) < 0);
+const acrossContracts = run([
+  { ...emission('320', [[d[0], 'A']], '2026-10-01T12:00:00Z'), workspaceId: 'contract-a' },
+  { ...emission('321', [[d[0], 'A']], '2026-10-08T12:00:00Z'), workspaceId: 'contract-b' },
+], [sigem(d[1], '0')]);
+assert.equal(C.pendingRows(acrossContracts.rows).length, 2, 'outro contrato não substitui o envio deste contrato');
+
 console.log("posting_conference_intelligent_grdt: OK");
 
 // A decisão é manual, por ocorrência/revisão; presença histórica também exclui reenvio.
@@ -140,6 +183,10 @@ assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eli
   global.ExcelJS = require('../exceljs.min.js');
   global.GRCONBrandAssets = { reportLogoBase64: 'data:image/png;base64,' + require('node:fs').readFileSync(require('node:path').join(__dirname, '../grcon-logo-report.png')).toString('base64') };
   const Report = require('../posting_conference_report.js');
+  assert.equal(Report.consolidatePendingDocuments(allReposted.rows).length, 0);
+  const pendingReposts = Report.consolidatePendingDocuments(reposted.rows);
+  assert.equal(pendingReposts.length, 2);
+  assert.equal(pendingReposts.find(row => row.document === C.displayDocument(d[2])).pendingEvents[0].egrdtNumber, 'GRDT-301');
   const mixed = run([emission('113', [[d[0], 'A', 'Para Cancelamento'], [d[1], 'B'], [d[2], 'C']])], [sigem(d[0], 'A', 'Emitido'), sigem(d[2], 'B', 'Em Workflow')]);
   const rows = mixed.rows.map(row => ({ ...row, allocation: { kind: 'allocated', label: 'Alocado' }, diagnosis: C.diagnoseRow(row, { kind: 'allocated', allocations: ['ALOC-027'] }) }));
   const groups = C.aggregateByGrdt(rows);
@@ -199,9 +246,9 @@ assert.equal(C.repostEligibility({ ...selection.rows[2], revisionSent: '' }).eli
   assert.match(repeatedSheet.getCell('Q11').value, /GRDT-201/);
   assert.match(repeatedSheet.getCell('Q11').value, /GRDT-202/);
   assert.match(repeatedSheet.getCell('Q11').value, /GRDT-203/);
-  assert.equal(repeatedSheet.getCell('R11').value, 'B · A · 0');
-  assert.equal(repeatedSheet.getCell('N11').value, 'Múltiplas GRDTs com pendências');
-  assert.match(repeatedSheet.getCell('O11').value, /GRDT-201/);
+  assert.equal(repeatedSheet.getCell('R11').value, 'B');
+  assert.equal(repeatedSheet.getCell('N11').value, 'GRDT inteira pendente');
+  assert.doesNotMatch(repeatedSheet.getCell('O11').value, /GRDT-201/);
   assert.equal(repeatedSheet.getCell('E11').value, '03/10/2026');
   const full = new global.ExcelJS.Workbook();
   await full.xlsx.load(await Report.buildWorkbook(rows, { mode: 'events', groups }));

@@ -182,21 +182,20 @@
     ];
   }
 
-  // A planilha de pendências é UMA linha por código documental, mesmo que
-  // tenha múltiplas revisões ou repostagens. Eventos permanecem intactos em
-  // pendingEvents, e a lista completa de envios permanece em sends.
+  // A planilha usa somente a pendência do último envio e preserva os demais em sends.
   function consolidatePendingDocuments(rows) {
     const groups = new Map();
     (rows || []).forEach((row) => {
       if (!row) return;
-      const identity = text(row.documentIdentity) || Conference.documentIdentity(row.document);
+      const identity = Conference.latestDocumentKey(row);
       if (!identity) return;
       let group = groups.get(identity);
       if (!group) {
-        group = { identity, aggregate: null, events: new Map() };
+        group = { identity, aggregate: null, events: new Map(), sends: [] };
         groups.set(identity, group);
       }
       if (Array.isArray(row.sends) && row.sends.length) group.aggregate = row;
+      group.sends.push(...(Array.isArray(row.sends) ? row.sends : [row]));
       const pending = Array.isArray(row.pendingEvents) ? row.pendingEvents
         : (Array.isArray(row.sends) ? row.sends : [row]);
       pending.filter(event => event && event.status !== Conference.STATUSES.CONFIRMED)
@@ -210,22 +209,23 @@
     });
     const time = (event) => Date.parse(event?.generatedAt || "") || 0;
     return [...groups.values()].filter(group => group.events.size).map((group) => {
-      const pendingEvents = [...group.events.values()].sort((a, b) =>
-        time(b) - time(a) || text(b.egrdtNumber).localeCompare(text(a.egrdtNumber), "pt-BR", { numeric: true }));
+      const compare = Conference.compareSendRecency || ((a, b) => time(b) - time(a));
+      const sends = group.sends.slice().sort(compare);
+      const latest = sends[0];
+      const pendingEvents = [...group.events.values()].filter(event => !event.superseded
+        && latest.status !== Conference.STATUSES.CONFIRMED
+        && Conference.sameSend(event, latest)).sort(compare).slice(0, 1);
+      if (!pendingEvents.length) return null;
       const aggregate = group.aggregate || pendingEvents[0];
-      const sends = Array.isArray(aggregate.sends) && aggregate.sends.length
-        ? aggregate.sends : pendingEvents;
-      const latest = aggregate.latestSend || sends.reduce((best, event) =>
-        !best || time(event) > time(best) ? event : best, null);
       return {
         ...pendingEvents[0], ...aggregate,
-        documentIdentity: group.identity,
+        documentIdentity: aggregate.documentIdentity || Conference.documentIdentity(aggregate.document),
         pendingEvents,
         sends,
         latestSend: latest,
         latestEgrdtNumber: aggregate.latestEgrdtNumber || latest?.egrdtNumber || "",
       };
-    }).sort((a, b) => time(b.pendingEvents[0]) - time(a.pendingEvents[0]));
+    }).filter(Boolean).sort((a, b) => time(b.pendingEvents[0]) - time(a.pendingEvents[0]));
   }
 
   function pendingDetails(row, groupsById) {

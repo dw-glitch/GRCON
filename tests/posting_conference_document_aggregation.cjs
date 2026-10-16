@@ -120,9 +120,15 @@ events = [
 docs = R.buildDocumentAggregates(events, C);
 assert.equal(docs[0].status, STATUSES.CONFIRMED);
 assert.equal(W.pendingRows(docs).length, 0);
+assert.equal(R.buildPendingDocumentAggregates(events.filter(row => row.status !== STATUSES.CONFIRMED), docs, C).length, 0,
+  'confirmação do último envio exclui as pendências antigas da tabela e do Excel');
+const latestOnly = R.buildDocumentAggregates([
+  event('LATEST', 'B', 'G-400', '2026-09-01T10:00:00Z', STATUSES.CONFIRMED),
+  event('LATEST', 'B', 'G-401', '2026-09-04T10:00:00Z', STATUSES.AWAITING),
+], C);
+assert.equal(latestOnly[0].status, STATUSES.AWAITING, 'o último envio determina o status, sem substituir sua evidência por uma tentativa anterior');
 
-// Uma pendência pode aparecer em várias revisões/eGRDTs, mas a tabela deve
-// renderizar uma única linha pelo código documental; os eventos não são perdidos.
+// Só o último envio gera pendência; tentativas anteriores permanecem no histórico.
 events = [
   event("ONE", "0", "G-200", "2026-08-01T10:00:00Z", STATUSES.CONFIRMED),
   event("ONE", "A", "G-210", "2026-09-01T10:00:00Z", STATUSES.NOT_FOUND),
@@ -134,14 +140,14 @@ const allDocumentRows = R.buildDocumentAggregates(events, C);
 const pendingEventRows = events.filter(item => item.status !== STATUSES.CONFIRMED)
   .map(row => ({ ...row, pendingScope: { label: "Parte da GRDT pendente", detail: "Conferência da emissão inteira." } }));
 const pendingDocs = R.buildPendingDocumentAggregates(pendingEventRows, allDocumentRows, C);
-assert.equal(pendingDocs.length, 2, "quatro pendências em duas linhas de documento");
+assert.equal(pendingDocs.length, 2, "somente dois últimos envios pendentes");
 const uniquePending = pendingDocs.find(row => row.document === "ONE");
-assert.equal(uniquePending.pendingEventCount, 3);
+assert.equal(uniquePending.pendingEventCount, 1);
 assert.equal(uniquePending.sendCount, 4, "preservar também a emissão histórica já confirmada");
 assert.equal(uniquePending.latestEgrdtNumber, "G-230");
 assert.equal(uniquePending.latestSendAt, "2026-09-03T10:00:00Z");
-assert.deepEqual(uniquePending.pendingRevisions, ["B", "A"]);
-assert.deepEqual(uniquePending.pendingEvents.map(row => row.egrdtNumber), ["G-230", "G-220", "G-210"]);
+assert.deepEqual(uniquePending.pendingRevisions, ["B"]);
+assert.deepEqual(uniquePending.pendingEvents.map(row => row.egrdtNumber), ["G-230"]);
 assert.deepEqual(uniquePending.sends.map(row => row.egrdtNumber), ["G-230", "G-220", "G-210", "G-200"]);
 assert.equal(uniquePending.pendingEvents[0].pendingScope.label, "Parte da GRDT pendente");
 assert.equal(W.buildPendingDocumentAggregates(pendingEventRows, allDocumentRows).length, 2);
