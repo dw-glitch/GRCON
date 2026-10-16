@@ -255,7 +255,6 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.waitForFunction(()=>document.querySelector('#pc-result-count')?.textContent.includes('3'));
  await page.evaluate(()=>{const ui=window.GrconPostingConferenceUi;ui.state.view='pending';ui.render();});
  await page.locator('#pc-discipline').selectOption('X');assert.equal(await page.locator('.pc-pending-table tbody tr').count(),3);
- await page.locator('#pc-grdt-classification').selectOption('PARCIALMENTE_CONFIRMADA');assert.equal(await page.locator('.pc-pending-table tbody tr').count(),2);
  await page.locator('#pc-document-list').fill('DOC-002');
  await page.waitForFunction(()=>document.querySelectorAll('.pc-pending-table tbody tr').length===1);
  assert.match(await page.locator('.pc-pending-table').textContent(),/Parte da GRDT pendente/);
@@ -273,7 +272,6 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'','nenhuma GRDT copiada quando não há pendência no filtro');
  await page.locator('#pc-status').selectOption('');
  await page.locator('#pc-document-list').fill('');
- await page.locator('#pc-grdt-classification').selectOption('');
  await page.locator('#pc-reference-date').fill('2026-10-02');await page.locator('#pc-save-date').click();await page.waitForFunction(()=>window.GrconSharedSigemQuery.current()?.meta.referenceDate==='2026-10-02');assert.equal(await page.evaluate(()=>window.qaDateCalls),1);
  await page.locator('#pc-table-wrap').scrollIntoViewIfNeeded();
  await page.screenshot({path:path.join(out,'pendencias-1366.png')});
@@ -325,7 +323,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
    ];
    ui.state.result=C.reconcile(history,ui.state.base.records,null,{now:'2026-10-08T12:00:00Z',baseReferenceDate:'2026-10-08'});
    Object.keys(ui.state.filters).forEach(key=>ui.state.filters[key]='');
-   ui.state.groupClassification='';ui.state.view='pending';ui.state.page=1;ui.render();
+   ui.state.view='pending';ui.state.page=1;ui.render();
  });
  assert.equal(await page.locator('.pc-pending-documents tbody tr').count(),2,'uma linha por código, não por revisão/envio');
  const duplicateRow=page.locator('.pc-pending-documents tbody tr').filter({has:page.locator('td:first-child strong', {hasText:'DOC-002'})});

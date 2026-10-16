@@ -14,7 +14,6 @@
     audit: [],
     view: "documents",
     page: 1,
-    groupClassification: "",
     filters: { search: "", document: "", documentList: "", grdt: "", family: "", discipline: "", revision: "", status: "", startDate: "", endDate: "" },
   };
 
@@ -72,8 +71,6 @@
       .pc-repost-group-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem;margin-top:.8rem}
       .pc-grdt-warning{display:block;padding:.6rem;border-left:3px solid #d97706;font-weight:700}
       .pc-grdt-table .pc-grdt-detail-row>td{background:var(--surface-subtle,#f8fafc);padding:.65rem}
-      .pc-grdt-filter{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:.5rem 0}
-      .pc-grdt-filter select{max-width:18rem}
       .pc-grdt-details input[type="search"]{display:block;max-width:23rem;margin:.6rem 0;padding:.45rem .6rem;border:1px solid var(--border,#ddd);border-radius:.5rem;background:var(--surface,#fff);color:inherit}
       .pc-pending-documents{min-width:1080px;table-layout:fixed}.pc-pending-documents th:nth-child(1){width:24%}.pc-pending-documents th:nth-child(2){width:17%}.pc-pending-documents th:nth-child(3){width:19%}.pc-pending-documents th:nth-child(4){width:19%}.pc-pending-documents th:nth-child(5){width:21%}.pc-pending-documents td{text-align:left!important;overflow-wrap:anywhere}.pc-pending-documents td:first-child strong{white-space:normal}.pc-pending-documents td small{display:block;color:var(--muted,#64748b);font-size:.74rem;margin-top:.25rem}.pc-pending-documents .pc-send-history summary span{overflow-wrap:anywhere}.pc-pending-documents .pc-send-event strong{overflow-wrap:anywhere}
 
@@ -104,7 +101,6 @@
       <section class="pc-toolbar-card pc-date-controls"><label>Data da Consulta Geral <input id="pc-reference-date" type="date"/></label> <button id="pc-save-date" type="button" class="secondary-button">Salvar data</button><small>Data da base, independente do upload.</small></section>
       <section class="pc-toolbar-card">
         <div class="pc-view-switch" role="tablist" aria-label="Visualização da conferência"><button class="active" data-pc-view="documents" type="button">Documentos</button><button data-pc-view="grdts" type="button">Por eGRDT</button><button data-pc-view="pending" type="button">Documentos pendentes</button></div>
-        <div class="pc-grdt-filter"><label>Classificação da GRDT <select id="pc-grdt-classification"><option value="">Todas</option><option value="TOTALMENTE_CONFIRMADA">Totalmente confirmada</option><option value="PARCIALMENTE_CONFIRMADA">Parcialmente confirmada</option><option value="NENHUM_DOCUMENTO_CONFIRMADO">Nenhum documento confirmado</option><option value="REQUER_INVESTIGACAO">Requer investigação</option><option value="NAO_VERIFICADA">Não verificada</option><option value="COM_TRAMITACAO">Em tramitação</option><option value="REVISAO_DIVERGENTE">Revisão divergente</option><option value="ALOCACAO_PENDENTE">Alocação pendente</option></select></label><small>A expansão mostra todos os documentos da emissão, inclusive os confirmados.</small></div>
         <div class="pc-filters" id="pc-filters">
           <label class="pc-search"><span>Busca</span><input id="pc-search" type="search" placeholder="Código, eGRDT, disciplina, status ou observação"/></label>
           <label class="pc-document-list"><span>Lista de documentos</span><textarea id="pc-document-list" rows="3" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Cole vários códigos — um por linha"></textarea><small id="pc-document-list-count">Todos os documentos</small></label>
@@ -141,7 +137,6 @@
       catch (error) { notify(error.message, "error"); }
       finally { render(); }
     });
-    el("pc-grdt-classification").addEventListener("change", event => { state.groupClassification = event.target.value; state.page = 1; renderTableOnly(); });
     el("pc-pending-grdts").addEventListener("click", async event => {
       if (!event.target.closest("[data-copy-pending-grdts]")) return;
       try { await navigator.clipboard.writeText([...new Set(filteredPendingRows().map(row => row.egrdtNumber).filter(Boolean))].join("\n")); notify("GRDTs copiadas.", "success"); }
@@ -188,8 +183,6 @@
       Object.keys(state.filters).forEach((key) => { state.filters[key] = ""; });
       ["pc-search", "pc-document-list", "pc-grdt", "pc-family", "pc-discipline", "pc-revision", "pc-status", "pc-start", "pc-end"].forEach((id) => { el(id).value = ""; });
       el("pc-document-list-count").textContent = "Todos os documentos";
-      state.groupClassification = "";
-      el("pc-grdt-classification").value = "";
       state.page = 1;
       renderTableOnly();
     });
@@ -478,10 +471,6 @@
     const matched = new Set(filteredEventRows().map((row) => row.key));
     let groups = detailedGroups().filter((group) => group.rows.some((row) => matched.has(row.key)));
     if (state.view === "pending") groups = groups.filter((group) => group.classification !== "TOTALMENTE_CONFIRMADA");
-    const kind = state.groupClassification;
-    if (kind) groups = groups.filter((group) => kind === "COM_TRAMITACAO" ? group.inTransit > 0
-      : kind === "REVISAO_DIVERGENTE" ? group.divergent > 0
-        : kind === "ALOCACAO_PENDENTE" ? group.allocationPending > 0 : group.classification === kind);
     return groups;
   }
 
