@@ -13,9 +13,9 @@
 
   async function pdfjs(){
     if(!pdfjsPromise){
-      const moduleUrl=new URL("assets/vendor/pdfjs/pdf.min.js",document.baseURI);
+      const moduleUrl=new URL("assets/vendor/pdfjs/pdf.min.mjs",document.baseURI);
       pdfjsPromise=import(moduleUrl.href).then(mod=>{
-        mod.GlobalWorkerOptions.workerSrc=new URL("assets/vendor/pdfjs/pdf.worker.min.js",document.baseURI).href;
+        mod.GlobalWorkerOptions.workerSrc=new URL("assets/vendor/pdfjs/pdf.worker.min.mjs",document.baseURI).href;
         return mod;
       }).catch(error=>{pdfjsPromise=null;throw new Error("Não foi possível carregar o leitor PDF local. Atualize a página e tente novamente.");});
     }
