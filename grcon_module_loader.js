@@ -49,6 +49,7 @@
     // o operador realmente inicia a combinação.
     "pdf-tools": ["pdf_merge_core.js", "react-dist/pdf-tools-app.js"],
     // Capa oficial: LD + template local; nenhum documento deixa o navegador.
+    "docx-to-pdf": ["zip", "pdf-lib.min.js", "docx_pdf_core.js", "docx_pdf_app.js"],
     "cover-document": ["xlsx", "zip", "pdf-lib.min.js", "core.js", "requests_core.js", "requests_report.js", "requests_taxonomy_core.js", "ld_memory.js", "performance_workers.js", "react-dist/cover-document-app.js"],
   };
 
@@ -61,6 +62,7 @@
     "grdt-reissue": ["GrconGrdtReissueCore", "GrconGrdtReissueUi", "GrdtWorkbook"],
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
     "cover-document": ["GrconCoverDocumentUi"],
+    "docx-to-pdf": ["GrconDocxPdfCore", "GrconDocxPdfUi"],
     "allocation-dashboard": ["GrconAllocationDashboardCore", "GrconAllocationDashboardUi"],
   };
 
@@ -222,6 +224,7 @@
   function directActivate(view) {
     if (view !== "pdf-tools") root.GrconPdfMergeUi?.deactivate?.();
     if (view !== "cover-document") root.GrconCoverDocumentUi?.deactivate?.();
+    if (view !== "docx-to-pdf") root.GrconDocxPdfUi?.deactivate?.();
 
     const modules = {
       control: "grdt-module",
@@ -233,6 +236,7 @@
       "additional-tools": "additional-tools-module",
       "pdf-tools": "pdf-tools-module",
       "cover-document": "cover-document-module",
+      "docx-to-pdf": "docx-to-pdf-module",
       "allocation-dashboard": "allocation-dashboard-module",
     };
     Object.entries(modules).forEach(([key, id]) => {
@@ -245,7 +249,7 @@
     if (scrollingElement) scrollingElement.scrollTop = 0;
     if (root.scrollY) root.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.querySelectorAll("[data-grcon-view]").forEach((button) => {
-      const nestedToolView = view === "grdt-reissue" || view === "pdf-tools" || view === "cover-document" || view === "allocation-dashboard";
+      const nestedToolView = view === "grdt-reissue" || view === "pdf-tools" || view === "cover-document" || view === "docx-to-pdf" || view === "allocation-dashboard";
       const additionalToolsNav = button.dataset.grconView === "additional-tools"
         && (button.classList.contains("ops-nav-button") || button.id === "tab-additional-tools");
       const active = button.dataset.grconView === view || (nestedToolView && additionalToolsNav);
@@ -268,6 +272,7 @@
     sigem: "Central de Postagem SIGEM",
     "pdf-tools": "Combinar PDFs",
     "cover-document": "Adicionar Capa",
+    "docx-to-pdf": "Converter DOCX em PDF",
     "allocation-dashboard": "Dashboard de Alocação",
   };
 
@@ -303,6 +308,10 @@
     }
     if (module === "cover-document") {
       root.GrconCoverDocumentUi?.activate?.();
+      return;
+    }
+    if (module === "docx-to-pdf") {
+      root.GrconDocxPdfUi?.activate?.();
       return;
     }
     if (module === "sigem") {
