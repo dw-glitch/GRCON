@@ -45,8 +45,38 @@ const root=process.cwd();
      };
      const imageOnly=await PDFLib.PDFDocument.create();
      imageOnly.addPage([595,842]);
-     return {a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save())};
+     const multipage=await PDFLib.PDFDocument.create();
+     const font=await multipage.embedFont(PDFLib.StandardFonts.Helvetica);
+     for(const idx of [1,2]){
+       const pg=multipage.addPage([595,842]);
+       pg.drawText('Pagina '+idx,{x:50,y:760,font,size:14});
+       pg.drawRectangle({x:50,y:650,width:450,height:65,borderColor:PDFLib.rgb(0,0,0),borderWidth:1});
+     }
+     return {a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),multipage:Array.from(await multipage.save())};
    });
+   // Modo visual (padrao): duas paginas, duas imagens e nenhum texto falso "editavel".
+   assert.equal(await page.locator('input[name="docx-pdf-mode"]:checked').inputValue(),'visual');
+   await page.locator('#docx-pdf-input').setInputFiles({
+     name:'duas-paginas.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.multipage)
+   });
+   await page.locator('#docx-pdf-confirm').check();
+   const visualDownload=page.waitForEvent('download',{timeout:60000});
+   await page.locator('#docx-pdf-convert').click();
+   const visual=await visualDownload;
+   assert.equal(visual.suggestedFilename(),'duas-paginas.docx');
+   const visualPackage=await page.evaluate(async bytes=>{
+     const zip=await JSZip.loadAsync(new Uint8Array(bytes));
+     return {files:Object.keys(zip.files),xml:await zip.file('word/document.xml').async('string'),
+       rels:await zip.file('word/_rels/document.xml.rels').async('string')};
+   },Array.from(fs.readFileSync(await visual.path())));
+   assert.equal(visualPackage.files.filter(name=>/^word\/media\/pagina-\d{4}\.jpg$/.test(name)).length,2);
+   assert.equal((visualPackage.xml.match(/<wp:anchor\b/g)||[]).length,2);
+   assert.equal((visualPackage.xml.match(/<w:pageBreakBefore\s*\/>/g)||[]).length,1);
+   assert.doesNotMatch(visualPackage.xml,/<w:t(?:\s|>)/,'modo visual nao oferece texto editavel');
+   assert.match(visualPackage.rels,/media\/pagina-0002\.jpg/);
+   await page.locator('#docx-pdf-clear').click();
+   await page.locator('input[value="editable-basic"]').check();
+   await page.locator('#docx-pdf-confirm').uncheck();
    const pdfInput={name:'qualidade.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.a)};
    await page.locator('#docx-pdf-input').setInputFiles(pdfInput);
    assert.equal(await page.locator('#docx-pdf-convert').isDisabled(),true,'exigir conferência para documento oficial');
@@ -88,6 +118,6 @@ const root=process.cwd();
    assert.equal(await page.locator('#docx-pdf-list [data-docx-action="download"]').count(),0);
    assert.deepEqual(uploads,[],'PDFs não podem ser enviados ao servidor');
    assert.deepEqual(errors,[],'não permitir erros JavaScript não tratados');
-   console.log('PDF -> DOCX Chromium: texto editável, ZIP, PDF sem texto requer OCR, erro controlado e nenhum upload: OK');
+   console.log('PDF -> DOCX Chromium: fidelidade visual 2 paginas, texto simplificado, ZIP, OCR avisado e zero uploads: OK');
  }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
