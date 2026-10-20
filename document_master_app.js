@@ -3,7 +3,7 @@
   const text = value => String(value ?? "");
   const esc = value => text(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const identity = value => root.GrconSigemPwDashboard?.documentIdentity?.(value)?.key || text(value).trim().replace(/\s+/g,'').toUpperCase().replace(/^NT-/, '');
-  let epoch = 0, searchTicket = 0, searchTimer, pwIndex = null, pwBase = null, opener = null;
+  let epoch = 0, searchTicket = 0, searchTimer, pwIndex = null, pwBase = null, opener = null, currentDocument = null;
   const api = () => root.GrconDocumentVault;
   const sections = [
     ['sigem','Consulta Geral / SIGEM'],['pw','ProjectWise'],['history','GRDT / eGRDT'],
@@ -21,12 +21,13 @@
     const scope=epoch;
     if (pwBase) return pwBase;
     if (!root.GrconSigemPwDashboard) await root.GRCONModuleLoader?.ensure('sigem_pw_dashboard_core.js');
-    const base = root.GrconSigemPwDashboardUi?.state?.pw;
+    const shared=root.GrconSharedPwQuery?.current?.();
+    const base = shared?.meta ? shared : root.GrconSigemPwDashboardUi?.state?.pw;
     const source = base?.meta ? base : await root.GrconSigemPwDashboard?.kvGet(root.GrconSigemPwDashboard.PW_BASE_KEY, null);
     if(scope!==epoch)return null;
     if (source !== pwBase) {
       pwBase = source; pwIndex = new Map();
-      for (const row of source?.records || []) {
+      for (const row of source?.sourceRecords || source?.records || []) {
         const key = identity(row.document); if (!pwIndex.has(key)) pwIndex.set(key, []);
         pwIndex.get(key).push(row);
       }
@@ -46,13 +47,17 @@
   }
   async function showDocument(code) {
     const ticket = ++searchTicket, scope = epoch;
+    currentDocument=null;
     document.getElementById('master-query').value = code;
     document.getElementById('master-results').innerHTML = '';
     status('Consultando fontes do documento…');
-    const results = await Promise.allSettled([api().request('/master?code='+encodeURIComponent(code)),currentPw()]);
+    const results = await Promise.allSettled([api().request('/master-page?code='+encodeURIComponent(code))]);
+    if(!results[0].value?.sources?.pw?.available) results.push((await Promise.allSettled([currentPw()]))[0]);
+    else results.push({status:'fulfilled',value:null});
     if (ticket !== searchTicket || scope !== epoch) return;
     const remote = results[0].status==='fulfilled' ? results[0].value : {};
-    const pw = results[1].status==='fulfilled' ? (pwIndex?.get(identity(code)) || []) : null;
+    const pw = remote.sources?.pw?.available ? remote.pw : results[1].status==='fulfilled' ? (pwIndex?.get(identity(code)) || []) : null;
+    currentDocument={code,remote,pw,columns:null,ticket,scope};
     const columns = {
       sigem:[['Código','document'],['Revisão','revision'],['Status','status'],['Título','title'],['Data',r=>r.date||r.updatedAt||'']],
       pw:[['Código','document'],['Revisão','revision'],['Workflow',r=>r.status||r.workflow||''],['Última emissão',r=>r.lastEmission||r.emissionFlag||''],['Databook',r=>r.databook||r.eap||'']],
@@ -65,15 +70,66 @@
     const values = [...(remote.sigem||[]),...(pw||[]),...(remote.vault||[]).map(f=>f.source_context||{})];
     const known = keys => values.map(row=>keys.map(key=>row[key]).find(value=>text(value).trim())).find(Boolean) || 'Não identificado';
     const identification=table([{description:known(['title','description']),class:known(['documentClass','class']),discipline:known(['discipline']),taxonomy:known(['taxonomy']),eap:known(['eap'])}], [['Descrição','description'],['Classe','class'],['Disciplina','discipline'],['Taxonomia','taxonomy'],['EAP','eap']]);
-    const heading = '<h3>'+esc(code)+'</h3><p>Fontes consultadas separadamente. Cada seção exibe até 100 registros; baixe versões específicas pelo identificador do arquivo.</p>';
+    currentDocument.columns=columns;
+    const heading = '<h3>'+esc(code)+'</h3><p>Fontes consultadas separadamente. Navegue pelas páginas de cada fonte; versões e emissões permanecem identificadas.</p>'+
+      '<div class="master-file-actions"><button type="button" class="secondary-button" data-master-target="document">Abrir na Central SIGEM</button><button type="button" class="secondary-button" data-master-target="vault">Pesquisar no Cofre</button></div>';
     document.getElementById('master-content').innerHTML = heading+'<section class="master-source"><h4>Identificação</h4>'+identification+'</section>'+sections.map(([key,label])=> {
-      let body;
-      if(key==='pw') body = pw===null ? '<p>ProjectWise indisponível.</p>' : !pwBase?.meta ? '<p>Base PW não carregada neste contrato/dispositivo.</p>' : '<p>Base local: '+esc(pwBase.meta.fileName)+' · '+esc(pwBase.meta.importedAt)+'</p>'+table(pw,columns.pw);
-      else if(results[0].status==='rejected') body='<p>Fonte compartilhada indisponível. '+esc(results[0].reason?.message)+'</p>';
-      else body=key==='vault'?filesMarkup(remote.vault):table(remote[key],columns[key]);
-      return '<section class="master-source"><h4>'+label+'</h4>'+body+'</section>';
+      return '<section class="master-source" data-master-source="'+key+'"><h4>'+label+'</h4><div data-master-body>'+sourceMarkup(key,results[0].status==='rejected')+'</div></section>';
     }).join('');
     status(results[0].status==='rejected'?'Algumas fontes não puderam ser consultadas.':'Registro atualizado.',results[0].status==='rejected');
+  }
+  function sourceMarkup(key,failed=false) {
+    const {remote,pw,columns}=currentDocument;
+    const meta=remote.sources?.[key];
+    let rows=key==='pw'&&!meta?.available?pw:remote[key];
+    if(key==='pw'&&!meta?.available) {
+      if(pw===null)return '<p>ProjectWise indisponível.</p>';
+      if(!pwBase?.meta)return '<p>Base PW não carregada neste contrato/dispositivo.</p>';
+      rows=(pw||[]).slice(currentDocument.localOffset||0,(currentDocument.localOffset||0)+100);
+    } else if(failed)return '<p>Fonte compartilhada indisponível. Tente atualizar a consulta.</p>';
+    else if(meta?.available===false)return '<p>'+esc(meta.reason)+'</p>';
+    const local=key==='pw'&&!meta?.available?pwBase?.meta:null;
+    const provenance=meta?.fileName?'<p>Base compartilhada: '+esc(meta.fileName)+' · '+esc(meta.date||'Data não informada')+'</p>':local?'<p>Base '+(local.source==='shared-projectwise'?'compartilhada em cache':'local')+': '+esc(local.fileName)+' · '+esc(local.importedAt)+'</p>':'';
+    const page=key==='pw'&&!meta?.available&&pw?.length ? {after:currentDocument.localOffset||0,next:(currentDocument.localOffset||0)+100,hasMore:(currentDocument.localOffset||0)+100<pw.length} : remote.pages?.[key];
+    const paging=page&&(page.after||page.hasMore)?'<nav aria-label="Páginas de '+esc(key)+'"><button type="button" data-master-page="'+key+'" data-master-offset="'+Math.max(0,page.after-100)+'" '+(!page.after?'disabled':'')+'>Anterior</button><span> Página '+(Math.floor(page.after/100)+1)+' </span><button type="button" data-master-page="'+key+'" data-master-offset="'+page.next+'" '+(!page.hasMore?'disabled':'')+'>Próxima</button></nav>':'';
+    const actions=key==='vault'?(rows||[]).map(f=>'<button type="button" class="secondary-button" data-master-detail="'+esc(f.id)+'">Versões e auditoria · '+esc(f.file_name)+'</button>').join(''):key==='history'?(rows||[]).map(h=>'<button type="button" class="secondary-button" data-master-history="'+esc(h.id)+'">Abrir emissão '+esc(h.egrdt_number)+'</button>').join(''):'';
+    return provenance+(key==='vault'?filesMarkup(rows):table(rows,columns[key]))+'<div class="master-file-actions">'+actions+'</div>'+paging;
+  }
+  async function loadPage(key,after,button) {
+    const view=currentDocument;if(!view)return;
+    button.disabled=true;
+    try{
+      if(key==='pw'&&!view.remote.sources?.pw?.available){
+        view.localOffset=after;
+        document.querySelector('[data-master-source="pw"] [data-master-body]').innerHTML=sourceMarkup('pw');
+        return;
+      }
+      const page=view.remote.pages?.[key];
+      const result=await api().request('/master-page?'+new URLSearchParams({code:view.code,source:key,after:String(after),revision:page.revision}));
+      if(view!==currentDocument||view.scope!==epoch||view.ticket!==searchTicket)return;
+      view.remote[key]=result[key];view.remote.pages[key]=result.pages[key];view.remote.sources=result.sources;
+      document.querySelector('[data-master-source="'+key+'"] [data-master-body]').innerHTML=sourceMarkup(key);
+      status('Página atualizada.');
+    }catch(error){if(view===currentDocument&&view.scope===epoch)status(error.message||'Fonte indisponível.',true);}
+    finally{button.disabled=false;}
+  }
+  async function openTarget(kind,value){
+    const scope=epoch;
+    try{
+      if(kind==='vault'){
+        document.getElementById('document-master-dialog').close();
+        await api().open();if(scope!==epoch)return;
+        const input=document.getElementById('vault-search');if(input){input.value=currentDocument.code;input.dispatchEvent(new Event('input',{bubbles:true}));}
+      }else if(kind==='history'){
+        await root.GRCONModuleLoader?.ensureModule?.('history');if(scope!==epoch)return;
+        const record=(root.GrconHistory?.read?.()||[]).find(r=>[r.id,r.cloudId,r.clientRecordId].includes(value));
+        if(!record)throw Error('Esta emissão não está disponível no histórico carregado. Atualize o Histórico.');
+        document.getElementById('document-master-dialog').close();root.GrconHistoryUi?.select?.(record.id);
+      }else{
+        await root.GRCONModuleLoader?.ensureModule?.('sigem');if(scope!==epoch)return;
+        document.getElementById('document-master-dialog').close();await root.GrconSigemCentralUi?.openTarget('document',currentDocument.code);
+      }
+    }catch(error){if(scope===epoch)status(error.message||'Destino indisponível.',true);}
   }
   async function search(query) {
     const ticket=++searchTicket, scope=epoch;
@@ -122,9 +178,9 @@
     dialog.addEventListener('close',()=>{searchTicket++;opener?.focus?.();});
     document.getElementById('master-query').addEventListener('input',event=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>void search(event.target.value),220);});
     document.getElementById('master-search').addEventListener('submit',event=>{event.preventDefault();clearTimeout(searchTimer);void showDocument(document.getElementById('master-query').value);});
-    dialog.addEventListener('click',event=>{const code=event.target.closest('[data-master-code]');if(code)void showDocument(code.dataset.masterCode);const file=event.target.closest('[data-master-download]');if(file)void downloadFile(file.dataset.masterDownload,file.dataset.masterName);});
+    dialog.addEventListener('click',event=>{const code=event.target.closest('[data-master-code]');if(code)void showDocument(code.dataset.masterCode);const page=event.target.closest('[data-master-page]');if(page)void loadPage(page.dataset.masterPage,Number(page.dataset.masterOffset),page);const detail=event.target.closest('[data-master-detail]');if(detail)void openFile(detail.dataset.masterDetail);const history=event.target.closest('[data-master-history]');if(history)void openTarget('history',history.dataset.masterHistory);const target=event.target.closest('[data-master-target]');if(target)void openTarget(target.dataset.masterTarget);const file=event.target.closest('[data-master-download]');if(file)void downloadFile(file.dataset.masterDownload,file.dataset.masterName);});
     dialog.addEventListener('submit',async event=>{if(event.target.getAttribute('id')!=='master-metadata')return;event.preventDefault();const values=Object.fromEntries(new FormData(event.target));try{await api().request('/metadata',{method:'POST',body:JSON.stringify(values)});status('Metadados atualizados.');}catch(error){status(error.message,true);}});
-    root.addEventListener('grcon:contract-context-changed',()=>{epoch++;searchTicket++;pwBase=null;pwIndex=null;dialog.close();document.getElementById('master-results').innerHTML='';document.getElementById('master-content').innerHTML='';document.getElementById('master-query').value='';});
+    root.addEventListener('grcon:contract-context-changed',()=>{epoch++;searchTicket++;currentDocument=null;pwBase=null;pwIndex=null;dialog.close();document.getElementById('master-results').innerHTML='';document.getElementById('master-content').innerHTML='';document.getElementById('master-query').value='';});
     root.addEventListener('grcon:pw-base-updated',()=>{pwBase=null;pwIndex=null;});
   }
   root.GrconDocumentMaster=Object.freeze({open,openFile});
