@@ -48,7 +48,7 @@ function BaseInfo({ kind, title, empty, base, result }: {
     <div id={`spw-${kind}-base`}>
       <div className="spw-base-title-row">
         <span>{title}</span>
-        <b className="spw-base-status loaded">Carregada</b>
+        <b className="spw-base-status loaded">{kind === "pw" && base.meta.source === "shared-projectwise" ? "Compartilhada" : "Carregada"}</b>
       </div>
       <strong title={String(base.meta.fileName || "")}>{String(base.meta.fileName || title)}</strong>
       <small>Data da base: {kind === "sigem" && base.meta.referenceDate ? String(base.meta.referenceDate).split("-").reverse().join("/") : fmtDate(base.meta.importedAt)}{originalDate}{kind === "sigem" && base.meta.referenceDate ? ` · Upload: ${fmtDate(base.meta.importedAt)}` : ""}</small>
@@ -61,12 +61,13 @@ function UploadIcon() {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M5 14v5h14v-5"></path></svg>;
 }
 
-export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onEditDate }: {
+export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onEditDate, onPublishPw }: {
   state: SigemPwState;
   onImportSigem(file: File): void;
   onImportPw(file: File): void;
   onImportLd(file: File): void;
   onEditDate(system: "sigem" | "pw"): void;
+  onPublishPw(): void;
 }) {
   const sigemRef = useRef<HTMLInputElement>(null);
   const pwRef = useRef<HTMLInputElement>(null);
@@ -91,8 +92,9 @@ export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onE
       <article className="spw-base-card" data-loaded={Boolean(state.pw.meta)}>
         <BaseInfo kind="pw" title="BASE PROJECTWISE" empty="Relação PW não carregada" base={state.pw} result={state.result} />
         <div className="spw-base-actions">
-          <button className="text-button" data-edit-base-date="pw" type="button" disabled={state.busy || !state.pw.meta} onClick={() => onEditDate("pw")}><span>Editar data</span></button>
+          <button className="text-button" data-edit-base-date="pw" type="button" disabled={state.busy || !state.pw.meta || (state.pw.meta.source === "shared-projectwise" && !window.GrconSharedPwQuery?.canPublish())} onClick={() => onEditDate("pw")}><span>Editar data</span></button>
           <button className="secondary-button" id="spw-pw-update" type="button" disabled={state.busy} onClick={() => pwRef.current?.click()}><UploadIcon /><span>{state.pw.meta ? "Atualizar base PW" : "Carregar base PW"}</span></button>
+          {state.pw.meta && window.GrconSharedPwQuery?.canPublish() && state.pw.meta.source !== "shared-projectwise" ? <button className="secondary-button" id="spw-pw-publish" type="button" disabled={state.busy} onClick={onPublishPw}>Publicar PW para a equipe</button> : null}
           <input ref={pwRef} id="spw-pw-file" hidden type="file" accept=".csv,.txt,text/csv" onChange={onFile(onImportPw)} />
         </div>
       </article>

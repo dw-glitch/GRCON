@@ -7,6 +7,7 @@ export interface EvolutionSourceCatalog {
   aliases: Map<string, string>;
   sharedIds: Set<string>;
   versions: SigemPwSharedVersion[] | null;
+  pwVersions?: SigemPwSharedVersion[] | null;
 }
 
 // Full Dashboard snapshots and the older content-indexed history are projections
@@ -16,11 +17,12 @@ export function buildEvolutionSourceCatalog(
   history: SigemPwHistory,
   versions: SigemPwSharedVersion[] | null,
   fingerprint: (system: string, records: SigemPwBase["records"]) => string,
+  pwVersions: SigemPwSharedVersion[] | null = null,
 ): EvolutionSourceCatalog {
   const sources = new Map<string, EvolutionSourceSnapshotMeta>();
   const payloads = new Map<string, SigemPwBase>();
   const aliases = new Map<string, string>();
-  const sharedIds = new Set((versions || []).map(version => version.snapshot_id));
+  const sharedIds = new Set([...(versions || []), ...(pwVersions || [])].map(version => version.snapshot_id));
   const deleted = new Set(history.deletedIds || []);
   const superseded = new Set<string>();
   for (const base of history.snapshots) {
@@ -32,6 +34,7 @@ export function buildEvolutionSourceCatalog(
     superseded.add(alias);
     if (deleted.has(id) || (system === "sigem" && versions !== null
       && base.meta.source === "shared-general-query" && !sharedIds.has(id))) continue;
+    if (system === "pw" && pwVersions !== null && base.meta.source === "shared-projectwise" && !sharedIds.has(id)) continue;
     aliases.set(alias, id);
     sources.set(id, { ...base.meta, id, system });
     payloads.set(id, base);
@@ -52,8 +55,17 @@ export function buildEvolutionSourceCatalog(
     const base = payloads.get(id);
     if (base) payloads.set(id, { ...base, meta: { ...base.meta, ...meta } });
   }
+  for (const version of pwVersions || []) {
+    const id = version.snapshot_id;
+    sources.set(id, { ...version.metadata, id, snapshotId: id, system: "pw", kind: "pw", source: "shared-projectwise",
+      fileName: version.file_name, importedAt: version.metadata?.importedAt || version.published_at || version.created_at,
+      recordCount: version.record_count });
+    // Full shared PW payloads remain authoritative; local projections may have
+    // been scoped using a different LD and cannot replace the original input.
+    payloads.delete(id);
+  }
   return { metadata: {
     sigem: [...sources.values()].filter(source => source.system === "sigem"),
     pw: [...sources.values()].filter(source => source.system === "pw"),
-  }, payloads, aliases, sharedIds, versions };
+  }, payloads, aliases, sharedIds, versions, pwVersions };
 }

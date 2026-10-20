@@ -161,6 +161,17 @@ interface LegacyActivationApi {
 
 declare global {
   interface Window {
+    GrconSharedPwQuery?: {
+      state: { error: string; stale: boolean; versions: import("./domain").SigemPwSharedVersion[] };
+      refresh(): Promise<SigemPwBase | null>;
+      current(): SigemPwBase | null;
+      listVersions(): Promise<import("./domain").SigemPwSharedVersion[]>;
+      loadSnapshot(id: string, versions?: import("./domain").SigemPwSharedVersion[]): Promise<SigemPwBase>;
+      publish(base: SigemPwBase): Promise<SigemPwBase | null>;
+      canPublish(): boolean;
+      setReferenceDate(value: string, id: string, expectedImportedAt?: string): Promise<void>;
+      remove(id: string): Promise<void>;
+    };
     GrconSigemPwDashboard?: SigemPwDashboardCoreApi;
     GrconSigemPwReadiness?: SigemPwReadinessApi;
     GrconSigemPwHistory?: SigemPwHistoryApi;

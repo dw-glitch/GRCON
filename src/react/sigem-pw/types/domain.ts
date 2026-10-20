@@ -179,6 +179,8 @@ export interface SigemPwSharedVersion {
 
 export interface SigemPwState {
   sigemVersions: SigemPwSharedVersion[];
+  pwVersions?: SigemPwSharedVersion[];
+  pwSharedError?: string;
   analysisSigemId: string;
   analysisPwId: string;
   analysisError: string;

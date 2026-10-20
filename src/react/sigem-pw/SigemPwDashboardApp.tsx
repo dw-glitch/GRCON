@@ -66,6 +66,7 @@ export function SigemPwDashboardApp() {
           state={state}
           onImportSigem={(file) => { void adapter.importSigem(file); }}
           onImportPw={(file) => { void adapter.importPw(file); }}
+          onPublishPw={() => { void adapter.publishPw(); }}
           onImportLd={(file) => { void adapter.importLd(file); }}
           onEditDate={(system) => adapter.openBaseDateEditor(system)}
         />

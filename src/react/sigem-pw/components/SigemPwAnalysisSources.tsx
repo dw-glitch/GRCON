@@ -13,7 +13,8 @@ interface Props {
   onDeleteSigem(id: string): void;
 }
 export function SigemPwAnalysisSources({ state, onSelect, canManageSigemHistory, onActivateSigem, onDeleteSigem }: Props) {
-  const pwVersions = state.history.snapshots.filter(item => item.meta.kind === "pw");
+  const sharedIds = new Set((state.pwVersions || []).map(item => item.snapshot_id));
+  const pwVersions = state.history.snapshots.filter(item => item.meta.kind === "pw" && item.meta.source !== "shared-projectwise" && !sharedIds.has(String(item.meta.snapshotId)));
   const selectedSigemId = state.analysisSigemId || String(state.officialSigem?.snapshotId || "");
   const selectedSigemVersion = state.sigemVersions.find(version => version.snapshot_id === selectedSigemId);
   const selectedSigemIsCurrent = selectedSigemVersion?.status === "active";
@@ -32,7 +33,8 @@ export function SigemPwAnalysisSources({ state, onSelect, canManageSigemHistory,
     </div> : null}
     <label>Base PW utilizada
       <select id="spw-analysis-pw" value={state.analysisPwId} disabled={state.busy} onChange={event => onSelect("pw", event.target.value)}>
-        <option value="">Base PW atual</option>
+        <option value="">PW atual{state.pw.meta?.source === "shared-projectwise" ? " compartilhado" : " deste computador"}</option>
+        {(state.pwVersions || []).map(version => <option key={version.snapshot_id} value={version.snapshot_id}>{date(version.metadata?.importedAt || version.published_at)} · {version.file_name} · {version.record_count.toLocaleString("pt-BR")} registros · compartilhado</option>)}
         {pwVersions.map(version => <option key={String(version.meta.snapshotId)} value={String(version.meta.snapshotId)}>{date(version.meta.importedAt)} · {String(version.meta.fileName)} · {version.records.length.toLocaleString("pt-BR")} registros</option>)}
       </select>
     </label>
@@ -40,6 +42,7 @@ export function SigemPwAnalysisSources({ state, onSelect, canManageSigemHistory,
       {state.analysisSigemId ? <> Base histórica selecionada para análise. A Consulta Geral oficial permanece em {date(state.officialSigem?.referenceDate || state.officialSigem?.importedAt)}.</> : " Usando a Consulta Geral atual."}
     </p>
     {state.analysisSigemId && <button type="button" className="secondary-button" disabled={state.busy} onClick={() => onSelect("sigem", "")}>Usar Consulta Geral mais recente</button>}
+    {state.pwSharedError ? <small role="status">PW compartilhado: {state.pwSharedError}</small> : null}
     {state.analysisError && <div role="alert"><p>{state.analysisError}</p><button className="secondary-button" type="button" disabled={state.busy} onClick={() => onSelect("sigem", state.analysisSigemId)}>Tentar novamente</button></div>}
   </div>;
 }
