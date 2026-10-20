@@ -10,7 +10,7 @@
  async function refresh(){
   const state=cloud(),w=state?.membership?.workspace_id;
   if(!w||!state.session?.access_token)return [];
-  if(scope!==w){scope=w;attempts=new Map();byRecord=new Map();cursor={};request=null;generation++;}
+  if(scope!==w){scope=w;attempts=new Map();byRecord=new Map();cursor={};request=null;generation++;lastSuccessfulSync=null;failures=0;retryAfter=0;disabledUntil=0;traceDisabled=false;}
   token=state.session.access_token;
   if(request)return request;
   if(traceDisabled && Date.now()<disabledUntil)return [];
