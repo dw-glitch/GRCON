@@ -43,6 +43,13 @@
     const left=Math.min(...corners.map(p=>p[0])),top=Math.min(...corners.map(p=>p[1]));
     const width=Math.max(.1,Math.max(...corners.map(p=>p[0]))-left);
     const height=Math.max(.1,Math.max(...corners.map(p=>p[1]))-top);
+    if(rect.polygon){
+      const points=corners.map(p=>Math.round((p[0]-left)/width*10000)+','+Math.round((p[1]-top)/height*10000));
+      const path='m '+points[0]+' l '+points.slice(1).join(',')+' x e';
+      return '<w:r><w:pict><v:shape id="'+shapeId(id)+'" style="'+pageStyle(left,top,width,height,0)+
+        '" coordorigin="0,0" coordsize="10000,10000" path="'+path+
+        '" filled="t" fillcolor="'+rect.color+'" stroked="f"/></w:pict></w:r>';
+    }
     return '<w:r><w:pict><v:rect id="'+shapeId(id)+'" style="'+pageStyle(left,top,width,height,0)+
       '" filled="t" fillcolor="'+rect.color+'" stroked="f"/></w:pict></w:r>';
   };
@@ -65,39 +72,71 @@
   ];
   const project=(m,x,y)=>[m[0]*x+m[2]*y+m[4],m[1]*x+m[3]*y+m[5]];
   function graphics(ops,OPS,warnings){
-    let matrix=[1,0,0,1,0,0],color='#000000',fillColor='#000000',weight=.8,pen=null,start=null,pending=[],pendingRects=[];
+    let matrix=[1,0,0,1,0,0],strokeColor='#000000',fillColor='#000000',weight=.8;
     const stack=[],lines=[],images=[],fills=[];
-    const emit=(from,to)=>{if(from&&to&&lines.length<3500)pending.push({x1:from[0],y1:from[1],x2:to[0],y2:to[1],color,weight});};
+    let pendingLines=[],pendingRects=[],pendingPolygons=[],pen=null,start=null,poly=null;
+    const emit=(from,to)=>{
+      if(from&&to&&lines.length+pendingLines.length<3500)pendingLines.push({x1:from[0],y1:from[1],x2:to[0],y2:to[1],color:strokeColor,weight});
+    };
+    const commitPoly=()=>{
+      if(poly&&poly.length>=3)pendingPolygons.push(poly);
+      poly=null;
+    };
+    const clear=()=>{pendingLines=[];pendingRects=[];pendingPolygons=[];pen=null;start=null;poly=null;};
+    const saveFills=()=>{
+      commitPoly();
+      for(const r of pendingRects)if(fills.length<5000)fills.push(r);
+      for(const p of pendingPolygons)if(p.length>=3&&fills.length<5000)fills.push({polygon:true,points:p,color:fillColor});
+    };
     for(let i=0;i<ops.fnArray.length;i++){
       const fn=ops.fnArray[i],args=ops.argsArray[i]||[];
-      if(fn===OPS.save){stack.push({matrix:[...matrix],color,fillColor,weight});continue;}
-      if(fn===OPS.restore){const old=stack.pop();if(old){matrix=old.matrix;color=old.color;fillColor=old.fillColor;weight=old.weight;}continue;}
+      if(fn===OPS.save){stack.push({matrix:[...matrix],strokeColor,fillColor,weight});continue;}
+      if(fn===OPS.restore){const old=stack.pop();if(old){matrix=old.matrix;strokeColor=old.strokeColor;fillColor=old.fillColor;weight=old.weight;}continue;}
       if(fn===OPS.transform){matrix=multiply(matrix,args);continue;}
-      if(fn===OPS.setStrokeRGBColor){color=rgb(args);continue;}
+      if(fn===OPS.setStrokeRGBColor){strokeColor=rgb(args);continue;}
       if(fn===OPS.setFillRGBColor){fillColor=rgb(args);continue;}
       if(fn===OPS.setLineWidth){weight=Math.max(.3,Math.min(4,Number(args[0])||.8));continue;}
       if(fn===OPS.constructPath){
         let offset=0;const pathOps=args[0]||[],coords=args[1]||[];
         for(const command of pathOps){
-          if(command===OPS.moveTo){pen=project(matrix,coords[offset++],coords[offset++]);start=pen;}
-          else if(command===OPS.lineTo){const next=project(matrix,coords[offset++],coords[offset++]);emit(pen,next);pen=next;}
-          else if(command===OPS.rectangle){
+          if(command===OPS.moveTo){
+            commitPoly();pen=project(matrix,coords[offset++],coords[offset++]);start=pen;poly=[pen];
+          }else if(command===OPS.lineTo){
+            const next=project(matrix,coords[offset++],coords[offset++]);emit(pen,next);pen=next;
+            if(poly)poly.push(next);
+          }else if(command===OPS.rectangle){
             const x=coords[offset++],y=coords[offset++],w=coords[offset++],h=coords[offset++];
             const pts=[[x,y],[x+w,y],[x+w,y+h],[x,y+h]].map(p=>project(matrix,...p));
-            for(let j=0;j<4;j++)emit(pts[j],pts[(j+1)%4]);pendingRects.push({points:pts,color:fillColor});pen=pts[0];start=pts[0];
-          }else if(command===OPS.curveTo){offset+=6;pen=project(matrix,coords[offset-2],coords[offset-1]);}
-          else if(command===OPS.curveTo2||command===OPS.curveTo3){offset+=4;pen=project(matrix,coords[offset-2],coords[offset-1]);}
-          else if(command===OPS.closePath){emit(pen,start);pen=start;}
+            for(let j=0;j<4;j++)emit(pts[j],pts[(j+1)%4]);
+            pendingRects.push({points:pts,color:fillColor});pen=pts[0];start=pts[0];
+          }else if(command===OPS.curveTo||command===OPS.curveTo2||command===OPS.curveTo3){
+            const raw=command===OPS.curveTo?coords.slice(offset,offset+6):coords.slice(offset,offset+4);
+            offset+=raw.length;
+            const c1=command===OPS.curveTo2?pen:project(matrix,raw[0],raw[1]);
+            const c2=command===OPS.curveTo3?project(matrix,raw[2],raw[3]):
+              project(matrix,raw[command===OPS.curveTo?2:0],raw[command===OPS.curveTo?3:1]);
+            const last=project(matrix,raw[raw.length-2],raw[raw.length-1]);
+            if(pen&&c1&&c2&&poly){
+              for(let j=1;j<=8;j++){
+                const t=j/8,q=1-t;
+                poly.push([q*q*q*pen[0]+3*q*q*t*c1[0]+3*q*t*t*c2[0]+t*t*t*last[0],
+                           q*q*q*pen[1]+3*q*q*t*c1[1]+3*q*t*t*c2[1]+t*t*t*last[1]]);
+              }
+            }
+            pen=last;
+          }else if(command===OPS.closePath){emit(pen,start);pen=start;commitPoly();}
         }
         continue;
       }
-      if(fn===OPS.stroke||fn===OPS.closeStroke||fn===OPS.fillStroke||fn===OPS.eoFillStroke||fn===OPS.closeFillStroke||fn===OPS.closeEOFillStroke){
-        for(const line of pending)if(lines.length<3500)lines.push(line);
-        if(fn!==OPS.stroke&&fn!==OPS.closeStroke){for(const rect of pendingRects)if(fills.length<5000)fills.push(rect);}
-        pending=[];pendingRects=[];continue;
+      const stroke=fn===OPS.stroke||fn===OPS.closeStroke||fn===OPS.fillStroke||fn===OPS.eoFillStroke||
+        fn===OPS.closeFillStroke||fn===OPS.closeEOFillStroke;
+      const fill=fn===OPS.fill||fn===OPS.eoFill||fn===OPS.fillStroke||fn===OPS.eoFillStroke||
+        fn===OPS.closeFillStroke||fn===OPS.closeEOFillStroke;
+      if(stroke||fill||fn===OPS.endPath){
+        if(fill)saveFills();
+        if(stroke)for(const line of pendingLines)if(lines.length<3500)lines.push(line);
+        clear();continue;
       }
-      if(fn===OPS.fill||fn===OPS.eoFill){for(const rect of pendingRects)if(fills.length<5000)fills.push(rect);pending=[];pendingRects=[];continue;}
-      if(fn===OPS.endPath){pending=[];pendingRects=[];continue;}
       if(fn===OPS.paintImageXObject||fn===OPS.paintJpegXObject){
         if(images.length<100)images.push({name:args[0],matrix:[...matrix]});continue;
       }
@@ -105,7 +144,7 @@
         if(images.length<100)images.push({inline:args[0],matrix:[...matrix]});
       }
     }
-    if(lines.length>=3500)note(warnings,'Há páginas com milhares de traços vetoriais; parte dos desenhos pode requerer revisão.');
+    if(lines.length>=3500||fills.length>=5000)note(warnings,'Há páginas com milhares de objetos vetoriais; parte dos desenhos pode requerer revisão.');
     return {lines,images,fills};
   }
   async function encodeImage(source,reader){
