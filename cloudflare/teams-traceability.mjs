@@ -117,6 +117,8 @@ export async function handleTraceRoute(request,env) {
     }
     if(['page','detail'].includes(route) && request.method==='GET') {
       const user=await actor(request,env),w=workspace(url.searchParams.get('workspace'));
+      // Disabled traceability must not call the RPC; session/workspace validation remains intact.
+      if(!enabled(env))return json({ok:true,enabled:false,data:route==='page'?[]:null});
       const input=route==='page'?{afterTime:url.searchParams.get('afterTime'),afterId:url.searchParams.get('afterId')}:{attemptId:url.searchParams.get('attemptId')};
       return json({ok:true,enabled:enabled(env),data:await traceRpc(env,w,user,route,input)});
     }
