@@ -74,6 +74,7 @@ const root=process.cwd();
    const visualDownload=page.waitForEvent('download',{timeout:60000});
    await page.locator('#docx-pdf-convert').click();
    const visual=await visualDownload;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
    assert.equal(visual.suggestedFilename(),'duas-paginas.docx');
    const visualPackage=await page.evaluate(async bytes=>{
      const zip=await JSZip.loadAsync(new Uint8Array(bytes));
@@ -105,6 +106,7 @@ const root=process.cwd();
    const mixedDownload=page.waitForEvent('download',{timeout:60000});
    await page.locator('#docx-pdf-convert').click();
    const mixedWord=await mixedDownload;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
    const mixedXml=await page.evaluate(async bytes=>{
      const zip=await JSZip.loadAsync(new Uint8Array(bytes));
      return zip.file('word/document.xml').async('string');
@@ -123,6 +125,7 @@ const root=process.cwd();
    const volumeDownload=page.waitForEvent('download',{timeout:120000});
    await page.locator('#docx-pdf-convert').click();
    const volumeWord=await volumeDownload;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
    const volumeXml=await page.evaluate(async bytes=>{
      const zip=await JSZip.loadAsync(new Uint8Array(bytes));
      return zip.file('word/document.xml').async('string');
@@ -141,6 +144,7 @@ const root=process.cwd();
    const first=page.waitForEvent('download',{timeout:45000});
    await page.locator('#docx-pdf-convert').click();
    const downloaded=await first;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
    assert.equal(downloaded.suggestedFilename(),'qualidade.docx');
    const original=fs.readFileSync(await downloaded.path());
    const extracted=await page.evaluate(async bytes=>{
@@ -157,6 +161,7 @@ const root=process.cwd();
    const grouped=page.waitForEvent('download',{timeout:45000});
    await page.locator('#docx-pdf-convert').click();
    const result=await grouped;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
    assert.equal(result.suggestedFilename(),'GRCON_PDF_convertidos.zip');
    const names=await page.evaluate(async bytes=>Object.keys((await JSZip.loadAsync(new Uint8Array(bytes))).files).sort(),
       Array.from(fs.readFileSync(await result.path())));
