@@ -28,7 +28,7 @@ const root=process.cwd();
    page.on('pageerror',error=>errors.push(error.message));
    page.on('request',req=>{if(req.method()!=='GET')uploads.push(req.url());});
    await page.goto('http://127.0.0.1:'+server.address().port);
-   for(const name of ['jszip.min.js','pdf-lib.min.js','docx_pdf_core.js','docx_pdf_app.js'])await page.addScriptTag({path:path.join(root,name)});
+   for(const name of ['jszip.min.js','pdf-lib.min.js','docx_pdf_layout.js','docx_pdf_core.js','docx_pdf_app.js'])await page.addScriptTag({path:path.join(root,name)});
    await page.evaluate(()=>window.GrconDocxPdfUi.activate());
    assert.equal(await page.getByRole('heading',{name:'Converter PDF para DOCX'}).count(),1);
    assert.equal(await page.locator('#docx-pdf-input').getAttribute('accept'),'.pdf,application/pdf');
@@ -54,8 +54,8 @@ const root=process.cwd();
      }
      return {a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),multipage:Array.from(await multipage.save())};
    });
-   // Modo visual (padrao): duas paginas, duas imagens e nenhum texto falso "editavel".
-   assert.equal(await page.locator('input[name="docx-pdf-mode"]:checked').inputValue(),'visual');
+   // Padrão novo: reconstrução com texto editável em OOXML, sem fotografar páginas.
+   assert.equal(await page.locator('input[name="docx-pdf-mode"]').count(),0);
    await page.locator('#docx-pdf-input').setInputFiles({
      name:'duas-paginas.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.multipage)
    });
@@ -69,13 +69,14 @@ const root=process.cwd();
      return {files:Object.keys(zip.files),xml:await zip.file('word/document.xml').async('string'),
        rels:await zip.file('word/_rels/document.xml.rels').async('string')};
    },Array.from(fs.readFileSync(await visual.path())));
-   assert.equal(visualPackage.files.filter(name=>/^word\/media\/pagina-\d{4}\.jpg$/.test(name)).length,2);
-   assert.equal((visualPackage.xml.match(/<wp:anchor\b/g)||[]).length,2);
+   assert.equal(visualPackage.files.filter(name=>/^word\/media\/pagina-\d{4}\.jpg$/.test(name)).length,0);
    assert.equal((visualPackage.xml.match(/<w:pageBreakBefore\s*\/>/g)||[]).length,1);
-   assert.doesNotMatch(visualPackage.xml,/<w:t(?:\s|>)/,'modo visual nao oferece texto editavel');
-   assert.match(visualPackage.rels,/media\/pagina-0002\.jpg/);
+   assert.match(visualPackage.xml,/<w:txbxContent>/,'texto deve ser objeto do Word');
+   assert.match(visualPackage.xml,/Pagina 1/);
+   assert.match(visualPackage.xml,/Pagina 2/);
+   assert.match(visualPackage.xml,/<v:line\b/,'bordas devem ser vetores Word');
+   assert.doesNotMatch(visualPackage.xml,/<wp:anchor\b/,'não rasterizar páginas');
    await page.locator('#docx-pdf-clear').click();
-   await page.locator('input[value="editable-basic"]').check();
    await page.locator('#docx-pdf-confirm').uncheck();
    const pdfInput={name:'qualidade.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.a)};
    await page.locator('#docx-pdf-input').setInputFiles(pdfInput);
@@ -118,6 +119,6 @@ const root=process.cwd();
    assert.equal(await page.locator('#docx-pdf-list [data-docx-action="download"]').count(),0);
    assert.deepEqual(uploads,[],'PDFs não podem ser enviados ao servidor');
    assert.deepEqual(errors,[],'não permitir erros JavaScript não tratados');
-   console.log('PDF -> DOCX Chromium: fidelidade visual 2 paginas, texto simplificado, ZIP, OCR avisado e zero uploads: OK');
+   console.log('PDF -> DOCX Chromium: OOXML editavel, vetores, 2 paginas, ZIP, OCR avisado e zero uploads: OK');
  }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
