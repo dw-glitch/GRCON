@@ -27,8 +27,11 @@ Validação: PGlite com papéis reais, sessão revogada, isolamento, carga parci
 concorrência, histórico e datas; cliente com 2.001 linhas e respostas incompletas;
 Chromium com duas sessões e IndexedDB independentes. O teste de produção da RPC
 usa transação com rollback, sem publicar base fictícia para os operadores.
-A ferramenta de aplicação de migrations apresentou `Invalid or expired requestState`;
-o DDL idempotente foi aplicado pelo executor SQL autenticado e conferido no banco.
-O registro desta execução no histórico de migrations ainda está pendente; uma
-tentativa de registro foi interrompida. O arquivo pode ser aplicado novamente
-pelo fluxo normal de migrations, pois o DDL é idempotente.
+A aplicação inicial usou DDL idempotente pelo executor SQL autenticado após
+falhas do serviço de migrations. Em 20/10/2026 o fluxo normal reaplicou esse DDL
+com sucesso e registrou `20261020174318_shared_projectwise_snapshots_tracking`.
+O registro foi conferido no banco. O arquivo inicial é mantido na ordem original,
+pois a paginação do Registro Mestre depende das tabelas PW em uma instalação
+nova. A migration de regularização repete o DDL idempotente; não remove snapshots,
+registros ou permissões operacionais. A regressão reaplica essa migration com
+uma base já publicada e verifica sua preservação.

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { SigemPwBase, SigemPwResult, SigemPwState } from "../types/domain";
 
 function fmt(value: number): string {
@@ -57,6 +57,25 @@ function BaseInfo({ kind, title, empty, base, result }: {
   );
 }
 
+function ImportOptions({base}: {base: SigemPwBase}) {
+  const [,redraw]=useState(0);
+  const [message,setMessage]=useState("");
+  const service=window.GrconImportReview;
+  if(!service)return null;
+  const labels: Record<string,string>={document:"Código do documento",revision:"Revisão",documentType:"Tipo do documento",state:"Status PW",lastEmission:"Última emissão"};
+  const selected=service.profile();
+  return <details className="spw-import-options"><summary>Prévia e perfis de importação</summary>
+    <label><input type="checkbox" id="spw-import-review-enabled" checked={service.enabled()} onChange={e=>{service.setEnabled(e.target.checked);redraw(n=>n+1);}} />Revisar impacto antes de ativar SIGEM, PW ou LD</label>
+    <label>Perfil de colunas PW<select id="spw-import-profile" value={selected?.name||""} onChange={e=>{service.selectProfile(e.target.value);redraw(n=>n+1);}}><option value="">Detecção automática</option>{service.profiles().map(p=><option key={p.name} value={p.name}>{p.name}</option>)}</select></label>
+    <form key={String(base.meta?.snapshotId||"")+String(selected?.name||"")} onSubmit={e=>{e.preventDefault();try{const values=new FormData(e.currentTarget);const columns={...selected?.columns};for(const field of Object.keys(labels))columns[field]=String(values.get(field)||"");service.saveProfile(String(values.get('name')||""),{columns,delimiter:String(values.get('delimiter')||";")});setMessage("Perfil salvo neste navegador para esta conta e contrato.");redraw(n=>n+1);}catch(error){setMessage(error instanceof Error?error.message:"Não foi possível salvar o perfil.");}}}>
+      <details><summary>Configurar mapeamento PW</summary><label>Nome do perfil<input name="name" maxLength={80} defaultValue={selected?.name||""} required /></label>
+      {Object.entries(labels).map(([field,label])=><label key={field}>{label}<input name={field} maxLength={160} defaultValue={selected?.columns[field]||String((base.meta?.columns as Record<string,string>|undefined)?.[field]||"")} required /></label>)}
+      <label>Separador<select name="delimiter" defaultValue={selected?.delimiter||String(base.meta?.delimiter||";")}><option value=";">Ponto e vírgula</option><option value=",">Vírgula</option><option value="\t">Tabulação</option></select></label><button type="submit">Salvar perfil</button>
+      {selected?<button type="button" onClick={()=>{service.removeProfile(selected.name);redraw(n=>n+1);}}>Excluir perfil</button>:null}</details>
+    </form><small>O perfil só é usado quando selecionado. Colunas ausentes ou ambíguas impedem a substituição da base.</small><p role="status">{message}</p>
+  </details>;
+}
+
 function UploadIcon() {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M5 14v5h14v-5"></path></svg>;
 }
@@ -97,6 +116,7 @@ export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onE
           {state.pw.meta && window.GrconSharedPwQuery?.canPublish() && state.pw.meta.source !== "shared-projectwise" ? <button className="secondary-button" id="spw-pw-publish" type="button" disabled={state.busy} onClick={onPublishPw}>Publicar PW para a equipe</button> : null}
           <input ref={pwRef} id="spw-pw-file" hidden type="file" accept=".csv,.txt,text/csv" onChange={onFile(onImportPw)} />
         </div>
+        <ImportOptions base={state.pw} />
       </article>
 
       <article className="spw-base-card" data-loaded={Boolean(state.ld.meta)}>

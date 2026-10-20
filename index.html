@@ -223,8 +223,8 @@
 <div class="macro6-action-row"><button class="secondary-button compact" data-macro6-action id="macro6-preferences-export" type="button">Exportar preferências</button><button class="secondary-button compact" data-macro6-action id="macro6-preferences-import-button" type="button">Importar preferências</button><input accept="application/json,.json" hidden id="macro6-preferences-import" type="file"/></div>
 </section>
 <section class="macro6-productivity-section">
-<header><strong>Backup completo</strong><small>Inclui preferências, Histórico de análises, Histórico de eGRDTs e fila SIGEM.</small></header>
-<div class="macro6-action-row"><button class="primary-button compact" data-macro6-action id="macro6-full-export" type="button">Criar backup completo</button><button class="secondary-button compact" data-macro6-action id="macro6-full-import-button" type="button">Restaurar backup</button><input accept="application/json,.json" hidden id="macro6-full-import" type="file"/></div>
+<header><strong>Backup completo</strong><small>Inclui dados locais com contexto verificável, bases do Dashboard, conferência e históricos. Banco compartilhado, R2 e arquivos físicos exigem backup próprio.</small></header>
+<div class="macro6-action-row"><button class="primary-button compact" data-macro6-action id="macro6-full-export" type="button">Criar backup completo</button><button class="secondary-button compact" data-macro6-action id="macro6-full-import-button" type="button">Restaurar backup</button><input accept="application/json,.json,.grconbackup" hidden id="macro6-full-import" type="file"/><button class="secondary-button compact" id="macro6-recover-local" type="button">Recuperar estado anterior</button></div>
 </section>
 <section class="macro6-productivity-section">
 <header><strong>Relatório comparativo</strong><small>Compara análises, eGRDTs e postagens no período selecionado.</small></header>
@@ -668,16 +668,20 @@
 <script defer="" src="retomar.js"></script>
 <script defer="" src="supabase.min.js"></script>
 <script defer="" src="grcon_cloud_config.js"></script>
+<script defer src="client_diagnostics.js"></script>
 <script defer="" src="grcon_cloud_app.js"></script>
 <script defer="" src="grcon-profile-avatar.js"></script>
 <script defer src="document_vault_core.js"></script>
 <script defer src="document_vault_app.js"></script>
+<script defer src="document_explanations.js"></script>
 <script defer src="document_master_app.js"></script>
 <script defer src="planned_documents_app.js"></script>
 <script defer src="allocation_registry_app.js"></script>
 <script defer src="shared_sigem_query_app.js?v=history-api-2"></script>
 <script defer src="shared_pw_query_app.js"></script>
 <script defer src="document_task_queue.js"></script>
+<script defer src="import_review.js"></script>
+<script defer src="managerial_report.js"></script>
 <script defer src="sigem_status_monitoring_app.js"></script>
 <script defer src="contract_admin_app.js"></script>
 <link rel="stylesheet" href="background-jobs.css">
@@ -731,6 +735,7 @@
 <script defer="" src="p1_ux.js"></script><script defer="" src="app-ui.js"></script>
 <script defer src="ui-v3.js"></script>
 <script defer src="macro5_flow_app.js"></script>
+<script defer src="grcon_backup.js"></script>
 <script defer src="productivity_center.js"></script>
 <script defer src="grcon_enhancements.js"></script>
 <script defer src="grdt-stage-progress.js"></script>

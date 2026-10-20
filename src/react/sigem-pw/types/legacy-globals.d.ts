@@ -161,6 +161,19 @@ interface LegacyActivationApi {
 
 declare global {
   interface Window {
+    GrconImportReview?: {
+      scope(): string;
+      enabled(): boolean;
+      setEnabled(value: boolean): void;
+      review(system: string, candidate: SigemPwBase, previous: SigemPwBase): Promise<boolean>;
+      profiles(): Array<{name: string; columns: Record<string,string>; delimiter: string}>;
+      profile(): {name: string; columns: Record<string,string>; delimiter: string} | null;
+      saveProfile(name: string, value: {columns: Record<string,string>; delimiter: string}): unknown;
+      selectProfile(name: string): void;
+      removeProfile(name: string): void;
+      session(): {filters?: Partial<import('./domain').SigemPwFilters>; revisionScope?: string; activeList?: string; analysisPwId?: string; analysisSigemId?: string} | null;
+      saveSession(value: unknown): void;
+    };
     GrconSharedPwQuery?: {
       state: { error: string; stale: boolean; versions: import("./domain").SigemPwSharedVersion[] };
       refresh(): Promise<SigemPwBase | null>;

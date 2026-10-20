@@ -47,14 +47,16 @@ o reaproveitamento deve ser avaliado junto do tempo total e do uso de memória.
 Fases 0–1 publicadas pelo PR #268, commit `c27f6b040387ff5bb0647290741682540f17dfd0`.
 Validação integral, Chromium e uso continuado aprovados no CI.
 Fase 2 integrada pelo PR #269, commit `3f1866a4c228592db34131ec00379d4c024bb730`; testes de banco, cliente, duas sessões Chromium e uso contínuo aprovados.
-Fase 3 em PR #270, banco e testes locais concluídos.
-Fase 4: `docs/document-task-queue.md`; edição compartilhada, CAS, filtros e visualizações testados no banco, cliente e Chromium.
+Fase 3 integrada pelo PR #270, commit `a561a36c6d1f6d7e5e8043079a9b8f2205e10a75`.
+Fase 4 integrada pelo PR #271, commit `f9c2059ec9d9fec2dbba3816b070474d7bc42e9d`.
+Fases 5–7 em entrega conjunta pela PR #274: prévia, perfis PW, retomada, CSV gerencial, backup/rollback com isolamento, diagnóstico da aba e explicações com fontes.
+Documentação: `docs/import-recovery-reports.md`, `docs/evolution-tools-diagnostics.md` e `docs/source-explanations.md`.
+A consulta com fontes funciona por regras. A camada generativa de IA não foi implementada nem ativada; depende da decisão explícita de credenciais.
+Pilotos externos PW/M365/OCR seguem condicionados a acesso, permissões e critérios de benefício.
+Migration PW regularizada pelo fluxo normal e registrada no banco sob `20261020174318_shared_projectwise_snapshots_tracking`; arquivo inicial preservado para a ordem de instalação nova.
 
-## Próximas entregas
+## Continuidade condicionada
 
-2. Snapshots PW compartilhados, publicação atômica e seleção pelos módulos consumidores.
-3. Registro Mestre: paginação por fonte com verificação de concorrência, metadados de origem, consulta ao PW compartilhado, ações para versões, Cofre e emissões. Implementação e testes de banco/Worker concluídos; publicação depende das regressões.
-4. Fila de pendências vigentes, prioridade e visualizações salvas.
-5. Prévia de importação, continuidade operacional e relatórios configuráveis.
-6. Diagnóstico integrado e provas de conceito condicionadas a benefício e acesso.
-7. Consulta e explicação com fontes, sem alterar revisão ou confirmar postagem por inferência.
+- Acompanhar o desempenho e os diagnósticos no uso real antes de contratar ferramentas adicionais.
+- Avaliar pilotos Bentley/M365/OCR apenas com acesso disponível e uma amostra representativa; esses pilotos não estão ativos.
+- Definir credenciais e limites de uso antes de implementar a camada generativa de IA. A consulta por regras permanece disponível sem API.

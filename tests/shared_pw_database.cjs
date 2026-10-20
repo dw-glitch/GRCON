@@ -29,6 +29,8 @@ const master='00000000-0000-4000-8000-000000000010',admin='00000000-0000-4000-80
  assert.equal((await rpc('current')).snapshot,null);
  await chunk(first,1,[rows[0]]);await assert.rejects(chunk(first,1,[{document:'ALTERADO'}]),/substituído/);
  await chunk(first,2,[rows[1]]);await rpc('publish',{id:first});
+ await db.exec('reset role');
+ await db.exec(fs.readFileSync('supabase/migrations/20261020174318_shared_projectwise_snapshots_tracking.sql','utf8'));
  await as(operator);assert.equal((await rpc('current')).snapshot.snapshot_id,first);
  assert.deepEqual((await rpc('page',{id:first})).rows.map(r=>r.payload),rows);
  await assert.rejects(rpc('list',{},c),/Sem acesso/);

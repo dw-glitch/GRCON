@@ -16,6 +16,10 @@ on:
       - "shared_pw_query_app.js"
       - "tests/shared_pw*.cjs"
       - "scripts/validar-shared-pw-browser.cjs"
+      - "scripts/validar-import-backup-browser.cjs"
+      - "import_review.js"
+      - "grcon_backup.js"
+      - "managerial_report.js"
       - "scripts/validar-performance-browser.cjs"
       - "workers/sigem_pw_dashboard.worker.js"
       - "workers/sigem_pw_evolution.worker.js"
@@ -114,6 +118,9 @@ jobs:
 
       - name: Chromium — PW compartilhado em duas sessões
         run: node scripts/validar-shared-pw-browser.cjs
+
+      - name: Chromium — importação, backup e retomada
+        run: node scripts/validar-import-backup-browser.cjs
 
       - name: Chromium — SIGEM × PW + regressões
         env:

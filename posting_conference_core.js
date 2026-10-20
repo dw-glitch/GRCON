@@ -1126,6 +1126,7 @@
     if (!prepared || !prepared.base || !prepared.state || !Array.isArray(prepared.audit)) {
       throw new Error("Importação preparada inválida; nenhuma base foi alterada.");
     }
+    prepared.base.meta={...prepared.base.meta,localContext:{userId:globalThis.GrconCloud?.state?.session?.user?.id||"",workspaceId:globalThis.GrconCloud?.state?.membership?.workspace_id||""}};
     await kvSetMany([
       [BASE_KEY, prepared.base],
       [STATE_KEY, prepared.state],
