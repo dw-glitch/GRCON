@@ -97,7 +97,22 @@ function messageOf(error: unknown, fallback: string): string {
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string" && error.message.trim()) return error.message;
   return fallback;
 }
+let restoredSessionScope="";
+function importContext(): {userId:string;workspaceId:string} {const [userId,workspaceId]=JSON.parse(window.GrconImportReview?.scope()||'["",""]') as [string,string];return {userId,workspaceId};}
+function sessionScope(): string {return window.GrconImportReview?.scope()||String(window.GrconCloud?.state?.membership?.workspace_id||"");}
+function restoreSessionHints(): void {
+  const scope=sessionScope();if(restoredSessionScope===scope)return;restoredSessionScope=scope;
+  const value=window.GrconImportReview?.session();if(!value)return;
+  const filters=value.filters||{};
+  state.filters={documentClass:filters.documentClass==="ET"||filters.documentClass==="N-1710"?filters.documentClass:"",query:text(filters.query).slice(0,2000),revision:text(filters.revision).slice(0,16),sigemStatus:text(filters.sigemStatus).slice(0,255),inPw:filters.inPw==="yes"||filters.inPw==="no"?filters.inPw:""};
+  state.revisionScope=value.revisionScope==="all"?"all":"revision0";
+  state.analysisPwId=value.analysisPwId||"";state.analysisSigemId=value.analysisSigemId||"";
+  document.documentElement.dataset.sigemPwRevisionScope=state.revisionScope;
+  window.dispatchEvent(new CustomEvent("grcon:sigem-pw-revision-scope-changed",{detail:{scope:state.revisionScope}}));
+}
+
 function emit(): void {
+  if(state.ready&&!state.busy&&state.result)window.GrconImportReview?.saveSession({filters:{...state.filters},revisionScope:state.revisionScope,analysisPwId:state.analysisPwId,analysisSigemId:state.analysisSigemId});
   revision += 1;
   snapshot = { ...state, revision };
   subscribers.forEach((listener) => listener());
@@ -379,7 +394,8 @@ async function importSigem(file: File): Promise<void> {
         { now: importedAt, reason: "sigem-pw-dashboard" },
       ) as PreparedConferenceImport;
     }
-    const candidate: SigemPwBase = { meta: prepared.parsed.meta, records: prepared.parsed.records };
+    const candidate: SigemPwBase = { meta: {...prepared.parsed.meta,localContext:importContext()}, records: prepared.parsed.records };
+    if (window.GrconImportReview && !await window.GrconImportReview.review("sigem",candidate,state.sigem)) return;
     const previousHistory = state.history;
     const recorded = await registerHistoryBeforeActivation("sigem", candidate, { reason: "sigem-import" });
     const historySourceSnapshotId = recorded.sigem?.snapshot?.id;
@@ -421,8 +437,9 @@ async function importPw(file: File): Promise<void> {
   try {
     if (!/\.(?:csv|txt)$/i.test(file.name || "")) throw new Error("A relação ProjectWise deve ser fornecida em CSV.");
     const importedAt = new Date().toISOString();
-    const parsed = await parsePwFile(file, { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt });
-    const candidate = Core().sanitizePwBase({ meta: parsed.meta, records: parsed.records }, state.ld);
+    const parsed = await parsePwFile(file, { fileName: file.name, fileSize: file.size, lastModified: file.lastModified, importedAt, mappingProfile: window.GrconImportReview?.profile() });
+    const candidate = Core().sanitizePwBase({ meta: {...parsed.meta,localContext:importContext()}, records: parsed.records }, state.ld);
+    if (window.GrconImportReview && !await window.GrconImportReview.review("pw",{...candidate,records:candidate.sourceRecords||candidate.records},{...state.pw,records:state.pw.sourceRecords||state.pw.records})) return;
     const previousHistory = state.history;
     const recorded = await registerHistoryBeforeActivation("pw", candidate, { reason: "pw-import" });
     const historySourceSnapshotId = recorded.pw?.snapshot?.id;
@@ -495,7 +512,8 @@ async function importLd(file: File): Promise<void> {
     if (!window.GRCONModuleLoader) throw new Error("Carregador de módulos do GRCON indisponível.");
     await window.GRCONModuleLoader.ensure("xlsx");
     const parsed = await parseQualityLdFile(file);
-    const candidateLd: SigemPwBase = { meta: parsed.meta, records: parsed.records };
+    const candidateLd: SigemPwBase = { meta: {...parsed.meta,localContext:importContext()}, records: parsed.records };
+    if (window.GrconImportReview && !await window.GrconImportReview.review("ld",candidateLd,state.ld)) return;
     const candidatePw = state.pw.meta ? Core().sanitizePwBase(state.pw, candidateLd) : null;
     const previousHistory = state.history;
     const recorded = candidatePw
@@ -558,6 +576,7 @@ async function refresh(reason = ""): Promise<void> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
     try {
+      restoreSessionHints();
       const resetApplied = await clearPreStage7BasesOnce();
       ensureSharedSigemHistoryCompatibility();
       await window.GrconSharedSigemQuery?.refresh();
@@ -592,6 +611,7 @@ async function refresh(reason = ""): Promise<void> {
       state.pw = bases.pw?.meta ? bases.pw : EMPTY_BASE();
       state.pwVersions = window.GrconSharedPwQuery?.state.versions || [];
       state.pwSharedError = window.GrconSharedPwQuery?.state.error || "";
+      if (state.analysisSigemId && !state.sigemVersions.some(item=>item.snapshot_id===state.analysisSigemId)) state.analysisSigemId="";
       if (state.analysisSigemId) state.sigem = await window.GrconSharedSigemQuery!.loadSnapshot(state.analysisSigemId, state.sigemVersions);
       if (state.analysisPwId) {
         const shared = state.pwVersions.some(item => item.snapshot_id === state.analysisPwId);
@@ -975,7 +995,7 @@ function installExternalListeners(): () => void {
     if (detail?.source !== "sigem-pw-dashboard" && detail?.source !== "sigem-pw-dashboard-ld") void refresh("base PW atualizada em outro módulo");
   };
   const dates = () => { if (!state.busy) void refresh("metadados compartilhados atualizados"); };
-  const context = () => { state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.pwVersions = []; state.pwSharedError = ""; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; emit(); void refresh("contrato alterado"); };
+  const context = () => { restoredSessionScope=""; state.filters={documentClass:"",query:"",revision:"",sigemStatus:"",inPw:""}; state.revisionScope="revision0"; state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.pwVersions = []; state.pwSharedError = ""; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; emit(); void refresh("contrato alterado"); };
   window.addEventListener("grcon:contract-context-changed", context);
   window.addEventListener("grcon:shared-sigem-date-updated", dates);
   window.addEventListener("grcon:shared-sigem-metadata-invalidated", dates);

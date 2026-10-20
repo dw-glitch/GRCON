@@ -121,7 +121,7 @@
       </section>
       <details id="pc-queue-controls" class="pc-toolbar-card" hidden><summary>Organização e visualizações das pendências</summary>
         <div class="pc-filters"><label>Prioridade<select id="pc-queue-priority"><option value="">Todas</option><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option></select></label><label>Responsável<input id="pc-queue-responsible" type="search" maxlength="160"></label>
-        <label>Visualização salva<select id="pc-saved-views"><option value="">Selecionar</option></select></label><label>Nome da visualização<input id="pc-view-name" maxlength="80"></label><button type="button" id="pc-save-view">Salvar visualização</button><button type="button" id="pc-remove-view">Excluir visualização</button><button type="button" id="pc-refresh-tasks">Atualizar organização</button></div><p id="pc-queue-status" role="status"></p>
+        <label>Visualização salva<select id="pc-saved-views"><option value="">Selecionar</option></select></label><label>Nome da visualização<input id="pc-view-name" maxlength="80"></label><button type="button" id="pc-save-view">Salvar visualização</button><button type="button" id="pc-remove-view">Excluir visualização</button><button type="button" id="pc-refresh-tasks">Atualizar organização</button></div><p id="pc-queue-status" role="status"></p><details><summary>Relatório gerencial CSV</summary><div id="pc-manager-columns" class="pc-filters"></div><button type="button" id="pc-manager-export">Baixar relatório gerencial</button></details>
       </details>
       <section class="pc-table-card">
         <header><div><span id="pc-table-kicker">DOCUMENTOS CONFERIDOS</span><strong id="pc-result-count">0 documento(s)</strong></div><small id="pc-table-help">Cada documento aparece apenas uma vez. Reenvios em diferentes eGRDTs não aumentam os totais.</small></header>
@@ -140,6 +140,13 @@
 
   function bind() {
     const tasks=root.GrconDocumentTasks;
+    renderManagerColumns();
+    el('pc-manager-columns').addEventListener('change',()=>{try{root.GrconManagerialReport.setColumns([...el('pc-manager-columns').querySelectorAll('input:checked')].map(input=>input.value));}catch(error){notify(error.message,'error');}});
+    el('pc-manager-export').addEventListener('click',()=>{try{
+      const data=root.GrconManagerialReport.build(filteredPendingDocuments(),{taskFor:code=>tasks.get(code),contract:root.GrconCloud?.state?.contract?.code||root.GrconCloud?.state?.membership?.contract_code||'',sourceFile:state.base.meta?.fileName,sourceDate:state.base.meta?.referenceDate||state.base.meta?.importedAt});
+      const blob=new Blob([root.GrconManagerialReport.csv(data)],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GRCON_Pendencias_Gerencial.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+    }catch(error){notify(error.message,'error');}});
+
     for(const [id,field] of [["pc-queue-priority","priority"],["pc-queue-responsible","responsible"]])el(id).addEventListener('input',()=>{state.queueFilters[field]=el(id).value;state.page=1;renderTableOnly();});
     el('pc-save-view').addEventListener('click',()=>{try{tasks.saveView(el('pc-view-name').value,{filters:{...state.filters},queueFilters:{...state.queueFilters}});renderSavedViews();}catch(e){notify(e.message,'error');}});
     el('pc-remove-view').addEventListener('click',()=>{tasks.removeView(el('pc-saved-views').value);renderSavedViews();});
@@ -582,6 +589,7 @@
     return root.GrconDocumentTasks?.filter(rows,state.queueFilters)||rows;
   }
 
+  function renderManagerColumns(){const report=root.GrconManagerialReport;if(!report||!el('pc-manager-columns'))return;const selected=report.columns();el('pc-manager-columns').innerHTML=Object.entries(report.fields).map(([key,label])=>'<label><input type="checkbox" value="'+key+'" '+(selected.includes(key)?'checked':'')+' '+(report.required.includes(key)?'disabled':'')+'>'+escapeHtml(label)+'</label>').join('');}
   function renderSavedViews(){
     const select=el('pc-saved-views');if(!select)return;const selected=select.value;
     select.innerHTML='<option value="">Selecionar</option>'+(root.GrconDocumentTasks?.views()||[]).map(v=>'<option value="'+escapeHtml(v.name)+'">'+escapeHtml(v.name)+'</option>').join('');select.value=selected;
@@ -847,7 +855,7 @@
 
   for(const event of ['grcon:contract-context-changed','grcon:cloud-signed-out'])root.addEventListener(event,()=>{
     state.queueFilters={priority:'',responsible:''};
-    if(shell){el('pc-queue-priority').value='';el('pc-queue-responsible').value='';el('pc-view-name').value='';renderSavedViews();}
+    if(shell){el('pc-queue-priority').value='';el('pc-queue-responsible').value='';el('pc-view-name').value='';renderSavedViews();renderManagerColumns();}
   });
 
   root.GrconPostingConferenceUi = Object.freeze({ activate, render, state, reconcile: reconcileCurrent });

@@ -318,7 +318,8 @@
   }
 
   function parsePwCsv(source, fileMeta) {
-    const delimiter = detectDelimiter(source);
+    const mappingProfile = fileMeta?.mappingProfile;
+    const delimiter = mappingProfile && [";", ",", "\t"].includes(mappingProfile.delimiter) ? mappingProfile.delimiter : detectDelimiter(source);
     let headers = null;
     let columns = null;
     const records = [];
@@ -333,6 +334,14 @@
       if (rowIndex === 0) {
         headers = row.map(text);
         columns = mapPwColumns(headers);
+        if (mappingProfile?.columns) for (const field of Object.keys(PW_HEADER_ALIASES)) {
+          const header = mappingProfile.columns[field];
+          if (!header) continue;
+          const matches = headers.map((value,index)=>normalizeHeader(value)===normalizeHeader(header)?index:-1).filter(index=>index>=0);
+          if (matches.length!==1) throw new Error('Perfil PW: coluna ausente ou ambígua para '+field+'. A base vigente foi preservada.');
+          columns[field]=matches[0];
+        }
+        if (columns.revisionComplete<0 && columns.revision>=0) columns.revisionComplete=columns.revision;
         const errors = validatePwColumns(columns, headers);
         if (errors.length) throw new Error(errors.join(" "));
         return;

@@ -191,6 +191,7 @@
   async function exportCompleteBackup() {
     setBusy(true, "Preparando backup completo…");
     try {
+      if(APP==="GRCON"&&root.GrconBackup){const result=await root.GrconBackup.createAndDownload();const excluded=result.payload.coverage?.excluded||[];notify(excluded.length?"Backup local criado. "+excluded.length+" base(s) sem contexto verificável foram preservadas e não entraram no arquivo.":"Backup local criado. Banco compartilhado e R2 têm recuperação própria.","success");return;}
       const payload = {
         schema: FULL_SCHEMA,
         app: APP,
@@ -232,6 +233,13 @@
     let historySnapshot = null;
     try {
       const payload = await readJsonFile(file);
+      if(complete&&APP==='GRCON'&&payload?.schema===root.GrconBackup?.BACKUP_SCHEMA){
+        const validation=root.GrconBackup.validateBackup(payload);if(!validation.valid)throw new Error(validation.errors.join(' '));
+        const summary=root.GrconBackup.summarizeBackup(payload);
+        if(!root.confirm('Restaurar '+summary.history+' eGRDT(s), '+summary.postings+' postagem(ns) e '+summary.dashboardRecords+' registro(s) de bases locais? Banco compartilhado e arquivos do Cofre não serão restaurados. Será criado um snapshot local de segurança.'))return;
+        await root.GrconBackup.restore(payload);notify('Backup local restaurado.','success');root.setTimeout(()=>root.location.reload(),700);return;
+      }
+      if(complete&&APP==='GRCON'&&payload?.schema===FULL_SCHEMA&&root.GrconCloud?.state?.membership?.workspace_id&&!root.GrconCloud?.isMasterOwner?.())throw new Error('Este backup antigo não identifica os contratos. A restauração completa é exclusiva do proprietário master.');
       const expected = complete ? FULL_SCHEMA : PREF_SCHEMA;
       if (payload?.schema !== expected || payload?.app !== APP) {
         throw new Error(`Este arquivo não é um ${complete ? "backup completo" : "backup de preferências"} do ${APP}.`);
@@ -478,7 +486,15 @@
     $(ids.clearOperational)?.addEventListener("click", clearOperationalData);
   }
 
+  async function recoverLocalSnapshot(){
+    setBusy(true,'Consultando snapshot de recuperação…');
+    try{const snapshot=await root.GrconBackup?.latestRecoverySnapshot();if(!snapshot){notify('Não há snapshot de recuperação desta conta e contrato neste navegador.','info');return;}
+      if(!root.confirm('Recuperar o estado local salvo antes da restauração de '+new Date(snapshot.createdAt).toLocaleString('pt-BR')+'? Banco compartilhado e Cofre têm recuperação própria.'))return;
+      await root.GrconBackup.restore(snapshot.payload);notify('Estado local recuperado.','success');root.setTimeout(()=>root.location.reload(),700);
+    }catch(error){notify(error.message||'Não foi possível recuperar o estado anterior.','error');}finally{setBusy(false,'Aguardando ação.');}
+  }
   function initGrcon() {
+    $('#macro6-recover-local')?.addEventListener('click',recoverLocalSnapshot);
     const range = defaultDateRange();
     const start = $("#macro6-report-start");
     const end = $("#macro6-report-end");

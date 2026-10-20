@@ -1236,3 +1236,10 @@
 @media (max-width: 1250px) { #sigem-pw-dashboard-module .spw-list-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 800px) { #sigem-pw-dashboard-module .spw-list-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { #sigem-pw-dashboard-module .spw-list-filters { grid-template-columns: minmax(0, 1fr); } }
+
+.spw-import-options{margin-top:.65rem;font-size:.8rem;color:var(--muted,#64748b)}
+.spw-import-options summary{cursor:pointer;font-weight:600;margin:.4rem 0}
+.spw-import-options label{display:grid;gap:.3rem;margin:.6rem 0}
+.spw-import-options label:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:.45rem}
+.spw-import-options input:not([type=checkbox]),.spw-import-options select{min-width:0;width:100%;box-sizing:border-box}
+.spw-import-options p:empty{display:none}

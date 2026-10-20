@@ -118,7 +118,7 @@
       () => original.saveAnalysis(payload),
       async () => {
         const source = payload || {};
-        const session = original.cleanSession(source.session || {});
+        const session = original.cleanSession({...source.session,localContext:{userId:root.GrconCloud?.state?.session?.user?.id||"",workspaceId:root.GrconCloud?.state?.membership?.workspace_id||""}});
         const documents = (source.documents || []).map((item, index) => original.cleanDocument(item, session, index));
         session.total = documents.length;
         session.savedDocuments = documents.length;

@@ -47,8 +47,9 @@ o reaproveitamento deve ser avaliado junto do tempo total e do uso de memória.
 Fases 0–1 publicadas pelo PR #268, commit `c27f6b040387ff5bb0647290741682540f17dfd0`.
 Validação integral, Chromium e uso continuado aprovados no CI.
 Fase 2 integrada pelo PR #269, commit `3f1866a4c228592db34131ec00379d4c024bb730`; testes de banco, cliente, duas sessões Chromium e uso contínuo aprovados.
-Fase 3 em PR #270, banco e testes locais concluídos.
-Fase 4: `docs/document-task-queue.md`; edição compartilhada, CAS, filtros e visualizações testados no banco, cliente e Chromium.
+Fase 3 integrada pelo PR #270, commit `a561a36c6d1f6d7e5e8043079a9b8f2205e10a75`.
+Fase 4 integrada pelo PR #271, commit `f9c2059ec9d9fec2dbba3816b070474d7bc42e9d`.
+Fase 5: `docs/import-recovery-reports.md`; prévia, perfis PW, retomada, CSV gerencial e backup/rollback com isolamento testados.
 
 ## Próximas entregas
 

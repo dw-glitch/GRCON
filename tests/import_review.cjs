@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const storage=new Map(),root={localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},GrconCloud:{state:{session:{user:{id:'u'}},membership:{workspace_id:'w'}}}};
+vm.runInNewContext(fs.readFileSync('import_review.js','utf8'),{window:root,console});const api=root.GrconImportReview;
+const previous={records:[{document:'A',revision:'0',status:'x'},{document:'A',revision:'0',status:'y'},{document:'B',revision:'0'}]},next={records:[{status:'y',revision:'0',document:'A'},{status:'x',document:'A',revision:'0'},{document:'C',revision:'A'}]};
+const result=api.compare(previous,next);assert.equal(result.added,1);assert.equal(result.removed,1);assert.equal(result.unchanged,1);assert.equal(result.changed,0);assert.equal(previous.records[0].status,'x');
+const Core=require('../sigem_pw_dashboard_core.js');
+const mapping={delimiter:';',columns:{document:'Codigo',revision:'Revisao QA',documentType:'Tipo QA',state:'Estado QA',lastEmission:'Emissao QA'}};
+api.saveProfile('PW Qualidade',mapping);api.selectProfile('PW Qualidade');
+const parsed=Core.parsePwCsv('Codigo;Revisao QA;Tipo QA;Estado QA;Emissao QA\nRL-5290.00-22313-ABC-C1O-001;0;RL;Em Workflow;Sim',{mappingProfile:api.profile()});assert.equal(parsed.records.length,1);assert.equal(parsed.records[0].revision,'0');
+assert.throws(()=>Core.parsePwCsv('Codigo;Codigo;Revisao QA;Tipo QA;Estado QA;Emissao QA\nDOC;DOC;0;RL;State;Sim',{mappingProfile:api.profile()}),/ambígua/);
+assert.throws(()=>Core.parsePwCsv('Outro;Revisao QA;Tipo QA;Estado QA;Emissao QA\nDOC;0;RL;State;Sim',{mappingProfile:api.profile()}),/ausente/);
+api.saveSession({filters:{query:'RL-5290'},revisionScope:'all'});assert.equal(api.session().filters.query,'RL-5290');
+root.GrconCloud.state.membership.workspace_id='other';assert.equal(api.profiles().length,0);assert.equal(api.session(),null);
+root.GrconCloud.state.membership.workspace_id='w';assert.equal(api.profile().name,'PW Qualidade');api.removeProfile('PW Qualidade');assert.equal(api.profile(),null);
+console.log('Importação: diferença sem mutação, duplicatas, perfil PW real, coluna ausente/ambígua e retomada por conta/contrato aprovados.');
