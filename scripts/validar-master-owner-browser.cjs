@@ -55,9 +55,15 @@ const root=process.cwd();
   await page.locator('#admin-user-role').selectOption('admin');
   await page.locator('#grcon-admin-user-form button[type="submit"]').click();
   await page.waitForFunction(()=>window.__qa.calls.some(c=>c.operation==='update'&&c.role==='admin'));
+  await page.waitForFunction(()=>document.querySelector('#grcon-admin-dialog').getAttribute('aria-busy')==='false');
   await page.locator('[data-admin-password="owner"]').click();
+  // Opening schedules focus on the next frame. Wait for it before fill(), whose
+  // text insertion is a separate browser command and could otherwise lose focus.
+  await page.waitForFunction(()=>document.activeElement?.id==='grcon-admin-new-password');
   await page.locator('#grcon-admin-new-password').fill('NovaSenha123!');
   await page.locator('#grcon-admin-confirm-password').fill('NovaSenha123!');
+  assert.equal(await page.locator('#grcon-admin-new-password').inputValue(),'NovaSenha123!');
+  assert.equal(await page.locator('#grcon-admin-confirm-password').inputValue(),'NovaSenha123!');
   await page.locator('#grcon-admin-password-next').click();
   await page.locator('#grcon-admin-password-submit').click();
   await page.waitForFunction(()=>window.__qa.calls.some(c=>c.name==='owner-change-user-password'&&c.workspaceId==='w1'));
