@@ -83,7 +83,96 @@
     zip.file("word/document.xml",officeDocument(blocks.join(""),dimension));
     return zip.generateAsync({type:"uint8array",compression:"DEFLATE",compressionOptions:{level:5}});
   }
-  async function convert(file,{onProgress,signal}={}){
+
+  // Modo visual: cada pagina PDF e renderizada pelo PDF.js e embutida como imagem
+  // na mesma geometria no OOXML. Isto preserva o aspecto, NAO torna texto editavel.
+  function drawing(pageNo, extentX, extentY){
+    const id=pageNo, rid="rId"+(pageNo+1);
+    return '<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="251658240" behindDoc="0" locked="1" layoutInCell="1" allowOverlap="1">'+
+      '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>'+
+      '<wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>'+
+      '<wp:extent cx="'+extentX+'" cy="'+extentY+'"/><wp:wrapNone/>'+
+      '<wp:docPr id="'+id+'" name="Pagina '+id+' do PDF" descr="Representacao visual da pagina '+id+'; conteudo nao editavel"/>'+
+      '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>'+
+      '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
+      '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+id+'" name="Pagina '+id+'.jpg"/><pic:cNvPicPr/></pic:nvPicPr>'+
+      '<pic:blipFill><a:blip r:embed="'+rid+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'+
+      '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+extentX+'" cy="'+extentY+'"/></a:xfrm>'+
+      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'+
+      '</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
+  }
+  function visualDocument(paragraphs,firstDimension){
+    // Margens nulas; as imagens flutuantes sao ancoradas em coordenadas da pagina.
+    const w=twip(firstDimension.width),h=twip(firstDimension.height);
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'+
+      ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'+
+      ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'+
+      ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'+
+      ' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'+
+      '<w:body>'+paragraphs.join('')+
+      '<w:sectPr><w:pgSz w:w="'+w+'" w:h="'+h+'"/>'+
+      '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>'+
+      '</w:body></w:document>';
+  }
+  async function visualDocx(pdf,{onProgress,signal}){
+    const zip=new root.JSZip(),paragraphs=[],relationships=[];
+    const first=(await pdf.getPage(1)).getViewport({scale:1});
+    let mixedSizes=false;
+    zip.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?>'+
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+      '<Default Extension="xml" ContentType="application/xml"/>'+
+      '<Default Extension="jpg" ContentType="image/jpeg"/>'+
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'+
+      '</Types>');
+    zip.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'+
+      '</Relationships>');
+    for(let n=1;n<=pdf.numPages;n++){
+      failIfCancelled(signal);
+      const page=await pdf.getPage(n),view=page.getViewport({scale:1});
+      if(Math.abs(view.width-first.width)>0.5||Math.abs(view.height-first.height)>0.5)mixedSizes=true;
+      // 144 dpi para qualidade legivel sem transformar arquivos extensos em GB.
+      const renderViewport=page.getViewport({scale:2});
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.ceil(renderViewport.width);canvas.height=Math.ceil(renderViewport.height);
+      const context=canvas.getContext('2d',{alpha:false});
+      if(!context)throw new Error('O navegador nao oferece suporte a renderizacao Canvas.');
+      context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);
+      const renderTask=page.render({canvasContext:context,viewport:renderViewport,background:'#ffffff'});
+      const abortRender=()=>renderTask.cancel();
+      signal?.addEventListener('abort',abortRender,{once:true});
+      try{await renderTask.promise;}
+      finally{signal?.removeEventListener('abort',abortRender);}
+      failIfCancelled(signal);
+      const jpg=await new Promise((resolve,reject)=>
+        canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('Falha ao gerar a imagem da pagina '+n)), 'image/jpeg',.90));
+      const filename='pagina-'+String(n).padStart(4,'0')+'.jpg';
+      zip.file('word/media/'+filename,new Uint8Array(await jpg.arrayBuffer()),{compression:'STORE'});
+      relationships.push('<Relationship Id="rId'+(n+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+filename+'"/>');
+      const x=Math.round(view.width*12700),y=Math.round(view.height*12700);
+      // Cada paragrafo pertence a pagina correspondente; posicionamento absoluto nao
+      // consome o espaco vertical da pagina e evita criar folhas em branco.
+      const pPr='<w:pPr>'+(n>1?'<w:pageBreakBefore/>':'')+
+        '<w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr>';
+      paragraphs.push('<w:p>'+pPr+drawing(n,x,y)+'</w:p>');
+      canvas.width=0;canvas.height=0;
+      page.cleanup();
+      onProgress?.(8+Math.round(84*n/pdf.numPages),'Preservando pagina '+n+' de '+pdf.numPages);
+      if(n%2===0)await new Promise(resolve=>setTimeout(resolve,0));
+    }
+    if(mixedSizes)throw new Error('O modo visual ainda nao aceita PDFs com dimensoes ou orientacoes diferentes entre paginas; nenhum DOCX incompleto sera entregue.');
+    zip.file('word/document.xml',visualDocument(paragraphs,first));
+    zip.file('word/_rels/document.xml.rels','<?xml version="1.0" encoding="UTF-8"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+relationships.join('')+'</Relationships>');
+    failIfCancelled(signal);
+    onProgress?.(94,'Compactando documento visual');
+    return zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:3}});
+  }
+
+  async function convert(file,{onProgress,signal,mode='visual'}={}){
     if(!root.JSZip)throw new Error("O componente de criação do DOCX não está disponível.");
     if(!file||!/\.pdf$/i.test(file.name||"")||file.size<=0)throw new Error("Selecione um arquivo PDF válido.");
     if(file.size>MAX_INPUT)throw new Error("PDF acima de 20 MB. Selecione um arquivo menor.");
@@ -100,6 +189,16 @@
     try{
       const pdf=await task.promise;
       if(pdf.numPages>MAX_PAGES)throw new Error("PDF excede o limite de 300 páginas.");
+      if(mode==='visual'){
+        const bytes=await visualDocx(pdf,{onProgress,signal});
+        failIfCancelled(signal);
+        onProgress?.(100,'DOCX visual pronto');
+        return {bytes,pages:pdf.numPages,mode:'visual',warnings:[
+          'Copia visual fiel: cada pagina e uma imagem e seu conteudo nao e editavel no Word.',
+          'Assinaturas digitais do PDF nao sao transferidas como assinaturas validas ao DOCX.'
+        ]};
+      }
+      if(mode!=='editable-basic')throw new Error('Modo de conversao nao reconhecido.');
       const blocks=[],warnings=[];
       let totalText=0,dimension={width:595.28,height:841.89},emptyPages=0;
       for(let n=1;n<=pdf.numPages;n++){
@@ -132,7 +231,7 @@
       const bytes=await asDocx(blocks,dimension);
       failIfCancelled(signal);
       onProgress?.(100,"DOCX pronto");
-      return {bytes,pages:pdf.numPages,warnings};
+      return {bytes,pages:pdf.numPages,mode:'editable-basic',warnings};
     }catch(error){
       if(signal?.aborted)throw new DOMException("Conversão cancelada.","AbortError");
       if(error?.name==="PasswordException")throw new Error("O PDF está protegido por senha. Remova a proteção com autorização antes da conversão.");
@@ -142,5 +241,5 @@
       await task.destroy().catch(()=>{});
     }
   }
-  root.GrconDocxPdfCore=Object.freeze({convert,MAX_INPUT,formats:Object.freeze(["pdf"])});
+  root.GrconDocxPdfCore=Object.freeze({convert,MAX_INPUT,formats:Object.freeze(['pdf']),modes:Object.freeze(['visual','editable-basic'])});
 })(window);
