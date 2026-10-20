@@ -22,13 +22,18 @@
   return ({requested:'Envio solicitado',accepted:'Recebido pelo fluxo; entrega no Teams não confirmada',delivered:'Enviado ao Teams; postagem não confirmada',failed:'Falha ou envio incerto; conferir o fluxo',expired:'Cartão expirado; postagem não confirmada'})[a.delivery_status]||'Não informado';
  }
  function confirmed(a,file){if(!a?.confirmed_at)return 'Não informado';if(!file)return 'Não se aplica';const doc=norm(file.document),rev=revision(file.grdtRevision||file.revisionSent||file.revision);return (a.confirmed_documents||[]).some(d=>norm(d.document)===doc&&revision(d.revision)===rev)?'Sim':'Não';}
- function values(a,file,sigem){
+ function values(a,file,sigem,traceState){
+   const sigemStatus=sigem||'Verificar na Consulta Geral';
+   if(traceState?.status && traceState.status!=='fresh'){
+    const label=traceState.status==='stale'?'Dados do Teams não atualizados':'Indisponível para consulta';
+    return headers.map((_,i)=>i===9?sigemStatus:label);
+   }
   const date=value=>value?new Date(value).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'';
   const sigemText=sigem||'Verificar na Consulta Geral';
   const count=a?.confirmed_at?a.confirmed_documents.length:'';
   return [a?.delivered_at?'Sim':a?'Entrega não confirmada':'Sem registro de envio ao Teams',a?.teams_created_at?date(a.teams_created_at):a?.delivered_at?'Não informado pelo Teams':'',a?.confirmed_at?'Sim':a?'Não confirmada':'Não informado',a?.confirmation_type==='total'?'Total':a?.confirmation_type==='partial'?'Parcial':'',a?.confirmed_by_name||'',date(a?.confirmed_at),a?.confirmed_at?'Microsoft Teams':'',count,a?.confirmed_at?a.documents.length-count:'',sigemText,a?.message_url||'',confirmed(a,file)];
  }
- function columns(a,file,sigem){const row=values(a,file,sigem);return Object.fromEntries(headers.map((h,i)=>[h,row[i]]));}
+ function columns(a,file,sigem,traceState){const row=values(a,file,sigem,traceState);return Object.fromEntries(headers.map((h,i)=>[h,row[i]]));}
  function conference(row,a){
   const base=row?.conferenceLabel||row?.statusLabel||row?.status||'Verificar na Consulta Geral';
   if(!a?.confirmed_at)return base;
