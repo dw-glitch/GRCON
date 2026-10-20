@@ -12,7 +12,7 @@
     if(!host||host.dataset.ready==="true")return;
     host.dataset.ready="true";
     host.innerHTML='<div class="docx-pdf-layout">'+
-      '<header class="docx-pdf-heading"><div><span>FERRAMENTAS ADICIONAIS / CONVERSÃO</span><h2>Converter PDF para DOCX</h2><p>Preserve a aparência do PDF no Word ou extraia texto para edição, sem enviar arquivos à nuvem.</p></div><button type="button" class="secondary-button" data-grcon-view="additional-tools">← Voltar às ferramentas</button></header>'+
+      '<header class="docx-pdf-heading"><div><span>FERRAMENTAS ADICIONAIS / CONVERSÃO</span><h2>Converter PDF para DOCX</h2><p>Reconstrua texto e linhas do PDF em objetos editáveis do Word, sem enviar arquivos à nuvem.</p></div><button type="button" class="secondary-button" data-grcon-view="additional-tools">← Voltar às ferramentas</button></header>'+
       '<div class="docx-pdf-grid"><section class="docx-pdf-panel" aria-labelledby="docx-pdf-upload-title">'+
       '<div class="docx-pdf-panel-heading"><div><span>ETAPA 1</span><h3 id="docx-pdf-upload-title">Selecionar documentos</h3></div><span class="docx-pdf-format-chip">PDF → DOCX</span></div>'+
       '<div id="docx-pdf-drop" class="docx-pdf-drop" role="button" tabindex="0" aria-label="Selecionar documentos PDF ou arrastar arquivos"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7zM14 3v5h5M12 11v7M9 14h6"/></svg><strong>Arraste os arquivos PDF aqui</strong><span>ou clique para escolher no computador</span><small>Até 12 documentos · 20 MB por arquivo · 70 MB por lote</small></div>'+
@@ -21,12 +21,8 @@
       '<ul id="docx-pdf-list" class="docx-pdf-list" aria-live="polite"></ul></section>'+
       '<aside class="docx-pdf-panel docx-pdf-settings" aria-labelledby="docx-pdf-options-title"><div class="docx-pdf-panel-heading"><div><span>ETAPA 2</span><h3 id="docx-pdf-options-title">Gerar DOCX</h3></div></div>'+
       '<dl class="docx-pdf-facts"><div><dt>Formato de entrada</dt><dd>.pdf</dd></div><div><dt>Formato de saída</dt><dd>DOCX</dd></div><div><dt>Tratamento</dt><dd>Local no navegador</dd></div><div><dt>Arquivos originais</dt><dd>Preservados</dd></div></dl>'+
-      '<fieldset class="docx-pdf-mode" id="docx-pdf-mode"><legend>Tipo de conversão</legend>'+
-      '<label class="docx-pdf-mode-choice"><input type="radio" name="docx-pdf-mode" value="visual" checked><span><strong>Cópia visual fiel (recomendado)</strong><small>Mantém páginas, tabelas, imagens e formatação como no PDF. Cada página fica como imagem, sem edição individual do conteúdo.</small></span></label>'+
-      '<label class="docx-pdf-mode-choice"><input type="radio" name="docx-pdf-mode" value="editable-basic"><span><strong>Texto editável (simplificado)</strong><small>Somente o texto selecionável. Tabelas, imagens e diagramação original NÃO são preservadas.</small></span></label>'+
-      '</fieldset>'+
-      '<div class="docx-pdf-limits"><strong>Limitações transparentes</strong><p>Word editável com alta fidelidade necessita de um motor especializado, ainda não contratado. O modo visual recusa PDFs com dimensões ou orientações misturadas, para evitar resultados incorretos. Assinaturas digitais não permanecem válidas.</p></div>'+
-      '<label class="docx-pdf-ack"><input id="docx-pdf-confirm" type="checkbox"> <span>Entendo a diferença entre aparência fiel e conteúdo editável e conferirei o DOCX antes do uso oficial.</span></label>'+
+      '<div class="docx-pdf-limits"><strong>Reconstrução editável em validação</strong><p>Textos são editáveis no Word, inclusive títulos e conteúdos de quadros, mas ficam posicionados em caixas. Desenhos e bordas simples tornam-se objetos do Word. Tabelas complexas ainda não são tabelas nativas; confira a diagramação antes do uso oficial.</p></div>'+ 
+      '<label class="docx-pdf-ack"><input id="docx-pdf-confirm" type="checkbox"> <span>Confirmo que revisarei a diagramação e os elementos editáveis antes do uso oficial.</span></label>'+
       '<button id="docx-pdf-convert" type="button" class="primary-button" disabled>Converter e baixar DOCX</button>'+
       '<button id="docx-pdf-cancel" type="button" class="secondary-button" hidden>Cancelar conversão</button>'+
       '<div class="docx-pdf-progress" id="docx-pdf-progress" hidden role="status" aria-live="polite"><div><strong id="docx-pdf-progress-title">Preparando conversão</strong><span id="docx-pdf-percent">0%</span></div><progress id="docx-pdf-progress-bar" max="100" value="0"></progress><small id="docx-pdf-stage"></small></div>'+
@@ -50,7 +46,6 @@
     });
     $("docx-pdf-clear").addEventListener("click",()=>{if(!state.busy){state.items=[];render();}});
     $("docx-pdf-confirm").addEventListener("change",render);
-    $("docx-pdf-mode").addEventListener("change",render);
     $("docx-pdf-convert").addEventListener("click",()=>void convertAll());
     $("docx-pdf-cancel").addEventListener("click",()=>state.abort?.abort());
     render();
@@ -94,7 +89,7 @@
       const rem=document.createElement("button");rem.type="button";rem.className="secondary-button compact";rem.textContent="Remover";rem.dataset.docxAction="remove";rem.dataset.id=item.id;rem.disabled=state.busy;actions.append(rem);
       li.append(info,actions);list.append(li);
     }
-    const selectedMode=document.querySelector('input[name="docx-pdf-mode"]:checked')?.value||'visual';
+    const selectedMode='editable-layout';
     const canConvert=state.items.length>0&&!state.busy&&$("docx-pdf-confirm").checked;
     $("docx-pdf-convert").dataset.mode=selectedMode;
     $("docx-pdf-convert").disabled=!canConvert;
@@ -114,7 +109,7 @@
   }
   async function convertAll(){
     if(state.busy||!state.items.length||!$("docx-pdf-confirm").checked)return;
-    const mode=document.querySelector('input[name="docx-pdf-mode"]:checked')?.value||'visual';
+    const mode='editable-layout';
     state.busy=true;state.abort=new AbortController();render();
     let success=0,failed=0;
     const selected=[...state.items],signal=state.abort.signal;
@@ -156,7 +151,7 @@
         if(!signal.aborted)download(zipBytes,"GRCON_PDF_convertidos.zip");
       }
       $("docx-pdf-feedback").textContent=success+" DOCX(s) gerado(s)"+(failed?" · "+failed+" com erro. Consulte a lista.":". Confira o conteúdo e a formatação antes do uso oficial.");
-      if(success)notify(success+" DOCX(s) gerado(s) no modo "+(mode==="visual"?"visual (não editável)":"texto simplificado")+". Confira o resultado.","success");
+      if(success)notify(success+" DOCX(s) gerado(s) no modo "+"reconstrução editável"+". Confira o resultado.","success");
       if(failed)notify(failed+" documento(s) não pôde/puderam ser convertido(s).","error");
     }finally{
       state.busy=false;state.abort=null;render();
