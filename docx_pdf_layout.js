@@ -168,16 +168,28 @@
     canvas.width=canvas.height=0;
     return blob?new Uint8Array(await blob.arrayBuffer()):null;
   }
+  function sectPr(width,height){
+    const w=Math.round(width*20),h=Math.round(height*20);
+    return '<w:sectPr><w:pgSz w:w="'+w+'" w:h="'+h+'"'+(w>h?' w:orient="landscape"':'')+'/>'+
+      '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>';
+  }
   async function convert(pdf,{onProgress,signal,reader}={}){
     const warnings=[],zip=new root.JSZip(),paragraphs=[],relations=[];
     const first=(await pdf.getPage(1)).getViewport({scale:1}),total=pdf.numPages;
+    let sectionDimension={width:first.width,height:first.height},sectionChanges=0;
     let texts=0,imageNo=0,shapeNo=0,empty=0;
     const r=(name,target)=>relations.push('<Relationship Id="'+name+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+target+'"/>');
     for(let n=1;n<=total;n++){
       abort(signal);
       const page=await pdf.getPage(n),view=page.getViewport({scale:1});
-      if(Math.abs(view.width-first.width)>.5||Math.abs(view.height-first.height)>.5)
-        throw new Error('As páginas deste PDF possuem tamanhos ou orientações mistos; o layout editável ainda não pode preservar isso com segurança.');
+      const newSection=n>1&&(Math.abs(view.width-sectionDimension.width)>.5||Math.abs(view.height-sectionDimension.height)>.5);
+      if(newSection){
+        // A seção anterior define o tamanho da página que acabou de ser escrita.
+        // O próprio Word inicia uma nova página ao mudar de seção.
+        paragraphs.push('<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/>'+
+          sectPr(sectionDimension.width,sectionDimension.height)+'</w:pPr></w:p>');
+        sectionDimension={width:view.width,height:view.height};sectionChanges++;
+      }
       const content=await page.getTextContent();
       const items=(content.items||[]).filter(x=>typeof x.str==='string'&&x.str.trim());
       if(!items.length)empty++;
@@ -198,7 +210,7 @@
       }
       for(const item of items){drawing+=textShape(++shapeNo,item,view,content.styles?.[item.fontName]);texts+=item.str.length;}
       // Uma âncora mínima por página; os conteúdos são objetos Word e podem ser editados.
-      paragraphs.push('<w:p><w:pPr>'+(n>1?'<w:pageBreakBefore/>':'')+
+      paragraphs.push('<w:p><w:pPr>'+(n>1&&!newSection?'<w:pageBreakBefore/>':'')+
         '<w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr>'+drawing+'</w:p>');
       page.cleanup();
       onProgress?.(7+Math.round(86*n/total),'Reconstruindo elementos editáveis: página '+n+' de '+total);
@@ -208,14 +220,12 @@
     if(empty)note(warnings,empty+' página(s) sem texto selecionável; verifique se contêm digitalizações.');
     note(warnings,'Texto em caixas editáveis e traços independentes; tabelas complexas ainda não são tabelas nativas do Word.');
     note(warnings,'Fontes, curvas e figuras podem diferir do PDF. Confirme visualmente antes do uso oficial.');
-    const width=Math.round(first.width*20),height=Math.round(first.height*20);
+    if(sectionChanges)note(warnings,sectionChanges+' mudança(s) de tamanho ou orientação de página preservada(s) em seções do Word.');
     const document='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'+
       ' xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"'+
       ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
-      '<w:body>'+paragraphs.join('')+
-      '<w:sectPr><w:pgSz w:w="'+width+'" w:h="'+height+'"/>'+
-      '<w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>';
+      '<w:body>'+paragraphs.join('')+sectPr(sectionDimension.width,sectionDimension.height)+'</w:body></w:document>';
     zip.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?>'+
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
