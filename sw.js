@@ -50,6 +50,7 @@ const ASSETS = [
   "pdf-merge.css",
   "cover-document.css",
   "docx-pdf.css",
+  "docx_pdf_layout.js",
   "docx_pdf_core.js",
   "assets/vendor/pdfjs/pdf.min.mjs",
   "assets/vendor/pdfjs/pdf.worker.min.mjs",
