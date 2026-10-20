@@ -58,7 +58,11 @@ const root=process.cwd();
        const pg=mixed.addPage(dims);
        pg.drawText('Pagina mista '+(i+1),{x:50,y:480,font,size:11});
      }
-     return {a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),
+     const volume=await PDFLib.PDFDocument.create();
+     for(let idx=1;idx<=233;idx++){
+       const pg=volume.addPage([595,842]);pg.drawText('Volume pagina '+idx,{x:50,y:740,font,size:11});
+     }
+     return {volume:Array.from(await volume.save()),a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),
        multipage:Array.from(await multipage.save()),mixed:Array.from(await mixed.save())};
    });
    // Padrão novo: reconstrução com texto editável em OOXML, sem fotografar páginas.
@@ -102,6 +106,22 @@ const root=process.cwd();
    assert.equal((mixedXml.match(/<w:sectPr>/g)||[]).length,3,'retrato, paisagem e retrato em seções independentes');
    assert.match(mixedXml,/<w:pgSz w:w="16840" w:h="11900" w:orient="landscape"\/>/);
    assert.equal((mixedXml.match(/<w:pageBreakBefore\/>/g)||[]).length,0,'mudança de seção faz a quebra de página');
+   // A volumetria real inclui um procedimento com 233 paginas.
+   await page.locator('#docx-pdf-clear').click();
+   await page.locator('#docx-pdf-input').setInputFiles({
+     name:'volume-233.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.volume)
+   });
+   const volumeDownload=page.waitForEvent('download',{timeout:120000});
+   await page.locator('#docx-pdf-convert').click();
+   const volumeWord=await volumeDownload;
+   const volumeXml=await page.evaluate(async bytes=>{
+     const zip=await JSZip.loadAsync(new Uint8Array(bytes));
+     return zip.file('word/document.xml').async('string');
+   },Array.from(fs.readFileSync(await volumeWord.path())));
+   assert.match(volumeXml,/Volume pagina 1</);
+   assert.match(volumeXml,/Volume pagina 233</);
+   assert.equal((volumeXml.match(/<w:pageBreakBefore\/>/g)||[]).length,232);
+
 
    await page.locator('#docx-pdf-clear').click();
    await page.locator('#docx-pdf-confirm').uncheck();
