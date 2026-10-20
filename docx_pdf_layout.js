@@ -122,7 +122,7 @@
     const warnings=[],zip=new root.JSZip(),paragraphs=[],relations=[];
     const first=(await pdf.getPage(1)).getViewport({scale:1}),total=pdf.numPages;
     let texts=0,imageNo=0,shapeNo=0,empty=0;
-    const r=(name,target)=>relations.push('<Relationship Id="'+name+'" Type="'+NS+'/image" Target="media/'+target+'"/>');
+    const r=(name,target)=>relations.push('<Relationship Id="'+name+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+target+'"/>');
     for(let n=1;n<=total;n++){
       abort(signal);
       const page=await pdf.getPage(n),view=page.getViewport({scale:1});
