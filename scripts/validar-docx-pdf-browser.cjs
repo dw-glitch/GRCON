@@ -51,6 +51,7 @@ const root=process.cwd();
        const pg=multipage.addPage([595,842]);
        pg.drawText('Pagina '+idx,{x:50,y:760,font,size:14});
        pg.drawRectangle({x:50,y:650,width:450,height:65,borderColor:PDFLib.rgb(0,0,0),borderWidth:1});
+       pg.drawRectangle({x:65,y:605,width:40,height:20,color:PDFLib.rgb(0,0,0)});
      }
      return {a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),multipage:Array.from(await multipage.save())};
    });
@@ -75,6 +76,7 @@ const root=process.cwd();
    assert.match(visualPackage.xml,/Pagina 1/);
    assert.match(visualPackage.xml,/Pagina 2/);
    assert.match(visualPackage.xml,/<v:line\b/,'bordas devem ser vetores Word');
+   assert.match(visualPackage.xml,/<v:rect\b/,'retangulos preenchidos devem ser objetos Word');
    assert.doesNotMatch(visualPackage.xml,/<wp:anchor\b/,'não rasterizar páginas');
    await page.locator('#docx-pdf-clear').click();
    await page.locator('#docx-pdf-confirm').uncheck();
