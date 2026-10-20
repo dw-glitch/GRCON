@@ -54,13 +54,15 @@ const root=process.cwd();
        pg.drawRectangle({x:65,y:605,width:40,height:20,color:PDFLib.rgb(0,0,0)});
      }
      const mixed=await PDFLib.PDFDocument.create();
+     const mixedFont=await mixed.embedFont(PDFLib.StandardFonts.Helvetica);
      for(const [i,dims] of [[595,842],[842,595],[595,842]].entries()){
        const pg=mixed.addPage(dims);
-       pg.drawText('Pagina mista '+(i+1),{x:50,y:480,font,size:11});
+       pg.drawText('Pagina mista '+(i+1),{x:50,y:480,font:mixedFont,size:11});
      }
      const volume=await PDFLib.PDFDocument.create();
+     const volumeFont=await volume.embedFont(PDFLib.StandardFonts.Helvetica);
      for(let idx=1;idx<=233;idx++){
-       const pg=volume.addPage([595,842]);pg.drawText('Volume pagina '+idx,{x:50,y:740,font,size:11});
+       const pg=volume.addPage([595,842]);pg.drawText('Volume pagina '+idx,{x:50,y:740,font:volumeFont,size:11});
      }
      return {volume:Array.from(await volume.save()),a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),
        multipage:Array.from(await multipage.save()),mixed:Array.from(await mixed.save())};
