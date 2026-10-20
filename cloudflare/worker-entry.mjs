@@ -1,6 +1,7 @@
 import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
 import {syncSharepoint} from './teams-sharepoint.mjs';
-import {handleGithubRoute} from './teams-github.mjs';
+import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
+import {generateExplanation,INTENTS,SOURCE_LABELS,evidenceFor,modelInput} from './document-ai.mjs';
 
 const PREFIX = "/api/document-vault/";
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
@@ -115,6 +116,42 @@ async function handleVaultOperation(request, env, operation) {
   if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
   const input = request.method === "POST" ? body : { id: safeUuid(url.searchParams.get("id")), code: safeText(url.searchParams.get("code"), 255), q: safeText(url.searchParams.get("q"), 160), source: safeText(url.searchParams.get("source"), 32), after: Math.max(0, Number(url.searchParams.get("after")) || 0), revision: url.searchParams.get("revision") || undefined };
   return json({ ok: true, ...await vaultOperation(env, workspaceId, user.id, operation, input) });
+}
+
+const aiEnabled=env=>env.GRCON_DOCUMENT_AI_ENABLED==='true'&&typeof env.AI?.run==='function';
+async function aiBody(request){
+ const reader=request.body?.getReader();let size=0,parts=[];
+ if(!reader)throw Object.assign(Error('Consulta inválida.'),{status:400});
+ for(;;){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>3000){await reader.cancel();throw Object.assign(Error('Consulta muito extensa.'),{status:413});}parts.push(value);}
+ const bytes=new Uint8Array(size);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}
+ try{return JSON.parse(new TextDecoder().decode(bytes));}catch{throw Object.assign(Error('Consulta inválida.'),{status:400});}
+}
+async function handleDocumentAi(request,env,probe=false){
+ if(probe){
+  await verifyGithubToken(bearerToken(request),{repository:'dw-glitch/GRCON',repositoryId:'1322072089',ownerId:'202873892',audience:'grcon-document-ai-probe',visibility:'public',workflow:'dw-glitch/GRCON/.github/workflows/deploy-cloudflare.yml@refs/heads/main',allowedEvents:['push','workflow_dispatch']});
+  if(!aiEnabled(env))return apiError('Workers AI indisponível.',503,'AI_NOT_CONFIGURED');
+  const slot=await rpc(env,'grcon_document_ai_budget',{operation:'probe'});
+  if(!slot.allowed)return json({ok:true,skipped:true,reason:slot.reason});
+  const explanation=await generateExplanation(env.AI,'revision',{queriedAt:new Date().toISOString(),sigem:[{revision:'0'}],pw:[{revision:'A'}],sources:{sigem:{available:true},pw:{available:true},history:{available:false},vault:{available:false},requests:{available:false}},pages:{}});
+  return json({ok:true,probe:true,mode:explanation.mode,model:explanation.model,citedItems:explanation.items.length});
+ }
+ const user=await authenticatedUser(request,env);
+ const body=request.method==='POST'?await aiBody(request):{};
+ const workspace=workspaceFrom(request,body);
+ if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
+ const budget=await rpc(env,'grcon_document_ai_budget',{operation:'status',target_workspace:workspace,actor_id:user.id});
+ if(request.method==='GET')return json({ok:true,enabled:aiEnabled(env),...budget});
+ if(!aiEnabled(env))return apiError('A consulta por regras continua disponível.',503,'AI_NOT_CONFIGURED');
+ if(!budget.available)return apiError('Limite diário da IA atingido. Use Consultar fontes.',429,'AI_DAILY_LIMIT');
+ if(!Object.hasOwn(INTENTS,body.intent)||typeof body.code!=='string'||!/^[A-Za-z0-9][A-Za-z0-9._/ -]{1,179}$/.test(body.code))return apiError('Consulta inválida.',400,'AI_INPUT_INVALID');
+ const data=await vaultOperation(env,workspace,user.id,'master-page',{code:body.code});
+ for(const source of Object.keys(SOURCE_LABELS))if(typeof body.revisions?.[source]!=='string'||body.revisions[source]!==String(data.pages?.[source]?.revision||''))return apiError('As fontes mudaram. Atualize o Registro Mestre antes de consultar a IA.',409,'AI_SOURCES_CHANGED');
+ // Validate bounds before reserving. Every attempted inference consumes its slot.
+ modelInput(body.intent,evidenceFor(data));
+ const slot=await rpc(env,'grcon_document_ai_budget',{operation:'reserve',target_workspace:workspace,actor_id:user.id});
+ if(!slot.allowed)return apiError('Limite de consultas da IA atingido. Use Consultar fontes.',429,'AI_LIMIT');
+ try{return json({ok:true,...await generateExplanation(env.AI,body.intent,data)});}
+ catch{return apiError('Não foi possível gerar a explicação. Use Consultar fontes.',503,'AI_UNAVAILABLE');}
 }
 
 async function listCatalog(env, workspaceId, actorId, input = {}) {
@@ -672,6 +709,9 @@ async function handleDelete(request, env) {
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
+  if(action==='ai-probe'&&request.method==='POST')return handleDocumentAi(request,env,true);
+  if(action==='ai-status'&&request.method==='GET')return handleDocumentAi(request,env);
+  if(action==='ai-explain'&&request.method==='POST')return handleDocumentAi(request,env);
   if (["detail", "metrics", "master", "master-page", "search"].includes(action) && request.method === "GET") return handleVaultOperation(request, env, action);
   if (action === "metadata" && request.method === "POST") return handleVaultOperation(request, env, action);
   if (action === "health" && request.method === "GET") return handleHealth(env);

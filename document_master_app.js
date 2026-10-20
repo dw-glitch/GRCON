@@ -78,6 +78,10 @@
     document.getElementById('master-content').innerHTML = heading+'<section class="master-source"><h4>Identificação</h4>'+identification+'</section>'+sections.map(([key,label])=> {
       return '<section class="master-source" data-master-source="'+key+'"><h4>'+label+'</h4><div data-master-body>'+sourceMarkup(key,results[0].status==='rejected')+'</div></section>';
     }).join('');
+    const aiButton=document.createElement('button');aiButton.type='button';aiButton.dataset.masterAi='';aiButton.textContent='Explicar com IA';aiButton.hidden=true;
+    document.querySelector('[data-master-explain]').after(aiButton);
+    const view=currentDocument;
+    void api().request('/ai-status').then(result=>{if(view===currentDocument&&view.scope===epoch&&view.ticket===searchTicket)aiButton.hidden=!(result.enabled&&result.available&&!view.remoteFailed);}).catch(()=>{});
     status(results[0].status==='rejected'?'Algumas fontes não puderam ser consultadas.':'Registro atualizado.',results[0].status==='rejected');
   }
   function explainDocument(){
@@ -85,6 +89,24 @@
     const ui=root.GrconPostingConferenceUi?.state;
     const result=root.GrconDocumentExplanations.answer({intent:document.getElementById('master-explanation-intent').value,code:view.code,data:view.remote,sources:view.remote.sources,remoteFailed:view.remoteFailed,localPwMeta:!view.remote.sources?.pw?.available?pwBase?.meta:null,workspaceId:root.GrconCloud?.state?.membership?.workspace_id,conference:ui?{snapshotId:ui.base.meta?.snapshotId,rows:ui.result.documentRows||[]}:null});
     document.getElementById('master-explanation-answer').innerHTML='<h4>'+esc(result.title)+'</h4>'+result.lines.map(line=>'<p>'+esc(line)+'</p>').join('')+result.limitations.map(line=>'<p class="master-empty">'+esc(line)+'</p>').join('')+'<div class="master-file-actions">'+result.citations.map(source=>'<button type="button" data-master-source-link="'+source.id+'">Ver fonte: '+esc(source.label)+'</button>').join('')+'</div>'+(result.queriedAt?'<small>Consulta inicial em '+esc(result.queriedAt)+'</small>':'');
+  }
+  async function explainWithAi(button){
+    const view=currentDocument,scope=epoch,ticket=searchTicket,intent=document.getElementById('master-explanation-intent').value;
+    if(!view||view.remoteFailed)return;
+    explainDocument();
+    const host=document.getElementById('master-explanation-answer'),box=document.createElement('section');box.setAttribute('aria-live','polite');host.appendChild(box);
+    if(Object.values(view.remote.pages||{}).some(page=>page.after)){box.textContent='Atualize a consulta do documento para usar a IA na primeira página das fontes.';return;}
+    const revisions=Object.fromEntries(['sigem','pw','history','vault','requests'].map(source=>[source,String(view.remote.pages?.[source]?.revision||'')]));
+    const cacheKey=JSON.stringify({intent,revisions}),generation=(view.aiGeneration||0)+1;view.aiGeneration=generation;
+    box.textContent='Preparando explicação…';button.disabled=true;
+    try{
+      const result=view.aiCache?.[cacheKey]||await api().request('/ai-explain',{method:'POST',body:JSON.stringify({code:view.code,intent,revisions})});
+      if(scope!==epoch||ticket!==searchTicket||view!==currentDocument||view.aiGeneration!==generation||document.getElementById('master-explanation-intent').value!==intent)return;
+      if(result.mode!=='workers-ai'||!Array.isArray(result.items))throw Error('Explicação indisponível.');
+      view.aiCache||={};view.aiCache[cacheKey]=result;
+      box.innerHTML='<h4>Explicação por IA</h4><p class="master-empty">Confira as fontes. Esta explicação não altera a conferência nem a revisão física.</p>'+result.items.map(item=>'<p>'+esc(item.text)+'</p><div class="master-file-actions">'+(item.citations||[]).filter(c=>['sigem','pw','history','vault','requests'].includes(c.source)).map(c=>'<button type="button" data-master-source-link="'+c.source+'">Ver fonte: '+esc(c.label)+'</button>').join('')+'</div>').join('')+'<small>Fontes consultadas em '+esc(result.queriedAt)+'</small>';
+    }catch(error){if(scope===epoch&&ticket===searchTicket&&view===currentDocument&&view.aiGeneration===generation)box.textContent=error.message||'IA indisponível. A consulta por fontes acima continua disponível.';}
+    finally{button.disabled=false;}
   }
   function sourceMarkup(key,failed=false) {
     const {remote,pw,columns}=currentDocument;
@@ -105,6 +127,7 @@
   }
   async function loadPage(key,after,button) {
     const view=currentDocument;if(!view)return;
+    view.aiGeneration=(view.aiGeneration||0)+1;view.aiCache={};document.getElementById('master-explanation-answer').replaceChildren();
     button.disabled=true;
     try{
       if(key==='pw'&&!view.remote.sources?.pw?.available){
@@ -191,9 +214,9 @@
     dialog.addEventListener('close',()=>{searchTicket++;opener?.focus?.();});
     document.getElementById('master-query').addEventListener('input',event=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>void search(event.target.value),220);});
     document.getElementById('master-search').addEventListener('submit',event=>{event.preventDefault();clearTimeout(searchTimer);void showDocument(document.getElementById('master-query').value);});
-    dialog.addEventListener('click',event=>{const code=event.target.closest('[data-master-code]');if(code)void showDocument(code.dataset.masterCode);if(event.target.closest('[data-master-explain]'))explainDocument();const sourceLink=event.target.closest('[data-master-source-link]');if(sourceLink)dialog.querySelector('[data-master-source="'+sourceLink.dataset.masterSourceLink+'"]')?.scrollIntoView({block:'start',behavior:'smooth'});const page=event.target.closest('[data-master-page]');if(page)void loadPage(page.dataset.masterPage,Number(page.dataset.masterOffset),page);const detail=event.target.closest('[data-master-detail]');if(detail)void openFile(detail.dataset.masterDetail);const history=event.target.closest('[data-master-history]');if(history)void openTarget('history',history.dataset.masterHistory);const target=event.target.closest('[data-master-target]');if(target)void openTarget(target.dataset.masterTarget);const file=event.target.closest('[data-master-download]');if(file)void downloadFile(file.dataset.masterDownload,file.dataset.masterName);});
+    dialog.addEventListener('click',event=>{const code=event.target.closest('[data-master-code]');if(code)void showDocument(code.dataset.masterCode);if(event.target.closest('[data-master-explain]'))explainDocument();const ai=event.target.closest('[data-master-ai]');if(ai)void explainWithAi(ai);const sourceLink=event.target.closest('[data-master-source-link]');if(sourceLink)dialog.querySelector('[data-master-source="'+sourceLink.dataset.masterSourceLink+'"]')?.scrollIntoView({block:'start',behavior:'smooth'});const page=event.target.closest('[data-master-page]');if(page)void loadPage(page.dataset.masterPage,Number(page.dataset.masterOffset),page);const detail=event.target.closest('[data-master-detail]');if(detail)void openFile(detail.dataset.masterDetail);const history=event.target.closest('[data-master-history]');if(history)void openTarget('history',history.dataset.masterHistory);const target=event.target.closest('[data-master-target]');if(target)void openTarget(target.dataset.masterTarget);const file=event.target.closest('[data-master-download]');if(file)void downloadFile(file.dataset.masterDownload,file.dataset.masterName);});
     dialog.addEventListener('submit',async event=>{if(event.target.getAttribute('id')!=='master-metadata')return;event.preventDefault();const values=Object.fromEntries(new FormData(event.target));try{await api().request('/metadata',{method:'POST',body:JSON.stringify(values)});status('Metadados atualizados.');}catch(error){status(error.message,true);}});
-    root.addEventListener('grcon:contract-context-changed',()=>{epoch++;searchTicket++;currentDocument=null;pwBase=null;pwIndex=null;dialog.close();document.getElementById('master-results').innerHTML='';document.getElementById('master-content').innerHTML='';document.getElementById('master-query').value='';});
+    const reset=()=>{epoch++;searchTicket++;currentDocument=null;pwBase=null;pwIndex=null;dialog.close();document.getElementById('master-results').innerHTML='';document.getElementById('master-content').innerHTML='';document.getElementById('master-query').value='';};root.addEventListener('grcon:contract-context-changed',reset);root.addEventListener('grcon:cloud-signed-out',reset);
     root.addEventListener('grcon:pw-base-updated',()=>{pwBase=null;pwIndex=null;});
   }
   root.GrconDocumentMaster=Object.freeze({open,openFile});

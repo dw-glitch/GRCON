@@ -4,9 +4,11 @@
   "compatibility_date": "2026-09-24",
   "main": "./cloudflare/worker-runtime.mjs",
   "compatibility_flags": ["nodejs_compat"],
+  "ai": {"binding": "AI"},
   "observability": {"enabled": true},
   "workflows": [{"name": "grcon-tasks", "binding": "GRCON_TASKS", "class_name": "GrconTaskWorkflow"}],
   "vars": {
+    "GRCON_DOCUMENT_AI_ENABLED": "true",
     "SUPABASE_URL": "https://kvyrttccwzdhasplfxnr.supabase.co",
     "R2_BUCKET_NAME": "grcon-documents",
     "GRCON_TEAMS_TRANSPORT": "github",
