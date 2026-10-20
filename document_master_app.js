@@ -25,6 +25,8 @@
     const base = shared?.meta ? shared : root.GrconSigemPwDashboardUi?.state?.pw;
     const source = base?.meta ? base : await root.GrconSigemPwDashboard?.kvGet(root.GrconSigemPwDashboard.PW_BASE_KEY, null);
     if(scope!==epoch)return null;
+    const current=root.GrconCloud?.state,owned=source?.meta?.localContext;
+    if((owned&&(owned.userId!==(current?.session?.user?.id||'')||owned.workspaceId!==(current?.membership?.workspace_id||'')))||(source?.meta?.sharedWorkspaceId&&source.meta.sharedWorkspaceId!==current?.membership?.workspace_id)){pwBase=null;pwIndex=null;return null;}
     if (source !== pwBase) {
       pwBase = source; pwIndex = new Map();
       for (const row of source?.sourceRecords || source?.records || []) {
@@ -57,7 +59,7 @@
     if (ticket !== searchTicket || scope !== epoch) return;
     const remote = results[0].status==='fulfilled' ? results[0].value : {};
     const pw = remote.sources?.pw?.available ? remote.pw : results[1].status==='fulfilled' ? (pwIndex?.get(identity(code)) || []) : null;
-    currentDocument={code,remote,pw,columns:null,ticket,scope};
+    currentDocument={code,remote,pw,columns:null,ticket,scope,remoteFailed:results[0].status==='rejected'};
     const columns = {
       sigem:[['Código','document'],['Revisão','revision'],['Status','status'],['Título','title'],['Data',r=>r.date||r.updatedAt||'']],
       pw:[['Código','document'],['Revisão','revision'],['Workflow',r=>r.status||r.workflow||''],['Última emissão',r=>r.lastEmission||r.emissionFlag||''],['Databook',r=>r.databook||r.eap||'']],
@@ -72,11 +74,17 @@
     const identification=table([{description:known(['title','description']),class:known(['documentClass','class']),discipline:known(['discipline']),taxonomy:known(['taxonomy']),eap:known(['eap'])}], [['Descrição','description'],['Classe','class'],['Disciplina','discipline'],['Taxonomia','taxonomy'],['EAP','eap']]);
     currentDocument.columns=columns;
     const heading = '<h3>'+esc(code)+'</h3><p>Fontes consultadas separadamente. Navegue pelas páginas de cada fonte; versões e emissões permanecem identificadas.</p>'+
-      '<div class="master-file-actions"><button type="button" class="secondary-button" data-master-target="document">Abrir na Central SIGEM</button><button type="button" class="secondary-button" data-master-target="vault">Pesquisar no Cofre</button></div>';
+      '<section class="master-source"><details id="master-explanation"><summary>Entender os resultados e suas fontes</summary><label>O que deseja consultar?<select id="master-explanation-intent">'+Object.entries(root.GrconDocumentExplanations?.questions||{}).map(([value,label])=>'<option value="'+value+'">'+esc(label)+'</option>').join('')+'</select></label><button type="button" data-master-explain>Consultar fontes</button><button type="button" data-master-target="conference">Abrir conferência deste código</button><div id="master-explanation-answer" aria-live="polite"></div></details></section><div class="master-file-actions"><button type="button" class="secondary-button" data-master-target="document">Abrir na Central SIGEM</button><button type="button" class="secondary-button" data-master-target="vault">Pesquisar no Cofre</button></div>';
     document.getElementById('master-content').innerHTML = heading+'<section class="master-source"><h4>Identificação</h4>'+identification+'</section>'+sections.map(([key,label])=> {
       return '<section class="master-source" data-master-source="'+key+'"><h4>'+label+'</h4><div data-master-body>'+sourceMarkup(key,results[0].status==='rejected')+'</div></section>';
     }).join('');
     status(results[0].status==='rejected'?'Algumas fontes não puderam ser consultadas.':'Registro atualizado.',results[0].status==='rejected');
+  }
+  function explainDocument(){
+    const view=currentDocument;if(!view||view.scope!==epoch||!root.GrconDocumentExplanations)return;
+    const ui=root.GrconPostingConferenceUi?.state;
+    const result=root.GrconDocumentExplanations.answer({intent:document.getElementById('master-explanation-intent').value,code:view.code,data:view.remote,sources:view.remote.sources,remoteFailed:view.remoteFailed,localPwMeta:!view.remote.sources?.pw?.available?pwBase?.meta:null,workspaceId:root.GrconCloud?.state?.membership?.workspace_id,conference:ui?{snapshotId:ui.base.meta?.snapshotId,rows:ui.result.documentRows||[]}:null});
+    document.getElementById('master-explanation-answer').innerHTML='<h4>'+esc(result.title)+'</h4>'+result.lines.map(line=>'<p>'+esc(line)+'</p>').join('')+result.limitations.map(line=>'<p class="master-empty">'+esc(line)+'</p>').join('')+'<div class="master-file-actions">'+result.citations.map(source=>'<button type="button" data-master-source-link="'+source.id+'">Ver fonte: '+esc(source.label)+'</button>').join('')+'</div>'+(result.queriedAt?'<small>Consulta inicial em '+esc(result.queriedAt)+'</small>':'');
   }
   function sourceMarkup(key,failed=false) {
     const {remote,pw,columns}=currentDocument;
@@ -107,7 +115,7 @@
       const page=view.remote.pages?.[key];
       const result=await api().request('/master-page?'+new URLSearchParams({code:view.code,source:key,after:String(after),revision:page.revision}));
       if(view!==currentDocument||view.scope!==epoch||view.ticket!==searchTicket)return;
-      view.remote[key]=result[key];view.remote.pages[key]=result.pages[key];view.remote.sources=result.sources;
+      view.remote[key]=result[key];view.remote.pages[key]={...result.pages[key],queriedAt:result.queriedAt};view.remote.sources={...view.remote.sources,[key]:result.sources?.[key]};
       document.querySelector('[data-master-source="'+key+'"] [data-master-body]').innerHTML=sourceMarkup(key);
       status('Página atualizada.');
     }catch(error){if(view===currentDocument&&view.scope===epoch)status(error.message||'Fonte indisponível.',true);}
@@ -116,7 +124,11 @@
   async function openTarget(kind,value){
     const scope=epoch;
     try{
-      if(kind==='vault'){
+      if(kind==='conference'){
+        if(!root.GrconPostingConferenceNavigation)throw Error('Conferência indisponível.');
+        const code=currentDocument.code;document.getElementById('document-master-dialog').close();await root.GrconPostingConferenceNavigation?.open();if(scope!==epoch)return;const ui=root.GrconPostingConferenceUi;if(!ui)throw Error('Conferência indisponível.');
+        Object.keys(ui.state.filters).forEach(key=>ui.state.filters[key]='');ui.state.filters.document=code;ui.state.filters.search=code;ui.state.view='documents';ui.state.page=1;document.querySelectorAll('#pc-filters input,#pc-filters select,#pc-filters textarea').forEach(control=>{if(control.id!=='pc-wait')control.value=control.id==='pc-search'?code:'';});ui.render();
+      }else if(kind==='vault'){
         document.getElementById('document-master-dialog').close();
         await api().open();if(scope!==epoch)return;
         const input=document.getElementById('vault-search');if(input){input.value=currentDocument.code;input.dispatchEvent(new Event('input',{bubbles:true}));}
@@ -129,7 +141,7 @@
         await root.GRCONModuleLoader?.ensureModule?.('sigem');if(scope!==epoch)return;
         document.getElementById('document-master-dialog').close();await root.GrconSigemCentralUi?.openTarget('document',currentDocument.code);
       }
-    }catch(error){if(scope===epoch)status(error.message||'Destino indisponível.',true);}
+    }catch(error){if(scope===epoch){const dialog=document.getElementById('document-master-dialog');if(!dialog.open)dialog.showModal();status(error.message||'Destino indisponível.',true);}}
   }
   async function search(query) {
     const ticket=++searchTicket, scope=epoch;
@@ -166,6 +178,7 @@
     opener=document.activeElement;
     const dialog=document.getElementById('document-master-dialog');
     if(!dialog.open)dialog.showModal();
+    if(currentDocument&&currentDocument.scope===epoch)currentDocument.ticket=searchTicket;
     document.getElementById('master-query').focus();
     if(code)void showDocument(code);
   }
@@ -178,7 +191,7 @@
     dialog.addEventListener('close',()=>{searchTicket++;opener?.focus?.();});
     document.getElementById('master-query').addEventListener('input',event=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>void search(event.target.value),220);});
     document.getElementById('master-search').addEventListener('submit',event=>{event.preventDefault();clearTimeout(searchTimer);void showDocument(document.getElementById('master-query').value);});
-    dialog.addEventListener('click',event=>{const code=event.target.closest('[data-master-code]');if(code)void showDocument(code.dataset.masterCode);const page=event.target.closest('[data-master-page]');if(page)void loadPage(page.dataset.masterPage,Number(page.dataset.masterOffset),page);const detail=event.target.closest('[data-master-detail]');if(detail)void openFile(detail.dataset.masterDetail);const history=event.target.closest('[data-master-history]');if(history)void openTarget('history',history.dataset.masterHistory);const target=event.target.closest('[data-master-target]');if(target)void openTarget(target.dataset.masterTarget);const file=event.target.closest('[data-master-download]');if(file)void downloadFile(file.dataset.masterDownload,file.dataset.masterName);});
+    dialog.addEventListener('click',event=>{const code=event.target.closest('[data-master-code]');if(code)void showDocument(code.dataset.masterCode);if(event.target.closest('[data-master-explain]'))explainDocument();const sourceLink=event.target.closest('[data-master-source-link]');if(sourceLink)dialog.querySelector('[data-master-source="'+sourceLink.dataset.masterSourceLink+'"]')?.scrollIntoView({block:'start',behavior:'smooth'});const page=event.target.closest('[data-master-page]');if(page)void loadPage(page.dataset.masterPage,Number(page.dataset.masterOffset),page);const detail=event.target.closest('[data-master-detail]');if(detail)void openFile(detail.dataset.masterDetail);const history=event.target.closest('[data-master-history]');if(history)void openTarget('history',history.dataset.masterHistory);const target=event.target.closest('[data-master-target]');if(target)void openTarget(target.dataset.masterTarget);const file=event.target.closest('[data-master-download]');if(file)void downloadFile(file.dataset.masterDownload,file.dataset.masterName);});
     dialog.addEventListener('submit',async event=>{if(event.target.getAttribute('id')!=='master-metadata')return;event.preventDefault();const values=Object.fromEntries(new FormData(event.target));try{await api().request('/metadata',{method:'POST',body:JSON.stringify(values)});status('Metadados atualizados.');}catch(error){status(error.message,true);}});
     root.addEventListener('grcon:contract-context-changed',()=>{epoch++;searchTicket++;currentDocument=null;pwBase=null;pwIndex=null;dialog.close();document.getElementById('master-results').innerHTML='';document.getElementById('master-content').innerHTML='';document.getElementById('master-query').value='';});
     root.addEventListener('grcon:pw-base-updated',()=>{pwBase=null;pwIndex=null;});

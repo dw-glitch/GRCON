@@ -40,6 +40,8 @@ const root=process.cwd();
   });
   await page.evaluate(()=>{window.GrconCloud.state.client.auth={getSession:async()=>({data:{session:{access_token:'qa-test'}}})};window.GrconCloud.state.contracts.push({workspace_id:'w2',contract_id:'c2',code:'UGH',active:true,settings:{}});});
   await page.addScriptTag({path:path.join(root,'contract_admin_app.js')});
+  await page.addScriptTag({path:path.join(root,'client_diagnostics.js')});
+  await page.evaluate(()=>window.GrconClientDiagnostics.recordResource({name:'https://qa.supabase.co/rest/v1/rpc/grcon_pw_base?apikey=QA_SECRET',duration:100,responseStatus:200}));
   await page.addScriptTag({path:path.join(root,'background_jobs_app.js')});
   assert.equal(await page.locator('.runtime-status #grcon-administration-shortcut').count(),1);
   assert.equal(await page.locator('.runtime-status #grcon-tasks-shortcut').count(),1,'master sees operational tasks in header');
@@ -80,6 +82,9 @@ const root=process.cwd();
   await page.locator('[data-admin-section="technical"]').click();
   await page.locator('#grcon-admin-technical .grcon-jobs-kpis').waitFor();
   assert.equal(await page.locator('#grcon-admin-contract').isVisible(),false);
+  await page.locator('[data-client-diagnostics] summary').click();
+  const diagnosticsDownload=page.waitForEvent('download');await page.locator('[data-client-diagnostics-download]').click();const downloadedDiagnostics=await diagnosticsDownload;const diagnosticFile=path.join(root,'artifacts/master-owner/local-diagnostics.json');fs.mkdirSync(path.dirname(diagnosticFile),{recursive:true});await downloadedDiagnostics.saveAs(diagnosticFile);const diagnosticJson=JSON.parse(fs.readFileSync(diagnosticFile,'utf8'));assert.equal(diagnosticJson.schema,'grcon.client-diagnostics.v1');assert.ok(!JSON.stringify(diagnosticJson).includes('QA_SECRET'));
+
   await page.locator('[data-admin-section="activity"]').click();
   assert.equal(await page.locator('#grcon-cloud-audit-panel').isVisible(),true);
   assert.equal(await page.evaluate(()=>window.GrconBackgroundJobs.state.open),false,'polling stops on leaving diagnostics');

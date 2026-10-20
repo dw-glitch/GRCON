@@ -476,6 +476,7 @@
     }
   }
 
+  root.GrconPostingConferenceNavigation=Object.freeze({open:openConference});
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else void init();
 })(window);

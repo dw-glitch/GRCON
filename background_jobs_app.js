@@ -40,6 +40,7 @@
   dialog.querySelector('[data-jobs-close]').addEventListener('click',()=>dialog.close());
   $('#grcon-jobs-view').addEventListener('click',event=>{
    if(event.target.closest('[data-jobs-refresh]'))void refresh();
+   if(event.target.closest('[data-client-diagnostics-download]')&&master())try{root.GrconClientDiagnostics?.download();}catch(error){notify(error.message,'error');}
    const download=event.target.closest('[data-job-download]'),retry=event.target.closest('[data-job-retry]');
    if(download)void downloadJob(download.dataset.jobDownload);
    if(retry)void api('retry',{method:'POST',id:retry.dataset.jobRetry}).then(()=>refresh()).catch(error=>notify(error.message,'error'));
@@ -70,11 +71,16 @@
  function table(jobs){
   return jobs.length?'<div class="grcon-jobs-table"><table><thead><tr><th>Tarefa</th><th>Andamento</th><th>Situação</th><th>Atualização</th><th>Ações</th></tr></thead><tbody>'+jobs.map(j=>'<tr><td><strong>'+escape(j.title)+'</strong>'+(state.technical?'<small>Contrato '+escape(j.workspace_id)+'</small>':'')+'</td><td><progress max="100" value="'+Number(j.progress||0)+'" aria-label="Andamento da tarefa"></progress><small>'+escape(j.stage)+'</small></td><td><span class="grcon-job-state" data-status="'+escape(j.status)+'">'+escape(labels[j.status]||j.status)+'</span><small>'+Number(j.attempts||0)+' tentativa(s)</small>'+(j.error_code?'<small>'+escape(j.error_code)+'</small>':'')+'</td><td>'+escape(new Date(j.updated_at).toLocaleString('pt-BR'))+'</td><td>'+(j.status==='succeeded'&&j.output_name?'<button type="button" data-job-download="'+escape(j.id)+'">Baixar resultado</button>':'')+(j.status==='failed'&&j.error_code!=='UPLOAD_INCOMPLETE'?'<button type="button" data-job-retry="'+escape(j.id)+'">Tentar novamente</button>':'')+(j.status==='needs_review'?'<small>Confira o Teams antes de iniciar outro envio.</small>':'')+'</td></tr>').join('')+'</tbody></table></div>':'<p>Nenhuma tarefa neste contrato.</p>';
  }
+ function clientDiagnostics(){
+  if(!master()||!root.GrconClientDiagnostics)return '';
+  const data=root.GrconClientDiagnostics.snapshot();
+  return '<details data-client-diagnostics><summary>Navegador e chamadas diretas ao banco</summary><p>Amostra desta aba, limitada às últimas '+data.sampleLimit+' chamadas. Status não informado pelo navegador não conta como falha.</p><div class="grcon-jobs-table"><table><thead><tr><th>Categoria</th><th>Chamadas</th><th>Erros HTTP</th><th>Status desconhecido</th><th>Média</th><th>P95</th><th>Máximo</th></tr></thead><tbody>'+data.requests.map(row=>'<tr><td>'+escape(row.category)+'</td><td>'+row.count+'</td><td>'+row.httpErrors+'</td><td>'+row.unknownStatus+'</td><td>'+row.averageMs+' ms</td><td>'+row.p95Ms+' ms</td><td>'+row.maxMs+' ms</td></tr>').join('')+'</tbody></table></div><p>'+data.longTasks.count+' tarefa(s) longa(s) do navegador · P95 '+data.longTasks.p95Ms+' ms. Armazenamento local: '+(data.persistence.ready?'pronto':data.persistence.degraded?'degradado':'não verificado')+'.</p><button type="button" data-client-diagnostics-download>Baixar diagnóstico desta aba</button></details>';
+ }
  function technical(data){
   const services=data.services||{},metrics=data.metrics||[];
   const serviceCards=[['Processamento',services.workflows],['Armazenamento',services.r2],['Banco',services.supabase],['Teams configurado',services.teamsConfigured]];
   const heartbeat=data.scheduler?new Date(data.scheduler):null,late=!heartbeat||Date.now()-heartbeat.getTime()>5*60000;
-  return '<div class="grcon-jobs-kpis">'+serviceCards.map(([label,ok])=>'<article><small>'+label+'</small><strong>'+ (ok?'Disponível':'Requer atenção')+'</strong></article>').join('')+'<article><small>Agendador</small><strong>'+(late?'Verificar execução':'Ativo')+'</strong><small>'+escape(heartbeat?heartbeat.toLocaleString('pt-BR'):'Sem execução registrada')+'</small></article></div><h3>APIs nas últimas 24 horas</h3><p>Chamadas das APIs do GRCON; não inclui arquivos estáticos nem consultas diretas ao Supabase.</p><div class="grcon-jobs-table"><table><thead><tr><th>Serviço</th><th>Requisições</th><th>Falhas</th><th>Tempo médio</th><th>Maior tempo</th></tr></thead><tbody>'+metrics.map(m=>'<tr><td>'+escape({vault:'Cofre',teams:'Teams',jobs:'Tarefas',other:'Outras APIs'}[m.route]||m.route)+'</td><td>'+Number(m.requests)+'</td><td>'+Number(m.errors)+'</td><td>'+Number(m.average_ms)+' ms</td><td>'+Number(m.max_ms)+' ms</td></tr>').join('')+'</tbody></table></div><h3>Tarefas recentes de todos os contratos</h3>'+table(data.jobs||[]);
+  return '<div class="grcon-jobs-kpis">'+serviceCards.map(([label,ok])=>'<article><small>'+label+'</small><strong>'+ (ok?'Disponível':'Requer atenção')+'</strong></article>').join('')+'<article><small>Agendador</small><strong>'+(late?'Verificar execução':'Ativo')+'</strong><small>'+escape(heartbeat?heartbeat.toLocaleString('pt-BR'):'Sem execução registrada')+'</small></article></div><h3>APIs nas últimas 24 horas</h3><p>Chamadas das APIs do GRCON; não inclui arquivos estáticos nem consultas diretas ao Supabase.</p><div class="grcon-jobs-table"><table><thead><tr><th>Serviço</th><th>Requisições</th><th>Falhas</th><th>Tempo médio</th><th>Maior tempo</th></tr></thead><tbody>'+metrics.map(m=>'<tr><td>'+escape({vault:'Cofre',teams:'Teams',jobs:'Tarefas',other:'Outras APIs'}[m.route]||m.route)+'</td><td>'+Number(m.requests)+'</td><td>'+Number(m.errors)+'</td><td>'+Number(m.average_ms)+' ms</td><td>'+Number(m.max_ms)+' ms</td></tr>').join('')+'</tbody></table></div>'+clientDiagnostics()+'<h3>Tarefas recentes de todos os contratos</h3>'+table(data.jobs||[]);
  }
  async function refresh(){
   clearTimeout(state.timer);if(!state.open||state.technical&&!master())return;
@@ -82,7 +88,8 @@
   try{
    const result=await api(state.technical?'technical':'list');
    if(ticket!==state.ticket||identity!==context()||!state.open||(state.technical||state.embedded)&&!master())return;
-   state.jobs=result.jobs||[];$('#grcon-jobs-content').innerHTML=state.technical?technical(result):table(state.jobs);$('#grcon-jobs-feedback').textContent='Atualizado agora';
+   const clientOpen=Boolean($('#grcon-jobs-content [data-client-diagnostics]')?.open);
+   state.jobs=result.jobs||[];$('#grcon-jobs-content').innerHTML=state.technical?technical(result):table(state.jobs);if(clientOpen&&$('[data-client-diagnostics]'))$('[data-client-diagnostics]').open=true;$('#grcon-jobs-feedback').textContent='Atualizado agora';
    if(state.jobs.some(j=>!['succeeded','failed','needs_review','cancelled'].includes(j.status))||state.technical)state.timer=setTimeout(()=>void refresh(),8000);
    for(const job of state.jobs.filter(j=>j.kind==='sigem_import'&&j.status==='succeeded'&&!completedImports.has(j.id))){completedImports.add(job.id);const query=root.GrconSharedSigemQuery;void(query?.completeBackgroundPublication?.()||query?.refreshLatest?.())?.catch(()=>{});}
   }catch(error){if(ticket===state.ticket&&state.open)$('#grcon-jobs-feedback').textContent=error.message;}
