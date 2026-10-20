@@ -15,6 +15,7 @@
     base: { meta: null, records: [] },
     result: { rows: [], eventRows: [], documentRows: [], groups: [], summary: {}, eventSummary: {}, changes: {}, consolidation: {} },
     audit: [],
+    queueFilters: {priority:"",responsible:""},
     view: "documents",
     page: 1,
     filters: { search: "", document: "", documentList: "", grdt: "", family: "", discipline: "", revision: "", status: "", startDate: "", endDate: "" },
@@ -118,6 +119,10 @@
           <button class="text-button" id="pc-clear-filters" type="button">Limpar filtros</button>
         </div>
       </section>
+      <details id="pc-queue-controls" class="pc-toolbar-card" hidden><summary>Organização e visualizações das pendências</summary>
+        <div class="pc-filters"><label>Prioridade<select id="pc-queue-priority"><option value="">Todas</option><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option></select></label><label>Responsável<input id="pc-queue-responsible" type="search" maxlength="160"></label>
+        <label>Visualização salva<select id="pc-saved-views"><option value="">Selecionar</option></select></label><label>Nome da visualização<input id="pc-view-name" maxlength="80"></label><button type="button" id="pc-save-view">Salvar visualização</button><button type="button" id="pc-remove-view">Excluir visualização</button><button type="button" id="pc-refresh-tasks">Atualizar organização</button></div><p id="pc-queue-status" role="status"></p>
+      </details>
       <section class="pc-table-card">
         <header><div><span id="pc-table-kicker">DOCUMENTOS CONFERIDOS</span><strong id="pc-result-count">0 documento(s)</strong></div><small id="pc-table-help">Cada documento aparece apenas uma vez. Reenvios em diferentes eGRDTs não aumentam os totais.</small></header>
         <div class="pc-progress" id="pc-progress" hidden><i></i><span>Processando…</span></div>
@@ -134,6 +139,17 @@
   function el(id) { return shell?.querySelector(`#${id}`); }
 
   function bind() {
+    const tasks=root.GrconDocumentTasks;
+    for(const [id,field] of [["pc-queue-priority","priority"],["pc-queue-responsible","responsible"]])el(id).addEventListener('input',()=>{state.queueFilters[field]=el(id).value;state.page=1;renderTableOnly();});
+    el('pc-save-view').addEventListener('click',()=>{try{tasks.saveView(el('pc-view-name').value,{filters:{...state.filters},queueFilters:{...state.queueFilters}});renderSavedViews();}catch(e){notify(e.message,'error');}});
+    el('pc-remove-view').addEventListener('click',()=>{tasks.removeView(el('pc-saved-views').value);renderSavedViews();});
+    el('pc-saved-views').addEventListener('change',()=>{const view=tasks.views().find(v=>v.name===el('pc-saved-views').value);if(!view)return;
+      for(const key of Object.keys(state.filters))state.filters[key]=typeof view.value?.filters?.[key]==='string'?view.value.filters[key]:'';
+      state.queueFilters={priority:view.value?.queueFilters?.priority||'',responsible:view.value?.queueFilters?.responsible||''};
+      const controls={search:'pc-search',documentList:'pc-document-list',grdt:'pc-grdt',family:'pc-family',discipline:'pc-discipline',revision:'pc-revision',status:'pc-status',startDate:'pc-start',endDate:'pc-end'};
+      for(const [field,id] of Object.entries(controls))el(id).value=state.filters[field];
+      el('pc-queue-priority').value=state.queueFilters.priority;el('pc-queue-responsible').value=state.queueFilters.responsible;state.page=1;renderTableOnly();});
+    el('pc-refresh-tasks').addEventListener('click',async()=>{await tasks.load();renderTableOnly();});
     el("pc-save-date").addEventListener("click", async () => {
       el("pc-save-date").disabled = true;
       try { await root.GrconSharedSigemQuery.setReferenceDate(el("pc-reference-date").value); notify("Data da Consulta Geral atualizada.", "success"); }
@@ -186,6 +202,7 @@
       Object.keys(state.filters).forEach((key) => { state.filters[key] = ""; });
       ["pc-search", "pc-document-list", "pc-grdt", "pc-family", "pc-discipline", "pc-revision", "pc-status", "pc-start", "pc-end"].forEach((id) => { el(id).value = ""; });
       el("pc-document-list-count").textContent = "Todos os documentos";
+      state.queueFilters={priority:"",responsible:""};el("pc-queue-priority").value="";el("pc-queue-responsible").value="";
       state.page = 1;
       renderTableOnly();
     });
@@ -199,6 +216,8 @@
       });
     });
     el("pc-table-wrap").addEventListener("click", (event) => {
+      const organizer=event.target.closest('[data-pc-organize]');
+      if(organizer){openTaskEditor(organizer.dataset.pcOrganize);return;}
       const button = event.target.closest("[data-pc-grdt]");
       if (!button) return;
       state.filters.grdt = button.dataset.pcGrdt;
@@ -551,16 +570,39 @@
 
   function filteredPendingRows() {
     const matched = new Set(Conference.pendingRows(filteredEventRows()).map(row => row.key));
-    return filteredGroups().flatMap(group => {
+    const rows=filteredGroups().flatMap(group => {
       const scope = Conference.pendingScope(group);
       return group.rows.filter(row => !row.superseded && matched.has(row.key)).map(row => ({ ...row, pendingScope: scope }));
     });
+    return root.GrconDocumentTasks?.filter(rows,state.queueFilters)||rows;
   }
 
   function filteredPendingDocuments(pendingEvents) {
-    return Conference.buildPendingDocumentAggregates(pendingEvents || filteredPendingRows(), documentRows());
+    const rows=Conference.buildPendingDocumentAggregates(pendingEvents || filteredPendingRows(), documentRows());
+    return root.GrconDocumentTasks?.filter(rows,state.queueFilters)||rows;
   }
 
+  function renderSavedViews(){
+    const select=el('pc-saved-views');if(!select)return;const selected=select.value;
+    select.innerHTML='<option value="">Selecionar</option>'+(root.GrconDocumentTasks?.views()||[]).map(v=>'<option value="'+escapeHtml(v.name)+'">'+escapeHtml(v.name)+'</option>').join('');select.value=selected;
+  }
+  function taskMarkup(document){
+    const tasks=root.GrconDocumentTasks,task=tasks?.get(document);
+    return (task?'<small>Prioridade '+escapeHtml(task.priority)+' · '+escapeHtml(task.responsible||'Sem responsável')+(task.due_date?' · Prazo '+escapeHtml(task.due_date):'')+'</small>':'')+
+      '<button type="button" class="pc-link" data-pc-organize="'+escapeHtml(document)+'">'+(tasks?.canEdit()?'Organizar':'Ver organização')+'</button>';
+  }
+  function openTaskEditor(code){
+    const tasks=root.GrconDocumentTasks,task=tasks?.get(code)||{},editable=tasks?.canEdit(),scope=JSON.stringify([root.GrconCloud?.state?.session?.user?.id,root.GrconCloud?.state?.membership?.workspace_id]);
+    const dialog=document.createElement('dialog');dialog.className='document-master-dialog';
+    dialog.innerHTML='<form><h3>Organização de '+escapeHtml(code)+'</h3><p>A situação continua determinada pela conferência do último envio.</p><fieldset '+(!editable?'disabled':'')+'><label>Prioridade<select name="priority">'+['normal','alta','urgente'].map(p=>'<option value="'+p+'" '+(p===(task.priority||'normal')?'selected':'')+'>'+p+'</option>').join('')+'</select></label><label>Responsável<input name="responsible" maxlength="160" value="'+escapeHtml(task.responsible||'')+'"></label><label>Prazo<input type="date" name="dueDate" value="'+escapeHtml(task.due_date||'')+'"></label><label>Observação<textarea name="note" maxlength="2000">'+escapeHtml(task.note||'')+'</textarea></label></fieldset><p role="status" data-task-status>'+escapeHtml(tasks?.state.error||'')+'</p><button type="button" data-close>Fechar</button>'+(editable?'<button type="submit">Salvar organização</button>':'')+'</form>';
+    document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+    const closeOnContext=()=>dialog.close();root.addEventListener('grcon:contract-context-changed',closeOnContext);root.addEventListener('grcon:cloud-signed-out',closeOnContext);
+    dialog.addEventListener('close',()=>{root.removeEventListener('grcon:contract-context-changed',closeOnContext);root.removeEventListener('grcon:cloud-signed-out',closeOnContext);dialog.remove();},{once:true});
+    dialog.querySelector('form').onsubmit=async e=>{e.preventDefault();const button=dialog.querySelector('[type=submit]');button.disabled=true;try{
+      await tasks.save(code,{...Object.fromEntries(new FormData(e.target)),expectedVersion:task.version||0});
+      if(scope===JSON.stringify([root.GrconCloud?.state?.session?.user?.id,root.GrconCloud?.state?.membership?.workspace_id])){renderTableOnly();dialog.close();}
+    }catch(error){dialog.querySelector('[data-task-status]').textContent=error.message;await tasks.load();}finally{button.disabled=false;}};dialog.showModal();
+  }
   function pendingTable(rows) {
     const body = rows.map((row) => {
       const pending = row.pendingEvents || [];
@@ -588,7 +630,7 @@
         '</small></article>').join("");
       return '<tr><td><strong>' + breakableCode(row.document) + '</strong><small>' +
         fmt(row.pendingEventCount) + ' ' + plural(row.pendingEventCount, "envio com pendência", "envios com pendência") +
-        ' · Revisão(ões): ' + escapeHtml(revisions) + '</small></td><td>' +
+        ' · Revisão(ões): ' + escapeHtml(revisions) + '</small>' + taskMarkup(row.document) + '</td><td>' +
         statusChip(current) + '<small>SIGEM: ' + escapeHtml(current.sigemStatus || "Não informado") +
         '</small></td><td><button class="pc-link" type="button" data-pc-grdt="' +
         escapeHtml(latestGrdt) + '">' + breakableCode(latestGrdt || "Não identificada") +
@@ -620,6 +662,8 @@
   }
 
   function renderTableOnly() {
+    if(el('pc-queue-controls')){el('pc-queue-controls').hidden=state.view!=='pending';el('pc-queue-status').textContent=root.GrconDocumentTasks?.state.error||'Organização compartilhada por contrato. Visualizações salvas neste navegador.';}
+
     if (!shell) return;
     shell.querySelectorAll("[data-pc-view]").forEach((button) => button.classList.toggle("active", button.dataset.pcView === state.view));
     const wrap = el("pc-table-wrap");
@@ -779,6 +823,8 @@
         setBusy(false);
       }
     }
+    renderSavedViews();
+    if(root.GrconCloud?.state?.online)void root.GrconDocumentTasks?.load().then(()=>{if(!shell.hidden)renderTableOnly();});
     render();
     setTimeout(() => el("pc-search")?.focus(), 0);
   }
@@ -797,6 +843,11 @@
   root.addEventListener("grcon:history-updated", () => {
     if (!state.ready) return;
     void reconcileCurrent({ reason: "history" });
+  });
+
+  for(const event of ['grcon:contract-context-changed','grcon:cloud-signed-out'])root.addEventListener(event,()=>{
+    state.queueFilters={priority:'',responsible:''};
+    if(shell){el('pc-queue-priority').value='';el('pc-queue-responsible').value='';el('pc-view-name').value='';renderSavedViews();}
   });
 
   root.GrconPostingConferenceUi = Object.freeze({ activate, render, state, reconcile: reconcileCurrent });

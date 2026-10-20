@@ -1,0 +1,17 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+(async()=>{const events=new Map(),storage=new Map();let release=null,blocked=false;
+ const rows=Array.from({length:1001},(_,i)=>({document_key:'DOC-'+String(i).padStart(4,'0'),document_code:'DOC-'+String(i).padStart(4,'0'),priority:i===1000?'urgente':'normal',responsible:i===1000?'Qualidade':'',version:1}));
+ const cloud={state:{session:{user:{id:'u1'}},membership:{workspace_id:'w1',role:'operator'},online:true,client:{rpc:async(name,{operation,input})=>{assert.equal(name,'grcon_document_tasks');if(blocked)await new Promise(r=>release=r);if(operation==='list')return {data:rows.filter(r=>r.document_key>input.after).slice(0,1000)};return {data:{document_code:input.document,version:2,...input}};}}}};
+ const root={GrconCloud:cloud,addEventListener:(e,fn)=>events.set(e,fn),localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}};
+ vm.runInNewContext(fs.readFileSync('document_task_queue.js','utf8'),{window:root,console});const api=root.GrconDocumentTasks;
+ await api.load();assert.equal(api.state.items.size,1001);
+ const pending=[{document:'DOC-0000',status:'NAO_ENCONTRADO'},{document:'DOC-1000',status:'NAO_ENCONTRADO'}];
+ assert.equal(api.filter(pending)[0].document,'DOC-1000');assert.equal(api.filter(pending,{priority:'urgente',responsible:'qualid'}).length,1);assert.equal(pending[0].document,'DOC-0000','input order and status remain untouched');
+ assert.equal(api.key('C1O-RNEST-DD-1.2.3.4-CE-DE-NT-TAG-01'),api.key('C1O_RNEST_DD_1.2.3.4_CE_DE_TAG-01'));
+ api.saveView('Urgentes',{queueFilters:{priority:'urgente'}});assert.equal(api.views().length,1);
+ cloud.state.membership.workspace_id='w2';events.get('grcon:contract-context-changed')();assert.equal(api.views().length,0);assert.equal(api.state.items.size,0);
+ cloud.state.membership.workspace_id='w1';events.get('grcon:contract-context-changed')();assert.equal(api.views()[0].name,'Urgentes');api.removeView('Urgentes');assert.equal(api.views().length,0);
+ blocked=true;const waiting=api.load();await new Promise(setImmediate);cloud.state.session.user.id='u2';events.get('grcon:cloud-signed-out')();release();await waiting;assert.equal(api.state.items.size,0,'late account response discarded');assert.equal(api.state.error,'');
+ console.log('Fila operacional: 1001 itens, prioridades, aliases, filtros sem mutação, visualizações por conta/contrato e resposta tardia aprovados.');
+})().catch(e=>{console.error(e);process.exitCode=1});
