@@ -34,7 +34,7 @@ assert.match(html, /class="additional-tool-card" data-grcon-view="pdf-tools"/);
 assert.match(html, /class="additional-tool-card" data-grcon-view="cover-document"/);
 assert.match(html, /class="additional-tool-card" data-grcon-view="docx-to-pdf"/);
 assert.match(html, /id="docx-to-pdf-module"[^>]+aria-label="Converter PDF em DOCX"/);
-assert.match(loader, /"docx-to-pdf": \["zip", "docx_pdf_core.js", "docx_pdf_app.js"\]/);
+assert.match(loader, /"docx-to-pdf": \["zip", "docx_pdf_layout.js", "docx_pdf_core.js", "docx_pdf_app.js"\]/);
 assert.match(loader, /"docx-to-pdf": "docx-to-pdf-module"/);
 assert.match(loader, /"docx-to-pdf": "Converter PDF em DOCX"/);
 assert.match(loader, /GrconDocxPdfUi\?\.activate/);
