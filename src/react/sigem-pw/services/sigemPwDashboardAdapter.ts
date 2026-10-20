@@ -440,6 +440,7 @@ async function importPw(file: File): Promise<void> {
       throw new Error(`${messageOf(error, "Falha ao ativar a base ProjectWise.")} A base anterior e o histórico foram restaurados.`);
     }
     state.pw = saved;
+    state.analysisPwId = text(saved.meta?.snapshotId);
     state.history = await Core().loadHistory();
     await rebuildModelAsync();
     renderFromModel(true);
@@ -589,9 +590,14 @@ async function refresh(reason = ""): Promise<void> {
       }
       state.sigem = bases.sigem?.meta ? bases.sigem : EMPTY_BASE();
       state.pw = bases.pw?.meta ? bases.pw : EMPTY_BASE();
+      state.pwVersions = window.GrconSharedPwQuery?.state.versions || [];
+      state.pwSharedError = window.GrconSharedPwQuery?.state.error || "";
       if (state.analysisSigemId) state.sigem = await window.GrconSharedSigemQuery!.loadSnapshot(state.analysisSigemId, state.sigemVersions);
       if (state.analysisPwId) {
-        const selected = bases.history.snapshots.find(item => item.meta.kind === "pw" && item.meta.snapshotId === state.analysisPwId);
+        const shared = state.pwVersions.some(item => item.snapshot_id === state.analysisPwId);
+        const selected = shared && window.GrconSharedPwQuery
+          ? Core().sanitizePwBase(await window.GrconSharedPwQuery.loadSnapshot(state.analysisPwId, state.pwVersions), bases.ld)
+          : bases.history.snapshots.find(item => item.meta.kind === "pw" && item.meta.snapshotId === state.analysisPwId);
         if (!selected) throw new Error("A base PW selecionada não está disponível.");
         state.pw = selected;
       }
@@ -782,6 +788,8 @@ async function removeSnapshot(id: string): Promise<void> {
   const item = state.history.snapshots.find((entry) => entry.meta.snapshotId === id);
   if (!item || !window.confirm(`Excluir a base “${text(item.meta.fileName) || "sem nome"}” do histórico?`)) return;
   try {
+    if (item.meta.source === "shared-projectwise") await window.GrconSharedPwQuery!.remove(id);
+    if (state.analysisPwId === id) state.analysisPwId = "";
     await Core().deleteSnapshot(id);
     await refresh("base excluída");
     state.history = await Core().loadHistory();
@@ -822,6 +830,17 @@ async function saveBaseDate(): Promise<void> {
     return;
   }
   const original = baseForDateEdit(system, snapshotId);
+  if (system === "pw" && original?.meta?.source === "shared-projectwise") {
+    setBusy(true, "Salvando data compartilhada do PW…");
+    try {
+      await window.GrconSharedPwQuery!.setReferenceDate(state.dateEditor.value, snapshotId, text(original.meta.importedAt));
+      await refresh("data PW compartilhada corrigida");
+      state.dateEditor = { ...state.dateEditor, open: false };
+      notify("Data PW salva e compartilhada.", "success");
+    } catch (error) { notify(messageOf(error, "Não foi possível salvar a data PW."), "error"); }
+    finally { setBusy(false); }
+    return;
+  }
   if (system === "sigem" && original?.meta?.source === "shared-general-query") {
     setBusy(true, "Salvando data compartilhada da Consulta Geral…");
     try {
@@ -929,6 +948,18 @@ async function selectAnalysisBase(system: "sigem" | "pw", id: string): Promise<v
   try { await refresh("seleção temporária de base"); } finally { setBusy(false); }
 }
 
+async function publishPw(): Promise<void> {
+  if (state.busy || !window.GrconSharedPwQuery?.canPublish() || !state.pw.meta) return;
+  setBusy(true, "Publicando PW compartilhado…");
+  try {
+    await window.GrconSharedPwQuery.publish(state.pw);
+    state.analysisPwId = "";
+    await refresh("PW compartilhado publicado");
+    notify("Base PW publicada para o contrato.", "success");
+  } catch (error) { notify(messageOf(error, "Não foi possível publicar o PW. A base compartilhada anterior foi preservada."), "error"); }
+  finally { setBusy(false); }
+}
+
 function installExternalListeners(): () => void {
   if (externalListenersInstalled) return () => undefined;
   externalListenersInstalled = true;
@@ -944,7 +975,7 @@ function installExternalListeners(): () => void {
     if (detail?.source !== "sigem-pw-dashboard" && detail?.source !== "sigem-pw-dashboard-ld") void refresh("base PW atualizada em outro módulo");
   };
   const dates = () => { if (!state.busy) void refresh("metadados compartilhados atualizados"); };
-  const context = () => { state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; emit(); void refresh("contrato alterado"); };
+  const context = () => { state.analysisSigemId = ""; state.analysisPwId = ""; state.sigemVersions = []; state.pwVersions = []; state.pwSharedError = ""; state.sigem = EMPTY_BASE(); state.pw = EMPTY_BASE(); state.model = null; state.aggregates = null; state.result = null; emit(); void refresh("contrato alterado"); };
   window.addEventListener("grcon:contract-context-changed", context);
   window.addEventListener("grcon:shared-sigem-date-updated", dates);
   window.addEventListener("grcon:shared-sigem-metadata-invalidated", dates);
@@ -972,6 +1003,7 @@ export const sigemPwDashboardAdapter = {
   clearPreStage7BasesOnce,
   importSigem,
   importPw,
+  publishPw,
   importLd,
   setQuery,
   setRevision,

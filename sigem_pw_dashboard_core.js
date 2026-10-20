@@ -1242,6 +1242,7 @@
 
   async function loadBases() {
     await migrateLegacyBases();
+    await (typeof globalThis !== "undefined" ? globalThis.GrconSharedPwQuery?.refresh?.() : null);
     const [sigem, pw, ld, history] = await Promise.all([loadSigemBase(), loadPwBase(), loadLdBase(), loadHistory()]);
     return { sigem, pw, ld, history };
   }

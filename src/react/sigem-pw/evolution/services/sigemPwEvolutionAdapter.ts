@@ -671,7 +671,9 @@ async function readHistoryMaps(
     while (next < remote.length && isCurrent()) {
       const { source } = remote[next++];
       try {
-        const base = await window.GrconSharedSigemQuery!.loadSnapshot(source.id, catalog.versions || undefined);
+        const base = source.system === "pw"
+          ? await window.GrconSharedPwQuery!.loadSnapshot(source.id, catalog.pwVersions || undefined)
+          : await window.GrconSharedSigemQuery!.loadSnapshot(source.id, catalog.versions || undefined);
         if (!isCurrent()) return;
         payloads.set(source.id, base as EvolutionPayload);
       } catch (error) {
@@ -868,15 +870,20 @@ async function readSourceCatalog(): Promise<EvolutionSourceCatalog> {
   const shared = ensureSharedSigemHistoryCompatibility();
   const cloud = window.GrconCloud?.state;
   const online = Boolean(cloud?.online && cloud.membership?.workspace_id && shared);
-  const [sigem, pw, history, versions] = await Promise.all([
+  await window.GrconSharedPwQuery?.refresh();
+  const [sigem, pw, history, versions, pwVersions] = await Promise.all([
     History().listSourceSnapshots("sigem"), History().listSourceSnapshots("pw"),
     window.GrconSigemPwDashboard!.loadHistory(),
     online ? shared!.listVersions().catch(error => {
       if (context === contextKey()) state.error = messageOf(error, "Não foi possível consultar as versões compartilhadas do SIGEM.");
       return null;
     }) : Promise.resolve(null),
+    online && window.GrconSharedPwQuery ? window.GrconSharedPwQuery.listVersions().catch(error => {
+      if (context === contextKey()) state.error = messageOf(error, "Não foi possível consultar as versões compartilhadas do PW.");
+      return null;
+    }) : Promise.resolve(null),
   ]);
-  return buildEvolutionSourceCatalog({ sigem, pw }, history, versions, History().contentFingerprint);
+  return buildEvolutionSourceCatalog({ sigem, pw }, history, versions, History().contentFingerprint, pwVersions);
 }
 
 async function loadSnapshots(forceLd = false): Promise<boolean> {

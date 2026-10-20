@@ -42,6 +42,12 @@ Estas fases não modificam o schema nem apagam dados. O cache é derivado e
 descartável. Medições locais não equivalem a tempos reais na rede corporativa;
 o reaproveitamento deve ser avaliado junto do tempo total e do uso de memória.
 
+## Situação após a primeira entrega
+
+Fases 0–1 publicadas pelo PR #268, commit `c27f6b040387ff5bb0647290741682540f17dfd0`.
+Validação integral, Chromium e uso continuado aprovados no CI.
+Fase 2: implementação em `docs/shared-projectwise.md`; testes de banco, cliente e duas sessões Chromium aprovados.
+
 ## Próximas entregas
 
 2. Snapshots PW compartilhados, publicação atômica e seleção pelos módulos consumidores.
