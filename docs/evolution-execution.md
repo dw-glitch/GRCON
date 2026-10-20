@@ -51,7 +51,7 @@ Fase 2: implementação em `docs/shared-projectwise.md`; testes de banco, client
 ## Próximas entregas
 
 2. Snapshots PW compartilhados, publicação atômica e seleção pelos módulos consumidores.
-3. Registro Mestre com fontes, paginação e ações existentes.
+3. Registro Mestre: paginação por fonte com verificação de concorrência, metadados de origem, consulta ao PW compartilhado, ações para versões, Cofre e emissões. Implementação e testes de banco/Worker concluídos; publicação depende das regressões.
 4. Fila de pendências vigentes, prioridade e visualizações salvas.
 5. Prévia de importação, continuidade operacional e relatórios configuráveis.
 6. Diagnóstico integrado e provas de conceito condicionadas a benefício e acesso.

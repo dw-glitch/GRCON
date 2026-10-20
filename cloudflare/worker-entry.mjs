@@ -98,6 +98,7 @@ async function catalog(env, workspaceId, actorId, operation, input = {}) {
 }
 
 async function vaultOperation(env, workspaceId, actorId, operation, input = {}) {
+  if (operation === "master-page") return rpc(env, "grcon_master_query", { target_workspace: workspaceId, actor_id: actorId, input });
   return rpc(env, "grcon_vault_operations", { target_workspace: workspaceId, actor_id: actorId, operation, input });
 }
 export async function hashStoredObject(object) {
@@ -112,7 +113,7 @@ async function handleVaultOperation(request, env, operation) {
   const body = request.method === "POST" ? await parseJson(request) : {};
   const workspaceId = workspaceFrom(request, body);
   if (!workspaceId) return apiError("Workspace inválido.", 400, "WORKSPACE_REQUIRED");
-  const input = request.method === "POST" ? body : { id: safeUuid(url.searchParams.get("id")), code: safeText(url.searchParams.get("code"), 255), q: safeText(url.searchParams.get("q"), 160) };
+  const input = request.method === "POST" ? body : { id: safeUuid(url.searchParams.get("id")), code: safeText(url.searchParams.get("code"), 255), q: safeText(url.searchParams.get("q"), 160), source: safeText(url.searchParams.get("source"), 32), after: Math.max(0, Number(url.searchParams.get("after")) || 0), revision: url.searchParams.get("revision") || undefined };
   return json({ ok: true, ...await vaultOperation(env, workspaceId, user.id, operation, input) });
 }
 
@@ -671,7 +672,7 @@ async function handleDelete(request, env) {
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
-  if (["detail", "metrics", "master", "search"].includes(action) && request.method === "GET") return handleVaultOperation(request, env, action);
+  if (["detail", "metrics", "master", "master-page", "search"].includes(action) && request.method === "GET") return handleVaultOperation(request, env, action);
   if (action === "metadata" && request.method === "POST") return handleVaultOperation(request, env, action);
   if (action === "health" && request.method === "GET") return handleHealth(env);
   if (action === "list" && request.method === "GET") return handleList(request, env);
