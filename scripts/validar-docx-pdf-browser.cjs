@@ -53,7 +53,13 @@ const root=process.cwd();
        pg.drawRectangle({x:50,y:650,width:450,height:65,borderColor:PDFLib.rgb(0,0,0),borderWidth:1});
        pg.drawRectangle({x:65,y:605,width:40,height:20,color:PDFLib.rgb(0,0,0)});
      }
-     return {a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),multipage:Array.from(await multipage.save())};
+     const mixed=await PDFLib.PDFDocument.create();
+     for(const [i,dims] of [[595,842],[842,595],[595,842]].entries()){
+       const pg=mixed.addPage(dims);
+       pg.drawText('Pagina mista '+(i+1),{x:50,y:480,font,size:11});
+     }
+     return {a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),
+       multipage:Array.from(await multipage.save()),mixed:Array.from(await mixed.save())};
    });
    // Padrão novo: reconstrução com texto editável em OOXML, sem fotografar páginas.
    assert.equal(await page.locator('input[name="docx-pdf-mode"]').count(),0);
@@ -78,6 +84,25 @@ const root=process.cwd();
    assert.match(visualPackage.xml,/<v:line\b/,'bordas devem ser vetores Word');
    assert.match(visualPackage.xml,/<v:(?:rect\b|shape\b[^>]*filled="t")/,'retangulos preenchidos devem ser formas Word editáveis');
    assert.doesNotMatch(visualPackage.xml,/<wp:anchor\b/,'não rasterizar páginas');
+   // Conserva A4 retrato / paisagem / A4 retrato sem distorção nem recusa.
+   await page.locator('#docx-pdf-clear').click();
+   await page.locator('#docx-pdf-input').setInputFiles({
+     name:'paginas-mistas.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.mixed)
+   });
+   const mixedDownload=page.waitForEvent('download',{timeout:60000});
+   await page.locator('#docx-pdf-convert').click();
+   const mixedWord=await mixedDownload;
+   const mixedXml=await page.evaluate(async bytes=>{
+     const zip=await JSZip.loadAsync(new Uint8Array(bytes));
+     return zip.file('word/document.xml').async('string');
+   },Array.from(fs.readFileSync(await mixedWord.path())));
+   assert.match(mixedXml,/Pagina mista 1/);
+   assert.match(mixedXml,/Pagina mista 2/);
+   assert.match(mixedXml,/Pagina mista 3/);
+   assert.equal((mixedXml.match(/<w:sectPr>/g)||[]).length,3,'retrato, paisagem e retrato em seções independentes');
+   assert.match(mixedXml,/<w:pgSz w:w="16840" w:h="11900" w:orient="landscape"\/>/);
+   assert.equal((mixedXml.match(/<w:pageBreakBefore\/>/g)||[]).length,0,'mudança de seção faz a quebra de página');
+
    await page.locator('#docx-pdf-clear').click();
    await page.locator('#docx-pdf-confirm').uncheck();
    const pdfInput={name:'qualidade.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.a)};
