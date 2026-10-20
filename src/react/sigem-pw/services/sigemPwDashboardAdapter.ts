@@ -440,7 +440,7 @@ async function importPw(file: File): Promise<void> {
       throw new Error(`${messageOf(error, "Falha ao ativar a base ProjectWise.")} A base anterior e o histórico foram restaurados.`);
     }
     state.pw = saved;
-    state.analysisPwId = text(saved.meta?.snapshotId);
+    state.analysisPwId = window.GrconSharedPwQuery?.current()?.meta ? text(saved.meta?.snapshotId) : "";
     state.history = await Core().loadHistory();
     await rebuildModelAsync();
     renderFromModel(true);
@@ -598,8 +598,8 @@ async function refresh(reason = ""): Promise<void> {
         const selected = shared && window.GrconSharedPwQuery
           ? Core().sanitizePwBase(await window.GrconSharedPwQuery.loadSnapshot(state.analysisPwId, state.pwVersions), bases.ld)
           : bases.history.snapshots.find(item => item.meta.kind === "pw" && item.meta.snapshotId === state.analysisPwId);
-        if (!selected) throw new Error("A base PW selecionada não está disponível.");
-        state.pw = selected;
+        if (selected) state.pw = selected;
+        else state.analysisPwId = ""; // A selected local snapshot may have been removed.
       }
       state.ld = bases.ld?.meta ? bases.ld : EMPTY_BASE();
       state.history = bases.history;
