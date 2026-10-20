@@ -76,7 +76,7 @@ const root=process.cwd();
    assert.match(visualPackage.xml,/Pagina 1/);
    assert.match(visualPackage.xml,/Pagina 2/);
    assert.match(visualPackage.xml,/<v:line\b/,'bordas devem ser vetores Word');
-   assert.match(visualPackage.xml,/<v:rect\b/,'retangulos preenchidos devem ser objetos Word');
+   assert.match(visualPackage.xml,/<v:(?:rect\b|shape\b[^>]*filled="t")/,'retangulos preenchidos devem ser formas Word editáveis');
    assert.doesNotMatch(visualPackage.xml,/<wp:anchor\b/,'não rasterizar páginas');
    await page.locator('#docx-pdf-clear').click();
    await page.locator('#docx-pdf-confirm').uncheck();
