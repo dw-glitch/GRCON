@@ -88,6 +88,15 @@ const root=process.cwd();
    assert.match(visualPackage.xml,/<v:line\b/,'bordas devem ser vetores Word');
    assert.match(visualPackage.xml,/<v:(?:rect\b|shape\b[^>]*filled="t")/,'retangulos preenchidos devem ser formas Word editáveis');
    assert.doesNotMatch(visualPackage.xml,/<wp:anchor\b/,'não rasterizar páginas');
+   const mixedUnit=await page.evaluate(async bytes=>{
+     const input=new File([new Uint8Array(bytes)],'paginas-mistas.pdf',{type:'application/pdf'});
+     try{
+       const word=await window.GrconDocxPdfCore.convert(input,{mode:'editable-layout'});
+       return {pages:word.pages,bytes:word.bytes.length,warnings:word.warnings};
+     }catch(error){return {error:error?.stack||error?.message||String(error)};}
+   },Array.from(fixtures.mixed));
+   assert.equal(mixedUnit.error,undefined,'Falha no core para paginas mistas: '+(mixedUnit.error||''));
+   assert.equal(mixedUnit.pages,3);
    // Conserva A4 retrato / paisagem / A4 retrato sem distorção nem recusa.
    await page.locator('#docx-pdf-clear').click();
    await page.locator('#docx-pdf-input').setInputFiles({
