@@ -28,7 +28,7 @@ const root=process.cwd();
    page.on('pageerror',error=>errors.push(error.message));
    page.on('request',req=>{if(req.method()!=='GET')uploads.push(req.url());});
    await page.goto('http://127.0.0.1:'+server.address().port);
-   for(const name of ['jszip.min.js','pdf-lib.min.js','docx_pdf_core.js','docx_pdf_app.js'])await page.addScriptTag({path:path.join(root,name)});
+   for(const name of ['jszip.min.js','pdf-lib.min.js','docx_pdf_layout.js','docx_pdf_core.js','docx_pdf_app.js'])await page.addScriptTag({path:path.join(root,name)});
    await page.evaluate(()=>window.GrconDocxPdfUi.activate());
    assert.equal(await page.getByRole('heading',{name:'Converter PDF para DOCX'}).count(),1);
    assert.equal(await page.locator('#docx-pdf-input').getAttribute('accept'),'.pdf,application/pdf');
@@ -45,8 +45,100 @@ const root=process.cwd();
      };
      const imageOnly=await PDFLib.PDFDocument.create();
      imageOnly.addPage([595,842]);
-     return {a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save())};
+     const multipage=await PDFLib.PDFDocument.create();
+     const font=await multipage.embedFont(PDFLib.StandardFonts.Helvetica);
+     for(const idx of [1,2]){
+       const pg=multipage.addPage([595,842]);
+       pg.drawText('Pagina '+idx,{x:50,y:760,font,size:14});
+       pg.drawRectangle({x:50,y:650,width:450,height:65,borderColor:PDFLib.rgb(0,0,0),borderWidth:1});
+       pg.drawRectangle({x:65,y:605,width:40,height:20,color:PDFLib.rgb(0,0,0)});
+     }
+     const mixed=await PDFLib.PDFDocument.create();
+     const mixedFont=await mixed.embedFont(PDFLib.StandardFonts.Helvetica);
+     for(const [i,dims] of [[595,842],[842,595],[595,842]].entries()){
+       const pg=mixed.addPage(dims);
+       pg.drawText('Pagina mista '+(i+1),{x:50,y:480,font:mixedFont,size:11});
+     }
+     const volume=await PDFLib.PDFDocument.create();
+     const volumeFont=await volume.embedFont(PDFLib.StandardFonts.Helvetica);
+     for(let idx=1;idx<=233;idx++){
+       const pg=volume.addPage([595,842]);pg.drawText('Volume pagina '+idx,{x:50,y:740,font:volumeFont,size:11});
+     }
+     return {volume:Array.from(await volume.save()),a:await build('A'),b:await build('B'),empty:Array.from(await imageOnly.save()),
+       multipage:Array.from(await multipage.save()),mixed:Array.from(await mixed.save())};
    });
+   // Padrão novo: reconstrução com texto editável em OOXML, sem fotografar páginas.
+   assert.equal(await page.locator('input[name="docx-pdf-mode"]').count(),0);
+   await page.locator('#docx-pdf-input').setInputFiles({
+     name:'duas-paginas.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.multipage)
+   });
+   await page.locator('#docx-pdf-confirm').check();
+   const visualDownload=page.waitForEvent('download',{timeout:60000});
+   await page.locator('#docx-pdf-convert').click();
+   const visual=await visualDownload;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
+   assert.equal(visual.suggestedFilename(),'duas-paginas.docx');
+   const visualPackage=await page.evaluate(async bytes=>{
+     const zip=await JSZip.loadAsync(new Uint8Array(bytes));
+     return {files:Object.keys(zip.files),xml:await zip.file('word/document.xml').async('string'),
+       rels:await zip.file('word/_rels/document.xml.rels').async('string')};
+   },Array.from(fs.readFileSync(await visual.path())));
+   assert.equal(visualPackage.files.filter(name=>/^word\/media\/pagina-\d{4}\.jpg$/.test(name)).length,0);
+   assert.equal((visualPackage.xml.match(/<w:pageBreakBefore\s*\/>/g)||[]).length,1);
+   assert.match(visualPackage.xml,/<w:txbxContent>/,'texto deve ser objeto do Word');
+   assert.match(visualPackage.xml,/Pagina 1/);
+   assert.match(visualPackage.xml,/Pagina 2/);
+   assert.match(visualPackage.xml,/<v:line\b/,'bordas devem ser vetores Word');
+   assert.match(visualPackage.xml,/<v:(?:rect\b|shape\b[^>]*filled="t")/,'retangulos preenchidos devem ser formas Word editáveis');
+   assert.doesNotMatch(visualPackage.xml,/<wp:anchor\b/,'não rasterizar páginas');
+   const mixedUnit=await page.evaluate(async bytes=>{
+     const input=new File([new Uint8Array(bytes)],'paginas-mistas.pdf',{type:'application/pdf'});
+     try{
+       const word=await window.GrconDocxPdfCore.convert(input,{mode:'editable-layout'});
+       return {pages:word.pages,bytes:word.bytes.length,warnings:word.warnings};
+     }catch(error){return {error:error?.stack||error?.message||String(error)};}
+   },Array.from(fixtures.mixed));
+   assert.equal(mixedUnit.error,undefined,'Falha no core para paginas mistas: '+(mixedUnit.error||''));
+   assert.equal(mixedUnit.pages,3);
+   // Conserva A4 retrato / paisagem / A4 retrato sem distorção nem recusa.
+   await page.locator('#docx-pdf-clear').click();
+   await page.locator('#docx-pdf-input').setInputFiles({
+     name:'paginas-mistas.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.mixed)
+   });
+   const mixedDownload=page.waitForEvent('download',{timeout:60000});
+   await page.locator('#docx-pdf-convert').click();
+   const mixedWord=await mixedDownload;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
+   const mixedXml=await page.evaluate(async bytes=>{
+     const zip=await JSZip.loadAsync(new Uint8Array(bytes));
+     return zip.file('word/document.xml').async('string');
+   },Array.from(fs.readFileSync(await mixedWord.path())));
+   assert.match(mixedXml,/Pagina mista 1/);
+   assert.match(mixedXml,/Pagina mista 2/);
+   assert.match(mixedXml,/Pagina mista 3/);
+   assert.equal((mixedXml.match(/<w:sectPr>/g)||[]).length,3,'retrato, paisagem e retrato em seções independentes');
+   assert.match(mixedXml,/<w:pgSz w:w="16840" w:h="11900" w:orient="landscape"\/>/);
+   assert.equal((mixedXml.match(/<w:pageBreakBefore\/>/g)||[]).length,0,'mudança de seção faz a quebra de página');
+   // A volumetria real inclui um procedimento com 233 paginas.
+   await page.locator('#docx-pdf-clear').click();
+   await page.locator('#docx-pdf-input').setInputFiles({
+     name:'volume-233.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.volume)
+   });
+   const volumeDownload=page.waitForEvent('download',{timeout:120000});
+   await page.locator('#docx-pdf-convert').click();
+   const volumeWord=await volumeDownload;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
+   const volumeXml=await page.evaluate(async bytes=>{
+     const zip=await JSZip.loadAsync(new Uint8Array(bytes));
+     return zip.file('word/document.xml').async('string');
+   },Array.from(fs.readFileSync(await volumeWord.path())));
+   assert.match(volumeXml,/Volume pagina 1</);
+   assert.match(volumeXml,/Volume pagina 233</);
+   assert.equal((volumeXml.match(/<w:pageBreakBefore\/>/g)||[]).length,232);
+
+
+   await page.locator('#docx-pdf-clear').click();
+   await page.locator('#docx-pdf-confirm').uncheck();
    const pdfInput={name:'qualidade.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.a)};
    await page.locator('#docx-pdf-input').setInputFiles(pdfInput);
    assert.equal(await page.locator('#docx-pdf-convert').isDisabled(),true,'exigir conferência para documento oficial');
@@ -54,6 +146,7 @@ const root=process.cwd();
    const first=page.waitForEvent('download',{timeout:45000});
    await page.locator('#docx-pdf-convert').click();
    const downloaded=await first;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
    assert.equal(downloaded.suggestedFilename(),'qualidade.docx');
    const original=fs.readFileSync(await downloaded.path());
    const extracted=await page.evaluate(async bytes=>{
@@ -70,6 +163,7 @@ const root=process.cwd();
    const grouped=page.waitForEvent('download',{timeout:45000});
    await page.locator('#docx-pdf-convert').click();
    const result=await grouped;
+   await page.waitForFunction(()=>!window.GrconDocxPdfUi.state.busy);
    assert.equal(result.suggestedFilename(),'GRCON_PDF_convertidos.zip');
    const names=await page.evaluate(async bytes=>Object.keys((await JSZip.loadAsync(new Uint8Array(bytes))).files).sort(),
       Array.from(fs.readFileSync(await result.path())));
@@ -88,6 +182,6 @@ const root=process.cwd();
    assert.equal(await page.locator('#docx-pdf-list [data-docx-action="download"]').count(),0);
    assert.deepEqual(uploads,[],'PDFs não podem ser enviados ao servidor');
    assert.deepEqual(errors,[],'não permitir erros JavaScript não tratados');
-   console.log('PDF -> DOCX Chromium: texto editável, ZIP, PDF sem texto requer OCR, erro controlado e nenhum upload: OK');
+   console.log('PDF -> DOCX Chromium: OOXML editavel, vetores, 2 paginas, ZIP, OCR avisado e zero uploads: OK');
  }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
