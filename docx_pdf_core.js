@@ -172,7 +172,7 @@
     return zip.generateAsync({type:'uint8array',compression:'DEFLATE',compressionOptions:{level:3}});
   }
 
-  async function convert(file,{onProgress,signal,mode='visual'}={}){
+  async function convert(file,{onProgress,signal,mode='editable-layout'}={}){
     if(!root.JSZip)throw new Error("O componente de criação do DOCX não está disponível.");
     if(!file||!/\.pdf$/i.test(file.name||"")||file.size<=0)throw new Error("Selecione um arquivo PDF válido.");
     if(file.size>MAX_INPUT)throw new Error("PDF acima de 20 MB. Selecione um arquivo menor.");
@@ -189,6 +189,13 @@
     try{
       const pdf=await task.promise;
       if(pdf.numPages>MAX_PAGES)throw new Error("PDF excede o limite de 300 páginas.");
+      if(mode==='editable-layout'){
+        if(!root.GrconPdfEditableLayout?.convert)throw new Error('O módulo local de reconstrução editável não está disponível.');
+        const result=await root.GrconPdfEditableLayout.convert(pdf,{onProgress,signal,reader});
+        failIfCancelled(signal);
+        onProgress?.(100,'DOCX editável pronto');
+        return result;
+      }
       if(mode==='visual'){
         const bytes=await visualDocx(pdf,{onProgress,signal});
         failIfCancelled(signal);
@@ -241,5 +248,5 @@
       await task.destroy().catch(()=>{});
     }
   }
-  root.GrconDocxPdfCore=Object.freeze({convert,MAX_INPUT,formats:Object.freeze(['pdf']),modes:Object.freeze(['visual','editable-basic'])});
+  root.GrconDocxPdfCore=Object.freeze({convert,MAX_INPUT,formats:Object.freeze(['pdf']),modes:Object.freeze(['editable-layout','visual','editable-basic'])});
 })(window);
