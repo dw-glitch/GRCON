@@ -49,7 +49,7 @@ verifiedAssets.push('grcon_service_worker.js');
 verifiedAssets.push('grcon_file_access.js');
 verifiedAssets.push('egrdt_email_reply.js', 'egrdt_email_reply_ui.js', 'egrdt-email-reply.css');
 verifiedAssets.push('background_jobs_app.js','background-jobs.css');
-verifiedAssets.push('docx-pdf.css','docx_pdf_core.js','docx_pdf_app.js','assets/vendor/pdfjs/pdf.min.mjs','assets/vendor/pdfjs/pdf.worker.min.mjs');
+verifiedAssets.push('docx-pdf.css','docx_pdf_layout.js','docx_pdf_core.js','docx_pdf_app.js','assets/vendor/pdfjs/pdf.min.mjs','assets/vendor/pdfjs/pdf.worker.min.mjs');
 verifiedAssets.push('shared_pw_query_app.js');
 verifiedAssets.push('document_task_queue.js','document_master_app.js');
 verifiedAssets.push('posting_conference_core.js', 'posting_conference_refinement.js', 'posting_conference_app.js', 'posting_conference_report.js', 'posting-conference.css');
