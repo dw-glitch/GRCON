@@ -53,10 +53,10 @@ Fases 5–7 em entrega conjunta pela PR #274: prévia, perfis PW, retomada, CSV 
 Documentação: `docs/import-recovery-reports.md`, `docs/evolution-tools-diagnostics.md` e `docs/source-explanations.md`.
 A consulta com fontes funciona por regras. A camada generativa de IA não foi implementada nem ativada; depende da decisão explícita de credenciais.
 Pilotos externos PW/M365/OCR seguem condicionados a acesso, permissões e critérios de benefício.
+Migration PW regularizada pelo fluxo normal e registrada no banco sob `20261020174318_shared_projectwise_snapshots_tracking`; arquivo inicial preservado para a ordem de instalação nova.
 
 ## Continuidade condicionada
 
 - Acompanhar o desempenho e os diagnósticos no uso real antes de contratar ferramentas adicionais.
-- Regularizar o registro da migration PW no histórico de migrations: as tabelas e RPCs estão aplicadas e testadas, mas o serviço de migrations ainda não registrou essa aplicação. Ver `docs/shared-projectwise.md`.
 - Avaliar pilotos Bentley/M365/OCR apenas com acesso disponível e uma amostra representativa; esses pilotos não estão ativos.
 - Definir credenciais e limites de uso antes de implementar a camada generativa de IA. A consulta por regras permanece disponível sem API.
