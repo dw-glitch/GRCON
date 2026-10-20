@@ -71,10 +71,10 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
   w.dispatchEvent(new CustomEvent('grcon:cloud-ready'));
  });
  await page.waitForFunction(()=>window.GrconSharedSigemQuery.current()?.meta?.snapshotId==='shared-current');
- assert.equal(await page.locator('#grcon-users-shortcut').isVisible(),true);
+ assert.equal(await page.locator('#grcon-administration-shortcut').isVisible(),true);
  for(const role of ['admin','operator','viewer']){
   await page.evaluate(role=>{window.GrconCloud.state.masterOwner=false;window.GrconCloud.state.membership.role=role;window.GrconCloud.state.contracts[0].role=role;window.dispatchEvent(new CustomEvent('grcon:cloud-ready'));},role);
-  assert.equal(await page.locator('#grcon-users-shortcut').count(),0);
+  assert.equal(await page.locator('#grcon-administration-shortcut').count(),0);
 
   assert.equal(await page.locator('#grcon-admin-dialog').count(),0);
  }
