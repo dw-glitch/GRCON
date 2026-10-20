@@ -6,7 +6,7 @@ O GRCON usa Cloudflare Workflows para manter a execução fora da sessão do nav
 
 - **Tarefas** no cabeçalho: trabalhos do próprio usuário no contrato atual, progresso, situação, download e nova tentativa de falhas recuperáveis.
 - **Painel técnico**: atalho montado somente para o proprietário master; o servidor verifica a capacidade no banco a cada consulta. Exibe disponibilidade/configuração dos serviços, execução do agendador, métricas das APIs nas últimas 24 horas e tarefas recentes dos contratos.
-- Na Conferência SIGEM, **Conferir em segundo plano** recalcula a conferência e prepara o Excel de pendências. **Relatório Excel** prepara em segundo plano exportações de até 10.000 linhas quando há sessão conectada. Exportações maiores continuam no motor local existente.
+- Na Conferência SIGEM, o recálculo é silencioso. **Relatório Excel** gera e baixa o XLSX diretamente no navegador, respeitando os filtros e a visualização. O botão de conferência em segundo plano foi removido.
 - **Publicar Consulta Geral compartilhada** envia a base validada para uma tarefa. As páginas são confirmadas no banco antes da publicação atômica. A base anterior continua ativa enquanto isso; uma publicação concorrente mais recente impede sobrescrita.
 - Avisos de eGRDT ao Teams entram na fila quando o usuário confirma o envio. A interface distingue registro da tarefa, recebimento pelo fluxo e confirmação no SIGEM.
 

@@ -54,7 +54,12 @@ const out=path.join(process.cwd(),'artifacts/integrated-contracts');fs.mkdirSync
  const XLSX=require('../xlsx.full.min.js');const workbook=XLSX.read(fs.readFileSync(exportPath),{type:'buffer'});const exported=XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);assert.equal(exported.length,3);assert.equal(exported[0].CONTRATO,'UHDT-D');assert.equal(exported[0]['CONSULTA ANTERIOR'],'Anterior.xlsx');
  await page.locator('[data-monitor-history]').first().click();await page.locator('#sigem-monitor-document-history').waitFor({state:'visible'});await page.locator('#sigem-monitor-document-history button').click();await page.locator('#sigem-monitor-document-history').waitFor({state:'hidden'});
  await page.screenshot({path:path.join(out,'monitoring.png')});
- await page.locator('#grcon-users-shortcut').click();await page.waitForFunction(()=>document.querySelector('#grcon-admin-users')?.textContent.includes('Operador QA'));assert.match(await page.locator('#grcon-admin-users').textContent(),/Operador QA/);await page.locator('#grcon-admin-close').click();
+ await page.evaluate(()=>{
+  window.GrconCloud.loadInvitations=async()=>{};
+  window.GrconCloud.loadAuditEvents=async()=>{};
+ });
+ assert.equal(await page.locator('#grcon-users-shortcut').count(),0,'atalho antigo não deve voltar');
+ await page.locator('#grcon-administration-shortcut').click();await page.waitForFunction(()=>document.querySelector('#grcon-admin-users')?.textContent.includes('Operador QA'));assert.match(await page.locator('#grcon-admin-users').textContent(),/Operador QA/);await page.locator('#grcon-admin-close').click();
  await page.evaluate(()=>window.GrconEgrdtEmailReplyUi.open([{egrdtNumber:'QA-001',generatedAt:'2026-10-06T12:00:00Z',files:[{document:'DOC-001',revision:'A',title:'QA',finalName:'DOC-001_A.pdf'}]}]));
  await page.waitForFunction(()=>document.querySelector('#egrdt-email-model-status')?.textContent.includes('versão 1'));
  assert.equal(await page.locator('#egrdt-email-message').inputValue(),'Envio QA-001');assert.equal(await page.locator('#egrdt-email-preview thead th').count(),3);assert.equal(await page.locator('#egrdt-email-preview tbody td').count(),2);

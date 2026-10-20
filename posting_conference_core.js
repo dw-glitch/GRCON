@@ -814,10 +814,15 @@
     const historyRows = flattenHistory(historyRecords);
     const base = Array.isArray(baseRecords) ? baseRecords : [];
     const index = buildBaseIndex(base);
+    return reconcileRows(historyRows, previousState, options, (row, previous, settings) => compareOne(row, base, index, previous, settings));
+  }
+
+  function reconcileRows(historyRows, previousState, options, compare) {
+    const settings = { ...(options || {}), now: text(options && options.now) || new Date().toISOString() };
     const previousItems = previousStateMap(previousState);
     const nextItems = {};
     const rows = markLatestSends(historyRows.map((historyRow) => {
-      const row = compareOne(historyRow, base, index, previousItems[historyRow.key], options);
+      const row = compare(historyRow, previousItems[historyRow.key], settings);
       nextItems[historyRow.key] = {
         firstConfirmedAt: row.firstConfirmedAt,
         confirmedRevision: row.confirmedRevision,
@@ -845,8 +850,71 @@
       groups,
       summary: summarize(rows),
       changes,
-      state: { version: 1, updatedAt: text(options && options.now) || new Date().toISOString(), items: nextItems },
+      state: { version: 1, updatedAt: settings.now, items: nextItems },
     };
+  }
+
+  // One bounded cache per consumer. Exact signatures detect in-place edits;
+  // cached evidence is never used across a different base or operational scope.
+  function createReconciler() {
+    let baseSignature = null, index = null, cache = new Map(), flattened = new Map();
+    let diagnostics = { compared: 0, reused: 0, indexRebuilt: false };
+    const copy = row => ({ ...row, searchKeys: row.searchKeys.slice(), revisionsFound: row.revisionsFound.slice(), matchedDocuments: row.matchedDocuments.slice() });
+    function clear() { baseSignature = null; index = null; cache.clear(); flattened.clear(); }
+    function prepareHistory(records) {
+      const next = new Map(), seen = new Map(), rows = [];
+      for (const record of records || []) {
+        const signature = JSON.stringify(record);
+        const stableTime = Boolean(text(record && record.generatedAt));
+        const prepared = stableTime && flattened.get(signature) || flattenHistory([record]);
+        if (stableTime) next.set(signature, prepared);
+        for (const source of prepared) {
+          const row = { ...source, searchKeys: source.searchKeys.slice() };
+          const prior = seen.get(row.key);
+          if (prior) {
+            if (row.purpose && prior.purpose && norm(row.purpose) !== norm(prior.purpose)) {
+              prior.purpose = ""; prior.purposeAmbiguous = true;
+            } else if (!prior.purpose && !prior.purposeAmbiguous) prior.purpose = row.purpose;
+            if (row.purposeAmbiguous) { prior.purpose = ""; prior.purposeAmbiguous = true; }
+          } else { seen.set(row.key, row); rows.push(row); }
+        }
+      }
+      flattened = next;
+      return rows;
+    }
+    function run(historyRecords, baseRecords, previousState, options = {}) {
+      const base = Array.isArray(baseRecords) ? baseRecords : [];
+      const signature = JSON.stringify([text(options.scope), base]);
+      const rebuilt = options.forceFull === true || signature !== baseSignature;
+      if (rebuilt) { cache.clear(); flattened.clear(); index = buildBaseIndex(base); baseSignature = signature; }
+      diagnostics = { compared: 0, reused: 0, indexRebuilt: rebuilt };
+      const nextCache = new Map();
+      const result = reconcileRows(prepareHistory(historyRecords), previousState, options, (row, previous, settings) => {
+        const prior = previous || {};
+        // The confirmation window changes even if neither input file changes.
+        const waitHours = Math.max(0, Number(settings.waitHours) || DEFAULT_WAIT_HOURS);
+        const withinWindow = hoursSince(row.generatedAt, settings.now) <= waitHours;
+        const rowSignature = JSON.stringify([row, text(prior.firstConfirmedAt), text(prior.confirmedRevision),
+          text(prior.confirmationSource), waitHours, text(settings.baseReferenceDate), withinWindow]);
+        const saved = cache.get(row.key);
+        let compared;
+        if (!options.forceFull && saved && saved.signature === rowSignature) {
+          diagnostics.reused++;
+          compared = { ...copy(saved.row), lastCheckedAt: settings.now };
+          if (!text(prior.firstConfirmedAt) && compared.status === STATUSES.CONFIRMED) compared.firstConfirmedAt = settings.now;
+        } else {
+          diagnostics.compared++;
+          compared = compareOne(row, base, index, previous, settings);
+        }
+        nextCache.set(row.key, { signature: rowSignature, row: copy(compared) });
+        return compared;
+      });
+      // Deleted history rows are evicted, while latest-send metadata is always
+      // aggregated over the full current history, never cached per event.
+      cache = nextCache;
+      return result;
+    }
+    return Object.freeze({ reconcile: run, clear, metrics: () => ({ ...diagnostics, cachedRows: cache.size }) });
   }
 
   function storageOf() {
@@ -978,13 +1046,39 @@
     return index.byId[text(recordOrId)] || index.byNumber[norm(number || recordOrId)] || null;
   }
 
-  async function reconcilePersisted(historyRecords, options) {
-    const [base, previousState] = await Promise.all([loadBase(), loadState()]);
-    const prefs = readPreferences();
-    const result = reconcile(historyRecords || (History && History.read ? History.read() : []), base.records || [], previousState, { ...prefs, ...(options || {}), baseReferenceDate: text(base.meta && base.meta.referenceDate) });
-    await saveState(result.state);
-    writeHistoryIndex(result.groups, base.meta);
-    return { ...result, baseMeta: base.meta || null };
+  const persistedReconciler = createReconciler();
+  let reconcileQueue = Promise.resolve();
+  function operationalScope() {
+    const cloud = typeof globalThis !== "undefined" ? globalThis.GrconCloud : null;
+    return JSON.stringify([cloud?.state?.session?.user?.id || "", cloud?.state?.membership?.workspace_id || ""]);
+  }
+  function reconcilePersisted(historyRecords, options) {
+    const scope = operationalScope();
+    const assertScope = () => {
+      if (scope !== operationalScope()) {
+        persistedReconciler.clear();
+        const error = new Error("O contexto da conferência foi alterado.");
+        error.name = "AbortError";
+        throw error;
+      }
+    };
+    const run = async () => {
+      assertScope();
+      const [base, previousState] = await Promise.all([loadBase(), loadState()]);
+      assertScope();
+      const result = persistedReconciler.reconcile(historyRecords || (History && History.read ? History.read() : []), base.records || [], previousState,
+        { ...readPreferences(), ...(options || {}), scope, baseReferenceDate: text(base.meta && base.meta.referenceDate) });
+      assertScope();
+      await saveState(result.state);
+      assertScope();
+      writeHistoryIndex(result.groups, base.meta);
+      return { ...result, baseMeta: base.meta || null, base };
+    };
+    const pending = reconcileQueue.then(run);
+    // A failed run must not poison subsequent requests. Serial persistence
+    // prevents two reconcilers from losing each other's confirmation evidence.
+    reconcileQueue = pending.catch(() => {});
+    return pending;
   }
 
   async function prepareWorkbookImport(workbook, fileMeta, historyRecords, options) {
@@ -1118,7 +1212,7 @@
     DEFAULT_WAIT_HOURS, STATUSES, AGGREGATE_STATUSES, HEADER_ALIASES,
     text, norm, normalizeRevision, normalizeHeader, documentKeys, documentIdentity, displayDocument, revisionRank,
     isPostedSigemStatus, parseSourceDate, effectiveRecordTimestamp, resolvePostingEvidence,
-    detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, summarize, aggregateByGrdt,
+    detectColumns, parseMatrix, parseWorkbook, flattenHistory, buildBaseIndex, reconcile, createReconciler, summarize, aggregateByGrdt,
     statusLabel, aggregateStatus, pendingScope, diagnoseRow, repostEligibility, filterRows, pendingRows, pertinentGrdt, pendingGrdts,
     compareSendRecency, latestDocumentKey, sameSend, markLatestSends,
     readPreferences, savePreferences, loadBase, saveBase, loadState, saveState, loadAudit,
