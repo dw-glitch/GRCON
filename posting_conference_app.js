@@ -6,6 +6,9 @@
   const History = root.GrconHistory;
   const PAGE_SIZE = 80;
   let shell = null;
+  let reconcilePromise = null;
+  let pendingReconcile = null;
+  let reconcileGeneration = 0;
   const state = {
     ready: false,
     busy: false,
@@ -218,6 +221,9 @@
     root.dispatchEvent(new CustomEvent("grcon:mascot-operation", {
       detail: { active: Boolean(busy), state: "checking-document", task: label || "Conferindo documentos" },
     }));
+    if (!busy && pendingReconcile && !reconcilePromise) queueMicrotask(() => {
+      if (pendingReconcile && !reconcilePromise && !state.busy) void reconcileCurrent(pendingReconcile);
+    });
   }
 
   function conferenceProjection(base) {
@@ -292,22 +298,45 @@
     if (state.ready) await reconcileCurrent({ reason: "shared-general-query" });
   }
 
-  async function reconcileCurrent(options) {
+  function reconcileCurrent(options) {
+    pendingReconcile = { ...(options || {}) };
+    reconcileGeneration++;
+    if (reconcilePromise) return reconcilePromise;
+    // Imports and exports keep ownership of their busy state. The last request
+    // is resumed when that operation finishes instead of racing its writes.
+    if (state.busy) return Promise.resolve();
+    const scope = () => JSON.stringify([root.GrconCloud?.state?.session?.user?.id, root.GrconCloud?.state?.membership?.workspace_id]);
+    const initialScope = scope();
     setBusy(true, "Recalculando a conferência…", { silent: true });
-    await (root.GrconOperations?.paint() || new Promise(resolve=>setTimeout(resolve,0)));
-    try {
-      state.result = await Conference.reconcilePersisted(History?.read?.() || [], options || {});
-      state.base = await Conference.loadBase();
-      state.audit = await Conference.loadAudit();
-      root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: state.result.summary, eventSummary: state.result.eventSummary, consolidation: state.result.consolidation, changes: state.result.changes, baseMeta: state.base.meta } }));
-      render();
-    } catch (error) {
-      currentOperation?.fail(error);
-      console.error(error);
-      notify(error.message || "Não foi possível recalcular a conferência.", "error");
-    } finally {
-      setBusy(false);
-    }
+    reconcilePromise = (async () => {
+      await (root.GrconOperations?.paint() || new Promise(resolve=>setTimeout(resolve,0)));
+      try {
+        while (pendingReconcile) {
+          if (scope() !== initialScope) { pendingReconcile = null; return; }
+          const request = pendingReconcile, generation = reconcileGeneration;
+          pendingReconcile = null;
+          const result = await Conference.reconcilePersisted(History?.read?.() || [], request);
+          const [base, audit] = await Promise.all([result.base || Conference.loadBase(), Conference.loadAudit()]);
+          if (scope() !== initialScope) { pendingReconcile = null; return; }
+          if (generation !== reconcileGeneration) continue;
+          state.result = result; state.base = base; state.audit = audit;
+          const wrap = el("pc-table-wrap"), top = wrap?.scrollTop || 0, left = wrap?.scrollLeft || 0;
+          root.dispatchEvent(new CustomEvent("grcon:conference-updated", { detail: { summary: result.summary, eventSummary: result.eventSummary, consolidation: result.consolidation, changes: result.changes, baseMeta: base.meta } }));
+          render();
+          if (wrap) { wrap.scrollTop = top; wrap.scrollLeft = left; }
+        }
+      } catch (error) {
+        currentOperation?.fail(error);
+        if (error.name !== "AbortError") {
+          console.error(error);
+          notify(error.message || "Não foi possível recalcular a conferência.", "error");
+        }
+      } finally { setBusy(false); }
+    })().finally(() => {
+      reconcilePromise = null;
+      if (pendingReconcile) void reconcileCurrent(pendingReconcile);
+    });
+    return reconcilePromise;
   }
 
   function statusChip(row) {

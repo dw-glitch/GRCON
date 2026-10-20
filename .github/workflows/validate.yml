@@ -29,14 +29,15 @@ jobs:
       - name: Instalar dependências de forma reproduzível
         run: npm ci --ignore-scripts
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Build
-        run: npm run build
-
-      - name: Testes
-        run: npm test
-
       - name: Executar validação completa
         run: npm run verify
+
+      - name: Medir referência sintética da conferência
+        run: npm run benchmark:conference
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: conference-benchmark
+          path: artifacts/evolution/conference-benchmark.json
+          if-no-files-found: warn

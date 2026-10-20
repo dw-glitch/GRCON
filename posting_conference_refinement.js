@@ -457,7 +457,7 @@
       },
       async reconcilePersisted(historyRecords, options) {
         const result = await original.reconcilePersisted(historyRecords, options);
-        const base = await original.loadBase();
+        const base = result.base || await original.loadBase();
         return enrichResult(result, base && base.records || [], wrapped);
       },
       async importWorkbook(workbook, fileMeta, historyRecords, options) {
