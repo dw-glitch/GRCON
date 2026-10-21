@@ -2097,6 +2097,51 @@
     return { status: "Não Postado", item: null, source: "ausência de DOCUMENTO-REVISÃO na Colar SIGEM", conflict: false, incomplete: false };
   }
 
+  // Status operacional da eGRDT. O status individual da revisão permanece
+  // preservado, mas uma revisão anterior ainda em análise impede considerar
+  // uma revisão posterior Não Postado como pronta para o SIGEM.
+  function grdtStatusForRevision(group, revision, context, documentOverride, exactStatus) {
+    const controlled = group || { records: [], history: [] };
+    const official = exactStatus || statusForRevision(controlled, revision, context);
+    const rawStatus = text(official && official.status) || "Não Postado";
+    if (statusKind(rawStatus) !== "not_posted") {
+      return { ...official, status: rawStatus, revisionStatus: rawStatus };
+    }
+    const document = text(documentOverride)
+      || text(controlled.records?.[0]?.document)
+      || text(controlled.history?.[0]?.document);
+    const query = root.GrconSharedSigemQueryCore;
+    let blocking = query?.previousAnalysis?.(
+      document, revision, context, controlled.history || [],
+      candidate => legacyStatusForRevision(controlled, candidate)
+    );
+    if (!blocking && !query?.previousAnalysis) {
+      const targetRank = revisionInfo(revision).rank;
+      blocking = (controlled.history || []).map(item => ({
+        revision: normalizeRevision(item.revision), status: text(item.sigemStatus || item.status),
+      })).filter(item => {
+        const info = revisionInfo(item.revision);
+        return info.valid && info.rank < targetRank && statusKind(item.status) === "analysis";
+      }).sort((a, b) => revisionRank(b.revision) - revisionRank(a.revision))[0] || null;
+    }
+    if (!blocking) return { ...official, status: rawStatus, revisionStatus: rawStatus };
+    const inheritedReason = `A revisão ${blocking.revision} permanece Em Análise no SIGEM (${blocking.status}). `
+      + `A revisão ${normalizeRevision(revision)} está ${rawStatus}, mas não deve ser preparada para postagem `
+      + "enquanto a análise anterior estiver aberta. Só inclua manualmente se houver uma exceção operacional confirmada.";
+    return {
+      ...official,
+      status: "Em Análise",
+      revisionStatus: rawStatus,
+      revisionStatusSource: official.source || "",
+      blockingRevision: blocking.revision,
+      blockingRevisionStatus: blocking.status,
+      blockingRevisionSource: blocking.source || "SIGEM",
+      blockingRevisionSnapshotId: blocking.snapshotId || "",
+      source: blocking.source || official.source || "",
+      inheritedReason,
+    };
+  }
+
   /**
    * Documentos da N-1710 seguem regra própria de nome. Vale tanto quando a ABA
    * da LD identifica a N-1710 (ex.: "LD 001 N-1710") quanto quando o próprio
@@ -2797,7 +2842,7 @@
     const traversed = [];
     let completed = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const statusInfo = statusForRevision(group, revision, settings.sigemQueryContext);
+      const statusInfo = grdtStatusForRevision(group, revision, settings.sigemQueryContext, document);
       resolvedSigemStatus = statusInfo;
       const currentStatus = text(statusInfo.status) || "Não Postado";
       const kind = statusKind(currentStatus);
@@ -2832,6 +2877,13 @@
       // usa a normalização central para impedir uma nova revisão sobre análise aberta.
       if (kind === "analysis") {
         decision = DISCARD;
+        if (statusInfo.blockingRevision) {
+          // A revisão solicitada continua Não Postado na fonte oficial; apenas
+          // a elegibilidade da eGRDT herda a pendência da revisão anterior.
+          reason = statusInfo.inheritedReason;
+          completed = true;
+          break;
+        }
         analysisEvidence = analysisEvidenceForRevision(group, revision, inferredSheet, statusInfo);
         // A revisão parada pela análise pode não ser a mesma da linha técnica
         // inicialmente selecionada (ex.: LD na revisão 0, análise aberta na
@@ -2950,7 +3002,11 @@
       reasonCode: fileRevision.valid && decision === DISCARD && statusKind(displayStatus) !== "analysis" ? "FILE_REVISION_ALREADY_POSTED" : "",
       status: displayStatus || "Sem status",
       revisionWarnings,
-      statusOriginal: displayStatus || "Sem status",
+      statusOriginal: resolvedSigemStatus?.revisionStatus || displayStatus || "Sem status",
+      sigemRevisionStatus: resolvedSigemStatus?.revisionStatus || displayStatus || "Sem status",
+      blockingRevision: resolvedSigemStatus?.blockingRevision || "",
+      blockingRevisionStatus: resolvedSigemStatus?.blockingRevisionStatus || "",
+      blockingRevisionSource: resolvedSigemStatus?.blockingRevisionSource || "",
       sigemStatusSource: resolvedSigemStatus?.source || "legacy-fallback",
       sigemStatusSnapshotId: resolvedSigemStatus?.snapshotId || "",
       statusOperational: normalizeSigemStatus(displayStatus || "Sem status").normalized,
@@ -3125,6 +3181,7 @@
     normalizeSigemStatus,
     statusKind,
     statusForRevision,
+    grdtStatusForRevision,
     normalizeRevision,
     revisionInfo,
     revisionRank,
