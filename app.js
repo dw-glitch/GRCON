@@ -3129,9 +3129,8 @@
   }
 
   function rowPassesBaseFilters(row) {
-    if (state.filter === "bloqueado" && !row.hardBlock) return false;
-    if (state.filter === C.REVIEW && (row.hardBlock || row.decision !== C.REVIEW)) return false;
-    if (!["todos", "bloqueado", C.REVIEW].includes(state.filter) && row.decision !== state.filter) return false;
+    // Grupos e totais refletem a elegibilidade SIGEM, não apenas READY da LD.
+    if (state.filter !== "todos" && decisionGroupKey(row) !== state.filter) return false;
     if (state.sheetFilter !== "todos" && C.norm(row.sheet) !== state.sheetFilter) return false;
     const query = normalizedTriageSearch();
     if (query) {
@@ -3589,7 +3588,8 @@
   }
 
   function renderSummary() {
-    const counts = C.resultCounts(state.results);
+    const counts = { ...C.resultCounts(state.results), pronto: 0, revisar: 0, bloqueado: 0, descartar: 0 };
+    state.results.forEach(row => { counts[decisionGroupKey(row)] += 1; });
     $("#count-total").textContent = counts.total;
     $("#count-ready").textContent = counts.pronto;
     $("#count-blocked").textContent = counts.bloqueado;
