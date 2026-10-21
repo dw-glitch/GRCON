@@ -5757,8 +5757,19 @@
       }
       state.selected.add(index);
       // Mantém o registro visual de que o operador incluiu um alerta de triagem.
-      if (row && (row.decision !== C.READY || row.hardBlock)) {
+      const statusPolicy = rowStatusPolicy(row);
+      if (row && (row.decision !== C.READY || row.hardBlock || statusPolicy.manualOnly)) {
         state.manualForceInclude.add(index);
+      }
+      if (statusPolicy.manualOnly) {
+        row.manualSigemSelection = {
+          revision: C.normalizeRevision(row.revision),
+          kind: statusPolicy.kind,
+          statusKey: C.normalizeSigemStatus(statusPolicy.status).key,
+          selectedAt: new Date().toISOString(),
+          selectedBy: window.GrconCloud?.state?.session?.user?.id || "",
+        };
+        auditManualGrdtChange(row, "Inclusão manual com status SIGEM", "Fora da GRDT", "Incluído manualmente", statusPolicy.status || "Status SIGEM não identificado");
       }
       if (manualAllocationOverrideAllowed(row)) {
         showToast("Documento incluído manualmente. A LD continuará registrada como Não Alocado.", "warn");
@@ -5766,6 +5777,7 @@
     } else {
       state.selected.delete(index);
       state.manualForceInclude.delete(index);
+      if (row) row.manualSigemSelection = null;
     }
     // Sincroniza os dois checkboxes (situação e manual)
     if (isManualSelect) {
