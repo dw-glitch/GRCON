@@ -23,7 +23,8 @@ export async function verifyGithubToken(token,config,{fetchImpl=fetch,now=Date.n
   if(claims.repository!==config.repository || String(claims.repository_id)!==config.repositoryId || String(claims.repository_owner_id)!==config.ownerId || String(claims.actor_id)!==config.ownerId || claims.repository_visibility!==(config.visibility||'private') || claims.ref!=='refs/heads/main' || claims.workflow_ref!==config.workflow || !subjects.includes(claims.sub) || !(config.allowedEvents||['issues','workflow_dispatch']).includes(claims.event_name))throw fail('OIDC_SOURCE_REJECTED',403);
   let keys=useCache && keyCache?.expires>now ? keyCache.keys : null;
   if(!keys || !keys.some(x=>x.kid===header.kid)) {
-    const response=await fetchImpl(JWKS,{redirect:'error',signal:AbortSignal.timeout(10000)});
+    // Workers supports manual/follow, not Fetch's error mode. Reject 3xx below.
+    const response=await fetchImpl(JWKS,{redirect:'manual',signal:AbortSignal.timeout(10000)});
     if(!response.ok)throw fail('OIDC_KEYS_UNAVAILABLE',503);
     const data=await response.json();
     if(!Array.isArray(data.keys) || data.keys.length>30)throw fail('OIDC_KEYS_INVALID',503);
@@ -87,7 +88,7 @@ export async function handleGithubRoute(request,env,{fetchImpl=fetch,now=Date.no
     const fingerprint=[...hash].map(x=>x.toString(16).padStart(2,'0')).join('');
     const headers={'content-type':'application/json',apikey:env.SUPABASE_SECRET_KEY};
     if(!env.SUPABASE_SECRET_KEY.startsWith('sb_secret_'))headers.authorization=`Bearer ${env.SUPABASE_SECRET_KEY}`;
-    const response=await fetchImpl(`${env.SUPABASE_URL.replace(/\/$/,'')}/rest/v1/rpc/grcon_teams_github_sync`,{method:'POST',headers,redirect:'error',signal:AbortSignal.timeout(10000),body:JSON.stringify({source_repository:cfg.repositoryId,source_issue:String(data.issueId),fingerprint,input:record})});
+    const response=await fetchImpl(`${env.SUPABASE_URL.replace(/\/$/,'')}/rest/v1/rpc/grcon_teams_github_sync`,{method:'POST',headers,redirect:'manual',signal:AbortSignal.timeout(10000),body:JSON.stringify({source_repository:cfg.repositoryId,source_issue:String(data.issueId),fingerprint,input:record})});
     if(!response.ok)throw fail('GITHUB_CONFIRMATION_REJECTED',response.status>=500?503:409);
     const result=await response.json();
     return json({ok:true,...result,...(result.attempt?callbackPresentation(result.attempt):{})});

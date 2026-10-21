@@ -6,7 +6,7 @@ assert.equal(tokenResponse.status,200,'Identidade da publicação indisponível.
 const {value}=await tokenResponse.json();assert.ok(value,'Identidade da publicação ausente.');
 const response=await fetch(new URL('/api/document-vault/ai-probe',process.env.GRCON_PRODUCTION_URL),{method:'POST',headers:{authorization:'Bearer '+value},signal:AbortSignal.timeout(45000)});
 const result=await response.json();
-assert.equal(response.status,200,'Workers AI não validado: '+String(result.error||'AI_PROBE_FAILED'));
+assert.equal(response.status,200,'Workers AI não validado: '+String(result.error||'AI_PROBE_FAILED')+' '+String(result.message||'').slice(0,400));
 assert.equal(result.ok,true);
 if(!result.skipped){assert.equal(result.mode,'workers-ai');assert.ok(result.citedItems>0);}
 console.log(JSON.stringify({ok:true,provider:'cloudflare-workers-ai',synthetic:true,...(result.skipped?{skipped:true,reason:result.reason}:{model:result.model,citedItems:result.citedItems})}));

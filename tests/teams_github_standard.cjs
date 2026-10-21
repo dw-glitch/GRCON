@@ -16,7 +16,7 @@ if(!global.crypto)global.crypto=webcrypto;
  const claims={iss:'https://token.actions.githubusercontent.com',aud:cfg.audience,sub:'repo:owner@42/private-bridge@123:ref:refs/heads/main',iat:clock,nbf:clock-1,exp:clock+300,repository:cfg.repository,repository_id:'123',repository_owner_id:'42',repository_visibility:'private',actor_id:'42',ref:'refs/heads/main',workflow_ref:cfg.workflow,event_name:'issues'};
  const encode=x=>Buffer.from(typeof x==='string'?x:JSON.stringify(x)).toString('base64url');
  const token=async(change={},header={})=>{const plain=encode({alg:'RS256',typ:'JWT',kid:'test',...header})+'.'+encode({...claims,...change});return plain+'.'+Buffer.from(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,Buffer.from(plain))).toString('base64url');};
- const keyFetch=async(url,options)=>{assert.equal(url,'https://token.actions.githubusercontent.com/.well-known/jwks');assert.equal(options.redirect,'error');return Response.json({keys:[jwk]});};
+ const keyFetch=async(url,options)=>{assert.equal(url,'https://token.actions.githubusercontent.com/.well-known/jwks');assert.equal(options.redirect,'manual');return Response.json({keys:[jwk]});};
  assert.equal((await verifyGithubToken(await token(),cfg,{fetchImpl:keyFetch,now,useCache:false})).repository_id,'123');
  for(const changes of [{aud:'evil'},{exp:clock-1},{repository_id:'999'},{actor_id:'99'},{repository_visibility:'public'},{workflow_ref:cfg.workflow.replace('relay','evil')},{ref:'refs/heads/other'},{event_name:'pull_request'},{iss:'https://evil.test'},{sub:'repo:someone/other:ref:refs/heads/main'}])await assert.rejects(verifyGithubToken(await token(changes),cfg,{fetchImpl:keyFetch,now,useCache:false}));
  await assert.rejects(verifyGithubToken(await token({}, {alg:'none'}),cfg,{fetchImpl:keyFetch,now,useCache:false}));
@@ -56,7 +56,7 @@ if(!global.crypto)global.crypto=webcrypto;
   await db.exec('set role authenticated');await assert.rejects(rpc('1','a'.repeat(64),input),/permission denied/);await assert.rejects(db.query('select * from private.grcon_teams_github_receipts'),/permission denied/);await db.exec('reset role');
   const fetchImpl=async(url,options={})=>{
    if(url.startsWith('https://token.'))return keyFetch(url,options);
-   assert.equal(url,'https://db.test/rest/v1/rpc/grcon_teams_github_sync');assert.equal(options.redirect,'error');assert.equal(options.headers.apikey,'sb_secret_test');
+   assert.equal(url,'https://db.test/rest/v1/rpc/grcon_teams_github_sync');assert.equal(options.redirect,'manual');assert.equal(options.headers.apikey,'sb_secret_test');
    const p=JSON.parse(options.body);return Response.json(await rpc(p.source_issue,p.fingerprint,p.input));
   };
   const request=data=>new Request('https://grcon.test/api/egrdt-teams/github',{method:'POST',headers:{authorization:'Bearer '+valid},body:JSON.stringify(data)});
