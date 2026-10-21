@@ -78,6 +78,7 @@ jobs:
           done
           node scripts/validar-cloudflare-browser.cjs
           node scripts/validar-allocation-browser.cjs
+          node scripts/validar-allocation-publication-browser.cjs
 
       - uses: actions/upload-artifact@v6
         if: always()

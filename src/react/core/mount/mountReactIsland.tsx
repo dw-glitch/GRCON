@@ -19,6 +19,11 @@ export function mountReactIsland(options: MountReactIslandOptions): boolean {
 
   if (container.dataset.grconReactIslandMounted === options.islandName) return true;
 
+  // Browser translation engines and legacy UI mutations must not rewrite nodes owned by React.
+  // The same marker is used by legacy progress controls to avoid destructive DOM edits.
+  container.setAttribute("translate", "no");
+  container.classList.add("notranslate");
+  container.dataset.grconReactIsland = options.islandName;
   const root = createRoot(container);
   container.dataset.grconReactIslandMounted = options.islandName;
   root.render(

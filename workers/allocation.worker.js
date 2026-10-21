@@ -18,7 +18,21 @@ function parse(kind,book,name){
  if(kind==='databook'){
   let parsed=A.parseDatabookWorkbook(book,XLSX).entries;
   if(!parsed.length){for(const sheet of book.SheetNames){const candidate={...book,SheetNames:['CAMINHO DB_SIGEM'],Sheets:{CAMINHO_DB_SIGEM:book.Sheets[sheet],'CAMINHO DB_SIGEM':book.Sheets[sheet]}};parsed=A.parseDatabookWorkbook(candidate,XLSX).entries;if(parsed.length)break;}}
-  return parsed;
+  if(parsed.length)return parsed;
+  // Fallback: accept complete, explicit Databook paths in arbitrary Excel sheets.
+  // Never synthesize a hierarchy from unrelated cells.
+  const entries=[];
+  for(const sheetName of book.SheetNames){
+   const values=XLSX.utils.sheet_to_json(book.Sheets[sheetName],{header:1,defval:'',raw:false});
+   for(let i=0;i<values.length;i++){
+    const cells=(values[i]||[]).map(v=>String(v??'').trim());
+    const at=cells.findIndex(v=>v.length>=8&&v.length<=2048&&v.split('|').length>=3&&v.split('|').length<=15&&!v.split('|').some(p=>!p.trim())&&!/^NOME UNIDADE\\s*\\|/i.test(v));
+    if(at<0)continue;
+    const path=cells[at],description=cells.slice(0,at).reverse().find(v=>v&&!/^\\d+(?:[.,]\\d+)*$/.test(v))||path.split('|').at(-1);
+    entries.push({databook:path,description,levels:path.split('|').map(x=>x.trim()),notes:'',rowNumber:i+1,sourceSheet:sheetName});
+   }
+  }
+  return entries;
  }
  if(kind==='eap')return A.parseProjectLevelBase(book,XLSX);
  if(kind==='ld')return C.parseWorkbook(book,name,Date.now());
