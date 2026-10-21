@@ -3045,6 +3045,7 @@
   function decisionGroupKey(row) {
     if (row && rowStatusPolicy(row).kind === "analysis") return "descartar";
     if (row && row.hardBlock) return "bloqueado";
+    if (row && rowStatusPolicy(row).manualOnly) return "revisar";
     if (row && row.decision === C.READY) return "pronto";
     if (row && row.decision === C.DISCARD) return "descartar";
     return "revisar";
