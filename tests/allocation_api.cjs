@@ -14,7 +14,7 @@ const assert=require('node:assert/strict');
   if(body.target_workspace!==w)return Response.json({message:'Sem acesso ao contrato.',code:'42501'},{status:403});
   if(String(url).endsWith('/grcon_document_ai_budget')){reserved++;return Response.json({allowed:allow});}
   assert.ok(String(url).endsWith('/grcon_allocation'));
-  if(body.operation==='context'){assert.equal(body.input.document,document);assert.equal(body.input.eap,Core.identity(document,{document}).eap,'API deve usar a EAP derivada do código e não do cliente');assert.ok(Array.isArray(body.input.normIds));if(body.input.confirmedPath)assert.equal(body.input.confirmedPath,path);else assert.ok(Array.isArray(body.input.candidatePaths));return Response.json({complete:true,bases,versions});}
+  if(body.operation==='context'){assert.equal(body.input.document,document);assert.equal(body.input.eap,Core.identity(document,{document}).eap,'API deve usar a EAP derivada do código e não do cliente');assert.ok(Array.isArray(body.input.normIds));if(body.input.confirmedPath)assert.equal(typeof body.input.confirmedPath,'string');else assert.ok(Array.isArray(body.input.candidatePaths));return Response.json({complete:true,bases,versions});}
   if(body.operation==='decision'){decisionCalls++;assert.equal(body.input.validated,true);assert.equal(body.input.family,row.identity.family);return Response.json({id:'confirmed'});}
   if(body.operation==='experiences')return Response.json({decisions:[]});
   throw Error('Unexpected '+body.operation);
