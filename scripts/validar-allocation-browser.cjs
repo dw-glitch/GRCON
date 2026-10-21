@@ -29,13 +29,15 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
    const data=await body(req);validateDecision(data,{complete:true,bases,versions});decisions.push({...data,id:'decision-1',trusted:true,current_sources:true});res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,id:'decision-1',trusted:true}));
   }
   if(url.pathname==='/api/document-vault/allocation-ai'){res.statusCode=503;res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:false,message:'IA indisponível. Use a revisão por regras.'}));}
-  const relative=decodeURIComponent(url.pathname).slice(1);if(relative.includes('..')||!/^((vendor\/recon|workers|react-dist)\/[^.][^]*\.(js|json)|[a-z0-9_-]+\.(css|js))$/i.test(relative)){res.statusCode=404;return res.end();}
+  const relative=decodeURIComponent(url.pathname).slice(1);if(relative.includes('..')||!/^((vendor\/recon|workers|react-dist)\/[^.][^]*\.(js|json)|[a-z0-9_.-]+\.(css|js))$/i.test(relative)){res.statusCode=404;return res.end();}
   const file=path.join(root,relative);if(!fs.existsSync(file)){res.statusCode=404;return res.end();}res.setHeader('content-type',file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':'text/javascript');res.end(fs.readFileSync(file));
  }catch(error){res.statusCode=500;res.end(JSON.stringify({ok:false,message:error.message}));}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base='http://127.0.0.1:'+server.address().port;
  const browser=await chromium.launch({headless:true,...(process.env.GRCON_CHROMIUM_PATH?{executablePath:process.env.GRCON_CHROMIUM_PATH}:{}),args:['--no-sandbox']});
  try{
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(base);await page.getByRole('button',{name:'Atualizar',exact:true}).click();
+  // These files contain multiple dots and must be served to the real Worker.
+  for(const asset of ['xlsx.full.min.js','exceljs.min.js','jszip.min.js'])assert.equal((await page.request.get(base+'/'+asset)).status(),200,asset);
   await page.getByLabel('Códigos para alocação').fill(documentCode);await page.getByRole('button',{name:'Analisar alocação',exact:true}).click();await page.getByRole('button',{name:'Revisar sugestão',exact:true}).click();await page.getByRole('dialog').waitFor();
   assert.ok(await page.getByRole('dialog').getByText('Níveis N1 a N10').isVisible());
   await page.getByLabel('Título revisável').fill('RELATORIO DE INSPECAO DE RECEBIMENTO — CORRIGIDO');
