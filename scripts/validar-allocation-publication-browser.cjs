@@ -51,8 +51,7 @@ const server=http.createServer(async(req,res)=>{try{
   assert.ok(await page.getByText('0 inconsistências').isVisible());
   await page.getByLabel('Revisão autorizada').fill('B');
   await page.getByRole('button',{name:'Publicar versão conferida'}).click();
-  await page.getByText('caminhos-novos.xlsx').waitFor({timeout:60000});
-  await page.getByText('Ativa',{exact:true}).waitFor();
+  await page.locator('.ag-base-table tbody tr').filter({hasText:'caminhos-novos.xlsx'}).getByText('Ativa',{exact:true}).waitFor({timeout:60000});
   assert.equal(storage.find(x=>x.status==='active').rows.length,503);
   assert.equal(storage.find(x=>x.id==='original').status,'archived');
   assert.equal(serial,1,'transient chunk failure must not create duplicate upload');
