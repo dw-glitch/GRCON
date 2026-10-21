@@ -1,0 +1,144 @@
+{
+  "repository": "dw-glitch/RECON",
+  "commit": "fadf2f33dbf32a6ab713770cecb69f333ec862bb",
+  "adaptation": "Only isolate TriagemCore and LDConflictCore globals from GRCON. Engines otherwise preserved. Native controller replaces DOM orchestration in allocation_app.js and bases_app.js.",
+  "files": {
+    "core.js": {
+      "sourceSha256": "2aa7936128d9c2b13e726a731c8d3b90b531ec4f0c9d5222a834bd24a3e58814",
+      "portedSha256": "0382f8251767211b9efc3db5e966d848d98c52647f553d728edd2b4a4edbe264"
+    },
+    "recon_contracts.js": {
+      "sourceSha256": "a0b4f787347f1a626616cb98333e47dc5ae71a36fa3cf264bc8d4a44ab9de5ab",
+      "portedSha256": "a0b4f787347f1a626616cb98333e47dc5ae71a36fa3cf264bc8d4a44ab9de5ab"
+    },
+    "ld_conflicts.js": {
+      "sourceSha256": "9eba9ea1cbfc916ed35a2a9f748034e0f8c7a2b4464094de91ce96c596e2c516",
+      "portedSha256": "a2b69804ab94c6e4af5af28ed3bb0711fb9ab3212d4941a5d0049963016ccdb9"
+    },
+    "allocation_confirmation_sources.js": {
+      "sourceSha256": "542336c6756df2337a4e11e3aeaea6abd25caa23613e3b905025020ede43d747",
+      "portedSha256": "a2619ab5a2f5a2a2b578a380dcba3bf25213623b3f70615a5d358e2d8908265b"
+    },
+    "non_tagged_title_rules.js": {
+      "sourceSha256": "fb277b318f10ec89572c3d6b629fbe1c0ceef12ca7f3b1a8cf1f5519e5588805",
+      "portedSha256": "fb277b318f10ec89572c3d6b629fbe1c0ceef12ca7f3b1a8cf1f5519e5588805"
+    },
+    "allocation_core.js": {
+      "sourceSha256": "c0703594eb4de728aff7065f7a125d7fe2acba59be8eb7538e2068aaf33a42d5",
+      "portedSha256": "4d711dff7a53bb43a51c5956e5740477b79d3664794d32f42a82a642deab0a6d"
+    },
+    "allocation_batches.js": {
+      "sourceSha256": "510d1a6b47ba85652e5e9c020e755de2d0ffab3bf024ea95eed0d96d3fc78088",
+      "portedSha256": "510d1a6b47ba85652e5e9c020e755de2d0ffab3bf024ea95eed0d96d3fc78088"
+    },
+    "allocation_workbook.js": {
+      "sourceSha256": "fe6dc4d64844e646c91eb8a146e0beb43e38244549c726a8b3b694733d542462",
+      "portedSha256": "e1ff505322d511de093252be134a7fe67be354987eaada64b13f2e4ad7463d0a"
+    },
+    "allocation_title_quality.js": {
+      "sourceSha256": "ea6516413e20c72c47decb60d554b375ad4f470eac1f5e7ce2622e8e08863b8e",
+      "portedSha256": "ea6516413e20c72c47decb60d554b375ad4f470eac1f5e7ce2622e8e08863b8e"
+    },
+    "databook_allocation_sources.js": {
+      "sourceSha256": "091eba9cea71eac2c68d9398d928b6e40b088349dda9da64450bff403dd70929",
+      "portedSha256": "76b795f9d54c201ba628cc274fe5ac0361780cb20b75a03d988e26e3f6fda537"
+    },
+    "ld_compatibility.js": {
+      "sourceSha256": "2e2592170bd3cc8ec84524b36f7e1057763d0f30469cd58cc0182968e1b8c922",
+      "portedSha256": "fceafc0327783f2cef313272f4069524e706433691befb09bfdaa68c90062f0f"
+    },
+    "ld_preservation.js": {
+      "sourceSha256": "79f32b575ff134dadaa9e115f5051e0d828cf0ba1f378e5570a5dcccf3a812ef",
+      "portedSha256": "79f32b575ff134dadaa9e115f5051e0d828cf0ba1f378e5570a5dcccf3a812ef"
+    },
+    "ld_databook_writer.js": {
+      "sourceSha256": "222181893b9886067c03ac5e9dc14dca20a44c73c1e28ea39b45c63e680f6605",
+      "portedSha256": "222181893b9886067c03ac5e9dc14dca20a44c73c1e28ea39b45c63e680f6605"
+    },
+    "ld_title_writer.js": {
+      "sourceSha256": "3ec1bdcbdff56d9643a57e278abe99cc0473fece06450111b27e081498199608",
+      "portedSha256": "3ec1bdcbdff56d9643a57e278abe99cc0473fece06450111b27e081498199608"
+    },
+    "bases_core.js": {
+      "sourceSha256": "d80aacdd9f618772ffa2d06b69e04949ca4cb3218467d6799fd186a48a201b33",
+      "portedSha256": "d80aacdd9f618772ffa2d06b69e04949ca4cb3218467d6799fd186a48a201b33"
+    },
+    "document_title_standard.js": {
+      "sourceSha256": "4c589912d6c3ba72c33606980267fd0004db6a99af891b9c74bdea9129409a3d",
+      "portedSha256": "4c589912d6c3ba72c33606980267fd0004db6a99af891b9c74bdea9129409a3d"
+    },
+    "document_title_standard_r.js": {
+      "sourceSha256": "1f641fa6075d62d051ad99da9524dc6db8230810b5c8b52a8bba63648f7aa2fb",
+      "portedSha256": "1f641fa6075d62d051ad99da9524dc6db8230810b5c8b52a8bba63648f7aa2fb"
+    },
+    "allocation_normative_rules.js": {
+      "sourceSha256": "e9247685dab263ba3336e54b56c053d5bfc418d489256f203e5750f16bbfefbd",
+      "portedSha256": "e9247685dab263ba3336e54b56c053d5bfc418d489256f203e5750f16bbfefbd"
+    },
+    "allocation_normative_catalogs.js": {
+      "sourceSha256": "a72777757c57d5615a163bbd93db58a978686002e04ce3be21e9e013ec23ca91",
+      "portedSha256": "a72777757c57d5615a163bbd93db58a978686002e04ce3be21e9e013ec23ca91"
+    },
+    "audit_core.js": {
+      "sourceSha256": "2794cbb64af247077af79fa1300b23ed03d7efc3c264dff307ecdf79981e651d",
+      "portedSha256": "8fd054a910abbcf62d9f67c09476db077b4bb382bd1469827c14979bfff53427"
+    },
+    "global_tag_title_core.js": {
+      "sourceSha256": "50a70617c0646ea2c80d161f5a24dce4069dcc5bbeebceee7725097d4afde3dd",
+      "portedSha256": "50a70617c0646ea2c80d161f5a24dce4069dcc5bbeebceee7725097d4afde3dd"
+    },
+    "databook_catalog.js": {
+      "sourceSha256": "2c4601d5b1c970b7eaff67009852d36842b8e7ff936d953feba03edde11afbca",
+      "portedSha256": "2c4601d5b1c970b7eaff67009852d36842b8e7ff936d953feba03edde11afbca"
+    },
+    "offline_resources.js": {
+      "sourceSha256": "5ff138d090ca10b6b213f1bef396b3a8c35ee9367f031b37bc981175faf8d8c9",
+      "portedSha256": "5ff138d090ca10b6b213f1bef396b3a8c35ee9367f031b37bc981175faf8d8c9"
+    },
+    "offline_recon_databook_c.js": {
+      "sourceSha256": "674589486484499f66ebf48d78d842c9b31a0316fb5752b514dd32c65219ba79",
+      "portedSha256": "674589486484499f66ebf48d78d842c9b31a0316fb5752b514dd32c65219ba79"
+    },
+    "offline_recon_eap_paths.js": {
+      "sourceSha256": "1eb67ee993668506736491182358b5eb476aeedcae4940ff1b0ee3fba100753c",
+      "portedSha256": "1eb67ee993668506736491182358b5eb476aeedcae4940ff1b0ee3fba100753c"
+    },
+    "offline_recon_allocation_template.js": {
+      "sourceSha256": "ab954f1aaa3b59b0bc49d69b31aaae2db0eff5abdcaf9b335388194f607ff7db",
+      "portedSha256": "ab954f1aaa3b59b0bc49d69b31aaae2db0eff5abdcaf9b335388194f607ff7db"
+    },
+    "offline_recon_audit_bases.js": {
+      "sourceSha256": "cd513d414c1f29f4793a9d54314fb84f41ed034413e812b0b0424d200b280ceb",
+      "portedSha256": "cd513d414c1f29f4793a9d54314fb84f41ed034413e812b0b0424d200b280ceb"
+    },
+    "scon_escopo_title_catalog.js": {
+      "sourceSha256": "68c4572b463df78c9222f87206a8dbc2bad41393a932e9480995edbb9f7d3aba",
+      "portedSha256": "68c4572b463df78c9222f87206a8dbc2bad41393a932e9480995edbb9f7d3aba"
+    },
+    "scon_catalog_loader.js": {
+      "sourceSha256": "177dce1e50380b9cd4eb3b10f3a1e3ce1cc5dbe77245e80ebc89ba17d88e7aee",
+      "portedSha256": "177dce1e50380b9cd4eb3b10f3a1e3ce1cc5dbe77245e80ebc89ba17d88e7aee"
+    },
+    "tag_reference_catalog.js": {
+      "sourceSha256": "56bb7a7c8760be4b88026bde494506b38ea004328eaf797184eeb2126e09fbc6",
+      "portedSha256": "56bb7a7c8760be4b88026bde494506b38ea004328eaf797184eeb2126e09fbc6"
+    },
+    "valve_list_catalog.js": {
+      "sourceSha256": "7d180b899ae96e24bceb02f779a700f25b9a093acc3ff13ee001feaca917d9a9",
+      "portedSha256": "7d180b899ae96e24bceb02f779a700f25b9a093acc3ff13ee001feaca917d9a9"
+    },
+    "valve_reparo_catalog.js": {
+      "sourceSha256": "a2f0c64d986450da51adb2987b4e9dc9efae95eaeac929e14d41af697334878e",
+      "portedSha256": "a2f0c64d986450da51adb2987b4e9dc9efae95eaeac929e14d41af697334878e"
+    },
+    "title_codes_csv.js": {
+      "sourceSha256": "9d0e8ff2e49cc9554dc8222452cec3f60fb149da82885bfee4120a518037a2b4",
+      "portedSha256": "9d0e8ff2e49cc9554dc8222452cec3f60fb149da82885bfee4120a518037a2b4"
+    },
+    "allocation_databook_finder.js": {
+      "sourceSha256": "03cf6555c11dabcbdedf13b65c726c97b952b9650019570964f306c80e2c90fa",
+      "portedSha256": "0e246117873d5cc7e3b9c778330b5c95a5e14829c40d91cc953c5ff6339fcd9e",
+      "adaptation": "Guard DOM event binding, expose pure ranking to CommonJS and replace window with globalThis; ranking functions unchanged."
+    }
+  }
+}

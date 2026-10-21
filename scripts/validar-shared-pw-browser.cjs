@@ -49,8 +49,9 @@ const server=http.createServer(async(req,res)=>{
    await GrconSharedPwQuery.publish(base);
   });
   const first=await b.evaluate(async()=>{const data=await GrconSigemPwDashboard.loadBases();return {id:data.pw.meta.snapshotId,records:data.pw.records.length,original:data.pw.sourceRecords.length,source:data.pw.meta.source,canPublish:GrconSharedPwQuery.canPublish()};});
-  assert.deepEqual(first,{id:'pw-1',records:2001,original:2001,source:'shared-projectwise',canPublish:false});
-  await a.evaluate(async()=>{
+  assert.deepEqual(first,{id:'pw-1',records:2001,original:2001,source:'shared-projectwise',canPublish:true});
+  assert.equal(await b.evaluate(()=>GrconSharedPwQuery.canEditDate()),false);
+  await b.evaluate(async()=>{
    const previous=await GrconSigemPwDashboard.loadPwBase();
    const records=previous.sourceRecords.slice(0,3).map(r=>({...r,revision:'A'}));
    await GrconSharedPwQuery.publish({meta:{fileName:'PW-2.csv',importedAt:'2026-10-21T10:00:00Z'},records});

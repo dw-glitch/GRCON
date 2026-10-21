@@ -2,6 +2,8 @@ import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
 import {syncSharepoint} from './teams-sharepoint.mjs';
 import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
 import {generateExplanation,INTENTS,SOURCE_LABELS,evidenceFor,modelInput} from './document-ai.mjs';
+import {validateDecision,allocationPrompt,recommendAllocation} from './allocation-ai.mjs';
+import AllocationCore from '../allocation_generator_core.js';
 
 const PREFIX = "/api/document-vault/";
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
@@ -119,10 +121,10 @@ async function handleVaultOperation(request, env, operation) {
 }
 
 const aiEnabled=env=>env.GRCON_DOCUMENT_AI_ENABLED==='true'&&typeof env.AI?.run==='function';
-async function aiBody(request){
+async function aiBody(request,max=3000){
  const reader=request.body?.getReader();let size=0,parts=[];
  if(!reader)throw Object.assign(Error('Consulta inválida.'),{status:400});
- for(;;){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>3000){await reader.cancel();throw Object.assign(Error('Consulta muito extensa.'),{status:413});}parts.push(value);}
+ for(;;){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>max){await reader.cancel();throw Object.assign(Error('Consulta muito extensa.'),{status:413});}parts.push(value);}
  const bytes=new Uint8Array(size);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}
  try{return JSON.parse(new TextDecoder().decode(bytes));}catch{throw Object.assign(Error('Consulta inválida.'),{status:400});}
 }
@@ -160,6 +162,42 @@ async function listCatalog(env, workspaceId, actorId, input = {}) {
     actor_id: actorId,
     input,
   });
+}
+
+async function handleAllocation(request,env,operation){
+ const user=await authenticatedUser(request,env),body=await aiBody(request,16000),workspace=workspaceFrom(request,body);
+ if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
+ if(typeof body.document!=='string'||body.document.length>255||typeof body.title!=='string'||body.title.length>2000)return apiError('Documento ou título inválido.',400,'ALLOCATION_INPUT');
+ const call=(action,input)=>rpc(env,'grcon_allocation',{target_workspace:workspace,actor_id:user.id,operation:action,input});
+ // Resolve the relevant references on the trusted server, not from client claims.
+ const identity=AllocationCore.identity(body.document,{document:body.document,discipline:safeText(body.discipline,180)});
+ const normative=AllocationCore.normative({document:body.document},{norms:[]});
+ const candidatePaths=operation==='recommend'&&Array.isArray(body.candidatePaths)
+  ?body.candidatePaths.filter(p=>typeof p==='string'&&p.length<=2048).slice(0,3):[];
+ const context=await call('context',{
+  document:body.document,eap:identity.eap,normIds:(normative.validation.rules||[]).slice(0,24),
+  ...(operation==='confirm'?{confirmedPath:safeText(body.confirmedPath,2048)}:{candidatePaths})
+ });
+ if(operation==='confirm'){
+  try{const input=validateDecision(body,context);return json({ok:true,...await call('decision',input),trusted:input.validated});}
+  catch(error){return apiError(error.message,409,'ALLOCATION_REVIEW');}
+ }
+ if(!aiEnabled(env))return apiError('Use a análise por regras.',503,'AI_NOT_CONFIGURED');
+ let prompt;
+ try{
+  // Derive the retrieval key on the server, never accept a client-supplied family.
+  prompt=allocationPrompt(body.document,body.title,context,[],safeText(body.discipline,180));
+  if(JSON.stringify(body.versions)!==JSON.stringify(context.versions)){
+   const sorted=value=>JSON.stringify(Object.entries(value||{}).sort());
+   if(sorted(body.versions)!==sorted(context.versions))return apiError('As bases mudaram. Reanalise.',409,'AI_SOURCES_CHANGED');
+  }
+  const related=await call('experiences',{...prompt.row.identity,trustedOnly:true});
+  prompt=allocationPrompt(body.document,body.title,context,related.decisions,safeText(body.discipline,180));
+ }catch(error){return apiError(error.message,409,'ALLOCATION_EVIDENCE');}
+ const budget=await rpc(env,'grcon_document_ai_budget',{operation:'reserve',target_workspace:workspace,actor_id:user.id});
+ if(!budget.allowed)return apiError('Limite de IA atingido. A análise por regras continua disponível.',429,'AI_LIMIT');
+ try{return json({ok:true,...await recommendAllocation(env.AI,prompt),versions:context.versions});}
+ catch{return apiError('IA indisponível. A análise por regras continua disponível.',503,'AI_UNAVAILABLE');}
 }
 
 async function lookupCatalog(env, workspaceId, actorId, input = {}) {
@@ -709,6 +747,8 @@ async function handleDelete(request, env) {
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
+  if(action==='allocation-confirm'&&request.method==='POST')return handleAllocation(request,env,'confirm');
+  if(action==='allocation-ai'&&request.method==='POST')return handleAllocation(request,env,'recommend');
   if(action==='ai-probe'&&request.method==='POST')return handleDocumentAi(request,env,true);
   if(action==='ai-status'&&request.method==='GET')return handleDocumentAi(request,env);
   if(action==='ai-explain'&&request.method==='POST')return handleDocumentAi(request,env);

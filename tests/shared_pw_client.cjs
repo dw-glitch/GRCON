@@ -32,7 +32,10 @@ function client(){
 (async()=>{
  const a=client(),b=client();await a.api.refresh();await b.api.refresh();
  assert.deepEqual(a.storage.get('pw'),b.storage.get('pw'),'computadores independentes recebem a mesma fonte');
- assert.equal(a.storage.get('pw').sourceRecords.length,2001);assert.equal(a.api.canPublish(),false);
+ assert.equal(a.storage.get('pw').sourceRecords.length,2001);assert.equal(a.api.canPublish(),true);assert.equal(a.api.canEditDate(),false);
+ await assert.rejects(a.api.setReferenceDate('2026-10-21','pw-1'),/Somente/);
+ a.root.GrconCloud.state.membership.role='admin';assert.equal(a.api.canEditDate(),true);
+ a.root.GrconCloud.state.membership.role='operator';
  assert.ok(maximum<=4);const saved=a.saves();await a.api.refresh();assert.equal(a.saves(),saved,'abrir novamente não regrava base inalterada');
  versions=[{...versions[0],snapshot_id:'pw-2',version:2}, {...versions[0],status:'archived'}];corrupt=true;
  await a.api.refresh();assert.equal(a.storage.get('pw').meta.snapshotId,'pw-1');assert.equal(a.api.state.stale,true);assert.match(a.api.state.error,/incompleto/);

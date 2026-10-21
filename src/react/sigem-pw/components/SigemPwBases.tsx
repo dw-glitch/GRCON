@@ -111,7 +111,7 @@ export function SigemPwBases({ state, onImportSigem, onImportPw, onImportLd, onE
       <article className="spw-base-card" data-loaded={Boolean(state.pw.meta)}>
         <BaseInfo kind="pw" title="BASE PROJECTWISE" empty="Relação PW não carregada" base={state.pw} result={state.result} />
         <div className="spw-base-actions">
-          <button className="text-button" data-edit-base-date="pw" type="button" disabled={state.busy || !state.pw.meta || (state.pw.meta.source === "shared-projectwise" && !window.GrconSharedPwQuery?.canPublish())} onClick={() => onEditDate("pw")}><span>Editar data</span></button>
+          <button className="text-button" data-edit-base-date="pw" type="button" disabled={state.busy || !state.pw.meta || (state.pw.meta.source === "shared-projectwise" && !window.GrconSharedPwQuery?.canEditDate())} onClick={() => onEditDate("pw")}><span>Editar data</span></button>
           <button className="secondary-button" id="spw-pw-update" type="button" disabled={state.busy} onClick={() => pwRef.current?.click()}><UploadIcon /><span>{state.pw.meta ? "Atualizar base PW" : "Carregar base PW"}</span></button>
           {state.pw.meta && window.GrconSharedPwQuery?.canPublish() && state.pw.meta.source !== "shared-projectwise" ? <button className="secondary-button" id="spw-pw-publish" type="button" disabled={state.busy} onClick={onPublishPw}>Publicar PW para a equipe</button> : null}
           <input ref={pwRef} id="spw-pw-file" hidden type="file" accept=".csv,.txt,text/csv" onChange={onFile(onImportPw)} />

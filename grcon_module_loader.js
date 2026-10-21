@@ -43,6 +43,7 @@
     "grdt-reissue": ["xlsx", "zip", "compliance", "sigem_posting_core.js", "emission.js", "grdt_reissue_core.js", "grdt_reissue_app.js"],
     // Hub estático: não carrega dependências até o operador escolher uma ferramenta.
     "additional-tools": [],
+    "allocation-generator": ["react-dist/allocation-app.js"],
     "allocation-dashboard": ["allocation_dashboard_core.js", "allocation_dashboard_app.js"],
     // O combinador é isolado do banco. A interface é uma ilha React; o Core
     // legado permanece fonte da verdade e pdf-lib só entra pelo Worker quando
@@ -63,6 +64,7 @@
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
     "cover-document": ["GrconCoverDocumentUi"],
     "docx-to-pdf": ["GrconDocxPdfCore", "GrconDocxPdfUi"],
+    "allocation-generator": ["GrconAllocationGeneratorUi"],
     "allocation-dashboard": ["GrconAllocationDashboardCore", "GrconAllocationDashboardUi"],
   };
 
@@ -237,6 +239,7 @@
       "pdf-tools": "pdf-tools-module",
       "cover-document": "cover-document-module",
       "docx-to-pdf": "docx-to-pdf-module",
+      "allocation-generator": "allocation-generator-module",
       "allocation-dashboard": "allocation-dashboard-module",
     };
     Object.entries(modules).forEach(([key, id]) => {
@@ -249,7 +252,7 @@
     if (scrollingElement) scrollingElement.scrollTop = 0;
     if (root.scrollY) root.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.querySelectorAll("[data-grcon-view]").forEach((button) => {
-      const nestedToolView = view === "grdt-reissue" || view === "pdf-tools" || view === "cover-document" || view === "docx-to-pdf" || view === "allocation-dashboard";
+      const nestedToolView = view === "allocation-generator" || view === "grdt-reissue" || view === "pdf-tools" || view === "cover-document" || view === "docx-to-pdf" || view === "allocation-dashboard";
       const additionalToolsNav = button.dataset.grconView === "additional-tools"
         && (button.classList.contains("ops-nav-button") || button.id === "tab-additional-tools");
       const active = button.dataset.grconView === view || (nestedToolView && additionalToolsNav);
@@ -273,6 +276,7 @@
     "pdf-tools": "Combinar PDFs",
     "cover-document": "Adicionar Capa",
     "docx-to-pdf": "Converter PDF em DOCX",
+    "allocation-generator": "Gerador de Alocação",
     "allocation-dashboard": "Dashboard de Alocação",
   };
 
@@ -296,6 +300,10 @@
     if (module === "additional-tools") return;
     if (module === "dashboard") {
       root.GrconHistoryDashboard?.activate?.();
+      return;
+    }
+    if (module === "allocation-generator") {
+      root.GrconAllocationGeneratorUi?.activate?.();
       return;
     }
     if (module === "allocation-dashboard") {

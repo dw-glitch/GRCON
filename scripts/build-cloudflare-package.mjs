@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDir, "..");
 const outDir = path.join(root, "dist-cloudflare");
-const runtimeDirs = ["assets", "workers", "react-dist"];
+const runtimeDirs = ["assets", "workers", "react-dist", "vendor/recon"];
 const rootRuntimeExtensions = new Set([
   ".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".webp", ".svg", ".ico",
   ".webm", ".wasm", ".xlsx", ".xls", ".csv", ".woff", ".woff2", ".ttf", ".otf",

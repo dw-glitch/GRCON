@@ -3,6 +3,12 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const BUILDS = {
+  allocation: {
+    entry: "src/react/allocation/index.tsx",
+    fileName: "allocation-app.js",
+    bundleName: "GrconAllocationBundle",
+    emptyOutDir: false,
+  },
   consultas: {
     entry: "src/react/consultas/index.tsx",
     fileName: "consultas-app.js",
