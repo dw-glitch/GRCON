@@ -3007,6 +3007,7 @@
   }
 
   function decisionLabel(value, row) {
+    if (row && rowStatusPolicy(row).manualOnly) return rowStatusPolicy(row).label;
     if (row && manuallyIncluded(row)) return "Incluído manualmente — LD: Não Alocado";
     if (row && row.hardBlock) return "Não será incluído";
     if (value === C.READY) return "Será incluído na eGRDT";
@@ -3015,6 +3016,7 @@
   }
 
   function compactDecisionLabel(row) {
+    if (rowStatusPolicy(row).manualOnly) return rowStatusPolicy(row).label;
     if (manuallyIncluded(row)) return "Incluído manualmente";
     // Conflito de alocação não é "não alocado": a LD tem duas respostas e quem
     // decide é a pessoa. Chamar de "não incluir" escondia a diferença.
@@ -3029,12 +3031,19 @@
     return "Conferir";
   }
 
+  function selectionSituationLabel(row, index) {
+    const policy = rowStatusPolicy(row);
+    if (rowIncludedForGeneration(row, index)) return policy.manualOnly ? "Incluído manualmente" : compactDecisionLabel(row);
+    return policy.manualOnly ? policy.label : "Excluído";
+  }
+
   function decisionClass(value, row) {
     if (row && row.hardBlock) return "blocked";
     return value === C.READY ? "ready" : value === C.DISCARD ? "discard" : "review";
   }
 
   function decisionGroupKey(row) {
+    if (row && rowStatusPolicy(row).kind === "analysis") return "descartar";
     if (row && row.hardBlock) return "bloqueado";
     if (row && row.decision === C.READY) return "pronto";
     if (row && row.decision === C.DISCARD) return "descartar";
@@ -3066,7 +3075,7 @@
     // 22 campos, inclusive repetidas consultas ao Apêndice e à estrutura LD.
     const record = row && row.record || {};
     switch (keyName) {
-      case "situation": return state.selected.has(resultIndex(row)) ? compactDecisionLabel(row) : "Excluído";
+      case "situation": return selectionSituationLabel(row, resultIndex(row));
       case "originalFile": return [row?.name, ...(row?.files || []).map(entry => entry.name)].filter(Boolean).join(" | ");
       case "document": return row?.document || "";
       case "ldCode": return apendiceInfo(row).ldCode || "";
@@ -3934,9 +3943,10 @@
       const previousIndex = entry.position > 0 ? virtualInfo.indices[entry.position - 1] : null;
       const previousRow = previousIndex === null ? null : state.results[previousIndex];
       const groupStart = state.groupByStatus && (!previousRow || decisionGroupKey(previousRow) !== decisionGroupKey(row));
-      const resultClass = decisionClass(row.decision, row);
+      const statusPolicy = rowStatusPolicy(row);
+      const resultClass = statusPolicy.manualOnly ? "review" : decisionClass(row.decision, row);
       const selectable = rowCanBeSelected(row);
-      const selected = state.selected.has(index);
+      const selected = rowIncludedForGeneration(row, index);
       const record = row.record || {};
       const ldRevision = record.revision || "—";
       // A coluna da triagem permanece fiel à LD. Ajustes aprovados de título
@@ -3971,7 +3981,9 @@
       const apendice = apendiceInfo(row);
       const databook = record.databook || "—";
       const manualSelection = manuallyIncluded(row, index);
-      const selectionTitle = manualAllocationOverrideAllowed(row)
+      const selectionTitle = statusPolicy.manualOnly
+        ? `Status SIGEM: ${statusPolicy.status || "não identificado"}. Marque individualmente para autorizar a inclusão nesta revisão.`
+        : manualAllocationOverrideAllowed(row)
         ? "Marcar manualmente para incluir na GRDT; a LD continuará registrada como Não Alocado"
         : rowRequiresManualResolution(row)
           ? "Pode incluir na GRDT; antes de gerar, abra Editar GRDT e conclua a pendência indicada"
@@ -3981,7 +3993,7 @@
           ${groupStart ? `<span class="triage-group-label">${escapeHtml(decisionGroupLabel(row))}</span>` : ""}
           <input id="select-row-${index}" name="select-row-${index}" class="row-select" data-select-row type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Selecionar para GRDT" title="${selectionTitle}">
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
-          <span class="status-chip ${selected ? resultClass : "excluded"}" title="Resultado da triagem: ${escapeHtml(compactDecisionLabel(row))}">${selected ? compactDecisionLabel(row) : "Excluído"}</span>
+          <span class="status-chip ${statusPolicy.manualOnly ? "manual-sigem" : selected ? resultClass : "excluded"}" title="Status SIGEM: ${escapeHtml(statusPolicy.status || "não identificado")} · Resultado da triagem: ${escapeHtml(compactDecisionLabel(row))}">${escapeHtml(selectionSituationLabel(row, index))}</span>
         </div></td>
         <td>${renderRowFileList(row, false)}${renderFileOrigin(row)}</td>
         <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="grdt-document-text"><span class="grdt-document-identity"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span><button type="button" class="grdt-copy-code" data-action="copy-code" aria-label="Copiar código ${escapeHtml(row.document)}" title="Copiar código">⧉</button></span><small class="grdt-document-original" title="${escapeHtml(row.name || "")}">${escapeHtml(row.name || "")}</small><small class="grdt-document-source">${escapeHtml(TriageQuery.origin(row))} · ${escapeHtml(TriageQuery.extensions(row).join(" / ") || "Tipo não identificado")}</small></span></span>${!row.record ? `<button type="button" class="text-button" data-action="suggest-allocation">Sugerir alocação</button>` : ""}${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryUi ? window.GrconGrdtHistoryUi.row(row.document, row.revision) : PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
@@ -4206,7 +4218,7 @@
     const filtered = filteredResults();
     const selectableIndices = [];
     filtered.forEach((row) => {
-      if (rowCanBeSelected(row) && rowOutputSources(row).length) selectableIndices.push(resultIndex(row));
+      if (rowCanAutoInclude(row)) selectableIndices.push(resultIndex(row));
     });
 
     const physicalSelected = [];
