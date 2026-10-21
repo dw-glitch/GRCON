@@ -59,7 +59,8 @@ assert.match(appSource, /return Boolean\(!row\.hardBlock \|\| manualAllocationOv
 assert.doesNotMatch(appSource, /if \(!row \|\| row\.blockCode === "discipline_confirmation"[^\n]*return false;/);
 assert.match(appSource, /Pode incluir na GRDT; antes de gerar, abra Editar GRDT/);
 assert.match(appSource, /ajuste_manual_grdt/);
-assert.match(coreSource, /statusOriginal: displayStatus \|\| "Sem status"/);
+assert.match(coreSource, /statusOriginal: resolvedSigemStatus\?\.revisionStatus \|\| displayStatus \|\| "Sem status"/);
+assert.match(coreSource, /blockingRevision: resolvedSigemStatus\?\.blockingRevision \|\| ""/);
 assert.match(coreSource, /statusOperational: normalizeSigemStatus/);
 assert.match(contractSource, /item\.statusOperational \|\| item\.status/);
 assert.match(emissionSource, /Abra Editar GRDT e escolha uma opção da lista oficial/);
