@@ -45,7 +45,7 @@ const server=http.createServer(async(req,res)=>{try{
   await page.getByRole('button',{name:'Bases de referência',exact:true}).click();
   assert.equal(await page.getByText('anterior.xlsx').count(),1);
   const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Descrição','Caminho Databook'],...paths.map((p,i)=>['Descrição '+i,p])]),'Caminhos atualizados');
-  const bytes=XLSX.write(book,{bookType:'xlsx',type:'buffer'});
+  const bytes=Buffer.from(XLSX.write(book,{bookType:'xlsx',type:'buffer'}));
   await page.locator('.ag-toolbar input[type=file]').setInputFiles({name:'caminhos-novos.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:bytes});
   await page.getByText('503 caminhos lidos',{exact:false}).waitFor();
   assert.ok(await page.getByText('0 inconsistências').isVisible());
