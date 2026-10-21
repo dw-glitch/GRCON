@@ -16,23 +16,64 @@ const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SH
 function read(bytes){return XLSX.read(bytes,{type:'array',cellDates:true,cellFormula:true});}
 function parse(kind,book,name){
  if(kind==='databook'){
-  let parsed=A.parseDatabookWorkbook(book,XLSX).entries;
-  if(!parsed.length){for(const sheet of book.SheetNames){const candidate={...book,SheetNames:['CAMINHO DB_SIGEM'],Sheets:{CAMINHO_DB_SIGEM:book.Sheets[sheet],'CAMINHO DB_SIGEM':book.Sheets[sheet]}};parsed=A.parseDatabookWorkbook(candidate,XLSX).entries;if(parsed.length)break;}}
-  if(parsed.length)return parsed;
-  // Fallback: accept complete, explicit Databook paths in arbitrary Excel sheets.
-  // Never synthesize a hierarchy from unrelated cells.
-  const entries=[];
-  for(const sheetName of book.SheetNames){
-   const values=XLSX.utils.sheet_to_json(book.Sheets[sheetName],{header:1,defval:'',raw:false});
-   for(let i=0;i<values.length;i++){
-    const cells=(values[i]||[]).map(v=>String(v??'').trim());
-    const at=cells.findIndex(v=>v.length>=8&&v.length<=2048&&v.split('|').length>=3&&v.split('|').length<=15&&!v.split('|').some(p=>!p.trim())&&!/^NOME UNIDADE\\s*\\|/i.test(v));
-    if(at<0)continue;
-    const path=cells[at],description=cells.slice(0,at).reverse().find(v=>v&&!/^\\d+(?:[.,]\\d+)*$/.test(v))||path.split('|').at(-1);
-    entries.push({databook:path,description,levels:path.split('|').map(x=>x.trim()),notes:'',rowNumber:i+1,sourceSheet:sheetName});
+  // Historical files may have the revision in the official map's sheet name.
+  // Never stop at CAPA: revision notes there contain snippets separated by |.
+  const normalized=value=>String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
+  const isMap=name=>/^CAMINHO DB SIGEM(?: |$)/.test(normalized(name));
+  const isPath=value=>{
+   const raw=String(value??'').trim(),parts=raw.split('|');
+   return raw.length>=8&&raw.length<=2048&&!/[\\r\\n]/.test(raw)&&parts.length>=3&&parts.length<=15
+    &&parts.every(p=>p.trim().length>0)&&/^DATA BOOK(?:\\s|$)/i.test(parts[1].trim());
+  };
+  const description=(row,column,fallback)=>{
+   for(let i=column-1;i>=0;i--){
+    const value=String(row[i]??'').trim(),label=normalized(value);
+    if(!value||/^\\d+(?:[.,]\\d+)*\\.?$/.test(value)||/^(SECAO|CAPITULO|ITEM|I|REVISAO|REV)$/.test(label))continue;
+    return value;
    }
+   return fallback;
+  };
+  const fromMap=(sheetName)=>{
+   const sheet=book.Sheets[sheetName];
+   const copied={...book,SheetNames:[...book.SheetNames,'CAMINHO DB_SIGEM'],
+    Sheets:{...book.Sheets,'CAMINHO DB_SIGEM':sheet}};
+   const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false});
+   return A.parseDatabookWorkbook(copied,XLSX).entries.filter(r=>isPath(r.databook)).map(record=>{
+    const row=rows[record.rowNumber-1]||[],column=row.findIndex(isPath);
+    // Keep the RECON canonical path and original source references. Column H
+    // contains the documents recommended for this folder in the official map.
+    return {...record,sourceSheet:sheetName,
+     description:column>=0?description(row,column,record.description):record.description,
+     notes:[record.notes,column>=0?String(row[column+1]??'').trim():''].filter(Boolean).join('\\n')};
+   });
+  };
+  const preferred=(book.SheetNames||[]).filter(isMap);
+  if(preferred.length){
+   for(const sheet of preferred){const entries=fromMap(sheet);if(entries.length)return entries;}
+   throw Error('A aba oficial CAMINHO DB_SIGEM foi localizada, mas não contém caminhos completos válidos. Confira a coluna de caminhos.');
   }
-  return entries;
+  // Non-standard layouts are supported only if they hold complete explicit
+  // paths. Exclude cover, guidelines and analysis worksheets from discovery.
+  const candidates=[];
+  for(const sheetName of book.SheetNames||[]){
+   const n=normalized(sheetName);
+   if(/^(CAPA|ORIENTACOES|ANALISE|REF NR13|DATA BOOK C M BASE)/.test(n))continue;
+   const rows=XLSX.utils.sheet_to_json(book.Sheets[sheetName],{header:1,defval:'',raw:false});
+   const hasHeader=rows.slice(0,40).some(row=>(row||[]).some(cell=>/^(CAMINHO DATABOOK|CAMINHO DATA BOOK|CAMINHO DB SIGEM)(?: |$)/.test(normalized(cell))));
+   if(!/CAMINHO|DATABOOK|DATA BOOK|SIGEM/.test(n)&&!hasHeader)continue;
+   const entries=[];
+   rows.forEach((row,i)=>{
+    const values=(row||[]).map(v=>String(v??'').trim()),column=values.findIndex(isPath);
+    if(column<0)return;
+    const databook=values[column];
+    entries.push({databook,description:description(values,column,databook.split('|').at(-1)),
+     levels:databook.split('|').map(x=>x.trim()),notes:String(values[column+1]||'').trim(),rowNumber:i+1,sourceSheet:sheetName});
+   });
+   if(entries.length)candidates.push({sheetName,entries});
+  }
+  candidates.sort((a,b)=>b.entries.length-a.entries.length);
+  if(candidates.length)return candidates[0].entries;
+  throw Error('Nenhuma aba de caminhos Databook encontrada. Use CAMINHO DB_SIGEM (com ou sem sufixo de revisão) ou uma tabela com a coluna Caminho Databook.');
  }
  if(kind==='eap')return A.parseProjectLevelBase(book,XLSX);
  if(kind==='ld')return C.parseWorkbook(book,name,Date.now());
