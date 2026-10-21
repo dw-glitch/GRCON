@@ -91,7 +91,7 @@ export const service={
  async ai(index:number){return task('Consultando IA para este documento',async()=>{
   const row=state.rows[index];if(row.confidence==='alta')throw Error('Correspondência exata: a análise por regras já é suficiente.');
   if(row.ai)return;
-  const response=await api('ai',{document:row.document,title:row.title,discipline:row.identity.discipline,versions:row.versions});const rows=state.rows.slice();rows[index]={...row,ai:response};emit({rows});
+  const response=await api('ai',{document:row.document,title:row.title,discipline:row.identity.discipline,versions:row.versions,candidatePaths:row.candidates.slice(0,3).map((p:Data)=>p.databook).filter(Boolean)});const rows=state.rows.slice();rows[index]={...row,ai:response};emit({rows});
  });},
  select(index:number,value:boolean){const rows=state.rows.slice();rows[index]={...rows[index],selected:value};activeRequest=null;emit({rows,plan:null,files:[]});},
  async plan(mode:string){const plan=await compute('plan',{results:state.rows.filter(x=>x.selected),mode});emit({plan});return plan;},
