@@ -3,6 +3,7 @@ import {syncSharepoint} from './teams-sharepoint.mjs';
 import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
 import {generateExplanation,INTENTS,SOURCE_LABELS,evidenceFor,modelInput} from './document-ai.mjs';
 import {validateDecision,allocationPrompt,recommendAllocation} from './allocation-ai.mjs';
+import AllocationCore from '../allocation_generator_core.js';
 
 const PREFIX = "/api/document-vault/";
 const SINGLE_UPLOAD_LIMIT = 64 * 1024 * 1024;
@@ -168,7 +169,15 @@ async function handleAllocation(request,env,operation){
  if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
  if(typeof body.document!=='string'||body.document.length>255||typeof body.title!=='string'||body.title.length>2000)return apiError('Documento ou título inválido.',400,'ALLOCATION_INPUT');
  const call=(action,input)=>rpc(env,'grcon_allocation',{target_workspace:workspace,actor_id:user.id,operation:action,input});
- const context=await call('context',{document:body.document});
+ // Resolve the relevant references on the trusted server, not from client claims.
+ const identity=AllocationCore.identity(body.document,{document:body.document,discipline:safeText(body.discipline,180)});
+ const normative=AllocationCore.normative({document:body.document},{norms:[]});
+ const candidatePaths=operation==='recommend'&&Array.isArray(body.candidatePaths)
+  ?body.candidatePaths.filter(p=>typeof p==='string'&&p.length<=2048).slice(0,3):[];
+ const context=await call('context',{
+  document:body.document,eap:identity.eap,normIds:(normative.validation.rules||[]).slice(0,24),
+  ...(operation==='confirm'?{confirmedPath:safeText(body.confirmedPath,2048)}:{candidatePaths})
+ });
  if(operation==='confirm'){
   try{const input=validateDecision(body,context);return json({ok:true,...await call('decision',input),trusted:input.validated});}
   catch(error){return apiError(error.message,409,'ALLOCATION_REVIEW');}
