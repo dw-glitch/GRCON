@@ -1267,6 +1267,7 @@
     state.pendingAllocationBundle = snapshot.pendingAllocationBundle || { rows: [], entries: [], documentCount: 0, pdfCount: 0 };
     state.selected = new Set(snapshot.selectedIndices || []);
     state.manualForceInclude = new Set(snapshot.manualForceIndices || []);
+    reconcileSelectedRows(); // Cache antigo não autoriza status SIGEM restrito.
     state.expanded.clear();
     state.resultVersion += 1;
     state.filteredCache = { signature: "", indices: [] };
@@ -1897,6 +1898,35 @@
     return Boolean(row && (rowCanBeSelected(row) || row.blockCode === "discipline_confirmation"));
   }
 
+  // Regra única de elegibilidade: histórico e repostagem não liberam status SIGEM.
+  function rowStatusPolicy(row) { return TriageQuery.selectionPolicy(row); }
+  function rowCanAutoInclude(row) {
+    return Boolean(row && rowCanBeSelected(row) && rowOutputSources(row).length
+      && rowStatusPolicy(row).autoEligible);
+  }
+  function rowIncludedForGeneration(row, index) {
+    return Boolean(rowCanBeSelected(row) && TriageQuery.selectionAuthorized(row, index, state.selected, state.manualForceInclude));
+  }
+  function guardedSelectedIndices(physicalOnly = false) {
+    const selected = new Set();
+    state.selected.forEach(index => {
+      const row = state.results[index];
+      if (rowIncludedForGeneration(row, index) && (!physicalOnly || row.files && row.files.length)) selected.add(index);
+    });
+    return selected;
+  }
+  function reconcileSelectedRows() {
+    let changed = false;
+    [...state.selected].forEach(index => {
+      if (rowIncludedForGeneration(state.results[index], index)) return;
+      state.selected.delete(index);
+      state.manualForceInclude.delete(index);
+      changed = true;
+    });
+    if (changed) state.filteredCache = { signature: "", indices: [] };
+    return changed;
+  }
+
   function refreshPendingAllocationBundle() {
     state.pendingAllocationBundle = PendingAllocationPackage
       ? PendingAllocationPackage.collect(state.results)
@@ -1905,13 +1935,13 @@
   }
 
   function outputPreviewData() {
-    const includedRows = state.results.filter((row, index) => state.selected.has(index) && rowCanBeSelected(row));
+    const includedRows = state.results.filter((row, index) => rowIncludedForGeneration(row, index));
     const items = includedRows.flatMap((row) => rowOutputSources(row).map((entry) => ({
       primary: entry.name || row.document,
       secondary: entry.finalName || row.finalName,
       meta: `${row.document} · revisão ${row.revision || "—"}`,
     })));
-    const previewPlan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
+    const previewPlan = E.createPlan(state.results, guardedSelectedIndices(), { manualForceIndices: state.manualForceInclude });
     const previewGroups = previewPlan.errors.length ? [] : splitPostingPlan(previewPlan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
     const batchCount = Math.max(1, previewGroups.length || Math.ceil(items.length / currentEgrdtBatchLimit()));
     const sequences = suggestedEgrdtSequences(batchCount);
@@ -2280,6 +2310,11 @@
       ? row.revisionSuggested
       : row.revision;
     row.revision = normalized;
+    if (C.normalizeRevision(previousRevision) !== normalized) {
+      // Autorização manual nunca se transfere para outra revisão.
+      row.manualSigemSelection = null;
+      state.manualForceInclude.delete(resultIndex(row));
+    }
     row.revisionManual = normalized !== suggested;
     auditManualGrdtChange(row, "Revisão enviada na GRDT", previousRevision, normalized, "revisão definida manualmente antes da geração");
     const info = C.revisionInfo ? C.revisionInfo(normalized) : { valid: true };
@@ -2541,7 +2576,7 @@
       state.selected.clear();
       state.manualForceInclude.clear();
       state.results.forEach((row, index) => {
-        if (row.decision === C.READY && !row.hardBlock && rowOutputSources(row).length) state.selected.add(index);
+        if (rowCanAutoInclude(row)) state.selected.add(index);
       });
       state.analysisAt = Date.now();
       state.analysisValidUntil = state.analysisAt + ANALYSIS_VALIDITY_MS;
@@ -2850,7 +2885,7 @@
       state.manualForceInclude.clear();
       state.results.forEach((row, index) => {
         row._resultIndex = index;
-        if (row.decision === C.READY && !row.hardBlock && rowOutputSources(row).length) state.selected.add(index);
+        if (rowCanAutoInclude(row)) state.selected.add(index);
       });
       state.resultVersion += 1;
       state.filteredCache = { signature: "", indices: [] };
@@ -2959,6 +2994,7 @@
       return false;
     }
     refreshSelectedSigemStatuses();
+    reconcileSelectedRows();
     if (window.GrconCloud?.state?.membership) {
       try { await window.GrconPlannedDocuments.refresh(); }
       catch (_) { showToast("Não foi possível confirmar a base atual de Documentos Previstos. Reconecte e tente novamente.", "error"); return false; }
@@ -4160,15 +4196,7 @@
   }
 
   function renderAll() {
-    state.selected.forEach((index) => {
-      const row = state.results[index];
-      // "Não Alocado" pode permanecer selecionado somente quando a escolha
-      // manual do operador estiver registrada. Outros bloqueios são removidos.
-      if (!row || !rowCanBeSelected(row) || (row.hardBlock && !state.manualForceInclude.has(index))) {
-        state.selected.delete(index);
-        state.manualForceInclude.delete(index);
-      }
-    });
+    reconcileSelectedRows();
     if (PostingFlow) PostingFlow.render(state.results, state.selected);
     renderSummary();
     renderSheetFilter();
@@ -4230,7 +4258,7 @@
     els.selectAllReady.indeterminate = !els.selectAllReady.checked && selectableIndices.some((index) => state.selected.has(index));
     els.exportFinalPackage.disabled = physicalSelected.length === 0 || physicalIncomplete > 0;
     const selectedItemCount = [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + amount, 0);
-    const selectedBatchCount = PostingFlow ? splitPostingPlan(E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude }), currentEgrdtBatchLimit(), currentEgrdtBatchMode()).length : currentEgrdtBatchMode() === "limit-only"
+    const selectedBatchCount = PostingFlow ? splitPostingPlan(E.createPlan(state.results, guardedSelectedIndices(), { manualForceIndices: state.manualForceInclude }), currentEgrdtBatchLimit(), currentEgrdtBatchMode()).length : currentEgrdtBatchMode() === "limit-only"
       ? Math.ceil(selectedItemCount / currentEgrdtBatchLimit())
       : [...selectedItemsByDiscipline.values()].reduce((total, amount) => total + Math.ceil(amount / currentEgrdtBatchLimit()), 0);
     const selectedDisciplineCount = selectedItemsByDiscipline.size;
@@ -4905,17 +4933,18 @@
 
   function buildEgrdtItems() {
     refreshSelectedSigemStatuses();
+    reconcileSelectedRows();
     state.selected.forEach((index) => {
       const row = state.results[index];
       if (row && row.egrdt && C.enforceDocumentFormat) C.enforceDocumentFormat(row.egrdt);
     });
-    const plan = E.createPlan(state.results, state.selected, { manualForceIndices: state.manualForceInclude });
+    const plan = E.createPlan(state.results, guardedSelectedIndices(), { manualForceIndices: state.manualForceInclude });
     return PostingFlow ? PostingFlow.classifyPlan(plan) : plan;
   }
 
   function previewEgrdtRows() {
     const rows = [];
-    state.results.filter((row, index) => state.selected.has(index) && rowCanBeSelected(row)).forEach((row) => {
+    state.results.filter((row, index) => rowIncludedForGeneration(row, index)).forEach((row) => {
       rowOutputSources(row).forEach((entry) => {
         const data = row.egrdt || {};
         rows.push({
@@ -5093,7 +5122,7 @@
   }
 
   function outputFileEntries() {
-    const selectedRows = state.results.filter((row, index) => state.selected.has(index));
+    const selectedRows = state.results.filter((row, index) => rowIncludedForGeneration(row, index));
     const manualForceRows = new Set([...state.manualForceInclude].map((index) => state.results[index]).filter(Boolean));
     const guard = OutputGuard ? OutputGuard.validateRows(selectedRows, { maxItems: currentEgrdtBatchLimit(), splitAllowed: true, manualForceRows }) : { valid: true, errors: [], warnings: [] };
     const entries = [];
@@ -5101,7 +5130,7 @@
     const duplicates = [];
     const errors = [];
     const warnings = [...(guard.warnings || [])];
-    state.results.filter((row, index) => state.selected.has(index) && rowCanBeSelected(row)).forEach((row) => {
+    state.results.filter((row, index) => rowIncludedForGeneration(row, index)).forEach((row) => {
       (row.files || []).forEach((entry) => {
         const check = C.validateFinalFileName(entry.finalName, entry.name, row.document, row.revision, row.sheet);
         const finalName = check.expected;
@@ -5130,10 +5159,7 @@
     window.GrconGrdtDownloadProgress?.phase("Consultando histórico de emissões…");
     if (PostingFlow) await PostingFlow.refresh(true);
     if (state.cancelled) throw new DOMException("Preparação cancelada.", "AbortError");
-    const physicalSelection = new Set([...state.selected].filter((index) => {
-      const row = state.results[index];
-      return row && row.files && row.files.length;
-    }));
+    const physicalSelection = guardedSelectedIndices(true);
     if (!physicalSelection.size) {
       showToast("Nenhum arquivo físico selecionado. Use Baixar somente eGRDT para itens recebidos somente por relação.", "warn");
       return;
@@ -5254,10 +5280,7 @@
     if (!(await ensureFreshAnalysis())) return;
     await ensureRuntime("export");
     if (PostingFlow) await PostingFlow.refresh(true);
-    const physicalSelection = new Set([...state.selected].filter((index) => {
-      const row = state.results[index];
-      return row && row.files && row.files.length;
-    }));
+    const physicalSelection = guardedSelectedIndices(true);
     if (!physicalSelection.size) {
       showToast("Nenhum arquivo físico foi fornecido. Use Gerar GRDT final para os itens recebidos pela relação.", "warn");
       return;
@@ -5771,10 +5794,10 @@
     const visibleIndices = filteredResultIndices();
     visibleIndices.forEach((index) => {
       const row = state.results[index];
-      if (!rowCanBeSelected(row) || !rowOutputSources(row).length) return;
+      if (!rowCanAutoInclude(row)) return;
       if (event.target.checked) {
         state.selected.add(index);
-        if (row.decision !== C.READY || row.hardBlock) state.manualForceInclude.add(index);
+        // Seleção em massa não cria autorização manual de status SIGEM.
       } else {
         state.selected.delete(index);
         state.manualForceInclude.delete(index);
