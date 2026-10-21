@@ -50,7 +50,7 @@
       status, kind, autoAllowed,
       manualOnly: !autoAllowed,
       autoEligible: Boolean(row && row.decision === Core.READY && !row.hardBlock && autoAllowed),
-      label: kind === "analysis" ? "Em análise" : kind === "unknown" ? "Verificar status" : "Conferir status SIGEM",
+      label: kind === "analysis" ? (row?.blockingRevision ? `Em análise (rev. ${row.blockingRevision})` : "Em análise") : kind === "unknown" ? "Verificar status" : "Conferir status SIGEM",
     };
   }
   function manualStatusApprovalValid(row) {
@@ -60,6 +60,7 @@
     return Boolean(approval
       && approval.kind === policy.kind
       && approval.revision === Core.normalizeRevision(row.revision)
+      && (approval.blockingRevision || "") === (row.blockingRevision || "")
       && approval.statusKey === Core.normalizeSigemStatus(policy.status).key);
   }
   function selectionAuthorized(row, index, selectedIndices, manualIndices) {
