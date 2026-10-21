@@ -24,10 +24,14 @@ function runtime(original=false){
  assert.equal(conflicted.suggestedPath,'','conflito não pode selecionar caminho de linha arbitrária');
  assert.equal(conflicted.candidates.length,0);
  assert.match(conflicted.blockers.join(' '),/Conflito na LD/i);
- assert.throws(()=>core.review(conflicted,{title:'TITULO',path:pathA,discipline:'TUB'},bases),/Conflito/);
+ assert.equal(core.review(conflicted,{title:'TITULO',path:pathA,discipline:'TUB'},bases).adjusted,true,'o conflito admite ajuste operacional sem virar aprendizado validado');
+ assert.equal(conflicted.selected,true);
+ assert.ok(conflicted.output.observation.includes('Conflito'));
+ assert.equal(core.review(conflicted,{title:'',path:'',discipline:'TUB'},bases).output.databook,'');
  assert.throws(()=>core.decisionPayload(conflicted,'Justificativa de confirmação'),/Conflito/);
  const missing=core.prepare({documents:[{document:doc,revision:'A',discipline:'TUB'}],records:[],bases,versions})[0];assert.equal(missing.ldLocated,false);assert.equal(missing.plannedAllocated,false);assert.equal(missing.revision,'A');
  const reviewed=core.review(missing,{title:'RELATÓRIO DE INSPEÇÃO DE RECEBIMENTO',path:pathA,discipline:'TUB'},bases);assert.ok(!/[ÓÇÃ]/.test(reviewed.title));
+ assert.equal(missing.selected,true);assert.equal(missing.output.databook,pathA,'caminho plausível preenchido sem confirmação');
  const id=reviewed.identity,experience={id:'learning-1',document:doc,title:reviewed.title,trusted:true,status:'corrected',family:id.family,discipline:id.discipline,eap:id.eap,confirmed_path:pathA,base_versions:versions};
  const next=doc.replace('228452','999999');const learned=core.prepare({documents:[{document:next,discipline:'TUB'}],bases,versions,decisions:[experience]})[0];assert.equal(learned.output.databook,pathA);assert.equal(learned.origin,'experiencia-validada');
  const other=core.prepare({documents:[{document:next.replace('_TUB_','_ELE_'),discipline:'ELE'}],bases,versions,decisions:[experience]})[0];assert.notEqual(other.origin,'experiencia-validada');
@@ -96,10 +100,15 @@ function runtime(original=false){
  const eap=await worker.run('bundled',{kind:'eap'});assert.ok(eap.length>300);const paths=await worker.run('bundled',{kind:'databook'});assert.ok(paths.length>150);
  const template=(await worker.run('bundled',{kind:'template'}))[0];
  const meta={allocationCode:'C1O-ALOC-CM-0001-2026',allocationDate:'2026-10-21',status:'PENDENTE ENVIO DE LD'};
- const exported=await worker.run('export',{results:[{...reviewed,confirmed:true}],meta,template});assert.equal(exported.length,3);
+ const exported=await worker.run('export',{results:[reviewed],meta,template});assert.equal(exported.length,3);
  const zip=await worker.run('zip',{files:exported});const Zip=require('../jszip.min.js'),ExcelJS=require('../exceljs.min.js');
  const archive=await Zip.loadAsync(zip);assert.equal(Object.keys(archive.files).length,3);
  for(const file of exported){const bytes=Buffer.from(file.base64,'base64');assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),file.sha256);const book=new ExcelJS.Workbook();await book.xlsx.load(bytes);assert.ok(book.worksheets.length);}
+ const incomplete=core.prepare({documents:[{document:'CODIGO-SEM-BASE'}],bases,versions})[0];
+ assert.ok(incomplete.blockers.length);assert.equal(incomplete.selected,true);
+ assert.equal((await worker.run('plan',{results:[incomplete],mode:'discipline'})).valid,true);
+ const draftFiles=await worker.run('export',{results:[incomplete],meta,template});assert.equal(draftFiles.length,3,'dados faltantes geram arquivos com observações');
+ const titlesBook=new ExcelJS.Workbook();await titlesBook.xlsx.load(Buffer.from(draftFiles.find(f=>f.kind==='titles').base64,'base64'));assert.equal(titlesBook.worksheets[0].getCell('E2').value,'Automático');assert.ok(titlesBook.worksheets[0].getCell('H2').value);
  // Compare the preserved exporter with the source version in a separate realm.
  const source=runtime(true);source.sandbox.RECONAllocationTemplate=template;
  const expected=await source.sandbox.AllocationWorkbook.buildAllocation([reviewed],source.sandbox.ExcelJS,meta);
