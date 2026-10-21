@@ -116,10 +116,10 @@ async function exportGroup({results,meta,template}){
  if(template)self.RECONAllocationTemplate=template;
  const allocation=await W.buildAllocation(results,ExcelJS,meta),control=await W.buildControlLines(results,meta,ExcelJS);
  await W.verify({allocation,control},results,meta.allocationCode,ExcelJS);
- const titlesBook=new ExcelJS.Workbook();titlesBook.creator='GRCON';const sheet=titlesBook.addWorksheet('Títulos revisados');
- sheet.addRow(['Código do Documento','Título anterior','Título recomendado','Fonte consultada','Situação de validação','Revisão','Caminho Databook']);
- results.forEach(r=>sheet.addRow([r.document,r.originalTitle||'',r.title,r.titleSource,r.confirmed?'Revisado pelo operador':'Revisão necessária',r.revision,r.output.databook]));
- sheet.views=[{state:'frozen',ySplit:1}];sheet.autoFilter={from:'A1',to:'G'+(results.length+1)};
+ const titlesBook=new ExcelJS.Workbook();titlesBook.creator='GRCON';const sheet=titlesBook.addWorksheet('Títulos');
+ sheet.addRow(['Código do Documento','Título anterior','Título','Fonte consultada','Preenchimento','Revisão','Caminho Databook','Observações']);
+ results.forEach(r=>sheet.addRow([r.document,r.originalTitle||'',r.title,r.titleSource,r.adjusted?'Ajustado':'Automático',r.revision,r.output.databook,r.output.observation||'']));
+ sheet.views=[{state:'frozen',ySplit:1}];sheet.autoFilter={from:'A1',to:'H'+(results.length+1)};
  sheet.columns.forEach((c,i)=>{c.width=i===0?48:i<4?65:30;});sheet.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1F4E78'}};
  const titles=new Uint8Array(await titlesBook.xlsx.writeBuffer());
  const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(titles);if(reopened.worksheets[0].getCell('A2').value!==results[0].document)throw Error('Falha na verificação dos títulos.');
@@ -134,7 +134,7 @@ self.onmessage=async({data})=>{const {id,operation,input}=data;try{
  else if(operation==='analyze')result=Engine.prepare(input);
  else if(operation==='review')result=Engine.review(input.row,input.changes,input.bases);
  else if(operation==='decision')result=Engine.decisionPayload(input.row,input.justification,input.status);
- else if(operation==='plan')result=RECONAllocationBatches.build(input.results,'C1O-ALOC-CM-0001-'+new Date().getFullYear(),{mode:input.mode});
+ else if(operation==='plan'){result=RECONAllocationBatches.build(input.results,'C1O-ALOC-CM-0001-'+new Date().getFullYear(),{mode:input.mode});result.groups.forEach(group=>{group.blocking=false;});result.errors=[];result.valid=result.groups.length>0;}
  else if(operation==='export')result=await exportGroup(input);
  else if(operation==='zip'){
   const zip=new JSZip();for(const f of input.files)zip.file(f.name,f.base64,{base64:true});result=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});

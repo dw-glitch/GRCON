@@ -14,6 +14,8 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  await db.exec(fs.readFileSync('supabase/migrations/20261021114531_allocation_review_hardening.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261021114934_allocation_context_alias_fix.sql','utf8'));
 
+ await db.exec(fs.readFileSync('supabase/migrations/20261021192719_allocation_automatic_generation.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261021193544_allocation_automatic_server_validation.sql','utf8'));
  const as=async(n,role='authenticated')=>db.exec(`reset role;set request.jwt.claim.sub='${n?uuid(n):''}';set request.jwt.claim.role='${role}';set role ${role};`);
  const rpc=(op,input={},workspace=uuid(1),actor=null)=>db.query('select public.grcon_allocation($1,$2,$3::jsonb,$4) as r',[workspace,op,JSON.stringify(input),actor]).then(x=>x.rows[0].r);
  const catalog=()=>rpc('catalog');
@@ -69,7 +71,34 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  assert.ok(suggested.bases.databook.some(p=>p.databook===lastPath));
  await as(10);
 
- await db.exec('reset role');
+ // Automatic generation is a bulk operational record, independent of confirmations.
+ await as(10);
+ const currentVersions=(await catalog()).versions,automaticDoc={document:'DOC-AUTO',revision:'0',title:'',discipline:'',workflow:'',eap:'',databook:lastPath,levels:Array(10).fill(''),warnings:['Título não identificado.'],observation:'Título não identificado.',trusted:true,reviewed:true,decisionId:trusted.id};
+ const autoInput={automatic:true,requestId:uuid(70),versions:currentVersions,groups:[{documents:[automaticDoc,{...automaticDoc,document:'DOC-SEM-CAMINHO',databook:''}]}]};
+ const experienceCount=(await rpc('experiences')).decisions.length;
+ await as(13);await assert.rejects(rpc('generate',autoInput),/perfis operacionais/);
+ await as(12);await assert.rejects(rpc('generate',autoInput),/Sem acesso/);
+ await as(11);await assert.rejects(rpc('generate',autoInput),/API do servidor/);
+ await as(0,'service_role');const auto=await rpc('generate',autoInput,uuid(1),uuid(11));
+ assert.equal(auto.runs.length,1);assert.equal(auto.runs[0].documents.length,2);assert.equal(auto.runs[0].status,'generated');
+ for(const doc of auto.runs[0].documents){assert.equal(doc.generationMode,'automatic');assert.equal(doc.trusted,false);assert.equal(doc.reviewed,false);assert.equal(doc.decisionId,undefined);}
+ assert.equal((await rpc('experiences',{},uuid(1),uuid(11))).decisions.length,experienceCount,'geração automática não contamina aprendizado');
+ assert.equal((await rpc('generate',autoInput,uuid(1),uuid(11))).reused,true);
+ await rpc('generate',{...autoInput,requestId:uuid(71)},uuid(1),uuid(11)); // No justification required for operational adjustment/regeneration.
+ await assert.rejects(rpc('generate',{...autoInput,requestId:uuid(72),versions:{...currentVersions,databook:first}},uuid(1),uuid(11)),/bases mudaram/);
+ const beforeInvalid=(await rpc('history',{},uuid(1),uuid(11))).runs.length;
+ await assert.rejects(rpc('generate',{...autoInput,requestId:uuid(73),groups:[autoInput.groups[0],{documents:[{...automaticDoc,databook:'INVENTADO'}]}]},uuid(1),uuid(11)),/Caminho ausente/);
+ assert.equal((await rpc('history',{},uuid(1),uuid(11))).runs.length,beforeInvalid,'falha no segundo grupo desfaz o primeiro');
+ await assert.rejects(rpc('generate',{...autoInput,requestId:uuid(74),groups:[{documents:[{...automaticDoc,levels:['x']}]}]},uuid(1),uuid(11)),/inválidos/);
+ await as(10);
+ const routeConfig={prefix:'C1O-ALOC-CM',unit:'UHDT-D',units:['UHDTD U-32','UHDTD U-39S'],unitRouting:'document-U32-U39S'};
+ await publish('config',[routeConfig],currentVersions.config);
+ const unit32='UHDTD U-32|DATA BOOK C&M|TUBULACAO|RIR',unit39='UHDTD U-39S|DATA BOOK C&M|TUBULACAO|RIR';
+ await publish('databook',[{databook:unit32,documentUnit:'U32'},{databook:unit39,documentUnit:'U39S'}],currentVersions.databook);
+ const unitVersions=(await catalog()).versions,unitDoc={...automaticDoc,document:'C1O_RNEST_U32_10.2.1.2_TUB_RIR_nt-NF-123-Tubos',databook:unit32};
+ await as(0,'service_role');await rpc('generate',{...autoInput,requestId:uuid(75),versions:unitVersions,groups:[{documents:[unitDoc,{...unitDoc,document:unitDoc.document.replace('_U32_','_U39S_'),databook:unit39}]}]},uuid(1),uuid(11));
+ await assert.rejects(rpc('generate',{...autoInput,requestId:uuid(76),versions:unitVersions,groups:[{documents:[{...unitDoc,databook:unit39}]}]},uuid(1),uuid(11)),/Unidade/);
+ await as(10);await db.exec('reset role');
  const secured=await db.query("select bool_and(relrowsecurity) as yes from pg_class where relname in ('grcon_allocation_bases','grcon_allocation_base_rows','grcon_allocation_decisions','grcon_allocation_runs','grcon_allocation_events')");assert.equal(secured.rows[0].yes,true);
  // The master tree from Central publication becomes the same versioned EAP
  // consumed by browser and server; malformed replacement rolls back atomically.

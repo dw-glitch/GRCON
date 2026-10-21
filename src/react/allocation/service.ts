@@ -2,7 +2,7 @@
 // the typed operational fields below, without exposing GRCON globals to RECON.
 export type BaseKind='databook'|'eap'|'titles'|'norms'|'template'|'li'|'scon'|'appendix'|'config';
 export type Data=Record<string,any>;
-export interface Row extends Data {document:string;revision:string;title:string;originalTitle:string;titleSource:string;ldLocated:boolean;plannedAllocated:boolean;existing:Array<{allocation:string;status:string}>;confidence:string;blockers:string[];statusLabel:string;decisionId:string;confirmed:boolean;output:{workflow:string;discipline:string;databook:string;levels:string[]};standard:{refs:Data[];errors:Data[];warnings:Data[];compatible:boolean};versions:Record<string,string>;identity:{unit?:string;family:string;discipline:string;eap:string};ai:Data|null;selected:boolean;}
+export interface Row extends Data {document:string;revision:string;title:string;originalTitle:string;titleSource:string;ldLocated:boolean;plannedAllocated:boolean;existing:Array<{allocation:string;status:string}>;confidence:string;blockers:string[];statusLabel:string;decisionId:string;confirmed:boolean;output:{workflow:string;discipline:string;databook:string;levels:string[];observation?:string};standard:{refs:Data[];errors:Data[];warnings:Data[];compatible:boolean};versions:Record<string,string>;identity:{unit?:string;family:string;discipline:string;eap:string};ai:Data|null;selected:boolean;}
 export interface FileOutput {name:string;kind:string;base64:string;sha256:string;}
 export interface Snapshot {openRequest:null|{document:string;revision:string;id:number};bases:Data[];versions:Record<string,string>;rows:Row[];history:Data[];decisions:Data[];preview:null|{kind:BaseKind;rows:Data[];fileName:string;validation?:{invalid:Array<{line:number;reason:string}>;duplicates:number;units:string[]}};busy:boolean;progress:string;error:string;canManage:boolean;plan:Data|null;files:FileOutput[];sourceFiles:Record<string,string[]>;batchResults:Array<{document:string;ok:boolean;message:string}>;}
 const globals=window as unknown as Record<string,any>;
@@ -153,28 +153,7 @@ export const service={
   const rows=await compute('analyze',{documents,records:ldRecords,central,confirmations:confirmationRows,planned,bases:contextBases,versions:state.versions,decisions:state.decisions});current(ticket);
   emit({rows,files:[],plan:null,batchResults:[]});activeRequest=null;
  });},
- async review(index:number,changes:Data){if(state.busy)throw Error('Outra operação está em andamento.');const ticket=epoch,row=await compute('review',{row:state.rows[index],changes,bases:contextBases});current(ticket);const rows=state.rows.slice();rows[index]=row;emit({rows,files:[],plan:null});activeRequest=null;},
- async confirm(index:number,justification:string,status='corrected'){return task('Registrando decisão revisada',async()=>{
-  const ticket=epoch,row=state.rows[index],payload=await compute('decision',{row,justification,status});current(ticket);
-  const result=await api('confirm',payload);
-  const rows=state.rows.slice();rows[index]={...row,decisionId:result.id,confirmed:true,selected:true,learned:result.trusted===true};emit({rows,files:[],plan:null});activeRequest=null;
- });},
- async confirmSelected(justification:string){return task('Confirmando documentos selecionados',async()=>{
-  if(justification.trim().length<5)throw Error('Informe a justificativa da conferência do lote.');
-  const ticket=epoch,indices=state.rows.flatMap((row,i)=>row.selected&&!row.confirmed?[i]:[]),results:Snapshot['batchResults']=[];
-  if(!indices.length)throw Error('Selecione documentos ainda não confirmados.');
-  for(const [n,index] of indices.entries()){
-   current(ticket);const row=state.rows[index];emit({progress:`Confirmando ${n+1} de ${indices.length}: ${row.document}`});
-   try{
-    if(row.blockers.length||!row.title||!row.output.databook)throw Error(row.blockers.join(' ')||'Revise título e caminho antes de confirmar.');
-    const payload=await compute('decision',{row,justification,status:'accepted'});current(ticket);
-    const result=await api('confirm',payload);current(ticket);
-    const rows=state.rows.slice();rows[index]={...row,decisionId:result.id,confirmed:true,learned:result.trusted===true};
-    results.push({document:row.document,ok:true,message:'Confirmado'});emit({rows,plan:null,files:[]});activeRequest=null;
-   }catch(error){current(ticket);results.push({document:row.document,ok:false,message:error instanceof Error?error.message:String(error)});}
-  }
-  emit({batchResults:results});return results;
- });},
+ async review(index:number,changes:Data){return task('Salvando ajustes',async()=>{const ticket=epoch,row=await compute('review',{row:state.rows[index],changes,bases:contextBases});current(ticket);const rows=state.rows.slice();rows[index]=row;emit({rows,files:[],plan:null});activeRequest=null;});},
  selectMany(indices:number[],value:boolean){if(state.busy)return;const picked=new Set(indices);activeRequest=null;emit({rows:state.rows.map((row,i)=>picked.has(i)?{...row,selected:value}:row),plan:null,files:[]});},
  async ai(index:number){return task('Consultando IA para este documento',async()=>{
   const row=state.rows[index];if(row.confidence==='alta')throw Error('Correspondência exata: a análise por regras já é suficiente.');
@@ -182,19 +161,22 @@ export const service={
   const response=await api('ai',{document:row.document,title:row.title,discipline:row.identity.discipline,versions:row.versions,candidatePaths:row.candidates.slice(0,3).map((p:Data)=>p.databook).filter(Boolean)});const rows=state.rows.slice();rows[index]={...row,ai:response};emit({rows});
  });},
  select(index:number,value:boolean){if(state.busy)return;const rows=state.rows.slice();rows[index]={...rows[index],selected:value};activeRequest=null;emit({rows,plan:null,files:[]});},
+ groupingChanged(){activeRequest=null;emit({plan:null,files:[]});},
  async plan(mode:string){const plan=await compute('plan',{results:state.rows.filter(x=>x.selected),mode});emit({plan});return plan;},
- async generate(mode:string,justification:string){return task('Gerando pacote de alocação',async()=>{
-  const ticket=epoch,selected=state.rows.filter(x=>x.selected);if(!selected.length||selected.some(r=>!r.confirmed))throw Error('Revise e confirme todos os documentos selecionados.');
+ async generate(mode:string){return task('Gerando pacote de alocação',async()=>{
+  const ticket=epoch,selected=state.rows.filter(x=>x.selected);if(!selected.length)throw Error('Selecione ao menos um documento.');
+  if(state.files.length&&state.plan?.mode===mode)return;
   const plan=await this.plan(mode);if(!plan.valid)throw Error(plan.errors?.join(' ')||'Agrupamento inválido.');
   activeRequest=activeRequest||crypto.randomUUID();
   const prefix=contextBases.config?.[0]?.prefix,year=new Date().getUTCFullYear();
   const observedSequence=Math.max(0,...[...localCentral,...localHistory].map(r=>{const value=String(r.allocation||'');const match=value.startsWith(prefix+'-')?value.match(/-(\d{4})-(\d{4})$/):null;return match&&Number(match[2])===year?Number(match[1]):0;}));
-  const generated=await rpc('generate',{requestId:activeRequest,versions:state.versions,observedSequence,justification,groups:plan.groups.map((g:Data)=>({documents:g.results.map((r:Row)=>({document:r.document,revision:r.revision,decisionId:r.decisionId}))}))});
+  const generated=await api('generate',{requestId:activeRequest,versions:state.versions,observedSequence,automatic:true,groups:plan.groups.map((g:Data)=>({documents:g.results.map((r:Row)=>({document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow||'',databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,observation:r.output.observation||'',warnings:r.blockers,adjusted:r.adjusted===true}))}))});
   const files:FileOutput[]=[];
   for(let i=0;i<plan.groups.length;i++){
    current(ticket);const run=generated.runs[i];let groupFiles=run.files;
    if(!groupFiles?.length){
-    groupFiles=await compute('export',{results:plan.groups[i].results,template:contextBases.template?.[0],meta:{allocationCode:run.allocation_code,allocationDate:new Date().toISOString().slice(0,10),status:'PENDENTE ENVIO DE LD'}});current(ticket);
+    const results=plan.groups[i].results.map((row:Row,index:number)=>{const doc=run.documents[index];return {...row,title:doc.title,blockers:doc.warnings,output:{...row.output,workflow:doc.workflow,discipline:doc.discipline,databook:doc.databook,levels:doc.levels,observation:doc.observation}};});
+    groupFiles=await compute('export',{results,template:contextBases.template?.[0],meta:{allocationCode:run.allocation_code,allocationDate:new Date().toISOString().slice(0,10),status:'PENDENTE ENVIO DE LD'}});current(ticket);
     await rpc('run-files',{id:run.id,files:groupFiles});
    }files.push(...groupFiles);
   }emit({files});const history=await rpc('history');emit({history:history.runs});
