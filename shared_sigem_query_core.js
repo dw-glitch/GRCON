@@ -45,8 +45,25 @@
     }
     return result;
   }
+  // Índice de revisões por documento, construído somente ao carregar a base.
+  // Evita varrer até 100 mil registros a cada linha da triagem/Worker.
+  function revisionsByDocument(indexed) {
+    const result = new Map();
+    for (const id of indexed?.keys() || []) {
+      const separator = id.lastIndexOf("::");
+      if (separator < 0) continue;
+      const documentKey = id.slice(0, separator), rev = id.slice(separator + 2);
+      if (!result.has(documentKey)) result.set(documentKey, new Set());
+      result.get(documentKey).add(rev);
+    }
+    return result;
+  }
   function context(shared, local) {
-    return { shared: shared ? index(shared) : null, local: local ? index(local) : null,
+    const sharedIndex = shared ? index(shared) : null;
+    const localIndex = local ? index(local) : null;
+    return { shared: sharedIndex, local: localIndex,
+      sharedRevisions: revisionsByDocument(sharedIndex),
+      localRevisions: revisionsByDocument(localIndex),
       sharedId: shared?.meta?.snapshotId || "", localId: local?.meta?.snapshotId || "" };
   }
   function resolve(document, rev, ctx, fallback) {
@@ -65,6 +82,32 @@
     const legacy = typeof fallback === "function" ? fallback() : fallback;
     return { ...(typeof legacy === "object" && legacy ? legacy : { status: text(legacy) }), source: "legacy-fallback", revision: revision(rev) };
   }
+  // Uma revisão futura como C pode estar "Não Postado" e continuar impedida
+  // de ser emitida porque B ainda está Em Workflow/Em Análise. A verificação
+  // sempre utiliza a mesma precedência por revisão do resolve() oficial.
+  function previousAnalysis(document, targetRevision, ctx, legacyRevisions, legacyResolver) {
+    const core = root.TriagemCore;
+    const targetInfo = core?.revisionInfo?.(targetRevision);
+    if (!targetInfo?.valid || !Number.isFinite(targetInfo.rank)) return null;
+    const candidates = new Set((legacyRevisions || []).map(item => revision(item?.revision)).filter(Boolean));
+    for (const documentKey of keys(document)) {
+      for (const layer of ["sharedRevisions", "localRevisions"]) {
+        for (const rev of ctx?.[layer]?.get(documentKey) || []) candidates.add(rev);
+      }
+    }
+    const earlier = [...candidates].map(rev => ({ rev, info: core.revisionInfo(rev) }))
+      .filter(item => item.info.valid && Number.isFinite(item.info.rank) && item.info.rank < targetInfo.rank)
+      .sort((a, b) => b.info.rank - a.info.rank);
+    for (const item of earlier) {
+      const resolved = resolve(document, item.rev, ctx, () =>
+        typeof legacyResolver === "function" ? legacyResolver(item.rev) : { status: "Não Postado" });
+      if (core.statusKind(resolved.status) === "analysis") {
+        return { revision: item.rev, status: resolved.status, source: resolved.source,
+          snapshotId: resolved.snapshotId || "", item: resolved.item || null };
+      }
+    }
+    return null;
+  }
   function validate(base) {
     if (!Array.isArray(base?.records) || !base.records.length) throw new Error("Consulta Geral vazia; a versão anterior foi mantida.");
     if (base.records.length > 100000) throw new Error("A Consulta Geral excede 100.000 registros.");
@@ -72,5 +115,5 @@
     if (!base.records.some((r) => text(r.status))) throw new Error("A Consulta Geral não contém status SIGEM.");
     return base;
   }
-  return Object.freeze({ text, canonical, keys, revision, index, context, resolve, validate });
+  return Object.freeze({ text, canonical, keys, revision, index, context, resolve, previousAnalysis, validate });
 });
