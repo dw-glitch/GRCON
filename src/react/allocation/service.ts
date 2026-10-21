@@ -4,17 +4,17 @@ export type BaseKind='databook'|'eap'|'titles'|'norms'|'template'|'li'|'scon'|'a
 export type Data=Record<string,any>;
 export interface Row extends Data {document:string;revision:string;title:string;originalTitle:string;titleSource:string;ldLocated:boolean;plannedAllocated:boolean;existing:Array<{allocation:string;status:string}>;confidence:string;blockers:string[];statusLabel:string;decisionId:string;confirmed:boolean;output:{workflow:string;discipline:string;databook:string;levels:string[]};standard:{refs:Data[];errors:Data[];warnings:Data[];compatible:boolean};versions:Record<string,string>;identity:{family:string;discipline:string;eap:string};ai:Data|null;selected:boolean;}
 export interface FileOutput {name:string;kind:string;base64:string;sha256:string;}
-export interface Snapshot {bases:Data[];versions:Record<string,string>;rows:Row[];history:Data[];decisions:Data[];preview:null|{kind:BaseKind;rows:Data[];fileName:string};busy:boolean;progress:string;error:string;canManage:boolean;plan:Data|null;files:FileOutput[];}
+export interface Snapshot {openRequest:null|{document:string;revision:string;id:number};bases:Data[];versions:Record<string,string>;rows:Row[];history:Data[];decisions:Data[];preview:null|{kind:BaseKind;rows:Data[];fileName:string};busy:boolean;progress:string;error:string;canManage:boolean;plan:Data|null;files:FileOutput[];}
 const globals=window as unknown as Record<string,any>;
-let state:Snapshot={bases:[],versions:{},rows:[],history:[],decisions:[],preview:null,busy:false,progress:'',error:'',canManage:false,plan:null,files:[]};
+let state:Snapshot={openRequest:null,bases:[],versions:{},rows:[],history:[],decisions:[],preview:null,busy:false,progress:'',error:'',canManage:false,plan:null,files:[]};
 const listeners=new Set<()=>void>();const emit=(patch:Partial<Snapshot>)=>{state={...state,...patch};listeners.forEach(fn=>fn());};
 const cloud=()=>globals.GrconCloud?.state;
 const scope=()=>JSON.stringify([cloud()?.session?.user?.id||'',cloud()?.membership?.workspace_id||'']);
-let identity=scope(),epoch=0,worker:Worker|null=null,requestId=0,activeRequest:string|null=null;
+let identity=scope(),epoch=0,worker:Worker|null=null,requestId=0,openId=0,activeRequest:string|null=null;
 const pending=new Map<number,{resolve:(v:any)=>void;reject:(e:Error)=>void}>();
 const baseCache=new Map<string,Data[]>();let ldRecords:Data[]=[],localCentral:Data[]=[],localHistory:Data[]=[],contextBases:Record<string,Data[]>={};
 function current(ticket:number){if(ticket!==epoch||identity!==scope())throw Error('A conta ou o contrato mudou. Refaça a análise.');}
-function reset(){identity=scope();epoch++;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();baseCache.clear();ldRecords=[];localCentral=[];localHistory=[];contextBases={};activeRequest=null;emit({bases:[],versions:{},rows:[],history:[],decisions:[],preview:null,busy:false,progress:'',error:'',canManage:false,plan:null,files:[]});}
+function reset(){identity=scope();epoch++;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();baseCache.clear();ldRecords=[];localCentral=[];localHistory=[];contextBases={};activeRequest=null;emit({openRequest:null,bases:[],versions:{},rows:[],history:[],decisions:[],preview:null,busy:false,progress:'',error:'',canManage:false,plan:null,files:[]});}
 export async function compute(operation:string,input:Data):Promise<any>{
  if(!worker){worker=new Worker('workers/allocation.worker.js');worker.onmessage=({data})=>{const p=pending.get(data.id);if(!p)return;pending.delete(data.id);if(data.error)p.reject(Error(data.error));else p.resolve(data.result);};worker.onerror=()=>{pending.forEach(p=>p.reject(Error('Motor de alocação indisponível. Reabra o módulo.')));pending.clear();worker?.terminate();worker=null;};}
  const id=++requestId;return new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});worker!.postMessage({id,operation,input});});
@@ -41,12 +41,22 @@ async function loadBase(base:Data){
 async function refreshInternal(){
  if(identity!==scope())reset();const ticket=epoch;const catalog=await rpc('catalog');current(ticket);
  const changed=JSON.stringify(catalog.versions)!==JSON.stringify(state.versions);if(changed){contextBases={};activeRequest=null;}
- emit({bases:catalog.bases,versions:catalog.versions,canManage:catalog.canManage,...(changed?{rows:[],plan:null,files:[]}: {})});
+ emit({bases:catalog.bases,versions:catalog.versions,canManage:catalog.canManage,...(changed?{openRequest:null,rows:[],plan:null,files:[]}: {})});
   const [history,decisions]=await Promise.all([rpc('history'),rpc('experiences')]);emit({history:history.runs,decisions:decisions.decisions});
 }
 export const service={
  subscribe(fn:()=>void){listeners.add(fn);return ()=>{listeners.delete(fn);};},snapshot:()=>state,
  refresh:()=>task('Atualizando bases e histórico',refreshInternal),
+ async open(seed:{document:string;revision:string}){
+  const ticket=epoch,intent=++openId;
+  try{
+   // Module activation starts a refresh. Wait for it before starting the seeded
+   // analysis; the persisted request also survives React's first mount.
+   if(state.busy)await new Promise<void>(resolve=>{const done=()=>{if(!state.busy){listeners.delete(done);resolve();}};listeners.add(done);done();});
+   current(ticket);if(intent!==openId)return;await this.analyze('',[seed]);current(ticket);
+   if(intent===openId&&!state.error&&state.rows.length)emit({openRequest:{...seed,id:intent}});
+  }catch(error){if(ticket===epoch)emit({error:error instanceof Error?error.message:String(error)});}
+ },
  async preview(kind:BaseKind,file?:File){return task('Lendo base e preparando prévia',async()=>{const rows=await compute(file?'parse':'bundled',file?{kind,file}:{kind});if(!Array.isArray(rows)||!rows.length)throw Error('Base vazia.');emit({preview:{kind,rows,fileName:file?.name||'Referência RECON — confirmar vigência'}});});},
  previewConfig(prefix:string,unit:string){emit({preview:{kind:'config',fileName:'Configuração contratual',rows:[{prefix:prefix.trim(),unit:unit.trim()}]}});},
  async publish(revision:string){return task('Publicando base de referência',async()=>{

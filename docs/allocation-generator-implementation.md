@@ -53,3 +53,13 @@ As listagens não transportam os binários de todos os arquivos: o pacote de uma
 - `scripts/validar-allocation-browser.cjs`: interface nativa com Worker real, título manual, confirmação de servidor, pacote, histórico, operador, 1440/1280 px e troca de contrato. Capturas disponíveis no artefato `cloudflare-browser` do CI.
 
 Os testes automatizados usam dados sintéticos. Nenhuma mensagem externa é enviada para Teams ou Outlook durante a validação.
+
+## Conclusão da validação em 21/10/2026
+
+Migrations `20261021094140_pw_operator_publication` e `20261021094333_intelligent_allocation_workspace` executadas e registradas com os mesmos identificadores do repositório. A aplicação transacional via SQL foi utilizada após o endpoint de migrations retornar requestState expirado. O teste em produção publicou um snapshot sintético como operador dentro de uma transação revertida: data operacional, exclusão master e contexto de servidor continuaram protegidos. As cinco tabelas privadas mantêm RLS e nenhum SELECT direto para anon/authenticated.
+
+A revisão adicional rejeita caminhos existentes quando a disciplina ou a unidade divergem do documento. A validação usa os mesmos reconhecedores de disciplina do RECON, preservando suas compatibilidades. O filtro também se aplica aos candidatos enviados à IA.
+
+No Chromium, a abertura direta a partir da GRDT foi testada antes do primeiro efeito React, com atualização de bases em andamento e revisão física A. O pedido aguarda a atualização e permanece no estado observado pela interface; trocas de contexto o invalidam. A área de download fica depois da tabela e não encobre suas linhas. A altura da tabela se adapta a lotes pequenos. Capturas foram revisadas em 1440 e 1280 pixels.
+
+O primeiro uso exige publicar, em **Bases de referência**, o mapa Databook, EAP, configuração de numeração e referências normativas autorizadas do contrato. Referências do RECON estão disponíveis para prévia, sem declarar automaticamente sua vigência contratual. O modelo oficial incorporado é preservado pelo exportador; um modelo contratual alternativo pode ser versionado. As bases não são copiadas silenciosamente entre contratos.

@@ -13,7 +13,7 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
 (async()=>{
  const {validateDecision}=await import('../cloudflare/allocation-ai.mjs');
  const server=http.createServer(async(req,res)=>{try{
-  const url=new URL(req.url,'http://localhost');if(url.pathname==='/'){res.setHeader('content-type','text/html');return res.end(html);}
+  const url=new URL(req.url,'http://localhost');if(url.pathname==='/'){res.setHeader('content-type','text/html');return res.end(url.searchParams.has('seed')?html.replace('</html>',`<script>GrconAllocationGeneratorUi.activate();GrconAllocationGeneratorUi.open({document:${JSON.stringify(documentCode)},revision:'A'});</script></html>`):html);}
   if(url.pathname==='/qa/rpc'){
    const {operation,input}=await body(req);let result={};
    if(operation==='catalog')result={bases:catalog,versions,canManage:false};
@@ -35,6 +35,11 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base='http://127.0.0.1:'+server.address().port;
  const browser=await chromium.launch({headless:true,...(process.env.GRCON_CHROMIUM_PATH?{executablePath:process.env.GRCON_CHROMIUM_PATH}:{}),args:['--no-sandbox']});
  try{
+  // Reproduce first opening from GRDT: refresh starts before React's effects.
+  const seeded=await browser.newPage({viewport:{width:1280,height:800}}),seedErrors=[];seeded.on('pageerror',e=>seedErrors.push(e.message));
+  await seeded.goto(base+'?seed=1');await seeded.getByRole('dialog').waitFor();
+  assert.equal(await seeded.getByLabel('Códigos para alocação').inputValue(),documentCode);
+  assert.ok(await seeded.getByRole('dialog').getByText('Revisão física A',{exact:false}).isVisible());assert.deepEqual(seedErrors,[]);await seeded.close();
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(base);await page.getByRole('button',{name:'Atualizar',exact:true}).click();
   // These files contain multiple dots and must be served to the real Worker.
   for(const asset of ['xlsx.full.min.js','exceljs.min.js','jszip.min.js'])assert.equal((await page.request.get(base+'/'+asset)).status(),200,asset);
