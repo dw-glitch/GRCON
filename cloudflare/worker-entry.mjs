@@ -2,7 +2,7 @@ import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
 import {syncSharepoint} from './teams-sharepoint.mjs';
 import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
 import {generateExplanation,INTENTS,SOURCE_LABELS,evidenceFor,modelInput} from './document-ai.mjs';
-import {validateDecision,allocationPrompt,recommendAllocation} from './allocation-ai.mjs';
+import {validateDecision,allocationPrompt,recommendAllocation,automaticContextKeys,validateAutomaticBatch} from './allocation-ai.mjs';
 import AllocationCore from '../allocation_generator_core.js';
 
 const PREFIX = "/api/document-vault/";
@@ -162,6 +162,17 @@ async function listCatalog(env, workspaceId, actorId, input = {}) {
     actor_id: actorId,
     input,
   });
+}
+
+async function handleAutomaticAllocation(request,env){
+ const user=await authenticatedUser(request,env),body=await aiBody(request,4000000),workspace=workspaceFrom(request,body);
+ if(!workspace||!safeUuid(body.requestId))return apiError('Contrato ou pedido inválido.',400,'ALLOCATION_INPUT');
+ const call=(operation,input)=>rpc(env,'grcon_allocation',{target_workspace:workspace,actor_id:user.id,operation,input});
+ try{
+  const keys=automaticContextKeys(body),context=await call('context',keys);
+  const input=validateAutomaticBatch(body,context);
+  return json({ok:true,...await call('generate',input)});
+ }catch(error){if(error.status)throw error;return apiError(error.message,409,'ALLOCATION_INPUT');}
 }
 
 async function handleAllocation(request,env,operation){
@@ -747,6 +758,7 @@ async function handleDelete(request, env) {
 async function routeVault(request, env) {
   const url = new URL(request.url);
   const action = url.pathname.slice(PREFIX.length).replace(/\/+$/, "");
+  if(action==='allocation-generate'&&request.method==='POST')return handleAutomaticAllocation(request,env);
   if(action==='allocation-confirm'&&request.method==='POST')return handleAllocation(request,env,'confirm');
   if(action==='allocation-ai'&&request.method==='POST')return handleAllocation(request,env,'recommend');
   if(action==='ai-probe'&&request.method==='POST')return handleDocumentAi(request,env,true);

@@ -11,6 +11,7 @@ const bootstrap=`window.GrconCloud={state:{session:{user:{id:'operator'},access_
 const html=`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>GRCON — Alocação QA</title><link rel="stylesheet" href="/design-system.css"><link rel="stylesheet" href="/legacy-compat.css"><link rel="stylesheet" href="/grcon-ui.css"><link rel="stylesheet" href="/grcon-final.css"><link rel="stylesheet" href="/grcon_cloud.css"><link rel="stylesheet" href="/grcon-responsive.css"><link rel="stylesheet" href="/grcon-version-c.css"><link rel="stylesheet" href="/grcon-version-c-phase2.css"><link rel="stylesheet" href="/grcon-ui-fix.css"><link rel="stylesheet" href="/allocation-generator.css"><style>body{margin:0;background:#f4f7f9;font-family:Arial,sans-serif}</style><div id="grcon-allocation-root"></div><script>${bootstrap}</script><script src="/react-dist/allocation-app.js"></script></html>`;
 async function body(req){const chunks=[];for await(const c of req)chunks.push(c);return JSON.parse(Buffer.concat(chunks).toString()||'{}');}
 (async()=>{
+ const {validateAutomaticBatch}=await import('../cloudflare/allocation-ai.mjs');
  const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url,'http://localhost');if(url.pathname==='/'){res.setHeader('content-type','text/html');return res.end(url.searchParams.has('seed')?html.replace('</html>',`<script>GrconAllocationGeneratorUi.activate();GrconAllocationGeneratorUi.open({document:${JSON.stringify(documentCode)},revision:'A'});</script></html>`):html);}
   if(url.pathname==='/qa/rpc'){
@@ -19,10 +20,16 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
    if(operation==='history')result={runs:history};
    if(operation==='experiences')result={decisions};
    if(operation==='page'){const kind=input.id.replace('-v1','');result={rows:bases[kind].map((payload,i)=>({row_number:i+1,payload}))};}
-   if(operation==='generate'){assert.equal(input.automatic,true);assert.ok(input.groups.every(g=>g.documents.every(d=>!d.decisionId)));generatedInputs.push(input);result={runs:input.groups.map((g,i)=>({id:'run-'+i,allocation_code:'C1O-ALOC-CM-0001-2026',status:'generated',documents:g.documents,files:[],base_versions:versions,created_at:new Date().toISOString()}))};history=result.runs;requests++;}
+   if(operation==='generate')throw Error('Automatic generation must use server validation');
    if(operation==='run-files'){history.find(r=>r.id===input.id).files=input.files;result={ok:true};}
    if(operation==='run-detail')result=history.find(r=>r.id===input.id);
    res.setHeader('content-type','application/json');return res.end(JSON.stringify(result));
+  }
+  if(url.pathname==='/api/document-vault/allocation-generate'){
+   const input=await body(req);assert.equal(input.automatic,true);assert.ok(input.groups.every(g=>g.documents.every(d=>!d.decisionId)));generatedInputs.push(input);
+   const validated=validateAutomaticBatch(input,{complete:true,bases,versions});
+   history=validated.groups.map((g,i)=>({id:'run-'+requests+'-'+i,allocation_code:'C1O-ALOC-CM-000'+(requests+1)+'-2026',status:'generated',documents:g.documents,files:[],base_versions:versions,created_at:new Date().toISOString()}));requests++;
+   res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,runs:history}));
   }
   if(url.pathname==='/api/document-vault/allocation-confirm'){
    confirmationRequests++;res.writeHead(409,{'content-type':'application/json'}).end(JSON.stringify({ok:false,message:'Confirmação não faz parte da geração automática.'}));return;

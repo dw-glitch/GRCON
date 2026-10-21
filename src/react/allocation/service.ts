@@ -170,12 +170,13 @@ export const service={
   activeRequest=activeRequest||crypto.randomUUID();
   const prefix=contextBases.config?.[0]?.prefix,year=new Date().getUTCFullYear();
   const observedSequence=Math.max(0,...[...localCentral,...localHistory].map(r=>{const value=String(r.allocation||'');const match=value.startsWith(prefix+'-')?value.match(/-(\d{4})-(\d{4})$/):null;return match&&Number(match[2])===year?Number(match[1]):0;}));
-  const generated=await rpc('generate',{requestId:activeRequest,versions:state.versions,observedSequence,automatic:true,groups:plan.groups.map((g:Data)=>({documents:g.results.map((r:Row)=>({document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow||'',databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,observation:r.output.observation||'',warnings:r.blockers,adjusted:r.adjusted===true}))}))});
+  const generated=await api('generate',{requestId:activeRequest,versions:state.versions,observedSequence,automatic:true,groups:plan.groups.map((g:Data)=>({documents:g.results.map((r:Row)=>({document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow||'',databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,observation:r.output.observation||'',warnings:r.blockers,adjusted:r.adjusted===true}))}))});
   const files:FileOutput[]=[];
   for(let i=0;i<plan.groups.length;i++){
    current(ticket);const run=generated.runs[i];let groupFiles=run.files;
    if(!groupFiles?.length){
-    groupFiles=await compute('export',{results:plan.groups[i].results,template:contextBases.template?.[0],meta:{allocationCode:run.allocation_code,allocationDate:new Date().toISOString().slice(0,10),status:'PENDENTE ENVIO DE LD'}});current(ticket);
+    const results=plan.groups[i].results.map((row:Row,index:number)=>{const doc=run.documents[index];return {...row,title:doc.title,blockers:doc.warnings,output:{...row.output,workflow:doc.workflow,discipline:doc.discipline,databook:doc.databook,levels:doc.levels,observation:doc.observation}};});
+    groupFiles=await compute('export',{results,template:contextBases.template?.[0],meta:{allocationCode:run.allocation_code,allocationDate:new Date().toISOString().slice(0,10),status:'PENDENTE ENVIO DE LD'}});current(ticket);
     await rpc('run-files',{id:run.id,files:groupFiles});
    }files.push(...groupFiles);
   }emit({files});const history=await rpc('history');emit({history:history.runs});
