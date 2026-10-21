@@ -29,7 +29,7 @@ async function api(action:string,input:Data){
  const result=await response.json();current(ticket);if(!response.ok||!result.ok)throw Error(result.message||'Não foi possível concluir.');return result;
 }
 async function task<T>(label:string,action:()=>Promise<T>):Promise<T|undefined>{
- if(state.busy)return;const ticket=epoch;emit({busy:true,progress:label,error:''});
+ if(state.busy)throw Error('Outra operação do gerador está em andamento.');const ticket=epoch;emit({busy:true,progress:label,error:''});
  try{return await action();}catch(error){if(ticket===epoch)emit({error:error instanceof Error?error.message:String(error)});throw error;}
  finally{if(ticket===epoch)emit({busy:false,progress:''});}
 }
