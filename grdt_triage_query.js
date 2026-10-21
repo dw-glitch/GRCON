@@ -60,7 +60,7 @@
     return Boolean(approval
       && approval.kind === policy.kind
       && approval.revision === Core.normalizeRevision(row.revision)
-      && approval.status === policy.status);
+      && approval.statusKey === Core.normalizeSigemStatus(policy.status).key);
   }
   function selectionAuthorized(row, index, selectedIndices, manualIndices) {
     if (!row || !selectedIndices || !selectedIndices.has(index)) return false;
