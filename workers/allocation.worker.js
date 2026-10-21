@@ -18,17 +18,17 @@ function parse(kind,book,name){
  if(kind==='databook'){
   // Historical files may have the revision in the official map's sheet name.
   // Never stop at CAPA: revision notes there contain snippets separated by |.
-  const normalized=value=>String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
+  const normalized=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();
   const isMap=name=>/^CAMINHO DB SIGEM(?: |$)/.test(normalized(name));
   const isPath=value=>{
    const raw=String(value??'').trim(),parts=raw.split('|');
-   return raw.length>=8&&raw.length<=2048&&!/[\\r\\n]/.test(raw)&&parts.length>=3&&parts.length<=15
-    &&parts.every(p=>p.trim().length>0)&&/^DATA BOOK(?:\\s|$)/i.test(parts[1].trim());
+   return raw.length>=8&&raw.length<=2048&&!/[\r\n]/.test(raw)&&parts.length>=3&&parts.length<=15
+    &&parts.every(p=>p.trim().length>0)&&/^DATA BOOK(?:\s|$)/i.test(parts[1].trim());
   };
   const description=(row,column,fallback)=>{
    for(let i=column-1;i>=0;i--){
     const value=String(row[i]??'').trim(),label=normalized(value);
-    if(!value||/^\\d+(?:[.,]\\d+)*\\.?$/.test(value)||/^(SECAO|CAPITULO|ITEM|I|REVISAO|REV)$/.test(label))continue;
+    if(!value||/^\d+(?:[.,]\d+)*\.?$/.test(value)||/^(SECAO|CAPITULO|ITEM|I|REVISAO|REV)$/.test(label))continue;
     return value;
    }
    return fallback;
@@ -44,7 +44,7 @@ function parse(kind,book,name){
     // contains the documents recommended for this folder in the official map.
     return {...record,sourceSheet:sheetName,
      description:column>=0?description(row,column,record.description):record.description,
-     notes:[record.notes,column>=0?String(row[column+1]??'').trim():''].filter(Boolean).join('\\n')};
+     notes:[record.notes,column>=0?String(row[column+1]??'').trim():''].filter(Boolean).join('\n')};
    });
   };
   const preferred=(book.SheetNames||[]).filter(isMap);
