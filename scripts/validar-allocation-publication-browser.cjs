@@ -9,7 +9,7 @@ const storage=[{id:'original',kind:'databook',file_name:'anterior.xlsx',revision
 const json=(res,status,data)=>{res.statusCode=status;res.setHeader('content-type','application/json');res.end(JSON.stringify(data));};
 const load=async req=>{const b=[];for await(const c of req)b.push(c);return JSON.parse(Buffer.concat(b).toString()||'{}');};
 const bootstrap=`window.GrconCloud={state:{session:{user:{id:'admin-qa'},access_token:'synthetic'},membership:{workspace_id:'contract-qa',role:'admin'},online:true,client:{rpc:async(name,args)=>{const r=await fetch('/qa/rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(args)});const data=await r.json();return r.ok?{data}:{error:{message:data.message}};}}}};`;
-const html=`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>GRCON QA</title><link rel="stylesheet" href="/allocation-generator.css"><div id="grcon-allocation-root"></div><script>${bootstrap}</script><script src="/operation_progress.js"></script><script src="/react-dist/allocation-app.js"></script></html>`;
+const html=`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>GRCON QA</title><link rel="stylesheet" href="/allocation-generator.css"><section><h2>Tabela legada</h2><div class="table-wrap"><table id="legacy-qa"><thead><tr><th>Controle</th></tr></thead><tbody><tr><td>Preservado</td></tr></tbody></table></div></section><div id="grcon-allocation-root"></div><script>${bootstrap}</script><script src="/operation_progress.js"></script><script src="/ui-v3.js"></script><script src="/react-dist/allocation-app.js"></script></html>`;
 const server=http.createServer(async(req,res)=>{try{
  const url=new URL(req.url,'http://localhost');
  if(url.pathname==='/')return res.end(html);
@@ -48,6 +48,8 @@ const server=http.createServer(async(req,res)=>{try{
   const bytes=Buffer.from(XLSX.write(book,{bookType:'xlsx',type:'buffer'}));
   await page.locator('.ag-toolbar input[type=file]').setInputFiles({name:'caminhos-novos.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:bytes});
   await page.getByText('503 caminhos lidos',{exact:false}).waitFor();
+  await page.locator('.ui-v3-table-shell #legacy-qa').waitFor();
+  assert.equal(await page.locator('#grcon-allocation-root .ui-v3-table-shell').count(),0,'legacy enhancements must not reparent React tables');
   assert.ok(await page.getByText('0 inconsistências').isVisible());
   await page.getByLabel('Revisão autorizada').fill('B');
   await page.getByRole('button',{name:'Publicar versão conferida'}).click();
@@ -90,7 +92,11 @@ const server=http.createServer(async(req,res)=>{try{
   });
   XLSX.utils.book_append_sheet(revE,XLSX.utils.aoa_to_sheet(official),'CAMINHO DB_SIGEM_REV.E');
   XLSX.utils.book_append_sheet(revE,XLSX.utils.aoa_to_sheet([['ANÁLISE DOCUMENTAL','UHDT-X|DATA BOOK C&M|ANÁLISE|NÃO IMPORTAR']]),'ANÁLISE ET x SIGEM');
-  const revEBytes=Buffer.from(XLSX.write(revE,{bookType:'xlsx',type:'buffer'}));
+  const privateFixture=process.env.GRCON_DATABOOK_FIXTURE_PATH;
+  const revEBytes=privateFixture?fs.readFileSync(privateFixture):Buffer.from(XLSX.write(revE,{bookType:'xlsx',type:'buffer'}));
+  const supplied=privateFixture?XLSX.read(revEBytes,{type:'buffer'}):null;
+  const suppliedRows=supplied?XLSX.utils.sheet_to_json(supplied.Sheets['CAMINHO DB_SIGEM_REV.E'],{header:1,defval:'',raw:false}):null;
+  const expectedPaths=suppliedRows?suppliedRows.map(r=>String(r[6]||'').trim()).filter(p=>p.split('|').length>=3):revEPaths;
   await page.locator('.ag-toolbar input[type=file]').setInputFiles({name:'Caminho Data book_Rev.E.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:revEBytes});
   await page.getByText('312 caminhos lidos',{exact:false}).waitFor({timeout:60000});
   assert.ok(await page.getByText('0 inconsistências').isVisible());
@@ -100,12 +106,12 @@ const server=http.createServer(async(req,res)=>{try{
   await page.locator('.ag-base-table tbody tr').filter({hasText:'Caminho Data book_Rev.E.xlsx'}).getByText('Ativa',{exact:true}).waitFor({timeout:60000});
   const activeE=storage.find(x=>x.status==='active');
   assert.equal(activeE.rows.length,312,'do not truncate the official map to the two notes in CAPA');
-  assert.deepEqual(activeE.rows.map(r=>r.databook),revEPaths,'preserve all official folder paths and their exact order');
+  assert.deepEqual(activeE.rows.map(r=>r.databook),expectedPaths,'preserve all official folder paths and their exact order');
   assert.equal(activeE.rows[0].rowNumber,11);
   assert.equal(activeE.rows.at(-1).rowNumber,354);
   assert.equal(activeE.rows[0].sourceSheet,'CAMINHO DB_SIGEM_REV.E');
-  assert.equal(activeE.rows[0].description,'DESCRIÇÃO 0','use C/D description rather than SEÇÃO label');
-  assert.equal(activeE.rows[0].notes,'* DOCUMENTOS DO ITEM 0','preserve documents from column H');
+  assert.equal(activeE.rows[0].description,suppliedRows?String(suppliedRows[10][2]).trim():'DESCRIÇÃO 0','use C/D description rather than SEÇÃO label');
+  assert.equal(activeE.rows[0].notes,suppliedRows?String(suppliedRows[10][7]).trim():'* DOCUMENTOS DO ITEM 0','preserve documents from column H');
   assert.equal(storage.find(x=>x.id==='upload-1').status,'archived');
   assert.equal(serial,2);
   await page.reload();await page.getByRole('button',{name:'Atualizar',exact:true}).click();await page.getByRole('button',{name:'Bases de referência',exact:true}).click();
