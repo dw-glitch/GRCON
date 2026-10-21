@@ -48,7 +48,68 @@ assert.equal(result.status,'Em análise');
 assert.equal(result.sigemStatusSource,'shared-general-query');
 assert.equal(result.allocationFinding.kind,'allocated');
 const other=Core.triageOne({id:'test',name:doc+'_B.pdf'},index,{sigemQueryContext:Query.context(base('Em análise','A'))});
-assert.notEqual(other.status,'Em análise');
+assert.equal(Core.statusKind(other.status), 'analysis', 'revisão A em análise impede postar B');
+assert.equal(other.blockingRevision,'A');
+assert.equal(other.sigemRevisionStatus,'Não Postado');
+assert.equal(other.decision,Core.DISCARD);
+
+// Bloqueio herdado: B está Em Workflow, C está Não Postado na Consulta Geral.
+// O status próprio de C não é apagado, mas a triagem não deve marcá-la READY.
+const revised = Query.context({
+  meta:{snapshotId:'prev-analysis'},
+  records:[
+    {document:doc,revision:'A',status:'Para Construção'},
+    {document:doc,revision:'B',status:'Em Workflow'},
+    {document:doc,revision:'C',status:'Não Postado'},
+  ],
+});
+const nextGroup = {records:[{document:doc,revision:'C'}],history:[]};
+assert.equal(Core.statusForRevision(nextGroup,'C',revised).status,'Não Postado','status exato continua fiel ao SIGEM');
+const guarded=Core.grdtStatusForRevision(nextGroup,'C',revised,doc);
+assert.equal(guarded.status,'Em Análise');
+assert.equal(guarded.revisionStatus,'Não Postado');
+assert.equal(guarded.blockingRevision,'B');
+assert.equal(guarded.blockingRevisionStatus,'Em Workflow');
+assert.match(guarded.inheritedReason,/revisão B permanece Em Análise/);
+assert.equal(Core.grdtStatusForRevision(nextGroup,'D',revised,doc).blockingRevision,'B','qualquer revisão posterior verifica anteriores');
+assert.equal(Core.grdtStatusForRevision(nextGroup,'B',revised,doc).blockingRevision,undefined,'a própria revisão não herda seu próprio bloqueio');
+assert.equal(Core.grdtStatusForRevision(nextGroup,'A',revised,doc).blockingRevision,undefined,'uma revisão anterior não herda status futuro');
+const nextIndex=Core.buildIndex([{
+  ...technical,revision:'C',status:'Não Postado',
+}],[{document:doc,revision:'C',status:'Não Postado',sheet:'Colar SIGEM'}]);
+const triagedNext=Core.triageOne({id:'next',name:doc+'_C.pdf'},nextIndex,{sigemQueryContext:revised});
+assert.equal(triagedNext.decision,Core.DISCARD);
+assert.equal(triagedNext.status,'Em Análise');
+assert.equal(triagedNext.sigemRevisionStatus,'Não Postado');
+assert.equal(triagedNext.blockingRevision,'B');
+assert.match(triagedNext.reason,/revisão B permanece Em Análise/);
+const release=Query.context({records:[
+  {document:doc,revision:'B',status:'Para Construção'},
+  {document:doc,revision:'C',status:'Não Postado'},
+]});
+assert.equal(Core.grdtStatusForRevision(nextGroup,'C',release,doc).blockingRevision,undefined);
+const released=Core.triageOne({id:'released',name:doc+'_C.pdf'},nextIndex,{sigemQueryContext:release});
+assert.equal(released.status,'Não Postado');
+assert.equal(released.decision,Core.READY);
+// Consulta Geral compartilhada prevalece sobre histórico local desatualizado.
+const priority=Query.context({records:[{document:doc,revision:'B',status:'Para Construção'}]},
+  {records:[{document:doc,revision:'B',status:'Em Análise'}]});
+assert.equal(Core.grdtStatusForRevision(nextGroup,'C',priority,doc).blockingRevision,undefined);
+const legacyGroup={records:[{document:doc,revision:'C'}],
+  history:[{document:doc,revision:'B',status:'Em Análise',sheet:'Colar SIGEM'}]};
+const legacy=Core.grdtStatusForRevision(legacyGroup,'C',null,doc);
+assert.equal(legacy.blockingRevision,'B','sem Consulta Geral compartilhada usa histórico SIGEM da LD');
+assert.equal(legacy.revisionStatus,'Não Postado');
+assert.equal(Core.grdtStatusForRevision(nextGroup,'C',Query.context({records:[
+  {document:doc.replace('3.8.9.1','3.8.9.2'),revision:'B',status:'Em Análise'},
+]}),doc).blockingRevision,undefined,'não misturar documentos de outros códigos');
+// Status C já emitido não deve ser falsamente anunciado como herdado de B.
+const alreadyIssued=Query.context({records:[
+  {document:doc,revision:'B',status:'Em Análise'},
+  {document:doc,revision:'C',status:'Para Construção'},
+]});
+assert.equal(Core.grdtStatusForRevision(nextGroup,'C',alreadyIssued,doc).status,'Para Construção');
+
 const many={records:Array.from({length:25000},(_,i)=>({document:`RL-5290.00-22313-ABC-C1O-${i}`,revision:'B',status:'Em análise'}))};
 const started=performance.now();const large=Query.context(many);
 for(let i=0;i<25000;i++) assert.equal(Query.resolve(`RL-5290.00-22313-ABC-C1O-${i}`,'B',large,'fallback').source,'shared-general-query');
