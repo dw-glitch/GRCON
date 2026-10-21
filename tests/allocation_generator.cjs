@@ -43,13 +43,56 @@ function runtime(original=false){
  assert.throws(()=>core.review(reviewed,{title:reviewed.title,path:civilPath},mixedBases),/Disciplina do caminho/);
  assert.throws(()=>validateDecision({...payload,confirmedPath:civilPath},{...context,bases:mixedBases}),/Disciplina do caminho/);
  assert.throws(()=>validateDecision({...payload,confirmedPath:pathA},{...context,bases:{...bases,config:[{unit:'UGH'}]}}),/Unidade/);
+ const revPath='UHDTD U-32|DATA BOOK C&M|TUBULACAO|RELATORIOS DE INSPECAO';
+ const multiUnitBases={...bases,databook:[{databook:revPath}],config:[{unit:'UHDT-D',units:['UHDTD GERAL','UHDTD U-32','UHDTD SE-XX00']}]};
+ assert.deepEqual(core.pathErrors(record,revPath,multiUnitBases),[]);
+ assert.equal(validateDecision({...payload,confirmedPath:revPath},{...context,bases:multiUnitBases}).validated,true);
+ assert.throws(()=>validateDecision({...payload,confirmedPath:revPath},{...context,bases:{...multiUnitBases,config:[{unit:'UGH',units:['UGH U-33']}]}}),/Unidade/);
  assert.throws(()=>validateDecision(payload,{...context,versions:{...versions,norms:'n2'}}),/bases mudaram/);
+ // Unit duplicates must be resolved from document group 3, independently of
+ // title/TAG and even when the same EAP and folder names occur in both units.
+ const routingConfig={unit:'UHDT-D',units:['UHDTD GERAL','UHDTD U-32','UHDTD U-39S'],unitRouting:'document-U32-U39S'};
+ const templateRows=[{databook:'UHDTD U-XX|DATA BOOK C&M|TUBULACAO|RIR TUB E STH',description:'RELATORIO DE INSPECAO DE RECEBIMENTO TUBULACAO',rowNumber:11},{databook:'UHDTD SE-XX00|DATA BOOK C&M|TUBULACAO|RIR TUB E STH',description:'RELATORIO DE INSPECAO DE RECEBIMENTO TUBULACAO',rowNumber:12},{databook:'UHDTD SE-XX00|DATA BOOK C&M|TUBULACAO|PASTA EXCLUSIVA',rowNumber:13}];
+ const routed=core.resolveDatabookCatalog(templateRows,routingConfig);
+ assert.equal(routed[0].documentUnit,'U32');assert.equal(routed[1].documentUnit,'U39S');assert.equal(routed[2].documentUnit,'U32');
+ assert.equal(routed[1].sourceDatabook,templateRows[1].databook);assert.ok(routed.every(r=>!/XX00|U-XX/.test(r.databook)));
+ assert.deepEqual(core.resolveDatabookCatalog(routed,routingConfig),routed,'routing is reproducible from preserved source paths');
+ assert.throws(()=>core.resolveDatabookCatalog([...templateRows,templateRows[1]],routingConfig),/Mais de dois/);
+ const routedBases={...bases,databook:routed,config:[routingConfig]},doc39=doc.replace('_U32_','_U39S_');
+ assert.equal(core.documentUnit(doc.replace('_U32_','_U39_')),'U39S');
+ for(const [code,expected] of [[doc,'U32'],[doc39,'U39S']]){
+  const preview=core.prepare({documents:[{document:code}],records:[{...record,document:code,documentKey:code,looseDocumentKey:code}],bases:routedBases,versions})[0];
+  const r=preview.output.databook?preview:core.review(preview,{title:preview.title,path:preview.candidates[0].databook},routedBases);
+  assert.equal(r.identity.unit,expected);assert.ok(r.output.databook.includes(expected==='U32'?'U-32':'U-39S'));
+  assert.ok(r.candidates.every(c=>c.documentUnit===expected));
+  assert.ok(r.output.levels[0].includes(expected==='U32'?'U-32':'U-39S'));
+  const otherPath=routed.find(c=>c.documentUnit!==expected).databook;
+  assert.throws(()=>core.review(r,{title:r.title,path:otherPath},routedBases),/Grupo 3/);
+  assert.throws(()=>validateDecision({...core.decisionPayload(r,'Conferido por unidade e EAP'),confirmedPath:otherPath},{complete:true,bases:routedBases,versions}),/Grupo 3/);
+  const verified=validateDecision(core.decisionPayload(r,'Conferido por unidade e EAP'),{complete:true,bases:routedBases,versions});
+  assert.ok(verified.validated);assert.ok(verified.evidence.some(e=>e.sourcePath===r.sourceDatabook));
+ }
  const prompt=allocationPrompt(doc,reviewed.title,context,[],'TUB');
  const fixture={run:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({candidateId:prompt.candidates[0].id,reason:'Caminho da disciplina previsto na base vigente.',citations:[prompt.refs[0].id]})}}]})};
  assert.equal((await recommendAllocation(fixture,prompt)).path,pathA);
  await assert.rejects(recommendAllocation({run:async()=>({response:{candidateId:'inventado',reason:'x',citations:['inventado']}})},prompt),/EVIDENCE/);
  const plan=await worker.run('plan',{results:[reviewed,{...reviewed,document:next,output:{...reviewed.output,discipline:'ELETRICA'}}],mode:'discipline'});assert.equal(plan.groups.length,2);
  assert.equal((await worker.run('plan',{results:[reviewed,reviewed],mode:'single'})).groups.length,1);
+ // Confirmation spreadsheets use the original RECON parser and keep their
+ // separate source names/outcomes when several files are selected together.
+ const X=worker.sandbox.XLSX;
+ const confirmationFile=(name,code,status)=>{const book=X.utils.book_new();X.utils.book_append_sheet(book,X.utils.aoa_to_sheet([['NOME DOCUMENTO','ALOCAÇÃO','STATUS','RESPOSTA DA FISCAL 01'],[code,'C1O-ALOC-CM-0001-2026',status,'Conferido pela Fiscal']]),'Confirmação');return new File([X.write(book,{type:'array',bookType:'xlsx'})],name);};
+ const cf1=await worker.run('parse',{kind:'confirmation',file:confirmationFile('confirmacao-1.xlsx',doc,'RECUSADO')});
+ const cf2=await worker.run('parse',{kind:'confirmation',file:confirmationFile('confirmacao-2.xlsx',next,'ACEITO')});
+ assert.equal(cf1[0].outcome.kind,'rejected');assert.equal(cf2[0].outcome.kind,'accepted');
+ assert.equal(cf1[0].source,'confirmacao-1.xlsx');assert.equal(cf2[0].source,'confirmacao-2.xlsx');
+ const withConfirmation=core.prepare({documents:[{document:doc}],records:[record],confirmations:cf1,bases,versions})[0];
+ assert.equal(withConfirmation.confirmationAllocation,'C1O-ALOC-CM-0001-2026');assert.match(withConfirmation.confirmationOutcome,/RECUSADO/);
+ const Registry=require('../allocation_registry_core.js'),levelBook=X.utils.book_new();
+ X.utils.book_append_sheet(levelBook,X.utils.aoa_to_sheet([['Exportação'],['Nivel 1','Nivel 2','Nivel 3','Nivel 4'],['UHDTD U-32','10.SUPRIMENTO','10.02.BENS','10.02.01.H.TUBULACAO']]),'Base - Caminho das Pastas');
+ const parsedLevels=Registry.parseProjectLevels(levelBook,X).entries;
+ assert.deepEqual(JSON.parse(JSON.stringify(parsedLevels)),JSON.parse(JSON.stringify(worker.sandbox.AllocationCore.parseProjectLevelBase(levelBook,X))));
+ assert.equal(core.levelsFor(record,pathA,{...bases,eap:parsedLevels}).levels[3],'10.02.01.H.TUBULACAO');
  const eap=await worker.run('bundled',{kind:'eap'});assert.ok(eap.length>300);const paths=await worker.run('bundled',{kind:'databook'});assert.ok(paths.length>150);
  const template=(await worker.run('bundled',{kind:'template'}))[0];
  const meta={allocationCode:'C1O-ALOC-CM-0001-2026',allocationDate:'2026-10-21',status:'PENDENTE ENVIO DE LD'};

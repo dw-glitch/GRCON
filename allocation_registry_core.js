@@ -4,7 +4,7 @@
   root.GrconAllocationRegistryCore = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Core) {
   "use strict";
-  const VERSION = "1.0.0";
+  const VERSION = "1.1.0";
   const text = value => String(value == null ? "" : value).trim();
   const key = value => Core.key(text(value));
   const norm = value => Core.norm(value).replace(/\s+/g, " ");
@@ -30,6 +30,28 @@
     if (Object.entries(item).some(([field, v]) => typeof v === "string" && v.length > (["fiscalComment", "fiscal2Comment", "remarks"].includes(field) ? 8192 : field === "databook" ? 2048 : field === "allocationStatus" ? 1024 : 255))) throw new Error("Campo muito extenso na Central de alocação.");
     if (!Number.isInteger(item.sourceRow) || item.sourceRow < 1 || item.sourceRow > 1048576) throw new Error("Linha de origem inválida.");
     return item;
+  }
+  // Same header/code semantics as RECON parseProjectLevelBase, kept pure for
+  // the shared import Worker. The generator uses RECON to resolve each EAP.
+  function parseProjectLevels(workbook, XLSX) {
+    const names = workbook?.SheetNames || [];
+    const named = names.find(name => norm(name) === "BASE - CAMINHO DAS PASTAS");
+    for (const name of named ? [named] : names) {
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], {header:1,defval:"",raw:false,blankrows:true,range:0});
+      const header = rows.slice(0,30).findIndex(row => row.some(cell => norm(cell) === "NIVEL 1"));
+      if (header < 0) continue;
+      const columns = Array.from({length:10},(_,i)=>rows[header].findIndex(cell=>norm(cell) === `NIVEL ${i+1}`));
+      const entries = [];
+      rows.slice(header+1).forEach((row,i)=>{
+        const levels = columns.map(column => column < 0 ? "" : text(row[column]));
+        const codes = levels.map(value=>value.match(/^(\d+(?:\.\d+)*)/)?.[1]).filter(Boolean);
+        if (!codes.length) return;
+        const code = codes.sort((a,b)=>b.split('.').length-a.split('.').length)[0].split('.').map(Number).join('.');
+        entries.push({code,levels,rowNumber:header+i+2});
+      });
+      return {entries,sheetName:name};
+    }
+    return {entries:[],sheetName:""};
   }
   function parseWorkbook(workbook, XLSX) {
     const name = workbook?.SheetNames?.find(name => norm(name) === "CENTRAL DE ALOCACAO");
@@ -73,7 +95,8 @@
       records.push(cleanRecord(item));
     }
     if (!records.length || records.length > 100000) throw new Error("A Central de alocação precisa conter entre 1 e 100.000 vínculos documentais.");
-    return { records, count: records.length, metadata: { version: VERSION, sheetName: name, headerRow: header + 1, ignored } };
+    const project = parseProjectLevels(workbook, XLSX);
+    return { records, count: records.length, metadata: { version: VERSION, sheetName: name, headerRow: header + 1, ignored, projectLevelBase:project.entries, projectLevelSheet:project.sheetName } };
   }
   function buildIndex(records) {
     const byDocument = new Map(), byCanonical = new Map();
@@ -101,5 +124,5 @@
     // ocorrência arbitrariamente quando um documento possui várias ALOCs.
     return [...unique];
   }
-  return Object.freeze({ VERSION, key, cleanRecord, parseWorkbook, buildIndex, lookup, fiscalCommentsForDocument });
+  return Object.freeze({ VERSION, key, cleanRecord, parseWorkbook, parseProjectLevels, buildIndex, lookup, fiscalCommentsForDocument });
 });

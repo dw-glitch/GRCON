@@ -7,7 +7,7 @@ const bases={databook:[{databook:pathValue,description:'RELATORIO DE INSPECAO DE
 let history=[],decisions=[],requests=0;
 const versions=Object.fromEntries(Object.keys(bases).map(k=>[k,k+'-v1']));
 const catalog=Object.entries(bases).map(([kind,rows],i)=>({id:kind+'-v1',kind,record_count:rows.length,status:'active',revision:'Referência RECON',version:i+1,file_name:kind+'.xlsx'}));
-const bootstrap=`window.GrconCloud={state:{session:{user:{id:'operator'},access_token:'synthetic'},membership:{workspace_id:'qa-contract',role:'operator'},online:true,client:{rpc:async(name,args)=>{const r=await fetch('/qa/rpc',{method:'POST',body:JSON.stringify(args)});return {data:await r.json()};}}}};window.GrconTriageUiApi={allocationSources:()=>({records:[{document:${JSON.stringify(documentCode)},documentKey:${JSON.stringify(documentCode)},looseDocumentKey:${JSON.stringify(documentCode)},sheet:'ET',revision:'0',title:'RELATORIO DE INSPECAO DE RECEBIMENTO',discipline:'TUB',source:'LD_001.xlsx',row:2}]})};window.GrconAllocationRegistry={refresh:async()=>{},current:()=>({records:[]})};`;
+const bootstrap=`window.GrconCloud={state:{session:{user:{id:'operator'},access_token:'synthetic'},membership:{workspace_id:'qa-contract',role:'operator'},online:true,client:{rpc:async(name,args)=>{const r=await fetch('/qa/rpc',{method:'POST',body:JSON.stringify(args)});return {data:await r.json()};}}}};window.GrconTriageUiApi={allocationSources:()=>({records:[{document:${JSON.stringify(documentCode)},documentKey:${JSON.stringify(documentCode)},looseDocumentKey:${JSON.stringify(documentCode)},sheet:'ET',revision:'0',title:'RELATORIO DE INSPECAO DE RECEBIMENTO',discipline:'TUB',source:'LD_001.xlsx',row:2}].flatMap(r=>[r,{...r,document:r.document.replace('228452','999999'),documentKey:r.documentKey.replace('228452','999999'),looseDocumentKey:r.looseDocumentKey.replace('228452','999999'),row:3}])})};window.GrconAllocationRegistry={refresh:async()=>{},current:()=>({records:[]})};`;
 const html=`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>GRCON — Alocação QA</title><link rel="stylesheet" href="/design-system.css"><link rel="stylesheet" href="/legacy-compat.css"><link rel="stylesheet" href="/grcon-ui.css"><link rel="stylesheet" href="/grcon-final.css"><link rel="stylesheet" href="/grcon_cloud.css"><link rel="stylesheet" href="/grcon-responsive.css"><link rel="stylesheet" href="/grcon-version-c.css"><link rel="stylesheet" href="/grcon-version-c-phase2.css"><link rel="stylesheet" href="/grcon-ui-fix.css"><link rel="stylesheet" href="/allocation-generator.css"><style>body{margin:0;background:#f4f7f9;font-family:Arial,sans-serif}</style><div id="grcon-allocation-root"></div><script>${bootstrap}</script><script src="/react-dist/allocation-app.js"></script></html>`;
 async function body(req){const chunks=[];for await(const c of req)chunks.push(c);return JSON.parse(Buffer.concat(chunks).toString()||'{}');}
 (async()=>{
@@ -26,7 +26,7 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
    res.setHeader('content-type','application/json');return res.end(JSON.stringify(result));
   }
   if(url.pathname==='/api/document-vault/allocation-confirm'){
-   const data=await body(req);validateDecision(data,{complete:true,bases,versions});decisions.push({...data,id:'decision-1',trusted:true,current_sources:true});res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,id:'decision-1',trusted:true}));
+   const data=await body(req);if(data.document.includes('999999'))return res.writeHead(409,{'content-type':'application/json'}).end(JSON.stringify({ok:false,message:'Base alterada para este documento — revisar'}));validateDecision(data,{complete:true,bases,versions});decisions.push({...data,id:'decision-1',trusted:true,current_sources:true});res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,id:'decision-1',trusted:true}));
   }
   if(url.pathname==='/api/document-vault/allocation-ai'){res.statusCode=503;res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:false,message:'IA indisponível. Use a revisão por regras.'}));}
   const relative=decodeURIComponent(url.pathname).slice(1);if(relative.includes('..')||!/^((vendor\/recon|workers|react-dist)\/[^.][^]*\.(js|json)|[a-z0-9_.-]+\.(css|js))$/i.test(relative)){res.statusCode=404;return res.end();}
@@ -59,6 +59,28 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
   const layout=await page.evaluate(()=>({table:document.querySelector('.ag-virtual').getBoundingClientRect().bottom,output:document.querySelector('.ag-output').getBoundingClientRect().top}));assert.ok(layout.output>=layout.table,'package actions must not cover document rows');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow');
   await page.evaluate(()=>{window.GrconCloud.state.membership.workspace_id='other';window.dispatchEvent(new CustomEvent('grcon:contract-context-changed'));});assert.equal(await page.getByRole('button',{name:'Revisado',exact:true}).count(),0);
+  // Multi-file confirmation import, master EAP display, filter-wide selection
+  // and partial server failures must all work with the real Worker/UI.
+  const batch=await browser.newPage({viewport:{width:1280,height:900}});batch.on('pageerror',e=>errors.push(e.message));await batch.goto(base);await batch.getByRole('button',{name:'Atualizar',exact:true}).click();
+  await batch.locator('.ag-evidence summary').click();
+  const X=require('../xlsx.full.min.js'),second=documentCode.replace('228452','999999');
+  const makeConfirmation=(name,code,status)=>{const book=X.utils.book_new();X.utils.book_append_sheet(book,X.utils.aoa_to_sheet([['NOME DOCUMENTO','ALOCAÇÃO','STATUS'],[code,'C1O-ALOC-CM-0001-2026',status]]),'Confirmação');return {name,mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(X.write(book,{type:'buffer',bookType:'xlsx'}))};};
+  await batch.getByLabel('Arquivos de confirmação',{exact:true}).setInputFiles([makeConfirmation('confirmacao-a.xlsx',documentCode,'RECUSADO'),makeConfirmation('confirmacao-b.xlsx',second,'RECUSADO')]);
+  await batch.getByText('2 registros de confirmação carregados.').waitFor();
+  assert.ok(await batch.getByText('confirmacao-a.xlsx · confirmacao-b.xlsx').isVisible());
+  await batch.getByLabel('Códigos para alocação').fill(documentCode+'\n'+second+'\tRELATORIO DE INSPECAO DE RECEBIMENTO');
+  await batch.getByRole('button',{name:'Analisar alocação',exact:true}).click();await batch.getByRole('button',{name:'Revisar sugestão',exact:true}).first().waitFor();
+  assert.equal(await batch.locator('.ag-virtual tbody tr').count(),2);
+  await batch.getByLabel('Pesquisar documentos').fill('999999');await batch.getByLabel('Selecionar todos do filtro').check();assert.equal(await batch.locator('.ag-virtual tbody input:checked').count(),1);
+  await batch.getByLabel('Pesquisar documentos').fill('');assert.equal(await batch.locator('.ag-virtual tbody input:checked').count(),1,'filter selections preserve rows outside current filter');
+  await batch.getByLabel('Selecionar todos do filtro').check();assert.equal(await batch.locator('.ag-virtual tbody input:checked').count(),2);
+  await batch.getByRole('button',{name:'Confirmar selecionados (2)',exact:true}).click();await batch.getByLabel('Justificativa da conferência do lote').fill('Conferidos título, EAP, disciplina e mapa vigente.');
+  await batch.getByRole('button',{name:'Confirmar sugestões do lote',exact:true}).click();await batch.getByText('1 confirmados · 1 com pendências',{exact:true}).waitFor();
+  assert.ok(await batch.getByText('Base alterada para este documento — revisar',{exact:false}).isVisible());assert.equal(await batch.getByRole('button',{name:'Revisado',exact:true}).count(),1);
+  assert.equal(await batch.getByRole('button',{name:'Conferir pacote',exact:true}).isDisabled(),true,'partly confirmed selection cannot be generated');
+  await batch.screenshot({path:path.join(out,'allocation-batch-1280.png'),fullPage:true});
+  assert.equal(await batch.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'desktop layout must not overflow horizontally');
+  await batch.close();
   assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'allocation-metrics.json'),JSON.stringify({ok:true,viewports:[1440,1280],downloadFiles:3,serverConfirmed:decisions.length,requests,pageErrors:errors},null,2));console.log('Allocation browser: native UI, actual Worker, manual title correction, server validation, official ZIP, operator permissions, history, desktop widths and contract reset passed.');
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1});

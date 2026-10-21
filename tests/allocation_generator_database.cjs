@@ -7,7 +7,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  create function auth.jwt() returns jsonb language sql as $$select jsonb_build_object('role',current_setting('request.jwt.claim.role',true))$$;
  create table public.grcon_workspaces(id uuid primary key);create table public.grcon_contracts(id uuid primary key,workspace_id uuid,active boolean);
  create table public.grcon_memberships(workspace_id uuid,contract_id uuid,user_id uuid,role text,active boolean);
- create table private.grcon_allocation_registry_snapshots(id uuid,workspace_id uuid,status text);create table private.grcon_allocation_registry_rows(snapshot_id uuid,payload jsonb);
+ create table private.grcon_allocation_registry_snapshots(id uuid,workspace_id uuid,contract_id uuid,status text,metadata jsonb default '{}',file_name text,created_by uuid,published_at timestamptz);create table private.grcon_allocation_registry_rows(snapshot_id uuid,payload jsonb);
  insert into public.grcon_workspaces values('${uuid(1)}'),('${uuid(2)}');insert into public.grcon_contracts values('${uuid(3)}','${uuid(1)}',true),('${uuid(4)}','${uuid(2)}',true);
  insert into public.grcon_memberships values('${uuid(1)}','${uuid(3)}','${uuid(10)}','admin',true),('${uuid(1)}','${uuid(3)}','${uuid(11)}','operator',true),('${uuid(2)}','${uuid(4)}','${uuid(12)}','operator',true),('${uuid(1)}','${uuid(3)}','${uuid(13)}','viewer',true);`);
  await db.exec(fs.readFileSync('supabase/migrations/20261021094333_intelligent_allocation_workspace.sql','utf8'));
@@ -71,5 +71,22 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 
  await db.exec('reset role');
  const secured=await db.query("select bool_and(relrowsecurity) as yes from pg_class where relname in ('grcon_allocation_bases','grcon_allocation_base_rows','grcon_allocation_decisions','grcon_allocation_runs','grcon_allocation_events')");assert.equal(secured.rows[0].yes,true);
+ // The master tree from Central publication becomes the same versioned EAP
+ // consumed by browser and server; malformed replacement rolls back atomically.
+ await db.exec('reset role');
+ await db.exec(fs.readFileSync('supabase/migrations/20261021150225_central_project_levels_function.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261021150539_central_project_levels.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261021150539_central_project_levels.sql','utf8'));
+ const master=[{code:'10.2.1',levels:['UHDTD U-32','10.SUPRIMENTO','10.02.BENS','10.02.01.H.TUBULACAO',...Array(6).fill('')],rowNumber:7}];
+ await db.query('insert into private.grcon_allocation_registry_snapshots(id,workspace_id,contract_id,status,metadata,file_name,created_by) values($1,$2,$3,$4,$5,$6,$7)',[uuid(99),uuid(1),uuid(3),'pending',{projectLevelBase:master,projectLevelSheet:'Base - Caminho das Pastas'},'Central-QA.xlsx',uuid(10)]);
+ const oldEap=(await catalog()).versions.eap;
+ await db.query("update private.grcon_allocation_registry_snapshots set status='active' where id=$1",[uuid(99)]);
+ await as(11);const centralCatalog=await catalog(),centralBase=centralCatalog.bases.find(b=>b.kind==='eap'&&b.status==='active');
+ assert.equal(centralBase.metadata.origin,'central-project-levels');assert.notEqual(centralBase.id,oldEap);assert.deepEqual((await rpc('page',{id:centralBase.id})).rows[0].payload,master[0]);
+ await as(0,'service_role');const centralContext=await rpc('context',{eap:'10.2.1.2'},uuid(1),uuid(11));assert.deepEqual(centralContext.bases.eap,master);
+ await db.exec('reset role');await assert.rejects(db.query("update private.grcon_allocation_registry_snapshots set metadata=$1 where id=$2",[{projectLevelBase:[{code:'INVENTADO',levels:[]}]},uuid(99)]),/hierarquia/);
+ await as(11);assert.equal((await catalog()).versions.eap,centralBase.id);
+ await db.exec('reset role');await db.query("update private.grcon_allocation_registry_snapshots set metadata='{}' where id=$1",[uuid(99)]);
+ await as(11);assert.equal((await catalog()).versions.eap,undefined,'removing the master sheet must not preserve obsolete Central hierarchy');
  console.log('Allocation DB: active contract authorization, base versions/restore, current-source learning, untrusted client feedback, sequence/idempotence, duplicate revision and lifecycle passed.');
 }finally{await db.close();}})().catch(e=>{console.error(e.message);process.exitCode=1});

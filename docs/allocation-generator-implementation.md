@@ -71,3 +71,52 @@ O refinamento global `ui-v3.js` criava um contêiner ao redor da região das tab
 A regressão administrativa carrega o refinamento global junto com o módulo, importa, publica, alterna abas e recarrega. Uma tabela legada externa comprova que o refinamento continua funcionando. O arquivo real Rev. E foi verificado localmente com seus 312 caminhos e testado em envio/publicação via RPC em uma transação revertida. Uma variável opcional `GRCON_DATABOOK_FIXTURE_PATH` permite repetir o teste de navegador com arquivo privado local; o CI utiliza somente a fixture sintética. Nenhum arquivo privado é incluído no repositório.
 
 Realtime continua opcional. Após falha de transporte, a sincronização HTTP permanece imediata e periódica a cada 45 segundos; o circuito de uma hora é persistido por origem/projeto para evitar que recargas abram repetidamente o mesmo WebSocket com falha. O prazo é limitado, nova rede permite retestar e uma conexão bem-sucedida limpa o estado. Isso não remove bloqueios de rede nem promete que a primeira tentativa WebSocket terá sucesso. Nenhum token, identificação de usuário ou documento é guardado nesse estado de rede.
+
+## RECON workflow and Central master hierarchy (2026-10-21)
+
+The generator now follows RECON's sources → relation → decision table → package
+sequence. Sources are compact file cards; confirmations and history accept
+multiple spreadsheets in one selection and retain individual source names.
+Confirmation parsing/classification uses the preserved RECON confirmation engine.
+The table exposes confirmation/Fiscal evidence, EAP, hierarchy origin and Databook.
+Filter-wide selection uses one store update and covers rows outside the virtual
+viewport. Batch confirmation validates each document through the existing server
+endpoint; successes retain their decision IDs, failures stay pending with their
+reason, and package generation requires every selected document to be confirmed.
+
+Shared Central import retains `Base - Caminho das Pastas` in snapshot metadata.
+The new private trigger publishes its N1–N10 rows into the existing versioned EAP
+base in the same transaction as Central activation. It preserves source sheet,
+snapshot and file identity, retires stale Central-derived hierarchies if the next
+Central has no master sheet, and leaves private-table access unchanged. The
+browser and server therefore resolve from the same EAP version. The generator
+continues to use RECON's RNEST field-4 EAP extraction, structural prefix matching
+and discipline disambiguation; ambiguous branches do not acquire invented levels.
+
+Validation includes two-file confirmation import, filter-wide selection, partial
+server failure, package blocking with pending decisions, private database trigger
+activation/rollback/retirement, EAP parser parity and actual desktop screenshots.
+The private Central workbook available in this session has 372 master entries;
+its parsed hierarchy matches RECON exactly. Corporate source workbooks are not
+included in repository fixtures.
+
+Rev.E includes template roots (GERAL, U-32 and SE-XX00). Configuration now
+accepts an explicit `units` list; exact membership is checked by the same core
+on the client and server. The legacy single `unit` field remains supported.
+No prefix or fuzzy root matching is used. The server also preserves the EAP
+source/version in decision evidence, rather than discarding it while rebuilding
+trusted evidence.
+
+
+### Contract unit routing clarified by the owner
+
+The owner clarified that XX00 is the U32 template and the repeated branch is
+U39S; RNEST group 3 (U32 / U39S, with U39 recognized as a routing alias) decides
+the document destination. The versioned configuration `document-U32-U39S`
+resolves generic/repeated rows at publication, keeping `sourceDatabook`, source
+sheet/row and unit identity. The real 312-row map produces 312 distinct concrete
+paths, with GERAL / U-32 / U-39S roots and no remaining XX00 or U-XX tokens.
+Candidates, manual review and server validation reject the other unit's path.
+Learning families also include the document unit. N1 follows the document unit
+while the EAP/discipline hierarchy remains the Central master structure.
+U39 routing recognition does not change the preserved normative code validator.

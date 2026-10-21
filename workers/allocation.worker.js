@@ -77,6 +77,8 @@ function parse(kind,book,name){
  }
  if(kind==='eap')return A.parseProjectLevelBase(book,XLSX);
  if(kind==='ld')return C.parseWorkbook(book,name,Date.now());
+ if(kind==='confirmation')return self.RECONAllocationConfirmations.parseWorkbook(book,XLSX,{name}).rows;
+ if(kind==='list')return A.parseRelationWorkbook(book,XLSX).entries.map(e=>({document:e.raw}));
  if(kind==='history')return A.parseHistoricalAllocationWorkbook(book,XLSX,name).rows;
  if(kind==='central')return A.parseControlWorkbook(book,XLSX).rows;
  if(kind==='titles')return C.parseWorkbook(book,name,Date.now()).records.map(r=>({document:r.document,title:r.title,source:name})).filter(r=>r.title);
@@ -128,6 +130,7 @@ self.onmessage=async({data})=>{const {id,operation,input}=data;try{
  let result;
  if(operation==='parse')result=await parseFile(input.kind,input.file);
  else if(operation==='bundled')result=await bundled(input.kind);
+ else if(operation==='route-catalog')result=Engine.resolveDatabookCatalog(input.rows,input.config);
  else if(operation==='analyze')result=Engine.prepare(input);
  else if(operation==='review')result=Engine.review(input.row,input.changes,input.bases);
  else if(operation==='decision')result=Engine.decisionPayload(input.row,input.justification,input.status);
