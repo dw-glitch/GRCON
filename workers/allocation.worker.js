@@ -130,6 +130,7 @@ self.onmessage=async({data})=>{const {id,operation,input}=data;try{
  let result;
  if(operation==='parse')result=await parseFile(input.kind,input.file);
  else if(operation==='bundled')result=await bundled(input.kind);
+ else if(operation==='route-catalog')result=Engine.resolveDatabookCatalog(input.rows,input.config);
  else if(operation==='analyze')result=Engine.prepare(input);
  else if(operation==='review')result=Engine.review(input.row,input.changes,input.bases);
  else if(operation==='decision')result=Engine.decisionPayload(input.row,input.justification,input.status);

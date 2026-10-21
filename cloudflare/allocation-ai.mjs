@@ -16,7 +16,7 @@ export function validateDecision(body,context){
  if(resolved.resolution?.blockFallback)throw Error('Hierarquia EAP não comprovada.');
  const refs=standard.refs.map(x=>({id:x.id,source:x.source,requirement:x.requirement}));
  return {...body,family:identity.family,eap:identity.eap,discipline:identity.discipline,levels:resolved.levels,
-  evidence:[...refs,...(identity.eap?[{id:'eap:'+context.versions.eap,source:resolved.resolution?.source||'Hierarquia EAP ativa',eap:identity.eap}]:[]),{id:'databook:'+context.versions.databook,source:'Mapa Databook ativo',path:path.databook}],
+  evidence:[...(path.sourceDatabook&&path.sourceDatabook!==path.databook?[{id:'unit-routing:'+context.versions.config,source:'Regra do contrato — unidade no Grupo 3',unit:identity.unit,sourcePath:path.sourceDatabook,resolvedPath:path.databook}]:[]),...refs,...(identity.eap?[{id:'eap:'+context.versions.eap,source:resolved.resolution?.source||'Hierarquia EAP ativa',eap:identity.eap}]:[]),{id:'databook:'+context.versions.databook,source:'Mapa Databook ativo',path:path.databook}],
   validated:standard.compatible&&standard.errors.length===0&&identity.kind!=='unknown'&&resolved.levels.some(Boolean)};
 }
 

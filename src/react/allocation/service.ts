@@ -2,7 +2,7 @@
 // the typed operational fields below, without exposing GRCON globals to RECON.
 export type BaseKind='databook'|'eap'|'titles'|'norms'|'template'|'li'|'scon'|'appendix'|'config';
 export type Data=Record<string,any>;
-export interface Row extends Data {document:string;revision:string;title:string;originalTitle:string;titleSource:string;ldLocated:boolean;plannedAllocated:boolean;existing:Array<{allocation:string;status:string}>;confidence:string;blockers:string[];statusLabel:string;decisionId:string;confirmed:boolean;output:{workflow:string;discipline:string;databook:string;levels:string[]};standard:{refs:Data[];errors:Data[];warnings:Data[];compatible:boolean};versions:Record<string,string>;identity:{family:string;discipline:string;eap:string};ai:Data|null;selected:boolean;}
+export interface Row extends Data {document:string;revision:string;title:string;originalTitle:string;titleSource:string;ldLocated:boolean;plannedAllocated:boolean;existing:Array<{allocation:string;status:string}>;confidence:string;blockers:string[];statusLabel:string;decisionId:string;confirmed:boolean;output:{workflow:string;discipline:string;databook:string;levels:string[]};standard:{refs:Data[];errors:Data[];warnings:Data[];compatible:boolean};versions:Record<string,string>;identity:{unit?:string;family:string;discipline:string;eap:string};ai:Data|null;selected:boolean;}
 export interface FileOutput {name:string;kind:string;base64:string;sha256:string;}
 export interface Snapshot {openRequest:null|{document:string;revision:string;id:number};bases:Data[];versions:Record<string,string>;rows:Row[];history:Data[];decisions:Data[];preview:null|{kind:BaseKind;rows:Data[];fileName:string;validation?:{invalid:Array<{line:number;reason:string}>;duplicates:number;units:string[]}};busy:boolean;progress:string;error:string;canManage:boolean;plan:Data|null;files:FileOutput[];sourceFiles:Record<string,string[]>;batchResults:Array<{document:string;ok:boolean;message:string}>;}
 const globals=window as unknown as Record<string,any>;
@@ -90,8 +90,9 @@ export const service={
   }catch(error){if(ticket===epoch)emit({error:error instanceof Error?error.message:String(error)});}
  },
  clearPreview(){emit({preview:null,error:''});},
- async preview(kind:BaseKind,file?:File){return task('Lendo base e preparando prévia',async()=>{const rows=await compute(file?'parse':'bundled',file?{kind,file}:{kind});if(!Array.isArray(rows)||!rows.length)throw Error('Nenhum registro reconhecido. Confira o arquivo e os cabeçalhos.');const validation=kind==='databook'?inspectDatabook(rows):undefined;emit({preview:{kind,rows,fileName:file?.name||'Referência RECON — confirmar vigência',validation},error:''});});},
- previewConfig(prefix:string,unit:string){emit({preview:{kind:'config',fileName:'Configuração contratual',rows:[{prefix:prefix.trim(),unit:unit.split(';')[0].trim(),units:unit.split(';').map(value=>value.trim()).filter(Boolean)}]}});},
+ async preview(kind:BaseKind,file?:File){return task('Lendo base e preparando prévia',async()=>{const ticket=epoch;let rows=await compute(file?'parse':'bundled',file?{kind,file}:{kind});current(ticket);
+  if(kind==='databook'){const configBase=state.bases.find(b=>b.kind==='config'&&b.status==='active');if(configBase){const config=(await loadBase(configBase))[0];current(ticket);rows=await compute('route-catalog',{rows,config});current(ticket);}}if(!Array.isArray(rows)||!rows.length)throw Error('Nenhum registro reconhecido. Confira o arquivo e os cabeçalhos.');const validation=kind==='databook'?inspectDatabook(rows):undefined;emit({preview:{kind,rows,fileName:file?.name||'Referência RECON — confirmar vigência',validation},error:''});});},
+ previewConfig(prefix:string,unit:string){emit({preview:{kind:'config',fileName:'Configuração contratual',rows:[{prefix:prefix.trim(),unit:unit.split(';')[0].trim(),units:unit.split(';').map(value=>value.trim()).filter(Boolean),...(unit.includes('39')?{unitRouting:'document-U32-U39S'}:{})}]}});},
  async publish(revision:string){return task('Publicando base de referência',async()=>{
   const preview=state.preview,cleanRevision=revision.trim();
   if(!preview||!cleanRevision)throw Error('Informe a revisão autorizada antes de publicar.');
@@ -207,6 +208,7 @@ export const service={
  moreExperiences:()=>task('Consultando experiências',async()=>{const page=await rpc('experiences',{after:state.decisions.length});emit({decisions:[...state.decisions,...page.decisions]});}),
  status:(run:Data,status:string,justification:string)=>task('Registrando situação real da alocação',async()=>{await rpc('run-status',{id:run.id,status,justification});await refreshInternal();}),
  invalidate:(decision:Data)=>task('Invalidando experiência',async()=>{await rpc('invalidate',{id:decision.id});await refreshInternal();}),
+ pathsFor(row:Row){return (contextBases.databook||[]).filter(p=>!row.identity.unit||!p.documentUnit||p.documentUnit===row.identity.unit);},
  bases:()=>contextBases,clear:reset,
 };
 function save(blob:Blob,name:string){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}

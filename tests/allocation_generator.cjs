@@ -49,6 +49,29 @@ function runtime(original=false){
  assert.equal(validateDecision({...payload,confirmedPath:revPath},{...context,bases:multiUnitBases}).validated,true);
  assert.throws(()=>validateDecision({...payload,confirmedPath:revPath},{...context,bases:{...multiUnitBases,config:[{unit:'UGH',units:['UGH U-33']}]}}),/Unidade/);
  assert.throws(()=>validateDecision(payload,{...context,versions:{...versions,norms:'n2'}}),/bases mudaram/);
+ // Unit duplicates must be resolved from document group 3, independently of
+ // title/TAG and even when the same EAP and folder names occur in both units.
+ const routingConfig={unit:'UHDT-D',units:['UHDTD GERAL','UHDTD U-32','UHDTD U-39S'],unitRouting:'document-U32-U39S'};
+ const templateRows=[{databook:'UHDTD U-XX|DATA BOOK C&M|TUBULACAO|RIR TUB E STH',description:'RELATORIO DE INSPECAO DE RECEBIMENTO TUBULACAO',rowNumber:11},{databook:'UHDTD SE-XX00|DATA BOOK C&M|TUBULACAO|RIR TUB E STH',description:'RELATORIO DE INSPECAO DE RECEBIMENTO TUBULACAO',rowNumber:12},{databook:'UHDTD SE-XX00|DATA BOOK C&M|TUBULACAO|PASTA EXCLUSIVA',rowNumber:13}];
+ const routed=core.resolveDatabookCatalog(templateRows,routingConfig);
+ assert.equal(routed[0].documentUnit,'U32');assert.equal(routed[1].documentUnit,'U39S');assert.equal(routed[2].documentUnit,'U32');
+ assert.equal(routed[1].sourceDatabook,templateRows[1].databook);assert.ok(routed.every(r=>!/XX00|U-XX/.test(r.databook)));
+ assert.deepEqual(core.resolveDatabookCatalog(routed,routingConfig),routed,'routing is reproducible from preserved source paths');
+ assert.throws(()=>core.resolveDatabookCatalog([...templateRows,templateRows[1]],routingConfig),/Mais de dois/);
+ const routedBases={...bases,databook:routed,config:[routingConfig]},doc39=doc.replace('_U32_','_U39S_');
+ assert.equal(core.documentUnit(doc.replace('_U32_','_U39_')),'U39S');
+ for(const [code,expected] of [[doc,'U32'],[doc39,'U39S']]){
+  const preview=core.prepare({documents:[{document:code}],records:[{...record,document:code,documentKey:code,looseDocumentKey:code}],bases:routedBases,versions})[0];
+  const r=preview.output.databook?preview:core.review(preview,{title:preview.title,path:preview.candidates[0].databook},routedBases);
+  assert.equal(r.identity.unit,expected);assert.ok(r.output.databook.includes(expected==='U32'?'U-32':'U-39S'));
+  assert.ok(r.candidates.every(c=>c.documentUnit===expected));
+  assert.ok(r.output.levels[0].includes(expected==='U32'?'U-32':'U-39S'));
+  const otherPath=routed.find(c=>c.documentUnit!==expected).databook;
+  assert.throws(()=>core.review(r,{title:r.title,path:otherPath},routedBases),/Grupo 3/);
+  assert.throws(()=>validateDecision({...core.decisionPayload(r,'Conferido por unidade e EAP'),confirmedPath:otherPath},{complete:true,bases:routedBases,versions}),/Grupo 3/);
+  const verified=validateDecision(core.decisionPayload(r,'Conferido por unidade e EAP'),{complete:true,bases:routedBases,versions});
+  assert.ok(verified.validated);assert.ok(verified.evidence.some(e=>e.sourcePath===r.sourceDatabook));
+ }
  const prompt=allocationPrompt(doc,reviewed.title,context,[],'TUB');
  const fixture={run:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({candidateId:prompt.candidates[0].id,reason:'Caminho da disciplina previsto na base vigente.',citations:[prompt.refs[0].id]})}}]})};
  assert.equal((await recommendAllocation(fixture,prompt)).path,pathA);

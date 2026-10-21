@@ -100,9 +100,23 @@ The private Central workbook available in this session has 372 master entries;
 its parsed hierarchy matches RECON exactly. Corporate source workbooks are not
 included in repository fixtures.
 
-Rev.E includes three different roots (GERAL, U-32 and SE-XX00). Configuration now
+Rev.E includes template roots (GERAL, U-32 and SE-XX00). Configuration now
 accepts an explicit `units` list; exact membership is checked by the same core
 on the client and server. The legacy single `unit` field remains supported.
 No prefix or fuzzy root matching is used. The server also preserves the EAP
 source/version in decision evidence, rather than discarding it while rebuilding
 trusted evidence.
+
+
+### Contract unit routing clarified by the owner
+
+The owner clarified that XX00 is the U32 template and the repeated branch is
+U39S; RNEST group 3 (U32 / U39S, with U39 recognized as a routing alias) decides
+the document destination. The versioned configuration `document-U32-U39S`
+resolves generic/repeated rows at publication, keeping `sourceDatabook`, source
+sheet/row and unit identity. The real 312-row map produces 312 distinct concrete
+paths, with GERAL / U-32 / U-39S roots and no remaining XX00 or U-XX tokens.
+Candidates, manual review and server validation reject the other unit's path.
+Learning families also include the document unit. N1 follows the document unit
+while the EAP/discipline hierarchy remains the Central master structure.
+U39 routing recognition does not change the preserved normative code validator.
