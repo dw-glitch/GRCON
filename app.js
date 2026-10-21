@@ -2296,9 +2296,25 @@
   }
 
   function resolveRowSigemStatus(row, revision) {
-    const group = state.index?.byDocument?.get(row.documentKey || C.key(row.document));
-    const fallback = group ? C.statusForRevision(group, revision) : { status: "Não Postado" };
-    return window.GrconSharedSigemQuery?.resolveSigemStatus(row.document, revision, fallback);
+    const group = state.index?.byDocument?.get(row.documentKey || C.key(row.document))
+      || { records: [], history: [] };
+    const fallback = C.statusForRevision(group, revision);
+    const shared = window.GrconSharedSigemQuery;
+    const official = shared?.resolveSigemStatus(row.document, revision, fallback) || fallback;
+    return C.grdtStatusForRevision(group, revision, shared?.context?.(), row.document, official);
+  }
+
+  function applyRowSigemStatus(row, resolved) {
+    if (!row || !resolved) return;
+    row.status = resolved.status;
+    row.statusOriginal = resolved.revisionStatus || resolved.status;
+    row.sigemRevisionStatus = resolved.revisionStatus || resolved.status;
+    row.blockingRevision = resolved.blockingRevision || "";
+    row.blockingRevisionStatus = resolved.blockingRevisionStatus || "";
+    row.blockingRevisionSource = resolved.blockingRevisionSource || "";
+    row.sigemStatusSource = resolved.source;
+    row.sigemStatusSnapshotId = resolved.blockingRevisionSnapshotId || resolved.snapshotId || "";
+    if (resolved.inheritedReason) row.reason = resolved.inheritedReason;
   }
 
   function applyRevisionOverride(row, rawValue) {
@@ -2326,7 +2342,7 @@
       finalName: C.proposedFileName(entry.name, row.document, row.revision, row.sheet),
     }));
     const resolved = resolveRowSigemStatus(row, row.revision);
-    if (resolved) { row.status = resolved.status; row.sigemStatusSource = resolved.source; row.sigemStatusSnapshotId = resolved.snapshotId || ""; }
+    applyRowSigemStatus(row, resolved);
     const primary = row.files.find((entry) => extensionOf(entry.name) === "pdf") || row.files[0] || null;
     row.finalName = primary
       ? primary.finalName
@@ -3983,7 +3999,9 @@
       const databook = record.databook || "—";
       const manualSelection = manuallyIncluded(row, index);
       const selectionTitle = statusPolicy.manualOnly
-        ? `Status SIGEM: ${statusPolicy.status || "não identificado"}. Marque individualmente para autorizar a inclusão nesta revisão.`
+        ? (row.blockingRevision
+          ? `Revisão ${row.blockingRevision} está Em Análise no SIGEM; revisão ${row.revision} está ${row.sigemRevisionStatus || "Não Postado"}. O SIGEM não deve aceitar uma nova revisão enquanto a anterior estiver em análise. Marque apenas em caso de exceção operacional confirmada.`
+          : `Status SIGEM: ${statusPolicy.status || "não identificado"}. Marque individualmente para autorizar a inclusão nesta revisão.`)
         : manualAllocationOverrideAllowed(row)
         ? "Marcar manualmente para incluir na GRDT; a LD continuará registrada como Não Alocado"
         : rowRequiresManualResolution(row)
@@ -4017,7 +4035,9 @@
         <td><span class="grdt-code" title="${escapeHtml(grdt)}">${escapeHtml(grdt)}</span></td>
         <td><span class="text-cell" title="${escapeHtml(technicalStatus)}">${escapeHtml(technicalStatus)}</span></td>
         <td><span class="sigem-status" title="${escapeHtml(ldSigemStatus)}">${escapeHtml(ldSigemStatus)}</span></td>
-        <td><span class="sigem-status" title="${escapeHtml(`${row.status} · Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || 'LD / Colar SIGEM'}`)}">${escapeHtml(row.status || "—")}</span></td>
+        <td><span class="sigem-status" title="${escapeHtml(row.blockingRevision
+          ? `Revisão ${row.blockingRevision}: ${row.blockingRevisionStatus}. Revisão ${row.revision}: ${row.sigemRevisionStatus}. Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || "LD / Colar SIGEM"}`
+          : `${row.status} · Fonte: ${window.GrconSharedSigemQuery?.sourceLabel(row.sigemStatusSource) || 'LD / Colar SIGEM'}`)}">${escapeHtml(row.blockingRevision ? `Em Análise (rev. ${row.blockingRevision})` : row.status || "—")}</span></td>
         <td><span class="posting-evidence ${row.postingEvidence && row.postingEvidence.complete ? "posted" : row.postingEvidence && row.postingEvidence.partial ? "review" : "none"}" title="${escapeHtml(row.postingEvidence && row.postingEvidence.explanation || "")}">${escapeHtml(row.postingStatus || (row.postingEvidence && row.postingEvidence.status) || "Sem evidência na LD")}</span></td>
         <td><span class="text-cell" title="${escapeHtml(fiscalComment)}">${escapeHtml(fiscalComment)}</span></td>
         <td><span class="text-cell">${escapeHtml(allocation)}</span>${window.GrconAllocationRegistry?.badge(row.document) || ""}</td>
@@ -4944,9 +4964,7 @@
       if (!row) continue;
       const resolved = resolveRowSigemStatus(row, row.egrdt?.revision || row.revision);
       if (!resolved) continue;
-      row.status = resolved.status;
-      row.sigemStatusSource = resolved.source;
-      row.sigemStatusSnapshotId = resolved.snapshotId || "";
+      applyRowSigemStatus(row, resolved);
     }
   }
 
@@ -5781,10 +5799,12 @@
         state.manualForceInclude.add(index);
       }
       if (statusPolicy.manualOnly) {
+        if (row.blockingRevision) showToast(`Atenção: revisão ${row.blockingRevision} ainda Em Análise; a revisão ${row.revision} não deve ser enviada ao SIGEM até a conclusão da anterior. Inclusão manual registrada como exceção.`, "warn");
         row.manualSigemSelection = {
           revision: C.normalizeRevision(row.revision),
           kind: statusPolicy.kind,
           statusKey: C.normalizeSigemStatus(statusPolicy.status).key,
+          blockingRevision: row.blockingRevision || "",
           selectedAt: new Date().toISOString(),
           selectedBy: window.GrconCloud?.state?.session?.user?.id || "",
         };
