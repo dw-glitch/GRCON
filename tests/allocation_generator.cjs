@@ -18,6 +18,14 @@ function runtime(original=false){
  const bases={databook:[{databook:pathA,description:'RELATORIO DE INSPECAO DE RECEBIMENTO TUBULACAO'}],eap:[{code:'10.2.1',levels:['UHDTD U-32','10.SUPRIMENTO','10.02.BENS TAG PRAT OU NAO TAG','10.02.01.H.TUBULACAO']}],norms:N.RULES,config:[{unit:'UHDT-D'}]};
  const versions={databook:'db1',eap:'e1',norms:'n1'},record={document:doc,documentKey:doc,looseDocumentKey:doc,revision:'0',title:'RELATORIO DE INSPECAO DE RECEBIMENTO',discipline:'TUB',sheet:'ET',source:'LD_001.xlsx',row:2};
  let rows=core.prepare({documents:[{document:doc,revision:'A'}],records:[record],bases,versions});assert.equal(rows[0].revision,'A');assert.equal(rows[0].ldLocated,true);assert.ok(rows[0].output.levels[3].includes('TUBULACAO'));
+ const conflictRecords=[{...record,source:'LD_001.xlsx',row:2,title:'RELATORIO DE INSPECAO DE RECEBIMENTO'},{...record,source:'LD_002.xlsx',row:5,title:'TITULO TECNICAMENTE DIVERGENTE'}];
+ const conflicted=core.prepare({documents:[{document:doc,revision:'A'}],records:conflictRecords,bases,versions})[0];
+ assert.equal(conflicted.ldConflictBlocked,true,'conflitos técnicos da LD devem permanecer bloqueantes');
+ assert.equal(conflicted.suggestedPath,'','conflito não pode selecionar caminho de linha arbitrária');
+ assert.equal(conflicted.candidates.length,0);
+ assert.match(conflicted.blockers.join(' '),/Conflito na LD/i);
+ assert.throws(()=>core.review(conflicted,{title:'TITULO',path:pathA,discipline:'TUB'},bases),/Conflito/);
+ assert.throws(()=>core.decisionPayload(conflicted,'Justificativa de confirmação'),/Conflito/);
  const missing=core.prepare({documents:[{document:doc,revision:'A',discipline:'TUB'}],records:[],bases,versions})[0];assert.equal(missing.ldLocated,false);assert.equal(missing.plannedAllocated,false);assert.equal(missing.revision,'A');
  const reviewed=core.review(missing,{title:'RELATÓRIO DE INSPEÇÃO DE RECEBIMENTO',path:pathA,discipline:'TUB'},bases);assert.ok(!/[ÓÇÃ]/.test(reviewed.title));
  const id=reviewed.identity,experience={id:'learning-1',document:doc,title:reviewed.title,trusted:true,status:'corrected',family:id.family,discipline:id.discipline,eap:id.eap,confirmed_path:pathA,base_versions:versions};
