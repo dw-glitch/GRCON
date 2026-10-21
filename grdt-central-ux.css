@@ -137,3 +137,18 @@ html[data-app="GRCON"] #results-table .status-chip.manual-sigem {
   border: 1px solid #e7c57a;
   font-weight: 650;
 }
+
+/* A alocação negativa tem prioridade sobre o status SIGEM, inclusive após
+   inclusão manual e quando a revisão também estiver Em Análise. */
+html[data-app="GRCON"] #results-table .status-chip.allocation-blocked {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #f1a9a9;
+  font-weight: 750;
+}
+html[data-app="GRCON"] #results-table .allocation-state.blocked {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #f1a9a9;
+  font-weight: 750;
+}

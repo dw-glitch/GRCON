@@ -45,6 +45,37 @@ inherited.manualSigemSelection = {revision:"C",kind:"analysis",statusKey:"EM ANA
 assert.equal(Q.selectionAuthorized(inherited,0,inheritedSelected,inheritedManual),true,"exceção marcada conscientemente");
 inherited.blockingRevision = "A";
 assert.equal(Q.selectionAuthorized(inherited,0,inheritedSelected,inheritedManual),false,"mudança da revisão bloqueadora exige nova exceção");
+// A alocação negativa é a pendência principal mesmo quando o SIGEM está Em Análise.
+for (const status of ["Não Postado", "Em Análise", "Em Workflow"]) {
+  for (const [kind, record] of [
+    ["not_allocated", {allocationStatus:"NÃO ALOCADO"}],
+    ["not_allocated", {record:{allocationStatus:"Não alocado"}}],
+    ["not_allocated", {allocationFinding:{kind:"not_allocated",label:"Não Alocado"}}],
+    ["conflict", {allocationFinding:{kind:"conflict"}}],
+    ["conflict", {blockCode:"not_allocated_conflict"}],
+  ]) {
+    const row = {document:"PR-5290.00-22313-175-C1O-013",revision:"B",
+      status,decision:Core.READY,hardBlock:false,...record};
+    const result=Q.selectionPolicy(row);
+    assert.equal(Q.allocationAlert(row),kind);
+    assert.equal(result.allocation,kind);
+    assert.equal(result.autoEligible,false,`${status} / ${kind}`);
+    assert.equal(result.manualOnly,true);
+    assert.equal(result.label,kind==="conflict"?"Conflito de alocação":"Não Alocado");
+    assert.equal(Q.selectionAuthorized(row,0,new Set([0]),new Set()),false);
+  }
+}
+const nonAllocatedManual = {document:"DOC-NEG",revision:"B",status:"Não Postado",decision:Core.READY,
+  allocationStatus:"NÃO ALOCADO"};
+const nonAllocatedSelected=new Set([0]),nonAllocatedManualIndices=new Set([0]);
+assert.equal(Q.selectionAuthorized(nonAllocatedManual,0,nonAllocatedSelected,nonAllocatedManualIndices),false);
+nonAllocatedManual.manualSigemSelection={kind:"not_posted",revision:"B",statusKey:"NAO POSTADO"};
+assert.equal(Q.selectionAuthorized(nonAllocatedManual,0,nonAllocatedSelected,nonAllocatedManualIndices),true,
+  "inclusão individual excepcional deve continuar disponível");
+assert.equal(Q.allocationAlert({allocationStatus:"ALOCADO"}),"");
+assert.equal(Q.selectionPolicy({status:"Não Postado",decision:Core.READY,allocationStatus:"ALOCADO"}).autoEligible,true);
+assert.equal(Q.allocationAlert({allocationStatus:""}),"",
+  "célula vazia não representa automaticamente Não Alocado");
 assert.equal(policy("Em análise", {decision: Core.REVIEW}).autoEligible, false);
 assert.equal(policy("Recusado", {hardBlock: true}).autoEligible, false);
 // "Repostagem" informa histórico, mas não autoriza selecionar item em análise.
@@ -74,6 +105,11 @@ assert.match(appSource,/E\.createPlan\(state\.results, guardedSelectedIndices\(\
 assert.match(appSource,/const physicalSelection = guardedSelectedIndices\(true\);/);
 assert.match(appSource,/row\.manualSigemSelection = \{/);
 assert.match(appSource,/rowStatusPolicy\(row\)\.manualOnly/);
+assert.match(appSource,/allocation-blocked/);
+assert.match(appSource,/const allocationClass = allocationAlert/);
+assert.match(appSource,/TriageQuery\.allocationAlert\(row\)\) return "bloqueado"/);
+assert.match(fs.readFileSync(require("node:path").join(__dirname,"..","grdt-central-ux.css"),"utf8"),
+  /status-chip\.allocation-blocked[\s\S]*#991b1b/);
 assert.doesNotMatch(appSource,/if \(row\.decision === C\.READY && !row\.hardBlock && rowOutputSources\(row\)\.length\) state\.selected\.add\(index\);/);
 console.log("GRDT SIGEM: análise excluída automaticamente, seleção individual, aliases, revisão, repostagem e proteção dos downloads OK.");
 

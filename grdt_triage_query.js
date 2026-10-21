@@ -42,15 +42,30 @@
   // Status do SIGEM e classificação de emissão são dimensões distintas:
   // READY/repostagem nunca transforma uma análise aberta em seleção automática.
   const automaticStatusKinds = new Set(["not_posted", "advance", "issued"]);
+  // Precedência documental: uma não alocação na LD/base de alocação jamais
+  // desaparece por causa do status SIGEM, mesmo durante uma análise aberta.
+  function allocationAlert(row) {
+    if (!row) return "";
+    if (row.blockCode === "not_allocated_conflict" || row.allocationFinding?.kind === "conflict")
+      return "conflict";
+    if (row.blockCode === "not_allocated" || row.allocationFinding?.kind === "not_allocated")
+      return "not_allocated";
+    const source = row.allocationStatus || row.record?.allocationStatus || "";
+    return Core.allocationState(source).kind === "not_allocated" ? "not_allocated" : "";
+  }
   function selectionPolicy(row) {
     const status = String(row && (row.status || row.sigemStatus || row.statusOperational) || "").trim();
     const kind = Core.statusKind(status);
-    const autoAllowed = automaticStatusKinds.has(kind);
+    const allocation = allocationAlert(row);
+    const autoAllowed = automaticStatusKinds.has(kind) && !allocation;
     return {
-      status, kind, autoAllowed,
+      status, kind, allocation, autoAllowed,
       manualOnly: !autoAllowed,
       autoEligible: Boolean(row && row.decision === Core.READY && !row.hardBlock && autoAllowed),
-      label: kind === "analysis" ? (row?.blockingRevision ? `Em análise (rev. ${row.blockingRevision})` : "Em análise") : kind === "unknown" ? "Verificar status" : "Conferir status SIGEM",
+      label: allocation === "not_allocated" ? "Não Alocado"
+        : allocation === "conflict" ? "Conflito de alocação"
+        : kind === "analysis" ? (row?.blockingRevision ? `Em análise (rev. ${row.blockingRevision})` : "Em análise")
+        : kind === "unknown" ? "Verificar status" : "Conferir status SIGEM",
     };
   }
   function manualStatusApprovalValid(row) {
@@ -69,5 +84,5 @@
     return !policy.manualOnly || Boolean(manualIndices && manualIndices.has(index) && manualStatusApprovalValid(row));
   }
   return Object.freeze({ origin, extensions, historyKind, matches, searchText,
-    selectionPolicy, manualStatusApprovalValid, selectionAuthorized });
+    allocationAlert, selectionPolicy, manualStatusApprovalValid, selectionAuthorized });
 });
