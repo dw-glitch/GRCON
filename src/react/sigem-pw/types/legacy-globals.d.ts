@@ -182,6 +182,7 @@ declare global {
       loadSnapshot(id: string, versions?: import("./domain").SigemPwSharedVersion[]): Promise<SigemPwBase>;
       publish(base: SigemPwBase): Promise<SigemPwBase | null>;
       canPublish(): boolean;
+      canEditDate(): boolean;
       setReferenceDate(value: string, id: string, expectedImportedAt?: string): Promise<void>;
       remove(id: string): Promise<void>;
     };

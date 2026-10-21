@@ -6,7 +6,8 @@
   const scope=()=>JSON.stringify([cloud()?.state?.session?.user?.id||'',cloud()?.state?.membership?.workspace_id||'']);
   const core=()=>{if(!root.GrconSigemPwDashboard)throw Error('Motor PW indisponível.');return root.GrconSigemPwDashboard;};
   const connected=()=>Boolean(cloud()?.state?.membership?.workspace_id&&cloud()?.state?.client&&cloud()?.state?.online);
-  const canPublish=()=>connected()&&['owner','admin'].includes(cloud()?.state?.membership?.role);
+  const canPublish=()=>connected()&&['owner','admin','operator'].includes(cloud()?.state?.membership?.role);
+  const canEditDate=()=>connected()&&['owner','admin'].includes(cloud()?.state?.membership?.role);
   function reset(){epoch++;snapshots.clear();state.base=null;state.versions=[];state.error='';state.stale=false;state.scope=scope();refreshPromise=null;}
   function assertContext(ticket,identity){if(ticket!==epoch||identity!==scope()){const e=Error('O contrato ou a conta mudou.');e.name='AbortError';throw e;}}
   async function request(operation,input={},identity=scope()){
@@ -93,7 +94,7 @@
   }
   async function publish(base,onProgress){
     if(state.scope!==scope())reset();
-    if(!canPublish())throw Error('Somente proprietário ou administrador pode publicar o PW compartilhado.');
+    if(!canPublish())throw Error('Seu perfil não pode publicar o PW compartilhado.');
     if(state.busy)throw Error('Já existe uma publicação PW em andamento.');
     const records=base?.sourceRecords||base?.records;
     if(!Array.isArray(records)||!records.length||records.length>100000||records.some(r=>!String(r.document||'').trim()))throw Error('Base PW inválida para compartilhamento.');
@@ -115,11 +116,12 @@
     }finally{state.busy=false;}
   }
   async function setReferenceDate(value,id,expectedImportedAt){
+    if(!canEditDate())throw Error('Somente proprietário ou administrador pode alterar a data operacional PW.');
     const date=new Date(value);if(Number.isNaN(date.getTime()))throw Error('Data PW inválida.');
     await request('date',{id,importedAt:date.toISOString(),...(expectedImportedAt!==undefined?{expectedImportedAt}:{})});snapshots.delete(id);await refresh();
     if(state.error)throw Error('Data PW salva, mas a atualização local falhou. Atualize a base.');
   }
   async function remove(id){await request('delete',{id});snapshots.delete(id);await refresh();}
   for(const name of ['grcon:contract-context-changed','grcon:cloud-signed-out'])root.addEventListener(name,reset);
-  root.GrconSharedPwQuery=Object.freeze({state,refresh,listVersions,loadSnapshot,publish,setReferenceDate,remove,canPublish,current:()=>state.base});
+  root.GrconSharedPwQuery=Object.freeze({state,refresh,listVersions,loadSnapshot,publish,setReferenceDate,remove,canPublish,canEditDate,current:()=>state.base});
 })(window);

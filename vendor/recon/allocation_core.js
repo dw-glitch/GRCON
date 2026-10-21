@@ -1,0 +1,2204 @@
+(function (root, factory) {
+  const core = root.RECONTriagemCore || (typeof module === "object" && module.exports ? require("./core.js") : null);
+  const conflicts = root.RECONLDConflictCore || (typeof module === "object" && module.exports ? require("./ld_conflicts.js") : null);
+  const confirmations = root.RECONAllocationConfirmations || (typeof module === "object" && module.exports ? require("./allocation_confirmation_sources.js") : null);
+  const nonTagged = root.RECONNonTaggedTitles || (typeof module === "object" && module.exports ? require("./non_tagged_title_rules.js") : null);
+  const api = factory(core, conflicts, confirmations, nonTagged);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  root.AllocationCore = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (C, F, P, NT) {
+  "use strict";
+
+  const READY = "pronto";
+  const REVIEW = "revisar";
+  const SKIP = "desconsiderar";
+
+  const ALLOCATION_HEADERS = Object.freeze([
+    "NomeDocumento",
+    "Data Prevista",
+    "Workflow",
+    "Documento Ativo",
+    "Ação",
+    "Data da Linha Base",
+    "Propósito de Emissão Original",
+    "Documento Crítico",
+    "Observação",
+    "Caminho Data Book",
+    "N1",
+    "N2",
+    "N3",
+    "N4",
+    "N5",
+    "N6",
+  ]);
+
+  const CONTROL_HEADERS = Object.freeze([
+    "ABA",
+    "VERSÃO \nDA LD",
+    "DATA DO ENVIO\n DA ALOC",
+    "Retorno da Fiscal 01\n (Renata)",
+    "Resposta da Fiscal 01\n (Renata)",
+    "Retorno da Fiscal 02\n (Nani)",
+    "STATUS DA ALOCAÇÃO",
+    "ALOCAÇÃO",
+    "FAROL",
+    ...ALLOCATION_HEADERS,
+    "N7",
+    "N8",
+    "N9",
+    "N10",
+  ]);
+
+  function text(value) {
+    if (value === null || value === undefined) return "";
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      const year = value.getFullYear();
+      const month = String(value.getMonth() + 1).padStart(2, "0");
+      const day = String(value.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    return String(value).trim();
+  }
+
+  function norm(value) {
+    return C && C.norm ? C.norm(value) : text(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+  }
+
+  function key(value) {
+    return C && C.key ? C.key(value) : norm(value).replace(/\s*([_.-])\s*/g, "$1");
+  }
+
+  function looseKey(value) {
+    return C && C.looseKey ? C.looseKey(value) : norm(value).replace(/[^A-Z0-9]/g, "");
+  }
+
+  const TITLE_STOP_WORDS = new Set([
+    "A", "AS", "AO", "AOS", "COM", "DA", "DAS", "DE", "DO", "DOS", "E", "EM", "NA", "NAS", "NO", "NOS",
+    "O", "OS", "PARA", "POR", "UM", "UMA", "MCM", "UHDT", "UHDTD", "U32", "C1O", "C",
+  ]);
+
+  function pathKey(value) {
+    return norm(value)
+      .replace(/EDECUCAO/g, "EXECUCAO")
+      .replace(/INTRUMENT/g, "INSTRUMENT")
+      .replace(/\s*\|\s*/g, "|");
+  }
+
+  function completeDatabook(value) {
+    const raw = text(value);
+    return raw && raw.split("|").filter((part) => part.trim()).length >= 3;
+  }
+
+  function documentFamily(value) {
+    const document = text(value);
+    let match = document.match(/^(?:[IAFLED]-)?([A-Z]{2,4})-5290\.00-[0-9]{5}-([A-Z0-9]{3})-[A-Z0-9]{3}-/i);
+    if (match) return { key: `${norm(match[1])}|${norm(match[2])}`, label: norm(match[2]), type: norm(match[1]) };
+    match = document.match(/-C1O-CV-([A-Z0-9]+)-/i);
+    if (match) return { key: `CV|${norm(match[1])}`, label: norm(match[1]), type: "CV" };
+    const groups = document.split("_");
+    if (groups.length >= 7 && norm(groups[1]) === "RNEST") {
+      return { key: `ET|${norm(groups[3])}|${norm(groups[4])}|${norm(groups[5])}`, label: `${groups[4]} ${groups[5]}`, type: "ET" };
+    }
+    return { key: "", label: "", type: "" };
+  }
+
+  function normalizeEap(value) {
+    // A profundidade da EAP varia por área do projeto (ex.: 6.16.48 tem 3
+    // níveis, 3.4.21.1 tem 4): exigir sempre 4 partes deixava a EAP inteira
+    // sem bater e a linha saía sem nenhum N1-N10, mesmo quando a base
+    // reconhecia o código mais raso por prefixo.
+    const match = text(value).match(/(\d+(?:\.\d+){1,6})/);
+    if (!match) return "";
+    return match[1].split(".").map((part) => String(Number(part))).join(".");
+  }
+
+  function documentEap(value) {
+    const document = text(value);
+    // Grupo 4 do nome do documento é sempre a EAP nos documentos RNEST,
+    // qualquer que seja sua profundidade — extrair pela posição evita
+    // depender de um padrão de tamanho fixo.
+    const groups = document.split("_");
+    if (groups.length >= 7 && norm(groups[1]) === "RNEST") return normalizeEap(groups[3]);
+    const token = groups.find((part) => /^\d+(?:\.\d+){1,6}$/.test(part.trim()));
+    return normalizeEap(token);
+  }
+
+  function recordEap(record) {
+    return normalizeEap(recordValue(record, ["EAP", "CÓDIGO EAP", "CODIGO EAP"])) || documentEap(record && record.document);
+  }
+
+  function levelKey(levels) {
+    return Array.from({ length: 10 }, (_, index) => norm((levels || [])[index])).join("|");
+  }
+
+  function addLevelsVote(votes, keyValue, levels) {
+    const voteKey = text(keyValue);
+    const normalizedLevels = Array.from({ length: 10 }, (_, index) => text((levels || [])[index]));
+    if (!voteKey || !normalizedLevels.some(Boolean)) return;
+    if (!votes.has(voteKey)) votes.set(voteKey, new Map());
+    const bucket = votes.get(voteKey);
+    const signature = levelKey(normalizedLevels);
+    if (!bucket.has(signature)) bucket.set(signature, { levels: normalizedLevels, count: 0 });
+    bucket.get(signature).count += 1;
+  }
+
+  function mostVotedLevels(bucket) {
+    if (!bucket || !bucket.size) return [];
+    return [...bucket.values()].sort((left, right) => right.count - left.count)[0].levels.slice();
+  }
+
+  function leadingNumericCode(value) {
+    const match = text(value).match(/^(\d+(?:\.\d+)*)/);
+    if (!match) return "";
+    return match[1].split(".").map((part) => String(Number(part))).join(".");
+  }
+
+  // A base de caminhos da EAP chega de duas formas: como aba do próprio
+  // controle ("Base - Caminho das Pastas") ou como o export do sistema, que vem
+  // numa planilha só, com a aba chamada Sheet1 e o cabeçalho algumas linhas
+  // abaixo do título. Procurar pelo cabeçalho Nivel 1 em qualquer aba cobre as
+  // duas sem depender do nome.
+  function findProjectLevelSheet(workbook, XLSX) {
+    const named = findSheet(workbook, "Base - Caminho das Pastas");
+    const candidates = named ? [named] : (workbook && workbook.SheetNames || []).map((name) => workbook.Sheets[name]);
+    for (const sheet of candidates) {
+      const rows = rowsFromSheet(sheet, XLSX);
+      for (let index = 0; index < Math.min(rows.length, 30); index += 1) {
+        const candidate = headerMap(rows[index]);
+        if (candidate.has("NIVEL 1") || candidate.has("NÍVEL 1")) return { rows, headerIndex: index, map: candidate };
+      }
+    }
+    return null;
+  }
+
+  function parseProjectLevelBase(workbook, XLSX) {
+    const found = findProjectLevelSheet(workbook, XLSX);
+    if (!found) return [];
+    const { rows, headerIndex, map } = found;
+    const entries = [];
+    for (let index = headerIndex + 1; index < rows.length; index += 1) {
+      const row = rows[index] || [];
+      const levels = Array.from({ length: 10 }, (_, levelIndex) => text(rowValue(row, map, [`Nivel ${levelIndex + 1}`, `Nível ${levelIndex + 1}`])));
+      if (!levels.some(Boolean)) continue;
+      const numericCodes = levels.map(leadingNumericCode).filter(Boolean);
+      if (!numericCodes.length) continue;
+      const code = numericCodes.sort((left, right) => right.split(".").length - left.split(".").length)[0];
+      entries.push({ code, levels, rowNumber: index + 1 });
+    }
+    return entries;
+  }
+
+  function commonLevels(rows) {
+    if (!rows || !rows.length) return [];
+    return Array.from({ length: 10 }, (_, index) => {
+      const values = rows.map((row) => text((row.levels || [])[index]));
+      const first = values[0];
+      return first && values.every((value) => norm(value) === norm(first)) ? first : "";
+    });
+  }
+
+  // Quando várias pastas dividem o mesmo código da EAP, o que as separa é a
+  // disciplina: sob 10.02.01 existem A.DINÂMICOS, B.ELÉTRICA, E.INSTRUMENTAÇÃO,
+  // H.TUBULAÇÃO e assim por diante. Se a disciplina do documento aponta para
+  // exatamente uma delas, ela resolve o nível; senão, fica só o que é comum.
+  function disambiguateByDiscipline(candidates, record) {
+    const wanted = databookDisciplineKey(record);
+    if (!wanted || candidates.length < 2) return null;
+    const depth = Math.max(...candidates.map((entry) => trimmedLevelCount(entry.levels)));
+    const matches = candidates.filter((entry) => {
+      const leaf = text((entry.levels || [])[depth - 1]);
+      return leaf && databookDisciplineKey({ discipline: leaf }) === wanted;
+    });
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function trimmedLevelCount(levels) {
+    let count = 0;
+    (levels || []).forEach((value, index) => { if (text(value)) count = index + 1; });
+    return count;
+  }
+
+  const PROJECT_LEVEL_INDEX_CACHE = typeof WeakMap === "function" ? new WeakMap() : null;
+
+  function normalizeProjectCode(value) {
+    const raw = text(value);
+    if (!/^\d+(?:\.\d+){0,6}$/.test(raw)) return "";
+    return raw.split(".").map((part) => String(Number(part))).join(".");
+  }
+
+  function projectLevelIndex(entries) {
+    const rows = Array.isArray(entries) ? entries : [];
+    if (PROJECT_LEVEL_INDEX_CACHE && PROJECT_LEVEL_INDEX_CACHE.has(rows)) return PROJECT_LEVEL_INDEX_CACHE.get(rows);
+    const byCode = new Map();
+    rows.forEach((entry) => {
+      const code = normalizeProjectCode(entry && entry.code);
+      if (!code) return;
+      if (!byCode.has(code)) byCode.set(code, []);
+      byCode.get(code).push(entry);
+    });
+    const index = { byCode };
+    if (PROJECT_LEVEL_INDEX_CACHE) PROJECT_LEVEL_INDEX_CACHE.set(rows, index);
+    return index;
+  }
+
+  function projectLevelCandidates(entries, eapValue) {
+    const eap = normalizeEap(eapValue);
+    if (!eap) return [];
+    const index = projectLevelIndex(entries);
+    const parts = eap.split(".");
+    const candidates = [];
+    for (let depth = 1; depth <= parts.length; depth += 1) {
+      const code = parts.slice(0, depth).join(".");
+      (index.byCode.get(code) || []).forEach((entry) => candidates.push(entry));
+    }
+    return candidates;
+  }
+
+  function disciplineKeysCompatible(left, right) {
+    if (!left || !right) return true;
+    if (left === right) return true;
+    const civilMetal = new Set(["CIVIL", "ESTRUTURA_METALICA"]);
+    return civilMetal.has(left) && civilMetal.has(right);
+  }
+
+  function projectPathDisciplineKey(levels) {
+    const values = Array.isArray(levels) ? levels : [];
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+      const discipline = databookDisciplineKey({ discipline: values[index] });
+      if (discipline) return discipline;
+    }
+    return "";
+  }
+
+  function recordDisciplineEvidence(record) {
+    const item = record || {};
+    const workflow = text(item.workflow || recordValue(item, ["WORKFLOW", "QUEM?"]));
+    const databook = text(recordValue(item, ["CAMINHO DATABOOK", "CAMINHO DATA BOOK"]));
+    const evidence = [
+      databookDisciplineKey(item),
+      databookDisciplineKey({ discipline: workflow }),
+      databookDisciplineKey({ discipline: databook }),
+    ].filter(Boolean);
+    return [...new Set(evidence)];
+  }
+
+  function levelsCompatibleWithRecord(levels, record) {
+    const pathDiscipline = projectPathDisciplineKey(levels);
+    if (!pathDiscipline) return true;
+    const evidence = recordDisciplineEvidence(record);
+    return !evidence.length || evidence.every((discipline) => disciplineKeysCompatible(discipline, pathDiscipline));
+  }
+
+  function levelsFromEapBase(entries, eapValue, record) {
+    const eap = normalizeEap(eapValue);
+    if (!eap) return [];
+    let candidates = projectLevelCandidates(entries, eap).filter((entry) => levelsCompatibleWithRecord(entry.levels, record));
+    if (!candidates.length) return [];
+
+    // Disciplina/contexto estrutural vem antes da profundidade. Isso impede um
+    // ramo elétrico mais profundo de vencer um ramo de tubulação compatível.
+    const wanted = databookDisciplineKey(record);
+    if (wanted) {
+      const explicit = candidates.filter((entry) => {
+        const pathDiscipline = projectPathDisciplineKey(entry.levels);
+        return pathDiscipline && disciplineKeysCompatible(wanted, pathDiscipline);
+      });
+      if (explicit.length) candidates = explicit;
+    }
+
+    const deepest = Math.max(...candidates.map((entry) => normalizeProjectCode(entry.code).split(".").length));
+    const best = candidates.filter((entry) => normalizeProjectCode(entry.code).split(".").length === deepest);
+    const uniquePaths = new Map();
+    best.forEach((entry) => {
+      const signature = levelKey(entry.levels);
+      if (signature && !uniquePaths.has(signature)) uniquePaths.set(signature, entry);
+    });
+    if (uniquePaths.size !== 1) return [];
+    return [...uniquePaths.values()][0].levels.slice();
+  }
+
+  // Nas alocações oficiais, N2 e N3 dependem só dos dois primeiros campos da
+  // EAP: 3.4.21.1 e 3.4.18.1 caem os dois em 03.REPARO / 03.04.CIVIL. Quando a
+  // EAP exata ainda não apareceu no controle, as EAPs irmãs — mesmo grupo e
+  // mesmo subgrupo — resolvem os níveis que elas têm em comum, em vez de
+  // deixar a linha vazia.
+  function levelsFromSiblingEaps(levelsByEap, eapValue) {
+    const eap = normalizeEap(eapValue);
+    if (!eap || !levelsByEap) return [];
+    const parts = eap.split(".");
+    if (parts.length < 2) return [];
+    const prefix = `${parts[0]}.${parts[1]}.`;
+    const siblings = [];
+    levelsByEap.forEach((levels, code) => {
+      if (String(code).startsWith(prefix) && (levels || []).some(Boolean)) siblings.push({ levels });
+    });
+    return siblings.length ? commonLevels(siblings) : [];
+  }
+
+  function levelResolutionForEap(control, record) {
+    const eap = recordEap(record);
+    const empty = { levels: [], source: "", sourceType: "none", confidence: "nenhuma", reason: "", blockFallback: false, candidateCount: 0 };
+    if (!eap || !control) return empty;
+
+    // A árvore mestre sempre tem precedência sobre histórico. Histórico antigo
+    // pode conter exatamente o erro que estamos tentando corrigir (TUB -> ELÉTRICA).
+    const baseEntries = control.projectLevelBase || [];
+    const baseCandidates = projectLevelCandidates(baseEntries, eap);
+    const fromBase = levelsFromEapBase(baseEntries, eap, record);
+    if (fromBase.some(Boolean)) {
+      return {
+        levels: fromBase,
+        source: "Base - Caminho das Pastas",
+        sourceType: "project-base",
+        confidence: "alta",
+        reason: "Caminho mestre compatível com EAP " + eap + " e disciplina/contexto do documento.",
+        blockFallback: false,
+        candidateCount: baseCandidates.length,
+      };
+    }
+
+    const discipline = recordDisciplineEvidence(record).join("/") || "não identificada";
+    if (baseCandidates.length) {
+      return {
+        levels: [],
+        source: "Base - Caminho das Pastas",
+        sourceType: "project-base-ambiguous",
+        confidence: "revisar",
+        reason: "REVISAR CAMINHO DE ALOCAÇÃO — não existe um único ramo mestre compatível para EAP " + eap + " / disciplina " + discipline + ".",
+        blockFallback: true,
+        candidateCount: baseCandidates.length,
+      };
+    }
+
+    // Somente quando a Base não cobre o EAP é permitido consultar o histórico,
+    // e ainda assim o caminho histórico precisa ser estruturalmente compatível.
+    const exact = control.levelsByEap && control.levelsByEap.get(eap);
+    if (exact && exact.some(Boolean)) {
+      if (levelsCompatibleWithRecord(exact, record)) {
+        return {
+          levels: exact.slice(),
+          source: "Histórico EAP (Base sem cobertura)",
+          sourceType: "history-eap",
+          confidence: "média",
+          reason: "EAP " + eap + " não existe na Base - Caminho das Pastas; usado histórico compatível.",
+          blockFallback: false,
+          candidateCount: 0,
+        };
+      }
+      return {
+        levels: [],
+        source: "Histórico EAP incompatível",
+        sourceType: "history-eap-conflict",
+        confidence: "revisar",
+        reason: "REVISAR CAMINHO DE ALOCAÇÃO — histórico de EAP " + eap + " conflita com a disciplina " + discipline + ".",
+        blockFallback: true,
+        candidateCount: 0,
+      };
+    }
+
+    // Compatibilidade legada: se a árvore mestre realmente não cobre o EAP e
+    // também não há EAP exata no histórico, uma EAP irmã do mesmo subgrupo pode
+    // fornecer apenas os níveis que são comuns a todos os irmãos. Esse fallback
+    // nunca roda quando a Base - Caminho das Pastas possui candidatos.
+    const sibling = levelsFromSiblingEaps(control.levelsByEap, eap);
+    if (sibling.some(Boolean) && levelsCompatibleWithRecord(sibling, record)) {
+      return {
+        levels: sibling.slice(),
+        source: "Histórico de EAP irmã (Base sem cobertura)",
+        sourceType: "history-sibling",
+        confidence: "baixa",
+        reason: "EAP " + eap + " não existe na Base; preservados somente níveis comuns de EAPs irmãs compatíveis.",
+        blockFallback: false,
+        candidateCount: 0,
+      };
+    }
+
+    // Sem qualquer candidato na Base, não bloqueie fontes oficiais posteriores
+    // do próprio documento (base documental/histórico). outputFromRecord ainda
+    // valida a disciplina antes de permitir que esses níveis sejam exportados.
+    return {
+      ...empty,
+      source: "Base - Caminho das Pastas sem cobertura",
+      sourceType: "project-base-missing",
+      confidence: "revisar",
+      reason: "EAP " + eap + " sem candidato na Base - Caminho das Pastas; avaliar fontes oficiais do próprio documento.",
+      blockFallback: false,
+    };
+  }
+
+  function levelsForEap(control, record) {
+    return levelResolutionForEap(control, record).levels.slice();
+  }
+
+  function documentSequence(value) {
+    const document = text(value).replace(/\.[A-Z0-9]+$/i, "");
+    const match = document.match(/(?:-|_)(\d{1,6})$/);
+    return match ? Number(match[1]) : null;
+  }
+
+  function titleKind(value) {
+    const title = norm(value);
+    const rules = [
+      ["CURRICULO", /\bCURRICULO\b/],
+      ["IEIS", /\bIEIS\b|INSTRUCAO DE EXECUCAO E INSPECAO DE SOLDAGEM/],
+      ["EPS", /\bEPS\b|ESPECIFICACAO DE PROCEDIMENTO DE SOLDAGEM/],
+      ["RQPS", /\bRQPS\b|QUALIFICACAO DE PROCEDIMENTO DE SOLDAGEM/],
+      ["RQS", /\bRQS\b|QUALIFICACAO DE SOLDADOR/],
+      ["RSQ", /\bRSQ\b|RELACAO DE SOLDADORES QUALIFICADOS/],
+      ["RIR", /\bRIR\b|INSPECAO DE RECEBIMENTO/],
+      ["RNC", /\bRNC\b|RELATORIO DE NAO CONFORMIDADE/],
+      ["DATA BOOK", /\bDATA BOOK\b/],
+      ["PLANO", /\bPLANO\b/],
+      ["PROCEDIMENTO", /\bPROCEDIMENTO\b/],
+      ["RELATORIO", /\bRELATORIO\b/],
+      ["CERTIFICADO", /\bCERTIFICACAO\b|\bCERTIFICADO\b/],
+    ];
+    const found = rules.find(([, pattern]) => pattern.test(title));
+    return found ? found[0] : "";
+  }
+
+  const GENERAL_DATABOOK_BY_DISCIPLINE = Object.freeze({
+    TUBULACAO: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|TUBULAÇÃO|RIR TUBULAÇÃO",
+      CM: "UHDT-D|DATA BOOK C&M|TUBULAÇÃO|C&M TUBULAÇÃO",
+    }),
+    CIVIL: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|CIVIL|RIR CIVIL",
+      CM: "UHDT-D|DATA BOOK C&M|CIVIL",
+    }),
+    ESTRUTURA_METALICA: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|CIVIL|RIR ESTRUTURA METÁLICA",
+      CM: "UHDT-D|DATA BOOK C&M|CIVIL|ESTRUTURA METÁLICA",
+    }),
+    EQP_ESTATICOS: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|EQP ESTÁTICOS|RIR",
+      CM: "UHDT-D|DATA BOOK C&M|EQP ESTÁTICOS|C&M DEMAIS EQP ESTÁTICOS",
+    }),
+    EQP_DINAMICOS: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|EQP DINÂMICOS|RIR",
+      CM: "UHDT-D|DATA BOOK C&M|EQP DINÂMICOS|C&M - DEMAIS EQP DINÂMICOS",
+    }),
+    ELETRICA: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|ELÉTRICA|RIR ELÉTRICA",
+      CM: "UHDT-D|DATA BOOK C&M|ELÉTRICA",
+    }),
+    TELECOM: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|TELECOM|RIR_TELECOM",
+      CM: "UHDT-D|DATA BOOK C&M|TELECOM",
+    }),
+    INSTRUMENTACAO: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|INSTRUMENTAÇÃO|RIR_INSTRUMENTAÇÃO",
+      CM: "UHDT-D|DATA BOOK C&M|INSTRUMENTAÇÃO",
+    }),
+    HVAC: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|HVAC",
+      CM: "UHDT-D|DATA BOOK C&M|HVAC|C&M DE HVAC",
+    }),
+    EQP_SEGURANCA: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|EQP SEGURANÇA|RIR EQP_SEGURANÇA",
+      CM: "UHDT-D|DATA BOOK C&M|EQP SEGURANÇA|C&M_EQP. SEGURANÇA",
+    }),
+    QUALIDADE: Object.freeze({
+      CM: "UHDT-D|DATA BOOK C&M|GERAL - PROCEDIMENTOS DE EXECUÇÃO|QUALIDADE",
+    }),
+    PINTURA: Object.freeze({
+      RIR: "UHDT-D|DATA BOOK C&M|PINTURA",
+      CM: "UHDT-D|DATA BOOK C&M|PINTURA",
+    }),
+  });
+
+  // Pasta N3 do mapa que corresponde a cada disciplina. Estrutura metálica não
+  // tem pasta própria: ela vive dentro de CIVIL.
+  const DISCIPLINE_DATABOOK_FOLDER = Object.freeze({
+    TUBULACAO: "TUBULACAO",
+    CIVIL: "CIVIL",
+    ESTRUTURA_METALICA: "CIVIL",
+    EQP_ESTATICOS: "EQP ESTATICOS",
+    EQP_DINAMICOS: "EQP DINAMICOS",
+    ELETRICA: "ELETRICA",
+    TELECOM: "TELECOM",
+    INSTRUMENTACAO: "INSTRUMENTACAO",
+    HVAC: "HVAC",
+    EQP_SEGURANCA: "EQP SEGURANCA",
+    PINTURA: "PINTURA",
+  });
+
+  function databookDisciplineKey(record) {
+    const item = record || {};
+    const documentGroups = text(item.document).split("_");
+    const codeDiscipline = documentGroups.length >= 6 ? norm(documentGroups[4]) : "";
+    const direct = norm(item.discipline || recordValue(item, ["DISCIPLINA", "WORKFLOW", "QUEM?"]));
+    const value = direct || codeDiscipline || norm(item.sheet);
+    // Nas alocações oficiais, um documento de CIVIL cujo Grupo 7 começa por EMT
+    // vai para a pasta de estrutura metálica, não para a de civil
+    // (C1O_RNEST_U32_3.5.1.5_CVL_RIR_EMT-NF-3857 → CIVIL|RIR ESTRUTURA METÁLICA).
+    if (/CIV|^CVL$/.test(value) && documentGroups.length >= 7 && /^EMT\b|^EMT[-_]/.test(norm(documentGroups.slice(6).join("_")))) {
+      return "ESTRUTURA_METALICA";
+    }
+    if (/TUB/.test(value)) return "TUBULACAO";
+    if (/EQP.*DIN|DINAM|^EQD$/.test(value)) return "EQP_DINAMICOS";
+    if (/EQP.*ESTAT|ESTATIC|^MEC$/.test(value)) return "EQP_ESTATICOS";
+    if (/ESTRUT|METAL|^EST$/.test(value)) return "ESTRUTURA_METALICA";
+    if (/CIV|^CVL$/.test(value)) return "CIVIL";
+    // TELECOM vem antes de ELÉTRICA porque a palavra TELECOM contém "ELE" e
+    // caía em ELETRICA.
+    if (/TELE|^TEL$/.test(value)) return "TELECOM";
+    if (/ELE|ELT/.test(value)) return "ELETRICA";
+    if (/INSTR|^INS$/.test(value)) return "INSTRUMENTACAO";
+    if (/HVAC|VENTIL|AR CONDICIONADO/.test(value)) return "HVAC";
+    if (/SEGUR|^SEG$/.test(value)) return "EQP_SEGURANCA";
+    if (/QUAL|^QUA$/.test(value)) return "QUALIDADE";
+    if (/PINT/.test(value)) return "PINTURA";
+    return "";
+  }
+
+  function databookFamilyForRecord(record) {
+    const item = record || {};
+    const documentGroups = text(item.document).split("_");
+    const reportCode = documentGroups.length >= 6 ? norm(documentGroups[5]) : "";
+    const documentType = norm(item.documentType || recordValue(item, ["TIPO DE DOCUMENTO", "TIPO DOCUMENTO"]));
+    return reportCode === "RIR" || documentType === "RIR" || titleKind(item.title) === "RIR" ? "RIR" : "CM";
+  }
+
+  // Pastas quase homônimas — CONCRETO - SUPERESTRUTURA e CONCRETO -
+  // INFRAESTRUTURA — empatam na pontuação porque quase todas as palavras são as
+  // mesmas. Quem decide é a palavra que só uma delas tem: se o título traz tudo
+  // o que a primeira tem e nada do que a segunda tem de exclusivo, não há
+  // empate de verdade.
+  function decidesByDistinctToken(winner, other) {
+    const winnerTokens = winner && winner.matchedTokens;
+    const otherTokens = other && other.matchedTokens;
+    if (!winnerTokens || !otherTokens) return false;
+    const exclusivos = [...winnerTokens].filter((token) => !otherTokens.has(token));
+    const contrarios = [...otherTokens].filter((token) => !winnerTokens.has(token));
+    return exclusivos.length > 0 && contrarios.length === 0;
+  }
+
+  function entryLevels(entry) {
+    const levels = entry && entry.levels;
+    return levels && levels.length ? levels : levelsFromDatabookPath(entry && entry.databook);
+  }
+
+  // Antes de aceitar o caminho geral da disciplina, procura no próprio mapa a
+  // pasta da disciplina que combina com a família do documento (RIR ou C&M).
+  // Só devolve quando existe um vencedor claro: em pastas onde várias opções
+  // empatam — TELECOM, por exemplo, que só tem C&M por equipamento — continuar
+  // no caminho geral é mais honesto do que escolher uma pasta ao acaso.
+  function disciplineCatalogFallback(record, catalogEntries) {
+    const discipline = databookDisciplineKey(record);
+    const folder = DISCIPLINE_DATABOOK_FOLDER[discipline];
+    if (!folder || !(catalogEntries || []).length) return null;
+    const family = databookFamilyForRecord(record);
+    const wantsMetal = discipline === "ESTRUTURA_METALICA";
+    const ranked = [];
+    (catalogEntries || []).forEach((entry) => {
+      const levels = entryLevels(entry);
+      // O mapa escreve EQP ESTÁTICOS e, em algumas linhas, EQP ESTÁTICO.
+      // Comparar sem o plural evita perder essas pastas.
+      if (levels.length < 4 || norm(levels[2]).replace(/S$/, "") !== folder.replace(/S$/, "")) return;
+      const leaf = norm(levels[3]);
+      const isRir = /^RIR\b|^RIR[_ -]/.test(leaf);
+      const isCm = /^C&M\b|^C&M[_ -]/.test(leaf);
+      if (family === "RIR" ? !isRir : !isCm) return;
+      const metalLeaf = /ESTRUTURA METALICA/.test(leaf);
+      let score = 0;
+      if (levels.length === 4) score += 10;
+      if (leaf.includes(folder)) score += 8;
+      if (/DEMAIS|COMUNS/.test(leaf)) score += 4;
+      if (wantsMetal) score += metalLeaf ? 12 : -12;
+      else if (discipline === "CIVIL" && metalLeaf) score -= 12;
+      ranked.push({ entry, levels, score });
+    });
+    // Disciplinas como PINTURA não têm pasta RIR nem C&M: as pastas são por
+    // atividade. Nesses casos a família não filtra nada e quem decide é a
+    // semelhança com o título do documento — ainda melhor que o caminho geral.
+    let margin = 4;
+    let byFamily = true;
+    if (!ranked.length) {
+      margin = 6;
+      byFamily = false;
+      const documentTokens = titleTokens(`${effectiveTitle(record)} ${text(record && record.document).split("_").pop() || ""}`);
+      (catalogEntries || []).forEach((entry) => {
+        const levels = entryLevels(entry);
+        if (levels.length < 4 || norm(levels[2]).replace(/S$/, "") !== folder.replace(/S$/, "")) return;
+        const entryTokens = titleTokens(`${entry.description || ""} ${levels[3]}`);
+        const similarity = Math.round(titleSimilarityFromTokens(documentTokens, entryTokens) * 30);
+        if (similarity <= 0) return;
+        const matchedTokens = new Set([...documentTokens].filter((token) => entryTokens.has(token)));
+        ranked.push({ entry, levels, matchedTokens, score: similarity + (levels.length === 4 ? 6 : 0) });
+      });
+    }
+    if (!ranked.length) return null;
+    ranked.sort((left, right) => right.score - left.score || left.entry.databook.length - right.entry.databook.length);
+    const top = ranked[0];
+    const runner = ranked.find((candidate) => pathKey(candidate.entry.databook) !== pathKey(top.entry.databook));
+    // Mesmo critério do Mapa Databook: entre pastas quase homônimas, decide a
+    // palavra do título que só uma delas tem, não a diferença de pontos.
+    if (runner && top.score - runner.score < margin && !decidesByDistinctToken(top, runner)) return null;
+    return {
+      databook: top.entry.databook,
+      levels: [],
+      source: byFamily
+        ? `Mapa Databook · pasta ${family === "RIR" ? "RIR" : "C&M"} da disciplina ${folder}`
+        : `Mapa Databook · pasta da disciplina ${folder} mais próxima do título`,
+      sourceType: "discipline-catalog",
+      confidence: "média",
+      support: 1,
+      allocation: "",
+      relatedDocuments: [],
+      family,
+      discipline,
+    };
+  }
+
+  function generalDatabookFallback(record) {
+    const discipline = databookDisciplineKey(record);
+    const family = databookFamilyForRecord(record);
+    const paths = GENERAL_DATABOOK_BY_DISCIPLINE[discipline];
+    const databook = paths && paths[family] || (family === "RIR"
+      ? "UHDT-D|DATA BOOK C&M|GERAL - PROCEDIMENTOS DE EXECUÇÃO|RECEBIMENTO-ARMAZ.-PRESERVAÇÃO"
+      : "UHDT-D|DATA BOOK C&M|GERAL - PROCEDIMENTOS DE EXECUÇÃO|C&M COMUNS");
+    const disciplineLabel = discipline ? discipline.replace(/_/g, " ") : "GERAL";
+    return {
+      databook,
+      levels: [],
+      source: `Fallback geral ${family === "RIR" ? "RIR" : "C&M"} da disciplina ${disciplineLabel}`,
+      sourceType: "discipline-fallback",
+      confidence: "fallback",
+      support: 0,
+      allocation: "",
+      relatedDocuments: [],
+      family,
+      discipline,
+      fallback: true,
+    };
+  }
+
+  // Muito item "nt-" chega na alocação com o título ainda vazio na LD (a
+  // correção de títulos é um passo separado). Sem palavra nenhuma para
+  // comparar, a escolha do Databook não tinha como diferenciar uma pasta
+  // específica da pasta geral da disciplina — mesmo quando o próprio código
+  // já entrega o que o documento é (non_tagged_title_rules.js já decodifica
+  // isso para a correção de títulos; aqui é o mesmo motor, só que como
+  // reforço de busca, não como título a gravar).
+  function effectiveTitle(record) {
+    const title = text(record && record.title);
+    if (title) return title;
+    if (!NT) return "";
+    const resolved = NT.resolve(record && record.document);
+    return resolved && resolved.description ? resolved.description : "";
+  }
+
+  function titleTokens(value) {
+    return new Set(norm(value).split(/[^A-Z0-9]+/).filter((token) => token.length >= 3 && !TITLE_STOP_WORDS.has(token)));
+  }
+
+  // Separado de titleSimilarity para permitir passar tokens já calculados: em
+  // chooseCatalogEvidence e chooseFamilyEvidence, o título do registro é o
+  // mesmo em toda a comparação contra o catálogo/histórico — sem isto,
+  // titleTokens(record.title) seria refeito uma vez por entrada comparada.
+  function titleSimilarityFromTokens(a, b) {
+    if (!a.size || !b.size) return 0;
+    let intersection = 0;
+    a.forEach((token) => { if (b.has(token)) intersection += 1; });
+    return intersection / Math.max(a.size, b.size);
+  }
+
+  function titleSimilarity(left, right) {
+    return titleSimilarityFromTokens(titleTokens(left), titleTokens(right));
+  }
+
+  function subjectTags(document, title, databook) {
+    const rawDocument = norm(document);
+    const searchable = norm(`${title || ""} ${databook || ""}`).replace(/[^A-Z0-9]+/g, " ");
+    const tags = new Set();
+    const has = (pattern) => pattern.test(searchable);
+    if (has(/\bMOTORES?\b/)) tags.add("MOTOR");
+    if (has(/\bCABOS?\b|\bBOBINA\b/)) tags.add("CABO");
+    if (has(/\bTRANSFORMADOR(?:ES)?\b/)) tags.add("TRANSFORMADOR");
+    if (has(/\bCAIXA(?:S)?\b|\bBORNE\b/)) tags.add("CAIXA");
+    if (has(/\bINFRAESTRUTURA\b|\bELETRODUTO\b|\bLEITO\b|\bBANDEJA\b/)) tags.add("INFRAESTRUTURA");
+    if (has(/\bPAINEL(?:ES|S)?\b/)) tags.add("PAINEL");
+    if (has(/\bVASOS?\b|\bTANQUES?\b/)) tags.add("VASO_TANQUE");
+    if (has(/\bFORNOS?\b|\bQUEIMADORES?\b/)) tags.add("FORNO_QUEIMADOR");
+    if (has(/\bTURBINAS?\b/)) tags.add("TURBINA");
+    if (has(/\bESTRUTURA METALICA\b/)) tags.add("ESTRUTURA_METALICA");
+    if (has(/\bACABAMENTO\b/)) tags.add("ACABAMENTO");
+    if ((has(/\bINSTRUMENTACAO\b/) && !tags.has("INFRAESTRUTURA") && !tags.has("CABO"))
+      && !tags.size) tags.add("INSTRUMENTO");
+    if (tags.size) return tags;
+    if (/_M-/.test(rawDocument)) tags.add("MOTOR");
+    if (/_BOBINA|_NT-C-/.test(rawDocument)) tags.add("CABO");
+    if (/_(?:TLE|TF)-/.test(rawDocument)) tags.add("TRANSFORMADOR");
+    if (/_(?:CBT|CJA|CJV)-/.test(rawDocument)) tags.add("CAIXA");
+    if (/_NT-(?:LBR|ETR)-/.test(rawDocument)) tags.add("INFRAESTRUTURA");
+    if (/_PN-/.test(rawDocument)) tags.add("PAINEL");
+    if (/_V-/.test(rawDocument)) tags.add("VASO_TANQUE");
+    if (/_(?:F-|Q-F-)/.test(rawDocument)) tags.add("FORNO_QUEIMADOR");
+    if (/_TB-/.test(rawDocument)) tags.add("TURBINA");
+    if (/_NT-EMT-/.test(rawDocument)) tags.add("ESTRUTURA_METALICA");
+    if (/_NT-LAC_/.test(rawDocument)) tags.add("ACABAMENTO");
+    if (/_(?:PI|CJP|CJF|CJD)-/.test(rawDocument)) tags.add("INSTRUMENTO");
+    return tags;
+  }
+
+  function setsIntersect(left, right) {
+    for (const value of left) if (right.has(value)) return true;
+    return false;
+  }
+
+  function recordValue(record, aliases) {
+    const columns = record && record.ldColumns || [];
+    for (const alias of aliases) {
+      const entry = columns.find((column) => norm(column.header) === norm(alias));
+      if (entry && text(entry.value)) return text(entry.value);
+    }
+    return "";
+  }
+
+  // O prazo é lido direto da LD, sem reformatar: a coluna ABA da Central passa
+  // a mostrar o texto exatamente como o usuário digitou na planilha de origem.
+  // A busca aceita qualquer cabeçalho que fale de prazo (PRAZO, PRAZO DE
+  // EMISSÃO, PRAZO CONTRATUAL...), mas dá preferência à coluna PRAZO pura.
+  function recordDeadline(record) {
+    const columns = record && record.ldColumns || [];
+    let fallback = "";
+    for (const column of columns) {
+      const header = norm(column.header);
+      if (!header.includes("PRAZO")) continue;
+      const value = text(column.value);
+      if (!value) continue;
+      if (header === "PRAZO") return value;
+      if (!fallback) fallback = value;
+    }
+    return fallback || text(record && record.deadline);
+  }
+
+  function hasAllocationStatusColumn(record) {
+    return (record && record.ldColumns || []).some((column) => {
+      const header = norm(column.header);
+      if (header.includes("CONFIRMACAO") && header.includes("DOCUMENTOS PREVISTOS")) return true;
+      return header === "ALOCACAO" && Boolean(recordAllocationStatus(record));
+    });
+  }
+
+  function versionParts(value) {
+    const raw = text(value).toUpperCase().replace(/\s+/g, "");
+    if (/^\d+$/.test(raw)) return { raw, phase: 0, prefix: "", sequence: Number(raw) };
+    const match = raw.match(/^([A-Z]+)(\d*)$/);
+    if (!match) return null;
+    return { raw, phase: 1, prefix: match[1], sequence: match[2] ? Number(match[2]) : 0 };
+  }
+
+  function newestLdVersion() {
+    return [...arguments].map(versionParts).filter(Boolean).sort((left, right) => {
+      const phase = left.phase - right.phase;
+      if (phase) return phase;
+      const prefix = left.prefix.localeCompare(right.prefix, "pt-BR");
+      return prefix || left.sequence - right.sequence;
+    }).at(-1)?.raw || "";
+  }
+
+  function ldNumberFromSource(value) {
+    const source = text(value).split(/[\\/]/).at(-1).toUpperCase();
+    const patterns = [
+      /(?:C1O|CIO)[-_](\d{3})(?=[_-])/,
+      /[-_](\d{3})(?=_\d{4}(?:[_-]|$))/,
+      /(?:^|[^A-Z0-9])LD[-_\s]*(\d{3})(?=[^0-9]|$)/,
+    ];
+    for (const pattern of patterns) {
+      const match = source.match(pattern);
+      if (match) return match[1];
+    }
+    return "";
+  }
+
+  function ldVersionFromSource(value) {
+    const source = text(value).split(/[\\/]/).at(-1)
+      .replace(/\.(?:XLSX|XLSM|XLS)$/i, "")
+      .replace(/\s+\(\d+\)$/, "")
+      .toUpperCase();
+    const standard = source.match(/_\d{4}[_-](\d+|[A-Z]+\d*)$/);
+    if (standard) return standard[1];
+    const explicit = source.match(/(?:^|[_\s-])REV(?:ISAO)?[_\s-]*(\d+|[A-Z]+\d*)$/);
+    return explicit ? explicit[1] : "";
+  }
+
+  function recordVersion(record, fallbackVersion) {
+    const direct = recordValue(record, ["VERSÃO DA LD ENVIADA"]);
+    if (direct) return direct;
+    return newestLdVersion(record && record.ldVersion, fallbackVersion) || ldVersionFromSource(record && record.source);
+  }
+
+  function rowValue(row, headerMap, aliases) {
+    for (const alias of aliases) {
+      const index = headerMap.get(norm(alias));
+      if (index !== undefined) return row[index];
+    }
+    return "";
+  }
+
+  function findSheet(workbook, wanted) {
+    const name = (workbook.SheetNames || []).find((sheetName) => norm(sheetName) === norm(wanted));
+    return name ? workbook.Sheets[name] : null;
+  }
+
+  function rowsFromSheet(sheet, XLSX) {
+    if (!sheet) return [];
+    return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
+  }
+
+  function findHeaderIndex(rows, required) {
+    const wanted = norm(required);
+    const limit = Math.min(rows.length, 40);
+    for (let rowIndex = 0; rowIndex < limit; rowIndex += 1) {
+      if ((rows[rowIndex] || []).some((value) => norm(value) === wanted)) return rowIndex;
+    }
+    return -1;
+  }
+
+  function headerMap(row) {
+    const result = new Map();
+    (row || []).forEach((value, index) => {
+      const name = norm(value);
+      if (name && !result.has(name)) result.set(name, index);
+    });
+    return result;
+  }
+
+  function splitBaseLevels(value) {
+    const parts = text(value).split("|").map((part) => part.trim()).filter(Boolean);
+    if (parts.length && norm(parts[0]).includes("IMPLANTACAO DO PROJETO")) parts.shift();
+    return Array.from({ length: 10 }, (_, index) => parts[index] || "");
+  }
+
+  function controlRowObject(row, map, rowNumber) {
+    const output = {};
+    CONTROL_HEADERS.forEach((header) => {
+      output[header] = rowValue(row, map, [header]);
+    });
+    output.rowNumber = rowNumber;
+    output.document = text(rowValue(row, map, ["NomeDocumento"]));
+    output.documentKey = key(output.document);
+    output.documentLooseKey = looseKey(output.document);
+    output.allocation = text(rowValue(row, map, ["ALOCAÇÃO"]));
+    output.status = text(rowValue(row, map, ["STATUS DA ALOCAÇÃO"]));
+    output.workflow = text(rowValue(row, map, ["Workflow"]));
+    output.databook = text(rowValue(row, map, ["Caminho Data Book"]));
+    output.ldVersion = text(rowValue(row, map, ["VERSÃO \nDA LD", "VERSÃO DA LD"]));
+    output.fiscalComment = text(rowValue(row, map, ["Resposta da Fiscal 01\n (Renata)", "Resposta da Fiscal 01", "COMENTÁRIO DA FISCAL", "COMENTARIO DA FISCAL", "OBSERVAÇÃO", "OBSERVACAO"]));
+    output.returnDate = text(rowValue(row, map, ["Retorno da Fiscal 01\n (Renata)", "Retorno da Fiscal 01", "DATA DE RETORNO"]));
+    output.levels = Array.from({ length: 10 }, (_, index) => text(rowValue(row, map, [`N${index + 1}`])));
+    return output;
+  }
+
+  function parseControlWorkbook(workbook, XLSX) {
+    const centralSheet = findSheet(workbook, "Central de alocação");
+    if (!centralSheet) throw new Error("A aba Central de alocação não foi encontrada no controle.");
+    const rows = rowsFromSheet(centralSheet, XLSX);
+    const headerIndex = findHeaderIndex(rows, "NomeDocumento");
+    if (headerIndex < 0) throw new Error("A coluna NomeDocumento não foi encontrada na Central de alocação.");
+    const map = headerMap(rows[headerIndex]);
+    const required = ["ABA", "ALOCAÇÃO", "NomeDocumento", "Data Prevista", "Workflow", "Ação", "Propósito de Emissão Original", "Caminho Data Book", "N1"];
+    const missing = required.filter((header) => !map.has(norm(header)));
+    if (missing.length) throw new Error(`O controle está sem as colunas: ${missing.join(", ")}.`);
+
+    const controlRows = [];
+    const latestByDocument = new Map();
+    const levelsByDatabookVotes = new Map();
+    const eapLevelVotes = new Map();
+    for (let index = headerIndex + 1; index < rows.length; index += 1) {
+      const item = controlRowObject(rows[index] || [], map, index + 1);
+      if (!item.document) continue;
+      controlRows.push(item);
+      latestByDocument.set(item.documentKey, item);
+      if (item.documentLooseKey) latestByDocument.set(item.documentLooseKey, item);
+      if (item.databook && item.levels.some(Boolean)) addLevelsVote(levelsByDatabookVotes, norm(item.databook), item.levels);
+      const eap = documentEap(item.document);
+      if (eap && item.levels.some(Boolean)) addLevelsVote(eapLevelVotes, eap, item.levels);
+    }
+
+    const levelsByDatabook = new Map([...levelsByDatabookVotes.entries()].map(([path, votes]) => [path, mostVotedLevels(votes)]));
+    const levelsByEap = new Map([...eapLevelVotes.entries()].map(([eap, votes]) => [eap, mostVotedLevels(votes)]));
+    const projectLevelBase = parseProjectLevelBase(workbook, XLSX);
+
+    const baseDocuments = new Map();
+    const baseSheet = findSheet(workbook, "Base - Doc previsto no projeto");
+    rowsFromSheet(baseSheet, XLSX).forEach((row) => {
+      const document = text(row[0]);
+      if (!document || norm(document) === "DOCUMENTO") return;
+      const baseItem = {
+        document,
+        flag: text(row[2]),
+        path: text(row[3]),
+        levels: splitBaseLevels(row[3]),
+      };
+      baseDocuments.set(key(document), baseItem);
+      baseDocuments.set(looseKey(document), baseItem);
+    });
+
+    return {
+      headerIndex,
+      headers: (rows[headerIndex] || []).map(text),
+      rows: controlRows,
+      latestByDocument,
+      levelsByDatabook,
+      levelsByEap,
+      projectLevelBase,
+      baseDocuments,
+      latestLdVersion: newestLdVersion(...controlRows.map((row) => row.ldVersion)),
+    };
+  }
+
+  // O caminho Databook É a sequência de níveis: cada trecho separado por "|"
+  // ocupa uma coluna N1..N10 da alocação. Ler os níveis do próprio caminho
+  // evita que a linha saia com N1 a N6 vazios quando o caminho é novo e ainda
+  // não apareceu no histórico do controle.
+  function levelsFromDatabookPath(value) {
+    const raw = text(value);
+    if (!raw) return [];
+    return raw.split("|").map((part) => part.trim()).filter(Boolean);
+  }
+
+  // A partir da Rev.C o mapa escreve a unidade como marcador (UHDT-X, XXX,
+  // NOME UNIDADE) porque vale para mais de uma unidade. A aba NÍVEL_CAMINHO e a
+  // aba ESTUTURA declaram o N1 real; sem essa troca o caminho gerado sairia
+  // literalmente com "UHDT-X", que não existe no SIGEM.
+  const UNIT_PLACEHOLDER = /^(?:UHDT-?X|X{2,}|NOME UNIDADE|UNIDADE)$/;
+
+  function canonicalDatabookUnit(workbook, XLSX) {
+    const sheets = ["NÍVEL_CAMINHO", "NIVEL_CAMINHO", "ESTUTURA", "ESTRUTURA"];
+    for (const sheetName of sheets) {
+      const sheet = findSheet(workbook, sheetName);
+      if (!sheet) continue;
+      const rows = rowsFromSheet(sheet, XLSX);
+      for (const row of rows) {
+        const found = (row || []).map(text).find((cell) => /^UHDT-[A-Z]$/i.test(cell.trim()) && !UNIT_PLACEHOLDER.test(norm(cell)));
+        if (found) return found.trim();
+      }
+    }
+    return "UHDT-D";
+  }
+
+  // Algumas células do mapa trazem o caminho dentro de uma nota de revisão,
+  // por exemplo: "Rev.B: Alterado o CAM DB ... (UHDT-X|DATA BOOK C&M|...)".
+  // Sem isolar o caminho, a nota inteira virava entrada do catálogo e a
+  // descrição correspondente ficava vazia.
+  function extractDatabookPath(value) {
+    const raw = text(value);
+    if (!raw) return "";
+    if (!/[()\n]/.test(raw)) return raw;
+    const matches = raw.match(/[^()\n|]+(?:\|[^()\n|]+){2,}/g) || [];
+    let best = "";
+    matches.forEach((candidate) => {
+      const trimmed = candidate.trim();
+      if (completeDatabook(trimmed) && trimmed.length > best.length) best = trimmed;
+    });
+    return best || raw;
+  }
+
+  function applyDatabookUnit(databook, unit) {
+    const parts = levelsFromDatabookPath(databook);
+    if (!parts.length) return text(databook);
+    if (UNIT_PLACEHOLDER.test(norm(parts[0]))) parts[0] = unit;
+    return parts.join("|");
+  }
+
+  function parseDatabookWorkbook(workbook, XLSX) {
+    const sheet = findSheet(workbook, "CAMINHO DB_SIGEM");
+    if (!sheet) return { entries: [], sourceSheet: "" };
+    const unit = canonicalDatabookUnit(workbook, XLSX);
+    const rows = rowsFromSheet(sheet, XLSX);
+    const entries = [];
+    let current = null;
+    rows.forEach((row, rowIndex) => {
+      const pathColumn = (row || []).findIndex((cell) => completeDatabook(cell) && !norm(cell).startsWith("NOME UNIDADE|"));
+      const databook = pathColumn >= 0 ? text(row[pathColumn]) : "";
+      let description = "";
+      if (pathColumn >= 0) {
+        for (let column = pathColumn - 1; column >= 0; column -= 1) {
+          const candidate = text(row[column]);
+          if (!candidate || /^\d+(?:[.,]\d+)*$/.test(candidate) || norm(candidate) === "I" || /^REV\./i.test(candidate)) continue;
+          description = candidate;
+          break;
+        }
+      } else {
+        description = (row || []).map(text).find((cell) => /DOCUMENTOS?:/i.test(cell) || /^\*/.test(cell)) || "";
+      }
+      if (completeDatabook(databook) && !norm(databook).startsWith("NOME UNIDADE|")) {
+        const resolved = applyDatabookUnit(extractDatabookPath(databook), unit);
+        const levels = levelsFromDatabookPath(resolved);
+        current = {
+          // Quando a linha do mapa é só uma nota de revisão, a descrição sai
+          // vazia e a entrada ficaria inalcançável na busca. O último nível do
+          // caminho é a pasta real, então serve de descrição.
+          description: description || levels[levels.length - 1] || "",
+          databook: resolved,
+          levels,
+          notes: "",
+          rowNumber: rowIndex + 1,
+          sourceSheet: "CAMINHO DB_SIGEM",
+        };
+        entries.push(current);
+      } else if (current && description && (/DOCUMENTOS?:/i.test(description) || /^\*/.test(description.trim()))) {
+        current.notes = [current.notes, description].filter(Boolean).join("\n");
+      }
+    });
+    return { entries, sourceSheet: "CAMINHO DB_SIGEM" };
+  }
+
+  function parseHistoricalAllocationWorkbook(workbook, XLSX, sourceName) {
+    const rows = [];
+    // Histórico real pode ter sido renomeado depois do envio. Aceita hífen,
+    // espaço ou underscore entre os blocos e normaliza de volta para o código
+    // oficial antes de comparar/ordenar.
+    const allocationNameMatch = text(sourceName).match(/C1O[-_ ]*ALOC[-_ ]*CM[-_ ]*(\d{4})[-_ ]*(\d{4})/i);
+    const allocationFromName = allocationNameMatch
+      ? "C1O-ALOC-CM-" + allocationNameMatch[1] + "-" + allocationNameMatch[2]
+      : "";
+    (workbook.SheetNames || []).forEach((sheetName) => {
+      const values = rowsFromSheet(workbook.Sheets[sheetName], XLSX);
+      let headerIndex = -1;
+      let map = null;
+      for (let index = 0; index < Math.min(values.length, 45); index += 1) {
+        const candidate = headerMap(values[index]);
+        if (["NOMEDOCUMENTO", "NOME DOCUMENTO", "NOME DO DOCUMENTO", "DOCUMENTO", "CODIGO DO DOCUMENTO", "CÓDIGO DO DOCUMENTO", "CODIGO DOCUMENTO", "CÓDIGO DOCUMENTO"].some((header) => candidate.has(norm(header)))) {
+          headerIndex = index;
+          map = candidate;
+          break;
+        }
+      }
+      if (headerIndex < 0 || !map) return;
+      for (let index = headerIndex + 1; index < values.length; index += 1) {
+        const row = values[index] || [];
+        const document = text(rowValue(row, map, ["NomeDocumento", "NOME DOCUMENTO", "NOME DO DOCUMENTO", "DOCUMENTO", "CODIGO DO DOCUMENTO", "CÓDIGO DO DOCUMENTO", "CODIGO DOCUMENTO", "CÓDIGO DOCUMENTO"]));
+        if (!document || norm(document) === "FIM") continue;
+        const item = {};
+        ALLOCATION_HEADERS.forEach((header) => { item[header] = rowValue(row, map, [header]); });
+        const levels = Array.from({ length: 10 }, (_, levelIndex) => text(rowValue(row, map, [`N${levelIndex + 1}`])));
+        Object.assign(item, {
+          document,
+          documentKey: key(document),
+          allocation: text(rowValue(row, map, ["ALOCAÇÃO"])) || allocationFromName,
+          status: text(rowValue(row, map, ["STATUS DA ALOCAÇÃO"])),
+          fiscalComment: text(rowValue(row, map, ["Resposta da Fiscal 01", "COMENTÁRIO DA FISCAL", "COMENTARIO DA FISCAL", "OBSERVAÇÃO", "OBSERVACAO"])),
+          returnDate: text(rowValue(row, map, ["Retorno da Fiscal 01", "DATA DE RETORNO"])),
+          workflow: text(rowValue(row, map, ["Workflow"])),
+          databook: text(rowValue(row, map, ["Caminho Data Book", "CAMINHO DATABOOK"])),
+          levels,
+          rowNumber: index + 1,
+          source: text(sourceName),
+          sourceSheet: sheetName,
+        });
+        rows.push(item);
+      }
+    });
+    return { rows };
+  }
+
+  function parseAllocationCode(value) {
+    const match = text(value).match(/^C1O-ALOC-CM-(\d{4})-(\d{4})$/i);
+    if (!match) return null;
+    return { code: `C1O-ALOC-CM-${match[1]}-${match[2]}`, sequence: Number(match[1]), year: Number(match[2]) };
+  }
+
+  function suggestAllocationCode(control, yearValue) {
+    const year = Number(yearValue) || new Date().getFullYear();
+    let latest = 0;
+    (control && control.rows || []).forEach((row) => {
+      const parsed = parseAllocationCode(row.allocation);
+      if (parsed && parsed.year === year) latest = Math.max(latest, parsed.sequence);
+    });
+    return `C1O-ALOC-CM-${String(latest + 1).padStart(4, "0")}-${year}`;
+  }
+
+  function parseRelationWorkbook(workbook, XLSX) {
+    const entries = [];
+    const ignored = [];
+    (workbook.SheetNames || []).forEach((sheetName) => {
+      const rows = rowsFromSheet(workbook.Sheets[sheetName], XLSX);
+      let headerIndex = -1;
+      let columns = [];
+      for (let rowIndex = 0; rowIndex < Math.min(rows.length, 35); rowIndex += 1) {
+        const matches = (rows[rowIndex] || []).map(norm).map((header, index) => ({ header, index })).filter(({ header }) => (
+          header === "DOCUMENTO" || header === "NOMEDOCUMENTO" || header === "CODIGO" || header === "CODIGO DO DOCUMENTO"
+          || header === "ARQUIVO" || header === "PDF" || header === "NOME DO ARQUIVO" || header === "NOME DO PDF"
+        ));
+        if (matches.length) {
+          headerIndex = rowIndex;
+          columns = matches.map((item) => item.index);
+          break;
+        }
+      }
+      if (headerIndex < 0) return;
+      for (let rowIndex = headerIndex + 1; rowIndex < rows.length; rowIndex += 1) {
+        columns.forEach((columnIndex) => {
+          const raw = text((rows[rowIndex] || [])[columnIndex]);
+          if (!raw || norm(raw) === "FIM") return;
+          entries.push({ raw, sheetName, rowNumber: rowIndex + 1, hintedSheet: "" });
+        });
+      }
+    });
+    if (!entries.length) ignored.push("Nenhuma coluna de documento foi localizada na relação Excel.");
+    return { entries, ignored };
+  }
+
+  function parseTextRelation(value) {
+    const entries = [];
+    const ignored = [];
+    text(value).split(/\r?\n/).forEach((line, index) => {
+      const raw = line.trim().replace(/^[\s\t;|,]+|[\s\t;|,]+$/g, "");
+      if (!raw) return;
+      if (norm(raw) === "FIM") return;
+      entries.push({ raw, sheetName: "Entrada por texto", rowNumber: index + 1, hintedSheet: "" });
+    });
+    if (!entries.length) ignored.push("A entrada por texto está vazia.");
+    return { entries, ignored };
+  }
+
+  function ldSignature(record) {
+    return [
+      record.sheet,
+      recordVersion(record),
+      recordValue(record, ["DATA PREVISTA DE EMISSÃO"]),
+      recordValue(record, ["DISCIPLINA", "WORKFLOW", "QUEM?"]),
+      recordValue(record, ["ESCOPO"]),
+      recordValue(record, ["PROPÓSITO DE EMISSÃO"]),
+      recordValue(record, ["CAMINHO DATABOOK", "CAMINHO DATA BOOK"]),
+    ].map(norm).join("||");
+  }
+
+  function dateValue(value, fallback) {
+    const raw = text(value);
+    if (!raw) return text(fallback);
+    const parsed = C && C.parseDate ? C.parseDate(raw) : new Date(raw);
+    return parsed && !Number.isNaN(parsed.getTime()) ? text(parsed) : raw;
+  }
+
+  function disciplineKey(value) {
+    return norm(value).split(/[|/]/).filter(Boolean).at(-1) || "";
+  }
+
+  function isAsBuiltPurpose(value) {
+    return norm(value) === "CONFORME CONSTRUIDO";
+  }
+
+  function workflowForPurpose(purpose, discipline) {
+    return isAsBuiltPurpose(purpose) ? "" : text(discipline);
+  }
+
+  function evidenceRecord(row, index) {
+    const group = index && index.byDocument && index.byDocument.get(key(row && row.document));
+    if (!group || !group.records || !group.records.length) return null;
+    return [...group.records].sort((left, right) => (Number(right.row) || 0) - (Number(left.row) || 0))[0];
+  }
+
+  function latestAllocation(values) {
+    return [...new Set((values || []).map(text).filter(Boolean))].sort((left, right) => {
+      const a = parseAllocationCode(left);
+      const b = parseAllocationCode(right);
+      if (a && b) return a.year - b.year || a.sequence - b.sequence;
+      if (a) return 1;
+      if (b) return -1;
+      return left.localeCompare(right, "pt-BR");
+    }).at(-1) || "";
+  }
+
+  function conflictEvidence(sourceType, source, alternatives, relatedDocuments) {
+    return {
+      databook: "",
+      levels: [],
+      source,
+      sourceType,
+      confidence: "conflito",
+      support: (alternatives || []).reduce((total, item) => total + (Number(item.support) || 0), 0),
+      allocation: "",
+      relatedDocuments: (relatedDocuments || []).slice(0, 8),
+      alternatives: (alternatives || []).slice(0, 4),
+      conflict: true,
+    };
+  }
+
+  function chooseFamilyEvidence(record, rows, index, sourceType) {
+    const targetFamily = documentFamily(record.document);
+    if (!targetFamily.key) return null;
+    const targetTitle = effectiveTitle(record);
+    const targetKind = titleKind(record.title);
+    const targetSubjects = subjectTags(record.document, targetTitle, "");
+    const targetTitleTokens = titleTokens(targetTitle);
+    const targetDiscipline = disciplineKey(record.discipline);
+    const targetSequence = documentSequence(record.document);
+    const dedupe = new Set();
+    const candidates = [];
+    (rows || []).forEach((row) => {
+      if (!row || !completeDatabook(row.databook)) return;
+      const sameDocument = key(row.document) === record.documentKey;
+      if (sameDocument) return;
+      const candidateRecord = evidenceRecord(row, index);
+      const candidateFamily = documentFamily(row.document);
+      if (candidateFamily.key !== targetFamily.key) return;
+      const candidateTitle = candidateRecord && candidateRecord.title || row.approvedTitle || row.title || row.originalTitle || "";
+      const candidateEffectiveTitle = effectiveTitle({ title: candidateTitle, document: row.document });
+      const candidateKind = titleKind(candidateTitle);
+      const candidateSubjects = subjectTags(row.document, candidateEffectiveTitle, row.databook);
+      const subjectMatch = setsIntersect(targetSubjects, candidateSubjects);
+      const similarity = titleSimilarityFromTokens(targetTitleTokens, titleTokens(candidateEffectiveTitle));
+      const kindMatch = Boolean(targetKind && candidateKind && targetKind === candidateKind);
+      // Planilhas oficiais de alocação normalmente não possuem a coluna Título.
+      // Para PR da N-1710, a família já combina categoria PR + código de serviço
+      // (ex.: PR|700). Se o histórico não traz título, não o descarte antes de
+      // avaliar sequência, disciplina e consistência do Caminho Databook.
+      const structuralPrHistory = sourceType === "history" && targetFamily.type === "PR" && !candidateKind;
+      if (targetKind && candidateKind && !kindMatch) return;
+      if (targetSubjects.size && !subjectMatch && !structuralPrHistory) return;
+      if (!kindMatch && similarity < 0.32 && !structuralPrHistory) return;
+      const dedupeKey = `${key(row.document)}|${pathKey(row.databook)}`;
+      if (dedupe.has(dedupeKey)) return;
+      dedupe.add(dedupeKey);
+      const candidateSequence = documentSequence(row.document);
+      const distance = targetSequence !== null && candidateSequence !== null ? Math.abs(targetSequence - candidateSequence) : null;
+      const disciplineMatch = Boolean(targetDiscipline && targetDiscipline === disciplineKey(candidateRecord && candidateRecord.discipline || row.discipline || row.workflow));
+      const score = 50 + (kindMatch ? 35 : 0) + (subjectMatch ? 38 : 0) + Math.round(similarity * 30) + (disciplineMatch ? 10 : 0)
+        + (sourceType === "history" ? 18 : 4)
+        + (distance === null ? 0 : Math.max(0, 10 - Math.min(10, distance)));
+      candidates.push({ row, record: candidateRecord, similarity, kindMatch, subjectMatch, disciplineMatch, sameDocument, score, path: row.databook });
+    });
+    if (!candidates.length) return null;
+
+    const groups = new Map();
+    candidates.forEach((candidate) => {
+      const candidatePathKey = pathKey(candidate.path);
+      if (!groups.has(candidatePathKey)) groups.set(candidatePathKey, { path: candidate.path, candidates: [], documents: new Set(), allocations: new Set(), totalScore: 0, maxScore: 0 });
+      const group = groups.get(candidatePathKey);
+      group.candidates.push(candidate);
+      group.documents.add(key(candidate.row.document));
+      if (candidate.row.allocation) group.allocations.add(candidate.row.allocation);
+      group.totalScore += candidate.score;
+      group.maxScore = Math.max(group.maxScore, candidate.score);
+    });
+    const ranked = [...groups.values()].sort((left, right) => right.documents.size - left.documents.size || right.totalScore - left.totalScore || right.maxScore - left.maxScore);
+    const top = ranked[0];
+    const totalSupport = ranked.reduce((sum, group) => sum + group.documents.size, 0);
+    const share = totalSupport ? top.documents.size / totalSupport : 0;
+    const sourceLabel = sourceType === "history" ? `Conflito no histórico da família ${targetFamily.label}`
+      : `Conflito na LD da família ${targetFamily.label}`;
+    const alternatives = ranked.map((group) => ({ databook: group.path, support: group.documents.size, score: group.maxScore }));
+    const relatedDocuments = ranked.flatMap((group) => group.candidates.map((candidate) => candidate.row.document));
+    if (!targetSubjects.size && ranked.length > 1 && share < (sourceType === "history" ? 0.90 : 0.93)) {
+      return conflictEvidence(sourceType, sourceLabel, alternatives, relatedDocuments);
+    }
+    const kindSupport = top.candidates.filter((candidate) => candidate.kindMatch).length;
+    const strong = sourceType === "history"
+      ? (top.documents.size >= 2 && share >= 0.60 && (!targetKind || kindSupport >= Math.ceil(top.candidates.length * 0.6)))
+        || (top.documents.size === 1 && ranked.length === 1 && top.maxScore >= 118)
+        // Um único PR histórico da mesma família é evidência suficiente quando
+        // não existe caminho concorrente: a família PR|serviço é estrutural e
+        // a pontuação ainda exige proximidade/consistência mínima.
+        || (targetFamily.type === "PR" && top.documents.size === 1 && ranked.length === 1 && top.maxScore >= 77)
+      : top.documents.size >= 2 && share >= 0.72 && (!targetKind || kindSupport >= Math.ceil(top.candidates.length * 0.7));
+    if (!strong) return ranked.length > 1 ? conflictEvidence(sourceType, sourceLabel, alternatives, relatedDocuments) : null;
+
+    const levelGroups = new Map();
+    top.candidates.forEach((candidate) => {
+      const levels = (candidate.row.levels || []).map(text);
+      if (!levels.some(Boolean)) return;
+      const levelKey = levels.map(norm).join("|");
+      if (!levelGroups.has(levelKey)) levelGroups.set(levelKey, { levels, count: 0 });
+      levelGroups.get(levelKey).count += 1;
+    });
+    const chosenLevels = [...levelGroups.values()].sort((left, right) => right.count - left.count)[0];
+    const allocation = latestAllocation([...top.allocations]);
+    return {
+      databook: top.path,
+      levels: chosenLevels ? chosenLevels.levels : [],
+      source: sourceType === "history" ? `Histórico da família ${targetFamily.label}` : `LD da família ${targetFamily.label}`,
+      sourceType,
+      confidence: "alta",
+      support: top.documents.size,
+      allocation,
+      relatedDocuments: top.candidates.slice(0, 8).map((candidate) => candidate.row.document),
+    };
+  }
+
+  function chooseCvEvidence(record, rows) {
+    if (titleKind(record.title) !== "CURRICULO") return null;
+    const candidates = (rows || []).filter((row) => {
+      const family = documentFamily(row && row.document);
+      return family.type === "CV" && text(row.databook) && (row.levels || []).slice(0, 4).some(Boolean);
+    });
+    if (!candidates.length) return null;
+    const groups = new Map();
+    candidates.forEach((row) => {
+      const levels = (row.levels || []).map(text);
+      const groupKey = `${pathKey(row.databook)}||${levels.slice(0, 4).map(norm).join("|")}`;
+      if (!groups.has(groupKey)) groups.set(groupKey, { databook: row.databook, levels, documents: new Set(), allocations: new Set(), rows: [] });
+      const group = groups.get(groupKey);
+      group.documents.add(key(row.document));
+      if (row.allocation) group.allocations.add(row.allocation);
+      group.rows.push(row);
+    });
+    const ranked = [...groups.values()].sort((left, right) => right.documents.size - left.documents.size);
+    const top = ranked[0];
+    const totalSupport = ranked.reduce((sum, group) => sum + group.documents.size, 0);
+    const share = totalSupport ? top.documents.size / totalSupport : 0;
+    if (top.documents.size < 3 || share < 0.80) {
+      if (ranked.length > 1) return conflictEvidence("history", "Conflito no histórico de currículos CV", ranked.map((group) => ({
+        databook: group.databook,
+        support: group.documents.size,
+      })), ranked.flatMap((group) => group.rows.map((row) => row.document)));
+      return null;
+    }
+    return {
+      databook: top.databook,
+      levels: top.levels,
+      source: "Histórico de currículos CV",
+      sourceType: "history",
+      confidence: "alta",
+      support: top.documents.size,
+      allocation: latestAllocation([...top.allocations]),
+      relatedDocuments: top.rows.slice(0, 8).map((row) => row.document),
+    };
+  }
+
+  // chooseCatalogEvidence roda uma vez por documento sem Databook confirmado
+  // na LD, e para cada um repete o mesmo trabalho sobre o catálogo inteiro.
+  // Como description/notes/databook de uma entrada do catálogo não mudam
+  // entre chamadas, o que só depende da ENTRADA (normalização, tags de
+  // assunto, profundidade do caminho) é calculado uma vez e reaproveitado —
+  // só o que depende do REGISTRO é recalculado a cada documento. Numa LD
+  // grande isso é a diferença entre segundos e minutos de análise.
+  const catalogEntryCache = new WeakMap();
+  function prepareCatalogEntry(entry) {
+    let prepared = catalogEntryCache.get(entry);
+    if (prepared) return prepared;
+    const searchable = `${entry.description || ""} ${entry.notes || ""}`;
+    prepared = {
+      searchable,
+      searchableNorm: norm(searchable),
+      searchableTokens: titleTokens(searchable),
+      databookDescriptionNorm: norm(`${entry.databook} ${entry.description}`),
+      entrySubjects: subjectTags("", searchable, entry.databook),
+      depth: text(entry.databook).split("|").filter(Boolean).length,
+    };
+    catalogEntryCache.set(entry, prepared);
+    return prepared;
+  }
+
+  function chooseCatalogEvidence(record, catalogEntries) {
+    const title = effectiveTitle(record);
+    const targetKind = titleKind(record.title);
+    const targetDiscipline = disciplineKey(record.discipline);
+    const targetTokens = titleTokens(title);
+    const targetSubjects = subjectTags(record.document, title, "");
+    const ranked = (catalogEntries || []).map((entry) => {
+      const prepared = prepareCatalogEntry(entry);
+      const searchableNorm = prepared.searchableNorm;
+      let overlap = 0;
+      const matchedTokens = new Set();
+      targetTokens.forEach((token) => { if (searchableNorm.includes(token)) { overlap += 1; matchedTokens.add(token); } });
+      const kindMatch = Boolean(targetKind && searchableNorm.includes(targetKind));
+      const disciplineMatch = Boolean(targetDiscipline && prepared.databookDescriptionNorm.includes(targetDiscipline));
+      const entrySubjects = prepared.entrySubjects;
+      const subjectMatch = targetSubjects.size && setsIntersect(targetSubjects, entrySubjects);
+      const subjectConflict = targetSubjects.size && entrySubjects.size && !subjectMatch;
+      const depth = prepared.depth;
+      const score = (kindMatch ? 65 : 0) + (disciplineMatch ? 24 : 0) + Math.min(28, overlap * 4)
+        + Math.round(titleSimilarityFromTokens(targetTokens, prepared.searchableTokens) * 28)
+        + (subjectMatch ? 58 : 0) - (subjectConflict ? 32 : 0)
+        + (subjectMatch && depth >= 5 ? 8 : 0);
+      return { entry, score, kindMatch, disciplineMatch, subjectMatch, matchedTokens };
+    }).filter((candidate) => candidate.score >= 62).sort((left, right) => right.score - left.score);
+    if (!ranked.length) return null;
+    const top = ranked[0];
+    const runner = ranked.find((candidate) => pathKey(candidate.entry.databook) !== pathKey(top.entry.databook));
+    if (runner && top.score - runner.score < 10 && !decidesByDistinctToken(top, runner)) {
+      return conflictEvidence("catalog", "Conflito no Mapa Databook", [top, runner].map((candidate) => ({
+        databook: candidate.entry.databook,
+        support: 1,
+        score: candidate.score,
+      })), []);
+    }
+    // Antes, tudo abaixo de 76 era descartado e caía no caminho geral da
+    // disciplina — justamente o que não pode acontecer. Com a folga de 10
+    // pontos sobre o segundo colocado já garantida acima, o melhor encaixe do
+    // mapa é sempre mais específico que o caminho geral; o que muda é a
+    // confiança declarada na análise.
+    const strong = top.score >= 76;
+    return {
+      databook: top.entry.databook,
+      levels: [],
+      source: strong ? "Mapa Databook" : "Mapa Databook · melhor encaixe",
+      sourceType: "catalog",
+      confidence: strong ? "alta" : "média",
+      support: 1,
+      allocation: "",
+      relatedDocuments: [],
+    };
+  }
+
+  function evidenceRowsByFamily(rows) {
+    const grouped = new Map();
+    (rows || []).forEach((row) => {
+      const family = documentFamily(row && row.document);
+      if (!family.key) return;
+      if (!grouped.has(family.key)) grouped.set(family.key, []);
+      grouped.get(family.key).push(row);
+    });
+    return grouped;
+  }
+
+  function evidenceRowsByType(rows) {
+    const grouped = new Map();
+    (rows || []).forEach((row) => {
+      const family = documentFamily(row && row.document);
+      if (!family.type) return;
+      if (!grouped.has(family.type)) grouped.set(family.type, []);
+      grouped.get(family.type).push(row);
+    });
+    return grouped;
+  }
+
+  function buildDatabookEvidenceContext(records, control, options) {
+    const supplemental = options && options.historyRows || [];
+    const historyRows = [...(control && control.rows || []), ...supplemental];
+    const ldRows = (records || []).filter((candidate) => completeDatabook(candidate.databook)).map((candidate) => ({
+      document: candidate.document,
+      documentKey: candidate.documentKey,
+      databook: candidate.databook,
+      workflow: candidate.discipline,
+      levels: [],
+      allocation: "",
+    }));
+    return {
+      historyByFamily: evidenceRowsByFamily(historyRows),
+      historyByType: evidenceRowsByType(historyRows),
+      ldByFamily: evidenceRowsByFamily(ldRows),
+      catalogEntries: options && options.catalogEntries || [],
+    };
+  }
+
+  function inferDatabookEvidence(record, context, index) {
+    const family = documentFamily(record.document);
+    let strongestConflict = null;
+    const accept = (evidence) => {
+      if (!evidence) return null;
+      if (evidence.conflict) {
+        if (!strongestConflict) strongestConflict = evidence;
+        return null;
+      }
+      return evidence;
+    };
+    if (family.type === "CV") {
+      const cvEvidence = chooseCvEvidence(record, context.historyByType.get("CV") || []);
+      const acceptedCv = accept(cvEvidence);
+      if (acceptedCv) return acceptedCv;
+    }
+    const historyEvidence = chooseFamilyEvidence(record, context.historyByFamily.get(family.key) || [], index, "history");
+    const acceptedHistory = accept(historyEvidence);
+    if (acceptedHistory) return acceptedHistory;
+    const ldEvidence = chooseFamilyEvidence(record, context.ldByFamily.get(family.key) || [], index, "ld");
+    const acceptedLd = accept(ldEvidence);
+    if (acceptedLd) return acceptedLd;
+    const catalogEvidence = chooseCatalogEvidence(record, context.catalogEntries);
+    const acceptedCatalog = accept(catalogEvidence);
+    if (acceptedCatalog) return acceptedCatalog;
+    // Último passo antes do caminho geral: a pasta da disciplina no próprio
+    // mapa, que é sempre mais específica do que o caminho geral e traz níveis.
+    // Um conflito não resolve o caminho — ele só diz que duas pastas
+    // disputaram. Antes, esse conflito voltava com o caminho vazio e a linha
+    // caía no caminho geral; agora ele viaja junto com a pasta da disciplina.
+    const disciplineEvidence = disciplineCatalogFallback(record, context.catalogEntries);
+    if (strongestConflict) {
+      if (!disciplineEvidence) return strongestConflict;
+      return {
+        ...disciplineEvidence,
+        source: `${disciplineEvidence.source} · ${strongestConflict.source}`,
+        priorConflict: true,
+        alternatives: strongestConflict.alternatives || [],
+      };
+    }
+    return disciplineEvidence;
+  }
+
+  function levelsForDatabook(levelsByDatabook, databook) {
+    if (!databook || !levelsByDatabook) return [];
+    const exact = levelsByDatabook.get(norm(databook));
+    if (exact && exact.some(Boolean)) return exact.slice();
+    const wanted = pathKey(databook);
+    for (const [candidate, levels] of levelsByDatabook.entries()) {
+      if (pathKey(candidate) === wanted && levels.some(Boolean)) return levels.slice();
+    }
+    return [];
+  }
+
+  function outputFromRecord(record, history, base, control, allocationDate, inference) {
+    const rawLdDatabook = recordValue(record, ["CAMINHO DATABOOK", "CAMINHO DATA BOOK"]);
+    const rawHistoryDatabook = history && history.databook || "";
+    const ldDatabook = completeDatabook(rawLdDatabook) ? rawLdDatabook : "";
+    const historyDatabook = completeDatabook(rawHistoryDatabook) ? rawHistoryDatabook : "";
+    const inferredDatabook = inference && completeDatabook(inference.databook) ? inference.databook : "";
+    const fallbackEvidence = generalDatabookFallback(record);
+    const databook = ldDatabook || historyDatabook || inferredDatabook || fallbackEvidence.databook;
+    const evidence = ldDatabook
+      ? { source: "LD", sourceType: "ld-exact", confidence: "confirmada", support: 1, allocation: "", relatedDocuments: [] }
+      : historyDatabook
+        ? { source: "Histórico do documento", sourceType: "history-exact", confidence: "confirmada", support: 1, allocation: history && history.allocation || "", relatedDocuments: [record.document] }
+        : inferredDatabook ? inference : {
+          ...fallbackEvidence,
+          priorConflict: Boolean(inference && inference.conflict),
+          alternatives: inference && inference.alternatives || [],
+        };
+
+    const family = documentFamily(record.document);
+    const eapResolution = family.type === "ET" ? levelResolutionForEap(control, record) : null;
+    const eapLevels = eapResolution ? eapResolution.levels : [];
+    let levels = [];
+    let levelsSource = "";
+    if (family.type === "ET" && eapLevels.some(Boolean)) {
+      levels = eapLevels.slice();
+      levelsSource = eapResolution && eapResolution.source || ("Base EAP " + recordEap(record));
+    } else if (family.type === "ET" && eapResolution && eapResolution.blockFallback) {
+      levels = [];
+      levelsSource = eapResolution.reason || "REVISAR CAMINHO DE ALOCAÇÃO";
+    } else if (base && base.levels && base.levels.some(Boolean)) {
+      levels = base.levels.slice();
+      levelsSource = "Base do documento";
+    } else if (history && history.levels && history.levels.some(Boolean)) {
+      levels = history.levels.slice();
+      levelsSource = "Histórico do documento";
+    } else if (inference && inference.levels && inference.levels.some(Boolean)
+      && (!databook || pathKey(inference.databook) === pathKey(databook))) {
+      levels = inference.levels.slice();
+      levelsSource = inference.source;
+    }
+    if (!levels.length && !(family.type === "ET" && eapResolution && eapResolution.blockFallback)) {
+      levels = levelsForDatabook(control && control.levelsByDatabook, databook);
+      if (levels.some(Boolean)) levelsSource = "Histórico do caminho";
+    }
+    if (family.type === "ET" && levels.some(Boolean) && !levelsCompatibleWithRecord(levels, record)) {
+      levels = [];
+      levelsSource = "REVISAR CAMINHO DE ALOCAÇÃO — os níveis encontrados conflitam com a disciplina/contexto do documento.";
+    }
+    while (levels.length < 10) levels.push("");
+    const sourceAction = recordValue(record, ["ESCOPO", "AÇÃO", "ACAO"]) || text(history && history["Ação"]) || "INCLUSÃO";
+    const action = norm(sourceAction) === "EMISSAO" ? "INCLUSÃO" : sourceAction;
+    const purpose = recordValue(record, ["PROPÓSITO DE EMISSÃO", "PROPÓSITO DE EMISSÃO ORIGINAL"]) || text(history && history["Propósito de Emissão Original"]);
+    const discipline = recordValue(record, ["DISCIPLINA", "WORKFLOW", "QUEM?"]) || (history && history.workflow) || "";
+    return {
+      document: record.document,
+      // A Data Prevista representa o dia em que a nova alocação é gerada.
+      // Datas antigas do controle servem como histórico, não como valor da
+      // nova linha ou da planilha oficial.
+      plannedDate: text(allocationDate),
+      discipline,
+      workflow: workflowForPurpose(purpose, discipline),
+      active: recordValue(record, ["DOCUMENTO ATIVO"]) || text(history && history["Documento Ativo"]),
+      action,
+      baselineDate: recordValue(record, ["DATA DA LINHA BASE"]) || text(history && history["Data da Linha Base"]),
+      purpose,
+      critical: recordValue(record, ["DOCUMENTO CRÍTICO"]) || text(history && history["Documento Crítico"]),
+      observation: recordValue(record, ["OBSERVAÇÃO"]) || text(history && history["Observação"]),
+      databook,
+      levels,
+      databookEvidence: evidence,
+      levelsSource,
+    };
+  }
+
+  function historyRank(row) {
+    const parsed = parseAllocationCode(row && row.allocation);
+    return parsed ? parsed.year * 100000 + parsed.sequence : Number(row && row.rowNumber) || 0;
+  }
+
+  function exactHistoryMap(control, supplemental) {
+    const result = new Map();
+    [...(control && control.rows || []), ...(supplemental || [])].forEach((row) => {
+      if (!row || !(row.document || row.documentKey)) return;
+      const identity = looseKey(row.document || row.documentKey);
+      if (!identity) return;
+      const current = result.get(identity);
+      if (!current || historyRank(row) >= historyRank(current)) result.set(identity, row);
+    });
+    return result;
+  }
+
+  function latestRecord(records) {
+    return (records || []).slice().sort((a, b) => (Number(b.row) || 0) - (Number(a.row) || 0))[0] || null;
+  }
+
+  function formatDateBR(value) {
+    const parsed = C && C.parseDate ? C.parseDate(value) : null;
+    if (!parsed || Number.isNaN(parsed.getTime())) return text(value);
+    return `${String(parsed.getDate()).padStart(2, "0")}/${String(parsed.getMonth() + 1).padStart(2, "0")}/${parsed.getFullYear()}`;
+  }
+
+  function postingEvidenceForRecord(record) {
+    const item = record || {};
+    const grdt = text(item.grdt || recordValue(item, ["GRDT", "EGRDT"]));
+    const effectiveDate = text(item.effectiveDate || recordValue(item, ["DATA EFETIVA DE EMISSÃO", "DATA EFETIVA EMISSÃO"]));
+    const parsedDate = C && C.parseDate ? C.parseDate(effectiveDate) : effectiveDate ? new Date(effectiveDate) : null;
+    const validDate = parsedDate instanceof Date && !Number.isNaN(parsedDate.getTime());
+    const complete = Boolean(grdt && validDate);
+    const partial = Boolean((grdt || effectiveDate) && !complete);
+    const source = [text(item.source), text(item.sheet) ? `aba ${item.sheet}` : "", item.row ? `linha ${item.row}` : ""].filter(Boolean).join(" · ");
+    if (complete) return {
+      grdt, effectiveDate, complete: true, partial: false, status: "POSTADO CONFORME LD",
+      explanation: `A própria LD informa a GRDT ${grdt} e a Data Efetiva de Emissão ${formatDateBR(effectiveDate)} na mesma linha${source ? ` (${source})` : ""}.`,
+      source, sheet: text(item.sheet), row: Number(item.row) || 0,
+    };
+    if (partial) return {
+      grdt, effectiveDate, complete: false, partial: true, status: "EVIDÊNCIA DE POSTAGEM INCOMPLETA",
+      explanation: grdt
+        ? `A LD informa a GRDT ${grdt}, mas a Data Efetiva de Emissão está vazia ou inválida${source ? ` (${source})` : ""}.`
+        : `A LD informa a Data Efetiva de Emissão ${formatDateBR(effectiveDate)}, mas o número da GRDT está vazio${source ? ` (${source})` : ""}.`,
+      source, sheet: text(item.sheet), row: Number(item.row) || 0,
+    };
+    return { grdt: "", effectiveDate: "", complete: false, partial: false, status: "SEM EVIDÊNCIA DE POSTAGEM NA LD", explanation: `A linha não possui número da GRDT nem Data Efetiva de Emissão${source ? ` (${source})` : ""}.`, source, sheet: text(item.sheet), row: Number(item.row) || 0 };
+  }
+
+  function meaningfulFiscalComment(value) {
+    const normalized = norm(value);
+    return Boolean(normalized && !/^(OK|ACEITO SEM COMENTARIOS?|SEM COMENTARIOS?|N\/A|NA|-)$/.test(normalized));
+  }
+
+
+  function outcomeForHistory(history) {
+    if (!history) return { kind: "unknown", label: "SEM RESULTADO", confidence: "baixa" };
+    return P && P.classifyEvidence
+      ? P.classifyEvidence({ status: history.status, comment: history.fiscalComment })
+      : { kind: "unknown", label: text(history.status) || "SEM RESULTADO", confidence: "baixa" };
+  }
+
+  function recordAllocationStatus(record) {
+    const item = record || {};
+    const explicit = text(item.allocationStatus);
+    if (explicit) return explicit;
+    const allocationCell = text(item.allocation || recordValue(item, ["ALOCAÇÃO"]));
+    const normalized = norm(allocationCell);
+    if (/^NAO ALOCAD[OA]\b/.test(normalized)) return "NÃO ALOCADO";
+    if (/^ALOCAD[OA]\b/.test(normalized)) return "ALOCADO";
+    return "";
+  }
+
+  function recordAllocationCode(record) {
+    const item = record || {};
+    const candidates = [item.allocation, recordValue(item, ["ALOCAÇÃO"]), recordValue(item, ["NÚMERO DA ALOCAÇÃO", "NUMERO DA ALOCACAO"])];
+    const found = candidates.map(text).find((candidate) => parseAllocationCode(candidate));
+    return found || "";
+  }
+
+  function outcomeForLd(record) {
+    const value = recordAllocationStatus(record);
+    const kind = C && C.allocationState ? C.allocationState(value).kind : norm(value) === "NAO ALOCADO" ? "not_allocated" : norm(value) === "ALOCADO" ? "allocated" : value ? "unknown" : "empty";
+    if (kind === "allocated") return { kind: "accepted", label: "ALOCADO CONFORME LD", confidence: "alta" };
+    if (kind === "not_allocated") return { kind: "not_allocated", label: "NÃO ALOCADO CONFORME LD", confidence: "alta" };
+    if (kind === "unknown") return { kind: "unknown", label: value || "RESULTADO NÃO RECONHECIDO", confidence: "baixa" };
+    return { kind: "empty", label: "SEM CONFIRMAÇÃO NA LD", confidence: "baixa" };
+  }
+
+  function effectiveFiscalComment(record, confirmation, history) {
+    const ldComment = text(record && record.fiscalComment);
+    const confirmationComment = text(confirmation && confirmation.comment);
+    const historyComment = text(history && history.fiscalComment);
+    if (confirmation && confirmation.outcome && confirmation.outcome.kind === "rejected" && confirmationComment) return confirmationComment;
+    if (meaningfulFiscalComment(ldComment)) return ldComment;
+    if (confirmationComment) return confirmationComment;
+    if (meaningfulFiscalComment(historyComment)) return historyComment;
+    return ldComment || historyComment;
+  }
+
+  function allocationDiagnosis(context) {
+    const data = context || {};
+    const record = data.record || {};
+    const resolution = data.resolution || { kind: "unknown", label: "" };
+    const history = data.history || null;
+    const base = data.base || null;
+    const existingAllocation = text(data.existingAllocation);
+    const fiscalComment = text(data.fiscalComment);
+    const inCentral = Boolean(history);
+    const inPlannedBase = Boolean(base);
+    const ldStatus = recordAllocationStatus(record);
+    const sourceSuffix = resolution.source ? ` Fonte: ${resolution.source}.` : "";
+    const fiscalSuffix = fiscalComment ? ` Motivo/retorno da Fiscal: ${fiscalComment}.` : "";
+
+    if (resolution.kind === "accepted") return {
+      kind: "allocated",
+      label: "ALOCADO — JÁ CONFIRMADO",
+      explanation: `${existingAllocation ? `O documento já está alocado em ${existingAllocation}` : "A confirmação mais recente informa que o documento já está alocado"}; por segurança ele começa desmarcado.${sourceSuffix}`,
+      inCentral,
+      inPlannedBase,
+    };
+    if (resolution.kind === "rejected") return {
+      kind: "rejected",
+      label: "RECUSADO — PRECISA DE NOVA ALOCAÇÃO",
+      explanation: `${existingAllocation ? `A alocação ${existingAllocation} foi recusada` : "A confirmação mais recente foi recusada"}; o documento precisa entrar em uma nova alocação.${fiscalSuffix}${sourceSuffix}`,
+      inCentral,
+      inPlannedBase,
+    };
+    if (resolution.kind === "pending") return {
+      kind: inCentral ? "pending_control" : "pending_external",
+      label: inCentral
+        ? "AGUARDANDO RETORNO DA FISCAL — JÁ INCLUÍDO NO CONTROLE"
+        : "AGUARDANDO RETORNO DA FISCAL",
+      explanation: `${inCentral ? "O documento já possui linha na Central de alocação" : "Foi localizado um envio/retorno pendente fora da Central carregada"}${existingAllocation ? `, vinculado à ${existingAllocation}` : ""}, mas ainda não existe aceite nem recusa conclusiva.${fiscalSuffix}${sourceSuffix}`,
+      inCentral,
+      inPlannedBase,
+    };
+    if (resolution.kind === "conflict") return {
+      kind: "conflict",
+      label: "CONFLITO DE STATUS — CONFERIR",
+      explanation: `Há fontes de mesma prioridade com resultados incompatíveis; o documento começa desmarcado, mas continua disponível para decisão manual.${sourceSuffix}`,
+      inCentral,
+      inPlannedBase,
+    };
+
+    const ldNotAllocated = resolution.kind === "not_allocated" || norm(ldStatus) === "NAO ALOCADO";
+    if (ldNotAllocated && inCentral) return {
+      kind: existingAllocation ? "pending_control" : "not_allocated_control",
+      label: existingAllocation
+        ? "AGUARDANDO RETORNO DA FISCAL — JÁ INCLUÍDO NO CONTROLE"
+        : "NÃO ALOCADO — JÁ INCLUÍDO NO CONTROLE",
+      explanation: `A LD está marcada como NÃO ALOCADO e o documento já possui linha na Central${existingAllocation ? ` na ${existingAllocation}` : ""}. Como não há aceite ou recusa conclusiva, o motivo operacional é retorno da Fiscal pendente ou atualização ainda não refletida na LD.${fiscalSuffix}`,
+      inCentral,
+      inPlannedBase,
+    };
+    if (ldNotAllocated && !inCentral) return {
+      kind: "new_control",
+      label: inPlannedBase ? "NOVO NA CENTRAL — JÁ PREVISTO NA BASE" : "NOVO NO CONTROLE",
+      explanation: `A LD está marcada como NÃO ALOCADO e não existe linha anterior para o documento na Central de alocação carregada. ${inPlannedBase ? "Ele já consta na base de documentos previstos e precisa da primeira inclusão na Central." : "Ele deve ser tratado como novo para inclusão no controle."}${fiscalSuffix}`,
+      inCentral,
+      inPlannedBase,
+    };
+    if (resolution.kind === "empty" && !inCentral) return {
+      kind: "new_control",
+      label: inPlannedBase ? "NOVO NA CENTRAL — JÁ PREVISTO NA BASE" : "NOVO NO CONTROLE",
+      explanation: `O documento não possui confirmação de alocação na LD nem linha anterior na Central carregada. ${inPlannedBase ? "Ele já consta na base de previstos." : "Ele precisa da primeira inclusão no controle."}`,
+      inCentral,
+      inPlannedBase,
+    };
+    if (inCentral) return {
+      kind: "pending_control",
+      label: "AGUARDANDO DEFINIÇÃO — JÁ INCLUÍDO NO CONTROLE",
+      explanation: `O documento já possui linha na Central${existingAllocation ? ` na ${existingAllocation}` : ""}, mas o status disponível não confirma aceite nem recusa.${fiscalSuffix}${sourceSuffix}`,
+      inCentral,
+      inPlannedBase,
+    };
+    return {
+      kind: "review",
+      label: "SITUAÇÃO NÃO CONFIRMADA — CONFERIR",
+      explanation: `Não foi possível comprovar se o documento está alocado, aguardando retorno ou se é novo no controle. Ele começa desmarcado e exige decisão manual.${sourceSuffix}`,
+      inCentral,
+      inPlannedBase,
+    };
+  }
+
+  function confirmationSourceLabel(confirmation) {
+    return P && P.sourceLabel ? P.sourceLabel(confirmation) : [text(confirmation && confirmation.source), text(confirmation && confirmation.sourceSheet), confirmation && confirmation.sourceRow ? `linha ${confirmation.sourceRow}` : ""].filter(Boolean).join(" · ");
+  }
+
+  function chooseAllocationResolution(record, history, confirmationResolution) {
+    if (confirmationResolution && confirmationResolution.conflict) {
+      return { kind: "conflict", label: "CONFLITO NAS CONFIRMAÇÕES", sourceType: "confirmation", source: "Pasta de confirmações", evidence: null };
+    }
+    const confirmation = confirmationResolution && confirmationResolution.evidence || null;
+    if (confirmation && confirmation.outcome && ["accepted", "rejected", "pending"].includes(confirmation.outcome.kind)) {
+      return { ...confirmation.outcome, sourceType: "confirmation", source: confirmationSourceLabel(confirmation), evidence: confirmation };
+    }
+    const historyOutcome = outcomeForHistory(history);
+    if (["accepted", "rejected", "pending"].includes(historyOutcome.kind)) {
+      return { ...historyOutcome, sourceType: "control", source: [text(history && history.source) || "Central de alocação", text(history && history.sourceSheet), history && history.rowNumber ? `linha ${history.rowNumber}` : ""].filter(Boolean).join(" · "), evidence: history };
+    }
+    const ldOutcome = outcomeForLd(record);
+    return { ...ldOutcome, sourceType: "ld", source: [text(record && record.source), text(record && record.sheet) ? `aba ${record.sheet}` : "", record && record.row ? `linha ${record.row}` : ""].filter(Boolean).join(" · "), evidence: record };
+  }
+
+  function appendReallocationObservation(output, previousAllocation, comment, source) {
+    if (!output) return output;
+    const note = [`NOVA ALOCAÇÃO APÓS RECUSA${previousAllocation ? ` DA ${previousAllocation}` : ""}`, comment ? `MOTIVO: ${comment}` : "", source ? `FONTE: ${source}` : ""].filter(Boolean).join(" — ");
+    output.observation = [text(output.observation), note].filter(Boolean).join(" | ");
+    return output;
+  }
+
+  function resolutionExplanation(record, resolution, confirmation, history, effectiveComment, existingAllocation) {
+    const parts = [];
+    const label = text(resolution && resolution.label);
+    if (resolution && resolution.kind === "accepted") {
+      parts.push(existingAllocation ? `A confirmação mais recente indica que o documento está alocado em ${existingAllocation}.` : "A confirmação mais recente indica que o documento já está alocado, mesmo sem número preenchido no campo ALOCAÇÃO.");
+    } else if (resolution && resolution.kind === "rejected") {
+      parts.push(existingAllocation ? `A alocação ${existingAllocation} foi recusada e não deve ser tratada como alocação aceita.` : "A confirmação mais recente registra recusa da alocação.");
+      parts.push("O documento foi preparado para uma nova alocação.");
+    } else if (resolution && resolution.kind === "not_allocated") {
+      parts.push("A LD confirma que o documento está NÃO ALOCADO e pode seguir para nova alocação.");
+      if (existingAllocation) parts.push(`O número ${existingAllocation} é apenas um registro anterior; sozinho ele não comprova que a alocação foi aceita.`);
+    } else if (resolution && resolution.kind === "pending") {
+      parts.push(`A confirmação mais recente está pendente${label ? ` (${label})` : ""}; nenhuma nova alocação foi preparada automaticamente.`);
+    } else if (resolution && resolution.kind === "conflict") {
+      parts.push("Foram encontradas confirmações contraditórias para o mesmo documento e para a mesma prioridade de retorno.");
+    } else {
+      parts.push("Não foi encontrada confirmação segura de que o documento está alocado ou liberado para nova alocação.");
+      if (existingAllocation) parts.push(`Existe o número ${existingAllocation}, mas o número da alocação isoladamente não comprova aceite.`);
+    }
+    if (effectiveComment) parts.push(`Comentário da Fiscal: ${effectiveComment}.`);
+    else if (resolution && resolution.kind === "rejected") parts.push("A recusa foi identificada pelo status, mas não há comentário explicando o motivo.");
+    if (resolution && resolution.source) parts.push(`Fonte da decisão: ${resolution.source}.`);
+    const stage = text(record && record.allocationStage);
+    if (stage && !/^(0|N\/A|NA|-)$/.test(norm(stage))) parts.push(`Etapa registrada na LD: ${stage}.`);
+    const version = recordVersion(record);
+    if (version) parts.push(`Versão da LD enviada: ${version}.`);
+    return parts.join(" ");
+  }
+
+  function allocationExplanation(record, mode, history) {
+    const item = record || {};
+    const status = recordAllocationStatus(item);
+    const allocation = text(history && history.allocation || recordAllocationCode(item));
+    const stage = text(item.allocationStage);
+    const fiscal = text(item.fiscalComment);
+    const version = text(item.ldVersion);
+    const source = [text(item.source), text(item.sheet) ? `aba ${item.sheet}` : "", item.row ? `linha ${item.row}` : ""].filter(Boolean).join(" · ");
+    const parts = [];
+    if (mode === "allocated") {
+      parts.push(allocation ? `O documento já está alocado em ${allocation}.` : "A LD confirma que o documento já está alocado.");
+      if (status) parts.push(`Confirmação de documentos previstos: ${status}.`);
+    } else if (mode === "not_allocated") {
+      parts.push(`A coluna “Confirmação de DOCUMENTOS PREVISTOS” está marcada como ${status || "NÃO ALOCADO"}.`);
+      if (meaningfulFiscalComment(fiscal)) parts.push(`Motivo registrado pela Fiscal: ${fiscal}.`);
+      else if (fiscal) parts.push(`O comentário “${fiscal}” não explica operacionalmente por que o documento ainda não foi alocado.`);
+      else parts.push("A LD não contém comentário da Fiscal explicando o motivo operacional da não alocação.");
+      if (allocation) parts.push(`Existe o número de alocação ${allocation}, mas a confirmação da linha continua como não alocada; confira a atualização da LD.`);
+      else parts.push("Nenhum número de alocação foi registrado nessa linha.");
+    } else {
+      parts.push(status ? `O valor de confirmação “${status}” não permite decisão automática.` : "A confirmação de documentos previstos está vazia ou a coluna não foi localizada.");
+    }
+    if (stage && !/^(0|N\/A|NA|-)$/.test(norm(stage))) parts.push(`Etapa da alocação: ${stage}.`);
+    if (version) parts.push(`Versão da LD enviada: ${version}.`);
+    else parts.push("A Versão da LD enviada não está preenchida nessa linha.");
+    if (source) parts.push(`Evidência: ${source}.`);
+    return parts.join(" ");
+  }
+
+  function resultEvidence(record, decision, reason, history) {
+    const item = record || {};
+    const postingEvidence = postingEvidenceForRecord(item);
+    return {
+      allocationReason: reason || allocationExplanation(item, decision === SKIP ? "allocated" : decision === READY ? "not_allocated" : "review", history),
+      allocationStatus: recordAllocationStatus(item),
+      existingAllocation: text(history && history.allocation || recordAllocationCode(item)),
+      allocationStage: text(item.allocationStage),
+      fiscalComment: text(item.fiscalComment),
+      grdt: postingEvidence.grdt,
+      effectiveDate: postingEvidence.effectiveDate,
+      postingEvidence,
+      postingStatus: postingEvidence.status,
+      sigemStatus: text(item.sigemStatus || item.status),
+    };
+  }
+
+  function analyze(entries, records, control, options) {
+    const index = C.buildIndex(records || [], options && options.ldHistory || []);
+    const evidenceContext = buildDatabookEvidenceContext(records, control, options);
+    const histories = exactHistoryMap(control, options && options.historyRows || []);
+    const confirmationIndex = P && P.buildIndex ? P.buildIndex(options && options.confirmationRows || []) : null;
+    const results = [];
+    const seenDocuments = new Set();
+    let duplicateCount = 0;
+    const allocationDate = text(options && options.allocationDate);
+    const ldSourceNames = [...new Set((options && options.ldSourceNames || []).map(text).filter(Boolean))];
+    const ldScopeLabel = ldSourceNames.length > 1 ? `${ldSourceNames.length} LDs carregadas` : "LD carregada";
+
+    (entries || []).forEach((entry) => {
+      const hintedSheet = entry.hintedSheet || C.inferSheetFromName(entry.raw);
+      const matches = C.matchDocuments(entry.raw, index, hintedSheet);
+      if (matches.length !== 1) {
+        results.push({
+          decision: REVIEW, selected: false, document: text(entry.raw),
+          reason: matches.length ? `Mais de um documento foi identificado na ${ldScopeLabel}.` : `Documento não encontrado na ${ldScopeLabel}.`,
+          allocationReason: matches.length ? "Mais de uma linha possível foi encontrada; nenhuma foi escolhida." : `Não há linha em nenhuma das ${ldSourceNames.length || 1} LD(s) carregada(s) para comprovar a situação de alocação.`,
+          allocationDiagnosis: matches.length ? "DOCUMENTO AMBÍGUO NA LD" : "DOCUMENTO NÃO LOCALIZADO NA LD",
+          allocationDiagnosisKind: matches.length ? "ambiguous" : "not_found",
+          allocationDiagnosisDetail: matches.length ? "Mais de uma linha possível foi encontrada; não existe saída segura para gerar manualmente." : "Sem linha técnica da LD não é possível montar a alocação oficial.",
+          ldSource: "", ldSources: [],
+          postingStatus: "SEM EVIDÊNCIA DE POSTAGEM NA LD", postingEvidence: null, source: entry,
+        });
+        return;
+      }
+
+      const matched = matches[0];
+      if (seenDocuments.has(matched.documentKey)) { duplicateCount += 1; return; }
+      seenDocuments.add(matched.documentKey);
+
+      const ldConflict = F && F.analyzeGroup ? F.analyzeGroup(matched.group, { hintedSheet }) : null;
+      const blockingConflictFields = ldConflict && ldConflict.hasConflict
+        ? ldConflict.fields.filter((field) => !["Alocação", "Situação de alocação"].includes(field))
+        : [];
+      if (blockingConflictFields.length) {
+        results.push({
+          decision: REVIEW, selected: false, document: matched.document,
+          sheet: [...new Set(ldConflict.candidates.map((candidate) => candidate.sheet).filter(Boolean))].join(" · "),
+          reason: `Conflito na LD. Valores diferentes em: ${blockingConflictFields.join(", ")}. Nenhuma linha foi escolhida para gerar a alocação.`,
+          allocationReason: `A situação não foi decidida porque existem divergências técnicas: ${blockingConflictFields.join(", ")}.`,
+          allocationDiagnosis: "CONFLITO TÉCNICO NA LD",
+          allocationDiagnosisKind: "technical_conflict",
+          allocationDiagnosisDetail: `As linhas da LD divergem em ${blockingConflictFields.join(", ")}; não existe uma saída única para gerar manualmente.`,
+          warnings: [F.evidenceText(ldConflict)], conflictLd: `SIM — ${blockingConflictFields.join(", ")}`, ldConflict,
+          ldSource: "",
+          ldSources: [...new Set((ldConflict.candidates || []).map((candidate) => text(candidate.source)).filter(Boolean))],
+          postingStatus: "CONFLITO NA LD", postingEvidence: null, record: null, source: entry,
+        });
+        return;
+      }
+
+      let candidates = matched.group.records.slice();
+      if (hintedSheet) {
+        const hinted = candidates.filter((record) => norm(record.sheet) === norm(hintedSheet));
+        if (hinted.length) candidates = hinted;
+      }
+      const record = latestRecord(candidates);
+      const ldSources = [...new Set(candidates.map((candidate) => text(candidate.source)).filter(Boolean))];
+      const history = histories.get(looseKey(matched.document)) || null;
+      const confirmationResolution = P && P.resolve ? P.resolve(confirmationIndex, matched.documentKey) : { evidence: null, conflict: false, candidates: [] };
+      const confirmation = confirmationResolution.evidence || null;
+      const resolution = chooseAllocationResolution(record, history, confirmationResolution);
+      const existingAllocation = text(confirmation && confirmation.allocation || history && history.allocation || recordAllocationCode(record));
+      const fiscalComment = effectiveFiscalComment(record, confirmation, history);
+      const resolutionReason = resolutionExplanation(record, resolution, confirmation, history, fiscalComment, existingAllocation);
+      const postingEvidence = postingEvidenceForRecord(record);
+      const allocationStatusAvailable = candidates.some(hasAllocationStatusColumn);
+      const base = control.baseDocuments.get(record.documentKey) || control.baseDocuments.get(looseKey(record.document)) || null;
+      const diagnosis = allocationDiagnosis({ record, resolution, history, confirmation, base, existingAllocation, fiscalComment });
+      const allocationReason = [diagnosis.explanation, resolutionReason].filter(Boolean).join(" ");
+      const rawLdDatabook = recordValue(record, ["CAMINHO DATABOOK", "CAMINHO DATA BOOK"]);
+      const exactDatabook = completeDatabook(rawLdDatabook) ? rawLdDatabook : history && completeDatabook(history.databook) ? history.databook : "";
+      const eapResolution = levelResolutionForEap(control, record);
+      const eapLevels = eapResolution.levels;
+      const exactLevels = eapLevels.some(Boolean) ? eapLevels
+        : eapResolution.blockFallback ? []
+          : base && base.levels && base.levels.some(Boolean) ? base.levels
+            : history && history.levels && history.levels.some(Boolean) ? history.levels
+              : levelsForDatabook(control.levelsByDatabook, exactDatabook);
+      const inference = !exactDatabook || !exactLevels.some(Boolean) ? inferDatabookEvidence(record, evidenceContext, index) : null;
+      const output = outputFromRecord(record, history, base, control, allocationDate, inference);
+      const ldVersion = recordVersion(record, control.latestLdVersion);
+      const warnings = [];
+      if (!output.workflow && !isAsBuiltPurpose(output.purpose)) warnings.push("Workflow vazio");
+      if (!output.databook) warnings.push("Caminho Data Book vazio");
+      if (!output.levels.slice(0, 6).some(Boolean)) warnings.push("Níveis N1 a N6 vazios");
+      if (/^REVISAR CAMINHO DE ALOCAÇÃO/.test(norm(output.levelsSource))) warnings.push(output.levelsSource);
+      if (!ldVersion) warnings.push("Versão da LD vazia");
+      if (output.databook && output.databookEvidence && /^history$|^ld$|^catalog$/.test(output.databookEvidence.sourceType)) warnings.push(`Databook por ${output.databookEvidence.source}`);
+      if (output.databookEvidence && output.databookEvidence.sourceType === "discipline-catalog") warnings.push(`Databook pela pasta da disciplina: ${output.databookEvidence.source}`);
+      if (output.databookEvidence && output.databookEvidence.sourceType === "discipline-fallback") warnings.push(`Databook geral aplicado: ${output.databookEvidence.source}`);
+      if (ldConflict && ldConflict.hasConflict && !blockingConflictFields.length) warnings.push("A LD possui divergência apenas nos campos de alocação; a decisão utilizou a confirmação mais recente.");
+
+      const common = {
+        document: record.document,
+        sheet: record.sheet,
+        ldSource: text(record.source),
+        ldSources,
+        record,
+        history,
+        base,
+        ldVersion,
+        ldDeadline: recordDeadline(record),
+        allocationStatusAvailable,
+        existingAllocation,
+        previousAllocation: existingAllocation,
+        databookInference: inference,
+        output,
+        source: entry,
+        warnings,
+        allocationReason,
+        fiscalComment,
+        confirmationStatus: text(confirmation && confirmation.status),
+        confirmationComment: text(confirmation && confirmation.comment),
+        confirmationOutcome: text(resolution && resolution.label),
+        confirmationSource: text(resolution && resolution.source),
+        confirmationAllocation: text(confirmation && confirmation.allocation),
+        confirmationDate: text(confirmation && confirmation.returnDate),
+        allocationDecisionSource: text(resolution && resolution.sourceType),
+        allocationStatus: recordAllocationStatus(record),
+        allocationStage: text(record && record.allocationStage),
+        allocationDiagnosis: diagnosis.label,
+        allocationDiagnosisKind: diagnosis.kind,
+        allocationDiagnosisDetail: diagnosis.explanation,
+        inAllocationControl: diagnosis.inCentral,
+        inPlannedDocumentBase: diagnosis.inPlannedBase,
+        grdt: postingEvidence.grdt,
+        effectiveDate: postingEvidence.effectiveDate,
+        postingEvidence,
+        postingStatus: postingEvidence.status,
+        sigemStatus: text(record && (record.sigemStatus || record.status)),
+      };
+
+      if (resolution.kind === "accepted") {
+        results.push({ ...common, decision: SKIP, selected: false, reason: allocationReason, reallocationRequired: false });
+        return;
+      }
+
+      if (resolution.kind === "rejected" || resolution.kind === "not_allocated" || resolution.kind === "empty") {
+        // Quando a LD confirma recusa, não alocação ou não contém confirmação (empty),
+        // permitir preparar a alocação desde que a linha exista na LD e não haja
+        // divergências bloqueantes. GRDT e Data Efetiva de Emissão NÃO devem bloquear
+        // a geração da alocação — são apenas informativas.
+        const reallocationRequired = resolution.kind === "rejected";
+        if (reallocationRequired) appendReallocationObservation(output, existingAllocation, fiscalComment, resolution.source);
+        results.push({
+          ...common,
+          decision: READY,
+          selected: true,
+          reason: allocationReason,
+          allocationReason,
+          reallocationRequired,
+        });
+        return;
+      }
+
+      const reason = resolution.kind === "conflict"
+        ? `${allocationReason} Fontes conflitantes: ${(confirmationResolution.candidates || []).map((item) => `${text(item.status)}${item.comment ? ` — ${item.comment}` : ""}`).join(" | ")}.`
+        : allocationReason;
+      results.push({ ...common, decision: REVIEW, selected: false, reason, allocationReason: reason, reallocationRequired: false });
+    });
+
+    return { results, duplicateCount, index };
+  }
+
+  function centralSheetLabel(result) {
+    const record = result && result.record || {};
+    const source = result && result.ldSource || record.source || "";
+    const ldNumber = ldNumberFromSource(source) || "000";
+    const rawSheet = text(record.sheet || result && result.sheet);
+    const normalizedSheet = norm(rawSheet).replace(/[_\s-]*LD[_\s-]*\d{3}$/, "");
+    const sheet = normalizedSheet.includes("N-1710") || normalizedSheet.includes("N1710") ? "N-1710" : "ET";
+    return `${sheet}_LD_${ldNumber}`;
+  }
+
+  // A coluna VERSÃO DA LD da Central recebe o prazo descrito na LD, copiado
+  // como está na planilha. Sem prazo para aquele documento, a versão da LD
+  // enviada continua sendo escrita, para a linha não sair em branco.
+  function centralLdVersionValue(result) {
+    const record = result && result.record || {};
+    const source = result && result.ldSource || record.source || "";
+    const deadline = text(result && result.ldDeadline) || recordDeadline(record);
+    return deadline || text(result && result.ldVersion) || recordVersion(record) || ldVersionFromSource(source);
+  }
+
+  function allocationRow(result, allocationDate) {
+    const output = result.output || {};
+    return [
+      output.document || result.document || "",
+      text(allocationDate) || output.plannedDate || "",
+      output.workflow || "",
+      output.active || "",
+      output.action || "",
+      output.baselineDate || "",
+      output.purpose || "",
+      output.critical || "",
+      output.observation || "",
+      output.databook || "",
+      ...Array.from({ length: 6 }, (_, index) => (output.levels || [])[index] || ""),
+    ];
+  }
+
+  function controlRow(result, meta) {
+    const record = result.record || {};
+    const base = result.base || {};
+    const output = result.output || {};
+    const source = result.ldSource || record.source || "";
+    return [
+      centralSheetLabel(result),
+      centralLdVersionValue(result),
+      text(meta.allocationDate),
+      "",
+      "",
+      "",
+      text(meta.status) || "PENDENTE ENVIO DE LD",
+      text(meta.allocationCode),
+      base.document ? 1 : 0,
+      ...allocationRow(result, meta.allocationDate),
+      ...Array.from({ length: 4 }, (_, index) => (output.levels || [])[index + 6] || ""),
+    ];
+  }
+
+  function canSelectForAllocation(result) {
+    return Boolean(result && result.document && result.record && result.output);
+  }
+
+  function defaultSelectedForAllocation(result) {
+    return Boolean(canSelectForAllocation(result) && result.decision === READY);
+  }
+
+  function selectedReady(results, selectedDocuments) {
+    const selected = selectedDocuments instanceof Set ? selectedDocuments : null;
+    return (results || []).filter((result) => {
+      if (!canSelectForAllocation(result)) return false;
+      return selected ? selected.has(key(result.document)) : defaultSelectedForAllocation(result);
+    });
+  }
+
+  return {
+    READY,
+    REVIEW,
+    SKIP,
+    ALLOCATION_HEADERS,
+    CONTROL_HEADERS,
+    text,
+    norm,
+    key,
+    pathKey,
+    completeDatabook,
+    documentFamily,
+    normalizeEap,
+    documentEap,
+    recordEap,
+    levelsFromEapBase,
+    parseProjectLevelBase,
+    levelResolutionForEap,
+    levelsForEap,
+    projectPathDisciplineKey,
+    levelsCompatibleWithRecord,
+    titleKind,
+    effectiveTitle,
+    databookDisciplineKey,
+    databookFamilyForRecord,
+    generalDatabookFallback,
+    disciplineCatalogFallback,
+    levelsFromDatabookPath,
+    outputFromRecord,
+    titleSimilarity,
+    subjectTags,
+    suggestCatalogDatabook: chooseCatalogEvidence,
+    isAsBuiltPurpose,
+    workflowForPurpose,
+    recordValue,
+    recordDeadline,
+    hasAllocationStatusColumn,
+    newestLdVersion,
+    ldNumberFromSource,
+    ldVersionFromSource,
+    recordVersion,
+    splitBaseLevels,
+    parseControlWorkbook,
+    parseDatabookWorkbook,
+    parseHistoricalAllocationWorkbook,
+    parseAllocationCode,
+    suggestAllocationCode,
+    parseRelationWorkbook,
+    parseTextRelation,
+    analyze,
+    outcomeForHistory,
+    outcomeForLd,
+    recordAllocationStatus,
+    recordAllocationCode,
+    allocationDiagnosis,
+    chooseAllocationResolution,
+    postingEvidenceForRecord,
+    allocationExplanation,
+    allocationRow,
+    centralSheetLabel,
+    centralLdVersionValue,
+    controlRow,
+    canSelectForAllocation,
+    defaultSelectedForAllocation,
+    selectedReady,
+  };
+});
