@@ -18,10 +18,10 @@ como um total. Consultar outra página atualiza somente a origem daquela fonte,
 sem atribuir novos metadados às páginas de outras fontes já abertas. Arquivos
 históricos mantêm seus identificadores para download exato.
 
-Esta entrega usa regras e dados verificáveis. Não contém modelo generativo nem
-faz chamadas a uma API de IA. A ativação de IA generativa permanece uma etapa
-separada, condicionada à decisão de credenciais e aos limites de uso. A interface
-existente já é útil sem esse serviço; não é apresentada como uma IA conectada.
+O botão Consultar fontes usa regras e dados verificáveis. Explicar com IA usa
+Workers AI opcionalmente, por ação explícita, com limites persistentes e fontes
+verificadas no servidor. A IA não substitui o motor da Conferência. Consulte
+`docs/workers-ai-sources.md` para limites, dados enviados e controle de consumo.
 
 Testes: snapshot/último envio/contrato divergentes, paginação, fonte indisponível,
 revisão física, ausência de mutação e Chromium com respostas vinculadas às fontes,

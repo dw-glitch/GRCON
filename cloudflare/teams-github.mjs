@@ -20,7 +20,7 @@ export async function verifyGithubToken(token,config,{fetchImpl=fetch,now=Date.n
   if(claims.iss!==ISSUER || claims.aud!==config.audience || !Number.isFinite(claims.exp) || !Number.isFinite(claims.iat) || !Number.isFinite(claims.nbf) || claims.exp<=clock || claims.nbf>clock+30 || claims.iat>clock+30 || claims.iat<clock-600 || claims.exp-claims.iat>600)throw fail('OIDC_EXPIRED_OR_INVALID',401);
   const [owner,name]=config.repository.split('/');
   const subjects=[`repo:${config.repository}:ref:refs/heads/main`,`repo:${owner}@${config.ownerId}/${name}@${config.repositoryId}:ref:refs/heads/main`];
-  if(claims.repository!==config.repository || String(claims.repository_id)!==config.repositoryId || String(claims.repository_owner_id)!==config.ownerId || String(claims.actor_id)!==config.ownerId || claims.repository_visibility!=='private' || claims.ref!=='refs/heads/main' || claims.workflow_ref!==config.workflow || !subjects.includes(claims.sub) || !['issues','workflow_dispatch'].includes(claims.event_name))throw fail('OIDC_SOURCE_REJECTED',403);
+  if(claims.repository!==config.repository || String(claims.repository_id)!==config.repositoryId || String(claims.repository_owner_id)!==config.ownerId || String(claims.actor_id)!==config.ownerId || claims.repository_visibility!==(config.visibility||'private') || claims.ref!=='refs/heads/main' || claims.workflow_ref!==config.workflow || !subjects.includes(claims.sub) || !(config.allowedEvents||['issues','workflow_dispatch']).includes(claims.event_name))throw fail('OIDC_SOURCE_REJECTED',403);
   let keys=useCache && keyCache?.expires>now ? keyCache.keys : null;
   if(!keys || !keys.some(x=>x.kid===header.kid)) {
     const response=await fetchImpl(JWKS,{redirect:'error',signal:AbortSignal.timeout(10000)});

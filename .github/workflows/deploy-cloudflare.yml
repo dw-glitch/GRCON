@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: grcon-cloudflare-production
@@ -44,3 +45,7 @@ jobs:
         env:
           GRCON_PRODUCTION_URL: https://grcon-cloudflare.grcon-qualidade.workers.dev
         run: node scripts/verify-cloudflare-production.mjs
+      - name: Validar Workers AI com dados sintéticos
+        env:
+          GRCON_PRODUCTION_URL: https://grcon-cloudflare.grcon-qualidade.workers.dev
+        run: node scripts/verify-document-ai-production.mjs

@@ -51,7 +51,7 @@ Fase 3 integrada pelo PR #270, commit `a561a36c6d1f6d7e5e8043079a9b8f2205e10a75`
 Fase 4 integrada pelo PR #271, commit `f9c2059ec9d9fec2dbba3816b070474d7bc42e9d`.
 Fases 5–7 em entrega conjunta pela PR #274: prévia, perfis PW, retomada, CSV gerencial, backup/rollback com isolamento, diagnóstico da aba e explicações com fontes.
 Documentação: `docs/import-recovery-reports.md`, `docs/evolution-tools-diagnostics.md` e `docs/source-explanations.md`.
-A consulta com fontes funciona por regras. A camada generativa de IA não foi implementada nem ativada; depende da decisão explícita de credenciais.
+Consultar fontes funciona por regras. Integração Workers AI em entrega separada, com teto persistente e retorno às regras; ver docs/workers-ai-sources.md.
 Pilotos externos PW/M365/OCR seguem condicionados a acesso, permissões e critérios de benefício.
 Migration PW regularizada pelo fluxo normal e registrada no banco sob `20261020174318_shared_projectwise_snapshots_tracking`; arquivo inicial preservado para a ordem de instalação nova.
 
@@ -59,4 +59,4 @@ Migration PW regularizada pelo fluxo normal e registrada no banco sob `202610201
 
 - Acompanhar o desempenho e os diagnósticos no uso real antes de contratar ferramentas adicionais.
 - Avaliar pilotos Bentley/M365/OCR apenas com acesso disponível e uma amostra representativa; esses pilotos não estão ativos.
-- Definir credenciais e limites de uso antes de implementar a camada generativa de IA. A consulta por regras permanece disponível sem API.
+- Acompanhar o consumo agregado da conta Cloudflare e a qualidade das explicações do Workers AI; manter a consulta por regras disponível.
