@@ -62,6 +62,56 @@ const server=http.createServer(async(req,res)=>{try{
   await page.reload();await page.getByRole('button',{name:'Atualizar',exact:true}).click();await page.getByRole('button',{name:'Bases de referência',exact:true}).click();
   assert.equal(await page.getByText('caminhos-novos.xlsx').count(),1,'new base survives page refresh');
   assert.equal(await page.getByText('anterior.xlsx').count(),1,'old version is archived, not removed');
-  console.log('Allocation publication Chromium: 503-row Excel import, preview, resumable chunk retry, activation, archive, reload, navigation and React DOM integrity passed.');
+
+  // Regression derived from the user's Rev.E workbook structure (synthetic data):
+  // first sheet CAPA contains two revision notes with pipes; the actual map is
+  // CAMINHO DB_SIGEM_REV.E, column G, with 312 complete folder paths.
+  const revE=XLSX.utils.book_new();
+  const cover=Array.from({length:19},()=>Array(7).fill(''));
+  cover[16][6]='Ver marcação — ALTERAÇÃO (UHDT-X|DATA BOOK C&M|EQUIPAMENTOS|PASTA ANTIGA)';
+  cover[17][6]='Incluído Caminho Data Book UHDT-X|DATA BOOK C&M|GERAL|ARQUIVOS';
+  XLSX.utils.book_append_sheet(revE,XLSX.utils.aoa_to_sheet(cover),'CAPA');
+  XLSX.utils.book_append_sheet(revE,XLSX.utils.aoa_to_sheet([['Orientações para a alocação']]),'ORIENTAÇÕES');
+  const official=Array.from({length:354},()=>Array(9).fill(''));
+  official[8][6]='CAMINHO NOVO';
+  official[9][6]='CAMINHO DATA BOOK (PRÉ-ALOCAÇÃO)';
+  const revEPaths=Array.from({length:312},(_,i)=>{
+   const unit=i<83?'UHDTD GERAL':i<199?'UHDTD U-32':'UHDTD SE-XX00';
+   return unit+'|DATA BOOK C&M|SISTEMA DE QUALIDADE|PASTA '+String(i).padStart(4,'0');
+  });
+  revEPaths.forEach((p,i)=>{
+   const row=i===311?353:10+i;
+   official[row][0]=i<83?'GERAL':'U-32';
+   official[row][2]='DESCRIÇÃO '+i;
+   official[row][4]='SEÇÃO';
+   official[row][5]='1.'+(i+1);
+   official[row][6]=p;
+   official[row][7]='* DOCUMENTOS DO ITEM '+i;
+  });
+  XLSX.utils.book_append_sheet(revE,XLSX.utils.aoa_to_sheet(official),'CAMINHO DB_SIGEM_REV.E');
+  XLSX.utils.book_append_sheet(revE,XLSX.utils.aoa_to_sheet([['ANÁLISE DOCUMENTAL','UHDT-X|DATA BOOK C&M|ANÁLISE|NÃO IMPORTAR']]),'ANÁLISE ET x SIGEM');
+  const revEBytes=Buffer.from(XLSX.write(revE,{bookType:'xlsx',type:'buffer'}));
+  await page.locator('.ag-toolbar input[type=file]').setInputFiles({name:'Caminho Data book_Rev.E.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:revEBytes});
+  await page.getByText('312 caminhos lidos',{exact:false}).waitFor({timeout:60000});
+  assert.ok(await page.getByText('0 inconsistências').isVisible());
+  assert.ok(await page.getByText('UHDTD SE-XX00',{exact:false}).first().isVisible(),'keep separate unit paths intact');
+  await page.getByLabel('Revisão autorizada').fill('E');
+  await page.getByRole('button',{name:'Publicar versão conferida'}).click();
+  await page.locator('.ag-base-table tbody tr').filter({hasText:'Caminho Data book_Rev.E.xlsx'}).getByText('Ativa',{exact:true}).waitFor({timeout:60000});
+  const activeE=storage.find(x=>x.status==='active');
+  assert.equal(activeE.rows.length,312,'do not truncate the official map to the two notes in CAPA');
+  assert.deepEqual(activeE.rows.map(r=>r.databook),revEPaths,'preserve all official folder paths and their exact order');
+  assert.equal(activeE.rows[0].rowNumber,11);
+  assert.equal(activeE.rows.at(-1).rowNumber,354);
+  assert.equal(activeE.rows[0].sourceSheet,'CAMINHO DB_SIGEM_REV.E');
+  assert.equal(activeE.rows[0].description,'DESCRIÇÃO 0','use C/D description rather than SEÇÃO label');
+  assert.equal(activeE.rows[0].notes,'* DOCUMENTOS DO ITEM 0','preserve documents from column H');
+  assert.equal(storage.find(x=>x.id==='upload-1').status,'archived');
+  assert.equal(serial,2);
+  await page.reload();await page.getByRole('button',{name:'Atualizar',exact:true}).click();await page.getByRole('button',{name:'Bases de referência',exact:true}).click();
+  assert.equal(await page.locator('.ag-base-table tbody tr').filter({hasText:'Caminho Data book_Rev.E.xlsx'}).getByText('Ativa',{exact:true}).count(),1);
+  assert.deepEqual(errors,[]);
+  console.log('Allocation publication Chromium: 503-row generic upload and 312-path revisioned Rev.E map (CAPA decoy), source rows, notes, descriptions, integrity, archive and reload passed.');
+
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1});
