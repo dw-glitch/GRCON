@@ -19,8 +19,9 @@
   return {levels:Array.from({length:10},(_,i)=>text(levels[i])),resolution:eap};
  }
  function pathErrors(record,path,bases){
-  const errors=[],unit=bases.config?.[0]?.unit;
-  if(unit&&text(path).split('|')[0].trim()!==unit)errors.push('Unidade do caminho diverge da configuração do contrato.');
+  const errors=[],config=bases.config?.[0],unit=config?.unit;
+  const units=Array.isArray(config?.units)&&config.units.length?config.units:[unit].filter(Boolean);
+  if(units.length&&!units.includes(text(path).split('|')[0].trim()))errors.push('Unidade do caminho diverge da configuração do contrato.');
   if(!A.levelsCompatibleWithRecord(text(path).split('|'),record))errors.push('Disciplina do caminho Databook diverge do documento ou workflow.');
   return errors;
  }

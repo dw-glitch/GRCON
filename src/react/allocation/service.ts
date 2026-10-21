@@ -91,7 +91,7 @@ export const service={
  },
  clearPreview(){emit({preview:null,error:''});},
  async preview(kind:BaseKind,file?:File){return task('Lendo base e preparando prévia',async()=>{const rows=await compute(file?'parse':'bundled',file?{kind,file}:{kind});if(!Array.isArray(rows)||!rows.length)throw Error('Nenhum registro reconhecido. Confira o arquivo e os cabeçalhos.');const validation=kind==='databook'?inspectDatabook(rows):undefined;emit({preview:{kind,rows,fileName:file?.name||'Referência RECON — confirmar vigência',validation},error:''});});},
- previewConfig(prefix:string,unit:string){emit({preview:{kind:'config',fileName:'Configuração contratual',rows:[{prefix:prefix.trim(),unit:unit.trim()}]}});},
+ previewConfig(prefix:string,unit:string){emit({preview:{kind:'config',fileName:'Configuração contratual',rows:[{prefix:prefix.trim(),unit:unit.split(';')[0].trim(),units:unit.split(';').map(value=>value.trim()).filter(Boolean)}]}});},
  async publish(revision:string){return task('Publicando base de referência',async()=>{
   const preview=state.preview,cleanRevision=revision.trim();
   if(!preview||!cleanRevision)throw Error('Informe a revisão autorizada antes de publicar.');

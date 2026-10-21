@@ -43,6 +43,11 @@ function runtime(original=false){
  assert.throws(()=>core.review(reviewed,{title:reviewed.title,path:civilPath},mixedBases),/Disciplina do caminho/);
  assert.throws(()=>validateDecision({...payload,confirmedPath:civilPath},{...context,bases:mixedBases}),/Disciplina do caminho/);
  assert.throws(()=>validateDecision({...payload,confirmedPath:pathA},{...context,bases:{...bases,config:[{unit:'UGH'}]}}),/Unidade/);
+ const revPath='UHDTD U-32|DATA BOOK C&M|TUBULACAO|RELATORIOS DE INSPECAO';
+ const multiUnitBases={...bases,databook:[{databook:revPath}],config:[{unit:'UHDT-D',units:['UHDTD GERAL','UHDTD U-32','UHDTD SE-XX00']}]};
+ assert.deepEqual(core.pathErrors(record,revPath,multiUnitBases),[]);
+ assert.equal(validateDecision({...payload,confirmedPath:revPath},{...context,bases:multiUnitBases}).validated,true);
+ assert.throws(()=>validateDecision({...payload,confirmedPath:revPath},{...context,bases:{...multiUnitBases,config:[{unit:'UGH',units:['UGH U-33']}]}}),/Unidade/);
  assert.throws(()=>validateDecision(payload,{...context,versions:{...versions,norms:'n2'}}),/bases mudaram/);
  const prompt=allocationPrompt(doc,reviewed.title,context,[],'TUB');
  const fixture={run:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({candidateId:prompt.candidates[0].id,reason:'Caminho da disciplina previsto na base vigente.',citations:[prompt.refs[0].id]})}}]})};
