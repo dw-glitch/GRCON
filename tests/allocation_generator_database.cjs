@@ -12,6 +12,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  insert into public.grcon_memberships values('${uuid(1)}','${uuid(3)}','${uuid(10)}','admin',true),('${uuid(1)}','${uuid(3)}','${uuid(11)}','operator',true),('${uuid(2)}','${uuid(4)}','${uuid(12)}','operator',true),('${uuid(1)}','${uuid(3)}','${uuid(13)}','viewer',true);`);
  await db.exec(fs.readFileSync('supabase/migrations/20261021094333_intelligent_allocation_workspace.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261021114531_allocation_review_hardening.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261021114934_allocation_context_alias_fix.sql','utf8'));
 
  const as=async(n,role='authenticated')=>db.exec(`reset role;set request.jwt.claim.sub='${n?uuid(n):''}';set request.jwt.claim.role='${role}';set role ${role};`);
  const rpc=(op,input={},workspace=uuid(1),actor=null)=>db.query('select public.grcon_allocation($1,$2,$3::jsonb,$4) as r',[workspace,op,JSON.stringify(input),actor]).then(x=>x.rows[0].r);
