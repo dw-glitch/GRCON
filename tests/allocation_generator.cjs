@@ -50,6 +50,21 @@ function runtime(original=false){
  await assert.rejects(recommendAllocation({run:async()=>({response:{candidateId:'inventado',reason:'x',citations:['inventado']}})},prompt),/EVIDENCE/);
  const plan=await worker.run('plan',{results:[reviewed,{...reviewed,document:next,output:{...reviewed.output,discipline:'ELETRICA'}}],mode:'discipline'});assert.equal(plan.groups.length,2);
  assert.equal((await worker.run('plan',{results:[reviewed,reviewed],mode:'single'})).groups.length,1);
+ // Confirmation spreadsheets use the original RECON parser and keep their
+ // separate source names/outcomes when several files are selected together.
+ const X=worker.sandbox.XLSX;
+ const confirmationFile=(name,code,status)=>{const book=X.utils.book_new();X.utils.book_append_sheet(book,X.utils.aoa_to_sheet([['NOME DOCUMENTO','ALOCAÇÃO','STATUS','RESPOSTA DA FISCAL 01'],[code,'C1O-ALOC-CM-0001-2026',status,'Conferido pela Fiscal']]),'Confirmação');return new File([X.write(book,{type:'array',bookType:'xlsx'})],name);};
+ const cf1=await worker.run('parse',{kind:'confirmation',file:confirmationFile('confirmacao-1.xlsx',doc,'RECUSADO')});
+ const cf2=await worker.run('parse',{kind:'confirmation',file:confirmationFile('confirmacao-2.xlsx',next,'ACEITO')});
+ assert.equal(cf1[0].outcome.kind,'rejected');assert.equal(cf2[0].outcome.kind,'accepted');
+ assert.equal(cf1[0].source,'confirmacao-1.xlsx');assert.equal(cf2[0].source,'confirmacao-2.xlsx');
+ const withConfirmation=core.prepare({documents:[{document:doc}],records:[record],confirmations:cf1,bases,versions})[0];
+ assert.equal(withConfirmation.confirmationAllocation,'C1O-ALOC-CM-0001-2026');assert.match(withConfirmation.confirmationOutcome,/RECUSADO/);
+ const Registry=require('../allocation_registry_core.js'),levelBook=X.utils.book_new();
+ X.utils.book_append_sheet(levelBook,X.utils.aoa_to_sheet([['Exportação'],['Nivel 1','Nivel 2','Nivel 3','Nivel 4'],['UHDTD U-32','10.SUPRIMENTO','10.02.BENS','10.02.01.H.TUBULACAO']]),'Base - Caminho das Pastas');
+ const parsedLevels=Registry.parseProjectLevels(levelBook,X).entries;
+ assert.deepEqual(JSON.parse(JSON.stringify(parsedLevels)),JSON.parse(JSON.stringify(worker.sandbox.AllocationCore.parseProjectLevelBase(levelBook,X))));
+ assert.equal(core.levelsFor(record,pathA,{...bases,eap:parsedLevels}).levels[3],'10.02.01.H.TUBULACAO');
  const eap=await worker.run('bundled',{kind:'eap'});assert.ok(eap.length>300);const paths=await worker.run('bundled',{kind:'databook'});assert.ok(paths.length>150);
  const template=(await worker.run('bundled',{kind:'template'}))[0];
  const meta={allocationCode:'C1O-ALOC-CM-0001-2026',allocationDate:'2026-10-21',status:'PENDENTE ENVIO DE LD'};

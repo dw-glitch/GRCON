@@ -77,6 +77,8 @@ function parse(kind,book,name){
  }
  if(kind==='eap')return A.parseProjectLevelBase(book,XLSX);
  if(kind==='ld')return C.parseWorkbook(book,name,Date.now());
+ if(kind==='confirmation')return self.RECONAllocationConfirmations.parseWorkbook(book,XLSX,{name}).rows;
+ if(kind==='list')return A.parseRelationWorkbook(book,XLSX).entries.map(e=>({document:e.raw}));
  if(kind==='history')return A.parseHistoricalAllocationWorkbook(book,XLSX,name).rows;
  if(kind==='central')return A.parseControlWorkbook(book,XLSX).rows;
  if(kind==='titles')return C.parseWorkbook(book,name,Date.now()).records.map(r=>({document:r.document,title:r.title,source:name})).filter(r=>r.title);

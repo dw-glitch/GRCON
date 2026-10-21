@@ -52,11 +52,11 @@
   const standard=T.resolve(record.document,{currentTitle:'',previousTitles:[]});
   return {title:normalize(standard?.title||record.title||''),source:standard?.title?'Motor de títulos RECON — '+T.STANDARD.document+' Rev. '+T.STANDARD.revision:record.title?'Título da LD — revisão necessária':'Sem título comprovado',original:record.title||''};
  }
- function prepare({documents,records=[],central=[],planned=[],bases={},versions={},decisions=[],date=new Date().toISOString().slice(0,10)}){
+ function prepare({documents,records=[],central=[],confirmations=[],planned=[],bases={},versions={},decisions=[],date=new Date().toISOString().slice(0,10)}){
   const catalog=bases.databook||[],paths=new Set(catalog.map(x=>x.databook));
   const control={rows:central,latestByDocument:new Map(central.map(x=>[key(x.document),x])),baseDocuments:new Map(),levelsByEap:new Map(),levelsByDatabook:new Map(),projectLevelBase:bases.eap||[]};
   const entries=documents.map(d=>({raw:text(typeof d==='string'?d:d.document),hintedSheet:C.inferSheetFromName(typeof d==='string'?d:d.document)}));
-  const original=A.analyze(entries,records,control,{allocationDate:date,catalogEntries:catalog,historyRows:central,ldHistory:[]});
+  const original=A.analyze(entries,records,control,{allocationDate:date,catalogEntries:catalog,historyRows:central,confirmationRows:confirmations,ldHistory:[]});
   return original.results.map((base,i)=>{
    const input=documents[i]||{},document=base.document;
    // Preserve the RECON-selected record; never replace a rejected LD conflict
@@ -83,7 +83,7 @@
    const confidence=blockers.length||!standard.compatible?'baixa':alternativePaths.length>1||!located?'media':'alta';
    return {...base,document,revision:text(input.revision||record.revision||'0'),record,ldLocated:located,plannedAllocated:allocated,existing,identity:id,
     originalTitle:title.original,titleSource:title.source,title:title.title,output:{...(base.output||A.outputFromRecord(record,null,null,control,date,inference)),databook:path,levels:levels.levels},
-    suggestedPath:path,candidates,standard,confidence,blockers,ldConflictBlocked,versions,decisionId:'',confirmed:false,ai:null,
+    suggestedPath:path,candidates,levelEvidence:levels.resolution,standard,confidence,blockers,ldConflictBlocked,versions,decisionId:'',confirmed:false,ai:null,
     origin:examples.length&&!located?'experiencia-validada':located?'motor-recon':'catalogo-recon',
     statusLabel:ldConflictBlocked?'Conflito na LD — corrigir fonte':blockers.length||!standard.compatible?'Revisão necessária':located?'Revisar sugestão':'Não localizado na LD — revisar sugestão',
     selected:false};
@@ -97,13 +97,13 @@
   const record={...row.record,title,discipline:text(changes.discipline||row.record.discipline),workflow:text(changes.workflow||row.output.workflow)};
   const errors=pathErrors(record,path,bases);if(errors.length)throw Error(errors.join(' '));
   const resolved=levelsFor(record,path,bases),standard=normative(record,bases);
-  return {...row,record,title,identity:identity(row.document,record),output:{...row.output,workflow:record.workflow,discipline:record.discipline,databook:path,levels:resolved.levels},standard,confirmed:false,decisionId:'',confidence:standard.errors.length?'baixa':'media',blockers:standard.errors.map(e=>e.message||e.code)};
+  return {...row,record,title,identity:identity(row.document,record),levelEvidence:resolved.resolution,output:{...row.output,workflow:record.workflow,discipline:record.discipline,databook:path,levels:resolved.levels},standard,confirmed:false,decisionId:'',confidence:standard.errors.length?'baixa':'media',blockers:[...standard.errors.map(e=>e.message||e.code),...(resolved.resolution?.blockFallback?['EAP não comprovada na base ativa.']:[])]};
  }
  function decisionPayload(row,justification,status='corrected'){
   if(row.ldConflictBlocked)throw Error('Conflito na LD não resolvido. Corrija a fonte antes de confirmar.');
   return {document:row.document,revision:row.revision,family:row.identity.family,discipline:row.identity.discipline,eap:row.identity.eap,title:row.title,
    suggestedPath:row.suggestedPath,confirmedPath:row.output.databook,levels:row.output.levels,versions:row.versions,
-   evidence:[...row.standard.refs.map(x=>({id:x.id,source:x.source,requirement:x.requirement})),{id:'databook:'+row.versions.databook,source:'Mapa Databook ativo',path:row.output.databook}],changes:{titleFrom:row.originalTitle,titleTo:row.title,pathFrom:row.suggestedPath,pathTo:row.output.databook},
+   evidence:[...row.standard.refs.map(x=>({id:x.id,source:x.source,requirement:x.requirement})),...(row.identity.eap?[{id:'eap:'+row.versions.eap,source:row.levelEvidence?.source||'Hierarquia EAP ativa',eap:row.identity.eap}]:[]),{id:'databook:'+row.versions.databook,source:'Mapa Databook ativo',path:row.output.databook}],changes:{titleFrom:row.originalTitle,titleTo:row.title,pathFrom:row.suggestedPath,pathTo:row.output.databook},
    origin:row.origin,confidence:row.confidence,status,justification};
  }
  return {prepare,review,identity,normative,levelsFor,pathErrors,titleFor,eligibleExperience,signature,decisionPayload,Audit};

@@ -50,7 +50,7 @@
         await root.GRCONModuleLoader.ensure("performance");
         const index = root.GrconPerformance?.supported ? await root.GrconPerformance.processData("allocation-index", { records }) : Core.buildIndex(records);
         if (!validScope(expected)) return null;
-        state.snapshot = { id: meta.snapshot_id, fileName: meta.file_name, updatedAt: meta.published_at, count: records.length, index, records, stale: false };
+        state.snapshot = { id: meta.snapshot_id, fileName: meta.file_name, updatedAt: meta.published_at, count: records.length, metadata: meta.metadata, index, records, stale: false };
         state.error = ""; emit(); return state.snapshot;
       } catch (error) {
         if (!validScope(expected)) return null;
@@ -99,7 +99,7 @@
     $("allocation-registry-owner-note").hidden = owner;
     if (!state.busy) $("allocation-registry-status").textContent = state.error || (state.snapshot ? `${state.snapshot.count.toLocaleString("pt-BR")} vínculos · ${state.snapshot.fileName} · atualizado em ${new Date(state.snapshot.updatedAt).toLocaleString("pt-BR")}.` : "Nenhuma Central compartilhada publicada. Documentos Previstos continua determinando Alocado/Não alocado.");
     const preview = $("allocation-registry-preview"); preview.hidden = !state.parsed;
-    preview.innerHTML = state.parsed ? `<p>${state.parsed.count} vínculos reconhecidos · ${state.parsed.metadata.ignored} linhas ignoradas. Confira antes de publicar.</p><table><thead><tr><th>Documento</th><th>Alocação</th><th>Status da alocação</th></tr></thead><tbody>${state.parsed.records.slice(0, 8).map(item => `<tr><td>${esc(item.document)}</td><td>${esc(item.allocation)}</td><td>${esc(item.allocationStatus)}</td></tr>`).join("")}</tbody></table><small>Amostra de até 8 vínculos; a publicação inclui a base inteira.</small>` : "";
+    preview.innerHTML = state.parsed ? `<p>${state.parsed.count} vínculos reconhecidos · ${state.parsed.metadata.projectLevelBase?.length || 0} caminhos EAP · ${state.parsed.metadata.ignored} linhas ignoradas. Confira antes de publicar.</p><table><thead><tr><th>Documento</th><th>Alocação</th><th>Status da alocação</th></tr></thead><tbody>${state.parsed.records.slice(0, 8).map(item => `<tr><td>${esc(item.document)}</td><td>${esc(item.allocation)}</td><td>${esc(item.allocationStatus)}</td></tr>`).join("")}</tbody></table><small>Amostra de até 8 vínculos; a publicação inclui a base inteira.</small>` : "";
   }
   function resolve(document) { return Context.resolve(document, root.GrconPlannedDocuments?.current(), current()); }
   function badge(document) {

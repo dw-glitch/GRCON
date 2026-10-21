@@ -71,3 +71,31 @@ O refinamento global `ui-v3.js` criava um contêiner ao redor da região das tab
 A regressão administrativa carrega o refinamento global junto com o módulo, importa, publica, alterna abas e recarrega. Uma tabela legada externa comprova que o refinamento continua funcionando. O arquivo real Rev. E foi verificado localmente com seus 312 caminhos e testado em envio/publicação via RPC em uma transação revertida. Uma variável opcional `GRCON_DATABOOK_FIXTURE_PATH` permite repetir o teste de navegador com arquivo privado local; o CI utiliza somente a fixture sintética. Nenhum arquivo privado é incluído no repositório.
 
 Realtime continua opcional. Após falha de transporte, a sincronização HTTP permanece imediata e periódica a cada 45 segundos; o circuito de uma hora é persistido por origem/projeto para evitar que recargas abram repetidamente o mesmo WebSocket com falha. O prazo é limitado, nova rede permite retestar e uma conexão bem-sucedida limpa o estado. Isso não remove bloqueios de rede nem promete que a primeira tentativa WebSocket terá sucesso. Nenhum token, identificação de usuário ou documento é guardado nesse estado de rede.
+
+## RECON workflow and Central master hierarchy (2026-10-21)
+
+The generator now follows RECON's sources → relation → decision table → package
+sequence. Sources are compact file cards; confirmations and history accept
+multiple spreadsheets in one selection and retain individual source names.
+Confirmation parsing/classification uses the preserved RECON confirmation engine.
+The table exposes confirmation/Fiscal evidence, EAP, hierarchy origin and Databook.
+Filter-wide selection uses one store update and covers rows outside the virtual
+viewport. Batch confirmation validates each document through the existing server
+endpoint; successes retain their decision IDs, failures stay pending with their
+reason, and package generation requires every selected document to be confirmed.
+
+Shared Central import retains `Base - Caminho das Pastas` in snapshot metadata.
+The new private trigger publishes its N1–N10 rows into the existing versioned EAP
+base in the same transaction as Central activation. It preserves source sheet,
+snapshot and file identity, retires stale Central-derived hierarchies if the next
+Central has no master sheet, and leaves private-table access unchanged. The
+browser and server therefore resolve from the same EAP version. The generator
+continues to use RECON's RNEST field-4 EAP extraction, structural prefix matching
+and discipline disambiguation; ambiguous branches do not acquire invented levels.
+
+Validation includes two-file confirmation import, filter-wide selection, partial
+server failure, package blocking with pending decisions, private database trigger
+activation/rollback/retirement, EAP parser parity and actual desktop screenshots.
+The private Central workbook available in this session has 372 master entries;
+its parsed hierarchy matches RECON exactly. Corporate source workbooks are not
+included in repository fixtures.
