@@ -1985,7 +1985,7 @@
   // compartilhado não depende dele para permanecer consistente.
   const REALTIME_POLL_MS = 45000;
   const REALTIME_CONNECT_TIMEOUT_MS = 12000;
-  const REALTIME_CIRCUIT_FAILURE_THRESHOLD = 2;
+  const REALTIME_CIRCUIT_FAILURE_THRESHOLD = 1;
   const REALTIME_CIRCUIT_OPEN_MS = 60 * 60 * 1000;
   const REALTIME_RETRY_STEPS_MS = Object.freeze([
     5 * 60 * 1000,
@@ -1993,6 +1993,14 @@
     15 * 60 * 1000,
     30 * 60 * 1000,
   ]);
+
+  const realtimeCircuitKey = "grcon.cloud.realtime-circuit.v1:" + Config.projectUrl;
+  function restoreRealtimeCircuit() {
+    const until = Number(readJson(realtimeCircuitKey, 0));
+    if (Number.isFinite(until) && until > Date.now() && until <= Date.now() + REALTIME_CIRCUIT_OPEN_MS) {
+      state.realtimeCircuitOpenUntil = Math.max(state.realtimeCircuitOpenUntil, until);
+    } else if (until) removeStored(realtimeCircuitKey);
+  }
 
   function startRealtimeFallbackPolling() {
     if (state.realtimePollTimer) return;
@@ -2096,14 +2104,14 @@
     const circuitOpened = state.realtimeFailures >= REALTIME_CIRCUIT_FAILURE_THRESHOLD;
     if (circuitOpened) {
       state.realtimeCircuitOpenUntil = Date.now() + REALTIME_CIRCUIT_OPEN_MS;
+      writeJson(realtimeCircuitKey, state.realtimeCircuitOpenUntil);
       retryDelay = REALTIME_CIRCUIT_OPEN_MS;
     }
     dropRealtime();
     setRealtimeStatus("indisponivel");
 
-    // Duas tentativas consecutivas bastam para concluir que esta rede está
-    // bloqueando WebSocket. O histórico continua pelo HTTP incremental e o
-    // socket deixa de gerar erros repetidos durante uma hora.
+    // Preserve HTTP synchronization after a transport failure. Persist the
+    // bounded cooldown so refreshes do not repeatedly reopen a failing socket.
     console.info(
       `GRCON Cloud: Realtime indisponível (${state.realtimeLastFailureReason}). `
       + `Fallback periódico ativo; ${circuitOpened ? "circuito WebSocket suspenso" : "nova tentativa"} em ${formatRetryDelay(retryDelay)}.`
@@ -2120,11 +2128,12 @@
     const settings = options || {};
     if (!state.online || !state.client || !state.membership?.workspace_id) return;
 
-    // Uma rede corporativa que bloqueia WebSocket não deve ser testada de novo
-    // só porque o usuário alternou de aba. Após duas falhas, o circuito fica
-    // aberto por uma hora; uma mudança real offline -> online pode zerá-lo.
+    // A failed transport is optional: keep HTTP active across reloads and tabs.
+    restoreRealtimeCircuit();
     if (state.realtimeCircuitOpenUntil > Date.now()) {
+      setRealtimeStatus("indisponivel");
       startRealtimeFallbackPolling();
+      scheduleRealtimeRetry(state.realtimeCircuitOpenUntil - Date.now());
       return;
     }
     if (!settings.force
@@ -2190,6 +2199,7 @@
           state.realtimeNextRetryAt = 0;
           state.realtimeLastFailureReason = "";
           state.realtimeCircuitOpenUntil = 0;
+          removeStored(realtimeCircuitKey);
           clearRealtimeGiveUp();
           clearRealtimeRetry();
           stopRealtimeFallbackPolling();
@@ -2339,6 +2349,7 @@
         state.realtimeRetryLevel = 0;
         state.realtimeNextRetryAt = 0;
         state.realtimeCircuitOpenUntil = 0;
+        removeStored(realtimeCircuitKey);
         subscribeRealtime({ force: true });
         scheduleSync();
       }

@@ -40,12 +40,16 @@
     if (element && element.dataset[key] !== value) element.dataset[key] = value;
   }
 
+  function reactManaged(element) {
+    return !!element?.closest?.("[data-grcon-react-island], [data-grcon-react-island-mounted]");
+  }
+
   function elementsWithin(scope, selector) {
     const source = scope && scope.nodeType === 1 ? scope : document;
     const items = [];
     if (source.nodeType === 1 && source.matches(selector)) items.push(source);
     if (source.querySelectorAll) items.push(...source.querySelectorAll(selector));
-    return items;
+    return items.filter((element) => !reactManaged(element));
   }
 
   function tableName(table) {
@@ -78,7 +82,7 @@
   }
 
   function enhanceTable(table) {
-    if (!table) return;
+    if (!table || reactManaged(table)) return;
     setData(table, "uiV3Enhanced", "true");
     const name = tableName(table);
     if (!table.querySelector(":scope > caption")) {
@@ -118,6 +122,8 @@
    * dizer a verdade, senão vira enfeite que aponta para o nada.
    */
   function marcarRolagemLateral(region) {
+    // Moving a React-owned region into a legacy wrapper breaks reconciliation.
+    if (reactManaged(region)) return;
     if (region.dataset.uiV3ScrollHint === "true") return;
     setData(region, "uiV3ScrollHint", "true");
     // A sombra é desenhada por um elemento de fora, não pelo que rola: dentro
@@ -215,7 +221,7 @@
   }
 
   function visibleModal() {
-    return Array.from(document.querySelectorAll('[role="dialog"], aside[aria-hidden="false"]')).find((element) => !element.hidden && element.offsetParent !== null);
+    return Array.from(document.querySelectorAll('[role="dialog"], aside[aria-hidden="false"]')).find((element) => !reactManaged(element) && !element.hidden && element.offsetParent !== null);
   }
 
   function focusModal(element) {
@@ -274,6 +280,7 @@
   }
 
   function scheduleEnhancement(scope) {
+    if (reactManaged(scope)) return;
     if (scope && (scope.nodeType === 1 || scope === document)) pendingScopes.add(scope);
     clearTimeout(enhanceTimer);
     enhanceTimer = window.setTimeout(flushEnhancements, 40);
@@ -312,6 +319,7 @@
 
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
+      if (reactManaged(mutation.target)) return;
       if (mutation.type === "childList") {
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === 1) scheduleEnhancement(node);
