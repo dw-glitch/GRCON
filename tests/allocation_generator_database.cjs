@@ -57,7 +57,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  const hugeEap=Array.from({length:1002},(_,i)=>({code:i===1001?'10.2.1':'99.'+(i+1),levels:['NIVEL '+i]}));
  await publish('eap',hugeEap);
  const hugeNorms=Array.from({length:1001},(_,i)=>({id:i===1000?'NORMA-ALVO':'REGRA-'+i,source:'Norma vigente '+i,requirement:'Item '+i}));
- await publish('norms',hugeNorms);
+ await publish('norms',hugeNorms,(await catalog()).versions.norms);
  await as(0,'service_role');
  const exact=await rpc('context',{document:'DOC-1',confirmedPath:lastPath,eap:'10.2.1',normIds:['NORMA-ALVO']},uuid(1),uuid(11));
  assert.equal(exact.complete,true,'validação não pode depender da paginação de 1000');
