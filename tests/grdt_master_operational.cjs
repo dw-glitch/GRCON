@@ -14,6 +14,57 @@ assert.equal(Q.origin({name:"D.pdf"}),"Relação sem arquivo físico");
 assert.match(Q.searchText(row,"LD-001","GRDT-123"), /GRDT-123/);
 assert.match(Q.searchText(row,"LD-001","GRDT-123"), /COFRE/);
 
+// Regressão da seleção automática por status SIGEM na Central de GRDT.
+const Core = require("../core.js");
+const policy = (status, extra={}) => Q.selectionPolicy({
+  document: "PR-5290.00-22313-175-C1O-013", revision: "B",
+  decision: Core.READY, status, ...extra,
+});
+for (const status of ["Em Análise", "Em Analise", "Em Workflow", " em workflow ", "EM ANÁLISE"]) {
+  const result = policy(status);
+  assert.equal(result.kind, "analysis", status);
+  assert.equal(result.autoEligible, false, status);
+  assert.equal(result.manualOnly, true, status);
+  assert.equal(result.label, "Em análise", status);
+}
+for (const status of ["Não Postado", "Recusado", "Para Construção"]) {
+  assert.equal(policy(status).autoEligible, true, status);
+}
+for (const status of ["", "Sem status", "Pendente Certificação", "Cancelado"]) {
+  assert.equal(policy(status).autoEligible, false, status);
+}
+assert.equal(policy("Em análise", {decision: Core.REVIEW}).autoEligible, false);
+assert.equal(policy("Recusado", {hardBlock: true}).autoEligible, false);
+// "Repostagem" informa histórico, mas não autoriza selecionar item em análise.
+const repro = { document: "PR-5290.00-22313-175-C1O-013", revision: "B",
+  decision: Core.READY, status: "Em análise", emissionKind: "REPOST" };
+const selected = new Set([0]), manual = new Set();
+assert.equal(Q.selectionAuthorized(repro,0,selected,manual),false);
+manual.add(0); // Índice manual por si só não vale sem registro de ação explícita.
+assert.equal(Q.selectionAuthorized(repro,0,selected,manual),false);
+repro.manualSigemSelection = {revision:"B",kind:"analysis",statusKey:"EM ANALISE",selectedAt:"2026-10-21T12:00:00.000Z"};
+assert.equal(Q.selectionAuthorized(repro,0,selected,manual),true);
+repro.status = "Em Workflow";
+assert.equal(Q.selectionAuthorized(repro,0,selected,manual),true,"aliases workflow/análise mantêm decisão explícita");
+repro.revision = "C";
+assert.equal(Q.selectionAuthorized(repro,0,selected,manual),false,"uma aprovação não autoriza revisão diferente");
+repro.revision = "B"; repro.status = "Sem status";
+assert.equal(Q.selectionAuthorized(repro,0,selected,manual),false,"status mudou: precisa nova decisão explícita");
+manual.clear();
+assert.equal(Q.selectionAuthorized(repro,0,selected,manual),false);
+selected.clear();
+assert.equal(Q.selectionAuthorized(repro,0,selected,manual),false);
+const appSource = fs.readFileSync(require.resolve("../app.js"), "utf8");
+assert.match(appSource,/if \(rowCanAutoInclude\(row\)\) state\.selected\.add\(index\);/);
+assert.match(appSource,/if \(!rowCanAutoInclude\(row\)\) return;/);
+assert.match(appSource,/function guardedSelectedIndices/);
+assert.match(appSource,/E\.createPlan\(state\.results, guardedSelectedIndices\(\)/);
+assert.match(appSource,/const physicalSelection = guardedSelectedIndices\(true\);/);
+assert.match(appSource,/row\.manualSigemSelection = \{/);
+assert.match(appSource,/rowStatusPolicy\(row\)\.manualOnly/);
+assert.doesNotMatch(appSource,/if \(row\.decision === C\.READY && !row\.hardBlock && rowOutputSources\(row\)\.length\) state\.selected\.add\(index\);/);
+console.log("GRDT SIGEM: análise excluída automaticamente, seleção individual, aliases, revisão, repostagem e proteção dos downloads OK.");
+
 function harness() {
   const events=new Map(), pending=[];
   const root={GrconHistoryClassification:C,GrconPostingBatchPlanner:require("../posting_batch_planner.js"),

@@ -39,5 +39,34 @@
       row.document, ldCode, row.revision, row.status, row.sheet, row.reason, row.allocationStatus,
       row.fiscalComment, row.grdt, row.record?.grdt, origin(row), ...extensions(row), historyNumbers].filter(Boolean).join(" "));
   }
-  return Object.freeze({ origin, extensions, historyKind, matches, searchText });
+  // Status do SIGEM e classificação de emissão são dimensões distintas:
+  // READY/repostagem nunca transforma uma análise aberta em seleção automática.
+  const automaticStatusKinds = new Set(["not_posted", "advance", "issued"]);
+  function selectionPolicy(row) {
+    const status = String(row && (row.status || row.sigemStatus || row.statusOperational) || "").trim();
+    const kind = Core.statusKind(status);
+    const autoAllowed = automaticStatusKinds.has(kind);
+    return {
+      status, kind, autoAllowed,
+      manualOnly: !autoAllowed,
+      autoEligible: Boolean(row && row.decision === Core.READY && !row.hardBlock && autoAllowed),
+      label: kind === "analysis" ? "Em análise" : kind === "unknown" ? "Verificar status" : "Conferir status SIGEM",
+    };
+  }
+  function manualStatusApprovalValid(row) {
+    const policy = selectionPolicy(row);
+    if (!policy.manualOnly) return true;
+    const approval = row && row.manualSigemSelection;
+    return Boolean(approval
+      && approval.kind === policy.kind
+      && approval.revision === Core.normalizeRevision(row.revision)
+      && approval.statusKey === Core.normalizeSigemStatus(policy.status).key);
+  }
+  function selectionAuthorized(row, index, selectedIndices, manualIndices) {
+    if (!row || !selectedIndices || !selectedIndices.has(index)) return false;
+    const policy = selectionPolicy(row);
+    return !policy.manualOnly || Boolean(manualIndices && manualIndices.has(index) && manualStatusApprovalValid(row));
+  }
+  return Object.freeze({ origin, extensions, historyKind, matches, searchText,
+    selectionPolicy, manualStatusApprovalValid, selectionAuthorized });
 });
