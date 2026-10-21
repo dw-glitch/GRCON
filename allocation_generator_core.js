@@ -54,39 +54,43 @@
  }
  function prepare({documents,records=[],central=[],planned=[],bases={},versions={},decisions=[],date=new Date().toISOString().slice(0,10)}){
   const catalog=bases.databook||[],paths=new Set(catalog.map(x=>x.databook));
-  const byCode=new Map(records.map(r=>[key(r.document),r]));
   const control={rows:central,latestByDocument:new Map(central.map(x=>[key(x.document),x])),baseDocuments:new Map(),levelsByEap:new Map(),levelsByDatabook:new Map(),projectLevelBase:bases.eap||[]};
   const entries=documents.map(d=>({raw:text(typeof d==='string'?d:d.document),hintedSheet:C.inferSheetFromName(typeof d==='string'?d:d.document)}));
   const original=A.analyze(entries,records,control,{allocationDate:date,catalogEntries:catalog,historyRows:central,ldHistory:[]});
   return original.results.map((base,i)=>{
-   const input=documents[i]||{},document=base.document,located=byCode.has(key(document));
-   const record={...(byCode.get(key(document))||{}),...(!located?{title:input.title||'',discipline:input.discipline||'',workflow:input.workflow||''}:{}),document,documentKey:key(document),looseDocumentKey:C.looseKey(document)};
+   const input=documents[i]||{},document=base.document;
+   // Preserve the RECON-selected record; never replace a rejected LD conflict
+   // with whichever duplicate row happened to be imported last.
+   const ldConflictBlocked=base.allocationDiagnosisKind==='technical_conflict'||base.allocationDiagnosisKind==='ambiguous';
+   const located=Boolean(base.record)||records.some(r=>key(r.document)===key(document));
+   const record={...(base.record||{}),...(!base.record&&!ldConflictBlocked?{title:input.title||'',discipline:input.discipline||'',workflow:input.workflow||''}:{}),document,documentKey:key(document),looseDocumentKey:C.looseKey(document)};
    const id=identity(document,record);record.discipline=id.discipline;record.sheet=record.sheet||C.inferSheetFromName(document);
    const examples=decisions.filter(d=>eligibleExperience(d,id,versions,paths));
    const title=titleFor(record,bases,examples);record.title=title.title;
    const inference=A.suggestCatalogDatabook(record,catalog);
-   let path=paths.has(base.output?.databook)?base.output.databook:paths.has(record.databook)?record.databook:'';
+   let path=ldConflictBlocked?'':paths.has(base.output?.databook)?base.output.databook:paths.has(record.databook)?record.databook:'';
    const exactCentral=central.filter(x=>key(x.document)===key(document));
-   if(!path&&examples.length)path=examples[0].confirmed_path;
-   if(!path&&paths.has(inference?.databook))path=inference.databook;
+   if(!ldConflictBlocked&&!path&&examples.length)path=examples[0].confirmed_path;
+   if(!ldConflictBlocked&&!path&&paths.has(inference?.databook))path=inference.databook;
    const finderQuery=Finder.parseQueries(document+'\t'+title.title)[0];
    const ranked=finderQuery?Finder.rankQuery(catalog,finderQuery,3):[];
    const alternativePaths=[...new Set([path,...(inference?.alternatives||[]).map(x=>x.databook),...ranked.map(x=>x.entry?.databook||x.databook)].filter(p=>paths.has(p)))];
-   const candidates=alternativePaths.filter(p=>!pathErrors(record,p,bases).length).map(p=>catalog.find(x=>x.databook===p)).filter(Boolean);
+   const candidates=ldConflictBlocked?[]:alternativePaths.filter(p=>!pathErrors(record,p,bases).length).map(p=>catalog.find(x=>x.databook===p)).filter(Boolean);
    const levels=levelsFor(record,path,bases),standard=normative(record,bases);
    const existing=exactCentral.map(x=>({allocation:x.allocation,status:x.allocationStatus||x.status}));
    const allocated=planned.some(x=>key(x.document)===key(document));
-   const blockers=[...standard.errors.map(e=>e.message||e.code),...(path?pathErrors(record,path,bases):['Nenhum caminho comprovado na base ativa.']),...(!title.title?['Título requer revisão.']:[]),...(!record.discipline?['Disciplina não identificada.']:[]),...(levels.resolution?.blockFallback?['EAP não comprovada na base ativa.']:[])];
+   const blockers=[...(ldConflictBlocked?[base.reason||'Conflito técnico na LD: nenhuma linha foi escolhida.']:[]),...standard.errors.map(e=>e.message||e.code),...(path?pathErrors(record,path,bases):['Nenhum caminho comprovado na base ativa.']),...(!title.title?['Título requer revisão.']:[]),...(!record.discipline?['Disciplina não identificada.']:[]),...(levels.resolution?.blockFallback?['EAP não comprovada na base ativa.']:[])];
    const confidence=blockers.length||!standard.compatible?'baixa':alternativePaths.length>1||!located?'media':'alta';
    return {...base,document,revision:text(input.revision||record.revision||'0'),record,ldLocated:located,plannedAllocated:allocated,existing,identity:id,
     originalTitle:title.original,titleSource:title.source,title:title.title,output:{...(base.output||A.outputFromRecord(record,null,null,control,date,inference)),databook:path,levels:levels.levels},
-    suggestedPath:path,candidates,standard,confidence,blockers,versions,decisionId:'',confirmed:false,ai:null,
+    suggestedPath:path,candidates,standard,confidence,blockers,ldConflictBlocked,versions,decisionId:'',confirmed:false,ai:null,
     origin:examples.length&&!located?'experiencia-validada':located?'motor-recon':'catalogo-recon',
-    statusLabel:blockers.length||!standard.compatible?'Revisão necessária':located?'Revisar sugestão':'Não localizado na LD — revisar sugestão',
+    statusLabel:ldConflictBlocked?'Conflito na LD — corrigir fonte':blockers.length||!standard.compatible?'Revisão necessária':located?'Revisar sugestão':'Não localizado na LD — revisar sugestão',
     selected:false};
   });
  }
  function review(row,changes,bases){
+  if(row.ldConflictBlocked)throw Error('Conflito técnico ou identificação ambígua na LD. Corrija a fonte e reanalise.');
   const path=text(changes.path),entry=(bases.databook||[]).find(x=>x.databook===path);
   if(!entry)throw Error('Escolha um caminho existente na base ativa.');
   const title=Audit.upperCaseTitle(Q.normalizeTitle(changes.title));if(!title)throw Error('Informe o título.');
@@ -96,6 +100,7 @@
   return {...row,record,title,identity:identity(row.document,record),output:{...row.output,workflow:record.workflow,discipline:record.discipline,databook:path,levels:resolved.levels},standard,confirmed:false,decisionId:'',confidence:standard.errors.length?'baixa':'media',blockers:standard.errors.map(e=>e.message||e.code)};
  }
  function decisionPayload(row,justification,status='corrected'){
+  if(row.ldConflictBlocked)throw Error('Conflito na LD não resolvido. Corrija a fonte antes de confirmar.');
   return {document:row.document,revision:row.revision,family:row.identity.family,discipline:row.identity.discipline,eap:row.identity.eap,title:row.title,
    suggestedPath:row.suggestedPath,confirmedPath:row.output.databook,levels:row.output.levels,versions:row.versions,
    evidence:[...row.standard.refs.map(x=>({id:x.id,source:x.source,requirement:x.requirement})),{id:'databook:'+row.versions.databook,source:'Mapa Databook ativo',path:row.output.databook}],changes:{titleFrom:row.originalTitle,titleTo:row.title,pathFrom:row.suggestedPath,pathTo:row.output.databook},
