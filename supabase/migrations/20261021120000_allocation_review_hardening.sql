@@ -34,6 +34,7 @@ begin
       or (b.kind='norms' and exists(
         select 1 from jsonb_array_elements_text(coalesce(input->'normIds','[]'::jsonb)) nr(id) where nr.id=br.payload->>'id'
       ))
+      or (b.kind='titles' and upper(br.payload->>'document')=upper(input->>'document'))
      )
      and (b.kind<>'titles' or upper(br.payload->>'document')=upper(input->>'document'))
    ) as rows
