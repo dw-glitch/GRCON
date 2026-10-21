@@ -4204,7 +4204,13 @@
     });
     updateOperationalFilterOptions();
     const counter = document.getElementById("triage-filter-result-count");
-    if (counter) counter.textContent = `${filteredResultIndices().length.toLocaleString("pt-BR")} de ${state.results.length.toLocaleString("pt-BR")} documentos exibidos · ${state.selected.size.toLocaleString("pt-BR")} incluídos para geração`;
+    if (counter) {
+      const analysisCount = state.results.reduce((count, row) => count + (rowStatusPolicy(row).kind === "analysis" ? 1 : 0), 0);
+      const eligibleCount = state.results.reduce((count, row) => count + (rowCanAutoInclude(row) ? 1 : 0), 0);
+      const manualCount = [...state.selected].reduce((count, index) =>
+        count + (rowStatusPolicy(state.results[index]).manualOnly ? 1 : 0), 0);
+      counter.textContent = `${filteredResultIndices().length.toLocaleString("pt-BR")} de ${state.results.length.toLocaleString("pt-BR")} documentos exibidos · ${eligibleCount.toLocaleString("pt-BR")} elegíveis automaticamente · ${analysisCount.toLocaleString("pt-BR")} em análise · ${state.selected.size.toLocaleString("pt-BR")} incluídos (${manualCount.toLocaleString("pt-BR")} por decisão manual de status)`;
+    }
   }
 
   function renderAll() {
