@@ -33,6 +33,18 @@ for (const status of ["Não Postado", "Recusado", "Para Construção"]) {
 for (const status of ["", "Sem status", "Pendente Certificação", "Cancelado"]) {
   assert.equal(policy(status).autoEligible, false, status);
 }
+const inherited = {document:"PR-5290.00-22313-175-C1O-013",revision:"C",
+  status:"Em Análise",sigemRevisionStatus:"Não Postado",blockingRevision:"B",
+  blockingRevisionStatus:"Em Workflow",decision:Core.DISCARD,hardBlock:false};
+assert.equal(Q.selectionPolicy(inherited).label,"Em análise (rev. B)");
+assert.equal(Q.selectionPolicy(inherited).autoEligible,false);
+assert.equal(Q.selectionPolicy(inherited).manualOnly,true);
+const inheritedSelected = new Set([0]), inheritedManual = new Set([0]);
+assert.equal(Q.selectionAuthorized(inherited,0,inheritedSelected,inheritedManual),false);
+inherited.manualSigemSelection = {revision:"C",kind:"analysis",statusKey:"EM ANALISE",blockingRevision:"B"};
+assert.equal(Q.selectionAuthorized(inherited,0,inheritedSelected,inheritedManual),true,"exceção marcada conscientemente");
+inherited.blockingRevision = "A";
+assert.equal(Q.selectionAuthorized(inherited,0,inheritedSelected,inheritedManual),false,"mudança da revisão bloqueadora exige nova exceção");
 assert.equal(policy("Em análise", {decision: Core.REVIEW}).autoEligible, false);
 assert.equal(policy("Recusado", {hardBlock: true}).autoEligible, false);
 // "Repostagem" informa histórico, mas não autoriza selecionar item em análise.
