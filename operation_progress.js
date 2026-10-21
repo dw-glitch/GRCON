@@ -23,9 +23,13 @@
     if (active.has(key)) throw new Error("Esta operação já está em andamento.");
     const started = performance.now(), scope = context(), controller = new AbortController();
     const taskId = options.silent ? null : root.QualityTaskCenter?.start(label, options.detail || "Preparando…");
-    const button = element(options.button), previous = button && { children: [...button.childNodes], disabled: button.disabled, busy: button.getAttribute("aria-busy") };
-    if (button) { button.disabled = true; button.textContent = options.busyLabel || "Processando…"; button.setAttribute("aria-busy", "true"); }
-    const host = element(options.host) || document.querySelector("dialog[open],.module-view:not([hidden])") || document.querySelector("main") || document.body;
+    const button = element(options.button);
+    // React owns its subtree: never replace JSX button child nodes with imperative text.
+    const managedButton = !!button?.closest?.("[data-grcon-react-island]");
+    const previous = button && !managedButton ? { children: [...button.childNodes], disabled: button.disabled, busy: button.getAttribute("aria-busy") } : null;
+    if (button && !managedButton) { button.disabled = true; button.textContent = options.busyLabel || "Processando…"; button.setAttribute("aria-busy", "true"); }
+    const requestedHost = element(options.host);
+    const host = requestedHost?.closest?.("[data-grcon-react-island]") ? (requestedHost.closest("[data-grcon-react-island]").parentElement || document.body) : (requestedHost || document.querySelector("dialog[open],.module-view:not([hidden])") || document.querySelector("main") || document.body);
     const node = document.createElement("div");
     node.className = "grcon-operation-progress"; node.dataset.operation = key; node.dataset.state = "running";
     const title = document.createElement("strong"); title.textContent = label;
@@ -71,7 +75,7 @@
       if (!error) bar.value = 100; else bar.hidden=true;
       if (error) root.QualityTaskCenter?.[cancelled ? "cancel" : "fail"]?.(taskId, error); else root.QualityTaskCenter?.finish(taskId, message.textContent);
       close.hidden = false;
-      if (button?.isConnected) { button.disabled = previous.disabled; button.replaceChildren(...previous.children); if(previous.busy == null)button.removeAttribute("aria-busy");else button.setAttribute("aria-busy",previous.busy); }
+      if (button?.isConnected && previous) { button.disabled = previous.disabled; button.replaceChildren(...previous.children); if(previous.busy == null)button.removeAttribute("aria-busy");else button.setAttribute("aria-busy",previous.busy); }
       recent.push({ key, label, durationMs: Math.round(performance.now() - started), feedbackMs, status: node.dataset.state });
       if (recent.length > 100) recent.shift();
       root.dispatchEvent(new CustomEvent("grcon:operation-metric", { detail: recent[recent.length - 1] }));
