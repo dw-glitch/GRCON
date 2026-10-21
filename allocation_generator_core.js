@@ -18,6 +18,12 @@
   const levels=(A.documentFamily(record.document).type==='ET'?eap.levels:A.levelsFromDatabookPath(path))||[];
   return {levels:Array.from({length:10},(_,i)=>text(levels[i])),resolution:eap};
  }
+ function pathErrors(record,path,bases){
+  const errors=[],unit=bases.config?.[0]?.unit;
+  if(unit&&text(path).split('|')[0].trim()!==unit)errors.push('Unidade do caminho diverge da configuração do contrato.');
+  if(!A.levelsCompatibleWithRecord(text(path).split('|'),record))errors.push('Disciplina do caminho Databook diverge do documento ou workflow.');
+  return errors;
+ }
  function normative(record,bases){
   const validation=N.validateDocument(record.document),available=new Map((bases.norms||[]).map(x=>[x.id,x]));
   const coded=C.buildEgrdtData(record.document,'0',record.document+'.pdf',{},C.inferSheetFromName(record.document)).discipline;
@@ -66,11 +72,11 @@
    const finderQuery=Finder.parseQueries(document+'\t'+title.title)[0];
    const ranked=finderQuery?Finder.rankQuery(catalog,finderQuery,3):[];
    const alternativePaths=[...new Set([path,...(inference?.alternatives||[]).map(x=>x.databook),...ranked.map(x=>x.entry?.databook||x.databook)].filter(p=>paths.has(p)))];
-   const candidates=alternativePaths.map(p=>catalog.find(x=>x.databook===p)).filter(Boolean);
+   const candidates=alternativePaths.filter(p=>!pathErrors(record,p,bases).length).map(p=>catalog.find(x=>x.databook===p)).filter(Boolean);
    const levels=levelsFor(record,path,bases),standard=normative(record,bases);
    const existing=exactCentral.map(x=>({allocation:x.allocation,status:x.allocationStatus||x.status}));
    const allocated=planned.some(x=>key(x.document)===key(document));
-   const blockers=[...standard.errors.map(e=>e.message||e.code),...(!path?['Nenhum caminho comprovado na base ativa.']:[]),...(!title.title?['Título requer revisão.']:[]),...(!record.discipline?['Disciplina não identificada.']:[]),...(levels.resolution?.blockFallback?['EAP não comprovada na base ativa.']:[])];
+   const blockers=[...standard.errors.map(e=>e.message||e.code),...(path?pathErrors(record,path,bases):['Nenhum caminho comprovado na base ativa.']),...(!title.title?['Título requer revisão.']:[]),...(!record.discipline?['Disciplina não identificada.']:[]),...(levels.resolution?.blockFallback?['EAP não comprovada na base ativa.']:[])];
    const confidence=blockers.length||!standard.compatible?'baixa':alternativePaths.length>1||!located?'media':'alta';
    return {...base,document,revision:text(input.revision||record.revision||'0'),record,ldLocated:located,plannedAllocated:allocated,existing,identity:id,
     originalTitle:title.original,titleSource:title.source,title:title.title,output:{...(base.output||A.outputFromRecord(record,null,null,control,date,inference)),databook:path,levels:levels.levels},
@@ -85,6 +91,7 @@
   if(!entry)throw Error('Escolha um caminho existente na base ativa.');
   const title=Audit.upperCaseTitle(Q.normalizeTitle(changes.title));if(!title)throw Error('Informe o título.');
   const record={...row.record,title,discipline:text(changes.discipline||row.record.discipline),workflow:text(changes.workflow||row.output.workflow)};
+  const errors=pathErrors(record,path,bases);if(errors.length)throw Error(errors.join(' '));
   const resolved=levelsFor(record,path,bases),standard=normative(record,bases);
   return {...row,record,title,identity:identity(row.document,record),output:{...row.output,workflow:record.workflow,discipline:record.discipline,databook:path,levels:resolved.levels},standard,confirmed:false,decisionId:'',confidence:standard.errors.length?'baixa':'media',blockers:standard.errors.map(e=>e.message||e.code)};
  }
@@ -94,5 +101,5 @@
    evidence:[...row.standard.refs.map(x=>({id:x.id,source:x.source,requirement:x.requirement})),{id:'databook:'+row.versions.databook,source:'Mapa Databook ativo',path:row.output.databook}],changes:{titleFrom:row.originalTitle,titleTo:row.title,pathFrom:row.suggestedPath,pathTo:row.output.databook},
    origin:row.origin,confidence:row.confidence,status,justification};
  }
- return {prepare,review,identity,normative,levelsFor,titleFor,eligibleExperience,signature,decisionPayload,Audit};
+ return {prepare,review,identity,normative,levelsFor,pathErrors,titleFor,eligibleExperience,signature,decisionPayload,Audit};
 });

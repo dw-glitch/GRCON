@@ -11,6 +11,7 @@ export function validateDecision(body,context){
  if(!path)throw Error('Caminho ausente na base ativa.');
  const unit=context.bases.config?.[0]?.unit;
  if(!unit||path.databook.split('|')[0].trim()!==unit)throw Error('Unidade do caminho diverge da configuração do contrato.');
+ const pathErrors=Core.pathErrors(record,path.databook,context.bases);if(pathErrors.length)throw Error(pathErrors.join(' '));
  const resolved=Core.levelsFor(record,path.databook,context.bases);
  if(resolved.resolution?.blockFallback)throw Error('Hierarquia EAP não comprovada.');
  const refs=standard.refs.map(x=>({id:x.id,source:x.source,requirement:x.requirement}));
@@ -25,7 +26,7 @@ export function allocationPrompt(document,title,context,experiences=[],disciplin
  const paths=context.bases.databook||[];
  // Rank only existing paths. A language model never supplies an arbitrary path.
  const tokens=Core.identity(document,record),source=row.candidates.length?row.candidates:paths.filter(p=>String(p.databook+' '+p.description).toUpperCase().includes(String(tokens.discipline).toUpperCase())).slice(0,3);
- const candidates=(tokens.discipline?source:[]).slice(0,3).map((p,i)=>({id:'path:'+i,path:p.databook,description:String(p.description||'').slice(0,120)}));
+ const candidates=(tokens.discipline?source:[]).filter(p=>!Core.pathErrors(record,p.databook,context.bases).length).slice(0,3).map((p,i)=>({id:'path:'+i,path:p.databook,description:String(p.description||'').slice(0,120)}));
  const refs=row.standard.refs.slice(0,5).map(p=>({id:p.id,source:p.source,requirement:p.requirement}));
  if(!context.complete||row.standard.errors.length||!row.standard.compatible||!candidates.length)throw Error('Evidência insuficiente para consultar a IA. Use a revisão determinística.');
  const evidence={document,title:String(title||'').slice(0,250),discipline:tokens.discipline,eap:tokens.eap,candidates,refs,experiences:experiences.filter(d=>Core.eligibleExperience(d,tokens,context.versions,new Set(paths.map(p=>p.databook)))).slice(0,2).map(d=>({id:d.id,path:d.confirmed_path,title:String(d.title||'').slice(0,120)}))};

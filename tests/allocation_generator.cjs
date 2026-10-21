@@ -30,6 +30,11 @@ function runtime(original=false){
  const confirmed=validateDecision(payload,context);assert.equal(confirmed.validated,true);
  assert.throws(()=>validateDecision({...payload,document:doc.replace('_TUB_','_ZZZ_')},context),/normativa/);
  assert.throws(()=>validateDecision({...payload,confirmedPath:'INVENTADO'},context),/Caminho/);
+ const civilPath='UHDT-D|DATA BOOK C&M|CIVIL|RELATORIOS DE INSPECAO';
+ const mixedBases={...bases,databook:[...bases.databook,{databook:civilPath}]};
+ assert.throws(()=>core.review(reviewed,{title:reviewed.title,path:civilPath},mixedBases),/Disciplina do caminho/);
+ assert.throws(()=>validateDecision({...payload,confirmedPath:civilPath},{...context,bases:mixedBases}),/Disciplina do caminho/);
+ assert.throws(()=>validateDecision({...payload,confirmedPath:pathA},{...context,bases:{...bases,config:[{unit:'UGH'}]}}),/Unidade/);
  assert.throws(()=>validateDecision(payload,{...context,versions:{...versions,norms:'n2'}}),/bases mudaram/);
  const prompt=allocationPrompt(doc,reviewed.title,context,[],'TUB');
  const fixture={run:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({candidateId:prompt.candidates[0].id,reason:'Caminho da disciplina previsto na base vigente.',citations:[prompt.refs[0].id]})}}]})};
