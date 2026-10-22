@@ -61,7 +61,7 @@ function validResult() {
   }, { summary: {}, classes: [], lists: {} });
   assert.equal(assessment.status, "empty");
   assert.equal(assessment.ready, false);
-  assert.equal(assessment.missing.length, 3);
+  assert.equal(assessment.missing.length, 2, "LD é opcional para comprovação de cadastro");
   assert.match(assessment.title, /Pronto/);
 })();
 
@@ -72,7 +72,7 @@ function validResult() {
     ld: { meta: null, records: [] },
   }, validResult());
   assert.equal(assessment.status, "partial");
-  assert.deepEqual(assessment.missing, ["relação ProjectWise", "LD da Qualidade"]);
+  assert.deepEqual(assessment.missing, ["relação ProjectWise"]);
   assert.doesNotMatch(assessment.message, /descart|fora do escopo|exclu/i);
 })();
 
@@ -101,7 +101,7 @@ function validResult() {
   assert.equal(assessment.ready, false);
   assert.ok(assessment.failedChecks.includes("emission-balance"));
   assert.ok(assessment.failedChecks.includes("register-list"));
-  assert.ok(assessment.failedChecks.includes("quality-ld"));
+  assert.ok(!assessment.failedChecks.includes("quality-ld"), "Ausência da LD não nega cadastro PW");
   assert.ok(assessment.failedChecks.includes("scope-version"));
 })();
 

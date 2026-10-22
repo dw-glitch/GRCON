@@ -38,7 +38,7 @@ export function SigemPwSituationCards({ state, activeList, onSelect }: {
 }) {
   const s = state.result?.summary;
   const both = Boolean(state.sigem.meta && state.pw.meta);
-  const unit = state.revisionScope === "revision0" ? "revisão 0" : "Documento + Revisão";
+  const unit = state.revisionScope === "revision0" ? "revisão 0 ou cadastro previsto sem revisão no PW" : "Documento + Revisão";
 
   return (
     <>
@@ -51,7 +51,7 @@ export function SigemPwSituationCards({ state, activeList, onSelect }: {
       </section>
       <p className="spw-classification-note" id="spw-classification-note">
         {both
-          ? <><strong>Contagem conciliada — {state.revisionScope === "revision0" ? "Rev. 0" : "todas as revisões"}:</strong> {fmt(s?.classifiedTotal || 0)} registro(s) distribuídos uma única vez entre as cinco situações. {state.revisionScope === "all" ? "Revisão ausente no PW é conciliada pelo código do documento." : "Somente a ocorrência normalizada como revisão 0 participa deste universo."}</>
+          ? <><strong>Contagem conciliada — {state.revisionScope === "revision0" ? "Rev. 0" : "todas as revisões"}:</strong> {fmt(s?.classifiedTotal || 0)} registro(s) distribuídos uma única vez entre as cinco situações. {state.revisionScope === "all" ? "Revisão ausente no PW é conciliada pelo código do documento." : "A presença do PW com “Última emissão = Previsto” conta como cadastro mesmo sem revisão informada; isso não atribui revisão 0 nem comprova emissão."}</>
           : "Carregue as bases SIGEM e PW para obter a classificação completa."}
       </p>
     </>

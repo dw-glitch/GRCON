@@ -9,7 +9,7 @@
 
   if (!Base) throw new Error("Core do Dashboard SIGEM × PW indisponível para aplicar o filtro de escopo.");
 
-  const SCOPE_VERSION = 4;
+  const SCOPE_VERSION = 5;
   const SCOPE_LABEL = "GRCON N-1710 · 5290.00 / 22313 / C1O";
   const N1710_SCOPE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const VALID_CLASSES = new Set(Base.SCOPE_CLASSES || Base.DOCUMENT_CLASSES || ["ET", "N-1710"]);

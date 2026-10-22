@@ -23,9 +23,9 @@
   const PW_BASE_KEY = "sigem-pw-current-pw-v3";
   const LD_BASE_KEY = "sigem-pw-current-quality-ld-v1";
   const HISTORY_KEY = "sigem-pw-base-history-v3";
-  const PW_BASE_VERSION = 4;
+  const PW_BASE_VERSION = 5;
   const HISTORY_VERSION = 3;
-  const PW_SCOPE_VERSION = 4;
+  const PW_SCOPE_VERSION = 5;
   const UNCLASSIFIED = "Não classificado";
   const SCOPE_CLASSES = Object.freeze(["ET", "N-1710"]);
   const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
@@ -166,20 +166,16 @@
     const scope = normalizeRevisionScope(revisionScope);
     if (scope === REVISION_SCOPES.ALL) return map;
     const scoped = new Map([...map].filter(([, entry]) => entry && entry.revisionKey === "0"));
-    // No relatório PW, "Previsto" frequentemente chega sem qualquer revisão.
-    // A presença do cadastro pode ser conciliada SOMENTE com um documento
-    // existente em SIGEM revisão 0, se não houver revisão 0 explícita no PW.
-    // Não atribuímos revisão 0 ao registro PW e não contamos um previsto
-    // sem revisão como PW exclusivo na visão de revisão 0.
-    if (sigemRevision0 instanceof Map) {
-      const sigemCodes = new Set([...sigemRevision0.values()].map((entry) => entry.documentKey));
-      const explicitPwCodes = new Set([...scoped.values()].map((entry) => entry.documentKey));
-      map.forEach((entry, key) => {
-        if (entry && entry.revisionKey === "__SEM_REVISAO__" && !entry.emitted
-          && entry.rows.some((row) => norm(row.lastEmission) === EMISSION_FLAGS.PLANNED)
-          && sigemCodes.has(entry.documentKey) && !explicitPwCodes.has(entry.documentKey)) scoped.set(key, entry);
-      });
-    }
+    if (!(sigemRevision0 instanceof Map)) return scoped;
+    // PW "Previsto" sem revisão comprova cadastro do código, NÃO emissão nem
+    // revisão zero. Deve aparecer também no indicador PW da visão inicial,
+    // mesmo quando não há registro da revisão 0 na Consulta Geral.
+    const explicitPwCodes = new Set([...scoped.values()].map((entry) => entry.documentKey));
+    map.forEach((entry, key) => {
+      if (entry && entry.revisionKey === "__SEM_REVISAO__" && !entry.emitted
+        && entry.rows.some((row) => norm(row.lastEmission) === EMISSION_FLAGS.PLANNED)
+        && !explicitPwCodes.has(entry.documentKey)) scoped.set(key, entry);
+    });
     return scoped;
   }
 
@@ -517,7 +513,8 @@
     const candidateClass = classFromIdentity(identity);
     if (candidateClass === "ET") return "ET";
     if (!enforceLd && identity.canonical.includes("_RNEST_")) return "ET";
-    if (candidateClass === "N-1710" && (!enforceLd || (ldUniverse && ldUniverse.has(identity.key)))) return "N-1710";
+    // A LD é fonte de localização/alocação, NUNCA prova de existência no PW.
+    if (candidateClass === "N-1710") return "N-1710";
     return "";
   }
 
@@ -537,6 +534,7 @@
         entryKey: entryKey(identity.key, rawRevision),
         emissionFlag,
         emittedEvidence: kind === "pw" && [EMISSION_FLAGS.CURRENT, EMISSION_FLAGS.HISTORICAL].includes(emissionFlag),
+        inQualityLd: kind === "pw" && Boolean(ldUniverse && ldUniverse.has(identity.key)),
       };
     }).filter((record) => record.documentKey && record.documentClass);
   }
@@ -576,7 +574,7 @@
         ...previousMeta,
         version: Math.max(Number(previousMeta.version) || 0, PW_BASE_VERSION),
         scopeVersion: PW_SCOPE_VERSION,
-        scopeRule: "ET estrutural ou N-1710 estrutural presente na LD da Qualidade",
+        scopeRule: "ET ou N-1710 válidos pela estrutura; existência PW independe da LD",
         scopeLdSnapshotId: text(ldMeta && ldMeta.snapshotId) || (ldMeta ? snapshotId("ld", ldMeta) : ""),
         sourceRecordCount: Number(previousMeta.sourceRecordCount) || sourceRecords.length,
         recordCount: audit.records.length,
@@ -587,6 +585,8 @@
         scopeAcceptedRecordCount: audit.acceptedCount,
         scopeExcludedCount: audit.excludedCount,
         scopeClassCounts: classCounts,
+        registeredWithoutQualityLdCount: audit.records.filter((row) => row.documentClass === "N-1710" && !row.inQualityLd).length,
+        plannedRegisteredCount: new Set(audit.records.filter((row) => norm(row.lastEmission) === EMISSION_FLAGS.PLANNED).map((row) => row.documentKey)).size,
       },
       records: audit.records,
       sourceRecords,
@@ -1279,7 +1279,7 @@
     return { sigem, pw, ld, history };
   }
 
-  const EMISSION_RULE = "A contagem usa código + revisão quando a revisão é informada. Revisões 0 e A do mesmo documento contam como duas entradas. Se o PW não informar a revisão, a presença no SIGEM é conciliada pelo código do documento, uma única vez, sem gerar falso ‘não localizado’. No PW, ‘Última emissão’ = Sim identifica a emissão atual e = Não identifica uma emissão histórica; ambos comprovam emissão. Previsto ou vazio significa cadastrado, ainda não emitido.";
+  const EMISSION_RULE = "A contagem usa código + revisão quando a revisão é informada: revisões 0 e A do mesmo documento são duas entradas. Sem revisão, a existência do cadastro é conciliada por código sem inventar a revisão. Todo código válido localizado no PW está CADASTRADO, independentemente da LD. Última emissão = Previsto significa cadastrado e não emitido; se a revisão não estiver preenchida, a presença permanece comprovada sem atribuir revisão 0. Sim identifica emissão atual e Não uma emissão histórica. Sem valor de emissão, não há comprovação de emissão.";
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,

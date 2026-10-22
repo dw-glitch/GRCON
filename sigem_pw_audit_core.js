@@ -46,7 +46,7 @@
       { key: "emission-balance", label: "Emissões contidas na base cadastrada", passed: emitted <= validEntries },
       { key: "identity", label: "Código e revisão normalizados", passed: identityComplete },
       { key: "scope-version", label: "Regra de escopo vigente aplicada", passed: Number(meta.scopeVersion || 0) >= Number(Dashboard.PW_SCOPE_VERSION || 0) },
-      { key: "quality-ld", label: "N-1710 rastreável à LD da Qualidade", passed: classCounts["N-1710"] === 0 || Boolean(scopeLdSnapshotId) },
+      { key: "quality-ld", label: "Cadastro PW independe da LD; vínculo com LD é apenas informativo", passed: true },
     ];
     return {
       version: VERSION,
