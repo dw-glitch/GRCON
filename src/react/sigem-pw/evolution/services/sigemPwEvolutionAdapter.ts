@@ -324,7 +324,12 @@ function scopeSnapshot(source: EvolutionSnapshot): EvolutionSnapshot {
   const cached = scopedSnapshotCache.get(cacheKey);
   if (cached) return cached;
 
-  const rawRecords = (source.records || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
+  // "Previsto" sem revisão confirma CADASTRO no PW, inclusive nesta visão.
+  // Esse item mantém a revisão indeterminada: não é convertido em revisão zero.
+  const rawRecords = (source.records || []).filter((row) =>
+    dashboardRevisionKey(row.revision) === "0"
+    || (source.system === "pw" && !text(row.revision)
+      && row.emissionKind === "planned" && row.emissionState === "not-emitted"));
   const records = Core().documentRevisionRecords(rawRecords);
   const rejected = (source.rejected || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
   const duplicates = (source.duplicates || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
@@ -364,15 +369,15 @@ function scopeSnapshot(source: EvolutionSnapshot): EvolutionSnapshot {
     indeterminateEmissionDocumentRevisionRecords: indeterminate.length,
     emissionBreakdown,
     classes,
-    comparisonGranularity: "revisão 0; uma ocorrência por documento + revisão",
+    comparisonGranularity: "revisão 0 + cadastros PW previstos sem revisão identificada; nenhuma revisão presumida",
     registrationRule: source.system === "pw"
-      ? "Cadastrado = documento válido em revisão 0 presente na relação PW"
+      ? "Cadastrado = documento válido em revisão 0 ou previsto sem revisão informada no PW"
       : "Presente = documento válido em revisão 0 na Consulta Geral",
   };
   const scoped: EvolutionSnapshot = {
     ...source,
     revisionScope: scope,
-    contentFingerprint: String(source.contentFingerprint || source.id || source.system) + ":revision0",
+    contentFingerprint: String(source.contentFingerprint || source.id || source.system) + ":revision0-plus-planned",
     audit,
     records,
     rejected,
