@@ -75,10 +75,13 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const built=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:2},records:[s(A,'A'),s(A,'A')]},universe);
   assert.equal(built.records.length,1); assert.equal(built.duplicates.length,1);
 })();
-(function ldUniverseRequiredWhenAvailable(){
+(function ldIsReferenceNotRegistrationGate(){
   const universe=Evo.buildLdUniverse([{document:A,tag:'TAG-1',discipline:'DOC'}],[]);
   const built=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:2},records:[s(A,'A'),s(B,'0')]},universe);
-  assert.equal(built.records.length,1); assert.equal(built.rejected[0].reason,'nao_encontrado_na_ld_qualidade'); assert.equal(built.records[0].tag,'TAG-1');
+  assert.equal(built.records.length,2, 'N-1710 sem LD deve permanecer no SIGEM × PW');
+  assert.equal(built.rejected.length,0);
+  assert.equal(built.records.find((row)=>row.document===A).tag,'TAG-1');
+  assert.match(built.records.find((row)=>row.document===B).inclusionReason,/sem correspondência na LD/i);
 })();
 (function etDoesNotRequireMembershipInQualityLd(){
   const et='C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-321530';
