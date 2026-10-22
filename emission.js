@@ -386,6 +386,9 @@
         names.add(outputKey);
 
         const item = {
+          // Resultados interrompidos pela alocação ainda têm a linha técnica
+          // da LD. Recupere seus metadados sem exigir uma edição só para gerar.
+          ...C.buildEgrdtData(row.document, row.revision, finalName, row.record || {}, row.sheet, ""),
           ...(row.egrdt || {}),
           document: row.document,
           revision: row.revision,
