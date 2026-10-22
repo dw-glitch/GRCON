@@ -175,7 +175,8 @@
       const sigemCodes = new Set([...sigemRevision0.values()].map((entry) => entry.documentKey));
       const explicitPwCodes = new Set([...scoped.values()].map((entry) => entry.documentKey));
       map.forEach((entry, key) => {
-        if (entry && entry.revisionKey === "__SEM_REVISAO__"
+        if (entry && entry.revisionKey === "__SEM_REVISAO__" && !entry.emitted
+          && entry.rows.some((row) => norm(row.lastEmission) === EMISSION_FLAGS.PLANNED)
           && sigemCodes.has(entry.documentKey) && !explicitPwCodes.has(entry.documentKey)) scoped.set(key, entry);
       });
     }
