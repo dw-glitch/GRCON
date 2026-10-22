@@ -120,3 +120,11 @@ Candidates, manual review and server validation reject the other unit's path.
 Learning families also include the document unit. N1 follows the document unit
 while the EAP/discipline hierarchy remains the Central master structure.
 U39 routing recognition does not change the preserved normative code validator.
+
+## Exportação de títulos e inclusão na LD
+
+O arquivo de títulos tem a aba `Títulos` com as colunas TAXONOMIA, RELATÓRIO, TÍTULO, DATA BOOK, TAG, DE / PARA e DISCIPLINA. O formato visual é o do GRCON, com cabeçalho azul, linhas alternadas, filtros, quebra de texto e congelamento do cabeçalho.
+
+As abas `LD - <aba de origem>` contêm somente os documentos selecionados, na ordem física das colunas da LD carregada, incluindo lacunas e campos personalizados. Título, código, revisão, disciplina, Databook e níveis são atualizados com os dados gerados. Os demais valores pertencem exclusivamente à linha do próprio documento. Para códigos ausentes da LD, somente o esquema de colunas de uma aba compatível é reutilizado; prazos, comentários, emissão, GRDTs, status e outras informações de documentos vizinhos não são copiados. Gerar uma alocação não preenche aceitação ou postagem como se estivessem confirmadas.
+
+Layouts de LD diferentes ficam em abas separadas para evitar deslocar campos ao colar. Sem uma LD com colunas disponíveis, a aba `LD - Padrão` traz os campos documentais conhecidos e mantém vazios os dados não comprovados. TAG e DE/PARA vêm do código, do título ou de campos do próprio documento. Os modelos de referência orientam somente as colunas, sem incorporar seus dados ao contrato.

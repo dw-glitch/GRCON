@@ -108,7 +108,28 @@ function runtime(original=false){
  assert.ok(incomplete.blockers.length);assert.equal(incomplete.selected,true);
  assert.equal((await worker.run('plan',{results:[incomplete],mode:'discipline'})).valid,true);
  const draftFiles=await worker.run('export',{results:[incomplete],meta,template});assert.equal(draftFiles.length,3,'dados faltantes geram arquivos com observações');
- const titlesBook=new ExcelJS.Workbook();await titlesBook.xlsx.load(Buffer.from(draftFiles.find(f=>f.kind==='titles').base64,'base64'));assert.equal(titlesBook.worksheets[0].getCell('E2').value,'Automático');assert.ok(titlesBook.worksheets[0].getCell('H2').value);
+ const titlesBook=new ExcelJS.Workbook();await titlesBook.xlsx.load(Buffer.from(draftFiles.find(f=>f.kind==='titles').base64,'base64'));assert.deepEqual(titlesBook.worksheets[0].getRow(1).values.slice(1),['TAXONOMIA','RELATÓRIO','TÍTULO','DATA BOOK','TAG','DE / PARA','DISCIPLINA']);assert.ok(titlesBook.getWorksheet('LD - Padrão').getCell('V2').value);
+ // The title workbook follows the supplied six-column model plus discipline.
+ // Full LD sheets retain physical positions, gaps, custom columns and each
+ // document's own values; a new document inherits only the column layout.
+ const LD=require('../allocation_ld_export.js'),ele='C1O_RNEST_U32_6.16.48.1_ELE_RILICE_PL-00-01A';
+ const ldColumns=[{header:'Documento',column:2,value:ele},{header:'Revisão',column:3,value:'B'},{header:'Título',column:4,value:'TITULO ANTERIOR'},{header:'Disciplina',column:5,value:'ELETRICA'},{header:'TAG',column:6,value:'PL-00-01A'},{header:'DE',column:7,value:'PN-32000'},{header:'PARA',column:8,value:'PN-32001'},{header:'CAMINHO DATABOOK',column:9,value:'ANTIGO'},{header:'PRAZO',column:10,value:'22/10/2026'},{header:'PACOTE CONTRATUAL',column:11,value:'PACOTE A'},{header:'GRDT',column:12,value:'GRDT-ORIGINAL'},{header:'STATUS SIGEM',column:13,value:'EM ANALISE'},{header:'N1',column:14,value:'ANTIGO'},{header:'DOCUMENTO DE REFERÊNCIA',column:15,value:'REFERENCIA-EXTERNA'}];
+ const sourceRecord={document:ele,documentKey:ele,looseDocumentKey:ele,title:'RELATORIO DE INSPECAO DE LANCAMENTO INTERLIGACAO E TESTES DE CABO ELETRICO CIRCUITO PL-00-01A - DE: PN-32000 / PARA: PN-32001',sheet:'ET',revision:'B',discipline:'ELE',source:'LD-TESTE.xlsx',ldColumns};
+ const elePath='UHDT-D|DATA BOOK C&M|ELETRICA|C&M CABOS_ELETRICA';
+ const eleBases={...bases,databook:[{databook:elePath,description:'RELATORIO DE INSPECAO DE LANCAMENTO INTERLIGACAO E TESTES DE CABO ELETRICO'}]};
+ const eleRows=core.prepare({documents:[{document:ele,revision:'B'},{document:ele.replace('01A','02A')}],records:[sourceRecord],bases:eleBases,versions});
+ assert.equal(eleRows[1].ldLayout.known,true);assert.equal(eleRows[1].ldLayout.columns[0].column,2);
+ eleRows.forEach(r=>{r.output.databook=elePath;r.output.levels=['UNIDADE NOVA',...Array(9).fill('')];});
+ const titleBytes=await LD.build(eleRows,ExcelJS),modelBook=new ExcelJS.Workbook();await modelBook.xlsx.load(titleBytes);
+ const modelSheet=modelBook.getWorksheet('Títulos'),ldSheet=modelBook.getWorksheet('LD - ET');
+ assert.equal(modelSheet.columnCount,7);assert.equal(modelSheet.getCell('E2').value,'PL-00-01A');assert.equal(modelSheet.getCell('F2').value,'DE: PN-32000 / PARA: PN-32001');assert.equal(modelSheet.getCell('G2').value,eleRows[0].identity.discipline);
+ assert.equal(ldSheet.getCell('A1').value,'');assert.equal(ldSheet.getCell('B1').value,'Documento');assert.equal(ldSheet.getCell('B2').value,ele);assert.equal(ldSheet.getCell('C2').value,'B');assert.equal(ldSheet.getCell('D2').value,eleRows[0].title);assert.equal(ldSheet.getCell('I2').value,elePath);assert.equal(ldSheet.getCell('J2').value,'22/10/2026');assert.equal(ldSheet.getCell('K2').value,'PACOTE A');assert.equal(ldSheet.getCell('L2').value,'GRDT-ORIGINAL');assert.equal(ldSheet.getCell('M2').value,'EM ANALISE');assert.equal(ldSheet.getCell('N2').value,'UNIDADE NOVA');assert.equal(ldSheet.getCell('O2').value,'REFERENCIA-EXTERNA');
+ for(const col of ['G','H','J','K','L','M'])assert.equal(ldSheet.getCell(col+'3').value,'','new document cannot inherit another document’s values: '+col);
+ const newRevision=LD.ldRow({...eleRows[0],revision:'C'},eleRows[0].ldLayout);assert.equal(newRevision.values[2],'C');assert.equal(newRevision.values[11],'');assert.equal(newRevision.values[12],'','new revision does not inherit previous SIGEM state');assert.equal(newRevision.values[10],'PACOTE A');
+ const layoutVariant={...eleRows[0],ldLayout:{columns:[{column:1,header:'TÍTULO'},{column:2,header:'DOCUMENTO'}],sheet:'ET',known:true}};
+ assert.equal(LD.groupRows([eleRows[0],layoutVariant]).length,2,'incompatible LD column orders have separate tabs');
+ assert.equal(modelSheet.getRow(1).fill.fgColor.argb,'FF1F4E78');assert.equal(ldSheet.views[0].ySplit,1);assert.ok(ldSheet.autoFilter);assert.equal(ldSheet.getCell('D2').alignment.wrapText,true);
+ assert.equal(LD.details({...eleRows[0],record:{},title:'TITULO SEM ORIGEM E DESTINO'}).route,'','DE/PARA is never invented');
  // Compare the preserved exporter with the source version in a separate realm.
  const source=runtime(true);source.sandbox.RECONAllocationTemplate=template;
  const expected=await source.sandbox.AllocationWorkbook.buildAllocation([reviewed],source.sandbox.ExcelJS,meta);

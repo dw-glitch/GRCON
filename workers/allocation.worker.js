@@ -9,7 +9,7 @@ importScripts('../xlsx.full.min.js','../exceljs.min.js','../jszip.min.js',
  '../vendor/recon/ld_preservation.js','../vendor/recon/ld_title_writer.js','../vendor/recon/ld_databook_writer.js','../vendor/recon/title_codes_csv.js',
  '../vendor/recon/offline_resources.js','../vendor/recon/offline_recon_databook_c.js','../vendor/recon/offline_recon_eap_paths.js',
  '../vendor/recon/offline_recon_allocation_template.js','../vendor/recon/offline_recon_audit_bases.js','../vendor/recon/databook_catalog.js',
- '../vendor/recon/allocation_databook_finder.js','../allocation_generator_core.js');
+ '../vendor/recon/allocation_databook_finder.js','../allocation_ld_export.js','../allocation_generator_core.js');
 const A=self.AllocationCore,C=self.RECONTriagemCore,W=self.AllocationWorkbook,Engine=self.GrconAllocationGeneratorCore;
 const bytesToBase64=bytes=>{let value='';for(let i=0;i<bytes.length;i+=8192)value+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(value);};
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -116,12 +116,7 @@ async function exportGroup({results,meta,template}){
  if(template)self.RECONAllocationTemplate=template;
  const allocation=await W.buildAllocation(results,ExcelJS,meta),control=await W.buildControlLines(results,meta,ExcelJS);
  await W.verify({allocation,control},results,meta.allocationCode,ExcelJS);
- const titlesBook=new ExcelJS.Workbook();titlesBook.creator='GRCON';const sheet=titlesBook.addWorksheet('Títulos');
- sheet.addRow(['Código do Documento','Título anterior','Título','Fonte consultada','Preenchimento','Revisão','Caminho Databook','Observações']);
- results.forEach(r=>sheet.addRow([r.document,r.originalTitle||'',r.title,r.titleSource,r.adjusted?'Ajustado':'Automático',r.revision,r.output.databook,r.output.observation||'']));
- sheet.views=[{state:'frozen',ySplit:1}];sheet.autoFilter={from:'A1',to:'H'+(results.length+1)};
- sheet.columns.forEach((c,i)=>{c.width=i===0?48:i<4?65:30;});sheet.getRow(1).font={bold:true,color:{argb:'FFFFFFFF'}};sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1F4E78'}};
- const titles=new Uint8Array(await titlesBook.xlsx.writeBuffer());
+ const titles=await self.GrconAllocationLdExport.build(results,ExcelJS);
  const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(titles);if(reopened.worksheets[0].getCell('A2').value!==results[0].document)throw Error('Falha na verificação dos títulos.');
  const files=[];for(const [kind,bytes,name] of [['allocation',allocation,meta.allocationCode+'.xlsx'],['control',control,'Linhas_Central_de_Alocacao_'+meta.allocationCode+'.xlsx'],['titles',titles,'Titulos_'+meta.allocationCode+'.xlsx']])files.push({kind,name,base64:bytesToBase64(new Uint8Array(bytes)),sha256:await hash(bytes)});
  return files;

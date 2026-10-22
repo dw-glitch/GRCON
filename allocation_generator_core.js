@@ -1,9 +1,9 @@
 (function(root,factory){
  const cjs=typeof module==='object'&&module.exports;
- const api=factory(root.RECONTriagemCore||(cjs?require('./vendor/recon/core.js'):null),root.AllocationCore||(cjs?require('./vendor/recon/allocation_core.js'):null),root.RECONAllocationNorms||(cjs?require('./vendor/recon/allocation_normative_rules.js'):null),root.ReconAllocationTitleQuality||(cjs?require('./vendor/recon/allocation_title_quality.js'):null),root.RECONDocumentTitleStandard||(cjs?require('./vendor/recon/document_title_standard_r.js'):null),root.RECONAuditCore||(cjs?require('./vendor/recon/audit_core.js'):null),root.RECONDatabookFinder||(cjs?require('./vendor/recon/allocation_databook_finder.js'):null));
+ const api=factory(root.RECONTriagemCore||(cjs?require('./vendor/recon/core.js'):null),root.AllocationCore||(cjs?require('./vendor/recon/allocation_core.js'):null),root.RECONAllocationNorms||(cjs?require('./vendor/recon/allocation_normative_rules.js'):null),root.ReconAllocationTitleQuality||(cjs?require('./vendor/recon/allocation_title_quality.js'):null),root.RECONDocumentTitleStandard||(cjs?require('./vendor/recon/document_title_standard_r.js'):null),root.RECONAuditCore||(cjs?require('./vendor/recon/audit_core.js'):null),root.RECONDatabookFinder||(cjs?require('./vendor/recon/allocation_databook_finder.js'):null),root.GrconAllocationLdExport||(cjs?require('./allocation_ld_export.js'):null));
  if(typeof module==='object'&&module.exports)module.exports=api;
  root.GrconAllocationGeneratorCore=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(C,A,N,Q,T,Audit,Finder){
+})(typeof globalThis!=='undefined'?globalThis:this,function(C,A,N,Q,T,Audit,Finder,L){
  'use strict';
  const text=x=>String(x??'').trim(),key=x=>A.key(x);
  const signature=versions=>JSON.stringify(Object.entries(versions||{}).sort(([a],[b])=>a.localeCompare(b)));
@@ -83,7 +83,7 @@
   return {title:normalize(standard?.title||record.title||''),source:standard?.title?'Motor de títulos RECON — '+T.STANDARD.document+' Rev. '+T.STANDARD.revision:record.title?'Título da LD — revisão necessária':'Sem título comprovado',original:record.title||''};
  }
  function prepare({documents,records=[],central=[],confirmations=[],planned=[],bases={},versions={},decisions=[],date=new Date().toISOString().slice(0,10)}){
-  const catalog=bases.databook||[],paths=new Set(catalog.map(x=>x.databook));
+  const catalog=bases.databook||[],paths=new Set(catalog.map(x=>x.databook)),ldLayouts=L.layoutIndex(records);
   const control={rows:central,latestByDocument:new Map(central.map(x=>[key(x.document),x])),baseDocuments:new Map(),levelsByEap:new Map(),levelsByDatabook:new Map(),projectLevelBase:bases.eap||[]};
   const entries=documents.map(d=>({raw:text(typeof d==='string'?d:d.document),hintedSheet:C.inferSheetFromName(typeof d==='string'?d:d.document)}));
   const original=A.analyze(entries,records,control,{allocationDate:date,catalogEntries:catalog,historyRows:central,confirmationRows:confirmations,ldHistory:[]});
@@ -115,7 +115,7 @@
    const blockers=[...(ldConflictBlocked?[base.reason||'Conflito técnico na LD: nenhuma linha foi escolhida.']:[]),...standard.errors.map(e=>e.message||e.code),...(path?pathErrors(record,path,bases):['Caminho não identificado na base ativa.']),...(!title.title?['Título requer revisão.']:[]),...(!record.discipline?['Disciplina não identificada.']:[]),...(levels.resolution?.blockFallback?['EAP não comprovada na base ativa.']:[])];
    const confidence=blockers.length||!standard.compatible?'baixa':alternativePaths.length>1||!located?'media':'alta';
    return {...base,document,revision:text(input.revision||record.revision||'0'),record,ldLocated:located,plannedAllocated:allocated,existing,identity:id,
-    sourceObservation:base.output?.observation||'',originalTitle:title.original,titleSource:title.source,title:title.title,output:{...(base.output||A.outputFromRecord(record,null,null,control,date,inference)),databook:path,levels:levels.levels,observation:[base.output?.observation,...blockers].filter(Boolean).join(' · ')},
+    sourceObservation:base.output?.observation||'',ldLayout:L.layoutFor(record,ldLayouts),originalTitle:title.original,titleSource:title.source,title:title.title,output:{...(base.output||A.outputFromRecord(record,null,null,control,date,inference)),databook:path,levels:levels.levels,observation:[base.output?.observation,...blockers].filter(Boolean).join(' · ')},
     sourceDatabook:catalog.find(p=>p.databook===path)?.sourceDatabook||path,suggestedPath:path,candidates,levelEvidence:levels.resolution,standard,confidence,blockers,ldConflictBlocked,versions,decisionId:'',confirmed:false,ai:null,
     origin:examples.length&&!located?'experiencia-validada':located?'motor-recon':'catalogo-recon',
     statusLabel:blockers.length||!standard.compatible?'Com observações':'Automático',
