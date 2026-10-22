@@ -75,10 +75,13 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const built=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:2},records:[s(A,'A'),s(A,'A')]},universe);
   assert.equal(built.records.length,1); assert.equal(built.duplicates.length,1);
 })();
-(function ldUniverseRequiredWhenAvailable(){
+(function ldIsReferenceNotRegistrationGate(){
   const universe=Evo.buildLdUniverse([{document:A,tag:'TAG-1',discipline:'DOC'}],[]);
   const built=Evo.buildSnapshot('sigem',{meta:{sourceRowCount:2},records:[s(A,'A'),s(B,'0')]},universe);
-  assert.equal(built.records.length,1); assert.equal(built.rejected[0].reason,'nao_encontrado_na_ld_qualidade'); assert.equal(built.records[0].tag,'TAG-1');
+  assert.equal(built.records.length,2, 'N-1710 sem LD deve permanecer no SIGEM × PW');
+  assert.equal(built.rejected.length,0);
+  assert.equal(built.records.find((row)=>row.document===A).tag,'TAG-1');
+  assert.match(built.records.find((row)=>row.document===B).inclusionReason,/sem correspondência na LD/i);
 })();
 (function etDoesNotRequireMembershipInQualityLd(){
   const et='C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-321530';
@@ -133,13 +136,13 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   assert.match(domain,/Cadastrados no SIGEM/); assert.match(domain,/Encontrados no ProjectWise/);
   assert.match(adapter,/bookType:\s*"xlsx"/); assert.match(adapter,/importedAt:\s*sourceSnapshot\.importedAt\s*\|\|\s*text\(payload\.meta\?\.importedAt\)/, 'a data operacional editada deve prevalecer na evolução');
   assert.match(adapter,/window\.GrconSigemPwDashboardUi\?\.state\?\.ld/, 'a evolução deve usar a LD persistida no dashboard');
-  assert.match(app,/LD da Qualidade necessária/); assert.match(app,/spw-evo-filter-document-type/); assert.match(app,/spw-evo-filter-source/); assert.match(app,/data-evo-select/); assert.match(app,/spw-evo-timeline/);
+  assert.match(app,/A LD da Qualidade é opcional/); assert.match(app,/spw-evo-filter-document-type/); assert.match(app,/spw-evo-filter-source/); assert.match(app,/data-evo-select/); assert.match(app,/spw-evo-timeline/);
   assert.match(app,/id="spw-evo-date-start"/); assert.match(app,/id="spw-evo-date-end"/); assert.match(adapter,/function periodSnapshots\(system/);
   assert.match(entry,/GrconSigemPwEvolutionUi/); assert.match(bootstrap,/async function openEvolution\(\)/); assert.match(bootstrap,/sigem_pw_evolution_core\.js/); assert.match(bootstrap,/react-dist\/sigem-pw-evolution-app\.js/); assert.doesNotMatch(bootstrap,/ensure\("sigem_pw_evolution_app\.js"\)/);
   const openDashboard = bootstrap.slice(bootstrap.indexOf('async function openDashboard()'), bootstrap.indexOf('async function openEvolution()'));
   assert.doesNotMatch(openDashboard,/sigem_pw_evolution|GrconSigemPwEvolutionUi/, 'a evolução deve continuar sob demanda e não bloquear a abertura principal');
   assert.match(historyApp,/if \(!acervoTarget \|\| !pendingTarget\) return/, 'histórico legado não pode falhar depois que a evolução assume a seção');
-  assert.match(scope,/SCOPE_VERSION = 4/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
+  assert.match(scope,/SCOPE_VERSION = 5/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
 })();
 
 

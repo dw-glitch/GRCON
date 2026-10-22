@@ -989,7 +989,7 @@ async function waitEvolutionReady(page) {
     assert.equal(resourcesBeforeEvolution.some((url) => /react-dist\/sigem-pw-evolution-app\.js(?:\?|$)/.test(url)), false, "bundle React da Evolução deve permanecer lazy");
     assert.equal(resourcesBeforeEvolution.some((url) => /sigem_pw_evolution_app\.js(?:\?|$)/.test(url)), false, "UI legada da Evolução nunca deve carregar");
 
-    // Primeiro abre sem LD válida: não pode inventar zero.
+    // Primeiro abre sem LD válida: cadastro PW continua comparável.
     await page.evaluate(() => {
       window.__evolutionOriginalLd = window.GrconSigemPwDashboardUi.state.ld;
       window.GrconSigemPwDashboardUi.state.ld = { meta: null, records: [] };
@@ -998,13 +998,13 @@ async function waitEvolutionReady(page) {
     await page.locator("#spw-evolution-open").click();
     await page.locator("#spw-evolution-section").waitFor({ state: "visible", timeout: 30000 });
     await waitEvolutionReady(page);
-    await page.waitForFunction(() => document.querySelector("#spw-evo-scope")?.textContent?.includes("LD da Qualidade necessária"), null, { timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector("#spw-evo-scope")?.textContent?.includes("não bloqueia o cadastro"), null, { timeout: 5000 });
     metrics.evolutionLazyLoadMs = Date.now() - evolutionLazyStart;
     assert.equal(await page.locator("#grcon-sigem-pw-evolution-root").count(), 1, "Evolução deve montar em uma única raiz React");
     assert.equal(await page.locator("#spw-evolution-section").getAttribute("data-evolution-version"), "react-phase-a", "Evolução deve permanecer React da FASE A");
     assert.equal(await page.evaluate(() => Boolean(window.GrconSigemPwEvolutionUi?.state && window.GrconSigemPwEvolutionUi?.refresh)), true, "facade React da Evolução deve estar disponível");
-    assert.match(await page.locator("#spw-evo-scope").textContent(), /LD da Qualidade necessária/i);
-    assert.equal(await page.locator("#spw-evo-kpis strong").first().textContent(), "—", "sem LD os KPIs não podem exibir zero válido");
+    assert.match(await page.locator("#spw-evo-scope").textContent(), /não bloqueia o cadastro/i);
+    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.ldUniverse !== null), true, "a Evolução deve preparar o universo mesmo sem a LD");
     await page.locator('#spw-evolution-section .spw-evo-head').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(outputDir, "01-evolution-phase-b-no-ld-1366.png"), fullPage: true });
 

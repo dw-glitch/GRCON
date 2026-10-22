@@ -81,10 +81,10 @@ const csv = [
 const parsed = Core.parsePwCsv(csv, { fileName: "pw.csv", importedAt: "2026-09-13T10:00:00Z" });
 assert.strictEqual(parsed.meta.recordCount, 4, "parser preserva a base; escopo LD é aplicado no modelo");
 const sanitized = Core.sanitizePwBase(parsed, { meta: { fileName: "LD.xlsx", importedAt: "2026-09-13T10:00:00Z" }, records: ld.records });
-assert.strictEqual(sanitized.records.length, 3, "persistência PW aceita apenas ET e N-1710 presente na LD");
-assert.strictEqual(sanitized.meta.validRevisionRecordCount, 3, "revisões 0 e A do mesmo documento contam como duas entradas");
+assert.strictEqual(sanitized.records.length, 4, "PW preserva N-1710 válido mesmo sem vínculo na LD");
+assert.strictEqual(sanitized.meta.validRevisionRecordCount, 4, "revisões 0 e A do mesmo documento contam como duas entradas");
 assert.deepStrictEqual(sanitized.records.filter((row) => row.document.includes("856-C1O-001")).map((row) => row.revision), ["0", "A"], "cada revisão permanece como linha própria");
-assert.ok(!sanitized.records.some((row) => row.document.includes("999-C1O-999")), "N-1710 ausente da LD não alcança a base persistível");
+assert.ok(sanitized.records.some((row) => row.document.includes("999-C1O-999")), "N-1710 ausente da LD continua cadastrado no PW");
 assert.ok(!Object.hasOwn(sanitized, "discardedRecords"), "documentos ignorados não devem ser materializados para exibição");
 
 const sigem = [
@@ -97,13 +97,13 @@ const sigem = [
 const model = Core.createModel(sigem, parsed.records, ld.records);
 const result = Core.aggregateModel(model, {});
 assert.deepStrictEqual(result.summary, {
-  sigem: 4, pwRegistered: 3, pwEmitted: 2, gapSigemToPw: 1, gapPwToEmitted: 1, pwExclusive: 0, matched: 3,
-  sigemOnly: 1, bothNotEmitted: 1, bothEmitted: 2, pwOnlyNotEmitted: 0, pwOnlyEmitted: 0, classifiedTotal: 4,
+  sigem: 5, pwRegistered: 4, pwEmitted: 3, gapSigemToPw: 1, gapPwToEmitted: 1, pwExclusive: 0, matched: 4,
+  sigemOnly: 1, bothNotEmitted: 1, bothEmitted: 3, pwOnlyNotEmitted: 0, pwOnlyEmitted: 0, classifiedTotal: 5,
 });
-assert.strictEqual(result.classes.find((row) => row.documentClass === "N-1710").sigem, 3);
+assert.strictEqual(result.classes.find((row) => row.documentClass === "N-1710").sigem, 4);
 assert.strictEqual(result.lists.toRegisterPw[0].document, "PR-5290.00-22313-122-C1O-003");
 assert.strictEqual(result.lists.pwNotEmitted[0].revision, "A");
-assert.ok(!result.lists.all.some((row) => row.document.includes("999-C1O-999")), "N-1710 fora da LD deve ser descartado silenciosamente");
+assert.ok(result.lists.all.some((row) => row.document.includes("999-C1O-999")), "N-1710 fora da LD deve continuar na comparação");
 assert.strictEqual(Core.aggregateModel(model, { documentClass: "ET" }).summary.sigem, 1);
 assert.throws(() => Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0"), /campo\(s\) obrigatório\(s\)/i);
 

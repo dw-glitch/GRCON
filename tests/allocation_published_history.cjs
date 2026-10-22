@@ -22,9 +22,10 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   for(const file of ['20261021094333_intelligent_allocation_workspace.sql','20261021114531_allocation_review_hardening.sql',
     '20261021114934_allocation_context_alias_fix.sql','20261021192719_allocation_automatic_generation.sql',
     '20261021193544_allocation_automatic_server_validation.sql',
-    '20261022120000_allocation_number_published_history.sql']){
+    '20261022120638_allocation_number_published_history.sql']){
      await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
   }
+  await db.exec(fs.readFileSync('supabase/migrations/20261022163651_allocation_history_contract_safety.sql','utf8'));
   const as=async(n,role='authenticated')=>db.exec(`reset role;set request.jwt.claim.sub='${n?uuid(n):''}';set request.jwt.claim.role='${role}';set role ${role};`);
   const rpc=(op,input={},actor=null)=>db.query('select public.grcon_allocation($1,$2,$3::jsonb,$4) as r',
     [uuid(1),op,JSON.stringify(input),actor]).then(x=>x.rows[0].r);
@@ -47,6 +48,16 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   await as(0,'service_role');
   await assert.rejects(rpc('generate',{...body,requestId:uuid(31)},uuid(11)),/utilizado/);
   await db.exec('reset role');
+  await db.query('insert into private.grcon_allocation_registry_snapshots(id,workspace_id,contract_id,status,file_name,created_by,published_at) values($1,$2,$3,$4,$5,$6,now())',
+    [uuid(50),uuid(1),uuid(4),'active','Outro contrato.xlsx',uuid(10)]);
+  await db.query('insert into private.grcon_allocation_registry_rows(snapshot_id,row_number,payload) values($1,1,$2),($1,2,$3)',
+    [uuid(50),{document:doc.document,allocation:created.runs[0].allocation_code,allocationStatus:'OUTRO CONTRATO'},
+      {document:'OUTRO-DOCUMENTO',allocation:'C1O-ALOC-CM-9900-'+year}]);
+  await as(11);
+  assert.equal((await rpc('history')).runs.length,0,'a publicação de outro contrato não comprova o histórico atual');
+  assert.equal((await rpc('sequence-preview')).nextSequence,201,'a sequência não consulta números de outro contrato');
+  await db.exec('reset role');
+  await db.query("update private.grcon_allocation_registry_snapshots set status='archived' where id=$1",[uuid(50)]);
   await db.query('insert into private.grcon_allocation_registry_snapshots(id,workspace_id,contract_id,status,file_name,created_by,published_at) values($1,$2,$3,$4,$5,$6,now())',
     [uuid(51),uuid(1),uuid(3),'active','Central.xlsx',uuid(10)]);
   await db.query('insert into private.grcon_allocation_registry_rows(snapshot_id,row_number,payload) values($1,1,$2)',
@@ -73,6 +84,24 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   await as(11);
   assert.equal((await rpc('history')).runs.length,0,'sumir da Central retira do histórico visível');
   assert.equal((await rpc('sequence-preview')).nextSequence,201,'número gerado nunca volta a ficar livre');
+  await db.exec('reset role');
+  await db.query('insert into private.grcon_allocation_registry_rows(snapshot_id,row_number,payload) values($1,2,$2)',
+    [uuid(51),{document:doc.document,allocation:' c1o-aloc-cm - 0201 - '+year+' '}]);
+  await as(11);
+  assert.equal((await rpc('sequence-preview')).nextSequence,202,'espaços e caixa não ocultam números publicados');
+  await as(0,'service_role');
+  await assert.rejects(rpc('generate',{...body,startSequence:201,requestId:uuid(32)},uuid(11)),/utilizado/);
+  const automatic={...body,requestId:uuid(33)};delete automatic.startSequence;
+  const next=await rpc('generate',automatic,uuid(11));
+  assert.equal(next.runs[0].sequence,202,'automático continua após o maior número realmente usado');
+  await db.exec('reset role');
+  await db.query('insert into private.grcon_allocation_registry_rows(snapshot_id,row_number,payload) values($1,3,$2)',
+    [uuid(51),{document:doc.document,allocation:'C1O-ALOC-CM-0204-'+year}]);
+  await as(0,'service_role');
+  await assert.rejects(rpc('generate',{...body,startSequence:203,requestId:uuid(34),groups:[{documents:[doc]},{documents:[doc]}]},uuid(11)),/utilizado/);
+  await db.exec('reset role');
+  const rolledBack=await db.query('select count(*)::int as n from private.grcon_allocation_runs where sequence=203');
+  assert.equal(rolledBack.rows[0].n,0,'conflito em um grupo reverte todo o lote, sem consumir números parciais');
   console.log('Allocation published history: sequência, geração, base publicada, atualização, ocultação e restauração OK');
  }finally{await db.close();}
 })().catch(error=>{console.error(error.stack||error);process.exitCode=1;});

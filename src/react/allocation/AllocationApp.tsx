@@ -34,7 +34,7 @@ export function AllocationApp(){
  disabled={state.busy} value={startNumber}
  placeholder={state.nextSequence===null?'Automático':String(state.nextSequence).padStart(4,'0')}
  onChange={e=>{setStartNumber(e.target.value);service.groupingChanged();}}/></label>
- <small>{state.sequencePrefix?state.sequencePrefix+'-':''}{String(startNumber||state.nextSequence||'—').padStart(4,'0')}{state.sequenceYear?'-'+state.sequenceYear:''} · {startNumber?'Escolha manual':'Sugestão automática'}</small>
+ <small>{state.sequencePrefix?state.sequencePrefix+'-':''}{String(startNumber||state.nextSequence||'—').padStart(4,'0')}{state.sequenceYear?'-'+state.sequenceYear:''} · {startNumber?'Escolha manual':'Sequência automática'}</small>
  <small role="status">{sourceInfo}</small></div>
    </section>
    {!!state.rows.length&&<>

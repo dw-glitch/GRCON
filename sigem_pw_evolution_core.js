@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.2";
+  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.3";
   const VALID_CLASSES = new Set(["ET", "N-1710"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
@@ -177,8 +177,10 @@
       return "fora_do_escopo_grcon";
     }
     if (identity.info && identity.info.eapApplicable && identity.info.eapValid === false) return "eap_invalida";
-    if (cls === "N-1710" && (!universe || !universe.qualityAvailable)) return "ld_qualidade_indisponivel";
-    if (cls === "N-1710" && !findQualityMatch(record, universe)) return "nao_encontrado_na_ld_qualidade";
+    // A falta do código na LD da Qualidade é uma divergência de localização,
+    // não uma inexistência do cadastro ProjectWise ou da Consulta Geral.
+    // O vínculo com a LD permanece acessível pelos metadados auditáveis,
+    // mas jamais exclui um documento válido do universo SIGEM × PW.
     return "";
   }
 
@@ -279,7 +281,9 @@
       ldRow: Number(match && match.row) || 0,
       ldPrazo: text(match && match.prazo),
       ldValidated: Boolean(universe && universe.available && match),
-      inclusionReason: cls === "N-1710" ? "Código N-1710 válido e localizado na LD da Qualidade" : "Código ET válido pela regra estrutural",
+      inclusionReason: cls === "N-1710"
+        ? (findQualityMatch(raw, universe) ? "N-1710 válido e localizado na LD da Qualidade" : "N-1710 estruturalmente válido; sem correspondência na LD da Qualidade")
+        : "Código ET válido pela regra estrutural",
       documentRevisionKey: documentRevisionKey(raw),
       occurrenceKey: occurrenceKey(raw, system),
       matchKey: matchKey(raw),

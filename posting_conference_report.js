@@ -333,7 +333,7 @@
 
     sheet.mergeCells(`D3:${lastColumn}3`);
     const subtitle = sheet.getCell("D3");
-    subtitle.value = `Histórico de eGRDTs × Consulta Geral SIGEM${options?.baseFileName ? ` · Base: ${options.baseFileName}` : ""}`;
+    subtitle.value = `Histórico de eGRDTs × Consulta Geral SIGEM${options?.baseFileName ? ` · Base: ${options.baseFileName}` : ""}${options?.teamsTraceStatus && options.teamsTraceStatus !== "fresh" ? " · Teams: dados indisponíveis ou não atualizados" : ""}`;
     subtitle.font = { name: "Arial", size: 9, color: { argb: MUTED } };
     subtitle.alignment = { vertical: "middle", horizontal: "left" };
     sheet.getRow(1).height = 24;
@@ -423,7 +423,7 @@
       if (Trace) {
         const representative = options?.pending ? row.pendingEvents[0] : row.latestSend || row;
         const attempt = Trace.attemptsFor(representative, traceIndex, options?.workspaceId)[0];
-        const extra = Trace.values(attempt, representative, Trace.conference(representative, attempt));
+        const extra = Trace.values(attempt, representative, Trace.conference(representative, options?.teamsTraceStatus === 'fresh' ? attempt : null), {status:options?.teamsTraceStatus,lastSuccessfulSync:options?.teamsLastSuccessfulSync});
         extra.forEach((value, offset) => { const cell=excelRow.getCell(baseHeaders.length+offset+1);cell.value=value;cell.alignment={vertical:'top',wrapText:true}; });
       }
       applyConferenceStyle(excelRow.getCell(conferenceColumn),
@@ -548,7 +548,7 @@
         if (!Trace) return values;
         const representative = options.pending ? row.pendingEvents[0] : row.latestSend || row;
         const attempt = Trace.attemptsFor(representative, traceIndex, options.workspaceId)[0];
-        return [...values, ...Trace.values(attempt, representative, Trace.conference(representative, attempt))];
+        return [...values, ...Trace.values(attempt, representative, Trace.conference(representative, options?.teamsTraceStatus === 'fresh' ? attempt : null), {status:options?.teamsTraceStatus,lastSuccessfulSync:options?.teamsLastSuccessfulSync})];
       }),
     };
   }

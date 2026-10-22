@@ -324,7 +324,12 @@ function scopeSnapshot(source: EvolutionSnapshot): EvolutionSnapshot {
   const cached = scopedSnapshotCache.get(cacheKey);
   if (cached) return cached;
 
-  const rawRecords = (source.records || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
+  // "Previsto" sem revisão confirma CADASTRO no PW, inclusive nesta visão.
+  // Esse item mantém a revisão indeterminada: não é convertido em revisão zero.
+  const rawRecords = (source.records || []).filter((row) =>
+    dashboardRevisionKey(row.revision) === "0"
+    || (source.system === "pw" && !text(row.revision)
+      && row.emissionKind === "planned" && row.emissionState === "not-emitted"));
   const records = Core().documentRevisionRecords(rawRecords);
   const rejected = (source.rejected || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
   const duplicates = (source.duplicates || []).filter((row) => dashboardRevisionKey(row.revision) === "0");
@@ -364,15 +369,15 @@ function scopeSnapshot(source: EvolutionSnapshot): EvolutionSnapshot {
     indeterminateEmissionDocumentRevisionRecords: indeterminate.length,
     emissionBreakdown,
     classes,
-    comparisonGranularity: "revisão 0; uma ocorrência por documento + revisão",
+    comparisonGranularity: "revisão 0 + cadastros PW previstos sem revisão identificada; nenhuma revisão presumida",
     registrationRule: source.system === "pw"
-      ? "Cadastrado = documento válido em revisão 0 presente na relação PW"
+      ? "Cadastrado = documento válido em revisão 0 ou previsto sem revisão informada no PW"
       : "Presente = documento válido em revisão 0 na Consulta Geral",
   };
   const scoped: EvolutionSnapshot = {
     ...source,
     revisionScope: scope,
-    contentFingerprint: String(source.contentFingerprint || source.id || source.system) + ":revision0",
+    contentFingerprint: String(source.contentFingerprint || source.id || source.system) + ":revision0-plus-planned",
     audit,
     records,
     rejected,
@@ -401,7 +406,9 @@ function preparedCacheKey(system: EvolutionSystem, source: EvolutionSourceSnapsh
 }
 
 function hasValidatedLd(): boolean {
-  return Boolean(state.ldUniverse?.qualityAvailable);
+  // A presença de cadastro SIGEM/PW não depende da LD. A inicialização
+  // do universo, mesmo vazio, já permite a comparação; a LD só enriquece.
+  return state.ldUniverse !== null;
 }
 
 function selectionKey(system: EvolutionSystem, role: "previous" | "current"): keyof EvolutionUiState["selections"] {
@@ -910,17 +917,8 @@ async function loadSnapshots(forceLd = false): Promise<boolean> {
     operation?.update("Preparando universo documental da LD…");
     const universe = await readLdUniverse(Boolean(forceLd));
     if (!isCurrent()) { state.ldUniverse = null; state.ldSignature = ""; return false; }
-    if (!universe.qualityAvailable) {
-      state.sigem = ordered(catalog.metadata.sigem.map(meta => unavailableSnapshot("sigem", meta, "Carregue a LD da Qualidade para comparar")));
-      state.pw = ordered(catalog.metadata.pw.map(meta => unavailableSnapshot("pw", meta, "Carregue a LD da Qualidade para comparar")));
-      state.timeline = [];
-      state.unavailable = { sigem: 0, pw: 0 };
-      state.comparison = null;
-      state.page = 1;
-      state.detailRow = null;
-      syncFilteredRows();
-      return true;
-    }
+    // A LD não é pré-requisito de presença no PW: seguir com o universo
+    // estrutural ET/N-1710 mesmo quando a LD da Qualidade estiver ausente.
 
     const { sigem: sigemMeta, pw: pwMeta } = catalog.metadata;
     const historyMaps = await readHistoryMaps([

@@ -11,14 +11,14 @@ const end = source.indexOf('\n\n  async function activate() {', start);
 assert.ok(start >= 0 && end > start, 'função de exportação encontrada');
 const exportSource = source.slice(start, end);
 
-async function testDownload(view) {
+async function testDownload(view, offline = false) {
   const rows = [{ document: 'DOC-1', revisionSent: 'A', egrdtNumber: 'GRDT-1' }];
   const group = { historyId: 'h1', egrdtNumber: 'GRDT-1', rows };
   const downloads = [], generated = [], notifications = [];
   let queued = 0, busy = false, renders = 0;
   const root = {
     GrconBackgroundJobs: { available: () => true, submit: async () => { queued++; throw new Error('Exportação desviada para tarefas'); } },
-    GrconTeamsTrace: { forExport: async () => [] },
+    GrconTeamsTrace: { forReport: async () => ({attempts:[],status:offline?'unavailable':'fresh',lastSuccessfulSync:null}) },
     GrconCloud: { state: { membership: { workspace_id: 'workspace-1' } } },
   };
   const Report = {
@@ -64,10 +64,12 @@ async function testDownload(view) {
   assert.equal(generated[0].options.mode, view === 'documents' ? 'documents' : 'events');
   assert.equal(busy, false, 'limpar estado de processamento');
   assert.equal(renders, 1);
-  assert.equal(notifications.at(-1).kind, 'success');
+  assert.equal(notifications.at(-1).kind, offline ? 'info' : 'success');
+  if (offline) assert.match(notifications.at(-1).message, /Teams não puderam ser atualizadas/);
 }
 
 (async () => {
   for (const view of ['documents', 'pending', 'grdts']) await testDownload(view);
+  await testDownload('pending', true);
   console.log('Conferência: download XLSX direto em documentos, pendências e por eGRDT; Tarefas permanece independente.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -121,7 +121,7 @@
       "LD UTILIZADA": text(record.ldName),
       "ORIGEM DOS DOCUMENTOS": text(record.sourceName),
       "NÚMEROS ANTERIORES": (record.numberHistory || []).join(" · "),
-      ...(Trace?.columns(Trace.attemptsFor(record, attempts, traceOptions.workspaceId)[0], null, traceOptions.teamsSigemEvidence?.[record.id]) || {}),
+      ...(Trace?.columns(Trace.attemptsFor(record, attempts, traceOptions.workspaceId)[0], null, traceOptions.teamsSigemEvidence?.[record.id], {status:traceOptions.teamsTraceStatus,lastSuccessfulSync:traceOptions.teamsLastSuccessfulSync}) || {}),
     }));
   }
   function documentRows(records, traceOptions = {}) {
@@ -178,7 +178,7 @@
       "SHA-256 DO ARQUIVO UTILIZADO": text(file.fileProvenance?.sha256),
       "INCLUSÃO NO COFRE": text(file.fileProvenance?.createdAt),
       "VERIFICAÇÃO NO COFRE": text(file.fileProvenance?.verifiedAt),
-      ...(Trace?.columns(Trace.attemptsFor(record, attempts, traceOptions.workspaceId)[0], file, traceOptions.teamsSigemEvidence?.[record.id]) || {}),
+      ...(Trace?.columns(Trace.attemptsFor(record, attempts, traceOptions.workspaceId)[0], file, traceOptions.teamsSigemEvidence?.[record.id], {status:traceOptions.teamsTraceStatus,lastSuccessfulSync:traceOptions.teamsLastSuccessfulSync}) || {}),
       "LASTMODIFIED DO ARQUIVO LOCAL": file.fileProvenance?.lastModified || "",
       };
     }));
@@ -360,7 +360,10 @@
     const totals = summary(source);
     const period = periodLabel(source, settings.startDate, settings.endDate);
     const selectedFamily = familyLabel(settings.documentFamily);
-    const metadata = `${source.length.toLocaleString("pt-BR")} eGRDT(s) · Período: ${period} · Tipo: ${selectedFamily} · Histórico local do GRCON · ${new Date().toLocaleString("pt-BR")}`;
+    const teamsNote = settings.teamsTraceStatus && settings.teamsTraceStatus !== "fresh"
+      ? ` · Teams: ${settings.teamsTraceStatus === "stale" ? "dados não atualizados" : "indisponível"}${settings.teamsLastSuccessfulSync ? " (última sincronização: " + formatDate(settings.teamsLastSuccessfulSync, true) + ")" : ""}`
+      : "";
+    const metadata = `${source.length.toLocaleString("pt-BR")} eGRDT(s) · Período: ${period} · Tipo: ${selectedFamily} · Histórico local do GRCON · ${new Date().toLocaleString("pt-BR")}${teamsNote}`;
     const egrdts = egrdtRows(source, settings);
     const documents = documentRows(source, settings);
 

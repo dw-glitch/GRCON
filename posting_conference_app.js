@@ -780,10 +780,13 @@
       }
       const scopeLabel = view === "pending" ? "Pendencias" : view === "grdts" ? "Por_eGRDT"
         : state.filters.grdt ? state.filters.grdt.replace(/[^A-Z0-9-]+/gi, "_") : "";
+      const trace = await root.GrconTeamsTrace?.forReport?.().catch(() => ({attempts:[],status:"unavailable",lastSuccessfulSync:null})) || {attempts:[],status:"unavailable",lastSuccessfulSync:null};
       const reportOptions = {
         mode, groups, scopeLabel, pending: view === "pending",
         timeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
-        teamsAttempts: await root.GrconTeamsTrace?.forExport?.() || [],
+        teamsAttempts: trace.attempts,
+        teamsTraceStatus: trace.status,
+        teamsLastSuccessfulSync: trace.lastSuccessfulSync,
         workspaceId: root.GrconCloud?.state?.membership?.workspace_id,
         baseFileName: state.base.meta?.fileName, baseImportedAt: state.base.meta?.importedAt,
       };
@@ -802,6 +805,7 @@
         ? `${fmt(rows.length)} documento(s) pendente(s), sem duplicações, exportado(s) em uma única aba.`
         : mode === "events" ? `${fmt(rows.length)} ocorrência(s) incluída(s) no relatório por eGRDT.`
           : `${fmt(rows.length)} documento(s) único(s) incluído(s) no relatório.`, "success");
+      if (trace.status !== "fresh") notify("Relatório exportado. As informações do Teams não puderam ser atualizadas.", "info");
     } catch (error) {
       currentOperation?.fail(error);
       console.error(error);

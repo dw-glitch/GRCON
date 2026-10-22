@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const Dashboard = require("../sigem_pw_dashboard_core.js");
 const Revision = require("../sigem_pw_revision_core.js");
 const Evolution = require("../sigem_pw_evolution_core.js");
+const Readiness = require("../sigem_pw_readiness_core.js");
 
 const etSigem = "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-123456";
 const etPw = "C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-123456";
@@ -72,8 +73,42 @@ assert.equal(missingPwRevisionWithPriorEmission.summary.pwEmitted, 1);
 const pwUnmatched = { document: n1710Another, lastEmission: "Previsto", revision: "" };
 const onlyRev0 = Dashboard.aggregateModel(Dashboard.createModel(sigem, [...parsed.records, pwUnmatched], ld), {}, { revisionScope: "revision0" });
 const onlyAll = Dashboard.aggregateModel(Dashboard.createModel(sigem, [...parsed.records, pwUnmatched], ld), {}, { revisionScope: "all" });
-assert.equal(onlyRev0.summary.pwOnlyNotEmitted, 0, "Não inferir revisão 0 de código que não está no SIGEM");
+assert.equal(onlyRev0.summary.pwOnlyNotEmitted, 1, "Previsto sem revisão deve contar como cadastro PW até na visão inicial");
+assert.equal(onlyRev0.lists.pwOnlyNotEmitted[0].revision, "Não informada no PW",
+  "Presença sem revisão não deve virar revisão 0 inventada");
 assert.equal(onlyAll.summary.pwOnlyNotEmitted, 1, "Cadastro previsto exclusivo deve constar na visão geral");
+
+
+// Regressão extraída da estrutura real RHDD(2).csv: Previsto vem SEM
+// RevisaoCompleta, Revisao, o_filename ou estado PW. A LD pode estar ausente.
+const noLd = Dashboard.sanitizePwBase({ ...parsed, sourceRecords: parsed.records }, { meta: null, records: [] });
+assert.equal(noLd.meta.recordCount, 2, "O N-1710 previsto não pode ser descartado por não estar na LD");
+assert.equal(noLd.meta.plannedRegisteredCount, 2);
+assert.equal(noLd.meta.registeredWithoutQualityLdCount, 1);
+assert.equal(noLd.records.find((row) => row.document === n1710).documentClass, "N-1710");
+
+const fromOldScope = Dashboard.sanitizePwBase({
+  meta: { ...noLd.meta, scopeVersion: 4 },
+  records: noLd.records.filter((row) => row.documentClass === "ET"),
+  sourceRecords: parsed.records,
+}, []);
+assert.equal(fromOldScope.records.length, 2, "Deve restaurar códigos antes descartados ao reprocessar a base");
+assert.equal(fromOldScope.meta.scopeVersion, Dashboard.PW_SCOPE_VERSION);
+
+const modelNoLd = Dashboard.createModel(sigem, noLd.records, []);
+const resultNoLd = Dashboard.aggregateModel(modelNoLd, {}, { revisionScope: "revision0" });
+assert.equal(resultNoLd.summary.bothNotEmitted, 2);
+assert.equal(resultNoLd.summary.sigemOnly, 0);
+assert.equal(resultNoLd.summary.pwRegistered, 2);
+assert.equal(resultNoLd.summary.pwEmitted, 0);
+assert.equal(Dashboard.aggregateModel(modelNoLd, {}, { revisionScope: "all" }).summary.matched, 2);
+const noLdReady = Readiness.assess({
+  sigem: { meta: { snapshotId: "sigem-test" }, records: sigem },
+  pw: noLd,
+  ld: { meta: null, records: [] },
+}, resultNoLd);
+assert.equal(noLdReady.ready, true, "A ausência da LD não pode bloquear comprovação de cadastro no PW");
+assert.ok(!noLdReady.failedChecks.includes("quality-ld"));
 
 const revisionResult = Revision.analyze(model);
 const n1710Revision = revisionResult.rows.find((row) => row.document === n1710);

@@ -17,6 +17,7 @@ const server=http.createServer(async(req,res)=>{try{
   const {operation,input={}}=await load(req);
   if(operation==='catalog'){const active=storage.filter(b=>b.status==='active');return json(res,200,{bases:storage.filter(b=>b.status!=='pending').map(({rows,...b})=>b),versions:Object.fromEntries(active.map(b=>[b.kind,b.id])),canManage:true});}
   if(operation==='history')return json(res,200,{runs:[]});
+  if(operation==='sequence-preview')return json(res,200,{prefix:'',year:2026,nextSequence:null});
   if(operation==='experiences')return json(res,200,{decisions:[]});
   if(operation==='page'){const b=storage.find(b=>b.id===input.id);return json(res,200,{rows:(b?.rows||[]).slice(input.after||0,(input.after||0)+1000).map((payload,i)=>({row_number:(input.after||0)+i+1,payload}))});}
   if(operation==='base-begin'){if(input.expectedActive!==storage.find(b=>b.kind===input.kind&&b.status==='active')?.id)return json(res,409,{message:'Outra versão está ativa'});const id='upload-'+(++serial);storage.push({id,kind:input.kind,file_name:input.fileName,revision:input.revision,status:'pending',record_count:input.count,version:serial+1,rows:[]});return json(res,200,{id});}
