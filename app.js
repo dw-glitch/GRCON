@@ -3053,7 +3053,7 @@
   function selectionSituationLabel(row, index) {
     const policy = rowStatusPolicy(row);
     if (policy.allocation) return rowIncludedForGeneration(row, index)
-      ? `${policy.label} · manual` : policy.label;
+      ? `Incluído manualmente · ${policy.label}` : policy.label;
     if (rowIncludedForGeneration(row, index)) return policy.manualOnly ? "Incluído manualmente" : compactDecisionLabel(row);
     return policy.manualOnly ? policy.label : "Excluído";
   }
@@ -5802,6 +5802,14 @@
         event.target.checked = false;
         showToast("Este documento possui um bloqueio técnico que não admite inclusão manual.", "warn");
         return;
+      }
+      // A triagem pode ter retornado cedo pela alocação e usado esse alerta
+      // como texto de situação. Registre a escolha com o status SIGEM real,
+      // o mesmo que será conferido no download, sem desmarcar a decisão depois.
+      if (manualAllocationOverrideAllowed(row)) {
+        applyRowSigemStatus(row, resolveRowSigemStatus(row, row.revision));
+        state.resultVersion += 1;
+        state.filteredCache = { signature: "", indices: [] };
       }
       state.selected.add(index);
       // Mantém o registro visual de que o operador incluiu um alerta de triagem.

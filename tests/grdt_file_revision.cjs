@@ -110,6 +110,20 @@ plan = E.createPlan([repost], [0], { manualForceIndices: [0] });
 assert.deepEqual(plan.errors, []);
 assert.equal(plan.entries[0].revision, 'A', 'reenvio manual mantém a revisão original');
 
+// The allocation fast path must still identify the physical revision and
+// recover existing LD metadata at the generation boundary after a manual choice.
+for (const allocationStatus of ['NÃO ALOCADO','Não','Recusado']) {
+  const blocked=triage(`${doc}_A.pdf`,[{...record(doc,'B'),allocationStatus}]);
+  blocked.files=[{name:blocked.name,file:blocked.file,finalName:blocked.finalName}];
+  assert.equal(blocked.hardBlock,true);assert.equal(blocked.revision,'A');
+  assert.ok(E.createPlan([blocked],[0]).errors.length,'selection alone cannot authorize an allocation override');
+  const manual=E.createPlan([blocked],[0],{manualForceIndices:[0]});
+  assert.deepEqual(manual.errors,[]);assert.equal(manual.entries.length,1);
+  assert.equal(manual.items[0].revision,'A');assert.equal(manual.items[0].format,'A4');
+  assert.equal(manual.items[0].documentType,'RL');assert.equal(manual.items[0].manualAllocationOverride,true);
+  assert.equal(blocked.record.allocationStatus,allocationStatus,'source allocation remains unchanged');
+}
+
 (async () => {
   // Run the real worker with the same index, without a browser-specific engine.
   const messages = [];
