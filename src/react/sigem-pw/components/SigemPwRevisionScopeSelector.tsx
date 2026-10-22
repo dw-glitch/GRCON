@@ -13,7 +13,7 @@ export function SigemPwRevisionScopeSelector({
   onChange(value: SigemPwRevisionScope): void;
 }) {
   const description = value === "revision0"
-    ? "Compara o cadastro inicial dos documentos: SIGEM Rev. 0 × PW Rev. 0."
+    ? "Compara SIGEM Rev. 0 com PW Rev. 0 e cadastros “Previsto” sem revisão informada. A revisão desconhecida não é tratada como emissão nem como revisão 0."
     : "Compara todas as ocorrências Documento + Revisão entre SIGEM e PW.";
 
   return (
