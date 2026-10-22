@@ -465,7 +465,7 @@ export function SigemPwEvolutionApp() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [auditMetric, setAuditMetric] = useState<EvolutionListMode | "pw-emitted-current" | null>(null);
   const { state, periodSigem, periodPw, pageData, adapter } = useSigemPwEvolution();
-  const hasValidatedLd = Boolean(state.ldUniverse?.qualityAvailable);
+  const hasValidatedLd = state.ldUniverse !== null;
   const comparison = state.comparison;
   const relation = comparison?.relation;
   const selectedSigem = adapter.selectedSnapshot("sigem", "current");
@@ -510,7 +510,7 @@ export function SigemPwEvolutionApp() {
           <span className="spw-kicker">EVOLUÇÃO SIGEM × PW</span>
           <h3>O que mudou entre as bases</h3>
           <p>{state.revisionScope === "revision0"
-            ? "Visão de cadastro inicial: somente a revisão 0 participa de KPIs, séries, listas e exportações."
+            ? "Visão inicial: revisão 0 e cadastros previstos sem revisão identificada são exibidos separadamente, sem presumir revisão 0."
             : "Visão histórica completa: cada Documento + Revisão participa do comparativo entre snapshots."}</p>
         </div>
         <div className="spw-evo-actions">
@@ -530,16 +530,16 @@ export function SigemPwEvolutionApp() {
       <div className={`spw-evo-scope${hasValidatedLd ? "" : " required"}`} id="spw-evo-scope">
         {hasValidatedLd ? (
           <>
-            <strong>Universo validado</strong>
-            <span>{fmt(state.ldUniverse?.qualityDocumentCount)} códigos N-1710 da LD da Qualidade. ET é validado pela codificação e as demais LDs carregadas enriquecem TAG, EAP e disciplina.</span>
+            <strong>Universo documental válido</strong>
+            <span>Cadastros ET e N-1710 são identificados diretamente no SIGEM e PW, inclusive quando “Última emissão” é “Previsto”. A LD da Qualidade complementa a localização de {fmt(state.ldUniverse?.qualityDocumentCount)} códigos N-1710, mas não bloqueia o cadastro.</span>
             <button type="button" className="text-button" id="spw-evo-refresh-ld" disabled={state.busy} onClick={() => { void adapter.refresh(true).catch(() => undefined); }}>
               Revalidar LD
             </button>
           </>
         ) : (
           <>
-            <strong>LD da Qualidade necessária</strong>
-            <span>Atualize a LD N-1710 no dashboard geral. A evolução não calcula números sem validar primeiro esse universo.</span>
+            <strong>Preparando a comparação</strong>
+            <span>Carregue as bases SIGEM e ProjectWise para avaliar cadastros e emissões. A LD da Qualidade é opcional.</span>
           </>
         )}
       </div>
