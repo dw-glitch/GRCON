@@ -91,7 +91,13 @@
     const rows = Array.isArray(document && document.rows) ? document.rows : [];
     for (const row of rows) {
       const revision = revisionValue(row);
-      if (revision === "") continue;
+      if (revision === "") {
+        if (kind === "pw" && norm(row.lastEmission) === "PREVISTO") {
+          const key = "__SEM_REVISAO__";
+          byRevision.set(key, newerRecord(row, byRevision.get(key)));
+        }
+        continue;
+      }
       const key = norm(revision);
       byRevision.set(key, newerRecord(row, byRevision.get(key)));
       if (kind === "pw" && row.emittedEvidence) emittedByRevision.set(key, newerRecord(row, emittedByRevision.get(key)));
@@ -118,8 +124,8 @@
     index.byRevision.forEach((record) => {
       const key = norm(revisionValue(record));
       output.push({
-        revision: revisionValue(record),
-        status: kind === "pw" ? text(record.state) : text(record.status),
+        revision: revisionValue(record) || "Não informada no PW",
+        status: kind === "pw" ? (text(record.state) || (norm(record.lastEmission) === "PREVISTO" ? "Previsto" : "")) : text(record.status),
         emitted: kind === "pw" ? Boolean(index.emittedByRevision.get(key)) : null,
         emissionFlag: kind === "pw" ? text(record.lastEmission) : "",
         sourceRow: Number(record.sourceRow) || 0,
@@ -228,6 +234,8 @@
     const latestEmitted = pwScan.latestEmitted;
     const latestRegisteredRevision = revisionValue(latestRegistered);
     const latestRegisteredRank = rank(latestRegisteredRevision);
+    const plannedWithoutRevision = base.pwRows.filter((record) =>
+      !revisionValue(record) && norm(record.lastEmission) === "PREVISTO");
     if (latestEmitted) {
       base.lastEmittedPwRevision = revisionValue(latestEmitted);
       base.lastEmittedPwStatus = text(latestEmitted.state);
@@ -253,6 +261,23 @@
       base.situation = SITUATIONS.UPDATED;
       base.reason = "A mesma revisão aplicável do SIGEM foi localizada no PW e possui evidência de emissão.";
       return { row: base, counter: "updated", sigemRevisionRows: sigemScan.rowCount, pwRevisionRows: pwScan.rowCount };
+    }
+
+    if (plannedWithoutRevision.length && !exact) {
+      const planned = plannedWithoutRevision.reduce((best, row) => newerRecord(row, best), null);
+      base.pwRevision = "Não informada no PW";
+      base.pwStatus = text(planned && planned.state) || "Previsto";
+      // Há prova de CADASTRO, mas não de qual revisão foi cadastrada.
+      // Com emissões históricas existentes, não atribuir indevidamente o
+      // cadastro planejado à revisão SIGEM nem afirmar que o PW está atrasado.
+      if (latestRegistered) {
+        base.situation = SITUATIONS.REVIEW;
+        base.reason = `O PW contém cadastro Previsto sem revisão informada e emissão anterior em ${latestRegisteredRevision}. O documento está cadastrado, porém a revisão prevista não pode ser confirmada.`;
+        return { row: base, counter: "review", sigemRevisionRows: sigemScan.rowCount, pwRevisionRows: pwScan.rowCount };
+      }
+      base.situation = SITUATIONS.AWAITING_EMISSION;
+      base.reason = `Documento cadastrado no PW como Previsto, sem revisão ou emissão. A presença do código é confirmada, mas não é possível afirmar que a revisão SIGEM ${sigemRevision} já foi cadastrada.`;
+      return { row: base, counter: "awaitingEmission", sigemRevisionRows: sigemScan.rowCount, pwRevisionRows: pwScan.rowCount };
     }
 
     if (latestRegistered) {
