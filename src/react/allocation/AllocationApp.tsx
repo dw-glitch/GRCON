@@ -42,7 +42,7 @@ export function AllocationApp(){
      </tbody></table>{!list.length&&<p className="ag-empty">Nenhum documento neste filtro.</p>}</div>
     </section>
     <section className="ag-card ag-output"><div className="ag-section-heading"><h3>Arquivos da alocação</h3><small>{selected.length} documentos selecionados{state.plan?` · ${state.plan.groups.length} alocações`:''}</small></div>
-     <div className="ag-toolbar"><button className="primary-button" disabled={state.busy||!selected.length} onClick={()=>act(generate())}>{state.files.length?'Baixar arquivos':'Gerar e baixar'}</button>{[['titles','Títulos'],['control','Linhas da Central'],['allocation','Alocação oficial']].map(([id,label])=><button className="secondary-button" key={id} disabled={state.busy||!state.files.length} onClick={()=>act(service.download(id))}>Baixar {label}</button>)}</div><small>Inclui títulos, linhas da Central e alocação oficial. Use Ajustar na tabela para editar e gerar novamente.</small>
+     <div className="ag-toolbar"><button className="primary-button" disabled={state.busy||!selected.length} onClick={()=>act(generate())}>{state.files.length?'Baixar arquivos':'Gerar e baixar'}</button>{[['titles','Títulos'],['control','Linhas da Central'],['allocation','Alocação oficial']].map(([id,label])=><button className="secondary-button" key={id} disabled={state.busy||!state.files.length} onClick={()=>act(service.download(id))}>Baixar {label}</button>)}</div><small>Inclui títulos com disciplina, linhas completas para a LD, linhas da Central e alocação oficial. No arquivo de títulos, copie as linhas da aba LD correspondente.</small>
     </section>
    </>}
   </>}
