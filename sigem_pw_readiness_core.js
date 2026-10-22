@@ -14,7 +14,6 @@
   const REQUIRED_BASES = Object.freeze([
     { key: "sigem", label: "Consulta Geral/SIGEM" },
     { key: "pw", label: "relação ProjectWise" },
-    { key: "ld", label: "LD da Qualidade" },
   ]);
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
@@ -30,6 +29,7 @@
   function assess(state, result) {
     const source = state || {};
     const loaded = Object.fromEntries(REQUIRED_BASES.map((item) => [item.key, validBase(source[item.key])]));
+    loaded.ld = validBase(source.ld);
     const missing = REQUIRED_BASES.filter((item) => !loaded[item.key]).map((item) => item.label);
     const anyLoaded = Object.values(loaded).some(Boolean);
     const allLoaded = missing.length === 0;
@@ -62,15 +62,15 @@
       check("exclusive-situations", "Cinco situações exclusivas conciliadas sem duplicidade",
         ["sigemOnly", "bothNotEmitted", "bothEmitted", "pwOnlyNotEmitted", "pwOnlyEmitted"].every((key) => Array.isArray(lists[key]) && lists[key].length === count(summary[key]))
           && count(summary.classifiedTotal) === count(summary.sigem) + count(summary.pwRegistered) - count(summary.matched), loaded.sigem && loaded.pw),
-      check("quality-ld", "N-1710 do PW vinculado à LD da Qualidade vigente",
-        n1710Pw === 0 || (Boolean(activeLdId) && pwLdId === activeLdId), loaded.pw),
+      check("quality-ld", "LD da Qualidade usada apenas para conferência de localização (sem bloquear cadastro PW)",
+        true, loaded.pw),
       check("scope-version", "Base PW processada pela regra de escopo vigente",
         count(source.pw && source.pw.meta && source.pw.meta.scopeVersion) >= count(Dashboard && Dashboard.PW_SCOPE_VERSION), loaded.pw),
     ];
     const failed = checks.filter((item) => item.applicable && !item.passed);
     let status = "empty";
     let title = "Pronto para receber as novas bases";
-    let message = "Carregue a Consulta Geral, a relação ProjectWise e a LD da Qualidade para iniciar uma comparação nova.";
+    let message = "Carregue a Consulta Geral e a relação ProjectWise. A LD é opcional para conferir localização, não para comprovar cadastro.";
     if (anyLoaded && !allLoaded) {
       status = "partial";
       title = "Carregamento ainda incompleto";
@@ -82,7 +82,7 @@
     } else if (allLoaded) {
       status = "ready";
       title = "Comparação pronta e íntegra";
-      message = "SIGEM, ProjectWise e LD estão carregados; totais, classes, emissões e listas foram conciliados.";
+      message = loaded.ld ? "SIGEM e PW conciliados; a LD está disponível para conferência de localização." : "SIGEM e PW conciliados; documentos previstos estão cadastrados independentemente da LD.";
     }
     return {
       version: VERSION,
