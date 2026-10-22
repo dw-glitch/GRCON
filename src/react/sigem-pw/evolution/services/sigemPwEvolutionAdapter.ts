@@ -406,7 +406,9 @@ function preparedCacheKey(system: EvolutionSystem, source: EvolutionSourceSnapsh
 }
 
 function hasValidatedLd(): boolean {
-  return Boolean(state.ldUniverse?.qualityAvailable);
+  // A presença de cadastro SIGEM/PW não depende da LD. A inicialização
+  // do universo, mesmo vazio, já permite a comparação; a LD só enriquece.
+  return state.ldUniverse !== null;
 }
 
 function selectionKey(system: EvolutionSystem, role: "previous" | "current"): keyof EvolutionUiState["selections"] {
@@ -915,17 +917,8 @@ async function loadSnapshots(forceLd = false): Promise<boolean> {
     operation?.update("Preparando universo documental da LD…");
     const universe = await readLdUniverse(Boolean(forceLd));
     if (!isCurrent()) { state.ldUniverse = null; state.ldSignature = ""; return false; }
-    if (!universe.qualityAvailable) {
-      state.sigem = ordered(catalog.metadata.sigem.map(meta => unavailableSnapshot("sigem", meta, "Carregue a LD da Qualidade para comparar")));
-      state.pw = ordered(catalog.metadata.pw.map(meta => unavailableSnapshot("pw", meta, "Carregue a LD da Qualidade para comparar")));
-      state.timeline = [];
-      state.unavailable = { sigem: 0, pw: 0 };
-      state.comparison = null;
-      state.page = 1;
-      state.detailRow = null;
-      syncFilteredRows();
-      return true;
-    }
+    // A LD não é pré-requisito de presença no PW: seguir com o universo
+    // estrutural ET/N-1710 mesmo quando a LD da Qualidade estiver ausente.
 
     const { sigem: sigemMeta, pw: pwMeta } = catalog.metadata;
     const historyMaps = await readHistoryMaps([
