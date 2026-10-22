@@ -17,7 +17,9 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
   if(url.pathname==='/qa/rpc'){
    const {operation,input}=await body(req);let result={};
    if(operation==='catalog')result={bases:catalog,versions,canManage:false};
-   if(operation==='history')result={runs:history};
+   if(operation==='history')result={runs:history.filter(run=>Boolean(run.control_published_at))};
+    if(operation==='sequence-preview')result={prefix:'C1O-ALOC-CM',year:2026,nextSequence:requests+1};
+    if(operation==='hide-run'){history=history.filter(run=>run.id!==input.id);result={ok:true};}
    if(operation==='experiences')result={decisions};
    if(operation==='page'){const kind=input.id.replace('-v1','');result={rows:bases[kind].map((payload,i)=>({row_number:i+1,payload}))};}
    if(operation==='generate')throw Error('Automatic generation must use server validation');
@@ -28,7 +30,7 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
   if(url.pathname==='/api/document-vault/allocation-generate'){
    const input=await body(req);assert.equal(input.automatic,true);assert.ok(input.groups.every(g=>g.documents.every(d=>!d.decisionId)));generatedInputs.push(input);
    const validated=validateAutomaticBatch(input,{complete:true,bases,versions});
-   history=validated.groups.map((g,i)=>({id:'run-'+requests+'-'+i,allocation_code:'C1O-ALOC-CM-000'+(requests+1)+'-2026',status:'generated',documents:g.documents,files:[],base_versions:versions,created_at:new Date().toISOString()}));requests++;
+   history=validated.groups.map((g,i)=>({id:'run-'+requests+'-'+i,allocation_code:'C1O-ALOC-CM-'+String((input.startSequence||requests+1)+i).padStart(4,'0')+'-2026',status:'generated',documents:g.documents,files:[],base_versions:versions,created_at:new Date().toISOString()}));requests++;
    res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,runs:history}));
   }
   if(url.pathname==='/api/document-vault/allocation-confirm'){
@@ -68,7 +70,21 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
   const ldRows=titlesBook.getWorksheet('LD - ET');assert.ok(ldRows,'download contains full LD rows in the loaded source order');assert.equal(ldRows.getCell('A1').value,'PROTOCOLO');assert.equal(ldRows.getCell('A2').value,'PROTOCOLO 2');assert.equal(ldRows.getCell('B2').value,documentCode);assert.match(ldRows.getCell('C2').value,/CORRIGIDO/);assert.equal(ldRows.getCell('D2').value,pathValue);
   await page.screenshot({path:path.join(out,'allocation-generate-1440.png'),fullPage:true});
   await page.getByRole('button',{name:'Bases de referência',exact:true}).click();assert.equal(await page.getByText('Publicar versão conferida',{exact:true}).count(),0);await page.screenshot({path:path.join(out,'allocation-bases-1440.png'),fullPage:true});
-  await page.getByRole('button',{name:'Histórico',exact:true}).click();assert.ok(await page.getByText('Gerada',{exact:true}).isVisible());
+  
+   await page.getByRole('button',{name:'Histórico',exact:true}).click();
+   assert.ok(await page.getByText('Nenhuma alocação identificada na Central de Alocação publicada para este filtro.').isVisible(),'geração sozinha não publica o histórico');
+   // Após a publicação, o histórico acompanha exclusivamente o status da Central oficial.
+   history=history.map(run=>({...run,control_status:'PENDENTE ENVIO DE LD',control_statuses:['PENDENTE ENVIO DE LD'],
+     control_published_at:new Date().toISOString(),control_document_count:run.documents.length}));
+   await page.getByRole('button',{name:'Pesquisar',exact:true}).click();
+   await page.getByText('PENDENTE ENVIO DE LD',{exact:true}).waitFor();
+   history[0].control_status='CONCLUÍDA';history[0].control_statuses=['CONCLUÍDA'];
+   await page.getByRole('button',{name:'Pesquisar',exact:true}).click();
+   await page.getByText('CONCLUÍDA',{exact:true}).waitFor();
+   page.once('dialog',dialog=>dialog.accept());
+   await page.getByRole('button',{name:'Excluir do histórico',exact:true}).click();
+   await page.getByText('Nenhuma alocação identificada na Central de Alocação publicada para este filtro.').waitFor();
+   
   await page.setViewportSize({width:1280,height:800});await page.getByRole('button',{name:'Gerar alocação',exact:true}).click();await page.screenshot({path:path.join(out,'allocation-generate-1280.png'),fullPage:true});
   const layout=await page.evaluate(()=>({table:document.querySelector('.ag-virtual').getBoundingClientRect().bottom,output:document.querySelector('.ag-output').getBoundingClientRect().top}));assert.ok(layout.output>=layout.table,'package actions must not cover document rows');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow');
@@ -90,7 +106,10 @@ async function body(req){const chunks=[];for await(const c of req)chunks.push(c)
   await batch.getByLabel('Pesquisar documentos').fill('999999');await batch.getByLabel('Selecionar todos do filtro').check();assert.equal(await batch.locator('.ag-virtual tbody input:checked').count(),1);
   await batch.getByLabel('Pesquisar documentos').fill('');assert.equal(await batch.locator('.ag-virtual tbody input:checked').count(),1,'filter selections preserve rows outside current filter');
   await batch.getByLabel('Selecionar todos do filtro').check();assert.equal(await batch.locator('.ag-virtual tbody input:checked').count(),2);
-  const batchDownload=batch.waitForEvent('download');await batch.getByRole('button',{name:'Gerar e baixar',exact:true}).last().click();await batchDownload;
+  await batch.getByLabel('Escolher número inicial da alocação').fill('200');
+   const batchDownload=batch.waitForEvent('download');await batch.getByRole('button',{name:'Gerar e baixar',exact:true}).last().click();await batchDownload;
+   assert.equal(generatedInputs.at(-1).startSequence,200,'numeração manual encaminhada ao servidor');
+   assert.match(history[0].allocation_code,/-0200-2026$/,'código oficial reflete a escolha');
   assert.equal(generatedInputs.at(-1).groups[0].documents.length,2);assert.equal(confirmationRequests,0);
   assert.equal(await batch.getByRole('button',{name:/Confirmar/}).count(),0);
   await batch.screenshot({path:path.join(out,'allocation-batch-1280.png'),fullPage:true});

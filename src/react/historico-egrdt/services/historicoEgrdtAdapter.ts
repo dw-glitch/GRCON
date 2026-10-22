@@ -203,13 +203,19 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
   const HistoryReport = report();
   await window.GRCONModuleLoader?.ensure?.("excel");
   await window.GRCONModuleLoader?.ensure?.("brand");
+  const trace = await window.GrconTeamsTrace?.forReport?.().catch(() => ({
+    attempts: [], status: "unavailable" as const, lastSuccessfulSync: null, errorCode: "TRACE_UNAVAILABLE",
+  }));
   const options = {
     startDate: filters.startDate,
     endDate: filters.endDate,
     documentFamily: filters.documentFamily,
     appVersion: appVersion(),
     brandAssets: window.GRCONBrandAssets,
-    teamsAttempts: await window.GrconTeamsTrace?.forExport?.() || [],
+    teamsAttempts: trace?.attempts || [],
+    teamsTraceStatus: trace?.status || "unavailable",
+    teamsLastSuccessfulSync: trace?.lastSuccessfulSync || null,
+    teamsErrorCode: trace?.errorCode || null,
     teamsSigemEvidence: window.GrconTeamsTrace?.sigemEvidence(records) || {},
     workspaceId: window.GrconCloud?.state?.membership?.workspace_id,
   };
@@ -221,6 +227,7 @@ async function exportPeriodReport(records: EgrdtHistoryRecord[], filters: EgrdtH
     HistoryReport.downloadName(records, options),
   );
   operation?.assertCurrent(); operation?.finish();
+  if (options.teamsTraceStatus !== "fresh") notify("Relatório exportado. As informações do Teams não puderam ser atualizadas.", "info");
   } catch (error) { operation?.fail(error); throw error; }
 }
 

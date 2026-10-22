@@ -8,7 +8,7 @@ const outputDir = path.join(process.cwd(), "artifacts/evolution-sources");
 fs.mkdirSync(outputDir, { recursive: true });
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, ...(process.env.GRCON_CHROMIUM_PATH ? {executablePath:process.env.GRCON_CHROMIUM_PATH} : {}) });
   try {
     const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
     const errors = [];
@@ -43,16 +43,17 @@ fs.mkdirSync(outputDir, { recursive: true });
     await page.waitForFunction(() => Boolean(window.GrconSigemPwEvolutionUi));
     await page.evaluate(() => window.GrconSigemPwEvolutionUi.activate());
     await page.waitForFunction(() => window.GrconSigemPwEvolutionUi.state.ready);
-    assert.equal(await page.locator('[data-evo-select="sigemCurrent"] option').count(), 4);
-    assert.equal(await page.locator('[data-evo-select="pwCurrent"] option').count(), 3);
-    assert.equal(await page.evaluate(() => window.__sharedLoads), 0, "no remote payload reads before LD validation");
-    assert.equal(await page.locator('[data-evo-select="sigemCurrent"]').isDisabled(), true);
-    assert.equal(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.comparison), null);
+    assert.deepEqual(await page.locator('[data-evo-select="sigemCurrent"] option').evaluateAll(options=>options.map(o=>o.value).sort()), ['remote','s1','s2']);
+    assert.deepEqual(await page.locator('[data-evo-select="pwCurrent"] option').evaluateAll(options=>options.map(o=>o.value).sort()), ['p1','p2']);
+    assert.equal(await page.evaluate(() => window.__sharedLoads), 1, "fontes compartilhadas são carregadas sem depender de LD");
+    assert.equal(await page.locator('[data-evo-select="sigemCurrent"]').isDisabled(), false);
+    assert.ok(await page.evaluate(() => window.GrconSigemPwEvolutionUi.state.comparison), 'a LD não condiciona a existência das bases SIGEM/PW');
     await page.evaluate(async () => {
       window.GrconSigemPwDashboardUi.state.ld = { meta: { snapshotId: "ld" }, records: [{ document: "RL-5290.00-22313-ABC-C1O-001", revision: "0" }] };
       await window.GrconSigemPwEvolutionUi.refresh(true);
     });
     assert.equal(await page.locator('[data-evo-select="sigemPrev"] option').count(), 4);
+    const preparedSharedLoads=await page.evaluate(()=>window.__sharedLoads);
     await page.locator('[data-evo-select="sigemPrev"]').selectOption("s1");
     await page.locator('[data-evo-select="sigemCurrent"]').selectOption("s2");
     await page.locator('[data-evo-select="pwPrev"]').selectOption("p1");
@@ -62,7 +63,7 @@ fs.mkdirSync(outputDir, { recursive: true });
     await page.locator('[data-evo-select="sigemPrev"]').selectOption("remote");
     assert.match(await page.locator('[data-evo-select="sigemPrev"]').inputValue(), /remote/);
     await page.evaluate(() => window.GrconSigemPwEvolutionUi.refresh());
-    assert.equal(await page.evaluate(() => window.__sharedLoads), 1, "remote version reuses prepared cache");
+    assert.equal(await page.evaluate(() => window.__sharedLoads), preparedSharedLoads, "remote version reuses prepared cache within the same analysis context");
     await page.locator("#spw-history-manage").click();
     assert.equal(await page.evaluate(() => window.__managerOpened), true);
     await page.evaluate(async () => {
@@ -78,7 +79,7 @@ fs.mkdirSync(outputDir, { recursive: true });
     await page.screenshot({ path: path.join(outputDir, "bases-recuperadas.png"), fullPage: true });
     assert.deepEqual(errors, []);
     const result = { passed: true, sigemSources: 4, pwSources: 2, realIndexedDb: true, realWorkers: true,
-      sharedBackend: "controlled fixture", noLdVisibility: true, failureAndRetry: true, selection: true, errors };
+      sharedBackend: "controlled fixture", ldIndependent: true, failureAndRetry: true, selection: true, errors };
     fs.writeFileSync(path.join(outputDir, "results.json"), JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result));
   } finally { await browser.close(); }

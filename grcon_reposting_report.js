@@ -18,7 +18,8 @@
   }
   async function buildWorkbook(batch) {
     if (!root.ExcelJS) throw new Error("ExcelJS indisponível para gerar o relatório do lote.");
-    const attempts = await root.GrconTeamsTrace?.forExport?.() || [];
+    const trace = await root.GrconTeamsTrace?.forReport?.().catch(() => ({attempts:[],status:"unavailable",lastSuccessfulSync:null})) || {attempts:[],status:"unavailable",lastSuccessfulSync:null};
+    const attempts = trace.attempts;
     const Trace = root.GrconTeamsTraceCore;
     const traceIndex = Trace?.index(attempts);
     const workspace = root.GrconCloud?.state?.membership?.workspace_id;
@@ -36,7 +37,7 @@
     const imageId = await logo(workbook);
     if (imageId !== null) sheet.addImage(imageId, { tl: { col: 7.05, row: 0.1 }, ext: { width: 82, height: 30 } });
     sheet.mergeCells("A2:H2");
-    sheet.getCell("A2").value = `Gerado em ${fmtDate(batch?.createdAt || Date.now())} · preparação de arquivos, sem confirmação automática de postagem no SIGEM`;
+    sheet.getCell("A2").value = `Gerado em ${fmtDate(batch?.createdAt || Date.now())} · preparação de arquivos, sem confirmação automática de postagem no SIGEM${trace.status !== 'fresh' ? ' · Teams não atualizado' : ''}`;
     sheet.getCell("A2").font = { name: "Arial", size: 9, italic: true, color: { argb: "FF506273" } };
     const summary = batch?.summary || {};
     sheet.mergeCells("A3:B3"); sheet.getCell("A3").value = `Documentos: ${summary.documents || 0}`;
@@ -53,7 +54,7 @@
       const files = result.selected?.length ? result.selected : [null];
       files.forEach((entry) => rows.push([
         result.target?.egrdtNumber || "—", result.target?.document || "—", result.target?.revision || "—", result.target?.conferenceLabel || result.target?.conferenceStatus || "—", result.target?.sigemStatus || "—", entry?.name || "—", entry?.relativePath || "—", stateLabel(result.state),
-        ...(Trace?.values(Trace.attemptsFor(result.target, traceIndex, workspace)[0], result.target, result.target?.conferenceLabel) || []),
+        ...(Trace?.values(Trace.attemptsFor(result.target, traceIndex, workspace)[0], result.target, result.target?.conferenceLabel, trace) || []),
       ]));
     });
     rows.forEach((values, rowIndex) => {

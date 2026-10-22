@@ -17,7 +17,11 @@ export async function traceRpc(env, workspace, actor, operation, input) {
   const response = await fetch(`${url}/rest/v1/rpc/grcon_teams_operation`, {method:'POST', headers,
     body:JSON.stringify({target_workspace:workspace,actor_id:actor,operation,input}),signal:AbortSignal.timeout(10000)});
   const result = await response.json().catch(()=>({}));
-  if (!response.ok) throw error(result.message || 'Falha na rastreabilidade do Teams.',response.status>=500?503:result.code === '42501'?403:400);
+  if (!response.ok) {
+    const failure=error(result.message || 'Falha na rastreabilidade do Teams.',response.status>=500?503:result.code === '42501'?403:400);
+    failure.code=String(result.code || 'TRACE_RPC_ERROR').replace(/[^A-Z0-9_-]/gi,'').slice(0,40);
+    throw failure;
+  }
   return result;
 }
 async function actor(request,env) {
@@ -117,9 +121,16 @@ export async function handleTraceRoute(request,env) {
     }
     if(['page','detail'].includes(route) && request.method==='GET') {
       const user=await actor(request,env),w=workspace(url.searchParams.get('workspace'));
+      // Disabled traceability must not call the RPC; session/workspace validation remains intact.
+      if(!enabled(env))return json({ok:true,enabled:false,data:route==='page'?[]:null});
       const input=route==='page'?{afterTime:url.searchParams.get('afterTime'),afterId:url.searchParams.get('afterId')}:{attemptId:url.searchParams.get('attemptId')};
       return json({ok:true,enabled:enabled(env),data:await traceRpc(env,w,user,route,input)});
     }
     return json({ok:false,message:'Método ou rota inválidos.'},405);
-  }catch(e){console.error('GRCON Teams trace',e.status || 500);return json({ok:false,message:e.status && e.status<500?e.message:'Rastreabilidade indisponível.'},e.status || 500);}
+  }catch(e){
+    const status=e.status || 500,code=String(e.code || 'TRACE_INTERNAL').replace(/[^A-Z0-9_-]/gi,'').slice(0,40);
+    // Operational diagnostics only; never log bearer tokens, payloads or private documents.
+    console.error('GRCON Teams trace', {route:url.pathname,method:request.method,status,code});
+    return json({ok:false,code,message:e.status && e.status<500?e.message:'Rastreabilidade indisponível.'},status);
+  }
 }

@@ -10,7 +10,9 @@ declare global {
  interface Window {
   GrconTeamsTrace?:{
    latest(record:unknown):TeamsAttempt|null;list(record:unknown):TeamsAttempt[];snapshot():TeamsAttempt[];
-   forExport():Promise<TeamsAttempt[]>;refresh():Promise<TeamsAttempt[]>;openHistory(id:string):Promise<void>;
+   forExport():Promise<TeamsAttempt[]>;refresh():Promise<TeamsAttempt[]>;
+   forReport():Promise<{attempts:TeamsAttempt[];status:'fresh'|'stale'|'unavailable'|'disabled';lastSuccessfulSync:string|null;errorCode:string|null}>;
+   openHistory(id:string):Promise<void>;
    sigemEvidence(records:unknown[]):Record<string,string>;
    consultationRows(rows:unknown[]):Promise<unknown[]>;
   };

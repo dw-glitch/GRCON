@@ -7,7 +7,7 @@
   const t = v => String(v ?? "").trim();
   const esc = v => t(v).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[ch]));
   const number = n => Number(n || 0).toLocaleString("pt-BR");
-  const state = {scope:"",version:"",prepared:[],duplicates:0,options:{search:"",status:"",stage:"",sheet:"",action:"",from:"",to:""},
+  const state = {scope:"",version:"",prepared:[],duplicates:0,options:{search:"",allocation:"",status:"",stage:"",sheet:"",action:"",from:"",to:""},
     aggregated:null,full:null,fullByAllocation:null,page:1,pageSize:65,detail:"",loading:false,busy:false};
   function shell(){
     const el=$("allocation-dashboard-root");if(!el||el.dataset.ready)return;
@@ -23,7 +23,8 @@
       <p id="ad-meta" class="allocation-dashboard-meta" aria-live="polite"></p>
       <p id="ad-alert" class="allocation-dashboard-alert" role="status" hidden></p>
       <div class="allocation-dashboard-filters" role="group" aria-label="Filtros de alocação">
-        <label>Documento / alocação<input id="ad-search" type="search" placeholder="Código, alocação ou workflow"></label>
+        <label>Número da alocação<input id="ad-allocation" type="search" inputmode="search" placeholder="Ex.: 0200 ou C1O-ALOC"></label>
+        <label>Documento / workflow<input id="ad-search" type="search" placeholder="Código do documento ou workflow"></label>
         <label>Status<select id="ad-status"></select></label>
         <label>Fiscal<select id="ad-stage"><option value="">Todas as etapas</option><option value="fiscal1">Fiscal 01</option><option value="fiscal2">Fiscal 02</option><option value="unclassified">Sem fiscal explícita</option></select></label>
         <label>Aba da LD<input id="ad-sheet" type="search" placeholder="Ex.: LD_004"></label>
@@ -42,12 +43,12 @@
         <div class="allocation-dashboard-pager"><span id="ad-page"></span><button id="ad-prev" class="secondary-button" type="button">Anterior</button><button id="ad-next" class="secondary-button" type="button">Próxima</button></div></section>
       </div></div>`;
     $("ad-status").innerHTML='<option value="">Todos os status</option>'+Object.entries(Model.STATUS).map(([c,v])=>`<option value="${c}">${esc(v)}</option>`).join("");
-    const keys=["search","status","stage","sheet","action","from","to"];
-    for(const key of keys)$("ad-"+key).addEventListener(key==="search"||key==="sheet"?"input":"change",ev=>{
+    const keys=["search","allocation","status","stage","sheet","action","from","to"];
+    for(const key of keys)$("ad-"+key).addEventListener(key==="search"||key==="allocation"||key==="sheet"?"input":"change",ev=>{
       state.options[key]=ev.target.value;state.page=1;state.detail="";scheduleRender();
     });
     $("ad-clear").addEventListener("click",()=>{
-      state.options={search:"",status:"",stage:"",sheet:"",action:"",from:"",to:""};
+      state.options={search:"",allocation:"",status:"",stage:"",sheet:"",action:"",from:"",to:""};
       for(const key of keys)$("ad-"+key).value="";
       state.page=1;state.detail="";render();
     });
@@ -76,7 +77,7 @@
     if(scope()===state.scope)return;
     snapshotGeneration++;renderGeneration++;if(filterTimer)clearTimeout(filterTimer);filterTimer=null;calculationPending=false;calculationCache=null;renderOperation?.abort();renderOperation=null;
     state.scope=scope();state.version="";state.prepared=[];state.duplicates=0;state.full=null;state.fullByAllocation=null;state.page=1;state.detail="";
-    state.options={search:"",status:"",stage:"",sheet:"",action:"",from:"",to:""};
+    state.options={search:"",allocation:"",status:"",stage:"",sheet:"",action:"",from:"",to:""};
     for(const key of Object.keys(state.options)){const el=$("ad-"+key);if(el)el.value="";}
   }
   let renderGeneration=0, calculationCache=null, renderOperation=null, snapshotGeneration=0, filterTimer=null, calculationPending=false;

@@ -9,8 +9,9 @@ const root=path.resolve(__dirname,'..');
   try{res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json'})[path.extname(file)]||'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-gpu'],...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
+ let browser;
  try{
+  browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-gpu'],...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{})});
   const page=await browser.newPage({viewport:{width:1366,height:768},serviceWorkers:'block',acceptDownloads:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://kvyrttccwzdhasplfxnr.supabase.co/**',r=>r.fulfill({status:401,contentType:'application/json',body:'{}'}));
@@ -57,6 +58,38 @@ const root=path.resolve(__dirname,'..');
   await page.waitForFunction(()=>window.GrconHistoryUi.state.filtered.length===0);
   await page.locator('#history-teams-responsible').fill('João');
   await page.waitForFunction(()=>window.GrconHistoryUi.state.filtered.length===1);
+  // Download the actual reports while the optional Teams service returns HTTP 500.
+  await page.route('**/api/egrdt-teams/page**',r=>r.fulfill({status:500,contentType:'application/json',body:JSON.stringify({ok:false,message:'Teams indisponível no cenário de regressão'})}));
+  await page.evaluate(()=>window.GrconTeamsTrace.refresh().catch(()=>{}));
+  const out=path.join(root,'artifacts/teams-export-resilience');fs.mkdirSync(out,{recursive:true});
+  const ExcelJS=require('../exceljs.min.js');
+  async function downloadReport(selector,name){
+   const pending=page.waitForEvent('download');await page.locator(selector).click();
+   const download=await pending,file=path.join(out,name+'.xlsx');await download.saveAs(file);
+   const book=new ExcelJS.Workbook();await book.xlsx.load(fs.readFileSync(file));
+   assert.ok(book.worksheets.length>0,name+' must be a valid Excel workbook');
+   const values=[];for(const sheet of book.worksheets)sheet.eachRow(row=>row.eachCell(cell=>values.push(String(cell.value||''))));
+   assert.ok(values.some(v=>v.includes('Dados do Teams não atualizados')),name+' must flag stale Teams evidence');
+   return book;
+  }
+  await downloadReport('#history-export-period','Historico_Teams_500');
+  await page.evaluate(async()=>{
+   for(const src of ['posting_conference_core.js','posting_conference_refinement.js','posting_conference_report.js','posting_conference_app.js'])await window.GRCONModuleLoader.ensure(src);
+   const core=window.GrconPostingConference,ui=window.GrconPostingConferenceUi;
+   const base=[{document:'DOC-001',documentIdentity:core.documentIdentity('DOC-001'),searchKeys:core.documentKeys('DOC-001'),revision:'0',status:'Em Análise',sourceRow:2}];
+   ui.state.result=core.reconcile(window.GrconHistory.read(),base,null,{now:new Date().toISOString(),baseReferenceDate:new Date().toISOString().slice(0,10)});
+   ui.state.base={meta:{fileName:'Consulta QA.xlsx',importedAt:new Date().toISOString()},records:base};
+   ui.state.ready=true;ui.render();document.getElementById('posting-conference-module').hidden=false;
+   document.getElementById('history-module').hidden=true;
+  });
+  await downloadReport('#pc-export','Conferencia_Teams_500');
+  await page.evaluate(async()=>{
+   for(const src of ['grcon_revision_control.js','grcon_revision_control_document.js','grcon_reposting_core.js','grcon_reposting_storage.js','grcon_reposting_search.js','grcon_reposting_report.js','grcon_reposting_app.js'])await window.GRCONModuleLoader.ensure(src);
+   const pending=window.GrconPostingConferenceUi.state.result.eventRows.filter(row=>row.document==='DOC-002');
+   if(!pending.length)throw Error('The browser fixture must contain a document pending in SIGEM');
+   await window.GrconRepostingUi.open(pending);
+  });
+  await downloadReport('#grcon-repost-report','Repostagem_Teams_500');
   await page.evaluate(()=>{
    window.GrconCloud.state.membership.workspace_id='00000000-0000-4000-8000-000000000099';
    window.dispatchEvent(new CustomEvent('grcon:contract-context-changed'));
@@ -65,6 +98,6 @@ const root=path.resolve(__dirname,'..');
   await page.waitForTimeout(100);
   assert.equal(await page.evaluate(()=>window.GrconTeamsTrace.latest({id:'test-record',workspaceId:'00000000-0000-4000-8000-000000000099'})),null);
   assert.deepEqual(errors,[]);
-  console.log('Chromium: receipt vs declaration, incremental partial update, pending revision, notification target and contract isolation PASS');
- }finally{await browser.close();await new Promise(r=>server.close(r));}
+  console.log('Chromium: receipt vs declaration, incremental partial update, pending revision, notification target, three valid Excel downloads under HTTP 500 and contract isolation PASS');
+ }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

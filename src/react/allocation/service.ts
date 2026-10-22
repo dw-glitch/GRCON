@@ -4,9 +4,9 @@ export type BaseKind='databook'|'eap'|'titles'|'norms'|'template'|'li'|'scon'|'a
 export type Data=Record<string,any>;
 export interface Row extends Data {document:string;revision:string;title:string;originalTitle:string;titleSource:string;ldLocated:boolean;plannedAllocated:boolean;existing:Array<{allocation:string;status:string}>;confidence:string;blockers:string[];statusLabel:string;decisionId:string;confirmed:boolean;output:{workflow:string;discipline:string;databook:string;levels:string[];observation?:string};standard:{refs:Data[];errors:Data[];warnings:Data[];compatible:boolean};versions:Record<string,string>;identity:{unit?:string;family:string;discipline:string;eap:string};ai:Data|null;selected:boolean;}
 export interface FileOutput {name:string;kind:string;base64:string;sha256:string;}
-export interface Snapshot {openRequest:null|{document:string;revision:string;id:number};bases:Data[];versions:Record<string,string>;rows:Row[];history:Data[];decisions:Data[];preview:null|{kind:BaseKind;rows:Data[];fileName:string;validation?:{invalid:Array<{line:number;reason:string}>;duplicates:number;units:string[]}};busy:boolean;progress:string;error:string;canManage:boolean;plan:Data|null;files:FileOutput[];sourceFiles:Record<string,string[]>;batchResults:Array<{document:string;ok:boolean;message:string}>;}
+export interface Snapshot {openRequest:null|{document:string;revision:string;id:number};bases:Data[];versions:Record<string,string>;rows:Row[];history:Data[];hiddenHistory:Data[];nextSequence:number|null;sequencePrefix:string;sequenceYear:number|null;decisions:Data[];preview:null|{kind:BaseKind;rows:Data[];fileName:string;validation?:{invalid:Array<{line:number;reason:string}>;duplicates:number;units:string[]}};busy:boolean;progress:string;error:string;canManage:boolean;plan:Data|null;files:FileOutput[];sourceFiles:Record<string,string[]>;batchResults:Array<{document:string;ok:boolean;message:string}>;}
 const globals=window as unknown as Record<string,any>;
-let state:Snapshot={openRequest:null,bases:[],versions:{},rows:[],history:[],decisions:[],preview:null,busy:false,progress:'',error:'',canManage:false,plan:null,files:[],sourceFiles:{},batchResults:[]};
+let state:Snapshot={openRequest:null,bases:[],versions:{},rows:[],history:[],hiddenHistory:[],nextSequence:null,sequencePrefix:'',sequenceYear:null,decisions:[],preview:null,busy:false,progress:'',error:'',canManage:false,plan:null,files:[],sourceFiles:{},batchResults:[]};
 const listeners=new Set<()=>void>();const emit=(patch:Partial<Snapshot>)=>{state={...state,...patch};listeners.forEach(fn=>fn());};
 const cloud=()=>globals.GrconCloud?.state;
 const scope=()=>JSON.stringify([cloud()?.session?.user?.id||'',cloud()?.membership?.workspace_id||'']);
@@ -14,7 +14,7 @@ let identity=scope(),epoch=0,worker:Worker|null=null,requestId=0,openId=0,active
 const pending=new Map<number,{resolve:(v:any)=>void;reject:(e:Error)=>void}>();
 const baseCache=new Map<string,Data[]>();let ldRecords:Data[]=[],localCentral:Data[]=[],localHistory:Data[]=[],confirmationRows:Data[]=[],contextBases:Record<string,Data[]>={};
 function current(ticket:number){if(ticket!==epoch||identity!==scope())throw Error('A conta ou o contrato mudou. Refaça a análise.');}
-function reset(){identity=scope();epoch++;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();baseCache.clear();ldRecords=[];localCentral=[];localHistory=[];confirmationRows=[];contextBases={};activeRequest=null;emit({openRequest:null,bases:[],versions:{},rows:[],history:[],decisions:[],preview:null,busy:false,progress:'',error:'',canManage:false,plan:null,files:[],sourceFiles:{},batchResults:[]});}
+function reset(){identity=scope();epoch++;worker?.terminate();worker=null;pending.forEach(p=>p.reject(Error('Contexto alterado.')));pending.clear();baseCache.clear();ldRecords=[];localCentral=[];localHistory=[];confirmationRows=[];contextBases={};activeRequest=null;emit({openRequest:null,bases:[],versions:{},rows:[],history:[],hiddenHistory:[],nextSequence:null,sequencePrefix:'',sequenceYear:null,decisions:[],preview:null,busy:false,progress:'',error:'',canManage:false,plan:null,files:[],sourceFiles:{},batchResults:[]});}
 export async function compute(operation:string,input:Data):Promise<any>{
  if(!worker){worker=new Worker('workers/allocation.worker.js');worker.onmessage=({data})=>{const p=pending.get(data.id);if(!p)return;pending.delete(data.id);if(data.error)p.reject(Error(data.error));else p.resolve(data.result);};worker.onerror=()=>{pending.forEach(p=>p.reject(Error('Motor de alocação indisponível. Reabra o módulo.')));pending.clear();worker?.terminate();worker=null;};}
  const id=++requestId;return new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});worker!.postMessage({id,operation,input});});
@@ -74,7 +74,9 @@ async function refreshInternal(){
  if(identity!==scope())reset();const ticket=epoch;const catalog=await rpc('catalog');current(ticket);
  const changed=JSON.stringify(catalog.versions)!==JSON.stringify(state.versions);if(changed){contextBases={};activeRequest=null;}
  emit({bases:catalog.bases,versions:catalog.versions,canManage:catalog.canManage,...(changed?{openRequest:null,rows:[],plan:null,files:[]}: {})});
-  const [history,decisions]=await Promise.all([rpc('history'),rpc('experiences')]);emit({history:history.runs,decisions:decisions.decisions});
+  const [history,decisions,sequence]=await Promise.all([rpc('history'),rpc('experiences'),rpc('sequence-preview')]);
+  current(ticket);emit({history:history.runs,decisions:decisions.decisions,nextSequence:sequence.nextSequence,
+   sequencePrefix:sequence.prefix||'',sequenceYear:sequence.year||null});
 }
 export const service={
  subscribe(fn:()=>void){listeners.add(fn);return ()=>{listeners.delete(fn);};},snapshot:()=>state,
@@ -163,14 +165,16 @@ export const service={
  select(index:number,value:boolean){if(state.busy)return;const rows=state.rows.slice();rows[index]={...rows[index],selected:value};activeRequest=null;emit({rows,plan:null,files:[]});},
  groupingChanged(){activeRequest=null;emit({plan:null,files:[]});},
  async plan(mode:string){const plan=await compute('plan',{results:state.rows.filter(x=>x.selected),mode});emit({plan});return plan;},
- async generate(mode:string){return task('Gerando pacote de alocação',async()=>{
+ async generate(mode:string,startSequence?:number){return task('Gerando pacote de alocação',async()=>{
   const ticket=epoch,selected=state.rows.filter(x=>x.selected);if(!selected.length)throw Error('Selecione ao menos um documento.');
   if(state.files.length&&state.plan?.mode===mode)return;
   const plan=await this.plan(mode);if(!plan.valid)throw Error(plan.errors?.join(' ')||'Agrupamento inválido.');
+  if(startSequence!==undefined&&(!Number.isInteger(startSequence)||startSequence<1||startSequence+plan.groups.length-1>9999))
+   throw Error('Escolha um número inicial de 0001 a 9999 compatível com a quantidade de alocações.');
   activeRequest=activeRequest||crypto.randomUUID();
   const prefix=contextBases.config?.[0]?.prefix,year=new Date().getUTCFullYear();
   const observedSequence=Math.max(0,...[...localCentral,...localHistory].map(r=>{const value=String(r.allocation||'');const match=value.startsWith(prefix+'-')?value.match(/-(\d{4})-(\d{4})$/):null;return match&&Number(match[2])===year?Number(match[1]):0;}));
-  const generated=await api('generate',{requestId:activeRequest,versions:state.versions,observedSequence,automatic:true,groups:plan.groups.map((g:Data)=>({documents:g.results.map((r:Row)=>({document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow||'',databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,observation:r.output.observation||'',warnings:r.blockers,adjusted:r.adjusted===true}))}))});
+  const generated=await api('generate',{requestId:activeRequest,versions:state.versions,observedSequence,...(startSequence===undefined?{}:{startSequence}),automatic:true,groups:plan.groups.map((g:Data)=>({documents:g.results.map((r:Row)=>({document:r.document,revision:r.revision,title:r.title,discipline:r.output.discipline||r.identity.discipline,workflow:r.output.workflow||'',databook:r.output.databook,levels:r.output.levels,eap:r.identity.eap,observation:r.output.observation||'',warnings:r.blockers,adjusted:r.adjusted===true}))}))});
   const files:FileOutput[]=[];
   for(let i=0;i<plan.groups.length;i++){
    current(ticket);const run=generated.runs[i];let groupFiles=run.files;
@@ -179,7 +183,7 @@ export const service={
     groupFiles=await compute('export',{results,template:contextBases.template?.[0],meta:{allocationCode:run.allocation_code,allocationDate:new Date().toISOString().slice(0,10),status:'PENDENTE ENVIO DE LD'}});current(ticket);
     await rpc('run-files',{id:run.id,files:groupFiles});
    }files.push(...groupFiles);
-  }emit({files});const history=await rpc('history');emit({history:history.runs});
+  }emit({files});await refreshInternal();
  });},
  async download(kind='zip',files=state.files){if(!files.length)throw Error('Gere os arquivos primeiro.');
   if(kind==='zip'){const bytes=await compute('zip',{files});save(new Blob([bytes]),'Pacote_Alocacao_GRCON.zip');}
@@ -187,6 +191,9 @@ export const service={
  },
  historyDownload:(run:Data)=>task('Preparando arquivos preservados',async()=>{const saved=await rpc('run-detail',{id:run.id});await service.download('zip',saved.files);}),
  searchHistory:(q:string,more=false)=>task('Consultando histórico',async()=>{const page=await rpc('history',{q,after:more?state.history.length:0});emit({history:more?[...state.history,...page.runs]:page.runs});}),
+ hiddenHistory:()=>task('Consultando exclusões',async()=>{const page=await rpc('hidden-history');emit({hiddenHistory:page.runs});}),
+ hideRun:(run:Data)=>task('Excluindo do histórico',async()=>{await rpc('hide-run',{id:run.id});await refreshInternal();}),
+ restoreRun:(run:Data)=>task('Restaurando alocação',async()=>{await rpc('restore-run',{id:run.id});await refreshInternal();const page=await rpc('hidden-history');emit({hiddenHistory:page.runs});}),
  moreExperiences:()=>task('Consultando experiências',async()=>{const page=await rpc('experiences',{after:state.decisions.length});emit({decisions:[...state.decisions,...page.decisions]});}),
  status:(run:Data,status:string,justification:string)=>task('Registrando situação real da alocação',async()=>{await rpc('run-status',{id:run.id,status,justification});await refreshInternal();}),
  invalidate:(decision:Data)=>task('Invalidando experiência',async()=>{await rpc('invalidate',{id:decision.id});await refreshInternal();}),
@@ -196,3 +203,8 @@ export const service={
 function save(blob:Blob,name:string){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}
 for(const event of ['grcon:contract-context-changed','grcon:cloud-signed-out'])window.addEventListener(event,reset);
 window.addEventListener('grcon:cloud-ready',()=>{if(identity!==scope())reset();});
+
+// A publicação da Central altera o status oficial, sem modificar a geração.
+window.addEventListener('grcon:allocation-registry-updated',()=>{
+ if(!state.busy&&cloud()?.online&&cloud()?.membership)void rpc('history').then(data=>emit({history:data.runs})).catch(()=>{});
+});
