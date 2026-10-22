@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const Dashboard = require("../sigem_pw_dashboard_core.js");
 const Revision = require("../sigem_pw_revision_core.js");
+const Evolution = require("../sigem_pw_evolution_core.js");
 
 const etSigem = "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-123456";
 const etPw = "C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-123456";
@@ -92,5 +93,27 @@ assert.equal(historical.situation, Revision.SITUATIONS.REVIEW,
   "Não afirmar que a revisão prevista desconhecida é a revisão A");
 assert.equal(historical.lastEmittedPwRevision, "0");
 assert.match(historical.reason, /cadastrado|cadastro/i);
+
+
+// A conciliação atual da Evolução, em "todas as revisões", deve enxergar
+// documentos previstos sem revisão, sem inventar qual revisão foi cadastrada.
+const evolutionMatch = Evolution.currentRelations(
+  [{ document: etSigem, revision: "0" }],
+  [{ document: etPw, revision: "", emissionKind: "planned", emissionState: "not-emitted", emitted: false }],
+);
+assert.equal(evolutionMatch.bothNotEmitted.length, 1);
+assert.equal(evolutionMatch.onlySigem.length, 0);
+assert.equal(evolutionMatch.onlyPw.length, 0);
+assert.equal(evolutionMatch.both[0].matchMode, "document-fallback");
+
+const evolutionHistorical = Evolution.currentRelations(
+  [{ document: etSigem, revision: "0" }, { document: etSigem, revision: "A" }],
+  [{ document: etPw, revision: "0", emissionKind: "current", emissionState: "emitted", emitted: true },
+   { document: etPw, revision: "", emissionKind: "planned", emissionState: "not-emitted", emitted: false }],
+);
+assert.equal(evolutionHistorical.bothEmitted.length, 1);
+assert.equal(evolutionHistorical.bothNotEmitted.length, 1);
+assert.equal(evolutionHistorical.onlyPw.length, 0);
+assert.equal(evolutionHistorical.onlySigem.length, 0);
 
 console.log("SIGEM × PW: previsto sem revisão, ET com equivalência estrutural e N-1710 preservado — OK");
