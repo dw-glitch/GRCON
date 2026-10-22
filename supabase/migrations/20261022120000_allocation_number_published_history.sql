@@ -1,9 +1,8 @@
--- Histórico oficial: somente alocações reconhecidas na Central de Alocação publicada.
+-- GRCON: numeração configurável e histórico baseado na Central publicada.
 begin;
 alter table private.grcon_allocation_runs add column if not exists hidden_at timestamptz;
 alter table private.grcon_allocation_runs add column if not exists hidden_by uuid;
-create unique index if not exists grcon_allocation_runs_contract_year_sequence
-  on private.grcon_allocation_runs(contract_id,year,sequence);
+create unique index if not exists grcon_allocation_runs_contract_year_sequence on private.grcon_allocation_runs(contract_id,year,sequence);
 create or replace function private.grcon_allocation(target_workspace uuid,operation text,input jsonb default '{}',actor_id uuid default null) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare u uuid:=auth.uid();c uuid;r text;is_server boolean:=coalesce(auth.jwt()->>'role','')='service_role';
@@ -220,11 +219,27 @@ begin
       where snap.workspace_id=target_workspace and snap.status in ('active','archived')
         and upper(btrim(ar.payload->>'allocation'))=upper(prefix||'-'||lpad(seq::text,4,'0')||'-'||year_no))
     then raise exception 'Número de alocação já utilizado. Escolha outro.' using errcode='23505'; end if;
+   if exists(select 1 from private.grcon_allocation_runs existing
+      where existing.contract_id=c and existing.year=year_no and existing.sequence=seq)
+    or exists(select 1 from private.grcon_allocation_registry_rows ar
+      join private.grcon_allocation_registry_snapshots snap on snap.id=ar.snapshot_id
+      where snap.workspace_id=target_workspace and snap.status in ('active','archived')
+        and upper(btrim(ar.payload->>'allocation'))=upper(prefix||'-'||lpad(seq::text,4,'0')||'-'||year_no))
+    then raise exception 'Número de alocação já utilizado. Escolha outro.' using errcode='23505'; end if;
    insert into private.grcon_allocation_runs(workspace_id,contract_id,request_id,allocation_code,year,sequence,base_versions,documents,justification,created_by) values(target_workspace,c,(input->>'requestId')::uuid,prefix||'-'||lpad(seq::text,4,'0')||'-'||year_no,year_no,seq,versions,items,coalesce(input->>'justification',''),u) returning * into run;
    result:=result||jsonb_build_array(to_jsonb(run));
   end loop;
   insert into private.grcon_allocation_events(workspace_id,contract_id,actor_id,action,details) values(target_workspace,c,u,'generate',jsonb_build_object('requestId',input->>'requestId','count',jsonb_array_length(result)));
   return jsonb_build_object('runs',result);
+ elsif operation='hide-run' then
+  update private.grcon_allocation_runs set hidden_at=now(),hidden_by=u
+   where id=(input->>'id')::uuid and contract_id=c and hidden_at is null returning id into new_id;
+  if new_id is null then raise exception 'Alocação indisponível ou já excluída.' using errcode='22023'; end if;
+ elsif operation='restore-run' then
+  if r not in ('owner','admin') then raise exception 'Restauração reservada aos gestores.' using errcode='42501'; end if;
+  update private.grcon_allocation_runs set hidden_at=null,hidden_by=null
+   where id=(input->>'id')::uuid and contract_id=c and hidden_at is not null returning id into new_id;
+  if new_id is null then raise exception 'Alocação indisponível ou não excluída.' using errcode='22023'; end if;
  elsif operation='hide-run' then
   update private.grcon_allocation_runs set hidden_at=now(),hidden_by=u
    where id=(input->>'id')::uuid and contract_id=c and hidden_at is null returning id into new_id;
@@ -295,7 +310,7 @@ end $$;
   select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at desc),'[]') into items from (select id,document,revision,family,discipline,eap,title,suggested_path,confirmed_path,levels,base_versions,evidence,changes,origin,confidence,status,trusted,justification,created_by,created_at,(base_versions=versions) as current_sources from private.grcon_allocation_decisions where contract_id=c and (coalesce(input->>'family','')='' or family=input->>'family') and (coalesce(input->>'discipline','')='' or discipline=input->>'discipline') and (coalesce(input->>'eap','')='' or eap=input->>'eap') and (not coalesce((input->>'trustedOnly')::boolean,false) or (trusted and status<>'invalidated' and base_versions=versions)) order by created_at desc limit 100 offset least(10000,greatest(0,coalesce((input->>'after')::integer,0)))) q;
   return jsonb_build_object('decisions',items,'versions',versions);
  end if;
- if operation in ('decision','generate','run-status','run-files') and r not in ('owner','admin','operator') then
+ if operation in ('decision','generate','run-status','run-files','hide-run','restore-run') and r not in ('owner','admin','operator') then
   raise exception 'Operação reservada aos perfis operacionais.' using errcode='42501';
  end if;
  if operation in ('base-begin','base-chunk','base-publish','base-restore') then
@@ -369,8 +384,8 @@ end $$;
    seq:=greatest(seq,num);
   end if;
   select greatest(seq,coalesce(max((regexp_match(ar.payload->>'allocation','([0-9]{4})-'||year_no||'$'))[1]::integer),0)) into seq from private.grcon_allocation_registry_rows ar join private.grcon_allocation_registry_snapshots s on s.id=ar.snapshot_id where s.workspace_id=target_workspace and s.status in ('active','archived') and ar.payload->>'allocation' like prefix||'-%';
-  result:='[]';
-  for item in select value from jsonb_array_elements(input->'groups') loop
+  if input ? 'startSequence' then
+    if coalesce(input->>'startSequence','') !~ '^[0-9]{1,4}
    items:='[]';
    if jsonb_typeof(item->'documents') is distinct from 'array' or jsonb_array_length(item->'documents') not between 1 and 2000 then raise exception 'Documentos inválidos.'; end if;
    for doc in select value from jsonb_array_elements(item->'documents') loop
@@ -430,94 +445,27 @@ end $$;
     end if;
    end loop;
    seq:=seq+1;if seq>9999 then raise exception 'Sequência esgotada.'; end if;
+   if exists(select 1 from private.grcon_allocation_runs existing
+      where existing.contract_id=c and existing.year=year_no and existing.sequence=seq)
+    or exists(select 1 from private.grcon_allocation_registry_rows ar
+      join private.grcon_allocation_registry_snapshots snap on snap.id=ar.snapshot_id
+      where snap.workspace_id=target_workspace and snap.status in ('active','archived')
+        and upper(btrim(ar.payload->>'allocation'))=upper(prefix||'-'||lpad(seq::text,4,'0')||'-'||year_no))
+    then raise exception 'Número de alocação já utilizado. Escolha outro.' using errcode='23505'; end if;
    insert into private.grcon_allocation_runs(workspace_id,contract_id,request_id,allocation_code,year,sequence,base_versions,documents,justification,created_by) values(target_workspace,c,(input->>'requestId')::uuid,prefix||'-'||lpad(seq::text,4,'0')||'-'||year_no,year_no,seq,versions,items,coalesce(input->>'justification',''),u) returning * into run;
    result:=result||jsonb_build_array(to_jsonb(run));
   end loop;
   insert into private.grcon_allocation_events(workspace_id,contract_id,actor_id,action,details) values(target_workspace,c,u,'generate',jsonb_build_object('requestId',input->>'requestId','count',jsonb_array_length(result)));
   return jsonb_build_object('runs',result);
- elsif operation='run-status' then
-  if input->>'status' not in ('submitted','accepted','rejected','cancelled') or length(btrim(coalesce(input->>'justification','')))<5 then raise exception 'Situação ou justificativa inválida.'; end if;
-  update private.grcon_allocation_runs set status=input->>'status',justification=input->>'justification' where id=(input->>'id')::uuid and contract_id=c returning id into new_id;
-  if new_id is null then raise exception 'Alocação indisponível.'; end if;
- elsif operation='run-files' then
-  if jsonb_typeof(input->'files') is distinct from 'array' or octet_length((input->'files')::text)>3000000 then raise exception 'Arquivos inválidos.'; end if;
-  update private.grcon_allocation_runs set files=input->'files' where id=(input->>'id')::uuid and contract_id=c and created_by=u and files='[]' returning id into new_id;
-  if new_id is null then raise exception 'Registro indisponível ou arquivos já preservados.'; end if;
- else raise exception 'Operação inválida.'; end if;
- insert into private.grcon_allocation_events(workspace_id,contract_id,actor_id,action,entity_id,details) values(target_workspace,c,u,operation,new_id,jsonb_build_object('versions',versions));
- return jsonb_build_object('ok',true,'id',new_id);
-end $$;
- then raise exception 'Número inicial inválido.' using errcode='22023'; end if;
-    num:=(input->>'startSequence')::integer;
-    if num not between 1 and 9999 or num+jsonb_array_length(input->'groups')-1>9999 then raise exception 'Numeração anual excedida.' using errcode='22023'; end if;
-    seq:=num-1;
-  end if;
-  result:='[]';
-  for item in select value from jsonb_array_elements(input->'groups') loop
-   items:='[]';
-   if jsonb_typeof(item->'documents') is distinct from 'array' or jsonb_array_length(item->'documents') not between 1 and 2000 then raise exception 'Documentos inválidos.'; end if;
-   for doc in select value from jsonb_array_elements(item->'documents') loop
-    if automatic then
-     if jsonb_typeof(doc) is distinct from 'object'
-       or length(btrim(coalesce(doc->>'document',''))) not between 1 and 255
-       or length(coalesce(doc->>'revision','0'))>40
-       or length(coalesce(doc->>'title',''))>2000
-       or length(coalesce(doc->>'discipline',''))>180
-       or length(coalesce(doc->>'workflow',''))>180
-       or length(coalesce(doc->>'eap',''))>80
-       or length(coalesce(doc->>'observation',''))>12000
-       or jsonb_typeof(doc->'levels') is distinct from 'array'
-       or jsonb_array_length(doc->'levels')<>10
-       or jsonb_typeof(doc->'warnings') is distinct from 'array'
-       or jsonb_array_length(doc->'warnings')>100
-       or exists(select 1 from jsonb_array_elements(doc->'levels') x where jsonb_typeof(x)<>'string' or length(x #>> '{}')>500)
-       or exists(select 1 from jsonb_array_elements(doc->'warnings') x where jsonb_typeof(x)<>'string' or length(x #>> '{}')>2000)
-     then raise exception 'Dados de alocação inválidos.' using errcode='22023'; end if;
-     path:=btrim(coalesce(doc->>'databook',''));
-     if length(path)>2048 then raise exception 'Caminho inválido.'; end if;
-     if path<>'' then
-      select br.payload into catalog_entry from private.grcon_allocation_base_rows br
-       where br.base_id=(versions->>'databook')::uuid and br.payload->>'databook'=path limit 1;
-      if not found then raise exception 'Caminho ausente na base ativa.'; end if;
-      if jsonb_typeof(v->'units')='array' and jsonb_array_length(v->'units')>0 then
-       if not exists(select 1 from jsonb_array_elements_text(v->'units') x where x=btrim(split_part(path,'|',1))) then raise exception 'Unidade fora da configuração do contrato.'; end if;
-      elsif coalesce(v->>'unit','')<>'' and v->>'unit'<>btrim(split_part(path,'|',1)) then
-       raise exception 'Unidade fora da configuração do contrato.';
-      end if;
-      doc_unit:=case when upper(split_part(doc->>'document','_',2))='RNEST' then upper(split_part(doc->>'document','_',3)) else '' end;
-      if doc_unit='U39' then doc_unit:='U39S'; end if;
-      path_unit:=upper(coalesce(catalog_entry->>'documentUnit',''));
-      if path_unit='' then
-       if path ~* '\mU-?32\M' then path_unit:='U32'; end if;
-       if path ~* '\mU-?39S?\M' then
-        if path_unit='U32' then raise exception 'Caminho com unidades conflitantes.'; end if;
-        path_unit:='U39S';
-       end if;
-      end if;
-      if doc_unit<>'' and path_unit<>'' and doc_unit<>path_unit then raise exception 'Unidade do caminho diverge do código do documento.'; end if;
-      if v->>'unitRouting'='document-U32-U39S' and path ~* '\m(SE-XX00|U-X{2,3})\M' then raise exception 'Caminho com unidade genérica.'; end if;
-     end if;
-     -- Copy only operational fields. Client flags cannot manufacture trusted feedback.
-     items:=items||jsonb_build_array(jsonb_build_object(
-      'document',btrim(doc->>'document'),'revision',coalesce(doc->>'revision','0'),
-      'title',coalesce(doc->>'title',''),'discipline',coalesce(doc->>'discipline',''),
-      'workflow',coalesce(doc->>'workflow',''),'eap',coalesce(doc->>'eap',''),
-      'databook',path,'levels',doc->'levels','observation',coalesce(doc->>'observation',''),
-      'warnings',doc->'warnings','adjusted',coalesce(doc->'adjusted'='true'::jsonb,false),
-      'generationMode','automatic','reviewed',false,'trusted',false));
-    else
-    select * into d from private.grcon_allocation_decisions where id=(doc->>'decisionId')::uuid and contract_id=c and base_versions=versions and status<>'invalidated';
-    if not found or not d.server_checked or d.document is distinct from doc->>'document' or d.revision is distinct from doc->>'revision' then raise exception 'Confirme cada documento com as bases atuais antes de gerar.'; end if;
-    if exists(select 1 from private.grcon_allocation_runs rr,jsonb_array_elements(rr.documents) dd where rr.contract_id=c and rr.status<>'cancelled' and dd->>'document'=d.document and dd->>'revision'=d.revision) and length(btrim(coalesce(input->>'justification','')))<10 then raise exception 'Revisão já possui alocação. Informe justificativa operacional.'; end if;
-    items:=items||jsonb_build_array(jsonb_build_object('document',d.document,'revision',d.revision,'decisionId',d.id,'title',d.title,'databook',d.confirmed_path,'levels',d.levels,'evidence',d.evidence,'discipline',d.discipline,'eap',d.eap));
-    end if;
-   end loop;
-   seq:=seq+1;if seq>9999 then raise exception 'Sequência esgotada.'; end if;
-   insert into private.grcon_allocation_runs(workspace_id,contract_id,request_id,allocation_code,year,sequence,base_versions,documents,justification,created_by) values(target_workspace,c,(input->>'requestId')::uuid,prefix||'-'||lpad(seq::text,4,'0')||'-'||year_no,year_no,seq,versions,items,coalesce(input->>'justification',''),u) returning * into run;
-   result:=result||jsonb_build_array(to_jsonb(run));
-  end loop;
-  insert into private.grcon_allocation_events(workspace_id,contract_id,actor_id,action,details) values(target_workspace,c,u,'generate',jsonb_build_object('requestId',input->>'requestId','count',jsonb_array_length(result)));
-  return jsonb_build_object('runs',result);
+ elsif operation='hide-run' then
+  update private.grcon_allocation_runs set hidden_at=now(),hidden_by=u
+   where id=(input->>'id')::uuid and contract_id=c and hidden_at is null returning id into new_id;
+  if new_id is null then raise exception 'Alocação indisponível ou já excluída.' using errcode='22023'; end if;
+ elsif operation='restore-run' then
+  if r not in ('owner','admin') then raise exception 'Restauração reservada aos gestores.' using errcode='42501'; end if;
+  update private.grcon_allocation_runs set hidden_at=null,hidden_by=null
+   where id=(input->>'id')::uuid and contract_id=c and hidden_at is not null returning id into new_id;
+  if new_id is null then raise exception 'Alocação indisponível ou não excluída.' using errcode='22023'; end if;
  elsif operation='run-status' then
   if input->>'status' not in ('submitted','accepted','rejected','cancelled') or length(btrim(coalesce(input->>'justification','')))<5 then raise exception 'Situação ou justificativa inválida.'; end if;
   update private.grcon_allocation_runs set status=input->>'status',justification=input->>'justification' where id=(input->>'id')::uuid and contract_id=c returning id into new_id;
