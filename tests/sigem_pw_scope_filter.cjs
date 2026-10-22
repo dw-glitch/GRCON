@@ -48,14 +48,14 @@ const Scope = require("../sigem_pw_scope_fix.js");
     ],
   };
   const sanitized = Scope.sanitizePwBase(parsed, ld);
-  assert.strictEqual(sanitized.meta.recordCount, 3, "somente documentos validados pela LD entram na base persistível");
-  assert.strictEqual(sanitized.meta.validRevisionRecordCount, 3, "revisões 0 e A contam separadamente");
-  assert.strictEqual(sanitized.meta.uniqueDocumentCount, 2);
-  assert.strictEqual(sanitized.meta.emittedDocumentCount, 2);
-  assert.strictEqual(sanitized.meta.scopeExcludedCount, 3, "quantidade excluída fica disponível apenas para controle técnico");
+  assert.strictEqual(sanitized.meta.recordCount, 6, "todos os códigos PW entram, inclusive sem classificação ou LD");
+  assert.strictEqual(sanitized.meta.validRevisionRecordCount, 6, "revisões 0 e A contam separadamente");
+  assert.strictEqual(sanitized.meta.uniqueDocumentCount, 5);
+  assert.strictEqual(sanitized.meta.emittedDocumentCount, 5);
+  assert.strictEqual(sanitized.meta.scopeExcludedCount, 0, "quantidade excluída fica disponível apenas para controle técnico");
   assert.strictEqual(sanitized.meta.invalidCount, 0, "documento fora da LD não deve ser apresentado como inválido");
-  assert.deepStrictEqual(sanitized.records.filter((record) => record.document.startsWith("RL-")).map((record) => record.revision), ["0", "A"]);
-  assert.strictEqual(sanitized.records.every((record) => record.documentClass === "N-1710"), true);
+  assert.deepStrictEqual(sanitized.records.filter((record) => record.document === "RL-5290.00-22313-ABC-C1O-001").map((record) => record.revision), ["0", "A"]);
+  assert.strictEqual(sanitized.records.filter((record) => record.documentClass === "N-1710").length, 3);
   assert.strictEqual(Object.hasOwn(sanitized, "discardedRecords"), false);
 
   const stalePw = [
@@ -67,9 +67,9 @@ const Scope = require("../sigem_pw_scope_fix.js");
     { document: "DE-5290.00-99999-856-C1O-003", revision: "0", status: "Sem Comentários" },
   ];
   const model = Scope.createModel(sigem, stalePw);
-  assert.strictEqual(model.pwAll.size, 1, "base antiga contaminada deve ser saneada ao carregar");
-  assert.strictEqual(model.sigemAll.size, 1, "comparação usa o mesmo universo documental");
-  assert.strictEqual(model.scopeAudit.excludedCount, 1);
+  assert.strictEqual(model.pwAll.size, 2, "classes não reconhecidas continuam cadastradas");
+  assert.strictEqual(model.sigemAll.size, 2, "comparação usa o mesmo universo documental");
+  assert.equal(Scope.scopeAudit(stalePw).excludedCount, 0);
 
   console.log("sigem_pw_scope_filter: OK");
 })();

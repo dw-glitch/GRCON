@@ -23,21 +23,22 @@
   const PW_BASE_KEY = "sigem-pw-current-pw-v3";
   const LD_BASE_KEY = "sigem-pw-current-quality-ld-v1";
   const HISTORY_KEY = "sigem-pw-base-history-v3";
-  const PW_BASE_VERSION = 5;
+  const PW_BASE_VERSION = 6;
   const HISTORY_VERSION = 3;
-  const PW_SCOPE_VERSION = 5;
+  const PW_SCOPE_VERSION = 6;
   const UNCLASSIFIED = "Não classificado";
-  const SCOPE_CLASSES = Object.freeze(["ET", "N-1710"]);
+  const SCOPE_CLASSES = Object.freeze(["ET", "N-1710", UNCLASSIFIED]);
   const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const EMISSION_FLAGS = Object.freeze({ CURRENT: "SIM", HISTORICAL: "NAO", PLANNED: "PREVISTO" });
   const COMPARISON_SITUATIONS = Object.freeze({
     SIGEM_ONLY: "Postado no SIGEM, ainda não cadastrado no PW",
+    BOTH_OTHER_REVISION: "Cadastrado no PW; revisão SIGEM sem correspondência confirmada",
     BOTH_NOT_EMITTED: "Postado no SIGEM e cadastrado no PW, ainda não emitido",
     BOTH_EMITTED: "Postado no SIGEM e emitido no PW",
-    PW_ONLY_NOT_EMITTED: "Cadastrado no PW, ainda não emitido e não localizado no SIGEM",
-    PW_ONLY_EMITTED: "Emitido no PW, mas não localizado no SIGEM",
+    PW_ONLY_NOT_EMITTED: "Revisão cadastrada no PW sem correspondência no SIGEM; não emitida",
+    PW_ONLY_EMITTED: "Revisão emitida no PW sem correspondência no SIGEM",
   });
-  const REQUIRED_PW_FIELDS = Object.freeze(["document", "revision", "documentType", "state", "lastEmission"]);
+  const REQUIRED_PW_FIELDS = Object.freeze(["document"]);
   const REVISION_SCOPES = Object.freeze({ REVISION0: "revision0", ALL: "all" });
 
   const PW_HEADER_ALIASES = Object.freeze({
@@ -167,14 +168,11 @@
     if (scope === REVISION_SCOPES.ALL) return map;
     const scoped = new Map([...map].filter(([, entry]) => entry && entry.revisionKey === "0"));
     if (!(sigemRevision0 instanceof Map)) return scoped;
-    // PW "Previsto" sem revisão comprova cadastro do código, NÃO emissão nem
-    // revisão zero. Deve aparecer também no indicador PW da visão inicial,
+    // Qualquer linha PW sem revisão comprova cadastro do código, NÃO revisão zero. Deve aparecer também no indicador PW da visão inicial,
     // mesmo quando não há registro da revisão 0 na Consulta Geral.
     const explicitPwCodes = new Set([...scoped.values()].map((entry) => entry.documentKey));
     map.forEach((entry, key) => {
-      if (entry && entry.revisionKey === "__SEM_REVISAO__" && !entry.emitted
-        && entry.rows.some((row) => norm(row.lastEmission) === EMISSION_FLAGS.PLANNED)
-        && !explicitPwCodes.has(entry.documentKey)) scoped.set(key, entry);
+      if (entry && entry.revisionKey === "__SEM_REVISAO__" && !explicitPwCodes.has(entry.documentKey)) scoped.set(key, entry);
     });
     return scoped;
   }
@@ -350,6 +348,7 @@
           const header = mappingProfile.columns[field];
           if (!header) continue;
           const matches = headers.map((value,index)=>normalizeHeader(value)===normalizeHeader(header)?index:-1).filter(index=>index>=0);
+          if (matches.length===0 && field!=='document') { columns[field]=-1; continue; }
           if (matches.length!==1) throw new Error('Perfil PW: coluna ausente ou ambígua para '+field+'. A base vigente foi preservada.');
           columns[field]=matches[0];
         }
@@ -376,7 +375,7 @@
       const lastEmission = rowValue(row, columns.lastEmission);
       const emissionFlag = norm(lastEmission);
       if (emissionFlag && !Object.values(EMISSION_FLAGS).includes(emissionFlag)) unknownEmissionCount += 1;
-      const duplicateKey = `${identity.key}::${norm(revisionComplete || revision)}`;
+      const duplicateKey = entryKey(identity.key, revisionComplete || revision);
       if (revisionSeen.has(duplicateKey)) duplicateRevisionCount += 1;
       else revisionSeen.add(duplicateKey);
 
@@ -522,7 +521,7 @@
     return (records || []).map((record) => {
       const identity = documentIdentity(record && record.document);
       const rawRevision = record && (record.revisionComplete || record.revision);
-      const scopedClass = scopeClassFromIdentity(identity, ldUniverse, enforceLd);
+      const scopedClass = scopeClassFromIdentity(identity, ldUniverse, enforceLd) || UNCLASSIFIED;
       const emissionFlag = kind === "pw" ? norm(record && record.lastEmission) : "";
       return {
         ...record,
@@ -574,7 +573,7 @@
         ...previousMeta,
         version: Math.max(Number(previousMeta.version) || 0, PW_BASE_VERSION),
         scopeVersion: PW_SCOPE_VERSION,
-        scopeRule: "ET ou N-1710 válidos pela estrutura; existência PW independe da LD",
+        scopeRule: "Todo código presente no PW comprova cadastro, independentemente de classe, status, emissão, revisão ou LD",
         scopeLdSnapshotId: text(ldMeta && ldMeta.snapshotId) || (ldMeta ? snapshotId("ld", ldMeta) : ""),
         sourceRecordCount: Number(previousMeta.sourceRecordCount) || sourceRecords.length,
         recordCount: audit.records.length,
@@ -717,9 +716,7 @@
   }
 
   function createModel(sigemRecords, pwRecords, ldRecords) {
-    // Chamadas novas sempre informam a LD (mesmo vazia) e, portanto, exigem
-    // pertencimento para N-1710. O modo de dois argumentos permanece somente
-    // como ponte para relatórios legados já carregados pelo GRCON.
+    // Cadastro é presença documental. A LD e os estados não excluem linhas PW.
     const enforceLd = arguments.length >= 3;
     const ldUniverse = buildLdUniverse(ldRecords || []);
     const normalizedSigem = normalizeRecords(sigemRecords || [], "sigem", ldUniverse, enforceLd);
@@ -742,16 +739,20 @@
   function comparisonRow(key, sigemEntry, pwEntry, options) {
     const settings = options || {};
     const reference = sigemEntry || pwEntry;
+    const pwEvidence = pwEntry || settings.pwDocumentEntry || null;
     const sigemStatus = currentStatus(sigemEntry, "sigem");
     const sigemCurrent = sigemEntry && sigemEntry.current;
     const sigemDate = text(sigemCurrent && (sigemCurrent.modifiedAt || sigemCurrent.includedAt || sigemCurrent.stateChangedAt || sigemCurrent.createdAt));
-    const pwLastEmission = text(pwEntry && pwEntry.current && pwEntry.current.lastEmission);
-    const pwStatusRaw = currentStatus(pwEntry, "pw");
+    const pwLastEmission = text(pwEvidence && pwEvidence.current && pwEvidence.current.lastEmission);
+    const pwStatusRaw = currentStatus(pwEvidence, "pw");
     const pwStatus = pwStatusRaw || (norm(pwLastEmission) === EMISSION_FLAGS.PLANNED ? "Previsto (sem estado no PW)" : "");
-    const pwEmission = pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : "Não cadastrado";
+    const pwEmission = pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : pwEvidence ? "Revisão não confirmada" : "Não cadastrado";
     let situationKey = "bothEmitted";
     let situation = COMPARISON_SITUATIONS.BOTH_EMITTED;
-    if (sigemEntry && !pwEntry) {
+    if (sigemEntry && !pwEntry && pwEvidence) {
+      situationKey = "bothOtherRevision";
+      situation = COMPARISON_SITUATIONS.BOTH_OTHER_REVISION;
+    } else if (sigemEntry && !pwEntry) {
       situationKey = "sigemOnly";
       situation = COMPARISON_SITUATIONS.SIGEM_ONLY;
     } else if (pwEntry && !sigemEntry && !pwEntry.emitted) {
@@ -776,12 +777,15 @@
       pwEmission,
       pwLastEmission,
       sigemOriginalCode: text(sigemEntry && sigemEntry.document),
-      pwOriginalCode: text(pwEntry && pwEntry.document),
-      pwRevisionEvidence: pwEntry && pwEntry.revisionKey === "__SEM_REVISAO__" ? "Não informada no PW" : "Informada no PW",
+      pwOriginalCode: text(pwEvidence && pwEvidence.document),
+      pwRevisionEvidence: !pwEntry && pwEvidence ? "Correspondência da revisão não confirmada" : pwEntry && pwEntry.revisionKey === "__SEM_REVISAO__" ? "Não informada no PW" : "Informada no PW",
       situation,
       situationKey,
       inSigem: Boolean(sigemEntry),
-      inPw: Boolean(pwEntry),
+      inPw: Boolean(pwEvidence),
+      hasPwEntry: Boolean(pwEntry),
+      pwRevision: pwEvidence ? revisionLabel(pwEvidence.current && (pwEvidence.current.revisionComplete || pwEvidence.current.revision)) : "",
+      pwRevisionMatched: Boolean(pwEntry && pwEntry.revisionKey !== "__SEM_REVISAO__" && sigemEntry && pwEntry.revisionKey === sigemEntry.revisionKey),
       pwEmitted: Boolean(pwEntry && pwEntry.emitted),
       matchMode: text(settings.matchMode) || (sigemEntry && pwEntry ? "document-revision" : "unmatched"),
     };
@@ -840,7 +844,10 @@
     });
 
     sigem.forEach((entry, key) => {
-      if (!consumedSigem.has(key)) all.push(comparisonRow(key, entry, null));
+      if (!consumedSigem.has(key)) {
+        const evidence = options && options.pwDocuments && options.pwDocuments.get(entry.documentKey);
+        all.push(comparisonRow(key, entry, null, { pwDocumentEntry: evidence, matchMode: evidence ? "document-presence" : "unmatched" }));
+      }
     });
     pw.forEach((entry, key) => {
       if (!consumedPw.has(key)) {
@@ -855,11 +862,12 @@
         || revisionRank(left.revision) - revisionRank(right.revision));
     const bySituation = (key) => all.filter((row) => row.situationKey === key);
     const sigemOnly = bySituation("sigemOnly");
+    const bothOtherRevision = bySituation("bothOtherRevision");
     const bothNotEmitted = bySituation("bothNotEmitted");
     const bothEmitted = bySituation("bothEmitted");
     const pwOnlyNotEmitted = bySituation("pwOnlyNotEmitted");
     const pwOnlyEmitted = bySituation("pwOnlyEmitted");
-    const exclusiveLists = [sigemOnly, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted];
+    const exclusiveLists = [sigemOnly, bothOtherRevision, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted];
     const classified = exclusiveLists.reduce((total, rows) => total + rows.length, 0);
     const uniqueClassified = new Set(exclusiveLists.flat().map((row) => row.key)).size;
     if (classified !== all.length || uniqueClassified !== all.length) {
@@ -869,15 +877,15 @@
     // Listas legadas permanecem disponíveis para o histórico e relatórios já
     // publicados, mas a interface principal usa somente os cinco grupos acima.
     const sigemRows = all.filter((row) => row.inSigem);
-    const pwRows = all.filter((row) => row.inPw);
+    const pwRows = all.filter((row) => row.hasPwEntry);
     const toRegisterPw = sigemOnly;
-    const pwNotEmitted = all.filter((row) => row.inPw && !row.pwEmitted);
-    const pwExclusive = all.filter((row) => row.inPw && !row.inSigem);
+    const pwNotEmitted = all.filter((row) => row.hasPwEntry && !row.pwEmitted);
+    const pwExclusive = all.filter((row) => row.hasPwEntry && !row.inSigem);
     const aligned = bothEmitted;
     const differences = all.filter((row) => row.situationKey !== "bothEmitted");
     return {
       all, sigem: sigemRows, pw: pwRows, differences,
-      sigemOnly, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted,
+      sigemOnly, bothOtherRevision, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted,
       toRegisterPw, pwNotEmitted, pwExclusive, aligned,
     };
   }
@@ -889,6 +897,7 @@
       if (!classes.has(key)) classes.set(key, {
         documentClass: key,
         sigem: 0,
+        bothOtherRevision: 0,
         pwRegistered: 0,
         pwEmitted: 0,
         gapSigemToPw: 0,
@@ -905,6 +914,7 @@
       if (entry.emitted) row.pwEmitted += 1;
       else row.gapPwToEmitted += 1;
     });
+    lists.bothOtherRevision.forEach((entry) => { ensure(entry.documentClass).bothOtherRevision += 1; });
     lists.sigemOnly.forEach((entry) => { ensure(entry.documentClass).gapSigemToPw += 1; });
     [...lists.pwOnlyNotEmitted, ...lists.pwOnlyEmitted].forEach((entry) => { ensure(entry.documentClass).pwExclusive += 1; });
     [...lists.bothNotEmitted, ...lists.bothEmitted].forEach((entry) => { ensure(entry.documentClass).matched += 1; });
@@ -927,7 +937,7 @@
     const emittedKeys = new Set([...pw].filter(([, document]) => document.emitted).map(([key]) => key));
     if (emittedKeys.size > pwKeys.size) throw new Error("Inconsistência matemática: PW emitido maior que PW cadastrado.");
 
-    const lists = buildComparisonLists(sigem, pw, { revisionScope });
+    const lists = buildComparisonLists(sigem, pw, { revisionScope, pwDocuments: source.pwAll });
     const gapSigemToPw = new Set(lists.sigemOnly.map((row) => row.key));
     const gapPwToEmitted = setDifference(pwKeys, emittedKeys);
     const pwExclusive = new Set([...lists.pwOnlyNotEmitted, ...lists.pwOnlyEmitted].map((row) => row.key));
@@ -935,12 +945,32 @@
 
     const classRows = summarizeClassesFromLists(sigem, pw, lists);
     const allClassRows = sigem.size === sigemAll.size && pw.size === pwAll.size
-      ? classRows : summarizeClassesFromLists(sigemAll, pwAll, buildComparisonLists(sigemAll, pwAll, { revisionScope }));
-    const classifiedTotal = lists.sigemOnly.length + lists.bothNotEmitted.length + lists.bothEmitted.length
+      ? classRows : summarizeClassesFromLists(sigemAll, pwAll, buildComparisonLists(sigemAll, pwAll, { revisionScope, pwDocuments: source.pwAll }));
+    const classifiedTotal = lists.sigemOnly.length + lists.bothOtherRevision.length + lists.bothNotEmitted.length + lists.bothEmitted.length
       + lists.pwOnlyNotEmitted.length + lists.pwOnlyEmitted.length;
     const expectedTotal = sigemKeys.size + pwKeys.size - matched.size;
     if (classifiedTotal !== expectedTotal) throw new Error("Inconsistência matemática: total classificado difere do universo comparado.");
 
+    const duplicateRows = [];
+    let duplicateGroups = 0, duplicateExtraRows = 0, pwSourceRows = 0;
+    pwSource.forEach((entry) => {
+      if (!documentPasses(entry, "pw", filters)) return;
+      pwSourceRows += entry.rows.length;
+      if (entry.rows.length < 2) return;
+      duplicateGroups += 1;
+      duplicateExtraRows += entry.rows.length - 1;
+      entry.rows.forEach((record, index) => {
+        const row = comparisonRow(`duplicate:${entry.key}:${index}`, null, entry);
+        duplicateRows.push({ ...row, document: record.document, revision: record.revisionLabel,
+          pwStatus: text(record.state), pwLastEmission: text(record.lastEmission),
+          pwEmission: record.emittedEvidence ? "Emitido" : "Não emitido", situationKey: "pwDuplicates",
+          situation: "Código + revisão repetidos na base PW", duplicateGroup: entry.key,
+          duplicateCount: entry.rows.length, duplicateOccurrence: index + 1,
+          pwSourceRow: Number(record.sourceRow) || 0, pwFileName: text(record.fileName),
+          pwOriginalCode: text(record.document) });
+      });
+    });
+    lists.pwDuplicates = duplicateRows;
     return {
       revisionScope,
       summary: {
@@ -952,6 +982,7 @@
         pwExclusive: pwExclusive.size,
         matched: matched.size,
         sigemOnly: lists.sigemOnly.length,
+        bothOtherRevision: lists.bothOtherRevision.length,
         bothNotEmitted: lists.bothNotEmitted.length,
         bothEmitted: lists.bothEmitted.length,
         pwOnlyNotEmitted: lists.pwOnlyNotEmitted.length,
@@ -974,6 +1005,7 @@
         sigemEntries: sigemAll.size,
         pwEntries: pwAll.size,
         pwEmittedEntries: [...pwAll.values()].filter((entry) => entry.emitted).length,
+        pwSourceRows, pwDuplicateGroups: duplicateGroups, pwDuplicateExtraRows: duplicateExtraRows, pwDuplicateRows: duplicateRows.length,
         ldDocumentCount: source.ldUniverse ? source.ldUniverse.size : 0,
       },
       sets: { sigemKeys, pwKeys, emittedKeys, gapSigemToPw, gapPwToEmitted, pwExclusive, matched },
@@ -1279,7 +1311,7 @@
     return { sigem, pw, ld, history };
   }
 
-  const EMISSION_RULE = "A contagem usa código + revisão quando a revisão é informada: revisões 0 e A do mesmo documento são duas entradas. Sem revisão, a existência do cadastro é conciliada por código sem inventar a revisão. Todo código válido localizado no PW está CADASTRADO, independentemente da LD. Última emissão = Previsto significa cadastrado e não emitido; se a revisão não estiver preenchida, a presença permanece comprovada sem atribuir revisão 0. Sim identifica emissão atual e Não uma emissão histórica. Sem valor de emissão, não há comprovação de emissão.";
+  const EMISSION_RULE = "Todo código presente na base PW está CADASTRADO, independentemente de status, classe, revisão, emissão ou LD. A presença é conferida na base completa mesmo na visão Rev. 0. Cadastro não comprova a mesma revisão nem emissão: esses dados são apresentados separadamente. Cada código + revisão conta uma vez; todas as ocorrências repetidas estão na lista Duplicados PW, com as linhas de origem. Revisões diferentes são registros distintos. Sim identifica emissão atual e Não uma emissão histórica; outros valores ou campos vazios não comprovam emissão.";
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,

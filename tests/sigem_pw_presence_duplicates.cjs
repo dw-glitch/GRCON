@@ -1,0 +1,79 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const Core=require('../sigem_pw_dashboard_core.js');
+const Scope=require('../sigem_pw_scope_fix.js');
+const Revision=require('../sigem_pw_revision_core.js');
+const Readiness=require('../sigem_pw_readiness_core.js');
+const et=n=>`C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${String(n).padStart(6,'0')}`;
+const statuses=['Previsto','Em análise','Cancelado','Superado','Qualquer estado',''];
+const csv=['NumeroDocumentoCliente;RevisaoCompleta;o_statename;Última emissão;o_filename',
+ ...statuses.map((status,i)=>[et(i+1),i%2?'A':'',status,i===1?'Sim':i===2?'Não':i===3?'???':'',`arquivo-${i}.pdf`].join(';')),
+ ['DOCUMENTO-EXTERNO','B','Estado externo','','externo.pdf'].join(';'),
+ [et(1).replaceAll('_','-'),'','Outro estado','','duplicado.docx'].join(';'),
+ [et(2),'A','Repetido','Sim','duplicado.pdf'].join(';'),
+ [et(2),'B','Outra revisão','','revisao-b.pdf'].join(';')].join('\n');
+const parsed=Core.parsePwCsv(csv,{fileName:'pw-completo.csv'});
+const prepared=Core.sanitizePwBase(parsed,[]);
+assert.equal(prepared.records.length,10,'nenhum estado, classe ou revisão exclui uma linha com código');
+assert.equal(prepared.meta.scopeExcludedCount,0);
+assert.equal(prepared.meta.uniqueDocumentCount,7);
+assert.equal(prepared.meta.validRevisionRecordCount,8);
+assert.equal(prepared.meta.duplicateRevisionCount,2);
+assert.equal(Core.parsePwCsv('NumeroDocumentoCliente\nCODIGO-SEM-OUTRAS-COLUNAS').records.length,1);
+assert.throws(()=>Core.parsePwCsv('Status\nPrevisto'),/NumeroDocumentoCliente/);
+const sigem=[...statuses.map((_,i)=>({document:et(i+1),revision:'0',status:'Postado'})),{document:'DOCUMENTO-EXTERNO',revision:'0'}, {document:et(99),revision:'0'}];
+const model=Core.createModel(sigem,prepared.records,[]);
+const all=Core.aggregateModel(model,{}, {revisionScope:'all'});
+assert.equal(all.summary.pwRegistered,8,'repetições não inflam o total de cadastros');
+assert.equal(all.quality.pwSourceRows,10);
+assert.equal(all.quality.pwDuplicateGroups,2);
+assert.equal(all.quality.pwDuplicateExtraRows,2);
+assert.equal(all.lists.pwDuplicates.length,4,'a relação separada contém todas as ocorrências repetidas');
+assert.deepEqual(all.lists.pwDuplicates.map(r=>r.pwSourceRow),[2,9,3,10]);
+assert.ok(all.lists.pwDuplicates.every(r=>r.duplicateCount===2 && r.inPw));
+assert.equal(new Set(all.lists.pwDuplicates.map(r=>r.key)).size,4);
+assert.equal(all.lists.pwDuplicates.filter(r=>r.pwOriginalCode===et(2)&&r.revision==='B').length,0,'outra revisão não é uma duplicata');
+assert.equal(all.summary.sigemOnly,1);
+assert.equal(all.lists.sigemOnly[0].document,et(99));
+assert.equal(all.lists.sigem.filter(r=>r.inPw).length,7,'todo código SIGEM presente na lista PW está cadastrado');
+assert.ok(all.lists.bothOtherRevision.every(r=>r.inPw&&!r.pwRevisionMatched&&r.pwEmission==='Revisão não confirmada'));
+assert.equal(all.lists.pw.length,8,'a evidência reutilizada por outra revisão não é um novo cadastro');
+const rev0=Core.aggregateModel(model,{}, {revisionScope:'revision0'});
+assert.equal(rev0.lists.sigem.filter(r=>r.inPw).length,7,'presença consulta o PW completo mesmo na visão revisão 0');
+assert.equal(rev0.lists.pwDuplicates.length,4,'duplicados continuam auditáveis no recorte revisão 0');
+assert.equal(rev0.summary.sigemOnly,1);
+const onlyUnknown=Core.aggregateModel(model,{documentClass:'Não classificado'},{revisionScope:'all'});
+assert.equal(onlyUnknown.summary.pwRegistered,1);
+assert.ok(onlyUnknown.lists.sigem.every(r=>r.inPw));
+const hiddenByStatus=Core.aggregateModel(model,{pwStatus:'NUNCA EXISTIU'},{revisionScope:'all'});
+assert.equal(hiddenByStatus.lists.sigem.filter(r=>r.inPw).length,7,'filtro de apresentação nunca muda a prova de cadastro');
+const legacy=Scope.aggregateModel(Scope.createModel(sigem,prepared.records),{}, {revisionScope:'all'});
+assert.deepEqual(legacy.summary,all.summary,'core principal e fachada legada usam a mesma regra');
+const readiness=Readiness.assess({sigem:{meta:{},records:sigem},pw:prepared,ld:{meta:null,records:[]}},all);
+assert.equal(readiness.ready,true,JSON.stringify(readiness.failedChecks));
+for(const status of statuses){
+ const r=Revision.analyze(Core.createModel([{document:et(1),revision:'0'}],[{document:et(1),state:status,lastEmission:''}],[]));
+ assert.notEqual(r.rows[0].situation,Revision.SITUATIONS.NOT_FOUND);
+ assert.match(r.rows[0].reason,/cadastrado/i);
+}
+let receive,response;const sandbox={GrconSigemPwDashboard:Core,importScripts(){},addEventListener(_t,f){receive=f;},postMessage(r){response=r;}};sandbox.self=sandbox;
+vm.runInNewContext(fs.readFileSync('workers/sigem_pw_dashboard.worker.js','utf8'),sandbox);
+receive({data:{type:'model',sigemRecords:sigem,pwRecords:prepared.records,ldRecords:[],generation:9}});
+assert.equal(response.ok,true);assert.equal(response.generation,9);
+assert.deepEqual(response.aggregates.all.summary,all.summary);
+assert.deepEqual(response.aggregates['revision0:all'].summary,rev0.summary);
+const Evo=require('../sigem_pw_evolution_core.js');
+const universe=Evo.buildLdUniverse([],[]);
+const sameCode='DOCUMENTO-EXTERNO';
+const make=(system,revision)=>Evo.buildSnapshot(system,{meta:{recordCount:1},records:[{document:sameCode,revision}]},universe);
+const evoSigem=make('sigem','B'),evoPw=make('pw','B');
+assert.equal(evoSigem.records.length,1);assert.equal(evoPw.records.length,1);
+assert.equal(evoSigem.audit.classes['Não classificado'],1);
+const rel=Evo.currentRelations(evoSigem.records,evoPw.records);
+assert.equal(rel.both.length,1);assert.equal(rel.onlySigem.length,0);assert.equal(rel.onlyPw.length,0);
+const unknownRevision=Evo.currentRelations(evoSigem.records,make('pw','').records);
+assert.equal(unknownRevision.both.length,1);assert.equal(unknownRevision.onlySigem.length,0);
+assert.equal(unknownRevision.bothIndeterminate.length,1);
+console.log('PW presence + duplicate audit: all statuses, empty optional columns, unknown classes, cross-revision presence, canonical identity, unique counts, duplicate source rows, legacy/worker parity and readiness OK');

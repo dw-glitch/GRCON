@@ -16,7 +16,7 @@ assert.strictEqual(Core.documentClass("RL-5290.00-22313-ABC-C1O-X01"), Core.UNCL
 assert.strictEqual(Core.documentClass(pwEt), "ET");
 assert.strictEqual(Core.documentClass("C10_RNEST_U32_3.1.1.1_INS_RIR_PI-1"), Core.UNCLASSIFIED, "C10 não deve ser aceito como C1O");
 assert.strictEqual(Core.documentClass("5900.00.0001.0100-ABC-CV-C1O-001"), Core.UNCLASSIFIED, "CV está fora do escopo desta fase");
-assert.deepStrictEqual(Core.SCOPE_CLASSES, ["ET", "N-1710"]);
+assert.deepStrictEqual(Core.SCOPE_CLASSES, ["ET", "N-1710", "Não classificado"]);
 assert.notStrictEqual(Core.entryKey("DOC", "0"), Core.entryKey("DOC", "A"), "revisões 0 e A contam separadamente");
 
 const ld = Core.parseLdMatrix([
@@ -98,14 +98,14 @@ const model = Core.createModel(sigem, parsed.records, ld.records);
 const result = Core.aggregateModel(model, {});
 assert.deepStrictEqual(result.summary, {
   sigem: 5, pwRegistered: 4, pwEmitted: 3, gapSigemToPw: 1, gapPwToEmitted: 1, pwExclusive: 0, matched: 4,
-  sigemOnly: 1, bothNotEmitted: 1, bothEmitted: 3, pwOnlyNotEmitted: 0, pwOnlyEmitted: 0, classifiedTotal: 5,
+  sigemOnly: 1, bothOtherRevision: 0, bothNotEmitted: 1, bothEmitted: 3, pwOnlyNotEmitted: 0, pwOnlyEmitted: 0, classifiedTotal: 5,
 });
 assert.strictEqual(result.classes.find((row) => row.documentClass === "N-1710").sigem, 4);
 assert.strictEqual(result.lists.toRegisterPw[0].document, "PR-5290.00-22313-122-C1O-003");
 assert.strictEqual(result.lists.pwNotEmitted[0].revision, "A");
 assert.ok(result.lists.all.some((row) => row.document.includes("999-C1O-999")), "N-1710 fora da LD deve continuar na comparação");
 assert.strictEqual(Core.aggregateModel(model, { documentClass: "ET" }).summary.sigem, 1);
-assert.throws(() => Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0"), /campo\(s\) obrigatório\(s\)/i);
+assert.equal(Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0").records.length, 1, "estado e emissão são opcionais para comprovar cadastro");
 
 (function dashboardRevisionScopesAreExplicitAndAuditable() {
   const doc = (id) => `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${id}`;
@@ -210,7 +210,8 @@ assert.throws(() => Core.parsePwCsv("NumeroDocumentoCliente;Revisao\nABC;0"), /c
   assert.equal(classified.summary.pwOnlyNotEmitted, 1, "somente o código realmente ausente permanece em Só PW");
   assert.equal(classified.summary.pwExclusive, 1);
   assert.equal(classified.summary.matched, 2);
-  assert.equal(classified.summary.sigemOnly, 1, "a revisão SIGEM adicional continua como entrada própria");
+  assert.equal(classified.summary.sigemOnly, 0, "a presença do código PW impede falso não cadastrado");
+  assert.equal(classified.summary.bothOtherRevision, 1, "a revisão adicional continua como entrada independente para conferência");
   assert.equal(classified.summary.classifiedTotal, 4);
   const fallback = classified.lists.bothNotEmitted[0];
   assert.equal(fallback.document, et("100001"));

@@ -10,7 +10,7 @@
   "use strict";
 
   const VERSION = "sigem-pw-readiness-2";
-  const CLASSES = Object.freeze(["ET", "N-1710"]);
+  const CLASSES = Object.freeze(["ET", "N-1710", "Não classificado"]);
   const REQUIRED_BASES = Object.freeze([
     { key: "sigem", label: "Consulta Geral/SIGEM" },
     { key: "pw", label: "relação ProjectWise" },
@@ -45,12 +45,12 @@
     const n1710Pw = count(n1710.pwRegistered);
 
     const checks = [
-      check("classes", "Somente as classes ET e N-1710 participam do resultado",
+      check("classes", "Todos os códigos estão classificados ou identificados como não classificados",
         (result && result.classes || []).every((row) => CLASSES.includes(text(row.documentClass))), Boolean(result)),
-      check("sigem-balance", "Total SIGEM conciliado com ET + N-1710",
-        count(et.sigem) + count(n1710.sigem) === sigemTotal, loaded.sigem),
-      check("pw-balance", "Total PW conciliado com ET + N-1710",
-        count(et.pwRegistered) + count(n1710.pwRegistered) === pwTotal, loaded.pw),
+      check("sigem-balance", "Total SIGEM conciliado com todas as classes",
+        (result?.classes || []).reduce((sum, row) => sum + count(row.sigem), 0) === sigemTotal, loaded.sigem),
+      check("pw-balance", "Total PW conciliado com todas as classes",
+        (result?.classes || []).reduce((sum, row) => sum + count(row.pwRegistered), 0) === pwTotal, loaded.pw),
       check("emission-balance", "Emissões PW contidas nos cadastros",
         emitted <= pwTotal, loaded.pw),
       check("register-list", "Lista Cadastrar no PW conciliada com o indicador",
@@ -59,8 +59,8 @@
         Array.isArray(lists.pwNotEmitted) && lists.pwNotEmitted.length === count(summary.gapPwToEmitted), loaded.pw),
       check("pw-exclusive-list", "Lista Somente no PW conciliada com o indicador",
         Array.isArray(lists.pwExclusive) && lists.pwExclusive.length === count(summary.pwExclusive), loaded.sigem && loaded.pw),
-      check("exclusive-situations", "Cinco situações exclusivas conciliadas sem duplicidade",
-        ["sigemOnly", "bothNotEmitted", "bothEmitted", "pwOnlyNotEmitted", "pwOnlyEmitted"].every((key) => Array.isArray(lists[key]) && lists[key].length === count(summary[key]))
+      check("exclusive-situations", "Situações exclusivas conciliadas sem duplicidade",
+        ["sigemOnly", ...(lists.bothOtherRevision ? ["bothOtherRevision"] : []), "bothNotEmitted", "bothEmitted", "pwOnlyNotEmitted", "pwOnlyEmitted"].every((key) => Array.isArray(lists[key]) && lists[key].length === count(summary[key]))
           && count(summary.classifiedTotal) === count(summary.sigem) + count(summary.pwRegistered) - count(summary.matched), loaded.sigem && loaded.pw),
       check("quality-ld", "LD da Qualidade usada apenas para conferência de localização (sem bloquear cadastro PW)",
         true, loaded.pw),

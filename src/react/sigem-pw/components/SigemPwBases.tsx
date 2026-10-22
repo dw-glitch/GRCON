@@ -29,7 +29,7 @@ function BaseInfo({ kind, title, empty, base, result }: {
         </div>
         <strong>{empty}</strong>
         <small>Carregue uma base válida para iniciar.</small>
-        <em>{kind === "ld" ? "Sem a LD, N-1710 não entra nos cálculos." : "Base ausente não é tratada como zero."}</em>
+        <em>{kind === "ld" ? "LD opcional: a presença no PW já comprova cadastro." : "Base ausente não é tratada como zero."}</em>
       </div>
     );
   }

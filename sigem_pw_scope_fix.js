@@ -9,7 +9,7 @@
 
   if (!Base) throw new Error("Core do Dashboard SIGEM × PW indisponível para aplicar o filtro de escopo.");
 
-  const SCOPE_VERSION = 5;
+  const SCOPE_VERSION = 6;
   const SCOPE_LABEL = "GRCON N-1710 · 5290.00 / 22313 / C1O";
   const N1710_SCOPE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const VALID_CLASSES = new Set(Base.SCOPE_CLASSES || Base.DOCUMENT_CLASSES || ["ET", "N-1710"]);
@@ -101,7 +101,7 @@
     const reasons = {};
     (records || []).forEach((record) => {
       const normalized = normalizeRecord(record, "pw");
-      if (normalized.documentKey && VALID_CLASSES.has(normalized.documentClass)) {
+      if (normalized.documentKey) {
         accepted.push(normalized);
         return;
       }
@@ -153,31 +153,11 @@
   function normalizeSigemRecords(records) {
     return (records || [])
       .map((record) => normalizeRecord(record, "sigem"))
-      .filter((record) => record.documentKey && VALID_CLASSES.has(record.documentClass));
+      .filter((record) => record.documentKey);
   }
 
   function createModel(sigemRecords, pwRecords, ldRecords) {
-    if (arguments.length >= 3 && typeof Base.createModel === "function") return Base.createModel(sigemRecords || [], pwRecords || [], ldRecords || []);
-    const normalizedSigem = normalizeSigemRecords(sigemRecords || []);
-    const pwAudit = scopeAudit(pwRecords || []);
-    const normalizedPw = pwAudit.accepted;
-    // O caminho legado de dois argumentos ainda é usado por integrações de
-    // escopo. Ele precisa expor as duas visões do mesmo conjunto:
-    // - *Entries: identidade código + revisão, usada em contagens/comparação;
-    // - *All: identidade documental consolidada, usada pela análise histórica
-    //   de revisões. Sem os mapas de entradas, aggregateModel() cai no fallback
-    //   documental e revisões 0/A/B do mesmo código viram apenas um item.
-    const sigemEntries = Base.buildEntryMap(normalizedSigem, "sigem");
-    const pwEntries = Base.buildEntryMap(normalizedPw, "pw");
-    return {
-      normalizedSigem,
-      normalizedPw,
-      sigemEntries,
-      pwEntries,
-      sigemAll: Base.buildDocumentMap(normalizedSigem, "sigem"),
-      pwAll: Base.buildDocumentMap(normalizedPw, "pw"),
-      scopeAudit: pwAudit,
-    };
+    return Base.createModel(sigemRecords || [], pwRecords || [], ldRecords || []);
   }
 
   async function loadPwBase() {

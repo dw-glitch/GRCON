@@ -114,7 +114,7 @@ const revisionResult = Revision.analyze(model);
 const n1710Revision = revisionResult.rows.find((row) => row.document === n1710);
 assert.equal(n1710Revision.situation, Revision.SITUATIONS.AWAITING_EMISSION);
 assert.equal(n1710Revision.pwRevision, "Não informada no PW");
-assert.match(n1710Revision.reason, /revisão ou emissão/i);
+assert.match(n1710Revision.reason, /sem revisão informada/i);
 assert.equal(Revision.historyForRows(model.pwAll.get(Dashboard.documentIdentity(n1710).key).rows, "pw")[0].revision,
   "Não informada no PW");
 

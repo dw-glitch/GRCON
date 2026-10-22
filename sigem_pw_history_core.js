@@ -17,7 +17,7 @@
 
   const DB_NAME = "grcon-sigem-pw-history";
   const DB_VERSION = 1;
-  const CALCULATION_VERSION = "sigem-pw-history-2";
+  const CALCULATION_VERSION = "sigem-pw-history-3";
   const STORES = Object.freeze({
     sourceSnapshots: "sourceSnapshots",
     comparisonSnapshots: "comparisonSnapshots",
@@ -311,10 +311,10 @@
         pwRegistered: Number(entryMetrics.pwRegistered || 0),
         pwEmitted: Number(entryMetrics.pwEmitted || 0),
         matched: Number(entryMetrics.matched || 0),
-        sigemOnly: Number(entryMetrics.gapSigemToPw || 0),
+        sigemOnly: Number(entryMetrics.gapSigemToPw || 0) + Number(entryMetrics.bothOtherRevision || 0),
         pwOnly: Number(entryMetrics.pwExclusive || 0),
         aligned: alignedEntries,
-        postPw: Number(entryMetrics.gapSigemToPw || 0),
+        postPw: Number(entryMetrics.gapSigemToPw || 0) + Number(entryMetrics.bothOtherRevision || 0),
         postSigem: Number(entryMetrics.pwExclusive || 0),
         awaitingEmission: Number(entryMetrics.gapPwToEmitted || 0),
         documentStates: states,
@@ -352,9 +352,9 @@
         pwRegistered: aggregate.summary.pwRegistered,
         pwEmitted: aggregate.summary.pwEmitted,
         matched: aggregate.summary.matched,
-        exclusiveSigem: aggregate.summary.gapSigemToPw,
+        exclusiveSigem: aggregate.summary.gapSigemToPw + aggregate.summary.bothOtherRevision,
         exclusivePw: aggregate.summary.pwExclusive,
-        postPw: aggregate.summary.gapSigemToPw,
+        postPw: aggregate.summary.gapSigemToPw + aggregate.summary.bothOtherRevision,
         postSigem: aggregate.summary.pwExclusive,
         awaitingEmission: aggregate.summary.gapPwToEmitted,
         aligned: aggregate.lists.aligned.length,

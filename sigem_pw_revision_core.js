@@ -92,7 +92,7 @@
     for (const row of rows) {
       const revision = revisionValue(row);
       if (revision === "") {
-        if (kind === "pw" && norm(row.lastEmission) === "PREVISTO") {
+        if (kind === "pw") {
           const key = "__SEM_REVISAO__";
           byRevision.set(key, newerRecord(row, byRevision.get(key)));
         }
@@ -235,7 +235,7 @@
     const latestRegisteredRevision = revisionValue(latestRegistered);
     const latestRegisteredRank = rank(latestRegisteredRevision);
     const plannedWithoutRevision = base.pwRows.filter((record) =>
-      !revisionValue(record) && norm(record.lastEmission) === "PREVISTO");
+      !revisionValue(record));
     if (latestEmitted) {
       base.lastEmittedPwRevision = revisionValue(latestEmitted);
       base.lastEmittedPwStatus = text(latestEmitted.state);
@@ -266,17 +266,17 @@
     if (plannedWithoutRevision.length && !exact) {
       const planned = plannedWithoutRevision.reduce((best, row) => newerRecord(row, best), null);
       base.pwRevision = "Não informada no PW";
-      base.pwStatus = text(planned && planned.state) || "Previsto";
+      base.pwStatus = text(planned && planned.state) || text(planned && planned.lastEmission) || "Sem estado informado";
       // Há prova de CADASTRO, mas não de qual revisão foi cadastrada.
       // Com emissões históricas existentes, não atribuir indevidamente o
       // cadastro planejado à revisão SIGEM nem afirmar que o PW está atrasado.
       if (latestRegistered) {
         base.situation = SITUATIONS.REVIEW;
-        base.reason = `O PW contém cadastro Previsto sem revisão informada e emissão anterior em ${latestRegisteredRevision}. O documento está cadastrado, porém a revisão prevista não pode ser confirmada.`;
+        base.reason = `O PW contém cadastro sem revisão informada e emissão anterior em ${latestRegisteredRevision}. O documento está cadastrado, porém a revisão prevista não pode ser confirmada.`;
         return { row: base, counter: "review", sigemRevisionRows: sigemScan.rowCount, pwRevisionRows: pwScan.rowCount };
       }
       base.situation = SITUATIONS.AWAITING_EMISSION;
-      base.reason = `Documento cadastrado no PW como Previsto, sem revisão ou emissão. A presença do código é confirmada, mas não é possível afirmar que a revisão SIGEM ${sigemRevision} já foi cadastrada.`;
+      base.reason = `Documento cadastrado no PW, sem revisão informada. A presença do código é confirmada, mas não é possível afirmar que a revisão SIGEM ${sigemRevision} já foi cadastrada.`;
       return { row: base, counter: "awaitingEmission", sigemRevisionRows: sigemScan.rowCount, pwRevisionRows: pwScan.rowCount };
     }
 

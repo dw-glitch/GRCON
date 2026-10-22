@@ -40,8 +40,8 @@ const prepared = [before, after].map((base, i) => {
   assert.deepEqual(response.snapshot, expected, "worker and main thread must use identical identity, scope and emission rules");
   return expected;
 });
-assert.equal(prepared[1].audit.scopeDiscardedRecords, 1);
-assert.equal(prepared[1].audit.emittedDocumentRevisionRecords, 2);
+assert.equal(prepared[1].audit.scopeDiscardedRecords, 0);
+assert.equal(prepared[1].audit.emittedDocumentRevisionRecords, 3);
 receive({ data: { type: "evolution-timeline", requestId: 10, sigem: [], pw: prepared } });
 assert.equal(response.ok, true);
 assert.equal(response.type, "evolution-timeline");

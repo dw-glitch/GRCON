@@ -52,7 +52,7 @@ function functionBody(source, name, nextName) {
 })();
 
 (function historicalTotalsUseDocumentPlusRevision() {
-  assert.match(historyCore, /CALCULATION_VERSION = "sigem-pw-history-2"/);
+  assert.match(historyCore, /CALCULATION_VERSION = "sigem-pw-history-3"/);
   assert.match(historyCore, /revisionEntries: entryTotal/);
   assert.match(historyCore, /emittedRevisionEntries/);
   assert.match(historyApp, /revisionEntries \?\? snapshot\.metrics\.comparableDocuments/,

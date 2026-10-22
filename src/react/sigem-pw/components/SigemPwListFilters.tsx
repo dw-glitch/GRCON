@@ -40,7 +40,7 @@ export function SigemPwListFilters({ query, documentClass, revision, sigemStatus
       <label className="spw-filter-control" htmlFor="spw-class">
         <span>Classe documental</span>
         <select id="spw-class" value={documentClass} onChange={(event) => onClass(event.target.value as SigemPwDocumentClass)}>
-          <option value="">ET e N-1710</option><option value="ET">ET</option><option value="N-1710">N-1710</option>
+          <option value="">Todas as classes</option><option value="ET">ET</option><option value="N-1710">N-1710</option><option value="Não classificado">Não classificado</option>
         </select>
       </label>
       <label className="spw-filter-control" htmlFor="spw-revision-filter">

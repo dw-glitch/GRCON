@@ -38,7 +38,7 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const ext='RL-5290.00-22399-ABC-C1O-999';
   const universe=Evo.buildLdUniverse([{document:A}],[]);
   const built=Evo.buildSnapshot('pw',{meta:{sourceRowCount:2,recordCount:2},records:[p(A,'0'),p(ext,'0')]},universe);
-  assert.equal(built.records.length,1); assert.equal(built.rejected.length,1); assert.ok(built.rejected[0].reason);
+  assert.equal(built.records.length,2, "todo código PW comprova cadastro"); assert.equal(built.rejected.length,0);
 })();
 (function sameCodeThreeRevisions(){
   const built=snap('sigem',[s(A,'A'),s(A,'B'),s(A,'C')]); assert.equal(built.records.length,3); assert.equal(built.audit.uniqueDocuments,1);
@@ -142,7 +142,7 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const openDashboard = bootstrap.slice(bootstrap.indexOf('async function openDashboard()'), bootstrap.indexOf('async function openEvolution()'));
   assert.doesNotMatch(openDashboard,/sigem_pw_evolution|GrconSigemPwEvolutionUi/, 'a evolução deve continuar sob demanda e não bloquear a abertura principal');
   assert.match(historyApp,/if \(!acervoTarget \|\| !pendingTarget\) return/, 'histórico legado não pode falhar depois que a evolução assume a seção');
-  assert.match(scope,/SCOPE_VERSION = 5/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
+  assert.match(scope,/SCOPE_VERSION = 6/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
 })();
 
 
