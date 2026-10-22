@@ -35,6 +35,7 @@ jobs:
           node scripts/validar-monitoring-popups-responsive.cjs
           node scripts/validar-document-workflows-auto-browser.cjs
           node scripts/validar-document-master-browser.cjs
+          node scripts/validar-conference-deadlines-browser.cjs
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -43,3 +44,4 @@ jobs:
             artifacts/integrated-contracts/
             artifacts/document-workflows/
             artifacts/document-workflows-auto/
+            artifacts/conference-deadlines/

@@ -325,6 +325,7 @@
           generatedAt: text(record.generatedAt),
           workspaceId: text(record.workspaceId),
           title: text(file && file.title),
+          grdtTitle: text(file && file.title),
           document: displayDocument(document),
           documentIdentity: identity,
           searchKeys: documentKeys(document),
