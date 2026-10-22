@@ -35,7 +35,7 @@
  function modelRow(row){const d=details(row);return [row.document,d.report,row.title||'',row.output?.databook||'',d.tag,d.route,d.discipline];}
  function field(header){
   const h=norm(header);
-  if(/^(DOCUMENTO|DOCUMENTO SIGEM|DOCUMENTO \(SIGEM\)|DOCUMENTO COMPLETO|CODIGO (?:DO )?DOCUMENTO|CODIGO DOCUMENTAL|TAXONOMIA|NOME (?:DO )?DOCUMENTO)$/.test(h))return 'document';
+  if(/^(DOCUMENTO|DOCUMENTO SIGEM|DOCUMENTO \(SIGEM\)|DOCUMENTO COMPLETO|CODIGO (?:DO )?DOCUMENTO|CODIGO DOCUMENTAL|NOME (?:DO )?DOCUMENTO)$/.test(h))return 'document';
   if(/^(REVISAO|REV)$/.test(h))return 'revision';
   if(h==='TITULO'||h.includes('TITULO DO DOCUMENTO'))return 'title';
   if(h==='RELATORIO'||h==='TIPO DE RELATORIO')return 'report';
@@ -101,7 +101,7 @@
   const documentColumn=headers.findIndex(h=>field(h)==='document')+1;
   sheet.views=[{state:'frozen',ySplit:1,xSplit:Math.min(3,Math.max(1,documentColumn)),showGridLines:false}];
   sheet.autoFilter={from:{row:1,column:1},to:{row:rows.length+1,column:headers.length}};
-  sheet.columns.forEach((column,i)=>{const f=field(headers[i]);column.width=f==='title'?90:f==='document'?52:f==='databook'?65:f==='report'?62:f==='route'?48:f==='observation'?70:24;column.numFmt='@';});
+  sheet.columns.forEach((column,i)=>{const f=headers===MODEL_HEADERS&&i===0?'document':field(headers[i]);column.width=f==='title'?90:f==='document'?52:f==='databook'?65:f==='report'?62:f==='route'?48:f==='observation'?70:24;column.numFmt='@';});
   sheet.eachRow((row,index)=>{row.font={name:'Aptos',size:11,color:{argb:'FF20384D'}};row.alignment={vertical:'middle',wrapText:true};
    if(index===1){row.height=32;row.alignment={vertical:'middle',horizontal:'center',wrapText:true};row.font={name:'Aptos',size:11,bold:true,color:{argb:'FFFFFFFF'}};row.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1F4E78'}};}
    else{row.height=Math.min(409,Math.max(34,...row.values.slice(1).map((v,i)=>Math.ceil((v instanceof Date?10:String(v??'').length)/(sheet.getColumn(i+1).width||24))*14+12)));row.fill={type:'pattern',pattern:'solid',fgColor:{argb:index%2?'FFFFFFFF':'FFF0F5FA'}};row.eachCell({includeEmpty:true},cell=>{if(cell.value instanceof Date)cell.numFmt=(cell.value.getUTCHours()||cell.value.getUTCMinutes())?'dd/mm/yyyy hh:mm':'dd/mm/yyyy';cell.border={bottom:{style:'hair',color:{argb:'FFDCE5ED'}}};});}
@@ -111,9 +111,9 @@
  async function build(results,ExcelJS){
   const book=new ExcelJS.Workbook();book.creator='GRCON';book.subject='Títulos e linhas completas para inclusão na LD';
   const titles=book.addWorksheet('Títulos');titles.addRow(MODEL_HEADERS);results.forEach(row=>titles.addRow(modelRow(row)));style(titles,MODEL_HEADERS,results);
-  const names=new Set(['Títulos']);
+  const names=new Set(['títulos']);
   for(const group of groupRows(results)){
-   const stem=('LD - '+(group.layout.known?(group.layout.sheet||'Documentos'):'Padrão')).replace(/[\\/*?:\[\]]/g,' ').slice(0,27);let name=stem,n=1;while(names.has(name))name=stem+' '+(++n);names.add(name);
+   const stem=('LD - '+(group.layout.known?(group.layout.sheet||'Documentos'):'Padrão')).replace(/[\\/*?:\[\]]/g,' ').slice(0,27);let name=stem,n=1;while(names.has(name.toLowerCase())){const suffix=' '+(++n);name=stem.slice(0,31-suffix.length)+suffix;}names.add(name.toLowerCase());
    const sheet=book.addWorksheet(name),converted=group.rows.map(row=>ldRow(row,group.layout));sheet.addRow(converted[0].headers);converted.forEach(row=>sheet.addRow(row.values));style(sheet,converted[0].headers,group.rows);
   }
   return new Uint8Array(await book.xlsx.writeBuffer());
