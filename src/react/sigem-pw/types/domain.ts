@@ -247,8 +247,8 @@ export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.f
   sigemOnly: "SIGEM: falta cadastrar no PW",
   bothNotEmitted: "SIGEM + PW: ainda não emitido",
   bothEmitted: "SIGEM + PW: emitido",
-  pwOnlyNotEmitted: "Só PW: ainda não emitido",
-  pwOnlyEmitted: "Só PW: emitido",
+  pwOnlyNotEmitted: "PW: revisão sem SIGEM, não emitida",
+  pwOnlyEmitted: "PW: revisão sem SIGEM, emitida",
 });
 
 export const SIGEM_PW_PAGE_SIZE = 100;

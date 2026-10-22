@@ -503,6 +503,13 @@ async function waitEvolutionReady(page) {
       [otherRevisionDoc,'0','Postado'],[missingDoc,'0','Postado']
     ]),'Consulta Geral');
     fs.writeFileSync(presenceSigem,XLSX.write(presenceBook,{type:'buffer',bookType:'xlsx'}));
+    await page.addScriptTag({url:baseUrl+'/import_review.js'});
+    await page.evaluate(()=>{GrconImportReview.saveProfile('Perfil anterior',{columns:{document:'NumeroDocumentoCliente',revision:'RevisaoCompleta',state:'o_statename',lastEmission:'Última emissão',documentType:'TipoDocumento'}});GrconImportReview.selectProfile('Perfil anterior');});
+    const codeOnlyPath=path.join(fixtureDir,'PW_only_document.csv');
+    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente\nDOCUMENTO-SO-CODIGO');
+    await importFile(page,'#spw-pw-file',codeOnlyPath);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),1,'perfil anterior não exige campos opcionais ausentes');
+    await page.evaluate(()=>GrconImportReview.selectProfile(''));
     await importFile(page,'#spw-pw-file',presencePw);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),4);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.quality.pwSourceRows),6);
@@ -552,7 +559,7 @@ async function waitEvolutionReady(page) {
     await waitIdle(page);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.records.length),6);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeVersion),6);
-    metrics.pwPresenceAndDuplicates={allRows:6,uniqueEntries:4,duplicateRows:4,duplicateGroups:2,download:true,withoutLd:true,existingBaseReprocessed:true};
+    metrics.pwPresenceAndDuplicates={allRows:6,uniqueEntries:4,duplicateRows:4,duplicateGroups:2,download:true,withoutLd:true,existingBaseReprocessed:true,savedProfileDocumentOnly:true};
     await page.locator('[data-revision-scope="all"]').click();
     await page.locator('[data-list="all"]').click();
     await resetDashboard(page);

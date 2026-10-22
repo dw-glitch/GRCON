@@ -64,4 +64,16 @@ receive({data:{type:'model',sigemRecords:sigem,pwRecords:prepared.records,ldReco
 assert.equal(response.ok,true);assert.equal(response.generation,9);
 assert.deepEqual(response.aggregates.all.summary,all.summary);
 assert.deepEqual(response.aggregates['revision0:all'].summary,rev0.summary);
+const Evo=require('../sigem_pw_evolution_core.js');
+const universe=Evo.buildLdUniverse([],[]);
+const sameCode='DOCUMENTO-EXTERNO';
+const make=(system,revision)=>Evo.buildSnapshot(system,{meta:{recordCount:1},records:[{document:sameCode,revision}]},universe);
+const evoSigem=make('sigem','B'),evoPw=make('pw','B');
+assert.equal(evoSigem.records.length,1);assert.equal(evoPw.records.length,1);
+assert.equal(evoSigem.audit.classes['Não classificado'],1);
+const rel=Evo.currentRelations(evoSigem.records,evoPw.records);
+assert.equal(rel.both.length,1);assert.equal(rel.onlySigem.length,0);assert.equal(rel.onlyPw.length,0);
+const unknownRevision=Evo.currentRelations(evoSigem.records,make('pw','').records);
+assert.equal(unknownRevision.both.length,1);assert.equal(unknownRevision.onlySigem.length,0);
+assert.equal(unknownRevision.bothIndeterminate.length,1);
 console.log('PW presence + duplicate audit: all statuses, empty optional columns, unknown classes, cross-revision presence, canonical identity, unique counts, duplicate source rows, legacy/worker parity and readiness OK');

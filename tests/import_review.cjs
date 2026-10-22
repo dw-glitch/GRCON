@@ -10,6 +10,8 @@ api.saveProfile('PW Qualidade',mapping);api.selectProfile('PW Qualidade');
 const parsed=Core.parsePwCsv('Codigo;Revisao QA;Tipo QA;Estado QA;Emissao QA\nRL-5290.00-22313-ABC-C1O-001;0;RL;Em Workflow;Sim',{mappingProfile:api.profile()});assert.equal(parsed.records.length,1);assert.equal(parsed.records[0].revision,'0');
 assert.throws(()=>Core.parsePwCsv('Codigo;Codigo;Revisao QA;Tipo QA;Estado QA;Emissao QA\nDOC;DOC;0;RL;State;Sim',{mappingProfile:api.profile()}),/ambígua/);
 assert.throws(()=>Core.parsePwCsv('Outro;Revisao QA;Tipo QA;Estado QA;Emissao QA\nDOC;0;RL;State;Sim',{mappingProfile:api.profile()}),/ausente/);
+const documentOnly=Core.parsePwCsv('Codigo\nDOCUMENTO-SEM-METADADOS',{mappingProfile:api.profile()});assert.equal(documentOnly.records.length,1);assert.equal(documentOnly.records[0].lastEmission,'');
+api.saveProfile('Só código',{columns:{document:'Codigo'}});
 api.saveSession({filters:{query:'RL-5290'},revisionScope:'all'});assert.equal(api.session().filters.query,'RL-5290');
 root.GrconCloud.state.membership.workspace_id='other';assert.equal(api.profiles().length,0);assert.equal(api.session(),null);
 root.GrconCloud.state.membership.workspace_id='w';assert.equal(api.profile().name,'PW Qualidade');api.removeProfile('PW Qualidade');assert.equal(api.profile(),null);

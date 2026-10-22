@@ -10,7 +10,7 @@
   "use strict";
 
   const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.4";
-  const VALID_CLASSES = new Set(["ET", "N-1710"]);
+  const VALID_CLASSES = new Set(["ET", "N-1710", "Não classificado"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
@@ -167,23 +167,6 @@
     return findLdMatches(record, universe).find((entry) => entry.qualityN1710) || null;
   }
 
-  function scopeReason(record, identity, cls, universe) {
-    if (!identity.key) return "codigo_vazio_ou_invalido";
-    if (!VALID_CLASSES.has(cls)) {
-      if (Dashboard && typeof Dashboard.n1710ScopeInfo === "function") {
-        const scope = Dashboard.n1710ScopeInfo(record && record.document);
-        if (scope && scope.reason && scope.reason !== "fora_das_familias_grcon") return scope.reason;
-      }
-      return "fora_do_escopo_grcon";
-    }
-    if (identity.info && identity.info.eapApplicable && identity.info.eapValid === false) return "eap_invalida";
-    // A falta do código na LD da Qualidade é uma divergência de localização,
-    // não uma inexistência do cadastro ProjectWise ou da Consulta Geral.
-    // O vínculo com a LD permanece acessível pelos metadados auditáveis,
-    // mas jamais exclui um documento válido do universo SIGEM × PW.
-    return "";
-  }
-
   function preferredLdMatch(matches) {
     if (!(matches || []).length) return null;
     return matches.find((row) => row.technical) || matches[0];
@@ -322,8 +305,8 @@
     for (const raw of records || []) {
       if (!raw || !text(raw.document)) continue;
       const identity = documentIdentity(raw.document);
-      const cls = documentClass(raw.document);
-      const reason = system === SYSTEMS.PW && identity.key ? "" : scopeReason(raw, identity, cls, universe);
+      // A presença do código é preservada nos dois sistemas; classe e EAP são metadados.
+      const reason = identity.key ? "" : "codigo_vazio_ou_invalido";
       if (reason) {
         const item = rejectRecord(raw, system, reason);
         rejected.push(item);
@@ -353,7 +336,7 @@
 
   function classCounts(records) {
     const output = { ET: 0, "N-1710": 0 };
-    for (const row of records || []) if (Object.prototype.hasOwnProperty.call(output, row.documentClass)) output[row.documentClass] += 1;
+    for (const row of records || []) { const cls=row.documentClass || "Não classificado"; output[cls]=(output[cls] || 0)+1; }
     return output;
   }
   function buildAudit(system, base, prepared, universe) {
@@ -636,7 +619,7 @@
     // Não converter a revisão ausente em 0/A/etc. nem consumir emissões históricas.
     const plannedUnknown = new Map();
     pw.forEach((row, key) => {
-      if (row.emissionKind === "planned" && !text(row.revision) && row.emissionState === "not-emitted") {
+      if (!text(row.revision)) {
         const documentKey = text(row.documentKey) || norm(documentIdentity(row.document).key);
         if (documentKey) plannedUnknown.set(documentKey, { key, row });
       }
@@ -661,17 +644,17 @@
         onlySigem.push({ ...sigemRow, movement: "Somente SIGEM" });
         return;
       }
-      const indeterminate = pwRow.emissionState === "indeterminate";
+      const indeterminate = pwRow.emissionState === "indeterminate" || Boolean(fallbackPw && pwRow.emitted);
       const matchMode = fallbackPw ? "document-fallback" : "document-revision";
       const linked = {
         ...sigemRow, matchedPw: pwRow, matchMode,
-        revisionEvidence: fallbackPw ? "PW previsto sem revisão informada: vínculo apenas por código" : "Revisão informada no PW",
-        movement: fallbackPw ? "SIGEM + PW cadastrado sem emissão (revisão PW indeterminada)"
+        revisionEvidence: fallbackPw ? "PW sem revisão informada: vínculo apenas por código" : "Revisão informada no PW",
+        movement: fallbackPw ? "SIGEM + PW cadastrado (revisão PW indeterminada)"
           : pwRow.emitted ? "SIGEM + PW emitido"
             : indeterminate ? "SIGEM + PW emissão indeterminada" : "SIGEM + PW não emitido",
       };
       both.push(linked);
-      if (pwRow.emitted) bothEmitted.push(linked);
+      if (pwRow.emitted && !fallbackPw) bothEmitted.push(linked);
       else if (indeterminate) bothIndeterminate.push(linked);
       else bothNotEmitted.push(linked);
     });

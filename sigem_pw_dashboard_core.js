@@ -35,8 +35,8 @@
     BOTH_OTHER_REVISION: "Cadastrado no PW; revisão SIGEM sem correspondência confirmada",
     BOTH_NOT_EMITTED: "Postado no SIGEM e cadastrado no PW, ainda não emitido",
     BOTH_EMITTED: "Postado no SIGEM e emitido no PW",
-    PW_ONLY_NOT_EMITTED: "Cadastrado no PW, ainda não emitido e não localizado no SIGEM",
-    PW_ONLY_EMITTED: "Emitido no PW, mas não localizado no SIGEM",
+    PW_ONLY_NOT_EMITTED: "Revisão cadastrada no PW sem correspondência no SIGEM; não emitida",
+    PW_ONLY_EMITTED: "Revisão emitida no PW sem correspondência no SIGEM",
   });
   const REQUIRED_PW_FIELDS = Object.freeze(["document"]);
   const REVISION_SCOPES = Object.freeze({ REVISION0: "revision0", ALL: "all" });
@@ -348,6 +348,7 @@
           const header = mappingProfile.columns[field];
           if (!header) continue;
           const matches = headers.map((value,index)=>normalizeHeader(value)===normalizeHeader(header)?index:-1).filter(index=>index>=0);
+          if (matches.length===0 && field!=='document') { columns[field]=-1; continue; }
           if (matches.length!==1) throw new Error('Perfil PW: coluna ausente ou ambígua para '+field+'. A base vigente foi preservada.');
           columns[field]=matches[0];
         }
