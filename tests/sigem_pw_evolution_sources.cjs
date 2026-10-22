@@ -46,8 +46,8 @@ function load(file, window, document) {
   await adapter.activate();
   assert.equal(adapter.state.sigem.length, 2, "missing LD must not erase saved SIGEM bases");
   assert.equal(adapter.state.pw.length, 2, "full Dashboard PW history must be visible without legacy source payloads");
-  assert.equal(adapter.state.comparison, null, "missing LD must not yield invented zero counts");
-  assert.ok(adapter.state.sigem.every(item => item.unavailableReason));
+  assert.ok(adapter.state.comparison, "sem LD, as bases SIGEM e PW continuam comparáveis");
+  assert.ok(adapter.state.sigem.every(item => !item.unavailableReason), "ausência da LD não pode sinalizar SIGEM indisponível");
   window.GrconSigemPwDashboardUi.state.ld = { meta: { snapshotId: "ld" }, records: [{ document: "RL-5290.00-22313-ABC-C1O-001", revision: "0" }] };
   await adapter.refresh(true);
   assert.equal(adapter.state.selections.sigemPrev, "s1"); assert.equal(adapter.state.selections.pwPrev, "p1");
