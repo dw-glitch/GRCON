@@ -81,6 +81,9 @@ const {chromium}=require('playwright'),XLSX=require('../xlsx.full.min.js');
  await page.evaluate(()=>{window.GrconCloud.state.masterOwner=true;window.GrconCloud.state.membership.role='owner';window.GrconCloud.state.contracts[0].role='owner';window.dispatchEvent(new CustomEvent('grcon:cloud-ready'));});
  await page.evaluate(()=>window.GrconSigemPwDashboardBootstrap.open());
  await page.waitForFunction(()=>window.GrconSigemPwDashboardUi?.state.ready&&!window.GrconSigemPwDashboardUi.state.busy);
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.revisionScope),'all','a abertura inclui todas as revisões');
+ assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20001);
+ await page.locator('[data-revision-scope="revision0"]').click();
  assert.equal(await page.evaluate(()=>window.GrconSigemPwDashboardUi.state.result.summary.sigem),20000);
  // The SIGEM headline KPI is auditable and its detail list must equal the number shown for the active revision scope.
  await page.locator('[data-summary-list="sigem"]').click();
