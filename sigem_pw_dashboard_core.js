@@ -1279,7 +1279,7 @@
     return { sigem, pw, ld, history };
   }
 
-  const EMISSION_RULE = "A contagem usa código + revisão quando a revisão é informada e identidade documental sem revisão quando ausente. Todo código válido localizado no PW está CADASTRADO, independentemente da LD. Última emissão = Previsto significa cadastrado e não emitido; se a revisão não estiver preenchida, a presença permanece comprovada sem atribuir revisão 0. Sim identifica emissão atual e Não uma emissão histórica. Sem valor de emissão, não há comprovação de emissão.";
+  const EMISSION_RULE = "A contagem usa código + revisão quando a revisão é informada: revisões 0 e A do mesmo documento são duas entradas. Sem revisão, a existência do cadastro é conciliada por código sem inventar a revisão. Todo código válido localizado no PW está CADASTRADO, independentemente da LD. Última emissão = Previsto significa cadastrado e não emitido; se a revisão não estiver preenchida, a presença permanece comprovada sem atribuir revisão 0. Sim identifica emissão atual e Não uma emissão histórica. Sem valor de emissão, não há comprovação de emissão.";
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
