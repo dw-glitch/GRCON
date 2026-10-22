@@ -94,8 +94,9 @@ function aggregate(sigemRows, pwRows) {
   assert.equal(result.summary.sigem, 3);
   assert.equal(result.summary.pwRegistered, 2);
   assert.equal(result.summary.matched, 2);
-  assert.equal(result.summary.gapSigemToPw, 1);
-  assert.deepEqual(result.lists.sigemOnly.map((row) => row.revision), ["B"]);
+  assert.equal(result.summary.gapSigemToPw, 0, "o código já está cadastrado no PW");
+  assert.deepEqual(result.lists.bothOtherRevision.map((row) => row.revision), ["B"]);
+  assert.equal(result.lists.bothOtherRevision[0].inPw, true);
 })();
 
 (function filtersKeepRevisionGranularity() {

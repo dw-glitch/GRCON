@@ -49,7 +49,7 @@ assert.match(adapter, /aggregates\[aggregateKey\]/);
 assert.match(adapter, /GRCONModuleLoader\.ensure\("xlsx"\)/);
 assert.match(adapter, /filteredRows\(\)/);
 assert.match(adapter, /rows\.slice\(start, start \+ 100\)/);
-assert.match(adapter, /revisionScope:\s*"revision0"/, "Dashboard deve iniciar em revisão 0");
+assert.match(adapter, /revisionScope:\s*"all"/, "Dashboard deve iniciar incluindo todos os cadastros");
 assert.match(adapter, /setRevisionScope/);
 assert.match(adapter, /\$\{state\.revisionScope\}:\$\{classKey\}/);
 assert.match(worker, /"revision0:all"/);

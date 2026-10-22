@@ -506,7 +506,7 @@
 
 #sigem-pw-dashboard-module .spw-actions-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 9px;
 }
 
@@ -1243,3 +1243,14 @@
 .spw-import-options label:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:.45rem}
 .spw-import-options input:not([type=checkbox]),.spw-import-options select{min-width:0;width:100%;box-sizing:border-box}
 .spw-import-options p:empty{display:none}
+
+#sigem-pw-dashboard-module .spw-pw-audit { display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px;border:1px solid var(--spw-border);border-radius:12px;margin-bottom:16px; }
+#sigem-pw-dashboard-module .spw-pw-audit div { display:grid;gap:4px;flex:1;min-width:150px; }
+#sigem-pw-dashboard-module .spw-pw-audit strong { font-size:1.4rem; }
+#sigem-pw-dashboard-module .spw-pw-audit small { flex-basis:100%; }
+
+#sigem-pw-dashboard-module .spw-table-wrap .spw-duplicates-table { table-layout:auto;min-width:1050px; }
+#sigem-pw-dashboard-module .spw-table-wrap .spw-duplicates-table td:nth-child(2) { width:330px;min-width:330px; }
+#sigem-pw-dashboard-module .spw-table-wrap .spw-duplicates-table td:nth-child(3) { min-width:96px; }
+#sigem-pw-dashboard-module .spw-table-wrap .spw-duplicates-table .spw-status { white-space:normal;overflow:visible; }
+#sigem-pw-dashboard-module .spw-pw-revision-note { display:block;margin-top:5px;color:var(--spw-muted);font-size:.68rem; }

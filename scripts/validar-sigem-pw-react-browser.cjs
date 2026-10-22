@@ -483,6 +483,80 @@ async function waitEvolutionReady(page) {
       ld: Boolean(window.GrconSigemPwDashboardUi.state.ld.meta),
     })), { sigem: false, pw: true, ld: false });
 
+    // Presence and duplicates must also work with no LD and with PW loaded alone.
+    await resetDashboard(page);
+    const presencePw = path.join(fixtureDir, 'PW_presence_duplicates.csv');
+    const presenceSigem = path.join(fixtureDir, 'SIGEM_presence.xlsx');
+    const presenceDoc = et('600001'), otherRevisionDoc = et('600002'), missingDoc = et('600099');
+    fs.writeFileSync(presencePw, [
+      'NumeroDocumentoCliente;RevisaoCompleta;o_statename;Última emissão;o_filename',
+      `${presenceDoc};;;;original.pdf`,
+      `${presenceDoc.replaceAll('_','-')};;Cancelado;;copia.docx`,
+      'DOCUMENTO-EXTERNO;B;Qualquer estado;;externo.pdf',
+      'DOCUMENTO-EXTERNO;B;Outro estado;;externo2.pdf',
+      `${otherRevisionDoc};A;Estado desconhecido;???;rev-a.pdf`,
+      `${otherRevisionDoc};B;Superado;;rev-b.pdf`,
+    ].join('\n'));
+    const presenceBook=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(presenceBook,XLSX.utils.aoa_to_sheet([
+      ['DOCUMENTO','REVISÃO','STATUS'],[presenceDoc,'0','Postado'],['DOCUMENTO-EXTERNO','0','Postado'],
+      [otherRevisionDoc,'0','Postado'],[missingDoc,'0','Postado']
+    ]),'Consulta Geral');
+    fs.writeFileSync(presenceSigem,XLSX.write(presenceBook,{type:'buffer',bookType:'xlsx'}));
+    await importFile(page,'#spw-pw-file',presencePw);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),4);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.quality.pwSourceRows),6);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.quality.pwDuplicateGroups),2);
+    await page.locator('[data-list="pwDuplicates"]').click();
+    await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.activeList==='pwDuplicates');
+    assert.equal(await page.locator('#spw-table tbody tr').count(),4);
+    await page.screenshot({path:path.join(outputDir,'pw-duplicates-1366.png'),fullPage:true});
+    const duplicateDownload=page.waitForEvent('download');
+    await page.locator('#spw-export').click();
+    const duplicateFile=await duplicateDownload;
+    assert.match(duplicateFile.suggestedFilename(),/pwDuplicates/);
+    const duplicatePath=path.join(fixtureDir,'PW_duplicados.xlsx');
+    await duplicateFile.saveAs(duplicatePath);
+    const duplicateBook=XLSX.read(fs.readFileSync(duplicatePath),{type:'buffer'});
+    const duplicateRows=XLSX.utils.sheet_to_json(duplicateBook.Sheets['Relação'],{defval:''});
+    assert.equal(duplicateRows.length,4);
+    assert.deepEqual(duplicateRows.map(r=>r['Linha no arquivo PW']),[2,3,4,5]);
+    assert.ok(duplicateRows.every(r=>r['Existe no PW']==='SIM' && r['Ocorrências do grupo']===2));
+    assert.deepEqual(duplicateRows.map(r=>r['Status PW']),['','Cancelado','Qualquer estado','Outro estado']);
+    await page.locator('#spw-class').selectOption('Não classificado');
+    await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.filters.documentClass==='Não classificado');
+    assert.equal(await page.locator('#spw-table tbody tr').count(),2);
+    await page.locator('#spw-clear').click();
+    await importFile(page,'#spw-sigem-file',presenceSigem);
+    await page.locator('[data-list="sigem"]').click();
+    const presence=await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.lists.sigem.map(r=>({document:r.document,inPw:r.inPw,situation:r.situation})));
+    assert.equal(presence.filter(r=>r.inPw).length,3);
+    assert.equal(presence.find(r=>r.document===missingDoc)?.inPw,false);
+    await page.locator('[data-revision-scope="revision0"]').click();
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.lists.sigem.filter(r=>r.inPw).length),3);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.sigemOnly),1);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.bothOtherRevision),2);
+    await page.locator('#spw-pw-presence-filter').selectOption('no');
+    await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.filters.inPw==='no');
+    assert.equal(await page.locator('#spw-table tbody tr').count(),1);
+    assert.match(await page.locator('#spw-table').innerText(),/600099/);
+    await page.locator('#spw-clear').click();
+    await page.locator('[data-list="pwDuplicates"]').click();
+    assert.equal(await page.locator('#spw-table tbody tr').count(),4,'duplicados usam o PW completo mesmo em Rev. 0');
+    // The next load must recover previously filtered rows from the retained source.
+    await page.evaluate(async()=>{
+      const core=GrconSigemPwDashboard,base=await core.loadPwBase();
+      await core.kvSet(core.PW_BASE_KEY,{...base,meta:{...base.meta,scopeVersion:5},records:base.records.filter(r=>r.documentClass==='ET')});
+      await GrconSigemPwDashboardUi.refresh('presence-migrate-existing-base');
+    });
+    await waitIdle(page);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.records.length),6);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeVersion),6);
+    metrics.pwPresenceAndDuplicates={allRows:6,uniqueEntries:4,duplicateRows:4,duplicateGroups:2,download:true,withoutLd:true,existingBaseReprocessed:true};
+    await page.locator('[data-revision-scope="all"]').click();
+    await page.locator('[data-list="all"]').click();
+    await resetDashboard(page);
+
     await resetDashboard(page);
     await importFile(page, "#spw-ld-file", fixtures.ldFile);
 
@@ -501,7 +575,9 @@ async function waitEvolutionReady(page) {
     await page.waitForSelector("#spw-revision-section", { timeout: 30000 });
     await page.screenshot({ path: path.join(outputDir, "02-sigem-pw-bases-1366.png"), fullPage: true });
 
-    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "revision0", "Dashboard deve abrir em Revisão 0");
+    assert.equal(await page.evaluate(() => window.GrconSigemPwDashboardUi.state.revisionScope), "all", "Dashboard deve incluir todos os cadastros por padrão");
+    await page.locator('[data-revision-scope="revision0"]').click();
+    await page.waitForFunction(() => window.GrconSigemPwDashboardUi.state.revisionScope === "revision0");
     assert.equal(await page.locator('[data-revision-scope="revision0"]').getAttribute("aria-pressed"), "true");
     const revision0Summary = await page.evaluate(() => window.GrconSigemPwDashboardUi.state.result.summary);
     assert.equal(revision0Summary.sigem, 251);

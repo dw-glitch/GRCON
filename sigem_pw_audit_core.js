@@ -10,7 +10,7 @@
   "use strict";
 
   const VERSION = "sigem-pw-audit-1";
-  const CLASSES = Object.freeze(["ET", "N-1710"]);
+  const CLASSES = Object.freeze(["ET", "N-1710", "Não classificado"]);
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
   function countBy(items, selector) {
@@ -42,7 +42,7 @@
     const scopeLdSnapshotId = text(meta.scopeLdSnapshotId);
     const activeLdId = text(ldBase && ldBase.meta && ldBase.meta.snapshotId);
     const checks = [
-      { key: "entry-balance", label: "Entradas conciliadas com as classes", passed: classCounts.ET + classCounts["N-1710"] === validEntries },
+      { key: "entry-balance", label: "Entradas conciliadas com as classes", passed: Object.values(classCounts).reduce((sum, count) => sum + count, 0) === validEntries },
       { key: "emission-balance", label: "Emissões contidas na base cadastrada", passed: emitted <= validEntries },
       { key: "identity", label: "Código e revisão normalizados", passed: identityComplete },
       { key: "scope-version", label: "Regra de escopo vigente aplicada", passed: Number(meta.scopeVersion || 0) >= Number(Dashboard.PW_SCOPE_VERSION || 0) },
@@ -86,6 +86,7 @@
       { Grupo: "Quantidade", Indicador: "Documentos únicos", Valor: metrics.uniqueDocuments },
       { Grupo: "Classe", Indicador: "ET", Valor: metrics.classes.ET },
       { Grupo: "Classe", Indicador: "N-1710", Valor: metrics.classes["N-1710"] },
+      { Grupo: "Classe", Indicador: "Não classificado", Valor: metrics.classes["Não classificado"] },
       { Grupo: "Emissão", Indicador: "PW emitido", Valor: metrics.emittedEntries },
       { Grupo: "Emissão", Indicador: "PW não emitido", Valor: metrics.notEmittedEntries },
       { Grupo: "Qualidade", Indicador: "Duplicidades técnicas consolidadas", Valor: metrics.consolidatedDuplicates },

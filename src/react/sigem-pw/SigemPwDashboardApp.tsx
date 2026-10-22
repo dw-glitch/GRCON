@@ -78,13 +78,20 @@ export function SigemPwDashboardApp() {
             <span className="spw-kicker">VISÃO CONSOLIDADA</span>
             <h3 id="spw-overview-title">Totais e pendências operacionais</h3>
             <p>{state.revisionScope === "revision0"
-              ? "Visão principal do cadastro inicial: somente ocorrências em revisão 0 nos dois sistemas."
+              ? "Visão principal do cadastro inicial: ocorrências em revisão 0 e cadastros sem revisão; a existência usa a base PW completa."
               : "Visão de movimentação documental: cada Documento + Revisão é uma ocorrência independente."}</p>
           </div>
           {classifiedTotal > 0 ? <UiMetaPill><strong>{fmt(classifiedTotal)}</strong> classificados</UiMetaPill> : null}
         </div>
         <SigemPwRevisionScopeSelector value={state.revisionScope} onChange={(value) => adapter.setRevisionScope(value)} />
         <SigemPwSystemsSummary state={state} onOpenSigem={() => adapter.openSigemDetails()} />
+        {state.pw.meta ? <section className="spw-pw-audit" aria-label="Conferência da lista PW" id="spw-pw-audit">
+          <div><strong>{fmt(state.result?.quality.pwSourceRows || 0)}</strong><span>linhas PW com código</span></div>
+          <div><strong>{fmt(state.result?.quality.pwDuplicateGroups || 0)}</strong><span>grupos de código + revisão repetidos</span></div>
+          <div><strong>{fmt(state.result?.quality.pwDuplicateExtraRows || 0)}</strong><span>repetições adicionais</span></div>
+          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwDuplicates")}>Ver duplicados PW</button>
+          <small>A lista de duplicados usa a base PW completa. Revisões diferentes são registros distintos. Exporte a relação pelo botão “Exportar lista”.</small>
+        </section> : null}
         <SigemPwSituationCards
           state={state}
           activeList={state.activeList}
@@ -97,7 +104,7 @@ export function SigemPwDashboardApp() {
           <div>
             <span className="spw-kicker">RELAÇÃO DETALHADA</span>
             <strong id="spw-list-title">{activeLabel}</strong>
-            <small>{state.revisionScope === "revision0"
+            <small>{state.activeList === "pwDuplicates" ? "Todas as ocorrências dos grupos duplicados na base PW completa, com linha de origem e status original." : state.revisionScope === "revision0"
               ? "Detalhamento auditável somente da revisão 0; os demais filtros permanecem ativos."
               : "Detalhamento auditável por Documento + Revisão; os demais filtros permanecem ativos."}</small>
           </div>
@@ -137,7 +144,7 @@ export function SigemPwDashboardApp() {
           onClass={(value: SigemPwDocumentClass) => adapter.setDocumentClass(value)}
           onClear={() => adapter.clearFilters()}
         />
-        <SigemPwTable rows={pageData.visible} caption={activeLabel} />
+        <SigemPwTable rows={pageData.visible} caption={activeLabel} duplicates={state.activeList === "pwDuplicates"} />
         <SigemPwPager
           page={state.page}
           pages={pageData.pages}

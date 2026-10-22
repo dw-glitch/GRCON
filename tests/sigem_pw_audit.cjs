@@ -24,11 +24,11 @@ const raw = {
 const sanitized = Dashboard.sanitizePwBase(raw, ld);
 const audit = Audit.buildAudit({ ...sanitized, meta: { ...sanitized.meta, snapshotId: "pw:validated" } }, ld);
 assert.equal(audit.status, "validated");
-assert.deepEqual(audit.metrics.classes, { ET: 2, "N-1710": 1 });
-assert.equal(audit.metrics.validRows, 4);
-assert.equal(audit.metrics.validEntries, 3);
-assert.equal(audit.metrics.uniqueDocuments, 2);
-assert.equal(audit.metrics.emittedEntries, 2);
+assert.deepEqual(audit.metrics.classes, { ET: 2, "N-1710": 1, "Não classificado": 1 });
+assert.equal(audit.metrics.validRows, 5);
+assert.equal(audit.metrics.validEntries, 4);
+assert.equal(audit.metrics.uniqueDocuments, 3);
+assert.equal(audit.metrics.emittedEntries, 3);
 assert.equal(audit.metrics.notEmittedEntries, 1);
 assert.equal(audit.metrics.consolidatedDuplicates, 1);
 assert.equal(audit.trace.ldFileName, "LD Qualidade.xlsx");

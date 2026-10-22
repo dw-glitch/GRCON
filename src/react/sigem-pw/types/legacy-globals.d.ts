@@ -43,6 +43,7 @@ interface PostingConferenceApi {
   commitPreparedImport(result: PreparedConferenceImport): Promise<unknown>;
 }
 interface SigemPwDashboardCoreApi {
+  EMISSION_RULE: string;
   SIGEM_BASE_KEY: string; PW_BASE_KEY: string; LD_BASE_KEY: string; HISTORY_KEY: string; LEGACY_SIGEM_BASE_KEY: string; LEGACY_PW_BASE_KEY: string; HISTORY_VERSION: number; PW_SCOPE_VERSION: number;
   normalizeHeader(value: unknown): string; norm(value: unknown): string; parseDateMs(value: unknown): number;
   revisionKey(value: unknown): string; normalizeRevisionScope(value: unknown): SigemPwRevisionScope;
@@ -171,7 +172,7 @@ declare global {
       saveProfile(name: string, value: {columns: Record<string,string>; delimiter: string}): unknown;
       selectProfile(name: string): void;
       removeProfile(name: string): void;
-      session(): {filters?: Partial<import('./domain').SigemPwFilters>; revisionScope?: string; activeList?: string; analysisPwId?: string; analysisSigemId?: string} | null;
+      session(): {pwPresenceRule?: number; filters?: Partial<import('./domain').SigemPwFilters>; revisionScope?: string; activeList?: string; analysisPwId?: string; analysisSigemId?: string} | null;
       saveSession(value: unknown): void;
     };
     GrconSharedPwQuery?: {

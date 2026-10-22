@@ -23,10 +23,10 @@ export function SigemPwHeader({ busy, classifiedTotal, ready, onEvolution, onHis
       <UiPageHeader
         eyebrow="Controle documental integrado"
         title="Dashboard SIGEM × ProjectWise"
-        description="Compare a Consulta Geral com a relação ProjectWise por documento + revisão, mantendo ET e N-1710 como universo operacional do dashboard."
+        description="Confira o cadastro pela presença do código na base ProjectWise. Compare revisões e emissões separadamente."
         meta={(
           <>
-            <UiMetaPill><strong>ET + N-1710</strong></UiMetaPill>
+            <UiMetaPill><strong>Base PW completa</strong></UiMetaPill>
             <UiMetaPill>Chave <strong>documento + revisão</strong></UiMetaPill>
             <UiMetaPill className={ready ? "spw-meta-ready" : "spw-meta-pending"}>
               <strong>{ready ? "Bases prontas" : "Aguardando bases"}</strong>

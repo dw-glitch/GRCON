@@ -78,7 +78,7 @@ const state: EvolutionUiState = {
   ldSignature: "",
   period: { start: "", end: "" },
   selections: { sigemPrev: "", sigemCurrent: "", pwPrev: "", pwCurrent: "" },
-  revisionScope: "revision0",
+  revisionScope: "all",
   comparison: null,
   timeline: [],
   listMode: "sigem-new",
@@ -1374,7 +1374,7 @@ function subscribeExternalEvents(): () => void {
   externalListenersInstalled = true;
   const onScope = (event: Event) => setRevisionScope((event as CustomEvent).detail?.scope);
   window.addEventListener("grcon:sigem-pw-revision-scope-changed", onScope);
-  state.revisionScope = document.documentElement.dataset.sigemPwRevisionScope === "all" ? "all" : "revision0";
+  state.revisionScope = document.documentElement.dataset.sigemPwRevisionScope === "revision0" ? "revision0" : "all";
   const onBaseUpdate = () => scheduleRefresh(false);
   const onContext = () => {
     contextEpoch++; state.sigem = []; state.pw = []; state.ldUniverse = null; state.ldSignature = "";

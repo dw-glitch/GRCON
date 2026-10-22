@@ -1,8 +1,8 @@
 export type SigemPwBaseKind = "sigem" | "pw" | "ld";
 export type SigemPwEditableBaseKind = "sigem" | "pw";
-export type SigemPwDocumentClass = "" | "ET" | "N-1710";
+export type SigemPwDocumentClass = "" | "ET" | "N-1710" | "Não classificado";
 export type SigemPwRevisionScope = "revision0" | "all";
-export type SigemPwListKey = "all" | "sigem" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
+export type SigemPwListKey = "all" | "sigem" | "pw" | "pwDuplicates" | "bothOtherRevision" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
 export type SigemPwReadinessStatus = "empty" | "partial" | "ready" | "attention";
 
 export interface SigemPwBaseMeta {
@@ -66,6 +66,13 @@ export interface SigemPwRow {
   sigemOriginalCode?: string;
   pwOriginalCode?: string;
   pwRevisionEvidence?: string;
+  pwRevision?: string;
+  pwRevisionMatched?: boolean;
+  hasPwEntry?: boolean;
+  duplicateCount?: number;
+  duplicateOccurrence?: number;
+  pwSourceRow?: number;
+  pwFileName?: string;
   situation: string;
   situationKey: SigemPwListKey | string;
   inSigem?: boolean;
@@ -94,6 +101,7 @@ export interface SigemPwSummary {
   pwExclusive: number;
   matched: number;
   sigemOnly: number;
+  bothOtherRevision: number;
   bothNotEmitted: number;
   bothEmitted: number;
   pwOnlyNotEmitted: number;
@@ -104,6 +112,10 @@ export interface SigemPwSummary {
 export interface SigemPwQuality {
   sigemRawRecords?: number;
   pwRawRecords?: number;
+  pwSourceRows?: number;
+  pwDuplicateGroups?: number;
+  pwDuplicateExtraRows?: number;
+  pwDuplicateRows?: number;
   sigemEntries: number;
   pwEntries: number;
   pwEmittedEntries?: number;
@@ -229,6 +241,9 @@ export interface WorkerModelPayload {
 export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.freeze({
   all: "Todas as situações",
   sigem: "Documentos do total SIGEM",
+  pw: "Cadastrados no PW",
+  pwDuplicates: "Duplicados PW",
+  bothOtherRevision: "Cadastrado: conferir revisão",
   sigemOnly: "SIGEM: falta cadastrar no PW",
   bothNotEmitted: "SIGEM + PW: ainda não emitido",
   bothEmitted: "SIGEM + PW: emitido",

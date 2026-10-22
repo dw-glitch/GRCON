@@ -13,8 +13,8 @@ export function SigemPwRevisionScopeSelector({
   onChange(value: SigemPwRevisionScope): void;
 }) {
   const description = value === "revision0"
-    ? "Compara SIGEM Rev. 0 com PW Rev. 0 e cadastros “Previsto” sem revisão informada. A revisão desconhecida não é tratada como emissão nem como revisão 0."
-    : "Compara todas as ocorrências Documento + Revisão entre SIGEM e PW.";
+    ? "Exibe ocorrências em revisão 0 e cadastros sem revisão informada. A existência do documento é sempre consultada na base PW completa."
+    : "Inclui todas as ocorrências Documento + Revisão. Status, emissão ou classe documental não excluem cadastros PW.";
 
   return (
     <div className="spw-revision-scope-block">

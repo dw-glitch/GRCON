@@ -66,7 +66,7 @@ assert.match(adapter, /GRCONModuleLoader\.ensure\("xlsx"\)/);
 assert.match(adapter, /bookType:\s*"xlsx"/);
 assert.match(adapter, /rows\.slice\(start, start \+ EVOLUTION_PAGE_SIZE\)/);
 assert.match(adapter, /function currentFiltersForExport\(\)/);
-assert.ok(adapter.includes('revisionScope: "revision0"'));
+assert.ok(adapter.includes('revisionScope: "all"'));
 assert.ok(adapter.includes("function setRevisionScope("));
 assert.ok(adapter.includes("dashboardRevisionKey("));
 assert.ok(adapter.includes("scopeSnapshot("));

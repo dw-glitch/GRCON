@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.3";
+  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.4";
   const VALID_CLASSES = new Set(["ET", "N-1710"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
@@ -323,7 +323,7 @@
       if (!raw || !text(raw.document)) continue;
       const identity = documentIdentity(raw.document);
       const cls = documentClass(raw.document);
-      const reason = scopeReason(raw, identity, cls, universe);
+      const reason = system === SYSTEMS.PW && identity.key ? "" : scopeReason(raw, identity, cls, universe);
       if (reason) {
         const item = rejectRecord(raw, system, reason);
         rejected.push(item);

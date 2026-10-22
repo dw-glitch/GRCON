@@ -134,9 +134,9 @@ function functionBody(source, name, nextName) {
 })();
 
 (function businessScopeRemainsUnchanged() {
-  assert.deepEqual(Dashboard.SCOPE_CLASSES, ["ET", "N-1710"]);
+  assert.deepEqual(Dashboard.SCOPE_CLASSES, ["ET", "N-1710", "Não classificado"]);
   assert.match(Dashboard.EMISSION_RULE, /código \+ revisão/i);
-  assert.match(Dashboard.EMISSION_RULE, /0 e A.*duas entradas/i);
+  assert.match(Dashboard.EMISSION_RULE, /Revisões diferentes são registros distintos/i);
 })();
 
 console.log("sigem_pw_stage7_atomic_import: OK — preparação, dependências, preservação, persistência compartilhada e rollback integral validados.");
