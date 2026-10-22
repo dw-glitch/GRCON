@@ -42,7 +42,7 @@ names.forEach(name => fs.writeFileSync(path.join(bundle, name), '%PDF-1.4\n%%EOF
   try {
     for (const worker of [true, false]) {
       const context = await browser.newContext({ viewport:{ width:1366,height:768 }, serviceWorkers:'block' });
-      if (!worker) await context.addInitScript(() => { window.Worker = undefined; });
+      if (!worker) await context.addInitScript(() => { window.__qaNativeWorker = window.Worker; window.Worker = undefined; });
       const page = await context.newPage();
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
@@ -117,6 +117,12 @@ names.forEach(name => fs.writeFileSync(path.join(bundle, name), '%PDF-1.4\n%%EOF
       preview = await page.evaluate(() => window.GrconEgrdtBatchPlan.preview('physical'));
       assert.equal(preview.valid, true, preview.errors.join('\n')); assert.equal(preview.totalItems, 7);
       assert.equal(await page.evaluate(i => window.GrconTriageUiApi.getResult(i).allocationStatus, n.index), 'NÃO ALOCADO');
+      if (!worker) await page.evaluate(() => {
+        // The triage/export capability was captured as false at initialization.
+        // Restore only the independent Cofre hashing transport for the download.
+        window.Worker = window.__qaNativeWorker;
+        if(window.GrconPerformance?.supported!==false)throw new Error('legacy export must stay active');
+      });
       const downloaded=page.waitForEvent('download', {timeout:30000});
       await page.locator('#export-zip').click();
       await page.locator('#p1-sequence-confirm').check();
