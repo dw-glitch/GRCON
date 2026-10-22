@@ -39,7 +39,7 @@
   if(/^(REVISAO|REV)$/.test(h))return 'revision';
   if(h==='TITULO'||h.includes('TITULO DO DOCUMENTO'))return 'title';
   if(h==='RELATORIO'||h==='TIPO DE RELATORIO')return 'report';
-  if(h==='DISCIPLINA'||h==='WORKFLOW'||h==='QUEM?')return h==='DISCIPLINA'?'discipline':'workflow';
+  if(h==='DISCIPLINA'||h==='WORKFLOW')return h==='DISCIPLINA'?'discipline':'workflow';
   if(h==='DATA BOOK'||h.includes('CAMINHO DATABOOK')||h.includes('CAMINHO DATA BOOK'))return 'databook';
   if(h==='EAP'||h==='CODIGO EAP')return 'eap';
   if(h==='UNIDADE'||h==='INSTALACAO')return 'unit';
@@ -64,6 +64,11 @@
   if(h.includes('INCLUIDO EM'))return 'included';
   return '';
  }
+ function dateValue(value,kind){
+  const raw=text(value);
+  if(!['effectiveDate','deadline','modified','included'].includes(kind)||!/^\d{1,4}[-/]\d{1,2}[-/]\d{2,4}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$/.test(raw))return value;
+  const parsed=C.parseDate(raw);return parsed?new Date(Date.UTC(parsed.getFullYear(),parsed.getMonth(),parsed.getDate(),parsed.getHours(),parsed.getMinutes(),parsed.getSeconds())):value;
+ }
  function ldRow(row,layout){
   const record=row.record||{},d=details(row),headers=Array(Math.max(...layout.columns.map(c=>c.column))).fill('');layout.columns.forEach(c=>{headers[c.column-1]=c.header;});
   const source=new Map((record.ldColumns||[]).map(c=>[c.column,c])),sameRevision=text(record.revision||'0').toUpperCase()===text(row.revision||'0').toUpperCase();
@@ -79,11 +84,11 @@
    if(f.startsWith('level:'))return row.output?.levels?.[Number(f.slice(6))-1]||'';
    if(f==='observation')return [text(original),row.output?.observation].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join(' · ');
    if(!sameRevision&&['status','sigemStatus','grdt','effectiveDate','modified','included'].includes(f))return '';
-   if(text(original))return text(original);
+   if(text(original))return dateValue(text(original),f);
    if(f==='documentType')return text(record.documentType)||C.buildEgrdtData(row.document,row.revision,'',record,record.sheet).documentType||'';
    // Operational state comes only from this document's LD. Generating a file
    // does not prove allocation acceptance, emission or SIGEM publication.
-   return f?text(record[f]):'';
+   return f?dateValue(text(record[f]),f):'';
   });
   return {headers,values};
  }
@@ -99,7 +104,7 @@
   sheet.columns.forEach((column,i)=>{const f=field(headers[i]);column.width=f==='title'?90:f==='document'?52:f==='databook'?65:f==='report'?62:f==='route'?48:f==='observation'?70:24;column.numFmt='@';});
   sheet.eachRow((row,index)=>{row.font={name:'Aptos',size:11,color:{argb:'FF20384D'}};row.alignment={vertical:'middle',wrapText:true};
    if(index===1){row.height=32;row.alignment={vertical:'middle',horizontal:'center',wrapText:true};row.font={name:'Aptos',size:11,bold:true,color:{argb:'FFFFFFFF'}};row.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF1F4E78'}};}
-   else{row.height=Math.min(409,Math.max(34,...row.values.slice(1).map((v,i)=>Math.ceil(String(v??'').length/(sheet.getColumn(i+1).width||24))*14+12)));row.fill={type:'pattern',pattern:'solid',fgColor:{argb:index%2?'FFFFFFFF':'FFF0F5FA'}};row.eachCell({includeEmpty:true},cell=>{cell.border={bottom:{style:'hair',color:{argb:'FFDCE5ED'}}};});}
+   else{row.height=Math.min(409,Math.max(34,...row.values.slice(1).map((v,i)=>Math.ceil((v instanceof Date?10:String(v??'').length)/(sheet.getColumn(i+1).width||24))*14+12)));row.fill={type:'pattern',pattern:'solid',fgColor:{argb:index%2?'FFFFFFFF':'FFF0F5FA'}};row.eachCell({includeEmpty:true},cell=>{if(cell.value instanceof Date)cell.numFmt=(cell.value.getUTCHours()||cell.value.getUTCMinutes())?'dd/mm/yyyy hh:mm':'dd/mm/yyyy';cell.border={bottom:{style:'hair',color:{argb:'FFDCE5ED'}}};});}
   });
   sheet.pageSetup={orientation:'landscape',paperSize:8,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:1'};
  }
