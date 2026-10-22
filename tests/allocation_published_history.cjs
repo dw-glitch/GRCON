@@ -63,7 +63,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   await rpc('hide-run',{id:created.runs[0].id});
   assert.equal((await rpc('history')).runs.length,0,'exclusão oculta de todas as sincronizações');
   await as(13);
-  await assert.rejects(rpc('restore-run',{id:created.runs[0].id}),/gestor/);
+  await assert.rejects(rpc('restore-run',{id:created.runs[0].id}),/perfis operacionais|gestor/);
   await as(10);
   assert.equal((await rpc('hidden-history')).runs.length,1);
   await rpc('restore-run',{id:created.runs[0].id});
