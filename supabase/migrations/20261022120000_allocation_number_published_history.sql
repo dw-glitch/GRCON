@@ -281,15 +281,6 @@ begin
   update private.grcon_allocation_runs set hidden_at=null,hidden_by=null
    where id=(input->>'id')::uuid and contract_id=c and hidden_at is not null returning id into new_id;
   if new_id is null then raise exception 'Alocação indisponível ou não excluída.' using errcode='22023'; end if;
- elsif operation='hide-run' then
-  update private.grcon_allocation_runs set hidden_at=now(),hidden_by=u
-   where id=(input->>'id')::uuid and contract_id=c and hidden_at is null returning id into new_id;
-  if new_id is null then raise exception 'Alocação indisponível ou já excluída.' using errcode='22023'; end if;
- elsif operation='restore-run' then
-  if r not in ('owner','admin') then raise exception 'Restauração reservada aos gestores.' using errcode='42501'; end if;
-  update private.grcon_allocation_runs set hidden_at=null,hidden_by=null
-   where id=(input->>'id')::uuid and contract_id=c and hidden_at is not null returning id into new_id;
-  if new_id is null then raise exception 'Alocação indisponível ou não excluída.' using errcode='22023'; end if;
  elsif operation='run-status' then
   if input->>'status' not in ('submitted','accepted','rejected','cancelled') or length(btrim(coalesce(input->>'justification','')))<5 then raise exception 'Situação ou justificativa inválida.'; end if;
   update private.grcon_allocation_runs set status=input->>'status',justification=input->>'justification' where id=(input->>'id')::uuid and contract_id=c returning id into new_id;
