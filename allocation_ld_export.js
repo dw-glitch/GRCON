@@ -65,10 +65,15 @@
   return '';
  }
  function dateValue(value,kind){
-  const raw=text(value);
-  if(!['effectiveDate','deadline','modified','included'].includes(kind)||!/^\d{1,4}[-/]\d{1,2}[-/]\d{2,4}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$/.test(raw))return value;
-  const parsed=C.parseDate(raw);return parsed?new Date(Date.UTC(parsed.getFullYear(),parsed.getMonth(),parsed.getDate(),parsed.getHours(),parsed.getMinutes(),parsed.getSeconds())):value;
+  if(!['effectiveDate','deadline','modified','included'].includes(kind))return value;
+  const raw=text(value),iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/),br=raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/),m=iso||br;
+  if(!m)return value;
+  let year=Number(iso?m[1]:m[3]);if(br&&m[3].length===2)year+=2000;if(year<1900)return value;
+  const month=Number(m[2]),day=Number(iso?m[3]:m[1]),hour=Number(m[4]||0),minute=Number(m[5]||0),second=Number(m[6]||0);
+  const date=new Date(Date.UTC(year,month-1,day,hour,minute,second));
+  return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day&&date.getUTCHours()===hour&&date.getUTCMinutes()===minute&&date.getUTCSeconds()===second?date:value;
  }
+
  function ldRow(row,layout){
   const record=row.record||{},d=details(row),headers=Array(Math.max(...layout.columns.map(c=>c.column))).fill('');layout.columns.forEach(c=>{headers[c.column-1]=c.header;});
   const source=new Map((record.ldColumns||[]).map(c=>[c.column,c])),sameRevision=text(record.revision||'0').toUpperCase()===text(row.revision||'0').toUpperCase();
