@@ -86,15 +86,16 @@
   }
 
   /**
-   * Harmoniza somente a representação dos seis separadores estruturais dos
-   * códigos RNEST. A base SIGEM usa, em grande parte, C1O_RNEST_... enquanto a
-   * exportação PW usa C1O-RNEST-.... O TAG/identificador (7º grupo) permanece
-   * intacto. Depois dessa harmonização, toda identidade passa pelas regras
-   * centrais do GRCON (documentSearchKeys / documentIdentityKey).
+   * Apenas ET/RNEST admite equivalência entre os seis separadores estruturais:
+   * SIGEM usa underscores e algumas exportações PW usam hífens. A TAG (grupo 7)
+   * é preservada literalmente. N-1710 é a exceção: utiliza hífens em AMBOS
+   * os sistemas, sem substituição de caracteres. Jamais trocar separadores
+   * globalmente ou identificar N-1710 apenas pela presença de hífen.
    */
   function canonicalDocumentCode(value) {
     const raw = norm(stripDocumentExtension(value)).replace(/\s*([_.-])\s*/g, "$1");
     if (!raw) return "";
+    if (N1710_CODE_RE.test(raw)) return raw;
     const match = raw.match(/^([A-Z0-9]{3})[-_]RNEST[-_]([A-Z0-9]+)[-_](\d+(?:\.\d+){3})[-_]([A-Z0-9]+)[-_]([A-Z0-9]+)[-_](.+)$/);
     if (!match) return raw;
     return `${match[1]}_RNEST_${match[2]}_${match[3]}_${match[4]}_${match[5]}_${match[6]}`;
@@ -161,10 +162,24 @@
       : REVISION_SCOPES.ALL;
   }
 
-  function scopeRevisionMap(map, revisionScope) {
+  function scopeRevisionMap(map, revisionScope, sigemRevision0) {
     const scope = normalizeRevisionScope(revisionScope);
     if (scope === REVISION_SCOPES.ALL) return map;
-    return new Map([...map].filter(([, entry]) => entry && entry.revisionKey === "0"));
+    const scoped = new Map([...map].filter(([, entry]) => entry && entry.revisionKey === "0"));
+    // No relatório PW, "Previsto" frequentemente chega sem qualquer revisão.
+    // A presença do cadastro pode ser conciliada SOMENTE com um documento
+    // existente em SIGEM revisão 0, se não houver revisão 0 explícita no PW.
+    // Não atribuímos revisão 0 ao registro PW e não contamos um previsto
+    // sem revisão como PW exclusivo na visão de revisão 0.
+    if (sigemRevision0 instanceof Map) {
+      const sigemCodes = new Set([...sigemRevision0.values()].map((entry) => entry.documentKey));
+      const explicitPwCodes = new Set([...scoped.values()].map((entry) => entry.documentKey));
+      map.forEach((entry, key) => {
+        if (entry && entry.revisionKey === "__SEM_REVISAO__"
+          && sigemCodes.has(entry.documentKey) && !explicitPwCodes.has(entry.documentKey)) scoped.set(key, entry);
+      });
+    }
+    return scoped;
   }
 
   function revisionLabel(value) {
@@ -729,7 +744,9 @@
     const sigemStatus = currentStatus(sigemEntry, "sigem");
     const sigemCurrent = sigemEntry && sigemEntry.current;
     const sigemDate = text(sigemCurrent && (sigemCurrent.modifiedAt || sigemCurrent.includedAt || sigemCurrent.stateChangedAt || sigemCurrent.createdAt));
-    const pwStatus = currentStatus(pwEntry, "pw");
+    const pwLastEmission = text(pwEntry && pwEntry.current && pwEntry.current.lastEmission);
+    const pwStatusRaw = currentStatus(pwEntry, "pw");
+    const pwStatus = pwStatusRaw || (norm(pwLastEmission) === EMISSION_FLAGS.PLANNED ? "Previsto (sem estado no PW)" : "");
     const pwEmission = pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : "Não cadastrado";
     let situationKey = "bothEmitted";
     let situation = COMPARISON_SITUATIONS.BOTH_EMITTED;
@@ -756,6 +773,10 @@
       sigemDate,
       pwStatus,
       pwEmission,
+      pwLastEmission,
+      sigemOriginalCode: text(sigemEntry && sigemEntry.document),
+      pwOriginalCode: text(pwEntry && pwEntry.document),
+      pwRevisionEvidence: pwEntry && pwEntry.revisionKey === "__SEM_REVISAO__" ? "Não informada no PW" : "Informada no PW",
       situation,
       situationKey,
       inSigem: Boolean(sigemEntry),
@@ -777,7 +798,8 @@
     return groups;
   }
 
-  function buildComparisonLists(sigem, pw) {
+  function buildComparisonLists(sigem, pw, options) {
+    const revision0 = normalizeRevisionScope(options && options.revisionScope) === REVISION_SCOPES.REVISION0;
     const all = [];
     const consumedSigem = new Set();
     const consumedPw = new Set();
@@ -791,7 +813,7 @@
       consumedPw.add(key);
       const missingPwRevision = pwEntry.revisionKey === "__SEM_REVISAO__";
       all.push(comparisonRow(key, sigemEntry, pwEntry, missingPwRevision ? {
-        revision: `Não informada no PW · SIGEM: ${sigemEntry.revision}`,
+        revision: revision0 ? "0" : `Não informada no PW · SIGEM: ${sigemEntry.revision}`,
         matchMode: "document-fallback",
       } : null));
     });
@@ -811,7 +833,7 @@
       consumedSigem.add(candidate.key);
       consumedPw.add(pwKey);
       all.push(comparisonRow(`document:${pwKey}:${candidate.key}`, candidate.entry, pwEntry, {
-        revision: `Não informada no PW · SIGEM: ${candidate.entry.revision}`,
+        revision: revision0 ? "0" : `Não informada no PW · SIGEM: ${candidate.entry.revision}`,
         matchMode: "document-fallback",
       }));
     });
@@ -896,7 +918,7 @@
     const sigemSource = source.sigemEntries || source.sigemAll || new Map();
     const pwSource = source.pwEntries || source.pwAll || new Map();
     const sigemAll = scopeRevisionMap(sigemSource, revisionScope);
-    const pwAll = scopeRevisionMap(pwSource, revisionScope);
+    const pwAll = scopeRevisionMap(pwSource, revisionScope, sigemAll);
     const sigem = filterMap(sigemAll, "sigem", filters);
     const pw = filterMap(pwAll, "pw", filters);
     const sigemKeys = new Set(sigem.keys());
@@ -904,7 +926,7 @@
     const emittedKeys = new Set([...pw].filter(([, document]) => document.emitted).map(([key]) => key));
     if (emittedKeys.size > pwKeys.size) throw new Error("Inconsistência matemática: PW emitido maior que PW cadastrado.");
 
-    const lists = buildComparisonLists(sigem, pw);
+    const lists = buildComparisonLists(sigem, pw, { revisionScope });
     const gapSigemToPw = new Set(lists.sigemOnly.map((row) => row.key));
     const gapPwToEmitted = setDifference(pwKeys, emittedKeys);
     const pwExclusive = new Set([...lists.pwOnlyNotEmitted, ...lists.pwOnlyEmitted].map((row) => row.key));
@@ -912,7 +934,7 @@
 
     const classRows = summarizeClassesFromLists(sigem, pw, lists);
     const allClassRows = sigem.size === sigemAll.size && pw.size === pwAll.size
-      ? classRows : summarizeClassesFromLists(sigemAll, pwAll, buildComparisonLists(sigemAll, pwAll));
+      ? classRows : summarizeClassesFromLists(sigemAll, pwAll, buildComparisonLists(sigemAll, pwAll, { revisionScope }));
     const classifiedTotal = lists.sigemOnly.length + lists.bothNotEmitted.length + lists.bothEmitted.length
       + lists.pwOnlyNotEmitted.length + lists.pwOnlyEmitted.length;
     const expectedTotal = sigemKeys.size + pwKeys.size - matched.size;
