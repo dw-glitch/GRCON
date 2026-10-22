@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.1";
+  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.2";
   const VALID_CLASSES = new Set(["ET", "N-1710"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
@@ -627,21 +627,52 @@
     const pwOnlyEmitted = [];
     const pwOnlyNotEmitted = [];
     const pwOnlyIndeterminate = [];
+    // Um cadastro PREVISTO pode não ter revisão no relatório PW.
+    // Conciliar por identidade documental uma única vez, APÓS os pares exatos.
+    // Não converter a revisão ausente em 0/A/etc. nem consumir emissões históricas.
+    const plannedUnknown = new Map();
+    pw.forEach((row, key) => {
+      if (row.emissionKind === "planned" && !text(row.revision) && row.emissionState === "not-emitted") {
+        const documentKey = text(row.documentKey) || norm(documentIdentity(row.document).key);
+        if (documentKey) plannedUnknown.set(documentKey, { key, row });
+      }
+    });
+    const plannedMatches = new Map();
+    const consumedPw = new Set();
+    const unmatchedSigem = [...sigem.entries()].filter(([key]) => !pw.has(key));
+    const revisionRank = (value) => Dashboard && typeof Dashboard.revisionRank === "function"
+      ? Dashboard.revisionRank(value) : (normalizeRevision(value) === "0" ? 0 : -1);
+    unmatchedSigem.sort((left, right) => revisionRank(right[1].revision) - revisionRank(left[1].revision));
+    for (const [sigemKey, sigemRow] of unmatchedSigem) {
+      const documentKey = text(sigemRow.documentKey) || norm(documentIdentity(sigemRow.document).key);
+      const candidate = plannedUnknown.get(documentKey);
+      if (!candidate || consumedPw.has(candidate.key)) continue;
+      plannedMatches.set(sigemKey, candidate.row);
+      consumedPw.add(candidate.key);
+    }
     sigem.forEach((sigemRow, key) => {
-      const pwRow = pw.get(key);
+      const fallbackPw = plannedMatches.get(key);
+      const pwRow = pw.get(key) || fallbackPw;
       if (!pwRow) {
         onlySigem.push({ ...sigemRow, movement: "Somente SIGEM" });
         return;
       }
       const indeterminate = pwRow.emissionState === "indeterminate";
-      const linked = { ...sigemRow, matchedPw: pwRow, movement: pwRow.emitted ? "SIGEM + PW emitido" : indeterminate ? "SIGEM + PW emissão indeterminada" : "SIGEM + PW não emitido" };
+      const matchMode = fallbackPw ? "document-fallback" : "document-revision";
+      const linked = {
+        ...sigemRow, matchedPw: pwRow, matchMode,
+        revisionEvidence: fallbackPw ? "PW previsto sem revisão informada: vínculo apenas por código" : "Revisão informada no PW",
+        movement: fallbackPw ? "SIGEM + PW cadastrado sem emissão (revisão PW indeterminada)"
+          : pwRow.emitted ? "SIGEM + PW emitido"
+            : indeterminate ? "SIGEM + PW emissão indeterminada" : "SIGEM + PW não emitido",
+      };
       both.push(linked);
       if (pwRow.emitted) bothEmitted.push(linked);
       else if (indeterminate) bothIndeterminate.push(linked);
       else bothNotEmitted.push(linked);
     });
     pw.forEach((pwRow, key) => {
-      if (sigem.has(key)) return;
+      if (sigem.has(key) || consumedPw.has(key)) return;
       const indeterminate = pwRow.emissionState === "indeterminate";
       const linked = { ...pwRow, movement: pwRow.emitted ? "Somente PW emitido" : indeterminate ? "Somente PW emissão indeterminada" : "Somente PW não emitido" };
       onlyPw.push(linked);

@@ -62,6 +62,10 @@ export interface SigemPwRow {
   sigemDate?: string;
   pwStatus: string;
   pwEmission: string;
+  pwLastEmission?: string;
+  sigemOriginalCode?: string;
+  pwOriginalCode?: string;
+  pwRevisionEvidence?: string;
   situation: string;
   situationKey: SigemPwListKey | string;
   inSigem?: boolean;

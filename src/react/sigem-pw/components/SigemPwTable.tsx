@@ -36,12 +36,12 @@ export function SigemPwTable({ rows, caption }: { rows: SigemPwRow[]; caption: s
               <tr key={row.key}>
                 <td><DocumentClassBadge className="spw-pill" value={row.documentClass} /></td>
                 <td className="spw-code">{row.document}</td>
-                <td><span className="spw-revision">{row.revision}</span></td>
+                <td><span className="spw-revision" title={row.pwRevisionEvidence === "Não informada no PW" ? "Cadastro confirmado no PW pelo código; revisão não informada na consulta." : undefined}>{row.revision}</span></td>
                 <td><span className="spw-status">{valueOrDash(row.sigemStatus)}</span></td>
                 <td><span className="spw-status">{valueOrDash(row.sigemDate || "")}</span></td>
                 <td><span className="spw-status spw-emission">{row.inPw ? "SIM" : "NÃO"}</span></td>
                 <td><span className="spw-status">{valueOrDash(row.pwStatus)}</span></td>
-                <td><span className="spw-status spw-emission">{row.pwEmission}</span></td>
+                <td><span className="spw-status spw-emission" title={row.pwLastEmission ? `Última emissão na consulta PW: ${row.pwLastEmission}` : undefined}>{row.pwEmission}</span></td>
                 <td><span className={`spw-situation ${situationClass(row)}`}>{row.situation}</span></td>
               </tr>
             ))}
