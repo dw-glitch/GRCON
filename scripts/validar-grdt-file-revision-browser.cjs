@@ -38,8 +38,9 @@ names.forEach(name => fs.writeFileSync(path.join(bundle, name), '%PDF-1.4\n%%EOF
     fs.createReadStream(file).on('error',()=>{res.statusCode=404;res.end();}).pipe(res);
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  const browser = await chromium.launch({ args:['--no-sandbox'], ...(process.env.GRCON_CHROMIUM_PATH ? { executablePath:process.env.GRCON_CHROMIUM_PATH } : {}) });
+  let browser;
   try {
+    browser = await chromium.launch({ args:['--no-sandbox'], ...(process.env.GRCON_CHROMIUM_PATH ? { executablePath:process.env.GRCON_CHROMIUM_PATH } : {}) });
     for (const worker of [true, false]) {
       const context = await browser.newContext({ viewport:{ width:1366,height:768 }, serviceWorkers:'block' });
       if (!worker) await context.addInitScript(() => { window.__qaNativeWorker = window.Worker; window.Worker = undefined; });
@@ -151,5 +152,5 @@ names.forEach(name => fs.writeFileSync(path.join(bundle, name), '%PDF-1.4\n%%EOF
       console.log(JSON.stringify({ mode:worker ? 'Worker' : 'Legado', rows, finalItems:preview.totalItems, manualOverride:true, unallocatedPackageVerified:true, errors }));
       await context.close();
     }
-  } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
+  } finally { await browser?.close(); await new Promise(resolve=>server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
