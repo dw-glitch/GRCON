@@ -66,9 +66,11 @@ export function automaticContextKeys(body){
 }
 export function validateAutomaticBatch(body,context){
  automaticContextKeys(body);
+ if(body.startSequence!==undefined&&(!Number.isInteger(body.startSequence)||body.startSequence<1||body.startSequence>9999))
+   throw Error('Número inicial da alocação inválido.');
  if(Core.signature(body.versions)!==Core.signature(context.versions))throw Error('As bases mudaram. Reanalise.');
  const paths=new Set((context.bases.databook||[]).map(p=>p.databook));
- return {automatic:true,requestId:body.requestId,versions:context.versions,observedSequence:body.observedSequence,groups:body.groups.map(group=>({documents:group.documents.map(doc=>{
+ return {automatic:true,requestId:body.requestId,versions:context.versions,observedSequence:body.observedSequence,...(body.startSequence===undefined?{}:{startSequence:body.startSequence}),groups:body.groups.map(group=>({documents:group.documents.map(doc=>{
   const identity=Core.identity(doc.document),record={document:doc.document,title:doc.title,discipline:identity.discipline||doc.discipline,workflow:doc.workflow};
   const path=doc.databook.trim();
   if(path&&!paths.has(path))throw Error('Caminho ausente na base ativa.');
