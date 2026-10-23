@@ -45,6 +45,7 @@
   }
 
   function documentClass(value) {
+    if (Base.documentClass(value) === "CV") return "CV";
     const identity = Base.documentIdentity(value);
     const info = identity.info;
     const code = identity.canonical;
