@@ -46,6 +46,7 @@ interface SigemPwDashboardCoreApi {
   EMISSION_RULE: string;
   SIGEM_BASE_KEY: string; PW_BASE_KEY: string; LD_BASE_KEY: string; HISTORY_KEY: string; LEGACY_SIGEM_BASE_KEY: string; LEGACY_PW_BASE_KEY: string; HISTORY_VERSION: number; PW_SCOPE_VERSION: number;
   normalizeHeader(value: unknown): string; norm(value: unknown): string; parseDateMs(value: unknown): number;
+  isC1OCode(value: unknown): boolean;
   revisionKey(value: unknown): string; normalizeRevisionScope(value: unknown): SigemPwRevisionScope;
   parsePwCsv(source: string, meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   parseLdMatrix(matrix: string[][], meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };

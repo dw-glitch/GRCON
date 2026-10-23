@@ -110,7 +110,7 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
 (function performanceLinear(){
   const count=20000; const ldRows=[]; const before=[]; const after=[];
   for(let i=0;i<count;i++){
-    const doc=`ABC_RNEST_U32_1.1.1.1_REP_TAG${String(i).padStart(5,'0')}_001`;
+    const doc=`C1O_RNEST_U32_1.1.1.1_REP_TAG${String(i).padStart(5,'0')}_001`;
     ldRows.push({document:doc}); before.push(s(doc,'0')); after.push(s(doc,'0'));
   }
   for(let i=0;i<250;i++) after.push(s(before[i].document,'A'));

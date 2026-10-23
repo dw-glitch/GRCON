@@ -9,11 +9,11 @@ const Revision = require(path.join(rootDir, "sigem_pw_revision_core.js"));
 const History = require(path.join(rootDir, "sigem_pw_history_core.js"));
 
 function et(tag, revision, status, extra = {}) {
-  const document = `ABC_RNEST_U32_1.1.1.1_REP_${tag}_000`;
+  const document = `C1O_RNEST_U32_1.1.1.1_REP_${tag}_000`;
   return { document, revision, status, sourceRow: Number(extra.sourceRow || 1), ...extra };
 }
 function pw(tag, revision, state, lastEmission, extra = {}) {
-  const document = `ABC_RNEST_U32_1.1.1.1_REP_${tag}_000`;
+  const document = `C1O_RNEST_U32_1.1.1.1_REP_${tag}_000`;
   return { document, revision, revisionComplete: revision, state, lastEmission, sourceRow: Number(extra.sourceRow || 1), ...extra };
 }
 function sigemBase(records, fileName = "Consulta Geral.xlsx", importedAt = "2026-09-10T08:30:00.000Z") {
