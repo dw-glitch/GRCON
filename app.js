@@ -1907,6 +1907,51 @@
     return Boolean(row && rowCanBeSelected(row) && rowOutputSources(row).length
       && rowStatusPolicy(row).autoEligible);
   }
+  // Ação explícita do operador, tanto pela linha quanto pelo cabeçalho.
+  function setRowSelected(index, checked, notify = true) {
+    const row = state.results[index];
+    if (checked) {
+      if (!rowCanBeSelected(row)) {
+        if (notify) showToast("Este documento possui um bloqueio técnico que não admite inclusão manual.", "warn");
+        return false;
+      }
+      // A triagem pode ter retornado cedo pela alocação e usado esse alerta
+      // como texto de situação. Registre a escolha com o status SIGEM real,
+      // o mesmo que será conferido no download, sem desmarcar a decisão depois.
+      if (manualAllocationOverrideAllowed(row)) {
+        applyRowSigemStatus(row, resolveRowSigemStatus(row, row.revision));
+        state.resultVersion += 1;
+        state.filteredCache = { signature: "", indices: [] };
+      }
+      state.selected.add(index);
+      // Mantém o registro visual de que o operador incluiu um alerta de triagem.
+      const statusPolicy = rowStatusPolicy(row);
+      if (row && (row.decision !== C.READY || row.hardBlock || statusPolicy.manualOnly)) {
+        state.manualForceInclude.add(index);
+      }
+      if (statusPolicy.manualOnly) {
+        if (notify && row.blockingRevision) showToast(`Atenção: revisão ${row.blockingRevision} ainda Em Análise; a revisão ${row.revision} não deve ser enviada ao SIGEM até a conclusão da anterior. Inclusão manual registrada como exceção.`, "warn");
+        row.manualSigemSelection = {
+          revision: C.normalizeRevision(row.revision),
+          kind: statusPolicy.kind,
+          statusKey: C.normalizeSigemStatus(statusPolicy.status).key,
+          blockingRevision: row.blockingRevision || "",
+          selectedAt: new Date().toISOString(),
+          selectedBy: window.GrconCloud?.state?.session?.user?.id || "",
+        };
+        auditManualGrdtChange(row, "Inclusão manual com status SIGEM", "Fora da GRDT", "Incluído manualmente", statusPolicy.status || "Status SIGEM não identificado");
+      }
+      if (notify && manualAllocationOverrideAllowed(row)) {
+        showToast("Documento incluído manualmente. A LD continuará registrada como Não Alocado.", "warn");
+      }
+    } else {
+      state.selected.delete(index);
+      state.manualForceInclude.delete(index);
+      if (row) row.manualSigemSelection = null;
+    }
+    return true;
+  }
+
   function rowIncludedForGeneration(row, index) {
     return Boolean(rowCanBeSelected(row) && TriageQuery.selectionAuthorized(row, index, state.selected, state.manualForceInclude));
   }
@@ -3056,9 +3101,25 @@
   function selectionSituationLabel(row, index) {
     const policy = rowStatusPolicy(row);
     if (policy.allocation) return rowIncludedForGeneration(row, index)
-      ? `Incluído manualmente · ${policy.label}` : policy.label;
-    if (rowIncludedForGeneration(row, index)) return policy.manualOnly ? "Incluído manualmente" : compactDecisionLabel(row);
-    return policy.manualOnly ? policy.label : "Excluído";
+      ? `${policy.label} · incluído manualmente` : policy.label;
+    if (!rowCanBeSelected(row)) return "Bloqueado";
+    if (policy.manualOnly) return rowIncludedForGeneration(row, index)
+      ? `${policy.label} · incluído manualmente` : policy.label;
+    if (rowIncludedForGeneration(row, index)) return row.decision === C.READY ? "Pronto" : compactDecisionLabel(row);
+    return "Excluído";
+  }
+
+  // Cor representa a situação real, mesmo após uma inclusão manual.
+  function selectionSituationClass(row, index) {
+    const policy = rowStatusPolicy(row);
+    if (policy.allocation === "conflict") return "allocation-conflict";
+    if (policy.allocation) return "allocation-blocked";
+    if (!rowCanBeSelected(row)) return "technical-blocked";
+    if (policy.unresolved) return "unresolved";
+    if (policy.kind === "analysis") return "in-analysis";
+    if (policy.manualOnly) return "manual-sigem";
+    if (!rowIncludedForGeneration(row, index)) return "excluded";
+    return decisionClass(row.decision, row);
   }
 
   function decisionClass(value, row) {
@@ -3979,7 +4040,7 @@
       const previousRow = previousIndex === null ? null : state.results[previousIndex];
       const groupStart = state.groupByStatus && (!previousRow || decisionGroupKey(previousRow) !== decisionGroupKey(row));
       const statusPolicy = rowStatusPolicy(row);
-      const resultClass = statusPolicy.allocation ? "blocked" : statusPolicy.manualOnly ? "review" : decisionClass(row.decision, row);
+      const resultClass = selectionSituationClass(row, index);
       const selectable = rowCanBeSelected(row);
       const selected = rowIncludedForGeneration(row, index);
       const record = row.record || {};
@@ -4009,7 +4070,7 @@
           || "—";
       const allocationVisual = C.allocationEvidenceState ? C.allocationEvidenceState(record) : C.allocationState(record.allocationStatus || row.allocationStatus);
       const allocationClass = allocationAlert
-        ? "blocked"
+        ? allocationAlert === "conflict" ? "allocation-conflict" : "blocked"
         : row.hardBlock
         ? "blocked"
         : allocationVisual.kind === "allocated" ? "allocated"
@@ -4034,7 +4095,7 @@
           ${groupStart ? `<span class="triage-group-label">${escapeHtml(decisionGroupLabel(row))}</span>` : ""}
           <input id="select-row-${index}" name="select-row-${index}" class="row-select" data-select-row type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Selecionar para GRDT" title="${selectionTitle}">
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
-          <span class="status-chip ${allocationAlert ? "allocation-blocked" : statusPolicy.manualOnly ? "manual-sigem" : selected ? resultClass : "excluded"}" title="Alocação: ${escapeHtml(allocationStatus)} · Status SIGEM: ${escapeHtml(statusPolicy.status || "não identificado")} · Resultado da triagem: ${escapeHtml(compactDecisionLabel(row))}">${escapeHtml(selectionSituationLabel(row, index))}</span>
+          <span class="status-chip ${resultClass}" title="Alocação: ${escapeHtml(allocationStatus)} · Status SIGEM: ${escapeHtml(statusPolicy.status || "não identificado")} · Resultado da triagem: ${escapeHtml(compactDecisionLabel(row))}">${escapeHtml(selectionSituationLabel(row, index))}</span>
         </div></td>
         <td>${renderRowFileList(row, false)}${renderFileOrigin(row)}</td>
         <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="grdt-document-text"><span class="grdt-document-identity"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span><button type="button" class="grdt-copy-code" data-action="copy-code" aria-label="Copiar código ${escapeHtml(row.document)}" title="Copiar código">⧉</button></span><small class="grdt-document-original" title="${escapeHtml(row.name || "")}">${escapeHtml(row.name || "")}</small><small class="grdt-document-source">${escapeHtml(TriageQuery.origin(row))} · ${escapeHtml(TriageQuery.extensions(row).join(" / ") || "Tipo não identificado")}</small></span></span>${!row.record ? `<button type="button" class="text-button" data-action="suggest-allocation">Sugerir alocação</button>` : ""}${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryUi ? window.GrconGrdtHistoryUi.row(row.document, row.revision) : PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
@@ -4267,7 +4328,7 @@
     const filtered = filteredResults();
     const selectableIndices = [];
     filtered.forEach((row) => {
-      if (rowCanAutoInclude(row)) selectableIndices.push(resultIndex(row));
+      if (rowCanBeSelected(row)) selectableIndices.push(resultIndex(row));
     });
 
     const physicalSelected = [];
@@ -5807,46 +5868,9 @@
     const rowElement = event.target.closest("tr[data-index]");
     if (!rowElement) return;
     const index = Number(rowElement.dataset.index);
-    const row = state.results[index];
-    if (event.target.checked) {
-      if (!rowCanBeSelected(row)) {
-        event.target.checked = false;
-        showToast("Este documento possui um bloqueio técnico que não admite inclusão manual.", "warn");
-        return;
-      }
-      // A triagem pode ter retornado cedo pela alocação e usado esse alerta
-      // como texto de situação. Registre a escolha com o status SIGEM real,
-      // o mesmo que será conferido no download, sem desmarcar a decisão depois.
-      if (manualAllocationOverrideAllowed(row)) {
-        applyRowSigemStatus(row, resolveRowSigemStatus(row, row.revision));
-        state.resultVersion += 1;
-        state.filteredCache = { signature: "", indices: [] };
-      }
-      state.selected.add(index);
-      // Mantém o registro visual de que o operador incluiu um alerta de triagem.
-      const statusPolicy = rowStatusPolicy(row);
-      if (row && (row.decision !== C.READY || row.hardBlock || statusPolicy.manualOnly)) {
-        state.manualForceInclude.add(index);
-      }
-      if (statusPolicy.manualOnly) {
-        if (row.blockingRevision) showToast(`Atenção: revisão ${row.blockingRevision} ainda Em Análise; a revisão ${row.revision} não deve ser enviada ao SIGEM até a conclusão da anterior. Inclusão manual registrada como exceção.`, "warn");
-        row.manualSigemSelection = {
-          revision: C.normalizeRevision(row.revision),
-          kind: statusPolicy.kind,
-          statusKey: C.normalizeSigemStatus(statusPolicy.status).key,
-          blockingRevision: row.blockingRevision || "",
-          selectedAt: new Date().toISOString(),
-          selectedBy: window.GrconCloud?.state?.session?.user?.id || "",
-        };
-        auditManualGrdtChange(row, "Inclusão manual com status SIGEM", "Fora da GRDT", "Incluído manualmente", statusPolicy.status || "Status SIGEM não identificado");
-      }
-      if (manualAllocationOverrideAllowed(row)) {
-        showToast("Documento incluído manualmente. A LD continuará registrada como Não Alocado.", "warn");
-      }
-    } else {
-      state.selected.delete(index);
-      state.manualForceInclude.delete(index);
-      if (row) row.manualSigemSelection = null;
+    if (!setRowSelected(index, event.target.checked)) {
+      event.target.checked = false;
+      return;
     }
     // Sincroniza os dois checkboxes (situação e manual)
     if (isManualSelect) {
@@ -5872,19 +5896,15 @@
   });
   els.selectAllReady.addEventListener("change", (event) => {
     if (state.downloadPreparing) return;
+    const checked = event.target.checked;
     const visibleIndices = filteredResultIndices();
     visibleIndices.forEach((index) => {
-      const row = state.results[index];
-      if (!rowCanAutoInclude(row)) return;
-      if (event.target.checked) {
-        state.selected.add(index);
-        // Seleção em massa não cria autorização manual de status SIGEM.
-      } else {
-        state.selected.delete(index);
-        state.manualForceInclude.delete(index);
-      }
+      // Inclui toda a lista filtrada, mesmo fora da janela virtual da tabela.
+      // O cabeçalho registra as mesmas exceções manuais da seleção individual.
+      if (checked && (state.selected.has(index) || !rowCanBeSelected(state.results[index]))) return;
+      setRowSelected(index, checked, false);
     });
-    if (event.target.checked) {
+    if (checked) {
       const visibleSet = new Set(visibleIndices);
       const manualCount = [...state.manualForceInclude].filter((index) => visibleSet.has(index)).length;
       showToast(`Documentos visíveis selecionados${manualCount ? ` · ${manualCount} inclusão(ões) manual(is) sinalizada(s)` : ""}.`, manualCount ? "warn" : "success");
@@ -6103,3 +6123,4 @@
     }
   }
 })();
+

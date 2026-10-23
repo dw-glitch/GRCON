@@ -99,7 +99,7 @@ selected.clear();
 assert.equal(Q.selectionAuthorized(repro,0,selected,manual),false);
 const appSource = fs.readFileSync(require.resolve("../app.js"), "utf8");
 assert.match(appSource,/if \(rowCanAutoInclude\(row\)\) state\.selected\.add\(index\);/);
-assert.match(appSource,/if \(!rowCanAutoInclude\(row\)\) return;/);
+assert.match(appSource,/if \(!setRowSelected\(index, event\.target\.checked\)\)/);
 assert.match(appSource,/function guardedSelectedIndices/);
 assert.match(appSource,/E\.createPlan\(state\.results, guardedSelectedIndices\(\)/);
 assert.match(appSource,/const physicalSelection = guardedSelectedIndices\(true\);/);
@@ -112,6 +112,163 @@ assert.match(fs.readFileSync(require("node:path").join(__dirname,"..","grdt-cent
   /status-chip\.allocation-blocked[\s\S]*#991b1b/);
 assert.doesNotMatch(appSource,/if \(row\.decision === C\.READY && !row\.hardBlock && rowOutputSources\(row\)\.length\) state\.selected\.add\(index\);/);
 console.log("GRDT SIGEM: análise excluída automaticamente, seleção individual, aliases, revisão, repostagem e proteção dos downloads OK.");
+
+// Executa os mesmos helpers e listener usados pela tela, com a política real.
+// A lista filtrada pode conter linhas fora da janela virtual e índices reordenados.
+function selectionHarness(rows, visible = rows.map((_, index) => index)) {
+  const events = new Map(), audits = [], notices = [];
+  const state = { results: rows, selected: new Set(), manualForceInclude: new Set(), resultVersion: 0 };
+  const checkbox = { addEventListener: (name, listener) => events.set(name, listener) };
+  const headerStart = appSource.indexOf("    const filtered = filteredResults();", appSource.indexOf("  function renderAll()"));
+  const headerIndices = appSource.slice(headerStart, appSource.indexOf("    const physicalSelected = [];", headerStart));
+  const headerState = appSource.match(/    els\.selectAllReady\.disabled = [^\n]+\n    els\.selectAllReady\.checked = [^\n]+\n    els\.selectAllReady\.indeterminate = [^\n]+/)[0];
+  const ctx = vm.createContext({ state, C: Core, TriageQuery: Q, Date, Set,
+    els: { selectAllReady: checkbox },
+    window: { GrconCloud: { state: { session: { user: { id: "QA-operator" } } } } },
+    resultIndex: item => rows.indexOf(item),
+    rowOutputSources: item => item.files || [],
+    filteredResultIndices: () => [...visible],
+    filteredResults: () => visible.map(index => rows[index]),
+    resolveRowSigemStatus: item => ({ status: item.sigemStatus || item.status }),
+    applyRowSigemStatus: (item, resolved) => { item.status = resolved.status; },
+    auditManualGrdtChange: (...args) => audits.push(args),
+    showToast: (...args) => notices.push(args),
+    renderAll: () => vm.runInContext(`reconcileSelectedRows(); { ${headerIndices} ${headerState} }`, ctx),
+  });
+  vm.runInContext(appSource.slice(appSource.indexOf("  function manualAllocationOverrideAllowed("),
+    appSource.indexOf("  function refreshPendingAllocationBundle(")), ctx);
+  const handlerStart = appSource.indexOf('  els.selectAllReady.addEventListener("change"');
+  vm.runInContext(appSource.slice(handlerStart, appSource.indexOf("  if (els.resultsScroll)", handlerStart)), ctx);
+  const render = () => ctx.renderAll();
+  render();
+  return { state, checkbox, audits, notices, render,
+    filter: indices => { visible = indices; render(); },
+    toggle: checked => { checkbox.checked = checked; events.get("change")({ target: checkbox }); },
+    individual: (index, checked) => vm.runInContext(`setRowSelected(${index}, ${checked}); renderAll();`, ctx),
+    output: () => [...vm.runInContext("guardedSelectedIndices()", ctx)],
+  };
+}
+const selectionRow = (status, extra = {}) => ({ document: "DOC", revision: "B", status,
+  decision: Core.READY, files: [{ name: "DOC_B.pdf" }], ...extra });
+const manualRows = [
+  selectionRow("Em Análise"),
+  selectionRow("Em Workflow", { blockingRevision: "A", decision: Core.DISCARD }),
+  selectionRow("Não Alocado", { sigemStatus: "Não Postado", hardBlock: true,
+    blockCode: "not_allocated", allocationStatus: "NÃO ALOCADO" }),
+  selectionRow("Sem status", { decision: Core.REVIEW }),
+];
+const allManual = selectionHarness(manualRows);
+assert.equal(allManual.checkbox.disabled, false, "cabeçalho habilitado mesmo sem elegíveis automáticos");
+allManual.toggle(true);
+assert.deepEqual([...allManual.state.selected], [0, 1, 2, 3]);
+assert.deepEqual(allManual.output(), [0, 1, 2, 3], "inclusão manual permanece autorizada após reconciliar a seleção");
+assert.deepEqual([...allManual.state.manualForceInclude], [0, 1, 2, 3]);
+assert.equal(allManual.checkbox.checked, true);
+assert.equal(allManual.checkbox.indeterminate, false);
+assert.equal(manualRows[1].manualSigemSelection.blockingRevision, "A");
+assert.equal(manualRows[2].manualSigemSelection.kind, "not_posted", "registra o status real após resolver Não Alocado");
+assert.equal(manualRows[2].allocationStatus, "NÃO ALOCADO", "preserva alerta da LD");
+assert.equal(allManual.audits.length, 4);
+assert.equal(allManual.notices.length, 1, "um aviso agregado para o lote");
+for (const item of manualRows) {
+  assert.equal(item.manualSigemSelection.selectedBy, "QA-operator");
+  assert.ok(item.manualSigemSelection.selectedAt);
+  assert.equal(Q.selectionPolicy(item).autoEligible, false, "seleção manual não muda a elegibilidade automática");
+}
+allManual.toggle(true);
+assert.equal(allManual.audits.length, 4, "não duplica auditoria de itens já selecionados");
+allManual.toggle(false);
+assert.equal(allManual.state.selected.size, 0);
+assert.equal(allManual.state.manualForceInclude.size, 0);
+assert.ok(manualRows.every(item => item.manualSigemSelection === null), "desmarcar tudo revoga exceções manuais");
+
+const mixed = selectionHarness([
+  selectionRow("Não Postado"), selectionRow("Em Análise"),
+  selectionRow("Recusado", { hardBlock: true, blockCode: "invalid_file" }),
+  selectionRow("Em Análise"),
+]);
+mixed.individual(3, true);
+mixed.filter([2, 1, 0]);
+mixed.toggle(true);
+assert.deepEqual([...mixed.state.selected].sort(), [0, 1, 3], "seleciona por índice-fonte e preserva itens fora do filtro");
+assert.deepEqual([...mixed.state.manualForceInclude].sort(), [1, 3]);
+assert.equal(mixed.state.results[2].manualSigemSelection, undefined, "bloqueio técnico não recebe autorização");
+assert.equal(mixed.checkbox.checked, true, "itens bloqueados não impedem marcar o cabeçalho");
+mixed.individual(1, false);
+assert.equal(mixed.checkbox.indeterminate, true);
+assert.equal(mixed.checkbox.checked, false);
+mixed.toggle(true);
+assert.equal(mixed.checkbox.checked, true);
+mixed.toggle(false);
+assert.deepEqual([...mixed.state.selected], [3], "desmarca só os resultados do filtro");
+assert.equal(mixed.state.results[1].manualSigemSelection, null);
+mixed.filter([2]);
+assert.equal(mixed.checkbox.disabled, true, "somente bloqueados técnicos");
+mixed.filter([]);
+assert.equal(mixed.checkbox.disabled, true, "nenhum resultado");
+mixed.filter([1, 0]);
+mixed.state.downloadPreparing = true;
+mixed.render();
+assert.equal(mixed.checkbox.disabled, true);
+mixed.toggle(true);
+assert.deepEqual([...mixed.state.selected], [3], "download em andamento não permite alterar a seleção");
+const virtual = selectionHarness(Array.from({ length: 550 }, () => selectionRow("Em Análise")));
+virtual.toggle(true);
+assert.equal(virtual.output().length, 550, "seleciona a lista inteira, inclusive fora da janela virtual");
+virtual.toggle(false);
+assert.equal(virtual.state.selected.size, 0);
+console.log("GRDT selecionar tudo: manuais, lote misto, filtros, índices, virtualização, cabeçalho e auditoria OK.");
+
+// A cor acompanha o problema real e o rótulo mantém a pendência após seleção.
+const visualRows = [
+  selectionRow("Não Postado"),
+  selectionRow("Não Postado", { allocationStatus: "NÃO ALOCADO" }),
+  selectionRow("Em Workflow", { blockingRevision: "A" }),
+  selectionRow("Não Postado", { decision: Core.REVIEW }),
+  selectionRow("Sem status"),
+  selectionRow("Não Postado", { blockCode: "not_allocated_conflict" }),
+  selectionRow("Não Postado", { hardBlock: true, blockCode: "invalid_file" }),
+  selectionRow("Não Postado"),
+];
+const visualState = { results: visualRows, selected: new Set([0, 1, 2, 3, 4, 5]), manualForceInclude: new Set([1, 2, 3, 4, 5]) };
+for (const index of visualState.manualForceInclude) {
+  const item = visualRows[index], policy = Q.selectionPolicy(item);
+  item.manualSigemSelection = { revision: "B", kind: policy.kind,
+    statusKey: Core.normalizeSigemStatus(policy.status).key, blockingRevision: item.blockingRevision || "" };
+}
+const visualCtx = vm.createContext({ state: visualState, C: Core, TriageQuery: Q,
+  resultIndex: item => visualRows.indexOf(item) });
+vm.runInContext(appSource.slice(appSource.indexOf("  function manualAllocationOverrideAllowed("),
+  appSource.indexOf("  function rowCanBeEdited(")), visualCtx);
+vm.runInContext(appSource.slice(appSource.indexOf("  function rowStatusPolicy("),
+  appSource.indexOf("  // Ação explícita do operador")), visualCtx);
+vm.runInContext(appSource.slice(appSource.indexOf("  function rowIncludedForGeneration("),
+  appSource.indexOf("  function guardedSelectedIndices(")), visualCtx);
+vm.runInContext(appSource.slice(appSource.indexOf("  function compactDecisionLabel("),
+  appSource.indexOf("  function decisionGroupKey(")), visualCtx);
+const expectedVisualClasses = ["ready", "allocation-blocked", "in-analysis", "review", "unresolved", "allocation-conflict", "technical-blocked", "excluded"];
+for (let index = 0; index < visualRows.length; index += 1) {
+  assert.equal(vm.runInContext(`selectionSituationClass(state.results[${index}], ${index})`, visualCtx), expectedVisualClasses[index]);
+}
+assert.equal(vm.runInContext("selectionSituationLabel(state.results[0], 0)", visualCtx), "Pronto");
+assert.match(vm.runInContext("selectionSituationLabel(state.results[1], 1)", visualCtx), /Não Alocado · incluído manualmente/);
+assert.match(vm.runInContext("selectionSituationLabel(state.results[2], 2)", visualCtx), /Em análise \(rev\. A\) · incluído manualmente/);
+assert.equal(vm.runInContext("selectionSituationLabel(state.results[6], 6)", visualCtx), "Bloqueado");
+const statusCss = fs.readFileSync(require.resolve("../grdt-central-ux.css"), "utf8");
+const palettes = [...statusCss.matchAll(/--grdt-status-bg:\s*(#[a-f\d]+);\s*--grdt-status-ink:\s*(#[a-f\d]+);\s*--grdt-status-border:\s*(#[a-f\d]+);/gi)];
+assert.equal(palettes.length, 8);
+assert.equal(new Set(palettes.map(match => match[1])).size, 8, "oito fundos distintos");
+assert.equal(new Set(palettes.map(match => match[2])).size, 8, "oito cores de texto distintas");
+const luminance = hex => hex.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255)
+  .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
+  .reduce((total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index], 0);
+for (const [, background, ink] of palettes) {
+  const values = [luminance(background), luminance(ink)];
+  assert.ok((Math.max(...values) + 0.05) / (Math.min(...values) + 0.05) >= 4.5,
+    `contraste de texto legível: ${ink} sobre ${background}`);
+}
+assert.match(statusCss, /tr\.result-row\.manually-included:hover > td\s*\{\s*background: var\(--grdt-status-surface\) !important;/);
+console.log("GRDT cores: pronto, não alocado, análise, conferência, não identificado, conflito, bloqueado e excluído distintos OK.");
 
 function harness() {
   const events=new Map(), pending=[];
@@ -144,3 +301,4 @@ function harness() {
   assert.equal(h.flow.lookup("NEW-DOC","0").emissionKind,"FIRST_POSTING");
   console.log("GRDT master: filtros combinados, história incompleta, concorrência, conta/contrato e retry aprovados.");
 })().catch(error=>{console.error(error);process.exitCode=1;});
+

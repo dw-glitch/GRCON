@@ -130,7 +130,7 @@ html[data-app="GRCON"] #results-table .grdt-document-identity .document-code {
 .grdt-download-progress progress { width: 100%; height: 10px; accent-color: #1661aa; }
 .grdt-download-progress[data-state="error"] strong { color: #a33d34; }
 
-/* Exceções SIGEM exigem inclusão individual e não herdam a cor verde de READY. */
+/* Exceções SIGEM preservam o aviso após a seleção explícita do operador. */
 html[data-app="GRCON"] #results-table .status-chip.manual-sigem {
   background: #fff3d6;
   color: #805200;
@@ -152,3 +152,51 @@ html[data-app="GRCON"] #results-table .allocation-state.blocked {
   border-color: #f1a9a9;
   font-weight: 750;
 }
+
+/* Uma paleta por situação para badge, faixa lateral e células fixas.
+   A marcação manual não deve repintar Não Alocado de amarelo. */
+html[data-app="GRCON"] #results-table :is(.result-row, .status-chip).ready {
+  --grdt-status-bg: #dcfce7; --grdt-status-ink: #166534; --grdt-status-border: #86cf9d; --grdt-status-symbol: "✓";
+}
+html[data-app="GRCON"] #results-table :is(.result-row, .status-chip, .allocation-state).allocation-blocked,
+html[data-app="GRCON"] #results-table .allocation-state.blocked {
+  --grdt-status-bg: #fee2e2; --grdt-status-ink: #991b1b; --grdt-status-border: #f1a9a9; --grdt-status-symbol: "!";
+}
+html[data-app="GRCON"] #results-table :is(.result-row, .status-chip).in-analysis {
+  --grdt-status-bg: #dbeafe; --grdt-status-ink: #1e40af; --grdt-status-border: #93b4ed; --grdt-status-symbol: "◷";
+}
+html[data-app="GRCON"] #results-table :is(.result-row, .status-chip):is(.review, .manual-sigem) {
+  --grdt-status-bg: #fff3d6; --grdt-status-ink: #805200; --grdt-status-border: #e7c57a; --grdt-status-symbol: "△";
+}
+html[data-app="GRCON"] #results-table :is(.result-row, .status-chip).unresolved {
+  --grdt-status-bg: #ede9fe; --grdt-status-ink: #5b21b6; --grdt-status-border: #c4b5fd; --grdt-status-symbol: "?";
+}
+html[data-app="GRCON"] #results-table :is(.result-row, .status-chip, .allocation-state).allocation-conflict {
+  --grdt-status-bg: #fce7f3; --grdt-status-ink: #9d174d; --grdt-status-border: #f0abcf; --grdt-status-symbol: "↔";
+}
+html[data-app="GRCON"] #results-table :is(.result-row, .status-chip).technical-blocked {
+  --grdt-status-bg: #ffedd5; --grdt-status-ink: #7c2d12; --grdt-status-border: #fdba74; --grdt-status-symbol: "×";
+}
+html[data-app="GRCON"] #results-table :is(.result-row, .status-chip):is(.excluded, .discard) {
+  --grdt-status-bg: #edf1f5; --grdt-status-ink: #475569; --grdt-status-border: #c1ccd8; --grdt-status-symbol: "−";
+}
+html[data-app="GRCON"] #results-table .status-chip,
+html[data-app="GRCON"] #results-table .allocation-state:is(.blocked, .allocation-conflict) {
+  background: var(--grdt-status-bg);
+  color: var(--grdt-status-ink);
+  border: 1px solid var(--grdt-status-border);
+  font-weight: 750;
+}
+html[data-app="GRCON"] #results-table .status-chip::before {
+  content: var(--grdt-status-symbol); flex: 0 0 auto; margin-right: 4px; font-weight: 850;
+}
+html[data-app="GRCON"] #results-table tbody tr.result-row {
+  --grdt-status-surface: color-mix(in srgb, var(--grdt-status-ink) 7%, var(--surface-1, #fff));
+  box-shadow: inset 4px 0 var(--grdt-status-ink);
+}
+html[data-app="GRCON"] #results-table tbody tr.result-row > :is(td:first-child, td:nth-child(3)),
+html[data-app="GRCON"] #results-table tbody tr.result-row.manually-included > td,
+html[data-app="GRCON"] #results-table tbody tr.result-row.manually-included:hover > td {
+  background: var(--grdt-status-surface) !important;
+}
+
