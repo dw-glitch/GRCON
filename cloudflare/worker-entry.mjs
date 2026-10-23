@@ -1,3 +1,4 @@
+import {handleSigemStorage} from './sigem-storage.mjs';
 import legacyWorker, { _internal as legacyInternal } from "./worker.mjs";
 import {syncSharepoint} from './teams-sharepoint.mjs';
 import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
@@ -802,6 +803,8 @@ export default {
   async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
+      const sigemResponse = await handleSigemStorage(request, env);
+      if (sigemResponse) return sigemResponse;
       const githubResponse = await handleGithubRoute(request, env);
       if (githubResponse) return githubResponse;
       if (url.pathname.startsWith(PREFIX)) return await routeVault(request, env, ctx);
@@ -817,3 +820,4 @@ export default {
     }
   },
 };
+

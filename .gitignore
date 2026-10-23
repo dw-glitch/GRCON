@@ -17,3 +17,7 @@ supabase/.temp/
 
 # Rebuilt from the canonical runtime modules before Edge deployment.
 supabase/functions/grcon-background-processor/generated/
+
+# Server-only local credentials
+.dev.vars*
+.env*

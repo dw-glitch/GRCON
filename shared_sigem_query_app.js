@@ -29,6 +29,20 @@
     return root.GrconPostingConference;
   }
   async function request(name, args) {
+    // Storage selection is server-owned. Preserve the existing RPC in runtimes
+    // without an authenticated browser session (including offline tooling).
+    const token = cloud()?.state?.session?.access_token;
+    if (name === "page" && token && typeof root.fetch === "function") {
+      const response = await root.fetch("/api/sigem-storage/page", {
+        method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ workspace: args.target_workspace, snapshot: args.target_snapshot, after: args.after_row, size: args.page_size }),
+        signal: AbortSignal.timeout(45000),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok || !Array.isArray(result.rows)) throw new Error("Não foi possível confirmar a Consulta Geral. A última base válida permanece disponível.");
+      if (["diverged", "unavailable", "not-migrated"].includes(result.shadow)) root.dispatchEvent(new CustomEvent("grcon:sigem-storage-warning", { detail: { snapshot: args.target_snapshot, after: args.after_row, result: result.shadow } }));
+      return result.rows;
+    }
     let timer;
     try {
       const response = await Promise.race([
@@ -374,3 +388,4 @@
     try { await listVersions(); } catch (_) { /* a base confirmada continua disponível */ }
   }, 15000);
 })(window);
+

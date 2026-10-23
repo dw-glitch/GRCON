@@ -1050,3 +1050,11 @@ html[data-theme="dark"] #grcon-admin-dialog .grcon-admin-nav button[aria-current
   #grcon-admin-dialog > header h2 { font-size: 21px; }
   #grcon-admin-dialog > header p { font-size: 12px; }
 }
+
+/* Storage administration: compact, neutral metrics within the Master screen. */
+.grcon-admin-storage-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}
+.grcon-admin-storage-metrics>div{padding:14px 16px;border:1px solid #dde5ed;border-radius:8px;background:#f8fafc;min-width:0}
+.grcon-admin-storage-metrics dt{font-size:12px;line-height:1.45;color:#52647a;margin-bottom:6px}
+.grcon-admin-storage-metrics dd{margin:0;font-size:15px;line-height:1.4;font-weight:600;color:#183249;overflow-wrap:anywhere}
+@media(max-width:1100px){.grcon-admin-storage-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.grcon-admin-storage-metrics{grid-template-columns:minmax(0,1fr)}}
