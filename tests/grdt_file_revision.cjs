@@ -55,7 +55,10 @@ assert.equal(correctB.status, 'Não Postado');
 const blankLd = triage(`${doc}_A.pdf`, [record(doc, '')]);
 assert.equal(blankLd.revision, 'A', 'LD vazia não apaga uma revisão inequívoca no arquivo');
 const unknown = triage(`${doc}_ERRADO.pdf`);
-assert.equal(unknown.revision, '');
+// Unrecognized suffix is preserved as identity, never silently stripped to
+// borrow the LD record of the shorter document.
+assert.equal(unknown.document, `${doc}_ERRADO`);
+assert.equal(unknown.revision, '0');
 assert.equal(unknown.decision, C.REVIEW);
 assert.equal(unknown.hardBlock, false);
 

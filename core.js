@@ -1701,17 +1701,26 @@
 
   function matchDocumentsForGrdt(value, index, hintedSheet) {
     if (!index?.byDocument) return [];
+    // A filename may be a complete document code OR that code followed by
+    // an underscore revision. When both candidates exist in the LD, returning
+    // the first one silently would substitute identities. Preserve ambiguity.
+    const found = new Map();
     for (const token of grdtFileDocumentCandidates(value)) {
       // exactDocumentMatch retains compatibility aliases for consultations;
       // its result must independently satisfy complete-code identity here.
       const direct = exactDocumentMatch(token, index);
-      if (direct && grdtIdentityKey(token) === grdtIdentityKey(direct.document)) return [direct];
+      if (direct && grdtIdentityKey(token) === grdtIdentityKey(direct.document)) {
+        found.set(grdtIdentityKey(direct.document), direct);
+      }
       // ET's explicit optional nt- form is the only identity alias accepted.
       const aliases = isEtDocument(token) ? (ntNeutralEntries(index).get(ntNeutralKey(token)) || [])
         .filter(entry => grdtIdentityKey(token) === grdtIdentityKey(entry.document)) : [];
-      if (aliases.length) return aliases.map(entry => ({...entry, matchedSearchKey: token, matchKind:'nt-variant', ntVariant:true}));
+      for (const entry of aliases) {
+        const key = grdtIdentityKey(entry.document);
+        if (!found.has(key)) found.set(key, {...entry, matchedSearchKey: token, matchKind:'nt-variant', ntVariant:true});
+      }
     }
-    return [];
+    return [...found.values()];
   }
 
   function matchDocument(nameOrText, index, hintedSheet) {
@@ -2407,6 +2416,9 @@
     const inferredSheet = input.hintedSheet || inferSheetFromName(input.name || input.document || "");
     const identitySource = input.document ? "documento informado" : "nome do arquivo";
     const identityValue = input.document || input.name || "";
+    // Keep the actual code visible for unmatched physical files; the absence
+    // of an LD record is a status, never the document's identity.
+    const inferredDocument = input.document || grdtFileDocumentCandidates(input.name || "").at(-1) || "Não localizado";
     const matches = matchDocumentsForGrdt(identityValue, index, inferredSheet);
     if (input.document && input.name && !fileDocumentIdentity(input.name, input.document).valid) {
       const identity = fileDocumentIdentity(input.name, input.document);
@@ -2428,10 +2440,10 @@
     if (matches.length > 1) {
       const codes = matches.slice(0, 5).map((candidate) => candidate.document).join("; ");
       return reviewResult(input, {
-        document: input.document || "Não localizado",
+        document: inferredDocument,
         sheet: inferredSheet,
         sheetSource: inferredSheet ? "prefixo do arquivo" : "não identificada",
-        revision: revisionFromName(input.name || "", input.document || "") || "",
+        revision: revisionFromName(input.name || "", inferredDocument) || "",
         status: "Código ambíguo no nome",
         reason: `O nome do arquivo contém mais de um código controlado (${codes}). Nenhuma associação automática foi feita.`,
         finalName: input.name || "arquivo.pdf",
@@ -2441,10 +2453,10 @@
     const match = matches[0] || null;
     if (!match) {
       return reviewResult(input, {
-        document: input.document || "Não localizado",
+        document: inferredDocument,
         sheet: inferredSheet,
         sheetSource: inferredSheet ? "prefixo do arquivo" : "não identificada",
-        revision: revisionFromName(input.name || "", input.document || "") || "",
+        revision: revisionFromName(input.name || "", inferredDocument) || "",
         status: "Não consta na LD",
         reason: `O código completo do arquivo não foi localizado na LD. A pesquisa operacional não substitui dígitos, letras, EAP, unidade ou tipo documental por similaridade. ${input.documentLookup.message} O texto interno do PDF não é usado para substituir a identidade informada pelo nome.`,
         finalName: input.name || "arquivo.pdf",

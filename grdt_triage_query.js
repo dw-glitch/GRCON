@@ -69,8 +69,9 @@
       status, kind, allocation, autoAllowed, unresolved,
       manualOnly: !autoAllowed,
       autoEligible: Boolean(row && row.decision === Core.READY && !row.hardBlock && autoAllowed),
-      label: unresolved ? (/NAO (?:LOCALIZAD|ENCONTRAD)|NAO CONSTA/.test(norm(status)) || row?.documentLookup?.matched === false ? 'Não localizado' : 'Status não identificado') : allocation === "not_allocated" ? "Não Alocado"
+      label: allocation === "not_allocated" ? "Não Alocado"
         : allocation === "conflict" ? "Conflito de alocação"
+        : unresolved ? (/NAO (?:LOCALIZAD|ENCONTRAD)|NAO CONSTA/.test(norm(status)) || row?.documentLookup?.matched === false ? 'Não localizado' : 'Status não identificado')
         : kind === "analysis" ? (row?.blockingRevision ? `Em análise (rev. ${row.blockingRevision})` : "Em análise")
         : kind === "unknown" ? "Verificar status" : "Conferir status SIGEM",
     };
