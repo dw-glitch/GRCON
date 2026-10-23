@@ -10,7 +10,7 @@
   "use strict";
 
   const VERSION = "sigem-pw-audit-1";
-  const CLASSES = Object.freeze(["ET", "N-1710", "Não classificado"]);
+  const CLASSES = Object.freeze(["ET", "N-1710", "CV", "Não classificado"]);
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
   function countBy(items, selector) {
@@ -86,6 +86,7 @@
       { Grupo: "Quantidade", Indicador: "Documentos únicos", Valor: metrics.uniqueDocuments },
       { Grupo: "Classe", Indicador: "ET", Valor: metrics.classes.ET },
       { Grupo: "Classe", Indicador: "N-1710", Valor: metrics.classes["N-1710"] },
+      { Grupo: "Classe", Indicador: "CV — Currículo", Valor: metrics.classes.CV },
       { Grupo: "Classe", Indicador: "Não classificado", Valor: metrics.classes["Não classificado"] },
       { Grupo: "Emissão", Indicador: "PW emitido", Valor: metrics.emittedEntries },
       { Grupo: "Emissão", Indicador: "PW não emitido", Valor: metrics.notEmittedEntries },
