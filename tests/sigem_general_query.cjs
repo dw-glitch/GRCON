@@ -28,6 +28,7 @@ assert.equal(query({batch:a}).rows.map(r=>r.revision).join(","),"0,A,B,C");
 assert.equal(query({batch:"INEXISTENTE\n"+b}).missing.join(","),"INEXISTENTE");
 assert.equal(query({batch:"INEXISTENTE\n"+b}).rows.length,2);
 assert.equal(query({batch:a,view:"latest"}).rows[0].revision,"C");
+assert.equal(query({batch:a,view:"latest",status:"Emitido"}).rows.length,0,"o filtro de status não transforma revisão antiga em mais recente");
 assert.equal(query({batch:a,revision:"A"}).rows.length,1);
 assert.equal(query({batch:a,status:"Em análise"}).rows[0].revision,"B");
 assert.equal(query({batch:a,title:"Projeto",discipline:"TUB",from:"2026-10-03"}).rows.length,2);
