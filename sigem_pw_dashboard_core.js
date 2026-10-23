@@ -25,7 +25,7 @@
   const HISTORY_KEY = "sigem-pw-base-history-v3";
   const PW_BASE_VERSION = 6;
   const HISTORY_VERSION = 3;
-  const PW_SCOPE_VERSION = 6;
+  const PW_SCOPE_VERSION = 7;
   const UNCLASSIFIED = "Não classificado";
   const SCOPE_CLASSES = Object.freeze(["ET", "N-1710", "CV", UNCLASSIFIED]);
   const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
@@ -603,7 +603,7 @@
         ...previousMeta,
         version: Math.max(Number(previousMeta.version) || 0, PW_BASE_VERSION),
         scopeVersion: PW_SCOPE_VERSION,
-        scopeRule: "Todo código presente no PW comprova cadastro, independentemente de classe, status, emissão, revisão ou LD",
+        scopeRule: "Todo código presente no PW comprova cadastro; CV é classe Currículo e sem presença no PW não constitui pendência",
         scopeLdSnapshotId: text(ldMeta && ldMeta.snapshotId) || (ldMeta ? snapshotId("ld", ldMeta) : ""),
         sourceRecordCount: Number(previousMeta.sourceRecordCount) || sourceRecords.length,
         recordCount: audit.records.length,
@@ -1356,7 +1356,7 @@
     return { sigem, pw, ld, history };
   }
 
-  const EMISSION_RULE = "A comparação SIGEM × PW utiliza somente códigos contendo C1O; registros fora desse escopo ficam separados. Todo código presente na base PW está CADASTRADO, independentemente de status, classe, revisão, emissão ou LD. A presença é conferida na base completa mesmo na visão Rev. 0. Cadastro não comprova a mesma revisão nem emissão: esses dados são apresentados separadamente. Cada código + revisão conta uma vez; todas as ocorrências repetidas estão na lista Duplicados PW, com as linhas de origem. Revisões diferentes são registros distintos. Sim identifica emissão atual e Não uma emissão histórica; outros valores ou campos vazios não comprovam emissão.";
+  const EMISSION_RULE = "A comparação SIGEM × PW utiliza somente códigos contendo C1O; registros fora desse escopo ficam separados. Documentos CV (Currículo) sem cadastro no PW permanecem no SIGEM, mas não representam pendência de emissão. Todo código presente na base PW está CADASTRADO, independentemente de status, classe, revisão, emissão ou LD. A presença é conferida na base completa mesmo na visão Rev. 0. Cadastro não comprova a mesma revisão nem emissão: esses dados são apresentados separadamente. Cada código + revisão conta uma vez; todas as ocorrências repetidas estão na lista Duplicados PW, com as linhas de origem. Revisões diferentes são registros distintos. Sim identifica emissão atual e Não uma emissão histórica; outros valores ou campos vazios não comprovam emissão.";
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
