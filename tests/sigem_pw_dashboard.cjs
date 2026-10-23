@@ -15,8 +15,8 @@ assert.strictEqual(Core.documentClass("RL-5290.00-22313-ABC-XYZ-001"), Core.UNCL
 assert.strictEqual(Core.documentClass("RL-5290.00-22313-ABC-C1O-X01"), Core.UNCLASSIFIED, "sequencial N-1710 deve ser numérico");
 assert.strictEqual(Core.documentClass(pwEt), "ET");
 assert.strictEqual(Core.documentClass("C10_RNEST_U32_3.1.1.1_INS_RIR_PI-1"), Core.UNCLASSIFIED, "C10 não deve ser aceito como C1O");
-assert.strictEqual(Core.documentClass("5900.00.0001.0100-ABC-CV-C1O-001"), Core.UNCLASSIFIED, "CV está fora do escopo desta fase");
-assert.deepStrictEqual(Core.SCOPE_CLASSES, ["ET", "N-1710", "Não classificado"]);
+assert.strictEqual(Core.documentClass("5900.00.0001.0100-ABC-CV-C1O-001"), "CV", "CV deve ser identificado como Currículo");
+assert.deepStrictEqual(Core.SCOPE_CLASSES, ["ET", "N-1710", "CV", "Não classificado"]);
 assert.notStrictEqual(Core.entryKey("DOC", "0"), Core.entryKey("DOC", "A"), "revisões 0 e A contam separadamente");
 
 const ld = Core.parseLdMatrix([
@@ -98,7 +98,7 @@ const model = Core.createModel(sigem, parsed.records, ld.records);
 const result = Core.aggregateModel(model, {});
 assert.deepStrictEqual(result.summary, {
   sigem: 5, pwRegistered: 4, pwEmitted: 3, gapSigemToPw: 1, gapPwToEmitted: 1, pwExclusive: 0, matched: 4,
-  sigemOnly: 1, bothOtherRevision: 0, bothNotEmitted: 1, bothEmitted: 3, pwOnlyNotEmitted: 0, pwOnlyEmitted: 0, classifiedTotal: 5,
+  sigemOnly: 1, cvNotApplicable: 0, bothOtherRevision: 0, bothNotEmitted: 1, bothEmitted: 3, pwOnlyNotEmitted: 0, pwOnlyEmitted: 0, classifiedTotal: 5,
 });
 assert.strictEqual(result.classes.find((row) => row.documentClass === "N-1710").sigem, 4);
 assert.strictEqual(result.lists.toRegisterPw[0].document, "PR-5290.00-22313-122-C1O-003");
