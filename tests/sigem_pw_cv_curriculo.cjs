@@ -58,7 +58,7 @@ assert.equal(Revision.analyze(model).rows.some(row => row.documentClass === "CV"
 const withCvInPw = Core.aggregateModel(Core.createModel(sigem, [
   ...pw, { document: cv, revision: "0", lastEmission: "Sim" }
 ], []), {}, {revisionScope: "all"});
-assert.equal(withCvInPw.summary.cvNotApplicable, 1, "CV com evidência no PW deixa de ser tratado como ausente");
+assert.equal(withCvInPw.summary.cvNotApplicable, 2, "CV sem mesma revisão PW continua sem pendência; emissão já registrada é respeitada");
 assert.equal(withCvInPw.summary.pwEmitted, 2);
 assert.equal(withCvInPw.lists.bothEmitted.some(row => row.documentClass === "CV"), true);
 
