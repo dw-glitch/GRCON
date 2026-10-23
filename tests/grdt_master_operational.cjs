@@ -268,6 +268,9 @@ for (const [, background, ink] of palettes) {
     `contraste de texto legível: ${ink} sobre ${background}`);
 }
 assert.match(statusCss, /tr\.result-row\.manually-included:hover > td\s*\{\s*background: var\(--grdt-status-surface\) !important;/);
+for (const key of ["pronto", "bloqueado", "descartar", "revisar", "nao_localizado"]) {
+  assert.ok(statusCss.includes(`.summary-item[data-filter="${key}"]`), `resumo com a mesma paleta: ${key}`);
+}
 console.log("GRDT cores: pronto, não alocado, análise, conferência, não identificado, conflito, bloqueado e excluído distintos OK.");
 
 function harness() {
