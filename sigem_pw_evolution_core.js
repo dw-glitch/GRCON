@@ -10,7 +10,7 @@
   "use strict";
 
   const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.5-c1o";
-  const VALID_CLASSES = new Set(["ET", "N-1710", "Não classificado"]);
+  const VALID_CLASSES = new Set(["ET", "N-1710", "CV", "Não classificado"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
   function text(value) { return value === null || value === undefined ? "" : String(value).trim(); }
@@ -75,6 +75,7 @@
   function documentClass(value) {
     if (Dashboard && typeof Dashboard.documentClass === "function") return Dashboard.documentClass(value);
     const code = documentIdentity(value).canonical;
+    if (/(?:^|[-_])CV(?=[-_]|$)/.test(code)) return "CV";
     if (code.includes("_RNEST_")) return "ET";
     if (/^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i.test(code)) return "N-1710";
     return "Não classificado";
@@ -266,7 +267,7 @@
       ldValidated: Boolean(universe && universe.available && match),
       inclusionReason: cls === "N-1710"
         ? (findQualityMatch(raw, universe) ? "N-1710 válido e localizado na LD da Qualidade" : "N-1710 estruturalmente válido; sem correspondência na LD da Qualidade")
-        : "Código ET válido pela regra estrutural",
+        : cls === "CV" ? "Currículo CV identificado; emissão pelo PW não exigida atualmente" : "Código ET válido pela regra estrutural",
       documentRevisionKey: documentRevisionKey(raw),
       occurrenceKey: occurrenceKey(raw, system),
       matchKey: matchKey(raw),
