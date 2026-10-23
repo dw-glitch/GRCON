@@ -14,7 +14,7 @@ for(const C of [Raw,Wrapped])for(const family of [code,et]){
  for(const neighbour of ['120','123','112','212','1210','0121','12I','12L','I21'])assert.equal(C.fileDocumentIdentity(family(neighbour)+'_0001_A.pdf',d121).valid,false,neighbour);
  for(const suffix of ['', '_0001','_A','_0001_A','_0','_REV_A'])assert.equal(C.fileDocumentIdentity(d122+suffix+'.pdf',d122).valid,true,suffix);
  assert.equal(C.matchDocumentsForGrdt(source,C.buildIndex([rec(d121),rec(d122)],[]))[0].document,d122);
- for(const extension of ['microstation','custom-extension-long','12345']){assert.equal(C.fileDocumentIdentity(d122+'.'+extension,d122).valid,true,'long or custom extensions preserve the full code');assert.equal(C.matchDocumentsForGrdt(d122+'.'+extension,C.buildIndex([rec(d122)],[]))[0].document,d122);}
+ for(const extension of ['microstation','custom-extension-long','12345']){assert.equal(C.fileDocumentIdentity(d122+'.'+extension,d122).valid,true,'long or custom extensions preserve the full code');assert.equal(C.fileRevisionEvidence(d122+'.'+extension,d122).revision,'0','extension is also removed consistently for physical revision');assert.equal(C.matchDocumentsForGrdt(d122+'.'+extension,C.buildIndex([rec(d122)],[]))[0].document,d122);}
  for(const tagSuffix of ['-A','-B','-0','-RIR']){assert.equal(C.fileDocumentIdentity(d122+tagSuffix+'.pdf',d122).valid,false,'TAG suffix is never stripped as an implicit revision');assert.equal(C.matchDocumentsForGrdt(d122+tagSuffix+'.pdf',C.buildIndex([rec(d122)],[])).length,0);}
  assert.equal(C.matchDocumentsForGrdt('/pasta/'+d121+'/'+source,index).length,0,'parent folder is not document identity');
  assert.equal(C.matchDocumentsForGrdt(d122+' - título cita '+d121+'.pdf',index).length,0,'a reference in a title is not identity');

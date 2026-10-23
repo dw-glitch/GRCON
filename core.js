@@ -1787,7 +1787,7 @@
   // contents of a file received under a different revision.
   function fileRevisionEvidence(fileName, document, matchedDocument) {
     const name = text(fileName).split(/[\\/]/).pop();
-    const stem = canonicalId(name.replace(/\.[A-Z0-9]{1,8}$/i, ""));
+    const stem = canonicalId(name.replace(/\.(?:[A-Z][A-Z0-9_-]*|\d+|7Z)$/i, ""));
     const code = canonicalId(document);
     if (!name || !code) return { applicable: false, valid: false, revision: "", source: "" };
     const sameDocument = (value) => Boolean(value && (
