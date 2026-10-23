@@ -3082,7 +3082,8 @@
   }
 
   function compactDecisionLabel(row) {
-    if (TriageQuery.allocationAlert(row)) return rowStatusPolicy(row).label;
+    if (TriageQuery.allocationAlert(row) === "not_allocated") return "Não incluir — Não alocado";
+    if (TriageQuery.allocationAlert(row) === "conflict") return "Conferir — Conflito de alocação";
     if (rowStatusPolicy(row).manualOnly) return rowStatusPolicy(row).label;
     if (manuallyIncluded(row)) return "Incluído manualmente";
     // Conflito de alocação não é "não alocado": a LD tem duas respostas e quem
@@ -3100,8 +3101,11 @@
 
   function selectionSituationLabel(row, index) {
     const policy = rowStatusPolicy(row);
-    if (policy.allocation) return rowIncludedForGeneration(row, index)
-      ? `${policy.label} · incluído manualmente` : policy.label;
+    // Decisão principal e motivo da LD são dimensões diferentes.
+    if (policy.allocation === "not_allocated") return rowIncludedForGeneration(row, index)
+      ? "Não incluir · inclusão manual" : "Não incluir";
+    if (policy.allocation === "conflict") return rowIncludedForGeneration(row, index)
+      ? "Conferir · inclusão manual" : "Conferir";
     if (!rowCanBeSelected(row)) return "Bloqueado";
     if (policy.manualOnly) return rowIncludedForGeneration(row, index)
       ? `${policy.label} · incluído manualmente` : policy.label;
@@ -3123,15 +3127,19 @@
   }
 
   function decisionClass(value, row) {
+    if (row && TriageQuery.allocationAlert(row) === "not_allocated") return "blocked";
+    if (row && TriageQuery.allocationAlert(row) === "conflict") return "review";
     if (row && TriageQuery.unresolvedStatus(row)) return 'review';
-    if (row && TriageQuery.allocationAlert(row)) return "blocked";
     if (row && row.hardBlock) return "blocked";
     return value === C.READY ? "ready" : value === C.DISCARD ? "discard" : "review";
   }
 
   function decisionGroupKey(row) {
+    // A recusa de alocação tem prioridade sobre ausência de status ou cadastro.
+    // Conflito, por outro lado, não é uma recusa confirmada.
+    if (row && TriageQuery.allocationAlert(row) === "not_allocated") return "bloqueado";
+    if (row && TriageQuery.allocationAlert(row) === "conflict") return "revisar";
     if (row && TriageQuery.unresolvedStatus(row)) return 'nao_localizado';
-    if (row && TriageQuery.allocationAlert(row)) return "bloqueado";
     if (row && rowStatusPolicy(row).kind === "analysis") return "descartar";
     if (row && row.hardBlock) return "bloqueado";
     if (row && rowStatusPolicy(row).manualOnly) return "revisar";
@@ -4094,6 +4102,7 @@
           <input id="select-row-${index}" name="select-row-${index}" class="row-select" data-select-row type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Selecionar para GRDT" title="${selectionTitle}">
           <button class="expand-button ${state.expanded.has(index) ? "open" : ""}" data-action="toggle-details" type="button" aria-label="Abrir evidências desta decisão" title="Abrir evidências desta decisão"><svg viewBox="0 0 16 16"><path d="M5 3l5 5-5 5"/></svg><span>Evidências</span></button>
           <span class="status-chip ${resultClass}" title="Alocação: ${escapeHtml(allocationStatus)} · Status SIGEM: ${escapeHtml(statusPolicy.status || "não identificado")} · Resultado da triagem: ${escapeHtml(compactDecisionLabel(row))}">${escapeHtml(selectionSituationLabel(row, index))}</span>
+          ${allocationAlert === "not_allocated" ? `<span class="grdt-status-reason">Não alocado</span>` : allocationAlert === "conflict" ? `<span class="grdt-status-reason">Conflito de alocação</span>` : ""}
         </div></td>
         <td>${renderRowFileList(row, false)}${renderFileOrigin(row)}</td>
         <td><span class="document-cell"><input id="manual-select-${index}" name="manual-select-${index}" class="manual-row-select" data-manual-select type="checkbox" ${selected ? "checked" : ""} ${selectable ? "" : "disabled"} aria-label="Incluir ${escapeHtml(row.document)} na GRDT" title="${selectionTitle}"><span class="grdt-document-text"><span class="grdt-document-identity"><span class="document-code" title="${escapeHtml(row.document)}">${escapeHtml(row.document)}</span><button type="button" class="grdt-copy-code" data-action="copy-code" aria-label="Copiar código ${escapeHtml(row.document)}" title="Copiar código">⧉</button></span><small class="grdt-document-original" title="${escapeHtml(row.name || "")}">${escapeHtml(row.name || "")}</small><small class="grdt-document-source">${escapeHtml(TriageQuery.origin(row))} · ${escapeHtml(TriageQuery.extensions(row).join(" / ") || "Tipo não identificado")}</small></span></span>${!row.record ? `<button type="button" class="text-button" data-action="suggest-allocation">Sugerir alocação</button>` : ""}${manualAllocationOverrideAllowed(row) ? `<span class="cell-muted">Não Alocado · inclusão manual permitida</span>` : ""}${row.ntRename ? `<span class="nt-rename-badge" title="${escapeHtml(row.ntRename.nota)}">nt- ajustado · informado ${escapeHtml(row.ntRename.enviado)}</span>` : ""}${row.previousAnalysisInfo && window.GrconAnalysisWarning ? window.GrconAnalysisWarning.createWarningBadge(row.previousAnalysisInfo).outerHTML : ""}${window.GrconGrdtHistoryUi ? window.GrconGrdtHistoryUi.row(row.document, row.revision) : PostingFlow ? PostingFlow.badge(row.document, row.revision) : window.GrconGrdtHistoryIndicator ? window.GrconGrdtHistoryIndicator.getBadgeHtml(row.document) : ""}</td>
