@@ -7,7 +7,7 @@
   const Emission = window.GrconEmission;
   const APP_VERSION = (window.GrconConfig && window.GrconConfig.APP_VERSION)
     || document.documentElement.dataset.version
-    || "5.44.14";
+    || "5.44.15";
   if (!Posting || !History) return;
 
   const $ = (selector, root) => (root || document).querySelector(selector);
@@ -102,7 +102,15 @@
       const et = typeof Emission.validateEtPlanningPair === "function"
         ? Emission.validateEtPlanningPair(row, sources)
         : { applies: false, valid: true, errors: [] };
-      if (et.applies && !et.valid) errors.push(...et.errors);
+      // Uma exceção registrada na geração vale somente para os mesmos arquivos
+      // do mesmo documento/revisão; arquivos novos continuam sendo conferidos.
+      const manualCompositionOverride = group.every((item) => (record.files || []).some((file) =>
+        file.manualCompositionOverride
+        && norm(file.document) === norm(item.document)
+        && norm(file.revision) === norm(item.revision)
+        && norm(file.finalName || file.fileName) === norm(item.fileName || item.finalName)
+      ));
+      if (et.applies && !et.valid && !manualCompositionOverride) errors.push(...et.errors);
       const n1710 = typeof Emission.validateN1710Pair === "function"
         ? Emission.validateN1710Pair(row, sources)
         : { applies: false, valid: true, errors: [] };

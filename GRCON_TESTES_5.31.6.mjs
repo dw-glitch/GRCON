@@ -505,7 +505,9 @@ check("Não Alocado fica fora por padrão, mas a seleção manual permite gerar 
     record: { ...result.record, allocationStatus: "ALOCADO" },
   };
   const protectedPlan = Emission.createPlan([otherBlock], new Set([0]), { manualForceIndices: new Set([0]) });
-  assert.ok(protectedPlan.errors.some((message) => /bloqueado não pode ser emitido/i.test(message)));
+  assert.deepEqual(protectedPlan.errors, []);
+  assert.equal(protectedPlan.entries[0].manualRuleOverride, true);
+  assert.ok(protectedPlan.warnings.some((message) => /inclusão manual apesar do alerta da triagem/i.test(message)));
 
   const summary = ReportSummary.buildRows([{ ...result, selectedForEgrdt: true, manuallyIncluded: true }], {})[0];
   assert.equal(summary.included, "SIM — MANUAL (LD NÃO ALOCADO)");

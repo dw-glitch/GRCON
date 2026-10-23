@@ -31,12 +31,12 @@
         && manualForceRows.has(row)
         && (/^not_allocated(?:_conflict)?$/.test(text(row.blockCode)) || norm(allocation).includes("NAO ALOCADO"))
       );
-      // Apenas "Não Alocado" pode ser superado por seleção manual consciente.
-      // Os demais bloqueios continuam impedindo a saída.
-      if (row.hardBlock && !manualAllocationOverride) {
+      const manualRuleOverride = Boolean(row.hardBlock && manualForceRows.has(row));
+      if (row.hardBlock && !manualRuleOverride) {
         errors.push(`${text(row.document) || "Documento"}: ${message ? message.title : "não pode ser incluído"}`);
       }
       if (manualAllocationOverride) warnings.push(`${text(row.document) || "Documento"}: inclusão manual apesar do status “Não Alocado” na LD.`);
+      else if (manualRuleOverride) warnings.push(`${text(row.document) || "Documento"}: inclusão manual apesar do alerta da triagem — ${text(row.reason || row.blockCode || row.status)}.`);
       const finalName = text(row.finalName);
       if (!finalName) errors.push(`${text(row.document) || "Documento"}: o nome final não foi definido.`);
       const key = norm(finalName);
