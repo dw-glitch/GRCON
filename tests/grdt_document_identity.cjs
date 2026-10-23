@@ -10,7 +10,7 @@ for(const C of [Raw,Wrapped])for(const family of [code,et]){
  const index=C.buildIndex([rec(d121)],[rec(d121,{sigemStatus:'Em Workflow',status:'Em Workflow'})]);
  assert.equal(C.matchDocumentsForGrdt(source,index).length,0,'122 may not inherit 121 from one-edit matching');
  const row=C.triageOne({id:source,name:source,documentLookupHint:{matched:true,ldDocument:d121,inputDocument:d122}},index);
- assert.notEqual(row.document,d121);assert.equal(row.documentLookup.matched,false);assert.deepEqual(Object.keys(row.record),[]);assert.deepEqual(Object.keys(row.egrdt),[]);assert.equal(Q.selectionPolicy(row).autoEligible,false);
+ assert.equal(row.document,d122,'missing LD must preserve the real 122 identifier');assert.equal(row.documentLookup.matched,false);assert.deepEqual(Object.keys(row.record),[]);assert.deepEqual(Object.keys(row.egrdt),[]);assert.equal(Q.selectionPolicy(row).autoEligible,false);
  for(const neighbour of ['120','123','112','212','1210','0121','12I','12L','I21'])assert.equal(C.fileDocumentIdentity(family(neighbour)+'_0001_A.pdf',d121).valid,false,neighbour);
  for(const suffix of ['', '_0001','_A','_0001_A','_0','_REV_A'])assert.equal(C.fileDocumentIdentity(d122+suffix+'.pdf',d122).valid,true,suffix);
  assert.equal(C.matchDocumentsForGrdt(source,C.buildIndex([rec(d121),rec(d122)],[]))[0].document,d122);
@@ -25,6 +25,25 @@ for(const C of [Raw,Wrapped]){
  assert.equal(C.matchDocumentsForGrdt(nt+'_A.pdf',C.buildIndex([rec(base)],[]))[0].document,base,'explicit ET nt alias retained');
  for(const other of [base.replace('U32','U39S'),base.replace('3.1.1.1','3.1.1.2'),base.replace('_RIR_','_REP_'),base.replace('VM-','VM'),base.replace('122','12Z')])assert.equal(C.matchDocumentsForGrdt(other+'_A.pdf',C.buildIndex([rec(base)],[])).length,0,'every complete identity group is checked');
 }
+// Hyphen suffixes belong to TAG identity, not an implicit file revision.
+for(const C of [Raw,Wrapped]){
+ const tagIndex=C.buildIndex([rec('P-101')],[]);
+ const tag=C.triageOne({id:'tag',name:'P-101-A.pdf'},tagIndex);
+ assert.equal(tag.document,'P-101-A','the final TAG letter cannot be discarded');
+ assert.equal(tag.revision,'0','a code-ending letter is not revision evidence');
+ assert.equal(tag.documentLookup.matched,false);
+ assert.equal(C.matchDocumentsForGrdt('P-101-A.pdf',tagIndex).length,0);
+ assert.equal(C.fileDocumentIdentity('P-101-A.pdf','P-101-A').valid,true);
+ assert.equal(C.fileDocumentIdentity('P-101-A.pdf','P-101').valid,false);
+ const ambiguousIndex=C.buildIndex([rec('TAG-101'),rec('TAG-101_A')],[]);
+ const candidates=C.matchDocumentsForGrdt('TAG-101_A.pdf',ambiguousIndex);
+ assert.equal(candidates.length,2,'two complete LD identities must not resolve to the first');
+ const ambiguous=C.triageOne({id:'ambiguous',name:'TAG-101_A.pdf'},ambiguousIndex);
+ assert.equal(ambiguous.decision,C.REVIEW);
+ assert.equal(ambiguous.status,'Código ambíguo no nome');
+ assert.deepEqual(Object.keys(ambiguous.record),[]);
+ assert.equal(Q.selectionPolicy(ambiguous).autoEligible,false);
+}
 const bad={document:code('121'),revision:'A',sheet:'N-1710',decision:Raw.READY,record:rec(code('121')),egrdt:Raw.buildEgrdtData(code('121'),'A',code('121')+'_0001_A.pdf',rec(code('121')),'N-1710','A4'),files:[{name:code('122')+'_0001_A.pdf',file:{name:code('122')+'_0001_A.pdf',size:1}}]};
 const plan=E.createPlan([bad],new Set([0]),{manualForceIndices:new Set([0])});assert.equal(plan.entries.length,0);assert.ok(plan.errors.some(e=>/identidade divergente/i.test(e)),'manual revision override cannot authorize another document');
 bad.files[0].name=code('121')+'_0001_A.pdf';const spoofed=E.createPlan([bad],new Set([0]),{manualForceIndices:new Set([0])});assert.equal(spoofed.entries.length,0,'actual File.name takes precedence over edited labels');
@@ -34,4 +53,4 @@ for(const status of ['Não localizado','Não encontrado','Sem status','Status n�
 assert.equal(Q.unresolvedStatus({decision:Raw.READY,status:'Não Postado'}),false,'absence of an exact revision in a loaded SIGEM base remains a different operational state');
 assert.equal(Q.unresolvedStatus({decision:Raw.READY,status:'Não Postado',documentLookup:{matched:false}}),true,'unmatched document cannot be ready');
 const ui=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'nao_localizado'/);assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'review'/);
-console.log('GRDT identity: raw+guarded core, 121/122, complete codes, false hints, folder/title references, nt aliases, physical file guard, manual override and unresolved status separation passed.');
+console.log('GRDT identity: raw+guarded core, 121/122, unmatched code preservation, P-101-A, ambiguous candidates, complete codes, false hints, folder/title references, nt aliases, physical file guard, manual override and unresolved status separation passed.');
