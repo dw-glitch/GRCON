@@ -134,7 +134,7 @@ function functionBody(source, name, nextName) {
 })();
 
 (function businessScopeRemainsUnchanged() {
-  assert.deepEqual(Dashboard.SCOPE_CLASSES, ["ET", "N-1710", "Não classificado"]);
+  assert.deepEqual(Dashboard.SCOPE_CLASSES, ["ET", "N-1710", "CV", "Não classificado"]);
   assert.match(Dashboard.EMISSION_RULE, /código \+ revisão/i);
   assert.match(Dashboard.EMISSION_RULE, /Revisões diferentes são registros distintos/i);
 })();

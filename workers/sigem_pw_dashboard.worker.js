@@ -35,20 +35,24 @@ self.addEventListener("message", (event) => {
         all: Dashboard.aggregateModel(model, {}, { revisionScope: "all" }),
         ET: Dashboard.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "all" }),
         "N-1710": Dashboard.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "all" }),
+        CV: Dashboard.aggregateModel(model, { documentClass: "CV" }, { revisionScope: "all" }),
       };
       const revision0Scope = {
         all: Dashboard.aggregateModel(model, {}, { revisionScope: "revision0" }),
         ET: Dashboard.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "revision0" }),
         "N-1710": Dashboard.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "revision0" }),
+        CV: Dashboard.aggregateModel(model, { documentClass: "CV" }, { revisionScope: "revision0" }),
       };
       const aggregates = {
         ...allScope,
         "revision0:all": revision0Scope.all,
         "revision0:ET": revision0Scope.ET,
         "revision0:N-1710": revision0Scope["N-1710"],
+        "revision0:CV": revision0Scope.CV,
         "all:all": allScope.all,
         "all:ET": allScope.ET,
         "all:N-1710": allScope["N-1710"],
+        "all:CV": allScope.CV,
       };
       self.postMessage({ ok: true, type: "model", generation: payload.generation, model, aggregates });
       return;

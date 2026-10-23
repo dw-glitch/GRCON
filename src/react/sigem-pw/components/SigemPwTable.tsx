@@ -2,6 +2,7 @@ import type { SigemPwRow } from "../types/domain";
 import { DocumentClassBadge } from "../../core/ui/DocumentClassBadge";
 
 function situationClass(row: SigemPwRow): string {
+  if (row.situationKey === "cvNotApplicable") return "";
   if (row.situationKey === "bothEmitted") return "ok";
   if (row.situationKey === "bothOtherRevision" || row.situationKey === "pwDuplicates" || row.situationKey === "bothNotEmitted" || row.situationKey === "pwOnlyNotEmitted") return "warn";
   return "danger";
@@ -29,7 +30,7 @@ export function SigemPwTable({ rows, caption, duplicates = false }: { rows: Sige
           <tbody>
             {rows.map((row) => (
               <tr key={row.key}>
-                <td title={row.documentClass}><DocumentClassBadge className="spw-pill" value={row.documentClass === "Não classificado" ? "Outro" : row.documentClass} /></td>
+                <td title={row.documentClass === "CV" ? "CV — Currículo" : row.documentClass}><DocumentClassBadge className="spw-pill" value={row.documentClass === "Não classificado" ? "Outro" : row.documentClass} /></td>
                 <td className="spw-code">{row.document}</td>
                 <td><span className="spw-revision" title={row.pwRevisionEvidence === "Não informada no PW" ? "Cadastro confirmado no PW pelo código; revisão não informada na consulta." : undefined}>{row.revision}</span>{!duplicates && row.inPw && row.pwRevision !== row.revision ? <small className="spw-pw-revision-note">PW: {row.pwRevision || "não informada"}</small> : null}</td>
                 {duplicates ? <>

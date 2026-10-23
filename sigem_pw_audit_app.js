@@ -103,6 +103,7 @@
       ["Documentos únicos", m.uniqueDocuments],
       ["ET", m.classes.ET],
       ["N-1710", m.classes["N-1710"]],
+      ["CV — Currículo", m.classes.CV || 0],
       ["PW emitido", m.emittedEntries],
       ["PW não emitido", m.notEmittedEntries],
       ["Linhas válidas", m.validRows],
@@ -117,12 +118,12 @@
       ["Tamanho", fmtBytes(t.fileSize)],
       ["Snapshot PW", t.snapshotId || "—"],
       ["Versão do saneamento", t.scopeVersion || "—"],
-      ["Regra aplicada", t.scopeRule || "ET + N-1710 da LD da Qualidade"],
+      ["Regra aplicada", t.scopeRule || "ET, N-1710 e CV (Currículo)"],
       ["Snapshot LD", t.ldSnapshotId || "—"],
       ["Arquivo LD vigente", t.ldFileName || "Identificado pelo snapshot"],
     ].map((item) => '<div><span>' + esc(item[0]) + '</span><strong>' + esc(item[1]) + "</strong></div>").join("");
     target.innerHTML =
-      '<div class="spw-audit-verdict' + verdictClass + '"><span>' + (audit.status === "validated" ? "✓" : "!") + '</span><div><b>' + verdictTitle + '</b>Os números abaixo usam somente entradas válidas por código + revisão, nas classes ET e N-1710 da LD da Qualidade.</div></div>' +
+      '<div class="spw-audit-verdict' + verdictClass + '"><span>' + (audit.status === "validated" ? "✓" : "!") + '</span><div><b>' + verdictTitle + '</b>Os números abaixo usam entradas válidas por código + revisão, incluindo CV (Currículo) quando presente no PW. A ausência de CV no PW não cria pendência.</div></div>' +
       '<div class="spw-audit-grid">' + cards.map((item) => '<article class="spw-audit-card"><span>' + esc(item[0]) + '</span><strong>' + fmt(item[1]) + "</strong></article>").join("") + "</div>" +
       '<section class="spw-audit-section"><h4>Verificações de integridade</h4><div class="spw-audit-checks">' + checks + "</div></section>" +
       '<section class="spw-audit-section"><h4>Identificação da importação</h4><div class="spw-audit-trace">' + trace + "</div></section>";

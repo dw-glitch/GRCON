@@ -1,8 +1,8 @@
 export type SigemPwBaseKind = "sigem" | "pw" | "ld";
 export type SigemPwEditableBaseKind = "sigem" | "pw";
-export type SigemPwDocumentClass = "" | "ET" | "N-1710" | "Não classificado";
+export type SigemPwDocumentClass = "" | "ET" | "N-1710" | "CV" | "Não classificado";
 export type SigemPwRevisionScope = "revision0" | "all";
-export type SigemPwListKey = "all" | "sigem" | "pw" | "pwDuplicates" | "bothOtherRevision" | "sigemOnly" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
+export type SigemPwListKey = "all" | "sigem" | "pw" | "pwDuplicates" | "bothOtherRevision" | "sigemOnly" | "cvNotApplicable" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
 export type SigemPwReadinessStatus = "empty" | "partial" | "ready" | "attention";
 
 export interface SigemPwBaseMeta {
@@ -101,6 +101,7 @@ export interface SigemPwSummary {
   pwExclusive: number;
   matched: number;
   sigemOnly: number;
+  cvNotApplicable: number;
   bothOtherRevision: number;
   bothNotEmitted: number;
   bothEmitted: number;
@@ -146,12 +147,15 @@ export interface SigemPwAggregateMap {
   all: SigemPwResult;
   ET: SigemPwResult;
   "N-1710": SigemPwResult;
+  CV: SigemPwResult;
   "revision0:all": SigemPwResult;
   "revision0:ET": SigemPwResult;
   "revision0:N-1710": SigemPwResult;
+  "revision0:CV": SigemPwResult;
   "all:all": SigemPwResult;
   "all:ET": SigemPwResult;
   "all:N-1710": SigemPwResult;
+  "all:CV": SigemPwResult;
 }
 
 export interface SigemPwReadinessCheck {
@@ -245,6 +249,7 @@ export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.f
   pwDuplicates: "Duplicados PW",
   bothOtherRevision: "Cadastrado: conferir revisão",
   sigemOnly: "SIGEM: falta cadastrar no PW",
+  cvNotApplicable: "CV — Currículos (PW não aplicável)",
   bothNotEmitted: "SIGEM + PW: ainda não emitido",
   bothEmitted: "SIGEM + PW: emitido",
   pwOnlyNotEmitted: "PW: revisão sem SIGEM, não emitida",

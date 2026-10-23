@@ -104,7 +104,7 @@ function restoreSessionHints(): void {
   const scope=sessionScope();if(restoredSessionScope===scope)return;restoredSessionScope=scope;
   const value=window.GrconImportReview?.session();if(!value)return;
   const filters=value.filters||{};
-  state.filters={documentClass:filters.documentClass==="ET"||filters.documentClass==="N-1710"||filters.documentClass==="Não classificado"?filters.documentClass:"",query:text(filters.query).slice(0,2000),revision:text(filters.revision).slice(0,16),sigemStatus:text(filters.sigemStatus).slice(0,255),inPw:filters.inPw==="yes"||filters.inPw==="no"?filters.inPw:""};
+  state.filters={documentClass:filters.documentClass==="ET"||filters.documentClass==="N-1710"||filters.documentClass==="CV"||filters.documentClass==="Não classificado"?filters.documentClass:"",query:text(filters.query).slice(0,2000),revision:text(filters.revision).slice(0,16),sigemStatus:text(filters.sigemStatus).slice(0,255),inPw:filters.inPw==="yes"||filters.inPw==="no"?filters.inPw:""};
   state.revisionScope=value.pwPresenceRule===6&&value.revisionScope==="revision0"?"revision0":"all";
   state.analysisPwId=value.analysisPwId||"";state.analysisSigemId=value.analysisSigemId||"";
   document.documentElement.dataset.sigemPwRevisionScope=state.revisionScope;
@@ -240,20 +240,24 @@ async function rebuildModelAsync(): Promise<boolean> {
           all: core.aggregateModel(model, {}, { revisionScope: "all" }),
           ET: core.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "all" }),
           "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "all" }),
+          CV: core.aggregateModel(model, { documentClass: "CV" }, { revisionScope: "all" }),
         };
         const revision0Scope = {
           all: core.aggregateModel(model, {}, { revisionScope: "revision0" }),
           ET: core.aggregateModel(model, { documentClass: "ET" }, { revisionScope: "revision0" }),
           "N-1710": core.aggregateModel(model, { documentClass: "N-1710" }, { revisionScope: "revision0" }),
+          CV: core.aggregateModel(model, { documentClass: "CV" }, { revisionScope: "revision0" }),
         };
         return {
           ...allScope,
           "revision0:all": revision0Scope.all,
           "revision0:ET": revision0Scope.ET,
           "revision0:N-1710": revision0Scope["N-1710"],
+          "revision0:CV": revision0Scope.CV,
           "all:all": allScope.all,
           "all:ET": allScope.ET,
           "all:N-1710": allScope["N-1710"],
+          "all:CV": allScope.CV,
         };
       })(),
     };
