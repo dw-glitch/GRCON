@@ -107,9 +107,9 @@ assert.match(appSource,/row\.manualSigemSelection = \{/);
 assert.match(appSource,/rowStatusPolicy\(row\)\.manualOnly/);
 assert.match(appSource,/allocation-blocked/);
 assert.match(appSource,/const allocationClass = allocationAlert/);
-assert.match(appSource,/TriageQuery\.allocationAlert\(row\)\) return "bloqueado"/);
+assert.match(appSource,/allocationAlert\\(row\\) === "not_allocated"\\) return "bloqueado"/);
 assert.match(fs.readFileSync(require("node:path").join(__dirname,"..","grdt-central-ux.css"),"utf8"),
-  /status-chip\.allocation-blocked[\s\S]*#991b1b/);
+  /--grdt-blocked-ink: #8b3a46/);
 assert.doesNotMatch(appSource,/if \(row\.decision === C\.READY && !row\.hardBlock && rowOutputSources\(row\)\.length\) state\.selected\.add\(index\);/);
 console.log("GRDT SIGEM: análise excluída automaticamente, seleção individual, aliases, revisão, repostagem e proteção dos downloads OK.");
 
