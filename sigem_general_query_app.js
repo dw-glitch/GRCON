@@ -77,6 +77,8 @@
         else missing.push(code);
       }
     }else source=records||[];
+    // "Última revisão" é calculada na fonte selecionada antes dos filtros de situação.
+    if(filters.view==="latest")source=latestRows(source);
     const query=key(filters.code), title=text(filters.title), revision=key(filters.revision);
     const status=trim(filters.status), discipline=trim(filters.discipline);
     const phrase=text(filters.search);
@@ -93,7 +95,6 @@
       if(filters.onlyDuplicate&&lookup.duplicates.get(key(row.document)+"\u0000"+key(row.revision))<2)return false;
       return true;
     });
-    if(filters.view==="latest")rows=latestRows(rows);
     const sort=filters.sort||"document",direction=filters.direction===-1?-1:1;
     rows=rows.slice().sort((a,b)=>{
       const difference=compare(a[sort],b[sort])||compare(a.document,b.document)||compare(a.revision,b.revision);
@@ -114,7 +115,8 @@
   if(!root.document)return;
 
   const state={records:[],base:null,lookup:buildIndex([]),scope:"",result:{rows:[],missing:[],matched:[],requested:[],duplicateInput:[]},
-    columns:DEFAULT_COLUMNS.slice(),page:0,error:"",view:"all",sort:"document",direction:1,renderStart:-1};
+    columns:DEFAULT_COLUMNS.slice(),widths:{document:285,revision:96,title:340,status:165,discipline:135,modifiedAt:170},
+    page:0,error:"",view:"all",sort:"document",direction:1,renderStart:-1};
   let shell,viewport,epoch=0,timer=0;
   const scoped=()=>JSON.stringify([root.GrconCloud?.state?.session?.user?.id||"",root.GrconCloud?.state?.membership?.workspace_id||""]);
   const el=id=>shell?.querySelector("#"+id);
@@ -183,7 +185,7 @@
       '<section class="sgq-card"><div id="sgq-stats" class="sgq-stats" aria-live="polite"></div><div class="sgq-actions" style="margin:12px 0"><button id="sgq-export" class="secondary-button" type="button">Exportar Excel</button><button id="sgq-csv" class="secondary-button" type="button">Exportar CSV</button><button id="sgq-copy" class="secondary-button" type="button">Copiar tabela</button><button id="sgq-missing-export" class="secondary-button" type="button">Exportar não encontrados</button></div>',
       '<details id="sgq-column-details"><summary>Organizar colunas</summary><div id="sgq-columns" class="sgq-column-list"></div></details>',
       '<p id="sgq-count" class="sgq-muted"></p><div id="sgq-scroll" class="sgq-table-scroll" tabindex="0" aria-label="Resultados da Consulta Geral">',
-      '<table class="sgq-table"><thead id="sgq-head"></thead><tbody id="sgq-body"></tbody></table></div></section>',
+      '<table class="sgq-table"><colgroup id="sgq-colgroup"></colgroup><thead id="sgq-head"></thead><tbody id="sgq-body"></tbody></table></div></section>',
       '<section class="sgq-card"><details id="sgq-missing-details"><summary><strong id="sgq-missing-title">Não encontrados (0)</strong></summary><p class="sgq-muted">Não localizado na Consulta Geral carregada. Não comprova ausência no SIGEM ou no ProjectWise.</p><div id="sgq-missing" class="sgq-missing-list"></div></details></section></div>'
     ].join("");
     document.querySelector("main.workspace").appendChild(shell);
@@ -225,6 +227,24 @@
       if(button)detail(Number(button.dataset.sgqDetail));
     };
     viewport.addEventListener("scroll",()=>renderRows());
+    el("sgq-columns").addEventListener("click",e=>{
+      const button=e.target.closest("button[data-sgq-move]");
+      if(!button)return;
+      const field=button.dataset.sgqMove,direction=Number(button.dataset.sgqDirection);
+      const current=state.columns.indexOf(field),target=current+direction;
+      if(current<0||target<0||target>=state.columns.length)return;
+      [state.columns[current],state.columns[target]]=[state.columns[target],state.columns[current]];
+      state.renderStart=-1;render();
+    });
+    el("sgq-columns").addEventListener("input",e=>{
+      const input=e.target.closest("input[data-sgq-width]");
+      if(!input)return;
+      const width=Math.max(85,Math.min(680,Number(input.value)||140));
+      state.widths[input.dataset.sgqWidth]=width;
+      el("sgq-colgroup").querySelectorAll("col").forEach((col,i)=>{
+        col.style.width=(state.widths[state.columns[i]]||150)+"px";
+      });
+    });
     el("sgq-columns").addEventListener("change",e=>{
       const input=e.target.closest("input[data-sgq-column]");
       if(!input)return;
@@ -291,7 +311,13 @@
     el("sgq-missing").textContent=result.missing.length?result.missing.join("\n"):"Nenhum código ausente da Consulta Geral carregada.";
     el("sgq-export").disabled=el("sgq-csv").disabled=el("sgq-copy").disabled=!result.rows.length;
     el("sgq-missing-export").disabled=!result.missing.length;
-    el("sgq-columns").innerHTML=FIELDS.map(([field,label])=>'<label><input type="checkbox" data-sgq-column="'+field+'" '+(state.columns.includes(field)?"checked":"")+"> "+escape(label)+"</label>").join("");
+    el("sgq-columns").innerHTML=FIELDS.map(([field,label])=>{
+      const visible=state.columns.includes(field);
+      return '<label><input type="checkbox" data-sgq-column="'+field+'" '+(visible?"checked":"")+"> "+escape(label)+
+        (visible?' <button type="button" data-sgq-move="'+field+'" data-sgq-direction="-1" title="Mover à esquerda">←</button><button type="button" data-sgq-move="'+field+'" data-sgq-direction="1" title="Mover à direita">→</button><input type="number" data-sgq-width="'+field+'" min="85" max="680" step="10" aria-label="Largura da coluna '+escape(label)+'" value="'+(state.widths[field]||150)+'" style="width:62px"> px':"")+"</label>";
+    }).join("");
+    el("sgq-colgroup").innerHTML=state.columns.map(field=>'<col style="width:'+(state.widths[field]||150)+'px">').join("");
+    el("sgq-colgroup").parentElement.style.minWidth=state.columns.reduce((total,field)=>total+(state.widths[field]||150),0)+"px";
     el("sgq-head").innerHTML="<tr>"+state.columns.map(field=>{
       const label=FIELDS.find(f=>f[0]===field)?.[1]||field;
       return '<th scope="col" title="Ordenar por '+escape(label)+'"><button type="button" data-sgq-sort="'+field+'">'+escape(label)+(state.sort===field?(state.direction>0?" ↑":" ↓"):"")+"</button></th>";
