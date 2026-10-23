@@ -786,10 +786,10 @@
     const pwLastEmission = text(pwEvidence && pwEvidence.current && pwEvidence.current.lastEmission);
     const pwStatusRaw = currentStatus(pwEvidence, "pw");
     const pwStatus = pwStatusRaw || (norm(pwLastEmission) === EMISSION_FLAGS.PLANNED ? "Previsto (sem estado no PW)" : "");
-    const pwEmission = sigemEntry && reference.documentClass === "CV" && !pwEvidence ? "Não aplicável (CV)" : pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : pwEvidence ? "Revisão não confirmada" : "Não cadastrado";
+    const pwEmission = sigemEntry && reference.documentClass === "CV" && !pwEntry ? "Não aplicável (CV)" : pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : pwEvidence ? "Revisão não confirmada" : "Não cadastrado";
     let situationKey = "bothEmitted";
     let situation = COMPARISON_SITUATIONS.BOTH_EMITTED;
-    if (sigemEntry && !pwEvidence && reference.documentClass === "CV") {
+    if (sigemEntry && !pwEntry && reference.documentClass === "CV") {
       situationKey = "cvNotApplicable";
       situation = COMPARISON_SITUATIONS.CV_NOT_APPLICABLE;
     } else if (sigemEntry && !pwEntry && pwEvidence) {
@@ -821,7 +821,7 @@
       pwLastEmission,
       sigemOriginalCode: text(sigemEntry && sigemEntry.document),
       pwOriginalCode: text(pwEvidence && pwEvidence.document),
-      pwRevisionEvidence: !pwEntry && pwEvidence ? "Correspondência da revisão não confirmada" : pwEntry && pwEntry.revisionKey === "__SEM_REVISAO__" ? "Não informada no PW" : "Informada no PW",
+      pwRevisionEvidence: sigemEntry && reference.documentClass === "CV" && !pwEntry ? "Revisão PW não exigida para CV" : !pwEntry && pwEvidence ? "Correspondência da revisão não confirmada" : pwEntry && pwEntry.revisionKey === "__SEM_REVISAO__" ? "Não informada no PW" : "Informada no PW",
       situation,
       situationKey,
       inSigem: Boolean(sigemEntry),
