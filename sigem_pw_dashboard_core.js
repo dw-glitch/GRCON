@@ -102,6 +102,20 @@
     return `${match[1]}_RNEST_${match[2]}_${match[3]}_${match[4]}_${match[5]}_${match[6]}`;
   }
 
+  // Escopo único da comparação: presença literal de C1O no código documental.
+  // A letra O jamais é confundida com o algarismo zero (C10).
+  function isC1OCode(value) {
+    return canonicalDocumentCode(value).includes("C1O");
+  }
+
+  function partitionC1ORecords(records) {
+    const eligible = [], outOfScope = [];
+    for (const row of Array.isArray(records) ? records : []) {
+      (isC1OCode(row && row.document) ? eligible : outOfScope).push(row);
+    }
+    return { eligible, outOfScope };
+  }
+
   function documentIdentity(value) {
     const canonical = canonicalDocumentCode(value);
     if (!canonical) return { key: "", canonical: "", info: null, searchKeys: [] };
@@ -719,12 +733,22 @@
     // Cadastro é presença documental. A LD e os estados não excluem linhas PW.
     const enforceLd = arguments.length >= 3;
     const ldUniverse = buildLdUniverse(ldRecords || []);
-    const normalizedSigem = normalizeRecords(sigemRecords || [], "sigem", ldUniverse, enforceLd);
-    const normalizedPw = normalizeRecords(pwRecords || [], "pw", ldUniverse, enforceLd);
+    // Filtrar ANTES da construção de mapas, indicadores, duplicidades e revisões.
+    // As bases originais são mantidas intactas para auditoria e exportação separada.
+    const sigemScope = partitionC1ORecords(sigemRecords);
+    const pwScope = partitionC1ORecords(pwRecords);
+    const normalizedSigem = normalizeRecords(sigemScope.eligible, "sigem", ldUniverse, enforceLd);
+    const normalizedPw = normalizeRecords(pwScope.eligible, "pw", ldUniverse, enforceLd);
     const sigemEntries = buildEntryMap(normalizedSigem, "sigem");
     const pwEntries = buildEntryMap(normalizedPw, "pw");
     return {
       ldUniverse,
+      comparisonScope: {
+        rule: "C1O", version: 7,
+        sigemAccepted: normalizedSigem.length, pwAccepted: normalizedPw.length,
+        sigemOutOfScope: sigemScope.outOfScope.length,
+        pwOutOfScope: pwScope.outOfScope.length,
+      },
       normalizedSigem,
       normalizedPw,
       // O Dashboard novo usa as entradas por código + revisão. Os mapas
@@ -1317,7 +1341,7 @@
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
     PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, N1710_CODE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
     EMISSION_FLAGS, EMISSION_RULE, COMPARISON_SITUATIONS, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS, REVISION_SCOPES,
-    text, norm, normalizeHeader, canonicalDocumentCode, documentIdentity, documentClass,
+    text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, partitionC1ORecords, documentIdentity, documentClass,
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
