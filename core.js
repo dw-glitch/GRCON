@@ -1670,12 +1670,14 @@
 
   function grdtFileDocumentCandidates(value) {
     const name = text(value).split(/[\\/]/).pop();
-    const rawStem = name.replace(/\.(?:[A-Z][A-Z0-9]{0,7}|7Z)$/i, '');
+    const rawStem = name.replace(/\.(?:[A-Z][A-Z0-9_-]*|\d+|7Z)$/i, '');
     const stem = canonicalId(rawStem);
     if (!stem) return [];
     const tokens = [stem];
     const sheet = stem.match(/^(.*)_\d{4}$/);
-    const suffix = stem.match(/^(.*?)(?:_\d{4})?[_ -](?:REV(?:ISAO)?[_. -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)$/);
+    // A hyphen belongs to a TAG/code (for example P-101-A); only the
+    // documented underscore separator may introduce an implicit revision.
+    const suffix = stem.match(/^(.*?)(?:_\d{4})?_(?:REV(?:ISAO)?[_. -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)$/);
     if (sheet) tokens.push(sheet[1]);
     const operational = stem.match(/^(.*?)(?:_\d{4})?_RIR$/);
     if (operational) tokens.push(operational[1]); // operational marker, never a confirmed revision
@@ -1799,7 +1801,9 @@
     if (sameDocument(stem)) return result("0", "nome do arquivo (sem sufixo = revisão 0)");
     const sheetOnly = stem.match(/^(.*)_\d{4}$/);
     if (sheetOnly && sameDocument(sheetOnly[1])) return result("0", "nome do arquivo (folha sem revisão = revisão 0)");
-    const suffix = stem.match(/^(.*?)(?:_\d{4})?[_ -](?:REV(?:ISAO)?[_. -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)$/);
+    // A hyphen belongs to a TAG/code (for example P-101-A); only the
+    // documented underscore separator may introduce an implicit revision.
+    const suffix = stem.match(/^(.*?)(?:_\d{4})?_(?:REV(?:ISAO)?[_. -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)$/);
     if (suffix && sameDocument(suffix[1]) && suffix[2] !== "RIR" && revisionInfo(suffix[2]).valid) {
       return result(normalizeRevision(suffix[2]), "nome do arquivo");
     }
