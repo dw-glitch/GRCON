@@ -107,9 +107,9 @@ assert.match(appSource,/row\.manualSigemSelection = \{/);
 assert.match(appSource,/rowStatusPolicy\(row\)\.manualOnly/);
 assert.match(appSource,/allocation-blocked/);
 assert.match(appSource,/const allocationClass = allocationAlert/);
-assert.match(appSource,/TriageQuery\.allocationAlert\(row\)\) return "bloqueado"/);
+assert.match(appSource,/allocationAlert\(row\) === "not_allocated"\) return "bloqueado"/);
 assert.match(fs.readFileSync(require("node:path").join(__dirname,"..","grdt-central-ux.css"),"utf8"),
-  /status-chip\.allocation-blocked[\s\S]*#991b1b/);
+  /--grdt-blocked-ink: #8b3a46/);
 assert.doesNotMatch(appSource,/if \(row\.decision === C\.READY && !row\.hardBlock && rowOutputSources\(row\)\.length\) state\.selected\.add\(index\);/);
 console.log("GRDT SIGEM: análise excluída automaticamente, seleção individual, aliases, revisão, repostagem e proteção dos downloads OK.");
 
@@ -251,14 +251,18 @@ for (let index = 0; index < visualRows.length; index += 1) {
   assert.equal(vm.runInContext(`selectionSituationClass(state.results[${index}], ${index})`, visualCtx), expectedVisualClasses[index]);
 }
 assert.equal(vm.runInContext("selectionSituationLabel(state.results[0], 0)", visualCtx), "Pronto");
-assert.match(vm.runInContext("selectionSituationLabel(state.results[1], 1)", visualCtx), /Não Alocado · incluído manualmente/);
+assert.match(vm.runInContext("selectionSituationLabel(state.results[1], 1)", visualCtx), /Não incluir · inclusão manual/);
 assert.match(vm.runInContext("selectionSituationLabel(state.results[2], 2)", visualCtx), /Em análise \(rev\. A\) · incluído manualmente/);
 assert.equal(vm.runInContext("selectionSituationLabel(state.results[6], 6)", visualCtx), "Bloqueado");
 const statusCss = fs.readFileSync(require.resolve("../grdt-central-ux.css"), "utf8");
-const palettes = [...statusCss.matchAll(/--grdt-status-bg:\s*(#[a-f\d]+);\s*--grdt-status-ink:\s*(#[a-f\d]+);\s*--grdt-status-border:\s*(#[a-f\d]+);/gi)];
-assert.equal(palettes.length, 8);
-assert.equal(new Set(palettes.map(match => match[1])).size, 8, "oito fundos distintos");
-assert.equal(new Set(palettes.map(match => match[2])).size, 8, "oito cores de texto distintas");
+const palettes = ["ready", "blocked", "analysis", "unresolved", "review"].map(name => {
+  const read = suffix => statusCss.match(new RegExp('--grdt-' + name + '-' + suffix + ':\\s*(#[0-9a-f]+)', 'i'))?.[1];
+  return [name, read("bg"), read("ink"), read("border")];
+});
+assert.equal(palettes.length, 5);
+assert.ok(palettes.every(([name,bg,ink,border]) => name && bg && ink && border));
+assert.equal(new Set(palettes.map(match => match[1])).size, 5, "cinco fundos semânticos distintos");
+assert.equal(new Set(palettes.map(match => match[2])).size, 5, "cinco cores legíveis de texto");
 const luminance = hex => hex.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255)
   .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
   .reduce((total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index], 0);
@@ -267,7 +271,7 @@ for (const [, background, ink] of palettes) {
   assert.ok((Math.max(...values) + 0.05) / (Math.min(...values) + 0.05) >= 4.5,
     `contraste de texto legível: ${ink} sobre ${background}`);
 }
-assert.match(statusCss, /tr\.result-row\.manually-included:hover > td\s*\{\s*background: var\(--grdt-status-surface\) !important;/);
+assert.doesNotMatch(statusCss, /--grdt-status-surface/, "linhas e seleções mantêm o fundo neutro");
 for (const key of ["pronto", "bloqueado", "descartar", "revisar", "nao_localizado"]) {
   assert.ok(statusCss.includes(`.summary-item[data-filter="${key}"]`), `resumo com a mesma paleta: ${key}`);
 }
@@ -275,7 +279,7 @@ const allocationVisualSource = appSource.match(/const allocationClass = allocati
 assert.equal(vm.runInNewContext(`${allocationVisualSource} allocationClass;`, {
   allocationAlert: "", allocationVisual: { kind: "allocated" }, row: { hardBlock: true },
 }), "allocated", "bloqueio técnico não pinta de vermelho uma alocação confirmada");
-console.log("GRDT cores: pronto, não alocado, análise, conferência, não identificado, conflito, bloqueado e excluído distintos OK.");
+console.log("GRDT cores: cinco tons suaves, motivos explícitos, cartões neutros e contraste AA OK.");
 
 function harness() {
   const events=new Map(), pending=[];

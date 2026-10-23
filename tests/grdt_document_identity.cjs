@@ -57,5 +57,43 @@ assert.equal(noAllocationAndUnknown.label,'Não Alocado','missing allocation mus
 assert.equal(noAllocationAndUnknown.autoEligible,false);
 assert.equal(Q.unresolvedStatus({decision:Raw.READY,status:'Não Postado'}),false,'absence of an exact revision in a loaded SIGEM base remains a different operational state');
 assert.equal(Q.unresolvedStatus({decision:Raw.READY,status:'Não Postado',documentLookup:{matched:false}}),true,'unmatched document cannot be ready');
-const ui=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'nao_localizado'/);assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'review'/);
+
+const ui=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'nao_localizado'/);
+assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'review'/);
+const groupSource=ui.slice(ui.indexOf('  function decisionGroupKey(row) {'),ui.indexOf('  function decisionGroupLabel(row) {'));
+assert.ok(groupSource.includes('allocationAlert(row) === "not_allocated"'));
+assert.ok(groupSource.indexOf('allocationAlert(row) === "not_allocated"')<groupSource.indexOf('unresolvedStatus(row)'),'não alocado antes de não localizado');
+const decisionGroupKey=vm.runInNewContext(groupSource+';decisionGroupKey',{TriageQuery:Q,rowStatusPolicy:row=>Q.selectionPolicy(row),C:Raw});
+const scenario=(status,extra={})=>({status,decision:Raw.READY,...extra});
+assert.equal(decisionGroupKey(scenario('Sem status',{allocationStatus:'NÃO ALOCADO',documentLookup:{matched:false}})),'bloqueado');
+assert.equal(decisionGroupKey(scenario('Em Workflow',{record:{allocationStatus:'Não alocado'}})),'bloqueado');
+assert.equal(decisionGroupKey(scenario('Não Postado',{allocationFinding:{kind:'not_allocated'}})),'bloqueado');
+assert.equal(decisionGroupKey(scenario('Sem status',{allocationFinding:{kind:'conflict'}})),'revisar');
+assert.equal(decisionGroupKey(scenario('Sem status',{documentLookup:{matched:false}})),'nao_localizado');
+assert.equal(decisionGroupKey(scenario('Em Análise')),'descartar');
+assert.equal(decisionGroupKey(scenario('Não Postado')),'pronto');
+const labelsSource=ui.slice(ui.indexOf('  function selectionSituationLabel(row, index) {'),ui.indexOf('  function decisionClass(value, row) {'));
+const selectionSituationLabel=vm.runInNewContext(labelsSource+';selectionSituationLabel',{
+  rowStatusPolicy:row=>Q.selectionPolicy(row),
+  rowIncludedForGeneration:row=>Boolean(row.manualSelected),
+  rowCanBeSelected:()=>true,
+  compactDecisionLabel:()=> 'Conferir'
+});
+assert.equal(selectionSituationLabel(scenario('Sem status',{allocationStatus:'NÃO ALOCADO'}),0),'Não incluir');
+assert.equal(selectionSituationLabel(scenario('Não Postado',{allocationStatus:'NÃO ALOCADO',manualSelected:true}),0),'Não incluir · inclusão manual');
+assert.equal(selectionSituationLabel(scenario('Não Postado',{allocationFinding:{kind:'conflict'}}),0),'Conferir');
+assert.match(ui,/grdt-status-reason">Não alocado/,'motivo operacional visível ao lado do badge');
+const css=fs.readFileSync(path.join(__dirname,'../grdt-central-ux.css'),'utf8');
+assert.match(css,/--grdt-blocked-bg: #f9ecee/);
+assert.match(css,/--grdt-ready-bg: #eaf5ee/);
+assert.doesNotMatch(css,/box-shadow: inset 4px 0/,'não colorir faixa de todas as linhas');
+assert.doesNotMatch(css,/--grdt-status-symbol/,'retirar símbolos decorativos recorrentes');
+const rgb=hex=>[1,3,5].map(n=>parseInt(hex.slice(n,n+2),16)/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4);
+const luminance=hex=>rgb(hex).reduce((sum,c,index)=>sum+c*[.2126,.7152,.0722][index],0);
+const contrast=(a,b)=>{const [x,y]=[luminance(a),luminance(b)].sort((x,y)=>y-x);return (x+.05)/(y+.05);};
+for (const pair of [['#eaf5ee','#216343'],['#f9ecee','#8b3a46'],['#edf2f8','#395a7a'],['#f1f3f6','#475569'],['#f8f2e8','#846326']]) {
+  assert.ok(contrast(...pair)>=4.5,'badges devem atender contraste WCAG AA: '+pair.join('/'));
+}
+
 console.log('GRDT identity: raw+guarded core, 121/122, unmatched code preservation, P-101-A, ambiguous candidates, complete codes, false hints, folder/title references, nt aliases, physical file guard, manual override and unresolved status separation passed.');
