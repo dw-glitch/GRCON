@@ -138,6 +138,7 @@
     const record = document && Array.isArray(document.rows) && document.rows.length ? document.rows[0] : null;
     const canonical = text(record && record.canonicalDocument) || text(document && document.document);
     const documentClass = text(document && document.documentClass);
+    if (documentClass === "CV") return { comparable: false, eap: "", documentType: "" };
     if (documentClass !== "ET") return { comparable: Boolean(Dashboard && Dashboard.isC1OCode && Dashboard.isC1OCode(canonical)), eap: "", documentType: "" };
     const normalized = canonical.replace(/-/g, "-");
     const underscore = normalized.includes("_RNEST_") ? normalized.split("_") : [];
