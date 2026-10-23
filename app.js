@@ -21,7 +21,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.15";
+  const APP_VERSION = "5.44.16";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -5247,7 +5247,9 @@
           const zip = new JSZip();
           generated.forEach((file) => zip.folder(file.official.baseName).file(file.fileName, file.data));
           zip.file("ORGANIZACAO_DOS_LOTES.txt", buildBatchSummaryText(generated));
-          downloadBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), packageName);
+          const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+          await PackageLayout.verifyArchive(blob, generated, { includeFiles: false });
+          downloadBlob(blob, packageName);
         }
       }
       saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, historyPrepared.historyRecords);
@@ -5358,6 +5360,10 @@
         const zip = new JSZip();
         PackageLayout.addFolders(zip, generated, [{ name: "ORGANIZACAO_DOS_LOTES.txt", data: buildBatchSummaryText(generated) }]);
         blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } }, detail => window.GrconGrdtDownloadProgress?.phase("Compactando ZIP…", detail.percent / 100));
+        await PackageLayout.verifyArchive(blob, generated, {
+          cancelled: () => state.cancelled,
+          onProgress: detail => window.GrconGrdtDownloadProgress?.phase(`Conferindo arquivos no ZIP (${detail.completed}/${detail.total})…`, detail.completed / detail.total),
+        });
       }
       window.GrconGrdtDownloadProgress?.phase("Registrando a emissão e entregando o pacote…");
       downloadBlob(blob, packageName);
@@ -5398,6 +5404,8 @@
       lines.push("");
     });
     lines.push("Cada pasta contém somente a eGRDT indicada e os arquivos pertencentes ao respectivo lote.");
+    lines.push("Extraia todo o ZIP para uma pasta local curta, por exemplo C:\\SIGEM. Abra o XLS na pasta extraída, ao lado dos arquivos do lote.");
+    lines.push("O pacote foi conferido antes do download. O envio pelo cliente Java e a confirmação no SIGEM são etapas posteriores.");
     return lines.join("\r\n");
   }
 
@@ -5495,6 +5503,7 @@
           { name: `Relatorio_GRCON_${firstOfficial.sequenceText}_${firstOfficial.year}_${timestamp}.xlsx`, data: await buildReportFile() },
         ]);
         blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } });
+        await PackageLayout.verifyArchive(blob, generated, { cancelled: () => state.cancelled });
       }
       downloadBlob(blob, packageName);
       saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, historyPrepared.historyRecords);
