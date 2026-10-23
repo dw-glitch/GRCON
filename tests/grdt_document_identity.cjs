@@ -50,6 +50,11 @@ bad.files[0].name=code('121')+'_0001_A.pdf';const spoofed=E.createPlan([bad],new
 for(const status of ['Não localizado','Não encontrado','Sem status','Status não identificado','']){
  const row={decision:Raw.READY,status};assert.equal(Q.unresolvedStatus(row),true);assert.equal(Q.selectionPolicy(row).autoEligible,false);
 }
+const noAllocationAndUnknown=Q.selectionPolicy({decision:Raw.REVIEW,status:'Sem status',allocationStatus:'Não Alocado'});
+assert.equal(noAllocationAndUnknown.unresolved,true);
+assert.equal(noAllocationAndUnknown.allocation,'not_allocated');
+assert.equal(noAllocationAndUnknown.label,'Não Alocado','missing allocation must remain explicit when SIGEM status is unknown');
+assert.equal(noAllocationAndUnknown.autoEligible,false);
 assert.equal(Q.unresolvedStatus({decision:Raw.READY,status:'Não Postado'}),false,'absence of an exact revision in a loaded SIGEM base remains a different operational state');
 assert.equal(Q.unresolvedStatus({decision:Raw.READY,status:'Não Postado',documentLookup:{matched:false}}),true,'unmatched document cannot be ready');
 const ui=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'nao_localizado'/);assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'review'/);
