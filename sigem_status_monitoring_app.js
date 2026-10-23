@@ -294,11 +294,14 @@
   function notificationOpenButton(item) {
     const original=item?.link_target||'';
     const target=original==='conference-status-monitor'&&item?.document_code?'sigem-central-document:'+item.document_code:original;
+    if(target.startsWith('document-task:'))return '<button class="text-button compact" type="button" data-document-task-target="'+escapeHtml(target)+'">Ver prazo e responsável</button>';
     if(target.startsWith('history:'))return '<button class="text-button compact" type="button" data-open-egrdt="'+escapeHtml(target.slice(8))+'">Abrir eGRDT</button>';
     if(target.startsWith('sigem-central-grdt:')||target.startsWith('sigem-central-document:')||target.startsWith('sigem-central-revision:'))return '<button class="text-button compact" type="button" data-sigem-central-target="'+escapeHtml(target)+'">Abrir na Central SIGEM</button>';
     return '';
   }
   root.document.addEventListener('click',async event=>{
+    const taskTarget=event.target.closest('[data-document-task-target]')?.dataset.documentTaskTarget;
+    if(taskTarget){try{if(root.GrconPostingConferenceNavigation)await root.GrconPostingConferenceNavigation.open();for(const module of ['posting_conference_core.js','posting_conference_refinement.js','posting_conference_report.js','posting_conference_app.js'])await root.GRCONModuleLoader.ensure(module);const [,contractId,...code]=taskTarget.split(':');root.dispatchEvent(new CustomEvent('grcon:open-document-task',{detail:{contractId,document:code.join(':')}}));}catch(error){notify(error.message,'error');}return;}
     const link=event.target.closest('[data-sigem-central-target]')?.dataset.sigemCentralTarget;if(!link)return;
     const expected=workspaceId();
     try{

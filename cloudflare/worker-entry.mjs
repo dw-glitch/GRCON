@@ -130,7 +130,7 @@ async function aiBody(request,max=3000){
 }
 async function handleDocumentAi(request,env,probe=false){
  if(probe){
-  await verifyGithubToken(bearerToken(request),{repository:'dw-glitch/GRCON',repositoryId:'1322072089',ownerId:'202873892',audience:'grcon-document-ai-probe',visibility:'public',workflow:'dw-glitch/GRCON/.github/workflows/deploy-cloudflare.yml@refs/heads/main',allowedEvents:['push','workflow_dispatch']});
+  await verifyGithubToken(bearerToken(request),{repository:'dw-glitch/GRCON',repositoryId:'1322072089',ownerId:'202873892',audience:'grcon-document-ai-probe',visibility:'private',workflow:'dw-glitch/GRCON/.github/workflows/deploy-cloudflare.yml@refs/heads/main',allowedEvents:['push','workflow_dispatch']});
   if(!aiEnabled(env))return apiError('Workers AI indisponível.',503,'AI_NOT_CONFIGURED');
   const slot=await rpc(env,'grcon_document_ai_budget',{operation:'probe'});
   if(!slot.allowed)return json({ok:true,skipped:true,reason:slot.reason});
@@ -785,6 +785,7 @@ async function routeVault(request, env) {
 export default {
   async scheduled(controller, env, ctx) {
     if (controller.cron === '* * * * *') {
+      ctx.waitUntil(rpc(env, 'grcon_document_task_deadlines', {}).catch(error => console.error('GRCON document deadlines', error.code || 'DEADLINE_CHECK_FAILED')));
       ctx.waitUntil(syncSharepoint(env).catch(error => console.error('GRCON SharePoint sync', error.code || 'SYNC_FAILED')));
       return;
     }

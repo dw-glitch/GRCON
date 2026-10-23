@@ -492,7 +492,7 @@
 
   function documentsTable(rows) {
     return `<table class="pc-table pc-document-table" aria-label="Documentos conferidos"><colgroup><col class="pc-col-document"/><col class="pc-col-sends"/><col class="pc-col-revisions"/><col class="pc-col-situation"/><col class="pc-col-confirmation"/><col class="pc-col-note"/></colgroup><thead><tr><th scope="col">Documento</th><th scope="col">Envios</th><th scope="col">Revisões</th><th scope="col">Situação</th><th scope="col">Confirmação</th><th scope="col">Observação</th></tr></thead><tbody>${rows.map((row) => `<tr>
-      <td class="pc-cell pc-cell-document"><div class="pc-document-code"><strong title="${escapeHtml(row.document)}">${breakableCode(row.document)}</strong><div class="pc-document-meta"><span class="document-class-badge" data-document-class="${escapeHtml((row.documentFamily || row.sheet) === "ET" || (row.documentFamily || row.sheet) === "N-1710" ? (row.documentFamily || row.sheet) : "")}">${escapeHtml(row.documentFamily || row.sheet || "—")}</span><span aria-hidden="true">·</span><span>${escapeHtml(row.discipline || "—")}</span></div>${row.sendCount > 1 ? `<span class="pc-consolidation-note">1 documento · ${fmt(row.sendCount)} envios</span>` : ""}${row.historicalPreserved ? '<small>Confirmação histórica preservada</small>' : ""}</div></td>
+      <td class="pc-cell pc-cell-document"><div class="pc-document-code"><strong title="${escapeHtml(row.document)}">${breakableCode(row.document)}</strong>${grdtTitleMarkup(row)}${taskMarkup(row.document)}<div class="pc-document-meta"><span class="document-class-badge" data-document-class="${escapeHtml((row.documentFamily || row.sheet) === "ET" || (row.documentFamily || row.sheet) === "N-1710" ? (row.documentFamily || row.sheet) : "")}">${escapeHtml(row.documentFamily || row.sheet || "—")}</span><span aria-hidden="true">·</span><span>${escapeHtml(row.discipline || "—")}</span></div>${row.sendCount > 1 ? `<span class="pc-consolidation-note">1 documento · ${fmt(row.sendCount)} envios</span>` : ""}${row.historicalPreserved ? '<small>Confirmação histórica preservada</small>' : ""}</div></td>
       <td class="pc-cell pc-cell-sends">${sendHistory(row)}</td>
       <td class="pc-cell pc-cell-revisions"><div class="pc-revision-grid"><div><span class="pc-block-label">Atual</span><strong>${escapeHtml(row.currentRevision || row.revisionSent || "—")}</strong></div><div><span class="pc-block-label">SIGEM</span><strong>${escapeHtml(row.revisionFound || "—")}</strong></div></div>${row.revisionCount > 1 ? `<small class="pc-revision-history">${fmt(row.revisionCount)} revisões no histórico</small>` : ""}</td>
       <td class="pc-cell pc-cell-situation"><div class="pc-situation-stack"><div><span class="pc-block-label">Conferência</span>${statusChip(row)}</div><div><span class="pc-block-label">Status SIGEM</span><span class="pc-sigem-status">${escapeHtml(row.sigemStatus || "—")}</span></div></div></td>
@@ -549,7 +549,7 @@
         ref.ldSheet ? "Aba: " + ref.ldSheet : "",
         ref.sourceRow ? "Linha: " + ref.sourceRow : "",
       ].filter(Boolean).join(" · ")).join(" | ");
-      return '<tr><td><strong>' + breakableCode(row.document) + '</strong><small>' + escapeHtml(row.discipline || row.documentFamily || "—") +
+      return '<tr><td><strong>' + breakableCode(row.document) + '</strong>' + grdtTitleMarkup(row) + '<small>' + escapeHtml(row.discipline || row.documentFamily || "—") +
         '</small>' + (row.title ? '<small>' + escapeHtml(row.title) + '</small>' : '') + control + '</td><td>' + escapeHtml(row.revisionSent || "—") + '</td><td>' + escapeHtml(row.revisionFound || "—") +
         '</td><td>' + statusChip(row) + '<small>SIGEM: ' + escapeHtml(row.sigemStatus || "Não informado") +
         (row.sigemStatusRevision ? ' · revisão ' + escapeHtml(row.sigemStatusRevision) : '') + '</small></td><td>' +
@@ -594,23 +594,30 @@
     const select=el('pc-saved-views');if(!select)return;const selected=select.value;
     select.innerHTML='<option value="">Selecionar</option>'+(root.GrconDocumentTasks?.views()||[]).map(v=>'<option value="'+escapeHtml(v.name)+'">'+escapeHtml(v.name)+'</option>').join('');select.value=selected;
   }
+  function grdtTitleMarkup(row){return '<span class="pc-grdt-title">'+escapeHtml(row.grdtTitle || 'Título não registrado nesta GRDT')+'</span>';}
   function taskMarkup(document){
     const tasks=root.GrconDocumentTasks,task=tasks?.get(document);
-    return (task?'<small>Prioridade '+escapeHtml(task.priority)+' · '+escapeHtml(task.responsible||'Sem responsável')+(task.due_date?' · Prazo '+escapeHtml(task.due_date):'')+'</small>':'')+
-      '<button type="button" class="pc-link" data-pc-organize="'+escapeHtml(document)+'">'+(tasks?.canEdit()?'Organizar':'Ver organização')+'</button>';
+    return (task?'<small>Prioridade '+escapeHtml(task.priority)+' · '+escapeHtml(task.responsible||'Sem responsável')+(task.due_date?' · Prazo '+escapeHtml(task.due_date.split('-').reverse().join('/')):'')+'</small>':'')+
+      '<button type="button" class="pc-link" data-pc-organize="'+escapeHtml(document)+'">'+(tasks?.canEdit(document)?'Gerenciar':'Ver gerenciamento')+'</button>';
   }
-  function openTaskEditor(code){
-    const tasks=root.GrconDocumentTasks,task=tasks?.get(code)||{},editable=tasks?.canEdit(),scope=JSON.stringify([root.GrconCloud?.state?.session?.user?.id,root.GrconCloud?.state?.membership?.workspace_id]);
-    const dialog=document.createElement('dialog');dialog.className='document-master-dialog';
-    dialog.innerHTML='<form><h3>Organização de '+escapeHtml(code)+'</h3><p>A situação continua determinada pela conferência do último envio.</p><fieldset '+(!editable?'disabled':'')+'><label>Prioridade<select name="priority">'+['normal','alta','urgente'].map(p=>'<option value="'+p+'" '+(p===(task.priority||'normal')?'selected':'')+'>'+p+'</option>').join('')+'</select></label><label>Responsável<input name="responsible" maxlength="160" value="'+escapeHtml(task.responsible||'')+'"></label><label>Prazo<input type="date" name="dueDate" value="'+escapeHtml(task.due_date||'')+'"></label><label>Observação<textarea name="note" maxlength="2000">'+escapeHtml(task.note||'')+'</textarea></label></fieldset><p role="status" data-task-status>'+escapeHtml(tasks?.state.error||'')+'</p><button type="button" data-close>Fechar</button>'+(editable?'<button type="submit">Salvar organização</button>':'')+'</form>';
+  async function openTaskEditor(code, suppliedTask){
+    const tasks=root.GrconDocumentTasks,task=suppliedTask||tasks?.get(code)||{},editable=!suppliedTask&&tasks?.canEdit(code),scope=JSON.stringify([root.GrconCloud?.state?.session?.user?.id,root.GrconCloud?.state?.membership?.workspace_id]);
+    const dialog=document.createElement('dialog');dialog.className='document-master-dialog pc-task-dialog';
+    dialog.innerHTML='<form><h3>Gerenciar '+escapeHtml(code)+'</h3><p data-task-author></p><p>Prazo compartilhado. Somente quem o criou pode alterá-lo. Válido até o fim do dia, no horário de Brasília.</p><fieldset '+(!editable?'disabled':'')+'><label>Prioridade<select name="priority">'+['normal','alta','urgente'].map(p=>'<option value="'+p+'" '+(p===(task.priority||'normal')?'selected':'')+'>'+p+'</option>').join('')+'</select></label><label>Responsável<select name="assigneeId"><option value="">Carregando usuários…</option></select></label><label>Prazo para postagem<input type="date" name="dueDate" value="'+escapeHtml(task.due_date||'')+'"></label><label>Observação<textarea name="note" maxlength="2000">'+escapeHtml(task.note||'')+'</textarea></label></fieldset><p role="status" data-task-status>'+escapeHtml(tasks?.state.error||'')+'</p><button type="button" data-close>Fechar</button>'+(editable?'<button type="submit" disabled>Salvar prazo</button>':'')+'</form>';
     document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();
     const closeOnContext=()=>dialog.close();root.addEventListener('grcon:contract-context-changed',closeOnContext);root.addEventListener('grcon:cloud-signed-out',closeOnContext);
     dialog.addEventListener('close',()=>{root.removeEventListener('grcon:contract-context-changed',closeOnContext);root.removeEventListener('grcon:cloud-signed-out',closeOnContext);dialog.remove();},{once:true});
     dialog.querySelector('form').onsubmit=async e=>{e.preventDefault();const button=dialog.querySelector('[type=submit]');button.disabled=true;try{
-      await tasks.save(code,{...Object.fromEntries(new FormData(e.target)),expectedVersion:task.version||0});
+      const row=documentRows().find(row=>tasks.key(row.document)===tasks.key(code));
+      await tasks.save(code,{...Object.fromEntries(new FormData(e.target)),expectedVersion:task.version||0,revisionSent:row?.revisionSent||'',grdtTitle:row?.grdtTitle||''});
+      void root.GrconSigemStatusMonitoring?.refreshNotifications?.();
       if(scope===JSON.stringify([root.GrconCloud?.state?.session?.user?.id,root.GrconCloud?.state?.membership?.workspace_id])){renderTableOnly();dialog.close();}
     }catch(error){dialog.querySelector('[data-task-status]').textContent=error.message;await tasks.load();}finally{button.disabled=false;}};dialog.showModal();
+    try{const users=await tasks.users();if(!dialog.isConnected)return;const author=users.find(u=>u.id===task.created_by);dialog.querySelector('[data-task-author]').textContent=task.created_by?'Criado por '+(author?.name||'usuário do GRCON')+'.':'';const select=dialog.querySelector('[name=assigneeId]');select.innerHTML='<option value="">Selecionar usuário</option>'+users.map(u=>'<option value="'+escapeHtml(u.id)+'" '+(u.id===task.assignee_id?'selected':'')+'>'+escapeHtml(u.name+(users.filter(other=>other.name===u.name).length>1?' · '+u.id.slice(-6):''))+'</option>').join('');if(task.assignee_id&&!users.some(u=>u.id===task.assignee_id)){const option=new Option(task.responsible||'Usuário inativo',task.assignee_id,true,true);select.add(option);}const submit=dialog.querySelector('[type=submit]');if(submit)submit.disabled=false;}catch(error){dialog.querySelector('[data-task-status]').textContent=error.message;}
+
   }
+  root.addEventListener('grcon:show-document-task',event=>{const task=event.detail;if(task.contract_id===root.GrconCloud?.state?.membership?.contract_id){root.GrconDocumentTasks.state.items.set(root.GrconDocumentTasks.key(task.document_code),task);openTaskEditor(task.document_code);}else openTaskEditor(task.document_code,task);});
+  root.setInterval(()=>{if(shell&&!shell.hidden&&root.GrconCloud?.state?.online)void root.GrconDocumentTasks?.load().then(()=>renderTableOnly());},30000);
   function pendingTable(rows) {
     const body = rows.map((row) => {
       const pending = row.pendingEvents || [];
@@ -636,7 +643,7 @@
         (index === 0 ? " · último envio" : "") +
         '</small><small>' + escapeHtml(send.conferenceLabel || send.statusLabel || Conference.statusLabel(send.status)) +
         '</small></article>').join("");
-      return '<tr><td><strong>' + breakableCode(row.document) + '</strong><small>' +
+      return '<tr><td><strong>' + breakableCode(row.document) + '</strong>' + grdtTitleMarkup(row) + '<small>' +
         fmt(row.pendingEventCount) + ' ' + plural(row.pendingEventCount, "envio com pendência", "envios com pendência") +
         ' · Revisão(ões): ' + escapeHtml(revisions) + '</small>' + taskMarkup(row.document) + '</td><td>' +
         statusChip(current) + '<small>SIGEM: ' + escapeHtml(current.sigemStatus || "Não informado") +
@@ -864,3 +871,8 @@
 
   root.GrconPostingConferenceUi = Object.freeze({ activate, render, state, reconcile: reconcileCurrent });
 })(window);
+
+window.addEventListener('grcon:open-document-task', async event => {
+ const {contractId,document:code}=event.detail||{};if(!contractId||!code)return;
+ try{const task=await window.GrconDocumentTasks.inspect(contractId,code);window.dispatchEvent(new CustomEvent('grcon:show-document-task',{detail:task}));}catch(error){window.alert(error.message);}
+});

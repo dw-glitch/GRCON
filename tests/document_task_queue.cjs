@@ -6,6 +6,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
  const root={GrconCloud:cloud,addEventListener:(e,fn)=>events.set(e,fn),localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}};
  vm.runInNewContext(fs.readFileSync('document_task_queue.js','utf8'),{window:root,console});const api=root.GrconDocumentTasks;
  await api.load();assert.equal(api.state.items.size,1001);
+ assert.equal(api.canEdit('DOC-0000'),true);api.state.items.get('DOC-0000').created_by='u2';assert.equal(api.canEdit('DOC-0000'),false,'only creator can edit existing task');api.state.items.get('DOC-0000').created_by='u1';assert.equal(api.canEdit('DOC-0000'),true);
  const pending=[{document:'DOC-0000',status:'NAO_ENCONTRADO'},{document:'DOC-1000',status:'NAO_ENCONTRADO'}];
  assert.equal(api.filter(pending)[0].document,'DOC-1000');assert.equal(api.filter(pending,{priority:'urgente',responsible:'qualid'}).length,1);assert.equal(pending[0].document,'DOC-0000','input order and status remain untouched');
  assert.equal(api.key('C1O-RNEST-DD-1.2.3.4-CE-DE-NT-TAG-01'),api.key('C1O_RNEST_DD_1.2.3.4_CE_DE_TAG-01'));

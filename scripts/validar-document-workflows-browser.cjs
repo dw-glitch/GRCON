@@ -42,9 +42,9 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  await page.evaluate(()=>{
   const workspace='00000000-0000-4000-8000-000000000001';
   let requestBase=null,requestRows=[];const tasks=new Map();window.qaDateCalls=0;
-  window.GrconCloud={state:{membership:{workspace_id:workspace,contract_id:'qa-contract',role:'owner'},contract:{display_name:'CONSAG / RNEST / UHDT-D',code:'UHDT-D'},session:{access_token:'qa'},online:true,client:{rpc(name,args){
+  window.GrconCloud={state:{membership:{workspace_id:workspace,contract_id:'qa-contract',role:'owner'},contract:{display_name:'CONSAG / RNEST / UHDT-D',code:'UHDT-D'},session:{access_token:'qa',user:{id:'qa'}},online:true,client:{rpc(name,args){
    let data=[];
-   if(name==='grcon_document_tasks'){const input=args.input||{};if(args.operation==='list')data=[...tasks.values()];if(args.operation==='save'){const old=tasks.get(input.document);if((old?.version||0)!==input.expectedVersion)return Promise.resolve({error:{message:'Outro usuário alterou esta organização.'}});data={document_key:input.document,document_code:input.document,priority:input.priority,responsible:input.responsible,note:input.note,due_date:input.dueDate,version:(old?.version||0)+1};tasks.set(input.document,data);}}
+   if(name==='grcon_document_tasks'){const input=args.input||{};if(args.operation==='list')data=[...tasks.values()];if(args.operation==='users')data=[{id:'qa-responsible',name:'Qualidade'}];if(args.operation==='save'){const old=tasks.get(input.document);if((old?.version||0)!==input.expectedVersion)return Promise.resolve({error:{message:'Outro usuário alterou esta organização.'}});data={document_key:input.document,document_code:input.document,priority:input.priority,assignee_id:input.assigneeId,responsible:input.assigneeId?'Qualidade':'',created_by:'qa',note:input.note,due_date:input.dueDate,version:(old?.version||0)+1};tasks.set(input.document,data);}}
    if(name==='grcon_requests_base') {
     const input=args.input||{};
     if(args.operation==='current')data=requestBase?.status==='active'?requestBase:null;
@@ -151,8 +151,8 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  assert.equal(await page.locator('.pc-pending-table tbody tr').count(),5);
  assert.ok(!(await page.locator('.pc-pending-table').textContent()).includes('DOC-001'));
  await page.locator('[data-pc-organize="DOC-002"]').click();
- const editor=page.locator('dialog').filter({has:page.locator('[name="responsible"]')});
- await editor.locator('[name="priority"]').selectOption('urgente');await editor.locator('[name="responsible"]').fill('Qualidade');await editor.locator('[name="note"]').fill('Conferir retorno');await editor.getByRole('button',{name:'Salvar organização',exact:true}).click();await editor.waitFor({state:'detached'});
+ const editor=page.locator('dialog').filter({has:page.locator('[name="assigneeId"]')});
+ await editor.locator('[name="priority"]').selectOption('urgente');await editor.locator('[name="assigneeId"]').selectOption('qa-responsible');await editor.locator('[name="note"]').fill('Conferir retorno');await editor.getByRole('button',{name:'Salvar prazo',exact:true}).click();await editor.waitFor({state:'detached'});
  assert.equal(await page.locator('.pc-pending-table tbody tr').count(),5,'organização não confirma nem remove pendência');
  await page.locator('#pc-queue-controls > summary').click();await page.locator('#pc-queue-priority').selectOption('urgente');assert.equal(await page.locator('.pc-pending-table tbody tr').count(),1);
  await page.locator('#pc-queue-controls details summary').click();await page.locator('#pc-manager-columns input[value="revision"]').uncheck();
@@ -160,7 +160,7 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  const managerBook=XLSX.read(fs.readFileSync(managerPath),{type:'buffer',raw:true}),managerRows=XLSX.utils.sheet_to_json(managerBook.Sheets[managerBook.SheetNames[0]],{defval:''});assert.equal(managerRows.length,1);assert.equal(managerRows[0].DOCUMENTO,'DOC-002');assert.equal(managerRows[0].CONTRATO,'UHDT-D');assert.equal(Object.hasOwn(managerRows[0],'REVISÃO ENVIADA'),false);
  await page.locator('#pc-view-name').fill('Urgentes');await page.locator('#pc-save-view').click();await page.locator('#pc-queue-priority').selectOption('');assert.equal(await page.locator('.pc-pending-table tbody tr').count(),5);
  await page.locator('#pc-saved-views').selectOption('Urgentes');assert.equal(await page.locator('.pc-pending-table tbody tr').count(),1);await page.locator('#pc-remove-view').click();await page.locator('#pc-queue-priority').selectOption('');
- await page.evaluate(async()=>{await window.GrconDocumentTasks.save('DOC-002',{priority:'normal',responsible:'',note:'',dueDate:''});window.GrconPostingConferenceUi.render();});
+ await page.evaluate(async()=>{await window.GrconDocumentTasks.save('DOC-002',{priority:'normal',assigneeId:'',note:'',dueDate:''});window.GrconPostingConferenceUi.render();});
 
  assert.match(await page.locator('.pc-pending-table').textContent(),/Parte da GRDT pendente/);
  assert.match(await page.locator('.pc-pending-table').textContent(),/GRDT inteira pendente/);
