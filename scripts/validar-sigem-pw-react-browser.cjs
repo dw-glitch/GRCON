@@ -559,7 +559,7 @@ async function waitEvolutionReady(page) {
     });
     await waitIdle(page);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.records.length),6);
-    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeVersion),6);
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.pw.meta.scopeVersion),7,'migração aplica o escopo C1O vigente, versão 7');
     metrics.pwPresenceAndDuplicates={allRows:6,uniqueEntries:4,duplicateRows:4,duplicateGroups:2,download:true,withoutLd:true,existingBaseReprocessed:true,savedProfileDocumentOnly:true};
     await page.locator('[data-revision-scope="all"]').click();
     await page.locator('[data-list="all"]').click();
