@@ -107,7 +107,7 @@ assert.match(appSource,/row\.manualSigemSelection = \{/);
 assert.match(appSource,/rowStatusPolicy\(row\)\.manualOnly/);
 assert.match(appSource,/allocation-blocked/);
 assert.match(appSource,/const allocationClass = allocationAlert/);
-assert.match(appSource,/allocationAlert\\(row\\) === "not_allocated"\\) return "bloqueado"/);
+assert.match(appSource,/allocationAlert\(row\) === "not_allocated"\) return "bloqueado"/);
 assert.match(fs.readFileSync(require("node:path").join(__dirname,"..","grdt-central-ux.css"),"utf8"),
   /--grdt-blocked-ink: #8b3a46/);
 assert.doesNotMatch(appSource,/if \(row\.decision === C\.READY && !row\.hardBlock && rowOutputSources\(row\)\.length\) state\.selected\.add\(index\);/);
