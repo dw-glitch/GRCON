@@ -492,23 +492,24 @@ async function waitEvolutionReady(page) {
       'NumeroDocumentoCliente;RevisaoCompleta;o_statename;Última emissão;o_filename',
       `${presenceDoc};;;;original.pdf`,
       `${presenceDoc.replaceAll('_','-')};;Cancelado;;copia.docx`,
-      'DOCUMENTO-EXTERNO;B;Qualquer estado;;externo.pdf',
-      'DOCUMENTO-EXTERNO;B;Outro estado;;externo2.pdf',
+      'DOCUMENTO-C1O-EXTERNO;B;Qualquer estado;;externo.pdf',
+      'DOCUMENTO-C1O-EXTERNO;B;Outro estado;;externo2.pdf',
       `${otherRevisionDoc};A;Estado desconhecido;???;rev-a.pdf`,
       `${otherRevisionDoc};B;Superado;;rev-b.pdf`,
     ].join('\n'));
     const presenceBook=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(presenceBook,XLSX.utils.aoa_to_sheet([
-      ['DOCUMENTO','REVISÃO','STATUS'],[presenceDoc,'0','Postado'],['DOCUMENTO-EXTERNO','0','Postado'],
+      ['DOCUMENTO','REVISÃO','STATUS'],[presenceDoc,'0','Postado'],['DOCUMENTO-C1O-EXTERNO','0','Postado'],
       [otherRevisionDoc,'0','Postado'],[missingDoc,'0','Postado']
     ]),'Consulta Geral');
     fs.writeFileSync(presenceSigem,XLSX.write(presenceBook,{type:'buffer',bookType:'xlsx'}));
     await page.addScriptTag({url:baseUrl+'/import_review.js'});
     await page.evaluate(()=>{GrconImportReview.saveProfile('Perfil anterior',{columns:{document:'NumeroDocumentoCliente',revision:'RevisaoCompleta',state:'o_statename',lastEmission:'Última emissão',documentType:'TipoDocumento'}});GrconImportReview.selectProfile('Perfil anterior');});
     const codeOnlyPath=path.join(fixtureDir,'PW_only_document.csv');
-    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente\nDOCUMENTO-SO-CODIGO');
+    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente\nDOCUMENTO-C1O-SO-CODIGO\nDOCUMENTO-FORA-ESCOPO');
     await importFile(page,'#spw-pw-file',codeOnlyPath);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),1,'perfil anterior não exige campos opcionais ausentes');
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),1,'código sem C1O fica separado e não entra na comparação');
     await page.evaluate(()=>GrconImportReview.selectProfile(''));
     await importFile(page,'#spw-pw-file',presencePw);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),4);
