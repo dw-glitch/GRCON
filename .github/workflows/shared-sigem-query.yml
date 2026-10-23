@@ -7,6 +7,9 @@ on:
       - "posting_conference_app.js"
       - "posting_conference_core.js"
       - "shared_sigem_query_app.js"
+      - "sigem_general_query_app.js"
+      - "tests/sigem_general_query.cjs"
+      - "scripts/validar-sigem-general-query-browser.cjs"
       - "shared_sigem_query_core.js"
       - "grdt_reissue_app.js"
       - "src/react/sigem-pw/**"
@@ -21,6 +24,9 @@ on:
       - "posting_conference_app.js"
       - "posting_conference_core.js"
       - "shared_sigem_query_app.js"
+      - "sigem_general_query_app.js"
+      - "tests/sigem_general_query.cjs"
+      - "scripts/validar-sigem-general-query-browser.cjs"
       - "shared_sigem_query_core.js"
       - "grdt_reissue_app.js"
       - "src/react/sigem-pw/**"
@@ -66,6 +72,7 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
           node scripts/validar-shared-sigem-browser.cjs
+          node scripts/validar-sigem-general-query-browser.cjs
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -75,4 +82,7 @@ jobs:
             artifacts/shared-sigem/*.png
             artifacts/shared-sigem/*.json
             artifacts/shared-sigem/*.xls
+            artifacts/sigem-general-query/*.png
+            artifacts/sigem-general-query/*.xlsx
+            artifacts/sigem-general-query/*.csv
           if-no-files-found: warn
