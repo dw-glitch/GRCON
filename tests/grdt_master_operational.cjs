@@ -122,7 +122,7 @@ function selectionHarness(rows, visible = rows.map((_, index) => index)) {
   const headerStart = appSource.indexOf("    const filtered = filteredResults();", appSource.indexOf("  function renderAll()"));
   const headerIndices = appSource.slice(headerStart, appSource.indexOf("    const physicalSelected = [];", headerStart));
   const headerState = appSource.match(/    els\.selectAllReady\.disabled = [^\n]+\n    els\.selectAllReady\.checked = [^\n]+\n    els\.selectAllReady\.indeterminate = [^\n]+/)[0];
-  const ctx = vm.createContext({ state, C: Core, TriageQuery: Q, Date, Set,
+  const ctx = vm.createContext({ state, C: Core, E: require("../emission.js"), TriageQuery: Q, Date, Set,
     els: { selectAllReady: checkbox },
     window: { GrconCloud: { state: { session: { user: { id: "QA-operator" } } } } },
     resultIndex: item => rows.indexOf(item),
@@ -190,9 +190,9 @@ const mixed = selectionHarness([
 mixed.individual(3, true);
 mixed.filter([2, 1, 0]);
 mixed.toggle(true);
-assert.deepEqual([...mixed.state.selected].sort(), [0, 1, 3], "seleciona por índice-fonte e preserva itens fora do filtro");
-assert.deepEqual([...mixed.state.manualForceInclude].sort(), [1, 3]);
-assert.equal(mixed.state.results[2].manualSigemSelection, undefined, "bloqueio técnico não recebe autorização");
+assert.deepEqual([...mixed.state.selected].sort(), [0, 1, 2, 3], "seleção manual inclui alertas e preserva itens fora do filtro");
+assert.deepEqual([...mixed.state.manualForceInclude].sort(), [0, 1, 2, 3]);
+assert.equal(mixed.state.results[2].hardBlock, true, "a exceção manual preserva o alerta original");
 assert.equal(mixed.checkbox.checked, true, "itens bloqueados não impedem marcar o cabeçalho");
 mixed.individual(1, false);
 assert.equal(mixed.checkbox.indeterminate, true);
@@ -203,7 +203,7 @@ mixed.toggle(false);
 assert.deepEqual([...mixed.state.selected], [3], "desmarca só os resultados do filtro");
 assert.equal(mixed.state.results[1].manualSigemSelection, null);
 mixed.filter([2]);
-assert.equal(mixed.checkbox.disabled, true, "somente bloqueados técnicos");
+assert.equal(mixed.checkbox.disabled, false, "inclusão manual disponível mesmo com alerta de triagem");
 mixed.filter([]);
 assert.equal(mixed.checkbox.disabled, true, "nenhum resultado");
 mixed.filter([1, 0]);
@@ -236,7 +236,8 @@ for (const index of visualState.manualForceInclude) {
   item.manualSigemSelection = { revision: "B", kind: policy.kind,
     statusKey: Core.normalizeSigemStatus(policy.status).key, blockingRevision: item.blockingRevision || "" };
 }
-const visualCtx = vm.createContext({ state: visualState, C: Core, TriageQuery: Q,
+const visualCtx = vm.createContext({ state: visualState, C: Core, E: require("../emission.js"), TriageQuery: Q,
+  rowOutputSources: item => item.files || [],
   resultIndex: item => visualRows.indexOf(item) });
 vm.runInContext(appSource.slice(appSource.indexOf("  function manualAllocationOverrideAllowed("),
   appSource.indexOf("  function rowCanBeEdited(")), visualCtx);
@@ -253,7 +254,7 @@ for (let index = 0; index < visualRows.length; index += 1) {
 assert.equal(vm.runInContext("selectionSituationLabel(state.results[0], 0)", visualCtx), "Pronto");
 assert.match(vm.runInContext("selectionSituationLabel(state.results[1], 1)", visualCtx), /Não incluir · inclusão manual/);
 assert.match(vm.runInContext("selectionSituationLabel(state.results[2], 2)", visualCtx), /Em análise \(rev\. A\) · incluído manualmente/);
-assert.equal(vm.runInContext("selectionSituationLabel(state.results[6], 6)", visualCtx), "Bloqueado");
+assert.equal(vm.runInContext("selectionSituationLabel(state.results[6], 6)", visualCtx), "Não incluir");
 const statusCss = fs.readFileSync(require.resolve("../grdt-central-ux.css"), "utf8");
 const palettes = ["ready", "blocked", "analysis", "unresolved", "review"].map(name => {
   const read = suffix => statusCss.match(new RegExp('--grdt-' + name + '-' + suffix + ':\\s*(#[0-9a-f]+)', 'i'))?.[1];

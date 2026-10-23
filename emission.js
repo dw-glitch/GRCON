@@ -317,15 +317,17 @@
         && row.hardBlock
         && (allocation.kind === "not_allocated" || /^not_allocated(?:_conflict)?$/.test(row.blockCode || ""))
       );
-      // "Não Alocado" continua sendo um alerta forte e nunca entra por padrão,
-      // mas pode seguir quando o operador marcar conscientemente a linha. Outros
-      // bloqueios técnicos continuam impedindo a emissão.
-      if (row.hardBlock && !manualAllocationOverride) {
+      const manualRuleOverride = Boolean(row.hardBlock && manualForce.has(rowIndex));
+      // Regras de triagem não impedem uma escolha explícita do operador.
+      // A identidade física e a consistência do pacote são conferidas abaixo.
+      if (row.hardBlock && !manualRuleOverride) {
         errors.push(`${row.document || row.name}: item bloqueado não pode ser emitido.`);
         return;
       }
       if (manualAllocationOverride) {
         warnings.push(`${row.document || row.name}: incluído manualmente na GRDT embora a LD informe “Não Alocado”.`);
+      } else if (manualRuleOverride) {
+        warnings.push(`${row.document || row.name}: inclusão manual apesar do alerta da triagem — ${row.reason || row.blockCode || row.status || "Não incluir"}.`);
       }
       const sources = row.files && row.files.length
         ? row.files
@@ -360,9 +362,13 @@
       if (pairValidation.ignoredDuplicates && pairValidation.ignoredDuplicates.length) {
         warnings.push(`${row.document}: ${pairValidation.ignoredDuplicates.length} arquivo(s) duplicado(s) ignorado(s); somente uma cópia de cada nome final seguirá para a eGRDT.`);
       }
-      if (!pairValidation.valid) {
+      const manualCompositionOverride = Boolean(!pairValidation.valid && manualForce.has(rowIndex));
+      if (!pairValidation.valid && !manualCompositionOverride) {
         pairValidation.errors.forEach((message) => errors.push(`${row.document}: ${message}`));
         return;
+      }
+      if (manualCompositionOverride) {
+        pairValidation.errors.forEach((message) => warnings.push(`${row.document}: inclusão manual com exceção de composição — ${message}`));
       }
       const orderedSources = pairValidation.sources;
       const codeValidation = C.validateDocumentCode(row.document, row.sheet);
@@ -407,6 +413,8 @@
           fileName: finalName,
           databook: String(row.record && row.record.databook || "").trim(),
           manualAllocationOverride,
+          manualRuleOverride,
+          manualCompositionOverride,
         };
         const sourceDiscipline = text(row.disciplineOriginalLd)
           || text(row.disciplineResolution && row.disciplineResolution.disciplineOriginalLd)
@@ -466,6 +474,8 @@
           file: source.file,
           virtual: Boolean(source.virtual || !source.file),
           manualAllocationOverride,
+          manualRuleOverride,
+          manualCompositionOverride,
           emissionKind: text(row && (row.emissionKind || row.historyClassification && row.historyClassification.emissionKind)) || "FIRST_POSTING",
           historyClassification: row && row.historyClassification ? { ...row.historyClassification } : null,
           item,
@@ -619,6 +629,8 @@
       "NOME CONSISTENTE": entry.finalName === entry.item.fileName ? "SIM" : "NÃO",
       "GRDT REABERTA E VALIDADA": entry.grdtReopened ? "SIM" : "NÃO",
       "INCLUSÃO MANUAL — LD NÃO ALOCADO": entry.manualAllocationOverride ? "SIM" : "NÃO",
+      "INCLUSÃO MANUAL — ALERTA DE TRIAGEM": entry.manualRuleOverride ? "SIM" : "NÃO",
+      "INCLUSÃO MANUAL — COMPOSIÇÃO DOS ARQUIVOS": entry.manualCompositionOverride ? "SIM" : "NÃO",
       "DISCIPLINA": entry.item && entry.item.discipline || entry.discipline || "",
       "LD DE ORIGEM": entry.sourceLd || "",
       "GRDT": entry.grdtFile || "",

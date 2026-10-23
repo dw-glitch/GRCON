@@ -21,7 +21,7 @@
   const PendingAllocationHistory = window.GrconPendingAllocationHistory;
   const FileAccess = window.GrconFileAccess;
   const Apendice = window.GrconApendice;
-  const APP_VERSION = "5.44.14";
+  const APP_VERSION = "5.44.15";
   const DOCUMENT_ENGINE_VERSION = "5.18.2"; // versão interna do motor documental, independente da versão do aplicativo
   try { window.localStorage.removeItem("grcon.databook.learning.v1"); } catch (_) { console.debug("[App] limpeza versão anterior:", _); /* limpeza de versão anterior */ }
   const DEFAULT_ITEMS_PER_EGRDT = 48;
@@ -1890,11 +1890,8 @@
   }
 
   function rowCanBeSelected(row) {
-    if (!row) return false;
-    // "Revisar" é uma pendência operacional, não um bloqueio por si só.
-    // Apenas hardBlock continua impedindo a seleção, salvo a exceção controlada
-    // de Não Alocado que já exige escolha manual explícita do operador.
-    return Boolean(!row.hardBlock || manualAllocationOverrideAllowed(row));
+    // A triagem orienta a seleção automática; a escolha manual fica disponível.
+    return Boolean(row);
   }
 
   function rowCanBeEdited(row) {
@@ -1905,6 +1902,7 @@
   function rowStatusPolicy(row) { return TriageQuery.selectionPolicy(row); }
   function rowCanAutoInclude(row) {
     return Boolean(row && rowCanBeSelected(row) && rowOutputSources(row).length
+      && E.validateEtPlanningPair(row, rowOutputSources(row)).valid
       && rowStatusPolicy(row).autoEligible);
   }
   // Ação explícita do operador, tanto pela linha quanto pelo cabeçalho.
@@ -1912,7 +1910,7 @@
     const row = state.results[index];
     if (checked) {
       if (!rowCanBeSelected(row)) {
-        if (notify) showToast("Este documento possui um bloqueio técnico que não admite inclusão manual.", "warn");
+        if (notify) showToast("Documento não encontrado na seleção atual.", "warn");
         return false;
       }
       // A triagem pode ter retornado cedo pela alocação e usado esse alerta
@@ -1924,10 +1922,18 @@
         state.filteredCache = { signature: "", indices: [] };
       }
       state.selected.add(index);
-      // Mantém o registro visual de que o operador incluiu um alerta de triagem.
+      // Toda marcação explícita autoriza a exceção, inclusive em linhas READY
+      // com restrições de composição identificadas somente ao montar o pacote.
       const statusPolicy = rowStatusPolicy(row);
-      if (row && (row.decision !== C.READY || row.hardBlock || statusPolicy.manualOnly)) {
-        state.manualForceInclude.add(index);
+      state.manualForceInclude.add(index);
+      const composition = E.validateEtPlanningPair(row, rowOutputSources(row));
+      if (!composition.valid) {
+        auditManualGrdtChange(row, "Inclusão manual com composição excepcional", "Fora da GRDT", "Incluído manualmente", composition.errors.join(" "));
+        if (notify) showToast("Inclusão manual registrada com os arquivos selecionados. A composição fora da regra ficará sinalizada no pacote.", "warn");
+      }
+      if (row.hardBlock && !manualAllocationOverrideAllowed(row)) {
+        auditManualGrdtChange(row, "Inclusão manual com alerta de triagem", "Fora da GRDT", "Incluído manualmente", row.reason || row.blockCode || row.status);
+        if (notify) showToast("Inclusão manual registrada. O alerta da triagem permanece para conferência.", "warn");
       }
       if (statusPolicy.manualOnly) {
         if (notify && row.blockingRevision) showToast(`Atenção: revisão ${row.blockingRevision} ainda Em Análise; a revisão ${row.revision} não deve ser enviada ao SIGEM até a conclusão da anterior. Inclusão manual registrada como exceção.`, "warn");
@@ -3107,8 +3113,12 @@
     if (policy.allocation === "conflict") return rowIncludedForGeneration(row, index)
       ? "Conferir · inclusão manual" : "Conferir";
     if (!rowCanBeSelected(row)) return "Bloqueado";
+    if (row.hardBlock) return rowIncludedForGeneration(row, index)
+      ? "Não incluir · inclusão manual" : "Não incluir";
     if (policy.manualOnly) return rowIncludedForGeneration(row, index)
       ? `${policy.label} · incluído manualmente` : policy.label;
+    if (!E.validateEtPlanningPair(row, rowOutputSources(row)).valid) return rowIncludedForGeneration(row, index)
+      ? "Conferir arquivos · inclusão manual" : "Conferir arquivos";
     if (rowIncludedForGeneration(row, index)) return row.decision === C.READY ? "Pronto" : compactDecisionLabel(row);
     return "Excluído";
   }
@@ -3118,10 +3128,11 @@
     const policy = rowStatusPolicy(row);
     if (policy.allocation === "conflict") return "allocation-conflict";
     if (policy.allocation) return "allocation-blocked";
-    if (!rowCanBeSelected(row)) return "technical-blocked";
+    if (!rowCanBeSelected(row) || row.hardBlock && !policy.allocation) return "technical-blocked";
     if (policy.unresolved) return "unresolved";
     if (policy.kind === "analysis") return "in-analysis";
     if (policy.manualOnly) return "manual-sigem";
+    if (!E.validateEtPlanningPair(row, rowOutputSources(row)).valid) return "review";
     if (!rowIncludedForGeneration(row, index)) return "excluded";
     return decisionClass(row.decision, row);
   }
@@ -4095,7 +4106,8 @@
         ? "Marcar manualmente para incluir na GRDT; a LD continuará registrada como Não Alocado"
         : rowRequiresManualResolution(row)
           ? "Pode incluir na GRDT; antes de gerar, abra Editar GRDT e conclua a pendência indicada"
-          : selectable ? "Marcar para incluir na GRDT final" : "Bloqueado por uma condição técnica que não admite inclusão manual";
+          : row.hardBlock ? "Marcar para incluir manualmente na GRDT; o alerta da triagem será preservado"
+          : "Marcar para incluir na GRDT final, inclusive como exceção às regras de composição dos arquivos";
       const mainRow = `<tr data-index="${index}" data-decision-group="${decisionGroupKey(row)}" class="result-row ${resultClass} ${groupStart ? "group-start" : ""} ${selected ? "selected" : ""} ${manualSelection ? "manually-included" : ""}">
         <td><div class="situation-cell">
           ${groupStart ? `<span class="triage-group-label">${escapeHtml(decisionGroupLabel(row))}</span>` : ""}
@@ -5131,6 +5143,8 @@
         finalName: entry.finalName,
         virtual: Boolean(entry.virtual),
         manualAllocationOverride: Boolean(entry.manualAllocationOverride),
+        manualRuleOverride: Boolean(entry.manualRuleOverride),
+        manualCompositionOverride: Boolean(entry.manualCompositionOverride),
         historyClassification: entry.historyClassification,
         sharedAllocationContext: entry.sharedAllocationContext,
         item: { ...(entry.item || {}) },

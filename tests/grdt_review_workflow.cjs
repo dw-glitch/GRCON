@@ -55,7 +55,7 @@ const contractSource = fs.readFileSync(path.join(root, "grcon_contracts.js"), "u
 const emissionSource = fs.readFileSync(path.join(root, "emission.js"), "utf8");
 
 assert.match(appSource, /function rowRequiresManualResolution\(row\)/);
-assert.match(appSource, /return Boolean\(!row\.hardBlock \|\| manualAllocationOverrideAllowed\(row\)\);/);
+assert.match(appSource, /function rowCanBeSelected\(row\)\s*\{[\s\S]*?return Boolean\(row\);/);
 assert.doesNotMatch(appSource, /if \(!row \|\| row\.blockCode === "discipline_confirmation"[^\n]*return false;/);
 assert.match(appSource, /Pode incluir na GRDT; antes de gerar, abra Editar GRDT/);
 assert.match(appSource, /ajuste_manual_grdt/);
