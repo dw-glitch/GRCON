@@ -30,7 +30,7 @@
     host.insertBefore(button, $("#grcon-cloud-account"));
     document.body.insertAdjacentHTML("beforeend", `<dialog id="grcon-admin-dialog" aria-labelledby="grcon-admin-title">
       <header><div><small>ÁREA EXCLUSIVA</small><h2 id="grcon-admin-title">Administração</h2><p>Controle de usuários, contratos e operações do GRCON.</p></div><button id="grcon-admin-close" type="button" aria-label="Voltar ao GRCON">Voltar ao GRCON</button></header>
-      <div class="grcon-admin-layout"><nav class="grcon-admin-nav" aria-label="Administração"><button type="button" data-admin-section="users" aria-current="page">Usuários e acessos</button><button type="button" data-admin-section="contracts">Contratos</button><button type="button" data-admin-section="technical">Painel técnico</button><button type="button" data-admin-section="activity">Registro de atividades</button><small>Exclusivo do proprietário master</small></nav><div class="grcon-admin-main">
+      <div class="grcon-admin-layout"><nav class="grcon-admin-nav" aria-label="Administração"><button type="button" data-admin-section="users" aria-current="page">Usuários e acessos</button><button type="button" data-admin-section="contracts">Contratos</button><button type="button" data-admin-section="technical">Painel técnico</button><button type="button" data-admin-section="storage">Infraestrutura e armazenamento</button><button type="button" data-admin-section="activity">Registro de atividades</button><small>Exclusivo do proprietário master</small></nav><div class="grcon-admin-main">
       <div class="grcon-admin-toolbar"><label>Contrato administrado<select id="grcon-admin-contract"></select></label></div>
       <p id="grcon-admin-feedback" role="status" aria-live="polite"></p>
       <section data-admin-panel="users" aria-labelledby="grcon-admin-users-title"><h3 id="grcon-admin-users-title" tabindex="-1">Usuários e acessos</h3><div class="grcon-admin-toolbar"><label>Buscar colaborador<input id="grcon-admin-search" type="search" placeholder="Nome ou e-mail"></label><button id="admin-user-new" type="button">Novo usuário</button></div>
@@ -40,6 +40,7 @@
       </section><section data-admin-panel="activity" hidden aria-labelledby="grcon-admin-activity-title"><h3 id="grcon-admin-activity-title" tabindex="-1">Registro de atividades</h3><details id="grcon-cloud-audit-panel" open><summary>Registro de atividades</summary><div id="grcon-cloud-audit"></div></details>
       </section><section data-admin-panel="contracts" hidden aria-labelledby="grcon-admin-contracts-title"><h3 id="grcon-admin-contracts-title" tabindex="-1">Contratos e configurações</h3><div id="grcon-admin-contract-settings"><form id="grcon-admin-contract-form"><input id="admin-contract-id" type="hidden"><div class="grcon-admin-grid"><label>Código<input id="admin-contract-code" required maxlength="60"></label><label>Nome<input id="admin-contract-name" required maxlength="160"></label><label>Identificação<input id="admin-contract-display" required maxlength="255"></label><label>Empresa<input id="admin-contract-company" maxlength="100"></label><label>Cliente<input id="admin-contract-client" maxlength="100"></label><label>Local<input id="admin-contract-site" maxlength="100"></label><label>Projeto<input id="admin-contract-project" maxlength="100"></label><label>Perfil de regras<input id="admin-contract-profile" maxlength="100"></label><label><input id="admin-contract-active" type="checkbox"> Contrato ativo</label><label><input id="admin-contract-inherit" type="checkbox"> Usar regras documentais da UHDT</label></div><div class="egrdt-email-actions"><button type="submit">Salvar contrato</button><button id="admin-contract-new" type="button">Novo contrato</button></div><small>Desativar preserva os dados e o histórico. Novos contratos começam com suas próprias configurações.</small></form></div></section>
       <section data-admin-panel="technical" hidden aria-labelledby="grcon-admin-technical-title"><h3 id="grcon-admin-technical-title" tabindex="-1">Painel técnico</h3><p>Saúde dos serviços, integrações, falhas e tarefas de todos os contratos.</p><div id="grcon-admin-technical"></div></section>
+      <section data-admin-panel="storage" hidden aria-labelledby="grcon-admin-storage-title"><h3 id="grcon-admin-storage-title" tabindex="-1">Infraestrutura e armazenamento</h3><div id="grcon-admin-storage"></div></section>
       </div></div>
     </dialog>`);
     button.addEventListener("click", () => void open());
@@ -128,8 +129,56 @@
       if ($("#grcon-cloud-invitations-panel").open) void cloud().loadInvitations(workspace);
     } catch (error) { if (generation === state.generation && $("#grcon-admin-users")) $("#grcon-admin-users").textContent = error.message; }
   }
+  async function loadStorage() {
+    const host = $("#grcon-admin-storage"), workspace = state.workspace, generation = state.generation;
+    if (!host || !master()) return;
+    const valid = () => state.open && state.section === "storage" && state.workspace === workspace && state.generation === generation && master();
+    const api = async (action, data) => {
+      const token = cloud()?.state?.session?.access_token;
+      if (!token || !valid()) throw new Error("A sessão ou o contrato mudou.");
+      const response = await root.fetch("/api/sigem-storage/" + action + (data ? "" : "?workspace=" + encodeURIComponent(workspace)), {
+        method: data ? "POST" : "GET", headers: { authorization: `Bearer ${token}`, ...(data ? { "content-type": "application/json" } : {}) },
+        ...(data ? { body: JSON.stringify({ workspace, ...data }) } : {}), signal: AbortSignal.timeout(45000),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error === "SIGEM_STORAGE_AUTHORIZATION_REQUIRED" ? "Falta confirmar a autorização para armazenamento externo." : "Não foi possível verificar o armazenamento: " + (result.error || response.status));
+      if (!valid()) throw new Error("A sessão ou o contrato mudou.");
+      return result;
+    };
+    const mib = bytes => Number.isFinite(bytes) ? (bytes / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " MiB" : "Não medido";
+    host.textContent = "Verificando armazenamento…";
+    try {
+      const status = await api("status"); if (!valid()) return;
+      const copied = (status.turso.snapshots || []).filter(s => s.state === "verified");
+      host.innerHTML = `<dl class="grcon-admin-grid"><div><dt>Fonte oficial</dt><dd>Supabase</dd></div><div><dt>Modo do servidor</dt><dd>${escape(status.mode)}</dd></div><div><dt>Banco Supabase completo</dt><dd>${escape(mib(status.databaseBytes))}</dd></div><div><dt>Tabela da Consulta Geral completa</dt><dd>${escape(mib(status.sourceBytes))}</dd></div><div><dt>Snapshots deste contrato</dt><dd>${escape(status.snapshots)}</dd></div><div><dt>Registros deste contrato</dt><dd>${escape(status.records)}</dd></div><div><dt>Turso</dt><dd>${status.turso.connected ? "Conexão confirmada" : status.turso.configured ? "Conexão não confirmada" : "Configuração pendente"}</dd></div><div><dt>Banco Turso completo</dt><dd>${escape(mib(status.turso.databaseBytes))}</dd></div><div><dt>Cópias validadas neste contrato</dt><dd>${copied.length}</dd></div></dl><p>A fonte oficial permanece no Supabase. A ativação do Turso depende da homologação das publicações, projeções SQL e recuperação.</p><div class="grcon-admin-row-actions"><button type="button" data-storage-refresh>Verificar conexão</button><button type="button" data-storage-report>Baixar relatório</button><button type="button" data-storage-copy ${status.turso.connected && status.externalStorageAuthorized && status.preflightApproved ? "" : "disabled"}>Iniciar / retomar cópia</button></div><p data-storage-progress role="status" aria-live="polite"></p>`;
+      host.querySelector("[data-storage-refresh]").addEventListener("click", () => void loadStorage());
+      host.querySelector("[data-storage-report]").addEventListener("click", () => {
+        const link = document.createElement("a"), url = URL.createObjectURL(new Blob([JSON.stringify({ ...status, reportedAt: new Date().toISOString() }, null, 2)], { type: "application/json" }));
+        link.href = url; link.download = "GRCON-Armazenamento.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+      host.querySelector("[data-storage-copy]").addEventListener("click", async () => {
+        const progress = host.querySelector("[data-storage-progress]");
+        for (const button of host.querySelectorAll("button")) button.disabled = true;
+        try {
+          const inventory = await api("inventory"); let done = 0;
+          const total = inventory.snapshots.reduce((n, s) => n + s.record_count, 0);
+          for (const snapshot of inventory.snapshots) {
+            // Re-read every batch on resume. Exact replay validates checkpoints,
+            // source, destination and backup rather than trusting an offset alone.
+            for (let after = 0; after < snapshot.record_count; after += 250) {
+              await api("copy", { snapshot: snapshot.id, after }); done += Math.min(250, snapshot.record_count - after);
+              progress.textContent = `${done.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} registros conferidos. Sair desta seção interrompe após o lote atual; a cópia pode ser retomada.`;
+            }
+            await api("seal", { snapshot: snapshot.id });
+          }
+          progress.textContent = "Cópia conferida. A fonte oficial permanece no Supabase; homologação e teste de restauração ainda são necessários.";
+        } catch (error) { if (valid()) progress.textContent = error.message + " Os lotes já conferidos foram preservados."; }
+        finally { if (valid()) for (const button of host.querySelectorAll("button")) button.disabled = false; }
+      });
+    } catch (error) { if (valid()) host.textContent = error.message; }
+  }
   async function selectSection(section, focus = true) {
-    if (!master() || !state.open || !["users", "contracts", "technical", "activity"].includes(section)) return;
+    if (!master() || !state.open || !["users", "contracts", "technical", "activity", "storage"].includes(section)) return;
     root.GrconBackgroundJobs?.unmount?.();
     state.section = section; state.generation++; clearSecrets();
     $("#grcon-admin-editor").hidden = true;
@@ -141,7 +190,8 @@
     }
     $("#grcon-admin-contract").closest(".grcon-admin-toolbar").hidden = section === "technical";
     if (focus) document.querySelector(`[data-admin-panel="${section}"] h3`)?.focus();
-    if (section === "users") await loadUsers();
+    if (section === "storage") await loadStorage();
+    else if (section === "users") await loadUsers();
     else if (section === "contracts") renderContract();
     else if (section === "activity") { $("#grcon-cloud-audit").textContent = ""; await cloud().loadAuditEvents(state.workspace); }
     else if (section === "technical" && root.GrconBackgroundJobs?.mount) root.GrconBackgroundJobs.mount($("#grcon-admin-technical"), { technical: true, workspace: state.workspace });
@@ -158,7 +208,7 @@
     $("#grcon-admin-contract").value = state.workspace;
     $("#grcon-admin-search").value = "";
     renderContract(); if (!$("#grcon-admin-dialog").open) $("#grcon-admin-dialog").showModal();
-    await selectSection(["users", "contracts", "technical", "activity"].includes(section) ? section : "users");
+    await selectSection(["users", "contracts", "technical", "activity", "storage"].includes(section) ? section : "users");
   }
   async function saveContract(event) {
     event.preventDefault(); if (!master() || state.saving) return;
@@ -203,3 +253,4 @@
   root.addEventListener("grcon:contract-context-changed", () => { state.workspace = ""; close(); permissions(); });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", permissions, { once:true }); else permissions();
 })(window);
+
