@@ -1,4 +1,4 @@
-import {storageMode, tursoClient, initialize, beginSnapshot, copyPage, sealSnapshot, verifiedPage, canonical, fail} from './sigem-turso.mjs';
+import {storageMode, tursoClient, initialize, beginSnapshot, copyPage, sealSnapshot, auditPage, verifiedPage, canonical, fail} from './sigem-turso.mjs';
 const PREFIX = '/api/sigem-storage/';
 const uuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v || '');
 const reply = (data, status = 200, headers = {}) => Response.json(data, {status, headers: {'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', ...headers}});
@@ -69,19 +69,19 @@ export async function handleSigemStorage(request, env) {
       return reply({ok: true, ...status, mode, externalStorageAuthorized: env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED === 'true', preflightApproved: env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED === 'true', turso, backupPrefix: 'sigem-backups/v1/', cutoverReady: false, cleanupAllowed: false});
     }
     if (action === 'inventory' && request.method === 'GET') return reply({ok: true, ...await control('inventory')});
-    if (!['copy', 'seal'].includes(action) || request.method !== 'POST' || !uuid(input.snapshot)) throw fail('SIGEM_ROUTE_INVALID', 404);
+    if (!['copy', 'seal', 'audit'].includes(action) || request.method !== 'POST' || !uuid(input.snapshot)) throw fail('SIGEM_ROUTE_INVALID', 404);
     const source = await control('source', {snapshot: input.snapshot}); // fresh master and contract check on every mutation
     consent(env);
     if (env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED !== 'true') throw fail('SIGEM_CAPACITY_CHECK_REQUIRED', 409);
     const db = tursoClient(env), bucket = env.GRCON_DOCUMENTS;
     if (!bucket) throw fail('SIGEM_BACKUP_UNAVAILABLE', 503);
-    await initialize(db); await beginSnapshot(db, source);
-    if (action === 'copy') {
+    if (action !== 'audit') { await initialize(db); await beginSnapshot(db, source); }
+    if (action === 'copy' || action === 'audit') {
       const after = Number(input.after);
       if (!Number.isInteger(after) || after < 0 || after >= source.record_count || after % 250 !== 0) throw fail('SIGEM_PAGE_INVALID', 400);
       const page = await control('source-page', {snapshot: source.id, after});
       if (canonical(page.source) !== canonical(source)) throw fail('SIGEM_SOURCE_CHANGED');
-      return reply({ok: true, ...await copyPage(db, bucket, source, after, page.rows)});
+      return reply({ok: true, ...await (action === 'audit' ? auditPage(db, bucket, source, after, page.rows) : copyPage(db, bucket, source, after, page.rows))});
     }
     return reply({ok: true, ...await sealSnapshot(db, bucket, source)});
   } catch (error) {
@@ -89,3 +89,4 @@ export async function handleSigemStorage(request, env) {
     return reply({ok: false, error: code, message: code}, error.status || 503);
   }
 }
+

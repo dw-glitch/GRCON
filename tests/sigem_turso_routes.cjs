@@ -34,7 +34,9 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   calls=[];const input={snapshot:uuid(3),after:0,size:1000};
   const response=await route(req('page',input),env);assert.deepEqual((await response.json()).rows,rows);assert.ok(!calls.some(x=>x.includes('turso.io')));
   assert.equal((await route(req('copy',{snapshot:uuid(3),after:0}),env)).status,403);
+  calls=[];assert.equal((await route(req('audit',{snapshot:uuid(3),after:0}),env)).status,403);assert.ok(!calls.some(x=>x.includes('turso.io')),'operator cannot audit corporate backups');
   role='master';calls=[];assert.equal((await route(req('copy',{snapshot:uuid(3),after:0}),env)).status,403);assert.ok(!calls.some(x=>x.includes('turso.io')),'corporate consent precedes external data access');
+  calls=[];assert.equal((await route(req('audit',{snapshot:uuid(3),after:0}),env)).status,403);assert.ok(!calls.some(x=>x.includes('turso.io')),'audits also require corporate consent');
   env.GRCON_SIGEM_STORAGE_MODE='shadow';env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED='true';
   calls=[];assert.equal((await route(req('copy',{snapshot:uuid(3),after:0}),env)).status,409);assert.ok(!calls.some(x=>x.includes('turso.io')),'capacity preflight blocks external writes');
   assert.equal((await (await route(req('page',input),env)).json()).shadow,'matched');
@@ -45,3 +47,4 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
  }finally{global.fetch=original;}
  console.log('SIGEM storage routes: session, master, contract RPC, corporate consent, official fallback in shadow, and blocked cutover passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
