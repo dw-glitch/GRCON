@@ -10,7 +10,7 @@
   "use strict";
 
   const VERSION = "sigem-pw-readiness-2";
-  const CLASSES = Object.freeze(["ET", "N-1710", "Não classificado"]);
+  const CLASSES = Object.freeze(["ET", "N-1710", "CV", "Não classificado"]);
   const REQUIRED_BASES = Object.freeze([
     { key: "sigem", label: "Consulta Geral/SIGEM" },
     { key: "pw", label: "relação ProjectWise" },
@@ -60,7 +60,7 @@
       check("pw-exclusive-list", "Lista Somente no PW conciliada com o indicador",
         Array.isArray(lists.pwExclusive) && lists.pwExclusive.length === count(summary.pwExclusive), loaded.sigem && loaded.pw),
       check("exclusive-situations", "Situações exclusivas conciliadas sem duplicidade",
-        ["sigemOnly", ...(lists.bothOtherRevision ? ["bothOtherRevision"] : []), "bothNotEmitted", "bothEmitted", "pwOnlyNotEmitted", "pwOnlyEmitted"].every((key) => Array.isArray(lists[key]) && lists[key].length === count(summary[key]))
+        ["sigemOnly", ...(lists.cvNotApplicable ? ["cvNotApplicable"] : []), ...(lists.bothOtherRevision ? ["bothOtherRevision"] : []), "bothNotEmitted", "bothEmitted", "pwOnlyNotEmitted", "pwOnlyEmitted"].every((key) => Array.isArray(lists[key]) && lists[key].length === count(summary[key]))
           && count(summary.classifiedTotal) === count(summary.sigem) + count(summary.pwRegistered) - count(summary.matched), loaded.sigem && loaded.pw),
       check("quality-ld", "LD da Qualidade usada apenas para conferência de localização (sem bloquear cadastro PW)",
         true, loaded.pw),
