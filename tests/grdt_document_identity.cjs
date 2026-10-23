@@ -59,8 +59,8 @@ assert.equal(Q.unresolvedStatus({decision:Raw.READY,status:'Não Postado'}),fals
 assert.equal(Q.unresolvedStatus({decision:Raw.READY,status:'Não Postado',documentLookup:{matched:false}}),true,'unmatched document cannot be ready');
 
 const ui=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
-assert.match(ui,/TriageQuery\\.unresolvedStatus\\(row\\)\\) return 'nao_localizado'/);
-assert.match(ui,/TriageQuery\\.unresolvedStatus\\(row\\)\\) return 'review'/);
+assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'nao_localizado'/);
+assert.match(ui,/TriageQuery\.unresolvedStatus\(row\)\) return 'review'/);
 const groupSource=ui.slice(ui.indexOf('  function decisionGroupKey(row) {'),ui.indexOf('  function decisionGroupLabel(row) {'));
 assert.ok(groupSource.includes('allocationAlert(row) === "not_allocated"'));
 assert.ok(groupSource.indexOf('allocationAlert(row) === "not_allocated"')<groupSource.indexOf('unresolvedStatus(row)'),'não alocado antes de não localizado');
