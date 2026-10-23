@@ -98,7 +98,7 @@
     shell.innerHTML = `
       <header class="pc-heading">
         <div><span>HISTÓRICO DE eGRDTs × CONSULTA GERAL SIGEM</span><h2>Conferência de Postagem</h2><p>Cada documento aparece uma única vez; reenvios ficam agrupados no histórico do documento.</p></div>
-        <div class="pc-heading-actions"><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Relatório Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><button class="secondary-button" id="pc-publish" type="button" hidden>Publicar Consulta Geral compartilhada</button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
+        <div class="pc-heading-actions"><button class="secondary-button" id="pc-query-base" type="button">Consultar Consulta Geral</button><button class="secondary-button" id="pc-export" type="button">${icon("M5 3h10l4 4v14H5zM15 3v5h5M8 13h8M8 17h8")}<span>Relatório Excel</span></button><button class="primary-button" id="pc-update" type="button">${icon("M12 3v12M8 7l4-4 4 4M5 14v5h14v-5")}<span>Atualizar Consulta Geral</span></button><button class="secondary-button" id="pc-publish" type="button" hidden>Publicar Consulta Geral compartilhada</button><input accept=".xlsx,.xls,.xlsm" hidden id="pc-file" type="file"/></div>
       </header>
       <section class="pc-hero" aria-live="polite"><div><span>CONFERÊNCIA GERAL</span><strong id="pc-hero-main">Carregue a Consulta Geral</strong><small id="pc-hero-note">O histórico permanece preservado como origem dos eventos de envio.</small></div><div class="pc-base-card" id="pc-base-card"></div></section>
       <section class="pc-kpis" id="pc-kpis" aria-label="Resumo da conferência"></section>
@@ -139,6 +139,7 @@
   function el(id) { return shell?.querySelector(`#${id}`); }
 
   function bind() {
+    el('pc-query-base').onclick=async()=>{try{await root.GRCONModuleLoader.ensure('sigem_general_query_app.js');await root.GrconGeneralQueryUi.open();}catch(error){notify(error.message,'error');}};
     const tasks=root.GrconDocumentTasks;
     renderManagerColumns();
     el('pc-manager-columns').addEventListener('change',()=>{try{root.GrconManagerialReport.setColumns([...el('pc-manager-columns').querySelectorAll('input:checked')].map(input=>input.value));}catch(error){notify(error.message,'error');}});

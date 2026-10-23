@@ -87,7 +87,7 @@
   /* Situação: números reais em cartões proporcionais com seleção evidente. */
   html[data-app="GRCON"][data-ui-generation="3"] #results-section .summary-bar {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: .48rem;
     padding: 0;
     background: transparent;

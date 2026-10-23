@@ -336,6 +336,13 @@
         errors.push(`${row.document}: nenhum arquivo físico selecionado.`);
         return;
       }
+      // Physical identity is mandatory even after manual inclusion or renaming.
+      // Revision overrides never authorize replacing document 122 with 121.
+      const mismatched = sources.filter(source => !C.fileDocumentIdentity(source.file?.name || source.name, row.document).valid);
+      if (mismatched.length) {
+        errors.push(`${row.document}: identidade divergente no arquivo físico (${mismatched.map(source => source.file?.name || source.name).join(', ')}). Corrija o vínculo antes de emitir.`);
+        return;
+      }
       const manualRevisionOverride = Boolean(manualForce.has(rowIndex) || row.revisionManual);
       // Exclude revision mismatches before pairing/deduplication: an old PDF
       // must not replace the correct one merely because both rename alike.
@@ -488,6 +495,7 @@
       if (entry.finalName !== item.fileName) errors.push(`${entry.document}: o arquivo físico “${entry.finalName}” diverge da coluna ARQUIVO “${item.fileName}”.`);
       if (norm(entry.revision) !== norm(item.revision)) errors.push(`${entry.document}: a revisão física diverge da revisão gravada na GRDT.`);
       const n1710 = Boolean(C && C.isN1710Context && C.isN1710Context(entry.sheet, entry.document));
+      if (!C.fileDocumentIdentity(entry.file?.name || entry.originalName, entry.document).valid) errors.push(`${entry.document}: identidade do arquivo original divergente no pacote.`);
       const check = C.validateFinalFileName(entry.finalName, entry.originalName, entry.document, entry.revision, entry.sheet);
       // N-1710 pode ter vários arquivos da mesma extensão; nesses casos o nome
       // final recebe um sufixo operacional único. A consistência relevante é a

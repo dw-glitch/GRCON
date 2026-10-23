@@ -1661,6 +1661,57 @@
     return maximalCandidates;
   }
 
+  // Operational GRDT identity never uses edit distance, confusable characters,
+  // title similarity or a TAG belonging to another complete code.
+  function grdtIdentityKey(value) {
+    const code = canonicalId(value);
+    return isEtDocument(code) ? ntNeutralKey(code) : code;
+  }
+
+  function grdtFileDocumentCandidates(value) {
+    const name = text(value).split(/[\\/]/).pop();
+    const rawStem = name.replace(/\.(?:[A-Z][A-Z0-9]{0,7}|7Z)$/i, '');
+    const stem = canonicalId(rawStem);
+    if (!stem) return [];
+    const tokens = [stem];
+    const sheet = stem.match(/^(.*)_\d{4}$/);
+    const suffix = stem.match(/^(.*?)(?:_\d{4})?[_ -](?:REV(?:ISAO)?[_. -]?)?(#[1-9]\d*|0[1-9]\d*|0|[A-Z]{1,3}(?:[1-9]\d*)?)$/);
+    if (sheet) tokens.push(sheet[1]);
+    const operational = stem.match(/^(.*?)(?:_\d{4})?_RIR$/);
+    if (operational) tokens.push(operational[1]); // operational marker, never a confirmed revision
+    if (suffix && suffix[2] !== 'RIR' && revisionInfo(suffix[2]).valid) tokens.push(suffix[1]);
+    const leadingCode = rawStem.trim().match(/^(\S+)\s+/);
+    if (leadingCode) tokens.push(canonicalId(leadingCode[1]));
+    // N-1710 codes contain no underscores: sheet and operational/revision
+    // suffixes cannot change the code before the first underscore.
+    const n1710 = stem.match(/^([A-Z]{2,4}-\d{4}\.\d{2}-[^_\s]+)_/);
+    if (n1710) tokens.push(n1710[1]);
+    return [...new Set(tokens)];
+  }
+
+  function fileDocumentIdentity(fileName, document) {
+    const tokens = grdtFileDocumentCandidates(fileName);
+    const expected = grdtIdentityKey(document);
+    const matched = tokens.find(token => expected && grdtIdentityKey(token) === expected);
+    return { valid: Boolean(matched), expected: text(document),
+      received: matched || tokens[tokens.length - 1] || '', sourceName: text(fileName) };
+  }
+
+  function matchDocumentsForGrdt(value, index, hintedSheet) {
+    if (!index?.byDocument) return [];
+    for (const token of grdtFileDocumentCandidates(value)) {
+      // exactDocumentMatch retains compatibility aliases for consultations;
+      // its result must independently satisfy complete-code identity here.
+      const direct = exactDocumentMatch(token, index);
+      if (direct && grdtIdentityKey(token) === grdtIdentityKey(direct.document)) return [direct];
+      // ET's explicit optional nt- form is the only identity alias accepted.
+      const aliases = isEtDocument(token) ? (ntNeutralEntries(index).get(ntNeutralKey(token)) || [])
+        .filter(entry => grdtIdentityKey(token) === grdtIdentityKey(entry.document)) : [];
+      if (aliases.length) return aliases.map(entry => ({...entry, matchedSearchKey: token, matchKind:'nt-variant', ntVariant:true}));
+    }
+    return [];
+  }
+
   function matchDocument(nameOrText, index, hintedSheet) {
     return matchDocuments(nameOrText, index, hintedSheet)[0] || null;
   }
@@ -2352,15 +2403,24 @@
     const inferredSheet = input.hintedSheet || inferSheetFromName(input.name || input.document || "");
     const identitySource = input.document ? "documento informado" : "nome do arquivo";
     const identityValue = input.document || input.name || "";
-    const matches = matchDocuments(identityValue, index, inferredSheet);
+    const matches = matchDocumentsForGrdt(identityValue, index, inferredSheet);
+    if (input.document && input.name && !fileDocumentIdentity(input.name, input.document).valid) {
+      const identity = fileDocumentIdentity(input.name, input.document);
+      return reviewResult(input, { document: identity.received || 'Não localizado',
+        status: 'Identidade do arquivo divergente', hardBlock: true, blockCode: 'document_identity_mismatch',
+        reason: `O arquivo “${input.name}” não corresponde ao código completo “${input.document}”. Nenhum status de outro documento foi utilizado.`,
+        documentSource: 'nome do arquivo', finalName: input.name });
+    }
     const calculatedDocumentLookup = documentLookup(
       identityValue,
       matches.length === 1 ? matches[0] : null,
       matches
     );
-    input.documentLookup = input.documentLookupHint && (input.documentLookupHint.matched || !matches.length)
-      ? input.documentLookupHint
-      : calculatedDocumentLookup;
+    const hint = input.documentLookupHint;
+    const safeHint = matches.length === 1 && hint?.matched
+      && grdtIdentityKey(hint.ldDocument) === grdtIdentityKey(matches[0].document)
+      && fileDocumentIdentity(input.name || identityValue, hint.inputDocument).valid;
+    input.documentLookup = safeHint ? hint : calculatedDocumentLookup;
     if (matches.length > 1) {
       const codes = matches.slice(0, 5).map((candidate) => candidate.document).join("; ");
       return reviewResult(input, {
@@ -2382,7 +2442,7 @@
         sheetSource: inferredSheet ? "prefixo do arquivo" : "não identificada",
         revision: revisionFromName(input.name || "", input.document || "") || "",
         status: "Não consta na LD",
-        reason: `${input.documentLookup.message} O texto interno do PDF não é usado para substituir a identidade informada pelo nome.`,
+        reason: `O código completo do arquivo não foi localizado na LD. A pesquisa operacional não substitui dígitos, letras, EAP, unidade ou tipo documental por similaridade. ${input.documentLookup.message} O texto interno do PDF não é usado para substituir a identidade informada pelo nome.`,
         finalName: input.name || "arquivo.pdf",
         documentSource: identitySource,
       });
@@ -2871,6 +2931,13 @@
         break;
       }
 
+      if (kind === 'unknown') {
+        decision = REVIEW;
+        reason = `O status “${currentStatus}” não permite decidir automaticamente se ${document}-${revision} está pronto para postagem. Confira a fonte SIGEM antes de incluir.`;
+        completed = true;
+        break;
+      }
+
       // Em Análise e Em Workflow são equivalentes operacionalmente: ambos
       // representam uma análise em andamento no SIGEM. O texto original vindo
       // da Consulta Geral permanece em displayStatus; apenas a regra de decisão
@@ -3193,6 +3260,7 @@
     buildIndex,
     exactDocumentMatch,
     matchDocument,
+    matchDocumentsForGrdt, grdtFileDocumentCandidates, fileDocumentIdentity,
     matchDocuments,
     compactDocumentCandidates,
     fuzzyDocumentCandidates,
