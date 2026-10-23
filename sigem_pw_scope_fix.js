@@ -101,12 +101,11 @@
     const reasons = {};
     (records || []).forEach((record) => {
       const normalized = normalizeRecord(record, "pw");
-      if (normalized.documentKey) {
+      if (Base.isC1OCode(record && record.document) && normalized.documentKey) {
         accepted.push(normalized);
         return;
       }
-      const scope = n1710ScopeInfo(record && record.document);
-      const reason = scope.reason || "fora_do_escopo_grcon";
+      const reason = normalized.documentKey ? "fora_do_escopo_c1o" : "codigo_vazio_ou_invalido";
       reasons[reason] = (reasons[reason] || 0) + 1;
       rejected.push(rejectedRecord(record, reason));
     });
