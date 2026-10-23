@@ -27,7 +27,7 @@
   const HISTORY_VERSION = 3;
   const PW_SCOPE_VERSION = 6;
   const UNCLASSIFIED = "Não classificado";
-  const SCOPE_CLASSES = Object.freeze(["ET", "N-1710", UNCLASSIFIED]);
+  const SCOPE_CLASSES = Object.freeze(["ET", "N-1710", "CV", UNCLASSIFIED]);
   const N1710_CODE_RE = /^(?:[IAFLED]-)?[A-Z0-9]{2,3}-5290\.00-22313-[A-Z0-9]{3}-C1O-\d{3,4}$/i;
   const EMISSION_FLAGS = Object.freeze({ CURRENT: "SIM", HISTORICAL: "NAO", PLANNED: "PREVISTO" });
   const COMPARISON_SITUATIONS = Object.freeze({
@@ -37,6 +37,7 @@
     BOTH_EMITTED: "Postado no SIGEM e emitido no PW",
     PW_ONLY_NOT_EMITTED: "Revisão cadastrada no PW sem correspondência no SIGEM; não emitida",
     PW_ONLY_EMITTED: "Revisão emitida no PW sem correspondência no SIGEM",
+    CV_NOT_APPLICABLE: "CV — Currículo; sem exigência de cadastro no PW",
   });
   const REQUIRED_PW_FIELDS = Object.freeze(["document"]);
   const REVISION_SCOPES = Object.freeze({ REVISION0: "revision0", ALL: "all" });
@@ -154,12 +155,19 @@
     return official.length ? official.includes(candidate) : /^[A-Z]{2,4}$/.test(candidate);
   }
 
-  /** Classe do dashboard. O universo desta fase é somente ET e N-1710. */
+  // CV é o tipo documental Currículo, não uma família sem classificação.
+  // Segmentos exatos evitam confundir CV com CVE.
+  function isCvDocumentCode(value) {
+    return /(?:^|[-_])CV(?=[-_]|$)/.test(canonicalDocumentCode(value));
+  }
+
+  /** Classe documental: ET, N-1710, CV e demais tipos identificados separadamente. */
   function documentClass(value) {
     return classFromIdentity(documentIdentity(value));
   }
 
   function classFromIdentity(identity) {
+    if (isCvDocumentCode(identity.canonical)) return "CV";
     if (/^C1O_RNEST_[A-Z0-9]+_\d+(?:\.\d+){3}_[A-Z0-9]+_[A-Z0-9]+_.+$/i.test(identity.canonical)) return "ET";
     if (N1710_CODE_RE.test(identity.canonical)) return "N-1710";
     return UNCLASSIFIED;
@@ -524,6 +532,7 @@
 
   function scopeClassFromIdentity(identity, ldUniverse, enforceLd) {
     const candidateClass = classFromIdentity(identity);
+    if (candidateClass === "CV") return "CV";
     if (candidateClass === "ET") return "ET";
     if (!enforceLd && identity.canonical.includes("_RNEST_")) return "ET";
     // A LD é fonte de localização/alocação, NUNCA prova de existência no PW.
@@ -531,11 +540,18 @@
     return "";
   }
 
+  function classForRecord(record, identity, ldUniverse, enforceLd) {
+    const type = norm(record && (record.documentType || record.tipoDocumento || record.tipo_documento));
+    const description = norm(record && (record.documentTypeDesc || record.descricaoTipoDocumento));
+    if (type === "CV" || description === "CURRICULO") return "CV";
+    return scopeClassFromIdentity(identity, ldUniverse, enforceLd) || UNCLASSIFIED;
+  }
+
   function normalizeRecords(records, kind, ldUniverse, enforceLd) {
     return (records || []).map((record) => {
       const identity = documentIdentity(record && record.document);
       const rawRevision = record && (record.revisionComplete || record.revision);
-      const scopedClass = scopeClassFromIdentity(identity, ldUniverse, enforceLd) || UNCLASSIFIED;
+      const scopedClass = classForRecord(record, identity, ldUniverse, enforceLd);
       const emissionFlag = kind === "pw" ? norm(record && record.lastEmission) : "";
       return {
         ...record,
@@ -581,7 +597,7 @@
     const classCounts = audit.records.reduce((counts, record) => {
       counts[record.documentClass] = (counts[record.documentClass] || 0) + 1;
       return counts;
-    }, { ET: 0, "N-1710": 0 });
+    }, { ET: 0, "N-1710": 0, CV: 0 });
     return {
       meta: {
         ...previousMeta,
@@ -770,10 +786,13 @@
     const pwLastEmission = text(pwEvidence && pwEvidence.current && pwEvidence.current.lastEmission);
     const pwStatusRaw = currentStatus(pwEvidence, "pw");
     const pwStatus = pwStatusRaw || (norm(pwLastEmission) === EMISSION_FLAGS.PLANNED ? "Previsto (sem estado no PW)" : "");
-    const pwEmission = pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : pwEvidence ? "Revisão não confirmada" : "Não cadastrado";
+    const pwEmission = sigemEntry && reference.documentClass === "CV" && !pwEvidence ? "Não aplicável (CV)" : pwEntry ? (pwEntry.emitted ? "Emitido" : "Não emitido") : pwEvidence ? "Revisão não confirmada" : "Não cadastrado";
     let situationKey = "bothEmitted";
     let situation = COMPARISON_SITUATIONS.BOTH_EMITTED;
-    if (sigemEntry && !pwEntry && pwEvidence) {
+    if (sigemEntry && !pwEvidence && reference.documentClass === "CV") {
+      situationKey = "cvNotApplicable";
+      situation = COMPARISON_SITUATIONS.CV_NOT_APPLICABLE;
+    } else if (sigemEntry && !pwEntry && pwEvidence) {
       situationKey = "bothOtherRevision";
       situation = COMPARISON_SITUATIONS.BOTH_OTHER_REVISION;
     } else if (sigemEntry && !pwEntry) {
@@ -885,13 +904,14 @@
         || numericOrder.compare(left.document, right.document)
         || revisionRank(left.revision) - revisionRank(right.revision));
     const bySituation = (key) => all.filter((row) => row.situationKey === key);
+    const cvNotApplicable = bySituation("cvNotApplicable");
     const sigemOnly = bySituation("sigemOnly");
     const bothOtherRevision = bySituation("bothOtherRevision");
     const bothNotEmitted = bySituation("bothNotEmitted");
     const bothEmitted = bySituation("bothEmitted");
     const pwOnlyNotEmitted = bySituation("pwOnlyNotEmitted");
     const pwOnlyEmitted = bySituation("pwOnlyEmitted");
-    const exclusiveLists = [sigemOnly, bothOtherRevision, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted];
+    const exclusiveLists = [sigemOnly, cvNotApplicable, bothOtherRevision, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted];
     const classified = exclusiveLists.reduce((total, rows) => total + rows.length, 0);
     const uniqueClassified = new Set(exclusiveLists.flat().map((row) => row.key)).size;
     if (classified !== all.length || uniqueClassified !== all.length) {
@@ -906,10 +926,10 @@
     const pwNotEmitted = all.filter((row) => row.hasPwEntry && !row.pwEmitted);
     const pwExclusive = all.filter((row) => row.hasPwEntry && !row.inSigem);
     const aligned = bothEmitted;
-    const differences = all.filter((row) => row.situationKey !== "bothEmitted");
+    const differences = all.filter((row) => row.situationKey !== "bothEmitted" && row.situationKey !== "cvNotApplicable");
     return {
       all, sigem: sigemRows, pw: pwRows, differences,
-      sigemOnly, bothOtherRevision, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted,
+      sigemOnly, cvNotApplicable, bothOtherRevision, bothNotEmitted, bothEmitted, pwOnlyNotEmitted, pwOnlyEmitted,
       toRegisterPw, pwNotEmitted, pwExclusive, aligned,
     };
   }
@@ -970,7 +990,7 @@
     const classRows = summarizeClassesFromLists(sigem, pw, lists);
     const allClassRows = sigem.size === sigemAll.size && pw.size === pwAll.size
       ? classRows : summarizeClassesFromLists(sigemAll, pwAll, buildComparisonLists(sigemAll, pwAll, { revisionScope, pwDocuments: source.pwAll }));
-    const classifiedTotal = lists.sigemOnly.length + lists.bothOtherRevision.length + lists.bothNotEmitted.length + lists.bothEmitted.length
+    const classifiedTotal = lists.sigemOnly.length + lists.cvNotApplicable.length + lists.bothOtherRevision.length + lists.bothNotEmitted.length + lists.bothEmitted.length
       + lists.pwOnlyNotEmitted.length + lists.pwOnlyEmitted.length;
     const expectedTotal = sigemKeys.size + pwKeys.size - matched.size;
     if (classifiedTotal !== expectedTotal) throw new Error("Inconsistência matemática: total classificado difere do universo comparado.");
@@ -1006,6 +1026,7 @@
         pwExclusive: pwExclusive.size,
         matched: matched.size,
         sigemOnly: lists.sigemOnly.length,
+        cvNotApplicable: lists.cvNotApplicable.length,
         bothOtherRevision: lists.bothOtherRevision.length,
         bothNotEmitted: lists.bothNotEmitted.length,
         bothEmitted: lists.bothEmitted.length,
@@ -1341,7 +1362,7 @@
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
     PW_BASE_VERSION, HISTORY_VERSION, PW_SCOPE_VERSION, N1710_CODE_RE, UNCLASSIFIED, SCOPE_CLASSES, DOCUMENT_CLASSES: SCOPE_CLASSES,
     EMISSION_FLAGS, EMISSION_RULE, COMPARISON_SITUATIONS, PW_HEADER_ALIASES, REQUIRED_PW_FIELDS, REVISION_SCOPES,
-    text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, partitionC1ORecords, documentIdentity, documentClass,
+    text, norm, normalizeHeader, canonicalDocumentCode, isC1OCode, isCvDocumentCode, partitionC1ORecords, documentIdentity, documentClass,
     revisionKey, normalizeRevisionScope, scopeRevisionMap, revisionLabel, entryKey, revisionRank, parseDateMs, detectDelimiter, forEachDelimitedRow, mapPwColumns, validatePwColumns,
     parsePwCsv, parseLdMatrix, buildLdUniverse, scopeClassFor, normalizeRecords, normalizeSigemRecords, sanitizePwRecords, sanitizePwBase, buildEntryMap, buildDocumentMap,
     createModel, groupEntriesByDocument, buildComparisonLists, summarizeClassesFromLists, aggregateModel, aggregate,
