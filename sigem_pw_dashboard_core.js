@@ -1335,7 +1335,7 @@
     return { sigem, pw, ld, history };
   }
 
-  const EMISSION_RULE = "Todo código presente na base PW está CADASTRADO, independentemente de status, classe, revisão, emissão ou LD. A presença é conferida na base completa mesmo na visão Rev. 0. Cadastro não comprova a mesma revisão nem emissão: esses dados são apresentados separadamente. Cada código + revisão conta uma vez; todas as ocorrências repetidas estão na lista Duplicados PW, com as linhas de origem. Revisões diferentes são registros distintos. Sim identifica emissão atual e Não uma emissão histórica; outros valores ou campos vazios não comprovam emissão.";
+  const EMISSION_RULE = "A comparação SIGEM × PW utiliza somente códigos contendo C1O; registros fora desse escopo ficam separados. Todo código presente na base PW está CADASTRADO, independentemente de status, classe, revisão, emissão ou LD. A presença é conferida na base completa mesmo na visão Rev. 0. Cadastro não comprova a mesma revisão nem emissão: esses dados são apresentados separadamente. Cada código + revisão conta uma vez; todas as ocorrências repetidas estão na lista Duplicados PW, com as linhas de origem. Revisões diferentes são registros distintos. Sim identifica emissão atual e Não uma emissão histórica; outros valores ou campos vazios não comprovam emissão.";
 
   return Object.freeze({
     DB_NAME, DB_STORE, LEGACY_SIGEM_BASE_KEY, LEGACY_PW_BASE_KEY, SIGEM_BASE_KEY, PW_BASE_KEY, LD_BASE_KEY, HISTORY_KEY,
