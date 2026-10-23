@@ -4071,8 +4071,6 @@
       const allocationVisual = C.allocationEvidenceState ? C.allocationEvidenceState(record) : C.allocationState(record.allocationStatus || row.allocationStatus);
       const allocationClass = allocationAlert
         ? allocationAlert === "conflict" ? "allocation-conflict" : "blocked"
-        : row.hardBlock
-        ? "blocked"
         : allocationVisual.kind === "allocated" ? "allocated"
         : allocationVisual.kind === "empty" || allocationVisual.kind === "blank" || allocationVisual.kind === "not_tracked" ? "empty"
         : "review";
@@ -4084,7 +4082,7 @@
         : statusPolicy.manualOnly
         ? (row.blockingRevision
           ? `Revisão ${row.blockingRevision} está Em Análise no SIGEM; revisão ${row.revision} está ${row.sigemRevisionStatus || "Não Postado"}. O SIGEM não deve aceitar uma nova revisão enquanto a anterior estiver em análise. Marque apenas em caso de exceção operacional confirmada.`
-          : `Status SIGEM: ${statusPolicy.status || "não identificado"}. Marque individualmente para autorizar a inclusão nesta revisão.`)
+          : `Status SIGEM: ${statusPolicy.status || "não identificado"}. Selecione para autorizar manualmente a inclusão nesta revisão.`)
         : manualAllocationOverrideAllowed(row)
         ? "Marcar manualmente para incluir na GRDT; a LD continuará registrada como Não Alocado"
         : rowRequiresManualResolution(row)

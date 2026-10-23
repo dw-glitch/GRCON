@@ -271,6 +271,10 @@ assert.match(statusCss, /tr\.result-row\.manually-included:hover > td\s*\{\s*bac
 for (const key of ["pronto", "bloqueado", "descartar", "revisar", "nao_localizado"]) {
   assert.ok(statusCss.includes(`.summary-item[data-filter="${key}"]`), `resumo com a mesma paleta: ${key}`);
 }
+const allocationVisualSource = appSource.match(/const allocationClass = allocationAlert[\s\S]*?;/)[0];
+assert.equal(vm.runInNewContext(`${allocationVisualSource} allocationClass;`, {
+  allocationAlert: "", allocationVisual: { kind: "allocated" }, row: { hardBlock: true },
+}), "allocated", "bloqueio técnico não pinta de vermelho uma alocação confirmada");
 console.log("GRDT cores: pronto, não alocado, análise, conferência, não identificado, conflito, bloqueado e excluído distintos OK.");
 
 function harness() {
