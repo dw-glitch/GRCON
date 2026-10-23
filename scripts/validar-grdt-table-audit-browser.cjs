@@ -12,7 +12,7 @@ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['DOCUMENTO','REVISÃ
 const ld=path.join(output,'LD_QA.xlsx');fs.writeFileSync(ld,XLSX.write(book,{type:'buffer',bookType:'xlsx'}));
 docs.forEach(doc=>fs.writeFileSync(path.join(output,'bundle',`${doc}_0001_0.pdf`),'%PDF-1.4\n%%EOF'));
 (async()=>{
- const browser=await chromium.launch({args:['--no-sandbox']});let page;
+ const browser=await chromium.launch({args:['--no-sandbox'],...(process.env.GRCON_CHROMIUM_PATH?{executablePath:process.env.GRCON_CHROMIUM_PATH}:{})});let page;
  try{
   const context=await browser.newContext({viewport:{width:1366,height:768},serviceWorkers:'block'});page=await context.newPage();
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -80,14 +80,18 @@ docs.forEach(doc=>fs.writeFileSync(path.join(output,'bundle',`${doc}_0001_0.pdf`
   await page.locator('#triage-clear-all').click();
   assert.equal(await page.evaluate(()=>window.GrconPerformanceDiagnostics.state().selected),count-1);
   await page.evaluate(()=>{document.getElementById('results-scroll').scrollTop=0;});await page.waitForTimeout(100);
+  // Grouping may reorder presentation independently of the source row index.
+  const editedIndex=await page.locator('tr.result-row').first().getAttribute('data-index').then(Number);
+  await page.evaluate(i=>window.__qaEditedIndex=i,editedIndex);
+  const editedDocument=await page.evaluate(i=>window.GrconTriageUiApi.getResult(i).document,editedIndex);
   await page.locator('[data-revision-input]').first().fill('A');await page.locator('[data-revision-input]').first().press('Tab');
-  assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.getResult(window.GrconTriageUiApi.filteredIndices()[0]).revision),'A');
+  assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.getResult(window.__qaEditedIndex).revision),'A');
   assert.equal(await page.evaluate(()=>window.GrconPerformanceDiagnostics.state().selected),count-1);
   assert.match(await page.locator('.grdt-revision-transition').first().innerText(),/Arquivo: 0 · GRDT: A/);
   await page.locator('[data-triage-facet="revision"]').selectOption('changed');
   assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.filteredIndices().length),1);
   await page.locator('#triage-clear-all').click();
-  assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.getResult(window.GrconTriageUiApi.filteredIndices()[0]).revision),'A');
+  assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.getResult(window.__qaEditedIndex).revision),'A');
   // Consulta real do serviço da tela com backend controlado: duas revisões e dois contratos.
   await page.evaluate(async(doc)=>{
     window.__qaCloud=window.GrconCloud;
@@ -97,7 +101,7 @@ docs.forEach(doc=>fs.writeFileSync(path.join(output,'bundle',`${doc}_0001_0.pdf`
       {id:'3',workspaceId:'OTHER',egrdtNumber:'QA-OTHER',generatedAt:'2026-01-03',files:[{document:doc,revision:'B'}]},
     ]};
     await window.GrconPostingFlow.refresh(true);
-  },docs[0]);
+  },editedDocument);
   await page.locator('#search').fill('QA-GRDT-001');await page.waitForTimeout(300);
   assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.filteredIndices().length),1,'busca reconhece GRDT mais antiga');
   assert.match(await page.locator('#results-body').innerText(),/QA-GRDT-002/);
@@ -111,7 +115,7 @@ docs.forEach(doc=>fs.writeFileSync(path.join(output,'bundle',`${doc}_0001_0.pdf`
   await historyTrigger.click();
   // Force retry to reproduce remote failure rather than reuse a complete cached response.
   await page.evaluate(async()=>{await window.GrconPostingFlow.refresh(true);});
-  await page.keyboard.press('Escape');await page.evaluate(doc=>window.GrconGrdtHistoryUi.open(doc,'A'),docs[0]);
+  await page.keyboard.press('Escape');await page.evaluate(doc=>window.GrconGrdtHistoryUi.open(doc,'A'),editedDocument);
   assert.match(await page.locator('.grdt-history-panel').innerText(),/Não foi possível consultar o histórico/);
   await page.evaluate(()=>{window.GrconCloud.loadClassificationHistory=async()=>[];});
   await page.locator('[data-history-retry]').click();
@@ -135,12 +139,12 @@ docs.forEach(doc=>fs.writeFileSync(path.join(output,'bundle',`${doc}_0001_0.pdf`
   // Ação principal usa os Workers e a geração oficial; ZIPs inspecionados, sem backend real.
   await page.locator('#select-all-ready').check();
   await page.locator('#select-all-ready').uncheck();
-  await page.locator('tr[data-index="0"] [data-select-row]').check();
-  const otherDocument=await page.evaluate(()=>{
-    const api=window.GrconTriageUiApi,first=api.getResult(0);
+  await page.locator(`tr[data-index="${editedIndex}"] [data-select-row]`).check();
+  const otherDocument=await page.evaluate(editedIndex=>{
+    const api=window.GrconTriageUiApi,first=api.getResult(editedIndex);
     const index=api.filteredIndices().find(i=>api.getResult(i).egrdt.discipline!==first.egrdt.discipline);
     return api.getResult(index).document;
-  });
+  },editedIndex);
   await page.locator('#search').fill(otherDocument);await page.waitForTimeout(300);
   await page.locator('tr.result-row [data-select-row]').first().check();
   await page.locator('#triage-clear-all').click();
@@ -177,7 +181,7 @@ docs.forEach(doc=>fs.writeFileSync(path.join(output,'bundle',`${doc}_0001_0.pdf`
     const zip=await JSZip.loadAsync(fs.readFileSync(target));const files=Object.keys(zip.files).filter(name=>!zip.files[name].dir);
     assert.equal(files.filter(name=>/\.pdf$/i.test(name)).length,2);
     assert.equal(files.filter(name=>/\.xls$/i.test(name)).length,mode==='discipline'?2:1);
-    assert.ok(files.some(name=>/_A\.pdf$/i.test(name)),'revisão editada no nome final');
+    assert.ok(files.some(name=>name.includes(editedDocument)&&/_A\.pdf$/i.test(name)),'revisão editada no arquivo físico selecionado');
     packages.push({mode,files});
   }
   // Falha na conferência antes de montar o ZIP não deixa o botão travado.

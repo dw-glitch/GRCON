@@ -358,7 +358,7 @@ check("status concluídos preservam a revisão 0 do arquivo; Em Workflow segue a
       Core.buildIndex([technical], [history]),
       {},
     );
-    assert.equal(result.decision, Core.DISCARD, status);
+    assert.equal(result.decision, Core.statusKind(status) === "unknown" ? Core.REVIEW : Core.DISCARD, status);
     assert.equal(result.revision, "0", status);
     assert.equal(result.status, status, status);
   });
@@ -1403,12 +1403,13 @@ check("ET localiza variação silenciosa de separadores somente dentro do TAG", 
   assert.ok(match);
   assert.equal(match.matchKind, "tag-format-variant");
   const result = Core.triageOne({ id: "tag-format", name: `${input}_0001.pdf` }, index, {});
-  assert.equal(result.document, ld);
-  assert.equal(result.finalName, `${ld}_0001.pdf`);
-  assert.equal(result.decision, Core.READY);
-  assert.equal(result.ntRename, null);
-  assert.equal(result.documentLookup.resultLabel, "LOCALIZADO NA LD");
-  assert.doesNotMatch(result.documentLookup.message, /erro|transcri|formata/i);
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("workflow PROJETO dos PR 040 e 041 usa somente ENGENHARIA DE PROJETO do modelo vigente", () => {
@@ -1524,9 +1525,13 @@ check("ET tolera uma única confusão alfanumérica comum no TAG quando a LD é 
   assert.ok(match);
   assert.equal(match.matchKind, "tag-transcription-variant");
   const result = Core.triageOne({ id: "tag-transcription", name: `${input}.pdf` }, index, {});
-  assert.equal(result.document, ld);
-  assert.equal(result.finalName, `${ld}.pdf`);
-  assert.equal(result.decision, Core.READY);
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("busca tolerante do TAG não adivinha quando há mais de uma linha possível", () => {
@@ -1536,8 +1541,13 @@ check("busca tolerante do TAG não adivinha quando há mais de uma linha possív
     ldDocumentRecord(`${prefix}P1-01A`),
   ], []);
   const result = Core.triageOne({ id: "tag-ambiguous", name: `${prefix}P.101A.pdf` }, index, {});
-  assert.equal(result.status, "Código ambíguo no nome");
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
   assert.equal(result.decision, Core.REVIEW);
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("busca final por tipo + TAG corrige os Grupos 1 a 5 pela codificação oficial da LD", () => {
@@ -1548,17 +1558,13 @@ check("busca final por tipo + TAG corrige os Grupos 1 a 5 pela codificação ofi
   assert.ok(match);
   assert.equal(match.matchKind, "report-tag");
   const result = Core.triageOne({ id: "report-tag", name: `${wrongPrefix}_0001.pdf` }, index, {});
-  assert.equal(result.document, ld);
-  assert.equal(result.finalName, `${ld}_0001.pdf`);
-  assert.equal(result.decision, Core.READY);
-  assert.equal(result.documentLookup.matchedByReportTag, true);
-  assert.equal(result.documentLookup.searchedReportCode, "RIR");
-  assert.equal(result.documentLookup.searchedTag, "P101A");
-  assert.equal(result.documentLookup.resultLabel, "LOCALIZADO PELO TIPO + TAG — USAR O CÓDIGO DA LD");
-  assert.match(result.documentLookup.message, /tipo.*RIR.*TAG.*P101A.*única correspondência/i);
-  assert.ok(result.ldRename);
-  const summary = ReportSummary.buildRows([result], {})[0];
-  assert.match(summary.renameForEgrdt, /SIM — RENOMEADO.*De:.*Para:/i);
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("mesmo TAG em REP e RUFF preserva o tipo REP informado", () => {
@@ -1572,11 +1578,13 @@ check("mesmo TAG em REP e RUFF preserva o tipo REP informado", () => {
   assert.equal(match.document, rep);
   assert.equal(match.matchKind, "report-tag");
   const result = Core.triageOne({ id: "rep-not-ruff", name: `${input}.pdf` }, index, {});
-  assert.equal(result.document, rep);
-  assert.equal(result.finalName, `${rep}.pdf`);
-  assert.equal(result.documentLookup.searchedReportCode, "REP");
-  assert.ok(result.ldRename);
-  assert.doesNotMatch(result.document, /_RUFF_/);
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("REP não localiza nem renomeia para RUFF quando só o outro tipo possui o TAG", () => {
@@ -1617,8 +1625,13 @@ check("tipo + TAG tolera uma confusão alfanumérica no TAG e mantém o mesmo ti
   assert.equal(match.document, ld);
   assert.equal(match.matchKind, "report-tag-transcription");
   const result = Core.triageOne({ id: "report-tag-transcription", name: `${input}.pdf` }, index, {});
-  assert.equal(result.finalName, `${ld}.pdf`);
-  assert.ok(result.ldRename);
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
+  assert.equal(result.decision, Core.REVIEW);
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("busca por tipo + TAG não escolhe automaticamente quando o mesmo tipo possui mais de um código", () => {
@@ -1630,9 +1643,13 @@ check("busca por tipo + TAG não escolhe automaticamente quando o mesmo tipo pos
   const input = `C1O_RNEST_U35_3.1.1.1_INS_RIR_${tag}`;
   assert.equal(Core.exactDocumentMatch(input, index), null);
   const result = Core.triageOne({ id: "report-tag-ambiguous", name: `${input}.pdf` }, index, {});
-  assert.equal(result.status, "Código ambíguo no nome");
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
   assert.equal(result.decision, Core.REVIEW);
-  assert.equal(result.documentLookup.searchResult, "ambiguous");
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("índice pesquisa 15.000 códigos ET na forma oposta sem limite de quantidade", () => {
@@ -2738,11 +2755,13 @@ check("separadores errados com título localizam a LD sem inventar revisão", ()
   assert.equal(matches[0].document, document);
   assert.equal(matches[0].matchKind, "code-format-variant");
   const result = Core.triageOne({ id: "formato-incorreto", name: sourceName }, index, {});
-  assert.equal(result.document, document);
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
   assert.equal(result.decision, Core.REVIEW);
-  assert.equal(result.revision, "");
-  assert.equal(result.reasonCode, Core.DECISION_CODES.FILE_REVISION_UNKNOWN);
-  assert.equal(result.finalName, sourceName);
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("um erro de transcrição localiza a LD inequívoca sem inventar revisão", () => {
@@ -2759,11 +2778,13 @@ check("um erro de transcrição localiza a LD inequívoca sem inventar revisão"
   assert.equal(matches[0].document, document);
   assert.equal(matches[0].matchKind, "code-transcription-variant");
   const result = Core.triageOne({ id: "transcricao-codigo", name: sourceName }, index, {});
-  assert.equal(result.document, document);
+  assert.equal(result.status, "Não consta na LD", "a GRDT exige o código completo do arquivo");
   assert.equal(result.decision, Core.REVIEW);
-  assert.equal(result.revision, "");
-  assert.equal(result.reasonCode, Core.DECISION_CODES.FILE_REVISION_UNKNOWN);
-  assert.equal(result.finalName, sourceName);
+  assert.deepEqual(result.record, {}, "nenhuma linha de outro documento pode fornecer status ou título");
+  assert.deepEqual(result.egrdt, {}, "não preparar eGRDT de um candidato aproximado");
+  assert.equal(result.documentLookup.matched, false);
+  assert.equal(Core.matchDocumentsForGrdt(result.name, index).length, 0);
+
 });
 
 check("título no nome desempata códigos vizinhos quando há um erro de transcrição", () => {

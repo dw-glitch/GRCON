@@ -790,11 +790,22 @@
     wrapped.triageOne = function guardedTriageOne(input, index, options) {
       const sourceValue = input && (input.document || input.name) || "";
       const identity = parseDocumentIdentity(sourceValue, { sheetName: input && input.hintedSheet });
-      const safeMatches = wrapped.matchDocuments(sourceValue, index, input && input.hintedSheet);
+      const safeMatches = [...filterCandidatesByIdentity(sourceValue, original.matchDocumentsForGrdt(sourceValue, index, input && input.hintedSheet))];
+      // Retain only EAP diagnostics from the wider consultation search.
+      if (!safeMatches.length) {
+        const diagnostic = identity.eapApplicable
+          ? filterCandidatesByIdentity(sourceValue, index?.byTypeTag?.get(typeTagKey(identity, false)) || []).eapDiagnostics
+          : null;
+        if (diagnostic) safeMatches.eapDiagnostics = diagnostic;
+      }
       const safeLookup = wrapped.documentLookup(sourceValue, safeMatches.length === 1 ? safeMatches[0] : null, safeMatches);
       const safeIndex = indexForIdentity(index, sourceValue);
       const safeInput = { ...(input || {}), documentLookupHint: safeLookup };
       let result = original.triageOne(safeInput, safeIndex, options);
+      if (!safeMatches.length && safeMatches.eapDiagnostics?.rejectedByEap?.length && result) {
+        result.documentLookup = safeLookup;
+        result.reason = `${safeLookup.message} ${result.reason}`;
+      }
 
       if (result && result.document && identity.eapApplicable) {
         const comparison = compareDocumentIdentity(sourceValue, result.document, { sheetName: result.sheet });

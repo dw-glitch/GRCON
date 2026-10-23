@@ -119,7 +119,7 @@
     if (!snapshot) { els.filters.hidden = true; return; }
     const chips = [];
     if (snapshot.filter && snapshot.filter !== "todos") {
-      const label = ({ pronto: "Prontos", bloqueado: "Não incluir", descartar: "Em análise", revisar: "Revisar" })[snapshot.filter] || snapshot.filter;
+      const label = ({ pronto: "Prontos", nao_localizado: "Não localizado / sem status", bloqueado: "Não incluir", descartar: "Em análise", revisar: "Revisar" })[snapshot.filter] || snapshot.filter;
       chips.push(chip(`Situação: ${label}`, "summary"));
     }
     if (snapshot.sheetFilter && snapshot.sheetFilter !== "todos") chips.push(chip(`Aba: ${els.sheet?.selectedOptions?.[0]?.textContent || snapshot.sheetFilter}`, "sheet"));

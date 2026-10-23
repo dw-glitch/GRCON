@@ -9,6 +9,10 @@ on:
       - "grcon_contracts.js"
       - "workers/triage.worker.js"
       - "tests/grdt_file_revision.cjs"
+      - "tests/grdt_document_identity.cjs"
+      - "grcon_utils.js"
+      - "grdt_triage_query.js"
+      - "scripts/validar-grdt-identity-browser.cjs"
       - "scripts/validar-grdt-file-revision-browser.cjs"
       - ".github/workflows/grdt-file-revision.yml"
   workflow_dispatch:
@@ -26,7 +30,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run build
-      - run: node tests/grdt_file_revision.cjs
+      - run: node tests/grdt_file_revision.cjs && node tests/grdt_document_identity.cjs
       - name: Instalar Chromium
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
@@ -37,9 +41,12 @@ jobs:
           REVISION_QA_SERVER=$!
           trap 'kill "$REVISION_QA_SERVER"' EXIT
           node scripts/validar-grdt-file-revision-browser.cjs
+          node scripts/validar-grdt-identity-browser.cjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: grdt-file-revision-browser
-          path: artifacts/grdt-file-revision/*.png
+          path: |
+            artifacts/grdt-file-revision/*.png
+            artifacts/grdt-identity/*.png
           if-no-files-found: warn

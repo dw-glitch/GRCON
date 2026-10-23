@@ -139,7 +139,7 @@
     cancelled: false,
     egrdtBatchLimit: readEgrdtBatchLimit(),
     egrdtBatchMode: readEgrdtBatchMode(),
-    groupByStatus: false,
+    groupByStatus: true,
     manualForceInclude: new Set(), // índices incluídos manualmente pelo operador (mesmo sem decisão READY)
   };
 
@@ -1229,7 +1229,7 @@
 
   function currentAnalysisSignature() {
     const days = Math.max(1, Number(els.recentDays && els.recentDays.value) || state.recentDays || 30);
-    return [`versao:${APP_VERSION}`, currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
+    return [`versao:${APP_VERSION}`, "identity:complete-code-v1", currentLdSignature(), currentPackageSignature(), currentRelationSignature(), `dias:${days}`,
       `sigem:${currentSigemQuerySnapshot() || "sem-base"}`,
       `previstos:${window.GrconPlannedDocuments?.current()?.id || "sem-base"}`,
       `central:${window.GrconAllocationRegistry?.signature() || "sem-base"}`].join("###");
@@ -1527,8 +1527,9 @@
       const raw = part.trim().replace(/^['"]|['"]$/g, "");
       if (!raw || C.norm(raw) === "FIM" || listHeader(raw)) return;
       const inferredDocument = listDocumentName(raw);
-      const exact = state.index && C.exactDocumentMatch ? C.exactDocumentMatch(inferredDocument, state.index) : null;
-      const matches = exact ? [exact] : C.matchDocuments(raw, state.index);
+      const exactMatches = C.matchDocumentsForGrdt(inferredDocument, state.index);
+      const exact = exactMatches.length === 1 ? exactMatches[0] : null;
+      const matches = exact ? [exact] : C.matchDocumentsForGrdt(raw, state.index);
       if (!/\.pdf$/i.test(listBaseName(raw)) && matches.length !== 1 && !C.inferSheetFromName(`${inferredDocument}.pdf`)) return;
       const document = matches.length === 1 ? matches[0].document : inferredDocument;
       const key = `${C.norm(raw)}::${C.key(document)}`;
@@ -1615,7 +1616,7 @@
       // Isso evita cortar identificadores ET que contêm ponto, vírgula ou outros
       // caracteres e evita falsas duplicidades entre documentos com prefixo igual.
       if (relationIndex) {
-        C.matchDocuments(line, relationIndex).forEach((match) => candidates.set(C.key(match.document), { document: match.document, match }));
+        C.matchDocumentsForGrdt(line, relationIndex).forEach((match) => candidates.set(C.key(match.document), { document: match.document, match }));
       }
       // As expressões regulares ficam apenas como contingência quando o código
       // ainda não existe na LD; elas nunca substituem um código completo da LD.
@@ -1623,7 +1624,8 @@
       if (!candidates.size) {
         line.split(/[\t;|]+/).map(cleanRelationPart).filter(Boolean).forEach((part) => {
           const document = listDocumentName(part);
-          const exact = relationIndex && C.exactDocumentMatch ? C.exactDocumentMatch(document, relationIndex) : null;
+          const exactCandidates = C.matchDocumentsForGrdt(document, relationIndex);
+          const exact = exactCandidates.length === 1 ? exactCandidates[0] : null;
           const sheet = C.inferSheetFromName(`${document}.pdf`);
           const validCode = sheet && C.validateDocumentCode(document, sheet).valid;
           if (/\.pdf$/i.test(listBaseName(part)) || exact || validCode) {
@@ -1633,7 +1635,7 @@
         });
       }
       if (!candidates.size && relationIndex) {
-        C.matchDocuments(line, relationIndex).forEach((match) => candidates.set(C.key(match.document), { document: match.document, match }));
+        C.matchDocumentsForGrdt(line, relationIndex).forEach((match) => candidates.set(C.key(match.document), { document: match.document, match }));
       }
       if (!candidates.size) {
         ignored.push({ raw: line, lineNumber: lineIndex + 1, reason: "Texto não reconhecido" });
@@ -1779,8 +1781,9 @@
 
     function indexByDocument(file, target) {
       const inferredDocument = listDocumentName(file.name);
-      const exact = C.exactDocumentMatch ? C.exactDocumentMatch(inferredDocument, state.index) : null;
-      const matches = exact ? [exact] : C.matchDocuments(file.name, state.index);
+      const exactMatches = C.matchDocumentsForGrdt(inferredDocument, state.index);
+      const exact = exactMatches.length === 1 ? exactMatches[0] : null;
+      const matches = exact ? [exact] : C.matchDocumentsForGrdt(file.name, state.index);
       // Só indexa quando a LD devolve UMA correspondência segura. O lookup
       // inicial usa apenas nome, extensão e caminho; nenhum conteúdo é aberto.
       if (matches.length !== 1) return;
@@ -2615,10 +2618,10 @@
       renderAll();
       els.resultsSection.hidden = false;
       focarResultados();
-      const counts = C.resultCounts(state.results);
+      const counts = triageGroupCounts();
       const ignored = state.ignoredFiles.length ? ` · ${state.ignoredFiles.length} arquivo(s) ignorado(s)` : "";
       const missingNotice = missingFromList.length ? ` · ${missingFromList.length} solicitado(s) não localizado(s)` : "";
-      showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar${ignored}${missingNotice}.`, counts.revisar || counts.bloqueado || missingFromList.length ? "warn" : "success");
+      showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar · ${counts.nao_localizado} não localizados/sem status${ignored}${missingNotice}.`, counts.revisar || counts.bloqueado || counts.nao_localizado || missingFromList.length ? "warn" : "success");
       window.setTimeout(() => { els.progress.hidden = true; }, 900);
     } catch (error) {
       console.error(error);
@@ -2922,12 +2925,12 @@
       // recente ao mostrar os documentos desta nova análise, em vez de
       // depender só de um evento de sincronização anterior.
       if (window.GrconGrdtHistoryIndicator) window.GrconGrdtHistoryIndicator.refresh();
-      const counts = C.resultCounts(state.results);
+      const counts = triageGroupCounts();
       window.requestAnimationFrame(() => {
         renderAll();
         focarResultados();
         refreshPerformancePanel(`Resultados iniciais exibidos · consolidando linha do tempo e Databook em segundo plano.`);
-        showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar.`, counts.revisar || counts.bloqueado ? "warn" : "success");
+        showToast(`${counts.pronto} prontos · ${counts.bloqueado} bloqueados · ${counts.descartar} em análise · ${counts.revisar} para revisar · ${counts.nao_localizado} não localizados/sem status.`, counts.revisar || counts.bloqueado || counts.nao_localizado ? "warn" : "success");
       });
 
       const enrichInput = state.results.map((row) => ({
@@ -3059,12 +3062,14 @@
   }
 
   function decisionClass(value, row) {
+    if (row && TriageQuery.unresolvedStatus(row)) return 'review';
     if (row && TriageQuery.allocationAlert(row)) return "blocked";
     if (row && row.hardBlock) return "blocked";
     return value === C.READY ? "ready" : value === C.DISCARD ? "discard" : "review";
   }
 
   function decisionGroupKey(row) {
+    if (row && TriageQuery.unresolvedStatus(row)) return 'nao_localizado';
     if (row && TriageQuery.allocationAlert(row)) return "bloqueado";
     if (row && rowStatusPolicy(row).kind === "analysis") return "descartar";
     if (row && row.hardBlock) return "bloqueado";
@@ -3075,7 +3080,7 @@
   }
 
   function decisionGroupLabel(row) {
-    return ({ pronto: "Incluir na eGRDT", revisar: "Precisa de conferência", bloqueado: "Não incluir", descartar: "Em análise" })[decisionGroupKey(row)] || "Outros";
+    return ({ pronto: "Incluir na eGRDT", nao_localizado: "Não localizado / status não identificado", revisar: "Precisa de conferência", bloqueado: "Não incluir", descartar: "Em análise" })[decisionGroupKey(row)] || "Outros";
   }
 
   function formatDateBR(value) {
@@ -3454,7 +3459,7 @@
       indices.push(index);
     }
     if (state.groupByStatus) {
-      const rank = { pronto: 0, revisar: 1, bloqueado: 2, descartar: 3 };
+      const rank = { pronto: 0, nao_localizado: 1, revisar: 2, bloqueado: 3, descartar: 4 };
       indices.sort((leftIndex, rightIndex) => {
         const left = state.results[leftIndex];
         const right = state.results[rightIndex];
@@ -3611,14 +3616,20 @@
     }
   }
 
-  function renderSummary() {
-    const counts = { ...C.resultCounts(state.results), pronto: 0, revisar: 0, bloqueado: 0, descartar: 0 };
+  function triageGroupCounts() {
+    const counts = { total: state.results.length, pronto: 0, nao_localizado: 0, revisar: 0, bloqueado: 0, descartar: 0 };
     state.results.forEach(row => { counts[decisionGroupKey(row)] += 1; });
+    return counts;
+  }
+
+  function renderSummary() {
+    const counts = triageGroupCounts();
     $("#count-total").textContent = counts.total;
     $("#count-ready").textContent = counts.pronto;
     $("#count-blocked").textContent = counts.bloqueado;
     $("#count-discard").textContent = counts.descartar;
     $("#count-review").textContent = counts.revisar;
+    $("#count-unresolved").textContent = counts.nao_localizado;
     document.querySelectorAll("[data-filter]").forEach((button) => {
       const filter = button.dataset.filter;
       button.querySelector("b").textContent = filter === "todos" ? counts.total : counts[filter] || 0;

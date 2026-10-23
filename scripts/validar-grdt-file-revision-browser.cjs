@@ -24,9 +24,11 @@ XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
 ]), 'Colar SIGEM');
 const ld = path.join(output, 'LD_001.xlsx');
 fs.writeFileSync(ld, XLSX.write(book, { type:'buffer', bookType:'xlsx' }));
-const names = [`${doc}_A.pdf`, `${doc}_B.pdf`, `${doc}_B.docx`, `${zero}.pdf`, `${unknown}_ERRADO.pdf`, `${unallocated}_A.pdf`, `${unallocated}_A.docx`, `${conflict}_B.pdf`];
+const names = [`${doc}_A.pdf`, `${doc}_B.pdf`, `${doc}_B.docx`, `${zero}.pdf`, `${unknown}_RIR.pdf`, `${unallocated}_A.pdf`, `${unallocated}_A.docx`, `${conflict}_B.pdf`];
 const bundle = path.join(output, 'bundle');
 fs.mkdirSync(bundle, { recursive:true });
+// Remove only this obsolete generated fixture from earlier test runs.
+if(fs.existsSync(path.join(bundle,`${unknown}_ERRADO.pdf`)))fs.unlinkSync(path.join(bundle,`${unknown}_ERRADO.pdf`));
 names.forEach(name => fs.writeFileSync(path.join(bundle, name), '%PDF-1.4\n%%EOF'));
 (async () => {
   const server=http.createServer((req,res)=>{

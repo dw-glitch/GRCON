@@ -53,16 +53,23 @@
     const source = row.allocationStatus || row.record?.allocationStatus || "";
     return Core.allocationState(source).kind === "not_allocated" ? "not_allocated" : "";
   }
+  function unresolvedStatus(row) {
+    if (!row) return false;
+    const status=String(row.status || row.sigemStatus || row.statusOperational || '').trim();
+    return row.documentLookup?.matched === false || row.blockCode === 'document_identity_mismatch'
+      || Core.statusKind(status) === 'unknown';
+  }
   function selectionPolicy(row) {
     const status = String(row && (row.status || row.sigemStatus || row.statusOperational) || "").trim();
     const kind = Core.statusKind(status);
     const allocation = allocationAlert(row);
-    const autoAllowed = automaticStatusKinds.has(kind) && !allocation;
+    const unresolved = unresolvedStatus(row);
+    const autoAllowed = automaticStatusKinds.has(kind) && !allocation && !unresolved;
     return {
-      status, kind, allocation, autoAllowed,
+      status, kind, allocation, autoAllowed, unresolved,
       manualOnly: !autoAllowed,
       autoEligible: Boolean(row && row.decision === Core.READY && !row.hardBlock && autoAllowed),
-      label: allocation === "not_allocated" ? "Não Alocado"
+      label: unresolved ? (/NAO (?:LOCALIZAD|ENCONTRAD)|NAO CONSTA/.test(norm(status)) || row?.documentLookup?.matched === false ? 'Não localizado' : 'Status não identificado') : allocation === "not_allocated" ? "Não Alocado"
         : allocation === "conflict" ? "Conflito de alocação"
         : kind === "analysis" ? (row?.blockingRevision ? `Em análise (rev. ${row.blockingRevision})` : "Em análise")
         : kind === "unknown" ? "Verificar status" : "Conferir status SIGEM",
@@ -84,5 +91,5 @@
     return !policy.manualOnly || Boolean(manualIndices && manualIndices.has(index) && manualStatusApprovalValid(row));
   }
   return Object.freeze({ origin, extensions, historyKind, matches, searchText,
-    allocationAlert, selectionPolicy, manualStatusApprovalValid, selectionAuthorized });
+    allocationAlert, unresolvedStatus, selectionPolicy, manualStatusApprovalValid, selectionAuthorized });
 });

@@ -41,7 +41,7 @@
   function defaultTriagePreferences() {
     return {
       density: "comfortable",
-      groupByStatus: false,
+      groupByStatus: true,
       visibleColumns: COLUMNS.filter((column) => column.essential).map((column) => column.key),
     };
   }
@@ -57,7 +57,7 @@
     });
     return {
       density: source.density === "compact" ? "compact" : "comfortable",
-      groupByStatus: Boolean(source.groupByStatus),
+      groupByStatus: typeof source.groupByStatus === "boolean" ? source.groupByStatus : defaultTriagePreferences().groupByStatus,
       visibleColumns: [...new Set(visible)],
     };
   }
