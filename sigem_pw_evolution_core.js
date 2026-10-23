@@ -9,7 +9,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Dashboard) {
   "use strict";
 
-  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.4";
+  const CALCULATION_VERSION = "sigem-pw-evolution-audit-v4.5-c1o";
   const VALID_CLASSES = new Set(["ET", "N-1710", "Não classificado"]);
   const SYSTEMS = Object.freeze({ SIGEM: "sigem", PW: "pw" });
 
@@ -303,10 +303,11 @@
     const preRejected = Array.isArray(options && options.preRejected) ? options.preRejected : [];
 
     for (const raw of records || []) {
-      if (!raw || !text(raw.document)) continue;
+      if (!raw) continue;
       const identity = documentIdentity(raw.document);
-      // A presença do código é preservada nos dois sistemas; classe e EAP são metadados.
-      const reason = identity.key ? "" : "codigo_vazio_ou_invalido";
+      // O filtro de escopo antecede qualquer indicador ou conciliação histórica.
+      const reason = !identity.key ? "codigo_vazio_ou_invalido"
+        : !Dashboard.isC1OCode(raw.document) ? "fora_do_escopo_c1o" : "";
       if (reason) {
         const item = rejectRecord(raw, system, reason);
         rejected.push(item);
