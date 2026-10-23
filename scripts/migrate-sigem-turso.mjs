@@ -1,6 +1,7 @@
 // Administrative driver. The user session is read from the process environment;
 // the Turso secret stays in the Worker and is never needed by this process.
 import {writeFile} from 'node:fs/promises';
+import {canonical, sha256, ZERO_HASH} from '../cloudflare/sigem-turso.mjs';
 const args = process.argv.slice(2), workspace = args[1];
 const usage = 'Usage: node scripts/migrate-sigem-turso.mjs <inventory|copy> <workspace-uuid> [report.json]';
 if (!['inventory','copy'].includes(args[0]) || !/^[0-9a-f-]{36}$/i.test(workspace || '')) throw Error(usage);
@@ -22,14 +23,27 @@ console.log(JSON.stringify({snapshots:result.inventoryCount,records:result.recor
 if (args[0] === 'copy') {
  for (const s of before.snapshots) {
   for (let after=0;after<s.record_count;after+=250) await api('copy',{snapshot:s.id,after});
-  result.snapshots.push({id:s.id,...await api('seal',{snapshot:s.id})});
+  const sealed = await api('seal',{snapshot:s.id});
+  let digest=ZERO_HASH,validatedRecords=0;
+  for (let after=0;after<s.record_count;after+=250) {
+   const audit=await api('audit',{snapshot:s.id,after});
+   const expected=Math.min(250,s.record_count-after);
+   if(audit.after!==after+expected||audit.count!==expected||audit.snapshotChecksum!==sealed.checksum||!/^[a-f0-9]{64}$/.test(audit.checksum))throw Error('SIGEM_AUDIT_INCOMPLETE');
+   digest=await sha256(digest+'\n'+audit.checksum);validatedRecords+=audit.count;
+  }
+  if(digest!==sealed.checksum||validatedRecords!==s.record_count)throw Error('SIGEM_AUDIT_HASH_MISMATCH');
+  result.snapshots.push({id:s.id,...sealed,validatedRecords,fullAudit:true});
   console.log(JSON.stringify({verifiedSnapshots:result.snapshots.length,totalSnapshots:before.snapshots.length}));
  }
  const after = await api('inventory');
- result.inventoryStable = JSON.stringify(before) === JSON.stringify(after);
- result.complete = result.inventoryStable;
+ result.inventoryStable = canonical(before) === canonical(after);
+ result.pendingSnapshots=after.pendingSnapshots;
+ result.validatedRecords=result.snapshots.reduce((n,s)=>n+s.validatedRecords,0);
+ result.complete = result.inventoryStable && before.pendingSnapshots===0 && after.pendingSnapshots===0 && result.validatedRecords===result.records;
  if (!result.inventoryStable) console.log('Source inventory changed. Reconcile new publications and metadata before any cutover.');
 }
 result.finishedAt=new Date().toISOString();
 if (args[2]) await writeFile(args[2],JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
 console.log(JSON.stringify({complete:result.complete,officialSource:'supabase',cutoverReady:false,cleanupAllowed:false}));
+if(args[0]==='copy'&&!result.complete)process.exitCode=2;
+

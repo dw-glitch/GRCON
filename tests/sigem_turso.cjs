@@ -10,8 +10,9 @@ const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12,'0');
  const db = {execute: async (sql,args=[]) => {const s=engine.prepare(sql);return s.columns().length ? {rows:s.all(...args)} : {rows:[],affected:s.run(...args).changes};}};
  const objects = new Map(); let unavailable = false;
  const bucket = {put:async(k,v)=>{if(unavailable)throw Error('network');objects.set(k,v);},head:async k=>objects.has(k)?{}:null,get:async k=>objects.has(k)?{text:async()=>objects.get(k)}:null};
- const source={id:uuid(3),workspace_id:uuid(1),contract_id:uuid(2),record_count:501,status:'active',metadata:{title:'Símbolos é ç 漢字',date:'2026-10-23'},deleted_at:null};
+ const source={id:uuid(3),workspace_id:uuid(1),contract_id:uuid(2),file_name:'Consulta Geral.xlsx',expected_count:501,record_count:501,status:'active',created_by:uuid(10),created_at:'2026-10-23T10:00:00+00:00',published_at:'2026-10-23T10:01:00+00:00',version:35,fingerprint:'source-hash',expected_active:null,previous_snapshot_id:uuid(4),comparison_id:null,deleted_by:null,metadata:{title:'Símbolos é ç 漢字',date:'2026-10-23'},deleted_at:null};
  const rows=Array.from({length:501},(_,i)=>({snapshot_id:source.id,row_number:i+1,document_key:'DOC-'+(i+1),revision_key:i===121?'A':'0',status_original:'Em workflow',status_normalized:'em_analise',title:'Título '+i,discipline:'CV',payload:{document:'DOC-'+(i+1),revision:i===121?'A':'0',status:'Em workflow',title:'Título '+i,extra:{original:'__0_-N-1710',array:[null,0,'']}}}));
+ rows[120].payload.title="O'Brien $$ ; DROP SCHEMA private; -- 漢字";
  await M.initialize(db); await M.initialize(db); await M.beginSnapshot(db,source);
  await assert.rejects(M.beginSnapshot(db,{...source,metadata:{date:'changed'}}),/SOURCE_CHANGED/);
  await assert.rejects(M.verifiedPage(db,source,0,1000),/NOT_VERIFIED/);
@@ -25,6 +26,9 @@ const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12,'0');
  await M.copyPage(db,bucket,source,250,rows.slice(250,500));await M.copyPage(db,bucket,source,500,rows.slice(500));
  const report=await M.sealSnapshot(db,bucket,source),verified=await M.verifySnapshot(db,bucket,source);
  assert.equal(report.checksum,verified.checksum);assert.equal(report.count,501);
+ for(let after=0;after<rows.length;after+=250){const result=await M.auditPage(db,bucket,source,after,rows.slice(after,after+250));assert.equal(result.snapshotChecksum,report.checksum);assert.equal(result.after,Math.min(after+250,501));}
+ await assert.rejects(M.auditPage(db,bucket,source,0,[{...rows[0],title:'changed'},...rows.slice(1,250)]),/AUDIT_SOURCE_MISMATCH/);
+ await assert.rejects(M.auditPage(db,bucket,{...source,workspace_id:uuid(9)},0,rows.slice(0,250)),/NOT_VERIFIED/);
  const {restoreBackup}=await import('../scripts/restore-sigem-backup.mjs');
  const disk=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
  const backupRoot=await disk.mkdtemp(path.join(os.tmpdir(),'grcon-sigem-restore-'));
@@ -32,8 +36,42 @@ const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12,'0');
   for(const [key,value] of objects){const location=path.join(backupRoot,key);await disk.mkdir(path.dirname(location),{recursive:true});await disk.writeFile(location,value);}
   const output=path.join(backupRoot,'restored.sqlite');
   const restored=await restoreBackup(backupRoot,report.manifestKey,report.manifestHash,output);assert.equal(restored.records,501);
+  assert.equal((await disk.stat(output)).mode&0o777,0o600,'recovery database must be private');
   const restoredDb=new DatabaseSync(output);assert.equal(restoredDb.prepare('select count(*) n from sigem_rows').get().n,501);assert.equal(JSON.parse(restoredDb.prepare('select row_json from sigem_rows where row_number=122').get().row_json).payload.document,'DOC-122');restoredDb.close();
   await assert.rejects(restoreBackup(backupRoot,report.manifestKey,report.manifestHash,output),/OUTPUT_EXISTS/);
+  const {exportPostgresBackup}=await import('../scripts/restore-sigem-postgres.mjs');
+  const sqlOutput=path.join(backupRoot,'isolated.sql');
+  const exported=await exportPostgresBackup(backupRoot,report.manifestKey,report.manifestHash,sqlOutput,'grcon_sigem_restore_test');
+  assert.equal(exported.liveDatabaseModified,false);assert.equal(exported.records,501);
+  const sql=await disk.readFile(sqlOutput,'utf8');
+  const recoveredPg=new PGlite();try{
+   await recoveredPg.exec('create schema private;create table private.operational_guard(value text);insert into private.operational_guard values(\'untouched\');');
+   await recoveredPg.exec(sql);
+   assert.equal((await recoveredPg.query('select count(*) n from grcon_sigem_restore_test.grcon_sigem_query_rows')).rows[0].n,501);
+   const recoveredRows=(await recoveredPg.query('select * from grcon_sigem_restore_test.grcon_sigem_query_rows order by row_number')).rows;
+   assert.deepEqual(recoveredRows,rows,'all original fields, nested payloads and row order survive PostgreSQL restore');
+   assert.deepEqual((await recoveredPg.query('select source_json from grcon_sigem_restore_test.recovery_manifest')).rows[0].source_json,source,'full original snapshot metadata survives');
+   assert.equal((await recoveredPg.query('select value from private.operational_guard')).rows[0].value,'untouched');
+   assert.equal((await recoveredPg.query("select count(*) n from pg_class c join pg_namespace ns on ns.oid=c.relnamespace where ns.nspname='grcon_sigem_restore_test' and c.relrowsecurity")).rows[0].n,3);
+   await assert.rejects(recoveredPg.exec(sql),/already exists/);await recoveredPg.exec('rollback');
+   assert.equal((await recoveredPg.query('select count(*) n from grcon_sigem_restore_test.grcon_sigem_query_rows')).rows[0].n,501);
+  }finally{await recoveredPg.close();}
+  await assert.rejects(exportPostgresBackup(backupRoot,report.manifestKey,report.manifestHash,sqlOutput),/EEXIST/);
+  assert.equal(await disk.readFile(sqlOutput,'utf8'),sql,'existing recovery file cannot be overwritten');
+  await assert.rejects(exportPostgresBackup(backupRoot,report.manifestKey,report.manifestHash,path.join(backupRoot,'bad-schema.sql'),'private'),/POSTGRES_SCHEMA_INVALID/);
+  const externalRoot=await disk.mkdtemp(path.join(os.tmpdir(),'grcon-external-backup-'));
+  try{
+   const externalManifest=path.join(externalRoot,'manifest.json');
+   await disk.writeFile(externalManifest,objects.get(report.manifestKey));
+   await disk.symlink(externalManifest,path.join(backupRoot,'external-manifest.json'));
+   await assert.rejects(restoreBackup(backupRoot,'external-manifest.json',report.manifestHash,path.join(backupRoot,'escaped.sqlite')),/BACKUP_PATH_INVALID/);
+  }finally{await disk.rm(externalRoot,{recursive:true,force:true});}
+  const unknownManifest={...JSON.parse(objects.get(report.manifestKey)),source:{...source,new_source_field:'must not disappear'}};
+  const unknownBody=M.canonical(unknownManifest),unknownKey='unknown-fields-manifest.json';
+  await disk.writeFile(path.join(backupRoot,unknownKey),unknownBody);
+  await assert.rejects(exportPostgresBackup(backupRoot,unknownKey,await M.sha256(unknownBody),path.join(backupRoot,'unknown-fields.sql')),/POSTGRES_SCHEMA_CHANGED/);
+  await assert.rejects(disk.stat(path.join(backupRoot,'unknown-fields.sql')),/ENOENT/);
+  assert.ok(!(await disk.readdir(backupRoot)).some(n=>n.includes('.partial-')));
   await disk.writeFile(path.join(backupRoot,first.backupKey),'corrupt');
   await assert.rejects(restoreBackup(backupRoot,report.manifestKey,report.manifestHash,path.join(backupRoot,'bad.sqlite')),/BACKUP_HASH_MISMATCH/);
   assert.ok(!(await disk.readdir(backupRoot)).some(n=>n.startsWith('bad.sqlite')),'failed restoration must not expose a partial database');
@@ -44,9 +82,11 @@ const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12,'0');
  assert.deepEqual(await M.readRows(db,{...source,workspace_id:uuid(9)},0,1000),[],'same snapshot cannot leak across workspaces');
  await assert.rejects(M.verifiedPage(db,{...source,contract_id:uuid(9)},0,1000),/NOT_VERIFIED/);
  objects.set(first.backupKey,'corrupt');await assert.rejects(M.verifySnapshot(db,bucket,source),/VERIFY_MISMATCH/);
+ await assert.rejects(M.auditPage(db,bucket,source,0,rows.slice(0,250)),/AUDIT_BACKUP_MISMATCH/);
  objects.set(first.backupKey,M.canonical(rows.slice(0,250)));
  engine.prepare('update sigem_rows set row_json=? where row_number=122').run(M.canonical({...rows[121],payload:{document:'DOC-121'}}));
  await assert.rejects(M.verifySnapshot(db,bucket,source),/VERIFY_MISMATCH/);
+ await assert.rejects(M.auditPage(db,bucket,source,0,rows.slice(0,250)),/AUDIT_DESTINATION_MISMATCH/);
  engine.close();
  assert.equal(M.canonical({b:1,a:{y:2,x:3}}),M.canonical({a:{x:3,y:2},b:1}));
  assert.throws(()=>M.canonical({n:9007199254740992}),/NON_CANONICAL/);
@@ -89,3 +129,4 @@ const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12,'0');
  }finally{await pg.close();}
  console.log('SIGEM Turso: SQLite integrity/resume/backups, exact identities, HTTP isolation, and PostgreSQL master/contract authorization passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+

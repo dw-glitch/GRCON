@@ -77,6 +77,7 @@ As instruções de Cloudflare e limites foram conferidas na documentação em 23
 - `GET /api/sigem-storage/inventory?workspace=<uuid>` — todos os snapshots publicados, inclusive exclusão lógica; informa uploads pendentes separadamente.
 - `POST /api/sigem-storage/copy` — `{workspace,snapshot,after}`; cursor múltiplo de 250. O Worker lê dados diretamente do Supabase; não aceita linhas enviadas pelo cliente.
 - `POST /api/sigem-storage/seal` — `{workspace,snapshot}`; exige checkpoints contíguos e contagem exata.
+- `POST /api/sigem-storage/audit` — `{workspace,snapshot,after}`; segunda passagem de 250 linhas, exclusiva Master, após o selo. Reconsulta a origem e compara cada campo, checkpoint, destino e backup. Não escreve no Turso nem no R2. Exige as mesmas autorizações e preflight da cópia.
 - `POST /api/sigem-storage/page` — `{workspace,snapshot,after,size}`; limite 1.000, preserva contrato e semântica offline do consumidor.
 
 Cada lote de 250 é serializado canonicamente, gravado no R2 e lido de volta antes de gravar o destino. A inserção de linhas é uma única instrução SQL atômica, sem transação atravessando requisições. As linhas são lidas de volta do Turso e comparadas integralmente; só então o checkpoint é gravado. Repetir um lote confere o conteúdo anterior e rejeita conflito. A finalização lê o diário validado, verifica sequência/contagem e salva manifesto com hash. A revalidação completa e restauração integral são etapas adicionais, necessárias antes do corte.
@@ -92,7 +93,7 @@ node scripts/migrate-sigem-turso.mjs inventory <workspace-uuid>
 node scripts/migrate-sigem-turso.mjs copy <workspace-uuid> <relatorio-novo.json>
 ```
 
-`GRCON_ACCESS_TOKEN` no ambiente do processo. O token Turso permanece no Worker. O driver repete lotes com limite, interrompe por autorização/erro definitivo e compara inventário antes/depois. Mudança no inventário mantém o relatório como incompleto.
+`GRCON_ACCESS_TOKEN` no ambiente do processo. O token Turso permanece no Worker. O driver repete lotes com limite, interrompe por autorização/erro definitivo e compara inventário antes/depois. Após selar cada snapshot, executa uma segunda passagem integral pela rota `audit` e recompõe o hash total. O relatório registra `validatedRecords` e `fullAudit`; somente termina com `complete:true` se os hashes conferirem, o inventário permanecer idêntico e não houver uploads pendentes. Mudança no inventário ou upload pendente produz código de saída 2 e relatório incompleto. Erros interrompem a execução, sem considerar o snapshot aprovado. O selo isolado não substitui essa segunda passagem.
 
 ## Backup e restauração
 
@@ -104,7 +105,19 @@ O operador técnico precisa baixar o prefixo pelo acesso autorizado ao R2, prese
 node scripts/restore-sigem-backup.mjs <raiz-local> <chave-manifesto> <sha256-manifesto> <novo-arquivo.sqlite>
 ```
 
-O utilitário valida manifesto, cada lote, ordem, hash total, integridade e chaves estrangeiras. Cria arquivo temporário e só renomeia ao final; falha remove o parcial, jamais sobrescreve destino existente. Teste automatizado restaura um snapshot sintético completo. **Restauração de snapshot corporativo completo ainda não executada.** Restauração no PostgreSQL requer ferramenta adicional antes da retirada física dos registros.
+O utilitário valida manifesto, cada lote, ordem, hash total, integridade e chaves estrangeiras. Publica o arquivo privado (0600) por hard link exclusivo após validação; recusa destino existente mesmo em concorrência e links simbólicos de entrada que escapem da raiz. Falha remove o parcial. Teste automatizado restaura um snapshot sintético completo. **Restauração de snapshot corporativo completo ainda não executada.**
+
+### Recuperação em PostgreSQL isolado
+
+`scripts/restore-sigem-postgres.mjs` valida o mesmo backup integral em SQLite temporário privado e gera SQL transacional para um **novo schema isolado**. Não abre conexão com PostgreSQL, não escreve no Supabase de produção e não troca o ponteiro ativo. Somente admite nomes `grcon_sigem_restore` ou `grcon_sigem_restore_<sufixo>`; schema existente aborta a transação. Tabelas possuem RLS habilitada e não concedem acesso ao PUBLIC. Os campos das tabelas foram conferidos contra o catálogo real em 23/10/2026; campos novos desconhecidos interrompem a geração, em vez de desaparecer silenciosamente.
+
+```sh
+node scripts/restore-sigem-postgres.mjs <raiz-local> <chave-manifesto> <sha256-manifesto> <novo-arquivo.sql> grcon_sigem_restore_homologacao
+```
+
+O responsável técnico deve revisar e executar o SQL **em banco de homologação isolado**, com parada no primeiro erro. Exemplo com conexão segura já configurada no ambiente/libpq: `psql --set=ON_ERROR_STOP=1 --file=<novo-arquivo.sql>`. Não usar produção para o ensaio. O SQL recria os campos tipados dos snapshots e linhas, preserva o JSON integral da origem no manifesto, valida contagem e limites da sequência e mantém chaves primárias/estrangeiras. Não recria auth, memberships, auditoria ou permissões do sistema operacional.
+
+Teste com PostgreSQL embarcado PGlite restaurou 501 linhas sintéticas e comparou **todas** as colunas e payloads, incluindo Unicode, aspas e conteúdo semelhante a SQL. O teste verifica metadados integrais, RLS, recusa de sobrescrita e preservação de uma tabela operacional separada. Isso comprova a ferramenta de recuperação isolada; a reintegração às tabelas `private` e a reversão operacional após o corte continuam exigindo protocolo próprio, homologação e autorização.
 
 Retenção: nenhuma exclusão automática de backup nesta fase. Definir política aprovada e conferir capacidade antes da carga. Não prometer franquia gratuita com base apenas na capacidade nominal do Turso.
 
@@ -116,7 +129,7 @@ Retenção: nenhuma exclusão automática de backup nesta fase. Definir polític
 4. Substituir dependências das dez funções SQL por projeções mínimas e/ou consultas servidoras ao Turso. Preservar as consultas históricas de prazos e comparações; não reduzir a uma projeção apenas do ativo. Medir tamanho real das projeções.
 5. Persistir divergências do shadow/auditoria e métricas de uso (leituras/escritas), definir rate limiting e exercitar falhas reais dos serviços.
 6. Homologar GRDT, conferência, repostagem, SIGEM × PW, consulta avançada, Registro Mestre, Cofre, notificações, exportações, múltiplos contratos e perfis em navegador com bases reais.
-7. Restaurar snapshot corporativo completo em ambiente isolado; implementar/testar restauração PostgreSQL e reversão após corte.
+7. Restaurar snapshot corporativo completo em ambiente isolado com as ferramentas SQLite/PostgreSQL; homologar reintegração às tabelas operacionais e reversão após corte. A ferramenta PostgreSQL isolada já está implementada e testada com dados sintéticos.
 8. Liberar modo `turso` somente após essa homologação. Nesta entrega ele continua bloqueado no código.
 9. Pedir autorização específica para retirar registros antigos, com quantidades, evidências de backup e recuperação, impacto e riscos. Depois avaliar espaço físico (VACUUM/reconstrução), custos, bloqueios e margem livre. Nunca executar VACUUM FULL sem avaliação.
 
@@ -128,3 +141,4 @@ Retenção: nenhuma exclusão automática de backup nesta fase. Definir polític
 - https://docs.turso.tech/sdk/http/reference
 - https://developers.cloudflare.com/workers/tutorials/connect-to-turso-using-workers/
 - https://developers.cloudflare.com/workers/configuration/secrets/
+

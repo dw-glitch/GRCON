@@ -146,6 +146,27 @@ export async function verifiedPage(db, source, after, size) {
   if (s?.state !== 'verified' || s.expected_count !== source.record_count) throw fail('SIGEM_SNAPSHOT_NOT_VERIFIED');
   return (await readRows(db, source, after, size)).map(r => ({row_number: r.row_number, payload: r.payload}));
 }
+// Independent, bounded second pass: checkpoint, current source, destination and
+// backup must all agree. This must run after sealing; a count alone is insufficient.
+export async function auditPage(db, bucket, source, after, rows) {
+  checkPage(source, after, rows);
+  const saved = (await db.execute(`SELECT * FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`, scopeArgs(source))).rows[0];
+  if (saved?.state !== 'verified' || saved.source_json !== canonical(source) || saved.expected_count !== source.record_count) throw fail('SIGEM_SNAPSHOT_NOT_VERIFIED');
+  const checkpoint = (await db.execute(`SELECT * FROM sigem_import_jobs WHERE workspace_id=? AND contract_id=? AND snapshot_id=? AND after_row=?`, [...scopeArgs(source), after])).rows[0];
+  const bytes = canonical(rows), checksum = await sha256(bytes);
+  if (checkpoint?.checksum !== checksum || checkpoint.last_row !== after + rows.length || checkpoint.row_count !== rows.length) throw fail('SIGEM_AUDIT_SOURCE_MISMATCH');
+  const expectedKey = `sigem-backups/v1/${source.workspace_id}/${source.contract_id}/${source.id}/rows-${after + 1}-${after + rows.length}-${checksum}.json`;
+  if (checkpoint.backup_key !== expectedKey) throw fail('SIGEM_AUDIT_BACKUP_MISMATCH');
+  const object = await bucket?.get(expectedKey);
+  if (!object || await object.text() !== bytes) throw fail('SIGEM_AUDIT_BACKUP_MISMATCH');
+  const destination = await readRows(db, source, after, rows.length);
+  if (canonical(destination) !== bytes) throw fail('SIGEM_AUDIT_DESTINATION_MISMATCH');
+  if (after + rows.length === source.record_count) {
+    const total = (await db.execute(`SELECT count(*) total FROM sigem_rows WHERE workspace_id=? AND contract_id=? AND snapshot_id=?`, scopeArgs(source))).rows[0]?.total;
+    if (total !== source.record_count) throw fail('SIGEM_VERIFY_INCOMPLETE');
+  }
+  return {after: after + rows.length, count: rows.length, checksum, snapshotChecksum: saved.checksum};
+}
 // Bounded sealing for Workers: each batch was read back from both stores by
 // copyPage; never run a whole 25k-row rescan inside one Worker request.
 export async function sealSnapshot(db, bucket, source) {
@@ -165,3 +186,4 @@ export async function sealSnapshot(db, bucket, source) {
   await db.execute(`UPDATE sigem_snapshots SET state='verified',checksum=?,verified_at=? WHERE workspace_id=? AND contract_id=? AND id=?`, [digest, new Date().toISOString(), ...scopeArgs(source)]);
   return {count: after, checksum: digest, manifestKey: key, manifestHash};
 }
+
