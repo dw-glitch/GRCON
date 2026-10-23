@@ -19,7 +19,7 @@ const {chromium}=require('playwright');
   });
   await page.addScriptTag({path:path.resolve('contract_admin_app.js')});
   await page.locator('#grcon-administration-shortcut').click();await page.locator('[data-admin-section="storage"]').click();
-  await page.getByText('817351',{exact:true}).waitFor();
+  await page.getByText('817.351',{exact:true}).waitFor();
   assert.equal(await page.locator('[data-storage-copy]').isDisabled(),true);
   assert.equal(await page.locator('[data-storage-refresh]').isVisible(),true);
   assert.equal(await page.locator('[data-admin-panel="storage"]').isVisible(),true);

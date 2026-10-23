@@ -33,7 +33,7 @@ export function tursoClient(env, fetcher = fetch) {
   let url;
   try { url = new URL(String(env.TURSO_DATABASE_URL || '').replace(/^libsql:/, 'https:')); } catch { throw fail('TURSO_NOT_CONFIGURED', 503); }
   // A fixed trusted database host prevents redirect-based credential disclosure/SSRF.
-  if (url.protocol !== 'https:' || !/^[a-z0-9-]+\.turso\.io$/.test(url.hostname) || url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/' || !env.TURSO_AUTH_TOKEN) throw fail('TURSO_NOT_CONFIGURED', 503);
+  if (url.protocol !== 'https:' || !/^(?:[a-z0-9-]+\.)+turso\.io$/.test(url.hostname) || url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/' || !env.TURSO_AUTH_TOKEN) throw fail('TURSO_NOT_CONFIGURED', 503);
   async function execute(sql, args = []) {
     let response;
     try { response = await fetcher(new URL('/v2/pipeline', url), {
