@@ -92,7 +92,7 @@
       const date=sourceDate(row.modifiedAt)||sourceDate(row.includedAt);
       if(filters.from&&(!date||date<filters.from))return false;
       if(filters.to&&(!date||date>filters.to))return false;
-      if(filters.onlyDuplicate&&lookup.duplicates.get(key(row.document)+"\u0000"+key(row.revision))<2)return false;
+      if(filters.onlyDuplicate&&(lookup.duplicates.get(key(row.document)+"\u0000"+key(row.revision))||0)<2)return false;
       return true;
     });
     const sort=filters.sort||"document",direction=filters.direction===-1?-1:1;
