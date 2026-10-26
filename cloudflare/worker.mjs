@@ -87,7 +87,7 @@ function buildAdaptiveCard(payload, imageUrl) {
     version: ADAPTIVE_CARD_VERSION,
     msteams: { width: "Full" },
     body: [
-      { type: "Image", url: imageUrl, width: "64px", height: "64px", altText: "Mascote GRCON dando joia", horizontalAlignment: "Left" },
+      { type: "Image", url: imageUrl, width: "64px", height: "80px", altText: "Mascote GRCON dando joia", horizontalAlignment: "Left" },
       { type: "TextBlock", text: "✅ eGRDT pronta para postagem", weight: "Bolder", size: "Medium", wrap: true },
       { type: "TextBlock", text: payload.egrdt.number, weight: "Bolder", spacing: "Small", wrap: true },
       { type: "TextBlock", text: "Pronta para postagem no SIGEM", isSubtle: true, spacing: "None", wrap: true },

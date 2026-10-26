@@ -25,7 +25,7 @@ Além dos campos já existentes, o corpo entregue ao Power Automate agora inclui
 
 O PNG fica versionado em `/assets/mascot/grcon-mascot-teams-thumbsup.png`. O endereço padrão é `https://grcon-cloudflare.grcon-qualidade.workers.dev/assets/mascot/grcon-mascot-teams-thumbsup.png`, servido publicamente sem autenticação. Não use `raw.githubusercontent.com/dw-glitch/GRCON/...`: o repositório é privado e o Teams recebe HTTP 404. O teste de regressão confere a estrutura completa do PNG e a publicação verifica os bytes e os cabeçalhos da imagem.
 
-Somente esse PNG decorativo dispensa `Cross-Origin-Resource-Policy: same-origin` e recebe `Access-Control-Allow-Origin: *`. O cabeçalho do cartão usa uma imagem de 64 × 64 pixels e textos empilhados com quebra de linha; uma falha da imagem não ocupa uma coluna ao lado dos dados. O cartão solicita `msteams.width = Full`, mas permanece legível quando o host ignora ou substitui esse campo.
+Somente esse PNG decorativo dispensa `Cross-Origin-Resource-Policy: same-origin` e recebe `Access-Control-Allow-Origin: *`. O cabeçalho do cartão usa uma imagem de 64 × 80 pixels e textos empilhados com quebra de linha; uma falha da imagem não ocupa uma coluna ao lado dos dados. O cartão solicita `msteams.width = Full`, mas permanece legível quando o host ignora ou substitui esse campo.
 
 A imagem é apenas decorativa. Se ela não carregar no Teams, o número da eGRDT, documentos, revisões e disciplinas continuam dentro do próprio cartão; as menções e a chamada final continuam sendo acrescentadas pelo Power Automate. O fluxo não deve condicionar a postagem ao sucesso da imagem.
 

@@ -127,7 +127,7 @@ async function testTeamsRendering() {
     assert.equal(images.length, 1);
     assert.equal(images[0].url, publicUrl);
     assert.equal(images[0].width, '64px');
-    assert.equal(images[0].height, '64px');
+    assert.equal(images[0].height, '80px');
     assert.equal(card.body.some(block => block.type === 'ColumnSet'), false, 'Mascote indisponível não pode espremer os dados em outra coluna');
     const readableText = card.body.filter(block => block.type !== 'Image');
     assert.ok(readableText.some(block => block.text === record.egrdtNumber && block.wrap));
