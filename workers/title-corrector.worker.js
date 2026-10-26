@@ -10,7 +10,21 @@ importScripts('../xlsx.full.min.js','../jszip.min.js',
   '../vendor/recon/ld_preservation.js','../vendor/recon/ld_title_writer.js',
   '../vendor/recon/offline_resources.js','../vendor/recon/offline_recon_audit_bases.js',
   '../vendor/recon/tag_reference_catalog.js','../vendor/recon/valve_list_catalog.js',
-  '../vendor/recon/valve_reparo_catalog.js','../vendor/recon/scon_escopo_title_catalog.js');
+  '../vendor/recon/valve_reparo_catalog.js','../vendor/recon/scon_escopo_title_catalog.js',
+  '../vendor/recon/scon_andaime.js',
+  '../vendor/recon/scon_apoio.js',
+  '../vendor/recon/scon_canteiro.js',
+  '../vendor/recon/scon_civil.js',
+  '../vendor/recon/scon_eletrica.js',
+  '../vendor/recon/scon_eqp_dinamico.js',
+  '../vendor/recon/scon_eqp_estatico.js',
+  '../vendor/recon/scon_est_metalica.js',
+  '../vendor/recon/scon_hvac.js',
+  '../vendor/recon/scon_instrumentacao.js',
+  '../vendor/recon/scon_loa.js',
+  '../vendor/recon/scon_recursos_etf.js',
+  '../vendor/recon/scon_seguranca.js',
+  '../vendor/recon/scon_tubulacao.js');
 const C=self.RECONTriagemCore,A=self.RECONAuditCore;
 let original=null,originalName='',report=[];
 const clean=x=>String(x==null?'':x).trim();
@@ -23,7 +37,13 @@ function merge(base,extras){
   const result={entries:[...(base?.entries||[]),...(extras?.entries||[])],byDocument:new Map(base?.byDocument||[]),byTagDiscipline:new Map(base?.byTagDiscipline||[])};
   for(const [key,value] of extras?.byDocument||[])if(!result.byDocument.has(key))result.byDocument.set(key,value);
   for(const [key,values] of extras?.byTagDiscipline||[])result.byTagDiscipline.set(key,[...(result.byTagDiscipline.get(key)||[]),...values]);
-  result.scon=extras?.scon?.entries?.length?extras.scon:base?.scon||null;
+  const chunks=Object.values(self.RECON_SCON_CHUNKS||{}).filter(chunk=>Array.isArray(chunk.rows));
+  const columns=['document','titleComplement','fullDescription','sconTag','discipline','itemType','drawingReference','row'];
+  const embedded=A.parseSconTitleCatalog({columns,rows:chunks.flatMap(chunk=>chunk.rows),sourceFile:'SCON - COMPONENTES E PROGRAMAÇÃO 2 (1).xlsx',sheet:'EXTRATO_COMPONENTES + PROGRAMACAO'});
+  const uploaded=extras?.scon?.entries?.length?extras.scon:base?.scon;
+  result.scon=uploaded?.entries?.length
+    ? A.buildSconReferenceIndex([...embedded.entries,...uploaded.entries],{sourceFile:'SCON controlada + base complementar',sheet:'FONTES COMBINADAS'})
+    : embedded;
   result.tagReference=A.parseTagReferenceCatalog(self.RECONTagReferenceCatalog);
   result.valveList=A.parseValveListCatalog(self.RECONValveListCatalog);
   result.valveReparo=A.parseValveReparoCatalog(self.RECONValveReparoCatalog);
