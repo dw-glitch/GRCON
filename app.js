@@ -4483,6 +4483,7 @@
     if (els.compatibilityStatus) els.compatibilityStatus.hidden = true;
     renderRelationPreview();
     updateInputMeta();
+    window.dispatchEvent(new CustomEvent("grcon:grdt-support-reset"));
   }
 
   function invalidateAnalysisResults(preserveIndex = false) {
@@ -6065,6 +6066,24 @@
   window.addEventListener("grcon:posting-classification-updated", () => { if (!state.busy && !state.downloadPreparing && els.exportZip.dataset.preparing !== "true") renderAll(); });
 
   window.GrconTriageUiApi = Object.freeze({
+    // Metadados exclusivamente de leitura: os arquivos físicos nunca são salvos
+    // e uma seleção passada jamais é restaurada automaticamente como autorizada.
+    preparationSnapshot: () => ({
+      schema: 1,
+      savedAt: Date.now(),
+      ldNames: state.ldFiles.slice(0, 12).map(file => String(file.name || "")),
+      relationName: state.listFiles[0] && String(state.listFiles[0].name || "") || "",
+      folderName: state.packageFiles[0] && String(state.packageFiles[0].webkitRelativePath || "").split("/")[0] || "",
+      relationText: String(state.relationSavedText || "").slice(0, 30000),
+      chosen: [...state.selected].slice(0, 300).map(index => {
+        const row = state.results[index];
+        return row ? { document: String(row.document || ""), revision: String(row.revision || ""),
+          manual: state.manualForceInclude.has(index) } : null;
+      }).filter(Boolean),
+      filter: String(state.filter || "todos"),
+      search: String(state.search || "").slice(0, 256),
+      recentDays: state.recentDays,
+    }),
     snapshot: () => ({
       filter: state.filter,
       sheetFilter: state.sheetFilter,
