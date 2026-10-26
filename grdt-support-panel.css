@@ -1,0 +1,107 @@
+/* GRCON — Central de Apoio: baixa densidade, contexto isolado, sem novo dashboard. */
+html[data-app="GRCON"] #grdt-support-panel {
+  --support-border: var(--border-color, #d7e0e9);
+  --support-muted: var(--text-muted, #64748b);
+  color: var(--text-color, inherit);
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-block: 0 12px;
+  border: 1px solid var(--support-border);
+  border-radius: 12px;
+  background: var(--card-bg, var(--surface, #fff));
+  min-width: 0;
+}
+html[data-app="GRCON"] #grdt-support-panel [hidden] { display: none !important; }
+#grdt-support-panel .grdt-support-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+#grdt-support-panel .grdt-support-head strong { font-size: 13px; font-weight: 700; }
+#grdt-support-panel .grdt-support-head small,
+#grdt-support-panel .grdt-support-muted {
+  color: var(--support-muted); font-size: 11px; line-height: 1.5; margin: 0;
+}
+#grdt-support-panel .grdt-support-grid {
+  display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(220px, 1fr);
+  gap: 12px; align-items: start;
+}
+#grdt-support-panel .grdt-support-grid:not(:has(#grdt-support-resume:not([hidden]))) {
+  grid-template-columns: minmax(0, 1fr);
+}
+#grdt-support-panel .grdt-support-search-area { min-width: 0; }
+#grdt-support-panel label,
+#grdt-support-panel .grdt-support-resume strong {
+  font-weight: 650; font-size: 12px; display: block; margin-bottom: 6px;
+}
+#grdt-support-panel .grdt-support-search-row { display: flex; gap: 8px; align-items: start; }
+#grdt-support-panel textarea {
+  font: inherit; font-size: 12px; line-height: 1.4; padding: 9px 10px;
+  border: 1px solid var(--support-border); color: inherit; background: var(--input-bg, transparent);
+  border-radius: 8px; min-height: 39px; max-height: 95px; box-sizing: border-box;
+  resize: vertical; width: 100%; flex: 1; min-width: 0;
+}
+#grdt-support-panel button { cursor: pointer; }
+#grdt-support-panel .grdt-support-search-row > button,
+#grdt-support-panel .grdt-support-resume button,
+#grdt-support-panel .grdt-support-filter {
+  min-height: 38px; padding: 7px 12px; border: 1px solid var(--support-border);
+  border-radius: 8px; background: var(--button-secondary-bg, var(--surface, transparent));
+  color: inherit; font-size: 12px; font-weight: 650;
+}
+#grdt-support-panel .grdt-support-search-row > button {
+  background: var(--primary, #155c8a); color: #fff; border-color: transparent;
+}
+#grdt-support-panel .grdt-support-resume {
+  border-left: 1px solid var(--support-border); padding-left: 12px; min-width: 0;
+}
+#grdt-support-panel .grdt-support-resume p { margin: 0 0 8px; font-size: 11px; line-height: 1.5; color: var(--support-muted); }
+#grdt-support-panel .grdt-support-search-info { display: block; margin-top: 5px; overflow-wrap: anywhere; }
+#grdt-support-panel .grdt-support-results {
+  margin-top: 9px; max-height: 188px; overflow: auto;
+  border: 1px solid var(--support-border); border-radius: 8px;
+}
+#grdt-support-panel .grdt-support-result-list { display: grid; }
+#grdt-support-panel .grdt-support-result {
+  display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(98px, .65fr) minmax(0, 1.5fr);
+  align-items: center; gap: 8px; width: 100%; border: 0; background: transparent;
+  border-bottom: 1px solid var(--support-border); padding: 7px 9px; text-align: left; color: inherit;
+  font-size: 12px;
+}
+#grdt-support-panel .grdt-support-result:hover,
+#grdt-support-panel .grdt-support-filter:hover { background: var(--hover-bg, rgba(100,116,139,.08)); }
+#grdt-support-panel .grdt-support-result:last-child { border-bottom: 0; }
+#grdt-support-panel .grdt-support-identity { min-width: 0; display: grid; gap: 1px; }
+#grdt-support-panel .grdt-support-identity strong { overflow-wrap: anywhere; font-weight: 650; }
+#grdt-support-panel .grdt-support-identity small { font-size: 10px; color: var(--support-muted); }
+#grdt-support-panel .grdt-support-result-title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#grdt-support-panel .grdt-support-result-status { overflow-wrap: anywhere; font-size: 11px; }
+#grdt-support-panel .grdt-support-attention { display: grid; gap: 8px; }
+#grdt-support-panel .grdt-support-attention-head strong { font-size: 12px; font-weight: 650; }
+#grdt-support-panel .grdt-support-attention-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+#grdt-support-panel .grdt-support-filter { min-height: 30px; padding: 5px 9px; font-weight: 500; }
+#grdt-support-panel #grdt-support-detail {
+  width: min(590px, calc(100vw - 32px)); max-height: min(75vh, 670px); overflow: auto;
+  padding: 18px; color: var(--text-color, inherit); background: var(--card-bg, #fff);
+  border: 1px solid var(--support-border); border-radius: 12px;
+}
+#grdt-support-panel #grdt-support-detail::backdrop { background: rgba(15,23,42,.45); }
+#grdt-support-panel .grdt-support-detail-close { float: right; border: 1px solid var(--support-border); background: transparent; color: inherit; border-radius: 7px; padding: 6px 10px; }
+#grdt-support-panel .grdt-support-detail-body h3 { font-size: 15px; margin: 3px 45px 8px 0; overflow-wrap: anywhere; }
+#grdt-support-panel .grdt-support-revisions { display: grid; gap: 6px; margin-block: 12px; }
+#grdt-support-panel .grdt-support-revision { border: 1px solid var(--support-border); border-radius: 8px; padding: 9px; display: grid; gap: 3px; font-size: 12px; }
+#grdt-support-panel .grdt-support-revision small { color: var(--support-muted); }
+#grdt-support-panel :is(button,textarea):focus-visible { outline: 2px solid var(--primary, #155c8a); outline-offset: 2px; }
+@media (max-width: 1150px) {
+  #grdt-support-panel .grdt-support-grid { grid-template-columns: minmax(0, 1fr); }
+  #grdt-support-panel .grdt-support-resume { border-left: 0; border-top: 1px solid var(--support-border); padding: 9px 0 0; }
+}
+@media (max-width: 720px) {
+  html[data-app="GRCON"] #grdt-support-panel { padding: 10px; }
+  #grdt-support-panel .grdt-support-search-row { flex-wrap: wrap; }
+  #grdt-support-panel .grdt-support-search-row > button { width: 100%; }
+  #grdt-support-panel .grdt-support-result { grid-template-columns: minmax(0, 1fr) minmax(85px, .5fr); }
+  #grdt-support-panel .grdt-support-result-title { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #grdt-support-panel * { scroll-behavior: auto; transition: none; animation: none; }
+}
