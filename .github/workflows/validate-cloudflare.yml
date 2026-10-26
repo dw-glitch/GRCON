@@ -8,6 +8,7 @@ on:
       - "scripts/verify-cloudflare-package.mjs"
       - "scripts/validar-cloudflare-browser.cjs"
       - "tests/cloudflare_deploy.cjs"
+      - "tests/sigem_turso*.cjs"
       - "wrangler.jsonc"
       - "package.json"
       - "package-lock.json"
@@ -54,6 +55,11 @@ jobs:
       - name: Validar configuração Wrangler sem publicar
         run: npx --yes wrangler@4.34.0 deploy --config wrangler.jsonc --dry-run --outdir "$RUNNER_TEMP/wrangler-dry-run"
 
+      - name: Validar conexão Turso no runtime Workers
+        run: |
+          npm install --no-save --package-lock=false miniflare@4.20250902.0
+          node tests/sigem_turso_workerd.cjs
+
       - name: Instalar Chromium
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
@@ -91,3 +97,4 @@ jobs:
             artifacts/cloudflare-browser/metrics.json
             artifacts/cloudflare-browser/allocation-metrics.json
           if-no-files-found: warn
+
