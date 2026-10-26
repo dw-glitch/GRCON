@@ -105,8 +105,9 @@ export async function readRows(db, source, after, limit = 250) {
 }
 export async function copyPage(db, bucket, source, after, rows) {
   checkPage(source, after, rows);
-  const saved = (await db.execute(`SELECT state FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`, scopeArgs(source))).rows[0];
+  const saved = (await db.execute(`SELECT state,source_json,expected_count FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`, scopeArgs(source))).rows[0];
   if (!saved) throw fail('SIGEM_NOT_INITIALIZED');
+  if (saved.source_json !== canonical(source) || saved.expected_count !== source.record_count) throw fail('SIGEM_SOURCE_CHANGED');
   const bytes = canonical(rows), checksum = await sha256(bytes);
   const key = `sigem-backups/v1/${source.workspace_id}/${source.contract_id}/${source.id}/rows-${after + 1}-${after + rows.length}-${checksum}.json`;
   if (!bucket?.put || !bucket?.get) throw fail('SIGEM_BACKUP_UNAVAILABLE', 503);

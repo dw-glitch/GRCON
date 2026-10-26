@@ -80,7 +80,10 @@ export async function handleSigemStorage(request, env) {
     if (env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED !== 'true') throw fail('SIGEM_CAPACITY_CHECK_REQUIRED', 409);
     const db = tursoClient(env), bucket = env.GRCON_DOCUMENTS;
     if (!bucket) throw fail('SIGEM_BACKUP_UNAVAILABLE', 503);
-    if (action !== 'audit') { await initialize(db); await beginSnapshot(db, source); }
+    // Prepare the schema and snapshot on its first page, rather than repeating
+    // six remote setup statements for every batch. copyPage still rechecks the
+    // immutable source metadata before each backup or destination write.
+    if (action === 'seal' || (action === 'copy' && Number(input.after) === 0)) { await initialize(db); await beginSnapshot(db, source); }
     if (action === 'copy' || action === 'audit') {
       const after = Number(input.after);
       if (!Number.isInteger(after) || after < 0 || after >= source.record_count || after % 250 !== 0) throw fail('SIGEM_PAGE_INVALID', 400);
