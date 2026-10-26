@@ -23,7 +23,9 @@ Além dos campos já existentes, o corpo entregue ao Power Automate agora inclui
 - `message.fallbackText`: texto completo para contingência;
 - `message.mascot`: metadados da imagem usada pelo cartão.
 
-O PNG fica versionado em `/assets/mascot/grcon-mascot-teams-thumbsup.png`. Ele é uma extração válida e transparente da pose oficial de joinha do sprite HD do GRCON; o teste de regressão confere a estrutura completa do PNG para impedir a publicação de arquivos truncados. O cartão usa uma URL HTTPS pública e imutável do próprio repositório GRCON para que a imagem não dependa da sessão do usuário, do navegador, do SharePoint ou de URL temporária. Depois do merge, o mesmo arquivo também fica disponível no deploy estático do GRCON/Vercel no caminho `/assets/mascot/grcon-mascot-teams-thumbsup.png`.
+O PNG fica versionado em `/assets/mascot/grcon-mascot-teams-thumbsup.png`. O endereço padrão é `https://grcon-cloudflare.grcon-qualidade.workers.dev/assets/mascot/grcon-mascot-teams-thumbsup.png`, servido publicamente sem autenticação. Não use `raw.githubusercontent.com/dw-glitch/GRCON/...`: o repositório é privado e o Teams recebe HTTP 404. O teste de regressão confere a estrutura completa do PNG e a publicação verifica os bytes e os cabeçalhos da imagem.
+
+Somente esse PNG decorativo dispensa `Cross-Origin-Resource-Policy: same-origin` e recebe `Access-Control-Allow-Origin: *`. O cabeçalho do cartão usa uma imagem de 64 × 80 pixels e textos empilhados com quebra de linha; uma falha da imagem não ocupa uma coluna ao lado dos dados. O cartão solicita `msteams.width = Full`, mas permanece legível quando o host ignora ou substitui esse campo.
 
 A imagem é apenas decorativa. Se ela não carregar no Teams, o número da eGRDT, documentos, revisões e disciplinas continuam dentro do próprio cartão; as menções e a chamada final continuam sendo acrescentadas pelo Power Automate. O fluxo não deve condicionar a postagem ao sucesso da imagem.
 
@@ -33,7 +35,7 @@ Não recrie o fluxo. Preserve gatilho, Parse JSON, validações, destino **Quali
 
 1. mantenha as ações atuais que obtêm as identidades/menções de Adriana e Janecleide;
 2. substitua a ação final **Post message in a chat or channel** por **Post card in a chat or channel**, mantendo `Flow bot`, `Chat em grupo` e **Qualidade - Documentação**;
-3. no campo **Cartão Adaptável**, use o objeto dinâmico `message.adaptiveCard` recebido do GRCON e acrescente as entidades `msteams.entities` com os resultados das duas ações de menção;
+3. preserve `msteams.width = Full` ao acrescentar as entidades de menção; no campo **Cartão Adaptável**, use o objeto dinâmico `message.adaptiveCard` recebido do GRCON e acrescente as entidades `msteams.entities` com os resultados das duas ações de menção;
 4. derive o UPN em tempo de execução a partir de `body/atMention`; não grave e-mails corporativos no repositório nem em valores literais do cartão;
 5. não deixe a ação antiga de mensagem ativa em paralelo com a ação de cartão, para que um clique continue gerando somente uma notificação;
 6. teste as menções reais no locatário antes de ativar. O texto `<at>...</at>` e a entidade correspondente precisam existir juntos para que o Teams gere a notificação.
@@ -41,7 +43,7 @@ Não recrie o fluxo. Preserve gatilho, Parse JSON, validações, destino **Quali
 No fluxo atual, o campo **Cartão Adaptável** usa a expressão abaixo. Ela preserva o cartão produzido pelo GRCON, acrescenta uma linha de chamada e cria as duas entidades de menção a partir dos tokens já obtidos pelo conector do Teams:
 
 ```text
-@{setProperty(setProperty(body('Parse_JSON')?['message']?['adaptiveCard'],'body',union(body('Parse_JSON')?['message']?['adaptiveCard']?['body'],createArray(json(concat('{"type":"TextBlock","text":"',outputs('Menção_-_Adriana')?['body/atMention'],' ',outputs('Menção_-_Janecleide')?['body/atMention'],', favor realizar a postagem.","wrap":true,"spacing":"Medium","separator":true}'))))),'msteams',json(concat('{"entities":[{"type":"mention","text":"',outputs('Menção_-_Adriana')?['body/atMention'],'","mentioned":{"id":"',replace(replace(outputs('Menção_-_Adriana')?['body/atMention'],'<at>',''),'</at>',''),'","name":"Adriana Nojosa da Silva"}},{"type":"mention","text":"',outputs('Menção_-_Janecleide')?['body/atMention'],'","mentioned":{"id":"',replace(replace(outputs('Menção_-_Janecleide')?['body/atMention'],'<at>',''),'</at>',''),'","name":"Janecleide Maria de Oliveira"}}]}')))}
+@{setProperty(setProperty(body('Parse_JSON')?['message']?['adaptiveCard'],'body',union(body('Parse_JSON')?['message']?['adaptiveCard']?['body'],createArray(json(concat('{"type":"TextBlock","text":"',outputs('Menção_-_Adriana')?['body/atMention'],' ',outputs('Menção_-_Janecleide')?['body/atMention'],', favor realizar a postagem.","wrap":true,"spacing":"Medium","separator":true}'))))),'msteams',json(concat('{"width":"Full","entities":[{"type":"mention","text":"',outputs('Menção_-_Adriana')?['body/atMention'],'","mentioned":{"id":"',replace(replace(outputs('Menção_-_Adriana')?['body/atMention'],'<at>',''),'</at>',''),'","name":"Adriana Nojosa da Silva"}},{"type":"mention","text":"',outputs('Menção_-_Janecleide')?['body/atMention'],'","mentioned":{"id":"',replace(replace(outputs('Menção_-_Janecleide')?['body/atMention'],'<at>',''),'</at>',''),'","name":"Janecleide Maria de Oliveira"}}]}')))}
 ```
 
 Essa composição segue o requisito do Teams para menções em Adaptive Cards: o texto `<at>...</at>` deve estar em um `TextBlock` e cada usuário deve possuir uma entidade `mention` correspondente em `msteams.entities`.
