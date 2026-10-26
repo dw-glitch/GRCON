@@ -75,6 +75,22 @@ export function TitleCorrectorApp(){
    const csv='\ufeff'+[header,...data].map(line=>line.map(csvEscape).join(';')).join('\r\n');
    fileDownload(new TextEncoder().encode(csv),'GRCON_Relatorio_Titulos.csv','text/csv;charset=utf-8');
  };
+ const exportExcel=async()=>{
+   setBusy(true);setMessage('');
+   try{const result:{bytes:Uint8Array;name:string}=await call('report',{rows:visible});
+     fileDownload(result.bytes,result.name,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+     setMessage('Relatório Excel das '+visible.length+' linhas filtradas gerado.');
+   }catch(error){setMessage('Falha no relatório: '+(error instanceof Error?error.message:String(error)));}
+   finally{setBusy(false);}
+ };
+ const exportPackage=async()=>{
+   setBusy(true);setMessage('');
+   try{const result:{bytes:Uint8Array;name:string;items:string[]}=await call('package',{rows:rows.filter(r=>r.decision==='approved'),reportRows:visible});
+     fileDownload(result.bytes,result.name,'application/zip');
+     setMessage('Pacote gerado com '+result.items.length+' arquivo(s).');
+   }catch(error){setMessage('Falha no pacote: '+(error instanceof Error?error.message:String(error)));}
+   finally{setBusy(false);}
+ };
  const ITEM_HEIGHT=106,viewport=500,start=Math.max(0,Math.floor(scrollTop/ITEM_HEIGHT)-4),end=Math.min(visible.length,start+Math.ceil(viewport/ITEM_HEIGHT)+9);
  return <div className="tc-root">
    <header className="tc-header"><div><small>FERRAMENTAS ADICIONAIS / QUALIDADE DOCUMENTAL</small><h2>Corretor Inteligente de Títulos</h2><p>Identifique o que é, onde se aplica e para que serve — com evidências verificáveis e aprovação antes da alteração.</p></div><button type="button" className="secondary-button" data-grcon-view="additional-tools">Voltar às ferramentas</button></header>
@@ -104,7 +120,7 @@ export function TitleCorrectorApp(){
        </div>)}
       </div>
      </div>
-     <div className="tc-actions"><p>Somente os títulos aprovados serão escritos na cópia. Todos os demais dados da LD permanecem preservados.</p><button className="secondary-button" disabled={!visible.length||busy} onClick={exportReport}>Relatório CSV filtrado</button><button className="primary-button" disabled={!totalApproved||busy} onClick={()=>void exportLd()}>Gerar cópia da LD ({totalApproved})</button></div>
+     <div className="tc-actions"><p>Somente os títulos aprovados serão escritos na cópia. Todos os demais dados da LD permanecem preservados.</p><button className="secondary-button" disabled={!visible.length||busy} onClick={exportReport}>Relatório CSV filtrado</button><button className="secondary-button" disabled={!visible.length||busy} onClick={()=>void exportExcel()}>Relatório Excel</button><button className="secondary-button" disabled={!visible.length||busy} onClick={()=>void exportPackage()}>Baixar pacote ZIP</button><button className="primary-button" disabled={!totalApproved||busy} onClick={()=>void exportLd()}>Gerar cópia da LD ({totalApproved})</button></div>
    </section></>}
    {active&&<div className="tc-overlay" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null);}}><aside className="tc-drawer" role="dialog" aria-modal="true" aria-label="Revisar título">
       <header><div><small>REVISÃO DOCUMENTAL</small><h3>{active.document}</h3><p>{labels[active.issue]||active.issue} · {active.confidence}</p></div><button className="secondary-button" onClick={()=>setDetail(null)} aria-label="Fechar painel">Fechar</button></header>
