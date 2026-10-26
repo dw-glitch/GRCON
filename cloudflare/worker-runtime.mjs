@@ -2,8 +2,9 @@ import {WorkflowEntrypoint} from 'cloudflare:workers';
 import worker from './worker-entry.mjs';
 import {handleJobsRoute,runJob,recoverJobs,recordMetric} from './background-jobs.mjs';
 import {buildBackgroundReport} from './background-report.mjs';
+import {runMigration} from './sigem-migration-job.mjs';
 export class GrconTaskWorkflow extends WorkflowEntrypoint {
- async run(event,step){return runJob(this.env,event.payload,step,buildBackgroundReport);}
+ async run(event,step){return event.payload?.kind==='sigem-migration'?runMigration(this.env,event.payload,step):runJob(this.env,event.payload,step,buildBackgroundReport);}
 }
 export default {
  async fetch(request,env,ctx){
@@ -17,3 +18,4 @@ export default {
   return worker.scheduled(controller,env,ctx);
  }
 };
+

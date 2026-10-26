@@ -176,6 +176,31 @@
       const connectionError = Object.prototype.hasOwnProperty.call(connectionMessages, status.turso.error) ? status.turso.error : "TURSO_UNAVAILABLE";
       const copied = (status.turso.snapshots || []).filter(s => s.state === "verified");
       host.innerHTML = `<dl class="grcon-admin-storage-metrics"><div><dt>Fonte oficial</dt><dd>Supabase</dd></div><div><dt>Modo do servidor</dt><dd>${escape(status.mode)}</dd></div><div><dt>Banco Supabase completo</dt><dd>${escape(mib(status.databaseBytes))}</dd></div><div><dt>Tabela da Consulta Geral completa</dt><dd>${escape(mib(status.sourceBytes))}</dd></div><div><dt>Snapshots deste contrato</dt><dd>${escape(Number(status.snapshots || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Registros deste contrato</dt><dd>${escape(Number(status.records || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Turso</dt><dd>${status.turso.connected ? "Conexão confirmada" : status.turso.configured ? "Conexão não confirmada" : "Configuração pendente"}</dd></div><div><dt>Banco Turso completo</dt><dd>${escape(mib(status.turso.databaseBytes))}</dd></div><div><dt>Cópias validadas neste contrato</dt><dd>${copied.length}</dd></div></dl><p>A fonte oficial permanece no Supabase. A ativação do Turso depende da conclusão dos testes de migração e recuperação.</p><div class="grcon-admin-row-actions"><button type="button" data-storage-refresh>Verificar conexão</button><button type="button" data-storage-report>Baixar relatório</button><button type="button" data-storage-copy ${status.turso.connected && status.externalStorageAuthorized && status.preflightApproved ? "" : "disabled"}>Iniciar / retomar cópia</button></div><p data-storage-progress role="status" aria-live="polite"></p>`;
+      const backgroundButton=document.createElement("button");
+      backgroundButton.type="button";backgroundButton.dataset.storageBackground="";backgroundButton.textContent="Copiar em segundo plano";
+      backgroundButton.disabled=!(status.turso.connected&&status.externalStorageAuthorized&&status.preflightApproved);
+      host.querySelector(".grcon-admin-row-actions").append(backgroundButton);
+      const backgroundProgress=document.createElement("p");backgroundProgress.setAttribute("role","status");backgroundProgress.dataset.storageBackgroundProgress="";host.append(backgroundProgress);
+      const monitor=async()=>{
+        if(!valid())return;
+        try{
+          const job=await api("background-status");if(!job.started)return;
+          state.migrationReport={...job,cutoverReady:false,cleanupAllowed:false,officialSource:"supabase"};
+          const failed=(job.reports||[]).find(lane=>lane.status==="failed");
+          backgroundProgress.textContent=job.complete?`Cópia e auditoria integral concluídas: ${job.validated.toLocaleString("pt-BR")} registros. A fonte oficial permanece no Supabase; restauração e homologação ainda são necessárias.`:
+            `Cópia em segundo plano: ${Number(job.copied||0).toLocaleString("pt-BR")} de ${Number(job.records||0).toLocaleString("pt-BR")} registros; auditoria integral: ${Number(job.validated||0).toLocaleString("pt-BR")}. `+
+            (!job.inventoryStable?"O inventário mudou; reconcilie as versões antes da homologação.":failed?"Execução interrompida: "+failed.error+". Os lotes foram preservados.":"Pode sair desta tela; o servidor continua o processamento.");
+          backgroundButton.disabled=job.complete||!failed;
+          host.querySelector("[data-storage-copy]").disabled=!failed;
+          if(!job.complete&&!failed)root.setTimeout(()=>void monitor(),10000);
+        }catch(error){if(valid())backgroundProgress.textContent="Não foi possível atualizar o progresso. A execução do servidor independe desta tela.";}
+      };
+      backgroundButton.addEventListener("click",async()=>{
+        backgroundButton.disabled=true;host.querySelector("[data-storage-copy]").disabled=true;
+        try{await api("background-copy",{});backgroundProgress.textContent="Cópia iniciada no servidor. Conferindo progresso…";await monitor();}
+        catch(error){if(valid()){backgroundProgress.textContent=error.message;backgroundButton.disabled=false;host.querySelector("[data-storage-copy]").disabled=false;}}
+      });
+      void monitor();
       if (!status.turso.connected) {
         const diagnosis = document.createElement("p"); diagnosis.dataset.storageDiagnosis = "";
         diagnosis.setAttribute("role", "status");
@@ -307,6 +332,7 @@
   root.addEventListener("grcon:contract-context-changed", () => { state.workspace = ""; close(); permissions(); });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", permissions, { once:true }); else permissions();
 })(window);
+
 
 
 

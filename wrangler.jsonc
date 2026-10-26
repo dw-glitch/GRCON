@@ -7,6 +7,7 @@
   "ai": {"binding": "AI"},
   "observability": {"enabled": true},
   "workflows": [{"name": "grcon-tasks", "binding": "GRCON_TASKS", "class_name": "GrconTaskWorkflow"}],
+  "services": [{"binding":"GRCON_MIGRATION_SELF","service":"grcon-cloudflare"}],
   "vars": {
     "GRCON_SIGEM_STORAGE_MODE": "supabase",
     "GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED": "true",
@@ -42,4 +43,5 @@
     "run_worker_first": ["/api/*"]
   }
 }
+
 
