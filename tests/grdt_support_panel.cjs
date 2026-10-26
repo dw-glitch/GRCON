@@ -42,5 +42,12 @@ const ui = source("grdt_support_panel.js");
 for (const [, id] of ui.matchAll(/\bbyId\("([^"]+)"\)/g)) {
   assert.ok(html.includes('id="' + id + '"'), "UI consulta ID inexistente: " + id);
 }
+assert.match(app, /preparationSnapshot: \(\) => \(\{/, "prévia da preparação exposta");
+assert.match(app, /grcon:grdt-support-reset/, "reset intencional limpa preparação");
+assert.match(ui, /PREPARATION_PREFIX/, "persistência de preparação isolada");
+assert.match(ui, /PREPARATION_TTL/, "rascunhos possuem prazo máximo");
+assert.match(ui, /root\.localStorage\.removeItem\(key\)/, "limpeza após reset");
+assert.match(ui, /prepareRelationDraft\(candidate\)/, "retomada exige reconferência pelo operador");
+assert.doesNotMatch(ui, /manualForceInclude\.add\(|state\.selected\.add\(/, "não reautorizar seleção antiga");
 new vm.Script(source("grdt_support_panel.js"), { filename: "grdt_support_panel.js" });
 console.log("Central de Apoio: identidade exata, revisões, layout, integração de triagem e syntax OK.");
