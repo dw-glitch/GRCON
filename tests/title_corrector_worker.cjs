@@ -50,5 +50,23 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  assert.equal(outputRows[1][1],approved.proposed);
  assert.equal(outputRows[2][1],originalRows[2][1],'outra linha foi alterada');
  await assert.rejects(request(3,'export',{rows:[{...first,id:'forjado',decision:'approved'}]}),/Selecione e aprove/);
+ // Duas LDs com códigos repetidos: linhas e saídas devem permanecer isoladas.
+ const batch=await request(4,'analyzeBatch',{files:[
+  {name:'LD_A.xlsx',bytes:fixture},{name:'LD_B.xlsx',bytes:fixture}],codes:[],sourceMode:'auto'});
+ assert.equal(batch.rows.length,4,'O lote de duas LDs deve retornar quatro documentos');
+ assert.notEqual(batch.rows[0].id,batch.rows[2].id,'Os IDs precisam distinguir arquivos diferentes');
+ assert.equal(batch.rows[0].sourceFile,'LD_A.xlsx');
+ assert.equal(batch.rows[2].sourceFile,'LD_B.xlsx');
+ const outputs=await request(5,'exportBatch',{rows:[
+  {...batch.rows[0],decision:'approved',proposed:batch.rows[0].proposed+' - A'},
+  {...batch.rows[2],decision:'approved',proposed:batch.rows[2].proposed+' - B'}]});
+ assert.equal(outputs.preservation.valid,true);
+ assert.equal(outputs.files,2);
+ assert.ok(outputs.name.endsWith('.zip'));
+ context.__zipBytes=outputs.bytes;
+ const zip=await run('JSZip.loadAsync(__zipBytes)','multi-lD');
+ const outputNames=Object.keys(zip.files).filter(n=>n.endsWith('.xlsx'));
+ assert.equal(outputNames.length,2,'É obrigatória uma cópia por LD');
+ await assert.rejects(request(6,'exportBatch',{rows:[{...batch.rows[0],id:'falso',decision:'approved'}]}),/títulos aprovados/);
  console.log('title_corrector_worker: análise real, SCON completa, TAG exata, exportação e preservação OK');
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -22,3 +22,4 @@ jobs:
           node-version: '22'
       - run: node tests/title_corrector_integration.cjs
       - run: node tests/title_corrector_worker.cjs
+      - run: node tests/title_ai_security.mjs
