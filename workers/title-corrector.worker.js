@@ -1,6 +1,6 @@
 'use strict';
 // Corretor de títulos: os arquivos e as bases são processados no próprio navegador.
-importScripts('../xlsx.full.min.js','../jszip.min.js',
+importScripts('../xlsx.full.min.js','../jszip.min.js','title-corrector-reports.js',
   '../vendor/recon/recon_contracts.js','../vendor/recon/core.js',
   '../vendor/recon/ld_conflicts.js','../vendor/recon/allocation_confirmation_sources.js',
   '../vendor/recon/non_tagged_title_rules.js','../vendor/recon/allocation_core.js',
@@ -138,6 +138,8 @@ self.onmessage=async({data})=>{
    let result;
    if(op==='analyze')result=await analyze(input);
    else if(op==='export')result=await exportLd(input.rows);
+   else if(op==='report')result=self.GrconTitleReports.report(input.rows);
+   else if(op==='package')result=await self.GrconTitleReports.package(input.rows,input.reportRows,exportLd);
    else throw Error('Operação desconhecida.');
    const transfers=result?.bytes instanceof Uint8Array?[result.bytes.buffer]:[];
    self.postMessage({id,result},transfers);
