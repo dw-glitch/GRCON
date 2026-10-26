@@ -4,6 +4,7 @@ import {syncSharepoint} from './teams-sharepoint.mjs';
 import {handleGithubRoute,verifyGithubToken} from './teams-github.mjs';
 import {generateExplanation,INTENTS,SOURCE_LABELS,evidenceFor,modelInput} from './document-ai.mjs';
 import {validateDecision,allocationPrompt,recommendAllocation,automaticContextKeys,validateAutomaticBatch} from './allocation-ai.mjs';
+import {prepareTitlePrompt,suggestTitle} from './title-ai.mjs';
 import AllocationCore from '../allocation_generator_core.js';
 
 const PREFIX = "/api/document-vault/";
@@ -128,6 +129,20 @@ async function aiBody(request,max=3000){
  for(;;){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>max){await reader.cancel();throw Object.assign(Error('Consulta muito extensa.'),{status:413});}parts.push(value);}
  const bytes=new Uint8Array(size);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}
  try{return JSON.parse(new TextDecoder().decode(bytes));}catch{throw Object.assign(Error('Consulta inválida.'),{status:400});}
+}
+async function handleTitleAi(request,env){
+ if(request.method!=='POST')return apiError('Método inválido.',405,'METHOD_NOT_ALLOWED');
+ const user=await authenticatedUser(request,env);
+ const body=await aiBody(request,7000),workspace=workspaceFrom(request,body);
+ if(!workspace)return apiError('Contrato inválido.',400,'WORKSPACE_REQUIRED');
+ if(!aiEnabled(env))return apiError('IA indisponível. O corretor determinístico continua disponível.',503,'AI_NOT_CONFIGURED');
+ const prepared=prepareTitlePrompt(body);
+ const budget=await rpc(env,'grcon_document_ai_budget',{operation:'status',target_workspace:workspace,actor_id:user.id});
+ if(!budget.available)return apiError('Limite da IA atingido. A revisão manual permanece disponível.',429,'AI_DAILY_LIMIT');
+ const slot=await rpc(env,'grcon_document_ai_budget',{operation:'reserve',target_workspace:workspace,actor_id:user.id});
+ if(!slot.allowed)return apiError('Limite individual da IA atingido.',429,'AI_LIMIT');
+ try{return json({ok:true,...await suggestTitle(env.AI,prepared)});}
+ catch{return apiError('Não foi possível verificar a escolha da IA. Use a sugestão técnica.',503,'AI_UNAVAILABLE');}
 }
 async function handleDocumentAi(request,env,probe=false){
  if(probe){
@@ -762,6 +777,7 @@ async function routeVault(request, env) {
   if(action==='allocation-generate'&&request.method==='POST')return handleAutomaticAllocation(request,env);
   if(action==='allocation-confirm'&&request.method==='POST')return handleAllocation(request,env,'confirm');
   if(action==='allocation-ai'&&request.method==='POST')return handleAllocation(request,env,'recommend');
+  if(action==='title-ai'&&request.method==='POST')return handleTitleAi(request,env);
   if(action==='ai-probe'&&request.method==='POST')return handleDocumentAi(request,env,true);
   if(action==='ai-status'&&request.method==='GET')return handleDocumentAi(request,env);
   if(action==='ai-explain'&&request.method==='POST')return handleDocumentAi(request,env);
