@@ -61,9 +61,9 @@ export async function handleSigemStorage(request, env) {
           await db.execute('SELECT 1 AS connected'); turso.connected = true;
           try {
             consent(env); // connection probe sends no corporate identifiers
+            turso.databaseBytes = (await db.execute('PRAGMA page_count')).rows[0]?.page_count * (await db.execute('PRAGMA page_size')).rows[0]?.page_size;
             turso.snapshots = (await db.execute(`SELECT id,state,expected_count,checksum,verified_at FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? ORDER BY id`, [input.workspace, status.contractId])).rows;
             turso.initialized = true;
-            turso.databaseBytes = (await db.execute('PRAGMA page_count')).rows[0]?.page_count * (await db.execute('PRAGMA page_size')).rows[0]?.page_size;
           } catch { turso.initialized = false; }
         } catch (error) {
           // Only locally defined codes are returned, never upstream messages or secrets.
@@ -94,4 +94,5 @@ export async function handleSigemStorage(request, env) {
     return reply({ok: false, error: code, message: code}, error.status || 503);
   }
 }
+
 

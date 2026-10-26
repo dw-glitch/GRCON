@@ -8,6 +8,9 @@
   "observability": {"enabled": true},
   "workflows": [{"name": "grcon-tasks", "binding": "GRCON_TASKS", "class_name": "GrconTaskWorkflow"}],
   "vars": {
+    "GRCON_SIGEM_STORAGE_MODE": "supabase",
+    "GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED": "true",
+    "GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED": "true",
     "GRCON_DOCUMENT_AI_ENABLED": "true",
     "SUPABASE_URL": "https://kvyrttccwzdhasplfxnr.supabase.co",
     "R2_BUCKET_NAME": "grcon-documents",
@@ -39,3 +42,4 @@
     "run_worker_first": ["/api/*"]
   }
 }
+

@@ -16,6 +16,9 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
    assert.equal(opts.headers.authorization,'Bearer never-log');
    const sql=JSON.parse(opts.body).requests[0].stmt.sql;
    statements.push(sql);
+   if(sql==='PRAGMA page_count')return httpResult({page_count:1});
+   if(sql==='PRAGMA page_size')return httpResult({page_size:4096});
+   if(mode==='empty'&&sql.includes('FROM sigem_snapshots'))return Response.json({results:[{type:'error',error:{message:'no such table'}}]});
    if(tursoFailure==='timeout')throw new DOMException('never-log upstream secret','TimeoutError');
    if(tursoFailure==='network')throw new Error('never-log upstream secret');
    if(tursoFailure==='protocol')return Response.json({results:[{type:'error',error:{message:'never-log upstream secret',code:'never-log'}}]});
@@ -57,6 +60,8 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   const invalids=[['TURSO_DATABASE_URL','https://evil.test','TURSO_URL_INVALID'],['TURSO_DATABASE_URL','"libsql://db-org.turso.io"','TURSO_URL_INVALID'],['TURSO_AUTH_TOKEN','Bearer never-log','TURSO_TOKEN_FORMAT_INVALID'],['TURSO_AUTH_TOKEN','TURSO_AUTH_TOKEN=never-log','TURSO_TOKEN_FORMAT_INVALID'],['TURSO_AUTH_TOKEN','"never-log"','TURSO_TOKEN_FORMAT_INVALID'],['TURSO_AUTH_TOKEN','never\nlog','TURSO_TOKEN_FORMAT_INVALID'],['TURSO_AUTH_TOKEN','   ','TURSO_NOT_CONFIGURED']];
   for(const [key,value,code] of invalids){calls=[];status=await (await route(req('status'),{...env,[key]:value})).json();assert.equal(status.turso.error,code);assert.ok(!calls.some(x=>x.includes('turso.io')));assert.ok(!JSON.stringify(status).includes('never-log'));}
   status=await (await route(req('status'),{...env,TURSO_DATABASE_URL:'  libsql://db-org.turso.io\n',TURSO_AUTH_TOKEN:' never-log\n'})).json();assert.equal(status.turso.connected,true);statements=[];
+  mode='empty';status=await (await route(req('status'),{...env,GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED:'true'})).json();
+  assert.equal(status.turso.connected,true);assert.equal(status.turso.initialized,false);assert.equal(status.turso.databaseBytes,4096,'an empty database can be measured before its migration tables exist');mode='supabase';statements=[];
   calls=[];role='operator';assert.equal((await route(req('status'),env)).status,403);assert.ok(!calls.some(x=>x.includes('turso.io')));role='master';
   calls=[];assert.equal((await route(req('audit',{snapshot:uuid(3),after:0}),env)).status,403);assert.ok(!calls.some(x=>x.includes('turso.io')),'audits also require corporate consent');
   env.GRCON_SIGEM_STORAGE_MODE='shadow';env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED='true';
