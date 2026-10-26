@@ -3,7 +3,7 @@
   const $ = selector => document.querySelector(selector);
   const cloud = () => root.GrconCloud;
   const master = () => Boolean(cloud()?.isMasterOwner?.());
-  const state = { users: [], workspace: "", open: false, editing: null, generation: 0, saving: false, section: "users", opening: 0 };
+  const state = { users: [], workspace: "", open: false, editing: null, generation: 0, saving: false, section: "users", opening: 0, migrationReport: null };
   const labels = { owner: "Proprietário", admin: "Administrador", operator: "Operador", viewer: "Consulta" };
   const escape = value => String(value ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
   const notify = (message, kind) => root.GrconNotify?.(message, kind || "info");
@@ -79,7 +79,7 @@
   function permissions() {
     // Nenhum atalho ou conteúdo de administração é montado para outros perfis.
     if (master()) { install(); return; }
-    state.opening++; state.generation++; state.users = []; state.workspace = ""; state.open = false; state.editing = null;
+    state.opening++; state.generation++; state.users = []; state.workspace = ""; state.open = false; state.editing = null; state.migrationReport = null;
     root.GrconBackgroundJobs?.unmount?.();
     cloud()?.closeAdminPasswordModal?.({ force: true });
     $("#grcon-admin-dialog")?.close();
@@ -134,16 +134,26 @@
     if (!host || !master()) return;
     const valid = () => state.open && state.section === "storage" && state.workspace === workspace && state.generation === generation && master();
     const api = async (action, data) => {
-      const token = cloud()?.state?.session?.access_token;
-      if (!token || !valid()) throw new Error("A sessão ou o contrato mudou.");
-      const response = await root.fetch("/api/sigem-storage/" + action + (data ? "" : "?workspace=" + encodeURIComponent(workspace)), {
-        method: data ? "POST" : "GET", headers: { authorization: `Bearer ${token}`, ...(data ? { "content-type": "application/json" } : {}) },
-        ...(data ? { body: JSON.stringify({ workspace, ...data }) } : {}), signal: AbortSignal.timeout(45000),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error === "SIGEM_STORAGE_AUTHORIZATION_REQUIRED" ? "Falta confirmar a autorização para armazenamento externo." : "Não foi possível verificar o armazenamento: " + (result.error || response.status));
-      if (!valid()) throw new Error("A sessão ou o contrato mudou.");
-      return result;
+      const retryable = ["copy", "seal", "audit", "inventory"].includes(action);
+      for (let attempt = 0; attempt < (retryable ? 4 : 1); attempt++) {
+        const token = cloud()?.state?.session?.access_token;
+        if (!token || !valid()) throw new Error("A sessão ou o contrato mudou.");
+        let response, result;
+        try {
+        response = await root.fetch("/api/sigem-storage/" + action + (data ? "" : "?workspace=" + encodeURIComponent(workspace)), {
+          method: data ? "POST" : "GET", headers: { authorization: `Bearer ${token}`, ...(data ? { "content-type": "application/json" } : {}) },
+          ...(data ? { body: JSON.stringify({ workspace, ...data }) } : {}), signal: AbortSignal.timeout(45000),
+        });
+        result = await response.json();
+        } catch (_) {
+          if (retryable && attempt < 3 && valid()) { await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt)); continue; }
+          throw new Error("SIGEM_STORAGE_NETWORK_UNAVAILABLE");
+        }
+        if ((!response.ok || !result.ok) && retryable && attempt < 3 && valid() && [429, 502, 503, 504].includes(response.status) && !["TURSO_NOT_CONFIGURED", "TURSO_URL_INVALID", "TURSO_TOKEN_FORMAT_INVALID", "TURSO_AUTH_REJECTED", "TURSO_REDIRECT_REJECTED"].includes(result.error)) { await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt)); continue; }
+        if (!response.ok || !result.ok) throw new Error(result.error === "SIGEM_STORAGE_AUTHORIZATION_REQUIRED" ? "Falta confirmar a autorização para armazenamento externo." : "Não foi possível verificar o armazenamento: " + (result.error || response.status));
+        if (!valid()) throw new Error("A sessão ou o contrato mudou.");
+        return result;
+      }
     };
     const mib = bytes => Number.isFinite(bytes) ? (bytes / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " MiB" : "Não medido";
     host.textContent = "Verificando armazenamento…";
@@ -173,28 +183,51 @@
         host.querySelector(".grcon-admin-row-actions").before(diagnosis);
       }
       host.querySelector("[data-storage-refresh]").addEventListener("click", () => void loadStorage());
-      host.querySelector("[data-storage-report]").addEventListener("click", () => {
-        const link = document.createElement("a"), url = URL.createObjectURL(new Blob([JSON.stringify({ ...status, reportedAt: new Date().toISOString() }, null, 2)], { type: "application/json" }));
+      host.querySelector("[data-storage-report]").addEventListener("click", async () => {
+        const refreshed = await api("status").catch(() => status); if (!valid()) return;
+        const migration = state.migrationReport?.workspace === workspace ? state.migrationReport : undefined;
+        const link = document.createElement("a"), url = URL.createObjectURL(new Blob([JSON.stringify({ ...refreshed, migration, reportedAt: new Date().toISOString() }, null, 2)], { type: "application/json" }));
         link.href = url; link.download = "GRCON-Armazenamento.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
       });
       host.querySelector("[data-storage-copy]").addEventListener("click", async () => {
         const progress = host.querySelector("[data-storage-progress]");
+        let report;
+        const canonical = value => value && typeof value === "object" ? Array.isArray(value) ? "[" + value.map(canonical).join(",") + "]" : "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + canonical(value[key])).join(",") + "}" : JSON.stringify(value);
+        const hash = async value => Array.from(new Uint8Array(await root.crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))), n => n.toString(16).padStart(2, "0")).join("");
         for (const button of host.querySelectorAll("button")) button.disabled = true;
         try {
           const inventory = await api("inventory"); let done = 0;
           const total = inventory.snapshots.reduce((n, s) => n + s.record_count, 0);
+          report = { workspace, startedAt: new Date().toISOString(), inventoryCount: inventory.snapshots.length, records: total, validatedRecords: 0, snapshots: [], complete: false, cutoverReady: false, cleanupAllowed: false };
+          state.migrationReport = report;
+          if (inventory.pendingSnapshots !== 0) throw new Error("Há uma importação pendente. Conclua ou resolva essa importação antes da cópia.");
           for (const snapshot of inventory.snapshots) {
             // Re-read every batch on resume. Exact replay validates checkpoints,
             // source, destination and backup rather than trusting an offset alone.
             for (let after = 0; after < snapshot.record_count; after += 250) {
               await api("copy", { snapshot: snapshot.id, after }); done += Math.min(250, snapshot.record_count - after);
-              progress.textContent = `${done.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} registros conferidos. Sair desta seção interrompe após o lote atual; a cópia pode ser retomada.`;
+              progress.textContent = `${done.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} registros copiados. Validados em segunda passagem: ${report.validatedRecords.toLocaleString("pt-BR")}. Sair desta seção interrompe após o lote atual; a cópia pode ser retomada.`;
             }
-            await api("seal", { snapshot: snapshot.id });
+            const sealed = await api("seal", { snapshot: snapshot.id });
+            let digest = "0".repeat(64), validatedRecords = 0;
+            for (let after = 0; after < snapshot.record_count; after += 250) {
+              const audit = await api("audit", { snapshot: snapshot.id, after });
+              const expected = Math.min(250, snapshot.record_count - after);
+              if (audit.after !== after + expected || audit.count !== expected || audit.snapshotChecksum !== sealed.checksum || !/^[a-f0-9]{64}$/.test(audit.checksum)) throw new Error("SIGEM_AUDIT_INCOMPLETE");
+              digest = await hash(digest + "\n" + audit.checksum); validatedRecords += audit.count;
+              progress.textContent = `Conferindo a cópia, o backup e a origem: ${(report.validatedRecords + validatedRecords).toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} registros.`;
+            }
+            if (digest !== sealed.checksum || validatedRecords !== snapshot.record_count) throw new Error("SIGEM_AUDIT_HASH_MISMATCH");
+            report.validatedRecords += validatedRecords;
+            report.snapshots.push({ id: snapshot.id, ...sealed, validatedRecords, fullAudit: true });
           }
-          progress.textContent = "Cópia conferida. A fonte oficial permanece no Supabase; homologação e teste de restauração ainda são necessários.";
-        } catch (error) { if (valid()) progress.textContent = error.message + " Os lotes já conferidos foram preservados."; }
-        finally { if (valid()) for (const button of host.querySelectorAll("button")) button.disabled = false; }
+          const current = await api("inventory");
+          report.inventoryStable = canonical(inventory) === canonical(current);
+          report.pendingSnapshots = current.pendingSnapshots;
+          report.complete = report.inventoryStable && current.pendingSnapshots === 0 && report.validatedRecords === total;
+          progress.textContent = report.complete ? "Cópia e conferência integral concluídas. Baixe o relatório. A fonte oficial permanece no Supabase; homologação e teste de restauração ainda são necessários." : "O inventário mudou durante a cópia. Baixe o relatório e reconcilie as novas versões antes de continuar. A fonte oficial permanece no Supabase.";
+        } catch (error) { if (report) report.error = error.message; if (valid()) progress.textContent = error.message + " Os lotes já conferidos foram preservados."; }
+        finally { if (report) report.finishedAt = new Date().toISOString(); if (valid()) for (const button of host.querySelectorAll("button")) button.disabled = false; }
       });
     } catch (error) { if (valid()) host.textContent = error.message; }
   }
@@ -274,5 +307,6 @@
   root.addEventListener("grcon:contract-context-changed", () => { state.workspace = ""; close(); permissions(); });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", permissions, { once:true }); else permissions();
 })(window);
+
 
 

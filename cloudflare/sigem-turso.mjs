@@ -69,12 +69,15 @@ export const SCHEMA = [
     source_json TEXT NOT NULL CHECK(json_valid(source_json)), expected_count INTEGER NOT NULL CHECK(expected_count BETWEEN 1 AND 100000),
     state TEXT NOT NULL DEFAULT 'copying' CHECK(state IN ('copying','verified')),
     checksum TEXT, verified_at TEXT, PRIMARY KEY(workspace_id,contract_id,id)) WITHOUT ROWID`,
+  // Large JSON values overflow index B-tree pages in WITHOUT ROWID tables.
+  // A rowid table keeps the complete payload local while retaining the same
+  // composite primary key, foreign key and document lookup index.
   `CREATE TABLE IF NOT EXISTS sigem_rows (
     workspace_id TEXT NOT NULL, contract_id TEXT NOT NULL, snapshot_id TEXT NOT NULL, row_number INTEGER NOT NULL CHECK(row_number BETWEEN 1 AND 100000),
     document_key TEXT NOT NULL, revision_key TEXT NOT NULL, status_normalized TEXT NOT NULL,
     row_json TEXT NOT NULL CHECK(json_valid(row_json)),
     PRIMARY KEY(workspace_id,contract_id,snapshot_id,row_number),
-    FOREIGN KEY(workspace_id,contract_id,snapshot_id) REFERENCES sigem_snapshots(workspace_id,contract_id,id)) WITHOUT ROWID`,
+    FOREIGN KEY(workspace_id,contract_id,snapshot_id) REFERENCES sigem_snapshots(workspace_id,contract_id,id))`,
   `CREATE INDEX IF NOT EXISTS sigem_exact_document ON sigem_rows(workspace_id,contract_id,snapshot_id,document_key,revision_key,row_number)`,
   `CREATE TABLE IF NOT EXISTS sigem_import_jobs (
     workspace_id TEXT NOT NULL, contract_id TEXT NOT NULL, snapshot_id TEXT NOT NULL,
@@ -105,8 +108,9 @@ export async function readRows(db, source, after, limit = 250) {
 }
 export async function copyPage(db, bucket, source, after, rows) {
   checkPage(source, after, rows);
-  const saved = (await db.execute(`SELECT state FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`, scopeArgs(source))).rows[0];
+  const saved = (await db.execute(`SELECT state,source_json,expected_count FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? AND id=?`, scopeArgs(source))).rows[0];
   if (!saved) throw fail('SIGEM_NOT_INITIALIZED');
+  if (saved.source_json !== canonical(source) || saved.expected_count !== source.record_count) throw fail('SIGEM_SOURCE_CHANGED');
   const bytes = canonical(rows), checksum = await sha256(bytes);
   const key = `sigem-backups/v1/${source.workspace_id}/${source.contract_id}/${source.id}/rows-${after + 1}-${after + rows.length}-${checksum}.json`;
   if (!bucket?.put || !bucket?.get) throw fail('SIGEM_BACKUP_UNAVAILABLE', 503);

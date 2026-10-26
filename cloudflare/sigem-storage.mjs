@@ -61,9 +61,9 @@ export async function handleSigemStorage(request, env) {
           await db.execute('SELECT 1 AS connected'); turso.connected = true;
           try {
             consent(env); // connection probe sends no corporate identifiers
+            turso.databaseBytes = (await db.execute('PRAGMA page_count')).rows[0]?.page_count * (await db.execute('PRAGMA page_size')).rows[0]?.page_size;
             turso.snapshots = (await db.execute(`SELECT id,state,expected_count,checksum,verified_at FROM sigem_snapshots WHERE workspace_id=? AND contract_id=? ORDER BY id`, [input.workspace, status.contractId])).rows;
             turso.initialized = true;
-            turso.databaseBytes = (await db.execute('PRAGMA page_count')).rows[0]?.page_count * (await db.execute('PRAGMA page_size')).rows[0]?.page_size;
           } catch { turso.initialized = false; }
         } catch (error) {
           // Only locally defined codes are returned, never upstream messages or secrets.
@@ -80,7 +80,10 @@ export async function handleSigemStorage(request, env) {
     if (env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED !== 'true') throw fail('SIGEM_CAPACITY_CHECK_REQUIRED', 409);
     const db = tursoClient(env), bucket = env.GRCON_DOCUMENTS;
     if (!bucket) throw fail('SIGEM_BACKUP_UNAVAILABLE', 503);
-    if (action !== 'audit') { await initialize(db); await beginSnapshot(db, source); }
+    // Prepare the schema and snapshot on its first page, rather than repeating
+    // six remote setup statements for every batch. copyPage still rechecks the
+    // immutable source metadata before each backup or destination write.
+    if (action === 'seal' || (action === 'copy' && Number(input.after) === 0)) { await initialize(db); await beginSnapshot(db, source); }
     if (action === 'copy' || action === 'audit') {
       const after = Number(input.after);
       if (!Number.isInteger(after) || after < 0 || after >= source.record_count || after % 250 !== 0) throw fail('SIGEM_PAGE_INVALID', 400);
@@ -94,4 +97,5 @@ export async function handleSigemStorage(request, env) {
     return reply({ok: false, error: code, message: code}, error.status || 503);
   }
 }
+
 
