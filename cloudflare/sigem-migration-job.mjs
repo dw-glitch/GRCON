@@ -70,7 +70,15 @@ export async function migrationStatus(env,workspace,inventory){
  const {id}=await latest.json(),grant=await readGrant(env,workspace,id);
  const reports=await Promise.all(grant.lanes.map(async(_,lane)=>{
   const object=await env.GRCON_DOCUMENTS.get(path(workspace,id)+'/lane-'+lane+'.json');
-  return object?object.json():{lane,status:'queued',copied:0,validated:0,snapshots:[]};
+  const report=object?await object.json():{lane,status:'queued',copied:0,validated:0,snapshots:[]};
+  if(env.GRCON_TASKS?.get){
+   try{
+    const state=await(await env.GRCON_TASKS.get('sigem-'+id.slice(0,40)+'-'+lane)).status();
+    if(['errored','terminated'].includes(state.status))return {...report,status:'failed',error:report.error||'SIGEM_WORKFLOW_INTERRUPTED'};
+    if(report.status==='failed'&&['queued','running','waiting'].includes(state.status))return {...report,status:'running',error:undefined};
+   }catch{ /* R2 still provides the last durable progress if Workflows status is unavailable. */ }
+  }
+  return report;
  }));
  const stable=await sha256(canonical(inventory))===grant.inventoryHash;
  return {started:true,id,createdAt:grant.createdAt,records:grant.lanes.flatMap(l=>l.snapshots).reduce((n,s)=>n+s.record_count,0),
@@ -117,10 +125,13 @@ export async function handleJobPage(request,env){
 }
 export async function runMigration(env,params,step,invoke){
  ready(env);
- const grant=await step.do('grant',retry,()=>readGrant(env,params.workspace,params.id));
+ const grant=await step.do('grant',retry,async()=>{
+  const value=await readGrant(env,params.workspace,params.id);
+  return {...value,lanes:value.lanes.map(l=>({snapshots:l.snapshots.map(s=>({id:s.id,record_count:s.record_count}))}))};
+ });
  if(!Number.isInteger(params.lane)||!grant.lanes[params.lane])throw fail('SIGEM_JOB_INVALID');
  const lane=grant.lanes[params.lane],report={lane:params.lane,status:'running',copied:0,validated:0,snapshots:[]};
- const save=()=>env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/lane-'+params.lane+'.json',canonical({...report,updatedAt:new Date().toISOString()}));
+ const save=async()=>{await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/lane-'+params.lane+'.json',canonical({...report,updatedAt:new Date().toISOString()}));return {saved:true};};
  const call=invoke||(async input=>{
   const response=await env.GRCON_MIGRATION_SELF.fetch(await signedJobRequest(env,{workspace:grant.workspace,id:grant.id,...input}));
   const value=await response.json();if(!response.ok||!value.ok)throw fail(value.error||'SIGEM_JOB_UNAVAILABLE',response.status);return value;
