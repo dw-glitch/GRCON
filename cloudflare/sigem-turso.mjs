@@ -30,18 +30,26 @@ function decoded(cell) {
   return cell.value;
 }
 export function tursoClient(env, fetcher = fetch) {
+  const databaseUrl = String(env.TURSO_DATABASE_URL || '').trim();
+  const authToken = String(env.TURSO_AUTH_TOKEN || '').trim();
+  if (!databaseUrl || !authToken) throw fail('TURSO_NOT_CONFIGURED', 503);
   let url;
-  try { url = new URL(String(env.TURSO_DATABASE_URL || '').replace(/^libsql:/, 'https:')); } catch { throw fail('TURSO_NOT_CONFIGURED', 503); }
+  try { url = new URL(databaseUrl.replace(/^libsql:/, 'https:')); } catch { throw fail('TURSO_URL_INVALID', 503); }
   // A fixed trusted database host prevents redirect-based credential disclosure/SSRF.
-  if (url.protocol !== 'https:' || !/^(?:[a-z0-9-]+\.)+turso\.io$/.test(url.hostname) || url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/' || !env.TURSO_AUTH_TOKEN) throw fail('TURSO_NOT_CONFIGURED', 503);
+  if (url.protocol !== 'https:' || !/^(?:[a-z0-9-]+\.)+turso\.io$/.test(url.hostname) || url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw fail('TURSO_URL_INVALID', 503);
+  // Reject pasted shell assignments, quotes or a duplicated Bearer prefix locally.
+  if (/[\s"'`]/.test(authToken) || /^(?:Bearer|TURSO_AUTH_TOKEN=)/i.test(authToken)) throw fail('TURSO_TOKEN_FORMAT_INVALID', 503);
   async function execute(sql, args = []) {
     let response;
     try { response = await fetcher(new URL('/v2/pipeline', url), {
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000),
-      headers: {'content-type': 'application/json', authorization: `Bearer ${env.TURSO_AUTH_TOKEN}`},
+      headers: {'content-type': 'application/json', authorization: `Bearer ${authToken}`},
       body: JSON.stringify({requests: [{type: 'execute', stmt: {sql, args: args.map(value)}}, {type: 'close'}]}),
-    }); } catch { throw fail('TURSO_UNAVAILABLE', 503); }
-    if (!response.ok) throw fail(response.status === 429 ? 'TURSO_RATE_LIMIT' : 'TURSO_UNAVAILABLE', response.status === 429 ? 429 : 503);
+    }); } catch (error) { throw fail(['TimeoutError', 'AbortError'].includes(error?.name) ? 'TURSO_TIMEOUT' : 'TURSO_UNAVAILABLE', 503); }
+    if (!response.ok) {
+      const code = response.status === 401 || response.status === 403 ? 'TURSO_AUTH_REJECTED' : response.status === 404 ? 'TURSO_DATABASE_NOT_FOUND' : response.status === 429 ? 'TURSO_RATE_LIMIT' : 'TURSO_UNAVAILABLE';
+      throw fail(code, response.status === 429 ? 429 : 503);
+    }
     const data = await response.json().catch(() => null), item = data?.results?.[0];
     if (item?.type !== 'ok' || item.response?.type !== 'execute' || data.results?.[1]?.type !== 'ok') throw fail('TURSO_QUERY_FAILED', 503);
     const result = item.response.result;

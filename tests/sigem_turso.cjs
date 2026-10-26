@@ -90,7 +90,7 @@ const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12,'0');
  engine.close();
  assert.equal(M.canonical({b:1,a:{y:2,x:3}}),M.canonical({a:{x:3,y:2},b:1}));
  assert.throws(()=>M.canonical({n:9007199254740992}),/NON_CANONICAL/);
- for (const bad of ['https://evil.test','https://x.turso.io.evil.test','https://user:pass@x.turso.io','https://x.turso.io/path','turso://x.turso.io']) assert.throws(()=>M.tursoClient({TURSO_DATABASE_URL:bad,TURSO_AUTH_TOKEN:'secret'}),/NOT_CONFIGURED/);
+ for (const bad of ['https://evil.test','https://x.turso.io.evil.test','https://user:pass@x.turso.io','https://x.turso.io/path','turso://x.turso.io']) assert.throws(()=>M.tursoClient({TURSO_DATABASE_URL:bad,TURSO_AUTH_TOKEN:'secret'}),/URL_INVALID/);
  assert.ok(M.tursoClient({TURSO_DATABASE_URL:'libsql://db-org.aws-us-east-1.turso.io',TURSO_AUTH_TOKEN:'private'}));
  let requestBody;
  const http=M.tursoClient({TURSO_DATABASE_URL:'libsql://test-org.turso.io',TURSO_AUTH_TOKEN:'private'},async(url,options)=>{assert.equal(options.redirect,'error');assert.equal(String(url),'https://test-org.turso.io/v2/pipeline');requestBody=JSON.parse(options.body);return Response.json({results:[{type:'ok',response:{type:'execute',result:{cols:[{name:'n'}],rows:[[{type:'integer',value:'1'}]],affected_row_count:0}}},{type:'ok',response:{type:'close'}}]});});
@@ -129,4 +129,5 @@ const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12,'0');
  }finally{await pg.close();}
  console.log('SIGEM Turso: SQLite integrity/resume/backups, exact identities, HTTP isolation, and PostgreSQL master/contract authorization passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
 
