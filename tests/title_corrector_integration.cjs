@@ -13,7 +13,7 @@ assert.match(loader,/view === "title-corrector"/);
 assert.match(vite,/"title-corrector": \{/);
 assert.match(worker,/RECONAuditCore/);
 assert.match(worker,/RECONTitleWriter\.apply/);
-assert.match(worker,/RECONLdPreservation/);
+assert.match(worker,/ld_preservation\\.js/);
 assert.match(worker,/RECONValveListCatalog/);
 assert.match(worker,/RECONTagReferenceCatalog/);
 assert.match(worker,/RECONSconEscopoTitleCatalog/);
