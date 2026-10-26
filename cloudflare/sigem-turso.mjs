@@ -42,10 +42,13 @@ export function tursoClient(env, fetcher = fetch) {
   async function execute(sql, args = []) {
     let response;
     try { response = await fetcher(new URL('/v2/pipeline', url), {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000),
+      // Workers rejects redirect:'error' before issuing any request. Manual mode
+      // preserves the no-redirect credential boundary on the real runtime.
+      method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20000),
       headers: {'content-type': 'application/json', authorization: `Bearer ${authToken}`},
       body: JSON.stringify({requests: [{type: 'execute', stmt: {sql, args: args.map(value)}}, {type: 'close'}]}),
     }); } catch (error) { throw fail(['TimeoutError', 'AbortError'].includes(error?.name) ? 'TURSO_TIMEOUT' : 'TURSO_UNAVAILABLE', 503); }
+    if (response.status >= 300 && response.status < 400) throw fail('TURSO_REDIRECT_REJECTED', 503);
     if (!response.ok) {
       const code = response.status === 401 || response.status === 403 ? 'TURSO_AUTH_REJECTED' : response.status === 404 ? 'TURSO_DATABASE_NOT_FOUND' : response.status === 429 ? 'TURSO_RATE_LIMIT' : 'TURSO_UNAVAILABLE';
       throw fail(code, response.status === 429 ? 429 : 503);

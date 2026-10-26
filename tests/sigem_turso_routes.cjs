@@ -47,7 +47,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   let status=await (await route(req('status'),env)).json();
   assert.equal(status.turso.connected,true);assert.equal(status.turso.initialized,false);
   assert.equal(status.externalStorageAuthorized,false);assert.deepEqual(statements,['SELECT 1 AS connected']);statements=[];
-  const scenarios=[[401,'TURSO_AUTH_REJECTED'],[403,'TURSO_AUTH_REJECTED'],[404,'TURSO_DATABASE_NOT_FOUND'],[429,'TURSO_RATE_LIMIT'],[503,'TURSO_UNAVAILABLE'],['timeout','TURSO_TIMEOUT'],['network','TURSO_UNAVAILABLE'],['protocol','TURSO_QUERY_FAILED']];
+  const scenarios=[[302,'TURSO_REDIRECT_REJECTED'],[401,'TURSO_AUTH_REJECTED'],[403,'TURSO_AUTH_REJECTED'],[404,'TURSO_DATABASE_NOT_FOUND'],[429,'TURSO_RATE_LIMIT'],[503,'TURSO_UNAVAILABLE'],['timeout','TURSO_TIMEOUT'],['network','TURSO_UNAVAILABLE'],['protocol','TURSO_QUERY_FAILED']];
   for(const [failure,code] of scenarios){
    tursoFailure=failure;const result=await route(req('status'),env);assert.equal(result.status,200);
    status=await result.json();assert.equal(status.turso.configured,true);assert.equal(status.turso.connected,false);assert.equal(status.turso.error,code);

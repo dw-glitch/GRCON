@@ -67,7 +67,7 @@ export async function handleSigemStorage(request, env) {
           } catch { turso.initialized = false; }
         } catch (error) {
           // Only locally defined codes are returned, never upstream messages or secrets.
-          const allowed = ['TURSO_NOT_CONFIGURED', 'TURSO_URL_INVALID', 'TURSO_TOKEN_FORMAT_INVALID', 'TURSO_AUTH_REJECTED', 'TURSO_DATABASE_NOT_FOUND', 'TURSO_TIMEOUT', 'TURSO_RATE_LIMIT', 'TURSO_UNAVAILABLE', 'TURSO_QUERY_FAILED', 'TURSO_RESPONSE_INVALID', 'TURSO_INTEGER_RANGE'];
+          const allowed = ['TURSO_NOT_CONFIGURED', 'TURSO_URL_INVALID', 'TURSO_TOKEN_FORMAT_INVALID', 'TURSO_AUTH_REJECTED', 'TURSO_DATABASE_NOT_FOUND', 'TURSO_TIMEOUT', 'TURSO_RATE_LIMIT', 'TURSO_UNAVAILABLE', 'TURSO_QUERY_FAILED', 'TURSO_RESPONSE_INVALID', 'TURSO_INTEGER_RANGE', 'TURSO_REDIRECT_REJECTED'];
           turso.error = allowed.includes(error?.code) ? error.code : 'TURSO_UNAVAILABLE';
         }
       } else turso.error = 'TURSO_NOT_CONFIGURED';

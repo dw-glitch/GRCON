@@ -154,6 +154,7 @@
         TURSO_URL_INVALID: "O endereço do banco é inválido. Copie Database URL no painel do banco Turso e salve somente o endereço em TURSO_DATABASE_URL.",
         TURSO_TOKEN_FORMAT_INVALID: "O token foi colado com formatação extra. Salve somente o token em TURSO_AUTH_TOKEN, sem aspas, Bearer ou o nome da variável.",
         TURSO_AUTH_REJECTED: "O Turso recusou o acesso. Confira se o token pertence a este banco e está válido, e se as regras de acesso do banco permitem a conexão.",
+        TURSO_REDIRECT_REJECTED: "O endereço do banco respondeu com um redirecionamento, que foi bloqueado para proteger o token. Confira Database URL no painel do banco Turso.",
         TURSO_DATABASE_NOT_FOUND: "O endereço não encontrou o banco no Turso. Confira Database URL no painel do banco e atualize TURSO_DATABASE_URL.",
         TURSO_TIMEOUT: "O Turso não respondeu no prazo. Tente Verificar conexão novamente; se persistir, envie o relatório de diagnóstico.",
         TURSO_RATE_LIMIT: "O Turso limitou as solicitações. Aguarde e verifique os limites do plano antes de tentar novamente.",
