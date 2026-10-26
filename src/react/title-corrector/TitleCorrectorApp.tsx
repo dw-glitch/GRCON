@@ -1,5 +1,4 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
-import './title-corrector.css';
 type Evidence={field:string;value:string;source:string;reference?:string;verified:boolean};
 type TitleRow={id:string;document:string;sheet:string;row:number;discipline:string;current:string;proposed:string;originalProposed:string;issue:string;reason:string;confidence:string;classification:string;tag:string;descriptionSource:string;facts:Evidence[];hasConflict:boolean;reviewRequired:boolean;decision:'pending'|'approved'|'kept';evidenceSummary:string;sourceRows:Record<string,number[]>};
 type Analysis={rows:TitleRow[];unmatched:string[];coverage?:{sheets?:Array<{sheet:string;rows:number;role:string}>;skippedSheets?:Array<{sheet:string;reason:string}>};sourceCounts:Record<string,number>;standard:string};
