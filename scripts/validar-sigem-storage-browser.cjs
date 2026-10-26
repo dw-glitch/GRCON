@@ -23,6 +23,7 @@ const crypto=require('node:crypto');
    const input=route.request().postDataJSON();
    if(copyScenario!=='disabled'){
     let result;
+    if(copyScenario==='retry'&&action==='copy'&&steps.filter(x=>x==='copy').length===1)return route.fulfill({status:503,json:{ok:false,error:'TURSO_UNAVAILABLE'}});
     if(action==='inventory'){inventoryReads++;result={snapshots:[{id:'s1',record_count:501,metadata:{generation:copyScenario==='changed'&&inventoryReads>1?2:1}}],pendingSnapshots:copyScenario==='pending'?1:0};}
     else if(action==='copy')result={after:input.after+Math.min(250,501-input.after)};
     else if(action==='seal')result={count:501,checksum:copyScenario==='hash'?'f'.repeat(64):digest,manifestKey:'sigem-backups/v1/test/manifest.json',manifestHash:'d'.repeat(64)};
@@ -40,7 +41,7 @@ const crypto=require('node:crypto');
   assert.equal(await page.locator('[data-admin-panel="storage"]').isVisible(),true);
   for(const width of [1440,1366,1024]){await page.setViewportSize({width,height:900});assert.equal(await page.locator('#grcon-admin-dialog').evaluate(el=>el.scrollWidth>el.clientWidth),false);}
   fs.mkdirSync('artifacts/sigem-storage',{recursive:true});await page.screenshot({path:'artifacts/sigem-storage/master-storage.png',fullPage:true});
-  for(const scenario of ['success','hash','incomplete','changed','pending']){
+  for(const scenario of ['success','retry','hash','incomplete','changed','pending']){
    copyScenario=scenario;inventoryReads=0;steps=[];
    await page.locator('[data-storage-refresh]').click();
    await page.waitForFunction(()=>document.querySelector('[data-storage-copy]')?.disabled===false);
@@ -48,7 +49,7 @@ const crypto=require('node:crypto');
    await page.waitForFunction(()=>document.querySelector('[data-storage-copy]')?.disabled===false&&Boolean(document.querySelector('[data-storage-progress]')?.textContent));
    const downloadEvent=page.waitForEvent('download');await page.locator('[data-storage-report]').click();
    const download=await downloadEvent,report=JSON.parse(fs.readFileSync(await download.path(),'utf8'));
-   assert.equal(report.migration.complete,scenario==='success');
+   assert.equal(report.migration.complete,['success','retry'].includes(scenario));
    assert.equal(report.source,'supabase');assert.equal(report.migration.cutoverReady,false);assert.equal(report.migration.cleanupAllowed,false);
    assert.ok(!JSON.stringify(report).includes('synthetic-session'));
    if(scenario==='success'){
@@ -56,7 +57,8 @@ const crypto=require('node:crypto');
     assert.equal(report.migration.snapshots[0].checksum,digest);assert.equal(report.migration.inventoryStable,true);
     assert.deepEqual(steps.filter(x=>['copy','seal','audit'].includes(x)),['copy','copy','copy','seal','audit','audit','audit']);
     await page.screenshot({path:'artifacts/sigem-storage/verified-copy.png',fullPage:true});
-   }else if(scenario==='changed')assert.equal(report.migration.inventoryStable,false);
+   }else if(scenario==='retry'){assert.equal(report.migration.validatedRecords,501);assert.equal(steps.filter(x=>x==='copy').length,4,'one transient failure is retried without skipping a page');}
+   else if(scenario==='changed')assert.equal(report.migration.inventoryStable,false);
    else if(scenario==='pending')assert.equal(steps.includes('copy'),false,'pending uploads block the copy');
    else assert.match(report.migration.error,/SIGEM_AUDIT_/);
   }

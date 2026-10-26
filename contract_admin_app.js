@@ -134,16 +134,26 @@
     if (!host || !master()) return;
     const valid = () => state.open && state.section === "storage" && state.workspace === workspace && state.generation === generation && master();
     const api = async (action, data) => {
-      const token = cloud()?.state?.session?.access_token;
-      if (!token || !valid()) throw new Error("A sessão ou o contrato mudou.");
-      const response = await root.fetch("/api/sigem-storage/" + action + (data ? "" : "?workspace=" + encodeURIComponent(workspace)), {
-        method: data ? "POST" : "GET", headers: { authorization: `Bearer ${token}`, ...(data ? { "content-type": "application/json" } : {}) },
-        ...(data ? { body: JSON.stringify({ workspace, ...data }) } : {}), signal: AbortSignal.timeout(45000),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error === "SIGEM_STORAGE_AUTHORIZATION_REQUIRED" ? "Falta confirmar a autorização para armazenamento externo." : "Não foi possível verificar o armazenamento: " + (result.error || response.status));
-      if (!valid()) throw new Error("A sessão ou o contrato mudou.");
-      return result;
+      const retryable = ["copy", "seal", "audit", "inventory"].includes(action);
+      for (let attempt = 0; attempt < (retryable ? 4 : 1); attempt++) {
+        const token = cloud()?.state?.session?.access_token;
+        if (!token || !valid()) throw new Error("A sessão ou o contrato mudou.");
+        let response, result;
+        try {
+        response = await root.fetch("/api/sigem-storage/" + action + (data ? "" : "?workspace=" + encodeURIComponent(workspace)), {
+          method: data ? "POST" : "GET", headers: { authorization: `Bearer ${token}`, ...(data ? { "content-type": "application/json" } : {}) },
+          ...(data ? { body: JSON.stringify({ workspace, ...data }) } : {}), signal: AbortSignal.timeout(45000),
+        });
+        result = await response.json();
+        } catch (_) {
+          if (retryable && attempt < 3 && valid()) { await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt)); continue; }
+          throw new Error("SIGEM_STORAGE_NETWORK_UNAVAILABLE");
+        }
+        if ((!response.ok || !result.ok) && retryable && attempt < 3 && valid() && [429, 502, 503, 504].includes(response.status) && !["TURSO_NOT_CONFIGURED", "TURSO_URL_INVALID", "TURSO_TOKEN_FORMAT_INVALID", "TURSO_AUTH_REJECTED", "TURSO_REDIRECT_REJECTED"].includes(result.error)) { await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt)); continue; }
+        if (!response.ok || !result.ok) throw new Error(result.error === "SIGEM_STORAGE_AUTHORIZATION_REQUIRED" ? "Falta confirmar a autorização para armazenamento externo." : "Não foi possível verificar o armazenamento: " + (result.error || response.status));
+        if (!valid()) throw new Error("A sessão ou o contrato mudou.");
+        return result;
+      }
     };
     const mib = bytes => Number.isFinite(bytes) ? (bytes / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " MiB" : "Não medido";
     host.textContent = "Verificando armazenamento…";
