@@ -176,22 +176,16 @@
     saveTimer = root.setTimeout(savePreparation, 650);
   }
   function updateResume() {
-    const Workspace = root.GrconWorkspace;
-    const draft = Workspace && typeof Workspace.draft === "function" ? String(Workspace.draft("grdtRelation", "") || "") : "";
     const previous = readPreparation();
-    const hasDraft = Boolean(draft.trim());
-    el.resume.hidden = !hasDraft && !previous;
-    if (!hasDraft && !previous) return;
-    if (previous) {
+    el.resume.hidden = !previous;
+    if (!previous) return;
+    {
       const parts = [];
       if (previous.ldNames.length) parts.push(previous.ldNames.slice(0, 2).join(", "));
       if (previous.relationName) parts.push(previous.relationName);
       if (previous.chosen.length) parts.push(previous.chosen.length + " documento(s) selecionado(s) anteriormente");
       text(el.resumeInfo, (parts.join(" · ") || "Preparação anterior salva") +
         ". Reanálise e revalidação dos arquivos serão necessárias. Nenhuma escolha antiga será aplicada automaticamente.");
-    } else {
-      text(el.resumeInfo, Core.parseCodes(draft).length +
-        " referência(s) por texto nesta aba. Revalide LD e arquivos físicos.");
     }
     el.resumeAction.disabled = false;
   }
@@ -280,11 +274,8 @@
     });
     el.resumeAction.addEventListener("click", function () {
       const previous = readPreparation();
-      const Workspace = root.GrconWorkspace;
-      const draft = Workspace && typeof Workspace.draft === "function" ? String(Workspace.draft("grdtRelation", "") || "") : "";
-      const candidate = draft.trim() ? Core.parseCodes(draft) :
-        previous ? (previous.relationText.trim() ? Core.parseCodes(previous.relationText) :
-          previous.chosen.map(function (row) { return row.document; })) : [];
+      const candidate = previous ? (previous.relationText.trim() ? Core.parseCodes(previous.relationText) :
+        previous.chosen.map(function (row) { return row.document; })) : [];
       const api = root.GrconTriageUiApi;
       if (candidate.length && api && typeof api.prepareRelationDraft === "function") {
         api.prepareRelationDraft(candidate);
