@@ -53,7 +53,8 @@ export async function handleSigemStorage(request, env) {
     }
     if (action === 'status' && request.method === 'GET') {
       const status = await control('status'); // database-enforced master check
-      let turso = {configured: Boolean(env.TURSO_DATABASE_URL && env.TURSO_AUTH_TOKEN), connected: false};
+      const configuration = {databaseUrlPresent: Boolean(String(env.TURSO_DATABASE_URL || '').trim()), authTokenPresent: Boolean(String(env.TURSO_AUTH_TOKEN || '').trim())};
+      let turso = {configured: configuration.databaseUrlPresent && configuration.authTokenPresent, connected: false, configuration};
       if (turso.configured) {
         try {
           const db = tursoClient(env);
@@ -64,8 +65,12 @@ export async function handleSigemStorage(request, env) {
             turso.initialized = true;
             turso.databaseBytes = (await db.execute('PRAGMA page_count')).rows[0]?.page_count * (await db.execute('PRAGMA page_size')).rows[0]?.page_size;
           } catch { turso.initialized = false; }
-        } catch { /* no secret or upstream error text */ }
-      }
+        } catch (error) {
+          // Only locally defined codes are returned, never upstream messages or secrets.
+          const allowed = ['TURSO_NOT_CONFIGURED', 'TURSO_URL_INVALID', 'TURSO_TOKEN_FORMAT_INVALID', 'TURSO_AUTH_REJECTED', 'TURSO_DATABASE_NOT_FOUND', 'TURSO_TIMEOUT', 'TURSO_RATE_LIMIT', 'TURSO_UNAVAILABLE', 'TURSO_QUERY_FAILED', 'TURSO_RESPONSE_INVALID', 'TURSO_INTEGER_RANGE'];
+          turso.error = allowed.includes(error?.code) ? error.code : 'TURSO_UNAVAILABLE';
+        }
+      } else turso.error = 'TURSO_NOT_CONFIGURED';
       return reply({ok: true, ...status, mode, externalStorageAuthorized: env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED === 'true', preflightApproved: env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED === 'true', turso, backupPrefix: 'sigem-backups/v1/', cutoverReady: false, cleanupAllowed: false});
     }
     if (action === 'inventory' && request.method === 'GET') return reply({ok: true, ...await control('inventory')});
