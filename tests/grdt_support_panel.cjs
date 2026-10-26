@@ -38,5 +38,9 @@ assert.match(app, /GrconGrdtSupportCore\.summarize\(state\.results\.map\(decisio
 assert.match(app, /grcon:grdt-support-summary/);
 assert.match(source("grdt_support_panel.js"), /data-filter=/, "filtros usam a tabela original");
 assert.doesNotMatch(source("grdt_support_panel.js"), /innerHTML|eval\(/, "nenhum HTML com dados não confiáveis");
+const ui = source("grdt_support_panel.js");
+for (const [, id] of ui.matchAll(/\bbyId\("([^"]+)"\)/g)) {
+  assert.ok(html.includes('id="' + id + '"'), "UI consulta ID inexistente: " + id);
+}
 new vm.Script(source("grdt_support_panel.js"), { filename: "grdt_support_panel.js" });
 console.log("Central de Apoio: identidade exata, revisões, layout, integração de triagem e syntax OK.");
