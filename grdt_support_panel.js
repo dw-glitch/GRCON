@@ -25,7 +25,11 @@
   function readBase() {
     const query = root.GrconSharedSigemQuery;
     // Consulta de outro contrato nunca pode ser reaproveitada antes da troca de contexto.
-    const membership = root.GrconCloud && root.GrconCloud.state && root.GrconCloud.state.membership;
+    const cloud = root.GrconCloud && root.GrconCloud.state;
+    const membership = cloud && cloud.membership;
+    // Uma projeção em memória do contrato anterior não pode ser consultada após sair.
+    if (root.GrconCloud && (!cloud || !cloud.session || !cloud.session.user ||
+        !cloud.session.user.id || !membership || !membership.workspace_id)) return null;
     if (membership && query && query.state && query.state.workspace !== membership.workspace_id) return null;
     const base = query && typeof query.current === "function" ? query.current() : null;
     return base && Array.isArray(base.records) ? base : null;
