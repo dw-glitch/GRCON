@@ -24,6 +24,9 @@
   }
   function readBase() {
     const query = root.GrconSharedSigemQuery;
+    // Consulta de outro contrato nunca pode ser reaproveitada antes da troca de contexto.
+    const membership = root.GrconCloud && root.GrconCloud.state && root.GrconCloud.state.membership;
+    if (membership && query && query.state && query.state.workspace !== membership.workspace_id) return null;
     const base = query && typeof query.current === "function" ? query.current() : null;
     return base && Array.isArray(base.records) ? base : null;
   }
@@ -200,7 +203,7 @@
     const panel = byId("grdt-support-panel");
     if (!panel) return;
     el.panel = panel; el.search = byId("grdt-support-search"); el.searchInfo = byId("grdt-support-search-info");
-    el.searchArea = byId("grdt-support-search-area"); el.results = byId("grdt-support-results");
+    el.searchArea = byId("grdt-support-search-form"); el.results = byId("grdt-support-results");
     el.resume = byId("grdt-support-resume"); el.resumeInfo = byId("grdt-support-resume-info");
     el.resumeAction = byId("grdt-support-resume-button"); el.attention = byId("grdt-support-attention");
     el.stageInfo = byId("grdt-support-stage"); el.detail = byId("grdt-support-detail");
