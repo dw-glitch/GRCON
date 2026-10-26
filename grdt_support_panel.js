@@ -6,7 +6,7 @@
   const Core = root.GrconGrdtSupportCore;
   if (!Core) return;
   const byId = function (id) { return doc.getElementById(id); };
-  let epoch = 0, debounce = 0, latestSummary = null, lastSearch = "";
+  let epoch = 0, debounce = 0, saveTimer = 0, latestSummary = null, lastSearch = "";
   let activeScope = "", lastRows = [];
   const el = {};
 
@@ -141,14 +141,58 @@
     lastRows = result.rows;
     renderResults(result, base);
   }
+  const PREPARATION_PREFIX = "grcon.support.preparation.v1.";
+  const PREPARATION_TTL = 7 * 86400000;
+  function preparationKey() {
+    const cloud = root.GrconCloud && root.GrconCloud.state;
+    if (!cloud || !cloud.session || !cloud.session.user || !cloud.session.user.id ||
+        !cloud.membership || !cloud.membership.workspace_id) return "";
+    return PREPARATION_PREFIX + encodeURIComponent(scope());
+  }
+  function readPreparation() {
+    const key = preparationKey();
+    if (!key) return null;
+    try {
+      const item = JSON.parse(root.localStorage.getItem(key) || "null");
+      if (!item || item.schema !== 1 || !Number.isFinite(item.savedAt) ||
+          item.savedAt > Date.now() + 60000 || Date.now() - item.savedAt > PREPARATION_TTL) return null;
+      if (!Array.isArray(item.ldNames) || !Array.isArray(item.chosen)) return null;
+      return item;
+    } catch (_) { return null; }
+  }
+  function savePreparation() {
+    const key = preparationKey(), api = root.GrconTriageUiApi;
+    if (!key || !api || typeof api.preparationSnapshot !== "function") return;
+    try {
+      const item = api.preparationSnapshot();
+      if (!item || (!item.ldNames.length && !item.relationName && !item.folderName &&
+          !item.relationText.trim() && !item.chosen.length)) return;
+      root.localStorage.setItem(key, JSON.stringify(item));
+    } catch (_) { /* a falha de armazenamento nunca bloqueia a GRDT */ }
+    updateResume();
+  }
+  function schedulePreparation() {
+    root.clearTimeout(saveTimer);
+    saveTimer = root.setTimeout(savePreparation, 650);
+  }
   function updateResume() {
     const Workspace = root.GrconWorkspace;
     const draft = Workspace && typeof Workspace.draft === "function" ? String(Workspace.draft("grdtRelation", "") || "") : "";
+    const previous = readPreparation();
     const hasDraft = Boolean(draft.trim());
-    el.resume.hidden = !hasDraft;
-    if (!hasDraft) return;
-    const count = Core.parseCodes(draft).length;
-    text(el.resumeInfo, count + " referência(s) de uma entrada por texto salva. LD e arquivos físicos precisarão ser revalidados.");
+    el.resume.hidden = !hasDraft && !previous;
+    if (!hasDraft && !previous) return;
+    if (previous) {
+      const parts = [];
+      if (previous.ldNames.length) parts.push(previous.ldNames.slice(0, 2).join(", "));
+      if (previous.relationName) parts.push(previous.relationName);
+      if (previous.chosen.length) parts.push(previous.chosen.length + " documento(s) selecionado(s) anteriormente");
+      text(el.resumeInfo, (parts.join(" · ") || "Preparação anterior salva") +
+        ". Reanálise e revalidação dos arquivos serão necessárias. Nenhuma escolha antiga será aplicada automaticamente.");
+    } else {
+      text(el.resumeInfo, Core.parseCodes(draft).length +
+        " referência(s) por texto nesta aba. Revalide LD e arquivos físicos.");
+    }
     el.resumeAction.disabled = false;
   }
   function prepared() {
@@ -235,8 +279,19 @@
       debounce = root.setTimeout(function () { void search(); }, 350);
     });
     el.resumeAction.addEventListener("click", function () {
-      const action = byId("relation-start");
-      if (action && !action.disabled) action.click();
+      const previous = readPreparation();
+      const Workspace = root.GrconWorkspace;
+      const draft = Workspace && typeof Workspace.draft === "function" ? String(Workspace.draft("grdtRelation", "") || "") : "";
+      const candidate = draft.trim() ? Core.parseCodes(draft) :
+        previous ? (previous.relationText.trim() ? Core.parseCodes(previous.relationText) :
+          previous.chosen.map(function (row) { return row.document; })) : [];
+      const api = root.GrconTriageUiApi;
+      if (candidate.length && api && typeof api.prepareRelationDraft === "function") {
+        api.prepareRelationDraft(candidate);
+        return;
+      }
+      const selector = byId("ld-input");
+      if (selector) { selector.focus(); selector.click(); }
     });
     byId("grdt-support-detail-close").addEventListener("click", function () { el.detail.close(); });
     el.detail.addEventListener("click", function (event) { if (event.target === el.detail) el.detail.close(); });
@@ -257,7 +312,17 @@
       if (field) field.addEventListener(field.tagName === "INPUT" ? "change" : "click", function () { root.setTimeout(renderStage, 50); });
     });
     root.addEventListener("grcon:processing-state", renderStage);
+    root.addEventListener("grcon:grdt-support-summary", schedulePreparation);
+    root.addEventListener("grcon:ui-update", schedulePreparation);
+    root.addEventListener("pagehide", function () { root.clearTimeout(saveTimer); savePreparation(); });
     root.addEventListener("pageshow", renderStage);
+    root.addEventListener("grcon:grdt-support-reset", function () {
+      root.clearTimeout(saveTimer);
+      const key = preparationKey();
+      try { if (key) root.localStorage.removeItem(key); } catch (_) { /* sem armazenamento */ }
+      latestSummary = null;
+      renderStage();
+    });
     renderStage();
   }
   root.GrconGrdtSupportUi = Object.freeze({ refresh: function () { if (el.panel) renderStage(); }, search: function (query) {
