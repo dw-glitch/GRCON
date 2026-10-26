@@ -91,6 +91,19 @@ const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12,'0');
  await assert.rejects(M.verifySnapshot(db,bucket,source),/VERIFY_MISMATCH/);
  await assert.rejects(M.auditPage(db,bucket,source,0,rows.slice(0,250)),/AUDIT_DESTINATION_MISMATCH/);
  engine.close();
+ // Regression for the actual JSON size: WITHOUT ROWID overflows SQLite index
+ // pages and used almost the entire Free storage allowance in the simulation.
+ const storageFootprint=legacy=>{const db=new DatabaseSync(':memory:');try{
+  for(let sql of M.SCHEMA){if(legacy&&sql.includes('CREATE TABLE IF NOT EXISTS sigem_rows'))sql+=' WITHOUT ROWID';db.exec(sql);}
+  const id=uuid(1),json=JSON.stringify({padding:'x'.repeat(940)});
+  db.prepare('insert into sigem_snapshots(workspace_id,contract_id,id,source_json,expected_count) values(?,?,?,?,?)').run(id,id,id,'{}',1000);
+  const add=db.prepare('insert into sigem_rows values(?,?,?,?,?,?,?,?)');db.exec('begin');
+  for(let n=1;n<=1000;n++)add.run(id,id,id,n,'DOC-'+String(n).padStart(45,'0'),'A','EM_ANALISE',json);db.exec('commit');
+  assert.equal(db.prepare('select count(*) n from sigem_rows where row_json=?').get(json).n,1000,'storage optimization preserves every payload');
+  assert.deepEqual(db.prepare('pragma foreign_key_check').all(),[]);
+  return db.prepare('pragma page_count').get().page_count*db.prepare('pragma page_size').get().page_size;
+ }finally{db.close();}};
+ assert.ok(storageFootprint(false)<storageFootprint(true)*0.6,'large JSON must not regress to the high-overflow layout');
  assert.equal(M.canonical({b:1,a:{y:2,x:3}}),M.canonical({a:{x:3,y:2},b:1}));
  assert.throws(()=>M.canonical({n:9007199254740992}),/NON_CANONICAL/);
  for (const bad of ['https://evil.test','https://x.turso.io.evil.test','https://user:pass@x.turso.io','https://x.turso.io/path','turso://x.turso.io']) assert.throws(()=>M.tursoClient({TURSO_DATABASE_URL:bad,TURSO_AUTH_TOKEN:'secret'}),/URL_INVALID/);

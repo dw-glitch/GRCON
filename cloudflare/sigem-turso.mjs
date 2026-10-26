@@ -69,12 +69,15 @@ export const SCHEMA = [
     source_json TEXT NOT NULL CHECK(json_valid(source_json)), expected_count INTEGER NOT NULL CHECK(expected_count BETWEEN 1 AND 100000),
     state TEXT NOT NULL DEFAULT 'copying' CHECK(state IN ('copying','verified')),
     checksum TEXT, verified_at TEXT, PRIMARY KEY(workspace_id,contract_id,id)) WITHOUT ROWID`,
+  // Large JSON values overflow index B-tree pages in WITHOUT ROWID tables.
+  // A rowid table keeps the complete payload local while retaining the same
+  // composite primary key, foreign key and document lookup index.
   `CREATE TABLE IF NOT EXISTS sigem_rows (
     workspace_id TEXT NOT NULL, contract_id TEXT NOT NULL, snapshot_id TEXT NOT NULL, row_number INTEGER NOT NULL CHECK(row_number BETWEEN 1 AND 100000),
     document_key TEXT NOT NULL, revision_key TEXT NOT NULL, status_normalized TEXT NOT NULL,
     row_json TEXT NOT NULL CHECK(json_valid(row_json)),
     PRIMARY KEY(workspace_id,contract_id,snapshot_id,row_number),
-    FOREIGN KEY(workspace_id,contract_id,snapshot_id) REFERENCES sigem_snapshots(workspace_id,contract_id,id)) WITHOUT ROWID`,
+    FOREIGN KEY(workspace_id,contract_id,snapshot_id) REFERENCES sigem_snapshots(workspace_id,contract_id,id))`,
   `CREATE INDEX IF NOT EXISTS sigem_exact_document ON sigem_rows(workspace_id,contract_id,snapshot_id,document_key,revision_key,row_number)`,
   `CREATE TABLE IF NOT EXISTS sigem_import_jobs (
     workspace_id TEXT NOT NULL, contract_id TEXT NOT NULL, snapshot_id TEXT NOT NULL,
