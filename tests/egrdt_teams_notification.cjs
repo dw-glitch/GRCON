@@ -102,4 +102,53 @@ while (cursor + 12 <= mascotPng.length) {
 }
 assert.equal(sawIend, true, "asset PNG do mascote precisa terminar com IEND");
 
-console.log("OK: aviso manual de eGRDT ao Teams validado");
+async function testTeamsRendering() {
+  const Worker = (await import('../cloudflare/worker.mjs'))._internal;
+  const publicUrl = 'https://grcon-cloudflare.grcon-qualidade.workers.dev/assets/mascot/grcon-mascot-teams-thumbsup.png';
+  const oldUrl = 'https://raw.githubusercontent.com/dw-glitch/GRCON/034c4270f0e7585ba77010f26e4880c128c934e0/assets/mascot/grcon-mascot-teams-thumbsup.png';
+  const previous = process.env.GRCON_TEAMS_MASCOT_URL;
+  try {
+    for (const candidate of ['', oldUrl, 'http://localhost/mascot.png', 'https://user:password@example.com/mascot.png', 'not-a-url']) {
+      process.env.GRCON_TEAMS_MASCOT_URL = candidate;
+      assert.equal(Api.resolveMascotUrl(), publicUrl, 'Node deve evitar imagem do repositório privado, inclusive em configuração antiga');
+      assert.equal(Worker.resolveMascotUrl({GRCON_TEAMS_MASCOT_URL: candidate}), publicUrl, 'Worker deve usar a mesma imagem pública');
+    }
+    const custom = 'https://cdn.example.com/grcon.png';
+    process.env.GRCON_TEAMS_MASCOT_URL = custom;
+    assert.equal(Api.resolveMascotUrl(), custom);
+    assert.equal(Worker.resolveMascotUrl({GRCON_TEAMS_MASCOT_URL: custom}), custom);
+    delete process.env.GRCON_TEAMS_MASCOT_URL;
+    const nodePayload = Api.normalizePayload(payload);
+    const workerPayload = Worker.normalizePayload(payload, {});
+    assert.deepEqual(workerPayload.message.adaptiveCard, nodePayload.message.adaptiveCard, 'Node e Cloudflare devem gerar o mesmo cartão');
+    const card = workerPayload.message.adaptiveCard;
+    assert.equal(card.msteams.width, 'Full');
+    const images = card.body.filter(block => block.type === 'Image');
+    assert.equal(images.length, 1);
+    assert.equal(images[0].url, publicUrl);
+    assert.equal(images[0].width, '64px');
+    assert.equal(images[0].height, '64px');
+    assert.equal(card.body.some(block => block.type === 'ColumnSet'), false, 'Mascote indisponível não pode espremer os dados em outra coluna');
+    const readableText = card.body.filter(block => block.type !== 'Image');
+    assert.ok(readableText.some(block => block.text === record.egrdtNumber && block.wrap));
+    for (const row of payload.egrdt.items) {
+      assert.ok(readableText.some(block => block.items?.some(item => item.text.includes(row.document) && item.wrap)), 'Documento/revisão deve permanecer no cartão quando a imagem falha');
+    }
+    // Power Automate may replace msteams while adding mentions. Layout must
+    // remain independent of Full width and keep compatibility with actions.
+    const {interactiveCard} = await import('../cloudflare/teams-traceability.mjs');
+    const interactive = interactiveCard(workerPayload, {id:'attempt', workspace_id:'workspace', contract_code:'UHDT-D', expires_at:'2026-11-01T12:00:00Z', documents:payload.egrdt.items});
+    assert.ok(interactive.actions.some(action => action.title.includes('Postado')));
+    assert.equal(interactive.body.filter(block => block.type === 'TextBlock' && payload.egrdt.items.some(row => block.text.includes(row.document))).length, 2);
+  } finally {
+    if (previous === undefined) delete process.env.GRCON_TEAMS_MASCOT_URL;
+    else process.env.GRCON_TEAMS_MASCOT_URL = previous;
+  }
+  const headers = fs.readFileSync(path.join(root, 'cloudflare/_headers'), 'utf8');
+  const mascotRule = headers.split('/assets/mascot/grcon-mascot-teams-thumbsup.png\n')[1]?.split('\n\n')[0];
+  assert.match(mascotRule || '', /! Cross-Origin-Resource-Policy/);
+  assert.match(mascotRule || '', /Access-Control-Allow-Origin: \*/);
+  assert.match(headers.split('\n\n')[0], /Cross-Origin-Resource-Policy: same-origin/, 'Demais assets devem manter a política atual');
+  console.log('OK: aviso manual, imagem pública, layout resiliente e paridade Node/Cloudflare validados');
+}
+testTeamsRendering().catch(error => { console.error(error); process.exitCode = 1; });

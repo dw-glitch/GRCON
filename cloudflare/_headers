@@ -44,3 +44,8 @@
 
 /workers/*
   Cache-Control: public, max-age=0, must-revalidate
+
+# Decorative Teams image is public; all other assets keep the default policy.
+/assets/mascot/grcon-mascot-teams-thumbsup.png
+  ! Cross-Origin-Resource-Policy
+  Access-Control-Allow-Origin: *

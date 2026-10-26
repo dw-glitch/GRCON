@@ -5,7 +5,7 @@ const MAX_BODY_BYTES = 64_000;
 const FLOW_TIMEOUT_MS = 15_000;
 const ADAPTIVE_CARD_VERSION = "1.2";
 const MASCOT_ASSET_PATH = "/assets/mascot/grcon-mascot-teams-thumbsup.png";
-const DEFAULT_MASCOT_PUBLIC_URL = "https://raw.githubusercontent.com/dw-glitch/GRCON/034c4270f0e7585ba77010f26e4880c128c934e0/assets/mascot/grcon-mascot-teams-thumbsup.png";
+const DEFAULT_MASCOT_PUBLIC_URL = "https://grcon-cloudflare.grcon-qualidade.workers.dev/assets/mascot/grcon-mascot-teams-thumbsup.png";
 const API_PATH = "/api/egrdt-teams-notification";
 
 const API_SECURITY_HEADERS = Object.freeze({
@@ -50,6 +50,7 @@ function resolveMascotUrl(env) {
   try {
     const url = new URL(candidate);
     if (url.protocol !== "https:" || url.username || url.password) return DEFAULT_MASCOT_PUBLIC_URL;
+    if (url.hostname === "raw.githubusercontent.com" && /^\/dw-glitch\/grcon\//i.test(url.pathname)) return DEFAULT_MASCOT_PUBLIC_URL;
     return url.href;
   } catch (_) {
     return DEFAULT_MASCOT_PUBLIC_URL;
@@ -84,28 +85,12 @@ function buildAdaptiveCard(payload, imageUrl) {
     type: "AdaptiveCard",
     "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
     version: ADAPTIVE_CARD_VERSION,
+    msteams: { width: "Full" },
     body: [
-      {
-        type: "ColumnSet",
-        columns: [
-          {
-            type: "Column",
-            width: "auto",
-            verticalContentAlignment: "Center",
-            items: [{ type: "Image", url: imageUrl, size: "Medium", altText: "Mascote GRCON dando joia", horizontalAlignment: "Center" }],
-          },
-          {
-            type: "Column",
-            width: "stretch",
-            verticalContentAlignment: "Center",
-            items: [
-              { type: "TextBlock", text: "✅ eGRDT pronta para postagem", weight: "Bolder", size: "Medium", wrap: true },
-              { type: "TextBlock", text: payload.egrdt.number, weight: "Bolder", spacing: "Small", wrap: true },
-              { type: "TextBlock", text: "Pronta para postagem no SIGEM", isSubtle: true, spacing: "None", wrap: true },
-            ],
-          },
-        ],
-      },
+      { type: "Image", url: imageUrl, width: "64px", height: "64px", altText: "Mascote GRCON dando joia", horizontalAlignment: "Left" },
+      { type: "TextBlock", text: "✅ eGRDT pronta para postagem", weight: "Bolder", size: "Medium", wrap: true },
+      { type: "TextBlock", text: payload.egrdt.number, weight: "Bolder", spacing: "Small", wrap: true },
+      { type: "TextBlock", text: "Pronta para postagem no SIGEM", isSubtle: true, spacing: "None", wrap: true },
       { type: "TextBlock", text: "Revisões enviadas na GRDT", weight: "Bolder", spacing: "Medium", separator: true, wrap: true },
       ...revisionBlocks,
       { type: "TextBlock", text: "Enviado pelo GRCON", isSubtle: true, size: "Small", spacing: "Medium", wrap: true },

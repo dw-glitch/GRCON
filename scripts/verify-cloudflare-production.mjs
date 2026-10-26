@@ -22,6 +22,13 @@ for (let attempt = 0; attempt < 6; attempt++) {
 }
 assert.equal(metadata.commit, expectedCommit, 'Produção deve servir exatamente o commit publicado.');
 assert.equal(metadata.provider, 'cloudflare');
+// Teams retrieves this decorative asset without the GRCON user's session.
+const teamsMascot = await get('/assets/mascot/grcon-mascot-teams-thumbsup.png');
+assert.equal(teamsMascot.status, 200, 'Mascote do Teams deve ser público.');
+assert.match(teamsMascot.headers.get('content-type') || '', /^image\/png\b/);
+assert.equal(teamsMascot.headers.get('cross-origin-resource-policy'), null, 'Mascote do Teams não pode bloquear incorporação externa.');
+assert.equal(teamsMascot.headers.get('access-control-allow-origin'), '*');
+assert.deepEqual(Buffer.from(await teamsMascot.arrayBuffer()), await readFile(new URL('../assets/mascot/grcon-mascot-teams-thumbsup.png', import.meta.url)), 'PNG público deve corresponder ao asset validado.');
 const page = await get('/');
 assert.equal(page.status, 200);
 const html = await page.text();
