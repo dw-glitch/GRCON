@@ -1,0 +1,172 @@
+// Durable orchestration stores only cursors/checksums; corporate rows stay in
+// the existing copy/audit Worker and the authorized Turso/R2 destinations.
+import {canonical,sha256,ZERO_HASH,fail,initialize,beginSnapshot,copyPage,sealSnapshot,auditPage,tursoClient} from './sigem-turso.mjs';
+const ROOT='sigem-migration-jobs/v1/';
+const hex=v=>/^[a-f0-9]{64}$/.test(v||'');
+const uuid=v=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v||'');
+const WIDTH=3,GROUP=8;
+const retry={retries:{limit:4,delay:'10 seconds',backoff:'exponential'},timeout:'5 minutes'};
+function ready(env){
+ if(env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED!=='true')throw fail('SIGEM_STORAGE_AUTHORIZATION_REQUIRED',403);
+ if(env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED!=='true')throw fail('SIGEM_CAPACITY_CHECK_REQUIRED');
+ if(!env.GRCON_DOCUMENTS||!env.GRCON_TASKS||!env.GRCON_MIGRATION_SELF||!env.SUPABASE_SECRET_KEY)throw fail('SIGEM_BACKGROUND_NOT_CONFIGURED',503);
+}
+async function rpc(env,grant,operation,input={}){
+ const key=env.SUPABASE_SECRET_KEY,headers={apikey:key,'content-type':'application/json'};
+ if(!key.startsWith('sb_secret_'))headers.authorization='Bearer '+key;
+ const response=await fetch(env.SUPABASE_URL+'/rest/v1/rpc/grcon_sigem_storage_service',{method:'POST',headers,
+  body:JSON.stringify({target_workspace:grant.workspace,actor_id:grant.actor,operation,input}),signal:AbortSignal.timeout(30000)});
+ const result=await response.json().catch(()=>null);
+ if(!response.ok)throw fail(result?.code==='42501'?'SIGEM_ACCESS_DENIED':'SIGEM_SOURCE_REJECTED',result?.code==='42501'?403:409);
+ return result;
+}
+const path=(workspace,id)=>ROOT+workspace+'/'+id;
+async function readGrant(env,workspace,id){
+ if(!uuid(workspace)||!hex(id))throw fail('SIGEM_JOB_INVALID',400);
+ const value=await env.GRCON_DOCUMENTS.get(path(workspace,id)+'/grant.json');
+ if(!value)throw fail('SIGEM_JOB_NOT_FOUND',404);
+ const grant=await value.json();
+ if(grant.workspace!==workspace||grant.id!==id||!uuid(grant.actor))throw fail('SIGEM_JOB_INVALID');
+ return grant;
+}
+export function planLanes(snapshots){
+ const lanes=Array.from({length:WIDTH},()=>({steps:2,snapshots:[]}));
+ for(const source of [...snapshots].sort((a,b)=>b.record_count-a.record_count)){
+  if(!uuid(source.id)||!Number.isSafeInteger(source.record_count)||source.record_count<1||source.record_count>100000)throw fail('SIGEM_JOB_LIMIT');
+  const lane=lanes.reduce((a,b)=>a.steps<=b.steps?a:b);
+  lane.steps+=4*Math.ceil(Math.ceil(source.record_count/250)/GROUP)+3;lane.snapshots.push(source);
+ }
+ if(lanes.some(l=>l.steps>900)||lanes.reduce((n,l)=>n+l.steps,0)>2400)throw fail('SIGEM_JOB_STEP_LIMIT');
+ return lanes.filter(l=>l.snapshots.length);
+}
+export async function startMigration(env,workspace,actor,inventory){
+ ready(env);
+ if(!uuid(workspace)||!uuid(actor)||!Array.isArray(inventory.snapshots)||!inventory.snapshots.length||inventory.pendingSnapshots!==0)throw fail('SIGEM_INVENTORY_NOT_READY');
+ const inventoryHash=await sha256(canonical(inventory)),id=await sha256(canonical({workspace,actor,inventoryHash}));
+ const key=path(workspace,id),prior=await env.GRCON_DOCUMENTS.get(key+'/grant.json');
+ let grant;
+ if(prior){grant=await prior.json();if(grant.inventoryHash!==inventoryHash||grant.actor!==actor)throw fail('SIGEM_JOB_CONFLICT');}
+ else{
+  grant={format:'grcon-sigem-migration-job-v1',id,workspace,actor,inventoryHash,createdAt:new Date().toISOString(),lanes:planLanes(inventory.snapshots)};
+  await env.GRCON_DOCUMENTS.put(key+'/grant.json',canonical(grant));
+ }
+ // ACL is also checked here by the service RPC, before dispatching any work.
+ if(await sha256(canonical(await rpc(env,grant,'inventory')))!==inventoryHash)throw fail('SIGEM_SOURCE_CHANGED');
+ for(let lane=0;lane<grant.lanes.length;lane++){
+  const instanceId='sigem-'+id.slice(0,40)+'-'+lane;
+  try{await env.GRCON_TASKS.create({id:instanceId,params:{kind:'sigem-migration',workspace,id,lane}});}
+  catch{
+   const instance=await env.GRCON_TASKS.get(instanceId),status=await instance.status();
+   if(['errored','terminated'].includes(status.status))await instance.restart();
+   else if(!['running','queued','waiting','paused','complete'].includes(status.status))throw fail('SIGEM_WORKFLOW_UNAVAILABLE',503);
+  }
+ }
+ await env.GRCON_DOCUMENTS.put(ROOT+workspace+'/latest.json',canonical({id}));
+ return {id,lanes:grant.lanes.length,records:inventory.snapshots.reduce((n,s)=>n+s.record_count,0)};
+}
+export async function migrationStatus(env,workspace,inventory){
+ const latest=await env.GRCON_DOCUMENTS.get(ROOT+workspace+'/latest.json');
+ if(!latest)return {started:false};
+ const {id}=await latest.json(),grant=await readGrant(env,workspace,id);
+ const reports=await Promise.all(grant.lanes.map(async(_,lane)=>{
+  const object=await env.GRCON_DOCUMENTS.get(path(workspace,id)+'/lane-'+lane+'.json');
+  const report=object?await object.json():{lane,status:'queued',copied:0,validated:0,snapshots:[]};
+  if(env.GRCON_TASKS?.get){
+   try{
+    const state=await(await env.GRCON_TASKS.get('sigem-'+id.slice(0,40)+'-'+lane)).status();
+    if(['errored','terminated'].includes(state.status))return {...report,status:'failed',error:report.error||'SIGEM_WORKFLOW_INTERRUPTED'};
+    if(report.status==='failed'&&['queued','running','waiting'].includes(state.status))return {...report,status:'running',error:undefined};
+   }catch{ /* R2 still provides the last durable progress if Workflows status is unavailable. */ }
+  }
+  return report;
+ }));
+ const stable=await sha256(canonical(inventory))===grant.inventoryHash;
+ return {started:true,id,createdAt:grant.createdAt,records:grant.lanes.flatMap(l=>l.snapshots).reduce((n,s)=>n+s.record_count,0),
+  copied:reports.reduce((n,r)=>n+(r.copied||0),0),validated:reports.reduce((n,r)=>n+(r.validated||0),0),
+  inventoryStable:stable,complete:stable&&reports.every(r=>r.status==='complete'),reports};
+}
+async function hmacKey(env){return crypto.subtle.importKey('raw',new TextEncoder().encode('grcon-sigem-job-v1\n'+env.SUPABASE_SECRET_KEY),{name:'HMAC',hash:'SHA-256'},false,['sign','verify']);}
+export async function signedJobRequest(env,input,at=Date.now()){
+ const body=canonical(input),time=String(at),signature=new Uint8Array(await crypto.subtle.sign('HMAC',await hmacKey(env),new TextEncoder().encode(time+'\n'+body)));
+ return new Request('https://grcon.internal/api/sigem-storage/job-page',{method:'POST',headers:{'content-type':'application/json','x-grcon-job-time':time,'x-grcon-job-signature':Array.from(signature,n=>n.toString(16).padStart(2,'0')).join('')},body});
+}
+export async function verifyJobRequest(env,request,now=Date.now()){
+ const time=request.headers.get('x-grcon-job-time'),sig=request.headers.get('x-grcon-job-signature');
+ if(!/^\d{13}$/.test(time||'')||Math.abs(now-Number(time))>120000||!hex(sig)||!env.SUPABASE_SECRET_KEY)throw fail('AUTH_REQUIRED',401);
+ const reader=request.body?.getReader();if(!reader)throw fail('SIGEM_INPUT_INVALID',400);
+ let raw='',size=0;const decoder=new TextDecoder();
+ for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>2000){await reader.cancel();throw fail('SIGEM_INPUT_TOO_LARGE',413);}raw+=decoder.decode(part.value,{stream:true});}
+ raw+=decoder.decode();
+ const bytes=new Uint8Array(sig.match(/../g).map(x=>parseInt(x,16)));
+ if(!await crypto.subtle.verify('HMAC',await hmacKey(env),bytes,new TextEncoder().encode(time+'\n'+raw)))throw fail('AUTH_INVALID',401);
+ try{return JSON.parse(raw);}catch{throw fail('SIGEM_INPUT_INVALID',400);}
+}
+export async function handleJobPage(request,env){
+ try{
+  ready(env);const input=await verifyJobRequest(env,request),grant=await readGrant(env,input.workspace,input.id);
+  const source=grant.lanes.flatMap(l=>l.snapshots).find(s=>s.id===input.snapshot);
+  if(!source)throw fail('SIGEM_SNAPSHOT_INVALID');
+  const current=await rpc(env,grant,'source',{snapshot:source.id});
+  if(canonical(current)!==canonical(source))throw fail('SIGEM_SOURCE_CHANGED');
+  const db=tursoClient(env),bucket=env.GRCON_DOCUMENTS;
+  let result;
+  if(input.phase==='seal'){
+   await initialize(db);await beginSnapshot(db,source);result=await sealSnapshot(db,bucket,source);
+  }else{
+   if(!['copy','audit'].includes(input.phase)||!Number.isInteger(input.after)||input.after<0||input.after>=source.record_count||input.after%250!==0)throw fail('SIGEM_PAGE_INVALID',400);
+   if(input.phase==='copy'&&input.after===0){await initialize(db);await beginSnapshot(db,source);}
+   const page=await rpc(env,grant,'source-page',{snapshot:source.id,after:input.after});
+   if(canonical(page.source)!==canonical(source))throw fail('SIGEM_SOURCE_CHANGED');
+   result=await(input.phase==='copy'?copyPage(db,bucket,source,input.after,page.rows):auditPage(db,bucket,source,input.after,page.rows));
+  }
+  // Never send corporate rows or bearer credentials back into Workflow state.
+  return Response.json({ok:true,...result},{headers:{'cache-control':'no-store'}});
+ }catch(error){return Response.json({ok:false,error:/^[A-Z0-9_]{1,80}$/.test(error.code||'')?error.code:'SIGEM_JOB_UNAVAILABLE'},{status:error.status||503,headers:{'cache-control':'no-store'}});}
+}
+export async function runMigration(env,params,step,invoke){
+ ready(env);
+ const grant=await step.do('grant',retry,async()=>{
+  const value=await readGrant(env,params.workspace,params.id);
+  return {...value,lanes:value.lanes.map(l=>({snapshots:l.snapshots.map(s=>({id:s.id,record_count:s.record_count}))}))};
+ });
+ if(!Number.isInteger(params.lane)||!grant.lanes[params.lane])throw fail('SIGEM_JOB_INVALID');
+ const lane=grant.lanes[params.lane],report={lane:params.lane,status:'running',copied:0,validated:0,snapshots:[]};
+ const save=async()=>{await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/lane-'+params.lane+'.json',canonical({...report,updatedAt:new Date().toISOString()}));return {saved:true};};
+ const call=invoke||(async input=>{
+  const response=await env.GRCON_MIGRATION_SELF.fetch(await signedJobRequest(env,{workspace:grant.workspace,id:grant.id,...input}));
+  const value=await response.json();if(!response.ok||!value.ok)throw fail(value.error||'SIGEM_JOB_UNAVAILABLE',response.status);return value;
+ });
+ try{
+  for(let index=0;index<lane.snapshots.length;index++){
+   const source=lane.snapshots[index];
+   for(let after=0;after<source.record_count;after+=250*GROUP){
+    const pages=await step.do('copy-'+index+'-'+after,retry,async()=>{
+     // Prepare once before concurrent pages: no page may race schema creation.
+     const offsets=Array.from({length:Math.min(GROUP,Math.ceil((source.record_count-after)/250))},(_,i)=>after+i*250);
+     const first=await call({phase:'copy',snapshot:source.id,after:offsets[0]});
+     return [first,...await Promise.all(offsets.slice(1).map(cursor=>call({phase:'copy',snapshot:source.id,after:cursor})))];
+    });
+    report.copied+=pages.reduce((n,p)=>n+p.count,0);await step.do('copy-progress-'+index+'-'+after,retry,save);
+   }
+   const sealed=await step.do('seal-'+index,retry,()=>call({phase:'seal',snapshot:source.id}));
+   let digest=ZERO_HASH,count=0;
+   for(let after=0;after<source.record_count;after+=250*GROUP){
+    const pages=await step.do('audit-'+index+'-'+after,retry,()=>Promise.all(Array.from({length:Math.min(GROUP,Math.ceil((source.record_count-after)/250))},(_,i)=>call({phase:'audit',snapshot:source.id,after:after+i*250}))));
+    for(let i=0;i<pages.length;i++){
+     const page=pages[i],cursor=after+i*250,expected=Math.min(250,source.record_count-cursor);
+     if(page.count!==expected||page.after!==cursor+expected||page.snapshotChecksum!==sealed.checksum||!hex(page.checksum))throw fail('SIGEM_AUDIT_INCOMPLETE');
+     digest=await sha256(digest+'\n'+page.checksum);count+=page.count;
+    }
+    report.validated=report.snapshots.reduce((n,s)=>n+s.validatedRecords,0)+count;
+    await step.do('audit-progress-'+index+'-'+after,retry,save);
+   }
+   if(count!==source.record_count||digest!==sealed.checksum)throw fail('SIGEM_AUDIT_HASH_MISMATCH');
+   report.snapshots.push({id:source.id,...sealed,validatedRecords:count,fullAudit:true});
+  }
+  await step.do('final-inventory',retry,async()=>{if(await sha256(canonical(await rpc(env,grant,'inventory')))!==grant.inventoryHash)throw fail('SIGEM_SOURCE_CHANGED');return true;});
+  report.status='complete';await step.do('complete',retry,save);return {complete:true};
+ }catch(error){
+  report.status='failed';report.error=/^[A-Z0-9_]{1,80}$/.test(error.code||'')?error.code:'SIGEM_JOB_UNAVAILABLE';
+  await step.do('failure',{retries:{limit:2,delay:'10 seconds',backoff:'exponential'}},save);throw fail(report.error);
+ }
+}

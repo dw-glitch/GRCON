@@ -103,7 +103,7 @@ export function checkPage(source, after, rows, size = 250) {
   });
 }
 export async function readRows(db, source, after, limit = 250) {
-  const result = await db.execute(`SELECT row_number,row_json FROM sigem_rows WHERE workspace_id=? AND contract_id=? AND snapshot_id=? AND row_number>? ORDER BY row_number LIMIT ?`, [...scopeArgs(source), after, limit]);
+  const result = await db.execute(`SELECT row_number,row_json FROM sigem_rows WHERE workspace_id=? AND contract_id=? AND snapshot_id=? AND row_number>? AND row_number<=? ORDER BY row_number LIMIT ?`, [...scopeArgs(source), after, after + limit, limit]);
   return result.rows.map(r => JSON.parse(r.row_json));
 }
 export async function copyPage(db, bucket, source, after, rows) {
@@ -201,4 +201,5 @@ export async function sealSnapshot(db, bucket, source) {
   await db.execute(`UPDATE sigem_snapshots SET state='verified',checksum=?,verified_at=? WHERE workspace_id=? AND contract_id=? AND id=?`, [digest, new Date().toISOString(), ...scopeArgs(source)]);
   return {count: after, checksum: digest, manifestKey: key, manifestHash};
 }
+
 

@@ -1,0 +1,79 @@
+'use strict';
+const assert=require('node:assert/strict'),{DatabaseSync}=require('node:sqlite'),fs=require('node:fs');
+const {PGlite}=require('@electric-sql/pglite');
+const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
+(async()=>{
+ const M=await import('../cloudflare/sigem-migration-job.mjs'),T=await import('../cloudflare/sigem-turso.mjs');
+ const source={id:uuid(3),workspace_id:uuid(1),contract_id:uuid(2),status:'active',record_count:2501,file_name:'LD sintética.xlsx',metadata:{teste:true}};
+ const rows=Array.from({length:source.record_count},(_,i)=>({snapshot_id:source.id,row_number:i+1,document_key:'DOC-'+(i+1),revision_key:'0',status_normalized:'em_analise',payload:{document:'DOC-'+(i+1),title:'SENTINEL_CORPORATE_ROW_'+i,extra:'Símbolos 漢字 é'}}));
+ const inventory={snapshots:[source],pendingSnapshots:0},objects=new Map();
+ const bucket={put:async(k,v)=>{objects.set(k,String(v));return {key:k,writeHttpMetadata(){}};},head:async k=>objects.has(k)?{}:null,get:async k=>objects.has(k)?{text:async()=>objects.get(k),json:async()=>JSON.parse(objects.get(k))}:null};
+ const engine=new DatabaseSync(':memory:');engine.exec('PRAGMA foreign_keys=ON');
+ const db={execute:async(sql,args=[])=>{const q=engine.prepare(sql);return q.columns().length?{rows:q.all(...args)}:{rows:[],affected:q.run(...args).changes};}};
+ const env={SUPABASE_URL:'https://test.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_SYNTHETIC_ONLY',TURSO_DATABASE_URL:'libsql://test-account.turso.io',TURSO_AUTH_TOKEN:'SYNTHETIC',GRCON_DOCUMENTS:bucket,GRCON_MIGRATION_SELF:{},GRCON_TASKS:{create:async x=>({id:x.id})},GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED:'true',GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED:'true'};
+ const originalFetch=global.fetch;let revoked=false;
+ global.fetch=async(url,options)=>{
+  const host=new URL(url).hostname;
+  if(host==='test.supabase.co'){
+   const args=JSON.parse(options.body);assert.equal(args.actor_id,uuid(9));assert.equal(args.target_workspace,uuid(1));
+   if(revoked)return Response.json({code:'42501'},{status:403});
+   const value=args.operation==='inventory'?inventory:args.operation==='source'?source:{source,rows:rows.slice(args.input.after,args.input.after+250)};
+   return Response.json(value);
+  }
+  assert.equal(host,'test-account.turso.io');
+  const input=JSON.parse(options.body),stmt=input.requests[0].stmt,args=stmt.args.map(a=>a.type==='null'?null:a.type==='integer'||a.type==='float'?Number(a.value):a.value);
+  const result=await db.execute(stmt.sql,args),cols=result.rows.length?Object.keys(result.rows[0]):[];
+  return Response.json({results:[{type:'ok',response:{type:'execute',result:{cols:cols.map(name=>({name})),rows:result.rows.map(r=>cols.map(name=>r[name]===null?{type:'null'}:typeof r[name]==='number'?{type:'integer',value:String(r[name])}:{type:'text',value:String(r[name])})),affected_row_count:result.affected||0}}},{type:'ok',response:{type:'close'}}]});
+ };
+ try{
+  const request=await M.signedJobRequest(env,{workspace:uuid(1),id:'a'.repeat(64),snapshot:source.id,phase:'copy',after:0});
+  assert.equal((await M.verifyJobRequest(env,request.clone())).after,0);
+  await assert.rejects(M.verifyJobRequest(env,new Request(request.url,{method:'POST',headers:request.headers,body:'{}'})),/AUTH_INVALID/);
+  await assert.rejects(M.verifyJobRequest(env,await M.signedJobRequest(env,{},Date.now()-130000)),/AUTH_REQUIRED/);
+  const denied=await M.handleJobPage(new Request(request.url,{method:'POST',body:'{}'}),env);assert.equal(denied.status,401);
+  const plan=M.planLanes(Array.from({length:36},(_,i)=>({...source,id:uuid(20+i),record_count:23408})));
+  assert.equal(plan.length,3);assert.ok(plan.every(l=>l.steps<=900));assert.ok(plan.reduce((n,l)=>n+l.steps,0)<=2400);
+  await assert.rejects(M.startMigration(env,uuid(1),uuid(9),{...inventory,pendingSnapshots:1}),/INVENTORY_NOT_READY/);
+  await assert.rejects(M.startMigration({...env,GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED:'false'},uuid(1),uuid(9),inventory),/AUTHORIZATION_REQUIRED/);
+  const started=await M.startMigration(env,uuid(1),uuid(9),inventory);
+  assert.equal(started.records,2501);
+  const params={workspace:uuid(1),id:started.id,lane:0};
+  const outputs=[],steps=[],step={do:async(name,config,fn)=>{if(typeof config==='function')fn=config;steps.push(name);const result=await fn();assert.equal(typeof result?.writeHttpMetadata,'undefined','R2 handles cannot enter Workflow state');outputs.push(result);return result;}};
+  let corrupt=true;
+  const invoke=async input=>{
+   const response=await M.handleJobPage(await M.signedJobRequest(env,{...params,...input}),env),data=await response.json();
+   if(!response.ok)throw T.fail(data.error,response.status);
+   if(corrupt&&input.phase==='audit'&&input.after===2000)data.checksum='f'.repeat(64);
+   return data;
+  };
+  await assert.rejects(M.runMigration(env,params,step,invoke),/HASH_MISMATCH/);
+  let state=await M.migrationStatus(env,uuid(1),inventory);assert.equal(state.complete,false);assert.equal(state.reports[0].status,'failed');
+  corrupt=false;assert.equal((await M.runMigration(env,params,step,invoke)).complete,true);
+  state=await M.migrationStatus(env,uuid(1),inventory);assert.equal(state.complete,true);assert.equal(state.validated,2501);assert.equal(state.copied,2501);
+  assert.equal(engine.prepare('select count(*) n from sigem_rows').get().n,2501,'replay cannot duplicate source rows');
+  assert.equal(JSON.stringify(outputs).includes('SENTINEL_CORPORATE_ROW'),false,'workflow state must not contain corporate row payloads');
+  assert.equal(JSON.stringify(outputs).includes('file_name'),false,'full snapshot metadata stays outside Workflow state');
+  assert.equal((await M.migrationStatus(env,uuid(1),{...inventory,pendingSnapshots:1})).complete,false,'changed inventory cannot be approved');
+  revoked=true;
+  const refused=await M.handleJobPage(await M.signedJobRequest(env,{...params,snapshot:source.id,phase:'audit',after:0}),env);
+  assert.equal(refused.status,403,'live access revocation must stop each page');
+ }finally{global.fetch=originalFetch;engine.close();}
+ // Real PostgreSQL ACL and live-master delegation, without production writes.
+ const pg=new PGlite();try{
+  await pg.exec(`create role anon;create role authenticated;create role service_role;create schema private;create schema auth;
+   create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+   create table private.grcon_master_owner(user_id uuid);create table public.grcon_contracts(id uuid,workspace_id uuid,active boolean);
+   create table public.grcon_memberships(user_id uuid,workspace_id uuid,contract_id uuid,active boolean,role text);
+   insert into private.grcon_master_owner values('${uuid(9)}');insert into public.grcon_contracts values('${uuid(2)}','${uuid(1)}',true);
+   insert into public.grcon_memberships values('${uuid(9)}','${uuid(1)}','${uuid(2)}',true,'owner');
+   create function private.grcon_sigem_storage_control(target_workspace uuid,operation text,input jsonb) returns jsonb language sql as $$select jsonb_build_object('actor',auth.uid(),'operation',operation)$$;`);
+  await pg.exec(fs.readFileSync(require('node:path').join(__dirname,'../supabase/sql/sigem_storage_background.sql'),'utf8'));
+  const sql=`select public.grcon_sigem_storage_service('${uuid(1)}','${uuid(9)}','inventory','{}') result`;
+  for(const role of ['anon','authenticated']){
+   await pg.exec('set role '+role);await assert.rejects(pg.query(sql),/permission denied/);await pg.exec('reset role');
+  }
+  await pg.exec('set role service_role');assert.equal((await pg.query(sql)).rows[0].result.actor,uuid(9));await pg.exec('reset role');
+  await pg.exec('update public.grcon_memberships set active=false;set role service_role');await assert.rejects(pg.query(sql),/revogado/);await pg.exec('reset role');
+ }finally{await pg.close();}
+ console.log('SIGEM durable copy: signed pages, live Master ACL, full real copy/audit, retry without duplication, integrity failure, changed inventory and payload-free Workflow state passed.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,4 +1,5 @@
 import {storageMode, tursoClient, initialize, beginSnapshot, copyPage, sealSnapshot, auditPage, verifiedPage, canonical, fail} from './sigem-turso.mjs';
+import {startMigration,migrationStatus,handleJobPage} from './sigem-migration-job.mjs';
 const PREFIX = '/api/sigem-storage/';
 const uuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v || '');
 const reply = (data, status = 200, headers = {}) => Response.json(data, {status, headers: {'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', ...headers}});
@@ -21,12 +22,14 @@ async function body(request) {
 export async function handleSigemStorage(request, env) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith(PREFIX)) return null;
+  if(url.pathname===PREFIX+'job-page'&&request.method==='POST')return handleJobPage(request,env);
   try {
     const token = request.headers.get('authorization');
     if (!/^Bearer \S+$/i.test(token || '')) throw fail('AUTH_REQUIRED', 401);
     if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) throw fail('SIGEM_NOT_CONFIGURED', 503);
     const auth = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {headers: {apikey: env.SUPABASE_SECRET_KEY, authorization: token}, signal: AbortSignal.timeout(10000)});
-    if (!auth.ok || !uuid((await auth.json()).id)) throw fail('AUTH_INVALID', 401);
+    const user=auth.ok?await auth.json():null;
+    if (!uuid(user?.id)) throw fail('AUTH_INVALID', 401);
     const input = request.method === 'POST' ? await body(request) : Object.fromEntries(url.searchParams);
     if (!input || Array.isArray(input) || !uuid(input.workspace)) throw fail('SIGEM_WORKSPACE_INVALID', 400);
     const action = url.pathname.slice(PREFIX.length), mode = storageMode(env);
@@ -74,6 +77,14 @@ export async function handleSigemStorage(request, env) {
       return reply({ok: true, ...status, mode, externalStorageAuthorized: env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED === 'true', preflightApproved: env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED === 'true', turso, backupPrefix: 'sigem-backups/v1/', cutoverReady: false, cleanupAllowed: false});
     }
     if (action === 'inventory' && request.method === 'GET') return reply({ok: true, ...await control('inventory')});
+    if(action==='background-copy'&&request.method==='POST'){
+      const inventory=await control('inventory');
+      return reply({ok:true,...await startMigration(env,input.workspace,user.id,inventory)});
+    }
+    if(action==='background-status'&&request.method==='GET'){
+      const inventory=await control('inventory');
+      return reply({ok:true,...await migrationStatus(env,input.workspace,inventory)});
+    }
     if (!['copy', 'seal', 'audit'].includes(action) || request.method !== 'POST' || !uuid(input.snapshot)) throw fail('SIGEM_ROUTE_INVALID', 404);
     const source = await control('source', {snapshot: input.snapshot}); // fresh master and contract check on every mutation
     consent(env);
@@ -97,5 +108,6 @@ export async function handleSigemStorage(request, env) {
     return reply({ok: false, error: code, message: code}, error.status || 503);
   }
 }
+
 
 
