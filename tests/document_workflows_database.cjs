@@ -34,6 +34,7 @@ const workspace='00000000-0000-4000-8000-000000000001';
   await db.exec(fs.readFileSync(path.join(root,'supabase/migrations/20261020123122_shared_projectwise_snapshots.sql'),'utf8'));
   await db.exec(fs.readFileSync(path.join(root,'supabase/migrations/20261020131411_document_master_pagination.sql'),'utf8'));
   await db.exec(fs.readFileSync(path.join(root,'supabase/migrations/20261020132354_document_operational_tasks.sql'),'utf8'));
+  await db.exec(fs.readFileSync(path.join(root,'supabase/sql/vault_bounded_allocation_lookup.sql'),'utf8'));
   const aliases=(await db.query("select private.grcon_master_document_key('C1O-RNEST-DD-1.2.3.4-CE-DE-nt-TAG-01') a,private.grcon_master_document_key('C1O_RNEST_DD_1.2.3.4_CE_DE_TAG-01') b,private.grcon_master_document_key('RL-5290.00-22313-856-C1O-017') c")).rows[0];
   assert.equal(aliases.a,aliases.b);assert.equal(aliases.c,'RL-5290.00-22313-856-C1O-017');
   const as = (id, role='authenticated') => db.exec(`reset role; set request.jwt.claim.sub='${id}'; set role ${role};`);
@@ -106,13 +107,13 @@ const workspace='00000000-0000-4000-8000-000000000001';
     values($1,$2,$3,$4,'DOC-001.pdf','DOC-001.pdf','DOC-001','DOC-001','0','pdf',3,$5,$6,'ready'),($7,$2,$3,$4,'DOC-002.pdf','DOC-002.pdf','DOC-002','DOC-002','0','pdf',3,$5,$6,'ready')`,[fileId,workspace,contract,owner,'a'.repeat(64),key,aliasId]);
   await db.query('insert into public.grcon_history(workspace_id,generated_at) values($1,now())',[workspace]);
   const worker=(await import('../cloudflare/worker-entry.mjs')).default;
-  const originalFetch=global.fetch, objects=new Map([[key,Buffer.from('PDF')]]); let deleted=0, failDelete=true, failFinish=false;
+  const originalFetch=global.fetch, objects=new Map([[key,Buffer.from('PDF')]]); let deleted=0, failDelete=true, failFinish=false, inventoryLists=0;
   const bucket={
     async head(k){return objects.has(k)?{size:objects.get(k).length}:null;},
     async get(k){return objects.has(k)?{body:new Response(objects.get(k)).body,size:objects.get(k).length}:null;},
     async put(k,body,options={}){const bytes=Buffer.from(await new Response(body).arrayBuffer());if(options.sha256&&createHash('sha256').update(bytes).digest('hex')!==options.sha256)throw Error('R2 checksum mismatch');objects.set(k,bytes);return {etag:'a'.repeat(32)};},
     async delete(k){if(failDelete)throw Error('R2 offline');deleted++;objects.delete(k);},
-    async list({prefix}){return {objects:[...objects.entries()].filter(([k])=>k.startsWith(prefix)).map(([key,value])=>({key,size:value.length})),truncated:false};},
+    async list({prefix}){inventoryLists++;return {objects:[...objects.entries()].filter(([k])=>k.startsWith(prefix)).map(([key,value])=>({key,size:value.length})),truncated:false};},
   };
   global.fetch=async(url,options={})=>{
     if(url.includes('/auth/v1/user')) return Response.json({id:options.headers.authorization.slice(7)});
@@ -138,18 +139,21 @@ const workspace='00000000-0000-4000-8000-000000000001';
     await db.exec('reset role');assert.equal((await db.query('select status from private.grcon_document_files where id=$1',[fileId])).rows[0].status,'delete_failed');
     assert.ok(objects.has(key));assert.equal((await db.query('select object_key from private.grcon_document_files where id=$1',[aliasId])).rows[0].object_key,key+'.retained-'+fileId);
     failDelete=false;failFinish=true;assert.equal((await deleteFile()).status,409);assert.equal(objects.has(key),false,'partial database failure does not pretend success');
+    const listsBeforeUsage=inventoryLists;
     const usageResponse=await worker.fetch(new Request('https://grcon.test/api/document-vault/usage?workspace='+workspace,{headers:{authorization:'Bearer '+owner}}),env);
     assert.equal(usageResponse.status,200);const usage=(await usageResponse.json()).storage;
     assert.equal(usage.usedBytes,3,'operational usage stops counting a pending object already removed from R2');
     assert.equal(usage.fileCount,1,'only the retained physical object remains counted');
-    assert.equal(usage.physicalObjects,1,'metrics reflect the remaining physical R2 object');
-    assert.equal(usage.source,'r2');
+    assert.equal(usage.pendingChecked,1,'the pending deletion is checked against R2 without scanning the bucket');
+    assert.equal(usage.source,'catalog');
+    assert.equal(inventoryLists,listsBeforeUsage,'opening usage must not scan the entire physical bucket');
     failFinish=false;assert.equal((await deleteFile()).status,200);assert.equal((await deleteFile()).status,200,'retry after success is idempotent');
     await db.exec('reset role');assert.equal((await db.query('select count(*)::int n from private.grcon_document_files where id=$1',[fileId])).rows[0].n,0);
     assert.equal((await db.query('select count(*)::int n from public.grcon_history')).rows[0].n,1,'old GRDT history is untouched');
     assert.equal((await db.query("select count(*)::int n from public.grcon_audit_events where action='document_vault_delete_finish'")).rows[0].n,1);
     const deniedReconcile=await worker.fetch(new Request('https://grcon.test/api/document-vault/reconcile',{method:'POST',headers:{authorization:'Bearer '+viewer,'content-type':'application/json'},body:JSON.stringify({workspaceId:workspace})}),env);assert.equal(deniedReconcile.status,403);
     const reconciled=await worker.fetch(new Request('https://grcon.test/api/document-vault/reconcile',{method:'POST',headers:{authorization:'Bearer '+owner,'content-type':'application/json'},body:JSON.stringify({workspaceId:workspace})}),env);assert.equal(reconciled.status,200);
+    assert.ok(inventoryLists>listsBeforeUsage,'explicit physical reconciliation still scans R2');
     await db.exec('reset role');assert.equal((await db.query("select count(*)::int n from public.grcon_audit_events where action='document_vault_storage_reconciled'")).rows[0].n,1);
     assert.ok(objects.has(key+'.retained-'+fileId),'reused binary is preserved for another document');
     await as('', 'service_role');const result=await rpc('grcon_document_vault_lookup',[workspace,owner,{items:[{requestId:'1',documentCode:'DOC-001'},{requestId:'2',documentCode:'DOC-002'}]}]);
@@ -230,7 +234,7 @@ const workspace='00000000-0000-4000-8000-000000000001';
     await assert.rejects(rpc('grcon_vault_operations',[workspace,viewer,'metadata',{id:first.data.file.id,purpose:'Denied'}]),/permissão/);
     await assert.rejects(rpc('grcon_vault_operations',[other,viewer,'detail',{id:first.data.file.id}]),/acesso/);
     await rpc('grcon_vault_operations',[workspace,admin,'metadata',{id:first.data.file.id,purpose:'Audited',discipline:'Civil'}]);
-    const metrics=await endpoint('usage',{},viewer,'GET');assert.equal(metrics.status,200);const measured=(await metrics.json()).storage;assert.equal(measured.source,'r2');assert.equal(measured.details.historical,1);assert.ok(measured.usedBytes>=bytes1.length+bytes2.length);
+    const metrics=await endpoint('usage',{},viewer,'GET');assert.equal(metrics.status,200);const measured=(await metrics.json()).storage;assert.equal(measured.source,'catalog');assert.equal(measured.details.historical,1);assert.ok(measured.usedBytes>=bytes1.length+bytes2.length);
     assert.equal((await endpoint('usage',{scope:'global'},viewer,'GET')).status,403,'global storage is owner-only');
     const globalUsage=await endpoint('usage',{scope:'global'},owner,'GET');assert.equal(globalUsage.status,200);assert.ok((await globalUsage.json()).storage.contracts.length>0);
     const snapshot=await rpc('grcon_vault_operations',[workspace,owner,'detail',{id:first.data.file.id}]);assert.ok(snapshot.audit.some(e=>e.action==='document_vault_download'));assert.ok(snapshot.audit.some(e=>e.action==='document_vault_metadata'));

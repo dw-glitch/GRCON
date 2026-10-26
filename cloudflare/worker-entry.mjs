@@ -87,6 +87,7 @@ async function rpc(env, name, payload) {
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch (_) { data = text; }
   if (!response.ok) {
+    if(data?.code==='57014')throw Object.assign(new Error('A consulta do Cofre excedeu o prazo. Tente atualizar novamente.'),{status:503,code:'VAULT_QUERY_TIMEOUT'});
     const message = data?.message || data?.error_description || data?.hint || "Falha no catálogo do Cofre.";
     throw Object.assign(new Error(message), { status: response.status === 403 ? 403 : 400, code: data?.code || "CATALOG_ERROR", detail: data });
   }
@@ -375,7 +376,7 @@ async function handleUsage(request, env) {
     storage = { checkedAt: new Date().toISOString(), source: "r2", scope: "global", contracts };
     for (const key of ["usedBytes","fileCount","catalogDocuments","physicalObjects","physicalBytes","catalogObjects","missingObjects","sizeMismatches","orphanObjects","removedPendingFinalization"]) storage[key] = contracts.reduce((sum, row) => sum + (Number(row[key]) || 0), 0);
     storage.healthy = contracts.every(row => row.healthy);
-  } else storage = await storageSnapshot(env, workspaceId, user.id);
+  } else storage = await storageUsageSnapshot(env, workspaceId, user.id);
   try { if (!global) storage.details = await vaultOperation(env, workspaceId, user.id, "metrics"); }
   catch (error) { console.error("GRCON vault metrics", error.code || "METRICS_UNAVAILABLE"); }
   storage.averageBytes = storage.fileCount ? storage.usedBytes / storage.fileCount : 0;
@@ -836,4 +837,5 @@ export default {
     }
   },
 };
+
 
