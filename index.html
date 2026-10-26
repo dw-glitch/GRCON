@@ -44,6 +44,7 @@
 <link href="grcon-profile-avatar.css" rel="stylesheet"/>
 <meta content="5.44.16" name="application-version"/><link rel="stylesheet" href="allocation-dashboard.css" />
 <link rel="stylesheet" href="grdt-central-ux.css" />
+<link rel="stylesheet" href="grdt-support-panel.css" />
 <link rel="stylesheet" href="allocation-generator.css">
 <link rel="stylesheet" href="title-corrector.css">
 </head>
@@ -109,7 +110,6 @@
 </nav>
 <section id="grdt-module" class="module-view" role="tabpanel" aria-labelledby="tab-control">
 <header class="ops-page-heading"><div><h2 id="grcon-module-title-1">Controle de GRDT</h2><p>LD e documentos prontos para análise.</p></div></header>
-<button type="button" class="secondary-button compact" data-grcon-view="sigem" data-sigem-preflight="true" title="Conferir tecnicamente o arquivo eGRDT antes da postagem">Conferir pacote eGRDT (.xls)</button>
 <nav class="grdt-stages" id="grdt-stages" aria-label="Etapas do Controle de GRDT" data-active-stage="1">
   <ol class="grdt-stages-list">
     <li class="grdt-stage is-current" data-grdt-stage="prepare" aria-current="step"><span class="grdt-stage-number" aria-hidden="true">1</span><span class="grdt-stage-text"><strong>Preparar</strong><small>LD, relação e arquivos</small></span></li>
@@ -246,6 +246,31 @@
 <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
 <div class="progress-message-row"><span id="progress-text">Processando…</span><button class="danger-button compact" id="cancel-processing" type="button" hidden>Cancelar</button></div>
 </div>
+</section>
+<section id="grdt-support-panel" class="grdt-support-panel" aria-label="Central de Apoio" data-mode="initial">
+  <div class="grdt-support-head"><strong>Central de Apoio</strong><small>Pesquisa e conferência documental</small></div>
+  <div class="grdt-support-grid">
+    <form id="grdt-support-search-form" class="grdt-support-search-area">
+      <label for="grdt-support-search">Consulta rápida</label>
+      <div class="grdt-support-search-row">
+        <textarea id="grdt-support-search" rows="1" aria-describedby="grdt-support-search-info" placeholder="Pesquisar código ou colar lista de documentos…" spellcheck="false"></textarea>
+        <button type="submit">Pesquisar</button>
+      </div>
+      <small id="grdt-support-search-info" class="grdt-support-muted grdt-support-search-info" role="status" aria-live="polite">Pesquisa exata na Consulta Geral disponível.</small>
+      <div id="grdt-support-results" class="grdt-support-results" hidden></div>
+    </form>
+    <aside id="grdt-support-resume" class="grdt-support-resume" hidden>
+      <strong>Continuar trabalho</strong>
+      <p id="grdt-support-resume-info"></p>
+      <button type="button" id="grdt-support-resume-button">Retomar entrada por texto</button>
+    </aside>
+  </div>
+  <small id="grdt-support-stage" class="grdt-support-muted" hidden></small>
+  <div id="grdt-support-attention" class="grdt-support-attention" role="status" aria-live="polite" hidden></div>
+  <dialog id="grdt-support-detail" aria-label="Revisões do documento">
+    <button type="button" class="grdt-support-detail-close" id="grdt-support-detail-close">Fechar</button>
+    <div id="grdt-support-detail-body" class="grdt-support-detail-body"></div>
+  </dialog>
 </section>
 <section aria-labelledby="grcon-retomar-title" class="grcon-retomar" hidden="" id="grcon-retomar">
 <div class="grcon-retomar-head">
@@ -745,6 +770,8 @@
 <script defer src="grcon_backup.js"></script>
 <script defer src="productivity_center.js"></script>
 <script defer src="grcon_enhancements.js"></script>
+<script defer src="grdt_support_core.js"></script>
+<script defer src="grdt_support_panel.js"></script>
 <script defer src="grdt-stage-progress.js"></script>
 <script defer src="grcon-ui-fix.js"></script>
 <script defer src="grcon_service_worker.js"></script>
