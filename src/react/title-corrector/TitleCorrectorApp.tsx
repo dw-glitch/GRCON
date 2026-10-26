@@ -7,7 +7,7 @@ type Responder={resolve:(value:any)=>void;reject:(reason:Error)=>void};
 const labels:Record<string,string>={ok:'Adequado',empty:'Título vazio',generic:'Pouco específico',document_type:'Tipo documental',description_mismatch:'Descrição divergente',missing_tag:'TAG ausente',wrong_tag:'TAG incorreta',possible_identifier:'Identificador incerto',format:'Padronização',conflict:'Conflito'};
 const factLabels:Record<string,string>={tipo:'Tipo documental',objeto:'O que é',localizacao:'Onde é',finalidade_documental:'Para que é / objetivo documental',eap_classificacao:'EAP — classificação, não localização física'};
 const fileDownload=(bytes:Uint8Array,name:string,kind:string)=>{const blob=new Blob([new Uint8Array(bytes)],{type:kind}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);};
-const csvEscape=(value:unknown)=>'"'+String(value??'').replace(/"/g,'""')+'"';
+const csvEscape=(value:unknown)=>{const raw=String(value??'');const safe=/^\\s*[=+@-]/.test(raw)?"'"+raw:raw;return '"'+safe.replace(/"/g,'""')+'"';};
 function useTitleWorker(){
  const worker=useRef<Worker|null>(null),seq=useRef(0),pending=useRef(new Map<number,Responder>());
  useEffect(()=>()=>{worker.current?.terminate();pending.current.forEach(item=>item.reject(new Error('Operação interrompida.')));pending.current.clear();},[]);
@@ -69,7 +69,7 @@ export function TitleCorrectorApp(){
  }
  async function approveOne(row:TitleRow){
    setBusy(true);
-   try{if(!row.hasConflict&&row.proposed.trim()){await publishDecision(row);decide(row.id,'approved');setDetail(null);setMessage('Título aprovado e registrado no histórico compartilhado do contrato.');}}
+   try{if(!row.hasConflict&&row.proposed.trim()){await publishDecision(row);setRows(prev=>prev.map(r=>r.id===row.id&&r.proposed===row.proposed?{...r,decision:'approved'}:r));setDetail(null);setMessage('Título aprovado e registrado no histórico compartilhado do contrato.');}}
    catch(e){setMessage('Aprovação não registrada: '+(e instanceof Error?e.message:String(e)));}
    finally{setBusy(false);}
  }
@@ -103,25 +103,27 @@ export function TitleCorrectorApp(){
  const selectedInView=visible.filter(r=>selected.has(r.id));
  const selectView=(checked:boolean)=>setSelected(prev=>{const next=new Set(prev);visible.forEach(r=>{if(checked)next.add(r.id);else next.delete(r.id);});return next;});
  const approveSelection=async()=>{
-  const eligible=selectedInView.filter(row=>!row.hasConflict&&row.proposed.trim()).slice(0,50),approved=new Set<string>(),failed:string[]=[];
+  const eligible=selectedInView.filter(row=>!row.hasConflict&&row.proposed.trim()).slice(0,50),approved=new Map<string,string>(),failed:string[]=[];
   setBusy(true);
   try{
    for(const row of eligible){
-    try{await publishDecision(row);approved.add(row.id);}catch(e){failed.push(row.document+': '+(e instanceof Error?e.message:String(e)));}
+    try{await publishDecision(row);approved.set(row.id,row.proposed);}catch(e){failed.push(row.document+': '+(e instanceof Error?e.message:String(e)));}
    }
-   setRows(prev=>prev.map(r=>approved.has(r.id)?{...r,decision:'approved'}:r));
+   setRows(prev=>prev.map(r=>approved.get(r.id)===r.proposed?{...r,decision:'approved'}:r));
    setSelected(new Set());
    setMessage(approved.size+' título(s) aprovados e registrados no contrato. '+(failed.length?failed.length+' não registrados — consulte a situação e repita.':''));
   }finally{setBusy(false);}
  };
  const analyze=async()=>{
    if(!files.length)return setMessage('Selecione ao menos uma LD para iniciar a análise.');
+   const initialScope=scope(),initialUser=cloud()?.session?.user?.id;
    setBusy(true);resetResult();
    try{
      if(files.length>8||files.some(file=>file.size>50*1024*1024)||files.reduce((sum,file)=>sum+file.size,0)>120*1024*1024)throw Error('Máximo: 8 LDs, 50 MB por arquivo e 120 MB no lote.');
      const codes=[...new Set(codeText.split(/[;\n\r\t,]+/).map(s=>s.trim()).filter(Boolean))];
      const data:Analysis=await call('analyzeBatch',{files:await Promise.all(files.map(async file=>({name:file.name,bytes:await file.arrayBuffer()}))),codes,sourceMode,
        referenceBytes:reference?await reference.arrayBuffer():null});
+     if(initialScope!==scope()||initialUser!==cloud()?.session?.user?.id)throw Error('O contrato ou usuário mudou. Reanalise a LD.');
      setAnalysis(data);setRows(data.rows);
      setMessage(data.rows.length+' documento(s) avaliados. '+(data.unmatched.length?data.unmatched.length+' código(s) não localizado(s).':'Confira as evidências antes de aprovar.'));
    }catch(error){setMessage('Falha na análise: '+(error instanceof Error?error.message:String(error)));}
@@ -195,9 +197,9 @@ export function TitleCorrectorApp(){
       <div className="tc-drawer-body"><section><h4>Título atual</h4><p>{active.current||'Vazio'}</p></section>
       <section><h4>Evidências — o que, onde e para que</h4>{['objeto','localizacao','finalidade_documental','eap_classificacao'].map(field=>{const fact=active.facts.find(f=>f.field===field);return <div className="tc-fact" key={field}><strong>{factLabels[field]}</strong><p>{fact?.value||'Não comprovado nas bases consultadas'}</p>{fact&&<small>{fact.source}{fact.reference?' · '+fact.reference:''}</small>}</div>})}</section>
       <section><h4>Referência normativa</h4>{active.facts.filter(f=>f.field==='tipo').map((fact,i)=><p key={i}>{fact.value}<br/><small>{fact.source}</small></p>)}<p>{active.reason}</p></section>
-      <section><label className="tc-edit"><strong>Título final proposto</strong><textarea rows={5} spellCheck={false} value={active.proposed} onChange={e=>alter(active.id,{proposed:e.target.value,decision:'pending'})}/></label><button className="secondary-button" onClick={()=>alter(active.id,{proposed:active.originalProposed,decision:'pending'})}>Restaurar recomendação técnica</button></section>
+      <section><label className="tc-edit"><strong>Título final proposto</strong><textarea rows={5} spellCheck={false} disabled={busy} value={active.proposed} onChange={e=>alter(active.id,{proposed:e.target.value,decision:'pending'})}/></label><button className="secondary-button" onClick={()=>alter(active.id,{proposed:active.originalProposed,decision:'pending'})}>Restaurar recomendação técnica</button></section>
       {active.hasConflict&&<p className="tc-warning">Existem conflitos ou fontes ambíguas. A exportação desta linha fica bloqueada até uma conferência documental segura.</p>}
-      <section><h4>Histórico de títulos aprovados neste contrato</h4>{history.length?history.map(decision=><div className="tc-fact" key={decision.id}><strong>{decision.approved_title}</strong><p><small>{new Date(decision.approved_at).toLocaleString('pt-BR')} · {decision.source_reference||'Revisão humana'}</small></p><button className="secondary-button" disabled={busy} onClick={()=>void invalidate(decision.id)}>Invalidar (administração)</button></div>):<p>Não há correções compartilhadas ativas para este documento.</p>}</section>
+      <section><h4>Histórico de títulos aprovados neste contrato</h4>{history.length?history.map(decision=><div className="tc-fact" key={decision.id}><strong>{decision.approved_title}</strong><p><small>{new Date(decision.approved_at).toLocaleString('pt-BR')} · {decision.source_reference||'Revisão humana'}</small></p>{['owner','admin'].includes(String(cloud()?.membership?.role||''))&&<button className="secondary-button" disabled={busy} onClick={()=>void invalidate(decision.id)}>Invalidar (administração)</button>}</div>):<p>Não há correções compartilhadas ativas para este documento.</p>}</section>
       <section><h4>Fontes e referências</h4><p>{active.evidenceSummary}</p>{Object.entries(active.sourceRows).filter(([,value])=>value.length).map(([kind,value])=><p key={kind}><strong>{kind.toUpperCase()}:</strong> registro(s) {value.join(', ')}</p>)}</section>
       </div><footer className="tc-actions"><button className="secondary-button" onClick={()=>{decide(active.id,'kept');setDetail(null);}}>Manter título atual</button><button className="secondary-button" disabled={busy||active.hasConflict||!active.proposed.trim()} onClick={()=>void runAi(active)}>Consultar IA</button><button className="primary-button" disabled={busy||active.hasConflict||!active.proposed.trim()} onClick={()=>void approveOne(active)}>Aprovar e registrar</button></footer>
    </aside></div>}

@@ -134,6 +134,7 @@ async function exportLd(rows){
  return {bytes:result.buffer,name:result.fileName.replace('_RECON_','_GRCON_'),changes:result.changes,preservation:result.preservation};
 }
 async function analyzeBatch(input){
+ multiFiles.clear();batchMode=false;original=null;report=[];
  if(!Array.isArray(input.files)||input.files.length<1||input.files.length>8)throw Error('Selecione de 1 a 8 LDs.');
  let size=0;const combined=[],collections=[],missing=[],skipped=[],totals={};
  const localFiles=new Map();
