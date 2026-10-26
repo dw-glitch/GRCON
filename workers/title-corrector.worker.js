@@ -27,6 +27,7 @@ importScripts('../xlsx.full.min.js','../jszip.min.js','title-corrector-reports.j
   '../vendor/recon/scon_tubulacao.js');
 const C=self.RECONTriagemCore,A=self.RECONAuditCore;
 let original=null,originalName='',report=[];
+let multiFiles=new Map();let batchMode=false;
 const clean=x=>String(x==null?'':x).trim();
 const normal=x=>clean(x).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
 const reading=bytes=>XLSX.read(bytes,{type:'array',cellDates:true,cellFormula:true,bookVBA:true});
@@ -132,14 +133,72 @@ async function exportLd(rows){
  const result=await self.RECONTitleWriter.apply(file,authorized,XLSX,JSZip);
  return {bytes:result.buffer,name:result.fileName.replace('_RECON_','_GRCON_'),changes:result.changes,preservation:result.preservation};
 }
+async function analyzeBatch(input){
+ if(!Array.isArray(input.files)||input.files.length<1||input.files.length>8)throw Error('Selecione de 1 a 8 LDs.');
+ let size=0;const combined=[],collections=[],missing=[],skipped=[],totals={};
+ const localFiles=new Map();
+ for(let i=0;i<input.files.length;i++){
+  const file=input.files[i];
+  if(!/\\.(xlsx|xlsm)$/i.test(file?.name||'')||!(file.bytes instanceof ArrayBuffer))throw Error('Arquivo de LD inválido.');
+  size+=file.bytes.byteLength;
+  if(file.bytes.byteLength>50*1024*1024||size>120*1024*1024)throw Error('O lote ultrapassa o limite de 120 MB (máximo 50 MB por LD).');
+  const data=await analyze({...input,name:file.name,bytes:file.bytes});
+  const rows=data.rows.map(row=>({...row,id:'ld:'+i+'::'+row.id,sourceId:String(i),sourceFile:file.name}));
+  localFiles.set(String(i),{bytes:file.bytes,name:file.name,rows});
+  combined.push(...rows);
+  collections.push({file:file.name,count:rows.length,coverage:data.coverage});
+  missing.push(...data.unmatched.map(code=>file.name+': '+code));
+  skipped.push(...(data.coverage?.skippedSheets||[]).map(entry=>({sheet:file.name+' / '+entry.sheet,reason:entry.reason})));
+  for(const [key,value] of Object.entries(data.sourceCounts||{}))totals[key]=Math.max(Number(totals[key]||0),Number(value||0));
+ }
+ multiFiles=localFiles;batchMode=true;report=combined;original=null;originalName='';
+ return {rows:combined,files:collections,unmatched:missing,coverage:{skippedSheets:skipped},sourceCounts:totals,standard:'ET-5290.00-22000-912-1LV-001 Rev. R'};
+}
+async function batchExports(rows){
+ if(!batchMode)throw Error('Reanalise as LDs para gerar o pacote.');
+ const saved={original,originalName,report},outputs=[],approved=(rows||[]).filter(r=>r.decision==='approved');
+ try{
+  for(const [sourceId,state] of multiFiles){
+   const selected=approved.filter(row=>row.sourceId===sourceId);
+   if(!selected.length)continue;
+   original=state.bytes;originalName=state.name;report=state.rows;
+   const output=await exportLd(selected);outputs.push(output);
+  }
+ }finally{original=saved.original;originalName=saved.originalName;report=saved.report;}
+ if(!outputs.length)throw Error('Não há títulos aprovados para exportação.');
+ return outputs;
+}
+async function exportBatch(rows){
+ const outputs=await batchExports(rows);
+ if(outputs.length===1)return outputs[0];
+ const zip=new JSZip();
+ outputs.forEach((file,i)=>zip.file(String(i+1).padStart(2,'0')+'_'+file.name,file.bytes));
+ return {bytes:await zip.generateAsync({type:'uint8array',compression:'DEFLATE'}),name:'GRCON_LDs_Titulos_Corrigidos.zip',
+   changes:outputs.flatMap(file=>file.changes),preservation:{valid:outputs.every(file=>file.preservation?.valid)},files:outputs.length};
+}
+async function packageBatch(input){
+ const zip=new JSZip(),items=[];
+ if((input.rows||[]).some(row=>row.decision==='approved')){
+  const outputs=await batchExports(input.rows);
+  outputs.forEach((file,i)=>{const name=String(i+1).padStart(2,'0')+'_'+file.name;zip.file(name,file.bytes);items.push(name);});
+ }
+ const audit=self.GrconTitleReports.report(input.reportRows||[]);
+ zip.file(audit.name,audit.bytes);items.push(audit.name);
+ const pending=self.GrconTitleReports.report((input.reportRows||[]).filter(row=>row.hasConflict||!row.proposed||row.confidence==='baixa'));
+ zip.file('GRCON_Pendencias_Titulos.xlsx',pending.bytes);items.push('GRCON_Pendencias_Titulos.xlsx');
+ return {bytes:await zip.generateAsync({type:'uint8array',compression:'DEFLATE'}),name:'GRCON_Pacote_Revisao_Titulos.zip',items};
+}
 self.onmessage=async({data})=>{
  const {id,op,input}=data;
  try{
    let result;
    if(op==='analyze')result=await analyze(input);
+   else if(op==='analyzeBatch')result=await analyzeBatch(input);
    else if(op==='export')result=await exportLd(input.rows);
+   else if(op==='exportBatch')result=await exportBatch(input.rows);
    else if(op==='report')result=self.GrconTitleReports.report(input.rows);
    else if(op==='package')result=await self.GrconTitleReports.package(input.rows,input.reportRows,exportLd);
+   else if(op==='packageBatch')result=await packageBatch(input);
    else throw Error('Operação desconhecida.');
    const transfers=result?.bytes instanceof Uint8Array?[result.bytes.buffer]:[];
    self.postMessage({id,result},transfers);
