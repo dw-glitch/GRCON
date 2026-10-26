@@ -58,6 +58,15 @@
     const heading = element("h3", "", code);
     const caption = element("p", "grdt-support-muted", "Todas as revisões encontradas nesta fonte. A situação de uma revisão não comprova a postagem de outra.");
     el.detailBody.append(heading, caption);
+    const copy = element("button", "grdt-support-filter", "Copiar código");
+    copy.type = "button";
+    copy.addEventListener("click", async function () {
+      try {
+        await root.navigator.clipboard.writeText(code);
+        text(copy, "Código copiado");
+      } catch (_) { text(copy, "Selecione e copie o código acima"); }
+    });
+    el.detailBody.append(copy);
     const list = element("div", "grdt-support-revisions");
     rows.slice(0, 100).forEach(function (row) {
       const item = element("div", "grdt-support-revision");
@@ -65,6 +74,13 @@
       const title = element("span", "", row.title || "Sem título registrado");
       const meta = element("small", "", "Fonte: Consulta Geral" + (row.sourceRow != null ? " · Linha " + row.sourceRow : ""));
       item.append(name, title, meta);
+      try {
+        const history = root.GrconPostingFlow && root.GrconPostingFlow.lookup(row.document, row.revision);
+        const emission = history && history.latestEmission;
+        if (emission && emission.grdt) {
+          item.append(element("small", "", "eGRDT registrada: " + emission.grdt + " · não comprova postagem"));
+        }
+      } catch (_) { /* histórico indisponível não altera a pesquisa SIGEM */ }
       list.append(item);
     });
     el.detailBody.append(list);
