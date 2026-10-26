@@ -21,7 +21,7 @@ assert.match(worker,/areaFor\(/);
 assert.match(worker,/if\(!authorized\.length\)/);
 assert.match(worker,/from\.document===row\.document/);
 assert.match(worker,/!from\.hasConflict/);
-assert.match(ui,/Aprovar título/);
+assert.match(ui,/Aprovar e registrar/);
 assert.match(ui,/Manter título atual/);
 assert.match(ui,/O que é/);
 assert.match(ui,/Para que é/);
