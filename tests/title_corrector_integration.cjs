@@ -26,6 +26,11 @@ assert.match(ui,/Manter título atual/);
 assert.match(ui,/O que é/);
 assert.match(ui,/Para que é/);
 assert.match(ui,/setRows/);
+// Execute the UI CSV escape function against spreadsheet formula prefixes.
+const escapeSource=ui.match(/const csvEscape=\(value:unknown\)=>([^\n]+);/)[1];
+const csvEscape=Function('value','return ((value)=>'+escapeSource+')(value)');
+for(const input of ['=1+1',' +SUM(A1:A2)','\t@teste','\n-10'])assert.ok(csvEscape(input).startsWith('"\''));
+assert.equal(csvEscape('Título "seguro"'),'"Título ""seguro"""');
 const Standard=require(path.join(root,'vendor/recon/document_title_standard.js'));
 require(path.join(root,'vendor/recon/document_title_standard_r.js'));
 assert.equal(globalThis.RECONDocumentTitleStandard.STANDARD.revision,'R');
@@ -37,3 +42,4 @@ assert.ok(updated.indexOf('r="A2"')<updated.indexOf('r="C2"'));
 assert.ok(updated.indexOf('r="C2"')<updated.indexOf('r="D2"'));
 assert.match(updated,/TITULO &amp; TESTE/);
 console.log('title_corrector_integration: integração, Rev. R e preservação XML: OK');
+

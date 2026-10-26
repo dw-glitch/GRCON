@@ -68,6 +68,9 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  const zip=await run('JSZip.loadAsync(__zipBytes)','multi-lD');
  const outputNames=Object.keys(zip.files).filter(n=>n.endsWith('.xlsx'));
  assert.equal(outputNames.length,2,'É obrigatória uma cópia por LD');
- await assert.rejects(request(6,'exportBatch',{rows:[{...batch.rows[0],id:'falso',decision:'approved'}]}),/títulos aprovados/);
+ await assert.rejects(request(6,'exportBatch',{rows:[{...batch.rows[0],id:'falso',decision:'approved'}]}),/Selecione e aprove/);
+ await assert.rejects(request(7,'analyzeBatch',{files:[{name:'LD_A.txt',bytes:fixture}]}),/Arquivo de LD inválido/);
+ await assert.rejects(request(8,'analyzeBatch',{files:[{name:'LD_Axlsx',bytes:fixture}]}),/Arquivo de LD inválido/);
  console.log('title_corrector_worker: análise real, SCON completa, TAG exata, exportação e preservação OK');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+

@@ -7,7 +7,7 @@ type Responder={resolve:(value:any)=>void;reject:(reason:Error)=>void};
 const labels:Record<string,string>={ok:'Adequado',empty:'Título vazio',generic:'Pouco específico',document_type:'Tipo documental',description_mismatch:'Descrição divergente',missing_tag:'TAG ausente',wrong_tag:'TAG incorreta',possible_identifier:'Identificador incerto',format:'Padronização',conflict:'Conflito'};
 const factLabels:Record<string,string>={tipo:'Tipo documental',objeto:'O que é',localizacao:'Onde é',finalidade_documental:'Para que é / objetivo documental',eap_classificacao:'EAP — classificação, não localização física'};
 const fileDownload=(bytes:Uint8Array,name:string,kind:string)=>{const blob=new Blob([new Uint8Array(bytes)],{type:kind}),url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);};
-const csvEscape=(value:unknown)=>{const raw=String(value??'');const safe=/^\\s*[=+@-]/.test(raw)?"'"+raw:raw;return '"'+safe.replace(/"/g,'""')+'"';};
+const csvEscape=(value:unknown)=>{const raw=String(value??'');const safe=/^\s*[=+@-]/.test(raw)?"'"+raw:raw;return '"'+safe.replace(/"/g,'""')+'"';};
 function useTitleWorker(){
  const worker=useRef<Worker|null>(null),seq=useRef(0),pending=useRef(new Map<number,Responder>());
  useEffect(()=>()=>{worker.current?.terminate();pending.current.forEach(item=>item.reject(new Error('Operação interrompida.')));pending.current.clear();},[]);
@@ -205,3 +205,4 @@ export function TitleCorrectorApp(){
    </aside></div>}
  </div>;
 }
+

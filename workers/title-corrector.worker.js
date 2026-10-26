@@ -156,7 +156,7 @@ async function analyzeBatch(input){
  const localFiles=new Map();
  for(let i=0;i<input.files.length;i++){
   const file=input.files[i];
-  if(!/\\.(xlsx|xlsm)$/i.test(file?.name||'')||!(file.bytes instanceof ArrayBuffer))throw Error('Arquivo de LD inválido.');
+  if(!/\.(xlsx|xlsm)$/i.test(file?.name||'')||!(file.bytes instanceof ArrayBuffer))throw Error('Arquivo de LD inválido.');
   size+=file.bytes.byteLength;
   if(file.bytes.byteLength>50*1024*1024||size>120*1024*1024)throw Error('O lote ultrapassa o limite de 120 MB (máximo 50 MB por LD).');
   const data=await analyze({...input,name:file.name,bytes:file.bytes});
@@ -221,3 +221,4 @@ self.onmessage=async({data})=>{
    self.postMessage({id,result},transfers);
  }catch(error){self.postMessage({id,error:error?.message||String(error)});}
 };
+
