@@ -4344,6 +4344,15 @@
     renderTable();
     updateTriageQuickControls();
 
+    // Central de Apoio é somente uma projeção dos grupos oficiais da triagem.
+    // Não recalcula nem altera decisão, inclusão manual, revisão ou postagem.
+    if (window.GrconGrdtSupportCore && els.resultsSection && !els.resultsSection.hidden) {
+      const summary = window.GrconGrdtSupportCore.summarize(state.results.map(decisionGroupKey));
+      window.dispatchEvent(new CustomEvent("grcon:grdt-support-summary", {
+        detail: { ...summary, resultVersion: state.resultVersion },
+      }));
+    }
+
     const filtered = filteredResults();
     const selectableIndices = [];
     filtered.forEach((row) => {
