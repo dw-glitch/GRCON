@@ -103,7 +103,7 @@ export function TitleCorrectorApp(){
  const selectedInView=visible.filter(r=>selected.has(r.id));
  const selectView=(checked:boolean)=>setSelected(prev=>{const next=new Set(prev);visible.forEach(r=>{if(checked)next.add(r.id);else next.delete(r.id);});return next;});
  const approveSelection=async()=>{
-  const eligible=selectedInView.filter(row=>!row.hasConflict&&row.proposed.trim()).slice(0,50),approved=new Map<string,string>(),failed:string[]=[];
+  const eligible=selectedInView.filter(row=>!row.reviewRequired&&!row.hasConflict&&row.proposed.trim()).slice(0,50),approved=new Map<string,string>(),failed:string[]=[];
   setBusy(true);
   try{
    for(const row of eligible){
@@ -179,7 +179,7 @@ export function TitleCorrectorApp(){
      {analysis.unmatched.length>0&&<details className="tc-warning"><summary>{analysis.unmatched.length} código(s) não localizado(s) na LD</summary><p>{analysis.unmatched.join(' · ')}</p></details>}
      {Boolean(analysis.coverage?.skippedSheets?.length)&&<details className="tc-warning"><summary>Abas sem leitura técnica: {analysis.coverage?.skippedSheets?.length}</summary>{analysis.coverage?.skippedSheets?.map(x=><p key={x.sheet}>{x.sheet}: {x.reason}</p>)}</details>}
      <div className="tc-filters"><input aria-label="Pesquisar documento e título" placeholder="Buscar código, TAG, título ou disciplina" value={search} onChange={e=>{setSearch(e.target.value);setScrollTop(0);}}/><select aria-label="Filtrar situação" value={filter} onChange={e=>{setFilter(e.target.value);setScrollTop(0);}}><option value="all">Todos</option><option value="pending">Pendentes</option><option value="review">Conferência necessária</option><option value="conflict">Conflitos</option><option value="ok">Adequados</option><option value="approved">Aprovados</option><option value="kept">Mantidos</option></select><select aria-label="Filtrar aba" value={sheet} onChange={e=>{setSheet(e.target.value);setScrollTop(0);}}><option value="">Todas as abas</option>{sheets.map(s=><option key={s}>{s}</option>)}</select></div>
-     <div className="tc-toolbar"><label><input type="checkbox" checked={Boolean(visible.length&&visible.every(r=>selected.has(r.id)))} onChange={e=>selectView(e.target.checked)}/> Selecionar filtrados ({selectedInView.length})</label><button className="secondary-button" disabled={!selectedInView.length||busy} onClick={()=>void approveSelection()}>Aprovar selecionados elegíveis (máx. 50)</button><span className="tc-spacer"/><span>{visible.length} resultado(s)</span></div>
+     <div className="tc-toolbar"><label><input type="checkbox" checked={Boolean(visible.length&&visible.every(r=>selected.has(r.id)))} onChange={e=>selectView(e.target.checked)}/> Selecionar filtrados ({selectedInView.length})</label><button className="secondary-button" disabled={!selectedInView.length||busy} onClick={()=>void approveSelection()}>Aprovar selecionados seguros (máx. 50)</button><span className="tc-spacer"/><span>{visible.length} resultado(s)</span></div>
      <div className="tc-table-header"><span>Documento</span><span>Título atual</span><span>Recomendação</span><span>Situação</span><span></span></div>
      <div className="tc-list" style={{height:Math.min(viewport,Math.max(110,visible.length*ITEM_HEIGHT))}} onScroll={e=>setScrollTop(e.currentTarget.scrollTop)}>
       <div style={{height:visible.length*ITEM_HEIGHT,position:'relative'}}>

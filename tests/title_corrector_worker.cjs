@@ -50,6 +50,7 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  assert.equal(outputRows[1][1],approved.proposed);
  assert.equal(outputRows[2][1],originalRows[2][1],'outra linha foi alterada');
  await assert.rejects(request(3,'export',{rows:[{...first,id:'forjado',decision:'approved'}]}),/Selecione e aprove/);
+ if(first.tag)await assert.rejects(request(31,'export',{rows:[{...first,decision:'approved',proposed:'RELATORIO DE INSPECAO - TAG INCORRETA'}]}),/TAG documental/);
  // Duas LDs com códigos repetidos: linhas e saídas devem permanecer isoladas.
  const batch=await request(4,'analyzeBatch',{files:[
   {name:'LD_A.xlsx',bytes:fixture},{name:'LD_B.xlsx',bytes:fixture}],codes:[],sourceMode:'auto'});

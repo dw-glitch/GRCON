@@ -119,9 +119,25 @@ async function analyze(input){
     valve:refs.valveList?.activeTagCount||0,escopo:refs.sconEscopo?.entries?.length||0},
     standard:'ET-5290.00-22000-912-1LV-001 Rev. R'};
 }
+function hasExactTitleTag(title,tag){
+ const hay=clean(title).toUpperCase(),needle=clean(tag).toUpperCase();
+ if(!needle)return true;
+ let at=hay.indexOf(needle);
+ while(at>=0){
+  const before=at?hay[at-1]:'',after=hay[at+needle.length]||'';
+  if(!/[A-Z0-9]/.test(before)&&!/[A-Z0-9]/.test(after))return true;
+  at=hay.indexOf(needle,at+1);
+ }
+ return false;
+}
 async function exportLd(rows){
  if(!original)throw Error('Analise uma LD antes de exportar.');
  const originalMap=mapRows(report);
+ for(const row of rows||[]){
+  if(row?.decision!=='approved')continue;
+  const controlled=originalMap.get(String(row.id));
+  if(controlled?.tag&&!hasExactTitleTag(row.proposed,controlled.tag))throw Error('A TAG documental '+controlled.tag+' está ausente ou alterada no título de '+controlled.document+'. Corrija antes de exportar.');
+ }
  const authorized=(rows||[]).filter(row=>{
    const from=originalMap.get(String(row.id));
    return from&&from.sheet===row.sheet&&from.row===row.row&&from.document===row.document
