@@ -38,10 +38,14 @@ async function request(id,op,input){events.length=0;await sandbox.onmessage({dat
  const result=await request(2,'export',{rows:[approved]});
  assert.equal(result.preservation.valid,true,'exportação falhou na conferência de integridade');
  assert.equal(result.changes.length,1,'exportação não isolou uma célula');
- const original=run('XLSX.read(__bytes,{type:"array"})',{__bytes:fixture});
- const output=run('XLSX.read(__bytes,{type:"array"})',{__bytes:result.bytes});
- const originalRows=run('XLSX.utils.sheet_to_json(__book.Sheets.TUB,{header:1})',{__book:original});
- const outputRows=run('XLSX.utils.sheet_to_json(__book.Sheets.TUB,{header:1})',{__book:output});
+ context.__bytes=fixture;
+ const original=run('XLSX.read(__bytes,{type:"array"})','original.xlsx');
+ context.__bytes=result.bytes;
+ const output=run('XLSX.read(__bytes,{type:"array"})','export.xlsx');
+ context.__book=original;
+ const originalRows=run('XLSX.utils.sheet_to_json(__book.Sheets.TUB,{header:1})','read-original');
+ context.__book=output;
+ const outputRows=run('XLSX.utils.sheet_to_json(__book.Sheets.TUB,{header:1})','read-export');
  assert.equal(originalRows[1][1],'RELATORIO DE INSPECAO');
  assert.equal(outputRows[1][1],approved.proposed);
  assert.equal(outputRows[2][1],originalRows[2][1],'outra linha foi alterada');
