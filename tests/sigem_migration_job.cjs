@@ -66,17 +66,21 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   },get:async id=>({status:async()=>({status:instances.get(id)?.status||'errored'}),restart:async()=>{
    const entry=instances.get(id);entry.status='queued';pending.push({id,params:entry.params});
   }})};
-  const next=await M.startMigration(env,uuid(1),uuid(9),inventory);let segments=0,transient=true;
+  const next=await M.startMigration(env,uuid(1),uuid(9),inventory);let segments=0,transient=true,firstRetry=true;
   while(pending.length){
    const entry=pending.shift();instances.get(entry.id).status='running';let calls=0;
    const bounded=async input=>{
     assert.ok(++calls<=M.PAGE_BUDGET,'each continuation stays below the Free subrequest budget');
+    if(entry.params.segment===0&&input.phase==='copy'&&input.after===0&&firstRetry){firstRetry=false;throw T.fail('TURSO_TIMEOUT',503);}
     if(entry.params.segment===1&&input.phase==='audit'&&transient){transient=false;throw T.fail('TURSO_TIMEOUT',503);}
     const response=await M.handleJobPage(await M.signedJobRequest(env,{workspace:uuid(1),id:next.id,...input}),env),value=await response.json();
     if(!response.ok)throw T.fail(value.error,response.status);return value;
    };
    try{
-    const result=await M.runMigration(env,entry.params,step,bounded);instances.get(entry.id).status='complete';segments++;
+    const retryStep=entry.params.segment===0?{do:async(name,config,fn)=>{
+     try{return await step.do(name,config,fn);}catch(error){if(error.code!=='TURSO_TIMEOUT')throw error;return step.do(name,config,fn);}
+    }}:step;
+    const result=await M.runMigration(env,entry.params,retryStep,bounded);instances.get(entry.id).status='complete';segments++;
     if(result.continued){const progress=await M.migrationStatus(env,uuid(1),inventory);assert.equal(progress.complete,false);assert.equal(progress.reports[0].segment,result.segment);}
    }catch(error){
     assert.equal(error.code,'TURSO_TIMEOUT');instances.get(entry.id).status='errored';

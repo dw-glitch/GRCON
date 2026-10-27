@@ -174,6 +174,12 @@ export async function runMigration(env,params,step,invoke){
   if(attempts>=PAGE_BUDGET)throw fail('SIGEM_SEGMENT_REQUEST_LIMIT');
   attempts++;return send(input);
  };
+ const parallel=async inputs=>{
+  const settled=await Promise.allSettled(inputs.map(async input=>call(input)));
+  const rejected=settled.find(value=>value.status==='rejected');
+  if(rejected)throw rejected.reason;
+  return settled.map(value=>value.value);
+ };
  const advance=async()=>{
   const nextSegment=segment+1,nextReport={...report,segment:nextSegment,status:'running'};
   await step.do('continue',retry,async()=>{
@@ -201,7 +207,7 @@ export async function runMigration(env,params,step,invoke){
     const pages=await step.do('copy-'+index+'-'+after,retry,async()=>{
      const offsets=Array.from({length:amount},(_,i)=>start+i*250);
      const first=await call({phase:'copy',snapshot:source.id,after:offsets[0]});
-     return [first,...await Promise.all(offsets.slice(1).map(cursor=>call({phase:'copy',snapshot:source.id,after:cursor})))];
+     return [first,...await parallel(offsets.slice(1).map(cursor=>({phase:'copy',snapshot:source.id,after:cursor})))];
     });
     for(let i=0;i<pages.length;i++){
      const expected=Math.min(250,source.record_count-start-i*250);
@@ -215,7 +221,7 @@ export async function runMigration(env,params,step,invoke){
     phase='audit';after=0;digest=ZERO_HASH;count=0;
    }else if(phase==='audit'){
     const auditIndex=index,start=after,amount=Math.min(GROUP,PAGE_BUDGET-used,Math.ceil((source.record_count-after)/250));
-    const pages=await step.do('audit-'+index+'-'+after,retry,()=>Promise.all(Array.from({length:amount},(_,i)=>call({phase:'audit',snapshot:source.id,after:start+i*250}))));
+    const pages=await step.do('audit-'+index+'-'+after,retry,()=>parallel(Array.from({length:amount},(_,i)=>({phase:'audit',snapshot:source.id,after:start+i*250}))));
     for(let i=0;i<pages.length;i++){
      const page=pages[i],cursor=start+i*250,expected=Math.min(250,source.record_count-cursor);
      if(page.count!==expected||page.after!==cursor+expected||page.snapshotChecksum!==sealed.checksum||!hex(page.checksum))throw fail('SIGEM_AUDIT_INCOMPLETE');
