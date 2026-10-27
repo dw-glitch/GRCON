@@ -105,3 +105,18 @@ html[data-app="GRCON"] #grdt-support-panel [hidden] { display: none !important; 
 @media (prefers-reduced-motion: reduce) {
   #grdt-support-panel * { scroll-behavior: auto; transition: none; animation: none; }
 }
+/* Central de Apoio: problemas de fato, sem repetir a barra de resumo da GRDT. */
+#grdt-support-panel .grdt-support-issues { display:grid; gap:6px; }
+#grdt-support-panel .grdt-support-issue { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; border-top:1px solid var(--support-border); padding:8px 0; }
+#grdt-support-panel .grdt-support-issue strong { font-size:12px; display:block; overflow-wrap:anywhere; }
+#grdt-support-panel .grdt-support-issue p { font-size:11px; color:var(--support-muted); margin:3px 0 0; line-height:1.5; overflow-wrap:anywhere; }
+#grdt-support-panel .grdt-support-issue button { padding:6px 10px; min-height:32px; border:1px solid var(--support-border); border-radius:7px; background:var(--button-secondary-bg,var(--surface,transparent)); color:inherit; font:inherit; font-size:11px; cursor:pointer; }
+#grdt-support-panel .grdt-support-preview { font-size:11px; color:var(--support-muted); }
+#grdt-support-panel .grdt-support-preflight { border-left:3px solid var(--support-border); padding:7px 9px; background:var(--surface-secondary,rgba(100,116,139,.06)); border-radius:4px; font-size:12px; }
+#grdt-support-panel .grdt-support-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+#grdt-support-panel .grdt-support-toggle { font-size:11px; cursor:pointer; border:0; color:inherit; background:transparent; text-decoration:underline; }
+#grdt-support-panel[data-minimized="true"] .grdt-support-grid,
+#grdt-support-panel[data-minimized="true"] .grdt-support-attention,
+#grdt-support-panel[data-minimized="true"] #grdt-support-stage { display:none !important; }
+#results-section .grdt-support-target { outline:2px solid var(--primary,#155c8a); outline-offset:-2px; }
+@media (max-width:720px) { #grdt-support-panel .grdt-support-issue { grid-template-columns:minmax(0,1fr); } }
