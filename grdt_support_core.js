@@ -72,29 +72,31 @@
       if (row.manual) manualSelected += 1;
       let kind = "", title = "", reason = "", action = "";
       const document = String(row.document || ""), revision = String(row.revision || "");
-      if (row.selected && row.manual) {
-        kind = "manual"; title = "Inclusão manual excepcional";
-        reason = "Seleção manual mantida. Confira o motivo e os arquivos antes de gerar.";
-        action = "Conferir seleção";
-      } else if (row.fileRevision && revision && key(row.fileRevision) !== key(revision)) {
+      if (row.fileRevision && revision && key(row.fileRevision) !== key(revision)) {
         kind = "revision"; title = "Revisão do arquivo divergente";
         reason = "Arquivo: rev. " + row.fileRevision + " · GRDT: rev. " + revision + ". Confira antes de gerar.";
         action = "Conferir revisões";
       } else if (row.revisionWarning) {
         kind = "revision"; title = "Identificação da revisão a conferir";
         reason = String(row.revisionWarning); action = "Ver evidências";
-      } else if (row.blockingRevision) {
-        kind = "analysis"; title = "Revisão anterior em análise";
-        reason = "Rev. " + row.blockingRevision + " permanece em análise; atual rev. " + (revision || "não informada") + ".";
-        action = "Conferir situação";
       } else if (row.allocationAlert === "not_allocated") {
         kind = "allocation"; title = "Documento não alocado";
-        reason = "Não alocado na fonte oficial da triagem; situação: Não incluir. Inclusão manual continua possível.";
+        reason = "Não alocado na fonte oficial da triagem; situação: Não incluir." +
+          (row.blockingRevision ? " A revisão " + row.blockingRevision + " também permanece em análise." : "") +
+          " Inclusão manual continua possível.";
         action = "Verificar alocação";
       } else if (row.allocationAlert === "conflict") {
         kind = "conflict"; title = "Conflito de alocação";
         reason = "A origem possui evidências contraditórias de alocação. Exige conferência.";
         action = "Conferir alocação";
+      } else if (row.blockingRevision) {
+        kind = "analysis"; title = "Revisão anterior em análise";
+        reason = "Rev. " + row.blockingRevision + " permanece em análise; atual rev. " + (revision || "não informada") + ".";
+        action = "Conferir situação";
+      } else if (row.selected && row.manual) {
+        kind = "manual"; title = "Inclusão manual excepcional";
+        reason = "Seleção manual mantida. Confira as evidências antes de gerar.";
+        action = "Conferir seleção";
       } else if (row.group === "nao_localizado") {
         kind = "missing"; title = "Situação não localizada";
         reason = "Sem identificação suficiente na fonte consultada; não equivale a Não alocado.";

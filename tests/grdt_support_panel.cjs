@@ -52,7 +52,7 @@ for (const file of ["grdt_support_core.js", "grdt_support_panel.js", "grdt-suppo
 assert.match(app, /GrconGrdtSupportCore\.summarize\(state\.results\.map\(decisionGroupKey\)\)/,
   "resumo provém da classificação oficial da triagem");
 assert.match(app, /grcon:grdt-support-summary/);
-assert.match(source("grdt_support_panel.js"), /data-filter=/, "filtros usam a tabela original");
+assert.match(source("grdt_support_panel.js"), /api\\.revealSupportRow\\(/, "ações apontam para a linha exata na tabela original");
 assert.doesNotMatch(source("grdt_support_panel.js"), /innerHTML|eval\(/, "nenhum HTML com dados não confiáveis");
 const ui = source("grdt_support_panel.js");
 for (const [, id] of ui.matchAll(/\bbyId\("([^"]+)"\)/g)) {
