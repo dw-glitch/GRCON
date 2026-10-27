@@ -470,7 +470,7 @@
         for (const file of generated) {
           if (file.official?.baseName) window.GrconEgrdtSequence?.syncFromNumber(file.official.baseName);
         }
-        window.GrconCloud?.completeEgrdtReservationRequest?.(generated);
+        if (window.GrconCloud?.completeEgrdtReservationRequest) window.GrconCloud.completeEgrdtReservationRequest(generated);
       }
       if (saved.error) console.warn("GRCON: histórico local indisponível", saved.error);
     } catch (error) {
