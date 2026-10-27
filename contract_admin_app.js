@@ -9,7 +9,7 @@
   const notify = (message, kind) => root.GrconNotify?.(message, kind || "info");
 
   async function usersApi(operation, input = {}) {
-    if (!master()) throw new Error("Acesso restrito ao proprietário master.");
+    if (!master()) throw new Error("Acesso restrito ao Proprietário ADM.");
     const response = await cloud().state.client.functions.invoke("owner-manage-users", { body: { ...input, operation, workspaceId: state.workspace } });
     if (response.error) {
       let detail;
@@ -30,7 +30,7 @@
     host.insertBefore(button, $("#grcon-cloud-account"));
     document.body.insertAdjacentHTML("beforeend", `<dialog id="grcon-admin-dialog" aria-labelledby="grcon-admin-title">
       <header><div><small>ÁREA EXCLUSIVA</small><h2 id="grcon-admin-title">Administração</h2><p>Controle de usuários, contratos e operações do GRCON.</p></div><button id="grcon-admin-close" type="button" aria-label="Voltar ao GRCON">Voltar ao GRCON</button></header>
-      <div class="grcon-admin-layout"><nav class="grcon-admin-nav" aria-label="Administração"><button type="button" data-admin-section="users" aria-current="page">Usuários e acessos</button><button type="button" data-admin-section="contracts">Contratos</button><button type="button" data-admin-section="technical">Painel técnico</button><button type="button" data-admin-section="storage">Infraestrutura e armazenamento</button><button type="button" data-admin-section="activity">Registro de atividades</button><small>Exclusivo do proprietário master</small></nav><div class="grcon-admin-main">
+      <div class="grcon-admin-layout"><nav class="grcon-admin-nav" aria-label="Administração"><button type="button" data-admin-section="users" aria-current="page">Usuários e acessos</button><button type="button" data-admin-section="contracts">Contratos</button><button type="button" data-admin-section="technical">Painel técnico</button><button type="button" data-admin-section="storage">Infraestrutura e armazenamento</button><button type="button" data-admin-section="activity">Registro de atividades</button><small>Exclusivo do Proprietário ADM</small></nav><div class="grcon-admin-main">
       <div class="grcon-admin-toolbar"><label>Contrato administrado<select id="grcon-admin-contract"></select></label></div>
       <p id="grcon-admin-feedback" role="status" aria-live="polite"></p>
       <section data-admin-panel="users" aria-labelledby="grcon-admin-users-title"><h3 id="grcon-admin-users-title" tabindex="-1">Usuários e acessos</h3><div class="grcon-admin-toolbar"><label>Buscar colaborador<input id="grcon-admin-search" type="search" placeholder="Nome ou e-mail"></label><button id="admin-user-new" type="button">Novo usuário</button></div>
@@ -91,7 +91,7 @@
     if (!master() || !$("#grcon-admin-users")) return;
     const term = $("#grcon-admin-search").value.trim().toLocaleLowerCase("pt-BR");
     const users = state.users.filter(u => `${u.name} ${u.email}`.toLocaleLowerCase("pt-BR").includes(term));
-    $("#grcon-admin-users").innerHTML = '<div class="grcon-admin-table-wrap"><table><thead><tr><th>Colaborador</th><th>E-mail</th><th>Função</th><th>Acesso</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody>' + users.map(u => `<tr><td>${escape(u.name)}</td><td>${escape(u.email)}</td><td>${escape(u.isMaster ? "Proprietário master" : labels[u.role] || u.role)}</td><td>${u.active ? "Ativo" : "Inativo"}</td><td>${escape(u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("pt-BR") : "Sem acesso registrado")}</td><td>${u.isMaster ? '<span title="Conta protegida; função alterada somente diretamente no banco">Conta protegida</span>' : `<div class="grcon-admin-row-actions"><button type="button" data-admin-edit="${escape(u.id)}">Editar acesso</button><button type="button" data-admin-password="${escape(u.id)}">Alterar senha</button></div>`}</td></tr>`).join("") + '</tbody></table></div>' + (users.length ? '' : '<p>Nenhum colaborador encontrado.</p>');
+    $("#grcon-admin-users").innerHTML = '<div class="grcon-admin-table-wrap"><table><thead><tr><th>Colaborador</th><th>E-mail</th><th>Função</th><th>Acesso</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody>' + users.map(u => `<tr><td>${escape(u.name)}</td><td>${escape(u.email)}</td><td>${escape(u.isMaster ? "Proprietário ADM" : labels[u.role] || u.role)}</td><td>${u.active ? "Ativo" : "Inativo"}</td><td>${escape(u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString("pt-BR") : "Sem acesso registrado")}</td><td>${u.isMaster ? '<span title="Conta protegida; função alterada somente diretamente no banco">Conta protegida</span>' : `<div class="grcon-admin-row-actions"><button type="button" data-admin-edit="${escape(u.id)}">Editar acesso</button><button type="button" data-admin-password="${escape(u.id)}">Alterar senha</button></div>`}</td></tr>`).join("") + '</tbody></table></div>' + (users.length ? '' : '<p>Nenhum colaborador encontrado.</p>');
   }
   function renderContract(isNew = false) {
     const c = isNew ? {} : cloud().state.contracts.find(c => c.workspace_id === state.workspace) || {};
@@ -156,6 +156,31 @@
       }
     };
     const mib = bytes => Number.isFinite(bytes) ? (bytes / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " MiB" : "Não medido";
+    // O percentual existe apenas se há um limite aplicável explicitamente configurado.
+    // Tamanho ocupado e espaço total são métricas diferentes: nunca presumir o plano.
+    const storageCard = (name, usedValue, limitValue, description, connected = true) => {
+      const used = Number(usedValue), limit = Number(limitValue);
+      const measured = usedValue !== null && usedValue !== undefined && Number.isFinite(used) && used >= 0;
+      const limited = limitValue !== null && limitValue !== undefined && Number.isFinite(limit) && limit > 0;
+      const ratio = measured && limited ? Math.round(used / limit * 100) : null;
+      const progress = ratio === null ? 0 : Math.min(100, Math.max(0, ratio));
+      const tone = ratio === null ? "unknown" : ratio >= 95 ? "critical" : ratio >= 85 ? "warning" : ratio >= 70 ? "attention" : "healthy";
+      const usedText = measured ? mib(used) : "Não medido";
+      const availableText = limited && measured ? mib(Math.max(0, limit - used)) : "Não disponível";
+      const capText = limited ? mib(limit) : "Não informado";
+      return `<article class="grcon-storage-card" data-storage-service="${escape(name)}" data-storage-tone="${tone}">
+        <div class="grcon-storage-card-header"><strong>${escape(name)}</strong><small>${escape(description)}</small></div>
+        <div class="grcon-storage-card-body">
+          <div class="grcon-storage-donut" role="img" aria-label="${escape(name)}: ${ratio === null ? "percentual indisponível" : ratio + "% utilizado"}" style="--storage-progress:${progress}%">
+            <span><strong>${ratio === null ? "—" : ratio + "%"}</strong><small>${ratio === null ? "sem limite conhecido" : "utilizado"}</small></span>
+          </div>
+          <dl class="grcon-storage-card-values"><div><dt>Utilizado</dt><dd>${escape(usedText)}</dd></div>
+          <div><dt>Disponível</dt><dd>${escape(availableText)}</dd></div>
+          <div><dt>Capacidade</dt><dd>${escape(capText)}</dd></div></dl>
+        </div>
+        <p class="grcon-storage-card-footnote">${connected ? "Medição do banco" : "Medição indisponível ou desatualizada"} · ${limited ? "Limite configurado no servidor (verifique o plano)" : "Limite não fornecido pelo serviço"}</p>
+      </article>`;
+    };
     host.textContent = "Verificando armazenamento…";
     try {
       const status = await api("status"); if (!valid()) return;
@@ -175,7 +200,16 @@
       };
       const connectionError = Object.prototype.hasOwnProperty.call(connectionMessages, status.turso.error) ? status.turso.error : "TURSO_UNAVAILABLE";
       const copied = (status.turso.snapshots || []).filter(s => s.state === "verified");
-      host.innerHTML = `<dl class="grcon-admin-storage-metrics"><div><dt>Fonte oficial</dt><dd>Supabase</dd></div><div><dt>Modo do servidor</dt><dd>${escape(status.mode)}</dd></div><div><dt>Banco Supabase completo</dt><dd>${escape(mib(status.databaseBytes))}</dd></div><div><dt>Tabela da Consulta Geral completa</dt><dd>${escape(mib(status.sourceBytes))}</dd></div><div><dt>Snapshots deste contrato</dt><dd>${escape(Number(status.snapshots || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Registros deste contrato</dt><dd>${escape(Number(status.records || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Turso</dt><dd>${status.turso.connected ? "Conexão confirmada" : status.turso.configured ? "Conexão não confirmada" : "Configuração pendente"}</dd></div><div><dt>Banco Turso completo</dt><dd>${escape(mib(status.turso.databaseBytes))}</dd></div><div><dt>Cópias validadas neste contrato</dt><dd>${copied.length}</dd></div></dl><p>A fonte oficial permanece no Supabase. A ativação do Turso depende da conclusão dos testes de migração e recuperação.</p><div class="grcon-admin-row-actions"><button type="button" data-storage-refresh>Verificar conexão</button><button type="button" data-storage-report>Baixar relatório</button><button type="button" data-storage-copy ${status.turso.connected && status.externalStorageAuthorized && status.preflightApproved ? "" : "disabled"}>Iniciar / retomar cópia</button></div><p data-storage-progress role="status" aria-live="polite"></p>`;
+      host.innerHTML = `<div class="grcon-storage-visuals">
+        ${storageCard("Supabase", status.databaseBytes, status.supabaseCapacityBytes, "Banco operacional · fonte oficial")}
+        ${storageCard("Turso", status.turso.databaseBytes, status.turso.capacityBytes, "Consulta Geral · cópia em homologação", status.turso.connected)}
+      </div><p class="grcon-storage-measured-at">Última verificação: ${escape(new Date().toLocaleString("pt-BR"))}. Percentuais aparecem apenas quando o limite é informado de forma explícita.</p>
+      <section class="grcon-storage-diagnostics" aria-label="Diagnóstico dos serviços">
+        <h4>Diagnóstico dos serviços</h4>
+        <p>${status.turso.connected ? "Supabase: medição disponível. Turso: conexão confirmada." : "Turso: " + escape(connectionMessages[connectionError]) + " Código: " + escape(connectionError) + "."}</p>
+        <small>Uma conexão confirmada não comprova conclusão da migração. A fonte oficial permanece no Supabase.</small>
+      </section>
+      <details class="grcon-storage-technical"><summary>Ver detalhes de infraestrutura e migração</summary><dl class="grcon-admin-storage-metrics"><div><dt>Fonte oficial</dt><dd>Supabase</dd></div><div><dt>Modo do servidor</dt><dd>${escape(status.mode)}</dd></div><div><dt>Banco Supabase completo</dt><dd>${escape(mib(status.databaseBytes))}</dd></div><div><dt>Tabela da Consulta Geral completa</dt><dd>${escape(mib(status.sourceBytes))}</dd></div><div><dt>Snapshots deste contrato</dt><dd>${escape(Number(status.snapshots || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Registros deste contrato</dt><dd>${escape(Number(status.records || 0).toLocaleString("pt-BR"))}</dd></div><div><dt>Turso</dt><dd>${status.turso.connected ? "Conexão confirmada" : status.turso.configured ? "Conexão não confirmada" : "Configuração pendente"}</dd></div><div><dt>Banco Turso completo</dt><dd>${escape(mib(status.turso.databaseBytes))}</dd></div><div><dt>Cópias validadas neste contrato</dt><dd>${copied.length}</dd></div></dl></details><p>A fonte oficial permanece no Supabase. A ativação do Turso depende da conclusão dos testes de migração e recuperação.</p><div class="grcon-admin-row-actions"><button type="button" data-storage-refresh>Atualizar métricas</button><button type="button" data-storage-report>Baixar relatório</button><button type="button" data-storage-copy ${status.turso.connected && status.externalStorageAuthorized && status.preflightApproved ? "" : "disabled"}>Iniciar / retomar cópia</button></div><p data-storage-progress role="status" aria-live="polite"></p>`;
       const backgroundButton=document.createElement("button");
       backgroundButton.type="button";backgroundButton.dataset.storageBackground="";backgroundButton.textContent="Copiar em segundo plano";
       backgroundButton.disabled=!(status.turso.connected&&status.externalStorageAuthorized&&status.preflightApproved);
@@ -202,12 +236,6 @@
         catch(error){if(valid()){backgroundProgress.textContent=error.message;backgroundButton.disabled=false;host.querySelector("[data-storage-copy]").disabled=false;}}
       });
       void monitor();
-      if (!status.turso.connected) {
-        const diagnosis = document.createElement("p"); diagnosis.dataset.storageDiagnosis = "";
-        diagnosis.setAttribute("role", "status");
-        diagnosis.textContent = `${connectionMessages[connectionError]} Código: ${connectionError}. Não envie seu token em mensagens ou capturas.`;
-        host.querySelector(".grcon-admin-row-actions").before(diagnosis);
-      }
       host.querySelector("[data-storage-refresh]").addEventListener("click", () => void loadStorage());
       host.querySelector("[data-storage-report]").addEventListener("click", async () => {
         const refreshed = await api("status").catch(() => status); if (!valid()) return;
