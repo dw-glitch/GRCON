@@ -78,3 +78,29 @@ O único artefato publicado é `summary.json`, com contagens e hashes. Payloads,
 SQL e arquivos SQLite não são incluídos em logs ou artefatos e são removidos
 ao fim do ensaio. Isso verifica a recuperação independente; não libera o corte
 nem substitui a homologação das dependências operacionais.
+
+
+## Continuação após diagnóstico real em 27/10/2026
+
+O diagnóstico pela API Cloudflare confirmou `SIGEM_SUBREQUEST_LIMIT` no primeiro
+passo `grant` de três instâncias de continuação (segmentos 17, 35 e 22). O próprio
+pai não deve criar o próximo Workflow: as continuações agora usam uma caixa de
+saída no R2, consumida pelo Cron em uma invocação independente. O estado aguardando
+o próximo disparo não é falha. O Cron reconfirma a associação atual do Master e o
+inventário antes de despachar ou recuperar uma execução, com até três tentativas
+por segmento. Nenhum segredo de infraestrutura fica na autorização persistida.
+
+A revisão 3 do executor reaproveita somente auditorias integrais concluídas. Cada
+comprovante precisa bater com o hash do manifesto R2, a contagem, o checksum e os
+metadados imutáveis do snapshot atual e do destino. A única mudança de ciclo de
+vida aceita para esse reaproveitamento é ativa para arquivada; edição de data,
+metadados ou conteúdo exige nova cópia e auditoria. Snapshots continuam separados
+por contrato e versão. As contagens reaproveitadas aparecem no relatório.
+
+A execução manual `40521670385` confirmou as três interrupções e repetiu com
+sucesso a restauração corporativa de 22.430 registros em SQLite e PostgreSQL
+isolados. A versão 37 foi arquivada na origem quando a versão 38 foi publicada;
+a reconciliação dessa mudança mantém registro anterior e posterior no Turso.
+A origem atual tem 38 snapshots e 893.493 registros. A cópia anterior parou em
+317.002 copiados / 269.509 auditados, e não comprova a migração completa.
+O corte, as projeções SQL e a limpeza no Supabase ainda não foram executados.

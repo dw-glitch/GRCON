@@ -2,6 +2,7 @@
 // the existing copy/audit Worker and the authorized Turso/R2 destinations.
 import {canonical,sha256,ZERO_HASH,fail,initialize,beginSnapshot,copyPage,sealSnapshot,auditPage,tursoClient} from './sigem-turso.mjs';
 const ROOT='sigem-migration-jobs/v1/';
+const WATCH='sigem-migration-watch/v1/';
 const hex=v=>/^[a-f0-9]{64}$/.test(v||'');
 const uuid=v=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v||'');
 const WIDTH=3,GROUP=8;
@@ -47,12 +48,16 @@ export function planLanes(snapshots){
 export async function startMigration(env,workspace,actor,inventory){
  ready(env);
  if(!uuid(workspace)||!uuid(actor)||!Array.isArray(inventory.snapshots)||!inventory.snapshots.length||inventory.pendingSnapshots!==0)throw fail('SIGEM_INVENTORY_NOT_READY');
- const inventoryHash=await sha256(canonical(inventory)),id=await sha256(canonical({workspace,actor,inventoryHash,runner:2}));
+ const inventoryHash=await sha256(canonical(inventory)),id=await sha256(canonical({workspace,actor,inventoryHash,runner:3}));
+ // Revalidate the delegated Master before reading prior corporate proofs.
+ if(await sha256(canonical(await rpc(env,{workspace,actor},'inventory')))!==inventoryHash)throw fail('SIGEM_SOURCE_CHANGED');
  const key=path(workspace,id),prior=await env.GRCON_DOCUMENTS.get(key+'/grant.json');
  let grant;
  if(prior){grant=await prior.json();if(grant.inventoryHash!==inventoryHash||grant.actor!==actor)throw fail('SIGEM_JOB_CONFLICT');}
  else{
-  grant={format:'grcon-sigem-migration-job-v1',id,workspace,actor,inventoryHash,createdAt:new Date().toISOString(),lanes:planLanes(inventory.snapshots)};
+  const completed=await reusableAudits(env,workspace,inventory);
+  grant={format:'grcon-sigem-migration-job-v1',id,workspace,actor,inventoryHash,records:inventory.snapshots.reduce((n,s)=>n+s.record_count,0),completed,
+   createdAt:new Date().toISOString(),lanes:planLanes(inventory.snapshots.filter(s=>!completed.some(c=>c.id===s.id)))};
   await env.GRCON_DOCUMENTS.put(key+'/grant.json',canonical(grant));
  }
  // ACL is also checked here by the service RPC, before dispatching any work.
@@ -69,7 +74,70 @@ export async function startMigration(env,workspace,actor,inventory){
   }
  }
  await env.GRCON_DOCUMENTS.put(ROOT+workspace+'/latest.json',canonical({id}));
+ await env.GRCON_DOCUMENTS.put(WATCH+workspace+'.json',canonical({workspace,id}));
  return {id,lanes:grant.lanes.length,records:inventory.snapshots.reduce((n,s)=>n+s.record_count,0)};
+}
+async function reusableAudits(env,workspace,inventory){
+ const latest=await env.GRCON_DOCUMENTS.get(ROOT+workspace+'/latest.json');
+ if(!latest)return [];
+ const {id}=await latest.json(),prior=await readGrant(env,workspace,id),proofs=[...(prior.completed||[])];
+ for(let lane=0;lane<prior.lanes.length;lane++){
+  const saved=await env.GRCON_DOCUMENTS.get(path(workspace,id)+'/lane-'+lane+'.json');
+  if(saved)proofs.push(...((await saved.json()).snapshots||[]));
+ }
+ const result=[],seen=new Set(),contract=inventory.snapshots[0].contract_id;
+ if(!uuid(contract)||inventory.snapshots.some(s=>s.workspace_id!==workspace||s.contract_id!==contract))throw fail('SIGEM_INVENTORY_NOT_READY');
+ const targets=(await tursoClient(env).execute('SELECT id,state,expected_count,checksum,source_json FROM sigem_snapshots WHERE workspace_id=? AND contract_id=?',[workspace,contract])).rows;
+ for(const proof of proofs){
+  const source=inventory.snapshots.find(s=>s.id===proof.id);
+  if(!source||seen.has(proof.id)||proof.fullAudit!==true||proof.validatedRecords!==source.record_count||proof.count!==source.record_count||!hex(proof.checksum)||!hex(proof.manifestHash))continue;
+  const key=`sigem-backups/v1/${source.workspace_id}/${source.contract_id}/${source.id}/manifest-${proof.manifestHash}.json`;
+  if(proof.manifestKey!==key)continue;
+  const object=await env.GRCON_DOCUMENTS.get(key);if(!object)continue;
+  const body=await object.text();if(await sha256(body)!==proof.manifestHash)continue;
+  const manifest=JSON.parse(body),savedSource=manifest.source;
+  // Published rows are immutable. Only the legitimate active -> archived
+  // lifecycle transition can reuse an audit; dates/metadata changes cannot.
+  if(manifest.recordCount!==source.record_count||manifest.checksum!==proof.checksum||!savedSource||
+   !(savedSource.status===source.status||(savedSource.status==='active'&&source.status==='archived'))||
+   canonical({...savedSource,status:source.status})!==canonical(source))continue;
+  const target=targets.find(t=>t.id===source.id);
+  if(target?.state!=='verified'||target.expected_count!==source.record_count||target.checksum!==proof.checksum)continue;
+  const destinationSource=JSON.parse(target.source_json);
+  if(!(destinationSource.status===source.status||(destinationSource.status==='active'&&source.status==='archived'))||canonical({...destinationSource,status:source.status})!==canonical(source))continue;
+  seen.add(proof.id);result.push({...proof,reusedAudit:true});
+ }
+ return result;
+}
+// Creating a child from inside a Workflow can inherit the subrequest chain.
+// Cron consumes the durable outbox in a fresh invocation after the parent exits.
+export async function recoverMigrations(env){
+ ready(env);if(!env.GRCON_DOCUMENTS.list)return;
+ const listing=await env.GRCON_DOCUMENTS.list({prefix:WATCH,limit:5});
+ for(const item of listing.objects||[]){
+  try{
+   const watch=await (await env.GRCON_DOCUMENTS.get(item.key)).json();
+   const grant=await readGrant(env,watch.workspace,watch.id);
+   if(await sha256(canonical(await rpc(env,grant,'inventory')))!==grant.inventoryHash)continue;
+   for(let lane=0;lane<grant.lanes.length;lane++){
+    const saved=await env.GRCON_DOCUMENTS.get(path(grant.workspace,grant.id)+'/lane-'+lane+'.json');
+    if(!saved)continue;
+    const report=await saved.json();if(report.status==='complete')continue;
+    const segment=report.segment||0,id=instanceId(grant.id,lane,segment);
+    let existing;
+    try{existing=await env.GRCON_TASKS.get(id);const state=await existing.status();
+     if(!['errored','terminated'].includes(state.status))continue;
+    }catch{if(!report.dispatchPending)continue;existing=null;}
+    const retryKey=path(grant.workspace,grant.id)+'/recovery-'+lane+'-'+segment+'.json';
+    const previous=await env.GRCON_DOCUMENTS.get(retryKey),tries=previous?(await previous.json()).attempts:0;
+    if(tries>=3)continue;
+    // Separate attempt record must never overwrite a running child's progress.
+    await env.GRCON_DOCUMENTS.put(retryKey,canonical({attempts:tries+1,at:new Date().toISOString()}));
+    if(existing)await existing.restart();
+    else try{await env.GRCON_TASKS.create({id,params:{kind:'sigem-migration',workspace:grant.workspace,id:grant.id,lane,segment}});}catch{/* next cron verifies existence; no child head is rewritten */}
+   }
+  }catch(error){console.warn('SIGEM_RECOVERY_DEFERRED',migrationError(error));}
+ }
 }
 export async function migrationStatus(env,workspace,inventory){
  const latest=await env.GRCON_DOCUMENTS.get(ROOT+workspace+'/latest.json');
@@ -84,6 +152,7 @@ export async function migrationStatus(env,workspace,inventory){
     if(['errored','terminated'].includes(state.status))return {...report,status:'failed',error:report.error||'SIGEM_WORKFLOW_INTERRUPTED'};
     if(report.status==='failed'&&['queued','running','waiting'].includes(state.status))return {...report,status:'running',error:undefined};
    }catch{
+    if(report.dispatchPending&&report.dispatch==='cron')return {...report,status:'waiting'};
     if(report.dispatchPending)return {...report,status:'failed',error:'SIGEM_DISPATCH_UNCONFIRMED'};
     /* R2 still provides durable progress if a started child's status is unavailable. */
    }
@@ -91,8 +160,9 @@ export async function migrationStatus(env,workspace,inventory){
   return report;
  }));
  const stable=await sha256(canonical(inventory))===grant.inventoryHash;
- return {started:true,id,createdAt:grant.createdAt,records:grant.lanes.flatMap(l=>l.snapshots).reduce((n,s)=>n+s.record_count,0),
-  copied:reports.reduce((n,r)=>n+(r.copied||0),0),validated:reports.reduce((n,r)=>n+(r.validated||0),0),
+ const reused=(grant.completed||[]).reduce((n,s)=>n+s.validatedRecords,0);
+ return {started:true,id,createdAt:grant.createdAt,records:grant.records||grant.lanes.flatMap(l=>l.snapshots).reduce((n,s)=>n+s.record_count,0),reusedAuditRecords:reused,completedSnapshots:grant.completed||[],
+  copied:reused+reports.reduce((n,r)=>n+(r.copied||0),0),validated:reused+reports.reduce((n,r)=>n+(r.validated||0),0),
   inventoryStable:stable,complete:stable&&reports.every(r=>r.status==='complete'),reports};
 }
 async function hmacKey(env){return crypto.subtle.importKey('raw',new TextEncoder().encode('grcon-sigem-job-v1\n'+env.SUPABASE_SECRET_KEY),{name:'HMAC',hash:'SHA-256'},false,['sign','verify']);}
@@ -168,7 +238,7 @@ export async function runMigration(env,params,step,invoke){
  });
  const grant=loaded.grant,lane=grant.lanes[params.lane];
  const report=loaded.cursor?.report||{lane:params.lane,status:'running',copied:0,validated:0,snapshots:[]};
- report.segment=segment;report.status='running';delete report.error;delete report.dispatchPending;
+ report.segment=segment;report.status='running';delete report.error;delete report.dispatchPending;delete report.dispatch;
  let index=loaded.cursor?.index||0,phase=loaded.cursor?.phase||'copy',after=loaded.cursor?.after||0;
  let sealed=loaded.cursor?.sealed||null,digest=loaded.cursor?.digest||ZERO_HASH,count=loaded.cursor?.count||0,used=0,attempts=0,handoffPrepared=false;
  const save=async()=>{await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/lane-'+params.lane+'.json',canonical({...report,updatedAt:new Date().toISOString()}));return {saved:true};};
@@ -184,7 +254,7 @@ export async function runMigration(env,params,step,invoke){
   return settled.map(value=>value.value);
  };
  const advance=async()=>{
-  const nextSegment=segment+1,nextReport={...report,segment:nextSegment,status:'running',dispatchPending:true};
+  const nextSegment=segment+1,nextReport={...report,segment:nextSegment,status:'waiting',dispatchPending:true,dispatch:'cron'};
   await step.do('checkpoint',retry,async()=>{
    // Save the checkpoint and visible head before dispatch. A fast child must
    // never have its newer progress overwritten by its parent.
@@ -194,17 +264,7 @@ export async function runMigration(env,params,step,invoke){
    return {prepared:true};
   });
   handoffPrepared=true;
-  await step.do('continue',retry,async()=>{
-   // A dispatch retry must never rewrite a running or completed child's head.
-   const id=instanceId(grant.id,params.lane,nextSegment);
-   try{await env.GRCON_TASKS.create({id,params:{kind:'sigem-migration',workspace:grant.workspace,id:grant.id,lane:params.lane,segment:nextSegment}});}
-   catch{
-    const state=await(await env.GRCON_TASKS.get(id)).status();
-    if(!['running','queued','waiting','paused','complete'].includes(state.status))throw fail('SIGEM_WORKFLOW_UNAVAILABLE',503);
-   }
-   return {continued:true,segment:nextSegment};
-  });
-  return {continued:true,segment:nextSegment};
+  return {continued:true,segment:nextSegment,dispatch:'cron'};
  };
  try{
   while(index<lane.snapshots.length){

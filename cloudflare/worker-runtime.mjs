@@ -2,7 +2,7 @@ import {WorkflowEntrypoint} from 'cloudflare:workers';
 import worker from './worker-entry.mjs';
 import {handleJobsRoute,runJob,recoverJobs,recordMetric} from './background-jobs.mjs';
 import {buildBackgroundReport} from './background-report.mjs';
-import {runMigration} from './sigem-migration-job.mjs';
+import {runMigration,recoverMigrations} from './sigem-migration-job.mjs';
 export class GrconTaskWorkflow extends WorkflowEntrypoint {
  async run(event,step){return event.payload?.kind==='sigem-migration'?runMigration(this.env,event.payload,step):runJob(this.env,event.payload,step,buildBackgroundReport);}
 }
@@ -14,7 +14,10 @@ export default {
   return response;
  },
  async scheduled(controller,env,ctx){
-  if(controller.cron==='* * * * *')ctx.waitUntil(recoverJobs(env).catch(()=>console.error('GRCON_TASK_RECOVERY_FAILED')));
+  if(controller.cron==='* * * * *'){
+   ctx.waitUntil(recoverJobs(env).catch(()=>console.error('GRCON_TASK_RECOVERY_FAILED')));
+   ctx.waitUntil(recoverMigrations(env).catch(()=>console.error('SIGEM_RECOVERY_FAILED')));
+  }
   return worker.scheduled(controller,env,ctx);
  }
 };
