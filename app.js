@@ -4392,7 +4392,19 @@
     if (window.GrconGrdtSupportCore && els.resultsSection && !els.resultsSection.hidden) {
       const summary = window.GrconGrdtSupportCore.summarize(state.results.map(decisionGroupKey));
       window.dispatchEvent(new CustomEvent("grcon:grdt-support-summary", {
-        detail: { ...summary, resultVersion: state.resultVersion },
+        detail: {
+          ...summary, resultVersion: state.resultVersion,
+          rows: state.results.map((row, index) => ({
+            index, document: String(row.document || ""), revision: String(row.revision || ""),
+            group: decisionGroupKey(row), selected: state.selected.has(index),
+            manual: state.manualForceInclude.has(index),
+            allocationAlert: TriageQuery.allocationAlert(row) || "",
+            blockingRevision: String(row.blockingRevision || ""),
+            fileRevision: String(row.fileRevision || ""),
+            revisionWarning: String(row.revisionFormatWarning || ""),
+            reason: String(row.reason || "").slice(0, 260),
+          })),
+        },
       }));
     }
 
@@ -6139,6 +6151,40 @@
   window.GrconTriageUiApi = Object.freeze({
     // Metadados exclusivamente de leitura: os arquivos físicos nunca são salvos
     // e uma seleção passada jamais é restaurada automaticamente como autorizada.
+
+    // Projeção de navegação exata: não altera seleção, elegibilidade ou revisão.
+    revealSupportRow: (code, revision) => {
+      const identity = value => String(value || "").trim().toLocaleUpperCase("pt-BR");
+      const targetCode = identity(code), targetRevision = identity(revision);
+      const index = state.results.findIndex(row =>
+        identity(row.document) === targetCode &&
+        (!targetRevision || identity(row.revision) === targetRevision));
+      if (index < 0) return false;
+      // O clique é uma navegação explícita; limpar filtros que esconderiam a linha.
+      state.filter = "todos";
+      state.sheetFilter = "todos";
+      state.quickFilter = "all";
+      state.operationalFilters = {};
+      document.querySelectorAll("[data-triage-facet]").forEach(select => { select.value = ""; });
+      state.columnFilters = { document: [C.norm(code)] };
+      if (targetRevision) state.columnFilters.targetRevision = [C.norm(revision)];
+      state.search = ""; if (els.search) els.search.value = "";
+      if (els.sheetFilter) els.sheetFilter.value = "todos";
+      state.filteredCache = { signature: "", indices: [] };
+      state.resultPage = 1;
+      if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
+      updateColumnFilterTriggerStates();
+      if (els.clearColumnFilters) els.clearColumnFilters.hidden = false;
+      renderAll();
+      const target = els.tbody && els.tbody.querySelector('tr[data-index="' + index + '"]');
+      if (target) {
+        target.classList.add("grdt-support-target");
+        els.resultsSection.scrollIntoView({ block: "start", behavior: "auto" });
+        target.scrollIntoView({ block: "nearest", behavior: "auto" });
+        window.setTimeout(() => target.classList.remove("grdt-support-target"), 3500);
+      }
+      return Boolean(target);
+    },
     preparationSnapshot: () => ({
       schema: 1,
       savedAt: Date.now(),

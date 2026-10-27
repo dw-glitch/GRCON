@@ -24,6 +24,17 @@ assert.equal(Core.search(base, doc("122") + "\n" + doc("123")).missing[0], doc("
 assert.equal(Core.search(base, doc("122"), 1).total, 2, "limite visual não oculta a contagem real");
 assert.equal(Core.summarize(["revisar", "bloqueado", "nao_localizado", "descartar", "pronto"]).attention, 4);
 
+
+assert.equal(Core.diagnose([{document: doc("122"),revision:"B",fileRevision:"A",selected:true}]).selectedRisks,1,
+  "revisão diferente selecionada exige alerta sem alterar seleção");
+assert.equal(Core.diagnose([{document: doc("121"),revision:"A",allocationAlert:"not_allocated"}]).issues[0].kind,"allocation",
+  "não alocado é distinto de não localizado");
+assert.equal(Core.diagnose([{document: doc("121"),revision:"A",group:"nao_localizado"}]).issues[0].kind,"missing");
+assert.equal(Core.diagnose([{document: doc("122"),revision:"B",manual:true,selected:true}]).manualSelected,1);
+assert.equal(Core.search(base, doc("121") + ";" + doc("122"), 200).total, 3,
+  "consulta em lote considera revisões por identidade exata");
+assert.match(app, /revealSupportRow:/, "navegação exata para a tabela original");
+
 const html = source("index.html"), app = source("app.js"), sw = source("sw.js");
 assert.doesNotMatch(html, /Conferir pacote eGRDT \(\.xls\)/);
 for (const id of ["grdt-support-panel", "grdt-support-search", "grdt-support-attention", "grdt-support-detail"]) {
