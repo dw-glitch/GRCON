@@ -56,7 +56,7 @@ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind
   window.GrconCloud.state.membership.role = "viewer";
   assert.equal(api.canManageHistory(), false);
   await assert.rejects(api.setReferenceDate("2026-09-29", "old"), /permissão/);
-  await assert.rejects(api.activateVersion("old"), /Proprietário ADM/i);
+  await assert.rejects(api.activateVersion("old"), /proprietário/i);
   await assert.rejects(api.deleteVersion("old"), /Proprietário ADM/i);
   window.GrconCloud.state.membership.role = "owner";
   versions[0].metadata.referenceDate = "2026-09-28"; incomplete = true;
