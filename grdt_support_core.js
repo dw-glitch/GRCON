@@ -109,7 +109,7 @@
       if (row.selected && kind) selectedRisks += 1;
       if (!kind) return;
       total += 1; counters[kind] = (counters[kind] || 0) + 1;
-      if (issues.length < maxIssues) issues.push({
+      issues.push({
         document: document, revision: revision, kind: kind, title: title,
         reason: reason, action: action, selected: Boolean(row.selected),
         index: Number.isSafeInteger(row.index) ? row.index : -1
@@ -118,9 +118,9 @@
     const priority = { revision: 0, manual: 1, analysis: 2, conflict: 3, allocation: 4, missing: 5, review: 6 };
     issues.sort(function (a,b) { return (priority[a.kind] ?? 9) - (priority[b.kind] ?? 9) ||
       Number(b.selected) - Number(a.selected); });
-    return { counters: counters, issues: issues, total: total, selected: selected,
+    return { counters: counters, issues: issues.slice(0, maxIssues), total: total, selected: selected,
       selectedRisks: selectedRisks, manualSelected: manualSelected,
-      limited: total > issues.length };
+      limited: total > maxIssues };
   }
   const GROUPS = Object.freeze({
     revisar: "Conferir", bloqueado: "Não incluir",

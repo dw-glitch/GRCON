@@ -205,6 +205,9 @@
       const parts = [];
       if (previous.ldNames.length) parts.push(previous.ldNames.slice(0, 2).join(", "));
       if (previous.relationName) parts.push(previous.relationName);
+      if (previous.folderName) parts.push("Pasta: " + previous.folderName);
+      if (previous.stage) parts.push("Etapa: " + previous.stage);
+      parts.push("Salvo em " + new Date(previous.savedAt).toLocaleString("pt-BR"));
       if (previous.chosen.length) parts.push(previous.chosen.length + " documento(s) selecionado(s) anteriormente");
       text(el.resumeInfo, (parts.join(" · ") || "Preparação anterior salva") +
         ". Reanálise e revalidação dos arquivos serão necessárias. Nenhuma escolha antiga será aplicada automaticamente.");

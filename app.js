@@ -6188,6 +6188,7 @@
     preparationSnapshot: () => ({
       schema: 1,
       savedAt: Date.now(),
+      stage: state.results.length ? "Conferência" : state.ldFiles.length || state.packageFiles.length ? "Preparação" : "Entrada",
       ldNames: state.ldFiles.slice(0, 12).map(file => String(file.name || "")),
       relationName: state.listFiles[0] && String(state.listFiles[0].name || "") || "",
       folderName: state.packageFiles[0] && String(state.packageFiles[0].webkitRelativePath || "").split("/")[0] || "",

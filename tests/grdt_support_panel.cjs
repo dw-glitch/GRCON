@@ -31,6 +31,10 @@ assert.equal(Core.diagnose([{document: doc("121"),revision:"A",allocationAlert:"
   "não alocado é distinto de não localizado");
 assert.equal(Core.diagnose([{document: doc("121"),revision:"A",group:"nao_localizado"}]).issues[0].kind,"missing");
 assert.equal(Core.diagnose([{document: doc("122"),revision:"B",manual:true,selected:true}]).manualSelected,1);
+const many = Array.from({length:1001}, (_,i)=>({document:doc(String(i+1)), revision:"A",group:"revisar",selected:i===1000}));
+assert.equal(Core.diagnose(many).total, 1001,"pendências acima de mil sem perder o total");
+assert.equal(Core.diagnose(many).issues.length, 200,"prévia limitada e ordenada sem bloquear a triagem");
+assert.ok(Core.diagnose(many).issues.some(x=>x.document===doc("1001")),"seleção no final da base é priorizada");
 assert.equal(Core.search(base, doc("121") + ";" + doc("122"), 200).total, 3,
   "consulta em lote considera revisões por identidade exata");
 const supportUi = source("grdt_support_panel.js");
