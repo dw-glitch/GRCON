@@ -57,6 +57,17 @@ const {chromium}=require("playwright");
       await page.addScriptTag({path:path.join(process.cwd(),file)});
     }
     await page.addStyleTag({path:path.join(process.cwd(),"sigem-posting-central.css")});
+    // A UI reduzida de Conferir GRDT esconde controles técnicos legados.
+    // Nesta suíte de compatibilidade, revele-os SOMENTE no navegador de teste.
+    await page.addStyleTag({content:`
+      #sigem-module .scc-grdt-review>.scc-views {display:flex!important}
+      #sigem-module .scc-grdt-review>.scc-filters {display:flex!important}
+      #sigem-module .scc-grdt-review>#scc-tracking-panel {display:block!important}
+      #sigem-module .scc-grdt-review #scc-list-toggle,
+      #sigem-module .scc-grdt-review #scc-monitor-open,
+      #sigem-module .scc-grdt-review #scc-copy {display:inline-flex!important}
+      #sigem-module .scc-grdt-review .scc-preset-label {display:block!important}
+    `});
     await page.locator("#scc-query").waitFor();
     // A Central inicia na visão agrupada por GRDT. Para conferir
     // documentos individuais, a suíte precisa escolher essa visão.
