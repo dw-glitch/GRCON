@@ -27,6 +27,7 @@
     queue: [],
     paused: false,
     uploadFault: null,
+    validationFailures: new Map(),
     active: 0,
     health: null,
     open: false,
@@ -450,6 +451,18 @@
         task.status = "error";
         task.error = error?.message || "Falha no envio.";
         task.phase = "Falha";
+        // Repeated identical HTTP 400s usually indicate a global mapping/schema
+        // mistake; pause instead of overwhelming the Worker with hundreds of calls.
+        if (Number(error?.status) === 400) {
+          const signature = String(error?.code || "400") + ":" + String(error?.message || "").slice(0, 160);
+          const count = (state.validationFailures.get(signature) || 0) + 1;
+          state.validationFailures.set(signature, count);
+          if (count >= 5 && !state.uploadFault) {
+            state.uploadFault = { code: String(error?.code || "HTTP_400_REPEATED"), message: task.error };
+            state.paused = true;
+            notify("Cinco arquivos apresentaram o mesmo erro ao inicializar o Cofre. A fila foi pausada para conferência, sem reenviar arquivos automaticamente.", "warning");
+          }
+        }
       }
       renderQueue();
     }
@@ -489,6 +502,7 @@
 
   function resumeQueue() {
     state.uploadFault = null;
+    state.validationFailures.clear();
     state.paused = false;
     state.queue.forEach(task => {
       if (task.status === "paused") {
@@ -1565,7 +1579,7 @@
       if (epoch !== contextEpoch || target !== workspaceId()) throw new Error("O contrato mudou. Analise novamente.");
       if (target && ["owner", "admin", "operator"].includes(root.GrconCloud?.state?.membership?.role)) {
         await uploadTask(task);
-        if (task.status === "paused" && state.uploadFault) {
+        if (state.uploadFault) {
           systemicFailure = new Error("Falha no catálogo do Cofre (" + state.uploadFault.code + "). A emissão foi pausada para evitar centenas de requisições repetidas.");
           throw systemicFailure;
         }
