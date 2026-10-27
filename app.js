@@ -125,6 +125,8 @@
     analysisAllocationSnapshot: "",
     analysisSigemSnapshot: "",
     egrdtSequenceCursor: 0,
+    egrdtOfficialLastGenerated: null,
+    egrdtOfficialWorkspace: "",
     manualEgrdtSequenceStart: null,
     manualEgrdtSequences: [],
     conflictResolutions: new Map(),
@@ -209,7 +211,42 @@
     return state.egrdtSequenceCursor;
   }
 
+  let lastOfficialSequenceRefresh = 0;
+  let pendingOfficialSequenceRefresh = null;
+  function refreshOfficialEgrdtSequenceStatus() {
+    const cloud = window.GrconCloud;
+    const workspace = cloud?.state?.membership?.workspace_id || "";
+    if (!workspace || !cloud.getEgrdtSequenceStatus || !cloud.state.online) return Promise.resolve(null);
+    if (workspace !== state.egrdtOfficialWorkspace) {
+      state.egrdtOfficialWorkspace = workspace;
+      state.egrdtOfficialLastGenerated = null;
+      lastOfficialSequenceRefresh = 0;
+    }
+    if (pendingOfficialSequenceRefresh) return pendingOfficialSequenceRefresh;
+    if (Date.now() - lastOfficialSequenceRefresh < 30000) return Promise.resolve(null);
+    lastOfficialSequenceRefresh = Date.now();
+    pendingOfficialSequenceRefresh = cloud.getEgrdtSequenceStatus(EGRDT_YEAR)
+      .then(status => {
+        if (!status || state.egrdtOfficialWorkspace !== workspace) return status;
+        const official = Number(status.last_generated);
+        if (Number.isInteger(official) && official >= 0) {
+          const changed = state.egrdtOfficialLastGenerated !== official;
+          state.egrdtOfficialLastGenerated = official;
+          if (changed && !state.busy) renderAll();
+        }
+        return status;
+      }).catch(error => {
+        console.warn("GRCON: não foi possível confirmar a última GRDT gerada", error?.message || error);
+        return null;
+      }).finally(() => { pendingOfficialSequenceRefresh = null; });
+    return pendingOfficialSequenceRefresh;
+  }
+
   function readLastEgrdtSequence() {
+    if (Number.isInteger(state.egrdtOfficialLastGenerated) &&
+        state.egrdtOfficialWorkspace === window.GrconCloud?.state?.membership?.workspace_id) {
+      return state.egrdtOfficialLastGenerated;
+    }
     let stored = EGRDT_SEQUENCE_START - 1;
     try {
       const candidate = Number(localStorage.getItem(EGRDT_SEQUENCE_KEY));
@@ -225,7 +262,9 @@
   }
 
   function automaticEgrdtSequenceInfo(offset = 0) {
-    if (SequenceCore) return SequenceCore.next({ year: EGRDT_YEAR, ldSequence: state.egrdtSequenceCursor, localSequence: readLastEgrdtSequence(), offset });
+    void refreshOfficialEgrdtSequenceStatus();
+    const official = Number.isInteger(state.egrdtOfficialLastGenerated) && state.egrdtOfficialWorkspace === window.GrconCloud?.state?.membership?.workspace_id;
+    if (SequenceCore) return SequenceCore.next({ year: EGRDT_YEAR, ldSequence: official ? state.egrdtOfficialLastGenerated : state.egrdtSequenceCursor, localSequence: readLastEgrdtSequence(), offset });
     const sequence = Math.max(EGRDT_SEQUENCE_START, readLastEgrdtSequence() + 1) + Math.max(0, Number(offset) || 0);
     return { sequence, sequenceText: String(sequence).padStart(4, "0"), year: EGRDT_YEAR, baseName: `${EGRDT_PREFIX}-${String(sequence).padStart(4, "0")}-${EGRDT_YEAR} - eGRDT` };
   }
@@ -272,7 +311,9 @@
       return Object.freeze({
         ...next,
         lastKnownSequence: readLastEgrdtSequence(),
-        source: state.egrdtSequenceCursor > 0 ? "LD carregada e histórico desta sessão" : "histórico local desta máquina",
+        source: Number.isInteger(state.egrdtOfficialLastGenerated) && state.egrdtOfficialWorkspace === window.GrconCloud?.state?.membership?.workspace_id
+          ? "histórico compartilhado confirmado"
+          : "prévia local; aguardando consulta ao histórico oficial",
         storageKey: EGRDT_SEQUENCE_KEY,
         collisionWarning: SequenceCore ? SequenceCore.simultaneousUseWarning() : "Confirme se outra eGRDT foi emitida antes de concluir.",
       });
