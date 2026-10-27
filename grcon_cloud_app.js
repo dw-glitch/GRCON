@@ -926,7 +926,7 @@
     const authorized = Boolean(state.membership?.workspace_id) && canManageHistory();
     clear.hidden = !authorized;
     clear.disabled = !authorized || !state.online || state.syncing || state.clearingHistory;
-    if (!authorized) clear.title = "Somente o proprietário master pode limpar o histórico compartilhado.";
+    if (!authorized) clear.title = "Somente o Proprietário ADM pode limpar o histórico compartilhado.";
     else if (!state.online) clear.title = "Reconecte o GRCON para apagar o histórico também no Supabase.";
     else if (state.syncing || state.clearingHistory) clear.title = "Aguarde a sincronização atual terminar.";
     else clear.title = "Apaga o histórico deste workspace no navegador e no Supabase e libera as numerações excluídas para reutilização.";
@@ -970,7 +970,7 @@
   async function manageHistoryFile(record, operation, options) {
     const workspaceId = state.membership?.workspace_id;
     if (!workspaceId || !state.client || !state.online) throw new Error("Conecte-se ao histórico compartilhado antes de alterar um documento.");
-    if (!canManageHistory()) throw new Error("Somente o proprietário master pode alterar documentos do histórico.");
+    if (!canManageHistory()) throw new Error("Somente o Proprietário ADM pode alterar documentos do histórico.");
     if (!record?.cloudId || !record?.cloudUpdatedAt || record?.workspaceId !== workspaceId) {
       throw new Error("A eGRDT precisa estar sincronizada com o contrato atual. Atualize o histórico.");
     }
@@ -1188,7 +1188,7 @@
     const target = adminPasswordModal.target;
     if (!target || !canManageMembers() || !state.client || !state.membership?.workspace_id) {
       clearAdminPasswordSecrets();
-      showAdminPasswordEditStep("Somente o proprietário master pode alterar senhas de usuários.", "error");
+      showAdminPasswordEditStep("Somente o Proprietário ADM pode alterar senhas de usuários.", "error");
       return;
     }
 
@@ -1389,7 +1389,7 @@
     const email = state.session?.user?.email || "Usuário";
     const name = state.profiles.get(state.session?.user?.id)?.display_name || email.split("@")[0];
     $("#grcon-cloud-account-name").textContent = name;
-    $("#grcon-cloud-account-role").textContent = `${isMasterOwner() ? "Proprietário master" : roleLabels[state.membership?.role] || "Usuário"} · ${state.online ? "online" : "offline"}`;
+    $("#grcon-cloud-account-role").textContent = `${isMasterOwner() ? "Proprietário ADM" : roleLabels[state.membership?.role] || "Usuário"} · ${state.online ? "online" : "offline"}`;
     $("#grcon-cloud-menu-workspace").textContent = state.membership?.workspace_name || "GRCON Compartilhado";
     $("#grcon-cloud-menu-email").textContent = email;
     const onlineCount = $("#grcon-cloud-online-count");
