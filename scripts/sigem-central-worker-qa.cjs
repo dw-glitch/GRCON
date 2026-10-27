@@ -23,6 +23,10 @@ const {chromium}=require('playwright');
   });
   await page.addStyleTag({path:path.join(root,'sigem-posting-central.css')});
   await page.addScriptTag({path:path.join(root,'sigem_posting_central_app.js')});
+  // The operator UI now begins at GRDT review. Expose legacy navigation only
+  // for this exhaustive Worker virtual-table regression.
+  await page.addStyleTag({content:'#sigem-module .scc-grdt-review>.scc-views{display:flex!important} #sigem-module .scc-grdt-review #scc-list-toggle{display:inline-flex!important}'});
+  await page.locator('[data-scc-view="documentos"]').click();
   await page.waitForFunction(()=>window.GrconSigemCentralUi.state.data?.documents.length===2500,null,{timeout:30000});
   assert.match(await page.locator('#sigem-central-base').innerText(),/compartilhado completo/);
   assert.ok(await page.locator('tr[data-scc-index]').count()<60);
