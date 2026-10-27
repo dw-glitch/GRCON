@@ -873,6 +873,16 @@
     return true;
   }
 
+  async function getEgrdtSequenceStatus(year) {
+    if (!state.membership?.workspace_id || !state.online) return null;
+    const { data, error } = await state.client.rpc("grcon_egrdt_sequence_status", {
+      target_workspace: state.membership.workspace_id,
+      target_year: Math.trunc(Number(year)),
+    });
+    if (error) throw new Error(error.message || "Não foi possível consultar a última GRDT gerada.");
+    return data && typeof data === "object" ? data : null;
+  }
+
   async function releaseEgrdtReservationRequest(officialNumbers) {
     const ids = [...new Set((officialNumbers || []).map(item => String(item?.requestId || "")).filter(Boolean))];
     if (!ids.length) return 0;
@@ -2493,6 +2503,7 @@
     saveExportTemplate,
     deleteExportTemplate,
     reserveEgrdtSequences,
+    getEgrdtSequenceStatus,
     releaseEgrdtReservationRequest,
     deleteHistoryRecord: deleteSharedHistoryRecord,
     manageHistoryFile,
