@@ -552,6 +552,7 @@
     exportZip: $("#export-zip"),
     exportEgrdt: $("#export-egrdt"),
     exportFinalPackage: $("#export-final-package"),
+    saveGrdtToVault: $("#grdt-save-to-vault"),
     advancedToggle: $("#advanced-toggle"),
     advancedPanel: $("#advanced-panel"),
     ignoredDetails: $("#ignored-details"),
@@ -1193,7 +1194,7 @@
     els.relationStart.disabled = busy;
     if (els.compatibilityOpen) els.compatibilityOpen.disabled = busy;
     els.recentDays.disabled = busy;
-    [els.egrdtBatchLimit, els.egrdtBatchMode, els.egrdtBatchSave].forEach(control => { if (control) control.disabled = busy || state.downloadPreparing; });
+    [els.egrdtBatchLimit, els.egrdtBatchMode, els.egrdtBatchSave, els.saveGrdtToVault].forEach(control => { if (control) control.disabled = busy || state.downloadPreparing; });
     if (busy) {
       if (els.progress) { els.progress.dataset.stage = state.downloadPreparing ? "emit" : "analysis"; els.progress.hidden = state.downloadPreparing; }
       if (els.progressBar) els.progressBar.style.width = "2%";
@@ -5236,6 +5237,11 @@
     return PackageLayout.archiveName(generated, timestamp);
   }
 
+  function prepareVaultForEmission(plan) {
+    if (!els.saveGrdtToVault?.checked) return null;
+    return window.GrconDocumentVault?.prepareEmissionFiles?.(plan);
+  }
+
   async function exportEgrdt() {
     if (!saveEgrdtBatchLimit(false)) { els.egrdtBatchLimit?.reportValidity(); return; }
     if (!(await ensureFreshAnalysis())) return;
@@ -5256,7 +5262,7 @@
     try {
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const startVaultQueue = window.GrconDocumentVault?.prepareEmissionFiles?.(prepared);
+      const startVaultQueue = prepareVaultForEmission(prepared);
       const groups = splitPostingPlan(prepared, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       reservedNumbers = officialNumbers;
@@ -5384,7 +5390,7 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const startVaultQueue = window.GrconDocumentVault?.prepareEmissionFiles?.(plan);
+      const startVaultQueue = prepareVaultForEmission(plan);
       window.GrconGrdtDownloadProgress?.phase("Preparando lotes e numeração…");
       const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
@@ -5518,7 +5524,7 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      const startVaultQueue = window.GrconDocumentVault?.prepareEmissionFiles?.(plan);
+      const startVaultQueue = prepareVaultForEmission(plan);
       const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       reservedNumbers = officialNumbers;
@@ -6058,7 +6064,7 @@
   els.exportEgrdt.addEventListener("click", exportEgrdt);
   function lockDownloadControls(locked) {
     const controls = [els.selectAllReady, els.exportEgrdt, els.exportFinalPackage, els.batchEgrdt,
-      els.egrdtBatchLimit, els.egrdtBatchMode, els.egrdtBatchSave,
+      els.egrdtBatchLimit, els.egrdtBatchMode, els.egrdtBatchSave, els.saveGrdtToVault,
       ...els.tbody.querySelectorAll("input,button[data-action=toggle-details],button[data-action=restore-revision]")];
     controls.forEach(control => {
       if (locked) { control.dataset.downloadWasDisabled = String(control.disabled); control.disabled = true; }

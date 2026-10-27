@@ -1,4 +1,8 @@
 /* Central GRDT — hierarquia de downloads, histórico e triagem corporativa */
+#results-section .grdt-vault-option { display: grid; gap: 5px; margin: 0 0 14px; padding: 11px 14px; border: 1px solid var(--border, #d8e2ea); border-radius: 9px; background: #f8fafc; }
+#results-section .grdt-vault-option label { display: flex; gap: 9px; align-items: center; cursor: pointer; font-size: .8rem; font-weight: 650; color: #30445d; }
+#results-section .grdt-vault-option input { flex: 0 0 16px; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; accent-color: #1661aa; }
+#results-section .grdt-vault-option small { color: #66788d; font-size: .73rem; line-height: 1.45; }
 #results-section .grdt-main-download {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   min-width: 210px;

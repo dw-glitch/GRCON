@@ -68,6 +68,36 @@ async function drain(h) {
 }
 
 (async () => {
+  const main = fs.readFileSync(require.resolve("../app.js"), "utf8");
+  const html = fs.readFileSync(require.resolve("../index.html"), "utf8");
+  const choice = html.match(/<input\b[^>]*id="grdt-save-to-vault"[^>]*>/)?.[0];
+  assert.ok(choice, "vault choice is available before GRDT downloads");
+  assert.doesNotMatch(choice, /\bchecked\b/, "vault storage requires an explicit opt-in");
+  const begin = main.indexOf("  function prepareVaultForEmission(");
+  const end = main.indexOf("  async function exportEgrdt(", begin);
+  let preparations = 0, startedUploads = 0;
+  const checkbox = { checked: false };
+  const choiceContext = vm.createContext({ els: { saveGrdtToVault: checkbox }, window: {
+    GrconDocumentVault: { prepareEmissionFiles(plan) { preparations++; assert.equal(plan.entries.length, 1200); return () => startedUploads++; } },
+  } });
+  vm.runInContext(main.slice(begin, end), choiceContext);
+  const optedOutPlan = { get entries() { throw new Error("Opt-out must skip even vault preparation"); } };
+  assert.equal(choiceContext.prepareVaultForEmission(optedOutPlan), null);
+  assert.equal(preparations, 0, "no preparation, hashing or uploads without consent");
+  checkbox.checked = true;
+  const optedIn = choiceContext.prepareVaultForEmission({ entries: Array(1200).fill({}) });
+  assert.equal(preparations, 1);
+  assert.equal(startedUploads, 0, "opt-in still waits for successful GRDT delivery");
+  optedIn(); assert.equal(startedUploads, 1);
+  checkbox.checked = false;
+  assert.equal(choiceContext.prepareVaultForEmission(optedOutPlan), null, "the next emission can independently opt out");
+  for (const [name, next] of [["exportEgrdt", "outputFileEntries"], ["exportZip", "buildBatchSummaryText"], ["exportFinalPackage", null]]) {
+    const start = main.indexOf("  async function " + name + "(");
+    const stop = next ? main.indexOf("  function " + next + "(", start) : main.indexOf('  els.ldInput.addEventListener', start);
+    const exporter = main.slice(start, stop);
+    assert.match(exporter, /const startVaultQueue = prepareVaultForEmission\(/, name + " respects the same choice");
+    assert.doesNotMatch(exporter, /persistEmissionFiles|GrconDocumentVault\?\.prepareEmissionFiles/, name + " has no bypass");
+  }
   const h = harness();
   const files = Array.from({ length: 1200 }, (_, i) => file("DOC-" + String(i).padStart(4, "0") + "_A.pdf"));
   const archives = ["zip", "rar", "7z", "tar", "gz", "ZIP"].map(ext => file("DOC-ARCHIVE_A." + ext));
