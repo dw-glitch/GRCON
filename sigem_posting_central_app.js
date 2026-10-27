@@ -43,7 +43,7 @@
       '<header class="scc-heading"><div><span>CONFERÊNCIA DOCUMENTAL</span>'+
       '<h2>Conferir GRDT</h2>'+
       '<p>Verifique os documentos, revisões e possíveis divergências de uma GRDT. A geração não comprova postagem.</p></div>'+
-      '<div class="scc-header-actions"><button type="button" id="scc-monitor-open" class="secondary-button compact">Evolução e monitoramento</button><button type="button" id="scc-technical-open" class="secondary-button compact">Conferir pacote .xls</button></div></header>'+
+      '<div class="scc-header-actions"><button type="button" id="scc-monitor-open" class="secondary-button compact">Evolução e monitoramento</button><button type="button" id="scc-technical-open" class="secondary-button compact">Conferir arquivo .xls</button></div></header>'+
       '<p class="scc-base" id="sigem-central-base" role="status"></p>'+
       '<div class="scc-query"><input type="search" id="scc-query" autocomplete="off" '+
       'placeholder="Pesquisar pelo número da GRDT ou documento" aria-label="Pesquisa universal"/>'+
@@ -106,7 +106,7 @@
       '<p class="scc-note">Base SIGEM e histórico GRCON: uma eGRDT gerada não comprova envio. Clique em uma linha para visualizar todas as ocorrências.</p>'+
       '</section>'+
       '<section id="sigem-technical-pane" class="scc-technical" hidden>'+
-      '<button type="button" id="scc-back" class="secondary-button compact">← Voltar à central</button><div id="sigem-technical-content"></div></section>'+
+      '<button type="button" id="scc-back" class="secondary-button compact">Consultar GRDTs no histórico</button><div id="sigem-technical-content"></div></section>'+
       '<aside class="scc-detail" id="sigem-central-detail" role="dialog" aria-label="Detalhes do documento" hidden>'+
       '<button type="button" class="scc-close" aria-label="Fechar detalhes">×</button>'+
       '<div id="sigem-central-detail-body"></div></aside>';
@@ -310,7 +310,7 @@
       },operation?.update);
       operation?.assertCurrent();
       const url=URL.createObjectURL(new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-      const anchor=document.createElement("a");anchor.href=url;anchor.download="GRCON_Central_Postagem_SIGEM_"+new Date().toISOString().slice(0,10)+".xlsx";anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+      const anchor=document.createElement("a");anchor.href=url;anchor.download="GRCON_Conferencia_GRDT_"+new Date().toISOString().slice(0,10)+".xlsx";anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
     }catch(error){operation?.fail(error);notify(error.message||"Não foi possível exportar a consulta.","error");}
     finally{operation?.finish();}
   }
