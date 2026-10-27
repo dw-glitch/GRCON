@@ -359,8 +359,8 @@
       <header class="sigem-heading">
         <div>
           <span>CONFERÊNCIA TÉCNICA</span>
-          <h2 id="sigem-title">Verificar eGRDT antes da postagem</h2>
-          <p>Esta área não controla a postagem. Ela existe somente para conferir se o arquivo eGRDT gerado está completo e coerente com os documentos do lote e com a LD.</p>
+          <h2 id="sigem-title">Conferir GRDT</h2>
+          <p>Selecione uma GRDT do histórico e confira o arquivo .xls real antes da postagem. Documentos, revisões, títulos e caminhos Databook são confrontados com o lote registrado; a conferência não realiza postagem.</p>
         </div>
       </header>
       <section aria-label="Busca das eGRDTs para conferência" class="sigem-toolbar">
