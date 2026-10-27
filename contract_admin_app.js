@@ -185,11 +185,12 @@
         if(!valid())return;
         try{
           const job=await api("background-status");if(!job.started)return;
-          state.migrationReport={...job,cutoverReady:false,cleanupAllowed:false,officialSource:"supabase"};
+          state.migrationReport={...job,workspace,cutoverReady:false,cleanupAllowed:false,officialSource:"supabase"};
           const failed=(job.reports||[]).find(lane=>lane.status==="failed");
           backgroundProgress.textContent=job.complete?`Cópia e auditoria integral concluídas: ${job.validated.toLocaleString("pt-BR")} registros. A fonte oficial permanece no Supabase; restauração e homologação ainda são necessárias.`:
             `Cópia em segundo plano: ${Number(job.copied||0).toLocaleString("pt-BR")} de ${Number(job.records||0).toLocaleString("pt-BR")} registros; auditoria integral: ${Number(job.validated||0).toLocaleString("pt-BR")}. `+
-            (!job.inventoryStable?"O inventário mudou; reconcilie as versões antes da homologação.":failed?"Execução interrompida: "+failed.error+". Os lotes foram preservados.":"Pode sair desta tela; o servidor continua o processamento.");
+            (!job.inventoryStable?"O inventário mudou; reconcilie as versões antes da homologação. ":"")+
+            (failed?"Execução interrompida: "+failed.error+". Os lotes foram preservados.":"Pode sair desta tela; o servidor continua o processamento.");
           backgroundButton.disabled=job.complete||!failed;
           host.querySelector("[data-storage-copy]").disabled=!failed;
           if(!job.complete&&!failed)root.setTimeout(()=>void monitor(),10000);
@@ -210,7 +211,7 @@
       host.querySelector("[data-storage-refresh]").addEventListener("click", () => void loadStorage());
       host.querySelector("[data-storage-report]").addEventListener("click", async () => {
         const refreshed = await api("status").catch(() => status); if (!valid()) return;
-        const migration = state.migrationReport?.workspace === workspace ? state.migrationReport : undefined;
+          const migration = state.migrationReport?.workspace === workspace ? state.migrationReport : undefined;
         const link = document.createElement("a"), url = URL.createObjectURL(new Blob([JSON.stringify({ ...refreshed, migration, reportedAt: new Date().toISOString() }, null, 2)], { type: "application/json" }));
         link.href = url; link.download = "GRCON-Armazenamento.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
       });
