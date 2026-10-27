@@ -59,7 +59,10 @@ const metrics = element => {
       return target.locator('#destination').evaluate(metrics);
     };
     const copyAndCheck = async (action = 'copy-all') => {
+      const before = await page.evaluate(() => window.qaNotifications.length);
       await page.locator(`[data-egrdt-email-action="${action}"]`).click();
+      // ClipboardItem.write is asynchronous: do not paste the previous copy while the new one is still pending.
+      await page.waitForFunction(count => window.qaNotifications.slice(count).some(item => item.kind === 'success' && /formatada copiada/.test(item.message)), before);
       const expected = await frame.locator('body').evaluate(metrics);
       const pasted = await pasteAndMeasure();
       if (action === 'copy-table') { expected.messageSize = null; expected.paragraphGap = null; }
