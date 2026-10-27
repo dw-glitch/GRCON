@@ -598,9 +598,13 @@
   let queueProgressTimer = null;
   function scheduleQueueProgress() {
     if (queueProgressTimer !== null) return;
-    queueProgressTimer = setTimeout(() => { queueProgressTimer = null; renderQueue(); }, 100);
+    queueProgressTimer = setTimeout(() => { queueProgressTimer = null; renderQueue(true); }, 100);
   }
-  function renderQueue() {
+  function renderQueue(immediate = false) {
+    // A thousand background files must not rebuild a hidden 220-row table
+    // thousands of times, nor replace focused inputs on every network event.
+    if (!state.open) return;
+    if (!immediate) { scheduleQueueProgress(); return; }
     if (queueProgressTimer !== null) { clearTimeout(queueProgressTimer); queueProgressTimer = null; }
     const host = document.getElementById("vault-queue-body");
     const panel = document.getElementById("vault-queue-panel");
@@ -1472,6 +1476,7 @@
 
   async function openVault() {
     activateShell();
+    renderQueue(true);
     await Promise.all([checkHealth(), refreshList(true), refreshStorage()]);
   }
 

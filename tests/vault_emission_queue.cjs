@@ -11,7 +11,7 @@ const entry = (f, revision = Core.parseStoredFileIdentity(f.name).revision) => (
 
 function harness({ failure = false, existing = true, conflict = false } = {}) {
   const calls = [], puts = [], notices = [], records = new Map();
-  let active = 0, maxActive = 0, hashes = 0;
+  let active = 0, maxActive = 0, hashes = 0, queueLookups = 0;
   const root = {
     GrconDocumentVaultCore: Core,
     GrconCloud: { state: { session: { access_token: "test" }, membership: { workspace_id: "contract-1", role: "operator" } } },
@@ -55,9 +55,9 @@ function harness({ failure = false, existing = true, conflict = false } = {}) {
     // Existing content must return a ready file: no PUT, no failure.
     return { ok: true, text: async () => JSON.stringify({ ok: true, file: record, ready: record.ready, duplicate: Boolean(old && record.ready), uploadMode: record.ready ? "none" : "single" }) };
   };
-  vm.runInNewContext(source, { window: root, document: { readyState: "loading", addEventListener() {}, getElementById() { return null; } },
+  vm.runInNewContext(source, { window: root, document: { readyState: "loading", addEventListener() {}, getElementById(id) { if (id === "vault-queue-body") queueLookups++; return null; } },
     Worker: HashWorker, XMLHttpRequest: Xhr, fetch, AbortController, DOMException, setTimeout, clearTimeout, console });
-  return { vault: root.GrconDocumentVault, root, calls, puts, notices, get hashes() { return hashes; }, get maxActive() { return maxActive; } };
+  return { vault: root.GrconDocumentVault, root, calls, puts, notices, get hashes() { return hashes; }, get maxActive() { return maxActive; }, get queueLookups() { return queueLookups; } };
 }
 async function drain(h) {
   for (let i = 0; i < 15000; i++) {
@@ -82,6 +82,7 @@ async function drain(h) {
   assert.equal(h.calls.length, 1200);
   assert.ok(h.maxActive <= 6, "bounded concurrent requests for 1200 files");
   assert.ok(h.vault.state.queue.every(t => t.status === "done"));
+  assert.equal(h.queueLookups, 0, "background queue never rebuilds the hidden vault table");
   assert.equal(h.vault.state.uploadFault, null);
   assert.equal(h.puts.length, 0, "ready existing objects are never uploaded again");
   assert.equal(plan.entries.length, 1206, "archives remain in the GRDT package");
