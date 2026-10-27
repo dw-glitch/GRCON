@@ -371,11 +371,9 @@
     if (window.GrconCloud?.state?.membership) {
       values = await window.GrconCloud.reserveEgrdtSequences(EGRDT_YEAR, count, requestedSequences);
     }
-    const highest = Math.max(...values.map((item) => item.sequence));
-    state.egrdtSequenceCursor = Math.max(Number(state.egrdtSequenceCursor) || 0, highest);
+    // Reservas temporárias não significam GRDT gerada.
     state.manualEgrdtSequenceStart = null;
     state.manualEgrdtSequences = [];
-    try { localStorage.setItem(EGRDT_SEQUENCE_KEY, String(Math.max(readLastEgrdtSequence(), highest))); } catch (_) { console.debug("[App] sequência mantida nesta aba:", _); /* sequência mantida nesta aba */ }
     return values;
   }
 
@@ -427,8 +425,11 @@
         if (typeof window.GrconNotify === "function") window.GrconNotify(mensagem, "warning");
         console.warn(`GRCON: ${mensagem}`);
       }
-      if (saved.saved && window.GrconCloud?.completeEgrdtReservationRequest) {
-        window.GrconCloud.completeEgrdtReservationRequest(generated);
+      if (saved.saved) {
+        for (const file of generated) {
+          if (file.official?.baseName) window.GrconEgrdtSequence?.syncFromNumber(file.official.baseName);
+        }
+        window.GrconCloud?.completeEgrdtReservationRequest?.(generated);
       }
       if (saved.error) console.warn("GRCON: histórico local indisponível", saved.error);
     } catch (error) {
@@ -5209,12 +5210,15 @@
     els.exportEgrdt.disabled = true;
     els.exportEgrdt.textContent = "Gerando…";
     if (Workspace) Workspace.start("grdt-export", "Geração de GRDT");
+    let reservedNumbers = [];
+    let outputDelivered = false;
     try {
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
       await window.GrconDocumentVault?.persistEmissionFiles?.(prepared);
       const groups = splitPostingPlan(prepared, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
+      reservedNumbers = officialNumbers;
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = previewGenerated.length === 1 ? previewGenerated[0].fileName : PackageLayout.archiveName(previewGenerated, timestamp);
       const historyPrepared = prepareHistoryOutput(previewGenerated, "eGRDT final", packageName, generatedAt);
@@ -5227,7 +5231,7 @@
           }, workerProgress("eGRDT"));
           generated = restoreWorkerGenerated(built.generated, groups);
           const file = generated[0];
-          downloadBlob(new Blob([file.data], { type: window.GrdtWorkbook.MIME || "application/vnd.ms-excel" }), file.fileName);
+          downloadBlob(new Blob([file.data], { type: window.GrdtWorkbook.MIME || "application/vnd.ms-excel" }), file.fileName); outputDelivered = true;
         } else {
           const built = await PerformanceCore.buildPackage({
             mode: "egrdt-only",
@@ -5237,7 +5241,7 @@
             limit: currentEgrdtBatchLimit(),
           }, workerProgress("eGRDT + ZIP"));
           generated = restoreWorkerGenerated(built.generated, groups);
-          downloadBlob(new Blob([built.bytes], { type: "application/zip" }), packageName);
+          downloadBlob(new Blob([built.bytes], { type: "application/zip" }), packageName); outputDelivered = true;
         }
         refreshPerformancePanel(`${generated.length} eGRDT(s) gerada(s).`);
       } else {
@@ -5252,19 +5256,23 @@
           file.fileName = `${file.official.baseName}.xls`;
         });
         if (generated.length === 1) {
-          downloadBlob(new Blob([generated[0].data], { type: window.GrdtWorkbook.MIME || "application/vnd.ms-excel" }), generated[0].fileName);
+          downloadBlob(new Blob([generated[0].data], { type: window.GrdtWorkbook.MIME || "application/vnd.ms-excel" }), generated[0].fileName); outputDelivered = true;
         } else {
           const zip = new JSZip();
           generated.forEach((file) => zip.folder(file.official.baseName).file(file.fileName, file.data));
           zip.file("ORGANIZACAO_DOS_LOTES.txt", buildBatchSummaryText(generated));
           const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
           await PackageLayout.verifyArchive(blob, generated, { includeFiles: false });
-          downloadBlob(blob, packageName);
+          downloadBlob(blob, packageName); outputDelivered = true;
         }
       }
       saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${generated.length} GRDT final(is) verificada(s) e registrada(s) para a etapa SIGEM.`, "success");
     } catch (error) {
+      if (!outputDelivered && reservedNumbers.length) {
+        try { await window.GrconCloud?.releaseEgrdtReservationRequest?.(reservedNumbers); }
+        catch (releaseError) { console.warn("GRCON: reserva temporária pendente de liberação", releaseError?.message || releaseError); }
+      }
       handleWorkerTaskError(error, "Não foi possível gerar a GRDT final.");
     } finally {
       if (Workspace) Workspace.finish("grdt-export");
@@ -5327,6 +5335,8 @@
     els.exportZip.disabled = true;
     els.exportZip.textContent = "Preparando…";
     if (Workspace) Workspace.start("grdt-package", "Arquivos + eGRDT");
+    let reservedNumbers = [];
+    let outputDelivered = false;
     try {
       const consistency = E.consistencyErrors(plan);
       if (consistency.length) throw new Error(consistency.join(" "));
@@ -5337,6 +5347,7 @@
       window.GrconGrdtDownloadProgress?.phase("Preparando lotes e numeração…");
       const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
+      reservedNumbers = officialNumbers;
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
       const historyPrepared = prepareHistoryOutput(previewGenerated, "Arquivos + eGRDT", packageName, generatedAt);
@@ -5376,11 +5387,15 @@
         });
       }
       window.GrconGrdtDownloadProgress?.phase("Registrando a emissão e entregando o pacote…");
-      downloadBlob(blob, packageName);
+      downloadBlob(blob, packageName); outputDelivered = true;
       saveGeneratedHistory(generated, "Arquivos + eGRDT", { packageName, generatedAt }, historyPrepared.historyRecords);
       window.GrconGrdtDownloadProgress?.finish();
       showToast(`${plan.entries.length} arquivo(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
     } catch (error) {
+      if (!outputDelivered && reservedNumbers.length) {
+        try { await window.GrconCloud?.releaseEgrdtReservationRequest?.(reservedNumbers); }
+        catch (releaseError) { console.warn("GRCON: reserva temporária pendente de liberação", releaseError?.message || releaseError); }
+      }
       window.GrconGrdtDownloadProgress?.finish(error.name === "AbortError" ? "Preparação cancelada." : "Não foi possível gerar o pacote. Tente novamente.", true);
       handleWorkerTaskError(error, "Não foi possível gerar os arquivos com a eGRDT.");
     } finally {
@@ -5454,6 +5469,8 @@
     els.exportFinalPackage.disabled = true;
     els.exportFinalPackage.textContent = "Gerando…";
     if (Workspace) Workspace.start("grdt-final-package", "Pacote final GRDT");
+    let reservedNumbers = [];
+    let outputDelivered = false;
     try {
       const consistency = E.consistencyErrors(plan);
       if (consistency.length) throw new Error(consistency.join(" "));
@@ -5462,6 +5479,7 @@
       await window.GrconDocumentVault?.persistEmissionFiles?.(plan);
       const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
+      reservedNumbers = officialNumbers;
       const previewGenerated = groups.map((group, index) => ({ group, official: officialNumbers[index], fileName: `${officialNumbers[index].baseName}.xls` }));
       const packageName = PackageLayout.archiveName(previewGenerated, timestamp);
       const historyPrepared = prepareHistoryOutput(previewGenerated, "Pacote completo", packageName, generatedAt);
@@ -5515,10 +5533,14 @@
         blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 4 } });
         await PackageLayout.verifyArchive(blob, generated, { cancelled: () => state.cancelled });
       }
-      downloadBlob(blob, packageName);
+      downloadBlob(blob, packageName); outputDelivered = true;
       saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${plan.entries.length} arquivo(s), ${generated.length} eGRDT(s) e o relatório de conferência validados no pacote final.`, "success");
     } catch (error) {
+      if (!outputDelivered && reservedNumbers.length) {
+        try { await window.GrconCloud?.releaseEgrdtReservationRequest?.(reservedNumbers); }
+        catch (releaseError) { console.warn("GRCON: reserva temporária pendente de liberação", releaseError?.message || releaseError); }
+      }
       handleWorkerTaskError(error, "Não foi possível gerar o pacote final.");
     } finally {
       if (Workspace) Workspace.finish("grdt-final-package");
