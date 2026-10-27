@@ -323,6 +323,7 @@
     }
     if (module === "sigem") {
       root.GrconSigemCentralUi?.refresh?.();
+      root.GrconSigemCentralUi?.openTechnical?.();
       return;
     }
     if (module === "grdt-reissue") {
