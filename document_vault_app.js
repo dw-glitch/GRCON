@@ -1539,8 +1539,21 @@
       const existing = lookupSource(file);
       if (existing?.id) { provenance.set(file, existing); report(file,1); return; }
       const identity = parseIdentity(file.name);
+      const entry = entryByFile.get(file) || {};
+      // The GRDT uses the exact document/revision selected by the operator, not
+      // an unrelated or similarly suffixed file identity (121 must not become 122).
+      const entryCode = text(entry.document).trim().toUpperCase();
+      const fileCode = text(identity.documentCode).trim().toUpperCase();
+      if (entryCode && fileCode && entryCode !== fileCode) {
+        throw new Error("Cofre: arquivo " + file.name + " diverge do documento " + entryCode + " solicitado na GRDT.");
+      }
+      const chosenRevision = text(entry.revision).trim().toUpperCase();
+      const fileRevision = text(identity.revision).trim().toUpperCase();
+      if (chosenRevision && fileRevision && chosenRevision !== fileRevision && !entry.manualRevisionOverride) {
+        throw new Error("Cofre: revisão do arquivo " + fileRevision + " diverge da revisão " + chosenRevision + " da GRDT.");
+      }
       const task = { id: "emission-" + Math.random().toString(36).slice(2), file, workspaceId: target,
-        documentCode: identity.documentCode, revision: identity.revision, format: identity.format,
+        documentCode: entryCode || fileCode, revision: chosenRevision || fileRevision, format: identity.format,
         origin: "local", documentClass: entryByFile.get(file)?.sheet || "", purpose: entryByFile.get(file)?.item?.purpose || "", discipline: entryByFile.get(file)?.discipline || "",
         allowConflict: false, progress: 0, status: "pending" };
       task.onEmissionProgress = value => {
@@ -1562,7 +1575,7 @@
       const item = task.status === "done" ? task.serverFile : null;
       if (!item && target) failed++;
       const meta = { id: item?.id || "", source: task.duplicate || task.reused ? "cofre" : "local", fileVersion: item?.file_version || 0,
-        fileName: file.name, revision: identity.revision, format: identity.format,
+        fileName: file.name, revision: task.revision, format: identity.format,
         sizeBytes: file.size, sha256: task.sha256, createdAt: item?.created_at || "", verifiedAt: item?.verified_at || "" };
       provenance.set(file, meta);
       if (item) registerSource(file, meta);
