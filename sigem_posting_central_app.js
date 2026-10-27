@@ -4,8 +4,7 @@
   const Query=root.GrconSigemCentralQuery,View=root.GrconSigemCentralRender;
   const History=root.GrconHistory;
   const Tracking=root.GrconSigemCentralTracking;
-  const DEFAULT=["document","title","statusLabel","sendCount",
-    "statusLabel","sigemStatus","egrdtNumber","generatedAt","sendCount"];
+  const DEFAULT=["document","title","statusLabel","sendCount","generatedAt","note"];
   const state={view:"grdts",panel:"central",query:"",filters:{},columns:DEFAULT.slice(),
     showColumns:false,sort:{key:"",dir:"asc"},widths:{},keepScroll:false,data:null,filtered:{rows:[],missing:[]},generation:0,pinned:["document"],savedViews:[],comparison:null,comparisonRows:[],trackingLoaded:false,viewColumns:{}};
   function workspace(){return root.GrconCloud?.state?.membership?.workspace_id||"unavailable";}
@@ -40,7 +39,7 @@
   function shell(){
     const module=$("#sigem-module");if(!module)return false;
     module.innerHTML=
-      '<section class="scc" id="sigem-central-workspace">'+
+      '<section class="scc scc-grdt-review" id="sigem-central-workspace">'+
       '<header class="scc-heading"><div><span>CONFERÊNCIA DOCUMENTAL</span>'+
       '<h2>Conferir GRDT</h2>'+
       '<p>Verifique os documentos, revisões e possíveis divergências de uma GRDT. A geração não comprova postagem.</p></div>'+
@@ -639,7 +638,7 @@
     if(index>=0)View.detail(state,index);else notify('Item indisponível no histórico acessível deste contrato.','warning');
   }
   if(shell()){
-    loadColumns();bind();
+    loadColumns();state.view="grdts";state.columns=DEFAULT.slice();state.filters={};bind();
     root.GrconSigemCentralUi=Object.freeze({state,refresh,openTechnical,openCentral,openTarget});
     void refresh();
   }
