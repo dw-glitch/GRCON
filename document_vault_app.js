@@ -1558,7 +1558,10 @@
       // an unrelated or similarly suffixed file identity (121 must not become 122).
       const entryCode = text(entry.document).trim().toUpperCase();
       const fileCode = text(identity.documentCode).trim().toUpperCase();
-      if (entryCode && fileCode && entryCode !== fileCode) {
+      // Use the canonical document-identity validator: _RIR and official
+      // technical suffixes are not part of the code, while 121 and 122 differ.
+      const physicalIdentity = entryCode && root.TriagemCore?.fileDocumentIdentity?.(file.name, entryCode);
+      if (physicalIdentity && !physicalIdentity.valid) {
         throw new Error("Cofre: arquivo " + file.name + " diverge do documento " + entryCode + " solicitado na GRDT.");
       }
       const chosenRevision = text(entry.revision).trim().toUpperCase();
