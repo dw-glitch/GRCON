@@ -4,9 +4,9 @@
   const Query=root.GrconSigemCentralQuery,View=root.GrconSigemCentralRender;
   const History=root.GrconHistory;
   const Tracking=root.GrconSigemCentralTracking;
-  const DEFAULT=["document","title","revisionSent","revisionFound",
+  const DEFAULT=["document","title","statusLabel","sendCount",
     "statusLabel","sigemStatus","egrdtNumber","generatedAt","sendCount"];
-  const state={view:"documentos",panel:"central",query:"",filters:{},columns:DEFAULT.slice(),
+  const state={view:"grdts",panel:"central",query:"",filters:{},columns:DEFAULT.slice(),
     showColumns:false,sort:{key:"",dir:"asc"},widths:{},keepScroll:false,data:null,filtered:{rows:[],missing:[]},generation:0,pinned:["document"],savedViews:[],comparison:null,comparisonRows:[],trackingLoaded:false,viewColumns:{}};
   function workspace(){return root.GrconCloud?.state?.membership?.workspace_id||"unavailable";}
   function storageKey(){return "grcon.sigem.central.preferences.v2:"+workspace()+":"+(root.GrconCloud?.state?.session?.user?.id||"anonymous");}
@@ -41,13 +41,13 @@
     const module=$("#sigem-module");if(!module)return false;
     module.innerHTML=
       '<section class="scc" id="sigem-central-workspace">'+
-      '<header class="scc-heading"><div><span>CENTRAL OPERACIONAL</span>'+
-      '<h2>Central de Postagem SIGEM</h2>'+
-      '<p>Consulta, conferência e rastreabilidade documental</p></div>'+
+      '<header class="scc-heading"><div><span>CONFERÊNCIA DOCUMENTAL</span>'+
+      '<h2>Conferir GRDT</h2>'+
+      '<p>Verifique os documentos, revisões e possíveis divergências de uma GRDT. A geração não comprova postagem.</p></div>'+
       '<div class="scc-header-actions"><button type="button" id="scc-monitor-open" class="secondary-button compact">Evolução e monitoramento</button><button type="button" id="scc-technical-open" class="secondary-button compact">Conferir pacote .xls</button></div></header>'+
       '<p class="scc-base" id="sigem-central-base" role="status"></p>'+
       '<div class="scc-query"><input type="search" id="scc-query" autocomplete="off" '+
-      'placeholder="Pesquisar documento, GRDT, título ou revisão" aria-label="Pesquisa universal"/>'+
+      'placeholder="Pesquisar pelo número da GRDT ou documento" aria-label="Pesquisa universal"/>'+
       '<button type="button" id="scc-list-toggle" class="secondary-button compact">Consultar lista</button></div>'+
       '<div class="scc-list" id="scc-list-panel" hidden><label for="scc-list-input">Cole uma lista de códigos, um por linha</label>'+
       '<textarea id="scc-list-input" rows="4" placeholder="Códigos separados por linha, vírgula ou ponto e vírgula"></textarea>'+
@@ -301,7 +301,7 @@
   async function exportExcel(){
     if(!state.filtered.rows.length){notify("Nenhum resultado para exportar.");return;}
     if(root.GrconOperations?.isActive("sigem-central-export"))return;
-    const operation=root.GrconOperations?.begin("sigem-central-export","Exportar Central de Postagem SIGEM",{host:"#sigem-module"});
+    const operation=root.GrconOperations?.begin("sigem-central-export","Exportar conferência de GRDT",{host:"#sigem-module"});
     try{
       await operation?.paint();
       await root.GRCONModuleLoader.ensure("performance");
