@@ -283,7 +283,7 @@
   }
 
   async function removeSourceSnapshot(snapshotId) {
-    if (!root.GrconCloud?.isMasterOwner?.()) throw new Error("Somente o proprietário master pode excluir o histórico.");
+    if (!root.GrconCloud?.isMasterOwner?.()) throw new Error("Somente o Proprietário ADM pode excluir o histórico.");
     if (state.busy) throw new Error("Já existe uma exclusão em andamento.");
     const allSources = [
       ...(await History.listSourceSnapshots("sigem")),
