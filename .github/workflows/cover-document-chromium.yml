@@ -1,4 +1,4 @@
-name: QA — Adicionar Capa Chromium
+name: QA — Ferramentas documentais Chromium
 
 on:
   pull_request:
@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   chromium:
-    name: Capa + Ferramentas adicionais — Chromium
+    name: Ferramentas adicionais — Chromium
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -57,17 +57,17 @@ jobs:
 
       - name: QA real no Chromium
         run: |
-          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-cover-document.log" 2>&1 &
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/grcon-document-tools.log" 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
-          node scripts/validar-cover-document-browser.cjs
+          node scripts/validar-docx-pdf-browser.cjs
 
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: cover-document-chromium
+          name: document-tools-chromium
           path: |
-            artifacts/cover-document-browser/*.png
-            artifacts/cover-document-browser/*.pdf
-            artifacts/cover-document-browser/metrics.json
+            artifacts/docx-pdf-browser/*.png
+            artifacts/docx-pdf-browser/*.pdf
+            artifacts/docx-pdf-browser/metrics.json
           if-no-files-found: warn
