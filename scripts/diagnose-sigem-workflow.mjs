@@ -26,7 +26,9 @@ export async function diagnoseWorkflow(config,fetcher=fetch){
   if(data.success!==true)throw Error('DIAG_API_REJECTED');return data.result;
  };
  const object=key=>get('/r2/buckets/grcon-documents/objects/'+key.split('/').map(encodeURIComponent).join('/'),true);
- const latest=await object('sigem-migration-jobs/v1/'+config.workspace+'/latest.json');
+ let latest;
+ try{latest=await object('sigem-migration-jobs/v1/'+config.workspace+'/latest.json');}
+ catch(error){if(error.message==='DIAG_NOT_FOUND')return {ok:true,readOnly:true,started:false,instances:[]};throw error;}
  if(!/^[a-f0-9]{64}$/.test(latest.id||''))throw Error('DIAG_JOB_INVALID');
  const root='sigem-migration-jobs/v1/'+config.workspace+'/'+latest.id;
  const grant=await object(root+'/grant.json');
@@ -36,7 +38,9 @@ export async function diagnoseWorkflow(config,fetcher=fetch){
   const report=await object(root+'/lane-'+lane+'.json');
   if(!Number.isSafeInteger(report.segment)||report.segment<0||report.segment>10000)throw Error('DIAG_SEGMENT_INVALID');
   const instance='sigem-'+latest.id.slice(0,40)+'-'+lane+(report.segment?'-s'+report.segment:'');
-  const state=await get('/workflows/grcon-tasks/instances/'+instance);
+  let state;
+  try{state=await get('/workflows/grcon-tasks/instances/'+instance);}
+  catch(error){if(error.message==='DIAG_NOT_FOUND'){result.push({lane,segment:report.segment,status:'not-created',error:null,lastSteps:[]});continue;}throw error;}
   const steps=Array.isArray(state.steps)?state.steps:[];
   result.push({lane,segment:report.segment,status:state.status,error:state.error?classifyWorkflowError(state.error):null,
    lastSteps:steps.slice(-4).map(s=>({type:s.type,name:/^[a-z0-9-]{1,100}$/.test(s.name||'')?s.name:null,

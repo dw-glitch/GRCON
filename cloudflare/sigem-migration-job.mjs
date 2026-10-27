@@ -85,6 +85,7 @@ async function reusableAudits(env,workspace,inventory){
   const saved=await env.GRCON_DOCUMENTS.get(path(workspace,id)+'/lane-'+lane+'.json');
   if(saved)proofs.push(...((await saved.json()).snapshots||[]));
  }
+ if(!proofs.some(p=>p.fullAudit===true&&inventory.snapshots.some(s=>s.id===p.id)))return [];
  const result=[],seen=new Set(),contract=inventory.snapshots[0].contract_id;
  if(!uuid(contract)||inventory.snapshots.some(s=>s.workspace_id!==workspace||s.contract_id!==contract))throw fail('SIGEM_INVENTORY_NOT_READY');
  const targets=(await tursoClient(env).execute('SELECT id,state,expected_count,checksum,source_json FROM sigem_snapshots WHERE workspace_id=? AND contract_id=?',[workspace,contract])).rows;
@@ -113,7 +114,9 @@ async function reusableAudits(env,workspace,inventory){
 // Cron consumes the durable outbox in a fresh invocation after the parent exits.
 export async function recoverMigrations(env){
  ready(env);if(!env.GRCON_DOCUMENTS.list)return;
- const listing=await env.GRCON_DOCUMENTS.list({prefix:WATCH,limit:5});
+ const cursorKey='sigem-migration-control/v1/watch-cursor.json';
+ const savedCursor=await env.GRCON_DOCUMENTS.get(cursorKey),cursor=savedCursor?(await savedCursor.json()).cursor:null;
+ const listing=await env.GRCON_DOCUMENTS.list({prefix:WATCH,limit:5,...(cursor?{cursor}:{})});
  for(const item of listing.objects||[]){
   try{
    const watch=await (await env.GRCON_DOCUMENTS.get(item.key)).json();
@@ -138,6 +141,7 @@ export async function recoverMigrations(env){
    }
   }catch(error){console.warn('SIGEM_RECOVERY_DEFERRED',migrationError(error));}
  }
+ await env.GRCON_DOCUMENTS.put(cursorKey,canonical({cursor:listing.truncated?listing.cursor:null}));
 }
 export async function migrationStatus(env,workspace,inventory){
  const latest=await env.GRCON_DOCUMENTS.get(ROOT+workspace+'/latest.json');
