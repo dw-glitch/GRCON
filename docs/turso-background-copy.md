@@ -15,7 +15,7 @@ novas instâncias após no máximo 32 chamadas de página/selo. O limite de 50
 subrequisições por instância do plano Free é independente do limite de passos;
 agrupar páginas dentro de um passo não reinicia esse orçamento. Os cursores,
 contagens e o hash parcial são persistidos antes de despachar a continuação.
-Os lotes são agrupados para manter o planejamento abaixo de 900 passos por
+Os lotes são agrupados para manter o planejamento abaixo de 1.000 passos por
 frente e 2.700 passos no total, reservando margem em relação à franquia Free de
 3.000 passos/dia. Não é
 habilitado upgrade nem cobrança. O consumo de outras tarefas compartilha essa
@@ -59,3 +59,22 @@ Referências oficiais consultadas em 26/10/2026:
 - https://developers.cloudflare.com/workflows/reference/limits/
 - https://developers.cloudflare.com/workflows/reference/pricing/
 - https://developers.cloudflare.com/workflows/build/workers-api/
+
+## Recuperação corporativa pelo GitHub Actions
+
+O workflow manual `SIGEM — Recuperação real de backup` usa as credenciais
+já existentes da publicação, limitadas ao passo de recuperação. Recebe apenas
+UUIDs e o hash do manifesto conferido de forma independente no Turso. A API
+R2 é usada somente com GET, no bucket existente e no prefixo exato da versão.
+Não há alteração de permissões, criação de token ou modificação em produção.
+Se o token de publicação não possuir leitura do R2, o workflow recusa com
+`RECOVERY_R2_ACCESS_DENIED`; essa permissão não é presumida.
+
+A ferramenta baixa manifesto e lotes para diretório privado temporário, confere
+cada hash e restaura a versão inteira em SQLite e PostgreSQL PGlite isolados.
+Todos os campos das linhas e metadados são comparados; timestamps tipados são
+comparados pelo instante, preservando também o JSON original do manifesto.
+O único artefato publicado é `summary.json`, com contagens e hashes. Payloads,
+SQL e arquivos SQLite não são incluídos em logs ou artefatos e são removidos
+ao fim do ensaio. Isso verifica a recuperação independente; não libera o corte
+nem substitui a homologação das dependências operacionais.

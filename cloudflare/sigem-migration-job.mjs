@@ -39,9 +39,9 @@ export function planLanes(snapshots){
   if(!uuid(source.id)||!Number.isSafeInteger(source.record_count)||source.record_count<1||source.record_count>100000)throw fail('SIGEM_JOB_LIMIT');
   const lane=lanes.reduce((a,b)=>a.steps<=b.steps?a:b);
   const pages=Math.ceil(source.record_count/250);
-  lane.steps+=4*Math.ceil(pages/GROUP)+3+2*Math.ceil((2*pages+1)/PAGE_BUDGET);lane.snapshots.push(source);
+  lane.steps+=4*Math.ceil(pages/GROUP)+3+3*Math.ceil((2*pages+1)/PAGE_BUDGET);lane.snapshots.push(source);
  }
- if(lanes.some(l=>l.steps>900)||lanes.reduce((n,l)=>n+l.steps,0)>2700)throw fail('SIGEM_JOB_STEP_LIMIT');
+ if(lanes.some(l=>l.steps>1000)||lanes.reduce((n,l)=>n+l.steps,0)>2700)throw fail('SIGEM_JOB_STEP_LIMIT');
  return lanes.filter(l=>l.snapshots.length);
 }
 export async function startMigration(env,workspace,actor,inventory){
@@ -83,7 +83,10 @@ export async function migrationStatus(env,workspace,inventory){
     const state=await(await env.GRCON_TASKS.get(instanceId(id,lane,report.segment||0))).status();
     if(['errored','terminated'].includes(state.status))return {...report,status:'failed',error:report.error||'SIGEM_WORKFLOW_INTERRUPTED'};
     if(report.status==='failed'&&['queued','running','waiting'].includes(state.status))return {...report,status:'running',error:undefined};
-   }catch{ /* R2 still provides the last durable progress if Workflows status is unavailable. */ }
+   }catch{
+    if(report.dispatchPending)return {...report,status:'failed',error:'SIGEM_DISPATCH_UNCONFIRMED'};
+    /* R2 still provides durable progress if a started child's status is unavailable. */
+   }
   }
   return report;
  }));
@@ -165,9 +168,9 @@ export async function runMigration(env,params,step,invoke){
  });
  const grant=loaded.grant,lane=grant.lanes[params.lane];
  const report=loaded.cursor?.report||{lane:params.lane,status:'running',copied:0,validated:0,snapshots:[]};
- report.segment=segment;report.status='running';delete report.error;
+ report.segment=segment;report.status='running';delete report.error;delete report.dispatchPending;
  let index=loaded.cursor?.index||0,phase=loaded.cursor?.phase||'copy',after=loaded.cursor?.after||0;
- let sealed=loaded.cursor?.sealed||null,digest=loaded.cursor?.digest||ZERO_HASH,count=loaded.cursor?.count||0,used=0,attempts=0;
+ let sealed=loaded.cursor?.sealed||null,digest=loaded.cursor?.digest||ZERO_HASH,count=loaded.cursor?.count||0,used=0,attempts=0,handoffPrepared=false;
  const save=async()=>{await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/lane-'+params.lane+'.json',canonical({...report,updatedAt:new Date().toISOString()}));return {saved:true};};
  const send=invoke||(input=>invokeMigrationPage(env,{workspace:grant.workspace,id:grant.id,...input}));
  const call=input=>{
@@ -181,13 +184,18 @@ export async function runMigration(env,params,step,invoke){
   return settled.map(value=>value.value);
  };
  const advance=async()=>{
-  const nextSegment=segment+1,nextReport={...report,segment:nextSegment,status:'running'};
-  await step.do('continue',retry,async()=>{
+  const nextSegment=segment+1,nextReport={...report,segment:nextSegment,status:'running',dispatchPending:true};
+  await step.do('checkpoint',retry,async()=>{
    // Save the checkpoint and visible head before dispatch. A fast child must
    // never have its newer progress overwritten by its parent.
    const cursor={segment:nextSegment,lane:params.lane,index,phase,after,sealed,digest,count,report:nextReport};
    await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/cursor-'+params.lane+'-'+nextSegment+'.json',canonical(cursor));
    await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/lane-'+params.lane+'.json',canonical({...nextReport,updatedAt:new Date().toISOString()}));
+   return {prepared:true};
+  });
+  handoffPrepared=true;
+  await step.do('continue',retry,async()=>{
+   // A dispatch retry must never rewrite a running or completed child's head.
    const id=instanceId(grant.id,params.lane,nextSegment);
    try{await env.GRCON_TASKS.create({id,params:{kind:'sigem-migration',workspace:grant.workspace,id:grant.id,lane:params.lane,segment:nextSegment}});}
    catch{
@@ -239,6 +247,7 @@ export async function runMigration(env,params,step,invoke){
   await step.do('final-inventory',retry,async()=>{if(await sha256(canonical(await rpc(env,grant,'inventory')))!==grant.inventoryHash)throw fail('SIGEM_SOURCE_CHANGED');return true;});
   report.status='complete';await step.do('complete',retry,save);return {complete:true};
  }catch(error){
+  if(handoffPrepared)throw fail(migrationError(error));
   // Retry attempts consume subrequests too. Continue from the last complete
   // group; any partial writes are read back by the idempotent page operation.
   if(error.code==='SIGEM_SEGMENT_REQUEST_LIMIT'||String(error.message).includes('SIGEM_SEGMENT_REQUEST_LIMIT'))return await advance();

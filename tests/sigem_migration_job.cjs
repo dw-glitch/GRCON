@@ -32,7 +32,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   await assert.rejects(M.verifyJobRequest(env,await M.signedJobRequest(env,{},Date.now()-130000)),/AUTH_REQUIRED/);
   const denied=await M.handleJobPage(new Request(request.url,{method:'POST',body:'{}'}),env);assert.equal(denied.status,401);
   const plan=M.planLanes(Array.from({length:36},(_,i)=>({...source,id:uuid(20+i),record_count:23408})));
-  assert.equal(plan.length,3);assert.ok(plan.every(l=>l.steps<=900));assert.ok(plan.reduce((n,l)=>n+l.steps,0)<=2400);
+  assert.equal(plan.length,3);assert.ok(plan.every(l=>l.steps<=1000));assert.ok(plan.reduce((n,l)=>n+l.steps,0)<=2700);
   await assert.rejects(M.startMigration(env,uuid(1),uuid(9),{...inventory,pendingSnapshots:1}),/INVENTORY_NOT_READY/);
   await assert.rejects(M.startMigration({...env,GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED:'false'},uuid(1),uuid(9),inventory),/AUTHORIZATION_REQUIRED/);
   const started=await M.startMigration(env,uuid(1),uuid(9),inventory);
@@ -91,6 +91,28 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   state=await M.migrationStatus(env,uuid(1),inventory);assert.equal(state.complete,true);assert.equal(state.copied,10001);assert.equal(state.validated,10001);
   assert.ok(segments>=3);assert.equal(engine.prepare('select count(*) n from sigem_rows where snapshot_id=?').get(source.id).n,10001);
   assert.equal(JSON.stringify(outputs).includes('SENTINEL_CORPORATE_ROW'),false);
+  // Lost create response plus lost status response: the child may finish
+  // before the dispatch step retries. Its completed head must survive.
+  const laneKey='sigem-migration-jobs/v1/'+uuid(1)+'/'+next.id+'/lane-0.json';
+  const completed=JSON.parse(objects.get(laneKey));let dispatches=0,statusReads=0;
+  env.GRCON_TASKS={create:async()=>{
+   dispatches++;if(dispatches===1)objects.set(laneKey,JSON.stringify({...completed,segment:1}));
+   throw new Error(dispatches===1?'response lost':'already exists');
+  },get:async()=>({status:async()=>{if(++statusReads===1)throw new Error('status lost');return {status:'complete'};}})};
+  const dispatchRetryStep={do:async(name,config,fn)=>{
+   try{return await step.do(name,config,fn);}catch(error){if(name!=='continue')throw error;return step.do(name,config,fn);}
+  }};
+  const replayInvoke=async input=>{
+   const response=await M.handleJobPage(await M.signedJobRequest(env,{workspace:uuid(1),id:next.id,...input}),env),value=await response.json();
+   if(!response.ok)throw T.fail(value.error,response.status);return value;
+  };
+  await M.runMigration(env,{workspace:uuid(1),id:next.id,lane:0},dispatchRetryStep,replayInvoke);
+  assert.equal(dispatches,2);assert.equal(JSON.parse(objects.get(laneKey)).status,'complete');
+  assert.equal(JSON.parse(objects.get(laneKey)).validated,10001,'dispatch retries cannot roll back a child report');
+  env.GRCON_TASKS={create:async()=>{throw new Error('dispatch unavailable');},get:async()=>{throw new Error('lookup unavailable');}};
+  await assert.rejects(M.runMigration(env,{workspace:uuid(1),id:next.id,lane:0},step,replayInvoke),/SIGEM_JOB_UNAVAILABLE/);
+  const unconfirmed=await M.migrationStatus(env,uuid(1),inventory);
+  assert.equal(unconfirmed.reports[0].segment,1);assert.equal(unconfirmed.reports[0].error,'SIGEM_DISPATCH_UNCONFIRMED');
   assert.equal(M.migrationError(new Error('Too many subrequests.')),'SIGEM_SUBREQUEST_LIMIT');
   const service=env.GRCON_MIGRATION_SELF;
   env.GRCON_MIGRATION_SELF={fetch:async()=>new Response('<html>Worker exceeded resource limits: 1102</html>',{status:500})};
