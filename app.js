@@ -6172,6 +6172,9 @@
       if (els.sheetFilter) els.sheetFilter.value = "todos";
       state.filteredCache = { signature: "", indices: [] };
       state.resultPage = 1;
+      // A filtragem de postagem é independente dos filtros da tabela.
+      // Limpá-la também evita que uma linha exata continue invisível.
+      if (PostingFlow?.setFilter) PostingFlow.setFilter("all");
       if (els.resultsScroll) els.resultsScroll.scrollTop = 0;
       updateColumnFilterTriggerStates();
       if (els.clearColumnFilters) els.clearColumnFilters.hidden = false;

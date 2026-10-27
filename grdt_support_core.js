@@ -36,6 +36,9 @@
     recordIndexes.set(records, index);
     return index;
   }
+  function rowsFor(records, code) {
+    return (recordsIndex(records).get(key(code)) || []).slice();
+  }
   function search(records, input, maxShown) {
     const parsed = parseCodes(input);
     const codes = parsed.slice(0, 250);
@@ -133,5 +136,5 @@
     });
     return { counts: counts, attention: Object.values(counts).reduce(function (a, b) { return a + b; }, 0) };
   }
-  return Object.freeze({ key: key, parseCodes: parseCodes, search: search, diagnose: diagnose, GROUPS: GROUPS, summarize: summarize });
+  return Object.freeze({ key: key, parseCodes: parseCodes, search: search, rowsFor: rowsFor, diagnose: diagnose, GROUPS: GROUPS, summarize: summarize });
 });

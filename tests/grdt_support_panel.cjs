@@ -17,6 +17,8 @@ const base = [
   { document: "P-101-A", revision: "0", status: "Previsto", title: "TAG" }
 ];
 assert.deepEqual(Core.search(base, doc("122")).rows.map(x => x.revision), ["A", "B"]);
+assert.deepEqual(Core.rowsFor(base,doc("122")).map(x=>x.revision),["A","B"],
+  "detalhe usa índice de identidade exata e todas as revisões");
 assert.deepEqual(Core.search(base, doc("121")).rows.map(x => x.document), [doc("121")]);
 assert.equal(Core.search(base, "P-101").total, 0, "não retirar sufixo de TAG");
 assert.equal(Core.search(base, doc("12")).total, 0, "não aceitar prefixo ou correspondência aproximada");
@@ -56,6 +58,7 @@ assert.match(app, /GrconGrdtSupportCore\.summarize\(state\.results\.map\(decisio
   "resumo provém da classificação oficial da triagem");
 assert.match(app, /grcon:grdt-support-summary/);
 assert.match(app, /revealSupportRow:/, "navegação exata para a tabela original");
+assert.match(app, /PostingFlow\\?\\.setFilter/, "ação contextual não deixa filtro de postagem esconder documento");
 assert.doesNotMatch(source("grdt_support_panel.js"), /innerHTML|eval\(/, "nenhum HTML com dados não confiáveis");
 const ui = source("grdt_support_panel.js");
 for (const [, id] of ui.matchAll(/\bbyId\("([^"]+)"\)/g)) {

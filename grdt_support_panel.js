@@ -53,7 +53,7 @@
   function openDetail(code) {
     const base = readBase();
     if (!base || !el.detail) return;
-    const rows = base.records.filter(function (row) { return Core.key(row && row.document) === Core.key(code); });
+    const rows = Core.rowsFor(base.records, code);
     if (!rows.length) return;
     rows.sort(function (a, b) {
       return new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" }).compare(String(a.revision || ""), String(b.revision || ""));
