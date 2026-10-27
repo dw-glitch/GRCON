@@ -35,6 +35,7 @@ const crypto=require('node:crypto');
   });
   await page.addScriptTag({path:path.resolve('contract_admin_app.js')});
   await page.locator('#grcon-administration-shortcut').click();await page.locator('[data-admin-section="storage"]').click();
+  await page.locator('.grcon-storage-technical > summary').click();
   await page.getByText('817.351',{exact:true}).waitFor();
   assert.equal(await page.locator('[data-storage-copy]').isDisabled(),true);
   assert.equal(await page.locator('[data-storage-refresh]').isVisible(),true);
