@@ -58,7 +58,7 @@ assert.match(app, /GrconGrdtSupportCore\.summarize\(state\.results\.map\(decisio
   "resumo provém da classificação oficial da triagem");
 assert.match(app, /grcon:grdt-support-summary/);
 assert.match(app, /revealSupportRow:/, "navegação exata para a tabela original");
-assert.match(app, /PostingFlow\\?\\.setFilter/, "ação contextual não deixa filtro de postagem esconder documento");
+assert.ok(app.includes('PostingFlow?.setFilter("all")'), "a navegação libera filtro de postagem externo");
 assert.doesNotMatch(source("grdt_support_panel.js"), /innerHTML|eval\(/, "nenhum HTML com dados não confiáveis");
 const ui = source("grdt_support_panel.js");
 for (const [, id] of ui.matchAll(/\bbyId\("([^"]+)"\)/g)) {
