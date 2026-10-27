@@ -104,7 +104,7 @@
         reason = row.reason ? String(row.reason).slice(0, 260) : "Verifique a evidência da triagem antes de selecionar.";
         action = "Ver evidências";
       }
-      if (row.selected && (row.manual || kind === "revision" || kind === "analysis" || kind === "allocation" || kind === "conflict" || kind === "missing")) selectedRisks += 1;
+      if (row.selected && kind) selectedRisks += 1;
       if (!kind) return;
       total += 1; counters[kind] = (counters[kind] || 0) + 1;
       if (issues.length < maxIssues) issues.push({
@@ -114,7 +114,7 @@
       });
     });
     const priority = { revision: 0, manual: 1, analysis: 2, conflict: 3, allocation: 4, missing: 5, review: 6 };
-    issues.sort(function (a,b) { return (priority[a.kind] || 9) - (priority[b.kind] || 9) ||
+    issues.sort(function (a,b) { return (priority[a.kind] ?? 9) - (priority[b.kind] ?? 9) ||
       Number(b.selected) - Number(a.selected); });
     return { counters: counters, issues: issues, total: total, selected: selected,
       selectedRisks: selectedRisks, manualSelected: manualSelected,

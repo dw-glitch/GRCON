@@ -7,7 +7,7 @@
   if (!Core) return;
   const byId = function (id) { return doc.getElementById(id); };
   let epoch = 0, debounce = 0, saveTimer = 0, latestSummary = null, lastSearch = "";
-  let activeScope = "", lastRows = [];
+  let activeScope = "", lastRows = [], issueLimit = 5;
   const el = {};
 
   function scope() {
@@ -72,7 +72,10 @@
     });
     el.detailBody.append(copy);
     const list = element("div", "grdt-support-revisions");
-    rows.slice(0, 100).forEach(function (row) {
+    let revisionShown = 100;
+    function renderRevisions() {
+      list.replaceChildren();
+      rows.slice(0, revisionShown).forEach(function (row) {
       const item = element("div", "grdt-support-revision");
       const name = element("strong", "", "Rev. " + (row.revision || "não informada") + " · " + normalizeStatus(row.status));
       const title = element("span", "", row.title || "Sem título registrado");
@@ -86,42 +89,57 @@
         }
       } catch (_) { /* histórico indisponível não altera a pesquisa SIGEM */ }
       list.append(item);
-    });
-    el.detailBody.append(list);
-    if (rows.length > 100) el.detailBody.append(element("small", "", "Mostrando as primeiras 100 linhas. Abra a Consulta Geral para consultar o restante."));
+      });
+      if (rows.length > revisionShown) {
+        const moreRevisions = element("button","grdt-support-toggle",
+          "Mostrar mais " + Math.min(100,rows.length - revisionShown) + " revisões/registros");
+        moreRevisions.type = "button";
+        moreRevisions.addEventListener("click",function () { revisionShown += 100; renderRevisions(); });
+        list.append(moreRevisions);
+      }
+    }
+    el.detailBody.append(list); renderRevisions();
     el.detailBody.append(element("p", "grdt-support-muted", sourceLabel(base)));
     el.detail.showModal();
   }
+
   function renderResults(result, base) {
-    el.results.replaceChildren();
-    el.results.hidden = false;
+    el.results.replaceChildren(); el.results.hidden = false;
     const summary = result.total + " registro(s) encontrado(s)" +
-      (result.missing.length ? " · " + result.missing.length + " código(s) não localizado(s)" : "") +
-      (result.total > result.rows.length ? " · prévia limitada" : "") +
-      (result.truncatedInput ? " · até 100 códigos por pesquisa" : "");
+      (result.missing.length ? " · " + result.missing.length + " código(s) ausente(s)" : "") +
+      (result.total > result.rows.length ? " · resultado parcial" : "") +
+      (result.truncatedInput ? " · até 250 códigos por consulta" : "");
     text(el.searchInfo, summary + " · " + sourceLabel(base));
     if (!result.total) {
-      el.results.append(element("p", "grdt-support-muted", "Nenhum registro encontrado para os códigos informados. Verifique a base e a grafia."));
+      el.results.append(element("p","grdt-support-muted",
+        "Nenhum registro encontrado nesta fonte. Confira código completo e referência da base."));
       return;
     }
-    const list = element("div", "grdt-support-result-list");
-    result.rows.forEach(function (row) {
-      const button = element("button", "grdt-support-result", "");
-      button.type = "button"; button.setAttribute("aria-label", "Ver revisões de " + row.document);
-      const identity = element("span", "grdt-support-identity");
-      identity.append(element("strong", "", row.document), element("small", "", "Rev. " + (row.revision || "—")));
-      button.append(identity, element("span", "grdt-support-result-status", normalizeStatus(row.status)),
-        element("span", "grdt-support-result-title", row.title || "Sem título"));
-      button.addEventListener("click", function () { openDetail(row.document); });
-      list.append(button);
-    });
-    el.results.append(list);
-    if (result.total > result.rows.length) {
-      el.results.append(element("small", "grdt-support-muted", "Para listagens extensas, consulte a Consulta Geral completa."));
+    let visible = 30;
+    const list = element("div","grdt-support-result-list");
+    function showMore() {
+      list.replaceChildren();
+      result.rows.slice(0,visible).forEach(function (row) {
+        const button = element("button","grdt-support-result","");
+        button.type = "button"; button.setAttribute("aria-label","Ver revisões de " + row.document);
+        const identity = element("span","grdt-support-identity");
+        identity.append(element("strong","",row.document),element("small","","Rev. " + (row.revision || "—")));
+        button.append(identity,element("span","grdt-support-result-status",normalizeStatus(row.status)),
+          element("span","grdt-support-result-title",row.title || "Sem título"));
+        button.addEventListener("click",function () { openDetail(row.document); });
+        list.append(button);
+      });
+      more.hidden = visible >= result.rows.length;
+      more.textContent = "Mostrar mais resultados (" + Math.min(50,result.rows.length - visible) + ")";
     }
-    if (result.missing.length) {
-      el.results.append(element("small", "grdt-support-muted", "Não localizados nesta fonte: " + result.missing.slice(0, 4).join(", ") + (result.missing.length > 4 ? "…" : "")));
-    }
+    const more = element("button","grdt-support-toggle","");
+    more.type = "button"; more.addEventListener("click",function () { visible += 50; showMore(); });
+    el.results.append(list,more); showMore();
+    if (result.total > result.rows.length) el.results.append(element("small","grdt-support-muted",
+      "Prévia limitada a 2.000 registros. Consulte a Consulta Geral para o restante."));
+    if (result.missing.length) el.results.append(element("small","grdt-support-muted",
+      "Ausentes nesta fonte: " + result.missing.slice(0,8).join(", ") +
+      (result.missing.length > 8 ? "…" : "")));
   }
   async function search() {
     const query = String(el.search.value || "").trim();
@@ -140,7 +158,7 @@
     }
     if (!base) { clearSearch("Consulta Geral indisponível. Tente novamente quando a base estiver carregada."); return; }
     // Reutiliza a base indexada/cached pelo módulo oficial; nenhuma cópia persistente.
-    const result = Core.search(base.records, query, 12);
+    const result = Core.search(base.records, query, 2000);
     if (ticket !== epoch || scope() !== current || String(el.search.value || "").trim() !== query) return;
     lastRows = result.rows;
     renderResults(result, base);
@@ -206,9 +224,12 @@
     const running = byId("progress") && !byId("progress").hidden;
     const emitting = byId("grdt-download-progress") && !byId("grdt-download-progress").hidden;
     el.panel.dataset.mode = hasResults ? "review" : running || emitting ? "processing" : prepared() ? "prepared" : "initial";
-    el.searchArea.hidden = Boolean(hasResults || running || emitting);
+    // Consulta útil justamente durante a conferência: nunca ocultá-la após analisar.
+    el.searchArea.hidden = false;
     el.resume.hidden = Boolean(hasResults || running || emitting);
     if (!hasResults && !running && !emitting) updateResume();
+    const existingResume = byId("grcon-retomar");
+    if (existingResume && !existingResume.hidden) el.resume.hidden = true;
     el.attention.hidden = !hasResults || !latestSummary;
     if (hasResults && latestSummary) renderAttention(latestSummary);
     if (!hasResults) el.attention.hidden = true;
@@ -221,38 +242,65 @@
     }
     el.stageInfo.hidden = !(el.stageInfo.textContent || "").trim();
   }
+
   function renderAttention(payload) {
     el.attention.replaceChildren();
-    const groups = payload && payload.counts || {};
-    const keys = ["revisar", "bloqueado", "nao_localizado", "descartar"];
-    const total = keys.reduce(function (sum, key) { return sum + Math.max(0, Number(groups[key]) || 0); }, 0);
-    const header = element("div", "grdt-support-attention-head");
-    header.append(element("strong", "", total ? total + " documento(s) com situação a conferir ou fora da inclusão automática" : "Nenhuma inconsistência identificada pelas verificações executadas."));
-    el.attention.append(header);
-    if (total) {
-      const buttons = element("div", "grdt-support-attention-actions");
-      keys.filter(function (key) { return Number(groups[key]) > 0; }).forEach(function (key) {
-        const button = element("button", "grdt-support-filter", Core.GROUPS[key] + " · " + groups[key]);
-        button.type = "button";
-        button.addEventListener("click", function () {
-          const target = doc.querySelector('#results-section [data-filter="' + key + '"]');
-          if (target) {
-            target.click();
-            byId("results-section").scrollIntoView({ block: "start", behavior: "auto" });
-          } else {
-            text(el.stageInfo, "Abra os filtros da tabela para conferir esses documentos.");
-            el.stageInfo.hidden = false;
-          }
-        });
-        buttons.append(button);
-      });
-      el.attention.append(buttons);
-      el.attention.append(element("small", "grdt-support-muted", "Classificações provenientes da triagem atual. Clique para filtrar a tabela, sem alterar seleções."));
+    const diagnostics = payload && payload.diagnostics;
+    if (!diagnostics) { el.attention.hidden = true; return; }
+    const total = diagnostics.total;
+    const title = element("div", "grdt-support-toolbar");
+    title.append(element("strong", "", total
+      ? total + " documento(s) merecem atenção"
+      : "Nenhuma pendência adicional identificada nesta triagem"));
+    if (total) title.append(element("span", "grdt-support-preview", "Orientação · sem alterar a classificação"));
+    el.attention.append(title);
+    if (diagnostics.selected && diagnostics.selectedRisks) {
+      const preflight = element("div", "grdt-support-preflight",
+        "Conferência preventiva: " + diagnostics.selectedRisks +
+        " dos " + diagnostics.selected + " documento(s) selecionado(s) exigem atenção" +
+        (diagnostics.manualSelected ? " · " + diagnostics.manualSelected + " por inclusão manual" : "") +
+        ". A seleção foi preservada; confira as evidências antes de gerar.");
+      el.attention.append(preflight);
     }
+    if (!total) {
+      el.attention.append(element("small", "grdt-support-muted",
+        "A ausência de alertas adicionais não comprova conformidade nem postagem."));
+      el.attention.hidden = false; return;
+    }
+    const issues = element("div", "grdt-support-issues");
+    diagnostics.issues.slice(0,issueLimit).forEach(function (issue) {
+      const row = element("div","grdt-support-issue");
+      const info = element("div");
+      info.append(element("strong", "", issue.document + " · rev. " +
+        (issue.revision || "não informada") + " — " + issue.title));
+      info.append(element("p", "", issue.reason));
+      const button = element("button", "", issue.action || "Ver na tabela");
+      button.type = "button"; button.title = "Ver a linha exata e suas evidências na tabela principal";
+      button.addEventListener("click", function () {
+        const api = root.GrconTriageUiApi;
+        const located = api && typeof api.revealSupportRow === "function" &&
+          api.revealSupportRow(issue.document, issue.revision);
+        if (!located) {
+          text(el.stageInfo, "Não foi possível revelar a linha. Verifique os filtros da tabela principal.");
+          el.stageInfo.hidden = false;
+        }
+      });
+      row.append(info,button); issues.append(row);
+    });
+    el.attention.append(issues);
+    if (diagnostics.issues.length > issueLimit) {
+      const more = element("button","grdt-support-toggle",
+        "Mostrar mais " + Math.min(12,diagnostics.issues.length - issueLimit) + " pendências");
+      more.type = "button";
+      more.addEventListener("click", function () { issueLimit += 12; renderAttention(latestSummary); });
+      el.attention.append(more);
+    }
+    if (diagnostics.limited) el.attention.append(element("small","grdt-support-muted",
+      "Há mais pendências que as exibidas aqui. Consulte a tabela completa para todas as linhas."));
     el.attention.hidden = false;
   }
   function resetContext() {
-    epoch += 1; activeScope = scope(); latestSummary = null; lastRows = [];
+    epoch += 1; activeScope = scope(); latestSummary = null; lastRows = []; issueLimit = 5;
     el.search.value = ""; clearSearch("");
     if (el.detail.open) el.detail.close();
     renderStage();
@@ -266,7 +314,19 @@
     el.resumeAction = byId("grdt-support-resume-button"); el.attention = byId("grdt-support-attention");
     el.stageInfo = byId("grdt-support-stage"); el.detail = byId("grdt-support-detail");
     el.detailBody = byId("grdt-support-detail-body");
+
     activeScope = scope();
+    const heading = panel.querySelector(".grdt-support-head");
+    const toggle = element("button","grdt-support-toggle","Recolher");
+    toggle.type = "button"; toggle.setAttribute("aria-expanded","true");
+    toggle.setAttribute("aria-controls","grdt-support-search-form grdt-support-attention");
+    toggle.addEventListener("click", function () {
+      const minimized = el.panel.dataset.minimized !== "true";
+      el.panel.dataset.minimized = String(minimized);
+      toggle.textContent = minimized ? "Expandir" : "Recolher";
+      toggle.setAttribute("aria-expanded",String(!minimized));
+    });
+    if (heading) heading.append(toggle);
     byId("grdt-support-search-form").addEventListener("submit", function (event) {
       event.preventDefault(); root.clearTimeout(debounce); void search();
     });
@@ -292,7 +352,8 @@
     el.detail.addEventListener("click", function (event) { if (event.target === el.detail) el.detail.close(); });
     root.addEventListener("grcon:grdt-support-summary", function (event) {
       if (activeScope !== scope()) { resetContext(); return; }
-      latestSummary = event.detail || null; renderStage();
+      latestSummary = event.detail ? { ...event.detail, diagnostics: Core.diagnose(event.detail.rows || []) } : null;
+      renderStage();
     });
     ["grcon:contract-context-changed", "grcon:cloud-signed-out"].forEach(function (name) { root.addEventListener(name, resetContext); });
     ["grcon:ui-update", "grcon:shared-sigem-updated", "grcon:cloud-ready"].forEach(function (name) {

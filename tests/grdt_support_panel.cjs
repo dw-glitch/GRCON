@@ -34,6 +34,11 @@ assert.equal(Core.diagnose([{document: doc("122"),revision:"B",manual:true,selec
 assert.equal(Core.search(base, doc("121") + ";" + doc("122"), 200).total, 3,
   "consulta em lote considera revisões por identidade exata");
 assert.match(app, /revealSupportRow:/, "navegação exata para a tabela original");
+const supportUi = source("grdt_support_panel.js");
+assert.match(supportUi, /el\.searchArea\.hidden = false/, "consulta permanece acessível na conferência");
+assert.match(supportUi, /diagnostics\.selectedRisks/, "pré-conferência informa riscos da seleção");
+assert.match(supportUi, /api\.revealSupportRow\(issue\.document, issue\.revision\)/,
+  "navegação pontual preserva identidade e revisão");
 
 const html = source("index.html"), app = source("app.js"), sw = source("sw.js");
 assert.doesNotMatch(html, /Conferir pacote eGRDT \(\.xls\)/);
