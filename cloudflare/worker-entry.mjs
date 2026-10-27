@@ -89,7 +89,14 @@ async function rpc(env, name, payload) {
   if (!response.ok) {
     if(data?.code==='57014')throw Object.assign(new Error('A consulta do Cofre excedeu o prazo. Tente atualizar novamente.'),{status:503,code:'VAULT_QUERY_TIMEOUT'});
     const message = data?.message || data?.error_description || data?.hint || "Falha no catálogo do Cofre.";
-    throw Object.assign(new Error(message), { status: response.status === 403 ? 403 : 400, code: data?.code || "CATALOG_ERROR", detail: data });
+    // Backend/schema faults must not masquerade as a per-file 400.
+    const errorCode = String(data?.code || "CATALOG_ERROR");
+    const clientError = /^(22023|22P02|23505)$/.test(errorCode);
+    const denied = response.status === 401 || response.status === 403 || errorCode === "42501";
+    const status = denied ? (response.status === 401 ? 401 : 403)
+      : clientError ? (errorCode === "23505" ? 409 : 400)
+      : 503;
+    throw Object.assign(new Error(message), { status, code: errorCode, detail: data });
   }
   return data;
 }

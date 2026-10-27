@@ -853,7 +853,7 @@
     });
     const current = readJson(key, null);
     const age = Date.now() - Number(current?.createdAt || 0);
-    if (current?.requestId && current.fingerprint === fingerprint && age >= 0 && age < 86400000) {
+    if (current?.requestId && current.fingerprint === fingerprint && age >= 0 && age < 7200000) {
       return current.requestId;
     }
     const requestId = newReservationRequestId();
@@ -871,6 +871,37 @@
     if (!current?.requestId || !requestIds.has(String(current.requestId))) return false;
     removeStored(key);
     return true;
+  }
+
+  async function getEgrdtSequenceStatus(year) {
+    if (!state.membership?.workspace_id || !state.online) return null;
+    const { data, error } = await state.client.rpc("grcon_egrdt_sequence_status", {
+      target_workspace: state.membership.workspace_id,
+      target_year: Math.trunc(Number(year)),
+    });
+    if (error) throw new Error(error.message || "Não foi possível consultar a última GRDT gerada.");
+    return data && typeof data === "object" ? data : null;
+  }
+
+  async function releaseEgrdtReservationRequest(officialNumbers) {
+    const ids = [...new Set((officialNumbers || []).map(item => String(item?.requestId || "")).filter(Boolean))];
+    if (!ids.length) return 0;
+    if (!state.membership?.workspace_id || !state.online) {
+      throw new Error("A reserva não pôde ser liberada offline. O servidor fará a recuperação após o prazo de segurança.");
+    }
+    let released = 0;
+    for (const requestId of ids) {
+      const { data, error } = await state.client.rpc("grcon_release_egrdt_reservations", {
+        target_workspace: state.membership.workspace_id,
+        target_request_id: requestId,
+      });
+      if (error) throw new Error(error.message || "Não foi possível liberar a reserva.");
+      released += Number(data) || 0;
+      const key = Config.reservationRequestStorageKey || "grcon.cloud.reservation.request.v1";
+      const current = readJson(key, null);
+      if (current?.requestId === requestId) removeStored(key);
+    }
+    return released;
   }
 
   async function reserveEgrdtSequences(year, amount, requestedSequences) {
@@ -893,7 +924,7 @@
     if (error) {
       const message = String(error.message || "");
       if (/já (?:está )?reservad|already|duplicate|unique/i.test(message)) {
-        throw new Error("Um dos números informados já foi reservado por outro usuário. Atualize a sequência e tente novamente.");
+        throw new Error("A sequência está reservada por uma geração em andamento. Nenhuma GRDT adicional foi confirmada; confira o histórico antes de tentar novamente.");
       }
       throw new Error(message || "Não foi possível reservar a numeração oficial no histórico compartilhado.");
     }
@@ -2472,6 +2503,8 @@
     saveExportTemplate,
     deleteExportTemplate,
     reserveEgrdtSequences,
+    getEgrdtSequenceStatus,
+    releaseEgrdtReservationRequest,
     deleteHistoryRecord: deleteSharedHistoryRecord,
     manageHistoryFile,
     inviteUser,
