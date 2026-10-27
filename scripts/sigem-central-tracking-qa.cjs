@@ -58,6 +58,9 @@ const {chromium}=require("playwright");
     }
     await page.addStyleTag({path:path.join(process.cwd(),"sigem-posting-central.css")});
     await page.locator("#scc-query").waitFor();
+    // A Central inicia na visão agrupada por GRDT. Para conferir
+    // documentos individuais, a suíte precisa escolher essa visão.
+    await page.locator('[data-scc-view="documentos"]').click();
     await page.waitForFunction(()=>document.querySelectorAll("#sigem-central-tbody tr[data-scc-index]").length>=2);
     assert.match(await page.locator("#sigem-central-base").innerText(),/Consulta_QA.xlsx/);
     const first=await page.locator("#sigem-central-tbody").innerText();
