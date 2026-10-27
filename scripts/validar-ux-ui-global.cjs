@@ -456,7 +456,7 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
         viewportMetrics.push({ label: "Dashboard · ET × N-1710", visuals: classVisuals });
         await screenshot(page, "dashboard-et-n1710", viewport, true);
       }
-      viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="sigem"]', "Postagem SIGEM", viewport, 900));
+      viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="sigem"]', "Conferir GRDT", viewport, 900));
 
       viewportMetrics.push(await visit(page, '.ops-sidebar [data-grcon-view="additional-tools"]', "Ferramentas adicionais", viewport, 500));
       if (viewport === 1440) {
@@ -465,28 +465,14 @@ async function visit(page, selector, label, viewport, waitMs = 800) {
         await screenshot(page, "ferramentas-dark", viewport);
         await setQaTheme(page, false);
       }
-      for (const [view, label] of [["grdt-reissue", "Repostagem de GRDT"], ["pdf-tools", "Combinar PDFs"], ["cover-document", "Adicionar Capa"]]) {
+      // Adicionar Capa foi descontinuado: conferir somente ferramentas ativas.
+      for (const [view, label] of [["grdt-reissue", "Repostagem de GRDT"], ["pdf-tools", "Combinar PDFs"], ["docx-to-pdf", "Converter PDF em DOCX"]]) {
         await clickVisible(page, '.ops-sidebar [data-grcon-view="additional-tools"]');
         await page.waitForTimeout(250);
         viewportMetrics.push(await visit(page, `#additional-tools-module [data-grcon-view="${view}"]`, label, viewport, 900));
-        if (view === "cover-document") {
-          const placeholderHeight = await page.locator(".cover-preview-frame").evaluate(node => node.getBoundingClientRect().height);
-          assert.ok(placeholderHeight < 350, "Prévia vazia deve reservar espaço compacto para manter a saída acessível.");
-          if (viewport === 1440) {
-            const lightBg = await page.locator(".cover-preview-frame").evaluate(node => getComputedStyle(node).backgroundColor);
-            await setQaTheme(page, true);
-            const darkBg = await page.locator(".cover-preview-frame").evaluate(node => getComputedStyle(node).backgroundColor);
-            assert.notEqual(darkBg, lightBg, "Prévia vazia deve acompanhar o tema real.");
-            viewportMetrics.push({ label: "Adicionar Capa tema escuro", geometry: await auditGeometry(page, "Adicionar Capa tema escuro") });
-            await screenshot(page, "adicionar-capa-dark", viewport);
-            await setQaTheme(page, false);
-            await page.evaluate(() => { document.body.style.zoom = "1.25"; });
-            viewportMetrics.push({ label: "Adicionar Capa zoom 125%", geometry: await auditGeometry(page, "Adicionar Capa zoom 125%") });
-            await screenshot(page, "adicionar-capa-zoom125", viewport);
-            await page.evaluate(() => { document.body.style.zoom = ""; });
-          }
-        }
       }
+      assert.equal(await page.locator('#additional-tools-module [data-grcon-view="cover-document"]').count(), 0,
+        "Adicionar Capa não deve reaparecer no hub de ferramentas");
 
       const settings = await clickVisible(page, "[data-ops-open-settings]");
       if (settings) {
