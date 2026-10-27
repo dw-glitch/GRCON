@@ -10,9 +10,14 @@ Ela registra somente identidade do solicitante, contrato e inventário original,
 sem token de sessão. A função SQL delegada é executável exclusivamente por
 `service_role` e reconfirma a associação ativa do Master em cada lote.
 
-São usadas até três execuções do Workflow já existente. Os lotes são agrupados
-para manter o plano atual abaixo de 900 passos por execução e 2.400 passos no
-total, reservando margem em relação à franquia Free de 3.000 passos/dia. Não é
+São usadas até três frentes do Workflow já existente, cada uma continuada em
+novas instâncias após no máximo 32 chamadas de página/selo. O limite de 50
+subrequisições por instância do plano Free é independente do limite de passos;
+agrupar páginas dentro de um passo não reinicia esse orçamento. Os cursores,
+contagens e o hash parcial são persistidos antes de despachar a continuação.
+Os lotes são agrupados para manter o planejamento abaixo de 1.000 passos por
+frente e 2.700 passos no total, reservando margem em relação à franquia Free de
+3.000 passos/dia. Não é
 habilitado upgrade nem cobrança. O consumo de outras tarefas compartilha essa
 franquia: uma limitação externa ainda pode interromper a execução e deve aparecer
 como falha, nunca como conclusão. O estado do Workflow armazena apenas cursores,
@@ -30,6 +35,22 @@ assinatura inválida, contrato incorreto ou revogação do Master interrompem a 
 Os relatórios privados persistem no R2. A retomada de execução falha reaproveita
 os lotes e confere novamente seu conteúdo; não remove nem sobrescreve a origem.
 
+O estado visível acompanha a instância de continuação atual. Um processo pai
+concluído não aprova um filho ainda em execução ou com falha. A revisão do
+executor faz parte do identificador do trabalho para não reutilizar o histórico
+de passos de uma implementação anterior. Falhas conhecidas de CPU e orçamento
+de subrequisições recebem códigos locais, sem registrar respostas ou segredos.
+O relatório baixado inclui o progresso do contrato correto, inclusive quando
+uma mudança de inventário acompanha uma falha de execução.
+
+Em 27/10/2026 a versão 36 tinha sido arquivada no Supabase após a publicação da
+versão 37, mas permanecia ativa nos metadados de uma cópia parcial no Turso.
+Todos os demais campos foram comparados e permaneceram idênticos. O estado foi
+reconciliado por atualização condicional do registro parcial, preservando os
+metadados anteriores e posteriores em `sigem_metadata_reconciliations`.
+Essa operação não alterou payloads nem liberou o corte. A auditoria integral
+continua obrigatória antes de considerar a versão aprovada.
+
 A preparação SQL está em `supabase/sql/sigem_storage_background.sql`. Deve ser
 aplicada antes de usar a nova ação. Testes executam SQLite, restauração/auditoria
 reais de conteúdo sintético, falha de hash, revogação e ACL em PostgreSQL PGlite.
@@ -38,3 +59,22 @@ Referências oficiais consultadas em 26/10/2026:
 - https://developers.cloudflare.com/workflows/reference/limits/
 - https://developers.cloudflare.com/workflows/reference/pricing/
 - https://developers.cloudflare.com/workflows/build/workers-api/
+
+## Recuperação corporativa pelo GitHub Actions
+
+O workflow manual `SIGEM — Recuperação real de backup` usa as credenciais
+já existentes da publicação, limitadas ao passo de recuperação. Recebe apenas
+UUIDs e o hash do manifesto conferido de forma independente no Turso. A API
+R2 é usada somente com GET, no bucket existente e no prefixo exato da versão.
+Não há alteração de permissões, criação de token ou modificação em produção.
+Se o token de publicação não possuir leitura do R2, o workflow recusa com
+`RECOVERY_R2_ACCESS_DENIED`; essa permissão não é presumida.
+
+A ferramenta baixa manifesto e lotes para diretório privado temporário, confere
+cada hash e restaura a versão inteira em SQLite e PostgreSQL PGlite isolados.
+Todos os campos das linhas e metadados são comparados; timestamps tipados são
+comparados pelo instante, preservando também o JSON original do manifesto.
+O único artefato publicado é `summary.json`, com contagens e hashes. Payloads,
+SQL e arquivos SQLite não são incluídos em logs ou artefatos e são removidos
+ao fim do ensaio. Isso verifica a recuperação independente; não libera o corte
+nem substitui a homologação das dependências operacionais.

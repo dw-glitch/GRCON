@@ -5,6 +5,10 @@ const ROOT='sigem-migration-jobs/v1/';
 const hex=v=>/^[a-f0-9]{64}$/.test(v||'');
 const uuid=v=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v||'');
 const WIDTH=3,GROUP=8;
+// Free Workflows have a per-instance subrequest budget as well as a step limit.
+// A lane continues in a fresh instance before exhausting that budget.
+export const PAGE_BUDGET=32;
+const instanceId=(id,lane,segment=0)=>'sigem-'+id.slice(0,40)+'-'+lane+(segment?'-s'+segment:'');
 const retry={retries:{limit:4,delay:'10 seconds',backoff:'exponential'},timeout:'5 minutes'};
 function ready(env){
  if(env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED!=='true')throw fail('SIGEM_STORAGE_AUTHORIZATION_REQUIRED',403);
@@ -34,15 +38,16 @@ export function planLanes(snapshots){
  for(const source of [...snapshots].sort((a,b)=>b.record_count-a.record_count)){
   if(!uuid(source.id)||!Number.isSafeInteger(source.record_count)||source.record_count<1||source.record_count>100000)throw fail('SIGEM_JOB_LIMIT');
   const lane=lanes.reduce((a,b)=>a.steps<=b.steps?a:b);
-  lane.steps+=4*Math.ceil(Math.ceil(source.record_count/250)/GROUP)+3;lane.snapshots.push(source);
+  const pages=Math.ceil(source.record_count/250);
+  lane.steps+=4*Math.ceil(pages/GROUP)+3+3*Math.ceil((2*pages+1)/PAGE_BUDGET);lane.snapshots.push(source);
  }
- if(lanes.some(l=>l.steps>900)||lanes.reduce((n,l)=>n+l.steps,0)>2400)throw fail('SIGEM_JOB_STEP_LIMIT');
+ if(lanes.some(l=>l.steps>1000)||lanes.reduce((n,l)=>n+l.steps,0)>2700)throw fail('SIGEM_JOB_STEP_LIMIT');
  return lanes.filter(l=>l.snapshots.length);
 }
 export async function startMigration(env,workspace,actor,inventory){
  ready(env);
  if(!uuid(workspace)||!uuid(actor)||!Array.isArray(inventory.snapshots)||!inventory.snapshots.length||inventory.pendingSnapshots!==0)throw fail('SIGEM_INVENTORY_NOT_READY');
- const inventoryHash=await sha256(canonical(inventory)),id=await sha256(canonical({workspace,actor,inventoryHash}));
+ const inventoryHash=await sha256(canonical(inventory)),id=await sha256(canonical({workspace,actor,inventoryHash,runner:2}));
  const key=path(workspace,id),prior=await env.GRCON_DOCUMENTS.get(key+'/grant.json');
  let grant;
  if(prior){grant=await prior.json();if(grant.inventoryHash!==inventoryHash||grant.actor!==actor)throw fail('SIGEM_JOB_CONFLICT');}
@@ -53,10 +58,12 @@ export async function startMigration(env,workspace,actor,inventory){
  // ACL is also checked here by the service RPC, before dispatching any work.
  if(await sha256(canonical(await rpc(env,grant,'inventory')))!==inventoryHash)throw fail('SIGEM_SOURCE_CHANGED');
  for(let lane=0;lane<grant.lanes.length;lane++){
-  const instanceId='sigem-'+id.slice(0,40)+'-'+lane;
-  try{await env.GRCON_TASKS.create({id:instanceId,params:{kind:'sigem-migration',workspace,id,lane}});}
+  const last=await env.GRCON_DOCUMENTS.get(key+'/lane-'+lane+'.json');
+  const report=last?await last.json():null,segment=Number.isSafeInteger(report?.segment)?report.segment:0;
+  const currentId=instanceId(id,lane,segment);
+  try{await env.GRCON_TASKS.create({id:currentId,params:{kind:'sigem-migration',workspace,id,lane,segment}});}
   catch{
-   const instance=await env.GRCON_TASKS.get(instanceId),status=await instance.status();
+   const instance=await env.GRCON_TASKS.get(currentId),status=await instance.status();
    if(['errored','terminated'].includes(status.status))await instance.restart();
    else if(!['running','queued','waiting','paused','complete'].includes(status.status))throw fail('SIGEM_WORKFLOW_UNAVAILABLE',503);
   }
@@ -73,10 +80,13 @@ export async function migrationStatus(env,workspace,inventory){
   const report=object?await object.json():{lane,status:'queued',copied:0,validated:0,snapshots:[]};
   if(env.GRCON_TASKS?.get){
    try{
-    const state=await(await env.GRCON_TASKS.get('sigem-'+id.slice(0,40)+'-'+lane)).status();
+    const state=await(await env.GRCON_TASKS.get(instanceId(id,lane,report.segment||0))).status();
     if(['errored','terminated'].includes(state.status))return {...report,status:'failed',error:report.error||'SIGEM_WORKFLOW_INTERRUPTED'};
     if(report.status==='failed'&&['queued','running','waiting'].includes(state.status))return {...report,status:'running',error:undefined};
-   }catch{ /* R2 still provides the last durable progress if Workflows status is unavailable. */ }
+   }catch{
+    if(report.dispatchPending)return {...report,status:'failed',error:'SIGEM_DISPATCH_UNCONFIRMED'};
+    /* R2 still provides durable progress if a started child's status is unavailable. */
+   }
   }
   return report;
  }));
@@ -123,50 +133,125 @@ export async function handleJobPage(request,env){
   return Response.json({ok:true,...result},{headers:{'cache-control':'no-store'}});
  }catch(error){return Response.json({ok:false,error:/^[A-Z0-9_]{1,80}$/.test(error.code||'')?error.code:'SIGEM_JOB_UNAVAILABLE'},{status:error.status||503,headers:{'cache-control':'no-store'}});}
 }
+export function migrationError(error) {
+ if(/^[A-Z0-9_]{1,80}$/.test(error?.code||''))return error.code;
+ if(/too many subrequests|subrequest limit/i.test(error?.message||''))return 'SIGEM_SUBREQUEST_LIMIT';
+ if(/exceeded CPU|CPU time limit/i.test(error?.message||''))return 'SIGEM_CPU_LIMIT';
+ return 'SIGEM_JOB_UNAVAILABLE';
+}
+export async function invokeMigrationPage(env,input){
+ const response=await env.GRCON_MIGRATION_SELF.fetch(await signedJobRequest(env,input));
+ const raw=await response.text();let value;
+ try{value=JSON.parse(raw);}catch{
+  if(/1102|Worker exceeded resource limits/i.test(raw))throw fail('SIGEM_CPU_LIMIT',503);
+  if(/too many subrequests/i.test(raw))throw fail('SIGEM_SUBREQUEST_LIMIT',503);
+  throw fail('SIGEM_WORKER_RESPONSE_INVALID',503);
+ }
+ if(!response.ok||!value?.ok)throw fail(/^[A-Z0-9_]{1,80}$/.test(value?.error||'')?value.error:'SIGEM_WORKER_REJECTED',response.status||503);
+ return value;
+}
 export async function runMigration(env,params,step,invoke){
  ready(env);
- const grant=await step.do('grant',retry,async()=>{
+ const segment=params.segment??0;
+ if(!Number.isSafeInteger(segment)||segment<0||segment>10000)throw fail('SIGEM_JOB_INVALID');
+ const loaded=await step.do('grant',retry,async()=>{
   const value=await readGrant(env,params.workspace,params.id);
-  return {...value,lanes:value.lanes.map(l=>({snapshots:l.snapshots.map(s=>({id:s.id,record_count:s.record_count}))}))};
+  if(!Number.isInteger(params.lane)||!value.lanes[params.lane])throw fail('SIGEM_JOB_INVALID');
+  let cursor=null;
+  if(segment){
+   const object=await env.GRCON_DOCUMENTS.get(path(value.workspace,value.id)+'/cursor-'+params.lane+'-'+segment+'.json');
+   if(!object)throw fail('SIGEM_CONTINUATION_NOT_FOUND');
+   cursor=await object.json();
+   if(cursor.segment!==segment||cursor.lane!==params.lane)throw fail('SIGEM_JOB_INVALID');
+  }
+  return {grant:{...value,lanes:value.lanes.map(l=>({snapshots:l.snapshots.map(s=>({id:s.id,record_count:s.record_count}))}))},cursor};
  });
- if(!Number.isInteger(params.lane)||!grant.lanes[params.lane])throw fail('SIGEM_JOB_INVALID');
- const lane=grant.lanes[params.lane],report={lane:params.lane,status:'running',copied:0,validated:0,snapshots:[]};
+ const grant=loaded.grant,lane=grant.lanes[params.lane];
+ const report=loaded.cursor?.report||{lane:params.lane,status:'running',copied:0,validated:0,snapshots:[]};
+ report.segment=segment;report.status='running';delete report.error;delete report.dispatchPending;
+ let index=loaded.cursor?.index||0,phase=loaded.cursor?.phase||'copy',after=loaded.cursor?.after||0;
+ let sealed=loaded.cursor?.sealed||null,digest=loaded.cursor?.digest||ZERO_HASH,count=loaded.cursor?.count||0,used=0,attempts=0,handoffPrepared=false;
  const save=async()=>{await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/lane-'+params.lane+'.json',canonical({...report,updatedAt:new Date().toISOString()}));return {saved:true};};
- const call=invoke||(async input=>{
-  const response=await env.GRCON_MIGRATION_SELF.fetch(await signedJobRequest(env,{workspace:grant.workspace,id:grant.id,...input}));
-  const value=await response.json();if(!response.ok||!value.ok)throw fail(value.error||'SIGEM_JOB_UNAVAILABLE',response.status);return value;
- });
+ const send=invoke||(input=>invokeMigrationPage(env,{workspace:grant.workspace,id:grant.id,...input}));
+ const call=input=>{
+  if(attempts>=PAGE_BUDGET)throw fail('SIGEM_SEGMENT_REQUEST_LIMIT');
+  attempts++;return send(input);
+ };
+ const parallel=async inputs=>{
+  const settled=await Promise.allSettled(inputs.map(async input=>call(input)));
+  const rejected=settled.find(value=>value.status==='rejected');
+  if(rejected)throw rejected.reason;
+  return settled.map(value=>value.value);
+ };
+ const advance=async()=>{
+  const nextSegment=segment+1,nextReport={...report,segment:nextSegment,status:'running',dispatchPending:true};
+  await step.do('checkpoint',retry,async()=>{
+   // Save the checkpoint and visible head before dispatch. A fast child must
+   // never have its newer progress overwritten by its parent.
+   const cursor={segment:nextSegment,lane:params.lane,index,phase,after,sealed,digest,count,report:nextReport};
+   await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/cursor-'+params.lane+'-'+nextSegment+'.json',canonical(cursor));
+   await env.GRCON_DOCUMENTS.put(path(grant.workspace,grant.id)+'/lane-'+params.lane+'.json',canonical({...nextReport,updatedAt:new Date().toISOString()}));
+   return {prepared:true};
+  });
+  handoffPrepared=true;
+  await step.do('continue',retry,async()=>{
+   // A dispatch retry must never rewrite a running or completed child's head.
+   const id=instanceId(grant.id,params.lane,nextSegment);
+   try{await env.GRCON_TASKS.create({id,params:{kind:'sigem-migration',workspace:grant.workspace,id:grant.id,lane:params.lane,segment:nextSegment}});}
+   catch{
+    const state=await(await env.GRCON_TASKS.get(id)).status();
+    if(!['running','queued','waiting','paused','complete'].includes(state.status))throw fail('SIGEM_WORKFLOW_UNAVAILABLE',503);
+   }
+   return {continued:true,segment:nextSegment};
+  });
+  return {continued:true,segment:nextSegment};
+ };
  try{
-  for(let index=0;index<lane.snapshots.length;index++){
+  while(index<lane.snapshots.length){
    const source=lane.snapshots[index];
-   for(let after=0;after<source.record_count;after+=250*GROUP){
+   if(used>=PAGE_BUDGET||attempts>=PAGE_BUDGET)return await advance();
+   if(phase==='copy'){
+    const start=after,amount=Math.min(GROUP,PAGE_BUDGET-used,Math.ceil((source.record_count-after)/250));
     const pages=await step.do('copy-'+index+'-'+after,retry,async()=>{
-     // Prepare once before concurrent pages: no page may race schema creation.
-     const offsets=Array.from({length:Math.min(GROUP,Math.ceil((source.record_count-after)/250))},(_,i)=>after+i*250);
+     const offsets=Array.from({length:amount},(_,i)=>start+i*250);
      const first=await call({phase:'copy',snapshot:source.id,after:offsets[0]});
-     return [first,...await Promise.all(offsets.slice(1).map(cursor=>call({phase:'copy',snapshot:source.id,after:cursor})))];
+     return [first,...await parallel(offsets.slice(1).map(cursor=>({phase:'copy',snapshot:source.id,after:cursor})))];
     });
-    report.copied+=pages.reduce((n,p)=>n+p.count,0);await step.do('copy-progress-'+index+'-'+after,retry,save);
-   }
-   const sealed=await step.do('seal-'+index,retry,()=>call({phase:'seal',snapshot:source.id}));
-   let digest=ZERO_HASH,count=0;
-   for(let after=0;after<source.record_count;after+=250*GROUP){
-    const pages=await step.do('audit-'+index+'-'+after,retry,()=>Promise.all(Array.from({length:Math.min(GROUP,Math.ceil((source.record_count-after)/250))},(_,i)=>call({phase:'audit',snapshot:source.id,after:after+i*250}))));
     for(let i=0;i<pages.length;i++){
-     const page=pages[i],cursor=after+i*250,expected=Math.min(250,source.record_count-cursor);
-     if(page.count!==expected||page.after!==cursor+expected||page.snapshotChecksum!==sealed.checksum||!hex(page.checksum))throw fail('SIGEM_AUDIT_INCOMPLETE');
-     digest=await sha256(digest+'\n'+page.checksum);count+=page.count;
+     const expected=Math.min(250,source.record_count-start-i*250);
+     if(pages[i].count!==expected||pages[i].after!==start+i*250+expected)throw fail('SIGEM_COPY_INCOMPLETE');
+     report.copied+=expected;after+=expected;
     }
-    report.validated=report.snapshots.reduce((n,s)=>n+s.validatedRecords,0)+count;
-    await step.do('audit-progress-'+index+'-'+after,retry,save);
-   }
-   if(count!==source.record_count||digest!==sealed.checksum)throw fail('SIGEM_AUDIT_HASH_MISMATCH');
-   report.snapshots.push({id:source.id,...sealed,validatedRecords:count,fullAudit:true});
+    used+=pages.length;if(after===source.record_count){phase='seal';after=0;}
+    await step.do('copy-progress-'+index+'-'+start,retry,save);
+   }else if(phase==='seal'){
+    sealed=await step.do('seal-'+index,retry,()=>call({phase:'seal',snapshot:source.id}));used++;
+    phase='audit';after=0;digest=ZERO_HASH;count=0;
+   }else if(phase==='audit'){
+    const auditIndex=index,start=after,amount=Math.min(GROUP,PAGE_BUDGET-used,Math.ceil((source.record_count-after)/250));
+    const pages=await step.do('audit-'+index+'-'+after,retry,()=>parallel(Array.from({length:amount},(_,i)=>({phase:'audit',snapshot:source.id,after:start+i*250}))));
+    for(let i=0;i<pages.length;i++){
+     const page=pages[i],cursor=start+i*250,expected=Math.min(250,source.record_count-cursor);
+     if(page.count!==expected||page.after!==cursor+expected||page.snapshotChecksum!==sealed.checksum||!hex(page.checksum))throw fail('SIGEM_AUDIT_INCOMPLETE');
+     digest=await sha256(digest+'\n'+page.checksum);count+=page.count;after+=page.count;
+    }
+    used+=pages.length;report.validated=report.snapshots.reduce((n,s)=>n+s.validatedRecords,0)+count;
+    if(after===source.record_count){
+     if(count!==source.record_count||digest!==sealed.checksum)throw fail('SIGEM_AUDIT_HASH_MISMATCH');
+     report.snapshots.push({id:source.id,...sealed,validatedRecords:count,fullAudit:true});
+     index++;phase='copy';after=0;sealed=null;digest=ZERO_HASH;count=0;
+    }
+    await step.do('audit-progress-'+auditIndex+'-'+start,retry,save);
+   }else throw fail('SIGEM_JOB_INVALID');
   }
   await step.do('final-inventory',retry,async()=>{if(await sha256(canonical(await rpc(env,grant,'inventory')))!==grant.inventoryHash)throw fail('SIGEM_SOURCE_CHANGED');return true;});
   report.status='complete';await step.do('complete',retry,save);return {complete:true};
  }catch(error){
-  report.status='failed';report.error=/^[A-Z0-9_]{1,80}$/.test(error.code||'')?error.code:'SIGEM_JOB_UNAVAILABLE';
+  if(handoffPrepared)throw fail(migrationError(error));
+  // Retry attempts consume subrequests too. Continue from the last complete
+  // group; any partial writes are read back by the idempotent page operation.
+  if(error.code==='SIGEM_SEGMENT_REQUEST_LIMIT'||String(error.message).includes('SIGEM_SEGMENT_REQUEST_LIMIT'))return await advance();
+  report.status='failed';report.error=migrationError(error);
   await step.do('failure',{retries:{limit:2,delay:'10 seconds',backoff:'exponential'}},save);throw fail(report.error);
  }
 }

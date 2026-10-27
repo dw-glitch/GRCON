@@ -38,7 +38,7 @@
     "test:teams-sharepoint": "node tests/teams_sharepoint_standard.cjs",
     "test:teams-github": "node tests/teams_github_standard.cjs",
     "benchmark:conference": "node scripts/benchmark-conference.cjs",
-    "test:sigem-turso": "node tests/sigem_turso.cjs && node tests/sigem_turso_routes.cjs && node tests/sigem_turso_cli.cjs && node tests/sigem_migration_job.cjs",
+    "test:sigem-turso": "node tests/sigem_turso.cjs && node tests/sigem_turso_routes.cjs && node tests/sigem_turso_cli.cjs && node tests/sigem_migration_job.cjs && node tests/sigem_recovery_drill.cjs",
     "test:vault-performance": "node tests/vault_query_performance.cjs"
   }
 }

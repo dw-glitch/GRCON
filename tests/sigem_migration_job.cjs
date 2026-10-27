@@ -32,7 +32,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   await assert.rejects(M.verifyJobRequest(env,await M.signedJobRequest(env,{},Date.now()-130000)),/AUTH_REQUIRED/);
   const denied=await M.handleJobPage(new Request(request.url,{method:'POST',body:'{}'}),env);assert.equal(denied.status,401);
   const plan=M.planLanes(Array.from({length:36},(_,i)=>({...source,id:uuid(20+i),record_count:23408})));
-  assert.equal(plan.length,3);assert.ok(plan.every(l=>l.steps<=900));assert.ok(plan.reduce((n,l)=>n+l.steps,0)<=2400);
+  assert.equal(plan.length,3);assert.ok(plan.every(l=>l.steps<=1000));assert.ok(plan.reduce((n,l)=>n+l.steps,0)<=2700);
   await assert.rejects(M.startMigration(env,uuid(1),uuid(9),{...inventory,pendingSnapshots:1}),/INVENTORY_NOT_READY/);
   await assert.rejects(M.startMigration({...env,GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED:'false'},uuid(1),uuid(9),inventory),/AUTHORIZATION_REQUIRED/);
   const started=await M.startMigration(env,uuid(1),uuid(9),inventory);
@@ -54,8 +54,71 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   assert.equal(JSON.stringify(outputs).includes('SENTINEL_CORPORATE_ROW'),false,'workflow state must not contain corporate row payloads');
   assert.equal(JSON.stringify(outputs).includes('file_name'),false,'full snapshot metadata stays outside Workflow state');
   assert.equal((await M.migrationStatus(env,uuid(1),{...inventory,pendingSnapshots:1})).complete,false,'changed inventory cannot be approved');
+  // A 10k-row snapshot needs more page calls than a Free Workflow permits.
+  // Exercise several real SQLite/R2 copy+audit continuations, including a
+  // failed child whose completed parent must not be mistaken for success.
+  source.id=uuid(6);source.record_count=10001;
+  rows.splice(0,rows.length,...Array.from({length:source.record_count},(_,i)=>({snapshot_id:source.id,row_number:i+1,document_key:'DOC-'+(i+1),revision_key:'0',status_normalized:'em_analise',payload:{document:'DOC-'+(i+1),title:'SENTINEL_CORPORATE_ROW_'+i}})));
+  const pending=[],instances=new Map();
+  env.GRCON_TASKS={create:async entry=>{
+   if(instances.has(entry.id))throw new Error('exists');
+   instances.set(entry.id,{status:'queued',params:entry.params});pending.push(entry);return {id:entry.id};
+  },get:async id=>({status:async()=>({status:instances.get(id)?.status||'errored'}),restart:async()=>{
+   const entry=instances.get(id);entry.status='queued';pending.push({id,params:entry.params});
+  }})};
+  const next=await M.startMigration(env,uuid(1),uuid(9),inventory);let segments=0,transient=true,firstRetry=true;
+  while(pending.length){
+   const entry=pending.shift();instances.get(entry.id).status='running';let calls=0;
+   const bounded=async input=>{
+    assert.ok(++calls<=M.PAGE_BUDGET,'each continuation stays below the Free subrequest budget');
+    if(entry.params.segment===0&&input.phase==='copy'&&input.after===0&&firstRetry){firstRetry=false;throw T.fail('TURSO_TIMEOUT',503);}
+    if(entry.params.segment===1&&input.phase==='audit'&&transient){transient=false;throw T.fail('TURSO_TIMEOUT',503);}
+    const response=await M.handleJobPage(await M.signedJobRequest(env,{workspace:uuid(1),id:next.id,...input}),env),value=await response.json();
+    if(!response.ok)throw T.fail(value.error,response.status);return value;
+   };
+   try{
+    const retryStep=entry.params.segment===0?{do:async(name,config,fn)=>{
+     try{return await step.do(name,config,fn);}catch(error){if(error.code!=='TURSO_TIMEOUT')throw error;return step.do(name,config,fn);}
+    }}:step;
+    const result=await M.runMigration(env,entry.params,retryStep,bounded);instances.get(entry.id).status='complete';segments++;
+    if(result.continued){const progress=await M.migrationStatus(env,uuid(1),inventory);assert.equal(progress.complete,false);assert.equal(progress.reports[0].segment,result.segment);}
+   }catch(error){
+    assert.equal(error.code,'TURSO_TIMEOUT');instances.get(entry.id).status='errored';
+    const progress=await M.migrationStatus(env,uuid(1),inventory);assert.equal(progress.reports[0].status,'failed');
+    await M.startMigration(env,uuid(1),uuid(9),inventory);
+   }
+  }
+  state=await M.migrationStatus(env,uuid(1),inventory);assert.equal(state.complete,true);assert.equal(state.copied,10001);assert.equal(state.validated,10001);
+  assert.ok(segments>=3);assert.equal(engine.prepare('select count(*) n from sigem_rows where snapshot_id=?').get(source.id).n,10001);
+  assert.equal(JSON.stringify(outputs).includes('SENTINEL_CORPORATE_ROW'),false);
+  // Lost create response plus lost status response: the child may finish
+  // before the dispatch step retries. Its completed head must survive.
+  const laneKey='sigem-migration-jobs/v1/'+uuid(1)+'/'+next.id+'/lane-0.json';
+  const completed=JSON.parse(objects.get(laneKey));let dispatches=0,statusReads=0;
+  env.GRCON_TASKS={create:async()=>{
+   dispatches++;if(dispatches===1)objects.set(laneKey,JSON.stringify({...completed,segment:1}));
+   throw new Error(dispatches===1?'response lost':'already exists');
+  },get:async()=>({status:async()=>{if(++statusReads===1)throw new Error('status lost');return {status:'complete'};}})};
+  const dispatchRetryStep={do:async(name,config,fn)=>{
+   try{return await step.do(name,config,fn);}catch(error){if(name!=='continue')throw error;return step.do(name,config,fn);}
+  }};
+  const replayInvoke=async input=>{
+   const response=await M.handleJobPage(await M.signedJobRequest(env,{workspace:uuid(1),id:next.id,...input}),env),value=await response.json();
+   if(!response.ok)throw T.fail(value.error,response.status);return value;
+  };
+  await M.runMigration(env,{workspace:uuid(1),id:next.id,lane:0},dispatchRetryStep,replayInvoke);
+  assert.equal(dispatches,2);assert.equal(JSON.parse(objects.get(laneKey)).status,'complete');
+  assert.equal(JSON.parse(objects.get(laneKey)).validated,10001,'dispatch retries cannot roll back a child report');
+  env.GRCON_TASKS={create:async()=>{throw new Error('dispatch unavailable');},get:async()=>{throw new Error('lookup unavailable');}};
+  await assert.rejects(M.runMigration(env,{workspace:uuid(1),id:next.id,lane:0},step,replayInvoke),/SIGEM_JOB_UNAVAILABLE/);
+  const unconfirmed=await M.migrationStatus(env,uuid(1),inventory);
+  assert.equal(unconfirmed.reports[0].segment,1);assert.equal(unconfirmed.reports[0].error,'SIGEM_DISPATCH_UNCONFIRMED');
+  assert.equal(M.migrationError(new Error('Too many subrequests.')),'SIGEM_SUBREQUEST_LIMIT');
+  const service=env.GRCON_MIGRATION_SELF;
+  env.GRCON_MIGRATION_SELF={fetch:async()=>new Response('<html>Worker exceeded resource limits: 1102</html>',{status:500})};
+  await assert.rejects(M.invokeMigrationPage(env,{}),/SIGEM_CPU_LIMIT/);env.GRCON_MIGRATION_SELF=service;
   revoked=true;
-  const refused=await M.handleJobPage(await M.signedJobRequest(env,{...params,snapshot:source.id,phase:'audit',after:0}),env);
+  const refused=await M.handleJobPage(await M.signedJobRequest(env,{workspace:uuid(1),id:next.id,snapshot:source.id,phase:'audit',after:0}),env);
   assert.equal(refused.status,403,'live access revocation must stop each page');
  }finally{global.fetch=originalFetch;engine.close();}
  // Real PostgreSQL ACL and live-master delegation, without production writes.
