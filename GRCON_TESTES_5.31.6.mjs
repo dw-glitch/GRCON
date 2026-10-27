@@ -980,9 +980,10 @@ check("o módulo de Solicitações saiu do GRCON e virou um atalho para o GRCON 
   // A Consultas continua com sua própria aba, intacta.
   assert.match(html, /data-grcon-view="requests"/);
   assert.match(html, /id="requests-module"/);
-  // O lugar do antigo módulo agora é um link externo para o GRCON Flow.
-  assert.match(html, /href="https:\/\/grcon-flow\.vercel\.app\/"/);
-  assert.match(html, /class="ops-nav-button ops-nav-external"[^>]*href="https:\/\/grcon-flow\.vercel\.app\/"/);
+  // O GRCON Flow passa a aparecer apenas no menu Aplicativos do cabeçalho.
+  assert.match(html, /class="app-shortcut-link app-shortcut-link-flow"[^>]*href="https:\/\/grcon-flow\.vercel\.app\/"/);
+  assert.doesNotMatch(html, /class="ops-nav-button ops-nav-external"[^>]*href="https:\/\/grcon-flow\.vercel\.app\/"/);
+  assert.doesNotMatch(html, /class="ops-nav-external"[^>]*href="https:\/\/grcon-flow\.vercel\.app\/"/);
 
   assert.ok(!fs.existsSync(path.join(root, "solicitacoes_app.js")), "solicitacoes_app.js não deve mais existir no pacote");
 

@@ -13,7 +13,14 @@ const doc = read("docs/ux-18-higgsfield-handoff-20261009.md");
 
 assert.match(css, /:is\(button, a\[href\], input, select, textarea, summary, \[role="button"\], \[tabindex\]\):focus-visible/);
 assert.match(css, /outline:\s*3px solid var\(--ui-focus\)/);
-assert.match(html, /class="ops-nav-button ops-nav-external"[^>]*href="https:\/\/grcon-flow\.vercel\.app\//);
+assert.match(html, /class="app-shortcut-link app-shortcut-link-flow"[^>]*href="https:\/\/grcon-flow\.vercel\.app\//);
+assert.doesNotMatch(html, /class="ops-nav-button ops-nav-external"[^>]*href="https:\/\/grcon-flow\.vercel\.app\//);
+assert.doesNotMatch(html, /class="ops-nav-external"[^>]*href="https:\/\/grcon-flow\.vercel\.app\//);
+const appsMenu = html.match(/<div class="grcon-app-shortcuts-panel">([\s\S]*?)<\/div>/)?.[1] || "";
+assert.match(appsMenu, /app-shortcut-link-flow/);
+const appPositions = ["app-shortcut-link-vincula", "app-shortcut-link-recon", "app-shortcut-link-flow"].map(name => appsMenu.indexOf(name));
+assert.ok(appPositions.every(pos => pos >= 0) && appPositions[0] < appPositions[1] && appPositions[1] < appPositions[2], "Aplicativos: Vincula, RECON, GRCON Flow");
+assert.equal((html.match(/https:\/\/grcon-flow\.vercel\.app\//g) || []).length, 1, "GRCON Flow aparece uma vez no cabeçalho");
 assert.match(html, /<nav aria-label="Navegação compacta do GRCON"/);
 assert.match(doc, /UX Pilot:[^\n]*erro interno/);
 assert.match(doc, /não[^\n]*screenshots do GRCON em produção/i);

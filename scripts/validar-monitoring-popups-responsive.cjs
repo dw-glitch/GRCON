@@ -255,7 +255,8 @@ async function activeView(page) {
       await menu.locator('.grcon-app-shortcuts-panel').waitFor({ state: 'visible' });
       const menuBox = await menu.locator('.grcon-app-shortcuts-panel').boundingBox();
       assert.ok(menuBox.x >= -1 && menuBox.x + menuBox.width <= width + 1, 'menu Aplicativos cabe na viewport: ' + width);
-      assert.equal(await menu.locator('a').count(), 2);
+      assert.equal(await menu.locator('.grcon-app-shortcuts-panel > a').count(), 3);
+      assert.equal(await menu.locator('.app-shortcut-link-flow').getAttribute('href'), 'https://grcon-flow.vercel.app/');
       await publisher.keyboard.press('Escape');
       assert.equal(await menu.getAttribute('open'), null);
       assert.equal(await trigger.evaluate(el => document.activeElement === el), true, 'Escape devolve foco a Aplicativos');
