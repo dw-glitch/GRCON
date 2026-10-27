@@ -18,7 +18,9 @@ export async function verifyRecovery(config,fetcher=fetch){
  const folder=await mkdtemp(join(tmpdir(),'grcon-real-recovery-'));let total=0,db,pg;
  const get=async(key,limit)=>{
   if(!key.startsWith(prefix))throw Error('RECOVERY_SCOPE_INVALID');
-  const url=`https://api.cloudflare.com/client/v4/accounts/${config.account}/r2/buckets/grcon-documents/objects/${encodeURIComponent(key)}`;
+  // R2's management API requires literal path separators in object keys.
+  const objectPath=key.split('/').map(encodeURIComponent).join('/');
+  const url=`https://api.cloudflare.com/client/v4/accounts/${config.account}/r2/buckets/grcon-documents/objects/${objectPath}`;
   const response=await fetcher(url,{headers:{authorization:'Bearer '+config.token},redirect:'manual',signal:AbortSignal.timeout(30000)});
   if(!response.ok)throw Error(response.status===401||response.status===403?'RECOVERY_R2_ACCESS_DENIED':response.status===404?'RECOVERY_BACKUP_NOT_FOUND':'RECOVERY_R2_UNAVAILABLE');
   const reader=response.body.getReader();const chunks=[];let size=0;

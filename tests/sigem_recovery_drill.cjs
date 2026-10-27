@@ -14,7 +14,7 @@ const assert=require('node:assert/strict'),{DatabaseSync}=require('node:sqlite')
   const sealed=await T.sealSnapshot(db,bucket,source),config={account:'a'.repeat(32),token:'SYNTHETIC_TOKEN_NOT_LOGGED',workspace:source.workspace_id,contract:source.contract_id,snapshot:source.id,manifestHash:sealed.manifestHash};
   const requests=[];let corrupt=false;
   const fetcher=async(url,options)=>{
-   const target=new URL(url);assert.equal(target.origin,'https://api.cloudflare.com');assert.equal(options.redirect,'manual');assert.equal(options.headers.authorization,'Bearer '+config.token);
+   const target=new URL(url);assert.equal(target.origin,'https://api.cloudflare.com');assert.doesNotMatch(target.pathname,/%2f/i,'R2 object path separators must remain literal');assert.equal(options.redirect,'manual');assert.equal(options.headers.authorization,'Bearer '+config.token);
    const key=decodeURIComponent(target.pathname.split('/objects/')[1]);requests.push(key);let body=objects.get(key);
    if(corrupt&&key.includes('/rows-'))body+=' ';
    return new Response(body,{status:body?200:404});
