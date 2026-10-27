@@ -50,7 +50,7 @@
     // legado permanece fonte da verdade e pdf-lib só entra pelo Worker quando
     // o operador realmente inicia a combinação.
     "pdf-tools": ["pdf_merge_core.js", "react-dist/pdf-tools-app.js"],
-    // Capa oficial: LD + template local; nenhum documento deixa o navegador.
+    // Conversor experimental: processamento de documentos permanece local no navegador.
     "docx-to-pdf": ["zip", "docx_pdf_layout.js", "docx_pdf_core.js", "docx_pdf_app.js"],
   };
 
