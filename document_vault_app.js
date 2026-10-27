@@ -26,6 +26,7 @@
     allocation: "all",
     queue: [],
     paused: false,
+    uploadFault: null,
     active: 0,
     health: null,
     open: false,
@@ -83,6 +84,12 @@
 
   function parseIdentity(fileName) {
     return Core.parseStoredFileIdentity(fileName);
+  }
+
+  function isSystemicVaultError(error) {
+    const code = String(error?.code || "");
+    return Number(error?.status) >= 500 || ["CATALOG_ERROR", "VAULT_INTERNAL", "VAULT_QUERY_TIMEOUT", "AUTH_INVALID", "PGRST202", "PGRST116", "42501", "42P01", "42883"].includes(code)
+      || /^PGRST/.test(code) || /^08[0-9A-Z]{3}$/.test(code);
   }
 
   function requestHeaders(jsonBody) {
@@ -421,7 +428,18 @@
       task.phase = "Armazenado";
       renderQueue();
     } catch (error) {
-      if (error?.name === "AbortError" || error?.code === "ABORTED") {
+      task.errorCode = String(error?.code || "");
+      task.errorStatus = Number(error?.status) || 0;
+      if (isSystemicVaultError(error)) {
+        state.paused = true;
+        task.status = "paused";
+        task.error = error?.message || "Cofre temporariamente indisponível.";
+        task.phase = "Fila suspensa — erro de catálogo";
+        if (!state.uploadFault) {
+          state.uploadFault = { code: task.errorCode, message: task.error };
+          notify("A fila do Cofre foi pausada por falha geral (" + (task.errorCode || "sem código") + "). Corrija a causa antes de retomar.", "warning");
+        }
+      } else if (error?.name === "AbortError" || error?.code === "ABORTED") {
         task.status = "paused";
         task.phase = "Pausado; pode continuar depois";
       } else if (error?.code === "IDENTITY_CONFLICT") {
@@ -470,6 +488,7 @@
   }
 
   function resumeQueue() {
+    state.uploadFault = null;
     state.paused = false;
     state.queue.forEach(task => {
       if (task.status === "paused") {
@@ -1504,6 +1523,7 @@
     const unique = [...entryByFile.keys()];
     const provenance = new Map();
     let failed = 0;
+    let systemicFailure = null;
     const progress = new Map(unique.map(file => [file, 0]));
     const totalBytes = unique.reduce((sum, file) => sum + Math.max(1, file.size || 0), 0);
     function report(file, fraction) {
@@ -1514,6 +1534,7 @@
     }
     function checkCancelled() { if (options.cancelled?.()) throw new DOMException("Preparação cancelada.", "AbortError"); }
     await mapLimit(unique, 3, async file => {
+      if (systemicFailure) throw systemicFailure;
       checkCancelled();
       const existing = lookupSource(file);
       if (existing?.id) { provenance.set(file, existing); report(file,1); return; }
@@ -1521,7 +1542,7 @@
       const task = { id: "emission-" + Math.random().toString(36).slice(2), file, workspaceId: target,
         documentCode: identity.documentCode, revision: identity.revision, format: identity.format,
         origin: "local", documentClass: entryByFile.get(file)?.sheet || "", purpose: entryByFile.get(file)?.item?.purpose || "", discipline: entryByFile.get(file)?.discipline || "",
-        allowConflict: true, progress: 0, status: "pending" };
+        allowConflict: false, progress: 0, status: "pending" };
       task.onEmissionProgress = value => {
         if (options.cancelled?.()) { value.activeXhr?.abort(); value.abortHash?.(); return; }
         report(file, Math.min(1, (value.progress || 0)/100));
@@ -1531,12 +1552,16 @@
       if (epoch !== contextEpoch || target !== workspaceId()) throw new Error("O contrato mudou. Analise novamente.");
       if (target && ["owner", "admin", "operator"].includes(root.GrconCloud?.state?.membership?.role)) {
         await uploadTask(task);
+        if (task.status === "paused" && state.uploadFault) {
+          systemicFailure = new Error("Falha no catálogo do Cofre (" + state.uploadFault.code + "). A emissão foi pausada para evitar centenas de requisições repetidas.");
+          throw systemicFailure;
+        }
       }
       checkCancelled();
       report(file, 1);
       const item = task.status === "done" ? task.serverFile : null;
       if (!item && target) failed++;
-      const meta = { id: item?.id || "", source: "local", fileVersion: item?.file_version || 0,
+      const meta = { id: item?.id || "", source: task.duplicate || task.reused ? "cofre" : "local", fileVersion: item?.file_version || 0,
         fileName: file.name, revision: identity.revision, format: identity.format,
         sizeBytes: file.size, sha256: task.sha256, createdAt: item?.created_at || "", verifiedAt: item?.verified_at || "" };
       provenance.set(file, meta);
@@ -1550,7 +1575,7 @@
       entry.fileProvenance = { ...(entry.fileProvenance || {}), source: meta.source === "local" ? "local" : "cofre", vaultFileId: meta.id || "",
         sha256: meta.sha256 || "", fileVersion: meta.fileVersion || 0, sizeBytes: meta.sizeBytes || entry.file.size };
     }
-    if (failed) notify(failed + " arquivo(s) local(is) não puderam ser preservados no Cofre. O histórico manterá o hash; a emissão pode continuar.", "warning");
+    if (failed) notify(failed + " arquivo(s) não foram preservados no Cofre. Confira revisões e conflitos na fila antes de gerar uma nova GRDT.", "warning");
   }
   root.GrconDocumentVault = Object.freeze({
     open: openVault,
