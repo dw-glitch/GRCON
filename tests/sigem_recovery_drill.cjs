@@ -22,6 +22,7 @@ const assert=require('node:assert/strict'),{DatabaseSync}=require('node:sqlite')
   const result=await verifyRecovery(config,fetcher);assert.equal(result.records,501);assert.equal(result.postgresRowsCompared,501);assert.equal(result.sourceMetadataPreserved,true);assert.equal(result.liveDatabaseModified,false);
   assert.equal(JSON.stringify(result).includes('SENTINEL_PRIVATE_CONTENT'),false);assert.equal(JSON.stringify(result).includes(config.token),false);
   assert.equal(requests.length,4,'one manifest and three complete batches');
+  const compatibility=await verifyRecovery({...config,verifyCompatibility:true},fetcher);assert.equal(compatibility.sqlProjectionValidated,true);assert.equal(compatibility.compatibilityRowsCompared,501);assert.equal(compatibility.operationalRollbackValidated,true);assert.equal(compatibility.liveDatabaseModified,false);
   corrupt=true;await assert.rejects(verifyRecovery(config,fetcher),/RECOVERY_BATCH_HASH_MISMATCH/);corrupt=false;
   await assert.rejects(verifyRecovery({...config,account:'https://evil.example'},fetcher),/CONFIGURATION_INVALID/);
   await assert.rejects(verifyRecovery(config,async()=>new Response('access denied',{status:403})),/RECOVERY_R2_ACCESS_DENIED/);
