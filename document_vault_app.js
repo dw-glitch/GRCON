@@ -16,6 +16,7 @@
   const LOOKUP_BATCH_SIZE = 500;
   let sourceRegistry = new WeakMap();
   let contextEpoch = 0;
+  const activeUploads = new Map();
 
   const state = {
     files: [],
@@ -141,6 +142,7 @@
       const xhr = new XMLHttpRequest();
       task.activeXhr = xhr;
       xhr.open("PUT", API + path, true);
+      xhr.timeout = 120000;
       const headers = { ...requestHeaders(false), ...(extraHeaders || {}) };
       Object.entries(headers).forEach(([name, value]) => xhr.setRequestHeader(name, value));
       if (blob.type) xhr.setRequestHeader("content-type", blob.type);
@@ -148,6 +150,7 @@
         if (event.lengthComputable && typeof onProgress === "function") onProgress(event.loaded, event.total);
       };
       xhr.onerror = () => reject(Object.assign(new Error("Falha de rede durante o envio."), { code: "NETWORK_ERROR" }));
+      xhr.ontimeout = () => reject(Object.assign(new Error("O envio ao Cofre não respondeu a tempo. Confira a fila antes de tentar novamente."), { code: "VAULT_TIMEOUT" }));
       xhr.onabort = () => reject(new DOMException("Envio pausado.", "AbortError"));
       xhr.onload = () => {
         let payload = null;
@@ -219,6 +222,7 @@
       uploading: "Enviando",
       paused: "Pausado",
       conflict: "Conflito",
+      skipped: "Ignorado no Cofre",
       done: task.duplicate ? "Já existente" : task.reused ? "Reaproveitado" : "Concluído",
       error: "Falhou",
     })[task.status] || task.status;
@@ -319,6 +323,14 @@
 
   async function uploadTask(task) {
     if (state.paused || !task || !["pending","paused"].includes(task.status)) return;
+    // Archives remain in the GRDT package, but are not catalogued in the vault.
+    if (Core.isArchiveFileName(task.file.name)) {
+      task.status = "skipped";
+      task.progress = 100;
+      task.phase = "Compactado mantido somente no pacote da GRDT";
+      renderQueue();
+      return;
+    }
     if (!text(task.documentCode) || !text(task.revision)) {
       task.status = "needs_metadata";
       task.phase = "Informe documento e revisão";
@@ -333,9 +345,22 @@
     task.status = "hashing";
     task.error = "";
     renderQueue();
+    let uploadKey = "", finishShared = null;
     try {
       if (!task.sha256) task.sha256 = await hashFile(task);
       if (state.paused) throw new DOMException("Fila pausada.", "AbortError");
+      if (task.workspaceId !== workspaceId()) throw new DOMException("O contrato mudou durante a preparação do Cofre.", "AbortError");
+      uploadKey = JSON.stringify([task.workspaceId, task.documentCode, task.revision, task.format, task.sha256, task.file.size]);
+      if (activeUploads.has(uploadKey)) {
+        const stored = await activeUploads.get(uploadKey);
+        Object.assign(task, { status: stored.status, serverFile: stored.serverFile,
+          duplicate: stored.status === "done", reused: stored.reused,
+          progress: stored.progress, error: stored.error, phase: stored.phase });
+        if (task.status === "done") rememberUploadedTask(task);
+        renderQueue();
+        return;
+      }
+      activeUploads.set(uploadKey, new Promise(resolve => { finishShared = resolve; }));
 
       task.status = "initializing";
       task.phase = "Verificando se já existe";
@@ -366,6 +391,7 @@
         task.status = "done";
         task.progress = 100;
         task.phase = task.duplicate ? "Este arquivo já estava armazenado" : task.reused ? "Conteúdo já existente reaproveitado" : "Concluído";
+        rememberUploadedTask(task);
         renderQueue();
         return;
       }
@@ -427,6 +453,7 @@
       task.status = "done";
       task.progress = 100;
       task.phase = "Armazenado";
+      rememberUploadedTask(task);
       renderQueue();
     } catch (error) {
       task.errorCode = String(error?.code || "");
@@ -440,6 +467,11 @@
           state.uploadFault = { code: task.errorCode, message: task.error };
           notify("A fila do Cofre foi pausada por falha geral (" + (task.errorCode || "sem código") + "). Corrija a causa antes de retomar.", "warning");
         }
+      } else if (error?.code === "ARCHIVE_IGNORED") {
+        task.status = "skipped";
+        task.error = "";
+        task.progress = 100;
+        task.phase = "Compactado mantido somente no pacote da GRDT";
       } else if (error?.name === "AbortError" || error?.code === "ABORTED") {
         task.status = "paused";
         task.phase = "Pausado; pode continuar depois";
@@ -465,6 +497,11 @@
         }
       }
       renderQueue();
+    } finally {
+      if (finishShared) {
+        finishShared(task);
+        activeUploads.delete(uploadKey);
+      }
     }
   }
 
@@ -1529,6 +1566,83 @@
     renderStorage();
   }
 
+  function rememberUploadedTask(task) {
+    const item = task.serverFile;
+    if (!item?.id || task.workspaceId !== workspaceId()) return;
+    registerSource(task.file, {
+      id: item.id, source: task.duplicate || task.reused ? "cofre" : "local",
+      documentCode: task.documentCode, revision: task.revision, format: task.format,
+      fileName: task.file.name, sizeBytes: task.file.size, sha256: task.sha256,
+      fileVersion: item.file_version || 0, createdAt: item.created_at || "", verifiedAt: item.verified_at || "",
+    });
+  }
+
+  function emissionTask(file, entry, target) {
+    const identity = parseIdentity(file.name);
+    const entryCode = text(entry.document).toUpperCase();
+    const physical = entryCode && root.TriagemCore?.fileDocumentIdentity?.(file.name, entryCode);
+    if (physical && !physical.valid) throw new Error("Cofre: arquivo " + file.name + " diverge do documento " + entryCode + " solicitado na GRDT.");
+    const revision = text(entry.revision).toUpperCase();
+    if (revision && identity.revision && revision !== identity.revision && !entry.manualRevisionOverride) {
+      throw new Error("Cofre: revisão do arquivo " + identity.revision + " diverge da revisão " + revision + " da GRDT.");
+    }
+    return { ...makeTask(file, identity), workspaceId: target,
+      documentCode: entryCode || identity.documentCode, revision: revision || identity.revision,
+      origin: "local", documentClass: entry.sheet || "", purpose: entry.item?.purpose || "", discipline: entry.discipline || "",
+      allowConflict: false, progress: 0, status: "pending" };
+  }
+
+  function sourceMatchesTask(source, task) {
+    return Boolean(source?.id && text(source.documentCode).toUpperCase() === task.documentCode
+      && text(source.revision).toUpperCase() === task.revision && source.format === task.format);
+  }
+
+  // Validate identities before generation. Storage only starts after delivery;
+  // neither hashing nor the R2/network queue can invalidate an emitted package.
+  function prepareEmissionFiles(plan) {
+    const target = workspaceId(), epoch = contextEpoch;
+    const tasks = new Map();
+    for (const entry of plan?.entries || []) {
+      if (!entry.file) continue;
+      const task = emissionTask(entry.file, entry, target);
+      const source = lookupSource(entry.file);
+      if (sourceMatchesTask(source, task)) {
+        entry.vaultFileId = source.id;
+        entry.fileProvenance = { ...(entry.fileProvenance || {}), vaultFileId: source.id,
+          sha256: source.sha256 || "", fileVersion: source.fileVersion || 0, sizeBytes: source.sizeBytes || entry.file.size };
+      } else if (!Core.isArchiveFileName(entry.file.name) && !tasks.has(entry.file)) tasks.set(entry.file, task);
+    }
+    let started = false;
+    return function startVaultQueue() {
+      if (started) return;
+      started = true;
+      try {
+        if (!tasks.size || !target) return;
+        if (epoch !== contextEpoch || target !== workspaceId()) {
+          notify("GRDT entregue. O contrato mudou; confira o Cofre antes de reenviar os arquivos.", "warning");
+          return;
+        }
+        if (!["owner", "admin", "operator"].includes(root.GrconCloud?.state?.membership?.role)) return;
+        const queued = new Map(state.queue.filter(task => task.workspaceId === target).map(task => [task.file, task]));
+        let added = 0;
+        for (const [file, task] of tasks) {
+          const previous = queued.get(file);
+          if (sourceMatchesTask(lookupSource(file), task) || (previous && previous.documentCode === task.documentCode && previous.revision === task.revision && previous.format === task.format)) continue;
+          state.queue.push(task);
+          state.importStats.analyzed++;
+          state.importStats.accepted++;
+          added++;
+        }
+        if (!added) return;
+        notify("GRDT entregue. " + added + " arquivo(s) na fila do Cofre. Mantenha o GRCON aberto e acompanhe pelo Cofre" + (state.paused ? "; a fila está pausada e pode ser retomada." : "."), "info");
+        renderQueue();
+        pump();
+      } catch (error) {
+        // Delivery has already succeeded. Queue/UI errors cannot reverse it.
+        console.warn("GRCON: GRDT entregue; confira a fila do Cofre.", error?.message || error);
+      }
+    };
+  }
 
   async function persistEmissionFiles(plan, onProgress, options = {}) {
     const epoch = contextEpoch, target = workspaceId();
@@ -1536,6 +1650,7 @@
     const entryByFile = new Map(entries.map(entry => [entry.file, entry]));
     const unique = [...entryByFile.keys()];
     const provenance = new Map();
+    const uploads = new Map();
     let failed = 0;
     let systemicFailure = null;
     const progress = new Map(unique.map(file => [file, 0]));
@@ -1580,8 +1695,17 @@
       task.sha256 = await hashFile(task);
       checkCancelled();
       if (epoch !== contextEpoch || target !== workspaceId()) throw new Error("O contrato mudou. Analise novamente.");
-      if (target && ["owner", "admin", "operator"].includes(root.GrconCloud?.state?.membership?.role)) {
-        await uploadTask(task);
+      const archive = Core.isArchiveFileName(file.name);
+      if (!archive && target && ["owner", "admin", "operator"].includes(root.GrconCloud?.state?.membership?.role)) {
+        // Share the verified result for identical copies within this emission.
+        // A different revision, format or binary always gets its own check.
+        const key = JSON.stringify([task.documentCode, task.revision, task.format, task.sha256, file.size]);
+        if (!uploads.has(key)) uploads.set(key, uploadTask(task).then(() => task));
+        const stored = await uploads.get(key);
+        if (stored !== task) Object.assign(task, {
+          status: stored.status, serverFile: stored.serverFile,
+          duplicate: stored.duplicate, reused: stored.reused,
+        });
         if (state.uploadFault) {
           systemicFailure = new Error("Falha no catálogo do Cofre (" + state.uploadFault.code + "). A emissão foi pausada para evitar centenas de requisições repetidas.");
           throw systemicFailure;
@@ -1590,7 +1714,7 @@
       checkCancelled();
       report(file, 1);
       const item = task.status === "done" ? task.serverFile : null;
-      if (!item && target) failed++;
+      if (!item && target && !archive && task.status !== "skipped") failed++;
       const meta = { id: item?.id || "", source: task.duplicate || task.reused ? "cofre" : "local", fileVersion: item?.file_version || 0,
         fileName: file.name, revision: task.revision, format: identity.format,
         sizeBytes: file.size, sha256: task.sha256, createdAt: item?.created_at || "", verifiedAt: item?.verified_at || "" };
@@ -1616,6 +1740,7 @@
     parseLookupInput: Core.parseLookupInput,
     resolveMissingEntries,
     persistEmissionFiles,
+    prepareEmissionFiles,
     request: requestJson,
     download: downloadBlob,
     refreshStorage,

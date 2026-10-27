@@ -5256,7 +5256,7 @@
     try {
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      await window.GrconDocumentVault?.persistEmissionFiles?.(prepared);
+      const startVaultQueue = window.GrconDocumentVault?.prepareEmissionFiles?.(prepared);
       const groups = splitPostingPlan(prepared, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       reservedNumbers = officialNumbers;
@@ -5307,6 +5307,7 @@
           downloadBlob(blob, packageName); outputDelivered = true;
         }
       }
+      startVaultQueue?.();
       saveGeneratedHistory(generated, "eGRDT final", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${generated.length} GRDT final(is) verificada(s) e registrada(s) para a etapa SIGEM.`, "success");
     } catch (error) {
@@ -5383,8 +5384,7 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      window.GrconGrdtDownloadProgress?.phase("Preservando arquivos no Cofre…");
-      await window.GrconDocumentVault?.persistEmissionFiles?.(plan, detail => window.GrconGrdtDownloadProgress?.phase(`Preservando arquivos no Cofre (${detail.completed}/${detail.total})…`, detail.progress), { cancelled: () => state.cancelled });
+      const startVaultQueue = window.GrconDocumentVault?.prepareEmissionFiles?.(plan);
       window.GrconGrdtDownloadProgress?.phase("Preparando lotes e numeração…");
       const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
@@ -5429,6 +5429,7 @@
       }
       window.GrconGrdtDownloadProgress?.phase("Registrando a emissão e entregando o pacote…");
       downloadBlob(blob, packageName); outputDelivered = true;
+      startVaultQueue?.();
       saveGeneratedHistory(generated, "Arquivos + eGRDT", { packageName, generatedAt }, historyPrepared.historyRecords);
       window.GrconGrdtDownloadProgress?.finish();
       showToast(`${plan.entries.length} arquivo(s) e ${generated.length} eGRDT(s) verificados e registrados para a etapa SIGEM.`, "success");
@@ -5517,7 +5518,7 @@
       if (consistency.length) throw new Error(consistency.join(" "));
       const generatedAt = new Date().toISOString();
       const timestamp = C.compactTimestamp(new Date());
-      await window.GrconDocumentVault?.persistEmissionFiles?.(plan);
+      const startVaultQueue = window.GrconDocumentVault?.prepareEmissionFiles?.(plan);
       const groups = splitPostingPlan(plan, currentEgrdtBatchLimit(), currentEgrdtBatchMode());
       const officialNumbers = await reserveEgrdtSequences(groups.length);
       reservedNumbers = officialNumbers;
@@ -5575,6 +5576,7 @@
         await PackageLayout.verifyArchive(blob, generated, { cancelled: () => state.cancelled });
       }
       downloadBlob(blob, packageName); outputDelivered = true;
+      startVaultQueue?.();
       saveGeneratedHistory(generated, "Pacote completo", { packageName, generatedAt }, historyPrepared.historyRecords);
       showToast(`${plan.entries.length} arquivo(s), ${generated.length} eGRDT(s) e o relatório de conferência validados no pacote final.`, "success");
     } catch (error) {

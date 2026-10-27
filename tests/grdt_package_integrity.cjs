@@ -71,5 +71,12 @@ async function archive(generated, mutate) {
   assert.ok(messages.some(message => /Conferindo arquivos no ZIP/.test(message.message)));
   const workerOnly = await context.buildPackage({ groups: generated.map(item => item.group), officialNumbers: generated.map(item => item.official), includeFiles: false }, "QA-XLS");
   assert.equal(workerOnly.packageVerification.fileCount, 1);
+  const [volume] = await fixture(Array(48).fill("pdf"));
+  const largeGroups = Array.from({ length: 25 }, (_, index) => ({ ...volume.group, number: index + 1 }));
+  const largeNumbers = largeGroups.map((_, index) => ({ baseName: `0130870-C1O-PGV-G-${2000 + index}-2026 - eGRDT` }));
+  const large = await context.buildPackage({ groups: largeGroups, officialNumbers: largeNumbers, includeFiles: true }, "QA-1200");
+  assert.equal(large.packageVerification.valid, true);
+  assert.equal(large.packageVerification.fileCount, 1225, "1200 physical files and 25 GRDTs reopened and verified");
+  assert.equal(large.packageVerification.batchCount, 25);
   console.log("OK — ZIP final: 19 PDFs + XLS, bytes reabertos, arquivo ausente/vazio/alterado, nomes, diretórios, cancelamento e Worker real.");
 })().catch(error => { console.error(error); process.exitCode = 1; });
