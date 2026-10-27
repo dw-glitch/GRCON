@@ -40,6 +40,8 @@ jobs:
           cache: npm
       - name: Instalar dependências
         run: npm ci --ignore-scripts
+      - name: Conferir projeção SQL e reversão isoladas
+        run: node tests/sigem_compatibility_cache.cjs
       - name: Conferir recuperação sintética
         run: node tests/sigem_recovery_drill.cjs
       - name: Diagnosticar interrupções da cópia (somente leitura)
@@ -57,6 +59,7 @@ jobs:
           GRCON_RECOVERY_CONTRACT: ${{ inputs.contract }}
           GRCON_RECOVERY_SNAPSHOT: ${{ inputs.snapshot }}
           GRCON_RECOVERY_MANIFEST_HASH: ${{ inputs.manifest_hash }}
+          GRCON_RECOVERY_VERIFY_COMPATIBILITY: 'true'
         run: node scripts/verify-sigem-r2-recovery.mjs
       - uses: actions/upload-artifact@v6
         with:

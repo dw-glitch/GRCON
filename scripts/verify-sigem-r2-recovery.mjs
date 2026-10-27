@@ -56,12 +56,17 @@ export async function verifyRecovery(config,fetcher=fetch){
    const actual=(await pg.query('select to_jsonb(r) item from grcon_sigem_restore_drill.grcon_sigem_query_rows r where row_number>$1 order by row_number limit 250',[compared])).rows.map(r=>r.item);
    if(!rows.length||canonical(actual)!==canonical(rows))throw Error('RECOVERY_POSTGRES_CONTENT_MISMATCH');compared+=rows.length;
   }
-  return {ok:true,snapshot:config.snapshot,records:restored.records,checksum:restored.checksum,manifestHash:config.manifestHash,postgresRowsCompared:compared,sourceMetadataPreserved:true,liveDatabaseModified:false};
+  let compatibility={};
+  if(config.verifyCompatibility){
+   const {verifyCompatibilityCache}=await import('./verify-sigem-compatibility-cache.mjs');
+   compatibility=await verifyCompatibilityCache(pg,source,after=>db.prepare('select row_json from sigem_rows where row_number>? order by row_number limit 250').all(after).map(r=>JSON.parse(r.row_json)),{checksum:restored.checksum,manifestHash:config.manifestHash});
+  }
+  return {ok:true,snapshot:config.snapshot,records:restored.records,checksum:restored.checksum,manifestHash:config.manifestHash,postgresRowsCompared:compared,sourceMetadataPreserved:true,liveDatabaseModified:false,...compatibility};
  }finally{if(db)db.close();if(pg)await pg.close();await rm(folder,{recursive:true,force:true});}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
  try{
-  const result=await verifyRecovery({account:process.env.CLOUDFLARE_ACCOUNT_ID,token:process.env.CLOUDFLARE_API_TOKEN,workspace:process.env.GRCON_RECOVERY_WORKSPACE,contract:process.env.GRCON_RECOVERY_CONTRACT,snapshot:process.env.GRCON_RECOVERY_SNAPSHOT,manifestHash:process.env.GRCON_RECOVERY_MANIFEST_HASH});
+  const result=await verifyRecovery({account:process.env.CLOUDFLARE_ACCOUNT_ID,token:process.env.CLOUDFLARE_API_TOKEN,workspace:process.env.GRCON_RECOVERY_WORKSPACE,contract:process.env.GRCON_RECOVERY_CONTRACT,snapshot:process.env.GRCON_RECOVERY_SNAPSHOT,manifestHash:process.env.GRCON_RECOVERY_MANIFEST_HASH,verifyCompatibility:process.env.GRCON_RECOVERY_VERIFY_COMPATIBILITY==='true'});
   await mkdir('artifacts/sigem-recovery',{recursive:true});await writeFile('artifacts/sigem-recovery/summary.json',JSON.stringify({...result,verifiedAt:new Date().toISOString()},null,2),{mode:0o600});console.log(JSON.stringify(result));
  }catch(error){console.error(/^[A-Z0-9_]{1,80}$/.test(error.message)?error.message:'RECOVERY_FAILED');process.exitCode=1;}
 }
