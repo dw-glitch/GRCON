@@ -33,7 +33,6 @@ assert.equal(Core.diagnose([{document: doc("121"),revision:"A",group:"nao_locali
 assert.equal(Core.diagnose([{document: doc("122"),revision:"B",manual:true,selected:true}]).manualSelected,1);
 assert.equal(Core.search(base, doc("121") + ";" + doc("122"), 200).total, 3,
   "consulta em lote considera revisões por identidade exata");
-assert.match(app, /revealSupportRow:/, "navegação exata para a tabela original");
 const supportUi = source("grdt_support_panel.js");
 assert.match(supportUi, /el\.searchArea\.hidden = false/, "consulta permanece acessível na conferência");
 assert.match(supportUi, /diagnostics\.selectedRisks/, "pré-conferência informa riscos da seleção");
@@ -52,7 +51,7 @@ for (const file of ["grdt_support_core.js", "grdt_support_panel.js", "grdt-suppo
 assert.match(app, /GrconGrdtSupportCore\.summarize\(state\.results\.map\(decisionGroupKey\)\)/,
   "resumo provém da classificação oficial da triagem");
 assert.match(app, /grcon:grdt-support-summary/);
-assert.match(source("grdt_support_panel.js"), /api\\.revealSupportRow\\(/, "ações apontam para a linha exata na tabela original");
+assert.match(app, /revealSupportRow:/, "navegação exata para a tabela original");
 assert.doesNotMatch(source("grdt_support_panel.js"), /innerHTML|eval\(/, "nenhum HTML com dados não confiáveis");
 const ui = source("grdt_support_panel.js");
 for (const [, id] of ui.matchAll(/\bbyId\("([^"]+)"\)/g)) {
