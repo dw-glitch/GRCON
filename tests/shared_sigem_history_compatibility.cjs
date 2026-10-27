@@ -45,7 +45,7 @@ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind
   assert.equal(versions[0].metadata.referenceDate, "2026-09-30"); assert.equal(projections.length, 2); assert.equal(events.length, 1);
   assert.equal(api.canManageHistory(), true);
   master = false; assert.equal(api.canManageHistory(), false, "ordinary owner cannot delete history");
-  await assert.rejects(api.deleteVersion("old"), /proprietário master/); master = true;
+  await assert.rejects(api.deleteVersion("old"), /Proprietário ADM/); master = true;
   await api.activateVersion("old");
   assert.ok(calls.some(c => c.name.endsWith("activate") && c.args.target_snapshot === "old"));
   const deletion = await api.deleteVersion("old");

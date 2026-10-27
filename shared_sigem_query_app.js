@@ -327,7 +327,7 @@
   async function deleteVersion(id) {
     const workspace = cloud()?.state?.membership?.workspace_id;
     if (!workspace || !cloud()?.state?.online) throw new Error("Conecte-se para excluir a base da Consulta Geral.");
-    if (!canManageHistory()) throw new Error("Somente o proprietário master pode excluir bases da Consulta Geral.");
+    if (!canManageHistory()) throw new Error("Somente o Proprietário ADM pode excluir bases da Consulta Geral.");
     if (!String(id || "").trim()) throw new Error("Selecione uma base da Consulta Geral.");
     const result = await request("delete", { target_workspace: workspace, target_snapshot: id });
     snapshotCache.delete(id);

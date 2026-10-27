@@ -1058,3 +1058,27 @@ html[data-theme="dark"] #grcon-admin-dialog .grcon-admin-nav button[aria-current
 .grcon-admin-storage-metrics dd{margin:0;font-size:15px;line-height:1.4;font-weight:600;color:#183249;overflow-wrap:anywhere}
 @media(max-width:1100px){.grcon-admin-storage-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.grcon-admin-storage-metrics{grid-template-columns:minmax(0,1fr)}}
+
+/* Administração Proprietário ADM: consumo real, sem porcentagens presumidas. */
+.grcon-storage-visuals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:16px 0}
+.grcon-storage-card{min-width:0;padding:18px;border:1px solid #d8e4eb;border-radius:14px;background:#fff;box-shadow:0 3px 12px rgba(23,52,73,.035)}
+.grcon-storage-card-header{display:grid;gap:3px}.grcon-storage-card-header strong{color:#173c53;font-size:16px}.grcon-storage-card-header small{color:#607786;font-size:12px}
+.grcon-storage-card-body{display:flex;align-items:center;gap:20px;padding:14px 0}
+.grcon-storage-donut{--storage-accent:#178a7c;position:relative;display:grid;place-items:center;flex:0 0 136px;width:136px;height:136px;border-radius:50%;background:conic-gradient(var(--storage-accent) var(--storage-progress),#e7eff3 0)}
+.grcon-storage-donut::before{position:absolute;content:"";inset:13px;background:#fff;border-radius:50%}
+.grcon-storage-donut span{position:relative;display:grid;gap:2px;text-align:center}.grcon-storage-donut strong{font-size:25px;color:#173c53}.grcon-storage-donut small{font-size:10px;color:#647989}
+.grcon-storage-card[data-storage-tone="attention"] .grcon-storage-donut{--storage-accent:#ba8c33}
+.grcon-storage-card[data-storage-tone="warning"] .grcon-storage-donut{--storage-accent:#b6741b}
+.grcon-storage-card[data-storage-tone="critical"] .grcon-storage-donut{--storage-accent:#b94b46}
+.grcon-storage-card-values{display:grid;gap:9px;margin:0;min-width:0}
+.grcon-storage-card-values dt{font-size:11px;color:#667c8c}.grcon-storage-card-values dd{font-weight:700;color:#173c53;font-size:14px;margin:1px 0 0}
+.grcon-storage-card-footnote,.grcon-storage-measured-at{font-size:11px;line-height:1.5;color:#657986;margin:3px 0 0}
+.grcon-storage-diagnostics{padding:12px 16px;border:1px solid #dce5eb;border-radius:10px;background:#f9fbfc;margin:16px 0}
+.grcon-storage-diagnostics h4{font-size:14px;color:#173c53;margin:0 0 8px}
+.grcon-storage-diagnostics p{font-size:12px;color:#384f5c;margin:0 0 5px;line-height:1.6}
+.grcon-storage-diagnostics small{color:#667b89}
+.grcon-storage-technical{margin:16px 0}.grcon-storage-technical>summary{cursor:pointer;font-size:13px;font-weight:600;color:#315970}
+.grcon-maintenance-badge{display:inline-flex;gap:4px;align-items:center;vertical-align:middle;margin-left:5px;font-size:11px;font-weight:500;color:#8a6931;white-space:nowrap}
+.grcon-maintenance-badge svg{flex:none}
+@media(max-width:960px){.grcon-storage-visuals{grid-template-columns:1fr}}
+@media(max-width:520px){.grcon-storage-card-body{gap:12px}.grcon-storage-donut{width:112px;height:112px;flex-basis:112px}.grcon-storage-donut strong{font-size:21px}}

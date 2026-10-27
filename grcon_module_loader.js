@@ -50,9 +50,8 @@
     // legado permanece fonte da verdade e pdf-lib só entra pelo Worker quando
     // o operador realmente inicia a combinação.
     "pdf-tools": ["pdf_merge_core.js", "react-dist/pdf-tools-app.js"],
-    // Capa oficial: LD + template local; nenhum documento deixa o navegador.
+    // Conversor experimental: processamento de documentos permanece local no navegador.
     "docx-to-pdf": ["zip", "docx_pdf_layout.js", "docx_pdf_core.js", "docx_pdf_app.js"],
-    "cover-document": ["xlsx", "zip", "pdf-lib.min.js", "core.js", "requests_core.js", "requests_report.js", "requests_taxonomy_core.js", "ld_memory.js", "performance_workers.js", "react-dist/cover-document-app.js"],
   };
 
   const moduleRequirements = {
@@ -63,7 +62,6 @@
     requests: ["GrconRequestsCore", "GrconRequestsReport", "GrconRequestsTaxonomy", "GrconRequestsUi", "GrconConsultasReact"],
     "grdt-reissue": ["GrconGrdtReissueCore", "GrconGrdtReissueUi", "GrdtWorkbook"],
     "pdf-tools": ["GrconPdfMergeCore", "GrconPdfMergeUi"],
-    "cover-document": ["GrconCoverDocumentUi"],
     "docx-to-pdf": ["GrconDocxPdfCore", "GrconDocxPdfUi"],
     "allocation-generator": ["GrconAllocationGeneratorUi"],
     "title-corrector": ["GrconTitleCorrectorUi"],
@@ -227,7 +225,6 @@
 
   function directActivate(view) {
     if (view !== "pdf-tools") root.GrconPdfMergeUi?.deactivate?.();
-    if (view !== "cover-document") root.GrconCoverDocumentUi?.deactivate?.();
     if (view !== "docx-to-pdf") root.GrconDocxPdfUi?.deactivate?.();
 
     const modules = {
@@ -239,7 +236,6 @@
       "grdt-reissue": "grdt-reissue-module",
       "additional-tools": "additional-tools-module",
       "pdf-tools": "pdf-tools-module",
-      "cover-document": "cover-document-module",
       "docx-to-pdf": "docx-to-pdf-module",
       "allocation-generator": "allocation-generator-module",
       "title-corrector": "title-corrector-module",
@@ -255,7 +251,7 @@
     if (scrollingElement) scrollingElement.scrollTop = 0;
     if (root.scrollY) root.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.querySelectorAll("[data-grcon-view]").forEach((button) => {
-      const nestedToolView = view === "allocation-generator" || view === "title-corrector" || view === "grdt-reissue" || view === "pdf-tools" || view === "cover-document" || view === "docx-to-pdf" || view === "allocation-dashboard";
+      const nestedToolView = view === "allocation-generator" || view === "title-corrector" || view === "grdt-reissue" || view === "pdf-tools" || view === "docx-to-pdf" || view === "allocation-dashboard";
       const additionalToolsNav = button.dataset.grconView === "additional-tools"
         && (button.classList.contains("ops-nav-button") || button.id === "tab-additional-tools");
       const active = button.dataset.grconView === view || (nestedToolView && additionalToolsNav);
@@ -275,9 +271,8 @@
     "additional-tools": "Ferramentas adicionais",
     history: "Histórico de eGRDTs",
     dashboard: "Dashboard de emissões",
-    sigem: "Central de Postagem SIGEM",
+    sigem: "Conferir GRDT",
     "pdf-tools": "Combinar PDFs",
-    "cover-document": "Adicionar Capa",
     "docx-to-pdf": "Converter PDF em DOCX",
     "allocation-generator": "Gerador de Alocação",
     "title-corrector": "Corretor Inteligente de Títulos",
@@ -322,16 +317,13 @@
       root.GrconPdfMergeUi?.activate?.();
       return;
     }
-    if (module === "cover-document") {
-      root.GrconCoverDocumentUi?.activate?.();
-      return;
-    }
     if (module === "docx-to-pdf") {
       root.GrconDocxPdfUi?.activate?.();
       return;
     }
     if (module === "sigem") {
       root.GrconSigemCentralUi?.refresh?.();
+      root.GrconSigemCentralUi?.openTechnical?.();
       return;
     }
     if (module === "grdt-reissue") {
@@ -342,7 +334,7 @@
   }
 
   async function ensureModule(view) {
-    const module = view === "analysis-history" ? "control" : view || "control";
+    const module = view === "cover-document" ? "additional-tools" : view === "analysis-history" ? "control" : view || "control";
     requestedView = module;
     if (module === "control") {
       directActivate("control");

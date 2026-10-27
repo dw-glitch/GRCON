@@ -74,6 +74,16 @@ export async function handleSigemStorage(request, env) {
           turso.error = allowed.includes(error?.code) ? error.code : 'TURSO_UNAVAILABLE';
         }
       } else turso.error = 'TURSO_NOT_CONFIGURED';
+      // Optional administrator-entered plan limits. They are NOT provider-reported quotas.
+      // Never manufacture a percentage when no independently verified quota is configured.
+      const configuredLimit = key => {
+        const raw = String(env[key] || '').trim();
+        const number = /^[1-9][0-9]*$/.test(raw) ? Number(raw) : NaN;
+        return Number.isSafeInteger(number) && number > 0 ? number : null;
+      };
+      status.supabaseCapacityBytes = configuredLimit('GRCON_SUPABASE_DB_LIMIT_BYTES');
+      turso.capacityBytes = configuredLimit('GRCON_TURSO_DB_LIMIT_BYTES');
+      turso.capacitySource = turso.capacityBytes ? 'worker_configuration' : null;
       return reply({ok: true, ...status, mode, externalStorageAuthorized: env.GRCON_SIGEM_EXTERNAL_STORAGE_AUTHORIZED === 'true', preflightApproved: env.GRCON_SIGEM_MIGRATION_PREFLIGHT_APPROVED === 'true', turso, backupPrefix: 'sigem-backups/v1/', cutoverReady: false, cleanupAllowed: false});
     }
     if (action === 'inventory' && request.method === 'GET') return reply({ok: true, ...await control('inventory')});

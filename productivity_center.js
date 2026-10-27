@@ -239,7 +239,7 @@
         if(!root.confirm('Restaurar '+summary.history+' eGRDT(s), '+summary.postings+' postagem(ns) e '+summary.dashboardRecords+' registro(s) de bases locais? Banco compartilhado e arquivos do Cofre não serão restaurados. Será criado um snapshot local de segurança.'))return;
         await root.GrconBackup.restore(payload);notify('Backup local restaurado.','success');root.setTimeout(()=>root.location.reload(),700);return;
       }
-      if(complete&&APP==='GRCON'&&payload?.schema===FULL_SCHEMA&&root.GrconCloud?.state?.membership?.workspace_id&&!root.GrconCloud?.isMasterOwner?.())throw new Error('Este backup antigo não identifica os contratos. A restauração completa é exclusiva do proprietário master.');
+      if(complete&&APP==='GRCON'&&payload?.schema===FULL_SCHEMA&&root.GrconCloud?.state?.membership?.workspace_id&&!root.GrconCloud?.isMasterOwner?.())throw new Error('Este backup antigo não identifica os contratos. A restauração completa é exclusiva do Proprietário ADM.');
       const expected = complete ? FULL_SCHEMA : PREF_SCHEMA;
       if (payload?.schema !== expected || payload?.app !== APP) {
         throw new Error(`Este arquivo não é um ${complete ? "backup completo" : "backup de preferências"} do ${APP}.`);

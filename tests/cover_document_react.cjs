@@ -20,18 +20,18 @@ const service = read("src/react/cover-document/services/coverDocumentService.ts"
 const validation = read("src/react/cover-document/services/coverValidationService.ts");
 const css = read("cover-document.css");
 
-assert.match(html, /data-grcon-view="cover-document"/);
+assert.doesNotMatch(html, /data-grcon-view="cover-document"/);
 assert.doesNotMatch(html, /data-grcon-view="cover"/);
-assert.match(html, /id="cover-document-module"/);
+assert.doesNotMatch(html, /id="cover-document-module"/);
 assert.doesNotMatch(html, /id="cover-module"/);
-assert.match(html, /id="grcon-cover-document-root"/);
+assert.doesNotMatch(html, /id="grcon-cover-document-root"/);
 assert.match(html, /cover-document\.css/);
 assert.doesNotMatch(html, /cover-tool\.css/);
 
-assert.match(loader, /"cover-document"/);
-assert.match(loader, /react-dist\/cover-document-app\.js/);
-assert.match(loader, /"cover-document": \["xlsx", "zip", "pdf-lib\.min\.js", "core\.js", "requests_core\.js", "requests_report\.js", "requests_taxonomy_core\.js", "ld_memory\.js", "performance_workers\.js", "react-dist\/cover-document-app\.js"\]/);
-assert.match(loader, /GrconCoverDocumentUi/);
+assert.doesNotMatch(loader, /"cover-document": \[/);
+assert.doesNotMatch(loader, /react-dist\/cover-document-app\.js/);
+assert.doesNotMatch(loader, /"cover-document": \[/);
+assert.doesNotMatch(loader, /GrconCoverDocumentUi/);
 assert.doesNotMatch(loader, /GrconCoverUi/);
 
 assert.match(sw, /cover-document\.css/);

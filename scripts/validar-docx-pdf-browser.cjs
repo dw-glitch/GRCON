@@ -30,7 +30,7 @@ const root=process.cwd();
    await page.goto('http://127.0.0.1:'+server.address().port);
    for(const name of ['jszip.min.js','pdf-lib.min.js','docx_pdf_layout.js','docx_pdf_core.js','docx_pdf_app.js'])await page.addScriptTag({path:path.join(root,name)});
    await page.evaluate(()=>window.GrconDocxPdfUi.activate());
-   assert.equal(await page.getByRole('heading',{name:'Converter PDF para DOCX'}).count(),1);
+   assert.equal(await page.getByRole('heading',{name:/Converter PDF para DOCX/}).count(),1);
    assert.equal(await page.locator('#docx-pdf-input').getAttribute('accept'),'.pdf,application/pdf');
    assert.equal(await page.locator('#docx-pdf-convert').isDisabled(),true);
 
@@ -68,7 +68,8 @@ const root=process.cwd();
        multipage:Array.from(await multipage.save()),mixed:Array.from(await mixed.save())};
    });
    // Padrão novo: reconstrução com texto editável em OOXML, sem fotografar páginas.
-   assert.equal(await page.locator('input[name="docx-pdf-mode"]').count(),0);
+   assert.equal(await page.locator('#docx-pdf-mode').count(),1);
+   assert.equal(await page.locator('#docx-pdf-mode').inputValue(),'editable-layout');
    await page.locator('#docx-pdf-input').setInputFiles({
      name:'duas-paginas.pdf',mimeType:'application/pdf',buffer:Buffer.from(fixtures.multipage)
    });

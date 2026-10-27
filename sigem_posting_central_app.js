@@ -4,9 +4,8 @@
   const Query=root.GrconSigemCentralQuery,View=root.GrconSigemCentralRender;
   const History=root.GrconHistory;
   const Tracking=root.GrconSigemCentralTracking;
-  const DEFAULT=["document","title","revisionSent","revisionFound",
-    "statusLabel","sigemStatus","egrdtNumber","generatedAt","sendCount"];
-  const state={view:"documentos",panel:"central",query:"",filters:{},columns:DEFAULT.slice(),
+  const DEFAULT=["document","title","statusLabel","sendCount","generatedAt","note"];
+  const state={view:"grdts",panel:"central",query:"",filters:{},columns:DEFAULT.slice(),
     showColumns:false,sort:{key:"",dir:"asc"},widths:{},keepScroll:false,data:null,filtered:{rows:[],missing:[]},generation:0,pinned:["document"],savedViews:[],comparison:null,comparisonRows:[],trackingLoaded:false,viewColumns:{}};
   function workspace(){return root.GrconCloud?.state?.membership?.workspace_id||"unavailable";}
   function storageKey(){return "grcon.sigem.central.preferences.v2:"+workspace()+":"+(root.GrconCloud?.state?.session?.user?.id||"anonymous");}
@@ -40,14 +39,14 @@
   function shell(){
     const module=$("#sigem-module");if(!module)return false;
     module.innerHTML=
-      '<section class="scc" id="sigem-central-workspace">'+
-      '<header class="scc-heading"><div><span>CENTRAL OPERACIONAL</span>'+
-      '<h2>Central de Postagem SIGEM</h2>'+
-      '<p>Consulta, conferência e rastreabilidade documental</p></div>'+
-      '<div class="scc-header-actions"><button type="button" id="scc-monitor-open" class="secondary-button compact">Evolução e monitoramento</button><button type="button" id="scc-technical-open" class="secondary-button compact">Conferir pacote .xls</button></div></header>'+
+      '<section class="scc scc-grdt-review" id="sigem-central-workspace">'+
+      '<header class="scc-heading"><div><span>CONFERÊNCIA DOCUMENTAL</span>'+
+      '<h2>Conferir GRDT</h2>'+
+      '<p>Verifique os documentos, revisões e possíveis divergências de uma GRDT. A geração não comprova postagem.</p></div>'+
+      '<div class="scc-header-actions"><button type="button" id="scc-monitor-open" class="secondary-button compact">Evolução e monitoramento</button><button type="button" id="scc-technical-open" class="secondary-button compact">Conferir arquivo .xls</button></div></header>'+
       '<p class="scc-base" id="sigem-central-base" role="status"></p>'+
       '<div class="scc-query"><input type="search" id="scc-query" autocomplete="off" '+
-      'placeholder="Pesquisar documento, GRDT, título ou revisão" aria-label="Pesquisa universal"/>'+
+      'placeholder="Pesquisar pelo número da GRDT ou documento" aria-label="Pesquisa universal"/>'+
       '<button type="button" id="scc-list-toggle" class="secondary-button compact">Consultar lista</button></div>'+
       '<div class="scc-list" id="scc-list-panel" hidden><label for="scc-list-input">Cole uma lista de códigos, um por linha</label>'+
       '<textarea id="scc-list-input" rows="4" placeholder="Códigos separados por linha, vírgula ou ponto e vírgula"></textarea>'+
@@ -107,7 +106,7 @@
       '<p class="scc-note">Base SIGEM e histórico GRCON: uma eGRDT gerada não comprova envio. Clique em uma linha para visualizar todas as ocorrências.</p>'+
       '</section>'+
       '<section id="sigem-technical-pane" class="scc-technical" hidden>'+
-      '<button type="button" id="scc-back" class="secondary-button compact">← Voltar à central</button><div id="sigem-technical-content"></div></section>'+
+      '<button type="button" id="scc-back" class="secondary-button compact">Consultar GRDTs no histórico</button><div id="sigem-technical-content"></div></section>'+
       '<aside class="scc-detail" id="sigem-central-detail" role="dialog" aria-label="Detalhes do documento" hidden>'+
       '<button type="button" class="scc-close" aria-label="Fechar detalhes">×</button>'+
       '<div id="sigem-central-detail-body"></div></aside>';
@@ -301,7 +300,7 @@
   async function exportExcel(){
     if(!state.filtered.rows.length){notify("Nenhum resultado para exportar.");return;}
     if(root.GrconOperations?.isActive("sigem-central-export"))return;
-    const operation=root.GrconOperations?.begin("sigem-central-export","Exportar Central de Postagem SIGEM",{host:"#sigem-module"});
+    const operation=root.GrconOperations?.begin("sigem-central-export","Exportar conferência de GRDT",{host:"#sigem-module"});
     try{
       await operation?.paint();
       await root.GRCONModuleLoader.ensure("performance");
@@ -311,7 +310,7 @@
       },operation?.update);
       operation?.assertCurrent();
       const url=URL.createObjectURL(new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-      const anchor=document.createElement("a");anchor.href=url;anchor.download="GRCON_Central_Postagem_SIGEM_"+new Date().toISOString().slice(0,10)+".xlsx";anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+      const anchor=document.createElement("a");anchor.href=url;anchor.download="GRCON_Conferencia_GRDT_"+new Date().toISOString().slice(0,10)+".xlsx";anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
     }catch(error){operation?.fail(error);notify(error.message||"Não foi possível exportar a consulta.","error");}
     finally{operation?.finish();}
   }
@@ -639,7 +638,7 @@
     if(index>=0)View.detail(state,index);else notify('Item indisponível no histórico acessível deste contrato.','warning');
   }
   if(shell()){
-    loadColumns();bind();
+    loadColumns();state.view="grdts";state.columns=DEFAULT.slice();state.filters={};bind();
     root.GrconSigemCentralUi=Object.freeze({state,refresh,openTechnical,openCentral,openTarget});
     void refresh();
   }
