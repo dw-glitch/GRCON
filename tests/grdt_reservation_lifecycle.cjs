@@ -12,8 +12,8 @@ const audit = read("supabase/migrations/20261027165600_egrdt_reservation_recover
 
 assert.match(migration,/status = 'reserved'[\s\S]*history_id is null/);
 assert.match(migration,/reserved_at < clock_timestamp\(\) - interval '2 hours'/);
-assert.match(migration,/not exists \(/[\s\S]*?grcon_history/);
-assert.match(migration,/while exists \(/[\s\S]*?largest_sequence := largest_sequence \+ 1/);
+assert.match(migration,/not exists \([\s\S]*?grcon_history/);
+assert.match(migration,/while exists \([\s\S]*?largest_sequence := largest_sequence \+ 1/);
 assert.match(migration,/private\.grcon_release_egrdt_reservations/);
 assert.match(migration,/reserved_by = actor/);
 assert.match(migration,/pg_advisory_xact_lock/);
