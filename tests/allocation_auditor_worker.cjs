@@ -32,7 +32,7 @@ const file=(name,bytes)=>({name,size:bytes.byteLength,arrayBuffer:async()=>bytes
  const approved=sandbox.GrconAllocationAuditorCore.reviewEvent(officialAudit[0],{state:'Correção proposta',field:'workflow',value:'RNEST UHDTD U-32 C&M/ELETRICA-CORRIGIDO',decision:'accepted',justification:'Conferido com a origem autorizada e validado pelo operador.',evidence:['Registro técnico de revisão 2026']},'actor');
  const result=await request('revise-allocation',{file:file('C1O-ALOC-CM-0375-2026.xlsx',new Uint8Array(officialFixture)),rows:officialAudit,events:[approved],sourceHash:official.sha256,contract:'contract-a'});
  assert.equal(result.changed,1);
- const edited=XLSX.read(result.bytes,{type:'array',cellFormula:true});const unedited=XLSX.read(officialFixture,{type:'array',cellFormula:true});
+ const edited=sandbox.XLSX.read(result.bytes,{type:'array',cellFormula:true});const unedited=sandbox.XLSX.read(officialFixture,{type:'array',cellFormula:true});
  assert.equal(edited.Sheets.GERAL.C2.v,'RNEST UHDTD U-32 C&M/ELETRICA-CORRIGIDO');
  assert.equal(edited.Sheets.GERAL.A2.v,unedited.Sheets.GERAL.A2.v);
  assert.equal(edited.Sheets.GERAL.B2.v,unedited.Sheets.GERAL.B2.v);
