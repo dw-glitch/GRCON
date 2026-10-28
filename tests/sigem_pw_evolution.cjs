@@ -3,7 +3,7 @@ const { performance } = require('node:perf_hooks');
 const Evo = require('../sigem_pw_evolution_core.js');
 
 function s(document, revision, extra={}) { return { document, revision, status:'Em análise', ...extra }; }
-function p(document, revision, extra={}) { return { document, revision, revisionComplete: revision, state:'Liberado', lastEmission:'Sim', ...extra }; }
+function p(document, revision, extra={}) { return { document, revision, revisionComplete: revision, state:'Liberado', lastEmission:'Sim', company:'CSG', ...extra }; }
 function snap(system, records) { return Evo.buildSnapshot(system, { meta:{ fileName:`${system}.xlsx`, importedAt:'2026-09-11T12:00:00Z', sourceRowCount:records.length, recordCount:records.length }, records }, Evo.buildLdUniverse(records.map(r=>({document:r.document, revision:r.revision, discipline:'DOC'})), [])); }
 
 const A='RL-5290.00-22313-ABC-C1O-001';
@@ -142,7 +142,7 @@ const D='PR-5290.00-22313-XYZ-C1O-004';
   const openDashboard = bootstrap.slice(bootstrap.indexOf('async function openDashboard()'), bootstrap.indexOf('async function openEvolution()'));
   assert.doesNotMatch(openDashboard,/sigem_pw_evolution|GrconSigemPwEvolutionUi/, 'a evolução deve continuar sob demanda e não bloquear a abertura principal');
   assert.match(historyApp,/if \(!acervoTarget \|\| !pendingTarget\) return/, 'histórico legado não pode falhar depois que a evolução assume a seção');
-  assert.match(scope,/SCOPE_VERSION = 6/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
+  assert.match(scope,/SCOPE_VERSION = 8/); assert.doesNotMatch(app,/Descartados do escopo|Motivo de descarte|Motivo descarte/);
 })();
 
 
