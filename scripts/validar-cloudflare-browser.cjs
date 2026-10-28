@@ -210,38 +210,23 @@ async function probe(page, pathname) {
     assert.equal(vaultHealthBody.powerAutomateConfigured, false, "Preview local não deve inventar secret do Power Automate.");
     assert.equal(vaultHealthBody.powerAutomateUrlValid, false);
 
-    await page.waitForFunction(() => Boolean(window.GrconDocumentVault && document.querySelector("[data-vault-open]")), null, { timeout: 15000 });
-    await page.evaluate(() => {
-      const target = Array.from(document.querySelectorAll("[data-vault-open]")).find((node) => {
-        const rect = node.getBoundingClientRect();
-        const style = getComputedStyle(node);
-        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
-      });
-      if (!target) throw new Error("Navegação do Cofre não localizada.");
-      target.click();
-    });
-    await page.locator("#document-vault-module").waitFor({ state: "visible", timeout: 10000 });
+    // Cofre is deliberately hidden pending corporate storage approval. Its authenticated
+    // API remains available, but neither navigation nor UI should be exposed.
+    await page.waitForFunction(() => Boolean(window.GrconDocumentVault), null, { timeout: 15000 });
     const vaultUi = await page.evaluate(() => ({
-      moduleVisible: !document.getElementById("document-vault-module")?.hidden,
-      folderPicker: Boolean(document.getElementById("vault-folder-input")?.hasAttribute("webkitdirectory")),
-      allocationOptions: Array.from(document.querySelectorAll("#vault-allocation option")).map(option => option.value),
-      centralSourceOptions: Array.from(document.querySelectorAll('input[name="grdt-document-source"]')).map(input => input.value),
-      centralLookup: Boolean(document.getElementById("grdt-vault-lookup") && document.getElementById("grdt-vault-codes")),
-      automaticSourceHelp: Boolean(document.getElementById("grdt-auto-source-help")),
-      manualGrdtSelectionInVault: Boolean(document.getElementById("vault-use-grdt") || document.querySelector("[data-vault-select]")),
-      oldReissueCard: Boolean(document.querySelector('#additional-tools-module .additional-tool-card[data-grcon-view="grdt-reissue"]')),
+      navigation: document.querySelectorAll("[data-vault-open]").length,
+      module: Boolean(document.getElementById("document-vault-module")),
+      queue: Boolean(document.getElementById("vault-queue-body")),
+      usage: Boolean(document.getElementById("vault-storage-used")),
+      enabled: window.GrconStorageFeatures?.showStorageUI === true,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     }));
-    assert.equal(vaultUi.moduleVisible, true);
-    assert.equal(vaultUi.folderPicker, true);
-    assert.deepEqual(vaultUi.allocationOptions, ["all", "allocated", "not_allocated", "not_identified"]);
-    assert.deepEqual(vaultUi.centralSourceOptions, []);
-    assert.equal(vaultUi.centralLookup, false);
-    assert.equal(vaultUi.automaticSourceHelp, false);
-    assert.equal(await page.locator("#grcon-vault-help").count(), 0);
-    assert.equal(vaultUi.manualGrdtSelectionInVault, false);
-    assert.equal(vaultUi.oldReissueCard, false);
-    assert.ok(vaultUi.overflow <= 1, "Cofre não pode gerar overflow horizontal global.");
+    assert.equal(vaultUi.enabled, false, "O Cofre deve permanecer oculto.");
+    assert.equal(vaultUi.navigation, 0, "O Cofre não pode expor atalho de navegação.");
+    assert.equal(vaultUi.module, false, "O Cofre não pode renderizar o módulo oculto.");
+    assert.equal(vaultUi.queue, false, "O Cofre não pode renderizar filas de upload ocultas.");
+    assert.equal(vaultUi.usage, false, "O Cofre não pode renderizar indicadores de armazenamento.");
+    assert.ok(vaultUi.overflow <= 1, "Cofre oculto não pode provocar overflow.");
     results.vault = { health: { status: vaultHealth.status(), body: vaultHealthBody }, ui: vaultUi };
 
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
