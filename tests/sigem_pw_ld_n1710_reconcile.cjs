@@ -78,6 +78,16 @@ const aligned = Core.aggregateModel(Core.createModel(
   ld, options), {}, { revisionScope: "all" });
 assert.equal(aligned.lists.bothNotEmitted.length, 1, "PREVISTO é cadastrado, não emitido");
 
+const noSigem = Core.aggregateModel(Core.createModel([], pw, ld, {
+  ...options, sigemAvailable: false,
+}), {}, { revisionScope: "all" });
+assert.equal(noSigem.lists.ldWithoutSigem.length, 0, "sem Consulta Geral não pode afirmar que falta no SIGEM");
+const noPw = Core.aggregateModel(Core.createModel(sigem, [], ld, {
+  ...options, pwAvailable: false,
+}), {}, { revisionScope: "all" });
+assert.ok(noPw.lists.all.filter(x => x.inSigem).every(x =>
+  x.pwRegistrationStatus === "BASE PW NÃO CARREGADA — INCONCLUSIVO"), "sem PW não há prova de falta de cadastro");
+
 const previous = Core.aggregateModel(Core.createModel(sigem, pw, ld), {}, { revisionScope: "all" });
 assert.equal(previous.summary.sigem, 3, "sem opt-in legados preservam histórico e snapshot");
 console.log("SIGEM × PW: LD obrigatória, IS N-1710, CSG/QTM, revisões, rastreabilidade e exclusões OK");
