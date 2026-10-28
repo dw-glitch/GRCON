@@ -36,7 +36,7 @@ assert.equal(clean.records.length, 4);
 assert.equal(clean.meta.scopeAcceptedRecordCount, 4);
 assert.equal(clean.meta.scopeExcludedCount, 3);
 assert.deepEqual(clean.meta.scopeExcludedReasons, { empresa_divergente: 2, sigla_ausente: 1 });
-assert.deepEqual(clean.meta.scopeCompanyCounts, { CSG: 2, QTM: 3 });
+assert.deepEqual(clean.meta.scopeCompanyCounts, { CSG: 1, QTM: 2, MULTIPLAS: 1 });
 assert.equal(clean.meta.companyColumn, "C");
 assert.equal(clean.meta.scopeCompanyColumnMissing, false);
 assert.equal(clean.meta.uniqueDocumentCount, 3);
