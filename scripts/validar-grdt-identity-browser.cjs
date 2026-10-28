@@ -20,11 +20,12 @@ for(const worker of [true,false]){const context=await browser.newContext({viewpo
  const rows=await page.evaluate(()=>window.GrconTriageUiApi.filteredIndices().map(i=>{const r=window.GrconTriageUiApi.getResult(i);return {name:r.name,document:r.document,status:r.status,decision:r.decision,record:r.record,selected:window.GrconGrdtTriageQuery.selectionPolicy(r).autoEligible};}));
  const missing=rows.find(r=>r.name.includes('-122_'));assert.notEqual(missing.document,doc('121'));assert.equal(missing.selected,false);assert.equal(Object.keys(missing.record).length,0);
  const unknown=rows.find(r=>r.document===doc('124'));assert.equal(unknown.selected,false);assert.equal(unknown.decision,'revisar');
- assert.equal(await page.locator('#count-unresolved').innerText(),'2');
+ const unverifiedLd=rows.find(r=>r.document===doc('121'));assert.equal(unverifiedLd.status,'Status SIGEM não confirmado','Em Workflow somente na LD não comprova análise no SIGEM');
+ assert.equal(await page.locator('#count-unresolved').innerText(),'3');
  assert.equal(await page.locator('#count-blocked').innerText(),'1','não alocado com SIGEM não localizado pertence a NÃO INCLUIR');
  assert.equal(await page.evaluate(()=>window.GrconTriageUiApi.snapshot().groupByStatus),true);assert.equal(await page.locator('#count-ready').innerText(),'1');
  await page.locator('[data-filter=pronto]').click();let visible=await page.locator('#results-body').innerText();assert.match(visible,/-123/);assert.doesNotMatch(visible,/-122|-124/);
- await page.locator('[data-filter=nao_localizado]').click();visible=await page.locator('#results-body').innerText();assert.match(visible,/-122/);assert.match(visible,/-124/);assert.doesNotMatch(visible,/-123|-125/);
+ await page.locator('[data-filter=nao_localizado]').click();visible=await page.locator('#results-body').innerText();assert.match(visible,/-121/);assert.match(visible,/-122/);assert.match(visible,/-124/);assert.doesNotMatch(visible,/-123|-125/);
  await page.locator('[data-filter=bloqueado]').click();visible=await page.locator('#results-body').innerText();
  assert.match(visible,/-125/);assert.match(visible,/Não incluir/);assert.match(visible,/Não alocado/i);
  assert.doesNotMatch(visible,/-121|-122|-123|-124/);

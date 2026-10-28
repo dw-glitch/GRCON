@@ -16,6 +16,7 @@ const Workbook = require(path.join(root, "grdt_workbook.js"));
 const ExcelJS = require(path.join(root, "exceljs.min.js"));
 const JSZip = require(path.join(root, "jszip.min.js"));
 const Core = require(path.join(root, "core.js"));
+const SharedQuery = require(path.join(root, "shared_sigem_query_core.js"));
 const XLSX = require(path.join(root, "xlsx.full.min.js"));
 const ReportSummary = require(path.join(root, "report_summary.js"));
 const Requests = require(path.join(root, "requests_core.js"));
@@ -268,6 +269,7 @@ check("Em Workflow na revisão 0 se comporta como Em Análise e não abre a revi
   const index = Core.buildIndex([technical], [workflow]);
   const result = Core.triageOne({ id: "workflow-next-revision", name: `${ntDocument}.pdf` }, index, {
     now: new Date("2026-08-31T12:00:00.000Z"),
+    sigemQueryContext: SharedQuery.context({ records: [{ document: ntDocument, revision: "0", status: "Em Workflow" }] }),
   });
 
   assert.equal(result.decision, Core.DISCARD);
@@ -292,7 +294,7 @@ check("Em Workflow interrompe a progressão de revisões como Em Análise", () =
   const result = Core.triageOne(
     { id: "workflow-sequence", name: `${ntDocument}.pdf` },
     Core.buildIndex([technical], history),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: ["0", "A"].map(revision => ({ document: ntDocument, revision, status: "Em Workflow" })) }) },
   );
 
   assert.equal(result.decision, Core.DISCARD);
@@ -374,7 +376,7 @@ check("status concluídos preservam a revisão 0 do arquivo; Em Workflow segue a
   const workflowResult = Core.triageOne(
     { id: "workflow-equivalente-analise", name: `${ntDocument}.pdf` },
     Core.buildIndex([technical], [workflowHistory]),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: [{ document: ntDocument, revision: "0", status: "Em Workflow" }] }) },
   );
   assert.equal(workflowResult.decision, Core.DISCARD, "Em Workflow");
   assert.equal(workflowResult.revision, "0", "Em Workflow");
@@ -398,7 +400,7 @@ check("Em Análise nunca avança sozinho: para na própria revisão e cai no bal
   const result = Core.triageOne(
     { id: "em-analise-nao-avanca", name: `${ntDocument}.pdf` },
     Core.buildIndex([technical], [history]),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: [{ document: ntDocument, revision: "0", status: "Em Análise" }] }) },
   );
   assert.equal(result.decision, Core.DISCARD);
   assert.equal(result.revision, "0", "não pode avançar para a revisão A sozinho");
@@ -417,7 +419,10 @@ check("Em Análise nunca avança sozinho: para na própria revisão e cai no bal
   const resultadoEncadeado = Core.triageOne(
     { id: "em-analise-apos-avanco", name: `${ntDocument}_A.pdf` },
     Core.buildIndex([technical], encadeado),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: [
+      { document: ntDocument, revision: "0", status: "Recusado" },
+      { document: ntDocument, revision: "A", status: "Em Análise" },
+    ] }) },
   );
   assert.equal(resultadoEncadeado.decision, Core.DISCARD);
   assert.equal(resultadoEncadeado.revision, "A");
@@ -436,7 +441,10 @@ check("Em Análise adota GRDT e data efetiva da revisão realmente analisada, n�
   const result = Core.triageOne(
     { id: "em-analise-evidencia", name: `${ntDocument}_A.pdf` },
     Core.buildIndex([technical], encadeado),
-    {},
+    { sigemQueryContext: SharedQuery.context({ records: [
+      { document: ntDocument, revision: "0", status: "Recusado" },
+      { document: ntDocument, revision: "A", status: "Em Análise" },
+    ] }) },
   );
   assert.equal(result.decision, Core.DISCARD);
   assert.equal(result.revision, "A");
@@ -445,7 +453,8 @@ check("Em Análise adota GRDT e data efetiva da revisão realmente analisada, n�
   assert.ok(result.analysisEvidence, "analysisEvidence precisa ser preenchida quando o documento cai em Em análise");
   assert.equal(result.analysisEvidence.sourceKind, "history");
   assert.ok(result.analysisEvidence.statusSource, "precisa apontar a origem do status na Colar SIGEM");
-  assert.equal(result.analysisEvidence.statusSource.row, 4);
+  assert.equal(result.sigemStatusSource, "shared-general-query", "status confirmado exclusivamente na Consulta Geral");
+  assert.equal(result.analysisEvidence.emissionSource.row, 4, "GRDT/data extraídas da revisão A da LD");
 });
 
 check("status Não Postado mantém a própria revisão 0 para postagem", () => {
@@ -3662,13 +3671,16 @@ await (async () => {
 
   // A mesma LD passando pela triagem: Em Análise para na própria revisão e
   // leva a GRDT e a data da revisão analisada, não a da linha técnica.
-  const emAnalise = Core.triageOne({ id: "ld-em-analise", name: `${P}nt-SPE-AST-320021_A.pdf` }, index, {});
+  const emAnalise = Core.triageOne({ id: "ld-em-analise", name: `${P}nt-SPE-AST-320021_A.pdf` }, index, {
+    sigemQueryContext: SharedQuery.context({ records: [{ document: `${P}nt-SPE-AST-320021`, revision: "A", status: "Em Análise" }] }),
+  });
   assert.equal(emAnalise.decision, Core.DISCARD);
   assert.equal(emAnalise.revision, "A");
   assert.equal(emAnalise.status, "Em Análise");
   assert.equal(emAnalise.grdt, "GRDT-2026-0091");
   assert.ok(emAnalise.analysisEvidence, "a evidência da revisão em análise precisa ser preenchida");
-  assert.equal(emAnalise.analysisEvidence.statusSource.sheet, "Colar SIGEM");
+  assert.equal(emAnalise.sigemStatusSource, "shared-general-query");
+  assert.equal(emAnalise.analysisEvidence.emissionSource.sheet, "Colar SIGEM", "evidência técnica permanece na LD");
   checks.push(nome);
 })();
 

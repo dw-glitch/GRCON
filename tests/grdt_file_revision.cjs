@@ -39,8 +39,10 @@ for (const status of ['Em Análise', 'Em Workflow', 'Sem Comentários', 'Recusad
   assert.equal(row.revisionSuggested, 'A', status);
   assert.equal(row.fileRevision, 'A', status);
   assert.equal(row.egrdt.revision, 'A', status);
-  assert.equal(row.decision, C.DISCARD, status);
-  assert.equal(row.status, status);
+  const legacyAnalysis = C.statusKind(status) === 'analysis';
+  assert.equal(row.decision, legacyAnalysis ? C.REVIEW : C.DISCARD, status);
+  assert.equal(row.status, legacyAnalysis ? 'Status SIGEM não confirmado' : status,
+    'a LD isolada não confirma análise na Consulta Geral');
   assert.equal(row.hardBlock, false, 'marcação manual continua possível');
   assert.equal(row.finalName, `${doc}_A.pdf`);
   assert.match(C.decisionMessage(row).explanation, /revisão A/i);
