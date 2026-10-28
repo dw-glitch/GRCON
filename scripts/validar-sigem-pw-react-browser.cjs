@@ -43,13 +43,13 @@ function writeFixtures() {
   XLSX.utils.book_append_sheet(sigemBook, XLSX.utils.aoa_to_sheet(sigemRows), "Consulta Geral");
   fs.writeFileSync(sigemFile, XLSX.write(sigemBook, { type: "buffer", bookType: "xlsx" }));
 
-  const header = "NumeroDocumentoCliente;RevisaoCompleta;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão;datacriacao";
+  const header = "NumeroDocumentoCliente;RevisaoCompleta;Sigla da Empresa;Revisao;TipoDocumento;TipoDocumentoDesc;Disciplina;DisciplinaDesc;o_statename;Última emissão;datacriacao";
   const rows = [
-    [et("200001"),"0","0","RIR","Relatório","INS","Instrumentação","Cadastrado","Previsto","20/09/2026"],
-    [et("200002"),"0","0","RIR","Relatório","INS","Instrumentação","Liberado","Sim","20/09/2026"],
-    [et("200003"),"0","0","RIR","Relatório","INS","Instrumentação","Cadastrado","Previsto","20/09/2026"],
-    [et("200004"),"0","0","RIR","Relatório","INS","Instrumentação","Liberado","Sim","20/09/2026"],
-    [n1710,"0","0","RL","Relatório","QUA","Qualidade","Liberado","Sim","20/09/2026"],
+    [et("200001"),"0","CSG","0","RIR","Relatório","INS","Instrumentação","Cadastrado","Previsto","20/09/2026"],
+    [et("200002"),"0","CSG","0","RIR","Relatório","INS","Instrumentação","Liberado","Sim","20/09/2026"],
+    [et("200003"),"0","CSG","0","RIR","Relatório","INS","Instrumentação","Cadastrado","Previsto","20/09/2026"],
+    [et("200004"),"0","CSG","0","RIR","Relatório","INS","Instrumentação","Liberado","Sim","20/09/2026"],
+    [n1710,"0","CSG","0","RL","Relatório","QUA","Qualidade","Liberado","Sim","20/09/2026"],
   ];
   fs.writeFileSync(pwFile, [header, ...rows.map((row) => row.join(";"))].join("\n"), "utf8");
   return { ldFile, sigemFile, pwFile };
@@ -166,7 +166,7 @@ async function installRevisionFixture(page, bulkCount = 250) {
     const sigem = [];
     const pw = [];
     const addS = (id, revision, status = "Em Workflow") => sigem.push({ document: sigemDoc(id), revision, status });
-    const addP = (id, revision, state = "Liberado", lastEmission = "Sim") => pw.push({ document: pwDoc(id), revision, revisionComplete: revision, state, lastEmission });
+    const addP = (id, revision, state = "Liberado", lastEmission = "Sim") => pw.push({ document: pwDoc(id), revision, revisionComplete: revision, state, lastEmission, company: "CSG" });
 
     addS("910001", "B"); addP("910001", "B");
     addS("910002", "B"); addP("910002", "A");
@@ -179,7 +179,7 @@ async function installRevisionFixture(page, bulkCount = 250) {
 
     const n1710 = "RL-5290.00-22313-ABC-C1O-777";
     sigem.push({ document: n1710, revision: "0", status: "Postado" });
-    pw.push({ document: n1710, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Sim" });
+    pw.push({ document: n1710, revision: "0", revisionComplete: "0", state: "Liberado", lastEmission: "Sim", company: "CSG" });
 
     for (let index = 0; index < count; index += 1) {
       addS(String(920000 + index).padStart(6, "0"), "B");
@@ -489,13 +489,13 @@ async function waitEvolutionReady(page) {
     const presenceSigem = path.join(fixtureDir, 'SIGEM_presence.xlsx');
     const presenceDoc = et('600001'), otherRevisionDoc = et('600002'), missingDoc = et('600099');
     fs.writeFileSync(presencePw, [
-      'NumeroDocumentoCliente;RevisaoCompleta;o_statename;Última emissão;o_filename',
-      `${presenceDoc};;;;original.pdf`,
-      `${presenceDoc.replaceAll('_','-')};;Cancelado;;copia.docx`,
-      'DOCUMENTO-C1O-EXTERNO;B;Qualquer estado;;externo.pdf',
-      'DOCUMENTO-C1O-EXTERNO;B;Outro estado;;externo2.pdf',
-      `${otherRevisionDoc};A;Estado desconhecido;???;rev-a.pdf`,
-      `${otherRevisionDoc};B;Superado;;rev-b.pdf`,
+      'NumeroDocumentoCliente;RevisaoCompleta;Sigla da Empresa;o_statename;Última emissão;o_filename',
+      `${presenceDoc};;CSG;;;original.pdf`,
+      `${presenceDoc.replaceAll('_','-')};;CSG;Cancelado;;copia.docx`,
+      'DOCUMENTO-C1O-EXTERNO;B;CSG;Qualquer estado;;externo.pdf',
+      'DOCUMENTO-C1O-EXTERNO;B;CSG;Outro estado;;externo2.pdf',
+      `${otherRevisionDoc};A;CSG;Estado desconhecido;???;rev-a.pdf`,
+      `${otherRevisionDoc};B;CSG;Superado;;rev-b.pdf`,
     ].join('\n'));
     const presenceBook=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(presenceBook,XLSX.utils.aoa_to_sheet([
@@ -506,10 +506,10 @@ async function waitEvolutionReady(page) {
     await page.addScriptTag({url:baseUrl+'/import_review.js'});
     await page.evaluate(()=>{GrconImportReview.saveProfile('Perfil anterior',{columns:{document:'NumeroDocumentoCliente',revision:'RevisaoCompleta',state:'o_statename',lastEmission:'Última emissão',documentType:'TipoDocumento'}});GrconImportReview.selectProfile('Perfil anterior');});
     const codeOnlyPath=path.join(fixtureDir,'PW_only_document.csv');
-    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente\nDOCUMENTO-C1O-SO-CODIGO\nDOCUMENTO-FORA-ESCOPO');
+    fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente;Revisao;Sigla da Empresa\nDOCUMENTO-C1O-SO-CODIGO;0;CSG\nDOCUMENTO-FORA-ESCOPO;0;ABC');
     await importFile(page,'#spw-pw-file',codeOnlyPath);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),1,'perfil anterior não exige campos opcionais ausentes');
-    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),1,'código sem C1O fica separado e não entra na comparação');
+    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),1,'siglas de outras empresas ficam separadas e não entram na comparação');
     await page.evaluate(()=>GrconImportReview.selectProfile(''));
     await importFile(page,'#spw-pw-file',presencePw);
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),4);
@@ -927,7 +927,7 @@ async function waitEvolutionReady(page) {
       const original = window.GrconSigemPwRevision;
       const dashboard = window.GrconSigemPwDashboard;
       const s = (id, revision) => ({ document: "C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-" + id, revision, status: "Postado" });
-      const p = (id, revision) => ({ document: "C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-" + id, revision, revisionComplete: revision, state: "Liberado", lastEmission: "Sim" });
+      const p = (id, revision) => ({ document: "C1O-RNEST-U32-3.1.1.1-INS-RIR-PI-" + id, revision, revisionComplete: revision, state: "Liberado", lastEmission: "Sim", company: "CSG" });
       const model1 = dashboard.createModel([s("930001", "A")], [p("930001", "A")]);
       const model2 = dashboard.createModel([s("930002", "B")], [p("930002", "B")]);
       const analysis1 = original.analyze(model1);
@@ -1671,7 +1671,7 @@ async function waitEvolutionReady(page) {
       const management = window.GrconSigemPwHistoryManagement;
       const ldRecords = window.GrconSigemPwDashboardUi.state.ld.records;
       const sigem = Array.from({ length: 20000 }, (_, i) => ({ document: `C1O_RNEST_U32_3.1.1.1_INS_RIR_PI-${600000 + i}`, revision: "0", status: "Postado", sourceRow: i + 2 }));
-      const pw = sigem.map(row => ({ document: row.document.replaceAll("_", "-"), revision: "0", revisionComplete: "0", state: "Cadastrado", lastEmission: "Previsto", sourceRow: row.sourceRow }));
+      const pw = sigem.map(row => ({ document: row.document.replaceAll("_", "-"), revision: "0", revisionComplete: "0", state: "Cadastrado", lastEmission: "Previsto", company: "CSG", sourceRow: row.sourceRow }));
       const nextSigem = [...sigem, ...sigem.slice(0, 500).map((row, i) => ({ ...row, revision: "A", sourceRow: 20002 + i }))];
       const nextPw = [...pw, ...pw.slice(0, 500).map((row, i) => ({ ...row, revision: "A", revisionComplete: "A", state: "Liberado", lastEmission: "Sim", sourceRow: 20002 + i }))];
       const ids = [];
