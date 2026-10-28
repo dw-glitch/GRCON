@@ -10,6 +10,21 @@ O Worker `cloudflare/worker.mjs` preserva o endpoint `/api/egrdt-teams-notificat
 
 ## Build e validação
 
+### Workers Builds nativo
+
+No painel de `grcon-cloudflare`, os comandos existentes podem permanecer:
+
+- Build: `npm run build`
+- Deploy: `npx wrangler deploy`
+
+O lifecycle `postbuild` detecta `WORKERS_CI=1`, disponibilizado pelo Workers Builds, e executa o empacotamento e a verificação completa de `dist-cloudflare/` antes de permitir o deploy. Fora desse ambiente, o lifecycle não gera nem altera esse pacote; os workflows existentes continuam a empacotar explicitamente. Qualquer falha no empacotamento/validação interrompe o build.
+
+`WORKERS_CI_COMMIT_SHA` e `WORKERS_CI_BUILD_UUID` identificam a versão publicada no `deployment-meta.json`; os overrides explícitos e as variáveis do GitHub continuam aceitos. O pacote não é commitado. Não alterar `assets.directory` para `react-dist`: o GRCON também precisa de arquivos legados, Workers, catálogos e demais assets.
+
+O log de 28/10/2026 às 10:06 UTC comprovou que o build React terminou, mas faltou o empacotamento: `assets.directory` apontava para `dist-cloudflare` inexistente. Esse erro antecede a publicação e não comprova falha de token ou existência/ausência de bucket.
+
+### Verificação local e GitHub Actions
+
 ```bash
 npm ci --ignore-scripts
 npm run verify
