@@ -62,6 +62,17 @@ export const service={
   if(official){if(state.progress!==state.total)throw Error('Conclua a análise antes de gerar o pacote oficial.');const ui=await generator();files=await ui.generateAudited(state.rows.filter((_,i)=>state.selected.includes(i)),state.events,state.context.versions);current(t);}
   const bytes=await compute('export',{...state.context,rows:state.rows,events:state.events,history:state.context.history|| (state.history.length?state.history:state.rows.flatMap(r=>r.history||[])),files});current(t);save(bytes,'Auditoria_Alocacao_GRCON.zip');
  });},
+ async revisedAllocation(file:File){return task(async()=>{const t=epoch;
+  if(!state.rows.length||state.progress!==state.total)throw Error('Conclua a auditoria antes de corrigir o modelo oficial.');
+  if(state.context.inputModel!=='official-16'||state.context.inputSheet!=='GERAL'||!state.context.sourceHash)throw Error('A cópia corrigida exige importação do modelo oficial GERAL com origem rastreável.');
+  if(!file||file.name!==state.context.inputFile)throw Error('Selecione a mesma alocação original auditada.');
+  const events=g.GrconAllocationAuditorCore.approvedChanges(state.events).filter((e:Data)=>['workflow','databook','N1','N2','N3','N4','N5','N6'].includes(e.field));
+  if(!events.length)throw Error('Aprove ao menos uma correção de Workflow, Data Book ou N1–N6 com evidência antes de gerar a cópia.');
+  const result=await compute('revise-allocation',{file,events,rows:state.rows,sourceHash:state.context.sourceHash,contract:cloud().membership.contract_id});current(t);
+  const name=file.name.replace(/\.xlsx$/i,'')+'_REVISADA_GRCON.xlsx';save(result.bytes,name);
+  emit({message:'Cópia oficial revisada gerada: '+result.changed+' célula(s) autorizada(s), demais células verificadas. Arquivo original e LD permanecem intactos.'});
+  return result;
+ });},
  async revisedLd(file:File){return task(async()=>{const t=epoch,ui=await generator();const events=g.GrconAllocationAuditorCore.approvedChanges(state.events).filter((e:Data)=>e.field==='title');if(!events.length)throw Error('Aprove uma proposta de título primeiro.');const result=await ui.reviseAuditLd(file,state.rows,events);current(t);save(result.buffer,result.fileName);emit({message:`Cópia revisada gerada; ${result.count} títulos alterados e preservação verificada.`});});},
  async ai(index:number){return task(async()=>{const c=requireSession(),t=epoch,r=state.rows[index];if(r.ai)return;if(!r.findings.length)throw Error('Não há apontamentos para esta consulta.');const response=await fetch('/api/document-vault/allocation-audit-ai',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+c.session.access_token},body:JSON.stringify({workspaceId:c.membership.workspace_id,document:r.document,title:r.title,findings:r.findings.slice(0,8).map((f:Data,i:number)=>({id:'finding:'+i,field:f.field,message:f.message,evidence:f.evidence.slice(0,2)}))})});const d=await response.json();current(t);if(!response.ok)throw Error(d.message||'IA indisponível.');const rows=state.rows.slice();rows[index]={...r,ai:d};emit({rows});});},clear:reset,
 };
