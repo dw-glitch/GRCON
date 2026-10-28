@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-28",
+  "status": "preview-not-deployed",
+  "base": "dbe94f99229e792272ed5d92938dcb09d27190e9",
+  "verify": {
+    "command": "npm run verify",
+    "exitCode": 0
+  },
+  "cloudflarePackage": {
+    "files": 338,
+    "validated": true
+  },
+  "database": {
+    "localChecks": 24,
+    "remoteApplied": false,
+    "error": "Invalid or expired requestState"
+  },
+  "browser": {
+    "browser": "153.0.8010.0",
+    "realWorkers": true,
+    "realMascotRuntime": true,
+    "multiAllocation": true,
+    "documents": 2,
+    "reportSheets": [
+      "RESUMO",
+      "DETALHAMENTO"
+    ],
+    "closeReopen": true,
+    "checkpointCount": 400,
+    "checkpointResume": true,
+    "contextReset": true,
+    "reducedMotion": true,
+    "widths": [
+      1280,
+      1440
+    ],
+    "pageErrors": []
+  },
+  "realSample": {
+    "allocations": [
+      "0353",
+      "0369"
+    ],
+    "documents": 53,
+    "automaticCorrections": 0,
+    "normativeHomologation": false
+  },
+  "precision": null,
+  "falsePositives": null,
+  "falseNegatives": null,
+  "automaticCorrectionPrecision": null
+}

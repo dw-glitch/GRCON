@@ -90,26 +90,31 @@ export const service={
   });
  },
  async importAuditLd(files:File[]){return await this.importSource('ld',files);},
- async auditCurrent(){
+ assistantEnabled(){return globals.GRCON_FEATURES?.allocationAuditAssistant===true||cloud()?.contracts?.some((c:Data)=>c.id===cloud()?.membership?.contract_id&&c.settings?.enabledModules?.allocationAuditAssistant===true);},
+ async showAssistant(){await globals.GRCONModuleLoader.ensure('allocation-auditor');globals.GrconAllocationAuditorUi.showAssistant();},
+ async auditCurrent(assistantUi=false){
   const rows=state.rows.filter(r=>r.selected);if(!rows.length)throw Error('Selecione documentos para auditar.');
-  const context=await this.auditContext();await globals.GRCONModuleLoader.ensureModule('allocation-auditor');
-  await globals.GrconAllocationAuditorUi.open({...context,rows});
+  const context=await this.auditContext();await globals.GRCONModuleLoader[assistantUi?'ensure':'ensureModule']('allocation-auditor');
+  await globals.GrconAllocationAuditorUi.open({...context,rows});if(assistantUi)globals.GrconAllocationAuditorUi.showAssistant();
  },
  async auditSavedRun(run:Data){
   const context=await this.auditContext();const ticket=epoch;const saved=await rpc('run-detail',{id:run.id});current(ticket);
   const rows=(saved.documents||[]).map((d:Data)=>({document:d.document,revision:d.revision,title:d.title,record:{},output:{discipline:d.discipline,workflow:d.workflow,databook:d.databook,levels:d.levels},identity:{discipline:d.discipline,eap:d.eap}}));
-  await globals.GRCONModuleLoader.ensureModule('allocation-auditor');current(ticket);
-  await globals.GrconAllocationAuditorUi.open({...context,rows,allocation:saved.allocation_code,sourceVersions:saved.base_versions});
+  await globals.GRCONModuleLoader[this.assistantEnabled()?'ensure':'ensureModule']('allocation-auditor');current(ticket);
+  await globals.GrconAllocationAuditorUi.open({...context,rows,allocation:saved.allocation_code,sourceVersions:saved.base_versions});if(this.assistantEnabled())globals.GrconAllocationAuditorUi.showAssistant();
  },
  async generateAudited(rows:Data[],events:Data[],versions:Data){
   await this.auditContext();if(JSON.stringify(versions)!==JSON.stringify(state.versions))throw Error('As bases mudaram. Reanalise antes de gerar.');
   await this.analyze('',rows.map(r=>({document:r.document,revision:r.revision,title:r.title})));
+  if(state.rows.length!==rows.length)throw Error('O Gerador alterou a quantidade de ocorrências. Separe os lotes antes de continuar.');
   // Every accepted title/path correction remains explicit in the auditor report.
   for(let i=0;i<state.rows.length;i++){
-   const original=rows[i],approved=globals.GrconAllocationAuditorCore.approvedChanges(events).filter((e:Data)=>e.lineage===original.lineage);
+   const matches=rows.filter(r=>r.document===state.rows[i].document&&r.revision===state.rows[i].revision);if(matches.length!==1)throw Error('Origem ambígua ou revisão diferente ao gerar a alocação.');
+   const original=matches[0],approved=globals.GrconAllocationAuditorCore.approvedChanges(events).filter((e:Data)=>e.lineage===original.lineage);
    const latest=(field:string)=>approved.filter((e:Data)=>e.field===field).at(-1)?.after;
    const title=latest('title')??original.title,path=latest('databook')??original.databook;
-   if(title||path)await this.review(i,{title:title||state.rows[i].title,path:path||state.rows[i].output.databook,discipline:latest('discipline')||state.rows[i].identity.discipline});
+   if(title||path)await this.review(i,{title:title||state.rows[i].title,path:path||state.rows[i].output.databook,discipline:latest('discipline')||state.rows[i].identity.discipline,workflow:latest('workflow')||original.workflow||state.rows[i].output.workflow});
+   const revised=state.rows.slice();revised[i]={...revised[i],output:{...revised[i].output,levels:revised[i].output.levels.map((v:string,n:number)=>latest('N'+(n+1))??v)}};emit({rows:revised});
   }
   await this.generate('single');return state.files;
  },

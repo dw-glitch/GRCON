@@ -118,3 +118,7 @@ Rollback: o código pode ser revertido pelo commit de integração ou uma versã
 4. Confira achados e comentários. Aprove, rejeite ou justifique cada correção; não considere reapresentação como resolução.
 5. Baixe o pacote de correções e, quando houver origem exata e títulos aprovados, uma cópia revisada da LD. Corrija a fonte oficial conforme o procedimento da equipe.
 6. Gere o pacote pelo Gerador e submeta à conferência final. Pendências e exceções permanecem no relatório.
+
+## Evolução conversacional 2.0
+
+A entrega inicial opt-in, seus testes e limites estão descritos em [allocation-assistant-2-implementation.md](allocation-assistant-2-implementation.md). O fluxo antigo permanece disponível até homologação. A nova migration e a experiência não devem ser confundidas com a publicação histórica descrita acima.

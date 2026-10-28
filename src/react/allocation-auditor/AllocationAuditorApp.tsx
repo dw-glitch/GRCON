@@ -1,4 +1,5 @@
 import {useEffect,useMemo,useState,useSyncExternalStore} from 'react';
+import {AllocationAssistant} from './AllocationAssistant';
 import {service,type Data} from './service';
 export function AllocationAuditorApp(){
  const s=useSyncExternalStore(service.subscribe,service.snapshot),[query,setQuery]=useState(''),[catalogQuery,setCatalogQuery]=useState(''),[exact,setExact]=useState(false),[severity,setSeverity]=useState(''),[category,setCategory]=useState(''),[page,setPage]=useState(0),[detail,setDetail]=useState<number|null>(null),[file,setFile]=useState<File|null>(null),[sheets,setSheets]=useState<string[]>([]),[sheetDiagnostics,setSheetDiagnostics]=useState<Data[]>([]),[sheet,setSheet]=useState(''),[kind,setKind]=useState<'allocation'|'history'>('allocation'),[allocation,setAllocation]=useState(''),[savedAllocation,setSavedAllocation]=useState(''),[revision,setRevision]=useState('R'),[appEvidence,setAppEvidence]=useState(''),[value,setValue]=useState(''),[field,setField]=useState('title'),[decision,setDecision]=useState('proposed'),[reviewState,setReviewState]=useState('Correção proposta'),[justification,setJustification]=useState(''),[evidence,setEvidence]=useState(''),[error,setError]=useState('');
@@ -10,7 +11,7 @@ export function AllocationAuditorApp(){
  useEffect(()=>{if(detail!==null&&typeof window.requestAnimationFrame==='function')window.requestAnimationFrame(()=>{document.querySelector('.aa-detail')?.scrollIntoView?.({behavior:'smooth',block:'start'});});},[detail]);
  const rowValue=(r:Data,f:string)=>/^N[1-6]$/.test(f)?String(r.levels?.[Number(f.slice(1))-1]||''):String(r[f]||'');
  const choose=(i:number)=>{setDetail(i);setField('title');setValue(s.rows[i].title||'');setJustification('');setEvidence('');setReviewState('Correção proposta');setDecision('proposed');};
- return <div className="aa-app ag-app">
+ return <div className="aa-app ag-app"><AllocationAssistant/>
   <header className="ag-heading aa-hero"><div><span className="ag-kicker">QUALIDADE DOCUMENTAL / GRCON</span><h2>Auditor de Alocações</h2><p>Importe a alocação, confira os apontamentos e prepare uma cópia revisada.</p><small>Contrato ativo: {s.context.contract||"sessão"} · As fontes e versões constam do relatório de auditoria.</small></div><span className="aa-hero-icon" aria-hidden="true">✓</span></header>
   {(s.error||error)&&<p className="ag-notice ag-error" role="alert">{error||s.error}</p>}{s.message&&<p className="ag-notice" role="status">{s.message}</p>}
   <nav className="aa-steps" aria-label="Etapas da auditoria"><span className="aa-step aa-step-active">01 · Carregar</span><span className={s.records.length?"aa-step aa-step-active":"aa-step"}>02 · Diagnosticar</span><span className={s.rows.length?"aa-step aa-step-active":"aa-step"}>03 · Revisar e exportar</span></nav>
