@@ -2,7 +2,7 @@
 
 Referência: 28/10/2026. Base inspecionada: `dw-glitch/GRCON`, commit `b13640ec79b43d36574850bb0a1bddd2eebc2999`.
 
-**Estado: implementação funcional integrada à main pelo PR #322 (commit db1867950f14faa9fe47f8ffeba4633978debbec) e publicação comprovada em 28/10/2026 no commit 7fd267d554febb804afe73f3021574d4bd09c110. A homologação técnica e o fluxo autenticado de produção permanecem pendentes.** A estrutura de persistência foi aplicada ao Supabase. Não houve inserção automática do acervo operacional, alteração de LD oficial ou alteração dos comentários da Central.
+**Estado: implementação funcional integrada à main pelo PR #322 (commit db1867950f14faa9fe47f8ffeba4633978debbec) e publicação comprovada em 28/10/2026 no commit 7fd267d554febb804afe73f3021574d4bd09c110. A homologação técnica permanece pendente. Um fluxo autenticado com perfil proprietário foi exercitado em produção, conforme os limites abaixo.** A estrutura de persistência foi aplicada ao Supabase. Não houve inserção automática do acervo operacional, alteração de LD oficial ou alteração dos comentários da Central.
 
 ## Integração entregue
 
@@ -71,18 +71,18 @@ A partição candidata contém 9.189 registros de desenvolvimento, 3.069 de vali
 
 | Fase | Estado verificável |
 |---|---|
-| 1 — diagnóstico | Código, arquitetura, produção por metadados e 28 fontes inventariados; inspeção autenticada da produção pendente. |
+| 1 — diagnóstico | Código, arquitetura, produção e 28 fontes inventariados; inspeção autenticada com proprietário em um contrato realizada. |
 | 2 — inteligência fiscal | Extração integral da Central e catálogo implementados; interpretação e rotulagem humanas ainda necessárias. |
 | 3 — normas | Motor e reaproveitamento de catálogos testados; aplicabilidade e revisão integral dos anexos não homologadas. |
 | 4 — TAG/EAP/Data Book | Comparações implementadas; comprovação técnica da EAP e adequação de destinos pendentes. |
 | 5 — IA | Rota, limites e esquema testados com binding controlado; teste geral de Workers AI com inferência real sintética aprovado. Análise semântica autenticada do Auditor e sua qualidade permanecem não homologadas. |
 | 6 — reapresentações | Associação e estados auditáveis implementados; aliases entre códigos alterados dependem de confirmação. |
 | 7 — correções | Revisão, pacote e títulos em cópia da LD implementados; edição preservada de outros campos não liberada. |
-| 8 — Gerador | Integração e exportadores reutilizados; fluxo completo em produção pendente. |
-| 9 — React | Integração e teste DOM funcionais; fluxo sintético em Chromium real validado; fluxo autenticado em produção pendente. |
+| 8 — Gerador | Alocação existente do Gerador aberta no Auditor em produção; geração de novo pacote oficial não exercitada nesse teste. |
+| 9 — React | Fluxos DOM/Chromium sintéticos e amostra real com proprietário aprovados para navegação, análise, detalhes, gravação e reabertura. Outros perfis e troca entre contratos não exercitados em produção. |
 | 10 — estabilidade/segurança | Lotes, escopo, validação, cache e idempotência testados; retomada após fechar o navegador pendente. |
 | 11 — homologação | Testes técnicos e benchmark concluídos; conjunto rotulado independente e métricas de qualidade pendentes. |
-| 12 — publicação | Banco aplicado; pacote, verificação de bucket privado, publicação e conferência de commit/assets aprovados no workflow 40698617954. Produção confirmou o mesmo commit. Fluxo autenticado completo e homologação técnica permanecem pendentes. |
+| 12 — publicação | Banco aplicado; pacote, verificação de bucket privado, publicação e conferência de commit/assets aprovados no workflow 40698617954. Produção confirmou o mesmo commit. Amostra autenticada exercitada; demais perfis, contratos, exportação oficial e homologação técnica permanecem pendentes. |
 
 ## Publicação e custos
 
@@ -98,7 +98,9 @@ A pendência de infraestrutura foi encerrada em 28/10/2026. As permissões do Ac
 
 Os logs de publicação identificam a versão Worker `5503d2df-e360-4001-9044-3cd98fb2a8ab`, às 13:42:44 UTC (10:42:44 de Brasília). A conferência pós-deploy confirmou o commit exato, os quatro assets do Auditor, configuração do Cofre e HTTP 401 no catálogo sem sessão; o script também verifica que a rota semântica do Auditor recusa acesso anônimo.
 
-A inspeção direta de `/deployment-meta.json` confirmou o mesmo commit, provider `cloudflare`, build `74e1eaed-8c24-411d-bc35-1317a5418f2d` e geração às 13:44:32 UTC. Esse identificador pertence aos metadados servidos; não é apresentado como ID do workflow ou versão Worker. A página inicial está acessível e exige e-mail/senha. Sem sessão do GRCON neste navegador, importação, revisão, persistência e exportação autenticadas em produção não foram exercitadas. Os testes sintéticos e de CI não substituem essa validação nem a homologação normativa.
+A inspeção direta de `/deployment-meta.json` confirmou o mesmo commit, provider `cloudflare`, build `74e1eaed-8c24-411d-bc35-1317a5418f2d` e geração às 13:44:32 UTC. Esse identificador pertence aos metadados servidos; não é apresentado como ID do workflow ou versão Worker. A página inicial está acessível e exige e-mail/senha. Após login seguro, o perfil proprietário abriu o Auditor, carregou uma alocação existente do Gerador, processou quatro documentos, consultou detalhes/comentários fiscais e salvou/reabriu uma análise no contrato ativo. Os quatro resultados permaneceram inconclusivos; nenhuma correção foi aprovada, nenhum pacote oficial novo foi gerado e as fontes originais não foram alteradas. O download ZIP foi acionado, mas o arquivo não ficou disponível para inspeção dos bytes nesta sessão; não se declara integridade pós-download comprovada. Outros perfis, troca entre contratos, importação de novo arquivo e cópia revisada de LD não foram exercitados em produção.
+
+A consulta semântica autenticada de um documento acionou o fallback de resposta não verificável. O PR #329 solicita JSON Schema nativo e acrescenta diagnósticos seguros; a causa específica da resposta anterior não foi registrada pelo tratamento genérico e não é presumida. O resultado real dessa correção deve ser conferido após o deploy. Testes sintéticos/CI e a amostra autenticada não substituem homologação normativa nem métricas independentes.
 
 Rollback: o código pode ser revertido pelo commit de integração ou uma versão anterior do Worker; os registros históricos e originais do R2 não são alterados por esta entrega. As migrations devem permanecer quando houver análises salvas; o SQL de rollback recusa apagá-las nesse caso.
 
