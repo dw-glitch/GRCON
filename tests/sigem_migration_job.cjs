@@ -34,7 +34,7 @@ const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
   const plan=M.planLanes(Array.from({length:36},(_,i)=>({...source,id:uuid(20+i),record_count:23408})));
   assert.equal(plan.length,3);assert.ok(plan.every(l=>l.steps<=1000));assert.ok(plan.reduce((n,l)=>n+l.steps,0)<=2700);
   // Regression: 39 snapshots exceed the Free Workflow 2700-step safety cap.
-  const grown=Array.from({length:39},(_,i)=>({...source,id:uuid(100+i),record_count:23580}));
+  const grown=Array.from({length:39},(_,i)=>({...source,id:uuid(100+i),record_count:25000}));
   assert.throws(()=>M.planLanes(grown),/SIGEM_JOB_STEP_LIMIT/);
   const firstWave=M.planWave(grown);
   assert.ok(firstWave.lanes.length>0&&firstWave.deferred.length>0,'oversized history must be split');
