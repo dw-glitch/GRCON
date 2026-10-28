@@ -24,12 +24,12 @@ const quality = [{ document: "CE-5290.00-22313-856-C1O-001", discipline: "QUA" }
 const universe = Evo.buildLdUniverse([], [], { qualityRecords: quality });
 const workerUniverse = vm.runInContext("GrconSigemPwEvolution.buildLdUniverse([], [], {qualityRecords:" + JSON.stringify(quality) + "})", context);
 const makeBase = (records, importedAt) => ({ meta: { fileName: "fixture.csv", importedAt, sourceRowCount: records.length }, records });
-const before = makeBase([{ document: doc, revision: "0", lastEmission: "Previsto" }], "2026-10-01T12:00:00Z");
+const before = makeBase([{ document: doc, revision: "0", lastEmission: "Previsto", company: "CSG" }], "2026-10-01T12:00:00Z");
 const after = makeBase([
-  { document: doc.replace("_PI-", "_nt-PI-"), revision: "0", lastEmission: "Sim", sourceRow: 2 },
-  { document: doc.replaceAll("_", "-"), revision: "0", lastEmission: "Previsto", sourceRow: 3 },
-  { document: quality[0].document, revision: "A", lastEmission: "Não", sourceRow: 4 },
-  { document: outOfScope, revision: "0", lastEmission: "Sim", sourceRow: 5 },
+  { document: doc.replace("_PI-", "_nt-PI-"), revision: "0", lastEmission: "Sim", company: "CSG", sourceRow: 2 },
+  { document: doc.replaceAll("_", "-"), revision: "0", lastEmission: "Previsto", company: "CSG", sourceRow: 3 },
+  { document: quality[0].document, revision: "A", lastEmission: "Não", company: "CSG", sourceRow: 4 },
+  { document: outOfScope, revision: "0", lastEmission: "Sim", company: "CSG", sourceRow: 5 },
 ], "2026-10-05T12:00:00Z");
 const prepared = [before, after].map((base, i) => {
   const options = { snapshotId: "fixture-" + i };
