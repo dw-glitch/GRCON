@@ -30,8 +30,8 @@ const sigem = [
   { document: et, revision: "0", status: "Postado", sourceRow: 5 },
 ];
 const pw = [
-  { document: n1710, revision: "0", lastEmission: "Previsto" },
-  { document: et, revision: "0", lastEmission: "Sim" },
+  { document: n1710, revision: "0", lastEmission: "Previsto", company: "CSG" },
+  { document: et, revision: "0", lastEmission: "Sim", company: "CSG" },
 ];
 const model = Core.createModel(sigem, pw, []);
 assert.equal(model.normalizedSigem.filter(row => row.documentClass === "CV").length, 3);
@@ -56,7 +56,7 @@ assert.equal(revZero.summary.sigem, 4);
 assert.equal(Revision.analyze(model).rows.some(row => row.documentClass === "CV"), false, "CV não é atraso de revisão no PW");
 
 const withCvInPw = Core.aggregateModel(Core.createModel(sigem, [
-  ...pw, { document: cv, revision: "0", lastEmission: "Sim" }
+  ...pw, { document: cv, revision: "0", lastEmission: "Sim", company: "CSG" }
 ], []), {}, {revisionScope: "all"});
 assert.equal(withCvInPw.summary.cvNotApplicable, 2, "CV sem mesma revisão PW continua sem pendência; emissão já registrada é respeitada");
 assert.equal(withCvInPw.summary.pwEmitted, 2);
@@ -73,8 +73,8 @@ const explicitDesc = Core.createModel([
 assert.equal(explicitDesc.normalizedSigem[0].documentClass, "CV");
 
 const pwBase = Core.sanitizePwBase({
-  meta: { fileName: "pw.csv", importedAt: "2026-10-23T12:00:00Z" },
-  records: [...pw, { document: cv, revision: "A", lastEmission: "Previsto" }],
+  meta: { fileName: "pw.csv", companyColumn: "C", importedAt: "2026-10-23T12:00:00Z" },
+  records: [...pw, { document: cv, revision: "A", lastEmission: "Previsto", company: "CSG" }],
 }, []);
 assert.equal(pwBase.meta.scopeVersion, Core.PW_SCOPE_VERSION);
 assert.equal(pwBase.records.find(row=>row.document===cv).documentClass, "CV");
