@@ -832,6 +832,9 @@
     const enforceLd = arguments.length >= 3;
     const requireN1710Ld = Boolean(settings && settings.requireN1710Ld);
     const ldAvailable = Boolean(settings && settings.ldAvailable && Array.isArray(ldRecords) && ldRecords.length);
+    // Ausência de uma fonte nunca comprova ausência documental.
+    const sigemAvailable = !requireN1710Ld || settings.sigemAvailable !== false;
+    const pwAvailable = !requireN1710Ld || settings.pwAvailable !== false;
     const ldUniverse = buildLdUniverse(ldRecords || []);
     const sigemScope = { eligible: Array.isArray(sigemRecords) ? sigemRecords : [], outOfScope: [] };
     const pwScope = partitionPwCompanyRecords(pwRecords);
@@ -850,7 +853,7 @@
     const sigemEntries = buildEntryMap(normalizedSigem, "sigem");
     const pwEntries = buildEntryMap(normalizedPw, "pw");
     return {
-      ldUniverse, ldAvailable, requireN1710Ld,
+      ldUniverse, ldAvailable, sigemAvailable, pwAvailable, requireN1710Ld,
       excludedSigemN1710, excludedPwN1710, n1710Candidates: candidates,
       sourceSigemEntries: excludedSigemN1710.length || excludedPwN1710.length ? buildEntryMap(sourceSigem, "sigem") : undefined,
       sourcePwEntries: excludedSigemN1710.length || excludedPwN1710.length ? buildEntryMap(sourcePw, "pw") : undefined,
@@ -1080,6 +1083,11 @@
     const pwAll = scopeRevisionMap(pwSource, revisionScope, sigemAll);
     const sigem = filterMap(sigemAll, "sigem", filters);
     const pw = filterMap(pwAll, "pw", filters);
+    if (source.requireN1710Ld && source.pwAvailable === false) {
+      for (const row of lists.all) {
+        if (!row.inPw) row.pwRegistrationStatus = "BASE PW NÃO CARREGADA — INCONCLUSIVO";
+      }
+    }
     const sigemKeys = new Set(sigem.keys());
     const pwKeys = new Set(pw.keys());
     const emittedKeys = new Set([...pw].filter(([, document]) => document.emitted).map(([key]) => key));
@@ -1118,7 +1126,7 @@
     const sigemAllCodes = new Set([
       ...(source.normalizedSigem || []), ...(source.excludedSigemN1710 || []),
     ].map((record) => record.documentKey));
-    lists.ldWithoutSigem = source.ldAvailable
+    lists.ldWithoutSigem = source.ldAvailable && source.sigemAvailable
       ? [...(source.ldUniverse || new Map()).values()]
         .filter((record) => !sigemAllCodes.has(record.documentKey))
         .map((record) => ({
