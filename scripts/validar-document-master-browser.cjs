@@ -3,7 +3,15 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {chromium}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES?path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES,'playwright'):'playwright');
 const root=path.resolve(__dirname,'..');
 (async()=>{
- const server=http.createServer((req,res)=>{const file=path.join(root,new URL(req.url,'http://localhost').pathname==='/'?'index.html':decodeURIComponent(new URL(req.url,'http://localhost').pathname).slice(1));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}try{const type={'.js':'application/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.json':'application/json'}[path.extname(file)]||'application/octet-stream';const bytes=fs.readFileSync(file);res.writeHead(200,{'content-type':type});res.end(bytes);}catch(_){res.writeHead(404).end();}});
+ const server=http.createServer((req,res)=>{const file=path.join(root,new URL(req.url,'http://localhost').pathname==='/'?'index.html':decodeURIComponent(new URL(req.url,'http://localhost').pathname).slice(1));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}try{const type={'.js':'application/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.json':'application/json'}[path.extname(file)]||'application/octet-stream';let bytes=fs.readFileSync(file);
+ if(path.basename(file)==='document_vault_app.js'){
+  // QA-only legacy upload fixture; production keeps storage controls disabled.
+  const source=bytes.toString('utf8');
+  const flag='const storageFeatures = root.GrconStorageFeatures || Object.freeze({ showStorageUI: false, enableAutomaticUpload: false, enableManualUpload: false, enableAutomaticLookup: false });';
+  assert.ok(source.includes(flag),'Vault master QA fixture requires the storage feature guard.');
+  bytes=Buffer.from(source.replace(flag,'const storageFeatures = Object.freeze({ showStorageUI: true, enableAutomaticUpload: true, enableManualUpload: true, enableAutomaticLookup: true });'));
+ }
+ res.writeHead(200,{'content-type':type});res.end(bytes);}catch(_){res.writeHead(404).end();}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));server.unref();
  const browser=await chromium.launch({headless:true,args:['--no-sandbox'],executablePath:process.env.GRCON_CHROMIUM_PATH||process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH});
  try{
