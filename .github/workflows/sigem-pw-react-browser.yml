@@ -113,8 +113,12 @@ jobs:
 
       - name: Instalar Chromium
         run: |
-          npm install --no-save --package-lock=false playwright@1.55.0
-          npx playwright install --with-deps chromium
+          # Isolar Playwright das dependências do GRCON: npm install --no-save na
+          # raiz pode tentar atualizar Rollup e falhar ao buscar tarball inexistente.
+          mkdir -p "$RUNNER_TEMP/grcon-playwright"
+          npm install --prefix "$RUNNER_TEMP/grcon-playwright" --no-save --package-lock=false --ignore-scripts playwright@1.55.0
+          echo "NODE_PATH=$RUNNER_TEMP/grcon-playwright/node_modules" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/grcon-playwright/node_modules/.bin/playwright" install --with-deps chromium
 
       - name: Chromium — PW compartilhado em duas sessões
         run: node scripts/validar-shared-pw-browser.cjs

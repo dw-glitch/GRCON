@@ -509,7 +509,21 @@ async function waitEvolutionReady(page) {
     const codeOnlyPath=path.join(fixtureDir,'PW_only_document.csv');
     fs.writeFileSync(codeOnlyPath,'NumeroDocumentoCliente;Revisao;Sigla da Empresa\nDOCUMENTO-C1O-SO-CODIGO;0;CSG\nDOCUMENTO-FORA-ESCOPO;0;ABC');
     await importFile(page,'#spw-pw-file',codeOnlyPath);
-    assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.result.summary.pwRegistered),1,'perfil anterior não exige campos opcionais ausentes');
+    const importReview = page.locator('#grcon-import-review');
+    if (await importReview.isVisible().catch(() => false)) {
+      await importReview.locator('button[value=apply]').click();
+    }
+    await page.waitForFunction(()=>GrconSigemPwDashboardUi.state.pw.meta?.fileName==='PW_only_document.csv'
+      && !GrconSigemPwDashboardUi.state.busy, null, {timeout:15000});
+    const codeOnlyDiagnostics = await page.evaluate(()=>({
+      registered:GrconSigemPwDashboardUi.state.result?.summary?.pwRegistered,
+      pwFile:GrconSigemPwDashboardUi.state.pw.meta?.fileName,
+      records:GrconSigemPwDashboardUi.state.pw.records.map(r=>({document:r.document,company:r.company,documentClass:r.documentClass})),
+      filters:GrconSigemPwDashboardUi.state.filters,
+      sourceScope:GrconSigemPwDashboardUi.state.model?.comparisonScope,
+      readiness:GrconSigemPwDashboardUi.state.readiness?.failedChecks,
+    }));
+    assert.equal(codeOnlyDiagnostics.registered,1,'perfil anterior não exige campos opcionais ausentes: '+JSON.stringify(codeOnlyDiagnostics));
     assert.equal(await page.evaluate(()=>GrconSigemPwDashboardUi.state.model.comparisonScope.pwOutOfScope),1,'siglas de outras empresas ficam separadas e não entram na comparação');
     await page.evaluate(()=>GrconImportReview.selectProfile(''));
     await importFile(page,'#spw-pw-file',presencePw);

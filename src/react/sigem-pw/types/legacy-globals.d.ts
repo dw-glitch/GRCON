@@ -52,7 +52,7 @@ interface SigemPwDashboardCoreApi {
   parsePwCsv(source: string, meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   parseLdMatrix(matrix: string[][], meta: Record<string, unknown>): { meta: SigemPwBaseMeta; records: SigemPwRecord[] };
   sanitizePwBase(base: SigemPwBase, ld: SigemPwBase | SigemPwRecord[]): SigemPwBase;
-  createModel(sigem: SigemPwRecord[], pw: SigemPwRecord[], ld: SigemPwRecord[]): SigemPwModel;
+  createModel(sigem: SigemPwRecord[], pw: SigemPwRecord[], ld: SigemPwRecord[], settings?: { requireN1710Ld?: boolean; ldAvailable?: boolean; sigemAvailable?: boolean; pwAvailable?: boolean }): SigemPwModel;
   aggregateModel(model: SigemPwModel, filters?: { documentClass?: string }, options?: { revisionScope?: SigemPwRevisionScope }): SigemPwResult;
   loadBases(): Promise<{ sigem: SigemPwBase; pw: SigemPwBase; ld: SigemPwBase; history: SigemPwHistory }>;
   loadHistory(): Promise<SigemPwHistory>;

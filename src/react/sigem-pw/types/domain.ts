@@ -2,7 +2,7 @@ export type SigemPwBaseKind = "sigem" | "pw" | "ld";
 export type SigemPwEditableBaseKind = "sigem" | "pw";
 export type SigemPwDocumentClass = "" | "ET" | "N-1710" | "CV" | "Não classificado";
 export type SigemPwRevisionScope = "revision0" | "all";
-export type SigemPwListKey = "all" | "sigem" | "pw" | "pwDuplicates" | "bothOtherRevision" | "sigemOnly" | "cvNotApplicable" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted";
+export type SigemPwListKey = "all" | "sigem" | "pw" | "pwDuplicates" | "bothOtherRevision" | "sigemOnly" | "cvNotApplicable" | "bothNotEmitted" | "bothEmitted" | "pwOnlyNotEmitted" | "pwOnlyEmitted" | "sigemN1710OutsideLd" | "pwN1710OutsideLd" | "ldUnavailableN1710" | "ldWithoutSigem" | "n1710Candidates";
 export type SigemPwReadinessStatus = "empty" | "partial" | "ready" | "attention";
 
 export interface SigemPwBaseMeta {
@@ -65,6 +65,12 @@ export interface SigemPwRow {
   pwEmission: string;
   pwLastEmission?: string;
   pwCompany?: string;
+  ldStatus?: string;
+  ldOriginalCode?: string;
+  ldRevision?: string;
+  ldSourceRow?: number;
+  n1710DocumentType?: string;
+  pwRegistrationStatus?: string;
   sigemOriginalCode?: string;
   pwOriginalCode?: string;
   pwRevisionEvidence?: string;
@@ -123,6 +129,11 @@ export interface SigemPwQuality {
   pwEntries: number;
   pwEmittedEntries?: number;
   ldDocumentCount: number;
+  ldAvailable?: boolean;
+  sigemN1710OutsideLd?: number;
+  pwN1710OutsideLd?: number;
+  ldWithoutSigem?: number;
+  n1710Candidates?: number;
 }
 
 export interface SigemPwResult {
@@ -256,6 +267,11 @@ export const SIGEM_PW_LISTS: Readonly<Record<SigemPwListKey, string>> = Object.f
   bothEmitted: "SIGEM + PW: emitido",
   pwOnlyNotEmitted: "PW: revisão sem SIGEM, não emitida",
   pwOnlyEmitted: "PW: revisão sem SIGEM, emitida",
+  sigemN1710OutsideLd: "SIGEM N-1710 fora da LD",
+  pwN1710OutsideLd: "PW N-1710 fora da LD",
+  ldUnavailableN1710: "N-1710 aguardando LD",
+  ldWithoutSigem: "LD N-1710 sem SIGEM",
+  n1710Candidates: "Códigos N-1710 para conferir",
 });
 
 export const SIGEM_PW_PAGE_SIZE = 100;

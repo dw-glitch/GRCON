@@ -99,6 +99,13 @@ export function SigemPwDashboardApp() {
           <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwDuplicates")}>Ver duplicados PW</button>
           <small>A lista de duplicados usa apenas o PW das empresas CSG/QTM. Revisões diferentes são registros distintos. Exporte a relação pelo botão “Exportar lista”.</small>
         </section> : null}
+        {!state.ld.meta && state.sigem.meta ? <div className="spw-empty" role="alert"><strong>LD N-1710 necessária para os totais oficiais</strong><span>Documentos N-1710 permanecem em “N-1710 aguardando LD” até carregar e validar a LD. ET e CV mantêm seus critérios próprios.</span></div> : null}
+        {state.result?.quality?.ldAvailable ? <div className="spw-pw-audit" role="status">
+          <span><strong>{fmt(state.result.lists.sigemN1710OutsideLd?.length || 0)}</strong> N-1710 SIGEM fora da LD</span>
+          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("sigemN1710OutsideLd")}>Conferir na lista</button>
+          <span><strong>{fmt(state.result.lists.pwN1710OutsideLd?.length || 0)}</strong> N-1710 PW fora da LD</span>
+          <button type="button" className="secondary-button" onClick={() => adapter.setActiveList("pwN1710OutsideLd")}>Conferir PW</button>
+        </div> : null}
         <SigemPwSituationCards
           state={state}
           activeList={state.activeList}
