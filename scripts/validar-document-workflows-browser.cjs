@@ -7,7 +7,19 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  const server=http.createServer((req,res)=>{
   const file=path.join(root,decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\//,'')||'index.html');
   if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
-  try{const mime={'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'}[path.extname(file)]||'application/octet-stream';res.writeHead(200,{'content-type':mime});res.end(fs.readFileSync(file));}catch(_){res.writeHead(404).end();}
+  try{
+   const mime={'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'}[path.extname(file)]||'application/octet-stream';
+   let contents=fs.readFileSync(file);
+   // Only this isolated QA server opts into legacy Vault UI. Production assets
+   // and the Cloudflare smoke test preserve the corporate-approval hiding rule.
+   if(path.basename(file)==='document_vault_app.js'){
+    const source=contents.toString('utf8');
+    const flag='const storageFeatures = root.GrconStorageFeatures || Object.freeze({ showStorageUI: false, enableAutomaticUpload: false, enableManualUpload: false, enableAutomaticLookup: false });';
+    assert.ok(source.includes(flag),'Vault QA fixture requires the explicit hidden-storage feature guard.');
+    contents=Buffer.from(source.replace(flag,'const storageFeatures = Object.freeze({ showStorageUI: true, enableAutomaticUpload: true, enableManualUpload: true, enableAutomaticLookup: true });'));
+   }
+   res.writeHead(200,{'content-type':mime});res.end(contents);
+  }catch(error){console.error('QA fixture failed:',error.message);res.writeHead(404).end();}
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const base='http://127.0.0.1:'+server.address().port;
@@ -15,16 +27,6 @@ const root=path.resolve(__dirname,'..'),out=path.join(root,'artifacts/document-w
  try {
  const context=await browser.newContext({viewport:{width:1366,height:768},serviceWorkers:'block',acceptDownloads:true});
  await context.grantPermissions(['clipboard-read','clipboard-write']);
- // Isolated QA opt-in: exercise legacy Vault workflows without exposing the
- // Vault in production. The public Cloudflare smoke test verifies the hidden UI.
- await context.addInitScript(() => {
-   window.GrconStorageFeatures = Object.freeze({
-     showStorageUI: true,
-     enableAutomaticUpload: true,
-     enableManualUpload: true,
-     enableAutomaticLookup: true,
-   });
- });
  const page=await context.newPage();const errors=[],calls=[],metrics=[];
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://kvyrttccwzdhasplfxnr.supabase.co/**',r=>r.fulfill({status:401,contentType:'application/json',body:'{"message":"QA session"}'}));
