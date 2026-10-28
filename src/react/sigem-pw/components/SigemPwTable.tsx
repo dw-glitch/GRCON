@@ -24,7 +24,7 @@ export function SigemPwTable({ rows, caption, duplicates = false }: { rows: Sige
               <th>Classe</th>
               <th>Documento</th>
               <th>Revisão</th>
-              <th>Empresa PW (C)</th>
+              <th>Empresa PW (C)</th><th>LD N-1710</th><th>Tipo</th>
               {duplicates ? <><th>Qtd.</th><th>Linha PW</th><th>Arquivo PW</th><th>Status PW</th><th>Última emissão</th></> : <><th>Status SIGEM</th><th>Data SIGEM</th><th>Existe no PW</th><th>Status PW</th><th>Emissão PW</th><th>Situação</th></>}
             </tr>
           </thead>
@@ -35,6 +35,8 @@ export function SigemPwTable({ rows, caption, duplicates = false }: { rows: Sige
                 <td className="spw-code">{row.document}</td>
                 <td><span className="spw-revision" title={row.pwRevisionEvidence === "Não informada no PW" ? "Cadastro confirmado no PW pelo código; revisão não informada na consulta." : undefined}>{row.revision}</span>{!duplicates && row.inPw && row.pwRevision !== row.revision ? <small className="spw-pw-revision-note">PW: {row.pwRevision || "não informada"}</small> : null}</td>
                 <td>{row.pwCompany || "—"}</td>
+                <td title={row.ldOriginalCode ? `LD: ${row.ldOriginalCode} · linha ${row.ldSourceRow || "?"}` : undefined}>{row.ldStatus || (row.documentClass === "N-1710" ? "LD indisponível" : "N/A")}</td>
+                <td>{row.n1710DocumentType || "—"}</td>
                 {duplicates ? <>
                   <td>{row.duplicateOccurrence}/{row.duplicateCount}</td><td>{row.pwSourceRow || "—"}</td><td>{row.pwFileName || "—"}</td>
                   <td><span className="spw-status">{valueOrDash(row.pwStatus)}</span></td><td>{row.pwLastEmission || "—"}</td>
