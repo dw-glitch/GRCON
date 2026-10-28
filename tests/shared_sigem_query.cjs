@@ -48,7 +48,7 @@ assert.equal(result.status,'Em análise');
 assert.equal(result.sigemStatusSource,'shared-general-query');
 assert.equal(result.allocationFinding.kind,'allocated');
 const other=Core.triageOne({id:'test',name:doc+'_B.pdf'},index,{sigemQueryContext:Query.context(base('Em análise','A'))});
-assert.equal(Core.statusKind(other.status), 'analysis', 'revisão A em análise impede postar B');
+assert.equal(other.status, 'Não Postado', 'revisão atual preserva situação própria, apesar do bloqueio anterior');
 assert.equal(other.blockingRevision,'A');
 assert.equal(other.sigemRevisionStatus,'Não Postado');
 assert.equal(other.decision,Core.DISCARD);
@@ -66,7 +66,7 @@ const revised = Query.context({
 const nextGroup = {records:[{document:doc,revision:'C'}],history:[]};
 assert.equal(Core.statusForRevision(nextGroup,'C',revised).status,'Não Postado','status exato continua fiel ao SIGEM');
 const guarded=Core.grdtStatusForRevision(nextGroup,'C',revised,doc);
-assert.equal(guarded.status,'Em Análise');
+assert.equal(guarded.status,'Não Postado');
 assert.equal(guarded.revisionStatus,'Não Postado');
 assert.equal(guarded.blockingRevision,'B');
 assert.equal(guarded.blockingRevisionStatus,'Em Workflow');
@@ -79,7 +79,7 @@ const nextIndex=Core.buildIndex([{
 }],[{document:doc,revision:'C',status:'Não Postado',sheet:'Colar SIGEM'}]);
 const triagedNext=Core.triageOne({id:'next',name:doc+'_C.pdf'},nextIndex,{sigemQueryContext:revised});
 assert.equal(triagedNext.decision,Core.DISCARD);
-assert.equal(triagedNext.status,'Em Análise');
+assert.equal(triagedNext.status,'Não Postado');
 assert.equal(triagedNext.sigemRevisionStatus,'Não Postado');
 assert.equal(triagedNext.blockingRevision,'B');
 assert.match(triagedNext.reason,/revisão B permanece Em Análise/);
@@ -98,7 +98,9 @@ assert.equal(Core.grdtStatusForRevision(nextGroup,'C',priority,doc).blockingRevi
 const legacyGroup={records:[{document:doc,revision:'C'}],
   history:[{document:doc,revision:'B',status:'Em Análise',sheet:'Colar SIGEM'}]};
 const legacy=Core.grdtStatusForRevision(legacyGroup,'C',null,doc);
-assert.equal(legacy.blockingRevision,'B','sem Consulta Geral compartilhada usa histórico SIGEM da LD');
+assert.equal(legacy.blockingRevision,undefined,'sem Consulta Geral, histórico da LD não confirma análise');
+assert.equal(legacy.pendingLegacyRevision,'B');
+assert.equal(legacy.status,'Status SIGEM não confirmado');
 assert.equal(legacy.revisionStatus,'Não Postado');
 assert.equal(Core.grdtStatusForRevision(nextGroup,'C',Query.context({records:[
   {document:doc.replace('3.8.9.1','3.8.9.2'),revision:'B',status:'Em Análise'},
@@ -110,6 +112,37 @@ const alreadyIssued=Query.context({records:[
 ]});
 assert.equal(Core.grdtStatusForRevision(nextGroup,'C',alreadyIssued,doc).status,'Para Construção');
 
+
+const TriageQuery=require('../grdt_triage_query.js');
+const noLdIndex=Core.buildIndex([],[]);
+const absentInput={id:'missing-ld',name:doc+'_B.pdf'};
+const absentWithOfficialAnalysis=Core.triageOne({...absentInput},noLdIndex,{sigemQueryContext:context});
+assert.equal(absentWithOfficialAnalysis.document,doc);
+assert.equal(absentWithOfficialAnalysis.documentLookup.matched,false);
+assert.equal(absentWithOfficialAnalysis.status,'Em análise','consulta geral confirma a revisão, mesmo sem LD');
+assert.equal(absentWithOfficialAnalysis.sigemStatusSource,'shared-general-query');
+assert.equal(absentWithOfficialAnalysis.decision,Core.REVIEW,'ausência LD impede inclusão automática');
+assert.equal(TriageQuery.selectionPolicy(absentWithOfficialAnalysis).autoEligible,false);
+const absentWithOtherCode=Core.triageOne({...absentInput},noLdIndex,{
+  sigemQueryContext:Query.context({records:[{document:doc+'-OUTRO',revision:'B',status:'Em análise'}]})
+});
+assert.equal(absentWithOtherCode.status,'Não localizado na Consulta Geral');
+assert.notEqual(Core.statusKind(absentWithOtherCode.status),'analysis','não herdar análise do código vizinho');
+const absentWithOtherRevision=Core.triageOne({...absentInput},noLdIndex,{
+  sigemQueryContext:Query.context(base('Em análise','A'))
+});
+assert.equal(absentWithOtherRevision.status,'Não localizado na Consulta Geral','revisões independentes');
+const absentWithoutQuery=Core.triageOne({...absentInput},noLdIndex);
+assert.equal(absentWithoutQuery.status,'Status SIGEM não verificado');
+const legacyAnalysisIndex=Core.buildIndex([technical],[{document:doc,revision:'B',status:'Em análise',sheet:'Colar SIGEM'}]);
+const legacyOnlyAnalysis=Core.triageOne({...absentInput},legacyAnalysisIndex);
+assert.equal(legacyOnlyAnalysis.status,'Status SIGEM não confirmado','LD não pode certificar Em análise');
+assert.equal(legacyOnlyAnalysis.decision,Core.REVIEW);
+const previousPolicy=TriageQuery.selectionPolicy(triagedNext);
+assert.equal(previousPolicy.previousAnalysis,true);
+assert.equal(previousPolicy.autoEligible,false,'revisão anterior em análise bloqueia inclusão automática');
+assert.equal(previousPolicy.manualOnly,true);
+assert.notEqual(Core.statusKind(triagedNext.status),'analysis','o bloqueio não falsifica a revisão C');
 const many={records:Array.from({length:25000},(_,i)=>({document:`RL-5290.00-22313-ABC-C1O-${i}`,revision:'B',status:'Em análise'}))};
 const started=performance.now();const large=Query.context(many);
 for(let i=0;i<25000;i++) assert.equal(Query.resolve(`RL-5290.00-22313-ABC-C1O-${i}`,'B',large,'fallback').source,'shared-general-query');
